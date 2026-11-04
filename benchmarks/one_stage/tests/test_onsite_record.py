@@ -815,15 +815,27 @@ def test_the_record_lists_the_re_proof_inputs_and_which_of_outs_the_run_wrote(tm
 def test_the_record_lists_each_tied_audits_circuit_files_public_by_the_digests_the_periods_params_pin(tmp_path):
     """The period check reads C-Flock's circuit file of each template a tied audit's Program batches, held to the
     SHA-512 its params pin: the record lists them, public, by those pins in template order, each file in OUT by its pin
-    and whether the run wrote it; with none pinned they're missing with why, and a pin that isn't a SHA-512 is the
-    params' error, never a path."""
-    pins = [[{"template": "Int8RowQuant", "sha512": "ab" * 64}, {"template": "Rms", "sha512": "cd" * 64}]]
-    out = accepted(tmp_path / "pinned", circuits=pins)
+    and whether the run wrote it there with the pin's bytes, never through a link, or why not; with none pinned they're
+    missing with why, and a pin that isn't a SHA-512 is the params' error, never a path."""
+    body = {t: f"flock-ir-unit/v2 {t}\n".encode() for t in ("Int8RowQuant", "Rms", "Silu", "Gelu")}
+    pin = {t: hashlib.sha512(b).hexdigest() for t, b in body.items()}
+    out = accepted(tmp_path / "pinned", circuits=[[{"template": t, "sha512": h} for t, h in pin.items()]])
     (out / OR.CIRCUITS).mkdir(parents=True)
-    (out / OR.CIRCUITS / f"{'ab' * 64}.txt").write_text("flock-ir-unit/v2")
+    (out / OR.CIRCUITS / f"{pin['Int8RowQuant']}.txt").write_bytes(body["Int8RowQuant"])
+    (tmp_path / "elsewhere.txt").write_bytes(body["Silu"])
+    (out / OR.CIRCUITS / f"{pin['Silu']}.txt").symlink_to(tmp_path / "elsewhere.txt")
+    (out / OR.CIRCUITS / f"{pin['Gelu']}.txt").write_bytes(body["Rms"])
+    why = {"Int8RowQuant": {"present": True}, "Rms": {"present": False, "why": "the run wrote no such file"},
+           "Silu": {"present": False, "why": "a link: custody keeps OUT's own files, never what a link names"},
+           "Gelu": {"present": False, "why": "its bytes' SHA-512 isn't the pin it's named by"}}
     assert OR.record(out)["bound"]["circuits"] == {"public": True, "audits": [[
-        {"template": "Int8RowQuant", "sha512": "ab" * 64, "file": f"{OR.CIRCUITS}/{'ab' * 64}.txt", "present": True},
-        {"template": "Rms", "sha512": "cd" * 64, "file": f"{OR.CIRCUITS}/{'cd' * 64}.txt", "present": False}]]}
+        {"template": t, "sha512": h, "file": f"{OR.CIRCUITS}/{h}.txt"} | why[t] for t, h in pin.items()]]}
+    linked = accepted(tmp_path / "linked", circuits=[[{"template": "Rms", "sha512": pin["Rms"]}]])
+    (tmp_path / "files").mkdir()
+    (tmp_path / "files" / f"{pin['Rms']}.txt").write_bytes(body["Rms"])
+    (linked / OR.CIRCUITS).parent.mkdir(parents=True, exist_ok=True)
+    (linked / OR.CIRCUITS).symlink_to(tmp_path / "files")
+    assert OR.record(linked)["bound"]["circuits"]["audits"][0][0]["why"] == why["Silu"]["why"]
     assert OR.record(accepted(tmp_path / "none"))["bound"]["circuits"] == {"missing": OR.NO_CIRCUITS}
     bad = OR.record(accepted(tmp_path / "bad", circuits=[[{"template": "Rms", "sha512": "../x"}]]))["bound"]
     assert bad["circuits"] == {"error": f"{OR.CASE} params: ValueError: template 'Rms''s pin '../x' isn't a SHA-512"}

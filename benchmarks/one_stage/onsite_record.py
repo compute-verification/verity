@@ -42,9 +42,9 @@ incorrect proof block (`SKIP`, and what drawing it whole costs).
 K is that statement's count as proved, a known overcount (``notes``, `OVERCOUNT`); ``connections`` is how many
 connections k_sched and k_fail count, every one the schedule can carry (`CONNECTIONS`), its ``error`` where the case's
 caps aren't those; ``circuits`` lists each tied audit's circuit files, public, by the digests the period's params pin
-(`CIRCUITS`), and whether the run wrote each; and ``verdict_line`` is the run's published line of the network
-certifier's verdict (`LINE` in verdicts.txt), None where it has none. A public whose terms don't sum to K, or that isn't the rows form, is the bound's
-``error``. ``of_record`` is the figure of record (`OPEN`): that K only where the verdict's public holds every check the
+(`CIRCUITS`), and whether the run wrote each in OUT itself with the bytes its pin names, or why not; and
+``verdict_line`` is the run's published line of the network certifier's verdict (`LINE` in verdicts.txt), None where
+it has none. A public whose terms don't sum to K, or that isn't the rows form, is the bound's ``error``. ``of_record`` is the figure of record (`OPEN`): that K only where the verdict's public holds every check the
 tight ℓ_{a,j} rests on (``held``, `CHECKS`) and none of its premises is open (``premises``, `DISCHARGE`: each of
 `PREMISES` discharged by theorems in Security's locks, each at the statement `DISCHARGES` pins, taking no named
 assumption but a standing one (`STANDING`) or one its pin names and no premise that is open; and each guarantee it
@@ -703,8 +703,8 @@ def caps(case: Mapping[str, Any], cap: int) -> list[int]:
 
 def circuits(out: Path, case: Mapping[str, Any]) -> dict[str, Any]:
     """Each tied audit's circuit files (`CIRCUITS`) by the digests the period's params pin, public, in the Program's
-    template order, each with its file in OUT and whether the run wrote it; ``missing`` where the params pin none
-    (`NO_CIRCUITS`). ValueError where a pin isn't a SHA-512."""
+    template order, each with its file in OUT and whether the run wrote it there (`circuit_file`); ``missing`` where
+    the params pin none (`NO_CIRCUITS`). ValueError where a pin isn't a SHA-512."""
     pinned = []
     for a in case["params"]["audits"]:
         files = []
@@ -712,9 +712,23 @@ def circuits(out: Path, case: Mapping[str, Any]) -> dict[str, Any]:
             if not re.fullmatch(r"[0-9a-f]{128}", h := c["sha512"]):
                 raise ValueError(f"template {c['template']!r}'s pin {h!r} isn't a SHA-512")
             f = f"{CIRCUITS}/{h}.txt"
-            files.append({"template": c["template"], "sha512": h, "file": f, "present": (out / f).is_file()})
+            files.append({"template": c["template"], "sha512": h, "file": f} | circuit_file(out, f, h))
         pinned.append(files)
     return {"public": True, "audits": pinned} if any(pinned) else {"missing": NO_CIRCUITS}
+
+
+def circuit_file(out: Path, f: str, pin: str) -> dict[str, Any]:
+    """``present`` where OUT itself holds the file ``f``, reached through no link, whose bytes' SHA-512 is ``pin``;
+    otherwise not, with ``why``."""
+    p = out / f
+    if p.resolve() != out.resolve() / f:
+        return {"present": False, "why": "a link: custody keeps OUT's own files, never what a link names"}
+    if not p.is_file():
+        return {"present": False, "why": "the run wrote no such file"}
+    with p.open("rb") as fh:
+        if hashlib.file_digest(fh, "sha512").hexdigest() != pin:
+            return {"present": False, "why": "its bytes' SHA-512 isn't the pin it's named by"}
+    return {"present": True}
 
 
 def statement(lock: Mapping[str, Any], g: str) -> str | None:
