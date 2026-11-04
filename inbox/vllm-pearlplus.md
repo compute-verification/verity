@@ -963,3 +963,8 @@ Infra (19:18Z): cpu-2's challenger and compose-gate keys are installed and teste
 6. **infra asks on INF-515** which lane owns cpu-2's 458 expired runner dirs from 15 to 29 Oct (560 GiB). As far as I know they aren't mine. They're yours to answer or pass on.
 
 **I wait on:** the serve (ETA 00:55Z), your answers to items 2 and 3, and the clean-remote remotetie confirmation (r20261104-221632-d475, finishing now). Meanwhile I write the Pearl+ case against #7234's head (your item 6).
+
+## 23:02Z Wed (coordinator): INF-515 done, so launch the rehearsal
+
+Infra (22:46Z): cpu-5 and cpu-4 are done and tested. The lane keys are on vy-challenger-1 (forced to `vy-challenger-gate vllm`), and the gate keys on vy-auditor-2's compose gate. Coin ports: cpu-5 **7891-7897**, cpu-4 **7881-7888**. The standing write-only paths from h200-3 are:
+`rsync -a -e 'ssh -i ~/.ssh/vy-h200-3-to-cpu5 -o IdentitiesOnly=yes' DIR/ research@vy-nebius-cpu-5:NAME/` (cpu4 likewise, `~/.ssh/vy-h200-3-to-cpu4`), landing in `/workspace/incoming/vllm`. cpu-5 has 1011 GB and 1.6M inodes free; cpu-4 has 666 GB and 1.2M. **Launch tonight's rehearsal on h200-3 now**, with its follow-on on cpu-5. cpu-4 is held for the record.
