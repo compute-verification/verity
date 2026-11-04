@@ -267,15 +267,54 @@ theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
 theorem scanWindowsPlaced : ScanWindowsPlaced := by
   sorry
 
-/-- **`ScanWindowsPlaced`'s conclusion is not trivial** (the two-lemma rule's `_nontrivial`): at a deployment that
-parses every message to `nullStmt` and partitions none, one window placed at the empty partition is not placed, since
-the window's statement has no deployed partition. -/
+/-- A statement of one input gate, with `null`'s bytes as its descriptor and a design of no rule, which draws no slot,
+so every set of slots is accepted with probability `1` (`Design.Pa`). -/
+def oneInputStmt : Claims.Sampling.AuditStatement :=
+  { Properties.NetworkScan.nullStmt with prog := ⟨[.input], []⟩, design := ⟨[]⟩ }
+
+/-- `oneInputStmt`'s gate as a proof block of its own. -/
+def oneInputPart : Claims.Sampling.Partition := ⟨[[[[0]]]]⟩
+
+/-- A deployment that parses every message to `oneInputStmt` and partitions it as `oneInputPart`. -/
+def oneInputDeploy : Claims.Sampling.Deploy Bool ℕ Unit :=
+  { Properties.NetworkScan.acceptAllDeploy with
+    parse := fun _ => some oneInputStmt, partition := fun _ => some oneInputPart }
+
+/-- **`ScanWindowsPlaced`'s conclusion is not trivial** (the two-lemma rule's `_nontrivial`): at a scan C-Flock
+canonicalizes as `null` and a deployment that parses every message to `oneInputStmt`, whose descriptor is that text,
+partitioned as `oneInputPart`, with at most one incorrect proof block at `δ = 1/2` (`WrongBounds`), one window is not
+placed at `β = 0`: its one block, possibly incorrect since the design draws nothing, commits its input gate. So the
+conclusion fails where the deployment doesn't lay its statements out as Bits does (`StmtBits`) and the charge is below
+a block's committed bits. -/
 theorem scanWindowsPlaced_nontrivial :
-    ∃ D : Claims.Sampling.Deploy Bool ℕ Unit,
-      ¬ NetTiming.WindowsPlaced D (1 / 2) (fun _ : Fin 1 => Properties.NetworkScan.nullStmt) (fun _ => ⟨[]⟩)
-        (fun _ => 0) := by
-  refine ⟨{ Properties.NetworkScan.acceptAllDeploy with partition := fun _ => none }, fun h => ?_⟩
-  have h0 := h.1 0
-  simp at h0
+    ∃ (j : Lean.Json) (c : String) (_ : Flock.canon j = .ok c) (D : Claims.Sampling.Deploy Bool ℕ Unit)
+      (sw : Fin 1 → Claims.Sampling.AuditStatement) (Pw : Fin 1 → Claims.Sampling.Partition)
+      (_ : ∀ i, ∃ x, D.parse x = some (sw i)) (_ : ∀ i, (⟨(sw i).desc.toArray⟩ : ByteArray) = c.toUTF8)
+      (_ : ∀ i, D.partition (sw i) = some (Pw i)) (_ : ∀ i, WrongBounds (sw i) (Pw i) (1 / 2) 1),
+      ¬ NetTiming.WindowsPlaced D (1 / 2) sw Pw fun _ => 0 := by
+  refine ⟨.null, "null", Properties.NetworkScan.canon_null, oneInputDeploy, fun _ => oneInputStmt,
+    fun _ => oneInputPart, fun _ => ⟨[], rfl⟩, fun _ => Properties.NetworkScan.bytes_of_data_toList "null".toUTF8,
+    fun _ => rfl, fun _ => ?_, fun h => ?_⟩
+  · unfold WrongBounds
+    intro F hF
+    have hsub := Finset.mem_powerset.1 (Finset.mem_filter.1 hF).1
+    calc F.card ≤ (Finset.range oneInputPart.blocks.length).card := Finset.card_le_card hsub
+      _ = 1 := (Finset.card_range _).trans rfl
+  · have hPa : Claims.Sampling.Design.Pa oneInputStmt.design oneInputPart {0} = 1 := rfl
+    have hall : NetTiming.allSlots oneInputStmt.design oneInputPart = ∅ := rfl
+    have hin : ({0} : Finset ℕ) ∈ NetTiming.faultySets oneInputStmt.design oneInputPart (1 / 2) := by
+      refine Finset.mem_filter.2 ⟨Finset.mem_powerset.2 fun v hv => ?_, ?_, ?_⟩
+      · rw [Finset.mem_singleton.1 hv, Finset.mem_range]
+        decide
+      · show (1 / 2 : ℝ) < Claims.Sampling.Design.Pa oneInputStmt.design oneInputPart {0}
+        rw [hPa]
+        norm_num
+      · rw [hall]
+        exact Finset.disjoint_empty_right _
+    have h1 : NetTiming.faultyBits oneInputStmt.prog oneInputPart {0} = 1 := by
+      simp only [NetTiming.faultyBits, Finset.sum_singleton]
+      decide
+    have h0 : NetTiming.faultyBits oneInputStmt.prog oneInputPart {0} ≤ 0 := h.2 0 {0} hin
+    omega
 
 end Properties.NetworkPeriod
