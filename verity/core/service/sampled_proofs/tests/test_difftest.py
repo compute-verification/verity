@@ -11,7 +11,8 @@ Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the
 `slots` piece that sample in the claims' slots, read off `partition.strata`, `partition.unit_gates` and the root's input
 nodes (`slots`), for the `hidden_offsets`, `hidden_locate` and `hidden_witness` pieces `hidden_draw` on honest and
 arbitrary calls tables, for `check_public` and `check_verdicts` the proof system's own (`service.check_public`,
-`service.check_verdicts`), and for the `run` piece (a registration's whole run, `Run.run`) those references in a
+`service.check_verdicts`), for `registered_ports` the v2 audit's checks of the verifier's registered file
+(`registered.ports_twice`, `root_clash` and `entry_clash`) on files of changed and repeated ports, and for the `run` piece (a registration's whole run, `Run.run`) those references in a
 `Stream`'s order. The `partition`, `select` and `slots` pieces also run on random partitions: mixed population
 programs of random members of three templates, and rarely of `FORK` and of `IDENTITY`, of no gate, which one-stage
 refuses, under template queries over them, and programs of random root Calls (`call_program`) under `Q_word` and `Q_call`, a 32-bit
@@ -1084,6 +1085,47 @@ def session_registered(j):
                 isinstance(e, dict) and isinstance(e.get("value"), str) for e in reg["registered"])):
             raise D.Reject("a registered value has no string value")
     return {"registered": audit.session_registered(vs, reg)}
+
+
+#: The keys a `verity/registered-reads/v1` port holds (`Flock.Registered.PORT_KEYS`).
+PORT_KEYS = {"value", "root", "leaves", "words", G.WIDTH_KEY, "domain", G.SCHEMA_KEY, "reads", G.READS_FROM, "known", "param"}
+HEX512 = re.compile(r"[0-9a-f]{128}")
+
+
+def _read_port(name: str, e, v1: bool) -> None:
+    """`Flock.Registered.portsOf` on port ``name`` of a v1 file (else a v0 one): refused where it refuses the port."""
+    if not isinstance(e, dict) or (v1 and not set(e) <= PORT_KEYS) or (not v1 and G.READS_FROM in e):
+        raise D.Reject(f"port {name}: not an object of a port's keys")
+    words, bits, schema = e.get("words"), e.get(G.WIDTH_KEY, G.WORD_BITS), e.get(G.SCHEMA_KEY, G.SCHEMA)
+    if not (all(isinstance(e.get(k), str) and HEX512.fullmatch(e[k]) for k in ("root", "domain"))
+            and _nat(e.get("leaves")) and e["leaves"] > 0 and (G.READS_FROM not in e or _nat(e[G.READS_FROM]))
+            and ("words" not in e or _nat(words) and words > 0) and _nat(bits) and bits in G.WIDTHS
+            and (words is not None or bits == G.WORD_BITS) and isinstance(schema, str) and schema in G.SCHEMAS
+            and (schema == G.SCHEMA or words is not None) and isinstance(e.get("value"), str)
+            and isinstance(e.get("reads"), list) and all(r is None or _nat(r) for r in e["reads"])):
+        raise D.Reject(f"port {name}: refused")
+
+
+def registered_ports(j):
+    """The v2 audit's checks of the verifier's registered file on `{"format", "ports", "record", "schemas"}`, its ports a
+    list of `[name, port]` in the file's order: refused where `Flock.Registered.portsOf` refuses the file, else the first
+    name a later port repeats (`names`, `registered.ports_twice`) and whether the file is accepted (`ok`), the first two
+    ports of one root registering it differently (`roots`, `registered.root_clash`), and the first port differing from the
+    `record`'s entry for its value, with the field (`entry`, `registered.entry_clash` under `schemas`, the verifier's row
+    formats)."""
+    j = _json(j)
+    ps = j.get("ports") if isinstance(j, dict) else None
+    if not (isinstance(ps, list) and ps and all(isinstance(p, list) and len(p) == 2 and isinstance(p[0], str) for p in ps)):
+        raise D.Reject("ports is not a list of [name, port], or names none")
+    if j.get("format") not in (G.READS, G.READS_V1):
+        raise D.Reject("not a registered reads file")
+    for name, e in ps:
+        _read_port(name, e, j["format"] == G.READS_V1)
+    schemas = j["schemas"] if isinstance(j.get("schemas"), dict) else {}
+    if not all(isinstance(s, str) for s in schemas.values()):
+        raise D.Reject("a row format that is not a string")
+    names, roots, entry = G.ports_twice([n for n, _ in ps]), G.root_clash(ps), G.entry_clash(ps, j.get("record"), schemas)
+    return {"entry": entry and list(entry), "names": names, "ok": names is None, "roots": roots and list(roots)}
 
 
 def check_public(j):
@@ -2728,6 +2770,81 @@ SESSION_REGISTERED = D.Port(PIECES, "session_registered", session_registered, st
     st.builds(lambda vs, r: {"registration": r, "verdicts": vs}, VERDICTS, JSON),
     st.builds(lambda vs: {"verdicts": vs}, JSON), JSON), package=PACKAGE)
 
+#: The ports a `registered_ports` file draws from: `W`'s, of 16-bit words, and `T`'s, a bit row of 32-bit words, each at
+#: its own root.
+RP_PORTS = {
+    "W": {"value": "W", "root": "a1" * 64, "leaves": 4, "words": 6, "domain": "d1" * 64, "reads": [0, None]},
+    "T": {"value": "T", "root": "b2" * 64, "leaves": 2, "words": 3, G.WIDTH_KEY: 32, "domain": "d2" * 64,
+          G.SCHEMA_KEY: G.SCHEMA_V2, "reads": [None, 1]},
+}
+
+
+def _drop(k: str):
+    return lambda p: {x: v for x, v in p.items() if x != k}
+
+
+#: One change to a port: a field of its registration (leaves, words, word bits, domain, row format, value), its root or
+#: its reads; dropping `T`'s words is one the file refuses.
+PORT_CHANGES = [
+    lambda p: {**p, "leaves": p["leaves"] + 1}, lambda p: {**p, "words": p["words"] + 1}, _drop("words"),
+    lambda p: {**p, G.WIDTH_KEY: 48 - p.get(G.WIDTH_KEY, 16)}, lambda p: {**p, "domain": "e3" * 64},
+    lambda p: {**p, G.SCHEMA_KEY: G.SCHEMA_SEG}, _drop(G.SCHEMA_KEY), lambda p: {**p, "value": "U"},
+    lambda p: {**p, "root": "c4" * 64}, lambda p: {**p, "reads": [None]}]
+#: Ports a file refuses (an unknown key only in v1, `reads_from` only in v0).
+BAD_PORTS = [
+    lambda p: {**p, "root": p["root"].upper()}, lambda p: {**p, "root": p["root"][2:]}, lambda p: {**p, "leaves": 0},
+    lambda p: {**p, "leaves": True}, lambda p: {**p, G.WIDTH_KEY: 8}, lambda p: {**p, "words": 0},
+    lambda p: {**p, G.SCHEMA_KEY: "hm96-sha512/row/v3"}, lambda p: {**p, "reads": [-1]}, lambda p: {**p, "reads": None},
+    lambda p: {**p, "words": None}, lambda p: {**p, "x": 1}, lambda p: {**p, G.READS_FROM: 2},
+    lambda p: {**p, "value": 5}, _drop("domain"), lambda p: [p]]
+
+
+def _rp_entry(p: dict) -> dict:
+    """The record's entry for port `p`'s value, as R7 holds it to the verifier's: `word_bits` named only when not 16."""
+    e = {"value": p["value"], "root": p["root"], "leaves": p["leaves"], "words": p.get("words"), "domain": p["domain"]}
+    return e | ({G.WIDTH_KEY: p[G.WIDTH_KEY]} if p.get(G.WIDTH_KEY, 16) != 16 else {})
+
+
+#: One change to an entry: a field changed, named alike (16 word bits) or dropped, or another value's.
+ENTRY_CHANGES = [
+    lambda e: {**e, "leaves": e["leaves"] + 1}, lambda e: {**e, "leaves": str(e["leaves"])},
+    lambda e: {**e, "leaves": True}, lambda e: {**e, "words": (e["words"] or 0) + 1}, lambda e: {**e, G.WIDTH_KEY: 16},
+    lambda e: {**e, G.WIDTH_KEY: 32}, _drop(G.WIDTH_KEY), lambda e: {**e, G.WIDTH_KEY: None},
+    lambda e: {**e, "domain": "e3" * 64}, lambda e: {**e, "root": "c4" * 64}, lambda e: {**e, "root": e["root"].upper()},
+    _drop("root"), lambda e: {**e, "value": "U"}]
+#: The verifier's row formats (`row_schemas`): `T`'s, none, `W`'s too, and ones that aren't an object of strings.
+RP_SCHEMAS = [{"T": G.SCHEMA_V2}] * 4 + [{}, {"T": G.SCHEMA_V2, "W": G.SCHEMA_SEG}, {"W": G.SCHEMA}, None, [1], {"T": 5}]
+
+
+@st.composite
+def registered_ports_cases(draw) -> dict:
+    """A `registered_ports` input: one to four ports, each `RP_PORTS`' port of a value under a name (a name now and then
+    repeated, two ports of one value one root), mostly as registered and sometimes with one change (`PORT_CHANGES`) or one
+    the file refuses (`BAD_PORTS`); the record's entries for up to both values (`_rp_entry`), each sometimes changed
+    (`ENTRY_CHANGES`) and sometimes after an earlier, changed entry of its value, in any order; and the verifier's row
+    formats (`RP_SCHEMAS`). Mostly a v1 file."""
+    ports = []
+    for name in draw(st.lists(st.sampled_from(["w", "t", "a0", "a1"]), min_size=1, max_size=4)):
+        p, k = RP_PORTS[draw(st.sampled_from(sorted(RP_PORTS)))], draw(st.integers(0, 9))
+        ports.append([name, draw(st.sampled_from(PORT_CHANGES))(p) if k < 3 else
+                      draw(st.sampled_from(BAD_PORTS))(p) if k == 3 else p])
+    entries = []
+    for v in draw(st.lists(st.sampled_from(sorted(RP_PORTS)), unique=True, max_size=2)):
+        if draw(st.integers(0, 4)) == 0:
+            entries.append(draw(st.sampled_from(ENTRY_CHANGES))(_rp_entry(RP_PORTS[v])))
+        e = _rp_entry(RP_PORTS[v])
+        entries.append(draw(st.sampled_from(ENTRY_CHANGES))(e) if draw(st.integers(0, 2)) == 0 else e)
+    if draw(st.booleans()):
+        entries = entries[::-1]
+    record = draw(st.sampled_from([{"registered": entries}] * 6 + [{"registered": [5, *entries]}, None, {},
+                                                                    {"registered": None}]))
+    fmt = draw(st.sampled_from([G.READS_V1] * 8 + [G.READS, "verity/registered-reads/v2", None]))
+    return {"format": fmt, "ports": ports, "record": record, "schemas": draw(st.sampled_from(RP_SCHEMAS))}
+
+
+REGISTERED_PORTS = D.Port(PIECES, "registered_ports", registered_ports,
+                          st.one_of(*[registered_ports_cases()] * 5, JSON), package=PACKAGE)
+
 
 def _record_case(a: dict, delta: str) -> dict:
     """`audit_record`'s arguments from an audit: the verifier's derived law (or the record's, when the parameters don't
@@ -3240,7 +3357,8 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRAT
               (PRODUCED, 500), (KNOWN_PORT, 300),
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (DESIGN, 300), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
-              (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
+              (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (REGISTERED_PORTS, 400), (RECORD_PORT, 600),
+              (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300)]
 
 
