@@ -1,0 +1,10 @@
+# The integrator island's finals table (finals_table.py). Not a package: it runs from `benchmarks/covert_witness/` as
+# `python islands/integrator/finals_table.py`, and its tests run here as a suite
+# (`uv run tools/verity/check/suites.py benchmarks/covert_witness/islands/integrator`) on CPU torch.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["../.."]
+
+[tool.verity.tests]
+# The table scores with te_core, which it imports from benchmarks/covert_witness, against the pin's versions.
+inputs = ["benchmarks/covert_witness/te_core", "benchmarks/covert_witness/pin.py", "benchmarks/covert_witness/pinned.json"]

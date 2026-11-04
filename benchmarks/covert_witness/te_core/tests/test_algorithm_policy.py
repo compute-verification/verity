@@ -202,7 +202,7 @@ def test_every_run_has_a_row_at_each_gain_target_at_its_first_checkpoint_reachin
     assert s1[("ref@3", 11)][1] is None and s1[("mezo@2", 2)][1] == pytest.approx(1.2 / 1.5)
     q = got["console"]
     assert q["columns"] == AP.CONSOLE_COLUMNS and len(q["columns"]) <= console.COLUMNS_MAX
-    assert {"reading", "te_core", "rho_console", "rho_default", "rho_served"} <= set(q["columns"])
+    assert {"reading", "te_core", "rho_console", "rho_default", "rho_served", "rho_own"} <= set(q["columns"])
     assert [d["rho_default"] for d in ds] == [None if v == "inf" else v for v in cell["rho_console"]]
     assert q["rows"] == AP.console_rows(p["rows"]) and not console.refused(q)
     assert len(console.body(q)) <= console.BODY_MAX and len(q["note"]) <= console.NOTE_MAX
@@ -235,6 +235,39 @@ def test_the_dial_formula_on_a_rows_columns_is_te_cores_at_every_cell(tmp_path, 
     assert json.loads(at["qat@1"]["rho_inputs"])["delta_t_bits"] == 6e4
     assert json.loads(at["mezo@2"]["rho_inputs"])["delta_bits"] == 1e3
     assert json.loads(at["mezo@2"]["rho_inputs"])["delta_t_bits"] == 1e3
+
+
+def test_the_headline_is_rho_at_the_starts_own_session_at_16_bit_ids():
+    """rho_own (basis_own) is te_core.formalism's `published` at the start's own session, te_core.policy's `session` on
+    the start's model with 4,096 tokens in and 1,024 out, at k = 65,536, one 16-bit word an input token, with its c and
+    the session's packed ids (`own_c_gates`, `own_k_bits`) beside it: a v3 start's ids are 15 bits, so 61,440, and the
+    label says ρ there is at least rho_own. The 35.7M v3 model's session is under the 45M default's, so its ρ differs
+    from rho_default, and the dial's formula on the row's columns gives formalism.at's token form at it. The console's
+    copy carries rho_own, and every note keeps the label whole."""
+    v3 = V3_SHAPE | {"parameters": 35_658_240, "vocab": 32_000}
+    s = policy.session(35_658_240, *policy.CONSOLE_SESSION)
+    assert AP.own_session(v3) == s and policy.CONSOLE_SESSION == (4096, 1024)
+    assert (s["k_bits"], AP.V3_PACKED_K, AP.OWN_K) == (61_440, 61_440, 65_536) and s["gates"] < AP.CONSOLE[0]
+    assert AP.OWN_K_LABEL == "k = 65,536 (16-bit ids); at the packed 61,440 rho is at least this"
+    m = formalism.from_json(block(C0, 1e6, 3e6, None, 0.3))
+    r = {"id": "x-1", "run_id": "x", "checkpoint_step": 1, "start": "t1", "start_bpb": 1.2, "val_bpb": 1.19,
+         "gates": m.gates, "measured": m, "direction": "d", "mechanism": "m"}
+    p = AP.build({"starts": [FF.Start("t1", v3, "v3", [r], RATE)], "fits": {"v3": LAW}}, "test")
+    ds = plots.frame(p)
+    mine, default = formalism.published(m, s["gates"], AP.OWN_K), formalism.published(m)
+    assert ds and mine["rho"] != default["rho"]
+    for d in ds:
+        assert (d["rho_own"], d["basis_own"]) == (pytest.approx(mine["rho"]), mine["binding_kind"])
+        assert (d["own_c_gates"], d["own_k_bits"]) == (pytest.approx(s["gates"]), 61_440)
+        assert d["rho_default"] == pytest.approx(default["rho"])
+        page = panels.page_inputs(dict(zip(AP.COLUMNS, AP.rounded([d[c] for c in AP.COLUMNS]))))
+        assert dial(page, s["gates"], AP.OWN_K) == (pytest.approx(mine["rho"], rel=1e-3), mine["binding_kind"])
+    q = AP.cut(p, "art:" + "a" * 64)
+    assert "rho_own" in q["columns"] and not {"own_c_gates", "own_k_bits", "basis_own"} & set(q["columns"])
+    kept = "v2.3-pilot (te_core 99.0), v3 (te_core 99.0)"
+    for tier in (None, *AP.TIERS):
+        n = AP.note("art:" + "a" * 64, tier, kept, ("v3", "v2.3-pilot"))
+        assert AP.OWN_K_LABEL in n and len(n) <= console.NOTE_MAX
 
 
 @pytest.mark.parametrize("u1, dgrad, delta_t, tail, decoder", [
@@ -404,8 +437,9 @@ def test_a_row_resting_on_a_stub_is_marked_and_kept_out_of_the_coverage_the_cuts
 
     monkeypatch.setattr(AP.plt.Axes, "plot", plot)
     AP.figure(p, tmp_path)
-    points = {(d["p"], d["rho_default"]) for d in ds if d["p"] is not None}
-    assert plotted and plotted <= points and not plotted & {(d["p"], d["rho_default"]) for d in lora}
+    assert all(d["basis_own"] == AP.STUB for d in lora)
+    points = {(d["p"], d["rho_own"]) for d in ds if d["p"] is not None}
+    assert plotted and plotted <= points and not plotted & {(d["p"], d["rho_own"]) for d in lora}
 
 
 def test_a_rows_rho_is_published_at_the_consoles_default_and_the_serving_blocks_and_follows_published_to_reading_a(
@@ -432,9 +466,13 @@ def test_a_rows_rho_is_published_at_the_consoles_default_and_the_serving_blocks_
         got = (d["reading"], d["rho_default"], d["basis_default"], d["rho_served"])
         if run == "lora":
             assert got == ("A", None, AP.UNMEASURED, None) and d["rho_console"] is None
+            assert (d["rho_own"], d["basis_own"]) == (None, AP.UNMEASURED)
         elif run == "never":
             assert got == ("A", 37.5, "decoding", 37.5) and d["rho_console"] == 37.5
+            assert (d["rho_own"], d["basis_own"]) == (37.5, "decoding")
         else:
+            assert (d["rho_own"], d["basis_own"], d["own_c_gates"]) == (d["rho_default"], d["basis_default"],
+                                                                        AP.CONSOLE[0])
             r = by[d["record"].replace("@", "-")]
             m = formalism.measure(r, {"s1": SHAPE, "s2": SHAPE2}[r["start"]])
             v, s = formalism.at(m, *AP.CONSOLE), formalism.at(m, *panels.SERVED)
@@ -489,10 +527,74 @@ def test_a_partial_row_is_drawn_marked_but_in_no_cell_on_no_others_front_and_nev
 
     monkeypatch.setattr(AP.plt.Axes, "plot", plot)
     AP.figure(p, tmp_path)
-    marked = {(d["p"], d["rho_default"]) for d, x in zip(ds, part) if x and d["p"] is not None}
+    assert all(d["basis_own"] == AP.PARTIAL for d, x in zip(ds, part) if x)
+    marked = {(d["p"], d["rho_own"]) for d, x in zip(ds, part) if x and d["p"] is not None}
     assert marked and marked <= {xy for xy, k in calls if k.get("marker") == 6}
     rings = {xy for xy, k in calls if k.get("mec") == "red"}
     assert rings and not rings & marked
+
+
+def test_a_reached_run_with_no_trace_yet_is_a_row_with_its_records_p_and_no_rho_never_an_absence(tmp_path,
+                                                                                               monkeypatch):
+    """A run with no trace yet (te_core.frontier_fit's `untraced`; coordinator 10:56Z) has a row at each target it
+    reaches, at its first checkpoint reaching it, with C and p from its record and every ρ column null under basis
+    `unmeasured: not yet traced`; its checkpoints count in H, no decade holds it, every cut keeps the least-p one per
+    start and target, and the figure draws it on its floor and never reads "none reached" where it reached. leap
+    reaches gain 1.1 at a tenth of C0, half lora's, and gain 11, which no traced run reaches; late, of leap's start and
+    family, reaches gain 1.1 at five times leap's C, so the table and the figure hold it and no cut does; a row whose
+    start has no shape is none of them."""
+    leap = [("s1", "leap", "ref-optim/adamw", "full", 9e8, 3e9, None, 0.0, [(1, 0.1, 1.19), (2, 2.0, 1.04)])]
+    late = [("s1", "late", "ref-optim/adamw", "full", 9e8, 3e9, None, 0.0, [(1, 0.5, 1.19)])]
+    shapes = {"s1": SHAPE, "s2": SHAPE2}
+    lost = ledger_rows(leap)[0] | {"id": "lost-1", "run_id": "lost", "start": "zz"}
+    waiting = FF.untraced(ledger_rows(leap + late) + [lost], shapes)
+    assert [r["id"] for r in waiting] == ["leap-1", "leap-2", "late-1"]
+    assert [r["gates"] for r in waiting] == pytest.approx([0.1 * C0, 2.0 * C0, 0.5 * C0])
+    p = AP.build(info(), "test", untraced=waiting)
+    ds = plots.frame(p)
+    mine = {(d["record"], d["gain_target"]): d for d in ds if d["record"].startswith("leap@")}
+    assert set(mine) == {("leap@1", 1.1), ("leap@2", 2), ("leap@2", 11)}
+    nulls = ("rho_default", "rho_served", "rho_own", "rho_console", "rho_inputs", "reading", "binding_kind", "kinds")
+    for d in mine.values():
+        assert (d["reached"], d["basis_default"], d["basis_own"], d["te_core"]) == ("yes", AP.UNTRACED, AP.UNTRACED,
+                                                                                    AP.VERSION)
+        assert all(d[c] is None for c in nulls) and d["own_c_gates"] == AP.own_session(SHAPE)["gates"]
+    by = {(d["record"], d["gain_target"]): d for d in ds}
+    assert mine[("leap@1", 1.1)]["p"] == 1 and by[("lora@1", 1.1)]["H_gates"] == pytest.approx(0.1 * C0)
+    assert by[("lora@1", 1.1)]["p"] == pytest.approx(2) and mine[("leap@2", 2)]["p"] == pytest.approx(2.0 / 1.5)
+    assert mine[("leap@2", 11)]["p"] == 1 and by[("ref@3", 11)]["p"] == pytest.approx(1.5 / 2.0)
+    assert [k for k in by if k[0].startswith("late@")] == [("late@1", 1.1)]
+    assert by[("late@1", 1.1)]["p"] == pytest.approx(5) and by[("late@1", 1.1)]["basis_own"] == AP.UNTRACED
+    cov = AP.coverage(p)
+    assert AP.unmeasured_rows(p, AP.UNTRACED) == 4 and sum(c["rows"] for c in cov) == len(ds) - 4
+    assert not any((c.get("record") or "").startswith(("leap@", "late@")) for c in cov)
+    rec, g = AP.COLUMNS.index("record"), AP.COLUMNS.index("gain_target")
+    for tier in AP.TIERS:
+        cut = {(r[rec], r[g]) for r in AP.kept(p["rows"], tier, {c["row"] for c in cov if c["row"] is not None})}
+        assert set(mine) <= cut and ("late@1", 1.1) not in cut
+    assert {f"leap@{s}" for s in (1, 2)} <= {r[AP.CONSOLE_COLUMNS.index("record")] for r in AP.cut(p)["rows"]}
+    fits = {"v3": None, "v2.3-pilot": LAW}
+    assert (f"3 reached rows with p from the record and rho null, basis_default {AP.UNTRACED}, in no decade."
+            in AP.coverage_md(cov, fits, "T", untraced=3))
+    assert AP.board_line(cov, fits, "T", None, untraced=3).endswith(
+        f" 3 reached rows {AP.UNTRACED} (p the record's), in no decade.")
+    calls, titles, real_plot, real_title = [], [], AP.plt.Axes.plot, AP.plt.Axes.set_title
+
+    def plot(ax, *a, **k):
+        calls.append(a[:3])
+        return real_plot(ax, *a, **k)
+
+    def set_title(ax, text, *a, **k):
+        titles.append(text)
+        return real_title(ax, text, *a, **k)
+
+    monkeypatch.setattr(AP.plt.Axes, "plot", plot)
+    monkeypatch.setattr(AP.plt.Axes, "set_title", set_title)
+    AP.figure(p, tmp_path)
+    assert all((d["p"], AP.FLOOR, "x") in calls for d in [*mine.values(), by[("late@1", 1.1)]])
+    assert len(titles) == len(AP.GAINS) and not any("none of" in t for t in titles)
+    assert titles[0].startswith("gain 1.1: ") and "(2 not yet traced)" in titles[0]
+    assert titles[2].startswith("gain 11: 1 reached (1 not yet traced)") and "no reached run is traced yet" in titles[2]
 
 
 def test_the_kinds_cell_labels_a_measured_fresh_products_term_with_its_premises_binding_or_not():
