@@ -507,7 +507,7 @@ def test_the_registered_compiler_is_prove_paths_capped_compiler():
 
 
 def test_bs_builder_item_is_what_the_registration_log_registers_once():
-    """B's entry in the registration log: the inner compiler's digest, the Commit window's advice format and ℓ, read back as
+    """B's entry in the registration log: the inner compiler's digest, the Commit period's advice format and ℓ, read back as
     the log's builder; a second builder is refused."""
     from verity.core.protocols import registration as REG
     from verity_vllm.pipeline import window_advice as WA
