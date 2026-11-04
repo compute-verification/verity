@@ -114,8 +114,8 @@ def GenericSampledKSClaims : Prop :=
           ((jointOf H V Rl E stmt B reads opens t).toTrials L).bindErr (reg σ) (cont σ) M
 
 /-- **The recursive audit through the sampled compiler.** B1 at a compiled verifier `K` over the inner protocol `I`
-and the server `Sv`, its extractor `E*` (`Comp.E`) and relation (`Comp.R`), where L1's hypotheses hold at every sampled
-statement (`Comp.OuterKSAt`, nonnegative `κ_O` and `γ_O`, `Comp.Contract`):
+and the server `Sv`, its extractor `E*` (`Comp.E`) and relation (`Comp.R`), where the server binds (`Server.Binds`) and
+L1's hypotheses hold at every sampled statement (`Comp.OuterKSAt`, nonnegative `κ_O` and `γ_O`, `Comp.Contract`):
 $$\Pr[\text{accept}] \le P_a(F) + \mathbb E_S \max_{u \in S} \mathrm{Comp.err}(\mathrm{stmt}(S, R), P_S) +
 \varepsilon_{\rm bind},$$
 at the inner loop bounds `mI` and the link's `Mo`. It follows from L1 (`GenericRecursiveKS`) and B1. -/
@@ -126,7 +126,7 @@ def RecursiveSampledKS : Prop :=
     (stmt : Finset (Fin n) → Reg → Claims.Msg)
     (reads : Fin n → Finset B.Pos) (opens : Finset (Fin n) → Reg → Fin n → W → B.Pos → B.Opening)
     (t : Finset (Fin n) → Reg → ℝ) (M : ℕ),
-    I.WF → I.KSAbortLin H → I.LastCoinFree H →
+    I.WF → I.KSAbortLin H → I.LastCoinFree H → Sv.Binds →
     (∀ S R, K.OuterKSAt H (stmt S R) ∧ 0 ≤ K.κO (stmt S R) ∧ 0 ≤ K.γO (stmt S R) ∧
       K.Contract H (Sv.IVStar I.V I.ans) (fun v => I.opens (Sv.openView v)) (stmt S R)) →
     (jointOf H K.V (K.R I) (K.E I Sv) stmt B reads opens t).Sound Correct → (∀ S R, 0 ≤ t S R) → 1 ≤ M →

@@ -92,10 +92,10 @@ namespace Claims.RecGeneric
 /-- **The recursive audit through the sampled compiler, from L1**: L1 at every sampled statement bounds `PrBad` at
 `Comp.err` on every claims prover, which is B1's hypothesis. -/
 theorem recursiveSampledKS_of_L1 (hL1 : Flock.Guarantees.GenericRecursiveKS) : Flock.Guarantees.RecursiveSampledKS := by
-  intro Coin W _ _ _ H I Sv K mI Mo n Reg Dh Hc L B Correct stmt reads opens t M hWF hKS hLC hAt hS ht hM σ hCR
+  intro Coin W _ _ _ H I Sv K mI Mo n Reg Dh Hc L B Correct stmt reads opens t M hWF hKS hLC hBd hAt hS ht hM σ hCR
   exact Flock.SecurityProofs.GenericSampledKSClaims Coin W K.V (K.R I) (K.E I Sv) H
     (fun x P => K.err I Sv H P x mI Mo) n Reg Dh Hc L B Correct stmt reads opens t M
-    (fun S R P => hL1 Coin W H I Sv K hWF hKS hLC (stmt S R) (hAt S R).1 (hAt S R).2.1 (hAt S R).2.2.1
+    (fun S R P => hL1 Coin W H I Sv K hWF hKS hLC hBd (stmt S R) (hAt S R).1 (hAt S R).2.1 (hAt S R).2.2.1
       (hAt S R).2.2.2 Unit P mI Mo)
     hS ht hM σ hCR
 
