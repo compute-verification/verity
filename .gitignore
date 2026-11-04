@@ -73,6 +73,8 @@ benchmarks/network_e2e/tests/data/endpoint_carry/advice_trace.jsonl
 benchmarks/network_traces/tests/fixtures/weights-v1-h200-digests.json
 benchmarks/tc_probe_fp4/tests/fixtures/tc-sm100-f8-2026-10-19.json
 verity/core/protocols/certifier/tests/fixtures/arith_encode_vectors.json
+benchmarks/one_stage/tests/fixtures/a5-wired-v2
+benchmarks/one_stage/tests/fixtures/a5-wired-circuits
 verity/core/protocols/certifier/tests/fixtures/cache_step_vectors.json
 verity/core/protocols/certifier/tests/fixtures/cache_step_v2_vectors.json
 verity/core/protocols/certifier/tests/fixtures/replay_step_vectors.json
