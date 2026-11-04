@@ -129,10 +129,6 @@
    "why": "retl_walk, the tactic (an elab) that walks RetL goals at elaboration, step by step on the logged computation's head (retlStep, in Recursion/DecodeLog.lean's proofs and the module's own). It reads no files and does no IO, and the kernel replays every proof it builds.",
    "digest": "5dca0cbd5c9510d395564190eaa9597f5352180152be0e3b481a6ceb301f0435"
   },
-  "Proofs.Flock.Claims.Sampling.Select.LetWalk": {
-   "why": "ret_walk_let, the tactic (an elab) that walks Ret goals as ret_walk does (retStep), with a let that is not a join point generalized beside its value's equation (retLetStep, in Sampling/Select/SameLaw.lean's paramsParsed_rule). It reads no files and does no IO, and the kernel replays every proof it builds.",
-   "digest": "6654a57102cd93efa99ec77f2edc859e195d4b556d64adc4a22fe385e427e534"
-  },
   "Proofs.Flock.Claims.ZK.FinishLigEnd": {
    "why": "end_l and keep_l, local tactics (two macro_rules) that walk a Ligerito step by its head to its last squeeze (EndL) or through steps that only update its state (KeepL), trying the module's endL_*/keepL_* lemmas with refine, exact and split, in ligeritoCut_end's proof. They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
    "digest": "accc9479df9dc288a7e94f66fb36e63584f870dc095aaa78c798265fc1bbda7c"
