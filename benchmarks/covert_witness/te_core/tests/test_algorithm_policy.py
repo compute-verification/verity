@@ -534,6 +534,64 @@ def test_a_partial_row_is_drawn_marked_but_in_no_cell_on_no_others_front_and_nev
     assert rings and not rings & marked
 
 
+def test_a_reached_run_with_no_trace_yet_is_a_row_with_its_records_p_and_no_rho_never_an_absence(tmp_path,
+                                                                                               monkeypatch):
+    """A run with no trace yet (te_core.frontier_fit's `untraced`; coordinator 10:56Z) has a row at each target it
+    reaches, at its first checkpoint reaching it, with C and p from its record and every ρ column null under basis
+    `unmeasured: not yet traced`; its checkpoints count in H, no decade holds it, every cut keeps it, and the figure
+    draws it on its floor and never reads "none reached" where it reached. leap reaches gain 1.1 at a tenth of C0,
+    half lora's, and gain 11, which no traced run reaches; a row whose start has no shape is none of them."""
+    leap = [("s1", "leap", "ref-optim/adamw", "full", 9e8, 3e9, None, 0.0, [(1, 0.1, 1.19), (2, 2.0, 1.04)])]
+    shapes = {"s1": SHAPE, "s2": SHAPE2}
+    lost = ledger_rows(leap)[0] | {"id": "lost-1", "run_id": "lost", "start": "zz"}
+    waiting = FF.untraced(ledger_rows(leap) + [lost], shapes)
+    assert [r["id"] for r in waiting] == ["leap-1", "leap-2"]
+    assert [r["gates"] for r in waiting] == pytest.approx([0.1 * C0, 2.0 * C0])
+    p = AP.build(info(), "test", untraced=waiting)
+    ds = plots.frame(p)
+    mine = {(d["record"], d["gain_target"]): d for d in ds if d["record"].startswith("leap@")}
+    assert set(mine) == {("leap@1", 1.1), ("leap@2", 2), ("leap@2", 11)}
+    nulls = ("rho_default", "rho_served", "rho_own", "rho_console", "rho_inputs", "reading", "binding_kind", "kinds")
+    for d in mine.values():
+        assert (d["reached"], d["basis_default"], d["basis_own"], d["te_core"]) == ("yes", AP.UNTRACED, AP.UNTRACED,
+                                                                                    AP.VERSION)
+        assert all(d[c] is None for c in nulls) and d["own_c_gates"] == AP.own_session(SHAPE)["gates"]
+    by = {(d["record"], d["gain_target"]): d for d in ds}
+    assert mine[("leap@1", 1.1)]["p"] == 1 and by[("lora@1", 1.1)]["H_gates"] == pytest.approx(0.1 * C0)
+    assert by[("lora@1", 1.1)]["p"] == pytest.approx(2) and mine[("leap@2", 2)]["p"] == pytest.approx(2.0 / 1.5)
+    assert mine[("leap@2", 11)]["p"] == 1 and by[("ref@3", 11)]["p"] == pytest.approx(1.5 / 2.0)
+    cov = AP.coverage(p)
+    assert AP.unmeasured_rows(p, AP.UNTRACED) == 3 and sum(c["rows"] for c in cov) == len(ds) - 3
+    assert not any((c.get("record") or "").startswith("leap@") for c in cov)
+    rec, g = AP.COLUMNS.index("record"), AP.COLUMNS.index("gain_target")
+    for tier in AP.TIERS:
+        assert set(mine) <= {(r[rec], r[g]) for r in AP.kept(p["rows"], tier, {c["row"] for c in cov
+                                                                                if c["row"] is not None})}
+    assert {f"leap@{s}" for s in (1, 2)} <= {r[AP.CONSOLE_COLUMNS.index("record")] for r in AP.cut(p)["rows"]}
+    fits = {"v3": None, "v2.3-pilot": LAW}
+    assert (f"3 reached rows with p from the record and rho null, basis_default {AP.UNTRACED}, in no decade."
+            in AP.coverage_md(cov, fits, "T", untraced=3))
+    assert AP.board_line(cov, fits, "T", None, untraced=3).endswith(
+        f" 3 reached rows {AP.UNTRACED} (p the record's), in no decade.")
+    calls, titles, real_plot, real_title = [], [], AP.plt.Axes.plot, AP.plt.Axes.set_title
+
+    def plot(ax, *a, **k):
+        calls.append(a[:3])
+        return real_plot(ax, *a, **k)
+
+    def set_title(ax, text, *a, **k):
+        titles.append(text)
+        return real_title(ax, text, *a, **k)
+
+    monkeypatch.setattr(AP.plt.Axes, "plot", plot)
+    monkeypatch.setattr(AP.plt.Axes, "set_title", set_title)
+    AP.figure(p, tmp_path)
+    assert all((d["p"], AP.FLOOR, "x") in calls for d in mine.values())
+    assert len(titles) == len(AP.GAINS) and not any("none of" in t for t in titles)
+    assert titles[0].startswith("gain 1.1: ") and "(1 not yet traced)" in titles[0]
+    assert titles[2].startswith("gain 11: 1 reached (1 not yet traced)") and "no reached run is traced yet" in titles[2]
+
+
 def test_the_kinds_cell_labels_a_measured_fresh_products_term_with_its_premises_binding_or_not():
     """The fresh-products term rests on P-width and P-chain (coordinator 12:09Z), and the row's rests_on names them only
     where it binds, so the kinds cell carries formalism's RESTS_ON_CELL beside a measured term; an unmeasured term has

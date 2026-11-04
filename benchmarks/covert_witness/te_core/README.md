@@ -186,7 +186,7 @@ uncertainty where it would give its rms in effective compute. `training/algorith
 11, a checkpoint's gain C(L1)/C(L0) on that fit, from the start's loss L0 to its own L1, so every target is below
 L0), "yes" at the run's first checkpoint reaching g, else "no" at its last, with the algorithm's inefficiency p = C/H
 (H the least |C| of any checkpoint from the start
-on the same data reaching g, every run's pooled; a lower bound on a "no" row's p) against the policy's slowdown ρ,
+on the same data reaching g, traced or not, every run's pooled; a lower bound on a "no" row's p) against the policy's slowdown ρ,
 `formalism.published` under three policies: the headline `rho_own` at the start's own session (`policy.session` on
 the start's model, 4,096 tokens in and 1,024 out, c `own_c_gates`) at k = 65,536, one 16-bit word an input token,
 beside its packed ids (`own_k_bits`, 61,440 on v3), where ρ is at least rho_own; and two sensitivities, the
@@ -208,7 +208,9 @@ refuses, which no cell holds (`tables/refused.json` gives each one's reason). A 
 kind unmeasured, so ρ is only a lower bound) has basis `partial`: the figure marks it with a caret up and the cut
 picks the partial rows among themselves, but none is in a cell, on the others' front or the least S. No row is
 void: every row reads the products term, max(1, ρ_HE), with its premises, and the old figure's void Λ is only its
-sensitivity fresh_old.
+sensitivity fresh_old. A run that reached with no trace yet (`frontier_fit.untraced`) is a row at each target it
+reaches, never an absence: p from its record, its checkpoints in H, every ρ column null and both bases
+`unmeasured: not yet traced`; it is in no cell, every cut keeps it, and the figure draws it as an x on its floor.
 `--publish` GETs what the route serves
 and PUTs nothing without it: on a data whose served rows are at a newer te_core, or at an older one with a run this
 build has no row for, both panels keep the served rows (`kept_data`, `guarded`), so a version switch never

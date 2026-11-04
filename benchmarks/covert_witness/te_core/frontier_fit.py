@@ -55,7 +55,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import VERSION, console, frontier, panels, plots, policy, rescore
+from . import VERSION, console, formalism, frontier, panels, plots, policy, rescore
 from .gates import UNIT, per_mac
 
 NAME = "frontier-fit"
@@ -499,16 +499,37 @@ def scored_rows(a) -> tuple[dict, list[dict]]:
     """te_core.rescore's loading for `a` and its scored rows (te_core.plots' `load`, the pin's and the pilot's unless
     `--pin` names the commits), each with its record's family where it has none: the analysis classifies every record
     it has (`rescore.analysed`), whichever quantities score it. The valid rows te_core.formalism refuses are never
-    scored; `d["refused"]` holds each one's reason by row id (te_core.frontier's `formalism_rows`)."""
+    scored; `d["refused"]` holds each one's reason by row id (te_core.frontier's `formalism_rows`), and, on measured
+    quantities, `d["untraced"]` the valid rows with no trace yet (`untraced`)."""
     d = rescore.load(a)
     family = {run: f for (run, _), (_, f) in d["blocks"].items()}
     rows = [r | {"family": family[r["run_id"]]} if not r.get("family") and r.get("run_id") in family else r
             for r in d["rows"]]
     pin = d["pin"] if a.pin else frontier.pinned(pilot=True)
-    keep = [r for r in frontier.valid(rows, pin) if d["keep"] is None or d["keep"](r)]
+    valid = frontier.valid(rows, pin)
+    keep = [r for r in valid if d["keep"] is None or d["keep"](r)]
     scored, skipped = frontier.formalism_rows(keep, d["shapes"], d["ladder"])
     d["refused"] = {i: v[len(frontier.REFUSED):] for i, v in skipped.items() if v.startswith(frontier.REFUSED)}
+    d["untraced"] = (untraced([r for r in valid if not frontier.measured(r)], d["shapes"], d["ladder"])
+                     if d["keep"] is frontier.measured else [])
     return d, scored
+
+
+def untraced(rows: list[dict], shapes: dict[str, dict], ladder=None) -> list[dict]:
+    """Of `rows`, valid rows with no measured quantities (not te_core.frontier's `measured`: a trace not yet taken), each
+    with its |C| in gates (te_core.formalism's count of its record's ops, as a scored row's) and no ρ:
+    te_core.algorithm_policy gives a reached one a row, its ρ unmeasured. A row te_core.frontier's `formalism_rows`
+    would leave out for another reason (`frontier.left_out`, or refused) is none of them."""
+    out = []
+    for r in rows:
+        shape = shapes.get(r["start"])
+        if r.get("val_bpb") is None or frontier.left_out(r, shape, ladder):
+            continue
+        try:
+            out.append(r | {"gates": formalism.measure(r, shape).gates})
+        except (formalism.Refused, ValueError):
+            continue
+    return out
 
 
 def refusals(refused: dict[str, str]) -> str:
