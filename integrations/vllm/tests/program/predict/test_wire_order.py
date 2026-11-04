@@ -21,6 +21,8 @@ from tests.program.predict import test_steps as S
 from tests.program.predict import test_window_circuit as T
 from tests.program.predict import test_window_circuit_fa3 as TF
 from tests.program.predict import test_window_circuit_int8 as T8
+from tests.program.predict import test_window_circuit_pearl as TP
+from tests.program.predict import test_window_circuit_tables as TT
 from verity_vllm.program.predict import window_builder as WB
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict.build import Unexpressible
@@ -29,20 +31,25 @@ from verity_vllm.program.predict.window_circuit import WindowClass
 from verity.ml.windows import interface as IF
 
 SEGMENT = ("template", "at", "radix", "c", "r")
-#: each class the tests lower (its registered program, class and grain) and its function (`_function`): the digest of its
-#: templates, cuts and registered reads with every wired reader row's writer row, and the wired rows. Placing wires in
-#: entries (`window_builder.placed`) restates them and never changes what they wire.
+#: each class the tests lower (its registered program, class, grain and tables: H1's, `test_window_circuit_tables`', or
+#: Pearl+'s, `test_window_circuit_pearl`'s) and its function (`_function`): the digest of its templates, cuts and
+#: registered reads with every wired reader row's writer row, and the wired rows. Placing wires in entries
+#: (`window_builder.placed`) restates them and never changes what they wire.
 FUNCTIONS = {
-    "tiny": (S._registered, T.CLASS, T.GRAIN, 3264, "60788acb1c75aa92db0554bcdab73b4f699e8a668159b714de34fa1120037b86274ade8b"
-             "0435acb4f575ddfdc8abb9b81c3658371ee3aa831410c795d033bdd8"),
-    "slots": (S._registered, T.SLOTS, T.GRAIN, 13056, "773ff46288b89b94206019ca1271656362b22cb039e9ef423c338c1914d26eeccdf31be4"
-              "0f0ac33d22a60466e576f1296fc863940f6606cc6aa360a970333ba3"),
-    "int8": (T8._registered, T.CLASS, T8.GRAIN, 3824, "6cfd9a85ed56bd052784c90f496ef433595ae90199880cdee08fdad12e5d08fb6568a09"
-             "8170d0079c7cb7dad02680b002b60b112f7469f6c5134237c82d98439"),
-    "fa3": (TF._registered, T.CLASS, T.GRAIN, 3264, "38dc0707d9a99f2362b4e84901ed8a963f3d715fe9d11a6c2367c6be5e24780fbd20ac16"
-            "4496e879c021641222f37cc53176770dc45b618e15732c3f43aeb019"),
-    "long": (S._registered, WindowClass(2, 8, 4), T.GRAIN, 8236, "78d5880bb814f0c2c6a66eb44676d32bb9034ac817c89c2aa566e0d38eec9"
-             "6259bd6b1b15434f09df481bb88bef35b732396d134bc760efd01c85851640d06b5"),
+    "tiny": (S._registered, T.CLASS, T.GRAIN, None, 3264, "60788acb1c75aa92db0554bcdab73b4f699e8a668159b714de34fa1120037b86274"
+             "ade8b0435acb4f575ddfdc8abb9b81c3658371ee3aa831410c795d033bdd8"),
+    "slots": (S._registered, T.SLOTS, T.GRAIN, None, 13056, "773ff46288b89b94206019ca1271656362b22cb039e9ef423c338c1914d26eeccd"
+              "f31be40f0ac33d22a60466e576f1296fc863940f6606cc6aa360a970333ba3"),
+    "int8": (T8._registered, T.CLASS, T8.GRAIN, None, 3824, "6cfd9a85ed56bd052784c90f496ef433595ae90199880cdee08fdad12e5d08fb65"
+             "68a098170d0079c7cb7dad02680b002b60b112f7469f6c5134237c82d98439"),
+    "fa3": (TF._registered, T.CLASS, T.GRAIN, None, 3264, "38dc0707d9a99f2362b4e84901ed8a963f3d715fe9d11a6c2367c6be5e24780fbd20"
+            "ac164496e879c021641222f37cc53176770dc45b618e15732c3f43aeb019"),
+    "long": (S._registered, WindowClass(2, 8, 4), T.GRAIN, None, 8236, "78d5880bb814f0c2c6a66eb44676d32bb9034ac817c89c2aa566e0"
+             "d38eec96259bd6b1b15434f09df481bb88bef35b732396d134bc760efd01c85851640d06b5"),
+    "h1-tables": (T8._registered, T.CLASS, T8.GRAIN, TT.TABLES, 3824, "6fd3175c1e627eeeb9454c8381b94c6e55fcf9a7a171dc33b5845d8"
+                  "6a63098be35be3ab1ad4bd5ca40b0d7485645d4748884936e4c73850ddd8ed31bee7e9150"),
+    "pearl": (TP._registered, T.CLASS, T.GRAIN, TP.PEARL, 1964, "afbb150443c597ac9312b986571f983447098535e5b0b3d85a7fd1706457c5"
+              "01569d7daef60c5d56785099270ec107bc85d9fc48af75c76d6205ed50f0de0ec3"),
 }
 
 
@@ -167,8 +174,8 @@ def _function(desc) -> tuple[str, int]:
 
 @functools.cache
 def _lowered(name: str) -> tuple[WC.Lowered, dict]:
-    registered, cls, grain, _, _ = FUNCTIONS[name]
-    low = WC.lower(registered(), cls, None, grain, provable=False)
+    registered, cls, grain, tables, _, _ = FUNCTIONS[name]
+    low = WC.lower(registered(), cls, None, grain, provable=False, tables=tables)
     return low, json.loads(json.dumps(low.circuit.description()))
 
 
