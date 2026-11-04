@@ -56,8 +56,8 @@ class RunGraph:
         return sum(n * g.deep_macs(D, unit) for n, g in self.steps)
 
     def phi(self, D, unit: str = "macs") -> Fraction:
-        """The share of |C| in using GEMMs with at least D upstream (`StepGraph.depth_profile`'s unit)."""
-        return Fraction(self.deep_macs(D, unit), self.macs) if self.macs else Fraction(0)
+        """The share of |C| (`c_macs`) in updated MACs with at least D upstream (`StepGraph.depth_profile`'s unit)."""
+        return Fraction(self.deep_macs(D, unit), self.c_macs) if self.c_macs else Fraction(0)
 
     def record(self) -> dict:
         """The run as te_core.flops's `Counter.record()`: one step entry per step, in order, each naming its structure.
@@ -83,7 +83,7 @@ class RunGraph:
 
     def summary(self) -> dict:
         return {"steps": self.n_steps, "distinct": len(self.steps), "macs": self.macs, "c_macs": self.c_macs,
-                "tokens": self.tokens, "roles": {r: self.role_macs(r) for r in ("using", "producing", "neither")},
+                "tokens": self.tokens, "roles": {r: self.role_macs(r) for r in ("updated", "producing", "neither")},
                 "graphs": [{"steps": n, "digest": g.digest, "name": g.name, "macs": g.macs, "c_macs": g.c_macs,
                             "updated": sorted(g.updated), "trained": sorted(g.trained)} for n, g in self.steps]}
 

@@ -19,7 +19,6 @@ import torch.nn.functional as F
 
 import prepare
 
-KLASS = "shallow"
 
 
 def main() -> int:
@@ -79,7 +78,7 @@ def main() -> int:
             snaps.append((prepare.encode_full(tensors(params, theta, tuned)), len(steps)))
     delta = tensors(params, theta, tuned)
     model = dict(theta) | delta
-    prepare.submit(Path(a.out), a.start, KLASS, prepare.encode_full(delta), model, trainable, steps, changed=tuned,
+    prepare.submit(Path(a.out), a.start, prepare.encode_full(delta), model, trainable, steps, changed=tuned,
                    notes={"method": "top-block tuning", "args": vars(a), "steps": n_steps}, snapshots=snaps)
     return 0
 

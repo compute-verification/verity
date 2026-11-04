@@ -30,11 +30,10 @@ stated on these objects.
   is a unit of a `Partition`; NCI's instance calls them inference blocks, and training's serving blocks. No ordering of
   the proof blocks is required: Lemma 1 and Theorem 3 read none, so the draft's "inter-block edges point forward" is
   dropped.
-* A **`(c, k)`-partition** (`Partition.IsCK`) of a Boolean circuit: every proof block has exactly `c` gates, padding
-  included, and at most `k` unregistered input bits, `|in(I) \ θ| ≤ k` (`unregistered`). Its circuit has size `c · B`.
-  Proof blocks of at most `c` gates become exactly `c` by a `Pad`: registered padding gates in each proof block, read by
-  nothing of `d`.
-* The **slowdown** relative to a reference of size `T₀` is `|C| / T₀` (`slowdown`), a ratio of circuit sizes.
+* A **`(c, k)`-partition** (`Partition.IsCK`) of a Boolean circuit: every proof block has at most `c` gates, `|I| ≤ c`,
+  and at most `k` unregistered input bits, `|in(I) \ θ| ≤ k` (`unregistered`). Its circuit has size at most `c · B`.
+* The **slowdown** of `B` proof blocks of budget `c` relative to a reference of size `T₀` is `c · B / T₀` (`slowdown`),
+  each proof block priced at `c` gates: at least `|C| / T₀`.
 * **Local description length** (§4): `LDL M t r y` is the length of a shortest program on which the decoder `M`, with
   indexed access to the registered information `r`, outputs `y` within `t` steps, and `⊤` when none does. Side
   information `z` is registered information paired with it, `LDL M t (r, z) y`. The decoder is a parameter (`Decoder`):
@@ -101,27 +100,16 @@ that `S` reads is among them. -/
 def Declaration.unregistered (d : Declaration) (S : Finset (Fin d.D.N)) : Finset (Fin d.D.N) :=
   d.D.into S \ d.θ
 
-/-- **A `(c, k)`-partition** of a Boolean declaration's operation gates: every proof block has exactly `c` gates and at
+/-- **A `(c, k)`-partition** of a Boolean declaration's operation gates: every proof block has at most `c` gates and at
 most `k` unregistered input bits. -/
 structure Partition.IsCK (d : Declaration) {B : ℕ} (P : Partition d.D B) (c k : ℕ) : Prop where
   boolean : d.D.Boolean
-  card : ∀ u, (P.gates u).card = c
+  card : ∀ u, (P.gates u).card ≤ c
   reads : ∀ u, (d.unregistered (P.gates u)).card ≤ k
 
-/-- **A padding** of the partition `P` of `d` to the partition `P'` of `d'`, with as many proof blocks: `d'`'s circuit
-contains `d`'s (`M`), with the same registered gates among `d`'s, every gate of `d` stays in its proof block, and every
-other gate of `d'`, the padding, is a registered input gate or reads registered gates only. Padding is fixed and
-input-independent, so each proof block reads the unregistered gates it read before (`Verity.Pad.unregistered`).
-It completes the accounting; it is not evidence that hardware evaluated anything. -/
-structure Pad (d : Declaration) {B : ℕ} (P : Partition d.D B) (d' : Declaration) (P' : Partition d'.D B) where
-  M : Containment d.D d'.D
-  θ_emb : ∀ g, M.emb g ∈ d'.θ ↔ g ∈ d.θ
-  unit_emb : ∀ g, P'.unit (M.emb g) = P.unit g
-  pad_input : ∀ g', g' ∉ Set.range M.emb → d'.D.isInput g' = true → g' ∈ d'.θ
-  pad_reads : ∀ g', g' ∉ Set.range M.emb → ∀ a ∈ d'.D.reads g', a ∈ d'.θ
-
-/-- **The slowdown** of `C` relative to a reference circuit of size `T₀`: `|C| / T₀`. -/
-noncomputable def slowdown (C : Circuit) (T₀ : ℝ) : ℝ := ((C.size C.computed : ℕ) : ℝ) / T₀
+/-- **The slowdown** of `B` proof blocks of budget `c` relative to a reference circuit of size `T₀`: `c · B / T₀`, each
+proof block priced at `c` gates. -/
+noncomputable def slowdown (c B : ℕ) (T₀ : ℝ) : ℝ := ((c * B : ℕ) : ℝ) / T₀
 
 /-- **The committed declaration** `R = (θ, C, 𝓘)`, fixed once before the monitored computation: the declaration
 `(C, θ)`, the committed values of `θ`'s gates (`val`, read only there) and the partition `P` into `B` proof blocks. -/

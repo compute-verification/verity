@@ -1,4 +1,4 @@
-# covert_witness's nodes (launch.py, promote.py; te_core.launch.nodes): `NODE pool=GPU_POOL cpu=CPU_POOL`, one a line,
+# covert_witness's nodes (launch.py, promote.py; te_core.nodes): `NODE pool=GPU_POOL cpu=CPU_POOL`, one a line,
 # taken in turn; vy-dc-h200* is refused. A node is listed once its gpu pool takes training runs and `prep.sh` passed there.
 vy-nebius-2 pool=gpu cpu=research
 # vy-nebius-1 and -3 take training runs only through their gpu pools (8 and 4 cores a slot), so their CPU work (prep.sh,

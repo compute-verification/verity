@@ -1,0 +1,1837 @@
+{
+ "schema": "covert-witness/olmo-sample/v1",
+ "data": "v3",
+ "repo": "allenai/olmo-mix-1124",
+ "revision": "99ee6aaace88779d1ef099d36251b91101c1679b",
+ "fraction": 0.0098,
+ "seed": "random.Random('v3/<source>').shuffle(the source's files in path order)",
+ "rule": "each source's files in the seeded order, whole while their compressed bytes fit FRACTION of the source's; the first that doesn't gives its first documents holding `take` of its text's UTF-8 bytes",
+ "sources": {
+  "algebraic-stack": {
+   "files": 16,
+   "bytes": 11011501789,
+   "target_bytes": 107912718,
+   "chosen_bytes": 107912718,
+   "chosen": [
+    {
+     "path": "data/algebraic-stack/train/algebraic-stack-train-0010.json.gz",
+     "size": 376914368,
+     "sha256": "de46aa536b7f26d66d3e41031a5a7c8c187ec698071c8dd01703f253a8e24400",
+     "take": 0.286305661693958
+    }
+   ]
+  },
+  "arxiv": {
+   "files": 20,
+   "bytes": 21832617287,
+   "target_bytes": 213959649,
+   "chosen_bytes": 213959649,
+   "chosen": [
+    {
+     "path": "data/arxiv/train/arxiv-train-0013.json.gz",
+     "size": 1272716640,
+     "sha256": "cb0f174a7f3fda85035930bfa356f10d5ba0afddb3ca74e44b3acd22724ea2f0",
+     "take": 0.16811255757023807
+    }
+   ]
+  },
+  "dclm": {
+   "files": 27938,
+   "bytes": 7220464460921,
+   "target_bytes": 70760551717,
+   "chosen_bytes": 70760551717,
+   "chosen": [
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_3_of_10/shard_00000082_processed.jsonl.zstd",
+     "size": 243043848,
+     "sha256": "13f49d8a5e5fc70cb71444851582bd7c42bff77aeaa5a1cb9262344d8afad71f",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_02_of_10/local-shard_0_of_10/shard_00000170_processed.jsonl.zstd",
+     "size": 298730624,
+     "sha256": "cbc604819846f0ffeb2de7fac03b2f6d12c0b959956d4194543a09143a2773db",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_4_of_10/shard_00000168_processed.jsonl.zstd",
+     "size": 271325931,
+     "sha256": "48d2357b14cd0f82b359f57b681df96a6c517bba3d20ff843eb23fbe3c3dfa94",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_4_of_10/shard_00000088_processed.jsonl.zstd",
+     "size": 241114651,
+     "sha256": "457e927096e6397bb70de4583193432177159b927e1a9cbe4f83223d4a5d223a",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_5_of_10/shard_00000055_processed.jsonl.zstd",
+     "size": 229914327,
+     "sha256": "7c48251c723c55f7aff9e04b42e924529a2dc5d35cebc6be3b87923a544d504e",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_6_of_10/shard_00000073_processed.jsonl.zstd",
+     "size": 249486394,
+     "sha256": "2eff96eaa2cb6b513ba90f0e26490bac37d667fdb7c401ade22029a6f3a912d7",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_5_of_10/shard_00000272_processed.jsonl.zstd",
+     "size": 253450219,
+     "sha256": "61267f065f4f6326f81ee9b402a8009f439d87d3a130c1fed7a9640a382ccb32",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_1_of_10/shard_00000178_processed.jsonl.zstd",
+     "size": 207119949,
+     "sha256": "3c2921e217e4c41b6ea24c712dab49cd26360d535d0ad5779370ccc0d7c17ae4",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_3_of_10/shard_00000106_processed.jsonl.zstd",
+     "size": 245619581,
+     "sha256": "60e100f45aaaf44d442dc3bcc56e09c7c9d10812ed51f91f27f549d3c068582a",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_02_of_10/local-shard_5_of_10/shard_00000134_processed.jsonl.zstd",
+     "size": 300923888,
+     "sha256": "019e90028216ab203af3366b62d0d7c570ec18ec253cc1e48a5a6472f91e38de",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_1_of_10/shard_00000178_processed.jsonl.zstd",
+     "size": 220158553,
+     "sha256": "fc9957f746645f9137b5b3ba33d3fae03764d4ad90e43df722a4c4f2496f23f7",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_5_of_10/shard_00000034_processed.jsonl.zstd",
+     "size": 223186744,
+     "sha256": "4cdb576058fa5fa3a16f2decba22b0c6502325c0aabad4e2e3391830fdeb83a3",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_7_of_10/shard_00000027_processed.jsonl.zstd",
+     "size": 216588282,
+     "sha256": "dcc15c5526728da6e28cf29710e02c6a4810f79e8ba38f24af4f3eb5df701793",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_3_of_10/shard_00000205_processed.jsonl.zstd",
+     "size": 362567803,
+     "sha256": "d7845bc36e479e7ecc25db8dbfca918333f2950864d1c7396542ec891244ddb9",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_3_of_10/shard_00000138_processed.jsonl.zstd",
+     "size": 223602287,
+     "sha256": "7f76f2ab5d3777aeebd77c16d2a931b64e3de29361a851fb222986e47db1a4ea",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_7_of_10/shard_00000023_processed.jsonl.zstd",
+     "size": 256029189,
+     "sha256": "c0aeee26677dd8060d7a29c61e0a24d705b6a076bbd0c29cbaf92a590abfc785",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_6_of_10/shard_00000265_processed.jsonl.zstd",
+     "size": 396196005,
+     "sha256": "fce3d0eb6d9dc67ebb7228c2ee649ea7ace8b144e787ddb79b89296d7cdbe87f",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_0_of_10/shard_00000190_processed.jsonl.zstd",
+     "size": 280905410,
+     "sha256": "575fba7de79a12f35040980edcd4c15ce15323403babed34b4db7ca0bc5ac38b",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_0_of_10/shard_00000277_processed.jsonl.zstd",
+     "size": 438517267,
+     "sha256": "910f417c70eae1c155adebad25dd7735a85680649284a20cea90e8b68a3af21e",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_1_of_10/shard_00000164_processed.jsonl.zstd",
+     "size": 279154440,
+     "sha256": "bf0da25d6eed1c54afd3f424d1a78dab11c7506345243aa5d23efadd9f9e111a",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_03_of_10/local-shard_5_of_10/shard_00000031_processed.jsonl.zstd",
+     "size": 210685159,
+     "sha256": "027d51d8861f00a49ca9d50ccb237be3432f875b02d4d8ceeb13395b55ec3329",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_03_of_10/local-shard_6_of_10/shard_00000125_processed.jsonl.zstd",
+     "size": 208624027,
+     "sha256": "f3b6af692e67c74f8cdcdbb4155dc354b820593d94ecf49e8a50c0ce3126a0d3",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_9_of_10/shard_00000105_processed.jsonl.zstd",
+     "size": 221801866,
+     "sha256": "253680c1377a9846f2bca4b95f8305c752f070507b2b606f649010ab86f27ef6",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_7_of_10/shard_00000221_processed.jsonl.zstd",
+     "size": 342250841,
+     "sha256": "7f5eb8c850b0fabc126f1965b3e6b1c10d7f5ef9702a18a0471985efc8a5fbc9",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_0_of_10/shard_00000184_processed.jsonl.zstd",
+     "size": 233505757,
+     "sha256": "26c63f5bb0d8afded7a3d177d26b72444aaac955baf658a6afb21b77ec4ac5ad",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_1_of_10/shard_00000100_processed.jsonl.zstd",
+     "size": 264632437,
+     "sha256": "e8a7f614f15b9710be696f3534ea86df30cc47be2a1acd8beb8604c1b82e099d",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_9_of_10/shard_00000109_processed.jsonl.zstd",
+     "size": 191096412,
+     "sha256": "f5b32fb6539879164122f33b9aecd974800b97793d22c68de99bfb775b7e968b",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_3_of_10/shard_00000090_processed.jsonl.zstd",
+     "size": 257629464,
+     "sha256": "a11237d327e3adb925377bb41867942b35907841a386eaf65a2649cc085d0c9c",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_4_of_10/shard_00000151_processed.jsonl.zstd",
+     "size": 319411963,
+     "sha256": "d70e0620292cc9af2a62e85aff6bcb8960159ca93c21ba21c7d7009e3cdbe280",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_6_of_10/shard_00000060_processed.jsonl.zstd",
+     "size": 283700400,
+     "sha256": "c1e99ffc9b91be6b5632c6fd16b412268c594f722c4cba0ac8e455b1d7b02736",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_6_of_10/shard_00000193_processed.jsonl.zstd",
+     "size": 214417119,
+     "sha256": "0d7a321a932518445c65c5544b5a9d8fc56a4f7b69646f9c51346c80f2924fd7",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_1_of_10/shard_00000038_processed.jsonl.zstd",
+     "size": 224810401,
+     "sha256": "ce15104e622365d85cf6579f8c7827998f0f5e20ceae9387a0a6974bb81c4292",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_4_of_10/shard_00000114_processed.jsonl.zstd",
+     "size": 208380809,
+     "sha256": "78b0589338d8397e189ecc29a84acba8deafe8e76700f640bad75bf3fc424776",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_8_of_10/shard_00000226_processed.jsonl.zstd",
+     "size": 263322409,
+     "sha256": "edf95b48c4eea9c964b2fd9698f41de94f44a9fea040eb00042fdc1fdcd2eb2b",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_0_of_10/shard_00000154_processed.jsonl.zstd",
+     "size": 224458803,
+     "sha256": "a8dadc6def55f61200dc6d41fc08fadd534263ab86f9ec6092568879b5d79aab",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_1_of_10/shard_00000131_processed.jsonl.zstd",
+     "size": 218506134,
+     "sha256": "8518e16e5145f286ecf787cd8e1f9153e7c819b17672ade84dcc1d75ce7c0b00",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_7_of_10/shard_00000132_processed.jsonl.zstd",
+     "size": 273154710,
+     "sha256": "78096db218669b0e46b0ec059f4d89544bab1689ae01e8ac2111657b65b812f5",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_9_of_10/shard_00000095_processed.jsonl.zstd",
+     "size": 224359366,
+     "sha256": "7362f10d943a23ac7d0630d06b3774b2d3326dc75d59a68133a229a6a5f11c29",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_4_of_10/shard_00000183_processed.jsonl.zstd",
+     "size": 242882115,
+     "sha256": "fe8f99022daef0ac3d9bfed82673be61312ae856f9480c3bc9997a05d504a825",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_0_of_10/shard_00000001_processed.jsonl.zstd",
+     "size": 218055028,
+     "sha256": "ae6f05b12af96a05508bbe696e9e2904547239b42d3ca322495cbfbc6f62fa24",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_9_of_10/shard_00000023_processed.jsonl.zstd",
+     "size": 205363435,
+     "sha256": "8e106054b55153ac653ae391d0a2efa9b1d95c0fc23cb634f5de70c8b01ce67a",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_4_of_10/shard_00000169_processed.jsonl.zstd",
+     "size": 283273717,
+     "sha256": "e13218d8779971d4bac3515ca8c3badee3a1e2f40cb7c90cf1cd90a9796d7562",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_4_of_10/shard_00000039_processed.jsonl.zstd",
+     "size": 222982285,
+     "sha256": "3837650f2dc3b36b2270d8c567b324267bf4d29b39fd19b9eb190e977e410102",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_7_of_10/shard_00000002_processed.jsonl.zstd",
+     "size": 194582591,
+     "sha256": "07209065f4cd24d6c6916678a2e50a95f337e75e852a6b7b6eaedbd52eccb9b9",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_02_of_10/local-shard_3_of_10/shard_00000224_processed.jsonl.zstd",
+     "size": 344738144,
+     "sha256": "cd7c83221b53dc8984553871061f4b9547b4cf99d6478b96b9f5e2f7afd9c817",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_5_of_10/shard_00000236_processed.jsonl.zstd",
+     "size": 230568511,
+     "sha256": "0b1b24307f82ce5cf3c9a97b89a46c24f4057ef9d405c54315abb4be7a62a94e",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_0_of_10/shard_00000243_processed.jsonl.zstd",
+     "size": 230234739,
+     "sha256": "c09198802251cd1290d2c07d6e08e682f238ad662a7e8f5c811087715ec02e1e",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_8_of_10/shard_00000177_processed.jsonl.zstd",
+     "size": 350213434,
+     "sha256": "ba0cf2372d84e0c343c582451726fc11a66719d0f1eb8803ecdba6e688bdf4f2",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_6_of_10/shard_00000238_processed.jsonl.zstd",
+     "size": 286457949,
+     "sha256": "f8b1942bfb6694384602fd03fecdce1f60b622e9d5d51b33f38a0ca6b4025cd5",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_2_of_10/shard_00000074_processed.jsonl.zstd",
+     "size": 211706822,
+     "sha256": "b1ffbf61cdb49cf0253996956f91ceee62cc7a9b1763cc78658717ae64d99bdb",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_2_of_10/shard_00000222_processed.jsonl.zstd",
+     "size": 277415497,
+     "sha256": "c867f03d7c6277088668fa9f2b84f8eec8099c4c4c32ce2c9f5a69ce15fcd3d0",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_0_of_10/shard_00000171_processed.jsonl.zstd",
+     "size": 333316280,
+     "sha256": "5d210f4282471eb3652f05f3853cf9b608a0f6a787c04b9b6ccd6ab3bbb3736d",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_7_of_10/shard_00000203_processed.jsonl.zstd",
+     "size": 250392837,
+     "sha256": "b75357788669890ff1db3e60a4311c87bd04f57205b204e966231b4049bc0811",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_7_of_10/shard_00000123_processed.jsonl.zstd",
+     "size": 282826247,
+     "sha256": "903af381e45b3ffe3deb7731f12a48194197fd729265a3685c007a1a65661509",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_9_of_10/shard_00000239_processed.jsonl.zstd",
+     "size": 340338694,
+     "sha256": "554d17addd5344b95a9ed1852f0f6e9287205445054568f7f57d5fe8dc55b326",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_0_of_10/shard_00000259_processed.jsonl.zstd",
+     "size": 249098209,
+     "sha256": "19650abebc6af01bab10fe11ee3c6a06297c830bff93559037afa9b4d4af2971",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_1_of_10/shard_00000032_processed.jsonl.zstd",
+     "size": 239181741,
+     "sha256": "f460ee48c47e3701eaa2504d305804a051ecdc3323359c87e7077d2aed7507ec",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_7_of_10/shard_00000036_processed.jsonl.zstd",
+     "size": 219243666,
+     "sha256": "274002bab09c2bae72f2a1dd4926f6749818e78ba0084333b21472d8cfdf9f23",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_2_of_10/shard_00000134_processed.jsonl.zstd",
+     "size": 262358629,
+     "sha256": "9bf63e85ea89e9871763f1693937bdc77ca1b9c1590db6b8406af0d45e7d3aca",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_9_of_10/shard_00000001_processed.jsonl.zstd",
+     "size": 143022886,
+     "sha256": "8c68d3c5c88639e2efaba8f98b1675f22a987dcef3d81def1440389db50f671e",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_3_of_10/shard_00000260_processed.jsonl.zstd",
+     "size": 272335412,
+     "sha256": "e4ec9cc555bc000c9ebf9d89b92ebb4d0692a4ac6ca2145ba0d9d072ccfb5e7b",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_7_of_10/shard_00000011_processed.jsonl.zstd",
+     "size": 198130400,
+     "sha256": "49af5ecf112ba6befa5264f47a764f53d74df38c452b09de18bf7703aad70ec1",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_1_of_10/shard_00000110_processed.jsonl.zstd",
+     "size": 278701119,
+     "sha256": "09bb7e08ef1a8cc1d1f9e061967804989052d6e244bb1062b7424035a636af47",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_5_of_10/shard_00000155_processed.jsonl.zstd",
+     "size": 199353508,
+     "sha256": "951b2cb042842fa8693385fa143f63aa583dfa1d97cda25da3ecd8b913ca46ec",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_9_of_10/shard_00000191_processed.jsonl.zstd",
+     "size": 227353187,
+     "sha256": "8efb61bd01cd536cb8b49c24eec980c358f9f161fe7f07426651772ce71a1db9",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_7_of_10/shard_00000005_processed.jsonl.zstd",
+     "size": 196601713,
+     "sha256": "be8a4cff911d42c74e589a4195c177eb8afc37cb634484fb615af4b79c6929e2",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_7_of_10/shard_00000250_processed.jsonl.zstd",
+     "size": 380325563,
+     "sha256": "df62dca086a3ded61110b3eb2cb835cce55f3b4b195e61a1ce645ad539308564",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_2_of_10/shard_00000143_processed.jsonl.zstd",
+     "size": 314349285,
+     "sha256": "a5ded0e8d1145368dfe3b2a136db2c91bc886e438d8e38057e7a0da9047ee8d4",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_2_of_10/shard_00000191_processed.jsonl.zstd",
+     "size": 251649192,
+     "sha256": "caf27112fb9bed0fe034f4767117359a109fdf8bdc58c48ae034df31a0baaaef",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_3_of_10/shard_00000005_processed.jsonl.zstd",
+     "size": 215650969,
+     "sha256": "d334f14deba32104880cea506b6fcf8774bf6ca83593d974244cc774d349eaf5",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_02_of_10/local-shard_3_of_10/shard_00000205_processed.jsonl.zstd",
+     "size": 344025800,
+     "sha256": "9f397798937212c87a2eca36f5f9dc9c91a1997267f6045fa74e19c61803b2fa",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_9_of_10/shard_00000044_processed.jsonl.zstd",
+     "size": 225018942,
+     "sha256": "ebe77e58e03a087e0bbcc4a72e0d0a6296f6d22130f96d388d85f2f0d2fc3780",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_4_of_10/shard_00000149_processed.jsonl.zstd",
+     "size": 335686645,
+     "sha256": "e08e598066be8057f5899b63ee2353b8200be9a1254f8280733b22d0f1374f93",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_6_of_10/shard_00000188_processed.jsonl.zstd",
+     "size": 251756613,
+     "sha256": "04f384235cd342f40ee78f3d9b88304fa43178589b97e74ccf73dee625d17be9",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_8_of_10/shard_00000175_processed.jsonl.zstd",
+     "size": 319518954,
+     "sha256": "8abd4ea9438cdd7f7aaabca937a888cf562ded2d2d729054a51a93deac8e81e3",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_3_of_10/shard_00000045_processed.jsonl.zstd",
+     "size": 235236536,
+     "sha256": "d8fbe3631645dac23d66c8ced8d911c2d7f3082d2478c19288098c23ef2f0c80",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_7_of_10/shard_00000197_processed.jsonl.zstd",
+     "size": 334693568,
+     "sha256": "f7d22bb205b82042dd713f3b049c166e2062462f1a945757d42e93e332c9c08f",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_02_of_10/local-shard_5_of_10/shard_00000027_processed.jsonl.zstd",
+     "size": 240599769,
+     "sha256": "061f1d24201e2deec575b3073521b30ed6b0486bc493630cbc1842ed8a93f24b",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_02_of_10/local-shard_5_of_10/shard_00000225_processed.jsonl.zstd",
+     "size": 228620985,
+     "sha256": "baa0bb905754809a6b17c355015e4fb7e949f6ca64b065600d2d77e88d7cc600",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_6_of_10/shard_00000034_processed.jsonl.zstd",
+     "size": 206796907,
+     "sha256": "68e4a7cc6347c7e44e1119230893f7c6010b2abbd2607eac09b7dec28a8d4188",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_1_of_10/shard_00000151_processed.jsonl.zstd",
+     "size": 264534645,
+     "sha256": "4f10f08fcb63c728235a8f6c451eae127da4d1e555c7f6de2400436d979002ca",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_3_of_10/shard_00000087_processed.jsonl.zstd",
+     "size": 219952224,
+     "sha256": "9170875548c23822a4a007f3f386889eb1241189c180b4110fb87472d9e28dc8",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_02_of_10/local-shard_1_of_10/shard_00000233_processed.jsonl.zstd",
+     "size": 217338903,
+     "sha256": "a8c97f0187738cab8ce7a6e39f03a9f76721bc7960547c264eeca8baa2f1e74b",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_03_of_10/local-shard_2_of_10/shard_00000223_processed.jsonl.zstd",
+     "size": 209916953,
+     "sha256": "797b588d604dd1e64de4231c8f1850f0a9f3ff19aff7e26cd78eb3ed91868ba3",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_5_of_10/shard_00000148_processed.jsonl.zstd",
+     "size": 274390837,
+     "sha256": "436b39f82af772aaccc1199dcdc7e8005b41027318228e4322f39b6d0208c7b1",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_2_of_10/shard_00000119_processed.jsonl.zstd",
+     "size": 227929385,
+     "sha256": "efc8d90ee037ae53085cbd787d3cbfce169f410e3cc297efb29cd41578249dda",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_8_of_10/shard_00000016_processed.jsonl.zstd",
+     "size": 217716227,
+     "sha256": "7f9c2ac26630ba49b0bbd921e6d0ff24b24640b606837fd56efda615991346ea",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_2_of_10/shard_00000201_processed.jsonl.zstd",
+     "size": 196859634,
+     "sha256": "641ef618e14bb632b3bbaef54b99de16343801a9361de7e835b6618204038e0f",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_02_of_10/local-shard_4_of_10/shard_00000035_processed.jsonl.zstd",
+     "size": 268963550,
+     "sha256": "e4f0bc5895741e0b060267eb83a4306040b52c823ff10681f8baa33642f6d78f",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_3_of_10/shard_00000266_processed.jsonl.zstd",
+     "size": 229198509,
+     "sha256": "2f99c4173dbfd0816729f844deff119ea56dd4ce0d697540c0a822dec8214706",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_2_of_10/shard_00000150_processed.jsonl.zstd",
+     "size": 327203770,
+     "sha256": "87911a0bb30955c21a962c9329e315bf72a05cb8aa6c052743c89101c63c6577",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_8_of_10/shard_00000200_processed.jsonl.zstd",
+     "size": 292343844,
+     "sha256": "7b4ff62b8f60378c5db9a2d3b0a505c1334e9e61b1d8a7bb8116a1acd98520cc",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_6_of_10/shard_00000104_processed.jsonl.zstd",
+     "size": 242383650,
+     "sha256": "cb6f90f8100b22b538c70743f6fa0830fe62d04b57803daf980cccb3bc61ac11",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_5_of_10/shard_00000042_processed.jsonl.zstd",
+     "size": 93583608,
+     "sha256": "ef5af3774bb16fa2ab91181646a4a55d4938d4fd6d1cebec92ba07ae30aae19c",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_2_of_10/shard_00000004_processed.jsonl.zstd",
+     "size": 187469923,
+     "sha256": "6441f29f3df011c824090c39a4fdd5725d58904bf9dd70ea77208d0449114ec5",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_1_of_10/shard_00000170_processed.jsonl.zstd",
+     "size": 246478137,
+     "sha256": "81ca61568ca9dd2309475dfd5810ef5d6d9313d456459d94a34b18a9fd680ee4",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_4_of_10/shard_00000007_processed.jsonl.zstd",
+     "size": 212747632,
+     "sha256": "3b54a28e288475e8ccc0f6f115df91576bc97e09e00c3cb7cd5ccf6ccd05865f",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_7_of_10/shard_00000049_processed.jsonl.zstd",
+     "size": 209715126,
+     "sha256": "3cd8d60ee41bfc5b564d176bb768388d780af0097141b34069df64c77ce13fba",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_9_of_10/shard_00000110_processed.jsonl.zstd",
+     "size": 271806522,
+     "sha256": "b253d283b3d5152256b5a7e5a5376a8092fd30f2ca4970dd78bbd29607707fed",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_5_of_10/shard_00000260_processed.jsonl.zstd",
+     "size": 403262439,
+     "sha256": "18022dd44107650b2ee3cc339b771f789b1fc3ca21f36eeb849efa141ccd6569",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_1_of_10/shard_00000086_processed.jsonl.zstd",
+     "size": 224532982,
+     "sha256": "389c9b986b2ea8cfc940db8cc6737b50ec60f27f718423f3610e82e3cd0ea2e9",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_03_of_10/local-shard_7_of_10/shard_00000102_processed.jsonl.zstd",
+     "size": 300004762,
+     "sha256": "5d6f44e36896853118b0dde241cee17859e87e0bbb6d6f3023f190c9d7ffd3f3",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_6_of_10/shard_00000002_processed.jsonl.zstd",
+     "size": 219663553,
+     "sha256": "1ff4db46b08492bbd22abc33766d7677c49d39cf4c195b4fd81a81189b733e7d",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_7_of_10/shard_00000024_processed.jsonl.zstd",
+     "size": 199620565,
+     "sha256": "f400c6193fc38ce27ff8c4a63f09e3eab8c4aee43e7b53370b8757ccaec39509",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_7_of_10/shard_00000249_processed.jsonl.zstd",
+     "size": 362284368,
+     "sha256": "148662983669d0657e78844b0d5188f098d672bc9a5a53e81d458b600c260c20",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_3_of_10/shard_00000114_processed.jsonl.zstd",
+     "size": 204292565,
+     "sha256": "af477097463cae66ac8ac7a0a107579add546d2c1db20dfbf1bcec1ba0b4c979",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_3_of_10/shard_00000129_processed.jsonl.zstd",
+     "size": 256400467,
+     "sha256": "927eef8e24b56262ca8b4d61edb743146bc2de3bf54b660af0363db50f2d98fd",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_8_of_10/shard_00000232_processed.jsonl.zstd",
+     "size": 358912014,
+     "sha256": "4840b27e951f2b46744160be4aa98d0e489afc4d2205f2738e86e72beeaa6a5e",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_3_of_10/shard_00000228_processed.jsonl.zstd",
+     "size": 326699288,
+     "sha256": "c5752c58a5e8f45db99418fb6662776dd8597dc2a586550fd86ceca8bcd5280d",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_7_of_10/shard_00000266_processed.jsonl.zstd",
+     "size": 231994016,
+     "sha256": "745a68b6c78e63955c446fd1a042531a58069f791ea25d809d7a27cbd94d4502",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_5_of_10/shard_00000031_processed.jsonl.zstd",
+     "size": 220125222,
+     "sha256": "a0e04a34d1288e073b937357fb86c79ed2143b21a3c11c835244b0d2d595f717",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_5_of_10/shard_00000017_processed.jsonl.zstd",
+     "size": 253869163,
+     "sha256": "8d7e8c16f690be381a81ea577d1646ee25049be2ed6f90324b746d73390ed14c",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_0_of_10/shard_00000093_processed.jsonl.zstd",
+     "size": 277163177,
+     "sha256": "4a63ef3d13414ccc0f6915bd74669828ed468251a53107c2041ef0af6477629d",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_7_of_10/shard_00000222_processed.jsonl.zstd",
+     "size": 315539956,
+     "sha256": "dac5dc8db5442d4f1e65fe6ed134a2e8159f65c0ec62683c44a7b4c56b4ed59e",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_6_of_10/shard_00000099_processed.jsonl.zstd",
+     "size": 241756715,
+     "sha256": "155d21f20c225d7865e549ee660ccf7abdc97de14ad8b47f8a317dfd2d1f9509",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_8_of_10/shard_00000147_processed.jsonl.zstd",
+     "size": 224340113,
+     "sha256": "3434624f4d32aa040a203cd09befdcecbda1275c995d0f24e3686d574558ee1a",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_7_of_10/shard_00000254_processed.jsonl.zstd",
+     "size": 221762437,
+     "sha256": "06997a325f16bc1e33c32ff14114b10c490536da4ace66922ecd633a8ad006da",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_8_of_10/shard_00000252_processed.jsonl.zstd",
+     "size": 221813904,
+     "sha256": "4859752acc48cb2e40296293382a65e724e7c7bbef79ceea4c198d0a40d53335",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_9_of_10/shard_00000045_processed.jsonl.zstd",
+     "size": 217339229,
+     "sha256": "64c2d7456f09adc661ab1976cc2d27d32c21d0daa81a4ebfba17c8e8b75f5864",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_1_of_10/shard_00000116_processed.jsonl.zstd",
+     "size": 234722537,
+     "sha256": "70d91ac03d3739951d42c0996b17c7b438e61b3bee07a5e53c5387e92fe64d6e",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_9_of_10/shard_00000043_processed.jsonl.zstd",
+     "size": 221398854,
+     "sha256": "a030e84c69aa9fc2d450e47603c4e1c417a96f7d5e7fdd6d72f591afd303cf85",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_2_of_10/shard_00000111_processed.jsonl.zstd",
+     "size": 273182858,
+     "sha256": "c89d11520e13ae20d285d703b103fffee76ca752728f66cb9ebb64007523855e",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_4_of_10/shard_00000187_processed.jsonl.zstd",
+     "size": 224179350,
+     "sha256": "d7f14012b17edd481e0d7a46271f29382ed1b90903104d8ae816ba36d0867c00",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_3_of_10/shard_00000191_processed.jsonl.zstd",
+     "size": 229388296,
+     "sha256": "3e4f21992965d063e481972d3f496c455ae9eb2156cc36838fe3cc74282d4eaf",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_7_of_10/shard_00000169_processed.jsonl.zstd",
+     "size": 312871919,
+     "sha256": "01e1b5351fa0efa979d1ef7c313180cb6627a595af3886855af7b7763592b462",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_2_of_10/shard_00000067_processed.jsonl.zstd",
+     "size": 215906845,
+     "sha256": "fb212d4281a8a1eb4a10bffb5cf02ef089ea3ee8d26bbbf21494fab9fb0a1109",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_6_of_10/shard_00000019_processed.jsonl.zstd",
+     "size": 188252944,
+     "sha256": "7486bda63a1e47a8f585c9ed683c24b53af28f39efb4c002c68e0eaa5877e51b",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_1_of_10/shard_00000068_processed.jsonl.zstd",
+     "size": 217097935,
+     "sha256": "f88cb1d00e09b040ccbf8c9f19a8595cff36cd4c300552a6185c24d071dcf3a1",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_8_of_10/shard_00000027_processed.jsonl.zstd",
+     "size": 180866513,
+     "sha256": "6a0b957f3d4a869a1fb774f6d3aa6251a5620a0a3fb897a4116019ba4c529c95",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_7_of_10/shard_00000197_processed.jsonl.zstd",
+     "size": 277655911,
+     "sha256": "fa90816be27c0c2512d64dc211eab4dc48d34c0a32f1a5edb711b2ab0e0f8da2",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_3_of_10/shard_00000068_processed.jsonl.zstd",
+     "size": 209898766,
+     "sha256": "ccab6a4ffea6aa7a4af0e0c1141bbe4ae96950cf7bef4967f40937abeb3636e4",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_2_of_10/shard_00000240_processed.jsonl.zstd",
+     "size": 221831398,
+     "sha256": "e5bfe04ded883a9acb2838784b54588f3f9fbb19b2c54adcee958666586dd685",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_5_of_10/shard_00000057_processed.jsonl.zstd",
+     "size": 194767010,
+     "sha256": "cd5e68ce6191a99e2601c7292fb5baa5655abb31c63a7eec12d3f2d313f6af86",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_1_of_10/shard_00000259_processed.jsonl.zstd",
+     "size": 390380879,
+     "sha256": "751007d5d6ce46fc569bbcda2bbb68ea594b54030daeccd2b2976735c82fcd19",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_3_of_10/shard_00000258_processed.jsonl.zstd",
+     "size": 263066514,
+     "sha256": "a3bf3eaabe3d0778cb984e1188d2339315162d2833b4965a794dd62c45051ff9",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_5_of_10/shard_00000170_processed.jsonl.zstd",
+     "size": 259776416,
+     "sha256": "4e029627bc19cc454d7d99eea4df1c5b790208e9765de296e37c8dee5bbd3aee",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_02_of_10/local-shard_7_of_10/shard_00000261_processed.jsonl.zstd",
+     "size": 251506398,
+     "sha256": "5c700d36e9ac363e7c796dcbc438bca79d8b0516d8a70392882f9c3f684ff596",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_03_of_10/local-shard_7_of_10/shard_00000236_processed.jsonl.zstd",
+     "size": 223156448,
+     "sha256": "e16251cb352e37cab0119e891c64cbece822b45a0c51b7c70e0057dd0fda6984",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_5_of_10/shard_00000172_processed.jsonl.zstd",
+     "size": 339837052,
+     "sha256": "7a91ecf0b810d3c829e0dd8799e180838f919c1aabfe6b390325e85f8b2cac6c",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_3_of_10/shard_00000019_processed.jsonl.zstd",
+     "size": 219382639,
+     "sha256": "c30d3f0e4adf6b939e7ed6f985dbef45b76642fcfa6daefc9cb6f55ae49a6529",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_3_of_10/shard_00000269_processed.jsonl.zstd",
+     "size": 268599152,
+     "sha256": "75bb4fe6954d0edf1bacb5bff4d6fa4adbe67f3f633881c7807e5a62b00d2a13",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_8_of_10/shard_00000236_processed.jsonl.zstd",
+     "size": 230514864,
+     "sha256": "e5f1e5c780d5af1d89e8e6879404a8a872f6b89baa0c304d8f1a12f6947c98bb",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_6_of_10/shard_00000061_processed.jsonl.zstd",
+     "size": 216397123,
+     "sha256": "843c786f14c6c6296b1f4c5eb991dbbfc03f47de25a29cd4e958c5a5fcf885cf",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_03_of_10/local-shard_2_of_10/shard_00000087_processed.jsonl.zstd",
+     "size": 225953994,
+     "sha256": "421e837201b8ec7f0170e846f8074a05a90b90dfda9e7dbf3f47eb5d52e5f38b",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_3_of_10/shard_00000100_processed.jsonl.zstd",
+     "size": 281980997,
+     "sha256": "c7f5654cd38aa6f08fdc79f2e8ae2ce99e90593024122227a026d4b14dc59695",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_8_of_10/shard_00000005_processed.jsonl.zstd",
+     "size": 203948522,
+     "sha256": "552a9d35e2aa678007e25af16caf6eece254b75bb347537cd2de8dfd6236205e",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_9_of_10/shard_00000171_processed.jsonl.zstd",
+     "size": 243586402,
+     "sha256": "dc89a0820db8fb201e19e5cef9e9ac0692cedc84e3123ee11bed4a85054e3b92",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_1_of_10/shard_00000067_processed.jsonl.zstd",
+     "size": 263050743,
+     "sha256": "233d81e8136f430d83be49ea05eacd4f345f8916059bdcde2a7035b3579475dd",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_1_of_10/shard_00000021_processed.jsonl.zstd",
+     "size": 187838519,
+     "sha256": "d46510c709286a488ad7b841a29a140abc6aae64c67e81e6d8802f87a90dc727",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_6_of_10/shard_00000179_processed.jsonl.zstd",
+     "size": 367403659,
+     "sha256": "7792be2fe2a8f473635b4963e780517e231012d5454fe4b2c861d430adf5d5ab",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_3_of_10/shard_00000003_processed.jsonl.zstd",
+     "size": 196297541,
+     "sha256": "d699841875f0e10c834fb23ebf730556c83bee76db911257d52025d6233a1b0f",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_1_of_10/shard_00000269_processed.jsonl.zstd",
+     "size": 239179949,
+     "sha256": "9dec4254627f4991871109583d48d934c7920be736b25227fbf877cded982cbb",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_1_of_10/shard_00000065_processed.jsonl.zstd",
+     "size": 209235339,
+     "sha256": "5eb601640c87a74c04af3990f17255655eb44cc8a511665006d4dec36bd3b5c1",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_2_of_10/shard_00000127_processed.jsonl.zstd",
+     "size": 207374907,
+     "sha256": "b21356edd81ea6c4c63411d91d3c5284a3da490d50d003bbe8181b300657212f",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_6_of_10/shard_00000067_processed.jsonl.zstd",
+     "size": 224328874,
+     "sha256": "ba6239fe3037e8106b2cfee3fa1f5d812348f39159eba5f51f119a4fbbceb5d7",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_6_of_10/shard_00000210_processed.jsonl.zstd",
+     "size": 213482984,
+     "sha256": "2c793b89ccda16834a4c96df22a8360fada49638c4da705267477d34cd78c55f",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_0_of_10/shard_00000157_processed.jsonl.zstd",
+     "size": 199208007,
+     "sha256": "1691f2d62a0363b1a676f988aaf8f3f6097583ab66afba736ec3450a9f033a8f",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_7_of_10/shard_00000138_processed.jsonl.zstd",
+     "size": 294351061,
+     "sha256": "c2149668587767e75ff0960af23c8a737ab1c6f45b8883e4a53535cc38d8f9d1",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_9_of_10/shard_00000229_processed.jsonl.zstd",
+     "size": 407632728,
+     "sha256": "7a945f1d3630da272717dbda89d98075f26c5fe9ffc39287e439aea600d0525f",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_8_of_10/shard_00000017_processed.jsonl.zstd",
+     "size": 205988789,
+     "sha256": "eb524bc04b6199797658f957453a8f47defd7e4060671fd9e2d89043b4ccc49f",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_9_of_10/shard_00000020_processed.jsonl.zstd",
+     "size": 184020683,
+     "sha256": "e62c7dae4dbfe2cb9aab149e392c0b610eb911c024e7457a54c94da7cf90510b",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_8_of_10/shard_00000099_processed.jsonl.zstd",
+     "size": 196354260,
+     "sha256": "2b279035e058a0560a46b39d3e789643053637ba531eb3c42bf1bd4ff86950f1",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_03_of_10/local-shard_2_of_10/shard_00000183_processed.jsonl.zstd",
+     "size": 318949047,
+     "sha256": "623bf5cc668b4663351a2d58c4a40c5945535d5e0f2fceb59bd6d263df9797f5",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_0_of_10/shard_00000174_processed.jsonl.zstd",
+     "size": 356016248,
+     "sha256": "368a484f46df8160eaed0b22f667f76c0addd5eb086b5bcfb44b8265678976d6",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_4_of_10/shard_00000211_processed.jsonl.zstd",
+     "size": 379979098,
+     "sha256": "837ef7fa97638258ef9cd742266a828c3e170481530afe8b609a6d494149eacb",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_9_of_10/shard_00000053_processed.jsonl.zstd",
+     "size": 249180913,
+     "sha256": "6a778fc1f2b51cf37736f7312525504b9d3e8eaef54911c94d47a3e4a353a7b9",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_4_of_10/shard_00000063_processed.jsonl.zstd",
+     "size": 224164027,
+     "sha256": "c895beee32e87eba9702c2dc4524d795f99dad10a5243757b1ba839cef522315",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_1_of_10/shard_00000196_processed.jsonl.zstd",
+     "size": 243845792,
+     "sha256": "f49c07f6466734599166e4d7683d01cb6e78d87e3673b94f4172e1e4ec71b500",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_9_of_10/shard_00000053_processed.jsonl.zstd",
+     "size": 252448727,
+     "sha256": "6d02573c3bc8287bf9016409cd5e7fdea53d61f41571a64fb9c1eb4552f1ab57",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_8_of_10/shard_00000232_processed.jsonl.zstd",
+     "size": 215455467,
+     "sha256": "dc99def97571a702c1d46cd06776a2dbe1e900b8230fbe5b0ec441adb4c96cff",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_3_of_10/shard_00000216_processed.jsonl.zstd",
+     "size": 277496609,
+     "sha256": "783b69355af8bfad3a14237e276bdc00e18e95e57ad43b603ce8627fa43e096a",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_9_of_10/shard_00000069_processed.jsonl.zstd",
+     "size": 198943062,
+     "sha256": "ff08c96bb29fcce6bc9da25a9551f2613be72d7e58d3aeaba796e209ddd300a5",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_7_of_10/shard_00000117_processed.jsonl.zstd",
+     "size": 227239508,
+     "sha256": "7b80be0d02c3e17d93eb5f730ac4d3e573bdc8104200ace20bdf3d0d98f2839e",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_6_of_10/shard_00000235_processed.jsonl.zstd",
+     "size": 354682037,
+     "sha256": "968de9455819410d0d25455cb895e706272cd1bc5af368e0aaecb553f9ee96a8",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_8_of_10/shard_00000276_processed.jsonl.zstd",
+     "size": 232420617,
+     "sha256": "11c42db3091f8e86ed9b0853f2b4ad83328019afbcd800fb689c1862df8bfb6a",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_8_of_10/shard_00000186_processed.jsonl.zstd",
+     "size": 273244551,
+     "sha256": "7b2acb0494982584da3b271a79008aa40711944130e3291946652a820ace0927",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_7_of_10/shard_00000203_processed.jsonl.zstd",
+     "size": 354482126,
+     "sha256": "c682d085a24d186f4f5631b1cdb89f5e524b3a183c9eded274ce91057e1350c1",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_5_of_10/shard_00000011_processed.jsonl.zstd",
+     "size": 248740422,
+     "sha256": "31cc1e324f824faab419c0d19ebc1ca0eed254992ed9b50d314d0cc1caec20b6",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_7_of_10/shard_00000130_processed.jsonl.zstd",
+     "size": 311913825,
+     "sha256": "5b9da47bb3743a94d11e807cd71742dd29d90258650f9f555d7bce83ff0b5810",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_2_of_10/shard_00000182_processed.jsonl.zstd",
+     "size": 355050230,
+     "sha256": "6ab7ba7217285da4e348d1cb50f85978da79f5e4c9b77ff29fd23507fc0e4de0",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_03_of_10/local-shard_5_of_10/shard_00000074_processed.jsonl.zstd",
+     "size": 226522880,
+     "sha256": "c4124c8ecae805eb18eee571809ecc358b6fbba338d18ce16d6791f48c94134b",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_6_of_10/shard_00000085_processed.jsonl.zstd",
+     "size": 274919341,
+     "sha256": "954c298d7a5e8eff40e34dca9830457876138acdd305c8218a4ca1892e6fa3fa",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_8_of_10/shard_00000196_processed.jsonl.zstd",
+     "size": 199168522,
+     "sha256": "9905b6dcad35691d84815029e4031c861fd4cb1ec359cde615045221a6204cff",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_7_of_10/shard_00000052_processed.jsonl.zstd",
+     "size": 231657938,
+     "sha256": "5846580374d3d410895539cb5a492c45d0c27ad0c4cd27bdd04aed62dd43e8c9",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_4_of_10/shard_00000237_processed.jsonl.zstd",
+     "size": 226756604,
+     "sha256": "0a9707aaf567646bfd43103ba3f8abecf598b057d95803bdf58a1f7bf0535421",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_03_of_10/local-shard_3_of_10/shard_00000151_processed.jsonl.zstd",
+     "size": 264121640,
+     "sha256": "ec411227cc89675261b823472262c63554077435610e2de7adc8fa2d563b8521",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_9_of_10/shard_00000216_processed.jsonl.zstd",
+     "size": 338064687,
+     "sha256": "fef50b6f6ce01de47d6f87ee482e9806b866e3ed8331c3de05f683be42ae107c",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_02_of_10/local-shard_3_of_10/shard_00000133_processed.jsonl.zstd",
+     "size": 280020730,
+     "sha256": "6889c859219a725cd2e2a419fbc72782b3976900cb7958a578276f6b80e5360d",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_1_of_10/shard_00000269_processed.jsonl.zstd",
+     "size": 231273249,
+     "sha256": "73b8f6d9e59c932fa4a78bb0c5795ed536db933fb3ca23b4f02ae9ddf918942d",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_1_of_10/shard_00000071_processed.jsonl.zstd",
+     "size": 262011835,
+     "sha256": "3b374bb50c5a961607d6565046e422cfead19d579e884814fa11333b495af0ae",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_7_of_10/shard_00000046_processed.jsonl.zstd",
+     "size": 256757270,
+     "sha256": "ed56b803eb4b693a9918215d602eeafc8cc972329e23df2c817a20a339752e8a",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_0_of_10/shard_00000212_processed.jsonl.zstd",
+     "size": 222917058,
+     "sha256": "7ce12fdad60adc30264ab30f82bd35016db527894064d2348dd0ede79a3b7a3a",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_8_of_10/shard_00000117_processed.jsonl.zstd",
+     "size": 212563552,
+     "sha256": "08221776807430b3554c8e5867f1002ef895998bb72a51d263c151b61e683ac8",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_03_of_10/local-shard_3_of_10/shard_00000071_processed.jsonl.zstd",
+     "size": 215943184,
+     "sha256": "4e20fb4da08a6de635fee3ffacb9511cd0b7eb3512aa72afe4cb246f804b244e",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_5_of_10/shard_00000181_processed.jsonl.zstd",
+     "size": 245621941,
+     "sha256": "c0725f8fcd38072ab585f92fefa5698e42b31a321ac5a02d5a1f4b5e71f374fd",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_0_of_10/shard_00000151_processed.jsonl.zstd",
+     "size": 230778393,
+     "sha256": "9fcfe7169b248dbd66c510129c65675d16557bf7fcb8a95baacdbb7b0f8b50dd",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_2_of_10/shard_00000211_processed.jsonl.zstd",
+     "size": 187063879,
+     "sha256": "cc8e2eae4bba908e00cede27eaf0e9f3b5bad31233665f6d3e2bbc6a182d1b37",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_2_of_10/shard_00000026_processed.jsonl.zstd",
+     "size": 245068174,
+     "sha256": "2da0694fffa0c208c6af06cf008cfd42db3fff5ff38e75710e0de086bf284ca5",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_6_of_10/shard_00000069_processed.jsonl.zstd",
+     "size": 237217799,
+     "sha256": "257fe08bc2738ddd9192952cf8214ad5382f340da1d9965e086c8d9114289b37",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_0_of_10/shard_00000197_processed.jsonl.zstd",
+     "size": 355156988,
+     "sha256": "86b1bf4dede9a21ed159a2ff73f911d36c90dada422ff59bc4d59194e2c11ce6",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_5_of_10/shard_00000228_processed.jsonl.zstd",
+     "size": 267499388,
+     "sha256": "f915ff4da16fb744be7a19046e79bc5a5ff5fe0d1805ee6e0199aad2bb1e2fdc",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_2_of_10/shard_00000169_processed.jsonl.zstd",
+     "size": 316004058,
+     "sha256": "128c7a4aa82c691db8c3ca8994cb7e00370e138a150dcfd550d6fb0b80ca40a9",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_7_of_10/shard_00000134_processed.jsonl.zstd",
+     "size": 223062007,
+     "sha256": "a4b0813d5d10edfac6406f951ce20e2bf32fc2e0dd2a323a5507eede4b2ca8a1",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_1_of_10/shard_00000210_processed.jsonl.zstd",
+     "size": 386000464,
+     "sha256": "773f0c51773c5b466e5005c4b2c958a73d304b18fd69837ffba619b4ede6ea4d",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_1_of_10/shard_00000003_processed.jsonl.zstd",
+     "size": 180399402,
+     "sha256": "cf972e575805e4a2a6d7afcf4f45ed62539e366d5b33e1efcc105c9ffbeb5979",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_9_of_10/shard_00000271_processed.jsonl.zstd",
+     "size": 247273625,
+     "sha256": "88365fe8f7bb27810d7a704912037ffe23efb3eace0d7cb1b630837f89259b3b",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_0_of_10/shard_00000214_processed.jsonl.zstd",
+     "size": 217600260,
+     "sha256": "4913f3cfa21ad1d4603c56e0a1c8143589ce7bc6ae0a20ee2e27df0e019e51eb",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_03_of_10/local-shard_1_of_10/shard_00000149_processed.jsonl.zstd",
+     "size": 271107910,
+     "sha256": "f55c91bfe2d003f50d0af40eb05f35e1f6a3235e2cac85d642f0985cabe94070",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_2_of_10/shard_00000243_processed.jsonl.zstd",
+     "size": 230760843,
+     "sha256": "f1c09d93ad0f1f82818ea8347fbed4f8d10ed7573fe85f4f5082252ff0845dd1",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_03_of_10/local-shard_2_of_10/shard_00000028_processed.jsonl.zstd",
+     "size": 241408104,
+     "sha256": "92f68b8f209e8fd7919a602a335792258e0264e472d8398e2e8c8f4a99c2f59f",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_0_of_10/shard_00000256_processed.jsonl.zstd",
+     "size": 233264717,
+     "sha256": "2e5e87ab4fc2012a3dfa53a405c79bb61bd8a12a474e6831edd06891fd34151b",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_3_of_10/shard_00000138_processed.jsonl.zstd",
+     "size": 238110750,
+     "sha256": "b604e6d1136fe2c475209407e8c1494c389f9b2ae29886a65efd6e890208ab27",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_5_of_10/shard_00000132_processed.jsonl.zstd",
+     "size": 251311319,
+     "sha256": "e3288e43163a898a6b57a6e4456470869e004b0eaa3e561f75a145dda43a380f",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_6_of_10/shard_00000003_processed.jsonl.zstd",
+     "size": 89770458,
+     "sha256": "f057952334d33ee3e0c4d976e2fd56dd8a2a328030d95167ba4ded3b340393d3",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_9_of_10/shard_00000165_processed.jsonl.zstd",
+     "size": 250223386,
+     "sha256": "5be0f78f85414f7635ac2d51a36f333d0e9b9a25f54cc3952e7b67d39bfc9f1f",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_2_of_10/shard_00000063_processed.jsonl.zstd",
+     "size": 268538021,
+     "sha256": "6aaa11581f0e76e1658463c9d59d1374ca72d9e5e0fb0e3a7f81f7874c3bc101",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_6_of_10/shard_00000233_processed.jsonl.zstd",
+     "size": 216559995,
+     "sha256": "04d95d44032e201a53f8f676ef39696d96b9d62b6af4aa6e6d93c53327b54e06",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_3_of_10/shard_00000118_processed.jsonl.zstd",
+     "size": 215720726,
+     "sha256": "c3979f465596a40123ecb2b2e0540422b3a22d2f81fa45d41632577d8682dfc0",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_7_of_10/shard_00000220_processed.jsonl.zstd",
+     "size": 333676837,
+     "sha256": "cd5724ef1554ff15066921aff48a0f199e4942db5f9fdd925ff5038e8ac5dbc0",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_5_of_10/shard_00000192_processed.jsonl.zstd",
+     "size": 211525983,
+     "sha256": "23635781337d259ba244dfba18a2ead51969179f0d3769ba22d699a0b3ecc5d1",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_3_of_10/shard_00000228_processed.jsonl.zstd",
+     "size": 282166324,
+     "sha256": "ec96f7941ce44d1827afb44fb7bd6465940c661ae462405ab38b82852aa7d9fc",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_8_of_10/shard_00000147_processed.jsonl.zstd",
+     "size": 228425971,
+     "sha256": "74c4266e615359ba6cd52ae45cd0d9d36d5b659bc1e44998fba6bb2954d7c4fa",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_03_of_10/local-shard_7_of_10/shard_00000240_processed.jsonl.zstd",
+     "size": 236642205,
+     "sha256": "0b13d2796382cbd8cf93031298610ba3ba2cf3272610a446d0774694e246a688",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_4_of_10/shard_00000275_processed.jsonl.zstd",
+     "size": 266682932,
+     "sha256": "3bd701f43b7a884c77d7a10b8e7d4bb6ab6a2171c02c1751534680f0f086ac92",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_5_of_10/shard_00000027_processed.jsonl.zstd",
+     "size": 246597369,
+     "sha256": "faf1299879814c53a1780277d13191e773c2fedd5054f4ac8ecbd2a20362b096",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_9_of_10/shard_00000202_processed.jsonl.zstd",
+     "size": 217683842,
+     "sha256": "11c75f48b2721b0c150343feebdc0951975686f79b22ebe468193b14d98df1df",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_03_of_10/local-shard_8_of_10/shard_00000178_processed.jsonl.zstd",
+     "size": 290760959,
+     "sha256": "6c5591e5ca4b56db45334208ddf73b6dd9f336481d18a2e8f852a8b41e894fc5",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_1_of_10/shard_00000101_processed.jsonl.zstd",
+     "size": 257108849,
+     "sha256": "8b063f3e5b8b1372bf39842996ab57e1eb7cd71cf20c8ca499461f131dd6acb7",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_9_of_10/shard_00000100_processed.jsonl.zstd",
+     "size": 251784760,
+     "sha256": "68df3644e59a981531384827715b03f5e8e11f3654a8475a587fa3e33f42dc91",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_2_of_10/shard_00000081_processed.jsonl.zstd",
+     "size": 241902461,
+     "sha256": "41d8aeef9eed170d174d3b712e3835509fd65544a8dfa0174db7057eddc684d8",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_1_of_10/shard_00000156_processed.jsonl.zstd",
+     "size": 229021566,
+     "sha256": "8a55ac52b76ee2eeaf4ae9882a9d75c68dccee632580008091c4e7433a0e2a58",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_5_of_10/shard_00000036_processed.jsonl.zstd",
+     "size": 217541918,
+     "sha256": "ddbd7e90e35f47c7c12a763ad973da2d979775b16f76ce9702c0e79cf5517b0c",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_03_of_10/local-shard_5_of_10/shard_00000097_processed.jsonl.zstd",
+     "size": 234671019,
+     "sha256": "aa441247f7bbff3c50ab765ea726e781b37b3a22dc9f4ecf8c8687318ba0fe77",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_3_of_10/shard_00000261_processed.jsonl.zstd",
+     "size": 207479918,
+     "sha256": "98713faa0b6e0b4ffbf5a50dc2f0c9940d0e36cb3255be366aaa7bebcf1d42b7",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_9_of_10/shard_00000254_processed.jsonl.zstd",
+     "size": 249208784,
+     "sha256": "7da3527826613684e760c01a6e7d821c5ea7cb67aa3c678e716bf6d933361445",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_0_of_10/shard_00000009_processed.jsonl.zstd",
+     "size": 250803237,
+     "sha256": "dcc03bc46c7fbcab5096e2ae5f4fb9fbdca20ddfcf0219874ef3fc0dab81bde9",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_03_of_10/local-shard_0_of_10/shard_00000035_processed.jsonl.zstd",
+     "size": 192850383,
+     "sha256": "cae67397282434b34701627c4620b9c7883f9dc5382b303106fc2654cc28e0ee",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_03_of_10/local-shard_3_of_10/shard_00000166_processed.jsonl.zstd",
+     "size": 187122197,
+     "sha256": "5555e2621243bc07090234ab7245bb997168fff9006b7b73c7d8a61cd6fb1c34",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_2_of_10/shard_00000231_processed.jsonl.zstd",
+     "size": 349655699,
+     "sha256": "00d558f9d41fe5eca7822b42134ce8eb2b400837d30ba1984019c7bb7af41411",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_9_of_10/shard_00000137_processed.jsonl.zstd",
+     "size": 214663515,
+     "sha256": "11bac90c7ce8fc26748d97122d8342dc575038396402cbb168d8e4490a54c2ec",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_8_of_10/shard_00000214_processed.jsonl.zstd",
+     "size": 348971757,
+     "sha256": "7c435f8207422e981f5368633bd95e31e0cb104748f364a9bc5be593422e1e63",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_4_of_10/shard_00000031_processed.jsonl.zstd",
+     "size": 244666685,
+     "sha256": "1fce695ffc1a7f826296864730b1416a2701b72bc3aaf94567c29e8abb0f0487",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_1_of_10/shard_00000138_processed.jsonl.zstd",
+     "size": 316801956,
+     "sha256": "d8e37a8603d1327845551eecb45939b6151d99e4bc6e0f26119503e361adad4f",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_2_of_10/shard_00000233_processed.jsonl.zstd",
+     "size": 360219714,
+     "sha256": "f8e371114f6c7722cf28b2d0e567b1930c19bc4b0eede4ec998d5c36e45efee3",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_04_of_10/local-shard_9_of_10/shard_00000213_processed.jsonl.zstd",
+     "size": 234106838,
+     "sha256": "d347b759ae5ca8a9ff43e2ad47e6c93827b09f0a170262162be924c60943f9ac",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_6_of_10/shard_00000211_processed.jsonl.zstd",
+     "size": 376516968,
+     "sha256": "53004b0eedd9a4d2e83a1944e489cba918255f416b14e4216ff8d2a440e726d5",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_1_of_10/shard_00000002_processed.jsonl.zstd",
+     "size": 92466716,
+     "sha256": "42184ba52c5829da7d1765e5ff9de5651d08d4648778774348587c969a4ebbf9",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_7_of_10/shard_00000002_processed.jsonl.zstd",
+     "size": 153285956,
+     "sha256": "ab8e505d5c6cd83f9c4c3c1971d78c095ab0923639c6eb50f3bbc039910d9e9e",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_3_of_10/shard_00000193_processed.jsonl.zstd",
+     "size": 367063379,
+     "sha256": "42f80b2d469cfe28e368c4108cb0e241996dee314490456094eead8b12742147",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_6_of_10/shard_00000242_processed.jsonl.zstd",
+     "size": 382797458,
+     "sha256": "d3fdafc517d9ef3342196362ed6a2c9a4a5dd3123fd4e004df72b46e4b4f89f6",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_8_of_10/shard_00000077_processed.jsonl.zstd",
+     "size": 230675606,
+     "sha256": "d7c25b5667da1ff5dad16f51471c53c52e24394904f95a61d47031678b79ef1c",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_2_of_10/shard_00000254_processed.jsonl.zstd",
+     "size": 239290126,
+     "sha256": "58dad5f0ea42d0b56a146d7d29dd834e9cbe2c40549d4c5b1f3d8015ba897bac",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_9_of_10/shard_00000133_processed.jsonl.zstd",
+     "size": 227524937,
+     "sha256": "d3ea7926209b28b37cd83062862d2c82522dd394b67c98eccf4d7e13b2a0cf3e",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_6_of_10/shard_00000192_processed.jsonl.zstd",
+     "size": 318757460,
+     "sha256": "25fbf06ce8dd49ecf6e69785ba0227f2d8cd47ebc93912d97a45d599ba701622",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_03_of_10/local-shard_0_of_10/shard_00000049_processed.jsonl.zstd",
+     "size": 272095012,
+     "sha256": "604c8ac4baa306185d71a2dc5409d57c4e0d112df8e2d606d8cb015bc304b172",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_9_of_10/shard_00000007_processed.jsonl.zstd",
+     "size": 203900852,
+     "sha256": "4f03b1ef70c6e5f3db49525610bff7d9fb3ad56bede386f40dec14b2e0390e77",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_7_of_10/shard_00000182_processed.jsonl.zstd",
+     "size": 335844024,
+     "sha256": "ae38c40be4b25e60b27b6c61b9d3e7a5086c392926c54f0da6566383c25d1dd6",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_3_of_10/shard_00000178_processed.jsonl.zstd",
+     "size": 336977001,
+     "sha256": "fac7937f719c3b43c693a70c4d47eeef3d2f197ceb3955aacb71e1f0ac6e6396",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_5_of_10/shard_00000087_processed.jsonl.zstd",
+     "size": 228091280,
+     "sha256": "c543619e3c897ae76038d5e3b213b790e919a0eca124f2d51ac4fcf92db575b0",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_6_of_10/shard_00000101_processed.jsonl.zstd",
+     "size": 208883406,
+     "sha256": "0bd9886bb6745bff5cbda6daa35a490e801b9466481be70be8154c5a82c1ae6c",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_02_of_10/local-shard_8_of_10/shard_00000066_processed.jsonl.zstd",
+     "size": 215947904,
+     "sha256": "7faafb57ac18a0eaf7b080f1c52451ac7db459ec7759e2f278565eee24150950",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_2_of_10/shard_00000099_processed.jsonl.zstd",
+     "size": 259638337,
+     "sha256": "f555268660aa21ac1590476a2ee3d896b99bf52a4d651a627b6f0f22131a8e13",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_02_of_10/local-shard_5_of_10/shard_00000125_processed.jsonl.zstd",
+     "size": 245006138,
+     "sha256": "4b68de306571df15104e62c34d9b52c5f6ddc2588e65f64a2a66dc17d0150764",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_5_of_10/shard_00000192_processed.jsonl.zstd",
+     "size": 321342666,
+     "sha256": "bbd040b892130a6f79722cfde7486c3419cbe54978dd5ed81055ec27cea06c1c",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_09_of_10/local-shard_2_of_10/shard_00000008_processed.jsonl.zstd",
+     "size": 265068237,
+     "sha256": "930f38ae9b4de821eb8d9efd75ade5d4e12a1c1951926992ca812ee3dba85b54",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_02_of_10/local-shard_8_of_10/shard_00000234_processed.jsonl.zstd",
+     "size": 377316876,
+     "sha256": "f0667d926ce816814fd63fc41f8c27f08ab1f667fa8cf6957283ad3dca302b0d",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_02_of_10/local-shard_1_of_10/shard_00000240_processed.jsonl.zstd",
+     "size": 220904058,
+     "sha256": "bf06b2c01ed854c1789cf1b1f5b1cad60881ddfbe3d1218c59620c382899e42e",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_08_of_10/local-shard_5_of_10/shard_00000086_processed.jsonl.zstd",
+     "size": 228429548,
+     "sha256": "73bf40fdcc5dabf5fc32a8e6575d24df3ddc69bc9bcbeb8ca56408afc41dea51",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_2_of_10/shard_00000153_processed.jsonl.zstd",
+     "size": 232535459,
+     "sha256": "fc002c4295d19ec902e2173736e11e305fb0c059b36c2ef8bbf0418b05694af0",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_05_of_10/local-shard_8_of_10/shard_00000118_processed.jsonl.zstd",
+     "size": 259659503,
+     "sha256": "27e13c2d8da198aa103616ba9b5c741407739de57cec9b40db9d91e445fdf6f2",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_0_of_10/shard_00000023_processed.jsonl.zstd",
+     "size": 240200789,
+     "sha256": "1c1aa627ce807bbe131995700daccc2dac6be0955d1c4bf1a9c47dc0abd699b1",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_8_of_10/shard_00000115_processed.jsonl.zstd",
+     "size": 200629243,
+     "sha256": "4e40b3b292db0cab1951987fbbdc1847e4da85454745b2e6ca19870ec57fbc2a",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_5_of_10/shard_00000158_processed.jsonl.zstd",
+     "size": 247078308,
+     "sha256": "d29262034f7354a959d5091803d2b66ff1e0e797c2880e43eb819d063b6bee3b",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_10_of_10/local-shard_7_of_10/shard_00000176_processed.jsonl.zstd",
+     "size": 337049747,
+     "sha256": "1bf64055131cb7937459a21e1deb3716ffab92e8bf28c5962fa989ff2e131750",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_02_of_10/local-shard_8_of_10/shard_00000131_processed.jsonl.zstd",
+     "size": 324640439,
+     "sha256": "d3ca7a70049543fe97194849f20dd9fb1d3a5ce49897569b0d533871bf0f0a75",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_06_of_10/local-shard_9_of_10/shard_00000136_processed.jsonl.zstd",
+     "size": 268210754,
+     "sha256": "eb945caf1707812ec5171cdfedb1b9be7daa62458101636554ec4c32ae76a293",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_07_of_10/local-shard_4_of_10/shard_00000268_processed.jsonl.zstd",
+     "size": 423611462,
+     "sha256": "793799b6aabfe8fc09bdfe65bc61f3e31f0ee19c1af967ecad6858ceefa919f8",
+     "take": 1.0
+    },
+    {
+     "path": "data/dclm/raw/hero-run-fasttext_for_HF/filtered/OH_eli5_vs_rw_v2_bigram_200k_train/fasttext_openhermes_reddit_eli5_vs_rw_v2_bigram_200k_train/processed_data/global-shard_01_of_10/local-shard_8_of_10/shard_00000003_processed.jsonl.zstd",
+     "size": 136066290,
+     "sha256": "1f662ee6c42cb787383be0259676619fc1c6154f11930df2eb00805e82b9ecc1",
+     "take": 0.36075358581322836
+    }
+   ]
+  },
+  "open-web-math": {
+   "files": 13,
+   "bytes": 13007693283,
+   "target_bytes": 127475394,
+   "chosen_bytes": 127475394,
+   "chosen": [
+    {
+     "path": "data/open-web-math/train/open-web-math-train-0005.json.gz",
+     "size": 38375967,
+     "sha256": "4c01930d5787098417bed0b2feae8ecca0941c9b41c6f39542db10ccfebec51a",
+     "take": 1.0
+    },
+    {
+     "path": "data/open-web-math/train/open-web-math-train-0009.json.gz",
+     "size": 1327935519,
+     "sha256": "b18eaa1f44551e1239609449bf344c7f45a4f538273c922332ef7dce6659b0ee",
+     "take": 0.06709620000261474
+    }
+   ]
+  },
+  "pes2o": {
+   "files": 26,
+   "bytes": 106042211853,
+   "target_bytes": 1039213676,
+   "chosen_bytes": 1039213676,
+   "chosen": [
+    {
+     "path": "data/pes2o/pes2o-0001.json.gz",
+     "size": 4278234318,
+     "sha256": "e6154071a01cc128e119366cdc4e2b6f2e97772d3c8516aa8bbcc91c475abcf7",
+     "take": 0.24290714320790505
+    }
+   ]
+  },
+  "starcoder": {
+   "files": 863,
+   "bytes": 102890462637,
+   "target_bytes": 1008326534,
+   "chosen_bytes": 1008326534,
+   "chosen": [
+    {
+     "path": "data/starcoder/v1-decon-100_to_20k-2star-top_token_030/documents/python-0018.json.gz",
+     "size": 107266215,
+     "sha256": "b97b946aa165e68ca5f722be69883deb8664384d162d381bc21535e168b88bd1",
+     "take": 1.0
+    },
+    {
+     "path": "data/starcoder/v1-decon-100_to_20k-2star-top_token_030/documents/git-commits-cleaned-0009.json.gz",
+     "size": 209025364,
+     "sha256": "760651929f214712c0a62424738b710bc8b5ed84f90907bc2b6d2e7dcca61581",
+     "take": 1.0
+    },
+    {
+     "path": "data/starcoder/v1-decon-100_to_20k-2star-top_token_030/documents/go-0018.json.gz",
+     "size": 93821557,
+     "sha256": "3577038389174421e1940c381e927b60ce626ec2bebf78b2e0f2386dea180c83",
+     "take": 1.0
+    },
+    {
+     "path": "data/starcoder/v1-decon-100_to_20k-2star-top_token_030/documents/java-0029.json.gz",
+     "size": 89979231,
+     "sha256": "c2a661edfb82158cfd9e1cdc2441ed22e44cc42fd9b96b0fc44b4d341da09aa0",
+     "take": 1.0
+    },
+    {
+     "path": "data/starcoder/v1-decon-100_to_20k-2star-top_token_030/documents/javascript-0000.json.gz",
+     "size": 79225463,
+     "sha256": "414203bba88bed05c55663ce1854daae67c330b246e84db2a1b218645792556b",
+     "take": 1.0
+    },
+    {
+     "path": "data/starcoder/v1-decon-100_to_20k-2star-top_token_030/documents/cpp-0009.json.gz",
+     "size": 98890761,
+     "sha256": "94520f6c4a9f2cbe6d8113509013d112aa2d1ae41a3b95c763ef12e3d528ff86",
+     "take": 1.0
+    },
+    {
+     "path": "data/starcoder/v1-decon-100_to_20k-2star-top_token_030/documents/css-0002.json.gz",
+     "size": 38869642,
+     "sha256": "23b8977f024db3d9f7aa8285b7a205cbeba6da2e05ac3711ba0154028065eda4",
+     "take": 1.0
+    },
+    {
+     "path": "data/starcoder/v1-decon-100_to_20k-2star-top_token_030/documents/java-0023.json.gz",
+     "size": 91314712,
+     "sha256": "43262c42aad5b2f78d3c4ac1cca27946e6fbd9cf56c70b07077a728e5ec9cdf6",
+     "take": 1.0
+    },
+    {
+     "path": "data/starcoder/v1-decon-100_to_20k-2star-top_token_030/documents/typescript-0018.json.gz",
+     "size": 100304583,
+     "sha256": "356acd0f0bdf08dc29e22969683b20d3cb56e9515c13b0a99ebbfdcde290d6a0",
+     "take": 1.0
+    },
+    {
+     "path": "data/starcoder/v1-decon-100_to_20k-2star-top_token_030/documents/tcl-0000.json.gz",
+     "size": 32773822,
+     "sha256": "35a3253faa40daba854c885b2363cafad2c414c2fef2d45c6b9deac9cf0397d3",
+     "take": 1.0
+    },
+    {
+     "path": "data/starcoder/v1-decon-100_to_20k-2star-top_token_030/documents/git-commits-cleaned-0021.json.gz",
+     "size": 199828574,
+     "sha256": "c23386662e38651bb32cb28d9e9814220a1e3652e446acf94cdf6cfd2cd9b968",
+     "take": 0.3345626829254158
+    }
+   ]
+  },
+  "wiki": {
+   "files": 2,
+   "bytes": 6481127992,
+   "target_bytes": 63515054,
+   "chosen_bytes": 63515054,
+   "chosen": [
+    {
+     "path": "data/wiki/wiki-0001.json.gz",
+     "size": 2222652693,
+     "sha256": "338aa495307c808a50a8541dd684129b35efc9c2df36e3c979b27a1ded9f7b0c",
+     "take": 0.028576238888618842
+    }
+   ]
+  }
+ }
+}

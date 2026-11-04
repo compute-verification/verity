@@ -1,5 +1,6 @@
-"""covert_witness's E formats (`prepare.py`): the sparse, lora2 and quant formats' round trips, layouts and refusals, and
-every format's rebuild cost, which is at least what te_core's counter sees the decode compute."""
+"""covert_witness's E formats (`prepare.py`): the sparse, lora2, quant and model formats' round trips, layouts and
+refusals, every format's rebuild cost, which is at least what te_core's counter sees the decode compute, and data v3's
+training windows across its parts."""
 import importlib.util
 import json
 import lzma
@@ -335,3 +336,174 @@ def test_rebuild_macs_per_format_bound_what_the_counter_sees():
         assert prepare.format_of(blob) == fmt
         assert prepare.rebuild_macs(th, blob) == prepare.rebuild_macs(meta, blob) == macs
         assert counted(lambda blob=blob: prepare.decode(th, blob, device="cpu")) <= macs, fmt
+
+
+def lf(n_layer: int, vocab: int = 32000) -> dict:
+    from model import Size
+
+    return Size("t", 32, n_layer, 2, 64).config(vocab=vocab)
+
+
+def lf_theta(config: dict) -> dict[str, torch.Tensor]:
+    g = torch.Generator().manual_seed(1)
+    return {k: torch.randn(s, generator=g).to(torch.bfloat16) for k, s in prepare.architecture(config).items()}
+
+
+def test_a_model_format_is_its_own_architecture_with_thetas_tensors_where_e_gives_none(monkeypatch):
+    import evaluate
+
+    small, big = lf(1), lf(2)
+    th = lf_theta(small)
+    rec = {"config": small, "tokenizer": prepare.data_v3.TOKENIZER}
+    new = {k: torch.ones(s, dtype=torch.bfloat16) for k, s in prepare.architecture(big).items() if k not in th}
+    assert new
+    blob = prepare.encode_model(big, new)
+    assert prepare.format_of(blob) == "model" and prepare.rebuild_macs(th, blob) == 0
+    assert prepare.model_config(rec, blob) == big and prepare.model_config(rec, prepare.encode_full({})) == small
+    out = prepare.decode(th, blob, device="cpu")
+    assert {k: tuple(v.shape) for k, v in out.items()} == prepare.architecture(big)
+    assert all(prepare.same_bits(out[k], new[k] if k in new else th[k]) for k in out)
+    m = prepare.model_record(rec, big, out)
+    assert m["config"] == big and m["parameters"] == sum(v.numel() for v in out.values())
+    assert prepare.model_record(rec, small, th) is rec
+    # the evaluation job's cost record reads the grown model's record, scored in the start's tokens
+    monkeypatch.setattr(prepare, "held_out", lambda split, tok: (np.zeros(2049, dtype=np.uint16), {"bytes": 8000}))
+    monkeypatch.setattr(evaluate, "prepare", prepare)
+    cost = evaluate.eval_cost(prepare.SEARCH_POOL, m)
+    assert cost["parameters"] == m["parameters"] and cost["set"] == prepare.SEARCH_POOL
+    with torch.device("cpu"):
+        net = prepare.Net(big).load(out)
+    assert net.logits(torch.zeros(1, 4, dtype=torch.long)).shape == (1, 4, 32000)
+
+
+def test_a_model_format_keeps_thetas_vocabulary_context_and_tying_and_only_its_architectures_tensors():
+    small, big = lf(1), lf(2)
+    th, rec = lf_theta(small), {"config": small}
+    for config in (lf(2, vocab=50304), {**big, "ctx": 2048}, {**big, "tied": False}, {**big, "family": "hf-neox"}, None):
+        with pytest.raises(ValueError, match="θ's family, vocab, ctx, tied"):
+            prepare.model_config(rec, prepare.encode_model(config, {}))
+    shapes = prepare.architecture(big)
+    new = {k: torch.ones(s, dtype=torch.bfloat16) for k, s in shapes.items() if k not in th}
+    one = sorted(new)[0]
+    for given, why in ((new | {"stray": torch.ones(2)}, "not its architecture's tensors"),
+                       ({k: v for k, v in new.items() if k != one}, f"{one} is neither E's nor θ's"),
+                       (new | {one: torch.ones(3)}, f"{one} is neither E's nor θ's"),
+                       (new | {one: torch.ones(shapes[one], dtype=torch.int32)}, f"{one} is neither E's nor θ's")):
+        with pytest.raises(ValueError, match=why):
+            prepare.decode(th, prepare.encode_model(big, given), device="cpu")
+
+
+@pytest.mark.parametrize("key, tensors, zero, live, stage", [
+    ("prefix", ("prefix_k.weight", "prefix_v.weight", "prefix_gate"), "prefix_gate", "prefix_k.weight", 1),
+    ("adapter", ("adapter_norm", "adapter_down.weight", "adapter_up.weight"), "adapter_up.weight", "adapter_down.weight", 7),
+])
+def test_an_extended_model_at_its_initialisation_computes_thetas_function_exactly(key, tensors, zero, live, stage):
+    from torch.nn.attention import SDPBackend, sdpa_kernel
+
+    small = lf(2)
+    big = {**small, key: 4}
+    # at fp32: the CPU's bf16 products aren't bitwise reproducible from one call to the next, θ's own model included
+    torch.manual_seed(1)
+    with torch.device("cpu"):
+        th = {k: v.detach().float() for k, v in prepare.Net(small).params().items()}
+        torch.manual_seed(2)
+        init = {k: v.detach().float() for k, v in prepare.Net(big).params().items() if k not in th}
+    assert sorted(init) == sorted(f"blocks.{j}.{n}" for j in range(2) for n in tensors)
+    assert all(not init[f"blocks.{j}.{zero}"].any() and init[f"blocks.{j}.{live}"].any() for j in range(2))
+    out = prepare.decode(th, prepare.encode_model(big, init), device="cpu")
+    idx = torch.randint(0, 32000, (2, 16), generator=torch.Generator().manual_seed(3))
+    rec = prepare.model_record({"config": small, "tokenizer": prepare.data_v3.TOKENIZER}, big, out)
+    at = {n["param"]: n for n in prepare.positions(rec)}
+    assert at[f"blocks.1.{live}"]["stage"] == stage and at[f"blocks.1.{live}"]["flops"] == 2 * 4 * 32
+    from te_core.flops import forward_macs_per_token
+    # CPU's flash attention kernel isn't run-to-run deterministic, and forward_macs_per_token doesn't count its
+    # aten._scaled_dot_product_flash_attention_for_cpu, so every forward here runs on the MATH kernel
+    with sdpa_kernel(SDPBackend.MATH), torch.device("cpu"):
+        start, extended = prepare.Net(small).load(th), prepare.Net(big).load(out)
+        assert torch.equal(start.logits(idx), extended.logits(idx))
+        extra = forward_macs_per_token(prepare.Net(big), 16, 32000, "cpu") - forward_macs_per_token(prepare.Net(small), 16, 32000, "cpu")
+        # the 4 prefix keys' scores and values, or the adapter's down and up, at d = 32 in both blocks
+        assert extra >= 2 * 2 * 4 * 32
+        # training the zero tensor moves the function, so the extension is live
+        out[f"blocks.0.{zero}"] = torch.full_like(out[f"blocks.0.{zero}"], 0.5)
+        moved = prepare.Net(big).load(out)
+        assert not torch.equal(start.logits(idx), moved.logits(idx))
+
+
+def test_a_bias_extension_at_zero_biases_reproduces_thetas_function_exactly(monkeypatch):
+    """BitFit's extension: `bias` adds a zero vector to each named matrix of every block, so θ's logits come back bit
+    for bit (fp32 and under bf16 autocast), its forward costs θ's MACs, every bias has its matrix's position, and other
+    leaves are refused."""
+    from model import LINEARS
+    from te_core.flops import forward_macs_per_token
+    from torch.nn.attention import SDPBackend, sdpa_kernel
+
+    small = lf(2)
+    th = {k: v.float() for k, v in lf_theta(small).items()}
+    rec = {"config": small, "tokenizer": prepare.data_v3.TOKENIZER}
+    forward = [{"op": "forward", "tokens": 1}]
+    theta_forward = prepare.train_flops(rec | {"tensors": {k: [str(v.dtype), list(v.shape)] for k, v in th.items()}},
+                                        {"full": []}, forward)["flops"]
+    x = torch.randint(0, 32000, (2, 16), generator=torch.Generator().manual_seed(2))
+    # On CPU, oneDNN's bf16 matmul and the flash attention kernel aren't run-to-run deterministic (torch 2.14: about one
+    # call in 30 differs on identical inputs), so the comparisons run on kernels that are.
+    monkeypatch.setattr(torch.backends.mkldnn, "enabled", False)
+    for leaves in (["wq", "wv", "w_up", "w_down"], list(LINEARS)):
+        biased = {**small, "bias": leaves}
+        shapes = prepare.architecture(biased)
+        new = {k: torch.zeros(s) for k, s in shapes.items() if k not in th}
+        assert sorted(new) == sorted(f"blocks.{i}.{n}.bias" for i in range(2) for n in leaves)
+        blob = prepare.encode_model(biased, new)
+        assert prepare.model_config(rec, blob) == biased
+        out = prepare.decode(th, blob, device="cpu")
+        plain, ext = prepare.Net(small).load(th), prepare.Net(biased).load(out)
+        assert torch.equal(plain.logits(x), ext.logits(x))
+        with sdpa_kernel(SDPBackend.MATH):
+            with torch.autocast("cpu", dtype=torch.bfloat16):
+                assert torch.equal(plain.logits(x), ext.logits(x))
+            assert forward_macs_per_token(ext, 16, 32000, "cpu") == forward_macs_per_token(plain, 16, 32000, "cpu")
+        biased_rec = prepare.model_record(rec, biased, out)
+        nodes = {n["param"]: n for n in prepare.positions(biased_rec)}
+        for k in new:
+            w = nodes[k.removesuffix(".bias") + ".weight"]
+            assert (nodes[k]["layer"], nodes[k]["stage"], nodes[k]["flops"]) == (w["layer"], w["stage"], 0)
+        assert prepare.train_flops(biased_rec, {"full": sorted(new)}, forward)["flops"] == theta_forward
+    for bad in (["embed"], ["wq", "norm"], "wq", 3):
+        with pytest.raises(ValueError, match="bias must be a list"):
+            prepare.decode(th, prepare.encode_model({**small, "bias": bad}, {}), device="cpu")
+
+
+def test_every_encoder_is_one_the_harness_and_capture_wrap():
+    """Each of prepare's `encode_*` is in te_core.cw's ENCODERS, which the harness wraps to keep each checkpoint's E, and
+    in te_core.capture.script's, whose recording leaves the encoding out, so no format's encoding is traced as training."""
+    from te_core import cw
+    from te_core.capture import script
+
+    names = {n for n in vars(prepare) if n.startswith("encode_") and callable(getattr(prepare, n))}
+    assert names == set(cw.ENCODERS) == set(script._ENCODERS)
+
+
+def test_bpe32k_training_windows_cover_every_parts_windows_and_none_crosses_a_part(tmp_path, monkeypatch):
+    lengths = (41, 9, 2, 25)
+    (tmp_path / "parts").mkdir()
+    for i, n in enumerate(lengths):
+        (1000 * i + np.arange(n, dtype=np.uint16)).tofile(tmp_path / "parts" / f"{i:03d}.bin")
+    monkeypatch.setattr(prepare.data_v3, "TRAIN", tmp_path)
+    c, tok = 4, prepare.data_v3.TOKENIZER
+
+    def windows(n_parts: int) -> list[tuple[int, ...]]:
+        return sorted(tuple(range(1000 * i + j * c, 1000 * i + j * c + c + 1)) for i, n in enumerate(lengths[:n_parts])
+                      for j in range((n - 1) // c))
+
+    def rows(data) -> list[tuple[int, ...]]:
+        return sorted(map(tuple, data.next(len(data.order), device="cpu").tolist()))
+
+    # while it is installed: the parts whose records are in place from 000 on (002's isn't yet)
+    for i in (0, 1, 3):
+        (tmp_path / "parts" / f"{i:03d}.json").write_text("{}")
+    assert rows(prepare.TrainData(tok, ctx=c)) == windows(2)
+    assert rows(prepare.TrainData(tok, ctx=c, parts=1)) == windows(1)
+    with pytest.raises(SystemExit, match="2 training parts here, not 3"):
+        prepare.TrainData(tok, ctx=c, parts=3)
+    (tmp_path / "manifest.json").write_text(json.dumps({"parts": [{"index": i} for i in range(len(lengths))]}))
+    assert rows(prepare.TrainData(tok, ctx=c)) == windows(4)

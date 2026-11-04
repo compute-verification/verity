@@ -39,6 +39,7 @@ import Proofs.Nci.Cover
 import Proofs.Nci.PartitionCovers
 import Proofs.Nci.CompliesCK
 import Proofs.Nci.Ldl
+import Proofs.Nci.Formalism
 
 /-!
 # Proofs of NCI's guarantees

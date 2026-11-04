@@ -30,9 +30,9 @@ import time
 from pathlib import Path
 
 SEALED = Path(os.environ.get("CW_SEALED", "/workspace/research/te/sealed"))
-#: the held-out data's version (`data.py`): its sets are under `heldout/<DATA>/`, and the values scored on them under
-#: `values/<DATA>/`
-DATA = "v2.2"
+#: the held-out data's version (`data_v3.py`; v2.2's was `data.py`'s): its sets are under `heldout/<DATA>/`, and the
+#: values scored on them under `values/<DATA>/`
+DATA = "v3"
 VALUES = SEALED / "values" / DATA
 #: the share of its search gain a candidate's promotion-set gain must reach
 PROMOTION_SHARE = 0.5

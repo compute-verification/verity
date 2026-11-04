@@ -1,4 +1,4 @@
-# |C|/T₀ is a size ratio: what `tools/move/rename.py --map tools/move/size_ratio_map.toml` renames (the Glossary keeps
+# c·B/T₀ is a size ratio: what `tools/move/rename.py --map tools/move/size_ratio_map.toml` renames (the Glossary keeps
 # "slowdown" for wall-clock time only). `Verity.slowdown`, which Theorem 3 reads, becomes `Verity.sizeRatio`;
 # `Nci.slowdown`, the slowdown factor ρ, is another declaration and keeps its name, so the bare word is renamed only in
 # the Core files that declare and read `Verity.slowdown`. Declarations keep their place in the locks' records:

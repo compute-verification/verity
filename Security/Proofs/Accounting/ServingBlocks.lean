@@ -1,5 +1,5 @@
 import Definitions.Accounting.Guarantees.ServingBlocks
-import Proofs.Core.Padding
+import Proofs.Core.Formalism
 import Mathlib.Tactic.Linarith
 
 /-!
@@ -129,7 +129,7 @@ theorem assigned_le_inference (d : Declaration) (J : Counted d.D) (q : ℕ → �
   classical
   set U := J.V.filter fun v => ∀ i, ¬ J.body v ⊆ Pf.gates i
   have hcap : ∀ i, ∑ v ∈ (J.V \ U) ∩ Pf.gates i, J.ω v ≤ q c k := fun i => by
-    refine le_trans ?_ (hq (Pf.gates i) (Pf.gates_subset_computed i) (hCK.card i).le (hCK.reads i))
+    refine le_trans ?_ (hq (Pf.gates i) (Pf.gates_subset_computed i) (hCK.card i) (hCK.reads i))
     unfold Counted.inside
     refine Finset.sum_le_sum_of_subset_of_nonneg (fun v hv => ?_)
       fun v hv _ => J.ω_nonneg v (Finset.mem_of_mem_filter v hv)
