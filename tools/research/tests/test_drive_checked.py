@@ -336,6 +336,92 @@ def test_a_checked_below_a_moved_main_fast_forwards_to_it(world, monkeypatch):
     assert _checked(world) == _main(world)
 
 
+def _push_outside(world: World, files: dict[str, str], name: str) -> str:
+    """A commit onto `checked` by ``name``, pushed to it by someone other than drive; its sha."""
+    import os
+    import subprocess
+
+    c = world.change(files, base="origin/checked")
+    env = {**os.environ, **{f"GIT_{who}_{k}": v for who in ("AUTHOR", "COMMITTER")
+                            for k, v in (("NAME", name), ("EMAIL", f"{name}@example.invalid"))}}
+    sha = subprocess.run(["git", "commit-tree", f"{c}^{{tree}}", "-p", f"{c}^", "-m", "an outside commit"], cwd=world.dev, env=env,
+                         check=True, capture_output=True, text=True).stdout.strip()
+    _git(world.dev, "push", "-q", "origin", f"{sha}:refs/heads/checked")
+    return sha
+
+
+def test_a_checked_drive_didnt_write_holds_landing_next_and_main_and_rings_ci_and_top_once_until_it_is_reset(world, monkeypatch):
+    h = Review(world, monkeypatch, land_into="checked")
+    main = _main(world)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    landed = _checked(world)
+    assert h.q.load_state()["drive"]["checked_tips"][-1] == landed
+    _pass(h)                                                    # #1's after-landing run passed: `main` would follow it
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.review(2)
+    queued = _git(world.origin, "rev-parse", "next")
+    outside = _push_outside(world, {"x.txt": "x\n"}, "mallory")
+    launched = len(h.posted)
+    for _ in range(2):
+        why = h.tick()
+        assert why.startswith(f"`checked` is at {outside[:12]} ('an outside commit', by mallory <mallory@example.invalid>), "
+                              "which drive didn't write: drive lands nothing, syncs no `next` and moves no `main`"), why
+        assert f"back at {landed[:12]}, the last tip drive wrote" in why and f"accept-checked {outside} --by ci" in why
+        assert _checked(world) == outside and _main(world) == main and _git(world.origin, "rev-parse", "next") == queued
+        assert len(h.posted) == launched
+    (ring,) = [p for p in h.posts if outside[:12] in p]
+    assert ring.startswith("@ci @top queue: `checked` is at"), ring
+    _git(world.dev, "push", "-q", "--force", "origin", f"{landed}:refs/heads/checked")
+    assert h.tick().startswith("landed #2"), world.logs
+    assert _main(world) == landed and _git(world.origin, "rev-parse", "checked^1") == landed
+
+
+def test_ci_accepting_a_checked_drive_didnt_write_lets_drive_go_on_from_it_and_no_one_else_can(world, monkeypatch):
+    from research import queue as Q
+
+    h = Review(world, monkeypatch, land_into="checked")
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    landed = _checked(world)
+    outside = _push_outside(world, {"x.txt": "x\n"}, "mallory")
+    assert h.tick().startswith(f"`checked` is at {outside[:12]}")
+    with pytest.raises(QueueError, match="only ci accepts"):
+        Q.accept_checked(h.q, outside, "lane-1")
+    with pytest.raises(QueueError, match=f"is not `checked`'s tip, {outside[:12]}"):
+        Q.accept_checked(h.q, landed, "ci")
+    assert Q.accept_checked(h.q, outside, "ci") == 0
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.review(2)
+    assert h.tick().startswith("landed #2"), world.logs
+    assert _git(world.origin, "rev-parse", "checked^1") == outside
+
+
+def test_drives_own_landings_and_merges_of_main_are_tips_it_takes_and_a_refused_push_records_none(world, monkeypatch):
+    """Each tip drive pushes to `checked` is recorded before its push (the revert's: the red tests above tick on after it); a
+    push `checked` refuses leaves no record, and a state from before drive kept them takes the tip it finds."""
+    h = Review(world, monkeypatch, land_into="checked")
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    landed = _checked(world)
+    _move_main(world, {"c.txt": "moved\n"})
+    h.tick()
+    merged = _checked(world)
+    assert merged != landed and h.q.load_state()["drive"]["checked_tips"][-2:] == [landed, merged]
+    drive = h.q.load_state()["drive"]
+    stale = _git(h.q.workdir, "commit-tree", f"{landed}^{{tree}}", "-p", f"{landed}^", "-m", "not a fast-forward")
+    assert h.d._push_into(drive, stale).returncode and stale not in drive["checked_tips"] and _checked(world) == merged
+    state = h.q.load_state()
+    del state["drive"]["checked_tips"]
+    h.q.save_state(state)
+    h.tick()
+    assert h.q.load_state()["drive"]["checked_tips"] == [merged]
+    assert not any("didn't write" in x for x in world.logs), world.logs
+
+
 def test_land_into_takes_checked_or_main_and_only_drive_pushes_checked(world, monkeypatch):
     assert DriveFlags.parse('land_into = "checked"\n').land_into == "checked" and DriveFlags().land_into is None
     # a config that doesn't set it leaves the queue to read drive.toml's at `main`, as with no config

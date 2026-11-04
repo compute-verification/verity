@@ -1,5 +1,5 @@
 /-
-The proof service's challenger: its live coins, the one live-coin source of every protocol, as the verifier checks them
+The proof system's challenger: its live coins, the one live-coin source of every protocol, as the verifier checks them
 (`verity/core/protocols/sampled_proofs/challenger.py`, which `tests/test_challenger_difftest.py` holds to this, the
 verifier of record).
 
