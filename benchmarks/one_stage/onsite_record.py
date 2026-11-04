@@ -436,10 +436,8 @@ def measured(path: Path | None) -> dict[str, Any]:
 
 
 def lines(out: Path, name: str) -> list[str]:
-    try:
-        return (out / name).read_text().splitlines()
-    except FileNotFoundError:
-        return []
+    f = out / name
+    return f.read_text().splitlines() if f.is_file() else []
 
 
 def charged(b: Mapping[str, Any]) -> dict[str, Any]:
