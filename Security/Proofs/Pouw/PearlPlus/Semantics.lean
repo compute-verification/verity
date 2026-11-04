@@ -37,6 +37,10 @@ theorem ofFn_mapM {f : α → Option β} : ∀ {n : ℕ} {a : Fin n → α} {b :
     rw [List.ofFn_succ (f := a), List.ofFn_succ (f := b), List.mapM_cons, h 0, ih]
     rfl
 
+theorem ofFn_mapM_id {n : ℕ} {a : Fin n → Option β} {b : Fin n → β} (h : ∀ p, a p = some (b p)) :
+    (List.ofFn a).mapM id = some (List.ofFn b) :=
+  ofFn_mapM (f := id) (a := a) (b := b) h
+
 theorem foldlM_inv (P : β → Prop) (f : β → α → Option β) (hf : ∀ b a b', P b → f b a = some b' → P b') :
     ∀ (l : List α) (b b' : β), P b → l.foldlM f b = some b' → P b'
   | [], b, b', hb, h => by
@@ -49,12 +53,12 @@ theorem foldlM_inv (P : β → Prop) (f : β → α → Option β) (hf : ∀ b a
 
 theorem push_get!_lt [Inhabited α] {a : Array α} {v : α} {y : ℕ} (h : y < a.size) : (a.push v)[y]! = a[y]! := by
   have h' : y < (a.push v).size := by simp only [Array.size_push]; omega
-  rw [getElem!_pos _ y h', Array.getElem_push h', dif_pos h, getElem!_pos a y h]
+  rw [getElem!_pos (a.push v) y h', Array.getElem_push h', dif_pos h, getElem!_pos a y h]
 
 theorem push_get!_eq [Inhabited α] {a : Array α} {v : α} {y : ℕ} (h : a.size = y) : (a.push v)[y]! = v := by
   have h' : y < (a.push v).size := by simp only [Array.size_push]; omega
   have hn : ¬ y < a.size := by omega
-  rw [getElem!_pos _ y h', Array.getElem_push h', dif_neg hn]
+  rw [getElem!_pos (a.push v) y h', Array.getElem_push h', dif_neg hn]
 
 theorem zip_toList_get [Inhabited α] [Inhabited β] {a : Array α} {b : Array β} {j : ℕ}
     (h : j < (a.zip b).toList.length) (ha : j < a.size) (hb : j < b.size) : (a.zip b).toList[j] = (a[j]!, b[j]!) := by
@@ -67,7 +71,8 @@ theorem lmap_get! [Inhabited α] [Inhabited β] {l : List α} {g : α → β} {x
 theorem zipL_get! [Inhabited α] [Inhabited β] {l : List α} {g : α → β} {x : ℕ} (h : x < l.length) :
     (l.zip (l.map g)).toArray[x]! = (l[x]!, g l[x]!) := by
   have h' : x < (l.zip (l.map g)).length := by simpa using h
-  rw [List.getElem!_toArray, getElem!_pos _ x h', List.getElem_zip, List.getElem_map, getElem!_pos l x h]
+  rw [List.getElem!_toArray, getElem!_pos (l.zip (l.map g)) x h', List.getElem_zip, List.getElem_map,
+    getElem!_pos l x h]
 
 theorem get!_mem [Inhabited α] {l : List α} {x : ℕ} (h : x < l.length) : l[x]! ∈ l := by
   rw [getElem!_pos l x h]
@@ -254,6 +259,193 @@ theorem formV1_ok {rows eRows f : Array (Array ℕ)} {out : Words.Formed} (h : W
           exact hcodes) hfor
   simpa only [Nat.zero_add, Array.length_toList, Array.size_zip, hre, Nat.min_self] using this
 
+/-! ## A tile entry -/
+
+open Matrix in
+/-- **U from its parts**: where `C̃`, the chains of `A′·F_B`, `B̃·F_A` and `G`, the factor rows and the peel are values,
+`peelExactP` is the peel's word. -/
+theorem peelExactP_of {p : Pipeline} {G m n k : ℕ} {Aq : Matrix (Fin m) (Fin k) Code} {Bq : Matrix (Fin n) (Fin k) Code}
+    {FA FB : Matrix (Fin k) (Fin 32) Code} {beA : Matrix (Fin m) (Fin 32) ℕ} {beB : Matrix (Fin n) (Fin 32) ℕ}
+    {i : Fin m} {j : Fin n} {c u : ℕ} {af bf : Fin 32 → ℕ} {g : Fin 32 → Fin 32 → ℕ} {pa pb : List ℕ}
+    (hc : chainWordP? p G (rowAtoms (Aq i) (Bq j)) = some c)
+    (haf : ∀ q, chainWordP? p G (rowAtoms (Aq i) (FBᵀ q)) = some (af q))
+    (hbf : ∀ q, chainWordP? p G (rowAtoms (Bq j) (FAᵀ q)) = some (bf q))
+    (hg : ∀ q q', chainWordP? p G (rowAtoms (FBᵀ q) (FAᵀ q')) = some (g q q'))
+    (hpa : paRow? (List.ofFn (beA i)) (List.ofFn af) = some pa)
+    (hpb : pbRow? (List.ofFn (beB j)) (List.ofFn bf) (List.ofFn fun q => List.ofFn (g q)) = some pb)
+    (hu : uWord? c pa pb = some u) : peelExactP p G Aq Bq FA FB beA beB i j = some u := by
+  have h1 := ofFn_mapM_id haf
+  have h2 := ofFn_mapM_id hbf
+  have h3 := ofFn_mapM_id (b := fun q => List.ofFn (g q)) fun q => ofFn_mapM_id (b := g q) (hg q)
+  simp only [peelExactP, hc, h1, h2, h3, hpa, hpb, hu, Option.bind_eq_bind, Option.bind_some]
+
+open Matrix in
+/-- **A tile entry's words**: over a noise `z` whose lines and bases are the check's (`hEA`, `hEB`, `hFA`, `hFB`), at a
+tile whose rows' words are below `2^32`, where the check's fixed noise, operands and checked words are values, entry
+`(x, y)` on rows that are `Row8OK` has `C̃` the H100 chain of `pc8Sem`'s operands and `U` their `peelExactP` at the H100,
+given the peel factor rows. -/
+theorem tileWords (hA : PeelARow) (hB : PeelBRow) {m n k u : ℕ} {act wt : Codes} {z : Noise m n k Params.pi.r}
+    {salt rootB : ByteArray} {wn : Words.FixedNoise} {rows cols : List ℕ} {ops : Words.Ops} {ch : Words.Checked}
+    (hkK : k ≤ 2 ^ 16) (hact : ∀ i ∈ rows, ∀ l < k, act i l < 2 ^ 32) (hwt : ∀ j ∈ cols, ∀ l < k, wt j l < 2 ^ 32)
+    (hFA : ∀ l (hl : l < k) (t : Fin Params.pi.r), (wn.fa[l]!)[t.val]! = (z.FA ⟨l, hl⟩ t).val)
+    (hFB : ∀ l (hl : l < k) (t : Fin Params.pi.r), (wn.fb[l]!)[t.val]! = (z.FB ⟨l, hl⟩ t).val)
+    (hEA : ∀ i (hi : i < m) (e : Array ℕ),
+      Words.sampleLine (Words.lineKey (Words.rowSeed salt rootB u i (rowBytesOf act k i))) 0 0 0 Words.NORM_E = .ok e →
+        e.size = 32 ∧ ∀ t : Fin Params.pi.r, e[t.val]! = (z.EA ⟨i, hi⟩ t).val)
+    (hEB : ∀ j (hj : j < n) (e : Array ℕ), Words.sampleLine (Words.lineKey wn.seedB) 1 0 j Words.NORM_E = .ok e →
+        e.size = 32 ∧ ∀ t : Fin Params.pi.r, e[t.val]! = (z.EB ⟨j, hj⟩ t).val)
+    (hwn : Words.fixedNoise salt rootB k = .ok wn)
+    (henc : Words.encode salt rootB wn u k rows (rows.map (rowBytesOf act k)) cols (cols.map (rowBytesOf wt k)) = .ok ops)
+    (hch : Words.checked ops = .ok ch)
+    {x y : ℕ} (hx : x < rows.length) (hi : rows[x]! < m) (hRA : WholeCircuit.Row8OK coreOps k (act rows[x]!))
+    (hy : y < cols.length) (hj : cols[y]! < n) (hRB : WholeCircuit.Row8OK coreOps k (wt cols[y]!)) :
+    chainWordP? hopperE4m3K32 4 (rowAtoms (WholeCircuit.quant8A coreOps hopperE4m3K32 z act ⟨rows[x]!, hi⟩)
+        (WholeCircuit.quant8B coreOps hopperE4m3K32 z wt ⟨cols[y]!, hj⟩)) = some ((ch.c[x]!)[y]!) ∧
+      peelExactP hopperE4m3K32 4 (WholeCircuit.quant8A coreOps hopperE4m3K32 z act)
+        (WholeCircuit.quant8B coreOps hopperE4m3K32 z wt) (WholeCircuit.basis8 z.FA) (WholeCircuit.basis8 z.FB)
+        (fun i => WholeCircuit.be8 (WholeCircuit.betaQ8 coreOps k (act i)) (z.EA i))
+        (fun j => WholeCircuit.be8 (WholeCircuit.betaQ8 coreOps k (wt j)) (z.EB j)) ⟨rows[x]!, hi⟩ ⟨cols[y]!, hj⟩ =
+        some ((ch.u[x]!)[y]!) := by
+  have hadd := fp32AddIsTheSpec
+  obtain ⟨hfR, -, hfbC, hcolF, hgram⟩ := fixedNoise_ok hwn
+  unfold Words.encode at henc
+  obtain ⟨ea, hea, henc⟩ := bind_ok henc
+  obtain ⟨va, hva, henc⟩ := bind_ok henc
+  obtain ⟨a, ha, henc⟩ := bind_ok henc
+  try dsimp only at henc
+  obtain ⟨eb, heb, henc⟩ := bind_ok henc
+  obtain ⟨vb, hvb, henc⟩ := bind_ok henc
+  obtain ⟨b, hb, henc⟩ := bind_ok henc
+  obtain ⟨pas, hpas, henc⟩ := bind_ok henc
+  obtain ⟨pbs, hpbs, henc⟩ := bind_ok henc
+  obtain rfl := pure_ok henc
+  unfold Words.checked at hch
+  try dsimp only at hch
+  obtain ⟨c, hc, hch⟩ := bind_ok hch
+  obtain ⟨uu, hu, hch⟩ := bind_ok hch
+  obtain rfl := pure_ok hch
+  try dsimp only
+  -- the operands' rows, noise lines and forming
+  obtain ⟨hvaS, hvaA⟩ := mapM_ok hva
+  obtain ⟨heaS, heaA⟩ := mapM_ok hea
+  obtain ⟨hvbS, hvbA⟩ := mapM_ok hvb
+  obtain ⟨hebS, hebA⟩ := mapM_ok heb
+  simp only [List.size_toArray, List.length_zip, List.length_map, Nat.min_self] at hvaS heaS hvbS hebS
+  obtain ⟨haC, haE, haR⟩ := formV1_ok ha (by rw [hvaS, heaS])
+  obtain ⟨hbC, hbE, hbR⟩ := formV1_ok hb (by rw [hvbS, hebS])
+  obtain ⟨s, ρw, αw, βw, hs, hep, hcodes⟩ := haR x (by omega)
+  obtain ⟨s', ρw', αw', βw', hs', hep', hcodes'⟩ := hbR y (by omega)
+  have hvx := hvaA x (by simpa using hx)
+  rw [List.getElem!_toArray, lmap_get! hx] at hvx
+  obtain ⟨hvxS, hvxW⟩ := parseRow_ok (hact _ (get!_mem hx)) hvx
+  have hvy := hvbA y (by simpa using hy)
+  rw [List.getElem!_toArray, lmap_get! hy] at hvy
+  obtain ⟨hvyS, hvyW⟩ := parseRow_ok (hwt _ (get!_mem hy)) hvy
+  have hex := heaA x (by simpa using hx)
+  rw [zipL_get! hx] at hex
+  try dsimp only at hex
+  obtain ⟨heS, heA⟩ := hEA rows[x]! hi ea[x]! hex
+  have hey := hebA y (by simpa using hy)
+  rw [List.getElem!_toArray] at hey
+  obtain ⟨heS', heA'⟩ := hEB cols[y]! hj eb[y]! hey
+  -- the depth: the chain multiplies whole atoms, and `s5_stats` refuse an empty row
+  obtain ⟨hcS, hcA⟩ := mapM_ok hc
+  obtain ⟨-, hcxA⟩ := mapM_ok (hcA x (by omega))
+  have hcxy := hcxA y (by omega)
+  have hkx : (a.codes[x]!).size = k := by rw [(mapM_ok hcodes).1, Array.size_range, hvxS]
+  have hky : (b.codes[y]!).size = k := by rw [(mapM_ok hcodes').1, Array.size_range, hvyS]
+  have hk32 : k % 32 = 0 := by have := (chain_size hcxy).2; omega
+  have hk0 : 0 < k := by have := s5Stats_pos hs; omega
+  have hk8 : 8 ∣ k := Nat.dvd_of_mod_eq_zero (by omega)
+  have hk27 : k ≤ 2 ^ 27 := le_trans hkK (by norm_num)
+  obtain ⟨hepS, hepA, -, hcodA⟩ := formRow_quant8 (E := z.EA ⟨rows[x]!, hi⟩) (F := z.FA) hk0 hk8 hk27 hvxS hvxW
+    (hact _ (get!_mem hx)) hRA heS heA (fun t => (hfR t.val t.isLt).1) (fun t q => hFA t.val t.isLt q) hs hep hcodes
+  obtain ⟨hepS', hepA', -, hcodB⟩ := formRow_quant8 (E := z.EB ⟨cols[y]!, hj⟩) (F := z.FB) hk0 hk8 hk27 hvyS hvyW
+    (hwt _ (get!_mem hy)) hRB heS' heA' (fun t => (hfR t.val t.isLt).2) (fun t q => hFB t.val t.isLt q) hs' hep'
+    hcodes'
+  -- the chains
+  have hC : chainWordP? hopperE4m3K32 4 (rowAtoms (WholeCircuit.quant8A coreOps hopperE4m3K32 z act ⟨rows[x]!, hi⟩)
+      (WholeCircuit.quant8B coreOps hopperE4m3K32 z wt ⟨cols[y]!, hj⟩)) = some ((c[x]!)[y]!) :=
+    chain_ok hadd hkx hky (fun t ht => hcodA ⟨t, ht⟩) (fun t ht => hcodB ⟨t, ht⟩) hcxy
+  have hGq : ∀ p q : Fin 32, chainWordP? hopperE4m3K32 4 (rowAtoms ((WholeCircuit.basis8 z.FB)ᵀ p)
+      ((WholeCircuit.basis8 z.FA)ᵀ q)) = some ((wn.gram[p.val]!)[q.val]!) := fun p q => by
+    obtain ⟨-, hp2, hp3⟩ := hcolF p.val p.isLt
+    obtain ⟨hq1, -, hq3⟩ := hcolF q.val q.isLt
+    exact chain_ok hadd hp2 hq1 (fun t ht => (hp3 t ht).2.trans (hFB t ht p))
+      (fun t ht => (hq3 t ht).1.trans (hFA t ht q)) (hgram p.val p.isLt q.val q.isLt)
+  -- the peel factor rows
+  obtain ⟨-, hpaxS, af, hafC, hpaR⟩ := hA wn a pas x
+    (lineCodes (WholeCircuit.betaQ8 coreOps k (act rows[x]!)) (z.EA ⟨rows[x]!, hi⟩)) hpas (haC.trans haE.symm)
+    (by omega) hfbC hepS hepA (WholeCircuit.lineCodes_notNaN _ _)
+  obtain ⟨hpbS, hpbyS, bf, hbfC, hpbR⟩ := hB wn b pbs y
+    (lineCodes (WholeCircuit.betaQ8 coreOps k (wt cols[y]!)) (z.EB ⟨cols[y]!, hj⟩)) (fun p q => (wn.gram[p.val]!)[q.val]!)
+    hpbs (hbC.trans hbE.symm) (by omega) hepS' hepA' (WholeCircuit.lineCodes_notNaN _ _)
+    (fun p q => ⟨rfl, WholeCircuit.chainWordP?_lt (hGq p q), chainWordP?_wordQ (hGq p q)⟩)
+  have hAFq : ∀ q : Fin 32, chainWordP? hopperE4m3K32 4 (rowAtoms (WholeCircuit.quant8A coreOps hopperE4m3K32 z act
+      ⟨rows[x]!, hi⟩) ((WholeCircuit.basis8 z.FB)ᵀ q)) = some (af q) := fun q => by
+    obtain ⟨-, hq2, hq3⟩ := hcolF q.val q.isLt
+    exact chain_ok hadd hkx hq2 (fun t ht => hcodA ⟨t, ht⟩) (fun t ht => (hq3 t ht).2.trans (hFB t ht q)) (hafC q)
+  have hBFq : ∀ q : Fin 32, chainWordP? hopperE4m3K32 4 (rowAtoms (WholeCircuit.quant8B coreOps hopperE4m3K32 z wt
+      ⟨cols[y]!, hj⟩) ((WholeCircuit.basis8 z.FA)ᵀ q)) = some (bf q) := fun q => by
+    obtain ⟨hq1, -, hq3⟩ := hcolF q.val q.isLt
+    exact chain_ok hadd hky hq1 (fun t ht => hcodB ⟨t, ht⟩) (fun t ht => (hq3 t ht).1.trans (hFA t ht q)) (hbfC q)
+  -- the peel
+  obtain ⟨-, huA⟩ := mapM_ok hu
+  have hux := huA x (by rw [Array.size_range]; omega)
+  rw [range_get! (show x < c.size by omega)] at hux
+  obtain ⟨-, huxA⟩ := mapM_ok hux
+  have huxy := huxA y (by rw [Array.size_range]; omega)
+  rw [range_get! (show y < pbs.size by omega)] at huxy
+  have hU := peel_uWord (WholeCircuit.chainWordP?_lt hC) (by omega) (by omega) huxy
+  exact ⟨hC, peelExactP_of hC hAFq hBFq hGq hpaR hpbR hU⟩
+
 end SemSim
+
+open SemSim WordsSim in
+/-- **(b) A tile's words are the semantics'**, given the peel factor rows: `tileWords` at -h3's noise, whose lines and
+bases are the check's (`seedsAreTheSpec`, `lineIsTheSpec`, `fixedNoiseIsTheSpec`), on rows that pass the rules
+(`row8OK_of_floor`), read through the H100 record's ticket and useful words. -/
+theorem wordsAreTheSemantics_of (hA : PeelARow) (hB : PeelBRow) : WordsAreTheSemantics := by
+  intro Q R S saltOf rootOf ρ H s U u act salt rootB wn rows cols ops ch hsalt hroot hk hrows hcols hact hwt hW hwn
+    henc hch x hx hR y hy
+  have him := hrows _ (get!_mem hx)
+  have hjn := hcols _ (get!_mem hy)
+  have hWy := hW _ (get!_mem hy)
+  obtain ⟨hseed, -, -, hF⟩ := fixedNoiseIsTheSpec salt rootB _ wn hwn
+  have hsd : bytesNat wn.seedB = NoiseSha512.seedB (saltOf s) (rootOf (U.layout.wid u)) := by
+    rw [hseed, hsalt, hroot]
+  obtain ⟨hC, hP⟩ := tileWords (z := (semH3 saltOf rootOf : PearlCSem Q R S).noise H s U u act)
+    (wt := U.weight (U.layout.wid u)) hA hB hk hact hwt
+    (fun l hl t => by rw [(hF l hl t).1, hsd]; rfl) (fun l hl t => by rw [(hF l hl t).2, hsd]; rfl)
+    (fun i hi e he => by
+      obtain ⟨h1, h2⟩ := lineIsTheSpec _ 0 0 0 Words.NORM_E 256 e (by norm_num) (by norm_num) (Or.inl ⟨rfl, rfl⟩) he
+      refine ⟨h1, fun t => ?_⟩
+      rw [h2 t, (seedsAreTheSpec).2.2, hsalt, hroot, bytesNat_rowBytesOf]
+      rfl)
+    (fun j hj e he => by
+      obtain ⟨h1, h2⟩ := lineIsTheSpec _ 1 0 j Words.NORM_E 256 e (by norm_num) (by norm_num) (Or.inl ⟨rfl, rfl⟩) he
+      refine ⟨h1, fun t => ?_⟩
+      rw [h2 t, hsd]
+      rfl)
+    hwn henc hch hx him
+    (WholeCircuit.row8OK_of_floor CoreOps.pc8OpsAgree_coreOps hopperE4m3K32
+      (semH3 saltOf rootOf : PearlCSem Q R S).noise him hR.1 (hR.2 him).2)
+    hy hjn
+    (WholeCircuit.row8OK_of_floor CoreOps.pc8OpsAgree_coreOps hopperE4m3K32
+      (semH3 saltOf rootOf : PearlCSem Q R S).noise hjn hWy.1 (hWy.2 hjn).2)
+  refine ⟨?_, ?_⟩
+  · show _ = atNat _ rows[x]! cols[y]!
+    unfold atNat
+    rw [dif_pos ⟨him, hjn⟩]
+    have hv := TileCircuit.chainWordP_value hopperE4m3K32 4 _ hC
+    rw [Accum.chainP_hopper_four] at hv
+    exact hv.symm
+  · show _ = atNat _ rows[x]! cols[y]!
+    unfold atNat
+    rw [dif_pos ⟨him, hjn⟩]
+    rw [PeelExactP.peelExactP_hopper] at hP
+    have hv := congrArg (fun o => Option.bind o wordQ) hP
+    simp only [Option.bind_some] at hv
+    exact hv.symm
 
 end Pouw.PearlPlus.Bridge
