@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.Zk.LigeritoProverPos
-import Proofs.Flock.Claims.Complete.Reps
-import Proofs.Flock.Claims.Complete.Zk.Coins
-import Proofs.Flock.Claims.Complete.Json.Goals
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.LigeritoProverPos
+public import Proofs.Flock.Claims.Complete.Reps
+public import Proofs.Flock.Claims.Complete.Zk.Coins
+public import Proofs.Flock.Claims.Complete.Json.Goals
 
 /-!
 # The masked Ligerito prover returns where its pair's coins are independent
@@ -16,6 +18,8 @@ independent over `F` (`Zk.rhoIndependent`): that refusal is the one step of the 
   (`LRet.silent`), and a loop over `[0:n]` keeps an invariant of its state and its sends (`LRet.forIn_upto`).
 * After the lane phase the sends no longer matter: the rest returns from any sends (`LRet.ofTot`, Reps' `totL`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.L0
 

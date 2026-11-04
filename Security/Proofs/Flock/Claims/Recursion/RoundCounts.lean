@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
 
 /-!
 # Each rep stream's round count is the schedule's
@@ -14,6 +16,8 @@ round count and coins to the coin server's, and `RecVStar.checkSchedule` the coi
 * `DecAt.hz`: row L's coin tie (`TargetZ`'s form): the stream's round-2 coin is the live one the reader read `z` from.
 * `DecAt.hsz_of_sched`: row R's `hsz`, where the schedule's coin counts are `roundSizes` at the table's shape.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 

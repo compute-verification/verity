@@ -2,7 +2,12 @@
 `RecVStar.checkLabels` on a population of four units: a drawn table's statement must label its instances with the units its
 draw proves, at one table and at two (each table's part of the draw, `tableDraw`, as `Stmt.setupTables` builds it).
 -/
-import Flock.RecVStar
+module
+
+public import Flock.RecVStar
+meta import Flock.RecVStar
+
+@[expose] public section
 
 namespace Flock.Test.Labels
 

@@ -1,5 +1,7 @@
-import Definitions.Claims.SamplingGeneric
-import Proofs.Flock.Claims.Sampling.KS
+module
+
+public import Definitions.Claims.SamplingGeneric
+public import Proofs.Flock.Claims.Sampling.KS
 
 /-!
 # The sampled compiler: the extraction's failure event and its probability
@@ -30,6 +32,8 @@ inner run are one `Compiled.BlockEC` per slot of the sample (`Compiled.SlotEC`),
   (`SamplingGeneric/Split.lean`) needs only the split.
 * `κ_le_κs`, `γ_le_γs`: each proof block's error bounds are at most the sessions' (`le_maxBelow`).
 -/
+
+@[expose] public section
 
 namespace Claims.SamplingGeneric
 

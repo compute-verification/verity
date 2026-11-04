@@ -1,10 +1,12 @@
-import Definitions.Claims.SamplingGeneric
-import Proofs.Flock.Claims.Recursion.BitsLin2
-import Proofs.Flock.Claims.Sampling.Session
-import Proofs.Flock.SamplingGeneric.Coins
-import Proofs.Flock.SamplingGeneric.Session
-import Proofs.Flock.SamplingGeneric.Fails
-import Proofs.Flock.SamplingGeneric.Deployed
+module
+
+public import Definitions.Claims.SamplingGeneric
+public import Proofs.Flock.Claims.Recursion.BitsLin2
+public import Proofs.Flock.Claims.Sampling.Session
+public import Proofs.Flock.SamplingGeneric.Coins
+public import Proofs.Flock.SamplingGeneric.Session
+public import Proofs.Flock.SamplingGeneric.Fails
+public import Proofs.Flock.SamplingGeneric.Deployed
 
 /-!
 # `Claims.Sampling` from the sampled compiler at a frozen sampled record
@@ -25,6 +27,8 @@ at the deployed decoder (`ksLin_of_flockKS`). `Sampling.KS` reads every decoder 
 decoder of the record that differs from `D` only there (`withDecode`), which its statement and hypotheses read as they
 read `D` (`samplingKS_of_flockKS`).
 -/
+
+@[expose] public section
 
 namespace Claims.SamplingGeneric
 

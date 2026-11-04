@@ -1,5 +1,7 @@
-import Definitions.Claims.SamplingGeneric
-import Proofs.Flock.Claims.Sampling.KS
+module
+
+public import Definitions.Claims.SamplingGeneric
+public import Proofs.Flock.Claims.Sampling.KS
 
 /-!
 # The sampled compiler's count form
@@ -8,6 +10,8 @@ import Proofs.Flock.Claims.Sampling.KS
 at `δ = max(0, miss(t))` (`missAt`), a faulty set in `M_δ` having fewer than `t` proof blocks (`Sampling.Pa_le_miss`).
 So `CompilerKS` gives `CompilerKSCount` (`compilerKSCount_of`).
 -/
+
+@[expose] public section
 
 namespace Claims.SamplingGeneric
 

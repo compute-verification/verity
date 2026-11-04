@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Scope.Check
-import Proofs.Flock.Claims.Scope.Setup
-import Proofs.Flock.Soundness.Discharge.FailClosed.TmplStmt
+module
+
+public import Proofs.Flock.Claims.Scope.Check
+public import Proofs.Flock.Claims.Scope.Setup
+public import Proofs.Flock.Soundness.Discharge.FailClosed.TmplStmt
 
 /-!
 # The readable scope is the verifier's scope check
@@ -13,6 +15,8 @@ For every statement the verifier parses (`Parses`) and every relation part `rel`
   after the check (`Sizes`: `inScope_iff_scope`), not the setup's.
 * `inScope_iff_zk`: under `--zk`, exactly when `ProvedScope.check` passes.
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 

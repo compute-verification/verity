@@ -1,5 +1,7 @@
-import Properties.Pous.Period
-import Definitions.Accounting.JointBridge.SpaceOfPeriodHeld
+module
+
+public import Properties.Pous.Period
+public import Definitions.Accounting.JointBridge.SpaceOfPeriodHeld
 
 /-!
 # PoUS's per-period guarantee as the coins model's `.pous` input
@@ -11,6 +13,8 @@ guarantee for `.pous` (`Accounting.PeriodRun`), `PeriodRun.Sound c p .pous δ`, 
 until `Pous.Guarantees.ContinuousAudit` is tied to the deployed check (`Definitions.Accounting.JointBridge.SpaceOfPeriodHeld`'s
 header). `Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld` proves it from `Pous.Period.SecurityProofs.periodHeld`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Bridge
 

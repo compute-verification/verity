@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Sampling.Runs
-import Proofs.Flock.Claims.Sampling.RunsExp
-import Proofs.Flock.SamplingGeneric.Session
-import Proofs.Flock.SamplingGeneric.Bits
+module
+
+public import Proofs.Flock.Claims.Sampling.Runs
+public import Proofs.Flock.Claims.Sampling.RunsExp
+public import Proofs.Flock.SamplingGeneric.Session
+public import Proofs.Flock.SamplingGeneric.Bits
 
 /-!
 # The compiled extractor's costs
@@ -31,6 +33,8 @@ the sampling extractor at the step `runExt` (`E_eq_Esamp`).
 * `compilerEfficient`: **`CompilerEfficient`**, the three bounds at `Compiled.E` through `E_eq_Esamp`, so
   `compilerBits_of` gives `CompilerBits`.
 -/
+
+@[expose] public section
 
 namespace Claims.SamplingGeneric
 

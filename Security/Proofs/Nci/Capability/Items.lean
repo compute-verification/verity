@@ -1,5 +1,7 @@
-import Definitions.Nci.Capability
-import Proofs.Core.Formalism
+module
+
+public import Definitions.Nci.Capability
+public import Proofs.Core.Formalism
 
 /-!
 # Local bounds: what a block holds
@@ -11,6 +13,8 @@ import Proofs.Core.Formalism
   unregistered inputs;
 * `Circuit.bits_congr`: two runs agreeing on a bundle's gates give it the same bits.
 -/
+
+@[expose] public section
 
 namespace Nci.Capability
 

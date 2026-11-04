@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.SessionLean
-import Proofs.Flock.Claims.ZK.DeferredOut
+module
+
+public import Proofs.Flock.Claims.ZK.SessionLean
+public import Proofs.Flock.Claims.ZK.DeferredOut
 
 /-!
 # Flock's ZK server per outcome
@@ -15,6 +17,8 @@ the claims core's `ZKOut` at the factor `1`: the instance of `ZkArg.ZK`'s notion
 * `simOut`, `errOut`: the server's simulator given the outcome, and its error per outcome.
 * `zkOut_stops`, `server_zkOut`: `zk_server_lean_loop` per outcome.
 -/
+
+@[expose] public section
 
 namespace Claims.SamplingGeneric.FlockZk
 

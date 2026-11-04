@@ -1,6 +1,8 @@
-import Mathlib.Order.Bounds.Defs
-import Mathlib.Tactic.NormNum
-import Definitions.Pous.Model.Inc
+module
+
+public import Mathlib.Order.Bounds.Defs
+public import Mathlib.Tactic.NormNum
+public import Definitions.Pous.Model.Inc
 
 /-!
 # Certified numbers
@@ -9,6 +11,8 @@ The source report's operating point for Theorem 1(ii) (report §3): `S = (18/19)
 `ℓ = 98,304` bits give `p₀ = 1 − 1/19 + 1/32 + 1/98304 ≈ 0.978630`, and `k = 214` is the least `k` with
 `p₀^k ≤ 1/100`.
 -/
+
+@[expose] public section
 
 namespace Pous.Accounting
 

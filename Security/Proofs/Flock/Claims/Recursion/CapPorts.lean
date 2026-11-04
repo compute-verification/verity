@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.RowsCover
-import Proofs.Flock.Claims.Recursion.SchedDense
+module
+
+public import Proofs.Flock.Claims.Recursion.RowsCover
+public import Proofs.Flock.Claims.Recursion.SchedDense
 
 /-!
 # RecCap's part has its port `top` (`CapPorts`), from the reader's check
@@ -12,6 +14,8 @@ have RecCap's port `top`, the one fact `heldB_layoutBTops` still takes at round 
 `capPorts`: `CapPorts` at every shape. `ksLin2_deployed_caps` is `ksLin2_deployed_rows` with it discharged, and
 with the schedule at the dense shape (`schedMatches_dense`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
