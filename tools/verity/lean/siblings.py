@@ -16,7 +16,7 @@ from another package is taken as built). One that isn't is listed as unchecked.
 It is opt-in because of what it costs: on Security/Proofs' warm tree its stub imports some 3,200 modules in under 20 s
 at a peak near 8 GB, past the 1 GB a try on an agent VM has. So it runs only with `--siblings`, on Security on a node
 (`--on`), and records runs still catch what it isn't asked for. Stdlib only: the CLI's local `verity lean try` and
-`lean_changed.py --try` both load it."""
+`lean_changed.py --try` both load it, and every try takes its package's Lean options from it (`options`)."""
 from __future__ import annotations
 
 import contextlib
@@ -71,6 +71,20 @@ def source_dir(pkg: Path) -> tuple[Path, dict] | None:
         return None
     cfg = tomllib.loads(f.read_text())
     return (pkg / cfg.get("srcDir", ".")).resolve(), cfg
+
+
+def options(pkg: Path) -> list[str]:
+    """``pkg``'s `[leanOptions]` as lean's `-D` arguments, which `lake build` gives each of its modules and `lake env lean`
+    doesn't, so that a try refuses what the build does (an auto-bound name under `autoImplicit = false`); each `weak.`, so
+    one an import declares is set once it is imported, and none is refused as unknown. None from a `lakefile.lean`."""
+    if (got := source_dir(pkg)) is None:
+        return []
+
+    def flat(table: dict, at: str = "") -> list[str]:
+        return [a for k, v in table.items() for a in (flat(v, f"{at}{k}.") if isinstance(v, dict) else
+                                                      [f"-Dweak.{at}{k}={str(v).lower() if isinstance(v, bool) else v}"])]
+
+    return flat(got[1].get("leanOptions", {}))
 
 
 def modules(pkg: Path) -> dict[str, Path]:
