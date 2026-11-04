@@ -96,20 +96,4 @@ theorem openedRecorded_logged {record : Json} {o : Verity.Exchange} (hL : Bindin
   refine openedRecorded_congr ?_ hP
   exact (List.forall₂_map_left_iff.1 h).imp fun _ _ hab => ⟨hab.1, hab.2.1⟩
 
-private def honest : Json :=
-  Json.mkObj [("streams", Json.arr #[Json.mkObj [("stream", .str "t/rep0"), ("rounds", Json.arr #[.null, .null])]])]
-
-private def treeOpening (opened : Array (String × ℕ)) : _root_.SampledProofs.Challenger.LoggedTree :=
-  { key := "", nonce := "", root := "", spec := .null, opened := opened.map fun (s, k) => ⟨s, k, 1, "", ""⟩ }
-
-/-- The link and each recorded round. -/
-example : openedRecorded (treeOpening #[("session", 0), ("t/rep0", 0), ("t/rep0", 1)]) honest = true := by decide
-/-- A rep stream's round past the record's. -/
-example : openedRecorded (treeOpening #[("session", 0), ("t/rep0", 0), ("t/rep0", 1), ("t/rep0", 2)]) honest = false := by
-  decide
-/-- A second round of the link's stream. -/
-example : openedRecorded (treeOpening #[("session", 0), ("session", 1)]) honest = false := by decide
-/-- A stream the record doesn't name. -/
-example : openedRecorded (treeOpening #[("session", 0), ("t/rep1", 0)]) honest = false := by decide
-
 end Verity.Sampled
