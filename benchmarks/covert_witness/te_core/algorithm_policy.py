@@ -13,11 +13,14 @@ Daniel's C(L1)/C(L0) (coordinator 08:09Z and 11:16Z): the compute at which its d
 its start's l0 (te_core.frontier_fit's `gain_from`); a row carries C0 (`start_compute_gates`) and the start's own
 effective compute C_eff(l0) (`start_effective_gates`, over C0 the start's own gain, which the gain no longer reads). At
 a gain target g (`GAINS`: 1.1, 2 and 11, so +10%, +100% and +1000%) a start's target loss is E + (l0 − E)·g^(−γ),
-below l0 at every g (te_core.frontier_fit's `target`), and H is the least |C| of any scored checkpoint from the start
-on the same data reaching it, every checkpoint of every run pooled (null when none does). Every run from the start has
-a row at every target: `reached` "yes" at its first checkpoint reaching it, C that checkpoint's |C| and p = C/H >= 1;
-else "no" at its last checkpoint, C its total |C| and p = C/H a lower bound on its p (null without H). A start at or
-below its fit's E has no rows, and a data with no fit none.
+below l0 at every g (te_core.frontier_fit's `target`), and H is the least |C| of any scored or untraced checkpoint from
+the start on the same data reaching it, every checkpoint of every run pooled (null when none does). Every run from the
+start has a row at every target: `reached` "yes" at its first checkpoint reaching it, C that checkpoint's |C| and
+p = C/H >= 1; else "no" at its last checkpoint, C its total |C| and p = C/H a lower bound on its p (null without H). A
+start at or below its fit's E has no rows, and a data with no fit none. A run with no trace yet (te_core.frontier_fit's
+`untraced`) is a row at each target it reaches, never an absence: C and p as a traced run's, from its record, every ρ
+column null and basis_default and basis_own `unmeasured: not yet traced` (`UNTRACED`); it is in no decade, every cut
+keeps it and the figure draws it on `FLOOR`.
 
 Each row's ρ is te_core.formalism's `published` at its checkpoint under three policies (`POLICIES`), a column each,
 and ρ scales with c. The headline, `rho_own` (basis `basis_own`), is at the start's own session (`own_session`:
@@ -143,6 +146,12 @@ MARKERS = ("o", "s", "^", "D", "v", "P")
 EMPTY = "EMPTY"
 #: basis_default where reading A measures no kind valid on its own, its ρ null: in no decade, never an infinite ρ
 UNMEASURED = "unmeasured"
+#: basis_default and basis_own of a run that reaches a target but has no trace yet (te_core.frontier_fit's `untraced`):
+#: a row, never an absence (coordinator 10:56Z), p its record's and every ρ column null; in no decade, and on the
+#: figure's floor
+UNTRACED = "unmeasured: not yet traced"
+#: where the figure draws an untraced row: under every ρ, which is at least 1
+FLOOR = 0.9
 #: basis_default where a row's ρ rests on a stub input (`estimated`'s stub tag; coordinator 08:09Z item 2): in no
 #: decade, and off the cut's fronts and the figure; the stored table keeps it
 STUB = "stub"
@@ -152,6 +161,8 @@ STUB = "stub"
 PARTIAL = "partial"
 #: the bases whose ρ is only a lower bound, each with the marker the figure adds (a caret up); never the least S
 LOWER = {PARTIAL: 6}
+#: the bases no decade holds, in `coverage_md`'s and `board_line`'s order of counts
+BASES = (UNMEASURED, STUB, PARTIAL, UNTRACED)
 #: what `rests_on` opens with where ρ is the products term's or its floor's (binding `fresh_products` or `none`)
 TRACED = "computed from the traced op graph's matmuls and widths, (H) betas and (E) b_y assumed"
 #: the headline's k: one 16-bit word an input token of the console's session, the dial's measured k (the console's
@@ -320,17 +331,19 @@ def rests_on(one: dict) -> str | None:
     return one["rests_on"]
 
 
-def runs_of(st: frontier_fit.Start) -> dict[str, list[dict]]:
-    """A start's runs (run id, else record id), each its checkpoints by step."""
+def runs_of(rows: list[dict]) -> dict[str, list[dict]]:
+    """Rows' runs (run id, else record id), each its checkpoints by step."""
     out: dict[str, list[dict]] = {}
-    for r in sorted(st.rows, key=lambda r: (r.get("checkpoint_step") or 0, r["gates"])):
+    for r in sorted(rows, key=lambda r: (r.get("checkpoint_step") or 0, r["gates"])):
         out.setdefault(r.get("run_id") or r["id"], []).append(r)
     return out
 
 
-def build(info: dict, source: str, stamp: str | None = None) -> dict:
+def build(info: dict, source: str, stamp: str | None = None, untraced: list[dict] = ()) -> dict:
     """The panel, uncut, from te_core.frontier_fit's `build` (`info`: its starts and fits): a row per run, start and
-    gain target (module docstring), reached rows first by p, then the rest by gain."""
+    gain target (module docstring), reached rows first by p, then the rest by gain; and from `untraced`
+    (te_core.frontier_fit's `untraced`: rows with |C| and no trace), a row per run of a start's at each target it
+    reaches (basis `UNTRACED`), every checkpoint of them pooled into H."""
     ix = {c: i for i, c in enumerate(COLUMNS)}
 
     def order(x: list) -> tuple:
@@ -343,12 +356,28 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
         f = info["fits"].get(st.data)
         if f is None or st.l0 <= f["E"]:
             continue
-        runs, dials, own = runs_of(st), {}, frontier_fit.c_eff(f, st.l0)
+        runs, dials, own = runs_of(st.rows), {}, frontier_fit.c_eff(f, st.l0)
+        waiting = {run: cps for run, cps in runs_of([r for r in untraced if r["start"] == st.name]).items()
+                   if run not in runs}
+        honest = plots.staircase([(r["gates"], r["val_bpb"], r) for r in st.rows + [r for cps in waiting.values()
+                                                                                   for r in cps]])
         sess = own_session(st.shape)
+        prov = "gain:provisional" if f.get("provisional") else ""
         for g in GAINS:
             target = frontier_fit.target(f, st.l0, g)
-            h = panels.least(st.honest, target)
+            h = panels.least(honest, target)
             got = []
+            for run, cps in waiting.items():
+                r = next((r for r in cps if r["val_bpb"] <= target), None)
+                if r is None:
+                    continue
+                gain = frontier_fit.gain_from(f, st.l0, r["val_bpb"])
+                row = [st.label, st.c0, None if math.isinf(own) else own, st.l0, r["val_bpb"], g,
+                       None if math.isinf(gain) else gain, "yes", r["gates"], h, r["gates"] / h if h else None, None,
+                       UNTRACED, plots.method(r), r.get("family"), f"{run}@{r.get('checkpoint_step')}", st.data, prov]
+                cols = {"te_core": VERSION, "basis_own": UNTRACED, "own_c_gates": sess["gates"],
+                        "own_k_bits": sess["k_bits"]}
+                got.append(row + [cols.get(c) for c in COLUMNS[len(row):]])
             for run, cps in runs.items():
                 hit = next((r for r in cps if r["val_bpb"] <= target), None)
                 r = hit or cps[-1]
@@ -365,7 +394,7 @@ def build(info: dict, source: str, stamp: str | None = None) -> dict:
                        None if math.isinf(gain) else gain,
                        "yes" if hit else "no", r["gates"], h, r["gates"] / h if h else None, finite(one["rho"]),
                        basis_of(one, est), plots.method(r), r.get("family"), f"{run}@{r.get('checkpoint_step')}",
-                       st.data, " ".join(filter(None, (est, "gain:provisional" if f.get("provisional") else "")))]
+                       st.data, " ".join(filter(None, (est, prov)))]
                 cols = {"rho_inputs": rho_inputs(m, st.w), "reading": one["reading"], "te_core": VERSION,
                         "rho_console": None if one["rho"] is None else "inf" if math.isinf(one["rho"]) else one["rho"],
                         "binding_kind": one["binding_kind"], "rests_on": rests_on(one), "kinds": kinds(one),
@@ -416,9 +445,9 @@ def note(art: str | None = None, tier: str | None = None, kept: str = "", provis
 
 def decade(rho: float | None, basis: str | None = None) -> int | None:
     """The coverage's decade of ρ (`DECADES`) a row's rho_default is in: an infinite one (null) is in the last, and an
-    unmeasured one (null, basis `UNMEASURED`), one resting on a stub (basis `STUB`) or a partial one, only a lower
-    bound (basis `PARTIAL`), in none."""
-    if basis in (UNMEASURED, STUB, PARTIAL):
+    unmeasured one (null, basis `UNMEASURED` or `UNTRACED`), one resting on a stub (basis `STUB`) or a partial one,
+    only a lower bound (basis `PARTIAL`), in none."""
+    if basis in (UNMEASURED, UNTRACED, STUB, PARTIAL):
         return None
     if rho is None:
         return len(DECADES) - 1
@@ -426,8 +455,8 @@ def decade(rho: float | None, basis: str | None = None) -> int | None:
 
 
 def unmeasured_rows(p: dict, basis: str = UNMEASURED) -> int:
-    """How many of a panel's rows have no measured ρ (basis_default `UNMEASURED`), rest on a stub (`STUB`) or are
-    partial (`PARTIAL`), which no decade holds."""
+    """How many of a panel's rows have no measured ρ (basis_default `UNMEASURED`), no trace yet (`UNTRACED`), rest on a
+    stub (`STUB`) or are partial (`PARTIAL`), which no decade holds."""
     return sum(d.get("basis_default") == basis for d in plots.frame(p))
 
 
@@ -489,10 +518,11 @@ def served_text(cov: list[dict]) -> str:
 
 
 def coverage_md(cov: list[dict], fits: dict, stamp: str, refused: dict[str, str] | None = None,
-                unmeasured: int = 0, stubs: int = 0, partial: int = 0) -> str:
+                unmeasured: int = 0, stubs: int = 0, partial: int = 0, untraced: int = 0) -> str:
     """The coverage table in Markdown, a row per gain target and data, a column per decade of ρ, and how many valid
     checkpoints te_core.formalism refused (`refused`, row id -> reason) and rows have no measured ρ (`unmeasured`),
-    rest on a stub (`stubs`) or are partial (`partial`), which no cell can hold."""
+    rest on a stub (`stubs`), are partial (`partial`) or reached a target with no trace yet (`untraced`), which no cell
+    can hold."""
     lines = [f"# training/algorithm-policy coverage, {stamp}", "",
              "Per gain target, data and decade of rho_default: the reached row with the least p, else the failed "
              f"attempt with the greatest gain (p a lower bound), else **{EMPTY}**.", "",
@@ -520,11 +550,14 @@ def coverage_md(cov: list[dict], fits: dict, stamp: str, refused: dict[str, str]
     if unmeasured:
         lines.append(f"{unmeasured} {'row' if unmeasured == 1 else 'rows'} with no measured rho under reading A "
                      f"(rho_default null, basis_default {UNMEASURED}), in no decade.")
+    if untraced:
+        lines.append(f"{untraced} reached {'row' if untraced == 1 else 'rows'} with p from the record and rho null, "
+                     f"basis_default {UNTRACED}, in no decade.")
     return "\n".join(lines) + "\n"
 
 
 def board_line(cov: list[dict], fits: dict, stamp: str, art: str | None, refused: dict[str, str] | None = None,
-               unmeasured: int = 0, stubs: int = 0, partial: int = 0) -> str:
+               unmeasured: int = 0, stubs: int = 0, partial: int = 0, untraced: int = 0) -> str:
     """The coverage as one board line's text, after its time and tag."""
     parts = []
     for g in GAINS:
@@ -545,7 +578,9 @@ def board_line(cov: list[dict], fits: dict, stamp: str, art: str | None, refused
             + (f" {partial} {'row' if partial == 1 else 'rows'} partial (rho a lower bound), in no decade."
                if partial else "")
             + (f" {unmeasured} {'row' if unmeasured == 1 else 'rows'} unmeasured under reading A, in no decade."
-               if unmeasured else ""))
+               if unmeasured else "")
+            + (f" {untraced} reached {'row' if untraced == 1 else 'rows'} {UNTRACED} (p the record's), in no decade."
+               if untraced else ""))
 
 
 def headline(p: dict) -> str:
@@ -559,20 +594,21 @@ def kept(rows: list[list], tier: str, cov: set[int]) -> list[list]:
     and (at tier "family") family, the reached rows on the lower-left (p, rho_default) front (te_core.plots'
     staircase, an infinite ρ above every finite one) and the failed attempt with the greatest gain, neither resting on
     a stub (`STUB`), in the table's order. The partial rows (`PARTIAL`, ρ a lower bound) are picked among themselves
-    alone, so none displaces a row from the others' front and the console still draws them, marked."""
+    alone, so none displaces a row from the others' front and the console still draws them, marked. Every untraced row
+    (`UNTRACED`, at most one a run and target) stays at every tier: a run that reached is never an absence."""
     ix = {c: i for i, c in enumerate(COLUMNS)}
 
     def big(v):
         return sys.float_info.max if v is None else v
 
-    keep = set(cov)
+    keep = set(cov) | {i for i, r in enumerate(rows) if r[ix["basis_default"]] == UNTRACED}
     if tier != "coverage":
         groups: dict[tuple, list[int]] = {}
         for i, r in enumerate(rows):
             key = (r[ix["data"]], r[ix["start"]], r[ix["gain_target"]]) + ((r[ix["family"]],) if tier == "family" else ())
             groups.setdefault(key, []).append(i)
         for g in groups.values():
-            for on in ([i for i in g if rows[i][ix["basis_default"]] not in (STUB, PARTIAL)],
+            for on in ([i for i in g if rows[i][ix["basis_default"]] not in (STUB, PARTIAL, UNTRACED)],
                        [i for i in g if rows[i][ix["basis_default"]] == PARTIAL]):
                 yes = [i for i in on if rows[i][ix["reached"]] == "yes"]
                 keep |= {i for _, _, i in plots.staircase([(big(rows[i][ix["p"]]), big(rows[i][ix["rho_default"]]),
@@ -670,17 +706,18 @@ def store(path: Path, meta: dict) -> str:
 def figure(p: dict, out: Path) -> Path:
     """p against the headline rho_own (`basis_own`) on the headline data, log-log, one panel per gain target: a colour
     per family, a marker per start, filled where reached and open at a failed attempt's lower bound on p, a caret up
-    from a partial row's (`PARTIAL`, ρ a lower bound, never the least S), decades of ρ dotted and the iso-S diagonals
-    S = p ρ at `LEVELS`; its title names the headline's policy with each start's c and packed k, and the sensitivities'
-    (`POLICIES`)."""
+    from a partial row's (`PARTIAL`, ρ a lower bound, never the least S), a reached run with no trace yet (`UNTRACED`)
+    as an x at its p on `FLOOR`, under every ρ, decades of ρ dotted and the iso-S diagonals S = p ρ at `LEVELS`; its
+    title names the headline's policy with each start's c and packed k, and the sensitivities' (`POLICIES`)."""
     y, b = "rho_own", "basis_own"
     data = headline(p)
     every = [d for d in plots.frame(p) if d["data"] == data]
     rows = [d for d in every if d["p"] is not None and d.get(y) is not None and d[b] != STUB]
-    families = sorted({d["family"] or "?" for d in rows})
-    starts = list(dict.fromkeys(d["start"] for d in rows))
-    xlo = 10 ** math.floor(math.log10(min([d["p"] for d in rows] + [0.8])))
-    xhi = 10 ** math.ceil(math.log10(1.5 * max([d["p"] for d in rows] + [5.0])))
+    waiting = [d for d in every if d["p"] is not None and d[b] == UNTRACED]
+    families = sorted({d["family"] or "?" for d in rows + waiting})
+    starts = list(dict.fromkeys(d["start"] for d in rows + waiting))
+    xlo = 10 ** math.floor(math.log10(min([d["p"] for d in rows + waiting] + [0.8])))
+    xhi = 10 ** math.ceil(math.log10(1.5 * max([d["p"] for d in rows + waiting] + [5.0])))
     yhi = 10 ** math.ceil(math.log10(1.5 * max([d[y] for d in rows] + [float(max(LEVELS))])))
     fig, axes = plt.subplots(1, len(GAINS), figsize=(15, 6), sharex=True, sharey=True)
     xs = [10 ** (i / 20) for i in range(int(20 * math.log10(xlo)), int(20 * math.log10(xhi)) + 1)]
@@ -699,21 +736,30 @@ def figure(p: dict, out: Path) -> Path:
                     color=colour, mfc=colour if yes else "none", mec="k" if yes and d[b] == "fit" else colour, mew=0.7)
             if d[b] in LOWER:
                 ax.plot(d["p"], d[y], marker=LOWER[d[b]], ms=9, color=colour, mew=1.0)
+        untraced = [d for d in waiting if d["gain_target"] == g]
+        for d in untraced:
+            ax.plot(d["p"], FLOOR, "x", ms=7, mew=1.4, color=f"C{families.index(d['family'] or '?') % 10}")
         reached = [d for d in mine if d["reached"] == "yes"]
         whole = [d for d in reached if d[b] not in LOWER]
         at = [d for d in every if d["gain_target"] == g]
-        unplotted = len(at) - len(mine)
-        if reached:
-            least = ";\nno least S: every reached row is partial"
+        unplotted = len(at) - len(mine) - len(untraced)
+        hit = [d for d in at if d["reached"] == "yes"]
+        if reached or untraced:
+            least = ";\nno least S: " + ("every traced reached row is partial" if reached else
+                                         "no reached run is traced yet")
             if whole:
                 best = min(whole, key=lambda d: d["p"] * d[y])
                 ax.plot(best["p"], best[y], "o", mfc="none", mec="red", ms=11)
                 least = f";\nleast S {best['p'] * best[y]:.3g} ({best['start']}, {best['method_key']})"
-            ax.set_title(f"gain {g:g}: {len(reached)} reached"
-                         + (f" ({len(reached) - len(whole)} partial)" if len(whole) < len(reached) else "")
+            ax.set_title(f"gain {g:g}: {len(reached) + len(untraced)} reached"
+                         + "".join(f" ({n} {what})" for n, what in ((len(reached) - len(whole), "partial"),
+                                                                    (len(untraced), "not yet traced")) if n)
                          + f", {len(mine) - len(reached)} not"
                          + (f" ({unplotted} more: rho infinite, unmeasured or on a stub, or no p)" if unplotted else "")
                          + least, fontsize=8)
+        elif hit:
+            ax.set_title(f"gain {g:g}: {len(hit)} reached, none drawn: rho_own infinite, unmeasured or on a stub",
+                         fontsize=8)
         elif at:
             top = max(at, key=lambda d: d["gain"])
             ax.set_title(f"gain {g:g}: none of {len(at)} attempts reached it, so no H and no p", fontsize=8)
@@ -735,6 +781,9 @@ def figure(p: dict, out: Path) -> Path:
     if any(d[b] == PARTIAL for d in rows):
         keys.append(Line2D([], [], marker=LOWER[PARTIAL], ls="none", color="0.3", ms=8,
                            label="partial: rho a lower bound"))
+    if waiting:
+        keys.append(Line2D([], [], marker="x", ls="none", color="0.3", ms=7, mew=1.4,
+                           label=f"reached, not yet traced (rho unmeasured; drawn at {FLOOR:g})"))
     fig.legend(handles=keys, loc="lower center", ncol=min(len(keys), 7), fontsize=7, bbox_to_anchor=(0.5, 0.04))
     own = {d["start"]: (d["own_c_gates"], d["own_k_bits"]) for d in every if d.get("own_c_gates") is not None}
     fig.suptitle(f"{p['title']}, {data} data\nheadline rho_own: {POLICIES['rho_own']}\nc, packed k per start: "
@@ -787,7 +836,7 @@ def main(argv=None) -> int:
     runs, extra, source = frontier_fit.inputs(a, scored, d["shapes"], d, me)
     fp, info = frontier_fit.build(scored, d["shapes"], runs, a.source or source.replace(me, "te_core.frontier_fit", 1),
                                   extra, gains=GAINS)
-    p = build(info, source, fp["updated_at"])
+    p = build(info, source, fp["updated_at"], d["untraced"])
     own = coverage(p)
     tables = a.out / "tables"
     frontier_fit.write(fp, info, tables, a.out)
@@ -795,8 +844,7 @@ def main(argv=None) -> int:
     (tables / "coverage.json").write_text(json.dumps(own, allow_nan=False, indent=1) + "\n")
     (tables / "refused.json").write_text(json.dumps(d["refused"], indent=1, sort_keys=True) + "\n")
     (tables / "coverage.md").write_text(coverage_md(own, info["fits"], p["updated_at"], d["refused"],
-                                                    unmeasured_rows(p), unmeasured_rows(p, STUB),
-                                                    unmeasured_rows(p, PARTIAL)))
+                                                    *(unmeasured_rows(p, b) for b in BASES)))
     served = {}
     if a.publish:
         try:
@@ -807,8 +855,7 @@ def main(argv=None) -> int:
             return 1
     pub, fpub, held = guarded(p, fp, served)
     cov = own if pub is p else coverage(pub)
-    md = coverage_md(cov, info["fits"], p["updated_at"], d["refused"], unmeasured_rows(pub), unmeasured_rows(pub, STUB),
-                     unmeasured_rows(pub, PARTIAL))
+    md = coverage_md(cov, info["fits"], p["updated_at"], d["refused"], *(unmeasured_rows(pub, b) for b in BASES))
     art = store(tables, {"what": f"{PANEL} uncut, its coverage and {frontier_fit.PANEL} (te_core.algorithm_policy)",
                          "rows": len(p["rows"]), "source": source}) if a.publish else None
     q = cut(pub, art, held)
@@ -829,8 +876,8 @@ def main(argv=None) -> int:
           + f"){f' ({art})' if art else ''}; console {len(q['rows'])} rows, {len(console.body(q))} bytes, note "
           f"{len(q['note'])} characters" + (f", served rows kept on {held}" if held else "")
           + f" -> {a.out}: tables/, console/{NAME}.json, console/{frontier_fit.NAME}.json, {png.name}")
-    print("board: " + board_line(cov, info["fits"], p["updated_at"], art, d["refused"], unmeasured_rows(pub),
-                                 unmeasured_rows(pub, STUB), unmeasured_rows(pub, PARTIAL))
+    print("board: " + board_line(cov, info["fits"], p["updated_at"], art, d["refused"],
+                                 *(unmeasured_rows(pub, b) for b in BASES))
           + (f" Kept as served: {held}." if held else ""))
     if a.publish:
         status = []
