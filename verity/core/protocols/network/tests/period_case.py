@@ -1829,7 +1829,7 @@ def bits_why(c: CircuitHeader, defs: dict[str, tuple[list, list]], template: str
     return None
 
 
-def _held(c: CircuitHeader) -> list[bool]:
+def _port_held(c: CircuitHeader) -> list[bool]:
     """Of the unit net's input columns, whether a port holds each (`Flock.portCols`)."""
     held = [False] * min(c.in_words * WORD, c.const)
     for a0, w in _port_cols(c.in_groups):
@@ -1841,7 +1841,7 @@ def _held(c: CircuitHeader) -> list[bool]:
 
 def pad_cols(c: CircuitHeader) -> int:
     """`padCols`: the unit net's input columns no port holds, each a free input of each VU."""
-    return _held(c).count(False)
+    return _port_held(c).count(False)
 
 
 def reads_why(c: CircuitHeader, params: list, reads: list[bool], names: list[str]) -> str | None:
@@ -1851,7 +1851,7 @@ def reads_why(c: CircuitHeader, params: list, reads: list[bool], names: list[str
     pc = _port_cols(c.in_groups)
     if len(reads) != n_in:
         return "the circuit file's unit's read columns are not one per input column"
-    held = _held(c)
+    held = _port_held(c)
     if (x := next((x for x in range(n_in) if reads[x] and not held[x]), None)) is not None:
         return f"a row of the circuit file's unit reads its input column {x}, which no port holds"
     at = 0
