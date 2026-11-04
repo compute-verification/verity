@@ -1,7 +1,6 @@
 import Properties.Pouw
 import Proofs.Properties.Pouw.Grid
 import Proofs.Properties.Pouw.Draw
-import Proofs.Properties.Pouw.PearlPlusDraw
 
 /-!
 # Proofs of PoUW's window properties (`Properties.Pouw`)
