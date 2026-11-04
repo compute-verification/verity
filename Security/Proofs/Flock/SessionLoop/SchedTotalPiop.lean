@@ -54,7 +54,8 @@ theorem pt_bind {α β : Type} {ns ms : List ℕ} {Q : α → Prop} {R : β → 
     PT coins (ns ++ ms) R (p >>= f) := by
   intro t got hF
   obtain ⟨⟨⟨a, t₁⟩, g₁⟩, e₁, hq, hs₁⟩ := hp t got fun i hi => by
-    simpa only [List.getElem_append_left hi] using hF i (by rw [List.length_append]; omega)
+    have := hF i (by rw [List.length_append]; omega)
+    simpa only [List.getElem_append_left hi] using this
   obtain ⟨r, e₂, hr, hs₂⟩ := hf a hq t₁ g₁ fun i hi => by
     have := hF (ns.length + i) (by rw [List.length_append]; omega)
     simpa only [List.getElem_append_right (Nat.le_add_right ns.length i), Nat.add_sub_cancel_left,
@@ -72,11 +73,15 @@ theorem pt_modify (g : Transcript → Transcript) :
     PT coins [] (fun _ => True) (liftTM (modify g : Transcript.TM Unit) : TMW OpenM Unit) :=
   fun t got _ => ⟨(((), g t), got), rfl, trivial, rfl⟩
 
+theorem step_pure_bind {α β : Type} (a : α) (g : α → Step β) : Step.bind (pure a) g = g a := rfl
+
 /-- **A PIOP round** takes its coin where it fits the count its squeeze header holds. -/
 theorem round_false (got : Got) (c : ByteArray) {cs : Array F128} (hc : coins[got.size]? = some cs)
     (hn : cs.size = (_root_.Flock.u64OfLE c (c.size - 8)).toNat) :
     ((stepAsks coins false).round c).run got = .done ((fun i => cs[i]!), got.push cs) := by
   simp only [stepAsks, StateT.run, bind, StateT.bind, get, getThe, MonadStateOf.get, StateT.get, pure, Step.bind, hc]
+  refine (step_pure_bind _ _).trans ?_
+  dsimp only
   simp only [hn, bne_self_eq_false, Bool.false_eq_true, ↓reduceIte]
   rfl
 
@@ -234,7 +239,7 @@ theorem slotBase_ok_of {st : _root_.Flock.Stmt} {α α' : F128} {lw lw' ρ ρ' :
       rw [ite_eq_right hc]
       exact ⟨_, rfl⟩
   | net i =>
-    by_cases hc : (sl != (st.c.nets.getD i default).2.unitLog) = true
+    by_cases hc : ((st.c.nets.getD i default).2.unitLog != sl) = true
     · simp only [_root_.Flock.Stmt.slotBase] at h
       rw [ite_eq_left hc] at h
       simp [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
@@ -265,7 +270,6 @@ theorem foldRanges_ok_of {st : _root_.Flock.Stmt} {α α' : F128} {lw lw' ρ ρ'
       | none => rw [e, e'] at hf; cases hf
       | some kb' =>
         rw [e] at h
-        rw [e']
         obtain ⟨_, b⟩ := kb
         obtain ⟨_, b'⟩ := kb'
         simp only [bind, Except.bind, pure, Except.pure] at h ⊢
@@ -275,7 +279,6 @@ theorem foldRanges_ok_of {st : _root_.Flock.Stmt} {α α' : F128} {lw lw' ρ ρ'
       | some _ => rw [e, e'] at hf; cases hf
       | none =>
         rw [e] at h
-        rw [e']
         cases hsb : st.slotBase α lw ρ (r.kind, r.slotLog) with
         | error _ => rw [hsb] at h; simp [bind, Except.bind] at h
         | ok b =>
@@ -391,7 +394,6 @@ theorem lincheckFw_fold (c : _root_.Flock.CircuitFold) (lay : _root_.Flock.Zk.Pa
     · rename_i v hv
       apply tally_bind (tally_pure (Q := fun _ => True) trivial); intro _ _
       try dsimp only
-      refine tally_mono (Q := fun _ => True) ?_ fun _ _ => ⟨a, v, hv⟩
       apply tally_forIn_bind
       · intro i _ u
         try dsimp only
@@ -403,7 +405,7 @@ theorem lincheckFw_fold (c : _root_.Flock.CircuitFold) (lay : _root_.Flock.Zk.Pa
         try dsimp only
         apply tally_bind (tally_liftTM _); intro _ _
         apply tally_bind tally_sampleP; intro _ _
-        exact tally_pure trivial
+        exact tally_pure ⟨a, v, hv⟩
     · exact tally_throw_bind _ _
   · simp [lcCounts]
 
