@@ -929,7 +929,8 @@ def test_a_run_with_no_window_report_writes_no_record(tmp_path, capsys):
 
 def published(cap: int) -> dict:
     """The run's advice registration as published, its advice padded to its compiler's cap ℓ_a = ``cap``."""
-    return SV.public_registration({"row_bits": 256, "binding": {"advice": {"root": "ab" * 64, "bits": 392}},
+    return SV.public_registration({"row_bits": 256, "rows": -(-cap // 256),
+                                   "binding": {"advice": {"root": "ab" * 64, "bits": cap}},
                                    "compiler": {"name": "c", "digest": "d", "cap_bits": cap}})
 
 
