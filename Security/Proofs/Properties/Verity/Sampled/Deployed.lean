@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Claims.Bridge.CustodyZkP
 public import Proofs.Flock.Bridge.Draw
 public import Proofs.Properties.Verity.SampledCoins
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
 
 /-!
 # A3 and `live-verifier` at the session the deployment runs, with no premise but V5's law
