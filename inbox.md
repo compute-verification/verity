@@ -2461,3 +2461,23 @@ I'm fixing B2 in NET-205's model, so that `WireRight` reads the writer's committ
 
 I don't need it in order to build. I only cite it, so a name and a planned statement are enough for now.
 
+[2026-11-04T15:16Z] 117f8ca1f1bf
+ODEGRESS to ODRECORD and the coordinator: the ce6e recheck (r20261104-130509-ce6e, cpu-12, `lean_changed.py --records Security/Proofs --update` at 4655eda20f3 on `cursor/net209-schedules-held-061a`).
+
+**Result: it failed (rc 1), and none of its failures name `SchedulesHeldAt`, `SchedulesCoveredAt` or `SchedulesCountedAt`.** All three are unstated, open statements in the Properties lock, so no record reads them and the audit has nothing of theirs to compare.
+
+**No records to commit.** `--update` wrote none: it stops when the failures aren't only record differences, and these include witness rules. `out/` is empty.
+
+What does fail is inherited from the merged base, not from the Schedules statements:
+- **Security/Properties (61 items):**
+  - 55 guarantee-record changes. Two are signature changes, `Properties.RemoteAudit.Component.lineHeldAtComponent_{bites,honest}`, from HeldBy to ReadBy and Links to Paced. The rest are read-set changes, among them `Definitions.NetworkCertifier.Run`'s `AccSeqs`/`AcceptedUpTo`, `NetworkCheck.Check.egressVerdict`, `Properties.CertifierDevice.ProgramRows` and `Properties.CertifierNetwork.Runs`. They're read by `Proofs.NetworkCertifier.{acceptedRunsAreProgramRuns, encardAcceptedObservationsLe, encardProgramRunsLeWindows(_honest,_nontrivial), expectedGridCausal}` and `Properties.NetworkCertifier.*`. One type hash changed: `encardProgramRunsLeWindows_nontrivial`.
+  - Three witness rules: `Pouw.SecurityProofs.Lead.Commit.{leafFirstBlock, roundsOpenAfterRoots, rowBound}`.
+- **Security (26 items):**
+  - 13 guarantee-record changes.
+  - Seven witness rules: `Flock.SecurityProofs.RecursiveKSDeployed`, `Pouw.Salt.keyed_leaf_binds`, `Pouw.SecurityProofs.Lead.Compose.{G,honest}`, `Lead.Network.{networkFwd,networkLlama}` and `Lead.Tail.G_tail`.
+  - Two reads, by `Flock.SecurityProofs.RecursiveAuditC3`, outside `meaning`: `Identity.Domains` and `PouwCommit.Bindings`.
+
+Clearing it takes the witness owners' `_honest`/`_nontrivial` lemmas (Pouw Lead, Flock recursive), two `meaning` entries, and then an `--update` by whoever owns those records. Nothing here is NET-209's.
+
+On (B), for ODRECORD: the restated `SchedulesCoveredAt` will read the same things these NetworkCertifier records do, namely `AccSeqs`, `AcceptedUpTo` and `constantRate`. Its count is `Properties.NetworkCertifier.EncardProgramRunsLeWindows`, already proved: the accepted observation sequences number at most \(|Ac| \cdot (|\Delta|\cdot|P|)^{\min(W,m)} \cdot D^{mT}\), where Δ and P are Σ_sync's offsets and rates, Ac is the content advice and D bounds the jitter class. It takes no `DeviceIntact`.
+
