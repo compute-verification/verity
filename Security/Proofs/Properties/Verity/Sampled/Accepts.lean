@@ -327,19 +327,19 @@ theorem filesOn_of {V : Vocab d α} {θ : ByteArray} {F B : Array ByteArray} {A 
 
 /-! ## v2's verdict at `A` -/
 
-/-- **v2's verdict is flock-verify `--zk`'s at `A` on the session's files**: where composite `k` reads sampled proofs at
-v2, `A` is the session v2 sets up on the parameters and v2 reads `A`'s files on the blobs sent, the record and the
-proof files v2 reads in what the prover sent (`sentRecord`, `sentProofs`) are a transcript `AcceptsZKP A.I A.own`
-accepts, at the session `Exec.setupOfP` sets up at `A`'s inputs. -/
+/-- **v2's verdict is flock-verify `--zk`'s at `A` on the session's files**: where `A` is the session v2 sets up on
+the parameters and v2 reads `A`'s files on the blobs sent, the record and the proof files v2 reads in what the prover
+sent (`sentRecord`, `sentProofs`) are a transcript `AcceptsZKP A.I A.own` accepts, at the session `Exec.setupOfP` sets
+up at `A`'s inputs. -/
 theorem accepts_sent {V : Vocab d α} {k : Verity.Registration.Composite} {A : Live} {θ : ByteArray}
-    {F : Array ByteArray} {o : Verity.Exchange} (hk : ReadsV2 k) (hA : SetsUp V θ F A) (hθ : o.params = θ)
+    {F : Array ByteArray} {o : Verity.Exchange} (hA : SetsUp V θ F A) (hθ : o.params = θ)
     (hv : V.Verdict k .sampled o) (hF : FilesOn A o.sent) :
     ∃ record proofs spec sts, sentRecord o.sent = some record ∧ sentProofs o.sent = some proofs ∧
       Exec.setupOfP (ZkExec.zkInputs A.I) A.own record = .ok (spec, sts) ∧
       AcceptsZKP A.I A.own { record := record, proofs := proofs } := by
   subst hθ
-  obtain ⟨a, b, e, p, c, ev, ξ, dr, hcase, hacc⟩ := case_drew (verdict_case hk hv)
   obtain ⟨p', hp', hpart, hprog, -⟩ := hA.params
+  obtain ⟨a, b, e, p, c, ev, ξ, dr, hcase, hacc⟩ := case_drew hv.2.1 hp' (verdict_case hv)
   have hpp : p' = p := paramsAt_case hv.2.1 hcase hacc hp'
   rw [hpp] at hp' hpart hprog
   obtain ⟨record, spec, tabs, rest, proofs, -, hrec, hpr, hver⟩ := sent_verified hv.2.1 hcase hacc
@@ -366,15 +366,15 @@ def MovesOf (A : Live) (s : Verity.Sent) (S : Finset (Fin A.n)) (R : A.Reg) (out
     Exec.recordDraw record = some (A.dj S) ∧ out.rootB = sess.rootB ∧ out.pts = ptsOf A.mP sess.points ∧
       (∀ j r, out.reps j r = repRounds spec sess j.val r.val) ∧ out.proofs = proofs
 
-/-- **v2's verdict is flock-verify `--zk`'s acceptance of what the writer writes**: where composite `k` reads sampled
-proofs at v2, `A` is the session v2 sets up on the parameters, v2 reads `A`'s files on the blobs sent and the
-session's writer keeps an accepted transcript's view (`WritesView`), the sampled verdict implies `AcceptsZKP A.I A.own`
-of what the writer writes for moves v2's files decode to (`MovesOf`). -/
+/-- **v2's verdict is flock-verify `--zk`'s acceptance of what the writer writes**: where `A` is the session v2 sets up
+on the parameters, v2 reads `A`'s files on the blobs sent and the session's writer keeps an accepted transcript's view
+(`WritesView`), the sampled verdict implies `AcceptsZKP A.I A.own` of what the writer writes for moves v2's files
+decode to (`MovesOf`). -/
 theorem wr_accepts_of_verdict {V : Vocab d α} {k : Verity.Registration.Composite} {A : Live} {θ : ByteArray}
-    {F : Array ByteArray} {o : Verity.Exchange} (hk : ReadsV2 k) (hA : SetsUp V θ F A) (hθ : o.params = θ)
+    {F : Array ByteArray} {o : Verity.Exchange} (hA : SetsUp V θ F A) (hθ : o.params = θ)
     (hv : V.Verdict k .sampled o) (hF : FilesOn A o.sent) (hW : WritesView A) {S : Finset (Fin A.n)} {R : A.Reg}
     {out : LiveOutJ (A.J S R) A.mP} (hM : MovesOf A o.sent S R out) : AcceptsZKP A.I A.own (A.wr S R out) := by
-  obtain ⟨record, proofs, spec, sts, hrec, hpr, hs, hat⟩ := accepts_sent hk hA hθ hv hF
+  obtain ⟨record, proofs, spec, sts, hrec, hpr, hs, hat⟩ := accepts_sent hA hθ hv hF
   have hd : ∃ sess, Flock.Record.decode spec record = .ok sess := by
     obtain ⟨spec', sts', hs', -, hver⟩ := hat
     obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj (hs.symm.trans hs'))
@@ -428,22 +428,22 @@ def MovesReach (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : Byte
     ∃ (S : Finset (Fin A.n)) (R : A.Reg) (out : LiveOutJ (A.J S R) A.mP), o.1 = (R, S, A.wr S R out) ∧
       MovesOf A (Verity.Game.CoinTape.run (V.game θ F c) σ o.2).sent S R out
 
-/-- **The decoders' premise, pointwise** (`Decodes`): where composite `k` reads sampled proofs at v2, `A` is the
-session v2 sets up on the parameters and the committed files, v2 reads `A`'s files on the blobs of each accepted play,
+/-- **The decoders' premise, pointwise** (`Decodes`): where `A` is the session v2 sets up on the parameters and the
+committed files, v2 reads `A`'s files on the blobs of each accepted play,
 the session's writer keeps an accepted transcript's view (`WritesView`) and the outcomes on the joint law's support are
 the writer's at moves v2's files decode to (`MovesReach`), every accepted play there that misses nowhere and that `P`
 holds of is beside an outcome flock-verify `--zk` accepts at `A.own`. -/
 theorem decodes_of {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {P : Verity.Exchange → Prop} {A : Live} {rd : Reading A.rounds}
     {σ : Verity.Game.Strategy (V.game θ F c)} {D : Decoders A.rounds A.Reg}
-    {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} (hk : ReadsV2 k) (hA : SetsUp V θ F A)
+    {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} (hA : SetsUp V θ F A)
     (hF : ∀ x, V.Verdict k .sampled (Verity.Game.CoinTape.run (V.game θ F c) σ x) →
       FilesOn A (Verity.Game.CoinTape.run (V.game θ F c) σ x).sent)
     (hW : WritesView A) (hM : MovesReach V θ F c k P A rd σ D M) : Decodes V θ F c k P A rd σ D M := by
   intro o ho hacc
   obtain ⟨S, R, out, h1, hmo⟩ := hM o ho hacc
   rw [h1]
-  exact wr_accepts_of_verdict hk hA (play_ends V θ F c σ o.2).1 hacc.1 (hF o.2 hacc.1) hW hmo
+  exact wr_accepts_of_verdict hA (play_ends V θ F c σ o.2).1 hacc.1 (hF o.2 hacc.1) hW hmo
 
 /-- **v2 reads `A`'s files on an accepted play**: the play ends at its parameters and committed files, the verdict
 holds the files registered, and the blobs sent are the committed files, then the evidence's. -/
@@ -466,8 +466,8 @@ writer's at moves v2's files decode to. -/
 theorem decodes_of_digests {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {P : Verity.Exchange → Prop} {A : Live} {rd : Reading A.rounds}
     {σ : Verity.Game.Strategy (V.game θ F c)} {D : Decoders A.rounds A.Reg}
-    {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} (hk : ReadsV2 k) (hA : SetsUp V θ F A) (hD : DigestsAt V θ)
+    {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} (hA : SetsUp V θ F A) (hD : DigestsAt V θ)
     (hW : WritesView A) (hM : MovesReach V θ F c k P A rd σ D M) : Decodes V θ F c k P A rd σ D M :=
-  decodes_of hk hA (fun _ hv => filesOn_play hA hD hv) hW hM
+  decodes_of hA (fun _ hv => filesOn_play hA hD hv) hW hM
 
 end Verity.Sampled
