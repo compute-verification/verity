@@ -1,10 +1,11 @@
 import Proofs.NetworkCertifier.WitnessToys
+import Proofs.NetworkCertifier.KSWired
 import Proofs.Flock.Claims.Sampling.KS
 import Proofs.Flock.Claims.ERep
 import Definitions.NetworkCertifier.Period
 
 /-!
-# A deployment where `Claims.Sampling.KS` holds, and why `PeriodLeakRegistered` reads `RegOpensAt`
+# A deployment where `Claims.Sampling.KS` holds, and why `PeriodLeakRegistered` reads `RegOpensAt` and `RowsFormat.Wf`
 
 `ksNotD` is `leakD` (the negation `notStmt`, its verifier accepting) with a commitment that passes one value at each
 position, `false` at gate `0` and `true` at gate `1` (`notCm`), one proof block checked on every run, and a session whose
@@ -17,8 +18,13 @@ Without `RegOpensAt`, the first part of `PeriodLeakRegistered` is false (`not_wi
 `freeLay`, where the input is free and the negation is the egress slot's presence gate, a registration `badReg` that
 opens the input `true`, which `notCm` refuses, pins the input at `true`, so the circuit holds no frame, while the
 network certifier's openings `frameTops`, which pass, register a frame (`obs1`). No witness is then in `RLeakTap`, the
-silent prover is accepted, and its bound fails, at every hash, with `KS`, the decoder's radius, binding and the scope
-all holding. The registration `goodReg`, which opens the input `false`, meets `RegOpensAt` (`ksNotD_regOpens`).
+silent prover is accepted, and its bound fails, at every hash, with `KSWired` (`freeLay` has no wires), the decoder's
+radius, binding and the scope all holding. The registration `goodReg`, which opens the input `false`, meets
+`RegOpensAt` (`ksNotD_regOpens`).
+
+The rows format `blindRows` encodes every frame as the empty list (`blindRows_not_wf`): on the schedule `oneSched`,
+which fits it, the record of either of two servings is `obs1` (`blindRun_obs`), which the circuit accepts at `goodReg`
+(`frameTops_acc`), while the client's cell tells the servings apart (`boolDec_run`).
 -/
 
 namespace NetTiming.Witness
@@ -468,9 +474,9 @@ theorem ksNotD_reg_bound_fails (H : Msg → Msg) :
 `RegOpensAt`, every other hypothesis kept. -/
 def WindowLeakAtAnyOps : Prop :=
   ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
-    (H : Msg → Msg) (D : Claims.Sampling.Deploy Coin Col T), Claims.Sampling.KS H D → ∀ (L K S : ℕ)
-    (lay : Claims.Sampling.AuditStatement → BoundaryGates L S) (k : Claims.Sampling.AuditStatement → ℕ) (δ : ℝ)
-    (decode : List (ℕ × Col) → List T), 0 ≤ δ →
+    (H : Msg → Msg) (D : Claims.Sampling.Deploy Coin Col T) (L K S : ℕ)
+    (lay : Claims.Sampling.AuditStatement → BoundaryGates L S), KSWired H D (fun s => (lay s).wires) →
+    ∀ (k : Claims.Sampling.AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T), 0 ≤ δ →
     Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
     ∀ (reg : Claims.Sampling.AuditStatement → Finset ℕ) (ops : Claims.Sampling.AuditStatement → List (Opening Bool))
       (Dj : ℕ) (tops : Claims.Sampling.AuditStatement → List (Opening Bool)), D.commit.Binds H →
@@ -485,13 +491,114 @@ def WindowLeakAtAnyOps : Prop :=
           (Breg H D.V (Claims.Sampling.E D decode) D.commit D.parse ops Ω P m).Pr H
 
 /-- **Without `RegOpensAt`, `PeriodLeakRegistered`'s per-window part is false**: at SHA-512, at `ksNotD`, where `KS`
-holds (`ksNotD_KS`), the decoder that lists the one trace is within Flock's radius, `notCm` binds and the statement is
-in scope, the registration `badReg`, which doesn't open (`ksNotD_not_regOpens`), breaks the bound
-(`ksNotD_reg_bound_fails`). -/
+holds (`ksNotD_KS`) and so `KSWired` (`freeLay` has no wires), the decoder that lists the one trace is within Flock's
+radius, `notCm` binds and the statement is in scope, the registration `badReg`, which doesn't open
+(`ksNotD_not_regOpens`), breaks the bound (`ksNotD_reg_bound_fails`). -/
 theorem not_windowLeakAtAnyOps : ¬ WindowLeakAtAnyOps := fun h =>
   ksNotD_reg_bound_fails FlockDeploy.sha512
-    (h FlockDeploy.sha512 (ksNotD Unit) (ksNotD_KS _) 1 1 1 (fun _ => freeLay) (fun _ => 1) 0 (fun _ => [()]) le_rfl
-      (Claims.Witness.Flock.listWithin_unit _ _ _) (fun _ => {0}) (fun _ => badReg) 1 (fun _ => frameTops)
-      (notCm_binds _) [] (ksNotD_scopeAcc []) Unit silentP)
+    (h FlockDeploy.sha512 (ksNotD Unit) 1 1 1 (fun _ => freeLay) (ksWired_none (fun _ => rfl) (ksNotD_KS _))
+      (fun _ => 1) 0 (fun _ => [()]) le_rfl (Claims.Witness.Flock.listWithin_unit _ _ _) (fun _ => {0})
+      (fun _ => badReg) 1 (fun _ => frameTops) (notCm_binds _) [] (ksNotD_scopeAcc []) Unit silentP)
+
+/-! ## A rows format that doesn't read back -/
+
+/-- **A rows format whose frames don't read back**: one connection, every frame encoded as the empty list and decoded
+as nothing, one bucket a window. -/
+def blindRows : RowsFormat Unit Bool 1 1 where
+  conns := [()]
+  enc _ := []
+  dec _ := none
+  link := 0
+  T := 1
+  jitter _ _ _ := 0
+  status _ _ _ _ := .complete
+
+theorem blindRows_not_wf : ¬ blindRows.Wf := fun h => by
+  have h' := h.2.2 ((), .pad)
+  simp [blindRows] at h'
+
+/-- One cell a bucket, no latency, the connection admitted at bucket `0`, one cell: its one cell in bucket `0`. -/
+def oneSched : WardenSchedule Unit := ⟨1, 0, fun _ => 0, fun _ => 1⟩
+
+theorem oneSched_fits : blindRows.Fits 1 1 oneSched := by
+  refine ⟨fun c j hj => by simpa [blindRows, oneSched, WardenSchedule.bucket] using hj, fun b => ?_⟩
+  have hadm : ¬ (oneSched.adm () ≤ b ∧ b < oneSched.adm () + oneSched.D) := fun h => by simp [oneSched] at h
+  have h : laneLoad oneSched () b ≤ 1 := by
+    simp only [laneLoad, hadm, ↓reduceIte, zero_add]
+    exact (List.length_filter_le _ _).trans (by simp [oneSched])
+  simpa [blindRows] using h
+
+/-- The serving `z`'s arrivals: the one cell `z`, there from the start. -/
+def boolArr (z : Bool) : Unit → Arrivals Bool := fun _ => ⟨[z], fun _ => 0⟩
+
+/-- **The network certifier's code, recorded in `blindRows`**: the client's cells and the record of one window. -/
+def blindRun : Unit → WardenSchedule Unit × Bool → (Unit → List (ℕ × CellView Bool)) × (Fin 1 → List (Obs 1 1 1)) :=
+  fun _ p => (wardenCode p.1 (boolArr p.2), blindRows.record 1 1 p.1 (boolArr p.2) (wardenCode p.1 (boolArr p.2)))
+
+/-- The first cell's data, as the client receives it. -/
+def boolDec (v : Unit → List (ℕ × CellView Bool)) : Bool :=
+  match v () with
+  | (_, .data b) :: _ => b
+  | _ => false
+
+theorem boolDec_run (z : Bool) : boolDec (blindRun () (oneSched, z)).1 = z := by
+  cases z <;> rfl
+
+theorem obs_eq_obs1 {o : Obs 1 1 1} (hr : ∀ ℓ σ, o.rows ℓ σ = some []) (hj : o.jitter = 0)
+    (hs : ∀ κ, o.status κ = .complete) : o = obs1 := by
+  obtain ⟨rows, jitter, status⟩ := o
+  have h1 : rows = fun _ _ => some [] := funext fun ℓ => funext (hr ℓ)
+  have h3 : status = fun _ => .complete := funext hs
+  obtain rfl : jitter = 0 := hj
+  subst h1 h3
+  rfl
+
+/-- **The record doesn't tell the servings apart**: on either, its one window is `obs1`, the frame encoded as the empty
+list. -/
+theorem blindRun_obs (z : Bool) (i : Fin 1) : (blindRun () (oneSched, z)).2 i = [obs1] := by
+  fin_cases i
+  show [_] = [obs1]
+  congr 1
+  exact obs_eq_obs1 (fun ℓ σ => by
+    fin_cases ℓ
+    fin_cases σ
+    first | rfl | (cases z <;> rfl) | (cases z <;> decide)) rfl fun _ => rfl
+
+theorem empty_mem_notFaulty : (∅ : Finset ℕ) ∈ faultySets notStmt.design notPart 0 := by
+  classical
+  simp only [faultySets, Finset.mem_filter, Finset.mem_powerset]
+  refine ⟨Finset.empty_subset _, ?_, Finset.disjoint_empty_left _⟩
+  show (0 : ℝ) < notStmt.design.Pa notPart ∅
+  rw [notPa]
+  simp [Claims.Sampling.window]
+
+/-- **`frameTops` registers only what the circuit accepts at `goodReg`**: a sequence the network certifier registers
+at `frameTops` is accepted with the empty faulty set and the input `false`, whose negation `true` holds the frame. -/
+theorem frameTops_acc (H : Msg → Msg) (op : ℕ → List (Obs 1 1 1) → List Bool) (o : List (Obs 1 1 1))
+    (hto : TapOpens H notCm freeLay 1 op notStmt frameTops o) (hcov : Covered 1 o) (hlen : o.length = 1)
+    (hj : ∀ y ∈ o, y.jitter < 1) :
+    o ∈ AccSeqsSampled notProg notPart notStmt.design freeLay 1 (AsReg notProg freeLay 1 {0} (regVal goodReg)) 0 op
+      1 := by
+  obtain ⟨-, hstep⟩ := hto
+  obtain ⟨-, -, h0, hrows, -⟩ := hstep 0 Nat.one_pos
+  refine ⟨hlen, hj, ∅, empty_mem_notFaulty, fun _ => false,
+    ⟨fun g hg _ => by obtain rfl := Finset.mem_singleton.1 hg; rfl, fun _ _ => rfl⟩, fun _ => none,
+    fun _ _ h => by simp at h, fun t ht => ?_⟩
+  obtain rfl : t = 0 := by omega
+  refine ⟨h0, ?_, hcov 0 Nat.one_pos h0⟩
+  funext ℓ σ
+  rw [hrows ℓ]
+  show rowOf (tapVal frameTops) (freeLay.egress 0 ℓ) σ = rowOf (valOver notProg (resolveWires notProg freeLay.wires
+    (freeLay.inputOf 1 (ingressUpTo op o 0) fun _ => false) (fun _ => none) notProg.gates.length) fun _ => none)
+    (freeLay.egress 0 ℓ) σ
+  rw [resolveWires_nil (wires := freeLay.wires) rfl]
+  have hv : valOver notProg (freeLay.inputOf 1 (ingressUpTo op o 0) fun _ => false) (fun _ => none) 1 = true :=
+    notProg_val _ rfl
+  show (if tapVal frameTops 1 then some (([] : List ℕ).map (tapVal frameTops)) else none) =
+    if valOver notProg (freeLay.inputOf 1 (ingressUpTo op o 0) fun _ => false) (fun _ => none) 1 then
+      some (([] : List ℕ).map (valOver notProg (freeLay.inputOf 1 (ingressUpTo op o 0) fun _ => false) fun _ => none))
+    else none
+  rw [hv]
+  rfl
 
 end NetTiming.Witness

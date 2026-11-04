@@ -1,6 +1,7 @@
 import Proofs.NetworkCertifier.Witnesses
 import Proofs.NetworkCertifier.WitnessToys
 import Proofs.NetworkCertifier.KSWired
+import Proofs.NetworkCertifier.KsToy
 import Definitions.NetworkCertifier.Period
 
 /-!
@@ -20,6 +21,11 @@ a `nontrivial` one each, listed in the lock's `witnesses`, and none takes a bind
   dropped and every other premise kept (`PeriodLeakRegisteredUntrusted`) is false, at `scopelessD` (no statement in
   its scope, so `KS` holds), the well-formed rows format `fxRows`, no window and `Θ = {(1, 0)}`, where the device
   `leakyRun` tells two servings apart against `#Θ = 1`.
+* `not_periodLeakRegisteredAnyFormat`, unlisted, why it reads `RowsFormat.Wf`: the statement with `hF` dropped and
+  every other premise kept, `TrustedHost` included (`PeriodLeakRegisteredAnyFormat`), is false, at `ksNotD` (where
+  `KS` holds, `KsToy`), the rows format `blindRows`, which encodes every frame as the empty list, one window and
+  `Θ = {(1, 0)}`, where the network certifier's code, recorded in `blindRows`, registers one record on two servings
+  whose client cells differ, against a count of `1`.
 * `PooledLeakAccepted_honest`: its premises on the schedules, at `fxQueue`'s alone: each fits the format (`hfit`) and
   sends at most 6 cells a connection (`hcap`). Stated as their conjunction, not as `fits` alone: the witnesses rule
   reads a statement that is one definition applied by unfolding it once, and `fits` is a field.
@@ -69,12 +75,13 @@ theorem PeriodLeakRegistered_nontrivial :
 schedule and the server, every other hypothesis kept. -/
 def PeriodLeakRegisteredUntrusted : Prop :=
   ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
-    (H : Msg → Msg) (D : Claims.Sampling.Deploy Coin Col T) (L K S : ℕ)
-    (lay : AuditStatement → BoundaryGates L S), KSWired H D (fun s => (lay s).wires) →
-    ∀ (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T), 0 ≤ δ →
+    (H : Claims.Msg → Claims.Msg) (D : Claims.Sampling.Deploy Coin Col T) (L K S : ℕ)
+    (lay : Claims.Sampling.AuditStatement → BoundaryGates L S), KSWired H D (fun s => (lay s).wires) →
+    ∀ (k : Claims.Sampling.AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T), 0 ≤ δ →
     Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
-    ∀ (reg : AuditStatement → Finset ℕ) (ops : AuditStatement → List (Opening Bool)) (Dj : ℕ)
-      {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition)
+    ∀ (reg : Claims.Sampling.AuditStatement → Finset ℕ)
+      (ops : Claims.Sampling.AuditStatement → List (Opening Bool)) (Dj : ℕ)
+      {n : ℕ} (sw : Fin n → Claims.Sampling.AuditStatement) (Pw : Fin n → Claims.Sampling.Partition)
       (ρ : Fin n → ℕ → Bool) (op : Fin n → ℕ → List (Obs L K S) → List Bool) (β : Fin n → ℕ),
     WindowsPlaced D δ sw Pw β →
     ∀ {Conn Cell Srv Dev Z : Type} (arr : Srv → Conn → Arrivals Cell) (F : RowsFormat Conn Cell L K), F.Wf →
@@ -83,9 +90,10 @@ def PeriodLeakRegisteredUntrusted : Prop :=
       (Θ : Set (ℕ × ℕ)) (Zs : Set Z) (schedOf : Z → WardenSchedule Conn) (srvOf : Z → Srv),
     SchedulesCovered {s | (s.r, s.D) ∈ Θ ∧ F.Fits S n s} Zs schedOf →
     ∀ (dec : (Conn → List (ℕ × CellView Cell)) → Z), SenderDecodes run tap Zs schedOf srvOf dec →
-    ∀ (x : Z → Fin n → Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool)), D.commit.Binds H →
+    ∀ (x : Z → Fin n → Claims.Msg) (wit : Z → Fin n → Claims.Sampling.Wit)
+      (tops : Claims.Sampling.AuditStatement → List (Opening Bool)), D.commit.Binds H →
     (∀ m, ScopeAcc D lay k m → RegOpensAt H D reg ops m →
-      ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
+      ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
       PrBad H D.V
           (RLeakTap H D.commit D.parse D.partition L K S lay k δ
             (fun s _ => AsReg s.prog (lay s) (k s) (reg s) (regVal (ops s))) Dj tops)
@@ -114,6 +122,80 @@ theorem not_periodLeakRegisteredUntrusted : ¬ PeriodLeakRegisteredUntrusted := 
     fun _ _ i => i.elim0
   have h2 := (Set.encard_pair (show true ≠ false by decide)).symm.le.trans
     ((Set.encard_le_encard fun z _ => Set.mem_setOf.2 ⟨Set.mem_univ z, fun i => i.elim0⟩).trans hc)
+  simp at h2
+
+/-- **`PeriodLeakRegistered` at any rows format**: its statement without `F.Wf`, every other hypothesis kept,
+`TrustedHost` included. -/
+def PeriodLeakRegisteredAnyFormat : Prop :=
+  ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
+    (H : Claims.Msg → Claims.Msg) (D : Claims.Sampling.Deploy Coin Col T) (L K S : ℕ)
+    (lay : Claims.Sampling.AuditStatement → BoundaryGates L S), KSWired H D (fun s => (lay s).wires) →
+    ∀ (k : Claims.Sampling.AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T), 0 ≤ δ →
+    Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
+    ∀ (reg : Claims.Sampling.AuditStatement → Finset ℕ)
+      (ops : Claims.Sampling.AuditStatement → List (Opening Bool)) (Dj : ℕ)
+      {n : ℕ} (sw : Fin n → Claims.Sampling.AuditStatement) (Pw : Fin n → Claims.Sampling.Partition)
+      (ρ : Fin n → ℕ → Bool) (op : Fin n → ℕ → List (Obs L K S) → List Bool) (β : Fin n → ℕ),
+    WindowsPlaced D δ sw Pw β →
+    ∀ {Conn Cell Srv Dev Z : Type} (arr : Srv → Conn → Arrivals Cell) (F : RowsFormat Conn Cell L K) (tap : Dev)
+      (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S))),
+    Verity.Assumptions.TrustedHost tap run (fun p =>
+      (wardenCode p.1 (arr p.2), F.record S n p.1 (arr p.2) (wardenCode p.1 (arr p.2)))) →
+    ∀ (Θ : Set (ℕ × ℕ)) (Zs : Set Z) (schedOf : Z → WardenSchedule Conn) (srvOf : Z → Srv),
+    SchedulesCovered {s | (s.r, s.D) ∈ Θ ∧ F.Fits S n s} Zs schedOf →
+    ∀ (dec : (Conn → List (ℕ × CellView Cell)) → Z), SenderDecodes run tap Zs schedOf srvOf dec →
+    ∀ (x : Z → Fin n → Claims.Msg) (wit : Z → Fin n → Claims.Sampling.Wit)
+      (tops : Claims.Sampling.AuditStatement → List (Opening Bool)), D.commit.Binds H →
+    (∀ m, ScopeAcc D lay k m → RegOpensAt H D reg ops m →
+      ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
+      PrBad H D.V
+          (RLeakTap H D.commit D.parse D.partition L K S lay k δ
+            (fun s _ => AsReg s.prog (lay s) (k s) (reg s) (regVal (ops s))) Dj tops)
+          (Claims.Sampling.E D decode) m P ≤
+        Claims.Sampling.κ D δ m + Real.sqrt (Claims.Sampling.γ D m * PrB H D.V P m) +
+          (Bext H D.V (Claims.Sampling.E D decode) Ω P m).Pr H +
+          (Btap H D.V (Claims.Sampling.E D decode) D.commit D.parse tops Ω P m).Pr H +
+          (Breg H D.V (Claims.Sampling.E D decode) D.commit D.parse ops Ω P m).Pr H) ∧
+      (TapsOpen H D lay k op tops Zs x (fun z => (run tap (schedOf z, srvOf z)).2) →
+        {z | z ∈ Zs ∧ ∀ i, WindowGoodReg H D L K S lay k δ reg ops Dj (sw i) (ρ i) tops (x z i) (wit z i)
+            ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
+          Θ.encard * ((∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \
+            reg (sw i)).card * (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞))
+
+/-- **Without `RowsFormat.Wf`, `PeriodLeakRegistered` is false**: at `ksNotD`, where `KS` holds (`ksNotD_KS`) and so
+`KSWired` (`freeLay` has no wires), the registration `goodReg`, which opens (`ksNotD_regOpens`), one window at
+`δ = 0` and `Θ = {(1, 0)}`, the network certifier's code recorded in `blindRows` (which doesn't read back,
+`blindRows_not_wf`) on the schedule `oneSched` (which fits) registers `obs1` on both servings `z`, the client's cell
+being `z` (`boolDec_run`). The circuit accepts `obs1` at `goodReg` (`frameTops_acc`), so both secrets meet
+`WindowGoodReg`: `2` against a count of `#Θ · 2^0 · 1 · 2^0 · 1^1 = 1`. -/
+theorem not_periodLeakRegisteredAnyFormat : ¬ PeriodLeakRegisteredAnyFormat := fun h => by
+  have hgood : ∀ o : List (Obs 1 1 1), o = [obs1] →
+      WindowGoodReg shaD (ksNotD Unit) 1 1 1 (fun _ => freeLay) (fun _ => 1) 0 (fun _ => {0}) (fun _ => goodReg) 1
+        notStmt (regVal goodReg) (fun _ => frameTops) [] ⟨[]⟩ o := by
+    rintro o rfl
+    exact ⟨⟨notStmt, notPart, rfl, rfl, fun op o hto hcov hlen hj => frameTops_acc shaD op o hto hcov hlen hj⟩,
+      ksNotD_scopeAcc [], notStmt, rfl, ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩, fun _ _ => rfl, obs1_covered, rfl,
+      fun y hy => by obtain rfl := List.mem_singleton.1 hy; exact Nat.one_pos⟩
+  have hopens : ∀ o : List (Obs 1 1 1), o = [obs1] →
+      TapOpens shaD notCm freeLay 1 (fun _ _ => []) notStmt frameTops o := by
+    rintro o rfl
+    exact frameTops_opens shaD
+  have hc := (h shaD (ksNotD Unit) 1 1 1 (fun _ => freeLay) (ksWired_none (fun _ => rfl) (ksNotD_KS shaD))
+    (fun _ => 1) 0 (fun _ => [()]) le_rfl (Claims.Witness.Flock.listWithin_unit _ _ _) (fun _ => {0})
+    (fun _ => goodReg) 1 (n := 1) (fun _ => notStmt) (fun _ => notPart) (fun _ => regVal goodReg)
+    (fun _ _ _ => []) (fun _ => 0) ⟨fun _ => rfl, fun _ F hF => by obtain rfl := notFaulty_empty hF; simp [faultyBits]⟩
+    boolArr blindRows () blindRun (fun _ => rfl) {(1, 0)} Set.univ (fun _ => oneSched) id
+    (fun _ _ => ⟨rfl, oneSched_fits⟩) boolDec (fun z _ => boolDec_run z) (fun _ _ => []) (fun _ _ => ⟨[]⟩)
+    (fun _ => frameTops) (notCm_binds shaD)).2 fun z _ i s hs => by
+      obtain rfl : notStmt = s := Option.some.inj hs
+      exact hopens _ (blindRun_obs z i)
+  have h2 := (Set.encard_pair (show true ≠ false by decide)).symm.le.trans
+    ((Set.encard_le_encard fun z _ => Set.mem_setOf.2 ⟨Set.mem_univ z, fun i => hgood _ (blindRun_obs z i)⟩).trans hc)
+  have hF1 : faultySets notStmt.design notPart 0 = {∅} :=
+    Finset.eq_singleton_iff_unique_mem.2 ⟨empty_mem_notFaulty, fun _ hF => notFaulty_empty hF⟩
+  have hfree : (freeInputs notStmt.prog freeLay 1 \ {0}).card = 0 := by
+    first | decide | rfl | simp [freeInputs, notStmt, notProg, freeLay]
+  simp only [hF1, hfree, Finset.card_singleton] at h2
   simp at h2
 
 /-- **`PooledLeakAccepted`'s schedule premises at the deployed instance**, its schedules the fixture `fxQueue`'s alone:
