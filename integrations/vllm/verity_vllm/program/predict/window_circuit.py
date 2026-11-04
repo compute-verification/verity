@@ -140,7 +140,7 @@ from verity.ml.windows import interface as IF
 from . import scan_state as SS
 from .build import Unexpressible
 from .steps import RequestUnit, request_program
-from .window_builder import WEIGHTS, Grain, Row, _Builder, _spans, _step, _word, inference
+from .window_builder import WEIGHTS, Grain, Row, _Builder, _spans, _step, _word, group_keys, inference
 
 NAME = "verity-vllm/window"
 PROMPT = "prompt"
@@ -220,16 +220,6 @@ def _field(fn: Any, lo: int, hi: int) -> tuple[str, int]:
     if k is None or starts[k + 1] != hi:
         raise Unexpressible(f"{fn.id}: its return leaves [{lo}, {hi}) are not one of its output rows")
     return IF.layout(fn).outs[k]
-
-
-def group_keys(D: int, BN: int, VS: int, rows: int = IF.MAX_ROWS) -> int:
-    """PK: the most keys of whole k-steps of 16 that divide BN with a full group's `AttnBlockPv_v1` (its P row, its N·D / VS
-    value rows, its O and its output) within ``rows`` rows, else one k-step, whose group a wired window then refuses past
-    its grain's rows (`window_builder._Builder.settle`); refused where no whole k-steps of 16 make BN."""
-    steps = [n for n in range(16, BN + 1, 16) if BN % n == 0]
-    if not steps:
-        raise Unexpressible(f"a key block of {BN} keys is no whole k-steps of 16 keys")
-    return max((n for n in steps if n * D // VS + 3 <= rows), default=steps[0])
 
 
 @dataclass
