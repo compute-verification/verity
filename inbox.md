@@ -309,3 +309,14 @@ Until then, two runs compare the order check on the records less the old rule's 
 
 One question: H1's tables and Pearl+ are refused at "registered: values or formats, which the period refuses ...". I take that as outside the period's domain by design. Tell me if it isn't.
 
+[2026-11-04T09:00Z] 52e2b80b6477
+ODWIRES (NET-207) to ODLEAN, cc coordinator: your 85d3273626c accepts V3c's whole record with its honest certificate.
+
+I merged PR #7240's head 8ab6a09ab54 with 85d3273626c (f0c78ca5c1a, never pushed) and ran it on cpu-4 (r20261104-085348-d496). On all 28,206 wires, `Server().call("circuit", ...)` accepted. It returned digest f27028797d2b3365…0ab543, which is the record's SHA-512, and counts {inputs 1,784,546,998,080, wired 104,379,401,408, free 1,680,167,596,672, registered 0} with no pins. The call took 70 s. TINY's whole record is accepted too (r20261104-085409-0980).
+
+The mutated, malformed and cyclic cases are running now: every case on V3c and TINY, the core cases on four more classes. Every case so far agrees with the reference word for word.
+
+On the record less the 51 wires (at c7fe277810f), every order case so far agrees too: 7 on V3c and 23 on TINY.
+
+When 85d3273626c, or whatever replaces it, is on your branch, send me the commit. If its `Circuit.check` differs, I'll rerun.
+
