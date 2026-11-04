@@ -72,21 +72,29 @@ def test_f_is_at_the_graphs_clique_number_and_a_repeated_pair_refuses_with_its_p
 def test_a_recomputation_a_copy_and_a_cast_are_their_originals_value_so_m_keeps_one_copy_of_each_product():
     """An activation checkpoint reruns its forward: the rerun's product reads the original's values in both operands,
     so its arrays are the original's and the pair repeats, as it does for a product on a copy cast down and back; a
-    product of a value with its own rerun is a loop. Each refuses F; products on other values stay apart."""
+    product of a value with its own rerun is a loop. Each refuses F. Products on other values stay apart: two weights
+    made alike (zeros) and written in place by different updates, and two draws of randomness of one shape."""
     import torch
     from torch.fx.experimental.proxy_tensor import make_fx
 
+    from te_core.capture.structure import _Flow
+
     def step(x, w, v):
         h, again = torch.relu(x @ w), torch.relu(x @ w)
-        return h @ v, again @ v, x.clone().to(torch.bfloat16).float() @ w, torch.relu(x @ v) @ v, h @ again.t()
+        a, b = torch.zeros(8, 8), torch.zeros(8, 8)
+        a.add_(v)
+        b.add_(w)
+        return (h @ v, again @ v, x.clone().to(torch.bfloat16).float() @ w, torch.relu(x @ v) @ v, h @ again.t(),
+                x @ a, x @ b, x @ torch.randn(8, 8), x @ torch.randn(8, 8))
 
     gm = make_fx(step)(torch.randn(4, 8), torch.randn(8, 8), torch.randn(8, 8))
-    of = arrays.values(gm)
-    products = [{"node": n.name, "phase": "forward", "arrays": [of[io_bound._root(a)] for a in n.args[:2]]}
+    flow = _Flow(gm, {}, lambda n, i: 0)
+    of = arrays.values(flow)
+    products = [{"node": n.name, "phase": "forward", "arrays": [arrays.array(flow, of, n, a) for a in n.args[:2]]}
                 for n in gm.graph.nodes if n.target is torch.ops.aten.mm.default]
-    assert len(products) == 8 and len({of[n] for n in gm.graph.nodes if n.op == "placeholder"}) == 3
+    assert len(products) == 12
     got = arrays.check(products)
     assert sorted(r["count"] for r in got["repeated"]) == [2, 3] and len(got["loops"]) == 1
-    assert got["omega"] == 2 and got["arrays"] == 5
+    assert got["omega"] == 2 and got["arrays"] == 9
     why = arrays.refusal(got)
     assert "puts 5 of M's products on 2 pair(s)" in why and "1 of M's products of one value with a copy" in why

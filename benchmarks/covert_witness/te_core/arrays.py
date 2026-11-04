@@ -7,9 +7,9 @@ linear layer's forward, input-gradient and weight-gradient products are a triang
 F = √(2(1 − 1/ω)) = 2/√3 (`io_bound.SHARE`), the figure's F where M holds a backward product (`share`); the forward
 products alone and the weight gradients alone, one of each a layer, have no triangle, ω = 2 and F = 1, the figure's F
 on them. An array is
-the words of one value, an operand's root through views and casts (`io_bound._root`) taken as its value (`values`:
-the casts and copies of one value are one array, and so is a recomputation, the same op on the same values, as an
-activation checkpoint's rerun of its forward), so micro-batches' activations are their own arrays and a weight they
+the words of one value, the class of the value a product reads through an operand (`values`, `array`): the casts,
+copies and slices of one value are one array, and so is a recomputation, the same op on the same values, as an
+activation checkpoint's rerun of its forward, so micro-batches' activations are their own arrays and a weight they
 share is one. Two products on one pair, or one of a value with itself, refuse F (`refusal`), so M keeps one copy of
 each product; a step with a clique of more than three charges F at its own ω, and one whose forward products or
 weight gradients hold a triangle charges them F at theirs.
@@ -39,8 +39,12 @@ from . import io_bound
 
 #: products a repeated pair names in what `check` returns
 SHOWN = 4
-#: ops whose result holds its first argument's value, a copy or a cast, which `values` takes as that argument
-SAME = {"clone", "contiguous", "detach", "alias", "_to_copy", "to", "lift_fresh", "lift_fresh_copy", "type_as"}
+#: ops whose result is its first argument's value, element for element and dtype for dtype
+COPIES = {"clone", "contiguous", "detach", "alias", "lift_fresh", "lift_fresh_copy"}
+#: ops that draw randomness, each of whose values `values` keeps its own
+RANDOM = {"normal", "normal_", "uniform_", "bernoulli", "bernoulli_", "rand", "randn", "randint", "rand_like",
+          "randn_like", "randint_like", "randperm", "random_", "exponential_", "geometric_", "log_normal_", "cauchy_",
+          "multinomial", "poisson", "native_dropout", "dropout", "_fused_dropout", "rrelu_with_noise"}
 
 
 def share(omega: int | None, floor: float = io_bound.SHARE) -> float:
@@ -73,37 +77,57 @@ def clique(adj: dict) -> list:
     return best
 
 
-def values(gm) -> dict:
-    """Each node of the graph `gm` → its value's class: one op on the same values and constants is one value, so a
-    recomputation is its original's, a copy or a cast (`SAME`) is its argument's, and a placeholder or an attribute is
-    its own. A class can join values the step keeps apart (two draws of randomness, a storage read before and after
-    an in-place write), which only adds repeated pairs."""
+def _consts(a):
+    """An op's arguments with each node's place kept and its identity dropped."""
+    if hasattr(a, "op") and hasattr(a, "args"):
+        return "·"
+    if isinstance(a, (list, tuple)):
+        return tuple(_consts(x) for x in a)
+    if isinstance(a, dict):
+        return tuple((k, _consts(v)) for k, v in sorted(a.items()))
+    return repr(a)
+
+
+def values(flow) -> list[int]:
+    """Each value of a step's flow (te_core.capture.structure's `_Flow`, storage-versioned) → its array: the value's
+    class, or, for a view, a cast or a copy (the ops `io_bound._root` walks), the array of the latest value it read
+    (its storage's as of then), so the casts and the slices of one value are one array. One op on values of the same
+    classes, read argument by argument, with the same constants, makes values of one class, so a recomputation is
+    its original's; a copy (`COPIES`) is its argument's class; a value an op writes in place is that op's, so a
+    storage read before and after a write is two values; a graph source and every draw of randomness (`RANDOM`) are
+    their own, so a rerun of a draw (a checkpoint's replay of a dropout mask) is not its original's."""
+    from te_core.capture.structure import _WALK, _arg_nodes, _pk
+
     ids: dict = {}
-    of: dict = {}
-
-    def key(a):
-        if hasattr(a, "op") and hasattr(a, "args"):
-            return ("node", of[a])
-        if isinstance(a, (list, tuple)):
-            return tuple(key(x) for x in a)
-        if isinstance(a, dict):
-            return tuple((k, key(v)) for k, v in sorted(a.items()))
-        return repr(a)
-
-    from te_core.capture.structure import _pk
-
-    for n in gm.graph.nodes:
-        if n.op == "call_function":
-            if n.target is not operator.getitem and _pk(n.target) in SAME and n.args and hasattr(n.args[0], "op"):
-                of[n] = of[n.args[0]]
+    exact: list[int] = []
+    out: list[int] = []
+    made: dict = defaultdict(int)
+    for v, n in enumerate(flow.node):
+        idx, made[n] = made[n], made[n] + 1
+        k, name, reads = ("own", v), None, []
+        if v not in flow.source and getattr(n, "op", None) == "call_function":
+            name = "getitem" if n.target is operator.getitem else _pk(n.target)
+            args = _arg_nodes(n) + list(n.meta.get("te_scalar_deps", ()))
+            reads = [flow.reads.get((n, a), frozenset()) for a in args]
+            if name in COPIES and reads and reads[0]:
+                exact.append(exact[max(reads[0])])
+                out.append(out[max(reads[0])])
                 continue
-            k = (str(n.target), key(n.args), key(dict(n.kwargs)))
-        elif n.op in ("placeholder", "get_attr"):
-            k = (n.op, n.target)
-        else:
-            k = (n.op, n.name)
-        of[n] = ids.setdefault(k, len(ids))
-    return of
+            if name not in RANDOM:
+                k = (str(n.target), _consts(n.args), _consts(dict(n.kwargs)),
+                     tuple(frozenset(exact[u] for u in r) for r in reads), idx)
+        exact.append(ids.setdefault(k, len(ids)))
+        out.append(out[max(reads[0])] if name in _WALK and reads and reads[0] else exact[-1])
+    return out
+
+
+def array(flow, of: list[int], n, a) -> int:
+    """The array (`of`, `values`') of the latest value node `n` read through its operand `a`: its storage's as of the
+    read, through the views and casts that made `a`."""
+    r = flow.reads.get((n, a)) or ({flow.val[a]} if isinstance(flow.val.get(a), int) else None)
+    if not r:
+        raise ValueError(f"te_core.arrays: {n.name} reads no value through {getattr(a, 'name', a)}")
+    return of[max(r)]
 
 
 def check(products: list[dict]) -> dict:
@@ -153,8 +177,8 @@ def refusal(arrays: dict | None) -> str | None:
 
 def of_step(g) -> list[dict]:
     """M's products on a recorded step (te_core.capture.script's `record`), each {"node", "op", "part", "phase",
-    "arrays", "dw"}: its operands' arrays, each its root through views and casts as a value (`values`, named by the
-    class's first node), and whether it is a weight gradient (a backward product contracting over tokens, as
+    "arrays", "dw"}: its operands' arrays, each the class of the value it read (`array`, named by the class's first
+    node), and whether it is a weight gradient (a backward product contracting over tokens, as
     he_of_rows has it). Refused where M's count differs from the step's rows' (te_core.formalism.he_of_rows' M)."""
     from te_core.capture import products as P
     from te_core.capture.structure import _gemms, _pk
@@ -162,10 +186,10 @@ def of_step(g) -> list[dict]:
     vs = P._Values(g)
     gathered = P._gathered(vs, P._made(vs))
     by_name = {n.name: n for n in vs.nodes}
-    of = values(vs.gm)
+    of = values(vs.flow)
     first: dict = {}
-    for n in vs.gm.graph.nodes:
-        first.setdefault(of[n], n.name)
+    for v, c in enumerate(of):
+        first.setdefault(c, getattr(vs.flow.node[v], "name", str(v)))
     out = []
     for m in g.matmuls:
         n = by_name[m.node]
@@ -180,7 +204,7 @@ def of_step(g) -> list[dict]:
         if sum(x in m.token_dims for x in ("m", "k", "n")) >= 2:
             continue
         out.append({"node": n.name, "op": _pk(n.target), "part": m.part, "phase": m.phase,
-                    "arrays": [first[of[io_bound._root(x)]] for x in (A, B)],
+                    "arrays": [first[array(vs.flow, of, n, x)] for x in (A, B)],
                     "dw": m.phase == "backward" and sorted(m.token_dims) == ["k"]})
     rows = ((g.formalism or {}).get("products") or {}).get("rows")
     if rows is not None:
