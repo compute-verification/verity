@@ -345,7 +345,8 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
                for f in ("SampledCodeRuns", "SessionKS,", "SessionRuns", "ListWithin", "Binds"))
     assert "Python" in OR.DISCHARGE
     assert "no opening reaches the verifier" in OR.PREMISES["session-wires"]["is"]
-    assert all(f in OR.PREMISES["session-tags"]["is"] for f in ("circuitOf at Tags.circuit", "Tags.circuit.withCoins c"))
+    tags = OR.PREMISES["session-tags"]["is"]
+    assert "circuitOf at Tags.circuit" in tags and "Tags.circuit.withCoins c" in tags
 
 
 @pytest.mark.parametrize("given, open_", [
