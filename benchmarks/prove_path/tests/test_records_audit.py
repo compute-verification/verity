@@ -569,9 +569,10 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
     registration, the Program the audit sampled (the one the registration names), the audit's answer, ``steps`` 0 and
     ``free``: the audit's count, but with the state's reads registered (the period ties them to its scan's state tree),
     where the audit's own count leaves them free. ``records_audit.py period`` writes the same and says it in one line.
-    Refused by name: a window that commits no scan state, a circuit the registration doesn't bind, an audit that wrote no
-    Program or another than the registration names, an answer committing to another registration, and an audit that
-    opened the advice (``--opening``, a development check)."""
+    Refused by name: a registration binding a compiler or an advice (the period has no term to charge its bits), a window
+    that commits no scan state, a circuit the registration doesn't bind, an audit that wrote no Program or another than the
+    registration names, an answer committing to another registration, and an audit that opened the advice
+    (``--opening``, a development check)."""
     got = _registered(tmp_path / "w", name=RA.TIED, own=True)
     audit = _audited(got.dir, tmp_path / "a")
     rec, doc = (json.loads((got.dir / f).read_text()) for f in ("registration.json", "circuit.json"))
@@ -601,7 +602,14 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
         shutil.copytree(audit, d)
     (bare / "window" / "program.json").unlink()
     (renamed / "window" / "program.json").write_text(json.dumps({**p["program"], "name": "other"}))
+    compiled, advised = tmp_path / "c", tmp_path / "v"
+    for d, binds in ((compiled, {"compiler": {"name": "c", "digest": "00" * 64}}),
+                     (advised, {"advice": {"root": "00" * 64, "bits": 8}})):
+        shutil.copytree(got.dir, d)
+        (d / "registration.json").write_text(json.dumps({**rec, "window": {**rec["window"], **binds}}))
     for window, audited_by, why in [
+            (compiled, audit, "binds compiler: a circuit compiled from run-time choices"),
+            (advised, audit, "binds advice: a circuit compiled from run-time choices"),
             (other.dir, _audited(other.dir, tmp_path / "xa"), "commits no verity/certifier/scan-state/v1 its circuit reads"),
             (unbound, audit, "is not the circuit record the registration binds"),
             (got.dir, bare, "wrote no Program"),
