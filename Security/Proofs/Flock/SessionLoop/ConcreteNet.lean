@@ -101,15 +101,15 @@ theorem at_append {h : Array String} {at0 : Nat} {L M : List Nat} (hh : At h at0
 
 theorem bits_loop {h : Array String} (p : Nat) : ∀ (bs : List Nat) (k : Nat) (acc : Array Nat),
     (∀ j (hj : j < bs.length), h[p + (k + j)]? = some (toString bs[j])) →
-    forIn (m := V) (List.range' k bs.length) acc (fun i r => do
+    forIn (m := Except String) (List.range' k bs.length) acc (fun i r => do
       let x ← Net.num h (p + i); pure (ForInStep.yield (r.push x))) = .ok (acc ++ bs.toArray)
-  | [], k, acc, _ => by simp; rfl
+  | [], k, acc, _ => by simp <;> rfl
   | b :: bs, k, acc, hh => by
     rw [List.length_cons, List.range'_succ, List.forIn_cons]
     have h0 := hh 0 (by simp)
     simp only [Nat.add_zero, List.getElem_cons_zero] at h0
     rw [num_of h0]
-    show forIn (m := V) (List.range' (k + 1) bs.length) (acc.push b) _ = _
+    show forIn (m := Except String) (List.range' (k + 1) bs.length) (acc.push b) _ = _
     rw [bits_loop p bs (k + 1) (acc.push b) (fun j hj => by
       have := hh (j + 1) (by simp; omega)
       simpa [Nat.add_assoc, Nat.add_comm 1] using this)]
@@ -126,7 +126,7 @@ theorem at_num {h : Array String} {at0 : Nat} {L : List Nat} (hh : At h at0 L) (
 
 theorem groups_loop {h : Array String} : ∀ (gs : List Group) (k at_ : Nat) (acc : Array Group),
     At h at_ (gs.flatMap gNums) → (∀ g ∈ gs, Aligned g) →
-    forIn (m := V) (List.range' k gs.length) (at_, acc) (fun x __s => do
+    forIn (m := Except String) (List.range' k gs.length) (at_, acc) (fun x __s => do
             let col ← Net.num h __s.fst
             let words ← Net.num h (__s.fst + 1)
             let np ← Net.num h (__s.fst + 2)
@@ -139,7 +139,7 @@ theorem groups_loop {h : Array String} : ∀ (gs : List Group) (k at_ : Nat) (ac
                 pure (ForInStep.yield (__s.fst + 3 + np, __s.snd.push { col := col, words := words, bits := __s_1 }))
               else pure (ForInStep.yield (__s.fst + 3 + np, __s.snd.push { col := col, words := words, bits := __s_1 }))) =
       .ok (at_ + (gs.flatMap gNums).length, acc ++ gs.toArray)
-  | [], k, at_, acc, _, _ => by simp; rfl
+  | [], k, at_, acc, _, _ => by simp <;> rfl
   | g :: gs, k, at_, acc, hh, hal => by
     rw [List.flatMap_cons] at hh
     obtain ⟨hg, hr⟩ := at_append hh
@@ -150,7 +150,7 @@ theorem groups_loop {h : Array String} : ∀ (gs : List Group) (k at_ : Nat) (ac
       have := hg (3 + j) g.bits.toList[j] (by rw [gNums, List.getElem?_append_right (by simp)]; simp)
       simpa [Nat.add_assoc] using this)
     rw [Array.length_toList, Array.empty_append, Array.toArray_toList] at hb
-    have e : at_ + (gNums g).length = at_ + 3 + g.bits.size := by simp [gNums]; omega
+    have e : at_ + (gNums g).length = at_ + 3 + g.bits.size := by simp [gNums] <;> omega
     rw [e] at hr
     have ha : (isPow2 g.words && g.col % g.words == 0) = true := hal g List.mem_cons_self
     rw [List.length_cons, List.range'_succ, List.forIn_cons]
@@ -174,10 +174,8 @@ theorem groups_ok {h : Array String} {at0 : Nat} {gs : Array Group} (hh : At h a
   rw [hcount, ok_bind]
   obtain ⟨-, hr⟩ := at_append (L := [gs.size]) (M := gs.toList.flatMap gNums) hh
   rw [← Array.length_toList, groups_loop gs.toList 0 (at0 + 1) #[] hr hal, ok_bind]
-  simp only [side, List.length_cons, Array.empty_append, Array.toArray_toList]
-  show Except.ok _ = Except.ok _
-  congr 2
-  omega
+  all_goals simp only [side, List.length_cons, Array.empty_append, Array.toArray_toList]
+  all_goals omega
 
 theorem at_of (A B : List String) (L : List Nat) : At (A ++ L.map toString ++ B).toArray A.length L := by
   intro j n hj
@@ -194,7 +192,7 @@ theorem header_words (name : String) (l : Laid) : VStar.header name l = " ".inte
   unfold VStar.header hdr side gNums
   simp [List.map_flatMap]
 
-theorem format_word : Tok VStar.FORMAT := ⟨by decide, by unfold NoWs; decide⟩
+theorem format_word : Tok VStar.FORMAT := ⟨by decide, by simp [NoWs, VStar.FORMAT]⟩
 
 theorem header_tokens {name : String} (hw : Tok name) (l : Laid) :
     tokens (VStar.header name l) = (hdr name l).toArray := by
@@ -241,7 +239,7 @@ theorem ofRows_checks {name : String} {useful constPos : Nat} {ig og : Array Gro
 
 /-! ## The row loop -/
 
-theorem forIn_steps {β : Type} {f : Nat → β → V (ForInStep β)} {step : Nat → β → β} : ∀ (m k : Nat) (b : β),
+theorem forIn_steps {β : Type} {f : Nat → β → Except String (ForInStep β)} {step : Nat → β → β} : ∀ (m k : Nat) (b : β),
     (∀ j < m, ∀ b, f (k + j) b = .ok (.yield (step (k + j) b))) →
     forIn (List.range' k m) b f = .ok ((List.range' k m).foldl (fun b i => step i b) b)
   | 0, _, _, _ => rfl
@@ -275,12 +273,12 @@ theorem rowLine_tokens (a b : Array Nat) : tokens (VStar.rowLine a b) = ((rowNum
   obtain ⟨n, -, rfl⟩ := List.mem_map.mp hx
   exact word_nat n
 
-theorem mapM_nums {f : String → V Nat} (hf : ∀ n : Nat, f (toString n) = .ok n) :
+theorem mapM_nums {f : String → Except String Nat} (hf : ∀ n : Nat, f (toString n) = .ok n) :
     ∀ L : List Nat, (L.map toString).mapM f = .ok L
   | [] => rfl
   | x :: L => by rw [List.map_cons, List.mapM_cons, hf, ok_bind, mapM_nums hf L]; rfl
 
-theorem row_ok (a b : Array Nat) {f : String → V Nat} (hf : ∀ n : Nat, f (toString n) = .ok n) :
+theorem row_ok (a b : Array Nat) {f : String → Except String Nat} (hf : ∀ n : Nat, f (toString n) = .ok n) :
     (tokens (VStar.rowLine a b)).mapM f = .ok (rowNums a b).toArray := by
   rw [rowLine_tokens, Array.mapM_eq_mapM_toList, List.toList_toArray, mapM_nums hf]
   rfl
@@ -292,9 +290,9 @@ theorem rowNums_facts (a b : Array Nat) :
   let v := (rowNums a b).toArray
   show v.getD 0 0 = a.size ∧ v.getD (1 + a.size) 0 = b.size ∧ v.size = 2 + a.size + b.size ∧
       v.extract 1 (1 + a.size) = a ∧ v.extract (2 + a.size) (2 + a.size + b.size) = b
-  refine ⟨by simp [v, rowNums], ?_, by simp [v, rowNums]; omega, ?_, ?_⟩
+  refine ⟨by simp [v, rowNums], ?_, by simp [v, rowNums] <;> omega, ?_, ?_⟩
   · simp only [v, rowNums, Array.getD_eq_getD_getElem?, List.getElem?_toArray]
-    rw [List.getElem?_append_right (by simp; omega)]
+    rw [List.getElem?_append_right (by simp <;> omega)]
     simp [Nat.add_comm]
   · apply Array.toList_inj.mp
     simp [v, rowNums]
@@ -320,7 +318,7 @@ theorem netLs_row (name : String) (l : Laid) {j : Nat} (hj : j < l.useful) :
   simp [netLs, rowsLs, Array.getD_eq_getD_getElem?, Nat.add_comm 1, hj]
 
 theorem netLs_end (name : String) (l : Laid) : (netLs name l).toArray.getD (1 + l.useful) "" = "" := by
-  rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_none (by rw [netLs_size]; omega)]
+  rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_none (by rw [netLs_size] <;> omega)]
   rfl
 
 theorem parse_netLs {name : String} {l : Laid} {n : Net} (hw : Tok name) (ha : l.ra.size = l.useful)
@@ -345,7 +343,7 @@ theorem parse_netLs {name : String} {l : Laid} {n : Net} (hw : Tok name) (ha : l
     rw [List.append_nil, List.length_append, List.length_map] at this
     exact groups_ok this ho
   have e1 : (4 + (side l.inGroups).length + (side l.outGroups).length != (hdr name l).toArray.size) = false := by
-    simp [hdr]; omega
+    simp [hdr] <;> omega
   have hL : "".startsWith "LEAVES " = false := by simp
   have hC : "".startsWith "CUT " = false := by simp
   have e2 : (1 + l.useful != (netLs name l).toArray.size) = false := by rw [netLs_size]; simp
