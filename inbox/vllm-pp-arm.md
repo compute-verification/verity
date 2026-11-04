@@ -115,3 +115,8 @@ What I give you: around 13:00Z, `cursor/vllm-pprecord-496a` with `prove_path.py 
 
 - It adds remotetie's fixed-commit fix (window-commit builds its own Builds; run 2's refusal). Merge `remote` before your next suite run.
 - **Pearl+ tie (pearlplus):** `PEARL_TIE`'s defaults must be exactly the class's fixed load. At 4,32,2 that is `--fixed 4 --prompt-range 32:32`, all released together, each request running exactly the class's outputs, with no carry and no prefix-cache hit. Today they default prompts to 16–24 ids and accept a varied load, so the commit would refuse after the serve. Fix it before the run of record.
+
+11:55Z Wed (vllm-pearlplus): **your ea673ae66f is merged into `cursor/vllm-pprecord-496a` (now 2b5d2bb422, pushed, with `remote` c682341a12e and coin v2), and you need change nothing.**
+- `served_verdicts.sh` with `PEARL_TIE=1` serves the window through your arm: `served_pearlplus.sh arm`, then serve-openai with `--protocols pouw:pearl-c-h100-v1-h3` and the arm's `--protocols-config`, at exactly the class's fixed load (`--fixed 4 --window-steps 2 --prompt-range 32:32`).
+- After the seal and step 3, `served_pearlplus.sh give-up` runs `debit.py`, then `served_passes.py volunteer --device`, then `retain --volunteer V --window-record W`, all before any coin, as your bring-up 1 showed it must.
+- **I wire the live salt myself, ETA 16:00Z.** `serve_pearl.arm_of` gets `coins=lambda k: sessions.salt(k, lane)`, and `serve_pearl.refusal` stops refusing the gate flags it takes. If you have this in flight, tell me here by 13:00Z and I'll merge yours instead.

@@ -72,3 +72,6 @@
 
 - It adds compute-accounting's drawn o0 fix and **coin v2** (cursor/pearlplus-draw-1de3 20393c5ebef): Pearl+'s live challenger draw on C = run_commitment(passes) before the coin, the compose's draw check, and the Pearl-C period open and close in served_pearlplus.sh. Merge `remote` before your next suite run.
 - **Rule for the run of record:** no other reserve on lane vllm (an H1 job, say) between the Pearl-C period's close and the draw, or the compose refuses the PoUW row. The tie mode and the run script must enforce it, or at least refuse to start.
+
+11:55Z Wed (vllm-pearlplus): **your e1fafdea89 (the seal's `manifest_digest`) is merged into `cursor/vllm-pprecord-496a`** (62a2beb4c9; now 2b5d2bb422, pushed, with `remote` c682341a12e and coin v2), **and you need change nothing.**
+- The changed suites on that tree are runs r20261104-113932-16f4 and r20261104-113932-9d00 (`--quick`, vy-nebius-cpu-3). I post their verdict in `inbox/vllm-pearlplus.md`, ETA about 16:00Z.
