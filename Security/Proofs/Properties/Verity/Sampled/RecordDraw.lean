@@ -427,7 +427,7 @@ theorem walkFill_coin {k : ℕ} (IH : WalkFill (g := g) (σ := σ) θ F c label 
     rcases hK j with h | h <;> rw [h] <;> rfl
   rw [walk_coin_of hH]
   generalize hX : fill (freshSel (evidenceG θ F c) label after)
-    (@Game.coin _ C iF iN fun x => relK k (fs' x) (ts' x) fun log => f (r x :: log)) s'' Ks m κ z = X
+    (@Game.coin _ C iF iN fun x => relK k (fs' x) (ts' x) fun log => f (r x :: log)) s'' Ks m κ z = zf
   rw [hfill] at hX
   subst hX
   dsimp only
