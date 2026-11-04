@@ -1475,9 +1475,10 @@ def test_a_drawn_shared_row_members_files_complete_with_every_port_at_its_regist
 
 def test_an_instance_major_members_completed_files_are_its_rows_laid_out_as_a_shared_row_members(tmp_path):
     """`fed_chain`'s members completed (`flock_inputs.complete`): a chain member's ``w`` at the pin the verifier's own reads
-    give it, its wired ``x`` and its output at their window trees, and the feed's every port at its tree. An instance-major
-    member's public body is re-laid port-major under identity refs, and `flock_input_files` stages it under the completed
-    header, its prover body port-major from the window's files (`rows.copy_private`): the same rows, salts and strings."""
+    give it, its wired ``x`` and its output at their window trees, its shared-row body as served; and the feed's every port
+    at its tree. The feed, an instance-major member, has its public body re-laid port-major under identity refs, and
+    `flock_input_files` stages it under the completed header, its prover body port-major from the window's files
+    (`rows.copy_private`): the same rows, salts and strings."""
     circuit, w, feed_ins, feed, _ins, outs = fed_chain()
     win = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
     win.record(SRC, feed_ins, feed)
@@ -1490,14 +1491,17 @@ def test_an_instance_major_members_completed_files_are_its_rows_laid_out_as_a_sh
     record = json.loads(I.circuit_bytes(win.circuit_record()))
     params = I.registered_reads(record, I.window_of_record(record, LAW, {SID: SRC, GID: GEMM}.__getitem__), {"w": w.entry()},
                                 registered=REG)
-    f = _first(window, SID)
-    _completed(window, c, f, FI.complete(window, f, roots, c.public_body(f), registered=REG), [])
-    k = _first(window, GID)
+    g = _first(window, GID)
+    chain = FI.complete(window, g, roots, c.public_body(g), registered=REG, params=params[window.members[g].key],
+                        header=CS.registered_header(doc, g))
+    _completed(window, c, g, chain, ["w"])
+    assert not chain.relaid and chain.body == c.public_body(g)
+    k = _first(window, SID)
     m, mem = window.members[k], doc["members"][k]
-    got = FI.complete(window, k, roots, c.public_body(k), registered=REG, params=params[m.key], header=CS.registered_header(doc, k))
-    _completed(window, c, k, got, ["w"])
+    got = FI.complete(window, k, roots, c.public_body(k), registered=REG)
+    _completed(window, c, k, got, [])
     names = [p for p, _ in m.all_rows]
-    assert got.relaid and got.body == b"".join(c.bc[m.port(p)] for p in names) + np.repeat(
+    assert not m.tables and got.relaid and got.body == b"".join(c.bc[m.port(p)] for p in names) + np.repeat(
         np.arange(m.n, dtype="<u4")[:, None], len(names), axis=1).tobytes()
     meta = {"scheme": CS.SCHEME, "ports": [[p, n, 1] for p, n in mem["ports"]], "input_ports": mem["input_ports"],
             "out_ports": mem["out_ports"], "row_schemas": mem["row_schemas"], "vus_per_block": 1, "units_per_vu": 1,
