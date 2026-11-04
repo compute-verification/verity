@@ -269,6 +269,7 @@ theorem bconf_of_disagree {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.com
   obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 (Sampling.findColl_isSome _ hc)
   exact ⟨u, v, huv, findColl_spec H _ hvalid u v huv⟩
 
+omit [Nonempty Coin] in
 /-- An event of a tape and two runs at it that gives a collision `B_conf`'s output is at most `Pr[B_conf]`. -/
 theorem le_bconf (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {s : AuditStatement} (hs : L.parse x = some s)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
@@ -385,14 +386,14 @@ theorem pr_offReg_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Pr
             rw [L.regVal_eq_plur H P x ω hb]
             exact (hb.symm.trans h).symm
       _ = _ := Pr_eq_card_of_mem _ (FlockSoundness.Rewinding.bad (L.opTable H P x ω) fun g => L.plur H P x ω g)
-          fun rc => by simp only [FlockSoundness.Rewinding.bad, mem_filter, mem_univ, true_and] <;> exact Iff.rfl
+          fun rc => by simp only [FlockSoundness.Rewinding.bad, mem_filter, mem_univ, true_and]
   have hconf : (#(FlockSoundness.Rewinding.conflict (L.opTable H P x ω)) : ℝ) /
       (Fintype.card ((Fin (L.V.k x) → Coin) × L.BlockEC x) : ℝ) ^ 2 =
       Pr fun rr : ((Fin (L.V.k x) → Coin) × L.BlockEC x) × ((Fin (L.V.k x) → Coin) × L.BlockEC x) =>
         L.Conflict H P x ω rr := by
     rw [Pr_eq_card_of_mem (fun rr : ((Fin (L.V.k x) → Coin) × L.BlockEC x) × ((Fin (L.V.k x) → Coin) × L.BlockEC x) =>
         L.Conflict H P x ω rr) (FlockSoundness.Rewinding.conflict (L.opTable H P x ω))
-        fun rr => by simp only [FlockSoundness.Rewinding.conflict, mem_filter, mem_univ, true_and] <;> exact Iff.rfl,
+        fun rr => by simp only [FlockSoundness.Rewinding.conflict, mem_filter, mem_univ, true_and]; exact Iff.rfl,
       Fintype.card_prod ((Fin (L.V.k x) → Coin) × L.BlockEC x) ((Fin (L.V.k x) → Coin) × L.BlockEC x),
       Nat.cast_mul, sq]
   calc Pr (fun rc : (Fin (L.V.k x) → Coin) × L.BlockEC x => L.OffReg H P x ω rc.1 rc.2)
