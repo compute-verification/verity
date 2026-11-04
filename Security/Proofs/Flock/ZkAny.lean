@@ -19,6 +19,7 @@ public import Proofs.Flock.ZkAny.RelayStop
 public import Proofs.Flock.ZkAny.RelayRelease
 public import Proofs.Flock.ZkAny.RelayCoins
 public import Proofs.Flock.ZkAny.RelayFirst
+public import Proofs.Flock.ZkAny.RelayLive
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release
@@ -29,6 +30,7 @@ written by its own rounds and coins alone, its session's entry and salts kept, e
 frame its run on the loop's requests to it, its masking state the model's but for `stopped`, and the session's stop,
 which the other sessions' requests, the frames port's and a round's coins keep; and a round the frame releases at the
 model's place as the model's release, stopping the session where the model's does, after its stream's domain frame at
-the stream's first round in the schedule. -/
+the stream's first round in the schedule: where the session's stop is whether an earlier round failed, the deferred
+model's message. -/
 
 @[expose] public section
