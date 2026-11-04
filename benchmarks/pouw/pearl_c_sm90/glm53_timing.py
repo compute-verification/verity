@@ -4,7 +4,7 @@ in-domain linears and decode's and prefill's M (`--model`'s ``in_domain``, ``DEC
 shape is timed as one dense call, not the grouped launch.
 
   python benchmarks/pouw/pearl_c_sm90/glm53_timing.py --out DIR [--model glm53|llama32_1b] [--cubin C] [--reps 15] [--shapes N:K ...] [--m M ...] [--schedule S ...] [--graphs]
-  python benchmarks/pouw/pearl_c_sm90/glm53_timing.py --whole --out DIR [--model glm53|llama32_1b] [--cubin C] [--reps 15] [--shapes N:K ...] [--m M ...] [--layers L]
+  python benchmarks/pouw/pearl_c_sm90/glm53_timing.py --whole --out DIR [--model glm53|llama32_1b] [--cubin C] [--reps 15] [--shapes N:K ...] [--m M ...] [--layers L] [--nvtx]
 
 Arms, each one linear's call on a BF16 x of M rows:
 
@@ -41,10 +41,14 @@ each from poisoned outputs (``agree``).  Writes ``timing.json`` in DIR, one row 
 on its own x of M rows, in the run's slot order (`forward_of`), under the arms of `WHOLE`: the calls one at a time, each its
 own graph (``--graphs``'s ``pearlc``), and the forward captured whole as vLLM captures decode (`capture_whole`), serial,
 deferred (``whole_defer``: each call's tile hashing on a side stream beside the next call's A tree), under the served
-arm's options (`SERVED`) and with hashing off; beside each stock arm that builds at every shape, its forward captured as
+arm's options (`SERVED`), under them with A's tree kept in pd_commit and with pd_commit and pd_tree in half an SM's shared
+memory, and with hashing off; beside each stock arm that builds at every shape, its forward captured as
 one CUDA graph (`capture_stock`; run eagerly, and said so, when torch can't capture it).  Every hashing arm's passes must
 commit alike (`COMMITMENT`), and so must a pass of each from poisoned outputs: each capture writes the bytes the calls one
-at a time write.  Writes ``whole.json`` in DIR, one row an M; exits non-zero when any commitment differs.
+at a time write.  Writes ``whole.json`` in DIR, one row an M; exits non-zero when any commitment differs.  With ``--nvtx``
+(under nsys), after the timed reps, each arm makes `NVTX_FORWARDS` forwards back to back, each in an NVTX range
+``call whole ARM mM #i`` (a pearlc arm's in a pass of their own, neither timed nor compared), for glm53_profile.py's
+``lanes``.
 """
 
 from __future__ import annotations
@@ -63,21 +67,26 @@ sys.path.insert(0, str(HERE))
 import glm53  # noqa: E402
 
 INNER = 8
+#: --whole --nvtx: each arm's ranged forwards; lanes reads all but the first and the last
+NVTX_FORWARDS = 12
 ERR = 0.08
 EPOCH = 20261023
 STOCK = ("deepgemm", "cutlass", "triton", "cublaslt")
 MODELS = ("glm53", "llama32_1b")
 #: a whole capture's options (`pouw_pearl_c_lanes.whole_options`), each off unless an arm names it
-OPTIONS = ("whole_defer", "whole_defer_a", "whole_fork_stats", "whole_tree_sm", "whole_shape_joins")
+OPTIONS = ("whole_defer", "whole_defer_a", "whole_fork_stats", "whole_tree_sm", "whole_shape_joins", "whole_pd_shared")
 #: the options pearl_c_vllm's served arm (`bench_arm.PearlCWholeArm.run_options`) captures with on this kernel: each call's
 #: tile hashing beside the next call, its A tree beside its own forming and GEMM, which leave the tree's CTA its SM, and its
 #: A scales beside its A commitment
 SERVED = ("whole_defer", "whole_defer_a", "whole_fork_stats", "whole_tree_sm")
-#: --whole's pearlc arms, (hashing, the whole capture's options): None for the calls made one at a time, each its own graph
+#: --whole's pearlc arms, (hashing, the whole capture's options): None for the calls made one at a time, each its own graph;
+#: ``pearlc-served-unsplit`` is the served options but A's tree (each call's pd_commit builds it, mode 0), and
+#: ``pearlc-served-shared`` the served options with pd_commit and pd_tree in half an SM's shared memory (`whole_pd_shared`)
 WHOLE = {"pearlc-calls": (True, None), "pearlc-whole": (True, ()), "pearlc-deferred": (True, ("whole_defer",)),
-         "pearlc-served": (True, SERVED), "pearlc-whole-nohash": (False, ())}
+         "pearlc-served-unsplit": (True, ("whole_defer", "whole_fork_stats")), "pearlc-served": (True, SERVED),
+         "pearlc-served-shared": (True, (*SERVED, "whole_pd_shared")), "pearlc-whole-nohash": (False, ())}
 #: the arms whose saving over the calls one at a time and over the serial capture a row gives
-SAVING = ("pearlc-deferred", "pearlc-served")
+SAVING = ("pearlc-deferred", "pearlc-served-unsplit", "pearlc-served", "pearlc-served-shared")
 #: what a pass's end commits (`PearlCDeviceRun.end`), on which every hashing arm's passes must agree
 COMMITMENT = ("units", "tiles", "transcript_root", "activation_roots", "screened_rows", "failing_rows", "unsure_rows")
 
@@ -352,10 +361,11 @@ def commitment(out: dict) -> dict:
     return {k: out.get(k) for k in COMMITMENT}
 
 
-def whole(run, weights: dict, xs: dict, stock: dict, reps: int, layers: int = 1) -> dict:
+def whole(run, weights: dict, xs: dict, stock: dict, reps: int, layers: int = 1, nvtx: bool = False) -> dict:
     """One --whole row (the module's docstring) at xs' M, over `layers` layers' linears.  `stock` maps each stock arm that
     builds at every shape to its call a weight ({w: f}).  Each pearlc sample is a fresh pass of `INNER` forwards, whose end
-    is timed apart and, with hashing, committed; then each hashing arm makes one more pass from outputs poisoned 0xA5."""
+    is timed apart and, with hashing, committed; then, with `nvtx`, each arm's ranged forwards; then each hashing arm makes
+    one more pass from outputs poisoned 0xA5."""
     import torch
     order = sorted(weights, key=run.order.__getitem__)
     forward = forward_of(run, weights, xs)
@@ -402,6 +412,18 @@ def whole(run, weights: dict, xs: dict, stock: dict, reps: int, layers: int = 1)
                 pass_end[nm].append(end_ms)
             if c is not None:
                 ends[nm].append(c)
+    m = next(iter(xs.values())).shape[0]
+    for nm in names if nvtx else ():
+        if nm in arms:
+            fresh(nm)
+        f = arms[nm][2] if nm in arms else stocks[nm]
+        for i in range(NVTX_FORWARDS):
+            torch.cuda.nvtx.range_push(f"call whole {nm} m{m} #{i}")
+            f()
+            torch.cuda.nvtx.range_pop()
+        torch.cuda.synchronize()
+        if nm in arms:
+            run.end_pass()
     poisoned = {}
     for nm in ends:
         fresh(nm)
@@ -415,7 +437,7 @@ def whole(run, weights: dict, xs: dict, stock: dict, reps: int, layers: int = 1)
     equal = all(c == want for v in ends.values() for c in v)
     poisoned_equal = all(c == want for c in poisoned.values())
     best = min(stocks, key=med.get) if stocks else None
-    return {"m": next(iter(xs.values())).shape[0], "shapes": [list(weights[w].shape) for w in order], "calls": len(order),
+    return {"m": m, "shapes": [list(weights[w].shape) for w in order], "calls": len(order),
             "layers": layers, "ms": med, "ms_per_call": {nm: v / len(order) for nm, v in med.items()},
             "ms_per_layer": {nm: v / layers for nm, v in med.items()}, "runs": samples,
             "pass_end_ms": {nm: statistics.median(v) for nm, v in pass_end.items()},
@@ -459,6 +481,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--whole", action="store_true",
                    help="decode's forward captured whole, serial, deferred and as served (whole.json)")
     p.add_argument("--layers", type=int, default=1, help="--whole: the forward's layers, each its own weights of the shapes")
+    p.add_argument("--nvtx", action="store_true", help="--whole: each arm's NVTX-ranged forwards after its timed reps (under nsys)")
     a = p.parse_args(argv)
     import torch
     from verity_vllm.protocols.pouw.pearl_c.graphs import GRAPH_ROWS
@@ -471,6 +494,8 @@ def main(argv: list[str] | None = None) -> int:
     ms = a.m or ([*model.DECODE_M] if a.whole else [*model.DECODE_M, *model.PREFILL_M])
     if a.layers < 1 or (a.layers > 1 and not a.whole):
         p.error("--layers: at least 1, and only with --whole")
+    if a.nvtx and not a.whole:
+        p.error("--nvtx: only with --whole")
     if a.whole and (a.schedule != ["serial"] or max(ms) > GRAPH_ROWS or any(s == t for s, t in zip(shapes, shapes[1:]))):
         p.error(f"--whole: the serial schedule, M up to {GRAPH_ROWS} and no shape twice in a row (a deferred call joins at "
                 f"once after its own shape's)")
@@ -500,7 +525,7 @@ def main(argv: list[str] | None = None) -> int:
                                       for nm in STOCK if nm not in stock}
         for m in ms:
             xs = {w: torch.randn(m, W.shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, W in weights.items()}
-            r = whole(run, weights, xs, stock, a.reps, a.layers)
+            r = whole(run, weights, xs, stock, a.reps, a.layers, a.nvtx)
             rows.append(r)
             print(f"m {m}, a forward of {r['calls']} calls ({a.layers} layers): "
                   + ", ".join(f"{nm} {v:.4f} ms" for nm, v in r["ms"].items())
