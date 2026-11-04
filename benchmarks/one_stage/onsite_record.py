@@ -36,9 +36,10 @@ verdicts.txt), None where it has none. A public whose terms don't sum to K, or t
 ``error``. Beside the bound, ``advice_charge``: the served run's realized advice charge stays out of the record
 (`ADVICE`, which says what hides it and what doesn't yet); ``registered`` is ℓ_{a,j}, the registered width each
 execution phase's term charges, an upper bound on the honest charge (`REGISTERED`), with its share of K; and
-``measured`` is honest serving's |a_j| a Commit period, of which an execution phase holds several, measured on a test
-run with public inputs (`advice_charge.py`'s record, ``--advice-charge``) and labelled as that run's, never a figure of
-this one. ``tree`` is the commit the run served from (machine.txt's), None where machine.txt names none.
+``measured`` is honest serving's |a_j| a Commit period, of which an execution phase holds several, and their sum over
+each execution phase (``bits_per_phase``, missing where the test run's advice places no Commit period on the engine
+clock), measured on a test run with public inputs (`advice_charge.py`'s record, ``--advice-charge``) and labelled as
+that run's, never a figure of this one. ``tree`` is the commit the run served from (machine.txt's), None where machine.txt names none.
 
 **Periods**: the run's own certification period (``run``), proved, and each monitoring period of `leak_bounds.PERIODS`
 for the serving node, the census's reference datacenter and the world. A node's cell is proved where the run's period
@@ -310,6 +311,7 @@ def measured(path: Path | None) -> dict[str, Any]:
     if doc.get("format") != AC.FORMAT:
         raise ValueError(f"{path} is {doc.get('format')!r}, not {AC.FORMAT}")
     return {"label": doc["label"], "run": doc["run"], "from": str(path), "bits_per_commit_period": doc["bits"],
+            "bits_per_phase": doc["phase_bits"] or doc["by_phase"],
             "commit_periods_measured": len(doc["commit_periods"]), "finishes": doc["finishes"],
             "prompt_len": doc["prompt_len"], "output_len": doc["output_len"]}
 
