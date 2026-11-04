@@ -5,7 +5,7 @@ import Proofs.Flock.Claims.Sampling.Assembled
 /-!
 # The sampled audit at the assembled sampling records
 
-`SampledAuditAccepted` takes `KSWired` at any deployment, which is `Claims.Sampling.KS` at a layout with no wires
+`SampledAuditAccepted` takes `KSBy` at the wired check at any deployment, which is `Claims.Sampling.KS` at a layout with no wires
 (`ksWired_none`); `Claims.Sampling.sampling_assembled_of` proves `KS`, as a conjunct, at any deployment whose sessions are
 a Flock record with Flock's KS. Composed, the sampled audit implies `Accepted` at every such deployment and every layout
 with no wires (`sampledAuditAccepted_of`), and at the masked and plain records

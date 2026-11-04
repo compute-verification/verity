@@ -18,7 +18,8 @@ record's facts.
   executable's tree leaf of the commit string, `hm96Leaf_bytes`); `opens_of_read` is the half the wires use.
 * `WiredReads rel c wires`: `RevealsWires` at the record and SHA-512, at the check `ReadOpens c`.
 * `wiresRevealed_of_record`: at the record and SHA-512, `WiresRevealed` is `WiredReads`.
-* `ksWired_of_record`: **sampling at the incorrect set at the deployed record** (`KSWired`), at SHA-512, from the
+* `ksWired_of_record`: **sampling at the incorrect set at the deployed record** (`KSBy` at the wired check), at
+  SHA-512, from the
   sessions' KS (`SessionKS`), the slots, the sessions' openings under interior roots the run fixes, the scope checks
   and `WiredReads`; binding, the draw law and refusal are discharged as `sampling_assembled_of` discharges them. It
   reads the sessions' KS itself, not `SessionRuns` (each checked unit's session decides the run): a run of one session
@@ -98,7 +99,7 @@ theorem ksWired_of_record (rel : _root_.Flock.Readable.Parsed → _root_.Flock.R
     (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens shaD (SamplingDeploy.deploy rel c) iroots)
     (hfix : InteriorFixed shaD (SamplingDeploy.deploy rel c) iroots)
     (hprog : ProgramScope (SamplingDeploy.deploy rel c)) (hchecks : ChecksScope shaD (SamplingDeploy.deploy rel c))
-    (hw : WiredReads rel c wires) : KSWired shaD (SamplingDeploy.deploy rel c) wires :=
+    (hw : WiredReads rel c wires) : KSBy shaD (SamplingDeploy.deploy rel c) (wiredOk wires) :=
   ksWired_of_revealed wires iroots
     (Binding_of_hm96 _ c.own c.at_ (SamplingDeploy.row c.place c.bits) c.salt c.π c.layer
       (SamplingDeploy.deploy_commit rel c) (SamplingDeploy.row_places c.place c.bits) shaD)

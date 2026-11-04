@@ -21,7 +21,7 @@ audits, not from a premise:
 
 * each window's audit, at a statement in its scope, fails the leak relation at the network certifier's rows with
   probability at most `δ + ε_ks + ε_bind + Pr[B_tap]` at that statement (the errors of sampling at the incorrect set,
-  `KSWired`, and `B_tap` the collisions between the extracted trace's openings and the network certifier's, under
+  `Claims.Sampling.KSBy` at the wired check `wiredOk`, and `B_tap` the collisions between the extracted trace's openings and the network certifier's, under
   `CommitmentScheme.Binds`);
 * where the network certifier registers its observations, the secrets of a covert sender in the server whose every
   window meets its good event (`WindowGood`) number at most
@@ -41,8 +41,8 @@ incorrect set.
 wired gate is no free input, and the content term `2^#(freeInputs_i \ reg_i)` leaves out the wired rows as it leaves out
 the ingress. A proof block that holds or reads a wired row whose committed value is not its writer's is wire-wrong, and
 the sets the count ranges over are incorrect sets, the faulty and the wire-wrong proof blocks (`incorrect`): a drawn
-proof block's session shows its wired rows right (`KSWired`), so an undrawn wire-wrong one is in the incorrect set at the
-same error. Each incorrect proof block is charged in full, at all its committed gates (`faultyBits`): its inputs, the
+proof block's session shows its wired rows right (`KSBy` at `wiredOk`), so an undrawn wire-wrong one is in the incorrect
+set at the same error. Each incorrect proof block is charged in full, at all its committed gates (`faultyBits`): its inputs, the
 wired rows among them, its returned gates and the gates another proof block reads, so a wrong pass-through proof block,
 which returns an input it holds, pays in full too. An incorrect proof block reaches the rest of the circuit only through
 its committed gates, each held at one bit: those it returns or another proof block reads, and its inputs, among them a
@@ -58,8 +58,11 @@ open Claims.Sampling Finset
 set_option linter.unusedVariables false
 
 /-- **The leak through the network certifier over a monitoring period of accepted sampled audits.** At every
-deployment `D` of the sampled verifier where sampling at the incorrect set holds at the layout's wiring (`KSWired`,
-which is `Claims.Sampling.KS` with no wires) and the trace's commitment binds
+deployment `D` of the sampled verifier where sampling at the incorrect set holds at the layout's wiring
+(`Claims.Sampling.KSBy` at the wired check `wiredOk`, which is `Claims.Sampling.KS` with no wires; at a wired layout it
+follows from `KS_of`'s hypotheses with `WiresRevealed`, `ksWired_of_revealed`, at the deployed record `WiredReads`,
+`ksWired_of_record`, which the verifier of record's check of each session's wired reads is to give) and the trace's
+commitment binds
 (`CommitmentScheme.Binds`), with a decoder that lists every trace within Flock's radius, over a monitoring period of `n`
 windows registered as `sw i` (partition `Pw i`, registered values `ρ i`, operator `op i`, and `β i` bounding the
 committed bits of each of its possible incorrect sets), with the network certifier's openings `tops s` at each statement,
@@ -84,7 +87,7 @@ an input bit that later copies in other proof blocks read through their wires. -
 def PeriodLeakAccepted : Prop :=
   ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (L K S : ℕ)
-    (lay : AuditStatement → BoundaryGates L S) (hks : KSWired H D (fun s => (lay s).wires))
+    (lay : AuditStatement → BoundaryGates L S) (hks : KSBy H D (wiredOk fun s => (lay s).wires))
     (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
     (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ) (Dj : ℕ)
     {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition) (hPw : ∀ i, D.partition (sw i) = some (Pw i))

@@ -42,8 +42,9 @@ constant's own value, any other gate's committed one). With no wires it is the f
   Program every observation sequence and operator that the trace's transfer gates carry (`Carries`) with every status
   complete (`Covered`).
 
-**Sampling at the incorrect set** (`KSWired`) is `Claims.Sampling.KS` with the incorrect set in place of the faulty
-set: a drawn proof block is correct and its wired rows are its writers' values (`WireRight`). With no wires it is `KS`.
+**Sampling at the incorrect set** is `Claims.Sampling.KSBy` at the wired check (`wiredOk`): a drawn proof block is
+correct and its wired rows are its writers' values (`WireRight`), and the proof blocks that fail it are the incorrect
+set. With no wires it is `KS`.
 
 **What this module does not model.** The certifier's signed rows and the operator's moves are tied to the transfer gates
 by the transfer-gate proof blocks and, beyond them, by the certifier's trust (`trusted-host`). That tie is the condition
@@ -216,6 +217,13 @@ noncomputable def incorrect (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : 
     (wires : ℕ → Option ℕ) (w : Wit) : Finset ℕ :=
   faulty H Cm s P w ∪ wireWrong H Cm s P wires w
 
+/-- **The wired check** on proof block `u`, a check on each proof block (`Claims.Sampling.BlockCheck`): correct
+(`correctOk`), and each wired gate it holds or reads has its wire right (`WireRight`) at the statement's wiring
+`wires s`. The proof blocks that fail it are the incorrect set (`incorrect`). -/
+def wiredOk (wires : AuditStatement → ℕ → Option ℕ) : BlockCheck := fun s u val ι =>
+  correctOk s u val ι ∧
+    ∀ g, (g ∈ u ∨ ∃ x ∈ u, g ∈ (s.prog.gates[x]?.map BGate.reads).getD []) → WireRight s.prog (wires s) val g
+
 /-- **The sampled audit's relation** at `δ`, on the statement's bytes. The statement parses, its query evaluates, and,
 at the layout's wiring: the sampling relation holds at the incorrect set (`incorrect`: it is in `M_δ`); the incorrect
 set holds no slot sampled `all`; and the advice `(traceVal C ref, free)`, its inputs the trace's committed values and
@@ -233,13 +241,6 @@ def RAcc (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option 
       ∀ (op : ℕ → List (Obs L K S) → List Bool) (o : List (Obs L K S)),
         Carries (lay s) s.prog (w.val H Cm s) op (k s) o → Covered (k s) o →
           Accepted (circuitProgram s.prog (lay s) (k s)) op (k s) o (traceVal s.prog (w.val H Cm s), free)
-
-/-- **The sampling relation at the incorrect set** at `δ`, on the statement's bytes, at each statement's wiring
-`wires s`: the statement parses, its query evaluates, and the incorrect set is in `M_δ`. With no wires it is
-`Claims.Sampling.R`. -/
-def RWired (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement)
-    (partition : AuditStatement → Option Partition) (wires : AuditStatement → ℕ → Option ℕ) (δ : ℝ) : Rel Wit :=
-  fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧ incorrect H Cm s P (wires s) w ∈ s.design.M P δ
 
 section Claim
 
@@ -259,17 +260,6 @@ def KSAccepted (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : Au
   ∀ (δ : ℝ) decode, 0 ≤ δ → Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
     KSLinOn H D.V (ScopeAcc D lay k) (RAcc H D.commit D.parse D.partition L K S lay k δ) (E D decode) (κ D δ) (γ D)
       (fun _ => 1) (Bext H D.V (E D decode))
-
-/-- **Sampling at the incorrect set** at the deployment `D`, at each statement's wiring `wires s`: `Claims.Sampling.KS`
-with the incorrect set (`RWired`) in place of the faulty set. On the statements in the sampling scope, at every `δ ≥ 0`,
-at the sampling extractor and every decoder that lists every trace within Flock's radius,
-`Pr[acc ∧ ¬RWired δ] ≤ δ + ε_ks + ε_bind`, at `KS`'s errors. It holds where each drawn proof block's session shows it
-correct and its wired rows its writers' values (a constant's own, any other writer's committed one), so an undrawn
-wire-wrong proof block is in the incorrect set at `KS`'s error. With no wires it is `KS`. -/
-def KSWired (H : Msg → Msg) (D : Deploy Coin Col T) (wires : AuditStatement → ℕ → Option ℕ) : Prop :=
-  ∀ (δ : ℝ) decode, 0 ≤ δ → Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
-    KSLinOn H D.V (Scope D) (RWired H D.commit D.parse D.partition wires δ) (E D decode) (κ D δ) (γ D) (fun _ => 1)
-      (Bext H D.V (E D decode))
 
 end Claim
 

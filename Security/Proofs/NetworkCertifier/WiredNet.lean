@@ -4,7 +4,7 @@ import Proofs.NetworkCertifier.SampledAuditAccepted
 /-!
 # The wires a drawn proof block's session reveals
 
-`SessionWires` (`KSWired`) is `SessionOpens` with each wired gate a drawn proof block holds or reads opened to its
+`SessionWires` (`Proofs.NetworkCertifier.KSWired`) is `SessionOpens` with each wired gate a drawn proof block holds or reads opened to its
 writer's value (`WireRight`). Where the session proves the wire itself, its statement reading the writer's committed
 leaf as the wired input, a Flock witness in its relation reveals it: revealed in the session's Flock witness, so nothing
 reaches the verifier. `RevealsWires H D opens wires` says so at an accepted run, at an opening check `opens`: for each
@@ -16,8 +16,8 @@ opened to the same value by an opening in the same reveal that `opens` accepts.
 * `RevealsWires.mono`: a check that accepts more keeps the wires revealed.
 * `sessionWires_of`: `SessionOpens` and `WiresRevealed` give `SessionWires`. Values agreeing with the passing openings
   hold the opened value at the wired gate, and read its writer there (`read_of_writerRevealed`).
-* `ksWired_of_revealed`: sampling at the incorrect set (`KSWired`) from `KS_of`'s hypotheses with `WiresRevealed`
-  beside `SessionOpens`, by `KSWired_of`.
+* `ksWired_of_revealed`: sampling at the incorrect set (`KSBy` at the wired check) from `KS_of`'s hypotheses with
+  `WiresRevealed` beside `SessionOpens`, by `KSWired_of`.
 * `wiresRevealed_none`: with no wires there is nothing to reveal.
 -/
 
@@ -105,7 +105,7 @@ set_option synthInstance.maxSize 1024 in
 theorem ksWired_of_revealed (wires : AuditStatement → ℕ → Option ℕ) {H : Msg → Msg} {D : Deploy Coin Col T}
     (iroots : Msg → Seen → ℕ → List Msg) (hbind : D.commit.Binds H) (hsess : SessionKS H D)
     (hopens : SessionOpens H D iroots) (hw : WiresRevealed H D wires) (hfix : InteriorFixed H D iroots)
-    (hdraw : DrawLaw D) (hrefuse : Refuses H D) (hε : ∀ x, 0 ≤ D.εtable x) : KSWired H D wires :=
+    (hdraw : DrawLaw D) (hrefuse : Refuses H D) (hε : ∀ x, 0 ≤ D.εtable x) : KSBy H D (wiredOk wires) :=
   KSWired_of wires iroots hbind hsess (sessionWires_of hopens hw) hfix hdraw hrefuse hε
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] [Zero Col] in

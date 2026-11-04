@@ -363,12 +363,12 @@ theorem Pr_tapColl_le_Btap (H : Msg → Msg) (D : Deploy Coin Col T) (decode : L
     | some st => rw [hx] at hp; exact tapLog_valid H D.commit st.roots (tops st) p hp
 
 /-- **The leak bound at the network certifier's rows**, at any deployment `D` of the sampled verifier where sampling at
-the incorrect set holds at the layout's wiring (`KSWired`, which is `KS` with no wires) and the trace's commitment
-binds. Take a public layout `lay` and horizon `k`, `δ ≥ 0`, a decoder that lists every trace
+the incorrect set holds at the layout's wiring (`KSBy` at the wired check, which is `KS` with no wires) and the trace's
+commitment binds. Take a public layout `lay` and horizon `k`, `δ ≥ 0`, a decoder that lists every trace
 within Flock's radius, inputs `As` that suffice (`AdviceIn`), and the network certifier's openings `tops s` at each
 statement. On the statements in the audit's scope: `Pr[acc ∧ ¬RLeakTap] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`. -/
 theorem sampledLeak_tap (H : Msg → Msg) (D : Deploy Coin Col T) (hb : D.commit.Binds H) (L K S : ℕ)
-    (lay : AuditStatement → BoundaryGates L S) (hks : KSWired H D (fun s => (lay s).wires)) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T)
+    (lay : AuditStatement → BoundaryGates L S) (hks : KSBy H D (wiredOk fun s => (lay s).wires)) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T)
     (hδ : 0 ≤ δ) (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode)
     (As : AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)) (Dj : ℕ)
     (hin : ∀ s P, D.partition s = some P → ∀ ρ, AdviceIn K s.prog P s.design (lay s) (k s) ρ (As s ρ) δ)
@@ -377,7 +377,7 @@ theorem sampledLeak_tap (H : Msg → Msg) (D : Deploy Coin Col T) (hb : D.commit
     PrBad H D.V (RLeakTap H D.commit D.parse D.partition L K S lay k δ As Dj tops) (E D decode) x P ≤
       κ D δ x + Real.sqrt (γ D x * PrB H D.V P x) + (Bext H D.V (E D decode) Ω P x).Pr H +
         (Btap H D.V (E D decode) D.commit D.parse tops Ω P x).Pr H := by
-  have hks' := hks δ decode hδ hdec x hx.1 Ω P
+  have hks' := ksBy_wiredOk.1 hks δ decode hδ hdec x hx.1 Ω P
   rw [one_mul] at hks'
   unfold PrBad at hks' ⊢
   calc Pr (fun s : Ω × (Fin (D.V.k x) → Coin) × (E D decode).C x =>

@@ -1,12 +1,14 @@
 import Definitions.NetworkCertifier.Guarantees.SampledAudit
 import Proofs.Flock.Claims.Prob
 import Proofs.NetworkCertifier.Wires
+import Proofs.NetworkCertifier.KSWired
 
 /-!
 # The sampled audit implies `Accepted`
 
-`NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted`. `KSAccepted` is
-`KSWired`'s bound with a stronger relation on a smaller scope, so it is `KSWired` once `RWired δ x w` gives `RAcc δ x w`
+`NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted`. `KSAccepted` is the bound
+of `KSBy` at the wired check (at `RWired`, `ksBy_wiredOk`) with a stronger relation on a smaller scope, so it is that
+bound once `RWired δ x w` gives `RAcc δ x w`
 at every statement in the audit's scope (`rAcc_of_rWired`), `PrBad` monotone in the relation (`Claims.Pr_mono`). On
 that scope:
 
@@ -529,11 +531,11 @@ end NetTiming.SampledAuditProof
 
 open NetTiming.SampledAuditProof in
 /-- **The sampled audit implies `Accepted`, at `ε` at `δ` over the selection**
-(`NetTiming.Guarantees.SampledAuditAccepted`): `KSWired`'s bound at the stronger relation on the smaller scope,
-`RWired δ` giving `RAcc δ` there (`rAcc_of_rWired`). -/
+(`NetTiming.Guarantees.SampledAuditAccepted`): `KSBy`'s bound at the wired check, at `RWired` (`ksBy_wiredOk`), at the
+stronger relation on the smaller scope, `RWired δ` giving `RAcc δ` there (`rAcc_of_rWired`). -/
 theorem NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted := by
   intro Coin Col T _ _ _ _ _ H D L K S lay k hKS δ decode hδ hdec x hx Ω _ _ P
-  have h := hKS δ decode hδ hdec x hx.1 Ω P
+  have h := NetTiming.ksBy_wiredOk.1 hKS δ decode hδ hdec x hx.1 Ω P
   unfold Claims.PrBad at h ⊢
   refine le_trans (Claims.Pr_mono fun s hs => ⟨hs.1, fun hR => hs.2 ?_⟩) h
   revert hR

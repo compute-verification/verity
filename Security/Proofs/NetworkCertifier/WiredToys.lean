@@ -5,7 +5,7 @@ import Proofs.Flock.Claims.Witnesses.Sampling
 /-!
 # Three toys for the wired sampled audit's premises and count
 
-The sampled audit counts a wire-wrong proof block as incorrect (`incorrect`, `RWired`, `KSWired`), a layout's wiring
+The sampled audit counts a wire-wrong proof block as incorrect (`incorrect`, `RWired`, `KSBy` at the wired check), a layout's wiring
 fits its program only when its wires are acyclic (`WiresAcyclic`, inside `BoundaryGates.Fits`), and a free input that
 writes a wire stays a free input (`freeInputs`). Each toy is a program at which dropping one of the three lets accepted
 traces carry more observation sequences than `SampledLeakAccepted`'s bound

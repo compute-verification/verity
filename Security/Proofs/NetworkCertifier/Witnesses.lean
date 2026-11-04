@@ -12,7 +12,7 @@ Each guarantee that says what an accepted run establishes has two lemmas (the tw
 `G_honest`, its hypotheses at the honest deployed instance, and `G_nontrivial`, its conclusion false at an instance
 whose verifier accepts everything.
 
-* `SampledAuditAccepted`, `SampledLeakAccepted`, `SampledLeakRegistered`. Their premise `KSWired`, at layouts with no
+* `SampledAuditAccepted`, `SampledLeakAccepted`, `SampledLeakRegistered`. Their premise `KSBy` at the wired check, at layouts with no
   wiring, holds at SHA-512 at a sampling record over the masked Flock record at the deployed relation, under the
   assembled record's hypotheses (`ksWired_none` at `ks_deployed`: `KS_of` at `sampling_assembled_of`'s, Flock's KS
   `FlockDeploy.KS.zk_KS_untrim`). So do the rest: the record's decoder meets the list-decoding spec, a charge `β`
@@ -79,7 +79,7 @@ theorem charge_bounds {Coin Col T : Type} (D : Claims.Sampling.Deploy Coin Col T
   exact Finset.sum_le_sum_of_subset hF.1
 
 set_option synthInstance.maxSize 1024 in
-/-- **`SampledAuditAccepted`'s hypothesis at the deployed record**, at layouts with no wiring: `KSWired` there, from
+/-- **`SampledAuditAccepted`'s hypothesis at the deployed record**, at layouts with no wiring: `KSBy` at the wired check there, from
 `KS` (`ks_deployed`, `ksWired_none`). -/
 theorem SampledAuditAccepted_honest
     (D : Claims.Sampling.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)
@@ -90,13 +90,13 @@ theorem SampledAuditAccepted_honest
     (hfixed : DrawFixed D) (hsessions : SessionRuns shaD D) (hnum : InnerNumbers D) (hslots : DrawSlots D)
     (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens shaD D iroots) (hfix : InteriorFixed shaD D iroots)
     (hprog : ProgramScope D) (hchecks : ChecksScope shaD D) :
-    KSWired shaD D (fun _ _ => none) :=
+    KSBy shaD D (wiredOk fun _ _ => none) :=
   ksWired_none (fun _ => rfl) (ks_deployed D hflock hε own at_ row salt π layer hcommit hrow hfixed hsessions hnum
     hslots iroots hopens hfix hprog hchecks)
 
 set_option synthInstance.maxSize 1024 in
 /-- **`SampledLeakAccepted`'s hypotheses at the deployed record**, at layouts with no wiring: `SampledAuditAccepted`,
-`KSWired` (`ksWired_none` at `ks_deployed`), the record's decoder within Flock's radius (`Sampling.decoder_meets_zk`),
+`KSBy` at the wired check (`ksWired_none` at `ks_deployed`), the record's decoder within Flock's radius (`Sampling.decoder_meets_zk`),
 and at every `δ` a charge bounding every possible faulty set (`charge_bounds`). -/
 theorem SampledLeakAccepted_honest
     (D : Claims.Sampling.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)
@@ -107,7 +107,7 @@ theorem SampledLeakAccepted_honest
     (hfixed : DrawFixed D) (hsessions : SessionRuns shaD D) (hnum : InnerNumbers D) (hslots : DrawSlots D)
     (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens shaD D iroots) (hfix : InteriorFixed shaD D iroots)
     (hprog : ProgramScope D) (hchecks : ChecksScope shaD D) :
-    NetTiming.Guarantees.SampledAuditAccepted ∧ KSWired shaD D (fun _ _ => none) ∧
+    NetTiming.Guarantees.SampledAuditAccepted ∧ KSBy shaD D (wiredOk fun _ _ => none) ∧
       Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode ∧
       ∀ δ : ℝ, ∃ β : Claims.Sampling.AuditStatement → ℕ, ∀ s P, D.partition s = some P →
         ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s :=
@@ -128,7 +128,7 @@ theorem SampledLeakRegistered_honest
     (hfixed : DrawFixed D) (hsessions : SessionRuns shaD D) (hnum : InnerNumbers D) (hslots : DrawSlots D)
     (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens shaD D iroots) (hfix : InteriorFixed shaD D iroots)
     (hprog : ProgramScope D) (hchecks : ChecksScope shaD D) :
-    NetTiming.Guarantees.SampledAuditAccepted ∧ KSWired shaD D (fun _ _ => none) ∧ D.commit.Binds shaD ∧
+    NetTiming.Guarantees.SampledAuditAccepted ∧ KSBy shaD D (wiredOk fun _ _ => none) ∧ D.commit.Binds shaD ∧
       Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode ∧
       ∀ δ : ℝ, ∃ β : Claims.Sampling.AuditStatement → ℕ, ∀ s P, D.partition s = some P →
         ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s :=

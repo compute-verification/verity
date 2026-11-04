@@ -74,15 +74,16 @@ Wires.lean      a gate's value reads only what it depends on (valOver_congr_inp)
                                          the program the wires' resolution is a fixed point (resolveWires_fix), and
                                          a gate's resolution reads only what it depends on through reads and wires
                                          (resolveWires_congr_inp)
-KSWired.lean    sampling at the incorrect set (KSWired) from KS_of's hypotheses at the wired check
-                                         (KSWired_of), and from KS at a layout with no wires (ksWired_none)
+KSWired.lean    sampling at the incorrect set (KSBy at the wired check, wiredOk; its relation RWired,
+                                         ksBy_wiredOk) from KS_of's hypotheses at the wired check (KSWired_of), and
+                                         from KS at a layout with no wires (ksWired_none)
 WiredNet.lean   SessionWires from SessionOpens and the wires a checked unit's Flock witness reveals at the
-                                         commitment's own opening check (sessionWires_of), and KSWired from KS_of's
-                                         hypotheses with them (ksWired_of_revealed)
+                                         commitment's own opening check (sessionWires_of), and KSBy at the wired check
+                                         from KS_of's hypotheses with them (ksWired_of_revealed)
 WiredRead.lean  at the deployed sampling record and SHA-512, an opening passes exactly when the verifier's own
                                          registered check accepts it (opens_iff_read), so the wires are revealed
-                                         exactly where they are at that check (wiresRevealed_of_record), and KSWired
-                                         follows from the sessions' KS, the slots, the openings, the scope checks and
+                                         exactly where they are at that check (wiresRevealed_of_record), and KSBy at
+                                         the wired check follows from the sessions' KS, the slots, the openings, the scope checks and
                                          WiredReads (ksWired_of_record)
 NoWires.lean    each guarantee restated over the wiring gives, at a layout with no wires, its statement
                                          before the wiring, at KS (ksWired_none once each)
@@ -283,12 +284,13 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
 - **The ingress bound** (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardIngressDecodableLe`, `EncardIngressObsDecodableLeContents`, `EncardIngressDecodableLeContents`,
   `EncardIngressObsDecodableLeContentsPerWindow`.
-- **The sampled audit implies `Accepted`** (`SampledAuditAccepted.lean`): `SampledAuditAccepted`, `KSWired`'s bound at
+- **The sampled audit implies `Accepted`** (`SampledAuditAccepted.lean`): `SampledAuditAccepted`, the bound of
+  `Claims.Sampling.KSBy` at the wired check (`wiredOk`), at
   `RAcc δ` on the statements whose layout fits the program: no incorrect proof block (faulty, or wire-wrong: holding or
   reading a wired gate whose committed value is not its writer's) is sampled `all`, and the advice holding the
   incorrect proof blocks' committed gates at the trace's values makes `Accepted` every run the trace carries, each
-  wired gate reading its writer (`resolveWires`). With no wires `KSWired` is `Claims.Sampling.KS` (`ksWired_none`).
-  At a wired layout `ksWired_of_record` (`WiredRead.lean`) gives `KSWired` at the deployed record from the sessions' KS
+  wired gate reading its writer (`resolveWires`). With no wires that `KSBy` is `Claims.Sampling.KS` (`ksWired_none`).
+  At a wired layout `ksWired_of_record` (`WiredRead.lean`) gives it at the deployed record from the sessions' KS
   (`SessionKS`), `SessionOpens` and the wires a session reveals at the verifier's own check (`WiredReads`), with
   binding, the draw law and refusal discharged.
   `SampledAuditInstance.lean` discharges its hypothesis at layouts with no wires from
@@ -298,13 +300,13 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
   `EncardAccSeqsSampledLe`, the count of the sequences accepted with a possible incorrect set: the inputs other than the
   ingress and the wired gates, the incorrect proof blocks' committed bits and the choice of incorrect set.
   `SampledLeakAccepted` is what an accepted sampled audit establishes: with `SampledAuditAccepted` as its hypothesis
-  and `KSWired` at the deployment,
+  and `KSBy` at the wired check at the deployment,
   the carried sequences of length `k` are among those the count bounds except with probability `δ + ε_ks + ε_bind`
   (`RLeak`), and the count holds with `c` the number of free inputs not in the statement's registered inputs `reg`
   (`freeInputs`, at `AsReg`), at whatever values the trace holds at `reg`. It is `SampledLeak.lean`'s
   `sampledLeak_reg`. `RAcc` pins the inputs to the trace, so the values at `reg` are the trace's; that the
   registration's commitment binds them is a separate statement, not yet proved. Both `SampledAuditAccepted` and
-  `KSWired` are named assumptions in the lock.
+  `Claims.Sampling.KSBy` are named assumptions in the lock.
 - **The leak through the network certifier over a monitoring period** (`Period.lean`): `PeriodLeakAccepted` composes
   the leak bound at the network certifier's rows (`TapRows.lean`'s `sampledLeak_tap`) with the read-back of its
   record, so the bound's content term comes from the audits: over a monitoring period's windows, each registered as a
@@ -325,7 +327,7 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
   in the monitoring period's buckets, at most `S` a bucket, and its `#guard`s hold it to the Python records. The record
   holds the fail cells and padding too, so the proof counts the cells through the
   observations and needs no fail-cell charge: `∏_c (cap_c + 1)` is room. Its named assumptions are
-  `KSWired` (`Claims.Sampling.KS` with no wires), `CommitmentScheme.Binds`, `Claims.Flock.ListWithin` and `trusted-host`. The union over the monitoring
+  `Claims.Sampling.KSBy` at the wired check (`Claims.Sampling.KS` with no wires), `CommitmentScheme.Binds`, `Claims.Flock.ListWithin` and `trusted-host`. The union over the monitoring
   period's live coins and the registration's binding of the prover's values at `reg` are not yet stated.
   `Claims.Sampling.KS` stands in for proofs' live bound (`Flock.Guarantees.SampledKSLive`), which replaces it once
   locked, with live forms of `SampledAuditAccepted` and `SampledLeakAccepted`.

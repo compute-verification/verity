@@ -10,7 +10,7 @@ On `RAcc δ` the incorrect set (the faulty and the wire-wrong proof blocks) is o
 gates and the trace's committed values as the inputs besides the ingress. With those inputs moved into `As`
 (`AdviceIn`), it is then among the sequences `AccSeqsSampled` counts, so
 `RAcc δ` implies the leak relation `RLeak` (`rLeak_of_rAcc`), and `KSLinOn`'s bound moves from one to the other
-(`ksLinOn_rLeak`). At any deployment where `KSWired` (at the layout's wiring) and `SampledAuditAccepted` hold, the run's observations are then among
+(`ksLinOn_rLeak`). At any deployment where `KSBy` at the wired check (at the layout's wiring) and `SampledAuditAccepted` hold, the run's observations are then among
 at most `2^c · #faultySets · 2^β · D^n` public sequences, `c + log2 #faultySets + β + n·log2 D` bits, except with
 `KSAccepted`'s probability (`sampledLeak`).
 
@@ -179,7 +179,7 @@ section Deploy
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
 /-- **The leak bound under a sampled audit**, at any deployment `D` of the sampled verifier where sampling at the
-incorrect set holds at the layout's wiring (`KSWired`, which is `KS` with no wires), given `SampledAuditAccepted`. Take a public layout `lay` and horizon `k` of each statement, `δ ≥ 0`, a decoder that
+incorrect set holds at the layout's wiring (`KSBy` at the wired check, which is `KS` with no wires), given `SampledAuditAccepted`. Take a public layout `lay` and horizon `k` of each statement, `δ ≥ 0`, a decoder that
 lists every trace within Flock's radius, and for each statement and values `ρ` inputs besides the ingress `As s ρ`, at
 most `2^c` of them, that suffice for the inputs `ρ` (`AdviceIn`), and `β` bounding each possible faulty set's committed
 bits (`faultyBits`). On the statements in scope:
@@ -190,7 +190,7 @@ bits (`faultyBits`). On the statements in scope:
 * at every `ρ`, those sequences number at most `2^c · #faultySets(δ) · 2^β · Dj^k`, which the statement, `δ`, `As`, `ρ`,
   the operator and `Dj` fix: the leak is at most `c + log2 #faultySets(δ) + β + k·log2 Dj` bits. -/
 theorem sampledLeak (hSA : Guarantees.SampledAuditAccepted) (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ)
-    (lay : AuditStatement → BoundaryGates L S) (hks : KSWired H D (fun s => (lay s).wires)) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
+    (lay : AuditStatement → BoundaryGates L S) (hks : KSBy H D (wiredOk fun s => (lay s).wires)) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
     (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode)
     (As : AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)) (c β : AuditStatement → ℕ) (Dj : ℕ)
     (hAs : ∀ s ρ, (As s ρ).encard ≤ ((2 ^ c s : ℕ) : ℕ∞))
@@ -212,7 +212,7 @@ theorem sampledLeak (hSA : Guarantees.SampledAuditAccepted) (H : Msg → Msg) (D
 the trace at each statement's `reg` and `false` off the free inputs (`AsReg`), which suffice for every circuit, so `c`
 is the number of free inputs not in `reg` (`freeInputs`). -/
 theorem sampledLeak_reg (hSA : Guarantees.SampledAuditAccepted) (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ)
-    (lay : AuditStatement → BoundaryGates L S) (hks : KSWired H D (fun s => (lay s).wires)) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T)
+    (lay : AuditStatement → BoundaryGates L S) (hks : KSBy H D (wiredOk fun s => (lay s).wires)) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T)
     (hδ : 0 ≤ δ) (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ)
     (β : AuditStatement → ℕ) (Dj : ℕ)
     (hβ : ∀ s P, D.partition s = some P → ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s) :

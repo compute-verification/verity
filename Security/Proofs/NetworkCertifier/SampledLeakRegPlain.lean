@@ -9,8 +9,8 @@ import Proofs.Flock.Claims.Sampling.DeployedSha512
 (`SamplingDeploy.deployOf F c`) its trace commitment is `F`-free (`SamplingDeploy.deployOf_commit`), hm96 leaves under the
 verifier's own registered path check, and binds at every `H` with no hypothesis (`binds_deployOf`, from
 `Binding_of_regPath`). So the masked and plain records share one commitment (`deployPlain_commit`), and at the plain
-record (`SamplingDeploy.deployPlain`) the bound takes only the record's sampling at the incorrect set (`KSWired`,
-`sampledLeak_registered_plain`). At a layout with no wires that is the record's `KS` (`ksWired_none`), which
+record (`SamplingDeploy.deployPlain`) the bound takes only the record's sampling at the incorrect set (`KSBy` at the
+wired check, `sampledLeak_registered_plain`). At a layout with no wires that is the record's `KS` (`ksWired_none`), which
 `SamplingDeploy.sampling_deployed_plain_sha512` gives at SHA-512 at the deployed relation
 (`sampledLeak_registered_plain_sha512`). `SampledAuditAccepted` is discharged by its proof.
 -/
@@ -39,9 +39,9 @@ local notation "Dp" => SamplingDeploy.deployPlain rel c
 set_option synthInstance.maxSize 1024 in
 /-- **The leak bound at the registration's values, at the deployed plain record**: `sampledLeak_registered` at
 `SamplingDeploy.deployPlain rel c`, its binding `binds_deployOf` and `SampledAuditAccepted` its proof, given the record's
-sampling at the incorrect set at the layout's wiring (`KSWired`). -/
+sampling at the incorrect set at the layout's wiring (`KSBy` at the wired check). -/
 theorem sampledLeak_registered_plain (H : Msg → Msg) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
-    (hks : KSWired H Dp (fun s => (lay s).wires)) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (hδ : 0 ≤ δ)
+    (hks : KSBy H Dp (wiredOk fun s => (lay s).wires)) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (hδ : 0 ≤ δ)
     (hdec : Claims.Flock.ListWithin (Dp).flock.len (Dp).flock.enc (Dp).flock.θ decode) (reg : AuditStatement → Finset ℕ)
     (ops : AuditStatement → List (Opening Bool)) (Dj : ℕ) (x : Msg) (hx : ScopeAcc Dp lay k x)
     (hreg : ∀ st, (Dp).parse x = some st → RegOpens H (Dp).commit st (reg st) (ops st)) (Ω : Type) [Fintype Ω]
