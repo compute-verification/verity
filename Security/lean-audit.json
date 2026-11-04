@@ -2265,6 +2265,10 @@
   "Verity.Wipe.SurvivorBound": {
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
+  },
+  "Nci.Products.Standard.UnsplitCells": {
+   "owner": "@training",
+   "digest": "7c4355bcbe9d544699a54a1761224a02b5685c9eee088a7707ab0986d41cefe3"
   }
  },
  "meaning": [
@@ -2897,6 +2901,7 @@
   "Accounting.SecurityProofs.TS.DrawnBindingOfFork": "fc4ae1010af73e95ee2ac4299cf6aaaad4d267967b850103ad37b012c3648d86",
   "Accounting.SecurityProofs.TS.DrawnRightOff": "8201b64a7c1751fb3ae112dfce4ae56af89d24390b9572ddc6024aaf4ad10a64",
   "Accounting.SecurityProofs.TS.HeldSessionSound": "2a7a97f97088d84cba544f59a8af31d277ef7a011c9d793f4dd2a945f23b27f6",
+  "Accounting.SecurityProofs.TS.LeafGroupSound": "c5838adef54e7043e01608e725162fec80d4fa1d31294cfd50cf33fa2061efc2",
   "Accounting.SecurityProofs.TS.LeafLanesSound": "7d6f085de620acb57a098c5d2bf42c2f0248b2b5f84aad583eb15a2f5c36aab8",
   "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn": "deab04dfcfe2b047967e13801a426edafa0433d2325d2653dfd7a94dab219841",
   "Accounting.SecurityProofs.TS.ProofsSoundOfPinned": "0d86ac02d35b0a45cdccc1e8ace9d5a097be7b41f6ca5997353812461c532783",
@@ -2939,6 +2944,9 @@
   "Flock.SecurityProofs.IntegrityHorizonCarried": "89fbbeb7e268642019ee085f30b6bfc54063bc0970ba372d4c4a1a79f7e26037",
   "Flock.SecurityProofs.IntegrityPeriod": "320a3ed8346171425b3ea7537f61689dcef36bf45963401c24dbad1a97342ccc",
   "Flock.SecurityProofs.IntegrityPeriodLog": "20a8497e59180c39414fe50e1e41293894b8d2c6b974786bb7b8d58803dd58cc",
+  "Flock.SecurityProofs.JointServed": "7336cb84d9ce7d76a08b717e7b412bbe3b5fbbf7f79068bb0af0d60ef45c9a79",
+  "Flock.SecurityProofs.JointServed_honest": "b322a5ee756839ec18d249d2c4868b17f088400afc0a3556da10d5f9ff4073b7",
+  "Flock.SecurityProofs.JointServed_nontrivial": "3dfd9d37c2f1a836bc2f967261d6545049dcbfde0a0c1fff234dd9fe63a0a947",
   "Flock.SecurityProofs.JointStratified": "8a0d33c3f05e59012d7c2818198770e9a9b1ab6c83d82a51a9acd510ca33da6b",
   "Flock.SecurityProofs.JointStratifiedHorizon": "3e9e80ee60615d188982786bdec4907b7de3104db18d5eb28be48bfb02f945ee",
   "Flock.SecurityProofs.JointStratifiedHorizonMT": "b6e7f9ecc68c0bab5aac13a82c681beb4ba36c38b90508f1952d0b7f2503414d",
@@ -3042,6 +3050,7 @@
   "Nci.SecurityProofs.Training": "b3e344c8c136829d0a3a4130fa3fc8a8d5bb34e0a0fe3f5673183e5e7cd2cf3a",
   "Nci.SecurityProofs.UpdatedMatMul": "159e7399036e8f45f9a0af577ce7677b603914d42b48a260efc4b24f7b46c55b",
   "Nci.SecurityProofs.UpdatedMatMulReads": "3d44d307610a81a4747f64dcc7d3945c2dcfe9ea92f7a0339d49a79417e45c83",
+  "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": "7ccec3c51a3940931ea87fc0b3800d793566789cdc927ea9d9c011bcd1ef9e72",
   "NetTiming.SecurityProofs.EncardAccSeqsLeBlocks": "650045ec93f3bbadeb3f68796211ea24031bfbd9d8e4e0d267e7d5d5728382a6",
   "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts": "823fadfc71bbd70bb7d1b371d8148c6a54e6e63a9a6843d371d743d001f741c8",
   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": "5caed7ee8a100a9d93ca89b56802ab4a910a4db1c88e5e7788023283170da941",
@@ -3084,6 +3093,7 @@
   "Pous.SecurityProofs.StreamedWipeMeets2600GB": "a3671a8a99f4c7b653b5751bd24cb714a5764f731e9563fa3b20b1072228a5e2",
   "Pous.SecurityProofs.StreamedWipeMeets96GiB": "610f906d2a73a8612b035d1cfe33141715f61fda55f081c36162e0dc9afda003",
   "Pous.SecurityProofs.StreamedWipeMeetsFamily": "c26c23adbc15ab18912cbd9a9ff20ad52027001e35dd08dc661c67472b511255",
+  "Pous.SecurityProofs.StreamedWipeMeetsH200": "49f1879512445eac6ccc2bc32c426083fbb60df54d2005bdff69ca69d154ec51",
   "Pous.SecurityProofs.StreamedWipeMeetsInfoStated": "413276f220ff5f0da10702f8a3fc55ad0586acaee0ec41098be683abe4f02df7",
   "Pous.SecurityProofs.StreamedWipeMeetsReads": "a2f5444f8d5e25a0cfbb34ecce8550e64849fff88fd423a419993391aa377856",
   "Pous.SecurityProofs.StreamedWipeMeetsReadsTight": "8a49cf1cd6bc038083f46f503c9d0c48e1783f53288309186a2a45615d02a9c1",
@@ -3130,6 +3140,7 @@
   "RecDeploy.lamLin2_deployed_ge": "b4fd7e214a758b1d725d21f4bd374da8a4ee62ffdb18a7fe42e253ebc720465a",
   "RecDeploy.lamLin2_deployed_ge_dep": "eb376632437aa4a4d256ff9b890ea8f0159fa5593e7c5440ca2b13b27cfee626",
   "Verity.SecurityProofs.BlockDescription": "80baa463fd43086b3ca137b50dc78ace3b4400bfbabdb344ddc3c090d1f6dbeb",
+  "Verity.SecurityProofs.CapacityWithinEstimate": "33f7bf73bd890217a96e1f811c4fa5862df92ccec1ba47b063fff95e97ba8370",
   "Verity.SecurityProofs.Counting": "34e0729bbd40c2fd7311fc30725f7d8bb1f2fb2daed521891c0dada5afd70f77",
   "Verity.SecurityProofs.CountingSum": "1b2f164ab74dfac250ebe357db6363a1d52294716405d3ed10596cb21004e4ef",
   "Verity.SecurityProofs.ExpandAndSize": "03966908eadf7f2df4b6715764c0a881097cb6d8a2ea801f44df28194c7d2e60",
@@ -3137,14 +3148,7 @@
   "Verity.SecurityProofs.InferenceCap": "0035c5e37498f2d808d066ae0a6d0bd50791b4ad147383f0feba37bf8362c9fc",
   "Verity.SecurityProofs.PrivateOutBitsLe": "a595e2305f68fd4b90134f54bc1e597de991458da482ef92bfbc67d7d7a782f3",
   "Verity.SecurityProofs.RefineWrong": "52a2253ccd78c6339acebc6fe4e9ea3afaaff0120bb36457ff76a2a605ce5ad6",
-  "Verity.SecurityProofs.ServingBlockSum": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
-  "Accounting.SecurityProofs.TS.LeafGroupSound": "c5838adef54e7043e01608e725162fec80d4fa1d31294cfd50cf33fa2061efc2",
-  "Flock.SecurityProofs.JointServed": "7336cb84d9ce7d76a08b717e7b412bbe3b5fbbf7f79068bb0af0d60ef45c9a79",
-  "Flock.SecurityProofs.JointServed_honest": "b322a5ee756839ec18d249d2c4868b17f088400afc0a3556da10d5f9ff4073b7",
-  "Flock.SecurityProofs.JointServed_nontrivial": "3dfd9d37c2f1a836bc2f967261d6545049dcbfde0a0c1fff234dd9fe63a0a947",
-  "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": "7ccec3c51a3940931ea87fc0b3800d793566789cdc927ea9d9c011bcd1ef9e72",
-  "Pous.SecurityProofs.StreamedWipeMeetsH200": "49f1879512445eac6ccc2bc32c426083fbb60df54d2005bdff69ca69d154ec51",
-  "Verity.SecurityProofs.CapacityWithinEstimate": "33f7bf73bd890217a96e1f811c4fa5862df92ccec1ba47b063fff95e97ba8370"
+  "Verity.SecurityProofs.ServingBlockSum": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8"
  },
  "layers": {
   "Definitions.Core": {
@@ -9393,22 +9397,40 @@
    "type_hash": "666a85b779c1d6aa137cedbd9c4ae691be37ec1f093dd2f1e8fd80ff0e584aec"
   },
   "Nci.Products.SecurityProofs.SumCellBound": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.SumCellBound : Nci.Products.Guarantees.SumCellBound"],
+   "assumptions": [],
+   "type_hash": "f4d5e0fe995cfc4714ef0353d401302660799debaa27c4e72ead9a374bee7111"
   },
   "Nci.Products.SecurityProofs.SumCellBound_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.SumCellBound_honest : Nci.Products.Guarantees.SumCellBound_honest"],
+   "assumptions": [],
+   "type_hash": "3ac58c63ad61b2a6bc2b74157b3289fbb31890c8aff8472e5d57a0dd78b4d0be"
   },
   "Nci.Products.SecurityProofs.SumCellBound_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.SumCellBound_nontrivial : Nci.Products.Guarantees.SumCellBound_nontrivial"],
+   "assumptions": [],
+   "type_hash": "24cbbae12183372b93b497120056d3961bfba9e2cda183fffa6f4c31cee85576"
   },
   "Nci.Products.SecurityProofs.SumCellCap": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.SumCellCap : Nci.Products.Guarantees.SumCellCap"],
+   "assumptions": [],
+   "type_hash": "58b001f076e270ec225c672af8e380fcea344670b726b4d7c265510be65f683d"
   },
   "Nci.Products.SecurityProofs.SumCellCap_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.SumCellCap_honest : Nci.Products.Guarantees.SumCellCap_honest"],
+   "assumptions": [],
+   "type_hash": "7b4404d0c6f99ecd32ada028e7b2475880aa475072b522fbba574eb0617cf04d"
   },
   "Nci.Products.SecurityProofs.SumCellCap_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Nci.Products.SecurityProofs.SumCellCap_nontrivial : Nci.Products.Guarantees.SumCellCap_nontrivial"],
+   "assumptions": [],
+   "type_hash": "e4d2ecedc9f811578f15f0dbb314d6c02147b99b3ad857102ef673417e0aa440"
   },
   "Nci.Products.SecurityProofs.WholeBound": {
    "owner": "@training",
@@ -15057,6 +15079,9 @@
     "∀ (x : Pouw.RelativeSecurity.Paths Ω S) (w : Fin S) (i : Fin nπ), Exists fun ks => And (Array.instMembership.mem (known x w i) { fst := ok, snd := ks }) (∀ (r : Prod (Array Nat) ByteArray), Array.instMembership.mem ks r → Eq r.fst Accounting.TS.Held.okRow)": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Pouw.RelativeSecurity.Paths Ω S) (w : Fin S) (i : Fin nπ), ENNReal.instLE.le (instHMul.hMul (sess x w i).n.cast (sess x w i).bound) (ENNReal.ofReal δ)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
+   "Accounting.SecurityProofs.TS.LeafGroupSound": {
+    "∀ (x : Pouw.RelativeSecurity.Paths Ω S) (w : Fin S) (i : Fin nπ) (k : Accounting.TS.Group.Ix T.lanes n), ENNReal.instLE.le (instHMul.hMul ((sess₀ x w i k).canon (op x w i k)).n.cast ((sess₀ x w i k).canon (op x w i k)).bound) (ENNReal.ofReal δ)": "the per-session bound LeafLanesSound takes inline too, which #6460 brought before the inline rule reached it: name it or state it as a guarantee's conclusion"
+   },
    "Accounting.SecurityProofs.TS.LeafLanesSound": {
     "∀ (x : Pouw.RelativeSecurity.Paths Ω S) (w : Fin S) (i : Fin nπ) (k : Option (Fin 32)), ENNReal.instLE.le (instHMul.hMul ((sess₀ x w i k).canon (op x w i k)).n.cast ((sess₀ x w i k).canon (op x w i k)).bound) (ENNReal.ofReal δ)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
@@ -16724,6 +16749,9 @@
    "Verity.SecurityProofs.BlockDescription": {
     "instLENat.le e.length a_blk": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
+   "Verity.SecurityProofs.CommittedMeets": {
+    "Eq (Verity.Advice.Committed.root H F A r) root": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
    "Verity.SecurityProofs.Compose": {
     "Eq (P.wrong X) Finset.instEmptyCollection.emptyCollection": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "SetLike.instMembership.mem P.committed g": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -16777,12 +16805,6 @@
    "Verity.SecurityProofs.SoundMono": {
     "∀ (a : α), accept' a → accept a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (a : α), accept' a → E a → F a": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.TS.LeafGroupSound": {
-    "∀ (x : Pouw.RelativeSecurity.Paths Ω S) (w : Fin S) (i : Fin nπ) (k : Accounting.TS.Group.Ix T.lanes n), ENNReal.instLE.le (instHMul.hMul ((sess₀ x w i k).canon (op x w i k)).n.cast ((sess₀ x w i k).canon (op x w i k)).bound) (ENNReal.ofReal δ)": "the per-session bound LeafLanesSound takes inline too, which #6460 brought before the inline rule reached it: name it or state it as a guarantee's conclusion"
-   },
-   "Verity.SecurityProofs.CommittedMeets": {
-    "Eq (Verity.Advice.Committed.root H F A r) root": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    }
   }
  },
@@ -23146,6 +23168,12 @@
     "Nci.Products.SecurityProofs.SumCap",
     "Nci.Products.SecurityProofs.SumCap_honest",
     "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellBound",
+    "Nci.Products.SecurityProofs.SumCellBound_honest",
+    "Nci.Products.SecurityProofs.SumCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellCap",
+    "Nci.Products.SecurityProofs.SumCellCap_honest",
+    "Nci.Products.SecurityProofs.SumCellCap_nontrivial",
     "Nci.Products.SecurityProofs.WholeBound",
     "Nci.Products.SecurityProofs.WholeBound_honest",
     "Nci.Products.SecurityProofs.WholeBound_nontrivial",
@@ -23330,6 +23358,12 @@
     "Nci.Products.SecurityProofs.SumCap",
     "Nci.Products.SecurityProofs.SumCap_honest",
     "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellBound",
+    "Nci.Products.SecurityProofs.SumCellBound_honest",
+    "Nci.Products.SecurityProofs.SumCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellCap",
+    "Nci.Products.SecurityProofs.SumCellCap_honest",
+    "Nci.Products.SecurityProofs.SumCellCap_nontrivial",
     "Nci.Products.SecurityProofs.WholeBound",
     "Nci.Products.SecurityProofs.WholeBound_honest",
     "Nci.Products.SecurityProofs.WholeBound_nontrivial",
@@ -23620,6 +23654,12 @@
     "Nci.Products.SecurityProofs.SumCap",
     "Nci.Products.SecurityProofs.SumCap_honest",
     "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellBound",
+    "Nci.Products.SecurityProofs.SumCellBound_honest",
+    "Nci.Products.SecurityProofs.SumCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellCap",
+    "Nci.Products.SecurityProofs.SumCellCap_honest",
+    "Nci.Products.SecurityProofs.SumCellCap_nontrivial",
     "Nci.Products.SecurityProofs.WholeBound",
     "Nci.Products.SecurityProofs.WholeBound_honest",
     "Nci.Products.SecurityProofs.WholeBound_nontrivial",
@@ -24548,6 +24588,12 @@
     "Nci.Products.SecurityProofs.SumCap",
     "Nci.Products.SecurityProofs.SumCap_honest",
     "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellBound",
+    "Nci.Products.SecurityProofs.SumCellBound_honest",
+    "Nci.Products.SecurityProofs.SumCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellCap",
+    "Nci.Products.SecurityProofs.SumCellCap_honest",
+    "Nci.Products.SecurityProofs.SumCellCap_nontrivial",
     "Nci.Products.SecurityProofs.WholeBound",
     "Nci.Products.SecurityProofs.WholeBound_honest",
     "Nci.Products.SecurityProofs.WholeBound_nontrivial",
@@ -28101,6 +28147,12 @@
     "Nci.Products.SecurityProofs.SumCap",
     "Nci.Products.SecurityProofs.SumCap_honest",
     "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellBound",
+    "Nci.Products.SecurityProofs.SumCellBound_honest",
+    "Nci.Products.SecurityProofs.SumCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellCap",
+    "Nci.Products.SecurityProofs.SumCellCap_honest",
+    "Nci.Products.SecurityProofs.SumCellCap_nontrivial",
     "Nci.Products.SecurityProofs.WholeBound",
     "Nci.Products.SecurityProofs.WholeBound_honest",
     "Nci.Products.SecurityProofs.WholeBound_nontrivial",
@@ -28173,6 +28225,12 @@
     "Nci.Products.SecurityProofs.SumCap",
     "Nci.Products.SecurityProofs.SumCap_honest",
     "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellBound",
+    "Nci.Products.SecurityProofs.SumCellBound_honest",
+    "Nci.Products.SecurityProofs.SumCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellCap",
+    "Nci.Products.SecurityProofs.SumCellCap_honest",
+    "Nci.Products.SecurityProofs.SumCellCap_nontrivial",
     "Nci.Products.SecurityProofs.WholeBound",
     "Nci.Products.SecurityProofs.WholeBound_honest",
     "Nci.Products.SecurityProofs.WholeBound_nontrivial",
@@ -28626,26 +28684,41 @@
    ]
   },
   "Definitions.Nci.Guarantees.Products.Sum": {
-   "digest": "eed7d3091f3217767689f2ffa852ec547fb9d84db6f9b3136c9e9253626988bb",
+   "digest": "7b15cbb7dbdd171e0ce9ece8478e0c962872795a93581fa4996f48cb3339cd62",
    "definitions": {
     "Nci.Products.Guarantees.SumBound": "0dc7bb96619eea2e42b9d1d8ad469735ff1e242ec92109d63be9fe33badaa6e4",
-    "Nci.Products.Guarantees.SumCap": "8b34b6a3832ee5f22543a7d017a85bd621d5c208682a3a080b3240391aaf204c"
+    "Nci.Products.Guarantees.SumCap": "8b34b6a3832ee5f22543a7d017a85bd621d5c208682a3a080b3240391aaf204c",
+    "Nci.Products.Guarantees.SumCellBound": "adc691cf9c1344cd52b064970cdb16359dc430238a1380e6ebb18edc34144a25",
+    "Nci.Products.Guarantees.SumCellCap": "b28633ef5fcd40c7c953d8fa03981440fe04089dfd1bfc391e282346dda32a96"
    },
-   "guarantees": ["Nci.Products.SecurityProofs.SumBound", "Nci.Products.SecurityProofs.SumCap"]
+   "guarantees": [
+    "Nci.Products.SecurityProofs.SumBound",
+    "Nci.Products.SecurityProofs.SumCap",
+    "Nci.Products.SecurityProofs.SumCellBound",
+    "Nci.Products.SecurityProofs.SumCellCap"
+   ]
   },
   "Definitions.Nci.Guarantees.Products.SumWitnesses": {
-   "digest": "1c4cfaae245e19c918f4567409be2e8d7e04c1e11ecf16aa634a803b38511f03",
+   "digest": "0036208d244484b19c9d8dca4c2bed93bac3d94cba30531cd2c4aaa1cef27627",
    "definitions": {
     "Nci.Products.Guarantees.SumBound_honest": "a34ef1388bdf64134d7766533fe8a6682070720126bffc7ebe4febe01829662f",
     "Nci.Products.Guarantees.SumBound_nontrivial": "88f3b751ce54ccc09f6facb6fe39dee35fcc8a85ae88c2ef8682fd50be658475",
     "Nci.Products.Guarantees.SumCap_honest": "ab5234d05501e938953b7ebb7daf8cbd6168edfb54fa81f86da03f53f4e5e80d",
-    "Nci.Products.Guarantees.SumCap_nontrivial": "8c558f6d373e6e63717036cd5082b4c18c5d5e4b6e046a8c22f10e43a40a3722"
+    "Nci.Products.Guarantees.SumCap_nontrivial": "8c558f6d373e6e63717036cd5082b4c18c5d5e4b6e046a8c22f10e43a40a3722",
+    "Nci.Products.Guarantees.SumCellBound_honest": "ac2b1560cd920b1f01430f289a40f2a1c401215719aec79d2a7efd228287ab11",
+    "Nci.Products.Guarantees.SumCellBound_nontrivial": "ef02fb60cf63213d5eeebf9775bfc0f9ae4e18d3155ea90ca0b9205dfecf5f6b",
+    "Nci.Products.Guarantees.SumCellCap_honest": "5dbaaa6479c3354f05fd05ba41a2039907f3c7aaebc29276e8d41a95e1e0d8dc",
+    "Nci.Products.Guarantees.SumCellCap_nontrivial": "a82500e33acb5212cb2bfa5f856df54ae29c214a4ee0f36e76919e46c0430b49"
    },
    "guarantees": [
     "Nci.Products.SecurityProofs.SumBound_honest",
     "Nci.Products.SecurityProofs.SumBound_nontrivial",
     "Nci.Products.SecurityProofs.SumCap_honest",
-    "Nci.Products.SecurityProofs.SumCap_nontrivial"
+    "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellBound_honest",
+    "Nci.Products.SecurityProofs.SumCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellCap_honest",
+    "Nci.Products.SecurityProofs.SumCellCap_nontrivial"
    ]
   },
   "Definitions.Nci.Guarantees.Products.Whole": {
@@ -28944,6 +29017,12 @@
     "Nci.Products.SecurityProofs.SumCap",
     "Nci.Products.SecurityProofs.SumCap_honest",
     "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellBound",
+    "Nci.Products.SecurityProofs.SumCellBound_honest",
+    "Nci.Products.SecurityProofs.SumCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellCap",
+    "Nci.Products.SecurityProofs.SumCellCap_honest",
+    "Nci.Products.SecurityProofs.SumCellCap_nontrivial",
     "Nci.Products.SecurityProofs.WholeBound",
     "Nci.Products.SecurityProofs.WholeBound_honest",
     "Nci.Products.SecurityProofs.WholeBound_nontrivial",
@@ -28990,6 +29069,10 @@
     "Nci.Products.SecurityProofs.SumBound_nontrivial",
     "Nci.Products.SecurityProofs.SumCap_honest",
     "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellBound_honest",
+    "Nci.Products.SecurityProofs.SumCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellCap_honest",
+    "Nci.Products.SecurityProofs.SumCellCap_nontrivial",
     "Nci.Products.SecurityProofs.WholeBound_honest",
     "Nci.Products.SecurityProofs.WholeBound_nontrivial",
     "Nci.Products.SecurityProofs.WholeCap_honest",
@@ -29013,6 +29096,10 @@
     "Nci.Products.SecurityProofs.SumBound_nontrivial",
     "Nci.Products.SecurityProofs.SumCap_honest",
     "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellBound_honest",
+    "Nci.Products.SecurityProofs.SumCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellCap_honest",
+    "Nci.Products.SecurityProofs.SumCellCap_nontrivial",
     "Nci.Products.SecurityProofs.WholeBound_honest",
     "Nci.Products.SecurityProofs.WholeBound_nontrivial",
     "Nci.Products.SecurityProofs.WholeCap_honest",
@@ -29020,10 +29107,11 @@
    ]
   },
   "Definitions.Nci.Products.Received": {
-   "digest": "d3c0483266ee4afc20e19743df823c7961e766f0873a765a5495046a9e3538ea",
+   "digest": "fc04aa2513c801c649f2eefa79e1efe9213cfa4d6c031d04d7f67dad79c134a9",
    "definitions": {
     "Nci.Products.Standard.Cells": "88cea31bb74f7dc5d934ce75f8df7a9532f49cfc5574b079c457296907674e08",
     "Nci.Products.Standard.Received": "083f288d0d72d59d273d43b0c7b47054a8f60150ee0cb724a4d293f24e0a0512",
+    "Nci.Products.Standard.UnsplitCells": "7c4355bcbe9d544699a54a1761224a02b5685c9eee088a7707ab0986d41cefe3",
     "Nci.Products.Standard.cellGates": "54b158c823aa5ee5da3ac89c333956c5522d4e3b0488f3bb13ecc84965d0636c",
     "Nci.Products.chainBlocks": "0704dad3f0ae1d596fd600f962d093a24b7e65db1e643e9e7ef4ecc0310c155d",
     "Nci.Products.noCellBound": "68862fe5e9bd3da6212087addae8eb41ca4e501993fd9eb240bc4f936f5a616d"
@@ -29041,6 +29129,12 @@
     "Nci.Products.SecurityProofs.SumCap",
     "Nci.Products.SecurityProofs.SumCap_honest",
     "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellBound",
+    "Nci.Products.SecurityProofs.SumCellBound_honest",
+    "Nci.Products.SecurityProofs.SumCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellCap",
+    "Nci.Products.SecurityProofs.SumCellCap_honest",
+    "Nci.Products.SecurityProofs.SumCellCap_nontrivial",
     "Nci.Products.SecurityProofs.WholeBound",
     "Nci.Products.SecurityProofs.WholeBound_honest",
     "Nci.Products.SecurityProofs.WholeBound_nontrivial",
@@ -29062,7 +29156,13 @@
     "Nci.Products.SecurityProofs.SumBound_nontrivial",
     "Nci.Products.SecurityProofs.SumCap",
     "Nci.Products.SecurityProofs.SumCap_honest",
-    "Nci.Products.SecurityProofs.SumCap_nontrivial"
+    "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellBound",
+    "Nci.Products.SecurityProofs.SumCellBound_honest",
+    "Nci.Products.SecurityProofs.SumCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellCap",
+    "Nci.Products.SecurityProofs.SumCellCap_honest",
+    "Nci.Products.SecurityProofs.SumCellCap_nontrivial"
    ]
   },
   "Definitions.Nci.Products.System": {
@@ -29101,6 +29201,12 @@
     "Nci.Products.SecurityProofs.SumCap",
     "Nci.Products.SecurityProofs.SumCap_honest",
     "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellBound",
+    "Nci.Products.SecurityProofs.SumCellBound_honest",
+    "Nci.Products.SecurityProofs.SumCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellCap",
+    "Nci.Products.SecurityProofs.SumCellCap_honest",
+    "Nci.Products.SecurityProofs.SumCellCap_nontrivial",
     "Nci.Products.SecurityProofs.WholeBound",
     "Nci.Products.SecurityProofs.WholeBound_honest",
     "Nci.Products.SecurityProofs.WholeBound_nontrivial",
@@ -29123,6 +29229,10 @@
     "Nci.Products.SecurityProofs.SumBound_nontrivial",
     "Nci.Products.SecurityProofs.SumCap_honest",
     "Nci.Products.SecurityProofs.SumCap_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellBound_honest",
+    "Nci.Products.SecurityProofs.SumCellBound_nontrivial",
+    "Nci.Products.SecurityProofs.SumCellCap_honest",
+    "Nci.Products.SecurityProofs.SumCellCap_nontrivial",
     "Nci.Products.SecurityProofs.WholeBound_honest",
     "Nci.Products.SecurityProofs.WholeBound_nontrivial",
     "Nci.Products.SecurityProofs.WholeCap_honest",
