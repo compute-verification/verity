@@ -61,6 +61,7 @@ from typing import Any
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.commitments import advice as AC
 from verity.ml.windows import interface as IF
+from verity_vllm.commit import values as V
 from verity_vllm.config import option, workload_arg
 
 TRACED = "verity-vllm/advice-windows/traced-of-record/v0"
@@ -137,6 +138,8 @@ advice_rows = IF.advice_rows
 def commit_advice(compiler: Any, data: bytes, salts: Sequence[bytes] | None = None) -> AC.Committed:
     """The advice's hiding commitment (`interface.commit_advice`: `advice_rows` under `commitment_binding`), fresh salts unless
     ``salts`` is given."""
+    V.refuse_own("advice_windows.commit_advice", "the advice's opening hands the verifier every row's salt (its stand-in for "
+                 "the compile unit): it waits on the compile unit proving the advice rows, or the server releasing their salts")
     return IF.commit_advice(named(compiler), data, salts)
 
 

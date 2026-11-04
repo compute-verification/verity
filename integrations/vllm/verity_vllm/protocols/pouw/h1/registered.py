@@ -50,8 +50,13 @@ from verity.ml.commitments.merkle import merkle_depth
 from verity.ml.commitments.rowleaf import (ROW_SEG_BYTES, sha512_row_seg_prefix, sha512_row_seg_segment_prefix,
                                            sha512_row_seg_segments, sha512_row_v2_prefix)
 from verity.ml.crypto import chacha20
+from verity_vllm.commit import values as V
 
 _INST = hm96.SHA512
+#: why H1's tables don't commit through the value service yet (`values.refuse_own`)
+SERVICE_GAP = ("H1 commits its tables as the window runs (receipt rows after the A and B roots, the round-0 request table before "
+               "the live salt coin), and a value-service session commits once: it waits on the service appending tables to an "
+               "open session")
 _FRAME = b"veritor/protocol/merkle/frame/v3\0"
 #: `commit`'s path (`path`): ``"auto"``, ``"gpu"`` or ``"numpy"``, set by the caller that configures the run
 MODE = "auto"
@@ -66,6 +71,7 @@ def _pool() -> ThreadPoolExecutor:
 
 def salts(key: bytes, nonce: int, n: int) -> bytes:
     """Rows 0 .. n - 1's salts, concatenated: row j's `audit.hm96_salt(key, nonce, j)`."""
+    V.refuse_own("pouw_h1.registered.salts", SERVICE_GAP)
     return b"".join(chacha20.keystream(key, nonce, 3 * lo, 3 * min(_SALTED, n - lo)) for lo in range(0, n, _SALTED))
 
 
@@ -290,6 +296,7 @@ def commit(program: str, value: str, words: Any, key: bytes, nonce: int, keep_ro
     stream; elsewhere the `Registered` itself. ``also`` ``(domain id, nonce)``: the rows (a call's z/y records, on the
     device) are its call z table's too, committed from the same read (`pouw_h1_registered_device.device_hash`'s), that
     root `Later.also`; only with ``later`` on the GPU path."""
+    V.refuse_own("pouw_h1.registered.commit", SERVICE_GAP)
     if schema not in (G.SCHEMA_V2, G.SCHEMA_SEG):
         raise ValueError(f"rows of {schema!r}: {G.SCHEMA_V2} or {G.SCHEMA_SEG}")
     gpu = schema == G.SCHEMA_V2 and path() == "gpu"

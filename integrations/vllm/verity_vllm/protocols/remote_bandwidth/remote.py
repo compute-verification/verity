@@ -61,6 +61,7 @@ import numpy as np
 
 from verity.core.protocols.remote_bandwidth import audit, codec as rcodec, receipts as rb
 from verity_vllm import config
+from verity_vllm.commit import values
 from verity_vllm.protocols.remote_bandwidth import memory_map as store_map
 from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
 
@@ -264,6 +265,9 @@ class StoreBackend:
 
     def __init__(self, store: NodeMemory, engine: Callable[[int], None], *, randbytes: Callable[[int], bytes] = os.urandom,
                  path: str | Path | None = None, read_bytes_per_s: float = 1e12, device: KvDevice | None = None) -> None:
+        values.refuse_own("remote_bandwidth.StoreBackend's hiding salts", "the bandwidth audit's receipts tree is no schema "
+                          "of the value service's, and each pass commits it again: it waits on a receipts schema and a "
+                          "session a pass")
         self.store, self.engine, self.path, self.randbytes, self.device = store, engine, path, randbytes, device
         self.blocks, self.read_bytes_per_s = store.layout().blocks, read_bytes_per_s
         self.dropped: set[int] = set()

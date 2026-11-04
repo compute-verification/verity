@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.ml.commitments import Commitment, Opening as FrameOpening, VerificationLimits, verify_opening
-from verity_vllm.commit import scheme, step_rows
+from verity_vllm.commit import scheme, step_rows, values
 from verity_vllm.commit.merkle import fold_range, range_path_shape
 
 # A leaf a `--retain device` window's draw-gated release did not keep (`committer.device_pool`): refused, never replayed.
@@ -100,6 +100,7 @@ class NativeRangeOpenings:
 
     def _row_key(self, step: int) -> bytes:
         """rows-sha512: step `step`'s salt key, fresh from the OS generator, or the replayed run's (`replay_row_keys`)."""
+        values.refuse_own(f"{step_rows.NAME} step {step}'s salt key", step_rows.SERVICE_GAP)
         if self.replay_row_keys is None:
             ks = os.urandom(step_rows.KEY_BYTES)
         elif step in self.replay_row_keys:

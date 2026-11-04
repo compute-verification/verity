@@ -6,12 +6,13 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from verity_vllm.commit import step_rows
+from verity_vllm.commit import step_rows, values
 
 
 def key(tree: dict | None) -> bytes:
     """The registration's salt key: the one a committer registered under before (a re-registration reproduces its root:
     `c2_replay.live_weights_check`), else fresh from the OS generator."""
+    values.refuse_own(f"{step_rows.NAME}'s weights registration salt key", step_rows.SERVICE_GAP)
     tree = tree or {}
     return bytes.fromhex(tree["key"]) if tree.get("scheme") == step_rows.NAME else os.urandom(step_rows.KEY_BYTES)
 

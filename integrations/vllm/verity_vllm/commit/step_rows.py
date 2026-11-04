@@ -67,6 +67,9 @@ OWNER = -1
 ROW_BYTES = 4096
 SALT_BYTES = INST.salt_bytes
 KEY_BYTES = 64
+#: why rows-sha512's salt keys don't come from the value service yet (`values.refuse_own`)
+SERVICE_GAP = ("rows-sha512 salts each step's rows from a key of its own as the step runs, at serving rate: it waits on the "
+               "value service appending each step's tables to the window's open session")
 ROOT_BYTES = DIGEST_BYTES["sha512"]
 #: The program, ctx, geo, layout and names digests a root binds (SHA-512 identity digests, whole).
 ID_BYTES = DIGEST_BYTES["sha512"]

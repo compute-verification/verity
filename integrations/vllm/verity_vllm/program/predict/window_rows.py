@@ -61,6 +61,7 @@ from verity.ml.definitions.numerics.rows import ROWS
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.b1 import NEG_INF_BF16
 from verity.ml.windows import interface as IF
+from verity_vllm.commit import values as V
 from verity_vllm.protocols.pouw.h1 import registered as H1R
 from verity_vllm.query.manifest import format as RM
 
@@ -692,6 +693,9 @@ def index_salt(key: bytes, index: int) -> bytes:
     """Window ``index``'s index salt (`interface.Window.write`'s ``index_salt``, `rows.index_leaf`): drawn under the
     committer's secret ``key`` at salt nonce `INDEX_NONCE` plus the window's ``index``, which no other value under ``key``
     takes, so the committer draws it again from its key alone."""
+    V.refuse_own("window_rows.index_salt", "a window's index salt is a circuit input row's (`interface.Window.write`'s "
+                 "index_salt), which a sample's --salt-refs can't supply: it waits on the circuit taking the index leaf's "
+                 "salt from the value service")
     if not 0 <= index < 1 << 32:
         raise ValueError(f"window {index}: a window's index is a u32")
     return H1R.salts(key, INDEX_NONCE + index, 1)

@@ -46,12 +46,14 @@ from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root
 from verity.core.protocols.pouw.protocol import Matmul, Shape
 from verity.core.protocols.sampled_proofs.challenger import LiveRecord
 
+from verity_vllm.commit import values as V
 from verity_vllm.engine import int8_ranks  # noqa: F401  (a worker registers the int8 parts before it builds its model)
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import commit as CT
 from verity_vllm.protocols.pouw.h1 import hooks as PHK
 from verity_vllm.protocols.pouw.h1 import records as ZR
+from verity_vllm.protocols.pouw.h1 import registered as H1R
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 
 ENTRY = f"pouw:{PH.SCHEME}"
@@ -358,6 +360,7 @@ def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any =
                          "checkpoint into the ranks' shards, so the window registers its own b/<K>")
     if commit is not None and served is None:
         raise ValueError(f"{entry}: the Commit's values tie to the window's registered tables, so it needs served")
+    V.refuse_own(f"{entry}: the ranks' H1 salt key", H1R.SERVICE_GAP)
     if llm is not None:
         importlib.import_module(MRV2)
     executor = executor if executor is not None else executor_of(llm)

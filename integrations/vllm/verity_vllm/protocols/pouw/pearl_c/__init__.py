@@ -253,6 +253,10 @@ def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = SCHEMES[
 def new_salt_key(scheme: str) -> bytes:
     """A fresh prover hm96 salt key for `scheme`'s trees (their salts, kept by the prover and never in a record)."""
     import os
+
+    from verity_vllm.commit import values as V
+    V.refuse_own("pearl_c.new_salt_key", "Pearl-C's pass trees salt every row from a prover key as the pass runs: they wait "
+                 "on the value service appending a pass's tables to the window's open session")
     scheme_of(scheme)
     return os.urandom(32)
 

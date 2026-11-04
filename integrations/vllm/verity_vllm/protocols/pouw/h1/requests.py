@@ -67,6 +67,7 @@ from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveCommi
 from verity.ml.commitments import Commitment, Opening, VerificationLimits, hm96, verify_opening
 from verity.ml.commitments.hm96 import batch
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, sha512_row_seg_digest
+from verity_vllm.commit import values as V
 
 
 @dataclass(frozen=True)
@@ -207,6 +208,7 @@ def hiding_rows(binding: bytes, owner: int, values: Sequence[bytes], key: bytes,
     nodes from their constant prefixes, since `MerkleTree`'s leaf by leaf took some 0.1 ms a leaf, a round's request
     table each round."""
     from verity_vllm.protocols.pouw.h1 import registered as NR
+    V.refuse_own("pouw_h1.requests.hiding_rows", NR.SERVICE_GAP)
     n = len(values)
     y = batch.salts(key, nonce, np.arange(n))
     domain = rows_domain(binding, owner, n, HM96)

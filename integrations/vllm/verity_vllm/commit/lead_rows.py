@@ -42,6 +42,7 @@ from verity.errors import ProtocolError
 from verity.ml.commitments import hm96, keyed
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
+from verity_vllm.commit import values as V
 from verity_vllm.errors import Refused
 
 __all__ = ["A_LEAF_TAG", "A_SEGMENT", "BINDING_TAG", "CHUNK_WORDS", "KEY_SALT_BYTES", "ROW_TILE", "TILE_COLS", "TILE_ROWS",
@@ -183,6 +184,8 @@ class WindowKeying:
     def __init__(self, calls: int, *, ks_w: bytes | None = None, y0: bytes | None = None) -> None:
         if type(calls) is not int or not 1 <= calls < WORDS_POSITION:
             raise Refused(f"a window of {calls} calls a forward")
+        V.refuse_own("lead_rows.WindowKeying's ks_w and y0", "a keyed root SHA-512(ks_w || salt_w || M_top) is no schema "
+                          "of the value service's (it commits hm96 rows): it waits on the server holding ks_w")
         ks_w = os.urandom(keyed.KEY_BYTES) if ks_w is None else bytes(ks_w)
         y0 = os.urandom(KEY_SALT_BYTES) if y0 is None else bytes(y0)
         if len(ks_w) != keyed.KEY_BYTES or len(y0) != KEY_SALT_BYTES:

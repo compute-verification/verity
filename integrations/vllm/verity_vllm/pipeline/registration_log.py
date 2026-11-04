@@ -31,6 +31,7 @@ import numpy as np
 from verity.core.protocols.sampled_proofs.one_stage import registration as REG
 from verity.ml.circuits.types import Array, RecordType, Tuple, Type
 from verity_vllm.commit import registered_rows as RR
+from verity_vllm.commit import values as V
 
 
 def lower(t: Type) -> list[tuple[int, int]]:
@@ -96,6 +97,8 @@ def record(program_digest: str, params: Sequence[tuple[str, Type]], theta: Seque
 def write(program_digest: str, params: Sequence[tuple[str, Type]], theta: Sequence[int],
           values: Callable[[str], np.ndarray], window: Mapping[str, Any]) -> dict[str, Any]:
     """The record, its digest, nci-check's trusted input and the instance's `provenance`, and the prover's salts."""
+    V.refuse_own("registration_log.write", "it returns the prover's salts: `predict node-registration` commits θ through the "
+                 "value service")
     types = dict(params)
     entries, salts = {}, {}
     for name in dict.fromkeys(n for n, _w in theta_parameters(params, theta).values()):
