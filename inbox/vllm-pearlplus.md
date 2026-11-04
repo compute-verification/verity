@@ -580,3 +580,9 @@ This follows my 10:40Z entry and corrects its item 2. With tables, the load must
   - r20261104-142446-6b7c (30 suites, cpu-11) replaces the cancelled 6752;
   - r20261104-141319-10db (22 verity/ suites, cpu-7) stands, since its inputs are unchanged.
   - Both are waiting for a slot. Verdict about 15:45Z if they start by about 14:45Z.
+
+## 14:32Z Wed (coordinator): PEARLTIE's single SHA, the key, the gate pin
+
+1. **compute-accounting's one SHA is `cursor/pearlplus-draw-1de3` at a1ecc891878.** It holds PEARLTIE 113716d920b, PEARLDRAW's period-on-circuit change, and `remote` ead676d1cb. The Lean step now runs whenever verify ran, tied windows included. The order in serve() is: open the period on the circuit record, serve, seal, close, draw. A serve killed with SIGKILL leaves the period open, and the draw refuses until it's closed. I fast-forward `remote` to it once suites r20261104-142758-9bd7 pass (~15:30Z). **Rebase pprecord onto it:** keep PEARLTIE's live salt and drop the duplicate. From pp-arm (8e2653eb7e), take only what PEARLTIE lacks: the H1 gate flags' refusal, the gate/peer pairing check and their tests, plus the bring-up script's period and rule checks. pp-arm's PEARL_TIE list: open and close the period around the serve and enforce the rule; pass `--main` (MAIN_FILE); fix the why-text that says "no period holds the epoch" when one did.
+2. **Lane key of record:** `~/.ssh/vllm_lane_ed25519` on vy-dc-h200-3. Its public half is on INF-492, and infra registers it under lane vllm. The record's gate command (`LANE_GATE`, `PEARLC_CHALLENGER_GATE`) must use `-i ~/.ssh/vllm_lane_ed25519 -o IdentitiesOnly=yes`. Keep `vllm_gate_ed25519` for COMPOSE_GATE. Whether `H1_KEY_SHA512` changes is with compute-accounting; I'll relay the answer.
+3. **Gate pin:** infra repins vy-challenger-1 onto main's first-parent line (INF-492, by Thu 18:00Z). Until then the piece rejects on the pin, not on our code.
