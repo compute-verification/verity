@@ -79,7 +79,8 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 
 Every subprotocol of every product is ported to its own `Core.Protocol`. Remote with the network certifier's network
 certification reads its audits' answers as its evidence carries them: no tie holds them to sampled proofs' answer
-(`NetworkCheck.Period`'s "What it doesn't check").
+(`NetworkCheck.Period`'s "What it doesn't check"), though `egress` holds each audit's registration to the policy's
+record.
 
 A subprotocol without a port is a stub, `Core.Example.protocol` under an id that says so (`Stubs.lean`). A port replaces
 its stub in `Core.Onsite.components` and `Core.Remote.components` with its own `Core.Protocol` value, its package a
@@ -189,9 +190,10 @@ rejection need not reject the whole: such a reference disagrees with the Lean on
 composite's verdicts (`test_product_over_remotes_subprotocols_is_remote`,
 `test_product_over_remote_networks_subprotocols_is_remote_network`, `test_product_over_onsites_subprotocols_is_onsite`).
 Remote with the network certifier's cases are remote's beside network certification's
-(`test_remote_network_agrees`), and on remote's accepting case it accepts beside an accepted period of network
-certification, rejects beside a rejected one and is undecided beside an undecided one, in Lean, `product` and Python
-(`test_remote_network_is_remotes_verdict_and_the_network_certifiers`).
+(`test_remote_network_agrees`). On remote's accepting case it accepts beside an accepted period of network
+certification whose compute audits are on remote's record, rejects beside a rejected one and is undecided beside an
+undecided one. Beside an accepted period with no compute audit, or one on another record, it refuses by `egress`. Each
+holds in Lean, `product` and Python (`test_remote_network_is_remotes_verdict_and_the_network_certifiers`).
 
 A bare `uv run` inside this directory stops its workspace search at `verity/core/protocols/pyproject.toml`; run the suite
 through `suites.py`, or `pytest` with the workspace's `.venv`.
