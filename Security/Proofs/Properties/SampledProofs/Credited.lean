@@ -286,6 +286,7 @@ theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : On
   obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨cB, -, hR⟩ := bind_ok hR
   obtain ⟨pB, hpB, hR⟩ := bind_ok hR
+  obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨rd, -, hR⟩ := bind_ok hR
   obtain ⟨R', hfold, hR⟩ := bind_ok hR
   have hheld : OneStageZk.provedHeld R'.proved e.base.provedUnits = .ok () ∧ R' = R := by
@@ -307,6 +308,8 @@ theorem credited_of_checkBlobsAt {b : ByteArray} {p : OneStageZk.Params} {c : On
   | some record =>
     rw [hu] at hstep
     dsimp only at hstep
+    obtain ⟨_, -, hstep⟩ := bind_ok hstep
+    try dsimp only at hstep
     unfold OneStageZk.push at hstep
     dsimp only at hstep
     split at hstep

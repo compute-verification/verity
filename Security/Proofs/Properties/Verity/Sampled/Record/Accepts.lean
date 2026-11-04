@@ -306,6 +306,7 @@ theorem verdict_of_accepts (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt 
   obtain ⟨pB, hpB, hR⟩ := bind_ok hR
   obtain rfl : cB = A.I.circuitFile := Except.ok.inj (hcB.symm.trans hn.circuit)
   obtain rfl : pB = A.I.publicFile := Except.ok.inj (hpB.symm.trans hn.pub)
+  obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨rd, hrd, hR⟩ := bind_ok hR
   obtain ⟨R', hfold, hR⟩ := bind_ok hR
   have hRR : R' = R := by
@@ -325,6 +326,8 @@ theorem verdict_of_accepts (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt 
   | some record =>
     rw [hu] at hstep
     dsimp only at hstep
+    obtain ⟨_, -, hstep⟩ := bind_ok hstep
+    try dsimp only at hstep
     unfold _root_.SampledProofs.OneStageZk.push at hstep
     dsimp only at hstep
     split at hstep
