@@ -1,8 +1,9 @@
-"""N2's egress side of the scan (`egress`) on the warden's own egress: links of variable-length responses served
-through the warden's schedule (`egress_traffic`, `warden.Warden._egress`), and the slot state each bucket's egress
-reads. The reference renders every bucket row the warden registered from that state; the Boolean Definition computes
-its reference's outputs, bit for bit, on honest and adversarial states (the row of a state that renders none too); it
-reads only the state; and the verifier's registered read of its row output holds the computed rows to the warden's."""
+"""N2's egress side of the scan (`egress`) on the network certifier's own egress: links of variable-length responses
+served through the network certifier's schedule (`egress_traffic`, `warden.Warden._egress`), and the slot state each
+bucket's egress reads. The reference renders every bucket row the network certifier registered from that state; the
+Boolean Definition computes its reference's outputs, bit for bit, on honest and adversarial states (the row of a state
+that renders none too); it reads only the state; and the verifier's registered read of its row output holds the computed
+rows to the network certifier's."""
 
 import random
 
@@ -16,7 +17,7 @@ from verity.core.protocols.certifier import egress as EG, head_check as HC, io_t
 from verity.core.protocols.certifier.active import DATA, PAD
 from verity.core.protocols.certifier.certificate import Direction
 
-#: the warden's schedule the tests serve: T = 6 buckets of 4 lanes of r = 2 slots, D = 2
+#: the network certifier's schedule the tests serve: T = 6 buckets of 4 lanes of r = 2 slots, D = 2
 PARAMS = W.WardenParams(cell_bytes=256, slots=2, delay=2, lanes=4, window=6)
 SESSION = bytes(range(32))
 #: the request slots and outputs a slot the served links' states hold
@@ -108,9 +109,9 @@ def test_the_map_is_the_wardens_slots():
 
 @pytest.mark.parametrize("seed", [1, 2, 3])
 def test_the_state_renders_the_wardens_registered_rows(seed):
-    """Every bucket row of a busy link, idle ones too, is the warden's registered row (`warden_rows.window_rows` of
-    the record its grid closed), rendered from the state the scan's ingress step wrote at that bucket (each request
-    in the lowest free slot from its admission to its last egress bucket)."""
+    """Every bucket row of a busy link, idle ones too, is the network certifier's registered row
+    (`warden_rows.window_rows` of the record its grid closed), rendered from the state the scan's ingress step wrote at
+    that bucket (each request in the lowest free slot from its admission to its last egress bucket)."""
     served = busy(seed, PARAMS, 14, 15, 6)
     assert not served.fails
     sh, kinds = shape(PARAMS, NR, K), set()
@@ -168,9 +169,10 @@ def test_the_bucket_circuit_is_its_reference(B, R, r, NR, K, IB_, D):
 
 
 def test_the_bucket_circuit_computes_the_wardens_rows():
-    """On every bucket of a busy link, the circuit computes the warden's registered row from the state the ingress
-    step wrote, with o0 `ACCEPT`; under a state one of whose rendered output ids is another (what links the state's
-    layout to the circuit) it computes another row, which no registered read of the warden's opens."""
+    """On every bucket of a busy link, the circuit computes the network certifier's registered row from the state the
+    ingress step wrote, with o0 `ACCEPT`; under a state one of whose rendered output ids is another (what links the
+    state's layout to the circuit) it computes another row, which no registered read of the network certifier's
+    opens."""
     served = busy(4, PARAMS, 14, 15, 6)
     sh = shape(PARAMS, NR, K)
     sts, rs = states(served, NR, K), rows(served)
@@ -210,8 +212,8 @@ def _committed(served, w):
 def test_the_registered_read_holds_the_row_output_to_the_wardens_rows():
     """The verifier's registered read of the proof block's row output o1 (`warden_rows.refusal` on `bucket_port`: proof
     block 3 + t reads row t) accepts the rows a window's proof blocks compute from its states, committed under the
-    warden's salts, and refuses a row with one bit flipped and a row moved to another bucket, at its own position and at
-    the other's."""
+    network certifier's salts, and refuses a row with one bit flipped and a row moved to another bucket, at its own
+    position and at the other's."""
     served = busy(6, PARAMS, 14, 15, 6)
     T, sh = PARAMS.window, shape(PARAMS, NR, K)
     w = max(range(len(served.records)), key=lambda w: len(set(WR.window_rows(served.records[w], PARAMS))))
@@ -240,8 +242,8 @@ def test_the_registered_read_holds_the_row_output_to_the_wardens_rows():
 
 def test_a_request_not_yet_in_the_state_computes_another_row():
     """The row of a request's admission bucket holds its lane (a `PAD` on its q), so a state that omits a request the
-    warden admitted, or admits it a bucket late, renders another row than the warden's, which its registered read
-    refuses."""
+    network certifier admitted, or admits it a bucket late, renders another row than the network certifier's, which its
+    registered read refuses."""
     served = serve(PARAMS, [0, 0], [[5, 6, 7], [8]], 2)
     sh = shape(PARAMS, 2, 4)
     sts, rs = states(served, 2, 4), rows(served)

@@ -73,7 +73,7 @@ def test_the_references() -> None:
     # u^2 + u + x^-1 = 0 in K
     u = (0, 1)
     assert G.kmul(u, u) == (G.XINV, 1)
-    # φ8's generator is a root of X^8 + X^4 + X^3 + X + 1 (Flock's PROTOCOL.md §2.2), and φ8 is additive
+    # φ8's generator is a root of X^8 + X^4 + X^3 + X + 1 (the Lean verifier's `Flock.Field`), and φ8 is additive
     g = [1]
     for _ in range(8):
         g.append(G.mul(g[-1], G.PHI8_GEN))

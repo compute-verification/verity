@@ -1,16 +1,16 @@
-"""The warden's cells as the rows a proof block reads (design v3: the transfer gates are the cells' bits). Each
-execution phase's cells are committed one `hm96-sha512/row/v2` row a bucket, each under a hiding salt, in a
-frame-v3-sha512 tree. The warden signs a head that names the root and a salted digest of the execution phase's wiring
-with the certifier's signer (`certificate.Issuer.sign`, LMS n = 64). A proof block opens a cell's row as its output port
-(the sender's) or its input port (the receiver's) by the Lean verifier's registered reads (`flock-verify --registered`,
-`Flock.Registered.checkPort`): the port's table row is the proof block's row committed under the row's salt, and it must
-climb its path to the signed root at the row the verifier reads for the proof block. The verifier derives that row from
-the proof block's (connection, cell) and the warden's wiring (`port`). No gate of the proof block hashes the row, and
-the verifier receives no row and no salt.
+"""The network certifier's cells as the rows a proof block reads (design v3: the transfer gates are the cells' bits).
+Each execution phase's cells are committed one `hm96-sha512/row/v2` row a bucket, each under a hiding salt, in a
+frame-v3-sha512 tree. The network certifier signs a head that names the root and a salted digest of the execution
+phase's wiring with the certifier's signer (`certificate.Issuer.sign`, LMS n = 64). A proof block opens a cell's row as
+its output port (the sender's) or its input port (the receiver's) by the Lean verifier's registered reads
+(`flock-verify --registered`, `Flock.Registered.checkPort`): the port's table row is the proof block's row committed
+under the row's salt, and it must climb its path to the signed root at the row the verifier reads for the proof block.
+The verifier derives that row from the proof block's (connection, cell) and the network certifier's wiring (`port`). No
+gate of the proof block hashes the row, and the verifier receives no row and no salt.
 
-**The rows** (`window_rows`). An execution phase w of the warden's schedule (`WardenParams`: T buckets of S = lanes·r
-slots of B-byte cells) is T rows of S·B bytes. Row t − w·T is bucket t, slot j at bytes j·B to (j + 1)·B (words j·B/2
-onward), in the grid's order: a bucket's cells sorted by stream (the connection's ordinal), a connection's r cells
+**The rows** (`window_rows`). An execution phase w of the network certifier's schedule (`WardenParams`: T buckets of S =
+lanes·r slots of B-byte cells) is T rows of S·B bytes. Row t − w·T is bucket t, slot j at bytes j·B to (j + 1)·B (words
+j·B/2 onward), in the grid's order: a bucket's cells sorted by stream (the connection's ordinal), a connection's r cells
 together and in order, and a slot no connection holds B zero bytes. So T and a row's size are the schedule's, whatever
 the load. A row's 8·S·B bits are its bytes, bit 8k + i of the row bit i of byte k: the `hm96-sha512/row/v2` bit row of
 its S·B/2 little-endian u16 words (`words`), which the proof block's port carries.
@@ -18,12 +18,12 @@ its S·B/2 little-endian u16 words (`words`), which the proof block's port carri
 **The wiring** (`Wiring`, read off the record by `wiring`) says which connection holds which slots. Connection q, live
 in `cells`/r rows from row `first`, holds slots ρ·r … ρ·r + r − 1 of each, ρ its rank by ordinal among the row's live
 connections; its cell k of the execution phase (k = 0 … cells − 1) is in row first + ⌊k/r⌋ at slot ρ·r + (k mod r)
-(`Wiring.place`). The warden commits it as (q, first, cells) by q under a 64-byte salt it samples for the execution
-phase:
+(`Wiring.place`). The network certifier commits it as (q, first, cells) by q under a 64-byte salt it samples for the
+execution phase:
 
     wiring = tagged_sha512(WIRING_TAG, salt ‖ u32be count ‖ (u32be q ‖ u32be first ‖ u32be cells) by q)
 
-**The commitment** is a registered value's (`one_stage.registered`), under the warden's own domain:
+**The commitment** is a registered value's (`one_stage.registered`), under the network certifier's own domain:
 
     x_k    = the sha512/row/v2 digest of row k's 8·S·B bits
     b‖c_k  = hm96.SHA512.commit_string(default_key, x_k, salt_k)
@@ -32,10 +32,10 @@ phase:
     domain = CommitmentDomain(identity_digest_sha512(DOMAIN_TAG, {parameters, session, link, direction, window,
              cell_bytes, slots, rows, row_schema}), -1, RangeIndexedDomain(0, T), hash="sha512")
 
-so a root opens under one execution phase of one session's schedule alone. salt_k is 192 bytes the warden samples from
-the operating system for each row, never for another. The opening (`Cells`: the rows, their salts and the wiring with
-its salt) is witness, which the warden hands to the prover alone (`Cells.witness`: the salts, since the rows and the
-wiring are the record's).
+so a root opens under one execution phase of one session's schedule alone. salt_k is 192 bytes the network certifier
+samples from the operating system for each row, never for another. The opening (`Cells`: the rows, their salts and the
+wiring with its salt) is witness, which the network certifier hands to the prover alone (`Cells.witness`: the salts,
+since the rows and the wiring are the record's).
 
 **The signed head** (`CellsHead`) is public, as a hiding root is:
 
@@ -56,8 +56,8 @@ record digest instead, so neither verifies as the other (each would need a SHA-5
 `value` is the registered value's name (`<link>/<direction>/<window>`), `words` and `word_bits` a row's S·B/2 leaves of
 16 bits, and `layout` the rows' order: row t − first_bucket is bucket t, of `slots` slots, `connection_slots` = r a
 connection. `check_registration` is the verifier's read of it: the head is the execution phase's, its domain, rows, row
-format and layout are the ones the schedule's parameters give, and its certificate verifies under the warden's key in
-the session over the head's digest.
+format and layout are the ones the schedule's parameters give, and its certificate verifies under the network
+certifier's key in the session over the head's digest.
 
 **How a proof block reads it** (`port`). The verifier's own `--registered` port (`verity/registered-reads/v1`) names the
 value, root, leaves, words, word bits, domain and row schema, and `reads`: proof block `reads_from + i` opens the row of
@@ -79,9 +79,9 @@ it states `Units`. `bucket_port` names the head's value too, and needs no `Units
 so a statement's positions are all it can vary, and Lean's registered reads hold each to its proof block's row.
 
 **The wiring is opened to the verifier for now** (the named gap, whose plan is in PROTOCOL.md): it gives away each
-connection's first row and cells. q is the cells' stream field, the warden's ordinal: the k-th connection to reach it,
-from 0, is q = k + 1, as the active certifier's `Requests` streams it and the I/O tie's map puts advice request k
-(`order[k] + 1`).
+connection's first row and cells. q is the cells' stream field, the network certifier's ordinal: the k-th connection to
+reach it, from 0, is q = k + 1, as the active certifier's `Requests` streams it and the I/O tie's map puts advice
+request k (`order[k] + 1`).
 """
 
 from __future__ import annotations
@@ -288,7 +288,8 @@ def opens(dom: CommitmentDomain, root: bytes, position: int, bc_: bytes, path: b
 
 @dataclass(frozen=True, slots=True)
 class CellsHead:
-    """What the warden signs for an execution phase's rows: public, since its root and wiring digest are hiding."""
+    """What the network certifier signs for an execution phase's rows: public, since its root and wiring digest are
+    hiding."""
 
     link: str
     direction: Direction
@@ -320,8 +321,8 @@ class CellsHead:
 
 @dataclass(frozen=True)
 class Cells:
-    """The warden's opening of one execution phase's rows, witness: the rows, their salts and the wiring, and what they
-    commit to."""
+    """The network certifier's opening of one execution phase's rows, witness: the rows, their salts and the wiring, and
+    what they commit to."""
 
     link: str
     direction: Direction
@@ -357,7 +358,7 @@ class Cells:
 
     @property
     def witness(self) -> bytes:
-        """What the warden keeps for the prover beside the record: the rows' salts, then the wiring's
+        """What the network certifier keeps for the prover beside the record: the rows' salts, then the wiring's
         (`read_witness`)."""
         return b"".join(self.salts) + self.wiring.salt
 
@@ -446,8 +447,9 @@ def registration(head: CellsHead, certificate: Certificate, params: WardenParams
 
 def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, params: WardenParams, link: str,
                        direction: Direction, window: int) -> tuple[CellsHead, CommitmentDomain]:
-    """The verifier's read of a registration for the execution phase it expects, under the warden's key and session and
-    the schedule's parameters: the head and the domain the verifier derived, or ValueError naming what fails."""
+    """The verifier's read of a registration for the execution phase it expects, under the network certifier's key and
+    session and the schedule's parameters: the head and the domain the verifier derived, or ValueError naming what
+    fails."""
     B, S, T = params.cell_bytes, params.grid.allocation, rows_of(params)
     dom = domain(params, session, link, direction, window)
     want = {"format": REGISTRATION, "value": value_name(link, direction, window), "link": link,
@@ -491,10 +493,10 @@ def _port(head: CellsHead, value: str, rows: Sequence[int], reads_from: int) -> 
 def port(head: CellsHead, wiring_: Wiring, params: WardenParams, reads: Units | Sequence[tuple[int, int]],
          reads_from: int = 0) -> dict[str, Any]:
     """The verifier's own `--registered` port of a proof block population that opens the head's rows: proof block
-    `reads_from + i` opens the row of its read (q, k), connection q's cell k of the execution phase, under the warden's
-    wiring (`Wiring.place`, which refuses what no honest read is). `reads` is the Program's `Units`, whose value
-    (`Units.value`) the port names, so a statement must name it too; a bare sequence of reads binds nothing, and the
-    port names the head's value (a5_warden's form until it states `Units`). ValueError for a wiring the head doesn't
+    `reads_from + i` opens the row of its read (q, k), connection q's cell k of the execution phase, under the network
+    certifier's wiring (`Wiring.place`, which refuses what no honest read is). `reads` is the Program's `Units`, whose
+    value (`Units.value`) the port names, so a statement must name it too; a bare sequence of reads binds nothing, and
+    the port names the head's value (a5_warden's form until it states `Units`). ValueError for a wiring the head doesn't
     name."""
     _schedules(head, params)
     if wiring_.digest() != head.wiring:

@@ -6,11 +6,11 @@ import Proofs.Flock.Soundness.Refine.Schedule
 The executable verifier (`Flock.*`) and the model (`Model.*`, `Accounting.*`) each define the `fast100` schedule and the
 quantities derived from it. These theorems say the two agree, for every `m`:
 
-* `fast100_schedOf`: the executable's schedule, read as the model's (`schedOf`), is the model's schedule (PROTOCOL.md §15);
-* `fast100_level`: at every level, the stratified queries (§13.5), the cap depth and path length (§14), the
+* `fast100_schedOf`: the executable's schedule, read as the model's (`schedOf`), is the model's schedule (`Flock.Schedule`);
+* `fast100_level`: at every level, the stratified queries (`Flock.Ligerito`), the cap depth and path length (`Flock.Merkle`), the
   consistency-coin count and the codeword length are the model's (`LevelSeam`);
 * `fast100_dims`: the dimensions the executable's Ligerito loop tracks are the ones the model's rounds use (`DimSeam`,
-  §13.3);
+  `Flock.Ligerito`);
 * `fast100_alpha`: at every level the number of consistency coins, `ceilLog2 q`, is not one, so the model's draw of
   them is a vector draw.
 

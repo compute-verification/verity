@@ -3,7 +3,7 @@ import Mathlib.Logic.Function.Basic
 import Definitions.Hash.Basic
 
 /-!
-# Merkle trees (PROTOCOL.md §14)
+# Merkle trees (`Flock.Merkle`)
 
 A level's commitment is a Merkle cap: the nodes at depth `c` of a binary tree over the columns.
 Leaf `q` is `H(encode(column q))`; a node is `H(left ‖ right)`; an opening of position `pos` is the
@@ -39,7 +39,7 @@ variable (H : List UInt8 → D) (E : Enc Col D)
 def up (idx : ℕ) (acc sib : D) : D :=
   if idx % 2 = 0 then H (E.dig acc ++ E.dig sib) else H (E.dig sib ++ E.dig acc)
 
-/-- Walk from a node up through the siblings (§14). -/
+/-- Walk from a node up through the siblings (`Flock.Merkle`). -/
 def walk : ℕ → D → List D → D
   | _, acc, [] => acc
   | idx, acc, sib :: rest => walk (idx / 2) (up H E idx acc sib) rest
@@ -47,7 +47,7 @@ def walk : ℕ → D → List D → D
 /-- The cap entry an opening of `pos` reaches, starting from the leaf `H(encode column)`. -/
 def reach (pos : ℕ) (column : Col) (sibs : List D) : D := walk H E pos (H (E.col column)) sibs
 
-/-- An opening verifies: it reaches the cap entry `pos >> (d − c)` (§14). -/
+/-- An opening verifies: it reaches the cap entry `pos >> (d − c)` (`Flock.Merkle`). -/
 def Verifies (cap : ℕ → D) (depth : ℕ) (pos : ℕ) (column : Col) (sibs : List D) : Prop :=
   sibs.length = depth ∧ reach H E pos column sibs = cap (pos / 2 ^ depth)
 

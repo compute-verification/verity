@@ -21,7 +21,7 @@ session's inputs (`planAt`, `Sites.lean`), with:
 * `hHm := Discharge.Hm.keyedRowsOuts_computes` (`rsAt_computes`).
 
 Its hypotheses on the statement's form (`ht`, `hc`, `hU`, `hpub`, `hpt`, `hscope`) are ones flock-verify refuses a statement
-failing (PROTOCOL.md §16.15), and `FailClosed.flock_headline_exec` takes none of them.
+failing (`Flock.ProvedScope`), and `FailClosed.flock_headline_exec` takes none of them.
 -/
 
 namespace FlockSoundness.Discharge.Integrate

@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.Refine.Rep
 
 /-!
-# The Merkle checks are the model's path checks (PROTOCOL.md §14)
+# The Merkle checks are the model's path checks (`Flock.Merkle`)
 
 For the unsalted SHA-512 scheme (`MerkleScheme.sha512`), a passed `merkleCheck` is the model's `Merkle.Verifies` at
 every query, with the model's hash `H512` (SHA-512 on byte lists, into 64-byte digests) and encodings `enc512` (a row is
@@ -165,7 +165,7 @@ theorem climb_size (msId : String) : ∀ (sibs : List ByteArray) (idx : ℕ) (ac
       simp only [climb]
       exact climb_size msId rest (idx / 2) _ (by split_ifs <;> exact sha512_size _)
 
-/-- **A passed Merkle check is the model's path check** (§14), for the unsalted SHA-512 scheme: every query's row has
+/-- **A passed Merkle check is the model's path check** (`Flock.Merkle`), for the unsalted SHA-512 scheme: every query's row has
 the lane count, and its path verifies against the cap. -/
 theorem merkleCheck_verifies (msId : String) {cap : Array ByteArray} {c d : ℕ} {pos : Array ℕ}
     {rows : Array (Array F128)} {sibs salts : Array ByteArray} {lanes : ℕ}
@@ -225,7 +225,7 @@ def openRow (p : LigeritoProof) (sch : Flock.Schedule) (ℓ j : ℕ) : List 𝔽
     (sibsOf (openAt p (sch.levels.size - 1) ℓ).2.1 ((sch.levels.getD ℓ default).d - (sch.levels.getD ℓ default).cap)
       j).map toDig)
 
-/-- **The proof's openings pass the model's path checks** (§14): for the unsalted SHA-512 scheme, a rep whose requests
+/-- **The proof's openings pass the model's path checks** (`Flock.Merkle`): for the unsalted SHA-512 scheme, a rep whose requests
 passed the executable's Merkle checks (`ReqOK`) and whose caps are the proof's is `OpensOK` at openings that are the
 proof's rows and siblings. -/
 theorem opensOK_of (msId : String) (sch : Flock.Schedule) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))

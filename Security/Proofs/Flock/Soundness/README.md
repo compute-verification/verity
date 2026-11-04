@@ -7,14 +7,14 @@ analysis, the compiled proof, the knowledge extractor, the spec deviations, the 
 and the post-quantum and root-reuse analyses.
 
 The interactive mode only. The Lean development is this directory (namespace `FlockSoundness`). The verifier it is about
-is specified in `../../../../verity/ml/flock/verifier/PROTOCOL.md`. The work is staged along a16z's zkVM security stages (DESIGN.md §7).
+is the Lean package `verity/core/service/flock/` (outlined in `verity/ml/flock/verifier/README.md`). The work is staged along a16z's zkVM security stages (DESIGN.md §7).
 
 ## 1. Theorems
 
 ### 1.1 Soundness at the oracle layer (`table_sound`, `table_sound_fast100`, `table_sound_fast100_34_35`)
 
 Consider one table of a session, run as the verifier of record runs it: the `fast100` profile, run twice on one committed
-root, with live coins, for any statement of PROTOCOL.md §16. For every prover strategy, the probability of this event is
+root, with live coins, for any statement of `Flock.Statement`. For every prover strategy, the probability of this event is
 at most `tableError(fast100 m, shape)`:
 
 > the verifier accepts both reps, while no codeword within the level-0 proximity radius of the committed table packs a
@@ -24,7 +24,7 @@ at most `tableError(fast100 m, shape)`:
 - **`tableError`** is a Lean function of the parameters (`Accounting/Bound.lean`), with one term per verifier coin. It
   is at most **2^-205 for 22 ≤ m ≤ 35**, proved in `Accounting/Numbers.lean`.
 - **The statement shapes covered** have at most 2^27 witness bits per block, 1,024 public regions and 64 link-point
-  coordinates. That is every statement of §16, with room to spare.
+  coordinates. That is every statement of `Flock.Statement`, with room to spare.
 - **The link points' layout** is a named hypothesis (`Statement.LinkLayout`, `ASSUMPTIONS.md`).
 - **At this layer committed tables are sent whole.** The theorem is statistical, so it holds against quantum provers
   too.
@@ -100,7 +100,7 @@ link term per audit.
   (`table_knowledge_sound_joint` states it with `2ε_c⁻ + 2(K·Adv₀ + N₀/(eK))`). At
   `K = √(N₀/(e·Adv₀))` this is at most `ε_c⁻ + t·2^-244.7` (m = 33).
 - **`session_knowledge_sound`** (`Session.lean`) is the same form for one table inside a batched session.
-  - The session is the protocol's (PROTOCOL.md §5). `Commit` carries every level-0 cap before any coin, the link
+  - The session is the protocol's (`Flock.Record`). `Commit` carries every level-0 cap before any coin, the link
     points are one sample, and then every table runs concurrently in any order. The rest of the session is arbitrary.
   - The extractor reruns everything after `Commit`.
   - `ε_c⁻` and `Adv₀` are the table's terms computed in the session (`epsS`, `adv₀S`).
@@ -130,7 +130,7 @@ link term per audit.
   `ecr/sha-512`), platform (A3, and A6, the coin server's OS randomness), model, intended to prove (`hHm`, the placements
   `pp` or `dp`, `lay`, `rs`, `tr`, `hConst`, `hZero`; `assumption-notes/e2e-checklist.md`), or a numeric condition.
 - **Over what the verifier accepts** (`Discharge/FailClosed`). `flock-verify verify` refuses every statement outside the
-  forms the proof covers (the verifier's PROTOCOL.md §16.15; `FailClosed.scopeOk_eq`), so the executable's headlines
+  forms the proof covers (the verifier's `Flock.ProvedScope`; `FailClosed.scopeOk_eq`), so the executable's headlines
   (`zk_session_sound` with its `J`, hidden, custody and composed forms, and `flock_headline_exec` with its hidden and
   decoded forms) are restated over `Verifies` (accepted, and in scope) with no hypothesis on the circuit, the public file
   or the statement's form. The old forms, which take those hypotheses, are the lemmas they apply. The zero-knowledge
@@ -142,7 +142,7 @@ link term per audit.
   committed to), or `collide` of the two openings is a SHA-512 collision (`Layout.registered_weights`; from
   `HmRowComputes` for rows, `HmRows.registered_weights_hm96`; for the message the audit's extractor settles on,
   `registered_weights_extracted`).
-- **Registered reads** (`Registered/`; PROTOCOL.md §16.10). A row a session reads from a value registered before opens
+- **Registered reads** (`Registered/`; `Flock.HmRow`). A row a session reads from a value registered before opens
   the registered root the verifier holds, at the position the verifier's program reads (`Flock.Registered.check_ok`, in
   the verifier's package). Two different leaves the verifier accepts at one position under one root give an explicit
   SHA-512 collision (`TwoOpenings.collides`, from `Flock.Registered.opensLeaf_binding`), at most `q²/2^513` likely under
@@ -161,7 +161,7 @@ link term per audit.
 | A live coin hits a fixed nonzero polynomial's zero with probability at most degree/|F| (Schwartz–Zippel) | (framework) | `Game/Poly.lean` | proved |
 | Two reps on independent coins, any interleaving: the error squares | 1a | `Game/Interleave.lean`, `value_interleave_le` | proved |
 | The bound as a function of the parameters, and its value for every `m` | 1a | `Accounting/*` | proved |
-| The verifier, following PROTOCOL.md §9–§16 | 1a | `Model/*`, `Definitions/Flock/` | written (definitions) |
+| The verifier, following the Lean verifier (`Flock.Piop` to `Flock.Statement`) | 1a | `Model/*`, `Definitions/Flock/` | written (definitions) |
 | Composition: one table from one rep and the link points | 1a | `table_sound` | proved from `rep_sound` and `link_sound` |
 | One rep is sound from a doomed start | 1a | `rep_sound` (`RepSound.lean`) | proved from the four phase lemmas below |
 | One sumcheck round, in each of the spec's three encodings | 1a | `Rounds.lean` | proved |
@@ -191,7 +191,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
 
 ### 1.5 The compiled lowering (`lowering_sound`, `Prog.isRowsUnit`; `Lowering.lean`)
 
-- **The audit's circuit is the rows the verifier parses** (spec §16.5, `Flock/Net.lean`).
+- **The audit's circuit is the rows the verifier parses** (`Flock.Circuit`, `Flock/Net.lean`).
   - A template's unit is its input columns, its computed rows and its constant (`Rows`).
   - A computed row is `z_i = (⊕_{c∈a_i} z_c)·(⊕_{c∈b_i} z_c)`, reading earlier columns and the constant. It is one gate
     of the circuit (`Audit.Op.row`).
@@ -227,7 +227,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
   are placed in a block. Then the trace decoded from that block makes the unit correct.
   - Placed (`Placement`) means two things:
     - the block matrices' rows at the unit's computed columns read exactly its rows' columns;
-    - the rows at its constant read the pin, as every slot's constant is wired to it (spec §16.1).
+    - the rows at its constant read the pin, as every slot's constant is wired to it (`Flock.Statement`).
 
     The decoded trace then carries `true` on the constant (`UnitPlace.decode_one`).
   - A unit's input columns on one gate must carry one value in every satisfying witness (`UnitPlace.aliased`), as
@@ -338,7 +338,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
 domains. The proof uses Dao–Kominers–Thaler (DKT26, ePrint 2026/2056), proved in ArkLib at our pin
 (`ReedSolomon.mcaError_affineLine_johnson_le`). With `ρ = (k − 1)/n` and `η = 1 − √ρ − δ`, its count is below
 `(8/3)·n·t'³/ρ`, where `t' = max(⌈√ρ/(2η)⌉, 3) + ½ ≤ m + ½` for BCHKS25's `m = max(⌈√ρ/η⌉, 3)`, so below BCHKS25's
-numerator `a` (`Level.mcaA`); for `k ≥ n` the code is every word. It bounds every Ligerito fold's coin (spec §13.3,
+numerator `a` (`Level.mcaA`); for `k ≥ n` the code is every word. It bounds every Ligerito fold's coin (`Flock.Ligerito`,
 `prCoin_mca_le`). The accounting keeps `a`, so no number changes: DKT26's count is `2^8.2` to `2^12.3` smaller, on a
 term below 2^-170.
 
@@ -366,8 +366,8 @@ term below 2^-170.
   - The *compiled layer* replaces each table by its SHA-512 Merkle cap plus authentication paths, opened at the end of
     the proof. The coin server keeps each round's bytes before flipping that round's coins, and the replay compares
     bytes, so no hash binds the rounds (§1.2).
-  - **The compiled layer is the adopted variant, not yet the recorded sessions'.** PROTOCOL.md specifies SHA-256 trees
-    (§14) and round digests (§6) for the sessions it records, following upstream, and SHA-512 trees as its target. The
+  - **The compiled layer is the adopted variant, not yet the recorded sessions'.** The archived statement versions use SHA-256 trees
+    (`Flock.Merkle`) and round digests (`Flock.Transcript`) for the sessions they record, following upstream, and SHA-512 trees as its target. The
     compiled layer has SHA-512 trees and kept round bytes (DESIGN.md §1).
 - **Sessions: batched and serialized** (DESIGN.md §11.1). There is exactly one verifier.
   - **Batching.** A session carries every table from a time window, proved in parallel by many GPUs or datacenters.
@@ -383,12 +383,12 @@ term below 2^-170.
 - **The committed values.** Flock runs Ligerito in the list-decoding regime, and no out-of-domain sample follows the
   commitment (spec §9.1; paper Remark 11). A committed table therefore binds the prover to a short list of codewords,
   not to one witness. The list has at most 200 entries at rate 1/2 (ArkLib's Johnson bound, `1/(2ηρ)` with
-  `η = 1/200`; PROTOCOL.md §15's 0.02 is a diagnostic).
+  `η = 1/200`; `Flock.Schedule`'s 0.02 is a diagnostic).
   - "The committed values satisfy the circuit" means that some codeword of that list packs a satisfying witness
     (`Model.CommittedSatisfies`), which is exactly right for soundness.
   - Claims that use the committed values elsewhere (registered data, links to other proofs, recursion) need them
     extracted (§1.3).
-- **The circuit.** The theorem is about the block R1CS the statement lowers to (spec §16.1), with the pinned constant
+- **The circuit.** The theorem is about the block R1CS the statement lowers to (`Flock.Statement`), with the pinned constant
   column and the public regions. That this R1CS means the named circuit is the lowering theorem (level 3). Its generic
   step, for every template, is proved here (§1.5), and so is the placement for the executable's statement
   (`placement_of_setupH`). What a correct unit computes is its certificate's (`IsRowsUnit.computes_of_cert`).

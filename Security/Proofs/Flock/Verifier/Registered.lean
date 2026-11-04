@@ -1,11 +1,11 @@
 /-
-Level 3: registered reads (PROTOCOL.md §16.10). `check_ok`: when `Registered.check` accepts, each of the verifier's
+Level 3: registered reads (`Flock.HmRow`). `check_ok`: when `Registered.check` accepts, each of the verifier's
 registered ports has the registered rows' width, and every instance's row of it climbs, from its frame-v3-sha512 leaf at
 the position the verifier's program reads for the instance's unit, to the registered root the verifier holds.
 `complete_opens`: when the complete check (`checkComplete`) accepts too, every port of the circuit is such a port.
 `opensLeaf_binding`: two openings the verifier accepts at
 one position under one registered root, with different leaves, give an explicit SHA-512 collision (`openPair`), and
-`opens_binding` the same of two commit strings (`bcPair`). No random oracle. `checkDescription_ok` (PROTOCOL.md §16.16):
+`opens_binding` the same of two commit strings (`bcPair`). No random oracle. `checkDescription_ok` (`Tags.withPlainLeaves`):
 when `Registered.checkDescription` accepts an inner statement, each of its registered rows opens the registered root at
 its own index, every instance reads one of them, and every one of them is read.
 -/
@@ -341,7 +341,7 @@ theorem opens_binding (reg : Port) (pos : Nat) (bc path bc' path' : ByteArray) (
   · rename_i hl
     exact opensLeaf_binding reg pos _ path _ path' (Sha512.hash_size _) (Sha512.hash_size _) hl h1 h2
 
-/-! ### A recursive session's inner statement: its description (PROTOCOL.md §16.16)
+/-! ### A recursive session's inner statement: its description (`Tags.withPlainLeaves`)
 
 `checkDescription_ok`: when `Registered.checkDescription` accepts, each of the verifier's registered ports `reg` is the
 circuit's port `p`, whose table is `reg`'s registration in order: table row `r` (`rowsOf c pub reg r`) opens `reg`'s root

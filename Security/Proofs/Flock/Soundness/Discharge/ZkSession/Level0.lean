@@ -145,7 +145,7 @@ structure Pads0 (np e : ℕ) where
 /-- A round polynomial whose coefficients are forms. -/
 abbrev QuadL (K : Type) (np : ℕ) := LinK K np × LinK K np × LinK K np
 
-/-- `from(msg, s)` (§13.2) on forms. -/
+/-- `from(msg, s)` (`Flock.Ligerito`) on forms. -/
 def fromMsgL {np : ℕ} (m : LinK K np × LinK K np) (s : LinK K np) : QuadL K np := (m.1, s + m.2, m.2)
 
 /-- `q(x) = q₀ + q₁·x + q₂·x²` on forms. -/

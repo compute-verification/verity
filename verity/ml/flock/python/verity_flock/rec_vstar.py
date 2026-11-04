@@ -11,7 +11,7 @@ top. Its hashing part, which this module states over plain Python:
   commitments is refused (``FIREWALL-REFUSED: tree top``). The stacked table R has no root at ``Commit``: its level 0 is
   its binding round's top, which must be the top registered at staging (`registered`: the ``stacked`` entry of the
   circuit registration, ``verity/registration/v2``, `rec_live.REGISTRATION`, whose digest the statement's META binds).
-* **Openings** (PROTOCOL.md §13.3, §13.5). Level ``l`` of a rep's Ligerito opening is ``Q_l`` queries into that tree. Query
+* **Openings** (`Flock.Ligerito`). Level ``l`` of a rep's Ligerito opening is ``Q_l`` queries into that tree. Query
   ``j``'s position is ``pos_j = (s_j << (d - c_j)) | (coin_j.lo mod 2^(d - c_j))`` over the level's query round's coins,
   its leaf ``SHA-512(row)`` (the row's elements, 16 bytes each, lo LE then hi LE: the statement's
   ``flock-leaf/sha512-unsalted``, `verity_flock.circuit.LEAF_SCHEME_PLAIN`), and the ``d - c`` siblings climb it
@@ -42,7 +42,7 @@ HASH = 64
 SALT = 192
 #: PcsParams.merkle_hash (bincode's variant index of flock-hash's HashKind) of a tree with plain SHA-512 leaves
 PLAIN_KIND = 2
-#: and of an hm96-sha512/v1 tree (PROTOCOL.md §14)
+#: and of an hm96-sha512/v1 tree (`Flock.Merkle`)
 HM96_KIND = 3
 
 
@@ -104,7 +104,7 @@ class Level:
 
 
 def decode(b: bytes) -> dict:
-    """The parts of an inner proof of the SHA-512 build (PROTOCOL.md §8.2 with each level's ``opened_salts``: 192 bytes a
+    """The parts of an inner proof of the SHA-512 build (`Flock.Proof` with each level's ``opened_salts``: 192 bytes a
     query for ``hm96-sha512/v1`` leaves, empty for plain ones) V*'s hashing reads: ``m``, ``k0``, ``plain`` and the opened
     levels in query order (level 0 against ``initial_cap``, then each ``recursive_proofs`` entry against the cap before it,
     then ``final_proof`` against the last ``recursive_caps`` entry)."""
@@ -147,7 +147,7 @@ def decode(b: bytes) -> dict:
 
 
 def strata(Q: int, d: int) -> list[int]:
-    """§13.5: ``Q`` as a sum of powers of two, greedily, each ``c_i = min(floor(log2 rem), d)``."""
+    """`Flock.Ligerito`: ``Q`` as a sum of powers of two, greedily, each ``c_i = min(floor(log2 rem), d)``."""
     out, rem = [], Q
     while rem:
         c = min(rem.bit_length() - 1, d)
@@ -157,7 +157,7 @@ def strata(Q: int, d: int) -> list[int]:
 
 
 def positions(Q: int, d: int, coins: list[int]) -> list[int]:
-    """§13.5: query ``j``'s position from its coin."""
+    """`Flock.Ligerito`: query ``j``'s position from its coin."""
     if len(coins) != Q:
         raise ValueError(f"{len(coins)} coins for {Q} queries")
     out = []

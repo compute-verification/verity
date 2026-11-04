@@ -13,7 +13,7 @@ rep-0 proofs swapped.
 
 Writes OUT_DIR/<name>/ per case and OUT_DIR/zk_mutants.json, the `--expect` form of `agree.py`: the verdict both verifiers
 must reach, the Lean verifier's reason prefix, and `upstream_accepted` where upstream's offline replay, which takes the
-record's coins without re-deriving them from the coin tree (verifier PROTOCOL.md §7.4), accepts what the Lean verifier
+record's coins without re-deriving them from the coin tree (`Flock.CoinTree`), accepts what the Lean verifier
 refuses.
 """
 import hashlib, json, shutil, sys
@@ -62,7 +62,7 @@ def ybar_short(b, off):
 
 
 def trailing(b, off):
-    """Bytes after the inner proof: refused by the Lean verifier (verifier PROTOCOL.md §17.1, D17), ignored by upstream."""
+    """Bytes after the inner proof: refused by the Lean verifier (`verity/ml/flock/verifier/README.md`, D17), ignored by upstream."""
     b += b"\x00" * 16
 
 
@@ -109,7 +109,7 @@ PROOF = [
 ]
 
 #: (name, rep, edit, expect): a nonce of the file made 1, its rounds left as they are: the decoder refuses it before any replay
-#: (verifier PROTOCOL.md R4, D21), and upstream's replay rejects it at the rounds' digests.
+#: (`Flock.Proof`, D21 in `verity/ml/flock/verifier/README.md`), and upstream's replay rejects it at the rounds' digests.
 NONCES = [
     ("zk-lig-query-nonce", 0, flip("lig.qn"), reject("grinding_nonce ≠ 0 (R4)")),
     ("zk-lig-claim-nonce", 0, flip("lig.cbn", 1), reject("claim_batch_grinding_nonce ≠ 0 (R4)")),
@@ -219,12 +219,11 @@ def main(src, out, table=None):
     def coin_tree(field, value):
         return lambda rec: rec["coin_tree"].__setitem__(field, value(rec["coin_tree"][field]))
 
-    # round 0's coins are r_skip, drawn and never read (§19 A1)
+    # round 0's coins are r_skip, drawn and never read (`verity/ml/flock/verifier/README.md` A1)
     record_case("zk-coin-unused", coin(0), ACCEPT)
     record_case("zk-coin-round1", coin(1), reject("ligerito: final check failed"))
     record_case("zk-coin-last-round", coin(-1), reject("zk inner: column"))
-    # the verifier checks the record's coin tree, not its openings: the commitment protects the prover (verifier PROTOCOL.md
-    # §7.4); upstream's offline replay ignores `coin_tree` (divergence D6)
+    # the verifier checks the record's coin tree, not its openings: the commitment protects the prover (`Flock.CoinTree`); upstream's offline replay ignores `coin_tree` (divergence D6)
     record_case("zk-coin-tree-key", coin_tree("key", lambda h: flip_hex(h, 5)), ACCEPT)
     record_case("zk-coin-tree-root", coin_tree("root", lambda h: flip_hex(h, 5)), ACCEPT)
     record_case("zk-coin-tree-key-bit-2047", coin_tree("key", lambda h: h[:-2] + "%02x" % (int(h[-2:], 16) | 0x80)),

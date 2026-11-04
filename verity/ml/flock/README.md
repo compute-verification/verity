@@ -38,9 +38,9 @@ binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patch
   `live/PROTOCOL.md` §10.4 says what each side computes.
 - `*.patch`, `cuda_*_patch.py`, `cuda/`: what the pod scripts apply to the upstream checkout.
 - `pod/`: the pod scripts, run through `research run` (`tool.py` declares the `flock_pure` tool).
-- `verifier/`: the outline of the verifier of record (`PROTOCOL.md`), which is the executable Lean verifier
-  (`../../core/service/flock/`, `flock-verify`), and the scripts that hold it to upstream's Rust verifier; its Lean
-  proofs are under `Security/Proofs/Flock/`. See its README.
+- `verifier/`: what runs Flock's verifier, the Lean verifier (`../../core/service/flock/`, `flock-verify`, whose
+  definitions are the specification), and the scripts that hold it to upstream's Rust verifier; its Lean proofs are
+  under `Security/Proofs/Flock/`. See its README.
 
 Flock's circuit prover is M0 in the Layout above (module `verity_flock.circuit`, CLI `flock-circuit`, statements
 `verity/flock-circuit` and `verity/flock-tables`). The Lean verifier reads its format, serving writes rows in it

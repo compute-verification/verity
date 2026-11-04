@@ -24,7 +24,7 @@ theorem qbOut_reqs_cons {D : Type} (r : ℕ) (lv : Accounting.Level) (ch : List 
     pathLen lv⟩], by simp only [qbOut, h, List.cons_append]⟩
 
 set_option maxHeartbeats 4000000 in
-/-- **Ligerito's rounds refine the model's, level 0's request first** (§13.3): `ligerito_refines`, and the result's
+/-- **Ligerito's rounds refine the model's, level 0's request first** (`Flock.Ligerito`): `ligerito_refines`, and the result's
 first request is level 0's, at the positions of the coins of round `k + k0 + 6` of the transcript, where `k` is the
 round Ligerito starts at. -/
 theorem ligerito_refines_req0 {D : Type} (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128)
@@ -550,7 +550,7 @@ theorem ligerito_refines_req0 {D : Type} (ms : MerkleScheme) (sch : Flock.Schedu
   simp only [List.append_assoc, List.cons_append, List.nil_append] at hmain ⊢
   exact hmain
 
-/-- **Ligerito refines the model's, level 0's request first** (§13.3–§13.6): `ligerito_accepts`, and the result's first
+/-- **Ligerito refines the model's, level 0's request first** (`Flock.Ligerito`): `ligerito_accepts`, and the result's first
 request is level 0's, at the positions of the coins of round `k + k0 + 6`. -/
 theorem ligerito_accepts_req0 {D : Type} (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128)
     (cap : Array ByteArray) (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (r : ℕ) (b : ℕ → 𝔽)
@@ -579,7 +579,7 @@ theorem ligerito_accepts_req0 {D : Type} (ms : MerkleScheme) (sch : Flock.Schedu
   rw [hver, ← hn7]
   exact hfc
 
-/-- **Ligerito on the opening's output refines the model's, level 0's request first** (§12.4, §13):
+/-- **Ligerito on the opening's output refines the model's, level 0's request first** (`Flock.Opening`, `Flock.Ligerito`):
 `ligerito_accepts_opening`, and the result's first request is level 0's, at the positions of the coins of round
 `k + k0 + 6`. -/
 theorem ligerito_accepts_opening_req0 {D : Type} (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128)

@@ -67,7 +67,7 @@ _SWAP = threading.Lock()
 #: ``lig.fold`` (``fold_grinding_nonces``) is one too: the verifier requires it empty, but the scan reads what it got.
 GRIND = ("lig.qn", "lig.fold", "lig.cbn", "lig.consn")
 
-#: A ring switch's grinding nonce, which the verifier requires to be 0 (Flock's PROTOCOL.md §8.3): a zero one is a
+#: A ring switch's grinding nonce, which the verifier requires to be 0 (the Lean verifier's `Flock.Proof`): a zero one is a
 #: field the reader fixes, and a nonzero one, which the verifier refuses, stays the prover's.
 RS_NONCE = re.compile(r"rs\.\d+\.nonce")
 
