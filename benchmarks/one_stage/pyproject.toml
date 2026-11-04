@@ -40,10 +40,11 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # serve-openai's endpoint (`integrations/vllm/verity_vllm`) over a stand-in engine; `examples/vllm/serve.sh`: the
 # demo's endpoint (`test_vllm_example`). network_e2e's endpoint advice: `verity-vllm advice`'s output, which
 # advice_charge's tests read. `benchmarks/census/adversary.json`: onsite_record's world cells (`leak_bounds.world_links`).
-# `Security/lean-audit.json`: onsite_record's guarantees the tight K rests on, each at the statement whose hypotheses and
-# antecedents it names (`RESTS_ON`), which the lock records by digest and no other way.
+# `Security/lean-audit.json` and `Security/Properties/lean-audit.json`: onsite_record's guarantees the tight K rests on
+# and the discharges of its premises, each at the statement whose hypotheses and antecedents it names (`RESTS_ON`,
+# `DISCHARGES`), which the locks record by digest and no other way.
 inputs = ["verity", "verity/core/service/sampled_proofs/lakefile.toml", "benchmarks/live_challenger",
-          "Security/lean-audit.json",
+          "Security/lean-audit.json", "Security/Properties/lean-audit.json",
           "examples/h200/interfaces/verity_e2e_demo", "benchmarks/torch_gpu/commit_slots/slots.py",
           "benchmarks/prove_path/records_audit.py", "examples/vllm/serve_load.py", "examples/vllm/serve.sh",
           "examples/h200/interfaces/tests/fixtures/drawn-unit-bundle.json",
