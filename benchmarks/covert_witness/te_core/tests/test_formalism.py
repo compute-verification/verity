@@ -666,7 +666,8 @@ def test_the_products_term_is_the_theorem_of_records_on_m():
     chain = replace(one_segment(), products=CHAIN)
     b = F.bound(chain, c, k)
     fig = F.he_figure(CHAIN["he"], c, 1e12)
-    assert fig["beta"] == 16 and fig["b_y"] == 16 and not fig["below_width"] and fig["macs_share"] == 1
+    assert (fig["subset"], fig["beta_w"], fig["beta_x"], fig["b_y"]) == ("M", 16, 15.9, 16)
+    assert not fig["below_width"] and fig["macs_share"] == 1
     assert fig["F"] == pytest.approx(2 / math.sqrt(3), rel=1e-15) and fig["N"] == SQUARE["macs"]
     assert fig["O"] == SQUARE["outputs"] * 16
     assert b["terms"]["fresh_products"] == fig["rho"] > 1 and "fresh_products" not in b["unmeasured"]
@@ -674,8 +675,10 @@ def test_the_products_term_is_the_theorem_of_records_on_m():
     assert F.published(chain)["reading"] == ("A" if F.READING_A else "B")
     one = F.published(chain, reading="A")
     assert one["products_rests_on"] == F.he_rests_on(fig)
-    assert all(x in one["products_rests_on"] for x in ("(H)", "β = 16 bits a word", "(E)", "b_y = 16 bits an output",
-                                                       "a single counterexample refutes"))
+    assert all(x in one["products_rests_on"] for x in ("(H)", "β_w = 16 and β_x = 15.9 bits a word", F.BETA_K_LABEL,
+                                                       "the casts of one value count as one word", "(E)",
+                                                       "b_y = 16 bits an output", "a single counterexample refutes"))
+    assert F.CODE_LABEL not in one["products_rests_on"]
     assert one["rests_on"] == (one["products_rests_on"] if one["binding_kind"] == "fresh_products" else
                                F.RESTS_ON_CELL[one["binding_kind"]])
     assert one["capture_code"] is None and F.published(replace(chain, products=CHAIN | {
@@ -690,9 +693,107 @@ def test_the_products_term_is_the_theorem_of_records_on_m():
     assert F.bound(replace(chain, products=CHAIN | {"he": None}), c, k)["unmeasured"]["fresh_products"] == F.HE_RETRACE
     fans = F.bound(replace(chain, products=CHAIN | {"p_match": [{"op": "expand", "fan_out": 16.0, "count": 1}]}), c, k)
     assert fans["terms"]["fresh_products"] is None and "breaks the premise" in fans["unmeasured"]["fresh_products"]
-    assert all(x in F.RESTS_ON["fresh_products"] for x in ("(H)", "(E)", "F = 2/√3", "β_eff", "K* = ½√(k/β)"))
+    assert all(x in F.RESTS_ON["fresh_products"] for x in ("(H)", "(E)", "F = 2/√3", "β_eff", "K* = ½√(k/β)",
+                                                           F.BETA_K_LABEL, F.CODE_LABEL, "casts of one value"))
     assert all(x in F.RESTS_ON_CELL["fresh_products"] for x in ("(H)", "(E)", "a single counterexample refutes"))
     assert F.CELL_SENSITIVITIES == ("reduction", "update", "fresh_old")
+
+
+def he_row(phase: str, td: list, m: int, k: int, n: int, count: int = 1, batch: int = 1) -> dict:
+    """A product row as te_core.capture.products writes one: both operands affected at bf16, paid, none gathered."""
+    gates = next(g for g, b in F.HE_BITS.items() if b == (16, 16))
+    return {"phase": phase, "token_dims": td, "dims": {"batch": batch, "m": m, "k": k, "n": n}, "count": count,
+            "macs": batch * m * k * n, "outputs": batch * m * n, "affected": [True, True], "self": False,
+            "gathered": [False, False], "widths": [16, 16], "rates": [16.0, 16.0], "cell_gates": gates}
+
+
+#: a step of 1,024 tokens: two layers' 1,024-wide matrix, a 4,096-wide head and an 8-long product with wide outputs,
+#: forward, input and weight gradients, beside the optimizer's products and attention's
+HE_STEP = [he_row("forward", ["m"], 1024, 1024, 1024, 2), he_row("forward", ["m"], 1024, 1024, 4096),
+           he_row("forward", ["m"], 1024, 8, 4096), he_row("backward", ["m"], 1024, 4096, 1024),
+           he_row("backward", ["k"], 4096, 1024, 1024), he_row("backward", ["m"], 1024, 1024, 1024, 2),
+           he_row("backward", ["k"], 1024, 1024, 1024, 2), he_row("optimizer", [], 1024, 1024, 1024, 4),
+           he_row("forward", ["batch", "m", "n"], 256, 64, 256, 1, 4)]
+
+
+def test_the_products_term_takes_the_best_of_three_ms_at_beta_k_with_the_code_size_beta_w_and_the_first_steps():
+    """4.13.1's rules on M (`he_of_rows`, `he_figure`): the optimizer's products and attention's leave M; a weight is an
+    operand no token indexes, a backward product contracting over tokens a weight gradient, and the head's are the
+    backward products over its vocabulary width (the widest forward output); the trained weights are the weights a
+    step's forward reads, each matrix once a token. Activations are charged β(k), 15.9 up to 145,568 and linear in log
+    k between io-bound's points, none past 8e8, weights their width or less the record's code bits a trained weight,
+    a weight's β the β_w a product reports beside its activation's β_x. The term is the best of all of M, M less its contractions below K_thr (here the 8-long product's wide outputs,
+    whose leaving lifts the term) and the weight gradients alone at F = 1; over a run's steps it loses the ⌊k/(τT)⌋
+    after the first update, and from 8e7 the head's products leave M. Model products that sum the head's gradients
+    with the layers' are unmeasured from 8e7, and every M past 8e8."""
+    c, k, C, T = 1e11, 65_536.0, 1e13, 1024
+    assert (F.beta_k(1.0), F.beta_k(145_568), F.beta_k(8e6), F.beta_k(8e8)) == (15.9, 15.9, 10.8, 0.37)
+    assert F.beta_k(math.sqrt(8e6 * 8e7)) == pytest.approx((10.8 + 2.7) / 2, rel=1e-12) and F.beta_k(8.1e8) is None
+    he = F.he_of_rows(HE_STEP, k, 10.0, T)
+    opt, att = HE_STEP[7], HE_STEP[8]
+    assert he["left_out_macs"] == 10 * (opt["count"] * opt["macs"] + att["count"] * att["macs"])
+    assert he["trained_weights"] == 2 * 1024 * 1024 + 1024 * 4096 + 8 * 4096
+    assert sorted((g["k_dim"], g["dw"], g["head"], tuple(g["weight"])) for g in he["groups"]) == [
+        (8, False, False, (False, True)), (1024, False, False, (False, True)), (1024, False, False, (False, True)),
+        (1024, True, False, (False, False)), (1024, True, True, (False, False)), (4096, False, True, (False, True))]
+    fig = F.he_figure(he, c, C)
+    assert fig["subset"] == F.HE_SUBSETS[1] and fig["rho"] == max(fig["subsets"].values()) > fig["subsets"]["M"]
+    assert 8 < fig["K_thr"] < 1024 and fig["beta_k"] == 15.9 and fig["F"] == pytest.approx(2 / math.sqrt(3))
+    dw = [g for g in he["groups"] if g["dw"]]
+    N, O = sum(g["macs"] for g in dw), sum(g["wires"] for g in dw)
+    assert fig["subsets"][F.HE_SUBSETS[2]] == pytest.approx(max(0.0, F.he_rho(N, O, 15.9, 15.9, 16, 1.0, c, k, C)),
+                                                            rel=1e-12)
+    first = F.he_figure(he, c, C, tau=16)
+    assert first["first_steps"] == 4 and first["N"] == pytest.approx(0.6 * fig["N"], rel=1e-12)
+    assert fig["first_steps"] is None and F.he_figure(he, c, C, tau=1e3)["first_steps"] == 0
+    coded = F.he_figure(he, c, C, beta_code=2.0)
+    assert coded["rho"] < fig["rho"] and coded["beta_code"] == 2.0
+    one = he | {"groups": [g for g in he["groups"] if g["k_dim"] == 1024 and not g["dw"] and not g["head"]][:1]}
+    weighed = F.he_figure(one, c, C, beta_code=8.0)
+    assert (weighed["beta_w"], weighed["beta_x"], weighed["code_bound"]) == (8.0, 15.9, True)
+    m = replace(one_segment(delta=2.0 * he["trained_weights"]),
+                products={"k": k, "order": "chain", "products": [], "he": he})
+    term, why, got = F.he_products(m, c, k)
+    assert why is None and got["beta_code"] == 2.0 and term == F.he_figure(he, c, m.gates, m.tau_bits, 2.0)["rho"]
+    assert (F.CODE_LABEL in F.he_rests_on(got)) == got["code_bound"]
+    far = F.he_of_rows(HE_STEP, 8e7)
+    assert F.he_figure(far, c, C) == F.he_figure(far | {"groups": [g for g in far["groups"] if not g["head"]]}, c, C)
+    assert F.he_figure(he, c, C) != F.he_figure(he | {"groups": [g for g in he["groups"] if not g["head"]]}, c, C)
+    for at, why in ((8e7, F.HE_HEAD), (9e8, F.HE_PAST)):
+        model = replace(one_segment(), products={"k": at, "order": "chain", "products": [SQUARE],
+                                                 "he": F.he_of_products([SQUARE], at)})
+        assert F.he_products(model, c, at)[:2] == (None, why), at
+    with pytest.raises(ValueError, match="past k"):
+        F.he_figure(F.he_of_rows(HE_STEP, 9e8), c, C)
+
+
+def test_the_products_term_charges_m_its_least_pair_where_a_layers_arrays_differ_in_beta():
+    """F = 2/√3 is proved for one β on a layer's three shared arrays (weights, activations, output gradients); with a β
+    each, Motzkin-Straus sums u_r·u_s/(β_r·β_s) over the pairs M's products multiply, so both terms take the least
+    pair product among M's products. Weights at 2 (the record's code size), activations at β(k) = 15.9 and output
+    gradients at 8: all of M binds at the input gradient's 2·8 = 16, below the forward product's 2·15.9, which would
+    read higher, and each threshold's M_P keeps only the products whose pair is at least its own."""
+    c, k, C, m, K = 1e11, 65_536.0, 1e13, 256, 65_536
+
+    def group(beta: list, weight: list, forward: bool, dw: bool, scale: float) -> dict:
+        return {"beta": beta, "width": [16, 16], "weight": weight, "b_y": 16, "forward": forward, "k_dim": K,
+                "dw": dw, "head": False, "macs": scale * m * m * K, "wires": scale * m * m * 16}
+
+    fwd, dx = group([16.0, 16.0], [False, True], True, False, 1), group([8.0, 16.0], [False, True], False, False, 4)
+    dw = group([8.0, 16.0], [False, False], False, True, 0.25)
+    he = {"k": k, "groups": [fwd, dx, dw], "r_step": None, "candidates_macs": 5.25 * m * m * K, "self_macs": 0.0,
+          "gathered_macs": 0.0, "left_out_macs": 0.0, "steps": None, "step_tokens": None, "trained_weights": None}
+    fig = F.he_figure(he, c, C, beta_code=2.0)
+    share = 2 / math.sqrt(3)
+
+    def rho(M: list, bw: float, bx: float, f: float = share) -> float:
+        return F.he_rho(sum(g["macs"] for g in M), sum(g["wires"] for g in M), bw, bx, 16, f, c, k, C)
+
+    assert (fig["subset"], fig["beta_w"], fig["beta_x"], fig["code_bound"]) == ("M", 2.0, 8.0, True)
+    assert fig["F"] == pytest.approx(share, rel=1e-15) and fig["macs_share"] == 1
+    assert fig["rho"] == pytest.approx(rho([fwd, dx, dw], 2.0, 8.0), rel=1e-12)
+    assert rho([fwd, dx, dw], 2.0, 8.0) < rho([fwd, dx, dw], 2.0, 15.9)
+    assert fig["rho"] > max(rho([fwd, dw], 2.0, 15.9), rho([dw], 15.9, 8.0), rho([dw], 15.9, 8.0, 1.0)) > 0
 
 
 #: a code name in a published string: a dotted path (a module's, or its function's), an identifier with an underscore
@@ -711,8 +812,8 @@ def test_no_published_string_names_the_code():
     c, k = 1e11, policy.CONSOLE[1]
     static = [F.RESTS_ON, F.RESTS_ON_CELL, F.SENSITIVITIES, F.STUBS, F.TRACED, F.DECODER, F.V23,
               F.FRESH_UNMEASURED, F.FRESH_VOID, F.FRESH_RETRACE, F.FRESH_UNCHECKED, F.ONE_CLASS, F.LOG_UNKNOWN,
-              F.HE_RETRACE, F.HE_NO_ROWS, F.STAND_IN, F.ENTRIES, F.OPS, F.PRODUCTS, F.TRACED_PRODUCTS, F.CONTEXT,
-              F.TAIL]
+              F.HE_RETRACE, F.HE_NO_ROWS, F.HE_PAST, F.HE_HEAD, F.STAND_IN, F.ENTRIES, F.OPS, F.PRODUCTS,
+              F.TRACED_PRODUCTS, F.CONTEXT, F.TAIL]
     strings = [s for x in static for s in (x.values() if isinstance(x, dict) else [x])]
     chain = CHAIN
     coded = one_segment(delta=500.0, decoder=5e10)
@@ -736,7 +837,8 @@ def test_no_published_string_names_the_code():
                 strings += [one["label"], one["rests_on"], one["why"] or "", one["void"] or "",
                             one["products_rests_on"] or ""]
     strings += [F.void_reason(0.17, 0.5), F.void_reason(0.023, 7e-5), F.void_reason(None, None),
-                F.he_rests_on({"beta": 3.2, "b_y": 16.0, "below_width": True})]
+                F.he_rests_on({"subset": F.HE_SUBSETS[2], "beta_w": 1.6, "beta_x": 3.2, "b_y": 16.0,
+                               "below_width": True, "code_bound": True}), *F.HE_SUBSETS]
     assert {F.FRESH_UNMEASURED, F.FRESH_RETRACE, F.FRESH_UNCHECKED, F.HE_NO_ROWS} <= reasons
     assert all(any(x in r for r in reasons) for x in ("op log", "classified at k", "summed in a tree", "elementwise "
                                                       "steps (", "breaks the premise", "no entries", "no op log"))
@@ -766,7 +868,8 @@ def test_published_reading_a_above_1_is_the_measured_max_partial_where_a_kind_is
     full = F.published(chain, 1e11, policy.CONSOLE[1], "A")
     assert full["binding_kind"] == "fresh_products" and full["rho"] == full["terms"]["fresh_products"] > 1
     assert not full["partial"] and full["rests_on"] == full["products_rests_on"]
-    assert full["rests_on"].startswith("theorem of record, given (H): operands are hard at β = 16 bits a word")
+    assert full["rests_on"].startswith("theorem of record on M, given (H): operands are hard at β_w = 16 and β_x = "
+                                       "15.9 bits a word")
 
 
 def test_published_reading_a_at_most_1_with_a_kind_unmeasured_is_null_never_1():
@@ -894,7 +997,9 @@ def test_a_dense_steps_product_rows_give_io_bounds_bound_on_it(monkeypatch):
     assert one["inputs"]["fresh_old"]["capture"] == one["inputs"]["fresh_products"]["capture"] == products.CAPTURE
     assert one["inputs"]["fresh_old"]["subset"]["dropped"] == 4
     assert one["terms"]["fresh_products"] == F.he_figure(got["he"], c, C)["rho"]
-    assert round(one["terms"]["fresh_products"]) == 123_811 and one["inputs"]["fresh_products"]["beta"] == 16
+    he = one["inputs"]["fresh_products"]
+    assert round(one["terms"]["fresh_products"]) == 99_481 and (he["subset"], he["beta_w"], he["beta_x"]) == (
+        "M", 15.9, 15.9)
 
 
 def test_the_45m_dense_steps_old_figure_reads_its_whole_making_system_and_a_rank_one_class_voids_it():
@@ -996,9 +1101,10 @@ def test_a_traces_products_at_each_k_of_the_dial_give_the_term_there_which_the_d
     `at`), so the products term is measured at each of them on that k's M, and off the dial it is unmeasured with the
     reason. At a fixed k the theorem of record's ρ is c/|C| times a function of k, and io_bound's blocks don't move
     with c, so the dial reads the old figure and the term as c times a number for each k (`fresh_per_c`, [fresh_old/c,
-    term/c]). On the 45M dense step the term falls with k (123,811 at the console's 65,536 bits and 53,735 at 80,000,
-    at β 16), and from the served block's 145,568 bits up the outputs' term exceeds the MACs', so it is 0, which ρ's
-    floor reads as 1; the old figure is 2,869,161, 2,089,282 and 778,360 there, and void from 800,000 bits up, where its
+    term/c]). On the 45M dense step the term falls with k (99,481 at the console's 65,536 bits and 56,743 at 80,000 on
+    M, 23,374 at the served block's 145,568 and 1,655 at 800,000 on M without its short contractions), and from 8e6
+    bits up β(k) is low enough that the outputs' term exceeds the MACs', so it is 0, which ρ's floor reads as 1; the
+    old figure is 2,869,161, 2,089,282 and 778,360 at the first three, and void from 800,000 bits up, where its
     whole-making system's one cycle, which feeds every counted product, has no fixed point, so the dial reads it null
     beside the term."""
     from te_core.capture import products
@@ -1022,7 +1128,7 @@ def test_a_traces_products_at_each_k_of_the_dial_give_the_term_there_which_the_d
             else:
                 assert why is None and old == pytest.approx(c * per[str(k)][0], rel=1e-12)
     c = policy.CONSOLE[0]
-    assert [round(c * per[str(k)][1]) for k in products.DIAL_K] == [123_811, 53_735] + [0] * 5
+    assert [round(c * per[str(k)][1]) for k in products.DIAL_K] == [99_481, 56_743, 23_374, 1_655] + [0] * 3
     assert [round(c * per[str(k)][0]) for k in (65_536, 80_000, 145_568)] == [2_869_161, 2_089_282, 778_360]
     assert [per[str(k)][0] is None for k in products.DIAL_K] == [False] * 3 + [True] * 4
     term, why, _ = F.he_products(m, c, 100_000)
@@ -1186,7 +1292,8 @@ def test_a_row_an_older_te_core_ingested_reads_its_traces_rows_as_this_one_does(
     ingest stored are never read as they are, since no capture before `ELEMENTWISE_FROM` looked for those products
     (`FRESH_UNCHECKED`); products a record has of its own stand. The products term reads M from the same rows: rows
     before `SYSTEM_FROM` need a retrace (`HE_RETRACE`), products stored without rows have no M (`HE_NO_ROWS`), and
-    rows with `gathered` are measured at each k their trace keeps rows at."""
+    rows with `gathered` are measured at each k their trace keeps rows at (0 at the console's k: the run's 2.5 steps
+    after the first are among the ⌊k/(τT)⌋ = 512 it leaves out)."""
     row = {"count": 2, "phase": "forward", "op": "mm", "dims": {"batch": 1, "m": 4, "k": 512, "n": 8},
            "token_dims": ["m"], "macs": 16384, "outputs": 32, "affected": [True, True], "widths": [16, 16],
            "rates": [16.0, 16.0], "paid": [True, False], "self": False, "b_c": 32, "k_whole": 512,
@@ -1246,7 +1353,7 @@ def test_a_row_an_older_te_core_ingested_reads_its_traces_rows_as_this_one_does(
     assert now["products"]["system"] is not None
     old, why, got = fresh(before_412(now))
     assert (old, why) == fresh(now)[:2] and old > 0 and why is None and got["whole_making"] != F.ONE_CLASS
-    assert term(before_412(now)) == term(now) and term(now)[0] > 0 and term(now)[1] is None
+    assert term(before_412(now)) == term(now) == (0.0, None)
     served = 145_568.0
     dial = F.of_record(record(captured | {"at": {f"{served:.0f}": {"k": served, "rows": captured["rows"],
                                                                    "p_match": []}}}))
