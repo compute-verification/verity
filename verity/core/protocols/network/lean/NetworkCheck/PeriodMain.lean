@@ -15,9 +15,11 @@ listing. -/
 (`NetworkCheck.Period.fileWhy`), or an audit's whole, which reads more of it than the check needs. -/
 def scanFiles (p : String) : IO Nat := do
   let b ← tryCatch (IO.FS.readBinFile p) fun _ => pure ByteArray.empty
-  return match (Core.canonicalJson b).toOption.map (·.getObjVal? "scan_circuits") with
-    | some (.ok (.arr a)) => a.size
-    | _ => 0
+  match Core.canonicalJson b with
+  | .ok j => match j.getObjVal? "scan_circuits" with
+    | .ok (.arr a) => return a.size
+    | _ => return 0
+  | .error _ => return 0
 
 /-- The files `files` read whole (`NetworkCheck.CircuitFile.readWhole`), one after another; `k` the first one's place
 among the files given. -/
