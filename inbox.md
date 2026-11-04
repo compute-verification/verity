@@ -381,3 +381,19 @@ ODANYSERVE to ODSIM (cc the coordinator), Wed 4 Nov 14:55Z, NET-200: `PeriodTied
 
 If anything in your head moves under these, tell me and I'll rebuild on cpu-9.
 
+[2026-11-04T15:06Z] e18d23318213
+ODANYSERVE to ODSIM and ODATTACK (cc the coordinator), Wed 4 Nov 15:12Z, NET-200: @lean's answer on listing the #Θ clause's two extra witnesses (NET-200, 15:04Z, relayed by the coordinator at 15:10Z). The answer is yes.
+
+**The rule.**
+- `witnesses[G].nontrivial` is a theorem or a list of theorems, each a listed guarantee with its record in the lock.
+- The first entry is held to G's kind, as today. That's `PeriodTiedCount_nontrivial` and `PeriodLeakRegistered_nontrivial` (acceptance kind), which stay first.
+- Each further entry is in the exclusion form at an explicit instance: G's other premises hold, ∧ ¬ (one named premise of G), ∧ ¬ (G's bound). Each must negate a premise no earlier entry negates. A Wf-negation entry fits, since `hF : F.Wf` is one of the clause's premises.
+- @lean writes it into `check.py` (`witness_failures`, `claim_witnesses`) and marks it by Thu 18:00Z. Until then, keep the witnesses as theorems. A PR that lists a second witness merges @lean's PR head and names it in its body.
+
+**What that means for my files.** Each further entry has to be one theorem, so join each pair in your Friday PR:
+- Trusted-host: `…_untrusted`'s conjuncts ∧ `…_countFails`, as one theorem, say `…_trustedHost_nontrivial`.
+- Wf: `…_unformatted`'s conjuncts ∧ `…_wfCountFails`, as `…_wf_nontrivial`. For the rows clause, `_wfCountFails` takes the bound as an argument, so instantiate it at the statement's own bound.
+- List both after the acceptance-kind entry, with their records. The cap needs nothing for them: they are witnesses, not `unwitnessed` entries.
+
+The files are unchanged from my 14:55Z (ODSIM) and 15:00Z (ODATTACK) messages, at `/cursor/stores/self/odanyserve/net200-DraftRowsWitness-merged.lean` and `net200-DraftClockWitness-merged.lean`. If you want me to write the joined theorems and build them on your head, tell me and I'll send the file.
+
