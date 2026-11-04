@@ -9,12 +9,13 @@ import Proofs.Properties.Challenger.Coins
 Clause (i) of `MovesOf`: the record v2 reads in an accepted play decodes (`Exec.recordDraw`) to the session's draw file
 (`Live.dj`) at the proof blocks the play's sample selects.
 
-* **v2's refusal** (`DrawHeld`): wherever v2 drew `units` under the law `L` over `n` units (`Drew`), the units are
-  ascending below `n` (`unitsAscending`) and the record's `unit_draw` prints as `UnitDraw.toJson ⟨L, n, units, #[]⟩`
-  does (`recordDrawn`). It is a `Prop` about v2's code, taken as a hypothesis.
-* **The record half** (`recordDraw_of_drew`): where `DrawHeld` holds, v2 drew `units`, and the session's law and
-  population are `L` and `n`, the record decodes to the session's draw file at the proof blocks `units` names, at a
-  session whose draw files `norm` fixes. Both are rebuilt values (`Flock.norm`) that `canonUtf8` prints alike, so they
+* **v2's refusal** (`DrawHeld`): wherever composite `k` accepted what the prover sent as a `same` composition
+  (`Verity.SameAccepts`) and v2 drew `units` under the law `L` over `n` units there (`Drew`), the units are ascending
+  below `n` (`unitsAscending`) and the record's `unit_draw` prints as `UnitDraw.toJson ⟨L, n, units, #[]⟩` does
+  (`recordDrawn`). It is a `Prop` about v2's code, taken as a hypothesis.
+* **The record half** (`recordDraw_of_drew`): where `DrawHeld` holds, `k` accepted, v2 drew `units`, and the session's
+  law and population are `L` and `n`, the record decodes to the session's draw file at the proof blocks `units` names,
+  at a session whose draw files `norm` fixes. Both are rebuilt values (`Flock.norm`) that `canonUtf8` prints alike, so they
   are equal (`eq_of_canonUtf8`): a rebuilt value is well formed (`FlockDeploy.wf_norm`), so its objects hold their keys
   in order (`sortedKeys_of_wf`), and sorted values that print alike are equivalent
   (`Properties.Challenger.CanonRead.canon_inj`). The draw file at the units' proof blocks is
@@ -633,10 +634,12 @@ def recordDrawn (L : Flock.Draw.Law) (n : ℕ) (units : Array ℕ) (record : Str
       | _, _ => false
     | none => false
 
-/-- **v2 holds the record's draw to its own** in what composite `k` accepts: wherever v2 drew `units` under the law `L`
-over `n` units in what the prover sent (`Drew`), the record v2 reads there is drawn so (`recordDrawn`). -/
+/-- **v2 holds the record's draw to its own** in what composite `k` accepts: wherever `k` accepted what the prover sent
+as a `same` composition and v2 drew `units` under the law `L` over `n` units there (`Drew`), the record v2 reads there
+is drawn so (`recordDrawn`). Without the acceptance, the record `sentRecord` finds by id can be another entry's than
+the case `Drew` reads in order. -/
 def DrawHeld (k : Verity.Registration.Composite) : Prop :=
-  ∀ s dr L n ξ units record, Drew k s dr L n ξ units → sentRecord s = some record →
+  ∀ s dr L n ξ units record, Verity.SameAccepts k s → Drew k s dr L n ξ units → sentRecord s = some record →
     recordDrawn L n units record = true
 
 theorem exec_recordDraw (record : String) :
@@ -720,16 +723,17 @@ theorem eq_of_canonUtf8 {a b : Json} {s : String} (ha : Flock.norm a = a) (hb : 
     (Properties.Challenger.CanonRead.canon_inj (sortedKeys_of_wf a wa) (sortedKeys_of_wf b wb) hsa hsb)
 
 /-- **The record's draw is the session's draw file at v2's units**: where v2 holds the record's draw to its own
-(`DrawHeld`), v2 drew `units` under the law `L` over `n` units in what the prover sent, and the session's law and
-population are `L` and `n`, the record v2 reads decodes to the session's draw file at the proof blocks `units` names,
-at a session whose draw files `norm` fixes. -/
+(`DrawHeld`), composite `k` accepted what the prover sent, v2 drew `units` under the law `L` over `n` units there, and
+the session's law and population are `L` and `n`, the record v2 reads decodes to the session's draw file at the proof
+blocks `units` names, at a session whose draw files `norm` fixes. -/
 theorem recordDraw_of_drew {k : Verity.Registration.Composite} (hH : DrawHeld k) {s : Verity.Sent} {dr : Draws}
-    {L : Flock.Draw.Law} {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (hd : Drew k s dr L n ξ units) (A : Live)
+    {L : Flock.Draw.Law} {n : ℕ} {ξ : ByteArray} {units : Array ℕ} (hS : Verity.SameAccepts k s)
+    (hd : Drew k s dr L n ξ units) (A : Live)
     (hL : A.law = L) (hn : A.n = n) (hfix : ∀ S, Flock.norm (A.dj S) = A.dj S) {record : String}
     (hr : sentRecord s = some record) :
     FlockSoundness.Discharge.Exec.recordDraw record =
       some (A.dj (Finset.univ.filter fun u : Fin A.n => u.val ∈ units)) := by
-  have h := hH s dr L n ξ units record hd hr
+  have h := hH s dr L n ξ units record hS hd hr
   subst hL hn
   unfold recordDrawn at h
   rw [Bool.and_eq_true] at h
@@ -910,7 +914,7 @@ theorem recordDraw_of_coins {V : Vocab d α} {k : Verity.Registration.Composite}
       rw [length_bitsOf, length_fillCoins]
       omega
   rw [draw_of_drew hd A ω hL hn hpre]
-  exact recordDraw_of_drew hH hd A hL hn hfix hr
+  exact recordDraw_of_drew hH hv.2.1 hd A hL hn hfix hr
 
 /-! ## The record's draw on the joint law's support -/
 
