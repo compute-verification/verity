@@ -4,6 +4,7 @@ import Batteries.Tactic.OpenPrivate
 import Proofs.Properties.Pouw.LiveSalt.Ledger
 import Proofs.Properties.Verity.SampledDraw
 import Proofs.Properties.Verity.SampledLog
+import Proofs.Properties.Verity.Sampled.Trees
 import Std.Tactic.Do
 
 /-!
@@ -21,6 +22,10 @@ reads the log (`ReadsLog`, `drawRead_coinsRead`).
   those its pairs' root lines show (`sel`), and `ξ` is `COIN_BYTES` bytes for each of them equal to the digest.
 * **What the read shows** (`fresh_readLines`, `countFresh_eq`, `chunks_flatten`): the read's coins of the draw's family
   after the digest are `ξ`'s coins, one for each such root, so their bits are `ξ`'s.
+* **The read in order** (`treeRelease_some`, `sampleLinkFirst_snoc`, `sampleLinkFirst_readLines`,
+  `sampleLinkFirst_readLines_nil`, `sampleLinkFirst_congr`): where the release log's lines after its head pass
+  `sampleLinkFirst`, the releases the read shows pass `SampleLinkFirst`: the sample, then the link, then the other
+  rounds; and so do releases of the same frames answering the same bytes, as a log the read is of.
 * **What `coinsRead` leaves open** (`ReadsLog`): that the read returns a log wherever v2 accepts. The read refuses a
   coin tree's line whose `event` string is neither a tree's nor an opening's, an opening whose stream its tree's spec
   doesn't name, and a record that doesn't parse. v2's check tells a coin tree's line apart and finds its stream by
@@ -436,6 +441,289 @@ theorem chunks_flatten : ∀ (m : ℕ) (ξ : ByteArray), ξ.size = COIN_BYTES * 
       rw [ByteArray.size_extract, Nat.min_self, h, Nat.mul_succ, Nat.add_sub_cancel]
     rw [chunks, List.flatten_cons, chunks_flatten m _ hs, bitsOfBytes_eq, ← bitsOf_append,
       ByteArray.extract_append_extract, Nat.zero_min, Nat.max_eq_right h64, ByteArray.extract_zero_size]
+
+/-! ## The read in order -/
+
+/-- **A coin tree's line releases its `Hello` or a round's opening**, as `treeRelease` reads it: a `Hello` adds its
+tree's spec to the trees sampled, on a line whose `event` isn't `OPEN_EVENT`; an opening is of a round of a tree sampled
+before it, of the stream its line names, on a line whose `event` is `OPEN_EVENT`. -/
+theorem treeRelease_some {records : List Json} {ts ts' : List (String × Flock.CoinTree.Spec)} {j : Json}
+    {r : Verity.Release} (h : treeRelease records ts j = some (r, ts')) :
+    (∃ root spec, r.frame = .hello spec ∧ ts' = ts ++ [(root, spec)] ∧
+        SampledProofs.jsonStrIs (SampledProofs.getD j "event") OPEN_EVENT = false) ∨
+      (∃ i s n, r.frame = .opening i s n ∧ ts' = ts ∧
+        SampledProofs.jsonStrIs (SampledProofs.getD j "event") OPEN_EVENT = true ∧
+        ∀ stream, SampledProofs.getD j "stream" = .str stream →
+          ((ts.map (·.2))[i]?.bind fun sp => sp.streams[s]?) = some stream) := by
+  unfold treeRelease at h
+  cases hev : SampledProofs.getD j "event" with
+  | str x =>
+    simp only [hev] at h
+    by_cases hT : x = TREE_EVENT
+    · subst hT
+      simp only [beq_self_eq_true, ite_true, Option.bind_eq_bind] at h
+      left
+      split at h
+      · rename_i key _
+        split at h
+        · rename_i nonce _
+          split at h
+          · rename_i root _
+            obtain ⟨spec, -, h⟩ := Option.bind_eq_some_iff.1 h
+            obtain ⟨ν, -, h⟩ := Option.bind_eq_some_iff.1 h
+            obtain ⟨r', -, h⟩ := Option.bind_eq_some_iff.1 h
+            obtain ⟨κ, -, h⟩ := Option.bind_eq_some_iff.1 h
+            simp only [Option.pure_def, Option.some.injEq, Prod.mk.injEq] at h
+            obtain ⟨rfl, rfl⟩ := h
+            exact ⟨root, spec, rfl, rfl, by simp [SampledProofs.jsonStrIs, TREE_EVENT, OPEN_EVENT]⟩
+          · simp at h
+        · simp at h
+      · simp at h
+    · have hT' : (x == TREE_EVENT) = false := by simpa using hT
+      simp only [hT', Bool.false_eq_true, ite_false] at h
+      by_cases hO : x = OPEN_EVENT
+      · subst hO
+        simp only [beq_self_eq_true, ite_true, Option.bind_eq_bind] at h
+        right
+        split at h
+        · rename_i root _
+          split at h
+          · rename_i stream hstream
+            split at h
+            · rename_i aft _
+              obtain ⟨k, -, h⟩ := Option.bind_eq_some_iff.1 h
+              obtain ⟨n, -, h⟩ := Option.bind_eq_some_iff.1 h
+              obtain ⟨i, -, h⟩ := Option.bind_eq_some_iff.1 h
+              obtain ⟨⟨_, spec⟩, hts, h⟩ := Option.bind_eq_some_iff.1 h
+              obtain ⟨s, hs, h⟩ := Option.bind_eq_some_iff.1 h
+              obtain ⟨b, -, h⟩ := Option.bind_eq_some_iff.1 h
+              simp only [Option.pure_def, Option.some.injEq, Prod.mk.injEq] at h
+              obtain ⟨rfl, rfl⟩ := h
+              refine ⟨i, s, n, rfl, rfl, by simp [SampledProofs.jsonStrIs], fun stream' h' => ?_⟩
+              rw [hstream] at h'
+              cases h'
+              have hsp : (ts.map (·.2))[i]? = some spec := by simp [hts]
+              rw [hsp, Option.bind_some]
+              obtain ⟨hlt, heq, -⟩ := Array.findIdx?_eq_some_iff_getElem.1 hs
+              simp [Array.getElem?_eq_getElem hlt, beq_iff_eq.1 heq]
+            · simp at h
+          · simp at h
+        · simp at h
+      · have hO' : (x == OPEN_EVENT) = false := by simpa using hO
+        simp [hO'] at h
+  | _ => simp_all [TREE_EVENT, OPEN_EVENT]
+
+theorem helloSpecs_append (a b : List Verity.Release) : helloSpecs (a ++ b) = helloSpecs a ++ helloSpecs b :=
+  List.filterMap_append
+
+/-- **A release after a log in order keeps it in order**: where it releases no coin of the sample after an opening,
+and, as the first opening, opens the stream `TREE_SESSION`. -/
+theorem sampleLinkFirst_snoc {label : String} {after : ByteArray} {pre : List Verity.Release} {r : Verity.Release}
+    (hP : SampleLinkFirst label after pre)
+    (hf : (∃ q ∈ pre, ∃ i s n, q.frame = .opening i s n) → ¬ (r.frame = .fresh label ∧ r.answers = after))
+    (ho : ∀ i s n, r.frame = .opening i s n → (∀ q ∈ pre, ∀ i' s' n', q.frame ≠ .opening i' s' n') →
+      ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = some TREE_SESSION) :
+    SampleLinkFirst label after (pre ++ [r]) := by
+  intro pre₀ r₀ post₀ heq i s n hr₀
+  cases post₀.eq_nil_or_concat with
+  | inl h =>
+    subst h
+    obtain ⟨rfl, h⟩ := List.append_inj' heq rfl
+    cases List.cons.inj h |>.1
+    exact ⟨fun _ hq => absurd hq List.not_mem_nil, ho i s n hr₀⟩
+  | inr h =>
+    obtain ⟨post₁, x, rfl⟩ := h
+    rw [List.concat_eq_append] at heq ⊢
+    have heq' : pre ++ [r] = (pre₀ ++ r₀ :: post₁) ++ [x] := by rw [heq]; simp
+    obtain ⟨hpre, hx⟩ := List.append_inj' heq' rfl
+    cases List.cons.inj hx |>.1
+    obtain ⟨hpost, hlink⟩ := hP pre₀ r₀ post₁ hpre i s n hr₀
+    refine ⟨fun q hq => ?_, hlink⟩
+    rcases List.mem_append.1 hq with hq | hq
+    · exact hpost q hq
+    · rw [List.mem_singleton.1 hq]
+      exact hf ⟨r₀, by rw [hpre]; simp, i, s, n, hr₀⟩
+
+/-- A family's release after a log in order keeps it in order, where it isn't the sample's or no round is opened. -/
+theorem sampleLinkFirst_snoc_fresh {label : String} {after : ByteArray} {pre : List Verity.Release}
+    {r : Verity.Release} {opened : Bool} {lab : String} {root : ByteArray} (hP : SampleLinkFirst label after pre)
+    (hO : opened = true ↔ ∃ q ∈ pre, ∃ i s n, q.frame = .opening i s n) (hr : r.frame = .fresh lab)
+    (ha : r.answers = root) (hs : opened = true → ¬ (lab = label ∧ root = after)) :
+    SampleLinkFirst label after (pre ++ [r]) ∧ helloSpecs (pre ++ [r]) = helloSpecs pre ∧
+      (opened = true ↔ ∃ q ∈ pre ++ [r], ∃ i s n, q.frame = .opening i s n) := by
+  refine ⟨sampleLinkFirst_snoc hP (fun h ⟨h1, h2⟩ => ?_) (fun i s n h => ?_), ?_, ?_⟩
+  · rw [hr] at h1
+    cases h1
+    exact hs (hO.2 h) ⟨rfl, ha ▸ h2⟩
+  · rw [hr] at h
+    cases h
+  · simp [helloSpecs_append, helloSpecs, hr]
+  · rw [hO]
+    constructor
+    · rintro ⟨q, hq, i, s, n, h⟩
+      exact ⟨q, List.mem_append_left _ hq, i, s, n, h⟩
+    · rintro ⟨q, hq, i, s, n, h⟩
+      rcases List.mem_append.1 hq with hq | hq
+      · exact ⟨q, hq, i, s, n, h⟩
+      · rw [List.mem_singleton.1 hq, hr] at h
+        cases h
+
+/-- **v2's read of a log in order is in order**: where the release log's lines after its head pass `sampleLinkFirst`'s
+scan, the releases `readLines` reads from them, after the releases `pre` read before them, show the sample, then the
+link, then the other rounds. -/
+theorem sampleLinkFirst_readLines {label : String} {after : ByteArray} {records : List Json} :
+    ∀ (lines : List String) (ts : List (String × Flock.CoinTree.Spec)) (pending : Option String) (ξ : ByteArray)
+      (opened : Bool) (pre : List Verity.Release) {log : List Verity.Release},
+      sampleLinkFirstFrom label after opened pending lines = true →
+      readLines label after records lines ts pending ξ = some log →
+      helloSpecs pre = ts.map (·.2) →
+      (opened = true ↔ ∃ q ∈ pre, ∃ i s n, q.frame = .opening i s n) →
+      SampleLinkFirst label after pre → SampleLinkFirst label after (pre ++ log)
+  | [], _, none, _, _, pre, log, _, hR, _, _, hP => by
+    simp only [readLines, Option.some.injEq] at hR
+    subst hR
+    simpa using hP
+  | [], _, some _, _, _, _, _, _, hR, _, _, _ => by simp [readLines] at hR
+  | l :: ls, ts, pending, ξ, opened, pre, log, hB, hR, hS, hO, hP => by
+    unfold readLines at hR
+    unfold sampleLinkFirstFrom at hB
+    by_cases ht : treeLine l = true
+    · rw [ite_eq_left ht] at hR hB
+      simp only [Option.bind_eq_bind] at hR
+      obtain ⟨⟨r, ts'⟩, hX, hR⟩ := Option.bind_eq_some_iff.1 hR
+      obtain ⟨j, hj, hX⟩ := Option.bind_eq_some_iff.1 hX
+      simp only [Option.pure_def] at hR
+      obtain ⟨rest, hrest, hR⟩ := Option.bind_eq_some_iff.1 hR
+      cases hR
+      have hev : event l = .ok j := by
+        cases he : event l with
+        | ok j' =>
+          rw [he] at hj
+          simp only [Except.toOption, Option.some.injEq] at hj
+          rw [hj]
+        | error _ =>
+          rw [he] at hj
+          simp [Except.toOption] at hj
+      have hol : openLine l = SampledProofs.jsonStrIs (SampledProofs.getD j "event") OPEN_EVENT := by
+        simp only [openLine, hev]
+      have hll : linkLine l = (SampledProofs.jsonStrIs (SampledProofs.getD j "event") OPEN_EVENT &&
+          SampledProofs.jsonStrIs (SampledProofs.getD j "stream") TREE_SESSION) := by
+        simp only [linkLine, hev]
+      split at hB
+      · exact absurd hB (by simp)
+      rename_i hc
+      have hIH := sampleLinkFirst_readLines ls ts' pending ξ (opened || openLine l) (pre ++ [r]) hB hrest
+      rw [List.append_assoc, List.singleton_append] at hIH
+      rcases treeRelease_some hX with ⟨root, spec, hr, hts, hoe⟩ | ⟨i, s, n, hr, hts, hoe, hst⟩
+      · rw [hol, hoe, Bool.or_false] at hIH
+        refine hIH ?_ ?_ (sampleLinkFirst_snoc hP (fun _ ⟨h1, _⟩ => ?_) (fun i s n h => ?_))
+        · rw [helloSpecs_append, hS, hts]
+          simp [helloSpecs, hr]
+        · rw [hO]
+          constructor
+          · rintro ⟨q, hq, i, s, n, h⟩
+            exact ⟨q, List.mem_append_left _ hq, i, s, n, h⟩
+          · rintro ⟨q, hq, i, s, n, h⟩
+            rcases List.mem_append.1 hq with hq | hq
+            · exact ⟨q, hq, i, s, n, h⟩
+            · rw [List.mem_singleton.1 hq, hr] at h
+              cases h
+        · rw [hr] at h1
+          cases h1
+        · rw [hr] at h
+          cases h
+      · subst hts
+        rw [hol, hoe, Bool.or_true] at hIH
+        refine hIH ?_ ?_ (sampleLinkFirst_snoc hP (fun _ ⟨h1, _⟩ => ?_) (fun i' s' n' h hnone => ?_))
+        · rw [helloSpecs_append, hS]
+          simp [helloSpecs, hr]
+        · exact ⟨fun _ => ⟨r, by simp, i, s, n, hr⟩, fun _ => rfl⟩
+        · rw [hr] at h1
+          cases h1
+        · obtain ⟨rfl, rfl, rfl⟩ := Verity.Frame.opening.inj (hr.symm.trans h)
+          have hop : opened = false := by
+            cases hb : opened
+            · rfl
+            · obtain ⟨q, hq, i'', s'', n'', h''⟩ := hO.1 hb
+              exact absurd h'' (hnone q hq i'' s'' n'')
+          have hlk : linkLine l = true := by
+            cases hb : linkLine l
+            · exact absurd ⟨hop, by rw [hol, hoe], hb⟩ hc
+            · rfl
+          rw [hll, hoe, Bool.true_and] at hlk
+          rw [hS]
+          exact hst _ (Trees.strIs hlk)
+    · rw [ite_eq_right ht] at hR hB
+      cases pending with
+      | none => exact sampleLinkFirst_readLines ls ts (some l) ξ opened pre hB hR hS hO hP
+      | some a =>
+        simp only [Option.bind_eq_bind] at hR
+        obtain ⟨⟨lab, root⟩, hra, hR⟩ := Option.bind_eq_some_iff.1 hR
+        simp only [Option.pure_def] at hR
+        dsimp only at hB
+        split at hB
+        · exact absurd hB (by simp)
+        rename_i hc
+        have hs : opened = true → ¬ (lab = label ∧ root = after) := fun ho hm =>
+          hc ⟨ho, by rw [hra, hm.1, hm.2]⟩
+        by_cases hm : lab = label ∧ root = after
+        · rw [ite_eq_left hm] at hR
+          obtain ⟨rest, hrest, hR⟩ := Option.bind_eq_some_iff.1 hR
+          cases hR
+          obtain ⟨hP', hS', hO'⟩ := sampleLinkFirst_snoc_fresh
+            (r := ⟨.fresh label, after, Verity.bitsOfBytes (ξ.extract 0 COIN_BYTES)⟩) hP hO rfl rfl
+            fun ho _ => hs ho hm
+          have h := sampleLinkFirst_readLines ls ts none _ opened _ hB hrest (hS'.trans hS) hO' hP'
+          rwa [List.append_assoc, List.singleton_append] at h
+        · rw [ite_eq_right hm] at hR
+          obtain ⟨rest, hrest, hR⟩ := Option.bind_eq_some_iff.1 hR
+          cases hR
+          obtain ⟨hP', hS', hO'⟩ := sampleLinkFirst_snoc_fresh (r := (⟨.fresh lab, root, []⟩ : Verity.Release)) hP hO
+            rfl rfl hs
+          have h := sampleLinkFirst_readLines ls ts none _ opened _ hB hrest (hS'.trans hS) hO' hP'
+          rwa [List.append_assoc, List.singleton_append] at h
+
+/-- **v2's read of a log in order is in order**, from the log's first line after its head. -/
+theorem sampleLinkFirst_readLines_nil {label : String} {after : ByteArray} {records : List Json}
+    {lines : List String} {ξ : ByteArray} {log : List Verity.Release} (hB : sampleLinkFirst label after lines = true)
+    (hR : readLines label after records lines [] none ξ = some log) : SampleLinkFirst label after log := by
+  have h := sampleLinkFirst_readLines lines [] none ξ false [] hB hR rfl (by simp)
+    (fun pre r post h => absurd h (by simp))
+  simpa using h
+
+theorem forall₂_split {α β : Type} {R : α → β → Prop} {r' : β} {post' : List β} :
+    ∀ {pre' : List β} {l : List α}, List.Forall₂ R l (pre' ++ r' :: post') →
+      ∃ pre r post, l = pre ++ r :: post ∧ List.Forall₂ R pre pre' ∧ R r r' ∧ List.Forall₂ R post post'
+  | [], _, .cons h t => ⟨[], _, _, rfl, .nil, h, t⟩
+  | _ :: _, _, .cons h t =>
+    let ⟨pre, r, post, he, hp, hr, hq⟩ := forall₂_split t
+    ⟨_ :: pre, r, post, by rw [he]; rfl, .cons h hp, hr, hq⟩
+
+theorem helloSpecs_congr :
+    ∀ {l l' : List Verity.Release}, List.Forall₂ (fun x y => x.frame = y.frame ∧ x.answers = y.answers) l l' →
+      helloSpecs l = helloSpecs l'
+  | _, _, .nil => rfl
+  | x :: _, y :: _, .cons h t => by
+    have e := helloSpecs_congr t
+    simp only [helloSpecs, List.filterMap_cons, h.1] at e ⊢
+    rw [e]
+
+/-- **Releases of the same frames, answering the same bytes, are in order together**: `SampleLinkFirst` reads only
+each release's frame and the bytes it answered. -/
+theorem sampleLinkFirst_congr {label : String} {after : ByteArray} {l l' : List Verity.Release}
+    (hl : List.Forall₂ (fun x y => x.frame = y.frame ∧ x.answers = y.answers) l l')
+    (hP : SampleLinkFirst label after l) : SampleLinkFirst label after l' := by
+  intro pre' r' post' heq i s n hr'
+  subst heq
+  obtain ⟨pre, r, post, rfl, hpre, hr, hpost⟩ := forall₂_split hl
+  obtain ⟨hP1, hP2⟩ := hP pre r post rfl i s n (hr.1.trans hr')
+  refine ⟨fun q' hq' ⟨h1, h2⟩ => ?_, fun hnone => ?_⟩
+  · obtain ⟨q, hq, hqq⟩ := Properties.SampledProofs.SecurityProofs.forall₂_mem_right hpost q' hq'
+    exact hP1 q hq ⟨hqq.1.trans h1, hqq.2.trans h2⟩
+  · rw [← helloSpecs_congr hpre]
+    refine hP2 fun q hq i' s' n' hqo => ?_
+    obtain ⟨q', hq', hqq⟩ := Claims.Bridge.Custody.forall₂_mem_left hpre q hq
+    exact hnone q' hq' i' s' n' (hqq.1.symm.trans hqo)
 
 /-! ## v2's case in what the prover sent -/
 
