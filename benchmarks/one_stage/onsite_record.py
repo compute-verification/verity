@@ -328,7 +328,7 @@ PREMISES: dict[str, dict[str, Any]] = {
                                 "this name, until k_sched's count bounds that union and the Property that gives it, "
                                 "stated over that audit, is in the lock at the statement `DISCHARGES` pins; the "
                                 "decoder half is what K counts (`COUNTS`)",
-                          "discharged_by": ("Properties.NetworkCertifier.SchedulesCoveredAt",)},
+                          "discharged_by": ("Properties.NetworkCertifier.schedulesCoveredAt",)},
     "sampled-leg-bridge": {"is": "the sampled leg's bridge, from its guarantee Verity.Vocab.SampledProofsSound at "
                                  "one-stage v2 to OneStageZk's Lean record: the sampled facts the period takes (KS; "
                                  "ListWithin, the decoder's list at Flock's radius; Binds, the trace commitment's "
