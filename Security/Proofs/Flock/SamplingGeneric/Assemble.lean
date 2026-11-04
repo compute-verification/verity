@@ -10,6 +10,7 @@ public import Proofs.Flock.Claims.Sampling.KS
 `KSOf`'s deterministic half: an extraction that fails gives the failure event the probabilistic half bounds
 (`Compiled.Fails` at `Compiled.Found`, `SamplingGeneric/Fails.lean`), or a `Bext` collision (`split`,
 `Claims.Sampling`'s `split` with Flock's `E^rep` replaced by `Arg`'s extractor at each sampled proof block's session).
+With `KS_of_sessionKS` it gives `KSOf` (`ksOf`).
 
 * `innerBody`, `outerBody`, `outerList`, `found`: **the extractor's parts**, and what it keeps (`E_eval`); the kept
   openings pass their checks, with the checks' calls among the extractor's own (`passes_found`, `ownLog_E`), and the
@@ -19,6 +20,7 @@ public import Proofs.Flock.Claims.Sampling.KS
   checked them (`CommitmentScheme.Binds`), so without one the kept openings agree and assemble a witness; its faulty
   set is refused at `δ`, and a block of it found at a kept inner run would be correct at the kept openings
   (`Sessions.opens`, with the interior roots fixed by the first stage, `Sessions.interior`).
+* `ksOf`: **`KSOf`**, `KS_of_sessionKS` at `split`.
 -/
 
 @[expose] public section
@@ -254,5 +256,11 @@ theorem split {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H)
   exact hnc hcorr
 
 end Compiled
+
+/-- **`KSOf`**: the sessions' bound at `Found` (`SessionKS`) and the split give `Compiled.KS`. -/
+theorem ksOf : KSOf := by
+  intro Coin _ _ _ A L H hbind hS hSK
+  exact Compiled.KS_of_sessionKS hS hSK fun δ _ x _ P s hacc hfail =>
+    Compiled.split hbind hS δ x P s.1 s.2.1 s.2.2 hacc hfail
 
 end Claims.SamplingGeneric
