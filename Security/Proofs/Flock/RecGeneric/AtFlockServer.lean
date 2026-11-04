@@ -10,7 +10,8 @@ public import Proofs.Flock.Claims.Recursion.HonestIVStarR
 `Server.ofBound Bd` is the bound record's server:
 
 * `Open(DE, hm96)` is the bound record's `IVStar`, and its opened views are the bound record's, both by unfolding
-  (`ivStarOfBound`, `openViewOfBound`);
+  (`ivStarOfBound`, `openViewOfBound`), so what `E^rep` reads through hm96's opening at the element-level Flock is
+  what it reads at the bound record (`opens_openView_ofBound`);
 * it binds where a row's digest input is injective: two passing openings of one commit string to different rows collide
   on the salts' hashes where the salts differ and on the rows' digests where they share it (`bindsOfBound`, from
   `Bound.opens_coll`);
@@ -32,6 +33,14 @@ theorem ivStarOfBound {Coin Col T : Type} [Inhabited Coin] (Bd : Bound Coin Col 
 /-- **F1: hm96's opened views are the bound record's**: `Server.openView` at `Server.ofBound` unfolds to
 `Bound.openView`. -/
 theorem openViewOfBound {Coin Col T : Type} (Bd : Bound Coin Col T) : OpenViewOfBound Bd :=
+  rfl
+
+/-- **The contract's reader at hm96 is the bound record's**: what `E^rep` reads of a view at the element-level Flock
+through hm96's opening (`RecoversLinkOn`'s reader) is `DE`'s columns of the bound record's opened view, the reading of
+`Inner.ofFlock` at `Bound.deploy` (`openViewOfBound`). -/
+theorem opens_openView_ofBound {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+    (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T) (Cp : Caps Coin) (v : Seen) :
+    (Proto.ofFlock Bd decI Cp).opens ((Server.ofBound Bd).openView v) = (Inner.ofFlock Bd.deploy decI).opens v :=
   rfl
 
 /-- **hm96's commit string is the bound record's honest one**: `b ‖ c` with `b = H(rowIn row) ⊕ Φy` and
