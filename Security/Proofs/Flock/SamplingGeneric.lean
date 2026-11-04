@@ -9,6 +9,7 @@ public import Proofs.Flock.SamplingGeneric.Session
 public import Proofs.Flock.SamplingGeneric.Count
 public import Proofs.Flock.SamplingGeneric.Bits
 public import Proofs.Flock.SamplingGeneric.Efficient
+public import Proofs.Flock.SamplingGeneric.Counter
 
 /-!
 # The sampled compiler in the claims core, at Flock
@@ -26,8 +27,9 @@ from the session transfer and the session's fork (`SamplingGeneric/Session.lean`
 (`flockKS`) and the count form (`compilerKSCount`, `SamplingGeneric/Count.lean`). `CompilerBits` follows from it and
 the extractor's expected reruns and own calls (`SamplingGeneric/Bits.lean`, `ExpOwnOf`). `CompilerEfficient` and
 `ExpOwnOf` as stated are false at a sample that repeats a proof block (`Counter.not_compilerEfficient`,
-`Counter.not_expOwnOf`, `SamplingGeneric/Efficient.lean`). A session's coins in a compiled run, `coinsOf` and `place`,
-invert each other (`SamplingGeneric/Coins.lean`).
+`Counter.not_expOwnOf`, `SamplingGeneric/Counter.lean`), and hold where the extractor extracts slot by slot
+(`Compiled.efficient_of_slots`, `Compiled.expOwn_of_slots`, `SamplingGeneric/Efficient.lean`). A session's
+coins in a compiled run, `coinsOf` and `place`, invert each other (`SamplingGeneric/Coins.lean`).
 -/
 
 @[expose] public section

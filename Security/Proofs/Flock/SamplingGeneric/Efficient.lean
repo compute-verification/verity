@@ -1,29 +1,34 @@
 module
 
-public import Proofs.Flock.SamplingGeneric.Assemble
+public import Proofs.Flock.Claims.Sampling.Runs
+public import Proofs.Flock.Claims.Sampling.RunsExp
+public import Proofs.Flock.SamplingGeneric.Session
 public import Proofs.Flock.SamplingGeneric.Bits
 
 /-!
-# The compiler's efficiency, as stated, is false
+# The compiled extractor's costs
 
-`CompilerEfficient` bounds the compiled extractor's own SHA-512 calls by `k²·n_PU·(openCalls + h_s)`, from the contract
-(`Compiled.Sessions`), `OpenCallsLe` and the proof system's costs, and so does `ExpOwnOf` (`SamplingGeneric/Bits.lean`),
-which `compilerBits_of` reads.
+`Compiled.Efficient`'s three bounds at a compiled sampled verifier that meets the contract (`Compiled.Sessions`), from
+the proof system's costs (`Arg.RerunsLe`, `Arg.RerunsExpLe`, `Arg.OwnLe`) and the opening checks' count
+(`Compiled.OpenCallsLe`), at the sampling extractor whose accepted inner runs extract slot by slot (`slotExt`).
 
-* **Without `OpenCallsLe`, `openCalls` bounds nothing.** The contract never relates it to `commit` or `reveal`, so
-  checking what one session's witness reveals can cost more SHA-512 calls than `openCalls` (`not_ownLe_openCalls`, at
-  a sample without repeats). So both statements take `OpenCallsLe`.
-* **The sample may repeat a proof block.** `Compiled.E` extracts once per entry of `checked`, and the contract never
-  says the entries are distinct or at most `n_PU`, so an inner run that samples one block twice extracts it twice
-  (`not_ownLe_repeats`, where checking what a session's witness reveals costs exactly `openCalls`); so
-  `not_compilerEfficient` and `not_expOwnOf`.
-
-`L₀ n oc` is the compiled verifier both use: one proof block, a verifier of one round that accepts, a proof system of
-one round whose extractor returns at once, a sample of `n` copies of the block, a reveal of one opening whose check is
-one SHA-512 call, and `openCalls = oc`. It meets the contract (`sessions₀`) and the proof system costs nothing
-(`A₀_runs`, `A₀_runsExp`, `A₀_own`); its extractor's own calls are `k²·n` (`ownLog_E₀`), against the bound `k²·oc`.
-They are counted at any compiled verifier: at an accepted run, the outer body's at the kept outer runs
-(`Compiled.length_ownLog_E`), `k` of them when every run accepts (`Compiled.length_outerList_all`).
+* `Esamp`: the sampling extractor with what it does at each accepted inner run a parameter (`step`), and its three
+  bounds from the step's (`Esamp_runs_le`, `Esamp_runs_exp`, `Esamp_own_le`): `Claims.Sampling`'s `E_runs_le`,
+  `E_runs_exp` and `E_own_le` with Flock's unit waits replaced by the step. In expectation the step's reruns average at
+  most `W` of the inner run, and acceptance times `W` averages at most `B` over the second stage, against which the
+  inner wait amortizes (`level_ex`, `level_amortized`).
+* `unitExt_runs_eq`, `unitExt_own_le`: under `runs`, a sampled proof block's extraction reruns exactly as `A`'s extractor
+  against the session's prover at the session's coins (each served rerun is one rerun, seen as the session's view), and
+  its own SHA-512 calls are `A`'s extractor's and its reveal's checks.
+* `slotExt`, `slotStep`: a run's extractions slot by slot of the sample (the first `n_PU`), each at its slot's coins.
+  Its strict reruns and own calls are at most `n_PU` blocks' (`slotExt_runs_le`, `slotExt_own_le`); in expectation, slot
+  `i` weighs at most `e_s` given acceptance (`slot_exp_le`): resampling its block's session's rounds keeps the block
+  (`fixed`, `Ex_resample`), so the session's coins and the block's coins are uniform beside one prover `P'`, where
+  `A.RerunsExpLe` holds.
+* `slots_runs_le`, `slots_runs_exp`, `slots_own_le`: `Efficient`'s three bounds at `Esamp` of `slotStep`.
+* `efficient_of_slots`, `expOwn_of_slots`: `Efficient` and `ExpOwnOf`'s two bounds at a compiled verifier whose
+  extractor is `Esamp` of `slotStep`, the only fact about `Compiled.E` they read. `Compiled.E` repeats a block a sample
+  repeats, on one block's coins, where both fail (`Counter.not_compilerEfficient`, `Counter.not_expOwnOf`).
 -/
 
 @[expose] public section
@@ -31,300 +36,648 @@ They are counted at any compiled verifier: at an accepted run, the outer body's 
 namespace Claims.SamplingGeneric
 
 open Claims Claims.Sampling
+open Claims.Recursion (serve viewing)
 
-theorem ownLog_flatMapRP_const {R β γ : Type} (H : Msg → Msg) (run : R → Trace) (f : β → RP R (List γ)) (m : ℕ)
-    (l : List β) (h : ∀ b ∈ l, (ownLog H run (f b)).length = m) :
-    (ownLog H run (flatMapRP f l)).length = l.length * m := by
-  rw [ownLog_flatMapRP, List.map_congr_left h, List.map_const', List.sum_replicate, smul_eq_mul]
+/-! ## Reruns and own calls read the runs only through what they show -/
 
-/-- A wait at which every run accepts keeps the first `k` runs. -/
-theorem waitAccC_length_all {R : Type} (H : Msg → Msg) (run : R → Trace) (hrun : ∀ r, (run r).out = .acc) (k : ℕ)
-    (l : List R) : ((waitAccC k l []).eval H run).1.length = min k l.length := by
-  rw [waitAccC_eval_nil, List.length_map, accList, List.filter_eq_self.2 fun r _ => decide_eq_true (hrun r),
-    List.length_take]
+theorem eval_runs_congr {R α : Type} (H : Msg → Msg) {run₁ run₂ : R → Trace}
+    (h : ∀ r, (run₁ r).seen = (run₂ r).seen) (p : RP R α) : (p.eval H run₁).2.2 = (p.eval H run₂).2.2 := by
+  induction p with
+  | ret a => rfl
+  | hash q k ih => exact ih (H q)
+  | rerun r k ih =>
+    simp only [RP.eval]
+    rw [h r, ih]
+
+theorem ownLog_congr {R α : Type} (H : Msg → Msg) {run₁ run₂ : R → Trace}
+    (h : ∀ r, (run₁ r).seen = (run₂ r).seen) (p : RP R α) : ownLog H run₁ p = ownLog H run₂ p := by
+  induction p with
+  | ret a => rfl
+  | hash q k ih => simp only [ownLog, ih]
+  | rerun r k ih =>
+    simp only [ownLog]
+    rw [h r, ih]
+
+/-- Served by one rerun each, seen through `f`, a program makes the inner stage's own SHA-512 calls against the served
+runs. -/
+theorem ownLog_serve_viewing {R₁ R₂ α : Type} (H : Msg → Msg) (f : Seen → Seen) (g : R₁ → R₂) (run : R₂ → Trace)
+    (p : RP R₁ α) :
+    ownLog H run (RP.serve (fun r => viewing f (g r)) p) = ownLog H (servedRun H (fun r => viewing f (g r)) run) p := by
+  induction p with
+  | ret a => rfl
+  | hash m k ih => simp only [RP.serve, ownLog, ih]
+  | rerun r k ih =>
+    simp only [RP.serve, ownLog]
+    rw [ownLog_bind, ownLog_of_noHash H run (NoHash.rerun (g r) _ fun _ => NoHash.ret _), List.nil_append, ih,
+      servedRun_seen]
+
+/-- Served by one rerun each, a program reruns as often as the inner stage against the served runs. -/
+theorem serve_place_runs {R₁ R₂ α : Type} (H : Msg → Msg) (f : Seen → Seen) (g : R₁ → R₂) (run : R₂ → Trace)
+    (p : RP R₁ α) :
+    ((RP.serve (fun r => viewing f (g r)) p).eval H run).2.2 =
+      (p.eval H (servedRun H (fun r => viewing f (g r)) run)).2.2 := by
+  rw [(RP.serve_eval H _ run p).2.2, RP.eval_runs_eq H _ p]
+  have h1 : ∀ r, ((viewing f (g r) : RP R₂ Seen).eval H run).2.2 = 1 := fun _ => rfl
+  simp only [h1, List.map_const', List.sum_replicate, smul_eq_mul, mul_one]
+
+/-- A wait's kept runs show what their runs show. -/
+theorem seen_of_mem_zip {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (rs : List R) {n : ℕ}
+    {li : Fin n × (R × Seen)} (h : li ∈ (List.finRange n).zip ((waitAccC k rs []).eval H run).1) :
+    li.2.2 = (run li.2.1).seen := by
+  obtain ⟨j, q⟩ := li
+  have hq := (List.of_mem_zip h).2
+  rw [waitAccC_eval_nil] at hq
+  obtain ⟨r, -, rfl⟩ := List.mem_map.1 hq
+  rfl
+
+theorem le_foldr_max_nat {a : ℕ} : ∀ {l : List ℕ}, a ∈ l → a ≤ l.foldr max 0
+  | [], h => by simp at h
+  | b :: l, h => by
+    rw [List.foldr_cons]
+    rcases List.mem_cons.1 h with rfl | h
+    · exact le_max_left _ _
+    · exact le_max_of_le_right (le_foldr_max_nat h)
+
+theorem le_maxBelowN {n : ℕ} (f : ℕ → ℕ) {u : ℕ} (hu : u < n) : f u ≤ maxBelowN n f :=
+  le_foldr_max_nat (List.mem_map.2 ⟨u, List.mem_range.2 hu, rfl⟩)
+
+/-- **One coordinate of uniform dependent coins is uniform**, in expectation. -/
+theorem Ex_pi_eval_dep {ι : Type} [Fintype ι] [DecidableEq ι] {E : ι → Type} [∀ i, Fintype (E i)]
+    [∀ i, Nonempty (E i)] (i : ι) (f : E i → ℝ) : Ex (fun c : (j : ι) → E j => f (c i)) = Ex f := by
+  rw [← Claims.Sampling.Ex_fst (β := (j : {j // j ≠ i}) → E j) f]
+  exact Ex_equiv (Equiv.piSplitAt i E) fun p => f p.1
+
+/-- **Uniform coins restricted along an injective map, beside `A`'s extractor's coins cast along an equation of
+shapes, are uniform**, in expectation. -/
+theorem Ex_restrict_shape {Coin : Type} [Fintype Coin] [Nonempty Coin] {A : Arg Coin} {m n : ℕ}
+    (emb : Fin m → Fin n) (hemb : Function.Injective emb) {s s' : A.Sh} (hs : s = s')
+    (F : (Fin m → Coin) → A.EC s → ℝ) :
+    Ex (fun p : (Fin n → Coin) × A.EC s' => F (fun i => p.1 (emb i)) (cast (congrArg A.EC hs.symm) p.2)) =
+      Ex (fun p : (Fin m → Coin) × A.EC s => F p.1 p.2) := by
+  subst hs
+  rw [Ex_prod, Ex_prod]
+  exact Ex_comp_inj emb hemb fun a => Ex (F a)
 
 namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem k_le_cap (L : Compiled Coin A) (x : Msg) : L.k x ≤ L.cap x := by
-  unfold Compiled.cap; exact Nat.le_mul_of_pos_left _ (by positivity)
+/-! ## The sampling extractor at a step -/
 
-/-- At an accepted run, the extractor's own calls are its outer body's at the kept outer runs. -/
-theorem length_ownLog_E (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
-    (r₀ : Fin (L.V.k x) → Coin) (c : L.E.C x) {s : AuditStatement} (hs : L.parse x = some s)
-    (hacc : (run H P L.V x ω r₀).out = .acc) :
-    (ownLog H (run H P L.V x ω) (L.E.ext x r₀ c)).length =
-      (ownLog H (run H P L.V x ω) (flatMapRP (L.outerBody x s c) (L.outerList H x (run H P L.V x ω) c))).length := by
-  have hacc' : (run H P L.V x ω r₀).seen.out = .acc := hacc
-  simp only [E, ownLog, hs]
-  rw [ite_eq_left hacc', ownLog_bind, ownLog_bind, ownLog_of_noHash _ _ (NoHash.waitAccC _ _ _), List.nil_append,
-    List.length_append]
-  exact Nat.add_zero _
+/-- What the sampling extractor does at an accepted inner run `(r, v)`, on its coins `Y x`, at the outer run's index
+`j` and the inner run's `l`. -/
+abbrev Step (L : Compiled Coin A) (Y : Msg → Type) : Type :=
+  (x : Msg) → AuditStatement → Y x → Fin (L.k x) → Fin (L.k x) → (Fin (L.V.k x) → Coin) → Seen →
+    RP (Fin (L.V.k x) → Coin) (List (List Msg × Opening Bool))
+
+/-- At an accepted outer run `jo`, on the inner waits' coins and the steps' (`c`): the inner wait fresh on the second
+stage, and the step at each kept inner run. -/
+noncomputable def sampInner (L : Compiled Coin A) (Y : Msg → Type) (step : L.Step Y) (x : Msg) (s : AuditStatement)
+    (c : (Fin (L.k x) → Fin (L.cap x) → Fin (L.V.k x) → Coin) × Y x)
+    (jo : Fin (L.k x) × ((Fin (L.V.k x) → Coin) × Seen)) :
+    RP (Fin (L.V.k x) → Coin) (List (List Msg × Opening Bool)) :=
+  (waitAccC (L.k x) ((List.finRange (L.cap x)).map fun l => forkOn (L.stage2 x) jo.2.1 (c.1 jo.1 l)) []).bind
+    fun inner => flatMapRP (fun li : Fin (L.k x) × ((Fin (L.V.k x) → Coin) × Seen) =>
+      step x s c.2 jo.1 li.1 li.2.1 li.2.2) ((List.finRange (L.k x)).zip inner)
+
+/-- **The sampling extractor at a step** (`Compiled.E` with its innermost part `step`): replay the judged run; if it
+accepted, rerun on fresh coins until `k` accepted runs are in hand; at each, rerun fresh on the second stage until `k`
+accepted runs are in hand (each wait giving up after `K`); at each of those, the step; and assemble. -/
+noncomputable def Esamp (L : Compiled Coin A) (Y : Msg → Type) [∀ x, Fintype (Y x)] [∀ x, Nonempty (Y x)]
+    (step : L.Step Y) : Extractor Coin Sampling.Wit L.V where
+  C x := (Fin (L.cap x) → Fin (L.V.k x) → Coin) × (Fin (L.k x) → Fin (L.cap x) → Fin (L.V.k x) → Coin) × Y x
+  ext x r₀ c := .rerun r₀ fun v₀ =>
+    match L.parse x with
+    | none => .ret none
+    | some s =>
+      if v₀.out = .acc then
+        (waitAccC (L.k x) ((List.finRange (L.cap x)).map c.1) []).bind fun outer =>
+          (flatMapRP (L.sampInner Y step x s c.2) ((List.finRange (L.k x)).zip outer)).bind fun found =>
+            .ret (some (assemble s found))
+      else .ret none
+
+section Samp
+
+variable (H : Msg → Msg) (L : Compiled Coin A) (Y : Msg → Type) [∀ x, Fintype (Y x)] [∀ x, Nonempty (Y x)]
+  (step : L.Step Y)
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [∀ x, Fintype (Y x)] [∀ x, Nonempty (Y x)] in
+theorem sampInner_runs_le {x : Msg} {s : AuditStatement} (run' : (Fin (L.V.k x) → Coin) → Trace) (B : ℕ)
+    (hstep : ∀ c j l r, ((step x s c j l r (run' r).seen).eval H run').2.2 ≤ B)
+    (c : (Fin (L.k x) → Fin (L.cap x) → Fin (L.V.k x) → Coin) × Y x)
+    (jo : Fin (L.k x) × ((Fin (L.V.k x) → Coin) × Seen)) :
+    ((L.sampInner Y step x s c jo).eval H run').2.2 ≤ L.cap x + L.k x * B := by
+  unfold sampInner
+  rw [(RP.eval_bind H run' _ _).2, waitAccC_runs_eq]
+  refine Nat.add_le_add ((waitRuns_le_length _ _ _ _).trans_eq (by simp)) ?_
+  refine (flatMapRP_runs_le H run' _ B _ fun li hli => ?_).trans
+    (Nat.mul_le_mul_right _ (length_zip_finRange_le _ _))
+  rw [seen_of_mem_zip H run' _ _ hli]
+  exact hstep _ _ _ _
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- At runs that all accept, the outer wait keeps `k` runs. -/
-theorem length_outerList_all (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
-    (c : L.ECoins x) (hrun : ∀ r, (run' r).out = .acc) : (L.outerList H x run' c).length = L.k x := by
-  unfold outerList
-  rw [List.length_zip, List.length_finRange, waitAccC_length_all H run' hrun, List.length_map, List.length_finRange,
-    Nat.min_eq_left (L.k_le_cap x), min_self]
+/-- **`ExtractRunsLe` at the sampling extractor**: at most `1 + K + k·(K + k·B)` reruns, when each step at an inner run
+reruns at most `B`. -/
+theorem Esamp_runs_le (B : Msg → ℕ)
+    (hstep : ∀ x s (Ω : Type) (P : Prover Ω) (ω : Ω), L.parse x = some s → ∀ c j l r,
+      ((step x s c j l r (run H P L.V x ω r).seen).eval H (run H P L.V x ω)).2.2 ≤ B x) :
+    ExtractRunsLe H (L.Esamp Y step) (fun x => 1 + L.cap x + L.k x * (L.cap x + L.k x * B x)) := by
+  intro x Ω P ω r₀ c
+  simp only [Extractor.eval, Esamp, RP.eval]
+  split
+  · simp only [RP.eval, Nat.zero_add]
+    rw [Nat.add_assoc]
+    exact Nat.le_add_right 1 _
+  · rename_i s hs
+    split
+    · have h := outer_runs_le H (run H P L.V x ω) (L.k x) (L.cap x) (L.cap x + L.k x * B x)
+        ((List.finRange (L.cap x)).map c.1) (by rw [List.length_map, List.length_finRange])
+        (L.sampInner Y step x s c.2) (fun found => some (assemble s found))
+        (fun jo => sampInner_runs_le H L Y step (run H P L.V x ω) (B x) (hstep x s Ω P ω hs) c.2 jo)
+      exact (Nat.add_le_add_right h 1).trans_eq (by ring)
+    · simp only [RP.eval, Nat.zero_add]
+      rw [Nat.add_assoc]
+      exact Nat.le_add_right 1 _
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [∀ x, Fintype (Y x)] [∀ x, Nonempty (Y x)] in
+theorem sampInner_own_le {x : Msg} {s : AuditStatement} (run' : (Fin (L.V.k x) → Coin) → Trace) (B : ℕ)
+    (hstep : ∀ c j l r, (ownLog H run' (step x s c j l r (run' r).seen)).length ≤ B)
+    (c : (Fin (L.k x) → Fin (L.cap x) → Fin (L.V.k x) → Coin) × Y x)
+    (jo : Fin (L.k x) × ((Fin (L.V.k x) → Coin) × Seen)) :
+    (ownLog H run' (L.sampInner Y step x s c jo)).length ≤ L.k x * B := by
+  unfold sampInner
+  rw [ownLog_bind, ownLog_of_noHash H run' (NoHash.waitAccC _ _ _), List.nil_append]
+  refine (ownLog_flatMapRP_le H run' _ B _ fun li hli => ?_).trans
+    (Nat.mul_le_mul_right _ (length_zip_finRange_le _ _))
+  rw [seen_of_mem_zip H run' _ _ hli]
+  exact hstep _ _ _ _
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+/-- **`ExtractOwnLe` at the sampling extractor**: at most `k·k·B` own calls, when each step at an inner run makes at
+most `B`; the waits make none. -/
+theorem Esamp_own_le (B : Msg → ℕ)
+    (hstep : ∀ x s (Ω : Type) (P : Prover Ω) (ω : Ω), L.parse x = some s → ∀ c j l r,
+      (ownLog H (run H P L.V x ω) (step x s c j l r (run H P L.V x ω r).seen)).length ≤ B x) :
+    ExtractOwnLe H (L.Esamp Y step) (fun x => L.k x * (L.k x * B x)) := by
+  intro x Ω P ω r₀ c
+  simp only [Esamp, ownLog]
+  split
+  · simp [ownLog]
+  · rename_i s hs
+    split
+    · rw [ownLog_bind, ownLog_of_noHash _ _ (NoHash.waitAccC _ _ _), List.nil_append, ownLog_bind]
+      simp only [ownLog, List.append_nil]
+      exact (ownLog_flatMapRP_le H _ _ _ _ fun jo _ =>
+        sampInner_own_le H L Y step _ (B x) (hstep x s Ω P ω hs) c.2 jo).trans
+        (Nat.mul_le_mul_right _ (length_zip_finRange_le _ _))
+    · simp [ownLog]
+
+/-- An outer body's reruns at outer index `j` and run `r`, on its inner wait's coins `d` and the steps' `ξ`: the inner
+wait's, and the steps' at its kept runs. -/
+noncomputable def sampB {x : Msg} (s : AuditStatement) (run' : (Fin (L.V.k x) → Coin) → Trace) (j : Fin (L.k x))
+    (r : Fin (L.V.k x) → Coin) (d : Fin (L.cap x) → Fin (L.V.k x) → Coin) (ξ : Y x) : ℝ :=
+  (waitRuns run' (L.k x) ((List.finRange (L.cap x)).map fun l => forkOn (L.stage2 x) r (d l)) 0 : ℝ) +
+    (((List.finRange (L.k x)).zip ((waitAccC (L.k x) ((List.finRange (L.cap x)).map fun l =>
+      forkOn (L.stage2 x) r (d l)) []).eval H run').1).map fun li =>
+        (((step x s ξ j li.1 li.2.1 (run' li.2.1).seen).eval H run').2.2 : ℝ)).sum
+
+/-- An outer body's weight given its run `r`: the inner wait's expected reruns fresh on the second stage, and its kept
+runs' weights `W`. -/
+noncomputable def sampG {x : Msg} (run' : (Fin (L.V.k x) → Coin) → Trace) (W : (Fin (L.V.k x) → Coin) → ℝ)
+    (r : Fin (L.V.k x) → Coin) : ℝ :=
+  waitExp (run' ∘ forkOn (L.stage2 x) r) (L.k x) (L.cap x) 0 +
+    accExp (run' ∘ forkOn (L.stage2 x) r) (L.k x) (W ∘ forkOn (L.stage2 x) r) (L.cap x) 0
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [∀ x, Fintype (Y x)] [∀ x, Nonempty (Y x)] in
+theorem sampInner_runs_eq {x : Msg} (s : AuditStatement) (run' : (Fin (L.V.k x) → Coin) → Trace)
+    (c : (Fin (L.k x) → Fin (L.cap x) → Fin (L.V.k x) → Coin) × Y x)
+    (jo : Fin (L.k x) × ((Fin (L.V.k x) → Coin) × Seen)) :
+    (((L.sampInner Y step x s c jo).eval H run').2.2 : ℝ) = sampB H L Y step s run' jo.1 jo.2.1 (c.1 jo.1) c.2 := by
+  unfold sampInner sampB
+  rw [wait_flat_runs, Nat.cast_add, Nat.cast_list_sum, List.map_map]
+  congr 1
+  refine congrArg List.sum (List.map_congr_left fun li hli => ?_)
+  simp only [Function.comp_apply]
+  rw [seen_of_mem_zip H run' _ _ hli]
+
+omit [Fintype Coin] [Inhabited Coin] [∀ x, Fintype (Y x)] [∀ x, Nonempty (Y x)] in
+theorem sampG_nonneg {x : Msg} (run' : (Fin (L.V.k x) → Coin) → Trace) {W : (Fin (L.V.k x) → Coin) → ℝ}
+    (hW : ∀ r, 0 ≤ W r) (r : Fin (L.V.k x) → Coin) : 0 ≤ sampG L run' W r :=
+  add_nonneg (waitExp_nonneg _ _ _ _) (accExp_nonneg _ _ (fun _ => hW _) _ _)
+
+omit [Inhabited Coin] in
+/-- An outer body's reruns average at most `sampG` of its run: `level_ex` at the inner wait, fresh on the second
+stage. -/
+theorem Ex_sampB_le {x : Msg} (s : AuditStatement) (run' : (Fin (L.V.k x) → Coin) → Trace)
+    (W : (Fin (L.V.k x) → Coin) → ℝ) (hW : ∀ r, 0 ≤ W r)
+    (hstep : ∀ j l r, Ex (fun ξ : Y x => (((step x s ξ j l r (run' r).seen).eval H run').2.2 : ℝ)) ≤ W r)
+    (j : Fin (L.k x)) (r : Fin (L.V.k x) → Coin) :
+    Ex (fun c2 : (Fin (L.k x) → Fin (L.cap x) → Fin (L.V.k x) → Coin) × Y x =>
+      sampB H L Y step s run' j r (c2.1 j) c2.2) ≤ sampG L run' W r := by
+  have hslice : Ex (fun c2 : (Fin (L.k x) → Fin (L.cap x) → Fin (L.V.k x) → Coin) × Y x =>
+        sampB H L Y step s run' j r (c2.1 j) c2.2) =
+      Ex (fun c : (Fin (L.cap x) → Fin (L.V.k x) → Coin) × Y x => sampB H L Y step s run' j r c.1 c.2) := by
+    rw [Ex_prod, Ex_prod]
+    exact Ex_pi_eval j fun d => Ex fun ξ => sampB H L Y step s run' j r d ξ
+  rw [hslice]
+  exact level_ex (D' := Fin (L.V.k x) → Coin) (R := Fin (L.V.k x) → Coin) (X := Y x) H run'
+    (forkOn (L.stage2 x) r) (L.k x) (L.cap x)
+    (fun l r' ξ => (((step x s ξ j l r' (run' r').seen).eval H run').2.2 : ℝ)) W hstep hW
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+/-- The extractor's reruns at a statement that parses: the replay, and at an accepted judged run the outer wait and
+each kept run's body. -/
+theorem Esamp_runs_le_outer {x : Msg} {s : AuditStatement} (hs : L.parse x = some s)
+    (run' : (Fin (L.V.k x) → Coin) → Trace) (r₀ : Fin (L.V.k x) → Coin) (c : (L.Esamp Y step).C x) :
+    ((((L.Esamp Y step).ext x r₀ c).eval H run').2.2 : ℝ) ≤
+      1 + (if (run' r₀).out = .acc then (1 : ℝ) else 0) *
+        ((waitRuns run' (L.k x) ((List.finRange (L.cap x)).map c.1) 0 : ℝ) +
+          (((List.finRange (L.k x)).zip ((waitAccC (L.k x) ((List.finRange (L.cap x)).map c.1) []).eval H
+            run').1).map fun jo => sampB H L Y step s run' jo.1 jo.2.1 (c.2.1 jo.1) c.2.2).sum) := by
+  simp only [Esamp, RP.eval]
+  split
+  · rename_i hn
+    rw [hs] at hn
+    exact absurd hn (Option.some_ne_none s)
+  · rename_i s' hs'
+    obtain rfl : s = s' := Option.some.inj (hs.symm.trans hs')
+    split
+    · rename_i ha
+      have ha' : (run' r₀).out = .acc := ha
+      have h := outer_runs_le_sum H run' (L.k x) ((List.finRange (L.cap x)).map c.1) (L.sampInner Y step x s c.2)
+        (fun found => some (assemble s found)) (fun jo => sampB H L Y step s run' jo.1 jo.2.1 (c.2.1 jo.1) c.2.2)
+        (fun jo => (sampInner_runs_eq H L Y step s run' c.2 jo).le)
+      rw [ite_eq_left ha', one_mul, Nat.cast_add, Nat.cast_one, add_comm (1 : ℝ)]
+      exact add_le_add h le_rfl
+    · rename_i ha
+      have ha' : ¬ (run' r₀).out = .acc := ha
+      rw [ite_eq_right ha', zero_mul, add_zero, Nat.cast_add, Nat.cast_one]
+      simp only [RP.eval, Nat.cast_zero, zero_add, le_refl]
+
+omit [Inhabited Coin] in
+/-- **`ExtractRunsExpLe` at the sampling extractor**, at one statement, prover and tape: at most `1 + k + k²·(1 + B)`
+reruns in expectation, when each step at an inner run `r` averages at most `W r` reruns over its coins, and acceptance
+times `W` averages at most `B` over the second stage at every run. -/
+theorem Esamp_runs_exp (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω)
+    (W : AuditStatement → (Fin (L.V.k x) → Coin) → ℝ) (B : ℝ) (hB0 : 0 ≤ B) (hW : ∀ s r, 0 ≤ W s r)
+    (hstep : ∀ s, L.parse x = some s → ∀ j l r,
+      Ex (fun ξ : Y x => (((step x s ξ j l r (run H P L.V x ω r).seen).eval H (run H P L.V x ω)).2.2 : ℝ)) ≤ W s r)
+    (hB : ∀ s, L.parse x = some s → ∀ r, Ex (fun d : Fin (L.V.k x) → Coin =>
+      (if (run H P L.V x ω (forkOn (L.stage2 x) r d)).out = .acc then (1 : ℝ) else 0) *
+        W s (forkOn (L.stage2 x) r d)) ≤ B) :
+    Ex (fun p : (Fin (L.V.k x) → Coin) × (L.Esamp Y step).C x =>
+      (((L.Esamp Y step).eval H P x ω p.1 p.2).2.2 : ℝ)) ≤ 1 + L.k x + (L.k x : ℝ) ^ 2 * (1 + B) := by
+  have hk0 : (0 : ℝ) ≤ L.k x := Nat.cast_nonneg _
+  cases hp : L.parse x with
+  | none =>
+    have h1 : ∀ p : (Fin (L.V.k x) → Coin) × (L.Esamp Y step).C x,
+        (((L.Esamp Y step).eval H P x ω p.1 p.2).2.2 : ℝ) = 1 := by
+      intro p
+      simp only [Extractor.eval, Esamp, RP.eval]
+      split
+      · simp [RP.eval]
+      · rename_i s' hs'
+        rw [hp] at hs'
+        exact absurd hs'.symm (Option.some_ne_none s')
+    simp only [h1, Ex_const]
+    nlinarith
+  | some s =>
+    let run' := run H P L.V x ω
+    let Rout : (L.Esamp Y step).C x → ℝ := fun c =>
+      (waitRuns run' (L.k x) ((List.finRange (L.cap x)).map c.1) 0 : ℝ) +
+        (((List.finRange (L.k x)).zip ((waitAccC (L.k x) ((List.finRange (L.cap x)).map c.1) []).eval H
+          run').1).map fun jo => sampB H L Y step s run' jo.1 jo.2.1 (c.2.1 jo.1) c.2.2).sum
+    have hpt : ∀ p : (Fin (L.V.k x) → Coin) × (L.Esamp Y step).C x,
+        (((L.Esamp Y step).eval H P x ω p.1 p.2).2.2 : ℝ) ≤
+          1 + (if (run' p.1).out = .acc then (1 : ℝ) else 0) * Rout p.2 :=
+      fun p => Esamp_runs_le_outer H L Y step hp run' p.1 p.2
+    have hsplit : Ex (fun p : (Fin (L.V.k x) → Coin) × (L.Esamp Y step).C x =>
+        1 + (if (run' p.1).out = .acc then (1 : ℝ) else 0) * Rout p.2) =
+        1 + Pr (fun r => (run' r).out = .acc) * Ex Rout := by
+      rw [Ex_add, Ex_const, Ex_prod]
+      congr 1
+      have hin : ∀ a : Fin (L.V.k x) → Coin, (Ex fun b : (L.Esamp Y step).C x =>
+          (if (run' a).out = .acc then (1 : ℝ) else 0) * Rout b) =
+          (if (run' a).out = .acc then (1 : ℝ) else 0) * Ex Rout := fun a => Ex_mul_left _ Rout
+      refine (congrArg Ex (funext hin)).trans ?_
+      rw [Ex_mul_right, Ex_ind]
+    have hW' : ∀ r, 0 ≤ W s r := hW s
+    have hout : Pr (fun r => (run' r).out = .acc) * Ex Rout ≤
+        L.k x + L.k x * Ex (fun r => (if (run' r).out = .acc then (1 : ℝ) else 0) * sampG L run' (W s) r) := by
+      have hle := level_ex (D' := Fin (L.V.k x) → Coin) (R := Fin (L.V.k x) → Coin)
+        (X := (Fin (L.k x) → Fin (L.cap x) → Fin (L.V.k x) → Coin) × Y x) H run' id (L.k x) (L.cap x)
+        (fun j r c2 => sampB H L Y step s run' j r (c2.1 j) c2.2) (sampG L run' (W s))
+        (fun j r => Ex_sampB_le H L Y step s run' (W s) hW' (hstep s hp) j r) (sampG_nonneg L run' hW')
+      refine (mul_le_mul_of_nonneg_left hle (Pr_nonneg _)).trans ?_
+      exact level_amortized run' id (L.k x) (L.cap x) (sampG L run' (W s)) (sampG_nonneg L run' hW')
+    have hacc : Ex (fun r => (if (run' r).out = .acc then (1 : ℝ) else 0) * sampG L run' (W s) r) ≤
+        L.k x + L.k x * B := by
+      rw [Ex_acc_forkOn (L.stage2 x) (fun r => (run' r).out = .acc) (sampG L run' (W s)) fun r d => by
+        unfold sampG
+        rw [forkOn_forkOn']]
+      refine (Ex_mono fun r => ?_).trans_eq (Ex_const _)
+      exact (level_amortized run' (forkOn (L.stage2 x) r) (L.k x) (L.cap x) (W s) hW').trans
+        (add_le_add le_rfl (mul_le_mul_of_nonneg_left (hB s hp r) hk0))
+    calc Ex (fun p : (Fin (L.V.k x) → Coin) × (L.Esamp Y step).C x =>
+          (((L.Esamp Y step).eval H P x ω p.1 p.2).2.2 : ℝ))
+        ≤ 1 + Pr (fun r => (run' r).out = .acc) * Ex Rout := (Ex_mono hpt).trans_eq hsplit
+      _ ≤ 1 + (L.k x + L.k x * (L.k x + L.k x * B)) :=
+          add_le_add le_rfl (hout.trans (add_le_add le_rfl (mul_le_mul_of_nonneg_left hacc hk0)))
+      _ = 1 + L.k x + (L.k x : ℝ) ^ 2 * (1 + B) := by ring
+
+end Samp
+
+/-! ## A sampled proof block's extraction -/
+
+omit [Fintype Coin] [Nonempty Coin] in
+/-- Under `runs`' session at `r0`, the served runs at coins `r` agreeing with `r0` off the session's rounds show what the
+session's prover's runs show. -/
+theorem served_seen (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω : Type} (P : Prover Ω) (ω : Ω) {u : ℕ}
+    {xS : Msg} (P' : Prover Unit) (r0 r : Fin (L.V.k x) → Coin) (hcard : A.V.k xS = (L.rounds x u).card)
+    (hview : ∀ r' : Fin (L.V.k x) → Coin, (∀ t ∉ L.rounds x u, (∀ t' ∈ L.rounds x u, t < t') → r' t = r0 t) →
+      L.session x u (run H P L.V x ω r').seen = some (xS, (run H P' A.V xS () (L.coinsOf x u xS r')).seen))
+    (hr : ∀ t ∉ L.rounds x u, r t = r0 t) (d : Fin (A.V.k xS) → Coin) :
+    (servedRun H (fun r' => viewing (L.view x u) (L.place x u xS r r')) (run H P L.V x ω) d).seen =
+      (run H P' A.V xS () d).seen := by
+  rw [servedRun_seen]
+  show L.view x u (run H P L.V x ω (L.place x u xS r d)).seen = (run H P' A.V xS () d).seen
+  unfold view
+  rw [hview _ fun t ht _ => (L.place_of_not_mem r d ht).trans (hr t ht), L.coinsOf_place hcard]
+  rfl
+
+omit [Fintype Coin] [Nonempty Coin] in
+/-- **A sampled proof block's extraction reruns as `A`'s extractor** against `runs`' session prover `P'`, at the
+session's coins of the run and the block's coins cast to the session's shape: each served rerun is one rerun, and
+checking what a witness reveals reruns nothing. -/
+theorem unitExt_runs_eq (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω : Type} (P : Prover Ω) (ω : Ω) {u : ℕ}
+    {xS : Msg} (P' : Prover Unit) (r0 : Fin (L.V.k x) → Coin) (hshape : A.shape xS = L.sh x u)
+    (hcard : A.V.k xS = (L.rounds x u).card)
+    (hview : ∀ r' : Fin (L.V.k x) → Coin, (∀ t ∉ L.rounds x u, (∀ t' ∈ L.rounds x u, t < t') → r' t = r0 t) →
+      L.session x u (run H P L.V x ω r').seen = some (xS, (run H P' A.V xS () (L.coinsOf x u xS r')).seen))
+    {r : Fin (L.V.k x) → Coin} (hr : ∀ t ∉ L.rounds x u, r t = r0 t) (s : AuditStatement) (c : A.EC (L.sh x u)) :
+    ((L.unitExt x s u r (run H P L.V x ω r).seen c).eval H (run H P L.V x ω)).2.2 =
+      (A.E.eval H P' xS () (L.coinsOf x u xS r) (cast (congrArg A.EC hshape.symm) c)).2.2 := by
+  have hv := hview r fun t ht _ => hr t ht
+  unfold unitExt
+  simp only [hv]
+  rw [dite_eq_left hshape, (RP.eval_bind H _ _ _).2, Claims.Recursion.serve_eq, serve_place_runs,
+    eval_runs_congr H (L.served_seen H P ω P' r0 r hcard hview hr)]
+  split
+  · rfl
+  · rw [checkRevealed_runs, Nat.add_zero]
+    rfl
+
+omit [Fintype Coin] [Nonempty Coin] in
+/-- **A sampled proof block's extraction's own SHA-512 calls** are `A`'s extractor's against `runs`' session prover
+`P'`, and its reveal's checks, at most `openCalls`. -/
+theorem unitExt_own_le (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω : Type} (P : Prover Ω) (ω : Ω) {u : ℕ}
+    {xS : Msg} (P' : Prover Unit) (r0 : Fin (L.V.k x) → Coin) (hshape : A.shape xS = L.sh x u)
+    (hcard : A.V.k xS = (L.rounds x u).card)
+    (hview : ∀ r' : Fin (L.V.k x) → Coin, (∀ t ∉ L.rounds x u, (∀ t' ∈ L.rounds x u, t < t') → r' t = r0 t) →
+      L.session x u (run H P L.V x ω r').seen = some (xS, (run H P' A.V xS () (L.coinsOf x u xS r')).seen))
+    {r : Fin (L.V.k x) → Coin} (hr : ∀ t ∉ L.rounds x u, r t = r0 t) (hopen : L.OpenCallsLe H) {s : AuditStatement}
+    (hs : L.parse x = some s) (c : A.EC (L.sh x u)) :
+    (ownLog H (run H P L.V x ω) (L.unitExt x s u r (run H P L.V x ω r).seen c)).length ≤
+      (ownLog H (run H P' A.V xS ()) (A.ext xS (L.coinsOf x u xS r) (cast (congrArg A.EC hshape.symm) c))).length +
+        L.openCalls x := by
+  have hv := hview r fun t ht _ => hr t ht
+  unfold unitExt
+  simp only [hv]
+  rw [dite_eq_left hshape, ownLog_bind, Claims.Recursion.serve_eq, ownLog_serve_viewing,
+    ownLog_congr H (L.served_seen H P ω P' r0 r hcard hview hr), List.length_append]
+  refine Nat.add_le_add_left ?_ _
+  split
+  · exact Nat.zero_le _
+  · rw [ownLog_checkRevealed_length]
+    exact hopen x s hs u _ _
+
+/-! ## Slot by slot -/
+
+/-- **A run's extractions, slot by slot** of the sample (the first `n_PU`): each slot's block at the slot's coins. -/
+noncomputable def slotExt (L : Compiled Coin A) (x : Msg) (s : AuditStatement) (r : Fin (L.V.k x) → Coin) (v : Seen)
+    (c : Fin (L.nPU x) → L.BlockEC x) : RP (Fin (L.V.k x) → Coin) (List (List Msg × Opening Bool)) :=
+  flatMapRP (fun iu : Fin (L.nPU x) × ℕ =>
+      if hu : iu.2 < L.nPU x then L.unitExt x s iu.2 r v (c iu.1 ⟨iu.2, hu⟩) else .ret [])
+    ((List.finRange (L.nPU x)).zip (L.checked x r))
+
+/-- The slots' coins at each accepted inner run, indexed (outer, inner, slot). -/
+abbrev SlotY (L : Compiled Coin A) (x : Msg) : Type := Fin (L.k x) × Fin (L.k x) × Fin (L.nPU x) → L.BlockEC x
+
+/-- `slotExt` as the sampling extractor's step. -/
+noncomputable def slotStep (L : Compiled Coin A) : L.Step L.SlotY := fun x s c j l r v =>
+  L.slotExt x s r v fun i => c (j, l, i)
+
+variable {H : Msg → Msg} {L : Compiled Coin A}
+
+omit [Fintype Coin] [Nonempty Coin] in
+theorem slotExt_runs_le (hS : L.Sessions H) {ρ : A.Sh → ℕ} (hρ : A.RerunsLe H ρ) {x : Msg} {Ω : Type}
+    (P : Prover Ω) (ω : Ω) (s : AuditStatement) (r : Fin (L.V.k x) → Coin) (c : Fin (L.nPU x) → L.BlockEC x) :
+    ((L.slotExt x s r (run H P L.V x ω r).seen c).eval H (run H P L.V x ω)).2.2 ≤ L.nPU x * L.ρs ρ x := by
+  unfold slotExt
+  refine (flatMapRP_runs_le H _ _ (L.ρs ρ x) _ fun ⟨i, u⟩ hiu => ?_).trans
+    (Nat.mul_le_mul_right _ (length_zip_finRange_le _ _))
+  dsimp only
+  split
+  · rename_i hu
+    obtain ⟨xS, P', hshape, hcard, -, hview⟩ := hS.runs x Ω P ω r u (List.of_mem_zip hiu).2
+    rw [L.unitExt_runs_eq H P ω P' r hshape hcard (fun r' h => (hview r' h).1) (fun _ _ => rfl) s _]
+    refine (hρ xS Unit P' () _ _).trans ?_
+    rw [hshape]
+    exact le_maxBelowN (fun u => ρ (L.sh x u)) hu
+  · exact Nat.zero_le _
+
+omit [Fintype Coin] [Nonempty Coin] in
+theorem slotExt_own_le (hS : L.Sessions H) {h : A.Sh → ℕ} (hh : A.OwnLe H h) (hopen : L.OpenCallsLe H) {x : Msg}
+    {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (L.V.k x) → Coin)
+    (c : Fin (L.nPU x) → L.BlockEC x) :
+    (ownLog H (run H P L.V x ω) (L.slotExt x s r (run H P L.V x ω r).seen c)).length ≤
+      L.nPU x * (L.openCalls x + L.hs h x) := by
+  unfold slotExt
+  refine (ownLog_flatMapRP_le H _ _ _ _ fun ⟨i, u⟩ hiu => ?_).trans
+    (Nat.mul_le_mul_right _ (length_zip_finRange_le _ _))
+  dsimp only
+  split
+  · rename_i hu
+    obtain ⟨xS, P', hshape, hcard, -, hview⟩ := hS.runs x Ω P ω r u (List.of_mem_zip hiu).2
+    refine (L.unitExt_own_le H P ω P' r hshape hcard (fun r' h => (hview r' h).1) (fun _ _ => rfl) hopen hs _).trans ?_
+    rw [Nat.add_comm (L.openCalls x)]
+    refine Nat.add_le_add_right ((hh xS Unit P' () _ _).trans ?_) _
+    rw [hshape]
+    exact le_maxBelowN (fun u => h (L.sh x u)) hu
+  · simp [ownLog]
+
+/-- Slot `i`'s extraction's reruns at the run `r` on the slot's coins `ρ`; `0` when fewer blocks are sampled. -/
+noncomputable def slotRuns (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
+    (run' : (Fin (L.V.k x) → Coin) → Trace) (i : Fin (L.nPU x)) (r : Fin (L.V.k x) → Coin) (ρ : L.BlockEC x) : ℝ :=
+  (((L.checked x r)[i.val]?).map fun u =>
+    if hu : u < L.nPU x then (((L.unitExt x s u r (run' r).seen (ρ ⟨u, hu⟩)).eval H run').2.2 : ℝ) else 0).getD 0
+
+omit [Fintype Coin] [Nonempty Coin] in
+theorem slotExt_runs_eq (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
+    (run' : (Fin (L.V.k x) → Coin) → Trace) (r : Fin (L.V.k x) → Coin) (c : Fin (L.nPU x) → L.BlockEC x) :
+    (((L.slotExt x s r (run' r).seen c).eval H run').2.2 : ℝ) = ∑ i, L.slotRuns H x s run' i r (c i) := by
+  unfold slotExt
+  rw [flatMapRP_runs, Nat.cast_list_sum, List.map_map]
+  refine Eq.trans ?_ (sum_zip_finRange (L.nPU x) (fun iu => if hu : iu.2 < L.nPU x then
+    (((L.unitExt x s iu.2 r (run' r).seen (c iu.1 ⟨iu.2, hu⟩)).eval H run').2.2 : ℝ) else 0) (L.checked x r))
+  refine congrArg List.sum (List.map_congr_left fun iu _ => ?_)
+  simp only [Function.comp_apply]
+  split <;> rfl
+
+omit [Nonempty Coin] in
+theorem slotRuns_nonneg (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
+    (run' : (Fin (L.V.k x) → Coin) → Trace) (i : Fin (L.nPU x)) (r : Fin (L.V.k x) → Coin) (ρ : L.BlockEC x) :
+    0 ≤ L.slotRuns H x s run' i r ρ := by
+  unfold slotRuns
+  cases (L.checked x r)[i.val]? with
+  | none => exact le_rfl
+  | some u =>
+    simp only [Option.map_some, Option.getD_some]
+    split
+    · exact Nat.cast_nonneg _
+    · exact le_rfl
+
+/-- The block at slot `i` of a sample, when it is below `n_PU`. -/
+def slotSel (L : Compiled Coin A) (x : Msg) (i : Fin (L.nPU x)) (l : List ℕ) : Option (Fin (L.nPU x)) :=
+  (l[i.val]?).bind fun u => if hu : u < L.nPU x then some ⟨u, hu⟩ else none
+
+omit [Fintype Coin] [Nonempty Coin] in
+theorem slotRuns_eq_sel (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
+    (run' : (Fin (L.V.k x) → Coin) → Trace) (i : Fin (L.nPU x)) (r : Fin (L.V.k x) → Coin) (ρ : L.BlockEC x) :
+    L.slotRuns H x s run' i r ρ = ((L.selUnit x (L.slotSel x i) r).map fun u =>
+      (((L.unitExt x s u r (run' r).seen (ρ u)).eval H run').2.2 : ℝ)).getD 0 := by
+  unfold slotRuns selUnit slotSel
+  cases hr : (L.checked x r)[i.val]? with
+  | none => simp
+  | some u =>
+    have hm : u ∈ L.checked x r := List.mem_of_getElem? hr
+    by_cases hu : u < L.nPU x
+    · simp [hu, hm]
+    · simp [hu]
+
+omit [Nonempty Coin] in
+/-- **Slot `i`'s expected reruns given acceptance**: over the second stage `d` at `r`, acceptance times slot `i`'s
+expected reruns is at most `e_s`. Resampling its block's session's rounds keeps the block (`fixed`), and on them the
+block's extraction is `A`'s extractor against one prover `P'` at uniform coins, which reruns at most `e` of the block's
+shape in expectation. -/
+theorem slot_exp_le (hS : L.Sessions H) {e : A.Sh → ℝ} (he : A.RerunsExpLe H e) {x : Msg} (s : AuditStatement)
+    {Ω : Type} (P : Prover Ω) (ω : Ω) (i : Fin (L.nPU x)) (r : Fin (L.V.k x) → Coin) :
+    Ex (fun d : Fin (L.V.k x) → Coin => (if (run H P L.V x ω (forkOn (L.stage2 x) r d)).out = .acc then (1 : ℝ) else 0) *
+        Ex fun ρ : L.BlockEC x => L.slotRuns H x s (run H P L.V x ω) i (forkOn (L.stage2 x) r d) ρ) ≤ L.es e x := by
+  have he0 : 0 ≤ L.es e x := maxBelow_nonneg _ _
+  rw [← Ex_resample (fun d => L.selRounds x (L.slotSel x i) (forkOn (L.stage2 x) r d))
+    (selRounds_resample hS (L.slotSel x i) r)]
+  refine (Ex_mono fun d => ?_).trans_eq (Ex_const (α := Fin (L.V.k x) → Coin) _)
+  cases h : L.selUnit x (L.slotSel x i) (forkOn (L.stage2 x) r d) with
+  | none =>
+    rw [selRounds_none h]
+    simp only [forkOn_empty, slotRuns_eq_sel, h, Option.map_none, Option.getD_none, Ex_const, mul_zero]
+    exact he0
+  | some u =>
+    rw [selRounds_some h]
+    have hm := (selUnit_eq_some.1 h).2
+    simp only [forkOn_sub (hS.fixed x _ u hm).1, slotRuns_eq_sel, selUnit_forkOn hS h, Option.map_some,
+      Option.getD_some]
+    obtain ⟨xS, P', hshape, hcard, -, hview⟩ := hS.runs x Ω P ω (forkOn (L.stage2 x) r d) u hm
+    have hag : ∀ σ : Fin (L.V.k x) → Coin, ∀ t ∉ L.rounds x u,
+        forkOn (L.rounds x u) (forkOn (L.stage2 x) r d) σ t = forkOn (L.stage2 x) r d t :=
+      fun σ t ht => by simp [forkOn, ht]
+    let F : (Fin (A.V.k xS) → Coin) → A.EC (A.shape xS) → ℝ := fun ρ' c' => ((A.E.eval H P' xS () ρ' c').2.2 : ℝ)
+    have hunit : ∀ σ (c : A.EC (L.sh x u)),
+        ((((L.unitExt x s u (forkOn (L.rounds x u) (forkOn (L.stage2 x) r d) σ)
+          (run H P L.V x ω (forkOn (L.rounds x u) (forkOn (L.stage2 x) r d) σ)).seen c).eval H
+            (run H P L.V x ω)).2.2 : ℝ)) =
+          F (fun t => σ (L.emb x u xS hcard t)) (cast (congrArg A.EC hshape.symm) c) := by
+      intro σ c
+      rw [L.unitExt_runs_eq H P ω P' (forkOn (L.stage2 x) r d) hshape hcard (fun r' h => (hview r' h).1) (hag σ) s c,
+        L.coinsOf_forkOn hcard]
+    calc Ex (fun σ : Fin (L.V.k x) → Coin =>
+          (if (run H P L.V x ω (forkOn (L.rounds x u) (forkOn (L.stage2 x) r d) σ)).out = .acc then (1 : ℝ) else 0) *
+            Ex fun ρ : L.BlockEC x => (((L.unitExt x s u (forkOn (L.rounds x u) (forkOn (L.stage2 x) r d) σ)
+              (run H P L.V x ω (forkOn (L.rounds x u) (forkOn (L.stage2 x) r d) σ)).seen (ρ u)).eval H
+                (run H P L.V x ω)).2.2 : ℝ))
+        ≤ Ex (fun σ : Fin (L.V.k x) → Coin => Ex fun c : A.EC (L.sh x u) =>
+            F (fun t => σ (L.emb x u xS hcard t)) (cast (congrArg A.EC hshape.symm) c)) := by
+          refine Ex_mono fun σ => ?_
+          rw [Ex_pi_eval_dep (E := fun v : Fin (L.nPU x) => A.EC (L.sh x v)) u]
+          simp only [hunit]
+          have hnn : 0 ≤ Ex fun c : A.EC (L.sh x u) =>
+              F (fun t => σ (L.emb x u xS hcard t)) (cast (congrArg A.EC hshape.symm) c) :=
+            Ex_nonneg fun _ => Nat.cast_nonneg _
+          split_ifs
+          · rw [one_mul]
+          · rw [zero_mul]
+            exact hnn
+      _ = Ex (fun p : (Fin (A.V.k xS) → Coin) × A.EC (A.shape xS) => F p.1 p.2) := by
+          rw [← Ex_restrict_shape (L.emb x u xS hcard) (L.emb x u xS hcard).injective hshape F, Ex_prod]
+      _ ≤ e (A.shape xS) := he xS Unit P' ()
+      _ = e (L.sh x u) := by rw [hshape]
+      _ ≤ L.es e x := le_maxBelow (fun v => e (L.sh x v)) u.isLt
+
+omit [Nonempty Coin] in
+theorem Ex_slotStep (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
+    (run' : (Fin (L.V.k x) → Coin) → Trace) (j l : Fin (L.k x)) (r : Fin (L.V.k x) → Coin) :
+    Ex (fun c : L.SlotY x => (((L.slotStep x s c j l r (run' r).seen).eval H run').2.2 : ℝ)) =
+      ∑ i, Ex fun ρ : L.BlockEC x => L.slotRuns H x s run' i r ρ := by
+  simp only [slotStep, slotExt_runs_eq]
+  rw [Ex_finsum]
+  exact Finset.sum_congr rfl fun i _ => Ex_pi_eval (j, l, i) fun ρ => L.slotRuns H x s run' i r ρ
+
+/-! ## `Efficient` at the slot-by-slot extractor -/
+
+omit [Fintype Coin] [Nonempty Coin] in
+/-- **Strict reruns**: at most `1 + K + k·(K + k·n_PU·ρ_s)`. -/
+theorem slots_runs_le (hS : L.Sessions H) {ρ : A.Sh → ℕ} (hρ : A.RerunsLe H ρ) :
+    ExtractRunsLe H (L.Esamp L.SlotY L.slotStep)
+      (fun x => 1 + L.cap x + L.k x * (L.cap x + L.k x * (L.nPU x * L.ρs ρ x))) :=
+  Esamp_runs_le H L L.SlotY L.slotStep (fun x => L.nPU x * L.ρs ρ x) fun _ s _ P ω _ c j l r =>
+    slotExt_runs_le hS hρ P ω s r _
+
+/-- **Expected reruns**: at most `1 + k + k²·(1 + n_PU·e_s)`. -/
+theorem slots_runs_exp (hS : L.Sessions H) {e : A.Sh → ℝ} (he : A.RerunsExpLe H e) :
+    ExtractRunsExpLe H (L.Esamp L.SlotY L.slotStep)
+      (fun x => 1 + L.k x + (L.k x : ℝ) ^ 2 * (1 + L.nPU x * L.es e x)) := by
+  intro x Ω P ω
+  have he0 : 0 ≤ L.es e x := maxBelow_nonneg _ _
+  refine Esamp_runs_exp H L L.SlotY L.slotStep x P ω
+    (fun s r => ∑ i, Ex fun ρ : L.BlockEC x => L.slotRuns H x s (run H P L.V x ω) i r ρ) (L.nPU x * L.es e x)
+    (mul_nonneg (Nat.cast_nonneg _) he0)
+    (fun s r => Finset.sum_nonneg fun i _ => Ex_nonneg fun ρ => slotRuns_nonneg H L x s _ i r ρ)
+    (fun s _ j l r => (Ex_slotStep H L x s _ j l r).le) fun s _ r => ?_
+  simp only [Finset.mul_sum]
+  rw [Ex_finsum]
+  calc ∑ i, Ex (fun d : Fin (L.V.k x) → Coin =>
+        (if (run H P L.V x ω (forkOn (L.stage2 x) r d)).out = .acc then (1 : ℝ) else 0) *
+          Ex fun ρ : L.BlockEC x => L.slotRuns H x s (run H P L.V x ω) i (forkOn (L.stage2 x) r d) ρ)
+      ≤ ∑ _i : Fin (L.nPU x), L.es e x := Finset.sum_le_sum fun i _ => slot_exp_le hS he s P ω i r
+    _ = L.nPU x * L.es e x := by rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
+
+omit [Fintype Coin] [Nonempty Coin] in
+/-- **Own SHA-512 calls**: at most `k²·n_PU·(openCalls + h_s)`. -/
+theorem slots_own_le (hS : L.Sessions H) {h : A.Sh → ℕ} (hh : A.OwnLe H h) (hopen : L.OpenCallsLe H) :
+    ExtractOwnLe H (L.Esamp L.SlotY L.slotStep)
+      (fun x => L.k x ^ 2 * L.nPU x * (L.openCalls x + L.hs h x)) := fun x Ω P ω r₀ c =>
+  (Esamp_own_le H L L.SlotY L.slotStep (fun x => L.nPU x * (L.openCalls x + L.hs h x))
+    (fun _ _ _ P ω hs c j l r => slotExt_own_le hS hh hopen hs P ω r _) x Ω P ω r₀ c).trans_eq (by ring)
+
+/-! ## At a compiled extractor that extracts slot by slot -/
+
+/-- **`Efficient`**, where the compiled extractor is the sampling extractor at `slotStep`. -/
+theorem efficient_of_slots (hE : L.E = L.Esamp L.SlotY L.slotStep) (hS : L.Sessions H) {ρ : A.Sh → ℕ}
+    {e : A.Sh → ℝ} {h : A.Sh → ℕ} (hρ : A.RerunsLe H ρ) (he : A.RerunsExpLe H e) (hh : A.OwnLe H h)
+    (hopen : L.OpenCallsLe H) : L.Efficient H ρ e h := by
+  unfold Efficient
+  rw [hE]
+  exact ⟨slots_runs_le hS hρ, slots_runs_exp hS he, slots_own_le hS hh hopen⟩
+
+/-- **`ExpOwnOf`'s two bounds**, where the compiled extractor is the sampling extractor at `slotStep`. -/
+theorem expOwn_of_slots (hE : L.E = L.Esamp L.SlotY L.slotStep) (hS : L.Sessions H) {e : A.Sh → ℝ}
+    {h : A.Sh → ℕ} (he : A.RerunsExpLe H e) (hh : A.OwnLe H h) (hopen : L.OpenCallsLe H) :
+    ExtractRunsExpLe H L.E (fun x => 1 + L.k x + (L.k x : ℝ) ^ 2 * (1 + L.nPU x * L.es e x)) ∧
+      ExtractOwnLe H L.E (fun x => L.k x ^ 2 * L.nPU x * (L.openCalls x + L.hs h x)) := by
+  rw [hE]
+  exact ⟨slots_runs_exp hS he, slots_own_le hS hh hopen⟩
 
 end Compiled
-
-namespace Counter
-
-/-! ## The compiled verifier -/
-
-/-- A verifier of one round that accepts whatever the prover sends. -/
-def V₁ : Verifier Unit := ⟨fun _ => 1, fun _ _ _ => .ret .acc⟩
-
-/-- A program of one input gate and no outputs, drawn `all`. -/
-def s₀ : AuditStatement := ⟨[], ⟨[.input], []⟩, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
-
-/-- One class of one stratum of one proof unit: the input gate. -/
-def P₀ : Partition := ⟨[[[[0]]]]⟩
-
-/-- A commitment whose check of an opening is one SHA-512 call, and passes. -/
-def Cm₀ : CommitmentScheme Bool := ⟨fun _ _ => .query [] fun _ => .ret true, fun _ _ _ => []⟩
-
-/-- A proof system of one round whose extractor returns at once; its relation is empty. -/
-def A₀ : Arg Unit where
-  Sh := Unit
-  shape _ := ()
-  V := V₁
-  rounds _ := 1
-  W := Unit
-  R _ _ := False
-  EC _ := Unit
-  ext _ _ _ := .ret (some ())
-  κ _ := 0
-  γ _ := 0
-
-/-- **The compiled verifier**: `V₁`, the statement `s₀` and partition `P₀` at every message, a sample of `n` copies of
-the one proof block, each session the whole run at its own statement, a reveal of one opening, and `openCalls = oc`. -/
-def L₀ (n oc : ℕ) : Compiled Unit A₀ where
-  V := V₁
-  parse _ := some s₀
-  scopeCheck _ := true
-  partition _ := some P₀
-  commit := Cm₀
-  stage2 _ := Finset.univ
-  checked _ _ := List.replicate n 0
-  sh _ _ := ()
-  rounds _ _ := Finset.univ
-  session x _ v := some (x, v)
-  iroots _ _ _ := []
-  reveal _ _ _ _ := [([], ⟨0, true, []⟩)]
-  openCalls _ := oc
-  Tape := Unit
-  P _ := ⟨fun _ _ _ => .ret []⟩
-  δc _ _ := 0
-
-/-! ## It meets the contract -/
-
-theorem unitClass₀ : unitClass s₀.prog [0] = some 16 := by
-  obtain ⟨t, ht⟩ : ∃ t, unitClasses = 16 :: t := by
-    rw [unitClasses, List.range_succ_eq_map, List.map_cons]
-    exact ⟨_, rfl⟩
-  rw [unitClass, ht]
-  rfl
-
-theorem inScope₀ : InScope P₀ s₀ := by
-  refine ⟨⟨fun g b hb i hi => ?_, fun o ho => by simp [s₀] at ho⟩,
-    ⟨by simp [Partition.gates, Partition.blocks, P₀], fun g hg => ?_, fun g hg _ => ?_, fun u hu => ?_,
-      fun u hu => ?_⟩, rfl, fun p hp => ?_⟩
-  · rcases g with _ | g
-    · simp only [s₀, List.getElem?_cons_zero, Option.some.injEq] at hb
-      subst hb
-      simp [BGate.reads] at hi
-    · simp [s₀] at hb
-  · simp [Partition.gates, Partition.blocks, P₀] at hg
-    simp [hg, s₀]
-  · simp [s₀] at hg
-    simp [hg, Partition.gates, Partition.blocks, P₀]
-  · simp [Partition.blocks, P₀] at hu
-    simp [hu]
-  · simp [Partition.blocks, P₀] at hu
-    subst hu
-    exact ⟨16, unitClass₀, by decide⟩
-  · simp [s₀, P₀] at hp
-    subst hp
-    exact trivial
-
-theorem pa₀ {B : Finset ℕ} (hB : B ⊆ Finset.range 1) : s₀.design.Pa P₀ B = OneStage.Pa [1] .all B := by
-  have hw : window 0 1 B = B := by
-    ext v
-    simp only [window, Finset.mem_image, Finset.mem_filter]
-    constructor
-    · rintro ⟨a, ⟨ha, -⟩, rfl⟩
-      simpa using ha
-    · intro hv
-      exact ⟨v, ⟨hv, Nat.zero_le _, by simpa using Finset.mem_range.1 (hB hv)⟩, Nat.sub_zero v⟩
-  have h : s₀.design.Pa P₀ B = OneStage.Pa [1] .all (window 0 1 B) * classesPa [] [] 1 B := rfl
-  rw [h, hw]
-  exact mul_one _
-
-theorem draws₀ {n : ℕ} (hn : 0 < n) (oc : ℕ) : ∀ x s P, (L₀ n oc).parse x = some s →
-    (L₀ n oc).partition s = some P → InScope P s → ∀ B ⊆ Finset.range P.blocks.length,
-      ∃ esc : (Fin ((L₀ n oc).V.k x) → Unit) → ℝ, (∀ r, 0 ≤ esc r) ∧
-        (∀ r, Pr (fun d : Fin ((L₀ n oc).V.k x) → Unit =>
-          ∀ u ∈ (L₀ n oc).checked x (forkOn ((L₀ n oc).stage2 x) r d), u ∉ B) ≤ esc r) ∧
-        Ex esc ≤ s.design.Pa P B := by
-  intro x s P hs hP _ B hB
-  obtain rfl : s₀ = s := Option.some.inj hs
-  obtain rfl : P₀ = P := Option.some.inj hP
-  have hB1 : B ⊆ Finset.range 1 := hB
-  rw [pa₀ hB1]
-  refine ⟨fun _ => OneStage.Pa [1] .all B, fun _ => ?_, fun r => ?_, (Ex_const _).le⟩
-  · show 0 ≤ OneStage.Pa [1] .all B
-    simp only [OneStage.Pa]
-    split_ifs <;> norm_num
-  · show Pr _ ≤ OneStage.Pa [1] .all B
-    by_cases hB0 : B = ∅
-    · have h1 : OneStage.Pa [1] .all B = 1 := by simp [OneStage.Pa, hB0]
-      rw [h1]
-      exact Pr_le_one _
-    · obtain ⟨v, hv⟩ := Finset.nonempty_iff_ne_empty.2 hB0
-      have hv0 : v = 0 := by have := Finset.mem_range.1 (hB1 hv); omega
-      subst hv0
-      have h0 : OneStage.Pa [1] .all B = 0 := by simp [OneStage.Pa, hB0]
-      rw [h0]
-      exact (Pr_congr (q := fun _ => False) fun d =>
-        ⟨fun h => h 0 (List.mem_replicate.2 ⟨by omega, rfl⟩) hv, False.elim⟩).trans_le Pr_false.le
-
-/-- **`L₀` meets the contract** whenever it samples the block (`0 < n`). -/
-theorem sessions₀ (H : Msg → Msg) {n : ℕ} (hn : 0 < n) (oc : ℕ) : (L₀ n oc).Sessions H where
-  draws := draws₀ hn oc
-  refuses _ _ _ _ _ _ := ⟨s₀, P₀, rfl, rfl, inScope₀⟩
-  interior _ _ _ _ _ _ _ := rfl
-  fixed _ _ _ _ := ⟨Finset.Subset.refl _, fun _ => rfl⟩
-  runs x _ P ω _ _ _ := ⟨x, ⟨fun _ _ _ => P.next x [] ω⟩, rfl, (Finset.card_fin 1).symm,
-    fun _ _ => iff_of_true rfl rfl, fun _ _ => ⟨rfl, fun q hq => by
-      have h : q ∈ ([] : List (Msg × Msg)) := hq
-      simp at h⟩⟩
-  opens _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ hR := False.elim hR
-
-/-- **The proof system costs nothing**: no reruns, strict or expected, and no SHA-512 calls of its own. -/
-theorem A₀_runs (H : Msg → Msg) : A₀.RerunsLe H (fun _ => 0) := fun _ _ _ _ _ _ => le_rfl
-
-theorem A₀_runsExp (H : Msg → Msg) : A₀.RerunsExpLe H (fun _ => 0) := by
-  intro x Ω P ω
-  have h0 : ∀ s : (Fin (A₀.V.k x) → Unit) × A₀.E.C x, ((A₀.E.eval H P x ω s.1 s.2).2.2 : ℝ) = 0 :=
-    fun _ => Nat.cast_zero
-  simp only [h0, Ex_const, le_refl]
-
-theorem A₀_own (H : Msg → Msg) : A₀.OwnLe H (fun _ => 0) := fun _ _ _ _ _ _ => le_rfl
-
-/-! ## Its extractor's own calls -/
-
-theorem ownLog_unitExt₀ (H : Msg → Msg) (n oc : ℕ) (x : Msg) (run' : (Fin ((L₀ n oc).V.k x) → Unit) → Trace)
-    (s : AuditStatement) (u : ℕ) (r : Fin ((L₀ n oc).V.k x) → Unit) (v : Seen) (c : A₀.EC ((L₀ n oc).sh x u)) :
-    (ownLog H run' ((L₀ n oc).unitExt x s u r v c)).length = 1 := by
-  unfold Compiled.unitExt
-  have hs : (L₀ n oc).session x u v = some (x, v) := rfl
-  simp only [hs]
-  rw [dite_eq_left (show A₀.shape x = (L₀ n oc).sh x u from rfl)]
-  rfl
-
-theorem ownLog_innerBody₀ (H : Msg → Msg) (n oc : ℕ) (x : Msg) (run' : (Fin ((L₀ n oc).V.k x) → Unit) → Trace)
-    (s : AuditStatement) (c : (L₀ n oc).ECoins x) (j : Fin ((L₀ n oc).k x))
-    (li : Fin ((L₀ n oc).k x) × ((Fin ((L₀ n oc).V.k x) → Unit) × Seen)) :
-    (ownLog H run' ((L₀ n oc).innerBody x s c j li)).length = n := by
-  unfold Compiled.innerBody
-  refine Eq.trans (ownLog_flatMapRP_const H run' _ 1 _ fun u hu => ?_) ?_
-  · obtain rfl : u = 0 := (List.mem_replicate.1 hu).2
-    rw [dite_eq_left (show 0 < (L₀ n oc).nPU x from Nat.one_pos)]
-    exact ownLog_unitExt₀ H n oc x run' s 0 _ _ _
-  · show (List.replicate n 0).length * 1 = n
-    simp
-
-theorem ownLog_outerBody₀ (H : Msg → Msg) (n oc : ℕ) (x : Msg) (run' : (Fin ((L₀ n oc).V.k x) → Unit) → Trace)
-    (hrun : ∀ r, (run' r).out = .acc) (s : AuditStatement) (c : (L₀ n oc).ECoins x)
-    (jo : Fin ((L₀ n oc).k x) × ((Fin ((L₀ n oc).V.k x) → Unit) × Seen)) :
-    (ownLog H run' ((L₀ n oc).outerBody x s c jo)).length = (L₀ n oc).k x * n := by
-  unfold Compiled.outerBody
-  rw [ownLog_bind, ownLog_of_noHash H run' (NoHash.waitAccC _ _ _), List.nil_append]
-  refine Eq.trans (ownLog_flatMapRP_const H run' _ n _ fun li _ => ownLog_innerBody₀ H n oc x run' s c jo.1 li) ?_
-  rw [List.length_zip, List.length_finRange, waitAccC_length_all H run' hrun, List.length_map, List.length_finRange,
-    Nat.min_eq_left ((L₀ n oc).k_le_cap x), min_self]
-
-/-- **The extractor's own calls are `k²·n`**: at every run, each of the `k` kept outer runs keeps `k` inner runs, at
-each of which each of the `n` entries of the sample costs one call. -/
-theorem ownLog_E₀ (H : Msg → Msg) (n oc : ℕ) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
-    (r₀ : Fin ((L₀ n oc).V.k x) → Unit) (c : (L₀ n oc).E.C x) :
-    (ownLog H (run H P (L₀ n oc).V x ω) ((L₀ n oc).E.ext x r₀ c)).length = (L₀ n oc).k x * ((L₀ n oc).k x * n) := by
-  have hrun : ∀ r, (run H P (L₀ n oc).V x ω r).out = .acc := fun _ => rfl
-  rw [Compiled.length_ownLog_E H (L₀ n oc) P x ω r₀ c (s := s₀) rfl (hrun r₀),
-    ownLog_flatMapRP_const H _ _ _ _ fun jo _ => ownLog_outerBody₀ H n oc x _ hrun s₀ c jo,
-    Compiled.length_outerList_all H (L₀ n oc) x _ c hrun]
-
-/-- The prover both bounds are read at: it sends the empty message. -/
-def P₁ : Prover Unit := ⟨fun _ _ _ => .ret []⟩
-
-/-! ## The bound fails -/
-
-/-- **Without repeats, `openCalls` bounds nothing**: `L₀ 1 0` samples its one block once, and checking its reveal
-costs one SHA-512 call while `openCalls = 0`, so its extractor's `k²` own calls exceed the bound `k²·(0 + 0)`. -/
-theorem not_ownLe_openCalls (H : Msg → Msg) :
-    ¬ ExtractOwnLe H (L₀ 1 0).E
-      (fun x => (L₀ 1 0).k x ^ 2 * (L₀ 1 0).nPU x * ((L₀ 1 0).openCalls x + (L₀ 1 0).hs (fun _ => 0) x)) := by
-  intro h
-  obtain ⟨c⟩ : Nonempty ((L₀ 1 0).E.C []) := inferInstance
-  have h3 := (ownLog_E₀ H 1 0 P₁ [] () (fun _ => ()) c).symm.trans_le (h [] Unit P₁ () (fun _ => ()) c)
-  have hb : (L₀ 1 0).openCalls [] + (L₀ 1 0).hs (fun _ => 0) [] = 0 := rfl
-  have hk := (L₀ 1 0).k_pos []
-  simp only [hb, mul_zero, mul_one] at h3
-  exact absurd h3 (Nat.not_le.2 (Nat.mul_pos hk hk))
-
-theorem not_efficient_openCalls (H : Msg → Msg) :
-    ¬ (L₀ 1 0).Efficient H (fun _ => 0) (fun _ => 0) (fun _ => 0) :=
-  fun h => not_ownLe_openCalls H h.2.2
-
-/-- `L₀ 1 0`'s sample has no repeats. -/
-theorem nodup_checked₀ (x : Msg) (r : Fin ((L₀ 1 0).V.k x) → Unit) : ((L₀ 1 0).checked x r).Nodup :=
-  List.nodup_singleton 0
-
-theorem openCalls_repeats (H : Msg → Msg) (x : Msg) (s : AuditStatement) (u : ℕ) (v : Seen) (w : Unit) :
-    (((L₀ 2 1).reveal s u v w).map fun p => (((L₀ 2 1).commit.opens p.1 p.2).eval H).2.length).sum =
-      (L₀ 2 1).openCalls x :=
-  rfl
-
-/-- `L₀ 2 1` meets `OpenCallsLe`: checking its reveal costs exactly `openCalls`. -/
-theorem openCallsLe₀ (H : Msg → Msg) : (L₀ 2 1).OpenCallsLe H := fun x s _ u v w =>
-  (openCalls_repeats H x s u v w).le
-
-/-- **With `openCalls` bounding each reveal's check, repeats break the bound**: `L₀ 2 1` samples its one block twice;
-checking its reveal costs exactly `openCalls = 1` (`openCallsLe₀`), and its extractor's `2k²` own calls exceed the
-bound `k²·1·(1 + 0)`. -/
-theorem not_ownLe_repeats (H : Msg → Msg) :
-    ¬ ExtractOwnLe H (L₀ 2 1).E
-      (fun x => (L₀ 2 1).k x ^ 2 * (L₀ 2 1).nPU x * ((L₀ 2 1).openCalls x + (L₀ 2 1).hs (fun _ => 0) x)) := by
-  intro h
-  obtain ⟨c⟩ : Nonempty ((L₀ 2 1).E.C []) := inferInstance
-  have h3 := (ownLog_E₀ H 2 1 P₁ [] () (fun _ => ()) c).symm.trans_le (h [] Unit P₁ () (fun _ => ()) c)
-  have hb : (L₀ 2 1).openCalls [] + (L₀ 2 1).hs (fun _ => 0) [] = 1 := rfl
-  have hn : (L₀ 2 1).nPU [] = 1 := rfl
-  have hk := (L₀ 2 1).k_pos []
-  simp only [hb, hn, mul_one] at h3
-  nlinarith [Nat.mul_pos hk hk]
-
-theorem not_efficient_repeats (H : Msg → Msg) :
-    ¬ (L₀ 2 1).Efficient H (fun _ => 0) (fun _ => 0) (fun _ => 0) :=
-  fun h => not_ownLe_repeats H h.2.2
-
-/-- **`CompilerEfficient` is false**: `L₀ 2 1` meets the contract and `OpenCallsLe` over a proof system that costs
-nothing, and its extractor's own calls exceed the bound. -/
-theorem not_compilerEfficient : ¬ CompilerEfficient := fun h =>
-  not_efficient_repeats id (h Unit A₀ (L₀ 2 1) id (fun _ => 0) (fun _ => 0) (fun _ => 0)
-    (sessions₀ id (by norm_num) 1) (A₀_runs id) (A₀_runsExp id) (A₀_own id) (openCallsLe₀ id))
-
-/-- **`ExpOwnOf` is false**: its own-calls conjunct is `CompilerEfficient`'s third, which `L₀ 2 1` breaks. -/
-theorem not_expOwnOf : ¬ ExpOwnOf := fun h =>
-  not_ownLe_repeats id (h Unit A₀ (L₀ 2 1) id (fun _ => 0) (fun _ => 0) (sessions₀ id (by norm_num) 1)
-    (A₀_runsExp id) (A₀_own id) (openCallsLe₀ id)).2
-
-end Counter
 
 end Claims.SamplingGeneric
