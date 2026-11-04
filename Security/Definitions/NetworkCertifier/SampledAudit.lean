@@ -18,8 +18,9 @@ are wired: each wired input gate's writer, a gate whose value the registered des
 fits the program (`BoundaryGates.Fits`) when, before the horizon, the egress gates are gates `C` returns and not inputs,
 so their values are committed and computed by `C`, the ingress gates are inputs, `C` is causal through its reads and
 its wires (`DependsWired`), and the wiring fits (`BoundaryGates.WiresFit`: each wired gate an input, its writer a gate
-`C` returns, an input or a constant among them, and the wires acyclic). A wire may carry ingress, as long as no step's
-egress reaches a later step's ingress through it. The verifier refuses a statement whose layout doesn't fit, as it
+`C` returns or an input, and the wires acyclic). An input writer is how a later copy of an input bit reads its first
+copy, both opening one committed leaf. A wire may carry ingress, as long as no step's egress reaches a later step's
+ingress through it. The verifier refuses a statement whose layout doesn't fit, as it
 refuses one outside the sampling scope.
 
 **The circuit's Program** (`circuitProgram`) is `C` run on the ingress up to step `t` and the declared advice, read off
@@ -131,14 +132,17 @@ def DependsWired (C : Prog) (wires : ℕ → Option ℕ) (i g : ℕ) : Prop :=
   Relation.ReflTransGen (fun a b => a ∈ (C.gates[b]?.map BGate.reads).getD [] ∨ wires b = some a) i g
 
 /-- **The wiring fits the program** over the horizon `k`. Each wired gate is an input of `C` and no ingress gate before
-`k`, so its value is committed, and its writer is a gate `C` returns, read as a gate outside its proof block reads it
-(`Prog.read`): a constant's own value, any other gate's committed value. A writer may be a computed gate, a constant or
-an input, and an input writer may itself be wired. A writer may depend on ingress; that no step's egress reaches a
-later step's ingress through a wire is the layout's causality (`BoundaryGates.Fits`, over `DependsWired`). The wires
-are acyclic (`WiresAcyclic`), so the chain of writers from a wired gate ends, at a writer that is not a wired gate: a
-constant, a computed gate, an ingress gate, a registered input or a free input. -/
+`k`, so its value is committed, and its writer is a gate `C` returns or an input, so its value is committed too, read
+as a gate outside its proof block reads it (`Prog.read`): a constant's own value, any other gate's committed value. A
+writer may be a computed gate, a constant or an input, and an input writer may itself be wired. An input writer is how
+a later copy of an input bit reads its first copy, where the layout gives each reading proof block its own copy. A
+writer may depend on ingress; that no step's egress reaches a later step's ingress through a wire is the layout's
+causality (`BoundaryGates.Fits`, over `DependsWired`). The wires are acyclic (`WiresAcyclic`), so the chain of writers
+from a wired gate ends, at a writer that is not a wired gate: a constant, a computed gate, an ingress gate, a registered
+input or a free input. -/
 def BoundaryGates.WiresFit {L S : ℕ} (lay : BoundaryGates L S) (C : Prog) (k : ℕ) : Prop :=
-  (∀ g w, lay.wires g = some w → C.gates[g]? = some .input ∧ (∀ t < k, g ∉ lay.ingress t) ∧ w ∈ C.outs) ∧
+  (∀ g w, lay.wires g = some w → C.gates[g]? = some .input ∧ (∀ t < k, g ∉ lay.ingress t) ∧
+    (w ∈ C.outs ∨ C.gates[w]? = some .input)) ∧
     WiresAcyclic C lay.wires
 
 /-- **The layout fits the program** over the horizon `k`, which the verifier checks before it samples. Before `k`: every
