@@ -68,6 +68,9 @@ ALLOWED = {
     # it, signs and verifies only through keys its caller hands it, and checks a configuration against what a protocol and
     # a workload declare to it, so neither gains an ml edge.
     "core.wire": set(),
+    # The Site, the registered hardware: its locations, links and registration log, the check each entry passes and the
+    # views a protocol reads. Its digests are canonical JSON's, the wire's.
+    "core.site": {"core.wire"},
     "core.deploy": {"core.wire"},
     # The registration log every subprotocol and both composites read, the Python of `Core.Registration`: canonical JSON
     # and SHA-512 only, so it reaches no ml.
