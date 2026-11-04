@@ -4,6 +4,7 @@ import Proofs.Flock.Bridge.V5.Statement
 import Proofs.Flock.Bridge.CircuitOf
 import Proofs.Flock.Soundness.ZK.RealLeaves
 import Proofs.Properties.Verity.Sampled.Deployed
+import Proofs.Properties.Verity.Sampled.Leaves
 
 /-!
 # Sampled proofs' leg of `Verity.Soundness`: the session v2 sets up
@@ -75,8 +76,9 @@ files and at the strategy a strategy of the period's game projects to. This modu
   * each leaf the device's coin trees hold in the play, twice, since the prover sees every leaf before it chooses what to
     open: the leaf's coins against fresh ones, at the mean over the device's fresh tree key of hm96's hiding gap
     (`CROnly.hidingGap`), which the leftover hash lemma bounds by `2^-257` a leaf, so `Claims.Hm96Hiding` holds at it
-    with no premise (`CROnly.hm96Hiding_gap`). The device refuses every tree past its caps, so a play's trees hold at
-    most `maxLeaves` (`2^46`) leaves, and the term is the closed `2 · 2^46/2^257 = 2^-210` (`Live.hidingTerm`);
+    with no premise (`CROnly.hm96Hiding_gap`). The device refuses every tree past its caps, so every run of a play
+    samples trees of at most `maxLeaves` (`2^46`) leaves in all (`Leaves.play_leaves_le`), and the term is the closed
+    `2 · 2^46/2^257 = 2^-210` (`Live.hidingTerm`);
   * the circuit file's and the public file's finders (`Vocab.fileFinder`, `Vocab.publicFinder`), `2²/2^513` each;
   * the read finder's published bound at `t` (`cr`, `Vocab.crBound`).
 -/
@@ -207,8 +209,9 @@ variable (A : Live)
 /-- **The coin trees' hiding term**: each leaf the device's coin trees hold in a play, twice, at `2^-257`, the leftover
 hash lemma's bound on the mean over the device's fresh tree key of hm96's hiding gap at one leaf. The prover sees every
 leaf before it chooses what to open, so the term counts the leaves the device samples, not the rounds the session
-opens; the device refuses every tree past its caps (`Verity.releases`), so a play's trees hold at most `maxLeaves`
-(`2^46`) leaves and the term is `2 · 2^46/2^257 = 2^-210` at every session, with no premise. -/
+opens; the device refuses every tree past its caps (`Verity.releases`), so every run of a play samples trees of at most
+`maxLeaves` (`2^46`) leaves in all (`Leaves.play_leaves_le`, with no premise), and the term is `2 · 2^46/2^257 = 2^-210`
+at every session. -/
 noncomputable def hidingTerm (_ : Live) : ℝ≥0∞ := 2 * (maxLeaves : ℝ≥0∞) / 2 ^ 257
 
 /-- **The session's draw file**: at each draw, the one `flock-verify draw` prints for the verifier's own draw under the
