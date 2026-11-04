@@ -33,6 +33,7 @@ import Definitions.NetworkCertifier.Tap
 import Definitions.NetworkCertifier.RecordRows
 import Definitions.NetworkCertifier.Period
 import Definitions.NetworkCertifier.Tied
+import Definitions.NetworkCertifier.TiedLeak
 import Definitions.Accounting.Sheets
 import Definitions.Accounting
 import Definitions.Population
