@@ -54,7 +54,7 @@ positions; `references.configs()` lists the served configurations and two shapes
 Llama-3.1-405B), labeled as constructed. The circuits are forward layers: the IR declares no training (backward,
 optimizer) circuit.
 
-    uv run --extra torch-cpu benchmarks/circuit_properties/run.py [--models NAME,...] [--T T] [--out DIR]
+    uv run --extra torch-cpu verity bench circuit_properties [--models NAME,...] [--T T] [--out DIR]
 
 measures each and sets a_out, a_in and |𝒥| per position beside benchmarks/rho's `fanout`, `legs` and layer products
 (its `models.toml` row, and `derived_fanout` / `derived_legs` of the config's matrices), checks whole-in-block under
