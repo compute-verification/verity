@@ -35,7 +35,8 @@ theorem recLayout_rounds (S : ZkSess) (b : RecDeploy.Brings) (msOf : Msg → Lis
     have hs : ∑ s ∈ Finset.range m, ((RecDeploy.nums b.st x (i + 1 + s)).rounds + 1) =
         ∑ s ∈ Finset.range m, ((RecDeploy.nums b.st x (i + (s + 1))).rounds + 1) :=
       Finset.sum_congr rfl fun s _ => by rw [Nat.add_assoc, Nat.add_comm 1 s]
-    rw [h1, hk, e, recLayout_rounds S b msOf hk x xO m (i + 1), hs, Finset.sum_range_succ', Nat.add_zero]
+    have h0 : (RecDeploy.nums b.st x (i + 0)).rounds = (RecDeploy.nums b.st x i).rounds := rfl
+    rw [h1, hk, e, recLayout_rounds S b msOf hk x xO m (i + 1), hs, Finset.sum_range_succ']
     omega
 
 /-- **`deployRec`'s V\* sessions make up their layout's rounds** at a session system whose rounds are the outer
