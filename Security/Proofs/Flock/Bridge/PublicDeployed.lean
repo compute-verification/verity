@@ -6,16 +6,16 @@ public import Proofs.Flock.Bridge.Public
 # `deltaPub` is below 1 at the deployment's parameters
 
 `SampledKSLivePub` bounds a cheating prover's success by `Bridge.deltaPub`, which says something only below 1. At the
-parameters ONE-19 deploys, `ρ = 1/2`, `k = ⌈2^24/e⌉` (`kDep`) and `M = R_w = 2^192`, it is:
+deployment's parameters, `ρ = 1/2`, `k = ⌈2^24/e⌉` (`kDep`) and `M = R_w = 2^192`, it is:
 
 * `rateM1_kDep`: `SampledKSLivePub`'s rate hypothesis holds, `2^23/(e·kDep) ≤ 1/2`;
 * `ksClosedM1_le`: the knowledge term is at most `2^-155` at budgets `q_F, q_S ≤ 2^82`;
-* `link_le`: the link factor is at most `2^-150` at `t' ≤ 2^80`;
+* `link_le`: the link factor is at most `2^-150` at a per-run cost `t' ≤ 2^81`;
 * `deltaPub_le_deployed`: so `deltaPub` is the draw's miss plus at most `2^-100`, for `W ≤ 2^40` committed wires;
 * `miss_le_pow`, `miss_le_exp`: the miss `C(n−K₀, k_d)/C(n, k_d)` is at most `(1 − K₀/n)^{k_d} ≤ e^{−K₀k_d/n}`;
 * `Flock.Guarantees.DeltaPubDeployed`: at `K₀ ≤ n ≤ K₀·k_d` (a draw of `k_d` units expects at least one of `K₀` bad
   ones), the miss is at most `1/e`, so `deltaPub < 1` at `SampledKSLivePub`'s budgets `q_F = 2(t' + v)`, `q_S = t' + v`
-  for `t', v ≤ 2^80`.
+  and link cost `t' + v` per run, for `t', v ≤ 2^80`.
 -/
 
 @[expose] public section
@@ -89,8 +89,8 @@ theorem ksClosedM1_le {k : ℕ} (hk : (k : ℝ) ≤ 2 ^ 23) {qF qS : ℝ} (hF0 :
   · linarith
   · norm_num
 
-/-- **The link factor at `t' ≤ 2^80` and `M = R_w = 2^192`** is at most `2^-150`, for `k ≤ 2^23`. -/
-theorem link_le {k : ℕ} (hk : (k : ℝ) ≤ 2 ^ 23) {t' : ℝ} (ht : t' ≤ 2 ^ 80) :
+/-- **The link factor at a per-run cost `t' ≤ 2^81` and `M = R_w = 2^192`** is at most `2^-150`, for `k ≤ 2^23`. -/
+theorem link_le {k : ℕ} (hk : (k : ℝ) ≤ 2 ^ 23) {t' : ℝ} (ht : t' ≤ 2 ^ 81) :
     2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * ((2 ^ 192 : ℕ) : ℝ)) +
       k / (Real.exp 1 * ((2 ^ 192 : ℕ) : ℝ)) ≤ 2 ^ (-(150 : ℝ)) := by
   have he : (1 : ℝ) ≤ Real.exp 1 := by linarith [Real.exp_one_gt_d9]
@@ -101,18 +101,18 @@ theorem link_le {k : ℕ} (hk : (k : ℝ) ≤ 2 ^ 23) {t' : ℝ} (ht : t' ≤ 2 
   simp only [Nat.cast_pow, Nat.cast_ofNat]
   have hk0 : (0 : ℝ) ≤ k := Nat.cast_nonneg k
   have hM : (2 : ℝ) ^ 192 ≤ Real.exp 1 * 2 ^ 192 := le_mul_of_one_le_left (by positivity) he
-  have h1 : 2 * (t' * (1 + k)) / 2 ^ 256 ≤ 2 * (2 ^ 80 * (1 + 2 ^ 23)) / 2 ^ 256 := by gcongr
+  have h1 : 2 * (t' * (1 + k)) / 2 ^ 256 ≤ 2 * (2 ^ 81 * (1 + 2 ^ 23)) / 2 ^ 256 := by gcongr
   have h2 : 1 / (Real.exp 1 * 2 ^ 192) ≤ 1 / 2 ^ 192 := one_div_le_one_div_of_le (by positivity) hM
   have h3 : (k : ℝ) / (Real.exp 1 * 2 ^ 192) ≤ 2 ^ 23 / 2 ^ 192 :=
     div_le_div₀ (by positivity) hk (by positivity) hM
-  refine le_trans (?_ : _ ≤ (2 : ℝ) * (2 ^ 80 * (1 + 2 ^ 23)) / 2 ^ 256 + 1 / 2 ^ 192 + 2 ^ 23 / 2 ^ 192) ?_
+  refine le_trans (?_ : _ ≤ (2 : ℝ) * (2 ^ 81 * (1 + 2 ^ 23)) / 2 ^ 256 + 1 / 2 ^ 192 + 2 ^ 23 / 2 ^ 192) ?_
   · linarith
   · norm_num
 
 /-- **`deltaPub` at the deployment's parameters is the draw's miss plus at most `2^-100`**: `ρ = 1/2`, `k = kDep`,
-`M = R_w = 2^192`, budgets `q_F, q_S ≤ 2^82`, `t' ≤ 2^80` and at most `2^40` committed wires. -/
+`M = R_w = 2^192`, budgets `q_F, q_S ≤ 2^82`, a link cost per run `t' ≤ 2^81` and at most `2^40` committed wires. -/
 theorem deltaPub_le_deployed (n kd K₀ W : ℕ) (hW : W ≤ 2 ^ 40) {qF qS t' : ℝ} (hF0 : 0 ≤ qF) (hF : qF ≤ 2 ^ 82)
-    (hS0 : 0 ≤ qS) (hS : qS ≤ 2 ^ 82) (ht0 : 0 ≤ t') (ht : t' ≤ 2 ^ 80) :
+    (hS0 : 0 ≤ qS) (hS : qS ≤ 2 ^ 82) (ht0 : 0 ≤ t') (ht : t' ≤ 2 ^ 81) :
     deltaPub n kd K₀ kDep qF qS t' (2 ^ 192) (2 ^ 192) W (1 / 2) ≤
       ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) + 2 ^ (-(100 : ℝ)) := by
   unfold deltaPub
@@ -211,13 +211,14 @@ namespace Flock.Guarantees
 
 /-- **`SampledKSLivePub`'s error is below 1 at the deployment's parameters.** At `k = kDep = ⌈2^24/e⌉`, `ρ = 1/2` and
 `M = R_w = 2^192`, its rate hypothesis holds (`1 ≤ k`, `rateM1 k ≤ ρ`), and `deltaPub < 1` at its budgets
-`q_F = 2(t' + v)` and `q_S = t' + v` for a prover's per-run time `t' ≤ 2^80` and one opening's verification `v ≤ 2^80`, at
-most `2^40` committed wires (`W`, `Bridge.ioSum`) and a draw of `k_d` of `n` units with `K₀ ≤ n ≤ K₀·k_d`. -/
+`q_F = 2(t' + v)` and `q_S = t' + v` and link cost `t' + v` per run, for a prover's per-run time `t' ≤ 2^80` and one
+opening's verification `v ≤ 2^80`, at most `2^40` committed wires (`W`, `Bridge.ioSum`) and a draw of `k_d` of `n` units
+with `K₀ ≤ n ≤ K₀·k_d`. -/
 def DeltaPubDeployed : Prop :=
   1 ≤ Bridge.kDep ∧ FlockSoundness.Discharge.ZkLink.rateM1 Bridge.kDep ≤ 1 / 2 ∧
     ∀ (n kd K₀ W : ℕ) (t' v : ℝ), 0 < n → K₀ ≤ n → n ≤ K₀ * kd → W ≤ 2 ^ 40 → 0 ≤ t' → t' ≤ 2 ^ 80 →
       0 ≤ v → v ≤ 2 ^ 80 →
-      Bridge.deltaPub n kd K₀ Bridge.kDep (2 * (t' + v)) (t' + v) t' (2 ^ 192) (2 ^ 192) W (1 / 2) < 1
+      Bridge.deltaPub n kd K₀ Bridge.kDep (2 * (t' + v)) (t' + v) (t' + v) (2 ^ 192) (2 ^ 192) W (1 / 2) < 1
 
 end Flock.Guarantees
 
@@ -227,7 +228,8 @@ theorem Flock.SecurityProofs.DeltaPubDeployed : Flock.Guarantees.DeltaPubDeploye
   intro n kd K₀ W t' v hn0 hK hn hW ht0 ht hv0 hv
   have hF : 2 * (t' + v) ≤ 2 ^ 82 := by linarith
   have hS : t' + v ≤ 2 ^ 82 := by linarith
-  refine (Flock.Bridge.deltaPub_le_deployed n kd K₀ W hW (by linarith) hF (by linarith) hS ht0 ht).trans_lt ?_
+  refine (Flock.Bridge.deltaPub_le_deployed n kd K₀ W hW (by linarith) hF (by linarith) hS (by linarith)
+    (by linarith)).trans_lt ?_
   have h := Flock.Bridge.miss_le_half hn0 hK hn
   have : (2 : ℝ) ^ (-(100 : ℝ)) < 1 / 2 := by
     rw [Real.rpow_neg (by norm_num), show (100 : ℝ) = ((100 : ℕ) : ℝ) by norm_num, Real.rpow_natCast]
