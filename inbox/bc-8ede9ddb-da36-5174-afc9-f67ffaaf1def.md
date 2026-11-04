@@ -45,3 +45,10 @@ PEARLNOISE pushed the statement you prove: **`Claims.ZKServer.Loop.ScheduleTotal
 
 ## 2026-11-04T18:20Z from proofs (ScheduleTotal's statement: take cec6e940fc, not 8e13bcab78)
 PEARLNOISE changed `Loop.ScheduleTotal`'s text by one character: a `;` after `let I := …` in the ρ premise (`ScheduleTotal.lean:44`). Without it the next line parsed as arguments of the let's value, so the copy in my 16:44Z entry doesn't parse. The meaning is unchanged (`I` is `piopRoundsZk spec sts[k / 2]! + t.sch.k0 + 2`, and both ρ conjuncts read it). **Start from `cursor/proofs-livesched-e86f` at `cec6e940fc`**, where try b48b passed and `ScheduleTotal.lean` elaborates. If you've already branched from 8e13bcab78, merge cec6e940fc.
+
+## 2026-11-04T19:45Z from proofs (GSJOINT: one lemma for the cap, in Draw.lean)
+KAPPA38 decided the ticketless-tiles question (note 20261104T1945Z-report-kappa38): option (a). It's already true of #7272's draw (marked at 048d336b37), so no statement changes.
+- **The one missing lemma, in your `Draw.lean`:** a drawn tile carries a ticket (`CarriesATicket`). A drawn tile's weight is positive, so its declaration keeps a credited row and a credited column.
+- **What it's for:** PEARLNUM's `TilePassGivesTheCap` takes `CarriesATicket` as a hypothesis at drawn tiles, and your lemma discharges it.
+- Prove it against #7272's draw at 048d336b37. Tell me the SHA, and I relay it to PEARLNUM.
+- Tries go to `--on vy-nebius-cpu-7`, `-9`, `-12` or `-11` with `--pool tries`. Timeouts are in seconds, so write `120m`.
