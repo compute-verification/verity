@@ -89,6 +89,13 @@ def test_put_refuses_a_panel_te_core_doesnt_put_before_any_request(pid, why):
         console.put({"id": pid})
 
 
+def test_every_training_panel_is_one_put_puts():
+    """The four training panels `put` PUTs: algorithm-policy's two, standard-workloads' and size-scaling (ladder-v3's),
+    none of them retired."""
+    assert set(console.PANELS) == {"training/algorithm-policy", "training/frontier-fit", "training/standard-workloads",
+                                   "training/size-scaling"} and not set(console.PANELS) & set(console.RETIRED)
+
+
 @pytest.mark.parametrize("patch, named", [
     (lambda: (formalism, "published", lambda *a, **k: None), "te_core.formalism.published isn't the function"),
     (lambda: (formalism, "published", functools.partial(formalism.published, reading="B")),

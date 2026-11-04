@@ -7,10 +7,10 @@ A body is at most `BODY_MAX` bytes (compact JSON, no NaN), a note at most `NOTE_
 its first cut that fits (`CUTS`, in order, the first the whole panel) with numbers to 4 significant digits (losses 6),
 and its note is the panel's short note (`SHORT`), the cut's, and `COMMON`; the uncut panel is DIR/<name>.json beside
 it. The console's training panels are `training/algorithm-policy` and `training/frontier-fit` (te_core.algorithm_policy
-PUTs both with `put`) and `training/standard-workloads` (te_core.standard_workloads'): te_core.plots' five panels are
-off it, so nothing here PUTs them. `put` PUTs one panel to `PANELS_URL`/<id> with a Cursor OIDC token (research.slack's
-`oidc_token`, imported only there) and returns its HTTP status; `served` GETs the panels the route serves for a
-producer.
+PUTs both with `put`), `training/standard-workloads` (islands/standard-workloads/standard_workloads.py's) and
+`training/size-scaling` (islands/ladder-v3/size_scaling.py's): te_core.plots' five panels are off it, so nothing here
+PUTs them. `put` PUTs one panel to `PANELS_URL`/<id> with a Cursor OIDC token (research.slack's `oidc_token`, imported
+only there) and returns its HTTP status; `served` GETs the panels the route serves for a producer.
 
 A number reaches the console only as a te_core VERSION, so `put` refuses before any request (`refusal`):
 - an id not in `PANELS`, or one `RETIRED` names;
@@ -20,7 +20,7 @@ A number reaches the console only as a te_core VERSION, so `put` refuses before 
 - a trace the ledger shares among its records changed in place (te_core.ledger's `changed_traces`);
 - a te_core tree with uncommitted changes or untracked files, or off `BRANCH`, where the integrator merges te_core: a
   file of te_core at the branch's head (fetched from origin) that this tree's HEAD lacks or has otherwise
-  (`off_branch`). A file only this tree has is its publisher's own module (standard-workloads' builder).
+  (`off_branch`). A file only this tree has is its publisher's own module (standard-workloads' panel module).
 """
 from __future__ import annotations
 
@@ -37,8 +37,9 @@ from pathlib import Path
 from .plots import NAMES, frame
 
 PANELS_URL = "https://website-docs-sage.vercel.app/api/panels"
-#: the panels `put` PUTs: te_core.algorithm_policy's two and te_core.standard_workloads'
-PANELS = ("training/algorithm-policy", "training/frontier-fit", "training/standard-workloads")
+#: the panels `put` PUTs: te_core.algorithm_policy's two, islands/standard-workloads/standard_workloads.py's and
+#: islands/ladder-v3/size_scaling.py's
+PANELS = ("training/algorithm-policy", "training/frontier-fit", "training/standard-workloads", "training/size-scaling")
 #: the panel ids `put` refuses, each with why
 RETIRED = {"training/frontier-branches": "frontier-branches is stored only, never PUT (te_core.panels)"} | {
     f"training/{n}": "te_core.plots' panels are off the console" for n in NAMES}
