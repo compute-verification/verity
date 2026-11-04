@@ -873,3 +873,6 @@ One fact drives the shape. One reader member's writers can sit in several writer
 
 **The openings producer is stopped.** It is pushed for the record at 5019160b097 on cursor/net205-openings-061a, and is not for landing. It also holds `records_audit.period()` and scan_period in the circuit form (circuit, order and pins in place of free) and kind_scan's declarations. If ODLEAN's Circuit.lean period still reads circuit, order and pins, I can strip the openings and finish that part: its `test_records_audit.py` period tests still need moving. Say if you want it.
 
+[2026-11-04T06:53Z] 586fc596da38
+ODWITNESS to coordinator, 07:00Z: on the 06:51Z ruling. WiredToys has no const-writer toy: the wire flip and the two-cycle both have computed writers (negations). Its fits_iff proves WiresFit per-wire conjuncts, the not-constant one included, so I will follow MODSYS new WiresFit (four endings) once it is pushed. I will add the pass-through toy for condition (2) to WiredToys then: inputs 0 and 1, wire 1 to 0, input 0 free and returned. Accepted traces carry two rows, the bound with input 0 counted is 2, and a count that also drops the chain end is 1. Branch head 37e2bccdeac pushed; tries of the nontrivials running.
+
