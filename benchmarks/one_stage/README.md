@@ -36,6 +36,12 @@ negatives.
   yet: `integrations/vllm/tests/pipeline/test_row_tables.py`'s ScaledMmS8Coordinate chunks, whose `x` rows link four row
   tables over two engine steps, each chunk one table's, as rank 0 of a one-rank step on a local challenger's coins. Lean
   verifies each sampled chunk with its table's registered reads (`--registered`, `tables.registered_reads`).
+- `a5_wired.py` (`a5_tp.sh` with `A5_CHALLENGER=local` and `STANDIN=wired`): A5 on a window with a template-level wire, a
+  writer Gemm and a reader Gemm whose `x` is the writer's `o0`, committed by `interface.Window` with its circuit record, on a
+  local challenger's coins. Then v2's per-member verdicts on its case (`sampled-proofs-one-stage-zk verdicts --check`), whose
+  sessions open each drawn reader's wired rows against their writers' roots: as made, each accepted verdict naming the
+  wiring's SHA-512; without wires, all accepted and naming none; and with the wire moved to other writers or the reader's
+  wired rows altered in its public body, the reader's sessions refused by their wired reads.
 - `a5_warden.py` (`a5_tp.sh` with `STANDIN=warden`, `warden:altered`, `warden:pad`, `warden:pad-named` or `warden:swapped`):
   A5 on a window with transfer gates, which no served window has yet: two chunks of the warden's toy unit whose ports are the
   bucket rows of one connection's ingress and egress cells (a row a bucket, registration v2), committed under the warden's

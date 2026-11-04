@@ -17,6 +17,10 @@
 #     and combines, each combine slot wired to its part), run as the entry row-tables is.
 #     The STANDIN entry row-tables is a5_row_tables.py: test_row_tables' window (ScaledMmS8Coordinate chunks whose x rows link
 #     its row tables) as rank 0 of a one-rank step, on a local challenger's coins (it needs A5_CHALLENGER for --main).
+#     The STANDIN entry wired is a5_wired.py: a writer Gemm template and a reader one, each reader unit's x its writer unit's
+#     o0 by a template-level wire, run as the entry row-tables is, then v2's per-member verdicts on its case
+#     (sampled-proofs-one-stage-zk verdicts --check) as made, without wires, with the wire moved and with the reader's
+#     wired rows altered, the last two refused by the reader's wired reads.
 #     The STANDIN entries warden and warden:KIND are a5_warden.py: transfer-gate chunks whose ports open the bucket rows of
 #     one connection's cells under the warden's signed roots, beside a drawn rest, on a warden run rehearsed here first (warden_serve.py
 #     rehearse --fake, about a minute, its prompts up to 2048 tokens so that seed 0's traffic has a connection admitted in its
@@ -130,7 +134,8 @@ RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/ml/floc
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }
 LEAN=$REPO/verity/core/service/flock/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
-(cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
+(cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier sampled-proofs-one-stage-zk) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
+V2ZK=$REPO/verity/core/service/sampled_proofs/.lake/build/bin/sampled-proofs-one-stage-zk
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
 
 # the verifier's lowering: a synthetic input set per template (its values are never read)
@@ -221,10 +226,11 @@ if [ -n "${A5_TP:-}" ]; then
   audit $N $A5_TP/commit ${A5_BUILD:-$A5_TP/build} "$WL" $WIN $PART "${ADV[@]}" || rc=1
 else
   for e in ${STANDIN:-256:subset:4 1536:subset:4}; do   # a rank's stand-in window holds 8 units; a draw of all leaves no negative
-    if [ "$e" = row-tables ] || [ "$e" = sparse-mla ]; then
+    if [ "$e" = row-tables ] || [ "$e" = sparse-mla ] || [ "$e" = wired ]; then
       [ -n "$MAIN" ] || { echo "STANDIN $e draws from a challenger's coins: set A5_CHALLENGER=local"; exit 3; }
       mkdir -p $O/$e
-      $TIME $PY benchmarks/one_stage/a5_${e//-/_}.py --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --main $MAIN \
+      V2=(); [ "$e" = wired ] && V2=(--v2 $V2ZK)
+      $TIME $PY benchmarks/one_stage/a5_${e//-/_}.py --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --main $MAIN "${V2[@]}" \
         ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} ${A5_COMPOSE_CACHE:+--compose-cache $A5_COMPOSE_CACHE} \
         --out $W/$e > $O/$e/a5.log 2> $O/$e/a5.err || rc=1
       grep '^A5' $O/$e/a5.log | cut -c1-4000; tail -25 $O/$e/a5.err
