@@ -9,6 +9,8 @@ import Proofs.NetworkCertifier.Advice
 import Proofs.NetworkCertifier.Ingress
 import Proofs.NetworkCertifier.Wires
 import Proofs.NetworkCertifier.KSWired
+import Proofs.NetworkCertifier.WiredNet
+import Proofs.NetworkCertifier.WiredRead
 import Proofs.NetworkCertifier.NoWires
 import Proofs.NetworkCertifier.SampledAuditAccepted
 import Proofs.NetworkCertifier.SampledAuditInstance
