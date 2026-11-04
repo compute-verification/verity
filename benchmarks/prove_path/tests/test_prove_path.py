@@ -1388,6 +1388,38 @@ def test_the_compile_command_writes_its_own_builds_with_no_vllm(tmp_path, monkey
     assert json.loads(out.read_text())["templates"]
 
 
+def test_window_commit_loads_its_own_builds_beside_its_out_while_the_row_dir_holds_none(tmp_path, monkeypatch):
+    """At a tied window's close (`serve_tie`, before its sample coin) the row dir holds the seal's commit and no Build:
+    ``advice_compile.py`` writes those once the serve is done. So window-commit's I2 loads each Program from its own Build,
+    written from its compile with its names and no vLLM (`own_builds`) into a directory of its own beside ``--out``, gone
+    once it returns, and writes none into the row dir."""
+    from verity_vllm.program.predict import window_circuit as WC
+
+    monkeypatch.setitem(sys.modules, "vllm", None)
+    s = _tiny_served(tmp_path, monkeypatch)
+    out, seen, load = tmp_path / "v3c-w0" / "window", {}, PP.I2Compiler.load
+
+    class Loaded(Exception):
+        pass
+
+    def loaded(i2, rank, world, requests):
+        p = load(i2, rank, world, requests)
+        seen.update(root=Path(i2.programs_root), held={Path(d).parent for d in p.dirs.values()}, digs=p.digs)
+        raise Loaded
+
+    monkeypatch.setattr(PP.I2Compiler, "load", loaded)
+    monkeypatch.setattr(WC, "takes", lambda *a, **k: None)
+    monkeypatch.setattr(WC, "lower", lambda *a, **k: None)
+    (tmp_path / "advice.bin").write_bytes(s.data)
+    a = argparse.Namespace(**vars(s.a), transfer_gate=[], out=str(out), advice=str(tmp_path / "advice.bin"),
+                           key=str(tmp_path / "private" / "key"), window_class=None, window_registration=None)
+    with pytest.raises(Loaded):
+        PP.window_commit_of_advice(a)
+    assert seen["root"].parent == out.parent and seen["held"] == {seen["root"]} and not seen["root"].exists()
+    assert seen["digs"] == {u.id: u.digest for u in s.units} and s.compiles == [True, False]
+    assert not list(Path(s.a.row_dir).glob("build_request*"))
+
+
 def test_a_served_windows_record_states_its_window_ingress_and_its_window_figure_is_the_advices_charge(tmp_path, monkeypatch,
                                                                                                       capsys):
     """TINY's served window over layer 0's ``SiluMul_v2{I=128}`` (`LAYER0`), as the registered compiler's ``circuit`` command
