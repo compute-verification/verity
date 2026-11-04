@@ -1,39 +1,52 @@
 """The console's training panel `training/standard-workloads`: the standard covert workloads (te_core.workloads'
 names: standard, diloco, rl, inference, lora and distill), each a small real run from a registered start, measured by
-te_core and priced by te_core.formalism at the console's default and the registered serving block.
+te_core and priced by te_core.formalism at the console's default and the registered serving block, beside the
+workloads no run here measures, each priced on te_core.workloads' model of it (`MODELLED`).
 
-    python islands/standard-workloads/standard_workloads.py --out DIR [--rows FILE] [--publish]
+    python islands/standard-workloads/standard_workloads.py --out DIR [--rows FILE] [--served FILE] [--base REV]
+    python islands/standard-workloads/standard_workloads.py --put DIR/console/standard-workloads.json --served FILE
+
+The build is a research run on a node (the agent VM only edits), from benchmarks/covert_witness with `--out` under the
+run's out/; the PUT is the agent VM's, which alone holds the console's token, with `--served` the panels the route
+served when it launched the build, written there by te_core.console.served() and sent with the run.
 
 `--rows` (default `ROWS`, the island's rows.json) gives the stored traces (the island's trace.py output, chosen steps
 of the runs, refused unless traced by a te_core from `TRACED_SINCE` to the one it runs on, a step traced more than once
 read from the newest te_core's trace) and a row per workload and measured
 dial setting: its workload, model, dials (te_core.workloads' arguments), run id and record art, what the run was beside
 them (`about`, and a `note`), `last_untraced` where the trace can't reach the run's last step (why, in its
-`input_status`), and `rounds` for a generation run (the island's generate.py). A row is the run's last
+`input_status`), and `rounds` for a generation run (the island's generate.py); or, for a workload no run measures,
+`modelled` (what the model is) in place of the run, its art and its trace: its row is te_core.workloads' model of the
+workload at its dials, with the model's products at each point (workloads.with_products) priced as a run's are, its
+run cell `MODELLED` with what the model is, its dials cell every argument of the model, and each input the model's
+(`modelled_status`). A measured row is the run's last
 checkpoint as te_core.ledger.ingest writes it (into a scratch ledger) with the run's traced structures
 (annotate.with_structures), measured by te_core.formalism.measure (its op log the ledger row's macs_log), and priced by
 formalism.published under `READING` at `POINTS`, algorithm_policy's: `rho_default` and `rho_console` are both its ρ
 at the console's default policy (`CONSOLE`, te_core.policy's: one full session of the 45M reference, attention
 included), with `binding_kind`, `rests_on` and `kinds` there, and `rho_served` its ρ at the registered serving block
-(te_core.panels' `SERVED`). ρ, its binding kind and what it rests on are published's as it gives them (null where it
-has no bound, resting on "unmeasured"); reading A's ρ is never infinite, so `build` refuses one. `kinds` is
-algorithm_policy's cell of the terms the max takes, its `partial` and `why` where published sets them, and, beside
-them, the sensitivities `SENSITIVITIES`: published's (reduction, update and fresh_no_cell, the fresh-products figure
-without P-cell, the term being the figure with it, blocks holding whole multiply cells) and reading B's token and
-decoding forms. `capture_code` is published's, the VERSION of the code that wrote the row's trace (null where the
-trace records none, one from before te_core 4.12.14, or the row has no trace). `rho_inputs` holds
-`KEYS` (C_gates beside algorithm_policy's `rho_inputs`), from which algorithm_policy.page_rho gives the dial's ρ at
-any (c, k), and beside them te_core.panels' `FRESH`, the fresh-products term over c at each k of the dial its products
-are classified at (null for a run with no product rows), which the console's port multiplies by c; `build` refuses a
+(te_core.panels' `SERVED`), both sensitivities beside the headline policy, each workload's own session at the
+console's k, which no column holds yet (the note says so). ρ, its binding kind and what it rests on are published's
+as it gives them (null where it has no bound, resting on "unmeasured"), a measured row's `rests_on` opening with
+algorithm_policy's `TRACED` where ρ is the products term's or its floor's, as algorithm_policy's rows do
+(algorithm_policy.rests_on); reading A's ρ is never infinite, so `build` refuses one. `kinds` is
+algorithm_policy's cell of the terms the max takes (the products term the theorem of record's ρ_HE, given (H) and (E)),
+its `partial` and `why` where published sets them, and, beside them, the sensitivities `SENSITIVITIES`: published's
+(reduction, update and fresh_old, the old products figure, which rests on P-width extended, false on honest circuits)
+and reading B's token and decoding forms. `capture_code` is published's, the VERSION of the code that wrote the
+row's trace (null where the trace records none, one from before te_core 4.12.14, or the row has no trace).
+`rho_inputs` holds `KEYS` (C_gates beside algorithm_policy's `rho_inputs`), from which algorithm_policy.page_rho gives
+the dial's ρ at any (c, k), and beside them te_core.panels' `FRESH`, the old figure and the products term over c at
+each k of the dial its products are classified at ([fresh_old/c, term/c]; null for a run with no product rows), which
+the console's port multiplies by c; `build` refuses a
 row whose rho_inputs miss formalism.at's ρ at either point or whose token dials miss its measured tokens
 (`token_dials`).
 `input_status` gives each input's source, "measured" or "assumed: " and why, from te_core's labels: a count, a trace's
 quantity, E's size and the harness's decoder are measured, and a stub, an assumption or an unmeasured quantity is
 assumed. An unmeasured Δ_grad names the steps te_core has none for and why (`untraced`), and whether Fit's verdict at
-`POINTS` rests on it (`held`). Beside `KEYS`, `products` is the fresh-products kind's input (`products`): measured at
-the console's default, or assumed with te_core's reason or where untraced steps that update count none, where the
-bound can't price them (a void term), why in plain words (`unpriced`), and where the serving block's k leaves it
-unmeasured. The words the builder adds there and in the note name no code (`CODE`): the
+`POINTS` rests on it (`held`). Beside `KEYS`, `products` is the products kind's input (`products`): measured at
+the console's default, or assumed with te_core's reason or where untraced steps that update count none, and where the
+serving block's k leaves it unmeasured. The words the builder adds there and in the note name no code (`CODE`): the
 code is training's slowdown code, and only te_core's reasons, which the builder relays as they are, are te_core's to
 word.
 
@@ -49,10 +62,14 @@ none per generated one; a, u and u_in te_core's stubs.
 
 DIR gets the uncut table, each row with its labels, parts, and formalism.at, formalism.published and the one bound
 (reading A's, formalism.bound) at both points (tables/standard-workloads.json), and the console's copy
-(console/standard-workloads.json); `--publish` GETs what the route serves, puts tables/ in the evidence store, whose art
-id the note names, and PUTs the panel, unless it would drop a served run's row or the route serves a newer te_core
-(`emptied`). The panel's source names the command at this checkout's commit and the integrator's commit it builds on
-(`commits`), and `--publish` refuses uncommitted changes to te_core or the island, which neither commit holds.
+(console/standard-workloads.json), whose note cites the tables in the research run's out/ (`cite`), which custody
+stores with the run's record. With `--served` a build is refused where it would drop a served run's row or the route
+serves a newer te_core (`emptied`). `--put` PUTs a build's console body (`put`), refused where the route's panel
+changed since `--served` was read, where the build would drop a row or the route refuses it (`emptied`, `refused`), or
+where its note cites no stored tables; then it GETs the panel and compares it with the body. The panel's source names
+the command at this checkout's commit and the integrator's commit it builds on (`commits`: `--base`, else their merge
+base on origin, which a node's checkout hasn't), refused where te_core or the island has uncommitted changes, which
+neither commit holds.
 """
 from __future__ import annotations
 
@@ -60,6 +77,7 @@ import argparse
 import dataclasses
 import json
 import math
+import os
 import re
 import subprocess
 import sys
@@ -69,7 +87,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from te_core import VERSION, algorithm_policy, annotate, console, formalism, panels, policy
+from te_core import VERSION, algorithm_policy, annotate, console, formalism, panels, policy, workloads
 from te_core.gates import of_log
 from te_core.ledger import Ledger, ingest
 
@@ -95,6 +113,10 @@ TRACED_SINCE = "4.4"
 #: the one bound's fields each row's details keep at both points
 BOUND = ("terms", "max", "binding", "unmeasured", "sensitivities")
 ROWS = HERE / "rows.json"
+#: a modelled row's run cell, before what the model is: no run measures the workload, so no trace
+MODELLED = "modelled: no trace"
+#: how a note cites stored tables: their path in a research run's out/ (`cite`)
+TABLES = re.compile(r" Tables run:r\d{8}-\d{6}-[0-9a-f]{4}/out/\S+\.")
 FP4 = "float4_e2m1fn_x2"
 GEMMS = ("mm", "addmm", "bmm")
 #: each column's te_core quantities (algorithm_policy's `LABELLED`, and the two 4.x terms)
@@ -178,21 +200,23 @@ def traces(arts: list[str]) -> dict[str, dict[int, dict]]:
     return out
 
 
-def commits(publish: bool = False) -> tuple[str, str, str]:
-    """This checkout's commit, the integrator's branch (pin.py's `BRANCH`) and its commit this one builds on (their
-    merge base on origin), the commits at 10 characters, which the panel's source names; with `publish`, refused where
-    te_core or the island has uncommitted changes, which neither commit holds."""
+def commits(base: str | None = None) -> tuple[str, str, str]:
+    """This checkout's commit, the integrator's branch (pin.py's `BRANCH`) and its commit this one builds on (`base`,
+    an ancestor of this one, else their merge base on origin), the commits at 10 characters, which the panel's source
+    names; refused where te_core or the island has uncommitted changes, which neither commit holds."""
     from pin import BRANCH, git
 
-    head, base = git("rev-parse", "HEAD"), git("merge-base", "HEAD", f"origin/{BRANCH}")
-    if head.returncode or base.returncode:
-        raise SystemExit(f"{PANEL}: no merge base of HEAD and origin/{BRANCH}: git fetch origin {BRANCH} and build "
-                         f"again")
-    dirty = git("status", "--porcelain", "--", str(CW / "te_core"), str(HERE)).stdout.split()
-    if publish and dirty:
-        raise SystemExit(f"{PANEL}: not PUT, since te_core or islands/{NAME} has uncommitted changes, which the "
-                         f"source's commit doesn't hold: commit them and publish again")
-    return head.stdout.strip()[:10], BRANCH, base.stdout.strip()[:10]
+    head = git("rev-parse", "HEAD")
+    on = git("rev-parse", "--verify", f"{base}^{{commit}}") if base else git("merge-base", "HEAD", f"origin/{BRANCH}")
+    if head.returncode or on.returncode:
+        raise SystemExit(f"{PANEL}: no commit of {BRANCH} to build on: give --base, or git fetch origin {BRANCH} and "
+                         f"build again")
+    if base and git("merge-base", "--is-ancestor", on.stdout.strip(), "HEAD").returncode:
+        raise SystemExit(f"{PANEL}: --base {base} isn't in this checkout's history: merge it first")
+    if git("status", "--porcelain", "--", str(CW / "te_core"), str(HERE)).stdout.strip():
+        raise SystemExit(f"{PANEL}: te_core or islands/{NAME} has uncommitted changes, which the source's commit "
+                         f"doesn't hold: commit them and build again")
+    return head.stdout.strip()[:10], BRANCH, on.stdout.strip()[:10]
 
 
 def coded(row: list, served: set[tuple[int, int]]) -> bool:
@@ -351,43 +375,14 @@ def status(m: formalism.Measured, override: dict[str, str] | None = None,
     return out | (override or {})
 
 
-def unpriced(b: dict) -> str | None:
-    """Why the bound can't price the run's fresh products, in plain words, where the one bound `b` at a point has their
-    term void (None where it hasn't; formalism.FRESH_VOID says it in full): how many of the step's counted products
-    a cycle with no fixed point feeds, and the best figure on a set of the others with the share of the step's fresh
-    multiplications it keeps, a lower bound, or that none has one, so they add nothing to the row's ρ."""
-    if "fresh_products" not in b["void"]:
-        return None
-    fresh, term = b["inputs"]["fresh_products"], b["terms"]["fresh_products"]
-    n, fed, kept = fresh["products"], fresh["void"]["diverged_fed"], fresh["void"]["kept_macs_share"]
-    counted = f"the step counts {n} product{'s' * (n != 1)} whose two operands both depend on the update"
-    if fed:
-        who = ("it is" if n == 1 else "every one of them is" if fed >= n else
-               f"{fed} of them {'is' if fed == 1 else 'are'}")
-        why = (f"{counted}, and {who} fed by a cycle of products whose outputs make other products' operands whole; at "
-               f"the point's block size each pass round the cycle makes more operand entries whole than it reads, so "
-               f"the count compounds without limit")
-    else:
-        why = f"{counted}, and no set of them has a proved cap on how many of them a block does"
-    if term is not None:
-        return (f"{why}; the best set of the others gives {algorithm_policy.num(term)}"
-                + ("" if kept is None else f" on {kept:.1%} of the step's fresh multiplications")
-                + ", a lower bound, which the row's slowdown takes where it is the largest")
-    left = ("; no product is left to price" if fed >= n else "; no set of the others has a proved cap either" if fed
-            else "")
-    return (f"{why}{left}, so {'it adds' if n == 1 else 'they add'} nothing to the row's slowdown, the largest figure "
-            f"the other kinds give, floored at 1")
-
-
 def products(b: dict[str, dict], rounds: bool = False, left: list[str] = ()) -> str:
-    """The fresh-products kind's input, the run's products of two fresh operands, as the one bound `b` read them at
-    each of `POINTS`: measured at the console's default, or assumed with te_core's reason (where unmeasured, where
-    the dominant traced step's stand in for steps of another shape, formalism.STAND_IN, or where `left`, `untraced`'s
-    steps but those that update nothing, have none, te_core counting the traced steps' alone); where the bound can't
-    price them at a point (their term void), why in plain words (`unpriced`); and where unmeasured at the serving
-    block, te_core's reason."""
+    """The products kind's input, the run's products whose two operands both depend on the update, as the one bound
+    `b` read them at each of `POINTS`: measured at the console's default, or assumed with te_core's reason (where
+    unmeasured, where the dominant traced step's stand in for steps of another shape, formalism.STAND_IN, or where
+    `left`, `untraced`'s steps but those that update nothing, have none, te_core counting the traced steps' alone);
+    and where unmeasured at the serving block, te_core's reason."""
     con, srv = b["console"], b["served"]
-    if (why := con["unmeasured"].get("fresh_products")) is not None and "fresh_products" not in con["void"]:
+    if (why := con["unmeasured"].get("fresh_products")) is not None:
         return f"assumed: {why}" + (_UNTRACED if rounds else "")
     stand = con["inputs"]["fresh_products"].get("stand_in")
     said = [f"{formalism.STAND_IN.removeprefix('approximated: ')} ({len(stand['structures'])} traced structures)"
@@ -397,18 +392,25 @@ def products(b: dict[str, dict], rounds: bool = False, left: list[str] = ()) -> 
         said.append(f"none on {len(left)} untraced step{'s' if len(left) > 1 else ''} ({'; '.join(left[:3])}{more}), "
                     f"the slowdown code counting the traced steps' products alone")
     out = f"assumed: {'; and '.join(said)}" if said else "measured"
-    here, there = unpriced(con), unpriced(srv)
-    off = srv["unmeasured"].get("fresh_products") if there is None else None
-    if here is not None:
-        out += (f"{'; and' if said else ', but'} the bound can't price them "
-                f"{'at either point' if there == here else _DEFAULT}: {here}")
-    elif not said and (there is not None or off is not None):
-        out += f" {_DEFAULT}"
-    if there is not None and there != here:
-        out += f"; at the serving block, the bound can't price them: {there}"
-    elif off is not None:
-        out += f"; at the serving block, {off}"
+    if (off := srv["unmeasured"].get("fresh_products")) is not None:
+        out += f"{'' if said else f' {_DEFAULT}'}; at the serving block, {off}"
     return out
+
+
+def modelled_status(m: formalism.Measured, b: dict[str, dict]) -> dict[str, str]:
+    """A modelled row's input sources: each of `KEYS` the workload model's, with te_core's labels for the quantities it
+    reads (w_fwd, which has none, a token's forward on the model's shape), and the products the model's matrix
+    products, with what `products` says of them as the one bound `b` read them."""
+    out = {}
+    for key in KEYS:
+        keys = LABELLED["delta_bits"] if key == "delta_t_bits" and m.delta_t_bits is None else LABELLED[key]
+        said = "; ".join(dict.fromkeys(m.labels[k].removeprefix("model: ") for k in keys if m.labels.get(k))) or (
+            "a token's forward on the model's shape, at the slowdown code's gate prices" if key == "w_fwd_gates" else
+            "no label from the slowdown code")
+        out[key] = f"modelled: {said}"
+    got = products(b)
+    rest = got.removeprefix("measured") if got.startswith("measured") else f"; {got.removeprefix('assumed: ')}"
+    return out | {"products": f"modelled: the workload model's matrix products{rest}"}
 
 
 def token_dials(dials: dict, tokens: float) -> list[str]:
@@ -481,34 +483,44 @@ def build(spec: dict, revs: tuple[str, str, str], stamp: str | None = None) -> t
     tr = traces(spec.get("traces", []))
     rows, details = [], []
     for r in spec["rows"]:
-        m, shape, read = measured(r, tr.get(r["run"], {}))
-        if bad := token_dials(r["dials"], m.tokens):
-            raise SystemExit(f"{PANEL}: {r['workload']} {r['run']}: {'; '.join(bad)}")
-        w_fwd = policy.w_fwd(shape)
-        at = {name: formalism.at(m, c, k) for name, (c, k) in POINTS.items()}
+        what = f"{r['workload']} {r.get('run', MODELLED)}"
+        if "modelled" in r:
+            model = workloads.model(r["workload"], **r["dials"])
+            ms = {name: workloads.with_products(model, c, k) for name, (c, k) in POINTS.items()}
+            m, w_fwd, dials = ms["console"], model.w_fwd, model.dials
+            read = {"modelled": r["modelled"], "derived": model.derived}
+            run = f"{MODELLED} ({r['modelled']})"
+        else:
+            m, shape, read = measured(r, tr.get(r["run"], {}))
+            if bad := token_dials(r["dials"], m.tokens):
+                raise SystemExit(f"{PANEL}: {what}: {'; '.join(bad)}")
+            ms, w_fwd, dials = dict.fromkeys(POINTS, m), policy.w_fwd(shape), r["dials"]
+            said = "; ".join(r[x] for x in ("about", "note") if r.get(x))
+            run = f"{r['run']} {r['art']}" + (f" ({said})" if said else "")
+        at = {name: formalism.at(ms[name], c, k) for name, (c, k) in POINTS.items()}
+        one = {name: formalism.published(ms[name], c, k, READING) for name, (c, k) in POINTS.items()}
+        bound = {name: formalism.bound(ms[name], c, k) for name, (c, k) in POINTS.items()}
         try:
             cell = priced(m, w_fwd, at)
-            st = status(m, ROUNDS if r.get("rounds") else None, read)
+            st = (modelled_status(m, bound) if "modelled" in r else
+                  status(m, ROUNDS if r.get("rounds") else None, read))
         except ValueError as e:
-            raise SystemExit(f"{PANEL}: {r['workload']} {r['run']}: {e}") from None
-        one = {name: formalism.published(m, c, k, READING) for name, (c, k) in POINTS.items()}
-        bound = {name: formalism.bound(m, c, k) for name, (c, k) in POINTS.items()}
+            raise SystemExit(f"{PANEL}: {what}: {e}") from None
         if inf := [name for name, v in one.items() if v["reading"] == "A" and v["rho"] is not None
                    and math.isinf(v["rho"])]:
-            raise SystemExit(f"{PANEL}: {r['workload']} {r['run']}: reading A's rho is infinite at "
-                             f"{' and '.join(inf)}, which no row publishes")
-        left = [g for g in read.get("untraced", []) if not g.endswith(IDLE)]
-        st["products"] = products(bound, bool(r.get("rounds")), left)
-        said = "; ".join(r[x] for x in ("about", "note") if r.get(x))
-        run = f"{r['run']} {r['art']}" + (f" ({said})" if said else "")
+            raise SystemExit(f"{PANEL}: {what}: reading A's rho is infinite at {' and '.join(inf)}, which no row "
+                             f"publishes")
+        if "modelled" not in r:
+            left = [g for g in read.get("untraced", []) if not g.endswith(IDLE)]
+            st["products"] = products(bound, bool(r.get("rounds")), left)
         con = one["console"]
-        rows.append([r["workload"], r["model"], compact(r["dials"]), run, cell, compact(st),
+        rows.append([r["workload"], r["model"], compact(dials), run, cell, compact(st),
                      rho_cell(con["rho"]), rho_cell(con["rho"]), con["reading"], VERSION, con["capture_code"],
-                     con["binding_kind"], con["rests_on"],
+                     con["binding_kind"], con["rests_on"] if "modelled" in r else algorithm_policy.rests_on(con),
                      kinds(con, bound["console"]),
                      rho_cell(one["served"]["rho"])])
-        details.append(finite({"workload": r["workload"], "run": r["run"], "art": r["art"], "read": read,
-                               "w_fwd_gates": w_fwd, "labels": m.labels,
+        details.append(finite({"workload": r["workload"], "run": r.get("run"), "art": r.get("art"),
+                               "modelled": r.get("modelled"), "read": read, "w_fwd_gates": w_fwd, "labels": m.labels,
                                "parts": [dataclasses.asdict(p) for p in m.parts], "tail_share": m.tail_share,
                                "at": at, "published": one,
                                "bound": {name: {f: v[f] for f in BOUND} for name, v in bound.items()}}))
@@ -518,20 +530,19 @@ def build(spec: dict, revs: tuple[str, str, str], stamp: str | None = None) -> t
     return p | {"note": note(p)}, details
 
 
-def note(p: dict, art: str | None = None) -> str:
-    """The panel's note, its readings as its rows have them, the fresh-products figure with or without P-cell as the
-    term takes it (formalism's `P_CELL`) and the other beside it, and `art` the stored tables."""
+def note(p: dict, tables: str | None = None) -> str:
+    """The panel's note: its readings as its rows have them, the products term the theorem of record's ρ_HE and the old
+    figure beside it (published's `fresh_old`), the headline policy, which no column holds yet, the points, both
+    sensitivities, and `tables` the stored tables (`cite`'s)."""
     (c, k), (cs, ks), (into, out) = POINTS["console"], POINTS["served"], policy.CONSOLE_SESSION
     got = {r[COLUMNS.index("reading")] for r in p["rows"]}
-    how = ("reading B, a target, not a bound (tables: reading A's)" if got <= {"B"} else
-           "reading A, one bound over the valid kinds (null: unmeasured)")
-    on = formalism.P_CELL
-    cell = (f"Fresh products {'assume' if on else 'do not assume'} blocks hold whole multiply cells (P-cell); kinds' "
-            f"{formalism.CELL_SENSITIVITIES[-1]} is the figure {'without' if on else 'with'}.")
-    return (f"Training's slowdown code {VERSION}: {how}. {cell} All but rho_served at the console's default: c = "
-            f"{algorithm_policy.num(c, 5)} gates, one full {into:,}-in, {out:,}-out session of the "
-            f"{policy.REFERENCE_PARAMS / 1e6:.0f}M reference with attention; k = {k:,.0f}. rho_served at the serving "
-            f"block (c = {algorithm_policy.num(cs, 5)}, k = {ks:,})." + (f" Tables {art}." if art else ""))
+    how = "reading B, a target, not a bound (tables: reading A's)" if got <= {"B"} else "reading A"
+    return (f"Training's slowdown code {VERSION}, {how}. Products term rho_HE: theorem of record, given (H), (E); "
+            f"fresh_old, the old term, rests on P-width extended, false on honest circuits. Headline (no column yet): "
+            f"each workload's own {into:,}-in, {out:,}-out session at k = {k:,.0f}. Sensitivities: rho_default = "
+            f"rho_console, the console's default, that session of the {policy.REFERENCE_PARAMS / 1e6:.0f}M reference "
+            f"(c = {algorithm_policy.num(c, 5)}); rho_served, the serving block (c = {algorithm_policy.num(cs, 5)}, "
+            f"k = {ks:,})." + (f" Tables {tables}." if tables else ""))
 
 
 def refused(p: dict) -> list[str]:
@@ -544,52 +555,109 @@ def refused(p: dict) -> list[str]:
     return out
 
 
+def kept(r: list, columns: list[str]) -> str:
+    """What a panel's row stands for, which a version switch keeps: its run's id, or a modelled row's workload and
+    model."""
+    run = str(r[columns.index("run")])
+    if run.startswith(MODELLED):
+        return f"{r[columns.index('workload')]} {r[columns.index('model')]} ({MODELLED})"
+    return run.split()[0]
+
+
 def emptied(p: dict, served: dict | None) -> list[str]:
     """Why `p` mustn't replace the panel the route serves (`served`): a version switch never empties a populated
-    panel, so every run it serves stays a row, and a te_core newer than the one it runs on keeps it."""
+    panel, so every run it serves and every workload it models stays a row (`kept`), and a te_core newer than the one
+    it runs on keeps it."""
     if not served:
         return []
-    run, te = (served["columns"].index(c) for c in ("run", "te_core"))
-    mine = {r[COLUMNS.index("run")].split()[0] for r in p["rows"]}
-    out = [f"it drops the served row of {r[run].split()[0]}" for r in served["rows"] if r[run].split()[0] not in mine]
+    te = served["columns"].index("te_core")
+    mine = {kept(r, COLUMNS) for r in p["rows"]}
+    out = [f"it drops the served row of {x}" for x in (kept(r, served["columns"]) for r in served["rows"])
+           if x not in mine]
     newer = sorted({str(r[te]) for r in served["rows"] if _version(str(r[te])) > _version(VERSION)})
     return out + [f"the route serves te_core {v}, newer than {VERSION}" for v in newer]
 
 
+def cite(out: Path) -> str | None:
+    """How the note cites the tables a build writes under `out`: the research run's id and their path in its run dir
+    (`run:RUN/out/.../tables`), where `out` is in the run's out/, which custody stores with the run's record; else None,
+    a build no `put` takes."""
+    run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    if not run_dir:
+        return None
+    try:
+        rel = (out.resolve() / "tables").relative_to(Path(run_dir).resolve())
+    except ValueError:
+        return None
+    if rel.parts[0] != "out":
+        return None
+    return f"run:{os.environ.get('RESEARCH_RUN_ID') or Path(run_dir).name}/{rel.as_posix()}"
+
+
+def put(body: Path, sent: dict) -> int:
+    """PUT a build's console body (`body`, its console/standard-workloads.json), refused where the route's panel
+    isn't `sent`'s (the panels it served when the build launched: someone PUT since), where the body would drop a
+    served row or the route refuses it (`emptied`, `refused`), or where its note cites no stored tables (`TABLES`);
+    then GET the panel, which must be the body. 0 where the route serves the body, else 1."""
+    q = json.loads(body.read_text())
+    if q.get("id") != PANEL:
+        raise SystemExit(f"{PANEL}: not PUT: {body} is {q.get('id')}'s body")
+    now = console.served().get(PANEL)
+    if now != sent.get(PANEL):
+        raise SystemExit(f"{PANEL}: not PUT: the route's panel changed after the build read it (now updated "
+                         f"{(now or {}).get('updated_at')}, from {(now or {}).get('source')}): someone PUT over it, "
+                         f"so tell the coordinator its time and build, and PUT nothing")
+    if bad := emptied(q, now) + refused(q):
+        raise SystemExit(f"{PANEL}: not PUT, since {'; '.join(bad[:5])}")
+    if not TABLES.search(q["note"]):
+        raise SystemExit(f"{PANEL}: not PUT: its note cites no stored tables, so build it as a research run with --out "
+                         f"in the run's out/")
+    got = console.put(q)
+    print(f"PUT {console.PANELS_URL}/{PANEL}: {got} at {datetime.now(UTC):%H:%M:%SZ}")
+    if not got.startswith("2"):
+        return 1
+    back = console.served().get(PANEL) or {}
+    if differ := sorted(k for k in {*q, *back} if back.get(k) != q.get(k)):
+        print(f"GET {PANEL}: the route serves another panel than the body ({', '.join(differ)} differ)")
+        return 1
+    print(f"GET {PANEL}: the body, {len(back['rows'])} rows, updated_at {back['updated_at']}")
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--out", type=Path, required=True)
+    do = ap.add_mutually_exclusive_group(required=True)
+    do.add_argument("--out", type=Path, help="build into DIR (on a node, in the research run's out/)")
+    do.add_argument("--put", type=Path, metavar="BODY", help="PUT a build's console body (the agent VM's)")
     ap.add_argument("--rows", type=Path, default=ROWS)
-    ap.add_argument("--publish", action="store_true",
-                    help=f"put the tables in the evidence store and PUT {console.PANELS_URL}/{PANEL}")
+    ap.add_argument("--served", type=Path,
+                    help="the panels the route served when the build launched (te_core.console.served()'s, as JSON)")
+    ap.add_argument("--base", help="the commit of the integrator's branch this checkout builds on (default: their "
+                                   "merge base on origin)")
     a = ap.parse_args(argv)
-    spec = json.loads(a.rows.read_text())
-    p, details = build(spec, commits(a.publish))
-    if bad := refused(p | {"note": note(p, "art:" + "0" * 64)}):
+    sent = json.loads(a.served.read_text()) if a.served else None
+    if a.put:
+        if sent is None:
+            raise SystemExit(f"{PANEL}: --put needs --served, the panels the route served when the build launched")
+        return put(a.put, sent)
+    p, details = build(json.loads(a.rows.read_text()), commits(a.base))
+    q = p | {"note": note(p, cite(a.out))}
+    if bad := refused(q):
         raise SystemExit(f"{PANEL}: the panels route refuses it: {'; '.join(bad[:5])}")
-    if a.publish and (bad := emptied(p, console.served().get(PANEL))):
-        raise SystemExit(f"{PANEL}: not PUT, since {'; '.join(bad[:5])}: name the served runs in the rows file")
+    if sent is not None and (bad := emptied(q, sent.get(PANEL))):
+        raise SystemExit(f"{PANEL}: not built, since {'; '.join(bad[:5])}: name the served runs in the rows file")
     tables, cons = a.out / "tables", a.out / "console"
     tables.mkdir(parents=True, exist_ok=True)
     cons.mkdir(parents=True, exist_ok=True)
     (tables / f"{NAME}.json").write_text(json.dumps(p | {"details": details}, indent=1, allow_nan=False) + "\n")
-    art = algorithm_policy.store(tables, {"what": f"{PANEL} uncut, each row's labels, parts, and formalism.at, "
-                                                  f"published and the one bound at both points "
-                                                  f"(islands/{NAME}/{Path(__file__).name})", "rows": len(p["rows"]),
-                                          "source": p["source"]}) if a.publish else None
-    q = p | {"note": note(p, art)}
     (cons / f"{NAME}.json").write_bytes(console.body(q))
     ix = {c: i for i, c in enumerate(COLUMNS)}
     for r in q["rows"]:
-        print(f"{r[ix['workload']]:10} {r[ix['run']][:21]}  reading {r[ix['reading']]}  rho_default "
-              f"{r[ix['rho_default']]}  rho_console {r[ix['rho_console']]}  binding {r[ix['binding_kind']]}")
+        print(f"{r[ix['workload']]:10} {r[ix['model']]:4} {r[ix['run']][:21]}  reading {r[ix['reading']]}  "
+              f"rho_console {r[ix['rho_console']]}  binding {r[ix['binding_kind']]}  rho_served {r[ix['rho_served']]}")
     print(f"{PANEL}: {len(q['rows'])} rows, {len(console.body(q))} bytes, longest cell "
-          f"{max(len(v) for r in q['rows'] for v in r if isinstance(v, str))} characters, note {len(q['note'])}"
-          f"{f' ({art})' if art else ''} -> {a.out}")
-    if a.publish:
-        got = console.put(q)
-        print(f"PUT {console.PANELS_URL}/{PANEL}: {got}")
-        return 0 if got.startswith("2") else 1
+          f"{max(len(v) for r in q['rows'] for v in r if isinstance(v, str))} characters, note {len(q['note'])} "
+          f"-> {a.out}\n{q['note']}")
     return 0
 
 
