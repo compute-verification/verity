@@ -516,20 +516,27 @@ def test_at_one_step_a_window_the_least_cap_of_the_servers_limits_commits_every_
     assert all(x["advice"]["bits"] == cap for x in records(tmp_path, SA.LINES) if not x.get("empty"))
 
 
+LONG = [_body(i, 24, 4, f"user-{i:019d}") for i in range(4)]  # GROUP under ids of 24 bytes, the served id bound
+
+
 def test_a_window_past_its_registered_cap_is_refused_by_name_and_the_committer_goes_on(tmp_path):
-    """Under a cap that holds the window admitting the group but not the one carrying it on (its carried state is more
-    advice), that window has a line naming it refused, the reason `pad`'s, and the committer goes on: the windows after it
-    open on nothing carried, so the group's are refused as such, and every closed window is settled, with no error."""
-    first = WA.total_bits(WA.Advice(tuple(WA.RequestAdvice(f"user-{i}", 24, 4, "length") for i in range(4)),
-                                    (WA.StepAdvice(tuple(WA.Row(i, "prefill", 0, 24) for i in range(4))),), (0,) * 4))
-    with Server(tmp_path, window_steps=1, advice=True,
-                compiler=ADV.registered_compiler("test-compiler", "ab" * 64, AW.least_cap(first))) as s:
-        serve_concurrently(s, GROUP)
+    """Under a cap a byte short of a window admitting one request of a 24-byte id and nothing else, every window of a group
+    of such requests is refused however their arrivals fall into windows: the first by `pad`'s reason, each after it
+    because the one before it is refused, so it opens on nothing carried. The committer goes on: once the group is served,
+    every window of a request with a 1-byte id is committed, and every closed window is settled, with no error."""
+    alone = WA.total_bits(WA.Advice((WA.RequestAdvice(LONG[0]["user"], 24, 4, "length"),),
+                                    (WA.StepAdvice((WA.Row(0, "prefill", 0, 24),)),), (0,)))
+    cap = AW.least_cap(alone) - 8
+    with Server(tmp_path, window_steps=1, advice=True, compiler=ADV.registered_compiler("test-compiler", "ab" * 64, cap)) as s:
+        serve_concurrently(s, LONG)
+        serve_concurrently(s, [_body(9, 24, 4, "u")])
     summary, index = s.advice_summary, json.loads((tmp_path / "advice" / "windows.json").read_text())
-    assert summary["error"] is None and summary["waiting"] == [] and summary["committed"] and summary["refused"]
-    past, *rest = sorted(map(int, index["refused"]))
-    assert "over the registered cap" in index["refused"][str(past)]
-    assert all(f"window {w - 1} before it is refused, so it opens on nothing carried" in index["refused"][str(w)] for w in rest)
+    refused, committed = summary["refused"], summary["committed"]
+    assert summary["error"] is None and summary["waiting"] == [] and refused and committed, summary
+    assert max(refused) < min(committed), (refused, committed)
+    assert "over the registered cap" in index["refused"][str(refused[0])]
+    assert all(f"window {was} before it is refused, so it opens on nothing carried" in index["refused"][str(w)]
+               for was, w in zip(refused, refused[1:]))
     lines = {x["window"]: x for x in records(tmp_path, SA.LINES)}
     assert {w for w, x in lines.items() if x.get("refused")} == set(summary["refused"])
     assert set(lines) == set(summary["committed"]) | set(summary["refused"]) | set(summary["empty"])
