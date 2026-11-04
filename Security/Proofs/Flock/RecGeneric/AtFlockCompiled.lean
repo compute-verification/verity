@@ -21,7 +21,9 @@ Its `E_O` is `Compiled.EO`: each session's rerun is a fork of the whole compiled
 not `Claims.Recursion.EO`'s, so L2 here bounds a different extractor than `RecursiveKSEvery` does, by `Comp.err` at
 `Compiled.toComp` (`KSCompiledOn`). What L2 reads at the instance beside L1's premises: the compiler's contract for
 `E_O` (`Compiled.Sessions`, `SessionsOfRec`), Flock's KS as `Arg.ofFlock`'s (`Claims.SamplingGeneric.flockArgKS`)
-and the compiler's contract at `compile` (`ContractCompiledOn`).
+and the compiler's contract at `compile` (`ContractCompiledOn`; at the deployment's dense statements
+`ContractCompiledDense`). The bits read `Compiled.EO`'s expected reruns (`CompiledEORunsExp`), one more per session
+than `Claims.Recursion.EO`'s, since each session's `E^rep` replays the judged run.
 
 Statements only: definitions, no proofs.
 -/
@@ -96,6 +98,19 @@ def KSCompiledOn (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T) (DO 
         ((compiledAt D Bd DO Cp).toComp.E (Proto.ofFlock Bd Bd.deploy.decode Cp) (Server.ofBound Bd)) x P ≤
       (compiledAt D Bd DO Cp).toComp.err (Proto.ofFlock Bd Bd.deploy.decode Cp) (Server.ofBound Bd) H P x m M
 
+/-- **`Compiled.EO` reruns the prover at most `1 + Σ_s (1 + m′_s·k_s)` times in expectation** (O2's expected-reruns
+half, at the instance): the judged run, then at each session `E^rep`'s replay of the judged run and its waits over
+forks at the session's first round, as `Claims.Recursion.EO_runs_exp` counts `Claims.Recursion.EO`'s, which has no
+replay per session. `Arg.RerunsExpLe` can't state it: `Arg.ofFlock`'s public shape fixes the waits and the truncation
+but not `N₀`, hence not `k`. Where each session's V\* statement has the session's numbers (`SessionNums`, which fixes
+`k`) and an accepted run shows each session accepting (`SessionAccepts`). -/
+def CompiledEORunsExp (H : Msg → Msg) (D : RecAt Coin) (DO : Claims.Flock.Deploy Coin Col' T') (IV : Verifier Coin) :
+    Prop :=
+  SessionNums (D.record IV) DO → SessionAccepts (D.record IV) →
+    ExtractRunsExpLe H (Compiled.ofRec D DO IV).EO fun x =>
+      1 + ∑ s : Fin ((D.record IV).nS x),
+        ((1 + ((D.record IV).nums x s).waits * ((D.record IV).nums x s).k : ℕ) : ℝ)
+
 end Instance
 
 end Claims.RecGeneric
@@ -127,3 +142,31 @@ def RecursiveKSCompiledEvery : Prop :=
       RecDeploy.DeployedR.rdR RecDeploy.DeployedR.finalR RecDeploy.DeployedR.wER RecDeploy.DeployedR.wR
 
 end Flock.Guarantees
+
+namespace Claims.RecGeneric
+
+open FlockDeploy (Coin FinalP)
+
+/-- **The compiler's contract at the dense statements, at a compiled record** `D`: `ContractCompiledOn` at SHA-512,
+the deployed relation's bound record at the reader `rd`, the deployed outer record and caps, and `RecDeploy.DenseAt`,
+as `ContractDenseAtRec` is `ContractOn` there. -/
+def ContractCompiledDenseAtRec (D : Claims.Recursion.RecAt Coin) (rd : Msg → Option FinalP)
+    (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg)) (wE w : Msg → ℝ) : Prop :=
+  ContractCompiledOn FlockDeploy.sha512 D
+    (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR rd)
+      (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR
+      RecDeploy.rowInDeployed final w)
+    (RecDeploy.deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep RecDeploy.DenseAt
+
+/-- **The compiler's contract at the deployment**: `ContractCompiledDenseAtRec` at the deployment's record and values,
+for every other field of the brings and every record the coin server keeps. -/
+def ContractCompiledDense : Prop :=
+  ∀ (b : RecDeploy.Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
+    (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8),
+    ContractCompiledDenseAtRec
+      (RecDeploy.recBoundAt _root_.Flock.Readable.relation
+        { RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest }
+        (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR))
+      RecDeploy.DeployedR.rdR RecDeploy.DeployedR.finalR RecDeploy.DeployedR.wER RecDeploy.DeployedR.wR
+
+end Claims.RecGeneric
