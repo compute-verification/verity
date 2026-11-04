@@ -80,3 +80,5 @@ art:c109f12fe7690c3b54a3c256d21975f80a9f5326ad5270511b0155901430b153, moved ther
 10:42Z integrator [STARTED] FINAL r20261103-132106-82a6 seed 101: r20261104-104215-1f2b on vy-nebius-3 (ref-optim l16-t20, about 123 min once it holds a GPU); check: train.log's first line reads steps 1793
 10:42Z integrator [STARTED] FINAL r20261104-060904-d64c seed own: r20261104-104223-dbbf on vy-nebius-3 (hybrid m-t20, about 171 min once it holds a GPU)
 10:44Z integrator [TOOL] finals step check: FINAL r20261103-132106-82a6 seed 102's rerun r20261104-084906-a213 read 1656 steps, planned 1793 (the original's): cancelled, relaunched with --budget-fraction 0.0008661636 (was 0.0008); its STARTED line follows
+10:45Z integrator [STARTED] FINAL r20261103-132106-82a6 seed 102: r20261104-104517-e4dd on vy-nebius-1 (ref-optim l16-t20, about 123 min once it holds a GPU); check: train.log's first line reads steps 1793
+10:45Z integrator [STARTED] FINAL r20261104-060904-d64c seed 101: r20261104-104526-f733 on vy-nebius-1 (hybrid m-t20, about 171 min once it holds a GPU)
