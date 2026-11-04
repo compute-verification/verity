@@ -26,9 +26,9 @@ roots (`RegOpens`), with the rows format's read-back of the client's view from t
 
 The rows format is the network certifier's own (`NetTiming.cellRows`): frames of the schedule's `B` bytes for its
 `lanes · windows · window` connections, which read back (`NetTiming.RowsFormat.Wf`) when both are under 2^32. That is a
-decidable condition on public parameters, so the period check refuses a schedule that fails it (`NetworkCheck.Period.rowsWf`,
-`rowsWfCheck`), and the statement takes the check's acceptance where `NetTiming.RowsFormat.Wf` was a premise: whatever
-rows-form period the check accepts, its frames read back.
+decidable condition on public parameters, so the period check refuses a schedule that fails it
+(`NetworkCheck.Period.rowsWf`, `rowsWfCheck`), and the statement takes the check's acceptance where
+`NetTiming.RowsFormat.Wf` was a premise: whatever rows-form period the check accepts, its frames read back.
 
 The schedule `schedOf z` the network certifier runs for a secret `z`, the client's connections' arrivals (their
 admissions and cells), is any function of `z`: the client's strategy run against the node's egress, which the secret
