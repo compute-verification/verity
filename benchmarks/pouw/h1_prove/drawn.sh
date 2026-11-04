@@ -12,6 +12,8 @@
 # of record refuses the lanes form until its mirror: H1_DRAWN_ONLY=1 stops at drawn.py's check).
 #   POUW_CMD='bash benchmarks/pouw/h1_prove/drawn.sh "$1" "$2" "$3"'      (served_verdicts.sh runs it in the tree)
 #   bash benchmarks/pouw/h1_prove/drawn.sh SERVE_DIR WINDOW PIECE_DIR
+# The window must be served with its receipts (serve-openai --h1-receipts, served_verdicts.sh's H1_RECEIPTS=1): a J10-R
+# call statement's o0 is opened at its call's receipt table receipt@<c>, and staging refuses a window without it.
 # env: H1_CIRCUITS (pouw_h1_circuits' --out, with the drawn K's k<K> file, --strata K, or its lane<K> and combine<K>
 #      files, --lanes K)  H1_CHECKPOINT (the served model's
 #      safetensors dir, b/<K>'s rows) or H1_WEIGHTS (an npz of w<i>, s<i>)  H1_GATE and H1_MODEL (the auditor's model-key
@@ -25,6 +27,8 @@
 #      H1_DRAWN_CHECK=0: no drawn.py check, for a caller whose credit verifies the statements itself
 #      H1_DRAWN_WORK (a private directory on the node: the scratch directory goes in it and is kept, so the proof files
 #      statements.json names outlive drawn.sh for that caller; it holds the staged witness)
+#      H1_DRAWN_STAGED (a work dir `drawn.py stage` already wrote, its plan.json: proved and checked as it is, no staging;
+#      drawn_cost.sh's DC_REAL=0 fixture, whose stand-in tile the CLI's word reference can't restage)
 # Memory: staging is capped at 90% of H1_DRAWN_MEM_GB. A session's live verifier and prover then run side by side, each
 # under an address-space cap (`ulimit -S -v`): the verifier gets H1_ZK_SERVER_GB and the prover the rest of
 # H1_DRAWN_MEM_GB less H1_ZK_LEAN_GB. The ZK server's Lean processes are the prover's children, and under an
@@ -85,7 +89,7 @@ fi
 log "drawn: ZK server $([ "$FW" = 1 ] && echo "on ($FWL)" || echo "OFF (H1_FIREWALL=0)"), caps: verifier $SERVE_GB GB," \
   "prover $PROVE_GB GB, its ZK server's Lean $LEAN_GB GB left"
 export PYTHONPATH=$SRC:$SRC/integrations/vllm:$SRC/verity/ml/flock/python${PYTHONPATH:+:$PYTHONPATH}
-WK=$SCR/stage ST=$P/drawn/statements.json
+WK=${H1_DRAWN_STAGED:-$SCR/stage} ST=$P/drawn/statements.json
 args=(--circuits "${H1_CIRCUITS:?H1_CIRCUITS: pouw_h1_circuits --out, with the drawn K file}")
 [ -n "${H1_DRAW_K:-}" ] && args+=(--k "$H1_DRAW_K")
 st=("${args[@]}" --work "$WK")
@@ -93,10 +97,15 @@ st=("${args[@]}" --work "$WK")
 [ -n "${H1_WEIGHTS:-}" ] && st+=(--weights "$H1_WEIGHTS")
 if [ -n "${H1_WEIGHTS_KEY:-}" ]; then st+=(--weights-key "$H1_WEIGHTS_KEY")
 elif [ -n "${H1_GATE:-}" ] && [ -n "${H1_MODEL:-}" ]; then st+=(--gate "$H1_GATE" --model "$H1_MODEL"); fi
-log "drawn: window $WIN of $SD, staging"
-$TIME "$OUT/stage.time" bash -c "$(vlimit "$STAGE_GB") exec $PY $J/../h1_prove/drawn.py stage $(printf '%q ' "$SD" "$WIN" "${st[@]}")" \
-  2>&1 | tee -a "$OUT/job.log"
-[ "${PIPESTATUS[0]}" = 0 ] || { log "drawn: staging REFUSED"; exit 1; }
+if [ -n "${H1_DRAWN_STAGED:-}" ]; then
+  [ -s "$WK/plan.json" ] || { log "drawn: H1_DRAWN_STAGED=$WK holds no plan.json"; exit 1; }
+  log "drawn: window $WIN of $SD, staged in $WK (H1_DRAWN_STAGED)"
+else
+  log "drawn: window $WIN of $SD, staging"
+  $TIME "$OUT/stage.time" bash -c "$(vlimit "$STAGE_GB") exec $PY $J/../h1_prove/drawn.py stage $(printf '%q ' "$SD" "$WIN" "${st[@]}")" \
+    2>&1 | tee -a "$OUT/job.log"
+  [ "${PIPESTATUS[0]}" = 0 ] || { log "drawn: staging REFUSED"; exit 1; }
+fi
 keep() {   # keep O NAME: the session's verifier-side log, its verdict lines and timings, none of them witness
   local K=$P/drawn/sessions/$2 f
   mkdir -p "$K"
