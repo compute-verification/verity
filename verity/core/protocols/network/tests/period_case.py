@@ -3193,7 +3193,7 @@ def bad_scans(p: dict) -> list[dict]:
           if keyed["definitions"][keyed["callees"][x["fn"]]]["form"] != "primitive"][-1]
     old = keyed["callees"][fn]
     keyed["callees"][fn] = "Input3_v1"
-    keyed["definitions"]["Input3_v1"] = keyed["definitions"].pop(old) | {"id": "Input3_v1"}
+    keyed["definitions"]["Input3_v1"] = keyed["definitions"].pop(old) | {"id": "Input3_v1", "bindings": {}}
     extra = json.loads(D.canonical(desc))
     extra["types"].append(["Array", 1, ["Value", 1]])
     extra["definitions"][extra["root"]]["body"]["nodes"].append(
