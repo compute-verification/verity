@@ -78,6 +78,7 @@ public import Proofs.Flock.SessionLoop.VsOfTakes
 public import Proofs.Flock.SessionLoop.VsOfBody
 public import Proofs.Flock.SessionLoop.SwCausalExe
 public import Proofs.Flock.SessionLoop.RowsHonest
+public import Proofs.Flock.SessionLoop.RoundsPassFrame
 
 /-!
 # Proof of C-Flock's zero knowledge at the session loop's own frames
