@@ -285,11 +285,11 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
   `EncardIngressDecodableLe`, `EncardIngressObsDecodableLeContents`, `EncardIngressDecodableLeContents`,
   `EncardIngressObsDecodableLeContentsPerWindow`.
 - **The sampled audit implies `Accepted`** (`SampledAuditAccepted.lean`): `SampledAuditAccepted`, the bound of
-  `Claims.Sampling.KSBy` at the wired check (`wiredOk`), at
-  `RAcc δ` on the statements whose layout fits the program: no incorrect proof block (faulty, or wire-wrong: holding or
-  reading a wired gate whose committed value is not its writer's) is sampled `all`, and the advice holding the
-  incorrect proof blocks' committed gates at the trace's values makes `Accepted` every run the trace carries, each
-  wired gate reading its writer (`resolveWires`). With no wires that `KSBy` is `Claims.Sampling.KS` (`ksWired_none`).
+  `Claims.Sampling.KSBy` at the wired check (`wiredOk`), at `RAcc δ` on the statements whose layout fits the program: no
+  incorrect proof block (faulty, or wire-wrong: holding or reading a wired gate whose committed value is not its
+  writer's, or whose writer is a constant gate) is sampled `all`, and the advice holding the incorrect proof blocks'
+  committed gates at the trace's values makes `Accepted` every run the trace carries, each wired gate reading its writer
+  (`resolveWires`). With no wires that `KSBy` is `Claims.Sampling.KS` (`ksWired_none`).
   At a wired layout `ksWired_of_record` (`WiredRead.lean`) gives it at the deployed record from the sessions' KS
   (`SessionKS`), `SessionOpens` and the wires a session reveals at the verifier's own check (`WiredReads`), with
   binding, the draw law and refusal discharged.

@@ -11,8 +11,8 @@ incorrect set, the faulty and the wire-wrong proof blocks (`incorrectBy_wiredOk`
 (`RBy_wiredOk`, `ksBy_wiredOk`). It follows from `KS_of`'s hypotheses with the check a drawn proof block passes widened
 from `correctOk` to `wiredOk`: `KSBy_of` at that check (`KSWired_of`). `SessionWires` is `SessionOpensBy` at that
 check: a drawn proof block's session reveals openings that make it correct and open each wired gate it holds or reads
-to its writer's value: a constant's own, any other writer's opened to the same value. With no wires the incorrect set is
-the faulty set (`incorrect_none`), and `KS` gives `KSBy` at the wired check (`ksWired_none`).
+to its writer's committed value, at a writer that is no constant gate. With no wires the incorrect set is the faulty set
+(`incorrect_none`), and `KS` gives `KSBy` at the wired check (`ksWired_none`).
 -/
 
 namespace NetTiming
@@ -105,8 +105,7 @@ theorem ksBy_wiredOk {H : Msg → Msg} {D : Deploy Coin Col T} {wires : AuditSta
 
 /-- **A drawn proof block's session shows it correct and its wired rows right**: `SessionOpensBy` at the wired check.
 Its session reveals openings under which the proof block is correct, and each wired gate it holds or reads is opened to
-its writer's value (`WireRight`): a constant writer's own, any other writer's opened to the same value. With no wires it
-is `SessionOpens`. -/
+its writer's committed value, at a writer that is no constant gate (`WireRight`). With no wires it is `SessionOpens`. -/
 def SessionWires (H : Msg → Msg) (D : Deploy Coin Col T) (iroots : Msg → Seen → ℕ → List Msg)
     (wires : AuditStatement → ℕ → Option ℕ) : Prop :=
   SessionOpensBy H D iroots (wiredOk wires)

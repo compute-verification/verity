@@ -232,8 +232,8 @@ theorem rLeakTap_of_r (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (l
   have hacc := accepted_of (F := incorrect H D.commit s P (lay s).wires w) hsc.1 hsc.2.1 hfit ι
     (fun v u hu hv => correct_mono (refIn_mono hext) (hι v u hu fun h => hv (Finset.mem_union_left _ h)))
     (fun g hg hnf w' hw' => by
-      obtain ⟨b, h1, h2⟩ := wireRight_of_not_faultyGate H D.commit s hsc.2.1 (lay s).wires w hg hnf w' hw'
-      exact ⟨b, hext g b h1, read_mono hext h2⟩) hcar hcov
+      obtain ⟨hc, b, h1, h2⟩ := wireRight_of_not_faultyGate H D.commit s hsc.2.1 (lay s).wires w hg hnf w' hw'
+      exact ⟨hc, b, hext g b h1, hext w' b h2⟩) hcar hcov
   have hacc' : Accepted (circuitProgram s.prog (lay s) (k s)) op (k s) o
       (traceVal s.prog (w.val H D.commit s),
         heldAdv s.prog P (incorrect H D.commit s P (lay s).wires w) (fill (w.val H D.commit s) (tapVal (tops s)))) := by
