@@ -21,8 +21,9 @@ this circuit from the advice and charges the registered length. A circuit with n
 registered (``--circuit``). Then `a5.audit`: the registration checked by Lean and Python, the sample on live coins read after
 the receipt, Flock ``--zk`` behind the Lean ZK server on the drawn members, Lean's verdicts and the audit record. Then the
 advice was fixed before the sample (`fixed_before_draw`), and advice re-committed after the coins is refused (`after_draw`).
-Units whose outputs are served out (``--outputs`` and the circuit's registered reads of output ports, `output_class`) are
-proved whole beside the sample, under a work law: every sample's closure (a5's `output_closure`).
+Units whose outputs are served out (``--outputs`` and the circuit's registered reads of output ports, `output_class`) would be
+proved whole beside the sample only on a closure map, which the stream refuses, so a5 refuses such a window before the
+sample (a5's `output_refusal`).
 The summary reports the leak bound's count beside the advice's charge, ``vacuous`` while the circuit's other inputs exceed
 it (`leak_count`; a record that declares its inputs, `declared_count`): the run figure, and for a record that declares
 its window's ingress the window figure beside it, with the premise it rests on named. An integration's labels are never read.
@@ -659,7 +660,7 @@ def verifier_window(window_dir: Path, law: Mapping[str, Any], template_sets: Pat
 
 
 def output_class(circuit: Mapping[str, Any], given: Iterable[Iterable[int]] = (), own: Iterable[str] = ()) -> list[list[int]]:
-    """The units the verifier proves whole (a5's output class), as ascending ``[lo, hi)`` ranges: the ``given`` ranges (the
+    """The units whose outputs are served out (a5's output class, which it refuses), as ascending ``[lo, hi)`` ranges: the ``given`` ranges (the
     verifier's own, from the circuit's shape) and every unit an uncut registered read of an output port (``o<j>``)
     covers in the circuit record (``registered``'s ``reads``: units ``[at, at + prod(radix))`` of its reader template,
     the population's indices from the templates' order), unless it reads one of the window's ``own`` values
@@ -876,8 +877,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--circuit", help="instead: the SHA-512 of the circuit record the verifier registered, a circuit with no compiler")
     p.add_argument("--run", required=True, help="the run root the verifier holds the window to, the one the run published")
     p.add_argument("--template-sets", help="the verifier's own input sets, for templates whose units are not bit rows")
-    p.add_argument("--outputs", help="JSON: the verifier's own [lo, hi) ranges of the units whose outputs are served out, proved "
-                   "whole beside the sample (`output_class`; a work law)")
+    p.add_argument("--outputs", help="JSON: the verifier's own [lo, hi) ranges of the units whose outputs are served out "
+                   "(`output_class`), which a5 refuses before the sample (`output_refusal`)")
     p.add_argument("--m0-pythonpath", required=True)
     p.add_argument("--bin", required=True)
     p.add_argument("--lean", required=True)
