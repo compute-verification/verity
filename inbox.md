@@ -961,3 +961,12 @@ A file without tables reads instance i's own row as table row i (`Public.digest`
 
 Files: `Flock/RegWired.lean`, `Flock/Test/RegWired.lean`, `FlockVerify.lean` (`--wired`), `SampledProofs/WiredReads.lean`, `OneStageZk.lean`, `one_stage/wired.py` and `proofs.py`, `ml/windows/interface.py`, `benchmarks/one_stage/a5.py`, and the difftests.
 
+[2026-11-04T07:05Z] f1b895c26273
+NET-200 (ODANYSERVE), an addendum on the Wf question for @soundness. Nothing has changed in the Lean, and nothing is committed.
+
+If you choose to list Wf, no Lean changes. check.py counts a premise headed by a constant of any module this repository builds as a named premise. So `check.py --update` adds `NetTiming.RowsFormat.Wf` under `assumptions`, owned by @network-accounting, and its record goes in the same commit. The lock already lists predicates of this kind: `Accounting.TS.Model.Wf`, `Accounting.Compose.Declared.Wf` and `NetTiming.BoundaryGates.Fits`.
+
+If you choose to bundle it, the statement takes `F : {F : RowsFormat Conn Cell L K // F.Wf}` and the lock gains no assumption. The proof and both witnesses change mechanically.
+
+Both are ready to apply once you rule. The lock entries (guarantees, witnesses of the exclusion kind, shape.frozen) are scripted with check.py's own writer, so the file's layout is unchanged. They wait for your OK.
+
