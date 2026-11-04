@@ -101,6 +101,7 @@ SOURCES = [
     ("r20261104-133126-ac09", "70b-*", "70b", {"orders": True}),
     ("r20261104-133157-6b84", "70b-*", "70b", {"orders": True}),
     ("r20261104-133157-6b84", "8b-*", "8b", {"orders": True}),
+    ("r20261104-144714-7768", "70b-*", "70b", {"deflate": 32, "orders": True}),
 ]
 
 
@@ -359,7 +360,7 @@ DEFENCES = {
     "2 and 4, 70B's four exact: clip up to 5% where it clears, else at a margin": operating(0.05, "margin",
                                                                                           exact=True),
 }
-RECOMMENDED = "4, 70B's four exact: every broken matrix at a margin; L0 q, k, v and L1 v uncredited"
+RECOMMENDED = "4, 70B's four exact, gate/up deflated by 32 where that clears"
 
 NEAR = 0.085  # the most a reorder took off a split, over the leaf (70B L62 q at 2%, r20261104-093237-b5f7 against natural)
 
@@ -458,7 +459,7 @@ def main():
                     served, its = "not priced yet", "–"
                 else:
                     served = (f"{var[4]} K chunks" if var[4] > 1 else f"deflated by {var[2]}" if var[2]
-                              else f"{var[0]:.0%} clip")
+                              else "design U" if var == U else f"{var[0]:.0%} clip")
                     its = f"{least_of(book.v[model][t][var]):.3f}"
                 served += f" | {credit:.1%}"
                 key = (model, t, var)
