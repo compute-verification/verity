@@ -113,10 +113,13 @@ admission, 2.7 s at the scan's 100 ms tick; for a slower endpoint `--bucket-ms` 
 4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`) runs the chain's warden path on that fetch with the serve dir's endpoint
 records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows form of
 the scan's link-window (`scan_period.rows_case`). The answer is accept only when the chain accepted, every request
-of the audited window is a certified one inside that link-window, and the Lean check accepts; beside that answer goes
+of the audited Commit period is a certified one inside that link-window and carries the network certifier's run in its
+release, every certified request is exactly one served request, and the Lean check accepts; beside that answer goes
 its case, `case.json`, as the one-stage composite reads a piece's (inline, about 83 MB on a served window). Only the protocol
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
-late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing. An accept's
+late, say, a connection the network certifier failed closed) or a step that can't run, the piece refuses
+(`refused.txt`), naming the network certifier's own check's problems, which leaves the certifier missing; a rehearsal
+whose certified egress holds bytes that are no output's is a reject. An accept's
 profile names its placement: the certifier on the gate's host, and the chain, the period check and their proofs' coins
 on the prover's node, so `trusted-host` is assumed with the auditor's devices not placed. The chain's endpoint report,
 whose rows count each Commit window's requests, steps and outputs and its advice's bits, stays beside the fetch, and so
@@ -127,6 +130,16 @@ bits. The leak guard (`--public`) moves any file the piece doesn't declare out o
 (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its `period` runs the
 consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of V3c's; each step
 releases through its own hold.
+
+`attacks.py` lists what the served path must refuse or charge (`table`): each attack with its case, the check that
+refuses it or the leak bound's term that charges it, and the reason its verdict names. Its `relay` is the prover's
+process between the network certifier's server connections and the endpoint, playing an attack on the responses
+(timing, chunking, padding, an altered or extra id) or on the connections (one answered without the endpoint, a copy
+served around the network certifier); `certifier_piece.py front --attack NAME` puts it in a served rehearsal, and
+`judge NAME --front OUT --serve SERVE_DIR` reads that rehearsal as the attack's verdict. `rehearse PORT SERVE_DIR OUT
+[--attacks NAME,...] -- FRONT_FLAGS` is served_verdicts.sh's `CERTIFIER_FRONT` for a serve step that plays the attacks
+one front after another against one serve-openai, each judged, their public verdicts in OUT/attacks.public.json.
+`tests/test_attacks.py` plays each attack on the network certifier at the scan's schedule on a virtual clock.
 
 ## The chain's run of record
 

@@ -170,8 +170,9 @@ class Request:
     finish: dict | None = None
     windows: set = field(default_factory=set)
     queue: asyncio.Queue | None = None
-    release: list | None = None                 # the network certifier's release headers on it (N, run hex), when it has them
-    times: dict = field(default_factory=dict)   # the clock's readings at its arrive record, first token and finish
+    release: list | None = None                 # the network certifier's release headers on it (run hex, N), when it has them
+    times: dict = field(default_factory=dict)   # the clock's readings at its arrive record (serve-openai's received),
+                                                # first token and finish
 
     @property
     def known(self) -> int:
@@ -232,7 +233,7 @@ class Scheduler:
         rec = {"kind": "arrive", "request": q.rid, "before_step": self.scheduled, "prompt_len": len(q.prompt),
                "eos_token_id": min(self.eos) if self.eos else None, "sampling": q.sampling}
         self.emit(rec)
-        q.times["arrived"] = rec["t"]
+        q.times["received"] = rec["t"]
         return q
 
     def busy(self) -> bool:
