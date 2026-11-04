@@ -218,7 +218,7 @@ def checksFast (reg receipt draw law : Json) (units : Array Int) (provedUnits : 
   simp only [checks, checksFast, find?_byPort]
 
 /-- The profile's draw of the law a draw names (`audit.profile`): a work law is the stratified law at its sizes. -/
-def profileDraw (law : Json) : Option Core.Draw :=
+def profileDraw (law : Json) : Option Core.SamplingDesign :=
   match getD law "law" with
   | .str "subset" => (nat? (getD law "k")).map .subset
   | .str "bernoulli" => do
