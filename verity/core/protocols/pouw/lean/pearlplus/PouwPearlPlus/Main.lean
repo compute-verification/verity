@@ -3,14 +3,18 @@ import PouwPearlPlus.Open
 /-!
 # `pouw-pearlplus`: the run verdict from a served run's retained passes
 
-    pouw-pearlplus --coins COINS.json --draws T (--source HEX | --record RECORD.json | both) MANIFEST...
+    pouw-pearlplus --coins COINS.json --draws T (--source HEX | --record RECORD.json | both) [--tie W.json] [--of-record]
+      MANIFEST...
 
 prints the verdict as one JSON object: `verdict` (`accept` or `reject`), `reason`, `refused` (`[code, why]` or null),
-`commitment` and `source` (hex, once the passes load and the coin is fixed), and `verdicts` (each opened tile's pass, id,
-ok and reason, in the verdict's order).
+`commitment` and `source` (hex, once the passes load and the coin is fixed), `verdicts` (each opened tile's pass, id,
+ok and reason, in the verdict's order), `work`, and `tie` (`{record, tables}` once the passes are held to W, or null).
 
-The prover's side is `Open.opening` over the pass's files. A record that exists pins the source (`after-coin`); one that
-doesn't is written with the run's commitment and the given source.
+`COINS.json` is the epoch's coin commitment, an in-process challenger's or a live session's (`EpochCoins.ofJson`). The
+prover's side is `Open.opening` over the pass's files. A record that exists pins the source (`after-coin`) and names its
+draw, and its ``rounds`` and ``dropped`` place the passes for the tie; one that doesn't is written with the run's
+commitment, the given source and the node's draw. `--tie W.json` holds the passes to the window record W (`Tie.tieOf`),
+and `--of-record` takes only a challenger draw on live coins (`Coins.ofRecordReason`).
 -/
 
 open Lean PouwCommit PouwCheck.PearlPlus
@@ -20,6 +24,8 @@ structure Args where
   draws : Nat := 3
   source : Option String := none
   record : Option String := none
+  tie : Option String := none
+  ofRecord : Bool := false
   manifests : List String := []
 
 partial def parse : List String → Args → Except String Args
@@ -30,6 +36,8 @@ partial def parse : List String → Args → Except String Args
     | none => throw s!"--draws {v}: an integer"
   | "--source" :: v :: rest, a => parse rest { a with source := some v }
   | "--record" :: v :: rest, a => parse rest { a with record := some v }
+  | "--tie" :: v :: rest, a => parse rest { a with tie := some v }
+  | "--of-record" :: rest, a => parse rest { a with ofRecord := true }
   | m :: rest, a => if m.startsWith "--" then throw s!"unknown option {m}" else parse rest { a with manifests := a.manifests ++ [m] }
 
 def readJson (path : String) : IO Json := do
@@ -40,7 +48,7 @@ def readJson (path : String) : IO Json := do
 def main (argv : List String) : IO UInt32 := do
   let a ← IO.ofExcept (parse argv {})
   let some coinsPath := a.coins | throw (IO.userError "--coins COINS.json is required")
-  let coins ← match CoinCommitment.ofJson (← readJson coinsPath) with
+  let coins ← match EpochCoins.ofJson (← readJson coinsPath) with
     | .ok c => pure c
     | .error e => throw (IO.userError s!"{coinsPath}: {e}")
   let mans ← a.manifests.mapM readJson
@@ -49,22 +57,32 @@ def main (argv : List String) : IO UInt32 := do
       | some b => pure (some b)
       | none => throw (IO.userError "--source: hex")
     | none => pure none
-  let held ← match a.record with
-    | some r => do
-      if ← System.FilePath.pathExists r then
-        let j ← readJson r
-        match (str? j "commitment").bind unhex, (str? j "source").bind unhex with
-        | some c, some s => pure (some ({ commitment := c, source := s } : CoinRecord))
-        | _, _ => throw (IO.userError s!"{r}: a coin record has a commitment and a source")
-      else pure none
-    | none => pure none
-  let input : Input := { coins, manifests := mans, draws := a.draws, source, held }
+  let mut rounds : Option (List Nat) := none
+  let mut dropped : List Nat := []
+  let mut held : Option CoinRecord := none
+  if let some r := a.record then
+    if ← System.FilePath.pathExists r then
+      let j ← readJson r
+      let (some c, some s) := ((str? j "commitment").bind unhex, (str? j "source").bind unhex)
+        | throw (IO.userError s!"{r}: a coin record has a commitment and a source")
+      held := some { commitment := c, source := s, schema := (str? j "schema").getD "", draw := (get? j "draw").getD .null }
+      let rows (k : String) : IO (Option (List Nat)) := match get? j k with
+        | none => pure none
+        | some (.arr xs) => match xs.toList.mapM natOf? with
+          | some ns => pure (some ns)
+          | none => throw (IO.userError s!"{r}: a coin record's {k} are integers")
+        | some _ => throw (IO.userError s!"{r}: a coin record's {k} are a list")
+      rounds ← rows "rounds"
+      dropped := (← rows "dropped").getD []
+  let tie ← a.tie.mapM readJson
+  let input : Input := { coins, manifests := mans, draws := a.draws, source, held, tie, rounds, dropped,
+                         ofRecord := a.ofRecord }
   let mut cache : Std.HashMap String ByteArray := {}
   let mut checked : Std.HashMap (String × String) (Except String ByteArray) := {}
   if let .ok pl := plan input then
     if let (some r, none) := (a.record, held) then
       IO.FS.writeFile r ((Json.mkObj [("schema", jstr COIN_SCHEMA), ("commitment", jstr (hex pl.root)),
-        ("source", jstr (hex pl.source))]).pretty ++ "\n")
+        ("source", jstr (hex pl.source)), ("draw", nodeDraw)]).pretty ++ "\n")
     for (i, tid) in pl.todo do
       let dir := (System.FilePath.mk a.manifests[i]!).parent.getD "."
       for spec in filesOf mans[i]! pl.passes[i]! tid do

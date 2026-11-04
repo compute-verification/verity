@@ -1,0 +1,99 @@
+import PouwPearlPlus.Tile
+import PouwPearlPlus.Load
+import Flock.WindowRecord
+
+/-!
+# The window record's tie (`verify_run.tie`, `verify_run.tie_entries`)
+
+`tieOf w passes rounds dropped` holds the run's loaded passes to the window record W (`--tie W`, a
+`verity/registration/v2` record that `served_passes.py retain --window-record` writes): among W's ``pearl-a/`` and
+``pearl-y/`` values, W registers exactly each call's A rows and y, pass i as round ``rounds[i]`` (default i), beside any of
+the ``dropped`` rounds' (passes left out of the retention before the coin). For pass s's call c:
+
+* ``pearl-a/{s}/{c}``: the manifest's ``root_a``, its m committed rows of K 32-bit words, under `activationBinding`'s
+  `hm96-sha512` domain;
+* ``pearl-y/{s}/{c}``: the manifest's y root, its real rows of N 32-bit words, under `served_y.y_domain`'s.
+
+An entry that names no ``word_bits`` is at `registered.WORD_BITS` (16). The answer is `{record: digest(W), tables}`; the
+first mismatch is Python's `ValueError`, in its words. Every JSON comparison is by a match (`Want.holds`).
+-/
+
+namespace PouwCheck.PearlPlus
+
+open Lean PouwCommit
+
+def TIE_PREFIXES : List String := ["pearl-a/", "pearl-y/"]
+/-- `registered.WORD_BITS`: the word width of an entry that names none. -/
+def REGISTERED_WORD_BITS : Nat := 16
+
+/-- A value an entry must hold: a string, or a JSON integer (Python's `int`, never a `bool` or a `float`). -/
+inductive Want where
+  | str (s : String)
+  | nat (n : Nat)
+
+def Want.holds : Want → Json → Bool
+  | .str s, j => jsonStrIs j s
+  | .nat n, .num ⟨m, 0⟩ => m == (n : Int)
+  | .nat _, _ => false
+
+/-- One call's entry as `tie_entries` wants it: root, leaves, words, word_bits and domain, in that order. -/
+abbrev Entry := List (String × Want)
+
+private def rawStr (j : Option Json) : String := match j with | some (.str s) => s | _ => ""
+
+private def domainHex (d : Except String RowsDomain) : Except String String := do
+  pure (hex (← d).frame.id)
+
+/-- `tie_entries(passes, rounds)`: what W must register for each call of the run, in Python's order. `passes` are the
+manifests with their loaded passes. -/
+def tieEntries (passes : List (Json × Pass)) (rounds : Option (List Nat)) : Except String (List (String × Entry)) :=
+  go (rounds.getD (List.range passes.length)) passes
+where
+  go : List Nat → List (Json × Pass) → Except String (List (String × Entry))
+    | [], [] => pure []
+    | [], _ :: _ => throw "zip() argument 2 is longer than argument 1"
+    | _ :: _, [] => throw "zip() argument 2 is shorter than argument 1"
+    | s :: rs, (man, p) :: ps => do
+      let us := match get? man "matmuls" with | some (.arr us) => us.toList | _ => []
+      let mut out : List (String × Entry) := []
+      for ((r, rec), c) in (p.records.zip us).zipIdx do
+        let u := r.matmul
+        let some y := get? rec "y" | throw s!"pass {s}'s call {c} (index {u.index}) commits no y to tie"
+        let da ← domainHex (rowsDomain (activationBinding p.salt u.index) u.index u.m HM96 false)
+        let dy ← domainHex (rowsDomain (yBinding p.salt u.index) u.index r.realRows HM96 false)
+        out := out ++ [(s!"pearl-a/{s}/{c}", [("root", .str (rawStr (get? rec "root_a"))), ("leaves", .nat u.m),
+            ("words", .nat u.k), ("word_bits", .nat 32), ("domain", .str da)]),
+          (s!"pearl-y/{s}/{c}", [("root", .str (rawStr (get? y "root"))), ("leaves", .nat r.realRows),
+            ("words", .nat u.n), ("word_bits", .nat 32), ("domain", .str dy)])]
+      pure (out ++ (← go rs ps))
+
+/-- `tie(w, passes, rounds, dropped)`: W's digest and the number of tables it ties, or the first mismatch. -/
+def tieOf (w : Json) (passes : List (Json × Pass)) (rounds : Option (List Nat)) (dropped : List Nat) :
+    Except String Tied := do
+  let regs ← match w, get? w "registered" with
+    | .obj _, some (.arr es) =>
+      if jsonStrIs ((get? w "format").getD .null) Flock.WindowRecord.FORMAT_V2 then pure es.toList
+      else throw s!"W is no {Flock.WindowRecord.FORMAT_V2} record with registered values"
+    | _, _ => throw s!"W is no {Flock.WindowRecord.FORMAT_V2} record with registered values"
+  let mut got : List (String × Json) := []
+  for e in regs do
+    let v := match e with | .obj _ => get? e "value" | _ => none
+    if let some (.str v) := v then
+      if TIE_PREFIXES.any v.startsWith then
+        if (got.lookup v).isSome then throw s!"W registers {v} twice"
+        got := got ++ [(v, e)]
+  let want ← tieEntries passes rounds
+  let skip := dropped.map toString
+  let extra := got.map (·.1) |>.filter fun v =>
+    (want.lookup v).isNone && !skip.contains ((v.splitOn "/")[1]?.getD "")
+  if let x :: xs := extra then
+    throw s!"W registers {xs.foldl (fun m y => if y < m then y else m) x}, no call of the run's"
+  for (v, x) in want do
+    let some e := got.lookup v | throw s!"W registers no {v}"
+    let have (k : String) : Json :=
+      if k == "word_bits" then (get? e k).getD (.num ⟨REGISTERED_WORD_BITS, 0⟩) else (get? e k).getD .null
+    let bad := x.filterMap fun (k, want) => if want.holds (have k) then none else some k
+    if !bad.isEmpty then throw s!"W's {v}: its {", ".intercalate bad} not the call's"
+  pure { record := ← Flock.WindowRecord.digestHex w, tables := want.length }
+
+end PouwCheck.PearlPlus

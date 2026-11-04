@@ -1,5 +1,4 @@
-import PouwPearlPlus.Run
-import PouwCommit.Py
+import PouwPearlPlus.Coins
 
 /-!
 # Reading a retained pass (`verify_run.load`, `credit.passes_distinct`, `pearl_c.manifest_epoch`)
@@ -9,8 +8,10 @@ gives it (`TYPE: why`, the exception Python raises):
 
 1. the manifest's schema (`manifest_schema`: the v2 run, not one recorded before epoch coins), its call indices
    (`passes_distinct`), its scheme (Pearl-C v1 -h3 on the H100's record) and its matmuls' shapes;
-2. its epoch (`manifest_epoch`, `Epoch.start`): the pass's coin commitment must be the verifier's, its salt coin must open
-   against it after the weights' root, and the salt must be the manifest's;
+2. its epoch (`manifest_epoch`, `Epoch.start`, `host.epoch_of`): the pass's coin commitment must be the verifier's (an
+   in-process challenger's, or a live session's when the pass's coins are `window.LIVE_SCHEME`'s), its salt coin must open
+   against it after the weights' root (a live session's after the salt epoch's open root, `Coins.liveSalt`), and the salt
+   must be the manifest's;
 3. its records (`records_of`, `UnitRecord`): real rows, |K|, excluded and voluntary rows, held to V-EX's caps
    (`checkRecords`) and to the records root the pass published;
 4. its domain (`PearlC.check`) and the commitment's tile count.
@@ -18,8 +19,8 @@ gives it (`TYPE: why`, the exception Python raises):
 `passesDistinct` refuses passes credited together whose call indices leave `[0, 2^32)` (`call-range`) or repeat under one
 salt (`repeated-call`), or one that is not a manifest with a string salt and a list of matmuls (`manifest`).
 
-Out of this port's scope, each refused by name: the sm_120 records' schemes, a live session's coins
-(`window.LIVE_SCHEME`), and a manifest's `instance` other than `k_min` and `tile`.
+Out of this port's scope, each refused by name: the sm_120 records' schemes and a manifest's `instance` other than `k_min`
+and `tile`.
 -/
 
 namespace PouwCheck.PearlPlus
@@ -28,33 +29,27 @@ open Lean PouwCommit
 
 def MANIFEST_SCHEMA : String := Domains.VLLM_PEARL_C_RUN
 def MANIFEST_RECORDED : String := Domains.VLLM_PEARL_C_RUN_V1
-def LIVE_SCHEME : String := Domains.POUW_EPOCH_COINS_LIVE
 def CALL_RANGE : Nat := 2 ^ 32
 
 /-- Lowercase hex, `bytes.hex()`. -/
 def hex (b : ByteArray) : String :=
   String.ofList (b.toList.flatMap fun x => [Nat.digitChar (x.toNat / 16), Nat.digitChar (x.toNat % 16)])
 
-/-- A refusal: Python's (code, why) where it has one (`passes_distinct`'s and `AFTER_COIN`), and the reason it rejects with. -/
+/-- `verify_run.tie`'s answer: the window record's digest (hex) and the number of tables it ties (`Tie.tieOf`). -/
+structure Tied where
+  record : String
+  tables : Nat
+  deriving Repr
+
+/-- A refusal: Python's (code, why) where it has one (`passes_distinct`'s and `AFTER_COIN`), the reason it rejects with,
+and the tie when the passes were held to W before the refusal (Python's verdict carries it then). -/
 structure Refusal where
   refused : Option (String × String) := none
   reason : String
+  tie : Option Tied := none
   deriving Repr
 
 def refuse {α : Type} (type why : String) : Except Refusal α := throw { reason := s!"{type}: {why}" }
-
-/-- `repr` of a JSON value as Python prints the value `json.loads` gives. -/
-def pyReprJson : Json → String
-  | .null => "None"
-  | .bool b => if b then "True" else "False"
-  | .str s => pyRepr s
-  | .num ⟨m, 0⟩ => toString m
-  | j => j.compress
-
-def get? (j : Json) (k : String) : Option Json :=
-  match j with
-  | .obj kv => kv.get? k
-  | _ => none
 
 /-- `passes_distinct(passes)`: (code, why), or none. -/
 def passesDistinct (passes : List Json) : Option (String × String) := Id.run do
@@ -169,8 +164,11 @@ def throwRefusal {α : Type} (why : Option (String × String)) (k : Unit → Exc
   | some (c, w) => throw { refused := some (c, w), reason := s!"Refused: {c}: {w}" }
   | none => k ()
 
-/-- `load(path, coins)`: the retained pass `man` held to what it published under the verifier's coin commitment `coins`. -/
-def load (coins : CoinCommitment) (man : Json) : Except Refusal Pass := do
+def malformed {α : Type} (e : String) : Except Refusal α := refuse "DomainError" s!"the pass's coins are malformed: {e}"
+
+/-- `load(path, coins)`: the retained pass `man` held to what it published under the epoch's coin commitment `coins`, the
+verifier's copy (`verify_run.epoch_coins`). -/
+def load (coins : EpochCoins) (man : Json) : Except Refusal Pass := do
   manifestSchema man
   throwRefusal (passesDistinct [man]) fun _ => do
   let scheme ← schemeOf man
@@ -184,18 +182,30 @@ def load (coins : CoinCommitment) (man : Json) : Except Refusal Pass := do
   let roots ← weights.mapM fun (w, v) => do
     let some wi := w.toNat? | refuse "ValueError" s!"invalid literal for int() with base 10: {pyRepr w}"
     pure (wi, ← hexOf (← key v "root") "a weight's root")
-  let some opening := get? man "salt_opening" | refuse "DomainError" "the pass has no salt coin"
-  let claimedJ ← key man "coins"
-  if get? claimedJ "scheme" == some (.str LIVE_SCHEME) then
-    refuse "DomainError" "the pass's coin commitment is not the epoch's"
-  let opening ← match CoinOpening.ofJson opening with
-    | .ok o => pure o
-    | .error e => refuse "DomainError" s!"the pass's coins are malformed: {e}"
-  let claimed ← match CoinCommitment.ofJson claimedJ with
-    | .ok c => pure c
-    | .error e => refuse "DomainError" s!"the pass's coins are malformed: {e}"
-  if claimed.epoch != coins.epoch || claimed.root != coins.root then
-    refuse "DomainError" "the pass's coin commitment is not the epoch's"
+  let some openingJ := get? man "salt_opening" | refuse "DomainError" "the pass has no salt coin"
+  let claimedJ? := get? man "coins"
+  let live := match claimedJ? with
+    | some j@(.obj _) => jsonStrIs ((get? j "scheme").getD .null) LIVE_SCHEME
+    | _ => false
+  let opening ← match live, openingJ with
+    | true, o => match LiveOpening.ofJson o with
+      | .ok o => pure (Sum.inr o)
+      | .error e => malformed e
+    | false, o => match CoinOpening.ofJson o with
+      | .ok o => pure (Sum.inl o)
+      | .error e => malformed e
+  let some claimedJ := claimedJ? | malformed (pyRepr "coins")
+  let claimed : EpochCoins ← if live then match LiveCommitment.ofJson claimedJ with
+      | .ok c => pure (.live c)
+      | .error e => malformed e
+    else match CoinCommitment.ofJson claimedJ with
+      | .ok c => pure (.inproc c)
+      | .error e => malformed e
+  let same := match claimed, coins with
+    | .inproc a, .inproc b => a.epoch == b.epoch && a.root == b.root
+    | .live a, .live b => sameLive a b
+    | _, _ => false
+  if !same then refuse "DomainError" "the pass's coin commitment is not the epoch's"
   if let some why := workloadReason matmuls then refuse "DomainError" why
   let ws := (matmuls.map (·.weight)).eraseDups
   if ws.length != roots.length || !ws.all (fun w => (roots.lookup w).isSome) then
@@ -203,11 +213,16 @@ def load (coins : CoinCommitment) (man : Json) : Except Refusal Pass := do
   let weightsRoot ← match PouwCommit.weightsRoot roots with
     | .ok r => pure r
     | .error e => refuse "ValueError" e
-  let salt ← match epochSalt coins opening weightsRoot with
-    | .ok (.ok s) => pure s
-    | .ok (.error why) => refuse "DomainError" why
-    | .error e => refuse "ValueError" e
-  if get? man "salt" != some (.str (hex salt)) then
+  let salt ← match coins, opening with
+    | .inproc c, .inl o => match epochSalt c o weightsRoot with
+      | .ok (.ok s) => pure s
+      | .ok (.error why) => refuse "DomainError" why
+      | .error e => refuse "ValueError" e
+    | .live c, .inr o => match liveSalt c o weightsRoot ((get? man "pass_index").getD .null) with
+      | .ok s => pure s
+      | .error e => throw { reason := e }
+    | _, _ => refuse "DomainError" "the pass's coin commitment is not the epoch's"
+  if !jsonStrIs ((get? man "salt").getD .null) (hex salt) then
     refuse "DomainError" "the pass's salt is not its coin's and the weights'"
   let wj (w : Nat) : Json := (weights.lookup (toString w)).getD .null
   let records ← (us.zip matmuls).mapM fun (u, mm) => do

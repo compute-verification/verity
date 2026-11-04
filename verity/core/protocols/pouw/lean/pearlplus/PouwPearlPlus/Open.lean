@@ -125,6 +125,9 @@ def output (ans : RunAnswer) : Json :=
     ("work", match ans.work with
       | some c => Json.mkObj [("credited", (c.credited : Nat)), ("credited_tiles", (c.creditedTiles : Nat)),
           ("macs", (c.macs : Nat)), ("rho", jstr (toString c.rho)), ("epsilon", jstr (toString c.epsilon))]
+      | none => .null),
+    ("tie", match ans.tie with
+      | some t => Json.mkObj [("record", jstr t.record), ("tables", (t.tables : Nat))]
       | none => .null)]
 
 end PouwCheck.PearlPlus
