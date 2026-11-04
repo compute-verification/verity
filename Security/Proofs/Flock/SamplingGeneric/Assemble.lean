@@ -66,14 +66,13 @@ noncomputable def found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : A
     (Z : List (Fin (L.k x) × ((Fin (L.V.k x) → Coin) × Seen))) : List (List Msg × Opening Bool) :=
   ((flatMapRP (L.outerBody x s c) Z).eval H run').1
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+omit [Fintype Coin] [Nonempty Coin] in
 theorem found_eq (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
     (run' : (Fin (L.V.k x) → Coin) → Trace) (c : L.ECoins x)
     (Z : List (Fin (L.k x) × ((Fin (L.V.k x) → Coin) × Seen))) :
     L.found H x s run' c Z = ((flatMapRP (L.outerBody x s c) Z).eval H run').1 :=
   rfl
 
-omit [Inhabited Coin] in
 /-- The extractor's program, with its outer body named. -/
 theorem E_ext_eq (L : Compiled Coin A) (x : Msg) (r₀ : Fin (L.V.k x) → Coin) (c : L.ECoins x) :
     L.E.ext x r₀ c = .rerun r₀ fun v₀ =>
@@ -111,7 +110,7 @@ theorem ownLog_E (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover
   rw [ite_eq_left hacc', ownLog_bind, ownLog_bind]
   exact List.mem_append_right _ (List.mem_append_left _ ht)
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+omit [Fintype Coin] [Nonempty Coin] in
 theorem passes_unitExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
     (s : AuditStatement) (u : ℕ) (r : Fin (L.V.k x) → Coin) (v : Seen) (c : A.EC (L.sh x u)) :
     Sampling.Passes H run' L.commit (L.unitExt x s u r v c) := by
@@ -125,7 +124,7 @@ theorem passes_unitExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' :
       | some w => exact Sampling.Passes.checkRevealed H run' L.commit _
     · exact Sampling.Passes.ret_nil H run' L.commit
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+omit [Fintype Coin] [Nonempty Coin] in
 theorem passes_found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
     (s : AuditStatement) (c : L.ECoins x) (Z : List (Fin (L.k x) × ((Fin (L.V.k x) → Coin) × Seen))) :
     Sampling.Passes H run' L.commit (flatMapRP (L.outerBody x s c) Z) :=
@@ -135,7 +134,7 @@ theorem passes_found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (
       · exact L.passes_unitExt H x run' s _ _ _ _
       · exact Sampling.Passes.ret_nil H run' L.commit
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+omit [Fintype Coin] [Nonempty Coin] in
 /-- A revealed opening that passes, of the witness a block's session's extraction returns, is among the block's
 extraction's. -/
 theorem unitExt_mem (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
@@ -159,7 +158,7 @@ theorem mem_outerList (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : 
   rw [waitAccC_eval_nil]
   exact mem_zip_finRange (getElem?_map_pair run' hj)
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+omit [Fintype Coin] [Nonempty Coin] in
 /-- **A block's extraction at a kept inner run, under a kept outer run, is kept**, when the inner run samples it. -/
 theorem mem_found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
     (run' : (Fin (L.V.k x) → Coin) → Trace) (c : L.ECoins x)
