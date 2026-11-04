@@ -1,4 +1,5 @@
-import Proofs.NetworkCertifier.SampledAuditInstance
+import Proofs.NetworkCertifier.SampledAuditAccepted
+import Proofs.Flock.Claims.Sampling.Assembled
 import Proofs.NetworkCertifier.Pooled
 import Proofs.Flock.Claims.Witnesses.Sampling
 import Proofs.Flock.Claims.Witnesses.Meets

@@ -8,11 +8,12 @@ import Proofs.NetworkCertifier.Counting
 import Proofs.NetworkCertifier.Advice
 import Proofs.NetworkCertifier.Ingress
 import Proofs.NetworkCertifier.SampledAuditAccepted
-import Proofs.NetworkCertifier.SampledAuditInstance
 import Proofs.NetworkCertifier.SampledCharge
 import Proofs.NetworkCertifier.SampledLeak
 import Proofs.NetworkCertifier.SampledLeakReg
-import Proofs.NetworkCertifier.SampledLeakRegPlain
+import Proofs.Flock.Claims.Sampling.Committed
+import Proofs.Flock.Claims.ZK.Deployed
+import Proofs.Flock.Claims.KS.PlainLeafKS
 import Proofs.NetworkCertifier.PeriodSum
 import Proofs.NetworkCertifier.Pooled
 import Proofs.NetworkCertifier.TapRows
