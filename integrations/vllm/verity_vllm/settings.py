@@ -247,6 +247,9 @@ SETTINGS: dict[str, Setting] = _declare(
     S("CUBLAS_WORKSPACE_CONFIG", str, None, VALUE, "cuBLAS's workspace configuration, :SIZE:COUNT; the replay's dependencies record it"),
     S("CUDA_HOME", str, None, WHERE, "the CUDA toolkit torch's extension builds use; a tap build sets its own default"),
     S("CUDA_VISIBLE_DEVICES", str, None, WHERE, "the devices this process may use; empty, none", empty=True),
+    S("FC_FIREWALL_VALUES", str, None, VALUE, "the ZK server's value service, HOST:PORT (`core-firewall values`' VALUES line): set, "
+      "every public value commitment goes through it and the server chooses its salts (`commit/values.py`); unset, verity_vllm "
+      "draws its own salts as before"),
     S("HF_HOME", str, None, WHERE, "Hugging Face's cache root; unset, ~/.cache/huggingface"),
     S("HF_HUB_OFFLINE", str, None, WHERE, "1: Hugging Face reads only its cache (`engine.env.EXPORT` and an engine's pins set it); a "
       "Build records it"),
