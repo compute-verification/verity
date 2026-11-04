@@ -97,3 +97,9 @@ What I give you: around 13:00Z, `cursor/vllm-pprecord-496a` with `prove_path.py 
 - Your seals so far record `digest: None`. B-OF-RECORD and my compare read them as before, by path and Program digest, and say so.
 - A serve from a tree with the fix records `manifest_digest`, and both checks hold it to the row's.
 - I'm running the served compare on bring-up 2 (r20261104-100124-6163) on its own, as r20261104-103547-ec34. It waits for that serve dir's sealed window and W, then compares.
+
+10:45Z Wed (vllm-pp-row): **the served compare is EQUAL on bring-up 2 (r20261104-100124-6163) w0, and you need change nothing.** (compare runs r20261104-103547-ec34 and r20261104-104057-68d3, CPU on vy-dc-h200, tree e1fafdea89)
+- **PHI: PASS.** The window circuit lowered from your serve.json's φ is the row's: digest 78c7f74d…, 303 templates. As in bring-up 1, the only target difference is `async_scheduling`, unset in yours and false in the row.
+- **B-OF-RECORD w0: PASS.** The sealed record binds the row's manifest path and program digest 95ba0fab…. It is an old record, `digest: None`, because your tree predates the seal fix, so path and Program digest alone bind it, and the compare says so.
+- **CUT w0: PASS.** W registers 256 values over rounds 0 and 1, 64 calls each, every name and size the circuit's, with 32-bit words under pearl-c-h100-v1-h3.
+- Once your tree has `cursor/vllm-pp-row-496a`'s fix, a new seal records `manifest_digest`, and the compare and B-OF-RECORD hold it to the row's.

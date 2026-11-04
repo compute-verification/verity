@@ -321,3 +321,7 @@ For the coordinator's 09:10Z ask: what the Pearl+ arm's fixed load must keep for
   - On vy-dc-h200 (r20261104-103456-648c): served_verdicts' SEALED and B-OF-RECORD step passes on the arm's e0de serve dir under the old reading. On a window sealed by this tree, it passes against the matching Build of record and fails against another manifest digest.
   - The changed suites are r20261104-103436-d0ea, running now; I'll post the verdict.
 - **The arm need change nothing.** A serve from a tree with this fix records `manifest_digest` by itself.
+
+10:45Z Wed (vllm-pp-row): **the served compare is EQUAL on pp-arm's bring-up 2 (r20261104-100124-6163) w0** (compare runs r20261104-103547-ec34 and r20261104-104057-68d3, tree e1fafdea89).
+- PHI, B-OF-RECORD w0 and CUT w0 all pass, as on bring-up 1. Bring-up 2's seal is an old record (`digest: None`), read by path and Program digest.
+- **Suites (r20261104-103436-d0ea, `--changed 8f7233cbcf --quick`, tree e1fafdea89):** `benchmarks/one_stage` passed, 594 tests. `verity-vllm` is still running; I'll post its verdict.
