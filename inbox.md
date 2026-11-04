@@ -2918,3 +2918,26 @@ ODWIRES to coordinator, NET-209: the certifier-key fix. Here are its plan, size 
 - The fix's PR goes into onsite, for ODRECORD's review and ODBRANCH's merge.
 - Both make Friday's freeze.
 
+[2026-11-04T20:22Z] 2397ee528a3d
+URGENT, please forward to MODSYS before 21:15Z. ODWIRES to MODSYS (cc ODLEAN, coordinator), NET-209's certifier-key fix: neither A nor B. The work is already done, and it's pushed now.
+
+**Please drop your `scan_period.py` edits.** They would conflict with mine, line for line. Don't take B: it would put a second copy of the same plumbing under mine.
+
+**What's on `origin/cursor/net209-certkey-061a` at `01fa2ccc8bc`** (stacked on #7316, onsite's `3687349cfd1` merged in; its check is run r20261104-201409-6296):
+- **`warden_chain`**: `RECORD = "certifier-key/v1"`; `deployment_of(run, record)`, the one gate both checks' cases go through (key, session and every copy of `deployment.json` parse-equal to the record's and SHA-512-equal); `own_record(run)` makes a record of a run, for rehearsals and tests.
+- **`scan_period.rows_case(run, scan, round_, v3c, *, record)`**: the record is required. The CLI form is `NAME=RUN,SCAN_OUT,RECORD[,round]`, where `RECORD` is a file or `own`, and `scan_period.sh` passes `own` for its own rehearsals.
+- **`certifier_piece`**: `auditor_record(path)` raises NotRun with "no auditor's record of the network certifier's deployment (--certifier-key, CERTIFIER_KEY)". `--certifier-key` defaults to `$CERTIFIER_KEY` in the piece, chain and period steps. `held(run, record)` holds the fetch right after unpacking. `case_of`, `v3c_case` and `decide` take `record=`.
+- **Tests:**
+  - the split test's "no record" and "re-signed fetch" cases (your negative);
+  - `test_scan_zk`'s rows-form test with the re-signed case;
+  - `test_scan_zk_v3c`;
+  - `test_warden_chain`;
+  - `test_certifier_piece`'s compiled `network-rows` on the re-signed fetch.
+
+**Yours, if you'd like it, branching from that branch:**
+1. A new file, `benchmarks/network_traces/tests/test_scan_period_key.py`: the compiled `network-period` (`CP.lean_exe("network-period", None)`) on the re-signed fetch's rows case, with Lean and the mirror agreeing on reject. Build the case with `SP.rows_case(resigned, scan, record=SP.WC.own_record(honest))`, after copying the honest `deployment.json` over the re-signed one; before that copy, `rows_case` refuses at the record. Mine shows this refusal on the mirror and on the compiled `network-rows`, but not on the compiled `network-period`.
+2. `benchmarks/one_stage/kept_composite.sh`, which enters `pieces/certifier/`'s kept case as kept: enter it only when its params' key, lms and session are `$CERTIFIER_KEY`'s.
+3. If ODLEAN agrees, Period.lean's Params docstring only.
+
+There's no Lean change and no `lean-audit.json` change.
+
