@@ -1,4 +1,5 @@
 import Properties.NetworkCertifier.Schedules
+import Proofs.Properties.NetworkCertifier.RowsStep
 
 /-!
 # The schedule the rows audit accepts fits the rows format
@@ -10,65 +11,13 @@ ordinals `1 … N` with `N` at most the connections its rows hold, so at most `l
 `a_i ≤ b < a_i + D + k_i`, `k_i` its lane's buckets (`rowsAt_length`), and its data, its cells but the padding, fit the
 buckets from `a_i + D` to `H` (`data_le`): its lane ends in the run. A bucket of the run then holds its row's cells, at
 most `S`; one of the `D` after it at most the last's; and one later only the cells of one connection past the run, which
-`wardenOf` admits `D` buckets apart. `rows_step` walks the audit's `do` blocks as Flock's `walk_step` does, and names
-each bound value after its binder.
+`wardenOf` admits `D` buckets apart. `rows_step` (`RowsStep.lean`) walks the audit's `do` blocks as Flock's `walk_step`
+does, and names each bound value after its binder.
 -/
 
 open NetworkCertifier.Rows
 
 namespace Properties.NetworkCertifier.RowsAudit
-
-theorem ebind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : (x >>= f) = .ok b) :
-    ∃ a, x = .ok a ∧ f a = .ok b := by
-  cases x with
-  | error e => cases h
-  | ok a => exact ⟨a, rfl, h⟩
-
-theorem pure_ok {α : Type} {a b : α} (h : (pure a : Except String α) = .ok b) : a = b := by
-  simp only [pure, Except.pure, Except.ok.injEq] at h
-  exact h
-
-theorem throw_ne_ok {α : Type} (e : String) (a : α) : (throw e : Except String α) ≠ .ok a := fun h => by cases h
-
-theorem throw_bind' {α β : Type} (e : String) (f : α → Except String β) :
-    ((throw e : Except String α) >>= f) = throw e := rfl
-
-open Lean Elab Tactic Meta in
-/-- One step through `h : x = .ok v`, by `x`'s head, as Flock's `walk_step`: a bind is split into its halves, the value
-and its equation named `v` and `h_v` after the binder when the program named it; an `if` is split on its condition
-`hc`; a `match` is split; a `throw` closes the goal. It fails at a `pure`. -/
-elab "rows_step" : tactic => do
-  let g ← getMainGoal
-  g.withContext do
-    let some d := (← getLCtx).findFromUserName? `h | throwError "rows_step: no h"
-    let ty ← instantiateMVars d.type
-    let some (_, lhs, _) := ty.eq? | throwError "rows_step: h is not an equation"
-    let lhs := lhs.headBeta.consumeMData
-    let h := mkIdent `h
-    let hc := mkIdent `hc
-    if lhs.isAppOfArity ``Bind.bind 6 then
-      let named := match (lhs.getArg! 5).consumeMData with
-        | .lam n .. => if n.isAnonymous || n.hasMacroScopes || n.isInternal then none else some n
-        | _ => none
-      match named with
-      | some n =>
-        let x := mkIdent n
-        let hx := mkIdent (n.appendBefore "h_")
-        evalTactic (← `(tactic| obtain ⟨$x:ident, $hx:ident, $h:ident⟩ := ebind_ok $h))
-      | none => evalTactic (← `(tactic| obtain ⟨_, _, $h:ident⟩ := ebind_ok $h))
-    else if lhs.isAppOfArity ``ite 5 then
-      let cs ← Term.exprToSyntax (lhs.getArg! 1)
-      evalTactic (← `(tactic| by_cases $hc:ident : $cs <;>
-        first | rw [ite_eq_left $hc:ident] at $h:ident | rw [ite_eq_right $hc:ident] at $h:ident))
-    else if lhs.isAppOfArity ``dite 5 then
-      let cs ← Term.exprToSyntax (lhs.getArg! 1)
-      evalTactic (← `(tactic| by_cases $hc:ident : $cs <;>
-        first | rw [dite_eq_left $hc:ident] at $h:ident | rw [dite_eq_right $hc:ident] at $h:ident))
-    else if lhs.isAppOfArity ``MonadExcept.throw 5 || lhs.isAppOfArity ``throwThe 5 then
-      evalTactic (← `(tactic| exact absurd $h (throw_ne_ok _ _)))
-    else if (← Lean.Meta.isMatcherApp lhs) then
-      evalTactic (← `(tactic| split at $h:ident))
-    else throwError "rows_step: stop"
 
 /-! ### Lists, folds and sums -/
 
