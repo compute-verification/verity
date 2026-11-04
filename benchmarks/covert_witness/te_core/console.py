@@ -7,15 +7,29 @@ A body is at most `BODY_MAX` bytes (compact JSON, no NaN), a note at most `NOTE_
 its first cut that fits (`CUTS`, in order, the first the whole panel) with numbers to 4 significant digits (losses 6),
 and its note is the panel's short note (`SHORT`), the cut's, and `COMMON`; the uncut panel is DIR/<name>.json beside
 it. The console's training panels are `training/algorithm-policy` and `training/frontier-fit` (te_core.algorithm_policy
-PUTs both with `put`): te_core.plots' five panels are off it, so nothing here PUTs them. `put` PUTs one panel to
-`PANELS_URL`/<id> with a
-Cursor OIDC token (research.slack's `oidc_token`, imported only there) and returns its HTTP status; `served` GETs the
-panels the route serves for a producer.
+PUTs both with `put`) and `training/standard-workloads` (te_core.standard_workloads'): te_core.plots' five panels are
+off it, so nothing here PUTs them. `put` PUTs one panel to `PANELS_URL`/<id> with a Cursor OIDC token (research.slack's
+`oidc_token`, imported only there) and returns its HTTP status; `served` GETs the panels the route serves for a
+producer.
+
+A number reaches the console only as a te_core VERSION, so `put` refuses before any request (`refusal`):
+- an id not in `PANELS`, or one `RETIRED` names;
+- a te_core object that a loaded te_core module binds at its top level and that isn't the one its source binds there
+  (`replaced`): a function, a class or a method its body defines, a name it imports from te_core, or a constant bound
+  to a string, number, bool or tuple of them, so no wrapper, swapped function or changed setting publishes;
+- a trace the ledger shares among its records changed in place (te_core.ledger's `changed_traces`);
+- a te_core tree with uncommitted changes or untracked files, or off `BRANCH`, where the integrator merges te_core: a
+  file of te_core at the branch's head (fetched from origin) that this tree's HEAD lacks or has otherwise
+  (`off_branch`). A file only this tree has is its publisher's own module (standard-workloads' builder).
 """
 from __future__ import annotations
 
 import argparse
+import ast
+import functools
+import inspect
 import json
+import subprocess
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -23,6 +37,14 @@ from pathlib import Path
 from .plots import NAMES, frame
 
 PANELS_URL = "https://website-docs-sage.vercel.app/api/panels"
+#: the panels `put` PUTs: te_core.algorithm_policy's two and te_core.standard_workloads'
+PANELS = ("training/algorithm-policy", "training/frontier-fit", "training/standard-workloads")
+#: the panel ids `put` refuses, each with why
+RETIRED = {"training/frontier-branches": "frontier-branches is stored only, never PUT (te_core.panels)"} | {
+    f"training/{n}": "te_core.plots' panels are off the console" for n in NAMES}
+#: the branch whose head's te_core every published panel is built on
+BRANCH = "cursor/covert-witness-4207"
+HERE = Path(__file__).resolve().parent
 BODY_MAX = 65536
 NOTE_MAX = 500
 #: the route's cell limit, live since the dashboard's 05:05Z change
@@ -178,19 +200,171 @@ def write(src: Path, out: Path) -> dict[str, dict]:
     return made
 
 
+def _constant(v) -> bool:
+    return isinstance(v, (str, int, float, bytes)) or isinstance(v, tuple) and all(map(_constant, v))
+
+
+_STDLIB = Path(inspect.__file__).resolve().parent
+
+
+def _library(obj) -> bool:
+    """Whether `obj`, a decorator's product, is installed code's: a function whose code is the standard library's or
+    an installed package's (torch wraps a dispatch mode's `__torch_dispatch__`), or an object of a type the standard
+    library defines (functools.lru_cache's wrapper), a partial aside."""
+    if inspect.isfunction(obj):
+        path = Path(obj.__code__.co_filename).resolve()
+        return path.is_relative_to(_STDLIB) or bool({"site-packages", "dist-packages"} & set(path.parts))
+    return type(obj).__module__.split(".")[0] in sys.stdlib_module_names and not isinstance(obj, functools.partial)
+
+
+def _defines(obj, file: Path, name: str) -> bool:
+    """Whether `obj` is the function `file` defines as `name`: that function, or an installed decorator's product
+    wrapping it (`__wrapped__`), as a contextmanager or an lru_cache is. A method is read through its staticmethod,
+    classmethod or property."""
+    if isinstance(obj, (staticmethod, classmethod)):
+        obj = obj.__func__
+    elif isinstance(obj, property):
+        obj = obj.fget
+    try:
+        inner = inspect.unwrap(obj)
+    except ValueError:
+        return False
+    return (inspect.isfunction(inner) and Path(inner.__code__.co_filename).resolve() == file
+            and inner.__code__.co_name == name and (inner is obj or _library(obj)))
+
+
+def _bound(mod) -> dict[str, object]:
+    """What `mod`'s source binds at its top level, by name, where `replaced` can check it: a def or class's ast node,
+    ("import", module, name) for a name from te_core, ("constant", value) for a `_constant` literal of an upper-case
+    name. A later top-level assignment to a name leaves it out."""
+    spec = mod.__spec__
+    pkg = spec.name if spec.submodule_search_locations else spec.name.rpartition(".")[0]
+    out: dict[str, object] = {}
+    for s in ast.parse(Path(mod.__file__).read_text()).body:
+        if isinstance(s, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            out[s.name] = s
+        elif isinstance(s, ast.ImportFrom):
+            src = s.module or ""
+            if s.level:
+                base = ".".join(pkg.split(".")[:len(pkg.split(".")) - s.level + 1])
+                src = f"{base}.{s.module}" if s.module else base
+            for a in s.names:
+                out.pop(a.asname or a.name, None)
+                if src.split(".")[0] == "te_core":
+                    out[a.asname or a.name] = ("import", src, a.name)
+        elif isinstance(s, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+            targets = s.targets if isinstance(s, ast.Assign) else [s.target]
+            names = [t.id for t in targets if isinstance(t, ast.Name)]
+            for n in names:
+                out.pop(n, None)
+            if not isinstance(s, ast.AugAssign) and s.value is not None and len(targets) == len(names) == 1 \
+                    and names[0].isupper():
+                try:
+                    v = ast.literal_eval(s.value)
+                except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError):
+                    continue
+                if _constant(v):
+                    out[names[0]] = ("constant", v)
+    return out
+
+
+def replaced() -> list[str]:
+    """Each object a loaded te_core module (`python -m`'s ``__main__`` among them) binds at its top level that isn't
+    the one its source binds (module docstring), and each such module loaded from outside this tree."""
+    bad = []
+    for name, mod in list(sys.modules.items()):
+        spec = getattr(mod, "__spec__", None)
+        if spec is None or spec.name.split(".")[0] != "te_core" or not getattr(mod, "__file__", None):
+            continue
+        file = Path(mod.__file__).resolve()
+        if not file.is_relative_to(HERE):
+            bad.append(f"{spec.name} is loaded from {file}, not {HERE}")
+            continue
+        for k, b in _bound(mod).items():
+            got = getattr(mod, k, None)
+            if isinstance(b, tuple) and b[0] == "constant":
+                if type(got) is not type(b[1]) or got != b[1]:
+                    bad.append(f"{spec.name}.{k} is {got!r:.60}, its source's {b[1]!r:.60}")
+            elif isinstance(b, tuple):
+                src = sys.modules.get(b[1])
+                if src is not None and got is not getattr(src, b[2], sys.modules.get(f"{b[1]}.{b[2]}")):
+                    bad.append(f"{spec.name}.{k} isn't {b[1]}.{b[2]}")
+            elif isinstance(b, ast.ClassDef):
+                if not isinstance(got, type) or got.__module__ != name or got.__qualname__ != k:
+                    bad.append(f"{spec.name}.{k} isn't the class its source defines")
+                    continue
+                bad += [f"{spec.name}.{k}.{f.name} isn't the method its source defines" for f in b.body
+                        if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        and not _defines(vars(got).get(f.name), file, f.name)]
+            elif not _defines(got, file, k):
+                bad.append(f"{spec.name}.{k} isn't the function its source defines")
+    return bad
+
+
+def _git(here: Path, *args: str) -> str:
+    r = subprocess.run(["git", "-C", str(here), *args], capture_output=True, text=True, check=False)
+    if r.returncode:
+        raise RuntimeError(f"git {' '.join(args)}: {(r.stderr or r.stdout).strip()[:300]}")
+    return r.stdout
+
+
+def off_branch(ref: str, here: Path = HERE) -> list[str]:
+    """Why the te_core tree at `here` isn't `ref`'s (module docstring): its uncommitted changes and untracked files,
+    and each file of `here` at `ref` that HEAD lacks or has otherwise."""
+    dirty = [line[3:] for line in _git(here, "status", "--porcelain", "--untracked-files=all", "--", ".").splitlines()]
+    prefix = _git(here, "rev-parse", "--show-prefix").strip().rstrip("/")
+
+    def files(rev: str) -> dict[str, str]:
+        listed = _git(here, "ls-tree", "-r", "--full-tree", f"{rev}:{prefix}").splitlines()
+        return {path: meta.split()[2] for meta, path in (line.split("\t", 1) for line in listed)}
+
+    mine, theirs = files("HEAD"), files(ref)
+    differ = sorted(f for f, blob in theirs.items() if mine.get(f) != blob)
+    head = _git(here, "rev-parse", "--short=10", ref).strip()
+    out = [f"uncommitted changes or untracked files in {prefix}: {', '.join(dirty[:4])}"
+           f"{f' and {len(dirty) - 4} more' if len(dirty) > 4 else ''}"] if dirty else []
+    if differ:
+        out.append(f"{len(differ)} files of {prefix} at {ref} ({head}) differ here or are missing: "
+                   f"{', '.join(differ[:4])}{' ...' if len(differ) > 4 else ''}")
+    return out
+
+
+def refusal(p: dict) -> str | None:
+    """Why `put` refuses `p` (module docstring), or None. The tree is checked last, against `BRANCH`'s head fetched
+    now."""
+    from . import ledger
+
+    pid = p.get("id")
+    if pid in RETIRED:
+        return f"retired: {RETIRED[pid]}"
+    if pid not in PANELS:
+        return (f"not a panel te_core PUTs ({', '.join(PANELS)}); a new one is added to console.PANELS in a te_core "
+                f"VERSION")
+    if changed := ledger.changed_traces():
+        return (f"{changed} of the ledger's shared traces changed in place after it read them, so every record sharing "
+                f"them changed and this panel doesn't hold; find the reader that writes into a record's "
+                f"formalism.trace and make it copy first")
+    if bad := replaced():
+        return (f"{len(bad)} te_core objects aren't their source's ({'; '.join(bad[:4])}): a ruling reaches a published "
+                f"number only as a te_core VERSION, so run its builder unwrapped, as `python -m te_core.MODULE`")
+    try:
+        _git(HERE, "fetch", "--quiet", "origin", f"+refs/heads/{BRANCH}:refs/remotes/origin/{BRANCH}")
+        off = off_branch(f"refs/remotes/origin/{BRANCH}")
+    except (OSError, RuntimeError) as e:
+        return f"te_core's tree can't be held to {BRANCH}'s head ({e}); publish from a git checkout with origin"
+    if off:
+        return f"{'; '.join(off)}: publish from a clean checkout of {BRANCH}'s head (git fetch origin {BRANCH})"
+    return None
+
+
 def put(p: dict) -> str:
-    """PUT `p` (module docstring); refused before any request where a trace the ledger shares among its records was
-    changed in place since it was read (te_core.ledger's `changed_traces`), since every record sharing it changed."""
+    """PUT `p` (module docstring), refused before any request where `refusal` gives a reason."""
     import urllib.error
     import urllib.request
 
-    from . import ledger
-
-    changed = ledger.changed_traces()
-    if changed:
-        raise SystemExit(f"console.put {p['id']}: {changed} of the ledger's shared traces changed in place after it "
-                         f"read them, so every record sharing them changed and this panel doesn't hold; find the "
-                         f"reader that writes into a record's formalism.trace and make it copy first")
+    why = refusal(p)
+    if why:
+        raise SystemExit(f"console.put {p.get('id')}: {why}")
     from research.slack import oidc_token
 
     req = urllib.request.Request(f"{PANELS_URL}/{p['id']}", body(p), method="PUT",  # noqa: S310 (a fixed https URL)

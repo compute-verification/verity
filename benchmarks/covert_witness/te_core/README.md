@@ -205,7 +205,12 @@ build has no row for, both panels keep the served rows (`kept_data`, `guarded`),
 empties a populated panel; a build with every served run replaces an older te_core's rows, however its coverage
 moves. `training/frontier-branches` (`panels`'s: the frontier and each start's honest and throttled branches over
 the dial) is retired from the console and no longer PUT; `panels` still holds the dial both use (`dial`, `rho_columns`,
-`page_inputs`, `mismatches`). Every scoring command (`frontier`, `plots`, `rescore`, `panels`, `frontier_fit`,
+`page_inputs`, `mismatches`). `console.put` refuses before any request: an id that isn't one of the three panels
+te_core PUTs (`console.PANELS`) or that is retired; a te_core object that a loaded te_core module binds and that isn't
+its source's (a wrapper, a swapped function or a changed setting); a changed shared trace; and a te_core tree with
+uncommitted changes or untracked files, or one whose files differ from `cursor/covert-witness-4207`'s head. So a number
+reaches the console only as a te_core VERSION on that head, built by its own command (`python -m te_core.MODULE`).
+Every scoring command (`frontier`, `plots`, `rescore`, `panels`, `frontier_fit`,
 `algorithm_policy`) applies one cap, `policy.eligible`: a checkpoint is scored only when its model's forward gates per
 token are at most the greater of twice its start's (`policy.CAP_FALLBACK`) and the compute-optimal model's at its loss
 under the ladder's fit (their `--ladder-fit FILE`, `policy.ladder_fit`), and twice its start's where there is no fit or
