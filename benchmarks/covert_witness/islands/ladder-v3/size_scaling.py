@@ -22,19 +22,25 @@ quantities are the step's as te_core.formalism completes a record's (`step`), an
 `published` at reading A, as te_core.workloads prices its models: the products term where it exceeds 1, partial since
 a traced step alone has no token entries or op log, else null with why. Its p is 1: it is the honest route.
 
-**Policies** (`policies`): `console`, te_core.policy's `CONSOLE`; `grown`, one session of the size's own model at the
-console's 4,096 input and 1,024 output tokens, at the console's k; `serving`, k = `SERVING_K` (100,000 input ids at 16
-bits) and c one session of the size's own model at 100,000 input and 1,024 output tokens (te_core.policy's `session`).
+**Policies** (`policies`: each ρ's (c, k) and the policy's input ids in bits, `k_bits`): `grown`, the headline, the
+size's own serving session (te_core.policy's `session` of the console's 4,096 input and 1,024 output tokens on the
+size's own model, the session te_core.algorithm_policy's headline is): c its gates, k_bits its input ids at the size's
+vocabulary (61,440 bits at 32,000, 65,536 at 50,304) and k the console's, a 16-bit word an input id, as
+te_core.rho_vectors' session dial prices the products term, at which every record's products are classified. ρ falls
+as k grows, so where k_bits is less than k the row says ρ there is at least its ρ at k (`policy_label`). `console`,
+te_core.policy's `CONSOLE`, one session of the 45M reference, a sensitivity; `serving`, k = k_bits = `SERVING_K`
+(100,000 input ids at 16 bits) and c one session of the size's own model at 100,000 input and 1,024 output tokens.
 Each serving row says it rests on te_core.formalism's `BETA_K_LABEL`: at that k the products term charges an
-activation at most β(k), io-bound's red-team of (H), not its width (`labelled`).
+activation at most β(k), io-bound's red-team of (H), not its width.
 
 **The measured frontier**: the scorer's uncut algorithm-policy table (te_core.algorithm_policy), each run's first
 checkpoint reaching each gain (`reached` yes, p = C/H), every route but standard training's (`STANDARD`), each
 checkpoint measured as the scorer measured it (`scored`: its ledger record with the formalism block in the scorer's
 formalism.jsonl, te_core.formalism's `measure`) and priced at each policy by `published`, whose ρ at the console's
-policy is the table's own on every row (`check`). Each priced row has the table's basis (`basis`): a row that is
-unmeasured, rests on a stub or is partial is never the least S. The row is the eligible one with the least S, else
-null S with why: no attack run at this size, none reached, or none with a full ρ at the policy.
+policy is the table's own on every row (`check`). A record keeps its products at the dial's k alone, so at a policy's k
+off it the products term is unmeasured. Each priced row has the table's basis (`basis`): a row that is unmeasured,
+rests on a stub or is partial is never the least S. The row is the eligible one with the least S, else null S with
+why: no attack run at this size, none reached, or none with a full ρ at the policy.
 """
 from __future__ import annotations
 
@@ -89,12 +95,13 @@ def shape(params: int) -> dict:
     return s
 
 
-def policies(params: int) -> dict[str, tuple[float, float]]:
-    """The three policies (module docstring) for the size of `params` parameters, each (c, k)."""
+def policies(params: int) -> dict[str, tuple[float, float, float]]:
+    """The three policies (module docstring) for the size of `params` parameters, each (c, k, k_bits)."""
     s = shape(params)
-    return {"console": policy.CONSOLE,
-            "grown": (policy.session_gates(params, *policy.CONSOLE_SESSION, s), policy.CONSOLE[1]),
-            "serving": (policy.session_gates(params, *SERVING_SESSION, s), float(SERVING_K))}
+    own = policy.session(params, *policy.CONSOLE_SESSION, s)
+    return {"console": (*policy.CONSOLE, policy.CONSOLE[1]),
+            "grown": (own["gates"], policy.CONSOLE[1], float(own["k_bits"])),
+            "serving": (policy.session_gates(params, *SERVING_SESSION, s), float(SERVING_K), float(SERVING_K))}
 
 
 # ---- trace: standard training's steps ------------------------------------------------------------------------------
@@ -151,11 +158,23 @@ def eligible(b: str) -> bool:
     return b not in (ap.UNMEASURED, ap.STUB, ap.PARTIAL)
 
 
-def labelled(row: dict, pol: str) -> dict:
-    """`row` at policy `pol`, a serving row with te_core.formalism's `BETA_K_LABEL` in what it rests on."""
-    if pol != "serving" or formalism.BETA_K_LABEL in (row.get("rests_on") or ""):
+def policy_label(pol: str, k: float, bits: float) -> str | None:
+    """What a row at policy `pol`, priced at k for a session of `bits` input bits, rests on beyond its ρ: a serving row
+    te_core.formalism's `BETA_K_LABEL`; a grown row whose ids pack into fewer bits than k, that its ρ at k is a lower
+    bound on its ρ at `bits`."""
+    if pol == "serving":
+        return formalism.BETA_K_LABEL
+    if pol == "grown" and bits < k:
+        ids = policy.id_bits(policy.SHAPES[policy.REFERENCE_PARAMS]["vocab"])
+        return f"k = {k:,.0f} ({ids}-bit ids); at the packed {bits:,.0f} rho is at least this"
+    return None
+
+
+def labelled(row: dict, label: str | None) -> dict:
+    """`row` with its policy's `label` (`policy_label`) at the end of what it rests on, where it hasn't it already."""
+    if label is None or label in (row.get("rests_on") or ""):
         return row
-    return row | {"rests_on": "; ".join(filter(None, (row.get("rests_on"), formalism.BETA_K_LABEL)))}
+    return row | {"rests_on": "; ".join(filter(None, (row.get("rests_on"), label)))}
 
 
 def products_inputs(m: formalism.Measured, c: float, k: float) -> str:
@@ -167,8 +186,11 @@ def products_inputs(m: formalism.Measured, c: float, k: float) -> str:
 
 
 def rests(one: dict) -> str:
-    """What a published ρ rests on, with its `why` where it has one (an unmeasured kind)."""
-    return one["rests_on"] + (f": {one['why']}" if one["why"] else "")
+    """What a published ρ rests on, as te_core.algorithm_policy's rows say it (`rests_on`), with its `why` where it has
+    one (an unmeasured kind)."""
+    from te_core import algorithm_policy
+
+    return algorithm_policy.rests_on(one) + (f": {one['why']}" if one["why"] else "")
 
 
 # ---- build -----------------------------------------------------------------------------------------------------------
@@ -322,9 +344,10 @@ def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: 
         own = step(json.loads(path.read_text())) if path.exists() else None
         for g in GAINS:
             cands = [r for r in reached if r["name"] == name and r["gain_target"] == g]
-            for pol, (c, k) in policies(params).items():
-                at = base | {"gain_target": g, "policy": pol, "c_gates": finite(c), "k_bits": k}
-                rows.append(labelled(at | standard(own, path, c, k, runs.get(name)), pol))
+            for pol, (c, k, bits) in policies(params).items():
+                at = base | {"gain_target": g, "policy": pol, "c_gates": finite(c), "k_bits": bits}
+                label = policy_label(pol, k, bits)
+                rows.append(labelled(at | standard(own, path, c, k, runs.get(name)), label))
                 best, bases = None, {}
                 for x in cands:
                     key = checkpoint(x["record"])
@@ -363,7 +386,7 @@ def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: 
                         f"{len(cands)} reached ({count})" + (f"; on {off[1]} the products term is {off[0]}" if off
                                                              else "") +
                         ": a row that is unmeasured, rests on a stub or is partial is never the least S")}
-                rows.append(labelled(at | row, pol))
+                rows.append(labelled(at | row, label))
     p = {"id": PANEL, "title": "Red teaming by model size: standard training's rho and the frontier's least S = p*rho",
          "kind": "table", "updated_at": stamp,
          "source": f"python islands/ladder-v3/size_scaling.py build (training's slowdown code {VERSION}; frontier: the "
@@ -378,10 +401,10 @@ def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: 
 
 def note() -> str:
     return (f"Per size, gain and policy ({UNIT}): standard training (traced at full size, p = 1) and the measured "
-            "frontier's least S = p*rho over reached attacks, never a partial, stub or unmeasured row. console: "
-            "the 45M session; grown: the size's own 4,096-in 1,024-out session at k 65,536; serving: k 1.6e6, its own "
-            "100,000-in session. rho: training's slowdown code's published rho, rho_products its products term. 1B: "
-            "the console's reference size, no start.")
+            "frontier's least S = p*rho over reached attacks, never a partial, stub or unmeasured row. Headline: grown, "
+            "the size's own 4,096-in 1,024-out session at k 65,536 (16-bit ids; rho at its packed k_bits is at least "
+            "this). Sensitivities: console (the 45M session), serving (k 1.6e6, its own 100,000-in session). 1B: the "
+            "console's reference size, no start.")
 
 
 def main(argv=None) -> int:
