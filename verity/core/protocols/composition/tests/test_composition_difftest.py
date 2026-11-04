@@ -161,9 +161,10 @@ def _statement(member: str) -> dict:
 #: a session whose coins are no tree the challenger logged, coins on another window or none; and in the per-member form
 #: (`_per_member`), a statement naming no member or of no session, two members' units meeting, a member's units or keys
 #: malformed, the evidence's proofs in the other form than the params', and proved units no session proved. A statement's
-#: other refusals (a member twice, statements out of the members' order, a circuit or public file in no blob) come after
-#: its one session's coins are held to a tree the challenger logged, outside the mirror: sampled proofs' difftest holds
-#: them on the challenger's trees.
+#: other refusals (a member twice, statements out of the members' order, a circuit or public file in no blob, a public
+#: file whose units are not exactly its member's) come after its one session's coins are held to a tree the challenger
+#: logged, outside the mirror: sampled proofs' difftest holds them on the challenger's trees, and its `public_units`
+#: piece holds the units rule to `proofs.units_exactly`.
 V2_BREAKS = {
     "v1": _v1,
     "v1-evidence": lambda a: {**a, "evidence": _v1(a)["evidence"]},

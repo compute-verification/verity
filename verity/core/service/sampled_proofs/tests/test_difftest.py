@@ -58,8 +58,8 @@ from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.profile import Bernoulli, Stratified, Stratum
 from verity.core.protocols.sampled_proofs import service
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
-                                                            partition as P, produced as PD, registered as G,
-                                                            registration as R)
+                                                            partition as P, produced as PD, proofs as PF,
+                                                            registered as G, registration as R)
 from verity.core.protocols.sampled_proofs.challenger import (COIN_BYTES, NO_TREE, SHARED_TREE, UNUSED_TREE,
                                                              ChallengerKey, CoinError)
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, coins_reason, draw_coins, draw_first
@@ -952,6 +952,19 @@ def pop_order(j):
         raise RuntimeError(f"the strategy drew a descriptor this file has no program for: {sha[:16]}")
     ok = P.in_order(PROGRAMS[sha], query, n)
     return {"layout": ok, "ranges": ok}
+
+
+def public_units(j):
+    """Whether a public file's ``indices`` are exactly the ``[lo, hi)`` ranges ``units``' units, ascending
+    (`proofs.units_exactly`, `PublicUnits.exactly`)."""
+    j = _json(j)
+    units, indices = (j.get("units"), j.get("indices")) if isinstance(j, dict) else (None, None)
+    if not (isinstance(units, list)
+            and all(isinstance(r, list) and len(r) == 2 and all(map(_nat, r)) and r[0] < r[1] for r in units)):
+        raise D.Reject("units is not a list of [lo, hi] with 0 <= lo < hi")
+    if not (isinstance(indices, list) and all(map(_nat, indices))):
+        raise D.Reject("indices is not a list of natural numbers")
+    return {"exactly": PF.units_exactly(units, indices)}
 
 
 def bound(j):
@@ -2082,6 +2095,14 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
 
 #: `OneStageZk.membersHeld`'s reason for a statement of other than exactly one session.
 ONE_SESSION = "a statement is exactly one session on live coins, never retried, and an undrawn member has no statement"
+#: `OneStageZk.runFrom`'s reason for a member's statement whose public file's units are not exactly its member's.
+NOT_EXACTLY = ("units: the public file's units.indices are not exactly the member's units, ascending: slot i of its "
+               "table is the member's i-th unit")
+
+
+def _public_file(*units: int) -> bytes:
+    """A public file's header line naming ``units``, all `OneStageZk.runFrom` reads before a session runs."""
+    return D.canonical({"units": {"indices": list(units)}}).encode() + b"\n"
 
 
 def test_v2_per_member_runs_each_statement_on_its_members_inputs(server, server_v2):
@@ -2092,21 +2113,23 @@ def test_v2_per_member_runs_each_statement_on_its_members_inputs(server, server_
     proofs per member: rejected by the coin trees' check across statements (a tree no statement's session used, or one
     serving two members' statements), by the session's own verdict on its member's circuit (another member's circuit no
     blob holds is not read), and for a statement naming a member the parameters don't, a statement of no session (an
-    undrawn member has no statement), a circuit no blob holds, proofs in the other form than the parameters', or proved
-    units the statements didn't prove. A unit proved outside its member's units and the refusal of what would accept (`MULTI_REFUSED`) need an
-    accepted session: `within`'s guards hold the first, `stage_zk_one_statement` proves the second."""
+    undrawn member has no statement), a circuit no blob holds, a public file whose units are not exactly its member's
+    in ascending order (shifted, reordered, short, another member's, or no units header: `PublicUnits.exactly`, the
+    `public_units` piece), proofs in the other form than the parameters', or proved units the statements didn't prove.
+    The refusal of what would accept (`MULTI_REFUSED`) needs an accepted session: `stage_zk_one_statement` proves it."""
     s, law = SETUPS[3], {"k": 2, "law": "subset"}
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
     rng = random.Random("v2-members")
-    circuits, public = {"m0": b"not a circuit file", "m1": b"not another circuit file"}, b"not a public file"
+    circuits = {"m0": b"not a circuit file", "m1": b"not another circuit file"}
+    publics = {"m0": _public_file(0, 1), "m1": _public_file(2, 3, 4)}
     members = {"m0": {"circuit": _sha(circuits["m0"]), "registered": None, "units": [[0, 2]]},
                "m1": {"circuit": _sha(circuits["m1"]), "registered": None, "units": [[2, 5]]}}
     ch, _, base, p1 = _challenger_audit(server, rng, s, law, rec, 1)
     _, _, base0, p0 = _challenger_audit(server, rng, s, law, rec, 0)
     p1, p0 = (p | {"proofs": {"members": members}} for p in (p1, p0))
     record = D.canonical(ch.trees[0].record).encode()
-    blobs = [circuits["m0"].hex(), circuits["m1"].hex(), public.hex(), record.hex()]
+    blobs = [circuits["m0"].hex(), circuits["m1"].hex(), publics["m0"].hex(), publics["m1"].hex(), record.hex()]
 
     def run(e, p=p1, blobs_=blobs):
         case = {"blobs": list(blobs_), "commitment": _hex(rec), "evidence": _hex(e), "params": p}
@@ -2116,11 +2139,12 @@ def test_v2_per_member_runs_each_statement_on_its_members_inputs(server, server_
     def sessions(names):
         return [{"name": n, "record": _sha(record), "reps": {}} for n in names]
 
-    def statements(*sts):
-        return {"statements": [{"member": m, "public": _sha(public), "sessions": sessions(ns)} for m, ns in sts]}
+    def statements(*sts, pubs=publics):
+        return {"statements": [{"member": m, "public": _sha(pubs.get(m, b"")), "sessions": sessions(ns)}
+                               for m, ns in sts]}
 
-    def per_member(*sts, b=base):
-        return b | {"proofs": statements(*sts), "sessions": [n for _, ns in sts for n in ns]}
+    def per_member(*sts, b=base, pubs=publics):
+        return b | {"proofs": statements(*sts, pubs=pubs), "sessions": [n for _, ns in sts for n in ns]}
 
     assert run(per_member()) == (
         "reject", f"proofs: the challenger's release log shows 1 coin trees and the sessions use 0: {UNUSED_TREE}")
@@ -2129,6 +2153,12 @@ def test_v2_per_member_runs_each_statement_on_its_members_inputs(server, server_
         "reject", "verdict flock-verify/s did not accept")
     got = run(per_member(("m1", ["s"])), blobs_=blobs[:1] + blobs[2:])
     assert got[0] == "reject" and got[1].startswith("proofs: member m1: circuit: no blob has the SHA-512"), got
+    for pub, why in ((_public_file(1, 2), NOT_EXACTLY), (_public_file(1, 0), NOT_EXACTLY),
+                     (_public_file(0), NOT_EXACTLY), (_public_file(0, 1, 2), NOT_EXACTLY), (publics["m1"], NOT_EXACTLY),
+                     (b"not a public file", "the public file's header is not JSON"),
+                     (b'{"units":{}}\n', "the public file's header names no units.indices")):
+        assert run(per_member(("m0", ["s"]), pubs={"m0": pub}), blobs_=[*blobs, pub.hex()]) == (
+            "reject", f"proofs: member m0: {why}"), pub
     assert run(per_member(("m0", ["s"]), ("m1", ["t"]))) == (
         "reject", f"proofs: session t's coins are not the challenger's: {SHARED_TREE}")
     assert run(per_member(("m2", ["s"]))) == ("reject", "proofs: member m2: the parameters name no such member")
@@ -2136,7 +2166,7 @@ def test_v2_per_member_runs_each_statement_on_its_members_inputs(server, server_
         "reject", f"proofs: member m0: its statement has 0 sessions: {ONE_SESSION}")
     assert run(per_member(b=base0), p=p0) == (
         "reject", "proofs: the units the sessions proved are not the evidence's proved_units")
-    assert run(base | {"proofs": {"public": _sha(public), "sessions": sessions(["s"])}, "sessions": ["s"]}) == (
+    assert run(base | {"proofs": {"public": _sha(publics["m0"]), "sessions": sessions(["s"])}, "sessions": ["s"]}) == (
         "reject", "proofs: the evidence's proofs are one statement's (public, sessions) and the parameters' per member "
                   "(members)")
     assert run(per_member(("m0", ["s"])), p=p1 | {"proofs": {"circuit": members["m0"]["circuit"], "registered": None}}) == (
@@ -2144,7 +2174,7 @@ def test_v2_per_member_runs_each_statement_on_its_members_inputs(server, server_
                   "(circuit, registered)")
     assert run(per_member(("m0", ["s"]), ("m1", ["t"])) | {"sessions": ["t", "s"]}) == (
         "reject", "evidence: proofs: the sessions are not the evidence's sessions, in order")
-    one = {"public": _sha(public), "sessions": []}
+    one = {"public": _sha(publics["m0"]), "sessions": []}
     for proofs_, why in (({"statements": [one | {"member": ""}]}, "proofs: a statement's member is not a member's name"),
                          ({"statements": [one]}, "the keys of a statement of the proofs are not member, public, sessions"),
                          ({"statements": {}}, "proofs: statements is not a list")):
@@ -2175,16 +2205,18 @@ def test_v2_per_member_holds_its_statements_to_the_members_order_and_one_session
     s, law = SETUPS[3], {"k": 2, "law": "subset"}
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)
-    circuits, public = {"m2": b"not a circuit file", "m10": b"not another circuit file"}, b"not a public file"
+    circuits = {"m2": b"not a circuit file", "m10": b"not another circuit file"}
+    publics = {"m2": _public_file(0, 1), "m10": _public_file(2, 3, 4)}
     members = {"m2": {"circuit": _sha(circuits["m2"]), "registered": None, "units": [[0, 2]]},
                "m10": {"circuit": _sha(circuits["m10"]), "registered": None, "units": [[2, 5]]}}
     ch, _, base, p = _challenger_audit(server, random.Random("v2-members-order"), s, law, rec, 2)
     p = p | {"proofs": {"members": members}}
     records = [D.canonical(t.record).encode() for t in ch.trees]
-    blobs = [circuits["m2"].hex(), circuits["m10"].hex(), public.hex(), *(r.hex() for r in records)]
+    blobs = [circuits["m2"].hex(), circuits["m10"].hex(), *(b.hex() for b in publics.values()),
+             *(r.hex() for r in records)]
 
     def run(*sts):
-        statements = [{"member": m, "public": _sha(public),
+        statements = [{"member": m, "public": _sha(publics[m]),
                        "sessions": [{"name": n, "record": _sha(records[t]), "reps": {}} for n, t in ss]} for m, ss in sts]
         e = base | {"proofs": {"statements": statements}, "sessions": [n for _, ss in sts for n, _ in ss]}
         case = {"blobs": list(blobs), "commitment": _hex(rec), "evidence": _hex(e), "params": p}
@@ -2692,6 +2724,22 @@ SLOTS = D.Port(PIECES, "slots", slots, st.one_of(selections(), selections(), cha
 POP_ORDER = D.Port(PIECES, "pop_order", pop_order, st.one_of(*[st.builds(
     lambda part, dn: {"population": max(0, part[2] + dn), "program": part[0], "query": part[1]}, partitions(),
     st.sampled_from([0, 0, 0, -1, 1]))] * 3, JSON), package=PACKAGE)
+
+
+def _units_case(units: list, how: int, x: int) -> dict:
+    """``units`` with their own units ascending, or those shifted, reversed, short of one, or with ``x`` added."""
+    want = [u for lo, hi in sorted(map(tuple, units)) for u in range(lo, hi)]
+    at = x % (len(want) + 1)
+    return {"indices": [want, [u + 1 for u in want], want[::-1], want[:-1], [*want, x], [*want[:at], x, *want[at:]]][how],
+            "units": units}
+
+
+PUBLIC_UNITS = D.Port(PIECES, "public_units", public_units, st.one_of(
+    *[st.builds(_units_case, st.lists(st.builds(lambda lo, n: [lo, lo + n], st.integers(0, 12), st.integers(1, 5)),
+                                      max_size=3), st.integers(0, 5), st.integers(0, 20))] * 2,
+    st.builds(lambda u, i: {"indices": i, "units": u}, st.lists(st.lists(st.integers(-1, 6), max_size=3), max_size=3),
+              st.lists(st.integers(-1, 6), max_size=6)),
+    JSON), package=PACKAGE)
 STRATA = st.lists(st.builds(lambda name, size, dk: {"k": max(0, size - dk), "name": name, "size": size},
                             st.sampled_from(["a", "b", "c", "unit"]), st.integers(0, 14), st.integers(0, 14)),
                   min_size=1, max_size=3, unique_by=lambda s: s["name"])
@@ -3372,7 +3420,7 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRAT
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (DESIGN, 300), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
-              (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300)]
+              (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300), (PUBLIC_UNITS, 300)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])

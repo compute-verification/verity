@@ -289,7 +289,9 @@ def _one_stage_evidence(rest: dict) -> dict:
 
 def _statement_check(p: dict, own: dict, st: dict, held: dict) -> str | None:
     """`OneStageZk.runFrom`'s refusals before a statement's sessions: registered values read without the verifier's
-    registered file, then a circuit or public file no blob holds."""
+    registered file, then a circuit or public file no blob holds. Its refusal of a member's public file whose units are
+    not exactly the member's (`proofs.units_exactly`) follows them, out of reach here: a member's statement is exactly
+    one session, which is outside the mirror."""
     if own["registered"] is None and p["reads_registered"]:
         return "registered: the program reads registered values and the verifier holds no registered reads"
     if own["circuit"] not in held or st["public"] not in held:

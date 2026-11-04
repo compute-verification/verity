@@ -39,10 +39,11 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   (`membersHeld`): a statement naming no member of the parameters or one an earlier statement named, statements out of
   the members' order (by first unit, the registration's: one order, one statement), or a statement of other than
   exactly one session (one session on live coins, never retried; none proves nothing), rejects. Then each statement is
-  verified as the one statement is,
-  on its member's circuit and registered file, after the statements before it, so no coin tree serves two statements.
-  Its proofs in the other form than the parameters', or a session proving a unit outside its member's units, rejects;
-  the evidence's `proved_units` are held to the union of the statements'. A stratum may span members, so a member's
+  verified as the one statement is, on its member's circuit and registered file, after the statements before it, so no
+  coin tree serves two statements, and its public file's units (`units.indices`) must be exactly its member's units,
+  ascending (`PublicUnits.exactly`), so every unit its sessions prove is its member's. Its proofs in the other form than
+  the parameters', or a public file of other units, rejects; the evidence's `proved_units` are held to the union of the
+  statements'. A stratum may span members, so a member's
   drawn count may be zero and it has no statement. Only a stratum's `k` is not read here: a statement is one table
   (`inputsOf`'s `count`), so no stratum's draw is split over a statement's tables. Every acceptance in this form is
   then refused (`MULTI_REFUSED`) until the guarantee for a sample over several members' statements is in the lock.
@@ -52,6 +53,7 @@ Without blobs (`toProtocol`) every check rejects: no blob holds the circuit file
 import CoreProtocol.Blobs
 import SampledProofs.OneStage
 import SampledProofs.ChallengerTrees
+import SampledProofs.PublicUnits
 import Flock
 
 namespace SampledProofs.OneStageZk
@@ -290,15 +292,10 @@ def programDigest (b : ByteArray) : Option String := do
     | x => x
   return Flock.hexOf (Flock.Sha512.hash (← (Flock.canon bare).toOption).toUTF8)
 
-private def headerLine (b : ByteArray) : ByteArray := Id.run do
-  for i in [0:b.size] do
-    if b[i]! == 10 then return b.extract 0 i
-  return b
-
 /-- `one_stage.proofs.proved_units`: the public file's unit indices (`units.indices`) of the instances the session's
 record drew (`unit_draw.units`), ascending. -/
 def provedUnits (pubB : ByteArray) (record : String) : V (Array Nat) := do
-  let some line := String.fromUTF8? (headerLine pubB) | throw "the public file's header is not UTF-8"
+  let some line := String.fromUTF8? (PublicUnits.headerLine pubB) | throw "the public file's header is not UTF-8"
   let h ← Json.parse line
   let .arr is := getD (getD h "units") "indices" | throw "the public file's header names no units.indices"
   let .arr ds := getD (getD (← Json.parse record) "unit_draw") "units" | throw "the record's unit_draw names no units"
@@ -481,8 +478,10 @@ def step (I : Flock.Witness.Inputs) (rd : Reads) (bs : Core.Blobs) (scope ksFile
 the sessions `r` holds, each session set up at its own record's draw: every session's verdict, the units the accepted
 ones proved and whether all accepted. A refusal for what `proofs.verify` refuses: registered values read without the
 verifier's registered file, a file no blob holds, or an accepted session naming another program than the partition
-object's. -/
-def runFrom (p : Own) (pub : String) (sessions : Array RunFiles) (bs : Core.Blobs) (r : Run) : V Run := do
+object's; and, given a member's units `units?`, a public file whose `units.indices` are not exactly them, ascending
+(`PublicUnits.exactly`), before any session. -/
+def runFrom (p : Own) (pub : String) (sessions : Array RunFiles) (bs : Core.Blobs) (units? : Option (Array (Nat × Nat)))
+    (r : Run) : V Run := do
   let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
   (if tags0.plainLeaves then throw s!"{tags0.name}: a statement with plain SHA-512 leaves: --zk's hiding needs hm96 leaves"
     else pure () : V Unit)
@@ -492,6 +491,10 @@ def runFrom (p : Own) (pub : String) (sessions : Array RunFiles) (bs : Core.Blob
     else pure () : V Unit)
   let circuitB ← bs.get p.circuit "circuit"
   let pubB ← bs.get pub "public file"
+  if let some us := units? then
+    if !PublicUnits.exactly us (← PublicUnits.unitIndices pubB) then
+      throw ("units: the public file's units.indices are not exactly the member's units, ascending: slot i of its " ++
+        "table is the member's i-th unit")
   let I := inputsOf tags0 p circuitB pubB bs
   let rd := { (← readsOf p.registered) with declared := ← declaredOf p bs }
   let tags := Flock.Witness.zkTags I
@@ -512,10 +515,7 @@ def provedHeld (want : Option (Array Nat)) (r : Run) : V Run :=
 /-- One statement's run (`runFrom`, after no session), its proved units held to `provedUnits?` (`provedHeld`). -/
 def run (p : Own) (pub : String) (sessions : Array RunFiles) (provedUnits? : Option (Array Nat)) (bs : Core.Blobs) :
     V Run := do
-  provedHeld provedUnits? (← runFrom p pub sessions bs ⟨#[], #[], #[], true⟩)
-
-/-- Whether unit `u` is in one of the ranges `rs`. -/
-def within (rs : Array (Nat × Nat)) (u : Nat) : Bool := rs.any fun (lo, hi) => lo ≤ u && u < hi
+  provedHeld provedUnits? (← runFrom p pub sessions bs none ⟨#[], #[], #[], true⟩)
 
 /-- A member's first unit, its lowest. Members' units are disjoint, so it orders them, and in the registration's order:
 member `k`'s units start at its base, which grows with `k`. -/
@@ -544,18 +544,15 @@ def membersHeld (ms : Array Member) (sts : Array StatementFiles) : V (Array Memb
   pure held
 
 /-- The per-member form's run (module docstring, **per member**): the statements' structure held (`membersHeld`), then
-each statement on its member's own inputs (`runFrom`) after the statements before it, so `step`'s coin-tree keys are
-fresh across statements; a refusal when a statement proves a unit outside its member's units, and for what `runFrom`
-refuses; then the union of the statements' proved units held to the evidence's (`provedHeld`). -/
+each statement on its member's own inputs and units (`runFrom`) after the statements before it, so `step`'s coin-tree
+keys are fresh across statements and each statement's public file is exactly its member's units, which every unit its
+sessions prove is then (`provedUnits` reads them off that file); a refusal for what `runFrom` refuses; then the union
+of the statements' proved units held to the evidence's (`provedHeld`). -/
 def runMembers (ms : Array Member) (sts : Array StatementFiles) (want : Array Nat) (bs : Core.Blobs) : V Run := do
   let held ← membersHeld ms sts
   let mut r : Run := ⟨#[], #[], #[], true⟩
   for (st, m) in sts.zip held do
-    let name := m.name
-    let r' ← (runFrom m.own st.pub st.sessions bs r).mapError (s!"member {name}: {·}")
-    if let some u := (r'.proved.extract r.proved.size r'.proved.size).find? (!within m.units ·) then
-      throw s!"member {name}: its statement proved unit {u}, outside the member's units"
-    r := r'
+    r ← (runFrom m.own st.pub st.sessions bs (some m.units) r).mapError (s!"member {m.name}: {·}")
   provedHeld (some want) r
 
 /-- The evidence's statements run in the parameters' form: the one statement's (`run`), or each member's
@@ -673,7 +670,6 @@ def main (args : List String) : IO UInt32 := do
 #guard (provedUnits "{\"units\":{\"indices\":[7,3,9]}}\nrest".toUTF8 "{\"unit_draw\":{\"units\":[2,0]}}").toOption
   == some #[7, 9]
 #guard (provedUnits "{\"units\":{\"indices\":[7]}}".toUTF8 "{\"unit_draw\":{\"units\":[1]}}").toOption.isNone
-#guard within #[(0, 4), (8, 9)] 8 && !within #[(0, 4), (8, 9)] 4 && !within #[] 0
 
 private def memberJ (units : List (Nat × Nat)) : Json :=
   Json.mkObj [("circuit", Json.str ("".pushn 'c' 128)), ("registered", Json.null),
