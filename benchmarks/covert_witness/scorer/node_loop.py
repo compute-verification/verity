@@ -36,7 +36,7 @@ from research import remote  # noqa: E402
 import scorer as S  # noqa: E402
 import v1cycle as V  # noqa: E402
 
-NODE = os.environ.get("TE_NODE", "vy-nebius-cpu-9")
+NODE = os.environ.get("TE_NODE", "vy-nebius-cpu-7")
 #: the refresh's state on the node (refresh-node.sh's K) and the research repository whose objects its first push borrows
 K = os.environ.get("TE_NODE_STATE", "/workspace/research/lanes/training/te-scorer")
 BORROW = "/workspace/research/git/verity.git/objects"
@@ -253,7 +253,7 @@ def finish(run: str, until: float) -> dict:
         shutil.copyfile(vm / "te-night2-efficiency.md", ARTIFACTS / "te-night2-efficiency.md")
     stamp = (vm / "stamp").read_text().strip() if (vm / "stamp").exists() else None
     label = None
-    if art:
+    if art and cycle:
         r = subprocess.run(["research", "data", "label", art, "note",
                             f"the scorer's refresh {stamp} on {NODE} ({run}): out/tables, te_core.rescore's tables and "
                             f"algorithm-policy's; out/fb, frontier-branches (benchmarks/covert_witness/scorer/"

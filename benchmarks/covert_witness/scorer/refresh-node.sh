@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The scorer's refresh as a research run on a CPU node (the agent VM only edits); node_loop.py launches it:
-#   research run --on vy-nebius-cpu-9 --pool research --cwd source --store-read [--send served.json --send vm-put.log]
+#   research run --on vy-nebius-cpu-7 --pool research --cwd source --store-read [--send served.json --send vm-put.log]
 #       -- bash benchmarks/covert_witness/scorer/refresh-node.sh
 # Its state is kept on the node in K ($TE_NODE_STATE): repo.git, the bare repository node_loop.py pushes the VM's refs
 # into (the records' commits, origin's branches); wt/, its worktrees (TE40_WT, the re-score's, the ingest's and the pin's
