@@ -247,7 +247,7 @@ def warmup(a: argparse.Namespace, serve_dir: Path, ps: list[list[int]] | None = 
            clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], object] = time.sleep) -> list[dict]:
     """``--warmup``'s requests (the module docstring), each its user, finish and seconds; or `stop_prompt`'s, `ps`
     until one's answer finishes on a stop. `served_session.Refused` when one fails or serve-openai hasn't recorded
-    every one's window closed within `WARMUP_CLOSE_S`."""
+    every one's execution phase closed within `WARMUP_CLOSE_S`."""
     flag = "--warmup" if ps is None else "--stop-prompt"
     ps = SS.prompts(a.warmup, a.prompt_ids, a.vocab, secrets.token_bytes(32)) if ps is None else ps
     tag, done = secrets.token_hex(4), []
@@ -269,7 +269,7 @@ def warmup(a: argparse.Namespace, serve_dir: Path, ps: list[list[int]] | None = 
     users, until = {d["user"] for d in done}, clock() + WARMUP_CLOSE_S
     while left := users - {r.get("user") for r in _lines(serve_dir / SS.USERS)}:
         if clock() > until:
-            raise SS.Refused(f"{flag}: serve-openai recorded no closed window of {sorted(left)} in "
+            raise SS.Refused(f"{flag}: serve-openai recorded no closed execution phase of {sorted(left)} in "
                              f"{serve_dir / SS.USERS} within {WARMUP_CLOSE_S} s")
         sleep(1)
     return done

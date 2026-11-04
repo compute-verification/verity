@@ -1011,8 +1011,8 @@ counts read no advice: the step-indexed scan (`ingress_scan`, `egress`, which `b
 proves, outside this protocol) renders each connection's egress as n + 1 cells, n its request Program's outputs
 (`SlotEntry_v1`: up to `max_tokens` and the first registered stop id, that one included), and an egress bucket's proof
 opens only on the network certifier's row, so a lane a cell longer or shorter, or a `FAIL`, is refused at its bucket.
-On a served link N2 is to hold each window's egress counts to the ingress counts and the advice; no N2 unit does yet.
-The advice is the leak, charged at its registered width ℓ_a,j in the network bound.
+On a served link N2 is to hold each execution phase's egress counts to the ingress counts and the advice; no N2 unit
+does yet. The advice is the leak, charged at its registered width ℓ_a,j in the network bound.
 
 This section attacks that claim through its parts: the advice codec (`advice.py`, with `encode`,
 `decode` and `bits`), the I/O tie unit (`io_tie`) and the compiler

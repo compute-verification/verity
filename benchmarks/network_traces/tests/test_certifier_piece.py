@@ -796,8 +796,8 @@ def test_the_pick_passes_over_the_warm_ups_windows_for_the_groups(tmp_path):
 class _Endpoint(http.server.BaseHTTPRequestHandler):
     """serve-openai's completions as the warm-up sees them: each answered whole, finishing on a stop for the requests
     numbered in ``stops`` and on the length otherwise, and recorded in the serve dir's request_users.jsonl first
-    (serve-openai records a request there once its window has closed) unless ``record`` is off; each request noted with
-    whether the gate had been asked by then."""
+    (serve-openai records a request there once its execution phase has closed) unless ``record`` is off; each request
+    noted with whether the gate had been asked by then."""
 
     def do_POST(self):
         s = self.server
@@ -891,7 +891,7 @@ def test_a_warm_up_that_fails_or_isnt_recorded_closed_refuses_the_front_before_t
     assert not (tmp_path / "request").exists() and not (out / "warmup.json").exists()
     endpoint.status, endpoint.record, clock = 200, False, _Clock()
     a = argparse.Namespace(port=port, warmup=1, prompt_ids=CP.PROMPT_IDS, vocab=128000, tokens=CP.TOKENS)
-    with pytest.raises(CP.SS.Refused, match="recorded no closed window of .'warmup-"):
+    with pytest.raises(CP.SS.Refused, match="recorded no closed execution phase of .'warmup-"):
         CP.warmup(a, serve, clock=clock, sleep=clock.sleep)
     assert clock.t > CP.WARMUP_CLOSE_S and not (tmp_path / "request").exists()
 
