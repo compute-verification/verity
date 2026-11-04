@@ -100,6 +100,11 @@ def test_the_served_draw_weighs_mixed_linears_by_the_cited_statements_wref():
     assert Fraction(weight[(1, 0, 0)], weight[(0, 0, 0)]) == Fraction(40 * 64, 64 * 64) * lean(1, 64, 14336) / 64 / (lean(1, 128, 4096) / 128)
 
 
+def formed(k: int) -> tuple[int, list[int], int]:
+    """A row's forming (α, x, β) at α = β = 1 and x = 0, whose elements are not salt-dead (the ends are ±e4m3(44·88))."""
+    return 0x3F800000, [0] * k, 0x3F800000
+
+
 def test_tile_cap_is_the_cells_share_of_the_units_credit():
     """The per-tile statement's cap (`Tile.lean`'s `pearlCTiles`): ρ·creditOf(unit at |K|)·tileShare, with tileShare =
     |rows|·|cols|/(m·n).  A row's own terms (forming, A′·F_B) count once across its row band, so a unit's tile caps sum to
@@ -112,7 +117,7 @@ def test_tile_cap_is_the_cells_share_of_the_units_credit():
         total = Fraction(0)
         for t in scheme.tiles(s):
             rows, cols = r.credited(t)
-            _, cap = CW.tile_cap(scheme, r, [[0] * s.k] * len(rows), [[0] * s.k] * len(cols))
+            _, cap = CW.tile_cap(scheme, r, [[0] * s.k] * len(rows), [[0] * s.k] * len(cols), [formed(s.k)] * len(rows))
             assert cap == scheme.cap * scheme.credit_of(Shape(s.m, kept, s.n)) * Fraction(len(rows) * len(cols), s.m * s.n)
             assert cap < scheme.cap * scheme.credit_of(Shape(len(rows), kept, len(cols)))
             total += cap
@@ -122,7 +127,7 @@ def test_tile_cap_is_the_cells_share_of_the_units_credit():
     tile = next(t for t in S.tiles(r.matmul.shape) if (t.rows[0], t.cols[0]) == (0, 16))
     rows, cols = r.credited(tile)
     assert (len(rows), len(cols)) == (15, 15)
-    assert CW.tile_cap(S, r, [[0] * K] * 15, [[0] * K] * 15)[1] == S.cap * CW.cell_credit(S, r) * 15 * 15
+    assert CW.tile_cap(S, r, [[0] * K] * 15, [[0] * K] * 15, [formed(K)] * 15)[1] == S.cap * CW.cell_credit(S, r) * 15 * 15
 
 
 def test_records_bind_every_field_and_the_splits():

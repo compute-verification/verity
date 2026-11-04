@@ -2077,7 +2077,7 @@ def test_served_debit_records_the_tile_rules_own_debit_and_cap(honest_pass, tmp_
     path, s, epoch, prover, tr, splits, records = honest_pass
     out = tmp_path / "out"
     assert SD.main([str(path), *coins_args(path), "--tiles", "3", "--jobs", "1", "--out", str(out)]) == 0
-    assert CW._debit_cap is SD._DEBIT_CAP and CW.D.chain_debit is SD._CHAIN_DEBIT
+    assert CW._debit_cap is SD._DEBIT_CAP and CW.D.tile_debit is SD._TILE_DEBIT
     (got,) = json.loads((out / "summary.json").read_text())["passes"]
     assert got["scheme"] == s.name and got["cap"] == str(s.cap) and got["openings_failed"] == 0
     assert set(got["strata"]) == {"m32-k128-n16", "m16-k128-n32"} and got["tiles_total"] == tr.commitment.count
@@ -2099,7 +2099,8 @@ def test_served_debit_records_the_tile_rules_own_debit_and_cap(honest_pass, tmp_
         assert {key: t[key] for key in t if key.startswith("share")} == {"share": float(debit / credit)}
         pos_a, pos_b = {i: p for p, i in enumerate(ref.tile.rows)}, {j: p for p, j in enumerate(ref.tile.cols)}
         a_codes, b_codes = [ops.a.codes[pos_a[i]] for i in rows], [ops.b.codes[pos_b[j]] for j in cols]
-        assert (t["atoms"], t["later_zero_promotions"]) == CW.D.chain_debit(a_codes, b_codes, s.device)
+        formed = [(ops.a.alpha[pos_a[i]], ops.a.x[pos_a[i]], ops.a.beta[pos_a[i]]) for i in rows]
+        assert (t["atoms"], t["later_zero_promotions"], t["forming_elements"]) == CW.D.tile_debit(a_codes, b_codes, formed, s.device)
         assert t["ok"] == (CW.check_opened(s, rec, ref.tile, a, b, ops) is None)
     assert got["later_zero_promotions"] == sum(t.get("later_zero_promotions", 0) for t in tiles)
 
@@ -2297,6 +2298,8 @@ def test_forming_headroom_on_a_recorded_line(tmp_path):
     cell = 12288 + Fraction(12288 * 1047, 125 * 128) + 96 + 128 + 120 - Fraction(1047, 125)
     want = ((cell * 2048 / 1000 - (32 + Fraction(1047, 500)) * 14) * 4096 / (40 * 64)) / (32 * 12288)
     assert FH.dead_to_flip(line) == want and 0.1099 < want < 0.1100
+    with pytest.raises(ValueError, match="recorded with the forming term"):
+        FH.check_line(line | {"forming_elements": 0})
     out = tmp_path / "fh.json"
     assert FH.main([str(path), "--out", str(out)]) == 0
     doc = json.loads(out.read_text())
@@ -2449,6 +2452,36 @@ def test_the_batch_debit_is_the_scalar_debit_and_a_nan_code_is_the_scalars_rejec
         FT.chain_debit(a, b, s.device)
 
 
+def test_the_batch_tile_debit_is_the_scalar_tile_debit():
+    """`fast_tile.tile_debit` is `pearl_c_debit.tile_debit`, forming elements included: on rows with salt-dead elements
+    (accumulators past both ends' saturation, and at 0), a zero row whose every block every word flags, and a row whose
+    accumulator overflows, where both reject alike."""
+    FT, s = SD.FT, PPD.scheme_of(SCHEME)
+    rng, seen = np.random.default_rng(7), set()
+    one = 0x3F800000
+    for trial in range(6):
+        a, b = _debit_codes(rng, 3, 384, trial % 2 == 0), _debit_codes(rng, 4, 384, trial % 2 == 0)
+        a[1] = [0] * 384
+        mags = 10.0 ** rng.uniform(-3, 5, (3, 384)) * rng.choice((-1, 1), (3, 384))
+        x = [[int(w) for w in row.astype(np.float32).view(np.uint32)] for row in mags]
+        x[0][:7] = [0, 0x80000000, 1, 0x00800000, 0x3F000000, 0x45000000, 0xC5000000]
+        beta = [int(np.float32(v).view(np.uint32)) for v in rng.uniform(0.01, 2.0, 3)]
+        formed = [(one, x[i], beta[i]) for i in range(3)]
+        want = CW.D.tile_debit(a, b, formed, s.device)
+        assert FT.tile_debit(a, b, formed, s.device) == want
+        flags = [[CW.D.word_flags(r, c, s.device) for c in b] for r in a]
+        dead = [CW.D.salt_dead(*f, s.device) for f in formed]
+        assert want[:2] == CW.D.chain_debit(a, b, s.device) and want[2] == sum(
+            1 for i in range(3) for l in range(384) if dead[i][l] or all(f[l // 32] for f in flags[i]))
+        seen.add(0 < sum(dead[0]) < 384)
+    assert seen == {True}
+    formed[0] = (0x7F000000, x[0], beta[0])
+    with pytest.raises(Exception) as want:
+        CW.D.tile_debit(a, b, formed, s.device)
+    with pytest.raises(type(want.value), match=str(want.value)):
+        FT.tile_debit(a, b, formed, s.device)
+
+
 def test_the_batch_debit_word_by_word_is_each_words_scalar_debit():
     """`fast_tile.word_debits` is `pearl_c_debit.word_debit` on every word, and its sums `chain_debit`'s on any rows and
     columns, so the remedy's row and column debits are the verifier's."""
@@ -2478,20 +2511,24 @@ def test_the_batch_forms_encode_and_check_a_tile_as_the_scalar_ones():
 
     def run():
         ops = s.encode(ctx, s.noise(ctx), a, b, tile)
-        return ops, s.checked(ctx, ops), CW.D.chain_debit(ops.a.codes, ops.b.codes, s.device)
+        formed = list(zip(ops.a.alpha, ops.a.x, ops.a.beta))
+        return (ops, s.checked(ctx, ops), CW.D.chain_debit(ops.a.codes, ops.b.codes, s.device),
+                CW.D.tile_debit(ops.a.codes, ops.b.codes, formed, s.device))
 
-    before = (C.form_v1, C.gram, C.peel_factors_a, C.peel_factors_b, C._basis, CW.D.chain_debit, type(s).checked, C.blake3)
+    debits = (CW.D.chain_debit, CW.D.tile_debit)
+    before = (C.form_v1, C.gram, C.peel_factors_a, C.peel_factors_b, C._basis, *debits, type(s).checked, C.blake3)
     undo = FT.install(s)
-    assert C.form_v1 is FT.form_v1 and CW.D.chain_debit is FT.chain_debit
+    assert C.form_v1 is FT.form_v1 and (CW.D.chain_debit, CW.D.tile_debit) == (FT.chain_debit, FT.tile_debit)
     fast = run()
     undo()
-    assert (C.form_v1, C.gram, C.peel_factors_a, C.peel_factors_b, C._basis, CW.D.chain_debit, type(s).checked, C.blake3) == before
+    debits = (CW.D.chain_debit, CW.D.tile_debit)
+    assert (C.form_v1, C.gram, C.peel_factors_a, C.peel_factors_b, C._basis, *debits, type(s).checked, C.blake3) == before
     ref = run()
     for side in ("a", "b"):
         for field in ("codes", "alpha", "beta", "s", "rho", "ep", "x"):
             assert getattr(getattr(fast[0], side), field) == getattr(getattr(ref[0], side), field), (side, field)
     assert (fast[0].pa, fast[0].pb) == (ref[0].pa, ref[0].pb)
-    assert (fast[1].c, fast[1].u) == (ref[1].c, ref[1].u) and fast[2] == ref[2]
+    assert (fast[1].c, fast[1].u) == (ref[1].c, ref[1].u) and fast[2:] == ref[2:]
     with pytest.raises(ValueError):
         FT.install(PPD.scheme_of("pearl-c-sm120-unpromoted-v1-h3"))
 
@@ -2532,7 +2569,7 @@ def test_served_debits_share_is_the_tile_rules_debit_over_its_rev1_credit():
     rec = PW.UnitRecord(Matmul(0, shape, 0), shape.m, shape.k, (), ())
     codes = lambda r: [[0] * shape.k] + [[int(c) for c in rng.integers(0, 0x70, shape.k) | (rng.integers(0, 2, shape.k) << 7)]
                                          for _ in range(r - 1)]
-    debit, cap = CW.tile_cap(s, rec, codes(rows), codes(cols))
+    debit, cap = CW.tile_cap(s, rec, codes(rows), codes(cols), [(0x3F800000, [0] * shape.k, 0x3F800000)] * rows)
     credit = Fraction(s.credit_of(Shape(1, shape.k, shape.n)), shape.n) * rows * cols
     assert s.first_adds(Shape(1, shape.k, shape.n)) == s.prices.fadd * shape.n > 0 and debit > 0
     got = SD.tile_numbers(s, debit, cap)

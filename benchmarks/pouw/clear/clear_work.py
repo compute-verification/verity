@@ -22,8 +22,9 @@ Pearl-C prover writes, through the clear audit (`clear_audit`).  This directory 
   - filler rows are zero;
   - every opened row is zero past |K| (F7);
   - credited rows pass the per-row rules, and excluded rows fail them;
-  - the debit replayed over the credited words (`pearl_c_debit`) is at most ρ times the credited cells' credit, their
-    share of the unit's `creditDevRev1` (F1; `tile_cap`);
+  - the debit replayed over the credited words (`pearl_c_debit`), their flagged atom-words, later +0 promotions and P3's
+    forming elements (fs·|cols|/n each), is at most ρ times the credited cells' credit, their share of the unit's
+    `creditDevRev1` (F1; `tile_cap`);
   - under a hashing format with the row cap (-h3, `row_cap`), so is each credited A row's debit over the credited columns,
     at most ρ times its cells' credit (`TTOutRowSeed.lean`'s (C2)), and at most 4ρ at Pearl-C's census ks below k_min
     (`row_cap_multiple`, `pearlCTilesDevRev1RowCapAt`), the tile's cap staying ρ.
@@ -199,15 +200,17 @@ def row_passes(words: Sequence[int]) -> bool:
     return P.f32_of_bits(rho) * P.f32_of_bits(alpha) >= P.SIGMA_MIN and C.live_row(words)
 
 
-def tile_cap(scheme: C.PearlC, record: UnitRecord, a_codes: Sequence[Sequence[int]], b_codes: Sequence[Sequence[int]]
-             ) -> tuple[Fraction, Fraction]:
-    """(debit, cap) over credited words given as their A′ and B̃ code rows: the replayed debit, rev1's `tileDebitRev1`,
-    and ρ times the credited cells' credit, the unit's `creditDevRev1` at |K| times their share |rows|·|cols|/(m·n) (the
-    per-tile statement's `tileShare`, `pearlCTilesDevRev1`).  A row's own terms (its forming and A′·F_B) so count once
-    across its row band, a |cols|/n share in each tile, not whole in every tile."""
-    d = scheme.device
-    atoms, zeros = D.chain_debit(a_codes, b_codes, d)
-    debit = D.debit_units(atoms, D.forming_elements(a_codes, b_codes), scheme.prices, d, zeros=zeros)
+def tile_cap(scheme: C.PearlC, record: UnitRecord, a_codes: Sequence[Sequence[int]], b_codes: Sequence[Sequence[int]],
+             formed: Sequence[tuple[int, Sequence[int], int]]) -> tuple[Fraction, Fraction]:
+    """(debit, cap) over credited words given as their A′ and B̃ code rows, ``formed`` each A row's forming (α, x, β): the
+    replayed debit, rev1's `tileDebitRev1` (`pearl_c_debit.tile_debit`), and ρ times the credited cells' credit, the
+    unit's `creditDevRev1` at |K| times their share |rows|·|cols|/(m·n) (the per-tile statement's `tileShare`,
+    `pearlCTilesDevRev1`).  A row's own terms (its forming and A′·F_B) so count once across its row band, a |cols|/n share
+    in each tile, not whole in every tile: a debited forming element is fs·|cols|/n (`tileDebitDev`), so the test is
+    ρ⁻¹·(n·D + fs·|cols|·E) ≤ `credit_of(1, |K|, n)`·|rows|·|cols|."""
+    d, n = scheme.device, record.matmul.shape.n
+    atoms, zeros, elements = D.tile_debit(a_codes, b_codes, formed, d)
+    debit = D.debit_units(atoms, Fraction(len(b_codes) * elements, n), scheme.prices, d, zeros=zeros)
     return debit, scheme.cap * cell_credit(scheme, record) * len(a_codes) * len(b_codes)
 
 
@@ -298,11 +301,13 @@ def row_cap_multiple(scheme, k: int) -> Fraction:
 def _debit_cap(scheme: C.PearlC, record: UnitRecord, tile: Tile, ops, rows: Sequence[int], cols: Sequence[int]
                ) -> tuple[Fraction, Fraction]:
     """(debit, cap) over the words of the tile's rows × cols: the scheme's `tile_cap` when it brings one, else this
-    module's on the A′ and B̃ code rows."""
+    module's on the A′ and B̃ code rows and the A rows' forming."""
     pos_a, pos_b = {i: p for p, i in enumerate(tile.rows)}, {j: p for p, j in enumerate(tile.cols)}
     if hasattr(scheme, "tile_cap"):
         return scheme.tile_cap(record, ops, [pos_a[i] for i in rows], [pos_b[j] for j in cols])
-    return tile_cap(scheme, record, [ops.a.codes[pos_a[i]] for i in rows], [ops.b.codes[pos_b[j]] for j in cols])
+    a = [pos_a[i] for i in rows]
+    return tile_cap(scheme, record, [ops.a.codes[p] for p in a], [ops.b.codes[pos_b[j]] for j in cols],
+                    [(ops.a.alpha[p], ops.a.x[p], ops.a.beta[p]) for p in a])
 
 
 class _TileRuleView:
@@ -612,8 +617,10 @@ def over_words(scheme: C.PearlC, records: Sequence[UnitRecord],
 def volunteer_words(scheme: C.PearlC, records: Sequence[UnitRecord],
                     words: Mapping[tuple[int, int], tuple[Sequence[Sequence[int]], Sequence[Sequence[int]]]]
                     ) -> tuple[dict[int, list[int]], dict[int, list[int]]]:
-    """`volunteer` for a scheme whose debit is additive over a tile's words (Pearl-C's: `pearl_c_debit.chain_debit`'s
-    counts, priced linearly by `debit_units`, and no `tile_cap` of its own), from each tile's counts word by word:
+    """`volunteer` for a scheme whose debit is additive over a tile's words (Pearl-C's chain debit: `pearl_c_debit.chain_debit`'s
+    counts, priced linearly by `debit_units`, and no `tile_cap` of its own), from each tile's counts word by word.  P3's
+    forming term is not additive over words (an element is debited when every word of its row flags its block), so
+    neither this nor `over_words` reads it: a tile it leaves within the cap can still be over `tile_cap`'s.
     ``words[(p, t)]`` is (flagged atoms, later +0 promotions) over the rows x columns of tile t of record p, in
     `scheme.tiles`' order (`fast_tile.word_debits` on the tile's A′ and B̃ codes).  Returns (voluntary A rows by matmul
     index, voluntary B rows by weight), for `declare`; `over_words` on the records with them is what the caps leave over.
