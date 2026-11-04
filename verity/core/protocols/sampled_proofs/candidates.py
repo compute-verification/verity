@@ -223,7 +223,7 @@ def shape_of(defn, pieces: Mapping[str, int], *, work: Mapping[str, int] | None 
     batch's members, a scan's iterations, summed), credited `work` by Definition
     id (0 elsewhere, a node's being its parts' unless named), the rows a proved instance opens one per parameter and one for
     its return (with `rows`), and serving's commitment its return's bits."""
-    from verity.ml.circuits.types import Array, Record, Tuple, Value
+    from verity.ml.circuits.types import Array, RecordType, Tuple, Value
 
     def bits(t) -> int:
         if isinstance(t, Value):
@@ -232,7 +232,7 @@ def shape_of(defn, pieces: Mapping[str, int], *, work: Mapping[str, int] | None 
             return t.n * bits(t.elem)
         if isinstance(t, Tuple):
             return sum(bits(f) for f in t.fields)
-        if isinstance(t, Record):
+        if isinstance(t, RecordType):
             return sum(bits(f) for _, f in t.fields)
         raise TypeError(f"no width for {t!r}")
 

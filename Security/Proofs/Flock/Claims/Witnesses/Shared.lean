@@ -6,7 +6,7 @@ import Proofs.Flock.Claims.ZK.Interact
 
 Every claim definition carries a refutation witness: a theorem `<Claim>_fails` that exhibits a concrete toy instance at
 which the claim is false, so the definition constrains something. A claim whose definition no instance can refute is
-vacuous. This file holds the toys and the witnesses of `Definitions.Claims`' shared forms; Flock's are
+vacuous. This file holds the toys and the witnesses of `Definitions.Core.Interaction`'s shared forms; Flock's are
 `Witnesses.Flock`, the sampling compiler's `Witnesses.Sampling`, the ZK-recursion compiler's `Witnesses.Recursion`.
 
 The toys: `accV` accepts after one round and `rejV` rejects; `silentP` sends the empty message and calls nothing;
@@ -30,8 +30,6 @@ outputs `([0], [1])`, a collision of the constant hash `constH`, whose outputs a
   `StrictBirthday_holds`, `ExpectedCR_holds`: `noFinder` meets both, so they are satisfiable.
 * `Hm96Hiding_fails`: a constant mask hides nothing below `δ₁ = 1/2`; `Hm96Hiding_holds`: a uniform mask with a
   constant salt hash hides at `δ₁ = 0`.
-* `JsonSpec_fails`: a canonical printer that never returns. `JsonSpec` reads `Json.parse`, `==` and `canon`, which the
-  kernel can't unfold, so no proof can show it satisfiable.
 
 `ERepCost` is a theorem at every record (`Claims.ERepCost` in `Proofs.Flock.Claims.ERepCost`), so it has no refutation.
 -/
@@ -333,11 +331,6 @@ theorem Hm96Hiding_holds {Y : Type} [Fintype Y] [Nonempty Y] : Hm96Hiding (id : 
   unfold PrENNReal
   rw [Fintype.sum_prod_type, add_zero]
   exact le_of_eq (Finset.sum_congr rfl fun x _ => (key x).symm)
-
-/-- **`JsonSpec` fails** at a canonical printer that never returns. -/
-theorem JsonSpec_fails (print : Lean.Json → String) : ¬ JsonSpec print fun _ => .error "" := fun h => by
-  obtain ⟨_, hs⟩ := h.canon_ok .null Claims.Json.Good.null
-  cases hs
 
 end Assumptions
 

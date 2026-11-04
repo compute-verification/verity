@@ -278,7 +278,7 @@ def test_a_dropped_block_rejects(toy, tmp_path):
         def lost(blocks):
             return lambda i: asked.append(i) or (bytes(q.block_bytes) if i == dropped else opt.answer(i))
         got = opt.audit(NODE, COINS, log=ts.session_log(tmp_path), prover=lost, **run)
-        assert dropped in asked and got.verdict == "reject" and got.answer["reason"] and got.s_bits == 0
+        assert dropped in asked and got.verdict == "reject" and got.answer["reason"] and got.public("s_bits") == 0
 
         held = opt.store.held()
         short = [list(seg) for seg in period.setup_inputs(held.setup_case)[2]]

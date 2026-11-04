@@ -43,7 +43,7 @@ def test_a_deferred_run_runs_only_its_steps_and_what_they_need_inside_a_recorded
 
 
 def test_a_recorded_check_runs_every_job_on_the_gate_and_passes_without_circuit_check(monkeypatch, tmp_path):
-    """circuit-check and ratchet-gate are off the gate (ci.toml's `gate = false`): a recorded check (`--record`, the declared
+    """circuit-check and ratchet-gate are off the gate (policy.toml's `off_gate`): a recorded check (`--record`, the declared
     command in a run) leaves them out, and its `check/v1` passes on the jobs on the gate alone."""
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "cache" / "check"))
     monkeypatch.setenv("VERITY_TEST_CACHE", str(tmp_path / "cache" / "tests"))
@@ -91,6 +91,15 @@ def test_a_sharded_deferred_run_runs_those_steps_parts_in_its_shard_alone(monkey
     assert rc == 0 and {p.partition(":")[0] for p in only} == {"pytest"}
 
 
+def test_the_shards_of_a_deferred_run_together_run_every_part_ratchet_gate_in_the_last():
+    """ratchet-gate is in no shard of ci.toml's plans: drive's sharded after-landing run never ran it, so drive took each passing
+    run as one that passed without ratchet-gate, verified nothing and ended no red record, while `main` moved on its gate."""
+    for n in CHECK.DECLARATION.plans():
+        got = [CHECK.shard(f"{k}/{n}", gated=False)["parts"] for k in range(1, n + 1)]
+        assert sorted(p for s in got for p in s) == sorted(CHECK.shard_parts()), n
+        assert "ratchet-gate" in got[-1] and all("ratchet-gate" not in CHECK.shard(f"{k}/{n}")["parts"] for k in range(1, n + 1))
+
+
 def test_record_of_a_deferred_run_launches_it_without_the_check_tool_and_without_lean(monkeypatch):
     """A post-landing run recorded as `--tool check` would be a check of `main`'s tip that `research merge` reads.  It carries
     its base's commit, above which ratchet-gate judges every merge."""
@@ -113,7 +122,13 @@ def test_record_of_a_deferred_run_launches_it_without_the_check_tool_and_without
     head, tail = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
     assert "--tool" not in head and head[head.index("--send") + 1].endswith(CHECK.SHARD_PARTS)
     assert tail[:2] == ["slot", "--priority"] and tail[-3:] == ["--keep-going", "--deferred", "pytest,circuit-check"]
-    assert sent[CHECK.BASE_FILE] == f"{CHECK._rev('HEAD')}\n"
+    assert sent[CHECK.BASE_FILE] == f"{CHECK._rev('HEAD')}\n" and CHECK.RATCHET_BASE_FILE not in sent
+    launched.clear()
+    sent.clear()
+    assert CHECK.record(["--base", "HEAD^", "--ratchet-base", "HEAD", "--on", "vy-x", "--deferred", "ratchet-gate"]) == 0
+    [cmd] = launched
+    assert "--ratchet-base" not in cmd and "HEAD" not in cmd[cmd.index("--") + 1:]
+    assert sent[CHECK.BASE_FILE] == f"{CHECK._rev('HEAD^')}\n" and sent[CHECK.RATCHET_BASE_FILE] == f"{CHECK._rev('HEAD')}\n"
 
 
 def _pack(tmp_path: Path, monkeypatch) -> Path:
@@ -143,7 +158,7 @@ def test_the_after_landing_run_reuses_circuit_checks_passes_alone(monkeypatch, t
     monkeypatch.delenv("VERITY_SKIP_STORE", raising=False)
     monkeypatch.setattr(CHECK.SUITES, "foreign", lambda members, env: None)
 
-    def run(out, n, cache, keep_going, only, packs, reused, regenerate, circuit_cache=None):
+    def run(out, n, cache, keep_going, only, packs, reused, regenerate, circuit_cache=None, live=None, splits=None):
         got.update(cache=cache, circuit_cache=circuit_cache, packs=packs is not None, reused=reused is not None)
         return True, []
 

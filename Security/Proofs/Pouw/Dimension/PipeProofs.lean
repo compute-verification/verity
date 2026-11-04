@@ -9,9 +9,7 @@ import Proofs.Pouw.Dimension.MinRankProofs
   or an FP32 output (`pipe_mem_slots`); the words are outside `V₀` and distinct (`pipe_word_nmem`, `pipe_word_injOn`),
   so `|S_B| + |S_R| ≥ D` with `|S_B| ≤ #big`, `cost ≥ 16·#big + c_s·#steps` (`pipe_cost`), and `A1_cost` on `S_R`
   gives `c_s·#steps ≥ 16·(|S_R| − γ·D)`.
-* `ttNCPOfA1costA2`, `ttNCPOfQuadA2`: `ttNCPOfA1A2`'s arithmetic (`pipe_ttncp`).
-* `a1CostOfSplit`, `a1CostWitness`, `pipeWitness`, `pipeWordWitness` (the 16-FFMA chain `psums`), `a2WitnessPipe`,
-  `a2WitnessQuad`, `pipeChainConsistent`.
+* `a1CostOfSplit`, `a1CostWitness`, `pipeWitness`, `pipeWordWitness` (the 16-FFMA chain `psums`).
 * `minRankGeShift16`: a diagonal 16 × 16 minor in each of `minrank.md`'s three cases (`shMinor_diag`, `shMinor_48`,
   `shMinor_24`; the last uses `cycle_sum`); `minRankGeFacts`.
 -/
@@ -148,57 +146,6 @@ theorem algBoundPipe : AlgBoundPipe := by
 theorem algBoundQuad : AlgBoundQuad := by
   intro k m n N R A B U L P cs c γ hind hMR hU hL hP hout hA1 hc
   exact pipe_core IsQuadPipe hind hU hL hP.1.1 hP.1.2.1 hP.2 hout (hA1 hind hMR) hc
-
-/-- `ttNCPOfA1A2`'s arithmetic, from Theorem D's bound on the matching program. -/
-theorem pipe_ttncp {k m n : ℕ} {U : Finset ℕ} {C Mc γ₀ γ₁ γ₂ : ℝ} (h16 : 16 ∣ k) (hk : 0 < k)
-    (hb : 16 * (1 - γ₁) * ((U.card * (m * n) * (3 * k / 16 - 1) : ℕ) : ℝ) ≤ C) (hcost : (1 - γ₂) * C ≤ Mc)
-    (hγ₂ : γ₂ < 1) (hγ₀ : γ₀ < 1) (hγ : 1 - γ₀ ≤ (1 - γ₂) * (1 - γ₁) * (1 - 16 / (3 * k : ℝ))) :
-    ¬ (Mc / (1 - γ₀) < ∑ _u ∈ U, 3 * ((m * k * n : ℕ) : ℝ)) := by
-  intro hev
-  obtain ⟨k', rfl⟩ := h16
-  have hk' : 1 ≤ k' := by omega
-  have h3 : 3 * (16 * k') / 16 - 1 = 3 * k' - 1 := by omega
-  rw [h3] at hb
-  push_cast [Nat.cast_sub (by omega : 1 ≤ 3 * k')] at hb
-  rw [sum_const, nsmul_eq_mul] at hev
-  have hpos : 0 < 1 - γ₀ := by linarith
-  rw [div_lt_iff₀ hpos] at hev
-  push_cast at hev hγ
-  have hk'R : (0 : ℝ) < k' := by exact_mod_cast hk'
-  have hid : (1 - 16 / (3 * (16 * (k' : ℝ)))) * (3 * (16 * k')) = 16 * (3 * k' - 1) := by
-    field_simp
-  have hX : (0 : ℝ) ≤ U.card * (m * n) := by positivity
-  set g := (1 - γ₂) * (1 - γ₁) with hg
-  have step1 : (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * (1 - γ₀) ≤
-      (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * (g * (1 - 16 / (3 * (16 * (k' : ℝ))))) :=
-    mul_le_mul_of_nonneg_left hγ (by positivity)
-  have step2 : (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * (g * (1 - 16 / (3 * (16 * (k' : ℝ))))) =
-      g * (16 * (U.card * (m * n) * (3 * k' - 1))) := by
-    rw [show (U.card * (m * n) * (3 * (16 * (k' : ℝ)))) * (g * (1 - 16 / (3 * (16 * (k' : ℝ))))) =
-      g * (U.card * (m * n) * ((1 - 16 / (3 * (16 * (k' : ℝ)))) * (3 * (16 * k')))) by ring, hid]
-    ring
-  have step3 : g * (16 * (U.card * (m * n) * (3 * k' - 1))) ≤ (1 - γ₂) * C := by
-    have h4 : (1 - γ₁) * (16 * (U.card * (m * n) * (3 * k' - 1))) ≤ C := by linarith
-    calc g * (16 * (U.card * (m * n) * (3 * k' - 1)))
-        = (1 - γ₂) * ((1 - γ₁) * (16 * (U.card * (m * n) * (3 * k' - 1)))) := by rw [hg]; ring
-      _ ≤ (1 - γ₂) * C := mul_le_mul_of_nonneg_left h4 (by linarith)
-  have e1 : (U.card : ℝ) * (3 * (m * (16 * k') * n)) = U.card * (m * n) * (3 * (16 * (k' : ℝ))) := by ring
-  rw [e1] at hev
-  linarith
-
-/-- **`TT_NCP_of_A1cost_A2`** at W1's constants. -/
-theorem ttNCPOfA1costA2 : TTNCPOfA1costA2 := by
-  intro k m n N R A B U M q γ₀ γ₁ γ₂ h16 hk hind hMR hU hA2 hA1 hout hγ₂ hγ₀ hγ
-  obtain ⟨L, P, hL, hP, hPout, hcost⟩ := hA2 q
-  exact pipe_ttncp h16 hk (algBoundPipe k m n N R A B U L P 8 2 γ₁ hind hMR hU hL hP
-    (fun u hu p hp => hPout _ (hout u hu p hp) ⟨u, hu, p, hp, rfl⟩) hA1 (by norm_num)) hcost hγ₂ hγ₀ hγ
-
-/-- **`TT_NCP_of_A1quad_A2`**. -/
-theorem ttNCPOfQuadA2 : TTNCPOfQuadA2 := by
-  intro k m n N R A B U M q γ₀ γ₁ γ₂ h16 hk hind hMR hU hA2 hA1 hout hγ₂ hγ₀ hγ
-  obtain ⟨L, P, hL, hP, hPout, hcost⟩ := hA2 q
-  exact pipe_ttncp h16 hk (algBoundQuad k m n N R A B U L P 8 2 γ₁ hind hMR hU hL hP
-    (fun u hu p hp => hPout _ (hout u hu p hp) ⟨u, hu, p, hp, rfl⟩) hA1 (by norm_num)) hcost hγ₂ hγ₀ hγ
 
 /-- **`A1_cost` splits.** -/
 theorem a1CostOfSplit : A1CostOfSplit := by
@@ -607,28 +554,5 @@ theorem pipeWordWitness : PipeWordWitness := by
   · have hc : cost ((List.range 16).map fun i => Instr.priced 8 (psums x y i)) = 16 * 8 := by
       simp [cost, Function.comp_def, Instr.price]
     rw [cost_append, honest_cost, hc]
-
-/-- **A2's witness into the closed pipe** (a trivial model). -/
-theorem a2WitnessPipe : A2WitnessPipe := by
-  intro N m n k cs W q
-  exact ⟨coords N m n k, q.1, coords_V0, q.2, fun φ hφ _ => hφ, by simp [pipeMachine]⟩
-
-/-- **A2's witness into the quadratic closed pipe** (a trivial model). -/
-theorem a2WitnessQuad : A2WitnessQuad := by
-  intro N m n k cs W q
-  exact ⟨coords N m n k, q.1, coords_V0, q.2, fun φ hφ _ => hφ, by simp [quadMachine]⟩
-
-/-- **The two chains' hypotheses hold together.** -/
-theorem pipeChainConsistent : PipeChainConsistent := by
-  intro k hk h16 m n N A B U hU
-  obtain ⟨R, P, -, hind, hMR, hQ, hout, -, -⟩ := pipeWitness k hk h16 m n N A B U hU
-  obtain ⟨hA1, hA1q, -⟩ := a1CostWitness k R
-  refine ⟨R, hind, minRankGe_mono (by norm_num) hMR, a2WitnessPipe N m n k 8 _, a2WitnessQuad N m n k 8 _, hA1, hA1q,
-    ⟨⟨P, hQ.1⟩, fun u hu p hp => hout u hu p hp⟩, ⟨⟨P, hQ⟩, fun u hu p hp => hout u hu p hp⟩, ?_⟩
-  have hk' : (1024 : ℝ) ≤ k := by exact_mod_cast hk
-  have h1 : 16 / (3 * (k : ℝ)) ≤ 1 / 2 := by
-    rw [div_le_iff₀ (by positivity)]
-    linarith
-  linarith
 
 end Pouw.Dimension

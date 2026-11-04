@@ -192,7 +192,7 @@ def world(tmp_path, monkeypatch, registry):
     (tmp_path / rs.PEOPLE_DIR / "luke.json").write_text(json.dumps({
         "schema": rs.PERSON_SCHEMA, "name": "Luke Example", "slack_user": LUKE, "email": None, "note": "x",
         "channel": {"key": "chat-luke", "id": CHAT}, "opened": "2026-10-19T17:30Z", "closed": None}))
-    for k in ("RESEARCH_SLACK_REGISTRY", "RESEARCH_AGENT_URL", "ROUTER_MODEL_ENABLED"):
+    for k in ("RESEARCH_SLACK_REGISTRY", "RESEARCH_AGENT_URL", "ROUTER_MODEL_ENABLED", "VERCEL_OIDC_TOKEN"):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("RESEARCH_NOTES", str(notes))
     monkeypatch.setenv("RESEARCH_ROUTES_URL", f"file://{published}")

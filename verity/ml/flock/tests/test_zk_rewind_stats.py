@@ -103,7 +103,7 @@ def test_independent_rewinds_pass_and_reused_ones_are_told_apart():
 
 
 def test_rewinds_on_one_dummy_opening_fail():
-    """red-team-m2-zk G1: rewinds that reuse the extraction run's dummy opening complete at the gate's epsilon."""
+    """Rewinds that reuse the extraction run's dummy opening complete at the gate's epsilon."""
     assert not _gk(21, 2)["pass"]
 
 

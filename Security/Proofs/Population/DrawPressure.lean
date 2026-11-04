@@ -92,7 +92,7 @@ theorem sum_missing_uniformDraw (B : Finset (Fin n)) :
     ∑ s ∈ missing n k B, uniformDraw n k s = ((n - B.card).choose k : ℝ) / n.choose k := by
   simp only [uniformDraw, sum_const, card_missing, nsmul_eq_mul, mul_one_div]
 
-theorem uniformDraw_nonneg (s : Draw n k) : 0 ≤ uniformDraw n k s := by
+theorem uniformDraw_nonneg (s : Verity.Draw.Subset n k) : 0 ≤ uniformDraw n k s := by
   unfold uniformDraw
   positivity
 
@@ -107,8 +107,9 @@ theorem uniformDraw_isDist (hk : k ≤ n) : IsDist (uniformDraw n k) := by
 wrong set `B h`; the window escapes only on the draws that miss `B h` and leaks at most `Σ_{u ∈ B h} w u`, with each
 unit's weight `w u ≤ 1`. Then a window that leaks `ℓ` escapes with probability at most `exp (-(k/n) ℓ)`. With `k > n`
 there is no draw, and the bound holds vacuously. -/
-theorem drawPressure {A : Strategy (Draw n k)} (B : List (Draw n k) → Finset (Fin n)) (w : Fin n → ℝ)
-    (hw : ∀ u, w u ≤ 1) (hesc : ∀ h, A.esc h ⊆ missing n k (B h)) (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, w u) :
+theorem drawPressure {A : Strategy (Verity.Draw.Subset n k)} (B : List (Verity.Draw.Subset n k) → Finset (Fin n))
+    (w : Fin n → ℝ) (hw : ∀ u, w u ≤ 1) (hesc : ∀ h, A.esc h ⊆ missing n k (B h))
+    (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, w u) :
     DetectionPressure (uniformDraw n k) (k / n) A := by
   intro h
   rcases le_or_gt k n with hk | hk
@@ -140,10 +141,10 @@ theorem prob_not {Ω : Type} [Fintype Ω] {μ : Ω → ℝ} (hμ : IsDist μ) (N
 /-- **Harm through the first detection under the deployed draw**: with `0 < k ≤ n`, each window as in `drawPressure`
 and leaking at most `ℓ`, with probability at least `1 - δ` what leaves up to and including the first detection is below
 `ℓ + (n/k) ln (1/δ)`, for every adaptive strategy, every horizon `N` and every history `h`. -/
-theorem draw_tail_cum (hk : 0 < k) (hkn : k ≤ n) {A : Strategy (Draw n k)} (B : List (Draw n k) → Finset (Fin n))
-    (w : Fin n → ℝ) (hw : ∀ u, w u ≤ 1) (hesc : ∀ h, A.esc h ⊆ missing n k (B h))
-    (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, w u) {ℓ : ℝ} (hL : LeakBounded ℓ A) {δ : ℝ} (hδ : 0 < δ) (N : ℕ)
-    (h : List (Draw n k)) :
+theorem draw_tail_cum (hk : 0 < k) (hkn : k ≤ n) {A : Strategy (Verity.Draw.Subset n k)}
+    (B : List (Verity.Draw.Subset n k) → Finset (Fin n)) (w : Fin n → ℝ) (hw : ∀ u, w u ≤ 1)
+    (hesc : ∀ h, A.esc h ⊆ missing n k (B h)) (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, w u) {ℓ : ℝ} (hL : LeakBounded ℓ A)
+    {δ : ℝ} (hδ : 0 < δ) (N : ℕ) (h : List (Verity.Draw.Subset n k)) :
     1 - δ ≤ prob (uniformDraw n k) N (fun cs => A.cum N h cs < ℓ + n / k * Real.log (1 / δ)) := by
   have hμ := uniformDraw_isDist hkn
   have hkR : (0 : ℝ) < k := by exact_mod_cast hk

@@ -30,11 +30,11 @@ session accepts (`Accepts`), and the decoded witness is each session's value lay
 * `sessions`: the `S` sessions in a row, each played by a strategy the prover names at its start (`seqC`, `ofBase`);
   every strategy of a session is named (`ZkOuter.ofBase_surj`), so no prover is lost.
 * `outerV`: the outer proof at a history: the prover registers `R₂`, the values V*'s sessions read that the history
-  does not fix (V*'s running sums `rec-acc`, which every level's session and the algebra read, and with `link_rows`
-  each level's opened rows `rec-rows-L<level>`), then V*'s sessions at `R₂` (`zs R ω t R₂ j`) in a row. `R₂` is one
-  registration for all of them, sent before any session's draw, so each session's `own`, `rd` and `hown` may read its
-  roots and values, and `Good` ties every session to the same values. Its binding is in each session's `bound`:
-  `regTermZC` at the registrant's leaf and `qR²/2^513` off it.
+  does not fix (V*'s running sums `rec-acc`, which every level's session and the algebra read, and each level's opened
+  rows and their siblings, `rec-rows-L<level>` and `rec-aux-L<level>`), then V*'s sessions at `R₂` (`zs R ω t R₂ j`) in
+  a row. `R₂` is one registration for all of them, sent before any session's draw, so each session's `own`, `rd` and
+  `hown` may read its roots and values, and `Good` ties every session to the same values. Its binding is in each
+  session's `bound`: `regTermZC` at the registrant's leaf and `qR²/2^513` off it.
 * `VBridge`: what V*'s circuits compute: when every session accepts and every layer is `Good`, the messages `wmsg` reads
   from the layers hold an inner transcript the inner verifier accepts on the hidden circuit's statement `x R ω` at the
   rounds' coins.
@@ -595,8 +595,9 @@ theorem sessions_le
 variable {Reg₂ : Type}
 
 /-- **V*'s outer proof at one history**: the prover registers `R₂`, the values V*'s sessions read that the history does
-not fix (V*'s running sums `rec-acc`, which every level's session and the algebra read, and with `link_rows` each
-level's opened rows `rec-rows-L<level>`), and then V*'s sessions at `R₂` run in a row. The output records `R₂`. -/
+not fix (V*'s running sums `rec-acc`, which every level's session and the algebra read, and each level's opened rows
+and their siblings, `rec-rows-L<level>` and `rec-aux-L<level>`), and then V*'s sessions at `R₂` run in a row. The
+output records `R₂`. -/
 noncomputable abbrev outerV (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ) :
     Game (Reg₂ × VRec Vs Reg' dg N) :=
   .send Reg₂ fun R₂ => (sessions (zs R₂) dg N).map fun b => (R₂, b)

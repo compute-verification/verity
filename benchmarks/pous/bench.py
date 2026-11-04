@@ -336,7 +336,7 @@ class P2V1Gpu:
 
     name = "p2-v1-gpu"
     own_scheme = "p2/v4"
-    experimental = "P2 remains experimental: the P2–M1-SGI instantiation assumption is not accepted (spec §10.8)"
+    experimental = "P2 remains experimental: the P2–M1-SGI instantiation assumption is not accepted"
 
     def conformance_gate(self) -> dict[str, Any]:
         sys.path.insert(0, str(HERE))

@@ -62,7 +62,7 @@ Python's builder with C-Flock's CPU prover, not `refP`.
 
 What ties the two provers is `verity/core/service/vstar/tests/test_vstar_trace_difftest.py`. `refP`'s V\* parts are
 `bringsAt`'s `refPartsFin (A0 mask)`: each part's `VStar.Trace.assign` at its fitted port inputs (`VStar.In.partIn`,
-which `test_vstar_in_difftest` holds to Python's stager). The trace difftest holds `VStar.Trace.assign` (`vstar-trace`) to
+whose level, algebra and cap builders `test_vstar_in_difftest` holds to Python's stager). The trace difftest holds `VStar.Trace.assign` (`vstar-trace`) to
 C-Flock's CPU prover's witness (`flock-trace`: `Stmt::row_inputs`, `unit_inputs`, `converge`, `witness`), block for
 block and range for range, on parts Python's `rec_vstage.stage` staged:
 * `test_the_recorded_plain_leaf_sessions_traces` (at 547915a62c)
@@ -78,7 +78,7 @@ def HonestFixture : Prop :=
   ∃ (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Brings) (x : Msg) (aux : Msg → ℕ → Flock.RecRecord.Round)
     (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace)
-    (w : Claims.Flock.Wit) (st : Claims.Recursion.Stmt) (ω : Tape (bLAt mask Ir b0 x aux nOf hd recRest))
+    (w : Claims.Flock.Wit) (st : Claims.Recursion.CompiledStatement) (ω : Tape (bLAt mask Ir b0 x aux nOf hd recRest))
     (r : Fin ((DAt mask Ir b0 x aux nOf hd recRest).V.k x) → Coin),
     HonestRunAccepted mask Ir b0 x aux nOf hd recRest decI w st ω r ∧
     HonestWitSatisfies FlockDeploy.sha512 (IAt decI).V (bLAt mask Ir b0 x aux nOf hd recRest) x w ω r ∧
