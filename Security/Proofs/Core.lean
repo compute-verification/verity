@@ -39,6 +39,7 @@ import Proofs.Core.HongKung
 import Proofs.Core.Blocks
 import Proofs.Core.Structure
 import Proofs.Core.DeviceFigures
+import Proofs.Core.CapacityWithinEstimate
 import Proofs.Core.Site
 
 /-!
