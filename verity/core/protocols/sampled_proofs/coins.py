@@ -44,9 +44,12 @@ def _ratio(p: Any) -> tuple[int, int] | None:
     return None
 
 
-def _law_problem(law: Mapping[str, Any]) -> str | None:
+def law_problem(law: Mapping[str, Any], population: int) -> str | None:
+    """Why `law` is no one-stage sampling design over `population` proof blocks, or None (Lean `Draw.flockLaw`): exactly its keys,
+    a subset's k a natural number at most the population, a Bernoulli p NUM/DEN in [0, 1], and an expanded stratified or
+    work design's strata well formed (`strata_problem`)."""
     kind = law.get("law")
-    if kind not in _LAW_KEYS:
+    if not isinstance(kind, str) or kind not in _LAW_KEYS:
         return "a one-stage law is subset, bernoulli, stratified or work"
     if set(law) != _LAW_KEYS[kind]:
         return f"a {kind} law is exactly {sorted(_LAW_KEYS[kind])}"
@@ -54,9 +57,11 @@ def _law_problem(law: Mapping[str, Any]) -> str | None:
         return None if _ratio(law["p"]) else "a bernoulli law's p is NUM/DEN with 0 <= NUM <= DEN and DEN > 0"
     if not _int(law["k"]) or law["k"] < 0:
         return f"a {kind} law's k is a natural number"
-    if kind != "subset" and not isinstance(law["strata"], list):
+    if kind == "subset":
+        return f"a subset draw of {law['k']} exceeds the population of {population}" if law["k"] > population else None
+    if not isinstance(law["strata"], list):
         return f"a {kind} law is expanded: its strata are a list (one_stage.draw.derive)"
-    return None
+    return strata_problem(law, population)
 
 
 class _RanOut(Exception):
@@ -360,7 +365,7 @@ def draw_first(randomness: OwnRandomness, law: Mapping[str, Any], population: in
     and `work` one stream per stratum, in order, each stratum's `subset k_s n_s` mapped to the stratum's proof blocks.  With the
     verifier's closure map (a work sampling design only, as `flock-verify draw --closure`), the sample carries its `closure`
     (`closure_of`) when that is not empty."""
-    problem = _law_problem(law)
+    problem = law_problem(law, population)
     if problem:
         raise ValueError(problem)
     kind = law["law"]
@@ -368,16 +373,11 @@ def draw_first(randomness: OwnRandomness, law: Mapping[str, Any], population: in
         raise ValueError("a closure widens a work draw only")
     if kind == "subset":
         k = law["k"]
-        if k > population:
-            raise ValueError(f"a subset draw of {k} exceeds the population of {population}")
         units = randomness.stream(2 * k * _width(population) + 64, lambda read: _subset(k, population, read))
     elif kind == "bernoulli":
         num, den = _ratio(law["p"])
         units = randomness.stream(2 * population * _width(den) + 64, lambda read: _bernoulli(num, den, population, read))
     else:
-        problem = strata_problem(law, population)
-        if problem:
-            raise ValueError(problem)
         units = []
         for s in law["strata"]:
             ranges, k_s = s["units"], s["k"]
