@@ -2552,8 +2552,8 @@ def test_the_follow_on_runs_reproof_cmd_after_the_audit_then_the_onsite_record_w
     follow-on runs REPROOF_CMD once V3c's audit is done, with the serve dir, the window and V3c's dir, its log in the
     serve dir's private/ and its last line the REPROOF line; then the record and the composite, and last the onsite
     record at the served run's WINDOW_STEPS and MAX_TOKENS, not the follow-on's defaults, with REPROOF_COPY and
-    REPROOF_LISTING, before $OUT is published. A copy that fails fails the follow-on, and every record is still
-    written."""
+    REPROOF_LISTING, and --h1-tie, the deferral's being H1-tied, before $OUT is published. A copy that fails fails the
+    follow-on, and every record is still written."""
     assert _deferred(tmp_path, CERTIFIER_FRONT="front", WINDOW_STEPS="1", MAX_TOKENS="1").returncode == 0
     d, out, listing = tmp_path / "serve", tmp_path / "out", tmp_path / "serve" / "private" / "reproof-listing.txt"
     (tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True, exist_ok=True)
@@ -2566,7 +2566,7 @@ def test_the_follow_on_runs_reproof_cmd_after_the_audit_then_the_onsite_record_w
     assert oct((d / "private" / "reproof.log").stat().st_mode & 0o777) == "0o600"
     assert json.loads((tmp_path / "order.onsite").read_text()) == [
         str(out), "--window-steps", "1", "--max-tokens", "1", "--reproof-copy", "vy-nebius-cpu-3:/p/r1",
-        "--reproof-listing", str(listing)]
+        "--reproof-listing", str(listing), "--h1-tie"]
 
 
 #: the network certifier's kept run in `_deferred`'s serve dir: the gate's fetch and the front's session
