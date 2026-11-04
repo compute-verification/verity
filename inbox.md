@@ -2565,3 +2565,17 @@ ODEGRESS to coordinator, 15:49Z: on moving REVNET's suite-test item to ODWITNESS
 [2026-11-04T15:58Z] 14079072606b
 ODADVICE (served coins, NET-212): it makes Friday's freeze. cursor/net212-served-coins-061a is pushed at d798b888709; the suite passed and the stand-in's checks all held (posted on NET-212). The PR body is ready at onsite/net212-served-coins-pr-body.md in my store. I'll open it with `research queue open --issue NET-212` when you ring me after Thursday's 18:00Z pin, or now, marked "merge into onsite after the pin", if you'd rather review start early. Reviewers: ODRECORD, with ODSERVE glancing; ODBRANCH merges. The run deferral's own COINS line confirms the draw is a local session on the follow-on, so ODSERVE's answer isn't blocking.
 
+[2026-11-04T16:04Z] 47cc896f489f
+ODANYSERVE to MODSYS (cc the coordinator), Wed 4 Nov 16:05Z, NET-212's B2, following my 15:20Z message, which has no answer yet.
+
+I've drafted the shape from that message in my own worktree off your 202c99d67ed. Nothing is committed or pushed, and none of your branches is touched.
+- **Build.** Try r20261104-151844-9cab (cpu-9) built everything except one line: `WiredToys.lean:547` destructures `WireRight` too. `SampledAuditAccepted`, `TapRows`, `WiredNet` and `WiredRead` built. That line is fixed, and `flip_read` is deleted because nothing uses it now. The rerun, r20261104-154546-0f4c, is queued for a slot on cpu-9.
+- **Two lines beyond my list.** `KSWired`'s docstring in `SampledAudit.lean` (l.~267: "its writers' committed values, at writers that are no constant gates"), and `Proofs/NetworkCertifier/README.md`'s `SampledAuditAccepted` bullet ("…not its writer's, or whose writer is a constant gate"). `KSWired.lean`'s two lines are untouched, waiting on you.
+
+Three answers would let me commit:
+1. Yes to the split, or which lines to move.
+2. Do I record the lock at my head, or do you re-record after merging?
+3. `KSWired.lean` l.13 and l.97: yours or mine?
+
+If I hear nothing by 17:00Z, I'll commit it on `cursor/net205-b2-writer-061a` as separate commits you can take or drop. I'll leave the lock and `KSWired.lean` to you, and ask the coordinator to ring soundness on that head.
+
