@@ -16,8 +16,8 @@ roots (`RegOpens`), with the rows format's read-back of the client's view from t
 
 * each window's audit, at a statement in its scope whose registration opens its registered inputs (`RegOpensAt`), has
   `Pr[acc ∧ ¬RLeakTap δ] ≤ δ + ε_ks + ε_bind + Pr[B_tap] + Pr[B_reg]` (the errors of sampling at the incorrect set,
-  `KSWired`, and the collisions between the extracted trace's openings and the network certifier's, `B_tap`, and the
-  registration's, `B_reg`, under `CommitmentScheme.Binds`);
+  `Claims.Sampling.KSBy` at the wired check `wiredOk`, and the collisions between the extracted trace's openings and
+  the network certifier's, `B_tap`, and the registration's, `B_reg`, under `CommitmentScheme.Binds`);
 * where at every window's statement the network certifier registers its observations at that window's operator
   (`TapsOpen`), a covert sender's secrets whose every window meets `WindowGoodReg` number at most
   `#Θ · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`: the sender moves at most
@@ -60,11 +60,12 @@ set_option linter.unusedVariables false
 rows-form period the check accepts, on its schedule `s` over `n = p.windows` link-windows, the network certifier
 recording its `N = lanes · n · window` connections in its frames of `B = s.cellBytes` bytes (`NetTiming.cellRows`, on
 the egress link `link`, `window` buckets a window, with any jitter classes and statuses), and at every deployment `D`
-of the sampled verifier where sampling at the incorrect set holds at the layout's wiring (`KSWired`) and the trace's
-commitment binds (`CommitmentScheme.Binds`), with a decoder that lists every trace within Flock's radius, the windows
-registered as `sw i` (`WindowsPlaced`: partition `Pw i`, and `β i` bounding the committed bits of each of its possible
-incorrect sets), the network certifier's openings `tops s` at each statement, and a network certifier that runs its
-code by `trusted-host`, its one run giving the cells the client receives and its record of them:
+of the sampled verifier where sampling at the incorrect set holds at the layout's wiring (`KSBy` at the wired check)
+and the trace's commitment binds (`CommitmentScheme.Binds`), with a decoder that lists every trace within Flock's
+radius, the windows registered as `sw i` (`WindowsPlaced`: partition `Pw i`, and `β i` bounding the committed bits of
+each of its possible incorrect sets), the network certifier's openings `tops s` at each statement, and a network
+certifier that runs its code by `trusted-host`, its one run giving the cells the client receives and its record of
+them:
 
 * each window's audit, at a statement in its scope whose registration opens its registered inputs (`RegOpensAt`), has
   `Pr[acc ∧ ¬RLeakTap δ] ≤ δ + ε_ks + ε_bind + Pr[B_tap] + Pr[B_reg]` with the registered inputs at the registration's
@@ -84,7 +85,7 @@ def PeriodLeakRegistered : Prop :=
     p.form = .rows s sd scan →
     ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
       (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (L K S : ℕ)
-      (lay : AuditStatement → BoundaryGates L S) (hks : KSWired H D (fun s => (lay s).wires))
+      (lay : AuditStatement → BoundaryGates L S) (hks : KSBy H D (wiredOk fun s => (lay s).wires))
       (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
       (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ)
       (ops : AuditStatement → List (Opening Bool)) (Dj : ℕ)

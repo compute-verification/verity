@@ -57,7 +57,7 @@ schedule and the server, every other hypothesis kept. -/
 def PeriodLeakRegisteredUntrusted : Prop :=
   ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (H : Claims.Msg → Claims.Msg) (D : Claims.Sampling.Deploy Coin Col T) (L K S : ℕ)
-    (lay : Claims.Sampling.AuditStatement → BoundaryGates L S), KSWired H D (fun s => (lay s).wires) →
+    (lay : Claims.Sampling.AuditStatement → BoundaryGates L S), KSBy H D (wiredOk fun s => (lay s).wires) →
     ∀ (k : Claims.Sampling.AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T), 0 ≤ δ →
     Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
     ∀ (reg : Claims.Sampling.AuditStatement → Finset ℕ)
@@ -111,7 +111,7 @@ theorem not_periodLeakRegisteredUntrusted : ¬ PeriodLeakRegisteredUntrusted := 
 def PeriodLeakRegisteredAnyFormat : Prop :=
   ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (H : Claims.Msg → Claims.Msg) (D : Claims.Sampling.Deploy Coin Col T) (L K S : ℕ)
-    (lay : Claims.Sampling.AuditStatement → BoundaryGates L S), KSWired H D (fun s => (lay s).wires) →
+    (lay : Claims.Sampling.AuditStatement → BoundaryGates L S), KSBy H D (wiredOk fun s => (lay s).wires) →
     ∀ (k : Claims.Sampling.AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T), 0 ≤ δ →
     Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
     ∀ (reg : Claims.Sampling.AuditStatement → Finset ℕ)
@@ -145,8 +145,8 @@ def PeriodLeakRegisteredAnyFormat : Prop :=
             reg (sw i)).card * (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞))
 
 /-- **Without `RowsFormat.Wf`, `PeriodLeakRegisteredWf` is false**: at `ksNotD`, where `KS` holds (`ksNotD_KS`) and so
-`KSWired` (`freeLay` has no wires), the registration `goodReg`, which opens (`ksNotD_regOpens`), one window at
-`δ = 0` and `Θ = {(1, 0)}`, the network certifier's code recorded in `blindRows` (which doesn't read back,
+`KSBy` at the wired check (`freeLay` has no wires), the registration `goodReg`, which opens (`ksNotD_regOpens`), one
+window at `δ = 0` and `Θ = {(1, 0)}`, the network certifier's code recorded in `blindRows` (which doesn't read back,
 `blindRows_not_wf`) on the schedule `oneSched` (which fits) registers `obs1` on every serving `z`, the client's cell
 being `z` (`cellDec_run`). The circuit accepts `obs1` at `goodReg` (`frameTops_acc`), so every secret meets
 `WindowGoodReg`, `0` and `1` among them: `2` against a count of `#Θ · 2^0 · 1 · 2^0 · 1^1 = 1`. -/

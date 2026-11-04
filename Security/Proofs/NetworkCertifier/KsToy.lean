@@ -18,9 +18,9 @@ Without `RegOpensAt`, the first part of `PeriodLeakRegisteredWf` is false (`not_
 `freeLay`, where the input is free and the negation is the egress slot's presence gate, a registration `badReg` that
 opens the input `true`, which `notCm` refuses, pins the input at `true`, so the circuit holds no frame, while the
 network certifier's openings `frameTops`, which pass, register a frame (`obs1`). No witness is then in `RLeakTap`, the
-silent prover is accepted, and its bound fails, at every hash, with `KSWired` (`freeLay` has no wires), the decoder's
-radius, binding and the scope all holding. The registration `goodReg`, which opens the input `false`, meets
-`RegOpensAt` (`ksNotD_regOpens`).
+silent prover is accepted, and its bound fails, at every hash, with `KSBy` at the wired check (`freeLay` has no
+wires), the decoder's radius, binding and the scope all holding. The registration `goodReg`, which opens the input
+`false`, meets `RegOpensAt` (`ksNotD_regOpens`).
 
 `WitnessToys`' rows format `blindRows` encodes every frame as the empty list (`blindRows_not_wf`): on the schedule
 `oneSched`, which fits it, the record of every serving `z` is `obs1` (`blindRun_obs`), which the circuit accepts at
@@ -480,7 +480,7 @@ theorem ksNotD_reg_bound_fails (H : Msg → Msg) :
 def WindowLeakAtAnyOps : Prop :=
   ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (H : Msg → Msg) (D : Claims.Sampling.Deploy Coin Col T) (L K S : ℕ)
-    (lay : Claims.Sampling.AuditStatement → BoundaryGates L S), KSWired H D (fun s => (lay s).wires) →
+    (lay : Claims.Sampling.AuditStatement → BoundaryGates L S), KSBy H D (wiredOk fun s => (lay s).wires) →
     ∀ (k : Claims.Sampling.AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T), 0 ≤ δ →
     Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
     ∀ (reg : Claims.Sampling.AuditStatement → Finset ℕ) (ops : Claims.Sampling.AuditStatement → List (Opening Bool))
@@ -496,8 +496,8 @@ def WindowLeakAtAnyOps : Prop :=
           (Breg H D.V (Claims.Sampling.E D decode) D.commit D.parse ops Ω P m).Pr H
 
 /-- **Without `RegOpensAt`, `PeriodLeakRegistered`'s per-window part is false**: at SHA-512, at `ksNotD`, where `KS`
-holds (`ksNotD_KS`) and so `KSWired` (`freeLay` has no wires), the decoder that lists the one trace is within Flock's
-radius, `notCm` binds and the statement is in scope, the registration `badReg`, which doesn't open
+holds (`ksNotD_KS`) and so `KSBy` at the wired check (`freeLay` has no wires), the decoder that lists the one trace
+is within Flock's radius, `notCm` binds and the statement is in scope, the registration `badReg`, which doesn't open
 (`ksNotD_not_regOpens`), breaks the bound (`ksNotD_reg_bound_fails`). -/
 theorem not_windowLeakAtAnyOps : ¬ WindowLeakAtAnyOps := fun h =>
   ksNotD_reg_bound_fails FlockDeploy.sha512
