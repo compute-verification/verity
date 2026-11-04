@@ -29,6 +29,7 @@ def slotRounds (L : Compiled Coin A) (x : Msg) (p : ℕ) (r : Fin (L.V.k x) → 
   | some u => L.rounds x u
   | none => ∅
 
+omit [Nonempty Coin] in
 theorem slotRounds_fork {H : Msg → Msg} (L : Compiled Coin A) (hS : L.Sessions H) (x : Msg) (p : ℕ)
     (d σ : Fin (L.V.k x) → Coin) :
     L.slotRounds x p (forkOn (L.slotRounds x p d) d σ) = L.slotRounds x p d := by
@@ -37,11 +38,12 @@ theorem slotRounds_fork {H : Msg → Msg} (L : Compiled Coin A) (hS : L.Sessions
   | none => simp only [forkOn_empty, hu]
   | some u => simp only [(hS.fixed x d u (List.mem_of_getElem? hu)).2 σ, hu]
 
+omit [Fintype Coin] [Nonempty Coin] in
 theorem coinsOf_forkOn (L : Compiled Coin A) {x : Msg} {u : ℕ} {xS : Msg}
     (hk : A.V.k xS = (L.rounds x u).card) (d σ : Fin (L.V.k x) → Coin) :
     L.coinsOf x u xS (forkOn (L.rounds x u) d σ) = fun i => σ (L.emb x u xS hk i) := by
   funext i
-  simp only [coinsOf, dif_pos hk, forkOn, emb, Finset.orderEmbOfFin_mem, ite_true]
+  simp only [coinsOf, dite_eq_left hk, forkOn, emb, Finset.orderEmbOfFin_mem, ite_true]
 
 /-- **A sampled slot rejects with at most its sessions' error**: the event that the proof block sampled at slot `p` has
 a session that shows a rejection, at the reference prover on an honest witness, has probability at most any `e ≥ 0`
