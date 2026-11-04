@@ -20,6 +20,12 @@ run wrote no answer, ``missing`` and ``why``:
 ``of_record`` holds when every one of them accepted, the condition for the demo's run of record; ``placement`` is the
 network certifier's answer's, which host ran each party.
 
+**The composite's error** (``composite_error``, `COMPOSITE`): the sum over the onsite composite's four subprotocols of
+each one's error, each subprotocol's δ with where the run states it: sampled proofs' and PoUW's from their rows (their
+answers' integrity-profile δ), the network certifier's from its bound (its eps), and inference-only's missing
+(`NO_NCI_DELTA`). ``stated`` sums the δs the run states, a lower bound on the error, which is ``vacuous`` at 1 or
+more; the rest is ``unvalued`` (`COMPOSITE_UNVALUED`).
+
 **The bound** is the network certifier's accepted answer's public in its rows form: K and each of its terms in the
 notation table's symbols (`TERMS`, `PHASE_TERMS`), each naming the public fields it sums (``lean``): k_sched
 (``schedules``), k_fail (``cells``) and, for each execution phase j of the certification period (the code's link-window,
@@ -28,28 +34,56 @@ the jitter T_j·log2 d_jit, T_j the phase's buckets (``jitter``). They sum to K,
 sends past its committed program except with δ_net over ``period_s`` seconds, the run's m execution phases of T buckets
 of τ (the certifier's case's ``schedule``). ``delta_net`` gives it term by term, each with its source: the answer's
 ``eps``, only its δ part (m · δ and each charged audit's δ, `EPS`), and m times each phase's knowledge, binding and
-collision errors ε_ks, ε_bind and ε_tap (`ERRORS`), which no check computes, so δ_net has no number here (`UNVALUED`).
+collision errors ε_ks, ε_bind and ε_tap (`ERRORS`), which no check computes, so δ_net has no number here (`UNVALUED`);
+``delta`` splits eps into the scans' δ and the charged audits', with eps a phase and each charged audit's reading at
+δ_i where the public lists it (``charged_audits``; `DELTA`: what sets each, and what a smaller one costs); ``skip`` is
+k_{skip,j} each phase with its slot entries, every one of a tied audit drawn in part with a bound of at least one
+incorrect proof block (`SKIP`, and what drawing it whole costs).
 K is that statement's count as proved, a known overcount (``notes``, `OVERCOUNT`); ``connections`` is how many
 connections k_sched and k_fail count, every one the schedule can carry (`CONNECTIONS`), its ``error`` where the case's
 caps aren't those; and ``verdict_line`` is the run's published line of the network certifier's verdict (`LINE` in
 verdicts.txt), None where it has none. A public whose terms don't sum to K, or that isn't the rows form, is the bound's
-``error``. Beside the bound, ``advice_charge``: the served run's realized advice charge stays out of the record
-(`ADVICE`, which says what hides it and what doesn't yet); ``registered`` is ℓ_{a,j}, the registered width each
-execution phase's term charges, an upper bound on the honest charge (`REGISTERED`), with its share of K; and
+``error``. ``of_record`` is the figure of record (`OPEN`): that K only where the verdict's public holds every check the
+tight ℓ_{a,j} rests on (``held``, `CHECKS`) and none of its premises is open (``premises``, `DISCHARGE`: each of
+`PREMISES` discharged by theorems in Security's locks that take no named assumption but a standing one, `STANDING`), and
+while one of either is ``open``, by name, K plus ℓ_a + 1 bits for each audit tied to each
+execution phase's scan (``advice``: the bits each phase adds). Beside the bound, ``advice_charge``: the served run's
+realized advice charge stays out of the record (`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is
+ℓ_{a,j} as the bound charges each execution phase, with its share of K and its source (`CHARGED`: the tied compute
+audits' unregistered inputs, read off the period's parameters, with no advice length and no cap in them); ``cap`` is
+each audit's ℓ_a, the cap of the advice the run registered (its published advice registration's, `REGISTRATION`), stated
+as a cap and in no term of K (`CAP`), and the figure of record's ``missing`` where the run published none; and
 ``measured`` is honest serving's |a_j| a Commit period, of which an execution phase holds several, and their sum over
 each execution phase (``bits_per_phase``, missing where the test run's advice places no Commit period on the engine
-clock), measured on a test run with public inputs (`advice_charge.py`'s record, ``--advice-charge``) and labelled as
+clock; ``phases`` says where those phases start, `TEST_PHASES`), measured on a test run with public inputs
+(`advice_charge.py`'s record, ``--advice-charge``) and labelled as
 that run's, never a figure of this one. ``tree`` is the commit the run served from (machine.txt's), None where machine.txt names none.
 
-**Periods**: the run's own certification period (``run``), proved, and each monitoring period of `leak_bounds.PERIODS`
-for the serving node, the census's reference datacenter and the world. A node's cell is proved where the run's period
+**Periods**, of the figure of record: the run's own certification period (``run``), proved, and each monitoring period
+of `leak_bounds.PERIODS` for the serving node, the census's reference datacenter and the world. Where the figure of
+record isn't the tight K, ``periods_tight`` gives the same cells of the tight K beside them, with the open checks and
+premises it is conditional on (``conditional_on``), never as the result. A node's cell is proved where the run's period
 covers the monitoring period's seconds (its m execution phases), and otherwise scaled from the run to the period; a
 datacenter's and the world's are scaled from the node's. Each scaled cell names its rule, which ``rules`` states with
 its sources (`RULES`): the bound, the case's schedule, and each census line it reads with its SHA-512 (`census`). Each
-cell gives K in bits (the least integer at or above a scaled one), its share of one copy of the weights
-(`leak_bounds.WEIGHTS`), its δ_net's terms over the execution phases it counts (``delta_net``), whether eps alone is
-already vacuous (at least 1) and the statement it rests on; beside that pooled total, ``per_phase`` is the same over
+cell gives K in bits (the least integer at or above a scaled one), its share of one copy of the weights a deployment
+protects (``share``: `leak_bounds.WEIGHTS`, the adversary resource model's as published, a stated parameter that
+``weights`` gives with its census line and SHA-512, `WEIGHTS`) and beside it of the demo's served model's
+(``share_served``, `leak_bounds.SERVED`), its share of the egress its execution phases can carry (``share_of_capacity``, the schedule's
+capacity in ``egress``, `EGRESS`; the served egress is missing, `SERVED_EGRESS`), its δ_net's terms over the execution
+phases it counts (``delta_net``), whether eps alone is
+already vacuous (at least 1), the eps a phase under which it wouldn't be (``eps_per_phase_below``, beside the bound's
+``delta``) and the statement it rests on; beside that pooled total, ``per_phase`` is the same over
 one execution phase, proved only where m is 1.
+
+**Re-proof inputs** (``reproof``, `REPROOF`): what a later re-proof of the run's sampled units needs, each wire a sampled
+unit reads then proved inside its session: the committed values and their openings for every sampled unit and the units
+that write what it reads, the registration, the live draw and its receipt, and the public files, each by where it is (the
+serve dir's by their paths there, naming no window) and what it holds, with whether the run wrote each of OUT's and how
+each must be kept (``kept``, `REPROOF_KEPT`). The serve dir's are witness, kept off OUT and custody in a copy off the
+served node (``--reproof-copy`` NODE:/PATH, ``--reproof-listing``, a listing of it kept off OUT): ``copy`` names its node
+and path, and each serve-dir input says whether the listing holds every file its path names, never their bytes or
+digests; with no copy given, ``copy`` is missing with why.
 
 The record's counts and indices are the certification period's (m and each phase j), public in the Lean answer's
 profile; it names no Commit window, whose count `publish` holds.
@@ -72,6 +106,7 @@ if str(HERE.parent / "network_traces") not in sys.path:
     sys.path.insert(0, str(HERE.parent / "network_traces"))
 import advice_charge as AC  # noqa: E402
 import leak_bounds as LB  # noqa: E402
+from served_integrity import exact_delta  # noqa: E402
 
 FORMAT = "verity/onsite-network-record/v1"
 EXTENDS = "verity/all-protocols-window/v1"
@@ -86,6 +121,8 @@ VERDICTS = ("sampled proofs", "PoUW", "inference-only", "remote", "the network c
 ROWS = {"sampled proofs": "integrity", "PoUW": "work", "the network certifier": "communication"}
 #: where the certifier piece leaves its period's case (`certifier_piece.CASE`), whose params carry the schedule and caps
 CASE = Path("pieces") / "certifier" / "case.json"
+#: the run's advice registration as it publishes it (`served_verdicts.py public-registration`), its compiler's cap ℓ_a
+REGISTRATION = "registration.json"
 #: K's terms over the period, each a symbol of the notation table and the rows form's public fields it sums
 TERMS = {"k_{sched}": ("schedules",), "k_{fail}": ("cells",)}
 #: K's terms of each execution phase j, each summing its scan's public fields
@@ -94,7 +131,7 @@ PHASE_TERMS = {"\\ell_{a,j}": ("free",), "k_{skip,j}": ("faulty_sets", "faulty_b
 ADVICE = ("not in this record: the realized advice length |a_j| is a value. The run's published registration copies state "
           "the compiler's cap in its place (`served_verdicts.py public_registration`), but each window's advice is "
           "committed and compiled at its own length, so |a_j| is hidden only once it is padded to ℓ_a before it is "
-          "committed; the bound charges ℓ_{a,j}, the registered width")
+          "committed; the bound's ℓ_{a,j} holds no advice length (`CHARGED`)")
 OVERCOUNT = ("a known overcount, proved and larger than necessary: k_sched and k_fail charge every connection the "
              "schedule can carry (`Schedule.caps`), whatever the traffic, and each connection's cell count twice, in "
              "k_sched (its lane's length, #S_s ≤ ∏_c (cap_c + 1)) and in k_fail (its fail cell's position), which in a "
@@ -117,9 +154,106 @@ ERRORS = {
 }
 UNVALUED = ("δ_net is eps plus each execution phase's ε_ks, ε_bind and ε_tap, never eps alone; no check computes those "
             "three, so δ_net has no number here")
+COMPOSITE = (f"{ONSITE}'s error, Verity.Game's SoundnessFor at its compiled verifier: it accepts while the claim of one of "
+             "its four subprotocols fails with probability at most the sum of their errors, each its published δ at the "
+             "strategy's SHA-512 calls plus ε_forge(t, Q) plus its loss at its finder's collision probability "
+             "(`Verity.Vocab.error`). Each subprotocol's δ is a term of its own, so one draw read at two δs, a tied "
+             "audit's at sampled proofs' δ and at the network period's, counts in both")
+COMPOSITE_UNVALUED = ("each subprotocol's ε_forge(t, Q) and its loss at its finder's collision probability, and the "
+                      "network certifier's m(ε_ks + ε_bind + ε_tap) (`ERRORS`): no check computes them, so the composite's "
+                      "error has no number here, and ``stated`` is the sum of the δs the run states, a lower bound on it")
+NO_NCI_DELTA = "no published file states it: remote's composite publishes each case's params by their SHA-512 alone"
+DELTA = ("what sets eps: m · δ_scan, every phase's scan at one δ, its one-stage answer's stated δ (its integrity "
+         "profile's, a sampling-design parameter in (0, 1) and not C-Flock's soundness error, which is in ε_ks), plus "
+         "δ_i for each tied audit drawn in part (NetworkCheck.Period's chargedOf). Where the public lists those "
+         "readings (`charged`: each audit's draw read at δ_i, with its bound b there), δ_i is the period check's own "
+         "constant, fixed before any coin, and the same draw read at its answer's δ stays sampled proofs' term of the "
+         "composite's error; where it lists none, δ_i is the audit's answer's δ, and the charged part is what eps holds "
+         "beyond m · δ_scan. A scan with every proof block drawn holds no incorrect proof block at any δ, so a smaller "
+         "δ_scan costs neither proving nor bits; drawn in part, its bound grows as δ falls (faulty_sets, faulty_bits). "
+         "A tied audit drawn in part charges every slot-entry bit of its phase (faulty_entries) once its bound at δ_i "
+         "is at least one incorrect proof block, as at any small δ_i it is, so a smaller δ_i costs K nothing; drawn "
+         "whole, it leaves eps and its entries leave K, at the cost of proving each of its proof blocks")
+NO_READINGS = ("the period's public lists no reading at δ_i (`charged`): its check reads each charged audit at its "
+               "answer's δ, and the charged part is eps − m · δ_scan")
 #: the run's published line of the network certifier's verdict (`served_verdicts.pieces`)
 LINE = "THE NETWORK CERTIFIER "
-REGISTERED = "registered width, an upper bound on the honest charge"
+CHARGED = ("PeriodLeakAccepted's ℓ_{a,j}: the free inputs of each compute audit tied to execution phase j's scan, those "
+           "its Program neither registers at a pinned root nor ties (NetworkCheck.Period's tiedAudits sums the "
+           "parameters' audits[].free, #(freeInputs \\ reg); `records_audit.py period`'s free for V3c's window audit). "
+           "It reads no cap and no advice length: the advice is the compile unit's input, not the window Program's "
+           "(`records_audit.py declared_count`), so neither the advice registration's width ℓ_a (its compiler's "
+           "cap_bits) nor |a_j| is in it. It is the tight form, the figure of record only once the period's check "
+           "performs both checks it rests on and none of its premises is open (`CHECKS`, `DISCHARGE`, `OPEN`)")
+SKIP = ("PeriodLeakAccepted's k_{skip,j}: what execution phase j's draws didn't take whole. The scan's incorrect proof "
+        "blocks' term (``faulty_sets``, ``faulty_bits``: none where every one of its proof blocks is drawn), and "
+        "``faulty_entries``, every slot-entry bit E_w of each audit tied to j's scan that is drawn in part (charged, "
+        "NetworkCheck.Period's chargedOf) with a bound of at least one incorrect proof block. Drawn whole, a tied "
+        "audit adds no entries and its δ leaves eps, at the cost of proving every one of its proof blocks")
+#: the checks the tight ℓ_{a,j} rests on, each by the name the period's public lists it under in ``held`` once its Lean
+#: check performs it
+CHECKS = {"free": "each tied audit's free inputs computed from its Program's descriptor, not taken as a parameter",
+          "circuit": "each tied audit's circuit held fixed whatever its advice"}
+#: Security's locks in this tree (`tools/verity/lean/check.py`'s record of each guarantee's named assumptions): the
+#: guarantees', and the Properties' that discharge premises at the deployed code
+ROOT = HERE.parents[1]
+LOCKS = (ROOT / "Security" / "lean-audit.json", ROOT / "Security" / "Properties" / "lean-audit.json")
+#: the guarantees the tight K rests on, by their names in `LOCKS`
+RESTS_ON = ("NetTiming.SecurityProofs.PeriodLeakAccepted",)
+#: each premise the tight K rests on, by the name ``open`` gives it: what it says, the theorems that discharge it at the
+#: deployed code by their names in `LOCKS`' guarantees (none named yet leaves it open), and the named assumptions of
+#: `RESTS_ON` it stands for, which its discharge decides
+PREMISES: dict[str, dict[str, Any]] = {
+    "wires-fit": {"is": "the wires part of BoundaryGates.Fits at the tied audit's statements: the decoder link, and the "
+                        "period check running Circuit.check",
+                  "discharged_by": ("Properties.NetworkCertifier.wiredScopeAcc",
+                                    "Properties.NetworkCertifier.circuitWiresFit",
+                                    "Properties.NetworkPeriod.rowsWiresChecked"), "assumes": ()},
+    "session-wires": {"is": "SessionWires: each sampled proof block's wired inputs equal their writers' committed rows, "
+                            "proved inside its own session, whose statement reads the writer's committed leaf by path and "
+                            "whose circuit equates it with the wired input, so no opening reaches the verifier; "
+                            "OneStageZk.verdicts accepting only where each sampled reader's wire is the layout's, at the "
+                            "registered position, root and path; and SessionOpens and the binding from the sampled leg's "
+                            "bridge (`sampled-leg-bridge`), never a named assumption. Open until the theorem that "
+                            "OneStageZk.verdicts' acceptance gives it is named and in the lock",
+                      "discharged_by": (), "assumes": ()},
+    "free-count": {"is": "each tied audit's free at least #(freeInputs \\ reg) at the wired layout",
+                   "discharged_by": ("Properties.NetworkCertifier.circuitCounts",), "assumes": ()},
+    "held-performed": {"is": "the public's held names only the checks the period check performed, each holding of it",
+                       "discharged_by": ("Properties.NetworkPeriod.rowsHeld",), "assumes": ()},
+    "circuit-held": {"is": "each tied audit's class circuit held",
+                     "discharged_by": ("Properties.NetworkPeriod.rowsCircuitHeld",), "assumes": ()},
+    "sampled-leg-bridge": {"is": "the sampled leg's bridge, from its guarantee Verity.Vocab.SampledProofsSound at "
+                                 "one-stage v2 to OneStageZk's Lean record: the sampled facts the period takes (KS; at "
+                                 "the per-member record, the only form with wires, SessionKS, the sessions' KS, which "
+                                 "SessionKS_of can't give there, its SessionRuns failing at more than one session; "
+                                 "SessionOpens; RegOpens: the registered reads' openings), proved of the Lean verifier "
+                                 "and taken as theorem hypotheses on the layer below, never SampledCodeRuns or another "
+                                 "premise about the deployed Python. Open until the bridge's theorem is in the lock",
+                           "discharged_by": (), "assumes": ()},
+}
+#: the named assumptions that may stand under the figure of record, each on an auditor-trusted device
+STANDING = {"Verity.Assumptions.TrustedHost": "trusted-host: the network certifier and its host are the auditor's"}
+DISCHARGE = ("the tight K's premises (`PREMISES`), each open until every theorem that discharges it at the deployed code "
+             "is in Security's lock with no named assumption but a standing one (`STANDING`), and open while none is "
+             "named; and each named assumption of a guarantee of `RESTS_ON` that is neither standing nor a premise's, by "
+             "its own name, with each such guarantee the lock doesn't list. No premise about our own Python stands: "
+             "soundness is in Lean or rests on an auditor-trusted device")
+OPEN = ("the figure of record: K as the period's check states it, the tight form, only where its Lean verdict performed "
+        "every check of `CHECKS` (the public's held) and no premise of it is open (`DISCHARGE`). While "
+        "either is open it is K plus ℓ_a + 1 bits for each audit tied to each execution phase's scan, beside that "
+        "phase's ℓ_{a,j}: an advice of at most ℓ_a bits (`CAP`) is one of fewer than 2^(ℓ_a + 1) strings. The tight K's "
+        "cells go beside the figure of record's, conditional on what is open (periods_tight)")
+CAP = ("ℓ_a, the cap of the advice the run registered: its published advice registration's compiler cap_bits "
+       "(`REGISTRATION`, its advice's length padded to it), the length each Commit period's advice is padded to before "
+       "it is committed, the same for each tied audit, whose own registration in the case's commitment binds no advice "
+       "or compiler (`records_audit.py period` refuses one that does). A cap, in no term of PeriodLeakAccepted's K: it "
+       "enters the figure of record only while a check of `CHECKS` or a premise is open, as ℓ_a + 1 bits for each tied "
+       "audit (`OPEN`)")
+NO_REGISTRATION = (f"the run published no advice registration ({REGISTRATION}), whose compiler's cap is the ℓ_a the "
+                   "figure of record charges each tied audit while a check or a premise is open")
+TIED_ALL = ("every audit of the case's commitment: the public names no scan's tied audits (scans[j].tied), so each is "
+            "charged to every execution phase, exact with one audit")
 #: each scaled cell's rule, by the name it gives; `rules` adds each one's sources
 RULES = {
     "per-phase": "the run's K and eps over one of its m execution phases, K/m: their average, which no statement bounds a "
@@ -134,12 +268,67 @@ RULES = {
              "an H100-equivalent's FLOP/s, in machines of the reference datacenter's GPUs, rounded up, one network "
              "certifier on each",
 }
+EGRESS = ("the schedule's egress capacity an execution phase, from the case's params.schedule: at most lanes connections "
+          "live, each at most slots cells a bucket, over its T buckets, and no more than its caps' total (egress_cells "
+          "for each of its lanes · T connections), each cell cell_bytes bytes. It bounds the egress a phase can carry, so "
+          "K's share of it (each cell's share_of_capacity) is a lower bound on K's share of the egress it carried")
+SERVED_EGRESS = ("not in this record: the egress the run served is a count of its own traffic, which no published file "
+                 "states (the network certifier's chain files that count it stay on the node)")
+WEIGHTS = ("a stated parameter: one copy of the weights a deployment protects, the adversary resource model's model as "
+           "published (its census line's weights_bytes, at its weights_datatype), whatever the model the run served; "
+           "share_served is of the demo's served model beside it")
 FROM_BOUND = "bound: the run's K and eps over its m execution phases"
 FROM_SCHEDULE = f"{CASE} params.schedule: an execution phase's T buckets of τ"
 STATEMENTS = {"run": LB.STATEMENTS["per_period"], "node": LB.STATEMENTS["per_period"],
               "datacenter": LB.STATEMENTS["datacenter"], "world": LB.STATEMENTS["datacenter"]}
 NO_MEASUREMENT = ("no test run's measurement given (--advice-charge: `advice_charge.py`'s record of honest serving on "
                   "public inputs)")
+TEST_PHASES = ("the test run's own: T buckets of τ from its first Commit period's engine clock reading, not the network "
+               "certifier's phase boundaries, so a Commit period near a boundary can count in the next phase")
+#: what a later re-proof of the run's sampled units needs, each wire a sampled unit reads then proved inside its session:
+#: each by name, where it is (the serve dir, the prover's on the served node, by its path there with w<K> the audited
+#: window and <class> V3c's class; or OUT, the run's public files) and what it holds
+REPROOF = {
+    "values": ("serve dir", "v3c-w<K>-<class>/window/",
+               "the window commit: every unit's committed values with their rows and salts, the sampled units' and those "
+               "of the units that write what they read, and its circuit.json and registration.json"),
+    "openings": ("serve dir", "v3c-w<K>-<class>/audit/window/",
+                 "each sampled unit's opening as it was proved (m<k>-private.bin, m<k>-public.bin, v<j>-private.bin), "
+                 "with the partition and the Program the audit sampled"),
+    "draw": ("serve dir", "v3c-w<K>-<class>/audit/window/{draw,segment,receipt}.json",
+             "the live draw and its receipt, the stream's record that it received the registration before it read a coin"),
+    "coins": ("serve dir", "v3c-w<K>-<class>/audit/challenger/",
+              "the live challenger session the draw read its coins from"),
+    "advice": ("serve dir", "advice/w<K>/",
+               "the advice's registration and its opening (private/advice.bin), which the window circuit reads under its "
+               "hiding root"),
+    "weights": ("serve dir", "weights_registration.json, private/weights.key, private/cos_sin_cache.npy",
+                "the weights registration the audit pins, the committer's key their salts come from and the rotary table, "
+                "beside the checkpoint (REPO at REV, public)"),
+    "run root": ("serve dir", "windows.jsonl", "the run root the audit holds the registration to"),
+    "circuit": ("serve dir", "window-circuit-w<K>-<class>.json",
+                "the verifier's window-circuit record at the class, which the window commit's circuit is held to"),
+    "h1": ("serve dir", "h1/", "under H1_TIE, H1's registration of the window and its log, whose tables the circuit reads"),
+    "registration": ("OUT", "v3c-audit/registration.json",
+                     "the window's registration, whose roots bind every committed value and which the period's "
+                     "commitment holds whole"),
+    "audit": ("OUT", "v3c-audit/summary.json",
+              "the audit's summary: its draw, its coins and that the registration was fixed before the draw"),
+    "audit record": ("OUT", "v3c-audit/window/audit.json", "the audit record, each sampled unit's verdict"),
+    "period audit": ("OUT", "v3c-audit/period.json", "the audit as the network certifier's period reads it"),
+    "main": ("OUT", "v3c-audit/main.txt", "main's first-parent line the challenger session pins on"),
+    "advice registration": ("OUT", REGISTRATION, "the advice registration's public form, its compiler's cap"),
+    "case": ("OUT", str(CASE), "the network certifier's period case, whose commitment holds the tied audits' "
+                               "registrations"),
+    "record": ("OUT", "record/verdicts.json", "the window report of every verdict"),
+}
+REPROOF_KEPT = ("each retained past the week after the run, never only on the served node: OUT's in custody with the "
+                "run's public files; the serve dir's, witness, never in OUT or custody, which are public, but copied off "
+                "the served node to a private path keeping the serve dir's layout (`copy`: its node and path, and of "
+                "each serve-dir input whether the copy's listing holds every file its path names, never their bytes or "
+                "digests); a re-proof holds each to the public registration and the audit's summary")
+NO_COPY = ("no copy of the serve dir's inputs is given (--reproof-copy NODE:/PATH and --reproof-listing): they are on "
+           "the served node only")
 
 
 def missing(why: str, src: str | None = None) -> dict[str, Any]:
@@ -208,6 +397,9 @@ def bound(public: Mapping[str, Any]) -> dict[str, Any]:
             terms += [{"symbol": s, "phase": i, "bits": sum(int(scan[f]) for f in fs),
                        "lean": [f"scans[{i}].{f}" for f in fs]} for s, fs in PHASE_TERMS.items()]
         K, eps = int(public["K"]), Fraction(public["eps"])
+        deltas = {Fraction(s["delta"]) for s in public["scans"]}
+        readings = [{"delta": str(Fraction(c["delta"])), **{f: int(c[f]) for f in ("drawn", "units", "wrong_units")}}
+                    for c in public["charged"]] if "charged" in public else None
     except (KeyError, TypeError, ValueError) as e:
         raise ValueError(f"the rows form's public lacks a term: {type(e).__name__}: {e}") from None
     if sum(t["bits"] for t in terms) != K:
@@ -217,9 +409,21 @@ def bound(public: Mapping[str, Any]) -> dict[str, Any]:
         raise ValueError("the rows form's public has no scan: a period of no execution phase, which bounds nothing")
     if "windows" in public and int(public["windows"]) != m:
         raise ValueError(f"{m} scans for the period's {public['windows']} execution phases")
+    if len(deltas) != 1 or eps < m * min(deltas):
+        raise ValueError(f"eps {eps} isn't m · δ_scan plus the charged audits' δ: the scans' δ are "
+                         f"{sorted(map(str, deltas))}, and the period's check holds them to one")
+    (scan,) = deltas
+    if readings is not None and eps != m * scan + sum((Fraction(r["delta"]) for r in readings), Fraction(0)):
+        raise ValueError(f"eps {eps} isn't m · δ_scan plus each charged reading's δ_i: m · δ_scan is {m * scan}, and "
+                         f"the readings' δ_i are {[r['delta'] for r in readings]}")
     sources = [EPS, *ERRORS.values()]
+    skip = {"is": SKIP, "bits_per_phase": [t["bits"] for t in terms if t["symbol"] == "k_{skip,j}"],
+            "entries_per_phase": [int(s["faulty_entries"]) for s in public["scans"]]}
     return {"statement": LB.STATEMENTS["per_period"], "K": K, "phases": m, "notes": [OVERCOUNT], "terms": terms,
-            "delta_net": {"terms": [t | s for t, s in zip(delta_net(eps, m), sources)], "note": UNVALUED}}
+            "delta_net": {"terms": [t | s for t, s in zip(delta_net(eps, m), sources)], "note": UNVALUED},
+            "delta": {"scan": str(scan), "charged": str(eps - m * scan), "eps_per_phase": str(eps / m), "is": DELTA,
+                      "charged_audits": {"missing": NO_READINGS} if readings is None else readings},
+            "skip": skip}
 
 
 def delta_net(eps: Fraction, phases: int) -> list[dict[str, Any]]:
@@ -227,15 +431,37 @@ def delta_net(eps: Fraction, phases: int) -> list[dict[str, Any]]:
     return [{"symbol": "eps", "value": str(eps)}, *({"symbol": s, "times": phases} for s in ERRORS)]
 
 
+def composite_error(rows: Mapping[str, Any], eps: Fraction | None, why: str = "no accepted bound") -> dict[str, Any]:
+    """The composite's error term by term (`COMPOSITE`): each subprotocol's δ with where the run states it, or why it
+    doesn't (the network certifier's eps from its bound, else ``why``); ``stated`` sums those stated (None where none
+    is), ``vacuous`` at 1 or more."""
+    terms: list[dict[str, Any]] = []
+    for name in ("sampled proofs", "PoUW"):
+        t = {"subprotocol": name, "from": f"record/verdicts.json protocols.{ROWS[name]}.delta: its answer's "
+                                          "integrity-profile δ"}
+        d = (rows.get(ROWS[name]) or {}).get("delta")
+        try:
+            terms.append(t | ({"missing": "its row states no δ"} if d is None else {"delta": str(exact_delta(d))}))
+        except (TypeError, ValueError):
+            terms.append(t | {"error": f"its row's δ {d!r} isn't a number"})
+    terms.append({"subprotocol": "inference-only", "missing": NO_NCI_DELTA})
+    terms.append({"subprotocol": "the network certifier", "from": f"{EPS['source']}: its eps (`EPS`)"}
+                 | ({"missing": why} if eps is None else {"delta": str(eps)}))
+    given = [Fraction(t["delta"]) for t in terms if "delta" in t]
+    stated = sum(given, Fraction(0)) if given else None
+    return {"is": COMPOSITE, "terms": terms, "stated": None if stated is None else str(stated),
+            "vacuous": stated is not None and stated >= 1, "unvalued": COMPOSITE_UNVALUED}
+
+
 def eps_of(b: Mapping[str, Any]) -> Fraction:
     """The bound's eps, its δ_net's first term."""
     return Fraction(b["delta_net"]["terms"][0]["value"])
 
 
-def schedule(case: Mapping[str, Any], phases: int) -> tuple[Fraction, int]:
-    """An execution phase's seconds, T buckets of τ (the case's ``schedule``), and the connections its caps count
+def schedule(case: Mapping[str, Any], phases: int) -> tuple[Fraction, int, int]:
+    """An execution phase's seconds, T buckets of τ (the case's ``schedule``), the connections its caps count
     (``cells``), the case's period held to the answer's phases where its params keep ``windows`` and its caps to its
-    schedule's over them (`CONNECTIONS`)."""
+    schedule's over them (`CONNECTIONS`), and its egress capacity a phase in bits (`EGRESS`)."""
     params = case["params"]
     if "windows" in params and int(params["windows"]) != phases:
         raise ValueError(f"the case's period has {params['windows']} execution phases, and its answer {phases}")
@@ -247,7 +473,9 @@ def schedule(case: Mapping[str, Any], phases: int) -> tuple[Fraction, int]:
         raise ValueError(f"the case's {len(caps)} caps aren't its schedule's (Schedule.caps: egress_cells = "
                          f"{s['egress_cells']} for each of its lanes · m · T = {n} connections), which the period's "
                          "check refuses")
-    return Fraction(int(s["window"]) * int(s["bucket_ms"]), 1000), n
+    T = int(s["window"])
+    cells = min(int(s["lanes"]) * int(s["slots"]) * T, n // phases * int(s["egress_cells"]))
+    return Fraction(T * int(s["bucket_ms"]), 1000), n, cells * 8 * int(s["cell_bytes"])
 
 
 def census_line(name: str, *fields: str) -> dict[str, Any]:
@@ -255,7 +483,7 @@ def census_line(name: str, *fields: str) -> dict[str, Any]:
     SHA-512 of its canonical JSON."""
     d, = (d for d in json.loads((LB.CENSUS / name).read_text()) if d["role"] == "reference")
     canonical = json.dumps(d, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
-    return {"file": str((LB.CENSUS / name).relative_to(HERE.parents[1])), "id": d["id"],
+    return {"file": str((LB.CENSUS / name).relative_to(ROOT)), "id": d["id"],
             "read": {f: d[f] for f in fields}, "sha512": hashlib.sha512(canonical).hexdigest()}
 
 
@@ -269,26 +497,35 @@ def census() -> dict[str, Any]:
             "world": {"links": LB.world_links(), "sources": world}}
 
 
-def cell(bits: Fraction, eps: Fraction, phases: int, where: str, rule: str | None = None) -> dict[str, Any]:
-    """A cell over ``phases`` execution phases, proved, or scaled by ``rule`` (`RULES`)."""
-    return {"bits": math.ceil(bits), "share": float(bits / LB.WEIGHTS.bits), "delta_net": delta_net(eps, phases),
-            "vacuous": eps >= 1,
+def cell(bits: Fraction, eps: Fraction, phases: int, where: str, capacity: int,
+         rule: str | None = None) -> dict[str, Any]:
+    """A cell over ``phases`` execution phases, each of ``capacity`` egress bits (`EGRESS`), proved, or scaled by
+    ``rule`` (`RULES`)."""
+    return {"bits": math.ceil(bits), "share": float(bits / LB.WEIGHTS.bits), "share_served": float(bits / LB.SERVED.bits),
+            "share_of_capacity": float(bits / (capacity * phases)), "delta_net": delta_net(eps, phases),
+            "vacuous": eps >= 1, "eps_per_phase_below": str(Fraction(1, phases)),
             "statement": STATEMENTS[where]} | ({"how": "scaled", "rule": rule} if rule else {"how": "proved"})
 
 
-def periods(K: int, eps: Fraction, m: int, phase_s: Fraction, connections: int) -> dict[str, Any]:
+def periods(K: int, eps: Fraction, m: int, phase_s: Fraction, connections: int, capacity: int) -> dict[str, Any]:
     """The run's own period, proved, and each monitoring period's node, proved where the run's period covers it and
     else scaled, datacenter and world, scaled from the node's, each beside its figure over one execution phase (module
     docstring)."""
     refs = census()
     links = {"node": 1, **{k: v["links"] for k, v in refs.items()}}
     one, one_eps, period_s = Fraction(K, m), eps / m, m * phase_s
-    per_phase = cell(one, one_eps, 1, "run", None if m == 1 else "per-phase")
-    run = cell(Fraction(K), eps, m, "run") | {"seconds": str(period_s), "phases": m, "connections": connections,
-                                              "per_phase": per_phase}
+    per_phase = cell(one, one_eps, 1, "run", capacity, None if m == 1 else "per-phase")
+    run = cell(Fraction(K), eps, m, "run", capacity) | {"seconds": str(period_s), "phases": m,
+                                                        "connections": connections, "per_phase": per_phase}
     sources = {"per-phase": [FROM_BOUND], "run-to-period": [FROM_BOUND, FROM_SCHEDULE],
                **{k: v["sources"] for k, v in refs.items()}}
-    out: dict[str, Any] = {"phase_s": str(phase_s), "weights": LB.WEIGHTS.label, "run": run,
+    weights = {"share": {"of": LB.WEIGHTS.label, "is": WEIGHTS, "bits": LB.WEIGHTS.bits,
+                         "source": census_line("adversary.json", "model", "total_params", "weights_bytes",
+                                               "weights_datatype")},
+               "share_served": {"of": LB.SERVED.label, "bits": LB.SERVED.bits}}
+    out: dict[str, Any] = {"phase_s": str(phase_s), "weights": weights, "run": run,
+                           "egress": {"capacity_bits_per_phase": capacity, "is": EGRESS,
+                                      "served": {"missing": SERVED_EGRESS}},
                            "rules": {k: {"rule": text, "sources": sources[k]} for k, text in RULES.items()}}
     for name, seconds in LB.PERIODS.items():
         w = math.ceil(Fraction(seconds) / phase_s)
@@ -299,9 +536,9 @@ def periods(K: int, eps: Fraction, m: int, phase_s: Fraction, connections: int) 
             rule = where if where != "node" else None if covered else "run-to-period"
             params = {"phases": node, "phase_s": str(phase_s), "links": n,
                       "connections": str(Fraction(connections, m) * node * n)}
-            out[name][where] = cell(one * node * n, one_eps * node * n, node * n, where, rule) | {
+            out[name][where] = cell(one * node * n, one_eps * node * n, node * n, where, capacity, rule) | {
                 "parameters": params,
-                "per_phase": per_phase if where == "node" else cell(one * n, one_eps * n, n, where, where)}
+                "per_phase": per_phase if where == "node" else cell(one * n, one_eps * n, n, where, capacity, where)}
     return out
 
 
@@ -313,31 +550,157 @@ def measured(path: Path | None) -> dict[str, Any]:
     if doc.get("format") != AC.FORMAT:
         raise ValueError(f"{path} is {doc.get('format')!r}, not {AC.FORMAT}")
     return {"label": doc["label"], "run": doc["run"], "from": str(path), "bits_per_commit_period": doc["bits"],
-            "bits_per_phase": doc["phase_bits"] or doc["by_phase"],
+            "bits_per_phase": doc["phase_bits"] or doc["by_phase"], "phases": TEST_PHASES,
             "commit_periods_measured": len(doc["commit_periods"]), "finishes": doc["finishes"],
             "prompt_len": doc["prompt_len"], "output_len": doc["output_len"]}
 
 
 def lines(out: Path, name: str) -> list[str]:
-    try:
-        return (out / name).read_text().splitlines()
-    except FileNotFoundError:
-        return []
+    f = out / name
+    return f.read_text().splitlines() if f.is_file() else []
 
 
-def registered(b: Mapping[str, Any]) -> dict[str, Any]:
-    """ℓ_{a,j}, each execution phase's registered width, and their share of K."""
+def charged(b: Mapping[str, Any]) -> dict[str, Any]:
+    """ℓ_{a,j} as the bound charges each execution phase (`CHARGED`), and their share of K."""
     free = [t["bits"] for t in b["terms"] if t["symbol"] == "\\ell_{a,j}"]
-    return {"label": REGISTERED, "bits_per_phase": free, "share": float(Fraction(sum(free), b["K"])),
-            "lean": "scans[i].free"}
+    return {"is": CHARGED, "bits_per_phase": free, "share": float(Fraction(sum(free), b["K"])),
+            "lean": "scans[j].free"}
 
 
-def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
-    """OUT's onsite record (module docstring); FileNotFoundError where `served_verdicts.py record` wrote no report."""
+def advice_cap(reg: Any) -> int:
+    """ℓ_a (`CAP`) of the run's published advice registration: its compiler's cap_bits, a whole number of at least 1
+    bits. ValueError, by name, where it states none (an ℓ_a of 0 would charge a tied audit's advice nothing) or its
+    advice's length isn't padded to it."""
+    cap = ((reg.get("compiler") if isinstance(reg, Mapping) else None) or {}).get("cap_bits")
+    if not isinstance(cap, int) or isinstance(cap, bool) or cap < 1:
+        raise ValueError(f"its compiler states no cap_bits of at least 1 bit ({cap!r}), the ℓ_a the figure of record "
+                         "charges each tied audit while a check or a premise is open, so it charges none rather than 0")
+    bits = reg["binding"]["advice"]["bits"]
+    if bits != cap:
+        raise ValueError(f"its advice's length {bits} isn't padded to its compiler's cap {cap}")
+    return cap
+
+
+def caps(case: Mapping[str, Any], cap: int) -> list[int]:
+    """Each audit's ℓ_a (`CAP`), the run's ``cap``, in the order of the case's commitment. ValueError where an audit's
+    registration binds an advice or a compiler, whose bits no term of K charges."""
+    audits = json.loads(bytes.fromhex(case["commitment"]))["audits"]
+    if bound := [i for i, r in enumerate(audits)
+                 if any((r.get("window") or {}).get(k) is not None for k in ("advice", "compiler"))]:
+        raise ValueError(f"the registrations of audits {bound} bind an advice or a compiler, whose bits no term of K "
+                         "charges (records_audit.py period refuses them)")
+    return [cap] * len(audits)
+
+
+def premises(locks: Sequence[Path], root: Path = ROOT) -> dict[str, Any]:
+    """The tight K's premises as ``locks`` record their discharges (`DISCHARGE`): each of `PREMISES` with the theorems
+    no lock lists (``missing``) and the named assumptions of those one does that don't stand (``assumes``), each
+    guarantee of `RESTS_ON` with its named assumptions, and ``open``: each premise not discharged, then each assumption
+    of `RESTS_ON` neither standing nor a premise's, and each of its guarantees no lock lists. A lock that can't be read
+    lists nothing, and ``unread`` names it, by its path under ``root`` (the tree) where it is one, with why."""
+    listed: dict[str, Any] = {}
+    unread: list[str] = []
+    for lock in locks:
+        try:
+            listed |= json.loads(lock.read_text())["guarantees"]
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            name = lock.relative_to(root) if lock.is_relative_to(root) else lock
+            unread.append(f"{name}: {type(e).__name__}: {e.strerror if isinstance(e, OSError) else e}")
+    found, open_ = {}, []
+    for name, p in PREMISES.items():
+        missing = [t for t in p["discharged_by"] if t not in listed]
+        assumes = sorted({a for t in p["discharged_by"] if t in listed for a in listed[t]["assumptions"]} - set(STANDING))
+        found[name] = {"is": p["is"], "discharged_by": list(p["discharged_by"]), "missing": missing, "assumes": assumes}
+        if missing or assumes or not p["discharged_by"]:
+            open_.append(name)
+    covered = set(STANDING) | {a for p in PREMISES.values() for a in p["assumes"]}
+    rests = {g: {"assumptions": list(listed[g]["assumptions"])} if g in listed else {"missing": "not in the lock"}
+             for g in RESTS_ON}
+    open_ += sorted({a for r in rests.values() for a in r.get("assumptions", ()) if a not in covered}
+                    | {g for g, r in rests.items() if "missing" in r})
+    return {"is": DISCHARGE, "from": "Security/lean-audit.json and Security/Properties/lean-audit.json guarantees",
+            "premises": found, "rests_on": rests, "standing": STANDING, "open": open_, "unread": unread}
+
+
+def of_record(public: Mapping[str, Any], ell: Sequence[int], K: int, prem: Mapping[str, Any]) -> dict[str, Any]:
+    """The figure of record (`OPEN`) from the period's public, the audits' caps ``ell`` and the tight K's premises
+    ``prem`` (`premises`): ``K``, the checks the public holds, what is open (those checks and the premises), and the
+    advice ℓ_a + 1 charges, summed over each phase's tied audits (the public's ``scans[j].tied``, else every audit:
+    `TIED_ALL`)."""
+    held = [c for c in CHECKS if c in (public.get("held") or ())]
+    open_ = [c for c in CHECKS if c not in held] + list(prem["open"])
+    tied = [s.get("tied") for s in public["scans"]]
+    per = [sum(ell[int(i)] + 1 for i in (t if t is not None else range(len(ell)))) for t in tied]
+    return {"K": K + (sum(per) if open_ else 0), "held": held, "open": open_, "is": OPEN, "premises": prem,
+            "advice": {"bits_per_phase": per,
+                       "tied": "scans[j].tied" if all(t is not None for t in tied) else TIED_ALL}}
+
+
+def figure(out: Path, case: Mapping[str, Any], public: Mapping[str, Any], K: int,
+           prem: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The figure of record (`of_record`) and ``advice_charge``'s ``cap`` from OUT's advice registration
+    (`REGISTRATION`) and the case's commitment: both the one ``missing`` or ``error`` where either can't be read."""
+    try:
+        cap = advice_cap(json.loads((out / REGISTRATION).read_text()))
+    except FileNotFoundError:
+        return (why := {"missing": NO_REGISTRATION}), why
+    except (KeyError, TypeError, ValueError) as e:
+        return (why := {"error": f"{REGISTRATION}: {type(e).__name__}: {e}"}), why
+    try:
+        ell = caps(case, cap)
+        return of_record(public, ell, K, prem), {"ell_a": ell, "is": CAP}
+    except (IndexError, KeyError, TypeError, ValueError) as e:
+        return (why := {"error": f"{CASE} commitment: {type(e).__name__}: {e}"}), why
+
+
+def named(path: str) -> list[re.Pattern[str]]:
+    """Each file a `REPROOF` path names, as a pattern over a listing's paths: ``, `` separates paths, ``{a,b}`` is each of
+    a and b, ``<x>`` any one name, and a trailing ``/`` a directory holding at least one file."""
+    out = []
+    for part in path.split(", "):
+        m = re.fullmatch(r"(.*)\{([^}]*)\}(.*)", part)
+        for p in [m[1] + x + m[3] for x in m[2].split(",")] if m else [part]:
+            rx = "".join("[^/]+" if t.startswith("<") else re.escape(t) for t in re.split(r"(<[^>]+>)", p))
+            out.append(re.compile(rx + (".+" if p.endswith("/") else "")))
+    return out
+
+
+def reproof(out: Path, copy: str | None = None, listing: Path | None = None) -> dict[str, Any]:
+    """The re-proof inputs (`REPROOF`), each with where it is and what it holds; of OUT's whether the run wrote it, and of
+    the serve dir's, where ``copy`` (NODE:/PATH) and ``listing`` (each file under PATH, one path relative to it a line)
+    are given, whether the copy holds every file its path names."""
+    files = None
+    if copy is None or listing is None:
+        kept: dict[str, Any] = {"missing": NO_COPY}
+    elif not (node_at := copy.partition(":"))[0] or not node_at[2].startswith("/"):
+        kept = {"error": f"--reproof-copy {copy!r} isn't NODE:/PATH"}
+    else:
+        try:
+            files = [x for x in listing.read_text().splitlines() if x]
+            kept = {"node": node_at[0], "path": node_at[2]}
+        except (OSError, UnicodeDecodeError) as e:
+            kept = {"error": f"the copy's listing (--reproof-listing) can't be read: {type(e).__name__}"}
+    inputs = {}
+    for name, (at, path, what) in REPROOF.items():
+        inputs[name] = {"in": at, "path": path, "holds": what}
+        if at == "OUT":
+            inputs[name]["present"] = (out / path).exists()
+        elif files is not None:
+            inputs[name]["copied"] = all(any(rx.fullmatch(f) for f in files) for rx in named(path))
+    if files is not None:
+        kept["not_copied"] = [n for n, x in inputs.items() if x.get("copied") is False]
+    return {"inputs": inputs, "copy": kept, "kept": REPROOF_KEPT}
+
+
+def record(out: Path, advice_charge: Path | None = None, copy: str | None = None,
+           listing: Path | None = None) -> dict[str, Any]:
+    """OUT's onsite record (module docstring), with the re-proof inputs' ``copy`` and its ``listing`` where given
+    (`reproof`); FileNotFoundError where `served_verdicts.py record` wrote no report."""
     report = json.loads((out / "record" / "verdicts.json").read_text())
     if report.get("format") != EXTENDS:
         raise ValueError(f"record/verdicts.json is {report.get('format')!r}, not {EXTENDS}")
-    advice = {"served": ADVICE, "registered": {"missing": "no bound"}, "measured": measured(advice_charge)}
+    advice = {"served": ADVICE, "charged": {"missing": "no bound"}, "cap": {"missing": "no bound"},
+              "measured": measured(advice_charge)}
     rows = report.get("protocols") or {}
     found = composites(out)
     v = {name: row_verdict(rows, ROWS[name]) for name in ("sampled proofs", "PoUW")}
@@ -357,7 +720,8 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
         "of_record": {"holds": all(x["verdict"] == "accept" for x in v.values()),
                       "missing": [k for k, x in v.items() if x["verdict"] == "missing"],
                       "not_accepting": [k for k, x in v.items() if x["verdict"] not in ("accept", "missing")]},
-        "placement": profile.get("placement"), "advice_charge": advice}
+        "placement": profile.get("placement"), "advice_charge": advice, "composite_error": composite_error(rows, None),
+        "reproof": reproof(out, copy, listing)}
     nv = v["the network certifier"]
     if nv["verdict"] != "accept":
         why = (f"the network certifier's verdict is {nv['verdict']}"
@@ -371,31 +735,52 @@ def record(out: Path, advice_charge: Path | None = None) -> dict[str, Any]:
     except ValueError as e:
         return rec | {"bound": {"error": str(e)}, "periods": {"missing": "no bound"}}
     b["verdict_line"] = next((x for x in reversed(lines(out, "verdicts.txt")) if x.startswith(LINE)), None)
-    advice["registered"] = registered(b)
+    rec["composite_error"] = composite_error(rows, eps_of(b))
+    advice["charged"] = charged(b)
     b["period_s"] = None
     try:
-        phase_s, connections = schedule(json.loads((out / CASE).read_text()), b["phases"])
+        case = json.loads((out / CASE).read_text())
     except FileNotFoundError:
         b["connections"] = {"missing": f"no {CASE}: they are its params' caps"}
+        b["of_record"] = advice["cap"] = {"missing": f"no {CASE}: its commitment holds the tied audits' registrations"}
         return rec | {"periods": {"missing": f"no {CASE}: the execution phase's length is its params' schedule"}}
+    except ValueError as e:
+        b["connections"] = b["of_record"] = advice["cap"] = {"error": f"{CASE}: {type(e).__name__}: {e}"}
+        return rec | {"periods": b["of_record"]}
+    b["of_record"], advice["cap"] = figure(out, case, answer["public"], b["K"], premises(LOCKS))
+    try:
+        phase_s, connections, capacity = schedule(case, b["phases"])
     except (KeyError, TypeError, ValueError) as e:
         b["connections"] = {"error": f"{CASE}: {type(e).__name__}: {e}"}
         return rec | {"periods": {"error": f"{CASE}: {type(e).__name__}: {e}"}}
     b["connections"] = {"count": connections, "from": CONNECTIONS}
     b["period_s"] = str(b["phases"] * phase_s)
-    return rec | {"periods": periods(b["K"], eps_of(b), b["phases"], phase_s, connections)}
+    if "K" not in b["of_record"]:
+        why = b["of_record"].get("error") or b["of_record"]["missing"]
+        return rec | {"periods": {"missing": f"no figure of record: {why}"}}
+    eps, m, K = eps_of(b), b["phases"], b["of_record"]["K"]
+    rec["periods"] = periods(K, eps, m, phase_s, connections, capacity)
+    if K != b["K"]:
+        rec["periods_tight"] = {"conditional_on": b["of_record"]["open"],
+                                **periods(b["K"], eps, m, phase_s, connections, capacity)}
+    return rec
 
 
 def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
-    """The ``ONSITE`` line: each verdict, whether the run is of record, K, its δ_net's terms and connections, the
-    year's datacenter cell, and the measured advice charge's test run."""
+    """The ``ONSITE`` line: each verdict, whether the run is of record, K of record, the tight K and the checks it is
+    conditional on, its δ_net's terms, eps's split and connections, the composite's stated error, the year's datacenter
+    cell, and the measured advice charge's test run."""
     b, p = rec.get("bound") or {}, rec.get("periods") or {}
     year = (p.get("year") or {}).get("datacenter")
-    m = rec["advice_charge"]["measured"]
+    m, fig = rec["advice_charge"]["measured"], b.get("of_record") or {}
     return {"verdicts": {k: x["verdict"] for k, x in rec["verdicts"].items()}, "of_record": rec["of_record"]["holds"],
-            "K": b.get("K"), "delta_net": None if "delta_net" not in b else delta_net(eps_of(b), b["phases"]),
+            "K": fig.get("K"), "K_tight": b.get("K"), "open": fig.get("open"),
+            "delta_net": None if "delta_net" not in b else delta_net(eps_of(b), b["phases"]),
+            "delta": None if "delta" not in b else {k: b["delta"][k] for k in ("scan", "charged")},
+            "composite_error": {k: rec["composite_error"][k] for k in ("stated", "vacuous")},
             "connections": (b.get("connections") or {}).get("count"),
-            "year_datacenter": None if year is None else {k: year[k] for k in ("bits", "share", "delta_net", "how")},
+            "year_datacenter": None if year is None else {
+                k: year[k] for k in ("bits", "share", "share_served", "share_of_capacity", "delta_net", "how")},
             "advice_measured_on": m.get("run"), **{k: b[k] for k in ("missing", "error") if k in b}}
 
 
@@ -404,10 +789,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("out", type=Path, help="the served run's public $OUT")
     ap.add_argument("--advice-charge", type=Path,
                     help="a test run's advice-charge.json (advice_charge.py), stated beside the bound as that run's")
+    ap.add_argument("--reproof-copy", metavar="NODE:/PATH",
+                    help="where the serve dir's re-proof inputs were copied off the served node, keeping its layout")
+    ap.add_argument("--reproof-listing", type=Path,
+                    help="the copy's listing, kept off OUT: each file under PATH, one path relative to it a line")
     ap.add_argument("--to", type=Path, help="the record's path (default OUT/record/onsite.json)")
     a = ap.parse_args(argv)
     try:
-        rec = record(a.out, a.advice_charge)
+        rec = record(a.out, a.advice_charge, a.reproof_copy, a.reproof_listing)
     except FileNotFoundError as e:
         print(f"ONSITE: not written: {e.filename} is missing", file=sys.stderr)
         return 1

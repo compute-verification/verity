@@ -161,7 +161,6 @@ import time
 from collections.abc import Iterator, Sequence
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import replace
-from fractions import Fraction
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
 
@@ -984,8 +983,9 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
     none in ``out/case-v2-error.txt``."""
     try:
         import replay as RP
+        import served_integrity as SI
 
-        d = str(Fraction(delta).limit_denominator(10**12))
+        d = str(SI.exact_delta(delta))
         p = RP.params(program, query, law, ports, leaf_layer, d, work_table=work_table, partition=partition, **(tied or {}))
         e = RP.evidence(record, instances=instances, sessions=sessions, session_roots=session_roots, served=served)
         c = RP.Case("", "a5", rec["format"], "audit", "audit", program, p, rec, e, None)

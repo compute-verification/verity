@@ -96,7 +96,9 @@ the pins its registration records as their parameters' registered roots (``pins`
 scan state's, which the period refuses (it fixes no value before the run): the period check then counts the audit's free
 inputs on the record (`NetworkCheck.Circuit.check`: the input gates less the rows its wires and its pinned parameters'
 registered reads fill), the state's reads among them, and holds the registration to both. Refused where the window
-commits no scan state.
+commits no scan state, and where its registration binds a compiler or an advice: an advice bound at a root counts as
+registered there, so it falls in no term of K (ℓ_{a,j} counts only the circuit's free inputs), and the period takes only
+a circuit the verifier registered, which reads no advice.
 
 ``count``: a record that declares its inputs, counted before the committer writes its members' rows (`declared_count`): a
 stated one (cuts, registered reads, ingress: `interface.Circuit.declared`) from its description alone, and one that lists
@@ -686,14 +688,19 @@ TIED = SCAN_STATE
 def period(window: Path, audit: Path, pins: Mapping[str, str]) -> dict[str, Any]:
     """The window's audit as one compute audit of the network certifier's period (module docstring's ``period``):
     ``{answer, free, program, registration, steps}``, and ``circuit``, ``order`` and ``pins`` where the window has its
-    wires' order (``order.json``). ``pins`` are the verifier's (`pins_of`). ValueError where the
-    circuit isn't the one the registration binds, the window commits no `TIED` value its circuit reads, the audit wrote no
-    Program or another than the registration names, or its answer commits to another registration; RuntimeError where
-    the audit opened the advice (`served_integrity.opened`: ``--opening``, a development check no period reads)."""
+    wires' order (``order.json``). ``pins`` are the verifier's (`pins_of`). ValueError where the registration binds a
+    compiler or an advice (the advice's bits would go uncharged), the circuit isn't the one the registration binds, the
+    window commits no `TIED` value its circuit reads, the audit wrote no Program or another than the registration names,
+    or its answer commits to another registration; RuntimeError where the audit opened the advice
+    (`served_integrity.opened`: ``--opening``, a development check no period reads)."""
     import served_integrity as SI
 
     rec = json.loads((window / "registration.json").read_text())
     body, own = (window / "circuit.json").read_bytes(), rec.get("window") or {}
+    if bound := sorted(k for k in ("compiler", "advice") if own.get(k) is not None):
+        raise ValueError(f"the registration binds {' and '.join(bound)}: a circuit compiled from run-time choices, whose "
+                         "advice, bound at a root, counts as registered and so falls in no term of K (free, ℓ_{a,j}, "
+                         "counts only free inputs); it takes a circuit the verifier registered, which reads no advice")
     if hashlib.sha512(body).hexdigest() != own.get("circuit"):
         raise ValueError(f"{window / 'circuit.json'} is not the circuit record the registration binds")
     doc = json.loads(body)

@@ -46,9 +46,12 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                transfer gates (tapVal, TapOpens), the leak relation at them (RLeakTap) and the
                                collision finder against its openings (Btap)
 ../../Definitions/NetworkCertifier/Period.lean  trusted: a monitoring period of sampled audits: a statement registered
-                               as a window's (SameRegistration) and a window's good event (WindowGood)
+                               as a window's (SameRegistration), a window's good event (WindowGood; WindowGoodReg
+                               at the registration's values) and the period statement's named conditions
+                               (RegOpensAt, TapsOpen, WindowsPlaced, SchedulesHeld, SenderDecodes)
 ../../Definitions/NetworkCertifier/Guarantees/Period.lean  trusted: the leak through the network certifier over a
-                               monitoring period of sampled audits (PeriodLeakAccepted)
+                               monitoring period of sampled audits (PeriodLeakAccepted; PeriodLeakRegistered at the
+                               registration's values)
 ../../Definitions/NetworkCertifier/Guarantees/Pooled.lean  trusted: the incorrect proof blocks over a monitoring period
                                of sampled audits on independent live coins (PooledIncorrectBlocksLe)
 ../../Definitions/NetworkCertifier/PooledLeak.lean  trusted: a window's leak relation at one faulty set (LeakAt) and a
@@ -90,7 +93,12 @@ Period.lean     the leak through the network certifier over a monitoring period:
                                          registered observations are among AccSeqsSampled at its registration
                                          (mem_accSeqsSampled_of_windowGood), and the secrets the network certifier's
                                          cells decode to, read back from those observations and counted over the
-                                         windows (encard_periodGood_le, periodLeak)
+                                         windows (encard_period_le, periodLeak)
+PeriodReg.lean  the same at the registration's values: a trace that agrees with the network certifier's openings
+                                         and the registration's gives the leak relation with the registered inputs
+                                         at the registration's values (rLeakTapReg_of_r), a disagreement with either
+                                         being a collision (sampledLeak_tapReg), counted over WindowGoodReg
+                                         (periodLeak_registered)
 PeriodSum.lean  the period sum: per-window leak bounds `Pr[acc w ∧ b w < moved w] ≤ ε w` summed over a
                                          period's windows by a union bound (Pr_exists_mem_le_sum, periodLeak_le_sum)
 Pooled.lean     the incorrect proof blocks over a monitoring period: a uniform draw misses `f` blocks with
@@ -120,7 +128,8 @@ CountWitnesses.lean  the thirteen counts' pairs: seven egress (four over `AccSeq
                                          status complete, and each bound is false at the verifier that accepts
                                          everything (`acceptAll`); the per-execution-block forms at `e₀ = 0`, from
                                          the empty prefix. In the lock's `witnesses`
-PeriodWitnesses.lean  the monitoring period's two pairs (PeriodLeakAccepted, PooledLeakAccepted), in the
+PeriodWitnesses.lean  the monitoring period's pairs (PeriodLeakAccepted, PooledLeakAccepted) and
+                                         PeriodLeakRegistered's nontrivial lemma, in the
                                          lock's `witnesses`: no binder over the instance, the sampled verifier's
                                          code the one named assumption (Assumptions/SampledCode.lean)
 Assumptions/SampledCode.lean  `NetTiming.Assumptions.SampledCodeRuns`: the sampled verifier the service runs

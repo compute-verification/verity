@@ -205,7 +205,7 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
     assert [(x["name"], x["counted"]) for x in where["links"]] == [("certified", True), ("gate", False)]
     assert json.loads((piece / "chain" / "report" / "report.json").read_text())["verdict"] == "accepted"
     assert {p.name for p in piece.iterdir()} - {"piece.json"} == {"answer.json", CP.CASE, "chain", "piece.log"}
-    assert KS.scan(piece)[0] == []
+    assert [(f.file, f.path) for f in KS.scan(piece)[0]] == [("piece.log", "")]  # served_verdicts.sh's CERTIFIER_PRIVATE
     seen = {f.name: f.read_bytes() for f in (tmp_path / "seen").iterdir()}
     raw = (piece / CP.CASE).read_bytes()
     case = json.loads(raw)
@@ -463,7 +463,7 @@ def _numbers(p: Path) -> set[int]:
 
 
 def _private_chain_out(out: Path) -> Path:
-    """What the chain's active-warden path leaves in out/ on a served window: each step's file carrying the window's private
+    """What the chain's network certifier path leaves in out/ on a served window: each step's file carrying the window's private
     values where the chain writes them, and the report and report.md that ``chain_record.py report`` makes of them."""
     docs = {
         "custody.json": {"verdict": "accepted", "gate_runs": [{"gate_run": RUN, "strategies": {}}]},

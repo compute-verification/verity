@@ -1,10 +1,11 @@
 """kind-scan: each field the network certifier's piece releases to the verifier, by kind. A field is one of the four
-public kinds (`verity.core.wire.PUBLIC`: protocol structure, the protocol's outputs, the verifier's coins and draws,
+public kinds (`verity.core.wire.PUBLIC`: protocol structure, the protocol's outputs, the verifier's coins and samples,
 hiding commitments) or what the network certifier signed (`CERTIFICATE`: its certificates reach the verifier in the
 clear from the auditor's device, a provisional exception to the four kinds, not a fifth). A field of no declared kind is
 a finding.
 
     python benchmarks/network_traces/kind_scan.py DIR
+    python benchmarks/network_traces/kind_scan.py --received OUT
 
 DIR is a piece's DIR, or its hold before the leak guard releases it (`certifier_piece.settle` runs the scan there on
 every served run and refuses on a finding, releasing nothing): `DOCS`' files, the case as DIR/case.json (its commitment
@@ -18,13 +19,23 @@ count of its requests, the advice's length.
 
 The record path's two development checks are findings wherever they reach the verifier (`Development`, each naming its
 check): an advice binding in a registration (``window.compiler``, ``window.advice``: the compiler and the advice's root and
-length an audit opens, `records_audit.py audit --opening`), since the window commit's proofs read the advice under its
-hiding root and no registration of the record path binds it to be opened; and the chain's endpoint rebuild (the report's
-``endpoint`` step, chain_record.sh's CR_ENDPOINT on the endpoint's records and advice in the clear), which the
-active-warden path refuses. The report's steps are the active-warden path's (`STEPS`). A text field (a verdict's reason, a
-step's account of what ran in the clear) is declared by its key, its text not read. The logs (`LOGS`) are the run's
-account, published in its public form (`served_verdicts.publish`), not the verifier's input, and aren't read; any other
-file is a finding.
+length an audit opens, `records_audit.py audit --opening`), since no audit of record reads an advice (V3c's class
+window's circuit is the class's) and no registration of the record path binds one to be opened; and the chain's
+endpoint rebuild (the report's ``endpoint`` step, chain_record.sh's CR_ENDPOINT on the endpoint's records and advice in
+the clear), which the network certifier path refuses. The report's steps are the network certifier path's (`STEPS`). A
+text field (a verdict's reason, a step's account of what ran in the clear) is declared by its key, its text not read,
+and so is a text file (`TEXT`, a
+refusal). Any other file is a finding, a log included: the steps' logs stay on the node (`served_verdicts.sh`'s
+CERTIFIER_PRIVATE).
+
+``--received OUT`` scans what a verifier on another machine reads of a served run's OUT (`RECEIVED`, the files
+`served_verdicts.RECEIVED` names, which `served_verdicts.publish` leaves as they are only once this scan is clean): the
+certifier's piece (``pieces/certifier``, `DOCS`) and V3c's audit (``v3c-audit``, `V3C_DOCS`, what `served_integrity.answer`
+reads of it and the period's compute audit), each whole, so a file in either that no declaration covers is a finding;
+and the window circuit's inputs and count, each the verifier's: the registered compiler (`COMPILER`), the advice
+registration (`ADVICE_REGISTRATION`, its length held to the cap: `padded`), the weights registration (`WEIGHTS`) and each
+class's count (`COUNT`). None of them reads the advice: an advice binding, a compile, an unpadded length or a φ that
+carries a workload is a finding.
 
 Prints each finding (its file, key path and the value's type, never the value) and a count of leaves by kind; exit 0
 with no finding, 1 with one.
@@ -56,11 +67,11 @@ class Development:
 
 
 OPENING = Development("an advice binding, which an audit opens (records_audit.py audit --opening, a development check): "
-                      "on the record path the window commit's proofs read the advice under its hiding root, its length "
-                      "included, and nothing opens it")
+                      "no audit of record reads an advice or its length (V3c's class window's circuit is the class's), "
+                      "and nothing opens one")
 ENDPOINT = Development("the chain's endpoint rebuild (CR_ENDPOINT: the endpoint's records and advice, in the clear), a "
-                       "development check the active-warden path refuses")
-#: the chain's steps on the active-warden path (`chain_record.report`)
+                       "development check the network certifier path refuses")
+#: the chain's steps on the network certifier path (`chain_record.report`)
 STEPS = ("custody", "certificates", "n2", "scan", "lean")
 
 
@@ -77,9 +88,11 @@ RECORD = {"**": S}
 ENTRY = {"value": S, "root": M, "leaves": S, "words": S, "word_bits": S, "domain": S}
 #: a one-stage registration (`one_stage.registration.record`): the digests and population of the Program and query, the
 #: law the verifier's sampling design over them, the roots and registered values hiding commitments under domains of
-#: their structure; its window the provenance: a scan round's account and members, or a committed window's run root,
-#: circuit record, class, per-window values, registered roots and index leaf. The window's own number is none of them,
-#: and the advice's binding (`interface.advice_binding`) is `OPENING`'s.
+#: their structure; its window the provenance: a scan round's account and members, its state's reads (`stateRead`'s
+#: runs) and row 0's opening (`stateEmpty`: the empty state, which the protocol fixes, its width and salt structure and
+#: its path's siblings hiding commitments; no unit reads leaf 0), or a committed window's run root, circuit record,
+#: class, per-window values, registered roots and index leaf. The window's own number is none of them, and the advice's
+#: binding (`interface.advice_binding`) is `OPENING`'s.
 REGISTRATION = {
     "format": S, "protocol": S, "program": S, "query": S, "partition": S, "population": S, "scheme": S, "leaf_layer": S,
     "anchors[]": S, "previous": M,
@@ -88,13 +101,15 @@ REGISTRATION = {
     "roots[].port": S, "roots[].leaves": S, "roots[].domain": S, "roots[].root": M,
     **under("registered[]", ENTRY),
     "window.kind": S, "window.link": S, "window.of": S, "window.members.*.template": S, "window.members.*.units[]": S,
+    "window.reads.*.*.leaf": S, "window.reads.*.*.units[]": S,
+    "window.empty.*.words": S, "window.empty.*.salt": S, "window.empty.*.path": M,
     "window.run": M, "window.circuit": S, "window.order": S, "window.index_leaf": M, "window.registered_roots.*": M,
     "window.window_circuit.class[]": S, "window.activations.program": S,
     **under("window.activations.values.*", ENTRY),
     "window.compiler.**": OPENING, "window.advice.**": OPENING,
 }
 #: a one-stage answer (`served_integrity.answer`, `Answer.toJson`): its verdict and bound the protocol's outputs, its
-#: profile the integrity profile's structure, and the units drawn and proved the verifier's draws
+#: profile the integrity profile's structure, and the units sampled (``drawn``) and proved the verifier's samples
 ONE_STAGE = {
     "protocol": S, "verdict": O, "reason": O, "commitment": M,
     "profile": O, "profile.programs[]": S, "profile.prescribed[]": S, "profile.covered[]": S, "profile.linked": S,
@@ -119,6 +134,7 @@ CERTIFICATE_DOC = dict.fromkeys(("digest", "direction", "key_id", "link", "signa
 COMMITMENT = {**under("audits[]", REGISTRATION), **under("windows[]", REGISTRATION)}
 EVIDENCE = {**under("audits[]", ONE_STAGE), **under("windows[].answer", ONE_STAGE),
             **under("windows[].certificates[]", CERTIFICATE_DOC), **under("windows[].registrations[]", ROWS)}
+#: the parameters, each structure: a connection's cap (``cells``) is the registered schedule's (`WardenParams.caps`)
 PARAMS = {
     "audits[].free": S, "audits[].steps": S, **under("audits[].program", DESCRIPTOR), **under("scan", DESCRIPTOR),
     **under("audits[].circuit", RECORD), **under("audits[].order", RECORD), "audits[].pins.*": M,
@@ -141,7 +157,7 @@ ANSWER = {
        for k in ("delta", "drawn", "faulty_bits", "faulty_entries", "faulty_sets", "free", "jitter", "units",
                  "wrong_units")},
 }
-#: a step of the chain's report: its verdict, the draw's law, population and size with its bound at each δ, and what
+#: a step of the chain's report: its verdict, the sample's law, population and size with its bound at each δ, and what
 #: it ran in the clear
 STEP = {"verdict": O, "in_the_clear": S, "eps_at_delta": O,
         **{f"eps_at_delta.{k}": S for k in ("law", "units", "drawn", "per_proof")},
@@ -169,8 +185,67 @@ DOCS: dict[str, dict[str, Any]] = {
     "piece.json": {"server": S, "rc": O, "limit": S},
 }
 HEX = {"case.json": ("commitment", "evidence")}
-#: the logs `served_verdicts.sh` and `served_verdicts.py` write in DIR (`certifier_piece.LOGS`)
-LOGS = ("piece.log", "chain.log", "period.log")
+#: text files, each declared whole, its text not read: a piece's refusal (`certifier_piece.REFUSED`), the protocol's
+#: output
+TEXT = {"refused.txt": O}
+
+#: what `served_integrity.answer` reads of a records audit's ``summary.json`` (`served_integrity.SUMMARY`): its refusal,
+#: its checks before the sample and after it, and the audit's verdict, its coins' outcome and Lean's refusals, each the
+#: protocol's output. An audit that compiled the advice (``compile``) opened it: `OPENING`'s
+SUMMARY_DOC = {
+    "refused.**": O, "checks_before_draw": O, "checks_before_draw.*": O,
+    "fixed_before_draw": O, "fixed_before_draw.ok": O, "fixed_before_draw.codes[]": O,
+    "audit": O, "audit.accepted": O, "audit.outcome.**": O, "audit.why.**": O,
+    "compile.**": OPENING,
+}
+#: what it reads of the audit record ``window/audit.json`` (`served_integrity.RECORD`): its verdict and each check's
+#: outcome, the units sampled and those the proved statement covers, the sample and the units proved (the verifier's
+#: samples),
+#: the registration it audited, and the bound on incorrect proof blocks over the population at δ
+AUDIT_RECORD = {
+    "accepted": O, "checks.*": O, "checks.*.ok": O, "checks.*.codes[]": O,
+    "checks.proved.detail.units.drawn[]": C, "checks.proved.detail.units.statement[]": C,
+    "draw.**": C, "proved_units[]": C, **under("registration", REGISTRATION),
+    "wrong_units": O, "wrong_units.delta": S, "wrong_units.of": S, "wrong_units.rule": S, "wrong_units.bound": O,
+    "wrong_units.per_template.*": O,
+}
+#: V3c's audit as one compute audit of the network certifier's period (`records_audit.period`): its answer, its free
+#: input bits and steps, the Program and the registration
+PERIOD = {**under("answer", ONE_STAGE), "free": S, "steps": S, **under("program", DESCRIPTOR),
+          **under("registration", REGISTRATION)}
+#: V3c's audit as the run publishes it (``v3c-audit``: `served_integrity.public_copy`, the registration it audited and
+#: its period audit)
+V3C_DOCS: dict[str, dict[str, Any]] = {"summary.json": SUMMARY_DOC, "window/audit.json": AUDIT_RECORD,
+                                       "registration.json": REGISTRATION, "period.json": PERIOD}
+#: the run's registered compiler (`prove_path.compiler_doc`): its name, digest and cap, the compiler it wraps and the
+#: server's code, its model's transfer gates, the default seed and φ (the model, target, TP, sampling, engine and
+#: execution), all structure. φ's workload is the requests', which a registered φ never carries: nothing under it is
+#: declared
+COMPILER = {
+    "name": S, "digest": S, "cap_bits": S, "inner.name": S, "inner.digest": S, "served.name": S, "served.digest": S,
+    "transfer_gates[]": S, "default_seed": S, "phi.schema": S, "phi.execution": S, "phi.profile": S,
+    **{f"phi.{k}.**": S for k in ("model", "target", "tp", "sampling", "engine")},
+}
+#: a window's advice registration as the run publishes it (`served_verdicts.public_registration`): its binding's compiler
+#: and the registered compiler, structure; the advice's root and each weight's root (`registered_roots`), hiding
+#: commitments; the advice's length and rows, which `padded` holds to the cap; and the window commit it names
+ADVICE_REGISTRATION = {
+    "schema": S, "scheme": S, "binding.compiler.name": S, "binding.compiler.digest": S, "binding.advice.root": M,
+    "binding.advice.bits": S, **{f"compiler.{k}": S for k in ("name", "digest", "cap_bits", "inner.name", "inner.digest")},
+    "rows": S, "row_bits": S, "T": S, "commit": S, "commit.run_id": S, "commit.run_root": M, "registered_roots.*": M,
+    "padded[]": S,
+}
+#: the committer's weights registration (`window_weights.weights_registration`): the Program and model it registers
+#: under, each weight's entry (its root a hiding commitment) and the parameters it leaves unrooted, with why
+WEIGHTS = {"schema": S, "program": S, "model.repo": S, "model.revision": S, "grain.**": S, **under("values.*", ENTRY),
+           "unrooted.*": S}
+#: the window circuit's input count at a class (`prove_path.window_circuit_of_class`), the class circuit's structure
+COUNT = {"count.*": S, "seconds.*": S}
+#: what a verifier on another machine reads of a served run's OUT, by path (`served_verdicts.RECEIVED`): each of
+#: `RECEIVED_DIRS` whole by its declarations, and each other path (a glob) by its one
+RECEIVED_DIRS: dict[str, dict[str, dict[str, Any]]] = {"pieces/certifier": DOCS, "v3c-audit": V3C_DOCS}
+RECEIVED: dict[str, dict[str, Any]] = {"compiler.json": COMPILER, "registration.json": ADVICE_REGISTRATION,
+                                       "weights_registration.json": WEIGHTS, "window-circuit-*.json": COUNT}
 
 _KIND = None
 
@@ -224,16 +299,17 @@ def _leaves(value: Any, nodes: list[dict], path: tuple[str, ...] = ()) -> Iterat
         yield path, [n[_KIND] for n in nodes if _KIND in n], value
 
 
-def scan_doc(rel: str, doc: Any, kinds: Counter) -> list[Finding]:
-    """``doc``'s findings, as DIR's file ``rel`` (`DOCS`), each leaf counted in ``kinds`` by its kind."""
-    for k in HEX.get(rel, ()):
+def scan_doc(rel: str, doc: Any, kinds: Counter, docs: Mapping[str, Mapping[str, Any]] = DOCS) -> list[Finding]:
+    """``doc``'s findings, as the file ``rel`` of a dir ``docs`` declares (`DOCS`, a piece's DIR), each leaf counted in
+    ``kinds`` by its kind."""
+    for k in HEX.get(rel, ()) if docs is DOCS else ():
         if isinstance(doc, dict) and isinstance(doc.get(k), str):
             try:
                 doc = {**doc, k: json.loads(bytes.fromhex(doc[k]))}
             except ValueError as e:
                 return [Finding(rel, k, f"isn't hex of JSON ({type(e).__name__})")]
     out = []
-    for path, declared, value in _leaves(doc, [_trie(DOCS[rel])]):
+    for path, declared, value in _leaves(doc, [_trie(docs[rel])]):
         if not declared:
             out.append(Finding(rel, _name(path), f"a {type(value).__name__} of no declared kind"))
         elif len(set(declared)) > 1:
@@ -245,30 +321,75 @@ def scan_doc(rel: str, doc: Any, kinds: Counter) -> list[Finding]:
     return out
 
 
-def scan(d: Path) -> tuple[list[Finding], Counter]:
-    """Every file under ``d`` scanned (module docstring): the findings, and the leaves counted by kind."""
+def _json(rel: str, p: Path, out: list[Finding]) -> Any:
+    if p.is_symlink():
+        out.append(Finding(rel, "", "a symlink, which the verifier would receive as the file it names"))
+        return None
+    try:
+        return json.loads(p.read_bytes())
+    except ValueError as e:
+        out.append(Finding(rel, "", f"isn't JSON ({type(e).__name__})"))
+        return None
+
+
+def scan(d: Path, docs: Mapping[str, Mapping[str, Any]] = DOCS) -> tuple[list[Finding], Counter]:
+    """Every file under ``d`` scanned by its declaration in ``docs`` (module docstring; `DOCS`, a piece's DIR): the
+    findings, and the leaves counted by kind."""
     kinds, out = Counter(), []
     for p in sorted(x for x in d.rglob("*") if x.is_file() or x.is_symlink()):
         rel = p.relative_to(d).as_posix()
-        if rel in LOGS:
+        if rel in TEXT and docs is DOCS and not p.is_symlink():
+            kinds[TEXT[rel]] += 1
             continue
-        if rel not in DOCS or p.is_symlink():
+        if rel not in docs:
             out.append(Finding(rel, "", "a file the verifier would receive that no declaration covers"))
             continue
-        try:
-            doc = json.loads(p.read_bytes())
-        except ValueError as e:
-            out.append(Finding(rel, "", f"isn't JSON ({type(e).__name__})"))
-            continue
-        out += scan_doc(rel, doc, kinds)
+        if (doc := _json(rel, p, out)) is not None:
+            out += scan_doc(rel, doc, kinds, docs)
     return out, kinds
+
+
+def padded(rel: str, reg: Any) -> list[Finding]:
+    """The advice registration's length at its cap (`served_verdicts.public_registration`): ``binding.advice.bits`` its
+    compiler's ``cap_bits`` and ``rows`` the rows those fill, else a finding, the advice's own length being the
+    window's."""
+    try:
+        cap, row_bits = int(reg["compiler"]["cap_bits"]), int(reg["row_bits"])
+        got = {"binding.advice.bits": reg["binding"]["advice"]["bits"], "rows": reg["rows"]}
+    except (KeyError, TypeError, ValueError, ZeroDivisionError):
+        return [Finding(rel, "binding.advice.bits", "no length the cap can be read against")]
+    want = {"binding.advice.bits": cap, "rows": -(-cap // row_bits) if row_bits > 0 else None}
+    return [Finding(rel, k, "the advice's own length, not the cap's") for k in got if got[k] != want[k]]
+
+
+def received(out: Path) -> tuple[list[Finding], Counter]:
+    """What a verifier on another machine reads of a served run's ``out`` (module docstring): each dir of
+    `RECEIVED_DIRS` scanned whole, each path of `RECEIVED` by its declaration, the advice registration's length held to
+    its cap (`padded`). A dir or file missing is no finding: what reads it reads its absence."""
+    kinds, found = Counter(), []
+    for sub, docs in RECEIVED_DIRS.items():
+        if (out / sub).is_dir():
+            f, k = scan(out / sub, docs)
+            found += [dataclasses.replace(x, file=f"{sub}/{x.file}") for x in f]
+            kinds.update(k)
+    for pattern, table in RECEIVED.items():
+        for p in sorted(out.glob(pattern)):
+            rel = p.relative_to(out).as_posix()
+            if (doc := _json(rel, p, found)) is not None:
+                found += scan_doc(rel, doc, kinds, {rel: table})
+                if table is ADVICE_REGISTRATION:
+                    found += padded(rel, doc)
+    return found, kinds
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="kind_scan.py", description=__doc__.splitlines()[0])
-    ap.add_argument("dir", type=Path)
+    ap.add_argument("dir", type=Path, nargs="?")
+    ap.add_argument("--received", type=Path, metavar="OUT", help="a served run's OUT: what a verifier reads of it")
     a = ap.parse_args(argv)
-    found, kinds = scan(a.dir)
+    if (a.dir is None) == (a.received is None):
+        ap.error("DIR or --received OUT, one of them")
+    found, kinds = scan(a.dir) if a.received is None else received(a.received)
     for f in found:
         print(f"KIND-SCAN finding: {f}")
     print(f"KIND-SCAN {'clean' if not found else f'{len(found)} findings'}: "

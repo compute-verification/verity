@@ -96,7 +96,7 @@ REQUEST_USERS = "request_users.jsonl"
 #: the records mirrored into the run's $OUT, none of them private (`research_outputs.private`): requests.jsonl and the step
 #: traces, which hold request values, stay in the serve dir with the served rows' salts, and what reads them runs there
 MIRRORED = ("serve.json", REQUEST_USERS, "windows.jsonl", "seals.jsonl", "pauses.jsonl", "summary.json", "remote_session.json",
-            "memory_map.jsonl")
+            "memory_map.jsonl", "advice_registration.json", "advice.jsonl")
 
 
 def gc_of(rc: Any) -> dict[str, Any] | None:
@@ -265,7 +265,9 @@ class CommitWindows:
     (`serve_h1.H1Windows`) opens on each window once its committer is installed and closes first at its close, before the
     committer comes off or its window is detached, its hooks being on top of the committer's; what its ``close`` returns is
     the window line's ``pouw_h1``, and when that is a `Future` (its release off the loop) the line is written once it
-    resolves, the loop and the sealer going on. An arm with ``sealed`` hears each window's seal line, or why it has none."""
+    resolves, the loop and the sealer going on. An arm with ``sealed`` hears each window's seal line, or why it has none.
+    ``advice`` (`serve_advice.ServedAdvice`) gets each window's line as it is made, before any arm's hold, and each finished
+    request's line of requests.jsonl."""
 
     def __init__(self, committer: Any, out: Path, *, run_id: str, window_steps: int, idle_close_steps: int = 1,
                  eos_ids: Sequence[int] = (), decode: Callable[[Sequence[int]], str] | None = None,
@@ -273,8 +275,9 @@ class CommitWindows:
                  marks: Callable[[int, str], None] | None = None, seal: Mapping[str, Any] | None = None,
                  served: Mapping[str, int] | None = None, sealer: Any = None, window_bytes: int | None = None, disk: Any = None,
                  on_floor: Callable[[str], None] | None = None, mirror: Callable[[], None] | None = None,
-                 request_cap: int = 0, arm: Any = None, release: Any = None) -> None:
+                 request_cap: int = 0, arm: Any = None, release: Any = None, advice: Any = None) -> None:
         self.com, self.out, self.clock, self.wall, self.marks = committer, Path(out), clock, wall, marks
+        self.advice = advice                             # `serve_advice.ServedAdvice`: each window's advice, committed as it serves
         self.release = release                           # `serve_release.Draws`: each window's draw-gated release, before its seal
         self.arm, self._arm_out = arm, {}                # each window's arm outcome, until its line is written
         self.arm_failed: list[int] = []                  # the windows whose arm failed to open or close
@@ -466,6 +469,8 @@ class CommitWindows:
         self._write_window(rec)
         if self.marks is not None:
             self.marks(self.window, "close")
+        if self.advice is not None:                      # its line came before the close mark the committer waits on
+            self.advice.wake()
         if self.mirror is not None:
             self.mirror()
         if isinstance(job, tuple):
@@ -583,6 +588,8 @@ class CommitWindows:
 
     def _write_window(self, rec: dict[str, Any]) -> None:
         """The window's line, with its arm's outcome; held while its arm is still closing (`_arm_closed` writes it)."""
+        if self.advice is not None:
+            self.advice.closed(rec)
         with self._lock:
             if rec["window"] in self._arm_pending:
                 self._awaiting[rec["window"]] = rec
@@ -760,6 +767,9 @@ class CommitWindows:
                                          "cache_hit": int(rec["check"].get("cache_hit") or 0)})
                 fh.write(json.dumps(rec) + "\n")
                 fu.write(json.dumps({"engine_id": rec["engine_id"], "user": rec["user"]}) + "\n")
+                if self.advice is not None:
+                    fh.flush()
+                    self.advice.recorded(rec)
 
     def summary(self) -> dict[str, Any]:
         """The windows closed so far; ``closing`` those whose finalize, off the loop, has yet to run (their requests unchecked)."""

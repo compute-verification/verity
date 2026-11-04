@@ -15,6 +15,9 @@
       "tokens_per_request",
       "model",
       "active_params",
+      "total_params",
+      "weights_bytes",
+      "weights_datatype",
       "datatype",
       "flop_per_active_param_per_token",
       "flop_per_request",
@@ -60,6 +63,19 @@
       "active_params": {
         "type": "number",
         "exclusiveMinimum": 0
+      },
+      "total_params": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      },
+      "weights_bytes": {
+        "description": "one copy of the model's weights as published, the copy a deployment protects",
+        "type": "integer",
+        "exclusiveMinimum": 0
+      },
+      "weights_datatype": {
+        "type": "string",
+        "minLength": 1
       },
       "datatype": {
         "type": "string",

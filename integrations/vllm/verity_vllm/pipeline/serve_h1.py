@@ -657,7 +657,8 @@ def arm_of(opts: Any, llm: Any, com: Any, out: Path, flush: Callable[[], Any] | 
     """The server's arm under ``--protocols`` over the served ``llm`` and its committer ``com`` (None without): T
     ``--max-num-batched-tokens`` and S ``--window-steps`` a window, each window's session through `sessions_of` (window
     0's reserved while the Program is declared), its prover state in ``--h1-prover``, its Commit record named by
-    ``--h1-window-commit`` (`serve_tie.WindowTie`, after ``flush``, the advice trace's drain) and its release on a
+    ``--h1-window-commit`` (`serve_tie.WindowTie`, after ``flush``: the advice trace's drain, and under ``--advice`` every
+    whole window's advice committed, `serve_advice.ServedAdvice.drain`) and its release on a
     `worker` of its own, made ready (`H1Windows.ready`)."""
     from verity_vllm.pipeline.serve_tie import WindowTie
 
