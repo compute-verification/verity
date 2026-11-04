@@ -42,7 +42,7 @@ lean = D.server_fixture(port("op", R.python_op, R.op_input()))
 
 def _vectors() -> list[dict]:
     v = json.loads(R.VECTORS.read_text())
-    assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "order", "budget", "schedule", "escapes"}
+    assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "order", "budget", "schedule", "escapes", "registrations"}
     return v["cases"]
 
 
@@ -88,8 +88,9 @@ def _tallied(reference, tally: Counter, key):
 
 def _assert_ops_seen(tally: Counter) -> None:
     ops = {k.split(":")[0] for k in tally}
-    assert ops == {"open", "finish", "stop", "release", "admit", "failures", "slot"}, tally
-    for k in ("open:ok", "open:refused", "open:error", "admit:ok", "admit:refused"):
+    assert ops == {"open", "finish", "stop", "release", "admit", "failures", "slot", "register", "registrations"}, tally
+    for k in ("open:ok", "open:refused", "open:error", "admit:ok", "admit:refused", "registrations:ok",
+              "registrations:refused"):
         assert tally[k] >= 10, (k, tally)
 
 
@@ -219,3 +220,27 @@ def test_the_lean_reads_only_the_firewalls_lines(lean):
         assert lean.call("op", value)[0] == "reject", name
         assert R.python_op(value)["result"] == 0, name
     assert _lean_op(lean)({"op": ["failures", "s"], "record": f"{first}\n{second}\n"})["result"] == 0
+
+
+def test_the_lean_reads_registrations_only_in_their_order(lean):
+    """The Lean reads each registration only at its place among the registrations, its record that number first, and each
+    admission or skip only at its place among them, below the registrations before it: a record admitting one twice, out of
+    its order or before it is registered, or holding a registration out of its place, is refused, so no registration is
+    admitted twice. Python reads each as its events."""
+    good = R.record_of([["open", "s", ["L0"], None, None], ["finish", "r0000"], ["register", "aa"], ["register", "bb"],
+                        ["registrations", "r0000", "L0", [0]]])
+    lines = good.splitlines(keepends=True)
+
+    def line(seq: int, **ev) -> str:
+        return json.dumps({"seq": seq, **ev}, sort_keys=True) + "\n"
+
+    admit = {"event": "admit", "part": "L0", "session": "r0000"}
+    variants = {"admitted twice": good + line(5, **admit, n=0), "out of its order": "".join(lines[:4]) + line(4, **admit, n=1),
+                "before its registration": "".join(lines[:2]) + line(2, **admit, n=0),
+                "registration out of its place": "".join(lines[:2]) + line(2, event="register", n=1, record="0000000000000001bb"),
+                "record numbered otherwise": "".join(lines[:2]) + line(2, event="register", n=0, record="0000000000000001aa")}
+    for name, text in variants.items():
+        value = {"op": ["failures", "s"], "record": text}
+        assert lean.call("op", value)[0] == "reject", name
+        assert R.python_op(value)["result"] == 0, name
+    assert _lean_op(lean)({"op": ["failures", "s"], "record": good})["result"] == 0

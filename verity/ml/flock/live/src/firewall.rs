@@ -187,6 +187,14 @@ pub fn lean_frame_exe() -> std::path::PathBuf {
         .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../..").join("verity/core/service/flock/.lake/build/bin/flock-firewall"))
 }
 
+/// The `core-firewall` the ZK server keeps its record with (its release side and its value service): `FC_CORE_FIREWALL`,
+/// else the build in this checkout's verity/core/service/firewall.
+#[cfg(feature = "sha512")]
+pub fn core_firewall_exe() -> std::path::PathBuf {
+    std::env::var_os("FC_CORE_FIREWALL").map(Into::into)
+        .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../..").join("verity/core/service/firewall/.lake/build/bin/core-firewall"))
+}
+
 /// Makes the Lean server's `flock-firewall tap` (`Flock.Firewall.Frame.tapCmd`) the OS source of every sample of this process
 /// that is not a rep's own (`zk_hooks::set_os_source`): level 0's hiding, every tree's salts but the pads'. The mask slot's
 /// words are the Lean session loop's ([`lean_level0`]), and so is the coin tree's nonce, its `Hello`'s. Set it before the first draw. A tap that fails later panics, as an OS
@@ -679,6 +687,211 @@ impl Drop for LeanSession {
     }
 }
 
+/// The ZK server's value service of record: `core-firewall values --state DIR --salt-key FILE` (`Flock.Firewall.Values`
+/// in the Lean verifier, on the ZK server's record in `DIR`), which holds the server's salt key and derives every value
+/// commitment's salt from it (live PROTOCOL.md §10.2). The serving stack commits through it ([`lean_commit`]) and
+/// registers one session of each epoch ([`lean_register`]), each registration numbered on the record, and the prover takes
+/// its witness's salts from it ([`lean_salts`]). It runs until this handle drops.
+#[cfg(feature = "sha512")]
+pub struct LeanValues {
+    child: std::process::Child,
+    _stdin: std::process::ChildStdin,
+    addr: String,
+}
+
+#[cfg(feature = "sha512")]
+impl LeanValues {
+    /// The service `exe` (`core-firewall`) on the ZK server's state directory `state` and the key file `key`.
+    pub fn start(exe: &std::path::Path, state: &std::path::Path, key: &std::path::Path) -> Result<Self, String> {
+        use std::io::BufRead;
+        use std::process::{Command, Stdio};
+        let mut child = Command::new(exe).arg("values").arg("--state").arg(state).arg("--salt-key").arg(key)
+            .stdin(Stdio::piped()).stdout(Stdio::piped()).spawn()
+            .map_err(|e| refused(format!("the Lean value service {} does not start ({e}): `lake build core-firewall` in verity/core/service/firewall, or FC_CORE_FIREWALL", exe.display())))?;
+        let stdin = child.stdin.take().expect("piped stdin");
+        let mut line = String::new();
+        let _ = std::io::BufReader::new(child.stdout.take().expect("piped stdout")).read_line(&mut line);
+        let Some(addr) = line.trim_end().strip_prefix("VALUES ").map(str::to_string) else {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(refused(format!("the Lean value service did not start: {:?}", line.trim_end())));
+        };
+        Ok(LeanValues { child, _stdin: stdin, addr })
+    }
+
+    /// Where a commit or a salts request connects.
+    pub fn addr(&self) -> &str {
+        &self.addr
+    }
+}
+
+#[cfg(feature = "sha512")]
+impl Drop for LeanValues {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+/// One request to the value service at `addr`, its line `line` and its body `body`, sent whole before the client shuts its
+/// side down (the service reads a request up to there): the whole answer.
+#[cfg(feature = "sha512")]
+pub fn values_request(addr: &str, line: &str, body: &[u8]) -> Result<Vec<u8>, String> {
+    use std::io::{Read, Write};
+    let tcp = std::net::TcpStream::connect(addr).map_err(|e| e.to_string())?;
+    let send = || -> std::io::Result<()> {
+        let mut w = &tcp;
+        w.write_all(format!("{line}\n").as_bytes())?;
+        w.write_all(body)?;
+        w.flush()?;
+        tcp.shutdown(std::net::Shutdown::Write)
+    };
+    send().map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    (&tcp).read_to_end(&mut out).map_err(|e| e.to_string())?;
+    Ok(out)
+}
+
+/// The answer line at byte `*o` of `b`, past `ok `, its words; the service's `err WHY` as the error.
+#[cfg(feature = "sha512")]
+fn answer_line(b: &[u8], o: &mut usize) -> Result<Vec<String>, String> {
+    let nl = b[*o..].iter().position(|&x| x == b'\n').ok_or("an answer with no line")?;
+    let l = String::from_utf8_lossy(&b[*o..*o + nl]).to_string();
+    *o += nl + 1;
+    match (l.strip_prefix("ok "), l.strip_prefix("err ")) {
+        (Some(ws), _) => Ok(ws.split(' ').map(String::from).collect()),
+        (_, Some(why)) => Err(why.to_string()),
+        _ => Err(format!("an answer line {l:?}")),
+    }
+}
+
+/// The row schemas in the order the value service indexes them (`Flock.Registered.SCHEMAS`).
+#[cfg(feature = "sha512")]
+pub const VALUE_SCHEMAS: [&str; 3] = [crate::circuit::ROW_SCHEMA, crate::circuit::ROW_SCHEMA_V2, crate::circuit::ROW_SCHEMA_SEG];
+
+/// A table a commit request carries: its frame-v3-sha512 domain id, its row schema and its rows' unsalted 64-byte digests in
+/// leaf order.
+#[cfg(feature = "sha512")]
+pub struct CommitTable {
+    pub domain: Vec<u8>,
+    pub schema: &'static str,
+    pub digests: Vec<[u8; 64]>,
+}
+
+/// A table as the value service committed it: its root, its tag and its leaves' `b || c` in leaf order.
+#[cfg(feature = "sha512")]
+pub struct Committed {
+    pub root: Vec<u8>,
+    pub tag: Vec<u8>,
+    pub bcs: Vec<[u8; crate::circuit::BC_BYTES]>,
+}
+
+/// Commits `tables` through the value service at `addr` (`commit J D₀ N₀ S₀ …`, the body every table's digests and
+/// nothing else): the session the service drew, and each table as it committed it.
+#[cfg(feature = "sha512")]
+pub fn lean_commit(addr: &str, tables: &[CommitTable]) -> Result<(Vec<u8>, Vec<Committed>), String> {
+    use crate::circuit::BC_BYTES;
+    let fail = |e: String| refused(format!("the Lean value service's commit at {addr}: {e}"));
+    let mut line = format!("commit {}", tables.len());
+    for t in tables {
+        if !VALUE_SCHEMAS.contains(&t.schema) {
+            return Err(fail(format!("a table of row schema {}, none of the service's", t.schema)));
+        }
+        line += &format!(" {} {} {}", crate::hex(&t.domain), t.digests.len(), t.schema);
+    }
+    let body: Vec<u8> = tables.iter().flat_map(|t| t.digests.iter().flatten().copied()).collect();
+    let b = values_request(addr, &line, &body).map_err(fail)?;
+    let mut o = 0;
+    let hex = |w: &[String], k: usize| w.get(k).ok_or("a short answer line".to_string()).and_then(|x| crate::circuit::hexb(x));
+    let s = hex(&answer_line(&b, &mut o).map_err(fail)?, 0).map_err(fail)?;
+    let mut out = Vec::with_capacity(tables.len());
+    for (j, t) in tables.iter().enumerate() {
+        let w = answer_line(&b, &mut o).map_err(fail)?;
+        let n: usize = w.get(2).and_then(|x| x.parse().ok()).ok_or_else(|| fail(format!("table {j}'s answer {w:?}")))?;
+        if n != t.digests.len() || b.len() < o + BC_BYTES * n {
+            return Err(fail(format!("table {j}: {n} leaves answered of its {}, {} bytes left", t.digests.len(), b.len() - o)));
+        }
+        let bcs = b[o..o + BC_BYTES * n].chunks(BC_BYTES).map(|x| x.try_into().unwrap()).collect();
+        o += BC_BYTES * n;
+        out.push(Committed { root: hex(&w, 0).map_err(fail)?, tag: hex(&w, 1).map_err(fail)?, bcs });
+    }
+    if o != b.len() {
+        return Err(fail(format!("{} bytes past its tables", b.len() - o)));
+    }
+    Ok((s, out))
+}
+
+/// A table ref (`Flock.Firewall.Salts.TableRef`): table `j` of the commit session `s`, its domain, row schema and leaf
+/// count, and the root and tag the service answered.
+#[cfg(feature = "sha512")]
+pub fn table_ref(s: &[u8], j: usize, t: &CommitTable, c: &Committed) -> Vec<u8> {
+    let schema = VALUE_SCHEMAS.iter().position(|&x| x == t.schema).expect("a committed table's schema") as u8;
+    let parts: [&[u8]; 7] = [s, &(j as u32).to_be_bytes(), &t.domain, &(t.digests.len() as u64).to_be_bytes(), &[schema], &c.root, &c.tag];
+    parts.concat()
+}
+
+/// A refs file (`Flock.Firewall.Salts.parseRefs`): `be32 T ‖ be32 R`, the table refs, then each row ref `(t, i)`, leaf `i`
+/// of table ref `t`.
+#[cfg(feature = "sha512")]
+pub fn refs_file(tables: &[Vec<u8>], rows: &[(usize, usize)]) -> Vec<u8> {
+    let mut b = [(tables.len() as u32).to_be_bytes(), (rows.len() as u32).to_be_bytes()].concat();
+    b.extend(tables.iter().flatten());
+    for &(t, i) in rows {
+        b.extend((t as u32).to_be_bytes());
+        b.extend((i as u64).to_be_bytes());
+    }
+    b
+}
+
+/// The number of row refs a refs file names, from its counts and its length.
+#[cfg(feature = "sha512")]
+pub fn refs_rows(refs: &[u8]) -> Result<usize, String> {
+    const TABLE_REF: usize = 64 + 4 + 64 + 8 + 1 + 64 + 64;
+    let count = |o: usize| refs.get(o..o + 4).map(|x| u32::from_be_bytes(x.try_into().unwrap()) as usize);
+    let (Some(t), Some(r)) = (count(0), count(4)) else { return Err(format!("a refs file of {} bytes, shorter than its counts", refs.len())) };
+    if refs.len() != 8 + TABLE_REF * t + 12 * r {
+        return Err(format!("a refs file of {} bytes, where {t} table refs and {r} row refs take {}", refs.len(), 8 + TABLE_REF * t + 12 * r));
+    }
+    Ok(r)
+}
+
+/// Registers the commit session `s` through the value service at `addr` (`register S`): the registration's number on the
+/// ZK server's record, the number of sessions the service's epoch opened (1: the service opens one an epoch, refusing a
+/// commit while its session is not yet registered), and its record (`Flock.Firewall.Salts.recordOf`:
+/// `be64 n ‖ be64 m ‖ be32 T ‖` the session's table refs `‖` its record tag), which the service appended to the ZK server's
+/// record whole, where the session loop admits it (`core-firewall session --salt-key`).
+#[cfg(feature = "sha512")]
+pub fn lean_register(addr: &str, s: &[u8]) -> Result<(u64, u64, Vec<u8>), String> {
+    let fail = |e: String| refused(format!("the Lean value service's registration at {addr}: {e}"));
+    let b = values_request(addr, &format!("register {}", crate::hex(s)), &[]).map_err(fail)?;
+    let mut o = 0;
+    let w = answer_line(&b, &mut o).map_err(fail)?;
+    let (Some(m), Some(len)) = (w.first().and_then(|x| x.parse::<u64>().ok()), w.get(1).and_then(|x| x.parse::<usize>().ok())) else {
+        return Err(fail(format!("an answer {w:?}")));
+    };
+    let rec = &b[o..];
+    if rec.len() != len || len < 20 || rec[8..16] != m.to_be_bytes() {
+        return Err(fail(format!("a record of {} bytes, where the answer names {len} and {m} sessions", rec.len())));
+    }
+    Ok((u64::from_be_bytes(rec[..8].try_into().unwrap()), m, rec.to_vec()))
+}
+
+/// The salts of the rows the refs file `refs` names, in its row refs' order, from the value service at `addr`, which checks
+/// every table ref's tag.
+#[cfg(feature = "sha512")]
+pub fn lean_salts(addr: &str, refs: &[u8]) -> Result<Vec<u8>, String> {
+    let fail = |e: String| refused(format!("the Lean value service's salts at {addr}: {e}"));
+    let b = values_request(addr, "salts", refs).map_err(fail)?;
+    let mut o = 0;
+    let w = answer_line(&b, &mut o).map_err(fail)?;
+    let len: usize = w.first().and_then(|x| x.parse().ok()).ok_or_else(|| fail(format!("an answer {w:?}")))?;
+    let want = crate::circuit::SALT_BYTES * refs_rows(refs).map_err(fail)?;
+    if len != want || b.len() != o + len {
+        return Err(fail(format!("{len} bytes of salts in an answer of {}, where the refs' rows take {want}", b.len() - o)));
+    }
+    Ok(b[o..].to_vec())
+}
+
 /// The masking challenger's inner challenger under the ZK server. While a round's `release` is set (the device's unmasked
 /// round, which the Lean session loop's frame of the rep checks and masks, or a firewalled rep's inner proof's round, the
 /// session's Lean finish's, which the frame holds to its own: `flock-circuit`'s `zk_finish_fw`), what the masking
@@ -936,6 +1149,23 @@ mod tests {
             let e = relations_held(&named(&bad), &replay, true).unwrap_err();
             assert!(e.starts_with("FIREWALL-REFUSED: the Lean finish's constraints"), "{e}");
         }
+    }
+
+    /// A table ref and a refs file at the offsets `Flock.Firewall.Salts.TableRef.parse` and `parseRefs` read them.
+    #[cfg(feature = "sha512")]
+    #[test]
+    fn a_refs_file_is_laid_out_as_the_value_service_reads_it() {
+        let t = CommitTable { domain: vec![1; 64], schema: crate::circuit::ROW_SCHEMA_V2, digests: vec![[0; 64]; 3] };
+        let c = Committed { root: vec![2; 64], tag: vec![3; 64], bcs: vec![] };
+        let r = table_ref(&[4; 64], 5, &t, &c);
+        assert_eq!(r.len(), 269);
+        assert_eq!((&r[..64], &r[64..68], &r[68..132], &r[132..140], r[140], &r[141..205], &r[205..]),
+                   (&[4; 64][..], &[0, 0, 0, 5][..], &[1; 64][..], &3u64.to_be_bytes()[..], 1, &[2; 64][..], &[3; 64][..]));
+        let f = refs_file(&[r.clone()], &[(0, 2), (0, 0)]);
+        assert_eq!((&f[..8], &f[8..8 + 269]), (&[0, 0, 0, 1, 0, 0, 0, 2][..], &r[..]));
+        assert_eq!(&f[8 + 269..], &[[0u8, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 2], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]].concat()[..]);
+        assert_eq!(refs_rows(&f), Ok(2));
+        assert!(refs_rows(&f[..f.len() - 1]).is_err() && refs_rows(&f[..7]).is_err());
     }
 
     #[cfg(feature = "sha512")]

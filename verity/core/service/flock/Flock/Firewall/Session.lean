@@ -910,8 +910,8 @@ def frames (S : Hello.Setup) (specs : Hello.Specs) (srv : Socket.Server) (reg : 
         try ch.write s!"err a request `{first.trim}`\n".toUTF8 catch _ => pure ()
       try (c.shutdown).block catch _ => pure ()
 
-/-- `flock-firewall session --verifier HOST:PORT [--listen PORT] [--statement ID] --circuit F --public F …` (the statement
-flags `Hello.FLAGS`): the firewall's session loop. It listens on `127.0.0.1:PORT` (by default a port the system picks)
+/-- `flock-firewall session --verifier HOST:PORT [--listen PORT] [--statement ID] --circuit F --public F …` (the
+statement flags `Hello.FLAGS`): the firewall's session loop. It listens on `127.0.0.1:PORT` (by default a port the system picks)
 for sessions and on a port the system picks for the reps' frames, the tables' level 0 and the sessions' finish, prints `LISTENING 127.0.0.1:PORT` and then
 `FRAMES 127.0.0.1:PORT` once it does, and serves each connection as one session (`serve`) or one frame (`frames`), each
 on its own thread, every session's `Hello` at one statement set up once a draw (`Hello.Setup.specAt`). When a session
@@ -919,8 +919,13 @@ ends, every level 0 drawn for it is freed (`Level0.Slots.close`), and where ther
 `level 0: session SID ended; K drawn for it freed, N kept`. It runs until its standard
 input closes. `flock-firewall session --schedule …` instead reads a draw's JSON (`null` for none) on its standard input
 and prints the openings after the session stream's at it (`planOf`), `ok N` and a line `STREAM COINS` each, or
-`refused WHY`. `run` is the same loop with each session held by a hold `mkHold` makes for it (`core-firewall session`). -/
-def run (usage : String) (args : List String) (mkHold : Option (IO Hold)) : IO UInt32 := do
+`refused WHY`. `run` is the same loop with each session held by a hold (`core-firewall session`): `mkHold`, given the
+statement once it is set up and before the loop listens, makes each session's, or says why the loop serves none of the
+statement, which it prints as `refused WHY` before it exits. Without a hold the loop admits no registration, so it
+refuses `--salt-key`: a statement's value commitments are admitted on the ZK server's record (`core-firewall session
+--state DIR --salt-key FILE`). -/
+def run (usage : String) (args : List String) (mkHold : Option (Hello.Setup → IO (Except String (IO Hold)))) :
+    IO UInt32 := do
   let S ← match ← Hello.Setup.ofArgs usage args with
     | .ok S => pure S
     | .error e => IO.eprintln e; return 2
@@ -940,6 +945,18 @@ def run (usage : String) (args : List String) (mkHold : Option (IO Hold)) : IO U
     return 0
   let some verifier := Witness.argOf args "--verifier" | IO.eprintln usage; return 2
   let some listen := ((Witness.argOf args "--listen").getD "0").toNat? | IO.eprintln usage; return 2
+  let made : Except String (Option (IO Hold)) ← match mkHold with
+    | some f => (·.map some) <$> f S
+    | none =>
+      pure <| if (Witness.argOf args "--salt-key").isSome then
+        .error "--salt-key: a statement's value commitments are admitted on the ZK server's record (core-firewall session --state DIR --salt-key FILE)"
+      else .ok none
+  let mkHold ← match made with
+    | .ok m => pure m
+    | .error why =>
+      IO.println s!"refused {why}"
+      (← IO.getStdout).flush
+      return 2
   let auditor ← resolve verifier
   let specs : Hello.Specs ← IO.mkRef #[]
   let reg : IO.Ref Frames.Sessions ← IO.mkRef {}
