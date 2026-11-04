@@ -40,7 +40,7 @@ package paths through it.
 
 A move lands alone, as one commit per map on the commit it was made on. Its lead:
 
-1. lands each map first, as an ordinary change: `tools/move/NAME.toml`, directly in this directory, where `move_check.py`
+1. lands each map first, as an ordinary change: `tools/move/<name>.toml`, directly in this directory, where `move_check.py`
    reads a word map at the move's base and anyone reruns the move from;
 2. stages the move on the base it will land on, `main`:
 
