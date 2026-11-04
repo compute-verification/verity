@@ -14,8 +14,7 @@ with `F2fpBf16_v1`'s rounding (nearest even, every NaN `0x7FFF`). It is the regi
 `verity.core.protocols.pouw.schemes.pearl_c_u.y` wherever that pin's words stay finite (the pin refuses the rest; so does
 the check, `PouwCheck.PearlPlus.Rule.yOf`). The committed y (`served_y`, y's real rows as vLLM gets them) is this word:
 torch's bias add (`BIAS`, `Bf16Add_v1`) comes after it and is not committed. α is `pearl_c.s5_stats`' of the rows' FP32
-words. The H200's stored y is this on every real cell of r20261103-053659-36f1's decode tile 5
-(`test_pouw_pearl_c_u.H200_Y`).
+words. The H200's stored y is this on every real cell of a served decode tile (`test_pouw_pearl_c_u.H200_Y`).
 -/
 
 namespace Pouw.PearlC
