@@ -105,6 +105,10 @@ ALLOWED: dict[str, str] = {
                                                               "after it lands",
     "production would publish every event": "infra's Vercel deployment, another sense",
     "Production is `verity-slack-events`": "infra's Vercel deployment, another sense",
+    "the coin server keeps each round's bytes": "a row of Flock's Soundness README beside one a queued PR on next "
+                                                "rewrites; renamed after it lands",
+    "block-scaled FP4, NVFP4 only": "a line of PoUW's README beside one a queued PR on next rewrites; renamed after it "
+                                    "lands",
     "N, the window's proof units": "a public item's reason in A5's Spec (`benchmarks/one_stage/a5.py`): `Spec.digest` hashes it",
     "N, the round's proof units": "a public item's reason in scan_zk's Spec (`benchmarks/network_traces/scan_zk.py`): "
                                   "`Spec.digest` hashes it",
