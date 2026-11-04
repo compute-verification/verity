@@ -1790,6 +1790,9 @@ def bits_why(c: CircuitHeader, defs: dict[str, tuple[list, list]], template: str
     if any(k >= c.upv or p < len(gi) or p >= len(pc) or pc[p] < 16 or w >= in_rows
            for _, k, p, w in c.meta.get("leaf_cuts", [])):
         return "a leaf cut outside the unit's cut inputs or the input rows"
+    cols = _port_cols(c.in_groups)
+    if any(cols[p + 1][0] < cols[p][0] + cols[p][1] for p in range(len(cols) - 1)):
+        return "the circuit file's unit's input ports overlap or are out of column order"
     wired: dict[tuple[int, int], int] = {}
     for kp in [(x[1], x[2]) for x in c.meta.get("leaf_cuts", [])]:
         wired[kp] = wired.get(kp, 0) + 1
@@ -1970,12 +1973,14 @@ def _pow2(x: int) -> int:
     return 1 << max(0, (x - 1).bit_length())
 
 
-def circuit_file(desc: dict, template: str, part: str | None, upv: int = 1, cut: bool = False, **meta) -> str:
+def circuit_file(desc: dict, template: str, part: str | None, upv: int = 1, cut: bool = False,
+                 cut_at: int | None = None, **meta) -> str:
     """A flat circuit file laying out `template` of the Program `desc` as `SampledProofs.Bits.check` places it, at `upv`
     template instances a VU: an input row a parameter, `upv` times its packed words (`words_of`), then an output row `o`
     of `upv` times its return's (`ret_words`); a unit net of a 16-bit input port a parameter word, each instance's read
-    off its row word by its leaf map (with `cut`, the last port a cut input in an input group of its own, read through
-    a leaf cut), and a 16-bit output port a return word, its sixteen computed rows reading the input bits congruent to
+    off its row word by its leaf map (with `cut`, the last port a cut input in an input group of its own, at word
+    `cut_at` or else past the first group's, read through a leaf cut), and a 16-bit output port a return word, its
+    sixteen computed rows reading the input bits congruent to
     theirs, so every port bit is read and no padding; META binding the Program's SHA-512 and, given one, the
     `verity/partition/v1` digest `part`. `meta` overrides META's keys."""
     params, ret = def_sig(desc["definitions"][template])
@@ -1989,7 +1994,7 @@ def circuit_file(desc: dict, template: str, part: str | None, upv: int = 1, cut:
     oc = -(-in_words // ow) * ow
     const = oc * WORD + 16 * rw
     held = list(range(16 * leaf)) + [g0 * WORD + t for t in range(16 if cut else 0)]
-    ins = [(0, g0, [16] * leaf)] + [(g0, 1, [16])] * cut
+    ins = [(0, g0, [16] * leaf)] + [(g0 if cut_at is None else cut_at, 1, [16])] * cut
     groups = lambda gs: [len(gs), *(x for col, w, bs in gs for x in (col, w, len(bs), *bs))]  # noqa: E731
     head = " ".join(map(str, ["flock-ir-unit/v2", "toy", const + 1, const, *groups(ins), *groups([(oc, ow, [16] * rw)])]))
     reader = lambda xs: f"{len(xs)} {' '.join(map(str, xs))} 1 {const}"  # noqa: E731
@@ -2007,10 +2012,10 @@ def circuit_file(desc: dict, template: str, part: str | None, upv: int = 1, cut:
                       f"{CIRCUIT_BLOCK} unit {len(net)}", *net]) + "\n"
 
 
-def listed_files(case: dict, upv: int = 1, cut: bool = False, **meta) -> list[str]:
+def listed_files(case: dict, upv: int = 1, cut: bool = False, cut_at: int | None = None, **meta) -> list[str]:
     """The circuit files `circuit_file` writes for each file a case's audits list, in `Listing.files`' order: each its
     template of the audit's Program, bound to its record's partition digest."""
-    return [circuit_file(a["program"], f["template"], record_partition(a["circuit"], ""), upv, cut, **meta)
+    return [circuit_file(a["program"], f["template"], record_partition(a["circuit"], ""), upv, cut, cut_at, **meta)
             for a in case["params"]["audits"] if "circuits" in a for f in a["circuits"]]
 
 

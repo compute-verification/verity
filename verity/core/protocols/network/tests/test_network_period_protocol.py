@@ -963,7 +963,8 @@ def test_a_listed_audit_counts_its_vus_off_its_circuit_files(server, tmp_path):
     set of files that is not the listing's is refused by both, at the same reason: a file of another SHA-512, a file too
     many, META naming another Program or another partition; and, as `SampledProofs.Bits.check` refuses them, a unit
     returning one output word twice, a leaf map past the input rows, a cut input wired by no leaf cut or by two, a wire
-    into the unit, a leaf cut past the input rows, two row ports of one name, input rows out of the parameters' order,
+    into the unit, a leaf cut past the input rows, a cut input's group over the first group's ports, two row ports of
+    one name, input rows out of the parameters' order,
     output rows that are not the return's words, an input port reading another word than its parameter's (`fieldBit`),
     a parameter bit past its row's bits, and two instances a VU."""
     exe = D.build(LEAN, "network-period")
@@ -1010,6 +1011,8 @@ def test_a_listed_audit_counts_its_vus_off_its_circuit_files(server, tmp_path):
              "a wire into the circuit file's unit"),
             (None, PC.listed_files(case, cut=True, leaf_cuts=[["unit", 0, 271, 288]]),
              "a leaf cut outside the unit's cut inputs or the input rows"),
+            (None, PC.listed_files(case, cut=True, cut_at=0),
+             "the circuit file's unit's input ports overlap or are out of column order"),
             (None, PC.listed_files(case, ports=ports(("x", 16), ("x", 256), ("o", 16))),
              "two row ports of the circuit file have one name"),
             (None, PC.listed_files(case, ports=ports(("w", 256), ("x", 16), ("o", 16))),
