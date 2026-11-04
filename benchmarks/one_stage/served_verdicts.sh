@@ -98,7 +98,8 @@
 #     With the network certifier in the run, its piece (CERTIFIER_CMD) or its front (CERTIFIER_FRONT), `onsite_record.py`
 #     then writes the onsite demo's record
 #     ($OUT/record/onsite.json: every verdict its run of record needs, the network bound term by term and over each
-#     monitoring period, beside it ADVICE_CHARGE's measured advice charge, a test run's advice-charge.json, below, and
+#     monitoring period, labelled with the run's WINDOW_STEPS and MAX_TOKENS, beside it ADVICE_CHARGE's measured
+#     advice charge, a test run's advice-charge.json, below, and
 #     the re-proof inputs, the serve dir's and $OUT's files a later re-proof of the sampled units needs, with
 #     REPROOF_COPY's copy of the serve dir's, NODE:/PATH, checked against REPROOF_LISTING, its listing kept off $OUT);
 #     its ONSITE line gates nothing.
@@ -202,14 +203,16 @@
 # preflight refuses H1_TIE on a tree whose window-commit takes no --window-registration.
 # Under H1_TIE on a node with less memory than V3c's audit needs (its MemTotal, NODE_MEM_GB, under V3C_AUDIT_MEM_GB, default
 # 290), step 6 holds the tie (WINDOW-COMMIT, WINDOW-CIRCUIT-HELD) and defers the audit and the composite (`defer`), for
-# PRODUCT=remote alone (onsite's composite reads PoUS's case, which needs this node's card: the preflight refuses it).
+# PRODUCT=remote and remote-network, whose composites read neither PoUS's case nor the wipe's, and for onsite with
+# COMPOSITE set empty (onsite's composite reads both cases, which only this node's card writes: the preflight refuses it).
 # Step 5's record has sampled proofs missing and says what was deferred and why (its `deferred`), a DEFERRED line says
 # so, and the serve dir's
 # private/deferred gets the pieces the record read, the inference-only verdict (which the follow-on's record carries as
 # the served node wrote it), the advice registration's public form ($OUT/registration.json, which the follow-on's
 # $OUT carries for the onsite record), the settings the follow-on runs at (deferred.env: the window, the
 # product, V3c's class and law, H1_TIE, COMPOSITE, ALPHA, GAMMA, the served node, the tree's commit, ONSITE, whether
-# the run writes the onsite record, and the split certifier's two commands), and the
+# the run writes the onsite record, the split certifier's two commands, and WINDOW_STEPS and MAX_TOKENS, which label
+# the onsite record's figures), and the
 # follow-on's every input relative to the serve dir (`deferred_inputs`, with the split's chain the network certifier's
 # kept run), listed (inputs.txt, which names inputs.sha256
 # too) and hashed (inputs.sha256). The copy is the prover's: those files alone, to the same path on a node with the
@@ -222,7 +225,8 @@
 # line: a command that copies the serve dir's re-proof inputs off the node and writes REPROOF_LISTING, and fails the
 # follow-on where it fails; it runs whatever V3c's audit gave, a failed audit's inputs kept as well), composes the
 # final record (`record --node` the served node, so its composed_on names the
-# host it composed on, served_node false, and that it read a prover-side copy) and the
+# host it composed on, served_node false, and that it read a prover-side copy; its pieces the served node's, but for the
+# network certifier's where the split certifier answered here, which remote-network's record reads) and the
 # composite (`served_composite.sh`, SERVED_NODE the served node), and under ONSITE the onsite record, as the served
 # node's run would (with REPROOF_COPY and REPROOF_LISTING); its $OUT is published as every run's is.
 # POUW=pearlplus (default h1) makes Pearl+ PoUW's piece instead: H1_GATE defaults empty (set, the preflight refuses
@@ -286,7 +290,7 @@ D=${D:-$ROOT/${RESEARCH_RUN_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}}
 # step 6's deferral (`defer`): the settings the follow-on runs at, its inputs' list and sums, and the pieces the record read
 DEFER_DIR=$D/private/deferred
 FOLLOWS="K PRODUCT V3C_CLASS V3C_LAW H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE DEFERRED_TREE CR_SCAN_DELTA ONSITE"
-FOLLOWS+=" CERTIFIER_CHAIN_CMD CERTIFIER_PERIOD_CMD" FOLLOW= CLASH=
+FOLLOWS+=" CERTIFIER_CHAIN_CMD CERTIFIER_PERIOD_CMD WINDOW_STEPS MAX_TOKENS" FOLLOW= CLASH=
 if [ "${1:-}" = v3c ] && [ -f "$DEFER_DIR/deferred.env" ]; then  # the follow-on of a deferral, at the settings it recorded
   FOLLOW=1
   declare -A given=()
@@ -888,7 +892,7 @@ defer() {  # step 6 on a node short of V3c's audit's memory ($1, why), left to a
     COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" SERVED_NODE "$(hostname)" DEFERRED_TREE "$(tree_sha)" \
     CR_SCAN_DELTA "$CR_SCAN_DELTA" ONSITE "$([ -z "${CERTIFIER_CMD:-}${CERTIFIER_FRONT:-}" ] || echo 1)" \
     CERTIFIER_CHAIN_CMD "${CERTIFIER_CHAIN_CMD:-}" CERTIFIER_PERIOD_CMD "${CERTIFIER_PERIOD_CMD:-}" \
-    > "$DEFER_DIR/deferred.env" || return 1
+    WINDOW_STEPS "$WINDOW_STEPS" MAX_TOKENS "$MAX_TOKENS" > "$DEFER_DIR/deferred.env" || return 1
   deferred_inputs > "$DEFER_DIR/inputs.txt"
   (cd "$D" && tr '\n' '\0' < "$DEFER_DIR/inputs.txt" | xargs -0 -r sha256sum) > "$DEFER_DIR/inputs.sha256" || return 1
   echo private/deferred/inputs.sha256 >> "$DEFER_DIR/inputs.txt"
@@ -898,7 +902,7 @@ defer() {  # step 6 on a node short of V3c's audit's memory ($1, why), left to a
 }
 follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: the copy held to the served node's sums, then
   # step 6's audit, REPROOF_CMD, the final record, the composite and the onsite record, here rather than on the served node
-  local rc vrc rec comp=0 rp=0 TPY=$TREE/.venv/bin/python
+  local rc vrc rec comp=0 rp=0 TPY=$TREE/.venv/bin/python pieces=$DEFER_DIR/pieces p
   (cd "$D" && sha256sum --check --strict --quiet private/deferred/inputs.sha256) > "$DEFER_DIR/check.log" 2>&1
   rc=$?
   say "FOLLOW-ON on $(hostname -s), $NODE_MEM_GB GB: $DEFERRED_WHAT, which the served node $SERVED_NODE deferred, from its serve" \
@@ -923,8 +927,12 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
     mkdir -p "$OUT/record" && cp "$DEFER_DIR/inference-only.json" "$OUT/record/inference-only.json" \
       && say "INFERENCE-ONLY: the served node's verdict, carried into this record as it wrote it (the serve dir's private/deferred/inference-only.json)"
   fi
+  if [ -f "$OUT/pieces/certifier/answer.json" ]; then  # the split certifier answered here: the record reads that answer
+    for p in "$DEFER_DIR/pieces"/*; do [ "${p##*/}" = certifier ] || cp -a "$p" "$OUT/pieces/" || return 1; done
+    pieces=$OUT/pieces
+  fi
   "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$VW/audit" \
-    --registration "$VW/window/registration.json" --pieces "$DEFER_DIR/pieces" --out "$OUT/record" --product "$PRODUCT" \
+    --registration "$VW/window/registration.json" --pieces "$pieces" --out "$OUT/record" --product "$PRODUCT" \
     --node "$SERVED_NODE" 2>&1 | publish_lines
   rec=${PIPESTATUS[0]}
   [ -z "${COMPOSITE-1}" ] || TPY=$TPY SERVED_NODE=$SERVED_NODE bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
@@ -933,7 +941,8 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
   [ "$vrc" = 0 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ] && [ "$rp" = 0 ]
 }
 onsite_record() {  # the onsite record ($OUT/record/onsite.json, the header's), which gates nothing
-  "$TPY" benchmarks/one_stage/onsite_record.py "$OUT" ${ADVICE_CHARGE:+--advice-charge "$ADVICE_CHARGE"} \
+  "$TPY" benchmarks/one_stage/onsite_record.py "$OUT" --window-steps "$WINDOW_STEPS" --max-tokens "$MAX_TOKENS" \
+    ${ADVICE_CHARGE:+--advice-charge "$ADVICE_CHARGE"} \
     ${REPROOF_COPY:+--reproof-copy "$REPROOF_COPY"} ${REPROOF_LISTING:+--reproof-listing "$REPROOF_LISTING"} \
     2>&1 | publish_lines
 }
@@ -1057,14 +1066,15 @@ if [ -n "${H1_TIE:-}" ] && [ "${1:-}" != v3c ]; then  # V3c's window commit at e
     || { say "PREFLIGHT: under H1_TIE the window's sample coin waits for window-commit, and its session's reserve lasts the gate's 120 minutes from the serve's start: V3C_TIMEOUT is at most 90m, not $V3C_TIMEOUT"; exit 3; }
   LEASE_MIN=${LEASE_MIN:-150} LEASE_MEM_GB=${LEASE_MEM_GB:-160}
   if DEFER=$(short_of_memory); then  # step 6's audit and the composite go to a follow-on
-    [ "$PRODUCT" = remote ] || { say "PREFLIGHT: under H1_TIE, where $DEFER, its audit and the composite are deferred to a follow-on, and onsite's composite reads PoUS's case, which needs this node's card: PRODUCT=remote, or a node with the memory"; exit 3; }
+    [ "$PRODUCT" != onsite ] || [ -z "${COMPOSITE-1}" ] \
+      || { say "PREFLIGHT: under H1_TIE, where $DEFER, its audit and the composite are deferred to a follow-on, and onsite's composite reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote or remote-network, COMPOSITE set empty, or a node with the memory"; exit 3; }
   fi
 fi
 if [ -n "${PREFLIGHT_ONLY:-}" ]; then  # the checks above alone: nothing kept, built or served
   if [ -n "$FOLLOW" ]; then plan="the follow-on of $SERVED_NODE's deferral"
   else
     plan="the serve's lease ${LEASE_MIN:-60} min, capped at ${LEASE_MEM_GB:-128} GB"
-    [ -z "$DEFER" ] || plan+="; $DEFER, so step 6 defers V3c's audit and the composite to a follow-on"
+    [ -z "$DEFER" ] || plan+="; $DEFER, so step 6 defers $DEFERRED_WHAT to a follow-on"
   fi
   say "PREFLIGHT passed on $(hostname -s), $NODE_MEM_GB GB: $plan. PREFLIGHT_ONLY: nothing kept, built or served"
   exit 0
