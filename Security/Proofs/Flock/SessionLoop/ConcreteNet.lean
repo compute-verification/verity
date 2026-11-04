@@ -174,8 +174,9 @@ theorem groups_ok {h : Array String} {at0 : Nat} {gs : Array Group} (hh : At h a
   rw [hcount, ok_bind]
   obtain ⟨-, hr⟩ := at_append (L := [gs.size]) (M := gs.toList.flatMap gNums) hh
   rw [← Array.length_toList, groups_loop gs.toList 0 (at0 + 1) #[] hr hal, ok_bind]
-  all_goals simp only [side, List.length_cons, Array.empty_append, Array.toArray_toList]
-  all_goals omega
+  simp only [side, List.length_cons, Array.empty_append, Array.toArray_toList]
+  rw [show at0 + 1 + (gs.toList.flatMap gNums).length = at0 + ((gs.toList.flatMap gNums).length + 1) by omega]
+  rfl
 
 theorem at_of (A B : List String) (L : List Nat) : At (A ++ L.map toString ++ B).toArray A.length L := by
   intro j n hj
