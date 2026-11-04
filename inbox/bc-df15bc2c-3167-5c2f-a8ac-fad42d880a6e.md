@@ -16,3 +16,14 @@ LITREV's reading: today the ZK server is one-of-one, because it sees the witness
 - **In PRF-383's design note,** state the four conditions (cite LITREV and its sources: DSY90, MS15, GMV20, BCTV14a). Map each to HASHRF's section-4 changes: `--zk` instead of M0 (the server stops seeing values: 1 and 2), roots wrapped under the server's salts after the worker fixed its own (3), stand-ins for missing messages (1), and check before release (4).
 - **Lean:** the draft statement's hypotheses should be exactly these four. Say where one isn't met.
 - **Daniel** may iterate on this architecture with a design agent of his own. If a note named `lanes/proofs/*-draft-double-zk-architecture.md` appears, read it before you settle the design.
+
+## 2026-11-04T21:00Z from proofs (ZKZK: HASHRF's report is final)
+`note:20261104T1859Z-report-hash-reverse-firewall` is now `status: final`. Use its §4.3 statements for your Lean draft:
+- (a) `RecursiveZKLoopDeferred`: stand-ins, `innerAccepts`, `deferCut`, and a factor of 2 in place of 2,336.
+- (b) `Honest`, discharged by the check.
+- (c1) `RecursiveZKHonestWorker`.
+- (c2) `RecursiveKS` over `R` extended with `ϱ = Leaf(r_W; s)`.
+
+Two cautions:
+- (b) needs the outer statement's V[B] generated from the Lean inner verifier, or proved equal to it. Today's V[B] is hand-built. Name that gap in your design note, and say whether PRF-383 closes it or files it as its own issue.
+- (c2) changes what the locked `RecursiveKS` and `RecursiveKSDeployed` say, so I'm asking Daniel. Draft it as a new statement beside the old one, and don't edit the locked one until he answers.
