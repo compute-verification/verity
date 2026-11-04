@@ -20,8 +20,9 @@ prover's registered inputs pinned: `AsReg`) with that read-back, so the content 
 audits, not from a premise:
 
 * each window's audit, at a statement in its scope, fails the leak relation at the network certifier's rows with
-  probability at most `δ + ε_ks + ε_bind + Pr[B_tap]` at that statement (`Claims.Sampling.KS`'s errors, and `B_tap` the
-  collisions between the extracted trace's openings and the network certifier's, under `CommitmentScheme.Binds`);
+  probability at most `δ + ε_ks + ε_bind + Pr[B_tap]` at that statement (the errors of sampling at the incorrect set,
+  `KSWired`, and `B_tap` the collisions between the extracted trace's openings and the network certifier's, under
+  `CommitmentScheme.Binds`);
 * where the network certifier registers its observations, the secrets of a covert sender in the server whose every
   window meets its good event (`WindowGood`) number at most
   `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`: the sender moves at most
@@ -34,6 +35,15 @@ registered inputs, which the registration's commitment binds. The network certif
 with the secret. The first part covers an extracted trace that leaves them outside the faulty units, where every
 transfer gate is opened; the count charges a faulty proof block's rows through the Program, from the free inputs, the
 faulty sets, their committed bits and the timing. A proof block the sample missed is in the faulty set.
+
+**Wired rows.** The layout's wiring (`BoundaryGates.wires`) carries each wired input gate's writer's value into it, so a
+wired gate is no free input, and the content term `2^#(freeInputs_i \ reg_i)` leaves out the wired rows as it leaves out
+the ingress. A proof block that holds or reads a wired row whose committed value is not its writer's is wire-wrong, and
+the sets the count ranges over are incorrect sets, the faulty and the wire-wrong proof blocks (`incorrect`): a drawn
+proof block's session shows its wired rows right (`KSWired`), so an undrawn wire-wrong one is in the incorrect set at the
+same error. Each incorrect proof block is charged its whole committed output (`faultyBits`), never its input width: a
+wrong wired row is an input gate only its reader consumes, so whatever it injects reaches egress only through the
+reader's outputs, which that charge covers.
 -/
 
 namespace NetTiming.Guarantees
@@ -44,7 +54,8 @@ open Claims.Sampling Finset
 set_option linter.unusedVariables false
 
 /-- **The leak through the network certifier over a monitoring period of accepted sampled audits.** At every
-deployment `D` of the sampled verifier where `Claims.Sampling.KS` holds and the trace's commitment binds
+deployment `D` of the sampled verifier where sampling at the incorrect set holds at the layout's wiring (`KSWired`,
+which is `Claims.Sampling.KS` with no wires) and the trace's commitment binds
 (`CommitmentScheme.Binds`), with a decoder that lists every trace within Flock's radius, over a monitoring period of `n`
 windows registered as `sw i` (partition `Pw i`, registered values `ρ i`, operator `op i`, and `β i` bounding the
 committed bits of each of its possible faulty sets), with the network certifier's openings `tops s` at each statement,
@@ -60,8 +71,8 @@ and the observations of the monitoring period's windows (its record of those cel
   `#Ss · ∏_c (cap c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`. -/
 def PeriodLeakAccepted : Prop :=
   ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
-    (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (hks : KS H D) (L K S : ℕ)
-    (lay : AuditStatement → BoundaryGates L S)
+    (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (L K S : ℕ)
+    (lay : AuditStatement → BoundaryGates L S) (hks : KSWired H D (fun s => (lay s).wires))
     (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
     (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ) (Dj : ℕ)
     {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition) (hPw : ∀ i, D.partition (sw i) = some (Pw i))

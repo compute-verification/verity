@@ -4,11 +4,13 @@ import Definitions.NetworkCertifier.SampledAudit
 # The sampled audit's charge: what the faulty proof blocks add to the leak
 
 Definitions only. An accepted sampled audit gives `Accepted` by the circuit's Program at `δ`, with the declared advice
-holding values at the faulty proof blocks' committed gates (`RAcc`, `Definitions.NetworkCertifier.SampledAudit`). Those
-values are the prover's to choose, and so is which proof blocks are faulty, so the leak bound of a sampled audit
-charges, beyond the inputs the circuit reads besides the ingress, the faulty proof blocks' committed bits (`faultyBits`)
-and the choice of faulty set among the ones `RAcc δ` allows (`faultySets`). The sequences it counts are
-`AccSeqsSampled`.
+holding values at the incorrect proof blocks' committed gates (`RAcc`, `Definitions.NetworkCertifier.SampledAudit`), the
+faulty and the wire-wrong ones. Those values are the prover's to choose, and so is which proof blocks are incorrect, so
+the leak bound of a sampled audit charges, beyond the inputs the circuit reads besides the ingress and the wired gates
+(`freeInputs`), the incorrect proof blocks' committed bits (`faultyBits`) and the choice of incorrect set among the ones
+`RAcc δ` allows (`faultySets`). Each incorrect proof block is charged its whole committed output, never its input width:
+a wrong wired row is an input gate only its reader consumes, so whatever it injects reaches egress only through the
+reader's outputs, which that charge covers. The sequences it counts are `AccSeqsSampled`.
 -/
 
 namespace NetTiming
@@ -55,11 +57,11 @@ def AdviceIn {L S : ℕ} (K : ℕ) (C : Prog) (P : Partition) (d : Design) (lay 
   ∀ F ∈ faultySets d P δ, ∀ (op : ℕ → List (Obs L K S) → List Bool) (o : List (Obs L K S)),
     AcceptedFaulty C P lay k {ρ} F op o → AcceptedFaulty C P lay k As F op o
 
-/-- **The free inputs** of `C` over the horizon `k`: its input gates that are no step's ingress before `k`, the inputs
-the circuit's Program reads from the advice (`BoundaryGates.inputOf`). -/
+/-- **The free inputs** of `C` over the horizon `k`: its input gates that are no step's ingress before `k` and not wired,
+the inputs the circuit's Program reads from the advice (`BoundaryGates.inputOf`, `resolveWires`). -/
 def freeInputs {L S : ℕ} (C : Prog) (lay : BoundaryGates L S) (k : ℕ) : Finset ℕ :=
   (Finset.range C.gates.length).filter fun g =>
-    C.gates[g]? = some .input ∧ (List.range k).any (fun i => (lay.ingress i).contains g) = false
+    C.gates[g]? = some .input ∧ (List.range k).any (fun i => (lay.ingress i).contains g) = false ∧ lay.wires g = none
 
 /-- **The inputs pinned at `R`**: `ρ`'s values at the free inputs in `R`, any value at the other free inputs, and
 `false` off the free inputs: `2^#(freeInputs \ R)` of them. -/
