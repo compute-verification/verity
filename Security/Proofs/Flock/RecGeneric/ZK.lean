@@ -3,6 +3,7 @@ module
 public import Definitions.Claims.ZKOut
 public import Definitions.Claims.Recursion
 public import Proofs.Flock.Recursive.Statements
+public import Proofs.Flock.Claims.ZK.Statement
 
 /-!
 # The ZK server, as the recursion's zero knowledge reads it
@@ -40,6 +41,10 @@ zero knowledge says nothing. Summed over the outcomes it is the leak form (`Clai
 
 At hm96 (`Leaves.hm96`, through any encoding of a commit string's two halves) `Hides` holds at the key's hiding gap
 (`Hm96Hides`, Z2, from `ZK.ideal_leaves_adaptive`).
+
+Z1 takes the outer simulator as any program, so its simulator is counted only as the outer one is:
+`GenericRecursiveZKCost` (Z1-cost) bounds the compiled simulator's calls by the frames' and the outer simulator's
+(`Claims.ZKMal.SimCostLe`).
 
 Statements only: definitions, no proofs.
 -/
@@ -295,5 +300,17 @@ def GenericRecursiveZK : Prop :=
     (εO : (x : Msg) → Msg → Zs.WO → (Θ : Type) → VStar Θ → Θ → Zs.St → ℝ) (δ : ℝ),
     Lv.Hides δ → Zs.OuterZK H εO →
       ZKOut Zs.N Zs.Ω H Zs.k Zs.prover (fun _ _ => True) Zs.outcome Zs.sim (Zs.err H εO δ)
+
+/-- **Z1-cost: the compiled simulator is as counted as the outer one.** Where each frame makes at most `c_F(x)` calls
+and the outer simulator at most `c_O(x)`, on every coin, at every outer statement and outcome and against every
+verifier, the compiled simulator given the outcome makes at most `n_h(x)·(c_F(x) + 1)` calls in the first part (each
+round its frame and one question to `V*`), then at most `k_O(x)` at the refusal (one question a round) or `c_O(x)`
+at an outer outcome. -/
+def GenericRecursiveZKCost : Prop :=
+  ∀ (H : Msg → Msg) {W : Type} (Lv : Leaves) (Zs : ZkRelease W Lv) (cF cO : Msg → ℕ),
+    (∀ x pre ls, ((Zs.frame x pre ls).eval H).2.length ≤ cF x) →
+    (∀ x xO o (c : Zs.CO x) ask, ((Zs.progO x xO o c).eval H ask).2 ≤ cO x) →
+    ZKMal.SimCostLe H (Zs.sim.given none) (fun x => Zs.nh x * (cF x + 1) + Zs.ko x) ∧
+      ∀ o, ZKMal.SimCostLe H (Zs.sim.given (some o)) (fun x => Zs.nh x * (cF x + 1) + cO x)
 
 end Flock.Guarantees
