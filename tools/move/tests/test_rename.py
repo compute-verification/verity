@@ -44,6 +44,21 @@ def test_phrases_come_first_and_start_at_a_word():
     assert s("no 2-GPU worker") == "no 2-GPU worker"
 
 
+def test_a_phrase_a_line_break_splits_keeps_the_break():
+    s = WORDS.sub
+    assert s("reads the warden's\n    records whole") == "reads the network\n    certificates whole"
+    assert s("# reads the\n# warden's records") == "# reads the\n# network certificates"
+    assert s("/-- the warden's records\n  -- and the prover\n  -- gateway -/") == \
+        "/-- the network certificates\n  -- and the firewall -/"
+    assert s("the prover\n\ngateway") == "the prover\n\nfirewall"
+
+
+def test_a_phrase_that_starts_with_an_apostrophe_follows_a_possessive():
+    words = M.Words({"words": {"'s firewall": "'s ZK server", "firewall": "zk_server"}})
+    assert words.sub("Rust's firewall sends; the audit's\n    firewall; a firewall_state") == \
+        "Rust's ZK server sends; the audit's\n    ZK server; a zk_server_state"
+
+
 def test_what_is_kept_stands():
     s = WORDS.sub
     tags = 'ROW_TAG = b"verity-network-warden/row/v1"; RECORD_TAG = b"verity-network-warden/record/v1"'
@@ -55,6 +70,13 @@ def test_what_is_kept_stands():
     assert s("node.gateway.id", "tools/check/guard/x.py") == "node.gateway.id"
     assert s("node.gateway.id", "verity/x.py") == "node.firewall.id"
     assert s("the prover gateway", "tools/check/x.py") == "the firewall"
+
+
+def test_keep_paths_holds_a_path_and_not_the_files_text():
+    words = M.Words({"words": {"firewall": "zk_server"}, "keep_paths": {"pkg/firewall/**": ["firewall"]}})
+    assert words.path("pkg/firewall/tests/test_firewall.py") == "pkg/firewall/tests/test_firewall.py"
+    assert words.path("pkg/other/firewall.py") == "pkg/other/zk_server.py"
+    assert words.sub("the firewall serves", "pkg/firewall/tests/test_firewall.py") == "the zk_server serves"
 
 
 def test_a_name_in_all_follows_what_it_exports_where_a_quoted_key_stands():
