@@ -6,14 +6,14 @@ import Proofs.Flock.Claims.Sampling.Assembled
 import Proofs.Flock.Masked
 
 /-!
-# Refutation witnesses: zero knowledge with a public outcome, and the generic sampled compiler's
+# Refutation witnesses: the generic sampled compiler's zero knowledge
 
-`Claims.ZKOut`, the proof system's zero knowledge (`ZkArg.ZK`) and a masked compiled verifier's (`ZkCompiled.ZK`) each
-fail at a toy instance.
+The proof system's zero knowledge (`ZkArg.ZK`) and a masked compiled verifier's (`ZkCompiled.ZK`) each fail at a toy
+instance (`Claims.ZKOut`'s own, `Claims.ZKOut_fails`, is beside `Claims.zkOutLeak`).
 
 * `ZKOut` fails at a prover that talks (`talkP`) against a verifier that accepts everything, with a silent simulator and
   no error: the honest transcript is never empty and the simulator's always is (`talk_leaks`, through
-  `Claims.zkOutLeak`): `Claims.ZKOut_fails`.
+  `Claims.zkOutLeak`): `zkOut_talk_fails`.
 * `talkArg`, a proof system whose sessions run `talkP` and whose simulator is silent, is that instance:
   `ZkArg.ZK_fails`.
 * `talkL`, a masked compiled verifier of one session over `talkArg` under a commitment whose every opening passes, so
@@ -369,16 +369,6 @@ theorem zkFlock_meets : zkA.ZK FlockDeploy.sha512 ∧ zkL.ZkSessions FlockDeploy
 end Claims.Witness.SamplingGeneric
 
 /-! ## Stated over the spec -/
-
-namespace Claims
-
-/-- **`ZKOut` fails** at the talking prover against the verifier that accepts everything (`zkOut_talk_fails`). -/
-theorem ZKOut_fails (H : Msg → Msg) :
-    ¬ ZKOut (fun _ => Unit) (fun _ => Unit) H (fun _ => 1) (fun _ _ => Witness.SamplingGeneric.talkP)
-      (fun _ (_ : Unit) => True) (fun _ _ => ()) Witness.SamplingGeneric.silentSimOut (fun _ _ _ _ _ _ => 0) :=
-  Witness.SamplingGeneric.zkOut_talk_fails H
-
-end Claims
 
 namespace Claims.SamplingGeneric
 
