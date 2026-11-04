@@ -215,12 +215,15 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     report: dict = {"gate": "benchmarks/live_challenger/auditor.py on a scratch host, as lane " + LANE, "pin": pin,
                     "key_sha512": key_sha512, "period": PERIOD, "steps": log,
                     "stand_ins": {"serve": "one toy pass (proved_pass, k 128, 16 x 16 tiles) salted by the live session",
-                                  "sampled_proofs": "registration.json chained after W and a records-audit summary tied to W",
+                                  "sampled_proofs": "registration.json chained after W, a records-audit summary tied to W "
+                                                    "and a toy circuit record beside R, the period's circuit",
                                   "lean": "pearlplus-lean.json copied from Pearl+'s answer (--lean runs the node's step)"}}
 
-    # 1. the lane's Pearl-C period
+    # 1. the lane's Pearl-C period, its circuit the window's circuit record
+    (circuit_record := scratch / S.CIRCUIT_RECORD).write_bytes(b'{"name":"toy window circuit (pearlplus_local_e2e)"}\n')
     if _cli(log, "period open", ["benchmarks/one_stage/served_verdicts.py", "pearlplus-period", "open", str(piece),
-                                 "--gate", gate_cmd, "--name", PERIOD, "--scheme", SCHEME]).returncode:
+                                 "--gate", gate_cmd, "--name", PERIOD, "--scheme", SCHEME,
+                                 "--circuit-record", str(circuit_record)]).returncode:
         return 1
 
     # 2. a salt-only session in it salts the toy pass
@@ -301,6 +304,7 @@ def _run(out: Path, root: Path, lean: str | None = None) -> int:
     (audit / S.WINDOW_REGISTRATION).parent.mkdir(parents=True, exist_ok=True)
     (audit / S.WINDOW_REGISTRATION).write_text(json.dumps({"previous": tie, "registered": [], "stand_in": True}))
     (audit / S.AUDIT_SUMMARY).write_text(json.dumps({"tie": {"record": tie}, "stand_in": True}))
+    (audit / S.CIRCUIT_RECORD).write_bytes(circuit_record.read_bytes())
 
     def row() -> dict:
         r = S.piece_row("work", piece.parent, sampled_proofs=audit, key_sha512=key_sha512, lane=LANE)
