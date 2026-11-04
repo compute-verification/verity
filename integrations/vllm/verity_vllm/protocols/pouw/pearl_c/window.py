@@ -1,0 +1,161 @@
+"""Pearl+'s window record W: a ``verity/registration/v2`` record of every call's A rows and y of the rounds the prover
+retains, written after the retention and before the verifier's coin and the one-stage audit's sample, so a sampled proof
+block reads them as output values of W (`registration`'s reused values) under the roots Pearl+'s verdict credits.
+
+Round s is a pass's place among ``served.json``'s passes with calls (the verdict's numbering, `verify_run.tie`), so the
+warm-up's passes are rounds 0 and 1 and a dropped pass keeps its number; call c is the c-th call of the pass's manifest.
+W lists only the retained rounds the timed call made (`write`: a retained warm-up round is refused, since the verdict
+ties every retained round to W), each under its own number. Each call registers its A rows ``pearl-a/<s>/<c>``: its m₁₆
+committed rows of K FP32 words, at its ``root_a``, under `audit.activation_binding`'s domain; and its y
+``pearl-y/<s>/<c>``: its real rows of N FP32 words, at its y root, under `served_y.y_domain`'s (`entries`). Both are hm96
+rows of 32-bit words, the entries `verify_run.tie` holds to each call's root and recomputed domain.
+
+``served_passes.py retain --window-record W`` writes it: it drops the warm-up's rounds, writes the retention, then W over
+the rounds it retains.
+
+The audited window's registration, chained right after W, registers each value as W's (`reuse`): the rows the audited
+circuit's proof blocks make of it, committed as Pearl+ committed them, so its entry is W's, and one-stage's R7 takes it
+as an output value of W (records_audit's `tie_of`)."""
+from __future__ import annotations
+
+import json
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, fields
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+from verity.core.protocols.pouw.audit import HM96, activation_binding, hm96_salt, rows_domain
+from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as REG
+from verity.ml.commitments import CommitmentDomain
+from verity.ml.commitments.merkle import tree_levels
+
+from verity_vllm.protocols.pouw import pearl_c as PPD
+from verity_vllm.protocols.pouw.pearl_c import served_y as SY
+
+#: the width of a word of A's and y's committed rows: each BF16 word widened to FP32
+WORD_BITS = 32
+
+
+def a_value(s: int, c: int) -> str:
+    """Round ``s``'s call ``c``'s A rows."""
+    return f"pearl-a/{s}/{c}"
+
+
+def y_value(s: int, c: int) -> str:
+    """Round ``s``'s call ``c``'s y."""
+    return f"pearl-y/{s}/{c}"
+
+
+def entries(man: Mapping[str, Any], s: int) -> list[dict[str, Any]]:
+    """Round ``s``'s entries, from its pass's manifest ``man``: each call's A rows, then its y. ValueError for a pass whose
+    rows aren't hm96 rows, or a call that commits no y."""
+    hashing = PPD.scheme_of(man["scheme"]).commitment_hash
+    if hashing != HM96:
+        raise ValueError(f"round {s}'s pass commits {hashing} rows, and W registers {HM96} rows")
+    salt, out = bytes.fromhex(man["salt"]), []
+    for c, u in enumerate(man["matmuls"]):
+        if "y" not in u:
+            raise ValueError(f"round {s}'s call {c} (index {u['index']}) commits no y for W to register")
+        a = rows_domain(activation_binding(salt, u["index"]), u["index"], u["m"], HM96)
+        y = SY.y_domain(salt, u["index"], u["real_rows"])
+        out += [{"value": a_value(s, c), "root": u["root_a"], "leaves": u["m"], "words": u["k"],
+                 "domain": a.domain_id.hex(), G.WIDTH_KEY: WORD_BITS},
+                {"value": y_value(s, c), "root": u["y"]["root"], "leaves": u["real_rows"], "words": u["n"],
+                 "domain": y.domain_id.hex(), G.WIDTH_KEY: WORD_BITS}]
+    return out
+
+
+def _rounds(manifests: Sequence[Mapping[str, Any]], rounds: Sequence[int] | None) -> list[int]:
+    got = list(range(len(manifests))) if rounds is None else list(rounds)
+    if len(got) != len(manifests) or not all(type(s) is int and s >= 0 for s in got) or got != sorted(set(got)):
+        raise ValueError(f"W's rounds {got} are not distinct rounds in order, one a pass ({len(manifests)} passes)")
+    return got
+
+
+def record(manifests: Sequence[Mapping[str, Any]], previous: str | None = None,
+           rounds: Sequence[int] | None = None) -> dict[str, Any]:
+    """W over passes' manifests in order, pass i round ``rounds[i]`` (default i), chained after ``previous`` (the digest of
+    the prover's last one-stage record, `registration.digest`; None for its first). ValueError for no pass, rounds that
+    aren't one a pass in order, or passes of two salts."""
+    if not manifests:
+        raise ValueError("W registers the calls of a run's retained rounds, and it retains none")
+    head = manifests[0]
+    if other := next((m["salt"] for m in manifests if m["salt"] != head["salt"]), None):
+        raise ValueError(f"W is one epoch's: its passes are under salts {head['salt'][:16]}… and {other[:16]}…")
+    return {"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL,
+            "window": {"kind": "served", "entry": head["entry"], "scheme": head["scheme"], "salt": head["salt"]},
+            "registered": [e for s, m in zip(_rounds(manifests, rounds), manifests) for e in entries(m, s)],
+            "previous": previous}
+
+
+def write(path: str | Path, passes: Sequence[Mapping[str, Any]], rounds: Sequence[int],
+          previous: str | None = None) -> dict[str, Any]:
+    """W over the retained ``rounds`` (places among ``passes``, ``served.json``'s, with calls: the retention's) written to
+    ``path``, and returned. ValueError for a round that is no pass with calls, a warm-up's round (``timed`` false: W
+    lists only the timed call's rounds, so a tied run drops the warm-up's), or a round that retained no manifest."""
+    held = [p for p in passes if p.get("units")]
+    manifests = []
+    for s in rounds:
+        if not 0 <= s < len(held):
+            raise ValueError(f"no round {s} among the run's {len(held)} passes with calls")
+        if not held[s].get("timed", True):
+            raise ValueError(f"round {s} is the warm-up's (timed false) and retained: W lists only the timed call's rounds, "
+                             f"and the verdict ties every retained round to W, so drop it before the coin "
+                             f"(served_passes.py retain --drop {s}, or retain --window-record W)")
+        if not held[s].get("manifest"):
+            raise ValueError(f"round {s} retained no manifest, which W reads: serve with the pouw setting 'transcript_dir'")
+        manifests.append(json.loads(Path(held[s]["manifest"]).read_text()))
+    w = record(manifests, previous, rounds)
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(w, indent=1) + "\n")
+    return w
+
+
+@dataclass(frozen=True)
+class Committed(G.Registered):
+    """A call's A rows or y as a registered value of the audited circuit (`reuse`): its FP32 words in ``row-seg/v1`` rows,
+    salted as Pearl+ salts them, in a tree under ``call_domain``, the ``frame-v3-sha512`` domain of the call's binding,
+    index and rows (W's entry's domain id), so its entry is W's."""
+
+    call_domain: CommitmentDomain | None = None
+
+    @property
+    def domain(self) -> CommitmentDomain:
+        return self.call_domain
+
+
+def reuse(w: Mapping[str, Any], manifests: Sequence[Mapping[str, Any]],
+          rows_of: Callable[[str, int, np.ndarray], np.ndarray], rounds: Sequence[int] | None = None) -> dict[str, Committed]:
+    """The values W registers (``w``, the window record of ``manifests`` at ``rounds``: `record`), each as the audited
+    circuit's registered value: the rows ``rows_of(name, rows, empty)`` gives (`window_rows.Rows.value`: u16 words, an
+    FP32 word's two low first, every row no proof block makes ``empty``, zero), each salted with `audit.hm96_salt` under
+    its pass's ``hm96_salt_key`` at the call's index for A and `served_y.HM96_Y` past it for y. ValueError unless ``w`` is
+    the record of ``manifests`` and each value's entry is W's: the proof blocks don't make the rows Pearl+ committed, or
+    the key is another."""
+    if dict(w) != record(manifests, w.get("previous"), rounds):
+        raise ValueError("W is not the window record of these passes (`record`), whose calls' values the audited window reads")
+    out: dict[str, Committed] = {}
+    for s, man in zip(_rounds(manifests, rounds), manifests):
+        salt, key, want = bytes.fromhex(man["salt"]), bytes.fromhex(man["hm96_salt_key"]), iter(entries(man, s))
+        for u in man["matmuls"]:
+            i = u["index"]
+            for binding, nonce in ((activation_binding(salt, i), i), (SY.y_binding(salt, i), SY.HM96_Y + i)):
+                e = next(want)
+                n, k = e["leaves"], e["words"]
+                words = np.ascontiguousarray(rows_of(e["value"], n, np.zeros(2 * k, np.uint16)), "<u2").view("<u4")
+                base = G.Registered.commit(man["scheme"], e["value"], words.tolist(), [hm96_salt(key, nonce, j) for j in range(n)],
+                                           word_bits=WORD_BITS, schema=G.SCHEMA_SEG)
+                dom = rows_domain(binding, i, n, "sha512")
+                levels = tree_levels(dom, [G.leaf(dom, j, bc, G.SCHEMA_SEG) for j, bc in enumerate(base.bcs)])
+                got = out[e["value"]] = Committed(**{**{f.name: getattr(base, f.name) for f in fields(base)}, "levels": levels},
+                                                  call_domain=dom)
+                if got.entry() != e:
+                    raise ValueError(f"{e['value']}: the rows the audited circuit's proof blocks make of it are not the rows "
+                                     f"Pearl+ committed (root {got.root.hex()[:16]}… for W's {e['root'][:16]}…): the model "
+                                     "didn't make them, or the salt key is another")
+    return out
+
+
+__all__ = ["WORD_BITS", "Committed", "a_value", "entries", "record", "reuse", "write", "y_value"]

@@ -1,4 +1,5 @@
 import NetworkCheck.Check
+import NetworkCheck.Circuit
 import CoreProtocol.Profile
 import Flock.Program
 import Flock.Public
@@ -159,10 +160,11 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   (`stateTied`): the scan's registration has an entry of its `roots` whose port is `scan/state` or of its `registered`
   whose value is `verity/certifier/scan-state/v1`, every such entry at one root and domain, and so has a `wired`
   audit's registration, every such entry at that root and domain. The scan's ingress unit t reads `sin` as that root's
-  row t and registers its `o1` as row t + 1, so each row past row 0 is the state the scan's transition computed from
-  the row before it, the prover's word for none; row 0 is the empty state, which no unit reads, and only the Programs
-  anchored at bucket 0 read it, whose entries the scan reads for no slot, since its state before bucket 0 has none
-  occupied. A slot's Program anchored at bucket a reads row a, the scan's state before a, so it computes its entry on
+  row t and its `o1` as row t + 1, but for its last unit, whose `o1` no row holds (the egress tie's is the prover's
+  one-leaf `scan/last`, registered before any coin), so each row past row 0 is the state the scan's transition computed
+  from the row before it, the prover's word for none; row 0 is the empty state, which no unit reads, and only the
+  Programs anchored at bucket 0 read it, whose entries the scan reads for no slot, since its state before bucket 0 has
+  none occupied. A slot's Program anchored at bucket a reads row a, the scan's state before a, so it computes its entry on
   the requests the scan read, not on a state the prover chose (`Properties.NetworkPeriod.RowsStateTied`).
 
 **Public**, on acceptance: `K` and its terms, each a ceiling of `log2` of `PeriodLeakAccepted`'s factor:
@@ -461,9 +463,6 @@ def firstParams (lanes : Nat) : Array String := #["row"] ++ progParams lanes
 def ingressParams (lanes : Nat) : Array String := #["row", "sin"] ++ progParams lanes
 def egressParams : Array String := #["state"]
 
-/-- A type's bits: its leaves' widths summed. -/
-def bitsOf (t : Flock.Program.Ty) : Nat := t.widths.foldl (· + ·) 0
-
 /-- Parameters' bits: their types' summed. -/
 def paramBits (ps : Array (String × Flock.Program.Ty)) : Nat := ps.foldl (fun n p => n + bitsOf p.2) 0
 
@@ -483,22 +482,6 @@ def ownReturns (P : Flock.Program.Prog) : Array Bool :=
       !p && match defn.body.nodes[k]? with
         | some n => n.form != .scan && ((P.defs[n.fn]!).prim || (n.fn < d && a[n.fn]!))
         | none => false)) #[]
-
-/-- The root's template nodes, in order: those calling a composite. -/
-def templateNodes (P : Flock.Program.Prog) : List Nat :=
-  let nodes := (P.defs[P.root]!).body.nodes
-  (List.range nodes.size).filter fun k => match P.defs[nodes[k]!.fn]? with
-    | some d => !d.prim
-    | none => false
-
-/-- The root node a template's argument reads when the argument is that input node's leaves in order from its first
-(one affine run), as the generator form binds each parameter to an input array of its own. -/
-def inputArg (P : Flock.Program.Prog) (a : Flock.Program.Arg) : Option Nat :=
-  match a.seq.parts.toList with
-  | [.affine false k 0 _] => match (P.defs[P.root]!).body.nodes[k]? with
-    | some n => if NciCheck.Desc.isInputNode P n then some k else none
-    | none => none
-  | _ => none
 
 /-- Refuses with `why` unless `b`: one step of a `do` block, so what its acceptance gives is read off it step by step
 (`Properties.NetworkScan`). -/
@@ -617,15 +600,6 @@ def selectEntryPins : List String :=
 
 /-- The entries' Definitions the check takes, by closure digest: `slotEntryPins` and `selectEntryPins`. -/
 def entryPins : List String := slotEntryPins ++ selectEntryPins
-
-/-- **A Program's input gates**: each of its root's input nodes (`Flock.Program.inputId?`, of either binding time) gives
-its members times its width, so a `Value<w>` leaf is `w` Boolean input gates. The decoder refuses an input node
-outside the root's body, so these are all of them: `#freeInputs` at no ingress, at least `#(freeInputs \ reg)` at
-every `reg` and horizon. It reads the root's nodes, not the unrolled circuit. -/
-def inputGates (prog : Flock.Program.Prog) : Nat :=
-  (((prog.defs[prog.root]?).map (·.body.nodes)).getD #[]).foldl (fun n x => n + match prog.defs[x.fn]? with
-    | some d => if d.prim then ((Flock.Program.inputId? d.key).map (x.members * ·.2)).getD 0 else 0
-    | none => 0) 0
 
 /-- A compute audit's layout terms and its Program, from the Program's descriptor (`Flock.Program.decode` of its
 canonical bytes): its units are its root's template instances, each committing its template's return; a root with no
@@ -1077,8 +1051,8 @@ def stateEntries (reg : Json) : Array Json :=
 
 /-- The scan's state is the state its slots' Programs read: the scan's registration has a state entry (`stateEntries`),
 every one at one root and domain, and an audit `wired` to the scan's `prog` has one, every one at that root and domain.
-The scan's units read and register their states at that root (`sin` row t, `o1` row t + 1), so the `SCAN_STATE` that
-audit's Programs read is the chain of the scan's transitions. -/
+The scan's units read their states at that root (`sin` row t, `o1` row t + 1, but the last unit's `o1`, which no row
+holds), so the `SCAN_STATE` that audit's Programs read is the chain of the scan's transitions. -/
 def stateTied (audits : Array Audit) (s : Schedule) (regs : Array Json) (reg : Json) : Bool :=
   let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
   match (stateEntries reg)[0]? with

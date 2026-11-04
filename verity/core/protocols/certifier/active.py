@@ -467,8 +467,9 @@ def compact_finish_violations(sampled: Mapping[int, Sequence[int]], eos: Iterabl
     client's abort, each one's response held to 1 ≤ k < `max_tokens[o]` ids and none of them EOS; any other's length
     finish is at `max_tokens[o]` exactly. `cells` are the link's frames in canonical order, padding left out. A
     violation is (ordinal, why), at most one an ordinal, 0 for a cell that isn't a record. The certifier commits
-    whatever ids and finish the server writes; this is the rule the I/O tie holds each response's length and finish
-    to. An abort is the Commit's word, not something on the link: the advice charges its `output_len` in full."""
+    whatever ids and finish the server writes; this is the rule a compact run's egress tie is to hold each response's
+    length and finish to (`scan_service.EgressTie` renders id-form cells only: `protocol/compact-finish.md`). An abort
+    is the Commit's word, not something on the link: the advice charges its `output_len` in full."""
     stops = frozenset(eos)
     got: dict[int, list[tuple[int, str | None]]] = defaultdict(list)
     out: list[tuple[int, str]] = []

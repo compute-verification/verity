@@ -4,6 +4,7 @@ import NetworkCheck.Difftest
 import NetworkCheck.Records
 import NetworkCheck.RecordsGrid
 import NetworkCheck.RecordsBytes
+import NetworkCheck.Circuit
 import NetworkCheck.Period
 import NetworkCheck.LinkWindow
 
@@ -31,4 +32,10 @@ by `tests/test_network_period_protocol.py`. Code: it imports only Lean, C-Flock'
 `NetworkCheck.LinkWindow` is N2's verdict of record on one execution phase from its proof (`service.LinkWindows.verify`,
 the `link-window` function of `network-records verdicts`). Beyond the above it imports C-Flock's `Flock.Hm96` and core's
 identity hash (`Identity.Tagged`).
+-/
+
+/-!
+`NetworkCheck.Circuit` checks a compute audit's circuit record against its Program at the size of their description:
+the population program, the wires, the registered reads, the wire order and the count of free input bits. Beyond the
+above it imports NCI's layout checks (`NciCheck.Desc`) and the sampled audit's wires (`SampledProofs.Wires`).
 -/

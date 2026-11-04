@@ -85,6 +85,27 @@ def test_a_v2_refusal_is_written_beside_the_v1_case(tmp_path, monkeypatch, RP):
     assert (tmp_path / "case-v2-error.txt").read_text().startswith("ValueError: v2 verifies --zk")
 
 
+def test_a_tied_case_names_its_values_parameters_and_row_formats_as_the_lean_reads_them(tmp_path, monkeypatch, RP):
+    """`OneStage.paramsOfJson` takes exactly its keys: a case tied to W (a5's ``tie``) names the program function's
+    ``parameters`` beside its registered values and their row formats as ``row_schemas``."""
+    class T:
+        def to_json(self):
+            return {"bits": 32}
+
+    program = type("Program", (), {"fn": type("Fn", (), {"signature": staticmethod(lambda: ([("v", T())], None))})})()
+    monkeypatch.setattr(RP, "descriptor", lambda program: {"program": "p"})
+    monkeypatch.setattr(RP, "evidence", lambda *a, **k: {})
+    monkeypatch.setattr(RP, "python", lambda c: {"verdict": "accept"})
+    tied = {"log": [{"previous": None}], "registered": {"v": 4}, "outputs": {"v": {"record": "dd" * 64, "value": "v"}},
+            "schemas": {"v": "row-seg/v1"}}
+    a5.write_case(tmp_path, program, {}, {}, {}, None, 0.01, None, {"format": "f"}, {}, instances=0, sessions=[],
+                  session_roots={}, served=[], tied=tied)
+    p = json.loads((tmp_path / "case.json").read_text())["params"]
+    assert sorted(p) == ["anchors", "delta", "law", "leaf_layer", "log", "outputs", "parameters", "partition", "ports",
+                         "program", "query", "registered", "row_schemas", "scheme", "work_table"]
+    assert (p["parameters"], p["row_schemas"]) == ([["v", {"bits": 32}]], {"v": "row-seg/v1"})
+
+
 def test_the_case_carries_the_verifiers_partition_which_v2_verifies_the_sessions_against(tmp_path, monkeypatch, RP):
     monkeypatch.setattr(RP, "descriptor", lambda program: {"program": "p"})
     monkeypatch.setattr(RP, "evidence", lambda *a, **k: {})
