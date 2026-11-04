@@ -51,13 +51,17 @@ theorem perOutcome_of_zkOutRelay {W St Ωs : Type} {N Ω : Msg → Type} [∀ x,
       (fun ω => Relay.out true {} {} (ins ω))
       (fun o c => (Relay.weave (Relay.ctlOf (.ok (spec, sts))) (Relay.tmplOf (.ok (spec, sts)))
         (Relay.encOf spec sts (((S.given o.1).out H Vs θ x (e c)).map (·.1)))).take o.2)
-      (fun o => ENNReal.ofReal (ε x w Θ Vs θ o.1)) :=
-  ((h spec sts x w hR Θ Vs θ hk ins hE hRd).map_out
-    (f := fun o : St × Fin (Relay.relayB spec sts + 1) => (o.1, o.2.val))
-    (fun a b hab => Prod.ext (congrArg Prod.fst hab) (Fin.ext (congrArg Prod.snd hab)))
+      (fun o => ENNReal.ofReal (ε x w Θ Vs θ o.1)) := by
+  have hf : Function.Injective fun o : St × Fin (Relay.relayB spec sts + 1) => (o.1, o.2.val) := by
+    intro a b hab
+    have h₁ := congrArg Prod.fst hab
+    have h₂ := congrArg Prod.snd hab
+    exact Prod.ext h₁ (Fin.ext h₂)
+  have hP := (h spec sts x w hR Θ Vs θ hk ins hE hRd).map_out hf
     (S' := fun o (c : S.C x) => (Relay.weave (Relay.ctlOf (.ok (spec, sts))) (Relay.tmplOf (.ok (spec, sts)))
       (Relay.encOf spec sts (((S.given o.1).out H Vs θ x c).map (·.1)))).take o.2)
-    (fun _ => rfl) (ε' := fun o => ENNReal.ofReal (ε x w Θ Vs θ o.1)) (fun _ => le_rfl)).comap_sim e
+    (fun _ => rfl) (ε' := fun o => ENNReal.ofReal (ε x w Θ Vs θ o.1)) (fun _ => le_rfl)
+  exact hP.comap_sim e
 
 /-- **An audit's sampled sessions of one protocol through the deployed held relay**, oldest first: `Sessions` releasing
 the relay's frames. Session `j`'s setup `(spec, sts)` is a function of the record, the sample and the earlier sessions'
@@ -157,7 +161,7 @@ theorem sampledAudit_zkOutRelay {K S Ys V O T R Xs ι W St N₀ Ω₀ Θ : Type}
   exact Flock.SecurityProofs.SampledAuditAny sv n m v v₀ st k₀
     (fun p χ => Tup.outs (Q.outc out H Pv (recOf sv n v st) p χ) (Q.rel p χ) ℓ)
     (fun p χ => Tup.rels (Q.rel p χ) ℓ) (fun ρ χ => Tup.sims (Q.sim Sm H eC ρ χ) ℓ)
-    (Tup.errs (fun j o => εS j o.1) ℓ) δ hown hS hδ s E
+    (Tup.errs (fun j (o : St × ℕ) => εS j o.1) ℓ) δ hown hS hδ s E
 
 end FlockSoundness.ZK
 
