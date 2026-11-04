@@ -41,7 +41,6 @@ verity-exact-kit = { workspace = true }
 # test_dither_j10r_form imports dither's J10-R host units (j10r_units.py, over served_h1's receipts) and forms.py.
 # pouw_h1 imports its table commits' module and pouw_h1_served its word encodings' module, each named at its path
 # before and after vllm's layout move. bench_arm's live coins open their session through verity_vllm.pipeline.commit_coins.
-# served_passes' window reads serve-openai's Pearl+ serve dir at serve_pearl's PRIVATE.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/claims/__init__.py",
@@ -55,7 +54,6 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py",
           "integrations/vllm/verity_vllm/commit/__init__.py", "verity/ml/windows/hiding.py",
           "integrations/vllm/verity_vllm/pipeline/__init__.py", "integrations/vllm/verity_vllm/pipeline/commit_coins.py",
-          "integrations/vllm/verity_vllm/pipeline/serve_pearl.py",
           "verity/ml/windows/rows.py", "integrations/vllm/verity_vllm/errors.py",
           "integrations/vllm/verity_vllm/engine", "integrations/vllm/verity_vllm/protocols/linear",
           "integrations/vllm/verity_vllm/protocols/__init__.py",

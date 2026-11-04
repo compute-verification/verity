@@ -228,7 +228,10 @@ def refusal(opts: Any) -> str | None:
     if not opts.protocols:
         return None
     if opts.protocols != ENTRY:
-        return f"--protocols {opts.protocols}: serve-openai serves {ENTRY} (PoUW H1) only"
+        from verity_vllm.pipeline.serve_pearl import ENTRY as PEARL
+
+        return (f"--protocols {opts.protocols}: serve-openai serves {ENTRY} (PoUW H1, serve_h1) and {PEARL} (Pearl+, "
+                "serve_pearl) only")
     if not opts.commit or opts.scheme != "rows-sha512" or not opts.required_manifest:
         return (f"--protocols {ENTRY} taps the server's rows-sha512 Commit (its int8 source and step-input port): it needs "
                 "--commit, --scheme rows-sha512 and the bench row's --required-manifest")

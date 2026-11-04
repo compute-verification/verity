@@ -262,10 +262,11 @@ class CommitWindows:
     the committer off the engine and the next one installs it again; one closed off the loop leaves it installed, its view
     detached, for the next window, which opens before the next engine step (`before_step`), so every step the hooks see is
     in an open window and an off-loop window costs no install (`serve_openai.main` closes the committer at the end). ``arm``
-    (`serve_h1.H1Windows`) opens on each window once its committer is installed and closes first at its close, before the
-    committer comes off or its window is detached, its hooks being on top of the committer's; what its ``close`` returns is
-    the window line's ``pouw_h1`` (the arm's ``KEY`` where it has one: `serve_pearl.PearlWindows`' ``pouw_pearl``), and when that is a `Future` (its release off the loop) the line is written once it
-    resolves, the loop and the sealer going on. An arm with ``sealed`` hears each window's seal line, or why it has none."""
+    (`serve_h1.H1Windows`, `serve_pearl.PearlWindows`) opens on each window once its committer is installed and closes first
+    at its close, before the committer comes off or its window is detached, its hooks being on top of the committer's; what
+    its ``close`` returns is the window line's ``pouw_h1`` (the arm's ``outcome_key`` where it has one), and when that is a
+    `Future` (its release off the loop) the line is written once it resolves, the loop and the sealer going on. An arm with
+    ``sealed`` hears each window's seal line, or why it has none."""
 
     def __init__(self, committer: Any, out: Path, *, run_id: str, window_steps: int, idle_close_steps: int = 1,
                  eos_ids: Sequence[int] = (), decode: Callable[[Sequence[int]], str] | None = None,
@@ -277,7 +278,7 @@ class CommitWindows:
         self.com, self.out, self.clock, self.wall, self.marks = committer, Path(out), clock, wall, marks
         self.release = release                           # `serve_release.Draws`: each window's draw-gated release, before its seal
         self.arm, self._arm_out = arm, {}                # each window's arm outcome, until its line is written
-        self.arm_key = getattr(arm, "KEY", "pouw_h1")    # its key in the window's line and the summary
+        self.arm_key = getattr(arm, "outcome_key", "pouw_h1")   # the line's and the summary's key for it
         self.arm_failed: list[int] = []                  # the windows whose arm failed to open or close
         self._arm_pending: set[int] = set()              # the windows whose arm is still closing off the loop
         self._awaiting: dict[int, dict[str, Any]] = {}   # ... and their lines, held until it ends

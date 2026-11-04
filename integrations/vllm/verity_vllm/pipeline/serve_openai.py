@@ -1,6 +1,6 @@
 """`verity-vllm serve-openai`: an OpenAI-compatible HTTP server whose engine is the in-process committing vLLM engine.
 
-    verity-vllm serve-openai --model REPO --revision SHA --out DIR [--port 18082] [--precision verity_int8|int8_exact|pin]
+    verity-vllm serve-openai --model REPO --revision SHA --out DIR [--port 18082] [--precision verity_int8|int8_exact|pin|bfloat16]
         [--protocol vllm|plain|ids [--id-payload 503]] [--no-commit] [--window-steps 64] [--no-learn-warmup]
         [--force-include-usage | --no-force-include-usage] [--retain-exclude hidden_m1] [--learn-host-budget-mb 4096]
         [--retain host|device [--retain-device-gb 32] [--release-after sampled_proofs,pouw_h1 [--draws-dir DIR]]]
@@ -8,7 +8,7 @@
         [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300]
         [--copy-records-to $OUT] [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1] [--async-scheduling]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
-        [--protocols pouw:pearl-c-h100-v1-h3 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME --pearl-lane LANE]]
+        [--protocols pouw:pearl-c-h100-v1-h3 --precision bfloat16 --protocols-config JSON]
         [--remote-verifier HOST:PORT [--remote-kv-lib SO [--remote-session-lib SO]] [--remote-filler-gib 0]]
 
 It serves what the network certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
@@ -89,10 +89,10 @@ it is written before the pending seals too, and its ``final`` is true only once 
 (`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``. With ``--challenger-gate`` and
 ``--challenger-peer`` each window's coins come from a session of its own on the auditor host's challenger, reserved
 through the challenger's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
-``--protocols pouw:pearl-c-<device>-v1-h3`` serves Pearl+ on the engine itself, one pass an engine step, so each Commit
-window's linears are the Pearl+ matmuls whose passes are committed (`serve_pearl`): each window's passes are its line's
-``pouw_pearl``, and at the stop every pass is in ``private/pearlplus-serve/served.json``, under the coins of one salt-only
-session reserved under ``--pearl-lane`` (with ``--challenger-gate`` and ``--challenger-peer``) or an in-process challenger.
+``--protocols pouw:pearl-c-h100-v1-h3`` (``--precision bfloat16``) serves every linear but the LM head as Pearl+'s FP8
+product under this server's Commit, one Pearl+ epoch a Commit window, the window's circuit cut at those linears
+(`serve_pearl`): each window's passes, one an engine step, its ``coins.json`` and ``served.json`` go to ``pearl/w<k>/``, and
+its outcome is its ``windows.jsonl`` line's ``pouw_pearl``.
 ``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to
 PoUB's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_remote`): its
 record is ``remote_session.json``, and a rejected session fails the exit.
@@ -120,7 +120,7 @@ from typing import Any
 
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED
-from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL, serve_pearl as PL,
+from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL, serve_pearl as SPL,
                                    serve_release as RL, serve_remote as SR, serve_row as RW, serve_seal as SS)
 from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, disk_record, ingress_of, param_of,
@@ -128,10 +128,11 @@ from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advi
 from verity_vllm.pipeline.serve_protocol import (ID_PAYLOAD, PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
                                                  VllmProtocol, error_body, framing_agrees, http_chunk, sse, usage_of)
 
-PRECISIONS = ("verity_int8", "int8_exact", "pin")
+PRECISIONS = ("verity_int8", "int8_exact", "pin", "bfloat16")
 #: precision -> (the int8 parts it registers, the int8 scope its layers must then run; None: not checked). Every precision
 #: registers the linears, which is the ``verity_int8`` quantization method a pin's checkpoint may name.
-INT8_PARTS = {"int8_exact": (("linears", "attention"), "all"), "verity_int8": (("linears",), "linears"), "pin": (("linears",), None)}
+INT8_PARTS = {"int8_exact": (("linears", "attention"), "all"), "verity_int8": (("linears",), "linears"), "pin": (("linears",), None),
+              "bfloat16": (("linears",), None)}
 TOP_P_REFUSAL = ("serve-openai refuses top_p={top_p} < 1: vLLM's top-p sampler runs with a split count the engine does not pin, "
                  "so a top-p draw is not a function of the committed values. Send top_p 1 (top_k and temperature are "
                  "served); the refusal lifts once the split count is pinned.")
@@ -157,7 +158,8 @@ class Options:
     precision: str = option("--precision", choices=PRECISIONS, default="verity_int8",
                             help="verity_int8 (default): int8 linears only, as vLLM's own server serves the int8 pin, the one that fits "
                                  "the certifier's plan; int8_exact: int8 linears and attention (quantization verity_int8, attention "
-                                 "CUSTOM); pin: the pin's engine profile")
+                                 "CUSTOM); pin: the pin's engine profile; bfloat16: the pin's profile at dtype bfloat16, "
+                                 "unquantized (Pearl+'s arm, serve_pearl)")
     max_num_seqs: int = option("--max-num-seqs", type=int, default=8)
     max_model_len: int = option("--max-model-len", type=int, default=512)
     max_num_batched_tokens: int = option("--max-num-batched-tokens", type=int, default=2048, help="tokens a step schedules")
@@ -222,13 +224,12 @@ class Options:
                                 help="release-order: skip a missing earlier release once a later request has waited this long")
     protocols: str | None = option("--protocols", default=None,
                                    help=f"{SH.ENTRY}: PoUW H1 on this server's Commit, one H1 window a Commit window (serve_h1); "
-                                        f"{PL.PREFIX}<device>-v1-h3: Pearl+ on the served engine, its passes each Commit "
-                                        "window's linears (serve_pearl)")
+                                        f"{SPL.ENTRY}: every linear but the LM head Pearl+'s FP8 product under it, one Pearl+ "
+                                        "epoch a Commit window, the window's circuit cut at those linears (serve_pearl)")
     protocols_config: str | None = option("--protocols-config", default=None,
                                           help="--protocols' settings, {\"pouw\": {...}}: a JSON object, or a JSON file "
                                                "(serve_h1.config_of, serve_pearl.config_of)")
     gate: SH.GateOptions = group(SH.GateOptions)
-    pearl: PL.PearlOptions = group(PL.PearlOptions)
     remote: SR.RemoteOptions = group(SR.RemoteOptions)
     retention: RL.RetentionOptions = group(RL.RetentionOptions)
     learning: SL.LearnOptions = group(SL.LearnOptions)
@@ -600,6 +601,8 @@ def engine_options(opts: Options) -> dict[str, Any]:
         kw.update(quantization="verity_int8", attention_backend="CUSTOM")
     elif opts.precision == "verity_int8":
         kw.update(quantization="verity_int8")
+    elif opts.precision == "bfloat16":
+        kw.update(dtype="bfloat16")
     return kw
 
 
@@ -640,18 +643,16 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError(f"--seal: {why}")
     if why := SS.scheme_refusal(opts):
         raise UsageError(why)
-    if why := PL.refusal(opts) or (None if PL.is_pearl(opts) else SH.refusal(opts)) or SR.refusal(opts) or SL.refusal(opts):
+    if why := (SPL.refusal if opts.protocols == SPL.ENTRY else SH.refusal)(opts) or SR.refusal(opts) or SL.refusal(opts):
         raise UsageError(why)
     if opts.commit and which("ninja") is None:
         raise UsageError("the Commit JIT-builds its kernels with ninja, which is not on PATH: put the environment's bin (where its "
                          "ninja is) on PATH, or pass --no-commit")
 
 
-def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[str, Any] | None = None,
-          serving: PL.Serving | None = None) -> tuple[Any, Any]:
+def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[str, Any] | None = None) -> tuple[Any, Any]:
     """The engine (`verity_vllm.LLM`), scheduling as ``--async-scheduling`` says (`serve_row`), and with the Commit on, its committer, sized
-    from the engine's envelope, with a `served_record.SamplerInputsSource` attached; built under a remote ``session``, with
-    Pearl+ installed as it is built under ``serving`` (`serve_pearl.Serving.engine`), before the committer."""
+    from the engine's envelope, with a `served_record.SamplerInputsSource` attached; built under a remote ``session``."""
     from verity_vllm.engine import env as engine_env
 
     engine_env.apply_engine(opts.hf_home)
@@ -660,8 +661,7 @@ def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[st
     scope = register_int8(opts.precision)
     from verity_vllm.llm import LLM
 
-    kw = {**engine_options(opts), **(serving.engine() if serving is not None else {})}
-    llm = RW.checked(opts, row, LLM(opts.model, revision=opts.revision, **(dict if session is None else session.engine_args)(kw)))
+    llm = RW.checked(opts, row, LLM(opts.model, revision=opts.revision, **(dict if session is None else session.engine_args)(engine_options(opts))))
     if scope is not None:
         from verity_vllm.program.frontend.kernel_readback import int8_exact_of
         if (got := int8_exact_of(llm.model)) != scope:
@@ -675,8 +675,7 @@ def main(opts: Options) -> int:
     preflight(opts)
     (out := Path(opts.out)).mkdir(parents=True, exist_ok=True)
     session = SR.session_of(opts, out)
-    serving = PL.serving_of(opts, out)
-    llm, com = build(opts, session, row := RW.of(opts), serving)
+    llm, com = build(opts, session, row := RW.of(opts))
     engine = llm.vllm.llm_engine
     proto = PROTOCOLS[opts.protocol](opts.force_include_usage, **({"payload": opts.id_payload} if opts.protocol == "ids" else {}))
     reference = getattr(proto, "base", proto)
@@ -690,7 +689,7 @@ def main(opts: Options) -> int:
     if com is not None:
         from verity_vllm.engine.step_trace import scheduler_config
 
-        arm = serving.arm(llm) if serving is not None else SH.arm_of(opts, llm, com, out, flush=trace.drain)
+        arm = SPL.arm_of(opts, llm, com, out) or SH.arm_of(opts, llm, com, out, flush=trace.drain)
         sealer = SP.sealer_of(opts)                      # its process spawned before the pool grows
         warmed = SS.warm_pool(com, opts.seal_warm_gb)
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
@@ -784,7 +783,7 @@ def main(opts: Options) -> int:
             sealer.close()
         if draws_dir is not None:                        # the pending seals have had their windows' draws
             draws_dir.stop()
-        if arm is not None:                              # each H1 window's release (off the loop), Pearl+'s passes, before ``final``
+        if arm is not None:                              # each H1 window's release (off the loop) ends before ``final``
             arm.drain()
         watchdog.stop()
         summary = stopped(True)
