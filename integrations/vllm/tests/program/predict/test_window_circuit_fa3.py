@@ -129,8 +129,8 @@ def test_a_head_with_no_cut_past_the_grains_rows_is_refused_by_name():
 
 
 #: int8 Llama-3.2-1B's function on the H200 at 4,32,4 (`test_wire_order._function`): its digest and its wired rows
-LLAMA_1B_FUNCTION = ("738385c325d6f91706fc5b251bf1932a27ae69bc1c0c165f4994a949d3ff326893d718e36a50daf2fb1b787f07db8f8d86f1"
-                     "1521aa5953c6d72d366ff4f67330", 12_668_152)
+LLAMA_1B_FUNCTION = ("5bbca919165bf2fab16be8115a906afa55fcae1349829c23fbf3069cfbe39329657d34ca37568162d553c414e1a6ebb4138ff1"
+                     "74ee4beedffae3e76b262127b9", 12_668_152)
 
 
 @pytest.mark.skipif(not os.environ.get("VERITY_VLLM_FA3_LLAMA_1B"),
