@@ -264,4 +264,43 @@ def stateReadAt (base : ℤ) : NetworkCheck.Circuit.Read :=
 /-- The slot audit with the circuit record whose read of the scan's state is from `base`. -/
 def anchorAudit (base : ℤ) : Audit := { slotAudit with circuit := some (anchorRecord (stateReadAt base)) }
 
+/-- The slot audit's registration with its `SCAN_STATE` registered at the root `root` and the domain `e`, beside its
+entries port at `r` and `d`. -/
+def stateReg (root : String) : Lean.Json :=
+  Lean.Json.mkObj [
+    ("registered", Lean.Json.arr #[Lean.Json.mkObj
+      [("value", "verity/certifier/scan-state/v1"), ("root", root), ("domain", "e")]]),
+    ("roots", Lean.Json.arr #[Lean.Json.mkObj
+      [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])]
+
+/-- A run of the scan's state reads: units `lo` to `hi − 1`, unit `lo + i` at leaf `l + i` (`isRun`). -/
+def stateRun (l lo hi : ℕ) : Lean.Json :=
+  Lean.Json.mkObj [("leaf", Lean.toJson l), ("units", Lean.Json.arr #[Lean.toJson lo, Lean.toJson hi])]
+
+/-- A link-window whose scan's `prog` is at the slot audit's entries port's root and domain, whose state, the tree its
+units read and register their states in, is at the root `s` and the domain `e`, and whose registration states its
+units' `sin` reads as the run `sin` and their `o1` as `o1`. -/
+def stateWindowOf (sin o1 : Lean.Json) : Lean.Json :=
+  Lean.Json.mkObj [
+    ("roots", Lean.Json.arr #[
+      Lean.Json.mkObj [("port", "scan/prog0"), ("root", "r"), ("domain", "d")],
+      Lean.Json.mkObj [("port", "scan/state"), ("root", "s"), ("domain", "e")]]),
+    ("window", Lean.Json.mkObj [("reads", Lean.Json.mkObj [("scan/state", Lean.Json.mkObj [("o1", o1), ("sin", sin)])])])]
+
+/-- That link-window at T = 1, its one unit reading no state and registering none: both runs empty. -/
+def stateWindow : Lean.Json := stateWindowOf (stateRun 1 1 1) (stateRun 1 0 0)
+
+/-- The slot audit with 9 free inputs, 4 of them with its reads of the scan's state held. -/
+def heldAudit : Audit := { slotAudit with free := 9, stateFree := 4 }
+
+/-- A rows-form period of the held audit and one phase, under the slot audit's schedule. -/
+def heldParams : Params :=
+  ⟨#[heldAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", none, .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+
+/-- A public whose one link-window's term counts 4 free inputs: the held audit's `stateFree`. -/
+def heldPublic : Public :=
+  { audits := #[], cells := 0, schedules := 0, windows := 1,
+    units := #[{ facts := { units := 0, drawn := 0, delta := ⟨0, 1⟩, wrong := 0 }, free := 4, faultySets := 0,
+                 faultyBits := 0, jitter := 0 }] }
+
 end Properties.NetworkPeriod
