@@ -148,10 +148,10 @@ def matmulOf (u : Json) : Except Refusal Matmul := do
 /-- `manifest_schema(man)`: the v2 run's schema, not one recorded before epoch coins. -/
 def manifestSchema (man : Json) : Except Refusal Unit := do
   let schema := get? man "schema"
-  if schema == some (.str MANIFEST_RECORDED) then
+  if fieldIs schema MANIFEST_RECORDED then
     refuse "DomainError" (s!"the pass's manifest is {MANIFEST_RECORDED}, recorded before epoch coins: only a replay of a " ++
       "recorded pass reads it")
-  if schema != some (.str MANIFEST_SCHEMA) then
+  if !fieldIs schema MANIFEST_SCHEMA then
     refuse "DomainError" s!"schema {pyReprJson (schema.getD .null)}, not {MANIFEST_SCHEMA}"
 
 /-- `Workload(matmuls)`'s refusals. -/
@@ -186,7 +186,7 @@ def load (coins : CoinCommitment) (man : Json) : Except Refusal Pass := do
     pure (wi, ← hexOf (← key v "root") "a weight's root")
   let some opening := get? man "salt_opening" | refuse "DomainError" "the pass has no salt coin"
   let claimedJ ← key man "coins"
-  if get? claimedJ "scheme" == some (.str LIVE_SCHEME) then
+  if fieldIs (get? claimedJ "scheme") LIVE_SCHEME then
     refuse "DomainError" "the pass's coin commitment is not the epoch's"
   let opening ← match CoinOpening.ofJson opening with
     | .ok o => pure o
@@ -207,7 +207,7 @@ def load (coins : CoinCommitment) (man : Json) : Except Refusal Pass := do
     | .ok (.ok s) => pure s
     | .ok (.error why) => refuse "DomainError" why
     | .error e => refuse "ValueError" e
-  if get? man "salt" != some (.str (hex salt)) then
+  if !fieldIs (get? man "salt") (hex salt) then
     refuse "DomainError" "the pass's salt is not its coin's and the weights'"
   let wj (w : Nat) : Json := (weights.lookup (toString w)).getD .null
   let records ← (us.zip matmuls).mapM fun (u, mm) => do
