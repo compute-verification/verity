@@ -333,8 +333,9 @@ def test_a_leaf_opening_other_values_roots_or_rows_is_refused(world, lanes, tmp_
 
 def test_a_drawn_leaf_outside_leaflanessound_is_refused_lanes_shape(world, tmp_path, monkeypatch):
     """At the served proof's reach only: a tile other than 32 × 32 is ``lanes-shape`` before anything is verified (the
-    stand-in's 8 × 16 here), and so is a K the tile check refuses, one below `h1zy.LEAST_K`, a chunked K and a J10-R
-    template, each after building its statement set (J10-R's chunk lanes and combine v2 included)."""
+    stand-in's 8 × 16 here, and a 2 × 4 tile, which has no whole lane), and so is a K the tile check refuses, one below
+    `h1zy.LEAST_K`, a chunked K and a J10-R template, the refusal read off the tile and K alone (J10-R's statement set,
+    chunk lanes and combine v2, is still `leaf_lanes.statements`')."""
     files = files_of()
     evidence, proved = prove(world, tmp_path, files)
     got, why = verified(world, evidence, files, runner(proved))
@@ -342,6 +343,7 @@ def test_a_drawn_leaf_outside_leaflanessound_is_refused_lanes_shape(world, tmp_p
     tile = {"tile": [32, 32]}
     plain, j10r = {"tiles": {k: {"j10r": False} for k in (352, 384, 400, 14336, 4096)}}, {"tiles": {4096: {"j10r": True}}}
     assert Cr.lanes_shape(tile, plain, 384) is None
+    assert "its 0 lanes wait" in Cr.lanes_shape({"tile": [2, 4]}, plain, 384)
     assert "fails PouwWindow.Lanes.Tile.check" in Cr.lanes_shape(tile, plain, 400)
     assert "below LEAST_K = 384" in Cr.lanes_shape(tile, plain, 352)
     assert "chunk lanes each" in Cr.lanes_shape(tile, plain, 14336)
