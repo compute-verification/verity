@@ -210,9 +210,11 @@ AUDIT_RECORD = {
     "wrong_units.per_template.*": O,
 }
 #: V3c's audit as one compute audit of the network certifier's period (`records_audit.period`): its answer, its free
-#: input bits and steps, the Program, each template's circuit file by its SHA-512, and the registration
+#: input bits and steps, the Program, each template's circuit file by its SHA-512, the registration, and where the
+#: window has its wires' order, its circuit record, the order and the held pins, as the period's parameters take them
 PERIOD = {**under("answer", ONE_STAGE), "free": S, "steps": S, **under("program", DESCRIPTOR),
-          "circuits[].template": S, "circuits[].sha512": S, **under("registration", REGISTRATION)}
+          "circuits[].template": S, "circuits[].sha512": S, **under("registration", REGISTRATION),
+          **under("circuit", RECORD), **under("order", RECORD), "pins.*": M}
 #: V3c's audit as the run publishes it (``v3c-audit``: `served_integrity.public_copy`, the registration it audited and
 #: its period audit)
 V3C_DOCS: dict[str, dict[str, Any]] = {"summary.json": SUMMARY_DOC, "window/audit.json": AUDIT_RECORD,

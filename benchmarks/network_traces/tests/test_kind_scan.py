@@ -269,6 +269,19 @@ def _edit(p: Path, f) -> None:
     p.write_text(json.dumps(f(json.loads(p.read_text()))))
 
 
+def test_v3cs_period_audit_with_its_wires_order_is_of_the_public_kinds(tmp_path, period):
+    """`records_audit.period` on a window with its wires' order gives V3c's period audit its circuit record, the order
+    and the held pins, as the period's parameters take them (`PARAMS`' ``audits[]``): period.json with them scans
+    clean."""
+    out = _out(tmp_path, period)
+    record = {"format": "verity/window-circuit/v1", "program": "ab" * 64, "statements": {"t@0": {"tables": []}}}
+    order = {"format": "verity/wire-order/v1", "segments": [{"template": "t@0", "at": 0, "radix": [8], "c": 0, "r": [0]}],
+             "wires": []}
+    _edit(out / "v3c-audit" / "period.json",
+          lambda p: {**p, "circuit": record, "order": order, "pins": {"weights/embed@4": "02" * 64}})
+    assert KS.received(out)[0] == []
+
+
 @pytest.mark.parametrize("plant, want", [
     (lambda o: (o / "pieces" / "certifier" / "chain.log").write_text("chain on window 3\n"),
      [("pieces/certifier/chain.log", "")]),
