@@ -8,6 +8,7 @@ public import Proofs.Flock.SamplingGeneric.Coins
 public import Proofs.Flock.SamplingGeneric.Session
 public import Proofs.Flock.SamplingGeneric.Count
 public import Proofs.Flock.SamplingGeneric.Bits
+public import Proofs.Flock.SamplingGeneric.Reg
 
 /-!
 # The sampled compiler in the claims core, at Flock
@@ -24,7 +25,10 @@ from the session transfer and the session's fork (`SamplingGeneric/Session.lean`
 `SamplingGeneric/Assemble.lean`: `ksOf`). So **`CompilerKS` is proved** (`compilerKS`), and with it Flock's instance
 (`flockKS`) and the count form (`compilerKSCount`, `SamplingGeneric/Count.lean`). `CompilerBits` follows from it and
 the extractor's expected reruns and own calls (`SamplingGeneric/Bits.lean`, `ExpOwnOf`). A session's coins in a
-compiled run, `coinsOf` and `place`, invert each other (`SamplingGeneric/Coins.lean`).
+compiled run, `coinsOf` and `place`, invert each other (`SamplingGeneric/Coins.lean`). The committed form,
+against the incorrect set of the plurality trace the prover's tape fixes, follows from the sessions' bound and the
+rewinding lemma (`SamplingGeneric/Reg.lean`: `compilerKSReg_of`), so **`CompilerKSReg` is proved** (`compilerKSReg`),
+and with it Flock's (`flockKSReg`).
 -/
 
 @[expose] public section
@@ -53,5 +57,15 @@ theorem flockKS : FlockKS (Coin := Coin) (Col := Col) (T := T) := flockKS_of_com
 
 /-- The count form, at the miss of a count. -/
 theorem compilerKSCount : CompilerKSCount := compilerKSCount_of compilerKS
+
+theorem flockKSReg_of_compilerKSReg (h : CompilerKSReg) : FlockKSReg (Coin := Coin) (Col := Col) (T := T) := by
+  intro H D _ decode L hKS hdec hB hS
+  exact h Coin (Arg.ofFlock D decode) L H (arg_ofFlock_wf D decode) (flockArgKS H D decode hKS hdec) hB hS
+
+/-- **The committed form**: `CompilerKSReg` from the sessions' bound (`compilerKSReg_of`). -/
+theorem compilerKSReg : CompilerKSReg := compilerKSReg_of sessionKSOf
+
+/-- **Flock's committed form**: the compiler's at `Arg.ofFlock`. -/
+theorem flockKSReg : FlockKSReg (Coin := Coin) (Col := Col) (T := T) := flockKSReg_of_compilerKSReg compilerKSReg
 
 end Claims.SamplingGeneric
