@@ -2580,6 +2580,10 @@
    "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
    "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
   },
+  "Flock.SecurityProofs.RecursiveKSCompiledEvery": {
+   "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
+   "nontrivial": "Flock.Guarantees.recursiveKSCompiledEvery_nontrivial"
+  },
   "Flock.SecurityProofs.RecursiveKSEvery": {
    "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
    "nontrivial": "Flock.Guarantees.recursiveKSEvery_nontrivial"
@@ -6643,6 +6647,9 @@
    "assumptions": [],
    "type_hash": "795a1501a9407a0386e6ef5f40629d3ccf38bdfd7d1b98ee6b279260cc983b26"
   },
+  "Flock.Guarantees.recursiveKSCompiledEvery_nontrivial": {
+   "owner": "@proofs"
+  },
   "Flock.Guarantees.recursiveKSEvery_nontrivial": {
    "owner": "@proofs",
    "signature": [
@@ -6938,6 +6945,9 @@
    "signature": ["Flock.SecurityProofs.RecursiveKS : Flock.Guarantees.RecursiveKS"],
    "assumptions": [],
    "type_hash": "51fdb43d2d2c86a0bb2d3ed41009b87a28fe7df24e6e6337b87129d9ba20d475"
+  },
+  "Flock.SecurityProofs.RecursiveKSCompiledEvery": {
+   "owner": "@proofs"
   },
   "Flock.SecurityProofs.RecursiveKSEvery": {
    "owner": "@proofs",
@@ -13718,9 +13728,11 @@
    "Pous.SecurityProofs.StreamedWipeMeetsReads": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at every number of reads k with (1 - 1/r)^k <= 2^-129, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeets141GB5": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 5231 reads, an H200's 141 GB fill with its 2.3 GB driver reserve, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Flock.SecurityProofs.RecursiveKS": "restatable: a probability statement (KSLin2On, through RecursiveKSAtRec at the deployed record) whose event is the recursive verifier's acceptance and then the extractor recovering no witness; KSLin2On's probability is not under shape.events, so the shape rule finds no acceptance. It fits once that probability is listed under shape.events or the statement is restated over FlockSoundness.Game.prob.",
+   "Flock.SecurityProofs.RecursiveKSCompiledEvery": "restatable: a probability statement (KSCompiledOn, through RecursiveKSCompiledAtRec at the deployed record) whose event is the compiled recursive verifier's acceptance and then the composite extractor over Compiled.EO recovering no witness, at every statement; KSCompiledOn's probability is not under shape.events, so the shape rule finds no acceptance. It fits once that probability is listed under shape.events or the statement is restated over FlockSoundness.Game.prob.",
    "Flock.SecurityProofs.RecursiveKSEvery": "restatable: a probability statement (KSLinkOn, through RecursiveKSEveryAtRec at the deployed record) whose event is the recursive verifier's acceptance and then the composite extractor recovering no witness, at every statement; KSLinkOn's probability is not under shape.events, so the shape rule finds no acceptance. It fits once that probability is listed under shape.events or the statement is restated over FlockSoundness.Game.prob.",
    "RecDeploy.HonestHalfFixture.honest_half_fixture": "completeness: RecursiveKS's honest lemma (LEAN-66, its witnesses entry): at the deployed instance, under the named assumption HonestFixture (the honest run accepted, its witness satisfying, shaped and collision-free), the premises RecursiveKSAt reads hold, so RecursiveKS is not vacuous there.",
    "Flock.Guarantees.recursiveKS_nontrivial": "completeness: RecursiveKS's nontrivial lemma (LEAN-66, its witnesses entry): under the named assumption KSFixture, the statement is false at the accept-all verifier (not RecursiveKSAtRec at the record that accepts every message), a counterexample for another verifier, not a property of the deployed one.",
+   "Flock.Guarantees.recursiveKSCompiledEvery_nontrivial": "completeness: RecursiveKSCompiledEvery's nontrivial lemma (its witnesses entry): under the named assumption KSFixture, the statement is false at the accept-all verifier (not RecursiveKSCompiledAtRec at the record that accepts every message), a counterexample for another verifier, not a property of the deployed one.",
    "Flock.Guarantees.recursiveKSEvery_nontrivial": "completeness: RecursiveKSEvery's nontrivial lemma (its witnesses entry): under the named assumption KSFixture, the statement is false at the accept-all verifier (not RecursiveKSEveryAtRec at the record that accepts every message), a counterexample for another verifier, not a property of the deployed one.",
    "Flock.SecurityProofs.SampledKSLivePub": "frozen (no-function): SampledKSLiveV2 at a public error, proved from it; it reads SampledKSLivePub (Security/Proofs/Flock/Bridge/Public.lean), SampledKSLiveV2's statement with its error deltaPub read off public parameters, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
    "Accounting.SecurityProofs.JointPeriodLiveECR": "frozen (no-function): Like JointPeriodLive, with ecr/sha-512 asked of each subprotocol's finder: its per-period guarantees are hypotheses over an abstract live period of the device model whose verdicts, openings, extractor, finders, computed gates and world are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
