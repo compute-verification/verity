@@ -163,11 +163,11 @@ theorem tiles_unique : ∀ (l : List TRange) (a b : ℕ), Tiles (l.map fun r => 
     simp only [List.map_cons, Tiles] at h
     obtain ⟨h1, h2⟩ := h
     have hl := tiles_mem l _ _ h2
-    rcases List.mem_cons.1 hx with rfl | hx <;> rcases List.mem_cons.1 hy with rfl | hy
+    rcases List.mem_cons.1 hx with rfl | hxl <;> rcases List.mem_cons.1 hy with rfl | hyl
     · rfl
-    · exfalso; have := hl y hy; omega
-    · exfalso; have := hl x hx; omega
-    · exact tiles_unique l _ _ h2 x hx y hy v hx1 hx2 hy1 hy2
+    · exfalso; have := hl y hyl; omega
+    · exfalso; have := hl x hxl; omega
+    · exact tiles_unique l _ _ h2 x hxl y hyl v hx1 hx2 hy1 hy2
 
 theorem locate_eq {rs : Array TRange} {r : TRange} {v : ℕ} (hr : r ∈ rs) (h1 : r.first ≤ v)
     (h2 : v < r.first + r.count) (hu : ∀ x ∈ rs, x.first ≤ v → v < x.first + x.count → x = r) :
