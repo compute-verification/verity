@@ -83,7 +83,7 @@ from verity.core.protocols.sampled_proofs.one_stage.draw import stratum_k
 from verity.ml.circuits import boolean as BL, codec, metadata as AN, population
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.defs import REGISTRY
-from verity.ml.circuits.ops import gemm as G
+from verity.ml.circuits.ops import gemm as GM
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import array_of, coll_concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
@@ -1557,7 +1557,7 @@ def audit_descriptor(units: tuple[tuple[int, int], ...], entries: tuple[int, ...
     return D.canonical(codec.encode_program(program))
 
 
-RECORD_GEMM = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
+RECORD_GEMM = bind(GM.Gemm, K=16, N=16, **GM.GEMM_AMPERE)
 RECORD_UNITS = 8
 
 
