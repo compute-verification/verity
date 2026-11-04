@@ -3,19 +3,20 @@ import Proofs.NetworkCertifier.Wires
 import Proofs.Flock.Claims.Witnesses.Sampling
 
 /-!
-# Two toys the wired sampled audit's premises exclude
+# Three toys for the wired sampled audit's premises and count
 
-The sampled audit counts a wire-wrong proof block as incorrect (`incorrect`, `RWired`, `KSWired`), and a layout's wiring
-fits its program only when its wires are acyclic (`WiresAcyclic`, inside `BoundaryGates.Fits`). Each toy is a program at
-which dropping one of the two lets accepted traces carry more observation sequences than `SampledLeakAccepted`'s bound
+The sampled audit counts a wire-wrong proof block as incorrect (`incorrect`, `RWired`, `KSWired`), a layout's wiring
+fits its program only when its wires are acyclic (`WiresAcyclic`, inside `BoundaryGates.Fits`), and a free input that
+writes a wire stays a free input (`freeInputs`). Each toy is a program at which dropping one of the three lets accepted
+traces carry more observation sequences than `SampledLeakAccepted`'s bound
 `2^#(freeInputs \ reg) · #faultySets(δ) · 2^β · Dj^k`, here at `δ = 0`, no registered input, `β = 0`, one step and
 `Dj = 1`.
 
-The program `flipProg` is two inputs, each negated, the negations returned at the two slots of one egress link
-(`flipEgress`); its partition `flipPart` is the proof blocks `{0, 1}` and `{2, 3}` of one class drawn `all`, so at
-`δ = 0` the one possible faulty set is empty (`flip_faultySets`). Every opening passes (`accCm`). `carried` is the set of
-sequences that the transfer gates of some trace carry, with every status complete, whose proof blocks counted bad are
-in `M_δ`.
+The program `flipProg` is two inputs, each negated, the first input and the negations returned, the negations at the
+two slots of one egress link (`flipEgress`); its partition `flipPart` is the proof blocks `{0, 1}` and `{2, 3}` of one
+class drawn `all`, so at `δ = 0` the one possible faulty set is empty (`flip_faultySets`). Every opening passes
+(`accCm`). `carried` is the set of sequences that the transfer gates of some trace carry, with every status complete,
+whose proof blocks counted bad are in `M_δ`.
 
 * **The wire flip** (`flipLay`): the second input is wired to the first negation, so one input is free and the bound
   is `2`. A trace whose two proof blocks are each correct, its wired input the opposite of its writer, has no faulty
@@ -25,6 +26,10 @@ in `M_δ`.
 * **The two-cycle** (`cycleLay`): each input wired to the other's negation. The layout fits but for its wires' cycle
   (`cycle_fits_iff`), no input is free and the bound is `1`, and two traces with no incorrect proof block carry two
   rows (`cycle_excludes`).
+* **The pass-through** (`passLay`): the second input is wired to the first, so the wire's chain ends at once at an input
+  no wire or ingress holds. Only the reader's copy leaves the free inputs: the first input stays free and the bound is
+  `2`, which the traces with no incorrect proof block meet (`pass_meets`). They carry two rows, so a count that left the
+  chain's end out too, `1`, is exceeded (`pass_excludes`).
 -/
 
 namespace NetTiming.WiredToys
@@ -33,8 +38,8 @@ open Claims Claims.Sampling Claims.Witness.Sampling
 
 /-! ## The program, its partition and layouts -/
 
-/-- Two inputs, each negated, the negations returned. -/
-def flipProg : Prog := ⟨[.input, .not 0, .input, .not 2], [1, 3]⟩
+/-- Two inputs, each negated, the negations returned, and the first input too, so it can write a wire. -/
+def flipProg : Prog := ⟨[.input, .not 0, .input, .not 2], [0, 1, 3]⟩
 
 /-- One class drawn `all`, its one stratum the proof blocks `{0, 1}` and `{2, 3}`. -/
 def flipPart : Partition := ⟨[[[[0, 1], [2, 3]]]]⟩
@@ -57,6 +62,12 @@ def cycleLay : BoundaryGates 1 2 where
   egress := flipEgress
   ingress _ := []
   wires g := if g = 0 then some 3 else if g = 2 then some 1 else none
+
+/-- No ingress, and the second input wired to the first: a pass-through, its writer an input no wire holds. -/
+def passLay : BoundaryGates 1 2 where
+  egress := flipEgress
+  ingress _ := []
+  wires g := if g = 2 then some 0 else none
 
 /-- The operator, which sends nothing. -/
 def flipOp : ℕ → List (Obs 1 1 2) → List Bool := fun _ _ => []
@@ -123,6 +134,29 @@ theorem cycle_bound :
   rw [cycle_free, flip_faultySets, Finset.card_singleton]
   rfl
 
+/-- Under `passLay` only the reader's copy leaves the free inputs: the first input, the wire's writer, stays. -/
+theorem pass_end : 0 ∈ freeInputs flipProg passLay 1 := by
+  decide
+
+theorem pass_free : (freeInputs flipProg passLay 1 \ ∅).card = 1 := by
+  decide
+
+theorem pass_erase : ((freeInputs flipProg passLay 1).erase 0).card = 0 := by
+  decide
+
+theorem pass_bound :
+    ((2 ^ (freeInputs flipProg passLay 1 \ ∅).card * (faultySets flipStmt.design flipPart 0).card * 2 ^ 0 * 1 ^ 1 :
+      ℕ) : ℕ∞) = ((2 : ℕ) : ℕ∞) := by
+  rw [pass_free, flip_faultySets, Finset.card_singleton]
+  rfl
+
+/-- The bound with the wire's chain's end left out of the free inputs too. -/
+theorem pass_bound_erase :
+    ((2 ^ ((freeInputs flipProg passLay 1).erase 0).card * (faultySets flipStmt.design flipPart 0).card * 2 ^ 0 *
+      1 ^ 1 : ℕ) : ℕ∞) = ((1 : ℕ) : ℕ∞) := by
+  rw [pass_erase, flip_faultySets, Finset.card_singleton]
+  rfl
+
 /-! ## The layouts fit but for the wires' cycle -/
 
 theorem reads_lt {b c : ℕ} (h : b ∈ (flipProg.gates[c]?.map BGate.reads).getD []) : b < c := by
@@ -151,10 +185,16 @@ theorem cycle_wired {g w : ℕ} (hw : cycleLay.wires g = some w) : (g = 0 ∧ w 
     · exact Or.inr ⟨‹_›, (Option.some.inj h').symm⟩
     · cases h'
 
-/-- A layout with `flipLay`'s egress and ingress whose wired gates are inputs and whose writers are negations fits
+theorem pass_wired {g w : ℕ} (hw : passLay.wires g = some w) : g = 2 ∧ w = 0 := by
+  have h' : (if g = 2 then some 0 else none) = some w := hw
+  split at h'
+  · exact ⟨‹_›, (Option.some.inj h').symm⟩
+  · cases h'
+
+/-- A layout with `flipLay`'s egress and ingress whose wired gates are inputs and whose writers are returned fits
 `flipProg` exactly when its wires are acyclic. -/
 theorem fits_iff (lay : BoundaryGates 1 2) (he : lay.egress = flipEgress) (hi : lay.ingress = fun _ => [])
-    (hw : ∀ g w, lay.wires g = some w → (g = 0 ∨ g = 2) ∧ (w = 1 ∨ w = 3)) :
+    (hw : ∀ g w, lay.wires g = some w → (g = 0 ∨ g = 2) ∧ w ∈ flipProg.outs) :
     lay.Fits flipProg 1 ↔ WiresAcyclic flipProg lay.wires := by
   refine ⟨fun h => by obtain ⟨-, -, -, -, h⟩ := h; exact h, fun h => ⟨fun t _ ℓ σ g hg => ?_, fun t _ g hg => ?_,
     fun t ht t' ht' htt' => absurd htt' (by omega), fun g w hgw => ?_, h⟩⟩
@@ -163,8 +203,8 @@ theorem fits_iff (lay : BoundaryGates 1 2) (he : lay.egress = flipEgress) (hi : 
   · rw [hi] at hg
     simp at hg
   · obtain ⟨hg, hw'⟩ := hw g w hgw
-    refine ⟨by rcases hg with rfl | rfl <;> rfl, fun t _ => by rw [hi]; simp,
-      by rcases hw' with rfl | rfl <;> decide, fun t _ i hi' => by rw [hi] at hi'; simp at hi'⟩
+    refine ⟨by rcases hg with rfl | rfl <;> rfl, fun t _ => by rw [hi]; simp, hw',
+      fun t _ i hi' => by rw [hi] at hi'; simp at hi'⟩
 
 theorem flip_acyclic : WiresAcyclic flipProg flipLay.wires := by
   refine ⟨fun _ => 0, fun g w g' hg hg' hd => ?_⟩
@@ -177,15 +217,29 @@ theorem flip_acyclic : WiresAcyclic flipProg flipLay.wires := by
 theorem flip_fits : flipLay.Fits flipProg 1 :=
   (fits_iff flipLay rfl rfl fun _ _ hw => by
     obtain ⟨rfl, rfl⟩ := flip_wired hw
-    exact ⟨Or.inr rfl, Or.inl rfl⟩).2 flip_acyclic
+    exact ⟨Or.inr rfl, by decide⟩).2 flip_acyclic
 
 /-- **`cycleLay` fits `flipProg` exactly when its wires are acyclic**: every other condition of `BoundaryGates.Fits`
 holds. -/
 theorem cycle_fits_iff : cycleLay.Fits flipProg 1 ↔ WiresAcyclic flipProg cycleLay.wires :=
   fits_iff cycleLay rfl rfl fun _ _ hw => by
     rcases cycle_wired hw with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
-    · exact ⟨Or.inl rfl, Or.inr rfl⟩
-    · exact ⟨Or.inr rfl, Or.inl rfl⟩
+    · exact ⟨Or.inl rfl, by decide⟩
+    · exact ⟨Or.inr rfl, by decide⟩
+
+theorem pass_acyclic : WiresAcyclic flipProg passLay.wires := by
+  refine ⟨fun _ => 0, fun g w g' hg hg' hd => ?_⟩
+  obtain ⟨-, rfl⟩ := pass_wired hg
+  rcases hc : passLay.wires g' with _ | w'
+  · exact absurd hc hg'
+  · obtain ⟨rfl, -⟩ := pass_wired hc
+    exact absurd (depends_le hd) (by omega)
+
+/-- `passLay` fits `flipProg`: its writer is an input, which `flipProg` returns. -/
+theorem pass_fits : passLay.Fits flipProg 1 :=
+  (fits_iff passLay rfl rfl fun _ _ hw => by
+    obtain ⟨rfl, rfl⟩ := pass_wired hw
+    exact ⟨Or.inr rfl, by decide⟩).2 pass_acyclic
 
 /-- **`cycleLay`'s wires are a cycle**: the first input's writer depends on the second input, and the second's on the
 first, so no rank falls along both. -/
@@ -267,23 +321,36 @@ theorem wireWrong_eq_empty {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : A
   obtain ⟨-, _, -, g, -, hg⟩ := Finset.mem_filter.1 hv
   exact hg (h g)
 
-/-- `flipProg`'s writers are negations, no constant, so they are read at their committed values. -/
-theorem flip_read (val : ℕ → Option Bool) {i : ℕ} (hi : i = 1 ∨ i = 3) : flipStmt.prog.read val i = val i := by
-  rcases hi with rfl | rfl <;> simp [Prog.read, flipStmt, flipProg]
+/-- `flipProg` has no constant, so its gates are read at their committed values. -/
+theorem flip_read (val : ℕ → Option Bool) {i : ℕ} (hi : i < 4) : flipStmt.prog.read val i = val i := by
+  interval_cases i <;> simp [Prog.read, flipStmt, flipProg]
 
 theorem cycle_wireRight (H : Msg → Msg) (a : Bool) (g : ℕ) :
     WireRight flipStmt.prog cycleLay.wires ((wit4 a (!a) (!a) a).val H accCm flipStmt) g := by
   obtain ⟨h0, h1, h2, h3⟩ := wit4_val H a (!a) (!a) a
   intro w hw
   rcases cycle_wired hw with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
-  · exact ⟨a, h0, (flip_read _ (i := 3) (Or.inr rfl)).trans h3⟩
-  · exact ⟨!a, h2, (flip_read _ (i := 1) (Or.inl rfl)).trans h1⟩
+  · exact ⟨a, h0, (flip_read _ (i := 3) (by decide)).trans h3⟩
+  · exact ⟨!a, h2, (flip_read _ (i := 1) (by decide)).trans h1⟩
 
 /-- Under `cycleLay`'s wiring, a trace whose inputs are its writers' values has no incorrect proof block. -/
 theorem cycle_incorrect (H : Msg → Msg) (a : Bool) :
     incorrect H accCm flipStmt flipPart cycleLay.wires (wit4 a (!a) (!a) a) = ∅ := by
   rw [incorrect, flip_faulty H (a := a) (b := !a) (c := !a) (d := a) rfl (by simp),
     wireWrong_eq_empty (cycle_wireRight H a), Finset.empty_union]
+
+theorem pass_wireRight (H : Msg → Msg) (a : Bool) (g : ℕ) :
+    WireRight flipStmt.prog passLay.wires ((wit4 a (!a) a (!a)).val H accCm flipStmt) g := by
+  obtain ⟨h0, -, h2, -⟩ := wit4_val H a (!a) a (!a)
+  intro w hw
+  obtain ⟨rfl, rfl⟩ := pass_wired hw
+  exact ⟨a, h2, (flip_read _ (i := 0) (by decide)).trans h0⟩
+
+/-- Under `passLay`'s wiring, a trace whose second input copies the first has no incorrect proof block. -/
+theorem pass_incorrect (H : Msg → Msg) (a : Bool) :
+    incorrect H accCm flipStmt flipPart passLay.wires (wit4 a (!a) a (!a)) = ∅ := by
+  rw [incorrect, flip_faulty H (a := a) (b := !a) (c := a) (d := !a) rfl rfl,
+    wireWrong_eq_empty (pass_wireRight H a), Finset.empty_union]
 
 /-- Under `flipLay`'s wiring, a trace with no incorrect proof block has negations of opposite values. -/
 theorem flip_vals (H : Msg → Msg) {w : Wit} (h : incorrect H accCm flipStmt flipPart flipLay.wires w = ∅) :
@@ -307,7 +374,34 @@ theorem flip_vals (H : Msg → Msg) {w : Wit} (h : incorrect H accCm flipStmt fl
     by_contra hn
     exact hnw ⟨[2, 3], rfl, 2, Or.inl (by simp), hn⟩
   obtain ⟨b, h2, h1⟩ := hr 1 rfl
-  exact ⟨b, (flip_read _ (i := 1) (Or.inl rfl)).symm.trans h1, by simp [h32, h2]⟩
+  exact ⟨b, (flip_read _ (i := 1) (by decide)).symm.trans h1, by simp [h32, h2]⟩
+
+/-- Under `passLay`'s wiring, a trace with no incorrect proof block has negations of one value. -/
+theorem pass_vals (H : Msg → Msg) {w : Wit} (h : incorrect H accCm flipStmt flipPart passLay.wires w = ∅) :
+    ∃ b, w.val H accCm flipStmt 1 = some b ∧ w.val H accCm flipStmt 3 = some b := by
+  classical
+  obtain ⟨hf, hw⟩ := Finset.union_eq_empty.1 h
+  have hnf : ∀ v, v < flipPart.blocks.length → ¬ Faulty H accCm flipStmt flipPart w v := fun v hv hfv => by
+    have h1 : v ∈ faulty H accCm flipStmt flipPart w := Finset.mem_filter.2 ⟨Finset.mem_range.2 hv, hfv⟩
+    rw [hf] at h1
+    exact Finset.notMem_empty v h1
+  have hnw : ¬ WireWrong H accCm flipStmt flipPart passLay.wires w 1 := fun hw1 => by
+    have h1 : (1 : ℕ) ∈ wireWrong H accCm flipStmt flipPart passLay.wires w :=
+      Finset.mem_filter.2 ⟨Finset.mem_range.2 (by decide), hw1⟩
+    rw [hw] at h1
+    exact Finset.notMem_empty 1 h1
+  obtain ⟨u0, hu0, ι0, hc0⟩ := Classical.not_not.1 (hnf 0 (by decide))
+  obtain rfl : [0, 1] = u0 := Option.some.inj hu0
+  obtain ⟨u1, hu1, ι1, hc1⟩ := Classical.not_not.1 (hnf 1 (by decide))
+  obtain rfl : [2, 3] = u1 := Option.some.inj hu1
+  have h10 := pair_val (C := flipProg) (i := 0) (j := 1) rfl rfl Nat.one_pos (by decide) (by decide) hc0
+  have h32 := pair_val (C := flipProg) (i := 2) (j := 3) rfl rfl (by omega) (by decide) (by decide) hc1
+  have hr : WireRight flipStmt.prog passLay.wires (w.val H accCm flipStmt) 2 := by
+    by_contra hn
+    exact hnw ⟨[2, 3], rfl, 2, Or.inl (by simp), hn⟩
+  obtain ⟨b, h2, h0⟩ := hr 0 rfl
+  have h0' := (flip_read _ (i := 0) (by decide)).symm.trans h0
+  exact ⟨!b, by simp [h10, h0'], by simp [h32, h2]⟩
 
 /-! ## The rows the traces carry -/
 
@@ -392,6 +486,34 @@ theorem cycle_two (H : Msg → Msg) :
     exact mem_carried rfl rfl H (cycle_incorrect H a) h1 h3
   · exact (flipObs_inj h).2
 
+/-- Counted at the incorrect set, the traces under `passLay` carry rows of one value at both slots only. -/
+theorem pass_rows (H : Msg → Msg) :
+    carried H accCm flipStmt flipPart passLay 1 0 (incorrect H accCm flipStmt flipPart passLay.wires) flipOp 1 ⊆
+      (fun b => [flipObs b b]) '' Set.univ := by
+  classical
+  rintro o ⟨hlen, hjit, hcov, w, hM, hcar⟩
+  have hsub : incorrect H accCm flipStmt flipPart passLay.wires w ⊆ Finset.range 2 :=
+    Finset.union_subset (Finset.filter_subset _ _) (Finset.filter_subset _ _)
+  obtain ⟨b, h1, h3⟩ := pass_vals H ((flip_M hsub).1 hM)
+  obtain ⟨x, rfl⟩ := List.length_eq_one_iff.1 hlen
+  obtain ⟨_, hrows, _⟩ := hcar 0 Nat.one_pos
+  exact ⟨b, Set.mem_univ _, congrArg (fun y => [y])
+    (obs_eq (fun ℓ => (hrows ℓ).trans (flipRows h1 h3 0 ℓ)) (hjit x (by simp))
+      (fun κ => hcov 0 Nat.one_pos Nat.one_pos κ)).symm⟩
+
+/-- Counted at the incorrect set, the traces under `passLay` carry two rows, one for each value of the free input. -/
+theorem pass_two (H : Msg → Msg) :
+    (Set.univ : Set Bool).encard ≤
+      (carried H accCm flipStmt flipPart passLay 1 0 (incorrect H accCm flipStmt flipPart passLay.wires) flipOp
+        1).encard := by
+  refine Set.encard_le_encard_of_injOn (f := fun a => [flipObs (!a) (!a)]) (fun ⦃a⦄ _ => ?_)
+    (fun ⦃a⦄ _ ⦃a'⦄ _ h => ?_)
+  · obtain ⟨-, h1, -, h3⟩ := wit4_val H a (!a) a (!a)
+    exact mem_carried rfl rfl H (pass_incorrect H a) h1 h3
+  · have h' := (flipObs_inj h).1
+    revert h'
+    cases a <;> cases a' <;> decide
+
 /-! ## The toys -/
 
 /-- **The wire flip.** `flipLay` fits `flipProg`, and the trace whose inputs are both `false` and negations both
@@ -456,6 +578,35 @@ theorem cycle_excludes (H : Msg → Msg) :
   rw [cycle_bound]
   intro h
   have h2 := (cycle_two H).trans h
+  rw [Set.encard_univ, ENat.card_eq_coe_fintype_card] at h2
+  exact absurd (ENat.natCast_le_natCast.1 h2) (by decide)
+
+/-- **The pass-through, counted with its chain's end**: the first input, which writes `passLay`'s one wire, stays a
+free input, and counted at the incorrect set the traces under `passLay` carry at most `SampledLeakAccepted`'s bound of
+observation sequences. -/
+theorem pass_meets (H : Msg → Msg) :
+    (carried H accCm flipStmt flipPart passLay 1 0 (incorrect H accCm flipStmt flipPart passLay.wires) flipOp
+        1).encard ≤
+      ((2 ^ (freeInputs flipProg passLay 1 \ ∅).card * (faultySets flipStmt.design flipPart 0).card * 2 ^ 0 *
+        1 ^ 1 : ℕ) : ℕ∞) := by
+  rw [pass_bound]
+  calc _ ≤ ((fun b => [flipObs b b]) '' Set.univ).encard := Set.encard_le_encard (pass_rows H)
+    _ ≤ (Set.univ : Set Bool).encard := Set.encard_image_le _ _
+    _ = ((2 : ℕ) : ℕ∞) := by rw [Set.encard_univ, ENat.card_eq_coe_fintype_card, Fintype.card_bool]
+
+/-- **The pass-through.** `passLay` fits `flipProg`, its one wire's chain ending at the first input, which stays a free
+input. The traces with no incorrect proof block under it carry more observation sequences than the bound would be with
+the chain's end left out of the free inputs too. -/
+theorem pass_excludes (H : Msg → Msg) :
+    passLay.Fits flipProg 1 ∧ 0 ∈ freeInputs flipProg passLay 1 ∧
+      ¬ (carried H accCm flipStmt flipPart passLay 1 0 (incorrect H accCm flipStmt flipPart passLay.wires) flipOp
+          1).encard ≤
+        ((2 ^ ((freeInputs flipProg passLay 1).erase 0).card * (faultySets flipStmt.design flipPart 0).card * 2 ^ 0 *
+          1 ^ 1 : ℕ) : ℕ∞) := by
+  refine ⟨pass_fits, pass_end, ?_⟩
+  rw [pass_bound_erase]
+  intro h
+  have h2 := (pass_two H).trans h
   rw [Set.encard_univ, ENat.card_eq_coe_fintype_card] at h2
   exact absurd (ENat.natCast_le_natCast.1 h2) (by decide)
 
