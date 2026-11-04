@@ -1587,7 +1587,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
     return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines(), read("order"), read("limits")
 
 
-#: whose coins V3c's audit draws on in `_v3c`'s development run, as `served_verdicts.sh v3c`'s first line says
+#: where V3c's audit's coins come from in `_v3c`'s development run, as `served_verdicts.sh v3c`'s first line says
 V3C_DEV = "a development challenger session where it runs (V3C_CHALLENGER local), in a development run (DEVELOPMENT=1)"
 V3C_ENTRY = f"COINS V3c's audit: {V3C_DEV}"
 
@@ -1765,7 +1765,7 @@ def test_under_h1_tie_v3c_audits_the_commit_h1_bound_and_makes_none_of_its_own(t
                         "verifier's own window-circuit record: PASS")
 
 
-#: the flags naming the challenger records_audit's audit draws on
+#: the flags naming the challenger whose coins records_audit's audit takes
 COIN_FLAGS = ("--challenger", "--peer", "--challenger-key", "--gate-key")
 
 
@@ -1910,9 +1910,9 @@ def _key(tmp_path: Path) -> Path:
 ])
 def test_the_coins_line_says_whose_coins_each_sample_is_on(tmp_path, extra, coins, v3c):
     """Before step 0 the run says whose coins each sample is on: sampled proofs' (run.sh's local development session
-    unless PP_CHALLENGER names a challenger, and then too while V3c's audit draws there, since both open on the window's
-    run root), PoUW H1's, and V3c's audit's when it runs (V3C_CHALLENGER, by default PP_CHALLENGER). Here step 0's
-    `predict row` then fails, and the run stops there."""
+    unless PP_CHALLENGER names a challenger, and then too while V3c's audit takes its coins there, since both open on the
+    window's run root), PoUW H1's, and V3c's audit's when it runs (V3C_CHALLENGER, by default PP_CHALLENGER). Here step
+    0's `predict row` then fails, and the run stops there."""
     venv = tmp_path / "toy-venv" / "bin"
     _script(venv / "python", '[ "$1 $2" = "-m research" ] && exit 0\n[ "$1 $2" = "-m verity_vllm.pipeline.cli" ] && exit 9\n'
                              f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\nexec {sys.executable} "$@"')
@@ -1936,9 +1936,9 @@ PERIOD_OPEN = json.dumps({"kind": "period-open", "session": None, "body": {"peri
 
 
 def _live(tmp_path: Path, ledger: list[str], hosts: bool = False) -> dict[str, str | None]:
-    """`_v3c`'s environment for a run of record (DEVELOPMENT unset) whose V3c audit draws on the live challenger LIVE
-    from peer vy-dc-h200 under a key record and a gate key, the gate a fake `ssh` (FAKE_SSH) whose ledger is `ledger`;
-    with `hosts`, `hostname` says $HOST."""
+    """`_v3c`'s environment for a run of record (DEVELOPMENT unset) whose V3c audit takes its coins from the live
+    challenger LIVE from peer vy-dc-h200 under a key record and a gate key, the gate a fake `ssh` (FAKE_SSH) whose ledger
+    is `ledger`; with `hosts`, `hostname` says $HOST."""
     _script(tmp_path / "gate" / "ssh", FAKE_SSH)
     (tmp_path / "ledger.jsonl").write_text("".join(x + "\n" for x in ledger))
     (tmp_path / "gate_ed25519").write_text("")
@@ -1947,9 +1947,9 @@ def _live(tmp_path: Path, ledger: list[str], hosts: bool = False) -> dict[str, s
             "PP_GATE_KEY": str(tmp_path / "gate_ed25519"), "PATH": ":".join(path)}
 
 
-def test_v3cs_audit_draws_on_the_live_challenger_once_the_gate_holds_no_session_on_its_run_root(tmp_path):
-    """V3c's audit is the sampled-proofs audit of record: with PP_CHALLENGER the live challenger it draws there
-    (records_audit's --challenger, --peer PP_PEER, --challenger-key and --gate-key), as its COINS line says, once
+def test_v3cs_audit_samples_on_the_live_challenger_once_the_gate_holds_no_session_on_its_run_root(tmp_path):
+    """V3c's audit is the sampled-proofs audit of record: with PP_CHALLENGER the live challenger it takes its coins
+    there (records_audit's --challenger, --peer PP_PEER, --challenger-key and --gate-key), as its COINS line says, once
     `served_verdicts.py gate --root`, through the same ssh and key, finds no session on the window's run root and no
     period of the lane open, which its V3C-GATE line says, and when, before the audit reserves anything."""
     env = _live(tmp_path, [LEDGER_LINE])
@@ -2330,18 +2330,19 @@ def test_a_follow_on_refuses_a_copy_unlike_the_served_nodes_another_setting_a_no
 
 
 def _live_follow(tmp_path: Path, **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
-    """`_deferred`'s deferral in a run of record whose V3c audit draws on the live challenger LIVE from the served node's
-    peer vy-dc-h200, then its follow-on on cpu-6 under `_live`'s gate with V3C_PEER cpu-6 (``extra`` adds to the
-    environment, None unsetting): `_v3c`'s outcome."""
+    """`_deferred`'s deferral in a run of record whose V3c audit takes its coins from the live challenger LIVE from the
+    served node's peer vy-dc-h200, then its follow-on on cpu-6 under `_live`'s gate with V3C_PEER cpu-6 (``extra`` adds
+    to the environment, None unsetting): `_v3c`'s outcome."""
     assert _deferred(tmp_path, DEVELOPMENT=None, PP_CHALLENGER=LIVE, PP_PEER="vy-dc-h200").returncode == 0
     env = {**_live(tmp_path, [LEDGER_LINE], hosts=True), "PP_CHALLENGER": None, "PP_PEER": None, "V3C_PEER": "cpu-6"}
     return _follow(tmp_path, **{**env, **extra})
 
 
-def test_a_follow_on_of_a_deferral_of_record_draws_on_the_challenger_it_recorded_from_its_own_node(tmp_path):
+def test_a_follow_on_of_a_deferral_of_record_samples_on_the_challenger_it_recorded_from_its_own_node(tmp_path):
     """A deferral in a run of record records V3c's audit's coins (V3C_CHALLENGER, DEVELOPMENT unset) and the served
-    node's peer, so its follow-on draws on that challenger, whatever its own environment's PP_CHALLENGER, from its own
-    node (V3C_PEER, default PP_PEER), as its COINS line says, once the gate holds no session on the window's run root."""
+    node's peer, so its follow-on takes its coins from that challenger, whatever its own environment's PP_CHALLENGER,
+    from its own node (V3C_PEER, default PP_PEER), as its COINS line says, once the gate holds no session on the window's
+    run root."""
     rc, lines, order, _limits = _live_follow(tmp_path)
     assert {k: v for k, v in _deferral_settings(tmp_path).items() if k in ("V3C_CHALLENGER", "DEVELOPMENT", "SERVED_PEER")} == {
         "V3C_CHALLENGER": LIVE, "DEVELOPMENT": "", "SERVED_PEER": "vy-dc-h200"}

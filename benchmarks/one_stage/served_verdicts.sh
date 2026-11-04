@@ -121,14 +121,14 @@
 #     and the period check, which the run's --timeout holds beside the other steps. The period check writes the
 #     certifier's answer.json in DIR, which step 4's certifier piece reads; `served_verdicts.sh v3c`, which writes no
 #     record, moves the steps' logs (CERTIFIER_PRIVATE) to the serve dir's private/pieces/certifier before it exits.
-# Coins: V3c's audit, the sampled-proofs audit of record, draws on V3C_CHALLENGER's coins, by default PP_CHALLENGER's: the
+# Coins: V3c's audit, the sampled-proofs audit of record, samples on V3C_CHALLENGER's coins, by default PP_CHALLENGER's: the
 # live challenger with PP_CHALLENGER=gate:USER@HOST (records_audit's, with its peer V3C_PEER, default PP_PEER, the node
 # it runs on, PP_CHALLENGER_KEY and PP_GATE_KEY), where it runs, on the served node or a deferral's follow-on. There
 # `served_verdicts.py gate --root` first finds no session on the window's run root (the gate opens a root once, ever) and
 # no period of lane H1_LANE open (a reserve would join it), its V3C-GATE line saying so and when. A local or loopback
 # session is a development session, which the preflight refuses unless DEVELOPMENT=1 (a development run), as it refuses a
 # V3C_PEER other than the node's peer H1's or Pearl+'s session names, and in a follow-on the served node's. Sampled
-# proofs' step 3 draws on a local development challenger session's coins on the served node (run.sh's PP_CHALLENGER
+# proofs' step 3 samples on a local development challenger session's coins on the served node (run.sh's PP_CHALLENGER
 # default, local, pinned on PP_MAIN's line, else MAIN_FILE's, else origin's main's) unless PP_CHALLENGER names the live
 # challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY), and then too while V3c's audit is
 # live, since both open on the window's run root: step 3 is then a development check. With H1_GATE (the
