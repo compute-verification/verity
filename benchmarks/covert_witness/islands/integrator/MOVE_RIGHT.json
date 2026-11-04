@@ -1,7 +1,7 @@
 {
  "what": "the move-right round (coordinator 16:17Z): each candidate relaunched from its record on the search split at the long tier, one seed, its budget k x the record's",
  "table": "art:d902a762579b498df6ec8be7cd16763204c60678d2adbcf387f9ddb2f5257971",
- "harness": "fcbc5b078afe34adc0dffc06c266bff9fd09eb17",
+ "harness": "c3ff9e70872d11316de7f281ac98e1de54f399e1",
  "long_by": "16:17Z coordinator",
  "target_end": "22:20Z",
  "node_end": "22:45Z",
@@ -1333,7 +1333,7 @@
   },
   {
    "key": "MR r20261103-083110-e29d 2x lr",
-   "run": "r20261104-165145-6ada",
+   "run": "r20261104-171720-bd0e",
    "variant": true,
    "start": "s-t20",
    "decade": 2,
@@ -1368,17 +1368,17 @@
      }
     }
    ],
-   "tree": null,
-   "node": "vy-nebius-2",
-   "k": 9.378846850926795,
+   "tree": "69b1df34395c138019eb87866a3e3d4b6c494b31",
+   "node": "vy-nebius-3",
+   "k": 8.640982428134869,
    "binds": "time",
-   "steps": 47269,
-   "end": "21:53Z",
+   "steps": 43551,
+   "end": "21:56Z",
    "p_cap": {
-    "1.1": 24.716965512723355,
-    "2.0": 2.355116023145583
+    "1.1": 22.77240134816283,
+    "2.0": 2.169831376467019
    },
-   "f_new": 0.022436201962463095,
+   "f_new": 0.02067107289341982,
    "launch": [
     "python",
     "benchmarks/covert_witness/launch.py",
@@ -1390,11 +1390,11 @@
     "--mechanism",
     "qlora",
     "--node",
-    "vy-nebius-2",
+    "vy-nebius-3",
     "--long",
     "16:17Z coordinator",
     "--note",
-    "MOVE-RIGHT r20261103-083110-e29d 2x lr k 9.38",
+    "MOVE-RIGHT r20261103-083110-e29d 2x lr k 8.64",
     "--no-wait",
     "--",
     "--mode",
@@ -1415,7 +1415,7 @@
     "--micro",
     "32",
     "--budget-fraction",
-    "0.0224362"
+    "0.0206711"
    ]
   }
  ]
