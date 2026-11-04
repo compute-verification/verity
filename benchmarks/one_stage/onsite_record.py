@@ -11,8 +11,8 @@ node, a datacenter and the world. It reads only the run's public $OUT and decide
 **Serving** (``serving``, `SERVING`): the run's S (served_verdicts.sh's WINDOW_STEPS) and MAX_TOKENS as its caller
 states them, which no file of OUT does, else ``missing`` (`NO_SERVING`); they label every figure of the record and its
 line. ``--beside`` sets runs' records beside each other (`BESIDE`, `BESIDE_IS`): each run's figure of record, tight K,
-ℓ_a and period cells, labelled with its run, tree and serving settings, and none carried to another's settings; a record
-stating no serving settings is refused (`UNLABELLED`).
+ℓ_a and period cells, labelled with its run, tree and serving settings and what they are conditional on, and none
+carried to another's settings; a record stating no serving settings is refused (`UNLABELLED`).
 
 **Verdicts** (`VERDICTS`), each ``{protocol, verdict, from}`` with the answer's ``reason`` or ``refusal``, or, where the
 run wrote no answer, ``missing`` and ``why``:
@@ -28,6 +28,12 @@ run wrote no answer, ``missing`` and ``why``:
 
 ``of_record`` holds when every one of them accepted, the condition for the demo's run of record; ``placement`` is the
 network certifier's answer's, which host ran each party.
+
+**Coins** (``coins``, `COINS`): sampled proofs' coins as the run's COINS lines in verdicts.txt name them (the served
+run's, or the follow-on's where it audits), ``open`` unless each names the live challenger (`LIVE_COINS`), and
+``missing`` where the run published none. While they are open, live-coins is named wherever a figure rests on that
+draw: the sampled-proofs verdict's and ``of_record``'s ``conditional_on``, and the figure of record's ``open`` and
+``conditional_on`` and its periods'.
 
 **The composite's error** (``composite_error``, `COMPOSITE`): the sum over the onsite composite's four subprotocols of
 each one's error, each subprotocol's δ with where the run states it: sampled proofs' and PoUW's from their rows (their
@@ -57,8 +63,9 @@ tight ℓ_{a,j} rests on (``held``, `CHECKS`) and none of its premises is open (
 `PREMISES` discharged by theorems in Security's locks, each at the statement `DISCHARGES` pins, taking no named
 assumption but a standing one (`STANDING`) or one its pin names and no premise that is open; and each guarantee it
 rests on in the lock at the statement whose hypotheses and antecedents `RESTS_ON` names, beside what K counts,
-`COUNTS`), and while one of either is ``open``, by name, K plus ℓ_a + 1 bits for each audit tied to each
-execution phase's scan (``advice``: the bits each phase adds). Beside the bound, ``advice_charge``: the served run's
+`COUNTS`) and the coins are live (``coins``), and while any is ``open``, by name, K plus ℓ_a + 1 bits for each audit
+tied to each execution phase's scan (``advice``: the bits each phase adds), conditional on the coins while they are open
+(``conditional_on``). Beside the bound, ``advice_charge``: the served run's
 realized advice charge stays out of the record (`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is
 ℓ_{a,j} as the bound charges each execution phase, with its share of K and its source (`CHARGED`: the tied compute
 audits' unregistered inputs, read off the period's parameters, with no advice length and no cap in them); ``cap`` is
@@ -71,9 +78,10 @@ clock; ``phases`` says where those phases start, `TEST_PHASES`), measured on a t
 that run's, never a figure of this one. ``tree`` is the commit the run served from (machine.txt's), None where machine.txt names none.
 
 **Periods**, of the figure of record: the run's own certification period (``run``), proved, and each monitoring period
-of `leak_bounds.PERIODS` for the serving node, the census's reference datacenter and the world. Where the figure of
-record isn't the tight K, ``periods_tight`` gives the same cells of the tight K beside them, with the open checks and
-premises it is conditional on (``conditional_on``), never as the result. A node's cell is proved where the run's period
+of `leak_bounds.PERIODS` for the serving node, the census's reference datacenter and the world, conditional on the coins
+while they are open (``conditional_on``). Where the figure of record isn't the tight K, ``periods_tight`` gives the same
+cells of the tight K beside them, with the open checks, premises and coins it is conditional on (``conditional_on``),
+never as the result. A node's cell is proved where the run's period
 covers the monitoring period's seconds (its m execution phases), and otherwise scaled from the run to the period; a
 datacenter's and the world's are scaled from the node's. Each scaled cell names its rule, which ``rules`` states with
 its sources (`RULES`): the bound, the case's schedule, and each census line it reads with its SHA-512 (`census`). Each
@@ -89,7 +97,7 @@ one execution phase, proved only where m is 1.
 
 **Re-proof inputs** (``reproof``, `REPROOF`): what a later re-proof of the run's sampled units needs, each wire a sampled
 unit reads then proved inside its session: the committed values and their openings for every sampled unit and the units
-that write what it reads, the registration, the live draw and its receipt, and the public files, each by where it is (the
+that write what it reads, the registration, the draw and its receipt, and the public files, each by where it is (the
 serve dir's by their paths there, naming no window) and what it holds, with whether the run wrote each of OUT's and how
 each must be kept (``kept``, `REPROOF_KEPT`). The serve dir's are witness, kept off OUT and custody in a copy off the
 served node (``--reproof-copy`` NODE:/PATH, ``--reproof-listing``, a listing of it kept off OUT): ``copy`` names its node
@@ -189,6 +197,20 @@ NO_READINGS = ("the period's public lists no reading at δ_i (`charged`): its ch
                "answer's δ, and the charged part is eps − m · δ_scan")
 #: the run's published line of the network certifier's verdict (`served_verdicts.pieces`)
 LINE = "THE NETWORK CERTIFIER "
+#: the run's published line naming each protocol's coins (served_verdicts.sh's first), and the form of its sampled
+#: proofs' part that names the live challenger: PP_CHALLENGER gate:USER@HOST at a named peer, whose session V3c's audit
+#: holds to PP_CHALLENGER_KEY
+COINS_LINE = "COINS "
+LIVE_COINS = re.compile(r"the challenger gate:\S+ \(peer [^?)\s][^)]*\)")
+COINS_OPEN = "live-coins"
+COINS = (f"{COINS_OPEN}: V3c's tied audit drew its sample on the live challenger's coins, which the serving side can't "
+         "know before it commits (the run's COINS line names PP_CHALLENGER gate:USER@HOST and its peer). Open, by this "
+         "name, wherever a COINS line names a local development challenger session, another challenger or no coins, "
+         "or the run published none: "
+         "the sampled-proofs verdict, each tied audit's δ in eps and the slot entries E_w that k_{skip,j} charges rest "
+         "on that draw, so every figure here, the figure of record's included, holds only on those coins and never as "
+         "a live draw's")
+NO_COINS = "the run published no COINS line naming sampled proofs' coins (served_verdicts.sh's)"
 CHARGED = ("PeriodLeakAccepted's ℓ_{a,j}: the free inputs of each compute audit tied to execution phase j's scan, those "
            "its Program neither registers at a pinned root nor ties (NetworkCheck.Period's tiedAudits sums the "
            "parameters' audits[].free, #(freeInputs \\ reg); `records_audit.py period`'s free for V3c's window audit). "
@@ -373,10 +395,12 @@ DISCHARGE = ("the tight K's premises (`PREMISES`), each open until every theorem
 RESTATED = ("its statement in the lock isn't the one whose hypotheses and antecedents `RESTS_ON` names: read them again, "
             "name each in its takes, and pin the lock's digest")
 OPEN = ("the figure of record: K as the period's check states it, the tight form, only where its Lean verdict performed "
-        "every check of `CHECKS` (the public's held) and no premise of it is open (`DISCHARGE`). While "
-        "either is open it is K plus ℓ_a + 1 bits for each audit tied to each execution phase's scan, beside that "
-        "phase's ℓ_{a,j}: an advice of at most ℓ_a bits (`CAP`) is one of fewer than 2^(ℓ_a + 1) strings. The tight K's "
-        "cells go beside the figure of record's, conditional on what is open (periods_tight)")
+        "every check of `CHECKS` (the public's held), no premise of it is open (`DISCHARGE`) and the run's COINS line "
+        "names the live challenger (`COINS`). While any is open it is K plus ℓ_a + 1 bits for each audit tied to each "
+        "execution phase's scan, beside that phase's ℓ_{a,j}: an advice of at most ℓ_a bits (`CAP`) is one of fewer "
+        "than 2^(ℓ_a + 1) strings. The tight K's cells go beside the figure of record's, conditional on what is open "
+        "(periods_tight); and while the coins are open, the figure of record and its cells are conditional on them too "
+        "(conditional_on), since no charge here covers a draw on known coins")
 CAP = ("ℓ_a, the cap of the advice the run registered: its published advice registration's compiler cap_bits "
        "(`REGISTRATION`, its advice's length padded to it), the length each Commit period's advice is padded to before "
        "it is committed, the same for each tied audit, whose own registration in the case's commitment binds no advice "
@@ -429,9 +453,10 @@ REPROOF = {
                  "each sampled unit's opening as it was proved (m<k>-private.bin, m<k>-public.bin, v<j>-private.bin), "
                  "with the partition and the Program the audit sampled"),
     "draw": ("serve dir", "v3c-w<K>-<class>/audit/window/{draw,segment,receipt}.json",
-             "the live draw and its receipt, the stream's record that it received the registration before it read a coin"),
+             "the draw and its receipt, the stream's record that it received the registration before it read a coin"),
     "coins": ("serve dir", "v3c-w<K>-<class>/audit/challenger/",
-              "the live challenger session the draw read its coins from"),
+              "the challenger session the draw read its coins from: a local development one unless the run's COINS "
+              "line names the live challenger (`coins`)"),
     "advice": ("serve dir", "advice/w<K>/",
                "the advice's registration and its opening (private/advice.bin), which the window circuit reads under its "
                "hiding root"),
@@ -470,8 +495,9 @@ NO_SERVING = ("the run's caller stated no serving settings (--window-steps and -
               "WINDOW_STEPS and MAX_TOKENS)")
 BESIDE = "verity/onsite-network-records-beside/v1"
 BESIDE_IS = ("each run's figures from its own record, beside the others', each labelled with its serving settings "
-             "(`SERVING`) and ℓ_a: its figure of record and tight K, and each period's cells (bits and share of the "
-             "weights). No figure is carried from one run's settings to another's")
+             "(`SERVING`), ℓ_a and what its figures are conditional on (`COINS`): its figure of record and tight K, "
+             "and each period's cells (bits and share of the weights). No figure is carried from one run's settings "
+             "to another's")
 UNLABELLED = ("states no serving settings, which label its figures beside another run's: write it again from its OUT "
               "with --window-steps and --max-tokens")
 
@@ -719,6 +745,17 @@ def lines(out: Path, name: str) -> list[str]:
     return f.read_text().splitlines() if f.is_file() else []
 
 
+def coins(out: Path) -> dict[str, Any]:
+    """Sampled proofs' coins as the run's COINS lines name them (`COINS`): each line's sampled-proofs part, None where
+    it names none, and ``open`` unless every part names the live challenger (`LIVE_COINS`); ``missing`` where the run
+    published no COINS line."""
+    said = [m[1].strip() if (m := re.search(r"sampled proofs: ([^;]*)", x)) else None
+            for x in lines(out, "verdicts.txt") if x.startswith(COINS_LINE)]
+    live = bool(said) and all(s is not None and LIVE_COINS.fullmatch(s) for s in said)
+    return ({"open": not live, "sampled_proofs": said, "from": f"verdicts.txt {COINS_LINE.strip()}", "is": COINS}
+            | ({} if said else {"missing": NO_COINS}))
+
+
 def charged(b: Mapping[str, Any]) -> dict[str, Any]:
     """ℓ_{a,j} as the bound charges each execution phase (`CHARGED`), and their share of K."""
     free = [t["bits"] for t in b["terms"] if t["symbol"] == "\\ell_{a,j}"]
@@ -815,24 +852,28 @@ def premises(locks: Sequence[Path], root: Path = ROOT) -> dict[str, Any]:
             "unread": unread}
 
 
-def of_record(public: Mapping[str, Any], ell: Sequence[int], K: int, prem: Mapping[str, Any]) -> dict[str, Any]:
-    """The figure of record (`OPEN`) from the period's public, the audits' caps ``ell`` and the tight K's premises
-    ``prem`` (`premises`): ``K``, the checks the public holds, what is open (those checks and the premises), and the
+def of_record(public: Mapping[str, Any], ell: Sequence[int], K: int, prem: Mapping[str, Any],
+              conditional: Sequence[str] = ()) -> dict[str, Any]:
+    """The figure of record (`OPEN`) from the period's public, the audits' caps ``ell``, the tight K's premises
+    ``prem`` (`premises`) and the conditions no charge covers (``conditional``: live-coins while the coins are open,
+    `COINS`): ``K``, the checks the public holds, what is open (those checks, the premises and the conditions), the
     advice ℓ_a + 1 charges, summed over each phase's tied audits (the public's ``scans[j].tied``, else every audit:
-    `TIED_ALL`)."""
+    `TIED_ALL`), and ``conditional_on``, the conditions, where any is open."""
     held = [c for c in CHECKS if c in (public.get("held") or ())]
-    open_ = [c for c in CHECKS if c not in held] + list(prem["open"])
+    open_ = [c for c in CHECKS if c not in held] + list(prem["open"]) + list(conditional)
     tied = [s.get("tied") for s in public["scans"]]
     per = [sum(ell[int(i)] + 1 for i in (t if t is not None else range(len(ell)))) for t in tied]
     return {"K": K + (sum(per) if open_ else 0), "held": held, "open": open_, "is": OPEN, "premises": prem,
             "advice": {"bits_per_phase": per,
-                       "tied": "scans[j].tied" if all(t is not None for t in tied) else TIED_ALL}}
+                       "tied": "scans[j].tied" if all(t is not None for t in tied) else TIED_ALL}} | (
+        {"conditional_on": list(conditional)} if conditional else {})
 
 
-def figure(out: Path, case: Mapping[str, Any], public: Mapping[str, Any], K: int,
-           prem: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    """The figure of record (`of_record`) and ``advice_charge``'s ``cap`` from OUT's advice registration
-    (`REGISTRATION`) and the case's commitment: both the one ``missing`` or ``error`` where either can't be read."""
+def figure(out: Path, case: Mapping[str, Any], public: Mapping[str, Any], K: int, prem: Mapping[str, Any],
+           conditional: Sequence[str] = ()) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The figure of record (`of_record`, at ``conditional``) and ``advice_charge``'s ``cap`` from OUT's advice
+    registration (`REGISTRATION`) and the case's commitment: both the one ``missing`` or ``error`` where either can't
+    be read."""
     try:
         cap = advice_cap(json.loads((out / REGISTRATION).read_text()))
     except FileNotFoundError:
@@ -841,7 +882,7 @@ def figure(out: Path, case: Mapping[str, Any], public: Mapping[str, Any], K: int
         return (why := {"error": f"{REGISTRATION}: {type(e).__name__}: {e}"}), why
     try:
         ell = caps(case, cap)
-        return of_record(public, ell, K, prem), {"ell_a": ell, "is": CAP}
+        return of_record(public, ell, K, prem, conditional), {"ell_a": ell, "is": CAP}
     except (IndexError, KeyError, TypeError, ValueError) as e:
         return (why := {"error": f"{CASE} commitment: {type(e).__name__}: {e}"}), why
 
@@ -908,6 +949,10 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     v["the network certifier"] = row_verdict(rows, ROWS["the network certifier"], net_src)
     v["onsite"] = composite_verdict(found, ONSITE, f"the run has no composite of {ONSITE}")
     v = {k: v[k] for k in VERDICTS}
+    drawn = coins(out)
+    cond = [COINS_OPEN] if drawn["open"] else []
+    if cond:
+        v["sampled proofs"]["conditional_on"] = cond
     net = rows.get(ROWS["the network certifier"]) or {}
     answer = net.get("answer") if isinstance(net.get("answer"), Mapping) else {}
     profile = answer.get("profile") if isinstance(answer.get("profile"), Mapping) else {}
@@ -916,10 +961,11 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
         "format": FORMAT, "extends": EXTENDS, "run": report.get("run"), "tree": tree, "node": report.get("node"),
         "serving": {"missing": NO_SERVING} if serving is None else {
             "window_steps": serving[0], "max_tokens": serving[1], "is": SERVING},
-        "verdicts": v,
+        "verdicts": v, "coins": drawn,
         "of_record": {"holds": all(x["verdict"] == "accept" for x in v.values()),
                       "missing": [k for k, x in v.items() if x["verdict"] == "missing"],
-                      "not_accepting": [k for k, x in v.items() if x["verdict"] not in ("accept", "missing")]},
+                      "not_accepting": [k for k, x in v.items() if x["verdict"] not in ("accept", "missing")]}
+                     | ({"conditional_on": cond} if cond else {}),
         "placement": profile.get("placement"), "advice_charge": advice, "composite_error": composite_error(rows, None),
         "reproof": reproof(out, copy, listing)}
     nv = v["the network certifier"]
@@ -947,7 +993,7 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     except ValueError as e:
         b["connections"] = b["of_record"] = advice["cap"] = {"error": f"{CASE}: {type(e).__name__}: {e}"}
         return rec | {"periods": b["of_record"]}
-    b["of_record"], advice["cap"] = figure(out, case, answer["public"], b["K"], premises(LOCKS))
+    b["of_record"], advice["cap"] = figure(out, case, answer["public"], b["K"], premises(LOCKS), cond)
     try:
         phase_s, connections, capacity = schedule(case, b["phases"])
     except (KeyError, TypeError, ValueError) as e:
@@ -959,7 +1005,7 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
         why = b["of_record"].get("error") or b["of_record"]["missing"]
         return rec | {"periods": {"missing": f"no figure of record: {why}"}}
     eps, m, K = eps_of(b), b["phases"], b["of_record"]["K"]
-    rec["periods"] = periods(K, eps, m, phase_s, connections, capacity)
+    rec["periods"] = ({"conditional_on": cond} if cond else {}) | periods(K, eps, m, phase_s, connections, capacity)
     if K != b["K"]:
         rec["periods_tight"] = {"conditional_on": b["of_record"]["open"],
                                 **periods(b["K"], eps, m, phase_s, connections, capacity)}
@@ -967,14 +1013,16 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
 
 
 def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
-    """The ``ONSITE`` line: the run's serving settings, each verdict, whether the run is of record, K of record, the
-    tight K and the checks it is conditional on, its δ_net's terms, eps's split and connections, the composite's stated
-    error, the year's datacenter cell, and the measured advice charge's test run."""
+    """The ``ONSITE`` line: the run's serving settings, each verdict, whether the run is of record and what every figure
+    is conditional on (`COINS`; open for a record that read no coins), K of record, the tight K and the checks it is
+    conditional on, its δ_net's terms, eps's split and connections, the composite's stated error, the year's datacenter
+    cell, and the measured advice charge's test run."""
     b, p, s = rec.get("bound") or {}, rec.get("periods") or {}, rec.get("serving") or {}
     year = (p.get("year") or {}).get("datacenter")
     m, fig = rec["advice_charge"]["measured"], b.get("of_record") or {}
     return {"serving": {k: s[k] for k in ("window_steps", "max_tokens")} if "window_steps" in s else None,
             "verdicts": {k: x["verdict"] for k, x in rec["verdicts"].items()}, "of_record": rec["of_record"]["holds"],
+            "conditional_on": rec["of_record"].get("conditional_on", []) if "coins" in rec else [COINS_OPEN],
             "K": fig.get("K"), "K_tight": b.get("K"), "open": fig.get("open"),
             "delta_net": None if "delta_net" not in b else delta_net(eps_of(b), b["phases"]),
             "delta": None if "delta" not in b else {k: b["delta"][k] for k in ("scan", "charged")},
@@ -1012,6 +1060,7 @@ def beside(paths: Sequence[Path]) -> dict[str, Any]:
             raise ValueError(f"{path} {UNLABELLED}")
         runs.append({"record": str(path), "run": rec.get("run"), "tree": rec.get("tree"), "serving": line["serving"],
                      "ell_a": (rec["advice_charge"].get("cap") or {}).get("ell_a"), "of_record": line["of_record"],
+                     "conditional_on": line["conditional_on"],
                      "K": line["K"], "K_tight": line["K_tight"], "open": line["open"],
                      "periods": cells(rec.get("periods")), "periods_tight": cells(rec.get("periods_tight"))})
     return {"format": BESIDE, "is": BESIDE_IS, "runs": runs}
@@ -1054,7 +1103,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         a.to.parent.mkdir(parents=True, exist_ok=True)
         a.to.write_text(json.dumps(doc, indent=1, sort_keys=True, ensure_ascii=False) + "\n")
-        print("ONSITE-BESIDE " + json.dumps([{k: r[k] for k in ("run", "serving", "ell_a", "K", "K_tight", "open")}
+        print("ONSITE-BESIDE " + json.dumps([{k: r[k] for k in ("run", "serving", "ell_a", "conditional_on", "K",
+                                                                 "K_tight", "open")}
                                              for r in doc["runs"]], sort_keys=True, ensure_ascii=False), flush=True)
         return 0
     if a.out is None:

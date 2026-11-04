@@ -14,7 +14,10 @@ discharge, taking no assumption but a standing one, and otherwise charges ℓ_a 
 phase, ℓ_a the cap of the run's published advice registration (no figure where it published none, and an error where an
 audit's own registration binds an advice), the tight K's cells beside it, conditional on what is open, by name. A tied
 audit drawn in part charges its slot entries in k_{skip,j}; each cell states its
-share of the schedule's egress capacity, and the served egress is missing. The run's `publish`
+share of the schedule's egress capacity, and the served egress is missing. Sampled proofs' coins are live only where
+every COINS line names the live challenger at a named peer; otherwise, or with none, live-coins is open by name, the
+figure of record charges ℓ_a + 1 for each tied audit whatever else holds, and it, its cells and the sampled-proofs
+verdict are conditional on the coins. The run's `publish`
 leaves the record as written. The run is of record only when every verdict, the onsite composite's included,
 accepted. Its caller's serving settings, S and MAX_TOKENS, both or neither, label the record and its line, missing where
 it states none; runs' records at two settings go beside each other, each run's figures labelled with its own settings
@@ -145,10 +148,20 @@ def network_row(public: dict | None) -> dict:
             "answer": answer(public)}
 
 
+#: the sampled-proofs part of a COINS line naming the live challenger, as served_verdicts.sh says it under PP_CHALLENGER
+GATE = "the challenger gate:research@toy-gate (peer toy-peer)"
+
+
+def coins_line(said: str, lead: str = "") -> str:
+    """The run's COINS line as served_verdicts.sh says it, its sampled-proofs part ``said``, led by ``lead``."""
+    return (f"COINS {lead}sampled proofs: {said}; PoUW H1: not served (H1_GATE empty); the bandwidth audit's: "
+            "vy-auditor-2's bw_party, inside PoUS's piece")
+
+
 def served_out(tmp_path: Path, *, network: dict | None = None, work: dict | None = None, case: dict | None = None,
-               composites: dict[str, dict] | None = None) -> Path:
-    """A toy $OUT: sampled proofs accepted, PoUW and the network certifier missing unless given, and the given
-    composites and certifier case."""
+               composites: dict[str, dict] | None = None, coins: str | None = GATE) -> Path:
+    """A toy $OUT: sampled proofs accepted, PoUW and the network certifier missing unless given, the given composites
+    and certifier case, and its COINS line, its sampled-proofs part ``coins`` (none where None)."""
     out = tmp_path / "out"
     rows = {"integrity": {"protocol": "verity/sampled-proofs/one-stage/v1", "owner": "compute-accounting",
                           "verdict": "accept", "reason": None, "answer": {}},
@@ -165,6 +178,8 @@ def served_out(tmp_path: Path, *, network: dict | None = None, work: dict | None
     if case is not None:
         (out / OR.CASE).parent.mkdir(parents=True)
         (out / OR.CASE).write_text(json.dumps(case))
+    if coins is not None:
+        (out / "verdicts.txt").write_text(coins_line(coins) + "\n")
     return out
 
 
@@ -181,20 +196,22 @@ def commitment(*audits: dict) -> str:
 
 def accepted(tmp_path: Path, public: dict = PUBLIC, windows: int = 1, caps: list[int] | None = None,
              schedule: dict = SCHEDULE, audits: tuple[dict, ...] = (NO_ADVICE,),
-             registration: dict | None = PUBLISHED) -> Path:
+             registration: dict | None = PUBLISHED, coins: str | None = GATE) -> Path:
     """A run whose network certifier accepted ``public``, its case the period's of ``windows`` execution phases at
     ``schedule``, whose caps are the schedule's (`Schedule.caps`) unless given, and whose commitment holds ``audits``'
-    registrations, with ``registration`` its published advice registration, none where None."""
+    registrations, with ``registration`` its published advice registration, none where None, and ``coins`` its COINS
+    line's sampled-proofs part (`served_out`)."""
     pouw = {"protocol": "verity/pouw/period/v1", "owner": "compute-accounting", "verdict": "accept", "reason": None}
     if caps is None:
         caps = [schedule["egress_cells"]] * (schedule["lanes"] * windows * schedule["window"])
     out = served_out(tmp_path, network=network_row(public), work=pouw,
                      case={"commitment": commitment(*audits), "evidence": "00",
                            "params": {"windows": windows, "cells": caps, "schedule": schedule}},
-                     composites={"remote": remote_composite()})
+                     composites={"remote": remote_composite()}, coins=coins)
     (out / "machine.txt").write_text(f"ubuntu\n{NODE}\n{TREE}\n96\nserve dir /serve/d\n")
-    (out / "verdicts.txt").write_text('THE NETWORK CERTIFIER {"rc": 1, "verdict": "error"}\nRECORD {}\n'
-                                      f"{LINE}\nCOMPOSITE CASE verity/certifier/v0 accept\n")
+    with open(out / "verdicts.txt", "a") as f:
+        f.write(f'THE NETWORK CERTIFIER {{"rc": 1, "verdict": "error"}}\nRECORD {{}}\n{LINE}\n'
+                "COMPOSITE CASE verity/certifier/v0 accept\n")
     if registration is not None:
         (out / OR.REGISTRATION).write_text(json.dumps(registration))
     return out
@@ -362,6 +379,72 @@ def test_the_tight_K_is_of_record_only_where_every_premise_is_discharged_and_non
     assert p["schedules-covered"]["missing"] == ([COVERED] if "schedules-covered" in open_ else [])
     rec = OR.record(accepted(tmp_path / "free", dict(PUBLIC, held=["free"])))
     assert rec["periods_tight"]["conditional_on"] == ["circuit", *open_]
+
+
+#: COINS lines' sampled-proofs parts that name no live challenger, as served_verdicts.sh says them
+DEVELOPMENT = {
+    "served": (f"a local development challenger session on {NODE}, the served node, not an auditor's (PP_CHALLENGER "
+               "local)"),
+    "deferred": ("a local development challenger session on the follow-on's node, where step 6 defers V3c's audit, not "
+                 "an auditor's (PP_CHALLENGER local)"),
+    "follow-on": ("a local development challenger session on cpu-6, the follow-on's node, where it runs V3c's audit, "
+                  "not an auditor's (PP_CHALLENGER local)"),
+    "no peer": "the challenger gate:research@toy-gate (peer ?)",
+    "not a gate": "the challenger vy-challenger-1 (peer toy-peer)",
+}
+
+
+def with_coins(tmp_path: Path, said: list[str]) -> dict:
+    """The record, written by `main`, of a run with both checks held whose verdicts.txt opens with the lines
+    ``said``."""
+    out = accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"]), coins=None)
+    (out / "verdicts.txt").write_text("".join(x + "\n" for x in said) + (out / "verdicts.txt").read_text())
+    assert OR.main([str(out)]) == 0
+    return json.loads((out / "record" / "onsite.json").read_text())
+
+
+@pytest.mark.parametrize("said", [
+    *([coins_line(s)] for s in DEVELOPMENT.values()),
+    [f"COINS sampled proofs: {DEVELOPMENT['follow-on']}; the other protocols' as the served node's COINS line "
+     "names them"],
+    [coins_line(GATE), coins_line(DEVELOPMENT["follow-on"])],
+    ["COINS the bandwidth audit's: vy-auditor-2's bw_party, inside PoUS's piece"],
+    [],
+])
+def test_coins_no_line_names_live_leave_the_figure_of_record_and_each_cell_conditional_on_them(tmp_path, capsys, said):
+    """A run whose COINS lines name a local development challenger session (the served node's, a deferral's or its
+    follow-on's), a gate at no named peer, another challenger or no sampled proofs' coins, or that published none, has
+    its coins open, live-coins by name: the sampled-proofs verdict, the run's being of record, the figure of record and
+    each of its cells are conditional on them, and the figure of record charges ℓ_a + 1 for the tied audit though both
+    checks are held and every premise discharged, the tight K beside it conditional on the coins alone."""
+    rec, cond = with_coins(tmp_path, said), [OR.COINS_OPEN]
+    parts = [x.partition("sampled proofs: ")[2].partition(";")[0] or None for x in said]
+    assert rec["coins"] == {"open": True, "sampled_proofs": parts, "from": "verdicts.txt COINS", "is": OR.COINS} | (
+        {} if said else {"missing": OR.NO_COINS})
+    of = rec["bound"]["of_record"]
+    assert rec["verdicts"]["sampled proofs"]["conditional_on"] == rec["of_record"]["conditional_on"] == cond
+    assert (of["held"], of["open"], of["conditional_on"], of["K"]) == (["free", "circuit"], cond, cond, KR)
+    assert rec["periods"]["conditional_on"] == rec["periods_tight"]["conditional_on"] == cond
+    assert (rec["periods"]["run"]["bits"], rec["periods_tight"]["run"]["bits"]) == (KR, K)
+    line = json.loads(capsys.readouterr().out.strip()[7:])
+    assert (line["conditional_on"], line["K"], line["K_tight"], line["open"]) == (cond, KR, K, cond)
+    assert all(x in OR.COINS for x in ("sampled-proofs verdict", "E_w", "never as a live draw's"))
+
+
+@pytest.mark.parametrize("lead", ["", "Pearl+'s epoch coins are in-process and the record claims no Pearl+ verdict; "])
+def test_coins_a_line_names_live_add_no_condition_and_the_tight_K_is_of_record(tmp_path, capsys, lead):
+    """A COINS line naming the live challenger (PP_CHALLENGER gate:USER@HOST at a named peer), whatever leads it, leaves
+    the coins closed: nothing is conditional on them, and with both checks held and every premise discharged the tight
+    K is of record. A record written before the record read the coins is conditional on them in its line."""
+    rec = with_coins(tmp_path, [coins_line(GATE, lead)])
+    assert rec["coins"] == {"open": False, "sampled_proofs": [GATE], "from": "verdicts.txt COINS", "is": OR.COINS}
+    of = rec["bound"]["of_record"]
+    assert not any("conditional_on" in x for x in (rec["verdicts"]["sampled proofs"], rec["of_record"], of,
+                                                   rec["periods"]))
+    assert (of["K"], of["open"], "periods_tight" in rec) == (K, [], False)
+    line = json.loads(capsys.readouterr().out.strip()[7:])
+    assert (line["conditional_on"], line["K"], line["open"]) == ([], K, [])
+    assert OR.summary({k: v for k, v in rec.items() if k != "coins"})["conditional_on"] == [OR.COINS_OPEN]
 
 
 def test_a_discharge_the_properties_lock_lists_counts_as_one_the_guarantees_lock_does(tmp_path, lock, monkeypatch):
@@ -1005,8 +1088,8 @@ def test_runs_at_two_serving_settings_go_beside_each_other_each_figure_labelled_
     runs = doc["runs"]
     assert [(r["record"], r["run"], r["tree"], r["serving"], r["ell_a"]) for r in runs] == [
         (str(p), "toy-run", TREE, {"window_steps": s, "max_tokens": m}, [cap]) for p, (s, m, cap) in zip(paths, SETTINGS)]
-    assert [(r["of_record"], r["K"], r["K_tight"], r["open"]) for r in runs] == [
-        (False, K + cap + 1, K, ["free", "circuit"]) for _, _, cap in SETTINGS]
+    assert [(r["of_record"], r["conditional_on"], r["K"], r["K_tight"], r["open"]) for r in runs] == [
+        (False, [], K + cap + 1, K, ["free", "circuit"]) for _, _, cap in SETTINGS]
     for p, r in zip(paths, runs):
         rec = json.loads(p.read_text())
         for name in ("periods", "periods_tight"):
