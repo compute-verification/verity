@@ -1,0 +1,18 @@
+# 8B v and o at 2% on the 27 layers HT-PUBLIC v2 didn't sample, with the split
+8b-vo-rest --hf unsloth/Meta-Llama-3.1-8B --target 0.02 --layers 1,2,3,4,5,6,7,9,10,11,12,13,14,15,17,18,19,20,21,22,23,25,26,27,28,29,30 --match v_proj,o_proj --fast --ranks 16,32,48,64,96,128,192,256 --workers 16
+# 8B gate, up and down the same
+8b-mlp-rest --hf unsloth/Meta-Llama-3.1-8B --target 0.02 --layers 1,2,3,4,5,6,7,9,10,11,12,13,14,15,17,18,19,20,21,22,23,25,26,27,28,29,30 --match gate_proj,up_proj,down_proj --fast --ranks 32,64,128,256 --workers 24
+# candidate 3: live weight noise uniform on [-f, f], drawn after the split's A and B are committed
+8b-noise1 --hf unsloth/Meta-Llama-3.1-8B --target 0.02 --layers 0 --match q_proj,k_proj --fast --ranks 16,32,48,64,96,128,192,256 --live-noise 1 --workers 2
+8b-noise4 --hf unsloth/Meta-Llama-3.1-8B --target 0.02 --layers 0 --match q_proj,k_proj --fast --ranks 16,32,48,64,96,128,192,256 --live-noise 4 --workers 2
+70b-noise1 --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 0,1,46 --match k_proj --fast --ranks 16,32,48,64,96,128 --live-noise 1 --workers 3
+70b-noise4 --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 0,1,46 --match k_proj --fast --ranks 16,32,48,64,96,128 --live-noise 4 --workers 3
+# candidate 1: other orthogonal rotations (rotated.py's docstring), the same clip
+8b-rot-hadamard --hf unsloth/Meta-Llama-3.1-8B --target 0.02 --layers 0 --match q_proj,k_proj --fast --ranks 16,32,48,64,96,128,192,256 --rot hadamard --workers 2
+70b-rot-hadamard --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 1,2,46,62 --match k_proj --fast --ranks 16,32,48,64,96,128,192 --rot hadamard --workers 4
+8b-rot-hadamard2 --hf unsloth/Meta-Llama-3.1-8B --target 0.02 --layers 0 --match q_proj,k_proj --fast --ranks 16,32,48,64,96,128,192,256 --rot hadamard2 --workers 2
+70b-rot-hadamard2 --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 1,2,46,62 --match k_proj --fast --ranks 16,32,48,64,96,128,192 --rot hadamard2 --workers 4
+8b-rot-haar --hf unsloth/Meta-Llama-3.1-8B --target 0.02 --layers 0 --match q_proj,k_proj --fast --ranks 16,32,48,64,96,128,192,256 --rot haar --workers 2
+70b-rot-haar --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 1,2,46,62 --match k_proj --fast --ranks 16,32,48,64,96,128,192 --rot haar --workers 4
+8b-rot-both --hf unsloth/Meta-Llama-3.1-8B --target 0.02 --layers 0 --match q_proj,k_proj --fast --ranks 16,32,48,64,96,128,192,256 --rot both --workers 2
+70b-rot-both --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 1,2,46,62 --match k_proj --fast --ranks 16,32,48,64,96,128,192 --rot both --workers 4

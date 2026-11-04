@@ -1,0 +1,6 @@
+# 70B q at 2% on the 64 layers HT-PUBLIC v2 didn't price, with the split
+70b-q-rest --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 7,9,10,11,13,14,15,17,18,19,20,21,22,23,25,26,27,28,29,30,31,33,34,35,36,37,38,39,41,42,43,44,45,46,47,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,65,66,67,68,69,70,71,72,73,74,75,76,77,78 --match q_proj --fast --ranks 64,128,256,384,512 --workers 30
+# 70B q on the early layers under the line at 2% (layers 0 and 1: HT-PUBLIC v2 §3b), re-clipped
+70b-q-clip --hf unsloth/Meta-Llama-3.1-70B --target 0.05,0.1,0.2 --layers 2,3,4,5,8 --match q_proj --fast --ranks 64,128,256,384,512 --workers 15
+# 70B down_proj at 2% served in K chunks of at most 8,192 (4 of 7,168): each chunk's none route and its own split
+70b-down-k8192 --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --match down_proj --kcap 8192 --fast --ranks 64,256 --workers 16

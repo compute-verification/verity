@@ -367,6 +367,12 @@ def work(job) -> dict:
     if noise:
         qn = np.clip(q + np.random.default_rng(7).integers(-noise, noise + 1, q.shape), -127, 127).astype(np.int16)
         rec["noise"] = {"f": noise, "none": residual_routes(qn, alus, orders), "isvd": {}}
+    if opts.get("nosplit"):
+        rec |= {"svd": {}, "prov": {}, "isvd": {}, "rpca": {}, "floor": {}, "tiles": tile_routes(q, alus)}
+        rec["best"] = {k: score(rec, k) for k in keys(alus)}
+        rec["exact_crop"] = {"none": crop_exact(q, alus)}
+        rec["seconds"] = time.time() - t0
+        return rec
     qf = q.astype(np.float32)
     U, s, Vt = np.linalg.svd(qf, full_matrices=False)
     s2 = s.astype(np.float64) ** 2
@@ -616,6 +622,7 @@ def main(argv=None) -> int:
     ap.add_argument("--kcap", type=int, default=0, help="K in chunks of at most this, each committed (0 = served K)")
     ap.add_argument("--orders", default="none", help="comma-separated orders of n and K (`price.permute`)")
     ap.add_argument("--fast", action="store_true", help="exact routes only (none, isvd, tiles)")
+    ap.add_argument("--no-split", action="store_true", help="no SVD and no split: the none and tile routes only")
     ap.add_argument("--ranks", default=None, help="comma-separated split ranks (default nat_ranks)")
     ap.add_argument("--alus", default=ALUS)
     ap.add_argument("--workers", type=int, default=8)
@@ -635,7 +642,7 @@ def main(argv=None) -> int:
         j for t in targets for j in hf_jobs(args.hf, t, layers, args.deflate, args.rot)]
     ranks = [int(x) for x in args.ranks.split(",")] if args.ranks else None
     opts = {"fast": args.fast, "orders": tuple(args.orders.split(",")), "kcap": args.kcap,
-            "live_noise": args.live_noise}
+            "live_noise": args.live_noise, "nosplit": args.no_split}
     if args.match:
         jobs = [j for j in jobs if keep(j[0], None, args.match.split(","))]
     jobs.sort(key=lambda j: (-math.prod(load_shape(j[1])), j[0]))
