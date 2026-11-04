@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.KSLin2
+module
+
+public import Proofs.Flock.Claims.Recursion.KSLin2
 
 /-!
 # The linked relation: `KSLin2` with link equality, by a union bound
@@ -15,6 +17,8 @@ each draw `E*` may serve, the draw's coins, its run's messages and `E_O`'s outer
 witness and table rows. So `KSLin2On` at `R` gives `KSLin2LinkOn` at `RL`, its bound one term more, `Pr[B_L]`
 (`ksLin2LinkOn_of`), and `KSLin2LinkOn` gives `KSLin2On` back wherever `B_L` finds nothing (`ksLin2On_of_linkOn`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

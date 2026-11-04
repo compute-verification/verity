@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
-import SampledProofs.Run
+module
+
+public import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
+public import SampledProofs.Run
 
 /-!
 # The sampled verifier's sessions at the code with its Lean draw
@@ -19,6 +21,8 @@ the population and R1–R7 (`Registration.check`) under the law of the rule over
 the draw of record (`Select.select`, under `Select.resolve`'s rule) on the challenger's bytes (`source`) and held it to
 the registration (`Draw.checkDraw`), and its `draw` and `read` are that draw's.
 -/
+
+@[expose] public section
 
 namespace SamplingDeploy
 

@@ -1,6 +1,10 @@
-import Proofs.Flock.Claims.Recursion.VerdictTargetL
-import Proofs.Flock.VBridge.Family.Setup
-import Proofs.Flock.C3.Compose.HoloStreamSizes
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictTargetL
+public import Proofs.Flock.VBridge.Family.Setup
+public import Proofs.Flock.C3.Compose.HoloStreamSizes
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The schedule's coin counts are the rounds `verifierRows` takes
@@ -15,6 +19,8 @@ neither reaches (`repRounds_tail`), by evaluating it at each `m` below 36.
 So at a decision's table `i`, the schedule's coin counts are `roundSizes` at the table's shape (`DecAt.hsched`), and
 row R's `hsz` holds wherever `structureOf` returns at that shape (`Top.hsz`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.Push
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Push
 
 /-!
 # The `--zk` table with every committed object an oracle
@@ -10,6 +12,8 @@ Each oracle the primed prover sends gives words or a `τ` the interactive-oracle
 no easier (`value_repZP_le`) and keeps `TabZK.after_sound`'s bound (`tabOrcP_sound`). Inside a session, the primed
 table at its position accepts uncommitted no more often for an optimal prover (`orcSessZ_value_le`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

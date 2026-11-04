@@ -1,11 +1,13 @@
-import Proofs.Flock.Claims.Recursion.TopsOpens
-import Proofs.Flock.Claims.Recursion.LastColsE
-import Proofs.Flock.Claims.Recursion.ConflictTiedE
-import Proofs.Flock.Claims.Recursion.LastBindsEC
-import Proofs.Flock.Claims.Recursion.CallsAgree
-import Proofs.Flock.Claims.Recursion.VStarCross
-import Proofs.Flock.Claims.Recursion.SetupCalls
-import Proofs.Flock.Claims.Recursion.PartAccepts
+module
+
+public import Proofs.Flock.Claims.Recursion.TopsOpens
+public import Proofs.Flock.Claims.Recursion.LastColsE
+public import Proofs.Flock.Claims.Recursion.ConflictTiedE
+public import Proofs.Flock.Claims.Recursion.LastBindsEC
+public import Proofs.Flock.Claims.Recursion.CallsAgree
+public import Proofs.Flock.Claims.Recursion.VStarCross
+public import Proofs.Flock.Claims.Recursion.SetupCalls
+public import Proofs.Flock.Claims.Recursion.PartAccepts
 
 /-!
 # `KSLin2` and `BitsLin2` at the element-level inner verifier's steps (`FlockDeploy.VE`)
@@ -34,6 +36,8 @@ at least the runs the one at the deployed plain verifier's accepts, and the hone
 the B corollaries to `VE`; no theorem here derives the bound at the deployed plain verifier's steps from the one at
 `VE`'s.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

@@ -1,11 +1,13 @@
-import PouwCommit.Draws
-import SampledProofs.Challenger
-import Identity.Domains
+module
+
+public import PouwCommit.Draws
+public import SampledProofs.Challenger
+public import Identity.Domains
 
 /-!
 # A live window's round coins (`window.py`, "Live windows")
 
-PoUW's live window is the proof service's challenger's first client (`SampledProofs.Challenger`). The check item's
+PoUW's live window is the proof system's challenger's first client (`SampledProofs.Challenger`). The check item's
 optional `coins` is the window's coin mode (`mode`, Compose's `CoinMode`), seeded when the item names none. A live
 epoch's coins are the layout `liveFamilies R` under `LIVE_SCHEME`: its salt coin and `R` round coins (`pouw/round`,
 rounds numbered from 0), all committed before the epoch. Its draw coin is a session of its own (`DRAW_FAMILIES`, which
@@ -15,6 +17,8 @@ window's round coins, and `roundKey` is `round_key`, round `r`'s noise key from 
 A Pearl-C pass's live session is reserved for its salt coin alone (`SALT_FAMILIES`), which `saltEpochReason`
 (`salt_epoch_reason`) checks.
 -/
+
+@[expose] public section
 
 namespace PouwWindow
 

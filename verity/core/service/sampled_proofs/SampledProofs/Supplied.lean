@@ -17,13 +17,19 @@ holds before the draw, so the prover never chooses it.
   `verity/one-stage/supplied-salt/v1`, the program's SHA-512 hex, the value's name and `i` (u32 little-endian), NUL between
   them.
 -/
-import Flock.Bytes
-import Flock.Canon
-import Flock.Firewall
-import Flock.Hash
-import Flock.Program
-import Flock.Registered
-import SampledProofs.Registered
+module
+
+public import Flock.Bytes
+public import Flock.Canon
+public import Flock.Firewall
+public import Flock.Hash
+public import Flock.Program
+public import Flock.Registered
+public import SampledProofs.Registered
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Supplied
 

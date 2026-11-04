@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.RootFindCorrect
-import Proofs.Flock.Claims.RootFindCost
+module
+
+public import Proofs.Flock.Claims.RootFindCorrect
+public import Proofs.Flock.Claims.RootFindCost
 
 /-!
 # A deterministic root finder over a finite field of characteristic 2: Berlekamp's trace method
@@ -20,3 +22,5 @@ Over `F` with `2^n` elements, `roots n basis f` lists the distinct roots of `f` 
 `roots_spec`: for `toPoly f ≠ 0` the list has no duplicates, and its members are exactly `f`'s roots.
 `rootsC_ops_le`: at most `costBound n basis.length f.length` field operations, for every `f`.
 -/
+
+@[expose] public section

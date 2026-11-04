@@ -1,4 +1,6 @@
-import Definitions.Pouw.Fp8Atom.E4M3
+module
+
+public import Definitions.Pouw.Fp8Atom.E4M3
 
 /-!
 # `HOPPER_E4M3_K32`: one Hopper FP8 tensor-core accumulator step, bit-exact (trusted definitions)
@@ -27,6 +29,8 @@ function by function from `verity.ml.tc` (`term.py`, `models.py`, `total.py`, `t
 accumulator are summed in one group. `ADA_E4M3_M16N8K32` (`adaE4m3K32`) is the same adder with two groups of 16.
 Words are natural numbers; the step reads the low 32 bits of the accumulator word and writes a word below `2^32`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom
 

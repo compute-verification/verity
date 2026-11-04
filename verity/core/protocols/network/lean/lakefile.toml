@@ -4,6 +4,7 @@ defaultTargets = ["NetworkCheck", "network-check-difftest", "network-check", "ne
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[require]]
 name = "flock_verifier"

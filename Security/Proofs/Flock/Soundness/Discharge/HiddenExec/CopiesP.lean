@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Copies
-import Proofs.Flock.Soundness.Discharge.Hidden.LayoutP
-import Proofs.Flock.Soundness.Discharge.Layout.InCover
-import Proofs.Flock.Soundness.Discharge.Aliased.KeysP
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Copies
+public import Proofs.Flock.Soundness.Discharge.Hidden.LayoutP
+public import Proofs.Flock.Soundness.Discharge.Layout.InCover
+public import Proofs.Flock.Soundness.Discharge.Aliased.KeysP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
 
 /-!
 # `Layout.Aliased` at a hidden-output statement with public inputs
@@ -18,6 +20,8 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
 * `aliased_of_keyP`: an instance that puts inputs on one gate only when they have one key with public inputs
   (`Aliased.srcKeyP`) is aliased.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

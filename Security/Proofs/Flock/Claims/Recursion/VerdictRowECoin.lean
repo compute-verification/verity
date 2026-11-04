@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowETarget
-import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
-import Proofs.Flock.Claims.Recursion.VerdictRowDCover
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowETarget
+public import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
+public import Proofs.Flock.Claims.Recursion.VerdictRowDCover
 
 /-!
 # Row E's coin tie, and its target at row D's pieces
@@ -18,6 +20,8 @@ reader and its tie, and states the target at those.
 * `Top.targetE_rowD`: `TargetE` at `accR`, row D's pieces and side reader, and `coefRead`. What it still takes:
   the pieces' running sums (`hholds`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 

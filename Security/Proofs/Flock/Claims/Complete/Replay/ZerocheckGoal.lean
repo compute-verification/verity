@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Shape
-import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
-import Proofs.Flock.Claims.Complete.Json.Goals
+module
+
+public import Proofs.Flock.Claims.Complete.Shape
+public import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
+public import Proofs.Flock.Claims.Complete.Json.Goals
 
 /-!
 # The zerocheck goal
@@ -15,6 +17,8 @@ rounds.
 * `repP_zerocheck`: a rep that returns carries the prover's zerocheck and the level-0 cap, at the replies from its
   first send on.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

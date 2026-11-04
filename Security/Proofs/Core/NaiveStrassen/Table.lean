@@ -1,5 +1,7 @@
-import Definitions.Core.NaiveStrassen
-import Proofs.Core.NaiveStrassen.Grid
+module
+
+public import Definitions.Core.NaiveStrassen
+public import Proofs.Core.NaiveStrassen.Grid
 
 /-!
 # The tables (NaiveStrassen's kernel tables)
@@ -14,6 +16,8 @@ previous level, and digit splits, relaxed by a fixed number of passes (`passes`)
 symmetrisation (splits of `B`). Nothing here is trusted: `Check.lean` checks the result, and only the check is proved
 sound.
 -/
+
+@[expose] public section
 
 namespace Verity.Accel.NaiveStrassen.Packed
 

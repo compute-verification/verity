@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.Dimension.H100Assumptions
-import Definitions.Pouw.Assumptions.Dimension.Embed
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100Assumptions
+public import Definitions.Pouw.Assumptions.Dimension.Embed
 
 /-!
 # `MH100`, the H100 analogue of `M4090`, and its per-word bound (trusted statements; draft semantics)
@@ -47,6 +49,8 @@ as any other register writer.
   per word, so the bound is tight. That independence is the scheme's statement, not proved here. The truncated
   atom words are not linear, so for them the W1-faithful route is `MH100w` (`Pouw.Dimension.H100W`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

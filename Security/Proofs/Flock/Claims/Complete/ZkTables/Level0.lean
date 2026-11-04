@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.Zk.LigeritoProverPos
-import Proofs.Flock.Claims.Complete.Replay.LigeritoCons
-import Proofs.Flock.Claims.Complete.Replay.Steps
-import Proofs.Flock.Soundness.Discharge.ZkView.Wire
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.LigeritoProverPos
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoCons
+public import Proofs.Flock.Claims.Complete.Replay.Steps
+public import Proofs.Flock.Soundness.Discharge.ZkView.Wire
 
 /-!
 # Level 0's masked Ligerito: the premises the table-level forms leave open
@@ -28,6 +30,8 @@ level 0's commitment of the table (`commitPZk`), and the coins as the replies to
 run plain's code inside both functions; plain's lemmas for them (`ligeritoP_tot`, `ligeritoP_shape`, `ligeritoWith_of`,
 `Lg.honest`) are stated from plain's level-0 start, so here they sit inside the whole-function statements.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables.Level0
 
