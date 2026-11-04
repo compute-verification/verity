@@ -1662,6 +1662,18 @@ def test_the_certifiers_chain_proves_its_scan_at_2_to_the_minus_64_unless_the_ru
     assert got == given if given else Fraction(float(got)) == Fraction(1, 2 ** 64)
 
 
+def test_v3c_into_an_out_holding_a_previous_runs_circuit_files_leaves_this_runs_alone(tmp_path):
+    """A rerun into the same $OUT: V3c's circuit files replace the previous run's whole, none nested in
+    circuits/circuits and none left over, so what a verifier reads still scans clean."""
+    old = tmp_path / "out" / "v3c-audit" / "circuits"
+    old.mkdir(parents=True)
+    (old / f"{'ab' * 64}.txt").write_text("flock-ir-unit/v2 a previous run's\n")
+    rc, lines, _order, _limits = _v3c(tmp_path)
+    assert rc == 0, lines
+    pin = hashlib.sha512(b"flock-ir-unit/v2 stand-in\n").hexdigest()
+    assert sorted(p.relative_to(old).as_posix() for p in old.rglob("*")) == [f"{pin}.txt"]
+
+
 def test_v3c_runs_the_certifiers_chain_beside_its_audit_and_its_period_check_on_the_period_json_after(tmp_path):
     """The window commit, then the split certifier's chain (it reads the commit's scan state) beside V3c's audit and its
     period.json, and the certifier's period check on it once both are done, each within its own limit; the check gets
