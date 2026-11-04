@@ -108,7 +108,8 @@ registered input (`WindowGoodReg`):
   `#Ss · ∏_c (cap c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`.
 
 Its other conditions are named too: the windows' registrations (`WindowsPlaced`), the schedules the record format holds
-(`SchedulesHeld`) and the sender's secrets recovered from the client's view (`SenderDecodes`). `RegOpensAt` restricts
+(`SchedulesHeld`), the sender's schedules among them (`SchedulesCovered`, a premise on the network certifier's code) and
+the sender's secrets recovered from the client's view (`SenderDecodes`, the count's own terms). `RegOpensAt` restricts
 which openings `ops` the first part speaks of, those that open the registered roots: a choice of `ops`, not a claim
 about the prover's honesty. Two different openings of one registered input are a collision `B_reg` covers. -/
 def PeriodLeakRegistered : Prop :=
@@ -126,8 +127,8 @@ def PeriodLeakRegistered : Prop :=
     (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
     (htrust : Verity.Assumptions.TrustedHost tap run fun p => tapCode f p.1 (arr p.2))
     (cap : Conn → ℕ) (Ss : Set (WardenSchedule Conn)) (hheld : SchedulesHeld f cap Ss)
-    (Zs : Set Z) (schedOf : Z → WardenSchedule Conn) (srvOf : Z → Srv)
-    (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : SenderDecodes run tap Ss Zs schedOf srvOf dec)
+    (Zs : Set Z) (schedOf : Z → WardenSchedule Conn) (srvOf : Z → Srv) (hcov : SchedulesCovered Ss Zs schedOf)
+    (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : SenderDecodes run tap Zs schedOf srvOf dec)
     (x : Z → Fin n → Claims.Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool)) (hb : D.commit.Binds H),
     (∀ m, ScopeAcc D lay k m → RegOpensAt H D reg ops m →
       ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
