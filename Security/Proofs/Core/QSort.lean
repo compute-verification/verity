@@ -1,6 +1,7 @@
 module
 
 public import Batteries.Tactic.OpenPrivate
+import all Init.Data.Array.QSort.Basic
 
 /-!
 # `Array.qsort` leaves a sorted array as it is
