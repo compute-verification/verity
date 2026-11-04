@@ -90,7 +90,8 @@ most that. The kinds:
   most its β_eff at r_step, the adapters' own operands at their widths; a weight's is at most the run record's code
   bits a trained weight (`CODE_LABEL`), an activation's at most β(k) (`BETA_K`, `BETA_K_LABEL`), the casts of one
   value counting as one word. b_y is M's least output width and F = 2/√3 where M holds a backward product (a layer's
-  forward, input-gradient and weight-gradient products share arrays), else 1, in both α and the outputs' term. The
+  forward, input-gradient and weight-gradient products share arrays), √(2(1 − 1/ω)) where a step's array graph has a
+  clique of ω > 3 (te_core.arrays), else 1, in both α and the outputs' term. The
   term is the best over three choices of M (`HE_SUBSETS`: M, M less the contractions too short for the main term to
   outweigh the outputs', and the weight gradients alone, at F = 1), each at the best β_w·β_x threshold it can take
   (`he_figure`), never below 0. It needs no whole-making system, no P-cell (a block's split MACs are charged k a block)
@@ -98,8 +99,9 @@ most that. The kinds:
   (left out of M, kept in |C|) and for a tree. It is unmeasured on a record with no product rows, on a record with an
   op log and no product rows (a ledger row traced before 4.8: `products_of_ops` has the log's dims and widths, but a
   log doesn't keep whether an operand depends on the update, `LOG_UNKNOWN`), on rows that predate `SYSTEM_FROM`
-  (`HE_RETRACE`), past `BETA_K`'s last k (`HE_PAST`), from `HEAD_K` on a model's products (`HE_HEAD`) and on a
-  step whose elementwise ops fan out into an operand (`p_match_reason`), and never priced on a
+  (`HE_RETRACE`), past `BETA_K`'s last k (`HE_PAST`), from `HEAD_K` on a model's products (`HE_HEAD`), on a
+  step whose elementwise ops fan out into an operand (`p_match_reason`) and on a step whose array graph puts two of
+  M's products on one pair of arrays (te_core.arrays' `refusal`), and never priced on a
   trace of another program (`FRESH_OTHER`). The products come from `products_of` (steps captured by capture_step or
   capture_fn) or `products_of_trace` (the product rows a recorded program's trace keeps from te_core 4.8 on,
   te_core.capture.products), each at the k it classifies them at, a trace's at every k of the console's dial too
@@ -200,7 +202,7 @@ from dataclasses import asdict, dataclass, field
 
 import numpy as np
 
-from . import io_bound, policy, tiles
+from . import arrays, io_bound, policy, tiles
 from .gates import gates, of_log, per_mac, split_key
 
 ACT_BITS = 16
@@ -879,7 +881,8 @@ def products_of_trace(block: dict, steps: float | None = None) -> dict:
     `shared_prefix` says so (None: no such product, so no position reads another's tokens and a repeated token is
     `gathered`'s). Each product keeps its operands' `fed`,
     which `fresh_products` reads to give each subset its own whole-making factor, and `elementwise_products` is the
-    trace's (None: captured before `ELEMENTWISE_FROM`, whose check an earlier list may not have passed)."""
+    trace's (None: captured before `ELEMENTWISE_FROM`, whose check an earlier list may not have passed). `arrays` is
+    the step's array graph where the block carries one (te_core.arrays' `check`, which `he_products` reads)."""
     out, kinds = [], dict.fromkeys(io_bound.KINDS, 0.0)
     flagged = all("gathered" in r for r in block["rows"])
     seq = max((r["dims"][d] for r in block["rows"] if sum(x in r["token_dims"] for x in ("m", "k", "n")) >= 2
@@ -914,7 +917,8 @@ def products_of_trace(block: dict, steps: float | None = None) -> dict:
            "shared_prefix": shared,
            "elementwise_products": block.get("elementwise_products") if _release(block.get("capture")) >=
            _release(ELEMENTWISE_FROM) else None,
-           "he": he_of_rows(block["rows"], block["k"], steps, block.get("tokens"))}
+           "he": he_of_rows(block["rows"], block["k"], steps, block.get("tokens"))} | (
+        {"arrays": block["arrays"]} if "arrays" in block else {})
     if "at" in block:
         rest = {x: v for x, v in block.items() if x != "at"}
         got["at"] = {x: products_of_trace(rest | b, steps) for x, b in block["at"].items()}
@@ -1235,7 +1239,8 @@ def he_rho(N: float, O: float, beta_w: float, beta_x: float, b_y: float, F: floa
 HE_SUBSETS = ("M", "M without its short contractions", "the weight gradients alone")
 
 
-def he_figure(he: dict, c: float, C: float, tau: float | None = None, beta_code: float | None = None) -> dict:
+def he_figure(he: dict, c: float, C: float, tau: float | None = None, beta_code: float | None = None,
+              graph: dict | None = None) -> dict:
     """The products term on M (`he_of_rows`) at (c, he's k) and |C|, the best of three valid choices of M
     (`HE_SUBSETS`), each at its best threshold, and 0 where none is positive. Each operand is charged its β, a
     weight's at most `beta_code` (the run record's code bits a trained weight), an activation's at most β(k)
@@ -1247,7 +1252,10 @@ def he_figure(he: dict, c: float, C: float, tau: float | None = None, beta_code:
     where a layer's arrays differ in β (Motzkin-Straus sums u_r·u_s/(β_r·β_s) over the pairs M_P multiplies), b_y M_P's
     least output width and F = 2/√3 where M_P holds a backward product (+2: a layer's forward, input-gradient and
     weight-gradient products share arrays; Motzkin-Straus bounds π by 4/3 where no four arrays are pairwise
-    multiplied), else 1, and 1 on the weight gradients alone; the subset's term is the largest `he_rho` over P. The
+    multiplied), else 1, and 1 on the weight gradients alone; with the step's array graph (`graph`, te_core.arrays'
+    `check`), F at its clique number where that is more than 3, and on the forward products alone and the weight
+    gradients alone at theirs where they hold a triangle (`arrays.share`); the subset's term is the largest `he_rho`
+    over P. The
     second subset leaves out of M's best the groups whose contraction K is below K_thr = (F·k/2)²·b_y/(β_w·β_x·(k +
     α)), where the outputs' term outweighs the main one. What it read: the binding subset, each subset's term, β_w,
     β_x, β (their geometric mean), b_y, F, α, N, O, K_thr, β(k), `beta_code` where it caps a weight in M
@@ -1281,7 +1289,9 @@ def he_figure(he: dict, c: float, C: float, tau: float | None = None, beta_code:
             bw, bx = next(w_x(cb, g) for p, cb, g in M if p == P)
             N, O = scale * sum(g["macs"] for _, _, g in M), scale * sum(g["wires"] for _, _, g in M)
             b_y = min(g["b_y"] for _, _, g in M)
-            F = 1.0 if one or all(g["forward"] for _, _, g in M) else io_bound.SHARE
+            F = arrays.share(graph and graph["omega_dw"], 1.0) if one else arrays.share(
+                graph and graph["omega_forward"], 1.0) if all(g["forward"] for _, _, g in M) else \
+                arrays.share(graph and graph["omega"])
             raw = he_rho(N, O, bw, bx, b_y, F, c, k, C)
             if out is None or raw > out["raw"]:
                 out = {"raw": raw, "beta_w": bw, "beta_x": bx, "beta": math.sqrt(P), "b_y": b_y, "F": F,
@@ -1430,9 +1440,11 @@ def he_products(m: Measured, c: float, k: float) -> tuple[float | None, str | No
     |C|) and on a circuit that declares a tree. It is unmeasured on a record with no product rows, on an op log's
     products (`LOG_UNKNOWN`), on rows that predate `SYSTEM_FROM` (`HE_RETRACE`), on products without M
     (`HE_NO_ROWS`), past `BETA_K`'s last k (`HE_PAST`), from `HEAD_K` on products that don't say which are the
-    head's (`HE_HEAD`) and on a step whose elementwise ops fan out into an operand (`p_match_reason`), and never priced
-    on a trace of another program (`FRESH_OTHER`). A weight's β is at most the record's code bits (`delta_bits`) over
-    M's trained weights where M counts them, and τ is the record's."""
+    head's (`HE_HEAD`), on a step whose elementwise ops fan out into an operand (`p_match_reason`) and on products
+    whose step's array graph (their `arrays`, te_core.arrays' `check`) puts two of M's on one pair of arrays
+    (`arrays.refusal`), and never priced on a trace of another program (`FRESH_OTHER`); with that graph, F is at its
+    clique numbers (`he_figure`), which it read beside the repeated pairs (`arrays`). A weight's β is at most the
+    record's code bits (`delta_bits`) over M's trained weights where M counts them, and τ is the record's."""
     p = m.products
     if p is None and m.ops is not None:
         p = products_of_ops(m.ops)
@@ -1461,8 +1473,14 @@ def he_products(m: Measured, c: float, k: float) -> tuple[float | None, str | No
         return None, HE_PAST, got
     if k >= HEAD_K and any(g.get("head") is None for g in he["groups"]):
         return None, HE_HEAD, got
+    graph = p.get("arrays")
+    if graph is not None:
+        got["arrays"] = {x: graph[x] for x in ("omega", "omega_forward", "omega_dw", "repeated")}
+        why = arrays.refusal(graph)
+        if why:
+            return None, why, got
     code = m.delta_bits / he["trained_weights"] if m.delta_bits and he.get("trained_weights") else None
-    got |= he_figure(he, c, m.gates, m.tau_bits, code)
+    got |= he_figure(he, c, m.gates, m.tau_bits, code, graph)
     return got["rho"], None, got
 
 

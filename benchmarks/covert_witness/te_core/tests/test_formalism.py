@@ -796,6 +796,58 @@ def test_the_products_term_charges_m_its_least_pair_where_a_layers_arrays_differ
     assert fig["rho"] > max(rho([fwd, dw], 2.0, 15.9), rho([dw], 15.9, 8.0), rho([dw], 15.9, 8.0, 1.0)) > 0
 
 
+def graph(omega: int = 3, forward: int = 2, dw: int = 2, repeated: list | None = None) -> dict:
+    """A step's array graph as te_core.arrays' `check` writes one."""
+    return {"omega": omega, "clique": [], "omega_forward": forward, "omega_dw": dw, "arrays": 6, "products": 6,
+            "repeated": repeated or []}
+
+
+def test_the_products_term_takes_f_at_the_steps_array_graph_and_refuses_two_products_on_one_pair():
+    """HEShared proves F = √(2(1 − 1/ω)) at the array graph's clique number ω, where M's products are on distinct pairs
+    of arrays. A step's graph at a layer's triangle (ω = 3), its forward products and weight gradients triangle-free,
+    leaves the term as it is without one; a clique of five charges M F = √1.6, a triangle among the weight gradients
+    charges them 2/√3, and one among the forward products charges a forward-only M_P, where it binds, 2/√3; two of M's
+    products on one pair leave the term unmeasured, with the graph it read."""
+    from te_core import arrays, io_bound
+
+    c, k, C = 1e11, 65_536.0, 1e13
+    he = F.he_of_rows(HE_STEP, k, 10.0, 1024)
+    fig = F.he_figure(he, c, C)
+    assert F.he_figure(he, c, C, graph=graph()) == F.he_figure(he, c, C, graph=graph(2)) == fig
+    wide = F.he_figure(he, c, C, graph=graph(5))
+    assert wide["F"] == pytest.approx(math.sqrt(1.6), rel=1e-15) and wide["subset"] == fig["subset"]
+    assert all(wide["subsets"][x] < fig["subsets"][x] for x in F.HE_SUBSETS[:2])
+    assert wide["subsets"][F.HE_SUBSETS[2]] == fig["subsets"][F.HE_SUBSETS[2]] and wide["rho"] < fig["rho"]
+    dws = F.he_figure(he, c, C, graph=graph(dw=3))["subsets"]
+    N, O = (sum(g[x] for g in he["groups"] if g["dw"]) for x in ("macs", "wires"))
+    assert dws[F.HE_SUBSETS[2]] == pytest.approx(F.he_rho(N, O, 15.9, 15.9, 16, io_bound.SHARE, c, k, C), rel=1e-12)
+    assert dws[F.HE_SUBSETS[2]] < fig["subsets"][F.HE_SUBSETS[2]]
+    m, K = 256, 65_536
+
+    def group(beta: list, weight: list, forward: bool, dw: bool, scale: float) -> dict:
+        return {"beta": beta, "width": [16, 16], "weight": weight, "b_y": 16, "forward": forward, "k_dim": K,
+                "dw": dw, "head": False, "macs": scale * m * m * K, "wires": scale * m * m * 16}
+
+    wide_fwd = {"k": k, "groups": [group([16.0, 16.0], [False, True], True, False, 16),
+                                   group([8.0, 16.0], [False, True], False, False, 1),
+                                   group([8.0, 16.0], [False, False], False, True, 1)],
+                "r_step": None, "candidates_macs": 18 * m * m * K, "self_macs": 0.0, "gathered_macs": 0.0,
+                "left_out_macs": 0.0, "steps": None, "step_tokens": None, "trained_weights": None}
+    alone = F.he_figure(wide_fwd, c, C)
+    assert (alone["subset"], alone["F"], alone["beta_w"], alone["beta_x"]) == ("M", 1.0, 16.0, 15.9)
+    assert alone["macs_share"] == pytest.approx(16 / 18, rel=1e-15)
+    shared = F.he_figure(wide_fwd, c, C, graph=graph(forward=3))
+    assert shared["F"] == pytest.approx(io_bound.SHARE, rel=1e-15) and shared["rho"] < alone["rho"]
+    one = replace(one_segment(), products={"k": k, "order": "chain", "products": [], "he": he})
+    term, why, got = F.he_products(replace(one, products=one.products | {"arrays": graph()}), c, k)
+    assert why is None and term == F.he_products(one, c, k)[0] and got["arrays"]["omega"] == 3
+    twice = graph(repeated=[{"pair": ["W0", "X0"], "products": ["f0", "f0r"], "count": 2}])
+    term, why, got = F.he_products(replace(one, products=one.products | {"arrays": twice}), c, k)
+    assert term is None and why == arrays.refusal(twice) and got["arrays"]["repeated"] == twice["repeated"]
+    b = F.bound(replace(one, products=one.products | {"arrays": twice}), c, k)
+    assert b["terms"]["fresh_products"] is None and b["unmeasured"]["fresh_products"] == why
+
+
 #: a code name in a published string: a dotted path (a module's, or its function's), an identifier with an underscore
 #: (te_core, io_bound, rows_of, ONE_CLASS, FRESH_VOID, k_whole) other than a one-letter math subscript (b_y), or a
 #: command-line flag
@@ -821,7 +873,9 @@ def test_no_published_string_names_the_code():
         replace(one_segment(), products=chain | x) for x in (
             {}, {"system": None}, {"elementwise_products": None}, {"order": "tree"},
             {"elementwise_products": [{"op": "mul", "count": 2, "macs": 4.0}]},
-            {"p_match": [{"op": "expand", "fan_out": 16.0, "count": 1}]})] + [
+            {"p_match": [{"op": "expand", "fan_out": 16.0, "count": 1}]},
+            {"arrays": graph(repeated=[{"pair": ["primals_1", "view_2"], "products": ["mm_1", "mm_4"],
+                                        "count": 2}])})] + [
         replace(one_segment(), products={x: v for x, v in chain.items() if x not in ("system", "he")})]
     reasons = set()
     for m in records:
@@ -841,7 +895,8 @@ def test_no_published_string_names_the_code():
                                "below_width": True, "code_bound": True}), *F.HE_SUBSETS]
     assert {F.FRESH_UNMEASURED, F.FRESH_RETRACE, F.FRESH_UNCHECKED, F.HE_NO_ROWS} <= reasons
     assert all(any(x in r for r in reasons) for x in ("op log", "classified at k", "summed in a tree", "elementwise "
-                                                      "steps (", "breaks the premise", "no entries", "no op log"))
+                                                      "steps (", "breaks the premise", "no entries", "no op log",
+                                                      "pair(s) of arrays"))
     named = {s: CODE_NAME.findall(s) for s in strings if CODE_NAME.search(s)}
     assert not named, named
     assert all(f"{words} ({name})" in F.SENSITIVITIES["fresh_old"] for name, words in F.PREMISES.items()
