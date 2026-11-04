@@ -49,7 +49,7 @@ theorem not_mem_of_any {cs us : Array ℕ} (h : ¬ (cs.any us.contains) = true) 
   intro u hu hm
   exact h (Array.any_eq_true'.2 ⟨u, hu, Array.contains_iff_mem.2 hm⟩)
 
--- `walk_step` down `Draw.UnitDraw.ofJson`'s unfolded do-block, a goal per branch
+-- `walk_step` down the unfolded do-block of `ofJson`, the sample's decoder, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **A draw's units ascend, and so does its closure, which holds no drawn unit**: `UnitDraw.ofJson` refuses any other. -/
 theorem ofJson_asc {d : Lean.Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson d = .ok D) :

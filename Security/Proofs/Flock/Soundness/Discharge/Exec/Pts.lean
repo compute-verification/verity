@@ -107,7 +107,7 @@ theorem setupH_facts (h : Stmt.setupH tags cf pf coins tables draw partition pro
   subst hs
   exact ⟨hc, fun d hd => ⟨pop, hpub d hd⟩, rfl⟩
 
--- `walk_step` down `HmRow.drawn`'s unfolded do-block, a goal per branch
+-- `walk_step` down the unfolded do-block that puts the sample in the population's header, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **A drawn public file has the draw's proved units** (§16.1): its units are `UnitDraw.proved`, the drawn units and
 their closure. -/

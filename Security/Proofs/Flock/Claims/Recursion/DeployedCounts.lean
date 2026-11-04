@@ -158,7 +158,7 @@ theorem hmOutC_g {tags : Tags} {cf : ByteArray} {tables : List (String × ByteAr
     obtain ⟨ls, hls⟩ := hm_parse_check_any hp
     exact g_of_range (c := c₀) hls hr hk hcnt
 
--- `walk_step` down `Stmt.setupHidden`'s unfolded do-block for each case of `draw`, a goal per branch
+-- `walk_step` down `Stmt.setupHidden`'s unfolded do-block with a sample and without, a goal per branch
 set_option maxHeartbeats 8000000 in
 /-- **`Stmt.setupHidden`'s statements satisfy `Counts`**, at any public input words. -/
 theorem setupHidden_counts

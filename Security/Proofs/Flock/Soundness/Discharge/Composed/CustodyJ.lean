@@ -31,7 +31,7 @@ open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type}
 
--- `walk_step` down `Draw.UnitDraw.ofJson`'s unfolded do-block, a goal per branch
+-- `walk_step` down the unfolded do-block of `ofJson`, the sample's decoder, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- What `UnitDraw.ofJson` returns: its units are the `units` field's, it has no closure without a `closure` key, and a
 `subset k` draw has `k` units. -/

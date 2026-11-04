@@ -106,7 +106,7 @@ private theorem hmOut_loadPublic {tags : Tags} {c : Circuit} {f : ByteArray} {po
     subst h
     assumption
 
--- `walk_step` down `Stmt.setupH`'s unfolded do-block for each case of `draw`, a goal per branch
+-- `walk_step` down `Stmt.setupH`'s unfolded do-block with a sample and without, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- What `Stmt.setupH` set up: its public file loaded (at a draw, `HmRow.drawn` of it) and passed `HmRow.checkPublic`,
 its instances, `Σ` and its `Hello`. -/
@@ -169,7 +169,7 @@ private theorem loadPublic_header {tags : Tags} {c : Circuit} {f : ByteArray} {p
     subst hpj
     exact ⟨⟨_, rfl⟩, obj_of_getObjVal (str_ok (k := "format") (by assumption))⟩
 
--- `walk_step` down `HmRow.drawn`'s unfolded do-block, a goal per branch
+-- `walk_step` down the unfolded do-block that puts the sample in the population's header, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- `HmRow.drawn` puts the draw in the population's header. -/
 private theorem drawn_header {c : Circuit} {pub pub' : Public} {d : Json} {m : Std.TreeMap.Raw String Json compare}
@@ -257,7 +257,7 @@ private theorem good_stratum {j : Json} (hw : Wf j) {s : Draw.Stratum} (h : stra
       simp only [hv, Except.toOption, Option.getD_some] at hn
       exact asNat_good hn
 
--- `walk_step` down `Draw.UnitDraw.ofJson`'s unfolded do-block, a goal per branch
+-- `walk_step` down the unfolded do-block of `ofJson`, the sample's decoder, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **A stratified draw that decodes is printable**: an object of exactly `law`, `population`, `units`, `k` and
 `strata`, a string, natural numbers, an array of them, and strata that decode. -/

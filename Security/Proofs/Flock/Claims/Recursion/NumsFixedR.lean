@@ -127,8 +127,8 @@ theorem inLoad_row {tags : Tags} {c : Circuit} {pi : HmIn.Ports} {f : ByteArray}
     subst h
     exact ⟨_, by assumption⟩
 
--- `walk_step` down `Stmt.setupHidden`'s unfolded do-block for each case of `draw`, then the hidden key's reads followed
--- through each branch
+-- `walk_step` down `Stmt.setupHidden`'s unfolded do-block with a sample and without, then the hidden key's reads
+-- followed through each branch
 set_option maxHeartbeats 4000000 in
 /-- **What `Stmt.setupHidden` set up**, at any `--public-inputs`: its circuit is `HmOut.parseCommit`'s, its public file the
 loaded one or its draw, and its `n`, `m`, `mPts` and region count are the circuit's and the public file's. -/

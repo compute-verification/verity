@@ -1176,7 +1176,7 @@ theorem inLoadPublic_cost (tags : Tags) (c : Circuit) (pi : HmIn.Ports) (file : 
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · omega
 
--- a cost combinator per bind and loop of `HmRow.drawnWith`'s unfolded body (`repeat (first ...)`), `omega` at each leaf
+-- a cost combinator per bind and loop of the unfolded sample header write (`repeat (first ...)`), `omega` at each leaf
 set_option maxHeartbeats 4000000 in
 theorem drawn_cost (c : Circuit) (pub : Public) (draw : Json) :
     countC.P (HmRow.drawnWith (Hashes.counted h) c pub draw) 1 := by

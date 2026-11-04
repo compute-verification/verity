@@ -17,7 +17,7 @@ namespace FlockSoundness.Discharge.Layout
 
 open Flock Refine Model
 
--- `walk_step` down `HmRow.drawn`'s unfolded do-block, a goal per branch
+-- `walk_step` down the unfolded do-block that puts the sample in the population's header, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **`HmRow.drawn`'s outputs**: the proved units' `nOut` output words, unit by unit. -/
 theorem drawn_outputs {c : Circuit} {pop pub : Public} {d : Lean.Json} (h : HmRow.drawn c pop d = .ok pub) :

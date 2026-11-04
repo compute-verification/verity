@@ -34,7 +34,7 @@ theorem setupH_drawn {tags : Tags} {circuitFile publicFile : ByteArray} {coins :
     subst h
     exact ⟨_, ‹_›, ‹_›⟩
 
--- `walk_step` down `HmRow.drawn`'s unfolded do-block, a goal per branch
+-- `walk_step` down the unfolded do-block that puts the sample in the population's header, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **`HmRow.drawn`'s statement**: the draw parses (`D`), its population is the registered one, its instances are the
 proved units, and its `b ‖ c` are the proved units' (a shared-row file keeps its tables). -/
@@ -157,7 +157,7 @@ theorem of_not_not_true {b : Bool} (h : ¬ (!b) = true) : b = true := by simpa u
 theorem of_not_or_not_true {a b : Bool} (h : ¬ (a || !b) = true) : b = true := by
   cases a <;> cases b <;> simp_all
 
--- `walk_step` down `Draw.UnitDraw.ofJson`'s unfolded do-block, a goal per branch
+-- `walk_step` down the unfolded do-block of `ofJson`, the sample's decoder, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **A draw's units are in its population**: `UnitDraw.ofJson` checks the drawn units, and a closure's units, against
 `[0, population)`. -/
