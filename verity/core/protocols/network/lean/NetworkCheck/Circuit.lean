@@ -172,7 +172,7 @@ structure Registered where
 /-- A stated circuit record, its templates' rows read off the Program: the templates by descriptor id with their units,
 in the Program's order, the cap, the wiring (templates, cuts and wires, `SampledProofs.Wires.Wiring`) and the
 registered reads. -/
-structure Record where
+structure Stated where
   templates : List (String × Nat)
   cap : Nat
   wiring : Wiring
@@ -247,7 +247,7 @@ def registeredOf (j : Json) : Except String Registered := do
 are `P`'s root template nodes' Definitions in order (`templateNodes`), each a template of rows (`templateOf`), named
 once, with its cap, wires, cuts and registered reads. A record that lists its members (`members`, `window_ingress`) or
 declares ingress is refused: the period counts a stated record's rows, and no wired gate is an ingress gate. -/
-def recordOf (P : Prog) (j : Json) : Except String Record := do
+def recordOf (P : Prog) (j : Json) : Except String Stated := do
   let ks := (keysOf j).getD []
   if ks.contains "members" || ks.contains "window_ingress" then
     throw "the circuit lists its members: the period reads a stated record (its templates, cap and wires)"
@@ -320,7 +320,7 @@ templates' parameters' bits (`inputGates`), so every input gate is a template's 
 template node's outputs (`returnsAll`), so every unit's output is a Program output. The Program is laid out as C-Flock's
 decoder lays one out and within its resolution's walk (`NciCheck.Desc`'s `rootLaidOut`, `inputsAtRoot` and
 `walkable`), and topological (`Prog.orderViolation`). -/
-def populationOk (P : Prog) (r : Record) : Bool :=
+def populationOk (P : Prog) (r : Stated) : Bool :=
   let nodes := (P.defs[P.root]!).body.nodes
   let ks := templateNodes P
   let reads := ks.flatMap fun k => (nodes[k]!).args.toList.map (inputArg P ·)
@@ -336,7 +336,7 @@ def populationOk (P : Prog) (r : Record) : Bool :=
 /-! ## Wired rows, leaf by leaf -/
 
 /-- The root template node of record `r`'s template `tid`. -/
-def nodeOf (P : Prog) (r : Record) (tid : String) : Option Nat :=
+def nodeOf (P : Prog) (r : Stated) (tid : String) : Option Nat :=
   ((templateNodes P).zip r.templates).findSome? fun (k, t, _) => if t == tid then some k else none
 
 /-- Output row `o`'s field of a return: its type, its first leaf and its index. -/
@@ -346,7 +346,7 @@ def fieldOf (ret : Ty) (o : String) : Option (Ty × Nat × Nat) :=
 
 /-- Each wire's reader row is its writer's output field leaf for leaf: the reader's parameter, cut `k` ways, has `k`
 times the field's leaves, all of one width, the field's. -/
-def leavesOk (P : Prog) (r : Record) : Bool :=
+def leavesOk (P : Prog) (r : Stated) : Bool :=
   r.wiring.wires.all fun w => match nodeOf P r w.reader, nodeOf P r w.writer with
     | some kr, some kw => match (templateDef P kr).params.find? (·.1 == w.port), fieldOf (templateDef P kw).ret w.out with
       | some (_, tp), some (to, _, _) =>
@@ -639,7 +639,7 @@ structure Counts where
 /-- The count of record `r` with wire summary `s`, `held` the registered parameters held to the verifier's pins: a
 read of a held parameter's fills its reader rows (none for an output port's, which fills no input); a table read or
 opening of a table over one, its port's rows. -/
-def countsOf (r : Record) (s : SampledProofs.Wires.Summary) (held : List String) : Counts :=
+def countsOf (r : Stated) (s : SampledProofs.Wires.Summary) (held : List String) : Counts :=
   let c := r.wiring
   let words := fun (tid p : String) => (((c.templates.lookup tid).bind (·.rows.lookup p)).map (·.words)).getD 0
   let inputs := (c.templates.map fun (_, t) => 16 * (t.rows.map (·.2.words)).sum * t.units).sum
