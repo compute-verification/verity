@@ -183,8 +183,8 @@ theorem not_cutCost_skipping : ¬ CutCost A 1 1 entry skipping := by
   simp only [stateAt_skipping] at h3
   exact absurd h3 (by decide)
 
-/-- Every block holds at most one gate, so the cap `1` bounds the token work at any budget. -/
-theorem tokenCapAt_one : A.TokenCapAt 1 1 entry witnesses {3, 4} 1 := by
+/-- Every block holds at most one gate, so the token-work bound holds at the cap `1` at any budget. -/
+theorem tokenWork_one : TokenWork A 1 1 entry witnesses {3, 4} 1 := by
   refine ⟨by decide, fun S f ν _ => ?_⟩
   calc ∑ T ∈ S, (A.entryWork 1 1 entry witnesses {3, 4} T (f T) ν : ℝ≥0)
       ≤ ∑ T, (A.entryWork 1 1 entry witnesses {3, 4} T (f T) ν : ℝ≥0) := sum_le_sum_of_subset (subset_univ S)
@@ -194,7 +194,7 @@ theorem tokenCapAt_one : A.TokenCapAt 1 1 entry witnesses {3, 4} 1 := by
 
 /-- At `skipping`, A1's budget admits no block that works on the token, whose shared bit and the token's one bit of
 state are two, so no block it admits holds a gate of `{3, 4}`. -/
-theorem tokenCapAt_zero : A.TokenCapAt 1 1 entry skipping {3, 4} 0 := by
+theorem tokenWork_zero : TokenWork A 1 1 entry skipping {3, 4} 0 := by
   refine ⟨by decide, fun S f ν hbud => le_of_eq (sum_eq_zero fun T hT => ?_)⟩
   simp only [stateAt_skipping, sum_const, smul_eq_mul, mul_one] at hbud
   have hν : ν = 0 := by
@@ -332,19 +332,19 @@ theorem Counting_nontrivial : Guarantees.Counting_nontrivial :=
   ⟨Chain.caps_token, Chain.partitionBound_one, Chain.not_whole_isCK, Chain.not_counting⟩
 
 theorem Slowdown_honest : Guarantees.Slowdown_honest :=
-  ⟨Chain.valid, Chain.cutCost, Chain.tokenCapAt_one, Chain.caps_weight, Chain.partitionBound_one, Chain.blocks_isCK⟩
+  ⟨Chain.valid, Chain.cutCost, Chain.tokenWork_one, Chain.caps_weight, Chain.partitionBound_one, Chain.blocks_isCK⟩
 
 theorem Slowdown_nontrivial : Guarantees.Slowdown_nontrivial :=
-  ⟨Chain.valid, Chain.not_cutCost_skipping, Chain.tokenCapAt_zero, Chain.caps_weight, Chain.partitionBound_one,
+  ⟨Chain.valid, Chain.not_cutCost_skipping, Chain.tokenWork_zero, Chain.caps_weight, Chain.partitionBound_one,
     Chain.blocks_isCK, Chain.not_slowdown⟩
 
 theorem Security_honest : Guarantees.Security_honest :=
-  ⟨floor_one, Set.mem_singleton _, Chain.valid, le_top, le_rfl, Chain.cutCost, Chain.tokenCapAt_one,
+  ⟨floor_one, Set.mem_singleton _, Chain.valid, le_top, le_rfl, Chain.cutCost, Chain.tokenWork_one,
     Chain.caps_weight, Chain.partitionBound_one, Chain.blocks_isCK, le_rfl⟩
 
 theorem Security_nontrivial : Guarantees.Security_nontrivial := by
   refine ⟨floor_one, Set.mem_singleton _, Chain.valid, le_top, le_rfl, Chain.not_cutCost_skipping,
-    Chain.tokenCapAt_zero, Chain.caps_weight, Chain.partitionBound_one, Chain.blocks_isCK, le_rfl, ?_⟩
+    Chain.tokenWork_zero, Chain.caps_weight, Chain.partitionBound_one, Chain.blocks_isCK, le_rfl, ?_⟩
   rw [show kindBound Chain.r.d 1 {3, 4} 0 = ⊤ from Chain.kindBound_zero ⟨3, by decide⟩, max_eq_left le_top,
     ENNReal.ofReal_one, mul_one, Chain.honestCost_eq, ENNReal.top_mul (by norm_num), top_le_iff]
   exact ENNReal.natCast_ne_top _

@@ -16,9 +16,10 @@ Each lower bound `X ≤ ρ` is proved as `X ≤ m c / |C|` for a partition `P` i
    partition-level bound (`partitionBound_kindBound`), and a kind with a partition-level bound gives it at `P`.
 2. **The token kind's cap.** By A1 an inference block `I` reads `u_I + Σ_T a_T(e_T(I)) ≤ |in(I) \ θ| ≤ k`, summed over
    the tokens it works on, so those tokens, its entry profile `e_T(I)` and its shared bits `u_I` are within A1's budget,
-   where the cap bounds `Σ_T W_T(e_T(I), u_I)`. `X` lies in the token blocks, so `|I ∩ X| ≤ Σ_T |I ∩ T ∩ X|` over the
-   same tokens (`card_inter_le_sum_worksOn`), and each term is at most `W_T(e_T(I), u_I)`, the most a block entering `T`
-   there holds (`card_le_entryWork`). The clean form: `Σ_T W_T(f_T, ν) ≤ r(ν) Σ_T a_T(f_T) ≤ r(ν) (k - ν)`.
+   where the token-work bound (`TokenWork`) caps `Σ_T W_T(e_T(I), u_I)`. `X` lies in the token blocks, so
+   `|I ∩ X| ≤ Σ_T |I ∩ T ∩ X|` over the same tokens (`card_inter_le_sum_worksOn`), and each term is at most
+   `W_T(e_T(I), u_I)`, the most a block entering `T` there holds (`card_le_entryWork`). The clean form, which gives the
+   token-work bound from a bound on the work per bit: `Σ_T W_T(f_T, ν) ≤ r(ν) Σ_T a_T(f_T) ≤ r(ν) (k - ν)`.
 3. **Slowdown** is the counting lemma at the kinds and at the token kind, whose work is a set of gates since the token
    blocks are (`tokenGates_subset`), with its cap a block; **Security** is it with A2:
    `ρ̲ p H(ℓ*) ≤ ρ̲ |C| ≤ m c ≤ N n c`.

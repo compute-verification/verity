@@ -3,7 +3,7 @@ import Definitions.Core.Annotation
 import Definitions.Nci.Formalism.Inference
 
 /-!
-# The training formalism v2, §3: the annotation, A1's values, and the token kind A1 caps
+# The training formalism v2, §3: the annotation, A1's values, and the token kind's work
 
 An **annotation** (`Annotation`) of a declaration's training is an existential witness: the new slow weights `θ'`,
 computed values, and the token blocks `𝒯`, an annotation of the circuit (`Verity.Annotation`) by token labels.
@@ -36,15 +36,17 @@ So the values are reads of blocks of the circuit, not free parameters, and a che
 witness works on one token, so its reads price one token's entry, and a block pays once for what its tokens share and
 not at all for what it computes.
 
-The token kind's work is a set `X` of token gates (te_core's: the token work no block computing its token from its
-inputs reaches). Defined from it and A1's values:
+The token kind's work is a set `X` of token gates (training's slowdown code's: the token work no block computing its
+token from its inputs reaches). Defined from it and A1's values:
 
 * `W_T(x, ν)` (`entryWork`): the most gates of `X` in `T` that an inference block holds whose work on `T` begins at `x`
   and whose shared bits `u_I` are at most `ν`, the token work reachable from `x`;
-* `cap` **bounds the token work within A1's budget** (`TokenCapAt`): at every set of tokens `S`, entry profile `f` and
-  shared bits `ν` with `ν + Σ_{T ∈ S} a_T(f_T) ≤ k`, `Σ_{T ∈ S} W_T(f_T, ν) ≤ cap`;
 * `r(ν)` **bounds the work per bit of state** (`WorkPerBit`): `W_T(x, ν) ≤ r(ν) a_T(x)`, and `M` **bounds the peak**
   of `(k - ν) r(ν)` (`PeakAtMost`), which together give the cap `M`, `(k - u) max (W / a)`.
+
+That a cap bounds the token work within A1's budget, `Σ_{T ∈ S} W_T(f_T, ν) ≤ cap` wherever
+`ν + Σ_{T ∈ S} a_T(f_T) ≤ k`, is the named assumption `training-token-work`
+(`Nci.Formalism.Assumptions.TokenWork`): A1 prices a block's reads and says nothing of how much token work they reach.
 -/
 
 namespace Nci.Formalism
@@ -120,15 +122,6 @@ noncomputable def entryWork [Fintype L] (c k : ℕ) {E : Type} (e : Finset (Fin 
     (𝒲 : Finset (Finset (Fin d.D.N))) (X : Finset (Fin d.D.N)) (T : L) (x : E) (ν : ℕ) : ℕ :=
   (univ.filter fun I => InferenceBlock d c k I ∧ e I T = x ∧ A.blockShared e 𝒲 I ≤ ν).sup
     fun I => (I ∩ A.tokens.holds T ∩ X).card
-
-/-- **`cap` bounds the token work within A1's budget**: `X` is a set of token gates, and at every set of tokens `S`,
-entry profile `f` and shared bits `ν` with `ν + Σ_{T ∈ S} a_T(f_T) ≤ k`, the token work from those entries is at most
-`cap`, `Σ_{T ∈ S} W_T(f_T, ν) ≤ cap`. -/
-def TokenCapAt [Fintype L] (c k : ℕ) {E : Type} (e : Finset (Fin d.D.N) → L → E) (𝒲 : Finset (Finset (Fin d.D.N)))
-    (X : Finset (Fin d.D.N)) (cap : ℝ≥0) : Prop :=
-  X ⊆ A.tokenGates ∧
-    ∀ (S : Finset L) (f : L → E) (ν : ℕ), ν + ∑ T ∈ S, A.stateAt e 𝒲 T (f T) ≤ k →
-      ∑ T ∈ S, (A.entryWork c k e 𝒲 X T (f T) ν : ℝ≥0) ≤ cap
 
 /-- **`r(ν)` bounds the token work per bit of state**: `X` is a set of token gates, and the token work from every entry
 `x` of every token `T`, at shared bits at most `ν`, is at most `r(ν)` a bit of `T`'s state there,

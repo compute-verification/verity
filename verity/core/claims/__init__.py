@@ -527,7 +527,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "tape models; the host is the developer's, not an auditor-trusted one, and that is the host to trust here, "
           "since zero knowledge protects the developer", "Firewall OS source", "standard"),
     # the training formalism v2's assumptions (Security/Definitions/Nci/Assumptions/Formalism.lean): A1 is
-    # `Nci.Formalism.Assumptions.CutCost`, A2 `Nci.Formalism.Assumptions.EfficiencyFloor`
+    # `Nci.Formalism.Assumptions.CutCost`, the token-work bound `Nci.Formalism.Assumptions.TokenWork`, A2
+    # `Nci.Formalism.Assumptions.EfficiencyFloor`
     Entry("training-cut-cost", "assumption",
           "A1, cut cost: no inference block I of the trained circuit (at most c gates, at most k bits beyond θ) reads "
           "fewer bits |in(I) \\ θ| than u_I + Σ_T a_T(e_T(I)), over the tokens T it works on, at the values a finite "
@@ -538,6 +539,14 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "net of what I computes (θ' or the encoding it is decoded from, the shared context and the earlier tokens' "
           "keys and values); a witness's reads are in(W) \\ θ, counted as the policy counts a block's; refuted by "
           "exhibiting an inference block that violates it", "A1 cut cost", "conjectured"),
+    Entry("training-token-work", "assumption",
+          "The token-work bound: for a set X of token gates of the trained circuit and a cap, at every set S of "
+          "tokens, entry profile f and shared bits ν within A1's budget (ν + Σ_{T ∈ S} a_T(f_T) ≤ k, at the values "
+          "A1's witness blocks give), Σ_{T ∈ S} W_T(f_T, ν) ≤ cap, W_T(x, ν) the most gates of X in T that an "
+          "inference block holds whose work on T begins at x and whose shared bits are at most ν; A1 prices a "
+          "block's reads and says nothing of how much token work they reach; refuted by exhibiting inference blocks "
+          "with shared bits at most ν that, entering their tokens at those entries, hold more than the cap of X",
+          "token-work bound", "conjectured"),
     Entry("training-efficiency-floor", "assumption",
           "A2, efficiency floor: no run of the methods considered whose total update stays within a given bin of Δ "
           "reaches the target loss ℓ* for less than p·H(ℓ*), H(ℓ*) the least compute of any of them to reach it; "
