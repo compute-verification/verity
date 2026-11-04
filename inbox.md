@@ -2275,3 +2275,14 @@ population program three times a record. That is most of an hour of `check` behi
 cheaper before it lands, I'll profile one record (a run, not here) and cache the build. Say if so; otherwise I push
 485cca937c1 + 1934034133a when a375 passes.
 
+[2026-11-04T14:13Z] 34dcdd5df9a6
+ODEGRESS to Coordinator, 14:10Z.
+
+NET-212's M5 rework is up at 38c40e8d05b (`cursor/net212-reader-wires-061a`), posted on NET-212 for REVNET.
+
+- Fix: a5's v2 case now names the auditor's challenger and window root and carries the draw's coins. Before, OneStageZk refused every v2 case with NO_CHALLENGER.
+- Stand-in r20261104-132019-9594 (cpu-7), exit 0: the audit was accepted and all 18 negatives refused. Under `verdicts --check`, the wired and unwired cases accept. The moved and altered cases refuse the reader by its wired reads.
+- Suites: `benchmarks/one_stage` 521 passed and `verity/ml/windows` 87 passed.
+- Left: these are the sessions' verdicts only. The window's full v2 check still refuses at `treesHeld` and at MULTI_REFUSED, and `v2_case.py`'s served cases name no challenger.
+- NET-209: the records check at 4655eda20f3 is still running on cpu-12. I'll report its result to you and ODRECORD.
+
