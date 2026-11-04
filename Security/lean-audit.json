@@ -2062,6 +2062,9 @@
    "owner": "@soundness",
    "digest": "0ed1c5456b740c38fa2d2638b81cae376aacb18ab9315ed23702dfe936d329e4"
   },
+  "Verity.Assumptions.ZkServerOwnUser": {
+   "owner": "@proofs"
+  },
   "Verity.Circuit.BitFaninPos": {
    "owner": "@lean",
    "digest": "45512e8df059ed91e18686bc0566c1fea60a580b592f5f8090ed5983c13f0d3e"
@@ -2542,6 +2545,10 @@
   "Pouw.Salt.keyed_leaf_binds": {
    "honest": ["Pouw.Salt.keyed_leaf_binds_honest"],
    "nontrivial": "Pouw.Salt.keyed_leaf_binds_nontrivial"
+  },
+  "Verity.SecurityProofs.RegisteredLeakage": {
+   "honest": ["Verity.SecurityProofs.RegisteredLeakage_honest"],
+   "nontrivial": "Verity.SecurityProofs.RegisteredLeakage_nontrivial"
   }
  },
  "unwitnessed": {
@@ -12294,6 +12301,18 @@
    "assumptions": [],
    "type_hash": "52a2253ccd78c6339acebc6fe4e9ea3afaaff0120bb36457ff76a2a605ce5ad6"
   },
+  "Verity.SecurityProofs.RegisteredLeakage": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.RegisteredLeakage_honest": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.RegisteredLeakage_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.RegisteredLeakage_nontrivial_stack": {
+   "owner": "@proofs"
+  },
   "Verity.SecurityProofs.SampleAfterRecorded": {
    "owner": "@soundness",
    "signature": ["Verity.SecurityProofs.SampleAfterRecorded : Verity.Guarantees.SampleAfterRecorded"],
@@ -13610,7 +13629,11 @@
    "Flock.SecurityProofs.IntegrityBlock": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.IntegrityHorizonBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Verity.SecurityProofs.CommittedMeets": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for CommittedMeets) commitment and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
-   "Flock.SecurityProofs.LoopInnerRound0Own": "frozen (no-function): the loop's obligation (Flock.Guarantees.LoopInnerRound0, which SessionLoopZK and SessionLoopZKDeployed take) at LeanRelease.withInner, the release whose scheduled round of each rep's inner proof is the frame's own (Loop.innerOf: Frame.innerSched at the round's eps, beta and coin count, on the rep's finish's rounds), proved at every table data, base release, level-0 source and finish's rounds, with no premise; it reads LoopInnerRound0Own (Security/Proofs/Flock/SessionLoop/Inner.lean), a statement of the model's release with no acceptance of a Lean function to take, so the lock records its text."
+   "Flock.SecurityProofs.LoopInnerRound0Own": "frozen (no-function): the loop's obligation (Flock.Guarantees.LoopInnerRound0, which SessionLoopZK and SessionLoopZKDeployed take) at LeanRelease.withInner, the release whose scheduled round of each rep's inner proof is the frame's own (Loop.innerOf: Frame.innerSched at the round's eps, beta and coin count, on the rep's finish's rounds), proved at every table data, base release, level-0 source and finish's rounds, with no premise; it reads LoopInnerRound0Own (Security/Proofs/Flock/SessionLoop/Inner.lean), a statement of the model's release with no acceptance of a Lean function to take, so the lock records its text.",
+   "Verity.SecurityProofs.RegisteredLeakage": "frozen (no-function): It is stated over an arbitrary value service, serving stack and event on the record, and says what a registration whose record counts its epoch's sessions leaks through the stack's choice of its session, rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.RegisteredLeakage_honest": "completeness: RegisteredLeakage's honest lemma (its witnesses entry): at a built value service, the stack that commits one session and registers it reads no key (ZkServerOwnUser) and the bound holds there, so the premise is not vacuous.",
+   "Verity.SecurityProofs.RegisteredLeakage_nontrivial": "completeness: RegisteredLeakage's nontrivial lemma (its witnesses entry): the bound fails (¬ real … ≤ 1 · (ideal + prfAdvantage) + forgeAdvantage) at the stack of RegisteredLeakage_nontrivial_stack, which makes its record tag from the key, a counterexample for another stack, not a property of a deployed one.",
+   "Verity.SecurityProofs.RegisteredLeakage_nontrivial_stack": "completeness: the stack RegisteredLeakage's nontrivial lemma is at reads the key (¬ ZkServerOwnUser), so that lemma's failing bound is ZkServerOwnUser's to prevent."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
