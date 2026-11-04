@@ -181,7 +181,8 @@ theorem classesPa_bernoulli {p : Core.Ratio} (hp : 0 < p.den) : ∀ (rs : List O
         intro v hv hvI
         exact Finset.disjoint_left.1 hI hv (Finset.mem_Ico.2 hvI)
       have h1 : OneStage.Pa (strataSizes c) .all (window o c.flatten.length B) = 1 := by
-        simp [OneStage.Pa, hw0]
+        rw [hw0]
+        simp [OneStage.Pa]
       rw [h1, one_mul]
       congr 2
       ext v
