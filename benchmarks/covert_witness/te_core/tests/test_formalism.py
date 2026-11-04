@@ -721,8 +721,8 @@ def test_the_products_term_takes_the_best_of_three_ms_at_beta_k_with_the_code_si
     operand no token indexes, a backward product contracting over tokens a weight gradient, and the head's are the
     backward products over its vocabulary width (the widest forward output); the trained weights are the weights a
     step's forward reads, each matrix once a token. Activations are charged β(k), 15.9 up to 145,568 and linear in log
-    k between io-bound's points, none past 8e8, weights their width or less the record's code bits a trained weight.
-    The term is the best of all of M, M less its contractions below K_thr (here the 8-long product's wide outputs,
+    k between io-bound's points, none past 8e8, weights their width or less the record's code bits a trained weight,
+    a weight's β the β_w a product reports beside its activation's β_x. The term is the best of all of M, M less its contractions below K_thr (here the 8-long product's wide outputs,
     whose leaving lifts the term) and the weight gradients alone at F = 1; over a run's steps it loses the ⌊k/(τT)⌋
     after the first update, and from 8e7 the head's products leave M. Model products that sum the head's gradients
     with the layers' are unmeasured from 8e7, and every M past 8e8."""
@@ -748,6 +748,9 @@ def test_the_products_term_takes_the_best_of_three_ms_at_beta_k_with_the_code_si
     assert fig["first_steps"] is None and F.he_figure(he, c, C, tau=1e3)["first_steps"] == 0
     coded = F.he_figure(he, c, C, beta_code=2.0)
     assert coded["rho"] < fig["rho"] and coded["beta_code"] == 2.0
+    one = he | {"groups": [g for g in he["groups"] if g["k_dim"] == 1024 and not g["dw"] and not g["head"]][:1]}
+    weighed = F.he_figure(one, c, C, beta_code=8.0)
+    assert (weighed["beta_w"], weighed["beta_x"], weighed["code_bound"]) == (8.0, 15.9, True)
     m = replace(one_segment(delta=2.0 * he["trained_weights"]),
                 products={"k": k, "order": "chain", "products": [], "he": he})
     term, why, got = F.he_products(m, c, k)
