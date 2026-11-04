@@ -1027,11 +1027,8 @@ def _once(paths: Sequence[Path]) -> list[Path]:
     """``paths`` without one that is a file an earlier one is (the same path, or a link to it)."""
     seen, out = set(), []
     for p in map(Path, paths):
-        try:
-            s = p.stat()
-            key: Any = (s.st_dev, s.st_ino)
-        except FileNotFoundError:
-            key = p
+        s = p.stat() if p.exists() else None
+        key: Any = (s.st_dev, s.st_ino) if s else p
         if key not in seen:
             seen.add(key)
             out.append(p)

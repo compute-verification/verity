@@ -102,14 +102,14 @@ structure RunFiles where
 
 /-- One statement of the evidence's `proofs`: the member it proves (none in the one-statement form), its public file's
 SHA-512 and its sessions. -/
-structure Statement where
+structure StatementFiles where
   member : Option String
   pub : String
   sessions : Array RunFiles
 
 structure Evidence where
   base : OneStage.Evidence
-  statements : Array Statement
+  statements : Array StatementFiles
 
 /-- The evidence's sessions, statement by statement. -/
 def Evidence.sessions (e : Evidence) : Array RunFiles := e.statements.foldl (· ++ ·.sessions) #[]
@@ -214,7 +214,7 @@ def proofsOf (pr : Json) : V (String × Array RunFiles) := do
 
 /-- The evidence's `proofs` in either form (module docstring, **evidence**): one statement, naming no member, or the
 per-member form's statements, each `proofsOf` with its member's nonempty name. -/
-def statementsOf (pr : Json) : V (Array Statement) := do
+def statementsOf (pr : Json) : V (Array StatementFiles) := do
   if keys? pr != some #["statements"] then
     let (pub, sessions) ← proofsOf pr
     return #[{ member := none, pub, sessions }]
@@ -488,7 +488,7 @@ def within (rs : Array (Nat × Nat)) (u : Nat) : Bool := rs.any fun (lo, hi) => 
 statement names no member of the parameters or one an earlier statement named, or proves a unit outside its member's
 units, and for what `runFrom` refuses; then the union of the statements' proved units held to the evidence's
 (`provedHeld`). -/
-def runMembers (ms : Array Member) (sts : Array Statement) (want : Array Nat) (bs : Core.Blobs) : V Run := do
+def runMembers (ms : Array Member) (sts : Array StatementFiles) (want : Array Nat) (bs : Core.Blobs) : V Run := do
   let mut r : Run := ⟨#[], #[], #[], true⟩
   let mut seen : Array String := #[]
   for st in sts do
