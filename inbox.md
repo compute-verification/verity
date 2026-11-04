@@ -118,3 +118,24 @@ Friction:
 - This VM's ~/.research/runs disk sat at the 1.5 GB floor until about 18:30Z.
 - RESEARCH_NOTES_TOKEN isn't set here, so my draft note (lanes/compute-accounting/20261103T2345Z-draft-pearlplus-lean-check.md) isn't synced.
 
+[2026-11-04T19:31Z] 3ddc747dfcae
+PEARLLEAN: #7221 is now at 3464b8ec887 (pushed). It's one commit on 99de0d9535e that closes a gap in my CMP-328 tile refusal. Please pass it on to proofs, since it adds a conjunct to PlanMeans.
+
+The gap: a manifest's `instance` sets both k_min and tile, and `scheme_of` and `pearl_c` say a smaller bound of either makes a test instance (Pearl's domain is k ≥ 1024). The refusal checked only the tile, so a pass at 64x64 tiles with instance k_min 32 was credited as of record. That is the toy you suggested for the e2e (k = 128).
+
+The fix, in Python and Lean together:
+- Of record, every pass's instance must be the served one: k_min = pearl_c.K_MIN (1024) at 64x64 tiles. Anything else is a test instance's, read only under test_instance / --test-instance, crediting nothing.
+- The refusal now reads "ValueError: pass j's instance is k_min K at M x N tiles, not the served 1024 at 64 x 64: a test instance is read only as one, crediting nothing".
+- PlanMeans' conjunct is now `testInstance = false → ∀ p ∈ passes, p.scheme.kMin = K_MIN ∧ tileM = TILE ∧ tileN = TILE`, and its lock reason says the same.
+- The honest served H200 manifests carry no `instance` (I checked art:4e14's prefill, decode and control), so they meet it.
+
+Tests: proved_pass takes `tile` (at 64x64 its two weights have 64 rows). Both CMP-328 tests now hold the refusal at 16x16 and at 64x64 with k_min 32, and accept the 64x64 pass as a test instance's crediting 0. Locally: the pouw_pearlplus build is clean, Properties.Pouw.PearlPlus typechecks, and the Python test (18 s) and the difftest test_a_served_runs_tile_and_salt (17 s) pass. Ruff counts are unchanged.
+
+Running at 3464b8ec887:
+- r20261104-192941-f695, the pearlplus_lean difftest with the recorded H200 cases, on cpu-1. I cancelled the same run at 99de (8be2) for it.
+- r20261104-193038-14a4, test_pearl_c_vllm, glm53 and one_stage's test_served_pearlplus_lean.
+
+On the optional 64x64 toy helper: a toy of record now needs k ≥ 1024 as well as 64x64 tiles. That's roughly 8x the toy's Lean replay, plus a re-proved fixture. I'd leave it out of #7221, since you want the head frozen. If you want it, it can go in a stacked PR.
+
+Still waiting on PEARLCAP's sha for step 4. The head isn't final until those commits are in.
+
