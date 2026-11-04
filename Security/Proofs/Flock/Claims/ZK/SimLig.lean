@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.ZK.Split
-import Proofs.Flock.Claims.ZK.SentE
-import Proofs.Flock.Claims.ZK.PiopSrcSv
-import Proofs.Flock.Claims.ZK.HiSalts
+module
+
+public import Proofs.Flock.Claims.ZK.Split
+public import Proofs.Flock.Claims.ZK.SentE
+public import Proofs.Flock.Claims.ZK.PiopSrcSv
+public import Proofs.Flock.Claims.ZK.HiSalts
 
 /-!
 # A rep's Ligerito opening from the cut (`SimLig`)
@@ -24,6 +26,8 @@ import Proofs.Flock.Claims.ZK.HiSalts
   the tape's salts (HiSalts' `hiSalt_exe`), and the lane rounds' tables, whose basis is the PIOP's switched vectors'
   (`openB_basis`); so `simLig`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal.Masked
 

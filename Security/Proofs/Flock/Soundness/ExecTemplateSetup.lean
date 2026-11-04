@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.ExecTemplatePlace
+module
+
+public import Proofs.Flock.Soundness.ExecTemplatePlace
 
 /-!
 # A typed template's layout, from `Stmt.setupH` (1e for templates, T3)
@@ -8,6 +10,8 @@ file derives them from what `Stmt.setupH` accepted for a template (`setupH_spec_
 `parse_facts_tmpl`, `check_facts_typed`, `delta_typed`) and what `Typed.read` built it from (`read_template`,
 `templateOf_spec`, `blockOf_spec`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

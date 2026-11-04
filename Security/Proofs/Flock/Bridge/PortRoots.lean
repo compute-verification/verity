@@ -1,6 +1,9 @@
-import Proofs.Flock.Bridge.Deployed
-import Proofs.Flock.Recursive.TopRoot
-import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+module
+
+public import Proofs.Flock.Bridge.Deployed
+public import Proofs.Flock.Recursive.TopRoot
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+import all Init.Data.String.Defs
 
 /-!
 # Two ports with one registered root and different domains are a SHA-512 collision
@@ -25,6 +28,8 @@ domains give two different inputs with one SHA-512 digest (`rootsOf_collides`).
   probability bounded at every file with `RootFixesDomain` is bounded at every file with that term added
   (`le_add_ecrBound`).
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge.PortRoots
 

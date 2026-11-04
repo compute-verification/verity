@@ -1,5 +1,7 @@
-import Mathlib.Data.ZMod.Basic
-import Mathlib.Algebra.BigOperators.Fin
+module
+
+public import Mathlib.Data.ZMod.Basic
+public import Mathlib.Algebra.BigOperators.Fin
 
 /-!
 # The deployed bound receipt's sketch: a relay as a two-party protocol (trusted)
@@ -19,6 +21,8 @@ an average of these. The bytes are read in `𝔽_p` (`p = 257` for the deployed 
 injectively); the sketch is the integer sketch's image mod `p`, which a location knowing the integer sketch knows. `ip` is the inner product on `𝔽_p^ι`, and the sketch's trace
 `Σ_i v_i[i]` is `ip` of the tile's bytes and the matrix (`sketch`, with `ι = Fin r × Fin m`).
 -/
+
+@[expose] public section
 
 namespace Accounting.BoundSketch
 

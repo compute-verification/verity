@@ -1,6 +1,8 @@
-import Proofs.Population.Egress
-import Proofs.Population.Pointer
-import Proofs.Population.Work
+module
+
+public import Proofs.Population.Egress
+public import Proofs.Population.Pointer
+public import Proofs.Population.Work
 
 /-!
 # Leakage is the faulty proof blocks' cone egress
@@ -36,6 +38,8 @@ number of egress values the observer can tell apart is the leakage, in bits its 
   one-bit scalar unit wrong the amplification set over all secrets has `2 ^ N` values: one wrong bit of control, `N`
   secret bits out. Reading weights only at fixed indices by fixed arithmetic does not bound amplification.
 -/
+
+@[expose] public section
 
 namespace Population.Dataflow
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.GS.Flock
+module
+
+public import Proofs.Flock.Claims.GS.Flock
 
 /-!
 # List decoding within a radius, at Flock's level-0 code
@@ -21,6 +23,8 @@ At Flock's level-0 code (`n = 2^level₀.logLen`, rate `ρ = 2^logCols / 2^logLe
 * `flockDecodeR_complexity`: its count (`n` lookups of at most `os.length` comparisons each and one step per point, then
   `flockCounted` on the `n` points) is at most `flockPolyR = flockPoly + X^2 + X` at the size `(os.length + n)·2^k0·128`.
 -/
+
+@[expose] public section
 
 namespace Claims.GS
 

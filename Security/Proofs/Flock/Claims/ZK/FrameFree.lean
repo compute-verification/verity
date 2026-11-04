@@ -1,7 +1,11 @@
-import Proofs.Flock.Claims.ZK.FrameRounds
-import Proofs.Flock.Claims.ZK.FrameOuter
-import Proofs.Flock.Claims.ZK.FramePass
-import Proofs.Flock.SessionLoop.Statement
+module
+
+public import Proofs.Flock.Claims.ZK.FrameRounds
+public import Proofs.Flock.Claims.ZK.FrameOuter
+public import Proofs.Flock.Claims.ZK.FramePass
+public import Proofs.Flock.SessionLoop.Statement
+import all Init.Data.String.Defs
+import all Init.Data.Array.Basic
 
 /-!
 # The values a round carries freely, read back off its bytes
@@ -19,6 +23,8 @@ algebraic phase, and the loop reads each free value as the 16-byte word there (`
 * **A value set at its place** (`foldl_set_at`): the fold that sets each pair's place, read at a place one pair alone
   names.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

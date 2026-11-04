@@ -1,6 +1,8 @@
-import Definitions.Pouw.RelativeSecurity
-import Properties.Pouw.Strata
-import Properties.SampledProofs.Draw
+module
+
+public import Definitions.Pouw.RelativeSecurity
+public import Properties.Pouw.Strata
+public import Properties.SampledProofs.Draw
 
 /-!
 # The ε a served window's credit reports (`PouwCheck.Credit.established`, `PouwWindow.epsAt`)
@@ -32,6 +34,8 @@ the service derives stratum `i`'s stream as `stream key ["draw", template] need`
 (the templates are distinct, `StrataTile`), and these are that derivation in the random-oracle model. They add no named
 assumption: the probability is over the streams' bytes.
 -/
+
+@[expose] public section
 
 open Lean (Json toJson)
 open Pouw.RelativeSecurity (prob)

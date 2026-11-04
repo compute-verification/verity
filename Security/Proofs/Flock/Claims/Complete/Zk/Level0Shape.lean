@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
-import Proofs.Flock.Claims.Complete.Zk.ProverOk
-import Proofs.Flock.Claims.Complete.Shaped
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsCarries
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
+public import Proofs.Flock.Claims.Complete.Zk.ProverOk
+public import Proofs.Flock.Claims.Complete.Shaped
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsCarries
 
 /-!
 # The masked Ligerito prover's proof lengths
@@ -20,6 +22,8 @@ length `Zk.decode` checks of its proof (`ZkTables.Level0.LgShaped`) and `t_pad` 
   padding's `t_pad` coefficients. **The rest** is plain's code from the split table on, walked on `Total.H` as
   `ligeritoP_shape` walks it and read off the run by determinism (`H_run`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.L0
 

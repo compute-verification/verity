@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Commit
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
-import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
-import Proofs.Flock.Soundness.Discharge.ZkExec.Event
-import Flock.KernelRfl
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Commit
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+public import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
+public import Flock.KernelRfl
 
 /-!
 # The hidden-output `--zk` chain's statement circuit
@@ -21,6 +23,8 @@ session it reads of the session's committed circuit (`HmOut.parseCommit`), and t
 * `parseStmtH_identity`, `parseStmtH_tagsAt`, `zkTags_isTmpl`: an untyped `HmOut.parseStmt` reads no identity, so it
   agrees at every table's tags.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

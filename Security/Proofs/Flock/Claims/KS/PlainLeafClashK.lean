@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.KS.PlainClash0K
-import Proofs.Flock.Claims.KS.PlainClashLaterK
-import Proofs.Flock.Claims.KS.PlainLeafDecK
-import Proofs.Flock.Claims.KS.PlainLeafClash
+module
+
+public import Proofs.Flock.Claims.KS.PlainClash0K
+public import Proofs.Flock.Claims.KS.PlainClashLaterK
+public import Proofs.Flock.Claims.KS.PlainLeafDecK
+public import Proofs.Flock.Claims.KS.PlainLeafClash
 
 /-!
 # The live self-clash at plain SHA-512 leaves, at `VK keep`
@@ -15,6 +17,8 @@ import Proofs.Flock.Claims.KS.PlainLeafClash
 The run-level half (`plainClashQ₀U`, `plainClashQ_orU`, `plainClashQLU`, `plainSimClashHU`) reads `P`'s run at the
 verifier, and is not restated here.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.PlainDraw
 

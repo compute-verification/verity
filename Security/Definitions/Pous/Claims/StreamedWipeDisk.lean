@@ -1,4 +1,6 @@
-import Definitions.Pous.Model.StreamedWipeDisk
+module
+
+public import Definitions.Pous.Model.StreamedWipeDisk
 
 /-!
 # The streamed-label wipe with a server's disks in the fill, as claims of an acceptance rule
@@ -11,6 +13,8 @@ the physical model that keeps all its prior content is accepted with probability
 numeric antecedents hold at the deployed session as measured: the deployed H200's card, `StreamedWipe.h200`, with its
 disks, `StreamedWipe.h200Disks`).
 -/
+
+@[expose] public section
 
 namespace Pous.Claims
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
-import Flock.ProvedScope
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Flock.ProvedScope
 
 /-!
 # Table `j`'s tags: the identity alone differs, which the circuit and public parses do not read
@@ -8,6 +10,8 @@ import Flock.ProvedScope
 identity at several. `HmRow.parse` (`ProvedScope.parse_identity`) and `HmRow.loadPublic` read no identity, so they agree at
 every table's tags.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

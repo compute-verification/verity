@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainClash0JK
-import Proofs.Flock.Claims.KS.PlainClashLaterK
+module
+
+public import Proofs.Flock.Claims.KS.PlainClash0JK
+public import Proofs.Flock.Claims.KS.PlainClashLaterK
 
 /-!
 # The later levels' entries and clash, draw half, at the parsed record
@@ -7,6 +9,8 @@ import Proofs.Flock.Claims.KS.PlainClashLaterK
 `PlainClashLater`'s and `PlainClashLaterK`'s `keep` lemmas at `wrPDJK` (`LaterEntriesAtJK`, `plain_laterEntriesAtJK`,
 `plain_laterEntriesHAtJK`, `plain_laterClashAtJK`, `plain_laterClashHAtJK`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.AtDraw
 

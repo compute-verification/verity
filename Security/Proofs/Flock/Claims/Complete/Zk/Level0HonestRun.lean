@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Zk.Level0Honest
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Level0Honest
 
 /-!
 # The honest masked Ligerito meets the masked model's final identity: the walk
@@ -9,6 +11,8 @@ folded table and weight (`LaneJ`), and at the last lane round the pair's sums, i
 (`LastVals`), after which the model's claim is the blinded claim `T'` on the split blinded fold (`sync_laneClose`). Level
 0 then ends in `Mid` (`mid_lv0Z`) and the last level meets the final identity (`goal_lastZ`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.L0
 

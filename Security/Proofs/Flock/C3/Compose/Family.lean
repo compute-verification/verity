@@ -1,6 +1,8 @@
-import Proofs.Flock.Recursive.AuditC3
-import Proofs.Flock.VBridge.Compiled
-import Proofs.Flock.C3.Compose.Tape
+module
+
+public import Proofs.Flock.Recursive.AuditC3
+public import Proofs.Flock.VBridge.Compiled
+public import Proofs.Flock.C3.Compose.Tape
 
 /-!
 # Piece (b): candidate 3's family
@@ -11,6 +13,8 @@ the sessions' `Outer` and their value layers): V*'s statements over the verifier
 as `VStarFamily.files` and `rep₀` are). Each stage's obligation is its piece's statement, in its piece's directory:
 `HPubRows` and `HTape` (g), `HReps` (c), `HSparse` (d), `HOpening` (e), `HRegLevels` (f).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

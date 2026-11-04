@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.FlockKSRecord
-import Proofs.Flock.Claims.KS.PlainAcc
+module
+
+public import Proofs.Flock.Claims.Recursion.FlockKSRecord
+public import Proofs.Flock.Claims.KS.PlainAcc
 
 /-!
 # The recursion's table bound from Flock's table bound with escapes on accepted runs
@@ -10,6 +12,8 @@ live sessions' bound with escapes on accepted runs at the statements some run ac
 (`FlockDeploy.KS.plain_tableBoundθOnAcc`), the full-width bound `FlockDeploy.KS.plain_KSAbort` takes, so the trimmed
 plain record meets `Inner.KSAbort` from that bound alone (`FlockDeploy.KS.plain_KSAbort_of_liveAcc`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 
