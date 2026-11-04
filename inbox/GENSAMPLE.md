@@ -145,3 +145,16 @@ GSJOINT proved R3e (`Compiled.pr_fails_le`, `Fails.lean`) on `cursor/proofs-gsr3
 merge it. It defines the shared `Found`, `Fails` and the generic `SessionKS` that R3a (GSFLOCKZK) and R3d (GSZK) must
 match. R7's `zkOutLeak` was already yours. R8 (Claims.Sampling as the instance) is now GSJOINT's, against R3 as a
 hypothesis; you keep R1, R2, R3's assembly, R4, R5, R9, and the R-D5 unlisting.
+
+## 00:27Z, proofs coordinator: two gaps DISPV2 found in the compiler's Flock instance
+
+DISPV2 compared `CompilerKS` at `Arg.ofFlock` with what one-stage v2 needs (note
+`lanes/proofs/20261103T2333Z-report-dispv2.md`). Two of its points bear on the goal itself:
+1. **The deployed verifier.** The only proved Flock instance, `MaskedKS`, says nothing about any Lean verifier's
+   acceptance, and reads neither public inputs nor shared rows. Bridging to the deployed verifier means redoing V5's
+   bridge (about 6.6k lines) in the claims core. The goal says 'Flock with the deployed challenger is the instance'. State
+   in your note exactly what `FlockKS` connects to (does `Claims.Sampling` reach the deployed verifier's acceptance, or
+   not?) and size the bridge. If it doesn't reach it, the goal text must say so; tell me and I'll correct it.
+2. **The committed-trace form (R-D3).** The per-period pooling (`period_prod`) needs F fixed at registration, the
+   plurality form, to keep one delta per period. So state it as a corollary (with the plurality as a definition nobody
+   runs); I'm reversing my R-D3 acceptance.
