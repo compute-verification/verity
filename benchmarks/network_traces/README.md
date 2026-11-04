@@ -225,10 +225,13 @@ A run's figures are its published Attempt's. The report's `d1` lists, per sampli
 and the scan accepted.
 
 The terms, in the generator reading of the scan's statement (each proof block's registered rows its boundary values):
-- The schedules and the fail cells, ⌈log2(cap_c + 1)⌉ each a connection (`capsTerm`, charged twice, as
-  `#S_s ≤ ∏_c (cap_c + 1)`; the record's `terms.cap_per_request`). Here cap_c bounds `WardenSchedule.cells c`, the
-  egress cells of connection c's lane, which is egress_cells. The endpoint's slot count isn't a term of the network
-  certifier's schedule: it enters the compute audit's terms, which go into JointPeriodLive.
+- The schedules and the fail cells, ⌈log2(cap_c + 1)⌉ for each connection c the schedule can carry (`capsTerm`,
+  charged twice, as `#S_s ≤ ∏_c (cap_c + 1)`; the record's `terms.cap_per_block`). Here cap_c bounds
+  `WardenSchedule.cells c`, the egress cells of connection c's lane, which is egress_cells, and the connections are
+  the lanes·T a sampling block can carry (`NetworkCheck.Period`'s `Schedule.caps`, the only caps its rows form takes).
+  They are charged whatever the requests served, since the sender picks how many connections it opens. The
+  endpoint's slot count isn't a term of the network certifier's schedule: it enters the compute audit's terms, which go
+  into JointPeriodLive.
 - The free inputs (`terms.free`): as registered, the tied audit's slot entries, NR·T / EVERY entries of NE bits
   (`ingress_scan.entry_bits`) a sampling block; or an entry's 33 + KO·IDB bits a request if `prog` is an input only at
   its anchored entries.

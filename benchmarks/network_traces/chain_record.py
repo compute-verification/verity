@@ -744,8 +744,10 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
             "draw": {"units": units, "drawn": drawn},
             "run": {"link_windows": v["windows"], "requests": v["requests"], "requests_per_link_window": rate,
                     "link_window_s": window_s, "accepted": v.get("accepted")},
-            "terms": {"schedules_per_request": link.cell, "cells_per_request": link.cell,
-                      "cap_per_request": link.cap, "free": free, "faulty": 0,
+            "terms": {"connections_per_block": link.connections, "cell": link.cell,
+                      "schedules_per_block": link.connections * link.cell,
+                      "cells_per_block": link.connections * link.cell, "cap_per_block": link.cap, "free": free,
+                      "faulty": 0,
                       "jitter_per_block": link.jitter, "jitter_bound": LB.JITTER_BOUND, "jitter_term": LB.JITTER,
                       "b": link.b, "fmax": {f"{float(d):g}": LB.fmax(d) for d in LB.DELTAS},
                       "scan_delta": str(link.scan_delta)},
@@ -753,9 +755,11 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
             "conditions": [
                 "the generator reading of the scan's statement (each proof block's registered rows its boundary "
                 "values): a claim, not yet a locked guarantee",
-                "each connection's cap is its lane's egress_cells, which the network certifier holds a lane to and "
-                "NetworkCheck.Period doesn't check; the schedules and the fail cells are charged at that cap, "
-                "⌈log2(cap + 1)⌉ each a request, as its rows form charges them",
+                "each connection's cap is its lane's egress_cells, which the network certifier holds a lane to "
+                "(trusted-host); NetworkCheck.Period takes the registered schedule's caps (Schedule.caps), "
+                "egress_cells for each of the lanes·T connections a sampling block's schedule can carry, and "
+                "charges the schedules and the fail cells ⌈log2(cap + 1)⌉ for each of them, whatever the requests "
+                "served, as its rows form does",
                 f"the jitter term is T bits a sampling block, one a bucket: {LB.JITTER}",
                 "the scan proves sampling block 0 of the warden run; a monitoring period's terms are its "
                 "per-sampling-block and per-request terms at the run's request rate",

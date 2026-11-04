@@ -10,8 +10,10 @@ blocks, T buckets of τ seconds each way, every one proved as its own proof bloc
 block's scan at δ_scan. K's terms are those of `NetworkCheck.Period`'s rows form (`rowsTerms`) in the generator reading
 of the scan's statement:
 
-* the schedules and the fail cells, ⌈log2(cap + 1)⌉ each a request (`capsTerm`, charged twice as `#Ss ≤ ∏_c (cap_c +
-  1)`), a connection's cap its lane's egress_cells;
+* the schedules and the fail cells, ⌈log2(cap + 1)⌉ for each of the lanes·T connections a sampling block's schedule
+  can carry, a connection's cap its lane's egress_cells (`Schedule.caps`, the only caps the rows form takes;
+  `capsTerm`, charged twice as `#Ss ≤ ∏_c (cap_c + 1)`). They are charged whatever the requests served: the sender
+  picks how many connections it opens;
 * the sampling block's free inputs (`READINGS`). As registered, the scan's ``prog`` is its tied compute audit's
   outputs, NR·T / EVERY slot entries of NE bits (`ingress_scan.entry_bits`), so they are that audit's free inputs,
   which the rows form charges to the sampling block (`tiedAudits`). If ``prog`` is an input only at its anchored
@@ -122,9 +124,15 @@ class LinkLoad:
         return self.egress_cells.bit_length()
 
     @property
+    def connections(self) -> int:
+        """The connections a sampling block's schedule can carry, lanes·T (`Schedule.caps` over one, its size)."""
+        return self.scan.lanes * self.T
+
+    @property
     def cap(self) -> int:
-        """A request's schedules and fail-cell terms, one `cell` each (`rowsTerms`'s `schedules` and `cells`)."""
-        return 2 * self.cell
+        """A sampling block's schedules and fail-cell terms, `cell` for each of its `connections` in each
+        (`rowsTerms`'s `schedules` and `cells`, each `capsTerm (Schedule.caps s 1)`)."""
+        return 2 * self.connections * self.cell
 
     @property
     def jitter(self) -> int:
@@ -160,7 +168,7 @@ class LinkLoad:
         blocks = self.blocks(period)
         requests = self.rate * seconds(period)
         free = self.free(reading)
-        k = float(requests * self.cap + blocks * (free["block"] + self.jitter) + requests * free["request"])
+        k = float(blocks * (self.cap + free["block"] + self.jitter) + requests * free["request"])
         if delta is None:
             return k
         f = fmax(delta)
