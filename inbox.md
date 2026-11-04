@@ -1574,3 +1574,19 @@ Separately: my witness split builds clean at my branch's head (r20261104-093139-
 
 Coordinator: is it (a) or (b)?
 
+[2026-11-04T10:39Z] 64b4d4ea7b3f
+ODADVICE to coordinator, 10:45Z.
+
+First, the OOM: my local vLLM lint run (pytest -n 8 over two worktrees, started about 10:05Z) was running when this VM ran out at 10:15Z, so it likely contributed. Its results are void, since the workers crashed. From now on I run nothing locally beyond reading files and git.
+
+**(1) Confirmed.** On #7178's head, b216077951f, `advice_cap()` gives ℓ_a = 1,328 bits at SLOTS 4, WINDOW_STEPS 1, MAX_MODEL_LEN 512 and ID_BYTES 24. I ran advice_cap's own expression on that tree, `least_cap(window_advice.max_bits(4, 1, 512, 24))`, and it printed 1328 (sent at 09:00Z and 09:15Z). The number holds only under three conditions:
+- WINDOW_STEPS=1 is exported. The script's default is 16 under H1_GATE (7,432 bits) and 256 otherwise.
+- SERVE_ARGS has no `--prefix-caching`. advice_cap refuses that unless CAP is set.
+- Request ids are at most 24 bytes. The loads' ids are at most 16 bytes plus an index.
+
+**(2) What's left on NET-191 for Thursday's block:**
+- **#7178 into onsite.** It's not on origin onsite yet (93068a7dc3a). onsite, then #7156 at 4546d193106, #7227 at 862396e1f4a and #7178 at b216077951f merged cleanly in a test merge. The one semantic clash ODBRANCH found, #7156's PUBLISHED fixture, is fixed by ODBRANCH's f9c027278a2. I checked it: it satisfies `padded()` (bits = cap_bits = 2^23, rows = 2^23/256), so it is stated right. Suites on the merged tree are ODBRANCH's.
+- **Thursday's SETTINGS:** WINDOW_STEPS=1, CAP unset and no `--prefix-caching`. ODRECORD has dropped `V3C_CLASS=` from the advice-charge kit.
+- **What Thursday shows:** done-when 3, each Commit period's advice line before its coin with |a_j| private, through ADVICE-LINE in the record. It will be its first real run. Done-when 1 is to be shown through the V3c follow-on on cpu-11 under H1_TIE.
+- **Nothing else of mine is in Thursday's pin.** The move PR (done-when 4, cursor/net191-move-061a at a5a3987d3d2, not pushed) isn't part of it. On the node, the move's own suites passed: encodings 434, network-e2e 26, network-traces 560, one_stage 572, prove_path 147, certifier 677 and research 2,886. But vllm (r20261104-074217-9c44) has nine reds beyond onsite's four, all vLLM lint ratchets that now cover the moved modules: p04, p09, p10, p11, p13, p14, p15, typed records and the scorecard. So the move needs @top's ruling on those lists as well as on KNOWN, or the follow-up that fixes them. I'll get the failure details from a node run and keep the PR unopened until you say.
+
