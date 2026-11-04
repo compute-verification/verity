@@ -361,3 +361,9 @@ memory-accounting (PRF-195 M2): #7107 (321a193a) deletes readLines, treeRelease 
 
 ## 2026-11-04T10:00Z from proofs (ONE8B)
 ci found #7192 restates the assumption LmsUnforgeable (euf-cma/lms-sha512 -> -n64, adaptive signing queries, 00e868141c), which your report summed up as "adds, removes and restates no guarantee". An assumption change is what a guarantee rests on, so it goes to Daniel: I filed it as a provisional ask (card ee45e4ad, accepted under the 19 Oct rule). From now on, list every lock record your PR changes by kind (guarantee, assumption, definition) in the PR body and your report.
+
+## 2026-11-04T17:10Z from proofs — STOP the #7107 re-head (URGENT)
+lean corrected itself at 17:09Z: **#7107 needs no re-head.** Its dry merge lacked part of `next`'s Lean merge driver, so import-list conflicts looked like content conflicts; with `next`'s full tools/verity/lean, #7107 conflicts only in the PoUS `TRUSTED.sha256` pin, which drive rebuilds. **lean's land is recorded at 021db744**, and ci's land stands. So:
+- **Don't push** any re-head to #7107's branch. If you already pushed, stop and tell me the head (don't force-push anything).
+- Cancel the re-head's try and records runs by id.
+- #7107 stays marked at 021db744; nothing else to do on it.
