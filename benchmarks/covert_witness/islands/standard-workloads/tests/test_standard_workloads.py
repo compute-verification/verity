@@ -4,9 +4,11 @@ published gives them, reading B's forms among their sensitivities; null and "unm
 infinite) at the console's default (rho_default and rho_console) and the registered serving block (rho_served), whose
 rho_inputs give the dial's ρ at both (page_rho) and whose input_status says which inputs te_core measured (an
 unmeasured Δ_grad's steps and whether Fit's verdict rests on it, and the fresh-products kind's input); a generation
-run's row is its rounds alone, each GEMM on the served codes priced as NVFP4; it reads traces from te_core 4.4 on; and
-the panel keeps to the panels route's limits, a cell up to 4,096 characters, and never replaces a served panel with one
-that drops its runs."""
+run's row is its rounds alone, each GEMM on the served codes priced as NVFP4; a workload no run measures is a modelled
+row, te_core.workloads' model priced the same way; it reads traces from te_core 4.4 on; the panel keeps to the panels
+route's limits, a cell up to 4,096 characters, never replaces a served panel with one that drops its rows, and cites
+its tables in the research run's out/; and a PUT takes a cited body only over the panel the build read, then reads it
+back."""
 import dataclasses
 import importlib.util
 import json
@@ -17,7 +19,7 @@ import pytest
 
 pytest.importorskip("matplotlib")
 
-from te_core import VERSION, algorithm_policy, console, formalism, panels, policy
+from te_core import VERSION, algorithm_policy, console, formalism, panels, policy, workloads
 from te_core.gates import of_log, per_mac
 
 #: the builder, loaded from its file: on sys.path, the island's directory would hide the standard library's trace
@@ -195,12 +197,89 @@ def test_a_step_traced_in_two_arts_is_read_from_the_newer_te_cores_trace_whateve
 
 def test_a_publish_never_drops_a_served_runs_row_nor_replaces_a_newer_te_cores():
     def panel(runs, te=VERSION):
-        return {"columns": SW.COLUMNS, "rows": [[None, None, None, f"{r} art:x (about)", *[None] * 5, te]
-                                                for r in runs]}
+        rows = [x if isinstance(x, tuple) else ("standard", x) for x in runs]
+        return {"columns": SW.COLUMNS, "rows": [[w, "45M", None, f"{r} art:x (about)", *[None] * 5, te]
+                                                for w, r in rows]}
     mine = panel(["r1", "r2"])
     assert SW.emptied(mine, None) == [] and SW.emptied(mine, panel(["r2", "r1"], "4.4")) == []
     assert SW.emptied(mine, panel(["r1", "r3"])) == ["it drops the served row of r3"]
     assert SW.emptied(mine, panel(["r1"], "9.0")) == [f"the route serves te_core 9.0, newer than {VERSION}"]
+    modelled = panel(["r1", ("rl", SW.MODELLED), ("inference", SW.MODELLED)])
+    assert SW.emptied(modelled, modelled) == [] and SW.emptied(panel(["r1", ("rl", SW.MODELLED)]), modelled) == \
+        [f"it drops the served row of inference 45M ({SW.MODELLED})"]
+
+
+def test_a_modelled_row_is_the_workload_models_products_priced_at_both_points():
+    """A workload no run measures (the rows file's RL with the updated weights between updates, and inference on an
+    unregistered model) is te_core.workloads' model at the row's dials, its products at each point's k priced as a
+    run's are: its ρ at each point workloads.rho's, its run cell `MODELLED` with what the model is, its dials every
+    argument of the model, each input the model's, no capture code; the rows file's words for it name no code."""
+    rows = [r for r in json.loads(SW.ROWS.read_text())["rows"] if "modelled" in r]
+    assert [r["workload"] for r in rows] == ["rl", "inference"]
+    p, details = SW.build({"rows": rows}, REVS, stamp="2026-11-03T00:00:00Z")
+    for r, row, d in zip(rows, p["rows"], details, strict=True):
+        cells, model = dict(zip(SW.COLUMNS, row)), workloads.model(r["workload"], **r["dials"])
+        assert cells["run"] == f"{SW.MODELLED} ({r['modelled']})" and cells["dials"] == SW.compact(model.dials)
+        for name, (c, k) in SW.POINTS.items():
+            assert cells[f"rho_{name}"] == SW.rho_cell(workloads.rho(model, c, k)["rho"])
+        assert cells["rho_default"] == cells["rho_console"] and cells["capture_code"] is None
+        st = json.loads(cells["input_status"])
+        assert list(st) == [*SW.KEYS, "products"] and all(v.startswith("modelled: ") for v in st.values())
+        assert (d["run"], d["art"], d["modelled"], d["read"]["derived"]) == (None, None, r["modelled"], model.derived)
+    assert not SW.refused(p) and not SW.refused(p | {"note": SW.note(p, "art:" + "0" * 64)})
+    assert [r["modelled"] for r in rows if SW.CODE.search(r["modelled"])] == []
+
+
+def test_the_note_cites_tables_in_a_research_runs_out_and_a_build_elsewhere_cites_none(tmp_path, monkeypatch):
+    run = tmp_path / "r20261104-081500-abcd"
+    for name in ("RESEARCH_RUN_DIR", "RESEARCH_RUN_ID"):
+        monkeypatch.delenv(name, raising=False)
+    assert SW.cite(run / "out") is None
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
+    assert SW.cite(run / "out") == "run:r20261104-081500-abcd/out/tables"
+    assert SW.cite(run / "out" / "sw") == "run:r20261104-081500-abcd/out/sw/tables"
+    assert SW.cite(run) is None and SW.cite(tmp_path / "elsewhere") is None
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261104-081500-beef")
+    assert SW.cite(run / "out") == "run:r20261104-081500-beef/out/tables"
+    for tables in (SW.cite(run / "out"), "art:" + "0" * 64):
+        assert SW.TABLES.search(SW.note({"rows": []}, tables))
+    assert not SW.TABLES.search(SW.note({"rows": []}))
+
+
+def test_a_put_takes_a_cited_body_only_over_the_panel_the_build_read_and_reads_it_back(tmp_path, monkeypatch):
+    """`put` PUTs a build's console body where the route still serves the panel the build read (`--served`), the body
+    keeps its rows, the route takes it and its note cites stored tables; then the panel it GETs must be the body.
+    Where someone PUT since, nothing is PUT."""
+    fx = json.loads(PINNED.read_text())
+    p, _, _ = build(formalism.from_json(fx["measured"]), fx, monkeypatch)
+    old = json.loads(console.body(p | {"note": SW.note(p, "art:" + "0" * 64)}))
+    route, puts = {SW.PANEL: old}, []
+
+    def put(q, status="200"):
+        puts.append(q)
+        route[SW.PANEL] = json.loads(console.body(q))
+        return status
+
+    def body(q, name="body.json"):
+        (tmp_path / name).write_bytes(console.body(q))
+        return tmp_path / name
+
+    monkeypatch.setattr(console, "served", lambda: dict(route))
+    monkeypatch.setattr(console, "put", put)
+    sent = {SW.PANEL: old}
+    with pytest.raises(SystemExit, match="cites no stored tables"):
+        SW.put(body(p), sent)
+    with pytest.raises(SystemExit, match="drops the served row of r20261103"):
+        SW.put(body(p | {"rows": [], "note": SW.note(p, "run:r20261104-081500-abcd/out/tables")}), sent)
+    with pytest.raises(SystemExit, match="someone PUT over it"):
+        SW.put(body(p), {SW.PANEL: old | {"updated_at": "2026-11-02T00:00:00Z"}})
+    assert puts == []
+    new = json.loads(console.body(p | {"note": SW.note(p, "run:r20261104-081500-abcd/out/tables")}))
+    assert SW.put(body(new), sent) == 0 and puts == [new] and route[SW.PANEL] == new
+    monkeypatch.setattr(console, "put", lambda q: "400 refused")
+    assert SW.put(body(old), {SW.PANEL: new}) == 1
+    monkeypatch.setattr(console, "put", lambda q: "200")
+    assert SW.put(body(old), {SW.PANEL: new}) == 1 and route[SW.PANEL] == new
 
 
 def test_a_row_whose_inputs_dont_give_te_cores_rho_is_refused(monkeypatch):
