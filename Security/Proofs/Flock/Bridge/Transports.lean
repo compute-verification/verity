@@ -124,7 +124,7 @@ theorem rowsOk_bits {c : Flock.Circuit} (h : RowsOk c) (q : Fin c.ports.size) :
   rw [getElem!_pos c.ports q.val q.isLt]
   unfold FlockSoundness.Discharge.Layout.portRowW
   have hm : c.ports[q.val] ∈ c.ports.toList := by simp
-  rcases FlockSoundness.Discharge.Layout.rowsH_spec h with h1 | ⟨h2, -, -⟩
+  rcases FlockSoundness.Discharge.Layout.rowsH_spec h with h1 | ⟨h2, -⟩
   · exact (h1 _ hm).2.1.symm
   · rcases h2 _ hm with h | h
     · exact (FlockSoundness.Discharge.Layout.v2Row_spec h).2.2.1.symm

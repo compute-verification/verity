@@ -42,9 +42,9 @@ theorem outPairs_ne_net {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout st)
     (hb : b < 2 ^ (st.c.rangeOf n).slotLog) : q.1 ≠ (st.c.rangeOf n).slot s₀ + b := by
   obtain ⟨g, hg, j, hj, k, hk, t, ht, hq1⟩ := outPairs_fst hq
   rw [hq1]
-  obtain ⟨hp, -, ht8⟩ := hrows.bound hj hk ht
+  obtain ⟨hp, hb', ht8⟩ := hrows.bound hj hk ht
   have R := Hm.RowRanges.ofL L F.parse F.check
-  obtain ⟨n', s, off, hn', hat, -⟩ := Hidden.Any.msg_at R (b := 2 * k + t / 8) hg hp (hrows.segs hj) ht8
+  obtain ⟨n', s, off, hn', hat, -⟩ := Hidden.Any.msg_at R hg hp (hrows.2 j hj).2 hb' ht8
   have hne : n ≠ n' := by rcases hn' with rfl | rfl <;> assumption
   intro he
   exact Hm.atSlot_ne L F (R.rowNet_lt hn') hn hne hat ⟨hs₀, hb, he⟩

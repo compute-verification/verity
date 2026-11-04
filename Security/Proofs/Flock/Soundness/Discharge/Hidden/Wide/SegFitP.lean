@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
 import Proofs.Flock.Soundness.Discharge.Hm.Flat
 
 /-!
-# Unsegmented output rows at public inputs
+# Output rows of any kind at public inputs
 
 `Wide.SegFit`'s `Any.msg_copyF` and `Any.sat_flatF` at a statement whose Δ is `HmOut.delta`'s without the pairs into a
 public leaf's bits (`HmIn.delta`). Every row it drops is a public leaf's bit, inside a unit slot's input rows
@@ -69,8 +69,8 @@ theorem msg_copyFP {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z 
       blockBit (L.model regs) z o (outSrc st.c g j k t) := by
   have R : RowRanges st.c := RowRanges.ofL (st := flatTwin st) L0 F0.parse F0.check
   obtain ⟨hp, hb, ht8⟩ := hrows.bound hj hk ht
-  obtain ⟨n, s, off, hn, hat, -, l, name, hl, hself⟩ := msg_at R (b := 2 * k + t / 8) hg hp (hrows.segs hj) ht8
-  have hx := deltaMsgCol_ltF R (b := 2 * k + t / 8) hg hp (hrows.segs hj) ht8
+  obtain ⟨n, s, off, hn, hat, -, l, name, hl, hself⟩ := msg_at R hg hp (hrows.2 j hj).2 hb ht8
+  have hx := deltaMsgCol_ltF R hg hp (hrows.2 j hj).2 hb ht8
   have hU : ¬ UnitIn st.c (deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8)) :=
     not_unitIn_of_rowNet L0 F0 hn hat
   have hfc := flat_count_msgF L0 F0 hg hp (hrows.2 j hj).2 hb ht8
@@ -105,7 +105,7 @@ theorem sat_flatFP {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z 
       rcases hq with rfl | rfl <;> rfl
     rw [hrows.size] at hj
     obtain ⟨hp, hb, ht8⟩ := hrows.bound hj hk ht
-    have hx := deltaMsgCol_ltF R (b := 2 * k + t / 8) hg hp (hrows.segs hj) ht8
+    have hx := deltaMsgCol_ltF R hg hp (hrows.2 j hj).2 hb ht8
     have hie : i = ⟨deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8), hx⟩ :=
       Fin.ext (hqi.symm.trans hq1)
     subst hie

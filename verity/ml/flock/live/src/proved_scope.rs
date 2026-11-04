@@ -182,12 +182,9 @@ fn seg_row(p: &Port) -> bool {
         segs.iter().all(|&(m, c)| WORD * (c - 1) <= m.div_ceil(8))
 }
 
-/// `ProvedScope.bitRows`: every row a [`v2_row`] or a [`seg_row`], in any mix, one output port each, the output rows (the
-/// last `out_row_ports.len()`) `v2_row`s.
+/// `ProvedScope.bitRows`: every row a [`v2_row`] or a [`seg_row`], in any mix, output rows among them, one output port each.
 fn bit_rows(ports: &[Port], out_row_ports: &[usize]) -> bool {
-    let n_in = ports.len().saturating_sub(out_row_ports.len());
-    ports.iter().all(|p| v2_row(p) || seg_row(p)) && out_row_ports.iter().all(|&k| k == 1) &&
-        (0..out_row_ports.len()).all(|j| ports.get(n_in + j).is_some_and(v2_row))
+    ports.iter().all(|p| v2_row(p) || seg_row(p)) && out_row_ports.iter().all(|&k| k == 1)
 }
 
 /// `ProvedScope.scopeWhy hidden` of a circuit outside `scopeOkI` (`scopeOk` when not `hidden`), `None` inside: the unit has
@@ -225,7 +222,7 @@ fn rows_why(ports: &[Port], out_row_ports: &[usize], hidden: bool) -> Option<&'s
     } else if hidden && !v1 && !bit_rows(ports, out_row_ports) {
         Some("rows that are neither all sha512/row/v1 rows of 16 · words bits in at least one chunk nor all unsegmented \
               sha512/row/v2 rows of 16 · words bits ending in their hm96 block or sha512/row-seg/v1 rows of 16 · words \
-              bits whose segments end in their last block, the output rows unsegmented, one output port each")
+              bits whose segments end in their last block, the output rows one output port each")
     } else {
         None
     }
@@ -441,22 +438,26 @@ mod tests {
     }
 
     #[test]
-    fn hidden_outputs_admit_seg_rows_alone_or_mixed_the_outputs_unsegmented() {
+    fn hidden_outputs_admit_seg_rows_alone_or_mixed_inputs_and_outputs() {
         let out = port(64, 1, 1024, true, None);
-        // Lean's witnessSeg and witnessMix (ZkHidden/NonVacuousSeg.lean)
+        // Lean's witnessSeg, witnessMix and witnessSegOut (ZkHidden/NonVacuousSeg.lean)
         assert_eq!(rows_why(&[seg(1024, 2), out.clone()], &[1], true), None);
         assert_eq!(rows_why(&[seg(17408, 21), port(64, 1, 1024, true, None), out.clone()], &[1], true), None);
         assert!(rows_why(&[seg(1024, 2), out.clone()], &[1], false).is_some());
-        // witnessSegOut, witnessSegLate, two output ports, a v1 row among them
+        assert_eq!(rows_why(&[seg(1024, 2), seg(1024, 2)], &[1], true), None);
+        assert_eq!(rows_why(&[seg(1024, 2)], &[1], true), None);
+        assert_eq!(rows_why(&[out.clone(), seg(17408, 21)], &[1], true), None);
+        assert_eq!(rows_why(&[seg(1024, 2), seg(17408, 21), out.clone()], &[1, 1], true), None);
+        // witnessSegLate, two output ports in a row, a v1 row among them
         let why = |ports: &[Port], outs: &[usize]| rows_why(ports, outs, true).unwrap();
-        assert_eq!(why(&[seg(1024, 2), seg(1024, 2)], &[1]),
+        assert_eq!(why(&[seg(896, 2), out.clone()], &[1]),
                    "rows that are neither all sha512/row/v1 rows of 16 · words bits in at least one chunk nor all unsegmented \
                     sha512/row/v2 rows of 16 · words bits ending in their hm96 block or sha512/row-seg/v1 rows of 16 · words \
-                    bits whose segments end in their last block, the output rows unsegmented, one output port each");
-        assert!(rows_why(&[seg(896, 2), out.clone()], &[1], true).is_some());
+                    bits whose segments end in their last block, the output rows one output port each");
         assert!(rows_why(&[seg(1024, 2), out.clone()], &[2], true).is_some());
+        assert!(rows_why(&[seg(1024, 2), seg(1024, 2)], &[2], true).is_some());
         assert!(rows_why(&[seg(1024, 2), port(64, 1, 1024, false, None), out.clone()], &[1], true).is_some());
-        assert!(rows_why(&[seg(1024, 2)], &[1], true).is_some());
+        assert!(rows_why(&[seg(1024, 2), seg(896, 2)], &[1], true).is_some());
         assert_eq!(rows_why(&[seg(1024, 2), out.clone(), out], &[1, 1], true), None);
     }
 
