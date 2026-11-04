@@ -6,9 +6,9 @@ and its outcome. The piece, on a serve dir whose window was the network certifie
 link-window: the period mirror's certifier/v0 accept (`period_case`), its profile with the placement (the certifier on
 the kept gate's host, the checks on the prover's node), then goes through `served_verdicts.py record` into the window
 report and the block record's certifier leg, which `block_record.check` holds and its schema admits, and its case.json
-is the three files `network-period` read, as `composite.py` reads a piece's case; the chain's endpoint report, with
-each Commit window's counts, stays in the kept run. A window request the warden didn't certify is
-rejected before any chain runs; a chain that refused, requests outside the scan's link-window and a period the check
+is the three files `network-period` read, as `composite.py` reads a piece's case, each field of DIR's of a public kind
+or a certificate (`kind_scan`); the chain opens no endpoint records, and its report stays in the kept run. A window
+request the warden didn't certify is rejected before any chain runs; a chain that refused, requests outside the scan's link-window and a period the check
 rejects are rejects; a rehearsal the gate's check failed (each request late) and a step that can't run (no kept run, no
 report, no build, the time limit) refuse, which leaves the certifier missing, and no process of a step's group outlives
 the piece, the time limit's SIGTERM included, whenever it comes. Of the chain, DIR gets only `PUBLIC`'s key paths,
@@ -48,9 +48,11 @@ sys.path[:0] = [str(HERE), str(Path(__file__).resolve().parent), str(ROOT / "ben
 import attacks as AT  # noqa: E402
 import certifier_piece as CP  # noqa: E402
 import chain_record as CR  # noqa: E402
+import kind_scan as KS  # noqa: E402
 import served_verdicts as S  # noqa: E402
 from test_served_session import RUN, STUB  # noqa: E402
 from test_warden_chain import WC, gate_run  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import registration as RG  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
 
@@ -63,11 +65,9 @@ PASSED = {"run": RUN, "rc": 0, "ended": "the rehearsal ended", "verdict": {"acce
 LATE = {"run": RUN, "rc": 1, "ended": "the rehearsal exited 1",
         "verdict": {"accepted": False, "problems": 8, "requests": 4, "ended": 0, "failed": ["fail"]}}
 GATE_HOST = "gate-host"
-#: the window's private values, as numbers no other field of the chain's files takes: its request, step and output
-#: counts, its committed, v0 and derived advice bits, and the tie's prompt lengths
-REQUESTS, STEPS, OUTPUTS, COMMITTED, V0, DERIVED = 7919, 7927, 7933, 104723, 104729, 104743
-PROMPT_LENS = [7937, 7949]
-PRIVATE = {REQUESTS, STEPS, OUTPUTS, COMMITTED, V0, DERIVED, *PROMPT_LENS}
+#: the window's private values, as numbers no other field of the chain's files takes: its request and output counts
+REQUESTS, OUTPUTS = 7919, 7933
+PRIVATE = {REQUESTS, OUTPUTS}
 
 
 @pytest.fixture(scope="module")
@@ -132,12 +132,9 @@ def _serve_dir(d: Path, warden: dict, records: list[dict] | None = None, kept: b
 
 
 def _chain_out(d: Path, verdict: str, w: int) -> Path:
-    """What the chain leaves in its run dir's out/: its report, the endpoint's and the scan's one link-window."""
+    """What the chain leaves in its run dir's out/: its report and the scan's one link-window."""
     out = d / "out"
     (out / "report").mkdir(parents=True)
-    (out / "endpoint").mkdir(parents=True)
-    (out / "endpoint" / "report.json").write_text(json.dumps({"chain": {"bits": {"commit_windows": [
-        {"window": K, "requests": 3, "carried": 0, "outputs": 12, "t0_s": 0.5}]}}}))
     (out / "scan" / "joint").mkdir(parents=True)
     (out / "report" / "report.json").write_text(json.dumps({"verdict": verdict, "why": None if verdict == "accepted"
                                                             else {"n2": "a window refused"}}))
@@ -175,12 +172,12 @@ def _integrity() -> dict:
 def _record(monkeypatch, capsys, serve: Path, pieces: Path) -> tuple[dict | None, dict]:
     """`served_verdicts.py record` over the pieces `pieces` ran, sampled proofs' row an accept: the block record (None
     where none was written) and the ``RECORD`` line."""
-    monkeypatch.setattr(S, "sampled_proofs_row", lambda d, run=None: _integrity())
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda d, run=None, registration=None: _integrity())
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     out = pieces.parent / "record"
     capsys.readouterr()
     S.main(["record", "--serve-run", str(serve), "--window", str(K), "--sampled-proofs", str(out / "sampled-proofs"),
-            "--pieces", str(pieces), "--out", str(out)])
+            "--registration", str(out / "registration.json"), "--pieces", str(pieces), "--out", str(out)])
     (line,) = [x.removeprefix("RECORD ") for x in capsys.readouterr().out.splitlines() if x.startswith("RECORD ")]
     rec = out / "block-record.json"
     return (json.loads(rec.read_text()) if rec.exists() else None), json.loads(line)
@@ -207,8 +204,8 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
     assert where[CP.PREMISE].startswith("assumed, the auditor's devices not placed")
     assert [(x["name"], x["counted"]) for x in where["links"]] == [("certified", True), ("gate", False)]
     assert json.loads((piece / "chain" / "report" / "report.json").read_text())["verdict"] == "accepted"
-    assert not (piece / "chain" / "endpoint").exists()
     assert {p.name for p in piece.iterdir()} - {"piece.json"} == {"answer.json", CP.CASE, "chain", "piece.log"}
+    assert KS.scan(piece)[0] == []
     seen = {f.name: f.read_bytes() for f in (tmp_path / "seen").iterdir()}
     raw = (piece / CP.CASE).read_bytes()
     case = json.loads(raw)
@@ -218,9 +215,8 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
     log = (piece / "piece.log").read_text()
     assert "leak guard (exit 0)" in log and f"case: {CP.CASE}, {len(raw)} bytes" in log
     keep = d / CP.PRIVATE / RUN
-    assert sorted(p.name for p in keep.iterdir()) == ["chain", "endpoint", "fetch.tar.gz", CP.SESSION]
-    assert (keep / "chain" / "out" / "endpoint" / "report.json").is_file()
-    assert [(keep / "endpoint" / f).stat().st_mode & 0o777 for f in CP.ENDPOINT] == [0o600] * 4
+    assert sorted(p.name for p in keep.iterdir()) == ["chain", "fetch.tar.gz", CP.SESSION]
+    assert (keep / "chain" / "out" / "report" / "report.json").is_file()
     row = S.piece_row("communication", tmp_path / "pieces")
     assert (row["verdict"], row["quantity"], row["owner"]) == ("accept", accept["public"], "network-accounting")
     rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
@@ -251,8 +247,8 @@ def test_a_window_request_the_warden_didnt_certify_is_rejected_before_any_chain(
 def _decide(tmp_path, warden, verdict="accepted", w=None, records=None, check=None):
     d = _serve_dir(tmp_path / "serve", warden, records)
 
-    def chain(keep, run, ep, windows):
-        assert sorted(p.name for p in ep.iterdir()) == sorted(CP.ENDPOINT) and windows == warden["windows"]
+    def chain(keep, run, windows):
+        assert windows == warden["windows"]
         _chain_out(keep / run / "chain", verdict, warden["w"] if w is None else w)
         return 0
     (tmp_path / "dir").mkdir()
@@ -467,78 +463,62 @@ def _numbers(p: Path) -> set[int]:
 
 
 def _private_chain_out(out: Path) -> Path:
-    """What the chain's warden path leaves in out/ on a served window, the endpoint's report the served node's: each
-    step's file carrying the window's private values where the chain writes them, and the report and report.md that
-    ``chain_record.py report`` makes of them."""
+    """What the chain's active-warden path leaves in out/ on a served window: each step's file carrying the window's private
+    values where the chain writes them, and the report and report.md that ``chain_record.py report`` makes of them."""
     docs = {
         "custody.json": {"verdict": "accepted", "gate_runs": [{"gate_run": RUN, "strategies": {}}]},
         "certs.json": {"warden_run": RUN, "verdict": "accepted", "windows": 1, "sync_bits": 0.0,
                        "rows": [{"window": 0, "certified": True}],
                        "warden_check": {"accepted": True, "summary": {"requests": REQUESTS, "outputs": OUTPUTS}}},
-        "endpoint/report.json": {
-            "warden_run": RUN, "at": CR.SERVED_NODE, "verdict": "accepted",
-            "io": {"accepted": True, "requests": REQUESTS, "tokens": OUTPUTS, "violations": []},
-            "chain": {"bits": {"T": 1, "bound": True, "rebuilt": True, "v0_total": V0, "commit_windows": [
-                {"window": K, "requests": REQUESTS, "carried": 0, "steps": STEPS, "outputs": OUTPUTS,
-                 "committed_bits": COMMITTED, "v0_bits": V0, "derived_bits": DERIVED, "bound": True, "rebuilt": True}],
-                "windows": [{"window": 0, "v0_bits": V0, "derived_bits": DERIVED, "in_run": True}]}}},
         "n2/summary.json": {"warden_run": RUN, "ok": True, "link": {"unit": "n2"}, "members": {"honest": {
             "network": {"accepted": True}, "windows": [{"window": 0, "accepted": True, "as_expected": True}]}}},
-        "tie/summary.json": {"warden_run": RUN, "class": "warden", "ok": True, "prompt_lens": PROMPT_LENS,
-                             "releases": [[0, 1]], "link": {"unit": "tie", "T": 30},
-                             "tie": {"honest": [True], "forged": [False]}},
         "scan/summary.json": {"warden_run": RUN, "T": 30, "ok": True, "responses": {"0": OUTPUTS}, "rounds": {
             "honest": {"ok": True, "audit": {"accepted": True, "window_accepted": True}},
             "chain": {"ok": True, "audit": {"accepted": False, "window_accepted": False}}}},
         "scan/answers.json": {"format": "answers", "delta": "1/100", "registration": {"program": "ab" * 64},
                               "windows": [{"window": 0, "answer": {"verdict": "accept"}, "registrations": []}]},
-        "job.json": {"path": CR.WARDEN, "run": "r-chain", "rc": {"n2": "0", "scan": "0", "tie": "0"}},
+        "job.json": {"path": CR.WARDEN, "run": "r-chain", "rc": {"n2": "0", "scan": "0"}},
     }
     for rel, doc in docs.items():
         (out / rel).parent.mkdir(parents=True, exist_ok=True)
         (out / rel).write_text(json.dumps(doc, indent=1))
-    CR.main(["report", *(x for f, rel in (("custody", "custody.json"), ("certs", "certs.json"), ("endpoint",
-             "endpoint/report.json"), ("n2", "n2/summary.json"), ("scan", "scan/summary.json"), ("job", "job.json"),
-             ("tie", "tie/summary.json")) for x in (f"--{f}", str(out / rel))), "--warden-run", RUN,
-             "--out", str(out / "report")])
+    CR.main(["report", *(x for f, rel in (("custody", "custody.json"), ("certs", "certs.json"), ("n2", "n2/summary.json"),
+                                         ("scan", "scan/summary.json"), ("job", "job.json"))
+             for x in (f"--{f}", str(out / rel))), "--warden-run", RUN, "--out", str(out / "report")])
     return out
 
 
-def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_moves_out_what_isnt_declared(tmp_path):
-    """The chain's out/ holds the window's private values: the endpoint's report (its Commit window's request, step and
-    output counts and its advice's bits), the report made of it (the certified I/O's counts, the advice's bits as K's
-    term) and report.md, the certificates step's view of the warden's check and the tie's prompt lengths. `publish`
-    puts none of them in the hold, only `PUBLIC`'s key paths, the endpoint's step its verdict and where it ran. A file
-    put past `publish`, in the hold (the endpoint's report copied whole, as the piece once published it) or in DIR (the
+def test_the_piece_publishes_no_count_of_the_window_and_the_guard_moves_out_what_isnt_declared(tmp_path):
+    """The chain's out/ holds the window's private values: the certificates step's view of the warden's check (the
+    certified I/O's counts), the report made of it, and the scan's response lengths; it opens no endpoint records, so
+    it has no endpoint step and d1's K no advice term (`chain_record.WARDEN_K`). `publish` puts none of the counts in
+    the hold, only `PUBLIC`'s key paths. A file put past `publish`, in the hold (report.md copied whole) or in DIR (the
     certificates step's), though neither holds a witness piece, is one the leak guard moves to the quarantine and never
     releases: DIR declares only `PIECE_FILES`."""
     out = _private_chain_out(tmp_path / "out")
     held = {p.relative_to(out).as_posix(): _numbers(p) & PRIVATE for p in out.rglob("*") if p.is_file()}
-    assert held["endpoint/report.json"] == PRIVATE - set(PROMPT_LENS) and held["tie/summary.json"] == set(PROMPT_LENS)
-    assert held["report/report.json"] >= {REQUESTS, OUTPUTS, V0, DERIVED} and held["report/report.md"] >= {
-        REQUESTS, OUTPUTS, DERIVED} and held["certs.json"] == {REQUESTS, OUTPUTS}
-    assert json.loads((out / "report" / "report.json").read_text())["verdict"] == "accepted"
+    assert held["certs.json"] == held["report/report.json"] == PRIVATE and held["scan/summary.json"] == {OUTPUTS}
+    full = json.loads((out / "report" / "report.json").read_text())
+    assert full["verdict"] == "accepted" and full["d1"]["K"]["open"] == CR.WARDEN_K
     hold, d, q = tmp_path / "hold", tmp_path / "pieces" / "certifier", tmp_path / "quarantine"
     CP.publish(out, hold)
     published = {p.relative_to(hold).as_posix(): p for p in hold.rglob("*") if p.is_file()}
     assert sorted(published) == sorted(f"chain/{rel}" for rel in CP.PUBLIC)
     assert {rel: _numbers(p) & PRIVATE for rel, p in published.items()} == dict.fromkeys(published, set())
+    assert KS.scan(hold)[0] == []
     report = json.loads(published["chain/report/report.json"].read_text())
-    assert report["verdict"] == "accepted" and set(report["steps"]) == {
-        "custody", "certificates", "endpoint", "tie", "n2", "scan", "lean"}
-    assert report["steps"]["endpoint"] == {"verdict": "accepted", "in_the_clear": CR.CLEAR["warden_endpoint_served"]}
+    assert report["verdict"] == "accepted" and set(report["steps"]) == set(KS.STEPS)
     assert report["steps"]["scan"]["eps_at_delta"]["units"] == 60
-    assert report["stubbed"] == list(CR.WARDEN_SERVED_STUBBED)
+    assert report["stubbed"] == list(CR.WARDEN_STUBBED)
     assert json.loads(published["chain/scan/answers.json"].read_text()) == json.loads(
         (out / "scan" / "answers.json").read_text())
-    (hold / "chain" / "endpoint").mkdir()
-    (hold / "chain" / "endpoint" / "report.json").write_bytes((out / "endpoint" / "report.json").read_bytes())
+    (hold / "chain" / "report" / "report.md").write_bytes((out / "report" / "report.md").read_bytes())
     (hold / "answer.json").write_text(json.dumps(CP.answer("accept", "")))
     (d / "chain").mkdir(parents=True)
     (d / "chain" / "certs.json").write_bytes((out / "certs.json").read_bytes())
     (d / "piece.log").write_text("leak guard\n")
     assert CP.guard(d, hold, None, q) == 3
-    assert all((q / "files" / "chain" / rel).is_file() for rel in ("endpoint/report.json", "certs.json"))
+    assert all((q / "files" / "chain" / rel).is_file() for rel in ("report/report.md", "certs.json"))
     assert sorted(p.relative_to(d).as_posix() for p in d.rglob("*") if p.is_file()) == sorted(
         ["answer.json", "piece.log", *published])
     assert not set().union(*(_numbers(p) & PRIVATE for p in d.rglob("*") if p.is_file()))
@@ -570,9 +550,11 @@ def _hook(step: str, d: Path, dir_: Path, v3c: Path, *args: str) -> int:
 
 def _chained(tmp_path: Path, v3c: Path | None, verdict: str = "accepted", w: int = 0) -> list[str]:
     """``chain``'s arguments: a chain that leaves `_chain_out`'s report, its scan's summary naming V3c's window (``v3c``;
-    None: no V3c window), and notes what it was given in TMP/chain-args."""
+    None: no V3c window) and `PERIOD`'s registration as the one whose trees it read, and notes what it was given in
+    TMP/chain-args."""
     out = _chain_out(tmp_path / "chain", verdict, w)
-    (out / "out" / "scan" / "summary.json").write_text(json.dumps({"v3c": v3c and {"window": str(v3c / "window")}}))
+    (out / "out" / "scan" / "summary.json").write_text(json.dumps({"v3c": v3c and {
+        "window": str(v3c / "window"), "registration": RG.digest(PERIOD["registration"])}}))
     note = shlex.quote(str(tmp_path / "chain-args"))
     return ["--chain-cmd", f'printf "%s\\n" "$@" > {note}; mkdir -p "$RESEARCH_RUN_DIR" && '
                            f'cp -r {shlex.quote(str(out / "out"))} "$RESEARCH_RUN_DIR/"']
@@ -582,8 +564,10 @@ def _lean(tmp_path: Path, answer: dict) -> list[str]:
     return ["--lean", str(_stub_lean(tmp_path, answer))]
 
 
-#: V3c's period.json as `records_audit.py period` writes it (its values stand-ins: the period check here is a stub)
-PERIOD = {"answer": {"verdict": "accept"}, "free": 5, "program": {"v3c": 1}, "registration": {"v3c": 2}, "steps": 0}
+#: V3c's period.json as `records_audit.py period` writes it (its values stand-ins of the kinds `kind_scan` declares: the
+#: period check here is a stub)
+PERIOD = {"answer": {"verdict": "accept"}, "free": 5, "program": {"v3c": 1}, "registration": {"program": "cd" * 64},
+          "steps": 0}
 
 
 def test_the_split_piece_chains_on_v3cs_window_and_checks_its_period_json(tmp_path, warden, period, capsys,
@@ -599,7 +583,7 @@ def test_the_split_piece_chains_on_v3cs_window_and_checks_its_period_json(tmp_pa
     assert _hook("chain", d, piece, v3c, *_chained(tmp_path, v3c, w=warden["w"]), "CR_SCAN_ARGS=--x 1") == 0
     assert (piece / "chain.log").read_text().splitlines()[-1] == (
         f"CERTIFIER-CHAIN accepted on V3c's window {v3c / 'window'}: the period step checks its period.json")
-    assert json.loads((piece / CP.CHAINED).read_text()) == {"chain": "accepted", "v3c": str(v3c)}
+    assert json.loads((piece / CP.CHAINED).read_text()) == {"chain": "accepted"}
     assert f"CR_SCAN_ARGS=--class w63k4 --v3c {v3c / 'window'} --x 1" in (tmp_path / "chain-args").read_text()
     assert not (piece / "answer.json").exists()
     (v3c / "period.json").write_text(json.dumps(PERIOD))
@@ -662,9 +646,9 @@ def test_each_steps_time_limit_names_its_own():
             CP.ended(limit)(signal.SIGTERM, None)
 
 
-def test_n2_and_the_tie_take_every_link_window_of_a_short_run_unless_named():
-    assert CP.sized(1, []) == ["CR_N2_DRAW=", "CR_TIE_WINDOWS=1"]
-    assert CP.sized(8, ["CR_N2_DRAW=4"]) == ["CR_TIE_WINDOWS=8", "CR_N2_DRAW=4"]
+def test_n2_takes_every_link_window_of_a_short_run_unless_named():
+    assert CP.sized(1, []) == ["CR_N2_DRAW="]
+    assert CP.sized(8, ["CR_N2_DRAW=4"]) == ["CR_N2_DRAW=4"]
     assert CP.sized(9, ["CR_SCAN_ONLY=1"]) == ["CR_SCAN_ONLY=1"]
 
 

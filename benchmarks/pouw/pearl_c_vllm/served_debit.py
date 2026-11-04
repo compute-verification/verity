@@ -164,8 +164,7 @@ def load(path: Path, light: bool = False, coins: CoinCommitment | None = None) -
     scheme = PD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
     matmuls = tuple(Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]) for u in man["matmuls"])
     epoch, _ = PD.manifest_epoch(man, coins, recorded=True)
-    records = [PW.UnitRecord(mm, u["real_rows"], u["k_kept"], tuple(u["excluded_a"]),
-                             tuple(man["weights"][str(mm.weight)]["excluded_b"])) for mm, u in zip(matmuls, man["matmuls"])]
+    records = VR.records_of(man, matmuls)
     splits = {w: PW.Split(man["weights"][str(w)]["k"]) for w in epoch.workload.weights()}
     reason = CW.check_records(epoch, splits, records)
     if reason is None and PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex() != man["records_root"]:
@@ -190,8 +189,8 @@ def load(path: Path, light: bool = False, coins: CoinCommitment | None = None) -
 
 
 def credited_macs(record: PW.UnitRecord) -> int:
-    real = record.real_rows - sum(1 for i in set(record.excluded_a) if i < record.real_rows)
-    return real * (record.matmul.shape.n - len(set(record.excluded_b))) * record.k_kept
+    real = record.real_rows - sum(1 for i in set(record.excluded_a) | set(record.voluntary_a) if i < record.real_rows)
+    return real * (record.matmul.shape.n - len(set(record.excluded_b) | set(record.voluntary_b))) * record.k_kept
 
 
 def sample(job: dict, per_stratum: int, seed: int) -> tuple[dict, list[int]]:

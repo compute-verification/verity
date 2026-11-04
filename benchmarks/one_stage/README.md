@@ -76,8 +76,12 @@ negatives.
   sampled proofs: the window's advice under that registration (`--weights-of-record`) and its request Programs, V3b's window
   circuit at each class of `CLASSES` (V2's 4,32,4 by default), with its weight reads counted registered at the registration's
   pins. The run needs every one of those counts. The class of record's count follows them as a measurement under its own
-  `WC_RECORD_TIMEOUT` (default 20m), after the record: a timeout or refusal there is reported and never fails the run. Then comes the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is C-Flock `--zk` on the drawn proof blocks
-  and the Lean verifier. Then come PoUW, PoUS, the bandwidth audit and the network certifier. Each runs its piece where
+  `WC_RECORD_TIMEOUT` (default 20m), after the record: a timeout or refusal there is reported and never fails the run. Then
+  comes V3c, sampled proofs' audit of record, within `V3C_TIMEOUT` and `V3C_AUDIT_TIMEOUT`: the window committed as the
+  class circuit's units (`prove_path.py window-commit`), then its records audit (`records_audit.py audit --circuit`, on a
+  challenger's coins), which is C-Flock `--zk` on the drawn proof blocks and the Lean verifier. The window commit's proofs
+  read the advice under its hiding root, so no advice opening reaches the verifier. V3c writes its audit as the network
+  certifier's period reads it (`period.json`). Then come PoUW, PoUS, the bandwidth audit and the network certifier. Each runs its piece where
   `POUW_CMD`, `POUS_CMD`, `BANDWIDTH_CMD` or `CERTIFIER_CMD` names one, within its own limit; otherwise its `MISSING` line
   names the command it lacks and its owner, and it gets no verdict. The script sets each owner's command by default where
   the tree has its piece and the node holds what the piece reads (its auditor key, the bandwidth audit's registered store).
@@ -89,11 +93,10 @@ negatives.
   and not composed, and the preflight refuses any onsite piece's command. `CERTIFIER_FRONT` is not a piece but how the
   requests are served, so a remote run may set it (with `LOAD=front`) to serve through the network certifier in front
   of its endpoint, its verdicts unchanged. An accept's clause says when its weights were held and their share of the checkpoint, where its
-  profile says so (PoUS's), and each δ of the block record's at which its quantity is not established. V3c runs last, within `V3C_TIMEOUT` and `V3C_AUDIT_TIMEOUT`, since nothing before it reads it, and writes its audit as the network
-  certifier's period reads it (`period.json`). With the certifier's piece split in two (`CERTIFIER_CHAIN_CMD` and
-  `CERTIFIER_PERIOD_CMD`), V3c runs before the pieces instead: the chain after its window commit, beside its audit
-  (within `CERTIFIER_TIMEOUT`, default 4h), and the period check on its `period.json` once both are done, whose answer
-  the certifier's piece reads. Each
+  profile says so (PoUS's), and each δ of the block record's at which its quantity is not established. With the
+  certifier's piece split in two (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), V3c's step also runs the chain after
+  its window commit, beside its audit (within `CERTIFIER_TIMEOUT`, default 4h), and the period check on its
+  `period.json` once both are done, whose answer the certifier's piece reads. Each
   step's verdict line is in `out/verdicts.txt`. The network certifier's piece, the longest, starts as soon as the window is
   picked. No line counts a window's requests: the serve dir's request lists, serve-openai's log and the load's records,
   timings and log stay on the node, and leave it only as `served_overhead.py metrics`' aggregate.
@@ -229,8 +232,17 @@ negatives.
   to its own on the step trace's clock, and splits the rest into losses by what the GPU was running at each sample.
   With `PYSPY=1`, `pyspy_steps.py` splits the same steps' host time by Python function and thread, from py-spy's trace.
 - `served_shares.py SERVE_DIR [--credit ANSWER.json]`: a served run's declared utilization (the work its step trace's
-  steps declare, the linears at θ and attention and the LM head at θ/2, over the loads' busy wall) and its accounted share
-  (the period credit's work at J10-R's 9/64 floor at θ, over the same wall), at the tensor and boost clock readings.
+  steps declare, the linears at θ and attention and the LM head at θ/2, over the loads' busy wall), term by term, and its
+  credited share (the MACs Pearl+'s verdict, `served_passes.py verify`'s answer, credited at θ, over the same wall), at
+  the tensor and boost clock readings.
+- `served_pearlplus.sh SERVE_DIR WINDOW PIECE_DIR`: PoUW's piece with Pearl+ (`served_verdicts.sh`'s `POUW=pearlplus`).
+  After the window's serve, it serves Llama-3.2-1B's BF16 checkpoint on the same card through `pouw:pearl-c-h100-v1-h3`
+  (`benchmarks/pouw/pearl_c_vllm/served_passes.py`, a prefill-heavy load), retains every pass, gives up the passes' rows
+  over a debit cap before the verifier's coin (`served_passes.py volunteer --device`: every word's counts from the card's
+  debit cubin, every `volunteer_pass.CROSS_CHECK`-th tile replayed on the CPU too; `PEARLPLUS_VOLUNTEER=cpu` replays
+  every tile on the CPU, far too slow for the default load), takes Pearl+'s verdict over all of them
+  (`served_passes.py verify`), and writes the piece through `served_verdicts.py pearlplus`: the verdict, the
+  linears' declared and credited shares (`served_shares.pearlplus_shares`), and why it credits nothing.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as

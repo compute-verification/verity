@@ -344,7 +344,6 @@
     {"file": "verity/core/protocols/certifier/tests/test_network_certifier_io_request.py", "count": 1},
     {"file": "verity/core/protocols/certifier/tests/test_network_certifier_io_request_phase9.py", "count": 1},
     {"file": "verity/core/protocols/certifier/tests/test_network_certifier_served.py", "count": 1},
-    {"file": "verity/core/protocols/certifier/tie_service.py", "count": 3},
     {"file": "verity/core/protocols/composition/tests/reference.py", "count": 1},
     {"file": "verity/core/protocols/network/lean/scripts/difftest_vectors.py", "count": 2},
     {"file": "verity/core/protocols/network/nci/lean/scripts/desc_difftest_vectors.py", "count": 1},

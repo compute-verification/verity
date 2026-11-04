@@ -1,6 +1,6 @@
 """demo-endpoint: an OpenAI endpoint in front of a decoder that isn't vLLM (the H200 demo's serving loop), for
 the network certifier's rehearsal (`certifier_serve.py rehearse --upstream URL --traffic varied`), writing the records a
-`verity-vllm serve-openai` endpoint writes, so network-e2e's endpoint binding and I/O tie read it unchanged.
+`verity-vllm serve-openai` endpoint writes, so network-e2e's endpoint binding reads it unchanged.
 
     python demo_endpoint.py --out DIR [--engine hash|seeded:SHAPE|MODULE:FACTORY] [--seed 0] [--host 127.0.0.1]
         [--port 0] [--eos 0] [--max-num-seqs 8] [--max-num-batched-tokens 2048] [--window-steps 16]
