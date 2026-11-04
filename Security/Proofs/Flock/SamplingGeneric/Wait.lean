@@ -3,6 +3,7 @@ module
 public import Definitions.Claims.SamplingGeneric
 public import Proofs.Flock.Claims.Sampling.KS
 public import Proofs.Flock.SamplingGeneric.Split
+public import Proofs.Flock.SamplingGeneric.Bits
 
 /-!
 # The compiled extractor's waits
@@ -40,12 +41,6 @@ open Claims Finset
 open Claims.Sampling (AuditStatement Partition InScope forkOn slack accList AllBad wait_bad_le S₁ card_S₁_le
   card_rpow_le_slack Pr_or_le Pr_acc_forkOn forkOn_forkOn' slack_pos OwnColl KSLin_of_ownColl)
 
-theorem foldr_max_nonneg : ∀ l : List ℝ, 0 ≤ l.foldr max 0
-  | [] => le_rfl
-  | a :: l => by
-    rw [List.foldr_cons]
-    exact le_max_of_le_right (foldr_max_nonneg l)
-
 theorem le_foldr_max {a : ℝ} : ∀ {l : List ℝ}, a ∈ l → a ≤ l.foldr max 0
   | [], h => by simp at h
   | b :: l, h => by
@@ -53,8 +48,6 @@ theorem le_foldr_max {a : ℝ} : ∀ {l : List ℝ}, a ∈ l → a ≤ l.foldr m
     rcases List.mem_cons.1 h with rfl | h
     · exact le_max_left _ _
     · exact le_max_of_le_right (le_foldr_max h)
-
-theorem maxBelow_nonneg (n : ℕ) (f : ℕ → ℝ) : 0 ≤ maxBelow n f := foldr_max_nonneg _
 
 theorem le_maxBelow {n : ℕ} (f : ℕ → ℝ) {u : ℕ} (hu : u < n) : f u ≤ maxBelow n f :=
   le_foldr_max (List.mem_map.2 ⟨u, List.mem_range.2 hu, rfl⟩)
@@ -95,12 +88,6 @@ theorem κ_le_κs (L : Compiled Coin A) (x : Msg) {u : ℕ} (hu : u < L.nPU x) :
 theorem γ_le_γs (L : Compiled Coin A) (x : Msg) {u : ℕ} (hu : u < L.nPU x) :
     A.γ (L.sh x u) / A.rounds (L.sh x u) ≤ L.γs x :=
   le_maxBelow (fun u => A.γ (L.sh x u) / A.rounds (L.sh x u)) hu
-
-theorem κ_nonneg (L : Compiled Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x : Msg) : 0 ≤ L.κ δ x := by
-  have := L.κs_nonneg x
-  have := slack_pos
-  unfold Compiled.κ
-  positivity
 
 end Numbers
 
