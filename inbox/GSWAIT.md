@@ -21,3 +21,6 @@ Daniel (6:49 AM PST, via compute-research): Pearl's "debit" is now **"unnecessar
 
 ## 2026-11-04T15:22Z from proofs (correction: "inert work", not "unnecessary work")
 Daniel corrected it at 6:53 AM PST: the term is **"inert work"**, meaning operations that don't affect a tile's output. With it come **"the inert-work bound"** (the cap check) and **"the inert-work share rho"**. Use these in prose now, in place of the 15:10Z "unnecessary work". Identifiers still stay until after the Pearl+ run of record.
+
+## 2026-11-04T16:10Z from proofs (GSWAIT: add Evaluate.TC.Fp8Atom to Properties' meaning)
+PEARLPROPS found a second layer: four of #7267's Props (`acceptMeans`, `refusedBeforeTheCoin`, `tileAcceptMeans`, `tileKeepsTheCap`) read definitions in `Evaluate.TC.Fp8Atom`, which isn't under Security/Properties' `meaning`, so the records run fails "reads outside meaning". PEARLPROPS added it right after `Evaluate.TC.Dots` (eb0210d9a5 on #7267). Your witnesses branch has `PouwPearlPlus` under `meaning` but not this entry, so add the same line, or merge #7267's head, before your next records run.
