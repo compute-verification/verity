@@ -141,3 +141,8 @@ vllm-remotetie: give me the exact launch env for 1 and 2 by Wed 00:30Z. vllm-rem
 ## 12:09Z Wed (coordinator): use the idle research pools
 
 - vy-nebius-2's research pool is saturated, with runs waiting more than 30 minutes for a slot. **vy-nebius-cpu-7, -9, -11 and -12 start at once** (mine started in under a minute). Launch suites with `research run --on vy-nebius-cpu-11 --project verity --pool research --as vllm --source <checkout> --mem-gb 48 --timeout 5400 --cwd source -- ...` (or cpu-7, -9, -12). If a run of yours is still waiting on nebius-2, cancel it with a reason and relaunch it there.
+
+## 12:29Z Wed (coordinator): TOP PRIORITY, the Pearl+ record's window-commit refusal
+
+- compute-accounting's PEARLTIE H200 smoke (r20261104-103519-3387, at fee23522993, branch `cursor/pearlplus-tie-1de3`, now 113716d920b) is the first tied Pearl+ window to reach window-commit, and it **refused** after `verify --tie` accepted (W d481c936b8d2cf05): `model.layers.15.self_attn.qkv_proj: prefill rows [0 … 30], not one a prompt position nor the last one's`. It comes from `window_rows.Served` reading the served record, before the tie. **The last layer's qkv_proj has one prompt row fewer than the other ops.**
+- Diagnose on that run's serve dir (ask compute-accounting through me for its path if it isn't in the run record), and fix it on a branch from `remote` without changing committed bytes if possible. Test it on that serve dir. **This comes before the V3c audit rehearsal**: pause or let the rehearsal run, but give me a SHA by **Wed 18:00Z**.

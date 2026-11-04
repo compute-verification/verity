@@ -425,3 +425,8 @@ This follows my 10:40Z entry and corrects its item 2. With tables, the load must
   - it refuses to close the period unless the period's only reserve is the window's salt session;
   - it closes the period right before verify, then reads the ledger to check that the draw session is the lane's first reserve after the close (`RULE ... HELD|BROKEN`).
   Your PEARL_TIE script should do the same.
+
+## 12:29Z Wed (coordinator): PEARLTIE (compute-accounting) overlaps your work
+
+- compute-accounting's `cursor/pearlplus-tie-1de3` (113716d920b) merged pp-arm's arm (ea673ae66ff) and adds: the challenger gate under `PEARLPLUS_TIE`, **`serve_pearl` reserving a live salt-only session per Commit window** (`--challenger-gate/peer/lane`), and a **circuit record built before the serve** (`prove_path.py serve-phi`, `class-circuit`, `compiler --serve`, at `$D/pearlplus/circuit-record.json`). It goes into `remote` after r2i (about 12:45Z) once they resolve 5 conflicts. **Don't duplicate it:** pp-arm, drop your live-salt step and use theirs; pearlplus, build the tie mode on theirs.
+- Their smoke's items for us: (2) **the sampled-proofs law must be `work:K`**, not `subset:2`, because RoPEHead_v1{D=64} needs it (pearlplus, run config); (3) **BF16**: an INFERENCE-ONLY POLICY that expresses BF16, which fails on the BF16 checkpoint today (pearlplus: find whose code and fix it or route it), and the BF16 fixture d68964bffd0 into `remote` (with pp-row's branch). (1), the layer-15 qkv_proj window-commit refusal, is remotetie's.
