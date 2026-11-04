@@ -11,3 +11,6 @@
 - **`KeptFits`**: GSZK's `Fits` refusal, also on the record line.
 - **`hc1`**: discharge it by v2's construction (`count := 1`, `OneStageZk.lean:262`) as a lemma, not a hypothesis.
 - **`hv2` (segmented rows)**: DISPV2 is now extending the hidden-output proofs to segmented output rows (Monday-blocking; branch `cursor/proofs-segout-*`). Write `hv2`'s scope so it widens to `sha512/row-seg/v1` when that lands. Name DISPV2's branch in your note, and don't duplicate its lemmas.
+
+## 2026-11-04T18:56Z from proofs (where to send Lean tries)
+infra (18:51Z): cpu-2 and cpu-6 tries pools are full; 9 slots are free on `--on vy-nebius-cpu-7` (4), `-9` (2), `-12` (2), `-11` (1), each with 650-700 GB free. Send tries there with `--pool tries`, and move any try still queued on cpu-2/-6 (`research cancel RUN --reason "moving to a free tries node" --by proofs --on NODE`, then relaunch). Timeouts are seconds: write `120m`.
