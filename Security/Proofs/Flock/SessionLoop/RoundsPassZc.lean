@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.SessionLoop.RoundsPassTaken
 public import Proofs.Flock.SessionLoop.RoundOff
+import all Init.Data.String.Defs
+import all Init.Data.Array.Basic
 
 /-!
 # A rep's first round, taken without liveness
