@@ -28,8 +28,9 @@ from the session transfer and the session's fork (`SamplingGeneric/Session.lean`
 the extractor's expected reruns and own calls (`SamplingGeneric/Bits.lean`, `ExpOwnOf`). `CompilerEfficient` and
 `ExpOwnOf` as stated are false at a sample that repeats a proof block (`Counter.not_compilerEfficient`,
 `Counter.not_expOwnOf`, `SamplingGeneric/Counter.lean`), and hold where the extractor extracts slot by slot
-(`Compiled.efficient_of_slots`, `Compiled.expOwn_of_slots`, `SamplingGeneric/Efficient.lean`). A session's
-coins in a compiled run, `coinsOf` and `place`, invert each other (`SamplingGeneric/Coins.lean`).
+(`Compiled.efficient_of_slots`, `Compiled.expOwn_of_slots`, `SamplingGeneric/Efficient.lean`). The opening checks'
+count they read, `Compiled.OpenCallsLe`, is the frozen `Sampling.OpenCallsLe` at Flock (`openCallsLe_of_deploy`). A
+session's coins in a compiled run, `coinsOf` and `place`, invert each other (`SamplingGeneric/Coins.lean`).
 -/
 
 @[expose] public section
@@ -58,5 +59,17 @@ theorem flockKS : FlockKS (Coin := Coin) (Col := Col) (T := T) := flockKS_of_com
 
 /-- The count form, at the miss of a count. -/
 theorem compilerKSCount : CompilerKSCount := compilerKSCount_of compilerKS
+
+/-- **The opening checks' count at Flock is the frozen one**: a compiled verifier over Flock at a deployed sampled
+verifier `D`'s Flock verifier, with `D`'s parser, commitment, reveal and opening count, meets `Compiled.OpenCallsLe`
+where `D` meets `Sampling.OpenCallsLe`, as the deployed verifier does (`SamplingDeploy.openCallsLe_deploy`). -/
+theorem openCallsLe_of_deploy [Zero Col] {H : Msg → Msg} (D : Claims.Sampling.Deploy Coin Col T)
+    (decode : List (ℕ × Col) → List T) (L : Compiled Coin (Arg.ofFlock D.flock decode)) (hparse : L.parse = D.parse)
+    (hcommit : L.commit = D.commit) (hreveal : L.reveal = D.reveal) (hcalls : L.openCalls = D.openCalls)
+    (h : Claims.Sampling.OpenCallsLe H D) : L.OpenCallsLe H := by
+  intro x s hs u v w
+  rw [hparse] at hs
+  rw [hcommit, hreveal, hcalls]
+  exact h x s hs u v w
 
 end Claims.SamplingGeneric
