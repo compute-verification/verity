@@ -768,6 +768,7 @@ def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_register
                     "--circuits", str(tmp_path / "c")]) == 0
     assert json.loads((tmp_path / "p.json").read_text()) == p
     assert [(f.name, f.read_bytes()) for f in (tmp_path / "c").iterdir()] == [(f"{pin}.txt", circuit)]
+    assert (tmp_path / "c" / f"{pin}.txt").samefile(audit / "window" / "m0" / "circuit.txt")
     assert json.loads(capsys.readouterr().out.splitlines()[-1].removeprefix("PERIOD ")) == {
         "verdict": "accept", "reason": None, "free": p["free"], "commitment": R.digest(rec), "program": rec["program"]}
     refused = RA.period(got.dir, _audited(got.dir, tmp_path / "r", accepted=False), {})["answer"]

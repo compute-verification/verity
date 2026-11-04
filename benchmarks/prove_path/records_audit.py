@@ -726,7 +726,7 @@ def period_circuits(audit: Path, program: Mapping[str, Any]) -> list[tuple[str, 
 def period(window: Path, audit: Path, pins: Mapping[str, str], circuits: Path | None = None) -> dict[str, Any]:
     """The window's audit as one compute audit of the network certifier's period (module docstring's ``period``):
     ``{answer, circuits, free, program, registration, steps}``, ``circuits`` each root template node's ``{template,
-    sha512}`` (`period_circuits`), each file copied into ``circuits`` as ``<sha512>.txt`` where given. ``pins`` are the verifier's
+    sha512}`` (`period_circuits`), each file linked into ``circuits`` as ``<sha512>.txt`` where given (copied across file systems). ``pins`` are the verifier's
     (`pins_of`). ValueError where the circuit isn't the one the registration binds, the window commits no `TIED` value its
     circuit reads, the audit wrote no Program or another than the registration names, a template's circuit file is missing
     or not its pin, or its answer commits to another registration; RuntimeError where the audit opened the advice
@@ -756,7 +756,11 @@ def period(window: Path, audit: Path, pins: Mapping[str, str], circuits: Path | 
     if circuits is not None:
         circuits.mkdir(parents=True, exist_ok=True)
         for _t, pin, f in composed:
-            shutil.copyfile(f, circuits / f"{pin}.txt")
+            (dst := circuits / f"{pin}.txt").unlink(missing_ok=True)
+            try:
+                os.link(f, dst)
+            except OSError:
+                shutil.copyfile(f, dst)
     return {"answer": answer, "circuits": [{"template": t, "sha512": pin} for t, pin, _f in composed],
             "free": count["free"], "program": program, "registration": rec, "steps": 0}
 
@@ -1076,8 +1080,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--audit", required=True, type=Path, help="the audit's --out: summary.json, window/program.json, "
                    "window/audit.json")
     p.add_argument("--out", required=True, type=Path, help="the period's audit entry, JSON")
-    p.add_argument("--circuits", required=True, type=Path, help="the directory each template's circuit file is copied "
-                   "into as <sha512>.txt, the entry's circuits naming it (`period_circuits`)")
+    p.add_argument("--circuits", required=True, type=Path, help="the directory each template's circuit file is linked "
+                   "into as <sha512>.txt (copied across file systems), the entry's circuits naming it (`period_circuits`)")
     p.add_argument("--pin", action="append", default=[], type=pin_arg, metavar="NAME=ROOT", help="as count's")
     p.add_argument("--pins", action="append", default=[], metavar="FILE", help="as count's")
     a = ap.parse_args(argv)
