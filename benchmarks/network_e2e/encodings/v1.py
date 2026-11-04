@@ -13,7 +13,8 @@ them as witness):
   its `max_tokens`; and its release, the bucket a of its connection's last ingress cell (`Request.end`), from which the
   server holds its whole body;
 - each request's output ids, its id events' `token_id`s in order, and each output's release bucket (`Request.release`),
-  which the warden's fixed schedule sets (egress cell i in bucket s + Δ_nc + ⌊i/r⌋, s its connection's admission).
+  which the network certifier's fixed schedule sets (egress cell i in bucket s + Δ_nc + ⌊i/r⌋, s its connection's
+  admission).
 The reference order is the warden's release order, the requests by (a, ordinal) (`release_order`).
 
 **Sent, the order**: the engine doesn't admit in that order. It admits in the API server's body-read order, which
