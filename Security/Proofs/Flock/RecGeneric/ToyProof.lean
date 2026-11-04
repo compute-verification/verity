@@ -33,7 +33,7 @@ open Claims.SamplingGeneric (Arg)
 
 theorem getD_take_of_lt {β : Type} (l : List β) (d : β) {i n : ℕ} (hi : i < n) :
     (l.take n).getD i d = l.getD i d := by
-  rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_take, if_pos hi]
+  rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_take, ite_eq_left hi]
 
 theorem getD_finRange_map {β : Type} {k : ℕ} (f : Fin k → β) (d : β) {i : ℕ} (hi : i < k) :
     ((List.finRange k).map f).getD i d = f ⟨i, hi⟩ := by
@@ -99,8 +99,11 @@ theorem run_fork_get {Coin : Type} [Inhabited Coin] (H : Msg → Msg) {Ω : Type
     ⟨[], [], [], .rej⟩ (by simpa using hag.2.1 hj)
   have hn : new = (run H P V x ω r).msgs.take j := by
     rw [hnew]
-    simpa using hag.1.symm
+    simp only [List.length_nil, List.drop_zero]
+    exact hag.1.symm
   subst hn
+  change (stepWith H P x ω (fun as => V.next x as ((List.range as.length).map (coinSeq (fork j r d)))) (V.k x) [] []
+    ⟨[], [], [], .rej⟩).msgs[j]? = _
   simpa [Nat.min_eq_left hj.le] using hget
 
 /-! ## The outer extraction -/
@@ -121,7 +124,8 @@ theorem Compiled.EO_fst {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited 
     (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (r : Fin (L.V.k x) → Coin)
     (c : L.EO.C x) {w : List (Msg × A.W)} (h : (L.EO.eval H P x ω r c).1 = some w) :
     (run H P L.V x ω r).out = .acc ∧
-      w.map Prod.fst = (List.finRange (L.nS x)).map fun s => (L.stmts x (run H P L.V x ω r).msgs).getD s [] := by
+      w.map Prod.fst =
+        (List.finRange (L.nS x)).map fun s : Fin (L.nS x) => (L.stmts x (run H P L.V x ω r).msgs).getD s.val [] := by
   have hacc : (run H P L.V x ω r).out = .acc := by
     by_contra hn
     simp [Extractor.eval, Compiled.EO, RP.eval, Trace.seen, hn] at h
@@ -141,10 +145,8 @@ theorem run_echoV {Coin : Type} [Fintype Coin] [Inhabited Coin] [DecidableEq Coi
           if ((P.next x [] ω).eval H).1 = x ∨ coinSeq c 0 = default then .acc else .rej)],
         if ((P.next x [] ω).eval H).1 = x ∨ coinSeq c 0 = default then .acc else .rej⟩ ∧
     (run H P (echoArg Coin).V x ω c).vLog = [] := by
-  have hk : (echoArg Coin).V.k x = 1 := rfl
-  by_cases h : ((P.next x [] ω).eval H).1 = x ∨ coinSeq c 0 = default
-  · simp [run, hk, stepWith, echoArg, echoV, OC.eval, Trace.seen, h]
-  · simp [run, hk, stepWith, echoArg, echoV, OC.eval, Trace.seen, h]
+  simp [run, stepWith, echoArg, echoV, OC.eval, Trace.seen]
+  split_ifs <;> simp
 
 /-- **`echoArg` is knowledge sound** at `κ = 1/|Coin|`, `γ = 0`. -/
 theorem echoArg_KS {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Coin]
@@ -168,7 +170,7 @@ theorem echoArg_KS {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
   have hc : coinSeq s.2.1 0 = default := by
     by_contra hc
     simp [hout, hne, hc] at hacc
-  rwa [coinSeq, dif_pos h0] at hc
+  rwa [coinSeq, dite_eq_left h0] at hc
 
 /-! ## The echo compiler's verifier -/
 
@@ -201,11 +203,11 @@ theorem echoCV_next_acc {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited 
   · simp [Compiled.echo, echoCV, h0, h1, h2, OC.eval] at h
   by_cases h3 : as.length ≤ 2 * IV.k x + 3
   · simp only [Compiled.echo, echoCV, h0, h1, h2, h3, ↓reduceIte, OC.eval] at h
-    split_ifs at h <;> cases h
+    split_ifs at h
   simp only [Compiled.echo, echoCV, h0, h1, h2, h3, ↓reduceIte, OC.eval_bind, OC.eval] at h
   refine ⟨h0, by omega, ?_⟩
   by_contra hv
-  rw [if_neg hv] at h
+  rw [ite_eq_right hv] at h
   cases h
 
 /-- **An accepted run of `echoCV`** takes all `2k + 4` rounds, `k > 0`, and the inner verifier's replay of its first
@@ -283,7 +285,7 @@ theorem echo_fork {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] 
     rw [hget]
     exact congrArg (fun b => some (a, b)) hr
   exact RecDeploy.stepWith_rej_out H P x ω _ ((Compiled.echo IV).V.k x) o [] [] ⟨[], [], [], .rej⟩ a
-    (by simpa using hr')
+    (by simp only [List.length_nil, Nat.zero_add]; exact hr')
 
 /-- **The echo compiler runs session `s` as `echoV`** at its staged statement. -/
 theorem echo_runs {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Coin]
@@ -299,7 +301,8 @@ theorem echo_runs {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] 
       (((Compiled.echo IV).stmts x (run H P (Compiled.echo IV).V x ω r).msgs).getD ↑s []) [] ()).eval H).1 =
       ((P.next x (((run H P (Compiled.echo IV).V x ω r).msgs.take (IV.k x + 3 + ↑s)).map RecDeploy.histOf)
         ω).eval H).1 := by
-    simp [sessProver, RecDeploy.histOf]
+    simp only [sessProver, List.append_nil]
+    rfl
   have hx : ((Compiled.echo IV).stmts x (run H P (Compiled.echo IV).V x ω r).msgs).getD ↑s [] =
       ((run H P (Compiled.echo IV).V x ω r).msgs.map Prod.fst).getD ↑s [] := by
     show (((run H P (Compiled.echo IV).V x ω r).msgs.take (IV.k x)).map Prod.fst).getD ↑s [] = _
@@ -316,10 +319,11 @@ theorem echo_runs {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] 
     ω).eval H).1 = a at hF ⊢
   generalize ((run H P (Compiled.echo IV).V x ω r).msgs.map Prod.fst).getD ↑s [] = xS at hF ⊢
   generalize coinSeq d (IV.k x + 3 + ↑s) = c at hF ⊢
+  rw [List.getD_eq_getElem?_getD] at hF hrej
   by_cases hcond : a = xS ∨ c = default
-  · rw [if_pos hcond] at hF ⊢
+  · rw [ite_eq_left hcond] at hF ⊢
     simp [Compiled.echo, Trace.seen, hF]
-  · rw [if_neg hcond] at hF ⊢
+  · rw [ite_eq_right hcond] at hF ⊢
     simp [Compiled.echo, Trace.seen, hF, hrej (by rw [hF])]
 
 /-- **The echo compiler meets the outer sessions' contract.** -/
@@ -366,7 +370,7 @@ theorem echo_forks {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     rw [echo_wits H IV P x ω r c hG.2 hR (by omega), echo_wits H IV P x ω (fork j r r') c' hG'.2 hR' (by omega)]
     exact Claims.Recursion.run_fst_getD H P _ x ω i fun i' hi' => by
       show r i' = if i'.val < j then r i' else r' i'
-      rw [if_pos (show i'.val < j by omega)]
+      rw [ite_eq_left (show i'.val < j by omega)]
   have hc : ∀ i < j, coinSeq (fun i : Fin (IV.k x) => coinSeq r i.val) i =
       coinSeq (fun i : Fin (IV.k x) => coinSeq (fork j r r') i.val) i := by
     intro i hi
