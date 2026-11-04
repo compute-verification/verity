@@ -197,9 +197,11 @@ SAMPLED_CASES = {R.UNDECIDED: empty_draws().map(form_case),
                                      OS.changed_audits(most=2).map(form_case))}
 
 NP = R.PERIOD
-#: The period check's changes by the verdict they aim at (`case` breaks the line `serve` reads, as PoUW's `case-*`).
-PERIOD_CASES = {v: tuple(m for m, x in NP.EXPECT.items() if x == v and m != "case")
-                for v in (R.ACCEPT, R.REJECT, R.UNDECIDED)}
+#: The period check's changes by the verdict they aim at (`case` breaks the line `serve` reads, as PoUW's `case-*`): the
+#: clock form's, and an honest rows-form period among the rejections, since the deployed check takes a rows-form scan
+#: only as a pinned one (`NetworkCheck.Period.scanPins`), which no generated period's stand-in scan is.
+PERIOD_CASES = {v: tuple(m for m, x in NP.EXPECT.items() if x == v and m != "case" and NP.PC.form_of(m) == "clock")
+                + (("rows-honest",) if v == R.REJECT else ()) for v in (R.ACCEPT, R.REJECT, R.UNDECIDED)}
 
 #: The inference-only policy's changes by the verdict they aim at: none, or one that rejects. It is never undecided.
 INFERENCE_CASES = {v: tuple(m for m, (x, _) in R.INFERENCE.EXPECT.items() if x == v) for v in (R.ACCEPT, R.REJECT)}
@@ -747,13 +749,15 @@ def test_remote_network_is_remotes_verdict_and_the_network_certifiers(remote_net
     """Remote with the network certifier over remote's made components (`remote_made`), whose sampled proofs refuses R
     (`test_remote_on_one_record_that_reuses_the_windows_registration`), beside a period of the network certifier whose
     compute audits are R (`certifier_with`, `on_r`), accepted, with a forged certificate, or with R's audit rejected or
-    undecided, or whose compute audits are on records of their own (`period_case.build`'s, in either form, accepted or
-    undecided), one with R's audit and another, or none. Each component answers as it does alone and the composite
-    rejects, as remote does; its `windows` tie holds but beside the period whose window names its own Commit record, and
-    its `egress` tie holds exactly where every compute audit is R, which the composite reads only where its components
-    don't reject (`CoreRemoteNetwork`'s guards hold it there). Its executable, `product IDS serve` over its subprotocols
-    and the Python agree on each, and the executables name sampled proofs' refusal, after the network certifier's where
-    that rejects too."""
+    undecided, or whose compute audits are on records of their own (`period_case.build`'s: a clock-form period with R's
+    audit and a rows-form period's, or with none; and rows-form periods, accepted or undecided as the unpinned check
+    answers them, which the deployed check refuses at their parameters, as no class pins their stand-in scans). Each
+    component answers as it does alone and the composite rejects, as remote does; its `windows` tie holds but beside the
+    period whose window names its own Commit record, and its `egress` tie holds exactly where every compute audit is R
+    and is read nowhere beside a period refused at its parameters, which commits to nothing; the composite reads it only
+    where its components don't reject (`CoreRemoteNetwork`'s guards hold it there). Its executable, `product IDS serve`
+    over its subprotocols and the Python agree on each, and the executables name sampled proofs' refusal, after the
+    network certifier's where that rejects too."""
     policy, period, own, audit, _, made = remote_made()
     refused = f"{R.SAMPLED_PROOFS.id} reject: the audit's checks failed: registered"
     rows = [(certifier_with("honest", [on_r(made)]), period, R.ACCEPT, True),
@@ -762,8 +766,8 @@ def test_remote_network_is_remotes_verdict_and_the_network_certifiers(remote_net
             (certifier_with("honest", [on_r(made, R.REJECT)]), period, R.REJECT, True),
             (certifier_with("honest", [on_r(made, R.UNDECIDED)]), period, R.UNDECIDED, True),
             (certifier_with("honest", [on_r(made)]), own, R.ACCEPT, True)]
-    for m, verdict in (("rows-honest", R.ACCEPT), ("rows-audit-undecided", R.UNDECIDED)):
-        rows.append((as_component(R.CERTIFIER, NP.build(m, 0, small=True)), period, verdict, False))
+    for m in ("rows-honest", "rows-audit-undecided"):
+        rows.append((as_component(R.CERTIFIER, NP.build(m, 0, small=True)), period, R.REJECT, None))
     j = NP.build("rows-honest", 0, small=True)
     c, e = (json.loads(bytes.fromhex(j[k])) for k in ("commitment", "evidence"))
     rows += [(certifier_with("honest", []), period, R.ACCEPT, False),
@@ -773,7 +777,8 @@ def test_remote_network_is_remotes_verdict_and_the_network_certifiers(remote_net
     for certifier, period_, verdict, held in rows:
         case = remote_case([certifier, policy, period_, audit], R.REMOTE_NETWORK)
         assert R.REMOTE_NETWORK.verdicts(case) == [verdict, R.ACCEPT, R.ACCEPT, R.REJECT], R.REMOTE_NETWORK.verdicts(case)
-        assert R.REMOTE_NETWORK.tied(case) == [(R.WINDOWS.what, period_ is period), (R.EGRESS.what, held)], (
+        egress = [] if held is None else [(R.EGRESS.what, held)]
+        assert R.REMOTE_NETWORK.tied(case) == [(R.WINDOWS.what, period_ is period), *egress], (
             R.REMOTE_NETWORK.tied(case))
         python = R.REMOTE_NETWORK.answer(case)
         assert python["verdict"] == R.REJECT, python
@@ -782,8 +787,8 @@ def test_remote_network_is_remotes_verdict_and_the_network_certifiers(remote_net
             assert out["reason"].endswith(refused), out
             assert out["reason"].startswith(f"{R.CERTIFIER.id} reject: ") == (verdict == R.REJECT), out
         seen[verdict, held] += 1
-    assert seen == {(R.ACCEPT, True): 3, (R.REJECT, True): 2, (R.UNDECIDED, True): 1, (R.ACCEPT, False): 3,
-                    (R.UNDECIDED, False): 1}, dict(seen)
+    assert seen == {(R.ACCEPT, True): 3, (R.REJECT, True): 2, (R.UNDECIDED, True): 1, (R.ACCEPT, False): 2,
+                    (R.REJECT, None): 2}, dict(seen)
 
 
 @pytest.mark.slow

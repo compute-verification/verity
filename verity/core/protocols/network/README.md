@@ -33,6 +33,7 @@ package's.
 | `network-check` | `verity/network-certificate/v4` | `NetworkCheck.Check` | one spatial unit's certified link-windows: every egress link in order, then every ingress link, under the certifier's LMS key in its session | `audit.py`'s `Audit` (`check_link`, `check_ingress_link`) |
 | `network-records` | `verity/network-records/v3` | `NetworkCheck.Records` | the same audit over raw, committed and certified records, with the egress grid compared or not | `audit.py`'s `Audit` |
 | `network-period` | `verity/certifier/v0` | `NetworkCheck.Period` | a certification period, the onsite composite protocol's communication component (below) | `tests/period_case.py` |
+| `network-period-unpinned` | `verity/certifier/v0` | `NetworkCheck.Period` (`unpinned`) | the same, with no scan Program pinned: a test's, for the generated rows-form periods | `tests/period_case.py` (`reference(case, pins=None)`) |
 | `network-check-difftest` | none | `NetworkCheck.Difftest` | that `certificate.py`'s encodings are `NetworkCheck.Certificate`'s, byte for byte | `certificate.py` |
 
 The other modules:
@@ -54,7 +55,9 @@ one-stage, one answer per registered sampling block of the workload). Its parame
 
 - **the clock form**: each link-window proved, both its ends certified and its clock certified (`service.LinkWindows`);
 - **the rows form**: the network certifier's own run, each link-window's cells committed as rows under one fixed
-  schedule a direction, its records certified, and the scan's one-stage answer for it.
+  schedule a direction, its records certified, and the scan's one-stage answer for it. The scan's Program is the one
+  pinned at the schedule's digest, one a scan class (`scanPins`, and `scan_service.SCAN_PINS` in Python); the
+  parameters name no other.
 
 It accepts when every link-window passes its form's check and every compute audit accepted. It then publishes `K`, the
 bits a covert sender in the server can move through the network certifier in the period, as
@@ -68,6 +71,7 @@ bits a covert sender in the server can move through the network certifier in the
 | `network-period` | `benchmarks/network_traces/certifier_piece.py`, `block_certifier.py` and `scan_period.sh` |
 | `network-check-difftest` | the Lean check, on the vectors below |
 | `network-check` | only its own test, `tests/test_network_check_protocol.py`; the records run `network-records` |
+| `network-period-unpinned` | only its own test, `tests/test_network_period_protocol.py` |
 
 - `lean_audit.Audit` is `audit.Audit` with every verdict taken from one `network-records verdicts` process.
   `VERITY_NETWORK_RECORDS_EXE` names a built executable; without it, the first request runs `lake build
@@ -84,7 +88,9 @@ bits a covert sender in the server can move through the network certifier in the
   one change aimed at one path of the check (`MUTATIONS`).
 - `test_network_records_protocol.py`: `network-records serve` and `verdicts`, with the grid compared and without it, on
   the same units' records published raw, committed, certified or mixed.
-- `test_network_period_protocol.py`: `network-period serve` against `period_case.py`'s mirror, in both forms.
+- `test_network_period_protocol.py`: `network-period-unpinned serve` against `period_case.py`'s mirror with no scan
+  pinned, in both forms, and `network-period serve` refusing the generated rows-form periods, whose stand-in scans no
+  class pins.
 - `test_lean_audit.py`: `lean_audit.Audit` against `audit.Audit`, which must give the same verdicts, clock, `accepted`
   and `violations`.
 - `test_nci_*.py`: the Python halves of the inference-only policy check's difftests, whose Lean is in `nci/`.

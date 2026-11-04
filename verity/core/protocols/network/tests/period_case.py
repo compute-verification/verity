@@ -9,8 +9,10 @@ under its LMS key (`certifier.certificate`), Σ_sync (`certifier.schedule`), one
 registration record is ASCII-only, where its canonical JSON is Lean's), and in the rows form
 the schedule (`warden.WardenParams`) and the verifier's read of each row registration
 (`warden_rows.check_registration`), and the scan's terms read off its Program's descriptor (`_scan`), as each compute
-audit's units and their committed bits are read off its own (`_audit`). Its verdict,
-public, profile and digest are Lean's exactly; its reason is its own. Public is `K` and its terms over
+audit's units and their committed bits are read off its own (`_audit`). The deployed check takes a rows-form scan only
+as the Program pinned at its schedule (`SCAN_PINS`, `pinned`), which no generated period's stand-in scan is, so
+`reference(case, pins=None)` is the check with none pinned (`network-period-unpinned`'s), which the difftest holds them
+to. Its verdict, public, profile and digest are Lean's exactly; its reason is its own. Public is `K` and its terms over
 `PeriodLeakAccepted`'s windows (the clock form's audits, the rows form's scans, all at one δ), each with its `delta`,
 and `eps`, the union of those deltas as an exact ratio string.
 
@@ -81,6 +83,7 @@ from verity_difftest import protocol as P
 from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.certificate import (SALT_BYTES, Certificate, Direction, LmsKey,
                                                             certificate_digest, clock_digest)
+from verity.core.protocols.certifier.scan_service import SCAN_PINS
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.certifier.warden import WardenParams
 from verity.core.protocols.pouw import core_check as CC
@@ -1330,8 +1333,24 @@ def check(p: Params, c: Commitment, e) -> tuple:
         "link": p.link, "windows": p.windows}
 
 
-def reference(case) -> dict:
-    return P.answer(ID, case, params=params, commitment=commitment, evidence=evidence, check=check,
+def pinned(j, pins: dict[str, str] | None = SCAN_PINS) -> Params:
+    """`pinnedScan`: the parameters, the rows form's scan held to the Program ``pins`` holds at its schedule's digest
+    (`scanPinned`), or to none when ``pins`` is None."""
+    p = params(j)
+    if pins is not None and p.schedule is not None:
+        want = pins.get(p.schedule.digest.hex())
+        if want is None:
+            raise D.Reject("schedule: no scan Program is pinned at its digest (scanPins)")
+        if want != p.program:
+            raise D.Reject("program: not the scan Program pinned at the schedule's digest (scanPins)")
+    return p
+
+
+def reference(case, pins: dict[str, str] | None = SCAN_PINS) -> dict:
+    """The deployed check's answer (`network-period`'s), the rows form's scans held to `SCAN_PINS`; with ``pins=None``
+    the check with none held (`network-period-unpinned`'s), which the generated rows-form periods take, as no class pins
+    their stand-in scans."""
+    return P.answer(ID, case, params=lambda j: pinned(j, pins), commitment=commitment, evidence=evidence, check=check,
                     digest=lambda c: tagged_sha512(COMMITMENT_TAG, c.bytes))
 
 
@@ -2672,7 +2691,8 @@ def verdict_of(kind: str) -> str:
 
 def case(kind: str, seed: int = 0, form: str = "clock") -> dict:
     """A small period of the form (`build(..., small=True)`: the toy key, as few link-windows and audits as its change
-    needs) aimed at `kind`, its change and every choice drawn from `seed`."""
+    needs) aimed at `kind`, its change and every choice drawn from `seed`; in the rows form, at the unpinned check's
+    verdict (`reference(case, pins=None)`), since the deployed check refuses its stand-in scan."""
     ms = AIMS[form][kind]
     return build(ms[random.Random(f"network-period {kind} {seed}").randrange(len(ms))], seed, small=True)
 
@@ -2682,10 +2702,10 @@ def kinds(form: str = "clock") -> tuple[str, ...]:
     return tuple(k for k in KINDS if AIMS[form][k])
 
 
-def cases(seed: int = 0, form: str = "clock") -> dict[str, tuple[dict, dict]]:
-    """One small period of the form of each kind it can be aimed at (`kinds`) with its answer,
-    `{kind: (case, answer)}`."""
-    return {k: (c, answer(c)) for k in kinds(form) for c in [case(k, seed, form)]}
+def cases(seed: int = 0, form: str = "clock", pins: dict[str, str] | None = SCAN_PINS) -> dict[str, tuple[dict, dict]]:
+    """One small period of the form of each kind it can be aimed at (`kinds`) with its answer under ``pins``
+    (`reference`), `{kind: (case, answer)}`."""
+    return {k: (c, reference(c, pins)) for k in kinds(form) for c in [case(k, seed, form)]}
 
 
 def audits_of(case: dict) -> list[tuple[dict, dict, dict]]:

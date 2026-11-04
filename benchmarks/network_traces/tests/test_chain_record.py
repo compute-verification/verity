@@ -415,7 +415,8 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
     assert why(period_answer=_period(tmp_path / "mixed", foreign, answer)) == (
         "the case isn't the answer's: its commitment's digest is another")
     rows = period.build("rows-honest", 0, small=True)
-    assert why(period_answer=_period(tmp_path / "rows", rows, period.reference(rows))).startswith("a rows-form answer")
+    accepted = period.reference(rows, pins=None)  # no class pins the generated period's stand-in scan
+    assert why(period_answer=_period(tmp_path / "rows", rows, accepted)).startswith("a rows-form answer")
     assert why(period_answer=_period(tmp_path / "k", case, answer | {"public": answer["public"] | {"K": 1}})) == (
         f"network-period check on the case answers accept with K {answer['public']['K']}, not the given answer: it "
         "isn't the verifier's on this case")

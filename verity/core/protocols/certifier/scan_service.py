@@ -250,6 +250,26 @@ def _sha512(obj: Any) -> str:
     return hashlib.sha512(canonical_json(obj)).hexdigest()
 
 
+#: The scan Program of each scan class, at its schedule's digest (`WardenParams.digest`): the SHA-512 of the Program its
+#: egress tie builds at G = 1 (`EgressTie.program`), at `scan_zk`'s classes w63, w63k4 and test. The period check's rows
+#: form takes only these (`NetworkCheck.Period.scanPins`, its Lean copy), so its parameters' `program` is read from
+#: here, never from the prover's registration; `benchmarks/network_traces/tests/test_scan_pins.py` rebuilds each.
+SCAN_PINS: dict[str, str] = {
+    "5221001234d37d159cda600b964b314e6a7b7e3c0bba575079fdbda33b30b22d"
+    "6e29eadc8fcefebb04249069fe6bb9c45526c20355f2a7c6483de53c100341f3":
+        "94b8a464f202d7b162abbcadec219918129787b4fd80e889806cbc803395d457"
+        "f3ca3f8637ac82bf752cebeb112eb4866ced0cea8089a060868f2e01b94b4b03",
+    "2f89374f336e62febfddc28b0204fae2f508e99e7a0744cb64b5c806f4fc1551"
+    "c3c3b5b2aa21b797cf74e4b427a349439569e042486da0c7496000307505f88f":
+        "e3ccfba13b2403d4704afeea08045189350bd06f7a3c66e12de124e1fb1a396e"
+        "996afcd5362983b503e8708038690890547c0b41f51d98ed2822ea820b39c855",
+    "b532b2d852347461762533e99f764499e1c0f98c93ac1102c33538467f0c098d"
+    "49f619a56b0dfe4844f43cfcf99e655613f07e45ee4e1a39d95e432579171182":
+        "5d12d735ed043cc63d3be87268b4afda07afe2d7e2571b897f1dda131d9facc8"
+        "2eebe89c783b23694c58ebb8fc959c62fd0b79e4aea0c217dde64f4f28fbbc68",
+}
+
+
 @dataclass(frozen=True)
 class EgressTie:
     """The egress tie on one link, every field public: the link, the network certifier's schedule

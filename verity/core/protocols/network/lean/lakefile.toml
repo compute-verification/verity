@@ -1,5 +1,5 @@
 name = "network_check"
-defaultTargets = ["NetworkCheck", "network-check-difftest", "network-check", "network-records", "network-period"]
+defaultTargets = ["NetworkCheck", "network-check-difftest", "network-check", "network-records", "network-period", "network-period-unpinned"]
 
 [leanOptions]
 autoImplicit = false
@@ -56,3 +56,8 @@ root = "NetworkCheck.RecordsMain"
 [[lean_exe]]
 name = "network-period"
 root = "NetworkCheck.PeriodMain"
+
+# The period check with no scan pinned (`NetworkCheck.Period.unpinned`), the difftest's on the generated rows-form periods.
+[[lean_exe]]
+name = "network-period-unpinned"
+root = "NetworkCheck.PeriodUnpinnedMain"

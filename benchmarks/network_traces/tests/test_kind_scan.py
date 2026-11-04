@@ -59,11 +59,16 @@ L_A, REALIZED = 8388608, 392
 
 @pytest.fixture(scope="module")
 def period():
+    """`period_case`, with the rows-form accept's stand-in scan pinned at its schedule (`SCAN_PINS`), as a class's
+    scan is."""
     spec = importlib.util.spec_from_file_location("period_case", PERIOD_CASE)
     mod = importlib.util.module_from_spec(spec)
     sys.modules["period_case"] = mod
     spec.loader.exec_module(mod)
-    return mod
+    p = mod.params(mod.case("accept", 1, "rows")["params"])
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(mod.SCAN_PINS, p.schedule.digest.hex(), p.program)
+        yield mod
 
 
 def _case(period, v3c: dict = V3C_WINDOW) -> tuple[dict, dict]:

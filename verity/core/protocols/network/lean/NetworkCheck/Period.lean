@@ -72,7 +72,10 @@ certifier's one fixed schedule (`warden.WardenParams`: each a positive integer, 
 header, B, S = `lanes` · `slots` and T = `window` u32s, and `every`, a slot stride's buckets, dividing T, so each
 link-window is T / `every` timesteps of `lanes` Program slots, `Schedule.programSlots` and `Schedule.windowPrograms`),
 whose digest `WardenParams.digest` every registration binds; its `program` is the scan's registered Program, the
-descriptor's SHA-512 (`partition_object.program_sha512`), and its `link` the run's (`warden_serve.LINK`), whose fails record is certified under the link `<link>-fails`. Its
+descriptor's SHA-512 (`partition_object.program_sha512`), which must be the scan Program pinned at the schedule's
+digest (`scanPins`, one a scan class: a schedule no class pins, or another Program at one, is refused, `pinnedScan`),
+so the parameters name the Program the class's generator builds, never one the prover registered; and its `link` the
+run's (`warden_serve.LINK`), whose fails record is certified under the link `<link>-fails`. Its
 `cells` must be the schedule's caps over the period (`Schedule.caps`): `egress_cells` for each of the
 `lanes · m · window` connections the network certifier can carry in `m` link-windows, since it admits a connection at a
 bucket's start only while fewer than `lanes` are live and serves it in that bucket. Any other list, an empty one
@@ -879,6 +882,45 @@ def paramsOf (j : Json) : V Params := do
         {cells.size}"
   pure { audits, cells, first, jitter, link, lms, key, session, program, circuit, form, windows }
 
+/-- The scan Programs the rows form takes, one a scan class, each at its schedule's digest (`Schedule.digest`): the
+SHA-512 of the Program the class's generator builds at G = 1 (`scan_service.EgressTie.program`, the descriptor
+`scan_zk` registers), for `scan_zk`'s classes `w63`, `w63k4` and `test`, in that order. A schedule is one class's, so
+a class that serves another's schedule (`ingress_scan.Class.serves`) is no pin. A new class, or a change to the scan's
+generator, is pinned here and in `scan_service.SCAN_PINS`, which `benchmarks/network_traces/tests/test_scan_pins.py`
+rebuilds. -/
+def scanPins : List (String × String) :=
+  [("5221001234d37d159cda600b964b314e6a7b7e3c0bba575079fdbda33b30b22d\
+      6e29eadc8fcefebb04249069fe6bb9c45526c20355f2a7c6483de53c100341f3",
+    "94b8a464f202d7b162abbcadec219918129787b4fd80e889806cbc803395d457\
+      f3ca3f8637ac82bf752cebeb112eb4866ced0cea8089a060868f2e01b94b4b03"),
+   ("2f89374f336e62febfddc28b0204fae2f508e99e7a0744cb64b5c806f4fc1551\
+      c3c3b5b2aa21b797cf74e4b427a349439569e042486da0c7496000307505f88f",
+    "e3ccfba13b2403d4704afeea08045189350bd06f7a3c66e12de124e1fb1a396e\
+      996afcd5362983b503e8708038690890547c0b41f51d98ed2822ea820b39c855"),
+   ("b532b2d852347461762533e99f764499e1c0f98c93ac1102c33538467f0c098d\
+      49f619a56b0dfe4844f43cfcf99e655613f07e45ee4e1a39d95e432579171182",
+    "5d12d735ed043cc63d3be87268b4afda07afe2d7e2571b897f1dda131d9facc8\
+      2eebe89c783b23694c58ebb8fc959c62fd0b79e4aea0c217dde64f4f28fbbc68")]
+
+/-- The rows form's `program` is the scan Program `pins` holds at the schedule's digest `d`, else why not. -/
+def scanPinned (pins : List (String × String)) (d : ByteArray) (program : String) : V Unit := do
+  match pins.lookup (Flock.hexOf d) with
+  | none => throw "schedule: no scan Program is pinned at its digest (scanPins)"
+  | some q => unless q == program do throw "program: not the scan Program pinned at the schedule's digest (scanPins)"
+
+#guard scanPins.all fun (s, p) => isDigest s && isDigest p
+#guard (scanPins.map (·.1)).eraseDups.length == scanPins.length
+#guard scanPins.all fun (s, p) => match Flock.unhex s with
+  | .ok d => (scanPinned scanPins d p).toBool && !(scanPinned scanPins d s).toBool
+  | .error _ => false
+#guard !(scanPinned scanPins .empty (scanPins.map (·.2)).head!).toBool
+
+/-- The parameters with the rows form's scan held to `pins` (`scanPinned`); `none` holds none, the test-only
+`unpinned` check's. -/
+def pinnedScan (pins : Option (List (String × String))) (p : Params) : V Params := do
+  if let (some ps, .rows _ d _) := (pins, p.form) then scanPinned ps d p.program
+  pure p
+
 /-- A window record of one of `Flock.WindowRecord.FORMATS`. -/
 def registrationOf (j : Json) (ctx : String) : V Json := do
   let format ← Flock.J.str j "format" ctx
@@ -1671,20 +1713,29 @@ def publicJson (x : Public) : Json :=
 def profileJson (pr : Profile) : Json :=
   Json.mkObj [("link", .str pr.link), ("windows", toJson pr.windows)]
 
-def protocol : Core.Protocol where
+/-- The period check with the rows form's scan held to `pins` (`pinnedScan`): `protocol` at `scanPins`, and `unpinned`
+at none, which only differs in its parameters' decoder. -/
+def protocolAt (pins : Option (List (String × String))) : Core.Protocol where
   id := protocolId
   Params := Params
   Commitment := Commitment
   Evidence := Evidence
   Public := Public
   Profile := Profile
-  params := paramsOf
+  params j := do pinnedScan pins (← paramsOf j)
   commitment := commitmentOf
   evidence := evidenceOf
   digest c := (Identity.taggedSha512 commitmentTag c.bytes).toOption.getD .empty
   check := check
   publicJson := publicJson
   profileJson := profileJson
+
+/-- The deployed check, `network-period`'s: the rows form takes only the pinned scans (`scanPins`). -/
+def protocol : Core.Protocol := protocolAt (some scanPins)
+
+/-- The check with no scan pinned, a test's: the `network-period-unpinned` executable, against which the difftest
+checks the generated rows-form periods, whose stand-in scans no class pins. -/
+def unpinned : Core.Protocol := protocolAt none
 
 /-! ## The clock openings -/
 
