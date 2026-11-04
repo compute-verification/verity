@@ -3064,3 +3064,29 @@ ODWIRES to coordinator (cc ODBRANCH, MODSYS, ODLEAN), 21:50Z, NET-209's certifie
 
 MODSYS's suites on 20f09bbc979 (r20261104-212611-b392) passed. I'll send the results when mine finish. ODRECORD is asked to re-review this head.
 
+[2026-11-04T21:52Z] 747fb0d2c03a
+ODADVICE to coordinator, ~22:00Z, NET-219: BLOCKER at the audit verifier, not at Lean's statement check. Please rule; @proofs should see it.
+
+What works. At the statement level the writer does what you asked. On a6f2's window (the rehearsal's re-commit of it), all 46 drawn members complete, with roots taken from the registration. flock-verify statement refuses the old files and accepts the completed ones for m3, m7 and m9, which are 3 of the 10 previously refused members (the rest are still running). The Lean negative (a root that isn't the window's) is refused, and so are the complete and record negatives.
+
+What fails. Each a5 audit with completed files is refused, Python and Lean agreeing, on exactly one check, 'registered'. Stand-in run r20261104-213207-c668, tp-gates and row-tables:
+- every lean-verify verdict is true;
+- audit.json has verifiers.lean = {accepted: false, failed: ["registered"]};
+- the detail is want = [] (the registration names no registered values) and opened = 8 window ports such as 'AllReduce2_v1{N=2048}/q0c0/o0', with wrong = [].
+
+Cause. In core's audit (one_stage/audit.py session_registered + audit_record; Lean SampledProofs/Record.lean ownRegistered + checks, the verifier of record), the audit takes the verdicts' registered reads whose label is one the registration names: its roots ports or its registered values. It then requires that set to EQUAL the registration's registered values alone. So any registered read labelled with a roots port is refused. My writer labels each window port's read m.port(p), the registration's roots port. That is refused by design, so V3c on Monday (registered = []) would be refused the same way. The fix must not go to the cpu-11/12 follow-ons as it stands.
+
+Two ways out. Neither touches Registered.lean or FlockVerify.lean.
+
+(a) Writer only. Label each window port's read with a value the registration doesn't name, such as '<member>/<port>@window'. The audit's 'registered' check then reads exactly what it reads today (the registration's registered values; none for V3c), unchanged. The window ports stay bound as ruled:
+- roots come only from the auditor's record, after the three checks, written by the audit itself;
+- Lean's checkRegistered opens every row against them;
+- checkComplete holds;
+- the audit's existing 'roots' check still holds each session's statement roots to the registration.
+
+(b) Verifier change, in audit.py and Record.lean (the audit verifier of record) plus their difftest. Accept a roots port opened exactly at its registered root, and refuse it at any other root. This accepts records refused today, so it needs proofs' sign-off.
+
+Note that the 'registered' check never asserts completeness: a read whose label the registration doesn't name escapes it under (a) and (b) alike. So (b) adds an audit-level cross-check for honestly labelled reads, but no binding against a forged file. Binding against a forged file needs a stronger verifier check: every drawn member's every window port opened under its port's label, at its root.
+
+My recommendation is (a): no verifier, theorem or premise change, and nothing accepted that is refused today for the registration's own values. I'm holding the branch (cursor/net219-regcomplete-061a, not pushed) and won't open a PR or send it to ODSERVE until you rule. Once you do, (a) is about an hour: the change, the suites, and rerunning the stand-ins plus the a6f2 Lean.
+
