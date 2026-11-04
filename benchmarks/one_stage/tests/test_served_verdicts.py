@@ -44,12 +44,15 @@ import os
 import re
 import shlex
 import shutil
+import socket
 import subprocess
 import sys
 import tarfile
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from fractions import Fraction
 from pathlib import Path
+from typing import Any
 
 import jsonschema
 import pytest
@@ -1786,6 +1789,7 @@ else:
         sys.exit(2)
     out.mkdir(parents=True)
     (out / "circuit.json").write_text(json.dumps({{"run": "ab"}}))
+    open(os.environ["ORDER"] + ".law", "w").write(a[a.index("--law") + 1] if "--law" in a else "")
     if "--window-registration" in a:
         tail = a[a.index("--window-registration"):]
         open(os.environ["ORDER"] + ".commit", "w").write("\\n".join(tail))
@@ -1826,12 +1830,14 @@ PERIOD = 'echo period-check >> "$ORDER"; cp "$4/period.json" "$3/"; echo \'{"ver
 
 
 def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = FAKE_V3C_PROVE_PATH,
-         records_audit: str = FAKE_RECORDS_AUDIT, **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
+         records_audit: str = FAKE_RECORDS_AUDIT, lease: bool = True,
+         **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
     """`served_verdicts.sh v3c` (or ``args``) on window 7 of a toy serve dir at the certifier's class, in a toy tree whose
     prove_path.py (``prove_path``) and records_audit.py (``records_audit``) note each step they run, its builds stubbed,
     main's first-parent line a toy MAIN_FILE, the split certifier's two commands set, a development run's local coins
     and no composite, so the default COMPOSE_OFF_NODE=1 composes the final record alone off the node (``extra`` adds to
-    the environment, None unsetting): the exit status, the verdict lines, the steps in order and the limits."""
+    the environment, None unsetting; ``lease`` False, no gpu-lease on the PATH): the exit status, the verdict lines, the
+    steps in order and the limits."""
     tree, bin_, venv, d = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
     for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "core" / "service" / "flock",
               tree / "verity" / "core" / "service" / "sampled_proofs", tree / "verity" / "ml" / "flock" / "pod", bin_, venv,
@@ -1852,7 +1858,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
     py = f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\n[ "$1 $2" = "-m research" ] && exit 0\nexec {sys.executable} "$@"'
     for path, body in ((venv / "python", py), (tree / ".venv" / "bin" / "python", py),
                        (bin_ / "timeout", f'[ "$1" = -k ] && shift 2\necho "$1" >> {tmp_path}/limits; shift; exec "$@"'),
-                       (bin_ / "gpu-lease", "exit 99"), (bin_ / "uv", "exit 0"), (bin_ / "lake", "exit 0")):
+                       *([(bin_ / "gpu-lease", "exit 99")] if lease else []), (bin_ / "uv", "exit 0"), (bin_ / "lake", "exit 0")):
         _script(path, body)
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "K": "7",
            "OUT": str(tmp_path / "out"), "SERVE_ROOT": str(tmp_path / "root"), "FLOCK_WORK": str(tmp_path / "fw"),
@@ -2069,6 +2075,25 @@ def test_under_h1_tie_v3cs_audit_is_tied_to_h1s_w_at_a_stratum_of_each_tables_re
     w = str(tmp_path / "serve" / "h1" / "w7" / "registration.json")
     assert _audited(tmp_path) == ({"--law": "stratified:1", "--tie": w, "--tie-prefix": "h1/", "--ports": ports} if tied
                                   else {"--law": "subset:1", "--tie": None, "--tie-prefix": None, "--ports": ports})
+
+
+@pytest.mark.parametrize("extra, law", [({}, "subset:1"), ({"V3C_LAW": "stratified:1"}, "stratified:1")])
+def test_an_untied_v3c_registers_its_window_at_the_sampling_design_its_audit_samples_by(tmp_path, extra, law):
+    """Untied, window-commit registers the window at V3C_LAW's sampling design and the audit samples by that one: R1 holds
+    a sample to the registration's design, so a commit at subset:1 under a stratified:1 audit is refused before its sample."""
+    rc, lines, order, _limits = _v3c(tmp_path, **extra)
+    assert rc == 0 and order.index("window-commit") < order.index("audit"), (lines, order)
+    assert (tmp_path / "order.law").read_text() == law and _audited(tmp_path, ("--law",)) == {"--law": law}
+
+
+def test_v3c_on_an_existing_serve_dir_needs_no_row_dir_taps_or_gpu_lease(tmp_path):
+    """`served_verdicts.sh v3c` serves nothing, so a CPU node with the audit's memory runs it: its preflight asks for the
+    venv's python alone, not the row dir, the FlashAttention and norm-tap builds or gpu-lease that serving reads."""
+    gone = {"ROW": str(tmp_path / "no-row"), "HIDDEN_SO": str(tmp_path / "no-h.so"), "NORM_TAP_SO": str(tmp_path / "no-n.so")}
+    rc, lines, order, _limits = _v3c(tmp_path, lease=False, **gone)
+    assert rc == 0 and "audit" in order and not any(x.startswith("PREFLIGHT") for x in lines), (lines, order)
+    rc, lines, _order, _limits = _v3c(tmp_path / "no-venv", lease=False, VENV=str(tmp_path / "no-venv" / "none"), **gone)
+    assert rc == 3 and lines[-1].startswith(f"PREFLIGHT: no {tmp_path / 'no-venv' / 'none'}/bin/python"), lines
 
 
 @pytest.mark.parametrize("tied, extra, limit", [
@@ -2749,16 +2774,18 @@ def _env_of(f: Path, names: str) -> dict[str, str]:
     return dict(x.split("=", 1) for x in said.splitlines())
 
 
-def _handed(tmp_path: Path, blobs: tuple[str, ...] = BLOBS, verdict: bool = True,
+def _handed(tmp_path: Path, blobs: tuple[str, ...] = BLOBS, verdict: bool = True, files: Mapping[str, Any] | None = None,
+            cmd: Sequence[str] = ("handoff",), pouw: Mapping[str, Any] | None = None,
             **extra: str) -> subprocess.CompletedProcess:
     """Window 7 of a toy serve dir as the served node leaves it at its record under H1's tie: its records audits' cases
     (a5's v2 case naming ``blobs``, relative to the serve dir unless absolute), H1's log and records, PoUW's period case,
     the window's seal, Commit line and request, every file of `HELD_BACK`, and in $OUT the record's pieces and (if
-    ``verdict``) inference-only verdict; then `served_verdicts.sh handoff` on vy-dc-h200 at the tree of commit SHA
-    (``extra`` adds to the environment)."""
+    ``verdict``) inference-only verdict; then `served_verdicts.sh handoff` (or ``cmd``) on vy-dc-h200 at the tree of
+    commit SHA (``files`` replaces a file's body, by its path, None leaving it unwritten; ``pouw`` PoUW's answer;
+    ``extra`` adds to the environment)."""
     d, out = tmp_path / "serve", tmp_path / "served-out"
     sp = "sampled-proofs-served"
-    files = {"seals.jsonl": {"window": 7, "requests": ["a"]},
+    served = {"seals.jsonl": {"window": 7, "requests": ["a"]},
              "windows.jsonl": {"window": 7, "run_root": "ab" * 64, "passed": True, "commit": {"steps": 3}},
              "requests.jsonl": {"user": "a", "engine_id": "a", "windows": [7], "check": {"passed": True}},
              "h1/log.jsonl": {"window": 7, "kind": "registration", "file": "w7/registration.json"},
@@ -2771,13 +2798,17 @@ def _handed(tmp_path: Path, blobs: tuple[str, ...] = BLOBS, verdict: bool = True
              "private/pouw/period/case.json": {"evidence": "beef"},
              "private/pouw/period/answer.json": {"protocol": "verity/pouw/period/v1"},
              **{f: {} for f in (*BLOBS, *HELD_BACK) if f != "requests.jsonl"}}
+    files = {**served, **(files or {})}
     for f, body in files.items():
+        if body is None:
+            continue
         (d / f).parent.mkdir(parents=True, exist_ok=True)
         (d / f).write_text(json.dumps(body) + "\n")
     with open(d / "h1" / "log.jsonl", "a") as log:
         log.write(json.dumps({"window": 7, "kind": "record", "file": "w7/record.json"}) + "\n")
     (out / "pieces" / "pouw").mkdir(parents=True)
-    for f, body in (("answer.json", {"verdict": "accept"}), ("served.json", {"server": "vy-dc-h200"}), ("piece.log", "")):
+    for f, body in (("answer.json", pouw or {"verdict": "accept"}), ("served.json", {"server": "vy-dc-h200"}),
+                    ("piece.log", "")):
         (out / "pieces" / "pouw" / f).write_text(json.dumps(body))
     (out / "record").mkdir()
     if verdict:
@@ -2787,11 +2818,11 @@ def _handed(tmp_path: Path, blobs: tuple[str, ...] = BLOBS, verdict: bool = True
            "D": str(d), "K": "7", "OUT": str(out), "SERVE_ROOT": str(tmp_path / "root"), "V3C_CLASS": W63K4,
            "PRODUCT": "remote", "H1_TIE": "1", "HOST": "vy-dc-h200", "RESEARCH_SOURCE_SHA": SHA,
            "GIT_CEILING_DIRECTORIES": str(tmp_path), **extra}
-    return subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "handoff"], cwd=tmp_path / "served-tree",
+    return subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), *cmd], cwd=tmp_path / "served-tree",
                           env=env, check=False, capture_output=True, text=True)
 
 
-COMPOSES = "K PRODUCT COMPOSITE ALPHA GAMMA SERVED_NODE COMPOSE_NODE COMPOSE_TREE AUDITED_ON STEPS"
+COMPOSES = "K PRODUCT COMPOSITE ALPHA GAMMA SERVED_NODE SERVED_DIR COMPOSE_NODE COMPOSE_TREE AUDITED_ON STEPS"
 
 
 def test_the_served_nodes_compose_hand_off_lists_and_hashes_the_verifier_side_files_alone(tmp_path):
@@ -2807,7 +2838,7 @@ def test_the_served_nodes_compose_hand_off_lists_and_hashes_the_verifier_side_fi
     d, dc, out = tmp_path / "serve", tmp_path / "serve" / "private" / "compose", tmp_path / "served-out"
     assert _env_of(dc / "compose.env", COMPOSES) == {
         "K": "7", "PRODUCT": "remote", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
-        "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "", "STEPS": "0,3"}
+        "SERVED_DIR": str(d), "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "", "STEPS": "0,3"}
     listed = (dc / "inputs.txt").read_text().splitlines()
     assert listed == [*sorted([*HANDED_READS, *BLOBS, *HANDED_OWN]), "private/compose/inputs.sha256"]
     assert not set(listed) & set(HELD_BACK) and S.witness(listed) == []
@@ -2930,11 +2961,12 @@ def test_the_compose_follow_on_holds_the_hand_off_to_its_sums_and_composes_the_r
     assert [x.split(" ")[0] for x in lines[1:]] == ["INFERENCE-ONLY:", "RECORD", "COMPOSITE:"]
     assert lines[-1] == "COMPOSITE: composed on vy-auditor-2"
     argv = json.loads((tmp_path / "order.record").read_text())
-    assert argv[:-6] + argv[-2:] == [
+    assert argv[:17] == [
         "record", "--serve-run", str(d), "--window", "7", "--sampled-proofs", str(d / "sampled-proofs-served"), "--pieces",
         str(d / "private" / "compose" / "pieces"), "--out", str(out / "record"), "--product", "remote", "--node",
-        "vy-dc-h200", "--steps", "0,3", "--off-node", "--sampled-lean"]
-    assert (argv[-6], len(argv[-5]), argv[-4:-2]) == ("--key-sha512", 128, ["--lane", "vllm"])
+        "vy-dc-h200", "--steps", "0,3"]
+    assert (argv[17], len(argv[18]), argv[19:]) == ("--key-sha512", 128, ["--lane", "vllm", "--off-node", "--sampled-lean",
+                                                                         "--tree", SHA])
     assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", "1", str(d), str(out)]
     assert json.loads((out / "record" / "inference-only.json").read_text()) == {"verdict": "accept"}
     assert not (d / "requests.jsonl").exists() and not _window_data(out, 7)
@@ -2996,7 +3028,7 @@ def test_a_follow_on_under_compose_off_node_audits_then_hands_off_and_composes_n
     assert lines[-1] == HANDOFF_LINE.replace("{d}", str(d))
     assert _env_of(dc / "compose.env", COMPOSES) == {
         "K": "7", "PRODUCT": "remote", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
-        "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "cpu-6", "STEPS": "0,3"}
+        "SERVED_DIR": str(d), "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "cpu-6", "STEPS": "0,3"}
     listed = (dc / "inputs.txt").read_text().splitlines()
     assert listed == [*sorted([
         "h1/log.jsonl", "h1/w7/record.json", "h1/w7/registration.json", "private/compose/compose.env",
@@ -3015,6 +3047,157 @@ def test_a_follow_on_under_compose_off_node_audits_then_hands_off_and_composes_n
     (tmp_path / "order").unlink()
     rc, lines, order = _compose(tmp_path, keep=(f"v3c-w7-{VTAG}/window/values/a.bin",), HOST="cpu-6")
     assert rc == 3 and order == [] and lines[0].startswith("PREFLIGHT: the compose follow-on holds no witness")
+
+
+#: the compose gate as `vy-compose-gate` serves it over ssh, its words its argv: `host.gate` on a compose host under
+#: $GATE_ROOT with lane vllm's key, its compose `host.compose_handoff` in-process with $GATE_ENV added (no runuser); the
+#: hand-off in transit with $TAMPER's member rewritten or a $CARRY member added
+GATE_DRIVER = '''import io, json, os, sys, tarfile
+from datetime import datetime, timezone
+from pathlib import Path
+sys.path.insert(0, os.environ["LIVE_VERIFIER"])
+import host as H
+root = Path(os.environ["GATE_ROOT"])
+host = H.Host(root=root / "var", config=root / "compose.json", pins=root / "pins.jsonl", main=root / "main.txt",
+              compose=True)
+src = sys.stdin.buffer
+if os.environ.get("TAMPER") or os.environ.get("CARRY"):
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=src, mode="r|") as t, tarfile.open(fileobj=buf, mode="w") as w:
+        for m in t:
+            body = t.extractfile(m).read() if m.isreg() else b""
+            if m.name == os.environ.get("TAMPER"):
+                body = b"tampered"
+                m.size = len(body)
+            w.addfile(m, io.BytesIO(body))
+        if os.environ.get("CARRY"):
+            w.addfile(tarfile.TarInfo(os.environ["CARRY"]), io.BytesIO(b""))
+    buf.seek(0)
+    src = buf
+
+
+def compose(argv, scratch):
+    Path(os.environ["GATE_ARGV"]).write_text(json.dumps(argv))
+    i = argv.index("compose")
+    return H.compose_handoff(host, scratch, src, pinned=argv[i + 2], on=(argv[i + 3:] or [None])[0],
+                             env=json.loads(os.environ["GATE_ENV"]))
+
+
+sys.exit(H.gate(["--ssh", " ".join(sys.argv[1:]), "--key", "vllm"], host, sink=sys.stdout.buffer,
+                pinned=os.environ["PIN"], busy=lambda: [], own=lambda p: None, compose=compose,
+                now=datetime(2026, 11, 4, 12, tzinfo=timezone.utc), token="ab12"))
+'''
+GATE_PIN = "c0" * 20
+
+
+def _gate_composed(tmp_path: Path, edit: Mapping[str, str | None] | None = None,
+                   **extra: str) -> tuple[subprocess.CompletedProcess, Path]:
+    """`_handed`'s serve dir with `_lean_handed`'s sampled proofs cases (v2's naming a5's ``BLOBS``), sent by
+    `served_verdicts.sh gate-compose` to `GATE_DRIVER`, pinned at GATE_PIN on remote, where the compose runs this tree's
+    `served_verdicts.sh compose` and record on vy-auditor-2 with a `FAKE_SAMPLED_LEAN`, no composite and no git (as the
+    pinned archive has none). ``edit`` replaces the served node's sampled-proofs files before the hand-off (None deletes);
+    ``extra`` adds to the sender's environment. The sender's run and $OUT."""
+    from verity.ml.circuits import codec
+
+    d, out, gate = tmp_path / "serve", tmp_path / "served-out", tmp_path / "gate-host"
+    v1 = {"params": {"verifier": "toy"}, "commitment": codec.canonical_json(LEAN_RECORD).hex(),
+          "evidence": codec.canonical_json({"draw": [0, 3]}).hex()}
+    sp = "sampled-proofs-served"
+    cases = {f"{sp}/window/case.json": v1, f"{sp}/summary.json": {"refused": "the node's own verdict"},
+             f"{sp}/window/case-v2.json": {**v1, "params": {"verifier": "toy", "proofs": {}},
+                                           "blobs": [str(d / b) for b in BLOBS]}}
+    gate.mkdir()
+    H = _live_host()
+    H.record_pin(gate / "pins.jsonl", GATE_PIN, datetime(2026, 11, 4, 11, tzinfo=UTC), on="remote", seal=lambda p: None)
+    driver = tmp_path / "gate-driver.py"
+    driver.write_text(GATE_DRIVER)
+    exe = tmp_path / "vstar-recursive"
+    exe.write_text(FAKE_SAMPLED_LEAN)
+    exe.chmod(0o755)
+    answer = {**_accepted()["answer"], "protocol": "verity/sampled-proofs/v1", "commitment": REG.digest(LEAN_RECORD)}
+    gate_env = {"PATH": f"{_hosts(tmp_path)}:{Path(sys.executable).parent}:/usr/bin:/bin", "HOST": "vy-auditor-2",
+                "SAMPLED_EXE": str(exe), "SEEN": str(tmp_path / "seen.json"), "ANSWER": json.dumps(answer),
+                "GIT_DIR": str(tmp_path / "no-git")}
+    cases.update({f"{sp}/{name}": None if body is None else json.loads(body) for name, body in (edit or {}).items()})
+    run = _handed(tmp_path, files=cases, cmd=("gate-compose", str(out / "pieces"), str(out / "record" / "inference-only.json")),
+                  pouw={"verdict": "accept", "reason": None, "commitment": "ef" * 64, **ACCEPTS["pouw"]},
+                  COMPOSITE="", COMPOSE_GATE=f"{sys.executable} {driver}", LIVE_VERIFIER=str(HERE.parents[1] / "live_verifier"),
+                  GATE_ROOT=str(gate), PIN=GATE_PIN, GATE_ENV=json.dumps(gate_env), GATE_ARGV=str(tmp_path / "gate.argv"),
+                  **extra)
+    return run, out
+
+
+def _live_host():
+    spec = importlib.util.spec_from_file_location("live_host", HERE.parents[1] / "live_verifier" / "host.py")
+    mod = sys.modules.setdefault(spec.name, importlib.util.module_from_spec(spec))
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.mark.parametrize("edit", [
+    None,
+    {"summary.json": json.dumps({"audit": {"accepted": True}})},
+    {"summary.json": None},
+])
+def test_gate_compose_sends_the_hand_off_to_the_compose_gate_which_composes_the_record_at_its_pin_and_answers_it(
+        tmp_path, edit):
+    """`gate-compose` sends the hand-off to the compose gate (lane vllm's key, the word `compose`, the tar on stdin), which
+    receives it in a scratch of its own, holds it to the served node's sums, rebases the cases' blobs onto its copy and
+    composes the record there with the pinned tree, off the served node: sampled proofs' row is its Lean's answer on the
+    copy's v2 case and blobs, whatever summary the served node wrote, and the record names the gate's pin and the branch
+    infra pinned it on. The answer lands in the sender's $OUT/compose, and the gate removes its scratch."""
+    run, out = _gate_composed(tmp_path, edit)
+    gate = tmp_path / "gate-host"
+    lines = (out / "verdicts.txt").read_text().splitlines()
+    assert run.returncode == 0, (run.stderr, lines)
+    assert lines[0].startswith("HANDOFF ")
+    assert lines[-1].startswith(f"GATE-COMPOSE at the compose gate's tree {GATE_PIN[:12]} (on remote): exit 0, the record "
+                                "accept, ") and lines[-1].endswith(f" files of its $OUT in {out / 'compose'}"), lines
+    argv = json.loads((tmp_path / "gate.argv").read_text())
+    scratch = gate / "var" / "scratch" / "compose-20261104T120000Z-ab12"
+    assert argv[:3] == ["runuser", "-u", "auditor"] and argv[-4:] == ["compose", str(scratch), GATE_PIN, "remote"]
+    composed = json.loads((out / "compose" / "record" / "verdicts.json").read_text())
+    assert composed["composed_on"] == {"host": socket.gethostname(), "served_node": False, "from": S.HANDED_FROM,
+                                       "tree": GATE_PIN, "tree_on": "remote"}
+    row = composed["protocols"]["integrity"]
+    assert row["answer_from"] == S.LEAN_HERE and row["answer"]["commitment"] == REG.digest(LEAN_RECORD), row
+    seen = json.loads((tmp_path / "seen.json").read_text())
+    assert seen["argv"][5:] == [str(scratch / "serve" / b) for b in BLOBS]
+    assert not scratch.exists() and list((gate / "var" / "scratch").iterdir()) == []
+    said = json.loads((out / "compose" / "gate.json").read_text())
+    assert (said["pinned"], said["pin"], said["by"], said["compose"]["rc"]) == (
+        GATE_PIN, {"line": 0, "utc": "2026-11-04T11:00:00Z", "on": "remote"}, "vllm", 0)
+    logged = [json.loads(x) for x in (gate / "var" / "composes.jsonl").read_text().splitlines()]
+    assert [(x["by"], x["rc"], x["refused"]) for x in logged] == [("vllm", 0, None)]
+    assert logged[0]["sums_sha512"] == hashlib.sha512(
+        (tmp_path / "serve" / "private" / "compose" / "inputs.sha256").read_bytes()).hexdigest() == said["compose"]["sums_sha512"]
+    assert not _window_data(out, 7)
+
+
+@pytest.mark.parametrize("extra, said", [
+    ({"TAMPER": "sampled-proofs-served/summary.json"}, "sampled-proofs-served/summary.json isn't the file the served node "
+     "hashed: its SHA-256 isn't its sum (1 such)"),
+    ({"TAMPER": "sampled-proofs-served/window/case-v2.json"}, "sampled-proofs-served/window/case-v2.json isn't the file the "
+     "served node hashed"),
+    ({"CARRY": "private/h1/key"}, "the hand-off carries the served run's witness: private/h1/key (H1's prover state (its "
+     "key))"),
+    ({"CARRY": "sampled-proofs-served/window/m0/inst-0.bin"}, "the hand-off carries the served run's witness: "
+     "sampled-proofs-served/window/m0/inst-0.bin"),
+    ({"CARRY": "notes.txt"}, "the hand-off carries notes.txt, which its sums don't list"),
+])
+def test_the_compose_gate_refuses_a_hand_off_off_its_sums_or_carrying_a_witness_and_composes_nothing(tmp_path, extra, said):
+    """No retries, and nothing composed from bytes the served node didn't hash or beside a witness: a file changed in
+    transit (even the summary a Lean row would never read) or a file added is refused before anything runs, the refusal
+    the sender's one line and exit 3, the gate's scratch removed and its log naming the refusal."""
+    run, out = _gate_composed(tmp_path, **extra)
+    lines = (out / "verdicts.txt").read_text().splitlines()
+    assert run.returncode == 3 and lines[-1].startswith("GATE-COMPOSE refused by the compose gate: "), lines
+    assert said in lines[-1] and not (tmp_path / "seen.json").exists()
+    assert not (out / "compose" / "record").exists()
+    gate = tmp_path / "gate-host" / "var"
+    assert list((gate / "scratch").iterdir()) == []
+    logged = [json.loads(x) for x in (gate / "composes.jsonl").read_text().splitlines()]
+    assert len(logged) == 1 and logged[0]["rc"] == 3 and said in logged[0]["refused"]
 
 
 #: rsync as `served_verdicts.sh copy` calls it: each file --files-from lists, from the source dir to $COPIED/HOST/PATH
