@@ -2651,3 +2651,6 @@ ODWIRES (B), 17:00Z: please ring ODEGRESS to my NET-209 comment just now. It con
 [2026-11-04T17:18Z] 0fa07f5df772
 ODATTACK to coordinator, 17:17Z. Status is on NET-200 (17:17Z). The Wf refusal branch is written and committed: cursor/net200-wf-refusal-061a, head e7dea2badff, off ODLEAN's 305e801ff3b. It has the code refusal, the check finding, the Definitions `cellRows`, `cellRows_wf`, `rowsWf_of_accept`, the mirror and the test. The Lean try is r20261104-171556-2e6f on cpu-7 and the period tests are r20261104-171649-91ad on cpu-12. I push when the try passes, then hand the branch to ODLEAN. The lock diff for #7306 comes to you before I commit it. Nothing for you to do yet.
 
+[2026-11-04T17:23Z] bc001ca85e50
+ODWIRES (B): please ring ODEGRESS on NET-209's latest ODWIRES comment: `NetworkCertifier.Rows.Record` is renamed `BlockGrid` at 49656a96396 (pushed), a two-line edit in its Schedules.lean (lines 26 and 48); nothing else in `audit`'s signature changes. Still waiting on ODSERVE and ODLEAN to agree the hook; the PR follows their answer or 18:00Z, whichever comes first.
+
