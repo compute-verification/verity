@@ -1385,6 +1385,60 @@ def test_a_pearlplus_piece_over_a_commit_windows_epoch_names_its_arm_and_no_shar
     assert bad["verdict"] == "reject" and bad["shares"] is None
 
 
+def _tied_epoch(tmp_path: Path, source: str = "in-process",
+                reserved: dict[str, str] | None = None) -> tuple[dict, dict, Path]:
+    """Window 7's own epoch under PEARLPLUS_TIE: serve_pearl's served.json for it (one round each of its three Commit
+    steps, its coins ``source``'s, the gate's reserve answer ``reserved``), Pearl+'s verdict accepting it, and W's file
+    (`PEARL_WREC`)."""
+    served, verified = _pearlplus_run(source=source)
+    window = {"entry": served["arm"], "run": "r", "window": 7, "retained": True, "commit_steps": 3,
+              "passes": [{**p, "timed": True} for p in served["passes"][1:]], "passes_with_calls": 3,
+              "coins": {**served["coins"], "reserved": reserved}, "ok": True, "error": None}
+    (w := tmp_path / "window-record.json").write_text(json.dumps(PEARL_WREC))
+    return window, verified, w
+
+
+def test_a_tied_pearlplus_piece_is_the_windows_own_epoch_and_says_so(tmp_path, capsys):
+    """Under PEARLPLUS_TIE (``--tie W``) the piece is the window's own Pearl+ epoch: on in-process coins it claims no
+    verdict and says so of the window's epoch (`PEARLPLUS_WHY_TIED_IN_PROCESS`, its epoch
+    `PEARLPLUS_EPOCH_TIED_IN_PROCESS`), not of a seeded load of its own after the window's serve; its load is the
+    window's steps and its ``tie`` W's digest, which its line names. Its arm's document short of ok, or missing, rejects,
+    naming the window's arm."""
+    window, verified, w = _tied_epoch(tmp_path)
+    doc = S.pearlplus(tmp_path / "a", window, verified, tie=w)
+    assert (doc["verdict"], doc["reasons"], doc["why"]) == (S.UNCLAIMED, [], S.PEARLPLUS_WHY_TIED_IN_PROCESS)
+    assert doc["coins"] == {**S.PEARLPLUS_COINS_IN_PROCESS, "epoch": S.PEARLPLUS_EPOCH_TIED_IN_PROCESS}
+    assert (doc["load"], doc["tie"]) == ({"window_steps": 3}, {"record": REG.digest(PEARL_WREC)})
+    for name, d in (("served.json", window), ("v.json", verified)):
+        (tmp_path / name).write_text(json.dumps(d))
+    assert S.main(["pearlplus", str(tmp_path / "cli"), "--served", str(tmp_path / "served.json"), "--verify",
+                   str(tmp_path / "v.json"), "--tie", str(w)]) == 0
+    line = json.loads(capsys.readouterr().out.removeprefix("POUW-DEV "))
+    assert (line["verdict"], line["tie"], line["load"]) == (S.UNCLAIMED, doc["tie"], {"window_steps": 3})
+    assert S.pearlplus(tmp_path / "b", window, verified, tie=tmp_path / "none.json")["tie"]["record"] is None
+    bad = S.pearlplus(tmp_path / "c", {**window, "ok": False, "error": "pass 2 retained no manifest"}, verified, tie=w)
+    assert bad["reasons"] == ["the window's Pearl+ epoch isn't one round a Commit step: pass 2 retained no manifest"]
+    none = S.pearlplus(tmp_path / "d", None, verified, tie=w)
+    assert none["reasons"][0] == "no served run: serve-openai's Pearl+ arm wrote no served.json for the window"
+
+
+@pytest.mark.parametrize("reserved, joined", [
+    ({"session": SID, "by": "vllm", "period": "pearlplus-r1"},
+     "reserved under lane vllm's key into its Pearl-C period pearlplus-r1"),
+    ({"session": SID, "by": "vllm"}, "in no period, its reserve having joined none, so the record can't take it"),
+])
+def test_a_tied_pearlplus_piece_on_a_live_salt_session_names_the_period_it_joined(tmp_path, live, reserved, joined):
+    """Under PEARLPLUS_TIE the window's salt coin is a live session's reserved as the window opened
+    (`PEARLPLUS_EPOCH_TIED`), and why the piece credits nothing by itself names the Pearl-C period that session joined,
+    as the gate's reserve answer in the window's served.json names it, or says it joined none."""
+    _calls, args = live
+    window, verified, w = _tied_epoch(tmp_path, S.LIVE_SOURCE, reserved)
+    doc = S.pearlplus(tmp_path / "a", window, verified, tie=w, **args)
+    assert (doc["verdict"], doc["reasons"], doc["coins"]["epoch"]) == ("accept", [], S.PEARLPLUS_EPOCH_TIED)
+    assert doc["why"] == S.pearlplus_why_tied(reserved) and doc["why"].endswith(f"on vy-challenger-1, {joined}")
+    assert doc["why"].startswith("development piece, which the record takes as PoUW's verdict of record only where")
+
+
 PEARL_W = "d7" * 64
 PEARL_LEAN_WORK = {"credited": 5400, "credited_tiles": 40, "macs": 5600, "rho": "1/100", "epsilon": "1/100"}
 
