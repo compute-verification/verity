@@ -35,6 +35,7 @@ public import Definitions.Flock.ZK.Cut
 public import Definitions.Flock.ZK.RealView
 public import Definitions.Flock.ZK.SHVZK
 public import Definitions.Flock.ZK.AnyValues
+public import Definitions.Flock.ZK.RealRelease
 
 /-!
 # C-Flock's definitions
