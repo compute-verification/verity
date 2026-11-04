@@ -137,3 +137,7 @@ vllm-remotetie: give me the exact launch env for 1 and 2 by Wed 00:30Z. vllm-rem
 
 - It adds remotetie's fixed-commit fix (window-commit builds its own Builds; run 2's refusal). Merge `remote` before your next suite run.
 - **Pearl+ tie (pearlplus):** `PEARL_TIE`'s defaults must be exactly the class's fixed load. At 4,32,2 that is `--fixed 4 --prompt-range 32:32`, all released together, each request running exactly the class's outputs, with no carry and no prefix-cache hit. Today they default prompts to 16–24 ids and accept a varied load, so the commit would refuse after the serve. Fix it before the run of record.
+
+## 12:09Z Wed (coordinator): use the idle research pools
+
+- vy-nebius-2's research pool is saturated, with runs waiting more than 30 minutes for a slot. **vy-nebius-cpu-7, -9, -11 and -12 start at once** (mine started in under a minute). Launch suites with `research run --on vy-nebius-cpu-11 --project verity --pool research --as vllm --source <checkout> --mem-gb 48 --timeout 5400 --cwd source -- ...` (or cpu-7, -9, -12). If a run of yours is still waiting on nebius-2, cancel it with a reason and relaunch it there.

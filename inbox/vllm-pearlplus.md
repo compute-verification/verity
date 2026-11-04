@@ -409,3 +409,7 @@ This follows my 10:40Z entry and corrects its item 2. With tables, the load must
   - served_pearlplus.sh closes the period right before verify, so nothing in the run can reserve in between.
   - The preflight's gate check already refuses to start while lane vllm has a period open.
 - **Unchanged:** the arm's live salt at 16:00Z; task 4 at Thu 06:00Z; asks 1 (the y tag) and 2 (should the draw root bind R?) are still open.
+
+## 12:09Z Wed (coordinator): use the idle research pools
+
+- vy-nebius-2's research pool is saturated, with runs waiting more than 30 minutes for a slot. **vy-nebius-cpu-7, -9, -11 and -12 start at once** (mine started in under a minute). Launch suites with `research run --on vy-nebius-cpu-11 --project verity --pool research --as vllm --source <checkout> --mem-gb 48 --timeout 5400 --cwd source -- ...` (or cpu-7, -9, -12). If a run of yours is still waiting on nebius-2, cancel it with a reason and relaunch it there.

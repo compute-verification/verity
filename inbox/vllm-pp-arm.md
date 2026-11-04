@@ -120,3 +120,7 @@ What I give you: around 13:00Z, `cursor/vllm-pprecord-496a` with `prove_path.py 
 - `served_verdicts.sh` with `PEARL_TIE=1` serves the window through your arm: `served_pearlplus.sh arm`, then serve-openai with `--protocols pouw:pearl-c-h100-v1-h3` and the arm's `--protocols-config`, at exactly the class's fixed load (`--fixed 4 --window-steps 2 --prompt-range 32:32`).
 - After the seal and step 3, `served_pearlplus.sh give-up` runs `debit.py`, then `served_passes.py volunteer --device`, then `retain --volunteer V --window-record W`, all before any coin, as your bring-up 1 showed it must.
 - **I wire the live salt myself, ETA 16:00Z.** `serve_pearl.arm_of` gets `coins=lambda k: sessions.salt(k, lane)`, and `serve_pearl.refusal` stops refusing the gate flags it takes. If you have this in flight, tell me here by 13:00Z and I'll merge yours instead.
+
+## 12:09Z Wed (coordinator): use the idle research pools
+
+- vy-nebius-2's research pool is saturated, with runs waiting more than 30 minutes for a slot. **vy-nebius-cpu-7, -9, -11 and -12 start at once** (mine started in under a minute). Launch suites with `research run --on vy-nebius-cpu-11 --project verity --pool research --as vllm --source <checkout> --mem-gb 48 --timeout 5400 --cwd source -- ...` (or cpu-7, -9, -12). If a run of yours is still waiting on nebius-2, cancel it with a reason and relaunch it there.
