@@ -1,5 +1,6 @@
 """Pearl+'s live draw end to end on one CPU machine, against infra's own gate code (`benchmarks/live_challenger/auditor.py`)
-on a scratch auditor host: its LMS-signed ledger, and each session's challenger a real ``serve.py`` process.
+on a scratch auditor host: its LMS-signed ledger, and each session's challenger a real ``serve.py`` process whose coins
+are the Lean verifier of record's (``sampled-proofs-verifier``, built first).
 
     python benchmarks/one_stage/pearlplus_local_e2e.py run --out OUT
 
@@ -158,8 +159,12 @@ def _run(out: Path, root: Path) -> int:
     import served_verdicts as S
     import test_pearl_c_vllm as T
 
+    from verity.core.protocols.sampled_proofs.one_stage import verifier as V
+
     out.mkdir(parents=True, exist_ok=True)
     scratch = Path(tempfile.mkdtemp(prefix="pp-e2e-"))
+    t = time.monotonic()
+    print(f"[coins] {V.executable()} built in {time.monotonic() - t:.0f} s: each challenger's coins are its", flush=True)
     A = _auditor()
     host = A.Host(root=root / "var", peers=root / "peers", name=HOST, pins=root / "pins.jsonl")
     (root / "var" / "sessions").mkdir(parents=True)
