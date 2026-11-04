@@ -658,6 +658,10 @@
   "Properties.NetworkPeriod.rowsStateAnchored": {
    "honest": ["Properties.NetworkPeriod.rowsStateAnchored_honest"],
    "nontrivial": "Properties.NetworkPeriod.rowsStateAnchored_nontrivial"
+  },
+  "Properties.NetworkPeriod.rowsStateHeld": {
+   "honest": ["Properties.NetworkPeriod.rowsStateHeld_honest"],
+   "nontrivial": "Properties.NetworkPeriod.rowsStateHeld_nontrivial"
   }
  },
  "unwitnessed": {
@@ -3011,6 +3015,15 @@
    "owner": "@network-accounting"
   },
   "Properties.NetworkPeriod.rowsStateAnchored_nontrivial": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsStateHeld": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsStateHeld_honest": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsStateHeld_nontrivial": {
    "owner": "@network-accounting"
   },
   "Properties.NetworkPeriod.rowsStateTied": {
@@ -6030,6 +6043,10 @@
    "Properties.NetworkPeriod.rowsStateAnchored": {
     "function": "NetworkCheck.Period.check",
     "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.rowsStateHeld": {
+    "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -6135,7 +6152,9 @@
    "Properties.NetworkPeriod.rowsCircuitHeld_nontrivial": "lemma: RowsCircuitHeld's nontrivial lemma: RowsCircuitHeldAt fails at a rows-form period of one phase whose tied audit is registered under another Program than the class circuit, which a verifier that accepts everything accepts",
    "NciCheck.Properties.DescCountsCK": "unstated: an accepted count of (c, k)-inference blocks (NciCheck.Count.evaluate) means the Boolean declaration the Program lowers to by the gate table complies with Nci.CompliesAtMost c k n; not yet proved: its proof needs Verity.Partition.IsCK to bound a proof block's gates by c rather than ask for exactly c, which the count's blocks of fewer gates don't meet, and NciCheck.Desc's summaries to cover the parameter leaves a Definition's gates read",
    "Properties.NetworkPeriod.rowsStateAnchored_honest": "completeness: RowsStateAnchored's honest lemma: the period check accepts a rows-form period of no phase, and a phase whose tied audit's circuit record reads row b of the scan's state at unit l·2 + b from base 0 is anchored",
-   "Properties.NetworkPeriod.rowsStateAnchored_nontrivial": "lemma: RowsStateAnchored's nontrivial lemma: RowsStateAnchoredAt fails at a rows-form period of one phase whose tied audit's circuit record reads the scan's state from base 3, past its slots' anchors, which a verifier that accepts everything accepts"
+   "Properties.NetworkPeriod.rowsStateAnchored_nontrivial": "lemma: RowsStateAnchored's nontrivial lemma: RowsStateAnchoredAt fails at a rows-form period of one phase whose tied audit's circuit record reads the scan's state from base 3, past its slots' anchors, which a verifier that accepts everything accepts",
+   "Properties.NetworkPeriod.rowsStateHeld_honest": "completeness: RowsStateHeld's honest lemma: the period check accepts a rows-form period of no phase, and an audit whose SCAN_STATE is its one phase's scan's state, at its root and domain, is held there and charged its stateFree",
+   "Properties.NetworkPeriod.rowsStateHeld_nontrivial": "lemma: RowsStateHeld's nontrivial lemma: RowsStateHeldAt fails at a rows-form period of one phase whose tied audit's SCAN_STATE is at another root than its scan's state, under a public charging that audit its stateFree, 4 of its 9 free inputs, which a verifier that accepts everything could publish"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {

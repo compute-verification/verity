@@ -1335,7 +1335,7 @@ def tiedFree (p : Params) (audits windows : Array Json) (reg : Json) : Nat :=
   (tiedAudits audits reg).foldl (fun n i => n + chargeOf p audits windows i) 0
 
 /-- Link-window `w`'s findings in the rows form, in the order the module docstring gives, and on acceptance its scan's
-facts, which its term charges beside its tied audits' free inputs (`tiedFree`, `check`). -/
+facts, which its term charges beside its tied audits' free inputs (`tiedFree`, `rowsPhase`). -/
 def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array Json) (w : Nat)
     (reg : Json) (x : Window) : Found Facts := do
   let what := s!"window {w}"
@@ -1355,6 +1355,13 @@ def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array
   let f ← factsOf what prof pub
   unless f.units == 2 * s.window do refuse s!"{what}: profile: {f.units} units, not the scan's 2T = {2 * s.window}"
   pure f
+
+/-- Phase `q` of the rows form, its registration and window and its index: its findings (`rowsWindowCheck`), and on
+acceptance its scan's facts and its tied audits' charges (`tiedFree`), which its term sums. -/
+def rowsPhase (p : Params) (s : Schedule) (sd : ByteArray) (c : Commitment) (q : (Json × Window) × Nat) :
+    Found (Option (Facts × Nat)) :=
+  (fun f => some (f, tiedFree p c.audits c.windows q.1.1)) <$>
+    rowsWindowCheck p s sd c.audits (p.first + q.2) q.1.1 q.1.2
 
 /-- Whether pin `(p, root)` is registration `reg`'s window's registered root for parameter `p` (its
 `registered_roots`, `interface.held_params`: the hex compared without case). -/
@@ -1613,8 +1620,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
         let clear := clearClocks ss
         pairs.map fun ((reg, x), i) => (fun () => none) <$>
           windowCheck p clear ((e.windows.extract 0 i).filterMap (·.clockDigest?)) (p.first + i) reg x
-      | .rows s sd _ => pairs.map fun ((reg, x), i) =>
-        (fun f => some (f, tiedFree p c.audits c.windows reg)) <$> rowsWindowCheck p s sd c.audits (p.first + i) reg x
+      | .rows s sd _ => pairs.map (rowsPhase p s sd c)
     let scans := ws.filterMap (·.toOption.join)
     let oneDelta : Option (Core.Verdict × String) := scans[0]?.bind fun (f0, _) =>
       (scans.find? (·.1.delta != f0.delta)).map fun (f, _) =>

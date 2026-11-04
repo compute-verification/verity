@@ -52,6 +52,13 @@ at its slots' anchors: lane `l`'s slot at boundary `b`, unit `l · nb + b`, read
 anchor's bucket, so with `RowsStateTied` a slot's Program reads the state the scan reached at its anchor. Its witnesses
 are an empty rows-form period `check` accepts, beside a tied audit whose record reads row `b` at unit `l · 2 + b`
 (`anchorAudit 0`), and an explicit period whose record reads from base 3 (`RowsStateAnchoredAt` false).
+
+`RowsStateHeld` says the check's term of a link-window counts a tied audit's reads of the scan's state as no free
+inputs only where that audit's `SCAN_STATE` is the scan's state, at its registration's root and domain, in every phase
+the audit is tied to (`stateHeldIn`), and else counts its whole free inputs: the term never subtracts what the state tie
+doesn't fix. Its witnesses are an empty rows-form period `check` accepts, beside an audit whose `SCAN_STATE` is its one
+phase's scan's state and is charged its `stateFree`, and an explicit period and public charging `stateFree` for an
+audit whose `SCAN_STATE` is at another root (`RowsStateHeldAt` false).
 -/
 
 namespace Properties.NetworkPeriod
@@ -191,6 +198,30 @@ admitted there. -/
 def RowsStateAnchored : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsStateAnchoredAt p c
+
+/-- What `RowsStateHeld` says of a period its check accepted with public `pub`: in the rows form, each link-window's
+term's free inputs are its scan's and, for each audit tied to it (`tiedAudits`), that audit's free inputs with its
+reads of the scan's state held (`Audit.stateFree`) where its `SCAN_STATE` is the scan's state in every link-window tied
+to it (`stateHeldIn`), else its whole free inputs (`Audit.free`). -/
+def RowsStateHeldAt (p : Params) (c : Commitment) (pub : Public) : Prop :=
+  ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+    ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg →
+      ∃ t ∈ pub.units[i]?, t.free = scan.free + (tiedAudits c.audits reg).foldl (fun n j => n +
+        (p.audits[j]?.map fun a => if stateHeldIn c.audits c.windows j then a.stateFree else a.free).getD 0) 0
+
+/-- **The rows form charges a tied audit its reads of the scan's state only where they are of the scan's own state.**
+If the check accepts a period in the rows form, its public's term of each link-window counts as free inputs its scan's
+and, for each audit its scan's `prog` is an output of (`tiedAudits`), that audit's: with its reads of
+`verity/certifier/scan-state/v1` held (`Audit.stateFree`) only where its registration has a state entry and, in every
+link-window it is tied to, each of its state entries is at the root and domain of that link-window's scan's state
+(`stateHeldIn`), the pin taken from the scan's registration, never from the parameters; else all its free inputs
+(`Audit.free`). So the term leaves out no input the prover chose of an audit whose state reads the scan's chain does
+not fix (`RowsStateTied` holds the scan's state to that chain from the empty state). That `stateFree` counts the audit's
+circuit record with the scan's state as a pinned parameter, and `free` without it, is the parameters' reading
+(`auditOf`), not stated here. -/
+def RowsStateHeld : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    check p c e = .accept pub prof → RowsStateHeldAt p c pub
 
 /-- A period check that accepts every period, publishing the rows form's terms of no link-window: what
 `RowsProgWiredOf` and `RowsStateTiedOf` must fail at for `RowsProgWired` and `RowsStateTied` (each its `…Of` at

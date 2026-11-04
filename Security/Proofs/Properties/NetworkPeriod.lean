@@ -12,6 +12,9 @@ connections and the windows (the compute audits, or the scans) are sums over `Fi
 finding is none (`firstFinding_none`), each phase's `wiredCheck`, `stateCheck` and `heldCheck` among them.
 `rowsCircuitHeld_honest` and `rowsCircuitHeld_nontrivial` are `RowsCircuitHeld`'s witnesses: an empty rows-form period
 the check accepts, beside a tied audit that runs the class circuit, and a period whose tied audit runs another.
+`RowsStateHeld` reads the accepted public off the check: on acceptance every phase has no finding, so each is its
+scan's facts and its tied audits' charges (`rowsPhase_ok`), the scans keep the phases' indices (`filterMap_getElem?`),
+and each link-window's term is its scan's free inputs and those charges (`tiedFree`).
 -/
 
 namespace Properties.NetworkPeriod
@@ -485,5 +488,124 @@ theorem rowsStateAnchored_nontrivial :
     (anchorRecord (stateReadAt 3)) rfl rfl).2 (stateReadAt 3) (List.mem_singleton.mpr rfl) rfl).2 3 1
     (by decide +kernel)
   exact absurd (hr.2.2.2 0 (by decide +kernel) 0 (by decide +kernel)).2 (by decide +kernel)
+
+/-! ## The rows form charges a tied audit its reads of the scan's state only where they are held -/
+
+/-- A `filterMap` whose function keeps every element keeps each index. -/
+theorem filterMap_getElem? {α β : Type} {g : α → Option β} {l : List α} (h : ∀ x ∈ l, (g x).isSome) (i : ℕ) :
+    (l.filterMap g)[i]? = l[i]?.bind g := by
+  induction l generalizing i with
+  | nil => simp
+  | cons x xs ih =>
+    obtain ⟨y, hy⟩ := Option.isSome_iff_exists.mp (h x (by simp))
+    cases i with
+    | zero => simp [List.filterMap_cons, hy]
+    | succ i => simpa [List.filterMap_cons, hy] using ih (fun z hz => h z (List.mem_cons_of_mem _ hz)) i
+
+/-- A rows-form phase without a finding has its scan's facts and its tied audits' charges (`tiedFree`). -/
+theorem rowsPhase_ok {p : Params} {s : Schedule} {sd : ByteArray} {c : Commitment} {q : (Lean.Json × Window) × ℕ}
+    (h : findingOf (rowsPhase p s sd c q) = none) :
+    ∃ f, rowsPhase p s sd c q = .ok (some (f, tiedFree p c.audits c.windows q.1.1)) := by
+  unfold rowsPhase at h ⊢
+  cases hr : rowsWindowCheck p s sd c.audits (p.first + q.2) q.1.1 q.1.2 with
+  | error x =>
+    rw [hr] at h
+    change findingOf (Except.error x : Found (Option (Facts × ℕ))) = none at h
+    cases h
+  | ok f => exact ⟨f, rfl⟩
+
+theorem rowsStateHeld : RowsStateHeld := by
+  intro p c e pub prof h s sd scan hform i reg hreg
+  unfold check at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  rename_i hew
+  split at h
+  · cases h
+  simp only [hform] at h
+  split at h
+  · cases h
+  · cases h
+  · rename_i hF
+    injection h with hpub
+    subst hpub
+    have hok : ∀ w ∈ ((c.windows.zip e.windows).zipIdx.map (rowsPhase p s sd c)).toList, findingOf w = none :=
+      fun w hw => firstFinding_none hF _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
+        (List.mem_append_left _ (List.mem_append_left _ (List.mem_map_of_mem hw))))))
+    have hsome : ∀ w ∈ ((c.windows.zip e.windows).zipIdx.map (rowsPhase p s sd c)).toList,
+        (w.toOption.join).isSome := by
+      intro w hw
+      have h0 := hok w hw
+      rw [Array.toList_map, List.mem_map] at hw
+      obtain ⟨q, _, rfl⟩ := hw
+      obtain ⟨g, hg⟩ := rowsPhase_ok h0
+      rw [hg]
+      rfl
+    obtain ⟨hi, -⟩ := Array.getElem?_eq_some_iff.mp hreg
+    have hie : i < e.windows.size := by omega
+    have hpair : ((c.windows.zip e.windows).zipIdx)[i]? = some ((reg, e.windows[i]), i) := by
+      rw [Array.getElem?_zipIdx,
+        (Array.getElem?_zip_eq_some (z := (reg, e.windows[i]))).mpr ⟨hreg, Array.getElem?_eq_getElem hie⟩]
+      simp
+    have hwsi : ((c.windows.zip e.windows).zipIdx.map (rowsPhase p s sd c))[i]? =
+        some (rowsPhase p s sd c ((reg, e.windows[i]), i)) := by
+      rw [Array.getElem?_map, hpair]
+      rfl
+    obtain ⟨f, hf⟩ := rowsPhase_ok (hok _ (Array.mem_toList_iff.mpr (Array.mem_of_getElem? hwsi)))
+    generalize (c.windows.zip e.windows).zipIdx.map (rowsPhase p s sd c) = W at hok hsome hwsi ⊢
+    have hscan : (W.filterMap fun x => x.toOption.join)[i]? = some (f, tiedFree p c.audits c.windows reg) := by
+      rw [← Array.getElem?_toList, Array.toList_filterMap, filterMap_getElem? hsome, Array.getElem?_toList, hwsi]
+      show (rowsPhase p s sd c ((reg, e.windows[i]), i)).toOption.join = _
+      rw [hf]
+      rfl
+    have hz : ((W.filterMap fun x => x.toOption.join).zip c.windows)[i]? =
+        some ((f, tiedFree p c.audits c.windows reg), reg) :=
+      (Array.getElem?_zip_eq_some (z := ((f, tiedFree p c.audits c.windows reg), reg))).mpr ⟨hscan, hreg⟩
+    have hu : (rowsPublic p c (auditChecks p c e) scan (W.filterMap fun x => x.toOption.join)).units[i]? =
+        some (scan.terms f (tiedFree p c.audits c.windows reg) (faultyEntries p c (auditChecks p c e) scan reg)
+          p.jitter) := by
+      simp only [rowsPublic, rowsTerms, Array.getElem?_map, hz, Option.map_some]
+    exact ⟨_, hu, rfl⟩
+
+/-- The slot audit with 9 free inputs, 4 of them with its reads of the scan's state held. -/
+def heldAudit : Audit := { slotAudit with free := 9, stateFree := 4 }
+
+/-- A rows-form period of the held audit and one phase, under the slot audit's schedule. -/
+def heldParams : Params :=
+  ⟨#[heldAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", none, .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+
+/-- A public whose one link-window's term counts 4 free inputs: the held audit's `stateFree`. -/
+def heldPublic : Public :=
+  { audits := #[], cells := 0, schedules := 0, windows := 1,
+    units := #[{ facts := ⟨0, 0, ⟨0, 1⟩, 0⟩, free := 4, faultySets := 0, faultyBits := 0, jitter := 0 }] }
+
+/-- **`RowsStateHeld`'s honest lemma**: the check accepts a rows-form period of no phase, and an audit whose
+`SCAN_STATE` is its one phase's scan's state, at its root and domain (`stateReg "s"`, `stateWindow`), is held there and
+its phase charges it its `stateFree`. -/
+theorem rowsStateHeld_honest :
+    check ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", some "c", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0⟩
+        ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ =
+      .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] #[] 1 0 #[]) { link := "", windows := 0 } ∧
+    stateHeldIn #[stateReg "s"] #[stateWindow] 0 = true ∧
+    tiedFree heldParams #[stateReg "s"] #[stateWindow] stateWindow = heldAudit.stateFree :=
+  ⟨rowsCircuitHeld_honest.1, by decide +kernel, by decide +kernel⟩
+
+/-- **`RowsStateHeld`'s nontrivial lemma**: `RowsStateHeldAt` fails at a rows-form period of one phase whose tied
+audit's `SCAN_STATE` is at another root than its scan's state (`stateReg "t"`), under a public whose term charges that
+audit its `stateFree`, 4 of its 9 free inputs, which a check that accepts everything could publish. -/
+theorem rowsStateHeld_nontrivial :
+    ¬ RowsStateHeldAt heldParams ⟨#[stateReg "t"], #[stateWindow], .empty⟩ heldPublic := by
+  intro h
+  obtain ⟨t, ht, hfree⟩ := h slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 stateWindow rfl
+  have h4 : t.free = 4 := by
+    simp [heldPublic] at ht
+    subst ht
+    rfl
+  rw [h4] at hfree
+  exact absurd hfree (by decide +kernel)
 
 end Properties.NetworkPeriod
