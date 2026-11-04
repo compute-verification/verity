@@ -5575,16 +5575,19 @@ fn worker_pads_case(gpu: bool) -> Value {
 /// `zk_value_salts` (live PROTOCOL.md §10.2): the value commitments' salts are the ZK server's, never the serving stack's. The
 /// stack commits every row of the staged file through the ZK server's value service (`flock-firewall values`), each row's
 /// unsalted digest and nothing else, and writes the service's `b || c` and roots into its file beside salts of its own
-/// choosing; a refs file names the service's tables and every row. Three firewalled CPU sessions, each in a process of its
-/// own, the session loop given the server's key and the refs (`--salt-key`, `--commitments`):
+/// choosing; a refs file names the service's tables and every row, and the stack registers the session, the one its epoch
+/// opened. Three firewalled CPU sessions, each in a process of its own, the session loop given the server's key and the
+/// registration's record (`--salt-key`, `--commitments`):
 /// * `overwritten`: the prover takes the server's salts in place of the stack's (`--salt-refs`), and the session is accepted;
 /// * `kept`: the prover keeps the stack's salts, which open none of the service's commitments, and the auditor rejects the
 ///   session at its opening, where the value commitments' claims are checked;
 /// * `own`: the staged file as the stack committed it, under salts of its own: the loop refuses the statement before any
-///   session, since none of its roots carries the server's tag.
+///   session, since none of its roots is a table of the server's record.
 ///
 /// And the service itself refuses a commit whose body carries a salt beside each digest, a short refs file and a refs file
-/// with a forged tag; the salts it answers open every one of its commitments.
+/// with a forged tag; the salts it answers open every one of its commitments; the record counts one session and holds the
+/// session's table refs; a session registers once, and in the epoch that opened it only: of two sessions committed after,
+/// the second's record counts two and the first no longer registers.
 fn value_salts_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
     let name = "zk_value_salts";
     if gpu {
@@ -5603,7 +5606,7 @@ fn value_salts_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
 }
 
 fn value_salts_run(st: &Stmt, inst: &Instances, lean: &std::path::Path, dir: &std::path::Path) -> Result<Value, String> {
-    use flock_live::firewall::{CommitTable, LeanValues, lean_commit, lean_salts, refs_file, table_ref, values_request};
+    use flock_live::firewall::{CommitTable, LeanValues, lean_commit, lean_register, lean_salts, refs_file, table_ref, values_request};
     let (c, np) = (&st.c, st.c.ports.len());
     let key = dir.join("salt.key");
     let values = LeanValues::start(lean, &key)?;
@@ -5657,8 +5660,12 @@ fn value_salts_run(st: &Stmt, inst: &Instances, lean: &std::path::Path, dir: &st
     let refs = refs_file(&trefs, &order);
     let refs_path = dir.join("refs.bin");
     std::fs::write(&refs_path, &refs).map_err(|e| e.to_string())?;
+    // the session's registration, the one the epoch opened
+    let (m, record) = lean_register(values.addr(), &s)?;
+    let records_path = dir.join("records.bin");
+    std::fs::write(&records_path, &record).map_err(|e| e.to_string())?;
     let (key_s, refs_s, path_s) = (key.display().to_string(), refs_path.display().to_string(), path.display().to_string());
-    let loop_env = vec![("FC_FIREWALL_SALT_KEY", key_s), ("FC_FIREWALL_COMMITMENTS", refs_s.clone())];
+    let loop_env = vec![("FC_FIREWALL_SALT_KEY", key_s), ("FC_FIREWALL_COMMITMENTS", records_path.display().to_string())];
     // the service's salts open its every commitment
     let salts = lean_salts(values.addr(), &refs)?;
     let opens = order.iter().enumerate()
@@ -5672,13 +5679,23 @@ fn value_salts_run(st: &Stmt, inst: &Instances, lean: &std::path::Path, dir: &st
     let mut forged = refs.clone();
     forged[8 + 205] ^= 1;
     let forged_tag = lean_salts(values.addr(), &forged).err().unwrap_or_default();
+    // the registration: its record holds the session's table refs; the session registers once, and a stack that commits
+    // its values twice more and registers the second has a record that says two
+    let holds = record.len() == 12 + trefs.iter().map(Vec::len).sum::<usize>() + 64 && record[12..record.len() - 64] == trefs.concat()[..];
+    let again = lean_register(values.addr(), &s).err().unwrap_or_default();
+    let (s2, _) = lean_commit(values.addr(), &tables)?;
+    let (s3, _) = lean_commit(values.addr(), &tables)?;
+    let (m3, _) = lean_register(values.addr(), &s3)?;
+    let closed = lean_register(values.addr(), &s2).err().unwrap_or_default();
     let service = json!({
         "opens": opens,
         "commit_with_salts": with_salts.trim_end(),
         "short_refs": short,
         "forged_tag": forged_tag,
+        "registered": {"sessions": m, "holds_its_table_refs": holds, "again": again, "of_two_sessions": m3, "closed_epoch": closed},
         "ok": opens && with_salts.starts_with("err a commit body of") && short.contains("a refs file of")
-            && forged_tag.contains("its tag is not the ZK server's"),
+            && forged_tag.contains("its tag is not the ZK server's")
+            && m == 1 && holds && m3 == 2 && [&again, &closed].iter().all(|w| w.contains("is none the current epoch opened")),
     });
     // the sessions
     let seen = |v: &Value| v["seen"].as_array().cloned().unwrap_or_default();
@@ -5703,7 +5720,8 @@ fn value_salts_run(st: &Stmt, inst: &Instances, lean: &std::path::Path, dir: &st
     let pass = service["ok"] == true && ["overwritten", "kept", "own"].iter().all(|k| sessions[k]["ok"] == true);
     Ok(json!({"case": "zk_value_salts", "expect": "the server's salts overwrite the stack's and the session is accepted; the stack's kept, \
                                                  rejected at the opening; the stack's own commitments refused by the loop; a salt in a commit, a short \
-                                                 refs file and a forged tag refused by the service",
+                                                 refs file and a forged tag refused by the service; a record counting its \
+                                                 epoch's sessions, each session registered once and in its own epoch",
               "service": service, "sessions": sessions, "pass": pass}))
 }
 

@@ -29,9 +29,9 @@ SHA-512 of its salt.
 
 **Grinding.** A stack that commits its values in `m` sessions and registers the one whose public roots it likes chooses
 among `m` outcomes, so it leaks at most `log₂ m` bits through the choice. The record makes `m` public, so the term is
-computable from what the verifier sees (`Flock.ValueSalts`, `Flock.Guarantees.RegisteredLeakage`).
+computable from what the verifier sees (`Verity.ValueSalts`, `Verity.Guarantees.RegisteredLeakage`).
 
-**The key is the ZK server's alone** (`zk-server-own-user`, `Flock.Assumptions.ZkServerOwnUser`): the value service and
+**The key is the ZK server's alone** (`zk-server-own-user`, `Verity.Assumptions.ZkServerOwnUser`): the value service and
 the session loop run under the ZK server's own OS user, which no worker and no serving stack shares, so nothing the stack
 runs reads the key or the epoch. The tags, the record tags and the count `m` mean what they say only under it.
 -/
@@ -217,7 +217,7 @@ def recordOf (k : ByteArray) (m : Nat) (o : Opened) : ByteArray :=
 
 /-- A registration record as a records file holds it: its epoch's session count, its table refs, their bytes and its
 record tag. -/
-structure Record where
+structure RegistrationRecord where
   m : Nat
   tables : Array TableRef
   trefs : ByteArray
@@ -225,13 +225,13 @@ structure Record where
   deriving Inhabited
 
 /-- Whether `r`'s record tag is the server's for its session count and table refs, under the key `k`. -/
-def Record.valid (k : ByteArray) (r : Record) : Bool := ctEq r.tag (recordTagOf k r.m r.tables.size r.trefs)
+def RegistrationRecord.valid (k : ByteArray) (r : RegistrationRecord) : Bool := ctEq r.tag (recordTagOf k r.m r.tables.size r.trefs)
 
 /-- **A records file**: registration records one after another, each `be64 m ‖ be32 T ‖ T table refs ‖ tag`, `T` at
 least one. -/
-def parseRecords (b : ByteArray) : Except String (Array Record) := go b.size 0 #[]
+def parseRecords (b : ByteArray) : Except String (Array RegistrationRecord) := go b.size 0 #[]
 where
-  go : Nat → Nat → Array Record → Except String (Array Record)
+  go : Nat → Nat → Array RegistrationRecord → Except String (Array RegistrationRecord)
     | 0, o, acc => if o == b.size then pure acc else throw s!"a records file of {b.size} bytes, past its records at byte {o}"
     | fuel + 1, o, acc => do
       if o == b.size then return acc

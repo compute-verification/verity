@@ -681,8 +681,8 @@ impl Drop for LeanSession {
 
 /// The ZK server's value service of record: `flock-firewall values --salt-key FILE` (`Flock.Firewall.Values` in the Lean
 /// verifier), which holds the server's salt key and derives every value commitment's salt from it (live PROTOCOL.md
-/// §10.2). The serving stack commits through it ([`lean_commit`]) and the prover takes its witness's salts from it
-/// ([`lean_salts`]). It runs until this handle drops.
+/// §10.2). The serving stack commits through it ([`lean_commit`]) and registers one session of each epoch
+/// ([`lean_register`]), and the prover takes its witness's salts from it ([`lean_salts`]). It runs until this handle drops.
 #[cfg(feature = "sha512")]
 pub struct LeanValues {
     child: std::process::Child,
@@ -842,6 +842,25 @@ pub fn refs_rows(refs: &[u8]) -> Result<usize, String> {
         return Err(format!("a refs file of {} bytes, where {t} table refs and {r} row refs take {}", refs.len(), 8 + TABLE_REF * t + 12 * r));
     }
     Ok(r)
+}
+
+/// Registers the commit session `s` through the value service at `addr` (`register S`): the number of sessions the
+/// service's epoch opened, and the registration's record (`Flock.Firewall.Salts.recordOf`: `be64 m ‖ be32 T ‖` the
+/// session's table refs `‖` its record tag). The session loop's `--commitments` is records one after another.
+#[cfg(feature = "sha512")]
+pub fn lean_register(addr: &str, s: &[u8]) -> Result<(u64, Vec<u8>), String> {
+    let fail = |e: String| refused(format!("the Lean value service's registration at {addr}: {e}"));
+    let b = values_request(addr, &format!("register {}", crate::hex(s)), &[]).map_err(fail)?;
+    let mut o = 0;
+    let w = answer_line(&b, &mut o).map_err(fail)?;
+    let (Some(m), Some(len)) = (w.first().and_then(|x| x.parse::<u64>().ok()), w.get(1).and_then(|x| x.parse::<usize>().ok())) else {
+        return Err(fail(format!("an answer {w:?}")));
+    };
+    let rec = &b[o..];
+    if rec.len() != len || len < 12 || rec[..8] != m.to_be_bytes() {
+        return Err(fail(format!("a record of {} bytes, where the answer names {len} and {m} sessions", rec.len())));
+    }
+    Ok((m, rec.to_vec()))
 }
 
 /// The salts of the rows the refs file `refs` names, in its row refs' order, from the value service at `addr`, which checks
