@@ -4,7 +4,7 @@ caps sit far above every deployed V* session at every `fast100` schedule: a tabl
 later level's RecCap over both reps' `2 · 2^cap` tops, RecCap's `2^cap`), a part's ports (its row ports, at most
 `MAX_REGIONS`, with `v` and `out`) and the deepest registered tree (`rec-acc`'s chain of every opening, both reps' and R's);
 and V*'s list, the recursion's parts (each level's RecOpen, the algebra's parts, RecCap at each later level and over level
-0's cap), at every `fast100` m of the deployed class's claims."""
+0's cap), and the hm96 calls that list records (`recorded_calls`), at every `fast100` m of the deployed class's claims."""
 from __future__ import annotations
 
 import pytest
@@ -33,6 +33,22 @@ def test_the_mirror_refuses_what_the_lean_guards_refuse():
     assert RB.count(10) is None and RB.count(RB.MAX_STATEMENTS) is None
     assert RB.count(RB.MAX_STATEMENTS + 1) == (
         f"refused: V*'s list at the verifier's inner shape holds 4097 statements, more than 4096: {TAIL}")
+    assert RB.recorded(0) is None and RB.recorded(RB.MAX_RECORDED) is None
+    assert RB.recorded(RB.MAX_RECORDED + 1) == (
+        f"refused: V*'s list at the verifier's inner shape records 4294967297 hm96 calls, more than 4294967296: {TAIL}")
+
+
+def test_a_statements_recorded_calls_are_the_verifiers():
+    """`recorded_at` counts as the Lean guards' `recordedAt` does: a level at `m = 27`'s level 0 over its `2 · 218`
+    openings and `rec-acc` rows, R's level with and without R's shape, a RecCap of 128 nodes, RecSparse's two ports at
+    two rows, the link table's part, and a list of three."""
+    assert RB.recorded_at("rec-open", 436, acc_reads=436) == 4360
+    assert RB.recorded_at("rec-open-stacked", 218, acc_reads=218) == 1308
+    assert RB.recorded_at("rec-open-stacked", 218) == 436
+    assert RB.recorded_at("cap", 128) == 512
+    assert RB.recorded_at("sparse", 2, own_rows=4) == 8
+    assert RB.recorded_at("link", 18) == 0
+    assert RB.recorded_at("rec-open", 436, acc_reads=436) + 2 * RB.recorded_at("cap", 128) == 5384
 
 
 def test_log2ceil_is_the_verifiers():
@@ -54,12 +70,15 @@ def test_the_caps_sit_far_above_every_deployed_v_star_session():
 
 @pytest.mark.slow
 def test_the_statement_cap_sits_far_above_every_deployed_v_star_list():
-    counts = {}
+    counts, calls = {}, {}
     for shape in [(m, 22, 8) for m in range(22, 36)] + [(22, 6, 16)]:
         try:
             sh = A.Shape(*shape)
             counts[shape] = 2 * len(sh.sched.levels) + len(RR.parts(RR.spec(sh)))
+            calls[shape] = RB.recorded_calls(sh)
         except ValueError:
             continue
     assert len(counts) >= 10 and counts.get((27, 22, 8)) == 10, counts
     assert 64 * max(counts.values()) <= RB.MAX_STATEMENTS, counts
+    assert calls.get((27, 22, 8)) == 11128 and calls.get((35, 22, 8)) == 14232, calls
+    assert 2 ** 18 * max(calls.values()) <= RB.MAX_RECORDED, calls
