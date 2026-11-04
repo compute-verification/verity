@@ -17,6 +17,8 @@ instance `t` (`instPos`) is the one its unit's member gives it, from that member
 * `locate_iff`, `locate_any_iff`: what locating a unit at a range's node and member says of the unit.
 * `unit_exists`, `unit_unique`: a unit of the population is one member's unit, once.
 * `instPos_eq`, `instPos_at`: an instance's claims position, at the member and unit holding it.
+* `instPos_lt`, `locate_node_unique`: a claims position inside the members' program is a member's unit's, which the
+  code locates at the instance's node, and a unit is located at one node.
 -/
 
 namespace Properties.NetworkScan.Query
@@ -372,5 +374,38 @@ theorem instPos_at {P : Flock.Program.Prog} {d : Flock.TemplateQuery.Desc} {tids
   obtain ⟨m, hm, u, hu, huv, hpos⟩ :=
     instPos_eq (pos := pos) (v := r.first + t) hperm (by omega) fun w => hloc w t ht
   exact ⟨r, hr, hnode, htid, m, hm, u, hu, huv, hpos⟩
+
+theorem findSome?_of_getD_ne {α β : Type} {l : List α} {f : α → Option β} {d : β}
+    (h : (l.findSome? f).getD d ≠ d) : ∃ a ∈ l, ∃ b, f a = some b ∧ (l.findSome? f).getD d = b := by
+  cases hf : l.findSome? f with
+  | none => rw [hf] at h; exact (h rfl).elim
+  | some b =>
+    obtain ⟨a, ha, hfa⟩ := List.exists_of_findSome?_eq_some hf
+    exact ⟨a, ha, b, hfa, rfl⟩
+
+/-- **A placed instance is a member's unit**: a claims position of template `i`'s instance `t` that is not past the
+members' program is the one `pos` gives at a member `m` and unit `u` the code locates at the template's node and member
+`t`, from `base ms m`. -/
+theorem instPos_lt {P : Flock.Program.Prog} {rs : Array TRange} {ms : Members} {i t : ℕ}
+    {pos : Flock.Circuit → ℕ → ℕ → Option ℕ} (h : instPos P rs ms i t pos ≠ (jointOf ms).gates.length) :
+    ∃ m < ms.length, ∃ u < (ms.getD m default).2.size,
+      ((Flock.TemplateQuery.locate rs ((ms.getD m default).2.getD u 0)).any
+        fun l => l.1 == (templateNodes P).getD i 0 && l.2.1 == t) = true ∧
+      ∃ x, pos (ms.getD m default).1 (ms.getD m default).2.size u = some x ∧
+        instPos P rs ms i t pos = base ms m + x := by
+  obtain ⟨m, hm, y, hy, he⟩ := findSome?_of_getD_ne h
+  simp only [Option.bind_eq_some_iff, Option.map_eq_some_iff] at hy
+  obtain ⟨u, hu, x, hx, rfl⟩ := hy
+  exact ⟨m, List.mem_range.1 hm, u, List.mem_range.1 (List.mem_of_find?_eq_some hu), List.find?_some hu, x, hx, he⟩
+
+/-- **A unit is located at one node.** -/
+theorem locate_node_unique {rs : Array TRange} {v k k' t t' : ℕ}
+    (h : ((Flock.TemplateQuery.locate rs v).any fun l => l.1 == k && l.2.1 == t) = true)
+    (h' : ((Flock.TemplateQuery.locate rs v).any fun l => l.1 == k' && l.2.1 == t') = true) : k = k' := by
+  rcases hl : Flock.TemplateQuery.locate rs v with _ | l
+  · rw [hl] at h; simp at h
+  · rw [hl] at h h'
+    simp only [Option.any_some, Bool.and_eq_true, beq_iff_eq] at h h'
+    exact h.1.symm.trans h'.1
 
 end Properties.NetworkScan.Query
