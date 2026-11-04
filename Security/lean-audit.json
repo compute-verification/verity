@@ -1666,46 +1666,6 @@
    "owner": "@compute-accounting",
    "digest": "a65c12c575aa911fb0a9e4c6ecaa41448dbb400843f7936024ed8d7eccec92ac"
   },
-  "Pouw.Assumptions.Lead.CardWithinAccelW1": {
-   "owner": "@compute-research",
-   "digest": "490e140a3224a61bb688b4558277fb195a991b6867847a944e7dd9d56d180f2d"
-  },
-  "Pouw.Assumptions.Lead.CertifierCoins": {
-   "owner": "@compute-research",
-   "digest": "dac19ea8e9da14a56eb26effd7c85954ae2790fd4738c521622c237c1afc4e49"
-  },
-  "Pouw.Assumptions.Lead.CommitL1w": {
-   "owner": "@compute-research",
-   "digest": "432a64db140ea1e95fe60399e33d18f724ca468af63b9245890107f4058817d3"
-  },
-  "Pouw.Assumptions.Lead.HonestHashRuled": {
-   "owner": "@compute-research",
-   "digest": "9aa8c125fcc8ed2aae5d6ed602764229385051720470b48161175f626e6c04ed"
-  },
-  "Pouw.Assumptions.Lead.OneInstructionMinimal": {
-   "owner": "@compute-research",
-   "digest": "c6d521aab045d905d77c91be4b0c34272bc637fdf989c0c7e282f5bf678c609a"
-  },
-  "Pouw.Assumptions.Lead.OutsourceWithinEgressLead": {
-   "owner": "@compute-research",
-   "digest": "3cc045b249e430cd65f2b4dd4ed641064204a53cd7e7054c3baf9e34ca1ffc52"
-  },
-  "Pouw.Assumptions.Lead.SerialForwards": {
-   "owner": "@compute-research",
-   "digest": "5810fbb215691023b9ce279b7e9ce946e63e4ac1b51d4d42422d4d82440ba440"
-  },
-  "Pouw.Assumptions.Lead.ShaWrites": {
-   "owner": "@compute-research",
-   "digest": "947cae386e3f1a19f45b418ddb688ee007cbdf85b6b0167d381acba5488fbd8b"
-  },
-  "Pouw.Assumptions.Lead.TileGrain": {
-   "owner": "@compute-research",
-   "digest": "2281c6db94c147f00dadd9837c28b61f18ca9ab8d23bf710798ec0ea45372a84"
-  },
-  "Pouw.Assumptions.Lead.W1": {
-   "owner": "@compute-research",
-   "digest": "72feea8d4c66f35d51c1b5fd2e5766a7da2b9ce0e4844e9d85c4470c3be135bb"
-  },
   "Pouw.Assumptions.OutsourceWithinEgress": {
    "owner": "@compute-research",
    "digest": "b56a56840f42a8ccfc2418f4a8b4169d2e1025ce9933babced5498b9fff7fbc8"
@@ -1890,10 +1850,6 @@
    "owner": "@compute-accounting",
    "digest": "7cfd18e0250ce18f4e28679c438c71ac38537b955ef174309651294dde643402"
   },
-  "Pouw.Guarantees.Lead.ChunksOf": {
-   "owner": "@compute-research",
-   "digest": "f927170f60f4894145db559ac76704c0a71e7fe4c98458d639bcc6190e55dc07"
-  },
   "Pouw.Gγ": {
    "owner": "@compute-accounting",
    "digest": "09f42b57cb73d9645e95b4480fa95b4479fde6cd18c00a646b8aa0e3f1badc68"
@@ -1905,18 +1861,6 @@
   "Pouw.InInt7": {
    "owner": "@compute-accounting",
    "digest": "d7dc4723b128157ac4a867bc38bdcbb69e10521d919e03fa35f9469d6f7b4248"
-  },
-  "Pouw.Lead.Accepted": {
-   "owner": "@compute-research",
-   "digest": "de719d852ecc89522c5505d0c152e1bb8e7b4aa42485cb274507fe78d908f6af"
-  },
-  "Pouw.Lead.Forward.Accepted": {
-   "owner": "@compute-research",
-   "digest": "98407f08b716f4ad3cb2e88b349f6cfbedd91a922de31bfaf77e9f2e4eb0023b"
-  },
-  "Pouw.Lead.Layout.Admits": {
-   "owner": "@compute-research",
-   "digest": "074bba61278b3227b632d3c9401f39caa854e4f017308dd847c645a4ad2416ad"
   },
   "Pouw.MerkleExtract.Opens": {
    "owner": "@compute-research",
@@ -14806,7 +14750,19 @@
    "Flock.SecurityProofs.IntegrityBlock": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.IntegrityHorizonBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Accounting.SecurityProofs.PooledSampling": "frozen (no-function): It bounds uniform samples over an abstract causal family of rounds whose good sets are any functions of the earlier rounds' coins and of the round's own coins other than its sample (Security/Definitions/Accounting/RateAuditPooled.lean, Causal), not a deployed sampler or verifier.",
-   "Accounting.SecurityProofs.RatePooled": "frozen (no-function,hash): As Accounting.SecurityProofs.PooledSampling for the passes of a chained window of abstract chip programs in the random-oracle model (Security/Definitions/Accounting/RateAuditRemote.lean, Chain), each pass's correct receipts its good set, not the rate audit's code."
+   "Accounting.SecurityProofs.RatePooled": "frozen (no-function,hash): As Accounting.SecurityProofs.PooledSampling for the passes of a chained window of abstract chip programs in the random-oracle model (Security/Definitions/Accounting/RateAuditRemote.lean, Chain), each pass's correct receipts its good set, not the rate audit's code.",
+   "Pouw.Guarantees.Lead.G": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Compose.G; that guarantee is unlisted and the lead gets no new Lean (TOP-211; Daniel on CMP-320, 4 Nov)",
+   "Pouw.Guarantees.Lead.G_tail": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Tail.G_tail; that guarantee is unlisted and the lead gets no new Lean (TOP-211; Daniel on CMP-320, 4 Nov)",
+   "Pouw.Guarantees.Lead.GapAll": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Statement.gapAll; that guarantee is unlisted and the lead gets no new Lean (TOP-211; Daniel on CMP-320, 4 Nov)",
+   "Pouw.Guarantees.Lead.GapAt": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Statement.gapAt; that guarantee is unlisted and the lead gets no new Lean (TOP-211; Daniel on CMP-320, 4 Nov)",
+   "Pouw.Guarantees.Lead.GapAtDecode": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Statement.gapAtDecode; that guarantee is unlisted and the lead gets no new Lean (TOP-211; Daniel on CMP-320, 4 Nov)",
+   "Pouw.Guarantees.Lead.GapFixedAt": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Tail.gapFixedAt; that guarantee is unlisted and the lead gets no new Lean (TOP-211; Daniel on CMP-320, 4 Nov)",
+   "Pouw.Guarantees.Lead.Honest": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Compose.honest; that guarantee is unlisted and the lead gets no new Lean (TOP-211; Daniel on CMP-320, 4 Nov)",
+   "Pouw.Guarantees.Lead.NetworkFwd": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Network.networkFwd; that guarantee is unlisted and the lead gets no new Lean (TOP-211; Daniel on CMP-320, 4 Nov)",
+   "Pouw.Guarantees.Lead.NetworkLlama": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Network.networkLlama; that guarantee is unlisted and the lead gets no new Lean (TOP-211; Daniel on CMP-320, 4 Nov)",
+   "Pouw.Guarantees.Lead.Nontrivial": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Statement.nontrivial; that guarantee is unlisted and the lead gets no new Lean (TOP-211; Daniel on CMP-320, 4 Nov)",
+   "Pouw.Guarantees.Lead.NontrivialTail": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Tail.nontrivialTail; that guarantee is unlisted and the lead gets no new Lean (TOP-211; Daniel on CMP-320, 4 Nov)",
+   "Pouw.Guarantees.Lead.TailAt": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Tail.tailAt; that guarantee is unlisted and the lead gets no new Lean (TOP-211; Daniel on CMP-320, 4 Nov)"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
