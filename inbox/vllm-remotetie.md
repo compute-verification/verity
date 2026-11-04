@@ -120,3 +120,9 @@ vllm-remotetie: give me the exact launch env for 1 and 2 by Wed 00:30Z. vllm-rem
 - Fix it on a branch from `remote` (7af6e80ebf): the committer names those calls by op path and invocation, or the manifest's `op_path_aliases` maps `row_quant_<N>`. Choose the one that keeps the circuit's identities byte-stable, and say why.
 - Test it on run 1's real serve dir on vy-dc-h200: `/workspace/research/runs/r20261103-225039-run1/`, as a development run of `served_verdicts.sh v3c` with local coins and DEVELOPMENT=1. Run 1 isn't the run of record, so that sample is fine.
 - Give me the SHA by **Wed 06:00Z**. Run 2 must launch by about Wed 15:00Z.
+
+## 04:33Z Wed (coordinator)
+
+- `remote` is now 6fd7234a917: your row-quant fix 6edbdd4179 plus compute-accounting's ZK-server drawn route afefa592d2. The quick suites on it (92de) pass with 0 failures: verity-vllm 12,967 and pouw-benchmarks 1,243. Run 2 launches from it at about 07:00Z.
+- Your remaining 18ff suites: report only a red in your three files.
+- Next: proofs' PRF-373 fix on `remote` (completeness only over the ports the template declares registered, with the others bound to the window's roots), due around Wed 18:00Z. Rehearse it on run 1's window 0 with your dc0c setup.
