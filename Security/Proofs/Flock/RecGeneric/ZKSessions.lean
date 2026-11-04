@@ -12,9 +12,11 @@ states that such an outer phase is zero knowledge per outcome (`Claims.ZKOut`), 
 reads it:
 
 * **the session system** (`ZkSess`): the session prover at its witness (`PS`, `kS` rounds at a session statement), its
-  public outcome (`outS`), and, at each compiled statement `x`, the session's tape `NS x × ΩS x` and its simulator's
-  coins `CS x` and program (`progS x`, given the session statement and outcome), the same at every session statement
-  under `x`. Its zero knowledge (`ZkSess.ZK`) is `ZKOut` at each `x` within `ε_S`.
+  public outcome (`outS`), and, at each compiled statement `x`, the session relation (`RS x`), the session's tape
+  `NS x × ΩS x` and its simulator's coins `CS x` and program (`progS x`, given the session statement and outcome), the
+  same at every session statement under `x`. Its zero knowledge (`ZkSess.ZK`) is `ZKOut` at each `x` within `ε_S`. The
+  composed prover draws its tapes, and the composed simulator its coins, before the outer statement fixes the session
+  statements, so their types are `x`'s; `RS x` may restrict the session statements to those whose own types match.
 * **the layout** (`Sessions`): at `x`, `n x` sessions, session `i` at `xs x x_O i`, and `ko x` rounds in all, which the
   sessions' rounds make up at every outer statement (`Sessions.Shaped`, an equation, met by any number of sessions).
 * **the composition**: the prover runs session `i` on its tape at its own history (`Sessions.PO`); the outcome is each
@@ -37,11 +39,12 @@ namespace Claims.RecGeneric
 open Claims Claims.Recursion
 
 /-- **A zero-knowledge session system at compiled statements**: the session prover at the witness `WS` (`PS`, on the
-tape `NS x × ΩS x` under the compiled statement `x`, `kS` rounds at a session statement), its public outcome (`outS`),
-and its simulator under `x`: coins `CS x` and a program given the session statement and the outcome (`progS x`). -/
+tape `NS x × ΩS x` under the compiled statement `x`, `kS` rounds at a session statement), its relation under `x` (`RS`),
+its public outcome (`outS`), and its simulator under `x`: coins `CS x` and a program given the session statement and the
+outcome (`progS x`). -/
 structure ZkSess where
   WS : Type
-  RS : Rel WS
+  RS : Msg → Rel WS
   kS : Msg → ℕ
   NS : Msg → Type
   ΩS : Msg → Type
@@ -67,10 +70,10 @@ def simAt (S : ZkSess) (x : Msg) : SimOut S.StS where
   prog xs o c := S.progS x xs o c
 
 /-- **The sessions are zero knowledge per outcome** under each compiled statement `x`: `ZKOut` of the session prover on
-`NS x × ΩS x`, against every verifier of the session's `kS` rounds, on every witness in `RS`, at `simAt x` and
+`NS x × ΩS x`, against every verifier of the session's `kS` rounds, on every witness in `RS x`, at `simAt x` and
 `εS x`. -/
 def ZK (S : ZkSess) (H : Msg → Msg) (εS : (x : Msg) → Msg → S.WS → (Θ : Type) → VStar Θ → Θ → S.StS → ℝ) : Prop :=
-  ∀ x, ZKOut (fun _ => S.NS x) (fun _ => S.ΩS x) H S.kS (fun w _ => S.PS w x) S.RS S.outS (S.simAt x) (εS x)
+  ∀ x, ZKOut (fun _ => S.NS x) (fun _ => S.ΩS x) H S.kS (fun w _ => S.PS w x) (S.RS x) S.outS (S.simAt x) (εS x)
 
 /-- `m` sessions' tapes under `x`. -/
 def tapes (S : ZkSess) (x : Msg) : ℕ → Type
@@ -137,8 +140,8 @@ def cnext (x xO : Msg) (wo : ℕ → S.WS) : (m i : ℕ) → List (Msg × Msg) �
 def PO (wo : ℕ → S.WS) (x : Msg) : Prover (S.tapes x (L.n x) × Unit) where
   next xO hist t := L.cnext x xO wo (L.n x) 0 hist t.1
 
-/-- **The composed relation**: every session's witness is in `RS` at its statement. -/
-def RO (x : Msg) : Rel (ℕ → S.WS) := fun xO wo => ∀ i < L.n x, S.RS (L.xs x xO i) (wo i)
+/-- **The composed relation**: every session's witness is in `RS x` at its statement. -/
+def RO (x : Msg) : Rel (ℕ → S.WS) := fun xO wo => ∀ i < L.n x, S.RS x (L.xs x xO i) (wo i)
 
 /-- The outcomes of the `m` sessions from session `i` on the transcript `τ` of their rounds: each one's at its
 statement on its rounds where the run reaches it, and `none` for each after a session that stops the run. -/

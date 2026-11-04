@@ -161,11 +161,11 @@ theorem ev_succ (H : Msg → Msg) (x xO : Msg) (wo : ℕ → S.WS) {Θ : Type} (
 
 open Classical in
 /-- **The hybrid over the sessions in turn**: the `m` sessions from session `i`, after the transcript `ms`, against `V*`
-after its messages, are zero knowledge per outcome within `errAt`, on witnesses in `RS` at those sessions. -/
+after its messages, are zero knowledge per outcome within `errAt`, on witnesses in `RS x` at those sessions. -/
 theorem hybrid (H : Msg → Msg) (εS : (x : Msg) → Msg → S.WS → (Θ : Type) → VStar Θ → Θ → S.StS → ℝ) (hS : S.ZK H εS)
     (x xO : Msg) (wo : ℕ → S.WS) {Θ : Type} (Vs : VStar Θ) (θ : Θ) :
     ∀ (m i : ℕ) (ms : List (Msg × Out)) (os : List (Option S.StS)) (Ev : List (Msg × Out) → Prop),
-      (∀ j, i ≤ j → j < i + m → S.RS (L.xs x xO j) (wo j)) →
+      (∀ j, i ≤ j → j < i + m → S.RS x (L.xs x xO j) (wo j)) →
       Pr (fun t : S.tapes x m => L.outs x xO m i (L.lrun H x xO wo Vs θ (ms.map Prod.fst) m i t) = os ∧
           Ev (ms ++ L.lrun H x xO wo Vs θ (ms.map Prod.fst) m i t)) ≤
         Pr (fun c : S.coins x m =>
@@ -207,7 +207,7 @@ theorem hybrid (H : Msg → Msg) (εS : (x : Msg) → Msg → S.WS → (Θ : Typ
         if S.outS (L.xs x xO i) (τA tA) = a ∧ ZKMal.goesOn (S.kS (L.xs x xO i)) (τA tA) = true then
           L.errAt H εS x xO wo Θ Vs θ m (i + 1) (ms ++ τA tA) os
         else 0
-      have hR' : ∀ j, i + 1 ≤ j → j < i + 1 + m → S.RS (L.xs x xO j) (wo j) := fun j h1 h2 =>
+      have hR' : ∀ j, i + 1 ≤ j → j < i + 1 + m → S.RS x (L.xs x xO j) (wo j) := fun j h1 h2 =>
         hR j (by omega) (by omega)
       have h1 : ∀ tA, Pr (fun tB : S.tapes x m =>
             L.outs x xO (m + 1) i (L.lrun H x xO wo Vs θ (ms.map Prod.fst) (m + 1) i (tA, tB)) = some a :: os ∧
