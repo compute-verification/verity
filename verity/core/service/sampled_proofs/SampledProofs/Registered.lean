@@ -199,4 +199,55 @@ def Entry.toJson (e : Entry) : Json :=
   Json.mkObj [("leaves", Lean.toJson e.leaves), ("words", Lean.toJson e.words), ("word_bits", Lean.toJson e.wordBits),
     ("domain", Json.str e.domain)]
 
+/-! ### The verifier's registered ports against the record's entries -/
+
+/-- `registered.entry_of`: the record's entry for `value`, the last of its `registered` entries naming it (as R7 reads
+it, and Python's dict). -/
+def entryOf (rec : Json) (value : String) : Option Json :=
+  match getD rec "registered" with
+  | .arr es => es.reverse.find? fun e => jeq (getD e "value") (.str value)
+  | _ => none
+
+/-- The leaf schema the verifier counts `value`'s rows in (`entries`'): its row format's (`schemas`), else `SCHEMA`. -/
+def schemaOf (schemas : Array (String × String)) (value : String) : String :=
+  (schemas.find? (·.1 == value)).elim SCHEMA (·.2)
+
+/-- Port `q` of the verifier's registered reads against the record's entry `e` for its value, field by field, each key
+with whether they agree: the root and domain (lowercase hex), the leaf count, the words (none when the port names none),
+the word bits (16 when the entry leaves them out), and the leaf schema, which the entry leaves to the verifier
+(`schemaOf`). -/
+def entryFields (schemas : Array (String × String)) (q : Flock.Registered.Port) (e : Json) : List (String × Bool) :=
+  [("root", jeq (getD e "root") (.str (Flock.hexOf q.root))),
+   ("leaves", int? (getD e "leaves") == some (q.leaves : Int)),
+   ("words", int? (getD e "words") == q.words.map fun w => (w : Int)),
+   (WIDTH_KEY, (field? e WIDTH_KEY).elim (some (WORD_BITS : Int)) int? == some (q.wordBits : Int)),
+   ("domain", jeq (getD e "domain") (.str (Flock.hexOf q.domain))),
+   (Flock.Registered.SCHEMA_KEY, q.schema == schemaOf schemas q.value)]
+
+/-- The first field of `entryFields` on which port `q` and the entry `e` differ. -/
+def entryDiff? (schemas : Array (String × String)) (q : Flock.Registered.Port) (e : Json) : Option String :=
+  ((entryFields schemas q e).find? (!·.2)).map (·.1)
+
+/-- `registered.entry_clash`: the first port of `own` that differs from the record's entry for its value (`entryOf`),
+with the field (`entryDiff?`). A port of a value the record has no entry for is held by nothing here. -/
+def entryClash (schemas : Array (String × String)) (rec : Json) (own : Array Flock.Registered.Port) :
+    Option (Flock.Registered.Port × String) :=
+  own.findSome? fun q => (entryOf rec q.value).bind fun e => (entryDiff? schemas q e).map (q, ·)
+
+theorem entryDiff?_none {schemas : Array (String × String)} {q : Flock.Registered.Port} {e : Json}
+    (h : entryDiff? schemas q e = none) : ∀ f ∈ entryFields schemas q e, f.2 = true := by
+  intro f hf
+  simpa using List.find?_eq_none.mp (Option.map_eq_none_iff.mp h) f hf
+
+/-- **No port differs from its value's entry**: where `entryClash` finds none, every port of `own` whose value the record
+has an entry for agrees with it on every field of `entryFields`: root, leaf count, words, word bits, domain and schema. -/
+theorem entryClash_none {schemas : Array (String × String)} {rec : Json} {own : Array Flock.Registered.Port}
+    (h : entryClash schemas rec own = none) :
+    ∀ q ∈ own, ∀ e, entryOf rec q.value = some e → ∀ f ∈ entryFields schemas q e, f.2 = true := by
+  intro q hq e he
+  apply entryDiff?_none
+  have h1 := Array.findSome?_eq_none_iff.mp h q hq
+  rw [he] at h1
+  exact Option.map_eq_none_iff.mp h1
+
 end SampledProofs.Registered

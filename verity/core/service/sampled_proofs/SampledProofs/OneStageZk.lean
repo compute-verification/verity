@@ -21,6 +21,11 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   and opened (`Challenger.trustedTreesOf`). Each session's coins must be one tree's, a tree no other session's, its
   record's `coin_tree`, link points and every round's coins as the challenger logged them, and every tree logged must be
   a session's (`Challenger.sessionsTreeReason`); else the check refuses, before any session is verified;
+* **ports** (`readsOf`, `portsHeld`): the verifier's registered file names each port once (`Registered.ofJson`), no two
+  ports of one root register it differently (`ownOf`: a row's opening finds its port by root), and every port of a value
+  the registration record has an entry for agrees with that entry in root, leaf count, words, word bits and domain, its
+  leaf schema the one the verifier counts the value's rows in (`Registered.entryClash`); else the check refuses, before
+  any session is verified;
 * **check**: `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
   (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path, its last the files' ports and roots,
@@ -233,8 +238,9 @@ def inputsOf (tags : Flock.Tags) (p : Own) (circuitB pubB : ByteArray) (bs : Cor
     program := some p.program }
 
 /-- The verifier's registered reads, as `verifyCmd` derives them from its registered file and its registered interface:
-its own ports, the reads it knows, the registered parameters, the ports it binds to the window's committed values, and
-the ports the window's interface declares registered (`RegBound.declaredOf`). -/
+its own ports (`ownOf`, which beyond `verifyCmd` refuses two ports of one root registering it differently), the reads it
+knows, the registered parameters, the ports it binds to the window's committed values, and the ports the window's
+interface declares registered (`RegBound.declaredOf`). -/
 structure Reads where
   registered : Option (Array Flock.Registered.Port)
   known : Array (String × Array (Array Nat × ByteArray))
@@ -242,16 +248,57 @@ structure Reads where
   bound : Array Flock.RegBound.Bound := #[]
   declared : Option (Array (String × String)) := none
 
+/-- The verifier's own ports, from its registered file `j` (without `RegBound.KEY`): `Registered.ofJson`'s, each name
+naming one port, and no two ports of one root registering it differently (`Registered.rootClash`): a row's opening finds
+the verifier's port by its root, and reads that port's leaf count, schema and domain. -/
+def ownOf (j : Json) : V (Array Flock.Registered.Port) := do
+  let own ← Flock.Registered.ofJson j
+  match Flock.Registered.rootClash own with
+  | some (a, b) =>
+    throw s!"registered reads: ports {a.name} and {b.name} have one root and register it differently ({(Flock.RecVStar.portDiff? a b false).getD ""}): a row's opening finds its port by root"
+  | none => pure own
+
+/-- What `ownOf` accepts: ports of distinct names, any two of one root of one registration. -/
+theorem ownOf_ok {j : Json} {own : Array Flock.Registered.Port} (h : ownOf j = .ok own) :
+    (∀ q ∈ own, ∀ q' ∈ own, q'.name = q.name → q' = q) ∧
+      ∀ a ∈ own, ∀ b ∈ own, a.root = b.root → a.registration = b.registration := by
+  obtain ⟨ps, hp, h⟩ := Flock.HmNets.bind_ok h
+  cases hc : Flock.Registered.rootClash ps with
+  | some ab => obtain ⟨a, b⟩ := ab; rw [hc] at h; cases h
+  | none =>
+    rw [hc] at h
+    cases h
+    exact ⟨Flock.Registered.ofJson_names hp, Flock.Registered.rootClash_none hc⟩
+
 def readsOf : Option Json → V Reads
   | none => pure { registered := none, known := #[], params := #[] }
   | some j => do
     let bound ← Flock.RegBound.ofJson j
     let j := Flock.RegBound.ownOf j
-    let own ← Flock.Registered.ofJson j
+    let own ← ownOf j
     let known ← Flock.Registered.knownOf j
     Flock.Registered.checkKnownAll own known
     pure { registered := some own, known := known ++ Flock.KnownRead.fullRows own (← Flock.KnownRead.readOf j),
            params := ← Flock.Registered.paramsOf j, bound }
+
+/-- The registered reads `readsOf` derives hold the ports `ownOf` accepts from the verifier's registered file. -/
+theorem readsOf_registered {f : Option Json} {rd : Reads} {own : Array Flock.Registered.Port}
+    (h : readsOf f = .ok rd) (ho : rd.registered = some own) :
+    ∃ j, f = some j ∧ ownOf (Flock.RegBound.ownOf j) = .ok own := by
+  cases f with
+  | none => cases h; cases ho
+  | some j =>
+    refine ⟨j, rfl, ?_⟩
+    obtain ⟨_, -, h⟩ := Flock.HmNets.bind_ok h
+    obtain ⟨own', hown, h⟩ := Flock.HmNets.bind_ok h
+    obtain ⟨_, -, h⟩ := Flock.HmNets.bind_ok h
+    obtain ⟨u, -, h⟩ := Flock.HmNets.bind_ok h
+    cases u
+    obtain ⟨_, -, h⟩ := Flock.HmNets.bind_ok h
+    obtain ⟨_, -, h⟩ := Flock.HmNets.bind_ok h
+    cases h
+    cases ho
+    exact hown
 
 /-- The ports the window's registered circuit record declares registered (`RegBound.declaredOfBytes`, its `program` the
 partition object's), from the blob `p.interface` names; none when it names none, and then a registered file that binds
@@ -449,19 +496,58 @@ def treesHeld (ts : Array Challenger.LoggedTree) (e : Evidence) (bs : Core.Blobs
     named := named.push (s.name, (Json.parse record).toOption.getD Json.null)
   if let some why := Challenger.sessionsTreeReason ts named then throw why
 
+/-- **The verifier's registered ports are the record's entries** (module docstring, **ports**): with registered reads
+(`readsOf`), every port whose value the registration record has an entry for agrees with it in root, leaf count, words,
+word bits and domain, and its leaf schema is the one the verifier counts the value's rows in (`Registered.entryClash`).
+R7 holds each entry to the verifier's own, and v1's check holds only the roots the verdicts report to it. -/
+def portsHeld (p : Params) (c : OneStage.Commitment) : V Unit := do
+  let some own := (← readsOf p.own.registered).registered | pure ()
+  match Registered.entryClash p.base.verifier.schemas c.record own with
+  | some (q, k) =>
+    throw s!"registered: port {q.name} reads {q.value} at another {k} than the registration record's entry for it"
+  | none => pure ()
+
+/-- What `portsHeld` accepts: no port of the verifier's registered reads differs from the record's entry for its value. -/
+theorem portsHeld_ok {p : Params} {c : OneStage.Commitment} (h : portsHeld p c = .ok ()) {rd : Reads}
+    {own : Array Flock.Registered.Port} (hr : readsOf p.own.registered = .ok rd) (ho : rd.registered = some own) :
+    Registered.entryClash p.base.verifier.schemas c.record own = none := by
+  obtain ⟨rd', hrd, h⟩ := Flock.HmNets.bind_ok h
+  rw [hr] at hrd
+  cases hrd
+  simp only [ho] at h
+  cases hc : Registered.entryClash p.base.verifier.schemas c.record own with
+  | none => rfl
+  | some qk => obtain ⟨q, k⟩ := qk; rw [hc] at h; cases h
+
 /-- The check at the coins `ξ` (module docstring, **check**): each session's coins held to the trees the challenger
-logged (`treesOf`, `treesHeld`), then the sessions' verdicts on the blobs, then v1's `checkAt` at `ξ` on them. v1
-accepts only verdicts that all accepted (`VerdictsAccept`); the run's own `all` says it again, so an acceptance reads
-the run rather than the verdicts' JSON. -/
+logged (`treesOf`, `treesHeld`), the verifier's registered ports to the record's entries (`portsHeld`), then the sessions'
+verdicts on the blobs, then v1's `checkAt` at `ξ` on them. v1 accepts only verdicts that all accepted
+(`VerdictsAccept`); the run's own `all` says it again, so an acceptance reads the run rather than the verdicts' JSON. -/
 def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
-  match treesOf p e >>= (treesHeld · e bs) >>= fun () =>
+  match treesOf p e >>= (treesHeld · e bs) >>= (fun () => portsHeld p c) >>= fun () =>
       run p.own e.pub e.sessions (some e.base.provedUnits) bs with
   | .error err => .reject s!"proofs: {err}"
   | .ok r =>
     match OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } with
     | .accept pub prof => if r.all then .accept pub prof else .reject "proofs: a session's verifier did not accept"
     | o => o
+
+/-- **An acceptance held the verifier's registered ports to the record's entries** (`portsHeld`, so `portsHeld_ok`), and
+its registered reads are ports of distinct names, any two of one root of one registration (`readsOf_registered`,
+`ownOf_ok`). -/
+theorem checkBlobsAt_held {p : Params} {c : OneStage.Commitment} {ξ : ByteArray} {e : Evidence} {bs : Core.Blobs}
+    {pub : OneStage.Public} {prof : Core.Integrity} (h : checkBlobsAt p c ξ e bs = .accept pub prof) :
+    portsHeld p c = .ok () := by
+  unfold checkBlobsAt at h
+  split at h
+  · cases h
+  · rename_i r hr
+    obtain ⟨u, h1, -⟩ := Flock.HmNets.bind_ok hr
+    obtain ⟨v, -, h2⟩ := Flock.HmNets.bind_ok h1
+    cases u
+    cases v
+    exact h2
 
 /-- The audit's check on the blobs: at the coins `coinsOf` reads (`checkBlobsAt`), refused with its reason when none
 read. -/

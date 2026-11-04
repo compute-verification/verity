@@ -106,4 +106,20 @@ def twice : String := file.compress.replace "\"a1\":" "\"a0\":"
 #guard JsonKeys.dupKey "{\"r\": [{\"k\": 1, \"k\": 2}]}" == some "\"k\""
 #guard JsonKeys.dupKey "{\"p\": {\"a\": {\"root\": \"00\", \"leaves\": 1, \"root\": \"01\"}}}" == some "\"root\""
 
+/-! `a0` and `a1` read one value, so they are two ports of one root registering it alike, which `Registered.rootClash`
+keeps; it finds two ports of one root registering it differently (a row's opening finds its port by root). A name a later
+port repeats is one `Registered.ofJson` refuses (`dupName?`), as `Json`'s type admits it though no parse builds it. -/
+
+/-- The file's ports, the second changed by `f`. -/
+def own (f : Registered.Port → Registered.Port := id) : Array Registered.Port :=
+  ((Registered.ofJson file).toOption.getD #[]).modify 1 f
+
+#guard (own).size == 2 && (Registered.rootClash own).isNone
+#guard ((Registered.rootClash (own fun p => { p with leaves := 8 })).map fun (a, b) => (a.name, b.name)) ==
+  some ("a0", "a1")
+#guard (Registered.rootClash (own fun p => { p with schema := HmRow.ROW_SCHEMA })).isSome
+#guard (Registered.rootClash (own fun p => { p with leaves := 8, root := root 2 })).isNone
+#guard Registered.dupName? (own).toList == none
+#guard Registered.dupName? ((own).toList ++ [(own)[0]!]) == some "a0"
+
 end Flock.Test.RegRows

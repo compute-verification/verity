@@ -109,7 +109,9 @@ theorem Port.readAt_eq (p : Port) (u : Nat) : p.readAt u = p.reads[u]? := by
     · rw [if_neg hu, Array.getElem?_append_right (by simp; omega)]
       simp
 
-def ofJson (j : Json) : V (Array Port) := do
+/-- A file's ports, one per entry of its `ports` object in its order, an entry's name repeated as often as the object
+holds it (`ofJson` refuses that). -/
+def portsOf (j : Json) : V (Array Port) := do
   let ctx := "registered reads"
   let format ← J.str j "format" ctx
   if format != FORMAT && format != FORMAT_V0 then throw s!"{ctx}: not a {FORMAT} file (nor a {FORMAT_V0} one)"
@@ -139,6 +141,66 @@ def ofJson (j : Json) : V (Array Port) := do
       | .null => pure none
       | r => some <$> J.asNat r s!"{ctx}: a read position"
     return { name, value := ← J.str e "value" ctx, root, leaves, words, wordBits, domain, readsRel := reads, schema, readsFrom }
+
+/-- The first port of `ps` whose name a later port has. -/
+def dupName? : List Port → Option String
+  | [] => none
+  | p :: ps => if ps.any (·.name == p.name) then some p.name else dupName? ps
+
+theorem dupName?_none {ps : List Port} (h : dupName? ps = none) :
+    ∀ q ∈ ps, ∀ q' ∈ ps, q'.name = q.name → q' = q := by
+  induction ps with
+  | nil => intro q hq; cases hq
+  | cons p ps ih =>
+    simp only [dupName?] at h
+    split at h
+    · cases h
+    · rename_i hany
+      have hne : ∀ x ∈ ps, x.name ≠ p.name := fun x hx he =>
+        hany (List.any_eq_true.mpr ⟨x, hx, by simp [he]⟩)
+      intro q hq q' hq' hn
+      rcases List.mem_cons.mp hq with rfl | hq <;> rcases List.mem_cons.mp hq' with rfl | hq'
+      · rfl
+      · exact absurd hn (hne _ hq')
+      · exact absurd hn.symm (hne _ hq)
+      · exact ih h q hq q' hq' hn
+
+/-- **The verifier's registered reads**: a `FORMAT` (or `FORMAT_V0`) file's ports (`portsOf`), each name naming one port
+(`ofJson_names`). A verdict reports a port by its name (`finding`) and every check of a statement's reads finds a port by
+its name, so a second port of a name would be one neither reads; a JSON object parsed from bytes holds a key once, and
+this refusal holds for any `Json` the verifier is given. -/
+def ofJson (j : Json) : V (Array Port) := do
+  let own ← portsOf j
+  match dupName? own.toList with
+  | some nm => throw s!"registered reads: port {nm} twice: a verdict reports one port per name, and each check reads a name's port"
+  | none => pure own
+
+theorem ofJson_names {j : Json} {own : Array Port} (h : ofJson j = .ok own) :
+    ∀ q ∈ own, ∀ q' ∈ own, q'.name = q.name → q' = q := by
+  obtain ⟨ps, -, h⟩ := HmNets.bind_ok h
+  cases hd : dupName? ps.toList with
+  | some nm => rw [hd] at h; cases h
+  | none =>
+    rw [hd] at h
+    cases h
+    intro q hq q' hq' hn
+    exact dupName?_none hd q (Array.mem_toList_iff.mpr hq) q' (Array.mem_toList_iff.mpr hq') hn
+
+/-- What a port registers of its value: the value, its leaf count, row width (`words`, `wordBits`), domain and leaf
+schema. A row's opening at a root reads the leaf count, schema and domain of the port it finds by that root. -/
+def Port.registration (p : Port) : String × Nat × Option Nat × Nat × ByteArray × String :=
+  (p.value, p.leaves, p.words, p.wordBits, p.domain, p.schema)
+
+/-- The first two ports of `own` (`PortRoots.collidesIn`'s, for registered ports) of one root whose registrations
+differ. Ports of one registration may share a root: an array of rows' ports `name[i]` read one value. -/
+def rootClash (own : Array Port) : Option (Port × Port) :=
+  own.findSome? fun a => (own.find? fun b => decide (a.root = b.root) && decide (a.registration ≠ b.registration)).map (a, ·)
+
+theorem rootClash_none {own : Array Port} (h : rootClash own = none) :
+    ∀ a ∈ own, ∀ b ∈ own, a.root = b.root → a.registration = b.registration := by
+  intro a ha b hb hr
+  have h1 := Array.find?_eq_none.mp (Option.map_eq_none_iff.mp (Array.findSome?_eq_none_iff.mp h a ha)) b hb
+  simpa [hr] using h1
 
 /-- The u16 words of a registered row of `words` leaves of `wordBits` bits, as the statement lays out the port's row:
 each leaf `wordBits / 16` words, low first, zero-padded to whole SHA-512 blocks of 64 words. -/
