@@ -27,7 +27,8 @@ run's draw file, at one table whose unit count is the draw's proved units (`shap
 units v2 credits (`unitsAt_size`), the `A.kd` units the coins draw (`drawUnits_of_accepts`, `drawn_length`).
 
 What it takes beside v2's acceptance: `ξ` is the first bytes of the draw rounds' coins' (`LiveCoins`' first half), and
-the session's statement at the run's draw file fits its length words (`Fits`).
+the run's draw file and `o`'s partition object and registered file are each under `2^64` bytes, the lengths of the
+session's statement v2 reads only as the JSON they parse to (`fits_of_accepts`).
 -/
 
 namespace Verity.Sampled.Record
@@ -155,9 +156,10 @@ theorem units_of_pass (A : Live) (o : Own) {b : ByteArray} {p : _root_.SampledPr
 
 /-- **v2's acceptance keeps the run's draw file**: where v2 accepts evidence it parsed at the coins `ξ`, reading `A`'s
 and `o`'s inputs (`Names`), with the verifier's law read over `A`'s population as `A`'s (`lawAt`), at a run whose draw
-file the blobs show (`Shows`), whose draw rounds' coins begin with `ξ` (`LiveCoins`' first half) and whose session's
-statement fits its length words (`Fits`), the draw file round keeps the run's draw file (`drawOk`): it proves the units
-the draw rounds' coins draw, and its session sets up one table of `A.kd` units, so it has the statement's numbers. -/
+file the blobs show (`Shows`) and whose draw rounds' coins begin with `ξ` (`LiveCoins`' first half), where the run's
+draw file and `o`'s partition object and registered file are each under `2^64` bytes, the draw file round keeps the
+run's draw file (`drawOk`): it proves the units the draw rounds' coins draw, and its session sets up one table of `A.kd`
+units, so it has the statement's numbers. -/
 theorem pass_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.SampledProofs.OneStageZk.Params}
     {c : _root_.SampledProofs.OneStage.Commitment} {ev : _root_.SampledProofs.OneStageZk.Evidence} {bs : Core.Blobs}
     {ξ : ByteArray} {pub : _root_.SampledProofs.OneStage.Public} {prof : Core.Integrity}
@@ -168,8 +170,10 @@ theorem pass_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Sampled
     (hshow : Shows A o ev bs (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen)
     (hlive : LiveCoins A o ξ (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen
       ((List.range (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs.length).map (coinSeq r)))
-    (hfits : Fits A o (drawOf (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen)) :
+    (hd : (drawOf (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen).length < 2 ^ 64)
+    (hpart : o.partition.size < 2 ^ 64) (hreg : ∀ b ∈ o.registered, b.size < 2 ^ 64) :
     drawOk A o (drawOf (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen) (coinsAt r) := by
+  have hfits := fits_of_accepts hacc hn hd hpart hreg
   have hu := units_of_pass A o he hacc hn hlaw P ω r hshow hlive
   refine ⟨hu, numsOk_of_refOk ?_⟩
   obtain ⟨s, rd, B, record, ksFiles, hs, hpl, hrd, hB, hutf, hv⟩ := verdict_of_accepts hacc hn
