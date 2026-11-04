@@ -111,4 +111,108 @@ theorem treeRelease_frame {records : List Json} {ts ts' : List (String × Flock.
     getElem?_spec, findIdxA_spec]
   all_goals exact fun l h => Verity.Frame.noConfusion h
 
+/-! ## The read with v2's own tests -/
+
+/-- The streams a coin tree's spec names, as `SampledProofs.Challenger.coinTreesOf` reads them: none where it names no
+list. -/
+def specStreams (spec : Json) : Array Json :=
+  match SampledProofs.getD spec "streams" with | .arr ss => ss | _ => #[]
+
+/-- **A coin tree's line's release, read with the tests `SampledProofs.Challenger.coinTreesOf` makes**, after the trees
+`ts` read so far, each its root and its spec as its line gives them: where the line's `event` is `TREE_EVENT` by
+`coinTreesOf`'s comparison, its hello after its nonce, with its root's and key's bits; else a round opened, of the
+`i`-th tree read and the `s`-th of its spec's streams, the first one equal to the line's by the comparison
+`coinTreesOf`'s `contains` makes, after the bytes it answers, with its coins' bits where a record of that tree gives
+them, else none; `none` where the line doesn't read as either. -/
+def treeStep (records : List Json) (ts : List (String × Json)) (d : Json) :
+    Option (Verity.Release × List (String × Json)) :=
+  if SampledProofs.getD d "event" == Json.str TREE_EVENT then do
+    let .str key := SampledProofs.getD d "key" | none
+    let .str nonce := SampledProofs.getD d "nonce" | none
+    let .str root := SampledProofs.getD d "root" | none
+    let spec ← specOf (SampledProofs.getD d "spec")
+    let ν ← (Flock.unhex nonce).toOption
+    let r ← (Flock.unhex root).toOption
+    let κ ← (Flock.unhex key).toOption
+    pure (⟨.hello spec, ν, Verity.bitsOfBytes (r ++ κ)⟩, ts ++ [(root, SampledProofs.getD d "spec")])
+  else do
+    let .str root := SampledProofs.getD d "tree" | none
+    let .str stream := SampledProofs.getD d "stream" | none
+    let .str aft := SampledProofs.getD d "after" | none
+    let k ← SampledProofs.nat? (SampledProofs.getD d "round")
+    let n ← SampledProofs.nat? (SampledProofs.getD d "n")
+    let i ← ts.findIdx? (·.1 == root)
+    let (_, spec) ← ts[i]?
+    let s ← (specStreams spec).findIdx? (Json.str stream == ·)
+    let b ← (Flock.unhex aft).toOption
+    let coins := match records.find? (recordTree · == root) with
+      | some rec => ((recordRound rec stream k).map Verity.bitsOfBytes).getD []
+      | none => []
+    pure (⟨.opening i s n, b, coins⟩, ts)
+
+/-- **The releases the lines after the release log's head show**, read as `readLines` reads them but each coin tree's
+line by `treeStep`, after the trees `ts` read so far: for the draw of family `label` after `after`, with the draw's
+coins `ξ` still to place and the root's line `pending` still to pair. -/
+def readTail (label : String) (after : ByteArray) (records : List Json) :
+    List String → List (String × Json) → Option String → ByteArray → Option (List Verity.Release)
+  | [], _, none, _ => some []
+  | [], _, some _, _ => none
+  | l :: ls, ts, pending, ξ =>
+    if treeLine l then do
+      let (r, ts') ← (event l).toOption.bind (treeStep records ts)
+      pure (r :: (← readTail label after records ls ts' pending ξ))
+    else
+      match pending with
+      | none => readTail label after records ls ts (some l) ξ
+      | some a => do
+        let (lab, root) ← rootOf a
+        if lab = label ∧ root = after then
+          let m := COIN_BYTES
+          pure (⟨.fresh label, after, Verity.bitsOfBytes (ξ.extract 0 m)⟩ ::
+            (← readTail label after records ls ts none (ξ.extract m ξ.size)))
+        else pure (⟨.fresh lab, root, []⟩ :: (← readTail label after records ls ts none ξ))
+
+/-- **The releases the release log's lines show, read with v2's own tests**: its head's coin tree where the head is a
+coin tree's line (`SampledProofs.Challenger.coinTreesOf` reads the head's line too), then the lines after it
+(`readTail`). -/
+def readLog (label : String) (after : ByteArray) (records : List Json) (ξ : ByteArray) :
+    List String → Option (List Verity.Release)
+  | [] => some []
+  | l :: ls =>
+    if treeLine l then do
+      let (r, ts) ← (event l).toOption.bind (treeStep records [])
+      pure (r :: (← readTail label after records ls ts none ξ))
+    else readTail label after records ls [] none ξ
+
+/-- A session's record on the blobs `bs`, as `SampledProofs.OneStageZk.treesHeld` reads it: one that doesn't parse is
+`null`; `none` where no blob holds it or it isn't UTF-8. -/
+def recordOn (bs : _root_.Core.Blobs) (r : _root_.SampledProofs.OneStageZk.RunFiles) : Option Json := do
+  let b ← (bs.get r.record s!"session {r.name}'s record").toOption
+  let t ← String.fromUTF8? b
+  pure ((Json.parse t).toOption.getD Json.null)
+
+/-- The records of the sessions v2's evidence `e` names, on the blobs `bs`, as `SampledProofs.OneStageZk.treesHeld`
+reads them (`recordOn`). -/
+def recordsOn (bs : _root_.Core.Blobs) (e : _root_.SampledProofs.OneStageZk.Evidence) : Option (List Json) :=
+  e.sessions.toList.mapM (recordOn bs)
+
+/-- **The device's log as v2's check reads it, with v2's own tests**: `coinsRead`'s read, with each coin tree's line
+read by the tests `SampledProofs.Challenger.coinTreesOf` makes, the head's line included (`readLog`), and the
+sessions' records as `SampledProofs.OneStageZk.treesHeld` reads them (`recordsOn`). -/
+def logRead (s : Verity.Sent) : Option (List Verity.Release) := do
+  let (p, c, e) ← (caseOf s).toOption
+  let (_, label) ← p.base.challenger
+  let ξ ← (_root_.SampledProofs.OneStageZk.coinsOf p c e).toOption
+  let lines ← (linesOf e).toOption
+  readLog label c.digest (← recordsOn (_root_.Core.Blobs.ofArray s.blobs) e) ξ lines
+
+/-- A coin tree's line's release, read with v2's own tests, answers no family's frame. -/
+theorem treeStep_frame {records : List Json} {ts ts' : List (String × Json)} {d : Json} {r : Verity.Release}
+    (h : treeStep records ts d = some (r, ts')) : ∀ l, r.frame ≠ .fresh l := by
+  refine of_triple_opt (Q := fun p => ∀ l, p.1.frame ≠ .fresh l) ?_ h
+  clear h
+  mvcgen [treeStep, -Spec.throw_Option, none_spec, specOf_spec, toOption_spec, nat_spec, findIdx_spec,
+    getElem?_spec, findIdxA_spec]
+  all_goals exact fun l h => Verity.Frame.noConfusion h
+
 end Verity.Sampled
