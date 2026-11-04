@@ -202,7 +202,7 @@ theorem sessionOpens (o : Own) (e : Ext) (hv2 : Flock.Bridge.RowsV2 A.D.unroll) 
   obtain ⟨⟨i, hi⟩, hq⟩ := hu
   obtain rfl := eq_xOf_of_nPU A o e (Nat.lt_of_le_of_lt (Nat.zero_le i) hi)
   change Fin ((V A o).k (xOf A o)) → FlockDeploy.Coin at r
-  have hs' : (record A o e).parse (xOf A o) = some (stmtA A) := ite_eq_left rfl
+  have hs' : (record A o e).parse (xOf A o) = some (stmtA A) := (record_parse A o e (xOf A o)).trans (ite_eq_left rfl)
   obtain rfl := Option.some.inj (hs.symm.trans hs')
   have hPt' : (record A o e).partition (stmtA A) = some (partA A) := rfl
   obtain rfl := Option.some.inj (hPt.symm.trans hPt')
@@ -218,14 +218,15 @@ theorem sessionOpens (o : Own) (e : Ext) (hv2 : Flock.Bridge.RowsV2 A.D.unroll) 
   generalize (((run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs.take (DRAW_ROUNDS + 1)).map Prod.fst).getD
     DRAW_ROUNDS [] = d at hdOk hlast
   obtain ⟨J, hJ⟩ := jsonOf_of_provedOf A hdOk.1
-  have hck : (record A o e).checked (xOf A o) r = drawn A (drawBytes (coinsAt r)) := ite_eq_left rfl
+  have hck : (record A o e).checked (xOf A o) r = drawn A (drawBytes (coinsAt r)) :=
+    (record_checked A o e (xOf A o) r).trans (ite_eq_left rfl)
   rw [hck] at hq
   have hud : u ∈ drawn A (drawBytes (coinsAt r)) := List.mem_of_getElem? hq
   have hl : (run FlockDeploy.sha512 P (record A o e).V (xOf A o) ω r).seen.msgs[DRAW_ROUNDS]? = some (d, .msg []) :=
     hlast
   rw [record_session_xOf A o e u] at hsess
   unfold sessionOf at hsess
-  simp only [hl, if_pos hdOk.2, Option.some.injEq, Prod.mk.injEq] at hsess
+  simp only [hl, ite_eq_left hdOk.2, Option.some.injEq, Prod.mk.injEq] at hsess
   obtain ⟨rfl, rfl⟩ := hsess
   -- the session's statement as flock-verify reads it
   obtain ⟨si, hraw, hzk, htags, hpin, hsetup⟩ := hins d J hJ

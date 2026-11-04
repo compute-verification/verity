@@ -23,9 +23,24 @@ open Classical in
 noncomputable def okAt (as : List Msg) (cs : List FlockDeploy.Coin) : Bool :=
   decide (drawOk A o (as.getD DRAW_ROUNDS []) (cs.take DRAW_ROUNDS))
 
+open Classical in
 theorem drawOk_of_okAt {as : List Msg} {cs : List FlockDeploy.Coin} (h : okAt A o as cs = true) :
     drawOk A o (as.getD DRAW_ROUNDS []) (cs.take DRAW_ROUNDS) :=
   of_decide_eq_true h
+
+/-! The record's fields at a statement `x`, by `rfl` only where `x` is a variable: at `xOf A o` itself,
+`ite_eq_left rfl` takes the branch, since unfolding the record there would evaluate the statement's bytes. -/
+
+theorem record_parse (x : Msg) : (record A o e).parse x = if x = xOf A o then some (stmtA A) else none := rfl
+
+theorem record_session (x : Msg) (u : ℕ) (v : Seen) :
+    (record A o e).session x u v = if x = xOf A o then some (sessionOf A o v) else none := rfl
+
+theorem record_flockV : (record A o e).flock.V = FlockDeploy.V true := rfl
+
+theorem flockV_next : (FlockDeploy.V true).next = FlockDeploy.next true := rfl
+
+theorem nums_fst (xS : Msg) : (Nums xS).1 = (FlockDeploy.V true).k xS := rfl
 
 /-- **Units are only at the record's statement**: elsewhere the statement doesn't parse. -/
 theorem eq_xOf_of_nPU {x : Msg} (hx : 0 < nPU (record A o e) x) : x = xOf A o := by
@@ -35,13 +50,13 @@ theorem eq_xOf_of_nPU {x : Msg} (hx : 0 < nPU (record A o e) x) : x = xOf A o :=
     simp only [code, h, ↓reduceIte]
   simp [nPU, hp] at hx
 
-theorem record_session_xOf (u : ℕ) (v : Seen) : (record A o e).session (xOf A o) u v = some (sessionOf A o v) := by
-  show (code A o e).session (xOf A o) u v = _
-  simp only [code, ↓reduceIte, ite_true]
+theorem record_session_xOf (u : ℕ) (v : Seen) : (record A o e).session (xOf A o) u v = some (sessionOf A o v) :=
+  (record_session A o e (xOf A o) u v).trans (ite_eq_left rfl)
 
 /-- **The record's verifier is a prefix, then one session**: the draw rounds answer a coin, the draw file round answers
 `[]` where `okAt` passes and refuses elsewhere, and past it each round is flock-verify `--zk`'s at the session's
 statement, with `kS` rounds where `okAt` passed (`numsOk`). -/
+open Classical in
 theorem prefixAt :
     SamplingDeploy.PrefixAt FlockDeploy.sha512 (V A o) (FlockDeploy.V true) (xOf A o) (DRAW_ROUNDS + 1) (kS A o)
       (okAt A o) (sessStmt A o) where
@@ -67,11 +82,13 @@ theorem prefixAt :
     rw [V_next_xOf]
     unfold nextAt
     rw [ite_eq_right (show ¬as.length ≤ DRAW_ROUNDS by omega),
-      ite_eq_right (show ¬as.length = DRAW_ROUNDS + 1 by omega)]
-    all_goals rfl
+      ite_eq_right (show ¬as.length = DRAW_ROUNDS + 1 by omega), flockV_next, Nat.add_sub_cancel]
   nOk as cs h := by
-    have h2 := congrArg Prod.fst (drawOk_of_okAt A o h).2
-    exact h2
+    have h2 : Nums (sessStmt A o (as.getD DRAW_ROUNDS [])) = Nums (xS₀ A o) := (drawOk_of_okAt A o h).2
+    have h3 := congrArg Prod.fst h2
+    rw [nums_fst, nums_fst] at h3
+    rw [Nat.add_sub_cancel, kS]
+    exact h3
 
 /-- **`SessionRuns` at the record**: every checked unit's session is the record's one flock-verify `--zk` session, on
 the rounds after the draw file round. -/
@@ -81,9 +98,10 @@ theorem sessionRuns : SessionRuns FlockDeploy.sha512 (record A o e) :=
     (fun _ => xS₀ A o)
     (fun x hx => by
       obtain rfl := eq_xOf_of_nPU A o e hx
+      rw [record_V, record_flockV]
       exact prefixAt A o)
     (fun _ _ _ h => (drawOk_of_okAt A o h).2)
-    (fun _ => rfl)
+    (fun _ => by rw [record_flockV, kS])
     (fun x u t => by
       rw [record_rounds]
       simp [after])
