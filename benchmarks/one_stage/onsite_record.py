@@ -220,8 +220,10 @@ PREMISES: dict[str, dict[str, Any]] = {
     "circuit-held": {"is": "each tied audit's class circuit held",
                      "discharged_by": ("Properties.NetworkPeriod.rowsCircuitHeld",), "assumes": ()},
     "sampled-leg-bridge": {"is": "the sampled leg's bridge, from its guarantee Verity.Vocab.SampledProofsSound at "
-                                 "one-stage v2 to OneStageZk's Lean record: the sampled facts the period takes (KS, "
-                                 "SessionOpens, RegOpens: the registered reads' openings), proved of the Lean verifier "
+                                 "one-stage v2 to OneStageZk's Lean record: the sampled facts the period takes (KS; at "
+                                 "the per-member record, the only form with wires, SessionKS, the sessions' KS, which "
+                                 "SessionKS_of can't give there, its SessionRuns failing at more than one session; "
+                                 "SessionOpens; RegOpens: the registered reads' openings), proved of the Lean verifier "
                                  "and taken as theorem hypotheses on the layer below, never SampledCodeRuns or another "
                                  "premise about the deployed Python. Open until the bridge's theorem is in the lock",
                            "discharged_by": (), "assumes": ()},

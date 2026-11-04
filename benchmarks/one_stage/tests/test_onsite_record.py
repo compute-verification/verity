@@ -283,7 +283,8 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
         list(p["discharged_by"]) for p in OR.PREMISES.values()]
     assert [of["premises"]["premises"][n]["discharged_by"] for n in UNNAMED] == [[], []]
     assert rec["periods_tight"]["conditional_on"] == list(OR.PREMISES) and rec["periods_tight"]["run"]["bits"] == K
-    assert "SampledCodeRuns" in OR.PREMISES["sampled-leg-bridge"]["is"] and "Python" in OR.DISCHARGE
+    assert all(f in OR.PREMISES["sampled-leg-bridge"]["is"] for f in ("SampledCodeRuns", "SessionKS,", "SessionRuns"))
+    assert "Python" in OR.DISCHARGE
     assert "no opening reaches the verifier" in OR.PREMISES["session-wires"]["is"]
 
 
