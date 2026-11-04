@@ -37,8 +37,9 @@
   its ``scope``), and its verdict is ``scan accepted`` or ``scan refused``: N2 isn't required, and the rest is held as
   before. On the certifier-only path (``--job``'s ``path``, `CERTIFIER_ONLY`) there are no warden rows: the scan isn't
   run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its negatives are
-  N2's members and the rehearsal's own check on each run it must refuse; token, which that check lets through, pends
-  the egress tie (`scan_service.EgressTie`). d1's K (`pooled_k`) counts the served units' compute audits
+  N2's members and the rehearsal's own check on each strategy it must refuse (``rehearsal/<strategy>``, no gate run's
+  id: refused only where every gate run that tried it refused it); token, which that check lets through, pends the
+  egress tie (`scan_service.EgressTie`). d1's K (`pooled_k`) counts the served units' compute audits
   (``--audit``: each window's sample and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at
   each δ. With ``--period-answer``
   (certifier/v0's ``network-period check`` answer on the period, a ``certifier.answer.json``, its case
@@ -889,8 +890,9 @@ def report(a) -> dict:
                  *(() if scan_only else ("n2",)), *(() if certifier_only else ("scan",))))
     accepted = (all(steps[k].get("verdict") == "accepted" for k in required)
                 and not any(steps[k].get("stand_in") for k in ("n2", "scan")))
-    rehearsal = {f"rehearsal/{g['gate_run']}/{s}": v == "refused" for g in cust.get("gate_runs") or []
-                 for s, v in (g.get("strategies") or {}).items() if s not in REHEARSAL_ACCEPTS}
+    tried = [g.get("strategies") or {} for g in cust.get("gate_runs") or []]
+    rehearsal = {f"rehearsal/{s}": all(t[s] == "refused" for t in tried if s in t)
+                 for t in tried for s in t if s not in REHEARSAL_ACCEPTS}
     negatives = {**rehearsal, **{f"n2/{k}": v for k, v in n2.get("negatives", {}).items()},
                  **{f"scan/{k}": v for k, v in scan.get("negatives", {}).items()}}
     audit_dirs = [Path(d) for d in getattr(a, "audit", None) or []]

@@ -582,6 +582,8 @@ def test_subset_bound():
 
 
 def test_the_certifier_only_path_needs_no_scan_names_its_stubs_and_counts_the_tampers(tmp_path):
+    """Each rehearsal strategy its own check must refuse is one negative, keyed by the strategy and no gate run's id,
+    refused only where every gate run that tried it refused it."""
     job = {"profile": "advice", "rc": {"n2": "0", "scan": "2"}, "path": cr.CERTIFIER_ONLY}
     steps = _steps(tmp_path, job)
     steps.scan = steps.warden_run = None
@@ -591,8 +593,15 @@ def test_the_certifier_only_path_needs_no_scan_names_its_stubs_and_counts_the_ta
     got = cr.report(steps)
     assert got["verdict"] == "accepted" and got["steps"]["scan"]["verdict"] == "not run"
     assert got["stubbed"][:3] == list(cr.STUBBED) and len(got["stubbed"]) == 5
-    assert got["negatives_refused"] == {"rehearsal/c1/late": True, "rehearsal/c1/extra": True, "n2/tampered": True}
+    assert got["negatives_refused"] == {"rehearsal/late": True, "rehearsal/extra": True, "n2/tampered": True}
     assert "on the certifier-only path" in cr.markdown(got) and "Stubbed:" in cr.markdown(got)
+    one = Path(steps.custody).read_text()
+    custody = json.loads(one)
+    custody["gate_runs"].append({"gate_run": "c2", "strategies": {"late": "accepted", "drop": "refused"}})
+    Path(steps.custody).write_text(json.dumps(custody))
+    assert cr.report(steps)["negatives_refused"] == {"rehearsal/late": False, "rehearsal/extra": True,
+                                                     "rehearsal/drop": True, "n2/tampered": True}
+    Path(steps.custody).write_text(one)
     ep = json.loads(Path(steps.endpoint).read_text())
     ep["chain"]["bits"]["rebuilt"] = False
     Path(steps.endpoint).write_text(json.dumps(ep))
