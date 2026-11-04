@@ -11,8 +11,10 @@ Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the
 `slots` piece that sample in the claims' slots, read off `partition.strata`, `partition.unit_gates` and the root's input
 nodes (`slots`), for the `hidden_offsets`, `hidden_locate` and `hidden_witness` pieces `hidden_draw` on honest and
 arbitrary calls tables, for `check_public` and `check_verdicts` the proof system's own (`service.check_public`,
-`service.check_verdicts`), and for the `run` piece (a registration's whole run, `Run.run`) those references in a
-`Stream`'s order. The `partition`, `select` and `slots` pieces also run on random partitions: mixed population
+`service.check_verdicts`), for the `fits` piece v2's refusal of a length a session's statement can't hold
+(`proofs.fits_why`, `proofs.draw_fits_why`) at small limits, and for the `run` piece (a registration's whole run,
+`Run.run`) those references in a `Stream`'s order.
+The `partition`, `select` and `slots` pieces also run on random partitions: mixed population
 programs of random members of three templates, and rarely of `FORK` and of `IDENTITY`, of no gate, which one-stage
 refuses, under template queries over them, and programs of random root Calls (`call_program`) under `Q_word` and `Q_call`, a 32-bit
 Call among them, whose unit `Q_word` takes in the 32-bit class and `Q_call` at `X = 16` refuses, and `SHARED`, whose
@@ -56,8 +58,8 @@ from verity_difftest import protocol as PR
 from verity.core.protocols.profile import Bernoulli, Stratified, Stratum
 from verity.core.protocols.sampled_proofs import service
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
-                                                            partition as P, produced as PD, registered as G,
-                                                            registration as R)
+                                                            partition as P, produced as PD, proofs as PF,
+                                                            registered as G, registration as R)
 from verity.core.protocols.sampled_proofs.challenger import COIN_BYTES, NO_CLOSE, NO_TREE, ChallengerKey, CoinError
 from verity.core.protocols.sampled_proofs.coins import (LIMITS, MAX_PATH, OwnRandomness, coins_reason, coins_within,
                                                         draw_coins, draw_first)
@@ -925,6 +927,46 @@ def slots(j):
     proved = set(DR.proved(out["draw"]))
     blocks = [b for c in classes for s in c for b in s]
     return {"checked": [[v, 0] for v, b in enumerate(blocks) if b["unit"] is None or b["unit"] in proved], "classes": classes}
+
+
+_LOWER_HEX = re.compile(r"(?:[0-9a-f]{2})*")
+
+
+def _unhex(x) -> bytes:
+    if not (isinstance(x, str) and _LOWER_HEX.fullmatch(x)):
+        raise D.Reject("not lowercase hex of whole bytes")
+    return bytes.fromhex(x)
+
+
+def fits(j):
+    """`OneStageZk.fitsWhy` and `drawFitsWhy` at ``limit`` (`proofs.fits_why`, `proofs.draw_fits_why`): the files hex,
+    the tables ``[name, hex]`` pairs, the program hex or null, and the partition object, registered reads and draw null
+    for none."""
+    j = _json(j)
+    if not (isinstance(j, dict) and _nat(j.get("limit"))):
+        raise D.Reject("limit is not a natural number")
+    circuit, public = _unhex(j.get("circuit")), _unhex(j.get("public"))
+    ts = j.get("tables")
+    if not (isinstance(ts, list) and all(isinstance(t, list) and len(t) == 2 and all(isinstance(x, str) for x in t)
+                                         for t in ts)):
+        raise D.Reject("tables is not a list of names and their hex")
+    tables = [(name, _unhex(b)) for name, b in ts]
+    program = None if j.get("program") is None else _unhex(j["program"])
+    return {"inputs": PF.fits_why(j["limit"], circuit, public, tables, program, j.get("partition"), j.get("registered")),
+            "draw": PF.draw_fits_why(j["limit"], j.get("draw"))}
+
+
+def public_units(j):
+    """Whether a public file's ``indices`` are exactly the ``[lo, hi)`` ranges ``units``' units, ascending
+    (`proofs.units_exactly`, `PublicUnits.exactly`)."""
+    j = _json(j)
+    units, indices = (j.get("units"), j.get("indices")) if isinstance(j, dict) else (None, None)
+    if not (isinstance(units, list)
+            and all(isinstance(r, list) and len(r) == 2 and all(map(_nat, r)) and r[0] < r[1] for r in units)):
+        raise D.Reject("units is not a list of [lo, hi] with 0 <= lo < hi")
+    if not (isinstance(indices, list) and all(map(_nat, indices))):
+        raise D.Reject("indices is not a list of natural numbers")
+    return {"exactly": PF.units_exactly(units, indices)}
 
 
 def bound(j):
@@ -1935,19 +1977,24 @@ def _sha(b: bytes) -> str:
     return hashlib.sha512(b).hexdigest()
 
 
-def _public_of(rec: dict, roots: dict | None = None) -> bytes:
+def _public_of(rec: dict, roots: dict | None = None, indices: list | None = None) -> bytes:
     """A public file whose header is `rec`'s as `registration.matches_public` reads one (`OneStageZk.publicHeld`): its
-    scheme, its ``frame_v3`` roots (`roots` in their place) and their ``domain_ids``, and its population as ``instances``.
-    No statement follows it, so a session set up on it is rejected."""
+    scheme, its ``frame_v3`` roots (`roots` in their place) and their ``domain_ids``, and its population as ``instances``,
+    its ``units.indices`` `indices`, by default the population's units in order (`OneStageZk.unitsHeld`). No statement
+    follows it, so a session set up on it is rejected."""
     reg = {r["port"]: r for r in rec["roots"]}
     fv = {"domain_ids": {p: r["domain"] for p, r in reg.items()}, "roots": roots or {p: r["root"] for p, r in reg.items()}}
-    header = {"frame_v3": fv, "instances": rec["population"], "scheme": rec["scheme"]}
+    units = {"indices": list(range(rec["population"])) if indices is None else indices}
+    header = {"frame_v3": fv, "instances": rec["population"], "scheme": rec["scheme"], "units": units}
     return json.dumps(header, sort_keys=True).encode() + b"\nnot a public file"
 
 
 #: `OneStageZk.NO_CHALLENGER`
 NO_CHALLENGER = ("the parameters name no challenger: the draw's coins are the auditor's challenger's signed release "
                  "(challenger, with window_root), never the prover's record")
+#: `OneStageZk.UNITS`
+UNITS = ("units: the public file's units.indices are not the registration's population units 0, ..., n - 1, ascending: "
+         "slot i of its table is unit i")
 #: `OneStageZk.POPULATION_ORDER`
 POPULATION_ORDER = ("population-order: the program's proof blocks under the query are not the registration's "
                     "population units in order")
@@ -2005,8 +2052,9 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     on the proofs. An audit v1 accepts on the verdict its evidence hands in and its challenger's coins is, in v2: refused
     for naming verdicts; refused, before any tree is read, with them replaced by proofs naming no session or two (the
     drawn units are proved in one session, `oneSession`); rejected by the session's own verdict when its files are not
-    a statement's; refused before the session is verified when its coins are not a tree the challenger logged, or the
-    public file is not the registration's (`publicHeld`, its codes Python's `matches_public`'s); refused when a file it
+    a statement's; refused before the session is verified when its coins are not a tree the challenger logged, the
+    public file is not the registration's (`publicHeld`, its codes Python's `matches_public`'s), or its units are not
+    the population's in order (`unitsHeld`, `proofs.units_exactly`); refused when a file it
     names is in no blob, as the public file the parameters name is when the blobs hold another, or its sessions are not
     the evidence's. The public file is the parameters', committed before any coin: evidence naming one of its own, or
     parameters naming none, are refused. `test_proofs.py` holds the verdicts to `verify`'s on a real session, and
@@ -2076,6 +2124,12 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     assert run(one, blobs_=[circuit.hex(), wrong.hex(), *blobs[2:]],
                p=p2 | {"proofs": {**p2["proofs"], "public": _sha(wrong)}}) == (
         "reject", f"proofs: public file: not the registration's: {', '.join(codes)}")
+    n = rec["population"]
+    for indices in (list(range(n))[::-1], list(range(1, n + 1)), list(range(n - 1)), [*range(n), n]):
+        assert indices != list(range(n))
+        moved = _public_of(rec, indices=indices)
+        assert run(one, blobs_=[circuit.hex(), moved.hex(), *blobs[2:]],
+                   p=p2 | {"proofs": {**p2["proofs"], "public": _sha(moved)}}) == ("reject", f"proofs: {UNITS}"), indices
     assert run(base | {"proofs": {"public": _sha(public), **proofs(["s"])}, "sessions": ["s"]}) == (
         "reject", "evidence: the keys of the evidence's proofs are not sessions")
     got = run(one, p=p2 | {"proofs": {k: v for k, v in p2["proofs"].items() if k != "public"}})
@@ -2653,6 +2707,32 @@ def changed_selections(draw, most: int = 2) -> dict:
 SELECT = D.Port(PIECES, "select", select, st.one_of(selections(), selections(), changed_selections(1),
                                                      changed_selections(2), JSON), package=PACKAGE)
 SLOTS = D.Port(PIECES, "slots", slots, st.one_of(selections(), selections(), changed_selections(1), JSON), package=PACKAGE)
+_FITS_HEX = st.binary(max_size=6).map(bytes.hex)
+_FITS_JSON = st.recursive(st.none() | st.booleans() | st.integers(-300, 300) | TEXT | st.sampled_from(["\n\r\t\\", "\x1f\x7f"]),
+                          lambda inner: st.lists(inner, max_size=3) | st.dictionaries(TEXT, inner, max_size=3),
+                          max_leaves=5)
+FITS = D.Port(PIECES, "fits", fits, st.one_of(
+    st.builds(lambda limit, c, p, ts, program, part, reg, draw: {
+        "circuit": c, "draw": draw, "limit": limit, "partition": part, "program": program, "public": p, "registered": reg,
+        "tables": ts}, st.integers(0, 24), _FITS_HEX, _FITS_HEX, st.lists(st.tuples(TEXT, _FITS_HEX).map(list), max_size=3),
+        st.none() | _FITS_HEX, _FITS_JSON, _FITS_JSON, _FITS_JSON),
+    JSON), package=PACKAGE)
+
+
+def _units_case(units: list, how: int, x: int) -> dict:
+    """``units`` with their own units ascending, or those shifted, reversed, short of one, or with ``x`` added."""
+    want = [u for lo, hi in sorted(map(tuple, units)) for u in range(lo, hi)]
+    at = x % (len(want) + 1)
+    return {"indices": [want, [u + 1 for u in want], want[::-1], want[:-1], [*want, x], [*want[:at], x, *want[at:]]][how],
+            "units": units}
+
+
+PUBLIC_UNITS = D.Port(PIECES, "public_units", public_units, st.one_of(
+    *[st.builds(_units_case, st.lists(st.builds(lambda lo, n: [lo, lo + n], st.integers(0, 12), st.integers(1, 5)),
+                                      max_size=3), st.integers(0, 5), st.integers(0, 20))] * 2,
+    st.builds(lambda u, i: {"indices": i, "units": u}, st.lists(st.lists(st.integers(-1, 6), max_size=3), max_size=3),
+              st.lists(st.integers(-1, 6), max_size=6)),
+    JSON), package=PACKAGE)
 STRATA = st.lists(st.builds(lambda name, size, dk: {"k": max(0, size - dk), "name": name, "size": size},
                             st.sampled_from(["a", "b", "c", "unit"]), st.integers(0, 14), st.integers(0, 14)),
                   min_size=1, max_size=3, unique_by=lambda s: s["name"])
@@ -3333,7 +3413,8 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRAT
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
-              (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400)]
+              (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (FITS, 400),
+              (PUBLIC_UNITS, 300)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
