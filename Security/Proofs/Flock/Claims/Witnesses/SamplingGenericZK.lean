@@ -130,6 +130,7 @@ section Talk
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- `talkL` meets the zero-knowledge contract: its one session is the run, and every witness is in `talkArg`'s
 relation. -/
 theorem talkL_sessions (H : Msg → Msg) : (talkL Coin).ZkSessions H where
@@ -141,6 +142,7 @@ theorem talkL_sessions (H : Msg → Msg) : (talkL Coin).ZkSessions H where
   witness _ _ _ _ _ _ _ := trivial
   honest _ _ _ _ _ _ _ := rfl
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- The toy witness opens the one input under `accCm`, so no proof block is incorrect. -/
 theorem talkL_rhon (H : Msg → Msg) :
     Claims.Sampling.Rhon H (talkL Coin).commit (talkL Coin).parse (talkL Coin).partition [] toyWit :=
@@ -148,6 +150,7 @@ theorem talkL_rhon (H : Msg → Msg) :
     show Claims.Sampling.faulty H accCm toyStmt toyPart toyWit = ∅
     simp [toy_faulty, toyWit_val]⟩
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem talkL_msgs (H : Msg → Msg) (w : Claims.Sampling.Wit)
     (t : (Fin ((talkL Coin).M []) → (talkArg Coin).Nonce) × (Fin ((talkL Coin).M []) → (talkArg Coin).Rest)) :
     (runStar H ((talkL Coin).prover w []) acceptAllVs [] t ()).msgs ≠ [] := by
@@ -157,6 +160,7 @@ theorem simAt_silent (C : Type) (xS : Msg) (o : Unit) (c : C) : simAt silentSimO
   unfold simAt
   split <;> rfl
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- The composed simulator at `talkL` says nothing. -/
 theorem talkL_simOut (H : Msg → Msg) (o : List Msg × List Unit) (c : (talkL Coin).sim.C []) :
     ((talkL Coin).sim.given o).out H acceptAllVs () [] c = [] := by
@@ -169,6 +173,7 @@ theorem talkL_simOut (H : Msg → Msg) (o : List Msg × List Unit) (c : (talkL C
     rw [simAt_silent]
     rfl
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem talkL_err (H : Msg → Msg) (w : Claims.Sampling.Wit) (o : List Msg × List (talkArg Coin).St) :
     (talkL Coin).err H [] w Unit acceptAllVs () o = 0 := by
   unfold ZkCompiled.err

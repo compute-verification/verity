@@ -88,19 +88,25 @@ noncomputable def ofDeploy (D : Claims.Sampling.Deploy Coin Col T) (iroots : Msg
 
 variable (D : Claims.Sampling.Deploy Coin Col T) (iroots : Msg → Seen → ℕ → List Msg)
 
+omit [Fintype Coin] [Nonempty Coin] in
 theorem ofDeploy_nPU (x : Msg) : (ofDeploy D iroots).nPU x = Claims.Sampling.nPU D x := rfl
 
+omit [Fintype Coin] [Nonempty Coin] in
 theorem ofDeploy_k (x : Msg) : (ofDeploy D iroots).k x = D.k x := rfl
 
+omit [Fintype Coin] [Nonempty Coin] in
 theorem ofDeploy_cap (x : Msg) : (ofDeploy D iroots).cap x = D.cap x := rfl
 
+omit [Fintype Coin] [Nonempty Coin] in
 theorem ofDeploy_scope (x : Msg) : (ofDeploy D iroots).Scope x ↔ Claims.Sampling.Scope D x := Iff.rfl
 
+omit [Fintype Coin] [Nonempty Coin] in
 theorem mem_ofDeploy_checked {x : Msg} {r : Fin (D.V.k x) → Coin} {u : ℕ} :
     u ∈ (ofDeploy D iroots).checked x r ↔
       ∃ p : Fin (Claims.Sampling.nPU D x), (D.checked x r)[p.val]? = some u :=
   mem_take_iff_slot
 
+omit [Fintype Coin] [Nonempty Coin] in
 /-- **The opening checks' count at Flock is the frozen one**: a compiled verifier over Flock at a frozen record `D`'s
 Flock verifier, with `D`'s parser, commitment, reveal and opening count, meets `Compiled.OpenCallsLe` where `D` meets
 `Sampling.OpenCallsLe`, as the deployed verifier does (`SamplingDeploy.openCallsLe_deploy`). -/
@@ -132,6 +138,7 @@ theorem κ_ofDeploy_le (δ : ℝ) (x : Msg) (hε : 0 ≤ D.εtable x) :
   rw [ofDeploy_k, ofDeploy_cap]
   gcongr
 
+omit [Fintype Coin] [Nonempty Coin] in
 /-- **`γ` is within the frozen one**: a proof block's bound over its session's rounds, times the compiled verifier's
 rounds, is at most Flock's `γ` at those rounds (`γFlock_mul_le`). -/
 theorem γ_ofDeploy_le (x : Msg) : (ofDeploy D iroots).γ x ≤ Claims.Sampling.γ D x := by
