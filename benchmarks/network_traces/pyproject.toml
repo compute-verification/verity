@@ -33,7 +33,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # one_stage's served_verdicts, whose pieces and record test_certifier_piece runs it through into the block record.
 # leak_bounds counts K over the census's reference datacenter and the adversary resource model's world, one link a
 # machine. attacks' registry names one_stage's A5 warden tests as the refusal of record of the reads it lists, and
-# prove_path's tests as the advice cap's, which test_attacks checks are there.
+# prove_path's tests as the advice cap's, which test_attacks checks are there. compile_slice_zk proves vLLM's compile
+# slice (`verity_vllm.scheduler`) on its fixtures.
 inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.json", "integrations/vllm/workloads",
           "integrations/vllm/verity_vllm/__init__.py",
           "integrations/vllm/verity_vllm/pipeline/__init__.py", "integrations/vllm/verity_vllm/pipeline/window_advice.py",
@@ -43,7 +44,8 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "integrations/vllm/verity_vllm/engine/__init__.py",
           "integrations/vllm/verity_vllm/engine/hooks.py", "integrations/vllm/verity_vllm/engine/step_trace.py",
           "integrations/vllm/verity_vllm/records/__init__.py", "integrations/vllm/verity_vllm/records/fields.py",
-          "integrations/vllm/verity_vllm/records/workload.py", "benchmarks/network_e2e/chain.py",
+          "integrations/vllm/verity_vllm/records/workload.py", "integrations/vllm/verity_vllm/scheduler",
+          "integrations/vllm/tests/scheduler/fixtures", "benchmarks/network_e2e/chain.py",
           "benchmarks/live_challenger", "benchmarks/one_stage/a5_coins.py",
           "benchmarks/one_stage/tests/test_a5_warden.py", "benchmarks/prove_path/tests/test_prove_path.py",
           "benchmarks/network_e2e/encodings/replay.py", "benchmarks/network_e2e/encodings/replay_vectors.py",

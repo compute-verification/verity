@@ -8,23 +8,15 @@ that isn't one pool's encoding. The circuit is its reference on every case, at G
 of a six-block engine under eviction pressure. The registered book is the arith fixture's async-light stream's."""
 from __future__ import annotations
 
-import json
 import random
 from dataclasses import replace
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+from tests.scheduler.book import book
 from verity_vllm.scheduler import compile_slice as CS, compile_slice_v2 as V2, replay_chain as RC
 from verity_vllm.scheduler import replay_step as RS
-
-FIXTURES = Path(__file__).parent / "fixtures"
-
-
-def book() -> dict:
-    streams = json.loads((FIXTURES / "arith_encode_vectors.json").read_text())["streams"]
-    return next(s for s in streams if s["source"].startswith("async-light"))["decisions"]["book"]
 
 
 BOOK = book()

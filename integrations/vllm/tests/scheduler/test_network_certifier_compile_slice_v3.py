@@ -8,24 +8,16 @@ rows are the ones CompileSlice_v2 checks, and a registered row one bit off them,
 from __future__ import annotations
 
 import itertools
-import json
 import random
 from dataclasses import replace
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+from tests.scheduler.book import book
 from verity_vllm.scheduler import compile_slice as CS, compile_slice_v2 as V2, compile_slice_v3 as V3
 from verity_vllm.scheduler import replay_chain as RC
 from verity.ml.circuits import boolean as BL
-
-FIXTURES = Path(__file__).parent / "fixtures"
-
-
-def book() -> dict:
-    streams = json.loads((FIXTURES / "arith_encode_vectors.json").read_text())["streams"]
-    return next(s for s in streams if s["source"].startswith("async-light"))["decisions"]["book"]
 
 
 def _x(f):

@@ -15,6 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from tests.scheduler.book import book
 from verity.core.protocols.certifier import io_tie as IT
 from verity_vllm.scheduler import compile_slice as CS, served_rows as SR, served_tie as ST
 from verity.ml.commitments import hm96
@@ -27,13 +28,7 @@ FIXTURE = Path(__file__).parent / "fixtures" / "compile_slice_smallkv.json"
 COUNT, POS = 1 << ST.FLAGS.index("count"), 1 << ST.FLAGS.index("pos")
 
 
-def _book() -> dict:
-    """The registered book the compile slice's charge reads (as `test_network_certifier_compile_slice.book`)."""
-    streams = json.loads((FIXTURE.parent / "arith_encode_vectors.json").read_text())["streams"]
-    return next(s for s in streams if s["source"].startswith("async-light"))["decisions"]["book"]
-
-
-BOOK = _book()
+BOOK = book()
 
 
 def _tokens(step):

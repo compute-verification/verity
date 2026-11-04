@@ -18,17 +18,12 @@ from types import SimpleNamespace
 
 import pytest
 
+from tests.scheduler.book import book
 from verity.core.protocols.certifier import arith_encode as AE, charge_chain as CC
 from verity_vllm.scheduler import compile_slice as CS
 
 FIXTURES = Path(__file__).parent / "fixtures"
 FIXTURE = FIXTURES / "compile_slice_smallkv.json"
-
-
-def book() -> dict:
-    """The registered book: the arith fixture's async-light stream's (`arith_vectors.decisions`)."""
-    streams = json.loads((FIXTURES / "arith_encode_vectors.json").read_text())["streams"]
-    return next(s for s in streams if s["source"].startswith("async-light"))["decisions"]["book"]
 
 
 BOOK = book()
