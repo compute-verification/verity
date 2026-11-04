@@ -181,17 +181,20 @@ def _keys(j: Any, keys: list[str], what: str) -> None:
 
 def _one_stage_params(rest: dict) -> dict:
     """`OneStageZk.paramsOfJson` behind `VStar.Recursive.Sampled`'s refusal of v1: ``proofs``, exactly the circuit file's
-    SHA-512 and the verifier's registered file or null, then v1's params (`decode_params_v2`, which refuses them naming
-    no challenger) with a partition object."""
+    SHA-512, the verifier's registered file or null, and when named the registered circuit record's SHA-512 or null,
+    then v1's params (`decode_params_v2`, which refuses them naming no challenger) with a partition object."""
     if "proofs" not in rest:
         raise Reject(f"the parameters name no proofs: {V1_REFUSED}")
     pr = rest["proofs"]
-    _keys(pr, ["circuit", "registered"], "proofs")
-    if not (isinstance(pr["circuit"], str) and len(pr["circuit"]) == 128
-            and all(c in "0123456789abcdef" for c in pr["circuit"])):
+    digest = lambda x: isinstance(x, str) and len(x) == 128 and all(c in "0123456789abcdef" for c in x)  # noqa: E731
+    _keys(pr, ["circuit", "interface", "registered"] if isinstance(pr, dict) and "interface" in pr
+          else ["circuit", "registered"], "proofs")
+    if not digest(pr["circuit"]):
         raise Reject("proofs: circuit is not a SHA-512 digest (128 lowercase hex)")
     if pr["registered"] is not None and not isinstance(pr["registered"], dict):
         raise Reject("proofs: registered is not the verifier's registered file (an object) or null")
+    if pr.get("interface") is not None and not digest(pr["interface"]):
+        raise Reject("proofs: interface is not a SHA-512 digest (128 lowercase hex) or null")
     p = ONE_STAGE.decode_params_v2(rest)
     if p["partition"] is None:
         raise Reject("partition is null: the sessions are verified against the verifier's own partition object")
