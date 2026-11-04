@@ -1,4 +1,6 @@
 import Properties.NetworkPeriod
+import Properties.NetworkPeriod.Placed
+import Proofs.Properties.NetworkScan
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
@@ -261,5 +263,19 @@ theorem rowsStateTied_nontrivial : ¬ RowsStateTiedOf acceptAllRows := by
       stateWindow rfl
   rw [stateWindow_skipped] at hs
   cases hs
+
+theorem scanWindowsPlaced : ScanWindowsPlaced := by
+  sorry
+
+/-- **`ScanWindowsPlaced`'s conclusion is not trivial** (the two-lemma rule's `_nontrivial`): at a deployment that
+parses every message to `nullStmt` and partitions none, one window placed at the empty partition is not placed, since
+the window's statement has no deployed partition. -/
+theorem scanWindowsPlaced_nontrivial :
+    ∃ D : Claims.Sampling.Deploy Bool ℕ Unit,
+      ¬ NetTiming.WindowsPlaced D (1 / 2) (fun _ : Fin 1 => Properties.NetworkScan.nullStmt) (fun _ => ⟨[]⟩)
+        (fun _ => 0) := by
+  refine ⟨{ Properties.NetworkScan.acceptAllDeploy with partition := fun _ => none }, fun h => ?_⟩
+  have h0 := h.1 0
+  simp at h0
 
 end Properties.NetworkPeriod

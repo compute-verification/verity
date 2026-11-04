@@ -608,6 +608,9 @@
    "honest": ["Properties.NetworkScan.scan_honest"],
    "nontrivial": "Properties.NetworkScan.scanScopeAcc_nontrivial"
   },
+  "Properties.NetworkPeriod.scanWindowsPlaced": {
+   "nontrivial": "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial"
+  },
   "Properties.RemoteAudit.codeLayoutTiles": {
    "honest": ["Properties.RemoteAudit.codeLayoutTiles_honest"],
    "nontrivial": "Properties.RemoteAudit.codeLayoutTiles_nontrivial"
@@ -2959,6 +2962,12 @@
    ],
    "assumptions": [],
    "type_hash": "d0d8204ffb2e772003635028c5622784d1ec1a8d0cc8a45ea37e71b1e8fe8d70"
+  },
+  "Properties.NetworkPeriod.scanWindowsPlaced": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial": {
+   "owner": "@network-accounting"
   },
   "Properties.NetworkRecords.acceptMeans": {
    "owner": "@network-accounting",
@@ -5937,6 +5946,10 @@
     "outcome": "accept"
    },
    "Properties.NetworkScan.scanScopeAcc": {
+    "function": ["NetworkCheck.Period.scanOf", "Flock.canon"],
+    "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.scanWindowsPlaced": {
     "function": ["NetworkCheck.Period.scanOf", "Flock.canon"],
     "outcome": "accept"
    },
