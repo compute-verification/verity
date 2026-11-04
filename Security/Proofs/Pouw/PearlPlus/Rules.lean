@@ -3,12 +3,12 @@ import Proofs.Pouw.PearlC.CoreOps
 import Proofs.Pouw.PearlPlus.Words
 
 /-!
-# Pearl+'s bridge, part (c): the check's per-row rules and debit replay are the game's
+# Pearl+'s bridge, part (c): the check's per-row rules and inert-work replay are the game's
 
-`Rule.checkOpened` decides each opened row by `row_passes` (the floor on the exact product ρ·α, and `live_row` on the exact
-statistic), and the cap by `word_debit`, a word's flagged atoms and its later promotions into a +0 total. The game reads
-`PearlCSem.RowOK` (the FMA floor `ρ·α − 1 ≥ 0` and `LiveRow` at δ = 1 under `Stat.every8`) and the tile debit
-`tileDebitRev1`, on `Skip.unitFlags` and `laterZeroPromos`.
+`Rule.rowsFailure` decides each opened row by `row_passes` (the floor on the exact product ρ·α, and `live_row` on the
+exact statistic), and `Rule.capCheck` the inert-work bound by `word_debit`, a word's flagged atoms and its later
+promotions into a +0 total. The game reads `PearlCSem.RowOK` (the FMA floor `ρ·α − 1 ≥ 0` and `LiveRow` at δ = 1 under
+`Stat.every8`) and the tile's inert work `tileDebitRev1`, on `Skip.unitFlags` and `laterZeroPromos`.
 
 `rowsAreTheRules` proves the rules from the row statistics (`StatsAreTheRow`) and ρ's finiteness (`StatsRhoIsFinite`);
 `rowPasses_iff` is the rules on one row given both. The floor agrees because ρ and α are finite FP32 words with

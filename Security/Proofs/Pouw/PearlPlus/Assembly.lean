@@ -6,9 +6,9 @@ import Proofs.Pouw.PearlPlus.Words
 /-!
 # Pearl+'s bridge, part (d): a passed tile is good in the game
 
-`TileAcceptMeans` says what `checkTile` establishes about a passed tile in the code's terms: its openings, the words its
-replay forms, its leaf and its rows' rules. This part reads it in the game's: a tile of a loaded pass that the check
-passes, whose openings are its unit's commitment, has `TileWordsGood` at the deployed semantics, or SHA-512 collides on
+`TileAcceptMeans` says what `checkTile` establishes about a tile that passes, or is only over its inert-work bound, in
+the code's terms: its openings, the words its replay forms, its leaf and its rows' rules. This part reads it in the
+game's: a tile of a loaded pass that the check passes or finds only over the bound, whose openings are its unit's commitment, has `TileWordsGood` at the deployed semantics, or SHA-512 collides on
 two different messages, one hashed in digesting the words the check forms and one in digesting the commitment's words on
 the tile (the leaf binds the tile's words through `sha512/row-seg/v1`). The pass's `load` bounds the depth by `K_MAX`
 before any tile, which `WordsAreTheSemantics` reads. `TileGood` adds the cap and every weight row's rules, which wait on
@@ -73,7 +73,8 @@ def OpensCommitted (p : Pass) (tid : ℕ) (o : TileOpening) (U : Pouw.PearlC.Wor
 
 /-- **(d) A passed tile's words are good**: a tile of a pass `load` gives, which is audit tile `g` of `U`, under the
 semantics' salt and weight root, whose weight rows all pass the rules (`TileGood`'s second conjunct), whose openings are
-its unit's commitment `c`, and that `checkTile` passes on its weight's noise, has every word of its credited rows at the
+its unit's commitment `c`, and that `checkTile` passes on its weight's noise or finds only over its inert-work bound, has
+every word of its credited rows at the
 reference values, or SHA-512 collides on two different messages, one hashed in digesting the words the check forms and
 one in digesting `c`'s words on the tile. -/
 def TilePassGivesTheWords : Prop :=
@@ -87,7 +88,8 @@ def TilePassGivesTheWords : Prop :=
       (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).weightOK (U.layout.shape ((auditTiling 64 64 U.layout).unit g))
         (U.weight (U.layout.wid ((auditTiling 64 64 U.layout).unit g))) j) →
     OpensCommitted p tid o U ((auditTiling 64 64 U.layout).unit g) c →
-    checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = none →
+    (checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = .pass ∨
+      ∃ why, checkTile p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o = .overCap why) →
       TileWordsGood (protocolH3 saltOf rootOf ρ) (tilesH3 saltOf rootOf ρ) U H s g c ∨
         ∃ x ∈ leafHashed p tid o, ∃ y ∈ commitHashed p tid c, x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y
 
@@ -96,6 +98,12 @@ end Pouw.PearlPlus.Bridge
 namespace Pouw.PearlPlus.Assembly
 
 open PouwCheck.PearlPlus
+
+/-- A tile that passes or is only over its inert-work bound is `TileAcceptMeans`' outcome at some bound. -/
+theorem passOrOver_bound {t : TileOutcome} (h : t = .pass ∨ ∃ why, t = .overCap why) :
+    ∃ bound : Option String, t = match bound with | none => .pass | some why => .overCap why := by
+  rcases h with h | ⟨why, h⟩
+  exacts [⟨none, h⟩, ⟨some why, h⟩]
 
 /-! ## `Except`, `mapM` and `for` -/
 
@@ -753,11 +761,13 @@ theorem tilePassGivesTheWords (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (
     TilePassGivesTheWords := by
   intro Q R S saltOf rootOf ρ H s coins man p tid o U g c hload hof hsalt hroot hwOK hopen hpass
   obtain ⟨pos, rows, cols, htile, -, hunit, -, hk, -, hwid, hrows, hcols⟩ := hof
-  obtain ⟨pos', rows', cols', ops, ch, htile', hrest⟩ := hT p _ tid o hpass
+  obtain ⟨bound, hb⟩ := Assembly.passOrOver_bound hpass
+  obtain ⟨pos', rows', cols', ops, ch, htile', hrest⟩ :=
+    hT p (Properties.Pouw.PearlPlus.noiseOf p tid) tid o bound (by cases bound <;> exact hb)
   simp only [htile, Option.some.injEq, Prod.mk.injEq] at htile'
   obtain ⟨rfl, rfl, rfl⟩ := htile'
   try dsimp only at hrest
-  obtain ⟨-, -, -, -, -, -, hform, hleaf, -, -⟩ := hrest
+  obtain ⟨-, -, -, -, -, -, hform, hleaf, -, -, -⟩ := hrest
   obtain ⟨wn', hwn, henc, hchk⟩ := Assembly.formed_ok hform
   rw [Assembly.noiseOf_eq htile, ← hk, ← hwid] at hwn
   obtain ⟨hoa, hob, hol, hact, hwt, hcw⟩ := hopen pos rows cols htile

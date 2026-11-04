@@ -37,6 +37,7 @@ from typing import Any
 from verity.core.protocols.pouw.schemes import SCHEMES
 
 from verity_vllm.protocols.pouw.pearl_c import ROW_ALIGN
+from verity_vllm.protocols.pouw.pearl_c import window as PWR
 
 from . import scan_state as SS
 from .build import Unexpressible
@@ -170,13 +171,13 @@ class PearlTables(FixedLoad):
 
     @staticmethod
     def a(s: int, c: int) -> str:
-        """Round ``s``'s call ``c``'s A rows."""
-        return f"pearl-a/{s}/{c}"
+        """Round ``s``'s call ``c``'s A rows, by the name Pearl+'s window record registers them under."""
+        return PWR.a_value(s, c)
 
     @staticmethod
     def y(s: int, c: int) -> str:
-        """Round ``s``'s call ``c``'s y."""
-        return f"pearl-y/{s}/{c}"
+        """Round ``s``'s call ``c``'s y, by the name Pearl+'s window record registers it under."""
+        return PWR.y_value(s, c)
 
     @staticmethod
     def rows(cls: WindowClass, s: int) -> int:

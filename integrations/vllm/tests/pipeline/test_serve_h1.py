@@ -861,7 +861,7 @@ def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp
     assert refusal(*h1, "--protocols-config", json.dumps({"pouw": {"admission": "per-round"}})) is None
     (cfg := tmp_path / "pouw.json").write_text(json.dumps({"pouw": {"retain_steps": 2}}))
     assert refusal(*h1, "--protocols-config", str(cfg)) is None
-    assert "PoUW H1) only" in refusal("--protocols", "pouw:ncp-v2")
+    assert "(PoUW H1, serve_h1) and pouw:pearl-c-h100-v1-h3 (Pearl+, serve_pearl) only" in refusal("--protocols", "pouw:ncp-v2")
     assert "--commit, --scheme rows-sha512" in refusal(*h1, "--no-commit")
     for t in ("2050", "2016"):
         assert refusal(*h1, "--max-num-batched-tokens", t) == refusal("--max-num-batched-tokens", t), t

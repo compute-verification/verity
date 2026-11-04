@@ -131,6 +131,15 @@ keep() {  # NAME: $W/NAME's records into $O/NAME, among them the circuit each dr
   (cd $W/$1 && find . -type f \( ! -name circuit.txt -o -path './window/m*/circuit.txt' \) ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' \
     ! -path './builds/*' ! -path './proof-edits/*/sessions/*' ! -path './proof-edits/mutants/*/*' ! -path './proof-edits/*/member/*' -print0 \
     | xargs -0 -r -I{} cp --parents {} $O/$1/)
+  # a case's blobs name its files in $W, which the EXIT trap removes: name the kept copies instead
+  (cd $O/$1 && find . -name '*.json' -print0 | xargs -0 -r grep -lZ '"blobs"' \
+    | xargs -0 -r $PY -c 'import json,sys
+w, o = sys.argv[1:3]
+for f in sys.argv[3:]:
+    c = json.load(open(f))
+    if isinstance(c, dict) and isinstance(c.get("blobs"), list):
+        c["blobs"] = [o + b[len(w):] if isinstance(b, str) and b.startswith(w) else b for b in c["blobs"]]
+        open(f, "w").write(json.dumps(c, sort_keys=True))' "$W/$1/" "$(cd $O/$1 && pwd)/")
 }
 run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, then the verifier's audit; RUN is the committed
          # run's arguments (--tp-commit DIR --build-root DIR, --bundle DIR --row-dir DIR --workload F, or --serve-run DIR
