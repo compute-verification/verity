@@ -1,4 +1,5 @@
-# The jobs `check` runs, written as data: who owns each, which group it runs in, and what its failure means for the run.
+# The jobs `check` runs, written as data: who owns each, which group it runs in, and what its failure means for the run. Which
+# of them gate a merge, and what may stay red, is drive's policy (policy.toml), not this file's.
 # `declaration.py` reads this file without running any of the commit's code. check.py takes its groups, their order and
 # what halts the run from here, builds each job's command, and refuses a job this file doesn't declare. This file is the
 # first step of the CI job API (owners declare their jobs, CI runs them).
@@ -11,7 +12,7 @@ owner = "ci"
 part = "tests"
 group = 1
 
-# Group 2: C-Flock's Rust build and tests, and the property checks every circuit passes.
+# Group 2: Flock's Rust build and tests, and the property checks every circuit passes.
 [[job]]
 name = "flock-circuit-build"
 owner = "proofs"
@@ -24,6 +25,12 @@ name = "circuit-check"
 owner = "circuits"
 part = "circuits"
 group = 2
+# its targets in 4 shards by the hash of each one's id, parts circuit-check:1/4 .. 4/4: a check that holds all four runs
+# `circuit-check --all` whole; one that holds some runs `--all --shard K/4` for each, and `check.py --combine` joins the shards
+# (`circuit-check --combine`), whose verdict is the unsharded run's
+shards = 4
+# Off the merge gate by drive's policy (policy.toml's `off_gate`): the plans keep it, so putting it back is one line there. Its red
+# in drive's after-landing run reverts its culprit at once and lands no PR touching its inputs until it passes.
 
 [[job]]
 name = "flock-rust-tests"
@@ -83,9 +90,21 @@ merge_requires = ["verity/ml/flock/python/verity_flock/rec_vstage.py", "verity/m
                   "verity/core/protocols/sampled_proofs/one_stage/registered.py", "verity/core/service/flock/VStar/In.lean",
                   "verity/core/service/vstar/"]
 
+# Group 7: no merge above the check's base grows the vLLM integration's lint ratchets (`ratchet_gate.py`, as the base has it):
+# on a train, each `Queue: #N` merge against the one below, so a failure names its PR.
+[[job]]
+name = "ratchet-gate"
+owner = "vllm"
+part = "tests"
+group = 7
+# Off the merge gate by drive's policy (policy.toml's `off_gate`) and out of the plans. It runs in drive's after-landing run
+# (`--deferred`, every job, its base the last verified commit; sharded, in its last shard), where a red reverts the landing
+# whose merge it names.
+
 # The shard plans: `check.py --record --shard K/N --on POD` runs shard K of the plan with N shards, on a pod of the lander's
 # choosing, and `check.py --record --combine RUN...` records their union as the commit's check (`research merge` re-reads the
-# shards). Balanced on a cold check's costs on one pod (lean-audit 46 min, soundness alone 45-70 of it; pytest 27, lean-suites
+# shards). These are written by hand and stay as fallbacks: `--shard auto[:MAX]` plans the shards from measured costs instead
+# (`shards.py`, `check.py --shard-plan` prints the plan), N the fewest that reach the critical path. Balanced on a cold check's costs on one pod (lean-audit 46 min, soundness alone 45-70 of it; pytest 27, lean-suites
 # 22, circuit-check about 48 on half the cores), so the wall time is about the soundness audit's.
 # lean-audit runs on a scratch tree, so a shard audits without lean-build; the jobs that read lean-build's binaries `needs`
 # it, or run `after` it, and a shard holds both.
@@ -98,6 +117,16 @@ shards = [
     ["lean-audit:Security", "lean-audit:Security/Proofs", "pytest"],
     ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites", "lean-agreement", "lean-changed"],
     ["flock-circuit-build", "circuit-check", "flock-rust-tests"],
+]
+
+# 4 pods: the 3-pod plan with pytest on a pod of its own, and circuit-check's four shards one to each pod, so a cold
+# circuit-check (about 4 h whole on one pod, drive.toml) is no single pod's long pole.
+[[plan]]
+shards = [
+    ["lean-audit:Security", "lean-audit:Security/Proofs", "circuit-check:1/4"],
+    ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites", "lean-agreement", "lean-changed", "circuit-check:2/4"],
+    ["pytest", "circuit-check:3/4"],
+    ["flock-circuit-build", "flock-rust-tests", "circuit-check:*"],
 ]
 
 # 5 pods: each of those apart.

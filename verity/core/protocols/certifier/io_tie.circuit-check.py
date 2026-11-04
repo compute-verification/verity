@@ -9,7 +9,7 @@ def _network_io_tie_roots() -> list[Any]:
     """The I/O tie's prototype (`verity.core.protocols.certifier.io_tie`) at the tests' size class: a bucket row of
     R = 8 256-byte slots (four lanes of r = 2) and a port of S = 4 read rows of P = 4 ids (E = 16 entries routed over
     M = 16 positions), which reaches the cell's parse, the Beneš routing (and its switch), the match against the map
-    and the bucket's unit at their smallest; and the cell's parse at B = 4,096."""
+    and the bucket's proof block at their smallest; and the cell's parse at B = 4,096."""
     from verity.ml.circuits.defs import bind
     from verity.core.protocols.certifier.io_tie import (IoTieBucket, IoTieCell, IoTieContent, IoTieMatch, IoTieRoute,
                                                         IoTieSwitch)

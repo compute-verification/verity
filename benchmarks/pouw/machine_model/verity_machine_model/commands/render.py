@@ -40,10 +40,10 @@ def _vectors(data: Path) -> str | None:
         v = vector(n, data)
         status = "current" if n == m.current else f"superseded by {v.superseded_by}" if v.superseded_by else ""
         p = v.published
-        body.append([f"`{n}`", v.epoch, status, len(v.rows), len(v.credits), _num(p, "tau", 4), _num(p, "tau_600w", 4),
-                     _num(p, "uf_low", 4), _num(p, "margin", 3), v.note, v.summary])
-    return _table(["vector", "epoch", "status", "rows", "credits", "τ", "τ at 600 W", "U/F_low", "margin", "note",
-                   "summary"], body) if body else None
+        body.append([f"`{n}`", v.epoch, status, len(v.rows), len(v.credits), _num(p, "tau", 4), _num(p, "uf_low", 4),
+                     _num(p, "margin", 3), v.note, v.summary])
+    return _table(["vector", "epoch", "status", "rows", "credits", "τ", "U/F_low", "margin", "note", "summary"],
+                  body) if body else None
 
 
 def _epochs(data: Path) -> str | None:

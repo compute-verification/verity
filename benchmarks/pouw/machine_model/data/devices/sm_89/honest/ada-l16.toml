@@ -1,9 +1,9 @@
-# Honest at L = 16 on the L40S as EPS1 ADA measured it: `honest16`, 8 IMMA.16816 then duo on each of their 32 words a
+# Honest at L = 16 on the L40S as measured: `honest16`, 8 IMMA.16816 then duo on each of their 32 words a
 # lane (LOP3 + IMAD + LEA.HI a word), operands in registers. The fastest of 2, 4, 6 and 8 warps a SMSP is 8's,
 # 26.85 words/SM/clk = 0.42 of the tensor pipe; occupancy doesn't move it, so it is the fold's cost, not latency.
 name = "ada-l16"
 status = "measured"
-source = "EPS1 ADA's honest16 (opcode_probe/sm89/scalar.cu, SASS pinned at 8 IMMA.16816, 32 LOP3.LUT, 32 IMAD, 32 LEA.HI a step; note:20261017T0605Z-draft-eps1-ada, r20261017-065626-d7f1)"
+source = "EPS1 ADA's honest16 (opcode_probe/sm89/scalar.cu, SASS pinned at 8 IMMA.16816, 32 LOP3.LUT, 32 IMAD, 32 LEA.HI a step)"
 L = 16
 
 [mma]
@@ -19,7 +19,7 @@ IMAD = 4
 
 [measured]
 cycles_per_mma = 19.069         # 128 words x 4 SMSPs / 26.85 words/SM/clk (19.07-20.39 over 2-8 warps a SMSP)
-source = "EPS1 ADA, honest16_w8 (note:20261017T0605Z-draft-eps1-ada, r20261017-065626-d7f1)"
+source = "EPS1 ADA, honest16_w8"
 
 [operands]      # the least operand delivery any program pays a MMA when the design names none
 floor = { LDSM_X4 = 0.097222 }

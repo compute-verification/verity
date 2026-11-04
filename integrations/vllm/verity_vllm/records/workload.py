@@ -147,7 +147,7 @@ class Workload:
     case: str | None                                  # the checkpoint's role; `pipeline.workload` writes null for a row without one
     engine: Mapping[str, Any] | None                  # v2's pinned engine block (`config.RowEngine`); a v1 workload has the flat keys
     sampling: WorkloadSampling | None                 # `properties.holdout` writes none: the driver's greedy default
-    sweep: Mapping[str, Any] | None                   # the sweep plan the requests were drawn from (`pipeline.workload`), else none
+    sweep: Mapping[str, Any] | None                   # the sweep plan the requests were sampled from (`pipeline.workload`), else none
     info: Mapping[str, Any]                           # the `INFO` fields it carries (and `V1_INFO`, for a v1 workload)
     # the document's sha256 as the driver records it (RunHeader.workload.sha256: sort_keys, compact separators), of the JSON as read
     doc_sha256: str = field(default="", compare=False)

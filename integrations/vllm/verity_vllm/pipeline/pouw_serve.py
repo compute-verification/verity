@@ -17,7 +17,7 @@ calls as one window under the work law at a budget of K = ``--draws``:
 - **tampered**: the same calls, except that credited word 7 of every tile of the first call is flipped by its prover,
   committed and opened that way (`check.replay.pouw_circuit.tamper_tiles`), with the calls root recomputed over it.
 
-Each replay's window draws under a fresh source (`verity.core.protocols.pouw.circuit.anchors.Ledger.open`), which its report records.
+Each replay's window samples under a fresh source (`verity.core.protocols.pouw.circuit.anchors.Ledger.open`), which its report records.
 
 The command writes ``pouw_serve.json`` under ``--out`` (default ``$RESEARCH_RUN_DIR``), and ``result.json`` beside it
 under a research run (``$RESEARCH_RUN_ID``). They hold
@@ -50,7 +50,7 @@ class Options:
     draws: int = option("--draws", type=int, default=16, help="the window's work-law budget K (default 16)")
     out: str = option("--out", env="RESEARCH_RUN_DIR", default=".", help="the output directory (default $RESEARCH_RUN_DIR, else .)")
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="", help="the research run's id: result.json is written when set")
-    challenger: str | None = option("--challenger", default=None, metavar="HOST:PORT", help="the auditor host's challenger the epoch's salt coin comes from (the pouw setting 'challenger'); without it the command's own in-process challenger draws it, and the run is a measurement only")
+    challenger: str | None = option("--challenger", default=None, metavar="HOST:PORT", help="the auditor host's challenger the epoch's salt coin comes from (the pouw setting 'challenger'); without it the command's own in-process challenger samples it, and the run is a measurement only")
     session: str | None = option("--session", default=None, metavar="JSON", help="with --challenger: the challenger gate's open answer for the window, {\"session\", \"seq\", \"root\", \"commitment\"} and its \"secret\" (the pouw setting 'session')")
 
 
