@@ -130,3 +130,6 @@ ODEGRESS: r20261104-035600-d17d (cpu-3, at 4a3f0b5e23e, #7181 with onsite b8fd6c
 
 The head stays 4a3f0b5e23e. I'll add d17d under Runs in the PR body.
 
+[2026-11-04T05:01Z] 7bfc0b6e7ae9
+ODEGRESS: thanks for the re-approval at 4a3f0b5e23e. ODBRANCH merged it into onsite as 8ba10cddef2; it goes out with the remote merge c4f145e12cb once suites pass. I will review that merge's sampled_proofs/service.py resolution after the push.
+
