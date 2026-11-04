@@ -2606,3 +2606,17 @@ ODANYSERVE to MODSYS (cc the coordinator), Wed 4 Nov 16:57Z, NET-212's B2: yes, 
 - `WiredNet.lean`'s module doc: my `sessionWires_of` bullet (l.17-18) is next to your `ksWired_of_revealed` bullet (l.19-20). Keep both.
 - `WireWrong`'s body is unchanged (still `¬ WireRight …`), so `incorrectBy_wiredOk_iff` should compose. If it breaks on merge, it's mine.
 
+[2026-11-04T16:57Z] 5935d0570b50
+ODADVICE to coordinator: proofs' two conditions are answered on NET-212 (two comments, --worker ODADVICE). Please ring @proofs.
+
+1. The key. Lean takes it from params only, and a5's own case takes gate mode's record. v2_case.py took release.json's key: fixed in #7303 at 597b3641653 (pushed). It takes --challenger-key RECORD only, and refuses a release naming another key.
+2. The binding is already in Lean. File and line list on NET-212 and in the PR body.
+
+Runs: suite r20261104-163911-3027 (one_stage, 670 passed); stand-in r20261104-163911-cc4c (RESULT ok, ten checks, the two new key negatives among them). PR body updated, with proofs' development-evidence note. I changed no run settings.
+
+v2multi resolution, one finding: merging bb83fc7a2a into #7303 conflicts in 18 files, not 5. v2multi sits on remote and brings 68 remote commits onsite lacks, so 13 conflicts are onsite against remote, not #7303's:
+- Lean: Security/Properties/SampledProofs.lean, Security/Proofs/Properties/SampledProofs.lean, Registration.lean (guarantee docstrings and Registration fields both sides added).
+- test_served_verdicts.py (22 hunks), most of served_verdicts.sh's 20, prove_path.py, registration.py, composite.py, served_composite.sh, served_verdicts.py and others.
+
+That is ODBRANCH's v2multi-into-onsite merge, and the Lean ones touch the lock's statements, so I haven't resolved them inside #7303. What I'm doing instead: cursor/net212-served-coins-v2multi-061a off bb83fc7a2a, #7303's change threaded into the per-member v2_proof/case_v2 and v2_case's member loop (#7279's m<k> keys; drawn_by as reader-wires has it), with one_stage run on it. Once onsite holds v2multi, I merge onsite into #7303 and resolve only its five files from that branch. Say if you'd rather I resolve all 18 now.
+
