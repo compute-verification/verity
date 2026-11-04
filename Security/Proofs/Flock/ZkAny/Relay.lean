@@ -34,11 +34,12 @@ possibly chosen after reading the answers before it, and so are the answers.
   coin request that is not coins stops the session (`State.noCoins`, `noCoins_stop`), so no slot comes twice.
 * `sched_prefix`, `relay_prefix`: the slots of a run are the schedule cut after one of them, and each control slot sent
   its frame (`Framed`).
-* `relay_release_cut`: what leaves for the auditor is the control frames at their fixed places (`ctlOf s`: the
-  `Register`'s, the `Link`'s and each `Open`'s, functions of the setup) and the model's frames at theirs
-  (`relayFrames`: what left at the `Hello`, each coin request and the `Finish`), over the schedule cut where its release
-  ended (`relayCut`, `weave`), then nothing. So the release is a function of where it ended (`relayEnd`, one of the
-  schedule's cuts) and the model's frames alone, whatever the worker sends and the auditor answers.
+* `relay_release_pre`, `relay_release_take`: where what left at each model slot (the `Hello`, each coin request and the
+  `Finish`) is the next of some frames `ms`, the last possibly cut where the release ended (`RelayPre`), what leaves for
+  the auditor is the control frames at their fixed places (`ctlOf s`: the `Register`'s, the `Link`'s and each `Open`'s,
+  functions of the setup) and `ms` at the model's, woven over the whole schedule (`weave`) and cut after the frames that
+  left (`relayLen`), then nothing. So the release is a function of how many frames left and `ms` alone, whatever the
+  worker sends and the auditor answers.
 
 Scope: the released bytes and their order, not their times. When each frame leaves is not modeled.
 -/
@@ -1829,61 +1830,58 @@ def weave (ctl : Kind → ByteArray) : List Kind → List (List ByteArray) → L
   | [], _ => []
   | k :: ks, ms => if isModel k then ms.headD [] ++ weave ctl ks ms.tail else ctl k :: weave ctl ks ms
 
-/-- What left at a trace's model slots, in order. -/
-def modelFrames (tr : List (Kind × List ByteArray)) : List (List ByteArray) :=
-  (tr.filter fun p => isModel p.1).map (·.2)
+/-- **What left at each model slot of the trace `tr` is the next of `ms`**, but at the trace's last slot, where it may
+be any prefix of it: where the session stopped or ended there, or at its `Finish`, where the auditor stopped taking its
+proofs or the hold kept them. -/
+def RelayPre : List (Kind × List ByteArray) → List (List ByteArray) → Prop
+  | [], _ => True
+  | (k, s) :: tl, ms =>
+    if isModel k then (s = ms.headD [] ∧ RelayPre tl ms.tail) ∨ (s <+: ms.headD [] ∧ tl = []) else RelayPre tl ms
 
-/-- **How many of a trace's slots released**: all of them, or those before a last control slot that sent nothing. -/
-def cutOf : List (Kind × List ByteArray) → Nat
-  | [] => 0
-  | (k, s) :: tl => if isModel k = false ∧ s = [] then 0 else cutOf tl + 1
+/-- **A release over a cut of the slots is a prefix of the release over them all.** -/
+theorem weave_prefix (ctl : Kind → ByteArray) :
+    ∀ (ks ks' : List Kind) (ms : List (List ByteArray)), ks <+: ks' → weave ctl ks ms <+: weave ctl ks' ms
+  | [], _, _, _ => List.nil_prefix
+  | k :: ks, _, ms, ⟨t, rfl⟩ => by
+    simp only [List.cons_append, weave]
+    split
+    · exact (List.prefix_append_right_inj _).mpr (weave_prefix ctl ks (ks ++ t) _ ⟨t, rfl⟩)
+    · exact List.cons_prefix_cons.mpr ⟨rfl, weave_prefix ctl ks (ks ++ t) ms ⟨t, rfl⟩⟩
 
-/-- **A trace whose control slots sent their frames is its slots woven with its model slots' frames**, cut where the
-last slot sent nothing (`cutOf`). -/
-theorem weave_framed (ctl : Kind → ByteArray) : ∀ tr : List (Kind × List ByteArray), Framed ctl tr →
-    cutOf tr ≤ tr.length ∧ tr.flatMap (·.2) = weave ctl ((tr.map (·.1)).take (cutOf tr)) (modelFrames tr)
-  | [], _ => ⟨Nat.le_refl _, rfl⟩
-  | (k, s) :: tl, ⟨hk, htl⟩ => by
-    obtain ⟨hc, he⟩ := weave_framed ctl tl htl
+/-- **A trace whose control slots sent their frames and whose model slots sent `ms` is a prefix of its slots woven with
+`ms`.** -/
+theorem flatMap_pre (ctl : Kind → ByteArray) :
+    ∀ (tr : List (Kind × List ByteArray)) (ms : List (List ByteArray)), Framed ctl tr → RelayPre tr ms →
+      tr.flatMap (·.2) <+: weave ctl (tr.map (·.1)) ms
+  | [], _, _, _ => List.nil_prefix
+  | (k, s) :: tl, ms, ⟨hk, htl⟩, hp => by
+    simp only [List.flatMap_cons, List.map_cons, weave]
     cases hm : isModel k
-    · rcases hk hm with rfl | ⟨rfl, rfl⟩
-      · have hcut : cutOf ((k, [ctl k]) :: tl) = cutOf tl + 1 := by simp [cutOf, hm]
-        rw [hcut]
-        refine ⟨by simp only [List.length_cons]; omega, ?_⟩
-        simp only [List.flatMap_cons, List.map_cons, List.take_succ_cons, weave, hm, Bool.false_eq_true, ite_false,
-          modelFrames, List.filter_cons, he]
-        rfl
-      · have hcut : cutOf [(k, [])] = 0 := by simp [cutOf, hm]
-        rw [hcut]
-        exact ⟨Nat.zero_le _, rfl⟩
-    · have hcut : cutOf ((k, s) :: tl) = cutOf tl + 1 := by simp [cutOf, hm]
-      rw [hcut]
-      refine ⟨by simp only [List.length_cons]; omega, ?_⟩
-      simp only [List.flatMap_cons, List.map_cons, List.take_succ_cons, weave, hm, ite_true, modelFrames,
-        List.filter_cons, List.headD_cons, List.tail_cons, he]
+    · simp only [RelayPre, hm, Bool.false_eq_true, ite_false] at hp
+      simp only [Bool.false_eq_true, ite_false]
+      rcases hk hm with rfl | ⟨rfl, rfl⟩
+      · exact List.cons_prefix_cons.mpr ⟨rfl, flatMap_pre ctl tl ms htl hp⟩
+      · exact List.nil_prefix
+    · simp only [RelayPre, hm, ite_true] at hp
+      simp only [ite_true]
+      rcases hp with ⟨rfl, hp⟩ | ⟨hs, rfl⟩
+      · exact (List.prefix_append_right_inj _).mpr (flatMap_pre ctl tl _ htl hp)
+      · simpa using hs.trans (List.prefix_append _ _)
 
 /-- **What leaves at each slot of the relay's session**, from its start: the requests that reach a slot (`pick`), at
 the schedule's places. -/
 def relayTrace (hold : Bool) (ins : List (ByteArray × Env)) : List (Kind × List ByteArray) :=
   schedTrace hold {} {} (pick hold {} {} ins)
 
-/-- **The model's frames the relay released**: what left at the `Hello`, each coin request and the `Finish`, in
-order. -/
-def relayFrames (hold : Bool) (ins : List (ByteArray × Env)) : List (List ByteArray) :=
-  modelFrames (relayTrace hold ins)
-
-/-- **Where the relay's release ended**: how many of the slots it reached released. -/
-def relayCut (hold : Bool) (ins : List (ByteArray × Env)) : Nat := cutOf (relayTrace hold ins)
-
-/-- **The deployed relay's release is the schedule's cut**: at every requests the worker sends and every answer of the
-auditor, at a setup `s` the relay reads, what leaves for the auditor is the session's control frames at their fixed
-places (`ctlOf s`: the `Register`, the `Link`, each `Open`) and the model's frames (`relayFrames`: what left at the
-`Hello`, each coin request and the `Finish`) at theirs, over the schedule `tmplOf s` cut where the release ended
-(`relayCut`); nothing leaves after it. -/
-theorem relay_release_cut (hold : Bool) (s : V (SessionSpec × Array Stmt)) (ins : List (ByteArray × Env))
-    (hs : ∀ p ∈ ins, p.2.setup = s) (hb : ∀ p ∈ ins, ∀ why, (p.2.barrier (some why)).isSome) :
-    relayCut hold ins ≤ (tmplOf s).length ∧
-      out hold {} {} ins = weave (ctlOf s) ((tmplOf s).take (relayCut hold ins)) (relayFrames hold ins) := by
+/-- **The deployed relay's release is a prefix of the schedule's**: at every requests the worker sends and every answer
+of the auditor, at a setup `s` the relay reads, where what left at each model slot (the `Hello`, each coin request and
+the `Finish`) is the next of `ms`, the last possibly cut (`RelayPre`), what leaves for the auditor is a prefix of the
+session's control frames at their fixed places (`ctlOf s`: the `Register`, the `Link`, each `Open`) and `ms` at the
+model's, over the whole schedule `tmplOf s`; nothing leaves after it. -/
+theorem relay_release_pre (hold : Bool) (s : V (SessionSpec × Array Stmt)) (ins : List (ByteArray × Env))
+    (ms : List (List ByteArray)) (hs : ∀ p ∈ ins, p.2.setup = s)
+    (hb : ∀ p ∈ ins, ∀ why, (p.2.barrier (some why)).isSome) (h : RelayPre (relayTrace hold ins) ms) :
+    out hold {} {} ins <+: weave (ctlOf s) (tmplOf s) ms := by
   obtain ⟨hsub, heq⟩ := out_sched hold {} {} ins (.inr ⟨rfl, reach_init⟩) hb
   have hmem : ∀ e ∈ pick hold {} {} ins, ∃ p ∈ ins, p.2 = e := fun e he => List.mem_map.mp (hsub.subset he)
   have hbe : ∀ e ∈ pick hold {} {} ins, ∀ why, (e.barrier (some why)).isSome := by
@@ -1894,24 +1892,26 @@ theorem relay_release_cut (hold : Bool) (s : V (SessionSpec × Array Stmt)) (ins
     intro e he
     obtain ⟨p, hp, rfl⟩ := hmem e he
     exact hs p hp
-  obtain ⟨⟨t, ht⟩, hfr⟩ := relay_prefix hold s _ hse
-  obtain ⟨hc, hw⟩ := weave_framed (ctlOf s) _ hfr
-  have hck : relayCut hold ins ≤ ((schedTrace hold {} {} (pick hold {} {} ins)).map (·.1)).length := by
-    simpa [relayCut, relayTrace] using hc
-  refine ⟨?_, ?_⟩
-  · have := congrArg List.length ht
-    simp only [List.length_append] at this
-    omega
-  · rw [heq, schedOut_trace hold {} {} _ hbe, hw, ← ht, List.take_append_of_le_length hck]
-    rfl
+  obtain ⟨hpre, hfr⟩ := relay_prefix hold s _ hse
+  rw [heq, schedOut_trace hold {} {} _ hbe]
+  exact (flatMap_pre (ctlOf s) _ ms hfr h).trans (weave_prefix _ _ _ ms hpre)
 
-/-- **Where the relay's release ended, in the schedule**: one of its `(tmplOf s).length + 1` cuts. -/
-def relayEnd (hold : Bool) (s : V (SessionSpec × Array Stmt)) (ins : List (ByteArray × Env)) :
-    Fin ((tmplOf s).length + 1) :=
-  ⟨min (relayCut hold ins) (tmplOf s).length, by omega⟩
+/-- **How many frames left over the relay's session**, at most `B`. -/
+def relayLen (hold : Bool) (B : Nat) (ins : List (ByteArray × Env)) : Fin (B + 1) :=
+  ⟨min (out hold {} {} ins).length B, by omega⟩
 
-theorem relayEnd_val {hold : Bool} {s : V (SessionSpec × Array Stmt)} {ins : List (ByteArray × Env)}
-    (h : relayCut hold ins ≤ (tmplOf s).length) : (relayEnd hold s ins : Nat) = relayCut hold ins :=
-  Nat.min_eq_left h
+/-- **The deployed relay's release is the schedule's, cut where it ended**: at `RelayPre`, the control frames and `ms`
+woven over the whole schedule, cut after the frames that left (`relayLen`, where the woven release is at most `B`
+long). -/
+theorem relay_release_take {hold : Bool} {s : V (SessionSpec × Array Stmt)} {ins : List (ByteArray × Env)}
+    {ms : List (List ByteArray)} {B : Nat} (hB : (weave (ctlOf s) (tmplOf s) ms).length ≤ B)
+    (hs : ∀ p ∈ ins, p.2.setup = s) (hb : ∀ p ∈ ins, ∀ why, (p.2.barrier (some why)).isSome)
+    (h : RelayPre (relayTrace hold ins) ms) :
+    out hold {} {} ins = (weave (ctlOf s) (tmplOf s) ms).take (relayLen hold B ins) := by
+  have hp := relay_release_pre hold s ins ms hs hb h
+  have hl : (relayLen hold B ins : Nat) = (out hold {} {} ins).length :=
+    Nat.min_eq_left (Nat.le_trans hp.length_le hB)
+  rw [hl]
+  exact List.prefix_iff_eq_take.mp hp
 
 end Claims.ZKServer.Relay
