@@ -5,9 +5,9 @@ circuit divides into inference blocks within their gate and fresh-input budgets,
 and the registered information and so needs no hardware at the site), work by proof of useful work over the period
 (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the period's windows credited all or nothing), onsite's work
 subprotocol, and integrity by sampled proofs (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`, in the
-form its params name: one-stage v1's audit, or the recursive audit, V*'s compiled check run on the recursive session's
-parts, which the caller hands in as blobs; one-stage v2, the audit on the proofs themselves, is not remote's until the
-composites switch to it). `Core.Composition.tiedSameB` composes them on the caller's blobs: every
+form its params name: one-stage v2's audit on the proofs themselves, or the recursive audit, V*'s compiled check run on
+the recursive session's parts, each on the blobs the caller hands in; one-stage v1, whose verdicts are the evidence's, is
+refused). `Core.Composition.tiedSameB` composes them on the caller's blobs: every
 subprotocol accepts or remote doesn't, and any one's rejection rejects remote whatever the others answer. The policy's
 commitment and sampled proofs' are the run's record, and both must commit to the same one; every window of the period
 must name that record as its Commit record (`windows`). Two records reject remote whatever the subprotocols answer.
@@ -143,9 +143,11 @@ private def strayOf (policy : String) (rs : List String) : Option String :=
 /-! ### One window's registration in the log, and the run's record reusing it
 
 `W` is the serving process's registration of a window's tables, the log's first record, in the form a served window
-writes it. `R`, the run's one-stage registration, is chained after it (`previous`) and registers those tables under the
+writes it. `R`, the run's registration record, is chained after it (`previous`) and registers those tables under the
 names PoUW's Commit gives them (`PouwCheck.Credit.commitRows`, `commitIds`) as output values that reuse `W`'s entries
-(`outputs`). The policy's case, sampled proofs' and the period's one window all name `R`. -/
+(`outputs`). The policy's case, sampled proofs' (one-stage v2's, `SampledProofs.OneStageZk`) and the period's one window
+all name `R`. `R` registers one window's tables, so a period credits at most one window on it: every window must name
+`R` (`windows`), and PoUW's ROOTS1 holds each window's tables to `R`'s (`Internal.arow`). -/
 
 open Lean (Json)
 
@@ -163,7 +165,7 @@ private def windowA : Json := tableEntry "pouw/h1/a/64@0" (rep "ab") (rep "a1") 
 private def windowIds : Json := tableEntry "pouw/h1/ids@0" (rep "ba") (rep "a2") 8
 
 private def recW : Json := Json.mkObj [("format", "verity/registration/v2"), ("previous", Json.null),
-  ("program", rep "11"), ("protocol", "verity/sampled-proofs/one-stage/v1"),
+  ("program", rep "11"), ("protocol", SampledProofs.Registration.PROTOCOL),
   ("registered", Json.arr #[windowA, windowIds]),
   ("window", Json.mkObj [("entry", 0), ("kind", "served"), ("open_root", rep "0e"), ("refused", Json.arr #[])])]
 
@@ -190,7 +192,7 @@ private def ports : Json := Json.mkObj [("out", Json.mkObj [("domain", rep "d1")
 private def runRecord (previous : Json) (registered : Array Json) : Json := Json.mkObj [("anchors", Json.arr #[]),
   ("format", "verity/registration/v2"), ("law", law), ("leaf_layer", rep "ee"),
   ("partition", (SampledProofs.Partition.digest partition).getD ""), ("population", 1), ("previous", previous),
-  ("program", circuit), ("protocol", "verity/sampled-proofs/one-stage/v1"),
+  ("program", circuit), ("protocol", SampledProofs.Registration.PROTOCOL),
   ("query", (SampledProofs.Registration.queryDigest query).toOption.getD ""), ("registered", Json.arr registered),
   ("roots", Json.arr #[Json.mkObj [("domain", rep "d1"), ("leaves", 2), ("port", "out"), ("root", rep "cd")],
     Json.mkObj [("domain", rep "d2"), ("leaves", 1), ("port", "x"), ("root", rep "ab")]]),
@@ -207,26 +209,37 @@ private def outputsOf (record : String) : Json := Json.mkObj [
   (PouwCheck.Credit.commitIds 0, Json.mkObj [("record", record), ("value", "pouw/h1/ids@0")]),
   (PouwCheck.Credit.commitRows 0 64, Json.mkObj [("record", record), ("value", "pouw/h1/a/64@0")])]
 
+/-- The verifier's own registered file (`flock-verify --registered`'s): `R`'s tables under the Commit's names, which no
+proof block of the audited circuit reads. -/
+private def readsFile : Json := Json.mkObj [("format", Flock.Registered.FORMAT), ("ports", Json.mkObj (reused.toList.map
+  fun x => ((x.getObjValD "value").getStr?.toOption.getD "", Json.mkObj [("domain", x.getObjValD "domain"),
+    ("leaves", x.getObjValD "leaves"), ("reads", Json.arr #[Json.null]), ("root", x.getObjValD "root"),
+    ("value", x.getObjValD "value"), ("words", x.getObjValD "words")])))]
+
+/-- The auditor's challenger, whose signed release the draw's coins come in: an LMS key over SHA-512. -/
+private def challenger : Json := Json.mkObj [("key", Json.mkObj [("H", 5), ("W", 8),
+  ("public", String.join (List.replicate 80 "c1"))]), ("label", "draw")]
+
+/-- One-stage v2's params: v1's over the log `log`, with `outputs`, the challenger and `W`'s open root as the window's,
+and `proofs`, the circuit file's SHA-512 and the verifier's registered file. -/
 private def sampledParams (log : Array Json) (outputs : Option Json) : Json := Json.mkObj ([("anchors", Json.arr #[]),
-  ("delta", "1/10"), ("form", "one-stage"), ("law", law), ("leaf_layer", rep "ee"), ("log", Json.arr log),
-  ("parameters", signature), ("partition", partition), ("ports", ports), ("program", jsonOf descriptor),
+  ("challenger", challenger), ("delta", "1/10"), ("form", "one-stage"), ("law", law), ("leaf_layer", rep "ee"),
+  ("log", Json.arr log), ("parameters", signature), ("partition", partition), ("ports", ports),
+  ("program", jsonOf descriptor), ("proofs", Json.mkObj [("circuit", rep "c0"), ("registered", readsFile)]),
   ("query", query), ("registered", Json.mkObj [(PouwCheck.Credit.commitIds 0, 1), (PouwCheck.Credit.commitRows 0 64, 1)]),
-  ("scheme", "frame-v3-sha512/hm96-sha512"), ("work_table", Json.null)] ++
+  ("scheme", "frame-v3-sha512/hm96-sha512"), ("window_root", rep "0e"), ("work_table", Json.null)] ++
     (outputs.map fun o => [("outputs", o)]).getD [])
 
-/-- An audit that drew and proved the one unit, its verifier of record accepting and reading `rec`'s registered values. -/
+/-- One-stage v2's evidence of an audit that drew the one unit and proved it in one session: the public file's and the
+session's record's SHA-512 (`proofs`) in place of verdicts, and coins no challenger signed. -/
 private def sampledEvidence (rec : Json) : Json :=
-  let reads := match rec.getObjValD "registered" with
-    | .arr es => es.toList.flatMap fun e => [0, 1].map fun (i : Nat) =>
-      (s!"{(e.getObjValD "value").getStr?.toOption.getD ""}.{i}",
-        Json.mkObj [("root", e.getObjValD "root"), ("value", e.getObjValD "value")])
-    | _ => []
-  Json.mkObj [("draw", jsonOf r#"{"k":1,"law":"subset","population":1,"units":[0]}"#), ("form", "one-stage"),
-    ("instances", 1), ("proved_units", jsonOf "[0]"), ("receipt", Json.mkObj [("registration", digestOf rec)]),
+  Json.mkObj [("coins", Json.mkObj []), ("draw", jsonOf r#"{"k":1,"law":"subset","population":1,"units":[0]}"#),
+    ("form", "one-stage"), ("instances", 1),
+    ("proofs", Json.mkObj [("public", rep "c2"), ("sessions", Json.arr #[Json.mkObj [("name", rep "ab"),
+      ("record", rep "c3"), ("reps", Json.mkObj [])]])]),
+    ("proved_units", jsonOf "[0]"), ("receipt", Json.mkObj [("registration", digestOf rec)]),
     ("served", Json.null), ("session_roots", Json.null), ("sessions", Json.arr #[rep "ab"]),
-    ("statement", jsonOf r#"{"instances":1}"#),
-    ("verdicts", Json.mkObj [("lean", Json.mkObj [("accepted", true), ("digest", rep "aa"), ("of_record", true),
-      ("registered", Json.mkObj reads)])])]
+    ("statement", jsonOf r#"{"instances":1}"#)]
 
 /-- The policy's case on `rec` after `log`, declaring the audited circuit as one inference block of its 15 gates. -/
 private def policyOn (log : Array Json) (rec : Json) : Case :=
@@ -267,22 +280,64 @@ private def policy (log : Array Json) : Answer := answerOf NciCheck.Protocol.pro
 private def sampled (log : Array Json) (outputs : Option Json) : Answer :=
   answerOf (noBlobs VStar.Recursive.Sampled.protocol) (sampledOn log outputs recR)
 
+/-- The verdicts `flock-verify verify --zk` writes for `e`'s sessions (`OneStageZk.verdictJson`'s names), each of record
+and accepting, reporting the roots it opened `rec`'s registered values against. -/
+private def grantedOf (rec : Json) (e : SampledProofs.OneStageZk.Evidence) : Array (String × Json) :=
+  let reads := match rec.getObjValD "registered" with
+    | .arr xs => xs.toList.flatMap fun x => [0, 1].map fun (i : Nat) =>
+      (s!"{(x.getObjValD "value").getStr?.toOption.getD ""}.{i}",
+        Json.mkObj [("root", x.getObjValD "root"), ("value", x.getObjValD "value")])
+    | _ => []
+  e.sessions.map fun s => (s!"flock-verify/{s.name}", Json.mkObj [("accepted", true), ("of_record", true),
+    ("registered", Json.mkObj reads), ("session", s.name)])
+
+/-- Sampled proofs with its draw's coins and its sessions' proofs granted: `VStar.Recursive.Sampled.protocol`'s decoders
+and digest, and in the one-stage form the check `OneStageZk.checkBlobsAt` ends in, v1's `check` on the verdicts the
+sessions' run gives (`grantedOf`); the recursive form refused. -/
+private def proved : Core.Protocol where
+  id := VStar.Recursive.Sampled.PROTOCOL
+  Params := VStar.Recursive.Sampled.Params
+  Commitment := SampledProofs.OneStage.Commitment
+  Evidence := VStar.Recursive.Sampled.Evidence
+  Public := SampledProofs.OneStage.Public
+  Profile := Core.Integrity
+  params := VStar.Recursive.Sampled.paramsOfJson
+  commitment := SampledProofs.OneStage.commitmentOf
+  evidence := VStar.Recursive.Sampled.evidenceOf
+  digest c := c.digest
+  check p c e := match p, e with
+    | .inl p, .inl e => SampledProofs.OneStage.check p.base c { e.base with verdicts := grantedOf c.record e }
+    | _, _ => .reject "the one-stage form only"
+  publicJson := SampledProofs.OneStage.publicJson
+  profileJson := Core.Integrity.toJson
+
+private def provedOn (log : Array Json) (outputs : Option Json) : Answer := answerOf proved (sampledOn log outputs recR)
+
 -- the policy accepts `R` after `W`, the log's first record, whose digest `R`'s previous names; with no `W` before it, the
 -- log's chain refuses `R` (`trusted`)
 #guard (policy #[recW]).verdict == .accept
 #guard (policy #[]).verdict == .reject
 #guard (policy #[]).reason.map (·.startsWith "trusted: ") == some true
 
--- sampled proofs' one-stage audit accepts `R` after `W`, its tables output values that reuse `W`'s entries; it refuses
--- `R` without the outputs (`R7-domain`: R7 holds the tables to the audited circuit's own domains, which `W`'s are not),
--- with outputs naming a record that isn't the log's (`R7-output`), and with no `W` in the log (`R6-previous` too)
-#guard (sampled #[recW] (some (outputsOf (digestOf recW)))).verdict == .accept
-#guard (sampled #[recW] none).verdict == .reject
-#guard (sampled #[recW] none).reason == some "registration: R7-domain"
-#guard (sampled #[recW] (some (outputsOf (rep "77")))).verdict == .reject
-#guard (sampled #[recW] (some (outputsOf (rep "77")))).reason == some "registration: R7-output, R7-domain"
-#guard (sampled #[] (some (outputsOf (digestOf recW)))).verdict == .reject
-#guard (sampled #[] (some (outputsOf (digestOf recW)))).reason == some "registration: R6-previous, R7-output, R7-domain"
+-- sampled proofs' one-stage form is v2's: with no blob and coins no challenger signed, it refuses `R` before any session is
+-- verified; v1's form of the audit, its verdicts the evidence's, is refused by name
+#guard (sampled #[recW] (some (outputsOf (digestOf recW)))).verdict == .reject
+#guard (sampled #[recW] (some (outputsOf (digestOf recW)))).reason.map (·.startsWith "coins: ") == some true
+#guard (answerOf (noBlobs VStar.Recursive.Sampled.protocol) { sampledOn #[recW] (some (outputsOf (digestOf recW))) recR with
+    evidence := (textOf (Json.mkObj [("form", "one-stage"), ("verdicts", Json.mkObj [])])).toUTF8 }).reason ==
+  some s!"evidence: the evidence names no proofs: {VStar.Recursive.Sampled.V1_REFUSED}"
+
+-- with the coins and the session's proofs granted, v2 accepts `R` after `W`, its tables output values that reuse `W`'s
+-- entries; it refuses `R` without the outputs (`R7-domain`: R7 holds the tables to the audited circuit's own domains,
+-- which `W`'s are not), with outputs naming a record that isn't the log's (`R7-output`), and with no `W` in the log
+-- (`R6-previous` too)
+#guard (provedOn #[recW] (some (outputsOf (digestOf recW)))).verdict == .accept
+#guard (provedOn #[recW] none).verdict == .reject
+#guard (provedOn #[recW] none).reason == some "registration: R7-domain"
+#guard (provedOn #[recW] (some (outputsOf (rep "77")))).verdict == .reject
+#guard (provedOn #[recW] (some (outputsOf (rep "77")))).reason == some "registration: R7-output, R7-domain"
+#guard (provedOn #[] (some (outputsOf (digestOf recW)))).verdict == .reject
+#guard (provedOn #[] (some (outputsOf (digestOf recW)))).reason == some "registration: R6-previous, R7-output, R7-domain"
 
 -- PoUW's ROOTS1 (`Internal.arow`) holds the window's tables to `R`'s, which are `W`'s entries; `W` registers them under
 -- the window's names, not the Commit's
@@ -300,15 +355,15 @@ private def arowOn (rec : Json) : Option (Except (String × String) Unit) :=
 #guard windows.strays [policyOn #[recW] recR, periodNaming [recW]] ==
   some s!"record: {NciCheck.Protocol.protocolId} committed {digestOf recR}, {PouwCheck.Period.protocolId} committed {digestOf recW}"
 
--- remote on the three cases: the policy and sampled proofs accept `R` and the window names it, so remote's one refusal
--- is the period's own, whose credit reads an auditor's ledger, here empty
+-- remote on the three cases: the policy accepts `R` and the window names it, so remote's refusals are the period's own,
+-- whose credit reads an auditor's ledger, here empty, and sampled proofs', whose coins no challenger signed
 private def remoteOn (window : Json) : Answer :=
   let xs := [policyOn #[recW] recR, periodNaming [window], sampledOn #[recW] (some (outputsOf (digestOf recW))) recR]
   Cases.answerCases (protocol.on #[]) xs (boundOn (components.map noBlobs) xs)
 #guard (remoteOn recR).verdict == .reject
 #guard (remoteOn recR).reason.map (·.startsWith s!"{PouwCheck.Period.protocolId} reject: period: ") == some true
-#guard (remoteOn recR).reason.map (fun r => contains r s!"{NciCheck.Protocol.protocolId} reject" ||
-  contains r s!"{VStar.Recursive.Sampled.protocol.id} reject") == some false
+#guard (remoteOn recR).reason.map (contains · s!"; {VStar.Recursive.Sampled.protocol.id} reject: coins: ") == some true
+#guard (remoteOn recR).reason.map (contains · s!"{NciCheck.Protocol.protocolId} reject") == some false
 
 /-- The period with its credit granted: `PouwCheck.Period.protocol`'s decoders and digest, its check crediting one window
 whatever the ledger and the window say. -/
@@ -327,16 +382,17 @@ private def credited : Core.Protocol where
   publicJson := PouwCheck.Credit.PeriodCredit.toJson
   profileJson := PouwCheck.Period.profileJson
 
-/-- Remote's composition (`tiedSame` over its records and its tie) with the period's credit granted. -/
+/-- Remote's composition (`tiedSame` over its records and its tie) with the period's credit and sampled proofs' coins and
+proofs granted. -/
 private def crediting : Core.Protocol :=
-  tiedSame "verity/remote/v0" tied [windows] [NciCheck.Protocol.protocol, credited, noBlobs VStar.Recursive.Sampled.protocol]
+  tiedSame "verity/remote/v0" tied [windows] [NciCheck.Protocol.protocol, credited, proved]
 
 private def creditingOn (window : Json) : Answer :=
   let xs := [policyOn #[recW] recR, periodNaming [window], sampledOn #[recW] (some (outputsOf (digestOf recW))) recR]
-  let cs := [NciCheck.Protocol.protocol, credited, noBlobs VStar.Recursive.Sampled.protocol]
+  let cs := [NciCheck.Protocol.protocol, credited, proved]
   Cases.answerCases crediting xs (boundOn cs xs)
 
--- with the period's credit granted, remote accepts the one window on `R`, and refuses a window on `W` by its tie
+-- with those granted, remote accepts the one window on `R`, and refuses a window on `W` by its tie
 #guard (creditingOn recR).verdict == .accept
 #guard (creditingOn recW).verdict == .reject
 #guard (creditingOn recW).reason ==

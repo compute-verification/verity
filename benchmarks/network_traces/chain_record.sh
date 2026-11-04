@@ -10,8 +10,8 @@
 #   certs    the client's kept certificates.jsonl (or certified.jsonl) and clocks.jsonl, verified, and the run's
 #            certified records held by the Lean's audit, network-records (chain_record.py certs)
 #   endpoint with CR_ENDPOINT (unset by default), off the network certifier path: a development check, the endpoint's own
-#            advice bound to the run and the I/O tie on it, both in the clear (network-e2e's e2e.py --no-prove:
-#            chain.served_advice and chain.tie); the certifier piece's kind scan refuses a report holding its step
+#            advice bound to the run, in the clear (network-e2e's e2e.py --no-prove: chain.served_advice); the
+#            certifier piece's kind scan refuses a report holding its step
 #   n2       N2's units proved by Flock --zk and decided by its verifier of record, Lean included: CR_N2_CMD
 #            (a sampled draw on signed clocks); else n2_zk.py prove, and on the advice profile, whose egress counts no
 #            N2 unit holds, not run
@@ -174,7 +174,7 @@ E2E=$W/e2e
 if [ -n "${CR_ENDPOINT:-}" ]; then
   unpack "$CR_ENDPOINT" "$W/endpoint"
   EP=$(find "$W/endpoint" -name advice_trace.jsonl -printf '%h\n' -quit)
-  log "chain: endpoint ${EP:-none} ($CR_ENDPOINT): its advice bound to ${HONEST#$G/} and the I/O tie, in the clear"
+  log "chain: endpoint ${EP:-none} ($CR_ENDPOINT): its advice bound to ${HONEST#$G/}, in the clear"
   "$PY" benchmarks/network_e2e/e2e.py --from "${HONEST%/out/honest}" --no-prove --no-negatives --endpoint-run "${EP:-$W/endpoint}" \
     --out "$E2E" --work "$W/e2e-work" > "$OUT/endpoint.log" 2>&1
   log "chain: endpoint done, rc $?"

@@ -19,7 +19,9 @@ comparison to each verdict, which decides nothing.
   ``warden-rehearse``'s), read by `warden_chain`: its own certified records under its key and session, on the network
   certifier link (`service.WardenProfile`: both heads at the network certifier's grid and parameters digest, no sync
   declared or charged), a certifier rehearsal's run refused by name; its members are honest and tampered, the tampered
-  head failing its signed digest alone.
+  head failing its signed digest alone. N2 holds a network certifier link's counts and nothing of its egress, which
+  only the egress tie (`scan_service`, proved by `scan_zk.py`) holds to the committed trace, so the network verdict
+  here takes none and refuses every member by name (``egress``): an honest member is one whose windows N2 all accepts.
 * **Members.** One stream each, over all of the run's execution phases: ``honest``; ``tampered``, the honest records
   with window 0's egress head one count off (`one_count`), committed by the prover under its own root, the certificates
   still the certifier's; with ``--extra``, certifier-serve's ``extra`` run (the shim wrote one event more and the
@@ -631,7 +633,9 @@ def prove(a) -> int:
         summary["warden_run"] = members["honest"].plan["warden_run"]
         summary["warden"] = {"syncs": "none: the warden runs no shaper clock, so a window declares no sync and the "
                                       "link's charge is 0",
-                             "counts": "the warden's schedule's (service.WardenProfile), not a profile's"}
+                             "counts": "the active warden's schedule's (service.WardenProfile), not a profile's",
+                             "egress": "not held here: the network verdict takes no egress tie and refuses by name "
+                                       f"({SVC.EGRESS_TIED!r}); scan_service's egress tie, scan_zk.py's, holds it"}
     for name in ("extra", "late"):
         if getattr(a, name):
             members[name] = link_windows(Path(getattr(a, name)))
@@ -684,8 +688,10 @@ def prove(a) -> int:
     ok = True
     for name, res in done.items():
         rec, net = res["received"], res["network"]
-        good = (all(r["as_expected"] for r in res["windows"]) and net["accepted"] == (name == "honest")
-                and set(net.get("why") or ()) == ({SVC.PERIOD_DRAWN} if name == OTHER else set())
+        why = set(net.get("why") or ())
+        counts = not net["refused"] and not why - {SVC.EGRESS_TIED}
+        good = (all(r["as_expected"] for r in res["windows"]) and counts == (name == "honest")
+                and why == ({SVC.PERIOD_DRAWN} if name == OTHER else set()) | ({SVC.EGRESS_TIED} if warden else set())
                 and not rec["leaked"] and rec["control"]["holds_all"])
         ok &= good
         summary["members"][name].update(res, ok=good)
