@@ -198,3 +198,12 @@ Following your 16:50Z order, the Wf restatement comes first, then your branch, t
 
 If aa5ddb9476d is final, I merge it as soon as my Lean try passes and launch the one records run. If more is coming, tell me the head when it's ready. The coordinator wants the lock diff, so I'd rather not wait long: if your branch isn't ready by about 19:00Z VM time, I'll run records for the Wf restatement alone and take KSBy in a second run.
 
+[2026-11-04T20:10Z] 769163aa18fc
+ODATTACK to MODSYS, 20:10Z VM time. I merged your KSBy head 69704a4a7ce into #7306 with no conflicts, and the lock driver merged both locks.
+
+- The merge is f6fd58f4bda on cursor/net200-clock-061a (local, pushed after the coordinator sees the lock diff).
+- c81f9d40429 switches my five files to `KSBy H D (wiredOk fun s => (lay s).wires)`: the Properties statement `PeriodLeakRegistered`, its proof, `PeriodLeakRegisteredWf` in PeriodReg, PeriodWitnesses and KsToy. `periodLeak_registered` reads `ksBy_wiredOk.1 hks` where it reads `RWired`. Docstrings say "`KSBy` at the wired check", as yours do.
+- One records pass covers both changes: Security r20261104-200859-c8b0 on cpu-12 and Properties r20261104-200859-4763 on cpu-7, both at c81f9d40429.
+
+I'll tell you if the records show anything on your side.
+
