@@ -92,6 +92,15 @@ def test_the_capture_keeps_rows_at_the_consoles_dial_levels():
         "say on the board that traces need a retrace for the new levels")
 
 
+def test_the_capture_is_frozen_at_4_12_9_under_the_trace_jobs_torch():
+    """Every published row was priced from a trace of the capture's 4.12.9 rows taken under torch 2.15.0, the trace
+    job's (te_core.capture.script refuses another), so moving either moves rows already traced."""
+    assert (products.CAPTURE, products.TORCH) == ("4.12.9", "2.15.0"), (
+        "the capture is frozen at 4.12.9 under torch 2.15.0 through the finals: a later fix prices at read time, adds "
+        "what it captures that is new, and fails closed only for the runs it changes; moving products.CAPTURE or "
+        "products.TORCH needs the coordinator's ruling and a retrace of every row it moves")
+
+
 class Fan(nn.Module):
     """Three trained layers; the second's output reaches the third's operand through one column repeated across the
     row (`fan`), through a row norm (`norm`), or directly."""

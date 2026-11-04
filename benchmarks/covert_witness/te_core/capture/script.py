@@ -936,6 +936,10 @@ def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     split = argv.index("--") if "--" in argv else len(argv)
     a = ap.parse_args(argv[:split])
+    if torch.__version__.split("+")[0] != products.TORCH:
+        raise SystemExit(f"te_core.capture.script: torch {torch.__version__} here, but the capture is frozen at "
+                         f"{products.CAPTURE} under torch {products.TORCH}, the trace job's (products.TORCH): trace "
+                         f"under torch=={products.TORCH}+cpu")
     run = json.loads(a.run.read_text())
     steps = run["steps"]
     wall = [float(s.get("wall_s") or 0.0) for s in steps]

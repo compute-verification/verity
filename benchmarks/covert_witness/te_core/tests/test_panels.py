@@ -337,11 +337,13 @@ def test_every_note_fits():
                for s in panels.STEPS) <= console.NOTE_MAX
 
 
-def test_publish_puts_the_console_copy(tmp_path, monkeypatch):
-    sent = []
-    monkeypatch.setattr(console, "put", lambda p: sent.append(p) or "201")
-    code, out = build(tmp_path, monkeypatch, False, ("--publish",))
-    assert code == 0 and len(sent) == 1
-    assert console.body(sent[0]) == (out / "console" / f"{panels.NAME}.json").read_bytes()
-    monkeypatch.setattr(console, "put", lambda p: "403 forbidden")
-    assert build(tmp_path / "again", monkeypatch, False, ("--publish",))[0] == 1
+def test_the_retired_panel_has_no_publish_and_puts_nothing(tmp_path, monkeypatch):
+    """frontier-branches is stored only: the command has no --publish, a build PUTs nothing, and the console refuses
+    its id."""
+    monkeypatch.setattr(console, "put", lambda p: pytest.fail(f"PUT {p['id']}"))
+    with pytest.raises(SystemExit) as e:
+        build(tmp_path, monkeypatch, False, ("--publish",))
+    assert e.value.code == 2
+    code, out = build(tmp_path / "again", monkeypatch)
+    assert code == 0 and (out / "console" / f"{panels.NAME}.json").exists()
+    assert panels.PANEL in console.RETIRED and panels.PANEL not in console.PANELS

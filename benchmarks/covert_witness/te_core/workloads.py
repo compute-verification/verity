@@ -28,36 +28,21 @@ kind that max takes, and partial where a valid kind is unmeasured; else null whe
 coordinator's 09:46Z and 12:20Z rulings). `basis` names fit, the binding kind, none or unmeasured, and
 `RESTS_ON[basis]` what it rests on. The kinds (`VALID`):
 
-- **fresh products** (`Fresh`): products whose two operands both depend on θ', priced by te_core.formalism's
-  `fresh_products`, te_core.io_bound's `bound` with Λ proved (the Loomis-Whitney cap per block, the larger of its root
-  form, (k/3)^1.5/sqrt(b_A b_B b_C) on chains entering as partial sums plus (k/2)/sqrt(b_A b_B) per sqrt of the chains
-  a block starts, and its linear form, the cap's concave envelope, times Λ for blocks doing several products at once),
-  on the model's products as io_bound reads a captured step's fresh rows (`products`, `Measured.products`): each GEMM
-  by the standard algorithm at its widths as passed (`WIDTHS`), its Definition's gates a MAC and a gadget, attention's
-  products uncounted (io_bound counts none). io_bound's cap has the chain order's constant, and the standard
-  algorithm sums in a chain: te_core's GEMM gadget accumulates each output entry along one chain from a zero 32-bit
-  word, so P-chain is a premise on the reference circuit, as P-width is (every operand entry paid at its passed
-  width, every partial sum at 32 bits), and the products' order is a chain (`ORDER`, te_core.formalism's; the
-  coordinator's 12:09Z ruling). The term is formalism's, io_bound's proved figure without P-cell (`formalism.P_CELL`
-  off), which needs no premise on how a partition splits a multiplier's gates (the coordinator's 06:57Z obligation 1
-  and 12:09Z ruling: P-cell is a premise on the partition, which the attacker chooses); it rests on P-width and
-  P-chain and no A1. Λ's whole-making factor is io_bound's whole_chain_of on the model's own whole-making system, the
-  theorem a traced step's term takes (the coordinator's 15:50Z ruling): `Classes` walks the architecture's step as
-  io_bound's chain_classes reads a captured one's graph (the io-bound note's §2.2), every product of two operands
-  that depend on θ′ in the class of its chain (the counted products', attention's QK^T over d_h and PV over the
-  span, an adapter's over its rank, Newton-Schulz's of an array with itself), with the couplings between classes. On
-  io_bound's captured dense and rank-16 LoRA steps (45M and s-t20) it is their system exactly. Where it has no
-  fixed point the term is unmeasured, never a number (formalism's FRESH_VOID): on every adapter's products, whose
-  rank-long chains compound (but a one-layer rank-1 W_q adapter's, which all escape, so its term is 0 at any Λ),
-  and on full-weight RL's at the serving block, whose rollouts pass 4.5-bit operands through attention's chains
-  over a 256-token prompt. The figure under P-cell (every block holding whole GEMM
-  gadgets) is the sensitivity beside it (formalism's `fresh_cell`, 19 times the term on the dense default). A
-  product with an operand in θ (a frozen weight, a registered teacher's) isn't fresh, nor is the
-  lowest layer's attention input projection's (its input is gathered embedding rows, which io_bound's P-width prices
-  below their width), nor Newton-Schulz's products of an array with itself; and a block computes a product's operands
-  itself where it can read the update up to the product's layer and the input ids up to its token (a forward) or of
-  its whole sequence (a backward, whose gradient reads every later token): those products escape (`Fresh.counted`),
-  since io_bound's P-width needs every operand paid at its width.
+- **fresh products** (`Fresh`): the theorem of record's products term (te_core.formalism's `he_products`) on M, the
+  model's products whose two operands both depend on θ' (`products`, `Measured.products`, and
+  `formalism.he_of_products`): each GEMM by the standard algorithm at its widths as passed (`WIDTHS`) and its
+  Definition's output width, attention's products uncounted, every one sharing arrays (F = 2/√3), and a LoRA's
+  operands the update reaches only through its adapters at their β_eff, β/(1 + (K*/r)²) at its rank r. It rests on
+  (H) and (E) at the β and b_y it takes and no A1, and needs no whole-making system and no P-cell. A product with an
+  operand in θ (a frozen weight, a registered teacher's) isn't in M, nor is the lowest layer's attention input
+  projection's (its input is gathered embedding rows), nor Newton-Schulz's products of an array with itself; and a
+  block computes a product's operands itself where it can read the update up to the product's layer and the input
+  ids up to its token (a forward) or of its whole sequence (a backward, whose gradient reads every later token):
+  those products escape (`Fresh.counted`), since such a block refutes (H) on them. Beside it, the old figure
+  (formalism's `fresh_products`, the sensitivity fresh_old): io_bound's `bound` with Λ proved on the same products,
+  with P-cell, Λ's whole-making factor io_bound's whole_chain_of on the model's own whole-making system (`Classes`,
+  walking the architecture's step as io_bound's chain_classes reads a captured one's graph), unmeasured where that
+  system has no fixed point (formalism's FRESH_VOID), as on every adapter's products.
 - **token** (A1 at reading A): te_core 4.5's packer over a trace's `entries` and its op log's matrix-product and
   weight-gradient tiles (te_core.tiles), finite at every k. A model has neither, so the term is unmeasured, never ∞
   or 1 (`reading_a`, its verdict beside each point).
@@ -68,7 +53,8 @@ Beside ρ, never in its max (`SENSITIVITIES`, each with what it rests on, and `T
 (c/|C|)·Σ steps·(b − 1)·partial/k and (c/|C|)·Σ steps·γ/k over each part whose step's token work fills b = ⌈N·w/c⌉ ≥ 2
 blocks (assumptions (R) and (U), which hold only for partitions split by tokens; the fresh-products kind covers the
 weight-gradient product dW = δ^T X, whose partial sums across token blocks are the reduction); reading B's token form
-and decoding; reading A's per-gate figure, which needs a trace; the fresh products' under P-cell; and the target,
+and decoding; reading A's per-gate figure, which needs a trace; the old fresh-products figure (fresh_old) and its
+figure without P-cell (fresh_no_cell); and the target,
 te_core.formalism.published at reading B, Fit's c/(c − d) or Slowdown's token form, which a row without a trace
 publishes: a target, not a bound. A DiLoCo sync has no tokens, so no term prices its workers' pseudo-gradients
 (`diloco`).
@@ -82,8 +68,7 @@ The conventions every workload shares:
   gates, 7.0 FLOPs a parameter, 3.51 session tokens' 2N); the old c held 1,457.5, and an estimate of 1,250 takes a
   training token as 4.1 session tokens' 2N, 17% above the count. Beside the rows, each workload's default point at
   the registered serving block, rehearsal 2's measured session (`SERVED`: c = 3.009e13 gates, k = 145,568 bits), a
-  headline: standard pretraining reads 6.38e3 there, with 8.08e4 under P-cell, against 2.65e5 and 4.98e6 at the
-  console's policy.
+  headline.
 - **Shapes** (`dense`): a dense decoder of N parameters with the reference model's d/L and SwiGLU width, d solved from N
   and the vocabulary (`vocab`: the 45M reference's 50,304, s-t20's 32,000), τ its ⌈log2 V⌉ bits an id.
 - **Work**: a token's MACs at te_core.gates' prices, its weight GEMMs at the workload's precision and its attention in
@@ -199,22 +184,15 @@ NO_TRACE = ("unmeasured: te_core 4.5's packer reads a trace's entries and op log
 #: the one bound's kinds (te_core.formalism.KINDS), each a lower bound on its own (coordinator 08:26Z and 10:21Z), with
 #: what its term rests on
 VALID = {
-    "fresh_products": "P-width and P-chain, reference circuit; no A1 (coordinator 12:09Z): te_core.io_bound's "
-                      f"Loomis-Whitney bound with Λ proved ({IO_BOUND}, by te_core.formalism.fresh_products) on the "
-                      "model's products of two fresh operands by the standard algorithm, under P-width (every operand "
-                      "entry paid at its passed width and every partial sum at 32 bits) and P-chain (each output "
-                      "entry accumulated along one chain from a zero word, as te_core's GEMM gadget does), premises "
-                      "on a reference circuit's wiring, false on a declared one, given P-share; without P-cell, so "
-                      "with no premise on how a partition splits a multiplier's gates (coordinator 06:57Z, obligation "
-                      "1); attention's products uncounted; Λ's whole-making factor by te_core.io_bound.whole_chain_of on "
-                      "the model's whole-making system, its products by chain length as a traced step's "
-                      "(io_bound.chain_classes; coordinator 15:50Z), the term unmeasured where it has no fixed point, "
-                      "as on every adapter's products; the figure under P-cell beside it (fresh_cell)",
+    "fresh_products": f"{formalism.RESTS_ON['fresh_products']}; on a model, M is its products of two operands both "
+                      "paid at their passed widths at k, attention's uncounted, every one sharing arrays (F = 2/√3), "
+                      "and a LoRA's operands the update reaches only through its adapters at their β_eff "
+                      "(te_core.formalism.he_of_products); the old figure beside it (fresh_old)",
     "token": f"{formalism.RESTS_ON['token']}; {NO_TRACE}",
     "decoding": f"{formalism.RESTS_ON['decoding']}; {NO_TRACE}",
 }
-#: what the bound publishes beside ρ, never in its max (te_core.formalism.SENSITIVITIES), the fresh products' figure
-#: under P-cell among them (fresh_cell, coordinator 12:09Z)
+#: what the bound publishes beside ρ, never in its max (te_core.formalism.SENSITIVITIES), the old fresh-products
+#: figure under P-cell among them (fresh_old)
 SENSITIVITIES = formalism.SENSITIVITIES
 #: reading B's token form beside ρ: te_core.formalism.published's ρ for a row without a trace, a target, not a bound
 TARGET = (f"{formalism.RESTS_ON_CELL['target']}: te_core.formalism.published at reading B, Fit's c/(c - d) where it "
@@ -227,10 +205,8 @@ RESTS_ON = VALID | {
     "none": "no kind exceeds 1: Fit fails and every valid kind is measured, none with a term above 1, so rho is 1 "
             "(coordinator 12:20Z)",
     "unmeasured": "unmeasured: Fit fails, no measured kind's term exceeds 1 and a valid kind is unmeasured, so rho is "
-                  "null, never 1, the measured terms in the kinds cell (coordinator 09:46Z and 12:20Z): the fresh "
-                  "products are unmeasured where the model's whole-making system has no fixed point (every adapter's "
-                  "products: te_core.formalism's FRESH_VOID) and for a circuit that declares a tree (none does), the "
-                  "token and decoding kinds without a trace",
+                  "null, never 1, the measured terms in the kinds cell (coordinator 09:46Z and 12:20Z): the token and "
+                  "decoding kinds without a trace",
 }
 #: reading A's verdicts on the token and decoding kinds (`reading_a`); their terms are unmeasured under each
 VERDICTS_A = {"unmodelled": "finite (te_core 4.5's tiles split an op, so no op's update bits alone leave it infinite), "
@@ -1248,9 +1224,11 @@ def products(m: Model, c: float, k: float) -> list[dict]:
 
 
 def with_products(m: Model, c: float, k: float) -> formalism.Measured:
-    """The model's `Measured` with its fresh products (`products`) at k as `Measured.products`, summed in `ORDER`, and
-    its whole-making system there (`Classes.system`), which te_core.formalism.fresh_products solves as a traced step's."""
+    """The model's `Measured` with its fresh products (`products`) at k as `Measured.products`, summed in `ORDER`, its
+    whole-making system there (`Classes.system`), which te_core.formalism.fresh_products solves as a traced step's,
+    and the products term's M from the same products (`formalism.he_of_products`, a LoRA's at its rank)."""
     p = {"k": float(k), "order": ORDER, "products": products(m, c, k)}
+    p["he"] = formalism.he_of_products(p["products"], k, m.dials["rank"] if m.adapter else None)
     if m.system is not None:
         #: a model states every product as a matrix product, so it lists none written with elementwise ops; formalism
         #: reads a system without the list as a capture that never looked
@@ -1259,10 +1237,10 @@ def with_products(m: Model, c: float, k: float) -> formalism.Measured:
 
 
 def fresh(m: Model, got: dict, c: float, k: float) -> dict:
-    """What the fresh-products kind read beside its term (`got`, te_core.formalism.fresh_products' on `with_products`):
-    the order, Λ (None: void, the whole-making system with no fixed point, so the term is unmeasured), the counted
-    share of |C|, attention's share (uncounted) and the term's figure at the numerical Λ (the figure
-    `formalism.P_CELL` takes; None where Λ is void, never a number)."""
+    """What the old fresh-products figure read (`got`, te_core.formalism.fresh_products' on `with_products`, the
+    sensitivity fresh_old): the order, Λ (None: void, the whole-making system with no fixed point), the counted share
+    of |C|, attention's share (uncounted) and the figure at the numerical Λ (the one `formalism.P_CELL` takes; None
+    where Λ is void, never a number)."""
     attention = sum(f.total(k) * per_mac(f.kind) for f in m.fresh if f.attention) / m.measured.gates
     b = got["io_bound"]
     lam = b["proved"]["lam"]
@@ -1285,16 +1263,16 @@ def rho(m: Model, c: float, k: float, target: tuple[float, str] | None = None) -
     holds; else the max of the `VALID` kinds' measured terms where it exceeds 1, partial where a valid kind is
     unmeasured; else None where a valid kind is unmeasured, never 1, which would read as no slowdown (coordinator
     09:46Z); else 1, binding none, every valid kind measured and none above 1. The terms are formalism.bound's: the
-    fresh products' by formalism.fresh_products on the model's products (`fresh` has what it read), the token and
+    products term by formalism.he_products on the model's M (`products_rests_on` names its β and b_y), the token and
     decoding kinds' None without a trace's entries and op log (`reading_a`'s verdict beside them). `basis` is
     published's binding kind (fit, the measured kind whose term, the max, exceeds 1, none or unmeasured),
     `binding_kind` the kind among them, `RESTS_ON[basis]` what it rests on, `partial` the dashboard's mark, and `why`
-    each unmeasured kind's reason (formalism's FRESH_VOID where the whole-making system has no fixed point, as on every
-    adapter's products). `whole_making` is formalism's solution of the model's whole-making system (`Classes`): e and
-    Λ's factor whole_chain = (1 + e)^1.5, each None where void.
+    each unmeasured kind's reason. `fresh` is what the old figure read, and `whole_making` formalism's solution of
+    the model's whole-making system (`Classes`), which only the old figure reads: e and Λ's factor
+    whole_chain = (1 + e)^1.5, each None where void.
     Beside it, never in the max: the `TARGET` (te_core.formalism.published at reading B, or for a record `target`,
-    page_rho's on its columns) and the `SENSITIVITIES` (bound's, None where unmeasured, fresh_cell the fresh products'
-    figure under P-cell); the kinds and sensitivities unmeasured (an infinite term among them: never ∞); Fit's clauses
+    page_rho's on its columns) and the `SENSITIVITIES` (bound's, None where unmeasured, fresh_old the old
+    fresh-products figure); the kinds and sensitivities unmeasured (an infinite term among them: never ∞); Fit's clauses
     that fail and its thresholds (the most Δ its compute block admits, k − (c/w_fit)·τ, and the most Δ_grad its
     reduction block admits, k/2); and each part's token blocks b."""
     me = with_products(m, c, k)
@@ -1308,9 +1286,10 @@ def rho(m: Model, c: float, k: float, target: tuple[float, str] | None = None) -
     basis = pub["binding_kind"]
     fails = sorted({clause for p in v["parts"] for clause, ok in p["fit"].items() if not ok})
     why = {kind: one["unmeasured"].get(kind) for kind in terms if terms[kind] is None}
-    got = one["inputs"]["fresh_products"]
+    got = one["inputs"]["fresh_old"]
     return {"rho": _finite(pub["rho"]), "basis": basis, "binding_kind": basis if basis in formalism.KINDS else None,
-            "terms": terms, "partial": pub["partial"], "why": why, "whole_making": got.get("whole_making"),
+            "terms": terms, "partial": pub["partial"], "why": why, "products_rests_on": pub["products_rests_on"],
+            "whole_making": got.get("whole_making"),
             "fresh": fresh(m, got, c, k),
             "target": {"rho": _finite(target[0]), "basis": target[1]}, "sensitivities": sens, "token_A": reading_a(m),
             "unmeasured": [name for name in (*terms, *sens) if (terms | sens)[name] is None],
@@ -1690,8 +1669,9 @@ def model(name: str, **dials) -> Model:
     return WORKLOADS[name].fn(**dials)
 
 
-#: the console's columns, each with the te_core quantities whose labels give its source (te_core.standard_workloads'
-#: `KEYS` and `LABELLED`: algorithm_policy's, with w_fwd and the two 4.x terms)
+#: the console's columns, each with the te_core quantities whose labels give its source
+#: (islands/standard-workloads/standard_workloads.py's `KEYS` and `LABELLED`: algorithm_policy's, with w_fwd and the
+#: two 4.x terms)
 KEYS = ("C_gates", *algorithm_policy.INPUTS, "w_fit_gates", "alpha_ratio")
 LABELLED = algorithm_policy.LABELLED | {"w_gates": ("token_gates", "tokens"), "w_fwd_gates": ("w_fwd_gates",),
                                         "w_fit_gates": ("token_gates", "tokens"), "alpha_ratio": ("affected_gates",)}
@@ -1909,8 +1889,8 @@ def _rho(v) -> str:
 #: how the table writes reading A's verdict on the token and decoding kinds, whose terms are unmeasured under each
 VERDICTS = {"unmodelled": "unmeasured", "refused": "refused"}
 #: the table's columns of a point's `rho` at a policy: (heading, how to read it)
-COLUMNS = (("fresh products", lambda r: r["terms"]["fresh_products"]),
-           ("fresh, P-cell (sens.)", lambda r: r["sensitivities"]["fresh_cell"]),
+COLUMNS = (("products", lambda r: r["terms"]["fresh_products"]),
+           ("fresh_old (sens.)", lambda r: r["sensitivities"]["fresh_old"]),
            ("target (B)", lambda r: r["target"]["rho"]),
            ("decoding, B (sens.)", lambda r: r["sensitivities"]["decoding_form"]),
            ("reduction (sens.)", lambda r: r["sensitivities"]["reduction"]),
@@ -1919,7 +1899,7 @@ COLUMNS = (("fresh products", lambda r: r["terms"]["fresh_products"]),
 
 
 def table(ref: dict) -> str:
-    """Each policy's table: every point's terms (the valid kinds', the fresh products' without P-cell and under it, the
+    """Each policy's table: every point's terms (the valid kinds', the products term and the old figure beside it, the
     target and the sensitivities), the token kind's reading-A verdict, the Fit clauses that fail, ρ and its basis;
     then the checks', each on the record and on the model; then what each basis rests on and what each verdict
     means."""
@@ -1940,12 +1920,12 @@ def table(ref: dict) -> str:
     s = ref["serving_block"]
     lines += [f"Each workload's default point at the registered serving block, rehearsal 2's measured session (c "
               f"{s['c']:.4g} gates, k {s['k']:,} bits), beside the console's: a headline, not a row", "",
-              "| workload | rho, console | rho, serving block | fresh, P-cell (sens.), console | fresh, P-cell (sens.), "
+              "| workload | rho, console | rho, serving block | fresh_old (sens.), console | fresh_old (sens.), "
               "serving block | basis, serving block |", "|---|---|---|---|---|---|"]
     for name, r in s["defaults"].items():
         p = ref["workloads"][name]["points"]["default"]["rho"]["default"]
-        lines.append(f"| {name} | {_rho(p['rho'])} | {_rho(r['rho'])} | {_fmt(p['sensitivities']['fresh_cell'])} | "
-                     f"{_fmt(r['sensitivities']['fresh_cell'])} | {r['basis']}{', partial' if r['partial'] else ''} |")
+        lines.append(f"| {name} | {_rho(p['rho'])} | {_rho(r['rho'])} | {_fmt(p['sensitivities']['fresh_old'])} | "
+                     f"{_fmt(r['sensitivities']['fresh_old'])} | {r['basis']}{', partial' if r['partial'] else ''} |")
     lines.append("")
     for q in POLICIES:
         lines += [f"{q}, the checks: each term on the record / on the model at its dials, and an island row's rho as "

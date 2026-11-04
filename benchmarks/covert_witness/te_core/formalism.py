@@ -75,37 +75,35 @@ A block that computes a token from its inputs (x0) is not charged, and the attac
 bound on its own, ρ ≥ max_K (|B_K|/|C|)/(cap_K(k)/c): each kind's term, the max, the kind it binds on and what each
 kind rests on (`RESTS_ON`). Where Fit fails ρ is max(1, that max); where Fit holds it is c/(c − d), and every term is at
 most that. The kinds:
-- fresh_products: products of two fresh operands, the Loomis-Whitney cap amortized over the partition, a theorem for
-  the run's circuit given the standard algorithm and the widths it passes: te_core.io_bound's bound with Λ proved
-  (`fresh_products`) on the run's products (`Measured.products`, which `products_of` takes from steps captured by
-  capture_step or capture_fn, and `products_of_trace` from the product rows a recorded program's trace keeps from
-  te_core 4.8 on (te_core.capture.products), each at the k it classifies them at, a trace's from te_core 4.12.1 on at
-  every k of the console's dial too, `at`), its figure with P-cell, a premise on the partition (`P_CELL`, Daniel's
-  whole-cell ruling; the figure without it is the sensitivity fresh_no_cell). At a fixed k the term is linear in c, so the console's dial reads
-  it as c times a number for each k it has products at (`fresh_per_c`, in te_core.panels' rho_inputs). io_bound's cap has the
-  chain order's constant (its premise P-chain), which is the reference circuit's order by construction (`ORDER`:
-  te_core.gates prices a GEMM MAC as a dot cell adding into one running 32-bit sum), so the term is measured on every
-  run's products. Λ proved reads the step's whole-making system (io_bound's `whole_chain_of`: every product with both
-  operands affected, a class by its chain length, at its least fixed point, solved exactly in feeding order where no
-  cycle runs through it), each subset of the products with its own factor from the classes that feed it; the figures
-  are the best subset's (io_bound's `bound`, whose subsets also drop the products fed by the classes of largest
-  made-whole share), the dropped products still in |C|, and `inputs` names how many it dropped, their share of the
-  counted MACs, the rule that dropped them and the classes only they read (`subset`). Before that G drops, never |C|,
-  every product with an operand that reads an embedding's rows before any op makes them token-specific (tokens that
-  share an id share its row, so a block that pays for it gets their products free), named the same way (`gathered`),
-  and each token-indexed product's share at the positions sequences can share (`SHARED_PREFIX`, `shared_prefix`).
-  Where a counted product is fed by a cycle that diverges, or no subset has a proved Λ, the term is void
-  (`FRESH_VOID`) and is the best subset's figure among the products no diverged cycle feeds, a valid lower bound
-  since that subset keeps only products whose feeding classes converge, or None where no such subset has one; a
-  void term is computed, so ρ's floor reads it (coordinator 21:54Z, `published`). It is unmeasured
-  where an op breaks P-match,
-  on a trace whose product rows predate what the term reads (`FRESH_RETRACE`). Products that come without one (a model's, a hand-written set) take io_bound's
-  one-class rule, named in `inputs` (`ONE_CLASS`). It is unmeasured, with io_bound's chain figure in `inputs`,
-  also for a circuit that declares a tree (none does), and on a record with no product rows. A record with an op log
-  and no product
-  rows (a ledger row traced before 4.8) has its log's
-  (`products_of_ops`: dims, widths, θ or attention's where the log's class says so), but a log doesn't keep whether an
-  operand is fresh (`LOG_UNKNOWN`), so the term is unmeasured there with the share of MACs whose freshness is unknown;
+- fresh_products: the theorem of record's products term (`he_products`, `RESTS_ON` has its statement), a theorem for
+  the run's circuit given (H) and (E): ρ ≥ (c/|C|)·(N/(k + α) − F·(k/2)·√(ON)/β/(k + α)^1.5), α = F·½·√(k³/(β²·b_y))
+  (`he_rho`), on M, the run's products whose two operands both depend on the update (`he_of_rows` on a step's product
+  rows, `he_of_products` on a model's), N its MACs and O its output wires. M leaves out one array times itself, a
+  product reading a gather's rows before any op makes them token-specific, each token-indexed product's share at the
+  positions sequences can share (`SHARED_PREFIX`), the run's steps before its first update (whose products read only
+  registered weights: a traced record counts only the steps of structures with an affected share, `of_record`), and
+  every product with an operand below the β it charges. An operand's β is its passed width, capped at its Definition's (`HE_BITS`), or
+  `beta_eff`, β/(1 + (K*/r)²) with K* = ½√(k/β), where the update reaches it only through a bottleneck of rank r: its
+  rate below its width implies r, and on a step with an adapter of rank r_step every operand downstream of it is at
+  most its β_eff at r_step, the adapters' own operands at their widths. b_y is M's least output width and F = 2/√3
+  where M holds a backward or optimizer product (a layer's forward, input-gradient and weight-gradient products share
+  arrays), else 1, in both α and the outputs' term. The term is the best over the β thresholds M can take
+  (`he_figure`), never below 0. It needs no whole-making system, no P-cell (a block's split MACs are charged k a block)
+  and no summation order, so it is measured where the old figure is void, on products written with elementwise ops
+  (left out of M, kept in |C|) and for a tree. It is unmeasured on a record with no product rows, on a record with an
+  op log and no product rows (a ledger row traced before 4.8: `products_of_ops` has the log's dims and widths, but a
+  log doesn't keep whether an operand depends on the update, `LOG_UNKNOWN`), on rows that predate `SYSTEM_FROM`
+  (`HE_RETRACE`) and on a step whose elementwise ops fan out into an operand (`p_match_reason`), and never priced on a
+  trace of another program (`FRESH_OTHER`). The products come from `products_of` (steps captured by capture_step or
+  capture_fn) or `products_of_trace` (the product rows a recorded program's trace keeps from te_core 4.8 on,
+  te_core.capture.products), each at the k it classifies them at, a trace's at every k of the console's dial too
+  (`at`). At a fixed k the term is linear in c, so the console's dial reads it as c times a number for each k it has
+  products at (`fresh_per_c`, in te_core.panels' rho_inputs). The old figure (`fresh_products`, the sensitivity
+  fresh_old) is te_core.io_bound's bound with Λ proved on the same products: the Loomis-Whitney cap amortized over
+  the partition, with each subset's whole-making factor (io_bound's `whole_chain_of`), void (`FRESH_VOID`) where a
+  counted product is fed by a cycle that diverges, with P-cell where `P_CELL`, and on io_bound's one-class rule for
+  products with no system (`ONE_CLASS`); it rests on P-width extended to every value a block reads while making
+  operands whole, which honest circuits refute;
 - token: A1's cap on a block's affected token work under reading A (below), A1's values from a witness family with
   matrix-product and weight-gradient tiles; unmeasured (never ∞) for a record without an op log or entries;
 - decoding: a block reading the update code runs the whole decoder, so it holds at most c − d affected gates: the
@@ -122,20 +120,19 @@ ones (None, and so ρ where Fit fails, where none is). Beside the kinds, never i
 - decoding_form: (D) under reading B, a block reading the update code holding at most max(c − d, min(c, α_max(x0·s +
   s*))) affected gates;
 - per_gate: the token kind with each gate at the best witness that holds it, not closed under unions (below);
-- fresh_cell: the fresh-products figure with P-cell, every block holding whole dot cells, a premise on the partition
-  (the term where `P_CELL`);
-- fresh_no_cell: the fresh-products figure without P-cell (the term where `P_CELL` is off).
+- fresh_old: the old fresh-products figure (`fresh_products`), with P-cell where `P_CELL`, every block holding whole
+  dot cells, a premise on the partition; it rests on P-width extended, false on honest circuits;
+- fresh_no_cell: the old figure without P-cell.
 (R) and (U) hold only for partitions split by tokens, not by layers or tensors (a block holding only frozen layers'
 work passes no partial), reading B isn't A1's approved reading, per_gate holds only for blocks that are no union of
-witnesses, and P-cell only for partitions that cut no dot cell, so they aren't lower bounds on their own without its
-premise; `kinds` refuses them. Each result is labelled "te_core VERSION, reading A". `published` is
-the console's ρ (coordinator 08:26Z), under reading A where a row's token kind is measured (its trace's entries and an
-op log), else reading B's token form, a target: Fit's c/(c − d) where it holds; else the max of the measured terms
-where it exceeds 1, partial where a kind is unmeasured; else None where a kind is unmeasured; else 1, binding none
-(coordinator 12:20Z), a void fresh-products term counting as computed and saying why (`void`; coordinator 21:54Z: the
-largest valid lower bound, floored at 1, never empty once the kinds are computed). Each comes with the kind it binds
-on and what that rests on, short (`RESTS_ON_CELL`), and the reduction and update sensitivities with the
-fresh-products figure the term doesn't take (fresh_no_cell where `P_CELL`).
+witnesses, and the old products figures on P-width extended, which honest circuits refute, so they aren't lower
+bounds on their own without its premise; `kinds` refuses them. Each result is labelled "te_core VERSION, reading A".
+`published` is the console's ρ (coordinator 08:26Z), under reading A where a row's token kind is measured (its
+trace's entries and an op log), else reading B's token form, a target: Fit's c/(c − d) where it holds; else the max of
+the measured terms where it exceeds 1, partial where a kind is unmeasured; else None where a kind is unmeasured; else
+1, binding none (coordinator 12:20Z). Each comes with the kind it binds on and what that rests on, short
+(`RESTS_ON_CELL`; the products term's with its β and b_y, `he_rests_on`, which `products_rests_on` carries wherever
+the term is measured), and the reduction and update sensitivities with the old products figure (fresh_old).
 
 **Reading A** (A1's approved reading): every block I reads |in(I) \\ θ| ≥ u_I + Σ_T a_T(e_T(I)), u_I the
 update bits I's work reads, counted once, and a_T(e) the bits of token T's computed state where I's work on T begins,
@@ -597,9 +594,9 @@ def _blocks(p: Part, c: float) -> float:
     return math.ceil(p.token_gates / p.steps / c) if p.tokens else 0
 
 
-#: whether the fresh-products term takes P-cell (a block holds whole dot cells), a premise on the partition, which the
-#: attacker chooses: on (Daniel's ruling, 21:57Z: assume whole multiply-add circuits per block, as a named premise),
-#: the term is io_bound's proved figure with it (`rho`) and the figure without it is the sensitivity `fresh_no_cell`
+#: whether the old fresh-products figure (`fresh_products`, the sensitivity fresh_old) takes P-cell (a block holds
+#: whole dot cells), a premise on the partition, which the attacker chooses: on, it is io_bound's proved figure with
+#: it (`rho`), and the figure without it is the sensitivity `fresh_no_cell`. The products term needs no P-cell
 P_CELL = True
 #: what every string a panel publishes calls this code, which names no module, function or constant of it
 #: (tests/test_formalism.py's code-name check)
@@ -610,22 +607,28 @@ PREMISES = {"P-width": "every value a block reads costs its full width",
             "P-match": "elementwise steps don't fan out",
             "P-cell": "blocks hold whole multiply cells"}
 P_WIDTH, P_CHAIN, P_MATCH, P_CELL_WORDS = (f"{PREMISES[x]} ({x})" for x in ("P-width", "P-chain", "P-match", "P-cell"))
-_CELL = (f"given that {P_CELL_WORDS}, a premise on the partition" if P_CELL else
-         f"without assuming that {P_CELL_WORDS}, a premise on the partition, which the attacker chooses (the figure "
-         f"with it is published beside the term)")
 #: the one bound's kinds (`bound`), each a lower bound on its own, in the order ties bind: the one resting on less first
 KINDS = ("fresh_products", "token", "decoding")
 #: what each kind rests on
 RESTS_ON = {
-    "fresh_products": "theorem for this circuit: the Loomis-Whitney cap on the multiplications a block does of "
-                      "products whose two operands both depend on the update (fresh operands), amortized over the "
-                      "partition, on the best subset of those products (every product still counted in |C|), each "
-                      "operand and partial sum at its passed width, given these premises on the reference circuit: "
-                      f"{P_WIDTH}, extended to every value a block reads while making operands whole (attention's "
-                      f"and the optimizer's included); {P_MATCH}: an entry's fan-out is at most its fan-in, "
-                      f"checked on the traced step; {P_CHAIN}, a chain of whole multiply cells, as {THE_CODE} prices "
-                      "a matrix product; products share arrays only as a layer's forward, input-gradient and weight-gradient "
-                      f"products do (P-share); and the standard multiplication algorithm; {_CELL}",
+    "fresh_products": "theorem of record for this circuit: every partition into blocks of at most c gates, each "
+                      "reading at most k bits outside θ, does N ≤ m(k + α) + F·(k/2)·√(mO)/β of M's N MACs in its m "
+                      "blocks, α = F·½·√(k³/(β²·b_y)), so ρ ≥ (c/|C|)·(N/(k + α) − F·(k/2)·√(ON)/β/(k + α)^1.5), "
+                      "floored at 1, O M's output wires; given these premises on M, each refuted by a single "
+                      "counterexample: (H) operands are hard: every set of M's words with a cut of at most k bits "
+                      "from the unregistered inputs has a cut of at least β bits a word, β the least width M "
+                      "charges an operand: its width as the circuit passes it (a coded width where the capture "
+                      "records one), or β_eff = β/(1 + (K*/r)²), K* = ½√(k/β), for an operand the update reaches "
+                      "only through a bottleneck of rank r a row or column (an adapter's Ax, a broadcast vector, a "
+                      "frozen edge), with a product whose operand is below the β M takes left out of M; (E) exports "
+                      "are wide: every gate set's cut to the outputs it alone feeds is at least b_y bits an output, "
+                      "b_y M's least output width; and the structure, which the product rows don't record: M's "
+                      "matmuls have distinct words, W and X disjoint, no two share both a w- and an x-word, and no "
+                      "four arrays are pairwise multiplied (a layer's forward, input-gradient and weight-gradient "
+                      "products share three: F = 2/√3 where M holds a backward or optimizer product, else 1). M is "
+                      "the grader's: the products whose two operands both depend on the update, less one array "
+                      "times itself, a product reading a gather's rows, the positions sequences share, and the "
+                      "steps before the run's first update, which read registered weights",
     "token": "assumption (A1, reading A) with its witness family, closed under unions: the runs of one traced token's "
              "path in segments (the trace's entries) and the matrix-product tiles of the record's op log, "
              "weight-gradient tiles among them; a block's work is a union of them, each part reading "
@@ -654,12 +657,13 @@ SENSITIVITIES = {
     "per_gate": "sensitivity, assumption (A1, reading A) with its witness family, not closed under unions: each gate "
                 "at the best witness that holds it; a block holding one gate of a product beside another product's "
                 "tile or the best run holds more, for a few bits of that gate's own operands",
-    "fresh_cell": f"sensitivity, assuming that {P_CELL_WORDS}: the fresh-products figure where every block does, a "
-                  "premise on the partition, which the attacker chooses" + (
-                      "; the term takes this premise" if P_CELL else "; the term is the figure without it"),
-    "fresh_no_cell": f"sensitivity, without assuming that {P_CELL_WORDS}: the fresh-products figure where a block may "
-                     "split a multiply cell, as a partition the attacker chooses may" + (
-                         "; the term assumes whole cells" if P_CELL else "; the term is this figure"),
+    "fresh_old": "rests on P-width extended, false on honest circuits: sensitivity, the old fresh-products figure, the "
+                 "Loomis-Whitney cap on the products of two operands both paid at their passed width, amortized over "
+                 f"the partition with each subset's whole-making chains, on the best subset, given {P_WIDTH}, "
+                 f"extended to every value a block reads while making operands whole, {P_MATCH}, {P_CHAIN}, P-share "
+                 "and the standard algorithm, " + ("given" if P_CELL else "without assuming") + f" that {P_CELL_WORDS}",
+    "fresh_no_cell": "rests on P-width extended, false on honest circuits: sensitivity, the old fresh-products figure "
+                     f"without assuming that {P_CELL_WORDS}, where a block may split a multiply cell",
 }
 #: the orders a circuit may declare its products' output entries summed in, each with its cap's constant; io_bound has
 #: the chain's
@@ -787,18 +791,19 @@ def products_of(segments, k: float | None = None, gemm_dtype: str | None = "bflo
     "fresh"; k the console's by default), its MACs and output entries times its steps (the bound's G and Q add over
     steps, so its blocks do too), the order its entries are summed in (`ORDERS`; None: the reference circuit's,
     `ORDER`), and the steps' whole-making system and P-match check from their product rows (te_core.capture.products,
-    `system_of`), G without the products that read a gather's rows as `products_of_trace` drops them (`gathered`), and
+    `system_of`), G without the products that read a gather's rows as `products_of_trace` drops them (`gathered`),
     the matrix products the steps write with elementwise ops (`elementwise_products`, times their steps), which
-    `fresh_products` refuses to price."""
+    `fresh_products` refuses to price, and the products term's M from the steps' rows (`he`, `he_of_rows`)."""
     from te_core.capture import products
 
     if order not in (None, *ORDERS):
         raise ValueError(f"order {order!r}: one of {ORDERS}, or None for the reference circuit's ({ORDER})")
     k = float(policy.CONSOLE[1] if k is None else k)
-    out, rows, broken, ew = [], [], [], {}
+    out, rows, broken, ew, counted = [], [], [], {}, []
     fresh = dropped = macs = dropped_macs = 0
     for n, g in segments:
         block = products.rows(g, k, gemm_dtype)
+        counted += [r | {"count": n * r["count"]} for r in block["rows"]]
         for x in block["elementwise_products"]:
             c, w = ew.get(x["op"], (0, 0))
             ew[x["op"]] = (c + n * x["count"], w + n * x["macs"])
@@ -817,7 +822,8 @@ def products_of(segments, k: float | None = None, gemm_dtype: str | None = "bflo
         broken += block["p_match"]
     return {"k": k, "order": order or ORDER, "products": out, "system": system_of(rows), "p_match": broken,
             "gathered": {"dropped": dropped, "of": fresh, "dropped_macs_share": dropped_macs / macs if macs else 0.0},
-            "elementwise_products": [{"op": op, "count": c, "macs": w} for op, (c, w) in sorted(ew.items())]}
+            "elementwise_products": [{"op": op, "count": c, "macs": w} for op, (c, w) in sorted(ew.items())],
+            "he": he_of_rows(counted, k)}
 
 
 def product_kind(row: dict) -> str:
@@ -841,8 +847,11 @@ def products_of_trace(block: dict, steps: float = 1.0) -> dict:
     """`Measured.products` from a trace's product rows (te_core.capture.products' `rows`, the trace's `products`) over
     `steps` traced steps: its fresh rows (`product_kind`) as exactly the products te_core.io_bound's bound reads, each
     row's MACs and output entries times its count and `steps`, at the k the capture classified them at, and each kind's
-    MACs. Their order is the reference circuit's (`ORDER`): the trace's ``unknown`` says only that the recorded graph
-    doesn't show it (`trace_order`).
+    MACs, and the products term's M over the steps (`he`, `he_of_rows`). The steps are ones after the run's first
+    update (`of_record` counts no step before it, whose products read only registered weights; a step captured on its
+    own stands for one after it). Their order is the
+    reference circuit's (`ORDER`): the trace's ``unknown`` says only that the recorded graph doesn't show it
+    (`trace_order`).
 
     Tokens that share an id share its row, so a block that pays for a row gets every such token's products of it free:
     the bound holds on any subset of the products, so G drops (never |C|) every fresh product with an operand that
@@ -890,7 +899,8 @@ def products_of_trace(block: dict, steps: float = 1.0) -> dict:
            "system": system_of(block["rows"]), "p_match": block.get("p_match"), "gathered": gathered,
            "shared_prefix": shared,
            "elementwise_products": block.get("elementwise_products") if _release(block.get("capture")) >=
-           _release(ELEMENTWISE_FROM) else None}
+           _release(ELEMENTWISE_FROM) else None,
+           "he": he_of_rows(block["rows"], block["k"], steps)}
     if "at" in block:
         rest = {x: v for x, v in block.items() if x != "at"}
         got["at"] = {x: products_of_trace(rest | b, steps) for x, b in block["at"].items()}
@@ -975,7 +985,8 @@ def traced_products(p: dict | None, block: dict | None, log: dict | None = None)
     `fresh_products` reads as products of no trace (`ONE_CLASS`), 4.12's kept one that counts the products reading
     gathered rows, which it would read as this te_core's, 4.12.1's kept them at the console's k only, though the trace
     keeps rows at each k of the dial (`at`, which `classified_at` reads), te_core 4.8's kept the trace's order unknown,
-    which it never measures, and before 4.10 an upcast operand's product was an expansion. Taken again, rows captured
+    which it never measures, before 4.10 an upcast operand's product was an expansion, and before 4.13 none kept the
+    products term's M (`he`), which this takes over the same steps. Taken again, rows captured
     before `SYSTEM_FROM` say they need a retrace (`FRESH_RETRACE`), rows captured before `ELEMENTWISE_FROM` that no
     capture looked at for products written elementwise say so (`FRESH_UNCHECKED`), and the rest are measured on their
     system, at each k their trace keeps rows at. Given the record's op log (`log`, its ops), rows with a shape the log
@@ -999,6 +1010,174 @@ def _subset(sub: dict | None) -> dict | None:
     return {"dropped": sub["dropped"], "of": sub["dropped"] + len(sub["kept"]),
             "dropped_macs_share": sub["dropped_macs_share"], "k_whole_min": sub["k_whole_min"]} | {
         x: sub[x] for x in ("rule", "threshold", "e", "dropped_fed") if x in sub}
+
+
+#: each GEMM Definition's operand and output widths in bits, by its gates a gadget (a product row's `cell_gates`):
+#: bf16's and f16's 16 and 16, f32's 32 and 32, fp8's and fp4's outputs at their operands' width, the least a circuit
+#: writes them at
+HE_BITS = {float(gates(d)): bits for d, bits in (("HopperBF16WgmmaDot16_v2", (16, 16)), ("F32Fma_v4", (32, 32)),
+                                                  ("BlackwellE4m3QmmaDot32_v2", (8, 8)),
+                                                  ("BlackwellE5m2QmmaDot32_v2", (8, 8)),
+                                                  ("BlackwellNvf4OmmaDot64_v2", (4, 4)))}
+#: why the products term is unmeasured on rows that don't say which operands read a gather's rows
+HE_RETRACE = (f"unmeasured: the trace's product rows predate {THE_CODE} {SYSTEM_FROM}, so they don't say which "
+              "products read an embedding's rows before any op makes them token-specific, which M leaves out; retrace "
+              f"the run with {THE_CODE} {ELEMENTWISE_FROM} or later")
+#: why the products term is unmeasured on products that come without M (a hand-written set)
+HE_NO_ROWS = ("unmeasured: the products carry no operand rates or output widths, which M reads (a step's product rows "
+              "give them, and so does a model)")
+
+
+def k_star(k: float, w: float) -> float:
+    """K* = ½√(k/w): the least contraction whose output a block of k bits can't make below its width w from the
+    contraction's two operands (a rows by b columns of them make ab entries for (a + b)·K·w bits)."""
+    return 0.5 * math.sqrt(k / w)
+
+
+def beta_eff(w: float, r: float, k: float) -> float:
+    """An operand's width in (H) where the update reaches it through a bottleneck of rank r a row or column (an
+    adapter's Ax, a broadcast vector, a frozen edge): β/(1 + (K*/r)²), K* at its width (`k_star`)."""
+    return w / (1 + (k_star(k, w) / r) ** 2) if r > 0 else 0.0
+
+
+#: a product row's dims each operand spans: A is batch x m x k, B batch x k x n
+SIDES = (("batch", "m", "k"), ("batch", "k", "n"))
+
+
+def he_of_rows(rows: list[dict], k: float, steps: float = 1.0) -> dict | None:
+    """The products term's M from a step's product rows at k (te_core.capture.products' rows) over `steps` steps
+    (+1: the grader chooses M): every product whose two operands both depend on the update, except one array times
+    itself (W and X disjoint) and a product with an operand that reads a gather's rows before any op makes them
+    token-specific (repeated rows aren't distinct words). Each operand's β is its passed width, capped at its
+    Definition's operand width (`HE_BITS`), where the row's rate pays it (`io_bound.is_paid`); else its rate ρ_a
+    below the width implies the bottleneck rank r = √(ρ_a k)/(2w) (a K-long product made whole at 4K²w²/k an entry),
+    so β = `beta_eff`(w, r, k) = w·ρ_a/(w + ρ_a). On a step with an adapter (`r_step`, the least contraction K of a
+    forward product of two affected operands, one token-free, that widens it 4K-fold or more on a step where a
+    frozen weight is an operand, or that builds a weight with both sides 4K or more: a LoRA's B·(Ax), a DoRA's B·A),
+    every token-indexed operand with more than r_step entries a token, or with no dim but tokens (attention's
+    scores), is at most `beta_eff`(w, r_step, k): the update reaches it only through the adapters, and its rate
+    stops showing that once r_step passes K*. The adapters' own operands (A, B, Ax and the rank-wide gradients) keep
+    their widths. Each output is at its Definition's output width b_y. Token-indexed products keep 1 −
+    `SHARED_PREFIX`/n of their MACs, as `products_of_trace`'s do, and every output. Grouped by (β_a, β_b, b_y,
+    forward or not): {"k", "groups": [{"beta", "width", "b_y", "forward", "macs", "wires"}], "r_step",
+    "candidates_macs", "self_macs", "gathered_macs"}; None for rows captured before `SYSTEM_FROM`, which don't flag
+    a gather's rows."""
+    if any("gathered" not in r for r in rows):
+        return None
+    seq = max((r["dims"][d] for r in rows if sum(x in r["token_dims"] for x in ("m", "k", "n")) >= 2
+               for d in ("m", "k", "n") if d in r["token_dims"]), default=None)
+    keep = 1 - SHARED_PREFIX / seq if seq else 1.0
+    sides = SIDES
+
+    def token(r: dict, i: int) -> bool:
+        return any(x in r["token_dims"] for x in sides[i])
+
+    frozen = any(r["phase"] == "forward" and not r["affected"][i] and not token(r, i) for r in rows for i in (0, 1))
+    ranks = []
+    for r in rows:
+        d, td = r["dims"], r["token_dims"]
+        if r["phase"] != "forward" or not all(r["affected"]):
+            continue
+        widened = frozen and ((td == ["m"] and 4 * d["k"] <= d["n"]) or (td == ["n"] and 4 * d["k"] <= d["m"]))
+        if widened or (not td and 4 * d["k"] <= min(d["m"], d["n"])):
+            ranks.append(d["k"])
+    r_step = min(ranks, default=None)
+    groups: dict = {}
+    total = alone = gathered = 0.0
+    for r in rows:
+        if not all(r["affected"]):
+            continue
+        n = r["count"] * steps
+        macs = n * r["macs"]
+        total += macs
+        if r["self"]:
+            alone += macs
+            continue
+        if any(r["gathered"]):
+            gathered += macs
+            continue
+        w_op, b_y = HE_BITS.get(r["cell_gates"], (min(r["widths"]),) * 2)
+        betas, widths = [], []
+        for i, (w, rate) in enumerate(zip(r["widths"], r["rates"])):
+            w = min(w, w_op)
+            b = w if io_bound.is_paid(rate, w) else w * rate / (w + rate) if rate > 0 else 0.0
+            if r_step is not None and token(r, i):
+                wide = math.prod(r["dims"][x] for x in sides[i] if x not in r["token_dims"])
+                if wide > r_step or all(x in r["token_dims"] for x in sides[i] if x != "batch"):
+                    b = min(b, beta_eff(w, r_step, k))
+            betas.append(round(b, 9))
+            widths.append(w)
+        key = (*betas, *widths, b_y, r["phase"] == "forward")
+        g = groups.setdefault(key, {"beta": betas, "width": widths, "b_y": b_y, "forward": key[-1], "macs": 0.0,
+                                    "wires": 0.0})
+        g["macs"] += (keep if r["token_dims"] else 1.0) * macs
+        g["wires"] += n * r["outputs"] * b_y
+    return {"k": float(k), "groups": [groups[x] for x in sorted(groups)], "r_step": r_step, "candidates_macs": total,
+            "self_macs": alone, "gathered_macs": gathered}
+
+
+def he_of_products(products: list[dict], k: float, rank: float | None = None) -> dict:
+    """M from products a model states (te_core.workloads' `products`: each group's MACs and output entries at k, its
+    operands' widths and its Definition's gates a gadget), every one of both operands' update dependence through a
+    trained matrix, at its operands' widths; with `rank`, a LoRA's adapter rank, each product whose contraction isn't
+    the rank has one operand the update reaches only through the adapters, at `beta_eff`(w, rank, k). A model's
+    products don't say their phase, so every group counts as sharing arrays (F = 2/√3)."""
+    groups = []
+    for p in products:
+        w_op, b_y = HE_BITS.get(p["cell_gates"], (min(p["b_a"], p["b_b"]),) * 2)
+        betas = [min(p["b_a"], w_op), min(p["b_b"], w_op)]
+        widths = list(betas)
+        if rank is not None and not math.isclose(p["k_dim"], rank, rel_tol=1e-9):
+            betas[1] = beta_eff(min(betas), rank, k)
+        groups.append({"beta": betas, "width": widths, "b_y": b_y, "forward": False, "macs": p["macs"],
+                       "wires": p["outputs"] * b_y})
+    total = sum(p["macs"] for p in products)
+    return {"k": float(k), "groups": groups, "r_step": rank, "candidates_macs": total, "self_macs": 0.0,
+            "gathered_macs": 0.0}
+
+
+def he_rho(N: float, O: float, beta: float, b_y: float, F: float, c: float, k: float, C: float) -> float:
+    """The theorem of record's ρ before its floor, (c/|C|)·(N/(k + α) − F·(k/2)·√(ON)/β/(k + α)^1.5) with
+    α = F·½·√(k³/(β²·b_y)), β_w = β_x = β: +2's 4/3 bounds π, whose square root multiplies both the split-free term
+    and the outputs' (the proof's Σ√(π_I z_I) ≤ √(max π)·√(m(O + mk/b_y))), so F = 2/√3 enters both."""
+    a = F * math.sqrt(k ** 3 / (beta * beta * b_y)) / 2
+    return c / C * (N / (k + a) - F * k / 2 * math.sqrt(O * N) / beta / (k + a) ** 1.5)
+
+
+def he_figure(he: dict, c: float, C: float) -> dict:
+    """The products term on M (`he_of_rows`) at (c, he's k) and |C|: for each operand width t some group's narrower
+    operand has, M_t the groups whose operands all have β ≥ t, each charged t (β_w = β_x = t, (H) per word holding
+    wherever it holds at the words' own β), b_y M_t's least output width and F = 2/√3 where M_t holds a backward or
+    optimizer product (+2: a layer's forward, input-gradient and weight-gradient products share arrays; Motzkin-Straus
+    bounds π by 4/3 where no four arrays are pairwise multiplied), else 1; the term is the largest `he_rho` over t,
+    each a valid choice of M, and 0 where none is positive. What it read: its β, b_y, F, α, N, O, M_t's share of the
+    candidates' MACs, whether M_t charges an operand below its width (`below_width`: at its `beta_eff`) and the
+    step's r_step."""
+    k = he["k"]
+    best: dict | None = None
+    for t in sorted({min(g["beta"]) for g in he["groups"] if min(g["beta"]) > 0}, reverse=True):
+        M = [g for g in he["groups"] if min(g["beta"]) >= t]
+        N, O = sum(g["macs"] for g in M), sum(g["wires"] for g in M)
+        b_y = min(g["b_y"] for g in M)
+        F = 1.0 if all(g["forward"] for g in M) else io_bound.SHARE
+        raw = he_rho(N, O, t, b_y, F, c, k, C)
+        if best is None or raw > best["raw"]:
+            best = {"raw": raw, "beta": t, "b_y": b_y, "F": F, "alpha": F * math.sqrt(k ** 3 / (t * t * b_y)) / 2,
+                    "N": N, "O": O, "below_width": any(b < w for g in M for b, w in zip(g["beta"], g["width"]))}
+    total = he["candidates_macs"]
+    if best is None:
+        return {"rho": 0.0, "beta": None, "b_y": None, "F": None, "alpha": None, "N": 0.0, "O": 0.0,
+                "macs_share": 0.0, "below_width": False, "r_step": he["r_step"]}
+    return {"rho": max(0.0, best.pop("raw"))} | best | {"macs_share": best["N"] / total if total else 0.0,
+                                                         "r_step": he["r_step"]}
+
+
+def p_match_reason(broken: list[dict]) -> str:
+    """Why a products figure is unmeasured on a step whose elementwise ops fan out into a product's operand (its
+    `p_match`): the rows' rates take P-match, so an operand's entries may be fewer distinct words than its rate says."""
+    ops = ", ".join(f"{x['op']} (fan-out {x['fan_out']:.3g}, {x['count']}×)" for x in broken)
+    return (f"unmeasured: the traced step breaks the premise that {P_MATCH}: {ops} hand one entry to several on the "
+            f"way into a product's operand")
 
 
 def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str | None, dict]:
@@ -1073,9 +1252,7 @@ def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str |
     elif p.get("p_match"):
         got["io_bound"] = io_bound.bound(p["products"], c, k, m.gates, math.inf)
         got["p_match"] = p["p_match"]
-        ops = ", ".join(f"{x['op']} (fan-out {x['fan_out']:.3g}, {x['count']}×)" for x in p["p_match"])
-        return None, (f"unmeasured: the traced step breaks the premise that {P_MATCH}: {ops} hand one entry to "
-                      f"several on the way into a product's operand"), got
+        return None, p_match_reason(p["p_match"]), got
     else:
         w = whole_chain(p["system"], k)
         got["whole_making"] = {"e": w["e"], "whole_chain": w["whole_chain"] if math.isfinite(w["whole_chain"]) else None,
@@ -1100,20 +1277,71 @@ def fresh_products(m: Measured, c: float, k: float) -> tuple[float | None, str |
                   f"constant only (its premise that {P_CHAIN}); the chain figure is in the inputs, never the bound"), got
 
 
+def he_products(m: Measured, c: float, k: float) -> tuple[float | None, str | None, dict]:
+    """The products kind's term at (c, k), the theorem of record's ρ on M (`he_figure` on the products' `he`,
+    `he_of_rows`), never below 0; its reason where it has no figure (None: it has one); and what it read. M is the
+    products' at the k they were classified at, or a trace's at each k of the console's dial (`classified_at`), so a
+    term at another k is unmeasured. It needs no whole-making system and no P-cell (a block's split MACs are charged
+    k a block) and no summation order, so it is measured where the old figure (`fresh_products`, the sensitivity
+    fresh_old) is void, on a step that writes products with elementwise ops (they are left out of M, and stay in
+    |C|) and on a circuit that declares a tree. It is unmeasured on a record with no product rows, on an op log's
+    products (`LOG_UNKNOWN`), on rows that predate `SYSTEM_FROM` (`HE_RETRACE`), on products without M
+    (`HE_NO_ROWS`) and on a step whose elementwise ops fan out into an operand (`p_match_reason`), and never priced on
+    a trace of another program (`FRESH_OTHER`)."""
+    p = m.products
+    if p is None and m.ops is not None:
+        p = products_of_ops(m.ops)
+        return None, (f"unmeasured: {LOG_UNKNOWN}; {p['unknown_share']:.0%} of its products' MACs have operands of "
+                      f"unknown freshness (the rest a θ operand or attention's); a trace from {THE_CODE} "
+                      f"{PRODUCTS_FROM} on keeps them"), {"source": p["source"], "unknown_share": p["unknown_share"]}
+    if p is None:
+        return None, FRESH_UNMEASURED, {}
+    p = classified_at(p, k) or p
+    got = {"k_classified": p["k"]} | {x: p[x] for x in ("capture", "capture_code", "stand_in", "other_program")
+                                      if x in p}
+    if "other_program" in p:
+        o = p["other_program"]
+        return None, FRESH_OTHER.format(unmatched=o["unmatched"], shapes=o["shapes"], ran=o["ran"], largest=", ".join(
+            f"{m}×{K} by {K}×{n}" for m, K, n in o["largest"])), got
+    if not math.isclose(p["k"], k, rel_tol=1e-12):
+        return None, (f"unmeasured: the products were classified at k = {p['k']:g}, not at this k, and keep none at "
+                      f"it (a trace from {THE_CODE} {SYSTEM_FROM} on keeps them at each k of the console's dial); "
+                      f"take them again at it from the run's captured step or its trace"), got
+    if p.get("he") is None:
+        return None, HE_RETRACE if "he" in p else HE_NO_ROWS, got
+    if p.get("p_match"):
+        return None, p_match_reason(p["p_match"]), got | {"p_match": p["p_match"]}
+    got |= he_figure(p["he"], c, m.gates)
+    return got["rho"], None, got
+
+
+def he_rests_on(got: dict) -> str:
+    """What a products term rests on with the β and b_y it took (`he_products`' `got`), short, as a row publishes it;
+    the generic `RESTS_ON_CELL` where M is empty."""
+    if got.get("beta") is None:
+        return RESTS_ON_CELL["fresh_products"]
+    which = ("M charges an operand the update reaches through a low-rank bottleneck at its β_eff"
+             if got["below_width"] else "M leaves out every product with an operand below that β")
+    return (f"theorem of record, given (H): operands are hard at β = {got['beta']:.4g} bits a word, and (E): exports "
+            f"are wide at b_y = {got['b_y']:g} bits an output, premises a single counterexample refutes; {which}")
+
+
 def fresh_per_c(m: Measured) -> dict[str, list[float] | None] | None:
-    """The fresh-products term as the console's dial reads it: for each k the run's products are classified at (by
-    its integer as a string; a trace's at each k of the console's dial, `classified_at`), the figure over c without
-    P-cell and with it, [rho_no_cell/c, rho/c] (`fresh_products`' fresh_no_cell and fresh_cell; the term is the second
-    where `P_CELL`): at a fixed k io_bound's blocks don't move with c, so each at (c, k) is c times it exactly. On a
-    void term they are its best subset's, [None, None] where no subset has a figure (ρ's floor reads it as computed);
-    None at a k where the term is unmeasured; None for a run with no product rows."""
+    """The products term as the console's dial reads it: for each k the run's products are classified at (by its
+    integer as a string; a trace's at each k of the console's dial, `classified_at`), [fresh_old/c, term/c] (the
+    sensitivity fresh_old, `fresh_products`' figure with P-cell, None where it is unmeasured or void with no subset
+    figure; and the term, `he_products`'): both are c times a number at a fixed k (io_bound's blocks don't move with
+    c, and the theorem of record's ρ is (c/|C|) times a function of k), so each at (c, k) is c times the entry
+    exactly. None at a k where the term is unmeasured; None for a run with no product rows."""
     p = m.products
     if p is None:
         return None
     out = {}
     for k in sorted({p["k"], *(b["k"] for b in p.get("at", {}).values())}):
-        term, why, got = fresh_products(m, 1.0, k)
-        out[f"{k:.0f}"] = [got["fresh_no_cell"], got["fresh_cell"]] if why is None or "void" in got else None
+        term, why, _ = he_products(m, 1.0, k)
+        _, old_why, got = fresh_products(m, 1.0, k)
+        out[f"{k:.0f}"] = None if why is not None else [
+            got["fresh_cell"] if old_why is None or "void" in got else None, term]
     return out
 
 
@@ -1121,16 +1349,17 @@ def bound(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> di
     """The counting lemma over the kinds of block work that are lower bounds on their own (module docstring) at (c, k):
     each kind's term (None: no figure, its reason in `unmeasured`), ρ ≥ their max over `kinds`, the kind that max
     binds on (`binding`; None where no kind has a figure) and what each kind rests on (`rests_on`); `void`, each kind
-    whose term is void but computed (the fresh products' best subset, or none with a figure) with its short reason,
-    which ρ's floor reads as computed (`published`); and beside them the
+    whose term is void but computed, with its short reason, which ρ's floor reads as computed (`published`; none
+    since the products term is the theorem of record's, which never voids); and beside them the
     sensitivities (`SENSITIVITIES`), never in the max, reduction and update each the sum over the parts that measure
-    it (None where none does; `unmeasured` names it where a part doesn't). `inputs` holds what each term reads beyond
-    `m`'s fields."""
+    it (None where none does; `unmeasured` names it where a part doesn't), fresh_old and fresh_no_cell the old
+    products figure's (`fresh_products`, its reason in `unmeasured` where it has none). `inputs` holds what each term
+    reads beyond `m`'s fields, the old figure's under fresh_old."""
     off = [kind for kind in kinds if kind in SENSITIVITIES]
     if off:
         raise ValueError(f"kinds {off!r}: sensitivities, never in the bound's max (they hold only for partitions split "
-                         f"by tokens, under reading B, for blocks that are no union of witnesses, or are the "
-                         f"fresh-products figure the term doesn't take); bound() returns them under 'sensitivities'")
+                         f"by tokens, under reading B, for blocks that are no union of witnesses, or rest on P-width "
+                         f"extended); bound() returns them under 'sensitivities'")
     if not kinds or set(kinds) - set(KINDS):
         raise ValueError(f"kinds {kinds!r}: some of {KINDS}")
     from . import VERSION
@@ -1140,9 +1369,12 @@ def bound(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> di
     code = m.delta_bits is not None and d < c
     share = sum(p.affected_gates for p in m.parts) / total if total else 0.0
     terms, unmeasured = {}, {}
-    terms["fresh_products"], why, fresh = fresh_products(m, c, k)
+    terms["fresh_products"], why, he = he_products(m, c, k)
     if why is not None:
         unmeasured["fresh_products"] = why
+    _, old_why, fresh = fresh_products(m, c, k)
+    if old_why is not None:
+        unmeasured["fresh_old"] = unmeasured["fresh_no_cell"] = old_why
     terms["token"] = packer(m, c, k, decoder=False)
     terms["decoding"] = packer(m, c, k, decoder=True) if code else terms["token"]
     if terms["token"] is None:
@@ -1166,10 +1398,8 @@ def bound(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> di
     cap = max(c - d if code else 0.0, min(c, m.alpha_max * (x0r * c / m.w + sr)))
     sens = {"token_form": _token_form(m.sigma, x0, c / m.w, s_star, m.alpha_ratio),
             "decoding_form": share * c / cap if cap > 0 else (math.inf if share else 0.0), "per_gate": per_gate(m, c, k),
-            "fresh_cell": fresh.get("fresh_cell"), "fresh_no_cell": fresh.get("fresh_no_cell")}
-    if "fresh_products" in unmeasured:
-        unmeasured["fresh_cell"] = unmeasured["fresh_no_cell"] = unmeasured["fresh_products"]
-    void = {"fresh_products": fresh["void"]["reason"]} if "void" in fresh else {}
+            "fresh_old": fresh.get("fresh_cell"), "fresh_no_cell": fresh.get("fresh_no_cell")}
+    void: dict = {}
     blocks = [_blocks(p, c) for p in m.parts]
     split = [(p, b) for p, b in zip(m.parts, blocks) if b >= 2]
     red = [p.steps * (b - 1) * p.partial_bits for p, b in split if p.partial_bits is not None]
@@ -1180,7 +1410,7 @@ def bound(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> di
             unmeasured[name] = (f"unmeasured: a part its token work splits has no {cut} (traced before {THE_CODE} 4.4, "
                                 f"or not traced)" + ("; the term sums the parts that have it" if got else ""))
     steps = [p.steps for p in m.parts]
-    inputs = {"fresh_products": fresh, "token": tok, "decoding": tok, "per_gate": tok,
+    inputs = {"fresh_products": he, "fresh_old": fresh, "token": tok, "decoding": tok, "per_gate": tok,
               "token_form": {"sigma": m.sigma, "x0": x0, "s": c / m.w, "s_star": s_star, "alpha_ratio": m.alpha_ratio},
               "decoding_form": {"share": share, "delta_bits": tok["delta_bits"], "decoder_gates": m.decoder_gates,
                                 "x0": x0r, "s_star": sr, "alpha_max": m.alpha_max, "cap": cap},
@@ -1249,9 +1479,8 @@ def at(m: Measured, c: float, k: float, reading: str | None = None, kinds: tuple
 #: target, not a bound), or `unmeasured` (ρ None) where Fit fails, no measured term exceeds 1 and a kind is unmeasured
 RESTS_ON_CELL = {
     "fit": "Fit's construction",
-    "fresh_products": f"theorem for this circuit (Loomis-Whitney), given that {PREMISES['P-width']} (P-width, "
-                      f"extended to what makes operands whole), {P_MATCH} and {P_CHAIN}, "
-                      f"{'given' if P_CELL else 'without assuming'} that {P_CELL_WORDS}",
+    "fresh_products": "theorem of record, given (H): operands are hard at the β the row's products term takes, and "
+                      "(E): exports are wide at its b_y, premises a single counterexample refutes",
     "token": "assumption A1 (reading A): a block's token work is a union of runs of one token's path and "
              "matrix-product tiles",
     "decoding": "assumption D: a block reading the update code runs the whole decoder; with A1 (reading A)",
@@ -1259,10 +1488,9 @@ RESTS_ON_CELL = {
     "none": "no kind exceeds 1",
     "unmeasured": "unmeasured",
 }
-#: the sensitivities a published ρ carries beside it (the coordinator's 08:28Z: reduction and update; 21:57Z: the
-#: fresh-products figure the term doesn't take, without P-cell where `P_CELL`), on every console row, so the others
-#: (`SENSITIVITIES`) stay in `bound`
-CELL_SENSITIVITIES = ("reduction", "update", "fresh_no_cell" if P_CELL else "fresh_cell")
+#: the sensitivities a published ρ carries beside it (the coordinator's 08:28Z: reduction and update; 07:08Z: the old
+#: fresh-products figure, fresh_old), on every console row, so the others (`SENSITIVITIES`) stay in `bound`
+CELL_SENSITIVITIES = ("reduction", "update", "fresh_old")
 #: whether a row whose token kind is measured (its trace's `entries` and an op log) publishes reading A (`published`)
 READING_A = True
 
@@ -1274,14 +1502,13 @@ def published(m: Measured, c: float | None = None, k: float | None = None, readi
     exceeds 1, binding that kind, `partial` where a kind is unmeasured (ρ is then only a lower bound); else, where a
     kind is unmeasured, None (binding `unmeasured`), with `why` saying so, never 1, which would read as no slowdown
     (coordinator 12:20Z); else 1, binding `none` (every kind computed, none above 1: the floor sets that 1, not any
-    kind). A void fresh-products term is computed (`uncomputed`): its best subset's figure is in the max, and `void`
-    has its short reason, which `why` carries too, so a row whose void term proves nothing above 1 reads 1 with it
-    (coordinator 21:54Z: "the products count diverges; best subset 0.17"). Under reading B, Slowdown's token form, a
-    target. Beside it what it rests on (`RESTS_ON_CELL`), the terms its max takes (None: no figure; under reading B
-    the token form), the bound's `CELL_SENSITIVITIES`, `fresh_subset`, the products the fresh-products term's
-    best subset dropped (`fresh_products`' `subset`; None where it dropped none or the term is unmeasured), and
-    `capture_code`, the VERSION of the code that wrote the trace its products came from (None: a trace from before
-    `CAPTURE_CODE_SINCE`, or no trace). This is the one place that rule lives: nothing downstream relabels its output."""
+    kind). A void term would be computed (`uncomputed`), with its short reason in `void` and `why`; the products term
+    never voids. Under reading B, Slowdown's token form, a target. Beside it what it rests on (`RESTS_ON_CELL`; where
+    the products term binds, `he_rests_on`, naming (H) with its β and (E) with its b_y), `products_rests_on`, the
+    products term's own wherever it is measured (None where it isn't), the terms its max takes (None: no figure;
+    under reading B the token form), the bound's `CELL_SENSITIVITIES`, and `capture_code`, the VERSION of the code
+    that wrote the trace its products came from (None: a trace from before `CAPTURE_CODE_SINCE`, or no trace). This
+    is the one place that rule lives: nothing downstream relabels its output."""
     if (c is None) != (k is None):
         raise ValueError("published: give both c and k, or neither for the console's policy")
     if c is None:
@@ -1313,13 +1540,15 @@ def published(m: Measured, c: float | None = None, k: float | None = None, readi
     if void is not None:
         why = void if why is None else f"{why}; {void}"
     terms = dict(b["terms"]) if reading == "A" else {"token_form": v["slowdown"]}
+    he = b["inputs"]["fresh_products"]
+    products = he_rests_on(he) if b["terms"]["fresh_products"] is not None else None
     return {"reading": reading, "label": f"{THE_CODE} {VERSION}, reading {reading}", "rho": rho,
-            "binding_kind": binding, "rests_on": RESTS_ON_CELL["unmeasured" if rho is None else binding],
-            "partial": partial, "why": why, "void": void,
+            "binding_kind": binding, "rests_on": products if binding == "fresh_products" else
+            RESTS_ON_CELL["unmeasured" if rho is None else binding],
+            "products_rests_on": products, "partial": partial, "why": why, "void": void,
             "terms": terms,
             "sensitivities": {name: b["sensitivities"][name] for name in CELL_SENSITIVITIES},
-            "fresh_subset": b["inputs"]["fresh_products"].get("subset"),
-            "capture_code": b["inputs"]["fresh_products"].get("capture_code")}
+            "capture_code": he.get("capture_code")}
 
 
 def uncomputed(b: dict) -> list[str]:
