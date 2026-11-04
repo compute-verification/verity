@@ -133,7 +133,7 @@ theorem accepted_drawnWrong_le (L : Law m.n) (hL : m.OneClass L) (τ : Strategy 
     (loweringSoundZK_of_place execArith _ (planZHJP m.dj m.y₀) (tabZHJP m.dj m.y₀)
       (placeZHJP m.dj m.y₀ m.ht m.hcS m.hscope m.hU m.hpi))
     (Discharge.Layout.keyProgP_readsOwn _ m.hU m.n m.pi _)
-    (Flock.Bridge.openingsCanonV5 m.n Reg m.I m.own m.ht m.D m.hD m.hU m.pi m.hpi m.pub m.hpub m.hscope m.kd m.dj
+    (Flock.Bridge.openingsCanonV5 m.n Reg m.I m.own m.ht m.D m.hDS m.hU m.pi m.hpi m.pub m.hpub m.hscope m.kd m.dj
       m.S₀ m.d₀ m.y₀)
     m.hRw m.hM m.hρ m.hr (jointZC_ksBound execArith execArith_correct hs512 (planZHJP m.dj m.y₀) m.hk) m.ht'
     (m.sim L hL τ)).trans ?_
