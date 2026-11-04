@@ -15,7 +15,7 @@ v1 session and inside a period of its lane, then a close, log or ledger entry ed
 another key, a ledger signed under its own key, one cut before the session's end, a second session for the window, a v1
 window, a v1 entry after a v2, a record leaf outside its session, an entry's or used twice, a period named twice, past
 its cap, committing no cap or circuit or closing with other windows, a record on another host or at another leaf, a log
-or refused hellos the ledger didn't seal, infra's published heads forked, each malformed form. The pins log's
+or refused hellos the ledger didn't seal, the ledger's published heads forked, each malformed form. The pins log's
 (`PINNED`) are a session whose open seals the host's pins log and pins its commit, then a commit off main or pinned
 after the open, no pins log, a malformed one or line, one cut or with a sealed line edited, and an open sealing
 none. A sample's coins (`READ`, `DRAW_COINS`: `read_reason` and `coins_reason`, `SampledProofs.ChallengerCoins`) are
@@ -23,8 +23,16 @@ a sample's coins from one family of a ledger session's challenger, opened after 
 roots, the bytes it read and the session's evidence, then a coin opened after the commitment and skipped, a wrong
 opening, coins opened before the commitment (their `after` rewritten or not), a coin opened and not read, the bytes
 tampered or longer, another commitment, a release log edited, the window of another session the ledger opens (a prover
-picking the window), a session whose pin is off the verifier's copy of main, no pins log, each malformed form. Each
-piece answers
+picking the window), a session whose pin is off the verifier's copy of main, no pins log, each malformed form. A
+``--zk`` session's coins (`COIN_TREES`, `SESSION_TREES`: `coin_trees_of` and `sessions_tree_reason`,
+`SampledProofs.ChallengerTrees`) are coin trees a session's challenger sampled and opened, their lines among its roots
+and releases, and the records of sessions on them, one tree each; then a tree's or a round's line with a key dropped or
+added, a malformed key, nonce, root, spec, after or coins, a root or key sampled twice, a tree's line no reader reads, a
+round of no tree sampled earlier, of a stream the tree lacks, out of order, opened twice or past the tree's rounds or
+block; a record on no logged tree or on another than the one logged under its root, its link's roots or points edited, a
+round's coins, count or message edited, a round added or swapped, a stream renamed, each malformed form, its link
+unopened, a tree two sessions use, or one none does. The release logs of `RELEASED`, `READ` and `DRAW_COINS` hold tree
+lines among their roots and releases too, and `RELEASED` a root or a release relabelled a tree's. Each piece answers
 ``{"refused": why}`` where the challenger refuses, so the reasons are compared too.
 """
 
@@ -46,6 +54,7 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from verity.core.protocols.sampled_proofs import challenger as Ch, coins as T
+from verity.ml.commitments import coin_tree as CT
 from verity.ml.commitments.identity import canonical_json_text
 from verity.ml.crypto import lms
 
@@ -360,7 +369,7 @@ PARAMS = [(1, 2), (2, 3), (4, 2), (8, 1)]
 #: those for a key that signs a ledger too: 32 leaves, room for a ledger's entries at increasing leaves on either side of
 #: its session's record
 LEDGER_PARAMS = [(1, 6), (2, 6), (4, 6)]
-HOSTS = ["vy-nebius-cpu-1", "auditor.example", "h", "A_1"]
+HOSTS = ["host-a", "auditor.example", "h", "A_1"]
 
 
 @functools.cache
@@ -711,7 +720,7 @@ class Ledger:
         queues = [named]
         for tag in ("o-1", "o-2")[:rng.randint(0, 2)]:
             sid, done = self.sid(tag), rng.random() < 0.8
-            events, _ = self.session_events(sid, _window(rng), f"vy-challenger-1.{sid}", rng.choice(LANES))
+            events, _ = self.session_events(sid, _window(rng), f"challenger-host.{sid}", rng.choice(LANES))
             queues.append(events + [("end", sid, {"closed": done, "complete": done and rng.random() < 0.8,
                                                   "files": {}, "rc": 0})])
         if self.two_step and rng.random() < 0.5:
@@ -722,7 +731,7 @@ class Ledger:
             self.events.append(q.pop(0))
         self.period_open = None
         if period is not None or rng.random() < 0.5:
-            self.period_open = {"by": "vy-admin", "cap": rng.randint(4, 8), "circuit": rng.choice(CIRCUITS),
+            self.period_open = {"by": "operator", "cap": rng.randint(4, 8), "circuit": rng.choice(CIRCUITS),
                                 "key_sha512": hashlib.sha512(s.pub).hexdigest(), "lane": self.lane,
                                 "period": rng.choice(PERIODS)}
             first = self.index("reserve" if self.two_step else "open", s.id)
@@ -733,7 +742,7 @@ class Ledger:
                 self.events.insert(at, ("period-close", None, self.close_body(self.events[:at])))
         if rng.random() < 0.3:
             old = {"commit": rng.randbytes(64).hex(), "period": rng.choice(PERIODS)}
-            self.v1 = [{"host": "vy-challenger-1", "key_sha512": hashlib.sha512(s.pub).hexdigest(),
+            self.v1 = [{"host": "challenger-host", "key_sha512": hashlib.sha512(s.pub).hexdigest(),
                         "pinned": rng.randbytes(20).hex(), "port": 7811, "window": old},
                        {"closed": True, "files": {}, "rc": 0}]
             self.events = [("open", "v1-0", self.v1[0]), ("end", "v1-0", self.v1[1])] + self.events
@@ -742,7 +751,7 @@ class Ledger:
         body = {"window": window, "host": host, "pinned": self.rng.randbytes(20).hex(),
                 "key_sha512": hashlib.sha512(self.s.pub if public is None else public).hexdigest(),
                 "port": self.rng.choice([7811, 7812])}
-        body.update(self.rng.choice([{"by": lane}, {"by": "vy-admin", "for": lane}, {"by": lane, "for": ""}]))
+        body.update(self.rng.choice([{"by": lane}, {"by": "operator", "for": lane}, {"by": lane, "for": ""}]))
         if self.rng.random() < 0.3:
             body["started_utc"] = "2026-10-20T09:45:48Z"
         if self.rng.random() < 0.2:
@@ -756,7 +765,7 @@ class Ledger:
     def reserve_body(self, lane: str) -> dict:
         rng = self.rng
         start, minutes = rng.choice(STARTS), rng.choice([1, 30, 720, rng.randint(1, 720)])
-        body = rng.choice([{"by": lane}, {"by": "vy-admin", "for": lane}])
+        body = rng.choice([{"by": lane}, {"by": "operator", "for": lane}])
         body.update(peer=rng.choice(PEERS), scheme=rng.choice(SCHEMES), epoch=rng.choice([0, 1, 7]),
                     families=[[rng.choice(LABELS), rng.randint(1, 4)]], minutes=minutes, started_utc=start,
                     expires_utc=Ch.later(start, minutes))
@@ -890,11 +899,14 @@ def _set(lines: list[str], i: int, **changes) -> list[str]:
 
 
 RELEASED_NAMES = ["honest", "head", "head-form", "empty", "odd", "root", "after", "index", "label", "label-release",
-                  "event", "time", "time-type", "extra", "non-canonical", "torn", "long", "float", "commitment-form",
-                  "request"]
+                  "event", "tree-event", "time", "time-type", "extra", "non-canonical", "torn", "long", "float",
+                  "commitment-form", "request"]
 
 
 def released_case(rng: random.Random, name: str) -> Any:
+    """A session's release log, mutated as `name` names, with the lines of coin trees its challenger sampled and opened
+    (`TreeSession`) among its roots and releases."""
+    rng = _seeded(rng)
     s = Session(rng)
     lines = list(s.lines)
     i = 1 + 2 * rng.randrange((len(lines) - 1) // 2)
@@ -922,6 +934,8 @@ def released_case(rng: random.Random, name: str) -> Any:
             j["log"] = _set(lines, i + 1, label=rng.choice(["nope", 5, None]))
         case "event":
             j["log"] = _set(lines, rng.choice([i, i + 1]), event=rng.choice(["commitment", "rooted", 1, None]))
+        case "tree-event":
+            j["log"] = _set(lines, rng.choice([i, i + 1]), event=rng.choice([Ch.TREE_EVENT, Ch.OPEN_EVENT]))
         case "time":
             j["log"] = _set(lines, rng.choice([i, i + 1]), **{rng.choice(["received_at", "released_at"]): -1})
         case "time-type":
@@ -946,6 +960,8 @@ def released_case(rng: random.Random, name: str) -> Any:
                 del j[rng.choice(sorted(j))]
             else:
                 j["log"] = rng.choice([None, "x", lines + [5]])
+    if name not in ("empty", "request"):
+        j["log"] = _interleave(rng, j["log"], [TreeSession(rng, s.ch).lines for _ in range(rng.choice([0, 1, 2]))])
     return j
 
 
@@ -1070,7 +1086,7 @@ def ledger_case(rng: random.Random, name: str) -> Any:
                               {"files": _body(files, **{rng.choice(Ch.SEALED_FILES): DROP})}])
             j["ledger"] = lg.lines(edit=_body_edit(end, **bad))
         case "second-open":
-            events.insert(rng.randint(0, len(events)), ("open", "s-other", lg.open_body(lg.window, "vy-challenger-1.x",
+            events.insert(rng.randint(0, len(events)), ("open", "s-other", lg.open_body(lg.window, "challenger-host.x",
                                                                                        "other")))
             j["ledger"] = lg.lines(events)
         case "reused-leaf":
@@ -1214,7 +1230,7 @@ def ledger_case(rng: random.Random, name: str) -> Any:
                     other = {0: False, 1: True}.get(v, v + 1)
             j["ledger"] = lg.lines(edit=_body_edit(o, **{k: other}))
         case "opened-by":
-            j["ledger"] = lg.lines(edit=_body_edit(o, opened_by=rng.choice(["other", "", "vy-Admin", None, 5, ["x"],
+            j["ledger"] = lg.lines(edit=_body_edit(o, opened_by=rng.choice(["other", "", "Operator", None, 5, ["x"],
                                                                             DROP])))
         case "open-late":
             start, expiry = reserve["started_utc"], reserve["expires_utc"]
@@ -1318,7 +1334,7 @@ def session_case(rng: random.Random, name: str) -> Any:
             j["window"] = _window(rng)
         case "other-host":
             o = lg.index("open", s.id)
-            host = rng.choice([h for h in HOSTS if h != s.host] + [f"vy-challenger-1.{s.id}"])
+            host = rng.choice([h for h in HOSTS if h != s.host] + [f"challenger-host.{s.id}"])
             j["ledger"] = lg.lines(edit=_entry_edit(o, lambda e: e["body"].update(host=host)))
         case "unsealed-log":
             j["ledger"] = lg.lines(edit=_entry_edit(end, lambda e: e["body"]["files"].update(
@@ -1535,10 +1551,12 @@ class Drawn:
     (one read, or a read and a rerun's extension), between other roots: the other family's, `draw` coins opened before
     the commitment (at least one when `before`), and later ones. `ledger` opens the session for its window. `after` is
     the commitment (drawn, by default), and `reads` reads the coins (`reads(coins)`, the bytes read), by default in one
-    or two reads of drawn lengths.  The ledger opens the session withheld unless `withheld` is false."""
+    or two reads of random lengths.  The ledger opens the session withheld unless `withheld` is false.  The challenger
+    samples and opens `trees` coin trees too (`TreeSession`; sampled, by default), their lines among the others."""
 
     def __init__(self, rng: random.Random, before: bool = False, after: bytes | None = None,
-                 reads: Callable[[Callable[[int], bytes]], bytes] | None = None, withheld: bool = True) -> None:
+                 reads: Callable[[Callable[[int], bytes]], bytes] | None = None, withheld: bool = True,
+                 trees: int | None = None) -> None:
         s = self.s = _ledger_session(rng)
         s.ch = _challenger(rng, [("other", 2), ("draw", 12)])
         s.ch.sign_record(s.host, s.pub, lambda m: lms.sign_at(s.k, s.q, m).encode())
@@ -1561,6 +1579,8 @@ class Drawn:
             self.read = self._step("draw", lambda: reads(coins))
         for _ in range(rng.randint(0, 2)):
             self._step("draw", lambda: self.records["draw"].record(rng.randbytes(64)))
+        self.trees = [TreeSession(rng, s.ch) for _ in range(rng.choice([0, 0, 1, 2]) if trees is None else trees)]
+        s.lines = _interleave(rng, s.lines, [t.lines for t in self.trees])
         s.close = s.signed(None)
         self.ledger = Ledger(rng, s, withheld=withheld)
         self.pins, self.main = _pinned(rng, self.ledger, "honest")
@@ -1709,6 +1729,313 @@ def draw_coins_case(rng: random.Random, name: str) -> Any:
     return j
 
 
+# ---- a --zk session's coins -----------------------------------------------------------------------------------------
+
+def _log(j: Any) -> list[str]:
+    if type(j) is not list or not all(type(line) is str for line in j):
+        raise D.Reject("log is not a list of strings")
+    return j
+
+
+def coin_trees(j: Any) -> Any:
+    _request(j, ["log"])
+    log = _log(j["log"])
+    return _refusing(lambda: {"trees": [t.to_json() for t in Ch.coin_trees_of(log).values()]})
+
+
+def session_trees(j: Any) -> Any:
+    _request(j, ["log", "records"])
+    log, rs = _log(j["log"]), j["records"]
+    if type(rs) is not list or not all(isinstance(r, dict) and sorted(r) == ["name", "record"]
+                                       and type(r["name"]) is str for r in rs):
+        raise D.Reject("records is not a list of {name, record}")
+    return _refusing(lambda: {"reason": Ch.sessions_tree_reason(Ch.coin_trees_of(log),
+                                                                [(r["name"], r["record"]) for r in rs])})
+
+
+TABLES = ["circuit", "circuit-00", "circuit-01", "circuit-63"]
+
+
+def _f128(w: int) -> str:
+    """A coin as a session record writes it: its 16 bytes big-endian (``hi`` first), in hex."""
+    return format(w, "032x")
+
+
+def _interleave(rng: random.Random, lines: list[str], runs: Sequence[list[str]]) -> list[str]:
+    """`lines` with each of `runs` merged in after its head, as one release log writes them: the rest of `lines` and
+    each run in its own order."""
+    queues = [list(lines[1:])] + [list(r) for r in runs]
+    out = list(lines[:1])
+    while any(queues):
+        out.append(rng.choice([q for q in queues if q]).pop(0))
+    return out
+
+
+class TreeSession:
+    """A ``--zk`` session's coin tree as challenger `ch` samples and opens it (`LiveChallenger.sample_tree`,
+    `open_tree`): `lines` its release log lines in order, and `record` the session's record on it (``coin_tree``,
+    ``link`` and ``streams``, beside keys the check doesn't read): its link points the tree's ``session`` round 0,
+    opened after the link's ``root_F`` and its tables' ``root_B``, and each table's two streams some rounds, each opened
+    after its message's digest, in a random order across the streams, the first round holding at least one coin."""
+
+    def __init__(self, rng: random.Random, ch: Ch.LiveChallenger) -> None:
+        self.ch = ch
+        tables = sorted(rng.sample(TABLES, rng.randint(1, 3)))
+        self.spec = {"block": rng.choice([1, 2, 3, 5]), "rounds_log": rng.choice([0, 1, 2]), "scheme": CT.SCHEME,
+                     "streams": [CT.SESSION] + [f"{t}/rep{r}" for t in tables for r in (0, 1)]}
+        tree, line = ch.sample_tree(self.spec, rng.choice([None, rng.randbytes(CT.NONCE_BYTES)]))
+        self.root, self.lines, self.opened = tree.root().hex(), [line], Counter()
+        block, rounds = self.spec["block"], 1 << self.spec["rounds_log"]
+        root_f, root_b = rng.randbytes(64), {t: rng.randbytes(64) for t in tables}
+        points = rng.randint(1, block)
+        m = rng.randint(1, block // points)
+        link = [_f128(c) for c in self.open(CT.SESSION, points * m, Ch.link_after(root_f, root_b))]
+        streams: dict[str, list[dict]] = {s: [] for s in self.spec["streams"][1:]}
+        first = rng.choice(list(streams))
+        rest = [s for s in streams for _ in range(rng.randint(0, rounds - (s == first)))]
+        rng.shuffle(rest)
+        for s in [first] + rest:
+            msg, n = rng.randbytes(64), rng.randint(0 if streams[s] or s != first else 1, block)
+            streams[s].append({"coins": [_f128(c) for c in self.open(s, n, msg)], "k": rng.randint(1, 4),
+                               "msg_sha512": msg.hex(), "n": n})
+        self.record = {"coin_tree": tree.record(),
+                       "link": {"points": [link[i * m:(i + 1) * m] for i in range(points)],
+                                "root_b": {t: r.hex() for t, r in root_b.items()}, "root_f": root_f.hex()},
+                       "streams": [{"rounds": r, "stream": s} for s, r in streams.items() if r or rng.random() < 0.5],
+                       "zk": True}
+
+    def open(self, stream: str, n: int, after: bytes) -> list[int]:
+        """The stream's next round's first `n` coins, opened after `after`, its line appended to `lines`."""
+        coins, _, line = self.ch.open_tree(self.root, stream, self.opened[stream], n, after)
+        self.opened[stream] += 1
+        self.lines.append(line)
+        return coins
+
+
+def _edit(line: str, **changes) -> str:
+    return canonical_json_text(_body(json.loads(line), **changes))
+
+
+def _hex_form(rng: random.Random, h: str) -> Any:
+    """`h`, a lowercase hex digest, in a form the log's lines never take."""
+    return rng.choice([h.upper(), h[:-2], h + "00", None, 5])
+
+
+COIN_TREES_NAMES = ["honest", "tree-keys", "tree-key", "tree-nonce", "tree-root", "spec", "root-twice", "key-twice",
+                    "unread-tree", "open-keys", "open-unknown", "open-early", "open-stream", "open-round", "open-again",
+                    "open-past", "open-n", "open-after", "open-coins", "request"]
+
+
+def _spec_form(rng: random.Random, spec: dict) -> Any:
+    s = spec["streams"]
+    return rng.choice([
+        {**spec, "scheme": "coin-tree/hm96-sha512/v1"}, {**spec, "block": rng.choice([0, Ch.MAX_BLOCK + 1, True, "1"])},
+        {**spec, "rounds_log": rng.choice([-1, Ch.MAX_ROUNDS_LOG + 1, None])}, {**spec, "streams": []},
+        {**spec, "streams": s + [s[-1]]}, {**spec, "streams": s + [rng.choice(["a b", "", "x" * (Ch.MAX_SESSION_ID + 1),
+                                                                               "\u00e9", 5])]},
+        {**spec, "streams": "session"}, {**spec, "nonce": "00" * 32}, _body(spec, block=DROP), None])
+
+
+def _tree_mutated(rng: random.Random, t: TreeSession, name: str) -> None:
+    """`t`'s lines mutated as `name` names: each a log `coin_trees_of` refuses."""
+    ls = t.lines
+    k = rng.randrange(1, len(ls))
+    match name:
+        case "tree-keys":
+            ls[0] = _edit(ls[0], **rng.choice([{"key": DROP}, {"spec": DROP}, {"x": 1}]))
+        case "tree-key" | "tree-nonce" | "tree-root":
+            f = name[5:]
+            ls[0] = _edit(ls[0], **{f: _hex_form(rng, json.loads(ls[0])[f])})
+        case "spec":
+            ls[0] = _edit(ls[0], spec=_spec_form(rng, t.spec))
+        case "root-twice" | "key-twice":
+            f = "key" if name == "root-twice" else "root"
+            ls.insert(rng.randint(1, len(ls)), _edit(ls[0], **{f: rng.randbytes(len(json.loads(ls[0])[f]) // 2).hex()}))
+        case "unread-tree":
+            doc = json.loads(ls[0])
+            ls[0] = rng.choice([json.dumps(doc), _edit(ls[0], spec={**t.spec, "streams": t.spec["streams"] + [
+                f"{i}/" + "x" * (Ch.MAX_SESSION_ID - 4) for i in range(32)]})])
+        case "open-keys":
+            ls[k] = _edit(ls[k], **rng.choice([{"after": DROP}, {"n": DROP}, {"x": 1}]))
+        case "open-unknown":
+            ls[k] = _edit(ls[k], tree=rng.choice([_flip(t.root), 5, None]))
+        case "open-early":
+            ls.insert(0, ls.pop(k))
+        case "open-stream":
+            ls[k] = _edit(ls[k], stream=rng.choice(["nope/rep0", CT.SESSION.upper(), 5, None]))
+        case "open-round":
+            r = json.loads(ls[k])["round"]
+            ls[k] = _edit(ls[k], round=rng.choice([r + 1, r - 1, str(r), True, None]))
+        case "open-again":
+            ls.insert(k + 1, ls[k])
+        case "open-past":
+            s = rng.choice(t.spec["streams"])
+            while t.opened[s] < 1 << t.spec["rounds_log"]:
+                t.open(s, rng.randint(0, t.spec["block"]), rng.randbytes(64))
+            last = next(line for line in reversed(ls) if json.loads(line).get("stream") == s)
+            ls.append(_edit(last, round=t.opened[s]))
+        case "open-n":
+            ls[k] = _edit(ls[k], n=rng.choice([t.spec["block"] + 1, -1, True]))
+        case "open-after" | "open-coins":
+            f = name[5:]
+            ls[k] = _edit(ls[k], **{f: _hex_form(rng, json.loads(ls[k])[f])})
+
+
+def _tree_log(rng: random.Random, name: str = "honest") -> tuple[Session, list[TreeSession], list[str]]:
+    """A session whose challenger sampled and opened coin trees, one of them mutated as `name` names (`_tree_mutated`),
+    and the release log holding their lines among the session's roots and releases."""
+    s = Session(rng)
+    trees = [TreeSession(rng, s.ch) for _ in range(rng.randint(1, 3))]
+    if name in COIN_TREES_NAMES[1:-1]:
+        _tree_mutated(rng, rng.choice(trees), name)
+    return s, trees, _interleave(rng, s.lines, [t.lines for t in trees])
+
+
+def coin_trees_case(rng: random.Random, name: str) -> Any:
+    rng = _seeded(rng)
+    _, _, log = _tree_log(rng, name)
+    j = {"log": log}
+    if name == "request":
+        if rng.random() < 0.5:
+            j = rng.choice([{}, {**j, "records": []}])
+        else:
+            j["log"] = rng.choice([None, "x", log + [5]])
+    return j
+
+
+SESSION_TREES_NAMES = ["honest", "no-tree", "coin-tree", "other-tree", "link-root-f", "link-root-b", "points",
+                       "link-form", "round-coins", "round-n", "round-msg", "round-extra", "round-swap", "stream-unknown",
+                       "stream-form", "streams-form", "unlinked", "shared", "unused", "record-type", "log-malformed",
+                       "request"]
+
+
+def _rounds(r: dict) -> list[tuple[dict, dict]]:
+    """Each round of record `r`'s streams beside its stream, the first stream's first round first."""
+    return [(s, x) for s in r["streams"] for x in s["rounds"]]
+
+
+def _record_mutated(rng: random.Random, t: TreeSession, others: list[TreeSession], name: str) -> Any:
+    """`t`'s record mutated as `name` names: each one `sessions_tree_reason` refuses."""
+    r = json.loads(json.dumps(t.record))
+    link, rounds = r["link"], _rounds(r)
+    s0, x0 = next((s, x) for s, x in rounds if x["n"] > 0)
+    match name:
+        case "no-tree":
+            r["coin_tree"] = rng.choice([{**r["coin_tree"], "root": _flip(t.root)}, _body(r["coin_tree"], root=DROP),
+                                         {**r["coin_tree"], "root": 5}, None, "x"])
+        case "coin-tree":
+            ct = r["coin_tree"]
+            r["coin_tree"] = rng.choice([{**ct, "key": _flip(ct["key"])}, {**ct, "nonce": _flip(ct["nonce"])},
+                                         {**ct, "spec": {**t.spec, "block": t.spec["block"] + 1}}, {**ct, "x": 1}])
+        case "other-tree":
+            r["coin_tree"] = rng.choice(others).record["coin_tree"] if others else {**r["coin_tree"], "x": 1}
+        case "link-root-f":
+            link["root_f"] = _flip(link["root_f"], rng.randrange(64))
+        case "link-root-b":
+            tb = rng.choice(sorted(link["root_b"]))
+            what = rng.choice(["flip", "add", "drop", "swap"] if len(link["root_b"]) > 1 else ["flip", "add", "drop"])
+            if what == "flip":
+                link["root_b"][tb] = _flip(link["root_b"][tb], rng.randrange(64))
+            elif what == "add":
+                link["root_b"][rng.choice(["circuit-99", "a"])] = rng.randbytes(64).hex()
+            elif what == "drop":
+                del link["root_b"][tb]
+            else:
+                a, b = rng.sample(sorted(link["root_b"]), 2)
+                link["root_b"][a], link["root_b"][b] = link["root_b"][b], link["root_b"][a]
+        case "points":
+            ps = link["points"]
+            what = rng.choice(["flip", "drop", "add"])
+            if what == "flip":
+                p = rng.choice(ps)
+                i = rng.randrange(len(p))
+                p[i] = _flip(p[i], rng.randrange(16))
+            elif what == "drop":
+                ps[-1] = ps[-1][:-1]
+            else:
+                ps.append([rng.randbytes(16).hex()])
+        case "link-form":
+            p = link["points"][0]
+            r["link"] = rng.choice([
+                None, "x", _body(link, root_b=DROP), {**link, "root_b": [link["root_b"]]}, {**link, "points": None},
+                {**link, "root_f": link["root_f"].upper()}, _body(link, root_f=DROP), {**link, "root_f": 5},
+                {**link, "root_b": {k: v[:-1] for k, v in link["root_b"].items()}},
+                {**link, "points": [[p[0][:-2]] + p[1:]] + link["points"][1:]},
+                {**link, "points": [[p[0].upper()] + p[1:]] + link["points"][1:]},
+                {**link, "points": [5] + link["points"]}])
+        case "round-coins":
+            i = rng.randrange(x0["n"])
+            x0["coins"][i] = _flip(x0["coins"][i], rng.randrange(16))
+        case "round-n":
+            x0["n"] += rng.choice([1, -1])
+        case "round-msg":
+            x0["msg_sha512"] = _flip(x0["msg_sha512"], rng.randrange(64))
+        case "round-extra":
+            s = rng.choice(r["streams"])
+            s["rounds"].append({"coins": [], "k": 1, "msg_sha512": rng.randbytes(64).hex(), "n": 0})
+        case "round-swap":
+            s = next((s for s in r["streams"] if len(s["rounds"]) > 1), None)
+            if s is None:
+                x0["msg_sha512"] = _flip(x0["msg_sha512"])
+            else:
+                i, j = rng.sample(range(len(s["rounds"])), 2)
+                s["rounds"][i], s["rounds"][j] = s["rounds"][j], s["rounds"][i]
+        case "stream-unknown":
+            name_ = s0["stream"]
+            s0["stream"] = rng.choice(["nope/rep0", CT.SESSION, name_[:-1] + ("1" if name_[-1] == "0" else "0")])
+        case "stream-form":
+            k = r["streams"].index(s0)
+            r["streams"][k] = rng.choice([
+                5, None, {**s0, "stream": 5}, {**s0, "rounds": None}, _body(s0, rounds=DROP),
+                {**s0, "rounds": [5] + s0["rounds"]}, {**s0, "rounds": [{**x0, "coins": None}]},
+                {**s0, "rounds": [{**x0, "coins": [c.upper() for c in x0["coins"]]}]},
+                {**s0, "rounds": [{**x0, "msg_sha512": x0["msg_sha512"][:-2]}]},
+                {**s0, "rounds": [{**x0, "n": rng.choice([-1, True, str(x0["n"]), None])}]}])
+        case "streams-form":
+            r = rng.choice([_body(r, streams=DROP), {**r, "streams": None}, {**r, "streams": {}}])
+        case "record-type":
+            r = rng.choice([None, [], 5, "x", {}])
+    return r
+
+
+def session_trees_case(rng: random.Random, name: str) -> Any:
+    rng = _seeded(rng)
+    s, trees, log = _tree_log(rng)
+    named = [(rng.choice(SESSIONS) + f"-{i}", t) for i, t in enumerate(trees)]
+    rng.shuffle(named)
+    records = [{"name": n, "record": t.record} for n, t in named]
+    k = rng.randrange(len(records))
+    t = named[k][1]
+    match name:
+        case "unlinked":
+            i = next(i for i, line in enumerate(log) if line == t.lines[1])
+            log = log[:i] + log[i + 1:]
+        case "shared":
+            records.insert(rng.randint(k + 1, len(records)), {"name": "again", "record": t.record})
+        case "unused":
+            del records[k]
+        case "log-malformed":
+            i = next(i for i, line in enumerate(log) if line == t.lines[0])
+            log = log[:i + 1] + [_edit(t.lines[0], key=rng.randbytes(CT.KEY_BYTES).hex())] + log[i + 1:]
+        case "honest" | "request":
+            pass
+        case _:
+            records[k]["record"] = _record_mutated(rng, t, [o for o in trees if o is not t], name)
+    j = {"log": log, "records": records}
+    if name == "request":
+        what = rng.choice(["keys", "log", "records", "entry"])
+        if what == "keys":
+            j = rng.choice([{"log": log}, {**j, "record": t.record}])
+        elif what == "log":
+            j["log"] = rng.choice([None, "x", log + [5]])
+        elif what == "records":
+            j["records"] = rng.choice([None, {}, t.record])
+        else:
+            records[k] = rng.choice([_body(records[k], name=DROP), {**records[k], "name": 5}, {**records[k], "x": 1},
+                                     [records[k]["name"], t.record]])
+    return j
+
+
 COMMITMENT = D.Port(PIECES, "challenger_commitment", commitment, _cases(commitment_case, COMMITMENT_NAMES),
                     package=PACKAGE, need_rejects=False, of_record="lean")
 OPENING = D.Port(PIECES, "challenger_opening", opening, _cases(opening_case, OPENING_NAMES), package=PACKAGE,
@@ -1737,6 +2064,10 @@ PINNED = D.Port(PIECES, "challenger_pinned", pinned, _cases(pinned_case, PINNED_
 READ = D.Port(PIECES, "challenger_read", read, _cases(read_case, READ_NAMES), package=PACKAGE, of_record="lean")
 DRAW_COINS = D.Port(PIECES, "challenger_draw_coins", draw_coins, _cases(draw_coins_case, DRAW_COINS_NAMES),
                     package=PACKAGE, of_record="lean")
+COIN_TREES = D.Port(PIECES, "challenger_coin_trees", coin_trees, _cases(coin_trees_case, COIN_TREES_NAMES),
+                    package=PACKAGE, of_record="lean")
+SESSION_TREES = D.Port(PIECES, "challenger_session_trees", session_trees,
+                       _cases(session_trees_case, SESSION_TREES_NAMES), package=PACKAGE, of_record="lean")
 
 pieces = D.server_fixture(COMMITMENT)
 
@@ -1747,7 +2078,8 @@ RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_
         (LEDGER, ledger_case, LEDGER_NAMES, 300), (HEAD, head_case, HEAD_NAMES, 100),
         (SESSION, session_case, SESSION_NAMES, 300), (CREDITED, credited_case, CREDITED_NAMES, 200),
         (PINNED, pinned_case, PINNED_NAMES, 200), (READ, read_case, READ_NAMES, 200),
-        (DRAW_COINS, draw_coins_case, DRAW_COINS_NAMES, 200)]
+        (DRAW_COINS, draw_coins_case, DRAW_COINS_NAMES, 200), (COIN_TREES, coin_trees_case, COIN_TREES_NAMES, 200),
+        (SESSION_TREES, session_trees_case, SESSION_TREES_NAMES, 200)]
 
 
 @pytest.mark.parametrize("port, make, names, examples", RUNS, ids=[r[0].fn for r in RUNS])
