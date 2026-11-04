@@ -316,7 +316,8 @@ theorem rowsCircuitHeld_honest :
         ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ =
       .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] #[] 1 0 #[]) { link := "", windows := 0 } ∧
     held (some "c") #[heldReg "c"] tiedWindow = true :=
-  ⟨by simp [check, auditChecks, wiredChecks, stateChecks, heldChecks, firstFinding, rowsPublic], tiedWindow_held⟩
+  ⟨by simp [check, auditChecks, wiredChecks, stateChecks, heldChecks, firstFinding, rowsPublic, Array.range],
+    tiedWindow_held⟩
 
 /-- **`RowsCircuitHeld`'s nontrivial lemma**: `RowsCircuitHeldAt` fails at a rows-form period of one link-window whose
 tied audit runs another Program than the class circuit `c`, which a check that accepts everything accepts. -/
