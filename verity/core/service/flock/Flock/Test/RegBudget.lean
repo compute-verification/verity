@@ -3,7 +3,11 @@
 `MAX_INSTANCES` instances, pass, as does a level's registration (`rec-acc` of 2048 rows, its tops, its `2 q` openings'
 coefficients); one port more, one leaf past `2^MAX_DEPTH`, or one instance more is refused, each by its own message.
 V\*'s list of `MAX_STATEMENTS` statements passes and one more is refused (`count`); a shape `RecVStar.statements` refuses
-(claims not two and two per region) is left to the checks that run it. Without an inner shape nothing is refused.
+(claims not two and two per region) is left to the checks that run it. Without an inner shape nothing is refused. A list
+recording `MAX_RECORDED` hm96 calls passes and one more is refused (`recorded`); a level's statement records two calls at
+each of its openings' `out`, `coef` and `dirs` and four at each `rec-acc` row its units read, R's level's at `out` and
+`rec-acc` alone (none of `rec-acc` without R's shape), a RecCap four at each node, RecSparse two at each of its ports' two
+rows, and the link table's part none (`recordedAt`).
 -/
 module
 
@@ -58,5 +62,23 @@ def whyC (n : Nat) : Option String :=
   some "refused: V*'s list at the verifier's inner shape holds 4097 statements, more than 4096: the recursion's call bound covers no more"
 #guard (statements none).toOption == some ()
 #guard (statements (some { inner with claims := 9 })).toOption == some ()
+
+def whyW (n : Nat) : Option String :=
+  match recorded n with
+  | .ok () => none
+  | .error e => some e
+
+#guard whyW 0 == none
+#guard whyW MAX_RECORDED == none
+#guard whyW (MAX_RECORDED + 1) ==
+  some ("refused: V*'s list at the verifier's inner shape records 4294967297 hm96 calls, more than 4294967296: " ++
+    "the recursion's call bound covers no more")
+#guard recordedAt inner (.recOpen 0 64 8 436) == 4360
+#guard recordedAt { inner with stacked := some { m := 23, claims := 2 } } (.recOpenStacked 0 64 8 218) == 1308
+#guard recordedAt inner (.recOpenStacked 0 64 8 218) == 436
+#guard recordedAt inner (.cap 0 128) == 512
+#guard recordedAt inner (.sparse { nu := 18, ell := 13, sLog := 6, tLog := 0 } 21) == 8
+#guard recordedAt inner (.link 6 6 18) == 0
+#guard recordedCalls inner #[.recOpen 0 64 8 436, .cap 1 128, .cap 0 128] == 5384
 
 end Flock.Test.RegBudget
