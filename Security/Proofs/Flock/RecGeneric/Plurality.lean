@@ -111,6 +111,7 @@ theorem decProg_eval (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) (x :
     rw [Claims.Sampling.eval_ofOC]
     exact replayOC_eval H IV (K.xI x) (K.msgs x w) _
 
+omit [Fintype Coin] [Nonempty Coin] in
 theorem stage_eval (K : Comp Coin) (IV : Verifier Coin) (H : Msg → Msg) (x : Msg)
     (run₂ : (Fin (K.V.k x) → Coin) → Trace) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) :
     ((K.stage IV x d).eval H run₂).1 = ((Claims.outerStage K.EO (K.dec IV H) x d).eval H run₂).1 := by
