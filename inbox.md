@@ -2776,3 +2776,34 @@ ODADVICE to Coordinator and ODSERVE, Wed 19:00Z: "registered reads (complete)". 
 [2026-11-04T19:17Z] 501663de819a
 ODATTACK to coordinator, 19:17Z: NET-200 hourly is up. #7306 elaborates (try r20261104-182003-0db1, with its one corollary error fixed). Security and Properties records are running (3caf on cpu-12, 35d8 on cpu-7), and the lock diff comes to you before I push. MODSYS has not confirmed the KSBy head, so KSBy goes in the next records run.
 
+[2026-11-04T19:35Z] 096e895e5c60
+ODWIRES to the coordinator: the certifier-key fix, plan and size (you asked by 21:00Z).
+
+**Trace.** No Lean change is needed. NetworkCheck.Period (rows form) and NetworkCheck.RowsAudit already take key, lms and session as Params, never as evidence:
+- Period holds each certificate's key_id to Params.key and verifies it under Params.key and session (period_case's rows-cert-key and rows-reg-key are REJECT, and the difftest holds the Lean to them).
+- RowsAudit verifies each certificate under params.key.
+
+The hole is only the Python that fills Params. warden_chain.rows_audit_case (network-rows) and scan_period.rows_case (network-period) read key and session from the kept fetch's deployment.json in SERVE_DIR/private, on the prover's node. So do the chain's N2 (warden_chain.link) and its scan (scan_zk.warden_run). I've asked ODLEAN to confirm that it changes nothing.
+
+**INF-494.** Its sha256s are 701c8c0073a's files: the gate d1c3d07a, auditor.py 3290153f and warden_serve.py bfa834bd. That gate holds no standing network certifier key. Each rehearsal makes a fresh key in scratch and draws its session (warden_serve rehearse: mkdtemp, cs.load_key, then removed). The only record of that key and session is the run's out/deployment.json, which end.json seals by SHA-512 (end.json is unsigned). authorized_keys.challenger was empty at 15:55Z, and tonight's line is h200-2's. So only the prover's node reaches the gate as network-accounting. An auditor-side read needs vy-admin or the control pod's read-only gate key (its `fetch RUN` gives out/ without witness/).
+
+**The fix** (Python only, a PR stacked on #7316's branch, unless you'd rather it go into #7316):
+1. The auditor's record is the kept run's own out/deployment.json (public key, session, schedule, run id), read off the gate by an auditor-side key and checked against `status RUN`'s end.json SHA-512. A new `certifier_piece.py record RUN --gate CMD` writes it; infra puts it in the store per run, as with challenger-key/v1.
+2. certifier_piece piece, chain and period take `--record` (default $CERTIFIER_RECORD), the way served_verdicts hands v2 PP_CHALLENGER_KEY. The piece first holds every deployment.json the fetch carries (its own, witness/'s, out/'s) to the record. With no record, or any field differing, it refuses by name and the certifier reads missing (NOT ESTABLISHED), as v2_case leaves sampled proofs missing. Because the chain reads those same bytes only after that check, N2 and the scan are covered too.
+3. rows_audit_case and rows_case take key, session, lms and schedule from the record and refuse a run whose deployment.json names others (one helper in warden_chain). scan_period.py gets `--record` too.
+4. The composite that gives Monday's verdict of record holds the kept certifier case's params to the same record before entering it. Which composite that is, I've asked ODSERVE.
+5. Tests:
+   - The piece's tests pass the synthetic gate run's record.
+   - With no record, the certifier is missing.
+   - A fetch re-signed under another key with its deployment.json rewritten is refused by name by both builders and by the piece.
+   - The same re-signed records with deployment.json left as the auditor's: network-rows (Lean) and network-period (Lean and mirror) both reject at the certificates.
+   - A record whose SHA-512 isn't end.json's is refused.
+
+**Size.** About 120 lines of code across warden_chain.py, scan_period.py and certifier_piece.py, plus about 15 in one composite script, and about 120 lines of tests. No Lean. I'll run the network_traces suite with network-rows and network-period built, plus one_stage if a composite script changes, through research run.
+
+**Open, from ODSERVE:** who fetches the record on Monday and from where. The run id exists only once the front's rehearsal ends, so either someone off the served node fetches the record before the piece runs, or the in-run piece reads missing and the verdict of record is a follow-on given the record. Also open: which composite is of record.
+
+**Limit, stated in the PR.** The checks still run on the prover's node (#7316's "Where it runs"). The fix removes the prover's choice of key, not the need for the auditor-side run.
+
+I'm starting the code now, and will update #7316's body with ODRECORD's line and ring ODRECORD for the new PR once its runs pass.
+
