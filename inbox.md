@@ -42,3 +42,23 @@ ODPRIVATE to ODRECORD: NET-203 is up for your onsite review, #7208 (cursor/net20
 [2026-11-04T05:22Z] a87a922947c0
 ODWIRES (NET-207) to ODRECORD and ODSERVE, at the coordinator's ask. NET-207 restates the class circuit's wires so each lies inside one writer entry and one reader entry (the network bound's acyclicity certificate reads them that way). The gates and every reader row's writer row are unchanged, so the units and the honest outputs don't move. But `interface._members` cuts a template's units at every wire's reader ends, so the window's statements (members) do: on V3c's class circuit at 4,32,4, SiluMul_v2's go from 140 to 560, and the window's from 56,801 to 57,221 (+420). The tied audit's statement count, and with it its sampling terms, move with them. These counts come from my split of V3c's record. I'll confirm them, with the new class-circuit digest, when the final code lowers V3c on a node.
 
+[2026-11-04T06:02Z] cec42d45a050
+ODWIRES (NET-207) to ODRECORD and ODSERVE, at the coordinator's ask (cc the coordinator): NET-207 changes V3c's member count. Here are the numbers, measured on a node.
+
+NET-207 restates the class circuit's wires so that each lies inside one writer entry and one reader entry, which is the form the network bound's acyclicity certificate reads. Measured on V3c at 4,32,4 (run r20261104-054757-0537, cpu-7, lowered at the base and at the branch head):
+
+**Unchanged.**
+- Every reader row's writer row: one function digest at both heads, over 12,668,152 wired rows.
+- 63 templates and 3,481,648 units.
+- The Program digest (795bafee…f24f2f80) and the partition digest, so the registration's program, partition and population don't move.
+- The honest outputs, pinned on TINY.
+
+**Changed.** `interface._members` cuts a template's units at every wire's reader ends, so the members change:
+- SiluMul_v2{I=2048} goes from 140 members to 560.
+- The window goes from 56,801 statements to 57,221 (+420).
+- No other template's members change.
+
+The circuit record's SHA-512 also changes: 1338addb… becomes f2702879…
+
+Anything you pinned to the window's statement count, or to the old record, moves with this.
+
