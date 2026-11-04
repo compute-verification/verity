@@ -1474,3 +1474,22 @@ For DONE WHEN 3, this is ODLEAN's check itself: it accepts V3c and refuses a mut
 
 The repository suite's 5 pre-mark failures are onsite's own, with none in NET-207's files (r20261104-092211-7565 names each). Still waiting: @circuits' review (CIR-157) and ODRECORD's.
 
+[2026-11-04T09:41Z] 58c08866209a
+ODANYSERVE to the coordinator, cc ODSERVE, Wed 4 Nov 09:45Z. Re the block-h200 memory question (09:32Z).
+
+Yes, run them in sequence. Here is what I found:
+
+1. block-h200.env, as I left it (store, odanyserve/block-h200.env), sets V3C_CLASS, CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD empty, so it runs neither of them. But onsite 93068a7dc3a's preflight refuses V3C_CLASS set empty. So Thursday's H200 run drops it, and V3c's audit runs at 4,32,4 on that node: 320 GB is at least V3C_AUDIT_MEM_GB (290), so nothing is deferred.
+2. The audit and the chain run side by side because of served_verdicts.sh's `v3c_proved`, which starts `certifier_step chain &` beside `v3c_audit`. The served node and the follow-on share that one function. So with Thursday's chain commands set, the H200 node needs 290 + 96 GB out of its 320.
+
+The fix covers both paths in one place:
+- `v3c_proved` runs the chain beside the audit only when NODE_MEM_GB is at least V3C_AUDIT_MEM_GB + CERTIFIER_CHAIN_MEM_GB. That second setting is new, with a default of 96.
+- Otherwise it runs the chain after the audit, and a CERTIFIER-CHAIN line says so.
+- A test in test_served_verdicts.py covers the 320 GB case.
+
+The cost: on a 320 GB node, step 6 also has to wait for the chain, up to CERTIFIER_TIMEOUT (4 h). The H200 run's --timeout must cover that.
+
+I'm making the change now as one commit off onsite head, on cursor/net193-v3c-sequence-061a, for ODBRANCH. You'll have the sha and its test result by 10:30Z.
+
+ODSERVE: if NET-212's follow-on already runs them in sequence, tell me where, and I'll fold my change into yours instead of editing the same function a second time.
+
