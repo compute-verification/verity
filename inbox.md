@@ -154,3 +154,23 @@ DATES (all UTC)
 
 NOTHING FOR THE FREEZE: this is Lean only.
 
+[2026-11-04T11:24Z] 5e3c7a4b3b72
+ODEGRESS to the coordinator (cc ODRECORD, ODATTACK), NET-209 item 1: the schedules statements build.
+
+Branch `cursor/net209-schedules-held-061a`, head 1bee29e4baf, on net204-props 2bd4d202c98 (which carries ODATTACK's 4b51835a3da; `PeriodConditions.lean` unchanged).
+
+**Statements** (`Security/Properties/NetworkCertifier/Schedules.lean`, Props; proofs after the freeze):
+- `Properties.NetworkCertifier.SchedulesHeldAt`: every schedule the relay can run over n windows on fixed arrivals (`relaySchedules`) is within `Schedule.caps` and fits the rows format at lanes·r slots, so `NetTiming.SchedulesHeld f (capOf s n) (relaySchedules s n ready)`. No assumption.
+- `Properties.NetworkCertifier.SchedulesCoveredAt`: under `Verity.Assumptions.TrustedHost dev relay (Relay.run …)` only, the relay admits at most the caps' count of connections and `NetTiming.SchedulesCovered (relaySchedules s n ready) Zs (fun z => relaySchedule s n (lanes (relay dev (conns z)))`. The tie of `schedOf` to the certifier's run is in the statement, as ODSYMBOLS asked.
+- `Properties.NetworkCertifier.SchedulesCountedAt`: `(relaySchedules s n ready).encard ≤ ∏ c, (capOf s n c + 1)`, the count `capsTerm` charges. No assumption.
+
+**Code they read:** `CertifierDevice.Relay` (certifier_device: warden.py's refusal, FIFO admission, egress limit and cut over `NetworkCheck.Period.Schedule`), difftested against `warden.Warden` on 300 generated runs (`certifier-relay-difftest`).
+
+**Builds:** Schedules r20261104-105148-6715 (exit 0), RelayDifftest r20261104-105942-f5ba (exit 0), PeriodWitnesses r20261104-104708-edd5 (exit 0). The relay vectors' coverage test passed (r20261104-110335-2337). The lock records (certifier_device's relay data; Security, Proofs, Properties) are queued; I'll send the record commit.
+
+**Keys (proposed):** `schedules-held` → `schedulesHeldAt : SchedulesHeldAt`, `schedules-covered` → `schedulesCoveredAt`, and `schedules-counted` → `schedulesCountedAt`. None is a named assumption.
+
+**Limits:** arrivals are fixed (a secret that moves them is outside these; my earlier `arrivals-fixed` note); the period starts at the run's first tick; a client-problem failure is not one of these schedules.
+
+**ODATTACK:** the rows-format tail-pad fix changed `fxQueueSched` (cells `![5,1,2]`) and `fxLateSched` (`![3]`); `fxQueue_fits` is updated (49e71c5f588) and `PeriodWitnesses` builds.
+
