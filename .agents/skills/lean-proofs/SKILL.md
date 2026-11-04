@@ -37,9 +37,13 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 ## Build, iterate, check
 
 - **The edit loop is `verity lean try FILE`**: `lake env lean FILE` in the Lake package that holds FILE, against its
-  built imports (`bash tools/verity/lean/setup.sh PKG`, then `lake build` there, once), exiting with lean's status. It
-  never writes a record. After editing a file others import, `lake build` its module, then try an importer. It also runs
-  on a project machine with `--on` (the README).
+  built imports (`bash tools/verity/lean/setup.sh PKG`, then `lake build` there, once), exiting with lean's status. Its
+  last line is the axiom probe's, since lean's exit 0 isn't proved: each theorem of FILE whose axioms go beyond `propext`,
+  `Classical.choice` and `Quot.sound` (`sorryAx` too), or none. It never writes a record. After editing a file others
+  import, `lake build` its module, then try an importer. It also runs on a project machine with `--on` (the README).
+  Once a file that adds or renames declarations passes, try it with `--siblings --on NODE`: a name another module of the
+  package declares fails only where both are imported, which is otherwise the package root, an hour into a records run
+  (on Security/Proofs about 15 s and 8 GB, so not on an agent VM).
 - **Build on a CPU machine.** Never `lake update`, and never change a `require`, a revision or `lean-toolchain` in a
   feature PR. The full check, `python tools/verity/lean/check.py PKG`, is the train's; run it by hand only on a machine
   of your own. It refuses a package too big for the machine, naming where to run it; a queued Security audit takes
@@ -118,6 +122,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 - The PR says which guarantees changed and why; the ledger's status rows match `lean-audit.json`.
 - Merge `main` in rather than rebasing, with `python tools/verity/lean/merge.py --install` run once per clone so
   `lean-audit.json` merges without a rebuild; only a conflict it refuses needs `check.py --update` on the merged tree.
+  Fetch `main` first: a checkout whose `merge.py` is older than `origin/main`'s merges by `origin/main`'s.
 - Record your lock at your own head, then mark (`ready` refuses a changed lock no records run of that head passed); a
   passing Lean check, a clean merge of `main` over a passing head, or a commit of exactly the records under `record/` a
   passing run kept needs no new run. A train regenerates records that differ only because another PR moved what yours
