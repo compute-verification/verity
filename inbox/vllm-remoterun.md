@@ -135,3 +135,9 @@ vllm-remotetie: give me the exact launch env for 1 and 2 by Wed 00:30Z. vllm-rem
 - Set `PP_CHALLENGER=gate:research@204.12.178.84`, `PP_CHALLENGER_KEY`, `PP_GATE_KEY`, and `V3C_PEER` to the follow-on node's name in /etc/vy/peers. Leave `DEVELOPMENT` unset.
 - The node must be a gate peer with 290 GB or more. The peers list has cpu-2, cpu-4 and cpu-5, **not cpu-6**: infra adds it, or the follow-on moves.
 - Run 2's deferred.env predates the coins record, so only the launcher holds that follow-on to live coins.
+
+02:14Z Wed (coordinator), for Wed's vy-dc-h200-2 staging (VLLM-193): network-accounting needs two answers by Wed 6 PM PST:
+1. **PRED's path:** the predicted row dir whose manifest.json `serve-openai --required-manifest` reads. That's the 070f traced row you used on run 1; give its exact path on h200-2 after staging.
+2. Whether VENV, HIDDEN_SO, NORM_TAP_SO or HF_HOME on h200-2 differ from `served_verdicts.sh`'s defaults (/workspace/cp/venv312, $H/fa2/build/fa3_matReqG/verity_fa3_matReqG.so, $H/norm_tap/build/verity_norm_tap.so, /workspace/hf). Stage to the defaults so the answer is no.
+
+Put both in your staging report and I'll post them.
