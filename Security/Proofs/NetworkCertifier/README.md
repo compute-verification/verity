@@ -75,6 +75,8 @@ Wires.lean      a gate's value reads only what it depends on (valOver_congr_inp)
                                          carries no ingress (resolveWires_ingress)
 KSWired.lean    sampling at the incorrect set (KSWired) from KS_of's hypotheses at the wired check
                                          (KSWired_of), and from KS at a layout with no wires (ksWired_none)
+NoWires.lean    each guarantee restated over the wiring gives, at a layout with no wires, its statement
+                                         before the wiring, at KS (ksWired_none once each)
 SampledCharge.lean  the leak bound under a sampled audit: by the layout's causality, holding each incorrect
                                          committed gate at one bit leaves every step's egress as it was
 SampledLeak.lean  the leak bound under an accepted sampled audit: its relation (RAcc) gives the leak
