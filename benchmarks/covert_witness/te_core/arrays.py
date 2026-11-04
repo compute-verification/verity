@@ -251,7 +251,8 @@ def main(argv=None) -> int:
     with open(a.log or "/dev/null", "w") as log:
         g = script.record(a.script, argv[split + 1:], step=a.step, starts=a.starts,
                           wall=[float(s.get("wall_s") or 0.0) for s in steps],
-                          step_tokens=int(steps[a.step]["tokens"]), log=log, tier=script.tier_of(run))
+                          step_tokens=int(steps[a.step]["tokens"]), log=log, tier=script.tier_of(run),
+                          stream_tokens=script.stream_tokens(run))
     got = check(of_step(g)) | {"step": a.step, "seconds": round(time.perf_counter() - t0, 1)}
     if a.into:
         trace = json.loads(a.into.read_text())
