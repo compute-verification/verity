@@ -23,8 +23,8 @@ variable {Q R S : Type}
 /-- **PoUW's adversaries are closed under budget-abort.** When the cost model truncates, every adversary that makes at
 most `q` oracle calls has, for every budget `b ≥ 0`, an adversary within `(b, q)` that commits its transcript wherever
 its realized online cost is at most `b`. -/
-theorem Adversary.abort {CM : CostModel Q R S} (hCM : BudgetAbort CM) (A : Adversary CM) (U : Workload) {q : ℕ}
-    (hq : CallsWithin A U q) {b : ℝ} (hb : 0 ≤ b) :
+theorem Adversary.abort {CM : CostModel Q R S} (hCM : BudgetAbort CM.run CM.cost CM.calls) (A : Adversary CM)
+    (U : Workload) {q : ℕ} (hq : CallsWithin CM.calls A.pre A.online A.act U q) {b : ℝ} (hb : 0 ≤ b) :
     ∃ A' : Adversary CM, A'.Bounded U b q ∧
       ∀ H s, onlineCost A U H s ≤ b → A'.transcript U H s = A.transcript U H s := by
   obtain ⟨prog', h⟩ := hCM.2 A.online U A.act b hb
@@ -39,7 +39,7 @@ theorem budgetAbort_of_oblivious (CM : CostModel Q R S)
     (hnn : ∀ prog H U act σ s, 0 ≤ CM.cost prog H U act σ s)
     (hobl : ∀ prog U act, ∃ c : ℝ, ∃ n : ℕ, ∀ H σ s, CM.cost prog H U act σ s = c ∧ CM.calls prog H U act σ s = n)
     (null : CM.Prog) (hnull : ∀ H U act σ s, CM.cost null H U act σ s = 0 ∧ CM.calls null H U act σ s = 0) :
-    BudgetAbort CM := by
+    BudgetAbort CM.run CM.cost CM.calls := by
   classical
   refine ⟨hnn, fun prog U act b hb => ?_⟩
   obtain ⟨c, n, hc⟩ := hobl prog U act
@@ -53,7 +53,7 @@ makes at most `q` calls, and its realized cost is at most `T` on every run, so `
 below it. -/
 theorem endToEnd_of_perRun [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S}
     {P : Protocol Q R S} {U : Workload} {T c e : ℝ} {q t : ℕ} {A : Adversary CM} (hA : A.Bounded U T q)
-    (h : CallsWithin A U q →
+    (h : CallsWithin CM.calls A.pre A.online A.act U q →
       pr (fun x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
           AuditAccepts (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧ onlineCost A U x.1 x.2.1 < c)
         ≤ e) :
@@ -78,7 +78,8 @@ theorem PouwEndToEndPerRun : Accounting.Guarantees.PouwEndToEndPerRun := by
 theorem ComputeOfPouwPerRun : Accounting.Guarantees.ComputeOfPouwPerRun := by
   intro Q R S _ _ _ _ CM P D γ₀ Ωmax ε hγ hΩ hWref hTT hCM U hU t εs hεs hne ι α ΩQ ΩS _ _ _ d r p hq real o
   obtain ⟨⟨_, _, tix⟩⟩ := hne
-  have hA : CallsWithin (real.adv o) U (d.rate .oracle * (r.win .compute).len) := fun H s =>
+  have hA : CallsWithin CM.calls (real.adv o).pre (real.adv o).online (real.adv o).act U
+      (d.rate .oracle * (r.win .compute).len) := fun H s =>
     (real.calls_le (H, s, tix) o).trans (Schedule.ops_le (r.fits _) _ _ _)
   refine le_trans (pr_mono fun x hx => ?_)
     (PouwEndToEndPerRun Q R S CM P D γ₀ Ωmax ε hγ hΩ hWref hTT hCM U hU _ hq (real.adv o) hA t εs hεs)

@@ -19,8 +19,9 @@ rest (`Run.read_add_pouwRead_add_covertRead`), within the device's `BW·T`. So, 
 every other account's within `F·T`, a run whose priced sum and window reads reach their certificates leaves the other
 accounts at most `(F + pRead·BW)·T − (W + pRead·Q)` of priced work and reads (`Run.pricedLt_of_covert`).
 
-`BudgetAbortPearlC` is compute-accounting's `Pouw.PearlC.W1BudgetAbort.BudgetAbortPearlC` (`budgetAbortPearlC_iff`),
-and a cost model whose costs and calls don't depend on the coins satisfies it (`budgetAbortPearlC_of_oblivious`).
+`BudgetAbort` at a Pearl-C cost model is compute-accounting's `Pouw.PearlC.W1BudgetAbort.BudgetAbortPearlC`
+(`budgetAbortPearlC_iff`), and a cost model whose costs and calls don't depend on the coins satisfies it
+(`budgetAbortPearlC_of_oblivious`).
 -/
 
 namespace Accounting
@@ -30,17 +31,17 @@ open Pouw
 variable {Q R S : Type}
 
 theorem budgetAbortPearlC_iff (CM : PearlC.CostModel Q R S) :
-    BudgetAbortPearlC CM ↔ PearlC.W1BudgetAbort.BudgetAbortPearlC CM :=
+    BudgetAbort CM.run CM.cost CM.calls ↔ PearlC.W1BudgetAbort.BudgetAbortPearlC CM :=
   Iff.rfl
 
 /-- A Pearl-C cost model whose programs' costs and calls do not depend on the oracle, the preprocessed state or the
-salt, with nonnegative costs and a program that costs nothing and calls nothing, truncates, so `BudgetAbortPearlC` is
-satisfiable. -/
+salt, with nonnegative costs and a program that costs nothing and calls nothing, truncates, so `BudgetAbort` is
+satisfiable at Pearl-C's cost models. -/
 theorem budgetAbortPearlC_of_oblivious (CM : PearlC.CostModel Q R S)
     (hnn : ∀ prog H U act σ s, 0 ≤ CM.cost prog H U act σ s)
     (hobl : ∀ prog U act, ∃ c : ℝ, ∃ n : ℕ, ∀ H σ s, CM.cost prog H U act σ s = c ∧ CM.calls prog H U act σ s = n)
     (null : CM.Prog) (hnull : ∀ H U act σ s, CM.cost null H U act σ s = 0 ∧ CM.calls null H U act σ s = 0) :
-    BudgetAbortPearlC CM := by
+    BudgetAbort CM.run CM.cost CM.calls := by
   classical
   refine ⟨hnn, fun prog U act b hb => ?_⟩
   obtain ⟨c, n, hc⟩ := hobl prog U act
@@ -50,8 +51,9 @@ theorem budgetAbortPearlC_of_oblivious (CM : PearlC.CostModel Q R S)
     exact absurd ((hc H σ s).1 ▸ h) hcb
 
 /-- **Pearl-C's adversaries are closed under budget-abort** when its cost model truncates. -/
-theorem abortPearlC {CM : PearlC.CostModel Q R S} (hCM : BudgetAbortPearlC CM) (A : PearlC.Adversary CM)
-    (U : PearlC.Workload) {q : ℕ} (hq : CallsWithinPearlC A U q) {b : ℝ} (hb : 0 ≤ b) :
+theorem abortPearlC {CM : PearlC.CostModel Q R S} (hCM : BudgetAbort CM.run CM.cost CM.calls)
+    (A : PearlC.Adversary CM) (U : PearlC.Workload) {q : ℕ} (hq : CallsWithin CM.calls A.pre A.online A.act U q)
+    {b : ℝ} (hb : 0 ≤ b) :
     ∃ A' : PearlC.Adversary CM, A'.Bounded U b q ∧
       ∀ H s, onlineCostPearlC A U H s ≤ b → A'.transcript U H s = A.transcript U H s := by
   obtain ⟨prog', h⟩ := hCM.2 A.online U A.act b hb
@@ -243,7 +245,8 @@ theorem PearlCEndToEndPerRun : Accounting.Guarantees.PearlCEndToEndPerRun := by
 theorem ComputeOfPearlCPerRunPriced : Accounting.Guarantees.ComputeOfPearlCPerRunPriced := by
   intro Q R S _ _ _ _ CM P D γ η hγ hG hCM U hU w κ hκ hw t εs hεs hne ι α ΩQ ΩS _ _ _ d r p pRead hq real o
   obtain ⟨⟨_, _, tix⟩⟩ := hne
-  have hA : CallsWithinPearlC (real.adv o) U (d.rate .oracle * (r.win .compute).len) := fun H s =>
+  have hA : CallsWithin CM.calls (real.adv o).pre (real.adv o).online (real.adv o).act U
+      (d.rate .oracle * (r.win .compute).len) := fun H s =>
     (real.calls_le (H, s, tix) o).trans (Schedule.ops_le (r.fits _) _ _ _)
   refine le_trans (pr_mono fun x hx => ?_)
     (PearlCEndToEndPerRun Q R S CM P D γ η hγ hG hCM U hU w κ hκ hw _ hq (real.adv o) hA t εs hεs)
