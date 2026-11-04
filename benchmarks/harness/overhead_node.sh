@@ -22,6 +22,11 @@ for ((i = 1; i < $#; i++)); do
   if [[ ${!i} == --card ]]; then j=$((i + 1)); card=${!j}; fi
 done
 arch=$("$PY" -c 'import sys; from verity_bench.overhead import card; print(card(sys.argv[1]).arch)' "$card")
+# sass_pins.json pins sm_120a's IEEE sequences under CUDA 12.9.1 (jobs/toolkit.sh assembles it) and sm_90a's under 13.0.1
+if [[ $arch == sm_120a ]]; then
+  . benchmarks/pouw/harness/jobs/toolkit.sh
+  export LD_LIBRARY_PATH=$CUDA_HOME/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
+fi
 POUW_HARNESS_LIB=$(PH_ARCH=$arch POUW_HARNESS_BUILD=${POUW_HARNESS_BUILD:-/workspace/research/cache/pouw-harness-build} \
   bash benchmarks/pouw/harness/native/build.sh 2> "$O/harness-build.log")
 export POUW_HARNESS_LIB
