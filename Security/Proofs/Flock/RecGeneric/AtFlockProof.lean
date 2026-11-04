@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.RecGeneric.AtFlock
 public import Proofs.Flock.RecGeneric.PlansProof
+public import Proofs.Flock.RecGeneric.AtFlockPlans
 public import Proofs.Flock.Claims.Recursion.KS
 public import Proofs.Flock.Claims.Recursion.LastBindsR
 
@@ -9,8 +10,8 @@ public import Proofs.Flock.Claims.Recursion.LastBindsR
 # The Flock instance: well formed, its inner and outer extractions (F4, F5, F8)
 
 * **F4**: the element-level Flock is a well-formed inner protocol (`protoWFOfFlock`, from the plans' reads), and
-  `KSFlockLin` is its `Proto.KSAbortLin` wherever its three plans are `B`, `FC` and `F0` at the runs
-  (`kSAbortLinOfFlockLin_of`, from `ForkPlanIsBAbort`, `CapPlanIsFC` and `ConflictPlanIsF0`).
+  `KSFlockLin` is its `Proto.KSAbortLin` (`kSAbortLinOfFlockLin`), its three plans being `B`, `FC` and `F0` at the runs
+  (`kSAbortLinOfFlockLin_of`, from `forkPlanIsBAbort`, `capPlanIsFC` and `conflictPlanIsF0`).
 * **F5**: today's `E_O` at the compiled record is knowledge sound at every statement from each session's
   (`outerKSOfSessions`): `PrBad_EO_le` sums the sessions' failures, and `Σ_s √(γ_s·k·p) = √((Σ_s √(γ_s·k))²·p)`.
 * **F8**: `Proto.LastCoinFree` at the element-level Flock (`Proto.ofFlock`) is `DE`'s `Bound.LastStepFree`: one
@@ -79,6 +80,12 @@ theorem kSAbortLinOfFlockLin_of {Coin Col T : Type} [Fintype Coin] [Nonempty Coi
         ((Bd.DE.k x : ℝ) + 1) / ((m 2 : ℝ) + 1)))
   rw [hB H Bd.DE.V x Ω P A keep, hC H Bd.DE.V Cp x Ω P A keep (m 1), hF H Bd.DE.V Bd.DE.k x Ω P A keep (m 2)]
   first | linarith | exact h.trans (le_of_eq (by ring))
+
+/-- **F4, the inner protocol's KS**: `KSFlockLin` is the element-level Flock's `Proto.KSAbortLin`, its plans being
+`B`, `FC` and `F0` at a protocol's runs that may abort (`forkPlanIsBAbort`, `capPlanIsFC`, `conflictPlanIsF0`). -/
+theorem kSAbortLinOfFlockLin {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+    [Zero Col] (H : Msg → Msg) (Bd : Bound Coin Col T) (Cp : Caps Coin) : KSAbortLinOfFlockLin H Bd Cp :=
+  kSAbortLinOfFlockLin_of (forkPlanIsBAbort Coin) (capPlanIsFC Coin) (conflictPlanIsF0 Coin) H Bd Cp
 
 /-- **F5**: each session's `E^rep` failing with probability at most `κ_s + √(γ_s·k(x)·Pr[B])`
 (`Claims.Recursion.OuterKS`) gives `Comp.OuterKSAt` at `Comp.ofRec`, at every decoder that meets the spec and every
