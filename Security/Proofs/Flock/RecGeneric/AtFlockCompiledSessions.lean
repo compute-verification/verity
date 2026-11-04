@@ -42,12 +42,12 @@ theorem ofRec_stages : (Compiled.ofRec D DO IV).Stages := by
       (IV.k (Claims.Recursion.xI (D.record IV) x) + (D.record IV).kS x))
   rw [List.take_take, min_self]
 
-/-- Each session's staged statement has the session's waits, truncation and rounds, so its public shape. -/
+/-- Each session's staged statement has the session's waits, truncation, rounds and `N₀`, so its public shape. -/
 theorem ofRec_shapes (H : Msg → Msg) (hN : SessionNums (D.record IV) DO) : (Compiled.ofRec D DO IV).Shapes H := by
   intro x Ω P ω r _ s
-  obtain ⟨hk, hW, hK, -, -, -⟩ := hN x s ((run H P (D.record IV).V x ω r).msgs.take
+  obtain ⟨hk, hW, hK, hN₀, -, -⟩ := hN x s ((run H P (D.record IV).V x ω r).msgs.take
     (IV.k (Claims.Recursion.xI (D.record IV) x) + (D.record IV).kS x))
-  exact congrArg₂ Prod.mk hW (congrArg₂ Prod.mk hK hk)
+  exact congrArg₂ Prod.mk hW (congrArg₂ Prod.mk hK (congrArg₂ Prod.mk hk hN₀))
 
 /-- Each session's errors at its staged statement are its numbers' `κ` and `γ`, which are nonnegative where its table
 error is. -/

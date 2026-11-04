@@ -12,8 +12,8 @@ counted), and the compiler is today's compiled record read session by session (`
 * its verifier, parser and inner statement are the record's, as at `Comp.ofRec`;
 * its rounds before the sessions are the inner session's and the staging rounds (`pre`), and the sessions' statements
   are the record's V\* statements at those rounds' messages (`stmts`);
-* session `s`'s public shape is its numbers' waits, truncation and rounds (`Deploy.nums`), and its errors' bounds are
-  their `κ` and `γ`, so `κ_O`, `γ_O` at `Compiled.toComp` are `Comp.ofRec`'s;
+* session `s`'s public shape is its numbers' waits, truncation, rounds and `N₀` (`Deploy.nums`), and its errors'
+  bounds are their `κ` and `γ`, so `κ_O`, `γ_O` at `Compiled.toComp` are `Comp.ofRec`'s;
 * the inner messages, the calls a finder searches and the compiled verifier's own are `Comp.ofRec`'s at the witnesses'
   second components.
 
@@ -42,10 +42,10 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 
 /-- **Today's compiled record as a compiled verifier over Flock `--zk`**, at the inner verifier `IV`: the record's
 verifier, parser and inner statement; the inner rounds and the staging rounds before the sessions; session `s` at the
-public shape of its numbers (`E^rep`'s waits, its truncation, the outer verifier's rounds), its errors within their
-`κ`, `γ`; the sessions' statements the record's V\* statements at the rounds before the sessions; session `s`'s view
-the record's; and the inner messages, the searched calls and the compiled verifier's own as `Comp.ofRec`'s, at the
-witnesses' second components. -/
+public shape of its numbers (`E^rep`'s waits, its truncation, the outer verifier's rounds, `N₀`), its errors within
+their `κ`, `γ`; the sessions' statements the record's V\* statements at the rounds before the sessions; session `s`'s
+view the record's; and the inner messages, the searched calls and the compiled verifier's own as `Comp.ofRec`'s, at
+the witnesses' second components. -/
 noncomputable def Compiled.ofRec (D : RecAt Coin) (DO : Claims.Flock.Deploy Coin Col' T') (IV : Verifier Coin) :
     Compiled Coin (Arg.ofFlock DO) where
   V := (D.record IV).V
@@ -53,7 +53,8 @@ noncomputable def Compiled.ofRec (D : RecAt Coin) (DO : Claims.Flock.Deploy Coin
   xI := Claims.Recursion.xI (D.record IV)
   pre x := IV.k (Claims.Recursion.xI (D.record IV) x) + (D.record IV).kS x
   nS := (D.record IV).nS
-  sh x s := (((D.record IV).nums x s).waits, ((D.record IV).nums x s).cap, ((D.record IV).nums x s).rounds)
+  sh x s := (((D.record IV).nums x s).waits, ((D.record IV).nums x s).cap, ((D.record IV).nums x s).rounds,
+    ((D.record IV).nums x s).N₀)
   κb x s := ((D.record IV).nums x s).κ
   γb x s := ((D.record IV).nums x s).γ
   stmts x ms :=
@@ -101,9 +102,8 @@ def KSCompiledOn (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T) (DO 
 /-- **`Compiled.EO` reruns the prover at most `1 + Σ_s (1 + m′_s·k_s)` times in expectation** (O2's expected-reruns
 half, at the instance): the judged run, then at each session `E^rep`'s replay of the judged run and its waits over
 forks at the session's first round, as `Claims.Recursion.EO_runs_exp` counts `Claims.Recursion.EO`'s, which has no
-replay per session. `Arg.RerunsExpLe` can't state it: `Arg.ofFlock`'s public shape fixes the waits and the truncation
-but not `N₀`, hence not `k`. Where each session's V\* statement has the session's numbers (`SessionNums`, which fixes
-`k`) and an accepted run shows each session accepting (`SessionAccepts`). -/
+replay per session. Where each session's V\* statement has the session's numbers (`SessionNums`, so its shape's `N₀`
+fixes its `k`) and an accepted run shows each session accepting (`SessionAccepts`). -/
 def CompiledEORunsExp (H : Msg → Msg) (D : RecAt Coin) (DO : Claims.Flock.Deploy Coin Col' T') (IV : Verifier Coin) :
     Prop :=
   SessionNums (D.record IV) DO → SessionAccepts (D.record IV) →
