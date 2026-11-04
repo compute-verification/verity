@@ -13,6 +13,7 @@ public import Proofs.Flock.RecGeneric.AtFlockReruns
 public import Proofs.Flock.RecGeneric.AtFlockTerms
 public import Proofs.Flock.RecGeneric.AtFlockContract
 public import Proofs.Flock.RecGeneric.AtFlockKS
+public import Proofs.Flock.RecGeneric.AtFlockBits
 public import Proofs.Flock.RecGeneric.Sampled
 public import Proofs.Flock.RecGeneric.SampledProof
 public import Proofs.Flock.RecGeneric.Toy
@@ -37,7 +38,8 @@ to every statement, since the deployed verifier accepts only dense ones (`Proofs
 reruns read as `Claims.Recursion`'s samples (`Proofs.Flock.RecGeneric.AtFlockReruns`), the term comparisons
 (`Proofs.Flock.RecGeneric.AtFlockTerms`, F6), the contract at the dense statements
 (`Proofs.Flock.RecGeneric.AtFlockContract`, F7), and the recursive verifier's KS at every statement from them
-(`Proofs.Flock.RecGeneric.AtFlockKS`), and the bridge to the sampled compiler (`Proofs.Flock.RecGeneric.Sampled`,
+(`Proofs.Flock.RecGeneric.AtFlockKS`), `KSLinkOn`'s bits at route 2C's five terms with the link's at two runs
+(`Proofs.Flock.RecGeneric.AtFlockBits`), and the bridge to the sampled compiler (`Proofs.Flock.RecGeneric.Sampled`,
 B1), with B1's proof and the recursive audit from L1 (`Proofs.Flock.RecGeneric.SampledProof`), and a toy outer argument
 and compiler at which L2's hypotheses are stated to hold together (`Proofs.Flock.RecGeneric.Toy`), proved to hold
 (`Proofs.Flock.RecGeneric.ToyProof`). L1's proof: the
