@@ -362,7 +362,7 @@ def WalkFill (k : ℕ) : Prop :=
 
 variable {θ F c label after rd}
 
-theorem stop_nil {pre : List Release} {f : List Release → Game Exchange}
+theorem walkFill_nil {pre : List Release} {f : List Release → Game Exchange}
     (hf : ∀ log, f log = evidenceG θ F c (pre ++ log)) {g'' : Game Exchange} (hn : g'' = f []) (s'' : Strategy g'')
     (Ks : Fin R → DigestCut Claims.Msg g'') (x : CoinTape g'' s'') (back : CoinTape g'' s'' → CoinTape g σ)
     (o : Exchange) (h : PlayReaches (Pos.walk g'' s'' Ks x back).g' (Pos.walk g'' s'' Ks x back).s' o) :
@@ -371,7 +371,7 @@ theorem stop_nil {pre : List Release} {f : List Release → Game Exchange}
   rw [hn, hf] at h1
   exact ⟨[], by simp [reaches_evidenceG h1], .inl rfl⟩
 
-theorem stop_opening {k : ℕ} {fs : List (String × ℕ)} {ts : List OpenTree} {pre : List Release}
+theorem walkFill_opening {k : ℕ} {fs : List (String × ℕ)} {ts : List OpenTree} {pre : List Release}
     {f : List Release → Game Exchange} (hf : ∀ log, f log = evidenceG θ F c (pre ++ log)) {i s n : ℕ}
     {b : ByteArray} {g'' : Game Exchange} (hn : g'' = relKNext k fs ts f (some (.opening i s n, b)))
     (s'' : Strategy g'') (Ks : Fin R → DigestCut Claims.Msg g'') (x : CoinTape g'' s'')
@@ -403,7 +403,7 @@ theorem stop_opening {k : ℕ} {fs : List (String × ℕ)} {ts : List OpenTree} 
 open Classical in
 /-- **One coin of the releases**: at a coin node of the releases, whose coin `x` releases `r x`, where the fill writes
 the coin `c₀` and fills on with `κ'`, the walk goes on to `c₀`'s continuation. -/
-theorem coin_step {k : ℕ} (IH : WalkFill (g := g) (σ := σ) θ F c label after rd k) {C : Type} {iF : Fintype C}
+theorem walkFill_coin {k : ℕ} (IH : WalkFill (g := g) (σ := σ) θ F c label after rd k) {C : Type} {iF : Fintype C}
     {iN : Nonempty C} (fs' : C → List (String × ℕ)) (ts' : C → List OpenTree) (pre : List Release)
     (f : List Release → Game Exchange) (hf : ∀ log, f log = evidenceG θ F c (pre ++ log)) (r : C → Release)
     (s'' : Strategy (@Game.coin _ C iF iN fun x => relK k (fs' x) (ts' x) fun log => f (r x :: log)))
@@ -479,7 +479,7 @@ theorem walkFill_next (hrd : PicksOpenings rd) {k : ℕ} (IH : WalkFill (g := g)
         (Pos.walk g'' s'' Ks (fill (freshSel (evidenceG θ F c) label after) g'' s'' Ks m κ z) back).s' o →
         ∃ log', o.log = pre ++ L ++ log' ∧ StopTail log' := by
   rcases msg with _ | ⟨l | spec | ⟨i, s, n⟩, b⟩
-  · exact ⟨[], .inl List.nil_prefix, stop_nil hf hn s'' Ks _ back⟩
+  · exact ⟨[], .inl List.nil_prefix, walkFill_nil hf hn s'' Ks _ back⟩
   · have hn1 : g'' = optGame (takeCoin l fs) (f []) fun fs' =>
         .coin (Fin 512 → Bool) fun x => relK k fs' ts fun log => f (⟨.fresh l, b, List.ofFn x⟩ :: log) := hn
     have hK1 : ∀ j, Ks j = .skip ∨
@@ -492,7 +492,7 @@ theorem walkFill_next (hrd : PicksOpenings rd) {k : ℕ} (IH : WalkFill (g := g)
     clear hK hn
     generalize takeCoin l fs = tc at hn1 hK1
     cases tc with
-    | none => exact ⟨[], .inl List.nil_prefix, stop_nil hf hn1 s'' Ks _ back⟩
+    | none => exact ⟨[], .inl List.nil_prefix, walkFill_nil hf hn1 s'' Ks _ back⟩
     | some fs' =>
       change g'' = Game.coin (Fin 512 → Bool) _ at hn1
       subst hn1
@@ -510,12 +510,12 @@ theorem walkFill_next (hrd : PicksOpenings rd) {k : ℕ} (IH : WalkFill (g := g)
         have hsel := freshSel_refl hF
         cases m with
         | zero =>
-          obtain ⟨L, -, hO⟩ := coin_step IH (fun _ => fs') (fun _ => ts) pre f hf
+          obtain ⟨L, -, hO⟩ := walkFill_coin IH (fun _ => fs') (fun _ => ts) pre f hf
             (fun x => ⟨.fresh l, b, List.ofFn x⟩) s'' Ks hK2 0 κ z back z.1 0 κ
             (by rw [fill_coin_of _ hH]; rfl)
           exact ⟨_, .inr (by rw [show fillCoins κ = [] from List.ofFn_zero]; exact List.nil_prefix), hO⟩
         | succ m₀ =>
-          obtain ⟨L, hA, hO⟩ := coin_step IH (fun _ => fs') (fun _ => ts) pre f hf
+          obtain ⟨L, hA, hO⟩ := walkFill_coin IH (fun _ => fs') (fun _ => ts) pre f hf
             (fun x => ⟨.fresh l, b, List.ofFn x⟩) s'' Ks hK2 (m₀ + 1) κ z back (κ 0) m₀ (Fin.tail κ)
             (by rw [fill_coin_of _ hH, hsel]; rfl)
           refine ⟨_, ?_, hO⟩
@@ -534,7 +534,7 @@ theorem walkFill_next (hrd : PicksOpenings rd) {k : ℕ} (IH : WalkFill (g := g)
                 simp only [hf]
                 exact logsAt_relK θ F c k fs' ts pre _) h z.1
             exact hns ⟨h1, h2⟩
-        obtain ⟨L, hA, hO⟩ := coin_step IH (fun _ => fs') (fun _ => ts) pre f hf
+        obtain ⟨L, hA, hO⟩ := walkFill_coin IH (fun _ => fs') (fun _ => ts) pre f hf
           (fun x => ⟨.fresh l, b, List.ofFn x⟩) s'' Ks hK2 m κ z back z.1 m κ
           (by rw [fill_coin_of _ hH, hnone]; cases m <;> rfl)
         refine ⟨_, ?_, hO⟩
@@ -570,17 +570,17 @@ theorem walkFill_next (hrd : PicksOpenings rd) {k : ℕ} (IH : WalkFill (g := g)
             simp only [hf]
             exact logsAt_relK θ F c k _ _ pre _) h z.1
         exact hns z.1 ⟨h1, h2⟩
-    obtain ⟨L, hA, hO⟩ := coin_step IH (fun _ => fs) (fun t => ts ++ [⟨b, spec, t, fun _ => 0⟩]) pre f hf
+    obtain ⟨L, hA, hO⟩ := walkFill_coin IH (fun _ => fs) (fun t => ts ++ [⟨b, spec, t, fun _ => 0⟩]) pre f hf
       (fun t => ⟨.hello spec, b, bitsOfBytes (treeRoot b spec t ++ treeKey t.1)⟩) s'' Ks hK2 m κ z back z.1 m κ
       (by rw [fill_coin_of _ hH, hnone]; cases m <;> rfl)
     refine ⟨_, ?_, hO⟩
     rw [freshCoins_cons_of _ (hns z.1)]
     exact hA
-  · exact ⟨[], .inl List.nil_prefix, stop_opening hf hn s'' Ks _ back⟩
+  · exact ⟨[], .inl List.nil_prefix, walkFill_opening hf hn s'' Ks _ back⟩
 
 /-- **`WalkFill` at every number of frames**, at readings that pick only openings. -/
 theorem walkFill (hrd : PicksOpenings rd) : ∀ k, WalkFill (g := g) (σ := σ) θ F c label after rd k
-  | 0 => fun _ _ _ _ hf _ hg s' Ks _ _ _ _ back => ⟨[], .inl List.nil_prefix, stop_nil hf hg s' Ks _ back⟩
+  | 0 => fun _ _ _ _ hf _ hg s' Ks _ _ _ _ back => ⟨[], .inl List.nil_prefix, walkFill_nil hf hg s' Ks _ back⟩
   | k + 1 => fun fs ts pre f hf g' hg s' Ks hK m κ z back => by
     rw [relK_succ] at hg
     subst hg
@@ -968,8 +968,8 @@ theorem recordDraw_reachesOff (e : 𝔽 ≃ (Fin 128 → Bool)) {V : Vocab d α}
     rw [hh, hinv.run]
     exact run_reaches _ _ _
   rw [firstStop_sampleMap e V θ F c A rd σ label after κ ω] at hreach
-  obtain ⟨L, hc, hO⟩ := walkFill hrd (frames (V.families θ)) (V.families θ) [] [] (evidenceG θ F c)
-    (fun _ => rfl) (V.game θ F c) (game_eq_relK V θ F c) σ (roundCuts V θ F c rd)
+  obtain ⟨L, hc, hO⟩ := walkFill (label := label) (after := after) hrd (frames (V.families θ)) (V.families θ) [] []
+    (evidenceG θ F c) (fun _ => rfl) (V.game θ F c) (game_eq_relK V θ F c) σ (roundCuts V θ F c rd)
     (fun j => .inr (roundCuts_heq V θ F c rd j)) m (κ ω.1) ω.2 id
   obtain ⟨log', hlog, htail⟩ := hO _ hreach
   rw [List.nil_append] at hlog
