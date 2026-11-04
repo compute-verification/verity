@@ -659,7 +659,9 @@ def pool_room() -> tuple[list[tuple[str, str, int | None]], dict[str, str], dict
     if HERE_DIR:
         cores, flying = len(os.sched_getaffinity(0)), [gb for p, gb in LOCAL.values() if p.poll() is None]
         n = max(0, (cores - HERE_CORES) // TRACE_SHARD - len(flying))
-        gb = float(os.environ.get("RESEARCH_RUN_MEM_GB") or 0) - HERE_GB - sum(flying)
+        # a pool slot's reservation reaches the workload as slot.py's CHECK_RUN_MEM_GB, a research.mem one's as this
+        held = os.environ.get("RESEARCH_RUN_MEM_GB") or os.environ.get("CHECK_RUN_MEM_GB") or 0
+        gb = float(held) - HERE_GB - sum(flying)
         return ([("here", "here", None)] * n, {"here": f"{cores} cores, {len(flying)} shards tracing, {n} more; "
                                                         f"{gb:.0f} GB to ask"}, {"here": gb})
     from research import auto
