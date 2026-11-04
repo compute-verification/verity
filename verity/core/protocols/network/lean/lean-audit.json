@@ -35,9 +35,9 @@
    "why": "a compute audit's circuit check is code: C-Flock's program decoder (the population program and its gates), NCI's description-sized layout checks, the sampled audit's wires, Bits' leaf widths and canonical JSON (the record's digest), no Mathlib and nothing of Security"
   },
   "NetworkCheck.CircuitFile": {
-   "imports": ["Flock.Hash", "Flock.HmRow", "Flock.JsonParse", "Flock.Tags"],
+   "imports": ["Flock.Hash", "Flock.HmRow", "Flock.JsonParse", "Flock.ProvedScope", "Flock.Tags"],
    "except": [],
-   "why": "reading a circuit file is code: C-Flock's SHA-512 over the file's chunks, its circuit header and META parsers, no Mathlib and nothing of Security"
+   "why": "reading a circuit file is code: C-Flock's SHA-512 over the file's chunks, its circuit header and META parsers, and the circuit parser a session's verifier reads its statement's circuit with (a scan's file read whole), no Mathlib and nothing of Security"
   },
   "NetworkCheck.Period": {
    "imports": [
