@@ -248,7 +248,7 @@ theorem buildSessionOf_eq (tags : Tags) (circuitB pubB compB : ByteArray) (coins
     ↓reduceIte]
   unfold buildSession
   rw [ProvedScope.circuitOf_hidden hh]
-  simp only [hr, ↓reduceIte, hh, Stmt.setupTables_eq]
+  simp only [hr, ↓reduceIte, Stmt.setupTables_eq]
 
 /-- `--program F`: the verifier's own copy of the program's descriptor bytes (a path, or with `--archive` its SHA-512), from which
 it derives a template query's units. -/
