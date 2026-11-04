@@ -263,7 +263,7 @@ def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server):
     """The egress renders the outputs of the audit the scan's `prog` is tied to, so the bits the prover chose of that
     audit's inputs are the link-window's: over honest rows periods, which Lean and the mirror accept with one public,
     each scan's `free` is the input gates of the Programs of the audits whose registration holds its `prog`'s root
-    (`input_gates`; the scan's own is 0), some of them nonzero."""
+    (`input_gates`; the scan's own is 0), some of them nonzero, and its `tied` names those audits by index."""
     charged = 0
     for n in range(8):
         case = build("rows-honest", n, small=n % 2 == 0)
@@ -275,9 +275,9 @@ def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server):
         for reg, t in zip(c["windows"], out["public"]["scans"]):
             roots = {e["root"] for e in reg.get("roots", []) + reg.get("registered", [])
                      if PC.prog_port(e.get("port")) or PC.prog_port(e.get("value"))}
-            want = sum(PC.input_gates(a["program"]) for a, r in zip(case["params"]["audits"], c["audits"])
-                       if any(o.get("root") in roots for o in r["roots"]))
-            assert t["free"] == want, (n, t, want)
+            tied = [i for i, r in enumerate(c["audits"]) if any(o.get("root") in roots for o in r["roots"])]
+            want = sum(PC.input_gates(case["params"]["audits"][i]["program"]) for i in tied)
+            assert (t["free"], t["tied"]) == (want, tied) and tied, (n, t, want, tied)
         charged += any(t["free"] for t in out["public"]["scans"])
     assert charged
 

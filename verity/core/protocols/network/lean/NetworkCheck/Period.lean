@@ -216,7 +216,8 @@ link-window's term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 
   unit is drawn, `drawn` its draw's `Σ k`, and `faulty_sets` every set of at most `b` of its 2T units, which holds the
   sets a stratified draw leaves possible too. `faulty_entries` is `E_w`, its slot entries' bits (`Scan.entries`:
   `lanes · T / every` entries of its `prog` ports' type, 8 · 112 = 896 at w63k4), when an audit its `prog` is tied to
-  is drawn in part with a `bound` of at least one wrong unit (`faultyEntries`), else 0.
+  is drawn in part with a `bound` of at least one wrong unit (`faultyEntries`), else 0. `tied` names the audits its
+  `free` sums, by their index in `audits` (`tiedAudits`, ascending).
 * `eps` is the scans' δ summed, `m · δ`, and each tied audit's drawn in part (`chargedOf`), whose bound
   `faulty_entries` reads: the δ part of the union over the monitoring period's windows that
   `CommOfPeriodLeakAccepted` states, each window at δ plus its knowledge error and its collision errors.
@@ -1248,6 +1249,9 @@ structure Public where
   /-- The facts of the rows form's tied audits drawn in part (`chargedOf`), whose bounds `faulty_entries` reads, so
   whose δ is in `eps`. -/
   charged : Array Facts := #[]
+  /-- Each of the rows form's link-windows' tied audits, by index (`tiedAudits`), the audits its scan's `free` sums;
+  none in the clock form. -/
+  tied : Array (Array Nat) := #[]
 
 def Public.K (x : Public) : Nat := x.schedules + x.cells + (x.units.map (·.bits)).foldl (· + ·) 0
 
@@ -1294,12 +1298,14 @@ def faultyEntries (p : Params) (c : Commitment) (as : Array (Found Facts)) (scan
   else 0
 
 /-- The rows form's public on acceptance: `rowsTerms` over the accepted audits' facts, each link-window's scan's facts,
-tied audits' free inputs and `β_w` (`faultyEntries`), and the charged audits (`chargedOf`). -/
+tied audits' free inputs and `β_w` (`faultyEntries`), and the charged audits (`chargedOf`), with each link-window's
+tied audits (`tiedAudits`). -/
 def rowsPublic (p : Params) (c : Commitment) (as : Array (Found Facts)) (scan : Scan) (scans : Array (Facts × Nat)) :
     Public :=
-  rowsTerms (as.filterMap (·.toOption)) scan
-    ((scans.zip c.windows).map fun ((f, t), reg) => (f, t, faultyEntries p c as scan reg)) p.cells p.jitter p.windows
-    ((Array.range as.size).filterMap (chargedOf p c as))
+  { rowsTerms (as.filterMap (·.toOption)) scan
+      ((scans.zip c.windows).map fun ((f, t), reg) => (f, t, faultyEntries p c as scan reg)) p.cells p.jitter p.windows
+      ((Array.range as.size).filterMap (chargedOf p c as)) with
+    tied := (scans.zip c.windows).map fun (_, reg) => tiedAudits c.audits reg }
 
 structure Profile where
   link : String
@@ -1338,12 +1344,14 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
           | .rows _ _ scan => rowsPublic p c as scan scans)
         { link := p.link, windows := p.windows }
 
-/-- The terms' JSON, each with its `faulty_entries` when `entries` (the rows form's scans). -/
-def termsJson (ts : Array AuditTerms) (entries : Bool := false) : Json :=
-  .arr <| ts.map fun t => Json.mkObj ([
+/-- The terms' JSON, each with its `faulty_entries` and its tied audits (`tied`, the `i`th's at `i`) when `entries`
+(the rows form's scans). -/
+def termsJson (ts : Array AuditTerms) (entries : Bool := false) (tied : Array (Array Nat) := #[]) : Json :=
+  .arr <| ts.zipIdx.map fun (t, i) => Json.mkObj ([
     ("delta", .str t.facts.delta.toString), ("drawn", toJson t.facts.drawn), ("faulty_bits", toJson t.faultyBits)] ++
     (if entries then [("faulty_entries", toJson t.faultyEntries)] else []) ++ [
-    ("faulty_sets", toJson t.faultySets), ("free", toJson t.free), ("jitter", toJson t.jitter),
+    ("faulty_sets", toJson t.faultySets), ("free", toJson t.free), ("jitter", toJson t.jitter)] ++
+    (if entries then [("tied", toJson (tied[i]?.getD #[]))] else []) ++ [
     ("units", toJson t.facts.units), ("wrong_units", toJson t.facts.wrong)])
 
 def factsJson (fs : Array Facts) : Json :=
@@ -1354,7 +1362,7 @@ def publicJson (x : Public) : Json :=
   Json.mkObj ([
     ("K", toJson x.K), ("audits", if x.rows then factsJson x.audits else termsJson x.units), ("cells", toJson x.cells),
     ("eps", .str x.eps.toString), ("schedules", toJson x.schedules), ("windows", toJson x.windows)] ++
-    (if x.rows then [("scans", termsJson x.units true)] else []))
+    (if x.rows then [("scans", termsJson x.units true x.tied)] else []))
 
 def profileJson (pr : Profile) : Json :=
   Json.mkObj [("link", .str pr.link), ("windows", toJson pr.windows)]
