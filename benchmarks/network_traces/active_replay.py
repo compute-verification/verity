@@ -580,11 +580,10 @@ def adversary_plan(plan: dict, setup: Setup, strategy: str, seed: int = 0) -> di
     (`pad_to`); `drop` writes that response's first event not at all, counted as written so the padding doesn't make
     it up; `byte` writes that response's first event that carries bytes with one hex digit changed (`other_hex`: one
     output byte, when the text is the outputs' hex), so only the output tie refuses it; and `token` writes every event
-    that carries bytes, of every response to a request enqueued in window 0,
+    that carries bytes, of every response to a request enqueued in execution phase 0,
     with other bytes (`other_token`), so the frame counts are honest's and only a check of the frames' tokens against
-    the committed sampled ids (the I/O tie) refuses it. The tie samples positions in each window, so a window whose
-    every token is wrong is refused at any number of samples, where one wrong frame among N would be refused only at the
-    share 1/N a sample."""
+    the committed trace (the egress tie, `scan_service.EgressTie`) refuses it. The egress tie samples every proof block
+    of an execution phase, so one wrong frame is refused as a phase whose every token is wrong is."""
     if strategy == "token":
         T = setup.egress_params.buckets
         window0 = [q["session"] for q in plan.get("requests", ()) if "enqueue" in q and q["enqueue"] // T == 0]

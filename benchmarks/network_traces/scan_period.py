@@ -35,9 +35,10 @@ and its Lean.
   and ``period.json``, each case's answers.
 * **V3c's audit** (``--v3c``, ``records_audit.py period``'s ``period.json``, for scans proved on V3c's trees,
   ``scan_zk.py --v3c``): the one compute audit, its Program's `SelectEntry_v1` chunks' o0 the scan's ``scan/prog<j>``
-  and its `SCAN_STATE` the scan's ``scan/state``, held to the class circuit of the verifier's own window-circuit
-  record (``--circuit``, `circuit_of_record`): a window whose registration names another Program is refused by
-  name, in Lean and in the mirror. The honest case is then accepted at any sample of V3c's (``subset:1``
+  and its `SCAN_STATE` the scan's ``scan/state``, its registration the one the scan's ``summary.json`` names (a foreign
+  audit is refused before any check), held to the class circuit of the verifier's own window-circuit record
+  (``--circuit``, `circuit_of_record`): a phase whose audit's registration names another Program is refused by name,
+  in Lean and in the mirror. The honest case is then accepted at any sample of V3c's (``subset:1``
   included): the period check is the consistency check, the committed I/O against the certificates, and what a
   sample of one or two proof blocks leaves unproved is covert capacity, which K charges.
 """
@@ -86,16 +87,24 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     ``scan``: honest, ``answers.json``'s; forged, the honest one with a certificate's signature changed; a refused round
     (tampered, chain), that round's registration and its refusal. With ``v3c`` (V3c's ``period.json``,
     ``records_audit.py period``'s, for a scan proved on its trees, ``scan_zk.py --v3c``) the one compute audit is V3c's,
-    in place of ``answers.json``'s, and ``circuit`` is required: the class circuit, the Program digest of the
-    verifier's own window-circuit record (`circuit_of_record`), to which the check holds V3c's registration. Without
-    ``v3c`` the class circuit is the stand-in block audit's own Program, whose wiring the check refuses first (with no
-    block audit, none, whose parameters the check refuses)."""
-    dep = json.loads(SZ._found(run, "deployment.json").read_text())
-    doc = json.loads((scan / "answers.json").read_text())
+    in place of ``answers.json``'s, and its registration must be the one whose trees the scan read (``summary.json``'s
+    ``v3c``): the period's audit, its scan's trees and the run's record are one registration, and an audit of another
+    is refused by name, never put in its place. With ``v3c``, ``circuit`` is required: the class circuit, the Program
+    digest of the verifier's own window-circuit record (`circuit_of_record`), to which the check holds V3c's
+    registration. Without ``v3c`` the class circuit is the stand-in block audit's own Program, whose wiring the check
+    refuses first (with no block audit, none, whose parameters the check refuses)."""
     if v3c is not None:
         if circuit is None:
             raise SystemExit(f"{v3c}: V3c's audit is held to the verifier's own window-circuit record: give its circuit")
-        doc["audits"] = [json.loads(v3c.read_text())]
+        audit = json.loads(v3c.read_text())
+        read = (json.loads((scan / "summary.json").read_text()).get("v3c") or {}).get("registration")
+        if read != (got := RG.digest(audit["registration"])):
+            raise SystemExit(f"{v3c}: a foreign audit: it registers {got[:16]}…, and the scan read the trees of "
+                             f"{f'{read[:16]}…' if read else 'no V3c registration'}")
+    dep = json.loads(SZ._found(run, "deployment.json").read_text())
+    doc = json.loads((scan / "answers.json").read_text())
+    if v3c is not None:
+        doc["audits"] = [audit]
     elif circuit is None and doc.get("audits"):
         circuit = doc["audits"][0]["registration"]["program"]
     if len(doc["windows"]) != 1:

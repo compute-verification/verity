@@ -504,10 +504,18 @@ class Case:
 
 def params(program, query: dict, law: dict, ports: dict, leaf_layer: str | None, delta: str, *, partition: dict | None = None,
            log: list | None = None, anchors: list | None = None, work_table: dict | None = None,
-           registered: dict | None = None, scheme: str = SCHEME) -> dict:
+           registered: dict | None = None, scheme: str = SCHEME, outputs: dict | None = None,
+           schemas: dict | None = None) -> dict:
+    """``outputs`` and ``schemas`` (a registration reusing an earlier record's values, `registration.check`'s) appear only
+    when given, ``schemas`` under the Lean's name ``row_schemas``; with ``registered``, ``parameters`` (the program
+    function's, which the descriptor doesn't carry), which `OneStage.paramsOfJson` requires of a verifier expecting values
+    registered."""
     return {"anchors": list(anchors or []), "delta": delta, "law": law, "leaf_layer": leaf_layer, "log": list(log or []),
             "partition": partition, "ports": ports, "program": descriptor(program), "query": query,
-            "registered": registered, "scheme": scheme, "work_table": work_table}
+            "registered": registered, "scheme": scheme, "work_table": work_table,
+            **({"parameters": [[n, t.to_json()] for n, t in program.fn.signature()[0]]} if registered is not None else {}),
+            **({"outputs": outputs} if outputs is not None else {}),
+            **({"row_schemas": schemas} if schemas is not None else {})}
 
 
 def evidence(a: dict, *, instances: int, sessions: list[str], session_roots: dict | None, served: list[int] | None) -> dict:
@@ -573,7 +581,8 @@ def python(c: Case) -> dict:
     out = lambda verdict, reason=None, public=None, profile=None: PR.outcome(  # noqa: E731
         R.PROTOCOL, verdict, reason, digest, public, profile)
     codes = R.check(rec, program, p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
-                    p["partition"], p["work_table"], p["registered"]).codes
+                    p["partition"], p["work_table"], p["registered"], outputs=p.get("outputs"),
+                    schemas=p.get("row_schemas")).codes
     if codes:
         return out("reject", f"registration: {', '.join(codes)}")
     try:

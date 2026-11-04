@@ -5,12 +5,11 @@ At the certifier, on certifier-serve runs on an injected clock against a stub en
 shim's `late`, `extra`, `drop` and `token`, certified by the certifier, and the prover's tampered head under its original
 certificate. N2's verdict of record refuses late by the record's status, extra and drop by the counts (the served counts on
 a served link) and the head by its signed digest; it accepts token, whose counts are honest's and whose changed frames
-only the I/O tie (pending) reads. The advice's tamperings run on I1 v0 (the advice module's classes when they're
+only the egress tie (pending) reads. The advice's tamperings run on I1 v0 (the advice module's classes when they're
 importable, a stand-in of their fields until then): each changes exactly what its check reads and leaves the advice
 valid under v0's schedule rules (`_check`; the real classes refuse invalid advice on construction). The Commit's runs on
-a stand-in of I3 as drafted. The I/O tie's (`io_tie`, when importable) run on a fake upstream's cells and
-Commit port of the advice, under the map the verifier computes from it; `frame` also runs on the network certifier's own
-committed cells (`warden_rows`, when importable), by the verifier's registered read."""
+a stand-in of I3 as drafted. `frame` runs on the network certifier's own committed cells (`warden_rows`, when
+importable), by the verifier's registered read."""
 
 from __future__ import annotations
 
@@ -161,7 +160,7 @@ def test_a_tampered_head_fails_its_signed_digest_and_its_counts_under_the_origin
 @pytest.mark.parametrize("profile", PROFILES)
 def test_certified_tokens_that_arent_the_endpoints_pass_n2_and_wait_for_the_tie(runs, profile):
     """token's changed frames, every token of the responses to window 0's requests, are certified under honest's
-    counts: N2 accepts every window, and only the I/O tie (pending) can refuse them, which the registry says."""
+    counts: N2 accepts every window, and only the egress tie (pending) can refuse them, which the registry says."""
     rs, verdicts = runs[profile]
     honest, token = _egress(rs["honest"]), _egress(rs["token"])
     assert token.counts == honest.counts and token.root != honest.root
@@ -176,7 +175,7 @@ def test_certified_tokens_that_arent_the_endpoints_pass_n2_and_wait_for_the_tie(
     assert differ == tokens and len(tokens) == TOKENS * len(window0)
     assert not NG.judge("token", verdicts["token"])["refused"]
     n = NG.NEGATIVES["token"]
-    assert n.code == f"{NG.TIE}.content" and "the I/O tie" in n.waits
+    assert n.code == f"{NG.EGRESS_TIE}.egress" and n.waits == ("the network certifier's cells",)
 
 
 def test_the_suite_reports_each_negative_for_the_one_command(runs, tmp_path):
@@ -187,8 +186,7 @@ def test_the_suite_reports_each_negative_for_the_one_command(runs, tmp_path):
     assert list(rows) == list(NG.NEGATIVES)
     assert {k for k, r in rows.items() if r.get("ok")} == {"late", "extra", "drop", "head", "token"}
     assert rows["head"]["run"] == str(tmp_path / "head") and rows["head"]["refused_windows"] == [0]
-    assert rows["token"]["n2_accepted"] and rows["token"]["waits"] == ["the I/O tie", "the warden's cells"]
-    assert all("tie" not in r for r in rows.values())
+    assert rows["token"]["n2_accepted"] and rows["token"]["waits"] == ["the network certifier's cells"]
     assert all(not r["ran"] and ("--advice" in r["why"] or "--commit" in r["why"])
                for r in rows.values() if r["tampers"] in ("advice", "commit"))
     assert not NG.suite({"honest": rs["honest"]}, tmp_path / "again", clock=lambda: 0.0)["late"]["ran"]
@@ -200,7 +198,7 @@ def test_every_negative_names_a_check_and_a_code_and_the_table_lists_each():
     for name, n in NG.NEGATIVES.items():
         assert n.family in ("io", "advice", "token", "circuit") and n.tampers in ("plan", "certified", "frames",
                                                                                    "advice", "commit")
-        assert re.fullmatch(r"[A-Za-z0-9_]+(\.[a-z_-]+)?", n.code), n.code
+        assert re.fullmatch(r"[A-Za-z0-9_]+(\.[A-Za-z_-]+)*", n.code), n.code
         assert any(row.startswith(f"| `{name}` |") for row in rows)
     assert {n.family for n in NG.NEGATIVES.values()} == {"io", "advice", "token", "circuit"}
     assert [n for n in NG.NEGATIVES.values() if not n.waits and n.tampers in ("advice", "commit")] == []
@@ -221,7 +219,7 @@ def test_a_frame_with_one_byte_changed_no_longer_opens_under_the_records_frames_
     assert all(verify_frame(root, params, k, f, open_frame(frames, params, k)) for k, f in enumerate(frames))
     assert not verify_frame(root, params, 2, bad[2], open_frame(frames, params, 2))
     assert not verify_frame(root, params, 2, bad[2], open_frame(bad, params, 2))
-    with pytest.raises(NG.NotApplicable, match="the warden's"):
+    with pytest.raises(NG.NotApplicable, match="the network certifier's"):
         NG.make("frame", tmp_path, tmp_path / "out")
 
 
@@ -480,85 +478,44 @@ def test_advice_prompt_split_swaps_two_prompts_and_keeps_every_row_and_output_wh
 
 
 FRAMING = (1, 1, 2, 2, 2)  # the link's request frames by prompt length: r0's prompt of 5 two, r1's of 2 one
+SCANNED = {"advice-missing", "advice-extra", "prompt-split"}
 
 
-def test_the_declared_received_is_the_advices_requests_frames_under_the_links_framing():
-    """`received` as a prover declares it beside the advice: the honest run's, less or more the frames of a request the
-    advice leaves out or adds (a copy's are its original's), in the first window that receives any."""
-    a = _advice()
-    assert NG.link_received(a, FRAMING, [3]) == [3] and NG.link_received(a, FRAMING, [0, 3]) == [0, 3]
-    assert NG.link_received(NG.extra_request(a), FRAMING, [3]) == [5]
-    assert NG.link_received(NG.missing_request(a), FRAMING, [3]) == [2]
-
-
-def test_the_advice_suite_ties_each_advice_negative_by_the_ingress_tie(tmp_path):
+def test_the_advice_rows_make_each_advice_negative_valid_advice_and_claim_no_refusal(tmp_path):
     """`negatives.py advice` on a run's advice, here the stand-in's through I1's own codec (skipped until I1 is
-    importable), IoTieRequest's reference on the certified ingress of the advice's id requests at 404-byte frames, whose
-    framing is the tests': the honest advice's requests are the cells', so every window is accepted; each advice
-    negative is valid advice that round-trips; missing, extra and prompt-split are refused by IoTieRequest's verdict,
-    their requests not the cells' (prompt-split's frames honest's); length and release, their requests honest's, are
-    the I/O tie's, and start and chunk the step unit's, so the ingress tie accepts them. `advice_run` on its encoding
-    at the link's cells: every request's frame received in window 0, honest accepted and every negative as named."""
+    importable): each advice negative is valid advice that round-trips, and no check reads the advice in the clear, so
+    none claims an `ok`: missing, extra and prompt-split are the scan's (each request's prompt read off the certified
+    ingress cells), length and release the egress tie's, and start and chunk the step unit's. `advice_run` on its
+    encoding: its shape and the same rows."""
     if V is sys.modules[__name__]:
         pytest.skip(f"{NG.ADVICE_MODULE} (I1) isn't importable")
-    rows = NG.advice_suite(_advice(), T=8, request_frames=FRAMING, received=[3], frame_bytes=404)
-    assert rows["honest"] == {"bits": V.total_bits(_advice()), "codes": [], "request_tie": [True], "ok": True}
+    rows = NG.advice_rows(_advice())
+    assert rows["honest"] == {"bits": V.total_bits(_advice())}
     made = {k: r for k, r in rows.items() if k != "honest"}
     assert set(made) == {k for k, n in NG.NEGATIVES.items() if n.tampers == "advice"}
-    assert all(r["ran"] and r["valid"] and r["ok"] for r in made.values()), made
-    tie = NG.REQUEST_TIE
-    assert {k: (r["codes"], r["request_tie"]) for k, r in made.items()} == {
-        "advice-length": ([], [True]), "advice-release": ([], [True]),
-        "advice-missing": ([tie], [False]), "advice-extra": ([tie], [False]),
-        "prompt-split": ([tie], [False]), "advice-start": ([], [True]), "advice-chunk": ([], [True])}
+    assert all(r["ran"] and r["valid"] and r["ok"] is None and r["waits"] for r in made.values()), made
+    assert {k for k, r in made.items() if r["code"] == NG.SCAN_TIED} == SCANNED
     assert made["prompt-split"]["prompt_lens"] == {0: [5, 2], 1: [2, 5]}
     (tmp_path / "advice.bin").write_bytes(V.encode(_advice()))
-    doc = NG.advice_run(tmp_path / "advice.bin", T=8, R=8)
-    assert doc["frame_bytes"] == cs.FRAME_BYTES and doc["received"] == [2] and doc["negatives"]["honest"]["ok"]
-    assert all(r["ran"] and r["ok"] for k, r in doc["negatives"].items() if k != "honest"), doc
+    doc = NG.advice_run(tmp_path / "advice.bin", T=8)
+    assert (doc["T"], doc["requests"], doc["negatives"]) == (8, 2, rows)
 
 
-def test_the_ingress_tie_reads_each_requests_record_by_its_user_and_states_the_rest(tmp_path):
-    """serve-openai's rows by user (by http id without one) where they carry the prompt; each advice request's id
-    request is its record's (its prompt ids, user and what it brought, seed 0 when it brought none), and one without a
-    record a prompt of its length under its own id; a record whose prompt isn't the advice's length can't be tied."""
-    from verity.core.protocols.certifier.active import id_request
-
-    brought = {"max_tokens": 3, "temperature": 0.5, "top_p": 0.9}
-    (tmp_path / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in [
-        {"http_id": "cmpl-0", "user": "r0", "prompt_ids": [1, 2, 3, 4, 5], "streamed_ids": [7, 8, 9],
-         "ingress": {"brought": brought}},
-        {"http_id": "cmpl-1", "user": None, "prompt_ids": [6, 6]},
-        {"request": "q2", "user": "r1", "output_ids": [21, 22]}]))
-    records = NG.read_requests(tmp_path / "requests.jsonl")
-    assert sorted(records) == ["cmpl-1", "r0"]
-    a = _advice()
-    assert NG.id_requests(a, records, 404, "m") == [
-        id_request(model="m", user="r0", prompt=[1, 2, 3, 4, 5], frame_bytes=404, seed=0, offset=0, **brought),
-        id_request(model="m", user="r1", prompt=[0, 0], max_tokens=2, frame_bytes=404, offset=0)]
-    with pytest.raises(NG.NotApplicable, match="2-token prompt, the advice 5"):
-        NG.id_requests(a, {"r0": records["cmpl-1"]}, 404)
-    assert NG.link_framing(404, 5) == FRAMING
-
-
-def test_phase_6s_split_of_339_and_16_token_prompts_is_refused_by_the_ingress_tie_alone():
-    """The prompt split at the link's 4096-byte cells: prompts of 339 and 16 tokens served (two request cells,
-    then one; 338 is one cell at the relay's cut), advised as 16 and 339. The cells' total is honest's and
-    the first request's end a cell earlier, so no count of the link's frames refuses it; IoTieRequest's reference on the
-    warden's ingress does."""
+def test_phase_6s_split_of_339_and_16_token_prompts_waits_for_the_scan_alone():
+    """The prompt split of phase 6: prompts of 339 and 16 tokens served, advised as 16 and 339, every row and output
+    where it was. The cells' total is honest's, so no count of the link's frames refuses it; the scan, which reads each
+    prompt off the certified ingress cells, does (the certifier's ingress-scan tests), so its row waits on the scan's
+    Spec."""
     if V is sys.modules[__name__]:
         pytest.skip(f"{NG.ADVICE_MODULE} (I1) isn't importable")
     a = V.Advice((V.RequestAdvice("u0", 339, 2, "length"), V.RequestAdvice("u1", 16, 1, "length")),
                  (V.StepAdvice((V.Row(0, "prefill", 0, 339),)), V.StepAdvice((V.Row(0, "decode", 339, 1),
                                                                              V.Row(1, "prefill", 0, 16)))),
                  (3, 3, 3))
-    framing = NG.link_framing(cs.FRAME_BYTES, 339)
-    assert (framing[15], framing[337], framing[338]) == (1, 1, 2)
-    rows = NG.advice_suite(a, T=8, request_frames=framing, received=[3], frame_bytes=cs.FRAME_BYTES)
-    split = rows["prompt-split"]
-    assert rows["honest"]["ok"] and rows["honest"]["request_tie"] == [True]
-    assert split["prompt_lens"] == {0: [339, 16], 1: [16, 339]}
-    assert split["codes"] == [NG.REQUEST_TIE] and split["request_tie"] == [False] and split["ok"]
+    split = NG.advice_rows(a)["prompt-split"]
+    assert split["prompt_lens"] == {0: [339, 16], 1: [16, 339]} and split["valid"] and split["ok"] is None
+    n = NG.NEGATIVES["prompt-split"]
+    assert n.code == NG.SCAN_TIED and n.pending and "the scan's Spec" in n.waits
 
 
 def test_an_advice_negative_waits_for_its_codec(tmp_path, monkeypatch):
@@ -602,9 +559,10 @@ def test_an_advice_negative_writes_the_edited_advice_beside_a_copy_of_the_run(tm
     assert codec.decode((out / "advice.bin").read_bytes()) == NG.start_shifted(_advice())
 
 
-def test_the_suites_advice_rows_are_the_ingress_ties_codes_on_the_given_advice(runs, tmp_path, monkeypatch):
-    """With --advice, each advice negative's row in the one command's report is `advice_run`'s on it (the ingress tie's
-    codes, not N2's on the unchanged certified records), its tampered advice beside a copy of honest's run."""
+def test_the_suites_advice_rows_are_advice_runs_on_the_given_advice(runs, tmp_path, monkeypatch):
+    """With --advice, each advice negative's row in the one command's report is `advice_run`'s on it (whether it
+    applies and round-trips, its check pending; not N2's on the unchanged certified records), its tampered advice
+    beside a copy of honest's run."""
     codec = V if V is not sys.modules[__name__] else _Codec
     monkeypatch.setattr(NG, "advice_module", lambda: codec)
     (tmp_path / "advice.bin").write_bytes(codec.encode(_advice()))
@@ -613,144 +571,8 @@ def test_the_suites_advice_rows_are_the_ingress_ties_codes_on_the_given_advice(r
     advice = {k: r for k, r in rows.items() if r["tampers"] == "advice"}
     assert advice and all(r["copy"] == str(tmp_path / "work" / k) for k, r in advice.items())
     assert all("run" not in r for r in advice.values())
-    assert all(r["ran"] and r["valid"] and r["ok"] and r["honest_codes"] == [] for r in advice.values()), advice
-    assert {k for k, r in advice.items() if r["codes"]} == {"advice-missing", "advice-extra", "prompt-split"}
-
-
-# --- the I/O tie on a fake upstream (`io_tie`) -------------------------------------------------------------------------
-
-IDS = {"r0": [11, 12, 13], "r1": [21, 22]}
-
-
-def test_the_tie_reads_each_requests_sampled_ids_by_its_advice_id(tmp_path):
-    (tmp_path / "requests.jsonl").write_text(
-        "".join(json.dumps({"request": f"q{k}", "user": u, "output_ids": x}) + "\n" for k, (u, x) in enumerate(IDS.items())))
-    assert NG.read_ids(tmp_path / "requests.jsonl") == IDS
-    (tmp_path / "served.jsonl").write_text("".join(json.dumps({"http_id": f"cmpl-{k}", "user": u, "streamed_ids": x})
-                                                   + "\n" for k, (u, x) in enumerate([(None, [7]), *IDS.items()])))
-    assert NG.read_ids(tmp_path / "served.jsonl") == {"cmpl-0": [7]} | IDS
-
-
-def test_the_tie_reads_the_requests_whose_clients_aborted_them(tmp_path):
-    """serve-openai writes a request its client aborted with ``finish`` null (or of reason ``abort``), an ``output_ids``
-    row with ``finish_reason`` ``abort``; a row with another finish, or with no finish field, isn't one."""
-    rows = [{"http_id": "cmpl-0", "user": "a", "streamed_ids": [1], "finish": None},
-            {"http_id": "cmpl-1", "user": None, "streamed_ids": [1], "finish": {"reason": "abort"}},
-            {"http_id": "cmpl-2", "user": "c", "streamed_ids": [1], "finish": {"reason": "length", "stop_reason": None}},
-            {"http_id": "cmpl-3", "user": "d", "streamed_ids": [1]},
-            {"request": "q0", "user": "e", "output_ids": [1], "finish_reason": "abort"},
-            {"request": "q1", "user": "f", "output_ids": [1], "finish_reason": "stop"}]
-    (tmp_path / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
-    assert NG.read_aborted(tmp_path / "requests.jsonl") == {"a", "cmpl-1", "e"}
-
-
-def test_the_ties_view_of_the_advice_is_each_kept_outputs_step_row_request_index_bucket_and_id():
-    """Each kept output as advice v0 has it (step, batch row, request, index), its release bucket and its sampled id, in
-    the advice's order; an output past its request's ids (a request the run never served) has the id 0."""
-    IT = pytest.importorskip(NG.IO_TIE_MODULE)
-    a = _advice()
-    assert NG.tie_outputs(IT, a, IDS) == ([IT.Output(1, 0, 0, 0), IT.Output(1, 1, 1, 0), IT.Output(2, 0, 0, 1),
-                                           IT.Output(2, 1, 1, 1), IT.Output(3, 0, 0, 2)], [3, 3, 3, 3, 5],
-                                          [11, 21, 12, 22, 13])
-    outputs, _, ids = NG.tie_outputs(IT, NG.extra_request(a), IDS)
-    assert [(o, x) for o, x in zip(outputs, ids) if o.request == 1] == [
-        (IT.Output(1, 1, 1, 0), 0), (IT.Output(2, 1, 1, 1), 0), (IT.Output(3, 1, 1, 2), 0)]
-    _, _, ids = NG.tie_outputs(IT, NG.output_length(a), IDS)
-    assert ids[-1] == 0 and len(ids) == 6
-
-
-def test_the_io_tie_refuses_each_negative_it_reads_by_its_part():
-    """`io_tie`'s reference (`io_tie.reference_parts`, skipped until it's importable) on a fake upstream's cells and
-    Commit port of the advice served through a network certifier of r = 2 slots a connection (r0's last output released
-    at bucket 4, the network certifier's, not 5), one shape for every advice: the honest window passes; the changed cell
-    under the kept root fails the cells' root, the changed port id under the Commit's kept root the port's; a certified
-    cell of another id, a dropped cell, and the map of a length or missing advice negative fail the content; an extra
-    request, which no connection carries, and a release the network certifier didn't make fail the map; start and chunk,
-    whose outputs and buckets are honest's, pass, leaving them to the step proof block. Two lanes of r = 2 slots hold r0
-    and r1 live together; one lane can't."""
-    pytest.importorskip(NG.IO_TIE_MODULE)
-    rows = NG.tie_suite(_advice(), IDS, T=8)
-    assert rows["honest"]["ok"] and rows["honest"]["shape"] == {"B": 256, "T": 8, "R": 4, "P": 3, "S": 3, "DS": 3,
-                                                                 "N": 32, "M": 16}
-    assert set(rows) == {"honest", *NG.TIE_PARTS}
-    assert all(r["ran"] and r["ok"] and "moved" not in r for k, r in rows.items() if k != "honest"), rows
-    want = {k: [f"{NG.TIE}.{p}"] if p else [] for k, p in NG.TIE_PARTS.items()}
-    want["frame"] = [f"{NG.TIE}.cells_root", f"{NG.TIE}.content"]
-    want["wrong-token"] = [f"{NG.TIE}.content", f"{NG.TIE}.port"]
-    assert {k: r["codes"] for k, r in rows.items() if k != "honest"} == want
-    with pytest.raises(NG.NotApplicable, match="more than R / r = 1 lanes"):
-        NG.tie_suite(_advice(), IDS, T=8, R=2)
-
-
-def test_a_chunk_split_that_moves_outputs_to_later_steps_is_refused_by_the_ties_content():
-    """With no chunked prefill, chunk splits a prefill row in two, so every later step moves one on: the map the
-    verifier computes from that advice names port entries of other steps than the Commit sampled each output in, and the
-    content refuses it; a map the verifier can't compute (a request no connection carries) refuses every window, by
-    `map`, and an advice the network certifier can't serve in R slots (two connections live in one lane) has no tie at
-    all."""
-    pytest.importorskip(NG.IO_TIE_MODULE)
-    a = _advice([[(0, "prefill", 0, 5), (1, "prefill", 0, 2)], [(0, "decode", 5, 1), (1, "decode", 2, 1)],
-                 [(0, "decode", 6, 1)]])
-    rows = NG.tie_suite(a, IDS, T=8)
-    assert rows["honest"]["ok"] and rows["advice-start"]["ran"] and rows["advice-start"]["codes"] == []
-    assert rows["advice-chunk"] | {"failing": None} == {"code": f"{NG.TIE}.content", "moved": True, "ran": True,
-                                                       "failing": None, "codes": [f"{NG.TIE}.content"], "ok": True}
-    assert rows["advice-extra"]["codes"] == [f"{NG.TIE}.map"] and "permutation" in rows["advice-extra"]["why"]
-    assert rows["advice-extra"]["ok"]
-    with pytest.raises(NG.NotApplicable, match="2 live requests, more than R / r = 1 lanes"):
-        NG.tie_suite(a, IDS, T=8, R=2)
-
-
-def test_the_suite_carries_the_ties_verdict_on_each_negative_it_reads(runs, tmp_path, monkeypatch):
-    """With --advice and --ids, each negative the tie reads carries its verdict (`tie`), and its `ok` needs the tie's:
-    token is ok only when N2 accepts it and the tie refuses it; frame and wrong-token, which N2 can't run on a
-    certifier run, are judged by the tie alone. Without `io_tie` the rows say so and keep their verdicts."""
-    codec = V if V is not sys.modules[__name__] else _Codec
-    monkeypatch.setattr(NG, "advice_module", lambda: codec)
-    (tmp_path / "advice.bin").write_bytes(codec.encode(_advice()))
-    (tmp_path / "requests.jsonl").write_text("".join(json.dumps({"user": u, "output_ids": x}) + "\n"
-                                                     for u, x in IDS.items()))
-    rs, _ = runs["planned"]
-    rows = NG.suite({s: rs[s] for s in STRATEGIES}, tmp_path / "work", advice=tmp_path / "advice.bin",
-                    ids=tmp_path / "requests.jsonl", clock=lambda: 0.0)
-    tied = {k: r for k, r in rows.items() if k in NG.TIE_PARTS}
-    assert set(tied) == set(NG.TIE_PARTS) and all("tie" in r for r in tied.values())
-    assert all("tie" not in r for k, r in rows.items() if k not in NG.TIE_PARTS)
-    if NG.io_tie_module() is None:
-        assert all(not r["tie"]["ran"] and "io_tie" in r["tie"]["why"] for r in tied.values())
-        assert rows["token"]["ok"] and rows["frame"].get("ok") is None
-        return
-    assert all(r["tie"]["ran"] and r["tie"]["ok"] and r["ok"] for r in tied.values()), tied
-    assert rows["token"]["n2_accepted"] and rows["token"]["tie"]["codes"] == [f"{NG.TIE}.content"]
-    assert not rows["frame"]["ran"] and not rows["wrong-token"]["ran"]
-
-
-def test_the_tie_on_a_fixed_plans_runs_has_no_verdict_and_names_what_they_lack(runs):
-    """A fixed plan's run keeps its frames, each window's held to its certified head at both ends, but they are text
-    events, none an id event, and the run keeps no Commit: honest and token alike have no verdict from the tie, which
-    names the id events and the Commit's rows as missing (and itself, on a tree without `io_tie`)."""
-    rs, _ = runs["planned"]
-    W = json.loads((rs["honest"] / "plan.json").read_text())["windows"]
-    lacks = ["id-events", "commit"] if NG.io_tie_module() else ["io-tie", "id-events", "commit"]
-    for s in ("honest", "token"):
-        row = NG.tie_run(rs[s], None)
-        assert row["verdict"] == NG.NOT_APPLICABLE and row["codes"] == [] and row["id_events"] == 0
-        assert row["held"] == {"egress": W, "ingress": W} and list(row["missing"]) == lacks
-        assert NG.tie_ok(s, row) is None
-
-
-def test_the_tie_owes_the_extra_run_a_refusal_by_content_as_it_owes_token_and_drop():
-    """Extra's run is a shim tamper the fake upstream doesn't build (`TIE_RUN_PARTS`, not `TIE_PARTS`), and `tie_ok`
-    holds it to IoTieWindow.content's refusal as it holds token's and drop's: refused by content is the verdict it
-    owes, accepted or another part's refusal isn't, and a run with no verdict owes none."""
-    def row(verdict, *parts):
-        return {"verdict": verdict, "codes": [f"{NG.TIE}.{p}" for p in parts]}
-    assert NG.TIE_RUN_PARTS.keys().isdisjoint(NG.TIE_PARTS)
-    for name in ("extra", "token", "drop"):
-        assert NG.tie_ok(name, row("refused", "content")) is True
-        assert NG.tie_ok(name, row("accepted")) is False
-        assert NG.tie_ok(name, row("refused", "cells_root")) is False
-        assert NG.tie_ok(name, row(NG.NOT_APPLICABLE)) is None
+    assert all(r["ran"] and r["valid"] and r["ok"] is None and "codes" not in r for r in advice.values()), advice
+    assert {k for k, r in advice.items() if r["code"] == NG.SCAN_TIED} == SCANNED
 
 
 # --- the Commit record: a stand-in of I3 as drafted --------------------------------------------------------------------

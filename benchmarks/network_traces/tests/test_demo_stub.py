@@ -211,8 +211,8 @@ def _served_with_records(out: Path, window_steps: int) -> tuple[dict[int, bytes]
 def test_with_out_its_records_are_the_endpoints_that_the_endpoint_step_binds_and_rebuilds(tmp_path, window_steps):
     """``serve --out``: each class request is answered the same bytes as without it, while the scheduler keeps
     serve-openai's records; requests.jsonl holds each one's user, the network certifier's release headers, its ids and
-    clock. Then what chain_record's network certifier endpoint step runs on them: `verity-vllm advice` at the network
-    certifier's bucket (its own `main`, a fixed compiler digest in place of the tree's code identity), and network-e2e's
+    clock. Then what network-e2e's endpoint step (the certifier-only path's) runs on them: `verity-vllm advice` at the
+    network certifier's bucket (its own `main`, a fixed compiler digest in place of the tree's code identity), and network-e2e's
     `served_advice` with the certified I/O (each user's prompt, max_tokens and the ids it was answered) in ingress order
     and the toy's EOS id: every Commit window's advice, those joined across a carry too, is bound to the certified
     requests, each once, and rebuilt from them. At --window-steps 16 the plan's windows are cut with requests running,
@@ -229,9 +229,9 @@ def test_with_out_its_records_are_the_endpoints_that_the_endpoint_step_binds_and
     assert sorted(by_user) == sorted(f"user-{j}" for j in range(7))
     for j in range(7):
         r = by_user[f"user-{j}"]
-        assert (r["prompt_ids"], r["streamed_ids"], r["release"]) == (prompts[j], S.outputs(prompts[j]), [j, RUN.hex()])
+        assert (r["prompt_ids"], r["streamed_ids"], r["release"]) == (prompts[j], S.outputs(prompts[j]), [RUN.hex(), j])
         assert r["finish"] == {"reason": "length", "stop_reason": None}
-        assert r["times"]["arrived"] < r["times"]["first_token"] < r["times"]["finished"]
+        assert r["times"]["received"] < r["times"]["first_token"] < r["times"]["finished"]
     serve = json.loads((tmp_path / "serve.json").read_text())
     assert serve["engine"]["engine_kwargs"]["max_model_len"] == 32 and serve["eos_token_ids"] == [S.VOCAB]
 
@@ -244,56 +244,3 @@ def test_with_out_its_records_are_the_endpoints_that_the_endpoint_step_binds_and
     assert (bits["bound"], bits["rebuilt"], bits["bound_why"], bits["why"]) == (True, True, None, None), bits
     assert len(windows) >= 2 and all(w["opened"] and w["commit_is_the_windows"] for w in windows)
     assert bool(bits["chains"]) == (window_steps == 16) and sum(w["requests"] for w in windows) == 7
-
-
-@pytest.mark.parametrize("window_steps", [16, 64])
-def test_on_the_served_node_the_endpoint_step_binds_its_records_to_the_certified_io_and_publishes_none(tmp_path,
-                                                                                                       monkeypatch,
-                                                                                                       window_steps):
-    """served_session's endpoint step on a serve dir whose requests.jsonl and advice_trace.jsonl stay there: its copy's
-    requests.jsonl, rebuilt from the users map and the certified I/O, is the endpoint's own record, and the advice on it
-    (`verity-vllm advice` at a fixed compiler digest in place of the tree's code identity) is bound to the certified
-    requests and rebuilt from them, across a carry too; the art is the report, windows.jsonl
-    and serve.json, with no prompt's ids or request-valued field, and the chain's report reads it as the served
-    node's. The stand-in's windows.jsonl and serve.json take serve-openai's form: its row count as ``served_rows`` and
-    the session's flags."""
-    import chain_record as CR
-    import served_session as SS
-    from verity_vllm.pipeline import advice as ADV
-
-    ep, out = tmp_path / "ep", tmp_path / "run" / "out"
-    ep.mkdir()
-    _served_with_records(ep, window_steps)
-    prompts = S.prompts(7)
-    own = [json.loads(x) for x in (ep / "requests.jsonl").read_text().splitlines()]
-    (ep / SS.USERS).write_text("".join(json.dumps({"engine_id": r["engine_id"], "user": r["user"]}) + "\n" for r in own))
-    windows = [json.loads(x) for x in (ep / "windows.jsonl").read_text().splitlines()]
-    (ep / "windows.jsonl").write_text("".join(json.dumps({k: v for k, v in w.items() if k != "rows"} | {
-        "served_rows": {"count": w["rows"]}}) + "\n" for w in windows))
-    serve = json.loads((ep / "serve.json").read_text())
-    (ep / "serve.json").write_text(json.dumps(serve | {"address": ["127.0.0.1", SS.PORT], "protocol": "ids",
-                                                       "id_payload": 503, "admit": "release-order",
-                                                       "scheme": "rows-sha512", "sealed": "windows/w<k>/",
-                                                       "retain_exclude": "hidden_m1"}))
-    io = [{"user": f"user-{j}", "prompt": prompts[j], "max_tokens": 24, "output": S.outputs(prompts[j])}
-          for j in range(7)]
-    (tmp_path / SS.CERTIFIED).write_text(json.dumps({
-        "deployment": {"run_id": "w-run", "origin_unix": 0.0, "windows": 4, "params": {"window": 10, "bucket_ms": 10000}},
-        "io": {"accepted": True, "requests": 7, "tokens": sum(len(r["output"]) for r in io), "violations": [],
-               "records": io}}))
-    monkeypatch.setenv("PYTHONPATH", "")  # endpoint sets it; this restores it after the test
-    monkeypatch.setattr(CR, "ADVICE_CLI", [*CR.ADVICE_CLI, "--compiler-digest", "ab" * 64])
-    assert SS.main(["endpoint", "--from", str(ep), "--io", str(tmp_path / SS.CERTIFIED), "--out", str(out),
-                    "--eos-ids", str(S.VOCAB)]) == 0
-    kept = tmp_path / "ep.endpoint" / "records"
-    assert ADV.io_record(kept / "requests.jsonl") == ADV.io_record(ep / "requests.jsonl")
-    assert not (ep / "advice").exists() and (kept / "advice" / "windows.json").is_file()
-    rep = json.loads((out / "report.json").read_text())
-    bits = rep["chain"]["bits"]
-    assert (rep["verdict"], rep["at"], bits["bound"], bits["rebuilt"], bits["bound_why"], bits["why"]) == (
-        "accepted", CR.SERVED_NODE, True, True, None, None), bits
-    assert bool(bits["chains"]) == (window_steps == 16) and sum(w["requests"] for w in bits["commit_windows"]) == 7
-    assert sorted(p.name for p in out.iterdir()) == ["report.json", "serve.json", "windows.jsonl"]
-    published = b"".join(p.read_bytes() for p in out.iterdir())
-    assert not any(n in published for n in [*SS.needles(prompts), b'"prompt_len"', b'"sampling"', b'"emitted"'])
-    assert CR.warden_endpoint_step(rep)["in_the_clear"] == CR.CLEAR["warden_endpoint_served"]
