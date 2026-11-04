@@ -84,13 +84,13 @@ def PeriodLeakRegisteredUntrusted : Prop :=
       {n : ℕ} (sw : Fin n → Claims.Sampling.AuditStatement) (Pw : Fin n → Claims.Sampling.Partition)
       (ρ : Fin n → ℕ → Bool) (op : Fin n → ℕ → List (Obs L K S) → List Bool) (β : Fin n → ℕ),
     WindowsPlaced D δ sw Pw β →
-    ∀ {Conn Cell Srv Dev Z : Type} (arr : Srv → Conn → Arrivals Cell) (F : RowsFormat Conn Cell L K), F.Wf →
+    ∀ {Conn Cell Srv Dev Sec : Type} (arr : Srv → Conn → Arrivals Cell) (F : RowsFormat Conn Cell L K), F.Wf →
     ∀ (tap : Dev)
       (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
-      (Θ : Set (ℕ × ℕ)) (Zs : Set Z) (schedOf : Z → WardenSchedule Conn) (srvOf : Z → Srv),
+      (Θ : Set (ℕ × ℕ)) (Zs : Set Sec) (schedOf : Sec → WardenSchedule Conn) (srvOf : Sec → Srv),
     SchedulesCovered {s | (s.r, s.D) ∈ Θ ∧ F.Fits S n s} Zs schedOf →
-    ∀ (dec : (Conn → List (ℕ × CellView Cell)) → Z), SenderDecodes run tap Zs schedOf srvOf dec →
-    ∀ (x : Z → Fin n → Claims.Msg) (wit : Z → Fin n → Claims.Sampling.Wit)
+    ∀ (dec : (Conn → List (ℕ × CellView Cell)) → Sec), SenderDecodes run tap Zs schedOf srvOf dec →
+    ∀ (x : Sec → Fin n → Claims.Msg) (wit : Sec → Fin n → Claims.Sampling.Wit)
       (tops : Claims.Sampling.AuditStatement → List (Opening Bool)), D.commit.Binds H →
     (∀ m, ScopeAcc D lay k m → RegOpensAt H D reg ops m →
       ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
@@ -137,14 +137,14 @@ def PeriodLeakRegisteredAnyFormat : Prop :=
       {n : ℕ} (sw : Fin n → Claims.Sampling.AuditStatement) (Pw : Fin n → Claims.Sampling.Partition)
       (ρ : Fin n → ℕ → Bool) (op : Fin n → ℕ → List (Obs L K S) → List Bool) (β : Fin n → ℕ),
     WindowsPlaced D δ sw Pw β →
-    ∀ {Conn Cell Srv Dev Z : Type} (arr : Srv → Conn → Arrivals Cell) (F : RowsFormat Conn Cell L K) (tap : Dev)
+    ∀ {Conn Cell Srv Dev Sec : Type} (arr : Srv → Conn → Arrivals Cell) (F : RowsFormat Conn Cell L K) (tap : Dev)
       (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S))),
     Verity.Assumptions.TrustedHost tap run (fun p =>
       (wardenCode p.1 (arr p.2), F.record S n p.1 (arr p.2) (wardenCode p.1 (arr p.2)))) →
-    ∀ (Θ : Set (ℕ × ℕ)) (Zs : Set Z) (schedOf : Z → WardenSchedule Conn) (srvOf : Z → Srv),
+    ∀ (Θ : Set (ℕ × ℕ)) (Zs : Set Sec) (schedOf : Sec → WardenSchedule Conn) (srvOf : Sec → Srv),
     SchedulesCovered {s | (s.r, s.D) ∈ Θ ∧ F.Fits S n s} Zs schedOf →
-    ∀ (dec : (Conn → List (ℕ × CellView Cell)) → Z), SenderDecodes run tap Zs schedOf srvOf dec →
-    ∀ (x : Z → Fin n → Claims.Msg) (wit : Z → Fin n → Claims.Sampling.Wit)
+    ∀ (dec : (Conn → List (ℕ × CellView Cell)) → Sec), SenderDecodes run tap Zs schedOf srvOf dec →
+    ∀ (x : Sec → Fin n → Claims.Msg) (wit : Sec → Fin n → Claims.Sampling.Wit)
       (tops : Claims.Sampling.AuditStatement → List (Opening Bool)), D.commit.Binds H →
     (∀ m, ScopeAcc D lay k m → RegOpensAt H D reg ops m →
       ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
