@@ -204,7 +204,7 @@ def tiedWindow : Lean.Json :=
 
 /-- A compute audit whose Program has one `SlotEntry_v1` template of one member, a pinned Definition (its closure
 digest `slotEntryPins`' first), and the schedule of one slot a window (one lane, T = 1, `every` 1). -/
-def slotAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, slotEntryPins[0]!)], none, none⟩
+def slotAudit : Audit := ⟨0, 0, "", 1, 0, #[("SlotEntry_v1{KO=1}", 1, slotEntryPins[0]!)], none, none, 0⟩
 
 def slotSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1⟩
 

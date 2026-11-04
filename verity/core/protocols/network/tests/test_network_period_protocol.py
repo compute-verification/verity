@@ -284,6 +284,36 @@ def test_a_tied_audit_that_reads_the_state_off_its_slots_anchors_is_refused(serv
         refused_by_lean_alone(build("rows-state-misanchored", n, small=True), server, PC.MISANCHORED)
 
 
+def test_a_tied_audit_is_charged_its_state_reads_held_only_at_the_scans_state(server, monkeypatch):
+    """A phase's term charges a tied audit its free inputs with its reads of the scan's state held (`state_free`) only
+    where its `SCAN_STATE` is the scan's state in every phase tied to it (`PC._state_held`), the root the scan's
+    registration's own: where each tied audit reads it at its slots' anchors (`rows-state-anchored`) each is charged its
+    `state_free`, below its `free`, and where the aimed phase ties a second audit whose `SCAN_STATE` is another
+    link-window's or none's (`rows-state-unheld`) that one is charged its `free` in every phase tied to it. Lean
+    accepts each with the mirror's public, and a mirror that holds every tied audit's reads, or none, gives another
+    public than Lean's."""
+    for m in ("rows-state-anchored", "rows-state-unheld"):
+        for n in range(3):
+            case = build(m, n, small=n % 2 == 0)
+            p, c = PC.params(case["params"]), PC.commitment(bytes.fromhex(case["commitment"]))
+            tied = [PC._tied_audits(c.audits, reg) for reg in c.windows]
+            held = {i: PC._state_held(c.audits, c.windows, i) for ts in tied for i in ts}
+            assert all(p.audits[i].state_free < p.audits[i].free for i in held), (m, n, p.audits)
+            assert all(held.values()) == (m == "rows-state-anchored"), (m, n, held)
+            want = [p.scan.free + sum(p.audits[i].state_free if held[i] else p.audits[i].free for i in ts)
+                    for ts in tied]
+            out = reference(case)
+            assert out["verdict"] == ACCEPT and [s["free"] for s in out["public"]["scans"]] == want, (m, n, out)
+            verdict, got = D.replay(PORT, case, server)
+            assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (m, n, got)
+    for m, always in (("rows-state-unheld", True), ("rows-state-anchored", False)):
+        monkeypatch.setattr(PC, "_state_held", lambda audits, windows, i, always=always: always)
+        for n in range(2):
+            with pytest.raises(D.Mismatch) as x:
+                D.replay(PORT, build(m, n, small=True), server)
+            assert x.value.lean[0] == x.value.python[0] == ACCEPT, x.value
+
+
 def test_a_scan_whose_prog_is_no_audits_output_is_refused(server, monkeypatch):
     """The scan reads each lane's Programs' rows (`scan/prog<j>`) from a compute audit's output, so the rows form
     refuses, in Lean and in the mirror and by name, each way a link-window's tie can fail at every lane
