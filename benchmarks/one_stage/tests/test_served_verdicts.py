@@ -2210,10 +2210,12 @@ TIES = {"H1_TIE": "1", "H1_GATE": GATE, "H1_CIRCUITS": "circuits"}
      "90m, not 1h"),
     ({**TIES, "NODE_MEM_GB": "196"}, FAKE_V3C_PROVE_PATH, "PREFLIGHT: under H1_TIE, where this node has 196 GB, under the "
      "290 GB V3c's audit needs (V3C_AUDIT_MEM_GB), its audit and the composite are deferred to a follow-on, and onsite's "
-     "composite reads PoUS's case, which needs this node's card: PRODUCT=remote, or a node with the memory"),
+     "composite reads PoUS's case, which needs this node's card: PRODUCT=remote or remote-network, or a node "
+     "with the memory"),
     ({**TIES, "V3C_AUDIT_MEM_GB": "600"}, FAKE_V3C_PROVE_PATH, "PREFLIGHT: under H1_TIE, where this node has 512 GB, under "
      "the 600 GB V3c's audit needs (V3C_AUDIT_MEM_GB), its audit and the composite are deferred to a follow-on, and onsite's "
-     "composite reads PoUS's case, which needs this node's card: PRODUCT=remote, or a node with the memory"),
+     "composite reads PoUS's case, which needs this node's card: PRODUCT=remote or remote-network, or a node "
+     "with the memory"),
 ])
 def test_the_preflight_refuses_h1_tie_without_h1s_prover_or_v3c_or_window_commits_tie_or_past_the_sessions_time(
         tmp_path, extra, prove_path, line):
@@ -2264,7 +2266,7 @@ open(os.environ["ORDER"] + ".record", "w").write(json.dumps(a))
 print("RECORD " + json.dumps({"composed": "pending", "window": 7}))
 '''
 FAKE_SERVED_COMPOSITE = '''echo composite >> "$ORDER"
-printf "%s\\n" "$SERVED_NODE" "$@" > "$ORDER.composite"
+printf "%s\\n" "$SERVED_NODE" "$PRODUCT" "$@" > "$ORDER.composite"
 echo "COMPOSITE: composed on $(hostname -s)" >> "$2/verdicts.txt"'''
 
 
@@ -2381,7 +2383,7 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
         "--registration", str(d / f"v3c-w7-{VTAG}" / "window" / "registration.json"), "--pieces",
         str(d / "private" / "deferred" / "pieces"), "--out", str(out / "record"), "--product", "remote", "--node",
         "vy-dc-h200"]
-    assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", str(d), str(out)]
+    assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", "remote", str(d), str(out)]
     assert not (out / "registration.json").exists() and not _window_data(out, 7), _window_data(out, 7)
 
 
@@ -2425,6 +2427,8 @@ DEFERS = "so step 6 defers V3c's audit and the composite to a follow-on"
     (TIES, "512 GB: the serve's lease 150 min, capped at 160 GB"),
     ({**TIES, "LEASE_MEM_GB": "64"}, "512 GB: the serve's lease 150 min, capped at 64 GB"),
     ({**TIES, "NODE_MEM_GB": "196", "PRODUCT": "remote", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None},
+     f"196 GB: the serve's lease 150 min, capped at 160 GB; {SHORT}, {DEFERS}"),
+    ({**TIES, "NODE_MEM_GB": "196", "PRODUCT": "remote-network"},
      f"196 GB: the serve's lease 150 min, capped at 160 GB; {SHORT}, {DEFERS}"),
 ])
 def test_preflight_only_says_what_the_run_would_do_and_stops_before_anything_is_kept_built_or_served(
@@ -2514,18 +2518,23 @@ def test_the_follow_on_runs_reproof_cmd_after_the_audit_then_the_onsite_record_w
 KEPT = ("private/certifier/r1/fetch.tar.gz", "private/certifier/r1/session.json")
 
 
+@pytest.mark.parametrize("product", ["remote", "remote-network"])
 def test_a_deferral_with_the_split_certifier_behind_its_front_leaves_the_chain_and_its_period_check_to_the_follow_on(
-        tmp_path):
+        tmp_path, product):
     """With the network certifier in front, remote takes the split certifier's two commands, whose period case the onsite
-    record reads (remote's record drops the certifier). Its deferral carries both and the kept run the chain reads,
+    record reads (remote's record drops the certifier), and so does remote-network, whose composite is the onsite
+    record's verdict. Its deferral carries both and the kept run the chain reads,
     listed and hashed, and nothing else of the certifier's private/; the follow-on runs the chain after V3c's audit and
     period rather than beside them (its node has the audit's memory alone), then the certifier's period check on that
-    period.json into its own $OUT/pieces/certifier, the record on the served node's pieces, and the onsite record last."""
+    period.json into its own $OUT/pieces/certifier, the record on the served node's pieces with the certifier's answer
+    from here (remote-network's record reads it), the product's composite after that period check, and the onsite
+    record last."""
     d = tmp_path / "serve"
     for f in (*KEPT, "private/certifier/attacks/relay.log"):
         (d / f).parent.mkdir(parents=True, exist_ok=True)
         (d / f).write_text(f)
-    run = _deferred(tmp_path, CERTIFIER_FRONT="front", CERTIFIER_CHAIN_CMD=CHAIN, CERTIFIER_PERIOD_CMD=PERIOD)
+    run = _deferred(tmp_path, PRODUCT=product, CERTIFIER_FRONT="front", CERTIFIER_CHAIN_CMD=CHAIN,
+                    CERTIFIER_PERIOD_CMD=PERIOD)
     assert run.returncode == 0, run.stderr
     dd = d / "private" / "deferred"
     assert [f for f in (dd / "inputs.txt").read_text().splitlines() if f.startswith("private/certifier/")] == list(KEPT)
@@ -2539,7 +2548,10 @@ def test_a_deferral_with_the_split_certifier_behind_its_front_leaves_the_chain_a
     assert (tmp_path / "order.args").read_text().split() == [str(d), "7", str(pieces), str(d / f"v3c-w7-{VTAG}")]
     assert json.loads((pieces / "answer.json").read_text()) == {"verdict": "accept"}
     record = json.loads((tmp_path / "order.record").read_text())
-    assert record[record.index("--pieces") + 1] == str(dd / "pieces")
+    assert (record[record.index("--pieces") + 1], record[record.index("--product") + 1]) == (
+        str(pieces.parent), product)
+    assert (pieces.parent / "pouw" / "answer.json").read_text() == (dd / "pieces" / "pouw" / "answer.json").read_text()
+    assert (tmp_path / "order.composite").read_text().split()[:2] == ["vy-dc-h200", product]
     assert not (pieces / "chain.log").exists() and (d / "private" / "pieces" / "certifier" / "period.log").exists()
 
 
