@@ -326,6 +326,9 @@
    "owner": "@memory-accounting",
    "digest": "c95bfe02effacf053a9585f0acb0ab353f98eeb5651de3b9d85cf6ce7995aedc"
   },
+  "Verity.Vocab.ComponentBound": {
+   "owner": "@soundness"
+  },
   "Verity.Vocab.InferenceOnlySound": {
    "owner": "@lean",
    "digest": "17ab737f5a566f68df77a0c6ef91e28ab70fe325e5aa76663f784535a99206b5"
