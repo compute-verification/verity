@@ -113,7 +113,7 @@ its name at `w`, and `cert` the record certified for the role's link, direction 
 the raw record's grid and status under the schedule's grid and digest, settled by the deadline, and whose certificate
 names the same, signs the head's digest under the record's salt and is the key's in the session. -/
 def bound (p : Params) (w : Nat) (role : String × String × Direction) (raw cert : Option Published) :
-    Except String NetworkCertifier.Rows.Record := do
+    Except String NetworkCertifier.Rows.BlockGrid := do
   let (name, link, d) := role
   let what := s!"{name} window {w}"
   let some (.raw l w' status grid) := raw | throw s!"{what}: not a raw record"
@@ -132,7 +132,7 @@ def bound (p : Params) (w : Nat) (role : String × String × Direction) (raw cer
 
 /-- The run's records as `NetworkCertifier.Rows.audit` reads them, each held to its certified record (`bound`): the
 requests', the responses' and the fails' records of windows `0 … W − 1`, in the commitment's order. -/
-def recordsOf (p : Params) (c : Commitment) : Except String (Array (Array NetworkCertifier.Rows.Record)) := do
+def recordsOf (p : Params) (c : Commitment) : Except String (Array (Array NetworkCertifier.Rows.BlockGrid)) := do
   unless c.records.size == 6 * p.windows do
     throw s!"the commitment holds {c.records.size} records, not 6 · W = {6 * p.windows}: each window's requests', \
       responses' and fails' records, each raw and then certified"

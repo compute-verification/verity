@@ -558,7 +558,7 @@ def test_network_rows_accepts_the_network_certifiers_records_and_refuses_cells_c
         tmp_path, rows_exe):
     """The compiled Lean audit (``network-rows``: `NetworkCheck.RowsAudit` over `NetworkCertifier.Rows.audit`) on the
     records the network certifier's own publisher writes and signs: the synthetic run's accepted; the same run with a
-    cell of window 0's egress re-cut, connection 1's lane re-clocked or a bucket's connections reordered, signed by
+    cell of window 0's egress re-cut, connection 1's cells re-clocked or a bucket's connections reordered, signed by
     its key, refused by name, and `rows_check`'s `Rejected` for the piece; and a record changed after its certificate
     signed it refused at its head. The one test that runs the case's encoding, the binding to the signed heads and the
     audit together on real records, which the stand-ins above don't."""

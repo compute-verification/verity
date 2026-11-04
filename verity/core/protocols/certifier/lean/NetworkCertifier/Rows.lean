@@ -120,14 +120,14 @@ structure Params where
 
 /-- One window's record of one direction as the network certifier published it (`grid.BlockGrid`): its status, none
 when complete, and its grid, a row of slots a bucket, each slot a frame or empty. -/
-structure Record where
+structure BlockGrid where
   status : Option String
   grid : Array (Array (Option ByteArray))
 
 /-- A direction's frames, a row a bucket over the buckets `0 … W·T − 1` of its `W` records (window `w`'s row `t` is
 bucket `w·T + t`), refused unless every record is complete and has `T` rows of `S` slots, each left-packed. `what`
 names the direction in a refusal. -/
-def framesOf (p : Params) (S : Nat) (what : String) (records : Array Record) :
+def framesOf (p : Params) (S : Nat) (what : String) (records : Array BlockGrid) :
     Except String (Array (Array ByteArray)) := do
   let windows ← records.toList.zipIdx.mapM fun (r, w) => do
     if let some why := r.status then throw s!"{what} window {w}: {why}"
@@ -255,7 +255,7 @@ the connections the ordinals `1 … N` admitted in ordinal order, each one's dat
 it has none, cut by the run's end in its delay, the egress rows those `expectedRows` gives from the schedule and data
 they show, bucket by bucket, and each connection's ingress the schedule's (`ingressHolds`). The refusal names the first
 finding. -/
-def audit (p : Params) (ingress egress fails : Array Record) : Except String Summary := do
+def audit (p : Params) (ingress egress fails : Array BlockGrid) : Except String Summary := do
   let W := egress.size
   unless 0 < W && ingress.size == W && fails.size == W do
     throw s!"a run's records are W ≥ 1 windows' ingress, egress and fails records, not {ingress.size}, {W} and \
