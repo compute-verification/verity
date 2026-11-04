@@ -260,7 +260,10 @@
 # the lane's first reserve after the close and opened on the run's commitment (served_pearlplus.sh's steps 2 and 4);
 # while the period is open its cap refuses every other reserve of the lane. PEARLC_CHALLENGER_GATE set
 # empty leaves Pearl+'s coins an
-# in-process challenger's: the COINS line, the run's first, leads with that, and the piece claims no verdict.
+# in-process challenger's: the COINS line, the run's first, leads with that, and the piece claims no verdict. The
+# preflight refuses to serve where the serve dir's filesystem has fewer than PEARLPLUS_INODES inodes free (default
+# 772388, two windows of Pearl+'s passes at the class of record, three files a pass member; 0 checks none), naming the
+# shortfall; earlier runs' Pearl+ windows are deleted with `research retention rm`.
 # With PEARLPLUS_TIE=1 too, the window itself is served under Pearl+, the way H1_TIE ties H1's: serve-openai serves
 # PEARLPLUS_ARM (default pouw:pearl-c-h100-v1-h3) on its one engine (`serve_pearl`, --protocols with --protocols-config
 # naming the cubin PEARLPLUS-CUBIN built before the lease), one Pearl+ epoch a Commit window beside sampled proofs cut at
@@ -315,8 +318,8 @@
 # SETTINGS=PATH names a file of NAME=VALUE lines on the node, read before every default below: the run's job record
 # publishes its launch command, so a load's counts (REQUESTS, PROMPTS, SLOTS, CERTIFIER_FRONT's) go in the file, and the
 # command names only its path.
-# PREFLIGHT_ONLY=1 runs the preflight alone (the settings, the row dir and taps, gpu-lease, the front's flags, H1_TIE's and
-# a follow-on's checks), says what the run would do (PREFLIGHT passed: its lease, or its deferral) and exits 0 before the
+# PREFLIGHT_ONLY=1 runs the preflight alone (the settings, the row dir and taps, gpu-lease, Pearl+'s free inodes, the
+# front's flags, H1_TIE's and a follow-on's checks), says what the run would do (PREFLIGHT passed: its lease, or its deferral) and exits 0 before the
 # serve dir is made, kept or anything built.
 # `served_verdicts.sh circuits K`, in TREE with D and OUT, counts serve dir D's window K's circuits alone (its advice written).
 # `served_verdicts.sh inference-policy`, in TREE with D and OUT, writes the inference-only policy at IO_CLASS alone, to
@@ -393,6 +396,7 @@ REQUESTS=${REQUESTS:-$SLOTS} CLASSES=${CLASSES:-4,32,4} CAP=${CAP:-8388608} MAX_
 PP_PARTITION=${PP_PARTITION:-benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step$([ "$MAX_TOKENS" = 1 ] && echo 0 || echo 1).json}
 T=${T:-${H1_T:-512}}
 DISK_FLOOR_GB=${DISK_FLOOR_GB:-100}
+PEARLPLUS_INODES=${PEARLPLUS_INODES:-772388}  # two windows of Pearl+'s passes at the class of record, three files a pass member
 H1_KEY_SHA512=${H1_KEY_SHA512:-27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc}
 POUW=${POUW:-h1}
 H1_PEER=${H1_PEER:-vy-dc-h200}
@@ -1377,6 +1381,15 @@ elif [ "${1:-}" = v3c ]; then  # V3c alone on an existing serve dir serves nothi
 else
   for f in "$ROW/manifest.json" "$ROW/build_summary.json" "$HIDDEN_SO" "$NORM_TAP_SO" "$PY"; do [ -e "$f" ] || { say "PREFLIGHT: no $f"; exit 3; }; done
   command -v gpu-lease >/dev/null || { say "PREFLIGHT: no gpu-lease on this node"; exit 3; }
+  if [ "$POUW" = pearlplus ] && [ "$PEARLPLUS_INODES" != 0 ]; then  # Pearl+'s windows' passes go to the serve dir's filesystem
+    at=$D; until [ -e "$at" ]; do at=$(dirname "$at"); done
+    read -r itotal ifree fs < <(df --output=itotal,iavail,target "$at" 2>/dev/null | tail -1)
+    [[ ${itotal:-} =~ ^[0-9]+$ && ${ifree:-} =~ ^[0-9]+$ && $PEARLPLUS_INODES =~ ^[0-9]+$ ]] \
+      || { say "PREFLIGHT: the serve dir's free inodes can't be held to PEARLPLUS_INODES ($PEARLPLUS_INODES): df says ${ifree:-nothing} free of ${itotal:-nothing} on $at"; exit 3; }
+    # a filesystem with no inode table (none in all) makes its inodes as it needs them
+    [ "$itotal" = 0 ] || [ "$ifree" -ge "$PEARLPLUS_INODES" ] \
+      || { say "PREFLIGHT: the serve dir's filesystem $fs has $ifree inodes free, $((PEARLPLUS_INODES - ifree)) short of PEARLPLUS_INODES ($PEARLPLUS_INODES), two windows of Pearl+'s passes at three files a pass member: delete earlier runs' Pearl+ windows with \`research retention rm\`, or set SERVE_ROOT on another filesystem"; exit 3; }
+  fi
   [ "$COMPOSE_OFF_NODE" = 0 ] || [ "$PRODUCT" != onsite ] || [ -z "${COMPOSITE-1}" ] \
     || { say "PREFLIGHT: COMPOSE_OFF_NODE=1 composes the composite off this node from its hand-off, and onsite's reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote, COMPOSITE set empty, or COMPOSE_OFF_NODE=0 for a development composite here"; exit 3; }
 fi

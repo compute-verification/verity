@@ -2329,10 +2329,10 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
          **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
     """`served_verdicts.sh v3c` (or ``args``) on window 7 of a toy serve dir at the certifier's class, in a toy tree whose
     prove_path.py (``prove_path``) and records_audit.py (``records_audit``) note each step they run, its builds stubbed,
-    main's first-parent line a toy MAIN_FILE, the split certifier's two commands set, a development run's local coins
-    and no composite, so the default COMPOSE_OFF_NODE=1 composes the final record alone off the node (``extra`` adds to
-    the environment, None unsetting; ``lease`` False, no gpu-lease on the PATH): the exit status, the verdict lines, the
-    steps in order and the limits."""
+    main's first-parent line a toy MAIN_FILE, the split certifier's two commands set, a development run's local coins,
+    no floor on the serve dir's free inodes and no composite, so the default COMPOSE_OFF_NODE=1 composes the final record
+    alone off the node (``extra`` adds to the environment, None unsetting; ``lease`` False, no gpu-lease on the PATH): the
+    exit status, the verdict lines, the steps in order and the limits."""
     tree, bin_, venv, d = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
     for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "core" / "service" / "flock",
               tree / "verity" / "core" / "service" / "sampled_proofs", tree / "verity" / "ml" / "flock" / "pod", bin_, venv,
@@ -2360,7 +2360,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
            "ROW": str(tmp_path / "row"), "HIDDEN_SO": str(tmp_path / "h.so"), "NORM_TAP_SO": str(tmp_path / "n.so"),
            "ORDER": str(tmp_path / "order"), "H1_GATE": "", "V3C_CLASS": W63K4, "CLASSES": W63K4,
            "CERTIFIER_CHAIN_CMD": CHAIN, "CERTIFIER_PERIOD_CMD": PERIOD, "NODE_MEM_GB": "512",
-           "MAIN_FILE": str(tmp_path / "main.txt"), "DEVELOPMENT": "1", "COMPOSITE": ""}
+           "MAIN_FILE": str(tmp_path / "main.txt"), "DEVELOPMENT": "1", "COMPOSITE": "", "PEARLPLUS_INODES": "0"}
     env = {k: v for k, v in {**env, **extra}.items() if v is not None}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), *args], cwd=tree, env=env, check=False,
                         capture_output=True).returncode
@@ -3293,6 +3293,41 @@ def test_the_preflight_refuses_pearlplus_tie_under_a_live_gate_without_main_file
         "PREFLIGHT: under PEARLPLUS_TIE the gate's pin is held to main's first-parent line, which MAIN_SHA's (default this "
         "tree's HEAD) need not hold: set MAIN_FILE to `git rev-list --first-parent origin/main` of a fresh fetch, sent "
         "with the run"], [])
+
+
+#: `df` on a toy filesystem: its arguments in $ORDER.df, the line under its header DF_LINE
+FAKE_DF = 'echo "$@" > "$ORDER.df"\necho "Inodes IFree Mounted on"\necho "$DF_LINE"'
+SHORT_INODES = ("PREFLIGHT: the serve dir's filesystem /workspace has 100 inodes free, 772288 short of PEARLPLUS_INODES "
+                "(772388), two windows of Pearl+'s passes at three files a pass member: delete earlier runs' Pearl+ "
+                "windows with `research retention rm`, or set SERVE_ROOT on another filesystem")
+
+
+@pytest.mark.parametrize("env, df, refusal", [
+    (PEARL_TIED, "2000000 100 /workspace", SHORT_INODES),
+    ({"POUW": "pearlplus", "PEARLC_CHALLENGER_GATE": ""}, "2000000 100 /workspace", SHORT_INODES),
+    (PEARL_TIED, "- - /workspace", "PREFLIGHT: the serve dir's free inodes can't be held to PEARLPLUS_INODES (772388): df "
+                                   "says - free of - on {at}"),
+    (PEARL_TIED, "2000000 772388 /workspace", None),
+    (PEARL_TIED, "0 0 /workspace", None),
+    ({}, "2000000 100 /workspace", None),
+])
+def test_the_preflight_refuses_a_pearlplus_serve_where_the_serve_dirs_filesystem_has_fewer_inodes_free_than_two_windows(
+        tmp_path, env, df, refusal):
+    """Pearl+'s passes, three files a pass member, go to the serve dir's filesystem, so under POUW=pearlplus, tied or not,
+    the preflight refuses to serve where df counts fewer than PEARLPLUS_INODES free there (by default two windows' at the
+    class of record) or counts none, naming the filesystem and the shortfall, before anything runs. It asks df about the
+    serve dir's nearest existing directory, since the serve dir is made after the preflight. A filesystem with no inode
+    table makes its inodes as it needs them, and H1's serve writes no Pearl+ window."""
+    _script(tmp_path / "bin" / "df", FAKE_DF)
+    rc, lines, order, _limits = _v3c(tmp_path, (), PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}",
+                                     HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1", D=str(tmp_path / "root" / "r1"),
+                                     DF_LINE=df, PEARLPLUS_INODES=None, **env)
+    asked = (tmp_path / "order.df").read_text().split() if (tmp_path / "order.df").exists() else None
+    assert asked == (["--output=itotal,iavail,target", str(tmp_path)] if env else None)
+    if refusal is None:
+        assert (rc, order) == (0, []) and len(lines) == 1 and lines[0].startswith("PREFLIGHT passed"), lines
+    else:
+        assert (rc, lines, order) == (3, [refusal.format(at=tmp_path)], [])
 
 
 TIES = {"H1_TIE": "1", "H1_GATE": GATE, "H1_CIRCUITS": "circuits"}
