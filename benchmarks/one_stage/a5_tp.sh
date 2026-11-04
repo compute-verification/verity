@@ -17,10 +17,11 @@
 #     and combines, each combine slot wired to its part), run as the entry row-tables is.
 #     The STANDIN entry row-tables is a5_row_tables.py: test_row_tables' window (ScaledMmS8Coordinate chunks whose x rows link
 #     its row tables) as rank 0 of a one-rank step, on a local challenger's coins (it needs A5_CHALLENGER for --main).
-#     The STANDIN entry wired is a5_wired.py: a writer Gemm template and a reader one, each reader unit's x its writer unit's
-#     o0 by a template-level wire, run as the entry row-tables is, then v2's per-member verdicts on its case
-#     (sampled-proofs-one-stage-zk verdicts --check) as made, without wires, with the wire moved and with the reader's
-#     wired rows altered, the last two refused by the reader's wired reads.
+#     The STANDIN entry wired is a5_wired.py: a writer Bf16AddRow template and a reader ArgmaxChunkBest one, each reader
+#     unit's x its writer unit's o0 by a template-level wire, run as the entry row-tables is, then v2's per-member verdicts
+#     on its case (sampled-proofs-one-stage-zk verdicts --check) as made, without wires, with the wire moved, with the
+#     reader's wired rows altered (these two refused by the reader's wired reads) and with the writer's committed o0 root
+#     another (the writer refused by the statement's root check, the reader by its wired reads).
 #     The STANDIN entries warden and warden:KIND are a5_warden.py: transfer-gate chunks whose ports open the bucket rows of
 #     one connection's cells under the warden's signed roots, beside a drawn rest, on a warden run rehearsed here first (warden_serve.py
 #     rehearse --fake, about a minute, its prompts up to 2048 tokens so that seed 0's traffic has a connection admitted in its
