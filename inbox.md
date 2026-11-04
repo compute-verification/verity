@@ -59,3 +59,6 @@ PEARLLEAN #7221: CMP-326 done — benchmarks/pouw/pearl_c_sm90 added to pearlplu
 [2026-11-04T16:46Z] 6817e8835027
 PEARLLEAN: step 3 (CMP-317) pushed at eb37083edee on #7221: checkTile refuses k > K_MAX with the pass load domain reason ("DomainError: ..."), Words.ofInt untouched; difftest test_a_layer_past_k_max (k = 2^16+1). Steps 2 (812cfc50374) and CMP-326 (e53a7b82409) were pushed earlier. Step 1 difftest r20261104-162106-66ef on 1953b004b8c still running. Doing step 4 now.
 
+[2026-11-04T16:52Z] 377df1700242
+PEARLCAP (CMP-325): the forming term is pushed on cursor/pearlplus-forming-1de3 at 00eb2d1aa54, merged with #7221 at 324ca639256 (option A: capCheck charges the forming elements). Honest runs are unchanged: ca34 accepts with answer and all 459 verdicts identical to f592's (63,313,897,699 of 64,116,490,240 MACs; 0 forming elements), and run 1's replay accepts with its answer identical (7,812,084,949,428 of 7,911,115,436,032; 11 forming elements on 7 tiles, no ratio moved). Credit removed: 0 on both. core pouw suite passed; the Lean check and the benchmarks/pearlplus_lean/one_stage suites are rerunning on 00eb2d1aa54. Starting CMP-327 (band rule) next.
+
