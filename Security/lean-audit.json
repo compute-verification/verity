@@ -552,7 +552,7 @@
   },
   "Accounting.Requirement.OneBlockEach": {
    "owner": "@memory-accounting",
-   "digest": "ae57e960a411de7fccb71c709eff4393cb29c6902da95c1402dcabbd9f410dab"
+   "digest": "b2ef39d6e526e2594348fabf55c0b20b76c098ece66c9f7a769605c4281e073f"
   },
   "Accounting.Requirement.Placement.Deadlines": {
    "owner": "@compute-accounting",
@@ -564,11 +564,11 @@
   },
   "Accounting.Requirement.PlanMatches": {
    "owner": "@memory-accounting",
-   "digest": "2a41f10acaedede88cc6a84729be9a6e2d6b1ab8e171e3ba7e17a202d945187c"
+   "digest": "d31411d0350f43c0cb39bf15c41023cc7ba1d489380042787eddd453c8ba5b8d"
   },
   "Accounting.Requirement.StoreMatches": {
    "owner": "@memory-accounting",
-   "digest": "d382ffa2a7544e21b5e96e7ab2d8842ccd8a6859a280f543ea4754f9a22d0704"
+   "digest": "d0aa0ce85aa44739a2c1b77355321989f75e5341ae0d84073797caa63794306b"
   },
   "Accounting.Requirement.Wiring.Topological": {
    "owner": "@memory-accounting",
