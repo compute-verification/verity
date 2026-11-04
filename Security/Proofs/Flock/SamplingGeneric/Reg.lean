@@ -142,7 +142,6 @@ theorem mem_runExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fi
   unfold runExt
   rw [flatMapRP_eval]
   refine List.mem_flatMap.2 ⟨u, hu, ?_⟩
-  dsimp only
   rw [dite_eq_left hlt]
   exact hq
 
@@ -176,11 +175,13 @@ theorem selReg_some (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Pro
   obtain ⟨u, hu⟩ := Option.isSome_iff_exists.1
     ((List.find?_isSome (p := fun u : Fin (L.nPU x) => decide (u.val ∈ l ∧ u.val ∈ L.Freg H P x ω))).2
       ⟨⟨v, hlt⟩, List.mem_finRange _, decide_eq_true ⟨hvl, hvF⟩⟩)
-  exact ⟨u, hu, of_decide_eq_true (List.find?_some hu)⟩
+  have hpu := List.find?_some hu
+  exact ⟨u, hu, of_decide_eq_true hpu⟩
 
 /-! ## The deterministic half -/
 
 set_option synthInstance.maxSize 1024 in
+omit [Nonempty Coin] in
 /-- **The deterministic half**: at an accepted run that samples proof block `u` of the committed trace's incorrect set,
 `u`'s session is not extracted, or the run's extractions disagree with themselves or open a gate off the committed
 trace. Otherwise the values that are the committed trace on the program's gates and the kept openings elsewhere, with
@@ -277,8 +278,7 @@ theorem le_bconf (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {s : AuditSta
       ownLog H (run H P L.V x q.1) (L.runExt x s q.2.2.1 (run H P L.V x q.1 q.2.2.1).seen q.2.2.2)) = some (u, v) ∧
         Collision H u v) :
     Pr Q ≤ (Bconf H L Ω P x).Pr H := by
-  simp only [Bconf, Finder.Pr]
-  rw [hs]
+  simp only [Bconf, hs]
   exact Pr_mono hQ
 
 /-- **One run's disagreement**: at most `Pr[B_conf]`, its first run. -/
@@ -385,14 +385,14 @@ theorem pr_offReg_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Pr
             rw [L.regVal_eq_plur H P x ω hb]
             exact (hb.symm.trans h).symm
       _ = _ := Pr_eq_card_of_mem _ (FlockSoundness.Rewinding.bad (L.opTable H P x ω) fun g => L.plur H P x ω g)
-          fun rc => mem_filter.trans (and_iff_right (mem_univ _))
+          fun rc => by simp only [FlockSoundness.Rewinding.bad, mem_filter, mem_univ, true_and] <;> exact Iff.rfl
   have hconf : (#(FlockSoundness.Rewinding.conflict (L.opTable H P x ω)) : ℝ) /
       (Fintype.card ((Fin (L.V.k x) → Coin) × L.BlockEC x) : ℝ) ^ 2 =
       Pr fun rr : ((Fin (L.V.k x) → Coin) × L.BlockEC x) × ((Fin (L.V.k x) → Coin) × L.BlockEC x) =>
         L.Conflict H P x ω rr := by
     rw [Pr_eq_card_of_mem (fun rr : ((Fin (L.V.k x) → Coin) × L.BlockEC x) × ((Fin (L.V.k x) → Coin) × L.BlockEC x) =>
         L.Conflict H P x ω rr) (FlockSoundness.Rewinding.conflict (L.opTable H P x ω))
-        fun rr => mem_filter.trans (and_iff_right (mem_univ _)),
+        fun rr => by simp only [FlockSoundness.Rewinding.conflict, mem_filter, mem_univ, true_and] <;> exact Iff.rfl,
       Fintype.card_prod ((Fin (L.V.k x) → Coin) × L.BlockEC x) ((Fin (L.V.k x) → Coin) × L.BlockEC x),
       Nat.cast_mul, sq]
   calc Pr (fun rc : (Fin (L.V.k x) → Coin) × L.BlockEC x => L.OffReg H P x ω rc.1 rc.2)
