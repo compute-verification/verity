@@ -9,7 +9,8 @@ A message waits in `$AGENT_INBOX` (default `/tmp/agent-inbox`) as `AGENT_ID.md`,
 in it. The agent's next shell command is refused once with them as the refusal's text, and the agent re-runs the command.
 AGENT_ID is the agent's conversation id: a subagent's is the `bc-…` id its Task call returned. Only agents whose shell
 commands pass through this VM's hook can be reached this way. Message an agent on another VM through its coordinator, on
-Slack.
+Slack. An idle agent runs no shell command, so it reads nothing until it is resumed: resume it with the message instead.
+`send` says so when nothing has ever been delivered to that agent on this VM.
 """
 from __future__ import annotations
 
@@ -49,7 +50,11 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     if a.cmd == "send":
         text = a.text if a.text is not None else (sys.stdin.read() if a.file == "-" else Path(a.file).read_text())
-        print(f"queued for {a.agent}: {send(a.agent, text)}")
+        box = send(a.agent, text)
+        print(f"queued for {a.agent}: {box}")
+        if not box.with_suffix(".delivered").exists():
+            print(f"inbox: nothing has been delivered to {a.agent} on this VM yet. If it is idle or on another VM it "
+                  "won't read this: resume it with the message (Task), or message its coordinator on Slack.")
         return 0
     if not INBOX.is_dir():
         print(f"inbox: {INBOX} is empty")
