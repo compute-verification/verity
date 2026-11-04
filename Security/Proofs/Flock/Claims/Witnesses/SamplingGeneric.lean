@@ -19,21 +19,28 @@ a `nontrivial` one, their conclusion false at a verifier that accepts everything
 * **The honest instance.** The proof system for proof blocks is C-Flock's deployed masked record at the deployed
   relation (`flockA`: `Arg.ofFlock` at `FlockDeploy.deployZk Flock.Readable.relation` and its own decoder), knowledge
   sound by `Flock.SecurityProofs.MaskedKS` within its decoder's radius (`listWithin_deployZk`), its reruns `E^rep`'s
-  (`ERep_cost`) and its own SHA-512 calls none (`flock_ownLe`). The tree has no deployed compiled sampled verifier (the
-  sampling record's code, `SamplingDeploy.Code`, is abstract), so the compiled verifier is one proof block whose session
-  is the whole run (`oneL`): the statement `toyStmt` (one input gate, returned, in scope), every round in the second
-  stage, and the session's witness revealing one opening at the root. Its commitment is the deployed form (`cm₀`: hm96
-  leaves of `sha512/row/v2` rows under the registered frame-v3-sha512 path check, at one port of one leaf), which binds
-  (`pathCommit_binds`) and opens the revealed opening at SHA-512 (`cm₀_opens`), so it meets the contract
-  (`oneL_sessions`), and checks an opening in at most `4 + depth` calls (`cm₀_calls`: `opens_calls_le` at the sampled
-  verifier's code `code₀` whose commitment it is). `compilerKS_honest` (also `CompilerKSReg`'s and
-  `CompilerKSCount`'s), `compilerBits_honest`, `compilerEfficient_honest`.
+  (`ERep_cost`), expected ones at most its strict `1 + m′·K` (`flockE`: its expected `1 + m′·k` reads `N₀`, which
+  Flock's shape doesn't carry), and its own SHA-512 calls none (`flock_ownLe`). The tree has no deployed compiled
+  sampled verifier (the sampling record's code, `SamplingDeploy.Code`, is abstract), so the compiled verifier is one
+  proof block whose session is the whole run (`oneL`): the statement `toyStmt` (one input gate, returned, in scope),
+  every round in the second stage, its error bounds the proof system's errors at the run's statement, and the session's
+  witness revealing one opening at the root. Its commitment is the deployed form (`cm₀`: hm96 leaves of `sha512/row/v2`
+  rows under the registered frame-v3-sha512 path check, at one port of one leaf), which binds (`pathCommit_binds`) and
+  opens the revealed opening at SHA-512 (`cm₀_opens`), so it meets the contract (`oneL_sessions`), and checks an
+  opening in at most `4 + depth` calls (`cm₀_calls`: `opens_calls_le` at the sampled verifier's code `code₀` whose
+  commitment it is). `compilerKS_honest` (also `CompilerKSReg`'s and `CompilerKSCount`'s), `compilerBits_honest`,
+  `compilerEfficient_honest`.
 * **The accept-all instance.** `acceptAllArg` accepts after one round, its relation is empty and its errors `0`, and
   `acceptAllL` is `oneL` over it with a commitment no opening passes (`rejCm`). Every premise but the proof system's
   knowledge soundness holds there (`acceptAll_drops`: rounds, binding, the contract), so each conclusion's failure is
   the work `Arg.KS` does: `compilerKS_nontrivial` (at `δ = 0`), `compilerKSCount_nontrivial` (at `t = 1`),
   `compilerBits_nontrivial` (`λ > 0` there), `compilerKSReg_nontrivial` (the committed trace opens nothing, so the
   proof block is in `Freg` at every run while `ε_reg = 0`).
+* **`CompilerEfficient`.** Nontrivial: a proof system whose extractor finds a witness at once, with no rerun or call
+  (`findArg`), compiled by `oneL` under a commitment whose opening check makes one SHA-512 call that the compiled
+  verifier counts as none (`effL`). Every premise but the opening checks' count holds there (`compilerEfficient_drops`),
+  and as every run is accepted the compiled extractor reaches an extraction whose check calls (`ownLog_E_pos`), above
+  the own-call bound `0` (`compilerEfficient_nontrivial`).
 * **`ZKOutLeak`.** Honest: `ZKOut` at C-Flock's deployed masked session (`zkFlock`, `MaskedZK`'s record at one coin
   per rep round and `t = 1`), its outcome trivial, from `ZKmalR`'s two-sided bound (`zkOut_of_zkmalR`). Nontrivial: a
   prover that talks against a verifier that accepts everything, with a silent simulator and no error
@@ -45,10 +52,6 @@ a `nontrivial` one, their conclusion false at a verifier that accepts everything
   same shape over a proof system whose prover talks and whose simulator is silent (`talkArg`, `talkL`), every opening
   passing, so the toy witness is in the sampling relation; it meets the contract (`compilerZK_drops`) and its
   conclusion fails (`compilerZK_nontrivial`).
-
-`CompilerEfficient` has no `nontrivial` witness here: as written it reads `checked`'s list, which may repeat a proof
-block, so a run's sessions aren't bounded by `n_PU`, it is false at an instance that meets its premises, and no
-accept-all instance can show that its conclusion does work.
 -/
 
 @[expose] public section
@@ -87,8 +90,9 @@ theorem toy_val_of_correct {val : ℕ → Option Bool} {ι : ℕ → Bool}
 /-! ## A compiled verifier of one proof block -/
 
 /-- **A compiled sampled verifier of one proof block** over `A`: the statement `toyStmt`, every round in the second
-stage, and the block always sampled, its session the whole run at the run's own statement; the session's witness
-reveals `rev` under the commitment `cm`, each checked in at most `calls` SHA-512 calls. -/
+stage, and the block always sampled, its session the whole run at the run's own statement, its error bounds `A`'s
+errors there; the session's witness reveals `rev` under the commitment `cm`, each checked in at most `calls` SHA-512
+calls. -/
 def oneL {Coin : Type} (A : Arg Coin) (cm : CommitmentScheme Bool) (rev : List (List Msg × Opening Bool)) (calls : ℕ) :
     Compiled Coin A where
   V := A.V
@@ -99,6 +103,8 @@ def oneL {Coin : Type} (A : Arg Coin) (cm : CommitmentScheme Bool) (rev : List (
   stage2 _ := Finset.univ
   checked _ _ := [0]
   sh x _ := A.shape x
+  κb x _ := A.κ x
+  γb x _ := A.γ x
   rounds _ _ := Finset.univ
   session x _ v := some (x, v)
   iroots _ _ _ := []
@@ -135,6 +141,7 @@ theorem oneL_sessions (A : Arg Coin) (cm : CommitmentScheme Bool) (rev : List (L
         obtain rfl : v = 0 := by omega
         exact h0 hv
       exact ⟨fun _ => 1, fun _ => zero_le_one, fun _ => Pr_le_one _, by rw [Ex_const, toy_Pa, ite_eq_left hw]⟩
+  slots _ _ := le_rfl
   refuses _ _ _ _ _ _ := ⟨toyStmt, toyPart, rfl, rfl, inScope_toy⟩
   interior _ _ _ _ _ _ _ := rfl
   fixed _ _ _ _ := ⟨Finset.Subset.refl _, fun _ => rfl⟩
@@ -148,7 +155,7 @@ theorem oneL_sessions (A : Arg Coin) (cm : CommitmentScheme Bool) (rev : List (L
         (fun t => ⟨fun _ => ⟨t, rfl⟩, fun _ => Finset.mem_univ _⟩) r'
     have hrun : ∀ r', run H (P.comap fun _ : Unit => ω) A.V x () r' = run H P A.V x ω r' := fun r' =>
       Claims.ZKMal.stepWith_comap H P (fun _ => ω) x () _ _ _ _ _
-    refine ⟨x, P.comap fun _ => ω, rfl, hc, fun r' _ => ?_, fun r' _ => ?_⟩
+    refine ⟨x, P.comap fun _ => ω, rfl, le_rfl, le_rfl, hc, fun r' _ => ?_, fun r' _ => ?_⟩
     · rw [hco r', hrun r']
       rfl
     · rw [hco r', hrun r']
@@ -249,10 +256,11 @@ noncomputable def flockL : Compiled FlockDeploy.Coin flockA :=
   oneL flockA cm₀ [([], opening₀)] (4 + SamplingDeploy.depth #[port₀])
 
 /-- `E^rep`'s strict reruns at a shape, `1 + m′·K`. -/
-def flockρ (s : ℕ × ℕ × ℕ × ℝ × ℝ × ℝ) : ℕ := 1 + s.1 * s.2.1
+def flockρ (s : ℕ × ℕ × ℕ) : ℕ := 1 + s.1 * s.2.1
 
-/-- `E^rep`'s expected reruns at a shape, `1 + m′·k`. -/
-noncomputable def flockE (s : ℕ × ℕ × ℕ × ℝ × ℝ × ℝ) : ℝ := 1 + (s.1 : ℝ) * (flockK s.2.2.2.2.1 : ℝ)
+/-- A bound on `E^rep`'s expected reruns at a shape: its strict `1 + m′·K`. Its expected `1 + m′·k` reads `N₀`
+(`k = ⌈4·N₀/e⌉`), which the shape doesn't carry. -/
+noncomputable def flockE (s : ℕ × ℕ × ℕ) : ℝ := (flockρ s : ℝ)
 
 theorem flockL_sessions : flockL.Sessions FlockDeploy.sha512 :=
   oneL_sessions flockA cm₀ [([], opening₀)] _ FlockDeploy.sha512 fun _ _ _ =>
@@ -264,9 +272,18 @@ theorem flockL_openCalls : flockL.OpenCallsLe FlockDeploy.sha512 := fun _ _ _ _ 
   rw [List.map_singleton, List.sum_singleton]
   exact cm₀_calls _ _ _
 
-theorem flock_reruns : flockA.RerunsLe FlockDeploy.sha512 flockρ ∧ flockA.RerunsExpLe FlockDeploy.sha512 flockE :=
-  Claims.ERep_cost FlockDeploy.sha512 flockD.V flockD.waits flockD.k flockD.cap (fun v => [flockD.cols v])
-    (Claims.Flock.assemble flockD.parse flockD.table flockD.decode flockD.read) (Claims.Flock.check flockD.parse)
+theorem flock_reruns : flockA.RerunsLe FlockDeploy.sha512 flockρ ∧ flockA.RerunsExpLe FlockDeploy.sha512 flockE := by
+  have h : flockA.RerunsLe FlockDeploy.sha512 flockρ :=
+    (Claims.ERep_cost FlockDeploy.sha512 flockD.V flockD.waits flockD.k flockD.cap (fun v => [flockD.cols v])
+      (Claims.Flock.assemble flockD.parse flockD.table flockD.decode flockD.read) (Claims.Flock.check flockD.parse)).1
+  refine ⟨h, fun x Ω P ω => ?_⟩
+  have hs : ∀ s : (Fin (flockA.V.k x) → FlockDeploy.Coin) × flockA.E.C x,
+      ((Extractor.eval FlockDeploy.sha512 P flockA.E x ω s.1 s.2).2.2 : ℝ) ≤ flockE (flockA.shape x) := fun s => by
+    have h1 : (Extractor.eval FlockDeploy.sha512 P flockA.E x ω s.1 s.2).2.2 ≤ flockρ (flockA.shape x) :=
+      h x Ω P ω s.1 s.2
+    unfold flockE
+    exact_mod_cast h1
+  exact (Ex_mono hs).trans (Ex_const _).le
 
 /-- A program with no SHA-512 call of its own, in `Claims.Sampling`'s form, has none in this one's. -/
 theorem noHash_of_sampling {R α : Type} {p : RP R α} (h : Claims.Sampling.NoHash p) : NoHash p := by
@@ -447,6 +464,16 @@ section Extract
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
+omit [Fintype Coin] [Nonempty Coin] in
+/-- A run's extractions make no SHA-512 call of their own where its proof blocks' make none. -/
+theorem noHash_runExt (L : Compiled Coin A) (hu : ∀ x s u r v c, NoHash (L.unitExt x s u r v c)) (x : Msg)
+    (s : AuditStatement) (r : Fin (L.V.k x) → Coin) (v : Seen) (c : L.SlotEC x) : NoHash (L.runExt x s r v c) := by
+  unfold Compiled.runExt
+  refine noHash_flatMapRP _ (fun _ => ?_) _
+  split
+  · exact hu _ _ _ _ _ _
+  · trivial
+
 /-- At a compiled verifier whose proof blocks' extractions make no SHA-512 call of their own, the compiled extractor
 makes none: its waits rerun. -/
 theorem noHash_compiledE (L : Compiled Coin A) (hu : ∀ x s u r v c, NoHash (L.unitExt x s u r v c)) (x : Msg)
@@ -464,21 +491,8 @@ theorem noHash_compiledE (L : Compiled Coin A) (hu : ∀ x s u r v c, NoHash (L.
       generalize List.map (fun l => forkOn (L.stage2 x) jo.2.1 (c.2.1 jo.1 l)) (List.finRange (L.cap x)) = rs'
       refine noHash_bind _ _ (noHash_waitAccC _ _ _) fun inner => ?_
       generalize (List.finRange (L.k x)).zip inner = lis
-      refine noHash_flatMapRP _ (fun _ => noHash_flatMapRP _ (fun _ => ?_) _) _
-      split
-      · exact hu _ _ _ _ _ _
-      · trivial
+      exact noHash_flatMapRP _ (fun _ => noHash_runExt L hu _ _ _ _ _) _
     · trivial
-
-omit [Fintype Coin] [Nonempty Coin] in
-/-- A run's extractions make no SHA-512 call of their own where its proof blocks' make none. -/
-theorem noHash_runExt (L : Compiled Coin A) (hu : ∀ x s u r v c, NoHash (L.unitExt x s u r v c)) (x : Msg)
-    (s : AuditStatement) (r : Fin (L.V.k x) → Coin) (v : Seen) (c : L.BlockEC x) : NoHash (L.runExt x s r v c) := by
-  unfold Compiled.runExt
-  refine noHash_flatMapRP _ (fun _ => ?_) _
-  split
-  · exact hu _ _ _ _ _ _
-  · trivial
 
 omit [Nonempty Coin] in
 /-- `B_conf` finds nothing where a run's extractions make no SHA-512 call of their own. -/
@@ -534,12 +548,12 @@ theorem acceptAllL_bound_fails (H : Msg → Msg) (Rx : Rel Claims.Sampling.Wit) 
 /-! ## The committed trace at the accept-all instance opens nothing -/
 
 theorem acceptAllL_opensAt (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
-    (r : Fin (acceptAllL.V.k x) → Unit) (c : acceptAllL.BlockEC x) : acceptAllL.opensAt H P x ω r c 0 = none :=
+    (r : Fin (acceptAllL.V.k x) → Unit) (c : acceptAllL.SlotEC x) : acceptAllL.opensAt H P x ω r c 0 = none :=
   rejCm_val H _
 
 theorem acceptAllL_regVal (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) :
     acceptAllL.regVal H P x ω 0 = none := by
-  have h : ∀ b, Pr (fun rc : (Fin (acceptAllL.V.k x) → Unit) × acceptAllL.BlockEC x =>
+  have h : ∀ b, Pr (fun rc : (Fin (acceptAllL.V.k x) → Unit) × acceptAllL.SlotEC x =>
       acceptAllL.opensAt H P x ω rc.1 rc.2 0 = some b) = 0 := fun b => by
     rw [Pr_congr fun rc => iff_false_intro (by rw [acceptAllL_opensAt]; simp)]
     exact Pr_false
@@ -567,8 +581,8 @@ theorem acceptAllL_εreg (H : Msg → Msg) (x : Msg) : acceptAllL.εreg H x sile
 
 /-! ## The nontrivial witnesses -/
 
-/-- **`CompilerKS`'s conclusion fails at the accept-all instance**, at `δ = 0`: the silent prover is accepted, no witness
-is in the relation, and the bound is below `1`. -/
+/-- **`CompilerKS`'s conclusion fails at the accept-all instance**, at `δ = 0`: the silent prover is accepted, no
+witness is in the relation, and the bound is below `1`. -/
 theorem compilerKS_nontrivial : ¬ acceptAllL.KS FlockDeploy.sha512 := fun h =>
   acceptAllL_bound_fails _ (Claims.Sampling.R _ acceptAllL.commit acceptAllL.parse acceptAllL.partition 0)
     (acceptAllL.κ 0 []) [] (sksD_noR (Coin := Unit) _ 0 le_rfl []) (by linarith [acceptAllL_κ []])
@@ -622,6 +636,115 @@ theorem acceptAll_drops : acceptAllArg.WF ∧ acceptAllL.commit.Binds FlockDeplo
   rw [hp, hb, mul_zero, Real.sqrt_zero, add_zero] at h1
   exact absurd h1 (show ¬ (1 : ℝ) ≤ 0 by norm_num)
 
+/-! ## `CompilerEfficient`: an opening check that calls more than it counts -/
+
+/-- **A proof system whose extractor finds a witness at once**: `acceptAllArg`, its extractor returning `()` with no
+rerun and no call. -/
+def findArg : Arg Unit := { acceptAllArg with ext := fun _ _ _ => .ret (some ()) }
+
+/-- A commitment whose every opening passes after one SHA-512 call. -/
+def callCm : CommitmentScheme Bool := ⟨fun _ _ => .query [] fun _ => .ret true, fun _ _ _ => []⟩
+
+/-- **The one-block compiled verifier over it**, its session's witness revealing `opening₀` under `callCm`, whose
+check it counts as no call. -/
+def effL : Compiled Unit findArg := oneL findArg callCm [([], opening₀)] 0
+
+section OwnCalls
+
+variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
+
+theorem exists_cons_of_length_pos {α : Type} {l : List α} (h : 0 < l.length) : ∃ a l', l = a :: l' :=
+  List.exists_cons_of_ne_nil (List.ne_nil_of_length_pos h)
+
+theorem ownLog_flatMapRP_head {R β γ : Type} (H : Msg → Msg) (run : R → Trace) (f : β → RP R (List γ)) (b : β)
+    (bs : List β) : (ownLog H run (f b)).length ≤ (ownLog H run (flatMapRP f (b :: bs))).length := by
+  rw [Claims.Sampling.ownLog_flatMapRP, List.map_cons, List.sum_cons]
+  exact Nat.le_add_right _ _
+
+/-- A wait whose first draw is accepted keeps it first. -/
+theorem waitAccC_head {R : Type} (H : Msg → Msg) (run : R → Trace) {k : ℕ} (hk : 0 < k) (r : R) (rs : List R)
+    (hr : (run r).out = .acc) : ∃ l, ((waitAccC k (r :: rs) []).eval H run).1 = (r, (run r).seen) :: l := by
+  rw [Claims.Sampling.waitAccC_eval_nil, Claims.Sampling.accList,
+    List.filter_cons_of_pos (p := fun r => decide ((run r).out = .acc)) (decide_eq_true hr), List.take_cons hk,
+    List.map_cons]
+  exact ⟨_, rfl⟩
+
+/-- **The compiled extractor makes a SHA-512 call of its own** wherever every run is accepted and each accepted run's
+extractions make one: its waits keep their first draws, so the first inner run's extractions are made. -/
+theorem ownLog_E_pos (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
+    (r₀ : Fin (L.V.k x) → Coin) (c : L.E.C x) {s : AuditStatement} (hs : L.parse x = some s)
+    (hacc : ∀ r, (run H P L.V x ω r).out = .acc) (hk : 0 < L.k x) (hcap : 0 < L.cap x)
+    (hrun : ∀ r v c', 0 < (ownLog H (run H P L.V x ω) (L.runExt x s r v c')).length) :
+    0 < (ownLog H (run H P L.V x ω) (L.E.ext x r₀ c)).length := by
+  have h₀ : (run H P L.V x ω r₀).seen.out = .acc := hacc r₀
+  obtain ⟨a, as, ha⟩ := exists_cons_of_length_pos (l := List.finRange (L.k x)) (by rw [List.length_finRange]; exact hk)
+  obtain ⟨l₀, ls, hl⟩ :=
+    exists_cons_of_length_pos (l := List.finRange (L.cap x)) (by rw [List.length_finRange]; exact hcap)
+  simp only [Compiled.E, ownLog, hs, ite_eq_left h₀]
+  rw [Claims.Sampling.ownLog_bind, Claims.Sampling.ownLog_of_noHash _ _ (Claims.Sampling.NoHash.waitAccC _ _ _),
+    List.nil_append, Claims.Sampling.ownLog_bind, List.length_append]
+  refine Nat.lt_of_lt_of_le ?_ (Nat.le_add_right _ _)
+  rw [hl, List.map_cons]
+  obtain ⟨o, ho⟩ := waitAccC_head H (run H P L.V x ω) hk (c.1 l₀) (ls.map c.1) (hacc _)
+  rw [ho, ha, List.zip_cons_cons]
+  refine Nat.lt_of_lt_of_le ?_ (ownLog_flatMapRP_head _ _ _ _ _)
+  dsimp only
+  rw [Claims.Sampling.ownLog_bind, Claims.Sampling.ownLog_of_noHash _ _ (Claims.Sampling.NoHash.waitAccC _ _ _),
+    List.nil_append, List.map_cons]
+  obtain ⟨o', ho'⟩ := waitAccC_head H (run H P L.V x ω) hk (forkOn (L.stage2 x) (c.1 l₀) (c.2.1 a l₀))
+    (ls.map fun l => forkOn (L.stage2 x) (c.1 l₀) (c.2.1 a l)) (hacc _)
+  rw [ho', List.zip_cons_cons]
+  refine Nat.lt_of_lt_of_le ?_ (ownLog_flatMapRP_head _ _ _ _ _)
+  exact hrun _ _ _
+
+end OwnCalls
+
+/-- Each of `effL`'s runs' extractions makes a SHA-512 call of its own: its one slot's session finds the witness at
+once, and checking the opening it reveals calls `callCm`'s one. -/
+theorem effL_runExt (H : Msg → Msg) (x : Msg) (run : (Fin (effL.V.k x) → Unit) → Trace)
+    (r : Fin (effL.V.k x) → Unit) (v : Seen) (c : effL.SlotEC x) :
+    0 < (ownLog H run (effL.runExt x toyStmt r v c)).length := by
+  have h1 : 0 < effL.nPU x := Nat.one_pos
+  obtain ⟨d, ds, hd⟩ :=
+    exists_cons_of_length_pos (l := List.finRange (effL.nPU x)) (by rw [List.length_finRange]; exact h1)
+  unfold Compiled.runExt
+  rw [hd, show effL.checked x r = [0] from rfl, List.zip_cons_cons]
+  refine Nat.lt_of_lt_of_le ?_ (ownLog_flatMapRP_head _ _ _ _ _)
+  dsimp only
+  rw [dite_eq_left h1, Compiled.unitExt, show effL.session x 0 v = some (x, v) from rfl]
+  dsimp only
+  rw [dite_eq_left (show findArg.shape x = effL.sh x 0 from rfl)]
+  exact Nat.succ_pos _
+
+/-- **`CompilerEfficient`'s conclusion fails at `effL`**, at no reruns and no calls of the proof system's: every run is
+accepted, so the compiled extractor reaches its first inner run's extraction, whose opening check makes a SHA-512 call
+of its own, while the own-call bound is `0`. -/
+theorem compilerEfficient_nontrivial :
+    ¬ effL.Efficient FlockDeploy.sha512 (fun _ => 0) (fun _ => 0) (fun _ => 0) := by
+  rintro ⟨-, -, h⟩
+  have c : effL.E.C [] := Classical.arbitrary _
+  have h1 := h [] Unit silentP () (fun _ => ()) c
+  have h0 : effL.k [] ^ 2 * effL.nPU [] * (effL.openCalls [] + effL.hs (fun _ => 0) []) = 0 := by
+    rw [show effL.hs (fun _ => 0) [] = 0 from maxBelowN_zero _, show effL.openCalls [] = 0 from rfl, add_zero,
+      mul_zero]
+  have hpos := ownLog_E_pos effL FlockDeploy.sha512 silentP [] () (fun _ => ()) c (s := toyStmt) rfl
+    (fun r => run_accV_out _ _ _ _ r) (by unfold Compiled.k; positivity)
+    (by unfold Compiled.cap Compiled.k; positivity) fun r v c' => effL_runExt _ [] _ r v c'
+  exact Nat.lt_irrefl 0 (Nat.lt_of_lt_of_le hpos (h1.trans_eq h0))
+
+/-- **What `effL` drops**: it meets the contract, and its proof system reruns nothing and makes no call of its own, but
+its opening checks make more calls than it counts. -/
+theorem compilerEfficient_drops : effL.Sessions FlockDeploy.sha512 ∧
+    findArg.RerunsLe FlockDeploy.sha512 (fun _ => 0) ∧ findArg.RerunsExpLe FlockDeploy.sha512 (fun _ => 0) ∧
+    findArg.OwnLe FlockDeploy.sha512 (fun _ => 0) ∧ ¬ effL.OpenCallsLe FlockDeploy.sha512 := by
+  refine ⟨oneL_sessions findArg callCm [([], opening₀)] 0 _ fun _ _ h => False.elim h, fun _ _ _ _ _ _ => le_rfl,
+    fun _ _ _ _ => ?_, fun _ _ _ _ _ _ => le_rfl, fun h => ?_⟩
+  · refine (Ex_mono fun _ => ?_).trans (le_of_eq (Ex_const 0))
+    show ((0 : ℕ) : ℝ) ≤ 0
+    exact le_of_eq Nat.cast_zero
+  · have h1 := h [] toyStmt rfl 0 ⟨[], .rej⟩ ()
+    exact absurd h1 (by simp [effL, oneL, callCm, OC.eval])
+
 /-! ## `ZKOut`'s leak form -/
 
 /-- A simulator, as one given a trivial outcome. -/
@@ -668,7 +791,8 @@ at `MaskedZK`'s error and fork term. -/
 theorem zkOutLeak_honest :
     ZKOut (fun _ => zkFlock.Nonce) (fun _ => zkFlock.Rest) FlockDeploy.sha512 (fun x => zkFlock.V.k x + 1)
       (fun w _ => zkFlock.prover w) (Claims.Flock.R zkFlock.parse) (fun _ _ => ()) (oneOut zkFlock.S)
-      (fun x w _ Vs θ _ => zkEps 1 x + zkγ 1 x * (Fork FlockDeploy.sha512 (zkFlock.prover w) Vs θ x).Pr FlockDeploy.sha512) :=
+      (fun x w _ Vs θ _ =>
+        zkEps 1 x + zkγ 1 x * (Fork FlockDeploy.sha512 (zkFlock.prover w) Vs θ x).Pr FlockDeploy.sha512) :=
   zkOut_of_zkmalR zkFlock_zk
 
 /-- A prover that says `[0]`. -/
@@ -701,8 +825,8 @@ theorem zkOutLeak_nontrivial :
 
 /-- **What the nontrivial instance drops**: `ZKOut` fails there, so `zkOutLeak`'s bound rests on it. -/
 theorem zkOut_dropped :
-    ¬ ZKOut (fun _ => Unit) (fun _ => Unit) FlockDeploy.sha512 (fun _ => 1) (fun _ _ => talkP) (fun _ (_ : Unit) => True)
-      (fun _ _ => ()) silentSimOut (fun _ _ _ _ _ _ => 0) := fun hz =>
+    ¬ ZKOut (fun _ => Unit) (fun _ => Unit) FlockDeploy.sha512 (fun _ => 1) (fun _ _ => talkP)
+      (fun _ (_ : Unit) => True) (fun _ _ => ()) silentSimOut (fun _ _ _ _ _ _ => 0) := fun hz =>
   zkOutLeak_nontrivial (Claims.zkOutLeak (fun _ => Unit) (fun _ => Unit) FlockDeploy.sha512 (fun _ => 1)
     (fun _ _ => talkP) (fun _ (_ : Unit) => True) (fun _ _ => ()) silentSimOut (fun _ _ _ _ _ _ => 0) hz [] () trivial
     Unit acceptAllVs () rfl (· ≠ []))
@@ -710,7 +834,8 @@ theorem zkOut_dropped :
 /-! ## `CompilerZK` -/
 
 /-- **C-Flock's deployed masked session as a proof system with a public outcome**: `Arg.ofFlock` at its record and
-decoder, its sessions' rounds `V.k + 1` (`Hello` first), its outcome trivial, and its simulator and error `MaskedZK`'s. -/
+decoder, its sessions' rounds `V.k + 1` (`Hello` first), its outcome trivial, and its simulator and error
+`MaskedZK`'s. -/
 noncomputable def zkA : ZkArg FlockDeploy.Coin where
   toArg := Arg.ofFlock zkFlock.toDeploy zkFlock.decode
   kz x := zkFlock.V.k x + 1
@@ -738,6 +863,8 @@ noncomputable def zkL : ZkCompiled FlockDeploy.Coin zkA where
   stage2 _ := Finset.univ
   checked _ _ := [0]
   sh x _ := zkA.shape x
+  κb x _ := zkA.κ x
+  γb x _ := zkA.γ x
   rounds _ _ := Finset.univ
   session x _ v := some (x, v)
   iroots _ _ _ := []
@@ -803,6 +930,8 @@ def talkL : ZkCompiled Unit talkArg where
   stage2 _ := Finset.univ
   checked _ _ := [0]
   sh _ _ := ()
+  κb _ _ := 0
+  γb _ _ := 0
   rounds _ _ := Finset.univ
   session x _ v := some (x, v)
   iroots _ _ _ := []
@@ -863,8 +992,8 @@ theorem talkL_err (H : Msg → Msg) (w : Claims.Sampling.Wit) (o : List Msg × L
   dsimp only
   split <;> rfl
 
-/-- **`CompilerZK`'s conclusion fails at `talkL`**: at the toy witness, which no proof block faults, the talking prover's
-transcript is never empty, the composed simulator's always is, and the error is `0`. -/
+/-- **`CompilerZK`'s conclusion fails at `talkL`**: at the toy witness, which no proof block faults, the talking
+prover's transcript is never empty, the composed simulator's always is, and the error is `0`. -/
 theorem compilerZK_nontrivial : ¬ talkL.ZK FlockDeploy.sha512 := by
   intro h
   have h1 := h (fun x => Claims.Sampling.leafLayer FlockDeploy.sha512 talkL.commit talkL.parse x toyWit) [] toyWit
