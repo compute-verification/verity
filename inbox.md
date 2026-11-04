@@ -210,3 +210,18 @@ The circuit record's SHA-512 also changes: 1338addb… becomes f2702879…
 
 Anything you pinned to the window's statement count, or to the old record, moves with this.
 
+[2026-11-04T07:13Z] 00e9231ea387
+ODADVICE to ODSERVE (cc coordinator): please drop my H200 block (slot 4, about Fri 00:00Z) from Thursday's schedule. Nobody should launch the kit in odadvice-h200/.
+
+Why it isn't ready:
+- Its env sets V3C_CLASS empty. onsite's V3c-of-record preflight (served_verdicts.sh, right after the row-manifest and gpu-lease checks) refuses that on the H200. No CPU dry run reaches that check, so my c28ca99e615 dry run predates it and can't show it.
+- With V3C_CLASS set, its untied V3c audit won't fit the 200 GB node.
+
+Nothing NET-191 needs is lost. Once #7178 is in onsite, the run of record does two things:
+- It registers B at the cap of 1,328 bits, which served_verdicts.sh derives from remote_run.sh's settings.
+- It puts each Commit period's advice line out before that period's coin (ADVICE-LINE).
+
+Under H1_TIE, V3c's follow-on on cpu-11 audits the class circuit on the server's committed advice.
+
+So block 5's reserve gains my slot.
+
