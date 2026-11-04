@@ -50,6 +50,10 @@ test depends on another test module only by importing or naming it, never throug
 nightly `audit-main` job (`check.py --no-cache`) names any cached pass a fresh run contradicts. `suites.py --explain
 SUITE` says why a suite would run, and `lean_audit.py --explain PKG` the same for a Lean package.
 
+A failed test is reported failed, whoever is fixing it: no runner tolerates a red. To let one stand while its fix lands, add
+an allowance to `tools/verity/check/policy.toml` (`suite NAME::TEST`, the owner's handle, a UTC expiry and a reason) in a
+reviewed change: drive and the quick tier take that failure as not red until it expires, then ring its owner.
+
 ## Where a test goes
 
 - **In the tests/ of the package it tests**, mirroring its modules (`verity/ml/circuits/tests/` tests
@@ -71,11 +75,16 @@ reused only while everything its tests read is unchanged. When it fails:
   `[tool.verity.tests] inputs` in the suite's pyproject.toml, with a comment saying why, as narrowly as a directory or
   file allows. A listed workspace package is its directory alone, not its dependencies, and every listed path adds the
   suite to the quick tier of each change under it.
+- **One test file reads what its source doesn't name** (a tree it walks, a module it loads by a computed name, what a
+  program it starts reads): the graph's test-file family keys each file on its own inputs, so add a
+  `[[tool.verity.tests.reads]]` entry with `tests` (the files, from the suite's directory) and `paths` (what they read,
+  Python included). An entry naming no test file or no file of the tree is refused.
 
 A Python a test starts is guarded like the test: declare the file its failure names, or give the test a stand-in.
 Programs the guard can't trace (bash, git, a Python run with `-I`, `-E` or `-S` or off the suite's PYTHONPATH) fail
 nothing, so list what they read, and list a path a test only checks the existence of (the guard sees opens, not
-`stat()`). A test that builds or runs a Lake package lists its lakefile, and its suite goes in `AFTER_LEAN`
+`stat()`). The graph's test-file runner fails a file that starts one unless its suite lists it under `[tool.verity.tests]
+untraced`, which keys it on the suite's whole tree. A test that builds or runs a Lake package lists its lakefile, and its suite goes in `AFTER_LEAN`
 (`tools/verity/check/suites.py`), after `check`'s lean-build step. Locate files from `__file__` (`Path(__file__).parent /
 "fixtures"`), never the working directory, and never lean on another suite's side effects: every suite runs alone.
 

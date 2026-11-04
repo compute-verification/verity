@@ -32,6 +32,7 @@ public import Definitions.Pouw.Game.Deadline
 public import Definitions.Pouw.Game.Defs
 public import Definitions.Pouw.Game.Params
 public import Definitions.Pouw.H1Zy
+public import Definitions.Pouw.KeyedLeaf
 public import Definitions.Pouw.M1
 public import Definitions.Pouw.MerkleExtract
 public import Definitions.Pouw.NCP.Defs
@@ -166,6 +167,12 @@ dequant's and the chain's words as parameters. `Proofs.Pouw.H1Zy` proves it the 
 `Tile`: `PouwH1TileZy_v1{TILE}`'s `ok` (`h1zy._body`) over `PouwH1Tile_v1` or `PouwH1Tile_v3` on its primitives' word
 views: TILE's z (EXACT, or the one-stream's recombination, wrap correction and dither peel at its noise) and the
 record's cell check. `Proofs.Pouw.H1Zy` proves it the check `TileChecks` reads.
+
+## `KeyedLeaf`: the lead's keyed commitments
+
+A window's view, the key leaf and each instance's keyed digest (`Hash.Keyed`), and the two games its hiding reads, each
+with `A`'s distinguisher in it: hm96's hiding game and the keyed digest's game against a random function. Their
+statements are `Definitions.Pouw.Guarantees.KeyedLeaf`, proved in `Proofs.Pouw.Salt`.
 
 ## `PearlC`: Pearl-C's Π and the statements about it
 

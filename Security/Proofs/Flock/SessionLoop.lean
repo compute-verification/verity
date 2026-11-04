@@ -14,6 +14,7 @@ public import Proofs.Flock.SessionLoop.FinishParts
 public import Proofs.Flock.SessionLoop.FinCommits
 public import Proofs.Flock.SessionLoop.FinPoints
 public import Proofs.Flock.SessionLoop.FinRounds
+public import Proofs.Flock.SessionLoop.TablesSide
 public import Proofs.Flock.Claims.ZK.FinishBridge
 public import Proofs.Flock.Claims.ZK.FinishTrunc
 public import Proofs.Flock.Claims.ZK.FinHmkLive
@@ -31,13 +32,13 @@ public import Proofs.Flock.Claims.ZK.RepCutFw
 public import Proofs.Flock.Claims.ZK.FinishSwMkAny
 public import Proofs.Flock.Claims.ZK.FinishFwL0
 public import Proofs.Flock.SessionLoop.FinishIsLoop
+public import Proofs.Flock.SessionLoop.Phase
 public import Proofs.Flock.SessionLoop.PiopState
 public import Proofs.Flock.SessionLoop.CutPiopLive
 public import Proofs.Flock.SessionLoop.CutInnerLive
 public import Proofs.Flock.SessionLoop.InnerSlot
 public import Proofs.Flock.SessionLoop.InnerUnrefused
 public import Proofs.Flock.SessionLoop.LiveInnerAt
-public import Proofs.Flock.SessionLoop.Phase
 public import Proofs.Flock.SessionLoop.VsOfTakes
 public import Proofs.Flock.SessionLoop.VsOfBody
 public import Proofs.Flock.SessionLoop.SwCausalExe

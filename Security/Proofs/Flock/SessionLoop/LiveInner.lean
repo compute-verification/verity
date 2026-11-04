@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.SessionLoop.TakenVals
 public import Proofs.Flock.SessionLoop.Inner
+import all Init.Data.String.Defs
 
 /-!
 # The session loop's frame past the inner proof's label

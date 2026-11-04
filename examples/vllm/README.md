@@ -16,7 +16,7 @@ The remote protocol composes three subprotocols, tied to one record, and accepts
   declared division yet.
 
 PoUW's verdict on the served run credits nothing. The challenger's gate holds a development key, so every served PoUW
-run is a development run. And an H1 commitment's served execution blocks aren't yet a `verity/pouw/v1` case, the form
+run is a development run. And an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case, the form
 remote's PoUW component reads. So the remote verdict can't accept on this run yet, and the run's record stays `pending`.
 
 `example.toml` records what the demo establishes. Its run is `moved`: it has no passing run of record. Its proof level
@@ -61,7 +61,8 @@ gets no verdict.
 
 The auditor's parties are the verifier, the challenger, the network certifier and the memory challenger. The
 challenger is an auditor host reached through its gate, and its live coins are PoUW's always and sampled proofs' when
-`PP_CHALLENGER` names it; otherwise the Lean verifier's own coins sample the proof blocks. The other three are not
+`PP_CHALLENGER` names it; otherwise a local development challenger session on the endpoint's node samples the proof
+blocks, which shows the path but is no auditor's coins. The verifier draws no coins of its own. The other three are not
 placed: the Lean verifier runs on the endpoint's node beside the prover, and the network certifier and the memory
 challenger, which onsite's pieces read, may run there too. Being placed needs each of them on a machine the prover
 doesn't control.
