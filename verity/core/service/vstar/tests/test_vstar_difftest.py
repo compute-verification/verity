@@ -745,8 +745,8 @@ def _vstar(tmp_path: Path, *args, flags: tuple[str, ...] = ()) -> bytes:
     return data
 
 
-#: `rec_outer.subcircuit(8, 1)`'s program digest (core's codec), and the circuit file `compose` writes under it with the
-#: bindings `a…a` and `b…b`.
+#: a program digest for `rec_outer.subcircuit(8, 1)`, an input the file holds as given (core's codec computes the real one,
+#: `circuit.program_digests`), and the circuit file `compose` writes under it with the bindings `a…a` and `b…b`.
 REC_OPEN_8_1 = {"RecOpen_v4{LANES=8,H=1}": "cb8c446680677966b08cdf47d09426438abcf47e3ac7cff5f76cd0225ef157ce"}
 REC_OPEN_8_1_FILE = ("1087318c40a3a8da1994bd1eae6c836ea7025bc17878cf187cf7aad290ad4bfe"
                      "afb71f00d0e0802270e76a47c5ef50213a02a6f5252151f654fbdc5c4ee661ce", 92449957)
