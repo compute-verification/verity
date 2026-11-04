@@ -43,6 +43,9 @@ import Proofs.Flock.Recursive.FirewallAdaptive
 import Proofs.Flock.Recursive.PublicAudit
 import Proofs.Flock.Recursive.PublicAuditProof
 import Proofs.Flock.Recursive.HoloExec
+import Proofs.Flock.Recursive.FirewallObj
+import Proofs.Flock.Recursive.FirewallSteps
+import Proofs.Flock.Recursive.FirewallHonest
 import Proofs.Flock.Recursive.StageKinds
 import Proofs.Flock.Recursive.HoloCoins
 import Proofs.Flock.Recursive.HoloSched
@@ -76,11 +79,15 @@ import Proofs.Flock.Recursive.KS
 import Proofs.Flock.Recursive.KSV
 import Proofs.Flock.Recursive.KSDeployed
 import Proofs.Flock.Recursive.KSProved
+import Proofs.Flock.Recursive.KSCoinTreeProved
+import Proofs.Flock.Recursive.KSCoinTreeWitnesses
 import Proofs.Flock.Recursive.KSLinked
 import Proofs.Flock.Claims.Recursion.DeployedCounts
 import Proofs.Flock.Claims.Recursion.LamDeployedTight
 import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
 import Proofs.Flock.Recursive.BitsK
+import Proofs.Flock.Claims.Recursion.KappaEpsTight
+import Proofs.Flock.Recursive.BitsKTight
 import Proofs.Flock.Claims.Recursion.AcceptedScope
 import Proofs.Flock.Claims.Recursion.InnerSetupCount
 import Proofs.Flock.Claims.Recursion.IVStarCalls

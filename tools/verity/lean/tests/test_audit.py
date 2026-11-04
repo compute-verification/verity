@@ -412,6 +412,59 @@ def test_the_reads_check_leaves_the_proofs_tree_to_the_trees_check():
         "exception to the trees rule is listed under `trees`' `except`)"]
 
 
+def test_the_record_follows_a_statement_through_the_modules_the_trees_except(tmp_path, monkeypatch):
+    """`trees`' `except` exempts a module from the trees rule, not from the record: `Facts.lean` walks a guarantee's
+    statement through `record_scope` (`meaning`, then the excepted prefixes), for a package's own guarantees and for those
+    a `proved_in` package proves, as `Security`'s are. The witnesses rule still reads only what the walk under `meaning`
+    alone reaches (`meaning_reads`), so what the record now holds brings no guarantee into its scope."""
+    why = "C-Flock is excepted until its spec is extracted"
+    pol = {"roots": ["S"], "meaning": ["S.Defs"], "trees": {"proofs": ["SP"], "except": {"SP.Loop": why, "S.Defs": why}}}
+    assert A.record_scope(pol) == ["S.Defs", "SP.Loop"]
+    assert A.record_scope({"roots": ["S"]}) == ["S"]
+    assert A.record_scope({"roots": ["S"], "trees": {"except": ["SP.Loop"]}}) == ["S"], "a malformed `except` is the trees check's"
+
+    configs = []
+
+    def run(argv, cwd, log=None, timeout=0):
+        cfg = json.loads(Path(argv[-1]).read_text())
+        configs.append(cfg)
+        Path(cfg["out"]).write_text(json.dumps({"pins": {}}))
+        Path(cfg["canon"]).write_text("")
+        return 0, ""
+    monkeypatch.setattr(A, "facts_program", lambda pkg: "facts")
+    monkeypatch.setattr(A, "run", run)
+    A.facts_of(tmp_path, pol, tmp_path)
+    assert configs[0]["meaning"] == ["S.Defs"] and configs[0]["recorded"] == ["S.Defs", "SP.Loop"]
+
+    s, p = tmp_path / "s", tmp_path / "p"
+    for d, rel in ((s, "S/Defs.lean"), (p, "SP/Loop.lean")):
+        (d / rel).parent.mkdir(parents=True)
+        (d / rel).write_text("")
+    (s / A.POLICY).write_text(json.dumps(pol | {"proved_in": ["../p"]}))
+    (p / A.POLICY).write_text(json.dumps({"roots": ["SP"]}))
+    (p / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "path", "name": "s", "dir": "../s"}]}))
+    scopes = []
+
+    class Read(Exception):
+        pass
+
+    def facts_of(q, qpol, work, moved=None):
+        scopes.append(A.record_scope(qpol))
+        raise Read
+    monkeypatch.setattr(A, "facts_of", facts_of)
+    with pytest.raises(Read):
+        A.proved(s, pol | {"proved_in": ["../p"]}, facts(modules=[], pins={}), tmp_path / "work")
+    assert scopes == [["S.Defs", "SP.Loop"]], "the prover's facts are walked through the spec's excepted modules"
+
+    claim = {"name": "S.Claims.Holds", "module": "S.Defs.Claims", "kind": "def", "hash": "4" * 32}
+    loop = {"name": "S.Guarantees.Loop", "module": "SP.Loop", "kind": "def", "hash": "5" * 32}
+    held = ("acceptance", "it reads the claim S.Claims.Holds")
+    assert A.witness_scope("S.t", pol, fact(reads=[loop, claim]) | {"meaning_reads": []}) is None, (
+        "a claim read only through the excepted statement")
+    assert A.witness_scope("S.t", pol, fact(reads=[loop, claim]) | {"meaning_reads": ["S.Claims.Holds"]}) == held
+    assert A.witness_scope("S.t", pol, fact(reads=[claim])) == held, "facts of a package with nothing excepted"
+
+
 def test_a_changed_statement_or_meaning_fails_until_updated():
     pol = recorded()
     fails = A.judge(pol, facts(pins={"P.t": fact(signature="P.t (h : P.Hyp) (n : Nat) : P.f n ≤ n", h="00000000000000bb")}), FILES)[0]
@@ -1578,6 +1631,80 @@ def test_a_premise_outside_meaning_changes_its_record_when_it_or_what_it_reads_c
         assert after == before, "the premise's record changed, and nothing else"
 
 
+LOOP = ("import Control.Assumptions\nimport Control.Defs\nnamespace Control.Guarantees\n"
+        "def Loop : Prop := ∀ n : Nat, Control.Hyp → Control.verifyDouble n\nend Control.Guarantees\n")
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_path):
+    """On a real build: a guarantee whose statement is a `def G : Prop` of a proofs-tree module under `trees`' `except`
+    and outside `meaning` (`Control.Guarantees.Loop`, as C-Flock's `SessionLoopZKDeployed` is in
+    `Proofs.Flock.SessionLoop`) is recorded through `G`'s body. A premise added to it that no named assumption stands for
+    (`n ≠ 5`), or dropped from it while another guarantee still takes it (`Hyp`, whose assumption entry stays, and whose
+    module's readers lose the guarantee), changes the record, which the audit refuses until `--update` records it, and
+    the review prints `G` as it is now. A walk that stopped at `G` would record its name alone, and neither change would
+    move the lock. What `G` reads under `meaning`
+    (`verifyDouble`, a verifier's acceptance by its name) is recorded too, but holds the guarantee to no witnesses."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    defs = pkg / "Control" / "Defs.lean"
+    defs.write_text(defs.read_text().replace(
+        "end Control", "def verifyDouble (n : Nat) : Prop := double n = n + n\n\nend Control"))
+    loop = pkg / "Control" / "Loop.lean"
+    loop.write_text(LOOP)
+    (pkg / "Control" / "LoopThm.lean").write_text(
+        "import Control.Loop\nnamespace Control\ntheorem doubles : Guarantees.Loop := by\n  unfold Guarantees.Loop\n"
+        "  intros\n  unfold verifyDouble double\n  omega\nend Control\n")
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.LoopThm\n")
+    pol = A.load(pkg)
+    A.dump(pkg, pol | {"meaning": ["Control.Assumptions", "Control.Defs", "Control.Thms"],
+                       "trees": pol["trees"] | {"proofs": [*pol["trees"]["proofs"], "Control.Loop"],
+                                                "except": {"Control.Loop": "the statement this test records, in a proof module"}},
+                       "claims": pol["claims"] | {"not": {"Control.verifyDouble": "the toy verifier the statement reads"}},
+                       "guarantees": pol["guarantees"] | {"Control.doubles": {"owner": "@lean"}}})
+
+    def build():
+        return subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+
+    def audit(update):
+        return A.audit(pkg, tmp_path / "out", update=update, replay=False, runs=False, log=lambda *_: None)
+
+    def lock():
+        return json.loads((pkg / A.POLICY).read_text())
+    build()
+    assert unshaped(audit(True)) == []
+    first = lock()
+    assert first["guarantees"]["Control.doubles"]["signature"] == ["Control.doubles : Control.Guarantees.Loop"]
+    assert list(first["reads"]["Control.Loop"]["definitions"]) == ["Control.Guarantees.Loop"]
+    assert first["reads"]["Control.Loop"]["guarantees"] == ["Control.doubles"]
+    assert "Control.doubles" in first["reads"]["Control.Defs"]["guarantees"], "and through it, what it reads under `meaning`"
+    assert "Control.verifyDouble" in first["reads"]["Control.Defs"]["definitions"]
+    seen = {first["reads"]["Control.Loop"]["digest"]}
+    for text, shows, codes, hyp_readers in (
+            (LOOP.replace("Control.Hyp →", "Control.Hyp → n ≠ 5 →"), "n ≠ 5", ["guarantees.reads-changed"],
+             ["Control.doubles", "Control.main_thm"]),
+            (LOOP.replace("Control.Hyp → ", ""), "∀ n : Nat, Control.verifyDouble n",
+             ["guarantees.readers", "guarantees.reads-changed"], ["Control.main_thm"])):
+        before = lock()
+        loop.write_text(text)
+        build()
+        assert sorted(f.code for f in audit(False)["failures"] if not f.code.startswith("shape")) == codes
+        rep = audit(True)
+        after = lock()
+        assert unshaped(rep) == [] and after["guarantees"] == before["guarantees"]
+        assert after["assumptions"] == before["assumptions"] and set(after["assumptions"]) == {"Control.Hyp"}
+        assert after["reads"]["Control.Assumptions"]["guarantees"] == hyp_readers
+        assert after["reads"]["Control.Loop"]["digest"] not in seen
+        seen.add(after["reads"]["Control.Loop"]["digest"])
+        changes = A.statement_changes(rep["review"])
+        assert changes[0] == "definition Control.Guarantees.Loop (Control.Loop), read by Control.doubles: changed", changes
+        assert any(shows in line for line in changes[1:]), changes
+        for module in ("Control.Loop", "Control.Assumptions"):
+            after["reads"][module] = before["reads"][module]
+        assert after == before, "the statement's record changed, and nothing else"
+
+
 def test_a_statement_whose_premises_could_not_be_read_fails():
     """`Facts.lean` writes `premises: null` when `premisesOf` throws on a statement; read as no premises, every premise of it
     would go unlisted, so it fails instead. Facts without the field (older documents) are not held to it."""
@@ -2020,7 +2147,8 @@ def test_an_unnamed_inline_hypothesis_fails_with_the_fix():
                         "inline hypothesis, neither a named assumption the lock lists, another listed guarantee's statement "
                         "nor a plain range (`0 < x`, `0 ≤ x`, `x ≤ 1`, `x ≤ y`, `∀ i, 0 ≤ f i`, over bound variables and "
                         "numerals); name it as a Prop in an Assumptions module and list it in the lock, or state it as a "
-                        "lock-listed guarantee's conclusion")
+                        "lock-listed guarantee's conclusion; or, where a merge or an older tree's `--update` dropped an "
+                        "entry the lock had for it, put that entry back as the earlier lock has it")
     assert A.INLINE_FIX in fails[0]
     assert A.inline_failures(pol, f)[2] == {"P.t": ["P.f n = 3", "x ≤ 2 * y", "P.Guarantees.T", "P.Unlisted n", "1 = 1"]}
     unread = facts(pins=f["pins"] | {"P.t": f["pins"]["P.t"] | {"inline": None}})
@@ -2603,6 +2731,52 @@ def test_two_builds_that_write_one_path_dependency_s_lake_run_one_at_a_time(tmp_
     [(second, line)] = waits.items()
     assert line == f"build: {tmp_path / second} waits for a build that writes the .lake of {d.resolve()}"
     assert [reps[p]["failures"] for p in "ab"] == [["build: exit 1\nfake build"]] * 2
+
+
+def test_with_the_node_s_artifact_cache_each_build_step_reads_a_cache_staged_for_it(tmp_path, monkeypatch):
+    """Lake finds a module in a cache by its 64-bit input hash alone, so no build reads the node's artifact cache: each
+    step reads a directory staged inside it for this build (`LAKE_CACHE_DIR`, with `LAKE_ARTIFACT_CACHE` unset: read,
+    never written), holding the modules the cache indexes under their keys, and gone once the build ends."""
+    mk = A.sibling("module_keys")
+    pkg, store = tmp_path / "p", tmp_path / "store"
+    (pkg / "P").mkdir(parents=True)
+    (pkg / A.POLICY).write_text(json.dumps({"roots": ["P"]}))
+    (pkg / "lean-toolchain").write_text("leanprover/lean4:v4.34.0\n")
+    (pkg / "lakefile.toml").write_text('name = "p"\ndefaultTargets = ["P"]\n\n[[lean_lib]]\nname = "P"\n')
+    (pkg / "lake-manifest.json").write_text(json.dumps({"name": "p", "packages": []}))
+    (pkg / "P.lean").write_text("theorem p : True := trivial\n")
+    (store / "artifacts").mkdir(parents=True)
+    (store / "artifacts" / ("a" * 16 + ".olean")).write_bytes(b"P")
+    (store / mk.INDEX).mkdir()
+    mk.entry_path(store, mk.key("P", mk.keys(pkg), {})).write_text(json.dumps({
+        "module": "P", "scope": "p", "hash": "1" * 16, "outputs": {"o": ["a" * 16 + ".olean"]},
+        "digests": {"a" * 16 + ".olean": mk.C.digest(b"P")}}))
+    cache = store / mk.STAGE / f"{os.getpid()}-p"
+    seen = []
+
+    def fake_run(argv, cwd, log=None, timeout=0):
+        seen.append((argv, (cache / "outputs" / "p" / f"{'1' * 16}.json").is_file()))
+        return (1, "fake build") if len(seen) == 2 else (0, "")
+
+    monkeypatch.setattr(A, "sandboxed", lambda: False)
+    monkeypatch.setattr(A, "setup", lambda pkg, toolchain, log: (0, ""))
+    monkeypatch.setattr(A, "run", fake_run)
+    monkeypatch.setattr(A, "ARTIFACTS", store)
+    rep = A.audit(pkg, tmp_path / "out", build=True, runs=False)
+    assert seen == [(["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build"], True),
+                    (["env", "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={cache}", "lake", "build", "+P"], True)]
+    assert rep["staged"] == {"modules": 1, "keyed": 1} and "stage" in rep["seconds"] and not cache.exists()
+    assert rep["failures"] == ["build-roots: exit 1\nfake build"]
+    lib = pkg / ".lake" / "build" / "lib" / "lean"
+    lib.mkdir(parents=True)
+    (pkg / "P" / "Q.lean").write_text("")
+    (lib / "P").mkdir()
+    (lib / "P" / "Q.trace").write_text(json.dumps({"depHash": "1" * 16}))   # Lake took P's entry for it
+    seen.clear()
+    monkeypatch.setattr(A, "run", lambda argv, cwd, log=None, timeout=0: (0, ""))
+    rep = A.audit(pkg, tmp_path / "out", build=True, runs=False)
+    assert [f.code for f in rep["failures"]] == ["build"] and "P.Q (P's)" in rep["failures"][0]
+    assert not (lib / "P" / "Q.trace").exists() and not cache.exists()
 
 
 def test_a_guarantee_is_proved_by_exactly_one_package():
