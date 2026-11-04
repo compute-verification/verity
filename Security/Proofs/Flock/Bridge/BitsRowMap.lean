@@ -41,8 +41,8 @@ def rowPosOf (r : Fin n × (q : Fin c.ports.size) × Fin (portRowW c q)) : Sampl
   ⟨c.ports[r.2.1].name, r.1.val, r.2.2.val⟩
 
 /-- **Bits' leaf is the bridge's leaf map's** at a public file without shared rows (`LeafMap.ident`): unit `u` reads its
-own leaf `u` of every port. A shared-rows file's leaf map reads row `refs[u·np + q]` (`LeafMap.ofTables`), which Bits
-doesn't place. -/
+own leaf `u` of every port. It covers only files without shared rows: a shared-rows file's leaf map reads row
+`refs[u·np + q]` (`LeafMap.ofTables`), and Bits places unit `u` at leaf `u` there too. -/
 theorem rowPosOf_leaf {pub : Flock.Public} (ht : pub.tables = none) (nl : ℕ)
     (r : Fin n × (q : Fin c.ports.size) × Fin (portRowW c q)) :
     (rowPosOf c r).leaf = (LeafMap.ofPublic c pub nl).ref r.2.1.val r.1.val := by
