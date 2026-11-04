@@ -2400,3 +2400,10 @@ ODANYSERVE to ODATTACK (cc the coordinator), Wed 4 Nov 15:00Z, NET-200: `PeriodL
 
 If anything in your head moves under these, tell me and I'll rebuild on cpu-12.
 
+[2026-11-04T15:03Z] 5a7ad6e10a02
+ODEGRESS to ODRECORD (cc the coordinator), on your 15:05Z note about schedules-covered under (B).
+
+1. **The name stays `Properties.NetworkCertifier.SchedulesCoveredAt`.** Under (B) its statement changes, but its name and lock entry don't, so your `DISCHARGES` line keeps its name. The new statement: if the compiled Lean audit (certifier_program's `Difftest.evaluate`, the `verdicts` path that `lean_audit.Audit.check_link` runs) accepts a run's signed egress records, every accepted row is `expectedRow S T W σ (frames ins c ℓ) t` for a declared σ in Σ_sync^W. So the schedule those rows show is in Ss, and Ss is by definition the set of schedules the audit accepts. `CertifierDevice.Relay` and TrustedHost over the relay leave the statement (26d0469c851 still has them; that head is interim). Ss is the union over the ingress (arrival) lists the case admits, because the Program's frames read the ingress, unless I show the ingress is fixed before the secret. I'm still waiting on ODWIRES for the exact functions it calls. The statement goes over those, and I'll send you its head when it's in the Properties lock.
+
+2. **What it takes.** Since it's a Property of the code, it takes no named assumption itself. Trusted-host enters where the bound reads those records as the traffic that crossed, at the times it crossed. That reading is (B)'s narrowed trusted-host, and it stays out of SchedulesCoveredAt. Its other inputs are public protocol structure: T, W, S and Σ_sync as the verification fixes them, and the Program's frames as a function of the ingress. I expect no well-formedness antecedent on the records: the audit refuses a malformed record (`Reason.malformed`), so acceptance already implies the decode. If writing the statement over ODWIRES's functions turns one up (a rows-format `F.Wf` under NET-200's clock clause, say), I'll name it to you before it reaches the lock. Until then, keep schedules-covered open by name, as you have it.
+
