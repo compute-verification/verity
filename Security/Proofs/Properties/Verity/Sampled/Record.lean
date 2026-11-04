@@ -3,7 +3,6 @@ import Proofs.Flock.Claims.Sampling.Session
 import Proofs.Flock.Claims.Sampling.Deployed
 import Proofs.Flock.Bridge.LeafMap
 import Proofs.Properties.SampledProofs.Units
-import Flock.Firewall
 
 /-!
 # One-stage v2's audit at a session, as a sampling record
@@ -19,8 +18,9 @@ public-coin form (`V`), with what the sampling claims read of it (`code`, `recor
   the coins) and its session has the statement's numbers (`numsOk`); then the one session, flock-verify `--zk` in
   public-coin form (`FlockDeploy.V true`) at the session's statement `sessStmt A o d`. Every other statement is refused.
 * **The session's numbers are the statement's**: the sampling record fixes each checked unit's session rounds by the
-  statement, so the verifier holds the session's round count and `N₀` to those at a reference draw file (`d₀`, the
-  bytes of `A.d₀`), and refuses a draw file that sets the session up at others.
+  statement, so the verifier holds the session's round count and `N₀` to those at a reference draw file (`d₀`, one
+  whose session sets up one table of `A.kd` units: `RefOk`), and refuses a draw file that sets the session up at
+  others.
 * **What the claims read** (`code`): the statement's audit statement and partition are V5's at `A` (`Flock.Bridge.stmtOf`,
   `Flock.Bridge.partOf`); the draw precedes the session (`stage2` and every unit's `rounds` are the session's rounds);
   the checked units are the coins' draw (`checked`); every unit's session is the one session (`sessionOf`, with a
@@ -90,11 +90,17 @@ def provedOf (A : Live) (d : Msg) : Option (Array ℕ) := do
   let j ← (FlockDeploy.jsonOf "draw" ⟨d.toArray⟩).toOption
   _root_.Properties.SampledProofs.Units.unitsAt A.pub.header (Flock.norm j)
 
-/-- The reference draw file: `A.d₀`'s text. -/
-def d₀ (A : Live) : Msg := (Flock.Firewall.printJson A.d₀).toUTF8.data.toList
+/-- **A reference draw file**: the session's statement at the draw file `d` reads as `baseRaw` with `d`, and sets up one
+table, of `A.kd` units. -/
+def RefOk (A : Live) (o : Own) (d : Msg) : Prop :=
+  ∃ s t, ({ baseRaw A o with draw := some ⟨d.toArray⟩ } : FlockDeploy.Raw).ins = .ok s ∧
+    FlockDeploy.setupOf true (sessStmt A o d) = some (s, t.spec, #[t]) ∧ t.n = A.kd
+
+/-- The reference draw file: one `RefOk` holds at, where one does. -/
+noncomputable def d₀ (A : Live) (o : Own) : Msg := Classical.epsilon (RefOk A o)
 
 /-- The session's statement at the reference draw file. -/
-def xS₀ (A : Live) (o : Own) : Msg := sessStmt A o (d₀ A)
+noncomputable def xS₀ (A : Live) (o : Own) : Msg := sessStmt A o (d₀ A o)
 
 /-- **A session statement's numbers**: flock-verify's rounds and `N₀` there. -/
 noncomputable def Nums (xS : Msg) : ℕ × ℝ := ((FlockDeploy.V true).k xS, FlockDeploy.N₀ true xS)
@@ -103,7 +109,7 @@ noncomputable def Nums (xS : Msg) : ℕ × ℝ := ((FlockDeploy.V true).k xS, Fl
 def numsOk (A : Live) (o : Own) (d : Msg) : Prop := Nums (sessStmt A o d) = Nums (xS₀ A o)
 
 /-- The session's rounds the statement fixes. -/
-def kS (A : Live) (o : Own) : ℕ := (FlockDeploy.V true).k (xS₀ A o)
+noncomputable def kS (A : Live) (o : Own) : ℕ := (FlockDeploy.V true).k (xS₀ A o)
 
 /-- **The draw file round's check**: the draw file proves exactly the units the draw coins `cs` draw, and its session
 has the statement's numbers. -/
@@ -131,7 +137,7 @@ def after (k : ℕ) : Finset (Fin k) := Finset.univ.filter fun t => DRAW_ROUNDS 
 
 /-- A refused draw file's session: the reference statement, and a prover that sends `[2]`, which flock-verify refuses
 at once. -/
-def refused (A : Live) (o : Own) : Msg × Seen := (xS₀ A o, ⟨[([2], .rej)], .rej⟩)
+noncomputable def refused (A : Live) (o : Own) : Msg × Seen := (xS₀ A o, ⟨[([2], .rej)], .rej⟩)
 
 open Classical in
 /-- **The session a run shows**: where the draw file round kept the draw file `d` and the session has the statement's
