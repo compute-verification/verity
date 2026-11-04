@@ -14,7 +14,12 @@ python scorer.py final entries|plan [--begin HH:MM] [--deadline HH:MM]  # the FI
 python scorer.py final launch ID... [--seeds 101,102,103] [--node N] [--smoke] [--dry-run]
 python scorer.py final dispatch [--nodes N1,N2,...] [--deadline HH:MM] [--dry-run]  # one pass: the plan's next reruns
 python scorer.py final collect|table                   # final-set reruns (below)
+python node_loop.py init|once|loop|finish RUN          # the refresh (v1cycle.py) as a research run on a CPU node
 ~~~
+
+The refresh runs on a CPU node (`refresh-node.sh`, its state kept there; the agent VM only edits): `node_loop.py` on
+the VM pushes the records' commits into the node's repository, launches each run, and PUTs the console bodies and posts
+the board lines it leaves in `out/vm/`, since a node holds no console token and no push to origin.
 
 The nodes launch.py and promote.py take are the coordinator's shared list `/tmp/te-nodes.txt` (11:55Z) when it exists
 (`TE_NODES`), else the harness's `nodes.txt`. The hourly lines are two runs: `board --digest --append`, then
