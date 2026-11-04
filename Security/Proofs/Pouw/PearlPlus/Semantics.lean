@@ -31,7 +31,7 @@ variable {α β : Type}
 
 theorem ofFn_mapM {f : α → Option β} : ∀ {n : ℕ} {a : Fin n → α} {b : Fin n → β}, (∀ p, f (a p) = some (b p)) →
     (List.ofFn a).mapM f = some (List.ofFn b)
-  | 0, _, _, _ => by simp only [List.ofFn_zero, List.mapM_nil] <;> rfl
+  | 0, _, _, _ => by simp only [List.ofFn_zero, List.mapM_nil]; rfl
   | n + 1, a, b, h => by
     have ih := ofFn_mapM (f := f) (a := fun p => a p.succ) (b := fun p => b p.succ) (fun p => h p.succ)
     rw [List.ofFn_succ (f := a), List.ofFn_succ (f := b), List.mapM_cons, h 0, ih]
@@ -54,12 +54,12 @@ theorem foldlM_inv (P : β → Prop) (f : β → α → Option β) (hf : ∀ b a
 
 theorem push_get!_lt [Inhabited α] {a : Array α} {v : α} {y : ℕ} (h : y < a.size) : (a.push v)[y]! = a[y]! := by
   have h' : y < (a.push v).size := by simp only [Array.size_push]; omega
-  rw [getElem!_pos (a.push v) y h', Array.getElem_push h', dif_pos h, getElem!_pos a y h]
+  rw [getElem!_pos (a.push v) y h', Array.getElem_push h', dite_eq_left h, getElem!_pos a y h]
 
 theorem push_get!_eq [Inhabited α] {a : Array α} {v : α} {y : ℕ} (h : a.size = y) : (a.push v)[y]! = v := by
   have h' : y < (a.push v).size := by simp only [Array.size_push]; omega
   have hn : ¬ y < a.size := by omega
-  rw [getElem!_pos (a.push v) y h', Array.getElem_push h', dif_neg hn]
+  rw [getElem!_pos (a.push v) y h', Array.getElem_push h', dite_eq_right hn]
 
 theorem zip_toList_get [Inhabited α] [Inhabited β] {a : Array α} {b : Array β} {j : ℕ}
     (h : j < (a.zip b).toList.length) (ha : j < a.size) (hb : j < b.size) : (a.zip b).toList[j] = (a[j]!, b[j]!) := by
@@ -106,7 +106,7 @@ theorem rho_empty (a : ℕ) {n : ℕ} (hn : n = 0) :
     · show wordQ (Evaluate.Fp32.sqrtRn (if (0 : ℕ) = 0 then
           (if m = 0 then Evaluate.Scalar.F32_NAN_PTX else Evaluate.Fp32.infWord (s ^^ false))
         else Evaluate.Fp32.roundRn (s ^^ false) (m <<< 149) 0)) = none
-      rw [if_pos rfl, if_neg hm]
+      rw [ite_eq_left rfl, ite_eq_right hm]
       cases s <;> decide +kernel
 
 /-- **`s5_stats` refuse an empty row**: its ρ is `√(part₀ / 0)`, which is not finite, and the stats are a value only where
@@ -216,7 +216,7 @@ def FormRow (rows eRows f : Array (Array ℕ)) (j : ℕ) (o : Words.Formed) : Pr
   o.codes.size = j ∧ o.ep.size = j ∧ ∀ y < j, ∃ s ρw αw βw : ℕ, Words.s5Stats rows[y]! = .ok (s, ρw, αw, βw) ∧
     (eRows[y]!).mapM (fun c => do Words.toFp8 (Evaluate.Fp32.f32MulV2 βw (← Words.ofFp8 c))) = .ok o.ep[y]! ∧
     (Array.range rows[y]!.size).mapM (fun t => do
-      Words.toFp8 (← Words.finite (Words.atom (Evaluate.Fp32.f32MulV2 αw rows[y]![t]!) (o.ep[y]!).toList
+      Words.toFp8 (← Words.finite (Words.atom (Evaluate.Fp32.f32MulV2 αw (rows[y]!)[t]!) (o.ep[y]!).toList
         (f[t]!).toList))) = .ok o.codes[y]!
 
 /-- **A side's forming**: where `formV1` is a value on rows and noise lines of one count, its codes and `E′` have a row
@@ -439,13 +439,13 @@ theorem wordsAreTheSemantics_of (hA : PeelARow) (hB : PeelBRow) : WordsAreTheSem
   refine ⟨?_, ?_⟩
   · show _ = atNat _ rows[x]! cols[y]!
     unfold atNat
-    rw [dif_pos (And.intro him hjn)]
+    rw [dite_eq_left (And.intro him hjn)]
     have hv := TileCircuit.chainWordP_value hopperE4m3K32 4 _ hC
     rw [Accum.chainP_hopper_four] at hv
     exact hv.symm
   · show _ = atNat _ rows[x]! cols[y]!
     unfold atNat
-    rw [dif_pos (And.intro him hjn)]
+    rw [dite_eq_left (And.intro him hjn)]
     rw [PeelExactP.peelExactP_hopper] at hP
     have hv := congrArg (fun o => Option.bind o wordQ) hP
     simp only [Option.bind_some] at hv
