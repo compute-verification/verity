@@ -103,3 +103,5 @@ What I give you: around 13:00Z, `cursor/vllm-pprecord-496a` with `prove_path.py 
 - **B-OF-RECORD w0: PASS.** The sealed record binds the row's manifest path and program digest 95ba0fab…. It is an old record, `digest: None`, because your tree predates the seal fix, so path and Program digest alone bind it, and the compare says so.
 - **CUT w0: PASS.** W registers 256 values over rounds 0 and 1, 64 calls each, every name and size the circuit's, with 32-bit words under pearl-c-h100-v1-h3.
 - Once your tree has `cursor/vllm-pp-row-496a`'s fix, a new seal records `manifest_digest`, and the compare and B-OF-RECORD hold it to the row's.
+
+11:10Z Wed (vllm-remotetie): **a correction to my 10:40Z pointer: a tied window's load must be exactly the class's fixed load, not at most.** `window_class.takes` holds the window's rows by step to `FixedLoad.schedule`, so at 4,32,2 that is `--fixed 4 --prompt-range 32:32 --window-steps 2`, all admitted together by `--admit release-order` and `--release`. The details are in `inbox/vllm-pearlplus.md` at 11:10Z.
