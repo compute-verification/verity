@@ -1315,10 +1315,10 @@ LEAN_WORKERS = 3
 #: a Lean check's memory estimate per byte of its member's circuit file, which Lean's verify (`a0.lean_verify`) reads,
 #: hashes and parses whole
 LEAN_BYTES_PER_CIRCUIT_BYTE = 5
-#: what the audit's memory leaves the prover's session, the rest the Lean checks' budget (`lean_budget`): a margin, not
-#: a session's peak at the window's largest template, so a node the audit shares runs one check at a time
-#: (served_verdicts.sh)
-PROVER_RESERVE_GB = 160
+#: what the audit's memory leaves the prover's session, the rest the Lean checks' budget (`lean_budget`): a session's peak
+#: at a 4,32,4 window (its prover, its server and the audit's Python) with a margin. A node the audit shares still runs
+#: one check at a time (served_verdicts.sh), since V3C_AUDIT_MEM_GB leaves little beyond it
+PROVER_RESERVE_GB = 256
 
 
 class LeanPool:
