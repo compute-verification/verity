@@ -151,9 +151,9 @@ def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_c
     assert (rec["run"], rec["tree"], b["verdict_line"]) == ("toy-run", TREE, LINE)
     assert [(t["symbol"], t.get("phase"), t["bits"], t["lean"]) for t in b["terms"]] == [
         ("k_{sched}", None, 756, ["schedules"]), ("k_{fail}", None, 756, ["cells"]),
-        ("\\ell_{a,i}", 0, 9088, ["scans[0].free"]),
-        ("k_{skip,i}", 0, 0, ["scans[0].faulty_sets", "scans[0].faulty_bits", "scans[0].faulty_entries"]),
-        ("k_i \\log_2 d_{jit}", 0, 63, ["scans[0].jitter"])]
+        ("\\ell_{a,j}", 0, 9088, ["scans[0].free"]),
+        ("k_{skip,j}", 0, 0, ["scans[0].faulty_sets", "scans[0].faulty_bits", "scans[0].faulty_entries"]),
+        ("T_j \\log_2 d_{jit}", 0, 63, ["scans[0].jitter"])]
     assert sum(t["bits"] for t in b["terms"]) == b["K"]
     assert b["notes"] == [OR.OVERCOUNT] and "k_sched" in OR.OVERCOUNT and "k_fail" in OR.OVERCOUNT
     assert b["connections"] == {"count": 4 * 63, "from": OR.CONNECTIONS}

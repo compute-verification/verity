@@ -22,9 +22,9 @@ network certifier's answer's, which host ran each party.
 
 **The bound** is the network certifier's accepted answer's public in its rows form: K and each of its terms in the
 notation table's symbols (`TERMS`, `PHASE_TERMS`), each naming the public fields it sums (``lean``): k_sched
-(``schedules``), k_fail (``cells``) and, for each execution phase i of the certification period (the code's link-window,
-the public's ``scans[i]``), ℓ_{a,i} (``free``), k_{skip,i} (``faulty_sets``, ``faulty_bits`` and ``faulty_entries``) and
-the jitter (``jitter``). They sum to K, by which `NetTiming.Guarantees.PeriodLeakAccepted` bounds what the serving node
+(``schedules``), k_fail (``cells``) and, for each execution phase j of the certification period (the code's link-window,
+the public's ``scans[j]``), ℓ_{a,j} (``free``), k_{skip,j} (``faulty_sets``, ``faulty_bits`` and ``faulty_entries``) and
+the jitter T_j·log2 d_jit, T_j the phase's buckets (``jitter``). They sum to K, by which `NetTiming.Guarantees.PeriodLeakAccepted` bounds what the serving node
 sends past its committed program except with δ_net over ``period_s`` seconds, the run's m execution phases of T buckets
 of τ (the certifier's case's ``schedule``). ``delta_net`` gives it term by term, each with its source: the answer's
 ``eps``, only its δ part (m · δ and each charged audit's δ, `EPS`), and m times each phase's knowledge, binding and
@@ -34,7 +34,7 @@ connections k_sched and k_fail count, every one the schedule can carry (`CONNECT
 caps aren't those; and ``verdict_line`` is the run's published line of the network certifier's verdict (`LINE` in
 verdicts.txt), None where it has none. A public whose terms don't sum to K, or that isn't the rows form, is the bound's
 ``error``. Beside the bound, ``advice_charge``: the served run's realized advice charge stays out of the record
-(`ADVICE`, which says what hides it and what doesn't yet); ``registered`` is ℓ_{a,i}, the registered width each
+(`ADVICE`, which says what hides it and what doesn't yet); ``registered`` is ℓ_{a,j}, the registered width each
 execution phase's term charges, an upper bound on the honest charge (`REGISTERED`), with its share of K; and
 ``measured`` is honest serving's |a_j| a Commit period, of which an execution phase holds several, measured on a test
 run with public inputs (`advice_charge.py`'s record, ``--advice-charge``) and labelled as that run's, never a figure of
@@ -50,7 +50,7 @@ cell gives K in bits (the least integer at or above a scaled one), its share of 
 already vacuous (at least 1) and the statement it rests on; beside that pooled total, ``per_phase`` is the same over
 one execution phase, proved only where m is 1.
 
-The record's counts and indices are the certification period's (m and each phase i), public in the Lean answer's
+The record's counts and indices are the certification period's (m and each phase j), public in the Lean answer's
 profile; it names no Commit window, whose count `publish` holds.
 """
 from __future__ import annotations
@@ -87,13 +87,13 @@ ROWS = {"sampled proofs": "integrity", "PoUW": "work", "the network certifier": 
 CASE = Path("pieces") / "certifier" / "case.json"
 #: K's terms over the period, each a symbol of the notation table and the rows form's public fields it sums
 TERMS = {"k_{sched}": ("schedules",), "k_{fail}": ("cells",)}
-#: K's terms of each execution phase i, each summing its scan's public fields
-PHASE_TERMS = {"\\ell_{a,i}": ("free",), "k_{skip,i}": ("faulty_sets", "faulty_bits", "faulty_entries"),
-               "k_i \\log_2 d_{jit}": ("jitter",)}
+#: K's terms of each execution phase j, each summing its scan's public fields
+PHASE_TERMS = {"\\ell_{a,j}": ("free",), "k_{skip,j}": ("faulty_sets", "faulty_bits", "faulty_entries"),
+               "T_j \\log_2 d_{jit}": ("jitter",)}
 ADVICE = ("not in this record: the realized advice length |a_j| is a value. The run's published registration copies state "
           "the compiler's cap in its place (`served_verdicts.py public_registration`), but each window's advice is "
           "committed and compiled at its own length, so |a_j| is hidden only once it is padded to ℓ_a before it is "
-          "committed; the bound charges ℓ_{a,i}, the registered width")
+          "committed; the bound charges ℓ_{a,j}, the registered width")
 OVERCOUNT = ("a known overcount, proved and larger than necessary: k_sched and k_fail charge every connection the "
              "schedule can carry (`Schedule.caps`), whatever the traffic, and each connection's cell count twice, in "
              "k_sched (its lane's length, #S_s ≤ ∏_c (cap_c + 1)) and in k_fail (its fail cell's position), which in a "
@@ -124,7 +124,7 @@ RULES = {
     "per-phase": "the run's K and eps over one of its m execution phases, K/m: their average, which no statement bounds a "
                  "phase by where m exceeds 1",
     "run-to-period": "the run's per execution phase times the period's execution phases, ⌈seconds / (T·τ)⌉, each as the "
-                     "run's at its load: ℓ_{a,i}, k_{skip,i} and the jitter scale with the phases, and k_sched and "
+                     "run's at its load: ℓ_{a,j}, k_{skip,j} and the jitter scale with the phases, and k_sched and "
                      "k_fail, ⌈log2(cap_c + 1)⌉ each a connection, with the connections, at the schedule's lanes · T a "
                      "phase",
     "datacenter": "the node's times the census's reference datacenter's machines, one network certifier on each "
@@ -322,8 +322,8 @@ def lines(out: Path, name: str) -> list[str]:
 
 
 def registered(b: Mapping[str, Any]) -> dict[str, Any]:
-    """ℓ_{a,i}, each execution phase's registered width, and their share of K."""
-    free = [t["bits"] for t in b["terms"] if t["symbol"] == "\\ell_{a,i}"]
+    """ℓ_{a,j}, each execution phase's registered width, and their share of K."""
+    free = [t["bits"] for t in b["terms"] if t["symbol"] == "\\ell_{a,j}"]
     return {"label": REGISTERED, "bits_per_phase": free, "share": float(Fraction(sum(free), b["K"])),
             "lean": "scans[i].free"}
 

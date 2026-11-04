@@ -2,7 +2,7 @@
 `FORMAT`): each Commit period's advice length |a_j| as `verity-vllm advice` writes it, unpadded, beside the prompt and
 output lengths and finishes of the requests it admits, so the mix it was measured at is on the record. A Commit period
 is WINDOW_STEPS engine steps, one in the run of record, so an execution phase of T buckets of τ holds several, and
-ℓ_{a,i}, the width the network certifier's bound charges execution phase i, is set against their sum, which this record
+ℓ_{a,j}, the width the network certifier's bound charges execution phase j, is set against their sum, which this record
 doesn't hold. A served run's advice length is private (a value), so only a test run with public inputs is measured, and
 its record says so (``label``): a figure of that test run, never of a served run.
 
