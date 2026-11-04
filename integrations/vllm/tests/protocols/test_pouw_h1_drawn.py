@@ -41,7 +41,7 @@ from tests.pipeline.test_serve_h1 import PROMPTS, _PeriodAuditor, _Server
 from tests.protocols import pouw_h1_circuits as PC
 from tests.protocols.test_pouw_h1_commit import K, ROWS, STEPS, Model
 from tests.protocols.test_pouw_h1_served import _unit
-from verity.ml.circuits.boolean import NOT, XOR, operands
+from verity.ml.circuits.boolean import AND, NOT, XOR, operands
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.ports import In, Out, Ports
 from verity.ml.circuits.refs import Coll, coll_concat
@@ -65,30 +65,37 @@ def _fold(B, bits):
     return bits[0]
 
 
-def _bits(*colls):
-    return [_bit(c, i) for c in colls for i in range(c.type.leaves)]
+def _zeros(B, *colls):
+    """0, read by an AND row per 16 bits of `colls`: AND(t, NOT t) of each 16 bits' XOR t, XORed together. XOR and NOT
+    are linear in the proof system, so only an AND row reads its inputs' columns, and a XOR alone could cancel."""
+    bits = [_bit(c, i) for c in colls for i in range(c.type.leaves)]
+    zs = []
+    for i in range(0, len(bits), 16):
+        t = _fold(B, bits[i:i + 16])
+        zs.append(B.call(AND, operands(t, B.call(NOT, t))))
+    return _fold(B, zs)
 
 
-#: a seed (a coin port and a position port, no sink returned) over J10-R's salt and position: a XOR tree over their bits
+#: a seed (a coin port and a position port, no sink returned) over J10-R's salt and position: `_zeros` of their bits
 StandInSeed = CompositeDefinition("H1DrawnTestSeed", 0, ("K", "R", "C"),
                                   lambda S: ([p for p in _sig(S)[0] if p[0] in ("salt", "position")], V1),
-                                  lambda B, S, salt, position: _fold(B, _bits(salt, position)), register=False,
+                                  lambda B, S, salt, position: _zeros(B, salt, position), register=False,
                                   ports=Ports(params={"salt": In(kind="coin"), "position": In(kind="position")}))
 
 
 def _body(B, S, a, b, zy, salt, position, roots, call, blocks):
     receipt, ok = (t for _n, t in _sig(S)[1].fields)
     seed = B.call(bind(StandInSeed, K=S.K, R=S.R, C=S.C), salt, position)
-    x = _fold(B, [seed, *_bits(a, b, zy, roots, call, blocks)])
+    x = B.call(XOR, operands(seed, _zeros(B, a, b, zy, roots, call, blocks)))
     return coll_concat(_sig(S)[1], [coll_concat(receipt, [B.call(NOT, B.call(NOT, _bit(zy, i)))
                                                           for i in range(receipt.leaves)]),
-                                    B.call(NOT, B.call(XOR, operands(x, x)))])
+                                    B.call(NOT, x)])
 
 
 #: J10-R's tile unit's signature (`h1window.tile_unit` over `h1tile.PouwH1Tile5`, so its statement's rows and public row
-#: are J10-R's), its receipt its record's leading bits (`_stand_in_receipts`) and its ok 1, which a XOR tree over every
-#: bit of every input reads (the coin and position through `StandInSeed`), since the Lean verifier refuses a known port
-#: (pub) or a port read in full that no computed row reads in every bit (`KnownRead`)
+#: are J10-R's), its receipt its record's leading bits (`_stand_in_receipts`) and its ok 1, the NOT of `_zeros` of every
+#: input (the coin and position through `StandInSeed`), since the Lean verifier refuses a known port (pub) or a port
+#: read in full that no computed row reads in every bit (`KnownRead`)
 StandInJ10R = CompositeDefinition("H1DrawnTestTileJ10R", 0, ("K", "R", "C"), _sig, _body, register=False,
                                   ports=Ports(params={"salt": In(kind="coin"), "position": In(kind="position")},
                                               ret={"receipt": Out(sink=True)}))
