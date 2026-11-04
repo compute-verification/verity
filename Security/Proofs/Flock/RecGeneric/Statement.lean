@@ -14,8 +14,9 @@ covered.
   (`Server`), at any compiled verifier with any outer extraction (`Comp`), at each statement where the outer extraction
   is knowledge sound (`Comp.OuterKSAt`) and the compiler meets its contract (`Comp.Contract`). The composite
   extractor is `Π`'s `E^rep`, each rerun served by `E_O` (`Comp.E`); its error is `Comp.err`: `κ_Π + N_I·κ_O`,
-  `√(N_I²·γ_O·Pr[B])`, `Π`'s own terms with its finders run on the composite's reruns, a rejecting judged run (`B_I`,
-  `forkPlan`) and the deviation finder (`linkPlan`) at weight `β = (N_I + Σ_i w_i·d_i)·k_Π`.
+  `√(N_I²·γ_O·Pr[B])`, `Π`'s own terms with its finders run on the composite's reruns, `E_O`'s witnesses outside `R_O`
+  at each rerun those finders read (`Comp.PrOut` at weight `Σ_i w_i·d_i`), a rejecting judged run (`B_I`, `forkPlan`)
+  and the deviation finder (`linkPlan`) at weight `β = (N_I + Σ_i w_i·d_i)·k_Π`.
 * **L2, the compiler** (`GenericRecursiveKSCompiled`): L1 at `compile(Π, A, S)` for any outer argument `A`
   (`Claims.SamplingGeneric.Arg`, the sampled audit's proof system for proof blocks) and
   compiler, its outer extraction session by session (`Compiled.EO`) and knowledge sound by `A`'s (`OuterSessionsKS`).
@@ -39,14 +40,17 @@ variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
 /-- **The composite's knowledge error** at the inner protocol `I` over the server `S`, the prover `P`, the statement
 `x`, `I`'s loop bounds `m` and the link's `M`:
-`κ(x) + √(γ(x)·Pr[B]) + Σ_i w_i(x_I)·(Pr[F_i(m_i) on the reruns] + τ_i(x_I, m_i)) + Pr[B_I] + β(x)·(Pr[F_dev(M)] + 1/(M+1))`,
-`F_i` read on the reruns as the inner view accepts (`innerModel`), `B_I` and `F_dev` as `E_O` gives (`verModel`). -/
+`κ(x) + √(γ(x)·Pr[B]) + Σ_i w_i(x_I)·(Pr[F_i(m_i) on the reruns] + τ_i(x_I, m_i)) + Σ_i w_i·d_i·Pr_out + Pr[B_I] +
+β(x)·(Pr[F_dev(M)] + 1/(M+1))`, `F_i` read on the reruns as the inner view accepts (`innerModel`), `Pr_out` the chance
+that `E_O` gives witnesses outside `R_O` at a rerun (`Comp.PrOut`, `0` where `R_O` holds at every witness), `B_I` and
+`F_dev` as `E_O` gives (`verModel`). -/
 noncomputable def Comp.err (K : Comp Coin) (I : Proto Coin W) (S : Server) (H : Msg → Msg) {Ω : Type} [Fintype Ω]
     [Nonempty Ω] (P : Prover Ω) (x : Msg) (m : Fin I.nT → ℕ) (M : ℕ) : ℝ :=
   K.κ I x + Real.sqrt (K.γ I x * PrB H K.V P x) +
     ∑ i, (I.terms i).w (K.xI x) *
       (((I.terms i).F (m i)).PrAt H (K.innerModel (S.IVStar I.V I.ans) H P x) (K.xI x) +
         (I.terms i).tail (K.xI x) (m i)) +
+    K.reads I x * K.PrOut H P x +
     (forkPlan (Coin := Coin) I.V.k).PrAt H (K.verModel (S.IVStar I.V I.ans) H P x) (K.xI x) +
     K.β I x * ((linkPlan (Coin := Coin) I.V.k M).PrAt H (K.verModel (S.IVStar I.V I.ans) H P x) (K.xI x) +
       1 / ((M : ℝ) + 1))

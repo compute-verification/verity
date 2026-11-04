@@ -23,7 +23,8 @@ inner view read off `E_O`'s witnesses (`Comp.decProg`) as the run of `Open(Π, S
 rerun program that reads no `H`: the inner view's run is an oracle program (`Comp.replayOC`) run through `ofOC`, so
 each of its SHA-512 calls is a `.hash` node, which `RP.eval` charges. Its knowledge error is the inner protocol's,
 `N_I = 1 + m_Π·k_Π` times `E_O`'s, and the inner terms' finders run on the composite's reruns (`Comp.innerModel`,
-`Comp.verModel`), each charged the rerun's calls with the inner view's (`Comp.rerunCost`).
+`Comp.verModel`), each charged the rerun's calls with the inner view's (`Comp.rerunCost`), plus `E_O`'s witnesses
+outside `R_O` at each rerun the terms read (`Comp.PrOut`, `Comp.reads`).
 
 `Comp.Contract H K IV x` is what the compiled verifier must give at the statement `x`, each a code fact proved per
 compiler (and, for `forks` and `accepts`, per circuit V* proves, where some run accepts `x`); `Comp.OuterKSAt` is
@@ -123,10 +124,15 @@ noncomputable def κ (K : Comp Coin) (I : Proto Coin W) (x : Msg) : ℝ := I.κ 
 /-- **The composite's `B` weight**: `γ = N_I²·γ_O`. -/
 noncomputable def γ (K : Comp Coin) (I : Proto Coin W) (x : Msg) : ℝ := (K.NI I x : ℝ) ^ 2 * K.γO x
 
+/-- **The terms' reads**: `Σ_i w_i·d_i` at the inner statement, the reruns the terms' plans read, each term's weighted
+(`RunFinder.ReadsLe`). -/
+noncomputable def reads (K : Comp Coin) (I : Proto Coin W) (x : Msg) : ℝ :=
+  ∑ i, (I.terms i).w (K.xI x) * (I.terms i).d (K.xI x)
+
 /-- **The deviation finder's weight**: `β = (N_I + Σ_i w_i·d_i)·k_Π`, at the inner statement: a guess among the inner
-rounds at each rerun the inner `E^rep` makes and each rerun a term's plan reads. -/
+rounds at each rerun the inner `E^rep` makes and each rerun a term's plan reads (`reads`). -/
 noncomputable def β (K : Comp Coin) (I : Proto Coin W) (x : Msg) : ℝ :=
-  ((K.NI I x : ℝ) + ∑ i, (I.terms i).w (K.xI x) * (I.terms i).d (K.xI x)) * I.V.k (K.xI x)
+  ((K.NI I x : ℝ) + K.reads I x) * I.V.k (K.xI x)
 
 /-! ## The composite's reruns as runs -/
 
@@ -134,6 +140,13 @@ noncomputable def β (K : Comp Coin) (I : Proto Coin W) (x : Msg) : ℝ :=
 def wits (K : Comp Coin) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (u : (Fin (K.V.k x) → Coin) × K.EO.C x) : Option K.WO :=
   (K.EO.eval H P x ω u.1 u.2).1
+
+/-- **`Pr[E_O gives witnesses outside R_O]`** at one rerun, over the tape and the rerun's coins. A term's plan reads
+such a rerun as its inner view accepts, while the inner prover the composite's bound is built on runs only on witnesses
+in `R_O`, so the composite pays it at each rerun the terms read (`reads`). Where `E_O` replays the judged run first, it
+is at most `E_O`'s failure, `κ_O + √(γ_O·Pr[B])`; where `R_O` holds at every witness, as at Flock's, it is `0`. -/
+noncomputable def PrOut (K : Comp Coin) (H : Msg → Msg) {Ω : Type} [Fintype Ω] (P : Prover Ω) (x : Msg) : ℝ :=
+  Pr fun t : Ω × ((Fin (K.V.k x) → Coin) × K.EO.C x) => ∃ w, K.wits H P x t.1 t.2 = some w ∧ ¬ K.RO x w
 
 /-- The evaluations a finder searches at a rerun: those of `calls` at its witnesses, none where `E_O` gave up. -/
 def rerunCalls (K : Comp Coin) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
@@ -217,13 +230,13 @@ def CallsTrue (H : Msg → Msg) (K : Comp Coin) (x : Msg) : Prop :=
     K.Gives H P x ω r c w → ∀ e ∈ K.calls H x r w, H e.1 = e.2
 
 /-- **The inner verifier's calls are searched**: at given witnesses at `x` in the outer relation, the inner view's run's
-calls are among `calls` and the compiled verifier's own, or two of those collide. -/
+calls are among `calls`, or two of those collide. The inner terms' finders search `calls` alone at a rerun
+(`innerModel`), so the inner prover's calls are among what they search. -/
 def CallsLogColl (H : Msg → Msg) (K : Comp Coin) (IV : Verifier Coin) (x : Msg) : Prop :=
   ∀ (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (K.V.k x) → Coin) (c : K.EO.C x) (w : K.WO),
     K.Gives H P x ω r c w → K.RO x w →
-      (∀ e ∈ (run H (replay (K.msgs x w)) IV (K.xI x) () fun i => coinSeq r i.val).vLog,
-        e ∈ K.calls H x r w ++ K.own H x (run H P K.V x ω r).msgs) ∨
-      ∃ u v, findColl (K.calls H x r w ++ K.own H x (run H P K.V x ω r).msgs) = some (u, v) ∧ Collision H u v
+      (∀ e ∈ K.innerLog IV H x r w, e ∈ K.calls H x r w) ∨
+      ∃ u v, findColl (K.calls H x r w) = some (u, v) ∧ Collision H u v
 
 /-- **The commitments bind across forks** (from the server's `Binds` and V\*'s reading of the run's commit strings),
 modulo what the inner extractor reads at the last inner round: at `x`, two accepted reruns forked at an inner round `j`

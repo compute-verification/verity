@@ -23,7 +23,8 @@ The generic statements (`Proofs.Flock.RecGeneric.Statement`) at today's recursio
 There `Comp.err` is at most `KSLin2`'s bound term by term but the link's: `κ`, `γ` and `β` equal `KSLin2`'s
 (`β = βdev2`, from `d = 0, 2, k + 1`); `B`'s term at the reruns and the judged run's `B_I` add to `(4k_I + 1)·Pr[B_I]`
 (`ForkPlansLeBinnerV`); `FC`'s and `F0`'s plans at the reruns are `FCI` and `F0I` (`CapPlanIsFCI`,
-`ConflictPlanIsF0I`); and the link term stays the gated link's (`linkPlan` at `verModel`). So L1 gives `KSLinkOn`,
+`ConflictPlanIsF0I`); `Comp.PrOut` is `0`, since `R_O` holds at every witness list (`Comp.ofRec`); and the link
+term stays the gated link's (`linkPlan` at `verModel`). So L1 gives `KSLinkOn`,
 `KSLin2`'s bound with that link term, at the statements where the instance's contract holds (`RecoversLinkOn`), and at
 every statement `Flock.Guarantees.RecursiveKSEveryAtRec`. The contract reads V\*'s two facts only where some run
 accepts, and the deployed compiled verifier accepts only dense statements, so at the deployment every statement needs
@@ -267,7 +268,7 @@ the calls of no witnesses true and the compiler's contract at `Open(DE, hm96)` a
 `KSLinkOn` at `G`, through
 `ProtoWFOfFlock`, `KSAbortLinOfFlockLin`, `OuterKSOfSessions`, `IVStarOfBound`, `OpenViewOfBound` and the three term
 comparisons. The error is `Comp.err` with `κ`, `γ` and `β` equal to `KSLin2`'s, `B`'s, `FC`'s and `F0`'s terms at most
-`KSLin2`'s, and the gated link's term as it is. -/
+`KSLin2`'s, `Comp.PrOut` at `0`, and the gated link's term as it is. -/
 def RecoversLinkOn [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Claims.Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop) : Prop :=
   _root_.Flock.Guarantees.GenericRecursiveKS → KSFlockLin H Bd.DE Cp →
