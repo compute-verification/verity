@@ -361,7 +361,8 @@ among them, and then a tree of more than `MAX_TREE_COINS` coins. So a tree the d
 `maxTreeCoins` leaves: a leaf is a round, of a coin or more. -/
 def TreeSpecOk (spec : Flock.CoinTree.Spec) : Prop := 1 ≤ spec.block ∧ treeCoins spec ≤ maxTreeCoins
 
-instance (spec : Flock.CoinTree.Spec) : Decidable (TreeSpecOk spec) := inferInstanceAs (Decidable (_ ∧ _))
+instance instDecidableTreeSpecOk (spec : Flock.CoinTree.Spec) : Decidable (TreeSpecOk spec) :=
+  inferInstanceAs (Decidable (_ ∧ _))
 
 /-- **The coin-tree lines the device's log holds** with the coin trees `ts` open: one for each tree it sampled and one
 for each round it opened. The deployed device counts them (`LiveChallenger._tree_lines`) and refuses a tree or an
