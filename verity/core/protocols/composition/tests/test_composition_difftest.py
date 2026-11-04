@@ -613,7 +613,7 @@ def test_remote_v1_ties_pearl_plus_run_to_the_policys_record():
                                          f"{R.PEARL_PLUS.id} committed {digest(0).hex()}")
     for undecoded in (b"", run(digest(0), x=1), run(digest(0)[:32]),
                       canonical({"manifests": [], "record": digest(0).hex()}).encode()):
-        assert R.run_record(undecoded, b"") is None and strays(1, undecoded) is None, undecoded
+        assert not isinstance(R.run_record(undecoded, b""), list) and strays(1, undecoded) is None, undecoded
 
 
 def test_sampled_proofs_refuses_one_stage_v1(remote_server):

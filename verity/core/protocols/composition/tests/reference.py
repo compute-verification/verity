@@ -533,10 +533,11 @@ def window_records(commitment: bytes, evidence: bytes) -> list[bytes] | core_che
     return out
 
 
-def run_record(commitment: bytes, evidence: bytes) -> list[bytes] | None:
+def run_record(commitment: bytes, evidence: bytes) -> list[bytes] | Reject | None:
     """`Core.Remote.V1.runRecord`: the digest of the registration record Pearl+'s run is on, its commitment's
     ``record``, as Pearl+ decodes the commitment (`PouwCheck.PearlPlus.Protocol.commitmentOf`: exactly ``manifests``, a
-    nonempty list, and ``record``, a SHA-512 digest in lowercase hex); None when it doesn't decode."""
+    nonempty list, and ``record``, a SHA-512 digest in lowercase hex); else what refused it, or None when it doesn't
+    decode, either of which reads as no value."""
     try:
         j = P.canonical_json(commitment)
         if not isinstance(j, dict) or sorted(j) != ["manifests", "record"]:
@@ -544,8 +545,8 @@ def run_record(commitment: bytes, evidence: bytes) -> list[bytes] | None:
         if not isinstance(j["manifests"], list) or not j["manifests"] or not isinstance(j["record"], str):
             return None
         record = P.unhex(j["record"])
-    except Reject:
-        return None
+    except Reject as e:
+        return e
     return [record] if len(record) == 64 else None
 
 
