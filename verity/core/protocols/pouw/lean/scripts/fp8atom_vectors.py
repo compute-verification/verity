@@ -226,7 +226,7 @@ FAMILIES = [
 ]
 
 
-# The R1 differential families, in the bulk only. Each draws from its own generator in the order R1's generator does.
+# The R1 differential families, in the bulk only. Each samples from its own generator in the order R1's generator does.
 R1_SEED = 20260929
 
 

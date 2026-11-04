@@ -41,7 +41,7 @@ def window(rounds: int = 4, k: int | None = None, epoch: int = 7, seed: str = "a
 
 def test_an_honest_window_is_accepted_round_by_round():
     ch, roots, ops = window()
-    assert ch.commitment.families == ((Wd.SALT, 1), (Wd.DRAW, 1), (Wd.ROUND, 4))
+    assert ch.commitment.families == ((Wd.SALT, 1), (Wd.ROUND, 4))
     assert ch.commitment.scheme == Wd.LIVE_SCHEME and Wd.live_epoch_reason(ch.commitment) is None
     for k in range(5):
         assert Wd.rounds_reason(ch.commitment, roots[:k], ops[:k]) is None
@@ -77,9 +77,23 @@ def test_only_a_live_epochs_coins_carry_a_window():
     vllm = Ch.LiveChallenger("verity/vllm/commit-coins/v1", 7, Wd.live_families(2), entropy("v"))
     assert Wd.rounds_reason(vllm.commitment, [], []) == \
         f"the coin commitment's scheme is verity/vllm/commit-coins/v1, not {Wd.LIVE_SCHEME}"
-    swapped = Ch.LiveChallenger(Wd.LIVE_SCHEME, 7, ((Wd.DRAW, 1), (Wd.SALT, 1), (Wd.ROUND, 2)), entropy("s"))
-    assert Wd.rounds_reason(swapped.commitment, [], []) == \
-        "the coin commitment's coins are not a live epoch's: one salt, one draw, then the rounds'"
+    for layout in (((Wd.ROUND, 2), (Wd.SALT, 1)), ((Wd.SALT, 1), (Wd.DRAW, 1), (Wd.ROUND, 2))):
+        other = Ch.LiveChallenger(Wd.LIVE_SCHEME, 7, layout, entropy("s"))
+        assert Wd.rounds_reason(other.commitment, [], []) == \
+            "the coin commitment's coins are not a live epoch's: one salt, then the rounds'"
+
+
+def test_a_windows_draw_session_is_its_draw_coin_alone():
+    """`draw_epoch_reason`: `LIVE_SCHEME` over `DRAW_FAMILIES` alone, the session the gate opens withheld on the
+    window's draw root. The window's own layout, a draw beside the rounds, and another scheme are refused."""
+    draw = Wd.draw_challenger(7, entropy("d")).commitment
+    assert draw.families == ((Wd.DRAW, 1),) and Wd.draw_epoch_reason(draw) is None
+    assert Wd.live_epoch_reason(draw) is not None
+    for layout in (Wd.live_families(1), ((Wd.SALT, 1), (Wd.DRAW, 1), (Wd.ROUND, 1)), ((Wd.DRAW, 2),)):
+        assert Wd.draw_epoch_reason(Ch.LiveChallenger(Wd.LIVE_SCHEME, 7, layout, entropy("o")).commitment) == \
+            "the coin commitment's coins are not a live window's draw session's: its draw coin alone"
+    other = Ch.LiveChallenger("verity/vllm/commit-coins/v1", 7, Wd.DRAW_FAMILIES, entropy("v")).commitment
+    assert Wd.draw_epoch_reason(other) == f"the coin commitment's scheme is verity/vllm/commit-coins/v1, not {Wd.LIVE_SCHEME}"
 
 
 def test_a_pearl_c_salt_session_is_its_salt_coin_alone():
@@ -108,7 +122,7 @@ def test_the_round_key_is_its_own_coin_and_root():
 
 def test_core_checks_rounds_reads_the_challengers_own_session():
     """The round rule of record reads the challenger's coins only through the session the auditor's signed ledger opens
-    and ends for the window, under the window's pinned key: a window whose coins an in-process challenger drew, whose
+    and ends for the window, under the window's pinned key: a window whose coins an in-process challenger sampled, whose
     log no one signed, or whose ledger is cut before the session's end, is refused however honest its coins."""
     d, s = rounds_cases.honest_rounds(random.Random("a"))
     d = rounds_cases.with_ledger(d, s, random.Random("l"))

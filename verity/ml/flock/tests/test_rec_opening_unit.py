@@ -16,7 +16,7 @@ from verity_flock import rec_algebra as A
 from verity_flock import rec_residuals as RR
 
 HERE = Path(__file__).resolve().parent
-LEAN = HERE.parents[2] / "core" / "service" / "flock"
+LEAN = HERE.parents[3] / "verity/core/service/flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-rec-opening"
 
 pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain"), pytest.mark.slow]

@@ -175,7 +175,7 @@ def build (sh : Shape) (lins : Array RecAlgebra.Lin) : Except String GfS := do
 
 /-- `GfResiduals_v1{S}`'s S of the opening, a function of the shape alone (`rec_algebra.structure`). -/
 def structureOf (sh : Shape) : Except String GfS := do
-  let lins ← ((run sh (RecAlgebra.symbolic sh) (claimsLike sh)).run' 0).run RecAlgebra.Coins.zeros
+  let lins ← ((run sh (RecAlgebra.symbolic sh) (claimsLike sh)).run' 0).run RecAlgebra.CoinSource.zeros
   build sh lins
 
 /-! ## The unit -/

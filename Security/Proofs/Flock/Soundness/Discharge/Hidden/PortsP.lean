@@ -5,6 +5,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
 
 * `parse_ports`, `parse_leaves`, `parse_noPorts`: with public input ports, one public leaf map per unit, each as long as
   the unit's `leaves_in`; without, no public leaf map.
+* `parse_leaves_lt`, `parse_leaf_lt`: each public leaf is a public word, below the ports' words.
 * `publicCol_at`: a column `HmIn.publicCol` names is bit `t` of public leaf `jj` of a unit slot `k`, at column
   `g0.col · WORD + 16 jj + t` of the slot, inside the unit's input rows (16-bit leaves, `CheckFacts.unit_groups`).
 * `keepCol`, `inDelta_toList`, `deltaEntry_inDelta`: `HmIn.delta` is `HmOut.delta` without the pairs into the columns it
@@ -105,6 +106,66 @@ theorem parse_noPorts {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi
   · exact h1
   · rw [he] at hne; cases hne
 
+set_option maxHeartbeats 4000000 in
+/-- **Each public leaf is a public word**: with public input ports, every leaf of a unit's public leaf map is below the
+ports' words. -/
+theorem parse_leaves_lt {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi) (hne : pi.ports.isEmpty = false) :
+    ∀ u < c.upv, ∀ j < (pi.leaves[u]!).size, (pi.leaves[u]!)[j]! < (pi.words : ℤ) := by
+  unfold HmIn.parse at h
+  dsimp only at h
+  cases hj : c.metaJ.getObjVal? "public_inputs" with
+  | error e =>
+    rw [hj] at h
+    try dsimp only at h
+    try simp only [throw_bind'] at h
+    repeat' walk_step
+    all_goals
+      simp only [pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      first | exact absurd hne (by decide) | simp at hne
+  | ok pj =>
+    rw [hj] at h
+    try dsimp only at h
+    try simp only [throw_bind'] at h
+    repeat' walk_step
+    all_goals
+      simp only [pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      have hc := ‹¬ (_ || _) = true›
+      intro u hu j hj'
+      by_contra hn
+      refine hc ?_
+      rw [Bool.or_eq_true, List.any_eq_true]
+      refine Or.inr ⟨u, List.mem_range.2 hu, ?_⟩
+      rw [Bool.or_eq_true, List.any_eq_true]
+      refine Or.inr ⟨j, List.mem_range.2 hj', ?_⟩
+      simp only [Bool.or_eq_true, decide_eq_true_eq]
+      try dsimp only at hn ⊢
+      first | exact Or.inr (Or.inl (by omega)) | omega
+
+/-- **A public leaf is below the public input ports' words** (`parse_leaves_lt`, read through `getD`). -/
+theorem parse_leaf_lt {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi) {u jj : ℕ} {q : ℤ}
+    (hq : (pi.leaves.getD u #[]).getD jj (-1) = q) (hq0 : 0 ≤ q) : q < pi.words := by
+  cases he : pi.ports.isEmpty
+  · obtain ⟨hsz, -⟩ := parse_leaves h he
+    have hu : u < pi.leaves.size := by
+      by_contra hu
+      simp [Array.getD, hu] at hq
+      omega
+    have hj : jj < (pi.leaves[u]'hu).size := by
+      by_contra hj
+      simp [Array.getD, hu, hj] at hq
+      omega
+    have hl := parse_leaves_lt h he u (hsz ▸ hu) jj (by rw [getElem!_pos pi.leaves u hu]; exact hj)
+    rw [getElem!_pos pi.leaves u hu, getElem!_pos _ jj hj] at hl
+    have hv : (pi.leaves.getD u #[]).getD jj (-1) = (pi.leaves[u]'hu)[jj]'hj := by
+      simp [Array.getD, hu, hj]
+    rw [← hq, hv]
+    exact hl
+  · rw [parse_noPorts h he] at hq
+    simp [Array.getD] at hq
+    omega
+
 /-- A list of 16s sums to 16 per entry. -/
 theorem sum_16 {l : List ℕ} (h : ∀ b ∈ l, b = 16) : l.sum = 16 * l.length := by
   rw [List.eq_replicate_iff.2 ⟨rfl, h⟩, List.sum_replicate, smul_eq_mul, List.length_replicate, Nat.mul_comm]
@@ -112,7 +173,9 @@ theorem sum_16 {l : List ℕ} (h : ∀ b ∈ l, b = 16) : l.sum = 16 * l.length 
 /-- **A column `HmIn.publicCol` names is a public leaf's bit**: bit `t` of leaf `jj` of unit slot `k`'s leaf group, a
 public leaf of the slot's unit, at a column of the slot inside the unit's input rows. -/
 theorem publicCol_at {c : Circuit} {pi : HmIn.Ports} (hp : HmIn.parse c = .ok pi) (hne : pi.ports.isEmpty = false)
-    (C : CheckFacts c) (hU : Built c.unit) {q : ℕ} (hq : HmIn.publicCol c pi q = true) :
+    (C : CheckFacts c)
+    (hgr : ∀ g ∈ c.unit.inGroups.toList, g.bits.foldl (· + ·) 0 ≤ g.words * WORD ∧ g.col + g.words ≤ c.unit.inWords)
+    {q : ℕ} (hq : HmIn.publicCol c pi q = true) :
     ∃ k < c.unitRange.count, ∃ jj < (c.unit.inGroups.getD 0 default).bits.size, ∃ t < 16,
       q = c.unitRange.slot k + ((c.unit.inGroups.getD 0 default).col * WORD + 16 * jj + t) ∧
       (c.unit.inGroups.getD 0 default).col * WORD + 16 * jj + t < c.unit.inWords * WORD ∧
@@ -125,7 +188,6 @@ theorem publicCol_at {c : Circuit} {pi : HmIn.Ports} (hp : HmIn.parse c = .ok pi
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (Nat.pos_of_ne_zero C.unit_groups.1),
       Option.getD_some]
     exact Array.getElem_mem_toList _
-  obtain ⟨-, -, -, -, hgr, -⟩ := built_spec hU
   obtain ⟨hb, hw⟩ := hgr _ hg0m
   have hdm := Nat.div_add_mod (q - c.unitRange.start) (2 ^ c.unitRange.slotLog)
   generalize hg0 : c.unit.inGroups.getD 0 default = g0 at hcol hl h16 hlv hb hw ⊢

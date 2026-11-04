@@ -1,11 +1,9 @@
-# The B200 (sm_100) as `eps` prices it (README "Devices"): the census of EPS1 DC, and no vector solved for prices, so
-# the constants only `solve` reads are left
-# out. Three epochs: DC-100; DS-100, the data-sheet vector, whose lines are
+# The B200 (sm_100) as `eps` prices it (README "Devices"): its measured census, and no vector solved for prices, so
+# the constants only `solve` reads are left out. Three epochs: DC-100; DS-100, the data-sheet vector, whose lines are
 # census/DS-100.csv and close where they open, so it moves no other epoch's census (benchmarks/pouw/dc/census.py
 # --write rewrites census.csv and keeps none of them); and DC-100-ri, which refits the uniform instruction's price on
-# the async-joint issue row (UNI,JI100_0) to its measured cost beside the saturated async tensor op (RT-ISA r2; the old
-# 0.906-of-an-issue-slot price, scaled from a scalar-saturated stream, was
-# optimistic). `current` stays DC-100; the refit is the vector DC-100-ri (read it with `eps --vector DC-100-ri`). The
+# the async-joint issue row (UNI,JI100_0) to its measured cost beside the saturated async tensor op (the old
+# 0.906-of-an-issue-slot price, scaled from a scalar-saturated stream, was optimistic). `current` stays DC-100; the refit is the vector DC-100-ri (read it with `eps --vector DC-100-ri`). The
 # B200 headline binds the issue ceiling (UNI,issue = 0.924, above the async-joint row), so the refit does not move it.
 current = "DC-100"
 epochs = ["DC-100", "DS-100", "DC-100-ri"]

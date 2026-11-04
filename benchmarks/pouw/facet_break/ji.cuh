@@ -1,4 +1,4 @@
-// FACET-BREAK's joint-issue search (the JI3q rows: each MMA form beside every other vector-pipe instruction): the
+// facet_break's joint-issue search (the JI3q rows: each MMA form beside every other vector-pipe instruction): the
 // schedule dimensions the mix family held fixed. `generate.py --family ji` instantiates them.
 //
 //   FB_JMIX(name, Form, NA, U, L1, L2, L3, Q, P, D, QD, tpb)

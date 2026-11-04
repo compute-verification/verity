@@ -1,5 +1,4 @@
-// LOWBIT-DC: are the datacenter FP8 and FP4 tensor kinds exact integer arithmetic, and do emu8's int8 routes hold there?
-// (note:20261017T0643Z-draft-lowbit-dc; decision 78.)
+// Are the datacenter FP8 and FP4 tensor kinds exact integer arithmetic, and do emu8's int8 routes hold there?
 //
 // sm_100a (B200): tcgen05.mma kind::f8f6f4 E4M3 (k32), kind::mxf4.block_scale.scale_vec::2X (E2M1, UE8M0, k64) and
 // kind::mxf4nvf4.block_scale.scale_vec::4X (E2M1, UE4M3, k64), accumulators in tensor memory. sm_90a (H200): wgmma

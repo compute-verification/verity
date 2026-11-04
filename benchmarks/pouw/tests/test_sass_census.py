@@ -1,4 +1,4 @@
-"""sass_census: the SASS opcode census RT-ISA diffs against A7's menu (`sass_census/`).
+"""sass_census: the SASS opcode census diff_menu.py diffs against A7's menu (`sass_census/`).
 
 On a synthetic two-architecture listing (`fixtures/sass_census_sample.sass`, sm_90a and sm_100a): `sass_count` parses
 the `cuobjdump -sass` text, counts each dotted opcode and folds the minor versions into one device family; `sass_semantics`

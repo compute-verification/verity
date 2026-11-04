@@ -1,4 +1,4 @@
-"""Figures for the compute dampener D, the hardware multiple at MFU_0 (``statement.dampener``: the overhead calculator's
+"""Figures for the slowdown D, the hardware multiple at MFU_0 (``statement.dampener``: the slowdown calculator's
 ``rho.theorem.multiple_bound`` on ``tiers.evaluate``'s terms, the residual at MFU_0), with the
 ladder, its scenarios and its numbers from ``statement.py``: D per rung by status, the (r̂, R_wipe) phase diagram,
 exposure tornados at the best PoUW design and at 6 GB streamed-label wipes, the memory cap by the fit bound and the
@@ -63,7 +63,7 @@ LADDER = [
     ("Floor, one-minute verdict lag", "Floor,\none-minute\nlag", "policy choice"),
 ]
 #: the rungs whose headline is the PoUW route, r̂ to 0 with no memory cap (``statement.ladder``'s closed-form D, which
-#: caps nothing there); the fit bound's cap at their 4 GB is drawn beside it
+#: caps nothing there); the fit bound's cap at their 4 GB is sampled beside it
 FLOORS = ("Floor (r̂ = 0, 4 GB)", "Floor, one-minute verdict lag")
 #: the Dot16 conjecture's (d, e), ``tiers.REFERENCE_THREADED``: conditional, as a run that trains its embedding reads
 #: Layered's lookup columns as updated weights
@@ -787,7 +787,7 @@ def schematic(out: Path) -> dict:
         ("nu", 2.42, 1.45, r"$\nu$", "declared computation",
          [rf"{sci(X.nu(P))} at Kimi K2's K and the structural $d$ = {num(P['d'])}",
           rf"{sci(nu_conj)} at the Dot16 conjecture's $d$ = {num(CONJECTURE['d'])}"], TERM["declared"]),
-        ("chi", 1.0, 1.1, r"$\chi$", "faulty proof blocks (T5)",
+        ("chi", 1.0, 1.1, r"$\chi$", "incorrect proof blocks (T5)",
          [f"{sci(chi[COSTS[0][0]])} today, {sci(chi[COSTS[1][0]])} at 512 draws"], TERM["cheat"]),
     ]
     plugs = [
@@ -833,7 +833,7 @@ def schematic(out: Path) -> dict:
         f"bound, so D = {num(D6)} at T3 for any r̂ above it). NCI plugs the declared "
         f"computation (nu = {num(X.nu(P))} at Kimi K2's K and the structural entry fee d = {num(P['d'])}; "
         f"{num(nu_conj)} at the Dot16 conjecture's d = {num(CONJECTURE['d'])}, conditional), which is now the largest "
-        "term the floor leaves. Faulty proof blocks at T5 are plugged by terminal detection, which ends "
+        "term the floor leaves. Incorrect proof blocks at T5 are plugged by terminal detection, which ends "
         "the identity, and by the cost of proving a draw, which sets how many pass: chi = "
         f"{num(chi[COSTS[0][0]])} at today's sparse draws, {num(chi[COSTS[1][0]])} at 512 draws per statement. "
         "PoUW and NCI are complements: without PoUW r̂ = 1, without NCI nu = 1. Each plug's tag is the tier from "

@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from verity.ml.circuits.types import Record
+from verity.ml.circuits.types import RecordType
 from verity_vllm.check.replay import index as IX
 from verity_vllm.correspondence.reader_for_query import recorded_names
 from verity_vllm.correspondence.runtime import validate_document
@@ -117,7 +117,7 @@ def test_compile_steps_names_each_program_the_same_on_every_compile_with_no_vllm
         u = next(u for u in c.requests if u.digest == dg)
         body = c.programs[dg].fn.body
         assert sorted(n.names) == list(range(len(body.nodes))) and n.params == [
-            [p, str(Record(*((WRAPPER + f, x) for f, x in t.fields)) if isinstance(t, Record) else t)] for p, t in body.params]
+            [p, str(RecordType(*((WRAPPER + f, x) for f, x in t.fields)) if isinstance(t, RecordType) else t)] for p, t in body.params]
         assert (n.shape["LP"], n.shape["T"], n.shape["C"], n.shape["sampling"]) == (u.LP, u.T, u.C, u.policy)
         d = tmp_path / dg[:16]
         assert write_build(str(d), c.programs[dg], n) == dg

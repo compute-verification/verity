@@ -1,4 +1,4 @@
-"""The reference against its own vectors, against FILL-SEC r5's XOR-in-13 values and P2-FF r9's twin (both written apart
+"""The reference against its own vectors, against the XOR-in-13 values and the r9 twin (both written apart
 from it), and the key rules' stated equivalences and rates."""
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ sys.path.insert(0, str(HERE.parent))
 import receipt_conform as C  # noqa: E402
 import receipt_folds as F  # noqa: E402
 
-#: P2-FF r9's reference twin, art:91c156a1829cb853157df217691fb08bd4764a631eb362c0b733361d3e3724b5's receipt_folds_r9.py
+#: the sha256 of the r9 folds' reference twin, receipt_folds_r9.py
 P2FF_SHA256 = "c5a3424f90850ca818eff182f43132ae72cf21aadcaacb99758ca454932f5bb4"
 
 
@@ -30,7 +30,7 @@ def test_the_reference_meets_every_vector():
 
 
 def test_xin13_matches_fill_sec_r5s_drop_in_values():
-    """The chains FILL-SEC r5 checked pfill's -DPFILL_XIN13 build against P2-FF's twin with (note:20261016T1200Z-draft-pfill-r9-folds)."""
+    """The chains that checked pfill's -DPFILL_XIN13 build against the r9 twin with."""
     want = {0: (0x0F64F41C, 0xD07F70C5, 0x965BAAEA), 5: (0x961AD57B, 0xA920F01A, 0x713A93F6),
             1023: (0xB6EE0819, 0x4D1BAFF2, 0x8751D122)}
     words = [tuple(w & F.M32 for w in d) for d in C.R5_WORDS]
@@ -130,7 +130,7 @@ def test_li_is_leans_half_steps_and_a_checkpoint_moves_at_the_changes_lowest_bit
 
 
 def test_the_e2e_key_rule_is_weaker_than_key_ok_r9():
-    """E2E's xin keys (segment.XA0, XA1) are drawn under Λ8 alone; one of them fails key_ok and another KJ19."""
+    """E2E's xin keys (segment.XA0, XA1) are sampled under Λ8 alone; one of them fails key_ok and another KJ19."""
     xa0, xa1 = F.e2e_xin_keys()
     assert not F.key_ok_r9(xa0[1]) and F.lambda8_ok(xa0[1])
     assert F.key_ok_r9(xa1[0]) and not F.kj19(xa1[0])

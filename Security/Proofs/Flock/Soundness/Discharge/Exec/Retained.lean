@@ -16,8 +16,7 @@ only the framed bytes absorbed since round `k - 1`, exactly (`Transcript.squeeze
 * `decode_retained`: when the spec retains rounds, `Record.decode` gives every round of every stream its bytes (S12).
 * `accepts_retained`: so every round of a record flock-verify accepts under such tags carries its bytes.
 * `accepts_allRetained`: the same as `Refine.AllRetained` for every stream, the hypothesis of `Refine/Frames.lean`'s
-  squeeze and sampling lemmas and of `Refine/FramesPiop.lean`'s `zerocheck_frames`, whose text says "on the unsalted
-  path": these tags retain too, so those lemmas apply to the production statements.
+  squeeze and sampling lemmas: these tags retain too, so those lemmas apply to the production statements.
 -/
 
 set_option Elab.async false
@@ -87,7 +86,7 @@ theorem setupTables_retain (hh : tags.hiddenOutputs = false)
 set_option maxHeartbeats 1000000 in
 /-- **An accepted record has every round's bytes** when its spec retains rounds: `Record.decode` refuses a round
 without them (S12). -/
-theorem decode_retained {text : String} {sess : Session} (hr : spec.retainRounds = true)
+theorem decode_retained {text : String} {sess : RunRecord} (hr : spec.retainRounds = true)
     (h : Record.decode spec text = .ok sess) :
     ∀ s ∈ sess.streams.toList, ∀ r ∈ s.rounds.toList, ∃ b, r.bytes = some b := by
   unfold Record.decode at h
@@ -136,13 +135,13 @@ theorem accepts_retained {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutput
   exact ⟨spec, sts, sess, hs, hd, hsr, decode_retained hsr hd⟩
 
 /-- `decode_retained` as `Refine/Frames.lean`'s `AllRetained`, for every stream. -/
-theorem decode_allRetained {text : String} {sess : Session} (hr : spec.retainRounds = true)
+theorem decode_allRetained {text : String} {sess : RunRecord} (hr : spec.retainRounds = true)
     (h : Record.decode spec text = .ok sess) : ∀ s ∈ sess.streams.toList, AllRetained s.rounds := fun s hs i hi => by
   rw [getElem!_pos s.rounds i hi]
   exact decode_retained hr h s hs _ (Array.getElem_mem_toList hi)
 
 /-- **flock-verify's acceptance under retaining tags gives `AllRetained`** (`Refine/Frames.lean`) for every stream of
-the record it decodes: the hypothesis `squeeze_bindA`, `sample_bindA`, `forIn_answers` and `zerocheck_frames` take. -/
+the record it decodes: the hypothesis `squeeze_bindA`, `sample_bindA` and `forIn_answers` take. -/
 theorem accepts_allRetained {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = false)
     (hr : I.tags.retainRounds = true) (h : Accepts I t) :
     ∃ spec sts sess, setupOf I t.record = .ok (spec, sts) ∧ Record.decode spec t.record = .ok sess ∧

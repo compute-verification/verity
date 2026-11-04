@@ -11,7 +11,7 @@ under a test key, for a rehearsal of a served window (`pouw_h1_rehearsal.py`); r
 ``init`` unpacks infra's tree (``git archive SHA`` of `ARCHIVE`'s paths, refused without one) as ``DIR/tree/SHA``, so
 `auditor.pinned_commit` names SHA, makes the host's state in ``DIR/host`` (`auditor.Host`, its pins log recording SHA as
 its own main, since nothing here fetches main) and its LMS key at ``--params``
-(default 4,5: 32 leaves), and builds the Lean verifier whose `one_stage.verifier.coins` serve.py draws its coins from
+(default 4,5: 32 leaves), and builds the Lean verifier whose `one_stage.verifier.coins` serve.py flips its coins from
 (``--coins lean``; ``stub`` serves `stub_serve.py`'s seeded bytes instead, and ``init`` falls back to it, saying why, when
 the build fails). Every verb then runs infra's own code from that tree, which goes first on ``sys.path`` before any
 ``verity`` import: `auditor.gate` with its hooks as root and `auditor` would run them on the auditor host (`reserve`,

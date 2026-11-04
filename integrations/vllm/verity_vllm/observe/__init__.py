@@ -9,7 +9,7 @@ Runtime side (imports torch / vLLM / triton): `observer`, `triton_adapter`, `sto
 (`verity-capture/log/v1`); see `DESIGN.md`.
 
 Vocabulary (the Verity IR design): Definition -> Specialization -> Instance -> subcircuit.  The
-runtime artifact is the *raw observation log* (never "trace"); "execution transcript" is reserved for the IR.
+runtime artifact is the *raw observation log* (never "trace"); "trace" is reserved for the IR's gate values.
 """
 
 __all__ = ["SCHEMA"]

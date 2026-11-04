@@ -100,7 +100,7 @@ def ReadersOpenPlayedR {Col T : Type} (H : Msg → Msg) (IV : Claims.Verifier Co
 (`ReadersAccept` with `ReadersColl` for its collision). -/
 def ReadersAcceptR {Col T : Type} (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings)
     (DO : Claims.Flock.Deploy Coin Col T) (shape : Claims.Recursion.Form → Prop) : Prop :=
-  ∀ (x : Msg) (s : Claims.Recursion.Stmt), parse x = some s → shape s.form →
+  ∀ (x : Msg) (s : Claims.Recursion.CompiledStatement), parse x = some s → shape s.form →
     ∀ (as : List Msg) (cs : List Coin) (ws : List Claims.Flock.Wit), as.length = IV.k (xIOf x) + kS x →
       cs.length = as.length → (∀ s < nS x, StagedPart b.st s x ((stagedAll b.st x as cs).getD s [])) →
         Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →
@@ -237,12 +237,11 @@ theorem ksA_deployed_reg (rel relO : Flock.Readable.Parsed → Flock.Readable.Re
     (FlockDeploy.coinsShown_V FlockDeploy.sha512 false) (callsNil I.V ivScope b FlockDeploy.sha512)
 
 /-- **`KSFlock` at `deployRec`, with registered ties**: `ksA_deployed_reg` at every inner decoder that meets the spec, as
-`KSA` is `KS`. Its level (`Claims.Recursion.lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner
-table at `m = 35`, `γ`'s weight at `IVStar` at `coverW`), below the 100-bit floor and the `2^-128` target under every
-weight. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
-(`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements being
-candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
+`KSA` is `KS`. No theorem evaluates its level (`Claims.Recursion.lam`) at the deployment. Route 2C's bound λ₂
+(`lamLin2`) evaluates to at least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and
+`KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved
+(`Flock.SecurityProofs.RecursiveKS`), Holo statements being candidate 3's own model, and `BitsLin2` at those statements
+follows from it (`bitsLin2On_of_ksLin2On`). -/
 theorem ksFlock_deployed_reg (rel relO : Flock.Readable.Parsed → Flock.Readable.Relation) (ivScope : Msg → Bool)
     (b : Brings) (opening : Claims.Recursion.Opening)
     (hF : Claims.Flock.KS FlockDeploy.sha512 (deployZkRec relO))

@@ -1,4 +1,4 @@
-// The edited GEMM on sm_80 (A100, EPS1 AMPERE r2): egemm.cu's e_l7qs, lpgemm.cu's 16-warp 128 x 128 mainloop with duo
+// The edited GEMM on sm_80 (A100): egemm.cu's e_l7qs, lpgemm.cu's 16-warp 128 x 128 mainloop with duo
 // receipts on C's running sums (each absorb LAG = 7 MMAs after its tile's MMA, a LOP3 tie every 4th MMA) and the peel as
 // a 2-atom tail, with sm_80's loads. TMA and mbarrier transactions are sm_90+, so a stage (128 of k for the tile's A and
 // B rows) comes in by cp.async, every thread 4 16-byte copies into an NST-stage ring (EG80_NST, 4 by default) laid out

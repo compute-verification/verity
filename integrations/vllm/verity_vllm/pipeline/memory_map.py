@@ -15,7 +15,7 @@ from the rank's Programs, committed slots and caches: MLA's latent cache is whol
 
 The request (``REQUEST_JSON``)::
 
-    {"path": <the map's file>, "registration": <hex of the remote audit's Registration.digest>,
+    {"path": <the map's file>, "registration": <hex of PoUB's Registration.digest>,
      "firsts"?: [<layer l's region's first block>], "blocks"?: <N>,
      "cache_dir"?: <where each Program's census and KV rows are read and cached, at <cache_dir>/<Program digest>, its Build dir only read>,
      "ranks"?: {"<r>": {<any of the above, for TP rank r>}}}

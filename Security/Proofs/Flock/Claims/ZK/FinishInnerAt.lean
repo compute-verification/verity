@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.ZK.FinishLigEnd
+import Proofs.Flock.Claims.ZK.FinishFc
 import Proofs.Flock.Claims.ZK.L0PinCoins
 
 /-!

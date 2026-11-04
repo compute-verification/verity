@@ -1,9 +1,9 @@
 """Dither's J10-R units ($DITHER_SO_UNITS=j10r: `benchmarks/hash/dither/j10r_units.py`, the host units the gate holds the
-GPU's receipts to word for word) in RT-ALGO-16's verifier form (#3574): a call's first position u0 is credit's (the
+GPU's receipts to word for word) in the verifier's form: a call's first position u0 is credit's (the
 window's earlier calls' units), its unit u = ri (N / 32) + cj at position u0 + u reads its call's seed_c at u0 and the
 blocks core's credit derives for tile t = u at the call's slot M (`core_check.j10r_blocks`), so its public rows are
 credit's `public_table` and its receipt `h1tile.j10r_reference`'s at them; and `forms.form_of` labels such an arm by
-#3574 when it is on credit's layout (`forms.j10r_part`)."""
+J10-R's adopted basis (`forms.ADOPTED_PARTS['j10r']`) when it is on credit's layout (`forms.j10r_part`)."""
 from __future__ import annotations
 
 import functools
@@ -29,17 +29,14 @@ LLAMA = [(6144, 4096), (4096, 4096), (28672, 4096), (4096, 14336)]
 @functools.cache
 def dither(name: str):
     """`benchmarks/hash/dither/<name>.py`, imported as its scripts import it (its directory on sys.path, and j10r_units'
-    own entries); sys.path and the ``receipts`` module the suite may hold are restored once it's loaded."""
-    path, shadow = list(sys.path), sys.modules.pop("receipts", None)
+    own entries); sys.path is restored once it's loaded."""
+    path = list(sys.path)
     sys.path.insert(0, str(DITHER))
     try:
         return __import__(name)
     finally:
         sys.path[:] = path
         sys.modules.pop(name, None)
-        sys.modules.pop("receipts", None)
-        if shadow is not None:
-            sys.modules["receipts"] = shadow
 
 
 @functools.cache
@@ -140,7 +137,7 @@ def test_the_arms_receipts_at_llamas_k():
 
 
 def test_a_j10r_arm_in_the_order_is_ask71_a_with_3574_as_its_basis():
-    """J10-R is an adopted part (`forms.ADOPTED_PARTS`, #3574): a -so -zy arm under it is form A with J10-R's basis after
+    """J10-R is an adopted part (`forms.ADOPTED_PARTS`): a -so -zy arm under it is form A with J10-R's basis after
     the z's, and an arm with an unadopted part stays unadopted."""
     F = dither("forms")
     assert "j10r" not in F.UNADOPTED_PARTS

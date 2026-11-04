@@ -364,13 +364,7 @@ theorem circuitOf_check {tags : Tags} {file : ByteArray} {tables : List (String 
     ∃ ls, HmRow.check c tags ls = .ok () := by
   unfold ProvedScope.circuitOf at h
   split at h
-  · unfold HmOut.parse at h
-    simp only [ht, Bool.not_false, ↓reduceIte] at h
-    obtain ⟨c', hc', h⟩ := ebind_ok h
-    obtain ⟨_, -, h⟩ := ebind_ok h
-    simp only [pure, Except.pure, Except.ok.injEq] at h
-    subst h
-    exact hm_parse_check hc'
+  · exact FlockSoundness.Discharge.Hidden.parseCommit_check ht h
   · exact hm_parse_check h
 
 theorem slotBase_ok (st : Stmt) (α : F128) (lw ρ : Array F128) {r : Range} (hr : SlotOk st.c r) :

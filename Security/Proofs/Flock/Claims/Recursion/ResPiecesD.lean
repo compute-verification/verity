@@ -90,7 +90,7 @@ variable {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : List Coin}
 
 /-- **Table 0's decode shape is the setup's inner shape** (`shI`) in every field V\*'s algebra reads, at a dense
 decision (`Rows.DecAt.sh_alg`, at the setup's numbers). -/
-theorem algSh_tie {xo : Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem algSh_tie {xo : Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (h0 : 0 < D.sts.size)
     {v : FlockDeploy.Ins × SessionSpec × Array Stmt} (hv : setupOf false x = some v) :
     algShape (D.sh cls 0) = shI v.2.1 v.2.2 := by
@@ -185,6 +185,7 @@ theorem listed_of_statements {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : R
   obtain ⟨t, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨A, hA, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨C, -, h⟩ := FlockC3.VStarList.eok_bind h
+  obtain ⟨L, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨K0, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨u, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨u', -, h⟩ := FlockC3.VStarList.eok_bind h

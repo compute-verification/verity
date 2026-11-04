@@ -50,14 +50,9 @@ is checked at; else the rep's answer is discarded and the next rep starts at its
 theorem coins_taken_of_answered {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : R) (h : List (Msg × Msg))
     (hn : 3 ≤ h.length) {m : Masker} (ha : L.answered x ρ h = .ok m) :
     L.opens x ρ h = true ∧ ∃ s, (L.prog x h).answer (L.cfgAt x ρ (h.length - 1)) (L.coinsOf x h) = .ok s := by
-  cases ho : L.opens x ρ h with
-  | false =>
-    rw [L.answered_of_not_opens x ρ h ho] at ha
-    cases ha
-  | true =>
-    refine ⟨rfl, ?_⟩
-    rw [L.answered_of_opens x ρ h ho] at ha
-    unfold frameAnswer at ha
+  obtain ⟨ho, -, ha⟩ := answered_ok ha
+  refine ⟨ho, ?_⟩
+  · unfold frameAnswer at ha
     split at ha
     · unfold takeAt at ha
       rw [if_neg (by omega)] at ha
@@ -67,7 +62,7 @@ theorem coins_taken_of_answered {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ
           unfold cfg cfgAt
           rw [hs]
         rw [hc]
-        exact ⟨m, ha⟩
+        exact ⟨m, (bind_rankStop_ok ha).1⟩
       · rw [if_neg (fun e => hs (of_decide_eq_true e))] at ha
         cases hp : (L.prog x h).answer (L.cfgAt x ρ (h.length - 1)) (L.coinsOf x h) with
         | error e =>
