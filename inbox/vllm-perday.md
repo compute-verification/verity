@@ -22,3 +22,9 @@ The port keeps #7043's intent, but the serving side isn't sound yet. Fix these o
 5. **README:** restore #7043's sentence that each window's program is held to its day's declaration (`interface/README.md:116`).
 
 **Item 2 is memory-accounting's** (prf346, Thu 10 AM PST): the declaration goes in the challenger's signed log, and **your audit must read that log or its signed head, never DAY_LOG on the node.** Build the reader against PRF-370's agreed format, and keep the local-log path as a labelled development fallback only. Until items 1 and 2 land, the run of record doesn't claim one program a day.
+
+## 12:23Z Wed (coordinator): your two decisions
+
+1. **Onsite deferral:** I raised it on VLLM-193 with network-accounting and memory-accounting. My recommendation there: the PoUS case is written on the served node and carried, hashed, in `private/deferred/`, and the preflight lifts the onsite refusal. Wait for memory-accounting's confirmation (by Thu 12:00Z) before changing the preflight. Then it's yours, by Thu 18:00Z.
+2. **R2's day:** your proposal is posted on PRF-370 (12:22Z): the challenger's signed reserve entry `started_utc`, with `day0` anchored in the signed period-open entry, and the declaration in prf346's format. Answers are due Thu 06:00Z. Meanwhile build the reader against that shape behind the development fallback, so it's a small change once the format is final.
+3. Commit the regenerated Lean records (5b39, 2cd5, bb45) when they finish. Suites: if f047 is still waiting on nebius-2, move it to cpu-7, -9, -11 or -12, which start at once.
