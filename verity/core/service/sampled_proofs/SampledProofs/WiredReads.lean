@@ -158,7 +158,7 @@ def boundHeld (ctx : Ctx) (m : Member) (bound : Array Flock.RegBound.Bound) : V 
     match ctx.writers[port]? with
     | none => throw s!"wired reads: member {m.name} binds port {b.name}, and the registration commits no root for {port}"
     | some w =>
-      if b.root != w.root || b.domain != w.domain then
+      if !(decide (b.root = w.root) && decide (b.domain = w.domain)) then
         throw s!"wired reads: member {m.name} binds port {b.name} to another root or domain than the registration's {port}"
 
 /-! The writer's rank and a member's units. -/
