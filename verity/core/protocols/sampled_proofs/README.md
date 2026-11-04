@@ -418,9 +418,7 @@ Code and records call a sampling design a `law`; the name stays until a format v
   Lean verifier reads them.
 - `check_draw` also holds the draw's population to the registration's.
 
-Pinned by `tests/test_one_stage.py` (`test_draw_checks`, `test_derive_expands_the_rule_over_the_verifiers_program`,
-`test_derive_expands_the_work_rule_over_the_verifiers_table`, `test_stratified_draw_checks`,
-`test_work_draw_checks_and_closures`).
+Pinned by `tests/test_one_stage.py`'s checks of each sampling design's text, objects and expansion.
 
 ### What a proof block's work may count
 
@@ -485,7 +483,7 @@ delta, through its weighted bound `harm_bound`; each application counts delta on
 - `compute_bound(profile, work)` is `harm_bound(work)`. Policies and PoUW pass their own utility to `worst_case`.
 - A proof block's output bits or work is one number for every proof block, or per stratum a number or `(bits, units)` pairs.
 
-Pinned by `tests/test_consumers.py` and `tests/fixtures/exfiltration_lean.json`, whose recorded sha256 of the Lean files it came from fails `test_the_lean_vectors_were_generated_from_this_tree` until it is regenerated.
+Pinned by `tests/test_consumers.py` and `tests/fixtures/exfiltration_lean.json`, regenerated when its Lean files change (a test compares their sha256).
 
 ### The proof system
 
@@ -511,9 +509,9 @@ Pinned by `tests/test_consumers.py` and `tests/fixtures/exfiltration_lean.json`,
   verdict), **the records** (`verity/proof-service/stream/v0` and `outcome/v0`) and what a stream refuses until it is
   built.
 
-Each rule, its formats and its refusal codes are in `service`'s module docstring. Pinned by `tests/test_service.py`, the
-log's history by `tests/test_service_history.py`, sessions by `tests/test_service_sessions.py`, the fleet's halt by
-`tests/test_service_fleet.py`, and the stream's and the fleet's rules by the difftest's `stream` and `fleet` pieces.
+Each rule, its formats and its refusal codes are in `service`'s module docstring. Pinned by `tests/test_service.py`,
+`tests/test_service_history.py`, `tests/test_service_sessions.py` and `tests/test_service_fleet.py`, and the stream's
+and the fleet's rules by the difftest's `stream` and `fleet` pieces.
 
 ### The draw's coins
 
