@@ -63,6 +63,7 @@ theorem compilerKSCount : CompilerKSCount := compilerKSCount_of compilerKS
 /-- **Bits**: `CompilerKS` and `ExpOwnOf` (`compilerBits_of`). -/
 theorem compilerBits : CompilerBits := compilerBits_of compilerKS expOwnOf
 
+omit [Inhabited Coin] [DecidableEq Col] in
 /-- **The opening checks' count at Flock is the frozen one**: a compiled verifier over Flock at a deployed sampled
 verifier `D`'s Flock verifier, with `D`'s parser, commitment, reveal and opening count, meets `Compiled.OpenCallsLe`
 where `D` meets `Sampling.OpenCallsLe`, as the deployed verifier does (`SamplingDeploy.openCallsLe_deploy`). -/
