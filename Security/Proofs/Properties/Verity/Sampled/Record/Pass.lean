@@ -157,7 +157,8 @@ theorem units_of_pass (A : Live) (o : Own) {b : ByteArray} {p : _root_.SampledPr
 and `o`'s inputs (`Names`), with the verifier's law read over `A`'s population as `A`'s (`lawAt`), at a run whose draw
 file the blobs show (`Shows`), whose draw rounds' coins begin with `ξ` (`LiveCoins`' first half) and whose session's
 statement fits its length words (`Fits`), the draw file round keeps the run's draw file (`drawOk`): it proves the units
-the draw rounds' coins draw, and its session sets up one table of `A.kd` units, so it has the statement's numbers. -/
+the draw rounds' coins draw, its session sets up one table of `A.kd` units, so it has the statement's numbers, and it
+fits its length words. -/
 theorem pass_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.SampledProofs.OneStageZk.Params}
     {c : _root_.SampledProofs.OneStage.Commitment} {ev : _root_.SampledProofs.OneStageZk.Evidence} {bs : Core.Blobs}
     {ξ : ByteArray} {pub : _root_.SampledProofs.OneStage.Public} {prof : Core.Integrity}
@@ -171,7 +172,7 @@ theorem pass_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Sampled
     (hfits : Fits A o (drawOf (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen)) :
     drawOk A o (drawOf (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen) (coinsAt r) := by
   have hu := units_of_pass A o he hacc hn hlaw P ω r hshow hlive
-  refine ⟨hu, numsOk_of_refOk ?_⟩
+  refine ⟨hu, numsOk_of_refOk ?_, hfits⟩
   obtain ⟨s, rd, B, record, ksFiles, hs, hpl, hrd, hB, hutf, hv⟩ := verdict_of_accepts hacc hn
   have h64 := reach_draw FlockDeploy.sha512 P ω r
   have hsm : (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen.msgs =
