@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
+module
+
+public import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
 
 /-!
 # Route 2C's split bound at the deployed caps: `κ ≤ 2^{−140.4}` and `ε ≤ 2^{−138.3}`
@@ -16,6 +18,8 @@ numbers `lamLin2_core_tight` bounds:
 
 `λ₂ ≥ 135.7` is the least of the six terms' bits less `log₂ 6`; summed term by term, `ε` is about `2^{−138.33}`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

@@ -1,6 +1,11 @@
-import Proofs.Pouw.PearlC.PeelFp4Checks.Defs
+module
+
+public import Proofs.Pouw.PearlC.PeelFp4Checks.Defs
+meta import Proofs.Pouw.PearlC.PeelFp4Checks.Defs
 
 /-! # `prod-64-nvfp4`: factor chains by evaluation (`#guard`, not a proof) (`PeelFp4Checks`, which joins them) -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.PeelFp4Checks
 

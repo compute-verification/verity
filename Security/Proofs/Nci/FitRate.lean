@@ -1,6 +1,8 @@
-import Definitions.Nci.Guarantees.FitRate
-import Proofs.Accounting.Actual.Windows
-import Proofs.Nci.Fit
+module
+
+public import Definitions.Nci.Guarantees.FitRate
+public import Proofs.Accounting.Actual.Windows
+public import Proofs.Nci.Fit
 
 /-!
 # Proof of the fit bound on a run
@@ -12,6 +14,8 @@ most `R + r ω`, and `FitBound` gives the count over the `n J` windows. Its comp
 (`computeRate_N`), and the count does not read `Φ`. Windows of at least `ω₀` ticks number at most `t / ω₀`
 (`cuts_mul_le`), which gives the rate.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Complete.Zk.Level0Pad
-import Proofs.Flock.Claims.Complete.Replay.LigeritoWeight
-import Proofs.Flock.Claims.Complete.ZkTables.Round0
-import Proofs.Flock.Soundness.Refine.Final
-import Proofs.Flock.Soundness.ZK.PadNonvanishing40
-import Flock.Firewall.Link
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Level0Pad
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoWeight
+public import Proofs.Flock.Claims.Complete.ZkTables.Round0
+public import Proofs.Flock.Soundness.Refine.Final
+public import Proofs.Flock.Soundness.ZK.PadNonvanishing40
+public import Flock.Firewall.Link
 
 /-!
 # `Flock.Firewall.Link`'s FFT is level 0's padded codeword
@@ -20,6 +22,8 @@ its rows are `FlockComplete.encodeRowsZk`'s (`rowsFft_eq`), so the recheck's row
 * `fftSum_coeffs`: at `s = 0` over `cols + 1` bits, a lane's coefficients give its words' encoding plus its padding,
   `FlockComplete.encodeRowsZk_entry`'s sum.
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Link
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Refine.ArithK
-import Proofs.Flock.Soundness.Refine.ExecLM
-import Proofs.Flock.Soundness.Refine.Schedule
+module
+
+public import Proofs.Flock.Soundness.Refine.ArithK
+public import Proofs.Flock.Soundness.Refine.ExecLM
+public import Proofs.Flock.Soundness.Refine.Schedule
 
 /-!
 # Ligerito's rounds refine the model's (PROTOCOL.md §13.3)
@@ -14,6 +16,8 @@ consumed rounds' coins.
 
 * `fold_refines`: the folding rounds (`foldRoundsC`, the executable's `challenge` loop).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.TmplSplitStep
+module
+
+public import Proofs.Flock.Soundness.TmplSplitStep
 
 /-!
 # What a walked table means
@@ -11,6 +13,8 @@ copies (`UOk`). `StOk`: every cached table means its class's, at every depth pas
   64 slots, valued.
 - `walkChild_ok`: a callee's table, re-keyed or walked directly, means its class's at the caller's chunk origin.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128 Std
 

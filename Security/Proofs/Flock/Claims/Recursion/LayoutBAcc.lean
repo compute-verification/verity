@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.FinOpen
-import Proofs.Flock.Claims.Recursion.FinalPiece
-import Proofs.Flock.Claims.Recursion.BoundAccepts
-import Proofs.Flock.Claims.Recursion.RowsCover
-import Proofs.Flock.Claims.Recursion.SchedDense
+module
+
+public import Proofs.Flock.Claims.Recursion.FinOpen
+public import Proofs.Flock.Claims.Recursion.FinalPiece
+public import Proofs.Flock.Claims.Recursion.BoundAccepts
+public import Proofs.Flock.Claims.Recursion.RowsCover
+public import Proofs.Flock.Claims.Recursion.SchedDense
 
 /-!
 # V*'s bound layout with the `rec-acc` chain's rows as slots (`layoutBAcc`), and where the messages carry them
@@ -35,6 +37,8 @@ rows' commits and the verifier's evaluations (`layoutBAcc_owner` is its owner pr
 The last message is the bound record's, read by `final` and the reader `rd`; the chain block follows `finOpen`'s pieces,
 so a `final` that reads those leaves it as a suffix of the element-level message.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

@@ -1,5 +1,7 @@
-import Proofs.Pouw.Fp8Atom.H1TGapStaging
-import Proofs.Pouw.Fp8Atom.H1TProofs
+module
+
+public import Proofs.Pouw.Fp8Atom.H1TGapStaging
+public import Proofs.Pouw.Fp8Atom.H1TProofs
 
 /-!
 # H-1T: the late words against staircases (staging, unpinned)
@@ -34,6 +36,8 @@ reads slice `T − 1`'s salt. The same holds for `j′`, with `cs′ = []` at `q
   any binades; so two tag settings whose difference `Y′ − Y` moves by more than `(n + n′ + 2)·2^(e − 24)` separate
   the chains outright.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T.Shift
 
