@@ -283,7 +283,8 @@ def trace_runs(text: str | None) -> dict[str, str]:
 
 def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: str) -> tuple[dict, dict]:
     """The panel and what it rests on: every candidate's ρ, binding and basis at the console's policy beside the
-    table's (`check`), and the candidates the scorer's rows don't give (`missing`)."""
+    table's (`check`) where the table is this te_core's (else `check_skipped` says whose it is), and the candidates
+    the scorer's rows don't give (`missing`)."""
     from te_core import algorithm_policy
 
     src = tables / "algorithm-policy" / "tables" / "algorithm-policy.json"
@@ -294,6 +295,8 @@ def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: 
     attacks = [r | {"name": by_label.get(r["start"])} for r in table(src)
                if r["data"] == "v3" and not str(r["method_key"]).startswith(STANDARD)]
     reached = [r for r in attacks if r["reached"] == "yes" and r["name"] in names]
+    versions = sorted({str(r["te_core"]) for r in reached})
+    compared = set(versions) <= {VERSION}
     rows_of = scored(tables, ledger, {checkpoint(r["record"]) for r in reached})
     shapes, measured, stub, why = policy.starts(), {}, {}, {}
     for key, row in rows_of.items():
@@ -332,7 +335,7 @@ def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: 
                         priced[(key, pol)] = one, basis(m, one, stub[key], c, k)
                     one, b = priced[(key, pol)]
                     bases[b] = bases.get(b, 0) + 1
-                    if pol == "console":
+                    if pol == "console" and compared:
                         check.append({"record": x["record"], "gain_target": g, "rho": one["rho"],
                                       "binding_kind": one["binding_kind"], "basis": b,
                                       "table": [x["rho_console"], x["binding_kind"], x["basis_default"]],
@@ -366,8 +369,9 @@ def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: 
                    f"{', '.join(sorted(set(runs.values()))) or 'no run'})",
          "note": note(), "columns": COLUMNS, "rows": [[r.get(c) for c in COLUMNS] for r in rows]}
     missing = sorted({r["record"] for r in reached if checkpoint(r["record"]) not in measured})
-    return p, {"check": check, "mismatches": [x for x in check if not x["ok"]], "missing": missing,
-               "unmeasured": {f"{r}@{s}": w for (r, s), w in why.items()}}
+    skipped = None if compared else f"the table is training's slowdown code {', '.join(versions)}, not {VERSION}"
+    return p, {"check": check, "check_skipped": skipped, "mismatches": [x for x in check if not x["ok"]],
+               "missing": missing, "unmeasured": {f"{r}@{s}": w for (r, s), w in why.items()}}
 
 
 def note() -> str:
@@ -414,7 +418,8 @@ def main(argv=None) -> int:
         (a.out / "size-scaling.json").write_bytes(console.body(p))
         (a.out / "check.json").write_text(json.dumps(info, indent=1, default=str) + "\n")
         print(f"{PANEL}: {len(p['rows'])} rows, {len(console.body(p))} bytes, note {len(p['note'])} characters; "
-              f"console check {len(info['check'])} rows, {len(info['mismatches'])} mismatched, "
+              + (f"console check skipped: {info['check_skipped']}, " if info["check_skipped"] else
+                 f"console check {len(info['check'])} rows, {len(info['mismatches'])} mismatched, ") +
               f"{len(info['missing'])} candidates not in the scorer's rows, {len(info['unmeasured'])} unmeasured"
               + (f"; REFUSED: {refused}" if refused else ""))
         return 1 if refused or info["mismatches"] or len(console.body(p)) > console.BODY_MAX or \
