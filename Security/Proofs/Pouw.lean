@@ -158,6 +158,7 @@ import Proofs.Pouw.PearlC.TileProtocol
 import Proofs.Pouw.PearlC.TileValues
 import Proofs.Pouw.PearlC.TileGamma
 import Proofs.Pouw.PearlC.TileGammaTol
+import Proofs.Pouw.PearlC.TileDrawGamma
 import Proofs.Pouw.PearlC.TileUOnlyGamma
 import Proofs.Pouw.PearlC.UOnlyGamma
 import Proofs.Pouw.PearlC.UOnlyLoopGamma
