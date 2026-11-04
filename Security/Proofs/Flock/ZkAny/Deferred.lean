@@ -53,8 +53,9 @@ private theorem pr_snd {α β : Type} [Fintype α] [Fintype β] [Nonempty α] (p
   classical
   rw [Pr_eq_sum (fun s : α × β => p s.2), Pr_eq_sum p, Fintype.sum_prod_type, Fintype.card_prod]
   have : (0 : ℝ) < Fintype.card α := by exact_mod_cast Fintype.card_pos
-  dsimp only
-  rw [Finset.sum_const, Finset.card_univ, nsmul_eq_mul, Nat.cast_mul]
+  have e : ∀ a : α, (∑ b : β, if p (a, b).2 then (1 : ℝ) else 0) = ∑ b : β, if p b then (1 : ℝ) else 0 :=
+    fun _ => rfl
+  rw [Finset.sum_congr rfl fun a _ => e a, Finset.sum_const, Finset.card_univ, nsmul_eq_mul, Nat.cast_mul]
   exact mul_div_mul_left _ _ this.ne'
 
 namespace ZkServer
