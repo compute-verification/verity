@@ -632,8 +632,8 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     (xf, bf), later, (xe, be) = templates[0], templates[1:-1], templates[-1]
     vus = _vu_strata(j)
     if not all(_apart(vus.get(callees[x["fn"]], []), vus.get(callees[xe["fn"]], [])) for x, _ in templates[:-1]):
-        raise D.Reject("scan: the egress template's VUs are not apart from the ingress templates' (vuStrata), so a "
-                       "drawn unit would be both an egress and an ingress bucket's")
+        raise D.Reject("scan: the egress template's VUs are not apart from the ingress templates' (vuStrata): a "
+                       "stratum of the draw would hold both egress and ingress units")
     if any(k == "row" or t == row for k, t in be["params"]):
         raise D.Reject("scan: the egress template takes its row as an input (the checker form)")
     if len(templates) not in (2, 3):

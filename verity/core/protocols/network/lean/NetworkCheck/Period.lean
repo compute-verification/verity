@@ -767,8 +767,8 @@ one instance of bucket 0's template, `T - 1` of the later ingress buckets' (no s
 returning the same and each one's `row` the schedule's row (`S · B` bytes), then `T` of the egress template, which
 returns a u16 and the schedule's row, and every input gate is a template's parameter. The types are the Boolean profile's, as the
 scan's Definitions have them: a byte 8 bits, a u16 16. First the egress template's VUs are apart from every other
-template's, in the strata the sampled verifier's draw reads (`vuStrata`, `apart`), so no unit is both an egress and an
-ingress bucket's. Then an egress template with a row among its parameters, the checker form, is refused by name: there
+template's, in the strata the sampled verifier's draw reads (`vuStrata`, `apart`), so no stratum holds both egress and
+ingress units. Then an egress template with a row among its parameters, the checker form, is refused by name: there
 the egress row is an input gate, which `NetTiming.BoundaryGates.Fits` refuses, and `K` would count the free inputs of a
 Program that only compares its egress rows.
 
@@ -798,7 +798,7 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   let strata ← (vuStrata prog).mapError (s!"scan: " ++ ·)
   let vus := fun (k : String) => ((strata.find? (·.1 == k)).map (·.2)).getD #[]
   need (templates.pop.all fun (_, d) => apart (vus d.key) (vus de.key)) "scan: the egress template's VUs are not \
-    apart from the ingress templates' (vuStrata), so a drawn unit would be both an egress and an ingress bucket's"
+    apart from the ingress templates' (vuStrata): a stratum of the draw would hold both egress and ingress units"
   need (!de.params.any (fun p => p.1 == "row" || p.2 == row)) "scan: the egress template takes its row as an input \
     (the checker form): no egress gate is an input (NetTiming.BoundaryGates.Fits)"
   let ((xf, df), later) ← ingressTemplates templates.pop.toList
