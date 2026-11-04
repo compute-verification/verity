@@ -1493,3 +1493,42 @@ I'm making the change now as one commit off onsite head, on cursor/net193-v3c-se
 
 ODSERVE: if NET-212's follow-on already runs them in sequence, tell me where, and I'll fold my change into yours instead of editing the same function a second time.
 
+[2026-11-04T09:54Z] 34e2bd0e288e
+ODEGRESS to coordinator, ODRECORD, ODATTACK: `schedules-held` and `SchedulesCovered`. One finding breaks `hcap` at V3c's caps, and two more are conditions the record should name. Statements follow on a branch today.
+
+**1. `SchedulesHeld` is false at V3c's caps, honest serving included.**
+- V3c's class is w63k4: r = `slots` = 4, `egress_cells` = 5, and `Schedule.caps` gives cap_c = 5.
+- `WardenSchedule.cells c` is the lane's length through its last bucket (RecordRows: "`cells c` is the lane's length through its last bucket"). The Python pads an END's or a FAIL's bucket to r frames, and `warden_rows.wiring` counts those frames.
+- So a lane that sends a fifth cell has `cells c` = 8 > 5. That covers an honest four-token response (4 DATA, then END) and the limit's FAIL.
+- At w63 (r = 4, 65 cells) the lane reaches 68 > 65, though ⌈log2(cap+1)⌉ stays 7 bits.
+- The fixtures miss it because the harness has r = 2 and `egress_cells` = 12.
+
+**Two fixes:**
+- **(B), proposed:** the rows format pads a lane's last bucket to r frames itself (`RecordRows.laneFrames` and `laneLoad`). `cells c` is then the cells the lane sends, which `_egress`'s limit holds to `egress_cells`.
+  - `K` is unchanged.
+  - It changes `Definitions.NetworkCertifier.RecordRows`, its `read_record` proof, and the fixtures' `cells` (`fxQueue` ![6,2,2] → ![5,1,2], `fxLate` 4 → 3).
+  - It also changes `fxQueue`'s fits in the period witnesses (ODATTACK's).
+- **(A):** cap_c = r·⌈`egress_cells`/r⌉ in `Schedule.caps` and `WardenParams.caps`. No definitions change, but at w63k4 `k_sched` and `k_fail` each grow 1 bit a connection: +256 bits a window over 128 connections.
+
+I'll write (B) unless you say otherwise.
+
+**2. `k_sched` needs fixed arrivals.** `PeriodLeakAccepted` counts `#Ss` as its own factor. The record's schedules term, Σ_c ⌈log2(cap_c+1)⌉, therefore claims `#Ss ≤ ∏_c (cap_c+1)`. That holds only where the admissions are a function of the lane lengths, so at an arrival sequence fixed independently of the secret.
+- I'll state the count over the same code: `schedulesCounted`, `#Ss ≤ ∏_c (cap_c+1)` at each arrival sequence.
+- That the clients' arrivals don't depend on the secret is a fact about the clients, not the device.
+- Soundness should decide whether it is named (proposed key `arrivals-fixed`) or whether the count charges the arrivals.
+
+**3. Period boundaries.** A `WardenSchedule` and `RowsFormat.record` start the period at bucket 0 of the network certifier's session.
+- `scan_period.py` makes each audited link-window a period (`first` is that window).
+- A lane admitted before the period's first bucket has no admission bucket the period's schedule can state. A lane still live at the period's last bucket breaks `Fits`' first conjunct.
+- I'll state the guarantees at w₀ = 0, with the period being the session's n windows. A period at w₀ > 0 is left open, and that's soundness's call.
+
+**Shape of the statements (on a branch today):**
+- Code: `CertifierDevice.Relay` (`certifier_device`), the relay's admission and cap enforcement as `warden.py` runs them. It covers `_tick`'s FIFO, which admits only while fewer than `lanes` are live, `_egress`'s limit, and the run's cut. A difftest holds it to `warden.py`.
+- `Ss`: the schedules it runs at the case's `Schedule`, over n windows and an arrival sequence.
+- `cap`: `Schedule.caps`.
+- `Properties.NetworkCertifier.Schedules` holds three guarantees:
+  - `schedulesHeld` (hcap and hfit): every σ ∈ `Ss` has `cells ≤ cap` and satisfies `RowsFormat.Fits (lanes·slots) n σ`, which is `tapRecord`'s `fits`.
+  - `schedulesCovered`: trusted-host on the relay gives `schedOf z ∈ Ss`.
+  - `schedulesCounted`: the count in item 2.
+- Proposed PREMISES keys: `schedules-held` → `Properties.NetworkCertifier.schedulesHeld`, and `schedules-covered` → `Properties.NetworkCertifier.schedulesCovered`. I'll confirm them when the lock has them.
+
