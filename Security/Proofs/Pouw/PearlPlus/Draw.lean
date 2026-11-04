@@ -18,6 +18,12 @@ declaration is consistent with it (`goodDeclTiles`). This file reads the code's 
   `TileOf` tile, its tickets that tile's `drawTickets` of `pearlCDrawRev1 devH100` under the records' declarations
   (`decOf`). Its parts: `wref 1 k n` is `wrefRowRev1 devH100 k n`, `ticketWeight` is the weight's numerator and
   denominator, and the run's lcm fold is `Finset.lcm` over the tiles.
+* (d) Acceptance is the tolerant audit's (`acceptGivesTheAudit`): when the check accepts, every sample of the game on
+  tiles the verdict opened is in `goodDeclTiles ∪ blankTiles` or over its cap, or SHA-512 collides on an opened tile.
+  A sampled tile's check gives its words (`TilePassGivesTheWords`) and its declaration (`TilePassGivesTheDecl`), so it
+  is good within the game's cap and over the cap otherwise. The tile's weight rows passing the rules is a hypothesis
+  (`DrawnOn.weights`), as in `TilePassGivesTheWords`: the check holds only credited B rows to the rules (an excluded row
+  must fail them and a voluntary one is unread), where `TileGood` reads every column.
 
 The run's layout (`RunLayout`) is what the game reads of the run: each pass tiles 64 × 64 (a manifest's `instance` may
 set another tile), each record is a unit of the workload that the transcript commits, with the record's shape and
@@ -1141,5 +1147,96 @@ theorem ticketsAreTheDraw : TicketsAreTheDraw := by
     obtain ⟨c, hc, rfl⟩ := hsurj g hNT hv
     obtain ⟨j, hj, rfl⟩ := List.getElem_of_mem hc
     exact ⟨j, by rw [hlen]; exact hj, by dsimp only; rw [dite_eq_left hj]⟩
+
+/-! ## Acceptance -/
+
+/-- What the game reads of the plan's tile `(pi, tid)` on audit tile `g`: the verdict opens it, it is `g` (`TileOf`),
+its pass's salt is the game's, its weight's root is the semantics', each weight row of its columns passes `P`'s rules,
+and its openings are its unit's commitment. -/
+structure DrawnOn {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (P : Protocol Q R S) (s : S) (pl : Plan)
+    (opener : ℕ → ℕ → Except String TileOpening) (U : Workload) (τ : Transcript) (pi tid g : ℕ) : Prop where
+  todo : (pi, tid) ∈ pl.todo
+  tile : TileOf pl.passes[pi]! tid U g
+  salt : bytesNat pl.passes[pi]!.salt = saltOf s
+  root : bytesNat ((pl.passes[pi]!.weightRoots.lookup (U.layout.wid ((auditTiling 64 64 U.layout).unit g))).getD
+    ByteArray.empty) = rootOf (U.layout.wid ((auditTiling 64 64 U.layout).unit g))
+  weights : ∀ j ∈ (auditTiling 64 64 U.layout).cols g,
+    P.weightOK (U.layout.shape ((auditTiling 64 64 U.layout).unit g)) (U.weight (U.layout.wid
+      ((auditTiling 64 64 U.layout).unit g))) j
+  opens : ∀ o c, opener pi tid = .ok o → τ ((auditTiling 64 64 U.layout).unit g) = some c →
+    OpensCommitted pl.passes[pi]! tid o U ((auditTiling 64 64 U.layout).unit g) c
+
+/-- **(d) Acceptance is the tolerant audit's**: at rules `P`, `TR` that read the deployed tiles, rules and words, when
+the check accepts a run laid out as the game's workload, every sample `c` of the game whose tiles the verdict opened
+(`DrawnOn`) is accepted by `AuditAcceptsTol` over `goodDeclTiles ∪ blankTiles`, with the over-cap tiles tolerated, under
+the records' declarations; or SHA-512 collides on two different messages of an opened tile, one hashed in digesting the
+words the check forms and one in digesting the commitment's words. -/
+def AcceptGivesTheAudit : Prop :=
+  ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (P : Protocol Q R S) (TR : TileRules Q R S)
+    (H : Q → R) (s : S) (i : Input) (opener : ℕ → ℕ → Except String TileOpening) (pl : Plan) (U : Workload)
+    (τ : Transcript) {w : ℕ → ℕ} {t : ℕ} (c : Fin t → Ticket w (TR.tiling U.layout).NT),
+    TR.tiling = auditTiling 64 64 → TR.rowOK = (tilesH3 saltOf rootOf ρ : TileRules Q R S).rowOK →
+    P.ticket = (protocolH3 saltOf rootOf ρ : Protocol Q R S).ticket →
+    P.useful = (protocolH3 saltOf rootOf ρ : Protocol Q R S).useful →
+    P.weightOK = (protocolH3 saltOf rootOf ρ : Protocol Q R S).weightOK →
+    (check i opener).accept = true → plan i = .ok pl → RunLayout pl.passes U τ →
+    (∀ j, ∃ pi tid, DrawnOn saltOf rootOf P s pl opener U τ pi tid (c j).1) →
+    AuditAcceptsTol (goodDeclTiles P TR U H s τ (decOf pl.passes) ∪ blankTiles TR U τ) (overCapTiles TR U H s τ) c ∨
+      ∃ pi tid g o cm, DrawnOn saltOf rootOf P s pl opener U τ pi tid g ∧ opener pi tid = .ok o ∧
+        τ ((auditTiling 64 64 U.layout).unit g) = some cm ∧
+        ∃ x ∈ leafHashed pl.passes[pi]! tid o, ∃ y ∈ commitHashed pl.passes[pi]! tid cm, x ≠ y ∧
+          Flock.Sha512.hash x = Flock.Sha512.hash y
+
+theorem acceptGivesTheAudit (hA : Properties.Pouw.PearlPlus.AcceptMeans)
+    (hP : Properties.Pouw.PearlPlus.PlanMeans) (hD : TilePassGivesTheDecl) (hW : TilePassGivesTheWords) :
+    AcceptGivesTheAudit := by
+  intro Q R S saltOf rootOf ρ P TR H s i opener pl U τ w t c hT hrow hPt hPu hPw hacc hplan hL hc
+  obtain ⟨pl', hpl', -, -, -, hopen⟩ := hA i opener hacc
+  rw [hplan, Except.ok.injEq] at hpl'
+  subst hpl'
+  have hload := (hP i pl hplan).2.1
+  by_cases hcol : ∃ pi tid g o cm, DrawnOn saltOf rootOf P s pl opener U τ pi tid g ∧ opener pi tid = .ok o ∧
+      τ ((auditTiling 64 64 U.layout).unit g) = some cm ∧
+      ∃ x ∈ leafHashed pl.passes[pi]! tid o, ∃ y ∈ commitHashed pl.passes[pi]! tid cm, x ≠ y ∧
+        Flock.Sha512.hash x = Flock.Sha512.hash y
+  · exact Or.inr hcol
+  left
+  intro j
+  obtain ⟨pi, tid, hd⟩ := hc j
+  generalize ((c j).1 : ℕ) = g at hd ⊢
+  obtain ⟨p, o, hp, ho, hpass⟩ := hopen pi tid hd.todo
+  have hp! : pl.passes[pi]! = p := by
+    obtain ⟨hl, he⟩ := List.getElem?_eq_some_iff.1 hp
+    rw [getElem!_pos pl.passes pi hl, he]
+  obtain ⟨man, -, hman⟩ := Assembly.mapM_ok_mem hload p (List.mem_of_getElem? hp)
+  have htile := hd.tile
+  rw [hp!] at htile
+  obtain ⟨-, -, -, -, hNT, -⟩ := id htile
+  simp only [goodDeclTiles, goodTiles, blankTiles, overCapTiles, Finset.mem_union, Finset.mem_filter,
+    Finset.mem_range, hT]
+  cases hτ : τ ((auditTiling 64 64 U.layout).unit g) with
+  | none => exact Or.inl (Or.inr ⟨hNT, rfl⟩)
+  | some cm =>
+    have hop := hd.opens o cm ho hτ
+    rw [hp!] at hop
+    have hdec : ∀ r ∈ p.records, decOf pl.passes r.matmul.index = declOf r := fun r hr => by
+      obtain ⟨pos, hpos⟩ := List.getElem?_of_mem hr
+      exact decOf_eq hL hp hpos
+    have hdecl := @hD Q R S saltOf rootOf ρ i.coins man p tid o U g τ cm (decOf pl.passes) hman htile hτ hdec hop
+      hpass
+    have hw := hW saltOf rootOf ρ H s i.coins man p tid o U g cm hman htile (by rw [← hp!]; exact hd.salt)
+      (by rw [← hp!]; exact hd.root) (by rw [← hPw]; exact hd.weights) hop hpass
+    rcases hw with hw | ⟨x, hx, y, hy, hne, hxy⟩
+    · by_cases hcap : TR.capOK H s U g cm.act
+      · refine Or.inl (Or.inl ⟨⟨hNT, cm, rfl, ?_⟩, ?_⟩)
+        · unfold TileGood
+          rw [hT, hrow, hPt, hPu]
+          exact ⟨hcap, hd.weights, hw⟩
+        · unfold declOK
+          rw [hT, hrow]
+          exact hdecl
+      · exact Or.inr ⟨hNT, cm, rfl, hcap⟩
+    · exact absurd ⟨pi, tid, g, o, cm, hd, ho, hτ, x, by rw [hp!]; exact hx, y, by rw [hp!]; exact hy, hne, hxy⟩
+        hcol
 
 end Pouw.PearlPlus.Bridge
