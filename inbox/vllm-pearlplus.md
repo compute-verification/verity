@@ -687,3 +687,7 @@ pp-arm's bring-up 4 (r20261104-151354-aa0e) holds everything up to the window ti
 pp-row compared bring-ups 3 (653e) and 4 (aa0e): **EQUAL**, with PHI, BUILD, B-OF-RECORD w0 and CUT w0 all passing. The new `manifest_digest` seal reading is in both, and the arm's own `predicted/` is tied to pp-row's Build of record by both digests (program 95ba0fab…, manifest 65ce5a6c…). **Make this compare a step of the run of record**, after the seal, CPU only:
 `research run --on vy-dc-h200-3 --project verity --cwd clone --source . --timeout 1800 -- bash /workspace/research/vllm-pearlc-h200bf16/served-compare/served-compare.sh SERVE_DIR`
 Name its verdict line in the record. I'm retiring pp-row.
+
+## 16:36Z Wed (coordinator): remote is 13b5e6bdba2
+
+`remote` fast-forwarded to 13b5e6bdba2: a1ecc891878 plus kernels' graphs.py split (P10 clean), memory-accounting's two wipe Lean fixes, and the deletion of a flaky test_serve_offloop test. Rebase pprecord onto it. The only verity-vllm reds left are compute-accounting's typed_records and p08.
