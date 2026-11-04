@@ -183,6 +183,15 @@ def test_each_classs_certificate_orders_its_wires_on_its_entries_its_function_un
     assert _function(desc) == (digest, rows)
 
 
+def test_a_wire_read_one_writer_unit_on_is_another_function():
+    """`_function` reads the wires: TINY's first wire read one writer unit on is another function of as many rows."""
+    _, desc = _lowered("tiny")
+    w = desc["wires"][0]
+    moved = {**desc, "wires": [{**w, "base": w["base"] + 1}, *desc["wires"][1:]]}
+    (digest, rows), (*_, n, pinned) = _function(moved), FUNCTIONS["tiny"]
+    assert rows == n and digest != pinned
+
+
 def test_a_layer_is_a_digit_of_its_own_ranked_by_its_time():
     """An entry's rank is its units' time, affine in its digits: an int8 layer's two quantizers at K = 64 are one entry of
     the step, the layer, the quantizer and the slot, ranked a step, a layer and a quantizer apart and never a slot apart."""

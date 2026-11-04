@@ -214,8 +214,8 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
 
 
 #: the SHA-512 of every unit's output rows on `window`'s values, each template's descriptor id in the circuit's order then
-#: its outputs' bytes: the honest witness's outputs, which restating the circuit's wires (`window_builder.placed`) leaves
-#: as they are
+#: its outputs' bytes: the honest witness's outputs, each placed by its node and read through no wire (the slow
+#: `test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs` reads them through the wires)
 OUTS = ("09566f9cfac4eeaf192a15ac37452df0b3570c49a2195ae3805d9950beb184852bac1b131122bbf815d059a290a1172eeec63e21868bb45d9be0"
         "9bd9040f1437")
 
