@@ -24,7 +24,7 @@ The lock's `meets` witnesses of these claims are Flock's decoder bounds at its d
 namespace Claims.Witness.SamplingGeneric
 
 open Claims.SamplingGeneric
-open Claims.Sampling (AuditStatement forkOn)
+open Claims.Sampling (AuditStatement forkOn slack)
 open Claims.Witness.Sampling (NoHash ownLog_noHash noHash_bind noHash_waitAccC noHash_flatMapRP rejCm toyProg toyStmt
   toyPart toyPart_blocks toy_boundary toy_Pa inScope_toy sksD sksD_noR sksD_noRCount sksD_outer sksD_missAt slack_pos
   slack_le_two)
@@ -73,6 +73,7 @@ section NoSessions
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
+omit [Fintype Coin] [Nonempty Coin] in
 /-- At a compiled verifier with no sessions, a run's extractions make no call of their own. -/
 theorem noHash_runExt (L : Compiled Coin A) (hs : ∀ x u v, L.session x u v = none) (x : Msg) (s : AuditStatement)
     (r : Fin (L.V.k x) → Coin) (v : Seen) (c : L.SlotEC x) : NoHash (L.runExt x s r v c) := by
@@ -114,16 +115,21 @@ theorem bext_pr (H : Msg → Msg) (L : Compiled Coin A) (hs : ∀ x u v, L.sessi
     simp [ownLog_noHash _ _ _ (noHash_compiledE L hs _ _ _), findColl])]
   exact Pr_false
 
+/-- A finder that outputs nothing finds nothing. -/
+theorem finder_pr_none (H : Msg → Msg) (F : Finder) (h : ∀ s, F.out s = none) : F.Pr H = 0 := by
+  unfold Finder.Pr
+  rw [Pr_congr fun s => iff_false_intro (by simp [h s])]
+  exact Pr_false
+
 /-- At a compiled verifier with no sessions, `B_conf` finds nothing. -/
 theorem bconf_pr (H : Msg → Msg) (L : Compiled Coin A) (hs : ∀ x u v, L.session x u v = none) (Ω : Type)
     [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) : (Compiled.Bconf H L Ω P x).Pr H = 0 := by
-  rcases hx : L.parse x with _ | s
-  · simp [Compiled.Bconf, hx, Finder.Pr, Pr_false]
-  · simp only [Compiled.Bconf, hx]
-    unfold Finder.Pr
-    rw [Pr_congr fun q => iff_false_intro (by
-      simp [ownLog_noHash _ _ _ (noHash_runExt L hs _ _ _ _ _), findColl])]
-    exact Pr_false
+  simp only [Compiled.Bconf]
+  -- The finder's coins are the match's, so the parse is generalized everywhere at once.
+  rcases L.parse x with _ | s
+  · exact finder_pr_none H _ fun _ => rfl
+  · exact finder_pr_none H _ fun q => by
+      simp [ownLog_noHash _ _ _ (noHash_runExt L hs _ _ _ _ _), findColl]
 
 end NoSessions
 
@@ -140,8 +146,10 @@ theorem toy_correct_val (val : ℕ → Option Bool) (ι : ℕ → Bool) (h : toy
   have hr : toyProg.refIn [0] val ι 0 = val 0 := by simp [Claims.Sampling.Prog.refIn, toy_boundary]
   exact ⟨b, hr.symm.trans hb⟩
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem sksL_scope (x : Msg) : (sksL Coin).Scope x := ⟨toyStmt, toyPart, rfl, rfl, inScope_toy⟩
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem sksL_κs (x : Msg) : (sksL Coin).κs x = 0 := by
   show ((List.range 1).map fun _ => (0 : ℝ)).foldr max 0 = 0
   simp
@@ -160,8 +168,12 @@ theorem sksL_κ (x : Msg) : (sksL Coin).κ 0 x < 1 / 3 := by
     rw [sksL_κs, hk, hc]
     ring
   rw [he]
-  nlinarith
+  generalize 2 * ((sksD Coin).k x : ℝ) / ((sksD Coin).cap x : ℝ) + Real.exp (-((sksD Coin).k x : ℝ) / 8) = X at ho ho0 ⊢
+  calc (1 + slack) * X ≤ 3 * X := by gcongr; linarith
+    _ ≤ 3 * (1 / 50) := by gcongr
+    _ < 1 / 3 := by norm_num
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem sksL_missAt (x : Msg) : (sksL Coin).missAt 1 x = 0 :=
   (show (sksL Coin).missAt 1 x = Claims.Sampling.missAt (sksD Coin) 1 x from rfl).trans (sksD_missAt x)
 
@@ -181,6 +193,7 @@ theorem sksL_bound_fails (H : Msg → Msg) (Rx : Rel Claims.Sampling.Wit) (κ' :
   rw [hp, hb, mul_zero, Real.sqrt_zero, add_zero, sksL_bext, mul_zero, add_zero] at h
   linarith
 
+omit [Fintype Coin] [Nonempty Coin] in
 theorem sksL_opensAt (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (r : Fin ((sksL Coin).V.k x) → Coin)
     (c : (sksL Coin).SlotEC x) (g : ℕ) : (sksL Coin).opensAt H P x ω r c g = none := by
   have hp : (sksL Coin).parse x = some toyStmt := rfl
@@ -193,6 +206,7 @@ theorem sksL_regVal (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω 
     (sksL Coin).regVal H P x ω g = none := by
   simp [Compiled.regVal, sksL_opensAt, Pr_false]
 
+open Classical in
 /-- So its incorrect set holds the proof block. -/
 theorem sksL_Freg (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) : 0 ∈ (sksL Coin).Freg H P x ω := by
   have hp : (sksL Coin).parse x = some toyStmt := rfl
@@ -219,8 +233,8 @@ theorem sksL_notM (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : 
     simp at h0
   intro hM
   have hpa : (0 : ℝ) < toyStmt.design.Pa toyPart ((sksL Coin).Freg H P x ω) := hM
-  rw [toy_Pa, if_neg hw] at hpa
-  exact lt_irrefl 0 hpa
+  rw [toy_Pa] at hpa
+  simp [hw] at hpa
 
 /-- `sksL`'s committed form's error is `0`. -/
 theorem sksL_εreg (H : Msg → Msg) (x : Msg) : (sksL Coin).εreg H x silentP = 0 := by
