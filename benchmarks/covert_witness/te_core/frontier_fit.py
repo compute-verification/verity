@@ -11,18 +11,24 @@ pretraining runs, their loss converted as te_core.panels converts it (`panels.sc
 runs: `--ladder-points` reads the ladder report's annealed runs (its F.json or report.json, each at its counted MACs)
 and the compute-optimal points of its FIT.json, which `--ladder-fit` names as well once the ladder has three sizes
 (`ladder_points`); without `--ladder-points` it reads `LADDER`'s, each start of the ladder's manifest at its counted
-C0 and held-out bpb. Every C is in te_core's gates: a start's C0 is te_core.panels' `c0`, a ladder point's MACs are at
-the bf16 GEMM price, as a v3 start's counted C0 is.
+C0 and held-out bpb (`ladder_file` builds it). Ladder runs that leave out a start the starts manifest registers on
+v3 are refused, since every such start is a ladder run (`uncovered`). Every C is in te_core's gates: a start's C0 is
+te_core.panels' `c0`, a ladder point's MACs are at the bf16 GEMM price, as a v3 start's counted C0 is.
 
 The fit (`fit`) reads the frontier from the least C0 of the data's starts in the manifest up: gains are read at no
-less compute, and the from-scratch runs' first evaluations below it are warm-up, not a frontier. It takes one point per
+less compute, and the from-scratch runs' first evaluations below it are warm-up, not a frontier. On v3
+(`FROM_SCRATCH`) it reads the frontier from scratch alone, its starts and the ladder's runs (coordinator 07:57Z: v3's
+fit is the ladder's starts'): pooled, a start's continuations take its own point's bin and, past their compute-optimal
+range, flatten the fit to E = 0; they still set te_core.algorithm_policy's H. It takes one point per
 1/`PER_DECADE` decade of C (the least loss there, so a stretch of checkpoints close in compute counts once) and fits E,
 A and γ by least squares in relative loss, E in [0, the least loss) and A > 0, γ on a grid refined by golden section.
 A data with fewer than `FIT_MIN` such points, or spanning less than a factor `FIT_SPAN` in C, has no fit, and so does
 one with neither a start that has a scored checkpoint nor a ladder point: the pilot's from-scratch losses are converted
 through its starts' (`panels.scratch`), and its starts' C0 rest on the dense rate their checkpoints give. A fit on
 fewer than `FIT_TARGET` points from scratch is provisional: its status and the note say so, the note with its points'
-residuals, and te_core.algorithm_policy's rows that read it carry gain:provisional in `estimated`. Effective
+residuals, and te_core.algorithm_policy's rows that read it carry gain:provisional in `estimated`. A fit on no more
+points than its `PARAMS` parameters has residuals that bound none of its uncertainty, which its status and its starts'
+say where they would give its rms in effective compute (`unbounded`). Effective
 compute C_eff(l) = (A/(l − E))^(1/γ) is the compute at which the fit reaches loss l, and a point's gain C_eff(l)/C its
 residual in compute (1 on the fit). A start's gain from its l0 to a loss L is Daniel's C(L)/C(l0) on the fit
 (`gain_from`), so its target at gain g (te_core.algorithm_policy's `GAINS`) is E + (l0 − E)·g^(−γ), below l0 at
@@ -62,11 +68,23 @@ PER_DECADE = 20
 FIT_MIN, FIT_SPAN = 3, 10.0
 #: the from-scratch points a fit is to read (coordinator 07:58Z: the target, not a gate); a fit on fewer is provisional
 FIT_TARGET = 5
-#: the v3 ladder's points read when no `--ladder-points` names any: each start of its manifest
-#: (islands/ladder-v3/ladder_store.json) at its counted C0 MACs and held-out bpb on the v3 search pool, built from the
-#: manifest and each start's start.json, sha256-checked, as `ladder-points.json` (te-ladder/F/v1); None reads none
-LADDER = "art:b5d21639ddaa436e761f5571fb7810555a62ed80b26926b1521579c10525cd82"
+#: the data whose fit reads its from-scratch points alone (method key `panels.SCRATCH`), v3's the ladder's starts
+#: (coordinator 07:57Z): pooled, its starts' continuations take the starts' bins and, past their compute-optimal
+#: range, pull E to its bound 0, so a start's own gain leaves 1; they still set H
+FROM_SCRATCH = ("v3",)
+#: the fit's parameters, E, A and γ: on no more points than these its residuals bound none of its uncertainty
+PARAMS = 3
+#: the v3 ladder's points read when no `--ladder-points` names any: each start of its manifest (`LADDER_MANIFEST`,
+#: batch 5, xl-t20 among them) at its counted C0 MACs and held-out bpb on the v3 search pool, built from the manifest
+#: and each start's start.json, sha256-checked, as `ladder-points.json` (te-ladder/F/v1; `ladder_file`); None reads
+#: none. A fit refuses ladder runs that leave out a registered v3 start (`uncovered`)
+LADDER = "art:971de925ed69b181ed27910ac30d230322c6f749141756d352dff746910b8602"
 LADDER_FILE = "ladder-points.json"
+#: the v3 ladder's manifest: each start's shape, with its counted C0 MACs, and its start.json's sha256 in the store
+LADDER_MANIFEST = Path(__file__).resolve().parents[1] / "islands" / "ladder-v3" / "ladder_store.json"
+#: the schema of the scoring cap's own fit (te_core.policy's `ladder_fit`; the integrator's CAP.json, coordinator
+#: 20:11Z): a `--ladder-fit` of it caps the score and holds no from-scratch point
+CAP_SCHEMA = "te-ladder/cap/"
 #: γ's grid, refined about its best by golden section
 GAMMAS = np.linspace(0.01, 2.0, 399)
 DIGITS = 6
@@ -130,6 +148,43 @@ def ladder_points(path: Path) -> list[tuple[float, float, dict]]:
     if not out:
         raise SystemExit(f"frontier_fit: {path} holds no ladder point (te-ladder/F/*, a report's F or te-ladder/fit/*)")
     return out
+
+
+def ladder_file(store: Path, manifest: Path = LADDER_MANIFEST) -> dict:
+    """`LADDER`'s ladder-points.json (te-ladder/F/v1) from the ladder's `manifest` and each start's start.json under
+    `store` (the manifest's `path` in its starts store): each start at its counted C0 MACs (provenance.c0.macs, the
+    manifest's c0_macs) and its held-out bpb on the v3 search pool (provenance.search_pool.bpb), each start.json
+    checked against the manifest's sha256."""
+    import hashlib
+
+    man = json.loads(manifest.read_text())
+    annealed = []
+    for name, s in man["starts"].items():
+        raw = (store / name / "start.json").read_bytes()
+        if hashlib.sha256(raw).hexdigest() != s["files"]["start.json"]:
+            raise SystemExit(f"frontier_fit: {store / name / 'start.json'} isn't the manifest's start.json for {name}")
+        p = json.loads(raw)["provenance"]
+        if p["c0"]["macs"] != s["shape"]["c0_macs"]:
+            raise SystemExit(f"frontier_fit: {name}'s start.json counts C0 {p['c0']['macs']} MACs, its manifest "
+                             f"{s['shape']['c0_macs']}")
+        annealed.append({"branch": name, "macs": p["c0"]["macs"], "bpb": p["search_pool"]["bpb"],
+                         "parameters": s["shape"]["parameters"], "tokens": s["shape"]["tokens"],
+                         "start_json_sha256": s["files"]["start.json"]})
+    return {"schema": "te-ladder/F/v1", "source": f"built by te_core {VERSION}'s frontier_fit.ladder_file from the v3 "
+            f"ladder's manifest ({manifest.relative_to(manifest.parents[2])}, starts store {man['art']}): each start's "
+            "C0 in counted MACs (start.json provenance.c0.macs, the manifest's c0_macs) and its held-out bits per "
+            "byte on the v3 search pool (provenance.search_pool.bpb), each start.json checked against the manifest's "
+            "sha256", "manifest": {"path": str(manifest.relative_to(manifest.parents[2])), "starts_store": man["art"]},
+            "annealed": annealed}
+
+
+def uncovered(shapes: dict[str, dict], extra: list[tuple]) -> list[str]:
+    """The registered v3 starts (`shapes`, the starts manifest's) that no annealed ladder run in `extra` is: each start
+    is a ladder run, so ladder runs that leave one out are an older ladder's. None where `extra` has no annealed run
+    (no ladder read, or only a FIT.json's compute-optimal models)."""
+    runs = {r["ladder"] for _, _, r in extra if str(r.get("source", "")).endswith(", annealed")}
+    return sorted(s for s, shape in shapes.items()
+                  if runs and shape.get("tokenizer") == policy.V3_TOKENIZER and s not in runs)
 
 
 def points(sts: list[Start], runs: list[dict], shapes: dict[str, dict], rate: float,
@@ -241,12 +296,20 @@ def c_spread(f: dict, loss: float) -> float:
 
 def targets(f: dict, l0: float, gains: tuple[float, ...]) -> str:
     """A start's target losses at `gains` (`target`; te_core.algorithm_policy's `GAINS`) and the fit's uncertainty in
-    effective compute at the first (`c_spread`), as a start row's status."""
+    effective compute at the first (`c_spread`), or that its residuals bound none (`unbounded`), as a start row's
+    status."""
     if l0 <= f["E"]:
         return f"no targets: its loss is at or below the fit's E ({f['E']:g})"
     at = [(g, target(f, l0, g)) for g in gains]
     return ("targets, C(L1)/C(L0) = g: " + ", ".join(f"{g:g}x {t:.5f} ({100 * (t / l0 - 1):+.2f}%)" for g, t in at)
-            + f"; the fit's rms is {100 * c_spread(f, at[0][1]):.3g}% in effective compute at {gains[0]:g}x")
+            + (f"; {unbounded(f)}" if f["points"] <= PARAMS else
+               f"; the fit's rms is {100 * c_spread(f, at[0][1]):.3g}% in effective compute at {gains[0]:g}x"))
+
+
+def unbounded(f: dict) -> str:
+    """Why a fit on no more points than its `PARAMS` parameters gives no uncertainty in effective compute."""
+    return (f"the fit's {f['points']} points are as many as its {PARAMS} parameters, so its residuals bound none of its "
+            "uncertainty")
 
 
 def span(lo: float, hi: float, unit: str = "") -> str:
@@ -258,11 +321,12 @@ def span(lo: float, hi: float, unit: str = "") -> str:
 def status(f: dict, spread: list[float], first: list[float], gains: tuple[float, ...]) -> str:
     """A fit row's status: provisional or not, E at its bound 0 where the points leave it there (`fit` holds E in
     [0, the least loss)), its points' gains (`spread`) and its rms in effective compute at its starts' first targets
-    (`first`, in %)."""
+    (`first`, in %), or that its residuals bound none (`unbounded`)."""
     return ((f"provisional fit: {f['scratch']} of its points from scratch, under {FIT_TARGET}" if f["provisional"]
              else "fit") + ("; E at its bound 0 (the least squares would put it at or below 0)" if f["E"] == 0 else "")
             + f"; its points' gains {span(min(spread), max(spread))}"
-            + (f"; its rms in loss is {span(min(first), max(first), '%')} in effective compute at its starts' "
+            + (f"; {unbounded(f)}" if f["points"] <= PARAMS else
+               f"; its rms in loss is {span(min(first), max(first), '%')} in effective compute at its starts' "
                f"{gains[0]:g}x targets" if first else ""))
 
 
@@ -291,7 +355,8 @@ def build(scored: list[dict], shapes: dict[str, dict], runs: list[dict], source:
     for d in panels.DATA:
         lo = c_lo(shapes, d, rate)
         anchored = any(s.data == d for s in sts) or any(p[2]["data"] == d for p in extra)
-        read[d] = used(pts[d], lo) if lo is not None and anchored else []
+        pool = [p for p in pts[d] if p[2].get("method_key") == panels.SCRATCH] if d in FROM_SCRATCH else pts[d]
+        read[d] = used(pool, lo) if lo is not None and anchored else []
         fits[d] = f = fit(read[d])
         if f is None:
             why = ("no fit: no start has a scored checkpoint on this data and no ladder point is given, so nothing "
@@ -327,10 +392,10 @@ def note(fits: dict | None = None, read: dict | None = None, pts: dict | None = 
     """The panel's note, and each provisional fit's points (`provisional`); over the route's `console.NOTE_MAX`
     without the ladder's runs off the fit."""
     def text(off: bool) -> str:
-        out = ("Per data, held-out bpb L against training gates C: E + A*C^-gamma, least squares in relative loss over "
-               "its frontier (least L per C: from scratch, starts at C0, checkpoints at C0 + |C|) from the least C0, a "
-               f"point per 1/{PER_DECADE} decade. C_eff = (A/(L - E))^(1/gamma); gain C_eff(L)/C at a point, "
-               "C(L)/C(l0) at a target.")
+        out = ("Per data, held-out bpb L at training gates C: E + A*C^-gamma, least squares in relative loss over its "
+               "frontier (least L per C: from scratch, starts at C0, checkpoints at C0 + |C|; "
+               f"{', '.join(FROM_SCRATCH)} from scratch only) from the least C0, a point per 1/{PER_DECADE} decade. "
+               "C_eff = (A/(L - E))^(1/gamma); gain C_eff(L)/C at a point, C(L)/C(l0) at a target.")
         for d, f in (fits or {}).items():
             if f and f.get("provisional"):
                 out += " " + provisional(d, f, read[d], pts[d], off)
@@ -404,14 +469,22 @@ def arguments(ap: argparse.ArgumentParser) -> argparse.ArgumentParser:
 
 def inputs(a, scored: list[dict], shapes: dict[str, dict], d: dict, command: str = "te_core.frontier_fit"
            ) -> tuple[list[dict], list[tuple], str]:
-    """The pretraining runs, the ladder's points (`--ladder-points`, else `LADDER`'s, and `--ladder-fit`'s FIT.json)
-    and the source of `command`'s panels for a loaded ledger `d` (te_core.rescore's `load`): its pins at 12
-    characters, or at 7 where those don't fit the route's `console.SOURCE_MAX`."""
+    """The pretraining runs, the ladder's points (`--ladder-points`, else `LADDER`'s, and `--ladder-fit`'s FIT.json,
+    not a CAP_SCHEMA one) and the source of `command`'s panels for a loaded ledger `d` (te_core.rescore's `load`): its
+    pins at 12 characters, or at 7 where those don't fit the route's `console.SOURCE_MAX`. Ladder runs that leave out
+    a registered v3 start of `shapes` are refused (`uncovered`)."""
     runs = panels.pretraining(a.pretraining or panels.fetch(panels.PRETRAINING))
-    extra = [p for path in [*a.ladder_points, *([a.ladder_fit] if a.ladder_fit else [])] for p in ladder_points(path)]
+    fit = [a.ladder_fit] if a.ladder_fit and not str(
+        json.loads(a.ladder_fit.read_text()).get("schema", "")).startswith(CAP_SCHEMA) else []
+    extra = [p for path in [*a.ladder_points, *fit] for p in ladder_points(path)]
     built = not a.ladder_points and LADDER
     if built:
         extra += [(x, y, r | {"manifest": LADDER}) for x, y, r in ladder_points(panels.fetch(LADDER) / LADDER_FILE)]
+    missing = uncovered(shapes, extra)
+    if missing:
+        raise SystemExit(f"{command}: the ladder's runs leave out the registered v3 start(s) {', '.join(missing)} "
+                         f"(the starts manifest's); read a ladder report or ladder-points.json that has each of them "
+                         f"(`frontier_fit.ladder_file` builds one from the ladder's manifest)")
     pin = d["pin"] if a.pin else frontier.pinned(pilot=True)
     tail = (f"{len(scored)} valid checkpoints, quantities {d['quantities']}; {len(d.get('refused', {}))} refused; "
             f"{len(extra)} ladder points" + (f" ({LADDER[:16]})" if built else "") + ")")

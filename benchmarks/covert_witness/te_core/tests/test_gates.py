@@ -40,6 +40,9 @@ def test_kinds_and_assumptions():
     assert gates.kind_of("fwd", "theta", "_scaled_mm") == ("gemm/e4m3", "")
     kind, note = gates.kind_of("fwd", "theta", "_int_mm", "int8")
     assert kind == "gemm/bf16" and "no Definition" in note
+    for op in ("mv", "addmv", "addmv_"):   # matrix-vector products, which te_core.capture.structure counts as GEMMs
+        assert gates.kind_of("forward", "", op, "bfloat16") == ("gemm/bf16", "")
+    assert gates.kind_of("forward", "", "mvlgamma", "bfloat16")[0] == "elementwise/bf16"
 
 
 def test_a_v23_log_in_gates():

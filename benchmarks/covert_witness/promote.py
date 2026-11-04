@@ -30,7 +30,7 @@ NODES = Path(os.environ.get("CW_NODES", HERE / "nodes.txt"))
 sys.path.insert(0, str(HERE))
 
 from pin import source  # noqa: E402
-from te_core import launch as te_launch  # noqa: E402
+from te_core import nodes as te_nodes  # noqa: E402
 
 
 def research(*args: str) -> str:
@@ -40,7 +40,7 @@ def research(*args: str) -> str:
     return r.stdout + r.stderr
 
 
-def decide_on(node: te_launch.Node, candidates: list[dict]) -> tuple[str, dict]:
+def decide_on(node: te_nodes.Node, candidates: list[dict]) -> tuple[str, dict]:
     if not node.cpu:
         raise SystemExit(f"promote: {node.name} names no CPU pool in {NODES} (`{node.name} pool=gpu cpu=research`)")
     _, src = source()
@@ -65,7 +65,7 @@ def decide_on(node: te_launch.Node, candidates: list[dict]) -> tuple[str, dict]:
 
 def decide(candidates: list[dict]) -> dict:
     """{id: {promote, value_sha256, output_sha256, node, run}} over every candidate, one decision run per node."""
-    known = {n.name: n for n in te_launch.nodes(NODES)}
+    known = {n.name: n for n in te_nodes.nodes(NODES)}
     default = next(iter(known))
     by_node: dict[str, list[dict]] = {}
     for c in candidates:

@@ -101,32 +101,43 @@ def with_structures(record: dict, traced: dict[str, dict]) -> dict:
     """A record counted by the runtime counter with its U, cut and training-formalism quantities from the traced step
     circuit: `traced` maps a structure id of the record to a traced structure (te_core.capture's
     `StepGraph.structure()`, or a recorded script's, `te_core.capture.script`), whose per-token rows are scaled to each
-    step's tokens. Only steps whose own structure has updated MACs take it (a step before the run's first update reads
-    θ only), and |C| stays the runtime count. A traced structure's `formalism` (te_core.capture.circuit.measure) gives
-    its steps' σ, affected share, token factor and Δ_grad (te_core.formalism's `TRACED_STRUCTURE`), and the record's
-    `formalism` block the per-token quantities of the traced structure its steps spend the most MACs in
-    (`formalism.of_trace`), with its `trace`'s read-back lists (`formalism.READ_BACKS`) those of every traced structure
-    its steps take, and none (unchecked) where one of them has none."""
+    step's tokens. Only steps whose own structure has updated MACs take its U and cut (a step before the run's first
+    update reads θ only), and |C| stays the runtime count. A traced structure's `formalism`
+    (te_core.capture.circuit.measure) gives its steps' σ, affected share, token factor and Δ_grad (te_core.formalism's
+    `TRACED_STRUCTURE`), a step that updates nothing included where a step that does is traced too: its Δ_grad, 0, is
+    a measurement, not a missing value. The record's `formalism` block takes the per-token quantities of the updating
+    traced structure its steps spend the most MACs in (`formalism.of_trace`), with its `trace`'s read-back lists
+    (`formalism.READ_BACKS`) those of every traced structure its steps take, and none (unchecked) where one of them has
+    none."""
     out = dict(record, structures=dict(record["structures"]), steps=[dict(s) for s in record["steps"]])
     weight: dict[str, int] = {}
+    idle: dict[str, dict] = {}
     for s in out["steps"]:
         sid, struct = s.get("struct"), record["structures"].get(s.get("struct"))
-        if sid not in traced or not struct or not struct["updated"] or not s.get("tokens"):
+        if sid not in traced or not struct or not s.get("tokens"):
             continue
         t, n = traced[sid], s["tokens"]
-        rows = [[r[0], r[1], round(r[0] * n), n, r[4]] for r in t["updated"]]
-        new = f"{sid}+traced{n}"
         f = t.get("formalism")
         measured = {k: f[k] for k in TRACED_STRUCTURE if k in f} if f else {}
+        if not struct["updated"]:
+            if measured:
+                idle[sid] = dict(struct, **measured)
+            continue
+        rows = [[r[0], r[1], round(r[0] * n), n, r[4]] for r in t["updated"]]
+        new = f"{sid}+traced{n}"
         out["structures"][new] = dict(struct, updated=rows, beta=t.get("beta"), cut_bits=t.get("cut_bits"), **measured)
         s["struct"] = new
         if f:
             weight[sid] = weight.get(sid, 0) + s.get("macs", 0)
     if weight:
+        for s in out["steps"]:
+            if s.get("struct") in idle and s.get("tokens"):
+                out["structures"][f"{s['struct']}+traced"] = idle[s["struct"]]
+                s["struct"] = f"{s['struct']}+traced"
         f = of_trace(traced[max(weight, key=weight.get)]["formalism"])
         trace = {k: v for k, v in f["trace"].items() if k not in READ_BACKS}
         for k in READ_BACKS:
-            lists = [traced[sid]["formalism"].get(k) for sid in weight]
+            lists = [traced[sid]["formalism"].get(k) for sid in [*weight, *idle]]
             if all(x is not None for x in lists):
                 trace[k] = list({json.dumps(e, sort_keys=True): e for x in lists for e in x}.values())
         f["trace"] = trace

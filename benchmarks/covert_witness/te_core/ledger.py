@@ -17,6 +17,7 @@ submissions. A submission carries its prefix's formalism quantities (`formalism`
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -108,11 +109,15 @@ class Ledger:
     # -- reading
 
     def records(self) -> list[dict]:
+        """Every agent's records, each run's trace one shared object (`shared_trace`)."""
         out = []
         for p in sorted((self.root / "records").glob("*/*.json")):
             rec = json.loads(p.read_text())
             if rec.get("agent") != p.parent.name:
                 continue  # a record in another agent's directory is not that agent's: skipped
+            f = rec.get("formalism")
+            if isinstance(f, dict) and isinstance(f.get("trace"), dict):
+                f["trace"] = shared_trace(f["trace"])
             art = p.with_suffix(".art")
             if art.exists():
                 rec["art"] = art.read_text().strip()
@@ -138,14 +143,6 @@ class Ledger:
         tmp.rename(self.root / "index.jsonl")
         return rows
 
-    def promoted(self, entry: str, tier: int) -> bool:
-        return any(r["kind"] == "promotion" and r["agent"] == SCORER and r.get("entry") == entry and int(r["tier"]) >= tier
-                   for r in self.records())
-
-    def launches(self, agent: str, tier: int, since_ts: float) -> int:
-        return sum(1 for r in self.records() if r["kind"] == "launch" and r["agent"] == agent and r["tier"] == tier
-                   and r["written_ts"] >= since_ts)
-
     # -- the scorer's records
 
     def promote(self, entry: str, tier: int, reason: str) -> dict:
@@ -153,6 +150,28 @@ class Ledger:
 
     def final(self, entry: str, test_bpb: float) -> dict:
         return self.append("final", {"entry": entry, "test_bpb": float(test_bpb)})
+
+
+#: each distinct trace the ledger has read, by its content's sha256: a run's checkpoints all carry its trace, and one
+#: object for each (230 distinct among 5,598 records at 21:56Z, 46 MB of 1.16 GB) keeps a whole re-score in memory.
+#: A reader that changed one in place would change every record sharing it, so `console.put` refuses where
+#: `changed_traces` finds one
+SHARED: dict[str, dict] = {}
+
+
+def _digest(trace: dict) -> str:
+    return hashlib.sha256(json.dumps(trace).encode()).hexdigest()
+
+
+def shared_trace(trace: dict) -> dict:
+    """The one object for `trace`'s content among the traces read so far (`SHARED`)."""
+    return SHARED.setdefault(_digest(trace), trace)
+
+
+def changed_traces() -> int:
+    """How many shared traces differ from the content they were read with (`SHARED`); 0 where every reader left
+    them as read."""
+    return sum(_digest(tr) != key for key, tr in SHARED.items())
 
 
 def version(v) -> tuple[int, ...]:
