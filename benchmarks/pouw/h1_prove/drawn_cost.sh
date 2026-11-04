@@ -38,9 +38,13 @@ for fw in ${DC_ARMS:-1 0}; do
   echo "fw$fw" > "$B/arm"
   H1_FIREWALL=$fw H1_CIRCUITS=$T/circuits H1_WEIGHTS=$T/weights.npz H1_WEIGHTS_KEY=$T/wkey H1_DRAW_K=2 H1_DRAWN_ONLY=1 \
     H1_DRAWN_MEM_GB=${DC_MEM_GB:-250} H1_ZK_SERVER_GB=${DC_SERVE_GB:-88} H1_ZK_LEAN_GB=${DC_LEAN_GB:-96} \
-    HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk} PY=$PWD/.venv/bin/python \
+    HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk} PY=$PWD/.venv/bin/python H1_DRAWN_WORK=$B/work$fw \
     bash benchmarks/pouw/h1_prove/drawn.sh "$T/serve" 0 "$OUT/fw$fw" > "$OUT/fw$fw.log" 2>&1
   echo "fw$fw exit $?" | tee -a "$OUT/arms.txt"
+  # the fixture's witness is the test's own, so its provers' stderr may leave the node, which drawn.sh's never does
+  for e in "$B"/work"$fw"/h1-drawn.*/out/*/prove.err; do
+    [ -e "$e" ] && { echo "== $e"; tail -20 "$e"; } >> "$OUT/fw$fw-prove-err.txt"
+  done
 done
 echo done > "$B/arm"
 sleep 3
