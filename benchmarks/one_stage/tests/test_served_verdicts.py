@@ -175,12 +175,11 @@ def test_a_published_line_names_no_window_and_counts_none_of_a_windows_own(tmp_p
     assert capsys.readouterr().out.splitlines() == [p for _, p in LINES] and not (tmp_path / "absent").exists()
 
 
-def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_public_form(tmp_path, capsys):
+def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_public_form(tmp_path):
     """`publish`, once the run is done: a file whose path names a window is held whole in the serve dir's private/out, one
     whose text or JSON names or counts a window is held there in full with its public form left in out/, and the rest,
-    the bench Build's requests by name, a window named ``all`` and a binary file among them, stay byte for byte, the
-    binary one named on stderr as unscanned. Then out/ names no window and counts none of a window's own, and a second
-    pass holds nothing."""
+    the bench Build's requests by name, a window named ``all`` and a binary file among them, stay byte for byte. Then out/
+    names no window and counts none of a window's own, and a second pass holds nothing."""
     out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
     files = {
         "verdicts.txt": "SERVE stopped (exit 0): 3 window(s) closed, 2 sealed\nCOMPOSITE CASE verity/pous/p2/v4/run accept\n",
@@ -215,8 +214,6 @@ def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_pu
     assert (out / "verdicts.txt").read_text() == ("SERVE stopped (exit 0): window(s) closed, sealed\n"
                                                   "COMPOSITE CASE verity/pous/p2/v4/run accept\n")
     assert gzip.decompress((out / "serve" / "h1" / "window-program.json.gz").read_bytes()) == b'{"rows": 512}'
-    assert capsys.readouterr().err.startswith(
-        "PUBLISH: serve/h1/window-program.json.gz stays as it is, unscanned: not UTF-8 text (invalid start byte at byte 1)")
     assert S.publish(out, private) == []
 
 
@@ -237,6 +234,17 @@ def test_the_sampled_proofs_line_names_the_partition_and_its_draw_and_no_advice_
     assert capsys.readouterr().out == line + "\n"
     (tmp_path / "log").write_text("refused\n")
     assert S.main(["sampled-line", str(tmp_path / "log")]) == 1
+
+
+def test_publish_names_on_stderr_each_file_it_leaves_unscanned_because_it_isnt_text(tmp_path, capsys):
+    """A file that isn't UTF-8 text stays in out/ byte for byte, unscanned, and `publish` says so on stderr, with why."""
+    out, private = tmp_path / "out", tmp_path / "private"
+    (out / "serve").mkdir(parents=True)
+    (out / "serve" / "program.json.gz").write_bytes(gzip.compress(b'{"rows": 512}'))
+    assert S.publish(out, private) == []
+    assert gzip.decompress((out / "serve" / "program.json.gz").read_bytes()) == b'{"rows": 512}'
+    assert capsys.readouterr().err == ("PUBLISH: serve/program.json.gz stays as it is, unscanned: not UTF-8 text "
+                                       "(invalid start byte at byte 1)\n")
 
 
 def test_the_front_line_says_the_sessions_public_fields_alone(tmp_path, capsys):
