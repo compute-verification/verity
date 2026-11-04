@@ -48,15 +48,15 @@ theorem playReaches_walk {g : Game α} {σ : Strategy g} :
   | .ret _, _, _, _, _, _, h => h
   | .send _ k, s', Ks, x, back, o, h => by
     by_cases hK : ∃ i, (Ks i).isHere
-    · rw [Pos.walk, if_pos hK] at h
+    · rw [Pos.walk, ite_eq_left_of_eq_true _ _ (eq_true hK)] at h
       exact h
-    · rw [Pos.walk, if_neg hK] at h
+    · rw [Pos.walk, ite_eq_right_of_eq_false _ _ (eq_false hK)] at h
       exact playReaches_walk (k s'.1) s'.2 _ x back o h
   | @Game.coin _ _ _ _ k, s', Ks, x, back, o, h => by
     by_cases hK : ∃ i, (Ks i).isHere
-    · rw [Pos.walk, if_pos hK] at h
+    · rw [Pos.walk, ite_eq_left_of_eq_true _ _ (eq_true hK)] at h
       exact h
-    · rw [Pos.walk, if_neg hK] at h
+    · rw [Pos.walk, ite_eq_right_of_eq_false _ _ (eq_false hK)] at h
       exact ⟨x.1, playReaches_walk (k x.1) (s' x.1) _ (x.2 x.1) _ o h⟩
 
 theorem walk_send_of {g : Game α} {σ : Strategy g} {M : Type} {k : M → Game α} {s' : Strategy (.send M k)}
@@ -68,6 +68,7 @@ theorem walk_send_of {g : Game α} {σ : Strategy g} {M : Type} {k : M → Game 
   · exact absurd h (by simp [hK])
   · rfl
 
+open Classical in
 theorem walk_coin_of {g : Game α} {σ : Strategy g} {C : Type} {iF : Fintype C} {iN : Nonempty C}
     {k : C → Game α} {s' : Strategy (@Game.coin _ C iF iN k)} {Ks : ι → DigestCut V (@Game.coin _ C iF iN k)}
     (hK : ∀ i, (Ks i).isHere = false) (x : CoinTape (@Game.coin _ C iF iN k) s')
@@ -84,7 +85,7 @@ theorem fill_send_of {Q : Type} (sel : FillSel α Q) {M : Type} {k : M → Game 
     (z : CoinTape (.send M k) s') :
     fill sel (.send M k) s' Ks m κ z = fill sel (k s'.1) s'.2 (fun i => (Ks i).atSend s'.1) m κ z := by
   rw [fill]
-  exact if_neg (by simp [hK])
+  exact ite_eq_right (by simp [hK])
 
 theorem fill_coin_of {Q : Type} (sel : FillSel α Q) {C : Type} {iF : Fintype C} {iN : Nonempty C}
     {k : C → Game α} {s' : Strategy (@Game.coin _ C iF iN k)} {Ks : ι → DigestCut V (@Game.coin _ C iF iN k)}
@@ -93,7 +94,7 @@ theorem fill_coin_of {Q : Type} (sel : FillSel α Q) {C : Type} {iF : Fintype C}
       fillAt (T := fun c => CoinTape (k c) (s' c))
         (fun c m κ y => fill sel (k c) (s' c) (fun i => (Ks i).atCoin c) m κ y) (@sel C iF iN k) m κ z := by
   rw [fill]
-  exact if_neg (by simp [hK])
+  exact ite_eq_right (by simp [hK])
 
 end Verity.Game
 
