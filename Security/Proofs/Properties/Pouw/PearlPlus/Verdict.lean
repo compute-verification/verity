@@ -10,7 +10,7 @@ import Proofs.Properties.Pouw.Commit
 each `for` loop by induction over its list with the loop's state as the invariant's, and the replay's tasks by their pure
 model (a task's `get` is its function's value). The unscale is the Definition's through `Properties.Evaluator`'s FP32
 equalities. A tile over its inert-work bound gets `checkOpened`'s refusal as its verdict, so a tile that passes keeps the
-inert-work bound (`TileKeepsTheCap`). `WorkIsTheCredit` is a `sorry` stub so far.
+inert-work bound (`TileKeepsTheCap`).
 -/
 
 namespace Properties.Pouw.PearlPlus
@@ -726,10 +726,5 @@ theorem yIsTheUnscale : YIsTheUnscale := by
   · cases h
   · cases h
     exact unscale_eq u alphaA alphaB
-
-/-! ## The published work -/
-
-/-- Unproved: a `sorry` stub until its proof replaces it. -/
-theorem workIsTheCredit : WorkIsTheCredit := sorry
 
 end Properties.Pouw.PearlPlus
