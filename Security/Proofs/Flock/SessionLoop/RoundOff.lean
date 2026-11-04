@@ -5,6 +5,8 @@ public import Proofs.Flock.SessionLoop.FinRepPads
 public import Proofs.Flock.SessionLoop.RoundOffL0
 public import Proofs.Flock.SessionLoop.RoundOffOpenBind
 public import Proofs.Flock.SessionLoop.RoundLig
+import all Init.Data.String.Defs
+import all Init.Data.Array.Basic
 
 /-!
 # A rep's scheduled rounds outside its masked phase
