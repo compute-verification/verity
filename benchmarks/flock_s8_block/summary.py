@@ -1,7 +1,7 @@
 """`run.sh`'s summary: per statement and mode (``MODES``), the timed sessions' prove times from the prover's ``LIVE``
 records, the verifier's verdicts, the GPU's busy share, tensor-pipe activity and power over the timed sessions' window, the
-prover's CPU seconds and peak memory, and the staged statement's size (a served window's member: its staging record and
-served-root check).
+prover's CPU seconds and peak memory, the staged statement's size (a served window's member: its staging record and
+served-root check), and Lean's verdicts and times over the kept sessions (``lean``, the lean step's).
 
     python summary.py OUT_DIR      prints the summary as JSON
 """
@@ -121,6 +121,16 @@ def statement(st: Path) -> dict:
     return s
 
 
+def lean_set(d: Path) -> dict:
+    """Lean's flock-verify over one kept session set: each session's exit (0: accepted), wall and peak memory."""
+    runs = {f.stem: (text(f).strip(), time_v(d / f"time-{f.stem}.txt")) for f in sorted(d.glob("*.rc"))}
+    walls = [t["wall_s"] for _, t in runs.values() if t["wall_s"] is not None]
+    peaks = [t["peak_rss_gb"] for _, t in runs.values() if t["peak_rss_gb"] is not None]
+    return {"sessions": len(runs), "accepted": [rc == "0" for rc, _ in runs.values()],
+            "wall_s": statistics.median(walls) if walls else None, "wall_all_s": walls,
+            "user_s": [t["user_s"] for _, t in runs.values()], "peak_rss_gb": max(peaks, default=None)}
+
+
 def main(out: Path) -> dict:
     res = {"host": text(out / "host.txt"), "binary": text(out / "binary.sha256").strip(),
            "statements": {}}
@@ -129,6 +139,10 @@ def main(out: Path) -> dict:
     for mode in MODES:
         for d in sorted(p for p in (out / mode).glob("*") if p.is_dir()):
             res["statements"].setdefault(d.name, {})[mode] = session_set(d, gpu=not mode.startswith("cpu"))
+        for d in sorted(p for p in (out / "lean" / mode).glob("*") if p.is_dir()):
+            res["statements"].setdefault(d.name, {}).setdefault("lean", {})[mode] = lean_set(d)
+    if (out / "time-lean-build.txt").exists():
+        res["lean_build"] = time_v(out / "time-lean-build.txt")
     res["nsys"] = {f.name: nsys_total_s(f) for f in sorted((out / "nsys").glob("*.csv"))}
     return res
 

@@ -18,14 +18,19 @@
 #               (the GPU's busy time, not its utilization counter's)
 #   5. cpu      per statement of CPU_STATEMENTS (and without --zk, CPU_PLAIN_STATEMENTS), the same session set without --gpu
 #               (the CPU prover), no lease
+#   6. lean     Lean's flock-verify (verity/core/service/flock, built into FLOCK_WORK keyed by its sources) on every session
+#               steps 4 and 5 kept of `served` and `served-plain`, on the verifier's cores: `verify --zk` of served's --zk sets,
+#               and `verify` of served-plain's plain sets as the plain-leaves statement on its full draw; per session its verdict,
+#               wall and peak memory in out/lean (hm96 leaves without --zk are outside Lean's plain scope, so not verified)
 # A session set passes once the verifier recorded each of its sessions and accepted it (out/MODE/NAME/verdicts.jsonl).
 # out/summary.json: per statement and mode, the median timed session's prove time, its phases, GPU busy share and peaks.
 # env: STATEMENTS="4096:1 4096:8 14336:1"  CPU_STATEMENTS="4096:1"  PLAIN_STATEMENTS=  CPU_PLAIN_STATEMENTS=  ROWS=8  WARM=1
-#      RUNS=3  VCPUS=4  LEASE_MIN=20  SM=90  DRAW=all (a --zk verifier samples every proof block, subset:N; unset, no sample)
+#      RUNS=3  VCPUS=4  LEASE_MIN=20  SM=90  DRAW=all (a --zk verifier samples every proof block, subset:N, and a plain one
+#      of a served statement its staged full draw, draw.json; unset, no sample)
 #      WINDOW=DIR (prove_path.py commit's window dir, the prover's files included) MEMBER=0  SUBCIRCUIT=ID  SERVE_RUN=DIR
 #      SERVE_WINDOW=0  CUDA_TK (default: verity/ml/flock/pod/cuda-13.3.sh's)  NSYS=1  NSYS_STATEMENT (default the first)
 #      FLOCK_WORK (default: a directory under /workspace/tmp, kept between steps; it holds the staged values)
-#      STEPS="build stage sanity gpu cpu"
+#      STEPS="build stage sanity gpu cpu" (lean: add it)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/flock-s8-block}/out; mkdir -p $O
@@ -132,7 +137,7 @@ session() {
   local d=$FW/data/$name o=$O/$2/$name
   case $mode in gpu*) G=--gpu ;; esac
   case $mode in *plain*) Z= ;; esac
-  [ -n "$Z" ] && [ "$DRAW" = all ] && DR="--draw subset:$n"
+  [ "$DRAW" = all ] && if [ -n "$Z" ]; then DR="--draw subset:$n"; elif [ -f $d/draw.json ]; then DR="--draw-file $d/draw.json"; fi
   mkdir -p $o; rm -rf $d/sessions-$mode
   local PORT=$(free_port) PIN=$(sha512sum $d/circuit.txt | cut -d' ' -f1)
   taskset -c $VCPU $B serve $Z --listen 127.0.0.1:$PORT --out $d/sessions-$mode --instances $d/pub-$n.bin --circuit $d/circuit.txt \
@@ -200,5 +205,36 @@ if has cpu; then
   for kn in $CPU_STATEMENTS; do session $kn cpu; done
   for kn in $CPU_PLAIN_STATEMENTS; do session $kn cpu-plain; done
 fi
+LEAN_BAD=0
+if has lean; then
+  echo "== lean $(date -u +%T)"
+  LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+  LV=$FW/lean-$LSHA/flock-verify
+  if [ ! -x $LV ]; then
+    export PATH=$HOME/.elan/bin:$PATH
+    command -v lake > /dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none > /dev/null
+    rm -rf $FW/lean-src && mkdir -p $FW/lean-src && cp -r verity/core/service/flock/. $FW/lean-src/ \
+      && (cd $FW/lean-src && /usr/bin/time -v -o $O/time-lean-build.txt lake build flock-verify) > $O/lean-build.log 2>&1 \
+      && mkdir -p $(dirname $LV) && cp $FW/lean-src/.lake/build/bin/flock-verify $LV || { tail -30 $O/lean-build.log; exit 1; }
+  fi
+  mkdir -p $O/lean
+  for name in served served-plain; do
+    d=$FW/data/$name; [ -f $d/n ] || continue; n=$(cat $d/n)
+    for set in $d/sessions-*; do
+      mode=${set##*/sessions-}
+      case $mode in *nsys*) continue ;; *plain*) [ $name = served-plain ] || continue
+        V=(verify --statement verity/flock-circuit+plain-leaves --stratified $n --coins os) ;;
+        *) [ $name = served ] || continue; V=(verify --zk --statement verity/flock-circuit) ;; esac
+      o=$O/lean/$mode/$name; mkdir -p $o
+      for S in $set/*/; do
+        [ -f $S/session.json ] || continue; l=$(basename $S)
+        taskset -c $VCPU /usr/bin/time -v -o $o/time-$l.txt $LV "${V[@]}" --circuit $d/circuit.txt --public $d/pub-$n.bin \
+          --partition $d/partition.json --program $d/program.json --session $S > $o/$l.log 2>&1
+        echo $? > $o/$l.rc; [ "$(cat $o/$l.rc)" = 0 ] || { LEAN_BAD=1; echo "lean $mode $name $l refused: $(tail -1 $o/$l.log)"; }
+      done
+    done
+  done
+fi
 echo "== summary $(date -u +%T)"
 python3 $REPO/benchmarks/flock_s8_block/summary.py $O | tee $O/summary.json
+exit $LEAN_BAD

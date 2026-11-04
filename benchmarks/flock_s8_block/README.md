@@ -14,8 +14,8 @@ Files:
   same sets without `--zk`. Each set passes only if the verifier recorded and accepted every session. Its header lists the
   steps and the environment.
 - `summary.py`: `out/summary.json`, per statement and mode: the timed sessions' prove time and phases, the verifier's
-  verdicts, the GPU's busy share, tensor-pipe and SM activity and peak memory, the prover cores' CPU seconds a session, and
-  the statement's size.
+  verdicts, the GPU's busy share, tensor-pipe and SM activity and peak memory, the prover cores' CPU seconds a session, the
+  statement's size, and with the step `lean`, Lean's verdict, wall and peak memory per kept session.
 
 On a GPU node (the build and staging run outside the lease; staging is about the template, not N):
 
@@ -30,8 +30,11 @@ On a served window instead (the sampled audit's one-stage proof blocks over the 
 `prove_path.py commit`'s window dir, prover's files included, and `SUBCIRCUIT` its member's census-style id.
 `rec_inner.py stage-window` stages every proof block of the member as the statement `served` (hm96 leaves, today's `--zk`
 statement) and `served-plain` (plain SHA-512 leaves). With `SERVE_RUN`, staging first checks that the window's run root is the
-one the served run published. `DRAW=all` has each `--zk` verifier sample every block, as a deployed one must. The job's
-`FLOCK_WORK` then holds the prover's values, so it is a directory the job makes and deletes:
+one the served run published. `DRAW=all` has each verifier sample every block, as a deployed one must: a `--zk` one by
+`--draw subset:N`, a plain one by the staged full draw. The step `lean` (add it to `STEPS`) verifies every kept session
+of the two statements with Lean's `flock-verify`, the verifier of record: `--zk` sets as `verity/flock-circuit`, and
+`served-plain`'s plain sets as `verity/flock-circuit+plain-leaves` (hm96 leaves without `--zk` are outside its plain scope).
+The job's `FLOCK_WORK` then holds the prover's values, so it is a directory the job makes and deletes:
 
 ~~~text
 research run --on NODE --project verity --source . --cwd source -- bash -c 'w=$(mktemp -d -p /workspace/tmp); \
