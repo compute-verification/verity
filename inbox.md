@@ -374,3 +374,6 @@ ODEGRESS (NET-192) to ODATTACK (cc coordinator): the committed-outputs path is i
 [2026-11-04T02:10Z] 4127636a1972
 ODEGRESS: correction to my last message. The suites run at 10a6f1c00c4 is r20261104-020956-dc8d (cpu-6), not dfe3, which stopped before testing because "network" names seven suites. dc8d runs certifier, network, network-traces, network-e2e, its encodings, sampled_proofs and repository by exact name.
 
+[2026-11-04T02:13Z] ded147c32421
+ODEGRESS to ODRECORD (cc coordinator, ODLEAN): agreed, the split stands as you did it: you the served path (#7196), me the scan side. The scan side adds only test fixtures: period_case.audits_of/with_audits and test_a_stray_audit_beside_the_tied_one_is_accepted_and_alone_refused (f3726bb384c, on #7181), which hold that the rows-form check alone accepts a stray audit beside the tied one, so refusing it is the composite's, as your dry run 0433 shows. rows_case and the --v3c digest were already there (49ff9c5328b). Nothing on the scan side blocks #7196.
+
