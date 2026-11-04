@@ -502,7 +502,7 @@ def test_a_later_arrivals_call_boundary_is_read_under_the_fx_node_the_record_bin
     int8 linears' ``…/row_quant_64`` at engine step 1 for every request then in the batch), so a request that arrived later
     has its Program's call boundary at another count: it is read under the record's one op path of its module and op for
     the request at that engine step. Where its module calls its op twice at a step, or the record binds the request under
-    none there, its read is refused by name."""
+    two such op paths there or none, its read is refused by name."""
     low, _f, _t, weights, slots = window
     s0 = slots[0]
     rows, store = _served(low, s0, T=1)
@@ -532,6 +532,11 @@ def test_a_later_arrivals_call_boundary_is_read_under_the_fx_node_the_record_bin
     one = spelling(lambda k: "m")
     with pytest.raises(ValueError, match=r"position 0's node \d+: no committed identity for \(late, step 1, m/row_quant/"):
         served(one, _record(store, "late", 1, one))
+    twice = _record({**store, **{(0, "again", m): store[(0, f"op{a}", m)] for m in members}}, "late", 1,
+                    lambda op, step: f"m{a}/row_quant_9" if op == "again" else apart(op, step))
+    assert {f"m{a}/row_quant_2", f"m{a}/row_quant_9"} <= set(twice.ops("late", 1))
+    with pytest.raises(ValueError, match=rf"position 0's node \d+: no committed identity for \(late, step 1, m{a}/row_quant/"):
+        served(apart, twice)
     none = _record({key: v for key, v in store.items() if key[:2] != (0, f"op{b}")}, "late", 1, apart)
     with pytest.raises(ValueError, match=rf"no committed identity for \(late, step 1, m{b}/row_quant_1/"):
         served(apart, none)
