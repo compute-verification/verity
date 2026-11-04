@@ -91,6 +91,9 @@ SOURCES = [
     ("r20261104-111402-81ab", "70b-*", "70b", {"orders": True}),
     ("r20261104-112755-5cbd", "70b-*", "70b", {"deflate": 32, "orders": True}),
     ("r20261104-114043-136c", "70b-*", "70b", {"orders": True}),
+    ("r20261104-121750-fe3b", "70b-gu-rest", "70b", {"orders": True}),
+    ("r20261104-121750-fa83", "70b-down-rest", "70b", {"orders": True}),
+    ("r20261104-121751-43c7", "70b-o-rest", "70b", {"orders": True}),
 ]
 
 
@@ -337,7 +340,7 @@ DEFENCES = {
 }
 RECOMMENDED = "4, 70B's four exact: every broken matrix at a margin; L0 q, k, v and L1 v uncredited"
 
-NEAR = 0.07  # the most a reorder took off a split's residual, over the leaf (r20261104-093237-c694 against natural)
+NEAR = 0.085  # the most a reorder took off a split, over the leaf (70B L62 q at 2%, r20261104-093237-b5f7 against natural)
 
 
 def evaluate(book, model, choose):
