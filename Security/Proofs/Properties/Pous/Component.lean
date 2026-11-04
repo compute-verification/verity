@@ -902,7 +902,8 @@ private def toyRound : MemoryChallenger.Round := ⟨0, 0, 0, 0, blockDigest toyB
 private def toyOpenings : Array CoinOpening := #[toyCoins.opening 0]
 private def toySigned (pk sig : ByteArray) : SignedSession :=
   ⟨toySessionCommitment, COMPLETE, #[toyRound], LMS, pk, sig⟩
-private def toySession (pk sig : ByteArray) : Run.Session := ⟨toySigned pk sig, toySessionCommitment, toyOpenings⟩
+private def toySession (pk sig : ByteArray) : Run.ChallengerRecord :=
+  ⟨toySigned pk sig, toySessionCommitment, toyOpenings⟩
 
 /-- `verdict`'s reasons before the rounds. -/
 private def rpre (schemes : Schemes) (trusted : List ByteArray) (s : SignedSession) (c : SessionCommitment) :
@@ -991,7 +992,7 @@ private theorem verdict_toy (pk sig m : ByteArray)
   exact rtail_toy
 
 private theorem checkAt_of (schemes : Schemes) (pt : Run.Point) (trusted : List ByteArray)
-    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray)
+    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengerRecord) (sid : ByteArray)
     (h1 : (pub.blocks == pt.params.blocks) = true) (h2 : (pub.salt.size == Run.SALT) = true)
     (h3 : (digests.size == pt.params.blocks * Merkle.DIGEST) = true)
     (h4 : (Merkle.root (Run.rowLeaves pt.params pub.salt digests) == some pub.root) = true)

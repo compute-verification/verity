@@ -162,8 +162,6 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
                                               "the memory challenger's port"),
     f"{MC_PY}streamed_wipe.py::Verdict": (f"{MC}StreamedWipe.lean::MemoryChallenger.StreamedWipe.Verdict",
                                           "memory-challenger-difftest", "the memory challenger's port, for the streamed wipe"),
-    f"{MC_PY}run.py::Session": ("verity/core/protocols/pous/check/PousCheck/Run.lean::PousCheck.Run.Session", "pous-run",
-                                "the PoUS run's protocol port reads the sessions the Python records"),
 }
 
 
@@ -973,12 +971,8 @@ KNOWN: dict[str, str] = {
     "verity/core/protocols/pous/audit.py::Answer": "homonym, a challenge's answer: rename (memory-accounting)",
     "verity/core/protocols/pous/challenger_party.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a reading of it (memory-accounting)",
-    "verity/core/protocols/pous/check/PousCheck/Certificate.lean::PousCheck.Certificate.Certificate":
-        "homonym, what a PoUS audit establishes: rename (memory-accounting)",
     "verity/core/protocols/pous/check/PousCheck/Certificate.lean::PousCheck.Certificate.Store":
         "duplicate of `CircuitRequirement.Store`: becomes `PousCheck.P2.Params` (deleted) (memory-accounting)",
-    "verity/core/protocols/pous/check/PousCheck/Run.lean::PousCheck.Run.Session":
-        "homonym, the old word for a run, kept as one protocol's run type: rename (memory-accounting)",
     "verity/core/protocols/pous/check/PousCheck/Verdict.lean::PousCheck.Verdict.Gate":
         "duplicate of `Flock.Program`: becomes `Flock.Program` (deleted) (memory-accounting)",
     "verity/core/protocols/pous/check/PousCheck/Verdict.lean::PousCheck.Verdict.Opening":
