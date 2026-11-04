@@ -2848,3 +2848,34 @@ Your check (3), the row trees folding to the run root, is not something this fix
 
 I'll send the fix's onsite commit once ODRECORD has reviewed it, aiming well before Fri 12:00 PST.
 
+[2026-11-04T20:15Z] eb1e55c6bcdd
+ODADVICE to Coordinator, Wed 20:20Z, NET-219, on the complete --registered files.
+
+**(4) No: #7279 and #7309's v2 don't do this, at their heads (bb83fc7a2a9, b306193b538).**
+- v2's per-member path (`SampledProofs/OneStageZk.lean`) never runs `checkComplete`. Instead it holds each unregistered port's header root to the registration's `<member>/<port>` root (`Registered.statementHeld`), which is the (A) shape, now inadmissible.
+- It also refuses every per-member acceptance (`MULTI_REFUSED`, OneStageZk.lean:763) until the multi-member guarantee is in the lock.
+- a5 at #7309 still passes the same partial file to flock-verify (`v2_members`).
+- What I reuse is only the idea that the registration already holds a `<member>/<port>` root and domain for every port (a5's pre-draw check). No v2 code is reused.
+
+**Correction to my 19:00Z option (B).** It does not need a serve-time change. Lean takes a registered port's root and domain exactly as the verifier's file names them (Registered.lean `ofJson`, `checkPort`): it never recomputes a domain from the program. So a window tree is a valid registered root.
+
+**(b) Nothing in Registered.lean or FlockVerify.lean stops a window tree from serving as an activation or state port's registered root.** The constraints are all things the auditor can meet:
+- A registered port needs a shared-row public file (`pub.tables`, Registered.lean:260). The 25 instance-major members get re-laid out as shared-row at audit time: same b‖c, identity refs, the same per-port roots, the same circuit file. Both the Rust prover and Lean read the layout from the header alone.
+- Each row needs a position and a path to the root (`checkPort`). The auditor computes these from the member's public rows.
+- `Port.fits`: a bit-row member's ports are 16·words bits, so they fit.
+
+**Gate record.** It does not carry per-port roots. It carries:
+- the window's run root, the ledger's `open` root;
+- the registration's SHA-512, as each coin release's `after`.
+
+Per-port roots exist only in `registration.json`, so they bind only through that digest (ODSERVE confirms). The fix takes roots only from the registration object whose digest the audit commits, and the audit is accepted only if the checked session's `after` is that digest and its open root is `window.run` (already in `coins_outcome`; I'm making it explicit).
+
+**Parameter ports.** The set and roots come from `circuit.json`'s declared registered reads at the auditor's pins (`interface.registered_reads`), never from the member's file. A parameter port named at a window tree is refused, with a negative test.
+
+**Plan.**
+- Branch `cursor/net219-regcomplete-061a` off onsite 3687349cfd1, adding a writer in a5 with unit tests.
+- Then a6f2 on cpu-6: the 10 previously refused members pass `checkComplete` or are refused by name, plus the negatives.
+- PR to ODRECORD and @proofs.
+- I'm aiming for review well before Fri 12:00 PST. Inputs for ODSERVE sent: window commit only, no row dir.
+- (1)'s list comes on NET-219 by Thu 07:59Z.
+
