@@ -25,10 +25,12 @@ An attack the served rehearsal plays (``served``) also names the network certifi
 when it accepts the run) and the piece's (``piece``): ``bound`` (steps 1 and 2 pass), ``reject``, or ``missing``
 (`certifier_piece.NotRun`: no served answer certified, the certifier missing). An attack with ``waits`` lands with the
 piece it waits on, whose test holds its refusal of record. The bound's terms are Lean's
-`NetTiming.Guarantees.PeriodLeakAccepted`'s, k_exfil ≤ k_sched + k_fail + Σ_i (ℓ_a,i + k_skip,i + k_i log2 d_jit): a
-failure, the server's choice of which connections fail and where, is inside k_fail, log2(cap + 1) over every
-connection; a cell count the server moves is inside k_sched; a hold or a chunking that keeps every cell in its
-schedule's bucket is inside k_i log2 d_jit, at d_jit = 2 (`leak_bounds.JITTER_BOUND`); none adds a term.
+`NetTiming.Guarantees.PeriodLeakAccepted`'s, k_exfil ≤ k_sched + k_fail + Σ_j (ℓ_a,j + k_skip,j + T_j log2 d_jit)
+over the period's m execution phases: a failure, the server's choice of which connections fail and where, is inside
+k_fail, log2(cap_c + 1) over every connection c the schedule can carry (`Schedule.caps`), served or not; a cell count
+the server moves is inside k_sched, over the same connections; a hold or a chunking that keeps every cell in its
+schedule's bucket is inside T_j log2 d_jit, T_j phase j's buckets, at d_jit = 2 (`JitterBounded` holds at no less;
+`leak_bounds.JITTER_BOUND`); none adds a term.
 
 **The relay** (`relay`, `Relay`): the prover's process between the network certifier's server connections (on the
 served path, the gate's tunnel to the prover's loopback) and the endpoint, the server's side, which the prover owns.
@@ -158,9 +160,9 @@ REGISTERED = "Lean's registered reads (warden_rows.refusal), a5_warden.py's refu
 A5 = "benchmarks/one_stage/tests/test_a5_warden.py"
 PP = "benchmarks/prove_path/tests/test_prove_path.py"
 TESTS = "benchmarks/network_traces/tests/test_attacks.py"
-FAILED = ("inside k_fail: where a connection fails is the server's choice, which log2(cap + 1) a connection counts; "
-          "the rehearsal certifies no served answer")
-JITTER = f"inside k_i log2 d_jit (`JitterBounded` at d_jit = {LB.JITTER_BOUND}, leak_bounds.JITTER_BOUND)"
+FAILED = ("inside k_fail: where a connection fails is the server's choice, which log2(cap_c + 1) counts for every "
+          "connection c the schedule can carry; the rehearsal certifies no served answer")
+JITTER = f"inside T_j log2 d_jit (`JitterBounded` at d_jit = {LB.JITTER_BOUND}, leak_bounds.JITTER_BOUND)"
 #: the front's ids out for a response at V3c's scan class's egress cells' cap (its ids and the trailer), and one under
 AT_CAP = CP.SS.A.SCAN_CLASSES[CP.V3C_SCAN_CLASS][0] - 1
 UNDER_CAP = AT_CAP - 1
