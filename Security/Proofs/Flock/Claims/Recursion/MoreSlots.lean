@@ -365,11 +365,13 @@ end Calls
 
 /-! ## Which ports the extra calls read -/
 
-theorem outputs_out_accOut (sv : VStar.Stmt) : ∀ nm ∈ sv.sub.outputs, nm = "out" ∨ nm = "acc_out" := by
-  cases sv <;> simp [VStar.Stmt.sub, VStar.recOpenSub, VStar.innerSub, VStar.sparseSub, VStar.capSub]
+theorem outputs_named (sv : VStar.Stmt) :
+    ∀ nm ∈ sv.sub.outputs, nm = "out" ∨ nm = "acc_out" ∨ nm = "rin" ∨ nm = "rout" := by
+  cases sv <;> simp [VStar.Stmt.sub, VStar.recOpenSub, VStar.innerSub, VStar.sparseSub, VStar.capSub, VStar.linkSub]
 
-theorem not_output {sv : VStar.Stmt} {nm : String} (h1 : nm ≠ "out") (h2 : nm ≠ "acc_out") : nm ∉ sv.sub.outputs :=
-  fun hm => (outputs_out_accOut sv nm hm).elim h1 h2
+theorem not_output {sv : VStar.Stmt} {nm : String} (h1 : nm ≠ "out") (h2 : nm ≠ "acc_out") (h3 : nm ≠ "rin")
+    (h4 : nm ≠ "rout") : nm ∉ sv.sub.outputs :=
+  fun hm => (outputs_named sv nm hm).elim h1 fun h => h.elim h2 fun h => h.elim h3 h4
 
 /-- A read of the chain at a port other than `acc` is an algebra part's `acc0` or `acc1`, at rep `u < 2`. -/
 theorem accRead_other {r : XR} {sv : VStar.Stmt} {nm : String} {u : ℕ} (ha : nm ≠ "acc")
@@ -485,7 +487,7 @@ theorem moreSlotsTrue {st : Stage} (hP : PastIn st) (hA : AccFits) :
           simp only [hq] at hp
           by_cases ha : nm = "acc"
           · subst ha
-            exact hmCallsG_true hS hck hr hss hsv hpc hq (not_output (by decide) (by decide))
+            exact hmCallsG_true hS hck hr hss hsv hpc hq (not_output (by decide) (by decide) (by decide) (by decide))
               (Or.inl (hA r ss s sv hss hsv u hrd)) p hp
           · obtain ⟨hu, hnm⟩ := accRead_other ha hrd
             exact hmCallsG_true hS hck hr hss hsv hpc hq hnm (Or.inr hu) p hp
