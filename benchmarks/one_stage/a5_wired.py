@@ -7,19 +7,21 @@ registered circuit record, and audited by `a5.audit` as rank 0 of a one-rank ste
 stream's outcome and the negatives. Then v2's per-member verdicts on the audit's case (``rank0/case-v2.json``, its
 ``proofs.wires`` the window's wiring from its registered circuit record, `a5.held_wiring`, and its challenger and coins
 the audit's draw's, `a5.drawn_by`) by
-``sampled-proofs-one-stage-zk verdicts --check`` (``--v2``), four ways:
+``sampled-proofs-one-stage-zk verdicts --check`` (``--v2``), five ways:
 
 * ``wired``: the case as the audit made it: every session accepted, each verdict naming the wiring's SHA-512;
 * ``unwired``: its parameters without ``wires``: every session accepted, no verdict naming a wiring;
-* ``moved``: the wire reading the writer's units in reverse: the reader's session refused by its wired reads, since its
-  rows are the writer's at the other positions;
+* ``moved``: the wire reading the writer's units in reverse: the reader's session refused by its wired reads (its rows
+  don't open the writer's root), since its rows are the writer's at the other positions;
 * ``altered``: the reader's public file with each unit's ``x`` row other than its writer's (a byte of its ``b || c``
-  flipped) and its header's ``x`` root the altered rows', the evidence naming that file: the reader's session refused
-  by its wired reads.
+  flipped), its header's ``x`` root and the commitment's ``<reader>/x`` root the altered rows', the evidence naming that
+  file: the reader's session refused by its wired reads;
+* ``writer``: the commitment's ``<writer>/o0`` root another, the files as they were: the writer's session refused by
+  the statement's root check (`HELD`), the reader's by its wired reads.
 
 The window as a whole stays refused by v2's check until a sample over several members' statements is in the lock
 (`OneStageZk.MULTI_REFUSED`); these are the sessions' verdicts it reads. The run exits 0 only when the audit is accepted
-with every negative refused and the four verdicts are as said. ``--out`` holds the window (``window/``, its private
+with every negative refused and the five verdicts are as said. ``--out`` holds the window (``window/``, its private
 files too), a5's records (``rank0/``, ``challenger/``), the verdicts' files (``v2/``) and ``summary.json``.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/verity/ml/flock/python \\
@@ -46,7 +48,7 @@ import a5_coins as AC  # noqa: E402
 import verity_difftest as DT  # noqa: E402
 from composite import canonical  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R  # noqa: E402
-from verity.ml.circuits.codec import descriptor_id  # noqa: E402
+from verity.ml.circuits.codec import canonical_json, descriptor_id  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.evaluation import evaluate_batch  # noqa: E402
 from verity.ml.circuits.ops import gemm as G  # noqa: E402
@@ -59,6 +61,10 @@ UNITS = 4
 WRITER, READER = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE), bind(G.Gemm, K=16, N=32, **G.GEMM_AMPERE)
 WID, RID = descriptor_id(WRITER), descriptor_id(READER)
 OF = {"stand-in": "benchmarks/one_stage/a5_wired.py", "writer": WID, "reader": RID, "units": UNITS}
+#: a reader's refusal by its wired reads: its row doesn't open its writer's root (`RegWired.check`)
+OPENS = "does not open"
+#: a writer's refusal by the statement's root check, its public file's ``o0`` root not the commitment's: any reason
+HELD = ""
 
 
 def circuit() -> IF.Circuit:
@@ -146,11 +152,29 @@ def unwired(case: dict) -> dict:
     return {**case, "params": {**case["params"], "proofs": pr}}
 
 
+def rooted(case: dict, port: str, root: str) -> dict:
+    """``case`` with its commitment's root of ``port`` (``<member>/<port>``) ``root``, and the evidence's reported root of
+    it when it reports one."""
+    rec = json.loads(bytes.fromhex(case["commitment"]))
+    (r,) = [r for r in rec["roots"] if r["port"] == port]
+    r["root"] = root
+    e = evidence_of(case)
+    if port in (e.get("session_roots") or {}):
+        e["session_roots"][port] = root
+    return {**with_evidence(case, e), "commitment": canonical_json(rec).hex()}
+
+
+def writer(case: dict, writer_key: str) -> dict:
+    """``case`` with its commitment's root of the writer's ``o0`` another, its files as they were: the writer's statement
+    isn't the root its reader opens."""
+    return rooted(case, f"{writer_key}/o0", hashlib.sha512(b"a5_wired: another o0 root").hexdigest())
+
+
 def altered(case: dict, reader: CS.Member, d: Path) -> dict:
     """``case`` with the reader's public file's every ``x`` row other than its writer's (the first byte of its ``b || c``
-    flipped, `wiring.string_at`) and its header's ``x`` root the altered rows' (`rows.port_tree`), so that the file is
-    its own rows' and only the wire tells them from the writer's: written to ``d`` and named by the reader's statement and
-    the blobs."""
+    flipped, `wiring.string_at`) and its header's ``x`` root the altered rows' (`rows.port_tree`), and the commitment's
+    ``<reader>/x`` root that root: a prover that committed reader rows other than the writer's, which only the wire
+    tells from the writer's. The file is written to ``d`` and named by the reader's statement and the blobs."""
     e = evidence_of(case)
     (st,) = [s for s in e["proofs"]["statements"] if s["member"] == reader.key]
     (src,) = [Path(b) for b in case["blobs"] if Path(b).is_file() and hashlib.sha512(Path(b).read_bytes()).hexdigest() == st["public"]]
@@ -171,7 +195,17 @@ def altered(case: dict, reader: CS.Member, d: Path) -> dict:
     f = d / src.name
     f.write_bytes(head + b"\n" + bytes(body))
     st["public"] = hashlib.sha512(f.read_bytes()).hexdigest()
-    return {**with_evidence(case, e), "blobs": [*case["blobs"], str(f)]}
+    return rooted({**with_evidence(case, e), "blobs": [*case["blobs"], str(f)]}, f"{reader.key}/x", root())
+
+
+def cases(case: dict, writer_key: str, reader: CS.Member, d: Path) -> dict[str, tuple[dict, list[str | None]]]:
+    """The five cases of ``case`` (module docstring), each with what `held` asks of its sessions' verdicts in the
+    statements' order: None accepted, else the refusal's reason. The altered reader's file is written under ``d``."""
+    members = [st["member"] for st in evidence_of(case)["proofs"]["statements"] for _ in st["sessions"]]
+    reads = [OPENS if m == reader.key else None for m in members]
+    return {"wired": (case, [None] * len(members)), "unwired": (unwired(case), [None] * len(members)),
+            "moved": (moved(case), reads), "altered": (altered(case, reader, d), reads),
+            "writer": (writer(case, writer_key), [HELD if m == writer_key else OPENS for m in members])}
 
 
 def wiring_digest(case: dict) -> str | None:
@@ -181,14 +215,14 @@ def wiring_digest(case: dict) -> str | None:
     return None if w is None else hashlib.sha512(DT.canonical(w).encode()).hexdigest()
 
 
-def held(got: dict, members: list[str], want: list[bool], wires: str | None) -> bool:
-    """Whether ``got`` lists one verdict per session, in the statements' order (``members``), accepted as ``want`` says,
-    each accepted one naming the wiring ``wires`` (none when None) and each refused one refused by its wired reads."""
+def held(got: dict, members: list[str], want: list[str | None], wires: str | None) -> bool:
+    """Whether ``got`` lists one verdict per session, in the statements' order (``members``): accepted where ``want`` is
+    None, naming the wiring ``wires`` (none when None), and elsewhere refused with a reason holding ``want``'s."""
     vs = got.get("verdicts")
     if got["rc"] != 0 or vs is None or len(vs) != len(members):
         return False
-    return all(v["accepted"] is ok and (v.get("wires") == wires if ok else "wired reads" in v["why"])
-               for v, ok in zip(vs, want))
+    return all((v["accepted"] is True and v.get("wires") == wires) if why is None else
+               (v["accepted"] is False and why in (v.get("why") or "")) for v, why in zip(vs, want))
 
 
 def main() -> int:
@@ -232,10 +266,8 @@ def main() -> int:
         e = evidence_of(case)
         members = [st["member"] for st in e["proofs"]["statements"] for _ in st["sessions"]]
         reader = next(m for m in mine.members if m.template == RID)
-        want = [m != reader.key for m in members]
-        runs = {"wired": (case, [True] * len(members)), "unwired": (unwired(case), [True] * len(members)),
-                "moved": (moved(case), want), "altered": (altered(case, reader, out / "v2" / "altered-public"), want)}
-        for name, (c, w) in runs.items():
+        writer_key = next(m.key for m in mine.members if m.template == WID)
+        for name, (c, w) in cases(case, writer_key, reader, out / "v2" / "altered-public").items():
             r = verdicts(a.v2, c, out / "v2" / name)
             wd = wiring_digest(c)
             got[name] = {"held": held(r, members, w, wd), "rc": r["rc"], "refused": r.get("refused"), "wires": wd,
@@ -245,7 +277,7 @@ def main() -> int:
         why = out / "rank0" / "case-v2-error.txt"
         got["error"] = why.read_text() if why.is_file() else "a5 wrote no v2 case"
     v2_ok = got.get("reader") in got.get("members", []) and got.get("wiring") is not None and all(
-        got[n]["held"] for n in ("wired", "unwired", "moved", "altered"))
+        got[n]["held"] for n in ("wired", "unwired", "moved", "altered", "writer"))
     summary = {"root": ROOT, "session": (published.get("plan") or {}).get("session"),
                "window": {"population": mine.population, "members": [[m.key, m.n] for m in mine.members],
                           "wired": {m.key: [[p, o, list(ws)] for p, o, ws in m.wired] for m in mine.members if m.wired},
