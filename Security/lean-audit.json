@@ -874,6 +874,9 @@
    "owner": "@proofs",
    "digest": "2308dfdeea98ca4f8299677a7f029818496838c9d848563ff91f92ed165ffeed"
   },
+  "Claims.ZKServer.Loop.ReachesInner": {
+   "owner": "@proofs"
+  },
   "Claims.ZKServer.Loop.Serves": {
    "owner": "@proofs",
    "digest": "95dc5c011d60324c9a2168b846a7f36977a1a1e7138bda71c1761e0403ff584f"
@@ -2558,6 +2561,10 @@
   "Pous.SecurityProofs.ObligationWide320": {
    "honest": ["Pous.SecurityProofs.ObligationWide320_honest"],
    "nontrivial": "Pous.SecurityProofs.ObligationWide320_nontrivial"
+  },
+  "Flock.SecurityProofs.LoopInnerRound0Own": {
+   "honest": ["Flock.SecurityProofs.LoopInnerRound0Own_honest"],
+   "nontrivial": "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial"
   }
  },
  "unwitnessed": {
@@ -6718,6 +6725,12 @@
    "signature": ["Flock.SecurityProofs.LoopInnerRound0Own : Flock.Guarantees.LoopInnerRound0Own"],
    "assumptions": [],
    "type_hash": "074ca4c2e7c09cd236106bc9347f26e15625cd966d0eb466ef4d0f65c93a15b8"
+  },
+  "Flock.SecurityProofs.LoopInnerRound0Own_honest": {
+   "owner": "@proofs"
+  },
+  "Flock.SecurityProofs.LoopInnerRound0Own_nontrivial": {
+   "owner": "@proofs"
   },
   "Flock.SecurityProofs.MaskedKS": {
    "owner": "@proofs",
