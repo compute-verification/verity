@@ -382,6 +382,7 @@ theorem checkCircuit_ok {i : RecVStar.Inner} {j : ℕ} {c : Flock.Circuit} {n : 
   obtain ⟨u', hp, h⟩ := ebind_ok h
   obtain ⟨u'', hq, h⟩ := ebind_ok h
   obtain ⟨_, -, h⟩ := ebind_ok h
+  obtain ⟨_, -, h⟩ := ebind_ok h
   cases h
   exact ⟨hs', hu, hp, hq⟩
 
@@ -409,6 +410,7 @@ theorem checkCircuit_holo {i : RecVStar.Inner} {j : ℕ} {c : Flock.Circuit} {n 
   obtain ⟨_, -, h⟩ := ebind_ok h
   obtain ⟨_, -, h⟩ := ebind_ok h
   obtain ⟨_, hh, h⟩ := ebind_ok h
+  obtain ⟨_, -, h⟩ := ebind_ok h
   cases h
   exact checkHolo_ok hh
 

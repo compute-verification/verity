@@ -41,9 +41,9 @@ def mib(bits: float) -> float:
 
 
 def test_exfiltration_is_the_output_bit_weighted_bound_plus_the_location_term():
-    """A4's sampling designs: the output bits in faulty proof blocks reach 9.40 MiB under the uniform subset:1024, 8.81 MiB with one proof block per
+    """A4's sampling designs: the output bits in incorrect proof blocks reach 9.40 MiB under the uniform subset:1024, 8.81 MiB with one proof block per
     template and 1.50 MiB sampling in proportion to output bits, each exactly core's `harm_bound` over the sampling design.  Which proof blocks
-    are wrong adds 0.08, 0.09 and 0.41 MiB (`location_bits`), so the bounds are 9.48, 8.89 and 1.91 MiB."""
+    are incorrect adds 0.08, 0.09 and 0.41 MiB (`location_bits`), so the bounds are 9.48, 8.89 and 1.91 MiB."""
     segments = [(A4_BITS[name], size) for name, size in A4_SIZES.items()]
     uniform = Stratified.uniform(sum(A4_SIZES.values()), 1024)
     p = one_level(Subset(1024))
@@ -57,7 +57,7 @@ def test_exfiltration_is_the_output_bit_weighted_bound_plus_the_location_term():
 
 def test_the_location_term_bounds_the_number_of_wrong_sets():
     """log2 of the sets of at most K = bound() of n proof blocks, sum_{j <= K} C(n, j), is at most `location_bits`, and within
-    log2(n) + 1 bits of it; no faulty proof block means no choice, and at least half the proof blocks wrong means every subset."""
+    log2(n) + 1 bits of it; no incorrect proof block means no choice, and at least half the proof blocks incorrect means every subset."""
     from math import comb
 
     for n, k in ((512, 4), (512, 16), (4096, 38)):

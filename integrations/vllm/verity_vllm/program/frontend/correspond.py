@@ -29,7 +29,7 @@ from verity.ml.circuits.refs import Refs
 
 
 @dataclass
-class DefinitionVerdict:
+class DefinitionCorrespondence:
     id: str
     verdict: str  # identical | same-references | mismatch | unverified | missing-left | missing-right
     gates: int | None = None
@@ -47,8 +47,8 @@ class CorrespondenceReport:
     definitions: int
     identical: int
     same_references: int
-    mismatches: list[DefinitionVerdict]
-    unverified: list[DefinitionVerdict]
+    mismatches: list[DefinitionCorrespondence]
+    unverified: list[DefinitionCorrespondence]
     same_reference_ids: list[str] = field(default_factory=list)
     root_out: str = ""  # identical | same-references | mismatch
     name_differences: list[str] = field(default_factory=list)  # call-name annotations that differ (not circuit)
@@ -126,49 +126,49 @@ def _refs_equal(a: Refs, b: Refs, leaf_limit: int) -> str:
     return "same-references"
 
 
-def compare_bodies(ba, bb, *, leaf_limit: int = 1 << 22, fid: str = "", names: list[str] | None = None) -> DefinitionVerdict:
+def compare_bodies(ba, bb, *, leaf_limit: int = 1 << 22, fid: str = "", names: list[str] | None = None) -> DefinitionCorrespondence:
     """Same body? `identical` (byte-equal encodings), `same-references` (different encodings, same gates and
     reference sequences leaf by leaf), `mismatch`, or `unverified` (a differing encoding beyond `leaf_limit`).
     Call names are annotations: differences are collected into `names`, never a mismatch."""
     return _compare_bodies_(ba, bb, leaf_limit, names if names is not None else [], fid)
 
 
-def _compare_bodies(fa: SpecializedDefinition, fb: SpecializedDefinition, leaf_limit: int, names: list[str], fid: str) -> DefinitionVerdict:
+def _compare_bodies(fa: SpecializedDefinition, fb: SpecializedDefinition, leaf_limit: int, names: list[str], fid: str) -> DefinitionCorrespondence:
     return _compare_bodies_(fa.body, fb.body, leaf_limit, names, fid)
 
 
-def _compare_bodies_(ba, bb, leaf_limit: int, names: list[str], fid: str, same_callee=None) -> DefinitionVerdict:
+def _compare_bodies_(ba, bb, leaf_limit: int, names: list[str], fid: str, same_callee=None) -> DefinitionCorrespondence:
     """`same_callee(fa, fb) -> bool` replaces callee-id equality (default) — `correspond_rebound` passes the pairing."""
     if same_callee is None:
         same_callee = _same_id
     if ba.params != bb.params:
-        return DefinitionVerdict(fid, "mismatch", None, f"params {ba.params!r} vs {bb.params!r}")
+        return DefinitionCorrespondence(fid, "mismatch", None, f"params {ba.params!r} vs {bb.params!r}")
     if ba.ret_type != bb.ret_type:
-        return DefinitionVerdict(fid, "mismatch", None, f"ret_type {ba.ret_type!r} vs {bb.ret_type!r}")
+        return DefinitionCorrespondence(fid, "mismatch", None, f"ret_type {ba.ret_type!r} vs {bb.ret_type!r}")
     if len(ba.nodes) != len(bb.nodes):
-        return DefinitionVerdict(fid, "mismatch", None, f"{len(ba.nodes)} nodes vs {len(bb.nodes)}")
+        return DefinitionCorrespondence(fid, "mismatch", None, f"{len(ba.nodes)} nodes vs {len(bb.nodes)}")
     if ba.gates != bb.gates:
-        return DefinitionVerdict(fid, "mismatch", None, f"{ba.gates} gates vs {bb.gates}")
+        return DefinitionCorrespondence(fid, "mismatch", None, f"{ba.gates} gates vs {bb.gates}")
     worst = "identical"
     for k, (na, nb) in enumerate(zip(ba.nodes, bb.nodes)):
         if na.form != nb.form or not same_callee(na.fn, nb.fn) or na.out != nb.out or tuple(na.axes) != tuple(nb.axes) \
                 or na.n != nb.n or na.n_xs != nb.n_xs or len(na.args) != len(nb.args):
-            return DefinitionVerdict(fid, "mismatch", ba.gates,
+            return DefinitionCorrespondence(fid, "mismatch", ba.gates,
                                      f"node {k}: {na.form} {descriptor_id(na.fn)} n={na.n} vs {nb.form} {descriptor_id(nb.fn)} n={nb.n}")
         if (na.name or None) != (nb.name or None):
             names.append(f"{fid} node {k}: {na.name!r} vs {nb.name!r}")
         for i, (aa, ab) in enumerate(zip(na.args, nb.args)):
             if aa.type != ab.type:
-                return DefinitionVerdict(fid, "mismatch", ba.gates, f"node {k} arg {i}: type {aa.type!r} vs {ab.type!r}")
+                return DefinitionCorrespondence(fid, "mismatch", ba.gates, f"node {k} arg {i}: type {aa.type!r} vs {ab.type!r}")
             v = _refs_equal(aa.refs, ab.refs, leaf_limit)
             if v == "mismatch":
-                return DefinitionVerdict(fid, "mismatch", ba.gates, f"node {k} arg {i}: reference sequences differ ({aa.refs!r} vs {ab.refs!r})")
+                return DefinitionCorrespondence(fid, "mismatch", ba.gates, f"node {k} arg {i}: reference sequences differ ({aa.refs!r} vs {ab.refs!r})")
             worst = _worse(worst, v)
     v = _refs_equal(ba.ret, bb.ret, leaf_limit)
     if v == "mismatch":
-        return DefinitionVerdict(fid, "mismatch", ba.gates, f"return references differ ({ba.ret!r} vs {bb.ret!r})")
+        return DefinitionCorrespondence(fid, "mismatch", ba.gates, f"return references differ ({ba.ret!r} vs {bb.ret!r})")
     worst = _worse(worst, v)
-    return DefinitionVerdict(fid, worst, ba.gates)
+    return DefinitionCorrespondence(fid, worst, ba.gates)
 
 
 _RANK = {"identical": 0, "same-references": 1, "unverified": 2, "mismatch": 3}
@@ -235,8 +235,8 @@ def correspond_rebound(left, right, *, leaf_limit: int = 1 << 22) -> Corresponde
 
     same_callee(ra, rb)
     names: list[str] = []
-    mism: list[DefinitionVerdict] = []
-    unver: list[DefinitionVerdict] = []
+    mism: list[DefinitionCorrespondence] = []
+    unver: list[DefinitionCorrespondence] = []
     same_ids: list[str] = []
     pairs: list[dict] = []
     n_ident = n_same = 0
@@ -246,7 +246,7 @@ def correspond_rebound(left, right, *, leaf_limit: int = 1 << 22) -> Corresponde
         fid = ia if ia == ib else f"{ia} ~ {ib}"
         if isinstance(fa, PrimitiveDefinition):
             ok = fa.params == fb.params and fa.ret == fb.ret
-            v = DefinitionVerdict(fid, "identical" if ok else "mismatch", 1, "" if ok else "primitive signatures differ")
+            v = DefinitionCorrespondence(fid, "identical" if ok else "mismatch", 1, "" if ok else "primitive signatures differ")
         else:
             v = _compare_bodies_(fa.body, fb.body, leaf_limit, names, fid, same_callee=same_callee)
         rec = {"left": ia, "right": ib, "verdict": v.verdict, "gates": v.gates}
@@ -278,21 +278,21 @@ def correspond(left, right, *, leaf_limit: int = 1 << 22) -> CorrespondenceRepor
     never required."""
     da, db = _reachable(left.root), _reachable(right.root)
     ids = sorted(set(da) | set(db), key=lambda s: (len(s), s))
-    mism: list[DefinitionVerdict] = []
-    unver: list[DefinitionVerdict] = []
+    mism: list[DefinitionCorrespondence] = []
+    unver: list[DefinitionCorrespondence] = []
     same_ids: list[str] = []
     names: list[str] = []
     n_ident = n_same = 0
     for fid in ids:
         fa, fb = da.get(fid), db.get(fid)
         if fa is None or fb is None:
-            mism.append(DefinitionVerdict(fid, "missing-left" if fa is None else "missing-right"))
+            mism.append(DefinitionCorrespondence(fid, "missing-left" if fa is None else "missing-right"))
             continue
         if isinstance(fa, PrimitiveDefinition) or isinstance(fb, PrimitiveDefinition):
             if not (isinstance(fa, PrimitiveDefinition) and isinstance(fb, PrimitiveDefinition)):
-                mism.append(DefinitionVerdict(fid, "mismatch", None, "primitive on one side, composite on the other"))
+                mism.append(DefinitionCorrespondence(fid, "mismatch", None, "primitive on one side, composite on the other"))
             elif fa.params != fb.params or fa.ret != fb.ret:
-                mism.append(DefinitionVerdict(fid, "mismatch", 1, "primitive signatures differ"))
+                mism.append(DefinitionCorrespondence(fid, "mismatch", 1, "primitive signatures differ"))
             else:
                 n_ident += 1
             continue
@@ -328,4 +328,4 @@ def correspond(left, right, *, leaf_limit: int = 1 << 22) -> CorrespondenceRepor
                                 same_ids, root_out, names, ra.gates, rb.gates)
 
 
-__all__ = ["correspond", "correspond_rebound", "compare_bodies", "CorrespondenceReport", "DefinitionVerdict"]
+__all__ = ["correspond", "correspond_rebound", "compare_bodies", "CorrespondenceReport", "DefinitionCorrespondence"]

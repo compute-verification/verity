@@ -1,4 +1,4 @@
-"""Independent numerical models for the GEMMs production vLLM runs (W4 "numerics" lane).
+"""Independent numerical models for the GEMMs production vLLM runs.
 
 Layers, each a separate Table 2 row class (contract §7):
 

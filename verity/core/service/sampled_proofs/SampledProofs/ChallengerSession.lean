@@ -54,6 +54,7 @@ The difftest's pieces: `challenger_close` (`ChallengerClose.from_json` and `clos
 `challenger_session` (`trusted_session_of`), `challenger_credited` (`credited_session`) and `challenger_pinned`
 (`pinned_session`), each `{"refused": why}` where Python refuses.
 -/
+import CoreProtocol.Record
 import SampledProofs.ChallengerRecord
 import SampledProofs.PyJson
 
@@ -101,7 +102,7 @@ def MAX_CAP : Nat := 2 ^ 24
 def MAX_MINUTES : Nat := 720
 /-- `RESERVED`: the request a reserve records and its session's open carries. -/
 def RESERVED : List String := ["by", "for", "peer", "scheme", "epoch", "families", "minutes"]
-def ZERO : String := String.ofList (List.replicate 128 '0')
+def ZERO : String := Core.Record.ZERO
 def WINDOW_FORM : String := "a window's identity is {root}: the served Commit's root, 64 bytes in lowercase hex"
 def LEDGER_FORM : String :=
   "an auditor's ledger line is an entry {body, kind, prev, schema, seq, session, sig} as the auditor writes it " ++
@@ -339,8 +340,7 @@ def ledgerMessage (I : ByteArray) (entry : Json) : V ByteArray := do
   unless I.size == 16 do throw s!"an LMS identifier is 16 bytes, not {I.size}"
   let .str schema := getD entry "schema" | throw "an entry's schema is a string"
   let some tag := ledgerTag? schema | throw s!"schema {pyRepr schema} is none of the ledger's"
-  let d ← taggedSha512 tag (Json.mkObj ((entries entry).toList.filter (·.1 != "sig")))
-  return Flock.Sha512.hash (field LEDGER_ROLE.toUTF8 ++ I ++ field d)
+  return Core.Record.message LEDGER_ROLE I (← taggedSha512 tag (Core.Record.unsigned entry))
 
 /-- `leaf_of`: the LMS leaf a signature was made at, its first four bytes. -/
 def leafOf (sig : ByteArray) : Nat := (sig.extract 0 4).toList.foldl (fun a b => a * 256 + b.toNat) 0
@@ -392,31 +392,22 @@ private def isBodyOf (kind : String) (v2 : Bool) (b : Json) : Bool :=
   | _ => false
 
 /-- `_ledger_entry`: a ledger line's entry when it is its own `ledger_text` (`PyJson.canonical`), escapes no surrogate,
-has only integers (`Flock.canon`), in at most `MAX_LEDGER_LINE` characters, and is of the ledger's form: a session's
-entry names its session, a period's names none. -/
+has only integers (`Flock.canon`), in at most `MAX_LEDGER_LINE` characters, is a record entry (`Core.Record.ofJson`)
+and is of the ledger's form: a schema of the ledger's, a session's entry naming its session and a period's none. -/
 def ledgerEntry? (line : Json) : Option LedgerEntry := do
   let .str text := line | none
   guard (text.length ≤ MAX_LEDGER_LINE)
   let e ← (Json.parse text).toOption
   guard ((PyJson.canonical e).toOption == some text && !escapesSurrogate text && (Flock.canon e).toOption.isSome)
-  guard (keys? e == some #["body", "kind", "prev", "schema", "seq", "session", "sig"])
-  let .str schema := getD e "schema" | none
-  let _ ← ledgerTag? schema
-  let seq ← nat? (getD e "seq")
-  let .str prev := getD e "prev" | none
-  guard (isDigest (.str prev))
-  let .str sigHex := getD e "sig" | none
-  guard (8 ≤ sigHex.length)
-  let sig ← (Flock.unhex sigHex).toOption
-  let body := getD e "body"
-  let .obj _ := body | none
-  let .str kind := getD e "kind" | none
-  let session ← match kind, getD e "session" with
-    | "reserve", .str s | "open", .str s | "end", .str s => if isSessionId s then some s else none
-    | "period-open", .null | "period-close", .null => some ""
+  let r ← (Core.Record.ofJson e).toOption
+  let _ ← ledgerTag? r.schema
+  guard (4 ≤ r.sig.size)
+  let session ← match r.kind, r.session with
+    | "reserve", some s | "open", some s | "end", some s => if isSessionId s then some s else none
+    | "period-open", none | "period-close", none => some ""
     | _, _ => none
-  guard (isBodyOf kind (schema == LEDGER_SCHEMA) body)
-  pure ⟨e, text, schema, seq, prev, kind, session, sig, body⟩
+  guard (isBodyOf r.kind (r.schema == LEDGER_SCHEMA) r.body)
+  pure ⟨e, text, r.schema, r.seq, r.prev, r.kind, session, r.sig, r.body⟩
 
 /-- `verify`'s at LMS over the key's parameters, false for a signature that doesn't decode. -/
 private def verifies (key : ChallengerKey) (m sig : ByteArray) : Bool :=
@@ -432,10 +423,10 @@ structure Win where
   ended : Option LedgerEntry := none
   deriving Inhabited
 
-/-- A period `verifyLedger` read: its name and lane, its windows' sessions, counted at their reserves (or one-step
-opens), whether it closed, and the cap and circuit its open committed (`null` both for a period opened before they were
-required). -/
-structure Period where
+/-- A monitoring period `verifyLedger` read: its name and lane, its windows' sessions, counted at their reserves (or
+one-step opens), whether it closed, and the cap and circuit its open committed (`null` both for a period opened before
+they were required). -/
+structure MonitoringPeriod where
   name : String
   lane : String
   windows : Array String := #[]
@@ -456,8 +447,8 @@ def laneOf (body : Json) : String := if truthy (getD body "for") then strOf (get
 
 /-- `_verify`'s `join`: lane `lane`'s open period, if any, takes window `session` at entry `i`, refused past its cap;
 the periods after it, and the period's name. -/
-private def join (periods : Array Period) (current : Array (String × String)) (i : Nat) (lane session : String) :
-    V (Array Period × Option String) := do
+private def join (periods : Array MonitoringPeriod) (current : Array (String × String)) (i : Nat) (lane session : String) :
+    V (Array MonitoringPeriod × Option String) := do
   let some (_, name) := current.find? (·.1 == lane) | return (periods, none)
   let some k := periods.findIdx? (·.name == name) | return (periods, none)
   let p := periods[k]!
@@ -484,12 +475,12 @@ private def inReserve (t : Json) (start expiry : String) : Bool :=
 
 /-- `_verify` (module docstring), over entries `ledgerEntry?` read: the ledger's windows and periods, or the first entry
 that fails, in `_verify`'s words. -/
-def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win × Array Period) := do
+def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win × Array MonitoringPeriod) := do
   let I := key.pub.extract 0 16
   let mut wins : Array Win := #[]
   let mut leaves : Array Nat := #[]
   let mut records : Array (Nat × Nat) := #[]
-  let mut periods : Array Period := #[]
+  let mut periods : Array MonitoringPeriod := #[]
   let mut current : Array (String × String) := #[]
   let mut reserves : Array Reserve := #[]
   let mut prev := ZERO
@@ -602,7 +593,7 @@ def verifyLedger (es : Array LedgerEntry) (key : ChallengerKey) : V (Array Win �
 
 /-- `_checked`: `ledger` (its lines) as `verifyLedger` reads it under the pinned key `key`, each line first refused unless
 `ledgerEntry?` reads it and, opening a window or a period, it names no other key. -/
-def checked (ledger : Json) (key : ChallengerKey) : V (Array Win × Array Period) := do
+def checked (ledger : Json) (key : ChallengerKey) : V (Array Win × Array MonitoringPeriod) := do
   if ledger == Json.null then throw NO_AUDIT
   let .arr lines := ledger | throw s!"the auditor's ledger is malformed: {LEDGER_FORM}"
   let pinned := Flock.hexOf (Flock.Sha512.hash key.pub)

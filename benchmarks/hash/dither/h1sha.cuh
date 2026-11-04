@@ -6,7 +6,7 @@
 #include <cstdint>
 typedef unsigned long long u64;
 typedef unsigned int u32;
-#include "../../torch_gpu/sha512_rows/sha512x.cuh"
+#include "../../../verity/ml/kernels/sha512.cuh"
 
 // NOISE_TAG = b"verity/pouw/noise/v1".ljust(24, b"\0") as three big-endian words
 constexpr u64 TAG0 = 0x7665726974792f70ULL, TAG1 = 0x6f75772f6e6f6973ULL, TAG2 = 0x652f763100000000ULL;

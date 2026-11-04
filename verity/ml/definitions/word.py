@@ -113,7 +113,7 @@ def _view(a: array) -> np.ndarray:
 
 class Graph:
     """The computing gates of one activation of `fn`: the graph of core's `verity.ml.circuits.cut.CallGraph` (the reference, whose step 3
-    this follows; `tests/query/test_word.py` holds the two equal field by field), built in one pass over the gates into flat arrays.  The
+    this follows; `tests/test_word.py` holds the two equal field by field), built in one pass over the gates into flat arrays.  The
     reference keeps Python objects per operand read (an interned token per input, a tuple per input read, the full key of every computing
     gate), hundreds of bytes each: GLM-5.3's MoE expert FP8 GEMMs read 257 operands per gate, 468 GB for one Definition.  Here a read
     costs a few bytes, and a computing gate's key is matched by its hash, then compared in full, so the recomputed pairs are the
@@ -174,8 +174,7 @@ class Graph:
             # an input's token is its operand (< 0), a gate's the first gate with its value (a structure gate: with its key)
             return (prim[j], *[o if o < 0 else tok[o] for o in mine])
 
-        for j in range(n):
-            g = c.gate(lo + j)
+        for j, g in enumerate(c.gates(lo, lo + n)):
             p = g.prim
             width[j] = p.ret.w
             prim[j] = self.prims.setdefault(p.id, len(self.prims))
@@ -262,7 +261,7 @@ def partition(G: Graph, X: int) -> tuple[np.ndarray, list[str], np.ndarray]:
 def cut_verdict(G: Graph, owner: np.ndarray, head: np.ndarray) -> CutVerdict:
     """`verity.ml.circuits.partition.validate_unit_cut` of the cut `owner` committing the gates `head >= 0`, the Call's parameters standing
     for the input unit (`verity.ml.circuits.cut.check_cut`'s arguments), in numpy passes over `G`'s reads: the reference's verdict, detail
-    for detail (`tests/query/test_word.py`), with no Python object per read.  A parameter's read crosses from the input unit into a
+    for detail (`tests/test_word.py`), with no Python object per read.  A parameter's read crosses from the input unit into a
     computing unit and reads a committed value, so it fails nothing: it counts in `cross_unit_reads`, and a parameter no unit reads and
     the Call does not return is `committed-unread`."""
     n, k = G.n, len(G.input_ids)
@@ -439,13 +438,14 @@ def _cache_rule(fn: Any, X: int, W: int, extras: int, limits: dict[str, int], ru
     os.replace(tmp, path)
 
 
-def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict | None = None, max_gates: Limits = None) -> dict[str, Any]:
+def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict | None = None, max_gates: Limits = None, graphs: dict | None = None) -> dict[str, Any]:
     """One Definition specialization under `Q_word_v1{X,W}`: {"definition", "query", "gates", "units_per_call", "by_kind",
     "committed_interior_words", "max_out_bits", "classes", "violations"}.  A class groups units by kind, the primitive and the
     activation of their first boundary gate, gates per unit and |out(S)|; `count` is units per Call, `nodes` the primitives of one
     unit.  `committed_interior` lists the committed interior values by (activation, primitive): what a tap must acquire.  A
     Definition over its gate limit (`gate_limit` of `max_gates`) is not cut: a `too-large` violation.  One `memo` per `max_gates`;
-    under `use_rule_cache` the rule is read from, or written to, the shared directory."""
+    under `use_rule_cache` the rule is read from, or written to, the shared directory.  ``graphs`` gets ``(Graph(fn), units(...))``
+    under ``fn.id`` when this call cut ``fn`` whole (not member by member, and not from ``memo`` or the cache)."""
     memo = {} if memo is None else memo
     key = (fn.id, X, W, extras)
     if key in memo:
@@ -477,8 +477,9 @@ def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict 
         rule = _finish(fn.id, fn.gates, [], [], X, W, extras)
         rule["violations"] = [{"definition": fn.id, "class": "too-large", "gates": fn.gates, "limit": limit}]
     else:
-        G = Graph(fn)
-        R = units(G, X, W, extras)
+        R = units(G := Graph(fn), X, W, extras)
+        if graphs is not None:
+            graphs[fn.id] = (G, R)
         cut = R["cut"]
         kinds = np.array([_KINDS.index(k) for k in R["kinds"]], np.int64)
         cols = np.stack([kinds, R["head_prim"], R["head_scope"], R["gates"], R["out_bits"], R["out_gates"]], 1)
@@ -502,8 +503,7 @@ def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict 
                 ibits[(c["scope"], c["head"])] += c["out_bits"] * c["count"]
         rule = _finish(fn.id, G.total, classes, [{"scope": s, "head": p, "words": w, "bits": ibits[(s, p)]} for (s, p), w in interior.most_common()],
                        X, W, extras)
-        rule["free_gates"] = G.free
-        rule["free_by_prim"] = dict(G.free_by_prim.most_common(8))
+        rule["free_gates"], rule["free_by_prim"] = G.free, dict(G.free_by_prim.most_common(8))
         rule["redundant_gates"] = cut.detail["redundant_gates"]
         if not cut.ok:
             rule["violations"].append({"definition": fn.id, "class": "cut", "codes": list(cut.codes), "detail": cut.detail})

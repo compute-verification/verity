@@ -1,8 +1,9 @@
 """network-e2e's report on certifier-serve's runs on an injected clock against a stub endpoint (`n2_zk.virtual`): honest,
 late and extra at a tiny shape, N2's verdicts only (nothing is lowered or proved here; `run.sh` proves on a node). The
 report holds per run its network verdict and per link-window N2's verdict of record: the honest run is accepted on every
-link-window, and late, extra and the tampered head are each refused at window 0 for their own reason (late: its egress
-head's fields and counts; extra: its counts alone; tampered: its counts and signed digest). The claim is in both files
+link-window, extra and the tampered head are each refused at window 0 for their own reason (extra: its counts alone;
+tampered: its counts and signed digest), and late on every window, unregistered: the certifier certifies nothing of its
+faulted window 0 (`Issuer.refused`), so its link stops before its first window. The claim is in both files
 word for word and names the gaps the certifier README names. The proofs' columns, each proving session's cost (no
 per-link-window share of it) and the cost pass's one link-window proved alone are read from n2_zk's summary as
 `n2_zk.prove` writes it, and a proof that wasn't held never counts as a refusal. Proofs n2_zk's own run kept are adopted
@@ -62,13 +63,19 @@ def test_the_honest_run_is_accepted_and_each_negative_refused_for_its_own_reason
     assert honest["network"]["accepted"] is True and honest["network"]["windows"] == windows
     rows = {(x["run"], x["window"]): x for x in r["link_windows"]}
     assert all(rows[("honest", w)]["n2"] == "accept" for w in range(windows))
-    reasons = {"late": ["fields", "counts"], "extra": ["counts"], "tampered": ["counts", "signed"]}
+    reasons = {"extra": ["counts"], "tampered": ["counts", "signed"]}
     for name, failed in reasons.items():
         neg = r["negatives"][name]
         assert neg["refused"] is True and neg["n2_refused_windows"] == [0] and not neg["proved"], name
         assert r["runs"][name]["network"] == r["runs"][name]["network"] | {"accepted": False, "refused": [0]}, name
         assert rows[(name, 0)]["failed_parts"] == {"egress": failed, "ingress": []}, name
         assert all(rows[(name, w)]["n2"] == "accept" for w in range(1, windows)), name
+    late = r["negatives"]["late"]
+    assert late["refused"] is True and late["n2_refused_windows"] == list(range(windows)) and not late["proved"]
+    assert late["by"][0] == "the certifier (Issuer.refused; link-windows [0])"
+    assert r["runs"]["late"]["network"] == r["runs"]["late"]["network"] | {"accepted": False,
+                                                                           "refused": list(range(windows))}
+    assert [w for *_, w in r["runs"]["late"]["issuer_refused"]] == [0] and not any(run == "late" for run, _ in rows)
     assert r["proofs"]["ran"] is False and r["proofs"]["alone"] is None and "prove_s" not in rows[("honest", 0)]
 
 

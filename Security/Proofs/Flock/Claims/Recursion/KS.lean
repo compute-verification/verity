@@ -276,7 +276,7 @@ def InnerKS [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (D
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
 /-- On an accepted run of a statement the compiled verifier parses with no circuit commitment, the inherited relation
 is the inner one at the inner statement. -/
-theorem R_of_innerR (D : Deploy Coin) (I : Inner Coin W) {x : Msg} {s : Stmt} (hs : D.parse x = some s)
+theorem R_of_innerR (D : Deploy Coin) (I : Inner Coin W) {x : Msg} {s : CompiledStatement} (hs : D.parse x = some s)
     (hc : s.circ = none) (o : Option W) (h : (innerR D I).ext x o) : (R D I).ext x o := by
   rcases o with _ | w
   · exact h

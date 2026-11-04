@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# hashcat's SHA-512 kernels against sha512x.cuh's default compression on one leased GPU, in one lease at one locked SM
+# hashcat's SHA-512 kernels against sx's default compression on one leased GPU, in one lease at one locked SM
 # clock. hashcat (HC_TAG, default v7.1.2) is built from its source in scratch. Its benchmark (`hashcat -b`: the mask
 # ?a?a?a?a?a?a?a, a 7-byte candidate, and for -m 1710 the self-test salt's 12 bytes, so one SHA-512 block a candidate) runs
 # -m 1700 and -m 1710 each with its optimized kernel (-O, what `hashcat -b` runs by default) and its pure one, at -w 3
 # (the benchmark's default), and -m 1700 -O at -w 4. Ours: commit_gpu's raw rate (`commit_gpu sha`, sha_rate: each thread
-# chains full compressions of a variable block) for commit_gpu's default build (a0r0l) and sx0000, sha512x.cuh's default
-# force-included (ruler.sh's builds), each checked bit for bit against reference.py in the lease before it is timed; and
+# chains full compressions of a variable block) for commit_gpu's default build (a0r0l) and sx0000, sx's default under
+# -DSHA_SX (ruler.sh's builds), each checked bit for bit against reference.py in the lease before it is timed; and
 # hashcat_forms.cu, our compression in hashcat's shapes (its header), its first digests checked against hashlib, and the
 # honest chain and -O's shape at each CTA size in SHAPES, in whole waves of the CTAs an SM holds (commit_gpu's sha launches
 # 8 CTAs of 256 an SM, 3 resident, a partial last wave).
@@ -41,7 +41,7 @@ build() {
   if [ "$t" != a0r0l ]; then
     sx=$($PY -c "import sys; sys.path.insert(0, '$X'); import engine; print(*engine.variant_flags('${t#sx}'))") ||
       { echo "build $t rc flags" >> "$O/rc.txt"; return; }
-    flags="$flags -include $X/as_commit_gpu.cuh $sx"
+    flags="$flags -DSHA_SX $sx"
   fi
   # shellcheck disable=SC2086
   nvcc -O3 -std=c++17 -gencode arch=compute_$SM,code=sm_$SM -Xptxas -v $flags -o "$W/commit_gpu_$t" $D/commit_gpu.cu \

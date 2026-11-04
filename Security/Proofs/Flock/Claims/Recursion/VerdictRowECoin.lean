@@ -115,7 +115,7 @@ theorem coefRead_eq (hnd : (D.spec.repStreams.toList.map (·.2.2)).Nodup) (hi : 
 /-- **`hcoef`, the coin tie, in `targetE`'s form**: at a decision of an inner statement read at the dense form and a
 table `i` of the statement, every piece of rep `r` of table `i` reads the verifier's `coef` for its query through
 `coefRead`. -/
-theorem hcoef {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem hcoef {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size) (pieces : List OpenPiece) :
     ∀ r : Fin 2, ∀ q ∈ pieces, q.table = i → q.rep = r.val →

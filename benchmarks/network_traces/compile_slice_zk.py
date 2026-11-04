@@ -60,7 +60,7 @@ proved by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify 
   priors, excepted); the prover's instance file, which holds those rows, is the control. A found piece fails the run
   when the lane's one rule calls it leaked (`leak_scan.scan`): there is no byte-count or witness-class exemption.
 * **rescan**: a finished ``prove``'s scan taken again under that rule (`leak_scan.rescan`) from the verifier's files it
-  kept, the pieces recomputed from its slice, kinds and partition (a salt the run drew isn't, so a found salt reads
+  kept, the pieces recomputed from its slice, kinds and partition (a salt the run sampled isn't, so a found salt reads
   leaked).
 * **Cost** (``--points``): sessions whose verifier samples the first k units, behind the ZK server (`a8.cost`).
 """
@@ -341,7 +341,7 @@ def srv_leaves(S, record: dict, i: int) -> list[tuple[str, int]]:
     return [(r, SR.leaf(S, record, i, j)) for j, r in enumerate(CS.srv_names(S))]
 
 
-def advice_leaf_ok(reg: ADV.Registration, binding: bytes, n: int, i: int, bc: bytes, n_bits: int) -> bool:
+def advice_leaf_ok(reg: ADV.Committed, binding: bytes, n: int, i: int, bc: bytes, n_bits: int) -> bool:
     """The verifier's check of unit i's ``adv`` row: its leaf from the proof's b‖c, walked to the registered root."""
     d = ADV.domain(binding, n)
     kind = BitRowLeaf(n_bits)
@@ -614,7 +614,7 @@ def prove(a) -> int:
     port_ = {p.name: p for p in sg.st.ports}
     honest = units[0].words
     n_bits = 16 * len(honest["adv"])
-    reg = ADV.register([bit_row((u.words["adv"], 16))[0] for u in units], n_bits, binding, salts["adv"])
+    reg = ADV.commit([bit_row((u.words["adv"], 16))[0] for u in units], n_bits, binding, salts["adv"])
     served = SR.register(x.S, [u.registered for u in units], binding, G=CS.block(x.S), salts=srv_salts)
     binds = {"advice": reg, "binding": binding, "n_bits": n_bits, "served": served, "run_root": binding,
              "certified": certified(M, port_["cert"], honest["cert"], cert_salt), "chain": ch, "program": program}
