@@ -926,3 +926,23 @@ Infra (19:18Z): cpu-2's challenger and compose-gate keys are installed and teste
    - So the Pearl+ case needs proofs' "Pearl+ in the remote theorem": a protocol id for Pearl+'s verdict among `Core.Remote.components`, and the case's params, commitment and evidence. **Who fixes them, and when?** Once they're fixed, I write the case from Pearl+'s piece and its Lean answer, and the hand-off carries it, in about 3 h.
    - Until then a tied run's composite names PoUW's component missing.
 3. **CMP-311 A, our part.** #7221 rewrites `served_pearlplus.sh` (step 4b, the Lean verdict), as does our part (deleting the give-up). I write ours on top of #7221 once it is in `remote`, so the joint merge has no conflict there.
+
+## 22:18Z Wed (vllm-pearlplus): **pprecord is pushed: `cursor/vllm-pprecord-496a` at 64abe4d09a, rebased onto `remote` e712d2eecd0 (lease over adba92b39c). Its suites have no red of mine. Two opt-in tied toy tests in `test_remotetie.py` fail, but they have been stale on `remote` since its served-cases change b9ee8805e7.**
+
+1. **Suites on 64abe4d09a.**
+   - verity-vllm (r20261104-205347-6a4a, cpu-11): 12,982 passed.
+   - prove_path and one_stage in full (r20261104-205507-4bfa, cpu-9): 152 passed, with the 8 opt-in tied tests skipped; 730 passed.
+   - The opt-in tied toy audits, `VERITY_PROVE_PATH_REMOTETIE=1 --fresh` (r20261104-213039-508a, cpu-9): 158 passed, 2 failed. `test_pearltie.py` passed 5 of 5 and `test_remotetie.py` 5 of 7.
+   - My other changed suites (r20261104-205323-745a, cpu-12, `--quick --changed e712d2eecd0`): 48 of 51 passed. The 3 red suites fail the same tests on clean `remote` (r20261104-214553-9bd3, cpu-11), and the five lints list the same files on both trees:
+     - repository: env reads (`pearlplus_local_e2e.py`, `test_circuit_check.py`); lane text (PR numbers in three Pearl+ files from #7221's lane and in `test_records_short_head.py`, dates and a name in `CoreOnsite.lean` and `CoreRemote.lean`); ruff RUF100 (`test_records_short_head.py`); domains (`POSEIDON2_BABYBEAR_W24_ROW` unread); flock JSON (`Lean.Json.parse` in `RecCompose.lean`, `RecLinksCmd.lean`, `Test/RecCompose.lean`).
+     - research: `test_queue.py::test_a_records_run_vouches_for_exactly_the_packages_it_passed`.
+     - property_redteam: `test_demo.py` finds no `demo.load_registry`.
+2. **The two `test_remotetie.py` failures are the test's, not the rebase's.**
+   - `remote`'s b9ee8805e7 (Tue 16:12Z) made `served_cases.py` write remote's sampled-proofs case (`verity/sampled-proofs/v1`, a5's v2 case in the one-stage form) and made remote's composite refuse one-stage v1's case by name. `test_remotetie.py` last changed before that (Tue 06:16Z), and the check skips its opt-in Lean tier.
+   - The toy's serve dir holds only v1's case, so `served_cases.py` prints NOT_WRITTEN for sampled proofs and exits 1: `test_one_stage_and_the_policy_accept_r_…` fails on `KeyError: 'verdict'`.
+   - `test_a_period_naming_w_is_refused_…` hands remote v1's case, and remote answers "params: verity/sampled-proofs/one-stage/v1 is not a component of this composition" before the period's refusal.
+   - My diff touches none of the test, `served_cases.py` or `composite.py`. The same suite runs on clean `remote` now to confirm (r20261104-221632-d475, cpu-9, by about 23:00Z).
+   - The fix is the test owner's (remotetie's, I believe): give the toy a v2 case, or expect sampled proofs missing.
+3. **What this means for the record's composite.** A tied window draws several members, so a5 writes its v2 case in the per-member form (`a5.v2_proof`). #7295 makes v2 reject that form's acceptance until its guarantee is in the lock (`OneStageZk.MULTI_REFUSED`). So until proofs' lock lands, remote's composite on a tied run can't accept sampled proofs, whatever the audit's verdict. This comes on top of the Pearl+ component it already lacks (21:05Z item 2).
+
+**I wait on:** your choice in 20:55Z item 4 and the space it needs; the rehearsal's law (20:05Z item 2) and the passes (20:05Z item 4); the owners of cpu-2's two Oct 30 serve dirs; who defines the Pearl+ component (21:05Z item 2); and #7221 by Thu 12:00Z.
