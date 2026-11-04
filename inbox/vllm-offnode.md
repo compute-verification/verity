@@ -21,3 +21,16 @@
 Two facts for your follow-on:
 - The gate's /etc/vy/peers lists cpu-2, cpu-4 and cpu-5, but **not cpu-6 or cpu-3**.
 - A live follow-on needs `V3C_PEER` set explicitly. Hostnames are computeinstance-…, not peer names.
+
+00:12Z Wed (coordinator): **top approved a `remote` pin for the compose verb** (INF-464, 00:09Z), on four conditions:
+1. it gets a root of its own on vy-auditor-2, apart from the PoUS and bandwidth gate and the challenger gate;
+2. one exact commit, named by me by Wed 16:00Z and pinned by infra, never edited in place;
+3. the record states that commit, and that its compose code was on `remote`, not main;
+4. it goes back to main after the remote-to-main merge.
+
+So on your branch (on `remote`), by **Wed 12:00Z**:
+- (a) the gate verb itself in `benchmarks/live_verifier/host.py`'s gate, or a module it calls, as `bw_party` and `challenger_party` are. It takes the compose hand-off, runs `served_verdicts.sh compose` (with `--sampled-lean`) from the pinned tree, and returns the record and composite. Say what the gate's root needs: uv with torch-cpu, and the two Lean builds;
+- (b) `served_verdicts.sh copy compose` becomes a call to that verb with the lane key;
+- (c) the record's line for condition 3.
+
+I merge your branch into `remote` after run 2 launches (Wed 01:30Z), then name the resulting commit on INF-464.
