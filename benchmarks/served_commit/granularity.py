@@ -49,13 +49,13 @@ def load(build_dir: str):
     from verity.ml.circuits.codec import decode_program
     from verity.ml.circuits.program import is_input
     from verity.ml.circuits.refs import runs
+    from verity.ml.definitions.registry.catalog import load as load_registry
     from verity_vllm.correspondence.reader_for_query import call_name_of, parse_call_name
     from verity_vllm.correspondence.runtime import RuntimeCorrespondence
-    from verity_vllm.query.program_view import _registry
 
     with gzip.open(Path(build_dir) / "descriptor.json.gz", "rt") as f:
         desc = json.load(f)
-    reg, _errors = _registry()
+    reg, _errors = load_registry()
     body = decode_program(desc, reg).defs[desc["root"]].body
     K = 0
     while K < len(body.nodes) and body.nodes[K].form == "batch" and is_input(body.nodes[K].fn):
