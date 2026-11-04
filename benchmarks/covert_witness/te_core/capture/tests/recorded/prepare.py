@@ -2,10 +2,14 @@
 from __future__ import annotations
 
 import os
+import types
+from pathlib import Path
 
 import torch
 from torch import nn
 
+#: data v3's names (prepare imports data_v3): its tokenizer, and the stream's directory, which the stub replaces
+data_v3 = types.SimpleNamespace(TOKENIZER="bpe32k", TRAIN=Path("/nonexistent/train/v3"))
 EVAL_CTX = 8
 DEVICE = "cpu"
 TIER = os.environ.get("CW_TIER", "search")

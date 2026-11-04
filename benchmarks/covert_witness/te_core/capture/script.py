@@ -18,7 +18,10 @@ and output calls are stubbed:
 - `start_record`, `load_theta` and `load_start`: the start's record (``--starts``), θ as fakes of its tensors, the model
   built from its config as prepare builds it;
 - `TrainData.next(n)` and `hooks.tokens(t)`: a graph input of token data, n windows of ctx + 1 tokens, as is a tensor
-  made (``torch.from_numpy``, ``as_tensor``) from the stream's own windows (`TrainData.tokens`, read through numpy);
+  made (``torch.from_numpy``, ``as_tensor``) from the stream's own windows (`TrainData.tokens` or its ``parts``, read
+  through numpy); the stream is zeros in prepare's parts, starts and order: for data v3's tokenizer, the parts each
+  start read names (its provenance's ``data.parts``), listed with one unread part in a manifest at ``data_v3.TRAIN``
+  as on a node, else the unread part alone, as long as the run record's steps read with headroom (`stream_tokens`);
 - the encoders run on the fakes unrecorded (E is the run's output, which its steps don't read back), so a program that
   sizes E by encoding it (a rank or a width to fit its class's cap) sees the length it saw for a format that stores its
   tensors raw; a compressed format's zeros compress further, and an encoder that can't run on fakes returns a stub;
@@ -63,7 +66,9 @@ import json
 import math
 import operator
 import os
+import shutil
 import sys
+import tempfile
 import time
 import types
 from pathlib import Path
@@ -94,8 +99,10 @@ _ENCODERS = ("encode_full", "encode_lora", "encode_lora2", "encode_seedlog", "en
 #: prepare's serialization of E's parts, which a program calls to size E without encoding it (an encode in the steps
 #: is a checkpoint under te_core.run): its checks and bytes are E's, unrecorded as the encoders' are
 _E_PARTS = ("_quant_array",)
-#: the stubbed data stream's length (the corpus's order of magnitude, so a program's windows never run out)
+#: the stubbed data stream's unread tokens at least, and over the run record's (`stream_tokens`): a step's record can
+#: count fewer tokens than it reads (one micro-batch's of four, for a batch of 128 windows read 32 at a time)
 STREAM_TOKENS = 3 * 10 ** 9
+STREAM_HEADROOM = 8
 _NP = {torch.float32: np.float32, torch.float64: np.float64, torch.float16: np.float16, torch.int64: np.int64,
        torch.int32: np.int32, torch.int16: np.int16, torch.int8: np.int8, torch.uint8: np.uint8, torch.bool: np.bool_}
 
@@ -304,6 +311,7 @@ class _Recorder:
         self.inputs = 0
         self.ctx = 0
         self.n_steps = 0
+        self.stream_tokens = STREAM_TOKENS
         self.events: dict[tuple, dict] = {}
 
     # -- read-backs the graph can't carry (module docstring)
@@ -667,8 +675,30 @@ def _patched(rec: _Recorder, prepare, hooks, starts: Path, scale: int, windows_o
         put(prepare, "EVAL_CTX", ctx)
     put(prepare, "DEVICE", "cuda")
 
+    # data v3's stream: a manifest of the parts each start read names (its provenance's data.parts), then one unread part
+    v3 = getattr(prepare, "data_v3", None)
+    v3 = v3 if hasattr(v3, "TRAIN") and hasattr(v3, "TOKENIZER") else None
+    read: dict[str, dict] = {}
+
+    def manifest():
+        parts = sorted(read.values(), key=lambda q: q["index"])
+        unread = {"index": max((q["index"] for q in parts), default=-1) + 1, "sha256": "unread",
+                  "tokens": rec.stream_tokens}
+        (train / "manifest.json").write_text(json.dumps({"parts": [*parts, unread]}) + "\n")
+
+    if v3 is not None:
+        train = Path(tempfile.mkdtemp(prefix="te-capture-v3-"))
+        put(v3, "TRAIN", train)
+        manifest()
+
     def start_record(name):
-        return json.loads((starts / f"{name}.start.json").read_text())
+        r = json.loads((starts / f"{name}.start.json").read_text())
+        if v3 is not None and r.get("tokenizer") == v3.TOKENIZER:
+            for q in ((r.get("provenance") or {}).get("data") or {}).get("parts") or []:
+                if {"index", "sha256", "tokens"} <= set(q):
+                    read.setdefault(q["sha256"], {k: q[k] for k in ("index", "sha256", "tokens")})
+            manifest()
+        return r
 
     def theta_of(name):
         rec_ = start_record(name)
@@ -699,10 +729,15 @@ def _patched(rec: _Recorder, prepare, hooks, starts: Path, scale: int, windows_o
     base_td = prepare.TrainData
 
     class TrainData:
-        def __init__(self, tokenizer, seed=1, ctx=None):
+        def __init__(self, tokenizer, seed=1, ctx=None, parts=None):
             self.ctx = int(ctx) // scale if ctx is not None else rec.ctx
-            self.tokens = _Zeros(STREAM_TOKENS)
-            self.order = np.random.default_rng(seed).permutation((len(self.tokens) - 1) // self.ctx)
+            sizes = [rec.stream_tokens]
+            if v3 is not None and tokenizer == v3.TOKENIZER:
+                sizes = [q["tokens"] for q in json.loads((train / "manifest.json").read_text())["parts"]][:parts]
+            self.parts = [_Zeros(n) for n in sizes]
+            self.tokens = _Zeros(sum(sizes))
+            self.starts = np.cumsum([0] + [(n - 1) // self.ctx for n in sizes])
+            self.order = np.random.default_rng(seed).permutation(int(self.starts[-1]))
             self.at = 0
 
         def next(self, n, device=None):
@@ -782,10 +817,12 @@ def _patched(rec: _Recorder, prepare, hooks, starts: Path, scale: int, windows_o
         post.remove()
         for obj, name, value in reversed(saved):
             setattr(obj, name, value)
+        if v3 is not None:
+            shutil.rmtree(train, ignore_errors=True)
 
 
 def _record_once(script: Path, args: list[str], starts: Path, stop: int, wall: list[float], scale: int, log,
-                 windows_only: bool = False) -> _Recorder:
+                 windows_only: bool = False, stream_tokens: int | None = None) -> _Recorder:
     from te_core import cw, hooks
 
     island = script.resolve().parent
@@ -795,6 +832,8 @@ def _record_once(script: Path, args: list[str], starts: Path, stop: int, wall: l
     prepare = cw.import_prepare(script)
     _exec_lifted(Path(prepare.__file__), prepare.__dict__)
     rec = _Recorder(stop, wall)
+    if stream_tokens is not None:
+        rec.stream_tokens = int(stream_tokens)
     sys.argv = [str(script), *args]
     sys.path.insert(0, str(island))
     main, main0 = types.ModuleType("__main__"), sys.modules.get("__main__")
@@ -833,6 +872,14 @@ class _Graph(torch.nn.Module):
             self.__dict__[name] = getattr(rec.root, name)
 
 
+def stream_tokens(run: dict) -> int:
+    """The stubbed stream's unread tokens for a run record: its steps times its largest step's tokens, STREAM_HEADROOM
+    times over, and at least STREAM_TOKENS."""
+    steps = run.get("steps") or []
+    most = max((int(s.get("tokens") or 0) for s in steps), default=0)
+    return max(STREAM_TOKENS, STREAM_HEADROOM * len(steps) * most)
+
+
 def tier_of(run: dict) -> str | None:
     """The budget tier a run's record was scored at (evaluate.py's `evaluation.budget.tier`; te_core.run's top-level
     `tier` is the promotion tier, not this), None for a record no evaluation scored."""
@@ -858,17 +905,19 @@ def _tier(tier: str | None):
 
 
 def record(script: Path, args: list[str], *, step: int, starts: Path, wall: list[float], step_tokens: int,
-           log=None, name: str | None = None, tier: str | None = None) -> StepGraph:
+           log=None, name: str | None = None, tier: str | None = None, stream_tokens: int | None = None) -> StepGraph:
     """Step `step` of the program `script` run with `args` (module docstring), as a `StepGraph` whose tokens are
     `step_tokens` (the record's count for that step), at the budget tier `tier` (`tier_of` the record: a program that
-    plans from prepare.budget plans the run's own steps only at the run's tier)."""
+    plans from prepare.budget plans the run's own steps only at the run's tier), its stubbed stream's unread part
+    `stream_tokens` long (the module's `stream_tokens` of the record; None: STREAM_TOKENS)."""
     log = log if log is not None else open(os.devnull, "w")
     name = name or Path(script).parent.name
     listed: dict[str, list[dict]] = {k: [] for k in READ_BACKS}
 
     def trace(scale, windows_only=False):
         with _tier(tier):
-            rec = _record_once(Path(script), list(args), Path(starts), step + 1, wall, scale, log, windows_only)
+            rec = _record_once(Path(script), list(args), Path(starts), step + 1, wall, scale, log, windows_only,
+                               stream_tokens)
         for k, have in listed.items():
             seen = {(e["kind"], e["where"]) for e in have}
             have += [e for e in rec.listed(k) if (e["kind"], e["where"]) not in seen]
@@ -947,7 +996,7 @@ def main(argv=None) -> int:
     t0 = time.perf_counter()
     with (open(a.log, "w") if a.log else open(os.devnull, "w")) as log:
         g = record(a.script, argv[split + 1:], step=a.step, starts=a.starts, wall=wall,
-                   step_tokens=int(steps[a.step]["tokens"]), log=log, tier=tier)
+                   step_tokens=int(steps[a.step]["tokens"]), log=log, tier=tier, stream_tokens=stream_tokens(run))
     by = steps[a.step].get("by") or {}
     out = {"step": a.step, "tier": tier, "structure": g.structure(), "gemm_macs": gemm_macs(g),
            "recorded_gemm_macs": int(steps[a.step]["matmul_macs"]),
