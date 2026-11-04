@@ -240,7 +240,8 @@ theorem foldRanges_map (st : Stmt) (a : F128) (lw rho : Array F128) :
     cases hc : bases.find? (fun kb => decide (kb.1 = (r.kind, r.slotLog))) with
     | some kb =>
       obtain ⟨key, b⟩ := kb
-      have hk : key = (r.kind, r.slotLog) := of_decide_eq_true (Array.find?_some hc)
+      have h1 := Array.find?_some hc
+      have hk : key = (r.kind, r.slotLog) := of_decide_eq_true h1
       have hw : slotWhy st (r.kind, r.slotLog) = none := by
         rw [← hk]
         exact hb _ (Array.mem_of_find?_eq_some hc)
@@ -287,29 +288,6 @@ theorem foldChk_map (st : Stmt) (a : F128) (lw rho : Array F128) :
 /-- The statement's setup (`Setup.ofCircuit`) with the fold `foldChk`. -/
 def ofCircuitChk (st : Stmt) : Setup := { Setup.ofCircuit st with fold := { st.circuitFold with fold := foldChk st } }
 
-theorem vBind_congr {M : Type → Type} [Monad M] [LawfulMonad M] [MonadExceptOf String M] {α β : Type} (x y : V α)
-    (h : (fun _ => ()) <$> x = (fun _ => ()) <$> y) (rest : TMW M β) :
-    ((match x with | .ok v => pure v | .error err => throw err : TMW M α) >>= fun _ => rest) =
-      ((match y with | .ok v => pure v | .error err => throw err : TMW M α) >>= fun _ => rest) := by
-  cases x with
-  | ok v =>
-    cases y with
-    | ok w =>
-      show (pure v >>= fun _ => rest) = (pure w >>= fun _ => rest)
-      simp only [pure_bind]
-    | error e =>
-      have h' : (Except.ok () : V Unit) = .error e := h
-      cases h'
-  | error e =>
-    cases y with
-    | ok w =>
-      have h' : (Except.error e : V Unit) = .ok () := h
-      cases h'
-    | error e' =>
-      have h' : (Except.error e : V Unit) = .error e' := h
-      cases h'
-      rfl
-
 /-- `lincheckFw` reads of its fold only the refusal. -/
 theorem lincheckFw_fold {M : Type → Type} [Monad M] [LawfulMonad M] [MonadExceptOf String M] [MonadLiftT V M]
     (io : Asks M) (c c' : CircuitFold) (hk : c.kLog = c'.kLog)
@@ -323,7 +301,19 @@ theorem lincheckFw_fold {M : Type → Type} [Monad M] [LawfulMonad M] [MonadExce
   unfold lincheckFw
   dsimp only
   refine bind_congr fun _ => bind_congr fun alpha => bind_congr fun _ => ?_
-  exact vBind_congr _ _ (hf _ _ _) _
+  have h := hf alpha (skipWeights zc.z) (zc.rho.extract 0 (k - 6))
+  dsimp only at h
+  revert h
+  cases f alpha (skipWeights zc.z) (zc.rho.extract 0 (k - 6)) <;>
+    cases f' alpha (skipWeights zc.z) (zc.rho.extract 0 (k - 6)) <;> intro h
+  · have h' : (Except.error _ : V Unit) = .error _ := h
+    cases h'
+    rfl
+  · have h' : (Except.error _ : V Unit) = .ok () := h
+    cases h'
+  · have h' : (Except.ok () : V Unit) = .error _ := h
+    cases h'
+  · simp only [pure_bind]
 
 theorem repPiop_fold {M : Type → Type} [Monad M] [LawfulMonad M] [MonadExceptOf String M] [MonadLiftT V M]
     (io : Asks M) (S : Setup) (c : CircuitFold) (hk : c.kLog = S.fold.kLog)
@@ -343,6 +333,7 @@ theorem rounds_fold (S : Setup) (c : CircuitFold) (hk : c.kLog = S.fold.kLog)
     (hf : ∀ a w r, (fun _ => ()) <$> c.fold a w r = (fun _ => ()) <$> S.fold.fold a w r) (k0 : Nat) (cap dom : ByteArray) :
     Skeleton.rounds { S with fold := c } k0 cap dom = Skeleton.rounds S k0 cap dom := by
   simp only [Skeleton.rounds, Skeleton.head, repPiop_fold Skeleton.recAsks S c hk hf]
+  all_goals rfl
 
 instance instLawfulStep : LawfulMonad Drive.Step := LawfulMonad.mk' Drive.Step
   (id_map := fun x => by
@@ -364,6 +355,8 @@ theorem openStep_fold (t : Tab) (S : Setup) (c : CircuitFold) (hk : c.kLog = S.f
       Drive.openStep { t with st := S } rep dom xs hi coins := by
   simp only [Drive.openStep, repPiop_fold (Drive.stepAsks coins false) S c hk hf, repOpening_fold]
 
+theorem ok_bind {α β : Type} (a : α) (f : α → V β) : ((Except.ok a : V α) >>= f) = f a := rfl
+
 /-- `tabOfLevel0` reads of its setup only the Merkle scheme and `m`. -/
 theorem tabOfLevel0_with (S S' : Setup) (hm : S'.merkle = S.merkle) (hn : S'.m = S.m) (l : Level0.Level0) :
     tabOfLevel0 S' l = (fun t => { t with st := S' }) <$> tabOfLevel0 S l := by
@@ -375,7 +368,7 @@ theorem tabOfLevel0_with (S S' : Setup) (hm : S'.merkle = S.merkle) (hn : S'.m =
       | error e => rfl
       | ok p =>
         obtain ⟨sch, tPad⟩ := p
-        cases (l.tPad != tPad) <;> rfl
+        cases h : (l.tPad != tPad) <;> simp only [ok_bind, h] <;> rfl
     · rfl
   · rfl
 
@@ -390,8 +383,7 @@ theorem openingOf_chk : openingOf Setup.ofCircuit = openingOf ofCircuitChk := by
   rw [tabOfLevel0_with (Setup.ofCircuit st) (ofCircuitChk st) rfl rfl l0,
     tabOfLevel0_with (Setup.ofCircuit st) (Setup.ofCircuit st) rfl rfl l0]
   simp only [Functor.map_map]
-  congr 1
-  funext t
+  refine congrArg (fun f => Functor.map f (tabOfLevel0 (Setup.ofCircuit st) l0)) (funext fun t => ?_)
   exact (openStep_fold t (Setup.ofCircuit st) { st.circuitFold with fold := foldChk st } rfl (foldChk_map st) rep dom xs
     hi coins).symm
 
