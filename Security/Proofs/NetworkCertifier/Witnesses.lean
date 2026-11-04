@@ -23,11 +23,14 @@ whose verifier accepts everything.
   negates its input. There, with nothing opened, the trace holds `false` at the negation, which the circuit computes
   `true` from the ingress the trace carries; the one unit is drawn `all`, so no possible faulty set holds it, and no
   witness is in `RLeak`.
-* `PooledIncorrectBlocksLe`. Its draw hypotheses hold at the uniform `k`-subset draw (`uniform_draw`), and its
-  soundness hypothesis at `ε = 0` when no block is incorrect. At one window of one block, that block incorrect, an audit
-  that always accepts, `ε = 0` and `q = F = 1`, its bound reads `1 ≤ 0`.
 
 The count conjuncts of the leak bounds read no verifier: they hold at every deployment, the accepting one included.
+
+`PooledIncorrectBlocksLe` reads no claim and no verifier, so the two-lemma rule doesn't hold it, and the lock lists
+neither of its lemmas here. Its draw hypotheses hold at the uniform `k`-subset draw (`uniform_draw`), and its soundness
+hypothesis at `ε = 0` when no block is incorrect (`PooledIncorrectBlocksLe_honest`). At one window of one block, that
+block incorrect, an audit that always accepts, `ε = 0` and `q = F = 1`, its bound reads `1 ≤ 0`
+(`PooledIncorrectBlocksLe_nontrivial`).
 -/
 
 namespace NetTiming.Witness
