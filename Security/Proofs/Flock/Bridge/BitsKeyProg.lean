@@ -16,8 +16,8 @@ import Proofs.Flock.Bridge.Statement
 * `laysOut_keyProg`, `unitsOut_keyProg`: `LaysOut` and `UnitsOut` at a circuit file's program. Each row reads its
   columns' gates (`keyWire_colVal`, through `keyIdx_eq`), and the outputs are the gates on returned outputs' columns,
   ascending (`outs_keyProg`).
-* `progOf_keyProg`, `blockOf_keyProg`: so at the circuit's constants (`constsOf`, Bits' `keyConsts`) the bridge's
-  program and proof blocks are Bits'.
+* `constsOf_eq_consts`, `progOf_keyProg`, `blockOf_keyProg`: the circuit's constants (`constsOf`) are Bits'
+  (`SampledProofs.Bits.consts`), so the bridge's program and proof blocks are Bits'.
 -/
 
 namespace Flock.Bridge
@@ -473,20 +473,28 @@ theorem unitsOut_keyProg (hu : c.unit.unitLog ≤ 32) :
 
 /-! ## Constants, program and proof blocks -/
 
-/-- **Bits' constants of the key program**: gate 0 is the constant `1`, gate 1 the zero. -/
-def keyConsts (g : ℕ) : Option Bool := if g = 0 then some true else if g = 1 then some false else none
-
-theorem constsOf_eq_keyConsts (g : Fin (Layout.keyN c hU n)) : constsOf c hU n g = keyConsts g.val := by
+/-- **The circuit's constants are Bits'** (`SampledProofs.Bits.consts`): gate 0 is the constant `1`, and gate 1 and
+every program input no unit reads are `0`, the owners agreeing (`owner_eq`). -/
+theorem constsOf_eq_consts (hu : c.unit.unitLog ≤ 32) (g : Fin (Layout.keyN c hU n)) :
+    constsOf c hU n g = SampledProofs.Bits.consts c n g.val := by
   have h1 : (Layout.oneG (c := c) (hU := hU) (n := n)).val = 0 := rfl
   have h0 : (Layout.zeroG (c := c) (hU := hU) (n := n)).val = 1 := rfl
-  unfold constsOf keyConsts
+  have hR : RowsAgree (bitsRows c) (Placed.circuitRows c hU) := rowsAgree_circuitRows c hU hu
+  have ho : SampledProofs.Bits.owner (SampledProofs.Bits.keyProg c n) g.val =
+      (owner ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) g).map Fin.val :=
+    owner_eq (laysOut_keyProg (n := n) hu) (unitsOut_keyProg hu) g
+  have hin : (SampledProofs.Bits.keyProg c n).inputs = 2 + n * Layout.keyB c hU := by
+    rw [keyProg_inputs, hR.1]
+  clear hR
+  unfold constsOf SampledProofs.Bits.consts
+  rw [ho, hin]
   split_ifs <;> simp_all [Fin.ext_iff]
 
 /-- **The bridge's program of a circuit file is Bits'**, at the circuit's constants. -/
 theorem progOf_keyProg (hu : c.unit.unitLog ≤ 32) :
     progOf ((Placed.keyProg c hU n).circuit (Layout.outsOf c hU n)) (constsOf c hU n) =
-      Properties.SampledProofs.bitsProg (SampledProofs.Bits.keyProg c n) keyConsts :=
-  (laysOut_keyProg hu).progOf_eq constsOf_eq_keyConsts
+      Properties.SampledProofs.bitsProg (SampledProofs.Bits.keyProg c n) (SampledProofs.Bits.consts c n) :=
+  (laysOut_keyProg hu).progOf_eq (constsOf_eq_consts hu)
 
 /-- **The bridge's positions of a circuit file's gates are Bits'.** -/
 theorem posOf_keyProg (hu : c.unit.unitLog ≤ 32)
@@ -497,8 +505,8 @@ theorem posOf_keyProg (hu : c.unit.unitLog ≤ 32)
 /-- **The bridge's proof blocks of a circuit file are Bits'**, at the circuit's constants. -/
 theorem blockOf_keyProg (hu : c.unit.unitLog ≤ 32)
     (u : Fin n) : blockOf ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) (constsOf c hU n) u =
-      SampledProofs.Bits.blockOf (SampledProofs.Bits.keyProg c n) keyConsts u.val :=
-  blockOf_eq (laysOut_keyProg hu) (unitsOut_keyProg hu) constsOf_eq_keyConsts u
+      SampledProofs.Bits.blockOf (SampledProofs.Bits.keyProg c n) (SampledProofs.Bits.consts c n) u.val :=
+  blockOf_eq (laysOut_keyProg hu) (unitsOut_keyProg hu) (constsOf_eq_consts hu) u
 
 end keyProg
 
