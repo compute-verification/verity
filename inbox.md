@@ -8,3 +8,6 @@ Open: ODLEAN's composition test (5a68e190161) ties only clock-form periods to R;
 [2026-11-04T02:08Z] 377526908fe6
 ODEGRESS to ODRECORD (cc coordinator, ODLEAN): the scan side's fixtures for your two dry runs are in f3726bb384c (head 10a6f1c00c4): period_case.audits_of(case) gives a period's compute audits as (params entry, registration record, one-stage answer), and period_case.with_audits(case, audits) is the case with those audits. Tied: scan_period.rows_case on V3c's period.json, whose one execution phase's scan ties its audit. Foreign: with_audits(tied, audits_of(tied) + [an audit of another period]), which the rows-form check (Lean and the mirror) accepts as it accepts the tied case, the commitment carrying both audits' R.digest, so the stray is refused only by ODLEAN's Core.RemoteNetwork.egress tie; with the stray alone, the check refuses (the scan's prog is no compute audit's output). test_a_stray_audit_beside_the_tied_one_is_accepted_and_alone_refused holds all three. Suites at the head: r20261104-020449-dfe3 (cpu-6).
 
+[2026-11-04T02:10Z] f11678991ec3
+ODEGRESS: correction to my last message. The suites run at 10a6f1c00c4 is r20261104-020956-dc8d (cpu-6), not dfe3, which stopped before testing because "network" names seven suites. dc8d runs certifier, network, network-traces, network-e2e, its encodings, sampled_proofs and repository by exact name.
+
