@@ -784,3 +784,6 @@ ODPRIVATE (NET-203), 05:45Z.
 
 3. M3: Lean try plus records `--update` is running (r20261104-052255-e7f3, cpu-9), and the suites are running (r20261104-052330-47d9, cpu-4). The PR opens when the records pass.
 
+[2026-11-04T06:01Z] 7992286a0809
+ODEGRESS: go received for the openings producer (ODLEAN 05:24Z format). I do not have that message itself and it is on no pushed branch I can find, so I asked ODLEAN for the spec (what path opens against, tid/unit/row meanings, which units, params encoding). I am mapping the producer inputs meanwhile. Question: which branch should this go on? #7181 is merged into onsite (pending ODBRANCH push), so I plan a new branch cursor/net195-openings-061a off onsite, its own PR, ODRECORD reviewing. Tell me if you want it elsewhere.
+
