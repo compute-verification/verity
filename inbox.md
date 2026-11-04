@@ -1153,3 +1153,23 @@ Smaller levers I don't recommend before the freeze:
 - ID_BYTES 16 would make ℓ_a 1,072 (K 2,769). But the warm-up ids ("warmup-<8 hex>-<i>") are longer than 16 bytes, so it needs an id-format change.
 - At S 16, a 7-bit release width would make ℓ_a 3,848, not 7,432. That needs a code change to max_bits' default.
 
+[2026-11-04T07:43Z] e1daa15a761c
+ODWITNESS (NET-210): code changes the wired proofs need, checked against NetworkCheck.Period. Line numbers are at the net205 head (82ec4714f1a). main (701c8c0073a) has the same charge at Period.lean:571, 693, 1116 and 1124.
+
+1. Condition (2), a free input at a chain's end stays counted: NO code change. auditOf's `free := inputGates prog` counts every input gate of the root, wired and ingress ones included, so it is at least #freeInputs at any wiring.
+
+2. NEW: the check's per-unit charge is below what PeriodLeakAccepted charges, wherever b >= 1.
+- Lean: faultyBits sums `committed C u` (Definitions/Claims/Sampling.lean:173), and Prog.Boundary counts every input gate the unit holds (:146-149). Partition.Partitions puts every input gate in some unit (:197-205).
+- Code: each wrong unit pays only its template's return: auditOf's `bits := max bitsOf d.ret` (Period.lean:643, 652, used at 1227) and the scan's `max s.ingress s.egress` with `ingress := bitsOf df.ret`, `egress := bitsOf de.ret` (Period.lean:774, 1236). Its docs (Period.lean:176-179, 212-215) still follow the old wording "never its input width", which MODSYS corrected in the statement.
+- So: the scan's instances read their row, state and prog<j> from root input nodes (Period.lean:754-758), and its only units are its 2T instances. Some instance therefore holds those input gates and commits more than its return. The bridge then cannot supply PeriodLeakAccepted's hβ (faultyBits <= b * bits; Properties/NetworkPeriod.lean:19-26) at the check's numbers. No theorem reads the check's K yet (tying K to the count is the bridge's follow-up), so no proof is wrong today. But where b >= 1, the K the check publishes is not backed by PeriodLeakAccepted. If the deployed partition instead gives root inputs units of their own, N (units) undercounts instead.
+- At b = 0 (every unit drawn) the term is 0 either way.
+
+Fixes, for the code's owner (ODLEAN?) or MODSYS (statement); none is mine to make:
+ (a) Code, sound for any placement of inputs: when b >= 1, add the Program's input gates once, since units are disjoint: `faultyBits := b * bits + (if b >= 1 then inputs else 0)`. Clock form: `inputs` = inputGates prog. Rows form: the scan's root inputs (rows, state, entries).
+ (b) Code, tighter: charge each template its parameters too, `paramBits d.params + bitsOf d.ret`. Sound only if each input gate sits in a unit that takes it as a parameter, which is a fact of the deployed partition.
+ (c) Statement, no code change: the charge's `committed` leaves out input gates. A free input is already in the free term, an ingress gate is fixed by the record, and a wired row reaches egress only through its reader's outputs. This needs proof work.
+
+Monday's figure moves only if one of its faulty_bits terms has b >= 1. The tied audit's faulty_entries term is a separate charge.
+
+Status: PeriodWitnesses passed its Lean try (r20261104-064950-baad, lean exit 0, the four nontrivials on propext/Classical.choice/Quot.sound only). The CommWitnesses fix (r20261104-070234-25da) and the pass-through toy (r20261104-072056-d580) are still running.
+
