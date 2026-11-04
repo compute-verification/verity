@@ -357,4 +357,9 @@ This follows my 10:40Z entry and corrects its item 2. With tables, the load must
   - `window-commit --pearl-served` passes `PearlTables` to `takes`, so the commit refuses at the PEARL-TIE R step, after the serve.
   - The fix: under `PEARL_TIE`, default `SLOTS` and `PROMPTS` from `V3C_CLASS` (its slots, and P:P), and refuse anything but `LOAD=fixed` at exactly those, as 1de3 does.
 - **The HELD failure I flagged at 10:40Z is gone on both Pearl+ branches.** Each now holds the tied commit to a record cut at Pearl+'s linears: 1de3 at the deployment's scheme (`PEARLPLUS_ARM`), and pprecord at `PEARL_SCHEME`. pprecord commits after step 3, so it never needed the Builds fix.
-- **Still running:** a development `served_verdicts.sh v3c` on the same scratch copy (r20261104-105449-028b), with local coins and the audit stopped before its coins. I'll add its WINDOW-CIRCUIT and HELD lines here.
+- **The development `served_verdicts.sh v3c` passes HELD** (r20261104-105449-028b on the same scratch copy, local coins, H1_TIE).
+  - WINDOW-CIRCUIT wrote the verifier's record reading H1's tables (cb3b9c7b…).
+  - WINDOW-COMMIT took the commit H1 bound at its close (R 261b439d…).
+  - WINDOW-CIRCUIT-HELD: PASS.
+  - Step 3's record was left as it was. The build passed.
+  - The audit stopped at its empty `MAIN_FILE`, by design, before any coin.
