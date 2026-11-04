@@ -16,7 +16,8 @@ connections and the windows (the compute audits, or the scans) are sums over `Fi
 (`firstFinding_none`), each link-window's `wiredCheck` and `stateCheck` among them.
 
 `ScanWindowsPlaced`'s `WrongBounds` holds at the bound the audit publishes, at a design whose rules are strata draws
-(`wrongBounds_of_countBound`): a set of more blocks is accepted with probability at most `miss(countBound + 1) < δ`.
+(`wrongBounds_of_countBound`, and `wrongBoundsDrawn` at `StrataDrawn`): a set of more blocks is accepted with
+probability at most `miss(countBound + 1) < δ`.
 -/
 
 namespace Properties.NetworkPeriod
@@ -283,6 +284,10 @@ theorem wrongBounds_of_countBound {s : Claims.Sampling.AuditStatement} {P : Clai
   NetTiming.card_le_of_mem_faultySets _ _
     (Claims.Sampling.Count.countBound_miss_design hw hs hss strata hlen hst δ hδ hδd).le hF
 
+/-- **`WrongBoundsDrawn`**: `wrongBounds_of_countBound` at the strata draw `StrataDrawn` gives. -/
+theorem wrongBoundsDrawn : WrongBoundsDrawn := fun _ _ strata δ ⟨hw, _, hs, hss, hlen, hst⟩ hδ hδd =>
+  wrongBounds_of_countBound hw hs hss strata hlen hst δ hδ hδd
+
 theorem scanWindowsPlaced : ScanWindowsPlaced := by
   sorry
 
@@ -298,6 +303,22 @@ def oneInputPart : Claims.Sampling.Partition := ⟨[[[[0]]]]⟩
 def oneInputDeploy : Claims.Sampling.Deploy Bool ℕ Unit :=
   { Properties.NetworkScan.acceptAllDeploy with
     parse := fun _ => some oneInputStmt, partition := fun _ => some oneInputPart }
+
+/-- `oneInputStmt`'s one proof block is a possible incorrect set at `δ = 1/2`: its design draws nothing, so the block
+is accepted with probability `1`. -/
+theorem oneInput_faulty : ({0} : Finset ℕ) ∈ NetTiming.faultySets oneInputStmt.design oneInputPart (1 / 2) := by
+  have hPa : Claims.Sampling.Design.Pa oneInputStmt.design oneInputPart {0} = 1 := rfl
+  have hall : NetTiming.allSlots oneInputStmt.design oneInputPart = ∅ := rfl
+  classical
+  simp only [NetTiming.faultySets, Finset.mem_filter, Finset.mem_powerset]
+  refine ⟨fun v hv => ?_, ?_, ?_⟩
+  · rw [Finset.mem_singleton.1 hv, Finset.mem_range]
+    decide
+  · show (1 / 2 : ℝ) < Claims.Sampling.Design.Pa oneInputStmt.design oneInputPart {0}
+    rw [hPa]
+    norm_num
+  · rw [hall]
+    exact Finset.disjoint_empty_right _
 
 /-- **`ScanWindowsPlaced`'s conclusion is not trivial** (the two-lemma rule's `_nontrivial`): at a scan C-Flock
 canonicalizes as `null` and a deployment that parses every message to `oneInputStmt`, whose descriptor is that text,
@@ -320,23 +341,17 @@ theorem scanWindowsPlaced_nontrivial :
     simp only [NetTiming.faultySets, Finset.mem_filter, Finset.mem_powerset] at hF
     calc F.card ≤ (Finset.range oneInputPart.blocks.length).card := Finset.card_le_card hF.1
       _ = 1 := (Finset.card_range _).trans rfl
-  · have hPa : Claims.Sampling.Design.Pa oneInputStmt.design oneInputPart {0} = 1 := rfl
-    have hall : NetTiming.allSlots oneInputStmt.design oneInputPart = ∅ := rfl
-    have hin : ({0} : Finset ℕ) ∈ NetTiming.faultySets oneInputStmt.design oneInputPart (1 / 2) := by
-      classical
-      simp only [NetTiming.faultySets, Finset.mem_filter, Finset.mem_powerset]
-      refine ⟨fun v hv => ?_, ?_, ?_⟩
-      · rw [Finset.mem_singleton.1 hv, Finset.mem_range]
-        decide
-      · show (1 / 2 : ℝ) < Claims.Sampling.Design.Pa oneInputStmt.design oneInputPart {0}
-        rw [hPa]
-        norm_num
-      · rw [hall]
-        exact Finset.disjoint_empty_right _
-    have h1 : NetTiming.faultyBits oneInputStmt.prog oneInputPart {0} = 1 := by
+  · have h1 : NetTiming.faultyBits oneInputStmt.prog oneInputPart {0} = 1 := by
       simp only [NetTiming.faultyBits, Finset.sum_singleton]
       decide
-    have h0 : NetTiming.faultyBits oneInputStmt.prog oneInputPart {0} ≤ 0 := h.2 0 {0} hin
+    have h0 : NetTiming.faultyBits oneInputStmt.prog oneInputPart {0} ≤ 0 := h.2 0 {0} oneInput_faulty
     omega
+
+/-- **`WrongBoundsDrawn`'s conclusion is not trivial** (the two-lemma rule's `_nontrivial`): at `oneInputStmt`, whose
+design of no rule draws nothing, its one proof block is a possible incorrect set at `δ = 1/2` (`oneInput_faulty`), so
+`0` is no `WrongBounds` bound there. The conclusion fails where the draw is not the design's strata draw
+(`StrataDrawn`: a design of no rule is not well formed on a partition of one class). -/
+theorem wrongBoundsDrawn_nontrivial : ¬ WrongBounds oneInputStmt oneInputPart (1 / 2) 0 := fun h => by
+  simpa using h {0} oneInput_faulty
 
 end Properties.NetworkPeriod

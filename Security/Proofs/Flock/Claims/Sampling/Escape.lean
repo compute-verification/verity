@@ -213,17 +213,6 @@ theorem OneStage.Pa_bernoulli (ns : List ℕ) {num den : ℕ} [NeZero den] (h : 
     bernoulli_miss_eq h, card_finOf hB]
   rfl
 
-/-- The strata `(n_s, k_s)` a one-stage design draws uniform subsets of, all but Bernoulli's: the stratified and work
-laws' own, and one stratum of every slot for `all` (drawing all of it) and `subset`. -/
-def OneStage.strata (ns : List ℕ) : OneStage → Option (List (ℕ × ℕ))
-  | .all => some [(ns.sum, ns.sum)]
-  | .subset K => some [(ns.sum, K)]
-  | .bernoulli _ _ => none
-  | .stratified K => some (ns.map fun n => (n, max 1 ((2 * K * n + ns.sum) / (2 * ns.sum))))
-  | .work K w f =>
-    let W := ((ns.zip w).map fun p => p.1 * p.2).sum
-    some ((ns.zip (w.zip f)).map fun p => (p.1, min p.1 (max p.2.2 ((K * p.2.1 * p.1 + W - 1) / W))))
-
 /-- **Every design but Bernoulli's is a strata draw**: its `P_a` is `strataPa` of its strata. -/
 theorem OneStage.Pa_strata {ns : List ℕ} {d : OneStage} {ss : List (ℕ × ℕ)} (h : d.strata ns = some ss)
     {B : Finset ℕ} (hB : B ⊆ range ns.sum) : d.Pa ns B = strataPa ss 0 B := by

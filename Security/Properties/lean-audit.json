@@ -613,6 +613,9 @@
   "Properties.NetworkPeriod.scanWindowsPlaced": {
    "nontrivial": "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial"
   },
+  "Properties.NetworkPeriod.wrongBoundsDrawn": {
+   "nontrivial": "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial"
+  },
   "Properties.RemoteAudit.codeLayoutTiles": {
    "honest": ["Properties.RemoteAudit.codeLayoutTiles_honest"],
    "nontrivial": "Properties.RemoteAudit.codeLayoutTiles_nontrivial"
@@ -2995,6 +2998,12 @@
    ],
    "assumptions": [],
    "type_hash": "cd6d7ffbbbd9a636fb8133bf75bd00db1b34001e7d7a290948e1b6b2bc6b9ded"
+  },
+  "Properties.NetworkPeriod.wrongBoundsDrawn": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial": {
+   "owner": "@network-accounting"
   },
   "Properties.NetworkRecords.acceptMeans": {
    "owner": "@network-accounting",
@@ -5950,6 +5959,10 @@
    "Properties.NetworkPeriod.scanWindowsPlaced": {
     "function": ["NetworkCheck.Period.scanOf", "Flock.canon"],
     "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.wrongBoundsDrawn": {
+    "function": "SampledProofs.Bound.countBound",
+    "outcome": "none"
    },
    "Pouw.SecurityProofs.Lead.Commit.leafFirstBlock": {
     "function": "PouwCommit.Domain.mk?",
