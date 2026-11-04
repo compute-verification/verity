@@ -2,13 +2,15 @@ import Properties.NetworkScan
 import Proofs.Properties.NetworkScan.Fits
 import Proofs.Properties.NetworkScan.Causal
 import Proofs.Flock.SamplingScope
+import Proofs.NetworkCertifier.Wires
 
 /-!
 # An accepted scan's statements are in the sampled audit's scope, from its layout fitting
 
 `scanFits`: `NetTiming.BoundaryGates.Fits`' parts (1) and (2) from what `scanOf`'s acceptance gives the layout
-(`Fits.scanFits_egress_ingress`), and part (3), causality, from the walk lemma (`CausalProof.scanCausal`) at the
-Program `scanOf` checks topological (`Fits.Accepted.topo`).
+(`Fits.scanFits_egress_ingress`), part (3), causality, from the walk lemma (`CausalProof.scanCausal`) at the
+Program `scanOf` checks topological (`Fits.Accepted.topo`), and part (4), the wiring, since the scan's layout wires no
+gate (`NetTiming.wiresFit_none`).
 
 `scanScopeAcc_of_scanFits`, and so `scanScopeAcc`: the sampling half is the scope check's (`ScopeMatches`), and the
 layout half is `ScanFits` at the statement's descriptor, the scan's canonical bytes, flattened (`StmtFlattens`).
@@ -37,7 +39,8 @@ theorem scanScopeAcc_of_scanFits (h : ScanFits) : ScanScopeAcc := by
 theorem scanFits : ScanFits := by
   intro j program s sc c P C h hc hP hF
   obtain ⟨he, hi⟩ := Fits.scanFits_egress_ingress h hc hP hF
-  exact ⟨he, hi, CausalProof.scanCausal j program s sc c P C h hc hP (Fits.scanOf_accepted h hc hP).topo hF⟩
+  exact ⟨he, hi, CausalProof.scanCausal j program s sc c P C h hc hP (Fits.scanOf_accepted h hc hP).topo hF,
+    NetTiming.wiresFit_none rfl C s.window⟩
 
 /-- **An accepted scan's statements are in the sampled audit's scope.** -/
 theorem scanScopeAcc : ScanScopeAcc := scanScopeAcc_of_scanFits scanFits

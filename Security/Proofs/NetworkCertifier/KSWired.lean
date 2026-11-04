@@ -1,4 +1,5 @@
 import Definitions.NetworkCertifier.SampledAudit
+import Proofs.NetworkCertifier.Wires
 import Proofs.Flock.Claims.Sampling.KS
 
 /-!
@@ -73,11 +74,6 @@ theorem wireWrong_none (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : Audit
   rw [Finset.filter_eq_empty_iff]
   rintro v - ⟨u, -, g, -, hn⟩
   exact hn fun w' h => by simp at h
-
-/-- With no wires, the wiring fits every program. -/
-theorem wiresFit_none {L S : ℕ} {lay : BoundaryGates L S} (h : lay.wires = fun _ => none) (C : Prog) (k : ℕ) :
-    lay.WiresFit C k :=
-  ⟨fun g w hw => by simp [h] at hw, fun _ => 0, fun g w g' hw => by simp [h] at hw⟩
 
 /-- With no wires, the incorrect set is the faulty set. -/
 theorem incorrect_none (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (P : Partition) (w : Wit) :
