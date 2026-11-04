@@ -2560,17 +2560,18 @@
    "Claims.Recursion.DrawRecord.Full": "a V* session's draw record that takes every unit, a clause of the readable scope (`InScope`), no claim",
    "Claims.SamplingGeneric.Compiled.Scope": "a helper the claims read: the sampling scope on the statement's bytes, which `KS`, `KSCount` and `KSReg` read",
    "Claims.SamplingGeneric.Compiled.Sessions": "a helper the claims read: the compiler's contract, the code facts the compiler's statements take of a compiled verifier",
-   "Claims.SamplingGeneric.CompilerKS": "a closed statement, proved of every proof system and compiled verifier and stated by the guarantee `Claims.SamplingGeneric.compilerKS`, which `witnesses` holds to its honest and nontrivial lemmas",
-   "Claims.SamplingGeneric.CompilerKSCount": "a closed statement, proved of every proof system and compiled verifier and stated by the guarantee `Claims.SamplingGeneric.compilerKSCount`, which `witnesses` holds to its honest and nontrivial lemmas",
-   "Claims.SamplingGeneric.CompilerKSReg": "a closed statement, proved of every proof system and compiled verifier and stated by the guarantee `Claims.SamplingGeneric.compilerKSReg`, which `witnesses` holds to its honest and nontrivial lemmas",
+   "Claims.SamplingGeneric.CompilerKS": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerKS`)",
+   "Claims.SamplingGeneric.CompilerKSCount": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerKSCount`)",
+   "Claims.SamplingGeneric.CompilerKSReg": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerKSReg`)",
    "Claims.SamplingGeneric.FlockArgKS": "proved of every Flock record and decoder (`Claims.SamplingGeneric.flockArgKS`)",
    "Claims.SamplingGeneric.FlockKS": "proved of every Flock record, decoder and compiled verifier over it (`Claims.SamplingGeneric.flockKS`)",
    "Claims.SamplingGeneric.FlockKSReg": "proved of every Flock record, decoder and compiled verifier over it (`Claims.SamplingGeneric.flockKSReg`)",
    "Claims.SamplingGeneric.Compiled.OpenCallsLe": "a helper the claims read: the opening checks' count, which `CompilerBits` and `CompilerEfficient` read",
-   "Claims.SamplingGeneric.CompilerBits": "a closed statement, proved of every proof system and compiled verifier and stated by the guarantee `Claims.SamplingGeneric.compilerBits`, which `witnesses` holds to its honest and nontrivial lemmas",
-   "Claims.SamplingGeneric.CompilerEfficient": "a closed statement, proved of every proof system and compiled verifier and stated by the guarantee `Claims.SamplingGeneric.compilerEfficient`, which `witnesses` holds to its honest and nontrivial lemmas",
+   "Claims.SamplingGeneric.CompilerBits": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerBits`)",
+   "Claims.SamplingGeneric.CompilerEfficient": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerEfficient`)",
    "Claims.SamplingGeneric.ZkCompiled.ZkSessions": "a helper the claims read: the compiler's zero-knowledge contract, the code facts `CompilerZK` takes of a masked compiled verifier",
-   "Claims.SamplingGeneric.CompilerZK": "a closed statement, proved of every zero-knowledge proof system and masked compiled verifier and stated by the guarantee `Claims.SamplingGeneric.compilerZK`, which `witnesses` holds to its honest and nontrivial lemmas"
+   "Claims.ZKOutLeak": "a corollary of `ZKOut`, proved of every `ZKOut` (`Claims.zkOutLeak`), not of a deployment",
+   "Claims.SamplingGeneric.CompilerZK": "proved of every zero-knowledge proof system and masked compiled verifier (`Claims.SamplingGeneric.compilerZK`)"
   }
  },
  "witnesses": {
@@ -2620,30 +2621,6 @@
   "Pouw.Salt.keyed_leaf_binds": {
    "honest": ["Pouw.Salt.keyed_leaf_binds_honest"],
    "nontrivial": "Pouw.Salt.keyed_leaf_binds_nontrivial"
-  },
-  "Claims.SamplingGeneric.compilerKS": {
-   "honest": ["Claims.SamplingGeneric.compilerKS_honest"],
-   "nontrivial": "Claims.SamplingGeneric.compilerKS_nontrivial"
-  },
-  "Claims.SamplingGeneric.compilerKSReg": {
-   "honest": ["Claims.SamplingGeneric.compilerKS_honest"],
-   "nontrivial": "Claims.SamplingGeneric.compilerKSReg_nontrivial"
-  },
-  "Claims.SamplingGeneric.compilerKSCount": {
-   "honest": ["Claims.SamplingGeneric.compilerKS_honest"],
-   "nontrivial": "Claims.SamplingGeneric.compilerKSCount_nontrivial"
-  },
-  "Claims.SamplingGeneric.compilerBits": {
-   "honest": ["Claims.SamplingGeneric.compilerKS_honest", "Claims.SamplingGeneric.compilerBits_honest"],
-   "nontrivial": "Claims.SamplingGeneric.compilerBits_nontrivial"
-  },
-  "Claims.SamplingGeneric.compilerEfficient": {
-   "honest": ["Claims.SamplingGeneric.compilerKS_honest", "Claims.SamplingGeneric.compilerBits_honest"],
-   "nontrivial": "Claims.SamplingGeneric.compilerEfficient_nontrivial"
-  },
-  "Claims.SamplingGeneric.compilerZK": {
-   "honest": ["Claims.SamplingGeneric.compilerZK_honest"],
-   "nontrivial": "Claims.SamplingGeneric.compilerZK_nontrivial"
   }
  },
  "unwitnessed": {
@@ -12618,51 +12595,6 @@
    "owner": "@proofs"
   },
   "Claims.Witness.SamplingGeneric.echo_meets": {
-   "owner": "@proofs"
-  },
-  "Claims.SamplingGeneric.compilerKS": {
-   "owner": "@proofs"
-  },
-  "Claims.SamplingGeneric.compilerKSReg": {
-   "owner": "@proofs"
-  },
-  "Claims.SamplingGeneric.compilerKSCount": {
-   "owner": "@proofs"
-  },
-  "Claims.SamplingGeneric.compilerBits": {
-   "owner": "@proofs"
-  },
-  "Claims.SamplingGeneric.compilerEfficient": {
-   "owner": "@proofs"
-  },
-  "Claims.SamplingGeneric.compilerZK": {
-   "owner": "@proofs"
-  },
-  "Claims.SamplingGeneric.compilerKS_honest": {
-   "owner": "@proofs"
-  },
-  "Claims.SamplingGeneric.compilerBits_honest": {
-   "owner": "@proofs"
-  },
-  "Claims.SamplingGeneric.compilerZK_honest": {
-   "owner": "@proofs"
-  },
-  "Claims.SamplingGeneric.compilerKS_nontrivial": {
-   "owner": "@proofs"
-  },
-  "Claims.SamplingGeneric.compilerKSReg_nontrivial": {
-   "owner": "@proofs"
-  },
-  "Claims.SamplingGeneric.compilerKSCount_nontrivial": {
-   "owner": "@proofs"
-  },
-  "Claims.SamplingGeneric.compilerBits_nontrivial": {
-   "owner": "@proofs"
-  },
-  "Claims.SamplingGeneric.compilerEfficient_nontrivial": {
-   "owner": "@proofs"
-  },
-  "Claims.SamplingGeneric.compilerZK_nontrivial": {
    "owner": "@proofs"
   }
  },
