@@ -23,9 +23,11 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # compact finish's regression ties the gate's own compact runs, network_traces' `gate_compact`, whose command is the
 # auditor host's. The tests build and run the Lake packages whose lakefiles they list: `network-records`
 # (certifier.lean_audit) and `sampled-proofs-verifier` (one_stage.verifier). The endpoint's Commit windows are the vLLM
-# integration's window advice (`window_advice`), which the chain reads, padded as committed (`advice_windows.pad`).
+# integration's window advice (`window_advice`), which the chain reads, padded as committed (`advice_windows.pad`); the
+# advice itself is vLLM's advice v0 (`scheduler/advice.py`).
 inputs = ["benchmarks/network_traces", "benchmarks/network_e2e/encodings/derived.py",
           "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/pipeline/__init__.py",
+          "integrations/vllm/verity_vllm/scheduler/__init__.py", "integrations/vllm/verity_vllm/scheduler/advice.py",
           "integrations/vllm/verity_vllm/pipeline/window_advice.py", "integrations/vllm/verity_vllm/pipeline/advice_windows.py",
           "integrations/vllm/verity_vllm/config.py", "integrations/vllm/verity_vllm/settings.py",
           "integrations/vllm/verity_vllm/records/__init__.py", "integrations/vllm/verity_vllm/records/fields.py",
