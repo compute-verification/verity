@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.ListSize
 import Proofs.Flock.Soundness.OpeningPhase
 
 /-!
-# The zerocheck phase (PROTOCOL.md §9.2)
+# The zerocheck phase (`Flock.Piop`)
 
 For one codeword near the committed table whose witness makes the region claims true, the doomed
 start says the block R1CS or the pin fails. The zerocheck then ends with the `a`, `b`, `c` claims
@@ -245,7 +245,7 @@ theorem value_residualRounds_coin_le : ∀ (n : ℕ) (req : Fin n → F) (claim 
 /-- The skip nodes `S` (§9). -/
 noncomputable def nodeS (A : Arith F K) (hA : A.Correct) : Fin 64 → F := hA.nodes.choose
 
-/-- The output coset `Λ` (§9.2). -/
+/-- The output coset `Λ` (`Flock.Piop`). -/
 noncomputable def nodeΛ (A : Arith F K) (hA : A.Correct) : Fin 64 → F :=
   hA.nodes.choose_spec.choose
 
@@ -266,7 +266,7 @@ noncomputable def polyS (A : Arith F K) (hA : A.Correct) (vals : Fin 64 → F) :
 noncomputable def polyΛ (A : Arith F K) (hA : A.Correct) (vals : Fin 64 → F) : F[X] :=
   Lagrange.interpolate Finset.univ (nodeΛ A hA) vals
 
-/-- `Pcomb` (§9.2): the polynomial of degree below 128 that is 0 on `S` and `vals` on `Λ`. -/
+/-- `Pcomb` (`Flock.Piop`): the polynomial of degree below 128 that is 0 on `S` and `vals` on `Λ`. -/
 noncomputable def polyComb (A : Arith F K) (hA : A.Correct) (vals : Fin 64 → F) : F[X] :=
   Lagrange.interpolate (Finset.univ : Finset (Fin 64 ⊕ Fin 64))
     (Sum.elim (nodeS A hA) (nodeΛ A hA)) (Sum.elim (fun _ => 0) vals)
@@ -772,7 +772,7 @@ theorem prCoin_req_one_le (m : ℕ) :
         rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, mul_one_div]
 
 open Classical in
-/-- **The zerocheck phase** (§9.2), for a list `W` of at most `L` messages: from a doomed start over
+/-- **The zerocheck phase** (`Flock.Piop`), for a list `W` of at most `L` messages: from a doomed start over
 `W`, the zerocheck ends undoomed with probability at most
 `(m − 13)/|F| + L·(m − 13 + 127 + 2(m − 6) + (m − k_log))/|F|`. -/
 theorem zerocheck_phase_of_list (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)

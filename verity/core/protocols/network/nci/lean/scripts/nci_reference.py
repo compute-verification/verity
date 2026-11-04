@@ -1,4 +1,4 @@
-"""The NCI policy's check of a declared division, straight from the definitions: the reference `NciCheck.check` is held to.
+"""The inference-only policy's check of a declared division, straight from the definitions: the reference `NciCheck.check` is held to.
 
     check(instance) -> {"gates", "ius", "complies", "failure"} | {"error": code}
 
@@ -9,7 +9,7 @@ docstring gives: the declaration's circuit is the canonical layout of a descript
 gate `g` of width `Value<w>` bits, an input gate when its primitive is an input (`program.is_input`, with no operands),
 reading the gates its operands name; θ is a list of ids of input gates bound at registration (`program.is_registered`;
 one bound per run is refused, `theta-not-registered`); the division is one owner per gate, `"input"` or an IU index.
-A primitive is taken as the descriptor declares it, as C-Flock's decoder takes it, so no registry is needed.
+A primitive is taken as the descriptor declares it, as Flock's decoder takes it, so no registry is needed.
 
     check_desc(instance) -> the same, for `NciCheck.Desc`'s instance: θ and the owners per root node
 
@@ -243,22 +243,20 @@ def check_desc(inst) -> dict:
 
 # θ's provenance (`NciCheck.Baseline`): after the policy check, each θ entry against the trusted input
 
-REGISTRATION_V1 = "verity/registration/v1"
-REGISTRATION_V2 = "verity/registration/v2"
 TRUSTED_KEYS = {"log", "run", "params"}
 REGISTERED_KEYS = {"kind", "registration", "value", "root"}
 
 
 def record_digest(rec: dict) -> str:
-    """`registration.digest`: SHA-512 of the record's own format (v1 or v2), a NUL and its canonical JSON."""
-    import hashlib
-    tag = REGISTRATION_V2 if rec.get("format") == REGISTRATION_V2 else REGISTRATION_V1
-    return hashlib.sha512(tag.encode() + b"\0" + codec.canonical_json(rec)).hexdigest()
+    """The window record's digest, `registration.digest`: SHA-512 of the record's own format (v1 or v2), a NUL and its
+    canonical JSON."""
+    from verity.core.protocols.sampled_proofs.one_stage.registration import digest
+    return digest(rec)
 
 
 def lower(t) -> list[tuple[int, int]]:
     """§5.1: the input nodes a parameter of type `t` lowers to, (width, n) each (`SampledProofs.Registered.lower`)."""
-    from verity.ml.circuits.types import Array, Record, Tuple
+    from verity.ml.circuits.types import Array, RecordType, Tuple
     ws = t.width_set()
     if len(ws) == 1:
         return [(next(iter(ws)), t.leaves)]
@@ -266,7 +264,7 @@ def lower(t) -> list[tuple[int, int]]:
         return lower(t.elem) * t.n
     if isinstance(t, Tuple):
         return [x for f in t.fields for x in lower(f)]
-    if isinstance(t, Record):
+    if isinstance(t, RecordType):
         return [x for _, f in t.fields for x in lower(f)]
     return []
 

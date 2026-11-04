@@ -3,7 +3,7 @@ import Flock.With.Verify
 /-!
 # The honest prover's transcript
 
-The plain prover's side of the replay transcript (PROTOCOL.md §6). Its state is the verifier's own `Transcript`: what the
+The plain prover's side of the replay transcript (`Flock.Transcript`). Its state is the verifier's own `Transcript`: what the
 prover absorbs it absorbs with the verifier's actions (`label`, `absorbF`, `absorbSlice`, `absorbBytes`, `pow`, lifted by
 `liftTM`), so the pending bytes evolve as the verifier's do. Only the squeeze differs: where the verifier reads round `k`
 from the record, the prover sends the framed bytes as the round's message (`Asks.round`), takes the live coin it is
@@ -40,7 +40,7 @@ def fitBytes (n : Nat) (b : ByteArray) : ByteArray :=
 
 variable {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M]
 
-/-- **The prover's squeeze** (§6.2 from the prover's side): a squeeze of `n = 0` frames its header; otherwise the framed
+/-- **The prover's squeeze** (`Flock.Transcript` from the prover's side): a squeeze of `n = 0` frames its header; otherwise the framed
 bytes are sent as round `k`, the round's first `n` coins returned, `pending` cleared, and the round recorded. -/
 def squeezeP (io : Asks M) (kind : UInt8) (n : Nat) : TMW M (Array F128) := fun t =>
   let c := framed t kind n

@@ -6,7 +6,7 @@ float32 holding BF16), judged in the clear as the scheme (`verity.core.protocols
 * admission per row of X and of W (`row_passes`, D-NF), over the full k and over the split unit, and the rows with a
   non-finite word (D-SB rejects the transcript);
 * the split unit's screened blocks (`dead_blocks`, 9.5ρ), and the rows D-SS's retired one-in-64 cap would have rejected;
-* on --tiles 64 x 64 grid tiles of the split unit, drawn by a seeded RNG: the verifier's forming with D-SB
+* on --tiles 64 x 64 grid tiles of the split unit, sampled by a seeded RNG: the verifier's forming with D-SB
   (`PearlC4._side`) and the replayed debit of the tile's credited words against the cap (`tile_cap`), item by item.
 
 Shortcuts: the split is a stand-in, not a pinned rule (the ⌊k/100⌋ channels with the largest max|x| over the captured rows
@@ -182,7 +182,7 @@ def tile(job: Job, name: str, t: int) -> dict:
     if fast:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         import f1_fast
-    s = F.PearlC4("nvfp4", f1=f1_fast.row_units if fast else None)
+    s = F.PearlC4("nvfp4", f1=f1_fast.row_units if fast else None, hashing="h0")
     unit = Matmul(0, Shape(m, k_unit, n), 0)
     lab = lambda part: hashlib.sha256(f"pearl-c4-real/{name}/{t}/{part}".encode()).digest()  # noqa: E731
     noise = s.noise(Context(lab("salt"), unit, lab("root_a"), lab("root_b")))

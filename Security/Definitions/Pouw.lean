@@ -30,6 +30,7 @@ import Definitions.Pouw.Game.Deadline
 import Definitions.Pouw.Game.Defs
 import Definitions.Pouw.Game.Params
 import Definitions.Pouw.H1Zy
+import Definitions.Pouw.KeyedLeaf
 import Definitions.Pouw.M1
 import Definitions.Pouw.MerkleExtract
 import Definitions.Pouw.NCP.Defs
@@ -40,6 +41,7 @@ import Definitions.Pouw.NCP.Relation
 import Definitions.Pouw.NCP.RouteU
 import Definitions.Pouw.NCP.Witness
 import Definitions.Pouw.NCP.Word
+import Definitions.Pouw.OnsiteFreed
 import Definitions.Pouw.PearlC.Accum
 import Definitions.Pouw.PearlC.Completeness
 import Definitions.Pouw.PearlC.Deadline
@@ -99,6 +101,7 @@ import Definitions.Pouw.TileBound.AlignedExactDefs
 import Definitions.Pouw.TileBound.Defs
 import Definitions.Pouw.TileBound.Fp8Defs
 import Definitions.Pouw.Window
+import Definitions.Pouw.Witness
 import Definitions.Pouw.Witness.Copy
 import Definitions.Pouw.Witness.Model
 
@@ -162,6 +165,12 @@ dequant's and the chain's words as parameters. `Proofs.Pouw.H1Zy` proves it the 
 `Tile`: `PouwH1TileZy_v1{TILE}`'s `ok` (`h1zy._body`) over `PouwH1Tile_v1` or `PouwH1Tile_v3` on its primitives' word
 views: TILE's z (EXACT, or the one-stream's recombination, wrap correction and dither peel at its noise) and the
 record's cell check. `Proofs.Pouw.H1Zy` proves it the check `TileChecks` reads.
+
+## `KeyedLeaf`: the lead's keyed commitments
+
+A window's view, the key leaf and each instance's keyed digest (`Hash.Keyed`), and the two games its hiding reads, each
+with `A`'s distinguisher in it: hm96's hiding game and the keyed digest's game against a random function. Their
+statements are `Definitions.Pouw.Guarantees.KeyedLeaf`, proved in `Proofs.Pouw.Salt`.
 
 ## `PearlC`: Pearl-C's Π and the statements about it
 

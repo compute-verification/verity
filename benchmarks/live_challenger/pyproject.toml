@@ -6,9 +6,19 @@
 testpaths = ["tests"]
 
 [tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/test_auditor_certifier.py",
+    "tests/test_auditor_load.py",
+    "tests/test_auditor_rt4.py",
+    "tests/test_auditor_warden.py",
+    "tests/test_coin_link.py",
+    "tests/test_serve.py",
+]
 # The load's verbs read and write the store with `benchmarks/network_traces/load_relay.py`, which commits with the
 # certifier's transfer rows and PoUS's P2 scheme. The rehearsal unit's RuntimeMaxSec bounds the gate's --minutes.
 inputs = ["benchmarks/network_traces/load_relay.py", "verity/core/protocols/certifier", "verity/core/protocols/pous",
+          "verity/core/protocols/record.py",
           "tools/research/src/research/pods/nebius/challenger/vy-certifier@.service",
           "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/sampled_proofs/__init__.py",

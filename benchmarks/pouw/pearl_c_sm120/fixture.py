@@ -64,7 +64,7 @@ SALT_KEY = hashlib.sha256(b"verity-pouw/pearl-c-sm120-gpu-check/salt-key").diges
 
 
 def test_challenger() -> Challenger:
-    """The gate's test challenger: epoch 0's coins drawn from SHA-512 in counter mode over `COINS`, the same at every build,
+    """The gate's test challenger: epoch 0's coins flipped from SHA-512 in counter mode over `COINS`, the same at every build,
     so a replay starts the fixture's epoch again from B's root."""
     blocks, buf = (hashlib.sha512(COINS + i.to_bytes(8, "little")).digest() for i in itertools.count()), bytearray()
 
@@ -247,7 +247,7 @@ def peel_np(device: Device, c: np.ndarray, pa: np.ndarray, pb: np.ndarray) -> np
 
 def _side(job):
     device, rows, idx, side, seed_e, seed_b, k, e = job
-    s = C.PearlC(k_min=32, tile=(16, 16), forming="v1", device=DEVICES[device])
+    s = C.PearlC(k_min=32, tile=(16, 16), forming="v1", device=DEVICES[device], hashing="h0")
     return s._side(rows, idx, side, seed_e, seed_b, k, e)
 
 

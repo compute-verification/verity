@@ -34,8 +34,14 @@
    "imports": ["Lms.Verify"],
    "except": [],
    "why": "signing is code: Lean core and the verifier's definitions only, no Mathlib and nothing of Security"
+  },
+  "Lms.Hss": {
+   "imports": ["Lms.Verify"],
+   "except": [],
+   "why": "HSS's role digests and two-level verification are code: Lean core and the verifier's definitions only, no Mathlib and nothing of Security; the attest guarantees' statements read them, so they are spec"
   }
  },
+ "guarantees": {},
  "dependencies": {
   "toolchain": "e16fb11255b56483f31d77272ec1ba8ef5aac027c8f7eab845542983b9840af9"
  }

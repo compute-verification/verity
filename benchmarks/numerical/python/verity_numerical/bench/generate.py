@@ -7,7 +7,7 @@
 
 The key is ``verity.ml.randomness.derive(SOURCE, DOMAIN, {"subcircuit": id, "seed": seed})``; draw ``j`` is
 ``Subcircuit.draw(key, j)`` (``templates``: every port's words from the counter stream at ``(port, j)``), evaluated by
-``verity.ml.circuits.evaluation.evaluate_batch`` on the subcircuit's IR target.  A draw is admitted when its outputs are inside the
+``verity.ml.circuits.evaluation.evaluate_batch`` on the subcircuit's IR target.  A sample is admitted when its outputs are inside the
 subcircuit's domain (``Subcircuit.admitted``: every BF16 output word finite), and instance ``i`` is the ``i``-th admitted draw
 (``index.json`` ``sub.draw``), so a larger set extends a smaller one of the same key: the first ``n`` instances are the same.
 The set is written in the captured sets' layout (``input_sets``, schema ``input-set/v1``) under ``<out>/sets/<name>/``, its
@@ -125,7 +125,7 @@ def generate(sub: TM.Subcircuit, n: int, seed: int, out: str | Path, *, procs: i
     return summary
 
 
-#: Named suites: (template, parameters, n).  ``101``: row #101's captured subcircuits (Llama-3.2-1B), plus its GEMMs on Hopper wgmma.
+#: Named suites: (template, parameters, n).  ``101``: row 101's captured subcircuits (Llama-3.2-1B), plus its GEMMs on Hopper wgmma.
 SUITES: dict[str, list[tuple[str, dict[str, Any], int]]] = {
     "101": [("gemm-coordinate", {"K": 2048, "semantics": "sm80.mma.m16n8k16.bf16"}, 4096),
             ("gemm-coordinate", {"K": 8192, "semantics": "sm80.mma.m16n8k16.bf16"}, 4096),
@@ -137,14 +137,14 @@ SUITES: dict[str, list[tuple[str, dict[str, Any], int]]] = {
             ("rmsnorm-triton", {"N": 2048, "EPS": 1e-5}, 256),
             ("silu-mul", {"I": 8192}, 256),
             ("gumbel-top-p-token-select", {"V": 128256}, 32)],
-    #: The FP8 GEMM lines at vLLM's reduction lengths: the captured #101 sizes (6,272 at K = 2048, 1,920 at K = 8192) and the
+    #: The FP8 GEMM lines at vLLM's reduction lengths: the captured row 101 sizes (6,272 at K = 2048, 1,920 at K = 8192) and the
     #: largest batches the RTX 4090's 24 GB carried (16,384 and 8,192); each smaller set is the larger one's prefix.
     "fp8": [("gemm-coordinate", {"K": K, "semantics": sem}, n)
             for sem in ("sm89.mma.m16n8k32.e4m3", "sm90.wgmma.m64n8k32.e4m3")
             for K, sizes in ((2048, (6272, 16384)), (8192, (1920, 8192))) for n in sizes],
     #: NVFP4 on the RTX 5090 at K = 1536 for the two Flock cells (Fp4 <= 32,768 and ShaFp4 <= 16,384 VUs per proof); 8,192 is the prefix.
     "nvfp4": [("gemm-coordinate", {"K": 1536, "semantics": "sm120.mma.m16n8k64.e2m1.nvf4"}, n) for n in (8192, 16384)],
-    #: The registered compiler's dead-free Definitions a served window draws, at Llama-3.2-1B's shapes (N 2048, D 64) and
+    #: The registered compiler's dead-free Definitions a served window samples, at Llama-3.2-1B's shapes (N 2048, D 64) and
     #: Llama-3.1-8B's (N 4096, D 128): RMSNormTriton_v5, AttentionHead_v18, and TokenSelect_v4's two calls at Llama 3's vocabulary.
     "dead-free": [("rmsnorm-triton-v5", {"N": 2048, "EPS": 1e-5}, 256),
                   ("rmsnorm-triton-v5", {"N": 4096, "EPS": 1e-5}, 256),

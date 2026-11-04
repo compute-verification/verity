@@ -1,17 +1,17 @@
-"""Reference-mode kinds (lane NUMERIC, GUIDANCE §43.1/§43.2 (B)): registered functions whose semantics is the Verity
+"""Reference-mode kinds: registered functions whose semantics is the Verity
 evaluator's own fully specified arithmetic, for programs derived from ordinary `nn.Module` code.
 
     Gate -> exactly one Value<w>.  Every evaluator is total on encodings.  Nothing in `prims.py`/`b1.py` changes.
 
 **What a reference kind is.**  A composite whose body is explicit dataflow over IEEE primitives (`F32Add/Sub/Mul/Fma/
-Div/Sqrt`, the aten conversions `Bf16ToF32_v1` / `F32ToBf16Rn_v1`) plus the three correctly-rounded transcendental
-primitives below.  Every reduction is **sequential, ascending index, from +0** (stated per kind).  The body *is* the
+Div/Sqrt`, the aten conversions `Bf16ToF32_v1` / `F32ToBf16Rn_v1`) plus the correctly-rounded transcendental primitives
+below.  Every reduction is **sequential, ascending index, from +0** (stated per kind).  The body *is* the
 definition; torch CPU is only the conformance oracle over a tested domain (`tests/program/test_ref_prims.py`,
 records under `docs/data/ref-prims/`): torch's reductions are vectorised/blocked (`RowwiseMoments`, oneDNN/MKL GEMM,
 `vec::reduce_all`) and its transcendentals are not correctly rounded (MKL VML for `torch.exp/erf/tanh`, ATen vectorised
 polynomials/Sleef inside fused kernels, libm on strided tensors — three last-bit-different implementations in one build),
 so bit agreement with torch is *measured*, never assumed, and a reference program's correspondence is to the reference
-execution only — never to a CUDA/vLLM run (brief).
+execution only — never to a CUDA/vLLM run.
 
 **Rounding points.**  `DT ∈ {"bf16", "f32"}` is the source model's tensor dtype (a static of every kind).  Internal
 arithmetic is f32; a `DT` rounding (`F32ToBf16Rn_v1`, RNE, NaN -> 0x7FC0 — torch's `.to(bfloat16)`) is applied exactly
@@ -20,31 +20,32 @@ where the torch op materialises a `DT` tensor.  With `DT="f32"` the widen/narrow
 **New primitives** (all `Name_v1`, total, NaN outputs canonical `0x7FC00000`):
   `F32Sub`      RN(a - b)                       `F32Sqrt`    RN(sqrt x) (IEEE; negative -> NaN, -0 -> -0)
   `F32MaxRef`   NaN-propagating max             `F32GtStrict` a > b on f32 values (NaN false) -> bit
-  `F32ExpRn`, `F32ErfRn`, `F32TanhRn`  RN32 of the value computed by the stated `decimal` algorithm at 100 digits
-      (`_DEC_PREC`); this coincides with correct rounding unless the exact value lies within 10^-90 relative of a
+  `F32ExpRn`, `F32LogRn`, `F32ErfRn`, `F32TanhRn`  RN32 of the value computed by the stated `decimal` algorithm at 100
+      digits (`_DEC_PREC`); this coincides with correct rounding unless the exact value lies within 10^-90 relative of a
       rounding boundary — no binary32 argument is known to (Lefèvre/Muller worst cases for exp are ~2^-60), and the
-      evaluator, not the mathematical function, is the registered definition.
+      evaluator, not the mathematical function, is the registered definition.  `F32LogRn`'s is MPFR's correctly rounded
+      log on all 2^32 words (`benchmarks/f32_exhaustive/run.py log`, which takes `exp` too).
   `GatherF32x{V}` the f32 twin of `prims.gather_bf16` (out-of-range token -> 0x7FC00000, documented extension).
-  `I64ToI32`    range-checked int64 -> int32 (DERIVE R4; out of range -> 0x80000000 sentinel, torch wraps).
+  `I64ToI32`    range-checked int64 -> int32 (out of range -> 0x80000000 sentinel, torch wraps).
 
 **Composites** (statics in capitals; see each docstring for the exact order):
   `DotRef{K}`, `LinearRef{K,N,DT,BIAS}`, `RMSNormRef{N,EPS,DT}`, `LayerNormRef{N,EPS,DT}`, `GeluRefElem{APPROX}` /
   `GeluRef{N,DT,APPROX}`, `SiluRefElem` / `SiluRef{N,DT}`, `SoftmaxRef{N,DT}`, `RoPERef{D,DT}` / `RoPEHeadsRef{NHEADS,D,DT}`,
   `RoPEInterleavedRef{D,DT}` (GPT-J pairing), `EagerAttentionHeadRef{T,D,DT,SCALE_OP}` / `EagerAttentionRef{T,NH,KVH,D,DT,SCALE_OP}`,
   `EmbeddingRef{V,H,DT}`, `AddRef{N,DT}`, `MulRef{N,DT}`, `ReluRef{N,DT}`, `ArgmaxStepF32` / `ArgmaxRef{V,DT}`.
-  Profile-mode additions at DERIVE's request, NOT in the reference digest: `RoPEHeadGptJ{D}` / `RoPEGptJ{NHEADS,D}` (vLLM
+  Profile-mode additions, NOT in the reference digest: `RoPEHeadGptJ{D}` / `RoPEGptJ{NHEADS,D}` (vLLM
   `rotary_embedding(is_neox=False)`, proof-supported through the `RopeOut`/`RopeOutAdd` twins; superseded by `boolean_rope`'s v2).
 
 **Loader note.**  Decoding a descriptor that names a reference kind requires `import verity.ml.definitions.registry.ref_prims` first
 (as for `hopper`/`fp8`).  `GatherF32x{V}_v1` is an on-demand family like `GatherBf16x{V}`; the codec's lazy-family table
 (`codec._LAZY_PRIMITIVE_FAMILIES`, a frozen file) is *extended by rebinding* from this module at import — additive, no
-edit to `codec.py` (stated per the lane brief).
+edit to `codec.py`.
 
-**Proof support:** none tonight (no Rust twin for any kind here; `zk/sp1/common/src/gateset.rs` untouched).
+**Proof support:** none (no kind here has a Rust twin in `zk/sp1/common/src/gateset.rs`).
 
 **Vocabulary pin:** `REF_VOCAB_VERSION` and `ref_vocab_digest()` (SHA-256 over the version string, this module's source,
 every reference kind's `(id, body/evaluator source hash)` and the shared `prims.py` primitives' `(id, evaluator source
-hash)`), for the importer's provenance record (brief boundary 5: "pin the primitive vocabulary and numerical dependencies").
+hash)`), for the importer's provenance record, which pins the primitive vocabulary and numerical dependencies.
 """
 
 from __future__ import annotations
@@ -62,6 +63,7 @@ from verity.ml.circuits.codec import register_lazy_family
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, composite, primitive
 from verity.ml.circuits.refs import Coll as _Coll, Explicit, concat, strided_view, tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
+from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.prims import BF16, BIT, F32, I32, F32_NAN, bits_of, f32_is_nan, f32_of
@@ -141,6 +143,20 @@ def f32_exp_rn_bits(u: int) -> int:
     if v < -105:
         return 0
     return _f32_of_dec(_dec_exp(_dec_of_frac(v)))
+
+
+@lru_cache(maxsize=1 << 22)
+def f32_log_rn_bits(u: int) -> int:
+    """`F32LogRn_v1`: RN32(ln(x)). NaN and x < 0 (-inf included) -> 0x7FC00000; ±0 -> -inf; +inf -> +inf; 1 -> +0;
+    otherwise the 100-digit `decimal` ln rounded RN-even, a normal word (2^-24 < |ln x| < 104)."""
+    c, v = _frac_of_f32(u)
+    if c == 2 or c == -1 or (c == 0 and v < 0):
+        return F32_NAN
+    if c == 1:
+        return 0x7F800000
+    if v == 0:
+        return 0xFF800000
+    return _f32_of_dec(_CTX.ln(_dec_of_frac(v)))
 
 
 @lru_cache(maxsize=1 << 22)
@@ -229,6 +245,12 @@ def F32ExpRn(x: int) -> int:
     return f32_exp_rn_bits(x & 0xFFFFFFFF)
 
 
+@primitive("F32LogRn", 1, [("x", F32)], F32, conformance=_REF_CONF)
+def F32LogRn(x: int) -> int:
+    """Correctly-rounded natural log: see `f32_log_rn_bits`."""
+    return f32_log_rn_bits(x & 0xFFFFFFFF)
+
+
 @primitive("F32ErfRn", 1, [("x", F32)], F32, conformance=_REF_CONF)
 def F32ErfRn(x: int) -> int:
     """Correctly-rounded erf: see `f32_erf_rn_bits`."""
@@ -267,7 +289,7 @@ def gather_f32(vocab: int) -> PrimitiveDefinition:
 
 register_lazy_family(r"^GatherF32x(\d+)_v1$", lambda m: gather_f32(int(m[1])))   # decodable where the program was not built
 
-REF_PRIMITIVES = [F32Sub, F32Sqrt, F32MaxRef, F32GtStrict, F32ExpRn, F32ErfRn, F32TanhRn]
+REF_PRIMITIVES = [F32Sub, F32Sqrt, F32MaxRef, F32GtStrict, F32ExpRn, F32LogRn, F32ErfRn, F32TanhRn]
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -635,7 +657,7 @@ def MulRef(B, S, a, b):
 
 @composite("ReluRef", 1, ["N", "DT"], lambda S: ((("x", Array(S.N, _dt(S.DT))),), Array(S.N, _dt(S.DT))), conformance=_REF_CONF)
 def ReluRef(B, S, x):
-    """`aten.relu` (DERIVE R1): `y_i = F32MaxRef(x_i, +0)` per element: x > 0 -> x; x < 0 -> +0.0; ±0 -> the same ±0 (torch
+    """`aten.relu`: `y_i = F32MaxRef(x_i, +0)` per element: x > 0 -> x; x < 0 -> +0.0; ±0 -> the same ±0 (torch
     2.4.1 CPU returns -0.0 for -0.0 on both its vectorised and scalar `clamp_min` paths — measured, `ReluRef_v1-*.json`);
     NaN -> NaN (0x7FC00000, DT NaN word after narrowing).  Widen/narrow are exact, so the kind is exact in either DT."""
     zero = B.call(b1.f32c(0.0))
@@ -649,7 +671,7 @@ def ReluRef(B, S, x):
                       Array(S.D, _dt(S.DT))),
            conformance=_REF_CONF)
 def RoPEInterleavedRef(B, S, x, cos, sin):
-    """HF GPT-J `apply_rotary_pos_emb` (DERIVE R3; interleaved pairing, `rotate_every_two`): with `cos`/`sin` the D/2-long
+    """HF GPT-J `apply_rotary_pos_emb` (interleaved pairing, `rotate_every_two`): with `cos`/`sin` the D/2-long
     table rows (HF `repeat_interleave(2)`s them; the kind indexes them directly), R = D/2, for i < R:
         `a_e = DT(RN(x_{2i} * cos_i))`,  `a_o = DT(RN(x_{2i+1} * cos_i))`,
         `p   = DT(RN(x_{2i+1} * sin_i))`, `q   = DT(RN(x_{2i} * sin_i))`,
@@ -672,12 +694,12 @@ def RoPEInterleavedRef(B, S, x, cos, sin):
     return _narrow(B, _Coll(Array(D, F32), inter), DT)
 
 
-# --- profile-mode addition requested by DERIVE (R3): vLLM's GPT-J rotary kernel, built only from exact-model-tested
+# --- profile-mode addition: vLLM's GPT-J rotary kernel, built only from exact-model-tested
 #     primitives that have Rust twins (RRopeOut/RRopeOutAdd) — so it is proof-supported, unlike the reference kinds. ---
 
 _GPTJ_CONF = ("superseded by RoPEHeadGptJ_v2 / RoPEGptJ_v2: a pairing permutation of RoPEHead_v1, the same RopeOut_v1/"
               "RopeOutAdd_v1 gates with (2i, 2i+1) in place of (i, i+D/2); vLLM d9105ea80's `rotary_embedding(is_neox=False)` "
-              "(bf16, run r20261004-060203-ba52) differs in 513 words of 17 of 60 difftest cases, every one an odd output "
+              f"(bf16, {EVIDENCE['cc12_difftest']['run_record']}) differs in 513 words of 17 of 60 difftest cases, every one an odd output "
               "whose products overflow f32: the kernel rounds y*cos and fuses x*sin, where NeoX's instantiation rounds x*sin")
 
 
@@ -710,7 +732,7 @@ I64 = Value(64)
 
 @primitive("I64ToI32", 1, [("t", I64)], I32, conformance=_REF_CONF)
 def I64ToI32(t: int) -> int:
-    """Range-checked narrowing of a torch int64 index to I32 (DERIVE R4): v = the two's-complement value of the 64-bit word;
+    """Range-checked narrowing of a torch int64 index to I32: v = the two's-complement value of the 64-bit word;
     `-2^31 <= v < 2^31` -> v as a 32-bit two's-complement word (identical to torch `.to(torch.int32)` there); otherwise
     0x80000000 (INT32_MIN — a negative token, which every Gather kind maps to its NaN word: total and visible).  torch's
     conversion WRAPS modulo 2^32 outside the range instead; that divergence is deliberate and recorded."""
@@ -746,7 +768,7 @@ REF_PRIMITIVES.append(I64ToI32)
 REF_COMPOSITES = [DotRef, LinearRef, RMSNormRef, LayerNormRef, GeluRefElem, GeluRef, SiluRefElem, SiluRef, SoftmaxRef,
                   RoPERef, RoPEHeadsRef, EagerAttentionHeadRef, EagerAttentionRef, EmbeddingRef, AddRef, MulRef, ReluRef,
                   RoPEInterleavedRef, ArgmaxStepF32, ArgmaxRef]
-#: profile-mode kinds registered here at DERIVE's request (vLLM GPT-J rotary); NOT part of the reference vocabulary digest —
+#: profile-mode kinds registered here (vLLM GPT-J rotary); NOT part of the reference vocabulary digest —
 #: they belong to the profile vocabulary (`b1.py` conventions, bf16 cache row, one rounding) and are proof-supported.
 PROFILE_ADDITIONS = [RoPEHeadGptJ, RoPEGptJ]
 
@@ -792,14 +814,15 @@ def ref_vocab_manifest() -> dict:
 
 
 def ref_vocab_digest() -> str:
-    """SHA-256 over the canonical JSON of `ref_vocab_manifest()` — what DERIVE records in a derived program's provenance."""
+    """SHA-256 over the canonical JSON of `ref_vocab_manifest()` — what a derived program's provenance records."""
     import json
     m = ref_vocab_manifest()
     return hashlib.sha256(json.dumps(m, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 __all__ = ["REF_VOCAB_VERSION", "DTYPES", "REF_PRIMITIVES", "REF_COMPOSITES", "SHARED_PRIMITIVES", "ref_vocab_manifest",
-           "ref_vocab_digest", "gather_f32", "F32Sub", "F32Sqrt", "F32MaxRef", "F32GtStrict", "F32ExpRn", "F32ErfRn", "F32TanhRn",
+           "ref_vocab_digest", "gather_f32", "F32Sub", "F32Sqrt", "F32MaxRef", "F32GtStrict", "F32ExpRn", "F32LogRn", "F32ErfRn",
+           "F32TanhRn",
            "DotRef", "LinearRef", "RMSNormRef", "LayerNormRef", "GeluRefElem", "GeluRef", "SiluRefElem", "SiluRef", "SoftmaxRef",
            "RoPERef", "RoPEHeadsRef", "EagerAttentionHeadRef", "EagerAttentionRef", "EmbeddingRef", "AddRef", "MulRef",
-           "ArgmaxStepF32", "ArgmaxRef", "f32_exp_rn_bits", "f32_erf_rn_bits", "f32_tanh_rn_bits"]
+           "ArgmaxStepF32", "ArgmaxRef", "f32_exp_rn_bits", "f32_log_rn_bits", "f32_erf_rn_bits", "f32_tanh_rn_bits"]

@@ -14,8 +14,8 @@ draw is not taken: the verifier of record's checks establish it at a session tha
 (`Proofs.Flock.Recursive.Loads`). The proof's sessions (`ZkOuter`) carry that typing in their fields, so this file
 builds them from the raw ones and carries the prover's strategy across:
 
-* `ZkOuterR.Typable`: the inputs pass the statement check with the verifier's registered reads (`ScopeZR`), their
-  circuit is V*'s, their registered population has V*'s units, and table 0 sets up at some draw. `ZkOuterR.build` is
+* `ZkOuterR.Typable`: the inputs pass the statement check with the verifier's registered reads (`ScopeZR`) at
+  untemplated tags, their circuit is V*'s, their registered population has V*'s units, and table 0 sets up at some draw. `ZkOuterR.build` is
   the typed session then, with the same game up to the casts along its table count (`build_sigma`).
 * `ZkOuter.refuse`: the session with one own port, named outside the circuit (`freshOwn`). It accepts no transcript
   (`not_acceptsZKR_fresh`): the setup's first table has the circuit (`setup_zero_c`), `Registered.check` runs
@@ -133,10 +133,11 @@ abbrev game : Game (Reg' × Finset (Fin nv) × Exec.Transcript) := auditLive Lv 
 def ofBase (τ₀ : Strategy (baseGame Lv Reg' dg J mPts N)) : Strategy (x.game dg N) :=
   ⟨τ₀.1, fun ω => Strategy.map (fun t => (τ₀.1, Lv.draw ω, t)) _ (Strategy.map (x.wr (Lv.draw ω) τ₀.1) _ (τ₀.2 ω))⟩
 
-/-- **The session types**: its inputs pass the statement check with the verifier's registered reads (`ScopeZR`), their
-circuit is `c`, their registered population has `nv` units, and table 0 sets up at some draw. -/
+/-- **The session types**: its inputs pass the statement check with the verifier's registered reads (`ScopeZR`) at
+untemplated tags, their circuit is `c`, their registered population has `nv` units, and table 0 sets up at some
+draw. -/
 def Typable : Prop :=
-  ScopeZR x.I ∧ circZ x.I = c ∧ (pubZ x.I).n = nv ∧
+  ScopeZR x.I ∧ x.I.tags.isTmpl = false ∧ circZ x.I = c ∧ (pubZ x.I).n = nv ∧
     ∃ (S₀ : Finset (Fin nv)) (d₀ : Lean.Json), Nonempty (DrawSetupZHJ (inputsJ x.I 0) mPts S₀ d₀)
 
 variable {x}
@@ -145,21 +146,21 @@ theorem Typable.ht (hx : x.Typable) : x.I.tags.typed = false :=
   hx.1.typed
 
 theorem Typable.hc (hx : x.Typable) : HmOut.parse (zkTags x.I) x.I.circuitFile x.I.tables = .ok c := by
-  rw [hx.1.parseH x.hTags.1, hx.2.1]
+  rw [hx.1.parseHF x.hTags.1 hx.2.1, hx.2.2.1]
 
 theorem Typable.hpub (hx : x.Typable) : HmOut.loadPublic (zkTags x.I) c x.I.publicFile = .ok (pubZ x.I) := by
   have h := hx.1.loadH x.hTags.1
-  rwa [hx.2.1] at h
+  rwa [hx.2.2.1] at h
 
 /-- A draw table 0 of the typed session sets up at. -/
-noncomputable def Typable.S₀ (hx : x.Typable) : Finset (Fin nv) := hx.2.2.2.choose
+noncomputable def Typable.S₀ (hx : x.Typable) : Finset (Fin nv) := hx.2.2.2.2.choose
 
 /-- Table 0's draw file at `Typable.S₀`. -/
-noncomputable def Typable.d₀ (hx : x.Typable) : Lean.Json := hx.2.2.2.choose_spec.choose
+noncomputable def Typable.d₀ (hx : x.Typable) : Lean.Json := hx.2.2.2.2.choose_spec.choose
 
 /-- The typed session's setup of table 0 at `Typable.S₀`. -/
 noncomputable def Typable.y₀ (hx : x.Typable) : DrawSetupZHJ (inputsJ x.I 0) mPts hx.S₀ hx.d₀ :=
-  Classical.choice hx.2.2.2.choose_spec.choose_spec
+  Classical.choice hx.2.2.2.2.choose_spec.choose_spec
 
 /-- Every table count of the typed session's plan is `J`. -/
 theorem Typable.hlen (hx : x.Typable) (S : Finset (Fin nv)) (R : Reg') :
@@ -223,16 +224,31 @@ theorem setup_zero_c {I : Inputs} (ht : I.tags.typed = false) (hh : I.tags.hidde
   have ht' : (zkTags I).typed = false := (zkTags_typed I).trans ht
   rcases HiddenExec.setupTables_okH hh' hs with ⟨-, st, hst, -, rfl⟩ | ⟨hlt, hsz, hj, -, -⟩
   · refine ⟨by simp, ?_⟩
-    have h1 : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok st.c := (Hidden.setupHidden_spec' hst).parse
+    have h1 : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok st.c := (Hidden.setupHidden_spec' hst).parseF (HmOut.parse_isTmpl hc)
     rw [hc] at h1
     exact (Except.ok.inj h1).symm
   · have h0 : 0 < sts.size := by omega
     obtain ⟨d, hd⟩ := hj 0 h0
     refine ⟨h0, ?_⟩
     have h1 : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok sts[0].c :=
-      (ZkHidden.parseH_identity ht' _ _ _).symm.trans (Hidden.setupHidden_spec' hd).parse
+      (ZkHidden.parseH_identity ht' _ _ _).symm.trans ((Hidden.setupHidden_spec' hd).parseF
+        (HmOut.parse_isTmpl ((ZkHidden.parseH_identity ht' _ _ _).trans hc)))
     rw [hc] at h1
     exact (Except.ok.inj h1).symm
+
+/-- **A hidden-output setup sets up at least one table**, whatever the circuit file. -/
+theorem setup_size_pos {I : Inputs} (hh : I.tags.hiddenOutputs = true) {r : String} {spec : Flock.SessionSpec}
+    {sts : Array Flock.Stmt} (hs : setupOf (zkInputs I) r = .ok (spec, sts)) : 0 < sts.size := by
+  have hh' : (zkTags I).hiddenOutputs = true := (zkTags_hiddenOutputs I).trans hh
+  rcases HiddenExec.setupTables_okH hh' hs with ⟨-, st, hst, -, rfl⟩ | ⟨hlt, hsz, -, -, -⟩
+  · simp
+  · omega
+
+/-- **Tags named as `Tags.circuit` are not a templated statement's** (`Tags.isTmpl` reads the name alone). -/
+theorem isTmpl_of_name {t : Flock.Tags} (h : t.name = Flock.Tags.circuit.name) : t.isTmpl = false := by
+  unfold Flock.Tags.isTmpl
+  rw [h]
+  rfl
 
 /-- **A session whose own list is `freshOwn c` accepts no transcript**: where the setup succeeds, its first table's
 circuit is `c` (`setup_zero_c`), and the registered check's `checkPort` finds no port of `c` named as the own port

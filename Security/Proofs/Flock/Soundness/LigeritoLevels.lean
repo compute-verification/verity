@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.LigeritoMCA
 
 /-!
-# Ligerito's levels meet the Johnson-range MCA bound (PROTOCOL.md §13, §15)
+# Ligerito's levels meet the Johnson-range MCA bound (`Flock.Ligerito`, `Flock.Schedule`)
 
 Each level's folds happen over `K`, in the level's Reed–Solomon code embedded from `F`
 (`codeK`: `2^logCols` coefficients on the `2^logLen` points `ω_q`). For every level of a

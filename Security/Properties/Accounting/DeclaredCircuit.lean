@@ -46,7 +46,7 @@ told only through `steer`, so the union in `G`'s query term runs over both summa
 Frozen (no-function, hash): `G`'s game, its premises but `SteeredLayout`, `ScheduleLayoutGap` and
 `RemoteAudit.Schedule.check`'s acceptance at the committed cap at every pass as the event's first conjunct. -/
 def ScheduledRequirement : Prop :=
-  ∀ (n P N ρ S q G Xr Lr qr τ k a L E es B εnum εden T M : ℕ) (ε δ : ℝ≥0∞) {ιW : Type} (Wc : Gates.Dag ιW)
+  ∀ (n P N ρ S q G Xr Lr qr τ k a L E es B εnum εden T M : ℕ) (ε δ : ℝ≥0∞) {ιW : Type} (Wc : Gates.IntDag ιW)
     (caps : Gates.Caps) (Aud : Gates.Audit) {Ω Ca Ch : Type} [Fintype Ω] [Fintype Ca]
     (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin 128 → RateSketch.Sector))
     (choose : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch)
@@ -59,7 +59,7 @@ def ScheduledRequirement : Prop :=
     (appended sent : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Array (ℕ × ℕ))
     {V K Dv : Type} [DecidableEq V] [DecidableEq K] (W : Requirement.Wiring V)
     (p : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Placement Dv V)
-    (ℓ : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Layout V)
+    (ℓ : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Store.Placement V)
     (grp : RateSketch.StackedCoins Ω Ca T n P N ρ G → V → K)
     (bind : RateSketch.StackedCoins Ω Ca T n P N ρ G → Fin n → Fin P → ℕ)
     (σ : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Store)

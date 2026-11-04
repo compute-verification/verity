@@ -21,7 +21,7 @@ the one-table plan of the session's inputs (`planAtH`), with:
 
 So the hypotheses left are those of the plain headline: `hscope`, `hdec`, A3, `cr/sha-512`, `ecr/sha-512` and the
 numeric conditions. flock-verify refuses a statement failing `hscope` or the statement's other form hypotheses
-(PROTOCOL.md §16.15), and `FailClosed.flock_headline_exec_hidden` takes none of them.
+(`Flock.ProvedScope`), and `FailClosed.flock_headline_exec_hidden` takes none of them.
 -/
 
 namespace FlockSoundness.Discharge.HiddenExec

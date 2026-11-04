@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.7: the partition invariant on one circuit (`verity.ir.partition.validate_unit_cut`): every gate, input
+The partition invariant on one circuit (`verity.ir.partition.validate_unit_cut`): every gate, input
 gates included, is certified by exactly one unit, cross-unit reads go only through committed values, and the committed
 set is the boundary set. The verifier checks it itself, on its own copy of the cut.
 -/
@@ -109,7 +109,7 @@ def validate (c : Cut) : List String := Id.run do
     com.toList.any (fun g => !boundary.contains g || !(g < n))]
   return (codes.zip problem).filterMap fun (k, b) => if b then some k else none
 
-/-! ### One Call's cut against its graph (`verity.ir.cut.check_cut`, PR #111) -/
+/-! ### One Call's cut against its graph (`verity.ir.cut.check_cut`) -/
 
 /-- A Call's computing graph (`verity.ir.cut.CallGraph`): its computing gates' declared widths, the reads between them, the
 returned gates, the Call's parameters (`inputs` of them) and the gates that read them, the parameters returned as they are,

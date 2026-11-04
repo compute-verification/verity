@@ -10,17 +10,18 @@ import dataclasses
 import pytest
 
 from test_ledger import DOWN_NS, PASS_NS, UP_NS, paced
-from test_remote_bandwidth import A, N, Clock, Entropy, challenger, finish, params, store  # noqa: F401
+from remote_bandwidth_fakes import Clock, Entropy
+from test_remote_bandwidth import A, N, challenger, finish, params, store  # noqa: F401
 from verity.core.protocols.remote_bandwidth import audit, coins
-from verity.core.protocols.remote_bandwidth.audit import Pace, Session, SessionError
+from verity.core.protocols.remote_bandwidth.audit import AuditRun, Pace, SessionError
 
 
-def logged(s: Session) -> tuple[coins.LiveCommitment, dict[str, tuple[bytes, ...]]]:
+def logged(s: AuditRun) -> tuple[coins.LiveCommitment, dict[str, tuple[bytes, ...]]]:
     """The session's coin commitment and the roots its in-process challenger opened each coin after, by family."""
     return s.coins.commitment, {label: s.coins.afters(label) for label, _ in s.coins.commitment.families}
 
 
-def honest(store, k: int, f: int, windows: int = 5) -> tuple[Session, audit.Record]:
+def honest(store, k: int, f: int, windows: int = 5) -> tuple[AuditRun, audit.Record]:
     s, prover, passes, clock, _ = paced(store, params(windows=windows, samples=N, window_ns=1, pace=Pace(k, 1000, f)))
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     return s, s.record()
@@ -59,10 +60,10 @@ def test_an_honest_session_at_one_in_flight_is_accepted_each_coin_after_the_root
 def test_the_boundary_is_due_at_the_windows_kth_root_at_one_in_flight(store) -> None:
     clock = Clock()
     p = params(windows=3, window_ns=5, pace=Pace(2, 1000, 1))
-    s = Session(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
+    s = AuditRun(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
     coin = s.start()
     assert s.next_boundary_ns() == 2 * A, "not due before its k roots: at the latest k allowances after its coin"
-    prover = audit.Prover(store, None, s.commitment, entropy=Entropy(b"receipt salts"))
+    prover = audit.Prover(store, None, entropy=Entropy(b"receipt salts"))
     clock.now = 100
     ps = prover.run(coin, 0, store.registration.digest, None)
     assert s.receive(0, 0, ps.root, step=0) is None
@@ -78,9 +79,9 @@ def two_roots_across_a_boundary(store, f: int, *, back: bool = False):
     clock read before the first root arrived."""
     clock = Clock()
     p = params(windows=3, window_ns=5, pace=Pace(2, 1000, f))
-    s = Session(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
+    s = AuditRun(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
     coin = s.start()
-    prover = audit.Prover(store, None, s.commitment, entropy=Entropy(b"receipt salts"))
+    prover = audit.Prover(store, None, entropy=Entropy(b"receipt salts"))
     clock.now = 100
     ps = prover.run(coin, 0, store.registration.digest, None)
     assert s.receive(0, 0, ps.root, step=0) is None

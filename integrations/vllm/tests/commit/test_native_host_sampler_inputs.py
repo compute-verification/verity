@@ -1,5 +1,5 @@
 """`served_record.SamplerInputsSource` on a `NativeHostCommitter`: each sampled step binds the seed and the position each
-row's draw read (Model Runner V2's ``seeds[idx_mapping]`` and ``positions[logits_indices]``) and keeps the step's rows,
+row's sample read (Model Runner V2's ``seeds[idx_mapping]`` and ``positions[logits_indices]``) and keeps the step's rows,
 widens the arena's step bound by them, and refuses by name a step whose input batch it can't read or whose rows don't
 match the samples."""
 from __future__ import annotations

@@ -1,5 +1,5 @@
 """grind_price: the template's θ meets `TileLuck`'s condition and is tight, κ must exceed the live rate, the premium is
-ln(T/δ)/θ, H1's per-head floor is ATTN-NOISE's, and the shapes are eps_budget's."""
+ln(T/δ)/θ, H1's per-head floor is attn_noise's, and the shapes are eps_budget's."""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ def test_y_star_grows_with_kappa_and_with_the_keyed_dither():
 
 def test_the_premium_is_ln_t_over_delta_over_theta_and_infinite_without_slack():
     assert G.ln_t_over_delta(128) == pytest.approx(168 * math.log(2))
-    s = G.Site("linears", "x", 32 * C * 4096 * 10, 32, C, 4096)
+    s = G.SeedGroup("linears", "x", 32 * C * 4096 * 10, 32, C, 4096)
     assert G.premium(s, 128, 4.0) == pytest.approx(G.ln_t_over_delta(128) * s.r / G.y_star(C, 4.0))
     assert G.premium(s, 128, G.KAPPA_LIVE) == math.inf
     assert G.levers()["cover_at_template"]["linear K=4096, κ=4, y*"]["pi_star_tiles"] == pytest.approx(
