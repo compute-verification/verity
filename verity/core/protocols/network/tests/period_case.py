@@ -1594,7 +1594,7 @@ UNIT_BYTES = (1, 2, 5, 40)
 SLOT_KEY = "SlotEntry_v1{KO=2,IDB=17,NP=4,STOP=[]}"
 SLOT_BINDING = {"KO": 2, "IDB": 17, "NP": 4, "STOP": ()}
 #: `SLOT_KEY` as Verity's catalog binds it (`interface.resolve`), a circuit record's template
-SLOT_ENTRY = bind(io_shell.SlotEntry, **SLOT_BINDING)
+SLOT_TEMPLATE = bind(io_shell.SlotEntry, **SLOT_BINDING)
 #: The select entries' template of the cases' audits that select a slot's token: `SelectEntry_v1` at its smallest
 #: binding, a pinned Definition (`SELECT_ENTRY_PINS`' first) ending in the `SlotEntry_v1` that writes the read bit,
 #: whose population of one member's descriptor is `fixtures/select_entry.json`.
@@ -1683,14 +1683,14 @@ ENTRY_STATE = "state"
 @lru_cache(maxsize=None)
 def anchor_audit(n: int, lanes: int, every: int, T: int, idle: bool = False) -> tuple[str, str, str]:
     """A rows-form tied audit's Program, circuit record and wire order, each canonical JSON: `n` units of `RECORD_GEMM`
-    and the slot entries' template of a slot each (`SLOT_ENTRY`, lanes · nb members, nb = T / every), the record
+    and the slot entries' template of a slot each (`SLOT_TEMPLATE`, lanes · nb members, nb = T / every), the record
     registering the scan's state (`SCAN_STATE`, T rows of its `ENTRY_STATE` port's W words) and reading it at the slots'
     anchors, unit l · nb + b from row b · every (radix [lanes, nb], step [0, every · W]; `idle`: a digit of radix 1
     between), the Program its population program and the order no segment and no wire."""
-    nb, W = T // every, dict(IF.layout(SLOT_ENTRY).rows)[ENTRY_STATE]
+    nb, W = T // every, dict(IF.layout(SLOT_TEMPLATE).rows)[ENTRY_STATE]
     radix, step = ((lanes, 1, nb), (0, 1, every * W)) if idle else ((lanes, nb), (0, every * W))
     reg = IF.Registered({SCAN_STATE: T * W}, reads=(IF.Read(SLOT_KEY, ENTRY_STATE, SCAN_STATE, 0, radix, 0, step),))
-    c = IF.Circuit("period-anchored", ((RECORD_GEMM, n), (SLOT_ENTRY, lanes * nb)), registered=reg)
+    c = IF.Circuit("period-anchored", ((RECORD_GEMM, n), (SLOT_TEMPLATE, lanes * nb)), registered=reg)
     order = {"format": "verity/wire-order/v1", "segments": [], "wires": []}
     return (D.canonical(codec.encode_program(c.program()[0])), D.canonical(IF.descriptor_record(c, 1)),
             D.canonical(order))
