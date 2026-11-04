@@ -13,8 +13,9 @@ public import Proofs.Flock.Claims.Sampling.KS
 With `KS_of_sessionKS` it gives `KSOf` (`ksOf`).
 
 * `innerBody`, `outerBody`, `outerList`, `found`: **the extractor's parts**, and what it keeps (`E_eval`); the kept
-  openings pass their checks, with the checks' calls among the extractor's own (`passes_found`, `ownLog_E`), and the
-  revealed openings that pass, of a sampled block's extracted witness, are kept (`unitExt_mem`, `mem_found`).
+  openings pass their checks, with the checks' calls among the extractor's own (`passes_runExt`, `passes_found`,
+  `ownLog_E`), and the revealed openings that pass, of the extracted witness of the block at a slot of the sample, at
+  the slot's coins, are kept (`unitExt_mem`, `mem_runExt`, `mem_found`).
 * `split`: **the deterministic half**. At an accepted run whose extraction fails, `Fails` holds or the extractor's own
   calls collide. Two kept openings under one roots at one position that disagree are a collision of the calls that
   checked them (`CommitmentScheme.Binds`), so without one the kept openings agree and assemble a witness; its faulty
@@ -39,13 +40,11 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg 
 
 /-! ## The extractor's parts -/
 
-/-- The extractor at one accepted inner run `li`, under the outer run `j`: every sampled proof block's extraction. -/
+/-- The extractor at one accepted inner run `li`, under the outer run `j`: every slot's extraction (`runExt`). -/
 noncomputable def innerBody (L : Compiled Coin A) (x : Msg) (s : AuditStatement) (c : L.ECoins x) (j : Fin (L.k x))
     (li : Fin (L.k x) × ((Fin (L.V.k x) → Coin) × Seen)) :
     RP (Fin (L.V.k x) → Coin) (List (List Msg × Opening Bool)) :=
-  flatMapRP (fun u : ℕ =>
-      if hu : u < L.nPU x then L.unitExt x s u li.2.1 li.2.2 (c.2.2 (j, li.1, ⟨u, hu⟩)) else .ret [])
-    (L.checked x li.2.1)
+  L.runExt x s li.2.1 li.2.2 fun p => c.2.2 (j, li.1, p)
 
 /-- The extractor at one accepted outer run `jo`: the inner wait on the second stage, and `innerBody` at each. -/
 noncomputable def outerBody (L : Compiled Coin A) (x : Msg) (s : AuditStatement) (c : L.ECoins x)
@@ -125,14 +124,22 @@ theorem passes_unitExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' :
     · exact Sampling.Passes.ret_nil H run' L.commit
 
 omit [Fintype Coin] [Nonempty Coin] in
+/-- What a run's extractions keep passes its opening check, with the check's calls their own. -/
+theorem passes_runExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
+    (s : AuditStatement) (r : Fin (L.V.k x) → Coin) (v : Seen) (c : L.SlotEC x) :
+    Sampling.Passes H run' L.commit (L.runExt x s r v c) := by
+  unfold runExt
+  exact Sampling.Passes.flatMapRP fun _ _ => by
+    split
+    · exact L.passes_unitExt H x run' s _ _ _ _
+    · exact Sampling.Passes.ret_nil H run' L.commit
+
+omit [Fintype Coin] [Nonempty Coin] in
 theorem passes_found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
     (s : AuditStatement) (c : L.ECoins x) (Z : List (Fin (L.k x) × ((Fin (L.V.k x) → Coin) × Seen))) :
     Sampling.Passes H run' L.commit (flatMapRP (L.outerBody x s c) Z) :=
-  Sampling.Passes.flatMapRP fun _ _ => Sampling.Passes.bind _ fun _ => Sampling.Passes.flatMapRP fun _ _ =>
-    Sampling.Passes.flatMapRP fun u _ => by
-      split
-      · exact L.passes_unitExt H x run' s _ _ _ _
-      · exact Sampling.Passes.ret_nil H run' L.commit
+  Sampling.Passes.flatMapRP fun _ _ => Sampling.Passes.bind _ fun _ => Sampling.Passes.flatMapRP fun li _ =>
+    L.passes_runExt H x run' s li.2.1 li.2.2 _
 
 omit [Fintype Coin] [Nonempty Coin] in
 /-- A revealed opening that passes, of the witness a block's session's extraction returns, is among the block's
@@ -149,6 +156,20 @@ theorem unitExt_mem (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (F
   rw [dite_eq_left h, (RP.eval_bind _ _ _ _).1, hw]
   exact mem_checkRevealed H run' L.commit hq hok
 
+omit [Fintype Coin] [Nonempty Coin] in
+/-- The extraction of the proof block at a slot of the sample, at the slot's coins, is among the run's extractions'. -/
+theorem mem_runExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
+    (s : AuditStatement) (r : Fin (L.V.k x) → Coin) (v : Seen) (c : L.SlotEC x) {i : Fin (L.nPU x)} {u : ℕ}
+    (hi : (L.checked x r)[i.val]? = some u) (hlt : u < L.nPU x) {q : List Msg × Opening Bool}
+    (hq : q ∈ ((L.unitExt x s u r v (c i ⟨u, hlt⟩)).eval H run').1) :
+    q ∈ ((L.runExt x s r v c).eval H run').1 := by
+  unfold runExt
+  rw [flatMapRP_eval]
+  refine List.mem_flatMap.2 ⟨(i, u), mem_zip_finRange hi, ?_⟩
+  dsimp only
+  rw [dite_eq_left hlt]
+  exact hq
+
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem mem_outerList (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
     (c : L.ECoins x) {j : Fin (L.k x)} {r : Fin (L.V.k x) → Coin}
@@ -159,16 +180,17 @@ theorem mem_outerList (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : 
   exact mem_zip_finRange (getElem?_map_pair run' hj)
 
 omit [Fintype Coin] [Nonempty Coin] in
-/-- **A block's extraction at a kept inner run, under a kept outer run, is kept**, when the inner run samples it. -/
+/-- **A block's extraction at a slot of a kept inner run, under a kept outer run, is kept**, at the slot's coins. -/
 theorem mem_found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
     (run' : (Fin (L.V.k x) → Coin) → Trace) (c : L.ECoins x)
     {Z : List (Fin (L.k x) × ((Fin (L.V.k x) → Coin) × Seen))} {j : Fin (L.k x)} {r : Fin (L.V.k x) → Coin}
     (hj : (j, (r, (run' r).seen)) ∈ Z) {l : Fin (L.k x)} {d : Fin (L.V.k x) → Coin}
     (hl : (accList (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.k x)
       ((List.finRange (L.cap x)).map (c.2.1 j)))[l.val]? = some d)
-    {v : ℕ} (hv : v ∈ L.checked x (forkOn (L.stage2 x) r d)) (hvlt : v < L.nPU x) {q : List Msg × Opening Bool}
+    {i : Fin (L.nPU x)} {v : ℕ} (hv : (L.checked x (forkOn (L.stage2 x) r d))[i.val]? = some v) (hvlt : v < L.nPU x)
+    {q : List Msg × Opening Bool}
     (hq : q ∈ ((L.unitExt x s v (forkOn (L.stage2 x) r d) (run' (forkOn (L.stage2 x) r d)).seen
-      (c.2.2 (j, l, ⟨v, hvlt⟩))).eval H run').1) :
+      (c.2.2 (j, l, i) ⟨v, hvlt⟩)).eval H run').1) :
     q ∈ L.found H x s run' c Z := by
   unfold found
   rw [flatMapRP_eval]
@@ -183,12 +205,7 @@ theorem mem_found (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditSt
   refine List.mem_flatMap.2 ⟨(l, (forkOn (L.stage2 x) r d, (run' (forkOn (L.stage2 x) r d)).seen)),
     mem_zip_finRange ?_, ?_⟩
   · rw [List.getElem?_map, hl]; rfl
-  · unfold innerBody
-    rw [flatMapRP_eval]
-    refine List.mem_flatMap.2 ⟨v, hv, ?_⟩
-    dsimp only
-    rw [dite_eq_left hvlt]
-    exact hq
+  · exact L.mem_runExt H x run' s _ _ (fun p => c.2.2 (j, l, p)) hv hvlt hq
 
 /-! ## The split -/
 
@@ -235,14 +252,15 @@ theorem split {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H)
   · exact Or.inl hshort2
   refine Or.inr ⟨accList_length_eq hshort2, fun l d hl v hv hgood => ?_⟩
   obtain ⟨b, hb, hnc⟩ := faulty_wrong hv (ιOf fd (L.iroots x (run' r).seen v))
-  obtain ⟨hvc, hvlt, xS, vS, hsess, hsh, wS, hwS, hRw⟩ := hgood
+  obtain ⟨i, hvlt, hvi, xS, vS, hsess, hsh, wS, hwS, hRw⟩ := hgood
+  have hvc := List.mem_of_getElem? hvi
   have hacc' : (run' (forkOn (L.stage2 x) r d)).out = .acc := by
     have h := acc_of_accList hl
     exact h
   obtain ⟨b', hb', hcor⟩ :=
     hS.opens x s Pt Ω P ω (forkOn (L.stage2 x) r d) v xS vS wS hs hPt hin hacc' hvc hsess hRw
   have hcorr := hcor (w.val H L.commit s) (ιOf fd (L.iroots x (run' r).seen v)) fun q hq hok => by
-    have hqf : q ∈ fd := L.mem_found H x s run' c hjZ hl hvc hvlt
+    have hqf : q ∈ fd := L.mem_found H x s run' c hjZ hl hvi hvlt
       (L.unitExt_mem H x run' s v _ _ hsess hsh hwS hq hok)
     refine ⟨fun hr => ?_, fun hi => ?_⟩
     · rw [hr] at hok

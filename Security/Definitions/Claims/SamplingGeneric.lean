@@ -16,8 +16,9 @@ form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme 
 `ExtractOwnLe`, `leafLayer`).
 
 1. **The proof system for proof blocks** (`Arg`): a public-coin verifier over byte strings, its statements' public shape
-   (`Sh`, `shape`) and the rounds a shape fixes, its witnesses and relation, and its extractor: coins per shape (`EC`),
-   a rerun program at the judged run's coins (`ext`), and its errors per shape (`κ`, `γ`). It is knowledge sound in
+   (`Sh`, `shape`: what its rounds and its extractor's coins read) and the rounds a shape fixes, its witnesses and
+   relation, and its extractor: coins per shape (`EC`), a rerun program at the judged run's coins (`ext`), and its
+   errors per statement (`κ`, `γ`). It is knowledge sound in
    `Claims.KS`'s form (`Arg.KS`); its cost is reruns (`Arg.RerunsLe`, `Arg.RerunsExpLe`) and its own SHA-512 calls
    (`Arg.OwnLe`), both counted by `RP.eval`. Its zero knowledge is the claims core's per public outcome (`ZkArg.ZK`,
    `Claims.ZKOut`), on its sessions' rounds (`kz`) and one tape type: at each outcome (each verdict, where a session
@@ -25,25 +26,29 @@ form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme 
    plus an error that reads the statement, the witness, the verifier and the outcome.
 2. **The compiled sampled verifier** (`Compiled`, `Sampling.Deploy` without Flock): its verifier, parser, scope check,
    partition and commitment; the second stage (`stage2`: the sample and the sessions); the sampled proof blocks
-   (`checked`); each one's public shape (`sh`), its session's rounds (`rounds`, whose order embedding `emb` of `A`'s
+   (`checked`); each one's public shape (`sh`) and the bounds on its session's errors (`κb`, `γb`), its session's
+   rounds (`rounds`, whose order embedding `emb` of `A`'s
    rounds is defined, from which `coinsOf` reads a session's coins and `place` replaces them), and its session
    (`session`: its statement and view); the roots a run shows for a proof block's interior values (`iroots`); and what a session's
    witness reveals (`reveal`), each opening checked at most `openCalls` SHA-512 calls.
 3. **The extractor** (`Compiled.E`): `Sampling.E` with each sampled proof block's extraction `Arg`'s extractor at its
    session (`Compiled.unitExt`), each rerun the judged run's coins with the session's rounds replaced (`place`), seen as
-   the session's view, then what its witness reveals that passes its opening check. Every SHA-512 call of the
+   the session's view, then what its witness reveals that passes its opening check. Its coins are per slot of the
+   sample (`SlotEC`), as `Sampling.E`'s are, so a proof block at two slots is extracted twice, on independent coins
+   (`runExt`, a run's extractions). Every SHA-512 call of the
    extraction is an `RP.hash` (the openings it checks, `Arg`'s own) or a rerun's, so `Bext`'s cost is counted, and the
    extractor is fixed before `H`.
 4. **The errors**: `κ_δ = c²·(δ + κ_s) + (1 + c)·(2k/K + e^{−k/8})`, `Sampling.κ` with Flock's `κ_F` replaced by the
-   largest of `Arg`'s `κ` at the proof blocks' shapes (`κs`); `γ = c⁴·k(x)·γ_s`, with `γ_s` the largest of
-   `Arg`'s `γ` per round at the proof blocks' shapes (a session's fork finder is the compiled verifier's `B` at a round
-   guess among `k(x)`); `ε_bind = Pr[B_ext]`.
+   largest of the proof blocks' bounds on `Arg`'s `κ` (`κs`, at `κb`); `γ = c⁴·k(x)·γ_s`, with `γ_s` the largest of
+   their bounds on `Arg`'s `γ` per round (`γb` over the shape's rounds; a session's fork finder is the compiled
+   verifier's `B` at a round guess among `k(x)`); `ε_bind = Pr[B_ext]`.
 5. **The contract** (`Compiled.Sessions`): the code facts the compiler theorems read, the generic forms of those
-   `Claims.Sampling`'s proofs take at Flock: the second stage draws the sample by the design (`draws`); the verifier
-   refuses what is out of scope (`refuses`); the interior roots precede the second stage (`interior`); the sample
-   precedes its sessions (`fixed`); each sampled proof block's session, at the block's shape, decides the run and is a
-   run of a prover against `Arg`'s verifier on the session's coins (`runs`); and a witness in `Arg`'s relation reveals
-   openings under which its proof block is correct (`opens`).
+   `Claims.Sampling`'s proofs take at Flock: the second stage draws the sample by the design (`draws`), in at most
+   `n_PU` slots (`slots`); the verifier refuses what is out of scope (`refuses`); the interior roots precede the second
+   stage (`interior`); the sample precedes its sessions (`fixed`); each sampled proof block's session, at the block's
+   shape and within its error bounds, decides the run and is a run of a prover against `Arg`'s verifier on the
+   session's coins (`runs`); and a witness in `Arg`'s relation reveals openings under which its proof block is correct
+   (`opens`).
 6. **The claims** of a compiled verifier (`Compiled.KS`, `Compiled.KSCount`, `Compiled.Bits`, `Compiled.Efficient`);
    its committed form (`Compiled.KSReg`): the incorrect set of the committed trace (`Freg` at `regVal`, the plurality of
    what the prover's runs' extractions open at its tape, a definition nobody runs, fixed before the window's coins), not
@@ -58,7 +63,8 @@ form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme 
    session witnesses are in `A`'s relation, and the reference prover sends the composed prover's messages.
 7. **The compiler's statements** (`CompilerKS`, `CompilerKSReg`, `CompilerKSCount`, `CompilerBits`,
    `CompilerEfficient`, `CompilerZK`): each claim of every compiled verifier that meets the contract, from `Arg`'s.
-8. **Flock** (`Arg.ofFlock`): Flock's `E^rep` at a decoder, its shape the numbers its errors read; `FlockArgKS` says
+8. **Flock** (`Arg.ofFlock`): Flock's `E^rep` at a decoder, its shape the numbers its coins read, its errors Flock's;
+   `FlockArgKS` says
    that `Flock.KS` is its `Arg.KS`, so `FlockKS` and `FlockKSReg` are `CompilerKS` and `CompilerKSReg` at Flock. They
    read `Flock.KS` and the contract as hypotheses, at a record, not at a deployed verifier's code.
 
@@ -83,10 +89,11 @@ def maxBelowN (n : ℕ) (f : ℕ → ℕ) : ℕ := ((List.range n).map f).foldr 
 
 /-! ## 1. The proof system for proof blocks -/
 
-/-- **A proof system for proof blocks**, as the sampled audit reads it: its statements' public shapes (`Sh`, `shape`),
-its verifier and the rounds a shape fixes, its witnesses and relation, and its extractor: its coins (`EC`, a finite type
-per shape), its rerun program at the judged run's coins (`ext`), and its errors per shape (`κ`, `γ`). A field, so the
-extractor is fixed before the hash: it calls `H` only through `RP.hash`. -/
+/-- **A proof system for proof blocks**, as the sampled audit reads it: its statements' public shapes (`Sh`, `shape`:
+what its rounds and its extractor's coins read), its verifier and the rounds a shape fixes, its witnesses and relation,
+and its extractor: its coins (`EC`, a finite type per shape), its rerun program at the judged run's coins (`ext`), and
+its errors per statement (`κ`, `γ`). A field, so the extractor is fixed before the hash: it calls `H` only through
+`RP.hash`. -/
 structure Arg (Coin : Type) where
   Sh : Type
   shape : Msg → Sh
@@ -98,8 +105,8 @@ structure Arg (Coin : Type) where
   [fin : ∀ s, Fintype (EC s)]
   [ne : ∀ s, Nonempty (EC s)]
   ext : (x : Msg) → (Fin (V.k x) → Coin) → EC (shape x) → RP (Fin (V.k x) → Coin) (Option W)
-  κ : Sh → ℝ
-  γ : Sh → ℝ
+  κ : Msg → ℝ
+  γ : Msg → ℝ
 
 attribute [instance] Arg.fin Arg.ne
 
@@ -112,9 +119,8 @@ def E (A : Arg Coin) : Extractor Coin A.W A.V where
   C x := A.EC (A.shape x)
   ext := A.ext
 
-/-- **The proof system is knowledge sound** at its errors per shape: `Claims.KS` of its extractor. -/
-def KS (H : Msg → Msg) (A : Arg Coin) : Prop :=
-  Claims.KS H A.V A.R A.E (fun x => A.κ (A.shape x)) (fun x => A.γ (A.shape x))
+/-- **The proof system is knowledge sound** at its errors: `Claims.KS` of its extractor. -/
+def KS (H : Msg → Msg) (A : Arg Coin) : Prop := Claims.KS H A.V A.R A.E A.κ A.γ
 
 /-- Its rounds are its shape's. -/
 def WF (A : Arg Coin) : Prop := ∀ x, A.V.k x = A.rounds (A.shape x)
@@ -165,7 +171,8 @@ def ZkArg.ZK (H : Msg → Msg) {Coin : Type} (A : ZkArg Coin) : Prop :=
 /-- **A compiled sampled verifier over the proof system `A`** (`Sampling.Deploy` with its Flock parts replaced by `A`):
 the verifier, its parser, scope check and partition, the trace's commitment; the second stage (`stage2`: the sample
 and the sessions, after the registration); the slots of the proof blocks a run samples (`checked`); each one's public
-shape (`sh x u`, fixed by the statement); its session's rounds (`rounds`) and the session as a run shows it
+shape (`sh x u`, fixed by the statement) and the bounds on its session's errors (`κb x u`, `γb x u`: on `A`'s `κ` and
+`γ` at the session's statement); its session's rounds (`rounds`) and the session as a run shows it
 (`session`: its statement in `A` and its view); the roots a run shows for a proof block's interior values (`iroots`); what a session's witness reveals
 (`reveal`: committed values, each with the roots it is committed under); the SHA-512 calls of checking what one
 session's witness reveals (`openCalls`); and the reference prover on its tapes with its completeness error. -/
@@ -178,6 +185,8 @@ structure Compiled (Coin : Type) (A : Arg Coin) where
   stage2 : (x : Msg) → Finset (Fin (V.k x))
   checked : (x : Msg) → (Fin (V.k x) → Coin) → List ℕ
   sh : Msg → ℕ → A.Sh
+  κb : Msg → ℕ → ℝ
+  γb : Msg → ℕ → ℝ
   rounds : (x : Msg) → ℕ → Finset (Fin (V.k x))
   session : Msg → ℕ → Seen → Option (Msg × Seen)
   iroots : Msg → Seen → ℕ → List Msg
@@ -249,19 +258,33 @@ noncomputable def unitExt (L : Compiled Coin A) (x : Msg) (s : AuditStatement) (
         | some w => checkRevealed L.commit (L.reveal s u v w)
     else .ret []
 
+/-- The extractor's coins at one slot of the sample: `A`'s extractor's at each proof block's shape, of which the slot
+reads its block's. -/
+abbrev BlockEC (L : Compiled Coin A) (x : Msg) := (u : Fin (L.nPU x)) → A.EC (L.sh x u)
+
+/-- The extractor's coins at one accepted inner run: one `BlockEC` per slot of the sample (`Sampling.E`'s per-slot
+coins), so a proof block at two slots is extracted twice, on independent coins. -/
+abbrev SlotEC (L : Compiled Coin A) (x : Msg) := Fin (L.nPU x) → L.BlockEC x
+
 /-- The extractor's coins: the outer wait's `K` coin vectors; for each of its `k` accepted runs, the inner wait's `K`
-(used fresh on the second stage); and for each accepted inner run and each proof block, `A`'s extractor's coins at the
-block's shape. -/
+(used fresh on the second stage); and for each accepted inner run and each slot of the sample, `A`'s extractor's coins
+at each proof block's shape. -/
 abbrev ECoins (L : Compiled Coin A) (x : Msg) :=
   (Fin (L.cap x) → Fin (L.V.k x) → Coin) × (Fin (L.k x) → Fin (L.cap x) → Fin (L.V.k x) → Coin) ×
-    ((j : Fin (L.k x) × Fin (L.k x) × Fin (L.nPU x)) → A.EC (L.sh x j.2.2))
+    (Fin (L.k x) × Fin (L.k x) × Fin (L.nPU x) → L.BlockEC x)
 
-/-- The extractor's coins at one accepted inner run: `A`'s extractor's at each proof block's shape. -/
-abbrev BlockEC (L : Compiled Coin A) (x : Msg) := (u : Fin (L.nPU x)) → A.EC (L.sh x u)
+/-- **A run's extractions**, at the accepted run `(r, v)` and the extractor's coins `c` there: slot by slot of the sample
+(the first `n_PU`, every slot by `Sessions.slots`), the proof block's at the slot's coins (`unitExt`), with what each
+finds that passes its opening check. -/
+noncomputable def runExt (L : Compiled Coin A) (x : Msg) (s : AuditStatement) (r : Fin (L.V.k x) → Coin) (v : Seen)
+    (c : L.SlotEC x) : RP (Fin (L.V.k x) → Coin) (List (List Msg × Opening Bool)) :=
+  flatMapRP (fun iu : Fin (L.nPU x) × ℕ =>
+      if hu : iu.2 < L.nPU x then L.unitExt x s iu.2 r v (c iu.1 ⟨iu.2, hu⟩) else .ret [])
+    ((List.finRange (L.nPU x)).zip (L.checked x r))
 
 /-- **The sampling extractor** (`Sampling.E`, generic): replay the judged run; if it accepted, rerun on fresh coins
 until `k` accepted runs are in hand; at each, rerun fresh on the second stage until `k` accepted runs are in hand (each
-wait giving up after `K`); at each of those, extract every sampled proof block (`unitExt`); and assemble. -/
+wait giving up after `K`); at each of those, extract every slot of the sample (`runExt`); and assemble. -/
 noncomputable def E (L : Compiled Coin A) : Extractor Coin Sampling.Wit L.V where
   C x := ECoins L x
   ext x r₀ c := .rerun r₀ fun v₀ =>
@@ -274,23 +297,21 @@ noncomputable def E (L : Compiled Coin A) : Extractor Coin Sampling.Wit L.V wher
               (waitAccC (L.k x) ((List.finRange (L.cap x)).map fun l => forkOn (L.stage2 x) jo.2.1 (c.2.1 jo.1 l))
                   []).bind fun inner =>
                 flatMapRP (fun li : Fin (L.k x) × ((Fin (L.V.k x) → Coin) × Seen) =>
-                    flatMapRP (fun u : ℕ =>
-                        if hu : u < L.nPU x then unitExt L x s u li.2.1 li.2.2 (c.2.2 (jo.1, li.1, ⟨u, hu⟩))
-                        else .ret [])
-                      (L.checked x li.2.1))
+                    L.runExt x s li.2.1 li.2.2 fun p => c.2.2 (jo.1, li.1, p))
                   ((List.finRange (L.k x)).zip inner))
             ((List.finRange (L.k x)).zip outer)).bind fun found => .ret (some (assemble s found))
       else .ret none
 
 /-! ## 4. The errors -/
 
-/-- **The sessions' knowledge error**: the largest of `A`'s `κ` at the proof blocks' shapes (Flock's `κ_F` in
+/-- **The sessions' knowledge error**: the largest of the proof blocks' bounds on `A`'s `κ` (`κb`; Flock's `κ_F` in
 `Sampling.κ`). -/
-noncomputable def κs (L : Compiled Coin A) (x : Msg) : ℝ := maxBelow (L.nPU x) fun u => A.κ (L.sh x u)
+noncomputable def κs (L : Compiled Coin A) (x : Msg) : ℝ := maxBelow (L.nPU x) (L.κb x)
 
-/-- **The sessions' `γ` per round**: the largest of `A`'s `γ` over its rounds at the proof blocks' shapes. -/
+/-- **The sessions' `γ` per round**: the largest of the proof blocks' bounds on `A`'s `γ` (`γb`) over the rounds of
+their shapes. -/
 noncomputable def γs (L : Compiled Coin A) (x : Msg) : ℝ :=
-  maxBelow (L.nPU x) fun u => A.γ (L.sh x u) / A.rounds (L.sh x u)
+  maxBelow (L.nPU x) fun u => L.γb x u / A.rounds (L.sh x u)
 
 /-- **The knowledge error at `δ`**: `δ + ε_ks`, with `ε_ks = (c² − 1)·δ + c²·κ_s + (1 + c)·(2k/K + e^{−k/8})`
 (`Sampling.κ` at `κ_s`). -/
@@ -332,13 +353,16 @@ def Scope (L : Compiled Coin A) (x : Msg) : Prop :=
 
 * `draws` (`DrawLaw`): on a statement in scope, for each set `B` of proof blocks, a weight of the coins bounds, at each,
   the probability over fresh second-stage coins that the sample misses `B`, and averages at most `P_a(B)`.
+* `slots` (the first `n_PU` slots `Claims.Sampling`'s hypotheses read): the sample has at most `n_PU` slots, so the
+  extractor reads every one.
 * `refuses` (`Refuses`): an accepted run's statement is in scope.
 * `interior` (`InteriorFixed`): the roots a run shows for a proof block's interior values are the same at fresh
   second-stage coins.
 * `fixed` (`DrawFixed`): a sampled proof block's session's rounds are in the second stage, and fresh coins on them keep
   the sample.
-* `runs` (`SessionRuns`, with `InnerNumbers` as the shape's equation): at coins `r` that sample `u`, the session's
-  statement `xS` is at the block's shape, `A` has as many rounds at `xS` as the session (so `emb` embeds them onto the
+* `runs` (`SessionRuns`, with `InnerNumbers` as the shape's equation and the error bounds): at coins `r` that sample
+  `u`, the session's statement `xS` is at the block's shape, `A`'s errors there are within the block's bounds (`κb`,
+  `γb`), `A` has as many rounds at `xS` as the session (so `emb` embeds them onto the
   session's in order: `SessionRuns`' embedding, the only order embedding onto them), and a prover
   against `A`'s verifier (the sampled prover with `r`'s coins off the session's rounds) is such that, at coins agreeing
   with `r` off the session's rounds, the run accepts exactly when that prover's run on the session's coins does, and at
@@ -353,13 +377,15 @@ structure Sessions (H : Msg → Msg) (L : Compiled Coin A) : Prop where
     ∀ B ⊆ Finset.range P.blocks.length, ∃ esc : (Fin (L.V.k x) → Coin) → ℝ, (∀ r, 0 ≤ esc r) ∧
       (∀ r, Pr (fun d : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.stage2 x) r d), u ∉ B) ≤ esc r) ∧
       Ex esc ≤ s.design.Pa P B
+  slots : ∀ x r, (L.checked x r).length ≤ L.nPU x
   refuses : ∀ x (Ω : Type) (P : Prover Ω) ω r, (run H P L.V x ω r).out = .acc → L.Scope x
   interior : ∀ x (Ω : Type) (P : Prover Ω) ω r d u,
     L.iroots x (run H P L.V x ω (forkOn (L.stage2 x) r d)).seen u = L.iroots x (run H P L.V x ω r).seen u
   fixed : ∀ x r u, u ∈ L.checked x r →
     L.rounds x u ⊆ L.stage2 x ∧ ∀ d, L.checked x (forkOn (L.rounds x u) r d) = L.checked x r
   runs : ∀ x (Ω : Type) (P : Prover Ω) (ω : Ω) r u, u ∈ L.checked x r →
-    ∃ (xS : Msg) (P' : Prover Unit), A.shape xS = L.sh x u ∧ A.V.k xS = (L.rounds x u).card ∧
+    ∃ (xS : Msg) (P' : Prover Unit), A.shape xS = L.sh x u ∧ A.κ xS ≤ L.κb x u ∧ A.γ xS ≤ L.γb x u ∧
+      A.V.k xS = (L.rounds x u).card ∧
       (∀ r' : Fin (L.V.k x) → Coin, (∀ t ∉ L.rounds x u, r' t = r t) →
         ((run H P L.V x ω r').out = .acc ↔ (run H P' A.V xS () (L.coinsOf x u xS r')).out = .acc)) ∧
       ∀ r' : Fin (L.V.k x) → Coin, (∀ t ∉ L.rounds x u, (∀ t' ∈ L.rounds x u, t < t') → r' t = r t) →
@@ -417,30 +443,24 @@ def nG (L : Compiled Coin A) (x : Msg) : ℕ :=
   | some s => s.prog.gates.length
   | none => 0
 
-/-- **A run's extractions**, at the run `(r, v)` and `A`'s extractor's coins `c`: every sampled proof block's
-(`unitExt`), as `E` makes them at each accepted inner run, with what each finds that passes its opening check. -/
-noncomputable def runExt (L : Compiled Coin A) (x : Msg) (s : AuditStatement) (r : Fin (L.V.k x) → Coin) (v : Seen)
-    (c : L.BlockEC x) : RP (Fin (L.V.k x) → Coin) (List (List Msg × Opening Bool)) :=
-  flatMapRP (fun u : ℕ => if hu : u < L.nPU x then L.unitExt x s u r v (c ⟨u, hu⟩) else .ret []) (L.checked x r)
-
-/-- **What a run's extractions open** under the statement's roots, at the prover's run `(ω, r)` and `A`'s extractor's
-coins `c`: at gate `g`, the first opening there that passes (`Sampling.Wit.val`) among what `runExt` finds; `none` where
-none opens `g`, and on a statement that doesn't parse. -/
+/-- **What a run's extractions open** under the statement's roots, at the prover's run `(ω, r)` and the extractor's
+coins `c` there: at gate `g`, the first opening there that passes (`Sampling.Wit.val`) among what `runExt` finds; `none`
+where none opens `g`, and on a statement that doesn't parse. -/
 noncomputable def opensAt (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
-    (r : Fin (L.V.k x) → Coin) (c : L.BlockEC x) (g : ℕ) : Option Bool :=
+    (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) (g : ℕ) : Option Bool :=
   match L.parse x with
   | none => none
   | some s => (assemble s ((L.runExt x s r (run H P L.V x ω r).seen c).eval H (run H P L.V x ω)).1).val H L.commit s g
 
 open Classical in
 /-- **The committed trace** at the prover's tape `ω`, a definition nobody runs: at gate `g`, the value the prover's runs'
-extractions open there most often (`opensAt`, over the window's coins and `A`'s extractor's coins; `true` on a tie), a
+extractions open there most often (`opensAt`, over the window's coins and the extractor's coins; `true` on a tie), a
 plurality table (`FlockSoundness.Rewinding.IsPlurality`); `none` where no run's extraction opens `g`. It reads the
 statement, the prover and `ω` only, so the prover fixes it before any of the window's coins. -/
 noncomputable def regVal (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (g : ℕ) : Option Bool :=
   let p : Bool → ℝ := fun b =>
-    Pr fun rc : (Fin (L.V.k x) → Coin) × L.BlockEC x => L.opensAt H P x ω rc.1 rc.2 g = some b
+    Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.opensAt H P x ω rc.1 rc.2 g = some b
   if p true = 0 ∧ p false = 0 then none else some (decide (p false ≤ p true))
 
 open Classical in
@@ -454,7 +474,7 @@ noncomputable def Freg (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : 
       ¬ ∃ b, (L.part s).blocks[v]? = some b ∧ ∃ (val : ℕ → Option Bool) (ι : ℕ → Bool),
         (∀ g < s.prog.gates.length, val g = L.regVal H P x ω g) ∧ s.prog.Correct (s.prog.refIn b val ι) b
 
-/-- **`B_conf`**: the prover's tape, two independent runs at it, each with `A`'s extractor's coins, and the first
+/-- **`B_conf`**: the prover's tape, two independent runs at it, each with the extractor's coins there, and the first
 collision among the calls the two runs' extractions make themselves (the openings they check, `A`'s own). Two runs
 whose extractions open one gate two ways, or one run's that does, give one (`CommitmentScheme.Binds`). Its cost is both
 runs' extractions' SHA-512 calls, their reruns' included. -/
@@ -462,7 +482,7 @@ noncomputable def Bconf (H : Msg → Msg) (L : Compiled Coin A) : FinderFamily :
   match L.parse x with
   | none => { S := Unit, out := fun _ => none, cost := fun _ => 0 }
   | some s =>
-    { S := Ω × ((Fin (L.V.k x) → Coin) × L.BlockEC x) × ((Fin (L.V.k x) → Coin) × L.BlockEC x)
+    { S := Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x)
       ne := ⟨(Classical.arbitrary _, (fun _ => default, Classical.arbitrary _),
         (fun _ => default, Classical.arbitrary _))⟩
       out := fun q =>
@@ -703,25 +723,20 @@ section Flock
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
 
-/-- `E^rep`'s accepted reruns per wait at the level-0 lengths `N₀`, `k = ⌈4·N₀/e⌉` (`Flock.Deploy.k`). -/
-noncomputable def flockK (N₀ : ℝ) : ℕ := ⌈4 * N₀ / Real.exp 1⌉₊
-
-/-- **Flock as a proof system for proof blocks**, at a decoder: `E^rep` (`Flock.E`), its shape the numbers its coins and
-errors read (waits `m′`, truncation `K`, rounds, `ε_table`, `N₀`, the weight `C`), and its errors Flock's (`Flock.κ`,
-`Flock.γ`). -/
+/-- **Flock as a proof system for proof blocks**, at a decoder: `E^rep` (`Flock.E`), its shape the numbers its coins
+read (waits `m′`, truncation `K`, rounds), and its errors Flock's (`Flock.κ`, `Flock.γ`). -/
 noncomputable def Arg.ofFlock (D : Claims.Flock.Deploy Coin Col T) (decode : List (ℕ × Col) → List T) :
     Arg Coin where
-  Sh := ℕ × ℕ × ℕ × ℝ × ℝ × ℝ
-  shape x := (D.waits x, D.cap x, D.V.k x, D.εtable x, D.N₀ x, D.weight x)
+  Sh := ℕ × ℕ × ℕ
+  shape x := (D.waits x, D.cap x, D.V.k x)
   V := D.V
-  rounds s := s.2.2.1
+  rounds s := s.2.2
   W := Claims.Flock.Wit
   R := Claims.Flock.R D.parse
-  EC s := Fin s.1 → Fin s.2.1 → Fin s.2.2.1 → Coin
+  EC s := Fin s.1 → Fin s.2.1 → Fin s.2.2 → Coin
   ext x r c := (Claims.Flock.E D decode).ext x r c
-  κ s := 4 * s.2.2.2.1 + 2 ^ (-(s.1 : ℝ)) + 2 * (flockK s.2.2.2.2.1 : ℝ) / (s.2.1 : ℝ) +
-    Real.exp (-(flockK s.2.2.2.2.1 : ℝ) / 8)
-  γ s := 16 * (Real.sqrt (2 * (s.2.2.1 : ℝ) * s.2.2.2.2.2) + (s.2.2.1 : ℝ)) ^ 2
+  κ := Claims.Flock.κ D
+  γ := Claims.Flock.γ D
 
 /-- **Flock's KS is `Arg.ofFlock`'s**: `Flock.KS` at a decoder within Flock's radius. -/
 def FlockArgKS : Prop :=

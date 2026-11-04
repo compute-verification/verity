@@ -11,9 +11,8 @@ public import Proofs.Flock.Soundness.Rewinding
 against the committed trace's incorrect set (`Compiled.Freg` at the plurality `Compiled.regVal`, which the prover's tape
 fixes before the window's coins), so its sampling term is the escape `P_a(Freg)` of a set fixed at registration.
 
-* `kept`, `opensAt_eq`, `passes_runExt`, `mem_runExt`: what a run's extractions keep (`runExt`); `opensAt` is the
-  assembled witness's value there; what they keep passes its opening check, with the check's calls their own; and a
-  sampled proof block's kept openings are among them.
+* `kept`, `opensAt_eq`: what a run's extractions keep (`runExt`, slot by slot of the sample); `opensAt` is the
+  assembled witness's value there.
 * `InConf`, `OffReg`, `Conflict`: a run's extractions keep two openings of one position that disagree; they open a gate
   of the program off the committed trace; two runs' extractions open one gate two ways.
 * `reg_split`: **the deterministic half**. At an accepted run that samples a proof block of `Freg`, the block's session
@@ -24,8 +23,8 @@ fixes before the window's coins), so its sampling term is the escape `P_a(Freg)`
 * `pr_offReg_le`: **the rewinding lemma** (`FlockSoundness.Rewinding.prBad_le`) at the runs' openings of the program's
   gates (`opTable`), the committed trace being their plurality (`plur`, `regVal_eq_plur`): a run opens a gate off it
   with probability at most `N·√Pr[conflict]`.
-* `pr_unfound_le`: the sessions' bound at the selection `selReg` (the first sampled block of `Freg`), averaged by
-  Jensen's inequality.
+* `pr_unfound_le`: the sessions' bound at the selection `selReg` (the first slot of the sample whose block is in
+  `Freg`), averaged by Jensen's inequality.
 * `ksReg_of_sessionKS`, `compilerKSReg_of`: **`KSReg`**: the union of the three, and on the draw, a set refused at `δ`
   missed with probability at most `P_a ≤ δ` (`Sessions.draws`).
 -/
@@ -113,87 +112,80 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg 
 
 /-- **What a run's extractions keep**, at the prover's run `(ω, r)` and `A`'s extractor's coins `c` (`runExt`). -/
 noncomputable def kept (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg)
-    (s : AuditStatement) (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.BlockEC x) : List (List Msg × Opening Bool) :=
+    (s : AuditStatement) (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) : List (List Msg × Opening Bool) :=
   ((L.runExt x s r (run H P L.V x ω r).seen c).eval H (run H P L.V x ω)).1
 
 omit [Fintype Coin] [Nonempty Coin] in
 theorem opensAt_eq (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
-    {s : AuditStatement} (hs : L.parse x = some s) (r : Fin (L.V.k x) → Coin) (c : L.BlockEC x) (g : ℕ) :
+    {s : AuditStatement} (hs : L.parse x = some s) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) (g : ℕ) :
     L.opensAt H P x ω r c g = (assemble s (L.kept H P x s ω r c)).val H L.commit s g := by
   simp only [opensAt, kept, hs]
-
-omit [Fintype Coin] [Nonempty Coin] in
-theorem passes_runExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
-    (s : AuditStatement) (r : Fin (L.V.k x) → Coin) (v : Seen) (c : L.BlockEC x) :
-    Sampling.Passes H run' L.commit (L.runExt x s r v c) := by
-  unfold runExt
-  exact Sampling.Passes.flatMapRP fun u _ => by
-    split
-    · exact L.passes_unitExt H x run' s _ _ _ _
-    · exact Sampling.Passes.ret_nil H run' L.commit
-
-omit [Fintype Coin] [Nonempty Coin] in
-/-- A sampled proof block's extraction's openings are among the run's extractions'. -/
-theorem mem_runExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fin (L.V.k x) → Coin) → Trace)
-    (s : AuditStatement) (r : Fin (L.V.k x) → Coin) (v : Seen) (c : L.BlockEC x) {u : ℕ} (hu : u ∈ L.checked x r)
-    (hlt : u < L.nPU x) {q : List Msg × Opening Bool}
-    (hq : q ∈ ((L.unitExt x s u r v (c ⟨u, hlt⟩)).eval H run').1) :
-    q ∈ ((L.runExt x s r v c).eval H run').1 := by
-  unfold runExt
-  rw [flatMapRP_eval]
-  refine List.mem_flatMap.2 ⟨u, hu, ?_⟩
-  rw [dite_eq_left hlt]
-  exact hq
 
 /-! ## The three events -/
 
 /-- A run's extractions keep two openings under one roots at one position, of different values. -/
 def InConf (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (s : AuditStatement) (ω : Ω)
-    (r : Fin (L.V.k x) → Coin) (c : L.BlockEC x) : Prop :=
+    (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) : Prop :=
   ∃ q ∈ L.kept H P x s ω r c, ∃ q' ∈ L.kept H P x s ω r c, q.1 = q'.1 ∧ q.2.pos = q'.2.pos ∧ q.2.val ≠ q'.2.val
 
 /-- A run's extractions open a gate of the program off the committed trace. -/
 def OffReg (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
-    (r : Fin (L.V.k x) → Coin) (c : L.BlockEC x) : Prop :=
+    (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) : Prop :=
   ∃ g < L.nG x, ∃ b, L.opensAt H P x ω r c g = some b ∧ L.regVal H P x ω g ≠ some b
 
 /-- Two runs' extractions, at one tape, open a gate of the program two ways (`FlockSoundness.Rewinding.ConflictAt`). -/
 def Conflict (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
-    (rr : ((Fin (L.V.k x) → Coin) × L.BlockEC x) × ((Fin (L.V.k x) → Coin) × L.BlockEC x)) : Prop :=
+    (rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) : Prop :=
   ∃ g : Fin (L.nG x), (L.opensAt H P x ω rr.1.1 rr.1.2 g).isSome ∧ (L.opensAt H P x ω rr.2.1 rr.2.2 g).isSome ∧
     L.opensAt H P x ω rr.1.1 rr.1.2 g ≠ L.opensAt H P x ω rr.2.1 rr.2.2 g
 
-/-- The first sampled proof block of the committed trace's incorrect set. -/
+/-- The first slot of the sample whose proof block is in the committed trace's incorrect set. -/
 noncomputable def selReg (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (l : List ℕ) : Option (Fin (L.nPU x)) :=
-  (List.finRange (L.nPU x)).find? fun u => decide (u.val ∈ l ∧ u.val ∈ L.Freg H P x ω)
+  (List.finRange (L.nPU x)).find? fun i => (l[i.val]?).any fun v => decide (v ∈ L.Freg H P x ω)
 
 omit [Nonempty Coin] in
+/-- A sample of at most `n_PU` slots with a block in `Freg` has a first such slot, its block below `n_PU`. -/
 theorem selReg_some (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
-    {l : List ℕ} {v : ℕ} (hvl : v ∈ l) (hvF : v ∈ L.Freg H P x ω) (hlt : v < L.nPU x) :
-    ∃ u, L.selReg H P x ω l = some u ∧ u.val ∈ l ∧ u.val ∈ L.Freg H P x ω := by
-  obtain ⟨u, hu⟩ := Option.isSome_iff_exists.1
-    ((List.find?_isSome (p := fun u : Fin (L.nPU x) => decide (u.val ∈ l ∧ u.val ∈ L.Freg H P x ω))).2
-      ⟨⟨v, hlt⟩, List.mem_finRange _, decide_eq_true ⟨hvl, hvF⟩⟩)
-  have hpu := List.find?_some hu
-  exact ⟨u, hu, of_decide_eq_true hpu⟩
+    {l : List ℕ} (hlen : l.length ≤ L.nPU x) (hFlt : ∀ v ∈ L.Freg H P x ω, v < L.nPU x) {v : ℕ} (hvl : v ∈ l)
+    (hvF : v ∈ L.Freg H P x ω) :
+    ∃ i, L.selReg H P x ω l = some i ∧ ∃ u : Fin (L.nPU x), l[i.val]? = some u.val ∧ u.val ∈ L.Freg H P x ω := by
+  obtain ⟨n, hn⟩ := List.mem_iff_getElem?.1 hvl
+  have hnl : n < l.length := (List.getElem?_eq_some_iff.1 hn).1
+  obtain ⟨i, hi⟩ := Option.isSome_iff_exists.1
+    ((List.find?_isSome (p := fun i : Fin (L.nPU x) => (l[i.val]?).any fun v => decide (v ∈ L.Freg H P x ω))).2
+      ⟨⟨n, lt_of_lt_of_le hnl hlen⟩, List.mem_finRange _, by
+        show (l[n]?).any (fun v => decide (v ∈ L.Freg H P x ω)) = true
+        rw [hn, Option.any_some]
+        exact decide_eq_true hvF⟩)
+  have hpi := List.find?_some hi
+  refine ⟨i, hi, ?_⟩
+  cases h : l[i.val]? with
+  | none =>
+    rw [h, Option.any_none] at hpi
+    exact absurd hpi Bool.false_ne_true
+  | some w =>
+    rw [h, Option.any_some] at hpi
+    have hwF := of_decide_eq_true hpi
+    exact ⟨⟨w, hFlt w hwF⟩, rfl, hwF⟩
 
 /-! ## The deterministic half -/
 
 set_option synthInstance.maxSize 1024 in
 omit [Nonempty Coin] in
-/-- **The deterministic half**: at an accepted run that samples proof block `u` of the committed trace's incorrect set,
-`u`'s session is not extracted, or the run's extractions disagree with themselves or open a gate off the committed
-trace. Otherwise the values that are the committed trace on the program's gates and the kept openings elsewhere, with
-the interior values the kept openings give, agree with every opening `u`'s witness reveals that passes, so they make
-`u` correct (`Sessions.opens`); but `u ∈ Freg` says no such values do. -/
+/-- **The deterministic half**: at an accepted run whose sample holds proof block `u` of the committed trace's
+incorrect set at slot `i`, `u`'s session is not extracted at the slot's coins, or the run's extractions disagree with
+themselves or open a gate off the committed trace. Otherwise the values that are the committed trace on the program's
+gates and the kept openings elsewhere, with the interior values the kept openings give, agree with every opening `u`'s
+witness reveals that passes, so they make `u` correct (`Sessions.opens`); but `u ∈ Freg` says no such values do. -/
 theorem reg_split {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) {x : Msg} {s : AuditStatement}
     {Pt : Sampling.Partition} (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hin : InScope Pt s)
-    {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.BlockEC x)
-    (hacc : (run H P L.V x ω r).out = .acc) (u : Fin (L.nPU x)) (hu : u.val ∈ L.checked x r)
+    {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x)
+    (hacc : (run H P L.V x ω r).out = .acc) (i u : Fin (L.nPU x)) (hiu : (L.checked x r)[i.val]? = some u.val)
     (hF : u.val ∈ L.Freg H P x ω) :
-    ¬ L.Found H x (run H P L.V x ω) u r (c u) ∨ L.InConf H P x s ω r c ∨ L.OffReg H P x ω r c := by
-  by_cases hfd : L.Found H x (run H P L.V x ω) u r (c u)
+    ¬ L.Found H x (run H P L.V x ω) u r (c i u) ∨ L.InConf H P x s ω r c ∨ L.OffReg H P x ω r c := by
+  have hu := List.mem_of_getElem? hiu
+  by_cases hfd : L.Found H x (run H P L.V x ω) u r (c i u)
   swap
   · exact Or.inl hfd
   by_cases hconf : L.InConf H P x s ω r c
@@ -218,8 +210,8 @@ theorem reg_split {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) {x
   · show (if g < s.prog.gates.length then L.regVal H P x ω g else L.opensAt H P x ω r c g) = L.regVal H P x ω g
     exact ite_eq_left hg
   · have hqk : q ∈ L.kept H P x s ω r c :=
-      L.mem_runExt H x (run H P L.V x ω) s r _ c hu u.isLt
-        (L.unitExt_mem H x (run H P L.V x ω) s u r (c u) hsess hsh hw hq hok)
+      L.mem_runExt H x (run H P L.V x ω) s r _ c hiu u.isLt
+        (L.unitExt_mem H x (run H P L.V x ω) s u r (c i u) hsess hsh hw hq hok)
     refine ⟨fun hr => ?_, fun hi => ?_⟩
     · have hv : L.opensAt H P x ω r c q.2.pos = some q.2.val := by
         rw [L.opensAt_eq H P x ω hs]
@@ -242,7 +234,7 @@ omit [Fintype Coin] [Nonempty Coin] in
 among the two runs' extractions' own calls, which `findColl` finds. -/
 theorem bconf_of_disagree {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
     (s : AuditStatement) {Ω : Type} (P : Prover Ω) (ω : Ω)
-    (rc rc' : (Fin (L.V.k x) → Coin) × L.BlockEC x) {q q' : List Msg × Opening Bool}
+    (rc rc' : (Fin (L.V.k x) → Coin) × L.SlotEC x) {q q' : List Msg × Opening Bool}
     (hq : q ∈ L.kept H P x s ω rc.1 rc.2 ∨ q ∈ L.kept H P x s ω rc'.1 rc'.2)
     (hq' : q' ∈ L.kept H P x s ω rc.1 rc.2 ∨ q' ∈ L.kept H P x s ω rc'.1 rc'.2)
     (h1 : q.1 = q'.1) (h2 : q.2.pos = q'.2.pos) (h3 : q.2.val ≠ q'.2.val) :
@@ -273,7 +265,7 @@ omit [Nonempty Coin] in
 /-- An event of a tape and two runs at it that gives a collision `B_conf`'s output is at most `Pr[B_conf]`. -/
 theorem le_bconf (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {s : AuditStatement} (hs : L.parse x = some s)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
-    {Q : Ω × ((Fin (L.V.k x) → Coin) × L.BlockEC x) × ((Fin (L.V.k x) → Coin) × L.BlockEC x) → Prop}
+    {Q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) → Prop}
     (hQ : ∀ q, Q q → ∃ u v, findColl (ownLog H (run H P L.V x q.1)
         (L.runExt x s q.2.1.1 (run H P L.V x q.1 q.2.1.1).seen q.2.1.2) ++
       ownLog H (run H P L.V x q.1) (L.runExt x s q.2.2.1 (run H P L.V x q.1 q.2.2.1).seen q.2.2.2)) = some (u, v) ∧
@@ -285,15 +277,15 @@ theorem le_bconf (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {s : AuditSta
 /-- **One run's disagreement**: at most `Pr[B_conf]`, its first run. -/
 theorem pr_inConf_le {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
     {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
-    Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.BlockEC x => L.InConf H P x s ω rc.1 rc.2) ≤
+    Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2) ≤
       (Bconf H L Ω P x).Pr H := by
-  calc Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.BlockEC x => L.InConf H P x s ω rc.1 rc.2)
-      = Pr (fun p : Ω × ((Fin (L.V.k x) → Coin) × L.BlockEC x) => L.InConf H P x s p.1 p.2.1 p.2.2) :=
-        (Sampling.Pr_prod_eq_Ex (fun p : Ω × ((Fin (L.V.k x) → Coin) × L.BlockEC x) =>
+  calc Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2)
+      = Pr (fun p : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.InConf H P x s p.1 p.2.1 p.2.2) :=
+        (Sampling.Pr_prod_eq_Ex (fun p : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
           L.InConf H P x s p.1 p.2.1 p.2.2)).symm
-    _ = Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.BlockEC x) × ((Fin (L.V.k x) → Coin) × L.BlockEC x) =>
+    _ = Pr (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
           L.InConf H P x s q.1 q.2.1.1 q.2.1.2) :=
-        (Pr_drop (fun (ω : Ω) (rc : (Fin (L.V.k x) → Coin) × L.BlockEC x) => L.InConf H P x s ω rc.1 rc.2)).symm
+        (Pr_drop (fun (ω : Ω) (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) => L.InConf H P x s ω rc.1 rc.2)).symm
     _ ≤ (Bconf H L Ω P x).Pr H :=
         le_bconf H L hs P fun q hq => by
           obtain ⟨a, ha, b, hb, h1, h2, h3⟩ := hq
@@ -303,10 +295,10 @@ omit [Nonempty Coin] in
 /-- **Two runs' conflict**: at most `Pr[B_conf]`. -/
 theorem pr_conflict_le {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) {x : Msg}
     {s : AuditStatement} (hs : L.parse x = some s) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) :
-    Ex (fun ω : Ω => Pr fun rr : ((Fin (L.V.k x) → Coin) × L.BlockEC x) × ((Fin (L.V.k x) → Coin) × L.BlockEC x) =>
+    Ex (fun ω : Ω => Pr fun rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
       L.Conflict H P x ω rr) ≤ (Bconf H L Ω P x).Pr H := by
-  refine (Sampling.Pr_prod_eq_Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.BlockEC x) ×
-      ((Fin (L.V.k x) → Coin) × L.BlockEC x) => L.Conflict H P x q.1 q.2)).symm.trans_le
+  refine (Sampling.Pr_prod_eq_Ex (fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
+      ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.Conflict H P x q.1 q.2)).symm.trans_le
     (le_bconf H L hs P fun q hq => ?_)
   obtain ⟨g, h1, h2, hne⟩ := hq
   obtain ⟨b1, hb1⟩ := Option.isSome_iff_exists.1 h1
@@ -323,21 +315,21 @@ theorem pr_conflict_le {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit
 
 /-- The runs' openings of the program's gates, as the rewinding lemma's table. -/
 noncomputable def opTable (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
-    (rc : (Fin (L.V.k x) → Coin) × L.BlockEC x) (g : Fin (L.nG x)) : Option Bool :=
+    (rc : (Fin (L.V.k x) → Coin) × L.SlotEC x) (g : Fin (L.nG x)) : Option Bool :=
   L.opensAt H P x ω rc.1 rc.2 g
 
 /-- The committed trace's value at a gate some run opens. -/
 noncomputable def plur (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (g : ℕ) : Bool :=
-  decide (Pr (fun rc : (Fin (L.V.k x) → Coin) × L.BlockEC x => L.opensAt H P x ω rc.1 rc.2 g = some false) ≤
-    Pr (fun rc : (Fin (L.V.k x) → Coin) × L.BlockEC x => L.opensAt H P x ω rc.1 rc.2 g = some true))
+  decide (Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.opensAt H P x ω rc.1 rc.2 g = some false) ≤
+    Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.opensAt H P x ω rc.1 rc.2 g = some true))
 
 omit [Nonempty Coin] in
 /-- At a gate some run's extractions open, the committed trace is the plurality's value. -/
 theorem regVal_eq_plur (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
-    {r : Fin (L.V.k x) → Coin} {c : L.BlockEC x} {g : ℕ} {b : Bool} (h : L.opensAt H P x ω r c g = some b) :
+    {r : Fin (L.V.k x) → Coin} {c : L.SlotEC x} {g : ℕ} {b : Bool} (h : L.opensAt H P x ω r c g = some b) :
     L.regVal H P x ω g = some (L.plur H P x ω g) := by
-  have hpos := Pr_pos_of (p := fun rc : (Fin (L.V.k x) → Coin) × L.BlockEC x =>
+  have hpos := Pr_pos_of (p := fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
     L.opensAt H P x ω rc.1 rc.2 g = some b) (r, c) h
   simp only [regVal, plur]
   split_ifs with h0
@@ -350,23 +342,23 @@ theorem regVal_eq_plur (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : 
 the committed trace with probability at most `N·√Pr[conflict]`, `N` the program's gates
 (`FlockSoundness.Rewinding.prBad_le`, the committed trace being the runs' openings' plurality). -/
 theorem pr_offReg_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) :
-    Pr (fun rc : (Fin (L.V.k x) → Coin) × L.BlockEC x => L.OffReg H P x ω rc.1 rc.2) ≤
-      L.nG x * Real.sqrt (Pr fun rr : ((Fin (L.V.k x) → Coin) × L.BlockEC x) × ((Fin (L.V.k x) → Coin) × L.BlockEC x) =>
+    Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2) ≤
+      L.nG x * Real.sqrt (Pr fun rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
         L.Conflict H P x ω rr) := by
   classical
-  have hcard : (0 : ℝ) < Fintype.card ((Fin (L.V.k x) → Coin) × L.BlockEC x) := by
+  have hcard : (0 : ℝ) < Fintype.card ((Fin (L.V.k x) → Coin) × L.SlotEC x) := by
     exact_mod_cast Fintype.card_pos
   have hcnt : ∀ (g : Fin (L.nG x)) (b : Bool),
       (#(FlockSoundness.Rewinding.openedTo (L.opTable H P x ω) g b) : ℝ) =
-        Pr (fun rc : (Fin (L.V.k x) → Coin) × L.BlockEC x => L.opensAt H P x ω rc.1 rc.2 g = some b) *
-          Fintype.card ((Fin (L.V.k x) → Coin) × L.BlockEC x) := by
+        Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.opensAt H P x ω rc.1 rc.2 g = some b) *
+          Fintype.card ((Fin (L.V.k x) → Coin) × L.SlotEC x) := by
     intro g b
-    rw [Pr_eq_card_of_mem (fun rc : (Fin (L.V.k x) → Coin) × L.BlockEC x => L.opensAt H P x ω rc.1 rc.2 g = some b)
+    rw [Pr_eq_card_of_mem (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.opensAt H P x ω rc.1 rc.2 g = some b)
       (FlockSoundness.Rewinding.openedTo (L.opTable H P x ω) g b)
       fun rc => mem_filter.trans (and_iff_right (mem_univ _)), div_mul_cancel₀ _ hcard.ne']
   have hpl : FlockSoundness.Rewinding.IsPlurality (L.opTable H P x ω) fun g => L.plur H P x ω g := by
     intro g v
-    have h := le_plur (fun b => Pr fun rc : (Fin (L.V.k x) → Coin) × L.BlockEC x =>
+    have h := le_plur (fun b => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
       L.opensAt H P x ω rc.1 rc.2 g = some b) v
     have h' : (#(FlockSoundness.Rewinding.openedTo (L.opTable H P x ω) g v) : ℝ) ≤
         #(FlockSoundness.Rewinding.openedTo (L.opTable H P x ω) g (L.plur H P x ω g)) := by
@@ -375,11 +367,11 @@ theorem pr_offReg_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Pr
     exact_mod_cast h'
   have hbad := FlockSoundness.Rewinding.prBad_le (op := L.opTable H P x ω) (fun g => L.plur H P x ω g) hpl (L.nG x)
     fun rc => (card_filter_le _ _).trans (card_univ.trans (Fintype.card_fin _)).le
-  have hoff : Pr (fun rc : (Fin (L.V.k x) → Coin) × L.BlockEC x => L.OffReg H P x ω rc.1 rc.2) ≤
+  have hoff : Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2) ≤
       (#(FlockSoundness.Rewinding.bad (L.opTable H P x ω) fun g => L.plur H P x ω g) : ℝ) /
-        Fintype.card ((Fin (L.V.k x) → Coin) × L.BlockEC x) := by
-    calc Pr (fun rc : (Fin (L.V.k x) → Coin) × L.BlockEC x => L.OffReg H P x ω rc.1 rc.2)
-        ≤ Pr (fun rc : (Fin (L.V.k x) → Coin) × L.BlockEC x => ∃ g,
+        Fintype.card ((Fin (L.V.k x) → Coin) × L.SlotEC x) := by
+    calc Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2)
+        ≤ Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => ∃ g,
             FlockSoundness.Rewinding.Off (L.opTable H P x ω) (fun g => L.plur H P x ω g) rc g) :=
           Pr_mono fun rc hrc => by
             obtain ⟨g, hg, b, hb, hne⟩ := hrc
@@ -389,48 +381,51 @@ theorem pr_offReg_le (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (P : Pr
       _ = _ := Pr_eq_card_of_mem _ (FlockSoundness.Rewinding.bad (L.opTable H P x ω) fun g => L.plur H P x ω g)
           fun rc => by simp only [FlockSoundness.Rewinding.bad, mem_filter, mem_univ, true_and]
   have hconf : (#(FlockSoundness.Rewinding.conflict (L.opTable H P x ω)) : ℝ) /
-      (Fintype.card ((Fin (L.V.k x) → Coin) × L.BlockEC x) : ℝ) ^ 2 =
-      Pr fun rr : ((Fin (L.V.k x) → Coin) × L.BlockEC x) × ((Fin (L.V.k x) → Coin) × L.BlockEC x) =>
+      (Fintype.card ((Fin (L.V.k x) → Coin) × L.SlotEC x) : ℝ) ^ 2 =
+      Pr fun rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
         L.Conflict H P x ω rr := by
-    rw [Pr_eq_card_of_mem (fun rr : ((Fin (L.V.k x) → Coin) × L.BlockEC x) × ((Fin (L.V.k x) → Coin) × L.BlockEC x) =>
+    rw [Pr_eq_card_of_mem (fun rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
         L.Conflict H P x ω rr) (FlockSoundness.Rewinding.conflict (L.opTable H P x ω))
         fun rr => by simp only [FlockSoundness.Rewinding.conflict, mem_filter, mem_univ, true_and]; exact Iff.rfl,
-      Fintype.card_prod ((Fin (L.V.k x) → Coin) × L.BlockEC x) ((Fin (L.V.k x) → Coin) × L.BlockEC x),
+      Fintype.card_prod ((Fin (L.V.k x) → Coin) × L.SlotEC x) ((Fin (L.V.k x) → Coin) × L.SlotEC x),
       Nat.cast_mul, sq]
-  calc Pr (fun rc : (Fin (L.V.k x) → Coin) × L.BlockEC x => L.OffReg H P x ω rc.1 rc.2)
+  calc Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2)
       ≤ _ := hoff
     _ ≤ _ := hbad
-    _ = L.nG x * Real.sqrt (Pr fun rr : ((Fin (L.V.k x) → Coin) × L.BlockEC x) ×
-          ((Fin (L.V.k x) → Coin) × L.BlockEC x) => L.Conflict H P x ω rr) := by
+    _ = L.nG x * Real.sqrt (Pr fun rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
+          ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.Conflict H P x ω rr) := by
       rw [Fintype.card_fin, hconf, Real.sqrt_mul (mul_self_nonneg (L.nG x : ℝ)),
         Real.sqrt_mul_self (Nat.cast_nonneg _)]
 
 /-! ## The sessions' bound at the selection -/
 
-/-- **The sessions' bound at a selection**, averaged over the tape: the run accepts and the picked sampled proof block is
-not found with probability at most `κ_s + √(k(x)·γ_s·Pr[B])` (Jensen's inequality). -/
+/-- **The sessions' bound at a selection**, averaged over the tape: the run accepts and the proof block at the picked
+slot is not found at the slot's coins with probability at most `κ_s + √(k(x)·γ_s·Pr[B])` (Jensen's inequality). -/
 theorem pr_unfound_le (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (β : Ω → (Fin (L.V.k x) → Coin) → ℝ) (hβ0 : ∀ ω r, 0 ≤ β ω r)
     (hβ : Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => β p.1 p.2) ≤ PrB H L.V P x)
     (sel : Ω → List ℕ → Option (Fin (L.nPU x)))
-    (hκ : ∀ ω r, Pr (fun p : (Fin (L.V.k x) → Coin) × L.BlockEC x =>
+    (hκ : ∀ ω r, Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
       (run H P L.V x ω (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-        ∃ u, sel ω (L.checked x (forkOn (L.stage2 x) r p.1)) = some u ∧
-          u.val ∈ L.checked x (forkOn (L.stage2 x) r p.1) ∧
-          ¬ L.Found H x (run H P L.V x ω) u (forkOn (L.stage2 x) r p.1) (p.2 u)) ≤
+        ∃ i, sel ω (L.checked x (forkOn (L.stage2 x) r p.1)) = some i ∧
+          ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.stage2 x) r p.1))[i.val]? = some u.val ∧
+            ¬ L.Found H x (run H P L.V x ω) u (forkOn (L.stage2 x) r p.1) (p.2 i u)) ≤
         L.κs x + Real.sqrt (L.V.k x * L.γs x * β ω r)) :
-    Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.BlockEC x =>
-      (run H P L.V x ω rc.1).out = .acc ∧ ∃ u, sel ω (L.checked x rc.1) = some u ∧ u.val ∈ L.checked x rc.1 ∧
-        ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 u)) ≤
+    Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
+      (run H P L.V x ω rc.1).out = .acc ∧ ∃ i, sel ω (L.checked x rc.1) = some i ∧
+        ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
+          ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u)) ≤
       L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) := by
   have hγ0 : 0 ≤ (L.V.k x : ℝ) * L.γs x := mul_nonneg (Nat.cast_nonneg _) (L.γs_nonneg x)
-  calc Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.BlockEC x =>
-        (run H P L.V x ω rc.1).out = .acc ∧ ∃ u, sel ω (L.checked x rc.1) = some u ∧ u.val ∈ L.checked x rc.1 ∧
-          ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 u))
+  calc Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
+        (run H P L.V x ω rc.1).out = .acc ∧ ∃ i, sel ω (L.checked x rc.1) = some i ∧
+          ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
+            ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u))
       ≤ Ex (fun ω : Ω => L.κs x + Ex fun r => Real.sqrt (L.V.k x * L.γs x * β ω r)) :=
-        Ex_mono fun ω => (Pr_forkOn_prod (L.stage2 x) (fun (r : Fin (L.V.k x) → Coin) (c : L.BlockEC x) =>
-            (run H P L.V x ω r).out = .acc ∧ ∃ u, sel ω (L.checked x r) = some u ∧ u.val ∈ L.checked x r ∧
-              ¬ L.Found H x (run H P L.V x ω) u r (c u))).trans_le
+        Ex_mono fun ω => (Pr_forkOn_prod (L.stage2 x) (fun (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
+            (run H P L.V x ω r).out = .acc ∧ ∃ i, sel ω (L.checked x r) = some i ∧
+              ∃ u : Fin (L.nPU x), (L.checked x r)[i.val]? = some u.val ∧
+                ¬ L.Found H x (run H P L.V x ω) u r (c i u))).trans_le
           ((Ex_mono (hκ ω)).trans_eq (by rw [Ex_add, Ex_const]))
     _ = L.κs x + Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => Real.sqrt (L.V.k x * L.γs x * β p.1 p.2)) := by
         rw [Ex_add, Ex_const,
@@ -460,29 +455,30 @@ theorem ksReg_of_sessionKS {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.co
     exact hv.1
   have hper : ∀ ω, Pr (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
       ∃ u ∈ L.checked x r, u ∈ L.Freg H P x ω) ≤
-      Pr (fun rc : (Fin (L.V.k x) → Coin) × L.BlockEC x => (run H P L.V x ω rc.1).out = .acc ∧
-        ∃ u, L.selReg H P x ω (L.checked x rc.1) = some u ∧ u.val ∈ L.checked x rc.1 ∧
-          ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 u)) +
-      (Pr (fun rc : (Fin (L.V.k x) → Coin) × L.BlockEC x => L.InConf H P x s ω rc.1 rc.2) +
-        L.nG x * Real.sqrt (Pr fun rr : ((Fin (L.V.k x) → Coin) × L.BlockEC x) ×
-          ((Fin (L.V.k x) → Coin) × L.BlockEC x) => L.Conflict H P x ω rr)) := by
+      Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => (run H P L.V x ω rc.1).out = .acc ∧
+        ∃ i, L.selReg H P x ω (L.checked x rc.1) = some i ∧
+          ∃ u : Fin (L.nPU x), (L.checked x rc.1)[i.val]? = some u.val ∧
+            ¬ L.Found H x (run H P L.V x ω) u rc.1 (rc.2 i u)) +
+      (Pr (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2) +
+        L.nG x * Real.sqrt (Pr fun rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
+          ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.Conflict H P x ω rr)) := by
     intro ω
     have hIO := (Sampling.Pr_union_le
-      (fun rc : (Fin (L.V.k x) → Coin) × L.BlockEC x => L.InConf H P x s ω rc.1 rc.2)
-      (fun rc : (Fin (L.V.k x) → Coin) × L.BlockEC x => L.OffReg H P x ω rc.1 rc.2)).trans
+      (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.InConf H P x s ω rc.1 rc.2)
+      (fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x => L.OffReg H P x ω rc.1 rc.2)).trans
         (add_le_add le_rfl (L.pr_offReg_le H P x ω))
-    refine (Pr_fst (β := L.BlockEC x) (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
+    refine (Pr_fst (β := L.SlotEC x) (fun r : Fin (L.V.k x) → Coin => (run H P L.V x ω r).out = .acc ∧
       ∃ u ∈ L.checked x r, u ∈ L.Freg H P x ω)).symm.trans_le (Sampling.Pr_or_le (fun rc hrc => ?_) le_rfl hIO)
     obtain ⟨hacc, v, hvl, hvF⟩ := hrc
-    obtain ⟨u, hu, hul, huF⟩ := L.selReg_some H P x ω hvl hvF (hFlt ω v hvF)
-    rcases reg_split hS hs hPt hin P ω rc.1 rc.2 hacc u hul huF with h | h | h
-    · exact Or.inl ⟨hacc, u, hu, hul, h⟩
+    obtain ⟨i, hi, u, hiu, huF⟩ := L.selReg_some H P x ω (hS.slots x rc.1) (hFlt ω) hvl hvF
+    rcases reg_split hS hs hPt hin P ω rc.1 rc.2 hacc i u hiu huF with h | h | h
+    · exact Or.inl ⟨hacc, i, hi, u, hiu, h⟩
     · exact Or.inr (Or.inl h)
     · exact Or.inr (Or.inr h)
   have hT := L.pr_unfound_le H P β hβ0 hβ (L.selReg H P x) fun ω r => hκ ω r (L.selReg H P x ω)
   have hI := pr_inConf_le hbind hs P
-  have hC : Ex (fun ω : Ω => Real.sqrt (Pr fun rr : ((Fin (L.V.k x) → Coin) × L.BlockEC x) ×
-      ((Fin (L.V.k x) → Coin) × L.BlockEC x) => L.Conflict H P x ω rr)) ≤ Real.sqrt ((Bconf H L Ω P x).Pr H) :=
+  have hC : Ex (fun ω : Ω => Real.sqrt (Pr fun rr : ((Fin (L.V.k x) → Coin) × L.SlotEC x) ×
+      ((Fin (L.V.k x) → Coin) × L.SlotEC x) => L.Conflict H P x ω rr)) ≤ Real.sqrt ((Bconf H L Ω P x).Pr H) :=
     (Ex_sqrt_le _ fun _ => Pr_nonneg _).trans (Real.sqrt_le_sqrt (pr_conflict_le hbind hs P))
   have hn : (0 : ℝ) ≤ L.nG x := Nat.cast_nonneg _
   have h1 : Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
