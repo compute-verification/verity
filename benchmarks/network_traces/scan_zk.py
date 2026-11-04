@@ -102,8 +102,9 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   for every W, which `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) checks for W with W's three records'
   certificates: accepted, one-stage's profile and bound at ``--delta`` (every unit drawn, the bound 0); refused, a
   reject naming the members Lean refused. Beside them, ``audits``: the block round's, the compute audit whose lanes'
-  o0 are the scan's ``prog<j>`` (its registration and answer, its Program's descriptor, its free inputs NR·nb·NE, every bit of every
-  slot entry, which the rows form's K charges to each link-window tied to it, and no steps).
+  o0 are the scan's ``prog<j>`` (its registration and answer, its Program's descriptor, and no steps): the rows form
+  counts its free inputs off that descriptor, NR·nb·NE, every bit of every slot entry, and its K charges them to each
+  link-window tied to it.
 * **A void run** (a warden run whose warden failed a connection closed, its `FAIL` in the egress row it signed, its
   reason in the ``fails`` record): the scan renders the connection's end where the warden wrote `FAIL`, and that bucket
   alone differs from the warden's row. Its block round and its honest round are proved, the honest one expected
@@ -1647,13 +1648,13 @@ def answers(at: SimpleNamespace, out: Path, res: dict, delta: Fraction, block: d
     (`window_answer`: accepted where the round's outputs all open to 1), since its registration holds each W's rows
     (`warden_roots`). A refused round's (a void run's) names the members Lean refused. With the block round's audit
     (``block``), the compute audit whose lanes' o0 are the scan's ``prog<j>`` (``audits``): its registration and
-    answer, and the terms a period's parameters give it, its Program's descriptor, its free inputs (every bit of every
-    slot entry, the stand-in's ``x``: it copies its input) and no steps."""
+    answer, and the terms a period's parameters give it, its Program's descriptor and no steps; the period counts its
+    free inputs off the descriptor (every bit of every slot entry, the stand-in's ``x``: it copies its input)."""
     reg, answer = _answer(out, "honest", res, delta, f"the scan's audit of link-windows {at.windows}")
     audits = []
     if block is not None:
         breg, banswer = _answer(out, "block", block, delta, "the block's audit")
-        audits.append({"answer": banswer, "free": entries_of(at.setup.cls, at.G, at.T) * IS.entry_bits(at.setup.cls),
+        audits.append({"answer": banswer,
                        "program": json.loads((out / PROGRAMS[BLOCK] / "program.json").read_text()),
                        "registration": breg, "steps": 0})
     doc = {"format": ANSWERS, "delta": str(delta), "registration": reg, "audits": audits,

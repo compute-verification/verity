@@ -9,7 +9,8 @@ and its Lean.
   and one schedule, whose caps over the one link-window are the cells, `WardenParams.caps`: `egress_cells` for each of
   the `lanes · window` connections it can carry), the link `warden_serve.LINK`, the Program the scan's registration's,
   the compute audits
-  ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps),
+  ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor and steps, off which
+  descriptor the period check counts its free inputs),
   the jitter bound `leak_bounds.JITTER_BOUND` (K's jitter term T bits a link-window, `leak_bounds.JITTER`), and the
   scan that Program's descriptor (``joint/program.json``), off which the period check reads the scan's terms; the
   commitment the audits' registrations and the scan's; the evidence the audits' answers, then the scan's answer, the
@@ -102,7 +103,7 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     N, W, H = dep["key"]["params"]
     audits = doc.get("audits", [])
     caps = WardenParams(**dep["params"]).caps(1)
-    params = {"audits": [{k: a[k] for k in ("free", "program", "steps")} for a in audits], "cells": caps,
+    params = {"audits": [{k: a[k] for k in ("program", "steps")} for a in audits], "cells": caps,
               "first": x["window"], "jitter": LB.JITTER_BOUND, "key": dep["key"]["public"], "link": WS.LINK,
               "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
               "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": dict(dep["params"]),

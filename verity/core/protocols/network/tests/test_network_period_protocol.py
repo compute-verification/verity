@@ -29,6 +29,9 @@ from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.certificate import Certificate
 from verity.core.protocols.certifier.schedule import SyncSet
 from verity.core.protocols.certifier.warden import WardenParams
+from verity.ml.circuits import codec
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.program import Program
 
 __all__ = ["EXPECT", "MUTATIONS", "build", "reference"]
 
@@ -259,8 +262,8 @@ def test_a_template_named_slot_entry_with_another_body_is_refused(server, monkey
 def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server):
     """The egress renders the outputs of the audit the scan's `prog` is tied to, so the bits the prover chose of that
     audit's inputs are the link-window's: over honest rows periods, which Lean and the mirror accept with one public,
-    each scan's `free` is the parameters' `free` of the audits whose registration holds its `prog`'s root (the scan's
-    own is 0), some of them nonzero."""
+    each scan's `free` is the input gates of the Programs of the audits whose registration holds its `prog`'s root
+    (`input_gates`; the scan's own is 0), some of them nonzero."""
     charged = 0
     for n in range(8):
         case = build("rows-honest", n, small=n % 2 == 0)
@@ -272,7 +275,7 @@ def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server):
         for reg, t in zip(c["windows"], out["public"]["scans"]):
             roots = {e["root"] for e in reg.get("roots", []) + reg.get("registered", [])
                      if PC.prog_port(e.get("port")) or PC.prog_port(e.get("value"))}
-            want = sum(a["free"] for a, r in zip(case["params"]["audits"], c["audits"])
+            want = sum(PC.input_gates(a["program"]) for a, r in zip(case["params"]["audits"], c["audits"])
                        if any(o.get("root") in roots for o in r["roots"]))
             assert t["free"] == want, (n, t, want)
         charged += any(t["free"] for t in out["public"]["scans"])
@@ -605,6 +608,26 @@ def test_the_bound_counts_what_it_says():
     three = dataclasses.replace(p, audits=(PC.Audit(0, 0, "", 1, 16),) * 3)
     assert public(three, [Facts(1, 1, Fraction(1, d), 0) for d in (10, 15, 6)])["eps"] == "1/3"
     assert public(dataclasses.replace(p, audits=()), [])["eps"] == "0"
+
+
+def test_an_audits_free_inputs_are_its_programs_input_gates():
+    """`auditOf` counts an audit's free inputs off its descriptor (`inputGates`, `input_gates`), never from the
+    parameters: each template's instances times its parameters' bits, from the templates' signatures, over the stand-in
+    unit, the slot entries' and the select entries' templates and mixes of them; a parameter bound at registration
+    counts as one bound per run does; and parameters stating a `free` are refused."""
+    for units, entries, select in [(((3, 2),), (), False), (((1, 1), (2, 40)), (4,), False), (((2, 5),), (3,), True)]:
+        desc = json.loads(PC.audit_descriptor(units, entries, select=select))
+        entry = PC.select_entry() if select else PC.slot_entry()
+        templates = [(bind(PC.AUDIT_UNIT, OUT=out), n) for n, out in units] + [(entry, n) for n in entries]
+        want = sum(n * sum(sum(t.leaf_widths()) for _, t in d.signature()[0]) for d, n in templates)
+        assert PC.input_gates(desc) == want > 0, (units, entries, select)
+    run, reg = (json.loads(D.canonical(codec.encode_program(Program(bind(PC.AUDIT_UNIT, OUT=2), registered=r))))
+                for r in ((), ("x",)))
+    assert run != reg and PC.input_gates(run) == PC.input_gates(reg) == 16
+    case = next(c for n in range(8) if (c := build("rows-honest", n))["params"]["audits"])
+    p = case["params"]
+    stated = p | {"audits": [a | {"free": PC.input_gates(a["program"])} for a in p["audits"]]}
+    assert reference(case)["verdict"] == ACCEPT and reference(case | {"params": stated})["verdict"] == REJECT
 
 
 def test_the_rows_forms_bound_counts_what_it_says():

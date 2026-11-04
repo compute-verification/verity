@@ -27,21 +27,24 @@ read.
 
 **Params**, JSON with exactly these keys (and each nested object exactly its own), in the clock form
 
-    {"audits": [{"free": f, "program": descriptor, "steps": k}, …], "cells": [cap, …], "first": w₀, "jitter": Dj,
+    {"audits": [{"program": descriptor, "steps": k}, …], "cells": [cap, …], "first": w₀, "jitter": Dj,
      "key": hex(I ‖ T[1]), "link": name, "lms": {"H": h, "N": n, "W": w, "toy": bool}, "program": hex,
      "session": hex(session), "sync_set": {"deltas": [δ, …], "rhos": [[num, den], …]}, "windows": m}
 
-each compute audit's layout terms (`free`, the free inputs it doesn't register, `#(freeInputs \ reg)`; `steps`, its
-monitoring period `k`) and its Program, the descriptor (`verity-ir/descriptor/v1`) of the window's population program,
-which must decode (`Flock.Program.decode`) with a template in its root: the audit's proof blocks are the root's template
-instances, and each commits its template's return, the outputs it computes that other proof blocks or the client read, which
-can be wider than a proof unit's 16-bit public output; each network certifier connection's cell cap over the period
-(`cap_c`), the session's window
+each compute audit's monitoring period (`steps`, `k`) and its Program, the descriptor (`verity-ir/descriptor/v1`) of
+the window's population program, which must decode (`Flock.Program.decode`) with a template in its root: the audit's
+proof blocks are the root's template instances, and each commits its template's return, the outputs it computes that
+other proof blocks or the client read, which can be wider than a proof unit's 16-bit public output; each network
+certifier connection's cell cap over the period (`cap_c`), the session's window
 the period starts at (`w₀`: its link-windows are the session's `w₀ … w₀ + m − 1`, so one certifier session spans many
 periods),
 the observations' jitter bound `Dj ≥ 1`, the network certifier's LMS public key and parameters and the certifier session
 (32 bytes) every certificate binds, the link (at most 65,535 UTF-8 bytes), the SHA-512 of N2's registered Program for
 the link (the partition object's `program`, `LinkWindows.partition`), Σ_sync, and the period's `m ≥ 1` link-windows.
+An audit's free inputs (`free`) are no parameter: the check counts them off its descriptor, the Program's input gates
+(`inputGates`: its root's input nodes' members times their widths, of either binding time). That is
+`#(freeInputs \ reg)` at `reg = ∅` with no ingress taken out, and at least it at every `reg` and horizon, so `K` takes
+no registered value as pinned and `WindowGood` holds no registration values.
 The rows form has, in place of `sync_set`,
 
     "scan": descriptor,
@@ -202,8 +205,9 @@ link-window's term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 
   admits a queued connection at the first lane that frees, in the clients' arrival order, so the admissions are a
   function of the lengths, and `#Ss ≤ ∏_c (cap_c + 1)`. The second factor is the fail cell's position (`failCell`). A
   failed lane ends at its fail cell, so in a run the two coincide; `K` charges the product as the statement states it.
-* each scan's terms, from the scan's Program and its tied audits: `free` the parameters' `free` of the audits its
-  `prog` is an output of, summed (`tiedAudits`, each once; the scan's own is 0, as it registers the rows, its `prog` is
+* each scan's terms, from the scan's Program and its tied audits: `free` the free inputs the check counts off the
+  descriptor (`inputGates`) of each audit its `prog` is an output of, summed (`tiedAudits`, each once; the scan's own is
+  0, as it registers the rows, its `prog` is
   those audits' output, and bucket 0 starts from the empty state, constants of `IngressScanFirst`: the egress tie
   moves the free term from the scan's `prog` to the tied audit's inputs), `steps` T, `faulty_bits`
   `b · max(b_ing, b_eg)` with `b_ing` an ingress instance's return bits (its verdict u16, state and view) and `b_eg` an
@@ -261,10 +265,10 @@ def failReasons : List String := ["late", "limit", "upstream", "ingress", "malfo
 /-- A cell's header: its kind u8, its connection's ordinal u32 and its payload's length u32. -/
 def cellHeader : Nat := 9
 
-/-- A compute audit's layout terms, its free inputs it doesn't register and its monitoring period, and what its Program
-gives: its SHA-512, its units (its root's template instances), the most bits one of them commits, and its slot entries'
-templates (`entries`: each root template node calling a `SlotEntry_v1` or `SelectEntry_v1` Definition, `entryIds`, by
-its descriptor id, members and closure digest, `slotEntryDigest`). -/
+/-- A compute audit's layout terms, its free inputs (its Program's input gates, `inputGates`) and its monitoring period,
+and what its Program gives: its SHA-512, its units (its root's template instances), the most bits one of them commits,
+and its slot entries' templates (`entries`: each root template node calling a `SlotEntry_v1` or `SelectEntry_v1`
+Definition, `entryIds`, by its descriptor id, members and closure digest, `slotEntryDigest`). -/
 structure Audit where
   free : Nat
   steps : Nat
@@ -613,12 +617,22 @@ def selectEntryPins : List String :=
 /-- The entries' Definitions the check takes, by closure digest: `slotEntryPins` and `selectEntryPins`. -/
 def entryPins : List String := slotEntryPins ++ selectEntryPins
 
+/-- **A Program's input gates**: each of its root's input nodes (`Flock.Program.inputId?`, of either binding time) gives
+its members times its width, so a `Value<w>` leaf is `w` Boolean input gates. The decoder refuses an input node
+outside the root's body, so these are all of them: `#freeInputs` at no ingress, at least `#(freeInputs \ reg)` at
+every `reg` and horizon. It reads the root's nodes, not the unrolled circuit. -/
+def inputGates (prog : Flock.Program.Prog) : Nat :=
+  (((prog.defs[prog.root]?).map (·.body.nodes)).getD #[]).foldl (fun n x => n + match prog.defs[x.fn]? with
+    | some d => if d.prim then ((Flock.Program.inputId? d.key).map (x.members * ·.2)).getD 0 else 0
+    | none => 0) 0
+
 /-- A compute audit's layout terms and its Program, from the Program's descriptor (`Flock.Program.decode` of its
 canonical bytes): its units are its root's template instances, each committing its template's return; a root with no
-template is refused. Its slot entries' templates are its root's template nodes whose Definition is `SlotEntry_v1` or
+template is refused. Its free inputs are the Program's input gates (`inputGates`), counted here and never read from
+the parameters. Its slot entries' templates are its root's template nodes whose Definition is `SlotEntry_v1` or
 `SelectEntry_v1` (`entryIds`), each with its closure digest (`slotEntryDigest`). -/
 def auditOf (a : Json) (ctx : String) : V Audit := do
-  exactly a ["free", "program", "steps"] ctx
+  exactly a ["program", "steps"] ctx
   let pj ← Flock.J.get a "program" ctx
   let prog ← match Flock.Program.decode (← Flock.canon pj).toUTF8 with
     | .ok prog => pure prog
@@ -633,7 +647,7 @@ def auditOf (a : Json) (ctx : String) : V Audit := do
     | none => none
   let entries ← slots.mapM fun (k, n) => do
     pure (k, n, ← (slotEntryDigest pj k).mapError (s!"{ctx}: " ++ ·))
-  pure { free := ← Flock.J.nat a "free" ctx, steps := ← Flock.J.nat a "steps" ctx, program := Flock.hexOf prog.sha512,
+  pure { free := inputGates prog, steps := ← Flock.J.nat a "steps" ctx, program := Flock.hexOf prog.sha512,
          units := templates.foldl (· + ·.1) 0, bits := templates.foldl (fun b t => max b t.2) 0, entries }
 
 /-- Whether a batch node of ingress buckets `t0, t0 + 1, …` reads the slot entries at their slots: for each lane `j`
@@ -1101,8 +1115,8 @@ def factsOf (what : String) (prof : Core.Integrity) (pub : Json) : Found Facts :
   | .error e => refuse s!"{what}: {e}"
 
 /-- Link-window `w`'s findings in the rows form, in the order the module docstring gives, and on acceptance its scan's
-facts and its tied audits' free inputs (`tiedAudits`: the parameters' `free` of each audit whose output the scan's
-`prog` is, each once). -/
+facts and its tied audits' free inputs (`tiedAudits`: each audit whose output the scan's `prog` is, once, at its
+Program's input gates, `inputGates`). -/
 def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array Json) (w : Nat)
     (reg : Json) (x : Window) : Found (Facts × Nat) := do
   let what := s!"window {w}"
