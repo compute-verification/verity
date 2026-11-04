@@ -16,7 +16,8 @@ alone (`ref_blockOf`), and it is correct exactly when the unit's gates are and e
 (`correct_blockOf`).
 
 * Where the lowered gates sit: wire `g`'s `gateSize` gates are at `off C g` onward (`gates_off`), every gate of
-  `progOf C` is one of them (`exists_block`), and two wires' blocks don't meet (`block_inj`).
+  `progOf C` is one of them (`exists_block`), and two wires' blocks don't meet (`block_inj`). Each reads only earlier
+  gates and each returned position is a gate (`progOf_topological`).
 * A row `(⊕ a) ∧ (⊕ b)` is lowered to the XOR of `a`'s positions, the XOR of `b`'s and their AND, at `posOf C g`. The
   two XORs are interior to the unit (`boundary_inner`): no output, input or gate of another unit reads them, so `Correct`
   asks nothing of their committed values, and the AND reads them as the unit computes them.
@@ -588,6 +589,22 @@ theorem reads_lt {p : ℕ} {x : BGate} (hx : (progOf C κ).gates[p]? = some x) {
   · exact lt_of_lt_of_le (posOf_lt_off (C.topo g a ha)) (Nat.le_add_right _ _)
   · omega
   · omega
+
+/-- Every wire's position is a gate of the lowered program. -/
+theorem posOf_lt_length (g : Fin C.N) : posOf C g < (progOf C κ).gates.length := by
+  have h1 := one_le_gateSize (C.op g)
+  have h := gates_off (κ := κ) g (j := gateSize (C.op g) - 1) (by omega)
+  rw [← posOf_eq] at h
+  have hl : gateSize (C.op g) - 1 < (lower C κ g).length := by rw [length_lower]; omega
+  rw [List.getElem?_eq_getElem hl] at h
+  exact (List.getElem?_eq_some_iff.1 h).1
+
+/-- **The lowered program is topologically ordered** (`Prog.Topological`): each gate reads only earlier gates
+(`reads_lt`), and each returned gate is a wire's position, one of its gates. -/
+theorem progOf_topological : (progOf C κ).Topological := by
+  refine ⟨fun _ _ hx _ hi => reads_lt hx hi, fun o ho => ?_⟩
+  obtain ⟨g, -, rfl⟩ := List.mem_map.1 ho
+  exact posOf_lt_length g
 
 /-- Gates `I` that are inputs read nothing, so adding them to `U` moves no gate on or off its boundary. -/
 theorem boundary_append_inputs {Cp : Claims.Sampling.Prog} {U I : List ℕ}

@@ -18,6 +18,7 @@ import Proofs.Flock.Bridge.PublicDeployed
 import Proofs.Flock.Bridge.Honest
 import Proofs.Flock.Bridge.V5
 import Proofs.Flock.Bridge.Public
+import Proofs.Flock.Bridge.RelDeploy
 
 /-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement
 of `SampledKSLive` is recorded. `KSLive`: `Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`,
@@ -33,7 +34,8 @@ at the code's partition (`Flock.Bridge.relDeploy_ofCircuit`).
 `Flock.SecurityProofs.DeltaPubDeployed : Flock.Guarantees.DeltaPubDeployed`, `deltaPub < 1` at the deployment's
 parameters. `Honest`: `Flock.SecurityProofs.SampledKSLiveHonest : Flock.Guarantees.SampledKSLiveHonest`, the file
 hypotheses of V2, V3 and Pub at the deployed session, from the named premise that its files parse
-(`Bridge.Assumptions.ServedFilesParse`). -/
+(`Bridge.Assumptions.ServedFilesParse`). `RelDeploy`: `RelDeployTarget`, proved (`Flock.Bridge.relDeploy`), and its
+leaf-map form at V5's layout (`Flock.Bridge.relDeployL`). -/
 
 /-- **`SampledKSLive` is stated** (`Flock.Guarantees.SampledKSLiveStated`). -/
 theorem Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated := rfl
