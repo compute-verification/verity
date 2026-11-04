@@ -1530,13 +1530,17 @@
    "owner": "@network-accounting",
    "digest": "0d433e5271a1ae85c0d7fde2eacabd9de68f97a6760809219bdf1ab0ba5234ec"
   },
+  "NetTiming.SchedulesCovered": {
+   "owner": "@network-accounting",
+   "digest": "767ae474e9250336583b74a2c21af271e6294275cae4b0a63d321bcfde447cea"
+  },
   "NetTiming.SchedulesHeld": {
    "owner": "@network-accounting",
    "digest": "ef3dc8e45f7f5aa3a85d6bfa4e16bfd85edf4b4a60ae1bf35f0ba3b825120f8f"
   },
   "NetTiming.SenderDecodes": {
    "owner": "@network-accounting",
-   "digest": "57f1ac7a9f0a6d967c78005f17ef9880ba2c3680e9e6d624e2cbad89a2691629"
+   "digest": "621346fd7e57e053597eb741c016a7e58395610b3992ceaea041b53d40c15e1b"
   },
   "NetTiming.StatusComplete": {
    "owner": "@network-accounting",
@@ -29536,10 +29540,10 @@
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.Period": {
-   "digest": "3c72563e49b03e7fe1cfe11394dfe54c6b10b8dc67119f469c713a33c243aa8e",
+   "digest": "060866ff435a63c8f3689abf08043391938fad9ed16bd59908ca223cc74e3cc6",
    "definitions": {
     "NetTiming.Guarantees.PeriodLeakAccepted": "0db3f3a734d201ea45375c21d5f216e32657736e057303e8cb3291e0732a3531",
-    "NetTiming.Guarantees.PeriodLeakRegistered": "79ebe236812c4d1257a7dd6dfc7dbc9816c7d1846745f64dce1596c5ebd20034"
+    "NetTiming.Guarantees.PeriodLeakRegistered": "a950c611a388e2a0afa380e293fdc65946330ba10ed90b6f8f567883d6f1af09"
    },
    "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted", "NetTiming.SecurityProofs.PeriodLeakRegistered"]
   },
@@ -29599,22 +29603,29 @@
    ]
   },
   "Definitions.NetworkCertifier.Period": {
-   "digest": "8e088d3be365efbaa83339fc9a903c2fedcef9a1a7a630f34c7ff7fa02dd0264",
+   "digest": "0e8a564bd7e6ae39698fec52bda52856b27d3ba183386c09a8fa94637c7f15a9",
    "definitions": {
     "NetTiming.RegOpensAt": "3a74b3e27c2cb7e1f75661279c29c44bd91dd037f30b51d67f6d27a5502da92f",
     "NetTiming.SameRegistration": "7604bb256ec6683474664e855d7454fcef82e5bd22247f0e1b78612d6147c6d6",
-    "NetTiming.SchedulesHeld": "ef3dc8e45f7f5aa3a85d6bfa4e16bfd85edf4b4a60ae1bf35f0ba3b825120f8f",
-    "NetTiming.SenderDecodes": "57f1ac7a9f0a6d967c78005f17ef9880ba2c3680e9e6d624e2cbad89a2691629",
-    "NetTiming.TapsOpen": "fc5a60237f1fc714c2469442c21862bf65776a0b8e47658e90c9e51a899704ae",
     "NetTiming.WindowGood": "3c79b3da5aebc32d34db8adbdea63884d52ac19001dc1060d807ee7e9ad60eea",
-    "NetTiming.WindowGoodReg": "ec85cf9b5459178341b8a5411d4d8c475bc1d3be245947aa957dadaee862820f",
-    "NetTiming.WindowsPlaced": "3c51a220f192b89d144ab2db548f09204a5039ae593305a11714cb5cabd0b157"
+    "NetTiming.WindowGoodReg": "ec85cf9b5459178341b8a5411d4d8c475bc1d3be245947aa957dadaee862820f"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.PeriodLeakRegistered"
    ]
+  },
+  "Definitions.NetworkCertifier.PeriodConditions": {
+   "digest": "79b25021a2a60d1f71b6eb0b529cda579757ec228751fb5e1313ef126067c63c",
+   "definitions": {
+    "NetTiming.SchedulesCovered": "767ae474e9250336583b74a2c21af271e6294275cae4b0a63d321bcfde447cea",
+    "NetTiming.SchedulesHeld": "ef3dc8e45f7f5aa3a85d6bfa4e16bfd85edf4b4a60ae1bf35f0ba3b825120f8f",
+    "NetTiming.SenderDecodes": "621346fd7e57e053597eb741c016a7e58395610b3992ceaea041b53d40c15e1b",
+    "NetTiming.TapsOpen": "fc5a60237f1fc714c2469442c21862bf65776a0b8e47658e90c9e51a899704ae",
+    "NetTiming.WindowsPlaced": "3c51a220f192b89d144ab2db548f09204a5039ae593305a11714cb5cabd0b157"
+   },
+   "guarantees": ["NetTiming.SecurityProofs.PeriodLeakRegistered"]
   },
   "Definitions.NetworkCertifier.PooledLeak": {
    "digest": "feacd6c22bbf9dbfdecb6334f134465878f92bf72ed142f82ebc81e18a8c137a",
