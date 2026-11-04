@@ -1719,6 +1719,35 @@ def test_the_run_verdict_refuses_a_give_up_made_after_its_coin(tmp_path):
     assert VR.verify_passes([path], 3, 1, "test", coins)["answer"]["verdict"] == "accept"
 
 
+def test_the_run_verdict_takes_its_coin_from_one_draw_on_its_commitment(tmp_path):
+    """With ``draw`` (``served_passes.py verify --draw-gate``, `pearl_c.draw.draw`) the verifier's coin is the draw's on the
+    run's commitment, asked for once, before any replay: the record carries what the draw returned beside its source, and
+    a verdict over the same passes takes that source without drawing again. A draw the gate or its challenger refuses
+    rejects the run with why, drawing no source on the node and writing no record."""
+    path = proved_pass(tmp_path, PROMOTED[0])[0]
+    coins, record, asked, coin = published(path), tmp_path / "coin.json", [], b"verifier" * 4
+
+    def draw(root: bytes) -> tuple[bytes, dict]:
+        asked.append(root)
+        return coin, {"session": {"session": "s20261104T0900Z-0001"}}
+    first = VR.verify_passes([path], 3, 1, "test", coins, record=record, draw=draw)
+    held = json.loads(record.read_text())
+    assert first["answer"]["verdict"] == "accept" and asked == [bytes.fromhex(first["commitment"])], first["line"]
+    assert (first["source"], held["source"], held["draw"]) == (coin.hex(), coin.hex(), draw(b"")[1])
+    asked.clear()
+    assert VR.verify_passes([path], 3, 1, "test", coins, record=record, draw=draw)["source"] == coin.hex() and not asked
+
+    def refused(root: bytes) -> tuple[bytes, dict]:
+        raise Ch.CoinError("the challenger gate refused reserve (exit 3): --peer 'x': one of []")
+    r = VR.verify_passes([path], 3, 1, "test", coins, record=tmp_path / "refused.json", draw=refused)
+    assert r["answer"]["verdict"] == "reject" and "source" not in r and not (tmp_path / "refused.json").exists()
+    assert r["answer"]["reason"] == ("the verifier's draw session: CoinError: the challenger gate refused reserve (exit 3): "
+                                     "--peer 'x': one of []")
+    SP = load("pearl_c_vllm_served_passes", KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+    with pytest.raises(SystemExit):
+        SP.main(["verify", "--passes", str(tmp_path), "--out", str(tmp_path / "v.json"), "--draw-gate", "ssh gate"])
+
+
 def test_a_tie_over_a_retention_holds_each_retained_pass_at_its_round_and_passes_over_the_dropped_rounds(tmp_path):
     """With round 0 dropped before the coin, W over both rounds ties the retained pass at its round 1, its dropped round's
     entries crediting nothing; without the drop those entries are a call the run doesn't hold, and the pass at round 0

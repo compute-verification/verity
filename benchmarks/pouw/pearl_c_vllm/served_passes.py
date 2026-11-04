@@ -8,7 +8,8 @@ all of them: `pouw.install`'s pass boundary under serving (`pouw_pass`: each eng
   served_passes.py volunteer --passes DIR --out volunteer.json [--jobs J] [--device DEBIT_CUBIN [--device-check N]]
   served_passes.py retain --passes DIR [--volunteer volunteer.json] [--drop ROUND ...] [--window-record W]
   served_passes.py verify --passes DIR [--manifest M ...] [--tie W] --out verify.json [--answer answer.json]
-                          [--draws 459] [--delta 1/100] [--jobs J] [--fast] [--coin-record R]
+                          [--draws 459] [--delta 1/100] [--jobs J] [--fast] [--coin-record R] \\
+                          [--draw-gate CMD --draw-peer NAME]
 
 ``serve`` builds the spec's preset with its Pearl-C arm (`pearl_c_arm`: ``--arm``, else the spec's one; `verity_bench`'s
 ``engine_args`` and ``protocols_config``, whose in-process challenger is the epoch's coins) and the pouw setting
@@ -68,7 +69,10 @@ the device numbers calls across the epoch, and a run whose passes share an index
 reads every pass, holds the window record ``--tie W`` (``retain --window-record W`` writes it) to them where one is named
 (`verify_run.tie`: each call's ``pearl-a/<s>/<c>`` and ``pearl-y/<s>/<c>`` entry its root and its domain recomputed from
 the salt and the call's index), takes the verifier's coin, and replays ``--draws`` work-weighted tiles over all of them and
-each pass's exclusion tiles.  It writes the details to ``--out``, with, where ``served.json`` says which passes the timed
+each pass's exclusion tiles.  The coin is drawn on the node, or with ``--draw-gate CMD --draw-peer NAME`` it is a live
+draw session's on the auditor host (`pearl_c.draw`: reserved withheld through the gate's command CMD, under the lane's
+key, and opened on the run's commitment), its session and opening in the coin record beside it, which the piece checks
+against the auditor's ledger (`pearl_c.draw.draw_reason`).  It writes the details to ``--out``, with, where ``served.json`` says which passes the timed
 call made and no ``--manifest`` names others, the credit over those retained alone (`timed_credit`), and the core answer
 (`answer_of`'s form, ``public.work.credited`` the MACs credited at Pearl's Assumption 1 at ``--delta``) to ``--answer``
 (default ``answer.json`` beside ``--out``, the file `served_verdicts.sh` reads as a piece's core answer), prints one line
@@ -460,9 +464,16 @@ def verify(args: argparse.Namespace) -> int:
     if paths is not None:
         coins = VR.epoch_coins(passes / "coins.json")
         window = json.loads(Path(args.tie).read_text()) if args.tie else None
+        draw = None
+        if args.draw_gate:
+            from verity_vllm.pipeline.commit_coins import ChallengerGate
+            from verity_vllm.protocols.pouw.pearl_c import draw as PD
+
+            def draw(root: bytes) -> tuple[bytes, dict]:
+                return PD.draw(ChallengerGate(args.draw_gate).call, args.draw_peer, root)
         doc.update(VR.verify_passes(paths, args.draws, args.jobs, args.commit, coins, fast=args.fast,
                                     cross_check=args.cross_check, delta=args.delta, window=window, rounds=rounds,
-                                    dropped=dropped, record=record))
+                                    dropped=dropped, record=record, draw=draw))
         if served is not None and not args.manifest and doc["answer"]["verdict"] == "accept":
             doc["timed"] = timed_credit(served, doc["answer"]["public"]["work"], coins, rounds)
     out = Path(args.out)
@@ -522,7 +533,13 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--cross-check", type=int, default=256)
     v.add_argument("--coin-record", help=f"the verifier's coin record (default: DIR/{COIN} where served.json names the "
                    "passes, none with --manifest)")
+    v.add_argument("--draw-gate", metavar="CMD", help="the verifier's coin from a draw session reserved withheld through "
+                   "infra's gate CMD (its ssh command, the lane's key) and opened on the run's commitment "
+                   "(pearl_c.draw), not drawn on the node")
+    v.add_argument("--draw-peer", metavar="NAME", help="with --draw-gate: this node's name in the challenger host's peers")
     args = p.parse_args(argv)
+    if args.cmd == "verify" and bool(args.draw_gate) != bool(args.draw_peer):
+        p.error("verify: --draw-gate and --draw-peer go together")
     return {"serve": serve, "same": same, "volunteer": volunteer, "retain": retain, "verify": verify}[args.cmd](args)
 
 

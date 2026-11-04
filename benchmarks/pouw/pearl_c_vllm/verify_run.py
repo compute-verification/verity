@@ -60,6 +60,7 @@ import mmap
 import os
 import sys
 import multiprocessing
+from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
@@ -522,7 +523,8 @@ def rejected(reason: str, commit: str) -> dict:
 def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: CoinCommitment | LiveCommitment,
                   source: bytes | None = None,
                   fast: bool = False, cross_check: int = 0, delta: Fraction = DELTA, window: dict | None = None,
-                  rounds: list[int] | None = None, dropped: tuple[int, ...] = (), record: Path | None = None) -> dict:
+                  rounds: list[int] | None = None, dropped: tuple[int, ...] = (), record: Path | None = None,
+                  draw: Callable[[bytes], tuple[bytes, dict]] | None = None) -> dict:
     """One served run's verdict over all its passes, in core's answer form (`core_check.answer_of`): every pass is read
     and held to what it published, and to the window record `window` where there is one (`tie`), then one source of the
     verifier's coins (`pouw.verifier.coins`), drawn after, keys `draws` work-weighted tiles over every pass's tickets
@@ -533,7 +535,9 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     ``dropped`` left out before the coin: they credit nothing, and W may register them (`tie`).  ``record`` is the
     verifier's record of its coin: the first verdict writes the run's commitment and the source there before any replay,
     and a later one over passes whose commitment is another (a retention or a give-up changed after the coin) is refused
-    (`AFTER_COIN`) while one over the same takes the same source, so a retry never redraws."""
+    (`AFTER_COIN`) while one over the same takes the same source, so a retry never redraws.  With ``draw`` the source is
+    ``draw(commitment)``'s coin, a live draw session's opened on the run's commitment (`pearl_c.draw.draw`), and the
+    record carries what it returns beside it (``draw``); a draw it refuses rejects the run, and no source is drawn here."""
     named = [read(x)[2] for x in paths]
     out = {"passes": named, "verifier_commit": commit, "draws": draws, "delta": str(delta),
            **({"rounds": list(rounds), "dropped": list(dropped)} if rounds is not None else {})}
@@ -566,12 +570,19 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
                           f"these passes are run {root.hex()[:16]})")
         source = bytes.fromhex(held["source"])
     else:
+        live = None
+        if source is None and draw is not None:
+            try:
+                source, live = draw(root)
+            except (ValueError, OSError) as ex:
+                return reject(f"the verifier's draw session: {type(ex).__name__}: {ex}")
         source = PV.coins(32) if source is None else source
         if record is not None:
             record.parent.mkdir(parents=True, exist_ok=True)
             tmp = record.with_name(record.name + ".tmp")
             tmp.write_text(json.dumps({"schema": COIN_SCHEMA, "commitment": root.hex(), "source": source.hex(), "passes": named,
-                                       **({"rounds": list(rounds), "dropped": list(dropped)} if rounds is not None else {})},
+                                       **({"rounds": list(rounds), "dropped": list(dropped)} if rounds is not None else {}),
+                                       **({"draw": live} if live is not None else {})},
                                       indent=1) + "\n")
             os.replace(tmp, record)
     key = derive(source, RUN_DRAW_DOMAIN, {"run": root})

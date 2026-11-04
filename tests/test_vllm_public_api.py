@@ -82,6 +82,10 @@ PUBLIC = {
     "verity_vllm.protocols.pouw.pearl_c.served_y": "I1: Pearl+'s served y as a retained pass commits it, a call's real rows "
                                                    "under its domain (y_domain, commit_y, retain_y) and on its device "
                                                    "(DeviceTrees), which verify_run opens on each drawn tile",
+    "verity_vllm.protocols.pouw.pearl_c.draw": "I1: Pearl+'s verifier's coin from a live draw session reserved withheld on "
+                                               "the gate under the lane's key and opened on the run's commitment (draw), "
+                                               "which served_passes.py verify takes, and the piece's check of its coin "
+                                               "record against the auditor's ledger (draw_reason)",
 }
 
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.

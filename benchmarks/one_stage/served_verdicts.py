@@ -222,14 +222,19 @@ PEARLPLUS_COINS = {"epoch": "a salt-only session on vy-challenger-1, reserved th
                             "started and opened by the install on its salt epoch's root; each pass's salt is held to it by "
                             "core_check.live_salt through the auditor's signed ledger, the host's pins log and main's "
                             "first-parent line (`pearlplus_coins`)",
-                   "draws": "the Lean verifier's IO.getRandomBytes in verify_run.py on the serving node, one source for the "
-                            "run, taken once every pass's roots are read and recorded in the passes' coin.json before any "
-                            "replay; the piece puts that record in the evidence store the moment it is drawn and holds the "
-                            "verdict to it (`coin`, `pearlplus_coin`)"}
+                   "draws": "a draw session of its own on vy-challenger-1 (the draw coin alone), reserved withheld through "
+                            "the lane's gate under its key once every pass's roots are read and opened on the run's "
+                            "commitment, one source for the run, recorded with the session in the passes' coin.json before "
+                            "any replay; the piece puts that record in the evidence store the moment it is drawn, holds the "
+                            "verdict to it (`coin`, `pearlplus_coin`) and the record to the session the auditor's ledger "
+                            "opened on that commitment (`pearlplus_draw`)"}
 #: the same where its epoch's coins are an in-process challenger's
-PEARLPLUS_COINS_IN_PROCESS = {**PEARLPLUS_COINS,
-                              "epoch": "an in-process challenger of epoch 0 (verity_bench's protocols_config, "
-                                       "pouw.challenged), held by the serving process"}
+PEARLPLUS_COINS_IN_PROCESS = {"epoch": "an in-process challenger of epoch 0 (verity_bench's protocols_config, "
+                                       "pouw.challenged), held by the serving process",
+                              "draws": "the Lean verifier's IO.getRandomBytes in verify_run.py on the serving node, one "
+                                       "source for the run, taken once every pass's roots are read and recorded in the "
+                                       "passes' coin.json before any replay; the piece puts that record in the evidence "
+                                       "store the moment it is drawn and holds the verdict to it (`coin`, `pearlplus_coin`)"}
 #: `served_step.coins_of`'s ``source`` for a live session's coins
 LIVE_SOURCE = "challenger"
 #: the evidence store's kind for the verifier's coin record as `coin` publishes it: the record's own schema
@@ -1016,6 +1021,37 @@ def pearlplus_coin(path: Path, answer: Mapping[str, Any]) -> dict[str, Any]:
     return got
 
 
+def pearlplus_draw(record: Mapping[str, Any], out: Path, gate: str | None, key: str | None, main: Path | None,
+                   lane: str) -> str | None:
+    """Why the verifier's coin record `record` (`served_passes.py verify --draw-gate`'s) isn't a live draw session's
+    reserved for `lane` and opened on its run commitment (`pearl_c.draw.draw_reason`), read through the gate `gate`: the
+    tree of the session it names as the gate's ``fetch`` gives it, and the auditor's ledger and the host's pins log as
+    the gate answers now, written under `out`, with the challenger key whose public key's SHA-512 is `key`
+    (`challenger.pinned_key`) and main's first-parent line `main`; None when it is."""
+    from verity.core.protocols.sampled_proofs import remote
+    from verity_vllm.protocols.pouw.h1 import challenger as PHC
+    from verity_vllm.protocols.pouw.pearl_c import draw as PD
+
+    sid = ((record.get("draw") or {}).get("session") or {}).get("session")
+    if not sid:
+        return PD.NO_DRAW
+    if not (gate and key and main):
+        return "no gate, key pin or main's first-parent line to check the draw session by (--gate, --key-sha512, --main)"
+    try:
+        tgz, tree = out / "draw-session.tgz", out / "draw-session"
+        tgz.write_bytes(_gate_out(gate, "fetch", sid))
+        with tarfile.open(tgz) as t:
+            t.extractall(tree, filter="data")
+        pinned = PHC.pinned_key(tree / sid / "out" / remote.KEY, key)
+        for name in ("ledger", "pins"):
+            (out / f"draw-{name}.jsonl").write_bytes(_gate_out(gate, name))
+        ledger = PHC.Ledger.load([out / "draw-ledger.jsonl"], pinned, pins=[out / "draw-pins.jsonl"],
+                                 main=remote.main_lines(main))
+        return PD.draw_reason(record, ledger, lambda s: tree / s if s == sid else None, lane)
+    except (OSError, RuntimeError, ValueError, KeyError, TypeError, tarfile.TarError) as e:
+        return f"{type(e).__name__}: {e}"[:600]
+
+
 def give_up(volunteered: Mapping[str, Any]) -> dict[str, Any]:
     """The prover's give-up before the coin (``served_passes.py volunteer``'s document): whose words' counts it took
     (``counts``: ``device``, the card's from the debit cubin ``cubin_sha256``, every ``cross_check``-th tile and each with
@@ -1033,7 +1069,7 @@ def give_up(volunteered: Mapping[str, Any]) -> dict[str, Any]:
 def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str, Any] | None,
               unretained: Mapping[str, Any] | None = None, volunteered: Mapping[str, Any] | None = None, *,
               gate: str | None = None, key: str | None = None, main: Path | None = None,
-              coin: Path | None = None) -> dict[str, Any]:
+              coin: Path | None = None, lane: str = "vllm") -> dict[str, Any]:
     """PoUW's development piece under POUW=pearlplus (``served_pearlplus.sh``), its document written to
     ``out/development.json``: Pearl+'s own served run (``served``, `served_passes.py serve`'s document) and Pearl+'s
     verdict over every pass it retained (``verified``, its ``verify``'s; None where either wrote none). Its verdict is
@@ -1054,7 +1090,9 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     finished), a measurement too.
     ``coin``, the verifier's coin as `coin` published it (its ``coin-put.json``), is ``coin`` (`pearlplus_coin`): its
     store id or why it has none, and an accept whose run commitment or draw source isn't the published record's
-    rejects. The piece names its load (``load``: the requests, their prompt and output tokens, and the tokens a step)."""
+    rejects; under a live run its ``draw`` is why the record's coin isn't the draw session's the auditor's ledger opened
+    on its run commitment, reserved for `lane` (`pearlplus_draw`; None when it is), and an accept it refuses rejects.
+    The piece names its load (``load``: the requests, their prompt and output tokens, and the tokens a step)."""
     import served_shares as SS
 
     out.mkdir(parents=True, exist_ok=True)
@@ -1091,6 +1129,14 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
         doc.update(line=verified.get("line"), credit=(answer.get("public") or {}).get("work"), dropped=verified.get("dropped"))
     if coin is not None:
         doc["coin"] = pearlplus_coin(coin, answer)
+        if doc["coin"]["reason"] is None and live:
+            try:
+                record = json.loads((coin.parent / COIN_RECORD).read_text())
+            except (OSError, ValueError) as e:
+                record = {"error": f"{type(e).__name__}: {e}"}
+            doc["coin"]["draw"] = pearlplus_draw(record, out, gate, key, main, lane)
+            if doc["coin"]["draw"] is not None:
+                doc["coin"]["reason"] = f"its draw: {doc['coin']['draw']}"
         if doc["coin"]["reason"] is not None and answer.get("verdict") == "accept":
             reasons.append(f"coin: {doc['coin']['reason']}")
     if volunteered is not None:
@@ -1453,6 +1499,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     pp.add_argument("--key-sha512", help="the SHA-512 of the challenger's public key the deployment pins (H1_KEY_SHA512)")
     pp.add_argument("--main", type=Path, help="main's first-parent line, one commit a line (MAIN_FILE)")
     pp.add_argument("--coin", type=Path, help=f"the verifier's coin as `coin` published it (its {COIN_PUT})")
+    pp.add_argument("--lane", default="vllm", help="the lane whose gate key reserved the live run's draw session "
+                                                   "(PEARLC_CHALLENGER_LANE)")
     cn = sub.add_parser("coin")
     cn.add_argument("out", type=Path)
     cn.add_argument("--record", type=Path, required=True, help="the verifier's coin record (served_passes.py verify's "
@@ -1589,7 +1637,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if a.cmd == "pearlplus":
         doc = pearlplus(a.out, _json(a.served) if a.served else None, _json(a.verify) if a.verify else None,
                         _json(a.unretained) if a.unretained else None, _json(a.volunteer) if a.volunteer else None,
-                        gate=a.gate, key=a.key_sha512, main=a.main, coin=a.coin)
+                        gate=a.gate, key=a.key_sha512, main=a.main, coin=a.coin, lane=a.lane)
         print(f"POUW-DEV {json.dumps(development_line(doc), sort_keys=True, default=str)}", flush=True)
         return 0
     if a.cmd == "coin":
