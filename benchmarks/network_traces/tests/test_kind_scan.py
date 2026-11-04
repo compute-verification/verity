@@ -11,7 +11,8 @@ naming no value; DIR without the period's files (the split's chain step) holds t
 Program.
 A key a table declares by no name comes from the source it names: an answer's bounds per template from the templates its
 profile draws by, a report step's bounds from the δs the chain bounds at (`chain_record.eps_at_delta`'s), a scan round's
-members from its link-windows and the schedule's lanes (`scan_zk.members_of`'s). A key from anywhere else is a finding
+members from its link-windows and the schedule's lanes (`scan_zk.members_of`'s), the report's negatives from those the
+chain counts (`chain_record.report`'s: the rehearsal's, N2's and the scan's). A key from anywhere else is a finding
 naming the source, never the key, and another key of a fixed vocabulary (the scan state's port and runs, the profile's
 level, the placement's parties) a field of no declared kind; a bare ``*`` is left only where `OPEN` lists it.
 What either development check would feed the record is a finding naming the check: an advice binding in an audit's registration (what `records_audit.py audit --opening`
@@ -39,8 +40,11 @@ ROOT = HERE.parents[1]
 sys.path[:0] = [str(HERE)]
 
 import certifier_piece as CP  # noqa: E402
+import certifier_serve as CS  # noqa: E402
 import chain_record as CR  # noqa: E402
 import kind_scan as KS  # noqa: E402
+import n2_zk as N2  # noqa: E402
+import scan_zk as SZ  # noqa: E402
 from verity.core.protocols.certifier.ingress_scan import SCAN_STATE  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 
@@ -246,7 +250,7 @@ def test_the_chains_endpoint_rebuild_or_any_other_step_is_a_finding(tmp_path, pe
         (d / "chain" / "report").mkdir(parents=True)
         (d / "chain" / "report" / "report.json").write_text(json.dumps({
             "schema": "s", "verdict": "accepted", "path": "warden", "scope": None, "stubbed": ["x"],
-            "negatives_refused": {"n2/tampered": True, "scan/forged": True}, "steps": steps}))
+            "negatives_refused": {"n2/tampered": True, "scan/chain": True}, "steps": steps}))
         return [(f.file, f.path, f.why) for f in KS.scan(d)[0]]
     step = {"verdict": "accepted", "in_the_clear": "the certificates", "eps_at_delta": None}
     assert found(dict.fromkeys(KS.STEPS, step), "warden") == []
@@ -280,10 +284,10 @@ def test_dirs_files_are_the_pieces():
 
 
 #: the bare ``*`` keys no source names yet, by the files' declarations, each its key path's tail to the ``*``: in DIR a
-#: committed window's registered roots, the parameters' pins and the report's negatives; in V3c's audit and the
-#: received files, their owners'. It only shrinks.
+#: committed window's registered roots and the parameters' pins; in V3c's audit and the received files, their owners'.
+#: It only shrinks.
 OPEN = {
-    "DOCS": {"window.registered_roots.*", "audits[].pins.*", "negatives_refused.*"},
+    "DOCS": {"window.registered_roots.*", "audits[].pins.*"},
     "V3C_DOCS": {"checks_before_draw.*", "checks.*", "wrong_units.per_template.*", "window.registered_roots.*"},
     "RECEIVED": {"registered_roots.*", "values.*", "unrooted.*", "count.*", "seconds.*"},
 }
@@ -304,24 +308,32 @@ def test_a_bare_star_is_left_only_where_open_lists_it(docs):
 
 
 def test_each_source_is_one_a_table_names():
+    """Each source is one a table names, and each fixed one is what its producer writes: the δs
+    `chain_record.eps_at_delta` keys, and the negatives `chain_record.report` counts, a rehearsal's tampers but those
+    its own check accepts (``serve --tamper`` takes `certifier_serve.TAMPERS`), N2's members but honest and the scan's
+    rounds but those whose window is accepted."""
     assert {s[1:-1] for d in OPEN for ps in _keys(d) for s in ps if s[:1] == "<"} == set(KS.SOURCES)
     assert set(CR.eps_at_delta(4, 2, "subset:2")["incorrect_at_delta"]) == KS.DELTA_KEYS
+    counted = {*(f"rehearsal/{s}" for s in {"honest", *CS.TAMPERS} - {*CR.REHEARSAL_ACCEPTS}),
+               *(f"n2/{m}" for m in {*N2.ROUNDS, N2.OTHER} - {"honest"}),
+               *(f"scan/{r}" for r in {*SZ.ROUNDS} - {*CR.SCAN_ACCEPTS})}
+    assert KS.NEGATIVES == counted, "set kind_scan.NEGATIVES to the negatives chain_record.report counts"
 
 
 SECRET = "a key that carries a witness"
 
 
 def test_a_key_from_anywhere_but_its_source_is_a_finding_naming_the_source(tmp_path, period):
-    """An execution phase's bounds per template, keyed by the templates its profile draws by, and a report step's
-    bounds at the δs the chain bounds at (`chain_record.eps_at_delta`'s) scan clean; another key of either is a finding
-    at its ``<name>``, naming the source and never the key."""
+    """An execution phase's bounds per template, keyed by the templates its profile draws by, a report step's bounds at
+    the δs the chain bounds at (`chain_record.eps_at_delta`'s) and the report's negatives, each one the chain counts,
+    scan clean; another key of any is a finding at its ``<name>``, naming the source and never the key."""
     case, answer = _case(period)
     ev = json.loads(bytes.fromhex(case["evidence"]))
     a = ev["windows"][0]["answer"]
     a["profile"]["levels"][0]["draw"] = {"law": "stratified", "strata": [{"name": "t0", "size": 2, "k": 1}]}
     eps = CR.eps_at_delta(4, 2, "subset:2")
 
-    def scanned(name: str, per_template: dict, at_delta: dict) -> Path:
+    def scanned(name: str, per_template: dict, at_delta: dict, negatives: dict) -> Path:
         a["public"]["per_template"] = per_template
         d = _dir(tmp_path / name, {**case, "evidence": canonical_json(ev).hex()}, answer)
         steps = {s: {"verdict": "accepted", "in_the_clear": "the rows", "eps_at_delta": eps} for s in KS.STEPS}
@@ -329,14 +341,17 @@ def test_a_key_from_anywhere_but_its_source_is_a_finding_naming_the_source(tmp_p
         (d / "chain" / "report").mkdir(parents=True)
         (d / "chain" / "report" / "report.json").write_text(json.dumps({
             "schema": "s", "verdict": "accepted", "path": "warden", "scope": None, "stubbed": [],
-            "negatives_refused": {}, "steps": steps}))
+            "negatives_refused": negatives, "steps": steps}))
         return d
 
-    assert KS.scan(scanned("honest", {"t0": 1}, eps["incorrect_at_delta"]))[0] == []
-    d = scanned("planted", {"t0": 1, SECRET: 0}, eps["incorrect_at_delta"] | {"0.25": 1})
+    every = dict.fromkeys(KS.NEGATIVES, True) | {"n2/other_subset": "escaped the draw", "rehearsal/late": False}
+    assert KS.scan(scanned("honest", {"t0": 1}, eps["incorrect_at_delta"], every))[0] == []
+    d = scanned("planted", {"t0": 1, SECRET: 0}, eps["incorrect_at_delta"] | {"0.25": 1},
+                {"n2/tampered": True, SECRET: True})
     found = KS.scan(d)[0]
     assert sorted((f.file, f.path, f.why) for f in found) == [
         ("case.json", "evidence.windows[].answer.public.per_template.<template>", KS.SOURCES["template"][1]),
+        ("chain/report/report.json", "negatives_refused.<negative>", KS.SOURCES["negative"][1]),
         ("chain/report/report.json", "steps.n2.eps_at_delta.incorrect_at_delta.<delta>", KS.SOURCES["delta"][1])]
     assert not any(SECRET in str(f) or "0.25" in str(f) for f in found)
     assert KS.main([str(d)]) == 1

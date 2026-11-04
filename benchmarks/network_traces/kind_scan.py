@@ -13,10 +13,10 @@ and evidence hex, `certifier_piece.write_case`, as the composite reads it) or as
 (DIR/period). Each file's JSON is walked to its leaves, the commitment's and evidence's bytes decoded as JSON, and each
 leaf's key path (a list's items ``[]``) must match one its file declares: ``<name>`` is any one key its source gives
 (`SOURCES`: a template the answer's profile draws by, a δ the chain's report bounds at, a member of a scan round of
-the period's link-windows and lanes, DIR/period's files read inside the one case they split, `PERIOD_FILES`), a key
-from anywhere else a finding naming the source in its place, never the key; ``*`` is any one key, in the tables no
-source names yet; and ``**`` everything below, a Program's descriptor (`DESCRIPTOR`, the circuit, which is structure)
-or a development check's field. A list's length and an object's keys are the shape of the leaves they hold. So a field
+the period's link-windows and lanes, a negative the chain's report counts, DIR/period's files read inside the one case
+they split, `PERIOD_FILES`), a key from anywhere else a finding naming the source in its place, never the key; ``*``
+is any one key, in the tables no source names yet; and ``**`` everything below, a Program's descriptor (`DESCRIPTOR`,
+the circuit, which is structure) or a development check's field. A list's length and an object's keys are the shape of the leaves they hold. So a field
 no declaration names, one a change adds included, is a finding until its kind is declared here: a window's own number,
 a count of its requests, the advice's length.
 
@@ -104,6 +104,12 @@ ENDPOINT = Development("the chain's endpoint rebuild (CR_ENDPOINT: the endpoint'
 STEPS = ("custody", "certificates", "n2", "scan", "lean")
 #: the δs the chain's report bounds at, as `chain_record.eps_at_delta` keys them (`chain_record.DELTAS`)
 DELTA_KEYS = frozenset({"0.5", "9.54e-07"})
+#: the negatives the chain's report counts (`chain_record.report`), each by its name: a rehearsal's tampers but those
+#: its own check accepts (``rehearsal/<tamper>``), N2's members but honest (``n2/<member>``) and the scan's rounds but
+#: those whose window is accepted (``scan/<round>``)
+NEGATIVES = frozenset({*(f"rehearsal/{t}" for t in ("late", "extra", "drop", "byte")),
+                       *(f"n2/{m}" for m in ("tampered", "extra", "late", "other_subset")),
+                       *(f"scan/{r}" for r in ("chain", "tampered", "unread"))})
 #: a scan round's member names (`scan_zk.members_of`): its link-windows' (``first``, ``last``, link-window ``w``'s
 #: ingress and egress) and its lanes' (lane ``j``'s block)
 MEMBER = re.compile(r"first|last|(?:ingress|egress)-(?P<w>0|[1-9][0-9]*)|block-c(?P<j>0|[1-9][0-9]*)")
@@ -137,6 +143,8 @@ SOURCES: dict[str, tuple[frozenset[str] | str | Callable[[tuple[dict, ...]], Cal
     "delta": (DELTA_KEYS, "not a δ the chain's report bounds at (chain_record.DELTAS)"),
     "member": (_members, "not a member of a scan round of the period's link-windows and lanes (scan_zk.members_of: "
                          "first, last, ingress-<w>, egress-<w>, block-c<j>)"),
+    "negative": (NEGATIVES, "not a negative the chain's report counts (chain_record.report: rehearsal/<tamper>, "
+                            "n2/<member>, scan/<round>)"),
 }
 
 
@@ -232,9 +240,10 @@ ANSWER = {
 STEP = {"verdict": O, "in_the_clear": S, "eps_at_delta": O,
         **{f"eps_at_delta.{k}": S for k in ("law", "units", "drawn", "per_proof")},
         "eps_at_delta.incorrect_at_delta.<delta>": O}
-#: the chain's report less what `certifier_piece.PUBLIC` drops: its verdict, each `STEPS` step's and what the path stubs
+#: the chain's report less what `certifier_piece.PUBLIC` drops: its verdict, each `STEPS` step's, what the path stubs and
+#: each negative's outcome (`NEGATIVES`)
 REPORT = {
-    "schema": S, "verdict": O, "path": S, "scope": S, "stubbed[]": S, "negatives_refused.*": O,
+    "schema": S, "verdict": O, "path": S, "scope": S, "stubbed[]": S, "negatives_refused.<negative>": O,
     **{k: v for s in STEPS for k, v in under(f"steps.{s}", STEP).items()},
     "steps.endpoint.**": ENDPOINT,
 }
