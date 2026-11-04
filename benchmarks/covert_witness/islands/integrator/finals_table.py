@@ -1,5 +1,5 @@
 """The finals table: every finals point (FINALS.json) scored on the sealed final set, per (start, gain) and seed, with
-p = C/H against the honest H and the search run's ρ beside it.
+p = C/H against the best route found and the search run's ρ beside it.
 
     python islands/integrator/finals_table.py fetch --launches JOB.jsonl --to DIR [--arts ARTS.json]
     python islands/integrator/finals_table.py build --records DIR --policy TABLES --launches JOB.jsonl --out OUT
@@ -23,15 +23,21 @@ unavailable. `build` reads te_core and changes nothing in it:
   first checkpoint at or below its target (C that checkpoint's |C|), else it is "not reached" at its last;
 - per point: the seeds reached (k of the seeds finished, of those planned: its FINALS.json reruns but a seed dropped or
   skipped there and never launched), C's mean and spread over the reached seeds;
-- H at (start, gain) is the honest point (`honest`: its island a reference direction, te_core.frontier's
-  `REF_DIRECTIONS`) with the least mean C, with its own spread, and p = C/H; `H_any`, the
-  least mean C over every point, covert routes included (te_core.frontier's `target`, the 19:50Z ruling, and
-  te_core.algorithm_policy's H), and `p_any` beside it; where the search's honest H (the least C_gates among the
-  honest points' reached rows in the scorer's table) has no finished seed reaching it, `H_caveat` says so, since p
-  then reads against a dearer H;
+- H at (start, gain) is the point with the least mean C over its reached seeds, every route's finals seeds counted,
+  covert ones included (the scorer's rule: te_core.frontier's `target` and te_core.algorithm_policy's H), with its own
+  spread; the headline p, `p_any` (plot 2's "p relative to the best route found"), is C/H. `H_honest`, the least
+  over the honest points (`honest`: its island a reference direction, te_core.frontier's `REF_DIRECTIONS`), and
+  `p_honest` ("p against the honest reference") are beside it as a sensitivity;
+- each H has its search split's (`search_h`): over every route the scorer's H_gates and the reached row at it, over
+  the honest ones the reached row with the least C_gates among the reference routes (a row's method_key direction,
+  as te_core.plots reads one). Where that H's point has no finished finals seed when the table builds (not a finals
+  point, not rerun, or its reruns unfinished), the final set's p would read against a different H, so the headline
+  p is the search split's, the scorer's stored p (`p_honest`: C_gates over the honest H's), labelled why
+  (`p_basis`), with the final set's (`p_any_final`, `p_honest_final`) beside it; where that point finished but no seed
+  reached g, `H_caveat` says so;
 - ρ is the search run's at its first checkpoint reaching g in the scorer's stored table (`--policy`'s
   algorithm-policy.json): ρ is a property of the computation, not of the data (`RHO_LABEL`); where the search run
-  didn't reach g it is its last checkpoint's, labelled so, and S = p·ρ on the headline rho_own (rho_default, so
+  didn't reach g it is its last checkpoint's, labelled so, and S = p_any·ρ on the headline rho_own (rho_default, so
   labelled, from a table older than rho_own).
 
 Nothing is left out silently: each point at each gain carries its seeds' states and every reason (`label`), and a
@@ -66,6 +72,12 @@ SEEDS = ("own", "101", "102")
 RHO_LABEL = "rho from the search run's trace"
 #: FINALS.json's label for a point left without its three seeds
 SINGLE = "single seed: a rerun doesn't fit before the nodes end"
+#: the headline p's basis where the search split's H has a finished finals seed
+FINAL_SET = "final set"
+#: a launched rerun's states while its record isn't in (`checkpoints`', and `fetch`'s why)
+NOT_YET = ("no finished record", "no run record in the store")
+#: the two H, the headline's first: (key, the scorer's name for its p)
+KINDS = (("any", "p relative to the best route found"), ("honest", "p against the honest reference"))
 
 
 def research() -> list[str]:
@@ -210,6 +222,38 @@ def rho_of(row: dict | None, run: str, g: float) -> dict:
         "S_reads": reads, "label": f"{RHO_LABEL}, {at}{own}"}
 
 
+def search_h(prows: dict[tuple[str, float], dict], label: str | None, g: float, kind: str) -> dict | None:
+    """The search split's H at the scorer's start `label` and gain `g`: over every route (`kind` "any") the scorer's
+    H_gates and the reached row at it (record None if no stored row is), over the honest ones the reached row with the
+    least C_gates among the reference routes (its method_key's direction in te_core.frontier's `REF_DIRECTIONS`)."""
+    group = [r for r in prows.values() if label is not None and r.get("start") == label and float(r["gain_target"]) == g]
+    best = min((r for r in group if r.get("reached") == "yes" and r.get("C_gates") and (
+        kind == "any" or str(r.get("method_key") or "").split("/")[0] in frontier.REF_DIRECTIONS)),
+        key=lambda r: r["C_gates"], default=None)
+    c = best and best["C_gates"]
+    if kind == "any":
+        c = next((r["H_gates"] for r in group if r.get("H_gates")), c)
+        best = best if best and math.isclose(best["C_gates"], c, rel_tol=1e-9) else None
+    return {"record": best and best["record"], "C_gates": c} if c else None
+
+
+def p_basis(s: dict | None, hp: dict | None, k: str) -> str:
+    """What the headline p at gain `k` reads: the final set (`FINAL_SET`), unless the search split's H `s` (its finals
+    point `hp`, None if it isn't one) has no finished finals seed, when it is the search split's p, labelled why."""
+    if s is None or (hp and hp["at"][k]["finished"]):
+        return FINAL_SET
+    head = "p on the search split: H"
+    if hp is None:
+        return f"{head} ({s['record'] or 'C %.3g gates, no stored row at it' % s['C_gates']}) is not a finals point"
+    ran = {v["rerun"]: v["state"] for v in hp["seeds"].values() if v["rerun"]}
+    if ran:
+        odd = [f"{r}: {st}" for r, st in ran.items() if not st.startswith(NOT_YET)]
+        return f"{head}'s reruns {', '.join(ran)} not finished" + (f" ({'; '.join(odd)})" if odd else "")
+    if hp["seeds"]:
+        return f"{head}'s reruns not launched (seeds {', '.join(hp['seeds'])} planned)"
+    return f"{head} ({hp['point']}, {s['record']}) not rerun in the finals"
+
+
 def build(finals: dict, runs: dict[str, dict[str, str]], records: Path, fits: dict[str, dict],
           prows: dict[tuple[str, float], dict], shapes: dict[str, dict], ladder=None, fetched: dict | None = None,
           pins: tuple[str, ...] = ()) -> dict:
@@ -260,11 +304,19 @@ def build(finals: dict, runs: dict[str, dict[str, str]], records: Path, fits: di
     tables = []
     for start in sorted({p["start"] for p in points}):
         mine = [p for p in points if p["start"] == start]
+        by_run = {p["run"]: p for p in mine}
+        scorers = next((r["start"] for p in mine for g in GAINS if (r := prows.get((p["run"], float(g))))), None)
         for g in GAINS:
             k = str(g)
             got = [p for p in mine if p["at"][k]["C"]]
-            h = min((p for p in got if p["honest"]), key=lambda p: p["at"][k]["C"]["mean"], default=None)
-            h_any = min(got, key=lambda p: p["at"][k]["C"]["mean"], default=None)
+            hf = {"any": min(got, key=lambda p: p["at"][k]["C"]["mean"], default=None),
+                  "honest": min((p for p in got if p["honest"]), key=lambda p: p["at"][k]["C"]["mean"], default=None)}
+            hs, hp, basis = {}, {}, {}
+            for kind, _ in KINDS:
+                hs[kind] = search_h(prows, scorers, float(g), kind)
+                rec = (hs[kind] or {}).get("record")
+                hp[kind] = by_run.get(rec.rpartition("@")[0]) if rec else None
+                basis[kind] = p_basis(hs[kind], hp[kind], k)
             rows, left = [], {}
             for p in mine:
                 a = p["at"][k]
@@ -287,42 +339,62 @@ def build(finals: dict, runs: dict[str, dict[str, str]], records: Path, fits: di
                        "rho_default": a["rho"].get("rho_default"), "basis_default": a["rho"].get("basis_default"),
                        "S_reads": a["rho"].get("S_reads"), "rho_label": a["rho"]["label"],
                        "rho_record": a["rho"].get("record"), "label": p["label"]}
-                for name, hh in (("", h), ("_any", h_any)):
-                    hc = hh and hh["at"][k]["C"]
-                    p_ = c["mean"] / hc["mean"] if c and hc else None
-                    row |= {f"p{name}": p_, f"p{name}_range": [c["min"] / hc["max"], c["max"] / hc["min"]] if p_ else None}
-                row["S"] = row["p"] * rho if row["p"] is not None and rho is not None else None
+                srow = prows.get((p["run"], float(g)))
+                for kind, _ in KINDS:
+                    hc = hf[kind] and hf[kind]["at"][k]["C"]
+                    fin = c["mean"] / hc["mean"] if c and hc else None
+                    rng = [c["min"] / hc["max"], c["max"] / hc["min"]] if fin is not None else None
+                    sea = (srow.get("p") if kind == "any" else srow["C_gates"] / hs[kind]["C_gates"]
+                           if srow.get("C_gates") and hs[kind] else None) if srow else None
+                    on = basis[kind] == FINAL_SET
+                    row |= {f"p_{kind}": fin if on else sea, f"p_{kind}_basis": basis[kind],
+                            f"p_{kind}_range": rng if on else None, f"p_{kind}_final": fin,
+                            f"p_{kind}_final_range": rng, f"p_{kind}_search": sea}
+                row["search_reached"] = srow and srow.get("reached")
+                row["S"] = row["p_any"] * rho if row["p_any"] is not None and rho is not None else None
                 rows.append(row)
-            rows.sort(key=lambda r: (not r["honest"], r["p"] if r["p"] is not None else math.inf, r["point"]))
-            searched_h = min(((row["C_gates"], p, row) for p in mine if p["honest"]
-                              and (row := prows.get((p["run"], float(g)))) and row.get("reached") == "yes"
-                              and row.get("C_gates")), key=lambda x: x[0], default=None)
-            caveat = None
-            if searched_h and all(p is not searched_h[1] for p in got):
-                cs, sp, srow = searched_h
-                sa = sp["at"][k]
-                caveat = (f"the search's honest H at {g:g}x, {sp['point']} ({srow['record']}, C {cs:.3g} gates), has no "
-                          "finished seed reaching it on the final set ("
-                          + (f"{sa['finished']} of {sa['planned']} finished): until it has, " if sa["planned"] else
-                             "not rerun in the finals): so ")
-                          + "p here reads against a dearer H")
-            tables.append({"start": start, "gain": g, "data": mine[0]["data"], "H_caveat": caveat,
-                           "H": h and {"point": h["point"], "run": h["run"], "island": h["island"],
-                                       "C": h["at"][k]["C"]},
-                           "H_any": h_any and {"point": h_any["point"], "run": h_any["run"],
-                                               "island": h_any["island"], "C": h_any["at"][k]["C"]},
-                           "H_why": None if h else "no honest point has a finished seed reaching it",
-                           "H_any_why": None if h_any else "no point has a finished seed reaching it",
-                           "rows": rows, "not_shown": left})
+            rows.sort(key=lambda r: (*(math.inf if r[f"p_{kind}"] is None else r[f"p_{kind}"] for kind, _ in KINDS),
+                                     r["point"]))
+            caveat = [f"the search split's H{'' if kind == 'any' else ' honest'} at {g:g}x, {x['point']} "
+                      f"({hs[kind]['record']}, C {hs[kind]['C_gates']:.3g} gates), has {x['at'][k]['finished']} of "
+                      f"{x['at'][k]['planned']} seeds finished and none reaching it on the final set"
+                      for kind, _ in KINDS if (x := hp[kind]) and x["at"][k]["finished"] and not x["at"][k]["reached"]]
+            tables.append({"start": start, "gain": g, "data": mine[0]["data"], "search_start": scorers}
+                          | {f"p_{kind}_basis": basis[kind] for kind, _ in KINDS}
+                          | {f"H_{kind}": h_at(hf[kind], k) for kind, _ in KINDS}
+                          | {f"H_{kind}_why": None if hf[kind] else
+                             f"no{' honest' if kind == 'honest' else ''} point has a finished seed reaching it"
+                             for kind, _ in KINDS}
+                          | {f"H_{kind}_search": hs[kind] and hs[kind] | (
+                              {"point": x["point"], "seeds": x["seeds"]}
+                              | {n: x["at"][k][n] for n in ("finished", "planned")} if (x := hp[kind]) else
+                              {"point": None}) for kind, _ in KINDS}
+                          | {"H_caveat": "; ".join(caveat) or None, "rows": rows, "not_shown": left})
     return {"points": points, "tables": tables}
+
+
+def h_at(p: dict | None, k: str) -> dict | None:
+    return p and {"point": p["point"], "run": p["run"], "island": p["island"], "C": p["at"][k]["C"]}
 
 
 def g3(x) -> str:
     return "-" if x is None else "inf" if isinstance(x, float) and math.isinf(x) else f"{x:.3g}"
 
 
+def p_cell(r: dict, kind: str) -> str:
+    """A row's p of `kind`: the headline with its range, "(search split)" where it reads that, then the final set's
+    and the search split's ("≥" where the search run didn't reach g: its last checkpoint's)."""
+    rng = r[f"p_{kind}_range"]
+    return (g3(r[f"p_{kind}"]) + (f" [{g3(rng[0])}, {g3(rng[1])}]" if rng else "")
+            + ("" if r[f"p_{kind}_basis"] == FINAL_SET else " (search split)")
+            + f" (final set {g3(r[f'p_{kind}_final'])}; search split "
+            + ("" if r["search_reached"] in ("yes", None) or r[f"p_{kind}_search"] is None else "≥")
+            + f"{g3(r[f'p_{kind}_search'])})")
+
+
 def markdown(t: dict) -> str:
-    """The table's markdown: per (start, gain) H, H_any and a row per point shown."""
+    """The table's markdown: per (start, gain) each H on the final set and the search split, what its p reads, and a
+    row per point shown, the headline p_any first."""
     lines = [f"# Finals table ({t['built_at']}, te_core {t['te_core']})", "",
              f"Targets: {t['rule']['target']}", f"H: {t['rule']['H']}", f"rho: {t['rule']['rho']}", "",
              f"Policy tables: {t['inputs']['policy']}", ""]
@@ -330,15 +402,22 @@ def markdown(t: dict) -> str:
         f = t["fits"].get(tb["data"]) or {}
         lines += [f"## {tb['start']} at {tb['gain']:g}x ({tb['data']}; fit E {g3(f.get('E'))}, gamma {g3(f.get('gamma'))})",
                   ""]
-        for name, h, why in (("honest H", tb["H"], tb["H_why"]),
-                             ("H over every route (the scorer's rule)", tb["H_any"], tb["H_any_why"])):
-            lines.append(f"- {name}: " + (f"{h['point']} ({h['island']}, {h['run']}), C {g3(h['C']['mean'])} gates, "
-                                          f"sd {g3(h['C']['sd'])} over {h['C']['n']} seeds" if h else why))
+        for kind, name in KINDS:
+            h, s = tb[f"H_{kind}"], tb[f"H_{kind}_search"]
+            lines += [f"- p_{kind}, {name}, reads: {tb[f'p_{kind}_basis']}",
+                      f"  - H{'' if kind == 'any' else ' honest'} on the final set: " + (
+                          f"{h['point']} ({h['island']}, {h['run']}), C {g3(h['C']['mean'])} gates, "
+                          f"sd {g3(h['C']['sd'])} over {h['C']['n']} seeds" if h else tb[f"H_{kind}_why"]),
+                      "  - on the search split: " + (
+                          f"{s['record'] or '-'}, C {g3(s['C_gates'])} gates, " + (
+                              f"{s['point']}, {s['finished']} of {s['planned']} finals seeds finished" if s["point"]
+                              else "not a finals point") if s else
+                          f"none: no reached row at {tb['search_start'] or 'this start'} in the scorer's table")]
         if tb.get("H_caveat"):
             lines.append(f"- CAVEAT: {tb['H_caveat']}")
-        lines += ["", "| point | island | seeds reached | C gates, mean (sd) | counted FLOPs, mean | p [range] | p_any | "
-                  "rho (which, basis) | S = p rho | label |", "|---|---|---|---|---|---|---|---|---|---|"] if tb["rows"] else [
-            "", "No point shown."]
+        lines += ["", "| point | island | seeds reached | C gates, mean (sd) | counted FLOPs, mean | "
+                  f"p_any, {KINDS[0][1]} | p_honest, {KINDS[1][1]} | rho (which, basis) | S = p_any rho | label |",
+                  "|---|---|---|---|---|---|---|---|---|---|"] if tb["rows"] else ["", "No point shown."]
         for r in tb["rows"]:
             c, which = r["C"], r["S_reads"] or "rho_own"
             basis = r["basis_own"] if which == "rho_own" else r["basis_default"]
@@ -346,9 +425,8 @@ def markdown(t: dict) -> str:
                 f"| {r['point']} ({r['run'][-4:]}) | {r['island']}{' (honest)' if r['honest'] else ''} | {r['reached']} | "
                 + (f"{g3(c['mean'])} ({g3(c['sd'])})" if c else "-") + " | "
                 + (g3(r["flops"]["mean"]) if r["flops"] else "-") + " | "
-                + (f"{g3(r['p'])} [{g3(r['p_range'][0])}, {g3(r['p_range'][1])}]" if r["p"] is not None else "-")
-                + f" | {g3(r['p_any'])} | {g3(r[which])} ({which}, {basis or '-'}) | {g3(r['S'])} | "
-                + "; ".join([r["rho_label"], *r["label"]]) + " |")
+                + f"{p_cell(r, 'any')} | {p_cell(r, 'honest')} | {g3(r[which])} ({which}, {basis or '-'}) | "
+                + f"{g3(r['S'])} | " + "; ".join([r["rho_label"], *r["label"]]) + " |")
         if tb["not_shown"]:
             lines.append("")
             lines.append("Not shown: " + "; ".join(f"{n} point(s): {why}" for why, n in tb["not_shown"].items()))
@@ -393,11 +471,15 @@ def main(argv=None) -> int:
                     "ladder_fit": str(a.ladder_fit) if a.ladder_fit else None},
          "rule": {"target": "frontier_fit.target(fit, l0, g) = E + (l0 - E) g^-gamma, E and gamma the start's data "
                             "fit in the scorer's tables, l0 each seed's start_bpb on the final set",
-                  "H": "the honest point (its island a reference direction, te_core.frontier's REF_DIRECTIONS) with "
-                       "the least mean C over its reached seeds; p = C/H; H_any and p_any over every route, the "
-                       "scorer's rule (te_core.algorithm_policy's H)",
-                  "rho": RHO_LABEL + " (the scorer's stored table); S = p * rho_own, rho_default where the table has "
-                                     "no rho_own", "single_seed": SINGLE},
+                  "H": "H_any, the point with the least mean C over its reached seeds, every route's finals seeds "
+                       "counted (the scorer's rule, te_core.algorithm_policy's H), and the headline p_any = C/H_any, "
+                       f"{KINDS[0][1]}; beside it H_honest over the honest points (their island a reference "
+                       f"direction, te_core.frontier's REF_DIRECTIONS) and p_honest, {KINDS[1][1]}. Where the search "
+                       "split's H has no finished finals seed, p is the search split's (the scorer's stored p; "
+                       "p_honest C_gates over its honest H's), so labelled in p_any_basis and p_honest_basis, with "
+                       "the final set's p_any_final and p_honest_final beside it",
+                  "rho": RHO_LABEL + " (the scorer's stored table); S = p_any * rho_own, rho_default where the table "
+                                     "has no rho_own", "single_seed": SINGLE},
          "fits": fits} | t
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "finals-table.json").write_text(json.dumps(t, indent=1, allow_nan=True) + "\n")
