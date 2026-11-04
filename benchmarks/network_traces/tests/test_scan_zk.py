@@ -671,14 +671,14 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     out = PC.reference(case)
     assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, 2 * T), out
     assert p["circuit"] == audit["registration"]["program"]
-    record = tmp_path / "window-circuit.json"
-    record.write_text(json.dumps({"format": IF.CIRCUIT, "program": program_digest(encode_program(block))}))
+    window_record = tmp_path / "window-circuit.json"
+    window_record.write_text(json.dumps({"format": IF.CIRCUIT, "program": program_digest(encode_program(block))}))
     summary = json.loads((scan / "summary.json").read_text())
     for k in (1, 2):
         (v3c := tmp_path / f"period-subset-{k}.json").write_text(json.dumps(sampled := block_audit(progs, sampled=k)))
         (scan / "summary.json").write_text(json.dumps({**summary, "v3c": {
             "registration": R.digest(sampled["registration"])}}))
-        got = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit=SP.circuit_of_record(record)))
+        got = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit=SP.circuit_of_record(window_record)))
         assert (got["verdict"], got["public"]["audits"][0]["drawn"], got["public"]["audits"][0]["units"]) == (
             "accept", k, E), got
         assert got["public"]["held"] == ["circuit", "free"], got
