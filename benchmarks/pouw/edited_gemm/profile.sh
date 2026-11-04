@@ -4,7 +4,7 @@
 # slice's per-call interleaving of the routes against plain cuBLASLt, and ncu's pipe and stall counters on the kernels.
 # Clocks are read, never set (ncu --clock-control none).
 #
-#   research run --on vy-nebius-2 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
+#   research run --on MACHINE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     -- bash benchmarks/pouw/edited_gemm/profile.sh
 set -uo pipefail
 export O=${OUT:?}

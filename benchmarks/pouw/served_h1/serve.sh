@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# served_h1's window on node 2 (serve.py): noise.cu built for the node's card (arch.sh) on the CPU, then serve.py on one
-# leased GPU for at most 28 minutes.  Extra arguments go to serve.py.
+# served_h1's window on an RTX PRO 6000 node (serve.py): noise.cu built for the node's card (arch.sh) on the CPU, then
+# serve.py on one leased GPU for at most 28 minutes.  Extra arguments go to serve.py.
 #   research run --on MACHINE --project verity --source <tree> --cwd source \
 #     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/served_h1/serve.sh
 # Coins off the node: a gated window's session (POUW_CHALLENGER_GATE) is refused, exit 13, since the gated served window
