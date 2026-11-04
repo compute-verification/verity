@@ -367,9 +367,9 @@ NEAR = 0.085  # the most a reorder took off a split, over the leaf (70B L62 q at
 def evaluate(book, model, choose):
     """Per chip@price the least cost over credit of a credited matrix (its over the leaf / the share of its MACs
     credited), the matrix setting it, the credited share of the model's MACs, the credited matrices unpriced, and
-    those a reorder could take under the line: a split at a rank priced in the natural order only, whose cost less
-    NEAR over the credit is under it (`natural`), or a variant within NEAR of it never priced with the split
-    (`unsplit`)."""
+    those a reorder could take under the line, or further under it: a split at a rank priced in the natural order
+    only whose cost less NEAR, over the credit, is under both the line and the matrix's least cost over credit
+    (`natural`), or a variant within NEAR of the line never priced with the split (`unsplit`)."""
     worst = {k: (math.inf, None, None) for k in KEYS}
     credited = 0.0
     unpriced, natural, unsplit = [], [], []
@@ -385,7 +385,7 @@ def evaluate(book, model, choose):
         if key not in book.split:
             if least_of(s) / credit < LINE + NEAR:
                 unsplit.append(t)
-        elif (book.natural_only(key) - NEAR) / credit < LINE:
+        elif (book.natural_only(key) - NEAR) / credit < min(LINE, least_of(s) / credit):
             natural.append(t)
         for k in KEYS:
             ol = s[k][0] / credit
