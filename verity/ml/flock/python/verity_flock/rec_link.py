@@ -43,8 +43,8 @@ Each table row is checked by exactly one instance. Whether the table lists every
 partition's own predicate, not this unit's.
 
 `_steps` states the computation once over two interpreters: `_Forms` for the M0 unit (`unit_circuit`) and `_Ir` for the
-Definition (`RecLink`'s body: the leaves a Call of ``Hm96Sha512Leaf_v1``, each compression a Call of
-``RecSha512Compress_v1``). `link_ref` (over ``hashlib`` and `hm96`) is the reference of both.
+Definition (`RecLink`'s body: the leaves a Call of ``Hm96Sha512Leaf_v1``, each compression a Call of `gates.lms`'s
+``Sha512Compress_v1``). `link_ref` (over ``hashlib`` and `hm96`) is the reference of both.
 """
 from __future__ import annotations
 
@@ -62,12 +62,13 @@ from verity.ml.commitments import hm96
 from verity.ml.commitments.gates.hm96 import DIGEST as HM_DIGEST
 from verity.ml.commitments.gates.hm96 import SALT as HM_SALT
 from verity.ml.commitments.gates.hm96 import Hm96Sha512Leaf, leaf_gadget
+from verity.ml.commitments.gates.lms import Sha512Compress
 from verity.ml.commitments.gates.sha512 import IV
 
 from . import ir_lower as IL
 from . import rec_links as RL
 from .class_statement import ClassDefinition
-from .rec_open import BLOCK, DIGEST, NODE_WORDS, RecSha512Compress, _sha, bytes_of, words_of
+from .rec_open import BLOCK, DIGEST, NODE_WORDS, _sha, bytes_of, words_of
 from .sha512_circuit import word_bit
 
 __all__ = ["IN_VALUE", "OUT_VALUE", "OUT_WORDS", "PORTS", "ROWS", "RecLink", "TEMPLATE", "Tree", "aux_words", "bits_for",
@@ -345,7 +346,7 @@ class _Ir:
         return [c.refs[i] for i in range(len(c.refs))]
 
     def compress(self, cv: list, msg: list) -> list:
-        return self._list(self.B.call(RecSha512Compress, Coll(DIGEST, TR._refs(cv)), Coll(BLOCK, TR._refs(msg))))
+        return self._list(self.B.call(Sha512Compress, Coll(DIGEST, TR._refs(cv)), Coll(BLOCK, TR._refs(msg))))
 
     def _pairs(self, fn, a: list, b: list) -> list:
         if len(a) != len(b):
