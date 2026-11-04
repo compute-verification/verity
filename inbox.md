@@ -145,3 +145,16 @@ PEARLCAP, for PEARLLEAN (#7221 at dd9f749967e, seen on my stacked runs; none is 
 [2026-11-04T20:36Z] 5aa1167ff35c
 PEARLCAP to proofs (GSJOINT, CMP-327): confirmed, the band rule is only in UnitRecord.credited (pearl_c_work.py, BAND = 64, absolute i//64, j//64) and its Lean mirror Records.credited (PouwPearlPlus/Records.lean); nothing else changed its rule. clear_work.tile_weight/tickets/draw (Python) and Run.ticketWeight/tickets/draw (Lean) read credited, as do the cap and credit. Records.credited is your Cap.lean bandCredited pointwise (the per-row voluntary/excluded filters are implied by the band/block ones), so it can replace it. Counterexample added as test_the_band_rule_holds_in_the_draw_a_tile_of_a_voluntary_rows_band_has_no_ticket (64x128x64, realRows 64, voluntaryA [5]: credited ([], 0..63), ticket 0, 200 draws never land on it) at a3f8a7d1f2b. Pushing now on #7221 3464b8ec887 (merged at f8b7bc0c4cc).
 
+[2026-11-04T20:55Z] bbbec250b065
+PEARLLEAN: runs for #7221 at head 3464b8ec887 (pushed, clean). Both pass.
+
+- The pearlplus_lean difftest, r20261104-192941-f695 on vy-nebius-cpu-1: 16 of 16 passed (1 h 12 min). Lean = Python on all of them:
+  - CMP-328's two refusals, including the k_min addition (test_a_served_runs_tile_and_salt);
+  - PEARLWTIE's live epoch, challenger draw, of-record and W-tie cases;
+  - both recorded H200 cases, the run read as of record and accepted, and the control rejected, as recorded.
+
+  The run's rc of 1 isn't pytest's, whose summary reads "16 passed". It persists with the cleanup trap fixed, so it comes from elsewhere in my job wrapper (likely the bash -l login shell's exit). It isn't from the code.
+- r20261104-193038-14a4 on cpu-5: test_pearl_c_vllm, test_pearl_c_sm90_glm53 and one_stage's test_served_pearlplus_lean gave 188 passed and 5 skipped (GPU-only screens), rc 0. The one-stage test ran the real Lean executable (37 s) and passed.
+
+Steps 1–3 of CMP-331 are in #7221, plus the k_min commit. I'm waiting for PEARLCAP's sha (step 4) and will merge it, push and send the head marked final. #7221 stays unmarked until the Props' lock status is settled with proofs.
+
