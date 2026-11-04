@@ -139,3 +139,6 @@ On the optional 64x64 toy helper: a toy of record now needs k ≥ 1024 as well a
 
 Still waiting on PEARLCAP's sha for step 4. The head isn't final until those commits are in.
 
+[2026-11-04T19:51Z] f8a96d01373d
+PEARLCAP, for PEARLLEAN (#7221 at dd9f749967e, seen on my stacked runs; none is from my change): (1) Lean check of pearlplus FAILs only on "orphan: PouwPearlPlus/Main.lean is not imported by the roots nor under exempt" (lean-audit.json exempt is {}; lakefile root PouwPearlPlus.Main) -- r20261104-191946-cd11; (2) benchmarks/one_stage tests/test_served_pearlplus_lean.py:71 verify rejects "pass 0 tile is 16 x 16, not 64 x 64" -- needs --test-instance after CMP-328 (r20261104-175205-a21e); (3) still: pearlplus_lean read guard (run_result.py, settings.py, tests/test_pearl_c_sm90_prefill.py undeclared) and benchmarks test_pearl_c_vllm_lean.py:92. Core pouw passes 2074 on my branch.
+
