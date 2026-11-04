@@ -18,7 +18,8 @@ program's outputs.
   (`SampledProofs.Bits.check`).
 * `vusOf`, `vbase`, `MembersOf P fs ms`: template `i`'s instances fill VUs of its own, `upv` a VU, from `vbase i`, and
   the members hold every VU once, each member one template's circuit file over VUs of that template's.
-* `instPos`: the claims position of a bit of template `i`'s instance `t`, at its member, unit and copy.
+* `instPos`: the claims position of a bit of template `i`'s instance `t`, at its member, unit and copy, and past the
+  joint program where nothing places it.
 * `wordBit`: the port word and bit of a field's bit, each field whole u16 words, packed 16 bits a word.
 -/
 
@@ -80,8 +81,9 @@ def MembersOf (P : Flock.Program.Prog) (fs : List Flock.Circuit) (ms : Members) 
 
 /-- **The claims position of a bit of template `i`'s instance `t`** in the members' joint program, at `pos`, its
 position in a member's program (of the member's circuit file and units, and the instance's unit and copy): instance `t`
-is copy `t % upv` of VU `vbase i + t / upv`, unit `u` of the first member whose VUs hold it at `u`. It is 0, the
-constant, where no member holds the VU or `pos` places nothing. -/
+is copy `t % upv` of VU `vbase i + t / upv`, unit `u` of the first member whose VUs hold it at `u`. Where no member holds
+the VU or `pos` places nothing, it is the joint program's length, a position past its gates: no gate, so neither an
+input nor an output, and a layout that reaches it fits nothing. -/
 def instPos (P : Flock.Program.Prog) (fs : List Flock.Circuit) (ms : Members) (i t : ℕ)
     (pos : Flock.Circuit → ℕ → ℕ → ℕ → Option ℕ) : ℕ :=
   let upv := (fs.getD i default).upv
@@ -90,7 +92,7 @@ def instPos (P : Flock.Program.Prog) (fs : List Flock.Circuit) (ms : Members) (i
     let ci := ms.getD m default
     ((List.range ci.2.size).find? (ci.2.getD · 0 == v)).bind fun u =>
       (pos ci.1 ci.2.size u (t % upv)).map (base ms m + ·)
-  ((List.range ms.length).findSome? inMember).getD 0
+  ((List.range ms.length).findSome? inMember).getD (jointOf ms).gates.length
 
 /-- **Bit `β` of field `π`** among the fields `ts`, each whole u16 words (`NetworkCheck.Circuit.templateOf`: an input
 row whole words, an output field of fewer than 16 bits one word), packed 16 bits a word least significant first, a

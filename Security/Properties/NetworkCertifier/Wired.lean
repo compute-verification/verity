@@ -15,8 +15,7 @@ reads its writer's value, so it is no free input, and the record's count (`Count
 files `fs`, each laid out by Bits as its template (`FilesOf`), and the members `ms` over them (`MembersOf`): every unit's
 gates, returning every unit's output copy bits. **The wires** are Bits' (`SampledProofs.Bits.wiresOf`): each source
 bit to the first claims position at its commitment position, compared at the partition's VUs, the writer's output bit
-where a unit writes it and else the first copy. `WiresBackward` says each runs to an earlier position, what the period
-check's check across an audit's members is to give from their descriptions, never walking the wires.
+where a unit writes it and else the first copy.
 
 **The registered rows** (`regGates`) are the reader rows of the registered reads of a held parameter and of the table
 reads and openings of a table over one, the rows `countsOf` counts as `registered`, bit for bit: bit `β` of a template's
@@ -24,8 +23,6 @@ port at its instance `u` (`portGates`) is its port word's bit (`wordBit`), at th
 (`instPos`, `SampledProofs.Bits.inBit`).
 
 * `CircuitCounts`: an accepted record's `free` is at least the circuit's free inputs outside its registered rows.
-* `WiredScopeAcc`: at a deployment's statement whose circuit is the members' joint program, a layout whose wires are
-  Bits' and with no ingress fits the wiring (`BoundaryGates.WiresFit`): the wires part of `NetTiming.ScopeAcc`'s `Fits`.
 * `Properties.NetworkPeriod.RowsWiresChecked`: the period check (`NetworkCheck.Period`) charges each audit the free
   inputs it counted off its registered Program, and with a circuit record those `Circuit.countsOf` counted on the record
   `Circuit.checked` read, at its pins' parameters and at those and the scan's state (`stateFree`), the record its
@@ -53,7 +50,7 @@ open Flock.Program (Prog Ty)
 open NetworkCheck.Period (templateNodes bitsOf)
 open NetworkCheck.Circuit (Stated Counts nodeOf templateDef recordOf heldOf)
 open SampledProofs.Bits (Members inBit wiresOf)
-open Properties.NetworkScan (Flattens jointOf FilesOf MembersOf instPos wordBit)
+open Properties.NetworkScan (jointOf FilesOf MembersOf instPos wordBit)
 
 /-- Template node `k`'s parameter `port`: its index and type. -/
 def portParam (P : Prog) (k : ℕ) (port : String) : Option (ℕ × Ty) :=
@@ -97,10 +94,6 @@ def regGates (P : Prog) (fs : List Flock.Circuit) (ms : Members) (r : Stated) (h
     (reg.openings.filter (pinned.contains ·.table)).flatMap (fun o =>
       o.ports.flatMap fun p => whole o.reader p o.start o.units)).toFinset
 
-/-- **Bits' wires run backward** at the members `ms`: each wired source bit's writer is an earlier claims position. The
-period check's check across an audit's members is to give it, from their descriptions, never walking the wires. -/
-def WiresBackward (ms : Members) : Prop := ∀ x w, wiresOf ms x = some w → w < x
-
 /-- What `CircuitCounts` says of a record its check accepted against `P` with the count `c`: wherever `P` is what
 C-Flock decodes from `bytes`, at the record `recordOf` reads, the held parameters `heldOf` reads off `pins`, `P`'s
 templates' circuit files `fs` (`FilesOf`) and its audit's members `ms` over them (`MembersOf`), at a layout whose wires
@@ -126,20 +119,6 @@ number at most `c.free`, the bits of the input rows no wire or registered read f
 def CircuitCounts : Prop :=
   ∀ (P : Prog) (record order pins : Json) (c : Counts),
     NetworkCheck.Circuit.check P record order pins = .ok c → CircuitCountsAt P record pins c
-
-/-- **Bits' wires fit at a deployment's statements.** If C-Flock decodes the Program `P` from `bytes`, `fs` are its
-templates' circuit files (`FilesOf`) and `ms` its audit's members over them (`MembersOf`), and Bits' wires run backward
-(`WiresBackward`), then at every deployment `D`, every statement `D` parses from `x` whose descriptor is `bytes` and
-whose circuit is the members' joint program (`Flattens`), at a layout whose wires are Bits' (`wiresOf`) and with no
-ingress before its horizon, has its layout's wiring fit its circuit (`WiresFit`): the wires part of
-`NetTiming.ScopeAcc`'s `Fits`, `ScanScopeAcc`'s carry for the wires. -/
-def WiredScopeAcc : Prop :=
-  ∀ (bytes : ByteArray) (P : Prog) (fs : List Flock.Circuit) (ms : Members),
-    Flock.Program.decode bytes = .ok P → FilesOf P fs → MembersOf P fs ms → WiresBackward ms →
-    ∀ {Coin Col T : Type} (D : Claims.Sampling.Deploy Coin Col T) (x : Claims.Msg) {L S : ℕ}
-      (lay : Claims.Sampling.AuditStatement → NetTiming.BoundaryGates L S) (k : Claims.Sampling.AuditStatement → ℕ),
-      ∀ st, D.parse x = some st → (⟨st.desc.toArray⟩ : ByteArray) = bytes → Flattens ms st.prog →
-        (lay st).wires = wiresOf ms → (∀ t < k st, (lay st).ingress t = []) → (lay st).WiresFit st.prog (k st)
 
 /-- A circuit check that accepts every record, counting nothing free: what `CircuitCountsOf` must fail at for
 `CircuitCounts` (its `…Of` at `check`) to say something. -/

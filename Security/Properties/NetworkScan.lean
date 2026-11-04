@@ -1,4 +1,4 @@
-import Properties.NetworkScan.Assumptions
+import Properties.NetworkScan.Flattens
 
 /-!
 # The rows form's scan fits its layout: what `NetworkCheck.Period.scanOf`'s acceptance gives the sampled audit's scope
@@ -21,7 +21,9 @@ template (`FilesOf`), and the members `ms` over them, each template's instances 
 later-template instance `t − 1`, each bit its input bit (`SampledProofs.Bits.inBit`). A field's bits are packed 16 a
 port word (`wordBit`), an instance is a copy of a VU of its member (`instPos`), the templates are the root's nodes that
 call a composite (`NetworkCheck.Period.templateNodes`, as `scanOf` reads them), and the wires are Bits'
-(`SampledProofs.Bits.wiresOf`). A statement's layout is its descriptor's (`layOf`), at horizon `T`.
+(`SampledProofs.Bits.wiresOf`). A statement's layout is its descriptor's (`layOf`), at horizon `T`. A gate nothing
+places is past the joint program (`instPos`, and `layOf` where the descriptor doesn't decode), so the layout fails
+closed: no such gate is an input or an output.
 
 * `ScanFits`: an accepted scan's layout fits its audit's joint program over `T` steps.
 * `ScanScopeAcc`: given an accepted scan, at every deployment whose scope check is its scope, a statement the scope
@@ -54,13 +56,13 @@ def scanLayout (P : Flock.Program.Prog) (s : Schedule) (fs : List Flock.Circuit)
         instPos P fs ms it.1 it.2 fun c n u k => inBit c n u k (wordBit ps 0 ℓ).1 (wordBit ps 0 ℓ).2
     wires := wiresOf ms }
 
-/-- A statement's layout at the schedule `s`, the files `fs` and the members `ms`: its descriptor's scan layout, none
-where the descriptor doesn't decode. -/
+/-- A statement's layout at the schedule `s`, the files `fs` and the members `ms`: its descriptor's scan layout, and
+where the descriptor doesn't decode, each slot's presence gate past the joint program and no ingress. -/
 def layOf (s : Schedule) (fs : List Flock.Circuit) (ms : Members) (x : Claims.Sampling.AuditStatement) :
     NetTiming.BoundaryGates 1 s.allocation :=
   match Flock.Program.decode ⟨x.desc.toArray⟩ with
   | .ok P => scanLayout P s fs ms
-  | .error _ => { egress := fun _ _ _ => (0, []), ingress := fun _ => [] }
+  | .error _ => { egress := fun _ _ _ => ((jointOf ms).gates.length, []), ingress := fun _ => [] }
 
 /-- **An accepted scan's layout fits its audit's joint program.** If `scanOf` accepts the scan `j` as the registered
 Program `program` at the schedule `s`, its canonical text is `c` and decodes to `P`, `fs` are `P`'s templates' circuit
@@ -77,9 +79,9 @@ def ScanFits : Prop :=
 /-- **An accepted scan's statements are in the sampled audit's scope.** If `scanOf` accepts the scan `j` at the
 schedule `s`, its canonical text is `c` and decodes to `P`, `fs` are `P`'s templates' circuit files (`FilesOf`) and
 `ms` its audit's members over them (`MembersOf`), then at every deployment `D` whose scope check is its sampling scope
-(`ScopeMatches`), a statement `x` the scope check takes, every parse of which has `c`'s bytes as its descriptor and
-the members' joint program as its circuit (`Flattens`), is in `ScopeAcc` at the layout `layOf s fs ms` and the horizon
-`T`. -/
+(`Claims.Sampling.ScopeMatches`, what the sampled leg gives of the deployed sampled verifier), a statement `x` the
+scope check takes, every parse of which has `c`'s bytes as its descriptor and the members' joint program as its
+circuit (`Flattens`), is in `ScopeAcc` at the layout `layOf s fs ms` and the horizon `T`. -/
 def ScanScopeAcc : Prop :=
   ∀ (j : Lean.Json) (program : String) (s : Schedule) (sc : Scan) (c : String) (P : Flock.Program.Prog)
     (fs : List Flock.Circuit) (ms : Members),
@@ -87,7 +89,7 @@ def ScanScopeAcc : Prop :=
     MembersOf P fs ms →
     ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
       (D : Claims.Sampling.Deploy Coin Col T) (x : Claims.Msg),
-      ScopeMatches D → D.scopeCheck x = true →
+      Claims.Sampling.ScopeMatches D → D.scopeCheck x = true →
       (∀ st, D.parse x = some st → (⟨st.desc.toArray⟩ : ByteArray) = c.toUTF8 ∧ Flattens ms st.prog) →
       NetTiming.ScopeAcc D (layOf s fs ms) (fun _ => s.window) x
 

@@ -273,10 +273,6 @@
    "owner": "@compute-research",
    "digest": "f0e12824cc546338a62a6ffb8bd14f09157e056e8b2143a7e6a6334209ff1c1a"
   },
-  "Properties.NetworkScan.ScopeMatches": {
-   "owner": "@network-accounting",
-   "digest": "034e585f8cf7bd0bc270f3d5d2e503ebd70488b8c972161b8a70c22e12caf7e7"
-  },
   "Properties.Pouw.Period.DrawIsCoin": {
    "owner": "@compute-accounting",
    "digest": "97c67360debeffd27250e2548d90facc3c355d2356b29afa2b66cb04d9aead7b"
@@ -1151,7 +1147,7 @@
     "SampledProofs.Bits"
    ],
    "except": [],
-   "why": "the scan's layout and its fit are stated against the period check's `scanOf`, C-Flock's decoder, Bits' layout of a circuit file (`SampledProofs.Bits`), the sampled audit's scope (`NetTiming.ScopeAcc`, `NetTiming.BoundaryGates.Fits`) and its own flattening and named deployment premise (`Properties.NetworkScan.Flattens`, `Properties.NetworkScan.Assumptions`), never a proof"
+   "why": "the scan's layout and its fit are stated against the period check's `scanOf`, C-Flock's decoder, Bits' layout of a circuit file (`SampledProofs.Bits`), the sampled audit's scope (`NetTiming.ScopeAcc`, `NetTiming.BoundaryGates.Fits`) and its own flattening (`Properties.NetworkScan.Flattens`), never a proof"
   },
   "Properties.Pous.Wipe": {
    "imports": ["Definitions.Accounting.Wipe", "MemoryChallenger.WipeProtocol"],
@@ -6138,8 +6134,7 @@
    "Properties.NetworkPeriod.rowsStateHeld_nontrivial": "lemma: RowsStateHeld's nontrivial lemma: RowsStateHeldAt fails at a rows-form period of one phase whose tied audit's SCAN_STATE is at another root than its scan's state, under a public charging that audit its stateFree, 4 of its 9 free inputs, which a verifier that accepts everything could publish",
    "Properties.NetworkScan.ScanFits": "unstated: an accepted scan's layout, at Bits' positions (inBit, outBit, wiresOf), fits its audit's members' joint program; an open statement, whose proof gets a guarantee entry",
    "Properties.NetworkScan.ScanScopeAcc": "unstated: an accepted scan's statements, each its audit's members' joint program, are in the sampled audit's scope at the scan's Bits layout; an open statement, whose proof gets a guarantee entry",
-   "Properties.NetworkCertifier.CircuitCounts": "unstated: an accepted circuit record's free count bounds its audit's members' joint program's free inputs outside its registered rows, at Bits' wires; an open statement, whose proof gets a guarantee entry",
-   "Properties.NetworkCertifier.WiredScopeAcc": "unstated: Bits' wires, run backward, fit a statement whose circuit is its audit's members' joint program; an open statement, whose proof gets a guarantee entry"
+   "Properties.NetworkCertifier.CircuitCounts": "unstated: an accepted circuit record's free count bounds its audit's members' joint program's free inputs outside its registered rows, at Bits' wires; an open statement, whose proof gets a guarantee entry"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
