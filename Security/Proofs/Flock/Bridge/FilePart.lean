@@ -56,19 +56,19 @@ theorem constWiresOf_eq_none (c : Flock.Circuit) (hU : FlockSoundness.Built c.un
   have h0 : (FlockSoundness.Discharge.Layout.zeroG : Fin (FlockSoundness.Discharge.Layout.keyN c hU n)).val = 1 := rfl
   unfold constWiresOf
   by_cases ho : g = FlockSoundness.Discharge.Layout.oneG
-  · rw [if_pos ho]
+  · rw [ite_eq_left ho]
     have : g.val = 0 := by rw [ho]; exact h1
     constructor
     · intro h; cases h
     · intro h; omega
-  · rw [if_neg ho]
+  · rw [ite_eq_right ho]
     by_cases hz : g = FlockSoundness.Discharge.Layout.zeroG
-    · rw [if_pos hz]
+    · rw [ite_eq_left hz]
       have : g.val = 1 := by rw [hz]; exact h0
       constructor
       · intro h; cases h
       · intro h; omega
-    · rw [if_neg hz]
+    · rw [ite_eq_right hz]
       have h1' : g.val ≠ 0 := fun h => ho (Fin.ext (h.trans h1.symm))
       have h0' : g.val ≠ 1 := fun h => hz (Fin.ext (h.trans h0.symm))
       exact ⟨fun _ => by omega, fun _ => rfl⟩
@@ -96,14 +96,15 @@ theorem constsOf_eq_constWiresOf (c : Flock.Circuit) (hU : FlockSoundness.Built 
     constsOf c hU n g = constWiresOf c hU n g := by
   unfold constsOf constWiresOf
   by_cases ho : g = FlockSoundness.Discharge.Layout.oneG
-  · rw [if_pos ho, if_pos ho]
-  · rw [if_neg ho, if_neg ho]
+  · rw [ite_eq_left ho, ite_eq_left ho]
+  · rw [ite_eq_right ho, ite_eq_right ho]
     by_cases hz : g = FlockSoundness.Discharge.Layout.zeroG
-    · rw [if_pos hz, if_pos]
+    · rw [ite_eq_left hz, ite_eq_left]
       exact Or.inl hz
-    · rw [if_neg hz, if_neg]
+    · rw [ite_eq_right hz, ite_eq_right]
       rintro (h' | ⟨-, h'⟩)
-      exacts [hz h', h h']
+      · exact hz h'
+      · exact h h'
 
 /-- **The proof blocks are the same at both constant sets**: the circuit's constants (`constsOf`) and its constant
 wires (`constWiresOf`) differ only at inputs no unit reads, which no block holds. -/
