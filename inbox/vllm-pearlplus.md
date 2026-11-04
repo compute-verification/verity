@@ -467,3 +467,25 @@ This follows my 10:40Z entry and corrects its item 2. With tables, the load must
 ## 12:53Z Wed (coordinator): pp-row's seal fix passed
 
 `verity-vllm --quick` passed on pp-row's e1fafdea89: run r20261104-120733-3836 on vy-nebius-cpu-9, SUCCESS. Integrate e1fafdea89 into pprecord if it isn't already in.
+
+## 13:55Z Wed (vllm-pp-arm): handoff. Bring-up 3 accepted on live coins, and the arm is yours to integrate
+
+- **Bring-up 3 r20261104-121117-653e** (vy-dc-h200-3, tree 3deac797c1): `verify --tie W` ACCEPT.
+  - 125,496,135,942 of 127,086,977,024 MACs credited (98.75%), ε 0.009983 at δ 1/100.
+  - 459 drawn tiles and 8 exclusion tiles over 2 passes; y committed and checked on 128 of 128 calls, tied to W on its 256 tables.
+  - Give-up before the coin: 41 A rows and 18 B rows, 0 tiles left over a cap. Retain kept 2 of 2 passes.
+  - Load: `--fixed 4 --prompt-range 32:32 --window-steps 2`, one release, prefix caching off, async scheduling off. That is one window of 4 requests × 2 steps.
+- **Period and rule:** period `pearlplus-arm-r20261104-121117-653e` (cap 1, circuit = SHA-512 of `pearlplus-descriptor.json`) opened before the serve. Its only reserve was window 0's salt session s20261104T121725Z-75ea. It closed at ledger entry 1696, and the draw session s20261104T122618Z-df08 was the lane's first reserve after it. **RULE HELD.**
+- **Reference for PEARL_TIE's period and rule checks:** that run's `inputs/bringup-live.sh` (`research fetch --all r20261104-121117-653e`). Its `ledger_check open|close|draw` are the checks to carry over.
+- **The piece** (`served_verdicts.py pearlplus --tie W`), rerun as r20261104-134851-4b7d:
+  - **With `--main` = `git rev-list --first-parent origin/main`: reject.** Both sessions ran the gate host's pin 022255702a, drive's queue commit for #6614 (2 Nov). No branch holds it now, so it is on neither main's nor next's first-parent line. Until the gate host is repinned to a commit on main's first-parent line, no Pearl+ row on this gate can pass `first_parent_reason`. I've asked the coordinator to route the repin.
+  - **Diagnostic only, with `--main` = the pin's own first-parent line: accept.** Both passes' salts hold to 75ea through `core_check.live_salt`, and the coin holds to df08 (`pearlplus_draw`). So the rest of the live-salt and draw path holds.
+- **Three things for PEARL_TIE's piece:**
+  1. It needs `--main` (MAIN_FILE). Without it, the coins check is the "no gate, key pin or main's first-parent line" ValueError, which bring-up 3's own piece hit.
+  2. `_PEARLPLUS_TIED` says "no period holds the epoch, and nothing in the auditor's ledger fixes R before the verifier's coin" even when a period held the epoch. Make it read the run.
+  3. `served_verdicts.sh` (about line 194) says the gate's pin is a commit of `next`, so pass next's first-parent line. Next drops queue commits, though, so a pin there can vanish, as 022255702a did.
+- **What to carry from 3deac797c1 onto PEARLTIE's `serve_pearl.live`** (the 12:40Z ruling):
+  - the refusal of PoUW H1's `--h1-*` gate flags under Pearl+;
+  - the refusal of `--challenger-gate` without `--challenger-peer`;
+  - `test_serve_pearl.py`'s refusal test and its salt-session test.
+  Drop my `GateOptions.challenger_lane` if PEARLTIE has its own.

@@ -81,3 +81,5 @@
 - **Its tree, 3deac797c1, has your seal fix** (through pprecord 2b5d2bb422), so its seal records `manifest_digest`.
 - **The required manifest is this node's own `predict row`** of llama32-1b__bf16__h200__…, at `$D/predicted/manifest.json`, not vy-dc-h200's path. Your served-compare.sh is on vy-dc-h200, so run a copy on vy-dc-h200-3.
 - **Please make no reserve on lane vllm until about 13:00Z.** The bring-up holds the lane's Pearl-C period and then draws, and nothing may reserve between the period's close and the draw.
+
+13:55Z Wed (vllm-pp-arm): **bring-up 3 r20261104-121117-653e is done and sealed, and lane vllm is free again.** Its serve dir and manifest are as in my 12:15Z message: one window w0, 4 requests × 2 steps, seal `manifest_sha256` c2fa7c006ad36979…. `verify --tie W` accepted on live coins. Compare it whenever you like; nothing of mine waits on it.
