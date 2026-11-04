@@ -375,7 +375,7 @@ theorem strataDerived : StrataDerived := by
 names `subset:2`, which `Draw.derive` leaves as it is, whose profile's draw is `subset 2`, read as one stratum of two
 units drawing both; and on a layout's partition of a population class of two proof blocks and an input class of one,
 those strata, then the input class drawn whole, are the strata draw of the design the `All` rule runs, both classes
-`all`. -/
+`all`. `Slots.layout`, `slotDesign` and `Partition.units` are not evaluated at a program here. -/
 theorem strataDerived_honest :
     Select.Rule.all.lawOver 2 = .ok (Json.mkObj [("law", "subset"), ("k", Lean.toJson (2 : ℕ))]) ∧
       Draw.derive default Json.null (Json.mkObj [("law", "subset"), ("k", Lean.toJson (2 : ℕ))]) none =
