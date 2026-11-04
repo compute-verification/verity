@@ -79,6 +79,7 @@
   "Proofs.Properties.Verity.Recursive.Audit",
   "Proofs.Properties.Pous.WipeSigned",
   "Proofs.Properties.Challenger",
+  "Proofs.Properties.Challenger.Limits",
   "Proofs.Properties.Firewall",
   "Proofs.Properties.Challenger.Coins"
  ],
