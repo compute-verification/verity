@@ -109,12 +109,12 @@ class Server:
     windows marking it."""
 
     def __init__(self, out: Path, window_steps: int = 64, abort_after: dict[tuple[int, ...], int] | None = None,
-                 advice: bool = False) -> None:
+                 advice: bool = False, compiler: AW.Capped = C) -> None:
         self.runner = Runner()
         self.engine = SchedEngine(self.runner, abort_after)
         self.engine.client_goes = self.client_goes
         self.trace = sc.advice_trace(out, self.engine.sched)
-        self.advice = SA.ServedAdvice(out, self.trace, wall=lambda: 0.0).start(C) if advice else None
+        self.advice = SA.ServedAdvice(out, self.trace, wall=lambda: 0.0).start(compiler) if advice else None
         self.advice_summary: dict | None = None
         self.windows = sc.CommitWindows(Committer(self.runner), out, run_id="t", window_steps=window_steps, eos_ids=[Tokenizer.eos_token_id],
                                         clock=lambda: 0.0, wall=lambda: 0.0, marks=self.trace.window, advice=self.advice)
@@ -500,6 +500,39 @@ def test_the_servers_advice_is_the_advice_commands_window_for_window_and_each_ha
         assert x["rows"] == reg["rows"] == C.cap_bits // AW.ROW_BITS
     with pytest.raises(ValueError, match="a window's advice is committed once"):
         ADV.write(tmp_path, compiler=C)
+
+
+GROUP = [_body(i, 24, 4, f"user-{i}") for i in range(4)]  # one group of 4 prompts of 24 ids, 4 outputs each
+
+
+def test_at_one_step_a_window_the_least_cap_of_the_servers_limits_commits_every_window(tmp_path):
+    """At one engine step a Commit window, at most 4 requests in one (the stand-in scheduler's 4 sequences), every length
+    within 512 and ids of at most 24 bytes, ℓ_a = `least_cap` of `window_advice.max_bits` of those limits pads every window's
+    advice: the group is committed window by window, one a step, none refused."""
+    cap = AW.least_cap(WA.max_bits(4, 1, 512, 24))
+    with Server(tmp_path, window_steps=1, advice=True, compiler=ADV.registered_compiler("test-compiler", "ab" * 64, cap)) as s:
+        serve_concurrently(s, GROUP)
+    assert s.advice_summary["passed"] and s.advice_summary["refused"] == [] and len(s.advice_summary["committed"]) >= 4
+    assert all(x["advice"]["bits"] == cap for x in records(tmp_path, SA.LINES) if not x.get("empty"))
+
+
+def test_a_window_past_its_registered_cap_is_refused_by_name_and_the_committer_goes_on(tmp_path):
+    """Under a cap that holds the window admitting the group but not the one carrying it on (its carried state is more
+    advice), that window has a line naming it refused, the reason `pad`'s, and the committer goes on: the windows after it
+    open on nothing carried, so the group's are refused as such, and every closed window is settled, with no error."""
+    first = WA.total_bits(WA.Advice(tuple(WA.RequestAdvice(f"user-{i}", 24, 4, "length") for i in range(4)),
+                                    (WA.StepAdvice(tuple(WA.Row(i, "prefill", 0, 24) for i in range(4))),), (0,) * 4))
+    with Server(tmp_path, window_steps=1, advice=True,
+                compiler=ADV.registered_compiler("test-compiler", "ab" * 64, AW.least_cap(first))) as s:
+        serve_concurrently(s, GROUP)
+    summary, index = s.advice_summary, json.loads((tmp_path / "advice" / "windows.json").read_text())
+    assert summary["error"] is None and summary["waiting"] == [] and summary["committed"] and summary["refused"]
+    past, *rest = sorted(map(int, index["refused"]))
+    assert "over the registered cap" in index["refused"][str(past)]
+    assert all(f"window {w - 1} before it is refused, so it opens on nothing carried" in index["refused"][str(w)] for w in rest)
+    lines = {x["window"]: x for x in records(tmp_path, SA.LINES)}
+    assert {w for w, x in lines.items() if x.get("refused")} == set(summary["refused"])
+    assert set(lines) == set(summary["committed"]) | set(summary["refused"]) | set(summary["empty"])
 
 
 def test_a_window_is_committed_once_whole_and_waits_on_a_record_or_a_step_still_to_come(tmp_path):

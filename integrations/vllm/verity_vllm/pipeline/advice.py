@@ -447,6 +447,13 @@ def commit(compiler: Any, a: Any, salts: list[bytes] | None = None,
     return registration(compiler, reg.root, len(reg.rows), registered_roots), AW.opening(data, reg)
 
 
+def within_cap(compiler: Any, b: Built) -> Built:
+    """A window's advice ``b``, refused (ValueError, `advice_windows.pad`'s) when its encoding is past ``compiler``'s ℓ less
+    the pad's end mark, so a window longer than its registered width is a refused window, as any other the advice refuses."""
+    compiler.pad(WA.encode(b.advice))
+    return b
+
+
 class TraceIndex:
     """A served trace's records indexed by what `window` reads, extended (`extend`) as the trace grows, so a server reads each
     record once however many windows it splits."""
@@ -543,8 +550,8 @@ def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, 
     """A server's advice, one a closed Commit window (`windows_of`; only ``window`` when given): each under ``out/w<k>/`` as
     `write_one` writes it, its registration naming the window's Commit (its run id and run root, from windows.jsonl).  The
     windows are read in order, each opening with what the last one left (`from_trace`'s ``carry``), so ``window`` reads the
-    ones before it too.  A window whose advice is refused (a finish the advice can't say, a trace the Commit record contradicts)
-    is named in ``refused``, and the others are written; the window after a refused one opens on nothing carried.  Until the
+    ones before it too.  A window whose advice is refused (a finish the advice can't say, a trace the Commit record contradicts,
+    an encoding past ℓ: `within_cap`) is named in ``refused``, and the others are written; the window after a refused one opens on nothing carried.  Until the
     server has `stopped`, a window holding a request with no Commit record yet is named in ``pending``, and neither it nor any
     window after it is read.  ``out/windows.json`` (public) lists each window's registration, written only when none is pending."""
     if io is None:
@@ -572,7 +579,7 @@ def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, 
                 + (f" (window {window} opens on what window {w} leaves)" if window is not None and w != window else ""))
             break
         try:
-            b = from_trace(sub, {i: q for i, q in io_all.items() if i in ids}, tau=tau, carry=carry)
+            b = within_cap(compiler, from_trace(sub, {i: q for i, q in io_all.items() if i in ids}, tau=tau, carry=carry))
         except ValueError as e:
             if window is None or w == window:
                 refused[str(w)] = str(e) + (f" (window {gone} before it is refused, so it opens on nothing carried)" if gone is not None else "")

@@ -18,8 +18,9 @@ window's advice committed by the server, its public line out before any coin of 
   ``advice.jsonl`` (`LINES`, public, mirrored): the compiler's digest, the root of the advice's hiding commitment and ℓ_a,
   the registered width, the length the advice is padded to before it is committed and compiled (`advice_windows.pad`), so
   no row count or public field says the advice's own length, which only the prover's ``private/`` knows; a window the advice
-  refuses is a line naming it refused, its reason in ``advice/windows.json``, and one with no step a line
-  naming it empty, so every closed window has its line.
+  refuses (one whose encoding is past ℓ_a among them, `advice.within_cap`) is a line naming it refused, its reason in
+  ``advice/windows.json``, and the committer goes on to the next window, which opens on nothing carried; one with no step
+  a line naming it empty, so every closed window has its line.
 * **Coins.** A draw of a window through ``--draws-dir`` before its line is out is refused, and the window's release with it
   (`serve_release.DrawDir`): no coin of a window is drawn before its advice is committed. At the stop the windows left are
   committed (`stop`), a request with no Commit record refused as `write_served` refuses it, before ``summary.json``'s
@@ -61,7 +62,9 @@ class AdviceOptions:
                                "the window (serve_advice)")
     advice_cap: int = option("--advice-cap", type=int, default=AW.CAP_BITS, metavar="BITS",
                              help="ℓ_a, the registered width: the length in bits every window's advice is padded to before it is "
-                                  "committed and compiled, which B's digest covers (default 2^23)")
+                                  "committed and compiled, which B's digest covers; a window past it is refused. The least "
+                                  "that pads every window within the server's limits is advice_windows.least_cap of "
+                                  "window_advice.max_bits (default 2^23)")
     advice_composite: str = option("--advice-composite", choices=COMPOSITES, default="onsite",
                                    help="the deployment whose registration log B's entry opens (default onsite)")
     advice_day: int = option("--advice-day", type=int, default=0, metavar="DAY",
@@ -303,7 +306,7 @@ class ServedAdvice:
             if not final and (commit is None or ids - set(io)):
                 return
             try:
-                b = ADV.from_trace(sub, io, tau=self.tau, carry=self.carry)
+                b = ADV.within_cap(self.compiler, ADV.from_trace(sub, io, tau=self.tau, carry=self.carry))
             except ValueError as e:
                 why = str(e) + (f" (window {self.gone} before it is refused, so it opens on nothing carried)"
                                 if self.gone is not None else "")
