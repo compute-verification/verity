@@ -3,23 +3,25 @@
 
 The executable form of `Security/Definitions/NetworkCertifier/RecordRows.lean` over the lanes of
 `Security/Definitions/NetworkCertifier/Warden.lean`, for the records the active network certifier writes
-(`verity/core/protocols/certifier/warden.py`, whose `audit` is the reference). Each direction's record has a row a bucket
-holding the `r` cells of every connection live in it, connection by connection in ordinal order, each cell naming its
-connection (`readCell`); the `fails` record holds a failed connection's reason (`readReason`).
+(`verity/core/protocols/certifier/warden.py`, whose `audit` is the reference). Each direction's record has a row a
+bucket holding the `r` cells of every connection live in it, connection by connection in ordinal order, each cell
+naming its connection (`readCell`); the `fails` record holds a failed connection's reason (`readReason`).
 
 `audit` reads a run's records over its `W` windows and accepts only when they are the schedule's. It reads the schedule
 the egress record shows (`scheduleOf`: each connection's admission bucket and its lane's cells) and the data its egress
 cells carry (`egressOf`), renders the egress rows that schedule and data give (`expectedRows`, `bucketFrames` of
 `laneFrames` over the lane `laneOf`), and compares them with the record's, bucket by bucket. Besides, every record is
 complete, no connection failed (no `FAIL` cell and no reason) or was refused, the connections are ordinals `1 … N`
-admitted in ordinal order, each lane is within the cap `egress_cells`, and each connection's ingress is data and
-padding, then at most one `END` and padding to its bucket, from its admission on (`ingressHolds`). Each cell is decoded
-once and each bucket rendered once: the audit's work is linear in the records' cells.
+admitted in ordinal order, each connection's data and `END` cells are within the cap `egress_cells`, and each
+connection's ingress is data and padding, then at most one `END` and padding to its bucket, from its admission on
+(`ingressHolds`). Each cell is decoded once and each bucket rendered once: the audit's work is linear in the records'
+cells.
 
 It accepts what `warden.audit` accepts, but for three kinds of run the network certifier never writes: a lane of no
 egress cell past its delay, unless the run's end cut it in its delay; a connection with ingress cells and no egress
-cells; and a lane past the cap, which the network certifier fails closed (`limit`). A lane's cells count through its
-last bucket (`laneCells`), as `WardenSchedule.cells` does.
+cells; and a connection of more data and `END` cells than the cap, which the network certifier fails closed (`limit`).
+The schedule's cells count a lane through its last bucket (`laneCells`), as `WardenSchedule.cells` does, so they pass
+the cap by the padding that fills the `END`'s bucket where `r` doesn't divide `egress_cells`.
 -/
 
 namespace NetworkCertifier.Rows
@@ -249,9 +251,10 @@ structure Summary where
 ingress, egress and fails records, window `w`'s at index `w` of each. Accepted when every record is complete with `T`
 left-packed rows of `lanes·r` slots (the fails record's of `lanes`), every frame of the two directions a cell and the
 fails record empty, no cell a `REFUSED` or `FAIL`, each row whole groups of `r` cells of a connection in ordinal order,
-the connections the ordinals `1 … N` admitted in ordinal order, each lane within the cap and, when it holds no cell, cut
-by the run's end in its delay, the egress rows those `expectedRows` gives from the schedule and data they show, bucket by
-bucket, and each connection's ingress the schedule's (`ingressHolds`). The refusal names the first finding. -/
+the connections the ordinals `1 … N` admitted in ordinal order, each one's data and `END` cells within the cap and, when
+it has none, cut by the run's end in its delay, the egress rows those `expectedRows` gives from the schedule and data
+they show, bucket by bucket, and each connection's ingress the schedule's (`ingressHolds`). The refusal names the first
+finding. -/
 def audit (p : Params) (ingress egress fails : Array Record) : Except String Summary := do
   let W := egress.size
   unless 0 < W && ingress.size == W && fails.size == W do
@@ -281,9 +284,10 @@ def audit (p : Params) (ingress egress fails : Array Record) : Except String Sum
       throw s!"connection {i + 1} admitted at bucket {adm.getD i 0}, before connection {i}"
   let s := scheduleOf p adm data
   for i in [0:N] do
-    let cells := s.cells.getD i 0
-    if p.egressCells < cells then throw s!"connection {i + 1}: {cells} egress cells, past the cap {p.egressCells}"
-    if cells == 0 && adm.getD i 0 + p.delay < H then
+    let n := (data.getD i #[]).size
+    if p.egressCells < n then
+      throw s!"connection {i + 1}: {n} egress data and END cells, past the cap {p.egressCells}"
+    if n == 0 && adm.getD i 0 + p.delay < H then
       throw s!"connection {i + 1}: no egress cell past its delay, and the run didn't end in it"
   let want := expectedRows p s data H
   if let some b := (List.range H).find? fun b => eg.getD b #[] != want.getD b #[] then
