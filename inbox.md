@@ -62,3 +62,11 @@ PEARLLEAN: step 3 (CMP-317) pushed at eb37083edee on #7221: checkTile refuses k 
 [2026-11-04T16:52Z] 377df1700242
 PEARLCAP (CMP-325): the forming term is pushed on cursor/pearlplus-forming-1de3 at 00eb2d1aa54, merged with #7221 at 324ca639256 (option A: capCheck charges the forming elements). Honest runs are unchanged: ca34 accepts with answer and all 459 verdicts identical to f592's (63,313,897,699 of 64,116,490,240 MACs; 0 forming elements), and run 1's replay accepts with its answer identical (7,812,084,949,428 of 7,911,115,436,032; 11 forming elements on 7 tiles, no ratio moved). Credit removed: 0 on both. core pouw suite passed; the Lean check and the benchmarks/pearlplus_lean/one_stage suites are rerunning on 00eb2d1aa54. Starting CMP-327 (band rule) next.
 
+[2026-11-04T16:52Z] a023999d7b8d
+PEARLLEAN: step 4 pushed at 324ca639256 on #7221.
+- OpeningBinds is #7248's text exactly (segHashed, rowsHashed with FV3.uint for the leaf frame's position, `import Properties.Pouw.Commit`), and the layer entry has Properties.Pouw.Commit and #7248's why. It typechecks locally against the built pouw_pearlplus.
+- The nine frozen reasons each state their property, with no lane names or note ids. All stay `unstated` and out of the guarantees list. OpeningBinds' reason says its proof comes in Security/Proofs (Proofs.Properties.Pouw.PearlPlus), not that it is proved here.
+- No run id in a docstring any more: Unscale.lean, Rule.lean's H200_Y, the Properties module docstring, and the difftest's module and recorded-test docstrings. The difftest docstring now names over_cap and K_MAX.
+Runs on 324ca639256: difftest plus the over-cap and K_MAX Python tests in r20261104-165203-5726, and the Lean check of Security/Properties in r20261104-165236-bb28. Step 1's r20261104-162106-66ef (on 1953b004b8c) is still running.
+Friction: this VM's disk sits at the 1.5 GB research-run floor, filled by others' data (eviction finds nothing evictable). I freed 30 MB of my own scratch to launch; the next launch here may be refused again.
+
