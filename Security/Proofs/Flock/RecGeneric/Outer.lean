@@ -17,9 +17,9 @@ so only its shape is fixed by the compiled statement: the extractor's coins are 
 bounds each session's errors by numbers the compiled statement fixes (`κb`, `γb`).
 
 The extractor's interface is stated, not assumed: `Arg.KS` is its knowledge soundness in `Claims.KS`'s form (`κ` plus
-`√(γ·Pr[B])`, `B` the outer verifier's fork finder); `Arg.RerunsLe` and `Arg.RerunsExpLe` bound its reruns, strictly
-or in expectation; and `Arg.OwnLe` bounds the SHA-512 calls it makes itself, beside its reruns'. Running time is reruns
-and calls, and `assemble`'s steps, which it returns beside its candidate.
+`√(γ·Pr[B])`, `B` the outer verifier's fork finder); `ExtractRunsLe` and `ExtractRunsExpLe` at `A.E` bound its reruns,
+strictly or in expectation; and `Sampling.ExtractOwnLe` at `A.E` bounds the SHA-512 calls it makes itself, beside its
+reruns'. Running time is reruns and calls, and `assemble`'s steps, which it returns beside its candidate.
 
 `Compiled Coin A` is a compiled verifier that runs, after its inner and staging rounds (`pre`), `nS` sessions of `A`'s
 verifier at the statements its staging rounds fix (`stmts`), session `s` at the public shape `sh x s` with its errors
@@ -189,18 +189,19 @@ def OuterSessionsKS : Prop :=
 `(1 + m_Π·K_Π)·(1 + Σ_s ρ(sh_s))` times on every coin where `A` reruns at most `ρ`; in expectation at most
 `(1 + m_Π·k_Π)·(1 + Σ_s e(sh_s))` where `A` reruns at most `e` in expectation (Wald, over `E^rep`'s fresh reruns); and
 it makes at most `(1 + m_Π·K_Π)·(Σ_s h(sh_s) + n)` SHA-512 calls of its own (`Sampling.ExtractOwnLe`) where `A` makes at
-most `h` (`Arg.OwnLe`) and `Open(Π, S)` at most `n` on any witnesses' inner messages (`Comp.innerLog`): each of
+most `h` (`Sampling.ExtractOwnLe` at `A.E`) and `Open(Π, S)` at most `n` on any witnesses' inner messages (`Comp.innerLog`): each of
 `E^rep`'s reruns is `E_O`'s sessions and the inner view's run, whose calls are `E*`'s own (`Comp.decProg`). The inner
 `E^rep`'s and `E_O`'s reruns multiply; their errors do not (`Comp.κ`: `N_I` times `κ_O`). -/
 def ExtractCost : Prop :=
   ∀ (Coin W : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg) (A : Arg Coin)
     (L : Compiled Coin A) (I : Proto Coin W) (S : Server) (ρ h : A.Sh → ℕ) (e : A.Sh → ℝ) (n : Msg → ℕ),
     L.Sessions H →
-      (A.RerunsLe H ρ → ExtractRunsLe H (L.toComp.E I S) fun x =>
+      ((ExtractRunsLe H A.E fun x => ρ (A.shape x)) → ExtractRunsLe H (L.toComp.E I S) fun x =>
         (1 + I.waits (L.xI x) * I.cap (L.xI x)) * (1 + ∑ s : Fin (L.nS x), ρ (L.sh x s))) ∧
-      (A.RerunsExpLe H e → ExtractRunsExpLe H (L.toComp.E I S) fun x =>
+      ((ExtractRunsExpLe H A.E fun x => e (A.shape x)) → ExtractRunsExpLe H (L.toComp.E I S) fun x =>
         (1 + I.waits (L.xI x) * I.k (L.xI x) : ℝ) * (1 + ∑ s : Fin (L.nS x), e (L.sh x s))) ∧
-      (A.OwnLe H h → (∀ x r ws, (L.toComp.innerLog (S.IVStar I.V I.ans) H x r ws).length ≤ n x) →
+      ((Claims.Sampling.ExtractOwnLe H A.E fun x => h (A.shape x)) →
+        (∀ x r ws, (L.toComp.innerLog (S.IVStar I.V I.ans) H x r ws).length ≤ n x) →
         Claims.Sampling.ExtractOwnLe H (L.toComp.E I S) fun x =>
           (1 + I.waits (L.xI x) * I.cap (L.xI x)) * (∑ s : Fin (L.nS x), h (L.sh x s) + n x))
 
