@@ -279,7 +279,7 @@ theorem schedTaken_l0 (L₁ : LeanRelease Flock.Wit Loop.Tp)
   -- the schedule: level 0's first `i + 1` bodies at zero pads
   obtain ⟨hssz, T, sws, ⟨_zc, _lc, -, hsws⟩, hbody⟩ := Bind.sched_l0 hal' hs'' hdom' (by rw [hT1]; exact hdg)
     hcapR hmT' (by rw [hT1]; exact hmkt) hXb (by rw [hT2]; exact hk0) (by rw [hT2]; exact hnn)
-    (by rw [hT2]; exact hq) (by rw [hT2']; omega) hmT (j := i) (by rw [hT2']; omega)
+    (by rw [hT2]; exact hq) (by rw [hT2']; have := (Count.sched_rho hz).1; omega) hmT (j := i) (by rw [hT2']; omega)
     (by rw [Array.size_map, Array.size_range]; omega)
   subst hsws
   have hlt' : (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (u + 1)).2 < sched'.size := by
