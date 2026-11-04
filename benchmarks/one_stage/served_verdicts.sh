@@ -120,9 +120,10 @@
 # (default the tree's HEAD). That key is a development key, so the run is a development run and credits nothing. The COINS line says which.
 # With H1_CIRCUITS too (a directory), before serve-openai starts (its startup reserves window 0's session, which joins
 # only a period already open), `served_verdicts.py program D/h1` writes the Program serve-openai will declare for REPO at
-# T and WINDOW_STEPS, `pouw_h1_circuits --program D/h1 --out H1_CIRCUITS --live T,WINDOW_STEPS --strata H1_STRATA`
-# builds its circuit files (the live file, and only the strata H1_STRATA lists, default none; a file already there under
-# the same bind is reused), then `served_verdicts.py period open` opens period H1_PERIOD (default served-RUN_ID) on its
+# T and WINDOW_STEPS, `pouw_h1_circuits --program D/h1 --out H1_CIRCUITS --live T,WINDOW_STEPS --strata H1_STRATA
+# [--lanes H1_LANES]` builds its circuit files (the live file, only the strata H1_STRATA lists, default none, and each K
+# of H1_LANES, default none, in credit's lanes form: lane<K> and combine<K>; a file already there under the same bind is
+# reused), then `served_verdicts.py period open` opens period H1_PERIOD (default served-RUN_ID) on its
 # digest, its draw K H1_DRAW_K (default `pouw_h1_challenger.draw_k`'s), its weights H1_MODEL's registration (default
 # none, which credit refuses), and its fixed length SLOTS requests of MAX_TOKENS (`--cap 1`: one window); `period served`
 # holds the Program serve-openai then declared to it, and `period close` closes it once the windows are sealed, or
@@ -316,7 +317,8 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" program "$D/h1" --model "$REPO" --rows "$T" \
       --steps "$WINDOW_STEPS" "${pc[@]}" 2>&1 | tail -1)"
     (cd "$TREE/integrations/vllm" && PYTHONPATH=$PYTHONPATH:$TREE/verity/ml/flock/python "$PY" -m tests.protocols.pouw_h1_circuits \
-      --program "$D/h1" --out "$H1_CIRCUITS" --live "$T,$WINDOW_STEPS" --strata "${H1_STRATA:-none}") \
+      --program "$D/h1" --out "$H1_CIRCUITS" --live "$T,$WINDOW_STEPS" --strata "${H1_STRATA:-none}" \
+      ${H1_LANES:+--lanes "$H1_LANES"}) \
       > "$OUT/h1-circuits.log" 2>&1 || say "H1-CIRCUITS refused (exit $?): $(tail -1 "$OUT/h1-circuits.log" | cut -c1-400)"
     # shellcheck disable=SC2086
     say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period open "$D" --gate "$H1_GATE" \
