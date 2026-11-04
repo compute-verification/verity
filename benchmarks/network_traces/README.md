@@ -86,8 +86,8 @@ id 128001. It runs at a given UTC time when asked. The endpoint is started by ha
 `examples/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, with bounded
 staging at its default, which that exclusion needs. Its `requests.jsonl` and `advice_trace.jsonl` hold request values
 (prompt and streamed ids; prompt lengths, sampling, rows and emitted ids) and stay on the served node: the chain opens
-no endpoint records or advice, since the window's compute audit is V3c's class window, whose proofs read the advice
-under its hiding root. The session's fetch, with `witness/`, stays in a 0700 directory outside the run dir, and
+no endpoint records or advice, since the window's compute audit is V3c's class window, whose circuit is the class's and
+reads no advice. The session's fetch, with `witness/`, stays in a 0700 directory outside the run dir, and
 `$OUT` gets only the bundle less `witness/` and the session's outcome. `chain` runs the chain's network certifier path
 on the kept fetch, and only from a tree with the record's leak guard. `session --gate local` is the dry rehearsal: this
 tree's gate on a scratch host, with `demo_stub.py serve` as the endpoint. `chain --coins gate` draws the scan's units on
@@ -123,10 +123,14 @@ piece would release, the case's commitment and evidence decoded, to one of the f
 certifier's certificates, and refuses the piece on any other field (a window's own number, a count of its requests, the
 advice's length), naming the check where a development check fed it: an audit that opened the advice (an advice binding
 in its registration, `records_audit.py audit --opening`) or the chain's endpoint rebuild (an `endpoint` step,
-`CR_ENDPOINT`). The leak guard (`--public`) moves any file the piece doesn't declare out of its directory. Split in two
-around V3c (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with the scan on V3c's
-committed window (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its
-`period` runs the consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of
+`CR_ENDPOINT`). Once a served run ends, `kind_scan.py --received OUT` holds everything a verifier on another machine
+receives of it the same way: the piece, V3c's audit, the registered compiler, the advice and weights registrations and
+the window circuit's counts, a log among them a finding (the steps' logs stay on the node). An advice length, a compile,
+or a φ carrying the requests is a finding too, and on any finding the run fails with those files kept on the node
+(`served_verdicts.sh`'s RECEIVED-SCAN). The leak guard (`--public`) moves any file the piece doesn't declare out of its
+directory. Split in two around V3c (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with
+the scan on V3c's committed window (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog
+trees), and its `period` runs the consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of
 V3c's; each step releases through its own hold.
 
 `attacks.py` lists what the served path must refuse or charge (`table`): each attack with its case, the check that
@@ -201,8 +205,9 @@ whole; a SIGKILL leaves the hold where it is, out of the record.
 through `active.Proxy` in front of the endpoint, is refused by name wherever it is given. The certificates step reruns
 the relay's own offline check on its witness (`warden_serve.check`) and holds the public `certificates.jsonl` to the
 certified lines. The relay signs no clock certificate, so none is read. No step opens the endpoint's records or its
-advice (`CR_ENDPOINT` is refused here): the window's compute audit is V3c's class window, whose proofs read the advice
-under its hiding root, so the report's K has no advice term (`chain_record.WARDEN_K`). N2 is the plain proof block
+advice (`CR_ENDPOINT` is refused here), and the window's compute audit is V3c's class window, whose circuit is the
+class's and reads no advice. The report's K has no advice term (`chain_record.WARDEN_K`): ℓ_a,j carries no advice
+because no audit of record reads one, and hiding never reduces K. N2 is the plain proof block
 on the relay's link (`n2_zk.py prove --warden-run`: both heads at the relay's grid and parameters digest, no sync
 declared or charged). The scan is `scan_zk.py prove --warden-run`'s: its ingress units read
 each request's prompt off the relay's ingress cells, so no step reads the advice's prompt lengths. Each step is held to the

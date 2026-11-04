@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import fnmatch
 import gzip
 import hashlib
 import importlib.util
@@ -50,6 +51,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import textwrap
 from datetime import UTC, datetime
 from fractions import Fraction
 from pathlib import Path
@@ -191,19 +193,26 @@ def test_a_published_line_names_no_window_and_counts_none_of_a_windows_own(tmp_p
     assert capsys.readouterr().out.splitlines() == [p for _, p in LINES] and not (tmp_path / "absent").exists()
 
 
-def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_public_form(tmp_path):
+@pytest.mark.parametrize("scanned", [False, True])
+def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_public_form(tmp_path, capsys, scanned):
     """`publish`, once the run is done: a file whose path names a window is held whole in the serve dir's private/out, one
     whose text or JSON names or counts a window is held there in full with its public form left in out/, and the rest,
     the bench Build's requests by name and a window named ``all`` among them, stay byte for byte; a binary file, which no
-    scan reads, is held whole. Then out/ names no window and counts none of a window's own, and a second pass holds
+    scan reads, is held whole. What a verifier reads (`RECEIVED`: the advice registration, the certifier's answer and
+    case, and V3c's period audit) is held whole unless the kind scan found it clean (``--received-scanned``), and then
+    keeps every key and value, the period's ``steps`` and the case's ``windows`` among them, only its text in public form.
+    Then out/ names no window, counts none of a window's own but what a verifier reads, and a second pass holds
     nothing."""
     out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
+    case = {"params": {"windows": 4, "link": "certified"}, "commitment": "ab" * 8}
     files = {
         "verdicts.txt": "SERVE stopped (exit 0): 3 window(s) closed, 2 sealed\nCOMPOSITE CASE verity/pous/p2/v4/run accept\n",
         "record/verdicts.json": json.dumps({"window": 7, "node": "n", "composed": {"verdict": "pending", "reason": "window 7: no"}}),
         "record/block-record.json": json.dumps({"server_time": [{"server": "n", "steps": [13, 19]}], "composed": {"verdict": "pending"}}),
         "registration.json": json.dumps(REGISTRATION),
         "pieces/certifier/answer.json": json.dumps({"reason": "window 7: the scan's prog", "verdict": "reject"}),
+        "pieces/certifier/case.json": json.dumps(case),
+        "v3c-audit/period.json": json.dumps({"free": 0, "steps": 16}),
         "pieces/bandwidth/answer.json": json.dumps({"profile": {"windows": 6}, "verdict": "accept"}),
         "serve/period.json": json.dumps({"close": {"body": {"windows": [{"root": "ab"}]}}, "rows": 512, "steps": 16}),
         "pieces/pouw/check/check.log": "calls /srv/h1/w7/pouw-h1-calls.json\nPOUW {\"window\": 7, \"verdict\": \"accept\"}\n",
@@ -211,20 +220,32 @@ def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_pu
         "predicted.json": json.dumps({"requests": {"build_request_LP11_T8": "ab"}, "row": "r"}),
         "pieces/wipe/served.json": json.dumps({"window": "all", "server": "n"}),
     }
+    if scanned:
+        files["registration.json"] = json.dumps(S.public_registration(REGISTRATION))
     for rel, body in files.items():
         (out / rel).parent.mkdir(parents=True, exist_ok=True)
         (out / rel).write_text(body)
     (out / "serve" / "h1").mkdir()
     (out / "serve" / "h1" / "window-program.json.gz").write_bytes(gzip.compress(json.dumps({"rows": 512}).encode()))
-    assert S.main(["publish", str(out), "--private", str(private)]) == 0
-    assert not _window_data(out, 7), _window_data(out, 7)
-    kept = {"predicted.json", "pieces/wipe/served.json"}
+    capsys.readouterr()
+    assert S.main(["publish", str(out), "--private", str(private), *(["--received-scanned"] * scanned)]) == 0
+    said = capsys.readouterr().out
+    assert ("(RECEIVED) wasn't found clean by the kind scan: held whole" in said) == (not scanned)
+    received = {"registration.json", "pieces/certifier/answer.json", "pieces/certifier/case.json", "v3c-audit/period.json"}
+    assert {r for r in files if any(fnmatch.fnmatchcase(r, g) for g in S.RECEIVED)} == received
+    whole = {"sampled-proofs/w7/summary.json", *(() if scanned else received)}
+    kept = {"predicted.json", "pieces/wipe/served.json", *(received - {"pieces/certifier/answer.json"} if scanned else ())}
+    assert _window_data(out, 7) == (['pieces/certifier/case.json: "windows":', 'v3c-audit/period.json: "steps": 1']
+                                    if scanned else []), _window_data(out, 7)
     for rel, body in files.items():
-        assert (out / rel).exists() == (rel != "sampled-proofs/w7/summary.json"), rel
+        assert (out / rel).exists() == (rel not in whole), rel
         if rel in kept:
             assert (out / rel).read_text() == body and not (private / rel).exists(), rel
         else:
             assert (private / rel).read_text() == body, rel
+    if scanned:
+        assert json.loads((out / "pieces" / "certifier" / "answer.json").read_text()) == {
+            "reason": "window K: the scan's prog", "verdict": "reject"}
     assert json.loads((out / "record" / "verdicts.json").read_text()) == {
         "node": "n", "composed": {"verdict": "pending", "reason": "window K: no"}}
     assert json.loads((out / "serve" / "period.json").read_text()) == {"close": {"body": {}}, "rows": 512}
@@ -232,7 +253,7 @@ def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_pu
                                                   "COMPOSITE CASE verity/pous/p2/v4/run accept\n")
     assert gzip.decompress((private / "serve" / "h1" / "window-program.json.gz").read_bytes()) == b'{"rows": 512}'
     assert not (out / "serve" / "h1" / "window-program.json.gz").exists()
-    assert S.publish(out, private) == []
+    assert S.publish(out, private, scanned) == []
 
 
 def test_the_front_line_says_the_sessions_public_fields_alone(tmp_path, capsys):
@@ -1316,16 +1337,30 @@ def test_the_gate_is_refused_while_the_lane_has_a_period_open(tmp_path, monkeypa
     assert ok and line.startswith("GATE ready: lane vllm's open period None;") and "NOT on the verifier's" in line
 
 
-FAKE_PROVE_PATH = '''import json, sys
+#: the registered compiler a toy tree's ``prove_path.py compiler`` prints (`prove_path.compiler_doc`'s fields)
+COMPILER_DOC = {"name": "c", "digest": "d", "cap_bits": REGISTRATION["compiler"]["cap_bits"],
+                "inner": {"name": "i2", "digest": "e"}, "served": {"name": "i2", "digest": "e"}, "transfer_gates": [],
+                "default_seed": 0, "phi": {"schema": "phi/v1", "model": {"repo": "m", "revision": "r"}, "workload": {},
+                                           "sampling": {"kind": "greedy"}, "execution": "bi-eager"}}
+#: a toy tree's window circuit: the verifier's, from the run's published compiler and registration alone
+WINDOW_CIRCUIT = '''
+if a[0] == "compiler":
+    print(%r)
+    sys.exit(0)
+assert a[0] == "window-circuit" and not {"--serve-run", "--window", "--row-dir", "--advice"} & set(a), a
+assert [a[a.index(f) + 1].rsplit("/", 1)[-1] for f in ("--compiler", "--registration")] == ["compiler.json",
+                                                                                          "registration.json"], a
+''' % json.dumps(COMPILER_DOC)
+FAKE_PROVE_PATH = f'''import json, os, sys
 a = sys.argv[1:]
-assert a[0] == "window-circuit"
+{WINDOW_CIRCUIT}
 c = a[a.index("--class") + 1] if "--class" in a else "record"
 answer = json.load(open("answers.json"))[c]
 if answer != "count":
     print("prove_path.py window-circuit: refused at", c, file=sys.stderr)
-    sys.exit({"refuse": 2, "expire": 124}[answer])
-open(a[a.index("--out") + 1], "w").write("{}")
-print(json.dumps({"bits": 772, "count": {"free": 3, "inputs": 10, "registered": 7, "units": 1}}))
+    sys.exit({{"refuse": 2, "expire": 124}}[answer])
+open(a[a.index("--out") + 1], "w").write("{{}}")
+print(json.dumps({{"count": {{"free": 3, "inputs": 10, "registered": 7, "units": 1}}}}))
 '''
 
 
@@ -1334,11 +1369,12 @@ def _circuits(tmp_path: Path, classes: str, answers: dict) -> tuple[int, list[st
     `timeout` does when a count runs out of time (``answers``, by class), under a `timeout` that records the limit it got:
     the exit status, the verdict lines, and the limits in order."""
     tree, bin_, venv = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin"
-    for d in (tree / "benchmarks" / "prove_path", bin_, venv, tmp_path / "serve"):
+    for d in (tree / "benchmarks" / "prove_path", bin_, venv, tmp_path / "serve" / "advice" / "w0"):
         d.mkdir(parents=True)
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_PROVE_PATH)
     (tree / "answers.json").write_text(json.dumps(answers))
     (tmp_path / "serve" / "weights_registration.json").write_text("{}")
+    (tmp_path / "serve" / "advice" / "w0" / "registration.json").write_text(json.dumps(REGISTRATION))
     for path, body in ((venv / "python", f'exec {sys.executable} "$@"'),
                        (bin_ / "timeout", f'echo "$1" >> {tmp_path}/limits; shift; exec "$@"')):
         path.write_text(f"#!/bin/sh\n{body}\n")
@@ -1356,9 +1392,12 @@ def test_the_class_of_record_is_measured_after_the_gating_classes_and_its_timeou
     assert lines[0].startswith("WINDOW-CIRCUIT class 4,32,4: registered 7 bits, free 3 bits of 10 input bits at the "
                                "weights registration's pins; ")
     assert lines[1:] == ["WINDOW-CIRCUIT class record (measurement) timed out after WC_RECORD_TIMEOUT=45m (exit 124): no count"]
-    published = json.loads((tmp_path / "out" / "window-circuit-4-32-4.json").read_text())
-    kept = json.loads((tmp_path / "serve" / "window-circuit-4-32-4.count.json").read_text())
-    assert "bits" not in published and '"bits"' not in lines[0] and kept["bits"] == 772 and published["count"] == kept["count"]
+    out = tmp_path / "out"
+    published = json.loads((out / "window-circuit-4-32-4.json").read_text())
+    assert published == json.loads((tmp_path / "serve" / "window-circuit-4-32-4.count.json").read_text())
+    assert json.loads((out / "compiler.json").read_text()) == COMPILER_DOC
+    assert json.loads((out / "registration.json").read_text()) == S.public_registration(REGISTRATION)
+    assert (out / "weights_registration.json").read_text() == "{}"
 
 
 @pytest.mark.parametrize("classes, answers, refused", [
@@ -1505,14 +1544,14 @@ FAKE_V3C_PROVE_PATH = f'''import json, os, sys
 from pathlib import Path
 a = sys.argv[1:]
 open(os.environ["ORDER"], "a").write(a[0] + "\\n")
-if a[0] == "compiler":
-    print(json.dumps({{"inner": {{"name": "toy", "digest": "ab" * 64}}}}))
-    sys.exit(0)
+if a[0] != "window-commit":
+{textwrap.indent(WINDOW_CIRCUIT, "    ")}
 out = Path(a[a.index("--out") + 1])
 assert a[a.index("--class") + 1] == "{W63K4}"
 if a[0] == "window-circuit":
     out.write_text("{{}}")
-    print(json.dumps({{"bits": 772, "count": {{"free": 3, "inputs": 10, "registered": 7, "units": 1}}}}))
+    c = {{"count": {{"free": 3, "inputs": 10, "registered": 7, "units": 1}}}}
+    print(json.dumps({{"bits": 772, **c}} if os.environ.get("ADVICE_BITS") else c))
 else:
     assert a[0] == "window-commit"
     if os.environ.get("FAIL_COMMIT"):
@@ -1557,7 +1596,8 @@ print("PERIOD " + json.dumps({"verdict": "accept"}))
 '''
 TOY_MAIN = f"{'ef' * 20}\n{'01' * 20}\n"
 CHAIN = 'echo chain >> "$ORDER"; printf "%s\\n" "$@" > "$ORDER.args"; echo "chain on window $2"'
-PERIOD = 'echo period-check >> "$ORDER"; cp "$4/period.json" "$3/"; echo \'{"verdict": "accept"}\' > "$3/answer.json"; echo checked'
+PERIOD = ('echo period-check >> "$ORDER"; test -s "$4/period.json" || exit 1; '
+          'echo \'{"verdict": "accept"}\' > "$3/answer.json"; echo checked')
 
 
 def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = FAKE_V3C_PROVE_PATH,
@@ -1578,6 +1618,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
               tmp_path / "row" / "build_summary.json", tmp_path / "h.so", tmp_path / "n.so"):
         f.write_text("")
     (d / "weights_registration.json").write_text("{}")
+    (d / "advice" / "w7" / "registration.json").write_text(json.dumps(REGISTRATION))
     _write(d, "windows.jsonl", [{"window": 7, "run_root": "ab" * 64}])
     (tmp_path / "main.txt").write_text(TOY_MAIN)
     # the toy tree's verity/ directories, on the PYTHONPATH the script sets and as `python -`'s working directory, would
@@ -1600,24 +1641,41 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
     return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines(), read("order"), read("limits")
 
 
+@pytest.mark.parametrize("given", [None, "0.25"])
+def test_the_certifiers_chain_proves_its_scan_at_2_to_the_minus_64_unless_the_run_sets_cr_scan_delta(tmp_path, given):
+    """The split certifier's chain gets CR_SCAN_DELTA, which chain_record.sh hands scan_zk.py as --delta: by default
+    2^-64 exactly (every scan block is drawn, so no δ costs proving), else the run's own."""
+    chain = CHAIN + '; printf "%s" "$CR_SCAN_DELTA" > "$ORDER.delta"'
+    rc, lines, _, _ = _v3c(tmp_path, CERTIFIER_CHAIN_CMD=chain, CR_SCAN_DELTA=given)
+    assert rc == 0, lines
+    got = (tmp_path / "order.delta").read_text()
+    assert got == given if given else Fraction(float(got)) == Fraction(1, 2 ** 64)
+
+
 def test_v3c_runs_the_certifiers_chain_beside_its_audit_and_its_period_check_on_the_period_json_after(tmp_path):
     """The window commit, then the split certifier's chain (it reads the commit's scan state) beside V3c's audit and its
     period.json, and the certifier's period check on it once both are done, each within its own limit; the check gets
     the serve dir, the window, the certifier's piece dir and V3c's dir, and writes the answer `pieces` reads there. The
-    two steps' logs, which count the window's requests, end in the serve dir's private/pieces/certifier, not in $OUT,
-    which leaves the node. $OUT then names no window and counts none of its own (the window commit's population, the
-    audit's, the chain's window): each line is whole in the serve dir's private/verdicts.txt, each file in its private/out."""
+    two steps' logs, which count the window's requests, end in the serve dir's private/pieces/certifier, and V3c's
+    audit's in its private/v3c-audit, not in $OUT, which leaves the node; $OUT/v3c-audit holds what the record reads of
+    the audit alone, and what a verifier reads of $OUT scans clean (`kind_scan.py --received`) and leaves as it is. $OUT
+    then names no window and counts none of its own (the window commit's population, the audit's, the chain's window):
+    each line is whole in the serve dir's private/verdicts.txt, each file in its private/out."""
     rc, lines, order, limits = _v3c(tmp_path)
     assert rc == 0, lines
-    assert order[:2] == ["window-circuit", "window-commit"] and order[-1] == "period-check"
-    assert sorted(order[2:-1]) == ["audit", "chain", "period"] and order.index("audit") < order.index("period")
+    assert order[:3] == ["compiler", "window-circuit", "window-commit"] and order[-1] == "period-check"
+    assert sorted(order[3:-1]) == ["audit", "chain", "period"] and order.index("audit") < order.index("period")
     assert limits[:2] == ["30m", "120m"] and sorted(limits[2:-1]) == ["180m", "4h"] and limits[-1] == "60m"
     vw, pieces = tmp_path / "serve" / f"v3c-w7-{W63K4.replace(',', '-')}", tmp_path / "out" / "pieces" / "certifier"
     assert (tmp_path / "order.args").read_text().split() == [str(tmp_path / "serve"), "7", str(pieces), str(vw)]
     assert not _window_data(tmp_path / "out", 7), _window_data(tmp_path / "out", 7)
     held = (tmp_path / "serve" / "private" / "verdicts.txt").read_text()
     assert "chain on window 7" in held and '"population": 37' in held and "chain on window K" in "\n".join(lines)
-    assert '"population": 37' in (tmp_path / "serve" / "private" / "out" / "v3c-audit" / "audit.log").read_text()
+    assert '"population": 37' in (tmp_path / "serve" / "private" / "v3c-audit" / "audit.log").read_text()
+    assert sorted(p.relative_to(tmp_path / "out").as_posix() for p in (tmp_path / "out" / "v3c-audit").rglob("*")) == [
+        "v3c-audit/period.json", "v3c-audit/summary.json"]
+    scan = (tmp_path / "serve" / "private" / "received-scan.txt").read_text().splitlines()
+    assert scan[-1].startswith("KIND-SCAN clean: ") and not (tmp_path / "serve" / "private" / "out" / "compiler.json").exists()
     assert json.loads((pieces / "answer.json").read_text()) == {"verdict": "accept"}
     assert json.loads((tmp_path / "out" / "v3c-audit" / "period.json").read_text()) == {"free": 0}
     heads = [line.split(" (")[0].split(":")[0] for line in lines]
@@ -1631,12 +1689,26 @@ def test_v3c_runs_the_certifiers_chain_beside_its_audit_and_its_period_check_on_
     assert not (pieces / "chain.log").exists() and not (pieces / "period.log").exists()
 
 
+def test_what_a_verifier_reads_that_reads_the_advice_fails_the_run_and_stays_on_the_node(tmp_path):
+    """A window circuit's count that states the advice's length (as one counted from the advice would): the kind scan
+    of what a verifier reads of $OUT finds it, the run fails though every step passed, and each file the scan reads is
+    held whole in the serve dir's private/out, none of it left in $OUT."""
+    rc, lines, _order, _limits = _v3c(tmp_path, ADVICE_BITS="1")
+    assert rc == 1 and lines[-1].startswith("RECEIVED-SCAN failed (exit 1, 1 findings, in the serve dir's "), lines
+    out, private = tmp_path / "out", tmp_path / "serve" / "private"
+    assert "window-circuit-8-32-4-4-16.json bits: a int of no declared kind" in (private / "received-scan.txt").read_text()
+    left = sorted(p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file())
+    assert not [p for p in left if any(fnmatch.fnmatchcase(p, g) for g in S.RECEIVED)], left
+    assert json.loads((private / "out" / "window-circuit-8-32-4-4-16.json").read_text())["bits"] == 772
+    assert (private / "out" / "compiler.json").exists() and (private / "out" / "pieces" / "certifier" / "answer.json").exists()
+
+
 def test_v3c_with_no_period_json_runs_no_period_check_and_fails(tmp_path):
     """V3c's audit wrote no period.json: no period check, and `served_verdicts.sh v3c` exits 1 once it has moved the
     chain's log to the serve dir's private/pieces/certifier."""
     rc, lines, order, _limits = _v3c(tmp_path, FAIL_PERIOD="1")
-    assert rc == 1 and order[:2] == ["window-circuit", "window-commit"]
-    assert sorted(order[2:]) == ["audit", "chain", "period"] and order.index("audit") < order.index("period")
+    assert rc == 1 and order[:3] == ["compiler", "window-circuit", "window-commit"]
+    assert sorted(order[3:]) == ["audit", "chain", "period"] and order.index("audit") < order.index("period")
     assert any("the audit under it wrote no Program" in x for x in lines[-3:-1])
     assert lines[-1] == "CERTIFIER-PERIOD: not run: V3c wrote no period.json"
     pieces = tmp_path / "out" / "pieces" / "certifier"
@@ -1681,7 +1753,7 @@ from pathlib import Path
 a = sys.argv[1:]
 open(os.environ["ORDER"], "a").write("advice\\n")
 k, out = a[a.index("--window") + 1], Path(a[a.index("--out") + 1])
-assert a[a.index("--compiler-name") + 1] == "toy" and "--weights-of-record" in a
+assert a[a.index("--compiler-name") + 1] == %r and "--weights-of-record" in a
 if os.environ.get("ADVICE_RC") == "3":
     print(f"[advice] commit window {k}: pending: request r1 of window {k} has no Commit record yet")
     sys.exit(3)
@@ -1689,7 +1761,7 @@ if os.environ.get("ADVICE_RC") == "3":
 (out / f"w{k}" / "registration.json").write_text("{}")
 (out / f"w{k}" / "private" / "advice.bin").write_bytes(b"\\x01")
 (out / "windows.json").write_text("{}")
-'''
+''' % COMPILER_DOC["inner"]["name"]
 W_OF_7 = {"format": "verity/registration/v2", "window": 7, "previous": None}
 
 
@@ -1766,14 +1838,14 @@ def _tied_commit(tmp_path: Path, bound: str | None, law: dict | None = TIED_LAW)
     vw = d / f"v3c-w7-{W63K4.replace(',', '-')}" / "window"
     vw.mkdir(parents=True)
     (d / "h1" / "w7").mkdir(parents=True)
-    r = {"format": "toy", "after": W_OF_7, **({"law": law} if law else {})}
+    r = {"format": "toy", "previous": REG.digest(W_OF_7), **({"law": law} if law else {})}
     (vw / "registration.json").write_text(json.dumps(r))
     (vw / "circuit.json").write_text(json.dumps({"run": "ab"}))
     (d / "h1" / "w7" / "window-commit.json").write_text(json.dumps({"run": "ab", "circuit": "cd", "population": 37}))
     log = [{"window": 7, "kind": "registration", "file": "w7/registration.json", "digest": "aa" * 64}]
     if bound is not None:
         log.append({"window": 7, "kind": "record", "file": "w7/record.json",
-                    "digest": REG.digest(r if bound == "same" else {**r, "after": None})})
+                    "digest": REG.digest(r if bound == "same" else {**r, "previous": None})})
     _write(d / "h1", "log.jsonl", log)
 
 
@@ -1782,7 +1854,8 @@ def test_under_h1_tie_v3c_audits_the_commit_h1_bound_and_makes_none_of_its_own(t
     digest) and its circuit to the verifier's, runs no window-commit, and goes on to its audit."""
     _tied_commit(tmp_path, "same")
     rc, lines, order, _limits = _v3c(tmp_path, H1_TIE="1")
-    assert rc == 0 and "window-commit" not in order and order[0] == "window-circuit" and "audit" in order, (lines, order)
+    assert rc == 0 and "window-commit" not in order and order[:2] == ["compiler", "window-circuit"] and "audit" in order, \
+        (lines, order)
     assert lines[1].startswith(f"WINDOW-COMMIT class {W63K4} at H1's close, its registration the Commit record H1 bound "
                                "before the sample coin (R ") and '"run": "ab"' in lines[1] and "population" not in lines[1]
     assert lines[2] == (f"WINDOW-CIRCUIT-HELD class {W63K4}: the committed circuit.json less its run fields is the "
@@ -1869,8 +1942,9 @@ def test_the_preflight_refuses_a_warm_at_no_positive_number_of_jobs_or_on_a_tree
 @pytest.mark.parametrize("given", ["MAIN_FILE", "MAIN_SHA"])
 def test_v3cs_audit_samples_on_a_local_challenger_session_pinned_on_mains_first_parent_line(tmp_path, given):
     """records_audit samples only on the auditor's challenger's coins, so V3c's audit takes a local development session's
-    (--challenger local), pinned on main's first-parent line: MAIN_FILE's, else MAIN_SHA's in the tree, kept as
-    $OUT/v3c-audit/main.txt, the --main the audit reads."""
+    (--challenger local), pinned on main's first-parent line: MAIN_FILE's, else MAIN_SHA's in the tree, kept as the
+    serve dir's private/v3c-audit/main.txt, the --main the audit reads, never in $OUT/v3c-audit, which holds only what
+    the record reads (`kind_scan.V3C_DOCS`)."""
     extra, line = {}, TOY_MAIN
     if given == "MAIN_SHA":
         tree = tmp_path / "tree"
@@ -1884,7 +1958,8 @@ def test_v3cs_audit_samples_on_a_local_challenger_session_pinned_on_mains_first_
     rc, lines, order, _limits = _v3c(tmp_path, **extra)
     assert rc == 0 and "audit" in order, (lines, order)
     assert len(line.split()) == 2 and (tmp_path / "order.main").read_text() == line
-    assert (tmp_path / "out" / "v3c-audit" / "main.txt").read_text() == line
+    assert (tmp_path / "serve" / "private" / "v3c-audit" / "main.txt").read_text() == line
+    assert not (tmp_path / "out" / "v3c-audit" / "main.txt").exists()
 
 
 @pytest.mark.parametrize("main, head, tail", [
@@ -1986,7 +2061,7 @@ def test_under_h1_tie_a_window_h1_bound_no_r_for_or_another_r_has_no_v3c(tmp_pat
     isn't audited as if it were."""
     _tied_commit(tmp_path, bound)
     rc, lines, order, _limits = _v3c(tmp_path, H1_TIE="1")
-    assert (rc, order, lines[-1]) == (16, ["window-circuit"], f"WINDOW-COMMIT class {W63K4}: {why}"), lines
+    assert (rc, order, lines[-1]) == (16, ["compiler", "window-circuit"], f"WINDOW-COMMIT class {W63K4}: {why}"), lines
 
 
 TIES = {"H1_TIE": "1", "H1_GATE": GATE, "H1_CIRCUITS": "circuits"}
@@ -2109,12 +2184,13 @@ def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_
     run = _deferred(tmp_path)
     assert run.returncode == 0, run.stderr
     d, dd, out = tmp_path / "serve", tmp_path / "serve" / "private" / "deferred", tmp_path / "served-out"
-    names = "K PRODUCT V3C_CLASS V3C_LAW H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE DEFERRED_TREE"
+    names = "K PRODUCT V3C_CLASS V3C_LAW H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE DEFERRED_TREE CR_SCAN_DELTA"
     said = subprocess.run(["bash", "-c", f'. "$1"; for v in {names}; do printf "%s=%s\\n" "$v" "${{!v}}"; done', "_",
                            str(dd / "deferred.env")], check=True, capture_output=True, text=True).stdout
     assert dict(x.split("=", 1) for x in said.splitlines()) == {
         "K": "7", "PRODUCT": "remote", "V3C_CLASS": W63K4, "V3C_LAW": "stratified:1", "H1_TIE": "1", "COMPOSITE": "1",
-        "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200", "DEFERRED_TREE": SHA}
+        "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200", "DEFERRED_TREE": SHA,
+        "CR_SCAN_DELTA": "5.421010862427522e-20"}
     listed = (dd / "inputs.txt").read_text().splitlines()
     window = [f"v3c-w7-{VTAG}/window/{f}" for f in ("circuit.json", "registration.json", "values/a.bin")]
     own = ["private/deferred/deferred.env", "private/deferred/pieces/pouw/answer.json"]

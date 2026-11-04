@@ -25,7 +25,7 @@
 # holding a certified.jsonl) and nothing of a certifier rehearsal's, which in CR_GATES is refused by name: certs
 # --warden-run, n2_zk.py prove --warden-run and the scan; the report requires every one (chain_record.WARDEN). It opens
 # no endpoint records or advice, so CR_ENDPOINT is refused there: the window's compute audit is V3c's class window,
-# whose proofs read the advice under its hiding root.
+# whose circuit is the class's and reads no advice.
 # env: CR_MEM_GB (what job.sh's stages may take, within the slot's)
 #      CR_GATES (space-separated: a tarball's name under the run's inputs/, an art: id, or a directory)
 #      CR_CLIENT (the client's kept files, a path under the unpacked gates; by default the certifier rehearsal's
@@ -35,7 +35,8 @@
 #      an art: id, or a directory; refused on the active-warden path)
 #      CR_N2_ROUNDS (n2_zk.py's --rounds)
 #      CR_N2_CMD (replaces the above; run with HONEST, CLIENT, BIN, LEAN, E2E and N2OUT set, writing N2OUT/summary.json)
-#      CR_WARDEN_RUN (the network certifier rehearsal's run, a path under the unpacked gates)  CR_SCAN_ARGS (more
+#      CR_WARDEN_RUN (the network certifier rehearsal's run, a path under the unpacked gates)  CR_SCAN_DELTA (scan_zk.py's
+#      --delta, e.g. served_verdicts.sh's 2^-64)  CR_SCAN_ARGS (more
 # scan_zk.py      arguments, e.g. "--draw 8")  CR_SCAN_CMD (replaces scan_zk.py prove; SCANOUT/summary.json)
 #      CR_PATH=certifier-only (the records are the certifier rehearsal's alone, with no active network certifier's rows:
 # the scan isn't run      or required, and the report names what that path stubs, chain_record.STUBBED)
@@ -140,7 +141,7 @@ if [ "${CR_PATH:-}" = warden ]; then
   else WARDEN=$(find "$G" -name certified.jsonl -printf '%h\n' -quit); WARDEN=${WARDEN%/witness}; fi
   [ -n "$WARDEN" ] || { log "chain: the active-warden path: no warden run (a certified.jsonl) in $CR_GATES"; exit 3; }
   [ -z "${CR_ENDPOINT:-}" ] || { log "chain: the active-warden path opens no endpoint records or advice (V3c's class" \
-    "window reads the advice under its hiding root), and CR_ENDPOINT names $CR_ENDPOINT: unset it"; exit 3; }
+    "window reads none), and CR_ENDPOINT names $CR_ENDPOINT: unset it"; exit 3; }
   HONEST= CLIENT= PROFILE=
   log "chain: the active-warden path, warden run ${WARDEN#$G/}"
 else
@@ -224,7 +225,7 @@ scan() {
   log "chain: scan ${CR_SCAN_CMD:+(CR_SCAN_CMD) }${wr:-on the synthetic warden run of scan_zk}"
   if [ -n "${CR_SCAN_CMD:-}" ]; then bash -c "$CR_SCAN_CMD"
   else "$PY" benchmarks/network_traces/scan_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$SCANOUT" $wr \
-    ${CR_SCAN_ARGS:-}; fi > "$OUT/scan.log" 2>&1
+    ${CR_SCAN_DELTA:+--delta "$CR_SCAN_DELTA"} ${CR_SCAN_ARGS:-}; fi > "$OUT/scan.log" 2>&1
   echo $? > "$W/scan.rc"; keep "$SCANOUT" "$OUT/scan"; log "chain: scan done, rc $(cat "$W/scan.rc")"
   [ "$(cat "$W/scan.rc")" = 0 ] || tail -n 1 "$OUT/scan.log" | cut -c1-600 > "$W/scan.why"
   [ -n "$wr" ] && echo "$WARDEN" > "$W/scan.warden"
