@@ -166,12 +166,13 @@ against that salted digest is a later change to its circuit (the certifier PROTO
       "empty": {"scan/state": {"words": W, "salt": hex, "path": hex}, …}
 
   (`stateRead`, a run a port: unit `lo + i` at leaf `l + i`), so the scan's ingress unit t (bucket t) reads `sin` as
-  that root's row t and registers its `o1` as row t + 1, and each row past row 0 is the state the scan's transition
-  computed from the row before it, the prover's word for none; and row 0, which no unit computes and only the
-  Programs anchored at bucket 0 read, is the empty state, `W` zero u16 words, opened under its salt through its path
-  to the state entry's root and domain (`stateEmpty`: the row and its salt are public, the other leaves hidden). A
-  slot's Program anchored at bucket a reads row a, the scan's state before a, so it computes its entry on the requests
-  the scan read, not on a state the prover chose (`Properties.NetworkPeriod.RowsStateTied`).
+  that root's row t and registers its `o1` as row t + 1, but for its last unit, whose `o1` no row holds (the egress
+  tie's is the prover's one-leaf `scan/last`, registered before any coin), and each row past row 0 is the state the
+  scan's transition computed from the row before it, the prover's word for none; and row 0, which no unit computes and
+  only the Programs anchored at bucket 0 read, is the empty state, `W` zero u16 words, opened under its salt through
+  its path to the state entry's root and domain (`stateEmpty`: the row and its salt are public, the other leaves
+  hidden). A slot's Program anchored at bucket a reads row a, the scan's state before a, so it computes its entry on
+  the requests the scan read, not on a state the prover chose (`Properties.NetworkPeriod.RowsStateTied`).
 
 **Public**, on acceptance: `K` and its terms, each a ceiling of `log2` of `PeriodLeakAccepted`'s factor:
 

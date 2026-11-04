@@ -6,7 +6,8 @@ atom's bit-exact batch form).
   (`peel_factors_a`, `peel_factors_b`) and G (`gram`).
 - `form_v1`: `pearl_c.form_v1`, the per-element atom of v1's forming, with its scalar statistics, E′ and cast.
 - `chain_debit`: `pearl_c_debit.chain_debit`, every word's masked group words, its totals, the backward bisection of the
-  later promotions' intervals and its flags, over the tile's words together.
+  later promotions' intervals and its flags, over the tile's words together; `word_debits` keeps each word's counts apart
+  (`volunteer_pass.py` sums them over any rows and columns).
 
 Each returns exactly what its scalar reference returns.  Wherever a word, an accumulator or a promotion leaves the finite
 range, or an input is not the shape the batch takes, it calls the scalar reference instead, so a rejection (and any other
@@ -206,7 +207,8 @@ def _carried(x: np.ndarray, w: np.ndarray) -> np.ndarray:
     return _key(_plus_zero(_add(_word(x), w)))
 
 
-def _debit(a: np.ndarray, b: np.ndarray, device) -> tuple[int, int]:
+def _debit(a: np.ndarray, b: np.ndarray, device) -> tuple[np.ndarray, np.ndarray]:
+    """Per word (a's rows by b's, row-major): its flagged atoms and its later promotions into a +0 total."""
     g_, atom = device.g, device.atom.k
     ra, k = a.shape
     if g_ is None or b.shape[1] != k or k % (g_ * atom):
@@ -234,7 +236,7 @@ def _debit(a: np.ndarray, b: np.ndarray, device) -> tuple[int, int]:
                   _least(lambda x, w=w, hi=hi: _carried(x, w) > hi, n) - 1)
         bounds.append((lo, hi))
     bounds.reverse()
-    atoms = 0
+    atoms = np.zeros(n, np.int64)
     for g, masked in enumerate(groups):
         lo, hi = bounds[g]
         keep = np.zeros((1 << g_, n), bool)
@@ -242,8 +244,10 @@ def _debit(a: np.ndarray, b: np.ndarray, device) -> tuple[int, int]:
             v = _key(_promote(totals[g], masked[mask]))
             keep[mask] = (lo <= v) & (v <= hi)
         for j in range(g_):
-            atoms += int(keep[[m for m in range(1 << g_) if m >> j & 1]].any(axis=0).sum())
-    zeros = sum(int((t == 0).sum()) for t in totals[1:-1])
+            atoms += keep[[m for m in range(1 << g_) if m >> j & 1]].any(axis=0)
+    zeros = np.zeros(n, np.int64)
+    for t in totals[1:-1]:
+        zeros += t == 0
     return atoms, zeros
 
 
@@ -252,9 +256,25 @@ def chain_debit(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]]
     try:
         if not len(a_rows) or not len(b_rows):
             raise _Scalar
-        return _debit(_rows(a_rows), _rows(b_rows), device)
+        atoms, zeros = _debit(_rows(a_rows), _rows(b_rows), device)
+        return int(atoms.sum()), int(zeros.sum())
     except _Scalar:
         return _SCALAR["chain_debit"](a_rows, b_rows, device)
+
+
+def word_debits(a_rows: Sequence[Sequence[int]], b_rows: Sequence[Sequence[int]], device=D.H100
+                ) -> tuple[np.ndarray, np.ndarray]:
+    """`pearl_c_debit.word_debit` on every word (a, b) of the tile: (flagged atoms, later +0 promotions), each an
+    a_rows x b_rows array, whose sums over any rows and columns are `chain_debit`'s on them."""
+    try:
+        if not len(a_rows) or not len(b_rows):
+            raise _Scalar
+        atoms, zeros = _debit(_rows(a_rows), _rows(b_rows), device)
+        return atoms.reshape(len(a_rows), len(b_rows)), zeros.reshape(len(a_rows), len(b_rows))
+    except _Scalar:
+        got = [[D.word_debit(a, b, device) for b in b_rows] for a in a_rows]
+        return (np.array([[sum(f) for f, _ in row] for row in got], np.int64).reshape(len(a_rows), len(b_rows)),
+                np.array([[z for _, z in row] for row in got], np.int64).reshape(len(a_rows), len(b_rows)))
 
 
 # ---- installing them ----------------------------------------------------------------------------------------------------

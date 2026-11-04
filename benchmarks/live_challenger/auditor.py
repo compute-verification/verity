@@ -136,7 +136,8 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   peer's loopback, `--minutes` 1 to 170, `--tamper` one of `TAMPERS` for a tampering shim instead of an honest one
   (`certifier_serve.py`'s: `late` holds a window-0 session past every sync, `extra` writes one event more and `drop`
   one fewer, which the rehearsal's check refuses, and `token` writes window 0's tokens with other bytes, a run it
-  accepts, exit 0, since only the I/O tie refuses it), `--requests` 4 to 400, `--in-flight` 1 to 4 requests sent
+  accepts, exit 0, since only the egress tie, `scan_service.EgressTie`, refuses it), `--requests` 4 to 400,
+  `--in-flight` 1 to 4 requests sent
   together and `--tokens` 16 to 64 tokens out of each, each recorded and passed on only when given
   (`certifier_serve.py`'s 4 and 64 otherwise), `--profile planned|served` N2's profile, planned by default: the planned
   egress occupancy, or the served profile, whose egress counts derive from the ingress head's, and the sampling
@@ -157,8 +158,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   its arrivals outlast. Each
   request's `user` is `<run>.j` (`--name`, the run), which the shim forwards the endpoint, so a committing endpoint
   records each request under the name the certified I/O reads, and the run's id events (or compact records), records
-  and `io.json` are in its `fetch`: `negatives.py tie-run --run TARBALL --ids REQUESTS.jsonl` ties them to the
-  endpoint's committed ids, which refuses `token`. The gate refuses while another rehearsal runs, writes
+  and `io.json` are in its `fetch`. The gate refuses while another rehearsal runs, writes
   `certifier/<run>/request.json` and starts its unit
   (`vy-certifier@<run>.service`), which runs `certifier-run` as `auditor`: an `ssh -N -L` with the auditor's tunnel key
   (the peer's line of /etc/vy/peers) from a free port of this host's loopback to 127.0.0.1:PORT on the peer, then the

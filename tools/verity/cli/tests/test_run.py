@@ -129,6 +129,7 @@ def test_the_composites_are_remote_remote_network_and_onsite():
                                                    "sampled-proofs": "verity/sampled-proofs/v1"}
     assert SP.SUBPROTOCOLS["verity/remote-network/v0"] == {**SP.SUBPROTOCOLS["verity/remote/v0"],
                                                            "certifier": "verity/certifier/v0"}
+    assert SP.SUBPROTOCOLS["verity/onsite/v0"]["sampled-proofs"] == "verity/sampled-proofs/one-stage/v1"
     assert SP.SUBPROTOCOLS["verity/onsite/v0"]["pouw"] == "verity/pouw/period/v1"
     assert SP.SUBPROTOCOLS["verity/onsite/v0"]["wipe"] == "verity/wipe/v0"
 
