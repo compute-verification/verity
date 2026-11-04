@@ -3332,6 +3332,27 @@
    "assumptions": [],
    "type_hash": "1a019f5616cb2c5552794b56c5cc73bb24cc6a061d261b53936cf95fcbd956bb"
   },
+  "Properties.Pouw.PearlPlus.acceptMeans": {
+   "owner": "@proofs"
+  },
+  "Properties.Pouw.PearlPlus.loadedGivesUp": {
+   "owner": "@proofs"
+  },
+  "Properties.Pouw.PearlPlus.planMeans": {
+   "owner": "@proofs"
+  },
+  "Properties.Pouw.PearlPlus.refusedBeforeTheCoin": {
+   "owner": "@proofs"
+  },
+  "Properties.Pouw.PearlPlus.tileAcceptMeans": {
+   "owner": "@proofs"
+  },
+  "Properties.Pouw.PearlPlus.tileKeepsTheCap": {
+   "owner": "@proofs"
+  },
+  "Properties.Pouw.PearlPlus.yIsTheUnscale": {
+   "owner": "@proofs"
+  },
   "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod : Properties.Pouw.Period.CheckedCreditPeriod"],
@@ -5246,6 +5267,42 @@
     "function": "PouwCommit.tagged",
     "outcome": "none"
    },
+   "Properties.Pouw.PearlPlus.acceptMeans": {
+    "function": "PouwCheck.PearlPlus.check",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.PearlPlus.loadedGivesUp": {
+    "function": "PouwCheck.PearlPlus.load",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.PearlPlus.planMeans": {
+    "function": "PouwCheck.PearlPlus.plan",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.PearlPlus.refusedBeforeTheCoin": {
+    "function": "PouwCheck.PearlPlus.plan",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.PearlPlus.tileAcceptMeans": {
+    "function": "PouwCheck.PearlPlus.checkTile",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.PearlPlus.tileKeepsTheCap": {
+    "function": "PouwCheck.PearlPlus.Rule.checkOpened",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.PearlPlus.yIsTheUnscale": {
+    "conjuncts": [
+     {
+      "function": "PouwCheck.PearlPlus.Rule.unscale",
+      "outcome": "none"
+     },
+     {
+      "function": "PouwCheck.PearlPlus.Rule.yOf",
+      "outcome": "accept"
+     }
+    ]
+   },
    "Properties.Pouw.Window.bucket8192": {
     "function": "PouwWindow.bucket",
     "outcome": "none"
@@ -5990,14 +6047,7 @@
    "Properties.Served.DrawMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.drawMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
-   "Properties.Pouw.PearlPlus.PlanMeans": "unstated: what Pearl+'s run verdict's plan establishes (distinct calls, loaded passes, the run commitment, the coin record, the draw), unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
-   "Properties.Pouw.PearlPlus.AcceptMeans": "unstated: Pearl+'s run verdict accepts only when every drawn tile's opening passes checkTile, unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
-   "Properties.Pouw.PearlPlus.RefusedBeforeTheCoin": "unstated: a pass refused before the coin opens no tile, unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
-   "Properties.Pouw.PearlPlus.LoadedGivesUp": "unstated: a loaded pass's give-up keeps V-EX's caps and the published records root, unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
-   "Properties.Pouw.PearlPlus.TileAcceptMeans": "unstated: what a passed tile establishes (its openings, its words and leaf, the per-row rules and cap, the y as the unscale of U), unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
-   "Properties.Pouw.PearlPlus.TileKeepsTheCap": "unstated: a passed tile's replayed debit is within rho = 1/400 of its credit, as a tile and on each credited row, unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
    "Properties.Pouw.PearlPlus.OpeningBinds": "unstated: two accepted openings of one position of an hm96 tree open one value, or two different messages hashed in checking them (`rowsHashed`) collide under SHA-512; proved (`Properties.Pouw.PearlPlus.openingBinds`), and listed under guarantees once it has its witnesses",
-   "Properties.Pouw.PearlPlus.YIsTheUnscale": "unstated: the unscale Pearl+'s check holds the served y to is the Definition Pouw.PearlC.unscale (PearlCUnscale_v1 at BIAS off), unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
    "Properties.Pouw.PearlPlus.WorkIsTheCredit": "unstated: the work an accepted Pearl+ run publishes is its credit at Pearl's assumption over the plan's passes at its draws and delta = 1/100, unproved; PEARLLEAN's draft statement (note:20261103T2345Z-draft-pearlplus-lean-check), which gets a guarantee entry once red team has read it",
    "Properties.Pouw.LiveSalt.epochRootBinding": "restatable: its hypotheses, 64-byte weights' roots and epochs below 2^64, are not an acceptance of `epochOpenRoot`, which returns on any input; stated over `PouwCheck.liveSaltCheck`'s acceptances, whose weights' roots are SHA-512 digests and whose `pass_index` is refused at 2^64 (`PASS_FORM`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Properties.Pouw.LiveSalt.rowSeedBinding": "restatable: its hypotheses, call indices and rows below 2^32 and two different pairs, are not an acceptance of `rowSeed`, which returns on any input; stated over the Pearl-C period's credit (CMP-82), which refuses a call index of 2^32 or more (`CALL_RANGE`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
