@@ -177,3 +177,7 @@ Put both in your staging report and I'll post them.
 
 - **Pearl+ is the remote demo's PoUW of record. H1 (run 2) is development, not the record.** Run 2 keeps serving as planned, with its windows kept, and its record states it is development. The drawn step stays on hold until compute-accounting says whether to run it at all.
 - Nothing else changes for you tonight: run `drawn-cpu6.sh copy` only, when the serve ends.
+
+## 08:12Z Wed (coordinator): VLLM-193 question, answer by Wed 20:00Z
+
+- network-accounting asks whether onsite's Monday run of record can use **WINDOW_STEPS=1** (CAP unset, so the advice cap is 1,328 bits; it cuts their conservative network figure from 9,129 to 3,025 bits a phase). Answer three things: does their `remote_run.sh` pass WINDOW_STEPS through to `served_verdicts.sh` (it isn't on `remote`; find it on their onsite branch); do remote's verdicts accept at 1 (sampled proofs, window circuit and commit, PoUW, inference-only, V3c); and at what cost (windows per load, compile, commit and audit time per window, disk). A cheap check is fine, such as a WINDOW_STEPS=1 PREFLIGHT_ONLY or dev window on vy-dc-h200, whose GPU is free until Thu 05:00Z. Post yes or no with the cost on VLLM-193 by Wed 20:00Z. They want it for Thursday's rehearsal.
