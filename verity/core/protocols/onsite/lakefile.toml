@@ -77,7 +77,7 @@ name = "onsite"
 root = "OnsiteMain"
 
 # Remote with the network certifier (`verity/remote-network/v0`): remote's subprotocols and the network certifier's
-# period, under remote's ties (CoreRemoteNetwork.lean). Its executable is the core CLI (`remote-network id | check |
+# period, under remote's ties and its own (CoreRemoteNetwork.lean). Its executable is the core CLI (`remote-network id | check |
 # serve`).
 [[lean_lib]]
 name = "CoreRemoteNetwork"

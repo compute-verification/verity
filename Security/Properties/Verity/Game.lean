@@ -18,9 +18,10 @@ The verifier of record is one compiled Lean function per composite (`Verity.Regi
 the composite `Core.Composites.composites` lists for it (`verifier`): onsite's `Core.Onsite.protocol`
 (`verity/onsite/v0`, `Core.Composition.tiedSameB`), remote's `Core.Remote.protocol` (`verity/remote/v0`,
 `Core.Composition.tiedSameB`) and remote with the network certifier's `Core.RemoteNetwork.protocol`
-(`verity/remote-network/v0`, `Core.Composition.tiedSameB` under remote's ties), each composing its subprotocols over the
-blobs the prover sent. Onsite has seven subprotocols, remote three of them and remote with the network certifier
-remote's three and the network certifier, each subprotocol at the component its composite names for it (`component`);
+(`verity/remote-network/v0`, `Core.Composition.tiedSameB` under remote's ties and its egress tie), each composing its
+subprotocols over the blobs the prover sent. Onsite has seven subprotocols, remote three of them and remote with the
+network certifier remote's three and the network certifier, each subprotocol at the component its composite names for
+it (`component`);
 the five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAudit`):
 
 | subprotocol | `Audit` | onsite's component | remote's component | remote with the network certifier's |
@@ -148,11 +149,12 @@ def tied : Verity.Registration.Composite → List String
   | .remoteNetwork => Remote.tied
 
 /-- The ties of composite `k`: at onsite, PoUS and PoUB-P2 on one store; at remote and remote with the network
-certifier, every window of PoUW's period on the policy's record. -/
+certifier, every window of PoUW's period on the policy's record, and at remote with the network certifier every compute
+audit of the network certifier's period on it too. -/
 def ties : Verity.Registration.Composite → List Composition.Tie
   | .onsite => [Onsite.store]
   | .remote => [Remote.windows]
-  | .remoteNetwork => [Remote.windows]
+  | .remoteNetwork => RemoteNetwork.ties
 
 /-- **The compiled component of composite `k` that decides subprotocol `a`**; `none` when `k` has no such
 subprotocol. -/

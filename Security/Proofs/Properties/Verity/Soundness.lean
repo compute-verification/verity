@@ -54,8 +54,9 @@ theorem verifier_mem (k : Verity.Registration.Composite) :
   · exact List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inl rfl)))))
 
 /-- **What a composite's verifier of record accepts, it accepted as a `same` composition**: an accepted composition of
-its components whose record subprotocols committed to one record, at onsite PoUS and PoUB-P2 on one store, and at
-remote and remote with the network certifier every window of PoUW's period on the policy's record. -/
+its components whose record subprotocols committed to one record, at onsite PoUS and PoUB-P2 on one store, at
+remote and remote with the network certifier every window of PoUW's period on the policy's record, and at remote with
+the network certifier every compute audit of the network certifier's period on it too. -/
 theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts k s) : SameAccepts k s := by
   cases k
   · obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
@@ -72,7 +73,7 @@ theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts
       Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hh, hties⟩
   · obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
       Properties.Composition.answerAccepts (RemoteNetwork.protocol.on s.blobs) s.params s.commitment s.evidence h
-    obtain ⟨hh, hties⟩ := Properties.Composition.acceptTied [Remote.windows] ev
+    obtain ⟨hh, hties⟩ := Properties.Composition.acceptTied RemoteNetwork.ties ev
       (Composition.checkSame "verity/remote-network/v0" Remote.tied (s.components .remoteNetwork) ps c ev) pub prof hch
     exact ⟨ps, c, ev, ⟨hp, hc, he⟩, pub, prof,
       Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hh, hties⟩

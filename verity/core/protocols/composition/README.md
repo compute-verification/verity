@@ -13,8 +13,9 @@ path, onsite and remote also on their subprotocols' packages, with no Mathlib:
   PoUW, PoUS, PoUB-P2 (on PoUS's store), network certification and the memory challenger's
   wipe, the policy and sampled proofs on one registration record, and PoUS and PoUB-P2 on one store (a `tiedSameB`).
   The package also holds remote with the network certifier (`Core.RemoteNetwork.protocol`, `verity/remote-network/v0`,
-  `CoreRemoteNetwork.lean`): remote's subprotocols and network certification under remote's record subprotocols and
-  remote's tie, with none of its own, so its verdict is the AND of remote's and network certification's.
+  `CoreRemoteNetwork.lean`): remote's subprotocols and network certification under remote's record subprotocols,
+  remote's tie and its own (`egress`), so its verdict is the AND of remote's and network certification's over one
+  registration record.
 - `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): sampled proofs, the inference-only policy and
   PoUW's period, the policy and sampled proofs on one registration record and every window of the period on it (a
   `tiedSameB`).
@@ -118,7 +119,8 @@ product is one:
 - remote, `tiedSameB "verity/remote/v0" [verity/inference-only/v0, verity/sampled-proofs/v1] [windows]
   components`, whose policy and sampled proofs each commit to the run's registration record;
 - remote with the network certifier, `tiedSameB "verity/remote-network/v0" [verity/inference-only/v0,
-  verity/sampled-proofs/v1] [windows] components`, remote's record subprotocols and tie over its four subprotocols;
+  verity/sampled-proofs/v1] [windows, egress] components`, remote's record subprotocols and tie over its four
+  subprotocols, and its own tie;
 - onsite, `tiedSameB "verity/onsite/v0" [verity/inference-only/v0, verity/sampled-proofs/v1] [store]
   components`, whose policy and sampled proofs each commit to the run's registration record (in either form, v1's).
 
@@ -136,7 +138,10 @@ commitment's `root`, the case's `store_root`). PoUB's generic session (`verity/r
 root is its own salted tree's, is not a subprotocol. Once the log exists, both read the store's hardware entry.
 Remote's one tie, `Core.Remote.windows`, puts every window of PoUW's period on the policy's record: the digest of the
 record the policy's commitment is, and the digest of each window's Commit record as the period's credit reads it
-(`PouwCheck.Credit.commitOf?`). The period's own commitment is the auditor's ledger, so it can't join `same`.
+(`PouwCheck.Credit.commitOf?`). The period's own commitment is the auditor's ledger, so it can't join `same`. Remote
+with the network certifier adds `Core.RemoteNetwork.egress`, which puts every compute audit of the network certifier's
+period on the policy's record: the digest of each registration in the period commitment's `audits`
+(`Flock.WindowRecord.digest`, one-stage's); a period with no compute audit names the empty string and is refused.
 
 ## The difftest
 

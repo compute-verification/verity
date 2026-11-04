@@ -90,7 +90,8 @@ negatives.
   requests are served, so a remote run may set it (with `LOAD=front`) to serve through the network certifier in front
   of its endpoint, its verdicts unchanged. `PRODUCT=remote-network` composes sampled proofs, PoUW and the network
   certifier, dropping the wipe, PoUS and the bandwidth audit as remote does, and its composites are remote's and
-  `verity/remote-network/v0`'s. An accept's clause says when its weights were held and their share of the checkpoint, where its
+  `verity/remote-network/v0`'s, which refuses a network certifier's period whose compute audits are not all on the run's
+  registration record (its `egress` tie). An accept's clause says when its weights were held and their share of the checkpoint, where its
   profile says so (PoUS's), and each δ of the block record's at which its quantity is not established. V3c runs last, within `V3C_TIMEOUT` and `V3C_AUDIT_TIMEOUT`, since nothing before it reads it, and writes its audit as the network
   certifier's period reads it (`period.json`). With the certifier's piece split in two (`CERTIFIER_CHAIN_CMD` and
   `CERTIFIER_PERIOD_CMD`), V3c runs before the pieces instead: the chain after its window commit, beside its audit
