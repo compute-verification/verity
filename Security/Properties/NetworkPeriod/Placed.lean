@@ -19,8 +19,8 @@ bound holds (`WrongBounds`).
 
 * `StmtBits D`: every statement `D` parses is its audit's members' joint program (`Properties.NetworkScan.Flattens`),
   each member a template of its descriptor's Program that Bits lays out (`Bits.check`, at a template node of the root,
-  `templateNodes`), and each of its partition's proof blocks is a member's unit's (`Bits.blockOf`, at the deployed
-  constants), at the member's first position (`Bits.base`).
+  `templateNodes`), and each of its partition's proof blocks is a member's unit's (`Bits.blockOf`, at the member's
+  constants, `Bits.consts`), at the member's first position (`Bits.base`).
 * `WrongBounds s P δ b`: each possible incorrect set of `s` at `δ` holds at most `b` proof blocks. It is the sampled
   leg's: the audit's answer publishes `b` (`SampledProofs.Bound.boundOf`), and `WrongBoundsDrawn` gives it at a strata
   draw. The period check reads the answer's `bound` and not the draw, so `ScanWindowsPlaced` takes it as it stands.
@@ -36,21 +36,22 @@ namespace Properties.NetworkPeriod
 
 open NetworkCheck.Period (Schedule Scan scanOf templateNodes)
 open NetworkCheck.Circuit (templateDef)
-open SampledProofs.Bits (Members keyProg blockOf base)
-open Properties.NetworkScan (Flattens consts)
+open SampledProofs.Bits (Members keyProg blockOf consts base)
+open Properties.NetworkScan (Flattens)
 open Claims.Sampling
 
 /-- **The deployment lays its statements out as `SampledProofs.Bits` does**: every statement `D` parses has a
 descriptor C-Flock decodes to a Program `P` and a partition `Q`, its gates are some members' joint program (`Flattens`),
 each member a template of `P`'s root (a template node's Definition, `templateNodes`) that Bits lays out (`Bits.check`),
-and each of `Q`'s proof blocks is some member's unit's (`Bits.blockOf`, at the deployed constants `consts`), at the
+and each of `Q`'s proof blocks is some member's unit's (`Bits.blockOf`, at the member's constants `Bits.consts`), at the
 member's first position (`Bits.base`). The deployed parser is the sampled verifier's, so it is that code's premise. -/
 def StmtBits {Coin Col T : Type} (D : Deploy Coin Col T) : Prop :=
   ∀ x s, D.parse x = some s → ∃ (P : Flock.Program.Prog) (Q : Partition) (ms : Members),
     Flock.Program.decode ⟨s.desc.toArray⟩ = .ok P ∧ D.partition s = some Q ∧ Flattens ms s.prog ∧
       (∀ v < Q.blocks.length, ∃ m < ms.length, ∃ u < (ms.getD m default).2.size,
         Q.blocks.getD v [] =
-          (blockOf (keyProg (ms.getD m default).1 (ms.getD m default).2.size) consts u).map (base ms m + ·)) ∧
+          (blockOf (keyProg (ms.getD m default).1 (ms.getD m default).2.size)
+            (consts (ms.getD m default).1 (ms.getD m default).2.size) u).map (base ms m + ·)) ∧
       ∀ m < ms.length, ∃ k ∈ templateNodes P,
         SampledProofs.Bits.check (ms.getD m default).1 P (templateDef P k).key = none
 

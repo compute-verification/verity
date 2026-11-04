@@ -506,6 +506,10 @@ theorem length_memberProg (ci : Flock.Circuit × Array ℕ) :
     (memberProg ci).1.length = off (keyProg ci.1 ci.2.size) (keyProg ci.1 ci.2.size).size :=
   length_prog _ _
 
+theorem unitPos_lt_member {ci : Flock.Circuit × Array ℕ} {u y : ℕ} (h : UnitPos ci.1 ci.2.size u y) :
+    y < (memberProg ci).1.length :=
+  unitPos_lt_length (consts ci.1 ci.2.size) h
+
 theorem sum_take_map {α : Type} [Inhabited α] (F : α → ℕ) (l : List α) {m : ℕ} (hm : m ≤ l.length) :
     ((l.take m).map F).sum = ((List.range m).map fun i => F (l.getD i default)).sum := by
   induction m with
@@ -658,7 +662,7 @@ theorem jointUnit_unique {ms : Members} {m m' u u' y : ℕ} (h : JointUnit ms m 
     m = m' ∧ u = u' := by
   obtain ⟨hm, x, rfl, hx⟩ := h
   obtain ⟨hm', x', he, hx'⟩ := h'
-  obtain ⟨rfl, rfl⟩ := joint_unique hm hm' (unitPos_lt_length consts hx) (unitPos_lt_length consts hx') he
+  obtain ⟨rfl, rfl⟩ := joint_unique hm hm' (unitPos_lt_member hx) (unitPos_lt_member hx') he
   exact ⟨rfl, unitPos_unique hx hx'⟩
 
 /-- **A gate of the members' program that reads a unit's position is that unit's.** -/
@@ -675,15 +679,18 @@ theorem reads_jointUnit {ms : Members} {m u y z : ℕ} {G : Claims.Sampling.BGat
   obtain ⟨z', hz', rfl⟩ := hz
   obtain ⟨hm, w, hw, hwu⟩ := hzu
   have hw2 := two_le_of_unitPos hwu
-  have hwl := unitPos_lt_length consts hwu
-  rcases reads_unit _ _ consts hG' hz' with h1 | ⟨u', hxu, hzu'⟩
-  · have hl := two_le_length (ms.getD m' default).1 (ms.getD m' default).2.size consts
+  have hwl := unitPos_lt_member hwu
+  rcases reads_unit _ _ (consts (ms.getD m' default).1 (ms.getD m' default).2.size) hG' hz' with
+    h1 | ⟨u', hxu, hzu'⟩
+  · have hl := two_le_length (ms.getD m' default).1 (ms.getD m' default).2.size
+      (consts (ms.getD m' default).1 (ms.getD m' default).2.size)
     have hz'l : z' < (memberProg (ms.getD m' default)).1.length := by
-      show z' < (prog (keyProg (ms.getD m' default).1 (ms.getD m' default).2.size) consts).1.length
+      show z' < (prog (keyProg (ms.getD m' default).1 (ms.getD m' default).2.size)
+        (consts (ms.getD m' default).1 (ms.getD m' default).2.size)).1.length
       omega
     obtain ⟨-, rfl⟩ := joint_unique hm' hm hz'l hwl hw
     omega
-  · obtain ⟨rfl, rfl⟩ := joint_unique hm' hm (unitPos_lt_length consts hzu') hwl hw
+  · obtain ⟨rfl, rfl⟩ := joint_unique hm' hm (unitPos_lt_member hzu') hwl hw
     obtain rfl := unitPos_unique hwu hzu'
     exact ⟨hm', x, rfl, hxu⟩
 

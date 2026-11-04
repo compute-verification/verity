@@ -7,12 +7,11 @@ import Definitions.NetworkCertifier.SampledAudit
 
 A sampling statement's gates (`Claims.Sampling.AuditStatement.prog`, "the descriptor flattened") are the Boolean-profile
 program its registered circuit files describe (`SampledProofs.Bits`): each member of the audit, a circuit file over some
-of the partition's VUs, is its key program lowered at the deployed constants (`SampledProofs.Bits.prog`), the members
-side by side, member `m`'s positions from `SampledProofs.Bits.base`. It returns every unit's output copy bits, the key
-program's outputs.
+of the partition's VUs, is its key program lowered at its constants (`SampledProofs.Bits.prog` at
+`SampledProofs.Bits.consts`), the members side by side, member `m`'s positions from `SampledProofs.Bits.base`. It
+returns every unit's output copy bits, the key program's outputs.
 
 * `bgateAt b`, `bgateOf`: a Boolean-profile gate as a sampling gate, its reads shifted by `b`.
-* `consts`: the deployed constants, gate 0 set and gate 1 clear.
 * `jointOf ms`, `Flattens ms C`: the members' joint program, and `C` being it.
 * `FilesOf P fs`: one circuit file a template of the Program `P`, in order, each one Bits lays out as its template
   (`SampledProofs.Bits.check`).
@@ -26,7 +25,7 @@ program's outputs.
 
 namespace Properties.NetworkScan
 
-open SampledProofs.Bits (LGate Members keyProg prog base)
+open SampledProofs.Bits (LGate Members keyProg prog consts base)
 open NetworkCheck.Period (templateNodes bitsOf)
 open NetworkCheck.Circuit (templateDef)
 open Flock.TemplateQuery (TRange locate population)
@@ -43,13 +42,11 @@ def bgateAt (b : ℕ) : LGate → Claims.Sampling.BGate
 /-- **A Boolean-profile gate as a sampling gate**, unshifted. -/
 def bgateOf : LGate → Claims.Sampling.BGate := bgateAt 0
 
-/-- **The deployed constants**: gate 0 set (the key program's constant) and gate 1 clear (its zero); every other input
-gate is free. -/
-def consts (g : ℕ) : Option Bool := if g = 0 then some true else if g = 1 then some false else none
-
 /-- **A member's Boolean program**: its circuit file's key program on its units (`SampledProofs.Bits.keyProg`), lowered
-at the deployed constants (`SampledProofs.Bits.prog`). -/
-def memberProg (ci : Flock.Circuit × Array ℕ) : List LGate × List ℕ := prog (keyProg ci.1 ci.2.size) consts
+at its constants (`SampledProofs.Bits.prog` at `SampledProofs.Bits.consts`: the constant set, and the zero and every
+input gate no unit reads clear). -/
+def memberProg (ci : Flock.Circuit × Array ℕ) : List LGate × List ℕ :=
+  prog (keyProg ci.1 ci.2.size) (consts ci.1 ci.2.size)
 
 /-- **The members' joint program**: each member's (`memberProg`) side by side, member `m`'s gates and outputs from
 `base ms m`, as sampling gates. It returns every unit's output copy bits. -/
