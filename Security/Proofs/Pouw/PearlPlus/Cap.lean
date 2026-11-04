@@ -238,7 +238,7 @@ theorem checkOpened_filler {s : Scheme} {r : UnitRecord} {rows cols : List ℕ} 
         dsimp only
         rw [if_pos (show rows[x] ≥ r.realRows from hf)]⟩))
     dsimp only at hmem
-    simp only [show (Rule.Kind.filler == Rule.Kind.filler) = true from rfl, eq_self_iff_true, ↓reduceIte] at hmem
+    simp only [show (Rule.Kind.filler == Rule.Kind.filler) = true from rfl, ↓reduceIte] at hmem
     split at hmem
     · cases hmem
     · rename_i hz
@@ -292,7 +292,7 @@ theorem zero_of_any {x : Array ℕ} (h : (x.any fun w => w != 0) = false) (l : �
     rfl
 
 /-- A row of zeros isn't live. -/
-theorem liveRow_zero {x : Array ℕ} (hk : 0 < x.size) (hz : ∀ l, x[l]! = 0) : Rule.liveRow x = false := by
+theorem liveRow_zero {x : Array ℕ} (hk : 0 < x.size) (hz : ∀ l : ℕ, x[l]! = 0) : Rule.liveRow x = false := by
   have hs : Rule.sq300 0 = 0 := by decide
   rw [Bridge.liveRow_eq]
   simp [hz, hs] <;> omega
@@ -497,7 +497,8 @@ theorem tilePassGivesTheChainCap (hT : Properties.Pouw.PearlPlus.TileAcceptMeans
   have hB := Cap.band_colsB hbandC hbB
   have hcc : (p.records[pos]!.credited rows cols).2 = cols := by
     simp only [UnitRecord.credited]
-    exact List.filter_eq_self.2 fun j hj => by simp [(hB j hj).1, (hB j hj).2]
+    exact List.filter_eq_self.2 fun j hj => by
+      simp only [(hB j hj).1, (hB j hj).2, Bool.not_false, Bool.and_self]
   have hrow : ∀ x (hx : x < rows.length),
       (ops.a.x[x]!).size = (U.layout.shape ((auditTiling 64 64 U.layout).unit g)).k ∧
       (Rule.rowPasses ops.a.rho[x]! ops.a.alpha[x]! ops.a.x[x]! = true ↔
@@ -538,7 +539,8 @@ theorem tilePassGivesTheChainCap (hT : Properties.Pouw.PearlPlus.TileAcceptMeans
         have hz := Cap.checkOpened_filler hchk hx (Nat.le_of_not_lt hge)
         have hlive := Cap.liveRow_zero (by rw [(hrow x hx).1]; exact hk0) (Cap.zero_of_any hz)
         have h2 := (hrow x hx).2.2 hok
-        simp [Rule.rowPasses, hlive] at h2
+        rw [Rule.rowPasses, hlive, Bool.and_false] at h2
+        cases h2
       have hex : p.records[pos]!.excludedA.contains rows[x] = false := by
         cases hc : p.records[pos]!.excludedA.contains rows[x]
         · rfl
@@ -546,7 +548,10 @@ theorem tilePassGivesTheChainCap (hT : Properties.Pouw.PearlPlus.TileAcceptMeans
           have h2 := (hrow x hx).2.2 hok
           rw [h1] at h2
           cases h2
-      exact ⟨hi, by simp [hlt, hex, hvolA _ hi]⟩
+      refine ⟨hi, ?_⟩
+      first
+      | simp only [decide_eq_true hlt, hex, hvolA _ hi, Bool.not_false, Bool.and_self]
+      | simp only [Bool.and_eq_true, decide_eq_true_eq, hex, hvolA _ hi, Bool.not_false, and_true]; exact hlt
   have hcrnd : (p.records[pos]!.credited rows cols).1.Nodup := hrowsnd.filter _
   have hcrne : (p.records[pos]!.credited rows cols).1 ≠ [] := by
     obtain ⟨i0, hi0⟩ := List.exists_mem_of_ne_nil _ hbA
@@ -598,7 +603,8 @@ theorem tilePassGivesTheChainCap (hT : Properties.Pouw.PearlPlus.TileAcceptMeans
   have hP : cr.toFinset = (semH3 saltOf rootOf : PearlCSem Q R S).passRows
       (U.layout.shape ((auditTiling 64 64 U.layout).unit g)) c.act ((auditTiling 64 64 U.layout).rows g) := by
     ext i
-    rw [List.mem_toFinset, hcr_iff, PearlCSem.passRows, Finset.mem_filter, hrows, List.mem_toFinset]
+    rw [List.mem_toFinset, hcr_iff]
+    simp only [PearlCSem.passRows, Finset.mem_filter, hrows, List.mem_toFinset]
   have hPm : ∀ i ∈ cr.toFinset, i < (U.layout.shape ((auditTiling 64 64 U.layout).unit g)).m := fun i hi =>
     hrowsm i ((hcr_iff i).1 (List.mem_toFinset.1 hi)).1
   have hCn : ∀ j ∈ cols.toFinset, j < (U.layout.shape ((auditTiling 64 64 U.layout).unit g)).n := fun j hj =>
