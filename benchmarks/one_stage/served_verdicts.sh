@@ -802,7 +802,8 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
       && say "INFERENCE-ONLY: the served node's verdict, carried into this record as it wrote it (the serve dir's private/deferred/inference-only.json)"
   fi
   "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$D/sampled-proofs-served" \
-    --pieces "$DEFER_DIR/pieces" --out "$OUT/record" --product "$PRODUCT" --node "$SERVED_NODE" 2>&1 | publish_lines
+    --pieces "$DEFER_DIR/pieces" --out "$OUT/record" --product "$PRODUCT" --node "$SERVED_NODE" \
+    --key-sha512 "$H1_KEY_SHA512" --lane "${H1_LANE:-vllm}" 2>&1 | publish_lines
   rec=${PIPESTATUS[0]}
   [ -z "${COMPOSITE-1}" ] || TPY=$TPY SERVED_NODE=$SERVED_NODE bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
   echo "---- verdicts"; cat "$OUT/verdicts.txt"
@@ -1132,7 +1133,7 @@ TPY=$TREE/.venv/bin/python
 # 5. one record of every verdict
 wait "$IOV"
 "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$SP" \
-  --pieces "$OUT/pieces" --out "$OUT/record" --product "$PRODUCT" \
+  --pieces "$OUT/pieces" --out "$OUT/record" --product "$PRODUCT" --key-sha512 "$H1_KEY_SHA512" --lane "${H1_LANE:-vllm}" \
   ${DEFER:+--deferred "$DEFERRED_WHAT, to a follow-on on a node with the memory, which composes the final record: $DEFER"} \
   2>&1 | publish_lines
 rec=${PIPESTATUS[0]}

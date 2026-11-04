@@ -115,8 +115,8 @@ an answer that names no server isn't carried. An accepted answer whose outputs a
 (`block_record.leg`) is its subprotocol's error. `block_record` carries only an accepted subprotocol's certificate, so
 where one about this node rejects or errs the composed verdict is ``reject`` and no block record is written; it is
 ``accept`` only when every subprotocol accepted here. PoUW's accepted development piece is its verdict of record where
-`pouw_of_record` holds it to the challenger's pin (``--key-sha512``, H1_KEY_SHA512), the lane's own gate key
-(``--lane``, H1_LANE, default vllm), its period's open and the Lean answer on the period's case; else its row stays
+`pouw_of_record` holds it to the challenger's pin (``--key-sha512``, served_verdicts.sh's H1_KEY_SHA512), the lane's
+own gate key (``--lane``, its H1_LANE, default vllm), its period's open and the Lean answer on the period's case; else its row stays
 missing, naming the condition it fails.
 Those are the subprotocols of ``--product`` (default onsite; `block_record.PRODUCTS`): each one the
 product drops is ``dropped`` in the report (`dropped_row`, whatever its piece left), not run and composed into no
@@ -1515,10 +1515,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--pieces", type=Path, required=True)
     r.add_argument("--out", type=Path, required=True)
     r.add_argument("--deferred", help="what the run left to a follow-on and why, which the record carries")
-    r.add_argument("--key-sha512", default=os.environ.get("H1_KEY_SHA512"),
+    r.add_argument("--key-sha512",
                    help="the challenger key's pin PoUW's coins are held to for a verdict of record (H1_KEY_SHA512)")
-    r.add_argument("--lane", default=os.environ.get("H1_LANE") or "vllm",
-                   help="the lane whose own gate key PoUW's window must be reserved under for a verdict of record")
+    r.add_argument("--lane", default="vllm",
+                   help="the lane whose own gate key PoUW's window must be reserved under for a verdict of record "
+                        "(H1_LANE)")
     for q in (p, r):
         q.add_argument("--node", default=socket.gethostname())
         q.add_argument("--product", default="onsite")
