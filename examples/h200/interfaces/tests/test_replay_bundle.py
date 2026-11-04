@@ -18,12 +18,12 @@ SCHEMA = Path(B.__file__).parent / "schemas" / "drawn-unit-bundle.v2.schema.json
 #: the bundle of units 5, 200, 300 and 511 (slot 0 layer 0, slot 0 layer 1, slot 1 layer 0, slot 1 layer 1) of a W8A8 MLP's
 #: window (two requests, one step, width 128: 512 units in members of 8) on the RTX PRO 6000's dot, under the window's
 #: registered subset:4, and that registration; `prove_bundle.py make` wrote them at bc24cf2713 from the retired torch loop,
-#: and the window itself is in the evidence store (benchmarks/one_stage/prove_bundle.sh's BUNDLE_WINDOW)
+#: and the window itself is the registered fixture benchmarks/one_stage/tests/fixtures/bundle-window (prove_bundle.sh's BUNDLE_WINDOW)
 FIXTURES = Path(__file__).parent / "fixtures"
 DRAW = (5, 200, 300, 511)
 PATHS = "its paths do not reach its unit, slot and step roots"
 #: `B.digests` of the fixture: a change to the bundle's bytes changes these
-GOLDEN = {"json": "fb509ff3a87ce874cc7fa2bbf5536e3cb7365c0d88153f81ae024fba511b169369e45c43fffa3e669189eeee76dcc6429eb45b820328ada7cbe4008961642cd7",
+GOLDEN = {"json": "d00fd9f23632ac85627cda499654432a6bd547fd30f391760a08de62972b3b3171e549fd2c1c7512dbde8812177d5df394acfbb7e79be95f9e29e147594e3ea1",
           "bin": "183e9e504664b5d831135407b51246829dc10eedf9587917cd88cef516599d2c9685bb19e9b013f403bba1aba68e270495c2e830139fea7efa961f0c823b3db3"}
 #: SHA-512 of kernels' fixtures/commit-slots-v1.json, which `S.fixture()` writes as ``json.dumps(fixture, indent=1) + "\n"``;
 #: its roots and digests are those of the commit `B.REFERENCE` pins
