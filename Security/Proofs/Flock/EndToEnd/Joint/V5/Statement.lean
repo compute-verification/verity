@@ -238,10 +238,11 @@ noncomputable def before (τ : Strategy w.game) (k : Fin w.ms.length) (ω : w.L.
   seqTape (fun m : MemberV5 w.Reg w.nJ => m.live (m.part (w.L.draw ω)) τ.1) w.ms k.1 k.2
     (Strategy.ofMap (w.out τ.1 ω) _ (τ.2 ω))
 
-noncomputable instance (τ : Strategy w.game) (k : Fin w.ms.length) (ω : w.L.Ω) : Fintype (w.before τ k ω) :=
+noncomputable instance instFintypeBefore (τ : Strategy w.game) (k : Fin w.ms.length) (ω : w.L.Ω) :
+    Fintype (w.before τ k ω) :=
   seqTape.fintype _ _ _ _ _
 
-instance (τ : Strategy w.game) (k : Fin w.ms.length) (ω : w.L.Ω) : Nonempty (w.before τ k ω) :=
+instance instNonemptyBefore (τ : Strategy w.game) (k : Fin w.ms.length) (ω : w.L.Ω) : Nonempty (w.before τ k ω) :=
   seqTape.nonempty _ _ _ _ _
 
 /-- **The sample's coins on which the draw ends.** -/
