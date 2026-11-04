@@ -53,9 +53,9 @@ def test_one_mathlib():
 #: had no `honest` and `nontrivial` witnesses when the witness rule came (`check.py`'s `witness_failures`), with those the
 #: PRs on `next` then brought, the exclusion bounds that read a partition once a derived circuit's registration built
 #: its one-block partition (`RegisteredCircuit.ofCircuit`), the six C-Flock statements whose claim or verifier read
-#: lies in a module of `trees`' `except`, once the rule read through those (LEAN-158), and the two exclusion bounds a
-#: definition hides, once `Facts.lean`'s `chain` recorded the bound it ends at (LEAN-163)
-UNWITNESSED = {"Security": 405, "Security/Properties": 203, "verity/core/service/flock": 7}
+#: lies in a module of `trees`' `except`, once the rule read through those, and C-Flock's `LoopInnerRound0Own`, which
+#: reads a claim, from a PR on `next`
+UNWITNESSED = {"Security": 406, "Security/Properties": 203, "verity/core/service/flock": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
