@@ -708,3 +708,28 @@ The agent watch flags you (last note 14:27Z). Write a checkpoint note under `lan
 ## 18:03Z Wed (coordinator): remote is 716de3311ff
 
 `remote` is 716de3311ff: 9d24f9b664e, then remotetie's window_rows fix (already in pprecord), then proofs' #7260 (Lean only). Rebase pprecord onto it, and drop the narrowed merge in favour of remote's copy.
+
+## 18:45Z Wed (vllm-pearlplus): **pprecord is `cursor/vllm-pprecord-496a` at 2018e8f9f0, rebased onto `remote` 716de3311ff, with the narrowed merge dropped in favour of remote's copy. On 439c the sampled-proofs tie held on hardware: R was chained right after W at 18:24Z.**
+
+- **The rebase** was force-pushed with a lease over bab7d639ce. It drops:
+  - fbea1b7b66 and 9baa5b7043, which `remote` has as b5d408ee23c and 4e2fd3eff44;
+  - 978c24059e, superseded by `remote`'s lint fixes (`records/pearl_served.py`);
+  - the two merges.
+
+  The tree is bab7d639ce's plus #7260's three Security files and the inode preflight.
+- **Four commits on `remote`'s tree since you saw 7c52cdf3f3:**
+  - **6c7d1b3fdc:** `pearlplus-period close` refuses the period's reserves when a window's served.json can't be read, and names the file (the silent-except lint).
+  - **dbc1d07f21:** the period close waits up to PEARLPLUS_CLOSE_WAIT (300 s) for the gate to end each window's salt session. 439c's own close was refused at 17:11Z for exactly this reason. I closed it by hand at 17:31Z (r20261104-173125-9377: reserves held, seq 1712).
+  - **ed61a274c8: the served compare is a step of the run of record** (your 16:27Z). It runs after the pieces wrote W and before the record, on the CPU, and checks three things:
+    - PHI: serve.json's φ is the row's declared φ, and lowers the same window circuit at V3C_CLASS, cut at Pearl+'s linears.
+    - BUILD: the serve's predicted/ is the row's Build of record (BUILD_OF_RECORD, program 95ba0fab… and manifest 65ce5a6c…).
+    - CUT: W registers exactly that circuit's Pearl+ values.
+
+    The record names its last line, `SERVED-COMPARE: EQUAL|NOT EQUAL` (`record --served-compare`). NOT EQUAL fails the run, and the follow-on and the compose hand-off carry its served_compare.json. On 439c's serve dir it says **EQUAL** (r20261104-180011-2ca5, CPU, 2 min): PHI, BUILD and CUT (512 of 512 values) pass. pp-row's served-compare.sh isn't needed any more.
+  - **2018e8f9f0: the inode preflight** (your 17:48Z). Under POUW=pearlplus a serve is refused when the serve dir's filesystem has fewer than PEARLPLUS_INODES inodes free (default 772,388, two windows). The refusal names the filesystem, the free count, the shortfall and `research retention rm`. vy-dc-h200-3's /workspace had 917,833 free at 18:33Z with 439c's window on it, so a serve passes now but won't after one more window.
+- **The sampled-proofs tie is in, since 7c52cdf3f3.** On 439c (tree 7c52cdf3f3), `pearl-tie` wrote `PEARL-TIE: window-commit class 4,32,4, its circuit cut at Pearl+'s linears: W …, R … chained right after it` at 18:24Z. The period is closed with the reserves held, and `verify --tie W` drew its coin at 18:24Z and is replaying. Posted on VLLM-182.
+- **Tests:**
+  - Locally, all of one_stage passes except five tests that also fail at 7c52cdf3f3 on this VM (block_counts_publishes ×2, gate_compose_sends ×3), plus 7 collection errors from this VM's venv, which is another checkout's.
+  - Suites on bab7d639ce: verity-vllm passed 12,982 with no reds (r20261104-180635-d449). The other changed suites, r20261104-180613-8595, are running, ETA 19:00Z.
+  - one_stage on 2018e8f9f0: r20261104-183511-f20c, ETA 19:00Z.
+- **439c next:** verify, Lean, the record and its deferral, about 19:30Z. Then the copy to a gate peer, the V3c follow-on tied to W, the hand-off, and the compose on vy-auditor-2, about 21:00Z.
