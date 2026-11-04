@@ -853,16 +853,20 @@ def test_the_serve_dirs_re_proof_inputs_are_checked_against_their_copys_listing_
 def test_under_h1s_tie_the_re_proofs_circuit_is_the_record_reading_h1s_tables(tmp_path):
     """Under H1_TIE the window commit's circuit is held to the verifier's record reading H1's tables (served_verdicts.sh's
     `v3c_record`, window-circuit-w<K>-<class>-tie.json), so a tied run's copy holding only the untied record at the
-    class hasn't copied the circuit; `--h1-tie` says the run is tied."""
+    class hasn't copied the circuit; `--h1-tie` says the run is tied, and the record names the circuit it needs."""
     out, copy = accepted(tmp_path), "vy-nebius-cpu-3:/home/research/keep/reproof"
     serve = [p for at, p, _ in OR.REPROOF.values() if at == "serve dir"]
     listing = tmp_path / "private" / "listing.txt"
     listing.parent.mkdir()
     for tie in (False, True):
         listing.write_text("\n".join(f for p in serve for f in _reproof_files(p, tie)) + "\n")
-        assert OR.record(out, copy=copy, listing=listing, tie=tie)["reproof"]["copy"]["not_copied"] == []
+        got = OR.record(out, copy=copy, listing=listing, tie=tie)["reproof"]
+        assert got["copy"]["not_copied"] == []
+        assert got["inputs"]["circuit"]["path"] == f"window-circuit-w<K>-<class>{'-tie' * tie}.json"
         assert OR.main([str(out), "--reproof-copy", copy, "--reproof-listing", str(listing), *(["--h1-tie"] * tie)]) == 0
-        assert json.loads((out / "record" / "onsite.json").read_text())["reproof"]["copy"]["not_copied"] == []
+        written = json.loads((out / "record" / "onsite.json").read_text())["reproof"]
+        assert written["copy"]["not_copied"] == [] and written["inputs"]["circuit"] == got["inputs"]["circuit"]
+        assert "<tie>" not in json.dumps(written)
     untied = [f for p in serve for f in _reproof_files(p)]
     listing.write_text("\n".join(untied) + "\n")
     assert OR.record(out, copy=copy, listing=listing, tie=True)["reproof"]["copy"]["not_copied"] == ["circuit"]

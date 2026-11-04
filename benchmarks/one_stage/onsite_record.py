@@ -855,10 +855,10 @@ def named(path: str, tie: bool = False) -> list[re.Pattern[str]]:
 
 
 def reproof(out: Path, copy: str | None = None, listing: Path | None = None, tie: bool = False) -> dict[str, Any]:
-    """The re-proof inputs (`REPROOF`), each with where it is and what it holds; of OUT's whether the run wrote it, and of
-    the serve dir's, where ``copy`` (NODE:/PATH) and ``listing`` (each file under PATH, one path relative to it a line)
-    are given, whether the copy's listing holds each file its path names (`named`, with ``tie`` where H1_TIE ties the
-    window) and at least one under each directory it names."""
+    """The re-proof inputs (`REPROOF`), each with where it is, its path (``<tie>`` -tie where ``tie``: H1_TIE ties the
+    window) and what it holds; of OUT's whether the run wrote it, and of the serve dir's, where ``copy`` (NODE:/PATH) and
+    ``listing`` (each file under PATH, one path relative to it a line) are given, whether the copy's listing holds each
+    file its path names (`named`) and at least one under each directory it names."""
     files = None
     if copy is None or listing is None:
         kept: dict[str, Any] = {"missing": NO_COPY}
@@ -872,11 +872,12 @@ def reproof(out: Path, copy: str | None = None, listing: Path | None = None, tie
             kept = {"error": f"the copy's listing (--reproof-listing) can't be read: {type(e).__name__}"}
     inputs = {}
     for name, (at, path, what) in REPROOF.items():
+        path = path.replace("<tie>", "-tie" if tie else "")
         inputs[name] = {"in": at, "path": path, "holds": what}
         if at == "OUT":
             inputs[name]["present"] = (out / path).exists()
         elif files is not None:
-            inputs[name]["copied"] = all(any(rx.fullmatch(f) for f in files) for rx in named(path, tie))
+            inputs[name]["copied"] = all(any(rx.fullmatch(f) for f in files) for rx in named(path))
     if files is not None:
         kept["not_copied"] = [n for n, x in inputs.items() if x.get("copied") is False]
     return {"inputs": inputs, "copy": kept, "kept": REPROOF_KEPT}
