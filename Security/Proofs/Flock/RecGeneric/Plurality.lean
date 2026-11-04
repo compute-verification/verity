@@ -332,7 +332,6 @@ theorem runO (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c, decC 
     exact haccρ
   have hcoin : ∀ i, i + 1 < I.V.k (K.xI x) → coinSeq ρ.1 i = coinSeq d.1 i := fun i hi => by
     have e := congrArg (fun l : List Coin => l.getD i default) hlρ
-    dsimp only at e
     rwa [getD_range_map _ _ (show i < I.V.k (K.xI x) - 1 by omega),
       getD_range_map _ _ (show i < I.V.k (K.xI x) - 1 by omega)] at e
   have hpre : ∀ j, j + 1 ≤ I.V.k (K.xI x) →
@@ -383,7 +382,7 @@ theorem runO (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c, decC 
         simp only [Server.ansAt, hk1, lt_irrefl, ↓reduceIte]
       obtain ⟨hρ1, hρ2⟩ := hag (I.V.k (K.xI x) - 1) (by omega)
       rw [hk1] at hρ1 hρ2 ⊢
-      rw [hans] at hρ1
+      have hρ1' := hρ1.trans (hans (firstCoins (I.V.k (K.xI x)) ρ.1))
       have hdrop : ((List.range (I.V.k (K.xI x))).map (coinSeq (firstCoins (I.V.k (K.xI x)) ρ.1))).dropLast =
           ((List.range (I.V.k (K.xI x))).map (coinSeq (firstCoins (I.V.k (K.xI x)) d.1))).dropLast := by
         rw [List.dropLast_eq_take, List.dropLast_eq_take]
@@ -395,10 +394,10 @@ theorem runO (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c, decC 
         ((List.range (I.V.k (K.xI x))).map (coinSeq (firstCoins (I.V.k (K.xI x)) d.1)))
         (by simp) (by simp) (by simp) hdrop
       simp only [eval_bindOC_full, OC.eval, List.append_nil, Prod.mk.injEq] at hL
-      rw [hρ1] at hL
+      rw [hρ1'] at hL
       refine ⟨?_, fun e he => hρ2 e (by rw [hL.2]; exact he)⟩
-      rw [hans]
-      exact of_decide_eq_true (hL.1.symm.trans (decide_eq_true rfl))
+      exact (of_decide_eq_true (hL.1.symm.trans (decide_eq_true rfl))).trans
+        (hans (firstCoins (I.V.k (K.xI x)) d.1)).symm
   have hc : ∀ n ≤ I.V.k (K.xI x), (List.range n).map (coinSeq (firstCoins (I.V.k (K.xI x)) d.1)) =
       (List.range n).map (coinSeq d.1) := fun n hn =>
     List.map_congr_left fun i hi => by
@@ -439,7 +438,6 @@ theorem runO (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c, decC 
       refine ⟨by simp only [List.length_append, List.length_singleton]; omega, by rw [has]; simp, ?_⟩
       simp only [List.map_append, hG.2.2, List.length_append, List.length_singleton, List.range_succ,
         List.map_singleton, hdec]
-      rfl
   obtain ⟨h1, h2, h3⟩ := run_replay_known H I.V (K.xI x) (S.opened os last) (firstCoins (I.V.k (K.xI x)) d.1)
     (Server.ansAt I.V I.ans (K.xI x) (firstCoins (I.V.k (K.xI x)) d.1)) hk
     (fun j hj => (hagd j hj).1) (fun j hj => ⟨_, by unfold Server.ansAt; exact ite_eq_left hj⟩)
