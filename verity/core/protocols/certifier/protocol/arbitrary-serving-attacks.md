@@ -50,7 +50,7 @@ its part's tests as the part lands. Those marked (written) run against the parts
   - egress counts one frame off in any bucket, a queued frame released early, and ingress over RIN, past or short of
     the window's `received` or after the response, are refused (11);
   - a response with one frame more than its `output_len` plus the framer's constant overhead is refused.
-- **The ties** (the egress tie, `scan_service.EgressTie`, and the ingress tie, `io_request`):
+- **The scan** (`scan_service.EgressTie`: its ingress units, `ingress_scan`, and its egress units, `egress`):
   - a frame with the right token id and any other byte changed is refused: another stream, frame kind or payload
     length, a finish reason, an id in the fill (8, written: every bit of a bucket's row is the one its proof block
     computes);
@@ -58,7 +58,7 @@ its part's tests as the part lands. Those marked (written) run against the parts
     written);
   - two frames mapped to one (request, position), and a position with no frame, are refused;
   - a prompt whose committed ids are another tokenization of the certified text is refused (4);
-  - the ingress tie and N2 read one advice digest (11).
+  - it reads no advice, so no second advice reaches it (11).
 - **The compiler and the Commit:**
   - a decode row whose input id is not the previous position's sampled token is refused (4);
   - a cache hit with no donor of an equal prefix, and a KV read with no writer, are refused (6);

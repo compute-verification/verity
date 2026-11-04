@@ -33,7 +33,8 @@ advice input is exactly ℓ_w gates wide, so the charge is ℓ_w.
   - Hits are 0 on 8eb1, which serves without prefix caching: its trace header says so (``enable_prefix_caching``
     false, `test_served_window.py`).
   - Order is 0 only under release-order serving, and 8eb1 wasn't served in release order. The order's charge is
-    outside the slice's proof: the ingress tie's lanes read the order (`io_request`).
+    outside the slice's proof, and no check reads the order: the scan takes each request's ordinal off its ingress
+    cells.
 
 **What binds the charge's inputs** (the phase-14 attack: `ChargeCount_v1` on its own is faithful, but its enables, its bits
 and its carry are witness until the slice binds them):

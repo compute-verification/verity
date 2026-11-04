@@ -108,8 +108,8 @@ that name its ordinal, with each frame's canonical position and egress bucket. A
 request whose `user` (the request's id) no other request has, every egress frame is an id event of a request released
 by its bucket, and every response keeps the finish rule: at most `max_tokens` tokens, ending at its first EOS token
 (the plan's `eos_token_ids`) or at `max_tokens`. `extra`'s token after a response's last breaks it. The check writes
-the I/O to `io.json` for the ingress tie's advice negatives, and compares it with the ids the shim wrote and the
-requests the plan sent.
+the I/O to `io.json`, whose requests network-e2e's advice bits read (`chain.bits`), and compares it with the ids the
+shim wrote and the requests the plan sent.
 On the advice profile each execution phase is registered by its one-stage registration record (its salted root, chained)
 with the check's own receipt, which no proof stream issues since N2 gives no outcome, and its certified records are
 held to the certifier's key and session by the Lean's audit (`_certified`). The verdict is `accepted` when every

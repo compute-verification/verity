@@ -81,8 +81,7 @@ so a statement's positions are all it can vary, and Lean's registered reads hold
 
 **The wiring is opened to the verifier for now** (the named gap, whose plan is in PROTOCOL.md): it gives away each
 connection's first row and cells. q is the cells' stream field, the network certifier's ordinal: the k-th connection to
-reach it, from 0, is q = k + 1, as the active certifier's `Requests` streams it and the ingress tie's lanes put advice
-request k (`order[k] + 1`).
+reach it, from 0, is q = k + 1, as the active certifier's `Requests` streams it.
 """
 
 from __future__ import annotations
