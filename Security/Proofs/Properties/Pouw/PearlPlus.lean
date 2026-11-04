@@ -27,6 +27,254 @@ theorem eq_of_bne_false {α : Type} [BEq α] [LawfulBEq α] {a b : α} (h : (a !
 
 theorem throw_bind {ε α β : Type} (e : ε) (f : α → Except ε β) : (throw e >>= f : Except ε β) = .error e := rfl
 
+/-! ## A loaded pass -/
+
+theorem refuse_bind {α β : Type} (t w : String) (f : α → Except Refusal β) : (refuse t w >>= f) = refuse t w := rfl
+
+theorem refuse_ne {α : Type} (t w : String) (a : α) : refuse t w ≠ .ok a := nofun
+
+/-- Beta-reduce `h` without unfolding its `have`s: `do`'s join points stay shared, so a chain stays linear. -/
+local macro "bz " h:ident : tactic => `(tactic| try dsimp (config := { zeta := false }) only at $h:ident)
+
+/-- Peel one bind of the chain `h`: `a` is its value and `ha` the bound computation's equation. -/
+local macro "peel " h:ident a:ident ha:ident : tactic =>
+  `(tactic| (have h' := bind_ok $h; clear $h; rcases h' with ⟨$a:ident, $ha:ident, $h:ident⟩; bz $h))
+
+/-- Close a branch of the chain `h` that refuses. -/
+local macro "nope " h:ident : tactic => `(tactic| first
+  | exact absurd $h (refuse_ne _ _ _)
+  | (rw [refuse_bind] at $h:ident; exact absurd $h (refuse_ne _ _ _))
+  | cases $h:ident)
+
+theorem mapM_ok_mem {ε α β : Type} {f : α → Except ε β} :
+    ∀ {l : List α} {l' : List β}, l.mapM f = .ok l' → ∀ b ∈ l', ∃ a ∈ l, f a = .ok b
+  | [], l', h, b, hb => by cases h; cases hb
+  | a :: l, l', h, b, hb => by
+    rw [List.mapM_cons] at h
+    obtain ⟨b0, h0, h⟩ := bind_ok h
+    obtain ⟨bs, hbs, h⟩ := bind_ok h
+    cases h
+    rcases List.mem_cons.1 hb with rfl | hb
+    · exact ⟨a, List.mem_cons_self, h0⟩
+    · obtain ⟨a', ha', h'⟩ := mapM_ok_mem hbs b hb
+      exact ⟨a', List.mem_cons_of_mem _ ha', h'⟩
+
+theorem forIn_all {α β γ : Type} (Q : α → Prop)
+    (f : α → Option (Option β) × γ → Id (ForInStep (Option (Option β) × γ)))
+    (hf : ∀ a g, (∃ g', f a (none, g) = .yield (none, g') ∧ Q a) ∨ ∃ v g', f a (none, g) = .done (some (some v), g')) :
+    ∀ (l : List α) (g : γ), (∀ v, (forIn l (none, g) f : Id _).1 ≠ some (some v)) → ∀ a ∈ l, Q a
+  | [], _, _, a, ha => by cases ha
+  | a :: l, g, h, b, hb => by
+    rcases hf a g with ⟨g', he, hq⟩ | ⟨v, g', he⟩
+    · rw [List.forIn_cons, he] at h
+      rcases List.mem_cons.1 hb with rfl | hb
+      · exact hq
+      · exact forIn_all Q f hf l g' h b hb
+    · rw [List.forIn_cons, he] at h
+      exact absurd rfl (h v)
+
+theorem forIn_all' {α β γ : Type} (Q : α → Prop)
+    (f : α → Option (Option β) × γ → Id (ForInStep (Option (Option β) × γ)))
+    (hf : ∀ a g, (∃ g', f a (none, g) = .yield (none, g') ∧ Q a) ∨ ∃ v g', f a (none, g) = .done (some (some v), g'))
+    (l : List α) (g : γ) (res : Option (Option β) × γ) (hres : (forIn l (none, g) f : Id _) = res)
+    (hne : ∀ v, res.1 ≠ some (some v)) : ∀ a ∈ l, Q a :=
+  forIn_all Q f hf l g (hres ▸ hne)
+
+def RecordKept (splits : List (Nat × Nat)) (r : UnitRecord) : Prop :=
+  r.matmul.k = kUnit ((splits.lookup r.matmul.weight).getD 0) ∧ r.kKept = (splits.lookup r.matmul.weight).getD 0 ∧
+    r.voluntaryA.length ≤ voluntaryCap r.matmul.m ∧ r.voluntaryB.length ≤ voluntaryCap r.matmul.n
+
+theorem recordKept_of {splits : List (Nat × Nat)} {r : UnitRecord}
+    (hk : ¬((r.matmul.k, r.kKept) != (kUnit ((splits.lookup r.matmul.weight).getD 0),
+      (splits.lookup r.matmul.weight).getD 0)) = true)
+    (hc : ¬(decide (r.voluntaryA.length > voluntaryCap r.matmul.m) ||
+      decide (r.voluntaryB.length > voluntaryCap r.matmul.n)) = true) : RecordKept splits r := by
+  simp only [bne_iff_ne, ne_eq, Decidable.not_not, Prod.mk.injEq, Bool.or_eq_true, decide_eq_true_eq,
+    not_or, Nat.not_lt] at hk hc
+  exact ⟨hk.1, hk.2, hc.1, hc.2⟩
+
+theorem checkRecords_kept {splits : List (Nat × Nat)} {records : List UnitRecord} (h : checkRecords splits records = none) :
+    ∀ r ∈ records, RecordKept splits r := by
+  unfold checkRecords at h
+  simp only [Id.run_bind] at h
+  generalize hres : (forIn records (none, [], []) _ : Id (Option (Option String) × List (Nat × List Nat) × List (Nat × List Nat))) = res at h
+  refine forIn_all' (RecordKept splits) _ ?_ records _ res hres ?_
+  · intro a g
+    dsimp only
+    split
+    · exact .inr ⟨_, _, rfl⟩
+    rename_i hk
+    repeat' split
+    all_goals first
+      | exact .inr ⟨_, _, rfl⟩
+      | exact .inl ⟨_, rfl, recordKept_of hk ‹_›⟩
+  · intro v hv
+    have hv' : res.run.fst = some (some v) := hv
+    rw [hv'] at h
+    cases h
+
+theorem load_facts {coins : PouwCommit.CoinCommitment} {man : Lean.Json} {p : Pass} (h : load coins man = .ok p) :
+    (∀ r ∈ p.records, r.reason = none) ∧
+      ∃ splits, checkRecords splits p.records = none ∧ recordsRoot p.salt p.weightsRoot splits p.records = p.recordsRoot := by
+  unfold load at h
+  peel h u0 hman
+  cases hd : passesDistinct [man] with
+  | some w => simp [throwRefusal, hd] at h
+  | none =>
+  rw [throwRefusal.eq_def, hd] at h
+  bz h
+  peel h scheme hsch
+  peel h mj hmj
+  extract_lets j1 at h
+  split at h
+  case h_2 => nope h
+  rename_i usA
+  peel h us hus
+  cases hus
+  dsimp (config := { zeta := false }) only [j1] at h
+  clear j1
+  peel h matmuls hmm
+  peel h wj hwj
+  extract_lets ws j2 at h
+  split at h
+  case h_2 => nope h
+  rename_i kv
+  peel h weights hweights
+  cases hweights
+  dsimp (config := { zeta := false }) only [j2] at h
+  clear j2
+  peel h roots hroots
+  split at h
+  case h_2 => nope h
+  rename_i opening0 _
+  peel h claimedJ hcj
+  extract_lets wtj jo ju at h
+  split at h
+  case isTrue => nope h
+  dsimp (config := { zeta := false }) only [ju] at h
+  clear ju
+  split at h
+  case h_2 => nope h
+  rename_i opening hop
+  peel h opening' hop'
+  cases hop'
+  dsimp (config := { zeta := false }) only [jo] at h
+  clear jo
+  extract_lets e1 e2 e3 e4 e5 at h
+  split at h
+  case h_2 => nope h
+  rename_i claimed hcl
+  peel h claimed' hc'
+  cases hc'
+  dsimp (config := { zeta := false }) only [e5] at h
+  clear e5
+  split at h
+  case isTrue => nope h
+  rename_i hep
+  dsimp (config := { zeta := false }) only [e4] at h
+  clear e4
+  split at h
+  case h_1 => nope h
+  rename_i wr hwr
+  dsimp (config := { zeta := false }) only [e3] at h
+  clear e3
+  split at h
+  case isTrue => nope h
+  rename_i hcov
+  dsimp (config := { zeta := false }) only [e2] at h
+  clear e2
+  split at h
+  case h_2 => nope h
+  rename_i weightsRoot hwroot
+  peel h weightsRoot' hw'
+  cases hw'
+  dsimp (config := { zeta := false }) only [e1] at h
+  clear e1
+  extract_lets f1 at h
+  split at h
+  case h_2 => nope h
+  case h_3 => nope h
+  rename_i salt hsalt
+  peel h salt' hs'
+  cases hs'
+  dsimp (config := { zeta := false }) only [f1] at h
+  clear f1
+  extract_lets g1 at h
+  split at h
+  case isTrue => nope h
+  rename_i hsaltj
+  dsimp (config := { zeta := false }) only [g1] at h
+  clear g1
+  peel h records hrecords
+  peel h splits hsplits
+  extract_lets k1 at h
+  split at h
+  case h_1 => nope h
+  rename_i cr hcr
+  dsimp (config := { zeta := false }) only [k1] at h
+  clear k1
+  peel h pubj hpubj
+  peel h published hpub
+  extract_lets l1 at h
+  split at h
+  case isTrue => nope h
+  rename_i hroot
+  dsimp (config := { zeta := false }) only [l1] at h
+  clear l1
+  peel h rootsA hrootsA
+  peel h c hc
+  peel h rootj hrootj
+  peel h root hroot'
+  peel h countj hcountj
+  split at h
+  case h_2 => nope h
+  rename_i count hcount
+  peel h yRoots hyRoots
+  peel h u1 hdomain
+  extract_lets pp m1 at h
+  split at h
+  case isTrue => nope h
+  rename_i htiles
+  dsimp (config := { zeta := false }) only [m1] at h
+  have hp : pp = p := Except.ok.inj h
+  clear h m1
+  subst hp
+  refine ⟨fun r hr => ?_, splits, ?_, ?_⟩
+  · obtain ⟨x, -, hfx⟩ := mapM_ok_mem hrecords r hr
+    bz hfx
+    extract_lets wt at hfx
+    peel hfx real hreal
+    peel hfx kk hkk
+    split at hfx
+    case h_2 => nope hfx
+    split at hfx
+    case h_2 => nope hfx
+    peel hfx eaj heaj
+    peel hfx ea hea
+    peel hfx ebj hebj
+    peel hfx eb heb
+    peel hfx va hva
+    peel hfx vb hvb
+    extract_lets rr jr at hfx
+    split at hfx
+    case h_1 => nope hfx
+    rename_i hrr
+    dsimp (config := { zeta := false }) only [jr] at hfx
+    have hp : rr = r := Except.ok.inj hfx
+    subst hp
+    cases hw : rr.reason with
+    | none => rfl
+    | some w => exact absurd hw (hrr w)
+  · cases hc : checkRecords splits records with
+    | none => rfl
+    | some w => exact absurd hc (hcr w)
+  · simpa using hroot
+
+theorem loadedGivesUp : LoadedGivesUp := by
+  intro coins man p h
+  obtain ⟨hr, splits, hc, hroot⟩ := load_facts h
+  exact ⟨fun r hm => ⟨hr r hm, (checkRecords_kept hc r hm).2.2.1, (checkRecords_kept hc r hm).2.2.2⟩, splits, hc, hroot⟩
+
 /-! ## The plan -/
 
 /-- `plan` once its source is fixed: the draw's key, the draw and the plan. -/
@@ -240,6 +488,79 @@ theorem refusedBeforeTheCoin : RefusedBeforeTheCoin := by
   intro i opener r h
   unfold check
   rw [h]
+
+/-! ## The run's acceptance -/
+
+/-- A loaded pass's units of one weight have one k: its split's `k_unit` (`checkRecords`). -/
+theorem load_kconsistent {coins : CoinCommitment} {man : Lean.Json} {p : Pass} (h : load coins man = .ok p) :
+    KConsistent p := by
+  obtain ⟨-, splits, hc, -⟩ := load_facts h
+  intro r hr r' hr' hw
+  rw [(checkRecords_kept hc r hr).1, (checkRecords_kept hc r' hr').1, hw]
+
+theorem passes_kconsistent {i : Input} {pl : Plan} (h : plan i = .ok pl) (j : Nat) : KConsistent pl.passes[j]! := by
+  obtain ⟨-, hm, -⟩ := planMeans i pl h
+  by_cases hj : j < pl.passes.length
+  · rw [getElem!_pos pl.passes j hj]
+    obtain ⟨man, -, hl⟩ := mapM_ok_mem hm _ (List.getElem_mem hj)
+    exact load_kconsistent hl
+  · rw [getElem!_neg pl.passes j hj]
+    intro r hr
+    cases hr
+
+theorem verdictOf_key (pl : Plan) (opener : Nat → Nat → Except String TileOpening) (x : Nat × Nat) :
+    ((verdictOf pl opener x).pass, (verdictOf pl opener x).tile) = x := by
+  unfold verdictOf
+  dsimp only
+  split
+  · rfl
+  · split <;> rfl
+
+theorem default_tile? (tid : Nat) : (default : Pass).tile? tid = none := rfl
+
+/-- A tile whose verdict passed is a pass's, opened, and passed `checkTile` on its weight's noise. -/
+theorem verdictOf_none {pl : Plan} {opener : Nat → Nat → Except String TileOpening} {pi tid : Nat}
+    (h : (verdictOf pl opener (pi, tid)).reason = none) :
+    ∃ p o, pl.passes[pi]? = some p ∧ opener pi tid = .ok o ∧ checkTile p (noiseOf p tid) tid o = none := by
+  unfold verdictOf at h
+  dsimp only at h
+  split at h
+  · cases h
+  rename_i x ht
+  split at h
+  · cases h
+  rename_i o ho
+  by_cases hj : pi < pl.passes.length
+  · refine ⟨pl.passes[pi], o, List.getElem?_eq_getElem hj, ho, ?_⟩
+    rw [← getElem!_pos pl.passes pi hj]
+    exact h
+  · rw [getElem!_neg pl.passes pi hj, default_tile?] at ht
+    cases ht
+
+theorem acceptMeans : AcceptMeans := by
+  intro i opener hacc
+  cases hp : plan i with
+  | error r => rw [refusedBeforeTheCoin i opener r hp] at hacc; cases hacc
+  | ok pl =>
+  unfold check at hacc ⊢
+  rw [hp] at hacc ⊢
+  dsimp only at hacc ⊢
+  split at hacc
+  case isFalse => cases hacc
+  rename_i hb
+  split
+  case isFalse hb' => exact absurd hb hb'
+  have hr := replay_eq pl opener (passes_kconsistent hp)
+  have hnone : ∀ v ∈ replay pl opener, v.reason = none := by
+    simp only [List.isEmpty_iff, List.filterMap_eq_nil_iff, Option.map_eq_none_iff] at hb
+    exact hb
+  refine ⟨pl, rfl, rfl, ?_, hnone, fun pi tid hm => verdictOf_none (hnone _ ?_)⟩
+  · dsimp only
+    rw [hr, List.map_map]
+    conv => rhs; rw [← List.map_id pl.todo]
+    exact List.map_congr_left fun x _ => verdictOf_key pl opener x
+  · rw [hr]
+    exact List.mem_map_of_mem hm
 
 /-! ## The served y -/
 
