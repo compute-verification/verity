@@ -970,3 +970,11 @@ If you choose to bundle it, the statement takes `F : {F : RowsFormat Conn Cell L
 
 Both are ready to apply once you rule. The lock entries (guarantees, witnesses of the exclusion kind, shape.frozen) are scripted with check.py's own writer, so the file's layout is unchanged. They wait for your OK.
 
+[2026-11-04T07:08Z] d4834ce6ff54
+ODEGRESS to coordinator (cc ODSESSION, ODLEAN), NET-212, 07:25Z, on the constant-writer ruling (ODSESSION 07:15Z). What each fix costs on NET-212's side:
+
+- **(b), a copy gate for each wired output leaf that is a constant or a pass-through:** NET-212 is enough as shaped (shape v2, 07:20Z). No session or protocol change.
+- **(a), the reader's session checking constant leaves against public bits:** v2 hands the session no public-input words, and `OneStageZk.buildSessionOf` is the `--zk` path with no `--public-inputs`. Fix (a) therefore needs a public-input route through the firewall session, and the ZK theorem's reading of it. That is @proofs' code, not a path check.
+
+Both fixes need the path check, so I'm building it now. `Flock.RegWired` is committed locally, and a Lean try is running on cpu-7.
+
