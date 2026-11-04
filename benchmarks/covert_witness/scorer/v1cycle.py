@@ -31,7 +31,7 @@ v2 te_core; 01:22Z: on te_core 4.0). One refresh:
    coverage line saying which of its points are priced (`v1labels.priced`), before te_core 4.13; from 4.13 unwrapped
    (POLICY_IO, `UNWRAPPED`), and a void row holds both PUTs; then `python -m
    te_core.panels frontier-branches` (Daniel, coordinator 23:56Z; the integrator's builder, 23:59Z), stored only
-   since algorithm-policy carries gain, gain_target and start_effective_gates (FB_RETIRED; 05:22Z, 07:48Z), so a
+   since algorithm-policy carries gain, gain_target and start_compute_gates (FB_RETIRED; 05:22Z, 07:48Z), so a
    refresh whose algorithm-policy isn't PUT PUTs no frontier either. A refused PUT is reported, not fatal. te_core's
    five old panels stay in the re-score's directory, unpublished (23:56Z).
 5. Deletes the measured ledger, which the next refresh builds afresh, and publishes the tables (the re-score's files
@@ -1027,7 +1027,7 @@ def policy_panels(out: Path, commit: str, put: bool, root: Path | None, gates: P
 
 #: what training/algorithm-policy's console copy carries once frontier-branches is no longer PUT, only stored
 #: (coordinator 05:22Z and 07:48Z)
-FB_SUCCESSOR = ("gain", "gain_target", "start_effective_gates")
+FB_SUCCESSOR = ("gain", "gain_target", "start_compute_gates")
 #: the coverage at the console default (coordinator 11:46Z): te_core.algorithm_policy's own on its uncut table, each
 #: row's rho_console in rho_default's place ("inf" infinite; a null one, unmeasured, and a partial one, only a lower
 #: bound, in no cell or frontier: coordinator 12:20Z); argv: the table, the stamp and the tables art
