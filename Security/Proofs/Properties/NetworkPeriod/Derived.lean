@@ -1,6 +1,7 @@
 import Proofs.Properties.NetworkPeriod
 import Proofs.Properties.NetworkPeriod.Bernoulli
 import Proofs.Flock.Claims.Sampling.Select.Strata
+import Proofs.Flock.Claims.Sampling.Select.SameLaw
 import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
 
 /-!

@@ -2,6 +2,7 @@ import Definitions.Claims.Sampling
 import Definitions.Claims.Sampling.Strata
 import SampledProofs.Record
 import SampledProofs.Slots
+import SampledProofs.OneStage
 
 /-!
 # Sampled proofs' draw in the claims' slots: it misses proof units no more often than `P_a` (`SampledProofs.Slots.select`)
@@ -26,6 +27,11 @@ probability, wherever both are given; the draw's own refusals make it so, and it
 `Record.profileDraw`, of the law `Draw.derive` expands, as `OneStage.check` reads them for its bound), that design draws
 those strata on that partition, the input class drawn whole after them (the claims' `StrataDrawn`): the strata whose
 count bound the audit publishes (`Bound.boundOf`) are the ones the draw ran. It takes no premise either.
+
+`SameLawProfile`: where the record's law is, in canonical bytes, both the law the rule names expanded and the
+verifier's law expanded (R1 under each, as `Run.run` and `OneStage.check` check it), the profile's draw of the two is
+one, so the bound the audit publishes is the bound of the law the draw ran. Its premise is that the verifier's law is
+one `OneStage.rule` accepts as it stands, as `OneStage.paramsOfJson` keeps it.
 -/
 
 open Lean (Json)
@@ -113,5 +119,21 @@ def StrataDerived : Prop :=
     Bound.strataOf n draw = some strata →
     Claims.Sampling.StrataDrawn D (slotPartition l)
       ((strata.toList.map fun x => (x.size, x.k)) ++ [(Slots.inputGates d.desc).size].map fun m => (m, m))
+
+/-- **The record's law has one profile**: where `rule` names the law `named` over `n` units, the verifier's `law` is one
+`OneStage.rule` accepts as it stands, and the record's law `recLaw` has the canonical bytes (`Draw.sameLaw`) both of the
+law `Draw.derive` expands from `named` and of the one it expands from `law` (R1 under the rule's law, as `Run.run` checks
+it, and under the verifier's, as `OneStage.check` does), the profile's draw (`Record.profileDraw`) of the verifier's
+expanded law is the one of the rule's. The premise is the verifier's law as `OneStage.paramsOfJson` keeps it, which
+`OneStage.rule` returns unchanged: without it, an object whose tree misorders its two keys prints the canonical bytes of
+the rule's law while its lookups miss, so its profile is none. Keeping `Flock.norm` of the verifier's law instead, a code
+change not made, would drop the premise. -/
+def SameLawProfile : Prop :=
+  ∀ (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json) (n : ℕ)
+    (named law recLaw ruleLaw verifierLaw : Json),
+    rule.lawOver n = .ok named → OneStage.rule law = .ok law →
+    Draw.derive d query named table = .ok ruleLaw → Draw.derive d query law table = .ok verifierLaw →
+    Draw.sameLaw recLaw ruleLaw = true → Draw.sameLaw recLaw verifierLaw = true →
+    Record.profileDraw verifierLaw = Record.profileDraw ruleLaw
 
 end Properties.SampledProofs
