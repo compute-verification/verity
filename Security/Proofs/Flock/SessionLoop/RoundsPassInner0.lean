@@ -37,7 +37,7 @@ open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
 open _root_.Flock.Transcript (header)
 open _root_.Flock.Firewall.Frame (Cfg Masker isLabel roundFree INNER_ROUNDS check labelFrame wordBytes words innerSched
-  ownRound passes firstDiff LABEL_PCS LABEL_ZC claimPoints)
+  ownRound passes firstDiff LABEL_PCS LABEL_ZC claimPoints innerOwn)
 open _root_.Flock.Firewall.Finish (Tab)
 open FlockSoundness.Refine (Frame encs)
 
@@ -93,7 +93,7 @@ theorem roundFree_own0_ok {c : Cfg} {s : Masker} {w t : ByteArray} (hw : w.size 
     (by decide), hf]
   simp only [bind, Except.bind, hq0]
   rw [hO]
-  rfl
+  try rfl
 
 theorem ownRound0_frames {c : Cfg} {s : Masker} {w t : ByteArray} (hw : w.size = 16) (ht : t.size = 64) :
     Frames (ownRound c s w t 1 0).data.toList 1 :=
@@ -168,15 +168,15 @@ theorem repState_push_flags {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.or
     (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (hx : xs.size + 2 < 2 ^ 64) (hk : 1 ≤ t.sch.k0)
     (hn : t.sch.n < 2 ^ 62) (hq : ∀ i, (t.sch.levels.getD i default).q < 2 ^ 63) (hn0 : t.sch.n ≠ 0)
     (htp : 2 * t.tPad < 2 ^ 64) (hd : ∀ i, 64 * 2 ^ (t.sch.levels.getD i default).d < 2 ^ 64)
-    (X : Array (Array F128)) (a : Array F128) {J : ℕ} (hX : X.size = J + 1)
+    (cq : Array (Array F128)) (a : Array F128) {J : ℕ} (hX : cq.size = J + 1)
     (hC : alg.size + (xs.size + 2) + 1 + t.sch.k0 + 4 ≤ J + 1)
     (hE : J + 1 < alg.size + (Count.openList (xs.size + 2) t.sch).length)
-    (hS : ∀ s1, (repState c t rep dom xs hi cr0 X ns (J + 1)).answer c (X.getD J #[]) = .ok s1 →
+    (hS : ∀ s1, (repState c t rep dom xs hi cr0 cq ns (J + 1)).answer c (cq.getD J #[]) = .ok s1 →
       (J + 1 = alg.size + (xs.size + 2) + 1 + t.sch.k0 + 4 → s1.l0 = true ∧ s1.pos = c.order.size ∧
         s1.rho.size = _root_.Flock.Firewall.Frame.RHO_COINS ∧ s1.inner = none) ∧
       (alg.size + (xs.size + 2) + 1 + t.sch.k0 + 4 < J + 1 → EndFlags s1))
     {N : ℕ} {cs : Array F128} {m : Masker} (hN : N = J + 2)
-    (ha : (repState c t rep dom xs hi cr0 (X.push a) ns N).answer c'' cs = .ok m) : EndFlags m := by
+    (ha : (repState c t rep dom xs hi cr0 (cq.push a) ns N).answer c'' cs = .ok m) : EndFlags m := by
   subst hN
   obtain ⟨-, sched', -, hs'⟩ := repState_ok ha
   rw [Array.pop_push] at hs'
@@ -193,17 +193,17 @@ theorem repState_push_flags {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.or
       .bytes t.st.digest, .bytes (_root_.Flock.Firewall.Finish.flat t.cm0.cap),
       .label LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc).toArray, 6) := by
     rw [hg 0 (by omega), ha0, Option.getD_some, head_encs]
-  rw [repState_at c t rep dom xs hi cr0 X ns J hal hs hj0] at hS
-  rw [repState_succ c t rep dom xs hi cr0 X ns a J hal hs hs' hX hj] at ha
+  rw [repState_at c t rep dom xs hi cr0 cq ns J hal hs hj0] at hS
+  rw [repState_succ c t rep dom xs hi cr0 cq ns a J hal hs hs' hX hj] at ha
   dsimp only at ha hS
   cases h2 : (_root_.Flock.Firewall.Frame.run c {} (schedReqs
-      (if rep = 0 then #[] else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) sched X J)).2
+      (if rep = 0 then #[] else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) sched cq J)).2
   · rw [h2] at ha hS
     simp only [Bool.false_eq_true, ↓reduceIte] at ha hS
-    have hgd := run_good hc _ sched X hdg hcap hdom h0 (J := J) (by omega) hj0 h2
+    have hgd := run_good hc _ sched cq hdg hcap hdom h0 (J := J) (by omega) hj0 h2
     generalize (_root_.Flock.Firewall.Frame.run c {} (schedReqs
-      (if rep = 0 then #[] else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) sched X J)).1 = S at ha hS hgd
-    cases h3 : (_root_.Flock.Firewall.Frame.run c S [.coins (.ok (X.getD J #[])),
+      (if rep = 0 then #[] else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) sched cq J)).1 = S at ha hS hgd
+    cases h3 : (_root_.Flock.Firewall.Frame.run c S [.coins (.ok (cq.getD J #[])),
         .round (sched'.getD (J + 1) (.empty, 0)).2 (sched'.getD (J + 1) (.empty, 0)).1
           (.sched (sched'.getD (J + 1) (.empty, 0)).1)]).2
     · rw [h3] at ha
@@ -259,20 +259,20 @@ theorem repState_end_from {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]
       N ≤ alg.size + (Count.openList (xs.size + 2) t.sch).length →
       (repState c t rep dom xs hi cr0 cr ns N).answer c'' cs = .ok m → EndFlags m
   | 0, cr, N, c'', cs, m, hN, he, hE, ha => by
-    obtain ⟨X, a, rfl⟩ : ∃ X a, cr = Array.push X a :=
+    obtain ⟨cq, a, rfl⟩ : ∃ cq a, cr = Array.push cq a :=
       ⟨cr.pop, cr.back!, Array.eq_push_pop_back!_of_size_ne_zero (by omega)⟩
     rw [Array.size_push] at hN
-    refine repState_push_flags hc hal hm14 hm hdg hcap hdom hmk hx hk hn hq hn0 htp hd X a
+    refine repState_push_flags hc hal hm14 hm hdg hcap hdom hmk hx hk hn hq hn0 htp hd cq a
       (J := alg.size + (xs.size + 2) + 1 + (t.sch.k0 + 3)) (by omega) (by omega) (by omega)
       (fun s1 hs1 => ⟨fun _ => ?_, fun h => absurd h (by omega)⟩) (by omega) ha
     obtain ⟨-, e2, e3, e4, e5⟩ := RhoKeep.repState_closeIn hc hal hm14 hdg hcap hdom hmk hx hz hlay hcd rfl
       (by omega) hs1
     exact ⟨e2, e4, e5, e3⟩
   | e + 1, cr, N, c'', cs, m, hN, he, hE, ha => by
-    obtain ⟨X, a, rfl⟩ : ∃ X a, cr = Array.push X a :=
+    obtain ⟨cq, a, rfl⟩ : ∃ cq a, cr = Array.push cq a :=
       ⟨cr.pop, cr.back!, Array.eq_push_pop_back!_of_size_ne_zero (by omega)⟩
     rw [Array.size_push] at hN
-    exact repState_push_flags hc hal hm14 hm hdg hcap hdom hmk hx hk hn hq hn0 htp hd X a
+    exact repState_push_flags hc hal hm14 hm hdg hcap hdom hmk hx hk hn hq hn0 htp hd cq a
       (J := alg.size + (xs.size + 2) + 1 + t.sch.k0 + 4 + e) (by omega) (by omega) (by omega)
       (fun s1 hs1 => ⟨fun h => absurd h (by omega), fun _ =>
         repState_end_from hc hal hm14 hm hdg hcap hdom hmk hx hk hn hq hn0 htp hd hz hlay hcd e (by omega)
