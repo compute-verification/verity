@@ -20,8 +20,8 @@ SHA-512 break on the run's trees. These properties are the code's side of it:
   source and the commitment.
 * `LoadedGivesUp`: a loaded pass's records are its published root's, and V-EX's give-up is within its caps.
 * `TileAcceptMeans`: a tile that passes opens against the pass's roots, its checked words are the committed leaf's, its
-  rows keep the per-row rules, its credited cells' replayed debit is within ρ = 1/400 of their credit (as a tile and per
-  credited A row), and its served y rows are the unscale of its U.
+  rows keep the per-row rules, its credited cells' replayed debit, P3's forming term included, is within ρ = 1/400 of their
+  credit (as a tile and per credited A row), and its served y rows are the unscale of its U.
 * `YIsTheUnscale`: the unscale the check holds y to is `Pouw.PearlC.unscale`, the served y's Definition
   (`PearlCUnscale_v1` at `BIAS` off).
 * `WorkIsTheCredit`: the work an accepted run publishes is its credit at Pearl's assumption (`creditAtAssumption`) over
@@ -134,18 +134,23 @@ def TileAcceptMeans : Prop :=
         Rule.yReason rows cols ops ch (ys.map fun y => words32 (openedValue y.value)) = none
 
 /-- **The cap a passed tile keeps** (`Rule.checkOpened`'s `capFailure`): on its credited rows `cr` and columns `cc`, the
-replayed debit, 40 per flagged atom-word and 32 per later +0 promotion, is at most ρ = 1/400 of `creditOf(1, |K|, n)/n` per
-credited cell, as a tile and on each credited A row (four times that at a census width). -/
+replayed debit, 40 per flagged atom-word, 32 per later +0 promotion and fs·|cc|/n per forming element of a credited row
+(`Rule.rowElements`: salt-dead, or in an atom block every word of its row flags; `tileDebitDev`'s elems), is at most
+ρ = 1/400 of `creditOf(1, |K|, n)/n` per credited cell, as a tile and on each credited A row (four times that at a census
+width). `Rule.debitUnits` is n times the debit, so the tile's test is 400·(n·D + fs·|cc|·E) ≤ creditOf(1, |K|, n)·|cr|·|cc|. -/
 def TileKeepsTheCap : Prop :=
   ∀ (s : Scheme) (r : UnitRecord) (rows cols : List Nat) (ops : Ops), Rule.checkOpened s r rows cols ops = none →
     let (cr, cc) := r.credited rows cols
     cr ≠ [] → cc ≠ [] →
-    ∃ words : List (List (Nat × Nat)),
-      cr.mapM (fun i => cc.mapM fun j => Rule.wordDebit ops.a.codes[rows.idxOf i]! ops.b.codes[cols.idxOf j]!) = .ok words ∧
+    ∃ (words : List (List (Array Bool × Nat))) (elems : List Nat),
+      cr.mapM (fun i => cc.mapM fun j => Rule.wordFlags ops.a.codes[rows.idxOf i]! ops.b.codes[cols.idxOf j]!) = .ok words ∧
+      (cr.zip words).mapM (fun (i, ws) => Rule.rowElements ops.a.alpha[rows.idxOf i]! ops.a.beta[rows.idxOf i]!
+        ops.a.x[rows.idxOf i]! (ws.map (·.1))) = .ok elems ∧
       let credit := creditOf 1 r.kKept r.matmul.n
-      let rowDebit := words.map fun ws => Rule.debitUnits (ws.foldl (· + ·.1) 0) (ws.foldl (· + ·.2) 0)
-      rowDebit.foldl (· + ·) 0 * (Rule.CAP_DEN * r.matmul.n) ≤ Rule.CAP_NUM * credit * cr.length * cc.length ∧
-      ∀ d ∈ rowDebit, d * (Rule.CAP_DEN * r.matmul.n) ≤
+      let rowDebit := (words.zip elems).map fun (ws, e) =>
+        Rule.debitUnits r.matmul.n cc.length (ws.foldl (· + (·.1.filter id).size) 0) (ws.foldl (· + ·.2) 0) e
+      rowDebit.foldl (· + ·) 0 * Rule.CAP_DEN ≤ Rule.CAP_NUM * credit * cr.length * cc.length ∧
+      ∀ d ∈ rowDebit, d * Rule.CAP_DEN ≤
         Rule.CAP_NUM * credit * cc.length * (if s.censusKs.contains r.matmul.k then 4 else 1)
 
 /-! ## The served y and the work -/

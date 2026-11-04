@@ -12,7 +12,10 @@ After a tile's openings and digest pass, the record decides it, in `check_opened
 * **The cap** (`cap_failure`): over the tile's credited rows × credited columns, the replayed debit is at most ρ = 1/400 of
   their cells' credit, and each credited A row's at most ρ of its own cells' (4ρ at a census k, `row_cap_at`). A word's
   debit (`word_debit`) is 40 units per flagged atom (32 MACs and a quarter of a promotion add) and 32 per later promotion
-  into a +0 total; P3's forming term is `pearl_c_debit.forming_elements`'s stub, 0.
+  into a +0 total. P3's forming term (`pearl_c_debit.forming_elements`, `tileDebitDev`'s elems) adds fs = 64 times |cols|/n
+  per credited row's element (i, l), l < k, that is salt-dead (`saltDead`: the support's two ends agree) or whose atom
+  block every word of the row over the credited columns flags. In integers, with D the words' debit and E the elements,
+  the tile passes when 400·(n·D + 64·|cols|·E) ≤ creditOf(1, |K|, n)·|rows|·|cols|.
 * **The served y** (`check_y`), on a call that commits one: each real row of the tile opens against the call's y root, and
   its word at column j is `RN_bf16(RN(RN(U · RN(1/α_A)) · RN(1/α_B)))` widened, `pearl_c_u.y`: `unscale`, the copy of the
   served y's Definition (`Pouw.PearlC.unscale`, `PearlCUnscale_v1` at `BIAS` off), where each step stays finite.
@@ -103,8 +106,9 @@ def masked (atoms : List (List Nat × List Nat)) : Reject (List (Nat × Nat)) :=
       nxt := nxt ++ [(mask, ← step w a b), (mask ||| (1 <<< j), w)]
     pure nxt) [(0, 0)]
 
-/-- `word_debit(a, b)`: the word's flagged atoms (`Skip.wordFlags`) and its later promotions into a +0 total. -/
-def wordDebit (a b : Array Nat) : Reject (Nat × Nat) := do
+/-- `word_debit(a, b)`: the word's atom flags (`Skip.wordFlags k a b t` for t < k/32) and its later promotions into a +0
+total. -/
+def wordFlags (a b : Array Nat) : Reject (Array Bool × Nat) := do
   let k := a.size
   if k != b.size || k % (PearlPlus.G * 32) != 0 then throw "a word's rows are whole promotion groups"
   let nG := k / (PearlPlus.G * 32)
@@ -125,7 +129,7 @@ def wordDebit (a b : Array Nat) : Reject (Nat × Nat) := do
     hi := least (fun x => carried x w > hi0) - 1
     bounds := bounds.push (lo, hi)
   bounds := bounds.reverse
-  let mut flagged := 0
+  let mut flags : Array Bool := #[]
   for g in [0:nG] do
     let (blo, bhi) := bounds[g]!
     let mut keeps : List Nat := []
@@ -134,13 +138,53 @@ def wordDebit (a b : Array Nat) : Reject (Nat × Nat) := do
         let kk := key (← promote totals[g]! w)
         if blo ≤ kk && kk ≤ bhi then keeps := mask :: keeps
     for j in [0:PearlPlus.G] do
-      if keeps.any fun mask => (mask >>> j) &&& 1 == 1 then flagged := flagged + 1
+      flags := flags.push (keeps.any fun mask => (mask >>> j) &&& 1 == 1)
   let zeros := ((List.range (nG - 1)).filter fun g => totals[g + 1]! == 0).length
-  return (flagged, zeros)
+  return (flags, zeros)
 
-/-- `debit_units` at the H100's prices: 40 per flagged atom-word, 0 per forming element (the stub), 32 per later +0
-promotion. -/
-def debitUnits (atoms zeros : Nat) : Nat := (32 + PearlPlus.FADD / PearlPlus.G) * atoms + PearlPlus.FADD * zeros
+/-- The word's flagged atoms (`Skip.chainDebit`'s count) and its later promotions into a +0 total. -/
+def wordDebit (a b : Array Nat) : Reject (Nat × Nat) := do
+  let (flags, zeros) ← wordFlags a b
+  return ((flags.filter id).size, zeros)
+
+/-- The salt-dead support's ends (`SaltDead.support`, `Cap.plusEnd` and `minusEnd`): E's flat entry e4m3(44), and F's
+e4m3(+11/4) and e4m3(−11/4). Must equal `pearl_c_debit.E_FLAT` and `F_ENDS`. -/
+def E_FLAT : Nat := 0x63
+def F_PLUS : Nat := 0x43
+def F_MINUS : Nat := 0xC3
+
+/-- `pearl_c_debit.flat_code`: c_β, the E′ code of the support's flat E entry at the row's β. -/
+def flatCode (beta : Nat) : Reject Nat := do toFp8 (f32MulV2 beta (← ofFp8 E_FLAT))
+
+/-- `pearl_c_debit.ends_agree`: the two ends' codes have one value, equal or both zeros (`Cap.codeVal_eq_iff`). -/
+def endsAgree (cPlus cMinus : Nat) : Bool := cPlus == cMinus || (cPlus ||| cMinus) &&& 0x7F == 0
+
+/-- `pearl_c_debit.salt_dead` on one element, `cb` its row's c_β: the codes of the support's two ends, the atom from the
+forming's accumulator f32(α·x) over [c_β]³² and [±11/4]³², agree; by `saltDeadP_iff_ends` it is P3's `saltDead`. -/
+def saltDead (alpha cb w : Nat) : Reject Bool := do
+  let acc ← finite (f32MulV2 alpha w)
+  let e := List.replicate 32 cb
+  pure (endsAgree (← toFp8 (← step acc e (List.replicate 32 F_PLUS))) (← toFp8 (← step acc e (List.replicate 32 F_MINUS))))
+
+/-- `pearl_c_debit.forming_elements` on one credited row, `flags` its words' over the credited columns: all its k elements
+when every word flags every atom block, else each element l whose block l/32 every word flags or that is salt-dead
+(every element's `saltDead` evaluated, as the Python's `salt_dead` is). -/
+def rowElements (alpha beta : Nat) (x : Array Nat) (flags : List (Array Bool)) : Reject Nat := do
+  let blocks := (flags.head?.map (·.size)).getD 0
+  let every := (Array.range blocks).map fun t => flags.all (·[t]!)
+  if every.all id then return 32 * blocks
+  let cb ← flatCode beta
+  let dead ← x.mapM (saltDead alpha cb)
+  return ((List.range x.size).filter fun l => every[l / 32]! || dead[l]!).length
+
+/-- fs, the salt-dependent part of `FORMING` (the noise atom and the cast), per debited forming element. Must equal
+`Prices.h100`'s `forming_credited`. -/
+def FS : Nat := 64
+
+/-- n times `debit_units` at the H100's prices over `cc` credited columns of a call of n columns: 40 per flagged
+atom-word, 32 per later +0 promotion, and fs·cc/n per forming element. -/
+def debitUnits (n cc atoms zeros elems : Nat) : Nat :=
+  n * ((32 + PearlPlus.FADD / PearlPlus.G) * atoms + PearlPlus.FADD * zeros) + FS * cc * elems
 
 /-- ρ, the H100 record's cap, as num/den. -/
 def CAP_NUM : Nat := 1
@@ -188,24 +232,28 @@ where
     if cr.isEmpty || cc.isEmpty then return none
     let posA := fun i => rows.idxOf i
     let posB := fun j => cols.idxOf j
-    let words : Except String (List (List (Nat × Nat))) := cr.mapM fun i => cc.mapM fun j =>
-      wordDebit ops.a.codes[posA i]! ops.b.codes[posB j]!
-    match words with
+    let replay : Except String (List Nat) := do
+      let words ← cr.mapM fun i => cc.mapM fun j => wordFlags ops.a.codes[posA i]! ops.b.codes[posB j]!
+      let elems ← (cr.zip words).mapM fun (i, ws) =>
+        rowElements ops.a.alpha[posA i]! ops.a.beta[posA i]! ops.a.x[posA i]! (ws.map (·.1))
+      pure ((words.zip elems).map fun (ws, e) =>
+        debitUnits r.matmul.n cc.length (ws.foldl (· + (·.1.filter id).size) 0) (ws.foldl (· + ·.2) 0) e)
+    match replay with
     | .error e => return some s!"the debit replay: {e}"
-    | .ok words =>
+    | .ok rowDebit =>
       let u := r.matmul
       let credit := creditOf 1 r.kKept u.n
-      let den := CAP_DEN * u.n
-      let rowDebit := words.map fun ws => debitUnits (ws.foldl (· + ·.1) 0) (ws.foldl (· + ·.2) 0)
       let debit := rowDebit.foldl (· + ·) 0
       let capNum := CAP_NUM * credit * cr.length * cc.length
-      if debit * den > capNum then
-        return some s!"the replayed debit {debit} exceeds the cap {roundHalfEven capNum den} (ρ·the credited cells' credit)"
+      if debit * CAP_DEN > capNum then
+        return some (s!"the replayed debit {roundHalfEven debit u.n} exceeds the cap {roundHalfEven capNum (CAP_DEN * u.n)} " ++
+          "(ρ·the credited cells' credit)")
       let widen := if s.censusKs.contains u.k then 4 else 1
       for (i, d) in cr.zip rowDebit do
         let capNum := CAP_NUM * credit * cc.length * widen
-        if d * den > capNum then
-          return some (s!"A row {i}'s replayed debit {d} exceeds its cap {roundHalfEven capNum den} (the row cap: " ++
+        if d * CAP_DEN > capNum then
+          return some (s!"A row {i}'s replayed debit {roundHalfEven d u.n} exceeds its cap " ++
+            s!"{roundHalfEven capNum (CAP_DEN * u.n)} (the row cap: " ++
             s!"{if widen == 1 then "" else toString widen}ρ·its credited cells' credit)")
       return none
 

@@ -157,25 +157,26 @@ def s5Stats (x : Array Nat) : Reject (Nat × Nat × Nat × Nat) := do
   let alpha := f32DivV2 S5_QMAX (max t S5_FLOOR)
   return (s, rho, alpha, ← finite (f32MulV2 (f32MulV2 rho alpha) S5_LINE))
 
-/-- One side formed by v1: each row's A′ (or B̃) codes, α, ρ, E′ and its FP32 words. -/
+/-- One side formed by v1: each row's A′ (or B̃) codes, α, ρ, β, E′ and its FP32 words. -/
 structure Formed where
   codes : Array (Array Nat)
   alpha : Array Nat
   rho : Array Nat
+  beta : Array Nat
   ep : Array (Array Nat)
   x : Array (Array Nat)
   deriving Inhabited
 
 /-- `form_v1(rows, e_rows, f)`: §5's forming, per element one atom with α·x as its accumulator over E′ and F's line. -/
 def formV1 (rows : Array (Array Nat)) (eRows : Array (Array Nat)) (f : Array (Array Nat)) : Reject Formed := do
-  let mut out : Formed := ⟨#[], #[], #[], #[], #[]⟩
+  let mut out : Formed := ⟨#[], #[], #[], #[], #[], #[]⟩
   for (x, e) in rows.zip eRows do
     let (_, rho, alpha, beta) ← s5Stats x
     let ep ← e.mapM fun c => do toFp8 (f32MulV2 beta (← ofFp8 c))
     let epl := ep.toList
     let codes ← (Array.range x.size).mapM fun t => do toFp8 (← finite (atom (f32MulV2 alpha x[t]!) epl f[t]!.toList))
-    out := { codes := out.codes.push codes, alpha := out.alpha.push alpha, rho := out.rho.push rho, ep := out.ep.push ep,
-             x := out.x.push x }
+    out := { codes := out.codes.push codes, alpha := out.alpha.push alpha, rho := out.rho.push rho,
+             beta := out.beta.push beta, ep := out.ep.push ep, x := out.x.push x }
   return out
 
 /-- `parse_f32_row`: a row's k FP32 words, each finite. -/
