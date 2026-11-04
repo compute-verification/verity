@@ -2480,7 +2480,7 @@ def test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_engine(t
                                                "--pearl-lane", "--model", "--revision", "--precision", "--window-steps")}
     assert at == {"--protocols": "pouw:pearl-c-h100-v1-h3", "--challenger-gate": gate, "--challenger-peer": "vy-dc-h200",
                   "--pearl-lane": "vllm", "--model": "unsloth/Llama-3.2-1B",
-                  "--revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "--precision": "bfloat16", "--window-steps": "4",
+                  "--revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "--precision": "pin", "--window-steps": "4",
                   "--protocols-config": json.dumps({"pouw": {"device": "cuda", "kernel": "pearl_c_sm90",
                                                              "cubin": "/c/pearl_c_sm90.cubin"}})}
     assert argv.count("--protocols") == 1 and "--h1-prover" not in argv and "--h1-window-commit" not in argv

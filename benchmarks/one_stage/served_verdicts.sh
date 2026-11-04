@@ -236,7 +236,7 @@
 # PEARLPLUS-CUBIN built before the lease, and with PEARLC_CHALLENGER_GATE set --challenger-gate, --challenger-peer and
 # --pearl-lane, the epoch's salt session reserved under that lane), so the window's linears are the Pearl+ matmuls whose
 # passes are committed, each retained in the serve dir's private/pearlplus-serve. Its defaults are then Llama 3.2 1B's
-# BF16 checkpoint (REPO unsloth/Llama-3.2-1B, PRECISION bfloat16), the BF16 B4 row's traced Build under
+# BF16 checkpoint (REPO unsloth/Llama-3.2-1B, PRECISION pin: its own BF16 linears), the BF16 B4 row's traced Build under
 # /workspace/research/vllm-pearlc-h200bf16 as ROW, LOAD=fixed and WINDOW_STEPS V3C_CLASS's outputs (round s of W is the
 # window's s-th step, the class's s-th output), PEARLC_BF16_ROWS=0 and V3C_LAW stratified:1. Pearl+'s piece then serves
 # nothing of its own (served_pearlplus.sh's PEARLPLUS_TIE): it cuts the window's passes from the serve's, writes W
@@ -308,7 +308,7 @@ PEARLPLUS_TIE=${PEARLPLUS_TIE:-}
 if [ -n "$PEARLPLUS_TIE" ]; then  # the window served under Pearl+: Llama 3.2 1B's BF16 checkpoint, whose linears Pearl-C reads
   HB=/workspace/research/vllm-pearlc-h200bf16
   ROW=${ROW:-$HB/r20261104-084130-0f59/llama32-1b__bf16__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager}
-  REPO=${REPO:-unsloth/Llama-3.2-1B} REV=${REV:-9535bd9b1d1dea6acafbdc4813b728796aeb28da} PRECISION=${PRECISION:-bfloat16}
+  REPO=${REPO:-unsloth/Llama-3.2-1B} REV=${REV:-9535bd9b1d1dea6acafbdc4813b728796aeb28da} PRECISION=${PRECISION:-pin}
   LOAD=${LOAD:-fixed} PEARLPLUS_ARM=${PEARLPLUS_ARM:-pouw:pearl-c-h100-v1-h3}
   # sm_90's BF16-rows path off unless PEARLC_BF16_ROWS says otherwise (e2e.BF16_RACE)
   export PEARLPLUS_TIE PEARLC_BF16_ROWS=${PEARLC_BF16_ROWS:-0}
