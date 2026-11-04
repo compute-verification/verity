@@ -24,6 +24,7 @@ import Proofs.Flock.VBridge
 import Proofs.Flock.Sampled
 import Proofs.Flock.Claims
 import Proofs.Flock.SamplingClaims
+import Proofs.Flock.SamplingGeneric
 import Proofs.Flock.Bridge
 import Proofs.Flock.Bridge.Transports
 import Proofs.Flock.Bridge.TransportsRefs
