@@ -2854,9 +2854,11 @@ def test_without_a_notes_token_the_service_asks_the_broker_for_one_by_its_oidc_i
     monkeypatch.setenv("RESEARCH_NOTES_TOKEN", "t0k")
     assert slack.notes_token(now + 3600) == "minted-2" and slack._notes_token["source"] == "broker"   # the broker wins
     monkeypatch.setattr(slack, "_notes_token", {})
-    answers.append(slack.urllib.error.HTTPError(slack.NOTES_TOKEN_URL, 403, "Forbidden", {}, io.BytesIO(b"")))
+    answers.append(slack.urllib.error.HTTPError(slack.NOTES_TOKEN_URL, 403, "Forbidden", {},
+                                                io.BytesIO(b'{"error": "identity_refused", "claim": "project_id"}')))
     assert slack.notes_token(now) == "t0k" and "the broker gave no notes token (403)" in capsys.readouterr().err
     assert slack._notes_token["source"] == "env"                                                # refused: the old token
+    assert slack.notes_token_why() == "the broker refused (403: identity_refused project_id)"     # its stated reason
     assert slack.notes_token(now + 30) == "t0k" and len(seen) == 4                              # not asked again so soon
     answers.append({})
     assert slack.notes_token(now + 61) == "t0k" and "has no `token`" in capsys.readouterr().err

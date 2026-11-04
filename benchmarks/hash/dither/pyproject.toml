@@ -7,3 +7,10 @@ testpaths = ["tests"]
 [tool.verity.tests]
 # The modules read their variables through this directory's registry (settings.py), on verity_config.settings.
 inputs = ["tools/config/verity_config", "verity/__init__.py", "verity/settings.py"]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_j10r_ws.py", "tests/test_settings.py"]
+paths = ["benchmarks/hash/dither"]

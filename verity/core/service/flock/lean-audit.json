@@ -2,6 +2,7 @@
  "roots": [
   "Flock",
   "FlockVerify",
+  "Flock.Test.JsonParse",
   "Flock.Test.Full",
   "Flock.Test.Labels",
   "Flock.Test.PortRoots",
@@ -72,8 +73,10 @@
   "Flock.Test.Canon",
   "Flock.Test.ZkIdentity",
   "Flock.Test.FrameStep",
+  "Flock.Test.SessionPlace",
   "Flock.Test.RegionBytes",
   "Flock.Test.PlainHidden",
+  "Flock.Test.Served",
   "Flock.Test.RequireLink",
   "Flock.Test.FV3",
   "VStar",
@@ -88,7 +91,8 @@
   "FlockRecSparse": "the flock-rec-sparse executable's entry point, one line; its command is Flock.RecSparseCmd.cmd, audited under Flock",
   "FlockRecOpening": "the flock-rec-opening executable's entry point, one line; its command is Flock.RecOpeningCmd.cmd, audited under Flock",
   "Flock.Test.RecCap": "a test, not a proof: its #guards evaluate whole V* lists in the interpreter, 1,097-1,246 s to build on every check node (26 Oct), so it gated every Flock-touching Lean check by about 18 min; built right after landing by verity/ml/flock/tests/test_lean_rec_cap_guards.py instead (top 06:18Z 26 Oct, Daniel's 11 Oct tier for parts whose cold run is over 10 min; proofs' PRF-190 adds a small-shape guard back to the roots)",
-  "FlockRecLinks": "the flock-rec-links executable's entry point, one line; its command is Flock.RecLinksCmd.cmd, audited under Flock"
+  "FlockRecLinks": "the flock-rec-links executable's entry point, one line; its command is Flock.RecLinksCmd.cmd, audited under Flock",
+  "FlockFrameTape": "the flock-frame-tape executable's entry point, a test's: Flock.Firewall.Frame.cmdWith (audited under Flock) with the rep's draws read from a file, so verity/ml/flock/tests/test_firewall_frame.py knows the pads the frame masks with"
  },
  "assumptions": {
   "Flock.Firewall.Contract.FirewallComputes": {
@@ -101,7 +105,9 @@
   }
  },
  "meaning": ["Flock"],
- "escapes": {},
+ "escapes": {
+  "Flock.Test.JsonParse.shw.go": "partial def: the test's printer of a parsed value (each number's mantissa and exponent), recursing through nested arrays and objects, to compare `JsonParse.parse` with `Lean.Json.parse` as text; no proof is about it, and the verifier never calls it"
+ },
  "verifier": {
   "entries": ["Flock.verifyWith", "Flock.Zk.verifyWith", "Flock.Stmt.setupTablesWith"],
   "stop": [
@@ -299,6 +305,21 @@
    "panicCore",
    "repeatM"
   ]
+ },
+ "witnesses": {
+  "Flock.RecLinks.check_sound": {
+   "honest": ["Flock.RecLinks.check_sound_honest"],
+   "nontrivial": "Flock.RecLinks.check_sound_nontrivial"
+  }
+ },
+ "unwitnessed": {
+  "Flock.Firewall.Contract.holds_coins": "f611d55ea12c11473bcbfe0f723437d933d8bdfed81b134e1c2427a6961b37df",
+  "Flock.Firewall.Contract.holds_coins_binding": "440fe1557c52cfc039fe7de0f3d2a61a3def418b42dbbc8f710547689f334711",
+  "Flock.Firewall.Contract.holds_commit": "15196dcbfdd621070fec595078f25d91bea5231c788c2420525d8efcbcd5728d",
+  "Flock.Firewall.Contract.holds_computed": "356e6e3e7042c1194d6dbca4fd6b9077d0042bb4dd61b956135b9228641f0e59",
+  "Flock.Firewall.Contract.holds_finish": "517bb4d3fba64c5643d16167bcaff8990f7a66a6902f8f85d1309536ffb66027",
+  "Flock.Firewall.Contract.holds_fixed": "f63a6c36d77ac4ab1cf2b4e5a1d17e2179d85048e48d1b674d5f325483d94dc4",
+  "Flock.Firewall.Contract.holds_masked": "457708597f2841098fb5904b6f15316d8f12d995a46c791b11e033668cb118ce"
  },
  "compile_time": {
   "Flock.With.ReturnsWalk": {
@@ -838,20 +859,5 @@
  },
  "dependencies": {
   "toolchain": "d5ca9d1164aa2cf25419881c4ec5c6a1486192af7c11e9d1704efd15e3fbd2fa"
- },
- "witnesses": {
-  "Flock.RecLinks.check_sound": {
-   "honest": ["Flock.RecLinks.check_sound_honest"],
-   "nontrivial": "Flock.RecLinks.check_sound_nontrivial"
-  }
- },
- "unwitnessed": {
-  "Flock.Firewall.Contract.holds_coins": "f611d55ea12c11473bcbfe0f723437d933d8bdfed81b134e1c2427a6961b37df",
-  "Flock.Firewall.Contract.holds_coins_binding": "440fe1557c52cfc039fe7de0f3d2a61a3def418b42dbbc8f710547689f334711",
-  "Flock.Firewall.Contract.holds_commit": "15196dcbfdd621070fec595078f25d91bea5231c788c2420525d8efcbcd5728d",
-  "Flock.Firewall.Contract.holds_computed": "356e6e3e7042c1194d6dbca4fd6b9077d0042bb4dd61b956135b9228641f0e59",
-  "Flock.Firewall.Contract.holds_finish": "517bb4d3fba64c5643d16167bcaff8990f7a66a6902f8f85d1309536ffb66027",
-  "Flock.Firewall.Contract.holds_fixed": "f63a6c36d77ac4ab1cf2b4e5a1d17e2179d85048e48d1b674d5f325483d94dc4",
-  "Flock.Firewall.Contract.holds_masked": "457708597f2841098fb5904b6f15316d8f12d995a46c791b11e033668cb118ce"
  }
 }
