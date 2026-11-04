@@ -273,6 +273,42 @@ def test_a_pin_is_logged_append_only_in_the_verifiers_form_or_refused(tmp_path):
     assert len(A.read_pins(log)) == 2 and len(sealed) == 2
 
 
+def test_the_pins_log_takes_the_pin_that_fills_its_cap_and_refuses_the_next(tmp_path):
+    """v2 refuses a pins log past `MAX_PINS` lines (`coins.LIMITS`), so `record_pin` logs the pin that fills it and
+    refuses the next, writing nothing, so pin.sh doesn't move `current`."""
+    log, sealed = tmp_path / "pins.jsonl", []
+    log.write_text("x\n" * (C.MAX_PINS - 1))
+    A.record_pin(log, PIN, "d" * 40, T0, seal=sealed.append)
+    with pytest.raises(A.Refused, match=f"holds {C.MAX_PINS} lines, the most v2 reads"):
+        A.record_pin(log, "e" * 40, "f" * 40, T1, seal=sealed.append)
+    pins = A.read_pins(log)
+    assert len(pins) == C.MAX_PINS and pins[-1] == C.pin_line(PIN, "d" * 40, "2026-10-20T09:30:00Z") and sealed == [log]
+
+
+def test_the_ledger_takes_the_entry_that_fills_each_cap_and_refuses_past_it(host, signer):
+    """v2 refuses a ledger with a line past `MAX_LEDGER_LINE` characters or past `MAX_LEDGER_LINES` lines
+    (`coins.LIMITS`), so `append` writes the entry that fills either and refuses, writing nothing, one past it: the
+    line count before it signs."""
+    I, sign, _ = signer
+    session = "s20261020T093000Z-0000"
+    A.append(host, "end", session, lambda ls: {"pad": ""}, I, sign)
+    base = len(A.read_ledger(host.ledger)[0])
+    A.append(host, "end", session, lambda ls: {"pad": "x" * (C.MAX_LEDGER_LINE - base)}, I, sign)
+    with pytest.raises(A.Refused, match=f"past the {C.MAX_LEDGER_LINE} v2 reads"):
+        A.append(host, "end", session, lambda ls: {"pad": "x" * (C.MAX_LEDGER_LINE - base + 1)}, I, sign)
+    lines = A.read_ledger(host.ledger)
+    assert [len(ln) for ln in lines] == [base, C.MAX_LEDGER_LINE]
+
+    host.ledger.write_bytes(b"x\n" * (C.MAX_LEDGER_LINES - 2) + lines[-1] + b"\n")
+    A.append(host, "end", session, lambda ls: {}, I, sign)
+    state = (host.key / "state.json").read_bytes()
+    with pytest.raises(A.Refused, match=f"the ledger holds {C.MAX_LEDGER_LINES} lines, the most v2 reads"):
+        A.append(host, "end", session, lambda ls: {}, I, sign)
+    lines = A.read_ledger(host.ledger)
+    assert len(lines) == C.MAX_LEDGER_LINES and json.loads(lines[-1])["seq"] == C.MAX_LEDGER_LINES - 1
+    assert (host.key / "state.json").read_bytes() == state
+
+
 @pytest.mark.parametrize("bad, why", [
     (["--commit", COMMIT], "unrecognized arguments: --commit"),
     (["--peer", "vy-challenger-1"], "--peer"),
