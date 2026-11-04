@@ -11,8 +11,8 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 
 * **the registration** keeps R1–R7 against the verifier's own copies (`Registered`): the record's format, protocol, law
   and window (`R1`); its program, query, partition and population (`R2`); its scheme, ports, roots, leaves and domains
-  (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window and the window's stream and prover (`R6`); and
-  for a v2 record its registered values (`R7`);
+  (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window and the window's stream and prover (`R6`); for
+  a v2 record its registered values (`R7`); and in the per-member form each member's one count of link points (`RL`);
 * **the draw** is a draw of the registered law over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work law, its strata and closure;
 * **the units** were proved and served as drawn, under the registered roots, and the verifiers of record opened the
@@ -201,10 +201,18 @@ def R7 (rec : Json) (v : Registration.Verifier) : Prop :=
     SuppliedIs es mine' v.supplied
       (Supplied.root rec v.log v.binding v.params (Flock.hexOf v.program.desc.sha512) (v.supplied.map (·.1)))
 
+/-- The per-member form's link points (`Registration.linkRefused`): when the verifier names members, its own law over its
+program and query applies (`LinkPoints.lawOf`, with the population), some draw under it ends, and no member's fewest
+and most drawn units under it, over the draws that end, give different link points (`LinkPoints.refused`, which
+refuses a law no draw of which ends); a draw that runs out of coins fails the window (`OneStageZk.RAN_OUT`). -/
+def RL (v : Registration.Verifier) : Prop :=
+  v.members.isEmpty = false → ∃ law n, LinkPoints.lawOf v.program v.query v.law v.workTable = .ok (law, n) ∧
+    LinkPoints.refused law n v.members = .ok #[]
+
 /-- The registration keeps R1–R7 against the verifier's own copies, with `law` the agreed law as derived; R7 when the
-verifier expects values registered. -/
+verifier expects values registered; and the per-member form's members' link points (`RL`). -/
 def Registered (v : Registration.Verifier) (rec law : Json) : Prop :=
-  R1 rec v law ∧ R2 rec v ∧ R3 rec v ∧ R4 rec v ∧ R5 rec v ∧ R6 rec v ∧ (ExpectsV2 v → R7 rec v)
+  R1 rec v law ∧ R2 rec v ∧ R3 rec v ∧ R4 rec v ∧ R5 rec v ∧ R6 rec v ∧ (ExpectsV2 v → R7 rec v) ∧ RL v
 
 /-! ## The draw: the registered law over the registered population -/
 
