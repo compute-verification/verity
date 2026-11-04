@@ -17,6 +17,8 @@ PoUW's guarantee becomes per-run by truncation: the adversary that runs `A` but 
 budget `b` costs at most `b` on every coin, and commits `A`'s transcript wherever `A` costs at most `b`. PoUW's cost
 model is abstract, so whether that adversary exists is a property of the model (`BudgetAbort`), not a theorem: a model
 whose cost reads what its programs cannot see (the oracle at points they never query, say) has no aborting program.
+`BudgetAbort` and `CallsWithin` read only a cost model's runs, costs and oracle calls, so one statement of each serves
+PoUW's `CostModel` and Pearl-C's, whose programs take activation codes.
 
 **Pricing.** The machine prices a PoUW run in two parts: its arithmetic, at W1's
 instruction prices with no fetch charge and no refund, is charged to the compute account, and every first fetch of a
@@ -27,8 +29,8 @@ fetches among them) are its bandwidth charge, beside the bandwidth audit's windo
 audit's reads are another device-model account's over the same window (`Run.ReadsAttributed`), so no bit read is
 certified twice. What the compute audit certifies is the priced sum, work plus `pRead` per bit read
 (`Run.ComputeSoundPerRunPriced`, `pRead` the price of a bit read in the unit the work is counted in), and tables cite
-the work and the bits separately. Pearl-C's game is a game of its own, with its own cost model; `BudgetAbortPearlC` is
-truncation for it, and `RealizesPearlCPriced` is a run whose compute audit is Pearl-C's audit, its cost covered by the
+the work and the bits separately. Pearl-C's game is a game of its own, with its own cost model, truncated by the same
+`BudgetAbort`, and `RealizesPearlCPriced` is a run whose compute audit is Pearl-C's audit, its cost covered by the
 priced sum.
 -/
 
@@ -36,31 +38,42 @@ namespace Accounting
 
 open Pouw
 
+section Truncation
+
+variable {Q R S Prog Wl Act St Tr : Type}
+
+/-- **A cost model truncates.** `run`, `cost` and `calls` are a cost model's (PoUW's `CostModel`, or Pearl-C's, whose
+programs take activation codes): a program's transcript, cost and oracle calls on an oracle, a workload, an activation
+input, a preprocessed state and a salt. Its costs are nonnegative, and it is closed under budget-abort: for every
+program, workload, activation input and budget `b ≥ 0` there is one program, fixed before the oracle, the preprocessed
+state and the salt, that runs the program and stops before its cost would exceed `b`. On every oracle, preprocessed
+state and salt it costs at most `b` and makes at most the program's oracle calls, and wherever the program costs at most
+`b` it commits the program's transcript. -/
+def BudgetAbort (run : Prog → (Q → R) → Wl → (ℕ → Act) → St → S → Tr)
+    (cost : Prog → (Q → R) → Wl → (ℕ → Act) → St → S → ℝ) (calls : Prog → (Q → R) → Wl → (ℕ → Act) → St → S → ℕ) :
+    Prop :=
+  (∀ (prog : Prog) (H : Q → R) (U : Wl) (act : ℕ → Act) (σ : St) (s : S), 0 ≤ cost prog H U act σ s) ∧
+    ∀ (prog : Prog) (U : Wl) (act : ℕ → Act) (b : ℝ), 0 ≤ b → ∃ prog' : Prog,
+      ∀ (H : Q → R) (σ : St) (s : S),
+        cost prog' H U act σ s ≤ b ∧ calls prog' H U act σ s ≤ calls prog H U act σ s ∧
+          (cost prog H U act σ s ≤ b → run prog' H U act σ s = run prog H U act σ s)
+
+/-- An adversary's preprocessing `pre` and its online program `online`, run on activation input `act` and workload `U`
+with a cost model's oracle calls `calls`, together make at most `q` oracle calls, for every oracle and salt: the oracle
+half of `Pouw.Adversary.Bounded` (or Pearl-C's), with no bound on the cost. -/
+def CallsWithin (calls : Prog → (Q → R) → Wl → (ℕ → Act) → St → S → ℕ) (pre : QTree Q R St) (online : Prog)
+    (act : ℕ → Act) (U : Wl) (q : ℕ) : Prop :=
+  ∀ (H : Q → R) (s : S), pre.calls H + calls online H U act (pre.eval H) s ≤ q
+
+end Truncation
+
 section Pouw
 
 variable {Q R S : Type}
 
-/-- **PoUW's cost model truncates.** Its costs are nonnegative, and it is closed under budget-abort: for every program,
-workload, activation input and budget `b ≥ 0` there is one program, fixed before the oracle, the preprocessed state and
-the salt, that runs the program and stops before its cost would exceed `b`. On every oracle, preprocessed state and salt
-it costs at most `b` and makes at most the program's oracle calls, and wherever the program costs at most `b` it
-commits the program's transcript. -/
-def BudgetAbort (CM : CostModel Q R S) : Prop :=
-  (∀ (prog : CM.Prog) (H : Q → R) (U : Workload) (act : ℕ → Mat) (σ : State) (s : S),
-      0 ≤ CM.cost prog H U act σ s) ∧
-    ∀ (prog : CM.Prog) (U : Workload) (act : ℕ → Mat) (b : ℝ), 0 ≤ b → ∃ prog' : CM.Prog,
-      ∀ (H : Q → R) (σ : State) (s : S),
-        CM.cost prog' H U act σ s ≤ b ∧ CM.calls prog' H U act σ s ≤ CM.calls prog H U act σ s ∧
-          (CM.cost prog H U act σ s ≤ b → CM.run prog' H U act σ s = CM.run prog H U act σ s)
-
 /-- The adversary's realized online cost on workload `U`, oracle `H` and salt `s`. -/
 def onlineCost {CM : CostModel Q R S} (A : Adversary CM) (U : Workload) (H : Q → R) (s : S) : ℝ :=
   CM.cost A.online H U A.act (A.pre.eval H) s
-
-/-- Preprocessing and the online phase together make at most `q` oracle calls, for every oracle and salt: the oracle
-half of `Pouw.Adversary.Bounded`, with no bound on the cost. -/
-def CallsWithin {CM : CostModel Q R S} (A : Adversary CM) (U : Workload) (q : ℕ) : Prop :=
-  ∀ (H : Q → R) (s : S), A.pre.calls H + CM.calls A.online H U A.act (A.pre.eval H) s ≤ q
 
 end Pouw
 
@@ -68,27 +81,10 @@ section PearlC
 
 variable {Q R S : Type}
 
-/-- **Pearl-C's cost model truncates**: `BudgetAbort`'s statement over Pearl-C's `CostModel`, whose programs take
-activation codes. Its costs are nonnegative, and for every program, workload, activation input and budget `b ≥ 0` there
-is one program, fixed before the oracle, the preprocessed state and the salt, that costs at most `b`, makes at most the
-program's oracle calls, and commits the program's transcript wherever the program costs at most `b`. -/
-def BudgetAbortPearlC (CM : PearlC.CostModel Q R S) : Prop :=
-  (∀ (prog : CM.Prog) (H : Q → R) (U : PearlC.Workload) (act : ℕ → PearlC.Codes) (σ : PearlC.State) (s : S),
-      0 ≤ CM.cost prog H U act σ s) ∧
-    ∀ (prog : CM.Prog) (U : PearlC.Workload) (act : ℕ → PearlC.Codes) (b : ℝ), 0 ≤ b → ∃ prog' : CM.Prog,
-      ∀ (H : Q → R) (σ : PearlC.State) (s : S),
-        CM.cost prog' H U act σ s ≤ b ∧ CM.calls prog' H U act σ s ≤ CM.calls prog H U act σ s ∧
-          (CM.cost prog H U act σ s ≤ b → CM.run prog' H U act σ s = CM.run prog H U act σ s)
-
 /-- A Pearl-C adversary's realized online cost on workload `U`, oracle `H` and salt `s`. -/
 def onlineCostPearlC {CM : PearlC.CostModel Q R S} (A : PearlC.Adversary CM) (U : PearlC.Workload) (H : Q → R)
     (s : S) : ℝ :=
   CM.cost A.online H U A.act (A.pre.eval H) s
-
-/-- A Pearl-C adversary's preprocessing and online phase together make at most `q` oracle calls, for every oracle and
-salt. -/
-def CallsWithinPearlC {CM : PearlC.CostModel Q R S} (A : PearlC.Adversary CM) (U : PearlC.Workload) (q : ℕ) : Prop :=
-  ∀ (H : Q → R) (s : S), A.pre.calls H + CM.calls A.online H U A.act (A.pre.eval H) s ≤ q
 
 /-- The compute audit's coins in Pearl-C's game at workload `U`, with `t` tickets weighted by `w`: the oracle, the salt
 and the tickets. -/

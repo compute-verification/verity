@@ -60,9 +60,9 @@ def PouwEndToEndPerRun : Prop :=
     γ₀ < 1 → 0 < Ωmax →
     (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N,
       (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →
-    Assumptions.TT CM P D γ₀ ε → BudgetAbort CM →
+    Assumptions.TT CM P D γ₀ ε → BudgetAbort CM.run CM.cost CM.calls →
     ∀ U : Workload, U.InDomain D → ∀ q : ℕ, q ≤ 2 ^ 64 →
-    ∀ A : Adversary CM, CallsWithin A U q → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
+    ∀ A : Adversary CM, CallsWithin CM.calls A.pre A.online A.act U q → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
           AuditAccepts (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
           onlineCost A U x.1 x.2.1 < (1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout)
@@ -79,7 +79,7 @@ def ComputeOfPouwPerRun : Prop :=
     γ₀ < 1 → 0 < Ωmax →
     (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N,
       (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →
-    Assumptions.TT CM P D γ₀ ε → BudgetAbort CM →
+    Assumptions.TT CM P D γ₀ ε → BudgetAbort CM.run CM.cost CM.calls →
     ∀ U : Workload, U.InDomain D → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 → Nonempty (PouwCoins P U t) →
     ∀ (ι α ΩQ ΩS : Type) [Fintype α] [Fintype ΩQ] [Fintype ΩS] (d : Device ι)
       (r : Run d α (PouwCoins P U t) ΩQ ΩS) (p : Price),
@@ -115,7 +115,7 @@ def CovertResidualPerRun : Prop :=
       ≤ εW + εQ + εS
 
 /-- **Pearl-C's γ-gap property, audited by work-weighted tickets, per run.** For Pearl-C's game at any cost model that
-truncates (`BudgetAbortPearlC`) and has the γ-gap property at `γ < 1` with error `η`, every in-domain workload whose
+truncates (`BudgetAbort`) and has the γ-gap property at `γ < 1` with error `η`, every in-domain workload whose
 units' `W_ref` are `κ ≥ 0` times their ticket weights `w`, every oracle bound `q ≤ 2^64` and every adversary that makes
 at most `q` oracle calls (with no bound on its cost), the audit with `t` tickets accepts while the adversary's online
 cost on that run is below `(1 − γ)(1 − ε_s)·∑_u W_ref(u)` with probability at most `(1 − ε_s)^t + η(q, N)`. At W1 with
@@ -123,10 +123,11 @@ fetches priced (`w1Priced`), the cost is the run's instruction prices plus its f
 def PearlCEndToEndPerRun : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : PearlC.CostModel Q R S) (P : PearlC.Protocol Q R S) (D : PearlC.Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ),
-    γ < 1 → PearlC.Gγ CM P D γ η → BudgetAbortPearlC CM →
+    γ < 1 → PearlC.Gγ CM P D γ η → BudgetAbort CM.run CM.cost CM.calls →
     ∀ U : PearlC.Workload, U.InDomain P D → ∀ (w : ℕ → ℕ) (κ : ℝ), 0 ≤ κ →
     (∀ u < U.layout.N, P.Wref U.layout u = κ * w u) →
-    ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : PearlC.Adversary CM, CallsWithinPearlC A U q → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
+    ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : PearlC.Adversary CM, CallsWithin CM.calls A.pre A.online A.act U q →
+    ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : PearlCCoins Q R S U w t =>
           AuditAccepts (PearlC.correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
           onlineCostPearlC A U x.1 x.2.1 < (1 - γ) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u)
@@ -142,7 +143,7 @@ compute window's length. Tables cite the work and the bits read separately; the 
 def ComputeOfPearlCPerRunPriced : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : PearlC.CostModel Q R S) (P : PearlC.Protocol Q R S) (D : PearlC.Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ),
-    γ < 1 → PearlC.Gγ CM P D γ η → BudgetAbortPearlC CM →
+    γ < 1 → PearlC.Gγ CM P D γ η → BudgetAbort CM.run CM.cost CM.calls →
     ∀ U : PearlC.Workload, U.InDomain P D → ∀ (w : ℕ → ℕ) (κ : ℝ), 0 ≤ κ →
     (∀ u < U.layout.N, P.Wref U.layout u = κ * w u) → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
     Nonempty (PearlCCoins Q R S U w t) →
@@ -169,7 +170,8 @@ def PearlCStopEndToEndPerRun : Prop :=
     γ < 1 → PearlC.GγPerCoin CM P D γ η →
     ∀ U : PearlC.Workload, U.InDomain P D → ∀ (w : ℕ → ℕ) (κ : ℝ), 0 ≤ κ →
     (∀ u < U.layout.N, P.Wref U.layout u = κ * w u) →
-    ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : PearlC.Adversary CM.withStop, CallsWithinPearlC A U q →
+    ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : PearlC.Adversary CM.withStop,
+      CallsWithin CM.withStop.calls A.pre A.online A.act U q →
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : PearlCCoins Q R S U w t =>
           AuditAccepts (PearlC.correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
@@ -184,7 +186,7 @@ coins and the device's oracle queries over the compute window at most `2^64`, th
 guarantee on the priced sum at the certified `(1 − γ)(1 − ε_s)·∑_u W_ref(u)` and error `(1 − ε_s)^t + η(q, N)`, where
 `q` is the device's oracle rate times the compute window's length. The device need not stop a run: a run that realizes
 the game at `CM` realizes it on `CM.withStop` (`RealizesPearlCPriced.withStop`, the adversary choosing no budget), so
-this covers every run `ComputeOfPearlCPerRunPriced` covers, from `GγPerCoin` in place of `Gγ` and `BudgetAbortPearlC`. -/
+this covers every run `ComputeOfPearlCPerRunPriced` covers, from `GγPerCoin` in place of `Gγ` and `BudgetAbort`. -/
 def ComputeOfPearlCStopPerRunPriced : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : PearlC.CostModel Q R S),
     (∀ (prog : CM.Prog) (H : Q → R) (U : PearlC.Workload) (act : ℕ → PearlC.Codes) (σ : PearlC.State) (s : S),

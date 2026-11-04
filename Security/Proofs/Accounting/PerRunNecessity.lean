@@ -67,7 +67,7 @@ theorem inDomain : U.InDomain D :=
   ⟨by norm_num [U, layout], fun u hu => by simp [U, layout, Shape.Wmm],
     fun _ _ _ _ _ _ => by norm_num [U, InInt7]⟩
 
-theorem callsWithin : CallsWithin A U 0 := fun _ _ => by simp [A, CM, QTree.calls]
+theorem callsWithin : CallsWithin CM.calls A.pre A.online A.act U 0 := fun _ _ => by simp [A, CM, QTree.calls]
 
 theorem accepts {t : ℕ} (H : Unit → Unit) (s : Bool) (c : Fin t → Ticket (P.Wref U.layout) U.layout.N) :
     AuditAccepts (correctSet P U H s (A.transcript U H s)) c := by
@@ -99,7 +99,7 @@ theorem tt_not_perRun :
     Assumptions.TT CM P D 0 (fun _ _ => 0) ∧
       (∀ U' : Workload, U'.InDomain D → ∀ u < U'.layout.N,
         (P.Wref U'.layout u : ℝ) ≤ 1 * ((U'.layout.shape u).Wmm : ℝ)) ∧
-      U.InDomain D ∧ CallsWithin A U 0 ∧
+      U.InDomain D ∧ CallsWithin CM.calls A.pre A.online A.act U 0 ∧
       (1 - 1 / 2 : ℝ) ^ 2 + 0 <
         pr (fun x : (Unit → Unit) × Bool × (Fin 2 → Ticket (P.Wref U.layout) U.layout.N) =>
           AuditAccepts (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
@@ -123,7 +123,7 @@ theorem tt_not_perRun :
 
 /-- `CM` does not truncate: by `PouwEndToEndPerRun`, a truncating cost model would bound the probability in
 `tt_not_perRun` by `1/4`. -/
-theorem not_budgetAbort : ¬ BudgetAbort CM := by
+theorem not_budgetAbort : ¬ BudgetAbort CM.run CM.cost CM.calls := by
   intro h
   obtain ⟨hTT, hW, hU, hA, hlt⟩ := tt_not_perRun
   exact absurd (SecurityProofs.PouwEndToEndPerRun Unit Unit Bool CM P D 0 1 (fun _ _ => 0) one_pos one_pos hW hTT h
