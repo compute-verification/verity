@@ -6,8 +6,9 @@ public import Proofs.Flock.Claims.ZK.CausalExe
 /-!
 # The tables' side of `SessionLoopZKDeployed` at the deployed tables
 
-At the session `CoinLayer.session Loop.loopNr Masked.dataE`, the premises `Flock.Guarantees.SessionLoopZKDeployed` takes
-of the tables, each at the deployed prover `Masked.PE`, its stopped round plan and its tape plan `Masked.UE`:
+At the session `CoinLayer.session Loop.loopNr Masked.dataE`, the tables' side `Flock.SecurityProofs.SessionLoopZKDeployed`
+discharges (all of it but `SwCausal`), each at the deployed prover `Masked.PE`, its stopped round plan and its tape plan
+`Masked.UE`:
 
 * `tables_dataE`: every table is one it sets up (`Masked.tables`).
 * `complete_dataE`: at the deployed relation each table's share is valid (`complete_tabC`).
