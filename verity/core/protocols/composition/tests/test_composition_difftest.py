@@ -3,8 +3,9 @@ Python reference (`reference.py`: the trial's composition rule with reject domin
 core interface and the subprotocols' own Python). Hypothesis draws each subprotocol's case to accept, reject, be
 undecided or fail to decode (from its own difftest's generator: PoUW's periods, made once from
 `pouw_period_cases`, the network certifier's period `build`, the inference-only policy's `drawn`, which is
-never undecided, sampled proofs' audits as one-stage v1's under the form ``one-stage``, `form_case` over `empty_draws`
-and `changed_audits` with the form's breaks, the wipe's signed wipes, `wipe_protocol_case.case`; space's and
+never undecided, sampled proofs' audits under the form ``one-stage``, `form_case`: one-stage v2's over `empty_draws`
+(an audit that drew nothing at its challenger's coins) with one of `V2_BREAKS` or the form's breaks, and one-stage v1's
+`changed_audits`, which the form refuses by name, the wipe's signed wipes, `wipe_protocol_case.case`; space's and
 bandwidth's from the small periods of their hooks, `periods.py`, all on one committed `C*` but PoUS's run on another
 store, `periods.OTHER_STORE`), often recommits the subprotocols each composite ties to one record (`one_record`: the
 policy to sampled proofs' registration record, on that audit's own declared circuit, `policy_on`, and at remote
@@ -22,6 +23,7 @@ from __future__ import annotations
 import collections
 import dataclasses
 import functools
+import hashlib
 import itertools
 import json
 import random
@@ -64,22 +66,71 @@ CIRCUIT, PUBLIC = b"not a circuit file", b"not a public file"
 BLOBS = [CIRCUIT, PUBLIC]
 
 
-@st.composite
-def empty_draws(draw) -> dict:
-    """A valid audit of a program that reads no registered value, whose draw drew no unit (a subset of none, or Bernoulli
-    at 0): with no session and no proved unit, v1 is undecided on it for want of the verifier of record."""
-    s = draw(st.sampled_from(OS.SETUPS))
-    law = draw(st.sampled_from([{"k": 0, "law": "subset"}, {"law": "bernoulli", "p": "0/1"}]))
+def _sha(b: bytes) -> str:
+    return hashlib.sha512(b).hexdigest()
+
+
+@functools.cache
+def _empty_audit(i: int) -> tuple[dict, dict, dict]:
+    """One-stage v2's audit of `OS.SETUPS[i]`, a program that reads no registered value, its params but δ, its record
+    and its evidence: its draw at its challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin
+    tree) drew no unit (a subset of none), so it has no session and no proved unit, and `BLOBS` hold its circuit and
+    public files. Made once each: a challenger's signed session is slow to make."""
+    s, law = OS.SETUPS[i], {"k": 0, "law": "subset"}
     part = {"program": s.sha512, "query": s.query}
     rec = OS.R.record(s.program, s.query, law, OS.SCHEME, [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports],
                       OS.WINDOW, leaf_layer=OS.LEAF, partition=part)
-    d = {**OS.DR.derive(s.program, s.query, law, None), "population": s.population, "units": []}
-    evidence = {"draw": d, "instances": 0, "proved_units": [], "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED),
-                "served": None, "session_roots": None, "sessions": [], "statement": {}, "verdicts": {}}
-    params = {"anchors": [], "delta": draw(st.sampled_from(["1/1000", "1/10", "1/2"])), "law": law, "leaf_layer": OS.LEAF,
-              "log": [], "partition": part, "ports": s.ports, "program": s.desc, "query": s.query, "registered": None,
-              "scheme": OS.SCHEME, "work_table": None}
+    ch, d, coins = OS._challenger_draw(random.Random(f"composition/empty/{i}"), s, law, rec, trees=0)
+    evidence = {"coins": coins, "draw": d, "instances": 0, "proofs": {"public": _sha(PUBLIC), "sessions": []},
+                "proved_units": [], "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED), "served": None,
+                "session_roots": None, "sessions": [], "statement": {}}
+    params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "law": law,
+              "leaf_layer": OS.LEAF, "log": [], "partition": part, "ports": s.ports, "program": s.desc,
+              "proofs": {"circuit": _sha(CIRCUIT), "registered": None}, "query": s.query, "registered": None,
+              "scheme": OS.SCHEME, "window_root": ch.ledger.window["root"], "work_table": None}
+    return params, rec, evidence
+
+
+@st.composite
+def empty_draws(draw) -> dict:
+    """A valid one-stage v2 audit whose draw drew nothing (`_empty_audit`) at a drawn δ: with no session and no proved
+    unit, v2 is undecided on it for want of the verifier of record."""
+    params, rec, evidence = _empty_audit(draw(st.integers(0, len(OS.SETUPS) - 1)))
+    params = {**params, "delta": draw(st.sampled_from(["1/1000", "1/10", "1/2"]))}
     return OS._json({"params": params, "record": rec, "evidence": evidence})
+
+
+def _without(x: dict, *ks: str) -> dict:
+    return {k: v for k, v in x.items() if k not in ks}
+
+
+def _v1(a: dict) -> dict:
+    """v2's audit `a` as one-stage v1's: its params without ``proofs``, its evidence with the verdicts of no session in
+    place of ``proofs``, which v1 decides as v2 does."""
+    return {**a, "params": _without(a["params"], "proofs"),
+            "evidence": {**_without(a["evidence"], "proofs"), "verdicts": {}}}
+
+
+#: One change to v2's audit (`empty_draws`) that sampled proofs refuses or rejects: the audit as v1's (refused by name
+#: at the params), v1's evidence under v2's params (refused by name at the evidence), v2's evidence naming verdicts,
+#: params naming no challenger or no partition, a circuit or public file no blob holds, proved units no session proved,
+#: a session whose coins are no tree the challenger logged, coins on another window or none.
+V2_BREAKS = {
+    "v1": _v1,
+    "v1-evidence": lambda a: {**a, "evidence": _v1(a)["evidence"]},
+    "verdicts": lambda a: {**a, "evidence": {**a["evidence"], "verdicts": {}}},
+    "no-challenger": lambda a: {**a, "params": _without(a["params"], "challenger")},
+    "no-partition": lambda a: {**a, "params": {**a["params"], "partition": None}},
+    "circuit": lambda a: {**a, "params": {**a["params"], "proofs": {"circuit": _sha(b"another circuit"),
+                                                                     "registered": None}}},
+    "public": lambda a: {**a, "evidence": {**a["evidence"], "proofs": {"public": _sha(b"another public file"),
+                                                                       "sessions": []}}},
+    "proved": lambda a: {**a, "evidence": {**a["evidence"], "proved_units": [0]}},
+    "session": lambda a: {**a, "evidence": {**a["evidence"], "sessions": ["s"], "proofs": {
+        "public": _sha(PUBLIC), "sessions": [{"name": "s", "record": _sha(CIRCUIT), "reps": {}}]}}},
+    "other-window": lambda a: {**a, "params": {**a["params"], "window_root": "ab" * 64}},
+    "no-coins": lambda a: {**a, "evidence": _without(a["evidence"], "coins")},
+}
 
 
 #: One break of sampled proofs' form that `VStar.Recursive.Sampled` refuses: params or evidence naming no form, another
@@ -96,17 +147,24 @@ def _with_form(x, br: str | None, side: str):
 
 
 def form_case(a: dict, br: str | None = None) -> dict:
-    """An audit (`{"params", "record", "evidence"}`) as sampled proofs' case under the form ``one-stage`` (one-stage v1's,
-    `SampledProofs.OneStage`), with `br`, one of `FORM_BREAKS`, when given."""
+    """An audit (`{"params", "record", "evidence"}`) as sampled proofs' case under the form ``one-stage`` (one-stage v2's,
+    `SampledProofs.OneStageZk`, or v1's, which the form refuses), with `br`, one of `FORM_BREAKS`, when given."""
     return OS._case({"params": _with_form(a["params"], br, "params"), "record": a["record"],
                      "evidence": _with_form(a["evidence"], br, "evidence")})
 
 
-#: Sampled proofs' cases by the verdict they aim at: an audit that drew nothing (undecided, for want of the verifier of
-#: record), and an audit with one or two changes or one break of the form.
+def broken_case(a: dict, br: str) -> dict:
+    """v2's audit `a` with the change `V2_BREAKS[br]`, as sampled proofs' case."""
+    return form_case(V2_BREAKS[br](a))
+
+
+#: Sampled proofs' cases by the verdict they aim at: v2's audit that drew nothing (undecided, for want of the verifier
+#: of record), and v2's audit with one change or one break of the form, or v1's audit with up to two changes (refused
+#: by name).
 SAMPLED_CASES = {R.UNDECIDED: empty_draws().map(form_case),
-                 R.REJECT: st.one_of(OS.changed_audits(most=2, least=1).map(form_case),
-                                     st.builds(form_case, empty_draws(), st.sampled_from(FORM_BREAKS)))}
+                 R.REJECT: st.one_of(st.builds(broken_case, empty_draws(), st.sampled_from(list(V2_BREAKS))),
+                                     st.builds(form_case, empty_draws(), st.sampled_from(FORM_BREAKS)),
+                                     OS.changed_audits(most=2).map(form_case))}
 
 NP = R.PERIOD
 #: The period check's changes by the verdict they aim at (`case` breaks the line `serve` reads, as PoUW's `case-*`).
@@ -155,6 +213,12 @@ def component_case(draw, C, kind: str | None) -> dict:
         case = R.WIPE_CASES.case(kind, draw(st.integers(0, 1)))
     else:
         case = draw(SAMPLED_CASES[R.UNDECIDED if kind == R.ACCEPT else kind])
+    return as_component(C, case)
+
+
+def as_component(C, case: dict) -> dict:
+    """`C`'s case as a composite's entry, with its digest as its Python reads it on `BLOBS` (the case's own commitment
+    when it doesn't decode, which a rejection never binds)."""
     root = bytes.fromhex(case["commitment"])
     digest = C.answer({**case, "blobs": BLOBS} if getattr(C, "blobs", False) else case)["commitment"]
     return {"id": C.id, "params": case["params"], "root": root, "evidence": bytes.fromhex(case["evidence"]),
@@ -494,6 +558,32 @@ def test_remote_refuses_a_period_window_on_another_record(remote_server):
         seen[len(json.loads(period["evidence"])["windows"])] += 1
     check()
     assert sum(seen.values()) > 0, dict(seen)
+
+
+def test_sampled_proofs_refuses_one_stage_v1(remote_server):
+    """Sampled proofs' one-stage form is one-stage v2: v1's audit under it, one v1 itself decides (undecided, on an
+    empty draw at its challenger's coins), is refused by name (`VStar.Recursive.Sampled.V1_REFUSED`) at its params,
+    and v1's evidence under v2's params at the evidence. Remote, its policy and period aimed at acceptance on the
+    audit's record, rejects with that refusal as sampled proofs' reason, in Lean as in Python."""
+    want = {"v1": f"params: the parameters name no proofs: {R.V1_REFUSED}",
+            "v1-evidence": f"evidence: the evidence names no proofs: {R.V1_REFUSED}"}
+    seen = collections.Counter()
+
+    @settings(max_examples=3, database=None, deadline=None, suppress_health_check=list(HealthCheck))
+    @given(component_case(R.INFERENCE_ONLY, R.ACCEPT), component_case(R.POUW_PERIOD, R.ACCEPT), empty_draws())
+    def check(policy, period, audit):
+        assert OS.answer(OS._case(_v1(audit)))["verdict"] == R.UNDECIDED
+        for br, why in want.items():
+            sampled = broken_case(audit, br)
+            got = R.SAMPLED_PROOFS.answer({**sampled, "blobs": BLOBS})
+            assert (got["verdict"], got["reason"]) == (R.REJECT, why), got
+            case = remote_case(one_record(R.REMOTE, [policy, period, as_component(R.SAMPLED_PROOFS, sampled)]))
+            assert R.REMOTE.answer(case)["verdict"] == R.REJECT
+            out = remote_server.exchange(case)
+            assert out["verdict"] == R.REJECT and f"{R.SAMPLED_PROOFS.id} reject: {why}" in out["reason"], out
+            seen[br] += 1
+    check()
+    assert set(seen) == set(want), dict(seen)
 
 
 @pytest.mark.slow

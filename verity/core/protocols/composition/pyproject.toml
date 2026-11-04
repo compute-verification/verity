@@ -22,7 +22,8 @@ timeout_s = 10800
 # Test-only: `lake` builds the registration log's check (`core-registration`, the core interface's) and the onsite and
 # remote packages beside this one (each product's executable, whose `serve` the
 # harness drives) and, through their path requires, the core interface, C-Flock's verifier, and the ported components'
-# Lean: sampled proofs' one-stage audit (with the LMS verifier and the difftest harness's Lean), PoUW's check (with
+# Lean: sampled proofs (`core_vstar_recursive`: its form's dispatch and the recursive audit) over its one-stage audit
+# (with the LMS verifier and the difftest harness's Lean), PoUW's check (with
 # its window, commitments, and core's identity and randomness), the network certifier's period check (with the
 # certifier program and the LMS verifier), the inference-only policy's check (`nci_check`), PoUS's run check (with the
 # memory challenger's Lean), the PoUB session's and the memory challenger's wipe. The reference runs the
@@ -44,7 +45,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__
           "verity/core/protocols/network", "verity/core/protocols/certifier",
           "verity/core/protocols/pous", "verity/core/protocols/remote_bandwidth",
           "verity/core/devices/memory_challenger/lean", "verity/core/attest/lean",
-          "verity/core/service/sampled_proofs", "verity/core/service/flock", "verity/core/primitives/lms/lean",
+          "verity/core/service/sampled_proofs", "verity/core/service/vstar/recursive", "verity/core/service/flock",
+          "verity/core/primitives/lms/lean",
           "verity/core/primitives/identity", "verity/core/primitives/randomness",
           # the deployment layer and its wire, which space's and bandwidth's challenger-host sides are started through
           # (`deploy.stream.Side`)
