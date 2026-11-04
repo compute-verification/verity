@@ -1,13 +1,13 @@
 module
 
-public import Proofs.Flock.ZkAny.Session
+public import Proofs.Flock.ZkAny.Tables
 public import Proofs.Flock.Soundness.ZK.Abort
 public import Definitions.Flock.ZK.RealView
 
 /-!
 # The ZK server's release with real hm96 leaves, at any values
 
-`ZkAny/Table.lean` and `ZkAny/Session.lean` bound the release behind the server's checks with every unopened leaf ideal.
+`ZkAny/Table.lean` and `ZkAny/Tables.lean` bound the release behind the server's checks with every unopened leaf ideal.
 Here every leaf is real, on both branches: where the check passes, the view's hidden leaves are hm96 leaves under fresh
 salts (`Hm96.viewR`); where it fails, the same run's pre-final messages leave (`Hm96.preR`), and every one of their leaves
 is an hm96 leaf of what it commits, `τ`'s commitment included (`Hm96.TauLeaf`), since nothing is opened. Each branch
@@ -29,9 +29,9 @@ guarantees of their own:
   those leaves, so the salts move to a fresh vector over every leaf (`toPre_viewR`, `prCoin_salts`); every leaf goes ideal,
   which gives the pre-final view (`prCoin_preLeaves_ideal`), Lemma A (`table_prefinal_indep`) moves it to the dummy, and
   the leaves go real again there: `2·|PreLeaves|·δ₁` at any witness carrying the public region data.
-* `Hm96.release_hm96`: one table, by `ZkAnyGate`.
-* `Session.release_hm96`: a session at fixed witnesses, by `prCoin_pi_close` and `ZkAnyOutcome`, per outcome in `ZKOut`'s
-  form; `Session.release_hm96_first`: the same at witnesses fixed before the server's draws.
+* `Hm96.release_hm96`: one table, per outcome of the check, by `gate_perOutcome`.
+* `Session.release_hm96`: a session at fixed witnesses, per outcome, by `prCoin_pi_close` and `perOutcome_of_split`;
+  `Session.release_hm96_first`: the same at witnesses fixed before the server's draws.
 -/
 
 @[expose] public section
@@ -215,30 +215,27 @@ theorem Hm96.viewR_derived (M : T.Hm96 C) (hW : ∀ r, Function.Bijective fun p 
   congrArg (fun v => T.hidWith v fun i => M.H (M.dig w ω i + M.My (ys i), M.cs (ys i)))
     (T.psi_realCore_at hW hβ w hreg ω hω).symm
 
-/-- **One table's release behind the check, at any values, with real leaves**: each branch within `2·δ₁` a leaf it
-leaves unopened of its simulator with real leaves, and the release within the sum of both. -/
+/-- **One table's release behind the check, at any values, with real leaves**, per outcome of the check: where it
+passes, within `2·δ₁` a hidden leaf of `S_shvzk(x, e)` with real leaves; where it fails, within `2·δ₁` a leaf of its
+pre-final messages of the dummy's real ones. -/
 theorem Hm96.release_hm96 (M : T.Hm96 C) {digT : F → B} (hT : M.TauLeaf digT) {δ₁ : ℝ≥0∞}
     (hT1 : Claims.Hm96Hiding M.My M.cs δ₁) (hrank : T.Rank) (hpad : T.PadOnto)
     (hW : ∀ r, Function.Bijective fun p : F × F => T.Wr r p.1 p.2) (hpads : T.PadsOnto) (hβ : ∀ r, T.β r ≠ 0)
     (go : T.Rand → Bool) (w w₀ : W) (hreg : T.sReg w = T.pubReg) (hreg₀ : T.sReg w₀ = T.pubReg)
-    (hgo : T.Gated go w) (E : T.View ⊕ T.PreView → Prop) :
-    prCoin (fun p : T.Rand × (T.Hid → Salt) => go p.1 = true ∧ E (.inl (M.viewR w p.1 p.2))) ≤
-        prCoin (fun σ : T.SimRand × (T.Hid → Salt) => E (.inl (M.simR w₀ σ.1 σ.2))) +
-          2 * Fintype.card T.Hid * δ₁ ∧
-      prCoin (fun p : T.Rand × (T.Hid → Salt) => go p.1 = false ∧ E (.inr (M.preR w p.1 p.2))) ≤
-        prCoin (fun p : T.Rand × (T.Hid → Salt) => E (.inr (M.preR w₀ p.1 p.2))) +
-          2 * Fintype.card T.PreLeaves * δ₁ ∧
-      prCoin (fun p : T.Rand × (T.Hid → Salt) => E (M.releaseR go w p.1 p.2)) ≤
-        prCoin (fun σ : T.SimRand × (T.Hid → Salt) => E (.inl (M.simR w₀ σ.1 σ.2))) +
-          prCoin (fun p : T.Rand × (T.Hid → Salt) => E (.inr (M.preR w₀ p.1 p.2))) +
-            (2 * Fintype.card T.Hid * δ₁ + 2 * Fintype.card T.PreLeaves * δ₁) :=
-  Flock.SecurityProofs.ZkAnyGate (fun p : T.Rand × (T.Hid → Salt) => M.viewR w p.1 p.2)
-    (fun p => T.hidWith (T.psi (T.realCore w p.1)) fun i => M.H (M.dig w p.1 i + M.My (p.2 i), M.cs (p.2 i)))
-    (fun p => M.preR w p.1 p.2) (fun p => go p.1) (fun σ : T.SimRand × (T.Hid → Salt) => M.simR w₀ σ.1 σ.2)
-    (fun p : T.Rand × (T.Hid → Salt) => M.preR w₀ p.1 p.2) _ _
+    (hgo : T.Gated go w) :
+    PerOutcome (fun p : T.Rand × (T.Hid → Salt) => go p.1) (fun p => M.releaseR go w p.1 p.2)
+      (gatedSim (fun σ : T.SimRand × (T.Hid → Salt) => M.simR w₀ σ.1 σ.2)
+        fun p : T.Rand × (T.Hid → Salt) => M.preR w₀ p.1 p.2)
+      fun b => if b then 2 * Fintype.card T.Hid * δ₁ else 2 * Fintype.card T.PreLeaves * δ₁ := by
+  have : Nonempty Salt := ⟨0⟩
+  have : Nonempty T.Rand := ⟨0⟩
+  have : Nonempty T.SimRand := ⟨0⟩
+  exact gate_perOutcome (view := fun p : T.Rand × (T.Hid → Salt) => M.viewR w p.1 p.2)
+    (d := fun p => T.hidWith (T.psi (T.realCore w p.1)) fun i => M.H (M.dig w p.1 i + M.My (p.2 i), M.cs (p.2 i)))
+    (cut := fun p => M.preR w p.1 p.2)
     (fun E' => M.preR_close hT hT1 hrank hW hβ w w₀ hreg hreg₀ E')
     (fun E' => M.derived_close hT1 hrank hpad hW hpads hβ w w₀ E')
-    (fun p hp => M.viewR_derived hW hβ w hreg p.1 (hgo p.1 hp) p.2) E
+    (fun p hp => M.viewR_derived hW hβ w hreg p.1 (hgo p.1 hp) p.2)
 
 end Table
 
@@ -292,26 +289,18 @@ theorem branchR_le (T : Fin J → Table F K W Salt (B × Salt) D Hi VL) {C : Typ
       (fun σ : (T j).SimRand × ((T j).Hid → Salt) => E (.inl ((M j).simR (w₀ j) σ.1 σ.2)))]
     exact (M j).derived_close (hT1 j) (hrank j) (hpad j) (hW j) (hpads j) (hβ j) (w j) (w₀ j) fun v => E (.inl v)
 
-/-- **A session's release behind the ZK server's checks, at any values, with real leaves**: at each outcome, jointly with
-it, within `2·δ₁` a leaf it leaves unopened of the simulator at that outcome; overall within the sum over outcomes, and
-within `|St|` times the uniform-outcome simulator plus the outcomes' errors. -/
+/-- **A session's release behind the ZK server's checks, at any values, with real leaves**, per outcome: at each
+outcome, within `2·δ₁` a leaf it leaves unopened of the simulator at that outcome. -/
 theorem release_hm96 (T : Fin J → Table F K W Salt (B × Salt) D Hi VL) {C : Type} (M : ∀ j, (T j).Hm96 C)
     {digT : Fin J → F → B} (hT : ∀ j, (M j).TauLeaf (digT j)) {δ₁ : ℝ≥0∞}
     (hT1 : ∀ j, Claims.Hm96Hiding (M j).My (M j).cs δ₁) (hrank : ∀ j, (T j).Rank) (hpad : ∀ j, (T j).PadOnto)
     (hW : ∀ j r, Function.Bijective fun p : F × F => (T j).Wr r p.1 p.2) (hpads : ∀ j, (T j).PadsOnto)
-    (hβ : ∀ j r, (T j).β r ≠ 0) {St : Type} [Fintype St] (out : (∀ j, (T j).Rand) → St)
+    (hβ : ∀ j r, (T j).β r ≠ 0) {St : Type} (out : (∀ j, (T j).Rand) → St)
     (full : St → Fin J → Bool) (w w₀ : Fin J → W) (hreg : ∀ j, (T j).sReg (w j) = (T j).pubReg)
-    (hreg₀ : ∀ j, (T j).sReg (w₀ j) = (T j).pubReg) (hgo : Gated T out full w)
-    (E : (∀ j, (T j).View ⊕ (T j).PreView) → Prop) :
-    (∀ s, prCoin (fun p : ∀ j, (T j).Rand × ((T j).Hid → Salt) => out (fun j => (p j).1) = s ∧
-        E (releaseR T M full w (out fun j => (p j).1) p)) ≤
-      prCoin (fun σ => E (simR T M full w₀ s σ)) + 2 * unopened T full s * δ₁) ∧
-    prCoin (fun p : ∀ j, (T j).Rand × ((T j).Hid → Salt) => E (releaseR T M full w (out fun j => (p j).1) p)) ≤
-      ∑ s, (prCoin (fun σ => E (simR T M full w₀ s σ)) + 2 * unopened T full s * δ₁) ∧
-    prCoin (fun p : ∀ j, (T j).Rand × ((T j).Hid → Salt) => E (releaseR T M full w (out fun j => (p j).1) p)) ≤
-      (Fintype.card St : ℝ≥0∞) *
-        prCoin (fun q : St × (∀ j, ((T j).SimRand × ((T j).Hid → Salt)) × ((T j).Rand × ((T j).Hid → Salt))) =>
-          E (simR T M full w₀ q.1 q.2)) + ∑ s, 2 * unopened T full s * δ₁ := by
+    (hreg₀ : ∀ j, (T j).sReg (w₀ j) = (T j).pubReg) (hgo : Release.Gated T out full w) :
+    PerOutcome (fun p : ∀ j, (T j).Rand × ((T j).Hid → Salt) => out fun j => (p j).1)
+      (fun p => releaseR T M full w (out fun j => (p j).1) p) (simR T M full w₀)
+      fun s => 2 * unopened T full s * δ₁ := by
   have : Nonempty Salt := ⟨0⟩
   have : ∀ j, Nonempty ((T j).Rand × ((T j).Hid → Salt)) := fun _ => ⟨(0, fun _ => 0)⟩
   have : ∀ j, Nonempty (((T j).SimRand × ((T j).Hid → Salt)) × ((T j).Rand × ((T j).Hid → Salt))) :=
@@ -322,57 +311,42 @@ theorem release_hm96 (T : Fin J → Table F K W Salt (B × Salt) D Hi VL) {C : T
     simp only [ε, unopened, Nat.cast_sum, Finset.mul_sum, Finset.sum_mul]
     refine Finset.sum_congr rfl fun j _ => ?_
     split_ifs <;> rfl
-  have hrel : ∀ p : ∀ j, (T j).Rand × ((T j).Hid → Salt),
-      releaseR T M full w (out fun j => (p j).1) p = fun j => branchR T M full w (out fun j => (p j).1) j (p j) :=
+  have hrel : Splits (fun p : ∀ j, (T j).Rand × ((T j).Hid → Salt) => releaseR T M full w (out fun j => (p j).1) p)
+      (fun p => out fun j => (p j).1) (fun s p => fun j => branchR T M full w s j (p j)) :=
     fun p => funext fun j => by
       simp only [releaseR, branchR]
       by_cases hf : full (out fun j => (p j).1) j = true
       · rw [ite_eq_left hf, ite_eq_left hf,
           (M j).viewR_derived (hW j) (hβ j) (w j) (hreg j) (p j).1 (hgo (fun j => (p j).1) j hf) (p j).2]
       · rw [ite_eq_right hf, ite_eq_right hf]
-  have hB : ∀ s (E' : (∀ j, (T j).View ⊕ (T j).PreView) → Prop),
-      prCoin (fun p : ∀ j, (T j).Rand × ((T j).Hid → Salt) => E' fun j => branchR T M full w s j (p j)) ≤
-        prCoin (fun σ => E' (simR T M full w₀ s σ)) + ∑ j, ε s j := fun s E' =>
-    prCoin_pi_close (Ω := fun j => (T j).Rand × ((T j).Hid → Salt))
-      (Ω' := fun j => ((T j).SimRand × ((T j).Hid → Salt)) × ((T j).Rand × ((T j).Hid → Salt)))
-      (V := fun j => (T j).View ⊕ (T j).PreView) (fun j => branchR T M full w s j)
-      (fun j σ => if full s j then .inl ((M j).simR (w₀ j) σ.1.1 σ.1.2) else .inr ((M j).preR (w₀ j) σ.2.1 σ.2.2))
-      (ε s) (fun j E'' => branchR_le T M hT hT1 hrank hpad hW hpads hβ full w w₀ hreg hreg₀ s j E'') E'
-  obtain ⟨hper, hsum, hcard⟩ := Flock.SecurityProofs.ZkAnyOutcome
-    (fun p : ∀ j, (T j).Rand × ((T j).Hid → Salt) => releaseR T M full w (out fun j => (p j).1) p)
-    (fun p => out fun j => (p j).1)
-    (fun s (p : ∀ j, (T j).Rand × ((T j).Hid → Salt)) => fun j => branchR T M full w s j (p j))
-    (fun s σ => simR T M full w₀ s σ) (fun s => ∑ j, ε s j) hrel hB E
-  simp only [hε] at hper hsum hcard
-  exact ⟨hper, hsum, hcard⟩
+  refine perOutcome_of_split hrel fun s E' => ?_
+  have h := prCoin_pi_close (Ω := fun j => (T j).Rand × ((T j).Hid → Salt))
+    (Ω' := fun j => ((T j).SimRand × ((T j).Hid → Salt)) × ((T j).Rand × ((T j).Hid → Salt)))
+    (V := fun j => (T j).View ⊕ (T j).PreView) (fun j => branchR T M full w s j)
+    (fun j σ => if full s j then .inl ((M j).simR (w₀ j) σ.1.1 σ.1.2) else .inr ((M j).preR (w₀ j) σ.2.1 σ.2.2))
+    (ε s) (fun j E'' => branchR_le T M hT hT1 hrank hpad hW hpads hβ full w w₀ hreg hreg₀ s j E'') E'
+  rw [hε s] at h
+  exact h
 
 /-- **A session's release behind the ZK server's checks, at any values, with real leaves, at witnesses fixed before the
-server's draws** (`WitnessesFirst`): `release_hm96` at the one witness they take. At each outcome `s`, jointly with it,
-the release is within `2·δ₁` a leaf it leaves unopened of the simulator given `s`, which reads the dummies `w₀` and not
-the witnesses. -/
+server's draws** (`WitnessesFirst`): `release_hm96` at the one witness they take. At each outcome `s` the release is
+within `2·δ₁` a leaf it leaves unopened of the simulator given `s`, which reads the dummies `w₀` and not the
+witnesses. -/
 theorem release_hm96_first (T : Fin J → Table F K W Salt (B × Salt) D Hi VL) {C : Type} (M : ∀ j, (T j).Hm96 C)
     {digT : Fin J → F → B} (hT : ∀ j, (M j).TauLeaf (digT j)) {δ₁ : ℝ≥0∞}
-    (hT1 : ∀ j, Claims.Hm96Hiding (M j).My (M j).cs δ₁) (hsim : ∀ j, (T j).Simulable) {St : Type} [Fintype St]
+    (hT1 : ∀ j, Claims.Hm96Hiding (M j).My (M j).cs δ₁) (hsim : ∀ j, (T j).Simulable) {St : Type}
     (out : (∀ j, (T j).Rand) → St) (full : St → Fin J → Bool)
     (wit : (∀ j, (T j).Rand × ((T j).Hid → Salt)) → Fin J → W) (w₀ : Fin J → W) (hfirst : WitnessesFirst wit)
     (hreg : ∀ p j, (T j).RegPublic (wit p j)) (hreg₀ : ∀ j, (T j).RegPublic (w₀ j))
-    (hgo : ∀ p, Gated T out full (wit p)) (E : (∀ j, (T j).View ⊕ (T j).PreView) → Prop) :
-    (∀ s, prCoin (fun p : ∀ j, (T j).Rand × ((T j).Hid → Salt) => out (fun j => (p j).1) = s ∧
-        E (releaseR T M full (wit p) (out fun j => (p j).1) p)) ≤
-      prCoin (fun σ => E (simR T M full w₀ s σ)) + 2 * unopened T full s * δ₁) ∧
-    prCoin (fun p : ∀ j, (T j).Rand × ((T j).Hid → Salt) =>
-        E (releaseR T M full (wit p) (out fun j => (p j).1) p)) ≤
-      ∑ s, (prCoin (fun σ => E (simR T M full w₀ s σ)) + 2 * unopened T full s * δ₁) ∧
-    prCoin (fun p : ∀ j, (T j).Rand × ((T j).Hid → Salt) =>
-        E (releaseR T M full (wit p) (out fun j => (p j).1) p)) ≤
-      (Fintype.card St : ℝ≥0∞) *
-        prCoin (fun q : St × (∀ j, ((T j).SimRand × ((T j).Hid → Salt)) × ((T j).Rand × ((T j).Hid → Salt))) =>
-          E (simR T M full w₀ q.1 q.2)) + ∑ s, 2 * unopened T full s * δ₁ := by
+    (hgo : ∀ p, Release.Gated T out full (wit p)) :
+    PerOutcome (fun p : ∀ j, (T j).Rand × ((T j).Hid → Salt) => out fun j => (p j).1)
+      (fun p => releaseR T M full (wit p) (out fun j => (p j).1) p) (simR T M full w₀)
+      fun s => 2 * unopened T full s * δ₁ := by
   have : Nonempty Salt := ⟨0⟩
   let p₀ : ∀ j, (T j).Rand × ((T j).Hid → Salt) := fun _ => (0, fun _ => 0)
   obtain ⟨w, rfl⟩ : ∃ w, wit = fun _ => w := ⟨wit p₀, funext fun p => hfirst p p₀⟩
   exact release_hm96 T M hT hT1 (fun j => (hsim j).1) (fun j => (hsim j).2.1) (fun j => (hsim j).2.2.1)
-    (fun j => (hsim j).2.2.2.1) (fun j => (hsim j).2.2.2.2) out full w w₀ (hreg p₀) hreg₀ (hgo p₀) E
+    (fun j => (hsim j).2.2.2.1) (fun j => (hsim j).2.2.2.2) out full w w₀ (hreg p₀) hreg₀ (hgo p₀)
 
 end Session
 
