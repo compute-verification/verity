@@ -12,8 +12,8 @@ read as a served run's they are refused (their tile is not 64 x 64), as passes o
 refused at load on both sides. Passes salted by a live session's coins load under that session's commitment, and a coin
 record's challenger draw (the v2 record's ``draw``) holds only as coin ``pouw/draw`` 0 of a draw session opened after the
 run's commitment, its coin the record's source; ``--of-record`` takes no other draw. `test_a_recorded_h200_run` does the
-same on an H200 run's retained passes against the verdicts the Python recorded on them, where `POUW_PEARLPLUS_RECORDED`
-names a directory holding them (`passes/` and `verdicts/{run,control}.json`).
+same on an H200 run's retained passes at the draw count and source of the verdicts the Python recorded on them, where
+`POUW_PEARLPLUS_RECORDED` names a directory holding them (`passes/` and `verdicts/{run,control}.json`).
 
 Where the Python raises past its own verdict the Lean refuses instead, and no case here reaches it: a debit replay or a
 checked U that rejects (the Lean names it), and an opening whose leaf doesn't parse (an opening that fails). The Lean also
@@ -493,10 +493,15 @@ def test_a_pass_that_is_not_ws(exe, tmp_path):
 @pytest.mark.parametrize("name, passes", [("run", ("prefill", "decode")), ("control", ("prefill", "decode", "control"))])
 def test_a_recorded_h200_run(exe, name, passes):
     """An H200 run's retained passes, the served run's (accepted) and with its control pass, whose activations aren't the
-    ones it committed (rejected): the Lean's verdict is the one the Python recorded, under the rule it recorded."""
+    ones it committed (rejected): under each ``over_cap`` rule the Lean's verdict is the Python's on them at the draw
+    count and source the Python recorded, and under ``uncredited``, the run of record's, it accepts or rejects as the
+    recorded verdict did (written before the forming term and the band rule, so its credit isn't today's)."""
     d = Path(RECORDED)
-    want = json.loads((d / "verdicts" / f"{name}.json").read_text())
+    rec = json.loads((d / "verdicts" / f"{name}.json").read_text())
     paths = [d / "passes" / p / "manifest.json" for p in passes]
-    got = lean(exe, paths, want["draws"], bytes.fromhex(want["source"]), coins=d / "passes" / "coins.json",
-               over_cap=want.get("over_cap", VR.REJECT))
-    assert got == answer(want)
+    coins, source = d / "passes" / "coins.json", bytes.fromhex(rec["source"])
+    for rule in VR.OVER_CAP:
+        want = answer(VR.verify_passes(paths, rec["draws"], len(os.sched_getaffinity(0)), "test", VR.epoch_coins(coins), source,
+                                       over_cap=rule))
+        assert rule != VR.UNCREDITED or want["verdict"] == rec["answer"]["verdict"], want["reason"]
+        assert lean(exe, paths, rec["draws"], source, coins=coins, over_cap=rule) == want, rule
