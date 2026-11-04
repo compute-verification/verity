@@ -176,7 +176,7 @@ end Deploy
 (`RowsFormat.encard_periodRead_le`) at each window's `AccSeqsSampled` (`encard_accSeqsSampled_le`). -/
 theorem periodLeak_registered : Guarantees.PeriodLeakRegistered := by
   intro Coin Col T _ _ _ _ _ H D L K S lay hks k δ decode hδ hdec reg ops Dj n sw Pw ρ op β ⟨hPw, hβ⟩ Conn Cell Srv
-    Dev Z arr F hF tap run htrust Θ Zs schedOf srvOf hcov dec hdz x wit tops hb
+    Dev Sec arr F hF tap run htrust Θ Zs schedOf srvOf hcov dec hdz x wit tops hb
   refine ⟨fun m hm hreg Ω _ _ P =>
       sampledLeak_tapReg H D hb L K S lay hks k δ decode hδ hdec reg ops Dj tops m hm hreg Ω P, fun htap => ?_⟩
   have hwin := fun z (hz : z ∈ Zs) (hg : ∀ i, WindowGoodReg H D L K S lay k δ reg ops Dj (sw i) (ρ i) tops (x z i)

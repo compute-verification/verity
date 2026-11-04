@@ -121,8 +121,10 @@ theorem not_periodLeakRegisteredUntrusted : ¬ PeriodLeakRegisteredUntrusted := 
     (fun z _ => leakyDec_run z) (fun _ => Fin.elim0) (fun _ => Fin.elim0) (fun _ => []) (scopelessD_binds shaD)).2
     fun _ _ i => i.elim0
   have h2 := (Set.encard_pair (show true ≠ false by decide)).symm.le.trans
-    ((Set.encard_le_encard fun z _ => Set.mem_setOf.2 ⟨Set.mem_univ z, fun i => i.elim0⟩).trans hc)
+    ((Set.encard_le_encard (s := ({true, false} : Set Bool)) fun z _ =>
+      Set.mem_setOf.2 ⟨Set.mem_univ z, fun i => i.elim0⟩).trans hc)
   simp at h2
+  all_goals exact absurd h2 (not_le.2 Nat.one_lt_ofNat)
 
 /-- **`PeriodLeakRegistered` at any rows format**: its statement without `F.Wf`, every other hypothesis kept,
 `TrustedHost` included. -/
@@ -190,13 +192,15 @@ theorem not_periodLeakRegisteredAnyFormat : ¬ PeriodLeakRegisteredAnyFormat := 
       obtain rfl : notStmt = s := Option.some.inj hs
       exact hopens _ (blindRun_obs z i)
   have h2 := (Set.encard_pair (show true ≠ false by decide)).symm.le.trans
-    ((Set.encard_le_encard fun z _ => Set.mem_setOf.2 ⟨Set.mem_univ z, fun i => hgood _ (blindRun_obs z i)⟩).trans hc)
+    ((Set.encard_le_encard (s := ({true, false} : Set Bool)) fun z _ =>
+      Set.mem_setOf.2 ⟨Set.mem_univ z, fun i => hgood _ (blindRun_obs z i)⟩).trans hc)
   have hF1 : faultySets notStmt.design notPart 0 = {∅} :=
     Finset.eq_singleton_iff_unique_mem.2 ⟨empty_mem_notFaulty, fun _ hF => notFaulty_empty hF⟩
   have hfree : (freeInputs notStmt.prog freeLay 1 \ {0}).card = 0 := by
     first | decide | rfl | simp [freeInputs, notStmt, notProg, freeLay]
   simp only [hF1, hfree, Finset.card_singleton] at h2
   simp at h2
+  all_goals exact absurd h2 (not_le.2 Nat.one_lt_ofNat)
 
 /-- **`PooledLeakAccepted`'s schedule premises at the deployed instance**, its schedules the fixture `fxQueue`'s alone:
 each fits its rows format (`hfit`), and sends at most 6 cells on each connection (`hcap`). -/

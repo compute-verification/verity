@@ -557,12 +557,19 @@ theorem obs_eq_obs1 {o : Obs 1 1 1} (hr : ∀ ℓ σ, o.rows ℓ σ = some []) (
 list. -/
 theorem blindRun_obs (z : Bool) (i : Fin 1) : (blindRun () (oneSched, z)).2 i = [obs1] := by
   fin_cases i
-  show [_] = [obs1]
-  congr 1
-  exact obs_eq_obs1 (fun ℓ σ => by
-    fin_cases ℓ
-    fin_cases σ
-    first | rfl | (cases z <;> rfl) | (cases z <;> decide)) rfl fun _ => rfl
+  first
+    | show [_] = [obs1]
+      congr 1
+      exact obs_eq_obs1 (fun ℓ σ => by
+        fin_cases ℓ
+        fin_cases σ
+        first | rfl | (cases z <;> rfl)) rfl fun _ => rfl
+    | simp only [blindRun, RowsFormat.record, show blindRows.T = 1 from rfl, List.range_one, List.map_cons,
+        List.map_nil, List.cons.injEq, eq_self_iff_true, and_true]
+      exact obs_eq_obs1 (fun ℓ σ => by
+        fin_cases ℓ
+        fin_cases σ
+        first | rfl | (cases z <;> rfl)) rfl fun _ => rfl
 
 theorem empty_mem_notFaulty : (∅ : Finset ℕ) ∈ faultySets notStmt.design notPart 0 := by
   classical
@@ -599,6 +606,6 @@ theorem frameTops_acc (H : Msg → Msg) (op : ℕ → List (Obs 1 1 1) → List 
       some (([] : List ℕ).map (valOver notProg (freeLay.inputOf 1 (ingressUpTo op o 0) fun _ => false) fun _ => none))
     else none
   rw [hv]
-  rfl
+  all_goals first | rfl | simp [tapVal, frameTops]
 
 end NetTiming.Witness
