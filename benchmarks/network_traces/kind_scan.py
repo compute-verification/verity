@@ -147,7 +147,7 @@ REPORT = {
     **{k: v for s in STEPS for k, v in under(f"steps.{s}", STEP).items()},
     "steps.endpoint.**": ENDPOINT,
 }
-#: the scan's answers (`scan_zk.answers`) less what `certifier_piece.PUBLIC` drops: each link-window's answer and the
+#: the scan's answers (`scan_zk.answers`) less what `certifier_piece.PUBLIC` drops: each execution phase's answer and the
 #: registrations it is checked against
 SCAN_ANSWERS = {"format": S, "delta": S, **under("registration", REGISTRATION), "windows[].window": S,
                 **under("windows[].answer", ONE_STAGE), **under("windows[].registrations[]", ROWS)}

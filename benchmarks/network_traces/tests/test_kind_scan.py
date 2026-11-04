@@ -96,7 +96,7 @@ def test_the_pieces_period_and_answer_are_of_the_public_kinds_in_either_layout(t
 
 def test_a_field_no_declaration_names_is_a_finding_wherever_it_lies(tmp_path, period):
     """The window's own number in V3c's provenance (which counts the run's windows), a count of requests in the
-    period's answer and in a link-window's one-stage answer, and an advice length beside the parameters."""
+    period's answer and in an execution phase's one-stage answer, and an advice length beside the parameters."""
     case, answer = _case(period, V3C_WINDOW | {"window_circuit": {"class": [4, 32, 4, 4, 16], "window": 3}})
     ev = json.loads(bytes.fromhex(case["evidence"]))
     ev["windows"][0]["answer"]["public"]["requests"] = 7
