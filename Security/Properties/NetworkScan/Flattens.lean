@@ -69,7 +69,8 @@ def FilesOf (P : Flock.Program.Prog) (fs : List Flock.Circuit) : Prop :=
 finds nothing wrong with the unit's read input columns (`SampledProofs.Bits.unitReads`) against its template's
 Definition at `row`. Its unit reads no input column that no port holds (input padding, a source with no commitment
 position) and, where its template has a parameter `row`, every bit of it, so that no constant fixes one
-(`SampledProofs.Bits.consts`). The period check refuses a circuit file it reads where `readsWhy` refuses. -/
+(`SampledProofs.Bits.consts`). The period check reads a scan's circuit files whole and refuses one `readsWhy`
+refuses. -/
 def RowsRead (P : Flock.Program.Prog) (fs : List Flock.Circuit) : Prop :=
   ∀ i < fs.length, SampledProofs.Bits.readsWhy (fs.getD i default) (templateDef P ((templateNodes P).getD i 0))
     (SampledProofs.Bits.unitReads (fs.getD i default)) ["row"] = none
