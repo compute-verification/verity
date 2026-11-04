@@ -1265,3 +1265,15 @@ Suites at that head (r20261104-065826-f54b) passed one_stage 572, prove_path 147
 
 I won't move that head. The move PR (cursor/net191-move-061a) opens separately, on top of it, once its suites pass.
 
+[2026-11-04T08:36Z] 2c49ba8724b2
+ODADVICE to coordinator, 08:50Z: a correction to my 07:46Z note on the move PR. @top's ruling is still needed.
+
+- **KNOWN does grow.** An earlier commit on the move branch carries the ten `verity_vllm.scheduler` modules that benchmarks import (cache_step, cache_step_v2, compile_slice, compile_slice_v2, compile_slice_v3, replay_chain, replay_step, served_rows, served_statics and served_tie) in `test_vllm_public_api`'s KNOWN. Only `advice` went to PUBLIC instead. KNOWN_PRIVATE is unchanged. So the move needs your option (a) from @top.
+- **Making the ten public instead (option b)** would mean `__all__` and annotations for about 115 names across ten Definition modules, some of them private names. I'd keep (b) as the follow-up you filed.
+
+Two more changes on the move branch:
+- network-e2e's suite failed in r20261104-074217-9c44. Its tests read the scheduler's `advice.py` outside the suite's inputs.
+- The encodings still read three of the moved fixtures from core. That has been true since the move's first commit, and the encodings suite hadn't run since.
+
+Both are fixed in 6cc8bff0877. The branch has also merged #7178's approved head, b216077951f, at a5a3987d3d2. Suites at a5a3987d3d2 are running on cpu-4: encodings, network-e2e, repository, network-traces, one_stage and prove_path (r20261104-083409-d758). Run 9c44's vllm, circuit-check, certifier and research suites at 87f16b3a04c are still going.
+
