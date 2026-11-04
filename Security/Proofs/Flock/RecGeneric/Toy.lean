@@ -6,9 +6,9 @@ public import Proofs.Flock.RecGeneric.Outer
 # A toy outer argument at which L2's hypotheses hold together
 
 `echoArg` is a one-round public-coin argument (a `Claims.SamplingGeneric.Arg`): the prover sends a message, and the
-verifier accepts where it is the statement or where its coin is `default`. The witness of `x` is `x`; the extractor reruns the judged run and returns
-its message unchecked, so on an accepted run it gives a non-witness with probability `1/|Coin|` (`κ = 1/|Coin|`,
-`γ = 0`).
+verifier accepts where it is the statement or where its coin is `default`. The witness of `x` is `x`; the extractor
+reruns the judged run and returns its message unchecked, so on an accepted run it gives a non-witness with probability
+`1/|Coin|` (`κ = 1/|Coin|`, `γ = 0`).
 
 `Compiled.echo` compiles over it. At the inner verifier `IV`, with `k = k_IV(x)`, its compiled verifier (`echoCV`)
 runs `IV`'s rounds (`0..k−1`, answering with `IV`'s messages and deciding nothing), three staging rounds, one echo
@@ -23,7 +23,7 @@ round `j` show one round-`j` message (`ForksBind` holds with no collision), and 
 view (`InnerAcceptsColl`). Off the outer relation a session accepted on its coin gives a witness whose inner view the
 compiled verifier never checked: the contract asks nothing there, and the error charges it to `N_I·κ_O`.
 
-Statements only: definitions, no proofs.
+Statements only: definitions, no proofs. `Proofs.Flock.RecGeneric.ToyProof` proves `EchoHolds`.
 -/
 
 @[expose] public section
