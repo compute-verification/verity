@@ -7,18 +7,18 @@ import Proofs.Properties.Verity.SampledRead
 # Sampled proofs' coupling, assembled from its pieces
 
 `CouplingTarget` at the leg's constructions with the binding's read finder and forger (`Binding.withBinding`), the
-projection at the sample-coupled coin maps (`Constructions.withProject` at `drawMaps`) and the messages'
+projection at the sample-coupled coin maps (`Constructions.withProject` at `sampleMaps`) and the messages'
 two-continuation finders (`Constructions.withMessages`), cut at the binding's property of the play: the log v2's check
 read is the device's (`Binding.Logged Binding.readsV2`).
 
 * **(a), the binding** (`Binding.logged_le`): an accepted play whose log v2 read isn't the device's is at most as likely
   as the read finder's collision plus the forger's forgery, wherever the device printed each play's log
   (`Binding.binds_of_prints`, at `Lines.PrintsLog`).
-* **(b), the logged coupling** (`couplingTarget_withProject_of_draw`): the coin map's premise holds within the openings'
-  gaps over the stops wherever the session's sampling coins are uniform (`drawMap_couples`), and the decoders' premise
-  holds pointwise (`decodes_of_digests`) wherever v2's parameters name the vocabulary's digests, the writer keeps an
-  accepted transcript's view and the outcomes on the joint law's support are the writer's at the moves v2's files decode
-  to.
+* **(b), the logged coupling** (`couplingTarget_withProject_of_sample`): the coin map's premise holds within the
+  openings' gaps over the stops wherever the session's sampling coins are uniform (`sampleMap_couples`), and the
+  decoders' premise holds pointwise (`decodes_of_digests`) wherever v2's parameters name the vocabulary's digests, the
+  writer keeps an accepted transcript's view and the outcomes on the joint law's support are the writer's at the moves
+  v2's files decode to.
 * **The sample's coins** (`srcCoinsAt`, `avg_srcCoinsAt`): the session's bytes as `m` fresh frames' coins, uniform by A3
   wherever the session's bytes are `m` frames.
 * **The sample under the binding's read** (`coupled_draw_coins_v2`): the sample's piece at the property of the play that
@@ -222,7 +222,7 @@ noncomputable def Constructions.assembled (e : 𝔽 ≃ (Fin 128 → Bool)) {V :
     (label : ByteArray → Array ByteArray → ByteArray → String)
     (after : ByteArray → Array ByteArray → ByteArray → ByteArray) {m : ℕ}
     (κ : (A : Live) → A.Ω → Fin m → Fin 512 → Bool) : Constructions V :=
-  ((Binding.withBinding K dev).withProject V rd D (drawMaps e V rd label after κ)).withMessages rd
+  ((Binding.withBinding K dev).withProject V rd D (sampleMaps e V rd label after κ)).withMessages rd
 
 variable (e : 𝔽 ≃ (Fin 128 → Bool)) (V : Vocab d α) (k : Verity.Registration.Composite)
 
@@ -241,14 +241,14 @@ theorem couplingTarget_assembled (K : Constructions V) (dev : Exchange → Prope
     (κ : (A : Live) → A.Ω → Fin m → Fin 512 → Bool) (A : Live) (θ : ByteArray) (F : Array ByteArray)
     (hP : ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ A ω)) = avg H)
-    (hε : ∀ c σ, couplesErr V θ F c A (rd A θ F c) σ (D A θ F c σ) (drawMaps e V rd label after κ A θ F c σ)
+    (hε : ∀ c σ, couplesErr V θ F c A (rd A θ F c) σ (D A θ F c σ) (sampleMaps e V rd label after κ A θ F c σ)
       (fun q _ s => openGap q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
       (fun q => openGap q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤ A.hidingTerm)
     (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (hW : WritesView A)
     (hM : ∀ c σ, MovesReach V θ F c k (Binding.Logged Binding.readsV2) A (rd A θ F c) σ (D A θ F c σ)
-      (drawMaps e V rd label after κ A θ F c σ)) :
+      (sampleMaps e V rd label after κ A θ F c σ)) :
     CouplingTarget V k (K.assembled e dev rd D label after κ) A θ F :=
-  couplingTarget_withProject_of_draw e V k rd (Binding.withBinding K dev) D label after κ A
+  couplingTarget_withProject_of_sample e V k rd (Binding.withBinding K dev) D label after κ A
     (Binding.Logged Binding.readsV2) θ F hκ
     (fun c σ => Binding.logged_le V k Binding.readsV2 dev θ F c σ (Binding.binds_of_prints V k dev θ hP)) hε
     (fun c σ => decodes_of_digests hA hDg hW (hM c σ))
@@ -265,12 +265,12 @@ theorem couplingTarget_assembled_src (K : Constructions V) (dev : Exchange → P
     (F : Array ByteArray) (hP : ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
     (hL : A.Lb 0 = m * 64)
     (hε : ∀ c σ, couplesErr V θ F c A (rd A θ F c) σ (D A θ F c σ)
-      (drawMaps e V rd label after (srcCoinsAt m) A θ F c σ)
+      (sampleMaps e V rd label after (srcCoinsAt m) A θ F c σ)
       (fun q _ s => openGap q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
       (fun q => openGap q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤ A.hidingTerm)
     (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (hW : WritesView A)
     (hM : ∀ c σ, MovesReach V θ F c k (Binding.Logged Binding.readsV2) A (rd A θ F c) σ (D A θ F c σ)
-      (drawMaps e V rd label after (srcCoinsAt m) A θ F c σ)) :
+      (sampleMaps e V rd label after (srcCoinsAt m) A θ F c σ)) :
     CouplingTarget V k (K.assembled e dev rd D label after (srcCoinsAt m)) A θ F :=
   couplingTarget_assembled e V k K dev rd D label after (srcCoinsAt m) A θ F hP (avg_srcCoinsAt hL) hε hA hDg hW hM
 
