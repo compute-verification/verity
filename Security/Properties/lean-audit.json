@@ -11542,14 +11542,15 @@
    ]
   },
   "Flock.Desc": {
-   "digest": "49d41e3def57e04b8c90087b482cefa2d6a53fca9aceb26d8ff6571c831eb7ad",
+   "digest": "3da9c9125024b3d963e8b9a91f82f103e5640e82d4a2de5d51ccd821bacc9e04",
    "definitions": {
     "Flock.Desc": "a20c8468278e1a6c76f3f6e82314b3e5ec14f1d8eb0ad6b15a3c9226225a0582",
-    "Flock.Desc.casesOn": "22909e61743f61418b2d107f4978f1c7477f23b69ed359b48b33a400a54a2499",
+    "Flock.Desc.casesOn": "cad2839f4b4fe46a8124a9c254a1a9e2f1593e36b3437c902273ab4cff3ffec8",
     "Flock.Desc.parse": "29741aa920f1a1db794829d9ec711d659607e7b1e75468acb563d01d49e61c6c",
-    "Flock.Desc.rec": "6e7e950835699fd5e32efdecad39d758a52659bd09336448c14a7d7be09a17e0",
+    "Flock.Desc.rec": "f443ca064670c7792163bb8a8f301fae72affc1bdad7641f47bcde1acde38bba",
     "Flock.Desc.single": "f3e788b80661c16aa5cd8e524b6f4fb66ccfd20aa67b005aba596b0f2f5da23c",
-    "Flock.Desc.unroll": "638fe7510e5750ee10fc270b2d6296cb19fc2bfff467aa0b9eb89e5558fa1730"
+    "Flock.Desc.tmpl": "10fecaada8a4ed07056e78b927ad55aa65af5e97af80f78f5b3ee235abc5c53c",
+    "Flock.Desc.unroll": "92e3c6d8c6f66134b1d55f4ca9aebe53ba181cba0b343e1af9788550e4fcd39e"
    },
    "guarantees": [
     "Verity.remote_soundness_of_subprotocols",
@@ -12412,7 +12413,7 @@
    ]
   },
   "Flock.HmRow": {
-   "digest": "969e72033850c637b843be6f523fdaba6c07e6f40734c8d6ee284e84bf6c837d",
+   "digest": "9a81c155892836ff8cfa4c53461f996ba26e455f449a85f1179062fd56fadbf1",
    "definitions": {
     "Flock.HmIn.FORMAT": "d170c17911f12935b7c639f768d2a51f2df2f502c139d50dafcd92acca7de79a",
     "Flock.HmIn.Ports": "215bbcb52a5c9b82ffa0c34ab9a1e63f466d28f12cb80b3227186587ecca5d72",
@@ -12466,6 +12467,7 @@
     "Flock.HmOut.recUnit": "63a46ce694ab518b79807f25cc9c6bf6e1c2be778dbd9a34ffe3fd44589894a2",
     "Flock.HmOut.regions": "d0190bfea8635860aeb7fb5b902dada63fe5f26c069df5d8bbc33acc2acfeb69",
     "Flock.HmOut.rowBcZeroSalt": "9eb517d60399480826c731075c1a261204d24284ffff5c3ed36980f53ee72a10",
+    "Flock.HmOut.unrolled": "ddc00e7d1d7970d8084e855b155d92dcd4398ede5496957a2da04ed086ad1efa",
     "Flock.HmRow.BC_BYTES": "d2aef41d3a4bf2c7d1feda3da2d9a0c8e9d694113b357a5570f877075000658c",
     "Flock.HmRow.BINDING_KEYS": "d8d4eff04ba53d498624492de5deaaaf7649d06c92165576e490834534dd3d4c",
     "Flock.HmRow.EVALUABLE": "330c9f10310fe11080b8816408e976c202262b5b86d2a0ec6f92150fccd0c27c",
@@ -15736,7 +15738,7 @@
    ]
   },
   "Flock.Tmpl": {
-   "digest": "7075fe738406419a5598dd51ab7ef406e8e0414f759d132824f5492d583536a3",
+   "digest": "aeed757f75953ce94e74a2a60d598ebc8826f82fb50d5c14548491e7e668b7a4",
    "definitions": {
     "Flock.Tmpl.Acc": "977dadb7026ef0ee9fecd23490ee0ab6dfcf4eff4aa0d4b49c4de239f97821f2",
     "Flock.Tmpl.Acc.empty": "f5793cac95dca49d796fcccae6a8a9edb614b41112b0485384b68ae4894f3be2",
@@ -15791,6 +15793,7 @@
     "Flock.Tmpl.parse": "2cc3beb9fbf4c4174008f013de0ac2c57dd45a5635297b1af2c720a8707c1829",
     "Flock.Tmpl.parse._sparseCasesOn_3": "b637662f24e53b2d5717d95ac3e3c781b170b925d9e02e9ddcf23ce643efef4e",
     "Flock.Tmpl.place": "ac4b23f4e42fcfda2da4976d04cc28d67d5a041e10719ed5fe167b1bccfb1d4d",
+    "Flock.Tmpl.unroll": "b5e60733061ccc0a0a99ba4b28fec528e52516d67a7b5a37c6fd6f61570d0982",
     "Flock.Tmpl.write": "6ad4a2e8427d885d98219bc3b97309c3de7a16479eb856f09aab5f1aec37f1fd",
     "_private.Flock.Tmpl.0.Flock.Tmpl.groups": "a90818430562fa9223d6227f8c0aaa808df646f6fbe9ba08acef9ce792e51b33",
     "_private.Flock.Tmpl.0.Flock.Tmpl.num": "307e81d576a7a2482bb896476703f456b05879de60e2c5917dc0175697740856"
