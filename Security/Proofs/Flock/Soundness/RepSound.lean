@@ -1,10 +1,12 @@
-import Proofs.Flock.Soundness.Defs
-import Proofs.Flock.Soundness.Rounds
-import Proofs.Flock.Soundness.OpeningPhase
-import Proofs.Flock.Soundness.ListSize
-import Proofs.Flock.Soundness.LincheckPhase
-import Proofs.Flock.Soundness.ZerocheckPhase
-import Proofs.Flock.Soundness.LigeritoPhase
+module
+
+public import Proofs.Flock.Soundness.Defs
+public import Proofs.Flock.Soundness.Rounds
+public import Proofs.Flock.Soundness.OpeningPhase
+public import Proofs.Flock.Soundness.ListSize
+public import Proofs.Flock.Soundness.LincheckPhase
+public import Proofs.Flock.Soundness.ZerocheckPhase
+public import Proofs.Flock.Soundness.LigeritoPhase
 
 /-!
 # One rep is sound
@@ -25,6 +27,8 @@ The errors add up to `repError` exactly (`repError_eq`), and `Game.value_bind_le
 phases. Each phase lemma is a chain of per-coin (round-by-round) steps: `Rounds` for the sumcheck
 rounds, `Game.prCoin_mvEval_eq_zero_le` for the vector coins.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

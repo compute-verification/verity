@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.ValueInner
-import Proofs.Flock.C3.PubRows.Shape
+module
+
+public import Proofs.Flock.Recursive.ValueInner
+public import Proofs.Flock.C3.PubRows.Shape
 
 /-!
 # The value tie at a statement check 5 accepted
@@ -17,6 +19,8 @@ from `RecCoins.check` at a statement of session `j`'s circuit, at each unit wher
 * `coins_of_session`: where a session accepts and its record draws, the statement setting up a drawn unit's part has
   the session's circuit and passes check 5 (`FlockC3.PubRows.stmt_of_session`'s argument, at `RecCoins.check`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

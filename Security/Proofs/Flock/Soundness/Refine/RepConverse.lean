@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Refine.Rep
-import Proofs.Flock.Soundness.Refine.LincheckConverse
-import Proofs.Flock.Soundness.Refine.OpeningConverse
-import Proofs.Flock.VBridge.Algebra.ZerocheckConverse
+module
+
+public import Proofs.Flock.Soundness.Refine.Rep
+public import Proofs.Flock.Soundness.Refine.LincheckConverse
+public import Proofs.Flock.Soundness.Refine.OpeningConverse
+public import Proofs.Flock.VBridge.Algebra.ZerocheckConverse
 
 /-!
 # One rep accepts when its stages' checks hold (`Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle`)
@@ -19,6 +21,8 @@ returns (`rsT`, `rsSws`).
 `roundsOf` builds a record's rounds from their coin counts, coins and retained bytes; each round retains its bytes
 (`roundsOf_retains`), so the stages' frame hypotheses hold by construction at the bytes the stages frame.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

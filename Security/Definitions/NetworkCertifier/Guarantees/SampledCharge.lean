@@ -1,6 +1,8 @@
-import Definitions.NetworkCertifier.SampledCharge
-import Definitions.NetworkCertifier.SampledReg
-import Definitions.NetworkCertifier.Guarantees.SampledAudit
+module
+
+public import Definitions.NetworkCertifier.SampledCharge
+public import Definitions.NetworkCertifier.SampledReg
+public import Definitions.NetworkCertifier.Guarantees.SampledAudit
 
 /-!
 # The sampled audit's charge: the leak bound when step proof blocks are sampled
@@ -33,6 +35,8 @@ run, not an assumption. Under the decided composition the registered inputs are 
 advice is advice v1. Its charge, the coded length counted by the in-circuit encoder, is at most the declared public `c`,
 and at most `2^c` advice values are charged `c` or less (`hAs`), as for any prefix-free code (Kraft).
 -/
+
+@[expose] public section
 
 namespace NetTiming.Guarantees
 

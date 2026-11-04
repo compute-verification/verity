@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.VStarHh
-import Proofs.Flock.Claims.Recursion.VStarPorts
-import Proofs.Flock.Claims.Recursion.VStarPin
-import Proofs.Flock.Claims.Recursion.VStarWit
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarHh
+public import Proofs.Flock.Claims.Recursion.VStarPorts
+public import Proofs.Flock.Claims.Recursion.VStarPin
+public import Proofs.Flock.Claims.Recursion.VStarWit
 
 /-!
 # What each V\* part's circuit accepts on the honest run, at the deployed builder (`honest_partAccepts_deployed`)
@@ -19,6 +21,8 @@ Of `honest_partAccepts_layR`'s premises about the witness holding the run's mess
   prover's (`hA`, the run lemma) and the run reaches it (`run_length_ge`);
 * `hp` at the rounds before the last (`hpE`) and `hh` are this theorem's hypotheses.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarHonest
 

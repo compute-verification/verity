@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.Compiled
-import Proofs.Flock.Soundness.Refine.RepConverse
+module
+
+public import Proofs.Flock.VBridge.Compiled
+public import Proofs.Flock.Soundness.Refine.RepConverse
 
 /-!
 # `Runs`' zerocheck and lincheck checks from E
@@ -15,6 +17,8 @@ plain shape, where that comb is `d.comb`.
 `rows_coins` is what makes the two meet: the points `verifierRows` returns (`info`, read by `CoinSource.ofRounds` from the
 rounds' coins) are those coins (rec_algebra.py:587–617, `RecAlgebra.zerocheck` and `RecAlgebra.lincheck`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Runs
 

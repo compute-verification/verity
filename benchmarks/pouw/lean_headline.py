@@ -489,7 +489,9 @@ def render(i: Instance) -> str:
              f"noncomputable def model :\n    {mtype} :=")
     pipe_ctors = "\n".join(f"  | {p}" for p in lane)
     width_lines = "\n".join(f"  | .{p} => {w}" for p, w in f.pipes.values())
-    return f'''import Definitions.Accounting.Headline.Encoding
+    return f'''module
+
+public import Definitions.Accounting.Headline.Encoding
 
 /-!
 # {f.key}'s headline instance: {f.device} and {f.title} (trusted; generated)
@@ -500,6 +502,8 @@ file. `Accounting.Guarantees.TS.{f.ns}SheetHeadline` reads it.
 
 {doc}
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Headline.{f.ns}
 
@@ -585,7 +589,9 @@ def render_measured(i: Instance, m: Measured) -> str:
                              for j, (k, om) in enumerate(m.writers))
     nt = len(m.writers)
     vf = VECTOR.replace("-", "").lower()
-    return f'''import Definitions.Accounting.Headline.Sm120
+    return f'''module
+
+public import Definitions.Accounting.Headline.Sm120
 
 /-!
 # sm_120's measured headline instance: {VECTOR} and H1 + fx1 (trusted; generated)
@@ -607,6 +613,8 @@ file. `Accounting.Guarantees.TS.Sm120MeasuredHeadline` reads it.
 * `piStar`, `wStarKind`: π*, the facet ({m.pistar}) the machine model's LP certificate sits on at
   q* = {Q_M.numerator}/{Q_M.denominator}, and the writer kind (honest's {m.wstar}) that is the cheapest word route there.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Headline.Sm120Measured
 

@@ -1,5 +1,7 @@
-import Proofs.Accounting.TS.Session.Lanes.KnownOf
-import Proofs.Accounting.TS.Session.Lanes.KnownBits
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.KnownOf
+public import Proofs.Accounting.TS.Session.Lanes.KnownBits
 
 /-!
 # A lane's known fields hold at the opened rows
@@ -19,6 +21,8 @@ Each port is taken as a known value's row (`KnownPort`: a `sha512/row/v2` port w
 at row 0, `known_readAt_zero`) and each of its bits as on a wire of the unit (`RowBitRead`). Flock-verify's known-read
 check gives both (`Lanes.KnownRead`'s `laneKnownHolds_of_check`, `combKnownOk_of_check`).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Lanes
 

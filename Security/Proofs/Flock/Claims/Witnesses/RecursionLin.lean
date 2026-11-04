@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Witnesses.Recursion
-import Definitions.Claims.RecursionLin
+module
+
+public import Proofs.Flock.Claims.Witnesses.Recursion
+public import Definitions.Claims.RecursionLin
 
 /-!
 # The linear recursion claims' witnesses
@@ -10,6 +12,8 @@ records (`ksR`, `ksRAt` with `ksB`): the outer witnesses record no call, so `Fde
 while the silent prover is always accepted on a statement with no witness and `κ < 1/2`. Their `meets` witnesses are
 `KS`'s, `Bits`' and `KSBound`'s: the claims read the same decoders.
 -/
+
+@[expose] public section
 
 namespace Claims.Witness.Recursion
 

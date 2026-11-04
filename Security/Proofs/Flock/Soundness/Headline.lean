@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Binding.E2E
-import Proofs.Flock.Soundness.ExecDrawOS
+module
+
+public import Proofs.Flock.Soundness.Binding.E2E
+public import Proofs.Flock.Soundness.ExecDrawOS
 
 /-!
 # The headline: the program's rows, SHA-512 throughout, the live draw
@@ -32,6 +34,8 @@ coins are those is A6 (`uniform/flock-coin-server`, `ASSUMPTIONS.md`), which the
 states, and which covers the challenger's keyed coin tree and per-round OS coins: `verify` refuses a session on a
 committed seed's coins (`ProvedScope.servedForm`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

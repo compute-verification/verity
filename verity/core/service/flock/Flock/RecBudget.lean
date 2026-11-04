@@ -17,7 +17,11 @@ shared-row file's tables are as long as its header says, which only the file's l
 holds the inner statement's files, `RecSetup.checkShape` refuses one whose shared-row table holds more than
 `MAX_INNER_ROWS` rows (`innerRows`), as many as a statement's instances can be (`m ≤ 35`, slots of at least `2^7`).
 -/
-import Flock.RecVStar
+module
+
+public import Flock.RecVStar
+
+@[expose] public section
 
 namespace Flock
 namespace RecBudget

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Binding.Rows
-import Proofs.Flock.Verifier.Registered
+module
+
+public import Proofs.Flock.Soundness.Binding.Rows
+public import Proofs.Flock.Verifier.Registered
 
 /-!
 # Registered reads: the model's objects
@@ -15,6 +17,8 @@ registered root the verifier holds, at the position the verifier's own program r
   it committed, and their path. `Checked` is what the verifier's registered check establishes at a registration, and
   `Off` the event that some registered read's leaf is not the registrant's.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Registered
 

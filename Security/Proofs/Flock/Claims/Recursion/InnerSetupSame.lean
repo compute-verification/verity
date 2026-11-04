@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.InnerForm
-import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
-import Proofs.Flock.Soundness.Discharge.Hidden.Public
+module
+
+public import Proofs.Flock.Claims.Recursion.InnerForm
+public import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+public import Proofs.Flock.Soundness.Discharge.Hidden.Public
 
 /-!
 # A full draw sets the inner statement up as its files do, region for region
@@ -17,6 +19,8 @@ it: the extra claims at any points (`Stmt.extraClaims`) and the lincheck's circu
 * `extraClaims_congr`, `circuitFold_congr`: the extra claims read a statement's `k_log`, `m`, `nbl` and regions, and the
   circuit fold its circuit, leaf, pin and Δ.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

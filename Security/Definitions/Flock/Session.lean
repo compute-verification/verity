@@ -1,5 +1,7 @@
-import Definitions.Flock.Ligerito
-import Definitions.Flock.Game.Interleave
+module
+
+public import Definitions.Flock.Ligerito
+public import Definitions.Flock.Game.Interleave
 
 /-!
 # One rep, and one table's session
@@ -13,6 +15,8 @@ committed root).
 The link points are drawn once, before either rep (R5), and give the region claims both reps
 open (`Flock.Statement`). `y` is pinned to zero for these statements (S10) and carries no information.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Model
 

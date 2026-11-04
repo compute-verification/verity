@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Hm.Bc
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Bc
+public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 
 /-!
 # A hidden-output statement (`Stmt.setupHidden`): what it is, and its frozen statements
@@ -15,6 +17,8 @@ past `HmRow.delta`'s), `pinList`, `outBytes` (an output row's message: the outpu
 u16 little-endian) and `commitPair` (the extractor for the row commitment `b ‖ c`). The `Prop`s below are the frozen
 statements `Theorems.lean` proves.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

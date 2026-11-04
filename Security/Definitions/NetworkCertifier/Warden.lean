@@ -1,4 +1,6 @@
-import Mathlib.Data.Nat.Notation
+module
+
+public import Mathlib.Data.Nat.Notation
 
 /-!
 # The network certifier: cells on a public schedule, the fail cell, and what the client sees
@@ -22,6 +24,8 @@ window is the schedule's, so it is public.
 timing, its ACKs and flow control) reaches the network certifier only as its connections' `Arrivals`: the data, in
 cells, and the bucket by which each cell has arrived.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 
