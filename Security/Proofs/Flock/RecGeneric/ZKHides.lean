@@ -26,7 +26,10 @@ theorem hm96_commits_eq (enc : ZkView.Bits × ByteArray → Msg) {n : ℕ} (msgs
     (Leaves.hm96 enc).commits msgs y =
       FlockSoundness.ZK.adaptiveLeaves enc (fun i prev => ZkView.bitsOf (Flock.Sha512.hash ⟨(msgs i prev).toArray⟩))
         (fun i => (ZkView.My (y i), ZkView.saltHash (y i))) :=
-  FlockSoundness.ZK.adaptiveLeaves_unique _ _ _ _ fun i => by rw [Leaves.commits]; rfl
+  FlockSoundness.ZK.adaptiveLeaves_unique _ _ _ _ fun i => by
+    -- `simp only`, not `rfl`: unifying `(π i).1` with `ZkView.My (y i)` unfolds `My`'s 1536-term sum past `maxRecDepth`
+    rw [Leaves.commits]
+    simp only [Leaves.hm96]
 
 end Claims.RecGeneric
 
