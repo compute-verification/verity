@@ -1,8 +1,8 @@
-"""serve-openai's advice (``--advice``): the registered compiler B registered once, before the first Commit window, and each
+"""serve-openai's advice (``--advice``): the registered compiler B registered once, before the first Commit period, and each
 window's advice committed by the server, its public line out before any coin of the window.
 
 * **Registration.** Before its engine loop runs, the server writes ``advice_registration.json`` (`register`, public): B as
-  the verifier recomputes it from ``serve.json`` (`served_compiler.compiler_doc`: compile_steps capped at ℓ_a,
+  the verifier recomputes it from ``serve.json`` (``verity-vllm predict compiler``: compile_steps capped at ℓ_a,
   ``--advice-cap``), the advice's format (`window_advice.SCHEMA`), and the deployment's registration log
   (`verity.core.protocols.registration`, under ``--advice-composite``), committed: B's information entry
   (`advice.builder_item`) and the day's declaration after it, B's digest as day ``--advice-day``'s program, so the day's
@@ -10,7 +10,7 @@ window's advice committed by the server, its public line out before any coin of 
   deployment's log so far, which registers B at most once and declares each day at most once (`duplicate-information`,
   `duplicate-declaration`): another builder, or a day it already declares, is refused. A serve dir that holds a
   registration is refused, and so is a second commit of its windows' advice by `verity-vllm advice`: a run registers B once.
-* **Commit.** Each closed Commit window's advice (`advice.from_trace`, a window carrying what the one before left) is
+* **Commit.** Each closed Commit period's advice (`advice.from_trace`, a window carrying what the one before left) is
   committed as `advice.write_served` commits it, under ``advice/w<k>/`` (``registration.json``, ``private/``), once the window
   is whole: its close and its ``windows.jsonl`` line, every step it scheduled recorded, and the Commit record of every
   request it ran, which the server writes at the close of the window the request finishes in. A window waits on its slowest
@@ -29,6 +29,8 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import sys
 import threading
 import time
 from collections.abc import Callable, Mapping
@@ -39,15 +41,14 @@ from typing import Any
 from verity.core.protocols import registration as REG
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine import step_trace as ST
+from verity_vllm.records import served_advice as RSA
 
 from . import advice as ADV
 from . import advice_windows as AW
-from . import served_compiler as SC
 from . import window_advice as WA
 
 REGISTRATION = "advice_registration.json"
 LINES = "advice.jsonl"
-SCHEMA = "verity-vllm/served-advice-registration/v1"
 COMPOSITES = ("onsite", "remote")
 
 
@@ -56,7 +57,7 @@ class AdviceOptions:
     """serve-openai's ``--advice`` group (`refusal`, `ServedAdvice`)."""
     advice: bool = option("--advice", action="boolean_optional", default=False,
                           help="register B (the served compiler, capped at --advice-cap) before the first window and commit each "
-                               "Commit window's advice as the server serves, its public line in advice.jsonl before any draw of "
+                               "Commit period's advice as the server serves, its public line in advice.jsonl before any draw of "
                                "the window (serve_advice)")
     advice_cap: int = option("--advice-cap", type=int, default=AW.CAP_BITS, metavar="BITS",
                              help="ℓ_a, the registered width: the length in bits every window's advice is padded to before it is "
@@ -86,7 +87,7 @@ def refusal(opts: Any) -> str | None:
     if not a.advice:
         return None
     if not opts.commit:
-        return "--advice commits each Commit window's advice: it needs the Commit (drop --no-commit)"
+        return "--advice commits each Commit period's advice: it needs the Commit (drop --no-commit)"
     if isinstance(a.advice_cap, bool) or a.advice_cap < 8 or a.advice_cap % 8:
         return f"--advice-cap {a.advice_cap}: ℓ_a is a whole number of bits, a multiple of 8 and at least 8"
     if isinstance(a.advice_day, bool) or a.advice_day < 0:
@@ -110,8 +111,11 @@ def refusal(opts: Any) -> str | None:
 
 
 def log_doc(doc: Mapping[str, Any]) -> Mapping[str, Any]:
-    """The committed registration log in ``doc``: a run's ``advice_registration.json`` (its ``registration.log``) or the log."""
-    return doc["registration"]["log"] if isinstance(doc, Mapping) and doc.get("schema") == SCHEMA else doc
+    """The committed registration log in ``doc``: a run's ``advice_registration.json`` (`records.served_advice`, its log) or
+    the log."""
+    if isinstance(doc, Mapping) and doc.get("schema") == RSA.SCHEMA:
+        return RSA.ServedAdviceRegistration.of(doc, REGISTRATION).log
+    return doc
 
 
 def declared_log(composite: str, compiler: AW.Capped, day: int, log: Mapping[str, Any] | None = None) -> list[REG.Entry]:
@@ -141,20 +145,31 @@ def declared_log(composite: str, compiler: AW.Capped, day: int, log: Mapping[str
     return full
 
 
+def compiler_doc(serve: Mapping[str, Any], cap_bits: int) -> dict[str, Any]:
+    """B of the run whose ``serve.json`` is ``serve``, by the verifier's formula (`served_compiler.compiler_doc`), from
+    ``verity-vllm predict compiler`` in a process of its own: the predictor imports the serving pipeline, never the reverse.
+    ValueError naming the formula's refusal."""
+    r = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "predict", "compiler", "--serve-json", "-",
+                        "--cap-bits", str(int(cap_bits))], input=json.dumps(serve, default=str), capture_output=True, text=True)
+    if r.returncode:
+        raise ValueError(f"verity-vllm predict compiler: exit {r.returncode}: {(r.stderr.strip().splitlines() or [''])[-1]}")
+    return json.loads(r.stdout)
+
+
 def register(out: Path, serve: Mapping[str, Any], cap_bits: int, composite: str = "onsite", *, day: int = 0,
              log: Mapping[str, Any] | None = None, t: float | None = None) -> tuple[AW.Capped, dict[str, Any]]:
     """B registered for the run whose ``serve.json`` is ``serve``, serving day ``day``: ``out/advice_registration.json``,
     written once (an existing one is a `UsageError`), at ``t`` (unix seconds, default now), its log `declared_log` of
     ``log``. -> B and the document."""
-    doc = SC.compiler_doc(serve, cap_bits=cap_bits)
+    doc = compiler_doc(serve, cap_bits)
     compiler = ADV.registered_compiler(doc["inner"]["name"], doc["inner"]["digest"], cap_bits)
     if compiler.digest != doc["digest"]:
         raise ValueError(f"B's digest {compiler.digest[:16]}… is not the formula's {doc['digest'][:16]}…")
     entries = declared_log(composite, compiler, day, log)
-    body = {"schema": SCHEMA, "compiler": doc, "advice": WA.SCHEMA, "cap_bits": int(cap_bits), "row_bits": AW.ROW_BITS,
-            "day": int(day), "registration": {"composite": composite, "head": REG.head(composite, entries),
-                                              "log": json.loads(REG.committed(composite, entries))},
-            "t": time.time() if t is None else float(t)}
+    body = RSA.ServedAdviceRegistration(
+        compiler=doc, advice=WA.SCHEMA, cap_bits=int(cap_bits), row_bits=AW.ROW_BITS, day=int(day), composite=composite,
+        head=REG.head(composite, entries), log=json.loads(REG.committed(composite, entries)),
+        t=time.time() if t is None else float(t)).dump()
     try:
         with open(Path(out) / REGISTRATION, "x") as fh:
             fh.write(json.dumps(body, indent=1) + "\n")

@@ -47,10 +47,11 @@ from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.types import Array, Value as Bits
 from verity.ml.windows import interface as IF, rows as CS
+from verity_vllm.engine.profiles import dense_generic as DG
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import advice_windows as AW
-from verity_vllm.pipeline import served_compiler as SC
 from verity_vllm.pipeline.tp import serving_rows as SRT
+from verity_vllm.program.predict import served_compiler as SC
 
 HERE = Path(__file__).resolve().parent
 VLLM = HERE.parents[2] / "integrations" / "vllm"
@@ -811,7 +812,7 @@ def _tiny_served(tmp_path: Path, monkeypatch) -> SimpleNamespace:
     and each compile's ``named``."""
     from verity_vllm.program.predict import steps as ST
 
-    monkeypatch.setattr(SC, "GATES_OF_RECORD", {})
+    monkeypatch.setattr(DG, "GATES_OF_RECORD", {})
     s = _served(tmp_path, monkeypatch)
     builds = {(4, 1): _request_build(LP=4, T=1, named=True), (4, 2): _request_build(LP=4, T=2, named=True)}
     units = [ST.RequestUnit(0, builds[(4, 1)].digest, 4, 1, {"kind": "greedy"}, None, 0, "r0"),
@@ -869,7 +870,7 @@ def test_phi_of_a_served_engine_is_advice_compiles_and_reads_its_target_and_exec
     serve = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "engine": {"execution": "bi-eager"}, "target": TARGET}
     phi = SC.phi_of_serve(serve)
     assert (phi.model["repo"], phi.model["revision"], phi.target, phi.execution) == ("m/x", "r", TARGET, "bi-eager")
-    assert phi.model["hf_config"] == json.loads(SC.LLAMA32_1B_CONFIG.read_text()) and not phi.requests
+    assert phi.model["hf_config"] == json.loads(DG.UNPINNED_HF_CONFIG.read_text()) and not phi.requests
     with pytest.raises(ValueError, match="serve.json records no target profile .* --target F gives it"):
         SC.phi_of_serve({**serve, "target": None})
     (tmp_path / "target.json").write_text(json.dumps({**TARGET, "device_name": "other"}))
@@ -890,9 +891,9 @@ def test_a_served_pins_phi_reads_its_config_of_record_as_advice_compile_does():
     phi = SC.phi_of_serve(serve)
     assert phi.model["hf_config"] == json.loads(pinned_hf_config(serve["model"], rev).read_text())
     assert phi.model["hf_config"]["quantization_config"]["quant_method"] == "verity_int8" and phi.target["int8_exact"] == "linears"
-    assert phi.digest() != SC.phi_of_serve(serve, hf_config=str(SC.LLAMA32_1B_CONFIG)).digest()
+    assert phi.digest() != SC.phi_of_serve(serve, hf_config=str(DG.UNPINNED_HF_CONFIG)).digest()
     bf16 = {**serve, "model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "target": TARGET}
-    assert SC.phi_of_serve(bf16).model["hf_config"] == json.loads(SC.LLAMA32_1B_CONFIG.read_text())
+    assert SC.phi_of_serve(bf16).model["hf_config"] == json.loads(DG.UNPINNED_HF_CONFIG.read_text())
 
 
 def test_a_served_windows_compiler_is_a_single_gpu_i2s_over_the_servers_code(monkeypatch):
@@ -933,7 +934,7 @@ def test_a_served_window_under_another_serve_json_than_its_advice_was_registered
     from verity_vllm.program.predict import steps as ST
 
     s = _served(tmp_path, monkeypatch)
-    monkeypatch.setitem(SC.GATES_OF_RECORD, SERVE_EDITS["model"]["model"], SC.GATES_OF_RECORD["unsloth/Llama-3.2-1B"])
+    monkeypatch.setitem(DG.GATES_OF_RECORD, SERVE_EDITS["model"]["model"], DG.GATES_OF_RECORD["unsloth/Llama-3.2-1B"])
     units = [ST.RequestUnit(0, "d0" * 64, 5, 2, {}, None, 0, "r0"), ST.RequestUnit(1, "d1" * 64, 3, 1, {}, None, 2, "r1")]
     monkeypatch.setattr(ST, "compile_steps", lambda registered, data, ingress, named=False: SimpleNamespace(requests=units, named={}))
     _q, held, _o = PP.served_advice(s.a)
@@ -942,7 +943,7 @@ def test_a_served_window_under_another_serve_json_than_its_advice_was_registered
     serve = json.loads((s.run / "serve.json").read_text())
     if SERVE_EDITS[field] is None:
         config = tmp_path / "config.json"
-        config.write_text(json.dumps({**json.loads(SC.LLAMA32_1B_CONFIG.read_text()), "rms_norm_eps": 1e-6}))
+        config.write_text(json.dumps({**json.loads(DG.UNPINNED_HF_CONFIG.read_text()), "rms_norm_eps": 1e-6}))
         s.a.hf_config = str(config)
     else:
         (s.run / "serve.json").write_text(json.dumps({**serve, **SERVE_EDITS[field]}))
@@ -1033,7 +1034,7 @@ def test_the_served_compiler_is_what_the_registration_must_name(tmp_path, monkey
     doc = PP.compiler_doc(str(s.run), None, None, CAP)
     assert {"name": doc["name"], "digest": doc["digest"]} == s.bound["compiler"] == {"name": PP.CAPPED, "digest": s.compiler.digest}
     assert doc["served"] == {"name": SERVER[0], "digest": SERVER[1]} and doc["default_seed"] == DEFAULT_SEED and doc["phi"]["target"] == TARGET
-    assert doc["transfer_gates"] == list(SC.GATES_OF_RECORD["unsloth/Llama-3.2-1B"])
+    assert doc["transfer_gates"] == list(DG.GATES_OF_RECORD["unsloth/Llama-3.2-1B"])
     assert PP.compiler_doc(str(s.run), None, None, 2 * CAP)["digest"] != doc["digest"]
     capsys.readouterr()
     assert PP.main(["compiler", "--serve-run", str(s.run), "--cap-bits", str(CAP)]) == 0
@@ -1239,7 +1240,7 @@ def test_a_served_compiler_lists_its_models_transfer_gates_of_record_beside_the_
     assert doc["served"] == {"name": SERVER[0], "digest": SERVER[1]} and doc["transfer_gates"] == [tg]
     assert doc == PP.compiler_doc(str(s.run), None, None, CAP, [tg])
     assert doc["inner"]["name"] == SERVER[0] and doc["inner"]["digest"] != SERVER[1] and doc["digest"] != s.bound["compiler"]["digest"]
-    gated = PP.Capped(PP.i2_of_serve(str(s.run), 0, s.a.row_dir, None, None, transfer_gates=(tg, tg)))
+    gated = PP.Capped(PP.i2_of_serve(str(s.run), 0, s.a.row_dir, None, None, CAP, transfer_gates=(tg, tg)), CAP)
     assert gated.transfer_gates == (tg,) and {"name": PP.CAPPED, "digest": gated.digest} == {"name": doc["name"], "digest": doc["digest"]}
     capsys.readouterr()
     assert PP.main(["compiler", "--serve-run", str(s.run), "--transfer-gate", tg, "--cap-bits", str(CAP)]) == 0

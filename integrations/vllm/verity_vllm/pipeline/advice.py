@@ -109,7 +109,7 @@ def registered_compiler(name: str = COMPILER, digest: str | None = None, cap_bit
 
 def builder_item(compiler: AW.Capped) -> dict[str, Any]:
     """B's item in the deployment's registration log (`verity.core.protocols.registration`, kind ``builder``): the inner
-    compiler's digest, the format of the advice it reads (a Commit window's, `window_advice.SCHEMA`) and ℓ, as the log
+    compiler's digest, the format of the advice it reads (a Commit period's, `window_advice.SCHEMA`) and ℓ, as the log
     decodes it."""
     return REG.item_of({"kind": "builder", "digest": compiler.inner.digest, "advice": WA.SCHEMA, "cap": compiler.cap_bits})
 
@@ -438,7 +438,7 @@ def codec(a: Any) -> Any:
 
 def commit(compiler: Any, a: Any, salts: list[bytes] | None = None,
            registered_roots: dict[str, str] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
-    """The advice (I1's, or a Commit window's) committed at the compiler's ℓ (``compiler``: an `advice_windows.Capped`), its
+    """The advice (I1's, or a Commit period's) committed at the compiler's ℓ (``compiler``: an `advice_windows.Capped`), its
     encoding padded to ℓ bits (`advice_windows.pad`) so the rows ℓ fixes hold it whatever its length: its public registration
     (`registration`, with ``registered_roots``) and its private opening (`advice_windows.opening`, of the padded bytes).
     Advice past ℓ less the pad's end mark is refused: the compiler is total only up to it."""

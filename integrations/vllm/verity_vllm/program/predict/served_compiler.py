@@ -1,6 +1,7 @@
 """B, a served run's registered compiler: `compile_steps` (`predict.steps`, I2) capped at ℓ (`advice_windows.Capped`), the one
-compiler each of its windows' advice is bound to. serve-openai registers it before its first window (`serve_advice`) and the
-verifier recomputes it from the run's ``serve.json`` (``prove_path.py compiler``), by this one formula.
+compiler each of its windows' advice is bound to. serve-openai registers it before its first window (`serve_advice`, through
+``verity-vllm predict compiler``) and the verifier recomputes it from the run's ``serve.json`` (``prove_path.py compiler``), by
+this one formula.
 
 Its inner digest (`inner_digest`) names the compiler's name, its code (`served_identity`: `compile_steps` by module path,
 its digest the verifier's `interface.compiler_digest` over the integration's import closure), what the compile reads of
@@ -20,14 +21,8 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity.ml.circuits.codec import canonical_json
-
-from .advice_windows import CAP_BITS, Capped
-
-#: the checkpoint config φ reads for a served model no manifest pins: unsloth/Llama-3.2-1B's (I2's test fixture)
-LLAMA32_1B_CONFIG = Path(__file__).resolve().parents[2] / "tests/program/predict/fixtures/llama32-1b.config.json"
-#: the templates each served model's compiler of record lists as holding transfer gates, by ``serve.json``'s ``model``
-#: (`served_gates`): unsloth/Llama-3.2-1B's is the TP1 stand-in, its RoPE heads, until I2 lists the I/O shell's units
-GATES_OF_RECORD: Mapping[str, tuple[str, ...]] = {"unsloth/Llama-3.2-1B": ("RoPEHead_v1{D=64}",)}
+from verity_vllm.engine.profiles import dense_generic as DG
+from verity_vllm.pipeline.advice_windows import CAP_BITS, Capped
 
 
 def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target: str | None = None) -> Any:
@@ -36,17 +31,17 @@ def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target:
     (`dense_generic.pinned_hf_config`), else for a model no manifest pins unsloth/Llama-3.2-1B's), the serving device's target
     profile (``serve.json``'s ``target``, the int8 scope its layers ran included, else the file ``target``) and the engine's
     execution label (``execution``, else ``engine.execution``); no workload."""
-    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
-    from verity_vllm.program.predict.phi import Phi
+    from .phi import Phi
 
     prof = json.loads(Path(target).read_text()) if target else serve.get("target")
     if not isinstance(prof, Mapping):
         raise ValueError("serve.json records no target profile (the serving device's TargetProfile.to_json()), so φ can't be read: "
                          "--target F gives it")
-    execution = serve.get("execution") or (serve.get("engine") or {}).get("execution")
+    engine = serve.get("engine")
+    execution = serve.get("execution") or (engine.get("execution") if isinstance(engine, Mapping) else None)
     if not isinstance(execution, str) or not execution:
         raise ValueError("serve.json records no execution label (execution, engine.execution), so φ can't be read")
-    hf = json.loads(Path(hf_config or pinned_hf_config(serve["model"], serve["revision"]) or LLAMA32_1B_CONFIG).read_text())
+    hf = json.loads(Path(hf_config or DG.pinned_hf_config(serve["model"], serve["revision"]) or DG.UNPINNED_HF_CONFIG).read_text())
     return Phi(model={"repo": serve["model"], "revision": serve["revision"], "hf_config": hf}, target=dict(prof), execution=execution)
 
 
@@ -63,19 +58,20 @@ def registered_seed(serve: Mapping[str, Any]) -> int:
 
 
 def registered_of_serve(serve: Mapping[str, Any], hf_config: str | None, target: str | None, cap_bits: int) -> Any:
-    from verity_vllm.program.predict.steps import Registered
+    from .steps import Registered
 
     return Registered.of(phi_of_serve(serve, hf_config, target), registered_seed(serve), cap_bits)
 
 
 def served_gates(serve: Mapping[str, Any], given: Sequence[str] = ()) -> tuple[str, ...]:
-    """The transfer gates B lists: its model's compiler of record's (`GATES_OF_RECORD`, none for a model it has no line for).
+    """The transfer gates B lists: its model's compiler of record's (`dense_generic.GATES_OF_RECORD`, none for a model it has
+    no line for).
     ``given`` (``--transfer-gate``) may only restate them: any other list is refused, so neither side builds a B listing
     another."""
-    model, pinned = str(serve.get("model")), GATES_OF_RECORD.get(str(serve.get("model")), ())
+    model, pinned = str(serve.get("model")), DG.GATES_OF_RECORD.get(str(serve.get("model")), ())
     if given and sorted(set(map(str, given))) != sorted(pinned):
         raise ValueError(f"--transfer-gate {sorted(set(map(str, given)))}: {model}'s compiler of record lists {list(pinned)} "
-                         "(served_compiler.GATES_OF_RECORD), and a served window's compiler lists those and no others")
+                         "(dense_generic.GATES_OF_RECORD), and a served window's compiler lists those and no others")
     return pinned
 
 

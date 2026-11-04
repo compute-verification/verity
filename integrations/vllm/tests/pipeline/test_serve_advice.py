@@ -32,7 +32,6 @@ from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as proto
 from verity_vllm.pipeline import serve_release as RL
-from verity_vllm.pipeline import served_compiler as SC
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.serve_admit import Delta
 from verity_vllm.program.predict.phi import Phi
@@ -547,16 +546,17 @@ def test_a_draw_of_a_window_before_its_advice_line_fails_its_release(tmp_path):
     assert draws.wait(1) == {"sampled_proofs": []}
 
 
-def test_b_is_registered_once_as_the_verifier_recomputes_it_and_the_registration_log_names_it(tmp_path, monkeypatch):
-    """`serve_advice.register` writes B as `served_compiler.compiler_doc` makes it of serve.json, the verifier's formula, and its
+def test_b_is_registered_once_as_the_verifier_recomputes_it_and_the_registration_log_names_it(tmp_path):
+    """`serve_advice.register` writes B as `served_compiler.compiler_doc` makes it of serve.json, the verifier's formula (run as
+    ``verity-vllm predict compiler``, the server's process importing no predictor), and its
     information entry, a registration log whose builder is B's item (`advice.builder_item`: the window advice's format, ℓ_a),
     whose last entry declares B's digest as the day's program and whose head names it. A second registration in the same
     serve dir is refused, and so is serving into one that holds it."""
     from verity.core.protocols import registration as REGLOG
     from verity_vllm.config import UsageError
     from verity_vllm.engine.served_seed import DEFAULT_SEED
+    from verity_vllm.program.predict import served_compiler as SC
 
-    monkeypatch.setattr(SC, "served_identity", lambda: (ADV.COMPILER, "cd" * 64))
     serve = {"model": "org/m", "revision": "r", "target": {"compute_capability": [12, 0], "num_sms": 188}, "execution": "eager",
              "default_seed": DEFAULT_SEED}
     compiler, body = SA.register(tmp_path, serve, 4096)
@@ -572,7 +572,7 @@ def test_b_is_registered_once_as_the_verifier_recomputes_it_and_the_registration
     opts = SimpleNamespace(commit=True, out=str(tmp_path), advising=SA.AdviceOptions(advice=True))
     assert "a run registers B once" in SA.refusal(opts)
     assert SA.refusal(SimpleNamespace(commit=False, out=str(tmp_path / "x"), advising=SA.AdviceOptions(advice=True))) \
-        == "--advice commits each Commit window's advice: it needs the Commit (drop --no-commit)"
+        == "--advice commits each Commit period's advice: it needs the Commit (drop --no-commit)"
     fresh = SimpleNamespace(commit=True, out=str(tmp_path / "x"))
     assert SA.refusal(SimpleNamespace(**vars(fresh), advising=SA.AdviceOptions(advice=True, advice_day=-1))) \
         == "--advice-day -1: a day is its index among the monitoring period's days, 0 or more"
@@ -581,14 +581,13 @@ def test_b_is_registered_once_as_the_verifier_recomputes_it_and_the_registration
 
 
 def test_a_run_extends_the_deployments_log_with_its_days_declaration_and_a_day_declared_or_another_builder_is_refused(
-        tmp_path, monkeypatch):
+        tmp_path):
     """Given the deployment's log so far (`--advice-log`: a run's advice_registration.json), the next day's run appends only
     its day's declaration of B, since the log registers B already; a run of a day the log declares is refused
     (`duplicate-declaration`: one program a day), and so is a log whose builder is another B or another deployment's."""
     from verity.core.protocols import registration as REGLOG
     from verity_vllm.engine.served_seed import DEFAULT_SEED
 
-    monkeypatch.setattr(SC, "served_identity", lambda: (ADV.COMPILER, "cd" * 64))
     serve = {"model": "org/m", "revision": "r", "target": {"compute_capability": [12, 0], "num_sms": 188}, "execution": "eager",
              "default_seed": DEFAULT_SEED}
     (tmp_path / "d0").mkdir()
