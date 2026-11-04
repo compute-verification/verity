@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import random
 import shutil
 import types
 from collections import Counter
@@ -22,6 +23,7 @@ import pytest
 from hypothesis import strategies as st
 
 import period_case as PC
+import test_network_records_protocol as NR
 import verity_difftest as D
 from period_case import (ACCEPT, EXPECT, FORMS, INGRESS, KINDS, MUTATIONS, REJECT, UNDECIDED, Facts, Params, at_most,
                          build, clog2, public, reference, verdict_of)
@@ -602,6 +604,257 @@ def test_each_fits_check_refuses_its_negative(server):
             assert fragment in reference(broken)["reason"], (name, n, reference(broken))
             verdict, out = D.replay(PORT, broken, server)
             assert verdict == REJECT and fragment in json.loads(out)["reason"], (name, n, out)
+
+
+def _reads(v: dict, form) -> bool:
+    """`form`, `readsEntries` or the walk, on a `reads-entries` input."""
+    j = v["program"]
+    x = j["definitions"][j["root"]]["body"]["nodes"][v["node"]]
+    return form(x, v["o"], v["t0"], v["every"], v["E"], v["ks"], j)
+
+
+#: `network-records verdicts`' `reads-entries` against the mirror's `readsEntries`
+READS = NR.VerdictsPort("network-records", "reads-entries", lambda v: _reads(v, PC._reads_entries), st.nothing(),
+                        package=LEAN, need_rejects=False)
+reads_server = D.server_fixture(READS)
+
+
+def _ty(j: dict, t):
+    return j["types"][t] if isinstance(t, int) else t
+
+
+def _reads_calls(desc, every: int) -> list[dict]:
+    """The `reads-entries` inputs `scanOf` asks of a descriptor: its first template's batch from argument 1 at bucket 0
+    and each later ingress template's from argument 2 at bucket 1, at the input nodes bucket 0's ports read, `E` the
+    first port's width; none where a port of the call is of another width, which `scanOf` refuses before it reads."""
+    if not isinstance(desc, dict) or desc.get("schema") != PC.SCHEMA:
+        return []
+    defs, callees = desc["definitions"], desc["callees"]
+    nodes = defs[desc["root"]]["body"]["nodes"]
+    ts = [k for k, x in enumerate(nodes) if defs[callees[x["fn"]]]["form"] != "primitive"]
+    if len(ts) < 2 or len(nodes[ts[0]]["args"]) < 2:
+        return []
+    xf = nodes[ts[0]]
+    r0 = [PC._member_refs(xf, o, desc)(0, 0) for o in range(1, len(xf["args"]))]
+    if None in r0:
+        return []
+    ks, E = [r[1] for r in r0], PC.leaves_of(defs[callees[xf["fn"]]]["body"]["params"][1][1])
+    out = []
+    for k, o, t0 in ((ts[0], 1, 0), *((k, 2, 1) for k in ts[1:-1])):
+        params = defs[callees[nodes[k]["fn"]]]["body"]["params"]
+        if all(o + i >= len(params) or PC.leaves_of(params[o + i][1]) == E for i in range(len(ks))):
+            out.append({"E": E, "every": every, "ks": ks, "node": k, "o": o, "program": desc, "t0": t0})
+    return out
+
+
+def _inner(v: dict) -> bool:
+    """Whether a lane's argument is mapped over an inner axis (`dims` `(n, L)`, `L < E`), which `readsEntries` refuses
+    and the walk read through."""
+    j = v["program"]
+    x = j["definitions"][j["root"]]["body"]["nodes"][v["node"]]
+    axes = x.get("axes") or [None] * len(x["args"])
+    return any(v["o"] + i < len(x["args"]) and axes[v["o"] + i] is not None
+               and PC._axis_dims(_ty(j, x["args"][v["o"] + i]["type"]), axes[v["o"] + i])[1] != v["E"]
+               for i in range(len(v["ks"])))
+
+
+def _walked(v: dict) -> bool:
+    """The old form of `readsEntries`: the walk, an inner-axis mapping refused."""
+    return _reads(v, PC._reads_entries_walk) and not _inner(v)
+
+
+def _scan_grid() -> list[tuple[str, int]]:
+    """Generator-form scans (`PC.scan_descriptor`) over T, every, lanes, the entries' width, and a lane reading a row
+    on (`skew`) or lane 0's input (`shared`), each with its `every`."""
+    out = []
+    for T in (1, 2, 3, 4, 6):
+        for every in (e for e in range(1, T + 1) if T % e == 0):
+            for L in (1, 2):
+                for P in (1, 3):
+                    for skew, shared in ((0, False), *([(1, False)] * (T // every > 1)), *([(0, True)] * (L > 1))):
+                        out.append((PC.scan_descriptor(T, 2, (2, P, 2, 2), lanes=L, every=every, skew=skew,
+                                                       shared=shared), every))
+    return out
+
+
+def _expand(q: dict) -> list[tuple]:
+    if "affine" in q:
+        s, i, b, c = q["affine"]
+        return [(s, i, b + k) for k in range(c)]
+    if "strided" in q:
+        s, i, b, inner, os, step, c = q["strided"]
+        return [(s, i, b + k // inner * os + k % inner * step) for k in range(c)]
+    return [tuple(e) for e in q["explicit"]]
+
+
+def _runs(refs: list[tuple]) -> list[tuple]:
+    """Maximal runs `(space, node, base, count)` of consecutive leaves of one node."""
+    out = []
+    for s, i, ell in refs:
+        if out and out[-1][:2] == (s, i) and out[-1][2] + out[-1][3] == ell:
+            out[-1] = (s, i, out[-1][2], out[-1][3] + 1)
+        else:
+            out.append((s, i, ell, 1))
+    return out
+
+
+def _piece(r: random.Random, s: str, i: int, b: int, c: int) -> dict:
+    """A run as one part of a drawn kind: affine, one strided block, strided blocks of one, strided blocks of a drawn
+    length stepping on by it, or explicit."""
+    kind, inner = r.randrange(5), r.randint(1, c)
+    return [{"affine": [s, i, b, c]}, {"strided": [s, i, b, c, r.randint(-3, 3), 1, c]},
+            {"strided": [s, i, b, 1, 1, r.randint(-3, 3), c]}, {"strided": [s, i, b, inner, inner, 1, c]},
+            {"explicit": [[s, i, b + k] for k in range(c)]}][kind]
+
+
+def _encoded(refs: list[tuple], E: int, how: str, r: random.Random) -> list[dict]:
+    """`refs` as parts: one explicit part; its runs each cut in up to three and each piece of a drawn kind (`_piece`);
+    or member by member, consecutive members reading one row one strided part of outer stride 0 and consecutive rows
+    one of outer stride `E`."""
+    if how == "explicit":
+        return [{"explicit": [list(x) for x in refs]}]
+    if how == "runs":
+        parts = []
+        for s, i, b, c in _runs(refs):
+            cuts = sorted(r.sample(range(1, c), min(c - 1, r.randrange(3))))
+            parts += [_piece(r, s, i, b + lo, hi - lo) for lo, hi in zip([0, *cuts], [*cuts, c])]
+        return parts
+    parts = []
+    for q in range(0, len(refs), E):
+        block = refs[q:q + E]
+        s, i, b = block[0]
+        if block != [(s, i, b + ell) for ell in range(E)]:
+            parts.append({"explicit": [list(x) for x in block]})
+            continue
+        last = parts[-1].get("strided") if parts else None
+        if last and last[:2] == [s, i] and last[3] == E:
+            members = last[6] // E
+            step = b - (last[2] + (members - 1) * last[4])
+            if (members == 1 and step in (0, E)) or (members > 1 and step == last[4]):
+                last[4], last[6] = step, last[6] + E
+                continue
+        parts.append({"strided": [s, i, b, E, 0, 1, E]})
+    return parts
+
+
+def _perturbed(parts: list[dict], E: int, ks: list[int], r: random.Random) -> list[dict]:
+    """`parts` with one drawn change that keeps their count: a part's base moved by one or by `E`, a stride by one, an
+    explicit reference's leaf by one, a part reversed or naming another lane's node, or two parts swapped."""
+    parts = json.loads(json.dumps(parts))
+    q = parts[r.randrange(len(parts))]
+    kind = r.randrange(6)
+    if kind == 0 and "explicit" not in q:
+        (q.get("affine") or q["strided"])[2] += r.choice((-E, -1, 1, E))
+    elif kind == 1 and "strided" in q:
+        q["strided"][r.choice((4, 5))] += r.choice((-1, 1))
+    elif kind == 2 and "explicit" in q:
+        q["explicit"][r.randrange(len(q["explicit"]))][2] += r.choice((-1, 1))
+    elif kind == 3:
+        refs = _expand(q)[::-1]
+        s, i, b = refs[0]
+        q.clear()
+        if all(x == (s, i, b - k) for k, x in enumerate(refs)):
+            q["strided"] = [s, i, b, len(refs), 0, -1, len(refs)]
+        else:
+            q["explicit"] = [list(x) for x in refs]
+    elif kind == 4 and len(ks) > 1:
+        for x in (q["explicit"] if "explicit" in q else [q.get("affine") or q["strided"]]):
+            x[1] = r.choice([k for k in ks if k != x[1]] or [x[1]])
+    elif kind == 5 and len(parts) > 1:
+        a = r.randrange(len(parts) - 1)
+        parts[a], parts[a + 1] = parts[a + 1], parts[a]
+    return parts
+
+
+def _with_arg(v: dict, lane: int, refs, axis="keep", ty=None) -> dict:
+    """`v` with lane `lane`'s argument's references `refs`, and its axis and type replaced where given."""
+    j = json.loads(json.dumps(v["program"]))
+    x = j["definitions"][j["root"]]["body"]["nodes"][v["node"]]
+    a = x["args"][v["o"] + lane]
+    a["refs"] = refs
+    if ty is not None:
+        j["types"].append(ty)
+        a["type"] = len(j["types"]) - 1
+    if axis != "keep":
+        x["axes"] = [*(x.get("axes") or [None] * len(x["args"]))]
+        x["axes"][v["o"] + lane] = axis
+    return v | {"program": j}
+
+
+def _in_range(v: dict, parts: list[dict]) -> bool:
+    """Whether every reference of `parts` names a leaf of an earlier root node, so the decoder reads them."""
+    j = v["program"]
+    nodes = j["definitions"][j["root"]]["body"]["nodes"]
+    return all(s == "n" and i < v["node"] and 0 <= ell < PC.leaves_of(_ty(j, nodes[i]["out"]))
+               for q in parts for s, i, ell in _expand(q))
+
+
+def _redrawn(v: dict, r: random.Random) -> list[tuple[str, dict]]:
+    """Inputs drawn from `v`, each named by how: a lane's argument re-encoded (`_encoded`), with a drawn change
+    (`_perturbed`) or at other `t0` and `every`; the argument mapped over its inner axis, the same references in its
+    order, where the entries are wider than a leaf; and the argument unmapped, its first member's row."""
+    j = v["program"]
+    x = j["definitions"][j["root"]]["body"]["nodes"][v["node"]]
+    lane = r.randrange(len(v["ks"]))
+    a = x["args"][v["o"] + lane]
+    nodes = j["definitions"][j["root"]]["body"]["nodes"]
+    refs, E, n = PC._refs(a, nodes), v["E"], x["n"]
+    out = []
+    for how in ("explicit", "runs", "blocks"):
+        parts = _encoded(refs, E, how, r)
+        assert [y for q in parts for y in _expand(q)] == refs, (how, parts)
+        out.append((how, _with_arg(v, lane, {"concat": parts})))
+        changed = _perturbed(parts, E, v["ks"], r)
+        if _in_range(v, changed):
+            out.append((f"{how}+change", _with_arg(v, lane, {"concat": changed})))
+        out.append((f"{how}+params", _with_arg(v, lane, {"concat": parts}) | {
+            "t0": r.randrange(4), "every": r.randint(1, 4)}))
+    axes = x.get("axes") or [None] * len(x["args"])
+    t = _ty(j, a["type"])
+    if axes[v["o"] + lane] == 0 and E > 1 and t[2][0] == "Array" and PC.leaves_of(t[2][2]) == 1:
+        moved = [list(refs[m * E + ell]) for ell in range(E) for m in range(n)]
+        out.append(("inner", _with_arg(v, lane, {"explicit": moved}, axis=1,
+                                       ty=["Array", t[2][1], ["Array", t[1], t[2][2]]])))
+        out.append(("unmapped", _with_arg(v, lane, {"explicit": [list(y) for y in refs[:E]]}, axis=None,
+                                          ty=t[2])))
+    return out
+
+
+def test_reads_entries_is_the_walk(reads_server):
+    """`readsEntries`, which reads a `prog<j>` argument part by part, is the walk it replaced, member by member and leaf
+    by leaf (`PC._reads_entries_walk`), with one difference, a mapping over an inner axis, which it refuses: Lean's
+    (`network-records verdicts`' `reads-entries`), the mirror's and the walk's answers are one on every `readsEntries`
+    call `scanOf` makes of the rows-form cases' scans, their bad scans and each `NetTiming.BoundaryGates.Fits` negative,
+    and a grid of generator-form scans over T, every, lanes, the entries' width, skew and a shared input; and on
+    arguments drawn from those calls: re-encoded explicitly, as cut runs of affine, strided and explicit parts, and as
+    strided rows, each also changed and at other `t0` and `every`, mapped over an inner axis (where the walk accepts
+    some that `readsEntries` refuses), and unmapped. A rewrite that loses a part kind, a stride or a row boundary
+    differs from the walk here, which the `#guard`s' handful of nodes can't show."""
+    calls, pool = [], []
+    for n in range(3):
+        case = build("rows-honest", n, small=n % 2 == 0)
+        every = case["params"]["schedule"]["every"]
+        pool += _reads_calls(case["params"]["scan"], every)
+        for p in (case["params"], *PC.bad_scans(case["params"]),
+                  *(q for q, _ in PC.scan_negatives(case["params"]).values())):
+            calls += [("case", c) for c in _reads_calls(p["scan"], every)]
+    grid = [c for text, every in _scan_grid() for c in _reads_calls(json.loads(text), every)]
+    calls += [("grid", c) for c in grid]
+    r = random.Random(0)
+    drawn = [y for c in pool + grid for y in _redrawn(c, r)]
+    seen, inner = Counter(), 0
+    for how, v in calls + drawn:
+        want = _walked(v)
+        assert _reads(v, PC._reads_entries) == want, (how, v)
+        assert D.replay(READS, v, reads_server) == ("output", D.canonical(want)), (how, v)
+        seen[(how, want)] += 1
+        inner += how == "inner" and _reads(v, PC._reads_entries_walk)
+    print(sorted(seen.items()))
+    for how in ("case", "grid", "explicit", "runs", "blocks", "unmapped"):
+        assert seen[(how, True)], (how, seen)
+    for how in ("grid", "explicit+change", "runs+change", "blocks+change", "explicit+params", "inner"):
+        assert seen[(how, False)], (how, seen)
+    assert inner, seen
 
 
 def test_a_scan_in_the_checker_form_is_refused_by_name(server):

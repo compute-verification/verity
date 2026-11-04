@@ -821,6 +821,18 @@ argument. -/
   !readsEntries (entriesNode 4 (some (4, 1)) #[.affine false 7 0 4, .affine false 7 2 4]) 1 1 2 2 [7] &&
   !readsEntries (entriesNode 4 (some (4, 2)) #[.affine false 7 0 4]) 1 1 2 2 [7]
 
+/-- `network-records verdicts`' `reads-entries`: on `{"E", "every", "ks", "node", "o", "program", "t0"}`,
+`readsEntries` of node `node` of the descriptor's root body, which `test_reads_entries_is_the_walk` holds to the
+member-by-member walk (`period_case._reads_entries_walk`) beside the mirror. -/
+def readsEntriesFn (j : Json) : Except String Json := do
+  let ctx := "reads-entries"
+  let prog ← Flock.Program.decode (← Flock.canon (← Flock.J.get j "program" ctx)).toUTF8
+  let root ← needSome prog.defs[prog.root]? s!"{ctx}: no root"
+  let x ← needSome root.body.nodes[← Flock.J.nat j "node" ctx]? s!"{ctx}: no such node"
+  let ks ← (← Flock.J.arr j "ks" ctx).toList.mapM (Flock.J.asNat · s!"{ctx}.ks")
+  return .bool (readsEntries x (← Flock.J.nat j "o" ctx) (← Flock.J.nat j "t0" ctx) (← Flock.J.nat j "every" ctx)
+    (← Flock.J.nat j "E" ctx) ks)
+
 /-- The scan's terms from its Program's descriptor (`Flock.Program.decode` of its canonical bytes), which must be the
 registered Program (`program`, its SHA-512) and the generator form of the schedule's execution phase: its root batches
 one instance of bucket 0's template, `T - 1` of the later ingress buckets' (no such template when `T = 1`), both
