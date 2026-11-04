@@ -2,8 +2,12 @@
 `kernel_rfl`: an equation left to the kernel. An `elab` is code run while compiling, so it is alone here, the module
 `compile_time` lists, apart from the proofs that use it (`Flock.ProvedScope`'s parses that read no identity).
 -/
-import Lean.Elab.Tactic.Basic
-import Lean.Meta.AppBuilder
+module
+
+public import Lean.Elab.Tactic.Basic
+public import Lean.Meta.AppBuilder
+
+@[expose] public section
 
 namespace Flock
 
