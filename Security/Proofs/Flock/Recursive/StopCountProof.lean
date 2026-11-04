@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Firewall
 public import Proofs.Flock.Recursive.StopCount
+import all Init.Data.Repr
 
 /-!
 # A recursive session's stops, counted from the firewall's rules: the proof
