@@ -41,9 +41,10 @@ knowledge term to `ε_ks,m`. Each member's session has one link-point count at e
 which the registration check makes so by refusing a member whose fewest and most proof blocks over the draws that end have
 different counts. Some draw ends within the verifier's bytes (`JointAuditV5.hend`): a window none of whose draws ends
 fails whenever it registers a member, with nothing to bound. The named assumptions are A3 (`uniform/io-getrandombytes`)
-for the sample's bytes, `live-verifier` at each member (`MemberV5.hCust`, `RecordCustodyZKJPLaw` at `subset |S|` for its part `S`), and `cr/sha-512` (`Assumptions.TableCRZAt`) and `ecr/sha-512`
-(`Assumptions.LinkCRZCAt`) at the strategy each member's session is played with alone (in a period, at every window's
-strategy on some run, `JointPeriodV5.Plays`), stated flat. Their proofs are in `Joint/V5/Bound.lean`.
+for the sample's bytes, `live-verifier` at each member (`MemberV5.hCust`, `RecordCustodyZKJPLaw` at `subset |S|` for
+its part `S`), and `cr/sha-512` (`Assumptions.TableCRZAt`) and `ecr/sha-512` (`Assumptions.LinkCRZCAt`) at the strategy
+each member's session is played with alone (in a period, at every window's strategy on some run, `JointPeriodV5.Plays`),
+stated flat. Their proofs are in `Joint/V5/Bound.lean`.
 -/
 
 namespace Flock.Guarantees
