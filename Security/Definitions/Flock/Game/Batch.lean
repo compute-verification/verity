@@ -1,4 +1,6 @@
-import Definitions.Flock.Game.Lock
+module
+
+public import Definitions.Flock.Game.Lock
 
 /-!
 # One lockstep among identical games
@@ -10,6 +12,8 @@ with the table at position `pre.length`. The index stays the table's, so its slo
 carry over. The lemmas (alignment, `Aligned.batchLock`, and `value_batch_getD_le`) are in
 `Proofs.Flock.Soundness.Game.Batch`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

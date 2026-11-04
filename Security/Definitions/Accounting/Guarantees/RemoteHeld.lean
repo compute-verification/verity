@@ -1,4 +1,6 @@
-import Definitions.Accounting.Assumptions.RemoteHeld
+module
+
+public import Definitions.Accounting.Assumptions.RemoteHeld
 
 /-!
 # The memory a remote audit shows held (trusted)
@@ -32,6 +34,8 @@ Known limits, each a premise a real node may fail rather than a gap in the bound
   time-held forms (`Definitions.Accounting.Guarantees.RemoteDraw`) state these lines at the record's own pooled bound, with
   `LiveCoins` derived from the deployed opening draw.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.Remote
 

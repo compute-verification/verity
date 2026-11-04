@@ -1,4 +1,6 @@
-import Proofs.Properties.NetworkCertifier.Check
+module
+
+public import Proofs.Properties.NetworkCertifier.Check
 
 /-!
 # The strings the check hashes, listed
@@ -6,6 +8,8 @@ import Proofs.Properties.NetworkCertifier.Check
 `checkStrings` lists every string the check hashes (`mem_checkStrings`): what a run without a SHA-512 collision among
 the strings it hashes rules out (`Proofs.Properties.CertifierNetwork.Runs`).
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check

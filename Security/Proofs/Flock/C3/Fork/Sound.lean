@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Fork.Runs
-import Proofs.Flock.Recursive.Universal
+module
+
+public import Proofs.Flock.C3.Fork.Runs
+public import Proofs.Flock.Recursive.Universal
 
 /-!
 # Piece (a): candidate 3's table is sound, in fork form
@@ -21,6 +23,8 @@ extraction reduces to where the runs open every position.
 * `holoAt_fast100`, `holoAt_linkLayout`, `holoAt_rsch`, `holoAt_units`: the executable parameters meet its hypotheses,
   as `compiledForkSound_execClassAt` does for `execClassAt`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowDCover
-import Proofs.Flock.Claims.Recursion.RoundSizes
-import Proofs.Flock.Claims.Complete.Replay.LigeritoWalk
-import Proofs.Flock.Verifier.Hash
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowDCover
+public import Proofs.Flock.Claims.Recursion.RoundSizes
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoWalk
+public import Proofs.Flock.Verifier.Hash
 
 /-!
 # Row D's `hlev`: the verifier's query positions, and the honest proof's Merkle checks
@@ -25,6 +27,8 @@ round `k + qOff sch ℓ`.
   closures (`plain_ops_std`) with 64-byte digests (`plain_widths_std`), so only the honest rep's `hrun`, `h0` and
   `hcoin` remain.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

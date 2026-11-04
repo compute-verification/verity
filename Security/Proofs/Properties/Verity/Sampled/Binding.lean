@@ -1,6 +1,8 @@
-import Proofs.Properties.Verity.Sampled
-import Proofs.Core.Game.Tape
-import Proofs.Properties.Challenger.Break
+module
+
+public import Proofs.Properties.Verity.Sampled
+public import Proofs.Core.Game.Tape
+public import Proofs.Properties.Challenger.Break
 
 /-!
 # The log the sampled check read is the device's, or a break: the read finder and the forger
@@ -31,6 +33,8 @@ collision, or the forger outputs a forgery of the device's LMS signature.
   parameters' key in one of its records (`Binds`). Then an accepted play that isn't `Logged` is at most as likely as
   the read finder's collision plus the forger's forgery, at a key at the deployed LMS parameters (`lmsVerify`'s).
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled.Binding
 

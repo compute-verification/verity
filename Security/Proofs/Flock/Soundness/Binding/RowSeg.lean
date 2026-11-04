@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Binding.Leaf
-import Flock.HmRow
+module
+
+public import Proofs.Flock.Soundness.Binding.Leaf
+public import Flock.HmRow
 
 /-!
 # `hm96-sha512/row-seg/v1` leaves, with their extractor
@@ -16,6 +18,8 @@ digests (`enc`, `segDigest_eq`). The outer message is not injective in the row, 
 * `ExplicitLeaf.rowSeg l` is the leaf of the rows of `l` bits, and `rowSeg_treeLeaf` ties it to the executable's: the
   `Hm96.Default512.treeLeaf` of `Hm96.Default512.commitString (HmRow.segDigest l row) salt`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Binding
 

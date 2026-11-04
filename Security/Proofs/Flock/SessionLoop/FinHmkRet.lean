@@ -1,6 +1,8 @@
-import Proofs.Flock.SessionLoop.FinHmkFc
-import Proofs.Flock.Claims.ZK.FinishInnerRet
-import Proofs.Flock.Claims.ZK.FinishSwFc
+module
+
+public import Proofs.Flock.SessionLoop.FinHmkFc
+public import Proofs.Flock.Claims.ZK.FinishInnerRet
+public import Proofs.Flock.Claims.ZK.FinishSwFc
 
 /-!
 # The views' masked values below `zp 64`, `final_c`'s included, from the cut session's own return
@@ -14,6 +16,8 @@ its inner proof's first round stops there with that round's body (`repCut_inner_
 
 * **`Loop.swSrcE_hmk_ret`**: every masked value of the views' source below `zp 64` is the request's plus its pad.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

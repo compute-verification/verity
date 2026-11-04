@@ -1,4 +1,6 @@
-import Properties.Challenger
+module
+
+public import Properties.Challenger
 
 /-!
 # When the fixed finder outputs a break
@@ -10,6 +12,8 @@ SHA-512 digest (`break_of_collision`), whichever it finds first. So a verifying 
 signed or the run carries a break (`signed_or_break`), and two strings it hashes with one digest are one string or the run
 carries a break (`eq_or_break`).
 -/
+
+@[expose] public section
 
 namespace Properties.Challenger
 

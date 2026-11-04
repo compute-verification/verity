@@ -1,8 +1,10 @@
-import Flock.Hm96
-import Flock.HmRow
-import PouwCommit.Frame
-import PouwCommit.Bindings
-import Identity.Domains
+module
+
+public import Flock.Hm96
+public import Flock.HmRow
+public import PouwCommit.Frame
+public import PouwCommit.Bindings
+public import Identity.Domains
 
 /-!
 # The protocol's row and tile trees (`audit.rows_domain`, `Hm96Domain`, `commit_rows`, `transcript_domain`)
@@ -16,6 +18,10 @@ leaf is the frame's plain leaf over the value under the tree's schema (`verity/p
 `commit_rows` draws the hm96 salts from the prover's 32-byte key: leaf `i`'s salt is ChaCha20 blocks `3i, 3i+1, 3i+2` under
 the key, with a 64-bit counter and the tree's 64-bit nonce (`hm96_salt`).
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PouwCommit
 
