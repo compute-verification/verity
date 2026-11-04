@@ -2137,7 +2137,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
     for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "core" / "service" / "flock",
               tree / "verity" / "core" / "service" / "sampled_proofs", tree / "verity" / "ml" / "flock" / "pod", bin_, venv,
               d / "advice" / "w7" / "private", tmp_path / "row"):
-        p.mkdir(parents=True)
+        p.mkdir(parents=True, exist_ok=True)
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(prove_path)
     (tree / "benchmarks" / "prove_path" / "records_audit.py").write_text(records_audit)
     (tree / "verity" / "ml" / "flock" / "pod" / "60-circuit.sh").write_text("exit 0\n")
@@ -2905,6 +2905,62 @@ def test_the_preflight_refuses_pearlplus_tie_without_pearls_piece_beside_h1s_tie
     output at the class's load: each refused before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, (), **{**PEARL_TIES, **extra})
     assert (rc, lines, order) == (3, [line], [])
+
+
+#: the toy tree's compiler of record for the BF16 1B, as prove_path.py lists it: its RoPE heads hold transfer gates
+TOY_GATES = 'GATES_OF_RECORD: dict = {"unsloth/Llama-3.2-1B": ("RoPEHead_v1{D=64}",)}\n'
+TG_PARTITION = {"templates": ["RoPEHead_v1{D=64}", "SiluMul_v2{I=8192}"], "law": "work:2",
+                "scope": {"op_path_prefix": "model.layers.0.", "steps": [1, 2]}}
+#: PEARLPLUS_TIE with V3c after step 4, the certifier unsplit
+PEARL_TIED = {**PEARL_TIES, "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None}
+
+
+def _no_transfer_gates(part: str, law: str, templates: list[str]) -> str:
+    return (f"PREFLIGHT: unsloth/Llama-3.2-1B's compiler of record lists ['RoPEHead_v1{{D=64}}'] as transfer gates "
+            f"(prove_path.GATES_OF_RECORD), every unit of which step 3 proves beside work:K of the rest, and PP_PARTITION "
+            f"{part} is {law} over {templates}: give a work:K partition that holds them, and in PP_SETS their input sets")
+
+
+def _partition_preflight(tmp_path: Path, tie: bool, **extra: str) -> tuple[int, list[str], list[str], list[str]]:
+    """`served_verdicts.sh` under PREFLIGHT_ONLY on vy-dc-h200-2, in `_v3c`'s toy tree whose prove_path.py lists the BF16
+    1B's RoPE heads as its transfer gates, under PEARLPLUS_TIE if ``tie``."""
+    return _v3c(tmp_path, (), prove_path=FAKE_V3C_PROVE_PATH + TOY_GATES,
+                PATH=f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", HOST="vy-dc-h200-2", PREFLIGHT_ONLY="1",
+                **(PEARL_TIED if tie else {}), **extra)
+
+
+@pytest.mark.parametrize("given, tie, refusal", [
+    (None, True, None),
+    ({"templates": ["SiluMul_v2{I=8192}"], "law": "subset:2"}, True, ("subset:2", ["SiluMul_v2{I=8192}"])),
+    ({**TG_PARTITION, "law": "stratified:2"}, True, ("stratified:2", TG_PARTITION["templates"])),
+    ({**TG_PARTITION, "templates": ["SiluMul_v2{I=8192}"]}, True, ("work:2", ["SiluMul_v2{I=8192}"])),
+    ({"templates": ["SiluMul_v2{I=8192}"], "law": "subset:2"}, False, None),
+])
+def test_the_preflight_refuses_a_step_3_partition_that_leaves_out_the_served_compilers_transfer_gates(
+        tmp_path, given, tie, refusal):
+    """Under PEARLPLUS_TIE the served BF16 1B's compiler of record lists its RoPE heads as transfer gates, every unit of
+    which step 3 proves beside the drawn rest (`serving_rows.work_table_of`), so step 3's partition defaults to a work:2
+    one holding them, and the preflight refuses another law or a partition without them, before anything runs. The int8
+    checkpoint's compiler lists none, so its subset:2 partition passes."""
+    (pp := tmp_path / "tree" / "benchmarks" / "prove_path").mkdir(parents=True)
+    (pp / "llama32_1b_tg_l0_step1.json").write_text(json.dumps(TG_PARTITION))
+    extra = {}
+    if given is not None:
+        (part := tmp_path / "partition.json").write_text(json.dumps(given))
+        extra["PP_PARTITION"] = str(part)
+    rc, lines, order, _limits = _partition_preflight(tmp_path, tie, **extra)
+    if refusal is None:
+        assert (rc, order) == (0, []) and lines[0].startswith("PREFLIGHT passed"), lines
+    else:
+        assert (rc, lines, order) == (3, [_no_transfer_gates(str(tmp_path / "partition.json"), *refusal)], [])
+
+
+def test_the_preflight_refuses_a_step_3_partition_it_cant_read_where_the_compiler_lists_transfer_gates(tmp_path):
+    """A partition file that isn't there, where the served compiler lists transfer gates, is refused, not passed."""
+    rc, lines, order, _limits = _partition_preflight(tmp_path, True)
+    assert (rc, order) == (3, []) and len(lines) == 1, lines
+    assert lines[0].startswith("PREFLIGHT: step 3's partition PP_PARTITION benchmarks/prove_path/llama32_1b_tg_l0_step1.json "
+                               "can't be read: FileNotFoundError"), lines
 
 
 TIES = {"H1_TIE": "1", "H1_GATE": GATE, "H1_CIRCUITS": "circuits"}
