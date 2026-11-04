@@ -8,6 +8,11 @@ program, the scan's descriptor and each scan registration's the scan Program pin
 (`scan_service.SCAN_PINS`), and each audit's descriptor and registration the class circuit, so another (a Program,
 the scan's annotations, which no digest covers, or a schedule no class pins) is a finding in either layout, naming no
 value; DIR without the period's files (the split's chain step) holds the scan's answers to some class's Program.
+A key a table declares by no name comes from the source it names: an answer's bounds per template from the templates its
+profile draws by, a report step's bounds from the δs the chain bounds at (`chain_record.eps_at_delta`'s). A key from
+anywhere else is a finding naming the source, never the key, and another key of a fixed vocabulary (the scan state's
+port and runs, the profile's level, the placement's parties) a field of no declared kind; a bare ``*`` is left only
+where `OPEN` lists it.
 What either development check would feed the record is a finding naming the check: an advice binding in an audit's registration (what `records_audit.py audit --opening`
 opens), at any length, the padded width included, and the chain's endpoint step (CR_ENDPOINT's rebuild), or any step
 the active-warden path doesn't run. On a finding the piece refuses, releasing nothing, its findings (file and key path)
@@ -33,6 +38,7 @@ ROOT = HERE.parents[1]
 sys.path[:0] = [str(HERE)]
 
 import certifier_piece as CP  # noqa: E402
+import chain_record as CR  # noqa: E402
 import kind_scan as KS  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 
@@ -258,6 +264,92 @@ def test_dirs_files_are_the_pieces():
     assert {*CP.PIECE_FILES, CP.CASE, CP.CHAINED, CP.REFUSED} - set(CP.LOGS) <= set(KS.DOCS) | set(KS.TEXT)
     assert not set(CP.LOGS) & (set(KS.DOCS) | set(KS.TEXT))
     assert f"profile.placement.{CP.PREMISE}" in KS.ANSWER
+
+
+#: the bare ``*`` keys no source names yet, by the files' declarations, each its key path's tail to the ``*``: in DIR a
+#: scan round's members, a committed window's registered values, the parameters' pins and the report's negatives; in
+#: V3c's audit and the received files, their owners'. It only shrinks.
+OPEN = {
+    "DOCS": {"window.members.*", "window.registered_roots.*", "window.activations.values.*", "audits[].pins.*",
+             "negatives_refused.*"},
+    "V3C_DOCS": {"checks_before_draw.*", "checks.*", "wrong_units.per_template.*", "window.members.*",
+                 "window.registered_roots.*", "window.activations.values.*"},
+    "RECEIVED": {"registered_roots.*", "values.*", "unrooted.*", "count.*", "seconds.*"},
+}
+
+
+def _keys(docs: str) -> list[list[str]]:
+    return [p.split(".") for table in getattr(KS, docs).values() for p in table]
+
+
+@pytest.mark.parametrize("docs", list(OPEN))
+def test_a_bare_star_is_left_only_where_open_lists_it(docs):
+    """A key no table names is a ``<name>`` that names its source, or a bare ``*`` `OPEN` lists, each entry of which
+    is still one."""
+    stars = {".".join(ps[:i + 1]) for ps in _keys(docs) for i, s in enumerate(ps) if s == "*"}
+    tails = {s: {t for t in OPEN[docs] if s == t or s.endswith(f".{t}")} for s in stars}
+    assert sorted(s for s, ts in tails.items() if not ts) == []
+    assert set().union(*tails.values()) == OPEN[docs]
+
+
+def test_each_source_is_one_a_table_names():
+    assert {s[1:-1] for d in OPEN for ps in _keys(d) for s in ps if s[:1] == "<"} == set(KS.SOURCES)
+    assert set(CR.eps_at_delta(4, 2, "subset:2")["incorrect_at_delta"]) == KS.DELTA_KEYS
+
+
+SECRET = "a key that carries a witness"
+
+
+def test_a_key_from_anywhere_but_its_source_is_a_finding_naming_the_source(tmp_path, period):
+    """An execution phase's bounds per template, keyed by the templates its profile draws by, and a report step's
+    bounds at the δs the chain bounds at (`chain_record.eps_at_delta`'s) scan clean; another key of either is a finding
+    at its ``<name>``, naming the source and never the key."""
+    case, answer = _case(period)
+    ev = json.loads(bytes.fromhex(case["evidence"]))
+    a = ev["windows"][0]["answer"]
+    a["profile"]["levels"][0]["draw"] = {"law": "stratified", "strata": [{"name": "t0", "size": 2, "k": 1}]}
+    eps = CR.eps_at_delta(4, 2, "subset:2")
+
+    def scanned(name: str, per_template: dict, at_delta: dict) -> Path:
+        a["public"]["per_template"] = per_template
+        d = _dir(tmp_path / name, {**case, "evidence": canonical_json(ev).hex()}, answer)
+        steps = {s: {"verdict": "accepted", "in_the_clear": "the rows", "eps_at_delta": eps} for s in KS.STEPS}
+        steps["n2"]["eps_at_delta"] = eps | {"incorrect_at_delta": at_delta}
+        (d / "chain" / "report").mkdir(parents=True)
+        (d / "chain" / "report" / "report.json").write_text(json.dumps({
+            "schema": "s", "verdict": "accepted", "path": "warden", "scope": None, "stubbed": [],
+            "negatives_refused": {}, "steps": steps}))
+        return d
+
+    assert KS.scan(scanned("honest", {"t0": 1}, eps["incorrect_at_delta"]))[0] == []
+    d = scanned("planted", {"t0": 1, SECRET: 0}, eps["incorrect_at_delta"] | {"0.25": 1})
+    found = KS.scan(d)[0]
+    assert sorted((f.file, f.path, f.why) for f in found) == [
+        ("case.json", "evidence.windows[].answer.public.per_template.<template>", KS.SOURCES["template"][1]),
+        ("chain/report/report.json", "steps.n2.eps_at_delta.incorrect_at_delta.<delta>", KS.SOURCES["delta"][1])]
+    assert not any(SECRET in str(f) or "0.25" in str(f) for f in found)
+    assert KS.main([str(d)]) == 1
+
+
+def test_another_key_of_a_fixed_vocabulary_is_a_field_of_no_declared_kind(tmp_path, period):
+    """The scan's state read under a run but ``sin`` and ``o1`` or opened under a port but ``scan/state`` (the one
+    `stateRead` and `stateEmpty` read), a profile's count drawn at a level but ``unit``, and a party the placement
+    doesn't name."""
+    case, answer = _case(period)
+    com, ev = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
+    w = com["windows"][0]["window"]
+    w["reads"]["scan/state"]["o2"] = w["reads"]["scan/state"]["o1"]
+    w["empty"] = {"scan/view": w["empty"]["scan/state"]}
+    ev["windows"][0]["answer"]["profile"]["drawn"]["token"] = 1
+    case = {**case, "commitment": canonical_json(com).hex(), "evidence": canonical_json(ev).hex()}
+    answer = answer | {"profile": answer["profile"] | {"placement": PLACEMENT | {
+        "parties": PLACEMENT["parties"] | {"auditor": "gate"}}}}
+    pre = "case.json", "commitment.windows[].window"
+    assert set(_paths(KS.scan(_dir(tmp_path / "d", case, answer))[0])) == {
+        ("answer.json", "profile.placement.parties.auditor"),
+        *((pre[0], f"{pre[1]}.reads.scan/state.o2.{k}") for k in ("leaf", "units[]")),
+        *((pre[0], f"{pre[1]}.empty.scan/view.{k}") for k in ("words", "salt", "path")),
+        ("case.json", "evidence.windows[].answer.profile.drawn.token")}
 
 
 #: a served run's registered compiler as `prove_path.py compiler` prints it (`prove_path.compiler_doc`)

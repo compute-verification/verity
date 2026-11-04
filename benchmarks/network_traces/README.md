@@ -120,10 +120,11 @@ node, so `trusted-host` is assumed with the auditor's devices not placed. The ch
 what `PUBLIC` names (the report's verdicts and ε at δ, and the scan's answers): the report's other keys and the steps'
 summaries count the window's certified requests and outputs. The kind scan (`kind_scan.py`) then holds every field the
 piece would release, the case's commitment and evidence decoded, to one of the four public kinds or the network
-certifier's certificates, and refuses the piece on any other field (a window's own number, a count of its requests, the
-advice's length), naming the check where a development check fed it: an audit that opened the advice (an advice binding
-in its registration, `records_audit.py audit --opening`) or the chain's endpoint rebuild (an `endpoint` step,
-`CR_ENDPOINT`). Once a served run ends, `kind_scan.py --received OUT` holds everything a verifier on another machine
+certifier's certificates, each key no table names taken from its source (a template an answer's profile draws by, a δ
+the chain's report bounds at), and refuses the piece on any other field or key (a window's own number, a count of its
+requests, the advice's length), naming the check where a development check fed it: an audit that opened the advice (an
+advice binding in its registration, `records_audit.py audit --opening`) or the chain's endpoint rebuild (an `endpoint`
+step, `CR_ENDPOINT`). Once a served run ends, `kind_scan.py --received OUT` holds everything a verifier on another machine
 receives of it the same way: the piece, V3c's audit, the registered compiler, the advice and weights registrations and
 the window circuit's counts, a log among them a finding (the steps' logs stay on the node). An advice length, a compile,
 or a φ carrying the requests is a finding too, and on any finding the run fails with those files kept on the node

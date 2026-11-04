@@ -11,11 +11,13 @@ DIR is a piece's DIR, or its hold before the leak guard releases it (`certifier_
 every served run and refuses on a finding, releasing nothing): `DOCS`' files, the case as DIR/case.json (its commitment
 and evidence hex, `certifier_piece.write_case`, as the composite reads it) or as the three files ``network-period`` reads
 (DIR/period). Each file's JSON is walked to its leaves, the commitment's and evidence's bytes decoded as JSON, and each
-leaf's key path (a list's items ``[]``) must match one its file declares: ``*`` is any one key (a Definition's, a port's,
-a stratum's, a δ's), and ``**`` everything below, a Program's descriptor (`DESCRIPTOR`, the circuit, which is structure)
-or a development check's field. A list's length and an object's keys are the shape of the leaves they hold. So a field
-no declaration names, one a change adds included, is a finding until its kind is declared here: a window's own number, a
-count of its requests, the advice's length.
+leaf's key path (a list's items ``[]``) must match one its file declares: ``<name>`` is any one key its source gives
+(`SOURCES`: a template the answer's profile draws by, a δ the chain's report bounds at), a key from anywhere else a
+finding naming the source in its place, never the key; ``*`` is any one key, in the tables no source names yet; and
+``**`` everything below, a Program's descriptor (`DESCRIPTOR`, the circuit, which is structure) or a development check's
+field. A list's length and an object's keys are the shape of the leaves they hold. So a field no declaration names, one
+a change adds included, is a finding until its kind is declared here: a window's own number, a count of its requests,
+the advice's length.
 
 A descriptor is structure only as the Program the verifier fixes, so DIR's Programs are held to it (`pinned`): the
 parameters' ``program``, the scan's descriptor (``scan``) and each scan registration's Program (the commitment's windows'
@@ -74,6 +76,22 @@ class Development:
     why: str
 
 
+@dataclasses.dataclass(frozen=True)
+class Sourced:
+    """A table's ``<name>`` in its trie: no key of a document equals it, so a key matches it only by its source
+    (`SOURCES`)."""
+
+    name: str
+
+
+@dataclasses.dataclass(frozen=True)
+class Unsourced:
+    """A key only a ``<name>`` declares, which its source doesn't give: a finding at ``<name>``, never the key, ``why``
+    naming the source."""
+
+    why: str
+
+
 OPENING = Development("an advice binding, which an audit opens (records_audit.py audit --opening, a development check): "
                       "no audit of record reads an advice or its length (V3c's class window's circuit is the class's), "
                       "and nothing opens one")
@@ -81,6 +99,15 @@ ENDPOINT = Development("the chain's endpoint rebuild (CR_ENDPOINT: the endpoint'
                        "development check the active-warden path refuses")
 #: the chain's steps on the active-warden path (`chain_record.report`)
 STEPS = ("custody", "certificates", "n2", "scan", "lean")
+#: the δs the chain's report bounds at, as `chain_record.eps_at_delta` keys them (`chain_record.DELTAS`)
+DELTA_KEYS = frozenset({"0.5", "9.54e-07"})
+#: each ``<name>`` key's source (module docstring): a fixed set, or the strings at a key path of the nearest object
+#: enclosing the key's own that holds the path's first field; and why a key from elsewhere is a finding
+SOURCES: dict[str, tuple[frozenset[str] | str, str]] = {
+    "template": ("profile.levels[].draw.strata[].name",
+                 "not a template the answer's profile draws by (profile.levels[].draw.strata[].name)"),
+    "delta": (DELTA_KEYS, "not a δ the chain's report bounds at (chain_record.DELTAS)"),
+}
 
 
 def under(prefix: str, table: Mapping[str, Any]) -> dict[str, Any]:
@@ -98,10 +125,11 @@ ENTRY = {"value": S, "root": M, "leaves": S, "words": S, "word_bits": S, "domain
 #: a one-stage registration (`one_stage.registration.record`): the digests and population of the Program and query, the
 #: law the verifier's sampling design over them, the roots and registered values hiding commitments under domains of
 #: their structure; its window the provenance: a scan round's account and members, its state's reads (`stateRead`'s
-#: runs) and row 0's opening (`stateEmpty`: the empty state, which the protocol fixes, its width and salt structure and
-#: its path's siblings hiding commitments; no unit reads leaf 0), or a committed window's run root, circuit record,
-#: class, per-window values, registered roots and index leaf. The window's own number is none of them, and the advice's
-#: binding (`interface.advice_binding`) is `OPENING`'s.
+#: runs, ``sin`` and ``o1``) and row 0's opening (`stateEmpty`: the empty state, which the protocol fixes, its width and
+#: salt structure and its path's siblings hiding commitments; no unit reads leaf 0), each under the state's port
+#: ``scan/state`` (`stateName`, the one key the verifier reads them at), or a committed window's run root, circuit
+#: record, class, per-window values, registered roots and index leaf. The window's own number is none of them, and the
+#: advice's binding (`interface.advice_binding`) is `OPENING`'s.
 REGISTRATION = {
     "format": S, "protocol": S, "program": S, "query": S, "partition": S, "population": S, "scheme": S, "leaf_layer": S,
     "anchors[]": S, "previous": M,
@@ -110,23 +138,24 @@ REGISTRATION = {
     "roots[].port": S, "roots[].leaves": S, "roots[].domain": S, "roots[].root": M,
     **under("registered[]", ENTRY),
     "window.kind": S, "window.link": S, "window.of": S, "window.members.*.template": S, "window.members.*.units[]": S,
-    "window.reads.*.*.leaf": S, "window.reads.*.*.units[]": S,
-    "window.empty.*.words": S, "window.empty.*.salt": S, "window.empty.*.path": M,
+    **{f"window.reads.scan/state.{r}.{k}": S for r in ("sin", "o1") for k in ("leaf", "units[]")},
+    "window.empty.scan/state.words": S, "window.empty.scan/state.salt": S, "window.empty.scan/state.path": M,
     "window.run": M, "window.circuit": S, "window.order": S, "window.index_leaf": M, "window.registered_roots.*": M,
     "window.window_circuit.class[]": S, "window.activations.program": S,
     **under("window.activations.values.*", ENTRY),
     "window.compiler.**": OPENING, "window.advice.**": OPENING,
 }
 #: a one-stage answer (`served_integrity.answer`, `Answer.toJson`): its verdict and bound the protocol's outputs, its
-#: profile the integrity profile's structure, and the units drawn and proved the verifier's draws
+#: profile the integrity profile's structure (its one level ``unit``, `one_stage.audit.LEVEL`), and the units drawn
+#: and proved the verifier's draws
 ONE_STAGE = {
     "protocol": S, "verdict": O, "reason": O, "commitment": M,
     "profile": O, "profile.programs[]": S, "profile.prescribed[]": S, "profile.covered[]": S, "profile.linked": S,
-    "profile.delta": S, "profile.drawn.*": S,
+    "profile.delta": S, "profile.drawn.unit": S,
     "profile.levels[].name": S, "profile.levels[].query": S, "profile.levels[].size": S, "profile.levels[].draw": S,
     **{f"profile.levels[].draw.{k}": S for k in ("law", "k", "subset", "bernoulli")},
     **{f"profile.levels[].draw.strata[].{k}": S for k in ("name", "size", "k", "work", "floor")},
-    "public": O, "public.bound": O, "public.per_template": O, "public.per_template.*": O, "public.drawn[]": C,
+    "public": O, "public.bound": O, "public.per_template": O, "public.per_template.<template>": O, "public.drawn[]": C,
     "public.proved[]": C,
 }
 #: a row registration of the network certifier's (`warden_rows`): the registered layout and schedule's digest, its root a
@@ -158,7 +187,7 @@ ANSWER = {
     "protocol": S, "verdict": O, "reason": O, "commitment": M, "profile": O, "public": O,
     "profile.link": S, "profile.windows": S,
     **{f"profile.placement.{k}": S for k in ("kind", "trusted-host", "uncounted")},
-    "profile.placement.parties.*": S,
+    **{f"profile.placement.parties.{p}": S for p in ("network_certifier", "prover", "verifier")},
     **{f"profile.placement.links[].{k}": S for k in ("name", "from", "to", "counted", "via")},
     **{f"public.{k}": O for k in ("K", "eps", "cells", "schedules", "windows")}, "public.held[]": O,
     "public.scans[].tied[]": O,
@@ -170,7 +199,7 @@ ANSWER = {
 #: it ran in the clear
 STEP = {"verdict": O, "in_the_clear": S, "eps_at_delta": O,
         **{f"eps_at_delta.{k}": S for k in ("law", "units", "drawn", "per_proof")},
-        "eps_at_delta.incorrect_at_delta.*": O}
+        "eps_at_delta.incorrect_at_delta.<delta>": O}
 #: the chain's report less what `certifier_piece.PUBLIC` drops: its verdict, each `STEPS` step's and what the path stubs
 REPORT = {
     "schema": S, "verdict": O, "path": S, "scope": S, "stubbed[]": S, "negatives_refused.*": O,
@@ -281,28 +310,57 @@ def _trie(table: Mapping[str, Any]) -> dict:
     for pattern, kind in table.items():
         node = root
         for seg in _segments(pattern):
-            node = node.setdefault(seg, {})
+            node = node.setdefault(Sourced(seg[1:-1]) if seg[:1] == "<" else seg, {})
         node[_KIND] = kind
     return root
+
+
+def _at(value: Any, segs: list[str]) -> Iterator[Any]:
+    """The values at the key path ``segs`` (`_segments`) under ``value``."""
+    if not segs:
+        yield value
+    elif segs[0] == "[]":
+        for v in value if isinstance(value, list) else ():
+            yield from _at(v, segs[1:])
+    elif isinstance(value, dict) and segs[0] in value:
+        yield from _at(value[segs[0]], segs[1:])
+
+
+def _source(name: str, up: tuple[dict, ...]) -> frozenset[str]:
+    """The keys ``<name>`` takes in an object the objects ``up`` enclose, outermost first (`SOURCES`)."""
+    at = SOURCES[name][0]
+    if not isinstance(at, str):
+        return at
+    segs = _segments(at)
+    return frozenset(v for v in _at(next((o for o in reversed(up) if segs[0] in o), None), segs) if isinstance(v, str))
 
 
 def _name(path: tuple[str, ...]) -> str:
     return "".join(s if s == "[]" or not i else f".{s}" for i, s in enumerate(path))
 
 
-def _leaves(value: Any, nodes: list[dict], path: tuple[str, ...] = ()) -> Iterator[tuple[tuple[str, ...], list, Any]]:
+def _leaves(value: Any, nodes: list[dict], path: tuple[str, ...] = (), up: tuple[dict, ...] = ()
+            ) -> Iterator[tuple[tuple[str, ...], list, Any]]:
     """Each leaf of ``value`` (a scalar, or a subtree a ``**`` declares) with the kinds the trie nodes ``nodes`` declare at
-    its key path."""
+    its key path, ``up`` the objects enclosing ``value``, outermost first. A key only a ``<name>`` declares, which its
+    source doesn't give, is one leaf at ``<name>``, declared `Unsourced`, and nothing under it is read."""
     whole = [n["**"][_KIND] for n in nodes if "**" in n]
     if whole:
         yield path, whole, None
     elif isinstance(value, dict):
+        named = [(w.name, c) for n in nodes for w, c in n.items() if isinstance(w, Sourced)]
+        sources = {w: _source(w, up) for w, _ in named}
         for k, v in value.items():
-            yield from _leaves(v, [c for n in nodes for c in (n.get(k), n.get("*")) if c is not None], (*path, k))
+            kids = [c for n in nodes for c in (n.get(k), n.get("*")) if c is not None]
+            kept = [c for w, c in named if kids or k in sources[w]]
+            if named and not kids and not kept:
+                yield (*path, f"<{named[0][0]}>"), [Unsourced(SOURCES[named[0][0]][1])], None
+            else:
+                yield from _leaves(v, kids + kept, (*path, k), (*up, value))
     elif isinstance(value, list):
         inner = [n["[]"] for n in nodes if "[]" in n]
         for v in value:
-            yield from _leaves(v, inner, (*path, "[]"))
+            yield from _leaves(v, inner, (*path, "[]"), up)
     else:
         yield path, [n[_KIND] for n in nodes if _KIND in n], value
 
@@ -322,7 +380,7 @@ def scan_doc(rel: str, doc: Any, kinds: Counter, docs: Mapping[str, Mapping[str,
             out.append(Finding(rel, _name(path), f"a {type(value).__name__} of no declared kind"))
         elif len(set(declared)) > 1:
             out.append(Finding(rel, _name(path), f"declared as {sorted(map(str, declared))}, not one kind"))
-        elif isinstance(declared[0], Development):
+        elif isinstance(declared[0], (Development, Unsourced)):
             out.append(Finding(rel, _name(path), declared[0].why))
         else:
             kinds[declared[0]] += 1
