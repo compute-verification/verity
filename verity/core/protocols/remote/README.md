@@ -19,7 +19,9 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 
 **Which "remote".** Six things in the tree are called "remote", and this page means the first:
 
-- the remote protocol, this one: `Core.Remote` (`CoreRemote.lean`, id `verity/remote/v0`);
+- the remote protocol, this one: `Core.Remote` (`CoreRemote.lean`): its composite of record `Core.Remote.V1.protocol`
+  (id `verity/remote/v1`, Pearl+'s run verdict as its work) and its development composite `Core.Remote.protocol` (id
+  `verity/remote/v0`, H1's period as its work);
 - PoUB, an onsite subprotocol whose code names still say "remote" until they are renamed: its package
   `verity/core/protocols/remote_bandwidth/`, its Lean verifier `RemoteAudit`, its Lean vocabulary `Accounting.Remote`
   (`Security/Definitions/Accounting/Remote.lean`) and `Accounting.Guarantees.Remote*`, its id `verity/remote-bandwidth/v0`,
@@ -57,11 +59,17 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 | Subprotocol | What it establishes | Lean check | id |
 |---|---|---|---|
 | Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the registered circuit outside the proof blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/core/service/vstar/recursive`), one-stage or recursive by its `form` | `verity/sampled-proofs/v1` |
-| PoUW ([README](../pouw/README.md)) | the period's credited work, in live words, is the registered work's: its windows credited all or nothing | `PouwCheck.Period.protocol` (`verity/core/protocols/pouw/lean/check`), onsite's work subprotocol too | `verity/pouw/period/v1` |
+| PoUW, of record ([README](../pouw/README.md)) | a served run's credited MACs at Pearl's assumption, at δ = 1/100 over its work-weighted draw | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/core/protocols/pouw/lean/pearlplus`) | `verity/pouw/pearl-plus/v1` |
+| PoUW, development (v0 only) | the period's credited work, in live words, is the registered work's: its windows credited all or nothing | `PouwCheck.Period.protocol` (`verity/core/protocols/pouw/lean/check`), onsite's work subprotocol too | `verity/pouw/period/v1` |
 | The inference-only policy ([README](../network/nci/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets, and θ is registered information | `NciCheck.Protocol.protocol` (`verity/core/protocols/network/nci/lean`) | `verity/inference-only/v0` |
 
-The code is `CoreRemote.lean`, `protocol = tiedSameB "verity/remote/v0" tied [windows] components` over `components =
-[NciCheck.Protocol.protocol, PouwCheck.Period.protocol, VStar.Recursive.Sampled.protocol]`. The policy and sampled
+The code is `CoreRemote.lean`. The composite of record is `V1.protocol = tiedSameB "verity/remote/v1" tied [] components`
+over `[NciCheck.Protocol.protocol, PouwCheck.PearlPlus.Protocol.protocol, VStar.Recursive.Sampled.protocol]`, the one
+`Verity.SoundnessOf` reads at remote; Pearl+'s commitment is the run's retained manifests, which name no record, so
+nothing yet ties its run to the record (its executable is `remote-v1`, `RemoteV1Main.lean`). The development composite,
+v0, is `protocol = tiedSameB "verity/remote/v0" tied [windows] components` over `components =
+[NciCheck.Protocol.protocol, PouwCheck.Period.protocol, VStar.Recursive.Sampled.protocol]`, and no soundness theorem
+covers it. The policy and sampled
 proofs commit to the run's record, which names the registered circuit; once the cases fit, two different records reject
 remote whatever the subprotocols answer (`Core.Composition.same`). The period's commitment is the auditor's ledger, not
 the record, so it joins through a tie (`Core.Remote.windows`): every window of the period must name the policy's record

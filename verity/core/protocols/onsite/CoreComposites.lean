@@ -1,8 +1,11 @@
 /-
 The composite a configuration's subprotocols make (`verity run CONFIG`): onsite (`Core.Onsite.protocol`,
-`verity/onsite/v0`) when they are onsite's, remote (`Core.Remote.protocol`, `verity/remote/v0`) when they are remote's,
-listed in any order. These two are the only composites a verifier runs: protocol soundness covers only these two, so
-`ofIds` refuses any other set by name (an id neither composes, one listed twice, none, or a set that is neither one's).
+`verity/onsite/v0`) when they are onsite's, remote (`Core.Remote.V1.protocol`, `verity/remote/v1`, the composite of
+record) when they are remote's with Pearl+'s run verdict as the work, and remote's development composite
+(`Core.Remote.protocol`, `verity/remote/v0`) when they are remote's with H1's period, listed in any order. Protocol
+soundness covers onsite and `verity/remote/v1` (`Verity.verifier`); `verity/remote/v0` is listed for H1's development
+until its callers move to v1, and no soundness theorem covers it. `ofIds` refuses any other set by name (an id no
+composite composes, one listed twice, none, or a set that is no composite's).
 
     product IDS id | check PARAMS COMMITMENT EVIDENCE | serve        IDS: the subprotocols' ids, comma-separated
 
@@ -16,9 +19,11 @@ namespace Core.Composites
 
 open Composition
 
-/-- The composites, each with its subprotocols' ids. -/
+/-- The composites, each with its subprotocols' ids: the two of record (onsite, remote v1), then remote's development
+composite (v0). -/
 def composites : List (BlobProtocol × List String) :=
   [(Core.Onsite.protocol, Core.Onsite.components.map (·.id)),
+    (Core.Remote.V1.protocol, Core.Remote.V1.components.map (·.id)),
     (Core.Remote.protocol, Core.Remote.components.map (·.id))]
 
 /-- Every subprotocol of some composite, by id. -/
@@ -54,16 +59,20 @@ private def contains (s pat : String) : Bool := (s.splitOn pat).length > 1
 
 private def onsiteIds : List String := Core.Onsite.components.map (·.id)
 private def remoteIds : List String := Core.Remote.components.map (·.id)
+private def remoteV1Ids : List String := Core.Remote.V1.components.map (·.id)
 
-#guard composites.map (·.1.id) == ["verity/onsite/v0", "verity/remote/v0"]
-#guard onsiteIds.all known.contains && remoteIds.all known.contains
-#guard known.length == (onsiteIds ++ remoteIds).eraseDups.length
+#guard composites.map (·.1.id) == ["verity/onsite/v0", "verity/remote/v1", "verity/remote/v0"]
+#guard onsiteIds.all known.contains && remoteIds.all known.contains && remoteV1Ids.all known.contains
+#guard known.length == (onsiteIds ++ remoteV1Ids ++ remoteIds).eraseDups.length
 
 -- the composites by their subprotocols, in any order, and no other set
 #guard idOf onsiteIds == some "verity/onsite/v0"
 #guard idOf onsiteIds.reverse == some "verity/onsite/v0"
 #guard idOf remoteIds == some "verity/remote/v0"
 #guard idOf remoteIds.reverse == some "verity/remote/v0"
+#guard idOf remoteV1Ids == some "verity/remote/v1"
+#guard idOf remoteV1Ids.reverse == some "verity/remote/v1"
+#guard idOf (remoteV1Ids ++ ["verity/pouw/period/v1"]) == none
 #guard idOf [] == none
 #guard idOf ["verity/sampled-proofs/one-stage/v1"] == none
 #guard idOf ["verity/sampled-proofs/one-stage/v2"] == none
