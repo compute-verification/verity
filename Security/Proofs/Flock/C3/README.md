@@ -15,7 +15,7 @@ deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 135.7 at th
 deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`, at the deployed reader) is proved with no hypothesis
 (`Flock.Guarantees.RecursiveKS`, `Flock.SecurityProofs.RecursiveKS` in `Recursive/KSProved.lean`). The listed
 recursive audit, `Flock.Guarantees.RecursiveAuditC3` (`Proofs/Properties/Verity/Recursive/Audit.lean`), is that dense
-form, the one `verity/sampled-proofs/recursive/v1` accepts, at `λ₂ = 100`. Holo statements are candidate 3's own
+form, the one `verity/sampled-proofs/recursive/v1` accepts, at `λ₂ = 135.7`. Holo statements are candidate 3's own
 model, and `BitsLin2` at the dense statements follows from `KSLin2` there (`bitsLin2On_of_ksLin2On`).
 
 What stays open is the hypotheses the discharge takes: `hbr_honest_reg`'s (`C3/Compose/Discharge.lean`, `_hbr` itself;
