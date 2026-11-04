@@ -19,7 +19,10 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
                               [--product P] [--deferred WHY] [--steps LO,HI] [--off-node]
                               [--sampled-lean [--sampled-exe PATH]] [--key-sha512 HEX] [--lane L]
+                              [--tree SHA [--tree-on BRANCH]]
     served_verdicts.py witness < PATHS
+    served_verdicts.py rebase SERVE_DIR SERVED_DIR < PATHS
+    served_verdicts.py composed ANSWER DIR [--gate-exit RC]
     served_verdicts.py public-registration REGISTRATION
     served_verdicts.py sampled-line LOG [--partition FILE]
     served_verdicts.py front-line SESSION
@@ -155,10 +158,17 @@ takes sampled proofs' row from this host's own run of its Lean verifier on the r
 public files (`lean_sampled_row`, ``--sampled-exe`` or built here), not from the summary and audit record the served node
 wrote, so an edit to those leaves the row as it is. Each row with an answer says where it came from (its
 ``answer_from``, and the line's ``answers``): `LEAN_HERE`, or `AS_WRITTEN` and the files it was read from.
+``--tree SHA`` names the commit of the tree that composed it, and ``--tree-on`` the branch its host pinned it from, both in
+``composed_on`` (the compose gate's: its pin line's).
 
 ``witness``: each path of stdin (relative to a serve dir) that is a served run's witness (`witness`: a committed value,
 a prover's instance, private or salts file, the advice, a key, a sealed row dir, the requests and their traces), one ``WITNESS
 PATH: WHY`` line each; exit 1 when there is one. A compose hand-off lists none, and its follow-on's serve dir holds none.
+
+``rebase``: a hand-off's copy at SERVE_DIR of the served node's serve dir SERVED_DIR (`rebase`): each case among the
+paths of stdin (relative to SERVE_DIR) that names ``blobs`` gets them under SERVE_DIR, a blob outside SERVED_DIR refused.
+``composed``: the compose gate's answer ANSWER (`host.py`'s ``compose``) written out under DIR (`composed`), one
+``GATE-COMPOSE`` line saying what it composed; exit 0 only when it composed and accepted.
 """
 from __future__ import annotations
 
@@ -1703,16 +1713,71 @@ def witness(paths: Sequence[str]) -> list[tuple[str, str]]:
     return out
 
 
+def rebase(serve_dir: Path, served_dir: str, paths: Sequence[str]) -> list[str]:
+    """Each case among ``paths`` (relative to ``serve_dir``, a hand-off's copy of the served node's serve dir
+    ``served_dir``) that names ``blobs``, its blobs rewritten to the same paths under ``serve_dir``; the cases rewritten.
+    ValueError on a blob outside ``served_dir``, which no hand-off carries, or on such a file that isn't JSON."""
+    base, done = served_dir.rstrip("/") + "/", []
+    for rel in paths:
+        f = serve_dir / rel
+        if f.suffix != ".json" or not f.is_file() or b'"blobs"' not in f.read_bytes():
+            continue
+        case = json.loads(f.read_text())
+        if not isinstance(case, dict) or not isinstance(case.get("blobs"), list):
+            continue
+        outside = [b for b in case["blobs"] if not (isinstance(b, str) and b.startswith(base))]
+        if outside:
+            raise ValueError(f"{rel} names a blob outside the served node's serve dir {served_dir}: {str(outside[0])[:200]}")
+        case["blobs"] = [str(serve_dir / b[len(base):]) for b in case["blobs"]]
+        f.write_text(json.dumps(case))
+        done.append(rel)
+    return done
+
+
+def composed(answer: Path, out: Path, gate_exit: int | None = None) -> tuple[int, str]:
+    """The compose gate's answer (one JSON line) written out under ``out``: its $OUT's files at their paths, and
+    ``gate.json`` (the pin and the exit, without the files). Its exit (0 composed and accepted) and its one line."""
+    try:
+        doc = json.loads(answer.read_text().strip().splitlines()[-1])
+    except (OSError, IndexError, ValueError) as e:
+        return 1, f"GATE-COMPOSE failed (ssh exit {gate_exit}): no answer from the compose gate ({type(e).__name__})"
+    if "refused" in doc:
+        return 3, f"GATE-COMPOSE refused by the compose gate: {str(doc['refused'])[:800]}"
+    c = doc.get("compose") or {}
+    files = c.get("files") or {}
+    root = out.resolve()
+    for rel, text in files.items():
+        f = (out / rel).resolve()
+        if root not in f.parents:
+            return 1, f"GATE-COMPOSE failed: the answer names {rel[:200]!r}, outside {out}"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(text)
+    (out / "gate.json").write_text(json.dumps({**doc, "compose": {k: v for k, v in c.items() if k != "files"}},
+                                              indent=1, sort_keys=True) + "\n")
+    record = next((ln for ln in files.get("verdicts.txt", "").splitlines() if ln.startswith("RECORD ")), None)
+    try:
+        line = json.loads(record[len("RECORD "):]) if record else {}
+    except ValueError as e:
+        return 1, f"GATE-COMPOSE failed: the compose's RECORD line isn't JSON ({e})"
+    said = line.get("composed") if isinstance(line, dict) else None
+    where = (f"at the compose gate's tree {str(doc.get('pinned'))[:12]}"
+             + (f" (on {doc['pin']['on']})" if (doc.get("pin") or {}).get("on") else ""))
+    rc = 0 if c.get("rc") == 0 and gate_exit in (None, 0) else 1
+    return rc, (f"GATE-COMPOSE {where}: exit {c.get('rc')}, the record {said or 'not written'}, "
+                f"{len(files)} files of its $OUT in {out}" + (f", {len(c['not_sent'])} not sent" if c.get("not_sent") else ""))
+
+
 def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[int, int], node: str,
            run: str | None, servers: Mapping[str, tuple[str | None, str]] | None = None, product: str = "onsite",
-           deferred: str | None = None,
-           off_node: bool = False) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
+           deferred: str | None = None, off_node: bool = False,
+           tree: Mapping[str, str] | None = None) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
     rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
     drops is its `dropped_row`, about no server. ``servers``: each piece's `piece_server`, by runner name; sampled proofs'
     answer is about ``node``, and a piece's that names no server isn't carried. ``deferred``: what the run left to a
     follow-on and why, which the report and the line carry. ``off_node``: composed from the served node's compose
-    hand-off (`HANDED_FROM`); ValueError on ``node`` itself."""
+    hand-off (`HANDED_FROM`); ValueError on ``node`` itself. ``tree``: the composing tree's ``tree`` (its commit) and
+    ``tree_on`` (the branch its host pinned it from), which ``composed_on`` carries."""
     from verity_e2e_demo import block_record as BR
 
     host = socket.gethostname()
@@ -1736,7 +1801,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                 rows[k] = {**r, "verdict": "error", "quantity": None, "epsilon": None,
                            "reason": f"its answer is not the block record's {legs[k]} leg: {type(e).__name__}: {e}"[:2000]}
     where = {"host": host, "served_node": host == node,
-             "from": HANDED_FROM if off_node else COMPOSED_FROM if host == node else COPIED_FROM}
+             "from": HANDED_FROM if off_node else COMPOSED_FROM if host == node else COPIED_FROM, **(tree or {})}
     left = {"deferred": deferred} if deferred else {}
     report = {"format": REPORT_FORMAT, "window": window, "node": node, "run": run, "protocols": rows,
               "servers": {k: at[k][0] for k in rows}, "composed_on": where, **left}
@@ -1868,12 +1933,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     r.add_argument("--sampled-lean", action="store_true",
                    help="sampled proofs' row from this host's run of its Lean on the case's proofs (lean_sampled_row)")
     r.add_argument("--sampled-exe", help="vstar-recursive, with --sampled-lean (default: built here)")
+    r.add_argument("--tree", help="the commit of the tree composing the record, which composed_on names")
+    r.add_argument("--tree-on", help="the branch the composing host pinned that tree from, with --tree")
     r.add_argument("--key-sha512", help="the challenger key's pin Pearl+'s live coins are held to for a verdict of record "
                                         "(H1_KEY_SHA512)")
     r.add_argument("--lane", default="vllm", help="the lane whose own gate key Pearl+'s live session must be reserved "
                                                   "under, in its open period, for a verdict of record "
                                                   "(PEARLC_CHALLENGER_LANE)")
     sub.add_parser("witness")
+    rb = sub.add_parser("rebase")
+    rb.add_argument("serve_dir", type=Path)
+    rb.add_argument("served_dir")
+    cd = sub.add_parser("composed")
+    cd.add_argument("answer", type=Path)
+    cd.add_argument("out", type=Path)
+    cd.add_argument("--gate-exit", type=int)
     for q in (p, r):
         q.add_argument("--node", default=socket.gethostname())
         q.add_argument("--product", default="onsite")
@@ -1888,6 +1962,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         for path, why in found:
             print(f"WITNESS {path}: {why}", flush=True)
         return 1 if found else 0
+    if a.cmd == "rebase":
+        try:
+            done = rebase(a.serve_dir, a.served_dir, [x for x in sys.stdin.read().splitlines() if x.strip()])
+        except (OSError, ValueError) as e:
+            print(f"REBASE refused: {type(e).__name__}: {e}", flush=True)
+            return 1
+        print(f"REBASED {len(done)} case(s)' blobs from {a.served_dir} to {a.serve_dir}", flush=True)
+        return 0
+    if a.cmd == "composed":
+        a.out.mkdir(parents=True, exist_ok=True)
+        rc, line = composed(a.answer, a.out, a.gate_exit)
+        print(line, flush=True)
+        return rc
     if a.cmd == "public-registration":
         print(json.dumps(public_registration(json.loads(a.registration.read_text())), indent=1, sort_keys=True))
         return 0
@@ -2033,12 +2120,15 @@ def main(argv: Sequence[str] | None = None) -> int:
            for k in keys}
     if a.sampled_exe is not None and not a.sampled_lean:
         ap.error("--sampled-exe is sampled proofs' Lean, which only --sampled-lean runs")
+    if a.tree_on and not a.tree:
+        ap.error("--tree-on names the branch of the tree --tree names")
     integrity = (lean_sampled_row(a.sampled_proofs, a.serve_run / "private" / "scratch", a.sampled_exe, run)
                  if a.sampled_lean else sampled_proofs_row(a.sampled_proofs, run))
     rows = {"integrity": integrity, **{k: row for k, (row, _) in got.items()}}
     report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run,
                                servers={k: at for k, (_, at) in got.items()}, product=a.product, deferred=a.deferred,
-                               off_node=a.off_node)
+                               off_node=a.off_node, tree={"tree": a.tree, **({"tree_on": a.tree_on} if a.tree_on else {})}
+                               if a.tree else None)
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
     if rec is not None:
