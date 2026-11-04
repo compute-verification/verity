@@ -17,7 +17,8 @@ v2 te_core; 01:22Z: on te_core 4.0). One refresh:
 2. Builds the measured ledger (trace40.py): v3's valid runs (the pilot's too under CAPTURE_FINAL's capture or with
    TE_TRACE_PILOT=1) traced, measured and ingested again in shards of TRACE_SHARD runs over TRACE_POOLS' free slots,
    a long-tier record in its tier's layer (TIER_FROM), the runs traced at earlier refreshes kept, and each run whose
-   trace lists an elementwise product retraced in the fix layer over its layer (FIX, `listed`), scored from there.
+   trace lists an elementwise product, or whose capture failed for an error a later capture code fixes, retraced in
+   the fix layer over its layer (FIX, `refix`), scored from there.
 3. Runs its `python -m te_core.rescore` on that ledger at PINS: per checkpoint of every valid record, v3's and the
    pilot's, measured, formalism v2's quantities measured on its traced step (t literal), Fit per kind of block and rho
    (c/(c - d) where every part fits, else Slowdown's bound, a target) on te_core.policy's (c, k) grid with the frozen
@@ -251,6 +252,12 @@ def same_capture(a: str, b: str) -> bool:
 #: run its layer's trace lists one for (`listed`, coordinator 23:59Z); a trace there reads 4.12.9 as its capture, so
 #: the cache's traced.json names the capture code (`mark`)
 FIX = "-fix"
+#: the capture errors a fix layer's capture code no longer raises, by the te_core that fixed them: from 4.13.3 the
+#: capture's stub TrainData takes the start's provenance and a stream sized from the run record (coordinator 15:47Z,
+#: 16:40Z), so a run its layer failed for --windows fresh or seen, or for a grow arm reading unread windows, traces
+#: there (`refix`). A traced.json error keeps only its tail, so each error is matched by its first and last words
+FIXED = {"4.13.3": (r"needs the start's provenance", r"says neither, so launch with --windows random",
+                    r"arm \d+ reads \d+ windows, \d+ are unread")}
 
 
 def layer_tier(te: Path) -> str | None:
@@ -290,6 +297,21 @@ def listed(te: Path) -> set[str]:
         if any(v.get("elementwise_products") for v in at.values()):
             out.add(p.name.removesuffix(".jsonl.gz"))
     return out
+
+
+def refix(te: Path) -> set[str]:
+    """The runs fix layer `te` traces: those its layer's traces list an elementwise product for (`listed`) or its layer
+    failed with an error te's capture code fixes (FIXED), less those an older fix layer over the same layer traced."""
+    base, at = fixed(te), version(capture_version(te))
+    fixes = [re.compile(p) for v, ps in FIXED.items() if version(v) <= at for p in ps]
+
+    def traced(t: Path) -> dict:
+        f = trace40.cache(t) / "traced.json"
+        return json.loads(f.read_text()) if f.exists() else {}
+    failed = {k for k, v in traced(base).items() if v.get("error") and any(p.search(v["error"]) for p in fixes)}
+    older = {k for p in layers() if p.name.endswith(FIX) and version(capture_version(p)) < at and fixed(p) == base
+             for k, v in traced(p).items() if not v.get("error")}
+    return (listed(base) | failed) - older
 
 
 def mark(te: Path) -> None:
@@ -456,12 +478,11 @@ def to_trace(te: Path, busy: set[str]) -> list[tuple[int, str]]:
     """The runs in scope with no trace in `te`'s cache and no node run tracing them, each with its rank: TE_TRACE_FIRST's
     (comma-separated) in its order ahead of every other, then v3's (`retrace_order`), then the pilot's under
     CAPTURE_FINAL's capture or when TE_TRACE_PILOT is set. A tier's layer
-    takes only that tier's records, and a layer before TIER_FROM's none of them; a fix layer only the runs its layer's
-    traces list elementwise products for (`listed`)."""
+    takes only that tier's records, and a layer before TIER_FROM's none of them; a fix layer only `refix`'s runs."""
     v3, done = v3_scope(), trace40.done(trace40.cache(te)) | busy
     pilot = os.environ.get("TE_TRACE_PILOT") == "1" or same_capture(capture_version(te), CAPTURE_FINAL)
     tier, tiers, at = layer_tier(te), run_tiers(), version(capture_version(te))
-    fix = listed(fixed(te)) if te.name.endswith(FIX) else None
+    fix = refix(te) if te.name.endswith(FIX) else None
 
     def here(run: str) -> bool:
         if fix is not None:
