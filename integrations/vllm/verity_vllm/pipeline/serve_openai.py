@@ -9,6 +9,7 @@
         [--copy-records-to $OUT] [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1] [--async-scheduling]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
         [--remote-verifier HOST:PORT [--remote-kv-lib SO [--remote-session-lib SO]] [--remote-filler-gib 0]]
+        [--day N --day-log LOG --day-program HEX [--day-blocks KEYS] [--day-params FILE]]
 
 It serves what the network certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
@@ -88,6 +89,9 @@ it is written before the pending seals too, and its ``final`` is true only once 
 (`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``. With ``--challenger-gate`` and
 ``--challenger-peer`` each window's coins come from a session of its own on the auditor host's challenger, reserved
 through the challenger's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
+``--day N`` declares day N's one circuit in the deployment's registration log ``--day-log`` before the model loads, and each
+window's registration names it (`serve_day`); a second declaration of the day is refused there, by core's
+``duplicate-declaration``. Without it the server writes what it wrote before.
 ``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to
 PoUB's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_remote`): its
 record is ``remote_session.json``, and a rejected session fails the exit.
@@ -116,7 +120,7 @@ from typing import Any
 from verity_vllm.config import UsageError, group, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import (seal_process as SP, serve_guard as SG, serve_h1 as SH, serve_learn as SL, serve_release as RL,
-                                   serve_remote as SR, serve_row as RW, serve_seal as SS)
+                                   serve_day as SD, serve_remote as SR, serve_row as RW, serve_seal as SS)
 from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, disk_record, ingress_of, param_of,
                                                records_mirror, served_statics, user_of)
@@ -223,6 +227,7 @@ class Options:
     remote: SR.RemoteOptions = group(SR.RemoteOptions)
     retention: RL.RetentionOptions = group(RL.RetentionOptions)
     learning: SL.LearnOptions = group(SL.LearnOptions)
+    day: SD.DayOptions = group(SD.DayOptions)
 
 
 # ---------------------------------------------------------------------------------------------------------------- engine loop
@@ -631,7 +636,7 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError(f"--seal: {why}")
     if why := SS.scheme_refusal(opts):
         raise UsageError(why)
-    if why := SH.refusal(opts) or SR.refusal(opts) or SL.refusal(opts):
+    if why := SH.refusal(opts) or SR.refusal(opts) or SL.refusal(opts) or SD.refusal(opts):
         raise UsageError(why)
     if opts.commit and which("ninja") is None:
         raise UsageError("the Commit JIT-builds its kernels with ninja, which is not on PATH: put the environment's bin (where its "
@@ -662,6 +667,7 @@ def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[st
 def main(opts: Options) -> int:
     preflight(opts)
     (out := Path(opts.out)).mkdir(parents=True, exist_ok=True)
+    day = SD.declare(opts, out)
     session = SR.session_of(opts, out)
     llm, com = build(opts, session, row := RW.of(opts))
     engine = llm.vllm.llm_engine
@@ -677,7 +683,7 @@ def main(opts: Options) -> int:
     if com is not None:
         from verity_vllm.engine.step_trace import scheduler_config
 
-        arm = SH.arm_of(opts, llm, com, out, flush=trace.drain)
+        arm = SH.arm_of(opts, llm, com, out, flush=trace.drain, day=day)
         sealer = SP.sealer_of(opts)                      # its process spawned before the pool grows
         warmed = SS.warm_pool(com, opts.seal_warm_gb)
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
@@ -741,7 +747,8 @@ def main(opts: Options) -> int:
               "required_manifest_path": getattr(com, "required_manifest_path", None), **RL.retention_record(opts, com),
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
               "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},
-              "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of(llm.model, opts.async_scheduling)}
+              "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of(llm.model, opts.async_scheduling),
+              **({"day": day.describe()} if day is not None else {})}
     (out / "serve.json").write_text(json.dumps(record, indent=1, default=str))
     if mirror is not None:
         mirror()

@@ -307,16 +307,29 @@ def untied(run: Any) -> str | None:
     return None
 
 
-def registration(run: Any, previous: str | None = None) -> dict[str, Any]:
+def registration(run: Any, previous: str | None = None, day: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The window's registration W at its close: a ``verity/registration/v2`` record of its served trees' entries
     (`pouw_h1_served.Served.entries`: its tables' and weights' roots, each domain binding the window Program and its
     open root) under the window Program, with what the served trees refused, chained after ``previous``, the digest of
-    the prover's last record (`registration.digest`; None for its first). It is the one-stage log's record whose
-    tables a named Commit record reuses (`reused`)."""
+    the prover's last record (`registration.digest`; None for its first). With ``day`` (`serve_day.Day.naming`), its
+    window also names the day's declaration (``day``, ``declaration``). It is the one-stage log's record whose tables a
+    named Commit record reuses (`reused`)."""
     served = run.served
     return {"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL, "program": served.program_digest,
-            "window": {"kind": "served", "entry": run.entry, "open_root": served.root, "refused": list(served.refused)},
+            "window": {"kind": "served", "entry": run.entry, "open_root": served.root, "refused": list(served.refused),
+                       **dict(day or {})},
             "registered": served.entries(), "previous": previous}
+
+
+#: what a window's registration names of its day's declaration (`registration`'s ``day``)
+DAY_KEYS = ("day", "declaration")
+
+
+def day_of(window: Any) -> dict[str, Any] | None:
+    """The day's declaration ``window`` (a registration W) names in its window, or None."""
+    w = window.get("window") if isinstance(window, Mapping) else None
+    named = {k: w[k] for k in DAY_KEYS if isinstance(w, Mapping) and k in w}
+    return named or None
 
 
 def reused(run: Any, window: Any, record: Any) -> str | None:
@@ -329,7 +342,7 @@ def reused(run: Any, window: Any, record: Any) -> str | None:
     served = run.served
     if served.refused or served.program is None:
         return "the window's served trees were refused, so it has no tables a Commit record can reuse"
-    if not isinstance(window, Mapping) or dict(window) != registration(run, window.get("previous")):
+    if not isinstance(window, Mapping) or dict(window) != registration(run, window.get("previous"), day_of(window)):
         return ("the window's registration is not its own: a verity/registration/v2 record of the window's served "
                 "trees' entries under its Program and open root (pouw_h1_commit.registration)")
     if not isinstance(record, Mapping):
@@ -521,6 +534,6 @@ def calls_root(salt: bytes, manifest: Sequence[Mapping[str, Any]], served: bytes
     return CR.calls_root(salt, manifest, served, None if commit is None else digest(commit))
 
 
-__all__ = ["IDS_PORT", "ROOT_BYTES", "SCHEME", "CommitRecord", "CommitTap", "Reused", "Sites", "UNTIED", "bind", "calls_root",
-           "committed", "digest", "ids_reason", "named", "record_of", "registration", "reuse", "reused", "roots1", "shape", "site",
-           "untied"]
+__all__ = ["DAY_KEYS", "IDS_PORT", "ROOT_BYTES", "SCHEME", "CommitRecord", "CommitTap", "Reused", "Sites", "UNTIED", "bind",
+           "calls_root", "committed", "day_of", "digest", "ids_reason", "named", "record_of", "registration", "reuse", "reused",
+           "roots1", "shape", "site", "untied"]
