@@ -277,7 +277,7 @@ theorem oMsg_eq {ω : Ω} {d : (Fin (K.V.k x) → Coin) × K.EO.C x} {w : K.WO} 
 omit [Nonempty Coin] in
 theorem fAt_lt {ω : Ω} {j : ℕ} (hj : j + 1 < I.V.k (K.xI x)) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) :
     K.fAt I S H P x ω j d = K.oMsg I S H P x ω d j :=
-  if_pos hj
+  ite_eq_left hj
 
 omit [Nonempty Coin] in
 theorem opAtO_lt {ω : Ω} {j : ℕ} (hj : j + 1 < I.V.k (K.xI x)) (l : List Coin) :
@@ -322,7 +322,7 @@ theorem runO (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c, decC 
   have hlast : K.fAt I S H P x ω (I.V.k (K.xI x) - 1) d =
       K.oMsg I S H P x ω (Classical.choose hex) (I.V.k (K.xI x) - 1) := by
     unfold Comp.fAt Comp.repMsg
-    rw [if_neg (show ¬ (I.V.k (K.xI x) - 1 + 1 < I.V.k (K.xI x)) by omega), dif_pos hex]
+    rw [ite_eq_right (show ¬ (I.V.k (K.xI x) - 1 + 1 < I.V.k (K.xI x)) by omega), dite_eq_left hex]
   obtain ⟨ρ, ⟨⟨w', hw', -⟩, haccρ, hAEρ, hlρ, hcρ⟩, hfρ⟩ : ∃ ρ, K.Rep I S H P x ω
       ((List.range (I.V.k (K.xI x) - 1)).map (coinSeq d.1)) (K.clsO I S H P x ω d) ρ ∧
       K.fAt I S H P x ω (I.V.k (K.xI x) - 1) d = K.oMsg I S H P x ω ρ (I.V.k (K.xI x) - 1) :=
@@ -500,14 +500,14 @@ theorem servedO_rel (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c
       exact hn hRO
     have e1 : (K.servedO I S H P x ω d).seen = S.openView (K.view (S.IVStar I.V I.ans) H x d.1 w) := by
       unfold Comp.servedO Comp.servedG
-      rw [if_neg hout, servedRun_seen, outerStage_eval]
+      rw [ite_eq_right hout, servedRun_seen, outerStage_eval]
       change (S.openT (K.dec (S.IVStar I.V I.ans) H x d.1 (K.wits H P x ω d))).seen = _
       rw [hw]
       exact ((S.openT_rel _).2 hacc').symm
     have e2 : K.innerFO I S H P x decC ω d =
         run H (K.innerPO I S H P x decC) I.V (K.xI x) ω (firstCoins (I.V.k (K.xI x)) d.1) := by
       unfold Comp.innerFO
-      rw [if_pos hk]
+      rw [ite_eq_left hk]
     obtain ⟨h1, h2, -⟩ := runO hCF decC hdec ω d hw hRO hacc' ha
     rw [e1, e2]
     refine ⟨?_, fun _ => h1.symm⟩
@@ -515,13 +515,13 @@ theorem servedO_rel (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c
     exact ⟨fun _ => h2, fun _ => hacc'⟩
   · have e2 : K.innerFO I S H P x decC ω d = abortTrace := by
       unfold Comp.innerFO
-      rw [if_neg hk]
+      rw [ite_eq_right hk]
     have e1 : K.servedO I S H P x ω d = abortTrace := by
       unfold Comp.servedO Comp.servedG
       by_cases hout : K.OutRO H P x ω d
-      · rw [if_pos hout]
+      · rw [ite_eq_left hout]
         exact ite_eq_right (by simp [abortTrace, Trace.seen])
-      rw [if_neg hout, servedRun_seen, outerStage_eval]
+      rw [ite_eq_right hout, servedRun_seen, outerStage_eval]
       change S.openT (K.dec (S.IVStar I.V I.ans) H x d.1 (K.wits H P x ω d)) = abortTrace
       refine ite_eq_right fun hacc => hk ?_
       obtain ⟨w, hw⟩ : ∃ w, K.wits H P x ω d = some w := by
@@ -547,9 +547,9 @@ theorem mixO_rel (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c, d
         I.opens (K.mixO I S H P x decC ω d).seen = I.opens (K.innerFO I S H P x decC ω d).seen) := by
   unfold Comp.mixO
   by_cases hb : K.BadO I S H P x ω d
-  · rw [if_pos hb]
+  · rw [ite_eq_left hb]
     exact ⟨Iff.rfl, fun _ => rfl⟩
-  · rw [if_neg hb]
+  · rw [ite_eq_right hb]
     exact servedO_rel hCF decC hdec ω d hb
 
 omit [Nonempty Coin] in
@@ -635,7 +635,7 @@ theorem PrBadGood_le (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ 
         (I.check (K.xI x)) (s.2.1, s.2.2.1) s.2.2.2)
       fun d hd => by
         unfold Comp.mixO
-        rw [if_neg (hnb d hd)]
+        rw [ite_eq_right (hnb d hd)]
     have heq3 : ((erepProg (I.waits (K.xI x)) (I.k (K.xI x)) (I.cap (K.xI x)) I.opens
         (I.assemble (K.xI x)) (I.check (K.xI x)) (s.2.1, s.2.2.1) s.2.2.2).eval H (K.mixO I S H P x decC s.1)).1 =
         ((erepProg (I.waits (K.xI x)) (I.k (K.xI x)) (I.cap (K.xI x)) I.opens (I.assemble (K.xI x))
