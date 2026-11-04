@@ -5190,14 +5190,19 @@ def review_owners(q: Queue, labels: StoreLabels, pr: int, head: str, owner: str 
     return {owner, q.handle(p), labels.ready_by(pr, head)}
 
 
+#: the after-landing steps whose tasks run test suites, so a `suite NAME` red record may be either's (`Driver._unit_states`)
+SUITE_STEPS = ("lean-suites", "pytest")
+
+
 def baseline(q: Queue, sha: str, by: str, steps: str | None = None) -> int:
     """`research queue baseline SHA --by ci [--steps STEP,...]`: record the landed branch (`checked`, `Queue.into`) at SHA as verified by the after-landing run
     (`drive["postland"]`), on the steps ci knows are green there (every after-landing step by default; with --steps, only those,
     as a red baseline run records: a later failure of another step reverts nothing), so the review landing lands without first running the after-landing run on that branch itself
     (`Driver._unbaselined`), and a later failure reverts only a landing above SHA.  When those steps cover every step on the merge
     gate there (not circuit-check: `Driver._gating`), drive moves `main` to SHA (`Driver._promote`).  It drops a bisection still open (it reverted
-    nothing), and is refused while a post-landing run runs, for a SHA the branch doesn't hold, and off drive (`/data/infra/drive.sh
-    queue baseline SHA --by ci` on the control pod)."""
+    nothing), ends each red record at or below SHA of a step it records (a `suite` record once it records every one of
+    `SUITE_STEPS`), as a run that passes it does (`Driver._green`), and is refused while a post-landing run runs, for a SHA the
+    branch doesn't hold, and off drive (`/data/infra/drive.sh queue baseline SHA --by ci` on the control pod)."""
     from .drive import AFTER_LANDING
 
     if _who(by) != "ci":
@@ -5225,9 +5230,20 @@ def baseline(q: Queue, sha: str, by: str, steps: str | None = None) -> int:
     pl["pending"] = [p for p in pl.get("pending", []) if not on(p, full)]
     if pl.get("failed") and on(pl["failed"], full):
         del pl["failed"]
+    ended = []
+    for key, r in list((pl.get("red") or {}).items()):
+        kind, _, name = key.partition(" ")
+        if not (all(s in green for s in SUITE_STEPS) if kind == "suite" else name in green) or not on(r["tip"], full):
+            continue
+        kept = pl.setdefault("green", {})
+        if kept.get(key) != full and (key not in kept or on(kept[key], full)):
+            kept[key] = full
+        del pl["red"][key]
+        ended.append(f"{key} (red at {r['tip'][:12]})")
     q.save_state(state)
     print(f"research queue: `{q.into}` {full[:12]} recorded as verified by the after-landing run, by {by}: the review landing lands "
-          f"on it; {len(pl['pending'])} landing(s) above it wait for their run")
+          f"on it; {len(pl['pending'])} landing(s) above it wait for their run"
+          + (f"; their red records end: {', '.join(ended)}" if ended else ""))
     return 0
 
 
