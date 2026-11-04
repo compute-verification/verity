@@ -1711,10 +1711,10 @@ def clocksFn (j : Json) : Except String Json := do
 -- in `roots`), with their port at another root while scan/view names theirs, with other leaves, or beside a second
 -- entry of their port at another root
 #guard
-  let r : Rows := { format := "", value := "l/egress/3", link := "l", direction := "egress", window := 3,
-    parameters := "", cellBytes := 0, rows := 4, words := 0, wordBits := 0, rowSchema := "", domain := "d",
-    wiring := .empty, root := ⟨#[0xab]⟩, layout := ⟨0, 0, 0, 0⟩, key := .empty, digest := .empty,
-    signature := .empty }
+  let r : Rows := {
+    format := "", value := "l/egress/3", link := "l", direction := "egress", window := 3, parameters := "",
+    cellBytes := 0, rows := 4, words := 0, wordBits := 0, rowSchema := "", domain := "d", wiring := .empty,
+    root := ⟨#[0xab]⟩, layout := ⟨0, 0, 0, 0⟩, key := .empty, digest := .empty, signature := .empty }
   let h := Flock.hexOf r.root
   let port := fun (q root : String) (l : Nat) =>
     Json.mkObj [("port", .str q), ("leaves", toJson l), ("root", .str root), ("domain", .str "d")]
