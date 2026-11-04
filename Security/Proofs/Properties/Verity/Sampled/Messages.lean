@@ -1,6 +1,8 @@
-import Proofs.Properties.Verity.Sampled
-import Proofs.Core.Game.TwoRun
-import Proofs.Flock.Claims.Prob
+module
+
+public import Proofs.Properties.Verity.Sampled
+public import Proofs.Core.Game.TwoRun
+public import Proofs.Flock.Claims.Prob
 
 /-!
 # Sampled proofs' coupling: the messages
@@ -31,6 +33,8 @@ square root of a two-continuation finder's success (`Core.Game.TwoRun`), one fin
   of each round's finder's success and of the record's. So `CouplingTarget` holds once the sampled verdict off the
   misses is bounded by its other terms (`couplingTarget_of_noMiss`).
 -/
+
+@[expose] public section
 
 namespace Verity.Game
 

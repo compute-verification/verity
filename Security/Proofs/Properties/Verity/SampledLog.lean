@@ -1,6 +1,8 @@
-import Proofs.Properties.Verity.Sampled
-import SampledProofs.ChallengerSession
-import Std.Tactic.Do
+module
+
+public import Proofs.Properties.Verity.Sampled
+public import SampledProofs.ChallengerSession
+public import Std.Tactic.Do
 
 /-!
 # The challenger session's release log, line by line, as v2's check reads it
@@ -17,6 +19,8 @@ position, as v2's check classifies them: `BEq Json` and `Json.parse` are `partia
 is a Hoare triple proved by `mvcgen`, read back at an `.ok` or `some` result (`of_triple`, `of_triple_opt`); the
 triples here hold of any `Except` or `Option` value, so `mvcgen` passes over a `partial` call it can't unfold.
 -/
+
+@[expose] public section
 
 set_option mvcgen.warning false
 

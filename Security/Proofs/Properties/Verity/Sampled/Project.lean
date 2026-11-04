@@ -1,5 +1,7 @@
-import Proofs.Properties.Verity.Sampled.Coupling
-import Proofs.Core.Game.InterleaveBridge
+module
+
+public import Proofs.Properties.Verity.Sampled.Coupling
+public import Proofs.Core.Game.InterleaveBridge
 
 /-!
 # Sampled proofs' coupling: the projection
@@ -37,6 +39,8 @@ decoded from the play's output on the tape.
   most likely message's reading `DigestCut.modeReading`). The registration is the record's on every tape
   (`regOf_eq`).
 -/
+
+@[expose] public section
 
 namespace Verity.Game
 

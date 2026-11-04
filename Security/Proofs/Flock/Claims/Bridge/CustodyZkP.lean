@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Assumptions.ZkP
-import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
-import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
+module
+
+public import Proofs.Flock.Soundness.Assumptions.ZkP
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
 
 /-!
 # The record `verify --zk --public-inputs` decodes is the live session's: `RecordsLiveZKJA`, by construction
@@ -37,6 +39,8 @@ At the verifier's acceptance at its public inputs `own` (`ZkHidden.AcceptsZKP I 
 The writer takes an accepted record rather than printing one from the outcome: `Json.parse`, which `Record.decode` and
 `recordDraw` read the record through, is a `partial def`, so no proof reads what it returns on a printed record.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.CustodyZkP
 

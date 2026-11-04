@@ -1,8 +1,10 @@
-import Properties.Verity.Game
-import Properties.SampledProofs.Draw
-import Proofs.Flock.Bridge.V5.Statement
-import Proofs.Flock.Bridge.CircuitOf
-import Proofs.Flock.Soundness.ZK.RealLeaves
+module
+
+public import Properties.Verity.Game
+public import Properties.SampledProofs.Draw
+public import Proofs.Flock.Bridge.V5.Statement
+public import Proofs.Flock.Bridge.CircuitOf
+public import Proofs.Flock.Soundness.ZK.RealLeaves
 
 /-!
 # Sampled proofs' leg of `Verity.Soundness`: the session v2 sets up
@@ -70,6 +72,8 @@ strategy of the period's game projects to. This module states its C-Flock side.
   * the circuit file's and the public file's finders (`Vocab.fileFinder`, `Vocab.publicFinder`), `2²/2^513` each;
   * the read finder's published bound at `t` (`cr`, `Vocab.crBound`).
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled
 
