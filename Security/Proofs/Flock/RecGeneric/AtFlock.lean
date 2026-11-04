@@ -25,7 +25,9 @@ There `Comp.err` is at most `KSLin2`'s bound term by term but the link's: `κ`, 
 (`ForkPlansLeBinnerV`); `FC`'s and `F0`'s plans at the reruns are `FCI` and `F0I` (`CapPlanIsFCI`,
 `ConflictPlanIsF0I`); `Comp.PrOut` is `0`, since `R_O` holds at every witness list (`Comp.ofRec`); and the link
 term stays the gated link's (`linkPlan` at `verModel`). So L1 gives `KSLinkOn`,
-`KSLin2`'s bound with that link term, at the statements where the instance's contract holds (`RecoversLinkOn`), and at
+`KSLin2`'s bound with that link term at the deployed decoders (`compDep`: the extractor decodes the reruns' openings
+as the deployment does, a counted program), at the statements where the instance's contract holds (`ContractOn`,
+`RecoversLinkOn`; at the deployment's dense statements `ContractDense`), and at
 every statement `Flock.Guarantees.RecursiveKSEveryAtRec`. The contract reads V\*'s two facts only where some run
 accepts, and the deployed compiled verifier accepts only dense statements, so at the deployment every statement needs
 V\*'s dense facts alone.
@@ -191,6 +193,13 @@ noncomputable abbrev compAt (D : RecAt Coin) (Bd : Bound Coin Col T) (decI : Lis
     (DO : Claims.Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') : Comp Coin :=
   Comp.ofRec D Bd.IVStar (Inner.ofFlock Bd.deploy decI) DO decO
 
+/-- **The instance at the deployed decoders**: `compAt` at the inner and outer records' own decoders
+(`Deploy.decode`, the candidate of the counted `Deploy.dec`), the ones the deployment runs. `Bound.deploy` keeps
+`DE`'s `dec`, so the inner one is `DE`'s. -/
+noncomputable abbrev compDep (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.Flock.Deploy Coin Col' T') :
+    Comp Coin :=
+  compAt D Bd Bd.deploy.decode DO DO.decode
+
 /-! ## The composite's terms against `KSLin2`'s -/
 
 /-- **`B`'s plan at the reruns is at most `B_I`**: at a statement where the calls given witnesses record are true and
@@ -233,53 +242,63 @@ def ConflictPlanIsF0I (D : RecAt Coin) (Bd : Bound Coin Col T) (DO : Claims.Floc
       PrF0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x R
 
 /-- **`KSLin2`'s bound with the gated link, at the composite**: at every statement `G` admits, the composite at today's
-compiled record over hm96 and the element-level Flock (`compAt`, `Comp.E`, which reads no `H`) meets
+compiled record over hm96 and the element-level Flock, at the deployed decoders (`compDep`, `Comp.E`, which reads no
+`H`, so its extractor is the deployment's counted decoding of the reruns' openings and no other) meets
 `κ + √(γ·Pr[B]) + (4k_I + 1)·Pr[B_I] + 4·W_I·(Pr[FCI] + 1/(M+1)) + 4·(Pr[F0I] + (k_I + 1)/(R+1)) +
 β₂·(Pr[link(M)] + 1/(M+1))`: `KSLin2`'s bound with its link term the gated link's on the composite's reruns
 (`linkPlan` at `verModel`, whose cost charges every rerun it names) in place of `FdevV`'s. -/
 def KSLinkOn [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Claims.Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop) : Prop :=
-  ∀ decI, decOK Bd.deploy decI → ∀ decO, decOK DO decO → ∀ (x : Msg), G x → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω]
-    (P : Prover Ω) (M R : ℕ),
-    PrBad H (compAt D Bd decI DO decO).V ((compAt D Bd decI DO decO).R (Proto.ofFlock Bd decI Cp))
-        ((compAt D Bd decI DO decO).E (Proto.ofFlock Bd decI Cp) (Server.ofBound Bd)) x P ≤
-      Claims.Recursion.κ (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) x +
-        Real.sqrt (Claims.Recursion.γ (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) x *
+  ∀ (x : Msg), G x → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (M R : ℕ),
+    PrBad H (compDep D Bd DO).V ((compDep D Bd DO).R (Proto.ofFlock Bd Bd.deploy.decode Cp))
+        ((compDep D Bd DO).E (Proto.ofFlock Bd Bd.deploy.decode Cp) (Server.ofBound Bd)) x P ≤
+      Claims.Recursion.κ (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) x +
+        Real.sqrt (Claims.Recursion.γ (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) x *
           PrB H (D.record Bd.IVStar).V P x) +
-        (4 * (Inner.ofFlock Bd.deploy decI).V.k (Claims.Recursion.xI (D.record Bd.IVStar) x) + 1) *
-          PrBinnerV H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x +
+        (4 * (Inner.ofFlock Bd.deploy Bd.deploy.decode).V.k (Claims.Recursion.xI (D.record Bd.IVStar) x) + 1) *
+          PrBinnerV H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode P x +
         4 * Cp.width (Claims.Recursion.xI (D.record Bd.IVStar) x) *
-          (PrFCI H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M + 1 / ((M : ℝ) + 1)) +
-        4 * (PrF0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x R +
-          (((Inner.ofFlock Bd.deploy decI).k (Claims.Recursion.xI (D.record Bd.IVStar) x) : ℝ) + 1) /
+          (PrFCI H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode Cp P x M +
+            1 / ((M : ℝ) + 1)) +
+        4 * (PrF0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO DO.decode P x R +
+          (((Inner.ofFlock Bd.deploy Bd.deploy.decode).k (Claims.Recursion.xI (D.record Bd.IVStar) x) : ℝ) + 1) /
             ((R : ℝ) + 1)) +
-        βdev2 (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) Cp x *
+        βdev2 (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) Cp x *
           ((linkPlan (Coin := Coin) Bd.DE.V.k M).PrAt H
-              ((compAt D Bd decI DO decO).verModel ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H P x)
-              ((compAt D Bd decI DO decO).xI x) +
+              ((compDep D Bd DO).verModel ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans) H P x)
+              ((compDep D Bd DO).xI x) +
             1 / ((M : ℝ) + 1))
+
+/-- **The instance's contract at the statements `G` admits**: at each, the calls of no witnesses are true, and at every
+inner and outer decoder that meets the list-decoding spec (`decOK`; `RecoversLinkOn` reads it at the deployed ones) the
+compiler's contract (`Comp.Contract`) at `Open(DE, hm96)` and `DE`'s reading of opened views. -/
+def ContractOn [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
+    (DO : Claims.Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop) : Prop :=
+  ∀ x, G x → (∀ e ∈ (D.record Bd.IVStar).calls x [], H e.1 = e.2) ∧
+    ∀ decI, decOK Bd.deploy decI → ∀ decO, decOK DO decO →
+      (compAt D Bd decI DO decO).Contract H ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans)
+        (fun v => (Proto.ofFlock Bd decI Cp).opens ((Server.ofBound Bd).openView v)) x
 
 /-- **L1 at Flock gives `KSLinkOn` at the statements `G` admits.** From the generic theorem, the element-level Flock's
 KS with no root (`KSFlockLin` at `DE`), each outer session's KS (`OuterKS`), the sessions' nonnegative table errors,
 the record's inner statement being the compiled one's, answers that decode to their coins, `DE`'s nonnegative table
 errors and last step free of its last coin (F8, `Bound.LastStepFree`, proved at the deployed reader and plain
 verifier: `RecDeploy.lastCoinFree_ofFlock_R`, `RecDeploy.lastCoinFree_ofFlock_V`), `rowIn` injective (`Bound.Binds`,
-as the bridge takes it, `Claims.Recursion.Bridge`), and at each statement `G` admits the calls of no witnesses true and the compiler's
-contract at `Open(DE, hm96)` and `DE`'s reading of opened views: `KSLinkOn` at `G`, through `ProtoWFOfFlock`,
-`KSAbortLinOfFlockLin`, `OuterKSOfSessions`, `IVStarOfBound`, `OpenViewOfBound`, `BindsOfBound` and the three term
-comparisons. The contract's `own` evaluations are the staged statements' setup calls, true by evaluation
-(`setupCalls`). The error is `Comp.err` with `κ`, `γ` and `β` equal to `KSLin2`'s, `B`'s, `FC`'s and `F0`'s terms at
-most `KSLin2`'s, `Comp.PrOut` at `0` at both its weights, and the gated link's term as it is. -/
+as the bridge takes it, `Claims.Recursion.Bridge`), the deployed decoders meeting the list-decoding spec (`decOK`), and
+at each statement `G` admits the calls of no witnesses true and the compiler's contract at `Open(DE, hm96)` and `DE`'s
+reading of opened views: `KSLinkOn` at `G`, through `ProtoWFOfFlock`, `KSAbortLinOfFlockLin`, `OuterKSOfSessions`,
+`IVStarOfBound`, `OpenViewOfBound`, `BindsOfBound` and the three term comparisons, each at the deployed decoders. The
+contract's `own` evaluations are the staged statements' setup calls, true by evaluation (`setupCalls`). The error is
+`Comp.err` with `κ`, `γ` and `β` equal to `KSLin2`'s, `B`'s, `FC`'s and `F0`'s terms at most `KSLin2`'s, `Comp.PrOut`
+at `0` at both its weights, and the gated link's term as it is. -/
 def RecoversLinkOn [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Claims.Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop) : Prop :=
   _root_.Flock.Guarantees.GenericRecursiveKS → KSFlockLin H Bd.DE Cp →
-    (∀ decI, OuterKS H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO) →
+    OuterKS H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy Bd.deploy.decode) DO →
     TableErrNonneg (D.record Bd.IVStar) → (∀ x, D.xI x = Claims.Recursion.xI (D.record Bd.IVStar) x) →
     (∃ dec : Msg → Coin, ∀ c, dec (Bd.ans c) = c) → (∀ x, 0 ≤ Bd.DE.εtable x) →
-    (∀ decI, (Proto.ofFlock Bd decI Cp).LastCoinFree H) → Bd.Binds →
-    (∀ x, G x → (∀ e ∈ (D.record Bd.IVStar).calls x [], H e.1 = e.2) ∧
-      ∀ decI decO, (compAt D Bd decI DO decO).Contract H ((Server.ofBound Bd).IVStar Bd.DE.V Bd.ans)
-        (fun v => (Proto.ofFlock Bd decI Cp).opens ((Server.ofBound Bd).openView v)) x) →
+    (Proto.ofFlock Bd Bd.deploy.decode Cp).LastCoinFree H → Bd.Binds →
+    decOK Bd.DE Bd.deploy.decode → decOK DO DO.decode → ContractOn H D Bd DO Cp G →
     KSLinkOn H D Bd DO Cp G
 
 end Instance
@@ -293,7 +312,8 @@ open FlockDeploy (Coin FinalP)
 
 /-- **Knowledge soundness of the recursive verifier at every statement, at a compiled record** `D`: the composite's
 bound with the gated link (`Claims.RecGeneric.KSLinkOn`) at every statement, at SHA-512, the deployed relation's bound
-record at the reader `rd`, the deployed caps. `Claims.RecGeneric.RecoversLinkOn` at `G := fun _ => True` gives it from
+record at the reader `rd`, the deployed caps and the deployed decoders. `Claims.RecGeneric.RecoversLinkOn` at
+`G := fun _ => True` gives it from
 the generic theorem and the instance's contract at every statement; V\*'s two facts are read only where some run
 accepts, so at a record that accepts only dense statements they are the dense ones. -/
 def RecursiveKSEveryAtRec (D : Claims.Recursion.RecAt Coin) (rd : Msg → Option FinalP)
@@ -316,3 +336,32 @@ def RecursiveKSEvery : Prop :=
       RecDeploy.DeployedR.rdR RecDeploy.DeployedR.finalR RecDeploy.DeployedR.wER RecDeploy.DeployedR.wR
 
 end Flock.Guarantees
+
+namespace Claims.RecGeneric
+
+open FlockDeploy (Coin FinalP)
+
+/-- **F7, the instance's contract at the dense statements, at a compiled record** `D`: `ContractOn` at SHA-512, the
+deployed relation's bound record at the reader `rd` (as `Flock.Guarantees.RecursiveKSAtRec` reads it), the deployed
+outer record and caps, and `RecDeploy.DenseAt`. `RecDeploy.ksLin2_route` proves these facts inside one proof, about
+`Claims.Recursion`'s draws; this is them about the composite's (`compAt`). -/
+def ContractDenseAtRec (D : Claims.Recursion.RecAt Coin) (rd : Msg → Option FinalP)
+    (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg)) (wE w : Msg → ℝ) : Prop :=
+  ContractOn FlockDeploy.sha512 D
+    (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR rd)
+      (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR
+      RecDeploy.rowInDeployed final w)
+    (RecDeploy.deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep RecDeploy.DenseAt
+
+/-- **F7 at the deployment**: `ContractDenseAtRec` at the deployment's record and values, for every other field of the
+brings and every record the coin server keeps (as `Flock.Guarantees.RecursiveKS` quantifies them). -/
+def ContractDense : Prop :=
+  ∀ (b : RecDeploy.Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
+    (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8),
+    ContractDenseAtRec
+      (RecDeploy.recBoundAt _root_.Flock.Readable.relation
+        { RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest }
+        (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR))
+      RecDeploy.DeployedR.rdR RecDeploy.DeployedR.finalR RecDeploy.DeployedR.wER RecDeploy.DeployedR.wR
+
+end Claims.RecGeneric
