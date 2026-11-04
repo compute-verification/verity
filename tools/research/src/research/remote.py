@@ -155,6 +155,9 @@ SMALL_FILES = ("job.json", "status.json", "failure.json", "result.json", "launch
 TERMINAL = ("done", "failed", "cancelled")
 FETCHED_FILE = ".fetched"                     # <run>/.fetched on the machine: written by `fetch --all` once every file verified
 FETCHED_SCHEMA = "research/fetched/v0.1"
+#: appended to a fetch's `tar -c`: GNU tar's exit 1 is "file changed as we read it" (a sampler still appending resources.jsonl at a
+#: run's end), whose archive is whole; 2 and up stay a failed fetch
+TAR_CHANGED_OK = '; rc=$?; [ "$rc" -eq 1 ] && rc=0; exit "$rc"'
 CUSTODY_DIR = "custody"                       # <root>/requests/<run-id>/custody/: --custody-r2's minted key + store.toml (store.custody)
 STORE_READ_DIR = "store-read"                 # --store-read's read-only key, put in the workload's environment (store.custody.READ_DIR_NAME)
 LAUNCH_ACK = ".launch-ack"                    # <root>/requests/<run-id>/.launch-ack: the FIFO the runner names its first record on
@@ -2240,10 +2243,10 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
     ssh = ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root")
     rd = rec["remote_run_dir"]
     if everything:
-        remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} && tar -cf - ."]
+        remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} || exit 2; tar -cf - .{TAR_CHANGED_OK}"]
     else:
         names = " ".join(shlex.quote(n) for n in (*SMALL_FILES, *also))
-        remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} && ls {names} 2>/dev/null | tar -cf - -T -"]
+        remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} || exit 2; ls {names} 2>/dev/null | tar -cf - -T -{TAR_CHANGED_OK}"]
 
     def extract(stream: IO[bytes]) -> None:           # member by member off the ssh pipe: a big run is never in the launcher's memory
         with tarfile.open(fileobj=stream, mode="r|") as tf:
