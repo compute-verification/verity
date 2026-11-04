@@ -19,7 +19,8 @@ Each is a `def … : Prop` over `Bridge.Defs` and `Bridge.Deployed`, so a proof 
 * `AssemblyTarget` (M4): `TransportsLive`, those and `EndToEndHidden` give `SampledKSLive`.
 * `RelDeployTarget` (rel_deploy): at the deployed sampling record (`SamplingDeploy.deployOf`) of a verifier's code
   whose layout is `commitDep`'s (`LayoutIs`) and which parses the statement's bytes to `stmtOf` and partitions it to
-  `partOf`, a `witDep` outside `RelS` at SHA-512 and `commitDep` is outside the record's `R`.
+  `partOf`, a `witDep` outside `RelS` at SHA-512 and `commitDep` is outside the record's `R`. Proved:
+  `relDeployTarget` (`Bridge.RelDeploy`).
 -/
 
 namespace Flock.Bridge

@@ -28,7 +28,9 @@ theorem unitClass_of_le {Cp : Prog} {u : List ℕ} (h : committed Cp u ≤ unitC
     refine List.mem_map.2 ⟨14, List.mem_range.2 ?_, rfl⟩
     rw [show unitClassMax / 16 = 2 ^ 14 from rfl, Nat.log2_two_pow]
     omega
-  obtain ⟨w, hw⟩ := Option.isSome_iff_exists.1 (List.find?_isSome.2 ⟨_, hmem, decide_eq_true h⟩)
+  have hsome : (unitClasses.find? fun w => decide (committed Cp u ≤ w)).isSome :=
+    List.find?_isSome.2 ⟨unitClassMax, hmem, decide_eq_true h⟩
+  obtain ⟨w, hw⟩ := Option.isSome_iff_exists.1 hsome
   exact ⟨w, hw, of_decide_eq_true (List.find?_some hw)⟩
 
 section Lowered
@@ -39,7 +41,8 @@ variable {C : FlockSoundness.Audit.Circuit} {κ : Fin C.N → Option Bool}
 theorem off_add_lt_length (g : Fin C.N) {j : ℕ} (hj : j < gateSize (C.op g)) :
     off C g.val + j < (progOf C κ).gates.length := by
   have h := gates_off (κ := κ) g hj
-  rw [List.getElem?_eq_getElem (by rw [length_lower]; exact hj)] at h
+  have hl : j < (lower C κ g).length := by rw [length_lower]; exact hj
+  rw [List.getElem?_eq_getElem hl] at h
   exact (List.getElem?_eq_some_iff.1 h).1
 
 theorem posOf_lt_length (g : Fin C.N) : posOf C g < (progOf C κ).gates.length := by
