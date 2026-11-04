@@ -2781,6 +2781,30 @@
   "Verity.SecurityProofs.RegisteredLeakage": {
    "honest": ["Verity.SecurityProofs.RegisteredLeakage_honest"],
    "nontrivial": "Verity.SecurityProofs.RegisteredLeakage_nontrivial"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKPerProver": {
+   "honest": ["Pouw.SecurityProofs.RelativeSecurity.StagedFloorPerProverHonest"],
+   "nontrivial": "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedPerProver": {
+   "honest": ["Pouw.SecurityProofs.RelativeSecurity.StagedFloorPerProverHonest"],
+   "nontrivial": "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKPerProver": {
+   "honest": ["Pouw.SecurityProofs.RelativeSecurity.OverlapFloorPerProverHonest"],
+   "nontrivial": "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedPerProver": {
+   "honest": ["Pouw.SecurityProofs.RelativeSecurity.OverlapFloorPerProverHonest"],
+   "nontrivial": "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedJ10RPerProver": {
+   "honest": ["Pouw.SecurityProofs.RelativeSecurity.StagedFloorJ10RPerProverHonest"],
+   "nontrivial": "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver": {
+   "honest": ["Pouw.SecurityProofs.RelativeSecurity.OverlapFloorJ10RPerProverHonest"],
+   "nontrivial": "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial"
   }
  },
  "unwitnessed": {
@@ -3106,23 +3130,12 @@
   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192": "33d62aa0ada7e5b4271924247b387ae663be075789d2a0a285f149f697c2e9e8",
   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": "1c86a1eeaf0d1cade5918bf743e5fd50320e363c7e9d94263f53d3f4a51ea0f4",
   "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b": "6db2b5f14eaa50ef363440f397e8532266bf9830364718fb5fd44faa6e14a9c2",
-  "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial": "9709cbcd16d5ff29ff99bd0518f49a574f5d8ccafd4ff793c9f566e26752d1c7",
-  "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorJ10RPerProverHonest": "d3110bb01c94423a4394bd3e4242ead329fda462c9cf86d39c981584bc3abd00",
   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK": "9aeace18613a03bae9a9ace39729fe1820c7ce37c2b3548ba819ae8cb939143a",
   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSided": "5f059058df646f93e609255e7315a6dc94bbdb8a935d1d2ba772982fd9e13e91",
   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10R": "c3b5ff51054c93fdd728740c3bdfddd8409df6b8bb84c80f14e95b58317d39f5",
-  "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver": "306a3e7f2c2609f52df8e57d7126556aadc9e807ae6ff53abd8c572d02c44a50",
-  "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedPerProver": "7c9c64d346edcaf1eff32af5cc382b993597c1dce6aaacd5a0d6899f377088c4",
-  "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKPerProver": "b476f0b9743f7a5904f5df8872a8cd5f58a0916e9804ae28893611953f84ed7f",
-  "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorPerProverHonest": "f94180802312966b8ee714f5ab5248cd469e298d47ecacb906968ee505098a07",
-  "Pouw.SecurityProofs.RelativeSecurity.StagedFloorJ10RPerProverHonest": "94225036c0be96004e2f60a90dedd24ae3a376e72cbb8d3d470f1f8f998a4437",
   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK": "f33a1c8f4ab00945928b706acaeb0e4c83af562d51c0c0d990ee9f6400abdaaf",
   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSided": "11c53ce9aa6c50fe108cb79becfc9910910a8e16fe4c94ed89612b1c568e24e3",
   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedJ10R": "069c46cc9d9d22c2a1a53547f44479f5d910a3c23a678df27aa3bad42a7a11ff",
-  "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedJ10RPerProver": "9404c3568cbf60ff1066303d542edfbc4659c29118aa290b6a6b403dcb7c9f5e",
-  "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedPerProver": "6234d3e472abb8a0edda9d8b2f2bc7f11c116f27edf03d80fef3f3678d506c54",
-  "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKPerProver": "2e4402f0f829311dc3640ba2998af10fbb44189a1831f1820b968d0fa3075413",
-  "Pouw.SecurityProofs.RelativeSecurity.StagedFloorPerProverHonest": "7c38a44178ff30a4e0740f350288063f6be4aaba58e1bf078759d978438d5e05",
   "Pouw.SecurityProofs.RelativeSecurity.TheoremSOverlap": "f42c411b268bec26707dbc703e88de32674efb881ce375c5007b812abfb3272f",
   "Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged": "1e679ec8c0e50fa88bfd9f987eb3de9f651b1316ddbcdafad82b042393c126fb",
   "Pouw.SecurityProofs.ShaRealize.ExtractOfRealize": "6cf84ec33aad45716ced5eb802b2006e2e6e85c755b136bc7fa565fe97a8513e",
@@ -12591,6 +12604,24 @@
    "assumptions": [],
    "type_hash": "9a62151d2a3a48d6146e45fb12da2d2a8baddbb2117cfeffd8f5f2c6f001b80c"
   },
+  "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial :",
+    "  Pouw.Guarantees.RelativeSecurity.FloorPerProverNontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "9709cbcd16d5ff29ff99bd0518f49a574f5d8ccafd4ff793c9f566e26752d1c7"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorJ10RPerProverHonest": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorJ10RPerProverHonest :",
+    "  Pouw.Guarantees.RelativeSecurity.OverlapFloorJ10RPerProverHonest"
+   ],
+   "assumptions": [],
+   "type_hash": "d3110bb01c94423a4394bd3e4242ead329fda462c9cf86d39c981584bc3abd00"
+  },
   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK : Pouw.Guarantees.RelativeSecurity.OverlapFloorK"],
@@ -12640,6 +12671,24 @@
    "assumptions": [],
    "type_hash": "b476f0b9743f7a5904f5df8872a8cd5f58a0916e9804ae28893611953f84ed7f"
   },
+  "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorPerProverHonest": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorPerProverHonest :",
+    "  Pouw.Guarantees.RelativeSecurity.OverlapFloorPerProverHonest"
+   ],
+   "assumptions": [],
+   "type_hash": "f94180802312966b8ee714f5ab5248cd469e298d47ecacb906968ee505098a07"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.StagedFloorJ10RPerProverHonest": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorJ10RPerProverHonest :",
+    "  Pouw.Guarantees.RelativeSecurity.StagedFloorJ10RPerProverHonest"
+   ],
+   "assumptions": [],
+   "type_hash": "94225036c0be96004e2f60a90dedd24ae3a376e72cbb8d3d470f1f8f998a4437"
+  },
   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorK": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.RelativeSecurity.StagedFloorK : Pouw.Guarantees.RelativeSecurity.StagedFloorK"],
@@ -12688,6 +12737,15 @@
    ],
    "assumptions": [],
    "type_hash": "2e4402f0f829311dc3640ba2998af10fbb44189a1831f1820b968d0fa3075413"
+  },
+  "Pouw.SecurityProofs.RelativeSecurity.StagedFloorPerProverHonest": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorPerProverHonest :",
+    "  Pouw.Guarantees.RelativeSecurity.StagedFloorPerProverHonest"
+   ],
+   "assumptions": [],
+   "type_hash": "7c38a44178ff30a4e0740f350288063f6be4aaba58e1bf078759d978438d5e05"
   },
   "Pouw.SecurityProofs.RelativeSecurity.TheoremSOverlap": {
    "owner": "@compute-accounting",
@@ -14401,12 +14459,12 @@
    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTNCP_U, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "NetTiming.SecurityProofs.EncardAccSeqsSampledLe": "frozen (no-function): It bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts with some faulty set that RAcc allows at delta, not runs of the network check's code, and takes the layout's fit (BoundaryGates.Fits) and the counts of the other inputs and of the faulty units' committed bits as premises; SampledAuditAccepted carries an accepted sampled audit to RAcc delta, so the two composed are the restatement path.",
    "Flock.SecurityProofs.RecursiveRanRegisteredExec": "frozen (obligation,world-unlisted,scope): RecursiveRanRegistered at the compiled inner protocol the verifier of record runs (innerAt) and the executable's row registration (rowCommit, whose binding is proved), with InnerSound proved and no A3; it takes what an accepted run carries of the rows it read (_hop, _hx) as open obligations, beside the developer's openings (_hreg); beside VBridge and the outer sessions' custody (ZkOuter's fields hRec, Zk.RecordsCustodyZKJ, and hDraw, Zk.DrawCustodyZKHJ), all listed, it takes their scope (ZkOuter's parameter hscope). It stays here until RecursiveAudit is pinned.",
-   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedPerProver": "frozen (no-function,world-unlisted,scope): OverlapFloorKOneSided per prover (CMP-33), the overlapped floor of record at each adversary's own error: the same floor and the same parity luck 0.854 per draw, each adversary's error its own (breakBound: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times its binding and zero-knowledge finder terms, each finder read through ecr/sha-512 at a budget computed from the adversary's time and top where it fails it, capped at 1 and averaged over its coins). It is stated over an arbitrary Machine and Service, an analysis map (ORunMap) and the analysis's collision finders (Finders), not the service's code, and takes three premises: ServiceSoundOverlapPerProver (ServiceSoundOverlap's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the analysis's finder for that adversary (Finders) finds a collision), KScopeOverlapOneSided and ChargeVF3j16Overlap, as OverlapFloorKOneSided does. c = 1 on K's proved one-sided scope; K1 is not claimed outside the two proved scopes, and the verifier can't observe which case applies (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).",
-   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKPerProver": "frozen (no-function,world-unlisted,scope): OverlapFloorK per prover (CMP-33): the same floor and the same luck 3/4 per draw, each adversary's error its own (breakBound: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times its binding and zero-knowledge finder terms, each finder read through ecr/sha-512 at a budget computed from the adversary's time and top where it fails it, capped at 1 and averaged over its coins). It is stated over an arbitrary Machine and Service, an analysis map (ORunMap) and the analysis's collision finders (Finders), not the service's code, and takes three premises: ServiceSoundOverlapPerProver (ServiceSoundOverlap's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the analysis's finder for that adversary (Finders) finds a collision), KScopeOverlapAffine and ChargeVF3j16Overlap, as OverlapFloorK does. It is a sibling of OverlapFloorKOneSidedPerProver, proved on its own scope; K1 is not claimed outside the two proved scopes (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).",
-   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedPerProver": "frozen (no-function,world-unlisted,scope): StagedFloorKOneSided per prover (CMP-33), the staged floor of record at each adversary's own error: the same floor and the same parity luck 0.854, each adversary's error its own (breakBound: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times its binding and zero-knowledge finder terms, each finder read through ecr/sha-512 at a budget computed from the adversary's time and top where it fails it, capped at 1 and averaged over its coins). It is stated over an arbitrary Machine and Service, an analysis map (RunMap) and the analysis's collision finders (Finders), not the service's code, and takes three premises: ServiceSoundStagedPerProver (ServiceSoundStaged's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the analysis's finder for that adversary (Finders) finds a collision), KScopeOneSided and ChargeVF3j16, as StagedFloorKOneSided does. c = 1 on K's proved one-sided scope; K1 is not claimed outside the two proved scopes, and the verifier can't observe which case applies (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).",
-   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKPerProver": "frozen (no-function,world-unlisted,scope): StagedFloorK per prover (CMP-33): the same floor and the same luck 3/4, each adversary's error its own (breakBound: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times its binding and zero-knowledge finder terms, each finder read through ecr/sha-512 at a budget computed from the adversary's time and top where it fails it, capped at 1 and averaged over its coins). It is stated over an arbitrary Machine and Service, an analysis map (RunMap) and the analysis's collision finders (Finders), not the service's code, and takes three premises: ServiceSoundStagedPerProver (ServiceSoundStaged's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the analysis's finder for that adversary (Finders) finds a collision), KScopeAffine and ChargeVF3j16, as StagedFloorK does. It is a sibling of StagedFloorKOneSidedPerProver, proved on its own scope; K1 is not claimed outside the two proved scopes (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).",
-   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedJ10RPerProver": "frozen (no-function,world-unlisted,scope): StagedFloorKOneSidedJ10R per prover (CMP-33; J10-R's call design, RT-ALGO-17): the same floor and the same parity luck 0.854, each adversary's error its own (breakBound: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times its binding and zero-knowledge finder terms, each finder read through ecr/sha-512 at a budget computed from the adversary's time and top where it fails it, capped at 1 and averaged over its coins). It is stated over an arbitrary Machine and Service, an analysis map (JRunMap) and the analysis's collision finders (Finders), not the service's code, and takes three premises: ServiceSoundStagedJ10RPerProver (ServiceSoundStagedJ10R's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the analysis's finder for that adversary (Finders) finds a collision), KScopeOneSidedJ10R and ChargeVF3j16J10R, as StagedFloorKOneSidedJ10R does. c = 1 on the call's one-sided scope; K1 is not claimed outside it, and the verifier can't observe which case applies (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).",
-   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver": "frozen (no-function,world-unlisted,scope): OverlapFloorKOneSidedJ10R per prover (CMP-33; J10-R's call design, RT-ALGO-17): the same floor and the same parity luck 0.854 per call, each adversary's error its own (breakBound: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times its binding and zero-knowledge finder terms, each finder read through ecr/sha-512 at a budget computed from the adversary's time and top where it fails it, capped at 1 and averaged over its coins). It is stated over an arbitrary Machine and Service, an analysis map (JORunMap) and the analysis's collision finders (Finders), not the service's code, and takes three premises: ServiceSoundOverlapJ10RPerProver (ServiceSoundOverlapJ10R's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the analysis's finder for that adversary (Finders) finds a collision), KScopeOverlapOneSidedJ10R and ChargeVF3j16OverlapJ10R, as OverlapFloorKOneSidedJ10R does. c = 1 on the calls' one-sided scope; K1 is not claimed outside it, and the verifier can't observe which case applies (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).",
+   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedPerProver": "frozen (no-function,world-unlisted,scope): OverlapFloorKOneSided per prover (CMP-33), the overlapped floor of record at each adversary's own error: the same floor and the same parity luck 0.854 per draw, each adversary's error its own (breakPr: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times the collision probabilities of the fork finders built from it, summed over the rounds, capped at 1 and averaged over its coins; ecr/sha-512 applies to those finders outside the floor, breakPr_le_breakBound). It is stated over an arbitrary Machine, a HashedService (a Service with its verifier's SHA-512 inputs) and an analysis map (ORunMap), not the service's code, and takes three premises: ServiceSoundOverlapPerProver (ServiceSoundOverlap's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the fork finder built from that adversary (forkFinders: two runs of it from its commitment forked at the round for binding, kz continuations for zero knowledge) finds a collision among the verifier's SHA-512 inputs in those runs), KScopeOverlapOneSided and ChargeVF3j16Overlap, as OverlapFloorKOneSided does. c = 1 on K's proved one-sided scope; K1 is not claimed outside the two proved scopes, and the verifier can't observe which case applies (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).",
+   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKPerProver": "frozen (no-function,world-unlisted,scope): OverlapFloorK per prover (CMP-33): the same floor and the same luck 3/4 per draw, each adversary's error its own (breakPr: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times the collision probabilities of the fork finders built from it, summed over the rounds, capped at 1 and averaged over its coins; ecr/sha-512 applies to those finders outside the floor, breakPr_le_breakBound). It is stated over an arbitrary Machine, a HashedService (a Service with its verifier's SHA-512 inputs) and an analysis map (ORunMap), not the service's code, and takes three premises: ServiceSoundOverlapPerProver (ServiceSoundOverlap's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the fork finder built from that adversary (forkFinders: two runs of it from its commitment forked at the round for binding, kz continuations for zero knowledge) finds a collision among the verifier's SHA-512 inputs in those runs), KScopeOverlapAffine and ChargeVF3j16Overlap, as OverlapFloorK does. It is a sibling of OverlapFloorKOneSidedPerProver, proved on its own scope; K1 is not claimed outside the two proved scopes (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).",
+   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedPerProver": "frozen (no-function,world-unlisted,scope): StagedFloorKOneSided per prover (CMP-33), the staged floor of record at each adversary's own error: the same floor and the same parity luck 0.854, each adversary's error its own (breakPr: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times the collision probabilities of the fork finders built from it, summed over the rounds, capped at 1 and averaged over its coins; ecr/sha-512 applies to those finders outside the floor, breakPr_le_breakBound). It is stated over an arbitrary Machine, a HashedService (a Service with its verifier's SHA-512 inputs) and an analysis map (RunMap), not the service's code, and takes three premises: ServiceSoundStagedPerProver (ServiceSoundStaged's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the fork finder built from that adversary (forkFinders: two runs of it from its commitment forked at the round for binding, kz continuations for zero knowledge) finds a collision among the verifier's SHA-512 inputs in those runs), KScopeOneSided and ChargeVF3j16, as StagedFloorKOneSided does. c = 1 on K's proved one-sided scope; K1 is not claimed outside the two proved scopes, and the verifier can't observe which case applies (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).",
+   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKPerProver": "frozen (no-function,world-unlisted,scope): StagedFloorK per prover (CMP-33): the same floor and the same luck 3/4, each adversary's error its own (breakPr: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times the collision probabilities of the fork finders built from it, summed over the rounds, capped at 1 and averaged over its coins; ecr/sha-512 applies to those finders outside the floor, breakPr_le_breakBound). It is stated over an arbitrary Machine, a HashedService (a Service with its verifier's SHA-512 inputs) and an analysis map (RunMap), not the service's code, and takes three premises: ServiceSoundStagedPerProver (ServiceSoundStaged's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the fork finder built from that adversary (forkFinders: two runs of it from its commitment forked at the round for binding, kz continuations for zero knowledge) finds a collision among the verifier's SHA-512 inputs in those runs), KScopeAffine and ChargeVF3j16, as StagedFloorK does. It is a sibling of StagedFloorKOneSidedPerProver, proved on its own scope; K1 is not claimed outside the two proved scopes (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).",
+   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedJ10RPerProver": "frozen (no-function,world-unlisted,scope): StagedFloorKOneSidedJ10R per prover (CMP-33; J10-R's call design, RT-ALGO-17): the same floor and the same parity luck 0.854, each adversary's error its own (breakPr: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times the collision probabilities of the fork finders built from it, summed over the rounds, capped at 1 and averaged over its coins; ecr/sha-512 applies to those finders outside the floor, breakPr_le_breakBound). It is stated over an arbitrary Machine, a HashedService (a Service with its verifier's SHA-512 inputs) and an analysis map (JRunMap), not the service's code, and takes three premises: ServiceSoundStagedJ10RPerProver (ServiceSoundStagedJ10R's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the fork finder built from that adversary (forkFinders: two runs of it from its commitment forked at the round for binding, kz continuations for zero knowledge) finds a collision among the verifier's SHA-512 inputs in those runs), KScopeOneSidedJ10R and ChargeVF3j16J10R, as StagedFloorKOneSidedJ10R does. c = 1 on the call's one-sided scope; K1 is not claimed outside it, and the verifier can't observe which case applies (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).",
+   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver": "frozen (no-function,world-unlisted,scope): OverlapFloorKOneSidedJ10R per prover (CMP-33; J10-R's call design, RT-ALGO-17): the same floor and the same parity luck 0.854 per call, each adversary's error its own (breakPr: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times the collision probabilities of the fork finders built from it, summed over the rounds, capped at 1 and averaged over its coins; ecr/sha-512 applies to those finders outside the floor, breakPr_le_breakBound). It is stated over an arbitrary Machine, a HashedService (a Service with its verifier's SHA-512 inputs) and an analysis map (JORunMap), not the service's code, and takes three premises: ServiceSoundOverlapJ10RPerProver (ServiceSoundOverlapJ10R's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the fork finder built from that adversary (forkFinders: two runs of it from its commitment forked at the round for binding, kz continuations for zero knowledge) finds a collision among the verifier's SHA-512 inputs in those runs), KScopeOverlapOneSidedJ10R and ChargeVF3j16OverlapJ10R, as OverlapFloorKOneSidedJ10R does. c = 1 on the calls' one-sided scope; K1 is not claimed outside it, and the verifier can't observe which case applies (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).",
    "Nci.Cover.SecurityProofs.CoverTrainingChained": "frozen (no-function): Like CoverTraining, it is about an arbitrary reference training circuit, here as its bits made a declaration (bitDecl, Security/Definitions/Nci/BitDecl.lean) with its multiplication blocks and token computations (Nci.Covering.MulBlocks), and a declaration that contains it with its baseline registered (the named BaselineRegistered, Security/Definitions/Nci/Assumptions/Baseline.lean), under the named ParameterHardAt on those bits and with ActivationChainedAt read in its statement (Security/Definitions/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; Security/Proofs/Nci/Cover/CheckedChained.lean joins it to a verdict (coverTrainedChained, from NciCheck.Properties.Witnesses), and stating that join among the properties is what would give it an acceptance.",
    "Nci.SecurityProofs.CoveringBoundPriced": "frozen (no-function): CoveringBoundTwoCosts's twin with a price per weight in place of one weight cost c_w, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHardPricedAt (Security/Definitions/Nci/Assumptions/CoveringPriced.lean) and with ActivationChainedAt read in its statement (Security/Definitions/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Accounting.SecurityProofs.DeclaredCircuitRequirement": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationSketchDeployed's game (sketch receipts at 16 rows, 2,773 openings a window, a store per pass made by the append-coin rule) on a layout that reads the codec and the append coins through an a-bit summary the pass's devices are told (Accounting.Assumptions.SteeredLayout: RateSketch.steeredStore, RateSketch.SketchSummarySession), each append's blocks read within the lifetime cap L of the window it joined (RateSketch.LifetimeCapped), a layer-1 bound on the prover system parametric in its resources a pass within the pass deadline tau (kept S, link Lr*tau, hash budget qr*tau, rebuilds Xr*tau), carriers of a declared circuit passing the stacking property (Gates.Property, Gates.Restricted) within its caps, charged over L windows (Accounting.Assumptions.CircuitCarriers, RateSketch.Provenance.OfCircuit: C = 8*R_L + ceil(1024*L*c*P*N*4096/E), R_L the most run-input bytes of L windows, a window certifying at most P*N*4096 bytes), slack k tiles a pass traded against k+1 query guesses ((qr*tau/2^96)^(k+1), 2^a once per pass), and its shortfall read pass by pass: the distinct sectors each pass read (RateSketch.SketchDeployedWindow.readsIn) from the tiles holding the appended blocks of the circuit's credited reads at the step it is bound to (strictly increasing), against the larger of the circuit's credited live bits in those blocks and its read bits in appended blocks less a block a group (Requirement.bitsAt, bits, OneBlockEach), with the memory map holding the circuit's credited blocks and each pass's plan covering its reads (Requirement.StoreMatches, PlanMatches: one-sided, other blocks may be resident or planned and earn nothing) and the plan's blocks at distinct positions of the pass's store, for a placed execution (Requirement.Placement, Placement.Deadlines: each pass tau ticks of the devices' clocks), layout, groups, binding, memory map, plans and addresses chosen after every coin; abstract verbatim pass devices in the random-oracle and ideal encoding models under the named assumptions SketchRank, SketchHashBudget, SquaringFloor and ChainSum (at their floor, epsilon at least 2^-64), KeyBinding, CircuitCarriers and SteeredLayout, not the rate audit's, the memory map's or the engine's code; attribution to the node's devices and tiers is not here. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest nonlinear units, budgeted units and data products, of Gates.encodeCosts, ⊤ where there is none).",
@@ -14580,7 +14638,12 @@
    "Verity.SecurityProofs.RegisteredLeakage": "frozen (no-function): It is stated over an arbitrary value service, serving stack and event on the record, and says what a registration whose record counts its epoch's sessions leaks through the stack's choice of its session, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.RegisteredLeakage_honest": "completeness: RegisteredLeakage's honest lemma (its witnesses entry): at a built value service, the stack that commits one session and registers it reads no key (ZkServerOwnUser) and the bound holds there, so the premise is not vacuous.",
    "Verity.SecurityProofs.RegisteredLeakage_nontrivial": "completeness: RegisteredLeakage's nontrivial lemma (its witnesses entry): the bound fails (¬ real … ≤ 1 · (ideal + prfAdvantage) + forgeAdvantage) at the stack of RegisteredLeakage_nontrivial_stack, which makes its record tag from the key, a counterexample for another stack, not a property of a deployed one.",
-   "Verity.SecurityProofs.RegisteredLeakage_nontrivial_stack": "completeness: the stack RegisteredLeakage's nontrivial lemma is at reads the key (¬ ZkServerOwnUser), so that lemma's failing bound is ZkServerOwnUser's to prevent."
+   "Verity.SecurityProofs.RegisteredLeakage_nontrivial_stack": "completeness: the stack RegisteredLeakage's nontrivial lemma is at reads the key (¬ ZkServerOwnUser), so that lemma's failing bound is ZkServerOwnUser's to prevent.",
+   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorPerProverHonest": "completeness: the honest witness of StagedFloorKPerProver and StagedFloorKOneSidedPerProver (LEAN-66, their witnesses entries): at the identity as sha and kz = 1 (it holds at every sha and kz, StagedFloorPerProverHonest_at, since the honest verifier hashes nothing), on one round of one stage over one cell-block (n = L = B = n' = 1, 7 planes at wRe) in the machine of functions at no cost (funMachine), a HashedService whose verifier accepts the answer true at every seed and refuses false, with the identity coin map and a run map whose one product slot computes the cell-block's target (so every error table is zero, the game accepts every play and no round breaks), meets ServiceSoundStagedPerProver at the fork finders with delta_b = beta_b = delta_z = beta_z = 0, KScopeAffine, KScopeOneSided and ChargeVF3j16 at kappa = 1 (the noise reads carry the one product, since the machine charges nothing). It shows the premises consistent at zero break terms; the floor there is negative, so it does not show the floor met.",
+   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorPerProverHonest": "completeness: the honest witness of OverlapFloorKPerProver and OverlapFloorKOneSidedPerProver (LEAN-66, their witnesses entries): as StagedFloorPerProverHonest on one round of one draw over one cell-block, ServiceSoundOverlapPerProver at the fork finders with zero break terms, KScopeOverlapAffine, KScopeOverlapOneSided and ChargeVF3j16Overlap at kappa = 1 hold in funMachine, with the honest answer accepted at every seed and another refused.",
+   "Pouw.SecurityProofs.RelativeSecurity.StagedFloorJ10RPerProverHonest": "completeness: the honest witness of StagedFloorKOneSidedJ10RPerProver (LEAN-66, its witnesses entry): as StagedFloorPerProverHonest on one round of one call over one cell-block of J10-R's call design (n = L = B = n' = 1), ServiceSoundStagedJ10RPerProver at the fork finders with zero break terms, KScopeOneSidedJ10R and ChargeVF3j16J10R at kappa = 1 hold in funMachine, with the honest answer accepted at every seed and another refused.",
+   "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorJ10RPerProverHonest": "completeness: the honest witness of OverlapFloorKOneSidedJ10RPerProver (LEAN-66, its witnesses entry): as StagedFloorJ10RPerProverHonest on one round of one call draw over one cell-block, ServiceSoundOverlapJ10RPerProver at the fork finders with zero break terms, KScopeOverlapOneSidedJ10R and ChargeVF3j16OverlapJ10R at kappa = 1 hold in funMachine, with the honest answer accepted at every seed and another refused.",
+   "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial": "completeness: the nontrivial witness of the six floors per prover (LEAN-66, their witnesses entries): at acceptAllService, the service whose verifier accepts everything, on one round of a fair coin, with the identity coin map and sha, one continuation for each fork finder and the floor F = 1 (as floorPerProver_acceptAll proves at every such service, coin map, sha, kz and positive F), ServiceFloorPerProver at breakPr with the floors' luck 2^-40 and zero break terms fails in funMachine (a constant adversary is accepted at every seed and charged nothing, while its error is 2^-40). Each floor per prover concludes ServiceFloorPerProver at that breakPr, at its own F."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -17204,6 +17267,58 @@
   }
  },
  "reads": {
+  "Definitions.Pouw.Guarantees.RelativeSecurity": {
+   "digest": "a2d1d0185869a1b60ad196fb8c97292a61b3b1dfdfd2fc45d09cb4588a2f789f",
+   "definitions": {
+    "Pouw.Guarantees.RelativeSecurity.FloorPerProverNontrivial": "61213c39b7afaeb33de564136caa6b4cd3478d63689ab05318952da0a5cf3900",
+    "Pouw.Guarantees.RelativeSecurity.OverlapFloorJ10RPerProverHonest": "322c0bcf338c0e6205c3555b56bf141977c9281e120808aca131554fc1278307",
+    "Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver": "ffd10209511c582f54285b8a74ef751743a3ade036de965e06c4e935bfcf9177",
+    "Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSidedPerProver": "6af8d77aaa157d95facd448903767cfa08575913c37eb948b6ab23a4a131d76d",
+    "Pouw.Guarantees.RelativeSecurity.OverlapFloorKPerProver": "0ee2add0041ef9287ae4149b91e7d033fb07275f9491de06c58bf8254f0718d3",
+    "Pouw.Guarantees.RelativeSecurity.OverlapFloorPerProverHonest": "7c2bcbcd35029a1fab67defec1ae5886580a307701fe1d9b20816a4e7a85c3e1",
+    "Pouw.Guarantees.RelativeSecurity.StagedFloorJ10RPerProverHonest": "21ecdbef0b3b90767adec0db141ca1937b2dc64869d7d08dbaf108c5ddbbb7eb",
+    "Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSidedJ10RPerProver": "b92219564d59e2dd92987d73a9ec37a710c0cc582e5e70fb92220e2c4c9f4fae",
+    "Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSidedPerProver": "6a42edd23ff580005fb7bff2a715d30b2b57831e78bb5140e8c18797012ebcd1",
+    "Pouw.Guarantees.RelativeSecurity.StagedFloorKPerProver": "ba8f48a8cdc619c6f22b86d1d87a8c3a7285985a53851dd11f7fea7745d26187",
+    "Pouw.Guarantees.RelativeSecurity.StagedFloorPerProverHonest": "c9cfa9db0b761dc423caa17a250d1ae8e04ac93fb435c17dabe75982cbfa902a"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial",
+    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorJ10RPerProverHonest",
+    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorPerProverHonest",
+    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorJ10RPerProverHonest",
+    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorPerProverHonest"
+   ]
+  },
+  "Definitions.Pouw.RelativeSecurityFork": {
+   "digest": "07a03bdd52ad93bc7bb7c60f324d1cb2a012fe109211fb9750563a187980db12",
+   "definitions": {
+    "Pouw.RelativeSecurity.HashedService": "25913fd6a085b8c66131c3c82809f265a931086ba8c313e84045803fe8b44a51",
+    "Pouw.RelativeSecurity.HashedService.hashes": "7e35933eb840bbad5bec0015fcf90ab87ff148e31efdad2449bd9e0620d7664e",
+    "Pouw.RelativeSecurity.HashedService.toService": "6ebbbb6e483de9fa1bd1212d6f8f42942d2a26d102663a722ec4a7aaf8eabaa3",
+    "Pouw.RelativeSecurity.Paths.splice": "0f2a74888dc7d771a8794d2b06facd45e2c49fd5015e1acd259d29485aecb17e",
+    "Pouw.RelativeSecurity.acceptAllService": "928b41fd75da93fb588eb810cc4ef1a7a9eb01c638831029211c20edf9675e4e",
+    "Pouw.RelativeSecurity.breakPr": "afdb74f925100dfeab88717f32d6f831b6b515fdace997f6ce90eab473ed88b5",
+    "Pouw.RelativeSecurity.forkFinder": "228504a882733200a263883195a8435fa23fe7fbdcf2811c8fb447fee2290d06",
+    "Pouw.RelativeSecurity.forkFinders": "b551692f90cc286c5a44176a93e72150761483139a00e7ff4dc1b440de560bf8",
+    "Pouw.RelativeSecurity.forkLog": "1ad512a74eb4f195e62b8b6db8fe7ccea7edac2fd19cffac7e3565b14aef9999",
+    "Pouw.RelativeSecurity.forkSeeds": "c160e86cf58d566789de2953821fe3b642c640be33e9ebb253a987740c228ab2",
+    "Pouw.RelativeSecurity.funMachine": "b3cab3dfd5c2d903030a98409ce1a74b0c4306f2d607b7534518c9e2f05543c9"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.RelativeSecurity.FloorPerProverNontrivial",
+    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorJ10RPerProverHonest",
+    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver",
+    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedPerProver",
+    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKPerProver",
+    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorPerProverHonest",
+    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorJ10RPerProverHonest",
+    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedJ10RPerProver",
+    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedPerProver",
+    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKPerProver",
+    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorPerProverHonest"
+   ]
+  },
   "Flock.KsScope": {
    "digest": "5b16f688c5e6979f6e37cc39a18731b8869a7aa237f6113cc889b09ff65a7ac4",
    "definitions": {
