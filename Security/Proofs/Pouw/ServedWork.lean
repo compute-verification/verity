@@ -1,5 +1,7 @@
-import Properties.Pouw.ServedWork
-import Proofs.Pouw.PeriodJ10R
+module
+
+public import Properties.Pouw.ServedWork
+public import Proofs.Pouw.PeriodJ10R
 
 /-!
 # Proof of `ServedWork`
@@ -14,6 +16,8 @@ import Proofs.Pouw.PeriodJ10R
   window's right words at `p` each, less `lam`. So the event is inside the words guarantee's event or some window's
   degenerate salts: `δ_s + n·(δ_bind + δ_ks)` plus `n·κ_deg(B)`.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Served.SecurityProofs
 

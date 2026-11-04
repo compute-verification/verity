@@ -1,6 +1,8 @@
-import Definitions.Accounting.Window
-import Definitions.Accounting.Guarantees.Responder
-import Proofs.Accounting.Responder
+module
+
+public import Definitions.Accounting.Window
+public import Definitions.Accounting.Guarantees.Responder
+public import Proofs.Accounting.Responder
 
 /-!
 # B2's oracle-location form, proved: a window as a ring responder
@@ -23,6 +25,8 @@ exceed `(D, Q, L)`, so that it is `RingBounded` on every primitive, and leaves i
 the windows' results (`seqAnswers_congr`), so an outcome the windows answer correctly is one it does.
 `B2WindowP2Ring` is that at P2's deployed point.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs
 

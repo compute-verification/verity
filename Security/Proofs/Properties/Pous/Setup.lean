@@ -1,5 +1,7 @@
-import Properties.Pous
-import Proofs.Properties.Identity
+module
+
+public import Properties.Pous
+public import Proofs.Properties.Identity
 
 /-!
 # Proofs of the setup check's two properties (`Properties.Pous`): `acceptsDecodes` and `publishesRoot`
@@ -17,6 +19,8 @@ a state represents the message it absorbed (`Properties.Identity.Rep`), so absor
 segment finalize alike. `publishesRoot`: the published root is `Merkle.root` over the loop's leaves, which are
 `leaves salt C`, and valid parameters give `C*` a block (`validate_ok`), so the root exists.
 -/
+
+@[expose] public section
 
 namespace PousCheck.Properties.SecurityProofs
 

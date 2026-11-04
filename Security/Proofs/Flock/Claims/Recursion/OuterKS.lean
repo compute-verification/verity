@@ -1,5 +1,9 @@
-import Proofs.Flock.Claims.Recursion.KS
-import Proofs.Flock.Claims.Recursion.CostExp
+module
+
+public import Proofs.Flock.Claims.Recursion.KS
+public import Proofs.Flock.Claims.Recursion.CostExp
+
+@[expose] public section
 
 namespace Claims.Recursion
 

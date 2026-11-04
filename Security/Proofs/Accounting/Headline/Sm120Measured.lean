@@ -1,5 +1,7 @@
-import Proofs.Accounting.Headline.EpsJl
-import Proofs.Accounting.Headline.Sm120
+module
+
+public import Proofs.Accounting.Headline.EpsJl
+public import Proofs.Accounting.Headline.Sm120
 
 /-!
 # sm_120's headline on its measured vector
@@ -25,6 +27,8 @@ The argument is `sm120MeasuredHeadline_bind`, with binding at `δ_bind` (`ProofL
 `Sm120MeasuredHeadline` takes it at `√δ_fork` (`Whole.moved_le_sqrt`), as the sheet's `Sm120SheetHeadline` takes
 `sm120SheetHeadline_bind`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS.Headline
 

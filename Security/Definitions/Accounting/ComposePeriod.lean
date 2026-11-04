@@ -1,4 +1,6 @@
-import Definitions.Accounting.Compose
+module
+
+public import Definitions.Accounting.Compose
 
 /-!
 # PoUW's work over a monitoring period of `n` windows (trusted)
@@ -50,6 +52,8 @@ period's coins, which the cheater may steer, and the tail at a stopping time is 
 * `epsPrefix`, `creditPrefix`: that bound as a share `ε(j)` of the prefix's live words, and the period's credit in
   live words, `(1 − ε(j))₊` of them.
 -/
+
+@[expose] public section
 
 namespace Accounting.Compose
 

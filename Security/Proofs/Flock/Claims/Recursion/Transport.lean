@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.Compose
-import Proofs.Flock.Claims.KS.Fork
+module
+
+public import Proofs.Flock.Claims.Recursion.Compose
+public import Proofs.Flock.Claims.KS.Fork
 
 /-!
 # The recursive audit's fork form, in the claims' error terms
@@ -17,6 +19,8 @@ prover by `κ + √(γ·Pr[B]) + β·Pr[Fe]`. Each kind of disjunct lands in one
 * a collision between two runs forked at a round, each read through the extractor (the inner rounds' forks), is
   `forkExt`'s: `B`'s two runs, `E` on each, then the pair (`forkExt_Pr_le`).
 -/
+
+@[expose] public section
 
 namespace Claims
 

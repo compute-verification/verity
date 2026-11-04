@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FinishStopAt
+module
+
+public import Proofs.Flock.Claims.ZK.FinishStopAt
 
 /-!
 # The replay's rows on a view's masked values, constants included
@@ -14,6 +16,8 @@ the firewall's stop, `rowsAt_of_cons`, reads their constants too).
   lincheck return (`Claims.ZKServer.zerocheckCut_proof`, `lincheckCut_proof`) at masked values that are the view's below
   `zp 64`, the PIOP's words.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 open Flock Model ZkSession ZkView ZK Refine

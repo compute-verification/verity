@@ -1,5 +1,9 @@
-import Proofs.Flock.Claims.ZK.FrameOuter
-import Proofs.Flock.Claims.ZK.FramePoints
+module
+
+public import Proofs.Flock.Claims.ZK.FrameOuter
+public import Proofs.Flock.Claims.ZK.FramePoints
+import all Init.Data.String.Defs
+import all Init.Data.Array.Basic
 
 /-!
 # The frame's rank check along a rep's requests (`FrameUnrefused`'s rank fault, at the frame)
@@ -20,6 +24,8 @@ answered them, after the earlier rep's claim points. Along the loop's requests f
   mask slot short of full rank (`LeanRelease.rankStop`), so wherever the frame takes the coins the opening's label
   passes its rank check.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.TmplFoldClassOk
-import Proofs.Flock.Soundness.TmplPosMap
+module
+
+public import Proofs.Flock.Soundness.TmplFoldClassOk
+public import Proofs.Flock.Soundness.TmplPosMap
 
 /-!
 # The template fold is its reference
@@ -12,6 +14,8 @@ has the reference as the call tree's `placeSum`, which reads every column at `π
 - `refVal_place`: a copy's `refVal`, its inputs read through `π`, is its `placeSum`.
 - `fold_eq_foldRef`: the fold and its reference agree entry by entry.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128
 

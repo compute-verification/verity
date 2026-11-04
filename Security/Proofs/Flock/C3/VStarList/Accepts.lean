@@ -1,10 +1,12 @@
-import Flock.RecSetup
-import Proofs.Flock.C3.VStarList.Range
-import Proofs.Flock.Recursive.HoloExec
-import Proofs.Flock.Recursive.VStarCheck
-import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+module
+
+public import Flock.RecSetup
+public import Proofs.Flock.C3.VStarList.Range
+public import Proofs.Flock.Recursive.HoloExec
+public import Proofs.Flock.Recursive.VStarCheck
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 
 /-!
 # Piece (h): `AcceptsC3` from the verifier's acceptance
@@ -29,6 +31,8 @@ covers check (`RecVStar.checkCovers`). So:
   accepted candidate-3 session check 5's source is the files of the record the verifier holds the inner transcript
   against, never a record of what check 5 reads (`Source.coins`), which `checkAtC3` refuses there.
 -/
+
+@[expose] public section
 
 namespace FlockC3.VStarList
 
@@ -274,9 +278,9 @@ theorem statements_of_checkStmt
     obtain ⟨ss, hss, -⟩ := check_ok (checkCircuit_ok hs).1
     simp [hss, Except.isOk, Except.toBool]
 
-/-- **The inner files' statement** (`Files.stmt`) is `setupHidden`'s on the files, with no program. -/
+/-- **The inner files' statement** (`Files.stmt`) is `setupHidden`'s on the files, under their program. -/
 theorem stmt_setupHidden {u : String} {spec' : SessionSpec} {st' : Stmt} (h : f.stmt u = .ok (spec', st')) :
-    Stmt.setupHidden RecVStar.innerTags f.circuit f.pub Coins.os [] none (some f.partition) none = .ok st' := by
+    Stmt.setupHidden RecVStar.innerTags f.circuit f.pub Coins.os [] none (some f.partition) f.program = .ok st' := by
   unfold RecCoins.Files.stmt at h
   split at h
   · rename_i x hx

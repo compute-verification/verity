@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.PlainClash0K
-import Proofs.Flock.Claims.KS.PlainClashLaterK
-import Proofs.Flock.Claims.KS.PlainPartsK
+module
+
+public import Proofs.Flock.Claims.KS.PlainClash0K
+public import Proofs.Flock.Claims.KS.PlainClashLaterK
+public import Proofs.Flock.Claims.KS.PlainPartsK
 
 /-!
 # The clashes' run-level half, at `VK keep`
@@ -12,6 +14,8 @@ the run (`plainClashQ₀K`, `plainClashQLK`), and the live self-clash's clash ho
 (`plainSimLaterClashAtK`, `plainSimClashAt_of_laterK`). Each is its original's proof at `plainSimK keep`, with the
 rep streams' rounds read up to their digests (`coins_getElem?_of_erase`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

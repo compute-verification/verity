@@ -1,5 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Layout.Region
-import Proofs.Flock.Soundness.ExecSetup
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.Region
+public import Proofs.Flock.Soundness.ExecSetup
+import all Init.Data.Array.Basic
 
 /-!
 # The `b ‖ c` that the statement pins at the `hm96` slots' outputs
@@ -11,6 +14,8 @@ byte string's 10 bit-index bits and the template instance's `log₂ g` bits, at 
 template instance `g`'s `hm96` output of port `p` are that digest (`bc_pinned`). The address is the `hm96` slot's
 (`bcAddr_eq_slotCol`), and setupH's statement's regions are `HmRow.regions` (`setupH_regions`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

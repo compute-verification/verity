@@ -1,6 +1,8 @@
-import Mathlib.Analysis.Complex.ExponentialBounds
-import Mathlib.Data.Nat.Choose.Bounds
-import Proofs.Pous.StreamedWipe.Bound
+module
+
+public import Mathlib.Analysis.Complex.ExponentialBounds
+public import Mathlib.Data.Nat.Choose.Bounds
+public import Proofs.Pous.StreamedWipe.Bound
 
 /-!
 # The streamed-label wipe at 2.6 TB and 74,000 challenges
@@ -14,6 +16,8 @@ import Proofs.Pous.StreamedWipe.Bound
 
 Both lemmas are stated for any `N`, `D` and `k`, so that no power of the deployed numbers is ever evaluated.
 -/
+
+@[expose] public section
 
 namespace PousStreamedWipe
 

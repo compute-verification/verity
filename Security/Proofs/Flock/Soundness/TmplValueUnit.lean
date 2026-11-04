@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.TmplValue
-import Proofs.Flock.VBridge.Unit
-import Flock.TmplComputes
+module
+
+public import Proofs.Flock.Soundness.TmplValue
+public import Proofs.Flock.VBridge.Unit
+public import Flock.TmplComputes
 
 /-!
 # A templated unit of a partition computes its Definitions at its local evaluation
@@ -15,6 +17,8 @@ A copy is bound to as many inputs as its Definition has (`Flock.TmplValue.within
 spec (`Tmpl.DefComputes`) carries that spec of the local evaluation at its bound inputs on its outputs, at every copy
 (`unit_computes`). No verifier path reads this file.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.TmplValue
 

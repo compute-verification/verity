@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.Salted
+module
+
+public import Proofs.Flock.Soundness.Refine.Salted
 
 /-!
 # Leaf schemes with explicit collision extractors
@@ -18,6 +20,8 @@ two colliding inputs, computed from the two openings (`ExplicitLeaf.pair`). The 
 `hm96_treeLeaf` ties `ExplicitLeaf.hm96`'s leaf to the executable's: it is `Hm96.Default512.treeLeaf` of the commit string
 `Hm96.Default512.commitString (Sha512.hash row) salt`, the leaf the verifier computes from a public `b ‖ c`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Binding
 

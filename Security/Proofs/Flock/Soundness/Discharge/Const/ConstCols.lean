@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.E2E
-import Proofs.Flock.Soundness.Types.ProgramPlaces
-import Proofs.Flock.Soundness.Discharge.Const.Inst
+module
+
+public import Proofs.Flock.Soundness.E2E
+public import Proofs.Flock.Soundness.Types.ProgramPlaces
+public import Proofs.Flock.Soundness.Discharge.Const.Inst
 
 /-!
 # `hConst`: only a unit's constant column sits on the constant's gate
@@ -19,6 +21,8 @@ the verifier accepted enter. It holds at `ones = {one}` when every unit's instan
 (`image_oneWire`), as the certificate's `h1` needs at the committed values; a set holding another gate a unit's column
 reads would make `ConstCols` false.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Const
 

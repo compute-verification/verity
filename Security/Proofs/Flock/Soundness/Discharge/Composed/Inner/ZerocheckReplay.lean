@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Refine.Exec
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckMasked
+module
+
+public import Proofs.Flock.Soundness.Refine.Exec
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckMasked
 
 /-!
 # `Zk.replay`'s zerocheck constraints are the `ZerocheckMasked` terms
@@ -10,6 +12,8 @@ at the coins it draws from `t`: the outer coins `rOuterAt t` (round `t.k + 1`; `
 coin `zAt t` (round `t.k + 2`) and the residual coins `rhoAt t (m − 6)` (rounds `t.k + 3 …`, the loop's pushed coins).
 Its `c` claim sits at `(L_s(z), r)` and its `c` value is the form `fc`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed.ZerocheckMasked
 

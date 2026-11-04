@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.Fork
-import Proofs.Flock.Claims.Bridge
+module
+
+public import Proofs.Flock.Claims.KS.Fork
+public import Proofs.Flock.Claims.Bridge
 
 /-!
 # Escapes at a game's verifier
@@ -9,6 +11,8 @@ outcome (`Bridge.run_ofGame`), so an escape event is tied to the verifier's log 
 soon as it gives a collision among the decision's calls: on the outcomes of two runs forked at `j`
 (`tiedColl_ofGame`), or of one run (`tiedColl_ofGame₁`).
 -/
+
+@[expose] public section
 
 namespace Claims
 

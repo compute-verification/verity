@@ -1,5 +1,7 @@
-import Proofs.Accounting.Headline.FpG1
-import Proofs.Accounting.Headline.Sm120Measured
+module
+
+public import Proofs.Accounting.Headline.FpG1
+public import Proofs.Accounting.Headline.Sm120Measured
 
 /-!
 # FP8-g1's and W4A8-g1's headlines on sm_120's measured vector, and an honest g1 window that meets every premise
@@ -33,6 +35,8 @@ and FP8-g1's fails.
 The witness isn't a served window, for `FpG1`'s reasons: its relation checks H1's ranges, its receipt game is the
 honest one, and its time is exactly the credit, so it shows only that every premise can hold at once.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.FpG1
 

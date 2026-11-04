@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Sampling.Deployed
-import Proofs.Flock.Claims.Sampling.Reference.Complete
+module
+
+public import Proofs.Flock.Claims.Sampling.Deployed
+public import Proofs.Flock.Claims.Sampling.Reference.Complete
 
 /-!
 # Sampling completeness at the deployed record
@@ -35,6 +37,8 @@ What is proved here: the reference prover's session messages are `ZkTables.hones
 committed value (`found_opens`, `found_val`, `found_covers`), and Flock's masked error is nonnegative
 (`δcZkT_nonneg`).
 -/
+
+@[expose] public section
 
 namespace SamplingDeploy
 

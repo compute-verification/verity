@@ -1,11 +1,13 @@
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Combinatorics.SimpleGraph.Clique
-import Mathlib.Combinatorics.SimpleGraph.Finite
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
+module
+
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Combinatorics.SimpleGraph.Clique
+public import Mathlib.Combinatorics.SimpleGraph.Finite
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
 
 /-!
 # B1: independent sets under a degree bound
@@ -13,6 +15,8 @@ import Proofs.Pous.Accounting.Numbers
 The draft `PousProofs.b1_indep_set`, stated verbatim and proved. A maximum independent set `s` dominates the graph:
 a vertex outside `s` with no neighbour in `s` could be added to it. So `n ≤ |s| + Σ_{u ∈ s} deg u ≤ (Δ + 1)|s|`.
 -/
+
+@[expose] public section
 
 namespace PousPebbling
 

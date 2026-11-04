@@ -1,6 +1,8 @@
-import Proofs.Flock.VBridge.Family.OutCols
-import Proofs.Flock.C3.RegLevels.OpensRegs
-import Proofs.Flock.VBridge.Family.PartReads
+module
+
+public import Proofs.Flock.VBridge.Family.OutCols
+public import Proofs.Flock.C3.RegLevels.OpensRegs
+public import Proofs.Flock.VBridge.Family.PartReads
 
 /-!
 # A part's input keys, from V*'s META
@@ -21,6 +23,8 @@ so the Δ key (`Aliased.srcKey`, copy 0) of each of the unit's input bits is the
   element `a` is keyed by that element's bit of its port in w, named as that port (`wIdx_get`, `rowBit`), and two
   parts' keys of one element's bit are one bit of rows of one name (`starts_inj`, `partRowBits_holds`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.OfVStar
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Shaped.Commit
+module
+
+public import Proofs.Flock.Claims.Complete.Shaped.Commit
 
 /-!
 # The honest opening's lengths: the Ligerito walk
@@ -14,6 +16,8 @@ messages, `i + 1` query and consistency nonces, `4 + 3i` claim nonces, `3 + 2i` 
 `2^dim`), the commitment it opens next (`CommitOk`), and the caps and openings so far; its last level sends `yr`, the
 split of the folded table, of `2^(ext + 1)` entries.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

@@ -1,5 +1,7 @@
-import Mathlib
-import Definitions.Core.NaiveStrassen
+module
+
+public import Mathlib
+public import Definitions.Core.NaiveStrassen
 
 /-!
 # Integer bilinear schemes against P1's floor: what is proved of "every scheme loses"
@@ -24,6 +26,8 @@ range while the cover only bounds `Σ ‖u_t‖₁ ‖v_t‖₁`, so a scheme of
 excluded by these inequalities; excluding it at the served shapes is a rank lower bound for matrix multiplication
 at those sizes. `Pouw.SakLb.SAKResidual` carries it.
 -/
+
+@[expose] public section
 
 namespace Verity.Accel.Bilinear
 
