@@ -16,7 +16,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   `Produced.opened`, `Produced.shared`);
 * `known_port`: the root and opening of a port the verifier registers at known content (`Produced.known`);
 * `check_draw`, `check_proved`: the draw's checks, each `{"ok", "codes", "detail"}`;
-* `draw`: the draw from given bytes of the challenger's coins;
+* `draw`: the draw from given bytes of the challenger's coins; `ran_out`: whether that draw runs out of them;
 * `select`: the challenger's draw from a Spec's selection rule on, over a program and query, from given bytes of its
   coins, with the number of bytes it read (`Select.select`);
 * `slots`: the claims' partition over the program and query, and the slots of that draw's checked proof blocks
@@ -33,6 +33,13 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `matches_public`: the verifier's own public file against the record (`Record.matchesPublic`);
 * `session_registered`: the registered roots the verifiers of record report (`Record.sessionRegistered`), and with a
   registration only its own values' (`Record.ownRegistered`);
+* `registered_ports`: the v2 audit's checks of the verifier's registered file (`OneStageZk.readsOf`, `portsHeld`): a port
+  name repeated (`Flock.Registered.dupName?`, which `Flock.Registered.ofJson` refuses), two ports of one root registering
+  it differently (`Flock.Registered.rootClash`) and a port differing from the record's entry for its value
+  (`Registered.entryClash`);
+* `statement_roots`: the per-member form's hold of a statement's other ports to the registration (`OneStageZk.heldChecks`):
+  the record's port roots (`Registered.rootsOf`) and the first port of the statement that no registered port names whose
+  public header's frame-v3-sha512 root and domain are not the record's for `<member>/<port>` (`Registered.statementClash`);
 * `record`: the whole audit record (`Record.record`), as the text of Python's `canonical_json`;
 * `check_public`: the proof system's public-items rule on a registration record (`Service.checkPublic`);
 * `check_verdicts`: the verdicts' share of a proof system outcome (`Service.checkVerdicts`);
@@ -60,6 +67,11 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and drawn rows' writers.
 * `wires_drawn`, `wires_drawn_unrolled`: the wire check on the drawn units alone (`Wires.Summary.drawnOk`, each drawn
   wired row's public string its writer's) and on the reference's entries whose unit is drawn.
+* `public_units`: whether a public file's `units.indices` are exactly given units, ascending (`PublicUnits.exactly`),
+  which the per-member form holds each statement's file to.
+* `link_points`: each member's fewest and most drawn units under a law over the draws that end, and the members whose
+  link points differ between them (`LinkPoints.bounds`, `LinkPoints.refused`), which the per-member form's registration
+  refuses.
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
 `select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `check_draw`,
@@ -81,6 +93,8 @@ import SampledProofs.Produced
 import SampledProofs.HiddenDraw
 import SampledProofs.PartitionRef
 import SampledProofs.WiresDrawn
+import SampledProofs.PublicUnits
+import SampledProofs.LinkPoints
 
 namespace SampledProofs.Pieces
 
@@ -234,6 +248,14 @@ def draw (j : Json) : V Json := do
   if !(getD j "law" matches .obj _) then throw "law is not an object"
   let some n := nat? (getD j "population") | throw "population is not a natural number"
   Draw.drawFirst (getD j "law") n (← Flock.unhex (← Flock.J.str j "source" "the draw"))
+
+/-- `draw`'s input to `{"ran_out"}`: whether that draw runs out of the source's bytes (`Draw.ranOutOf`,
+`coins.ran_out`); refused, as `draw`, where it refuses otherwise. -/
+def ranOut (j : Json) : V Json := do
+  if !(getD j "law" matches .obj _) then throw "law is not an object"
+  let some n := nat? (getD j "population") | throw "population is not a natural number"
+  let b ← Draw.ranOutOf (Draw.drawFirst (getD j "law") n (← Flock.unhex (← Flock.J.str j "source" "the draw")))
+  return Json.mkObj [("ran_out", Json.bool b)]
 
 /-- `{"rule", "program", "query", "work_table", "closure", "source"}` to `{"draw", "read"}`: the challenger's draw
 (`Select.select`) under a Spec's selection rule over the units of the program under the query (`Select.resolve`, a rate
@@ -589,16 +611,68 @@ def run (j : Json) : V Json := do
             statement := getD j "statement", delta := getD j "delta", provedUnits, instances,
             served := getD j "served", sessionRoots := getD j "session_roots", coins := getD j "coins" }
 
+/-- `kvs` as one object holding each entry in order, a key repeated as often as listed: a tree no `Json.mkObj` builds
+(it keeps a key's last value), as `Json`'s type admits it. -/
+def rawObj (kvs : Array (String × Json)) : Json :=
+  let t : Std.DTreeMap.Internal.Impl String (fun _ => Json) × Nat :=
+    kvs.foldr (fun (k, v) (t, n) => (.inner (n + 1) k v .leaf t, n + 1)) (.leaf, 0)
+  .obj ⟨⟨t.1⟩⟩
+
+/-- `{"format", "ports", "record", "schemas"}`: the verifier's registered file `{"format", "ports"}`, its ports a list of
+`[name, port]` in order, a name repeated as often as listed (`rawObj`), read as `Flock.Registered.portsOf` reads them, to
+the v2 audit's checks of them: the first name a later port repeats (`names`, `Flock.Registered.dupName?`) and whether
+`Flock.Registered.ofJson` accepts the file (`ok`), the first two ports of one root registering it differently (`roots`,
+`Flock.Registered.rootClash`), and the first port differing from the registration `record`'s entry for its value, with
+the field (`entry`, `Registered.entryClash` under the verifier's `schemas`, `{value: schema}`). Refused where `portsOf`
+refuses the file. -/
+def registeredPorts (j : Json) : V Json := do
+  let .arr ps := getD j "ports" | throw "ports is not a list"
+  let kvs ← ps.mapM fun p => match p with
+    | .arr #[.str n, e] => pure (n, e)
+    | _ => throw "a port is not [name, port]"
+  let file := Json.mkObj [("format", getD j "format"), ("ports", rawObj kvs)]
+  let own ← Flock.Registered.portsOf file
+  let schemas ← (entries (getD j "schemas")).mapM fun (v, s) => match s with
+    | .str s => pure (v, s)
+    | _ => throw s!"schema of {v} is not a string"
+  let pair := fun (x y : String) => Json.arr #[.str x, .str y]
+  return Json.mkObj [
+    ("names", ((Flock.Registered.dupName? own.toList).map Json.str).getD .null),
+    ("ok", .bool (Flock.Registered.ofJson file).toBool),
+    ("roots", ((Flock.Registered.rootClash own).map fun (a, b) => pair a.name b.name).getD .null),
+    ("entry", ((Registered.entryClash schemas (getD j "record") own).map fun (q, k) => pair q.name k).getD .null)]
+
+/-- `{"record", "member", "registered", "ports", "header"}`: the registration record's port roots by name
+(`roots`, `Registered.rootsOf`: `[port, root, domain]` in hex, ascending by port), and, of a statement's `ports` (names)
+in the per-member form, the first that is none of the verifier's `registered` port names and whose root and domain in
+the public `header` are not the record's for `<member>/<port>` (`clash`, `[port, differs]`, `Registered.statementClash`),
+or null. -/
+def statementRoots (j : Json) : V Json := do
+  let names : String → V (Array String) := fun k => do
+    let .arr xs := getD j k | throw s!"{k} is not a list"
+    xs.mapM fun
+      | .str s => pure s
+      | _ => throw s!"{k} holds a name that is not a string"
+  let .str member := getD j "member" | throw "member is not a string"
+  let roots := Registered.rootsOf (getD j "record")
+  let pub : Flock.Public := { header := getD j "header", n := 0, digests := #[], outputs := #[], sha := .empty }
+  let clash := Registered.statementClash (roots[·]?) member (← names "registered") pub (← names "ports")
+  return Json.mkObj [
+    ("roots", Json.arr ((roots.toArray.qsort (·.1 < ·.1)).map fun (p, r, d) =>
+      Json.arr #[.str p, .str (Flock.hexOf r), .str (Flock.hexOf d)])),
+    ("clash", (clash.map fun (q, b) => Json.arr #[.str q, .bool b]).getD .null)]
+
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("registration", registration),
    ("registered", registered),
-   ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("design", design),
+   ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("ran_out", ranOut), ("select", select), ("design", design),
    ("slots", slots), ("check_proved", checkProved),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
-   ("session_registered", sessionRegistered), ("record", record), ("check_public", checkPublic),
-   ("check_verdicts", checkVerdicts), ("run", run), ("hello", Hello.check),
+   ("session_registered", sessionRegistered), ("registered_ports", registeredPorts),
+   ("statement_roots", statementRoots), ("record", record),
+   ("check_public", checkPublic), ("check_verdicts", checkVerdicts), ("run", run), ("hello", Hello.check),
    ("pop_order", popOrder),
    ("challenger_commitment", Challenger.commitmentPiece),
    ("challenger_opening", Challenger.openingPiece), ("challenger_reason", Challenger.reasonPiece),
@@ -611,7 +685,9 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_draw_coins", Challenger.drawCoinsPiece),
    ("challenger_coin_trees", Challenger.coinTreesPiece), ("challenger_session_trees", Challenger.sessionTreesPiece),
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
-   ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef)]
+   ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef),
+   ("public_units", PublicUnits.piece),
+   ("link_points", LinkPoints.piece)]
 
 def verifier : List (String × (Json → V Json)) :=
   [("registration", registration), ("matches_public", matchesPublic), ("select", select), ("check_draw", checkDraw),

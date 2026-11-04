@@ -235,12 +235,15 @@ def test_missing_proof_files_are_refused(fx, tmp_path):
     assert got is None and why[0] == "proof", why
 
 
-def _v2(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-32.bin", own: bool = True):
+def _v2(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-32.bin", own: bool = True,
+        registered: dict | None = None):
+    """`verdicts_v2` on the fixture's files, with the verifier's own registered file (or `registered`, or none)."""
     st = fx / "stage"
+    if registered is None and own:
+        registered = json.loads((st / "registered.json").read_text())
     return PF.verdicts_v2(PF.Proof(st / "circuit.txt", st / public, (session,)), circuit_sha512=circuit,
                           program=json.loads((st / "program.json").read_bytes()),
-                          partition=json.loads((st / "partition.json").read_text()),
-                          registered=json.loads((st / "registered.json").read_text()) if own else None)
+                          partition=json.loads((st / "partition.json").read_text()), registered=registered)
 
 
 def _same(v1, v2):
@@ -267,6 +270,24 @@ def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
         if own and session == fx / "session":
             (f,) = mine
             assert (f.accepted, f.why, f.units) == (True, "", DRAWN), f
+
+
+@lean
+@pytest.mark.slow
+def test_the_v2_audit_refuses_two_ports_of_one_root_registering_it_differently(fx):
+    """The verifier's registered file with a second port at ``cs``'s root: registered alike (an array's ports `name[i]`
+    read one value so), the v2 audit takes the file and the session's set-up judges the port (this circuit has no row
+    ``cs_again``); at another leaf count the v2 audit refuses the file before any session is set up (`OneStageZk.ownOf`),
+    since a row's opening finds its port by root."""
+    reg = json.loads((fx / "stage" / "registered.json").read_text())
+    cs = {k: v for k, v in reg["ports"]["cs"].items() if k not in ("known", "param")}
+    alike, refused = _v2(fx, fx / "session", registered={**reg, "ports": {**reg["ports"], "cs_again": cs}})
+    assert refused is None and [f.why[:7] for f in alike] == ["setup: "], (alike, refused)
+    got, refused = _v2(fx, fx / "session",
+                       registered={**reg, "ports": {**reg["ports"], "cs_again": {**cs, "leaves": cs["leaves"] + 1}}})
+    assert got is None and refused == (
+        f"registered reads: ports cs and cs_again have one root and register it differently (leaves {cs['leaves']}, "
+        f"against {cs['leaves'] + 1}): a row's opening finds its port by root"), refused
 
 
 @lean

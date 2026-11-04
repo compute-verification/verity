@@ -27,7 +27,8 @@ peak), then O(proof) a session: so a protocol verifies one statement a stratum, 
 The one-stage audit's v2 (`V2`, `SampledProofs.OneStageZk`) runs this verifier inside the audit's own Lean, on the files
 as content-addressed blobs: `check_v2` hands it v1's inputs with the verdicts replaced by the files' digests
 (`evidence_v2`) and the files themselves, and `verdicts_v2` is that run's verdicts alone, which the difftest holds to
-`verify`'s.
+`verify`'s. `statements_v2` is the evidence's per-member form, one statement a drawn member, which v2 refuses until the
+guarantee for a sample over several members' statements is in the lock (`OneStageZk.MULTI_REFUSED`).
 
 Building takes the lock `verifier.BUILD_LOCK` takes: Lake builds the flock package in place for `sampled-proofs-verifier`
 too, and two builds at once would rewrite one module's C under each other.
@@ -180,6 +181,13 @@ def proved_units(public: Path, session: Path) -> tuple[int, ...]:
     return tuple(sorted(indices[i] for i in drawn))
 
 
+def units_exactly(units: Sequence[Sequence[int]], indices: Sequence[int]) -> bool:
+    """Whether a public file's ``units.indices`` are exactly the units of the ``[lo, hi)`` ranges `units`, ascending, so
+    slot ``i`` of its table is the ``i``-th of them (`PublicUnits.exactly`): the per-member form holds each statement's
+    file to its member's units, and ``[[0, n]]`` is a registration's population in order."""
+    return list(indices) == [u for lo, hi in sorted(map(tuple, units)) for u in range(lo, hi)]
+
+
 def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapping[str, Any],
            registered: Mapping[str, Any] | None = None) -> tuple[list[Finding] | None, tuple[str, str] | None]:
     """Each of `proof`'s sessions verified by C-Flock's Lean verifier against the verifier's own `program` (its
@@ -286,6 +294,21 @@ def evidence_v2(proof: Proof, names: Sequence[str] | None = None) -> tuple[dict,
     return {"public": file_sha512(proof.public), "sessions": sessions}, blobs
 
 
+def statements_v2(statements: Sequence[tuple[str, Proof]], names: Sequence[str]) -> tuple[dict, list[Path]]:
+    """The v2 evidence's ``proofs`` in the per-member form (`OneStageZk.statementsOf`): per statement, its member's name
+    and `evidence_v2`'s on its files, its sessions named by the next of `names` (the v1 evidence's ``sessions``,
+    statement by statement); and the blobs that hold them."""
+    names, out, blobs = list(names), [], []
+    for member, proof in statements:
+        pr, bs = evidence_v2(proof, names[:len(proof.sessions)])
+        names = names[len(proof.sessions):]
+        out.append({"member": member, **pr})
+        blobs += bs
+    if names:
+        raise ValueError(f"{len(names)} names left after the statements' sessions")
+    return {"statements": out}, blobs
+
+
 def verdicts_v2(proof: Proof, *, circuit_sha512: str, program: Mapping[str, Any], partition: Mapping[str, Any],
                 registered: Mapping[str, Any] | None = None) -> tuple[list[Finding] | None, str | None]:
     """`verify`, by the v2 audit's own run of the verifier on `proof`'s files as blobs
@@ -336,4 +359,4 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
 
 __all__ = ["EXE", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "V2", "V2_EXE", "Finding", "LeanError", "Proof",
            "check_v2", "evidence_v2", "executable", "file_sha512", "ks_form_why", "proved_units", "reads_registered",
-           "v2_executable", "verdicts_v2", "verify"]
+           "statements_v2", "units_exactly", "v2_executable", "verdicts_v2", "verify"]

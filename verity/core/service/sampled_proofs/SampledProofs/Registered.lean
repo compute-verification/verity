@@ -20,11 +20,16 @@ gates are then its own nodes' gates.
   identity `identity_digest_sha512("veritor/indexed-domain/range/v1", {"start": 0, "step": 1, "stop": rows})` and
   `uint(rows)`; a per-window value's binding adds `"window": R`, the window's open root (`domainAt`), so a root
   registered in one window opens under no other window's domain, and a value held across windows leaves it out.
+
+The v2 audit (`OneStageZk`) holds a statement to the registration record: each port of the verifier's registered reads
+to the record's entry for its value (`entryClash`), and every other port of the statement to the record's root and
+domain for `<member>/<port>` (`statementHeld`, at the record's `roots`: `rootsOf`).
 -/
 import Flock.Program
 import Flock.Public
 import Flock.Registered
 import SampledProofs.Partition
+import Std.Data.HashMap
 
 namespace SampledProofs.Registered
 
@@ -198,5 +203,180 @@ def entries (d : Desc) (ps : Array Param) (values : Array (String × Nat)) (sche
 def Entry.toJson (e : Entry) : Json :=
   Json.mkObj [("leaves", Lean.toJson e.leaves), ("words", Lean.toJson e.words), ("word_bits", Lean.toJson e.wordBits),
     ("domain", Json.str e.domain)]
+
+/-! ### The verifier's registered ports against the record's entries -/
+
+/-- `registered.entry_of`: the record's entry for `value`, the last of its `registered` entries naming it (as R7 reads
+it, and Python's dict). -/
+def entryOf (rec : Json) (value : String) : Option Json :=
+  match getD rec "registered" with
+  | .arr es => es.reverse.find? fun e => jeq (getD e "value") (.str value)
+  | _ => none
+
+/-- The leaf schema the verifier counts `value`'s rows in (`entries`'): its row format's (`schemas`), else `SCHEMA`. -/
+def schemaOf (schemas : Array (String × String)) (value : String) : String :=
+  (schemas.find? (·.1 == value)).elim SCHEMA (·.2)
+
+/-- Port `q` of the verifier's registered reads against the record's entry `e` for its value, field by field, each key
+with whether they agree: the root and domain (lowercase hex), the leaf count, the words (none when the port names none),
+the word bits (16 when the entry leaves them out), and the leaf schema, which the entry leaves to the verifier
+(`schemaOf`). -/
+def entryFields (schemas : Array (String × String)) (q : Flock.Registered.Port) (e : Json) : List (String × Bool) :=
+  [("root", jeq (getD e "root") (.str (Flock.hexOf q.root))),
+   ("leaves", int? (getD e "leaves") == some (q.leaves : Int)),
+   ("words", int? (getD e "words") == q.words.map fun w => (w : Int)),
+   (WIDTH_KEY, (field? e WIDTH_KEY).elim (some (WORD_BITS : Int)) int? == some (q.wordBits : Int)),
+   ("domain", jeq (getD e "domain") (.str (Flock.hexOf q.domain))),
+   (Flock.Registered.SCHEMA_KEY, q.schema == schemaOf schemas q.value)]
+
+/-- The first field of `entryFields` on which port `q` and the entry `e` differ. -/
+def entryDiff? (schemas : Array (String × String)) (q : Flock.Registered.Port) (e : Json) : Option String :=
+  ((entryFields schemas q e).find? (!·.2)).map (·.1)
+
+/-- `registered.entry_clash`: the first port of `own` that differs from the record's entry for its value (`entryOf`),
+with the field (`entryDiff?`). A port of a value the record has no entry for is held by nothing here. -/
+def entryClash (schemas : Array (String × String)) (rec : Json) (own : Array Flock.Registered.Port) :
+    Option (Flock.Registered.Port × String) :=
+  own.findSome? fun q => (entryOf rec q.value).bind fun e => (entryDiff? schemas q e).map (q, ·)
+
+theorem entryDiff?_none {schemas : Array (String × String)} {q : Flock.Registered.Port} {e : Json}
+    (h : entryDiff? schemas q e = none) : ∀ f ∈ entryFields schemas q e, f.2 = true := by
+  intro f hf
+  simpa using List.find?_eq_none.mp (Option.map_eq_none_iff.mp h) f hf
+
+/-- **No port differs from its value's entry**: where `entryClash` finds none, every port of `own` whose value the record
+has an entry for agrees with it on every field of `entryFields`: root, leaf count, words, word bits, domain and schema. -/
+theorem entryClash_none {schemas : Array (String × String)} {rec : Json} {own : Array Flock.Registered.Port}
+    (h : entryClash schemas rec own = none) :
+    ∀ q ∈ own, ∀ e, entryOf rec q.value = some e → ∀ f ∈ entryFields schemas q e, f.2 = true := by
+  intro q hq e he
+  apply entryDiff?_none
+  have h1 := Array.findSome?_eq_none_iff.mp h q hq
+  rw [he] at h1
+  exact Option.map_eq_none_iff.mp h1
+
+/-! ### A statement's other ports against the record's roots -/
+
+/-- `registered.roots_of`: the registration record's port roots (`roots`) by port name, each its root and domain as bytes,
+the last entry naming the port, none when that entry's root or domain is not lowercase hex (R3 refuses a record naming a
+port twice). In the per-member form a port is `<member>/<port>`, the member's name in the parameters. -/
+def rootsOf (rec : Json) : Std.HashMap String (ByteArray × ByteArray) :=
+  let roots := match getD rec "roots" with | .arr rs => rs | _ => #[]
+  roots.foldl (init := {}) fun m r =>
+    match getD r "port" with
+    | .str port =>
+      match getD r "root", getD r "domain" with
+      | .str root, .str dom =>
+        match Flock.unhex root, Flock.unhex dom with
+        | .ok rb, .ok db => m.insert port (rb, db)
+        | _, _ => m.erase port
+      | _, _ => m.erase port
+    | _ => m
+
+/-- `registered.statement_clash`: of the statement's ports `ports`, the first that is none of `registered` and whose
+frame-v3-sha512 root and domain in the public header (`Public.fv3Bytes`) are not the ones `rootAt` gives for
+`<member>/<port>`: with `false` when it gives none, `true` when they differ. -/
+def statementClash (rootAt : String → Option (ByteArray × ByteArray)) (member : String) (registered : Array String)
+    (pub : Flock.Public) (ports : Array String) : Option (String × Bool) :=
+  ports.findSome? fun q =>
+    if registered.contains q then none else
+    match rootAt s!"{member}/{q}" with
+    | none => some (q, false)
+    | some (r, d) =>
+      if (pub.fv3Bytes "roots" q).toOption == some r && (pub.fv3Bytes "domain_ids" q).toOption == some d then none
+      else some (q, true)
+
+/-- **No other port of the statement leaves the registration's roots**: where `statementClash` finds none, every port of
+`ports` that is none of `registered` has, in the public header, the frame-v3-sha512 root and domain `rootAt` gives for
+`<member>/<port>`. -/
+theorem statementClash_none {rootAt : String → Option (ByteArray × ByteArray)} {member : String}
+    {registered : Array String} {pub : Flock.Public} {ports : Array String}
+    (h : statementClash rootAt member registered pub ports = none) :
+    ∀ q ∈ ports, q ∉ registered → ∃ r d, rootAt s!"{member}/{q}" = some (r, d) ∧
+      ((pub.fv3Bytes "roots" q).toOption == some r) = true ∧
+      ((pub.fv3Bytes "domain_ids" q).toOption == some d) = true := by
+  intro q hq hr
+  have h1 := Array.findSome?_eq_none_iff.mp h q hq
+  have hc : ¬registered.contains q = true := fun ht => hr (Array.contains_iff_mem.mp ht)
+  rw [if_neg hc] at h1
+  cases hx : rootAt s!"{member}/{q}" with
+  | none => rw [hx] at h1; cases h1
+  | some rd =>
+    obtain ⟨r, d⟩ := rd
+    rw [hx] at h1
+    dsimp only at h1
+    refine ⟨r, d, rfl, ?_⟩
+    by_cases he : ((pub.fv3Bytes "roots" q).toOption == some r &&
+        (pub.fv3Bytes "domain_ids" q).toOption == some d) = true
+    · simpa only [Bool.and_eq_true] using he
+    · rw [if_neg he] at h1; cases h1
+
+/-- **A statement's other ports are the window's committed ones** (`statementClash`): every port of the circuit `c` that
+no port of the registered reads `own` names has, in the public header `pub`, the frame-v3-sha512 root and domain of the
+registration's `<member>/<port>` (`rootAt`), refused by name. `HmOut.checkPublic` holds the header's roots to the
+population's rows, and a drawn header keeps the population's, so a writer's statement is proved about the rows its
+readers open: O(ports) lookups, the statement's units never read. -/
+def statementHeld (rootAt : String → Option (ByteArray × ByteArray)) (member : String)
+    (own : Option (Array Flock.Registered.Port)) (c : Flock.Circuit) (pub : Flock.Public) : V Unit :=
+  match statementClash rootAt member ((own.getD #[]).map (·.name)) pub (c.ports.map (·.name)) with
+  | none => pure ()
+  | some (q, false) =>
+    throw (s!"registration: the statement's port {q} is no registered port, and the registration commits no root " ++
+      s!"for {member}/{q}: a port's rows are the window's committed ones, which its readers open")
+  | some (q, true) =>
+    throw (s!"registration: the statement's port {q} has another frame-v3-sha512 root or domain in the public file " ++
+      s!"than the registration's {member}/{q}: a port's rows are the window's committed ones, which its readers open")
+
+/-- What `statementHeld` accepts: every port of the circuit that no registered port names has the registration's root
+and domain for `<member>/<port>` in the public header. -/
+theorem statementHeld_ok {rootAt : String → Option (ByteArray × ByteArray)} {member : String}
+    {own : Option (Array Flock.Registered.Port)} {c : Flock.Circuit} {pub : Flock.Public}
+    (h : statementHeld rootAt member own c pub = .ok ()) :
+    ∀ q ∈ c.ports, (∀ o ∈ own.getD #[], o.name ≠ q.name) → ∃ r d, rootAt s!"{member}/{q.name}" = some (r, d) ∧
+      ((pub.fv3Bytes "roots" q.name).toOption == some r) = true ∧
+      ((pub.fv3Bytes "domain_ids" q.name).toOption == some d) = true := by
+  intro q hq hn
+  unfold statementHeld at h
+  split at h
+  · rename_i hc
+    refine statementClash_none hc q.name (Array.mem_map_of_mem hq) fun hm => ?_
+    obtain ⟨o, ho, he⟩ := Array.mem_map.mp hm
+    exact hn o ho he
+  · cases h
+  · cases h
+
+private def hexT (c : Char) : String := "".pushn c 128
+
+/-- A writer `W/c0`'s output row `o0` and a reader `R/c0`'s input row `x`, registered at roots `wo` and `rx`. -/
+private def recT (wo rx : String) (more : Array Json := #[]) : Json :=
+  Json.mkObj [("roots", Json.arr (#[
+    Json.mkObj [("port", "W/c0/o0"), ("root", .str wo), ("domain", .str (hexT 'd'))],
+    Json.mkObj [("port", "R/c0/x"), ("root", .str rx), ("domain", .str (hexT 'e'))]] ++ more))]
+
+private def pubT (port root dom : String) : Flock.Public :=
+  { header := Json.mkObj [("frame_v3", Json.mkObj [("roots", Json.mkObj [(port, .str root)]),
+      ("domain_ids", Json.mkObj [(port, .str dom)])])], n := 0, digests := #[], outputs := #[], sha := .empty }
+
+private def clashT (rec : Json) (member : String) (pub : Flock.Public) (port : String) (registered : Array String := #[]) :
+    Option (String × Bool) :=
+  statementClash ((rootsOf rec)[·]?) member registered pub #[port]
+
+#guard clashT (recT (hexT 'a') (hexT 'b')) "W/c0" (pubT "o0" (hexT 'a') (hexT 'd')) "o0" == none
+-- the writer: the record's `<writer>/o0` changed, its files kept
+#guard clashT (recT (hexT 'c') (hexT 'b')) "W/c0" (pubT "o0" (hexT 'a') (hexT 'd')) "o0" == some ("o0", true)
+-- the altered reader: its altered rows' root in its public file, refused, and with the record remade to it, passed
+#guard clashT (recT (hexT 'a') (hexT 'b')) "R/c0" (pubT "x" (hexT 'f') (hexT 'e')) "x" == some ("x", true)
+#guard clashT (recT (hexT 'a') (hexT 'f')) "R/c0" (pubT "x" (hexT 'f') (hexT 'e')) "x" == none
+#guard clashT (recT (hexT 'a') (hexT 'b')) "R/c0" (pubT "x" (hexT 'b') (hexT 'd')) "x" == some ("x", true)
+#guard clashT (recT (hexT 'a') (hexT 'b')) "m1" (pubT "x" (hexT 'b') (hexT 'e')) "x" == some ("x", false)
+#guard clashT (recT (hexT 'a') (hexT 'b')) "R/c0" (pubT "y" (hexT 'b') (hexT 'e')) "x" == some ("x", true)
+#guard clashT (recT (hexT 'a') (hexT 'b')) "m1" (pubT "x" (hexT 'f') (hexT 'e')) "x" #["x"] == none
+-- a later entry naming the port wins (R3 refuses a record naming it twice), and one whose root isn't lowercase hex
+-- leaves the port no root
+private def againT (root : String) : Array Json :=
+  #[Json.mkObj [("port", "R/c0/x"), ("root", .str root), ("domain", .str (hexT 'e'))]]
+
+#guard clashT (recT (hexT 'a') (hexT 'b') (againT "AB")) "R/c0" (pubT "x" (hexT 'b') (hexT 'e')) "x" == some ("x", false)
+#guard clashT (recT (hexT 'a') (hexT 'f') (againT (hexT 'b'))) "R/c0" (pubT "x" (hexT 'b') (hexT 'e')) "x" == none
 
 end SampledProofs.Registered
