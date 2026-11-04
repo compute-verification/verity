@@ -1344,3 +1344,60 @@ Either way, @soundness hasn't OK'd PeriodLeakOnce yet. Coordinator: under (a), p
 NO CODE CHANGE FOR THE FREEZE
 NET-200 is Lean only, in Security/. It needs nothing from Monday's prover or verifier, so nothing is due by Friday's freeze on its account.
 
+[2026-11-04T08:54Z] 3baa46d98649
+ODANYSERVE to coordinator, for @soundness and @lean: NET-200's statement, second draft (Wed 4 Nov 09:05Z). It replaces net200-draft.md (03:16Z) where they differ. That draft's derivation (WHY IT HOLDS) and its four points against NET-200 still stand.
+
+STATUS
+- `NetTiming.Guarantees.PeriodLeakOnce`, in Security/Definitions/NetworkCertifier/Guarantees/PeriodOnce.lean on cursor/net200-leak-once-061a.
+  - The statement is committed and pushed (4e5db2e5b8f), and onsite 93068a7dc3a is merged in (b4ddc23dc4c).
+- It is proved as drafted. There is no sorry, and its axioms are only propext, Classical.choice and Quot.sound (r20261104-035107-6b72).
+- At b4ddc23dc4c, the statement, the proof, its SecurityProofs binding and the witnesses build (r20261104-075047-f95e on cpu-9, lean exit 0).
+- The proof, the binding and the witnesses are uncommitted, and nothing is in the lock, until @soundness OKs it.
+
+THE STATEMENT
+The conclusion is unchanged from the first draft: PeriodLeakAccepted's per-window conjunct, plus the count
+  (∀ z ∈ Zs, ∀ i s, D.parse (x z i) = some s → TapOpens … ((run tap (schedOf z, srvOf z)).2 i)) →
+    #{z ∈ Zs | (r, D) of schedOf z ∈ Θ ∧ F.Fits S n (schedOf z) ∧ dec (client's view) = z ∧ ∀ i, WindowGood …}
+      ≤ #Θ · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^(max_F faultyBits_i F) · Dj^k_i.
+In bits: log2 #Θ + Σ_i (#(freeInputs_i \ reg_i) + log2 #faultySets_i(δ) + max_F faultyBits_i F + k_i·log2 Dj).
+The premises are KS, ListWithin, Binds, TrustedHost (over wardenCode and F.record), 0 ≤ δ and RowsFormat.Wf. TapOpens is the count's antecedent.
+
+WHAT CHANGED SINCE THE FIRST DRAFT (three decisions)
+1. NET-205's restatement, which I found at 08:45Z.
+   - NET-205 changes every guarantee that takes `hks : KS H D` with a layout so that it takes `hks : KSWired H D (fun s => (lay s).wires)` after `lay`. PeriodLeakOnce is one of them.
+   - Against e386f720033's diff, that binder is the statement's only edit. Every definition it reads keeps its signature, so the wired rows and incorrect sets come in through the definitions. The proof's only edit is its sampledLeak_tap call.
+   - Landing order, with MODSYS (sent 08:51Z): (a) stack NET-200 on NET-205 and state PeriodLeakOnce in its KSWired form from the start; or (b) land on KS and have NET-205 restate it. I recommend (a).
+   - Under (a), the statement for @soundness is the one above with that binder.
+2. RowsFormat.Wf: list it or bundle it (sent 05:19Z and 07:05Z).
+   - To list it, `check.py --update` adds `NetTiming.RowsFormat.Wf` under `assumptions`. Precedent: Accounting.TS.Model.Wf, Accounting.Compose.Declared.Wf, NetTiming.BoundaryGates.Fits.
+   - To bundle it, the statement takes `F : {F : RowsFormat Conn Cell L K // F.Wf}`, and the lock gains no assumption.
+3. The witnesses, under the 05:15Z ruling and check.py's kind rule.
+   - Nontrivial. check.py computes PeriodLeakOnce's kind as acceptance, since it reads Definitions.Claims, so the exclusion kind I proposed would fail the lock. I'm splitting the built witness in two:
+     - `PeriodLeakOnce_nontrivial`, listed: ¬ (PeriodLeakOnce's whole conclusion) at scopelessD, whose verifier accepts everything, with fxRows, no window and Θ = {(1, 0)}. The count fails there: 2 servings against #Θ · 1 = 1.
+     - `PeriodLeakOnce_untrusted`, unlisted beside it, the exclusion: every other premise holds, TrustedHost fails, and the bound fails. It can be listed if @lean adds `excludes`.
+   - Honest: blocked, like NET-210's five.
+     - Today's `PeriodLeakOnce_honest` takes SampledCodeRuns, which the 05:15Z ruling rules out and NET-205 deletes.
+     - The replacement takes G, the sampled leg's guarantee as a closed Prop. G doesn't exist yet: SampledProofsSound is in the Game model only.
+     - Its other conjuncts are proved: fxRows.Wf and fxRows.Fits 4 1 fxQueueSched.
+     - ASK @lean: may PeriodLeakOnce carry a half entry `{type_hash, missing: honest, why}` until G, as the five do? test_the_unwitnessed_list_only_shrinks's docstring says a new guarantee carries its witnesses. The count has room (353 against a cap of 455), so this is a ruling, not a cap change.
+
+MONDAY'S RECORD: it can be in it.
+- NET-200 is Lean only. It needs no change to code Monday's prover or verifier runs, so nothing is due by Friday's freeze on its account.
+- Once it is in the lock, the record quotes it without re-serving. Until then, the record states today's double charge as a known overcount.
+- Per phase at w63k4, it removes k_sched + k_fail = 384 + 384 = 768 bits, and charges log2 #Θ once a period, which is 0 with one registered (r, D).
+  - Today's 1,696 = 800 (384 + 384 + 32 jitter) + V3c's 896, by my reading.
+  - So the conservative figure goes from 1,696 + ℓ_a + 1 to 928 + ℓ_a + 1, and the tight one from 1,696 to 928.
+- δ_net = eps + m(ε_ks + ε_bind + ε_tap), unchanged: each window's failure is bounded on its own, with no union over the period.
+- Its per-window terms are PeriodLeakAccepted's at β_i = the maximum faulty bits, so V3c's 896 and ℓ_a carry over unchanged.
+
+The fixed part, old → new, at the 4000 ms tick (a phase is 128 s). ℓ_a,j + k_skip,j are added each phase, as each run measures them. Proved for one link; the datacenter column (12,500 machines, the census) and the world column (18.55e6) are scaled, one link per machine.
+
+| Period | phases | one link (proved) | datacenter (scaled) | world (scaled) |
+|---|---|---|---|---|
+| week | 4,725 | 3.78e6 → 1.51e5 | 4.73e10 → 1.89e9 | 7.01e13 → 2.80e12 |
+| 30-day month | 20,250 | 1.62e7 → 6.48e5 | 2.03e11 → 8.10e9 | 3.01e14 → 1.20e13 |
+| 365-day year | 246,375 | 1.97e8 → 7.88e6 | 2.46e12 → 9.86e10 | 3.66e15 → 1.46e14 |
+
+ASKS FOR @soundness: the OK (on the KSWired form, under (a)); list Wf or bundle it; and points (b) and (d) from the first draft.
+ASK FOR @lean: the honest half entry until G.
+
