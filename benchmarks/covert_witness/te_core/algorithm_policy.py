@@ -20,7 +20,7 @@ p = C/H >= 1; else "no" at its last checkpoint, C its total |C| and p = C/H a lo
 start at or below its fit's E has no rows, and a data with no fit none. A run with no trace yet (te_core.frontier_fit's
 `untraced`) is a row at each target it reaches, never an absence: C and p as a traced run's, from its record, every ρ
 column null and basis_default and basis_own `unmeasured: not yet traced` (`UNTRACED`); it is in no decade, every cut
-keeps it and the figure draws it on `FLOOR`.
+keeps the least-p one per data, start and target (`kept`) and the figure draws it on `FLOOR`.
 
 Each row's ρ is te_core.formalism's `published` at its checkpoint under three policies (`POLICIES`), a column each,
 and ρ scales with c. The headline, `rho_own` (basis `basis_own`), is at the start's own session (`own_session`:
@@ -594,20 +594,24 @@ def kept(rows: list[list], tier: str, cov: set[int]) -> list[list]:
     and (at tier "family") family, the reached rows on the lower-left (p, rho_default) front (te_core.plots'
     staircase, an infinite ρ above every finite one) and the failed attempt with the greatest gain, neither resting on
     a stub (`STUB`), in the table's order. The partial rows (`PARTIAL`, ρ a lower bound) are picked among themselves
-    alone, so none displaces a row from the others' front and the console still draws them, marked. Every untraced row
-    (`UNTRACED`, at most one a run and target) stays at every tier: a run that reached is never an absence."""
+    alone, so none displaces a row from the others' front and the console still draws them, marked. The untraced rows
+    (`UNTRACED`, reached with no ρ) are picked among themselves at every tier, the least p per data, start, gain target
+    and (at tier "family") family, so a group a run reached never reads as none reached; the stored table keeps them
+    all."""
     ix = {c: i for i, c in enumerate(COLUMNS)}
 
     def big(v):
         return sys.float_info.max if v is None else v
 
-    keep = set(cov) | {i for i, r in enumerate(rows) if r[ix["basis_default"]] == UNTRACED}
-    if tier != "coverage":
-        groups: dict[tuple, list[int]] = {}
-        for i, r in enumerate(rows):
-            key = (r[ix["data"]], r[ix["start"]], r[ix["gain_target"]]) + ((r[ix["family"]],) if tier == "family" else ())
-            groups.setdefault(key, []).append(i)
-        for g in groups.values():
+    keep = set(cov)
+    groups: dict[tuple, list[int]] = {}
+    for i, r in enumerate(rows):
+        key = (r[ix["data"]], r[ix["start"]], r[ix["gain_target"]]) + ((r[ix["family"]],) if tier == "family" else ())
+        groups.setdefault(key, []).append(i)
+    for g in groups.values():
+        if waiting := [i for i in g if rows[i][ix["basis_default"]] == UNTRACED]:
+            keep.add(min(waiting, key=lambda i: (rows[i][ix["p"]], rows[i][ix["C_gates"]])))
+        if tier != "coverage":
             for on in ([i for i in g if rows[i][ix["basis_default"]] not in (STUB, PARTIAL, UNTRACED)],
                        [i for i in g if rows[i][ix["basis_default"]] == PARTIAL]):
                 yes = [i for i in on if rows[i][ix["reached"]] == "yes"]
