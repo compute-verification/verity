@@ -209,6 +209,7 @@ theorem sksL_regVal (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω 
     (sksL Coin).regVal H P x ω g = none := by
   simp [Compiled.regVal, sksL_opensAt, Pr_false]
 
+omit [Nonempty Coin] in
 open Classical in
 /-- So its incorrect set holds the proof block. -/
 theorem sksL_Freg (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) : 0 ∈ (sksL Coin).Freg H P x ω := by
