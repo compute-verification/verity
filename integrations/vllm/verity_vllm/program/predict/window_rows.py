@@ -316,6 +316,28 @@ def _sites(ops: Sequence[tuple[str, tuple[str, ...]]]) -> dict[tuple[str, tuple[
     return out
 
 
+#: a narrowed linear's member (`RM.NARROWED_MEMBER`): its widest rows' member and its width
+_NARROWED = re.compile(RM.NARROWED_MEMBER.format(member="(.+)", width=r"(\d+)"))
+
+
+def _fold_narrowed(ops: dict[tuple[str, tuple[str, ...]], list[Mapping[str, Any]]],
+                   last: dict[tuple[str, tuple[str, ...]], int]) -> list[tuple[str, tuple[str, ...]]]:
+    """Fold each prefill op of a narrowed linear's rows (members `RM.NARROWED_MEMBER`: the last layer's fused qkv on the
+    prompt rows before the last, its keys' and values' columns) into the op of its widest rows at its op path, whose one
+    row is the last position's: one op, a row a prompt position, each its widest row's spec and members at that position.
+    -> the ops folded into. A narrowed op with no such op beside it stays, for the prefill's check to name."""
+    out = []
+    for o in [o for o in ops if o[1] and all(_NARROWED.fullmatch(m) for m in o[1])]:
+        w = (o[0], tuple(_NARROWED.fullmatch(m)[1] for m in o[1]))
+        if len(ops.get(w, ())) != 1:
+            continue
+        rows, end = sorted(ops.pop(o), key=lambda d: int(d["row"])), ops[w][0]
+        del last[o]
+        ops[w] = [{**end, "row": int(d["row"])} for d in rows] + [{**end, "row": len(rows)}]
+        out.append(w)
+    return out
+
+
 @dataclass
 class Served:
     """One request's served values by class node: its Program's rows as `ProgramIndex.describe` gives them, each with its
@@ -328,6 +350,9 @@ class Served:
     computes them all, which is the class Program's node order within a position however the prefill interleaves the
     others. A pruned op's one row is its member's last of the prompt's where the record binds the member at a row a prompt
     position (the engine computes the last layer at them all; only the logits gather a row a request), else its only one.
+    A narrowed linear's rows (the last layer's fused qkv, keys' and values' columns only on the prompt rows before the
+    last) are its node's there, beside its widest rows' one row, the last position's (`_fold_narrowed`): the node is read
+    a row a prompt position, each its widest member's whole row, which the record must bind at every prompt position.
     Step s ≥ 1 is position LP − 1 + s, a row each of those ops, matched to them by site (`_sites`), since a call
     boundary's op path names an fx node numbered over the request's steps. A row of another Definition than its class
     node's is refused by name; one of its Definition at other statics is `Slot`'s to hold to the class node's value."""
@@ -349,12 +374,18 @@ class Served:
         for i, d in enumerate(steps.get(0, ())):
             ops.setdefault(_op(d), []).append(d)
             last[_op(d)] = i
+        folded = _fold_narrowed(ops, last)
         order = sorted(ops, key=last.__getitem__)
         self.prefill = [sorted(ops[o], key=lambda d: int(d["row"])) for o in order]
         self.LP = max((len(v) for v in self.prefill), default=0)
         for (op, _), v in zip(order, self.prefill):
             if [int(d["row"]) for d in v] not in (list(range(self.LP)), [0]):
                 raise ValueError(f"{op}: prefill rows {[d['row'] for d in v]}, not one a prompt position nor the last one's")
+        for o in folded:
+            n = sorted({self.bound(0, o[0], str(m)) / int(width) for m, width, _dtype in ops[o][0]["members"]})
+            if n != [self.LP]:
+                raise ValueError(f"{o[0]}: a narrowed linear's node, read whole at every prompt position, its widest members "
+                                 f"bound at {n} rows, not a row a prompt position ({self.LP})")
         site = _sites(order)
         sites = set(site.values())
         self.decode = []
