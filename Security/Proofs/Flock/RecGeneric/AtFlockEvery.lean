@@ -152,9 +152,12 @@ theorem recursiveKSEveryAtRec_of_recovers (b : RecDeploy.Brings) (L : Claims.Rec
     (RecDeploy.binds_deployed _ _ _ wE FlockDeploy.joinR final w)
     (Claims.Sampling.listWithin_deployPlainTrim _root_.Flock.Readable.relation)
     (Claims.Sampling.listWithin_deployZk _root_.Flock.Readable.relation) hC) hε
-  · exact outerKS_of_flockKS FlockDeploy.KS.zk_KS_outer (RecDeploy.sessionNums _ _ _ _)
-      (RecDeploy.tableErrNonneg _ _ _) (RecDeploy.sessionRounds _ _ _ _) (RecDeploy.sessionAccepts _ _ _)
-      (RecDeploy.sessionRuns_sha512 _ _ _ _)
+  · let Bd := RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR rd)
+      (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR
+      RecDeploy.rowInDeployed final w
+    exact outerKS_of_flockKS FlockDeploy.KS.zk_KS_outer (RecDeploy.sessionNums _ _ _ _)
+      (RecDeploy.tableErrNonneg _ _ _) (RecDeploy.sessionRounds (Inner.ofFlock Bd.deploy Bd.deploy.decode) _ _ _)
+      (RecDeploy.sessionAccepts _ _ _) (RecDeploy.sessionRuns_sha512 (Inner.ofFlock Bd.deploy Bd.deploy.decode) _ _ _)
   · exact (congrArg (FlockDeploy.decCoin []) (RecDeploy.bdDeployed_ans _root_.Flock.Readable.relation
       (FlockDeploy.nextR rd) (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR
       RecDeploy.rowInDeployed final w c)).trans (Function.leftInverse_invFun RecDeploy.coin_bytes_injective c)
