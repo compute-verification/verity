@@ -246,28 +246,32 @@ def test_the_fresh_old_vectors_are_io_bounds_figure_with_p_cell_with_the_figure_
 
 
 def test_the_products_term_is_the_theorem_of_records_on_two_hand_computed_cases(built):
-    """The theorem of record's ρ, (c/|C|)·(N/(k + α) − F·(k/2)·√(ON)/β/(k + α)^1.5) with α = F·½·√(k³/(β²·b_y)), on
-    `HAND`'s two M, worked by hand at c/|C| = 10⁻³. (a) A forward and a backward product at β 16 and b_y 16 sharing
-    arrays (F = 2/√3) at k = 3·2^14: √k = 2^7·√3, so α = (2/√3)·½·k·√k/64 = 2k and k + α = 3k; with O = N/48 the
-    outputs' part is F·(k/2)·(N/√48)/16/(3k)^1.5 = F·N/(1152·√k) = (2/3)·N/(3k), so ρ = 10⁻³·N/(9k) = 10⁶ with N =
-    2 × 2.21184e14. (b) At the console's k = 2^16, a forward product (N₁ = 5.89824e14, O₁ = N₁/48) beside a backward
-    one an adapter's rank-16 output reaches (N₂ = 10¹⁷, O₂ = 10¹²), one operand at β_eff(16, 16) = 16/(1 + (32/16)²)
-    = 3.2, K* = ½√(2^16/16) = 32. M at t = 16 is the forward product alone, F = 1 and α = ½·2^24/64 = 2k, its ρ again
-    10⁶; at t = 3.2 both, F = 2/√3, α = F·2^23/12.8 = F·655,360, and ρ = 103,996,766.08, which binds. Each traced
-    step's term is `formalism.he_products` on its products at the console's (c, k), with what it rests on: the 45M
-    start's dense step and s-t20's at full size at β 16 and b_y 16 on the products both of whose operands are paid,
-    and the lowrank worker's LoRA and DoRA rank-16 steps a measured 0 at every β."""
+    """The theorem of record's ρ, (c/|C|)·(N/(k + α) − F·(k/2)·√(ON/(β_w·β_x))/(k + α)^1.5) with
+    α = F·½·√(k³/(β_w·β_x·b_y)), on `HAND`'s two M, worked by hand at c/|C| = 10⁻³, every operand a weight there, so
+    β(k) caps none. (a) A forward and a backward product at β 16 and b_y 16 sharing arrays (F = 2/√3) at k = 3·2^14:
+    √k = 2^7·√3, so α = (2/√3)·½·k·√k/64 = 2k and k + α = 3k; with O = N/48 the outputs' part is
+    F·(k/2)·(N/√48)/16/(3k)^1.5 = F·N/(1152·√k) = (2/3)·N/(3k), so ρ = 10⁻³·N/(9k) = 10⁶ with N = 2 × 2.21184e14. (b)
+    At the console's k = 2^16, a forward product (N₁ = 5.89824e14, O₁ = N₁/48) beside a backward one an adapter's
+    rank-16 output reaches (N₂ = 10¹⁷, O₂ = 10¹²), one operand at β_eff(16, 16) = 16/(1 + (32/16)²) = 3.2, K* =
+    ½√(2^16/16) = 32. M at β_w·β_x = 256 is the forward product alone, F = 1 and α = ½·2^24/64 = 2k, its ρ again 10⁶;
+    at 16 × 3.2 = 51.2 both, F = 2/√3, α = F·½·√(2^48/819.2), and ρ = 225,196,746.65, which binds. Each traced step's
+    term is `formalism.he_products` on its products at the console's (c, k), with what it rests on: the 45M start's
+    dense step and s-t20's at full size on all of M at β_w = β_x = 15.9 (the weight gradients' two activations at
+    β(k)) and b_y 16, and the lowrank worker's LoRA and DoRA rank-16 steps positive on their weight gradients alone (F
+    = 1), whose operand the adapters reach at β_eff 3.2, all of M a measured 0 there."""
     assert formalism.k_star(65_536, 16) == 32 and formalism.beta_eff(16, 16, 65_536) == pytest.approx(3.2, rel=1e-15)
     F = 2 / math.sqrt(3)
     k = 49_152.0
     assert F * 0.5 * math.sqrt(k ** 3 / (16 * 16 * 16)) == pytest.approx(2 * k, rel=1e-14)
-    assert formalism.he_rho(2 * 2.21184e14, 2 * 2.21184e14 / 48, 16, 16, F, 1e12, k, 1e15) == pytest.approx(
+    assert formalism.he_rho(2 * 2.21184e14, 2 * 2.21184e14 / 48, 16, 16, 16, F, 1e12, k, 1e15) == pytest.approx(
         1e6, rel=1e-12)
-    k, alpha = 65_536.0, F * 655_360
+    k = 65_536.0
+    alpha = F * 0.5 * math.sqrt(k ** 3 / (51.2 * 16))
     n, o = 5.89824e14 + 1e17, 5.89824e14 / 48 + 1e12
-    by_hand = 1e-3 * (n / (k + alpha) - F * (k / 2) * math.sqrt(o * n) / 3.2 / (k + alpha) ** 1.5)
-    assert by_hand == pytest.approx(103_996_766.08, rel=1e-10)
-    assert formalism.he_rho(5.89824e14, 5.89824e14 / 48, 16, 16, 1.0, 1e12, k, 1e15) == pytest.approx(1e6, rel=1e-12)
+    by_hand = 1e-3 * (n / (k + alpha) - F * (k / 2) * math.sqrt(o * n / 51.2) / (k + alpha) ** 1.5)
+    assert by_hand == pytest.approx(225_196_746.65, rel=1e-10)
+    assert formalism.he_rho(5.89824e14, 5.89824e14 / 48, 16, 16, 16, 1.0, 1e12, k, 1e15) == pytest.approx(
+        1e6, rel=1e-12)
     p = built["products"]
     assert p["rests_on"] == formalism.RESTS_ON["fresh_products"]
     vs = {v["name"]: v for v in p["vectors"]}
@@ -276,34 +280,42 @@ def test_the_products_term_is_the_theorem_of_records_on_two_hand_computed_cases(
         *(label.split(" (")[0] for label in rho_vectors.BATTERY_VOID[1].values())]
     (a_name, *_), (b_name, *_) = rho_vectors.HAND
     a, b = vs[a_name], vs[b_name]
-    assert (a["term"], a["beta"], a["b_y"], a["F"], a["alpha"]) == pytest.approx((1e6, 16, 16, F, 2 * 49_152),
-                                                                                 rel=1e-12)
+    assert (a["term"], a["beta_w"], a["beta_x"], a["b_y"], a["F"], a["alpha"]) == pytest.approx(
+        (1e6, 16, 16, 16, F, 2 * 49_152), rel=1e-12)
     assert (a["N"], a["O"], a["below_width"]) == (pytest.approx(2 * 2.21184e14), pytest.approx(2 * 2.21184e14 / 48),
                                                   False)
-    assert (b["term"], b["beta"], b["F"], b["alpha"]) == pytest.approx((by_hand, 3.2, F, alpha), rel=1e-12)
-    assert b["below_width"] and b["why"] is None and "β = 3.2 bits a word" in b["rests_on"]
+    assert (b["term"], b["beta_w"], b["beta_x"], b["F"], b["alpha"]) == pytest.approx((by_hand, 16, 3.2, F, alpha),
+                                                                                       rel=1e-12)
+    assert b["below_width"] and b["why"] is None and "β_w = 16 and β_x = 3.2 bits a word" in b["rests_on"]
+    assert a["subset"] == b["subset"] == "M"
     for v in vs.values():
         if v["name"] in (a_name, b_name):
             got = formalism.he_figure(v["inputs"]["he"], v["inputs"]["c"], v["inputs"]["C_gates"])
             assert got["rho"] == v["term"] and v["rests_on"] == formalism.he_rests_on(got)
             continue
         assert (v["inputs"]["c"], v["inputs"]["k"]) == policy.CONSOLE and v["why"] is None
-        assert (v["beta"], v["b_y"], v["F"], v["below_width"]) == (16, 16, pytest.approx(F), False), v["name"]
-    assert round(vs["the 45M start's dense step"]["term"]) == 123_811
-    assert round(vs["s-t20's dense step at full size"]["term"]) == 261_450
-    assert vs["the 45M start's dense step"]["macs_share"] == pytest.approx(0.56412, rel=1e-4)
+        assert v["beta_k"] == 15.9 and v["term"] == max(v["subsets"].values()) > 0, v["name"]
+        assert formalism.BETA_K_LABEL in v["rests_on"] and v["rests_on"].startswith(
+            f"theorem of record on {v['subset']}, given (H)")
+    for name in ("the 45M start's dense step", "s-t20's dense step at full size"):
+        assert (vs[name]["subset"], vs[name]["beta_w"], vs[name]["beta_x"], vs[name]["b_y"], vs[name]["F"],
+                vs[name]["below_width"]) == ("M", 15.9, 15.9, 16, pytest.approx(F), False), name
+    assert round(vs["the 45M start's dense step"]["term"]) == 99_481
+    assert round(vs["s-t20's dense step at full size"]["term"]) == 548_571
+    assert vs["the 45M start's dense step"]["macs_share"] == pytest.approx(0.292071, rel=1e-5)
     for name in list(vs)[4:]:
-        assert vs[name]["term"] == 0 and vs[name]["r_step"] == 16, name
+        assert vs[name]["subsets"]["M"] == 0 and vs[name]["subset"] == "the weight gradients alone", name
+        assert (vs[name]["F"], vs[name]["beta_x"], vs[name]["r_step"]) == (1.0, pytest.approx(3.2), 16), name
+    assert [round(vs[name]["term"]) for name in list(vs)[4:]] == [3_365, 2_093]
 
 
 def test_the_dial_vectors_are_c_times_a_rows_fresh_per_c_the_term_and_the_old_figure(built):
     """The console's dial ports the products term from a row's rho_inputs (te_core.panels' `rho_columns`, which holds
     `formalism.fresh_per_c` to its digits): at each k of the dial the old figure fresh_old is c times its entry's first
     number, null where that is null, and the term c times its second, each cell `formalism.he_products` and
-    `formalism.fresh_products` there. The 45M dense step's term is positive at the dial's two least k and a measured 0
-    from the served block's 145,568 bits up, where its outputs' part exceeds its MACs'; its old figure is measured at
-    the three least k and void above them with no subset's figure; the tiny start's cases are a measured 0 at every
-    k."""
+    `formalism.fresh_products` there. The 45M dense step's term is positive at the dial's four least k and a measured
+    0 from 8e6 up, where β(k) has fallen to 10.8 and below; its old figure is measured at the three least k and void
+    above them with no subset's figure; the tiny start's cases are a measured 0 at every k."""
     from dataclasses import replace
 
     from te_core import panels
@@ -316,7 +328,7 @@ def test_the_dial_vectors_are_c_times_a_rows_fresh_per_c_the_term_and_the_old_fi
     C = rows["gates"]
     ms["the 45M start's dense step"] = replace(
         ms["dense"], parts=(formalism.Part(gates=C, tokens=1.0, token_gates=C, affected_gates=C),),
-        products=formalism.products_of_trace(rows))
+        products=formalism.products_of_trace(rows), delta_bits=None)
     assert [v["name"] for v in d["vectors"]] == list(ms)
     for v in d["vectors"]:
         per = v["fresh_per_c"]
@@ -338,7 +350,7 @@ def test_the_dial_vectors_are_c_times_a_rows_fresh_per_c_the_term_and_the_old_fi
             assert all(e == [0.0, 0.0] for e in per.values())
     dense = d["vectors"][-1]["fresh_per_c"]
     assert [dense[str(k)][0] is None for k in DIAL_K] == [False] * 3 + [True] * 4
-    assert [dense[str(k)][1] > 0 for k in DIAL_K] == [True] * 2 + [False] * 5
+    assert [dense[str(k)][1] > 0 for k in DIAL_K] == [True] * 4 + [False] * 3
     assert d["rule"] == rho_vectors.PER_C_RULE and "fresh_per_c[k][1]" in d["rule"]
 
 
@@ -347,9 +359,9 @@ def test_the_grid_vectors_are_c_times_each_steps_fresh_per_c_at_every_k_of_the_c
     with the serving block's 145,568 bits beside it: at each the term is c times the step's fresh_per_c entry's second
     number and the old figure c times its first, each cell `formalism.he_products` and `formalism.fresh_products` at
     the console's c and at the k's own (the 45M reference's session of k/16 input tokens and 1,024 output, the serving
-    block's c at its k). At the console's c the 45M start's dense step's term falls from 2,636,920 at 16,384 bits to
-    123,811 at 65,536 and s-t20's at full size from 4,382,587 to 261,450, each a measured 0 from 131,072 up, where
-    the outputs' part exceeds the MACs'. The old figure on the 45M step falls from 25,843,305 to 778,360 at 145,568
+    block's c at its k). At the console's c the 45M start's dense step's term falls from 1,495,827 at 16,384 bits to
+    99,481 at 65,536 and 3,166 at 524,288, and s-t20's at full size from 5,284,215 to 548,571 and 21,911, each
+    positive at every k of the grid. The old figure on the 45M step falls from 25,843,305 to 778,360 at 145,568
     (709,375 to 64,340 without P-cell) and is void from 262,144 up with no subset's figure; on s-t20's from 39,795,651
     to 483,259 at 262,144 (1,083,180 to 56,556) and is void at 524,288 with no subset's figure, where a cycle of its
     whole-making system that feeds a counted product has no fixed point. The 45M fixture's rows at the console's k
@@ -365,8 +377,8 @@ def test_the_grid_vectors_are_c_times_each_steps_fresh_per_c_at_every_k_of_the_c
     assert panels.SERVED[1] == 145_568 and policy.CONSOLE[1] in g["k"]
     own = {k: policy.session_gates(policy.REFERENCE_PARAMS, n, 1024)
            for n, k in zip(policy.DIAL_IN_TOKENS, policy.K_GRID)} | {panels.SERVED[1]: panels.SERVED[0]}
-    want = {"the 45M start's dense step": [2_636_920, 729_574, 123_811, 0, 0, 0, 0],
-            "s-t20's dense step at full size": [4_382_587, 1_276_252, 261_450, 0, 0, 0, 0]}
+    want = {"the 45M start's dense step": [1_495_827, 447_179, 99_481, 27_814, 23_374, 8_361, 3_166],
+            "s-t20's dense step at full size": [5_284_215, 1_805_387, 548_571, 219_124, 186_545, 72_858, 21_911]}
     old = {"the 45M start's dense step": [25_843_305, 8_790_057, 2_869_161, 931_231, 778_360, None, None],
            "s-t20's dense step at full size": [39_795_651, 13_837_635, 4_749_660, 1_583_812, 1_334_785, 483_259, None]}
     no_cell = {"the 45M start's dense step": [709_375, 343_662, 163_341, 73_559, 64_340, None, None],
@@ -378,7 +390,7 @@ def test_the_grid_vectors_are_c_times_each_steps_fresh_per_c_at_every_k_of_the_c
         assert sorted(rows["at"], key=int) == [str(k) for k in g["k"] if k != policy.CONSOLE[1]]
         C = rows["gates"]
         m = replace(base, parts=(formalism.Part(gates=C, tokens=1.0, token_gates=C, affected_gates=C),),
-                    products=formalism.products_of_trace(rows))
+                    products=formalism.products_of_trace(rows), delta_bits=None)
         per = v["fresh_per_c"]
         assert v["C_gates"] == C and list(per) == [str(k) for k in g["k"]] and not differences(
             per, formalism.fresh_per_c(m))
@@ -421,9 +433,10 @@ def test_the_published_vectors_take_each_case_of_the_rule(built):
     """The console's port of `published` tests against these: each vector is `published` under reading A on its
     case's `measured`, and together they take every case of the rule: Fit; the max above 1, partial where a kind is
     unmeasured and not where none is; None where a kind is unmeasured and no term exceeds 1; 1, binding none, where
-    every kind is computed and none exceeds 1. The products term never voids: on `VOID_CASE` (the dense case with the
-    DoRA step's products, whose old figure is void) it is a measured 0, so the row binds on the token kind at the
-    console's c and reads 1 at one token a block, its old figure, the best subset's, beside it at 2,510 and 0.023."""
+    every kind is computed and none exceeds 1; where the products term binds, the row rests on its own premises
+    (`he_rests_on`). The products term never voids: on `VOID_CASE` (the dense case with the DoRA step's products,
+    whose old figure is void) it is measured on the weight gradients alone and binds, 1,883,730 at the console's c and
+    17 at one token a block, its old figure, the best subset's, beside it at 2,510 and 0.023."""
     seen = set()
     assert record(built, rho_vectors.VOID_CASE[0]) == rho_vectors.void_case(record(built, "dense"))
     for v in built["published"]:
@@ -445,12 +458,15 @@ def test_the_published_vectors_take_each_case_of_the_rule(built):
             assert max(terms.values()) <= 1
             seen.add(("none", v["void"] is not None))
         assert v["void"] is None
-        assert v["rests_on"] == formalism.RESTS_ON_CELL["unmeasured" if v["rho"] is None else v["binding_kind"]]
+        assert v["rests_on"] == (v["products_rests_on"] if v["binding_kind"] == "fresh_products" else
+                                 formalism.RESTS_ON_CELL["unmeasured" if v["rho"] is None else v["binding_kind"]])
         assert v["label"] == f"{formalism.THE_CODE} {VERSION}, reading A"
     assert seen == {"fit", ("max", True, False), ("max", False, False), "unmeasured", ("none", False)}
     void = [v for v in built["published"] if v["case"] == rho_vectors.VOID_CASE[0]]
-    assert [(round(v["rho"]), v["binding_kind"]) for v in void] == [(263, "token"), (1, "none")]
-    assert all(v["terms"]["fresh_products"] == 0 and v["why"] is None for v in void)
+    assert [(round(v["rho"]), v["binding_kind"]) for v in void] == [(1_883_730, "fresh_products"),
+                                                                    (17, "fresh_products")]
+    assert all(v["rests_on"].startswith(f"theorem of record on {formalism.HE_SUBSETS[2]}, given (H)")
+               and v["why"] is None for v in void)
     assert [round(v["sensitivities"]["fresh_old"], 3) for v in void] == [2510.258, 0.023]
 
 
