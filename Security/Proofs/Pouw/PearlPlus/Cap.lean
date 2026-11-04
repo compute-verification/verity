@@ -642,9 +642,10 @@ theorem tile_bound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (hL : Proper
     rwa [hcc] at this
   obtain ⟨cr, hcrdef⟩ : ∃ cr, (p.records[pos]!.credited rows cols).1 = cr := ⟨_, rfl⟩
   rw [hcrdef] at hcrnd hcrne hcr_iff
+  have hpair : p.records[pos]!.credited rows cols = (cr, cols) := Prod.ext hcrdef hcc
   have hF := hforming pos rows cols ops ch htile hform
   unfold formingCapOK at hF
-  rw [(Cap.band_eq hbandR hbandC hbA hbB).trans (Prod.ext hcrdef hcc)] at hF
+  rw [Cap.band_eq hbandR hbandC hbA hbB, hpair] at hF
   try dsimp only at hF
   obtain ⟨words, hw, hcap⟩ := hF
   have hCC := hC saltOf rootOf H s U ((auditTiling 64 64 U.layout).unit g) c.act p.salt
