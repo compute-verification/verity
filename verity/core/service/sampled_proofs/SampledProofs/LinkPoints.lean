@@ -5,15 +5,15 @@ setup compute it. A draw over several members draws a random count of each membe
 per-member form (`JointAuditV5.hcls_of_bounds`) reads one count of link points per member. A draw that runs out of the
 verifier's public coins fails the window (`OneStageZk.RAN_OUT`), so only a draw that ends gives counts: between the
 member's fewest and most units (`ended`, `bounds`), and the registration refuses a member whose fewest and most give
-different counts (`refused`, `Registration.check`'s `link-points`).
+different counts, and a law no draw of which ends (`refused`, `Registration.check`'s `link-points`).
 
 A draw that ends (`Draw.drawUnits`) draws, under `subset k`, `k` distinct units of the population (`k` above the
 population never ends); under `bernoulli a b`, none when `a = 0`, each unit when `a ≥ b > 0`, and any number of them
 otherwise (`b = 0 < a` never ends); and under `stratified` and `work`, `k_s` distinct units of each stratum `s` (a
 stratum with `k_s` above its size never ends). The fewest is what is left after the draw's units fill the rest of the
 population, or of each stratum, first; the most is `k`, or each stratum's `k_s`, where the member holds that many. A
-law no draw of which ends gives no counts, so it refuses no member: each of its windows fails. O(members × strata ×
-ranges), the descriptor's size, never the units'.
+law no draw of which ends gives no counts, and the registration refuses it (`ends`, `NEVER_ENDS`), so one it passes
+has a draw that ends. O(members × strata × ranges), the descriptor's size, never the units'.
 -/
 import Flock.Net
 import SampledProofs.Draw
@@ -66,10 +66,18 @@ def bounds (law : Flock.Draw.Law) (population : Nat) (ms : Array (Array (Nat × 
       throw s!"link points: member {i}: its units are not nonempty, disjoint [lo, hi) ranges of the population's {population}"
     pure (ended law population us)
 
+/-- Whether some draw under `law` over `[0, population)` ends: whether `ended` gives counts, which reads only the law and
+the population, never the member's units. -/
+def ends (law : Flock.Draw.Law) (population : Nat) : Bool := (ended law population #[]).isSome
+
+/-- The refusal of a law no draw of which ends (`ends`). -/
+def NEVER_ENDS : String := "link points: no draw under the law ends, so each of its windows fails"
+
 /-- The members whose fewest and most drawn units, over the draws that end, give different link points (`bounds`), by
-index. -/
+index; refused (`NEVER_ENDS`) when no draw under `law` ends. -/
 def refused (law : Flock.Draw.Law) (population : Nat) (ms : Array (Array (Nat × Nat) × Nat)) : V (Array Nat) := do
   let bs ← bounds law population ms
+  if !ends law population then throw NEVER_ENDS
   return (List.range ms.size).toArray.filter fun i =>
     let g := ms[i]!.2
     match bs[i]! with
@@ -85,8 +93,8 @@ def lawOf (p : Program) (query law : Json) (table : Option Json) : V (Flock.Draw
   | none => pure (← Draw.flockLaw law population, population)
 
 /-- `{"law", "population", "members"}` (the law as `Draw.flockLaw` reads it, each member `{"units", "vus_per_block"}`) to
-`{"bounds": [[fewest, most] or null, ...], "refused": [index, ...]}`, null where no draw ends; a malformed law or
-member is refused. -/
+`{"bounds": [[fewest, most], ...], "refused": [index, ...]}`; a malformed law or member, or a law no draw of which ends
+(`NEVER_ENDS`), is refused. -/
 def piece (j : Json) : V Json := do
   let some population := nat? (getD j "population") | throw "the population is not a natural number"
   let law ← Draw.flockLaw (getD j "law") population
@@ -113,7 +121,10 @@ def piece (j : Json) : V Json := do
   10 #[(2, 8)] == some (0 + 1, 2 + 3)
 #guard (refused (.subset 20) 40 #[(#[(0, 30)], 1), (#[(0, 30)], 4)]).toOption == some #[0]
 #guard (refused (.subset 2) 10 #[(#[(0, 10)], 1)]).toOption == some #[]
-#guard (refused (.subset 11) 10 #[(#[(0, 10)], 1)]).toOption == some #[]
+#guard ends (.subset 10) 10 && !ends (.subset 11) 10 && ends (.bernoulli 0 0) 10 && !ends (.bernoulli 1 0) 10
+#guard !ends (.stratified 3 #[{ template := "a", units := #[(0, 2)], k := 3 }]) 10
+#guard [Flock.Draw.Law.subset 11, .bernoulli 1 0, .stratified 3 #[{ template := "a", units := #[(0, 2)], k := 3 }]].all
+  fun law => match refused law 10 #[(#[(0, 10)], 1)] with | .error e => e == NEVER_ENDS | .ok _ => false
 #guard (refused (.subset 2) 10 #[(#[(0, 11)], 1)]).toOption == none
 
 end SampledProofs.LinkPoints

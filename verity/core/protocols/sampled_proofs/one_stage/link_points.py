@@ -4,7 +4,8 @@ A session of a member's statement opens its link at `PT_LOCAL + nbl(g, c)` point
 circuit's `g` units a proof block (META `vus_per_block`). A draw over several members draws a random count of each
 member's units. One that runs out of the verifier's public coins fails the window (`OneStageZk.RAN_OUT`); one that ends
 draws between the member's fewest and most units (`ended`, `bounds`). The registration of the per-member form refuses a
-member whose fewest and most give different link points (`refused`, the registration's `link-points`).
+member whose fewest and most give different link points, and a law no draw of which ends (`refused`, `ends`, the
+registration's `link-points`).
 """
 from __future__ import annotations
 
@@ -73,11 +74,23 @@ def bounds(law: Mapping[str, Any], population: int, members: Sequence[Member]) -
     return out
 
 
+def ends(law: Mapping[str, Any], population: int) -> bool:
+    """Whether some draw under `law` over `[0, population)` ends: whether `ended` gives counts, which reads only the law
+    and the population, never the member's units."""
+    return ended(law, population, ()) is not None
+
+
+#: Lean `LinkPoints.NEVER_ENDS`: the refusal of a law no draw of which ends (`ends`).
+NEVER_ENDS = "link points: no draw under the law ends, so each of its windows fails"
+
+
 def refused(law: Mapping[str, Any], population: int, members: Sequence[Member]) -> list[int]:
     """The members whose fewest and most drawn units, over the draws that end, give different link points (`bounds`),
-    by index."""
-    return [i for i, ((_, g), b) in enumerate(zip(members, bounds(law, population, members)))
-            if b is not None and nbl(g, b[0]) != nbl(g, b[1])]
+    by index; ValueError (`NEVER_ENDS`) when no draw under `law` ends."""
+    bs = bounds(law, population, members)
+    if not ends(law, population):
+        raise ValueError(NEVER_ENDS)
+    return [i for i, ((_, g), b) in enumerate(zip(members, bs)) if b is not None and nbl(g, b[0]) != nbl(g, b[1])]
 
 
 def law_of(program: Program, query: Mapping[str, Any], law: Mapping[str, Any],
