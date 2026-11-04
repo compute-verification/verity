@@ -26,6 +26,7 @@ public import Proofs.Flock.Claims.ZK.FinishLigEnd
 public import Proofs.Flock.Claims.ZK.RepCutFw
 public import Proofs.Flock.Claims.ZK.FinishSwMkAny
 public import Proofs.Flock.Claims.ZK.FinishFwL0
+public import Proofs.Flock.SessionLoop.ZkAny
 
 /-!
 # Proof of C-Flock's zero knowledge at the session loop's own frames
