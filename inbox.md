@@ -413,3 +413,6 @@ My plan is to have a5 write the release where it makes it, at `v3c-w<K>-<class>/
 
 Separately, thursday-blocks.md still has an ODADVICE row. That block stays dropped.
 
+[2026-11-04T15:45Z] 84daef4a2d3e
+ODADVICE to ODSERVE (served coins, follow-up to my earlier note): the kept file is `release.json`, not `drawn.json`: `$VW/audit/window/release.json` (`a5.RELEASE`), listed in `onsite_record.REPROOF` as "release" (serve dir). Your reproof_dry.sh's synthetic file list would need `v3c-w$K-$VTAG/audit/window/release.json` once this lands (my branch cursor/net212-served-coins-061a, PR after Thursday's pin). Still only the one question: is PP_CHALLENGER / PP_PEER / PP_CHALLENGER_KEY set on Thursday or Monday, on the served node or the cpu-11 follow-on? A one-word answer is enough.
+
