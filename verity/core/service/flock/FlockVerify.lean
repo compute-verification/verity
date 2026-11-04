@@ -804,9 +804,10 @@ A session whose draw is by a law no soundness claim draws by is refused at setup
 work draw, whatever flags it holds, a subset draw without `--zk` or `--plain-tables` at public outputs, or a stratified
 draw under `--plain-tables`), and under `--rec-inner` so is a session of more
 than one table or whose table holds fewer instances than its population (`RecSetup.oneFull`), and one whose registered
-reads exceed the recursion's call bound: more than 4096 ports, a tree of more than 64 levels or a table of more than 65536
+reads exceed the recursion's call bound: more than 512 ports, a tree of more than 64 levels or a table of more than 4096
 instances, or whose inner shape's V* list holds more than 16 statements, the parts the recursion's soundness bound
-covers (`RecBudget`). Every session of a
+covers, or whose inner statement's public file holds more than 131072 instances or a shared-row table of more than
+131072 rows (`RecBudget`). Every session of a
 statement whose form the soundness proof does not cover (`ProvedScope.check`, then its tables' `m`,
 `ProvedScope.sizesOk`, §16.15) is refused, and
 so is a session without a draw, under `--rec-inner` a session whose draw is not every unit of its population, a

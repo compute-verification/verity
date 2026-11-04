@@ -18,9 +18,9 @@ component), at every composite, with zero knowledge (`RecursiveFirewallPrivate`)
   guarantee takes it at the recursive configuration's verdict, `RecVerdict`.
 * Its knowledge-soundness term is `Dep.ksAt`: `t'·2^{-135.7}`, and at a draw whose statement is at the deployment's
   tables (`Dep.OneTable`: one plain inner table, and each V\* part one `--zk` table) the least of it and
-  `2^{-167.7} + t'·2^{-166.95}` (`RecDeploy.kappa_eps_oneTable_cap`), where the inner setup's calls and `nI₀` are at
-  most `2^43` and `vS₀ = nS·17716871168` (`RecDeploy.setupCalls_deployedB_le_cap`) is at most
-  `16·17716871168 ≈ 2^{38.04}`, at the verifier's cap of `16` V\* parts (`RecDeploy.nS_le_sixteen`).
+  `2^{-167.7} + t'·2^{-174.95}` (`RecDeploy.kappa_eps_oneTable_cap`), where the inner setup's calls and `nI₀` are at
+  most `2^32` and `vS₀ = nS·138543104` (`RecDeploy.setupCalls_deployedB_le_cap`) is at most `16·138543104 ≤ 2^32`,
+  at the verifier's cap of `16` V\* parts (`RecDeploy.nS_le_sixteen`).
 * It follows from `RecursiveKS`, read by name (`sampledProofsRecursive_of_ks`): an accepted play shows an accepted run of
   the deployed recursive verifier (`verdict_run`), off which `RecDeploy.lamLin2_R_ge_in` and
   `RecDeploy.setupCalls_deployedB_le_cap` read the call bounds and `RecDeploy.lamLin2_deployed_ge_dep_tight` reads
@@ -50,23 +50,23 @@ noncomputable def Dep.deployed (b : Brings) (aux : Msg → ℕ → Flock.RecReco
 with `c_B = SetupCount.innerB` the inner setup's and `c_V = 2^24` a decision's. -/
 def nI₀ : Msg → ℕ := fun _ => 2 ^ 28 + (SetupCount.innerB + 2 ^ 24)
 
-/-- **V\*'s setup calls**, at most, at a statement some run accepts: `17716871168` a staged part
-(`setupCalls_deployedB_le_cap`), at most `16 · 17716871168` since the verifier refuses more than `16` parts
+/-- **V\*'s setup calls**, at most, at a statement some run accepts: `138543104` a staged part
+(`setupCalls_deployedB_le_cap`), at most `16 · 138543104` since the verifier refuses more than `16` parts
 (`nS_le_of_partIn`). -/
-def vS₀ : Msg → ℕ := fun x => nS x * 17716871168
+def vS₀ : Msg → ℕ := fun x => nS x * 138543104
 
 /-- **The call bounds and the level at an accepted statement**: where some run of the deployed recursive verifier
 accepts `x`, the inner verifier's calls are at most `nI₀ x` on every run (`RecDeploy.lamLin2_R_ge_in`), V\*'s setup
 calls at most `vS₀ x` (`RecDeploy.setupCalls_deployedB_le_cap`), route 2C's `λ₂` at those counts is at least `135.7`
 (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and at the deployment's tables the inner setup's calls and `nI₀ x` are at
-most `2^43` (`RecDeploy.innerSetupCalls_le_acc`) and `vS₀ x` is `setupCalls_deployedB_le_cap`'s `nS x · 17716871168`,
-every premise read from the run. -/
+most `2^32` (`RecDeploy.innerSetupIns_le_acc`, `SetupCount.innerB_eq`) and `vS₀ x` is `setupCalls_deployedB_le_cap`'s
+`nS x · 138543104`, every premise read from the run. -/
 theorem calls_lam (q : Dep) {x : Msg} (h : q.RunAccepts x) :
     (∀ cs ws, (q.D.innerCalls FlockDeploy.sha512 x cs ws).length ≤ nI₀ x) ∧
       (135.7 : ℝ) ≤ Claims.Recursion.lamLin2 q.D q.I FlockDeploy.KS.CpDep x (nI₀ x) (vS₀ x) ∧
       (∀ ps, (Claims.Recursion.setupCalls FlockDeploy.sha512 q.D (q.D.vstar x ps)).length ≤ vS₀ x) ∧
       (q.OneTable x →
-        (innerSetupIns (xIOf x)).length ≤ 2 ^ 43 ∧ nI₀ x ≤ 2 ^ 43 ∧ vS₀ x ≤ nS x * 17716871168) := by
+        (innerSetupIns (xIOf x)).length ≤ 2 ^ 32 ∧ nI₀ x ≤ 2 ^ 32 ∧ vS₀ x ≤ nS x * 138543104) := by
   obtain ⟨Ω, P, ω, r, hacc⟩ := h
   have hacc' : (Claims.run FlockDeploy.sha512 P (RecDeploy.V (boundAt q.wE q.w).IVStar
       (deployedB { deployedB q.b with tr := recTr q.aux q.nOf q.hd q.recRest }).st) x ω r).out = .acc := hacc
@@ -77,24 +77,20 @@ theorem calls_lam (q : Dep) {x : Msg} (h : q.RunAccepts x) :
   obtain ⟨s, spec, sts, hin⟩ := plainIn_of_run_acc hacc'
   have hO := partIn_of_run_acc hacc'
   have hnS : nS x ≤ 2 ^ 16 := (nS_le_of_partIn hO).trans (by decide)
-  have hc : 2 ^ 28 + (SetupCount.innerB + 2 ^ 24) ≤ 2 ^ 43 := by
-    unfold SetupCount.innerB SetupCount.perRow
+  have hc : 2 ^ 28 + (SetupCount.innerB + 2 ^ 24) ≤ 2 ^ 32 := by
+    rw [SetupCount.innerB_eq]
     norm_num
   have hV : vS₀ x ≤ 2 ^ 55 := by
-    show nS x * 17716871168 ≤ 2 ^ 55
+    show nS x * 138543104 ≤ 2 ^ 55
     exact (Nat.mul_le_mul_right _ hnS).trans (by norm_num)
-  have hset : (innerSetupIns (xIOf x)).length ≤ 2 ^ 43 := by
-    obtain ⟨s', spec', sts', hs, hle⟩ := innerSetupCalls_le_acc hacc'
-    simp only [innerSetupIns, hs, List.length_map]
-    rw [(FlockDeploy.setupM_eval FlockDeploy.sha512 s'.read).2]
-    exact (hle _).trans SetupCount.innerB_le
+  have hset : (innerSetupIns (xIOf x)).length ≤ 2 ^ 32 := innerSetupIns_le_acc hacc'
   have hcap : q.OneTable x →
-      (innerSetupIns (xIOf x)).length ≤ 2 ^ 43 ∧ nI₀ x ≤ 2 ^ 43 ∧ vS₀ x ≤ nS x * 17716871168 :=
+      (innerSetupIns (xIOf x)).length ≤ 2 ^ 32 ∧ nI₀ x ≤ 2 ^ 32 ∧ vS₀ x ≤ nS x * 138543104 :=
     fun _ => ⟨hset, hc, le_rfl⟩
   exact ⟨(H []).1, lamLin2_deployed_ge_dep_tight _root_.Flock.Readable.relation
     (deployedB { deployedB q.b with tr := recTr q.aux q.nOf q.hd q.recRest }) (DeployedR.layR OpenRows.elemR)
     (FlockDeploy.nextR DeployedR.rdR) (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation DeployedR.rdR).cols
-    q.wE FlockDeploy.joinR rowInDeployed DeployedR.finalR q.w q.decI hin hO hnS (innerSetupIns_le_acc hacc')
+    q.wE FlockDeploy.joinR rowInDeployed DeployedR.finalR q.w q.decI hin hO hnS (hset.trans (by norm_num))
     (hc.trans (by norm_num)) hV,
     fun ps => setupCalls_deployedB_le_cap _root_.Flock.Readable.relation
       { deployedB q.b with tr := recTr q.aux q.nOf q.hd q.recRest } (DeployedR.layR OpenRows.elemR)
@@ -174,9 +170,9 @@ meet `FinderCR`, and `⊤` elsewhere; and (ii) zero knowledge, `RecursiveFirewal
 
 Its knowledge-soundness term `ksAt` (`Verity.Recursive.Dep.ksAt`) is `t'·2^{-λ}` with `λ = λ₂ = 135.7`, route 2C's
 level (`Claims.Recursion.lamLin2`), and at a draw whose statement is at the deployment's tables (`Dep.OneTable`) the
-least of it and route 2C's split bound `κ + t'·ε` with `κ = 2^{-167.7}` and `ε = 2^{-166.95}`
+least of it and route 2C's split bound `κ + t'·ε` with `κ = 2^{-167.7}` and `ε = 2^{-174.95}`
 (`RecDeploy.kappa_eps_oneTable_cap`, at the inner setup and the call bounds the run shows there). The finders are
-charged the inner calls `nI₀ = 2^28 + (c_B + 2^24)` and V\*'s setup calls `vS₀ = nS·17716871168`, read off the
+charged the inner calls `nI₀ = 2^28 + (c_B + 2^24)` and V\*'s setup calls `vS₀ = nS·138543104`, read off the
 accepted run with the deployed caps (`RecDeploy.lamLin2_R_ge_in`, `RecDeploy.setupCalls_deployedB_le_cap`,
 `RecDeploy.lamLin2_deployed_ge_dep_tight`). The bound record's level (`Claims.Recursion.lam`), which no theorem
 evaluates at the deployment, is one (i) doesn't use. -/
