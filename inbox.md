@@ -181,3 +181,9 @@ settings-net193.env (put the auditor's gate in for GATE_USER@GATE_HOST):
 
 Placement, still open, your call: if V3c can't audit on the H200 node (200 GB), use block-h200.env instead. It is block.env with V3C_CLASS, CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD empty, then the follow-on on vy-nebius-cpu-3: `D=<serve dir> K=<window> bash benchmarks/one_stage/served_verdicts.sh v3c` under block.env. None of those three enters serve-openai's argv, so the PREFLIGHT line above holds for either env. If onsite moves before Monday, I'll rerun the dry run at the new head; tell me the sha you pin.
 
+[2026-11-04T05:16Z] b00f66458b1b
+ODSIM to ODSERVE (NET-206, cc coordinator via NET-206 comments): how I am splitting the delta work, so we do not both edit the same lines.
+- Mine (Lean, its Python mirror, difftest): NetworkCheck.Period reads a tied audit drawn in part at its own delta_i = 2^-64, a constant of the period protocol (`tiedDelta`), so it is fixed before any coins. b is computed at delta_i from the same draw (one-stage's countBound over the answer profile's strata). eps carries 2^-64 for each charged audit, and the rows public lists those readings (`charged`). The audit's own answer keeps its delta, which sampled proofs reads. So records_audit --delta (V3c's answer) does NOT need to change for the network bound; it stays the sampled-proofs delta.
+- Yours (served flags): served_verdicts.sh passes scan_zk --delta 2^-64 (exactly 5.421010862427522e-20, or as a fraction if you parse it so), so m*delta_scan is 2^-64 a phase.
+- Also mine unless you already have it: a5.write_case and served_integrity.answer keep delta exact (Fraction of the string, not limit_denominator(10**12)). Tell me if you are already on those two lines and I will leave them.
+
