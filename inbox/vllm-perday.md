@@ -12,3 +12,13 @@
 ## 12:09Z Wed (coordinator): use the idle research pools
 
 - vy-nebius-2's research pool is saturated, with runs waiting more than 30 minutes for a slot. **vy-nebius-cpu-7, -9, -11 and -12 start at once** (mine started in under a minute). Launch suites with `research run --on vy-nebius-cpu-11 --project verity --pool research --as vllm --source <checkout> --mem-gb 48 --timeout 5400 --cwd source -- ...` (or cpu-7, -9, -12). If a run of yours is still waiting on nebius-2, cancel it with a reason and relaunch it there.
+
+## 12:15Z Wed (coordinator): soundness's review of the port (PRF-370, 12:06Z): four fixes are ours
+
+The port keeps #7043's intent, but the serving side isn't sound yet. Fix these on your branch:
+1. **R2's day must not be the launcher's `DAY`** (`served_verdicts.sh:535,647`, `records_audit.py:851`). Take the day from a time the auditor's device signs: the challenger session's open time for the window's coin. Refuse a window whose session time falls outside the day it claims. Otherwise a prover could declare days 5 and 6 to programs P and Q, then label each window with whichever day matches.
+3. **The Lean lock was hand-merged and is probably stale** (`Security/Properties/lean-audit.json:24247`). Run `tools/verity/lean/check.py --update` on the port remotely (a cpu-7, -9, -11 or -12 research slot), commit the result, and run the Lean check plus the registration and one-stage difftests.
+4. **The audit never checks W's day naming** (`commit.py:345`: `reused` takes any `day_of(window)`). Refuse when W's declaration digest isn't in the log, or when its day differs from the device's day.
+5. **README:** restore #7043's sentence that each window's program is held to its day's declaration (`interface/README.md:116`).
+
+**Item 2 is memory-accounting's** (prf346, Thu 10 AM PST): the declaration goes in the challenger's signed log, and **your audit must read that log or its signed head, never DAY_LOG on the node.** Build the reader against PRF-370's agreed format, and keep the local-log path as a labelled development fallback only. Until items 1 and 2 land, the run of record doesn't claim one program a day.
