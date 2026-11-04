@@ -8,6 +8,11 @@ import Proofs.Properties.Pouw.Commit
 By unfolding the port's definitions step by step: each `Except` chain one bind at a time (`bind_ok`), each `for` loop by
 induction over its list with the loop's state as the invariant's, and the replay's tasks by their pure model (a task's
 `get` is its function's value). The unscale is the Definition's through `Properties.Evaluator`'s FP32 equalities.
+
+Proved: `PlanMeans`, `AcceptMeans`, `RefusedBeforeTheCoin`, `LoadedGivesUp`, `TileAcceptMeans` and `YIsTheUnscale`.
+`TileKeepsTheCap` and `WorkIsTheCredit` state the rule that a sampled over-cap row refuses its tile and that the work is
+the credit over every unit; under tolerant acceptance, where a sampled over-cap row is credited nothing, both are to be
+restated before they are proved. `OpeningBinds` is the trees' and not proved here.
 -/
 
 namespace Properties.Pouw.PearlPlus
@@ -26,6 +31,17 @@ theorem eq_of_bne_false {α : Type} [BEq α] [LawfulBEq α] {a b : α} (h : (a !
   simpa using h
 
 theorem throw_bind {ε α β : Type} (e : ε) (f : α → Except ε β) : (throw e >>= f : Except ε β) = .error e := rfl
+
+theorem eq_of_not_bne {α : Type} [BEq α] [LawfulBEq α] {a b : α} (h : ¬(a != b) = true) : a = b := by
+  simpa using h
+
+theorem of_not_not {b : Bool} (h : ¬(!b) = true) : b = true := by
+  cases b
+  · exact absurd rfl h
+  · rfl
+
+theorem not_or_true {a b : Bool} (h : ¬(a || b) = true) : ¬a = true ∧ ¬b = true := by
+  cases a <;> cases b <;> simp_all
 
 /-! ## A loaded pass -/
 
@@ -481,6 +497,55 @@ theorem replay_eq (pl : Plan) (opener : Nat → Nat → Except String TileOpenin
     rcases List.mem_cons.1 he with rfl | he
     · exact ⟨_, hmem, rfl, rfl⟩
     · exact hn e he
+
+/-! ## A tile -/
+
+theorem tileAcceptMeans : TileAcceptMeans := by
+  intro p wn tid o h
+  unfold checkTile at h
+  dsimp only at h
+  split at h
+  case h_2 => cases h
+  rename_i pos rows cols ht
+  split at h
+  case isTrue => cases h
+  rename_i hcov
+  split at h
+  case isTrue => cases h
+  rename_i hA
+  split at h
+  case isTrue => cases h
+  rename_i hB
+  split at h
+  case isTrue => cases h
+  rename_i hT
+  split at h
+  case h_2 => cases h
+  rename_i ops ch hw
+  split at h
+  case isTrue => cases h
+  rename_i hleaf
+  split at h
+  case h_1 => cases h
+  rename_i hco
+  obtain ⟨hca, hcb⟩ := not_or_true hcov
+  obtain ⟨hlp, hlo⟩ := not_or_true hT
+  refine ⟨pos, rows, cols, ops, ch, ht, eq_of_not_bne hca, eq_of_not_bne hcb, eq_of_not_bne hlp, of_not_not hA,
+    of_not_not hB, of_not_not hlo, hw, eq_of_not_bne hleaf, ?_, fun yRoot hy => ?_⟩
+  · cases hc : Rule.checkOpened p.scheme p.records[pos]! rows cols ops with
+    | none => rfl
+    | some w => exact absurd hc (hco w)
+  · rw [hy] at h
+    dsimp only at h
+    split at h
+    case h_2 => cases h
+    rename_i ys hys
+    rw [pure_bind] at h
+    split at h
+    case isTrue => cases h
+    rename_i hy'
+    obtain ⟨hyp, hyo⟩ := not_or_true hy'
+    exact ⟨ys, hys, eq_of_not_bne hyp, of_not_not hyo, h⟩
 
 /-! ## The run's refusal before the coin -/
 
