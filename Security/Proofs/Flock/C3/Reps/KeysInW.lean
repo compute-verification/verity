@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Reps.WithReads
+module
+
+public import Proofs.Flock.C3.Reps.WithReads
 
 /-!
 # `wKey` from w's names: the Bool check `(keys m).all (wKey sh)` by the keys' construction
@@ -10,6 +12,8 @@ counts: the zerocheck's (`ab`, `c`, `g1`, `ginf`, `fa`, `fb`, at `m`), the linch
 at the rep's own shape: the zerocheck's at `m` (`zcKeys_all`), the lincheck's at `k_log` and a holo shape
 (`lcKeys_all`), and each claim's ring switch (`rsKeys_all`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

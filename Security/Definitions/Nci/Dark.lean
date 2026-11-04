@@ -1,4 +1,6 @@
-import Definitions.Nci
+module
+
+public import Definitions.Nci
 
 /-!
 # Partial containment: a reference circuit computed partly off the books
@@ -16,6 +18,8 @@ That it doesn't is a premise about the protocol, which decides what `θ` may hol
 `Nci.Assumptions.ThetaRegistered` (`Definitions/Nci/Assumptions/Baseline.lean`), which every guarantee through a
 containment, total or partial, takes as a hypothesis.
 -/
+
+@[expose] public section
 
 namespace Nci
 

@@ -1,7 +1,9 @@
-import Definitions.Pouw.Guarantees.OnsiteFreed
-import Proofs.Pouw.Dither
-import Proofs.Pouw.DitherWitness
-import Proofs.Pouw.Lemmas.Dither
+module
+
+public import Definitions.Pouw.Guarantees.OnsiteFreed
+public import Proofs.Pouw.Dither
+public import Proofs.Pouw.DitherWitness
+public import Proofs.Pouw.Lemmas.Dither
 
 /-!
 # The onsite PoUW protocol's freed compute: the proof
@@ -29,6 +31,8 @@ import Proofs.Pouw.Lemmas.Dither
 **What the witness doesn't show.** The witness machine exchanges no bits, so `β = K = 0` and the certifier's check
 refuses nothing (`twNet`); the onsite statement's `β K` term and the certifier's refusals aren't exercised.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ZkFork
-import Proofs.Flock.Claims.KS.PlainForkClash
+module
+
+public import Proofs.Flock.Claims.KS.ZkFork
+public import Proofs.Flock.Claims.KS.PlainForkClash
 
 /-!
 # The masked live fork event's collision
@@ -21,6 +23,8 @@ rows opened at one position of it that differ collide in the joined logs (`tiedC
   table `j`'s rep `r` records its proof's recursive caps and opens rows of them in the run's log.
 * `zkForkClash`: `ZkForkClash` holds at every statement.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

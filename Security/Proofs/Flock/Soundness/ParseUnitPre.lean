@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.ExecCircuit
+module
+
+public import Proofs.Flock.Soundness.ExecCircuit
 
 /-!
 # A unit given ahead of the file
@@ -7,6 +9,8 @@ import Proofs.Flock.Soundness.ExecCircuit
 comes first, ahead of the file's own nets, so it is the circuit's unit (`unit_of_parsePre`). The flat-parse consumers'
 `…Pre` forms (`Layout.outShape_of_parsePre`, `Hidden.unitFacts_of_parsePre`) read their facts about the unit off `n`.
 -/
+
+@[expose] public section
 
 open Flock
 

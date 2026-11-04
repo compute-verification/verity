@@ -1,5 +1,7 @@
-import Proofs.Core
-import Proofs.Nci.Lemmas
+module
+
+public import Proofs.Core
+public import Proofs.Nci.Lemmas
 
 /-!
 # Lemmas 1 and 2: what an IU reads at full and other positions
@@ -10,6 +12,8 @@ entries `R` uses, its full positions and the input entries it uses at its other 
 Lemma 2 says that at its other positions every input entry `R` uses is read, and every output entry `R` contributes to
 is split (`other_positions`). With incompressibility, they give the reads the theorem's proof starts from (`iu_reads`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

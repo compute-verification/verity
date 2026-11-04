@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Replay.RingSwitch
-import Proofs.Flock.Claims.Complete.Discharge
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.RingSwitch
+public import Proofs.Flock.Claims.Complete.Discharge
 
 /-!
 # The honest trace at the deployed relation
@@ -15,6 +17,8 @@ every region bit. So the trace satisfies every row, its pin is `1`, and its regi
 * `traceR1CS`: each table's trace satisfies the block R1CS (`TraceR1CS`), from `RelS` alone.
 * `zerocheck_goal'`, `lincheck_goal'`, `ringSwitch_goal'`: the goals at the deployed relation, without `TraceR1CS`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

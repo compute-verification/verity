@@ -1,4 +1,6 @@
-import Proofs.Accounting.Lemmas.EncodeChain
+module
+
+public import Proofs.Accounting.Lemmas.EncodeChain
 
 /-!
 # Bits for free: the encode chain's conjecture fails in the circuit model
@@ -22,6 +24,8 @@ The units bound here (`9` a bit read, `72` a key byte) is crude; a port of the m
 `⟨16, 17⟩`). Its proof is `Accounting.SecurityProofs.Gates.EncodeChainRefuted`, in
 `Security/Proofs/Accounting/Gates/Bitwise.lean`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.Gates
 

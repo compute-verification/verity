@@ -1,4 +1,6 @@
-import Definitions.Nci.Assumptions.Info
+module
+
+public import Definitions.Nci.Assumptions.Info
 
 /-!
 # The inference-only policy over threads, reads counted by information: the guarantees
@@ -7,6 +9,8 @@ A set whose fresh input reads are a state that is a function of `k` bits and an 
 `k + width(ingress)` bits of information (`InfoOfState`). Theorem 1 with reads counted by information is stated under
 `WeightsSupportFmt2` (`Definitions.Nci.Guarantees.Fmt2`).
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

@@ -1,16 +1,18 @@
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
-import Mathlib.Algebra.BigOperators.Group.Finset.Sigma
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.Ring.GeomSum
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Data.Int.Interval
-import Mathlib.Data.List.GetD
-import Mathlib.NumberTheory.LegendreSymbol.Basic
-import Mathlib.Tactic.IntervalCases
-import Mathlib.Tactic.NormNum.Basic
-import Mathlib.Tactic.Ring
-import Definitions.Accounting.Guarantees.Gates
+module
+
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
+public import Mathlib.Algebra.BigOperators.Group.Finset.Sigma
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.Ring.GeomSum
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Data.Int.Interval
+public import Mathlib.Data.List.GetD
+public import Mathlib.NumberTheory.LegendreSymbol.Basic
+public import Mathlib.Tactic.IntervalCases
+public import Mathlib.Tactic.NormNum.Basic
+public import Mathlib.Tactic.Ring
+public import Definitions.Accounting.Guarantees.Gates
 
 /-!
 # The circuit model's window and lower bounds, proved
@@ -34,6 +36,8 @@ the earlier gates' intervals; `Int8LinearWindow` and `LutPvWindow` from `dotChai
 over declared operands whose `32·S` products fit s32. `Bf16ToF32Affine` by the registry's entry and, on a 16-bit
 word, the mask's identity and `(u + 2^15) mod 2^16 · 2^16 = (u · 2^16 + 2^31) mod 2^32`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Gates
 

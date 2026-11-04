@@ -1,5 +1,7 @@
-import Definitions.Accounting.Assumptions.TS
-import Definitions.Accounting.Assumptions.TS.Fixed
+module
+
+public import Definitions.Accounting.Assumptions.TS
+public import Definitions.Accounting.Assumptions.TS.Fixed
 
 /-!
 # `UnitFixed` from a fixed word: lemmas
@@ -20,6 +22,8 @@ Option A (`Definitions.Accounting.TS.Fixed`). Each `def G : Prop` is proved as `
 
 `UnitFixed` itself stays an assumption, and its readers are unchanged; retiring it is a later step.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

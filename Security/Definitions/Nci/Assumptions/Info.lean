@@ -1,5 +1,7 @@
-import Definitions.Nci.Info
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
+module
+
+public import Definitions.Nci.Info
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
 # The inference-only policy over threads, reads counted by information: through a containment
@@ -8,6 +10,8 @@ import Mathlib.Analysis.SpecialFunctions.Pow.Real
 runs, and `WithinBlock` bounds a set of a declared circuit's gates by an inference block's size. The guarantees over
 threads with reads counted by information through a containment (`Definitions.Nci.Guarantees.Fmt2`) take both.
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 

@@ -1,5 +1,7 @@
-import Definitions.Nci.Sources
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
+module
+
+public import Definitions.Nci.Sources
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
 # The inference-only policy over threads, each value charged once over its copies: the named assumption
@@ -10,6 +12,8 @@ a weight's fprop and dgrad copies, and at llama-3-405b's fan-out. `WeightsSuppor
 per source, a fan-out bound in place of the margin, `e` per model, and the counted multiplications off weights fewer
 than `k₀` steps from the registered information. It is not signed off.
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 

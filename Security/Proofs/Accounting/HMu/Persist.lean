@@ -1,5 +1,7 @@
-import Definitions.Accounting.Guarantees.HMu
-import Proofs.Accounting.Lemmas.HMu
+module
+
+public import Definitions.Accounting.Guarantees.HMu
+public import Proofs.Accounting.Lemmas.HMu
 
 /-!
 # Lemma B′ for a persistent pattern, one word a unit
@@ -9,6 +11,8 @@ different states at `c`, for a fold whose step is injective in the word and in t
 part at `i + 1` and stay apart. A persistent pattern whose only position before `c` is `i` is such a pair for any two
 skipped values.
 -/
+
+@[expose] public section
 
 namespace Accounting.HMuProofs
 

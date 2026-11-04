@@ -1,4 +1,6 @@
-import PouwCheck.Lanes
+module
+
+public import PouwCheck.Lanes
 
 /-!
 # A served window's statements verified (`credit._verified`)
@@ -34,6 +36,8 @@ statements are call statements and drawn leaves' (`Lanes.leafStatement?`), at th
 window's draw), each against its own leaf Program; their sessions are judged by `Lanes.judged`, and once all have
 accepted, the produced record's checks (`Lanes.outcomes`) give each drawn leaf its one outcome.
 -/
+
+@[expose] public section
 
 namespace PouwCheck.Verified
 

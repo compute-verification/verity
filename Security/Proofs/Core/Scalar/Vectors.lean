@@ -1,4 +1,6 @@
-import Definitions.Core.Scalar
+module
+
+public import Definitions.Core.Scalar
 
 /-!
 # Vectors: the scalar primitives of `verity.ml.scalar`
@@ -8,6 +10,8 @@ against `Verity.Scalar`. `packages/verity/tests/ml/test_lean_scalar_vectors.py` 
 the Python, so a change on either side fails a build: the transcription cannot drift silently. Every operand is a word of
 its parameter's width.
 -/
+
+@[expose] public section
 
 namespace Verity.Scalar.Vectors
 

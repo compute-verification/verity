@@ -1,6 +1,8 @@
-import Definitions.NetworkCertifier.Tap
-import Definitions.Core.Assumptions
-import Proofs.NetworkCertifier.Warden
+module
+
+public import Definitions.NetworkCertifier.Tap
+public import Definitions.Core.Assumptions
+public import Proofs.NetworkCertifier.Warden
 
 /-!
 # What the tap's certifier saw is what its warden sent
@@ -12,6 +14,8 @@ lane sends before its fail cell is in the record, as that cell's data in its buc
 server's bytes, after the fail cell or past the lane's end, reach neither the client nor the record, so the record
 does not fix the whole stream the server sent.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

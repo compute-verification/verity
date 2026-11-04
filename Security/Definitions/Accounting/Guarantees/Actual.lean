@@ -1,7 +1,9 @@
-import Definitions.Accounting.Physical
-import Definitions.Core.Partition
-import Definitions.Nci.Reads
-import Definitions.Nci.Assumptions
+module
+
+public import Definitions.Accounting.Physical
+public import Definitions.Core.Partition
+public import Definitions.Nci.Reads
+public import Definitions.Nci.Assumptions
 
 /-!
 # The actual circuit's runtime statements (trusted)
@@ -20,6 +22,8 @@ declaration NCI's statements are about.
 
 The proofs are in `Security/Proofs/Accounting/Actual/`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.Actual
 

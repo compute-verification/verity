@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
 
 /-!
 # The masked replay and the inner proof, as frames
@@ -9,6 +11,8 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
   query loop emits nothing.
 * `ligeritoConstraints_size`: level 0's lane phase gives two constraints.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

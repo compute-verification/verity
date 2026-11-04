@@ -1,6 +1,8 @@
-import Definitions.Accounting.Guarantees.TS.Stages
-import Proofs.Accounting.TS
-import Proofs.Accounting.Lemmas.TS.Stages
+module
+
+public import Definitions.Accounting.Guarantees.TS.Stages
+public import Proofs.Accounting.TS
+public import Proofs.Accounting.Lemmas.TS.Stages
 
 /-!
 # Sampled proofs under per-stage coins: proofs
@@ -21,6 +23,8 @@ own stage's (`Stages.skipped_of_le`, `Stages.passes_of_le`), so conditioning on 
 `Pr[skipped_u ∧ passes_u]` by `p·Pr[skipped_u]` (`Stages.unit_luck`); and a unit's work weight at most `r` times its
 draw probability prices the share at `r` (`Stages.prob_comp`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS
 

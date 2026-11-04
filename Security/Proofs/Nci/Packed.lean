@@ -1,7 +1,9 @@
-import Definitions.Nci.Guarantees.Packed
-import Definitions.Nci.Guarantees.Training
-import Proofs.Nci.Contained
-import Proofs.Nci.Lemmas
+module
+
+public import Definitions.Nci.Guarantees.Packed
+public import Definitions.Nci.Guarantees.Training
+public import Proofs.Nci.Contained
+public import Proofs.Nci.Lemmas
 
 /-!
 # The fan-out bound on a chain with several products to a gate
@@ -19,6 +21,8 @@ reads). Neither is on the fan-out bound's path.
 At `k = 1` the packed chain is the chain (`Chain.toPacked`), the assumption is the per-product one
 (`packedActivationsIncompressible_toPacked`), and `ContainedFanOutOn` is the case `k = 1` (`containedFanOutOn_of_packed`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

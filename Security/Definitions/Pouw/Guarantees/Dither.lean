@@ -1,6 +1,8 @@
-import Definitions.Pouw.Dither
-import Definitions.Pouw.Assumptions.Dither
-import Definitions.Pouw.Assumptions.ShaRealize
+module
+
+public import Definitions.Pouw.Dither
+public import Definitions.Pouw.Assumptions.Dither
+public import Definitions.Pouw.Assumptions.ShaRealize
 
 /-!
 # The no-fold Dither protocol's work-soundness over a monitoring period (trusted)
@@ -22,6 +24,8 @@ The ACCEL program's headline, on the accelerator model of `Definitions.Pouw.Dith
   accepted replicas at once, at `ln(N / (s δ_coin))` of luck rather than the union bound's `ln(N / δ_coin)` a replica,
   under `OwnDither` and `CoinsConfidential` (tier A).
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.Dither
 

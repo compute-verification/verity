@@ -1,7 +1,9 @@
-import Properties.Pouw.ServedFreed
-import Proofs.Pouw.ServedWork
-import Proofs.Pouw.OnsiteFreed
-import Proofs.Pouw.Lemmas.Dither
+module
+
+public import Properties.Pouw.ServedFreed
+public import Proofs.Pouw.ServedWork
+public import Proofs.Pouw.OnsiteFreed
+public import Proofs.Pouw.Lemmas.Dither
 
 /-!
 # Proof of `ServedFreed`
@@ -17,6 +19,8 @@ import Proofs.Pouw.Lemmas.Dither
   originals spent at least that less `β · ext`, and off the certifier's event `ext ≤ K`. `FreedOfFloor` turns the
   floor into freed compute, and the union bound adds the certifier's `δ`.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Served.SecurityProofs
 

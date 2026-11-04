@@ -1,4 +1,6 @@
-import Mathlib.Analysis.MeanInequalities
+module
+
+public import Mathlib.Analysis.MeanInequalities
 
 /-!
 # C-Flock's one-stage audit: lemmas
@@ -8,6 +10,8 @@ These are steps of proofs, not guarantees: they sit with the proofs, and no reco
 Each guarantee is a `def G : Prop`, with the docstring, binders and `open`s of the statement in its source
 module. Its proof is the theorem `FlockSoundness.Audit.SecurityProofs.G : FlockSoundness.Audit.Guarantees.G`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Law
 open scoped ENNReal NNReal

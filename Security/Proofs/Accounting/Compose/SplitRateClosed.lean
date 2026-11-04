@@ -1,5 +1,7 @@
-import Proofs.Accounting.Compose.SplitRateExp
-import Proofs.Accounting.Lemmas.Compose
+module
+
+public import Proofs.Accounting.Compose.SplitRateExp
+public import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # The closed rate: proof
@@ -9,6 +11,8 @@ import Proofs.Accounting.Lemmas.Compose
 `c = Kρw_max` and `q = p + (1 − p)e^{−c}`, `−ln q ≥ 1 − q = (1 − p)(1 − e^{−c})` and `(1 + c)e^{−c} ≤ 1`, so
 `(1 + c)·(−ln q) ≥ (1 − p)·c`. At `w_max = 0` every work is `0` and `ν = ν₀ = 0` do.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Compose.Rates
 

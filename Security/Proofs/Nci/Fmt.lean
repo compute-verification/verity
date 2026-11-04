@@ -1,5 +1,7 @@
-import Definitions.Nci.Work
-import Proofs.Nci.Info
+module
+
+public import Definitions.Nci.Work
+public import Proofs.Nci.Info
 
 /-!
 # Each thread charged by its work: the lemmas
@@ -10,6 +12,8 @@ on a thread meets the threading inequality itself (`work_threaded`), and every c
 (`work_le`). A containment carries a small piece of `d` to a small piece of `c` (`smallInfo_piece`), as `Proofs.Nci.Fmt2`
 uses it.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

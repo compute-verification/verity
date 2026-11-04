@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.DeploySessions
+module
+
+public import Proofs.Flock.Claims.Recursion.DeploySessions
 
 /-!
 # The scope refusals on an accepted run
@@ -11,6 +13,8 @@ accepts (`stepWith_acc_last`). So the compiled verifier refuses an accepted run 
 refuse or one of whose V* records doesn't draw every unit (`run_acc_scope`; `DrawRecord.Full`, `run_acc_full`), and what it
 reads of the statement with the sessions' records is in `InScope` (`run_acc_inScope_records`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

@@ -1,4 +1,6 @@
-import Definitions.Accounting.TS
+module
+
+public import Definitions.Accounting.TS
 
 /-!
 # The tensor–scalar model's named assumptions (trusted)
@@ -67,6 +69,8 @@ The joint-luck premise JL is not used: D-ideal keeps the proved `ε_jl`.
 SAMPLING's LIN-STEER is false and is not stated here: a segmented consumer satisfies it only when its noise-active
 segments carry equal counts. It and the bound that holds, `SegmentSteer`, are lemmas (`Proofs.Accounting.Lemmas.TS.Steer`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions.TS
 

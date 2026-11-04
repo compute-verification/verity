@@ -1,5 +1,7 @@
-import RemoteAudit.Pooled
-import RemoteAudit.Shared
+module
+
+public import RemoteAudit.Pooled
+public import RemoteAudit.Shared
 
 /-!
 # The memory line held over time
@@ -18,6 +20,10 @@ same groups, and its pooled bound reads its draws, each its g windows' receipts 
 `tests/test_line.py` holds the two together through `RemoteAudit.Difftest`'s `line` and `line_record`. Code: Lean core
 only.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit.Line
 

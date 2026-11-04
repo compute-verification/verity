@@ -1,5 +1,7 @@
-import Proofs.Accounting.Compose.SplitRateClosed
-import Proofs.Accounting.Lemmas.Compose
+module
+
+public import Proofs.Accounting.Compose.SplitRateClosed
+public import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # The merged rate: proof
@@ -7,6 +9,8 @@ import Proofs.Accounting.Lemmas.Compose
 `Accounting.Guarantees.Compose.SplitRateMerged`, from `SplitRateClosed` at `p = p0 = q`: there the whole branch is the
 larger (`a ≤ b`), and lower lucks only raise `SplitRateAt`'s right side (`splitRateAt_anti`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Compose.Rates
 

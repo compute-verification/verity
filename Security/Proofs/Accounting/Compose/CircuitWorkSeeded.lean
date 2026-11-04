@@ -1,8 +1,10 @@
-import Proofs.Accounting.Compose.ServiceBudget
-import Proofs.Accounting.Compose.ServiceCovers
-import Proofs.Accounting.Compose.CircuitWork
-import Proofs.Accounting.Lemmas.Compose
-import Proofs.Accounting.Lemmas.TS
+module
+
+public import Proofs.Accounting.Compose.ServiceBudget
+public import Proofs.Accounting.Compose.ServiceCovers
+public import Proofs.Accounting.Compose.CircuitWork
+public import Proofs.Accounting.Lemmas.Compose
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # `CircuitWorkSeeded`: the circuit's work under seeded coins
@@ -21,6 +23,8 @@ import Proofs.Accounting.Lemmas.TS
   and `UnitFixed` with `ServiceCovers` on `Declared.atIR`'s layer gives the words as in `CircuitWork`
   (`WorkProof.work_of_bounds`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Compose.Seeded
 

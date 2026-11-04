@@ -22,8 +22,12 @@ Cost: per class of a Definition reached on more than one path, its own entries a
 its table's entries (at most `4^T` chunk pairs under layout `hybrid T`, times 64 slots while explicit) and its bound
 inputs' table entries times its copies.
 -/
-import Flock.TmplFold
-import Std.Data.HashMap
+module
+
+public import Flock.TmplFold
+public import Std.Data.HashMap
+
+@[expose] public section
 
 namespace Flock.Tmpl
 

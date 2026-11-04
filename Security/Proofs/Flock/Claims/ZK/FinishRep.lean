@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FinishLig
-import Proofs.Flock.Claims.ZK.FinishInner
+module
+
+public import Proofs.Flock.Claims.ZK.FinishLig
+public import Proofs.Flock.Claims.ZK.FinishInner
 
 /-!
 # The firewall's rep in the analysis's terms
@@ -22,6 +24,8 @@ import Proofs.Flock.Claims.ZK.FinishInner
 * `tmw_throw_bind`, `throw_bind_sv`: a throw ends a run in the transcript monad over a monad where it does, as it does
   in `flock-firewall finish`'s own (`StateT Nat V`).
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 

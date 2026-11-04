@@ -1,5 +1,7 @@
-import Definitions.Accounting.Guarantees.Sheet
-import Proofs.Accounting.Lemmas.Sheet
+module
+
+public import Definitions.Accounting.Guarantees.Sheet
+public import Proofs.Accounting.Lemmas.Sheet
 
 /-!
 # The data-sheet axioms' bridges
@@ -12,6 +14,8 @@ import Proofs.Accounting.Lemmas.Sheet
 * `scalarRoute_half`: at `q, q_T ≤ ½` A6's two words a lane is SCALAR-ROUTE's lanes clause, and at `b_T ≤ 0` its
   bytes clause is the split's sign.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS
 

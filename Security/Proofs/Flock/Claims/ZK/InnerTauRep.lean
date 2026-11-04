@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.InnerTauVal
-import Proofs.Flock.Claims.ZK.InnerBatched
-import Proofs.Flock.Claims.ZK.PiopSrcLc
+module
+
+public import Proofs.Flock.Claims.ZK.InnerTauVal
+public import Proofs.Flock.Claims.ZK.InnerBatched
+public import Proofs.Flock.Claims.ZK.PiopSrcLc
 
 /-!
 # `TauRep`: the inner proof's first five rows
@@ -20,6 +22,8 @@ are `rowsOf`'s `rowCEval`, `rowAB`, `rowLC`, `rowRsAb` and `rowRsC` by coefficie
 * **`innerPre_cutE`**: the inner run answered by `asksCut` that returns is the one answered by `asksS`.
 * **`tauRep`**: `TauRep`; **`innerTauVal_of_tauLig`**: `TauLig → InnerTauVal`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 open Claims FlockSoundness.ZK

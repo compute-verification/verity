@@ -1,7 +1,9 @@
-import Proofs.Pouw.NCP.RelationProofs
-import Proofs.Pouw.NCP.GameProofs
-import Definitions.Pouw.Guarantees.NCP
-import Proofs.Pouw.Lemmas.NCP
+module
+
+public import Proofs.Pouw.NCP.RelationProofs
+public import Proofs.Pouw.NCP.GameProofs
+public import Definitions.Pouw.Guarantees.NCP
+public import Proofs.Pouw.Lemmas.NCP
 
 /-!
 # The shift by 24: independent checkpoints, hence relation-free; FinalOnly and the floor under independence
@@ -13,6 +15,8 @@ has exactly two nonzero terms. Fresh entries make the checkpoint matrices triang
 (`indep_of_fresh`: the last coefficient of a vanishing combination is read off at its fresh entry), and independence
 implies relation-free (`independentRelationFree`).
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP.RelationWitness
 

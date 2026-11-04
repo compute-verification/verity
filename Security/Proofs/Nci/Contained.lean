@@ -1,10 +1,12 @@
-import Definitions.Nci.Assumptions
-import Definitions.Nci.Dark
-import Proofs.Nci.Reads
-import Proofs.Nci.Pull
-import Proofs.Nci.Support
-import Proofs.Nci.Rate
-import Proofs.Nci.Lemmas.Reads
+module
+
+public import Definitions.Nci.Assumptions
+public import Definitions.Nci.Dark
+public import Proofs.Nci.Reads
+public import Proofs.Nci.Pull
+public import Proofs.Nci.Support
+public import Proofs.Nci.Rate
+public import Proofs.Nci.Lemmas.Reads
 
 /-!
 # Proofs of the partial-sum law on a reference circuit
@@ -25,6 +27,8 @@ The count is one lemma over what the dark parts absorb, a budget `B` (`matMulOn_
 incompressibility bounds it by the dark gates' reads (`IncompressibleContainedMatMulOn`), and at `μ = 1` it goes
 (`ContainedFanOutOn`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

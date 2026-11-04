@@ -1,7 +1,9 @@
-import Properties.Accounting.Served
-import Proofs.Accounting.Compose.ServiceBudget
-import Proofs.Flock.Claims.Sampling.Select.Bounds
-import Proofs.Accounting.Lemmas.Compose
+module
+
+public import Properties.Accounting.Served
+public import Proofs.Accounting.Compose.ServiceBudget
+public import Proofs.Flock.Claims.Sampling.Select.Bounds
+public import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # The served window's draw misses a set no more often than a uniform permutation's subset (`DrawMissesSubset`)
@@ -17,6 +19,8 @@ import Proofs.Accounting.Lemmas.Compose
   tiles that must miss a set of at most `|B|` of them (`card_rest_le`), and `(m + 1)·C(m, K) = C(m + 1, K + 1)·(K + 1)`
   (`Nat.add_one_mul_choose_eq`) turns the product into the ratio.
 -/
+
+@[expose] public section
 
 namespace Properties.Served.SecurityProofs
 

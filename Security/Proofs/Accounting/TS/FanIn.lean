@@ -1,5 +1,7 @@
-import Proofs.Accounting.TS.Price
-import Proofs.Accounting.Lemmas.TS
+module
+
+public import Proofs.Accounting.TS.Price
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # The fan-in count, and FOLD-OPT and FILL-OPT from it
@@ -14,6 +16,8 @@ import Proofs.Accounting.Lemmas.TS
 * `FoldOptOfFanIn` and `FillOptOfFanIn`: `|ι| ≤ |O| + Σ_k m_k n_k` (`card_le_issued`), and the menu's fan-in routes
   make `m_k·s ≤ π·a_k` for `s = φ*` (`χ*/N_x`), so `(|ι| − |O|)·s ≤ Σ_k n_k π·a_k = π·n` (`price_of_fanIn`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS
 

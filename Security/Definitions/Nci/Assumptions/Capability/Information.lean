@@ -1,8 +1,10 @@
-import Definitions.Nci.Capability
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Mathlib.Probability.ProbabilityMassFunction.Basic
-import Mathlib.Basic.ENNReal.Real
-import Mathlib.Basic.Real.ENatENNReal
+module
+
+public import Definitions.Nci.Capability
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
+public import Mathlib.Probability.ProbabilityMassFunction.Basic
+public import Mathlib.Basic.ENNReal.Real
+public import Mathlib.Basic.Real.ENatENNReal
 
 /-!
 # Local bounds: information premises
@@ -22,6 +24,8 @@ The two measures make different scientific claims:
 one. Each premise's meaning is its item family's: updated slots (update hardness), operand scalars (activation hardness),
 or both in one budget (`Items.sum`, joint hardness).
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 

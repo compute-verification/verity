@@ -1,5 +1,7 @@
-import PouwWindow.Lanes
-import Flock.Registered
+module
+
+public import PouwWindow.Lanes
+public import Flock.Registered
 
 /-!
 # A drawn H1 leaf's registered data ports
@@ -24,6 +26,8 @@ count, row width, domain and schema), read at the layout's row from that base:
 * `checkOneRead own`: the leaf verifier's check that every port of the file, data or known, has one read
   (`checkOneRead_ok`), a statement being one unit, which `pouw-leaf-own` runs too.
 -/
+
+@[expose] public section
 
 namespace PouwWindow.Lanes
 

@@ -1,5 +1,7 @@
-import Proofs.Nci.Chain
-import Proofs.Nci.Lemmas
+module
+
+public import Proofs.Nci.Chain
+public import Proofs.Nci.Lemmas
 
 /-!
 # What an IU's reads determine: support lemmas
@@ -10,6 +12,8 @@ baseline at its committed values, the values on `in(R) ∩ θ` are fixed, so the
 entry to its charge (`charge_insert_le`), so a set of `R`'s gates charged more than `R` reads has a subset charged
 between `novelReads(R)` and `novelReads(R) + b_w + b_a` (`exists_charge_window`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

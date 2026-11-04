@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Zk.Level0Pad
-import Proofs.Flock.Claims.Complete.Replay.LigeritoRun
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Level0Pad
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoRun
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
 
 /-!
 # The verifier's masked Ligerito returns on the model's rounds
@@ -17,6 +19,8 @@ identity at the model's values.
 * **Its cursors** (`inv_x₀Z`): plain's `Inv` from round `k + 2` (the pair's two rounds); the level loop's invariant from
   any start (`inv_loop_of`, `done_of`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.L0
 

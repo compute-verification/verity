@@ -1,9 +1,11 @@
-import Definitions.Pouw.NCP.Pinned
-import Definitions.Pouw.NCP.Protocol
-import Definitions.Pouw.NCP.Relation
-import Definitions.Pouw.NCP.RouteU
-import Definitions.Pouw.Assumptions.NCP.RouteUGame
-import Definitions.Pouw.Assumptions.NCP.RouteUWord
+module
+
+public import Definitions.Pouw.NCP.Pinned
+public import Definitions.Pouw.NCP.Protocol
+public import Definitions.Pouw.NCP.Relation
+public import Definitions.Pouw.NCP.RouteU
+public import Definitions.Pouw.Assumptions.NCP.RouteUGame
+public import Definitions.Pouw.Assumptions.NCP.RouteUWord
 
 /-!
 # NCP's guarantees (trusted)
@@ -21,6 +23,8 @@ of the theorem `Pouw.NCP.GameProofs.shiftBy24_admissible`, its binders written a
 and namespace and comes just before them, as in its source: `GammaFromTTNCP_U_C2` reuses the auxiliary proof Lean makes
 for its `3 : ℝ` (`Pouw.NCP.RouteU.GammaFromTTNCP_U._proof_1`), and the audit reads that proof by name.
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.NCP
 

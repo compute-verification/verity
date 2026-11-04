@@ -1,8 +1,10 @@
-import Definitions.Nci.Guarantees.Training
-import Proofs.Nci.Threads
-import Proofs.Nci.Contained
-import Proofs.Nci.Packed
-import Proofs.Nci.Lemmas
+module
+
+public import Definitions.Nci.Guarantees.Training
+public import Proofs.Nci.Threads
+public import Proofs.Nci.Contained
+public import Proofs.Nci.Packed
+public import Proofs.Nci.Lemmas
 
 /-!
 # Proofs of NCI's guarantees under training's incompressibility
@@ -17,6 +19,8 @@ Through a partial containment each dark gate is an IU of its own (`withDark`), s
 absorbs by its reads (`IncompressibleContainedMatMulOn`). At `μ = 1` that budget has no weight, and the activations' half
 alone bounds the products the declaration computes (`ContainedFanOutOn`, the case `k = 1` of `PackedContainedFanOutOn`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

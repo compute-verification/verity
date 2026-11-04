@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.KS.ZkOuter
-import Proofs.Flock.Claims.Recursion.DeployLayout
-import Proofs.Flock.Claims.Recursion.BoundRouteCols
-import Proofs.Flock.Claims.Recursion.LastBindsDeployed
-import Proofs.Flock.Claims.Recursion.BoundWeight
-import Proofs.Flock.Claims.Recursion.PlainKSAbortDeployed
+module
+
+public import Proofs.Flock.Claims.KS.ZkOuter
+public import Proofs.Flock.Claims.Recursion.DeployLayout
+public import Proofs.Flock.Claims.Recursion.BoundRouteCols
+public import Proofs.Flock.Claims.Recursion.LastBindsDeployed
+public import Proofs.Flock.Claims.Recursion.BoundWeight
+public import Proofs.Flock.Claims.Recursion.PlainKSAbortDeployed
 
 /-!
 # The deployed recursion, with Flock's KS at the outer record proved
@@ -25,6 +27,8 @@ honest staging meets, `DeployHonest`), it is `FlockDeploy.KS.zk_KS_outer`. Each 
   verifier's own steps, columns and weight and the deployed rows' digest input, from `PlainLastBinds` and `γ`'s weight
   at the floor.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

@@ -1,6 +1,8 @@
-import Proofs.Nci.Throttling
-import Proofs.Nci.Lemmas.Reads
-import Proofs.Nci.Lemmas
+module
+
+public import Proofs.Nci.Throttling
+public import Proofs.Nci.Lemmas.Reads
+public import Proofs.Nci.Lemmas
 
 /-!
 # Updated matrix multiplications are throttled, in reads form
@@ -11,6 +13,8 @@ the total (`sum_card_products`), with the inference blocks' total fresh input as
 most `k = α c`, which gives `F · 2G ≤ size(D)` through `F = f(k) / (2α)` (`F_eq_readFactor`, used by
 `containedMatMul_of_reads`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 
