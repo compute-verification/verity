@@ -609,7 +609,7 @@ theorem finRepL0 (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Re
     refine ⟨?_, ?_⟩
     · rw [hcr, FlockSoundness.Refine.getElem!_range_map _ hpd', hf1, hrow, hcm0]
       show _ = l0.rows[p]!
-      rw [hrows0, hlv0, htp0, hin0, Masked.rows_linkIn, _root_.Flock.Firewall.Link.rows_eq, hgk,
+      rw [hrows0, hlv0, htp0, hin0, Masked.rows_linkIn x w t ⟨k / 2, hj⟩, _root_.Flock.Firewall.Link.rows_eq, hgk,
         FlockComplete.tablesP, FlockSoundness.Refine.getElem!_range_map _ hjT]
       all_goals rfl
     · rw [hcs, FlockSoundness.Refine.getElem!_range_map _ hpd', hf2, hsalt, hcm0]

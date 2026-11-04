@@ -147,10 +147,12 @@ theorem In_ext {a b : Link.In} (h1 : a.m = b.m) (h2 : a.g = b.g) (h3 : a.extra =
   simp only [Link.In.mk.injEq]
   exact ⟨h1, h2, h3, h4, h5⟩
 
+set_option maxHeartbeats 1000000 in
 /-- **`ofDraws` on a table's inputs written in its layout gives them back**: where `i`'s packed table has
 `2^(lanes + cols)` words, its extra lanes and lane paddings are `0` past level 0's sizes, and its salts are `192` bytes at
 the `2^d` tree positions and empty past them, `ofDraws` on `i.g` and `inBytes` returns a level 0 whose inputs are `i`. -/
-theorem ofDraws_inBytes {m : Nat} {s : Schedule} {tPad : Nat} {lv : Level} (hz : Zk.schedule m = .ok (s, tPad))
+theorem ofDraws_inBytes {m : Nat} {s : _root_.Flock.Schedule} {tPad : Nat} {lv : Level}
+    (hz : Zk.schedule m = .ok (s, tPad))
     (hlv : s.levels.getD 0 default = lv) (i : Link.In) (hm : i.m = m) (hg : i.g.size = 2 ^ (lv.lanes + lv.cols))
     (he : ∀ e c, ¬ (e < Zk.EXTRA_LANES ∧ c < 2 ^ lv.cols) → i.extra e c = 0)
     (hp : ∀ l k, ¬ (l < 2 ^ lv.lanes + Zk.EXTRA_LANES ∧ k < tPad) → i.lanePad l k = 0)
@@ -167,8 +169,10 @@ theorem ofDraws_inBytes {m : Nat} {s : Schedule} {tPad : Nat} {lv : Level} (hz :
     simp
   have hok : ofDraws m i.g (inBytes lv tPad i) = .ok (build m lv tPad i.g (drawnExtra lv (inBytes lv tPad i))
       (drawnPads lv tPad (inBytes lv tPad i)) (drawnSalts lv tPad (inBytes lv tPad i))) := by
+    subst hlv
     unfold ofDraws
-    simp only [hz, hlv, bind, Except.bind, h1, h2, h3, pure, Except.pure, Bool.false_eq_true, ↓reduceIte]
+    rw [hz]
+    simp only [bind, Except.bind, pure, Except.pure, h1, h2, h3, Bool.false_eq_true, ↓reduceIte]
     all_goals rfl
   have hE : ∀ e c, ((drawnExtra lv (inBytes lv tPad i))[e]!)[c]! = i.extra e c := by
     intro e c
@@ -266,6 +270,7 @@ noncomputable def Loop.tapeSrc (x : Msg) (w : Flock.Wit)
       (Masked.zkTab x ⟨k / 2, h⟩).tPad (Masked.linkIn x w ρ.2 ⟨k / 2, h⟩), #[])
   else .error "no table"
 
+set_option maxHeartbeats 1000000 in
 /-- **`Loop.Level0Src` is satisfiable**: at every statement `x` and witness `w`, the source `Loop.tapeSrc` meets it, so
 at every table, nonce, tape and rep the level 0 the loop draws has `Masked.linkIn`'s inputs. -/
 theorem Loop.level0Src_tapeSrc (x : Msg) (w : Flock.Wit) : Loop.Level0Src Loop.tapeSrc x w := by
@@ -287,34 +292,43 @@ theorem Loop.level0Src_tapeSrc (x : Msg) (w : Flock.Wit) : Loop.Level0Src Loop.t
       unfold Masked.ligSt
       rw [Masked.tabsOf_stAt]
       rfl
-    rw [Masked.linkIn_g]
-    show (FlockComplete.packed _ (Masked.ligSt x j).m).size = _
+    rw [Masked.linkIn_g x w t j]
+    unfold Masked.ligTab
     rw [FlockComplete.JsonRT.packed_size, hmL, ← hm, Nat.add_sub_cancel]
   have he : ∀ e c, ¬ (e < _root_.Flock.Zk.EXTRA_LANES ∧ c < 2 ^ (Masked.lv0 x j).cols) →
       (Masked.linkIn x w t j).extra e c = 0 := fun e c h => by
-    show (if c < 2 ^ (Masked.lv0 x j).cols then _ else (0 : F128)) = 0
+    show (if c < 2 ^ (Masked.lv0 x j).cols then (Masked.exeTape t).extra j.val e c else (0 : F128)) = 0
     by_cases hc : c < 2 ^ (Masked.lv0 x j).cols
     · have he4 : ¬ e < 4 := fun he4 => h ⟨he4, hc⟩
       rw [if_pos hc]
-      show Masked.ext4 _ (0 : F128) e = 0
+      show Masked.ext4 (fun r i' => Masked.fAt (0 : F128) ((Masked.cellAt t j.val).1.2.1.2 r i') c) (0 : F128) e = 0
       unfold Masked.ext4
       rw [if_neg (show ¬ e = 0 by omega), if_neg (show ¬ e = 1 by omega), if_neg (show ¬ e = 2 by omega),
         if_neg (show ¬ e = 3 by omega)]
     · rw [if_neg hc]
+  have hp : ∀ l k, ¬ (l < 2 ^ (Masked.lv0 x j).lanes + _root_.Flock.Zk.EXTRA_LANES ∧ k < (Masked.zkTab x j).tPad) →
+      (Masked.linkIn x w t j).lanePad l k = 0 := fun l k h => by
+    show (if l < 2 ^ (Masked.lv0 x j).lanes + _root_.Flock.Zk.EXTRA_LANES ∧ k < (Masked.zkTab x j).tPad then
+      (Masked.exeTape t).lanePad j.val l k else (0 : F128)) = 0
+    rw [if_neg h]
   have hs : ∀ q, q < 2 ^ (Masked.lv0 x j).d → ((Masked.linkIn x w t j).salt q).size = 192 := fun q hq => by
     rw [Masked.salt_linkIn x w t j hq]
     have hq' : q < Masked.schMax + Masked.schMax :=
       lt_of_lt_of_le (hq.trans_eq h5.symm) (Nat.add_le_add hz.nS hz.nU)
-    show (Masked.saltAt _ 0 0 q).size = 192
+    show (Masked.saltAt (Masked.cellAt t j.val) 0 0 q).size = 192
     unfold Masked.saltAt
     rw [if_pos rfl, if_pos rfl, Masked.fAt_lt _ _ hq']
     exact Masked.saltBytes_size _
+  have hs' : ∀ q, ¬ q < 2 ^ (Masked.lv0 x j).d → (Masked.linkIn x w t j).salt q = ByteArray.empty := fun q hq => by
+    show (if q < 2 ^ (Masked.lv0 x j).d then (Masked.exeTape t).toTape.salt j.val 0 0 q else ByteArray.empty) =
+      ByteArray.empty
+    rw [if_neg hq]
   unfold Loop.level0At
   rw [hsrc]
   simp only [bind, Except.bind]
   rw [Masked.stsOf_half x j r]
-  exact _root_.Flock.Firewall.Level0.ofDraws_inBytes (Masked.zkTab x j).hz rfl (Masked.linkIn x w t j) rfl hg he
-    (fun l k h => by first | exact if_neg h | (simp only [Masked.linkIn]; exact if_neg h)) hs
-    (fun q hq => by first | exact if_neg hq | (simp only [Masked.linkIn]; exact if_neg hq))
+  exact _root_.Flock.Firewall.Level0.ofDraws_inBytes (m := (Masked.stAt x j).m) (s := (Masked.zkTab x j).sch)
+    (tPad := (Masked.zkTab x j).tPad) (lv := Masked.lv0 x j) (Masked.zkTab x j).hz rfl (Masked.linkIn x w t j) rfl hg
+    he hp hs hs'
 
 end Claims.ZKServer
