@@ -24107,7 +24107,7 @@
    ]
   },
   "SampledProofs.ChallengerSession": {
-   "digest": "2b512a7eb25825b0139ce9d414918800dff7374deacba20301509bcacf089b23",
+   "digest": "77edb3ff054a7d034a9346cb99d2482f14e8f7bea985e81d190f90731056f5df",
    "definitions": {
     "SampledProofs.Challenger.Audited": "159b77cf065dee90e23af320bf78c6c962956fb8dafae7711c47bf9b416a91e0",
     "SampledProofs.Challenger.Audited.circuit": "322482c0ce5792be8e392fd5470dd756d5e44c3af242df1d9f634e383c868c95",
@@ -24215,13 +24215,13 @@
     "SampledProofs.Challenger.laneOf": "89f94029905b9a787a9b6cb67c31561dd1e28d8c6538e861e0f1e0991405fcff",
     "SampledProofs.Challenger.later": "6aa8332f863691e24553bbcfc3c19835da9115c5f053df9d2c7d644722e04267",
     "SampledProofs.Challenger.leafOf": "4712a23a6e2670b893b88edaeeabda556391b612cd99fc324902b4497ec3d224",
-    "SampledProofs.Challenger.ledgerEntry?": "ec282540f915ad2f40c629563bc16aea492bf88dc83866e964610d3621cc4286",
+    "SampledProofs.Challenger.ledgerEntry?": "02981d6aaa7f309c0bd18af7aff4b2a63912f1f3261903703fb207f749c09e67",
     "SampledProofs.Challenger.ledgerEntry?._sparseCasesOn_1": "b53f656b00c51cba381be3db08bf896f9a10713ceb227229fa341acd5da7097e",
     "SampledProofs.Challenger.ledgerMessage": "ceada06e550102551c8f18e5fa81a6424edc4999a314213e4a2ddc9b198cc938",
     "SampledProofs.Challenger.ledgerTag?": "3a56c57ec82fb0eeda7fa2552b9477c656fabf72be8687c1147e1889a884172c",
     "SampledProofs.Challenger.logChain": "fbde5859f5f5bf70d7e326d5ee0089196a31d1e8f28ea84f809c85ce5c3f530c",
     "SampledProofs.Challenger.logDigest": "6d06248e8115e687377bb0f9515d3cdea1ad643c3426b7a06ab0754872b2fecf",
-    "SampledProofs.Challenger.pinOf?": "9e1f9e8c3166bb585c4f43d3ffcf67f88aa9638323c9f615543edcb97c3232dc",
+    "SampledProofs.Challenger.pinOf?": "9df124d8f178663d28d45254e88715f07c012c4cb02ed3bd5904483a7b982a7c",
     "SampledProofs.Challenger.pinnedSession": "7f508d9b13dff0dd4f734a3b3a452b08345b2c8d1bdd9b1a463d07e8455682fc",
     "SampledProofs.Challenger.pinsReason": "60157ef5c06d8b667f812eeeb910cce865471d622c6a989789d93f95d496191d",
     "SampledProofs.Challenger.releasedRootsOf": "df961c9fb30880f6b6e50e558f60e258c28d58773d89e1a7b84bfb9e9c878563",
@@ -24532,19 +24532,20 @@
    ]
   },
   "SampledProofs.OneStageZk": {
-   "digest": "f14b5ee918273ae8d977719481f41c60d4acae45bb4117a4a68640eeb1bb0a38",
+   "digest": "d7eebce4cd5acb5f5ace770e1d9a5c4fc104f0ca35ea1fead3b3d358fc7a2af6",
    "definitions": {
     "SampledProofs.OneStageZk.buildSessionOf": "c1644ba67408e0011416a7a02e6e57acd071eacd5d89decca0c85a364ec55b19",
     "SampledProofs.OneStageZk.checkIdentifier": "78b13a39766df5c85e16b73a23cc39534d62a5849549b05e88740a018d87484a",
     "SampledProofs.OneStageZk.paramsOfJson._sparseCasesOn_1": "20b5ed0cff4ea5b4480fef9a518ce693089d4c0f5c4f7bfcdbe725546c564230",
-    "SampledProofs.OneStageZk.programDigest": "03eb6a5991a7630b96c91345a703cc0b72565070fd9d04dee6dd55dd9057a7be",
+    "SampledProofs.OneStageZk.programDigest": "e04320cb701bb40bb4c05d2ddd3f223a3ba88ebe299fbf5bcec21b7abe95fbbf",
     "SampledProofs.OneStageZk.proofsOf._sparseCasesOn_1": "9c33abc52f31224a4e89f170a2485174ac70e9ef3f1b43f6ec11ddcb69e09bfc",
     "SampledProofs.OneStageZk.proofsOf.match_1": "fd3b36b1b4bf53c96f35e6c91274fad7465139376cc6a691179044f11bd23962",
     "SampledProofs.OneStageZk.provedUnits": "7fc793770f4562364e834c2511a7be733cd26f63124160a19d6f7aa3d100cc83",
     "SampledProofs.OneStageZk.readsRegistered._sparseCasesOn_3": "3d4b5ccb0a05a149e7ade2284309b8979875d987ea7030f6c14d3a90a348a397",
     "SampledProofs.OneStageZk.readsRegistered.match_3": "be0ca05076256ffc96083c6d11695de0c3331df42a41bffc238b47ff53f6b0ef",
     "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.headerLine": "c84461330c47b95a2714c63e7a2fd55876e700755fa81e0164a702d631302628",
-    "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.headerOf": "aca4e1177bcf2cd6eee338d92d694087a1075acd96ee134eefcb138202eafbd3"
+    "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.headerOf": "01b7a303697008c7160efb9d191ed1351082fa20e6cde5872cea19283055f92f",
+    "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.headerOf._sparseCasesOn_1": "208363f83d320bfa456f7dfe114ebad2a4553fe5c6b2bf893a4d58acfe2c5e7e"
    },
    "guarantees": [
     "Properties.Remote.SecurityProofs.acceptComplies",
