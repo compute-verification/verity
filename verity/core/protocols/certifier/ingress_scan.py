@@ -64,8 +64,10 @@ row j·nb + ⌊t / EVERY⌋ of one slot-entries input (`NetworkCheck.Period`'s `
 ⌊t / EVERY⌋ as `SlotEntry_v1` lays them out. Unless that input is a compute audit's `SlotEntry_v1` template's entries,
 its `read` bit is the prover's word: an entry of `read` 1, n 0 and no outputs for a request no Program reads passes
 these gates (o0's ok 1), and an unwired input is a free input the prover commits, not a zero. So the refusal of an
-absent entry holds against an honest prover only, and the period check refuses such a link-window (`wired`), and one
-whose scan's state is not that audit's `SCAN_STATE`, by root and domain (`stateTied`). The scan's state tree is the
+absent entry holds against an honest prover only, and the period check refuses such a link-window (`wired`), one
+whose scan's state is not that audit's `SCAN_STATE`, by root and domain, or whose registration doesn't state bucket t's
+sin at leaf t and its o1 at leaf t + 1 (`stateTied`), and one whose registration doesn't open leaf 0 to the empty state
+(`stateEmpty`). The scan's state tree is the
 window state (`window_state`), each row but the empty state's the S_t one unit computes (its o1) and the next reads (its
 sin), both registered reads, so each row a Program reads is the one the scan's step computed from the row before.
 
