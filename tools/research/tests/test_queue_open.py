@@ -297,6 +297,19 @@ def test_edit_of_a_body_without_the_pr_tools_markup_is_the_file_verbatim(tmp_pat
     assert edit_pr(tmp_path, "o/r", 7, "Lane ci\n\nnew\n", gh="gh", run=gh)[1] == "Lane ci\n\nnew\n"
 
 
+def test_edit_sets_the_title_with_the_body_or_alone(tmp_path):
+    """`--title` was accepted and dropped without a word (CI-412): it reaches `gh pr edit` beside the body, or alone, which
+    leaves the body as it is."""
+    from research.queue import edit_pr
+
+    gh = ViewGh("Lane ci\n\nold\n")
+    edit_pr(tmp_path, "o/r", 7, "Lane ci\n\nnew\n", title="A new title", gh="gh", run=gh)
+    assert gh.calls[-1] == ["pr", "edit", "7", "--repo", "o/r", "--body", "Lane ci\n\nnew\n", "--title", "A new title"]
+    gh = ViewGh("Lane ci\n\nold\n")
+    assert edit_pr(tmp_path, "o/r", 7, None, title="Only the title", gh="gh", run=gh)[1] == "Lane ci\n\nold\n"
+    assert gh.calls[-1] == ["pr", "edit", "7", "--repo", "o/r", "--title", "Only the title"]
+
+
 def test_edit_refuses_a_body_that_drops_or_changes_the_prs_lane_and_dry_run_edits_nothing(tmp_path):
     from research.queue import edit_pr
 
