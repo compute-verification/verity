@@ -2098,6 +2098,10 @@
    "owner": "@soundness",
    "digest": "0ed1c5456b740c38fa2d2638b81cae376aacb18ab9315ed23702dfe936d329e4"
   },
+  "Verity.Assumptions.ZkServerOwnUser": {
+   "owner": "@proofs",
+   "digest": "48190983e935f56b4b362642eeb660a306c40d6e5a59fb223e01a60339b03b48"
+  },
   "Verity.Circuit.BitFaninPos": {
    "owner": "@lean",
    "digest": "45512e8df059ed91e18686bc0566c1fea60a580b592f5f8090ed5983c13f0d3e"
@@ -2705,6 +2709,10 @@
   "Flock.SecurityProofs.RecursiveKSDeployed": {
    "honest": ["RecDeploy.HonestHalfFixture.recursiveKSDeployed_honest"],
    "nontrivial": "Flock.Guarantees.recursiveKSDeployed_nontrivial"
+  },
+  "Verity.SecurityProofs.RegisteredLeakage": {
+   "honest": ["Verity.SecurityProofs.RegisteredLeakage_honest"],
+   "nontrivial": "Verity.SecurityProofs.RegisteredLeakage_nontrivial"
   }
  },
  "unwitnessed": {
@@ -12824,6 +12832,84 @@
    "assumptions": [],
    "type_hash": "52a2253ccd78c6339acebc6fe4e9ea3afaaff0120bb36457ff76a2a605ce5ad6"
   },
+  "Verity.SecurityProofs.RegisteredLeakage": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.RegisteredLeakage : Verity.Guarantees.RegisteredLeakage"],
+   "assumptions": [],
+   "type_hash": "c1691c01bc71c5e6ced76c120bd7930dd7f3bfd5dbd692f464a08699903362bd"
+  },
+  "Verity.SecurityProofs.RegisteredLeakage_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Verity.SecurityProofs.RegisteredLeakage_honest :",
+    "  And (Verity.Assumptions.ZkServerOwnUser fun x x_1 x_2 => Sum.inl 0)",
+    "    (ENNReal.instLE.le",
+    "      ({ salts := fun x x_1 => Unit.unit, out := fun x x_1 => Bool.false, tags := fun x x_1 x_2 => Unit.unit,",
+    "            rtag := fun k x x_1 => k }.real",
+    "        1 Unit.unit (fun x x_1 x_2 => Sum.inl 0) fun ρ => Eq ρ.snd.fst.snd.fst Bool.false)",
+    "      (instHAdd.hAdd",
+    "        (instHMul.hMul (Nat.cast 1)",
+    "          (instHAdd.hAdd",
+    "            ({ salts := fun x x_1 => Unit.unit, out := fun x x_1 => Bool.false, tags := fun x x_1 x_2 => Unit.unit,",
+    "                  rtag := fun k x x_1 => k }.ideal",
+    "              1 Unit.unit fun ρ => Eq ρ.snd.fst.snd.fst Bool.false)",
+    "            ({ salts := fun x x_1 => Unit.unit, out := fun x x_1 => Bool.false, tags := fun x x_1 x_2 => Unit.unit,",
+    "                  rtag := fun k x x_1 => k }.prfAdvantage",
+    "              1 Unit.unit fun ρ => Eq ρ.snd.fst.snd.fst Bool.false)))",
+    "        ({ salts := fun x x_1 => Unit.unit, out := fun x x_1 => Bool.false, tags := fun x x_1 x_2 => Unit.unit,",
+    "              rtag := fun k x x_1 => k }.forgeAdvantage",
+    "          1 Unit.unit ((fun x x_1 x_2 => Sum.inl 0) Bool.false Unit.unit))))"
+   ],
+   "assumptions": [],
+   "type_hash": "0f01383927bb6bd80be0de9303b9d30fd30d05fe3a18a8561c33465341413ecd"
+  },
+  "Verity.SecurityProofs.RegisteredLeakage_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Verity.SecurityProofs.RegisteredLeakage_nontrivial :",
+    "  Not",
+    "    (ENNReal.instLE.le",
+    "      ({ salts := fun x x_1 => Unit.unit, out := fun x x_1 => Bool.false, tags := fun x x_1 x_2 => Unit.unit,",
+    "            rtag := fun k x x_1 => k }.real",
+    "        1 Unit.unit",
+    "        (fun k x x_1 =>",
+    "          Sum.inr",
+    "            { fst := 1,",
+    "              snd := { fst := { fst := Unit.unit, snd := { fst := Bool.true, snd := Unit.unit } }, snd := k } })",
+    "        fun ρ => Eq ρ.snd.fst.snd.fst Bool.true)",
+    "      (instHAdd.hAdd",
+    "        (instHMul.hMul (Nat.cast 1)",
+    "          (instHAdd.hAdd",
+    "            ({ salts := fun x x_1 => Unit.unit, out := fun x x_1 => Bool.false, tags := fun x x_1 x_2 => Unit.unit,",
+    "                  rtag := fun k x x_1 => k }.ideal",
+    "              1 Unit.unit fun ρ => Eq ρ.snd.fst.snd.fst Bool.true)",
+    "            ({ salts := fun x x_1 => Unit.unit, out := fun x x_1 => Bool.false, tags := fun x x_1 x_2 => Unit.unit,",
+    "                  rtag := fun k x x_1 => k }.prfAdvantage",
+    "              1 Unit.unit fun ρ => Eq ρ.snd.fst.snd.fst Bool.true)))",
+    "        ({ salts := fun x x_1 => Unit.unit, out := fun x x_1 => Bool.false, tags := fun x x_1 x_2 => Unit.unit,",
+    "              rtag := fun k x x_1 => k }.forgeAdvantage",
+    "          1 Unit.unit",
+    "          ((fun k x x_1 =>",
+    "              Sum.inr",
+    "                { fst := 1,",
+    "                  snd := { fst := { fst := Unit.unit, snd := { fst := Bool.true, snd := Unit.unit } }, snd := k } })",
+    "            Bool.false Unit.unit))))"
+   ],
+   "assumptions": [],
+   "type_hash": "cdb5a83ddc43a78f91bdd06474adaa1ceca375c95334e16682e0438032bf3355"
+  },
+  "Verity.SecurityProofs.RegisteredLeakage_nontrivial_stack": {
+   "owner": "@proofs",
+   "signature": [
+    "Verity.SecurityProofs.RegisteredLeakage_nontrivial_stack :",
+    "  Not",
+    "    (Verity.Assumptions.ZkServerOwnUser fun k x x_1 =>",
+    "      Sum.inr",
+    "        { fst := 1, snd := { fst := { fst := Unit.unit, snd := { fst := Bool.true, snd := Unit.unit } }, snd := k } })"
+   ],
+   "assumptions": [],
+   "type_hash": "fba4d948949f886d15e762256792d9816d5cad74ce674dcde691fa1b7fa1132f"
+  },
   "Verity.SecurityProofs.SampleAfterRecorded": {
    "owner": "@soundness",
    "signature": ["Verity.SecurityProofs.SampleAfterRecorded : Verity.Guarantees.SampleAfterRecorded"],
@@ -14164,7 +14250,11 @@
    "Nci.SecurityProofs.OperandCapJointNontrivial": "completeness: OperandCapJoint's nontrivial witness (its witnesses entry), of the exclusion kind: at the toy circuit Nci.Capability.Toy (Security/Definitions/Nci/Capability/Toy.lean), its other premises hold as in its honest witness (prices of one bit, r = aout = 1, the proof block holding slots and operands priced at most two bits together, proved), the premise on Q fails at Q = 0, since min(rxy, aout y) is 1 at x = y = 1 on the budget, and the proof block completes one product, above Q, so OperandCapJoint's conclusion is not a tautology and needs its premise on Q.",
    "Flock.SecurityProofs.RecursiveKSDeployed": "restatable: a probability statement (KSLin2OnC, through RecursiveKSDeployedAt at the deployed record) bounding the recursive verifier's acceptance at Hello-committed coins by the extractor's success at the simulating prover and RecursiveKS's bound there; KSLin2OnC's probability is not under shape.events, so the shape rule finds no acceptance. It fits once that probability is listed under shape.events or the statement is restated over FlockSoundness.Game.prob.",
    "Accounting.SecurityProofs.TS.LeafGroupSound": "frozen (no-function): a leaf proved as a group of one-unit C-Flock statements, any shape (Accounting.TS.Group.Ix L n: L = T.lanes lanes of n chunks each and one combine, G = L n + 1 sessions), realizes one unit's proof layer (groupLayer, accepted where the leaf verifier's check of the tile and its chunks, PouwWindow.Lanes.checkChunks, passes and flock-verify accepts all G sessions with their known-content, complete and known-read checks at known content ending in the o0 row 1, and pouw-leaf-own's checks of each file, draw and reads pass; its relation any relation of the opened value, or LeafColl, or LeafKnownColl) over every window of fully checked C-Flock sessions, not a Lean function. Its premises are named and on the premises list (Proofs.Accounting.TS.Session.Group.Premises): SessionsCR (RowsSession.CR at every session), WindowLaws (WindowLaw at every statement) and GroupRealizes (accounting-ts-group-realizes: the group's circuits realize the relation at the rows its sessions open, past the group check; proved at the 32 x 32 leaf with one chunk a lane from LaneLowers and CombineLowers, groupRealizes_lanes32, and assumed at other shapes, whose Definitions no Lean states yet). Port uniqueness and the ok port (the known-read check's names), full checking and a unit (the draw check) and registered served roots (the reads built from own and the one-read check) are proved, not assumed. Proved by Accounting.TS.Group.group_soundAt, the argument LeafLanesSound shares: CheckedSessionSound's SoundAt at each session, the unwritten outcomes at probability 0 under WindowLaw, the complete check's registration of every port row and a union bound over the group, at (L n + 1) delta.",
-   "Flock.SecurityProofs.LoopInnerRound0Own": "frozen (no-function): the loop's obligation (Flock.Guarantees.LoopInnerRound0, which SessionLoopZK and SessionLoopZKDeployed take) at LeanRelease.withInner, the release whose scheduled round of each rep's inner proof is the frame's own (Loop.innerOf: Frame.innerSched at the round's eps, beta and coin count, on the rep's finish's rounds), proved at every table data, base release, level-0 source and finish's rounds, with no premise; it reads LoopInnerRound0Own (Security/Proofs/Flock/SessionLoop/Inner.lean), a statement of the model's release with no acceptance of a Lean function to take, so the lock records its text."
+   "Flock.SecurityProofs.LoopInnerRound0Own": "frozen (no-function): the loop's obligation (Flock.Guarantees.LoopInnerRound0, which SessionLoopZK and SessionLoopZKDeployed take) at LeanRelease.withInner, the release whose scheduled round of each rep's inner proof is the frame's own (Loop.innerOf: Frame.innerSched at the round's eps, beta and coin count, on the rep's finish's rounds), proved at every table data, base release, level-0 source and finish's rounds, with no premise; it reads LoopInnerRound0Own (Security/Proofs/Flock/SessionLoop/Inner.lean), a statement of the model's release with no acceptance of a Lean function to take, so the lock records its text.",
+   "Verity.SecurityProofs.RegisteredLeakage": "frozen (no-function): It is stated over an arbitrary value service, serving stack and event on the record, and says what a registration whose record counts its epoch's sessions leaks through the stack's choice of its session, rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.RegisteredLeakage_honest": "completeness: RegisteredLeakage's honest lemma (its witnesses entry): at a built value service, the stack that commits one session and registers it reads no key (ZkServerOwnUser) and the bound holds there, so the premise is not vacuous.",
+   "Verity.SecurityProofs.RegisteredLeakage_nontrivial": "completeness: RegisteredLeakage's nontrivial lemma (its witnesses entry): the bound fails (¬ real … ≤ 1 · (ideal + prfAdvantage) + forgeAdvantage) at the stack of RegisteredLeakage_nontrivial_stack, which makes its record tag from the key, a counterexample for another stack, not a property of a deployed one.",
+   "Verity.SecurityProofs.RegisteredLeakage_nontrivial_stack": "completeness: the stack RegisteredLeakage's nontrivial lemma is at reads the key (¬ ZkServerOwnUser), so that lemma's failing bound is ZkServerOwnUser's to prevent."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -23233,6 +23323,17 @@
     "Verity.SecurityProofs.SampleAfterRecorded_nontrivial_log"
    ]
   },
+  "Definitions.Core.Assumptions.ZkServer": {
+   "digest": "eec84e73c04a9cb634a5b9a91627f98674714cab5b17a99771e9ec4a8d7730af",
+   "definitions": {
+    "Verity.Assumptions.ZkServerOwnUser": "48190983e935f56b4b362642eeb660a306c40d6e5a59fb223e01a60339b03b48"
+   },
+   "guarantees": [
+    "Verity.SecurityProofs.RegisteredLeakage",
+    "Verity.SecurityProofs.RegisteredLeakage_honest",
+    "Verity.SecurityProofs.RegisteredLeakage_nontrivial_stack"
+   ]
+  },
   "Definitions.Core.Blocks": {
    "digest": "69f002782ff74804c6c3e22d6b0b6edae9910c30843f3d7e24330817aecb1c30",
    "definitions": {
@@ -24246,6 +24347,9 @@
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
     "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Verity.SecurityProofs.ProbBatchInduced",
+    "Verity.SecurityProofs.RegisteredLeakage",
+    "Verity.SecurityProofs.RegisteredLeakage_honest",
+    "Verity.SecurityProofs.RegisteredLeakage_nontrivial",
     "Verity.SecurityProofs.SampleAfterRecorded",
     "Verity.SecurityProofs.SampleAfterRecorded_honest",
     "Verity.SecurityProofs.SampleAfterRecorded_nontrivial",
@@ -24406,6 +24510,13 @@
     "Verity.SecurityProofs.PackSoundComplete",
     "Verity.SecurityProofs.RangeGadget"
    ]
+  },
+  "Definitions.Core.Guarantees.ValueSalts": {
+   "digest": "5c0e8494a91297a8b80989b64354a7e4c6905165b33bec071262b5a508364597",
+   "definitions": {
+    "Verity.Guarantees.RegisteredLeakage": "9bcfece5cb9ac7d5fbb1e14c46790968e9779c82d8c913931d234c5d1b8ad280"
+   },
+   "guarantees": ["Verity.SecurityProofs.RegisteredLeakage"]
   },
   "Definitions.Core.Hash": {
    "digest": "82b08c627e303af98768de008338f471bb1947da576c142e3486c4a01dfca926",
@@ -25404,6 +25515,36 @@
     "Verity.SecurityProofs.HopperUnitSound",
     "Verity.SecurityProofs.HopperUnitSoundZero",
     "Verity.SecurityProofs.PackSoundComplete"
+   ]
+  },
+  "Definitions.Core.ValueSalts": {
+   "digest": "2f211ea670939f09eeb1a974cbdfc965b20dc4e4896e7b043e17687979dc5daa",
+   "definitions": {
+    "Verity.ValueSalts.Choice": "20e67df2c4b0b113928795d348bc5e923929981f31c58e5d0f9d4e17f75998c6",
+    "Verity.ValueSalts.RegistrationRecord": "da4d5cbb7b9c919ff940c4cfcb53a1691f3081852374f454d1121e0e1335b356",
+    "Verity.ValueSalts.Service": "fcb0c9c801bd237589c9399670eb6777080a8748e4bdacec26df3c98c3a93865",
+    "Verity.ValueSalts.Service.admits": "5704c70a23f5aa94c67eafac62ea674752e8f1351e93f54ae6326d21433665db",
+    "Verity.ValueSalts.Service.forgeAdvantage": "bf894b927dacbf393bdd340b51f7cbf5d9a95d965652a37714c60edbfa8367c6",
+    "Verity.ValueSalts.Service.genuine": "df13262ce9930bb378a379090e6cf5157ea6626fa64e8c57098e508133c3c77e",
+    "Verity.ValueSalts.Service.handed": "049f359f86bc501b86bd09eb7542fddf06a9e150fbb993977d11800427c38a64",
+    "Verity.ValueSalts.Service.ideal": "1cc3299cccdf8e1d8316cd726b561b4d136505fc7635e05fc82093b692ec99b8",
+    "Verity.ValueSalts.Service.out": "d6548ae859c5f180db37b64a4c04fa73487c815026f0875f50a15b0589a0ed45",
+    "Verity.ValueSalts.Service.prfAdvantage": "5779f8de9753dc013d78218871997ecf469f07a9b9a6ea3069b1f5f8dec86ef6",
+    "Verity.ValueSalts.Service.real": "81aece53836bc5673d34981d2e08af9ee0237ad069167e7b8f31754ae394eace",
+    "Verity.ValueSalts.Service.record": "d0278db86d9c7f3142922b7be6f3c2a0a3a72d9411b60402260630467b1cc8e6",
+    "Verity.ValueSalts.Service.rtag": "6633084491ce093958a0f7f3cf76b765a3eac68612c2f8395593bac84fb26119",
+    "Verity.ValueSalts.Service.salts": "2f52f546775c44f7fdde59af84a46414a9d4a12a74807a0ce820bd7843e69410",
+    "Verity.ValueSalts.Service.tags": "c74f05d2ec2af7827ff3626a35f35c3527617cf61d74cc2f3595f7b3e6678944",
+    "Verity.ValueSalts.Service.view": "3374effed792a4ff7c9486076d87190e520262cc2c0c162f52256de587db0475",
+    "Verity.ValueSalts.Service.views": "6f283a516332aa721cde74d4dd1493ecbe46e7ddf86e27fe4b2b580d50ae0be6",
+    "Verity.ValueSalts.Stack": "f178b02c997074725b276a7fe79dba048325b6f67c8dfff847b44aa35347da5b",
+    "Verity.ValueSalts.View": "736830aee02bd159fa66e13a1b643ea1d04040a7566f6913242527ead4bedbeb"
+   },
+   "guarantees": [
+    "Verity.SecurityProofs.RegisteredLeakage",
+    "Verity.SecurityProofs.RegisteredLeakage_honest",
+    "Verity.SecurityProofs.RegisteredLeakage_nontrivial",
+    "Verity.SecurityProofs.RegisteredLeakage_nontrivial_stack"
    ]
   },
   "Definitions.Flock.Accounting.Bound": {
