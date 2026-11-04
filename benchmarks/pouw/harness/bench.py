@@ -295,10 +295,12 @@ class Bench:
             self.dev.profiler_stop()
 
     def warmup(self, entries: list[Entry], burst: int, seed: int, min_ms: float = WARMUP_MS,
-               max_ms: float = WARMUP_MAX_MS) -> dict:
+               max_ms: float = WARMUP_MAX_MS, item_ms: float | None = None) -> dict:
         """Rounds of the timed schedule (every entry and method once, in a seeded order), kept apart from the reps, until the
         GPU is at steady state: at least `min_ms` of device time, and a round's median SM clock within STEADY of the round's
-        before. `max_ms` bounds it (`steady` False). `per_call`: each entry's median per-call ms in the last round."""
+        before. `max_ms` bounds it (`steady` False). With `item_ms`, the first round's per-call times size every item as
+        `equalize` does, so the rounds after it run the timed items: items of a few calls would spend the warm-up on the
+        host's per-item flush and NVML reads, not on the GPU. `per_call`: each entry's median per-call ms in the last round."""
         pairs = [(e, m) for e in entries for m in self.methods]
         rng = random.Random(seed)
         total, clocks, per, steady = 0.0, [], {}, False
@@ -319,14 +321,17 @@ class Bench:
             steady = len(clocks) >= 2 and None not in clocks[-2:] and abs(clocks[-1] - clocks[-2]) <= STEADY * clocks[-2]
             if (steady and total >= min_ms) or total >= max_ms:
                 break
+            if item_ms is not None and len(clocks) == 1:
+                self.equalize(entries, {k: statistics.median(v) for k, v in per.items()}, burst, item_ms)
         return {"rounds": len(clocks), "device_ms": total, "round_sm_mhz": clocks, "steady": steady, "min_ms": min_ms,
                 "max_ms": max_ms, "per_call": {k: statistics.median(v) for k, v in per.items()}}
 
     def equalize(self, entries: list[Entry], per_call: dict, burst: int, item_ms: float = ITEM_MS) -> dict:
         """Sizes every entry's timed item to about the same device time, the larger of `item_ms` and the longest item at the
-        shape's burst: in calls for a burst or a graph (re-captured), in replays for a chain."""
+        shape's burst: in calls for a burst or a graph (re-captured), in replays for a chain. Sizing items already sized
+        (as the warm-up does) gives the same target."""
         unit = self.timer.unit
-        natural = {e.key: per_call[e.key] * unit(e, burst) for e in entries if per_call.get(e.key, 0) > 0}
+        natural = {e.key: per_call[e.key] * (e.length or burst) for e in entries if per_call.get(e.key, 0) > 0}
         target = max([item_ms, *natural.values()])
         graphs = "graph" in {m.split("-")[0] for m in self.methods}
         out = []
@@ -965,11 +970,12 @@ def run_shape(bench: Bench, dev, shape, fams: list[B.Family], arms: list, first:
         if bench.sass is not None:
             bench.sass.check(bench.sass.discover(), "mapped")
         st.mark("sass_gate")
+        item_ms = getattr(args, "item_ms", ITEM_MS)
         warm = bench.warmup(entries, plan["burst"], B.hash_seed(f"{args.seed}/{shape.label}/warmup"),
                             1e3 * getattr(args, "warmup_s", WARMUP_MS / 1e3),
-                            1e3 * getattr(args, "warmup_max_s", WARMUP_MAX_MS / 1e3))
+                            1e3 * getattr(args, "warmup_max_s", WARMUP_MAX_MS / 1e3), item_ms)
         row["warmup"] = {k: v for k, v in warm.items() if k != "per_call"}
-        row["sizing"] = bench.equalize(entries, warm["per_call"], plan["burst"], getattr(args, "item_ms", ITEM_MS))
+        row["sizing"] = bench.equalize(entries, warm["per_call"], plan["burst"], item_ms)
         st.mark("warmup")
         order_seed = B.hash_seed(f"{args.seed}/{shape.label}/order")
         row["order_seed"] = order_seed

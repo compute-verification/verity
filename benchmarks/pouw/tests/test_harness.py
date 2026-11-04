@@ -479,6 +479,17 @@ def test_the_warmup_lasts_its_device_time_and_stops_at_its_bound_unsteady():
     assert not w["steady"] and w["rounds"] == 4 and w["device_ms"] == pytest.approx(40.0)
 
 
+def test_the_warmup_runs_the_timed_items_after_its_first_round():
+    b, es = warm_bench([2400])
+    w = b.warmup(es, 4, seed=3, min_ms=50.0, max_ms=1e6, item_ms=40.0)
+    assert w["rounds"] == 2 and w["device_ms"] == pytest.approx(4.0 + 6.0 + 40.0 + 40.5)
+    assert sorted((it["round"], it["burst"]) for it in b.warmups) == [(0, 4), (0, 4), (1, 27), (1, 40)]
+    graphs = [e.graph for e in es]
+    sz = b.equalize(es, w["per_call"], 4, item_ms=40.0)
+    assert sz["target_ms"] == 40.0 and [x["calls"] for x in sz["entries"]] == [40, 27]
+    assert all(e.graph is g for e, g in zip(es, graphs))
+
+
 def test_the_warmup_needs_every_gate():
     b, dev = bench()
     e = entry(dev, ("baseline", "s", "f", "k"), 1.0)
