@@ -344,14 +344,21 @@ def _statements_check(p: dict, e: dict, held: dict) -> str | None:
 
 
 def _one_stage_check(p: dict, c: tuple[dict, bytes], e: dict, blobs: list[bytes]) -> tuple:
-    """`OneStageZk.checkBlobs` on `blobs`: at the coins v1 reads from the challenger's release (`_coins_of`), the
-    sessions' records held to the coin trees that release log shows (`challenger.sessions_tree_reason`), each
-    statement's circuit and public files on the blobs (`_statements_check`), and v1's `check` at those coins on the
-    verdicts of no session, what it would accept refused in the per-member form (`OneStageZk.MULTI_REFUSED`). A session
-    whose coins a tree the challenger logged holds is verified by `flock-verify`, outside the mirror."""
+    """`OneStageZk.checkBlobs` on `blobs`: at the coins v1 reads from the challenger's release (`_coins_of`), in the
+    per-member form a draw that runs out of them failing the window (`OneStageZk.RAN_OUT`, `_ran_out`), the sessions'
+    records held to the coin trees that release log shows (`challenger.sessions_tree_reason`), each statement's circuit
+    and public files on the blobs (`_statements_check`), and v1's `check` at those coins on the verdicts of no session,
+    what it would accept refused in the per-member form (`OneStageZk.MULTI_REFUSED`). A session whose coins a tree the
+    challenger logged holds is verified by `flock-verify`, outside the mirror."""
     try:
-        if ONE_STAGE._coins_of(p, c, e) is None:
-            return REJECT, "coins: no challenger"
+        coins = ONE_STAGE._coins_of(p, c, e)
+    except (CH.CoinError, KeyError, TypeError):
+        return REJECT, "coins"
+    if coins is None:
+        return REJECT, "coins: no challenger"
+    if p["members"] is not None and ONE_STAGE._ran_out(p, c[0], coins):
+        return REJECT, f"draw: {ONE_STAGE.WINDOW_RAN_OUT}"
+    try:
         trees = CH.coin_trees_of(e["coins"]["session"]["log"])
     except (CH.CoinError, KeyError, TypeError):
         return REJECT, "coins"

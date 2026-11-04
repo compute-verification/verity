@@ -2,10 +2,9 @@
 
 A session of a member's statement opens its link at `PT_LOCAL + nbl(g, c)` points for its `c` proved units and its
 circuit's `g` units a proof block (META `vus_per_block`). A draw over several members draws a random count of each
-member's units, in two cases of the verifier's public coins: one that runs out of coins draws every unit, so the
-member's count is its statement's whole public file's, exactly its units; one that ends draws between the member's
-fewest and most units (`ended`, `bounds`). The registration of the per-member form refuses a member whose fewest and
-most give different link points (`refused`, the registration's `link-points`).
+member's units. One that runs out of the verifier's public coins fails the window (`OneStageZk.RAN_OUT`); one that ends
+draws between the member's fewest and most units (`ended`, `bounds`). The registration of the per-member form refuses a
+member whose fewest and most give different link points (`refused`, the registration's `link-points`).
 """
 from __future__ import annotations
 
@@ -38,7 +37,7 @@ def ended(law: Mapping[str, Any], population: int, us: Sequence[Sequence[int]]) 
     """The fewest and most of the units `us` of `[0, population)` a draw under `law` (well formed: `coins.law_problem`)
     holds when it ends: the fewest is what is left after its units fill the rest of the population, or of each stratum,
     first, and the most `k`, or each stratum's `k_s`, where the member holds that many. None where no draw ends (`subset`
-    above the population, a stratum drawing more than it has), so every sample is the fallback's every unit."""
+    above the population, a stratum drawing more than it has), so every window under `law` fails."""
     n = size(us)
     if law["law"] == "subset":
         k = law["k"]

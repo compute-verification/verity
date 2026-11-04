@@ -64,6 +64,7 @@ from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, h
 from verity.core.protocols.sampled_proofs.challenger import (COIN_BYTES, NO_TREE, SHARED_TREE, UNUSED_TREE,
                                                              ChallengerKey, CoinError)
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, coins_reason, draw_coins, draw_first, law_problem
+from verity.core.protocols.sampled_proofs.coins import ran_out as draw_ran_out
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program, input_id, is_input
@@ -671,6 +672,17 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
     return "accept", public, {**profile, "delta": str(profile["delta"])}
 
 
+def _ran_out(p: dict, rec: dict, src: bytes) -> bool:
+    """`OneStage.ranOut`: whether the coins `src` run out before the draw under the verifier's law as derived ends
+    (`coins.ran_out`); false when the law doesn't derive, the record names no population or the draw refuses otherwise."""
+    if not _nat(rec.get("population")):
+        return False
+    try:
+        return draw_ran_out(DR.derive(p["program"], p["query"], p["law"], p["work_table"]), rec["population"], src)
+    except (P.QueryRefused, ValueError, TypeError):
+        return False
+
+
 def covered_params(j) -> dict:
     """`OneStage.paramsOfJson`: `decode_params` (`paramsParsed`), and a bernoulli law at 0 < p < 1 refused (`service.count_varies`)."""
     p = decode_params(j)
@@ -848,6 +860,22 @@ def draw(j):
         return src[at - n:at]
     try:
         return draw_first(OwnRandomness(source), j["law"], j["population"])
+    except (ValueError, TypeError) as e:
+        raise D.Reject(str(e)) from None
+
+
+def ran_out(j):
+    """`coins.ran_out` on `draw`'s input: whether that draw runs out of the source's bytes; refused where `draw` is."""
+    j = _json(j)
+    if not isinstance(j, dict) or not isinstance(j.get("law"), dict):
+        raise D.Reject("law is not an object")
+    if not _nat(j.get("population")):
+        raise D.Reject("population is not a natural number")
+    if not isinstance(j.get("source"), str):
+        raise D.Reject("source is not hex")
+    src = PR.unhex(j["source"])
+    try:
+        return {"ran_out": draw_ran_out(j["law"], j["population"], src)}
     except (ValueError, TypeError) as e:
         raise D.Reject(str(e)) from None
 
@@ -2010,6 +2038,8 @@ NO_CHALLENGER = ("the parameters name no challenger: the draw's coins are the au
 #: `OneStageZk.MULTI_REFUSED`
 MULTI_REFUSED = ("the per-member form (proofs.members) is refused until the guarantee for a sample over several members' "
                  "statements under one draw is in the lock: verify one statement (proofs {circuit, registered})")
+#: `OneStageZk.RAN_OUT`
+WINDOW_RAN_OUT = "the draw ran out of the challenger's coins: the window fails, with no retry and no redraw"
 
 
 def decode_params_v2(j) -> dict:
@@ -2268,35 +2298,81 @@ def test_v2_per_member_holds_its_statements_to_the_members_order_and_one_session
 
 def test_v2_per_member_registration_refuses_a_member_whose_link_points_vary(server, server_v2):
     """The per-member form's registration (`Registration.check`'s `link-points`, `link_points.refused`), run before any
-    session's verdict is read. Over 10 units under `bernoulli:1/2`, a draw that ends holds anywhere from none to all 10
-    of a member of all 10, whose link points differ at one unit a proof block (3 and 4), so it is refused; at two both
-    give 3 and the audit goes on to its session's verdict, which rejects (no blob holds a circuit file). Under `subset:2`
-    every draw that ends holds 2 of them, and one that runs out of coins all 10, its whole file, which is its own case,
-    so at one unit a proof block it is not refused. A member with a unit outside the population is refused. The Python
-    registration's codes are Lean's."""
+    session's verdict is read; only the first member has a statement. Over 10 units under `subset:9`, a draw that ends
+    holds 8 or 9 of a member of units 0-8 (and 0 or 1 of the member of unit 9), whose link points differ at one unit a
+    proof block (3 and 4), so it is refused; at two both give 3 and the audit goes on to its session's verdict, which
+    rejects (no blob holds a circuit file). Under `subset:2` every draw that ends holds 2 of a member of all 10, so at
+    one unit a proof block it is not refused; a draw that runs out of coins fails the window
+    (`test_v2_per_member_fails_a_window_whose_draw_ran_out`). A member with a unit outside the population is refused.
+    The Python registration's codes are Lean's."""
     s = Setup(P.population_program(PAIR, 10), P.template_instance_query(PAIR.id))
     PROGRAMS[s.sha512] = s.program
     circuit = b"not a circuit file"
 
-    def run(law: dict, units: list, g: int) -> tuple:
+    def run(law: dict, members: dict[str, tuple[list, int]]) -> tuple:
         rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                        WINDOW, leaf_layer=LEAF)
         ch, _, base, p = _challenger_audit(server, random.Random("v2-link-points"), s, law, rec, 1)
         record = D.canonical(ch.trees[0].record).encode()
+        first, (units, _) = next(iter(members.items()))
         public = _public_file(*(u for lo, hi in units for u in range(lo, hi)))
-        members = {"m0": {"circuit": _sha(circuit), "registered": None, "units": units, "vus_per_block": g}}
-        e = base | {"proofs": {"statements": [{"member": "m0", "public": _sha(public), "sessions": [
+        ms = {m: {"circuit": _sha(circuit), "registered": None, "units": us, "vus_per_block": g}
+              for m, (us, g) in members.items()}
+        e = base | {"proofs": {"statements": [{"member": first, "public": _sha(public), "sessions": [
             {"name": "s", "record": _sha(record), "reps": {}}]}]}, "sessions": ["s"]}
         case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec), "evidence": _hex(e),
-                "params": p | {"proofs": {"members": members}}}
+                "params": p | {"proofs": {"members": ms}}}
         out = server_v2.exchange(_json(case))
-        return (out["verdict"], out["reason"]), _registration(decode_params_v2(p) | {"link_members": [(units, g)]}, rec)
+        return (out["verdict"], out["reason"]), _registration(
+            decode_params_v2(p) | {"link_members": list(members.values())}, rec)
 
-    half, two = {"law": "bernoulli", "p": "1/2"}, {"k": 2, "law": "subset"}
-    assert run(half, [[0, 10]], 1) == (("reject", "registration: link-points"), ("link-points",))
-    assert run(half, [[0, 10]], 2) == (("reject", "verdict flock-verify/s did not accept"), ())
-    assert run(two, [[0, 10]], 1) == (("reject", "verdict flock-verify/s did not accept"), ())
-    assert run(two, [[0, 11]], 2) == (("reject", "registration: link-points"), ("link-points",))
+    nine, two = {"k": 9, "law": "subset"}, {"k": 2, "law": "subset"}
+    assert run(nine, {"m0": ([[0, 9]], 1), "m1": ([[9, 10]], 1)}) == (
+        ("reject", "registration: link-points"), ("link-points",))
+    assert run(nine, {"m0": ([[0, 9]], 2), "m1": ([[9, 10]], 1)}) == (
+        ("reject", "verdict flock-verify/s did not accept"), ())
+    assert run(two, {"m0": ([[0, 10]], 1)}) == (("reject", "verdict flock-verify/s did not accept"), ())
+    assert run(two, {"m0": ([[0, 11]], 2)}) == (("reject", "registration: link-points"), ("link-points",))
+
+
+def test_v2_per_member_fails_a_window_whose_draw_ran_out(server, server_v2):
+    """A per-member window whose draw runs out of the challenger's coins fails before its coin trees or any session is
+    read (`OneStageZk.RAN_OUT`, `OneStage.ranOut`): its challenger opened one coin after the registration, 64 bytes, and
+    `subset:9` over 10 units reads at least 226. Nothing redraws it and no fallback draws every unit. On coins that last
+    the same window goes on to its session's verdict, and the one-statement form on the coins that run out is rejected
+    by v1's coins check after its session. The Python twin (`_ran_out` on `_coins_of`'s coins) agrees."""
+    s = Setup(P.population_program(PAIR, 10), P.template_instance_query(PAIR.id))
+    PROGRAMS[s.sha512] = s.program
+    law = {"k": 9, "law": "subset"}
+    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                   WINDOW, leaf_layer=LEAF)
+    rng = random.Random("v2-ran-out")
+    ch, _, base, p = _challenger_audit(server, rng, s, law, rec, 1)
+    short = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=lambda coins: coins(64), trees=1)
+    short_base = base | {"coins": {k: v for k, v in short.evidence(short.segment.to_json()).items() if k != "key"}}
+    short_p = p | {"challenger": {"key": short.s.key.to_json(), "label": "draw"}, "window_root": short.ledger.window["root"]}
+    circuit, public = b"not a circuit file", _public_file(*range(10))
+    members = {"m0": {"circuit": _sha(circuit), "registered": None, "units": [[0, 10]], "vus_per_block": 1}}
+
+    def run(d: Drawn, b: dict, p: dict, per_member: bool) -> tuple:
+        record = D.canonical(d.trees[0].record).encode()
+        sessions = [{"name": "s", "record": _sha(record), "reps": {}}]
+        proofs = ({"statements": [{"member": "m0", "public": _sha(public), "sessions": sessions}]} if per_member
+                  else {"public": _sha(public), "sessions": sessions})
+        own = {"members": members} if per_member else {"circuit": _sha(circuit), "registered": None}
+        case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec),
+                "evidence": _hex(b | {"proofs": proofs, "sessions": ["s"]}), "params": p | {"proofs": own}}
+        out = server_v2.exchange(_json(case))
+        return out["verdict"], out["reason"]
+
+    def twin(b: dict, p: dict) -> bool:
+        p = decode_params_v2(p)
+        return _ran_out(p, rec, _coins_of(p, (rec, bytes.fromhex(R.digest(rec))), b))
+
+    assert run(short, short_base, short_p, True) == ("reject", f"draw: {WINDOW_RAN_OUT}")
+    assert run(short, short_base, short_p, False) == ("reject", "draw: coins: the randomness source ran out")
+    assert run(ch, base, p, True) == ("reject", "verdict flock-verify/s did not accept")
+    assert twin(short_base, short_p) and not twin(base, p)
 
 
 def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
@@ -2675,7 +2751,7 @@ def _changed_law(law: dict, change, x: int) -> dict:
         return law
 
 
-DRAW = D.Port(PIECES, "draw", draw, st.one_of(
+DRAW_INPUTS = st.one_of(
     st.builds(lambda a, src: {"law": a["record"]["law"], "population": a["record"]["population"], "source": src},
               changed_audits(most=0), SOURCE),
     st.builds(lambda a, f, x, dn, src: {"law": _changed_law(a["record"]["law"], f, x),
@@ -2686,7 +2762,9 @@ DRAW = D.Port(PIECES, "draw", draw, st.one_of(
     st.builds(lambda law, n, src: {"law": law, "population": n, "source": src}, SIMPLE_LAWS | laws(6),
               st.integers(0, 40), SHORT_SOURCE),
     st.builds(lambda law, n, src: {"law": law, "population": n, "source": src}, JSON, st.integers(0, 6) | JSON,
-              SHORT_SOURCE | st.sampled_from(["", "0", "zz", "AB", "ab cd"]) | JSON)), package=PACKAGE)
+              SHORT_SOURCE | st.sampled_from(["", "0", "zz", "AB", "ab cd"]) | JSON))
+DRAW = D.Port(PIECES, "draw", draw, DRAW_INPUTS, package=PACKAGE)
+RAN_OUT = D.Port(PIECES, "ran_out", ran_out, DRAW_INPUTS, package=PACKAGE)
 #: Law texts `draw.parse_law` or `draw.parse_rate` refuses or reads oddly: digits of other scripts, signs, spaces, a
 #: second separator, leading zeros, a missing or zero argument.
 ODD_LAW_TEXTS = ["subset:", "subset", "", "subset:\u0663", "work:\u00b2", "stratified:\uff11", "bernoulli:1/\u0662",
@@ -3529,7 +3607,7 @@ pieces = D.server_fixture(DECODE)
 
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
-              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (DESIGN, 300), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
+              (CHECK_DRAW, 500), (DRAW, 500), (RAN_OUT, 300), (SELECT, 600), (DESIGN, 300), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300), (PUBLIC_UNITS, 300),

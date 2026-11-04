@@ -64,6 +64,10 @@ def law_problem(law: Mapping[str, Any], population: int) -> str | None:
     return strata_problem(law, population)
 
 
+#: Lean `Draw.RAN_OUT`: the refusal of a draw whose source runs out before it ends.
+RAN_OUT = "the randomness source ran out"
+
+
 class _RanOut(Exception):
     pass
 
@@ -118,7 +122,7 @@ class OwnRandomness:
     def read(self, n: int) -> bytes:
         b = self._source(n)
         if len(b) != n:
-            raise ValueError("the randomness source ran out")
+            raise ValueError(RAN_OUT)
         return b
 
     def uniform(self, n: int) -> int:
@@ -393,6 +397,24 @@ def draw_first(randomness: OwnRandomness, law: Mapping[str, Any], population: in
     return out
 
 
+def ran_out(law: Mapping[str, Any], population: int, src: bytes) -> bool:
+    """Whether `draw_first` under `law` over `population` runs out of `src`, read in order, before it ends (Lean
+    `Draw.ranOutOf`, the difftest's `ran_out` piece); ValueError where it refuses otherwise."""
+    at = 0
+
+    def source(k: int) -> bytes:
+        nonlocal at
+        at += k
+        return src[at - k:at]
+    try:
+        draw_first(OwnRandomness(source), law, population)
+    except ValueError as e:
+        if str(e) == RAN_OUT:
+            return True
+        raise
+    return False
+
+
 def _nth(ranges: Sequence[Sequence[int]], j: int) -> int:
     for lo, hi in ranges:
         if j < hi - lo:
@@ -401,5 +423,5 @@ def _nth(ranges: Sequence[Sequence[int]], j: int) -> int:
     raise IndexError(j)
 
 
-__all__ = ["COINS_FORM", "ChallengerCoins", "DRAW_FORM", "OwnRandomness", "SEGMENT_FORM", "Segment",
-           "challenger_stream", "closure_of", "coins_reason", "draw_coins", "draw_first", "read_reason"]
+__all__ = ["COINS_FORM", "ChallengerCoins", "DRAW_FORM", "OwnRandomness", "RAN_OUT", "SEGMENT_FORM", "Segment",
+           "challenger_stream", "closure_of", "coins_reason", "draw_coins", "draw_first", "ran_out", "read_reason"]
