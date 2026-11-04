@@ -2459,15 +2459,15 @@
    },
    "Claims.SamplingGeneric.Compiled.KS": {
     "fails": "Claims.SamplingGeneric.Compiled.KS_fails",
-    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk", "Claims.Witness.SamplingGeneric.twoSessions_meets"]
    },
    "Claims.SamplingGeneric.Compiled.KSCount": {
     "fails": "Claims.SamplingGeneric.Compiled.KSCount_fails",
-    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk", "Claims.Witness.SamplingGeneric.twoSessions_meets"]
    },
    "Claims.SamplingGeneric.Compiled.KSReg": {
     "fails": "Claims.SamplingGeneric.Compiled.KSReg_fails",
-    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk", "Claims.Witness.SamplingGeneric.twoSessions_meets"]
    }
   },
   "not": {
@@ -2516,7 +2516,6 @@
    "Claims.Json.Ascii": "a helper the claims read: a text of ASCII without DEL, which `JsonSpec` reads",
    "Claims.Sampling.CommitmentScheme.Binds": "a helper the claims read: a commitment scheme's binding, which `Binding` reads",
    "Claims.Recursion.DrawRecord.Full": "a V* session's draw record that takes every unit, a clause of the readable scope (`InScope`), no claim",
-   "Claims.SamplingGeneric.Arg.WF": "a helper the claims read: the proof system's rounds are its shape's, which the compiler's statements take of it",
    "Claims.SamplingGeneric.Compiled.Scope": "a helper the claims read: the sampling scope on the statement's bytes, which `KS`, `KSCount` and `KSReg` read",
    "Claims.SamplingGeneric.Compiled.Sessions": "a helper the claims read: the compiler's contract, the code facts the compiler's statements take of a compiled verifier",
    "Claims.SamplingGeneric.CompilerKS": "proved of every proof system and compiled verifier (`Claims.SamplingGeneric.compilerKS`)",
@@ -6503,6 +6502,9 @@
    ],
    "assumptions": [],
    "type_hash": "c9aee9249a386b4232cc2e4430bafa74c02dd818197685ebfd898a3ef2d4c60e"
+  },
+  "Claims.Witness.SamplingGeneric.twoSessions_meets": {
+   "owner": "@proofs"
   },
   "Claims.ZKmalR_fails": {
    "owner": "@proofs",
