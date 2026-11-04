@@ -247,6 +247,24 @@ theorem RoundsReach.release {θ : ByteArray} {F : Array ByteArray} {c : ByteArra
   refine ⟨L, ?_⟩
   rw [hX, hL, hw]
 
+/-- **A trace from a play's end ends there**: from a position that keeps the invariant at the play's end `y`, any
+rewriting of its tape consumed, the play on the tape the trace ends on is `y`. -/
+theorem RoundsReach.run_ret {Ks₀ : Fin R → DigestCut Claims.Msg g} {q : Pos g σ Claims.Msg (Fin R)} (hi : q.Inv Ks₀)
+    {y : Exchange} (hy : q.g' = .ret y) {φ : CoinTape q.g' q.s' → CoinTape q.g' q.s'} {β : Type}
+    {fin : LiveOutJ J mPts → β} {rootB : Array ByteArray} {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ}
+    {rs : Fin J → Fin 2 → List Flock.Round} {o : β × CoinTape g σ}
+    (hr : RoundsReach D M dg J B fin rootB pts N rs (q.rewrite φ).consume o) : CoinTape.run g σ o.2 = y := by
+  obtain ⟨q', hq', ho⟩ := hr.le_tape
+  obtain ⟨h, hh⟩ := ((Pos.le_rewrite _ _).trans (Pos.le_consume _)).trans hq'
+  have key : ∀ p : Pos g σ Claims.Msg (Fin R), p.g' = .ret y → ∀ t, CoinTape.run p.g' p.s' t = y :=
+    fun ⟨_, _, _, _, _⟩ hg t => by
+      subst hg
+      rfl
+  rw [ho]
+  show CoinTape.run g σ (q'.back q'.x) = y
+  rw [hh, hi.run]
+  exact key q hy _
+
 /-- **A trace's answered stops**: `RoundsReach.out`'s list, at each answered submission a position the trace passes
 through that keeps any invariant `Q` its start keeps and each consumed stop passes on, the submission decoded at the
 stop after it, its coins, which `B` doesn't hold of there, and the rest of the trace from the stop with them written in
@@ -381,6 +399,130 @@ theorem RoundsReach.answers_logged {P : Fin R → List Release → Frame → Pro
 
 end Logged
 
+/-! ## Each opening the device logs, served -/
+
+/-- **Each opening of the log `log` is one the device serves after the releases before it.** -/
+def LogServed (log : List Release) : Prop :=
+  ∀ L₁ r L₂ i s n, log = L₁ ++ r :: L₂ → r.frame = .opening i s n → Served L₁ i s n
+
+theorem logServed_nil : LogServed [] := fun L₁ _ _ _ _ _ h => by
+  cases L₁ <;> simp at h
+
+theorem LogServed.snoc {log : List Release} {r : Release} (h : LogServed log)
+    (hr : ∀ i s n, r.frame = .opening i s n → Served log i s n) : LogServed (log ++ [r]) := by
+  intro L₁ r' L₂ i s n he hf
+  rcases List.append_eq_append_iff.1 he with ⟨a', rfl, ha'⟩ | ⟨c', rfl, hc'⟩
+  · cases a' with
+    | nil =>
+      obtain ⟨rfl, -⟩ := List.cons.inj ha'
+      rw [List.append_nil]
+      exact hr i s n hf
+    | cons x a'' =>
+      have h₂ := (List.cons.inj ha').2
+      cases a'' <;> simp at h₂
+  · cases c' with
+    | nil =>
+      obtain ⟨rfl, -⟩ := List.cons.inj hc'
+      have h₂ := hr i s n hf
+      rwa [List.append_nil] at h₂
+    | cons x c'' =>
+      obtain ⟨rfl, -⟩ := List.cons.inj hc'
+      exact h L₁ r' c'' i s n rfl hf
+
+/-- **An opening the device's trees answer is one it serves**, where the trees are the ones the log shows
+(`Served.next`'s converse). -/
+theorem Served.of_next {pre : List Release} {ts : List OpenTree} (hT : TreesOf pre ts) {i s n : ℕ} {T : OpenTree}
+    (hTi : ts[i]? = some T) {p : Fin T.spec.streams.size × Fin (2 ^ T.spec.roundsLog)} (hp : T.next s n = some p) :
+    Served pre i s n := by
+  obtain ⟨hs, ho, hn⟩ := OpenTree.next_some hp
+  have hs' : s < T.spec.streams.size := by
+    rw [← hs]
+    exact p.1.isLt
+  refine ⟨T.spec, ?_, hs', ?_, hn⟩
+  · rw [← hT.specs, List.getElem?_map, hTi]
+    rfl
+  · rw [← hT.opened i s, openedIn_some hTi hs']
+    have e : (⟨s, hs'⟩ : Fin T.spec.streams.size) = p.1 := Fin.ext hs.symm
+    rw [e, ← ho]
+    exact p.2.isLt
+
+theorem logServed_end {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {f : List Release → Game Exchange}
+    {pre : List Release} (hf : ∀ log, f log = evidenceG θ F c (pre ++ log)) (hS : LogServed pre)
+    (s : Strategy (f [])) {ex : Exchange} (h : PlayReaches (f []) s ex) : LogServed ex.log := by
+  obtain ⟨s', h'⟩ := playReaches_of_eq (hf []) s h
+  rw [log_of_evidenceG h', List.append_nil]
+  exact hS
+
+/-- **An output a play of an optional node reaches**, by the node's two cases. -/
+theorem reaches_optGame {β γ : Type} {g₀ : Game β} {K : γ → Game β} {Q : β → Prop} (o : Option γ)
+    (h0 : ∀ s e, PlayReaches g₀ s e → Q e) (h1 : ∀ x, o = some x → ∀ s e, PlayReaches (K x) s e → Q e)
+    (s : Strategy (optGame o g₀ K)) (e : β) (h : PlayReaches (optGame o g₀ K) s e) : Q e := by
+  cases o with
+  | none => exact h0 s e h
+  | some x => exact h1 x rfl s e h
+
+/-- **Each opening a play of the device's releases logs is one it serves**: from a log each of whose openings the
+device serves, at the trees that log shows, every play of the releases continuing to the evidence after the log and
+them ends on a log each of whose openings the device serves after the releases before it. -/
+theorem logServed_relK {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} (k : ℕ) :
+    ∀ (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game Exchange) (pre : List Release),
+      (∀ log, f log = evidenceG θ F c (pre ++ log)) → TreesOf pre ts → LogServed pre →
+      ∀ (st : Strategy (relK k fs ts f)) (ex : Exchange), PlayReaches (relK k fs ts f) st ex → LogServed ex.log := by
+  induction k with
+  | zero => exact fun _ _ _ _ hf _ hS st _ h => logServed_end hf hS st h
+  | succ k ih =>
+    intro fs ts f pre hf hT hS st ex h
+    obtain ⟨m, s₁⟩ := st
+    rcases m with _ | ⟨l | spec | ⟨i, s, n⟩, b⟩
+    · exact logServed_end hf hS s₁ h
+    · refine reaches_optGame (Q := fun e => LogServed e.log) (takeCoin l fs)
+        (fun s₀ _ h₀ => logServed_end hf hS s₀ h₀) (fun fs' _ s₂ e₂ h₂ => ?_) s₁ ex h
+      obtain ⟨x, hx⟩ := h₂
+      exact ih fs' ts (fun log => f (⟨.fresh l, b, List.ofFn x⟩ :: log)) (pre ++ [⟨.fresh l, b, List.ofFn x⟩])
+        (fun log => by simp only [hf, List.append_assoc, List.singleton_append]) (hT.fresh l b _)
+        (hS.snoc fun _ _ _ he => by cases he) (s₂ x) e₂ hx
+    · obtain ⟨t, ht⟩ := h
+      exact ih fs (ts ++ [⟨b, spec, t, fun _ => 0⟩])
+        (fun log => f (⟨.hello spec, b, bitsOfBytes (treeRoot b spec t ++ treeKey t.1)⟩ :: log))
+        (pre ++ [⟨.hello spec, b, bitsOfBytes (treeRoot b spec t ++ treeKey t.1)⟩])
+        (fun log => by simp only [hf, List.append_assoc, List.singleton_append]) (hT.hello b spec t _)
+        (hS.snoc fun _ _ _ he => by cases he) (s₁ t) ex ht
+    · refine reaches_optGame (Q := fun e => LogServed e.log) ts[i]?
+        (fun s₀ _ h₀ => logServed_end hf hS s₀ h₀) (fun T hTi s₂ e₂ h₂ => ?_) s₁ ex h
+      refine reaches_optGame (Q := fun e => LogServed e.log) (T.next s n)
+        (fun s₀ _ h₀ => logServed_end hf hS s₀ h₀) (fun p hp s₃ e₃ h₃ => ?_) s₂ e₂ h₂
+      obtain ⟨d, hd⟩ := h₃
+      exact ih fs (ts.set i (T.bump p.1)) (fun log => f (⟨.opening i s n, b, TreeDraw.opened d.1 n⟩ :: log))
+        (pre ++ [⟨.opening i s n, b, TreeDraw.opened d.1 n⟩])
+        (fun log => by simp only [hf, List.append_assoc, List.singleton_append]) (hT.opening hTi hp b _)
+        (hS.snoc fun _ _ _ he => by
+          obtain ⟨rfl, rfl, rfl⟩ := Frame.opening.inj he
+          exact Served.of_next hT hTi hp) (s₃ d) e₃ hd
+
+/-- **A log with an opening has a first one, which the link's slot picks**, where each opening of the log is one the
+device serves. -/
+theorem link_picks (tables : Array String) {log : List Release} (hS : LogServed log) :
+    ∀ (m : ℕ) (L₁ : List Release), L₁.length < m → ∀ (r : Release) (L₂ : List Release) (i s n : ℕ),
+      log = L₁ ++ r :: L₂ → r.frame = .opening i s n →
+        ∃ L₁ r L₂, log = L₁ ++ r :: L₂ ∧ slotRound tables .link L₁ r.frame
+  | 0, _, h => absurd h (Nat.not_lt_zero _)
+  | m + 1, L₁, hm => by
+    intro r L₂ i s n he hr
+    cases hf : firstOpened L₁ with
+    | none => exact ⟨L₁, r, L₂, he, i, s, n, hr, hS L₁ r L₂ i s n he hr, hf⟩
+    | some i' =>
+      obtain ⟨r', hmem, hr'⟩ := List.exists_of_findSome?_eq_some hf
+      obtain ⟨A, C, rfl⟩ := List.append_of_mem hmem
+      have ho : ∃ i s n, r'.frame = .opening i s n := by
+        try dsimp only at hr'
+        cases hfr : r'.frame <;> rw [hfr] at hr' <;> first | exact ⟨_, _, _, rfl⟩ | cases hr' | simp at hr'
+      obtain ⟨i₁, s₁, n₁, ho⟩ := ho
+      have hA : A.length < m := by
+        rw [List.length_append, List.length_cons] at hm
+        omega
+      exact link_picks tables hS m A hA r' (C ++ r :: L₂) i₁ s₁ n₁
+        (by rw [he, List.append_assoc, List.cons_append]) ho
+
 /-! ## The first stop -/
 
 section First
@@ -420,6 +562,65 @@ theorem firstStop_logged (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.ga
   rw [hML] at hr
   exact RoundsReach.stop_logged hPS (Pos.toStop_spec (Pos.inv_root (roundCuts V θ F c rd) (M.start ω))).2.2
     (stopsAt_firstStop V θ F c A rd σ M ω hP) hK (hBL _ _ hL) hr
+
+/-- **Each opening a play logs is one the device serves** after the releases before it (`logServed_relK`). -/
+theorem logServed_run (σ : Strategy (V.game θ F c)) (x : CoinTape (V.game θ F c) σ) :
+    LogServed (CoinTape.run (V.game θ F c) σ x).log := by
+  obtain ⟨s', h⟩ := playReaches_of_eq (game_eq_relK V θ F c) σ (run_reaches _ σ x)
+  refine logServed_relK _ _ _ _ [] (fun _ => ?_) TreesOf.nil logServed_nil s' _ h
+  rfl
+
+/-- **Where every cut is past at the first stop, no round picks in the play's log**: on a trace from the first stop,
+any rewriting of its tape consumed, where each round's reading picks only openings, no round picks any release of the
+play's log on the tape the trace ends on, after the releases before it. -/
+theorem firstStop_skip_log (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
+    {D : Decoders A.rounds A.Reg} (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) {B : RoundHold}
+    (hP : ∀ j pre fr, rd.round j pre fr → ∃ i s n, fr = .opening i s n) (ω : (A.extend M.widening).L.Ω)
+    (hK : ∀ j, (firstStop V θ F c A rd σ M ω).Ks j = .skip)
+    (φ : CoinTape (firstStop V θ F c A rd σ M ω).g' (firstStop V θ F c A rd σ M ω).s' →
+      CoinTape (firstStop V θ F c A rd σ M ω).g' (firstStop V θ F c A rd σ M ω).s')
+    {J N : ℕ} {β : Type} {fin : LiveOutJ J A.mP → β} {rootB : Array ByteArray} {pts : Fin 2 → Fin A.mP → 𝔽}
+    {rs : Fin J → Fin 2 → List Flock.Round} {o : β × CoinTape (V.game θ F c) σ}
+    (hr : RoundsReach D M A.dg J B fin rootB pts N rs ((firstStop V θ F c A rd σ M ω).rewrite φ).consume o) :
+    NoPick rd.round (fun _ => True) [] (CoinTape.run (V.game θ F c) σ o.2).log := by
+  obtain ⟨L, hL, h⟩ := walk_cast (rv := rd.reveal) (a := fun _ => True) hP (game_eq_relK V θ F c).symm σ
+    (roundCuts V θ F c rd) (M.start ω) id TreesOf.nil fun _ => Or.inl ⟨trivial, rfl⟩
+  rcases h with ⟨-, y, hy, s₀, x₀, hrun⟩ |
+    ⟨k, fs, ts, f', i, s, n, b, -, -, ⟨j, haj, hj⟩, s'', Ks, x'', back'', hq, hKs⟩
+  · have h₀ : PlayReaches (evidenceG θ F c L) s₀ y := by
+      rw [← hrun]
+      exact run_reaches _ s₀ x₀
+    rw [RoundsReach.run_ret (Pos.toStop_spec (Pos.inv_root (roundCuts V θ F c rd) (M.start ω))).2.2 hy hr,
+      log_of_evidenceG h₀]
+    exact hL
+  · have hjK : ((firstStop V θ F c A rd σ M ω).Ks j).isHere = true := by
+      show ((Pos.walk (V.game θ F c) σ (roundCuts V θ F c rd) (M.start ω) id).Ks j).isHere = true
+      rw [hq]
+      exact (isHere_openCuts hKs j).2 ⟨haj, hj⟩
+    rw [hK j] at hjK
+    exact absurd hjK (by decide)
+
+/-- **Where the play's log has an opening, the first stop fixes some cut**: on a trace from the first stop, any
+rewriting of its tape consumed, where each round's reading picks only openings and round `j₀`'s picks what the link's
+slot picks, and the play's log on the tape the trace ends on has an opening, not every cut is past at the first stop
+(`firstStop_skip_log`, `link_picks`). -/
+theorem firstStop_fixes (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
+    {D : Decoders A.rounds A.Reg} (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) {B : RoundHold}
+    (hP : ∀ j pre fr, rd.round j pre fr → ∃ i s n, fr = .opening i s n) (tables : Array String) (j₀ : Fin A.rounds)
+    (hj₀ : ∀ pre fr, slotRound tables .link pre fr → rd.round j₀ pre fr) (ω : (A.extend M.widening).L.Ω)
+    (φ : CoinTape (firstStop V θ F c A rd σ M ω).g' (firstStop V θ F c A rd σ M ω).s' →
+      CoinTape (firstStop V θ F c A rd σ M ω).g' (firstStop V θ F c A rd σ M ω).s')
+    {J N : ℕ} {β : Type} {fin : LiveOutJ J A.mP → β} {rootB : Array ByteArray} {pts : Fin 2 → Fin A.mP → 𝔽}
+    {rs : Fin J → Fin 2 → List Flock.Round} {o : β × CoinTape (V.game θ F c) σ}
+    (hr : RoundsReach D M A.dg J B fin rootB pts N rs ((firstStop V θ F c A rd σ M ω).rewrite φ).consume o)
+    (hO : ∃ L₁ r L₂ i s n, (CoinTape.run (V.game θ F c) σ o.2).log = L₁ ++ r :: L₂ ∧ r.frame = .opening i s n) :
+    ¬ ∀ j, (firstStop V θ F c A rd σ M ω).Ks j = .skip := by
+  intro hK
+  have hN := firstStop_skip_log V θ F c A rd σ M hP ω hK φ hr
+  obtain ⟨L₁, r, L₂, i, s, n, he, hr'⟩ := hO
+  obtain ⟨L₁', r', L₂', he', hl⟩ :=
+    link_picks tables (logServed_run V θ F c σ o.2) _ L₁ (Nat.lt_succ_self _) r L₂ i s n he hr'
+  exact hN j₀ trivial L₁' r' L₂' he' (hj₀ _ _ hl)
 
 end First
 
