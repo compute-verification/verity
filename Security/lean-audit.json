@@ -2550,6 +2550,10 @@
   "Verity.SecurityProofs.RegisteredLeakage": {
    "honest": ["Verity.SecurityProofs.RegisteredLeakage_honest"],
    "nontrivial": "Verity.SecurityProofs.RegisteredLeakage_nontrivial"
+  },
+  "Verity.SecurityProofs.RegisteredStreamLeakage": {
+   "honest": ["Verity.SecurityProofs.RegisteredStreamLeakage_honest"],
+   "nontrivial": "Verity.SecurityProofs.RegisteredStreamLeakage_nontrivial"
   }
  },
  "unwitnessed": {
@@ -12380,6 +12384,18 @@
    "assumptions": [],
    "type_hash": "fba4d948949f886d15e762256792d9816d5cad74ce674dcde691fa1b7fa1132f"
   },
+  "Verity.SecurityProofs.RegisteredStreamLeakage": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.RegisteredStreamLeakage_honest": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.RegisteredStreamLeakage_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.RegisteredStreamLeakage_nontrivial_stack": {
+   "owner": "@proofs"
+  },
   "Verity.SecurityProofs.SampleAfterRecorded": {
    "owner": "@soundness",
    "signature": ["Verity.SecurityProofs.SampleAfterRecorded : Verity.Guarantees.SampleAfterRecorded"],
@@ -13697,10 +13713,14 @@
    "Flock.SecurityProofs.IntegrityHorizonBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Verity.SecurityProofs.CommittedMeets": "frozen (no-function): It is stated over an arbitrary circuit, partition and (for CommittedMeets) commitment and hash, and says what a private partition's public predicates establish, rather than a Lean function's acceptance.",
    "Flock.SecurityProofs.LoopInnerRound0Own": "frozen (no-function): the loop's obligation (Flock.Guarantees.LoopInnerRound0, which SessionLoopZK and SessionLoopZKDeployed take) at LeanRelease.withInner, the release whose scheduled round of each rep's inner proof is the frame's own (Loop.innerOf: Frame.innerSched at the round's eps, beta and coin count, on the rep's finish's rounds), proved at every table data, base release, level-0 source and finish's rounds, with no premise; it reads LoopInnerRound0Own (Security/Proofs/Flock/SessionLoop/Inner.lean), a statement of the model's release with no acceptance of a Lean function to take, so the lock records its text.",
-   "Verity.SecurityProofs.RegisteredLeakage": "frozen (no-function): It is stated over an arbitrary value service, serving stack and event on the record, and says what a registration whose record counts its epoch's sessions leaks through the stack's choice of its session, rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.RegisteredLeakage": "frozen (no-function): It is stated over an arbitrary value service, serving stack and event on the record, and says what a registration whose record carries its number and counts its epoch's sessions leaks through the stack's choice of its session, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.RegisteredLeakage_honest": "completeness: RegisteredLeakage's honest lemma (its witnesses entry): at a built value service, the stack that commits one session and registers it reads no key (ZkServerOwnUser) and the bound holds there, so the premise is not vacuous.",
    "Verity.SecurityProofs.RegisteredLeakage_nontrivial": "completeness: RegisteredLeakage's nontrivial lemma (its witnesses entry): the bound fails (¬ real … ≤ 1 · (ideal + prfAdvantage) + forgeAdvantage) at the stack of RegisteredLeakage_nontrivial_stack, which makes its record tag from the key, a counterexample for another stack, not a property of a deployed one.",
-   "Verity.SecurityProofs.RegisteredLeakage_nontrivial_stack": "completeness: the stack RegisteredLeakage's nontrivial lemma is at reads the key (¬ ZkServerOwnUser), so that lemma's failing bound is ZkServerOwnUser's to prevent."
+   "Verity.SecurityProofs.RegisteredLeakage_nontrivial_stack": "completeness: the stack RegisteredLeakage's nontrivial lemma is at reads the key (¬ ZkServerOwnUser), so that lemma's failing bound is ZkServerOwnUser's to prevent.",
+   "Verity.SecurityProofs.RegisteredStreamLeakage": "frozen (no-function): It is stated over an arbitrary value service, stream stack, failure budget and event on the stream's admitted records, and says what a stream of numbered registrations, each admitted at its own position or passed over as a failure on the budget, leaks through the stack's choices, rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.RegisteredStreamLeakage_honest": "completeness: RegisteredStreamLeakage's honest lemma (its witnesses entry): at a built value service, the stack that commits one session at its one position and registers it reads no key (ZkServerOwnUser) and the bound holds there, so the premise is not vacuous.",
+   "Verity.SecurityProofs.RegisteredStreamLeakage_nontrivial": "completeness: RegisteredStreamLeakage's nontrivial lemma (its witnesses entry): the bound fails (¬ streamReal … ≤ Σ (streamIdeal + streamPrfAdvantage) + streamForgeAdvantage) at the stack of RegisteredStreamLeakage_nontrivial_stack, which makes its record tag from the key, a counterexample for another stack, not a property of a deployed one.",
+   "Verity.SecurityProofs.RegisteredStreamLeakage_nontrivial_stack": "completeness: the stack RegisteredStreamLeakage's nontrivial lemma is at reads the key (¬ ZkServerOwnUser), so that lemma's failing bound is ZkServerOwnUser's to prevent."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
