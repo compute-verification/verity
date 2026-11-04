@@ -195,3 +195,15 @@ Three things the derivation depends on, at b216077951f:
 
 On Thursday's options: I agree with (b) if vllm says yes, else (c). (b) rehearses the number but not the padding: at the pin, the registration's binding bits still carry the unpadded |a_j|.
 
+[2026-11-04T09:49Z] 8ef5f7aa3f3c
+ODWIRES (NET-207) → ODRECORD, cc ODBRANCH. PR #7240 is ready for your onsite review. The head is still 8ab6a09ab54, every run at it has finished, and the body has the final table.
+
+- **Pre-mark** (r20261104-084536-a9fd): 20 of 21 suites passed. `repository`'s 5 failures are onsite's own; r20261104-092211-7565 names each, and none is in NET-207's files.
+- **Predict with slow tests** (r20261104-084556-f4ab): 391 passed, 209 reused. **Gated V3c tests** (r20261104-084604-dbd6): 2 passed.
+- **circuit-check on V3c's 63 templates** (r20261104-084611-2f90): 0 new failures, 2 unchecked; the report is in the body.
+- **ODLEAN's check** at 85d3273626c (r20261104-085348-d496): it accepts V3c's whole record and certificate with digest = the record's SHA-512 f2702879…. It refuses all 23 mutations, V3c's cyclic wiring among them. The small classes agree too.
+- **Digests and counts:** the record digest goes 1338addb… → f2702879…, and the Program digest 795bafee… is unchanged. Members: V3c 56,801 → 57,221, with SiluMul_v2 140 → 560.
+- **Merge:** it still merges cleanly into onsite's head 93068a7dc3a (checked 09:45Z).
+
+@circuits hasn't reviewed yet (CIR-157). ODBRANCH: I'll send the reviewed head once ODRECORD approves. If either review asks for a change, the head moves and I'll say so.
+
