@@ -29,10 +29,11 @@ def Fp32AddIsTheSpec : Prop :=
 def SqrtIsTheSpec : Prop :=
   ∀ a : ℕ, (wordQ (Evaluate.Fp32.sqrtRn a)).isSome → Evaluate.Fp32.sqrtRn a = RowCircuit.sqrtWord a
 
-/-- **The check's BF16 step is `k16Step`**: `Evaluate.TC.hopperBf16Dot16` on a finite FP32 accumulator and 16 pairs of
-finite BF16 words is `PeelExact.k16Step` on the same words. -/
+/-- **The check's BF16 step is `k16Step`**: `Evaluate.TC.hopperBf16Dot16` on a finite FP32 accumulator word below `2^32`
+(the domain `Verity.TC.Spec` is transcribed on; it reads the sign as `acc >>> 31 = 1`, unmasked) and 16 pairs of finite
+BF16 words is `PeelExact.k16Step` on the same words. -/
 def Bf16DotIsTheStep : Prop :=
-  ∀ (acc : ℕ) (a b : List ℕ), (wordQ acc).isSome → a.length = 16 → b.length = 16 →
+  ∀ (acc : ℕ) (a b : List ℕ), (wordQ acc).isSome → acc < 2 ^ 32 → a.length = 16 → b.length = 16 →
     (∀ x ∈ a, x < 2 ^ 16 ∧ PeelExact.bf16Exp x ≠ 255) → (∀ y ∈ b, y < 2 ^ 16 ∧ PeelExact.bf16Exp y ≠ 255) →
     Evaluate.TC.hopperBf16Dot16 acc a b = PeelExact.k16Step acc (fun l => a.getD l.val 0) (fun l => b.getD l.val 0)
 
@@ -632,21 +633,14 @@ theorem k16_bounded (acc : ℕ) (a b : List ℕ) (hacc : acc < 2 ^ 32) (ha : a.l
 end Numerics
 
 open Numerics in
-/-- `Bf16DotIsTheStep` on an accumulator word below `2^32`, the domain `Verity.TC.Spec` is transcribed on. -/
+/-- The BF16 step on any 16 word pairs and an accumulator word below `2^32`, finite or not. -/
 theorem bf16Dot_of_lt (acc : ℕ) (a b : List ℕ) (hacc : acc < 2 ^ 32) (ha : a.length = 16) (hb : b.length = 16) :
     Evaluate.TC.hopperBf16Dot16 acc a b =
       PeelExact.k16Step acc (fun l => a.getD l.val 0) (fun l => b.getD l.val 0) := by
   rw [show Evaluate.TC.hopperBf16Dot16 = _ from Properties.Evaluator.TC.hopperBf16Dot16]
   exact k16_bounded acc a b hacc ha hb
 
-/-- **`Bf16DotIsTheStep` is false as stated**: `acc = 2^32 + 0xBF800000` is `wordQ`-finite (−1.0 in its low 32
-bits), but `Verity.TC.Spec.fp32Value` reads its sign as `acc >>> 31 = 1`, and `acc >>> 31 = 3`, so on 16 zero pairs the
-check's step writes +1.0 where `k16Step` writes −1.0. `bf16Dot_of_lt` is the statement on `acc < 2^32`. -/
-theorem not_bf16DotIsTheStep : ¬ Bf16DotIsTheStep := by
-  intro h
-  have := h 0x1BF800000 (List.replicate 16 0) (List.replicate 16 0) (by decide) (by decide) (by decide) (by decide)
-    (by decide)
-  revert this
-  decide
+theorem bf16DotIsTheStep : Bf16DotIsTheStep :=
+  fun acc a b _ hacc ha hb _ _ => bf16Dot_of_lt acc a b hacc ha hb
 
 end Pouw.PearlPlus.Bridge
