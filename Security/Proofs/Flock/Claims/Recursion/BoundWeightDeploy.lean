@@ -17,8 +17,9 @@ least at which (P3) (`Bound.WeightCovers`) holds.
   premises but (P3) giving `KSBoundCover`, `KSBoundDeployed` at `wCover rel`.
 
 At one table of `N₀ = 2^23` and the bounds `k_I = 4402`, `C_DE = 2^33`, `wCover` is about `2^69.65`. No theorem
-evaluates the recursion's security level (`Claims.Recursion.lam`) at the deployment, at `wCover` or at any other
-weight. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records
+evaluates the bound record's level (`Claims.Recursion.lam`) at the deployment, at `wCover` or at any other weight, and
+it is superseded: the recursion's error at the deployment is `κ + t·ε` (`RecDeploy.recursiveBitsK_deployed`). Route
+2C's bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep_tight`; at least 100, `RecDeploy.lamLin2_deployed_ge_dep`), and `KSLin2` at the
 deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`, at the deployed reader) is proved with no hypothesis
 (`Flock.Guarantees.RecursiveKS`, `Flock.SecurityProofs.RecursiveKS`). Holo statements are candidate 3's own model, and
@@ -78,8 +79,9 @@ theorem weightCovers_bdCover_plain (rel : _root_.Flock.Readable.Parsed → _root
 
 /-- **The deployed route with (P3) discharged**: `ksBoundRoute_of_bridge_cols` at the bridge (`bridge_bdDeployed`) at
 the deployed bound record (`bdCover`), wherever `DE`'s weight is at most the deployed plain record's (the intended
-choice among them), with (P3) from `weightCovers_bdCover`. The other premises are `KSBoundRouteCols`', at `bdCover`. No
-theorem evaluates its level (`Claims.Recursion.lam`) at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at
+choice among them), with (P3) from `weightCovers_bdCover`. The other premises are `KSBoundRouteCols`', at `bdCover`.
+Its level (`Claims.Recursion.lam`) is superseded: the recursion's error at the deployment is `κ + t·ε`
+(`RecDeploy.recursiveBitsK_deployed`). Route 2C's bound λ₂ (`lamLin2`) evaluates to at
 least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's
 dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved (`Flock.SecurityProofs.RecursiveKS`), Holo statements
 being candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/

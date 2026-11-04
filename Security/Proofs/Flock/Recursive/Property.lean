@@ -205,8 +205,9 @@ read those strings (`firewallStrings`, `firewallCommits`). What it takes of the 
 it (`FirewallSends`), and V*'s staging (`SessionsPublic`, `SessionsCoined`, `SessionsHonest`, and `OuterZK.Sessions`'
 `hz`, `hR`, `hS`).
 
-(i) is in fork form and states no bits. The recursion's knowledge form, `Claims.Recursion.KS`, is at its level
-`Claims.Recursion.lam`, which no theorem evaluates at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at
+(i) is in fork form and states no bits. The recursion's knowledge form's error at the deployment is `κ + t·ε`
+(`RecDeploy.recursiveBitsK_deployed`), from `KSLin2` there, which supersedes `Claims.Recursion.KS` and its level
+`Claims.Recursion.lam`. Route 2C's bound λ₂ (`lamLin2`) evaluates to at
 least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's dense
 statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved (`Flock.SecurityProofs.RecursiveKS`), Holo statements being
 candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/

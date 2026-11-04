@@ -8,15 +8,18 @@ verifier's own list (`vstarCount ish`), which at candidate 3's inner shape is el
 0–3 `rec-open`, 4–5 `rec-residuals`, 6 `rec-sparse`, 7–9 R's levels `rec-open-stacked`, 10 `rec-opening` at META's
 `stacked` shape.
 
-Its soundness (i) is in fork form and states no bits. The recursion's knowledge form, `Claims.Recursion.KS`
-(`Security/Definitions/Claims/Recursion.lean`), is at `Claims.Recursion.lam`, which no theorem evaluates at the
-deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records
+Its soundness (i) is in fork form and states no bits. The recursion's knowledge form's error at the deployment is
+`κ + t·ε`, `κ` once a session and `ε` per SHA-512 call of the prover's run (`RecDeploy.recursiveBitsK_deployed`),
+from `KSLin2` there, which supersedes `Claims.Recursion.KS` (`Security/Definitions/Claims/Recursion.lean`) and its
+level `Claims.Recursion.lam`. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep_tight`; at least 100, `RecDeploy.lamLin2_deployed_ge_dep`), and `KSLin2` at the
 deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`, at the deployed reader) is proved with no hypothesis
 (`Flock.Guarantees.RecursiveKS`, `Flock.SecurityProofs.RecursiveKS` in `Recursive/KSProved.lean`). The listed
 recursive audit, `Flock.Guarantees.RecursiveAuditC3` (`Proofs/Properties/Verity/Recursive/Audit.lean`), is that dense
-form, the one `verity/sampled-proofs/recursive/v1` accepts, at `λ₂ = 100`. Holo statements are candidate 3's own
-model, and `BitsLin2` at the dense statements follows from `KSLin2` there (`bitsLin2On_of_ksLin2On`).
+form, the one `verity/sampled-proofs/recursive/v1` accepts, at `λ₂ = 135.7`, and at a statement at the deployment's
+tables also at route 2C's split bound `κ + t'·ε`, `κ ≤ 2^{-167.7}` and `ε ≤ 2^{-174.95}` at the run's call caps
+(`RecDeploy.kappa_eps_oneTable_cap`). Holo statements are candidate 3's own model, and `BitsLin2` at the dense
+statements follows from `KSLin2` there (`bitsLin2On_of_ksLin2On`).
 
 What stays open is the hypotheses the discharge takes: `hbr_honest_reg`'s (`C3/Compose/Discharge.lean`, `_hbr` itself;
 at the honest source, `hbr_honest_src`'s in `C3/Compose/HonestSrc.lean`, whose module doc lists what is left) and

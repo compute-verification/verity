@@ -28,8 +28,9 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   `execOS_subset_full_escape`), so `RecursiveRanRegistered`, `PublicAudit` and `RecursiveAuditHolo` are proved from
   their forms with no A3 premise (`…NoA3`). `RecursiveSound` is proved the same way but is no longer a guarantee: its
   form admits a possibilistic break, and the recursion's guarantee is `Flock.Guarantees.RecursiveKS`. Those are fork
-  forms and state no bits; the recursion's knowledge form, `Claims.Recursion.KS`, is at its level
-  `Claims.Recursion.lam`, which no theorem evaluates at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to
+  forms and state no bits; the recursion's knowledge form's error at the deployment is `κ + t·ε`
+  (`RecDeploy.recursiveBitsK_deployed`), from `KSLin2` there, which supersedes `Claims.Recursion.KS` and its level
+  `Claims.Recursion.lam`. Route 2C's bound λ₂ (`lamLin2`) evaluates to
   at least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`; at least 100,
   `RecDeploy.lamLin2_deployed_ge_dep`), and `KSLin2` at the deployment's dense statements (`KSLin2On` at
   `RecDeploy.DenseAt`, at the deployed reader) is `Flock.Guarantees.RecursiveKS`, proved with no hypothesis
