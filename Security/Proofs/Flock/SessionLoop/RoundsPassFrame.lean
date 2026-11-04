@@ -62,8 +62,8 @@ theorem firstDiff_eq_none {v r : ByteArray} {free : Array ℕ}
   · refine List.find?_eq_none.mpr fun i hi => ?_
     have hi' := List.mem_range.1 hi
     cases hf : inFree free i
-    · simp [hf, h i hi' hf]
-    · simp [hf]
+    · simp [h i hi' hf]
+    · simp
 
 /-- **The frame's check passes a device round that `passes` and that `round` takes**, at a rep not stopped. -/
 theorem check_of_passes {c : Cfg} {s : Masker} {v r : ByteArray} {n : ℕ} {out : ByteArray} {s' : Masker}
@@ -212,7 +212,7 @@ theorem roundOk_valsDev (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVal
     simp only
     rw [hr, hq]
     simp only
-    rw [if_pos hF, Loop.setTau, if_neg, Loop.setFinalC, if_neg hnot]
+    rw [ite_eq_left hF, Loop.setTau, ite_eq_right, Loop.setFinalC, ite_eq_right hnot]
     rintro ⟨h2, -⟩
     rw [hin] at h2
     cases h2
