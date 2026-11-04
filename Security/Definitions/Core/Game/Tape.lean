@@ -37,6 +37,7 @@ def Tape.land : (g : Game α) → (s : Strategy (g.bind f)) → Tape f T g s →
 
 open Classical in
 /-- A tape over finite continuation tapes is finite. -/
+@[instance_reducible]
 noncomputable def Tape.fintype (hT : ∀ a s, Fintype (T a s)) : (g : Game α) → (s : Strategy (g.bind f)) →
     Fintype (Tape f T g s)
   | .ret a, s => hT a s
@@ -80,6 +81,7 @@ def seqStrat (g : β → Game α) : (l : List β) → (k : ℕ) → (h : k < l.l
       seqStrat g l k (Nat.lt_of_succ_lt_succ h) (Strategy.ofMap (x.1 :: ·) (seqG g l) x.2.1) x.2.2
 
 /-- The tape of the games before game `k` is finite. -/
+@[instance_reducible]
 noncomputable def seqTape.fintype (g : β → Game α) : (l : List β) → (k : ℕ) → (h : k < l.length) →
     (s : Strategy (seqG g l)) → Fintype (seqTape g l k h s)
   | [], _, _, _ => inferInstanceAs (Fintype PUnit)
