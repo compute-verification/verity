@@ -54,7 +54,7 @@ its part's tests as the part lands. Those marked (written) run against the parts
   - a frame with the right token id and any other byte changed is refused: another stream, frame kind or payload
     length, a finish reason, an id in the fill (8, written: every bit of a bucket's row is the one its proof block
     computes);
-  - a payload in m frames is refused for every m ≥ 1, since every proof block of the execution phase is drawn (8,
+  - a payload in m frames is refused for every m ≥ 1, since every proof block of the execution phase is sampled (8,
     written);
   - two frames mapped to one (request, position), and a position with no frame, are refused;
   - a prompt whose committed ids are another tokenization of the certified text is refused (4);

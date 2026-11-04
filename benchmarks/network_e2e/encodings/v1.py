@@ -21,8 +21,8 @@ comes after the release and overtakes it under load (the trace corpus behind the
 pairs on its heavy trace, 3 on small KV). So the engine's arrival order (`arrival_order`, recovered from the advice) is
 sent as the permutation from release order to it (`_deviations`): for each arrival that isn't the earliest released
 request not yet arrived, its position and its rank among those, in code_v1's `order` field as (position, (rank,)).
-`streams` (`Decoded.streams`) is that permutation as the ingress tie's lanes read it: each I1 request's warden
-ordinal.
+`streams` (`Decoded.streams`) is that permutation as the ingress tie's lanes read it: each I1 request's network
+certifier ordinal.
 
 **Replayed, 0 bits**: `replay.replay` runs vLLM's scheduler over the requests in arrival order under the
 registered engine (`Registered.engine`, its KV pool `num_gpu_blocks` included), and gives every step's rows (request,
@@ -242,9 +242,9 @@ def streams(advice: I1.Advice, record: CertifiedRequests) -> tuple[int, ...]:
 
 
 class Decoded(NamedTuple):
-    """What a string carries under the record: the advice; `streams`, each I1 request's warden ordinal (the ingress
-    tie's lanes put each request q on its stream through it); and the arrival order, the ordinals in the order the
-    engine took them."""
+    """What a string carries under the record: the advice; `streams`, each I1 request's network certifier ordinal (the
+    ingress tie's lanes put each request q on its stream through it); and the arrival order, the ordinals in the order
+    the engine took them."""
 
     advice: I1.Advice
     streams: tuple[int, ...]

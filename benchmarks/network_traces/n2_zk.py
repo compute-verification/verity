@@ -633,7 +633,7 @@ def prove(a) -> int:
         summary["warden_run"] = members["honest"].plan["warden_run"]
         summary["warden"] = {"syncs": "none: the warden runs no shaper clock, so a window declares no sync and the "
                                       "link's charge is 0",
-                             "counts": "the warden's schedule's (service.WardenProfile), not a profile's",
+                             "counts": "the active warden's schedule's (service.WardenProfile), not a profile's",
                              "egress": "not held here: the network verdict takes no egress tie and refuses by name "
                                        f"({SVC.EGRESS_TIED!r}); scan_service's egress tie, scan_zk.py's, holds it"}
     for name in ("extra", "late"):

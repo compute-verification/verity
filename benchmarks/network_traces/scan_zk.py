@@ -819,7 +819,7 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
     link registered by the warden and read back by the verifier, the scan's chain over their rows from the empty state
     (`scan_traffic.chain`), the prover's three registrations (the state tree the group's `ingress_scan.window_state`),
     the chain round's state tree, the unread round's unit and slot entries' tree (`_unread`) and the tampered round's
-    egress link-window (`_tamper`). With ``v3c`` the state and slot entries' trees are V3c's (`v3c_trees`).
+    egress execution phase (`_tamper`). With ``v3c`` the state and slot entries' trees are V3c's (`v3c_trees`).
 
     The chain's outputs are each connection's ids as the network certifier's egress carries them, or with ``outputs``
     the compute's committed ones by the connection's stream ordinal (the ingress order `warden_chain.io` numbers its

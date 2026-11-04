@@ -4,7 +4,7 @@ the ZK server would deliver, and a stand-in for the verifier's own run of Flock'
 which reads each session's verdict from the session file the stand-in prover writes. The proof's outputs are the proof
 block's on the prover's rows by each gate's reference (`LinkWindows.outputs`, `IngressTie.outputs`,
 `ingress_scan.reference`, `egress.outputs`), which the tests hold to the circuits: a Lean-accepted proof can't claim
-others. So the tests check everything the verifier of record does around the proof: its run's findings, the public row
+others. So the tests check everything the verifier does around the proof: its run's findings, the public row
 opened to the verifier's own copy, the output rows its registered reads open, the certificates and the sync."""
 
 from __future__ import annotations

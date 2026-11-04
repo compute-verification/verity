@@ -88,7 +88,7 @@ if [ -n "${SC_CHALLENGER:-}" ]; then   # the verifier's own copy of the first-pa
 fi
 SC_PORT=${SC_PORT:-$("$PY" -c 'import os; print(7811 + 16 * min(os.sched_getaffinity(0)))')}
 if [ -n "${SC_TIE:-}" ]; then
-  log "sctie: the egress tie of record${SC_CLASS:+ at $SC_CLASS}${SC_DRY:+, dry}${SC_WARDEN_RUN:+, warden run $SC_WARDEN_RUN}, sessions from port $SC_PORT"
+  log "sctie: the egress tie of record${SC_CLASS:+ at $SC_CLASS}${SC_DRY:+, dry}${SC_WARDEN_RUN:+, active-warden run $SC_WARDEN_RUN}, sessions from port $SC_PORT"
   "$PY" benchmarks/network_traces/scan_tie.py prove --bin "$BIN" --lean "$LEAN" --out "$W/sctie" --port "$SC_PORT" \
     ${SC_DRY:+--dry} ${SC_CLASS:+--class "$SC_CLASS"} ${SC_WARDEN_RUN:+--warden-run "$SC_WARDEN_RUN"} 2>&1 \
     | tee -a "$OUT/sctie.log" | cut -c1-4000

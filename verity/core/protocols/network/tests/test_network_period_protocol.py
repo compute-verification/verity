@@ -202,11 +202,11 @@ def test_a_scan_whose_prog_is_no_audits_output_is_refused(server, monkeypatch):
 
 def test_a_stray_audit_beside_the_tied_one_is_accepted_and_alone_refused(server):
     """A composite's tie of the network certifier's compute audits to its policy's record has two rows-form fixtures
-    (`PC.audits_of`, `PC.with_audits`): a small `rows-honest` period, whose one link-window's scan ties its one audit,
-    and the same period with another period's audit beside its own, a stray no link-window ties. Lean and the mirror
-    accept both alike, with the commitment registering exactly those audits' records, so the stray is the composite's
-    to refuse; and with the stray in place of the tied audit, the scan's prog is no compute audit's output and both
-    refuse it."""
+    (`PC.audits_of`, `PC.with_audits`): a small `rows-honest` period, whose one execution phase's scan ties its one
+    audit, and the same period with another period's audit beside its own, a stray no phase's scan ties. Lean and the
+    mirror accept both alike, with the commitment registering exactly those audits' records, so the stray is the
+    composite's to refuse; and with the stray in place of the tied audit, the scan's prog is no compute audit's output
+    and both refuse it."""
     for n in range(3):
         tied = build("rows-honest", n, small=True)
         (own,) = PC.audits_of(tied)

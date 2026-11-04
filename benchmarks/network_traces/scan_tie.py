@@ -382,8 +382,8 @@ def main(argv=None) -> int:
                                                        "default): a free port for each session")
     p.add_argument("--delta", type=float, default=2.0 ** -20)
     p.add_argument("--proof-deadline", type=float, default=6 * 3600.0,
-                   help="the Spec's proof deadline in seconds from the draw (default 6 hours)")
-    p.add_argument("--dry", action="store_true", help="stage, register and draw every round: nothing proved")
+                   help="the Spec's proof deadline in seconds from the sample (default 6 hours)")
+    p.add_argument("--dry", action="store_true", help="stage, register and sample every round: nothing proved")
     p.add_argument("--class", dest="setup", choices=sorted(SZ.SETUPS), default=SZ.W63K4.name)
     p.add_argument("--warden-run", type=Path, help="a warden_serve run's directory (as scan_zk.py's): its execution "
                                                    "phase 0 in place of the synthetic run's")

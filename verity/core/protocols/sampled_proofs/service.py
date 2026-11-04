@@ -1095,7 +1095,7 @@ class Stream:
     registration's population program is their mixed population (`partition.mixed_population_program`) at the counts
     `register` is given, under one sample by the Spec's sampling design (`stratified:K`: a stratum per template, each sampled at least
     once; `work:K`: at least the work table's floor). It is one program and one query, as for one template, so the
-    verifier of record's sample and run (`Select.select`, `Run.run`) read it in the same form. A window's templates
+    verifier's sample and run (`Select.select`, `Run.run`) read it in the same form. A window's templates
     may instead come with `program`, the challenger's own population program of every registration (a generator form
     that wires its templates' instances, the network certifier's scan's): its proof blocks are the templates'
     instances, each template's in one or more runs in their order, read stratum by stratum in order

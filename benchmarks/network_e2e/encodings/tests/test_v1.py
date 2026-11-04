@@ -147,8 +147,8 @@ def _ordinals(t, rec) -> list[int]:
 def test_the_order_is_sent_as_its_deviations_from_release_order():
     """Two requests released in one bucket that the engine took the other way round: the record's release order puts
     the later arrival first, so v1 sends one order entry, (its position, rank 1), and decodes back the advice, the
-    engine's arrival order and each I1 request's warden ordinal (`streams`, the ingress tie's lanes). Another rank
-    decodes to another advice or is refused, and a rank or position past the requests left is refused."""
+    engine's arrival order and each I1 request's network certifier ordinal (`streams`, the ingress tie's lanes).
+    Another rank decodes to another advice or is refused, and a rank or position past the requests left is refused."""
     t = step_trace("async-light")
     c = t.certified(0.1)
     k = next(k for k in range(len(t.requests) - 1) if c.ingress[k] == c.ingress[k + 1])

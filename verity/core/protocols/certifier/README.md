@@ -317,8 +317,8 @@ uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 
 ## Zero knowledge: what N2's verdict reads, and what's open
 
-Every protocol is to be zero-knowledge. N2 holds each window's per-bucket
-counts to the occupancy profile on every link-window (on a served link, to the ones its ingress counts derive under
+Every protocol is to be zero-knowledge. N2 holds each execution phase's per-bucket
+counts to the occupancy profile in every phase (on a served link, to the ones its ingress counts derive under
 the declared sync), beside the proved timing bound (provisional); on a network certifier link the egress tie
 (`scan_service`) holds the egress rows to the committed trace, and the network verdict counts only the execution
 phases it tied. N3, the content check, is retired, superseded by the step-indexed scan (`ingress_scan`, `egress`).

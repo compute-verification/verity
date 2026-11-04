@@ -373,7 +373,7 @@ What the network certifier's ties share (`io_tie`): the id form, in which each e
 the stream, the network certifier's, and a bucket's one order ((c)); the cells exactly; a Commit's rows, read as
 registered rows; and a Beneš network. The ingress tie (`io_request`, "The ingress tie" below) and the ingress-ids tie
 (`io_ids`) build on them. The egress tie is the step-indexed scan's, a Spec of the proof service
-(`scan_service.EgressTie`; the certifier README): every proof block of an execution phase drawn, each egress bucket's
+(`scan_service.EgressTie`; the certifier README): every proof block of an execution phase sampled, each egress bucket's
 cells computed by its proof block from the slot state and the committed trace's outputs (`egress.EgressBucket`), and
 each row a registered read of the network certifier's egress row, so a cell that differs from what the trace releases
 there refuses the phase. It computes the cells in the proof, where the egress map it replaced was computed in the

@@ -40,7 +40,7 @@
   run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its negatives are
   N2's members and the rehearsal's own check on each run it must refuse; token, which that check lets through, pends
   the egress tie (`scan_service.EgressTie`). d1's K (`pooled_k`) counts the served units' compute audits
-  (``--audit``: each window's draw and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at
+  (``--audit``: each window's sample and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at
   each δ. With ``--period-answer``
   (certifier/v0's ``network-period check`` answer on the period, a ``certifier.answer.json``, its case
   ``certifier.case.json`` beside it or ``--period-case``) and ``--server``, an accepted report also writes

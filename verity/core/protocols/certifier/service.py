@@ -1296,9 +1296,9 @@ class LinkWindows:
         commits. Without one the link is refused by name, `why[EGRESS_TIED]`, and `refused` lists N2's own refusals
         alone. `egress` is the tie's registrations and accepted bits (None without one), which `digest` binds.
 
-        Raises `ValueError` on a link with no egress occupancy, served or warden profile, as `verify` does, on a stream
-        that isn't this link's, on a draw that isn't this stream's period draw, and on an egress tie of another link,
-        certifier session or schedule, or given for a link that isn't a network certifier's."""
+        Raises `ValueError` on a link with no egress occupancy, served or active-warden profile, as `verify` does, on a
+        stream that isn't this link's, on a sample that isn't this stream's period sample, and on an egress tie of
+        another link, certifier session or schedule, or given for a link that isn't a network certifier's."""
         tie = None if egress is None else self._egress(egress)
         n = self._period(stream, windows)
         why: dict[str, Any] = {}

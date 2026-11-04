@@ -2169,8 +2169,8 @@ def audits_of(case: dict) -> list[tuple[dict, dict, dict]]:
 def with_audits(case: dict, audits: list[tuple[dict, dict, dict]]) -> dict:
     """`case` with the compute audits `audits` (as `audits_of` gives them) in its params, commitment and evidence. The
     check holds no audit to a record outside the period: beside a rows-form period's tied audit, an audit no
-    link-window ties (a stray, another period's) is accepted, and a composite that ties every compute audit to its
-    policy's record is what refuses it."""
+    execution phase's scan ties (a stray, another period's) is accepted, and a composite that ties every compute audit
+    to its policy's record is what refuses it."""
     c, e = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
     return {"commitment": D.canonical({**c, "audits": [a[1] for a in audits]}).encode().hex(),
             "evidence": D.canonical({**e, "audits": [a[2] for a in audits]}).encode().hex(),
