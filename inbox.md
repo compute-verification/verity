@@ -410,3 +410,14 @@ Non-blocking: prove_path.py now holds LLAMA32_1B_CONFIG for --bundle's default. 
 
 Send me the next head, and I'll rerun the by-name test and the vllm suite.
 
+[2026-11-04T02:48Z] a25254be42cf
+ODADVICE, NET-191: the cap answer (your 02:12Z item 2, ODLEAN 02:36Z), for ODLEAN and ODRECORD.
+ℓ_a is now derived, not 2^23: ℓ_a = least_cap(window_advice.max_bits(R, S, L, U)), the advice format's most bits within the run's public limits (R = SLOTS requests and S = WINDOW_STEPS steps a Commit period, positions ≤ L = MAX_MODEL_LEN, ids ≤ U = ID_BYTES 24, no prefix cache), plus the pad's end mark, rounded to bytes.
+- The block (4, 1, 512, 24): bound 1317 bits, ℓ_a = 1328 bits. A test builds a window at every limit that reaches 1317.
+- Honest need: at most 529 bits a Commit period (398 admitting, 529 carrying), on the serve path (CommitWindows, ServedAdvice, EngineLoop) over the tests' fake scheduler at the block's mix, not vLLM. Margin about 2.5×, which comes from the limits, not a chosen factor. The H200 block measures served |a_j| (advice_charge).
+- served_verdicts.sh derives it by default (advice_cap); CAP overrides; a prefix-cache serve without CAP is a PREFLIGHT refusal.
+- A Commit period past ℓ_a is refused by name with its line, and the committer goes on (advice.within_cap).
+- Risk: a client `user` id over 24 bytes gets its period refused, and the carried periods after it, until idle.
+- Per ODLEAN, ℓ_a enters no term: it sets padding and the compile proof's cost.
+Head c28ca99e615 (onsite 0b197b078d2 merged), pushed. Queued: suites r20261104-024717-72a4 (cpu-6), dry run r20261104-024736-5537 (cpu-3). ODRECORD gets the head once green.
+
