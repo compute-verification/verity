@@ -793,7 +793,7 @@ def day(out: Path) -> dict[str, Any]:
     it names none); ``missing`` where the run published no ADVICE-LINE."""
     said = [m[1] if (m := re.search(r"declared day (\S+)'s one program", x)) else None
             for x in lines(out, "verdicts.txt") if x.startswith(ADVICE_LINE)]
-    return ({"open": True, "advice_line_day": said, "from": f"verdicts.txt {ADVICE_LINE.strip()}", "is": DAY}
+    return ({"open": True, "advice_line_day": said, "from": f"verdicts.txt {ADVICE_LINE.rstrip(': ')}", "is": DAY}
             | ({} if said else {"missing": NO_ADVICE_LINE}))
 
 
