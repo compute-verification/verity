@@ -5,7 +5,7 @@
 #
 #   BANDWIDTH_CMD='bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'
 #
-# One remote bandwidth session over the node's registered store, PoUS's P2 C* (BW_STORE, mem69-v2's encoded store,
+# One PoUB session over the node's registered store, PoUS's P2 C* (BW_STORE, mem69-v2's encoded store,
 # only ever read), each pass one engine step's weight reads from it through kernels' staging decode on the card, its
 # receipts sketched from the rows the decode reads (`benchmarks/pous/p2_v1/bandwidth.py session`), under a gpu-lease of
 # its own (BW_LEASE_MIN minutes, default 40: each pass reads the whole store from disk, about 140 GB at mem69-v2, which
