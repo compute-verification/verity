@@ -57,6 +57,7 @@ Each question heads a catalogue section, whose entries are its examples.
 4. **Is anything public that should be a value?** A partition, count, salt or field that follows the workload.
 5. **Do the numbers compare?** Same baseline, metric, model, card, build and scheme (named in the label); the best
    baseline, not a slowed one; decode and prefill apart; a model's number labeled as one; a spec that reproduces it.
+   A figure you relay names its run, operating point and card; an overhead comes from the benchmarks' front door.
 6. **Is anything done or kept twice?** Two GEMMs for one linear, two untied trees over one value, two implementations of
    one format.
 7. **Does each check fail when it should?** Not a negative refused for an unrelated reason, a gate that can't fail, a
