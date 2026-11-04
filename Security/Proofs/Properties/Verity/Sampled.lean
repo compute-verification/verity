@@ -72,9 +72,10 @@ files and at the strategy a strategy of the period's game projects to. This modu
     a two-continuation finder (`twoRun`), which runs the play twice after the digest and outputs the two messages the
     evidence reveals when they differ, at `2t + 2h` SHA-512 calls. The most likely message misses with probability at
     most the square root of the finder's success, so each adds `√((2t + 2h)²/2^513)`;
-  * each tree opening the session reads, twice: the opened coins against fresh ones, at the mean over the device's
-    fresh tree key of hm96's hiding gap (`CROnly.hidingGap`), which the leftover hash lemma bounds by `2^-257` a leaf
-    (`hidingTerm`), so `Claims.Hm96Hiding` holds at it with no premise (`CROnly.hm96Hiding_gap`);
+  * each tree opening the session reads, four times: twice for the opened coins against fresh ones and twice for the
+    opening's empty class, at the mean over the device's fresh tree key of hm96's hiding gap (`CROnly.hidingGap`),
+    which the leftover hash lemma bounds by `2^-257` a leaf (`hidingTerm`), so `Claims.Hm96Hiding` holds at it with no
+    premise (`CROnly.hm96Hiding_gap`);
   * the circuit file's and the public file's finders (`Vocab.fileFinder`, `Vocab.publicFinder`), `2²/2^513` each;
   * the read finder's published bound at `t` (`cr`, `Vocab.crBound`).
 -/
@@ -316,9 +317,11 @@ noncomputable def sessionDelta (t : ℕ) : ℝ≥0∞ :=
 the most likely revealed message misses with probability at most the root of the finder's success. -/
 noncomputable def twoRun (q : ℝ) : ℝ≥0∞ := ENNReal.ofReal (Real.sqrt (q ^ 2 / 2 ^ (513 : ℝ)))
 
-/-- **The tree openings' hiding term**: each opening the session reads, twice, at `2^-257`, the leftover hash lemma's
-bound on the mean over the device's fresh tree key of hm96's hiding gap at one leaf. -/
-noncomputable def hidingTerm : ℝ≥0∞ := 2 * A.rounds / 2 ^ 257
+/-- **The tree openings' hiding term**: each opening the session reads, four times, at `2^-257`, the leftover hash
+lemma's bound on the mean over the device's fresh tree key of hm96's hiding gap at one leaf: twice for the opened coins
+against fresh ones (`openGap`), and twice for the opening's empty class, where no round of it is released as the coins'
+bits (`openEmpty`). -/
+noncomputable def hidingTerm : ℝ≥0∞ := 4 * A.rounds / 2 ^ 257
 
 /-- **The leg's δ at the session, `t` SHA-512 calls and the read finder's bound `cr`**: the session's error, a
 two-continuation term per round opened after a digest and one for the record, the tree openings' hiding term, the two
