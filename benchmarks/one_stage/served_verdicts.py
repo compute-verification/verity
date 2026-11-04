@@ -1467,16 +1467,13 @@ def witness(paths: Sequence[str]) -> list[tuple[str, str]]:
 def rebase(serve_dir: Path, served_dir: str, paths: Sequence[str]) -> list[str]:
     """Each case among ``paths`` (relative to ``serve_dir``, a hand-off's copy of the served node's serve dir
     ``served_dir``) that names ``blobs``, its blobs rewritten to the same paths under ``serve_dir``; the cases rewritten.
-    ValueError on a blob outside ``served_dir``, which no hand-off carries."""
+    ValueError on a blob outside ``served_dir``, which no hand-off carries, or on such a file that isn't JSON."""
     base, done = served_dir.rstrip("/") + "/", []
     for rel in paths:
         f = serve_dir / rel
-        if f.suffix != ".json" or not f.is_file():
+        if f.suffix != ".json" or not f.is_file() or b'"blobs"' not in f.read_bytes():
             continue
-        try:
-            case = json.loads(f.read_text())
-        except ValueError:
-            continue
+        case = json.loads(f.read_text())
         if not isinstance(case, dict) or not isinstance(case.get("blobs"), list):
             continue
         outside = [b for b in case["blobs"] if not (isinstance(b, str) and b.startswith(base))]
@@ -1510,9 +1507,10 @@ def composed(answer: Path, out: Path, gate_exit: int | None = None) -> tuple[int
                                               indent=1, sort_keys=True) + "\n")
     record = next((ln for ln in files.get("verdicts.txt", "").splitlines() if ln.startswith("RECORD ")), None)
     try:
-        said = json.loads(record[len("RECORD "):]).get("composed") if record else None
-    except (ValueError, AttributeError):
-        said = None
+        line = json.loads(record[len("RECORD "):]) if record else {}
+    except ValueError as e:
+        return 1, f"GATE-COMPOSE failed: the compose's RECORD line isn't JSON ({e})"
+    said = line.get("composed") if isinstance(line, dict) else None
     where = (f"at the compose gate's tree {str(doc.get('pinned'))[:12]}"
              + (f" (on {doc['pin']['on']})" if (doc.get("pin") or {}).get("on") else ""))
     rc = 0 if c.get("rc") == 0 and gate_exit in (None, 0) else 1
