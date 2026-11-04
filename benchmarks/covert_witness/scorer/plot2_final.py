@@ -9,12 +9,14 @@ islands/integrator/finals_table.py's out/finals-table.json, TABLES_JSON the sear
 (te_core.algorithm_policy's tables/algorithm-policy.json). The rules (coordinator 13:12Z, 13:36Z):
 
 - p is p_any: the mean |C| of the point's finished seeds reaching g over H_any's, the least mean |C| over every route;
-  the record cell carries p's range over seeds and the honest-only p (H over te_core.frontier's REF_DIRECTIONS) with
-  its range;
+  the record cell carries p's range over seeds and the finals table's honest-only p (p_honest, H over
+  te_core.frontier's REF_DIRECTIONS) with its range or its split;
 - the search H-setter of a (data, start, g) is its reached row with the least |C| in the search table. Where that
-  point has no finished seed, or no finals point reaches g, every row there is the search table's row for its run and
-  g, p the search split's, so a finals |C| is never divided by a search H; so is a row whose own point has no finished
-  seed. The record cell says which split a row's p is and why;
+  point isn't a finals point or has no finished seed (the finals table's p_any_basis, else the same rule on its
+  points), or no finals point reaches g, every row there is the search table's row for its run and g, p the search
+  split's, so a finals |C| is never divided by a search H; so is a row whose own point has no finished seed. The
+  record cell says which split a row's p is and why, and final.json's split_differs lists each (start, g) where the
+  finals table's split isn't the one its points give;
 - C is its reaching seeds' mean |C| and H H_any's; gain, start_loss and end_loss are their means. A point whose
   finished seeds all miss g is a "no" row at their last checkpoints' mean |C|, p = C/H_any a lower bound;
 - every ρ column is the search row's for its run and g, ρ from the search run's trace: S = p·rho_own is null where
@@ -46,6 +48,8 @@ RHO = ("rho_default", "rho_inputs", "reading", "rho_console", "binding_kind", "r
        "rho_own")
 TITLE = f"Finals: algorithm vs policy, p = C/H against rho per gain target ({UNIT})"
 FINAL, SEARCH = "final", "search split"
+#: the finals table's p_any_basis where its p reads the final set (islands/integrator/finals_table.py's FINAL_SET)
+FINAL_SET = "final set"
 
 
 def run_of(row: list) -> str:
@@ -102,8 +106,10 @@ def finals(row: list, fr: dict, at: dict, h_any: float) -> list:
     out[IX["reached"]] = "yes" if hit else "no"
     out[IX["C_gates"]], out[IX["H_gates"]], out[IX["p"]] = c, h_any, c / h_any
     seen = f"{at['reached']} of {at['finished']} finished seeds reach g ({at['planned']} planned)"
-    ph = (f"p honest {fr['p']:.3g} {span(fr.get('p_range'))}".rstrip() if fr.get("p") is not None
-          else "p honest: no honest point's finished seed reaches g")
+    hp = fr.get("p_honest", fr.get("p"))
+    ph = ("p honest: no honest point's finished seed reaches g" if hp is None else
+          f"p honest {hp:.3g} {span(fr.get('p_honest_range', fr.get('p_range')))}".rstrip()
+          if fr.get("p_honest_basis", FINAL_SET) == FINAL_SET else f"p honest {hp:.3g} ({SEARCH})")
     out[IX["record"]] = "; ".join(filter(None, (
         row[IX["record"]], f"{FINAL}: {seen}", f"p over seeds {span(fr.get('p_any_range'))}" if hit else
         "p a lower bound", ph)))
@@ -120,7 +126,7 @@ def build(fin: dict, search: dict) -> tuple[dict, dict]:
         groups.setdefault((r[IX["data"]], r[IX["start"]], r[IX["gain_target"]]), []).append(r)
     order = {k: i for i, k in enumerate(groups)}
     points = {p["run"]: p for p in fin["points"]}
-    rows, cells, differ, missing = [], [], [], []
+    rows, cells, differ, missing, split_differs = [], [], [], [], []
     for t in fin["tables"]:
         g = t["gain"]
         mine = []
@@ -140,8 +146,14 @@ def build(fin: dict, search: dict) -> tuple[dict, dict]:
         hs = run_of(min(yes, key=lambda r: r[IX["C_gates"]])) if yes else None
         hs_at = (points.get(hs) or {}).get("at", {}).get(f"{g:g}") if hs else None
         h_any = (t.get("H_any") or {}).get("C", {}).get("mean")
-        why = (f"the search H-setter {hs[-4:]} has no finished seed" if hs and not (hs_at or {}).get("finished")
-               else None if h_any else "no finals point's finished seed reaches g")
+        own = (f"the search H-setter {hs[-4:]} is not a finals point" if hs and hs not in points else
+               f"the search H-setter {hs[-4:]} has no finished seed" if hs and not (hs_at or {}).get("finished")
+               else None)
+        basis = t.get("p_any_basis")
+        if basis is not None and (basis != FINAL_SET) != bool(own):
+            split_differs.append({"start": t["start"], "g": g, "finals_table": basis, "points": own})
+        split = own if basis is None else None if basis == FINAL_SET else own or basis
+        why = split or (None if h_any else "no finals point's finished seed reaches g")
         got = []
         for fr, row in mine:
             at = points[fr["run"]]["at"][f"{g:g}"]
@@ -155,14 +167,16 @@ def build(fin: dict, search: dict) -> tuple[dict, dict]:
                                 and r[IX["p"]] is not None else -(r[IX["gain"]] or 0.0)))
         rows += [(order.get(key, len(order)), i, r) for i, r in enumerate(got)]
         cells.append({"data": t["data"], "start": t["start"], "label": key[1], "g": g, "split": SEARCH if why else FINAL,
-                      "why": why, "search_H": hs, "finals_H_any": (t.get("H_any") or {}).get("run"), "rows": len(got),
+                      "why": why, "finals_table_basis": basis, "search_H": hs,
+                      "finals_H_any": (t.get("H_any") or {}).get("run"), "rows": len(got),
                       "search_rows": sum(SEARCH in r[IX["record"]] for r in got)})
     stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     p = {"id": ap.PANEL, "title": TITLE, "kind": "table", "updated_at": stamp,
          "source": (f"scorer/plot2_final.py: the finals table built {fin['built_at']} (te_core {fin['te_core']}) on the "
                     f"search table of {search['updated_at']}; te_core {VERSION}'s cut and figure"),
          "note": "", "columns": ap.COLUMNS, "rows": [r for *_, r in sorted(rows, key=lambda x: x[:2])]}
-    return p | {"note": note(cells)}, {"cells": cells, "rho_differs": differ, "no_search_row": missing}
+    return p | {"note": note(cells)}, {"cells": cells, "rho_differs": differ, "no_search_row": missing,
+                                       "split_differs": split_differs}
 
 
 def note(cells: list[dict], art: str | None = None, tier: str | None = None) -> str:
@@ -248,6 +262,7 @@ def main(argv=None) -> int:
               f"{len(console.body(q))} bytes, note {len(q['note'])} characters; "
               f"{sum(c['split'] == SEARCH for c in info['cells'])} of {len(info['cells'])} cells on the search split; "
               f"rho differs from the finals table's on {len(info['rho_differs'])} rows; "
+              f"the split differs from the finals table's at {len(info['split_differs'])} (start, g); "
               f"{len(info['no_search_row'])} finals rows with no search row -> {args.out}")
         return 0
     p = json.loads((tables / f"{ap.NAME}.json").read_text())
