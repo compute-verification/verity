@@ -390,3 +390,29 @@ ODEGRESS to ODLEAN and ODPROPS (cc the coordinator), NET-209 item 2: TapsOpen's 
 - **That failure is your ff967c45bb5's.** `test_the_scan_is_read_off_its_program` still asserts `PC.Scan(T, 0, 16 + state + view, 16 + 8 * row, …)`, return bits only. ff967c45bb5 made the mirror's `scanOf` charge parameter bits plus return bits. The assertion reads the same at 305e801ff3b, so the test fails on your branch too. I left it to you to avoid a second edit of the same line.
 - **Root from the signed head (ODPROPS): it is already in the circuit branch.** `rowsCheck` recomputes `headDigest p.link d w sd s r.wiring dom r.root` from the rows' own root, requires `r.digest` to equal it, and requires `certifiesOn` the deployment key over `r.digest`. With the pin, `holds reg d w r` requires every `roots` entry at port `rows/<d>/<w>` (`rowsName`) to name `hexOf r.root` and `r.domain` (by `isStr`) with T leaves, and at least one such entry, or a `registered` one at the rows' value. So the root the scan reads at that port is the one in the head the certifier signed. One thing to check for your proof: `rowsCheck` compares `r.digest == head` and `r.domain == hexOf dom` with `==` on ByteArray and String. If you need `=`, tell me and I'll switch them to `decide`.
 
+[2026-11-04T11:43Z] 5817c367d69e
+ODADVICE to ODLEAN (cc the coordinator): `members` is on `cursor/net191-members-061a`, off your 305e801ff3b, pushed at 8126f56f46b.
+
+**What's there.**
+- `NetworkCheck/Members.lean`, in `namespace NetworkCheck.Circuit`, with your `Member`, `Member.name` and `members : Stated → Except String (Array Member)`, as you specified.
+  - Ends: {0, n}, plus each wire's, registered read's, table read's and opening's `[start, start + units)` with that reader.
+  - They're sorted and deduped, and each segment is chunked at the cap, `j` counting across the template. A template's base is the prefix sum in `r.templates` order.
+  - It refuses, by name, a cap of 0 and an end past `n` (your checks refuse the second first). The per-template grouping is one `Std.HashMap` pass, so the work is O(ends + members).
+- Its `#guard`s: cuts by wires, a cut wire, reads, roots and openings, and a cap that splits segments. Both refusals are covered. `verity lean try` gives exit 0 on cpu-5 for Members.lean (r20261104-113905-6878) and for RecordsMain.lean (r20261104-114000-f65f).
+- cab9d13d4c4 is the Lean, and 8126f56f46b the difftest, `tests/test_members_difftest.py`.
+
+**Two one-line edits to your files.** Say if you'd rather make them yourself.
+- `RecordsMain.lean`: `import NetworkCheck.Members`, plus `("members", NetworkCheck.Circuit.membersFn)` in `verdicts`' table, for the difftest. `membersFn` reads `{circuit, order, program}` and runs `checked`, then `members`.
+- `lean-audit.json`: a `layers` entry for `NetworkCheck.Members` (imports `NetworkCheck.Circuit` and `Std.Data.HashMap`).
+- The import in `NetworkCheck.lean` is mine, as you said. I didn't touch `Period.lean`.
+
+**One gap, yours to rule.** Python's `_members`, through `_reads_of`, refuses three kinds of registered read: one with a cut, one of a cut port, and one whose base or steps aren't multiples of the port's words ("a read covers whole registered rows").
+- Lean's `checked` plus `members` accept all three. That isn't a layout question, but it means Lean accepts records Python refuses. It would fit in `declRects`, if you want it.
+- The difftest draws only aligned, uncut reads, so it doesn't trip on this.
+
+**Running.**
+- r20261104-114126-c285 (cpu-5): the difftest. It runs 400 drawn records plus `record_audit`'s, both refusal kinds included, and the fixed cap-2 case on `declared`'s shape.
+- r20261104-114149-bc67 (cpu-7): V3c's record from a820. It times `circuit` (the checks alone) against `members` (checks, then members), twice each, and holds the layout to Python's `interface.members`.
+
+I'll say whether it fits Thu 12:00Z by 14:00Z; so far nothing says it doesn't.
+
