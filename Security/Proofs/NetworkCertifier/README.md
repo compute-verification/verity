@@ -71,8 +71,9 @@ Warden.lean     the warden's code is the client view: its lane is the client vie
                                          cell (wardenLane_eq), and so are its code's cells (wardenCode_eq), which
                                          Tap reads the network certifier's cells from
 Wires.lean      a gate's value reads only what it depends on (valOver_congr_inp); under a wiring that fits
-                                         the program the wires' resolution is a fixed point (resolveWires_fix) that
-                                         carries no ingress (resolveWires_ingress)
+                                         the program the wires' resolution is a fixed point (resolveWires_fix), and
+                                         a gate's resolution reads only what it depends on through reads and wires
+                                         (resolveWires_congr_inp)
 KSWired.lean    sampling at the incorrect set (KSWired) from KS_of's hypotheses at the wired check
                                          (KSWired_of), and from KS at a layout with no wires (ksWired_none)
 NoWires.lean    each guarantee restated over the wiring gives, at a layout with no wires, its statement

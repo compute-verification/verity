@@ -7,8 +7,9 @@ import Mathlib.Tactic.Ring
 # The sampled audit's charge (`Guarantees.SampledCharge`)
 
 A gate's value under held gates reads only the gates it depends on (`valOver_congr_inp`). The layout fits the program
-(`BoundaryGates.Fits`), so step `t`'s egress gates depend on no later step's ingress, the wires carry no ingress
-(`resolveWires_ingress`), and holding every committed gate of the incorrect proof blocks at the value it takes over the
+(`BoundaryGates.Fits`), so step `t`'s egress gates depend on no later step's ingress through reads or wires, a wired
+gate resolves alike at two ingresses that agree where it depends on them (`resolveWires_congr_inp`), and holding every
+committed gate of the incorrect proof blocks at the value it takes over the
 whole horizon, the wires resolved, leaves each step's egress rows as they were (`valOver_hold`, `resolveWires_hold`,
 `rows_holdAll`). So an accepted sequence is accepted with advice that holds each of those gates at one
 bit, and the count is Theorem 3's with that advice (`encard_acceptedFaulty_le`): the inputs besides the ingress, one bit
@@ -45,12 +46,12 @@ theorem length_ingressUpTo {In : Type} (op : ℕ → List (Obs L K S) → In) (o
     (ingressUpTo op o m).length = m + 1 := by
   simp [ingressUpTo]
 
-/-- A gate that an egress gate of step `t` depends on reads the same input whether the ingress runs to `t` or further:
-by causality it is no ingress gate of a later step. -/
+/-- A gate that an egress gate of step `t` depends on through reads and wires reads the same input whether the ingress
+runs to `t` or further: by causality it is no ingress gate of a later step. -/
 theorem inputOf_eq_of_causal {lay : BoundaryGates L S} {C : Prog} {n t : ℕ} (hfits : lay.Fits C n) (ht : t < n)
     {ℓ : Fin L} {σ : Fin S} {e : ℕ} (he : e ∈ slotGates (lay.egress t ℓ σ)) {ins ins' : List (List Bool)}
     (hlen : ins.length = t + 1) (hlen' : t + 1 ≤ ins'.length) (hlen'' : ins'.length ≤ n)
-    (hpre : ∀ j ≤ t, ins.getD j [] = ins'.getD j []) (a : ℕ → Bool) {i : ℕ} (hi : Depends C i e) :
+    (hpre : ∀ j ≤ t, ins.getD j [] = ins'.getD j []) (a : ℕ → Bool) {i : ℕ} (hi : DependsWired C lay.wires i e) :
     lay.inputOf n ins a i = lay.inputOf n ins' a i := by
   unfold BoundaryGates.inputOf
   have hnone : ∀ j, t + 1 ≤ j → j < ins'.length →
@@ -150,29 +151,26 @@ theorem rows_holdAll (C : Prog) (lay : BoundaryGates L S) (n : ℕ) (hfits : lay
       (circuitProgram C lay n).rows t (ingressUpTo op o t) (p.1, holdAll C lay n op o p.1 p.2 G) := by
   have hwf := hfits.2.2.2
   obtain ⟨r, hr⟩ := hwf.2
-  have hlt : (ingressUpTo op o t).length ≤ n := by rw [length_ingressUpTo]; omega
-  have hlF : (ingressUpTo op o (n - 1)).length ≤ n := by rw [length_ingressUpTo]; omega
   funext ℓ
   simp only [circuitProgram]
   apply rowOf_congr
   intro σ e he
-  have hagree : ∀ i, Depends C i e →
-      resolveWires C lay.wires (lay.inputOf n (ingressUpTo op o t) p.1) p.2 C.gates.length i =
-        resolveWires C lay.wires (lay.inputOf n (ingressUpTo op o (n - 1)) p.1) p.2 C.gates.length i := by
-    intro i hi
-    cases hw : lay.wires i with
-    | none =>
-      rw [resolveWires_of_none hw, resolveWires_of_none hw]
-      refine inputOf_eq_of_causal hfits ht he (length_ingressUpTo op o t) (by rw [length_ingressUpTo]; omega)
-        (by rw [length_ingressUpTo]; omega) (fun j hj => ?_) p.1 hi
-      rw [ingressUpTo_getD op o [] hj, ingressUpTo_getD op o [] (by omega)]
-    | some w => exact resolveWires_ingress hwf hlt hlF p.1 p.2 _ i (by simp [hw])
-  refine (valOver_hold C _ _ p.2 G hG e hagree e Relation.ReflTransGen.refl).trans
+  have hin : ∀ j, DependsWired C lay.wires j e →
+      lay.inputOf n (ingressUpTo op o t) p.1 j = lay.inputOf n (ingressUpTo op o (n - 1)) p.1 j := fun j hj =>
+    inputOf_eq_of_causal hfits ht he (length_ingressUpTo op o t) (by rw [length_ingressUpTo]; omega)
+      (by rw [length_ingressUpTo]; omega)
+      (fun j' hj' => by rw [ingressUpTo_getD op o [] hj', ingressUpTo_getD op o [] (by omega)]) p.1 hj
+  have hres : ∀ i, Depends C i e → ∀ free : ℕ → Option Bool,
+      resolveWires C lay.wires (lay.inputOf n (ingressUpTo op o t) p.1) free C.gates.length i =
+        resolveWires C lay.wires (lay.inputOf n (ingressUpTo op o (n - 1)) p.1) free C.gates.length i :=
+    fun i hi free => resolveWires_congr_inp C lay.wires free _ i fun j hj =>
+      hin j (hj.trans (dependsWired_of_depends hi))
+  refine (valOver_hold C _ _ p.2 G hG e (fun i hi => hres i hi p.2) e Relation.ReflTransGen.refl).trans
     (valOver_congr_inp C _ e fun i hi => ?_)
   cases hw : lay.wires i with
   | none => rw [resolveWires_of_none hw, resolveWires_of_none hw]
   | some w =>
-    rw [hagree i hi, resolveWires_ingress hwf hlt hlF p.1 _ _ i (by simp [hw])]
+    rw [hres i hi p.2, hres i hi]
     exact (resolveWires_hold hwf r hr _ p.2 G hG _ i w hw (card_wiredBelow_lt (wired_lt hwf hw))).symm
 
 /-! ### The count -/

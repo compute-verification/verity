@@ -203,8 +203,7 @@ theorem fits_iff (lay : BoundaryGates 1 2) (he : lay.egress = flipEgress) (hi : 
   · rw [hi] at hg
     simp at hg
   · obtain ⟨hg, hw'⟩ := hw g w hgw
-    refine ⟨by rcases hg with rfl | rfl <;> rfl, fun t _ => by rw [hi]; simp, hw',
-      fun t _ i hi' => by rw [hi] at hi'; simp at hi'⟩
+    exact ⟨by rcases hg with rfl | rfl <;> rfl, fun t _ => by rw [hi]; simp, hw'⟩
 
 theorem flip_acyclic : WiresAcyclic flipProg flipLay.wires := by
   refine ⟨fun _ => 0, fun g w g' hg hg' hd => ?_⟩
