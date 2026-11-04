@@ -709,7 +709,7 @@ The agent watch flags you (last note 14:27Z). Write a checkpoint note under `lan
 
 `remote` is 716de3311ff: 9d24f9b664e, then remotetie's window_rows fix (already in pprecord), then proofs' #7260 (Lean only). Rebase pprecord onto it, and drop the narrowed merge in favour of remote's copy.
 
-## 18:45Z Wed (vllm-pearlplus): **pprecord is `cursor/vllm-pprecord-496a` at 2018e8f9f0, rebased onto `remote` 716de3311ff, with the narrowed merge dropped in favour of remote's copy. On 439c the sampled-proofs tie held on hardware: R was chained right after W at 18:24Z.**
+## 18:36Z Wed (vllm-pearlplus): **pprecord is `cursor/vllm-pprecord-496a` at 2018e8f9f0, rebased onto `remote` 716de3311ff, with the narrowed merge dropped in favour of remote's copy. On 439c the sampled-proofs tie held on hardware: R was chained right after W at 18:24Z.**
 
 - **The rebase** was force-pushed with a lease over bab7d639ce. It drops:
   - fbea1b7b66 and 9baa5b7043, which `remote` has as b5d408ee23c and 4e2fd3eff44;
@@ -733,3 +733,12 @@ The agent watch flags you (last note 14:27Z). Write a checkpoint note under `lan
   - Suites on bab7d639ce: verity-vllm passed 12,982 with no reds (r20261104-180635-d449). The other changed suites, r20261104-180613-8595, are running, ETA 19:00Z.
   - one_stage on 2018e8f9f0: r20261104-183511-f20c, ETA 19:00Z.
 - **439c next:** verify, Lean, the record and its deferral, about 19:30Z. Then the copy to a gate peer, the V3c follow-on tied to W, the hand-off, and the compose on vy-auditor-2, about 21:00Z.
+
+## 18:46Z Wed (vllm-pearlplus): **pprecord is at c127366498: the inode preflight is now PEARLPLUS_TIE's. Suites: no reds of mine.**
+
+- **Correction to my 18:36Z entry:** the ~386k files are the tied window's commit, `rows.write`'s three files a member, which Pearl+'s piece makes on the served node. They are not Pearl+'s passes. So c127366498 limits the check to PEARLPLUS_TIE serves; 2018e8f9f0 had put it on every POUW=pearlplus serve. The run of record is checked either way.
+- **Suites:**
+  - r20261104-180613-8595 (the changed suites on bab7d639ce, without verity-vllm): 19 of 21 passed, one_stage's 704 among them. The two reds are `remote`'s: the repository suite's 5 (env_reads, lane_text, domains, flock_json, and ruff's RUF100 on `tools/research/tests/test_records_short_head.py`) and research's test_queue.
+  - r20261104-183511-f20c: one_stage passed 710 on 2018e8f9f0.
+  - r20261104-184351-d00e: one_stage on c127366498, ETA 19:00Z.
+- **For 439c's follow-on:** the gate peers have the memory: cpu-2 1007 GB, cpu-4 755 GB, cpu-5 755 GB. None of them holds `~/.ssh/vllm_lane_ed25519`, so the gate sees each node's default identity. The tied deferral copies the commit's ~386k files, and cpu-4 has only 772,331 inodes free, so it goes to cpu-2 (1,254,237) or cpu-5 (1,116,928). The gate opens a run root's live V3c audit once, ever, so the follow-on runs PREFLIGHT_ONLY first.
