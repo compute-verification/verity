@@ -33,7 +33,6 @@ import Proofs.NetworkCertifier.Witnesses
 import Proofs.NetworkCertifier.WitnessToys
 import Proofs.NetworkCertifier.CountWitnesses
 import Proofs.NetworkCertifier.PeriodWitnesses
-import Proofs.NetworkCertifier.Assumptions.SampledCode
 
 /-!
 # Proofs of the network certifier's guarantees
