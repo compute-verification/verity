@@ -102,7 +102,8 @@ def _root_.Flock.Bridge.EndToEndHiddenV5 : Prop :=
     (_hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the verify command's tags, and live-verifier at `own` and the law
     (hTags : TagsOkZHJ I)
-    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr law)
+    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr
+      fun _ => law)
     -- the count curve's parameters
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJP (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t')
@@ -165,7 +166,8 @@ def _root_.Flock.Bridge.TransportsLiveV5 : Prop :=
     (dg : ByteArray → ByteArray) (N : ℕ) (L : Law n)
     -- the verify command's tags, and live-verifier at `own` and the law
     (hTags : TagsOkZHJ I)
-    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr law)
+    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr
+      fun _ => law)
     (hsz : ∀ S ud, Flock.Draw.UnitDraw.ofJson (dj S) = .ok ud → ud.units.size = kd)
     (τ : Strategy (auditLive L Reg (liveOfZJ dg (planZHJP dj y₀) N wr))),
     let P := (keyProgP D.unroll pi hU n).partition (Discharge.Layout.outsOfP D.unroll hU n pi)
@@ -222,7 +224,8 @@ def SampledKSLiveV5 : Prop :=
     (_hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the verify command's tags, and live-verifier at `own` and the law
     (hTags : TagsOkZHJ I)
-    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr law)
+    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr
+      fun _ => law)
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJP (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t')
     -- the proof blocks whose miss is `δ`
