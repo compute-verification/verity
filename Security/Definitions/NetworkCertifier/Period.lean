@@ -24,8 +24,8 @@ openings collide with the network certifier's (`Btap`) or the registration's (`B
 The conditions a monitoring period's statement takes are named here: the registration opens its registered inputs at
 a statement (`RegOpensAt`), the network certifier registers its observations at every window (`TapsOpen`), each
 window's registration and the committed bits of its faulty sets (`WindowsPlaced`), the schedules the network
-certifier's record format holds (`SchedulesHeld`), and a covert sender's secrets recovered from the client's view of
-schedules among them (`SenderDecodes`).
+certifier's record format holds (`SchedulesHeld`), the schedules a covert sender's secrets run on among them
+(`SchedulesCovered`), and those secrets recovered from the client's view (`SenderDecodes`).
 -/
 
 namespace NetTiming
@@ -100,13 +100,23 @@ def SchedulesHeld {Conn Cell Ob : Type} (f : TapRecord Conn Cell Ob) (cap : Conn
     Prop :=
   ∀ s ∈ Ss, (∀ c, s.cells c ≤ cap c) ∧ f.fits s
 
-/-- **A covert sender's secrets, recovered from the client's view**: each secret `z` of `Zs` runs on a schedule of
-`Ss` (`schedOf z`) and a server behavior (`srvOf z`), and the decoder `dec` recovers it from the cells the network
-certifier's run `run tap` gives the client. -/
+/-- **The schedules a covert sender's secrets run on are counted**: the schedule the network certifier runs for each
+secret `z` of `Zs` (`schedOf z`) is one of `Ss`. The sender doesn't choose `Ss`: the count charges `log2 #Ss`, and
+`SchedulesHeld` is stated over it. So this holds of every covert sender only where `Ss` holds every schedule the deployed
+network certifier can run, through its admission and its caps at the deployment's parameters. That is a fact about the
+network certifier's code, a premise. -/
+def SchedulesCovered {Conn Z : Type} (Ss : Set (WardenSchedule Conn)) (Zs : Set Z) (schedOf : Z → WardenSchedule Conn) :
+    Prop :=
+  ∀ z ∈ Zs, schedOf z ∈ Ss
+
+/-- **A covert sender's secrets, recovered from the client's view**: the decoder `dec` recovers each secret `z` of `Zs`,
+run on the schedule `schedOf z` and the server behavior `srvOf z`, from the cells the network certifier's run `run tap`
+gives the client. These are the count's own terms, a quantified hypothesis on the adversary's strategy (its secrets,
+schedules, server behaviors and decoder), with `run` the network certifier's by `trusted-host`: nothing about the
+verifier's or the prover's code. -/
 def SenderDecodes {Conn Cell Srv Dev Z Ob : Type}
-    (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × Ob) (tap : Dev)
-    (Ss : Set (WardenSchedule Conn)) (Zs : Set Z) (schedOf : Z → WardenSchedule Conn) (srvOf : Z → Srv)
-    (dec : (Conn → List (ℕ × CellView Cell)) → Z) : Prop :=
-  ∀ z ∈ Zs, schedOf z ∈ Ss ∧ dec (run tap (schedOf z, srvOf z)).1 = z
+    (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × Ob) (tap : Dev) (Zs : Set Z)
+    (schedOf : Z → WardenSchedule Conn) (srvOf : Z → Srv) (dec : (Conn → List (ℕ × CellView Cell)) → Z) : Prop :=
+  ∀ z ∈ Zs, dec (run tap (schedOf z, srvOf z)).1 = z
 
 end NetTiming

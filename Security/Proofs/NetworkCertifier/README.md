@@ -48,7 +48,8 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
 ../../Definitions/NetworkCertifier/Period.lean  trusted: a monitoring period of sampled audits: a statement registered
                                as a window's (SameRegistration), a window's good event (WindowGood; WindowGoodReg
                                at the registration's values) and the period statement's named conditions
-                               (RegOpensAt, TapsOpen, WindowsPlaced, SchedulesHeld, SenderDecodes)
+                               (RegOpensAt, TapsOpen, WindowsPlaced, SchedulesHeld, SchedulesCovered,
+                               SenderDecodes)
 ../../Definitions/NetworkCertifier/Guarantees/Period.lean  trusted: the leak through the network certifier over a
                                monitoring period of sampled audits (PeriodLeakAccepted; PeriodLeakRegistered at the
                                registration's values)
