@@ -416,4 +416,237 @@ theorem sqrtIsTheSpec : SqrtIsTheSpec := by
   exact sqrt_main (((a % 2 ^ 32) >>> 23) % 256) (a % 2 ^ 32 % 2 ^ 23) _ _ _ _ _ _ (by omega)
     (Nat.mod_lt _ (by norm_num)) (by omega) rfl (by rw [hu1, hu2]) rfl rfl rfl rfl
 
+/-! ## The BF16 step on an accumulator word below `2^32` -/
+
+namespace Numerics
+
+open PeelExact
+
+
+/-- Core's term as the Definitions' (the same three fields). -/
+def termOf (t : Verity.TC.Spec.Term) : Pouw.Fp8Atom.Term := ⟨t.negative, t.exponent, t.magnitude⟩
+
+/-- Core's value as the Definitions'. -/
+def valueOf : Verity.TC.Spec.Value → Pouw.Fp8Atom.Value
+  | .nan => .nan
+  | .inf s => .inf s
+  | .fin t => .fin (termOf t)
+
+theorem packValue_eq (v : Verity.TC.Spec.Value) :
+    Verity.TC.Spec.packValue v = Pouw.Fp8Atom.packValue (valueOf v) := by
+  cases v with
+  | nan => rfl
+  | inf s => rfl
+  | fin t =>
+    show Verity.TC.Spec.packFp32 t = Pouw.Fp8Atom.packTerm (termOf t)
+    unfold Verity.TC.Spec.packFp32 Pouw.Fp8Atom.packTerm termOf Verity.TC.Spec.FP32_MAX_EXPONENT
+    dsimp only
+    by_cases h : t.magnitude &&& 8388608 = 0 <;> simp [h]
+
+theorem fp32Value_eq {w : ℕ} (hw : w < 2 ^ 32) :
+    valueOf (Verity.TC.Spec.fp32Value w) = Pouw.Fp8Atom.fp32Value w := by
+  have h1 : (w >>> 23) &&& 0xFF = (w >>> 23) % 256 := Nat.and_two_pow_sub_one_eq_mod _ 8
+  have h2 : w &&& 0x7FFFFF = w % 2 ^ 23 := Nat.and_two_pow_sub_one_eq_mod _ 23
+  have h3 : decide (w >>> 31 = 1) = ((w >>> 31) % 2 == 1) := by
+    rw [Nat.shiftRight_eq_div_pow]
+    have : w / 2 ^ 31 < 2 := by omega
+    rcases (by omega : w / 2 ^ 31 = 0 ∨ w / 2 ^ 31 = 1) with h | h <;> rw [h] <;> rfl
+  unfold Verity.TC.Spec.fp32Value Verity.TC.Spec.fp32Class Verity.TC.Spec.fp32Term Pouw.Fp8Atom.fp32Value
+  simp only [h1, h2, h3]
+  by_cases he : (w >>> 23) % 256 = 255
+  · by_cases hm : w % 8388608 = 0
+    · simp [he, hm, valueOf, h3]
+    · simp [he, hm, valueOf]
+  · by_cases h0 : (w >>> 23) % 256 = 0
+    · by_cases hm : w % 8388608 = 0
+      · simp [he, h0, hm, valueOf, termOf, Verity.TC.Spec.ZERO, Pouw.Fp8Atom.Term.zero]
+      · simp [he, h0, hm, valueOf, termOf, Verity.TC.Spec.FP32_MIN_NORMAL_EXPONENT, h3]
+    · simp [he, h0, valueOf, termOf, h3]
+
+theorem sign_eq (a b : ℕ) : decide ((a ^^^ b) >>> 15 &&& 1 = 1) = (bf16Sign a ^^ bf16Sign b) := by
+  rw [Nat.and_one_is_mod, Nat.shiftRight_xor_distrib]
+  unfold bf16Sign
+  rcases Nat.mod_two_eq_zero_or_one (a >>> 15) with ha | ha <;>
+    rcases Nat.mod_two_eq_zero_or_one (b >>> 15) with hb | hb <;> simp [Nat.xor_mod_two_eq_one, ha, hb] <;>
+      omega
+
+theorem class_nan (a : ℕ) : Verity.TC.Spec.bf16Class a = .nan ↔ bf16IsNaN a = true := by
+  have h1 : (a >>> 7) &&& 0xFF = (a >>> 7) % 256 := Nat.and_two_pow_sub_one_eq_mod _ 8
+  have h2 : a &&& 0x7F = a % 128 := Nat.and_two_pow_sub_one_eq_mod _ 7
+  unfold Verity.TC.Spec.bf16Class bf16IsNaN bf16Exp bf16Man
+  simp only [h1, h2]
+  by_cases hE : (a >>> 7) % 256 = 255 <;> by_cases hM : a % 128 = 0 <;> by_cases h0 : (a >>> 7) % 256 = 0 <;>
+    simp [hE, hM, h0]
+
+theorem class_inf (a : ℕ) : Verity.TC.Spec.bf16Class a = .inf ↔ bf16IsInf a = true := by
+  have h1 : (a >>> 7) &&& 0xFF = (a >>> 7) % 256 := Nat.and_two_pow_sub_one_eq_mod _ 8
+  have h2 : a &&& 0x7F = a % 128 := Nat.and_two_pow_sub_one_eq_mod _ 7
+  unfold Verity.TC.Spec.bf16Class bf16IsInf bf16Exp bf16Man
+  simp only [h1, h2]
+  by_cases hE : (a >>> 7) % 256 = 255 <;> by_cases hM : a % 128 = 0 <;> by_cases h0 : (a >>> 7) % 256 = 0 <;>
+    simp [hE, hM, h0]
+
+theorem class_zero (a : ℕ) : Verity.TC.Spec.bf16Class a = .zero ↔ bf16IsZero a = true := by
+  have h1 : (a >>> 7) &&& 0xFF = (a >>> 7) % 256 := Nat.and_two_pow_sub_one_eq_mod _ 8
+  have h2 : a &&& 0x7F = a % 128 := Nat.and_two_pow_sub_one_eq_mod _ 7
+  unfold Verity.TC.Spec.bf16Class bf16IsZero bf16Exp bf16Man
+  simp only [h1, h2]
+  by_cases hE : (a >>> 7) % 256 = 255 <;> by_cases hM : a % 128 = 0 <;> by_cases h0 : (a >>> 7) % 256 = 0 <;>
+    simp [hE, hM, h0]
+
+theorem sig_eq (a : ℕ) :
+    (a &&& 0x7F ||| (if (a >>> 7) &&& 0xFF ≠ 0 then 0x80 else 0)) = bf16Sig a := by
+  have h1 : (a >>> 7) &&& 0xFF = (a >>> 7) % 256 := Nat.and_two_pow_sub_one_eq_mod _ 8
+  have h2 : a &&& 0x7F = a % 128 := Nat.and_two_pow_sub_one_eq_mod _ 7
+  unfold bf16Sig bf16Exp bf16Man
+  rw [h1, h2]
+  by_cases h : (a >>> 7) % 256 = 0
+  · simp [h]
+  · simp only [h, ne_eq, not_false_eq_true, ite_true, ite_false]
+    have hm : a % 128 < 2 ^ 7 := Nat.mod_lt _ (by decide)
+    have := Nat.shiftLeft_add_eq_or_of_lt hm 1
+    rw [Nat.one_shiftLeft] at this
+    show (a % 128 ||| 2 ^ 7) = 2 ^ 7 + a % 128
+    rw [Nat.or_comm, ← this]
+
+theorem product_eq (a b : ℕ) : termOf (Verity.TC.Spec.bf16Product a b) = bf16Product a b := by
+  have hx : ∀ x : ℕ, (if (x >>> 7) &&& 0xFF ≠ 0 then (x >>> 7) &&& 0xFF else 1) = bf16ExpOr1 x := by
+    intro x
+    have h1 : (x >>> 7) &&& 0xFF = (x >>> 7) % 256 := Nat.and_two_pow_sub_one_eq_mod _ 8
+    unfold bf16ExpOr1 bf16Exp; rw [h1]; by_cases h : (x >>> 7) % 256 = 0 <;> simp [h] <;> omega
+  unfold Verity.TC.Spec.bf16Product bf16Product
+  simp only [sig_eq, hx, sign_eq]
+  by_cases h : (bf16Sig a * bf16Sig b) <<< 9 = 0 <;>
+    simp [h, termOf, Verity.TC.Spec.ZERO, Pouw.Fp8Atom.Term.zero]
+
+theorem productTotal_eq (a b : ℕ) :
+    valueOf (Verity.TC.Spec.bf16ProductTotal a b) = bf16ProductTotal a b := by
+  unfold Verity.TC.Spec.bf16ProductTotal bf16ProductTotal
+  simp only [class_nan, class_inf, class_zero, Bool.or_eq_true, sign_eq]
+  cases bf16IsNaN a <;> cases bf16IsNaN b <;> cases bf16IsInf a <;> cases bf16IsInf b <;> cases bf16IsZero a <;>
+    cases bf16IsZero b <;> simp [valueOf, sign_eq, product_eq]
+
+theorem any_isNaN (vs : List Verity.TC.Spec.Value) :
+    (vs.map valueOf).any Pouw.Fp8Atom.Value.isNaN = vs.any Verity.TC.Spec.Value.isNaN := by
+  induction vs with
+  | nil => rfl
+  | cons v vs ih => cases v <;> simp [ih, valueOf, Pouw.Fp8Atom.Value.isNaN, Verity.TC.Spec.Value.isNaN]
+
+theorem any_isInf (s : Bool) (vs : List Verity.TC.Spec.Value) :
+    (vs.map valueOf).any (Pouw.Fp8Atom.Value.isInf s) = (vs.filterMap Verity.TC.Spec.Value.infSign?).contains s := by
+  induction vs with
+  | nil => rfl
+  | cons v vs ih =>
+    cases v with
+    | inf n =>
+      simp only [List.map_cons, List.any_cons, List.filterMap_cons, valueOf, Pouw.Fp8Atom.Value.isInf,
+        Verity.TC.Spec.Value.infSign?, List.contains_cons, ih]
+      cases n <;> cases s <;> rfl
+    | _ =>
+      simp only [List.map_cons, List.any_cons, List.filterMap_cons, valueOf, Pouw.Fp8Atom.Value.isInf,
+        Verity.TC.Spec.Value.infSign?, Bool.false_or, ih]
+
+theorem finite_eq (vs : List Verity.TC.Spec.Value) :
+    (vs.map valueOf).filterMap Pouw.Fp8Atom.Value.finite? = (vs.filterMap Verity.TC.Spec.Value.term?).map termOf := by
+  induction vs with
+  | nil => rfl
+  | cons v vs ih =>
+    cases v <;> simp only [List.map_cons, List.filterMap_cons, valueOf, Pouw.Fp8Atom.Value.finite?,
+      Verity.TC.Spec.Value.term?, ih]
+
+theorem foldl_add {α : Type} (g : α → Int) (l : List α) (c : Int) :
+    l.foldl (fun acc x => acc + g x) c = c + (l.map g).sum := by
+  induction l generalizing c with
+  | nil => simp
+  | cons x l ih => simp [List.foldl, ih, Int.add_assoc]
+
+theorem foldl_congr_add {α : Type} (g : α → Int) (l : List α) (f : Int → α → Int)
+    (hf : ∀ acc x, f acc x = acc + g x) : l.foldl f 0 = (l.map g).sum := by
+  have : f = fun acc x => acc + g x := funext fun acc => funext fun x => hf acc x
+  subst this
+  rw [foldl_add]; simp
+
+theorem groupSum_eq (ts : List Verity.TC.Spec.Term) :
+    termOf (Verity.TC.Spec.groupSum ts 26 (-133)) = Pouw.Fp8Atom.groupSum 26 (-133) (ts.map termOf) := by
+  unfold Verity.TC.Spec.groupSum Pouw.Fp8Atom.groupSum Pouw.Fp8Atom.alignedSum
+  generalize hE : Pouw.Fp8Atom.maxExp (-133) (ts.map termOf) = E
+  have hE' : ts.foldl (fun mx (t : Verity.TC.Spec.Term) => if t.magnitude ≠ 0 ∧ t.exponent > mx then t.exponent else mx)
+      (-133) = E := by
+    rw [← hE, Pouw.Fp8Atom.maxExp, List.foldl_map]; rfl
+  simp only [hE']
+  rw [foldl_congr_add (fun t => Pouw.Fp8Atom.aligned 26 E (termOf t)) ts _ (fun acc t => by
+    simp only [Pouw.Fp8Atom.aligned, Pouw.Fp8Atom.toAdder, termOf, Verity.TC.Spec.FP32_SIGNIFICAND_WIDTH]
+    by_cases h0 : t.magnitude = 0 <;> by_cases hn : t.negative = true <;> simp [h0, hn, Int.sub_eq_add_neg])]
+  rw [show (ts.map fun t => Pouw.Fp8Atom.aligned 26 E (termOf t)) = (ts.map termOf).map (Pouw.Fp8Atom.aligned 26 E)
+    by rw [List.map_map]; rfl]
+  generalize ((ts.map termOf).map (Pouw.Fp8Atom.aligned 26 E)).sum = T
+  unfold Pouw.Fp8Atom.normalize Pouw.Fp8Atom.fromAdder
+  simp only [Verity.TC.Spec.FP32_SIGNIFICAND_WIDTH, Verity.TC.Spec.FP32_MIN_NORMAL_EXPONENT,
+    show ∀ n, Verity.TC.bitLength n = Pouw.Fp8Atom.bitLength n from fun _ => rfl]
+  by_cases hT : T = 0
+  · simp [hT, termOf, Verity.TC.Spec.ZERO, Pouw.Fp8Atom.Term.zero]
+  simp only [hT, ite_false]
+  generalize Pouw.Fp8Atom.bitLength T.natAbs = bl
+  simp only [apply_ite termOf]
+  rfl
+
+theorem groupStepTotal_eq (acc : Verity.TC.Spec.Value) (ps : List Verity.TC.Spec.Value) :
+    valueOf (Verity.TC.Spec.groupStepTotal acc ps 26 (-133)) =
+      Pouw.Fp8Atom.groupStepTotal 26 (-133) (valueOf acc) (ps.map valueOf) := by
+  unfold Verity.TC.Spec.groupStepTotal Pouw.Fp8Atom.groupStepTotal
+  dsimp only
+  rw [show valueOf acc :: ps.map valueOf = (acc :: ps).map valueOf from rfl, any_isNaN, any_isInf, any_isInf,
+    finite_eq, ← groupSum_eq]
+  generalize (acc :: ps).any Verity.TC.Spec.Value.isNaN = A
+  generalize Verity.TC.Spec.groupSum ((acc :: ps).filterMap Verity.TC.Spec.Value.term?) 26 (-133) = t
+  generalize (acc :: ps).filterMap Verity.TC.Spec.Value.infSign? = L
+  cases A
+  · cases L with
+    | nil =>
+      simp only [List.contains_nil, Bool.false_eq_true, and_self, Bool.and_self, ite_false, Bool.false_eq_true]
+      rw [apply_ite valueOf]; rfl
+    | cons s L =>
+      cases s <;> cases h1 : L.contains true <;> cases h2 : L.contains false <;>
+        simp only [List.contains_cons, h1, h2] <;> rfl
+  · rfl
+
+theorem products_eq (a b : List ℕ) (ha : a.length = 16) (hb : b.length = 16) :
+    (List.zipWith Verity.TC.Spec.bf16ProductTotal a b).map valueOf =
+      List.ofFn fun l : Fin 16 => bf16ProductTotal (a.getD l.val 0) (b.getD l.val 0) := by
+  apply List.ext_getElem
+  · simp [ha, hb]
+  · intro i h1 h2
+    have hi : i < 16 := by simpa using h2
+    simp only [List.getElem_map, List.getElem_zipWith, List.getElem_ofFn, productTotal_eq,
+      List.getD_eq_getElem?_getD, List.getElem?_eq_getElem (show i < a.length by omega),
+      List.getElem?_eq_getElem (show i < b.length by omega), Option.getD_some]
+
+theorem k16_bounded (acc : ℕ) (a b : List ℕ) (hacc : acc < 2 ^ 32) (ha : a.length = 16) (hb : b.length = 16) :
+    Verity.TC.Spec.tcDotTotal Verity.TC.HOPPER_BF16_WGMMA_K16 acc a b =
+      k16Step acc (fun l => a.getD l.val 0) (fun l => b.getD l.val 0) := by
+  unfold Verity.TC.Spec.tcDotTotal k16Step
+  simp only [Verity.TC.HOPPER_BF16_WGMMA_K16, hopperBf16K16, Verity.TC.Spec.runGroups]
+  rw [List.take_of_length_le (by omega), List.take_of_length_le (by omega), packValue_eq, groupStepTotal_eq,
+    fp32Value_eq hacc, products_eq a b ha hb]
+
+end Numerics
+
+open Numerics in
+/-- `Bf16DotIsTheStep` on an accumulator word below `2^32`, the domain `Verity.TC.Spec` is transcribed on. -/
+theorem bf16Dot_of_lt (acc : ℕ) (a b : List ℕ) (hacc : acc < 2 ^ 32) (ha : a.length = 16) (hb : b.length = 16) :
+    Evaluate.TC.hopperBf16Dot16 acc a b =
+      PeelExact.k16Step acc (fun l => a.getD l.val 0) (fun l => b.getD l.val 0) := by
+  rw [show Evaluate.TC.hopperBf16Dot16 = _ from Properties.Evaluator.TC.hopperBf16Dot16]
+  exact k16_bounded acc a b hacc ha hb
+
+/-- **`Bf16DotIsTheStep` is false as stated**: `acc = 2^32 + 0xBF800000` is `wordQ`-finite (−1.0 in its low 32
+bits), but `Verity.TC.Spec.fp32Value` reads its sign as `acc >>> 31 = 1`, and `acc >>> 31 = 3`, so on 16 zero pairs the
+check's step writes +1.0 where `k16Step` writes −1.0. `bf16Dot_of_lt` is the statement on `acc < 2^32`. -/
+theorem not_bf16DotIsTheStep : ¬ Bf16DotIsTheStep := by
+  intro h
+  have := h 0x1BF800000 (List.replicate 16 0) (List.replicate 16 0) (by decide) (by decide) (by decide) (by decide)
+    (by decide)
+  revert this
+  decide
+
 end Pouw.PearlPlus.Bridge
