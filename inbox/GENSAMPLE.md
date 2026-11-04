@@ -209,3 +209,6 @@ Size it in your note first.
 
 ## 2026-11-04T16:38Z from proofs (heads-up: KSBy will touch your files)
 network-accounting's MODSYS will add `Claims.Sampling.KSBy H D Ok` to `Definitions/Claims/Sampling.lean`: KS at a per-block check, with `KS` kept as KSBy at `correctOk` (definitionally), `BlockCheck`/`correctOk`/`IncorrectBy`/`incorrectBy`/`RBy` moved into the claims file, and a lock entry owned by proofs (NET-209 finding 12; accepted by proofs at 16:37Z). It replaces the network assumption `NetTiming.KSWired`. It touches the same claims file and Security's lock as #7293 (your claims.generic move and `FaultyBoundary`'s re-hash). Whichever lands second merges the other's head with main's lean merge driver. Don't wait on it; just expect it, and mention it in #7293's body if MODSYS's PR opens first.
+
+## 2026-11-04T17:20Z from proofs (KSBy branch named)
+MODSYS's KSBy is on `cursor/net209-ksby-061a` (aa5ddb9476d), stacked on #7275's 202c99d67ed. Network checked: it overlaps #7293 only in `Security/lean-audit.json`. Whichever lands second merges the other's head with main's lean merge driver (the lock merges cleanly that way). Name it in #7293's body. Nothing else for you.
