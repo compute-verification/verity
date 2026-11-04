@@ -1074,6 +1074,31 @@ def test_pearlpluss_h200_spec_serves_the_1bs_bf16_checkpoint_through_sm90s_kerne
     assert pouw.refusals("pearl-c-h100-v1-h3", Context(stage="serve", enabled=arm.protocols, settings=config)) == ()
 
 
+def test_served_passes_arm_writes_that_arm_as_serve_openais_protocols_config(monkeypatch, tmp_path):
+    """``served_passes.py arm`` writes the H200 spec's Pearl-C arm as serve-openai's Pearl+ arm takes it
+    (`serve_pearl.config_of`): `serve_pearl.CONFIG`'s keys alone, the setup's paths read in, no coins drawn (the server
+    draws each window's); an unset ``$`` value is refused, naming it."""
+    from verity.core.protocols.pouw import verifier
+    from verity_vllm.pipeline import serve_pearl as SPL
+
+    from benchmarks.pouw.pearl_c_vllm import served_passes as SP
+
+    def drawn(n):
+        raise AssertionError("served_passes.py arm drew coins")
+    monkeypatch.setattr(verifier, "coins", drawn)
+    spec, out = str(SPEC_ROOT / "llama32-1b-1gpu-pouw-protocol-served-h200.toml"), tmp_path / "config.json"
+    monkeypatch.delenv("PEARLC_KERNEL", raising=False)
+    monkeypatch.setenv("PEARLC_CUBIN", "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin")
+    with pytest.raises(ValueError, match=r"\$PEARLC_KERNEL"):
+        SP.main(["arm", "--spec", spec, "--out", str(out)])
+    monkeypatch.setenv("PEARLC_KERNEL", "/tree/benchmarks/pouw/pearl_c_sm90")
+    assert SP.main(["arm", "--spec", spec, "--out", str(out)]) == 0
+    doc = json.loads(out.read_text())
+    assert doc == {"pouw": {"device": "cuda", "kernel": "/tree/benchmarks/pouw/pearl_c_sm90",
+                            "cubin": "/run/out/setup/pearl_c_sm90/pearl_c_sm90.cubin"}}
+    assert SPL.config_of(str(out)) == doc
+
+
 def test_arm_settings_name_a_protocol_arm_of_the_spec_and_a_control_it_runs(tmp_path):
     source = (SPEC_ROOT / "llama31-8b-1gpu-pouw-protocol-served.toml").read_text()
     path = tmp_path / "spec.toml"

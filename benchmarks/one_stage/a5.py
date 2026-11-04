@@ -185,7 +185,7 @@ from verity.ml.commitments import row_table as RT  # noqa: E402
 from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as REG  # noqa: E402
-from verity.ml.windows import flock_inputs as FI, rows as CS, tables as TB  # noqa: E402
+from verity.ml.windows import flock_inputs as FI, interface as IF, rows as CS, tables as TB  # noqa: E402
 from verity.ml.windows import wiring as WI  # noqa: E402
 
 RANK_PORTS = 16
@@ -485,26 +485,59 @@ def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) 
     return neg
 
 
+def declared_ports(interface: Path, template: str) -> list[str]:
+    """The ports the window's registered circuit record `interface` declares registered for `template`, as Lean's
+    `RegBound.declaredOf` reads them: its committed reads' (`interface.committed_reads`: each registered read's port, each
+    table read's and each opening's verdict)."""
+    doc = json.loads(Path(interface).read_text())
+    reg = IF.Registered.of(doc["registered"]) if doc.get("registered") else None
+    return sorted({r.port for r in IF.committed_reads(reg) if r.reader == template})
+
+
 def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[str, dict]:
     """A drawn chunk's honest session, a chunk that reads a row table or an outside registered value, re-verified by Lean against
     registered reads it must refuse: none (its header names registered reads the verifier holds no root for), its first port's
     value's root replaced, and (a value of more than one row) every unit reading that value's next row, each with its other
-    ports' reads as registered."""
+    ports' reads as registered; and where the file binds its other ports (`REG.BOUND`), its first bound port bound at another
+    root, or left out, and the file verified without the window's registered circuit record (`--interface`); and there,
+    the first registered port the record declares registered for the chunk's template (an embedding read's ``o1``) bound at
+    its header's root and domain, or left out, beside another registered port: against the honest statement, which names
+    it registered, Lean refuses either before `RegBound` (`Registered.check`); a statement committing it afresh is
+    `RegBound`'s refusal (`test_lean_registered_reads`)."""
     st, n = mm["st"], mm["m"].n
     honest = json.loads(st["registered_file"].read_text())
     port = next(iter(honest["ports"]))
     p = honest["ports"][port]
+    at = lambda change: {**honest, "ports": {**honest["ports"], port: {**p, **change}}}  # noqa: E731
     cases = {"chunk-without-registered-reads": (None, "holds no registered roots"),
-             "registered-read-against-another-root": ({"root": "00" * 64}, "does not open")}
+             "registered-read-against-another-root": (at({"root": "00" * 64}), "does not open")}
     if p["leaves"] > 1:
-        cases["registered-reads-another-row"] = ({"reads": [(r + 1) % p["leaves"] for r in p["reads"]]}, "the verifier's program reads")
+        cases["registered-reads-another-row"] = (at({"reads": [(r + 1) % p["leaves"] for r in p["reads"]]}), "the verifier's program reads")
+    if honest.get(REG.BOUND):
+        b, *rest = sorted(honest[REG.BOUND])
+        bound = honest[REG.BOUND]
+        cases["bound-port-at-another-root"] = ({**honest, REG.BOUND: {**bound, b: {**bound[b], "root": "00" * 64}}},
+                                               "is not the window's committed one")
+        left = {k: v for k, v in honest.items() if k != REG.BOUND} | ({REG.BOUND: {k: bound[k] for k in rest}} if rest else {})
+        cases["bound-port-left-out"] = (left, f"registered reads (complete): the statement's port {b} is")
+        cases["bound-ports-without-interface"] = (honest, "holds no registered interface (--interface)")
+        d = next((q for q in sorted(honest["ports"]) if len(honest["ports"]) > 1 and st.get("interface_file")
+                  and any(q == x or (q.startswith(f"{x}[") and q.endswith("]"))
+                          for x in declared_ports(st["interface_file"], mm["m"].template))), None)
+        if d is not None:
+            fv = (mm.get("header") or {}).get("frame_v3") or {}
+            kept = {**honest, "ports": {k: v for k, v in honest["ports"].items() if k != d}}
+            why = f"the statement names port {d} registered, and the verifier's registered reads do not"
+            cases["declared-port-bound"] = ({**kept, REG.BOUND: {**bound, d: {
+                "root": fv.get("roots", {}).get(d, "00" * 64), "domain": fv.get("domain_ids", {}).get(d, "00" * 64)}}}, why)
+            cases["declared-port-left-out"] = (kept, why)
     out = {}
-    for name, (change, why) in cases.items():
-        alt = {x: y for x, y in st.items() if x != "registered_file"}
-        if change is not None:
+    for name, (doc, why) in cases.items():
+        alt = {x: y for x, y in st.items() if x != "registered_file"
+               and not (x == "interface_file" and name == "bound-ports-without-interface")}
+        if doc is not None:
             alt["registered_file"] = sdir / f"{name}.json"
-            alt["registered_file"].write_text(json.dumps({**honest, "ports": {**honest["ports"], port: {**honest["ports"][port], **change}}},
-                                                         sort_keys=True))
+            alt["registered_file"].write_text(json.dumps(doc, sort_keys=True))
         v = a0.lean_verify(a.lean, alt, n, sdir, zk=True, log=name)
         out[name] = {"refused": a0.lean_refused(v, why), "why": v.get("why")}
     return out
@@ -738,12 +771,22 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         print("A5 " + json.dumps({"refused_before_draw": summary["checks_before_draw"], "checks": checks}, default=str))
         return summary, False
     # each row-table chunk's Lean verify reads its x rows against its table's root, which the checks above tied to the registration;
-    # a member reading an outside registered value, against the root its owner signed
+    # a member reading an outside registered value, against the root its owner signed; each of its other ports bound to the
+    # registration's root and domain of its rows, which the checks above held its header's to (`REG.bind_ports`), never a
+    # port the window's registered circuit record declares registered (`--interface`: the record the audit holds by SHA-512)
     reads = {**(TB.registered_reads(mine, publics, registered=REG) if mine.row_tables else {}), **(registered or {})}
+    iface = served / "circuit.json"
+    iface = iface if iface.is_file() and hashlib.sha512(iface.read_bytes()).hexdigest() == summary.get("circuit") else None
     for mm in members:
         if mm["m"].key in reads:
+            m = mm["m"]
+            fv_roots = mm["header"]["frame_v3"]["roots"]
+            own = REG.bind_ports(reads[m.key], fv_roots, {p: {"root": roots[m.port(p)]["root"], "domain": want[m.port(p)]["domain"]}
+                                                         for p in fv_roots})
             mm["st"]["registered_file"] = mm["st"]["dir"] / "registered.json"
-            mm["st"]["registered_file"].write_text(json.dumps(reads[mm["m"].key], sort_keys=True))
+            mm["st"]["registered_file"].write_text(json.dumps(own, sort_keys=True))
+            if iface is not None:
+                mm["st"]["interface_file"] = iface
 
     # one sample over the whole population; each member serves its share under --zk
     if not streamed(a):
@@ -1019,19 +1062,20 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
 
 
 def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, registered: dict | None,
-            tables: Sequence[Path]) -> dict:
-    """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest and
-    the verifier's registered file), the evidence with its ``verdicts`` replaced by the proofs' files
-    (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``, the paths of the files those name and of the
-    pinned lookup tables, which onsite reads after the evidence (`compose.onsite_check`)."""
+            tables: Sequence[Path], interface: Path | None = None) -> dict:
+    """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest,
+    the verifier's registered file and, given `interface`, the window's registered circuit record's SHA-512, its file a
+    blob), the evidence with its ``verdicts`` replaced by the proofs' files (`proofs.evidence_v2`, under the evidence's
+    ``sessions``), and ``blobs``, the paths of the files those name and of the pinned lookup tables, which onsite reads
+    after the evidence (`compose.onsite_check`)."""
     import replay as RP
     from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
     pr, blobs = PF.evidence_v2(proof, sessions)
     evidence = {k: v for k, v in json.loads(bytes.fromhex(case["evidence"])).items() if k != "verdicts"} | {"proofs": pr}
-    return {"blobs": [str(b) for b in (*blobs, *tables)], "commitment": case["commitment"],
-            "evidence": RP.DT.canonical(evidence).encode().hex(),
-            "params": {**case["params"], "proofs": {"circuit": circuit, "registered": registered}}}
+    own = {"circuit": circuit, "registered": registered} | ({"interface": PF.file_sha512(interface)} if interface else {})
+    return {"blobs": [str(b) for b in (*blobs, *tables, *([interface] if interface else []))], "commitment": case["commitment"],
+            "evidence": RP.DT.canonical(evidence).encode().hex(), "params": {**case["params"], "proofs": own}}
 
 
 def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
@@ -1049,7 +1093,8 @@ def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
     reads = st.get("registered_file")
     return {"proof": PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{n}.bin",
                               tuple(f.parent for f in sorted((sdir / "sessions").glob("*/session.json")))),
-            "circuit": mm["pin"], "registered": json.loads(reads.read_text()) if reads else None, "tables": tables}
+            "circuit": mm["pin"], "registered": json.loads(reads.read_text()) if reads else None, "tables": tables,
+            "interface": st.get("interface_file") if reads else None}
 
 
 def streamed(a: argparse.Namespace) -> bool:
