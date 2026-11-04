@@ -116,7 +116,7 @@ its image when the tree is unchanged, and the gate refuses a REF holding a commi
 `old2new SHA`, `check REF` and `build PRE POST` move clones onto it, name images, guard and build the map (`commitmap.py`).
 
 `research merge` is how `main` receives a merge: in the target's checkout it runs `git merge --no-ff REF` only when the store
-(refreshed from the remote first, when one is usable) holds an attempt of the tool, default `check`, with `state` done, rc 0,
+(refreshed from a usable remote first) holds an attempt of the tool, default `check`, with `state` done, rc 0,
 and a clean source at REF's exact commit, and when the target's tip is an ancestor of REF, so the merged tree is the checked one.
 The attempt's own record and result must agree with the target's declaration: its command (`Tool.command`, in a check slot or
 not, plus check.py's own flags only), a result kind it produces (`check/v1`, never `lean-fast/v1`), a passed verdict and no step
@@ -126,7 +126,7 @@ stores, that every gate refuses each bad attempt in `CANARY` and admits a good o
 
 `research merge --train A B C` merges the refs in order onto the target's tip in a scratch worktree, one `--no-ff` merge each
 (so its commits are the train's prefixes), records the tool on the last (`research run --tool`, `--on` a machine), and when it
-passes fast-forwards the target to that exact tree. On a failure it bisects the prefixes to the first ref whose merge breaks it
+passes fast-forwards the target to that exact tree. On a failure it bisects to the first ref whose merge breaks it
 and fast-forwards to the longest prefix that passed.
 
 `research merge --train --prepare BRANCH [--onto BASE] N@SHA ...` is the lander's train build: the same chain, in a scratch
@@ -137,9 +137,9 @@ among its tests) runs on the tip, which is pushed as BRANCH, never forced. Nothi
 `check.py --slots` picks), and `research merge BRANCH` lands it.
 
 After a merge or a train lands, `research merge` sweeps the pull requests (`gh`; `--sweep` does only that, `--dry-run` prints
-it). From the remote's copy of the target, the truth rather than the checkout, it closes each open pull request whose head is on
+it). From the remote's copy of the target, not the checkout, it closes each open PR whose head is on
 it, naming the commit, retargets each whose base branch's tip is on it (stacks GitHub never closes), and deletes a closed one's
-head branch unless an open one uses it. With `--push`, which whoever lands a train passes, a merge that lands is
+head branch unless an open one uses it. With `--push` (the lander's), a merge that lands is
 pushed, never forced, before the sweep, and a refused push sweeps nothing and exits 1; without it, run `research merge --sweep`
 after `git push`. No remote skips the sweep, and its failure leaves the exit code alone. Then `main` goes over ssh to node 1's
 bare repo (120 s; `RESEARCH_MERGE_MIRROR`: host, empty skips); a failure logs the `--mirror` rerun.
@@ -152,16 +152,17 @@ step needs. It may also name what runs after a landing (`Tool.after_land`, an ar
 in the checkout with the landed commit appended, and can't change the exit code; `check`'s is its `post_train.py`, the vLLM
 regression's manifest rebuilds, which label the landing's check attempt.
 
-Since 12 Oct `research queue drive` moves `main`; the lander handles only what drive refuses.
-
 `research queue` is the merge queue: `next` is the landed branch (drive.toml's `land_into`: `checked`) plus every admitted PR,
 one `--no-ff` merge commit each, and drive fast-forwards `checked` to the reviewed prefix and `main` only to a commit of
-`checked` whose after-landing run passed every step on the merge gate (`research.drive`). A PR is admitted when it's open (drafts too),
+`checked` whose after-landing run passed every step on the merge gate (`research.drive`); its alarms ring the owner of a slow step, a
+stuck ready PR or a red, and the lander handles only what drive refuses. A PR is admitted when it's open (drafts too),
 names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, and is marked ready at its head by that
 owner (`research queue ready PR --mark --by LANE`, or `--on auto` to run the quick tier first, or a `ready` label on
 `pr:{n}@{head}`). No PR waits on a person's approval or on a per-head grant. The branch holds the queue's state (each
-merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and a
-conflicting or ejected PR's owner gets one handoff per head. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
+merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and one post per
+root cause names each PR it leaves out. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
+
+The mark and sync refuse a lock merge dropping an entry `next` needs (`lock_drops`).
 
 The workload receives `RESEARCH_RUN_ID`, `RESEARCH_RUN_DIR` and `OUT` (its `out/`, uploaded in full) and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local

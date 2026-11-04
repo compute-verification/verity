@@ -22,7 +22,7 @@ parent, since walking back needs the dropped `r_j`; anything that reveals a pare
 call state of `2m + 512` bits, more than the two labels it yields.
 
 **Broken modes, kept to replay their attacks** (`tests/test_pous_two_for_one.py`): `XorSponge`, the sponge of the
-15:50Z instantiation (`s_j = Π(s_{j−1} ⊕ (B_j ‖ 0))`, rate `m`, capacity 512, a header block first), from whose states
+first instantiation (`s_j = Π(s_{j−1} ⊕ (B_j ‖ 0))`, rate `m`, capacity 512, a header block first), from whose states
 `Π⁻¹` recovers an absorbed parent (`lean/submissions/sponge-dense`, `dense_two_labels_from_one_state`); and
 `MiyaguchiPreneel` (`s_j = Π(x_j) ⊕ x_j`, `x_j = s_{j−1} ⊕ (B_j ‖ 0)`), whose pre-image `x_j` is a checkpoint that is
 also a masked parent.  Neither is a default anywhere.
@@ -274,9 +274,9 @@ class _RateStepper:
 
 @dataclass(frozen=True, slots=True)
 class XorSponge:
-    """**Broken.** The 15:50Z sponge: `s_j = Π(s_{j−1} ⊕ (B_j ‖ 0))` over `pi` of `m + 512` bits, zero IV, blocks the
-    header (zero-filled to `m`), the parents newest first and the pad; the key is the rate.  One state regenerates two
-    labels through `Π⁻¹`."""
+    """**Broken.** The first instantiation's sponge: `s_j = Π(s_{j−1} ⊕ (B_j ‖ 0))` over `pi` of `m + 512` bits, zero
+    IV, blocks the header (zero-filled to `m`), the parents newest first and the pad; the key is the rate.  One state
+    regenerates two labels through `Π⁻¹`."""
 
     params: Params
     pi: Permutation

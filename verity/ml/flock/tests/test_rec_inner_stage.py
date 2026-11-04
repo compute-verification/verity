@@ -40,7 +40,7 @@ def test_the_inner_statement_binds_the_partition_object_beside_it(tmp_path):
     inner = [str(BIN), "rec-inner", "--circuit", str(out / "circuit.txt"), "--public", str(out / "pub-2.bin")]
     p = subprocess.run([*inner, "--partition", str(out / "partition.json"), "--program", str(out / "program.json")],
                        capture_output=True, text=True)
-    assert p.returncode == 0 and json.loads(p.stdout)["format"] == "verity/rec-inner/v1", p.stderr
+    assert p.returncode == 0 and json.loads(p.stdout)["format"] == "verity/rec-inner/v2", p.stderr
     p = subprocess.run(inner, capture_output=True, text=True)
     assert p.returncode == 1 and "the verifier's partition object is required" in p.stderr
 
@@ -92,4 +92,4 @@ def test_a_served_windows_member_stages_as_the_inner_statement_over_its_own_byte
     p = subprocess.run([str(BIN), "rec-inner", "--circuit", str(out / "circuit.txt"), "--public", str(out / f"pub-{n}.bin"),
                         "--partition", str(out / "partition.json"), "--program", str(out / "program.json")],
                        capture_output=True, text=True)
-    assert p.returncode == 0 and json.loads(p.stdout)["format"] == "verity/rec-inner/v1", p.stderr
+    assert p.returncode == 0 and json.loads(p.stdout)["format"] == "verity/rec-inner/v2", p.stderr

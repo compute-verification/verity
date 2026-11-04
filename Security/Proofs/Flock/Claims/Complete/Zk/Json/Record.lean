@@ -193,7 +193,7 @@ theorem checkRecord_ok (S : Claims.JsonSpec printJ Flock.canon) (ct : CoinTree.S
   have hnon := strAs_same hs (gC (k := "nonce") (v := Json.str (zeros 64)) (by simp))
   have hroot := strAs_same hs (gC (k := "root") (v := Json.str (zeros 128)) (by simp))
   obtain ⟨sv, hsv, hsvs⟩ := hs.getObjVal (gC (k := "spec") (v := ct.toJson) (by simp))
-  obtain ⟨cs, hcs⟩ := S.canon_ok _ (good_specJson ct)
+  obtain ⟨cs, hcs, -⟩ := S.canon_ok _ (good_specJson ct)
   have hcs' : canon sv = .ok cs := by rw [← S.canon_same _ _ hsvs, hcs]
   obtain ⟨n, rfl, hn, hk⟩ := same_obj_wf hs
   have hkeys : n.keys = ["key", "nonce", "root", "spec"] := keys_of hn (by decide) fun k => by

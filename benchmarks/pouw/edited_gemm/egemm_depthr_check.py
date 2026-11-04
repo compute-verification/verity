@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FOLD depth-R same-word binding (note:20261017T0320Z-draft-eps1-fold, correction 2).
+"""Depth-R same-word binding of the fold.
 
 The served-GEMM scalar-only dial absorbs the SAME committed word R times through the XOR-in(13,19) fold with the SAME keys
 every round (benchmarks/pouw/edited_gemm/egemm.cu's EG_ROUNDS; receipt_folds_r9.xorin_step iterated). This closes the open
@@ -7,7 +7,7 @@ piece: the R-round fold still binds the word with no new luck term. Binding is t
 -- on the full 2^n state space, no nonzero change to the committed word's four s32 limbs leaves the R-fold output fixed on
 every state (an "all-state collapse" is a kernel element = a break).
 
-The theorem, and why same-word depth-R is NOT g3-chains' open case (note:20261016T2051Z-draft-g3-chains):
+The theorem, and why same-word depth-R is NOT g3-chains' open case:
   * Runs of >= 3 are open only in the alternating shape (T, R, T, R, split), which g3-chains shows needs the per-round
     keys/words to ALTERNATE (pairs 1 and 3 carry a key near +-1; pairs 0, 2 do not). The scalar-only dial folds the
     IDENTICAL word with the IDENTICAL keys every round, so it cannot realize the alternation. Hence at ODD depth there is
@@ -25,7 +25,7 @@ standing in for (13, 19); then a 32-bit sample on the real rotations):
   (2) n = 10, 12 over key_ok_r11 keys (dangerous near-inverse + random), full state space, R = 1..5: zero collapse.
   (3) a KJ19 positive control: a key ~ +-1 collapses at even depth (the search sees runs of two), and key_ok_r11 rejects it.
   (4) 32-bit over the real (13, 19) and key_ok_r11 keys, R = 3, 4, 5: zero collapse.
-  (5) the mirror is faithful: one fold round equals receipt_folds_r9.xorin_step (the pinned P2-FF r9 reference).
+  (5) the mirror is faithful: one fold round equals receipt_folds_r9.xorin_step (the pinned r9 reference).
 Positive controls: a degenerate key a0 = 0 drops limb w0, and a zero-round fold ignores the word; both collapse, and
 --mutations confirms the checker catches each.
 
@@ -199,7 +199,7 @@ def main() -> int:
     rng = np.random.default_rng(7)
     rand_words = lambda n, k: [tuple(int(x) for x in rng.integers(1, 1 << n, 4)) for _ in range(k)]
 
-    # (0) the fold is faithful: one round of the proof's fold == receipt_folds_r9.xorin_step (the pinned P2-FF r9 fold).
+    # (0) the fold is faithful: one round of the proof's fold == receipt_folds_r9.xorin_step (the pinned r9 fold).
     a0m, a1m = np.uint32(0x9E3779B1), np.uint32(0x85EBCA77)
     ym = np.arange(256, dtype=np.uint32) * np.uint32(2654435761)
     dm = [(np.uint32(0x1234 + i) + np.arange(256, dtype=np.uint32)) for i in range(4)]

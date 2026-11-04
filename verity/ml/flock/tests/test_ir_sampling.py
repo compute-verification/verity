@@ -271,7 +271,7 @@ def test_a_mutated_netlist_is_caught_by_the_ir_comparison():
 CAPTURED = os.environ.get("VERITY_CAPTURED_101_GUMBEL")
 
 
-@pytest.mark.skipif(not CAPTURED, reason="set VERITY_CAPTURED_101_GUMBEL to the captured #101 sampling set's directory")
+@pytest.mark.skipif(not CAPTURED, reason="set VERITY_CAPTURED_101_GUMBEL to the captured Llama-3.2-1B sampling set's directory")
 def test_captured_rows_through_the_units(tmp_path):
     s = InputSet.open(Path(CAPTURED))
     low = S.lane(128256)

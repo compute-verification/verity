@@ -37,7 +37,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from verity.ml.circuits.types import Record
+from verity.ml.circuits.types import RecordType
 
 from .build import BuildResult, _Decoder, build_program, decoder
 from .common import Unexpressible
@@ -228,7 +228,7 @@ def name_request(raw: Any, net: Any, params: tuple, *, LP: int, T: int, C: int, 
                             f"({w.nodes[w.k].fn.id}) first unnamed")
     body, calls, names = kept_records(raw, w.calls, w.names, registered=True)
     *user, (wname, wrec) = params
-    weights = Record(*((WRAPPER + f, t) for f, t in wrec.fields))
+    weights = RecordType(*((WRAPPER + f, t) for f, t in wrec.fields))
     doc = {"schema": SCHEMA, "body": "program_fn", "inputs": [n for n, _ in user], "weights": [n for n, _ in weights.fields],
            "rank": None, "occurrences": w.occurrences, "calls": calls}
     names_of = [n for n, _ in params]

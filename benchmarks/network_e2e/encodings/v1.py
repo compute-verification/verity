@@ -44,7 +44,7 @@ records (the tie: prompt and output lengths against the certified ids, `finish` 
   (`derived.Prefixes.cached` over the rows scheduled before the lookup) less the replay's hit, in whole blocks. Where
   the bound holds (`derived._walk`'s: sync scheduling, and the blocks of the requests admitted through the step at most
   the pool less its null block) the shortfall is 0 by the bound and is derived at 0 bits. Past it, the hit is the
-  prover's choice of eviction, so it is sent and charged, and no choice goes uncharged (LEAK-LEAN's `BitsCount`).
+  prover's choice of eviction, so it is sent and charged, and no choice goes uncharged (the sampled leak bound's `hAs`).
 The resumes and the order of new requests that `derived._walk` would otherwise read are the replay's, so v1 sends none.
 The KV pool's size is registered before the run, never sent: a prover that chose it could declare a bigger pool and buy
 derived hits with it.
@@ -63,7 +63,7 @@ record's windows (`windows`: its last bucket's, plus one). `code_v1` codes each 
 terminates each window's segment, so the code finds every window's end itself, with no length prefix. A window's charge
 is its segment's bits (`code_v1.Encoded.lens`; `bits_by_window`), a function of the string alone, never of the record.
 The strings are prefix-free for every W, so a string
-charged c bits in all is one of at most 2^c (LEAK-LEAN's `bitsCount_of_prefixFree`). The codebook (`Registered.book`,
+charged c bits in all is one of at most 2^c (Kraft; the sampled leak bound's `hAs`). The codebook (`Registered.book`,
 `code_v1.Book`) is fit on other runs, never this one, and its digest is registered before the first window. `decode`
 takes only the canonical string (`code_v1.decode`: each segment the coder's own codeword for the symbols it decodes to),
 zero padding of fewer than 8 bits and no byte past it, and then holds the windows to the replay's: the decisions the

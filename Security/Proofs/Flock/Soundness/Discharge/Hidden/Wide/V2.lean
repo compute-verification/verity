@@ -217,15 +217,16 @@ theorem msg_bytesAll {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {
 end Hidden
 
 theorem outputs_committed_v2' : OutputsCommittedV2 := by
-  intro tags cf pf coins tables d partition program st ht h pop hpop hpt D hD hlt hupv hu hor h64 L regs hregs z hz o g
+  intro tags cf pf coins tables d partition program st ht hi h pop hpop hpt D hD hlt hupv hu hor h64 L regs hregs z hz o g
     j hg hg2 hj hr
   have s := setupHidden_spec' h
-  obtain ⟨hp, hcr⟩ := parse_untyped ht s.parse
+  obtain ⟨hp, hcr⟩ := parse_untyped ht (s.parseF hi)
   have P := parse_facts hp
   have L0 : FlockSoundness.Layout (flatTwin st) := layout_of (st := flatTwin st) P s.pin rfl rfl s.m s.kLog
   have F0 : Aliased.UnitFacts tags (flatTwin st) := unitFacts_of_parse (st := flatTwin st) hp rfl
   have R : RowRanges st.c := RowRanges.ofL (st := flatTwin st) L0 F0.parse F0.check
-  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray := by rw [s.da, hidden_delta']
+  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray := by
+    rw [s.da, hidden_delta_unpinned (unpinned_of_rep hp hcr hor)]
   have hrows : OutRowsW st.c := outRowsW_of hp hcr hu hor h64
   have hz0 := sat_flatAll L L0 F0 hda hrows hz
   have hzero : blockBit (L.model regs) z o (zeroCol st.c) = false :=
@@ -240,7 +241,7 @@ theorem outputs_committed_v2' : OutputsCommittedV2 := by
         (bytesOf (blockBit (L.model regs) z o) 192 (saltCol st.c g (HmOut.nIn st.c + j))) := by
     have h2 : 2 * (st.c.ports.getD (HmOut.nIn st.c + j) default).words + 17 ≤
         128 * ((st.c.ports.getD (HmOut.nIn st.c + j) default).chunks + 1) := by omega
-    have := row_bc_tgt L0 F0 rfl hupv hz0 o hg hpl (by rw [getElem!_eq_getD']; exact hb)
+    have := row_bc_tgt L0 F0 rfl hupv (hz0.ex _) o hg hpl (by rw [getElem!_eq_getD']; exact hb)
       (by rw [getElem!_eq_getD']; exact hw.ge) (by rw [getElem!_eq_getD']; exact h2) hu
     rw [getElem!_eq_getD'] at this
     exact this
@@ -249,7 +250,7 @@ theorem outputs_committed_v2' : OutputsCommittedV2 := by
 
 /-- **`OutputsBindingV2` from `OutputsCommittedV2`**. -/
 theorem outputs_binding_v2_of (hC : OutputsCommittedV2) : OutputsBindingV2 := by
-  intro tags cf pf coins coins' tables d d' partition partition' program program' st st' ht hs hs' pop hpop hpt D D' hD
+  intro tags cf pf coins coins' tables d d' partition partition' program program' st st' ht hi hs hs' pop hpop hpt D D' hD
     hDp hD' hDp' hupv hu hor h64 L regs hregs L' regs' hregs' z hz z' hz' o o' g g' j hg hg2 hg' hg2' hj hr hr' hidx hne
   have hcc : st.c = st'.c := setupHidden_c hs hs'
   have hpop' : HmOut.loadPublic tags st'.c pf = .ok pop := by rw [← hcc]; exact hpop
@@ -259,8 +260,8 @@ theorem outputs_binding_v2_of (hC : OutputsCommittedV2) : OutputsBindingV2 := by
   have hor' : st'.c.outRowPorts = Array.replicate st'.c.outPorts.size 1 := by rw [← hcc]; exact hor
   have h64' : ∀ j < st'.c.outPorts.size, (st'.c.ports.getD (HmOut.nIn st'.c + j) default).words % 64 = 0 := by
     rw [← hcc]; exact h64
-  have e1 := hC ht hs hpop hpt hD hDp hupv hu hor h64 L regs hregs hz o hg hg2 hj hr
-  have e2 := hC ht hs' hpop' hpt hD' hDp' hupv' hu' hor' h64' L' regs' hregs' hz' o' hg' hg2' hj' hr'
+  have e1 := hC ht hi hs hpop hpt hD hDp hupv hu hor h64 L regs hregs hz o hg hg2 hj hr
+  have e2 := hC ht hi hs' hpop' hpt hD' hDp' hupv' hu' hor' h64' L' regs' hregs' hz' o' hg' hg2' hj' hr'
   have hp : HmRow.prefixOf (st.c.ports.getD (HmOut.nIn st.c + j) default) =
       HmRow.prefixOf (st'.c.ports.getD (HmOut.nIn st'.c + j) default) := by rw [hcc]
   refine commitPair_spec' _ _ _ _ (fun e => ?_) (e1.symm.trans (Eq.trans ?_ e2))

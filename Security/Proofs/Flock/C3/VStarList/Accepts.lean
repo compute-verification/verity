@@ -274,9 +274,9 @@ theorem statements_of_checkStmt
     obtain ⟨ss, hss, -⟩ := check_ok (checkCircuit_ok hs).1
     simp [hss, Except.isOk, Except.toBool]
 
-/-- **The inner files' statement** (`Files.stmt`) is `setupHidden`'s on the files, with no program. -/
+/-- **The inner files' statement** (`Files.stmt`) is `setupHidden`'s on the files, under their program. -/
 theorem stmt_setupHidden {u : String} {spec' : SessionSpec} {st' : Stmt} (h : f.stmt u = .ok (spec', st')) :
-    Stmt.setupHidden RecVStar.innerTags f.circuit f.pub Coins.os [] none (some f.partition) none = .ok st' := by
+    Stmt.setupHidden RecVStar.innerTags f.circuit f.pub Coins.os [] none (some f.partition) f.program = .ok st' := by
   unfold RecCoins.Files.stmt at h
   split at h
   · rename_i x hx
@@ -333,7 +333,7 @@ theorem c3_of_checks (hsp : ish.sparse.isSome = true)
   rcases HiddenExec.setupTables_okH innerTags_hiddenOutputs hpub with ⟨-, st₀, hst₀, -, hsts₀⟩ | ⟨hc1, -⟩
   · obtain rfl : st = st₀ := by simpa using hsts₀
     obtain ⟨hcc, hmm, hrr⟩ := setupHidden_same hst₀ (stmt_setupHidden hst')
-    rw [HiddenExec.setupHidden_parseC hst₀] at hc
+    rw [HiddenExec.setupHidden_parseC (HmOut.parse_isTmpl hc) hst₀] at hc
     cases hc
     obtain ⟨d, sh, hb, hic, -⟩ := commits_ok htr hreg hcs
     obtain ⟨hsh, hd⟩ := metaBound_ok (hmb.trans hb)

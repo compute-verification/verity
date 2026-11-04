@@ -22,7 +22,8 @@ For `suites.py`'s per-test verdicts it also records each test that passed (every
 seconds, each test that failed, and which of the suite's `test_*.py` files were opened while a test module was collected or
 its tests ran (under `"*"` when neither: a session fixture, a conftest). It deselects the tests `VERITY_SUITE_REUSE` names,
 whose passes `suites.py` reuses, and in an xdist worker it moves the longest tests (`VERITY_SUITE_HEAVY`) to the heads of the
-workers' shares: an order only, which parallel suites declare their outcomes don't depend on. It sets `VERITY_SUITE_MODULE` while a test module is collected or run, so the Pythons a test starts
+workers' shares: an order only, which parallel suites declare their outcomes don't depend on. Under `suites.py --files` it
+collects only the test files of the run's part (`VERITY_SUITE_PART`, `in_part`). It sets `VERITY_SUITE_MODULE` while a test module is collected or run, so the Pythons a test starts
 trace their own reads (`child/`), and in a child this process forks it writes each such read at once to `VERITY_SUITE_READS`
 (`child/verity_suite_reads.py`): a fork's memory never comes back, and one that ends through `os._exit` flushes nothing.
 
@@ -36,6 +37,7 @@ Two kinds of skip fail instead: one for an unreachable evidence store under a re
 from __future__ import annotations
 
 import atexit
+import hashlib
 import importlib.metadata
 import importlib.util
 import json
@@ -54,7 +56,8 @@ SLOW_S = 5.0
 STORE_UNREACHABLE = "the evidence store is not reachable"
 _STORE_REQUIRED = os.environ.get("VERITY_STORE_REQUIRED") == "1"
 _KEY = "verity_suite_guard"
-_ACTIVE = bool(os.environ.get("VERITY_SUITE_ROOT") and os.environ.get("VERITY_SUITE_REPORT"))
+_REPORT = os.environ.get("VERITY_SUITE_REPORT")
+_ACTIVE = bool(os.environ.get("VERITY_SUITE_ROOT") and _REPORT)
 
 _root = os.path.realpath(os.environ.get("VERITY_SUITE_ROOT", ""))
 _watch = frozenset(os.path.normpath(os.path.join(_root, p)) for p in json.loads(os.environ.get("VERITY_SUITE_WATCH", "[]")))
@@ -72,8 +75,8 @@ _current = "*"                                                   # the test modu
 _test = ""                                                       # the node id of the test running, if one is
 _reads: dict[str, set[str]] = {}                                 # test module (or "*") -> other test modules it opened
 #: node id -> seconds of its setup and call, None once a phase did not pass. Setup counts: a module-scoped fixture's setup goes
-#: to the first test that needs it, and ordering by call alone started those late (test_lean_witness, 12 Oct: 138 s of calls
-#: behind 1,270-1,475 s of `f1` setup per worker). A test enters only once its call passed: one stopped mid-call never counts
+#: to the first test that needs it, and ordering by call alone started those late (a module with 138 s of calls behind
+#: 1,270-1,475 s of fixture setup per worker). A test enters only once its call passed: one stopped mid-call never counts
 _outcomes: dict[str, float | None] = {}
 _setup_s: dict[str, float] = {}                                  # node id -> seconds of its passed setup, until its call reports
 _failed: set[str] = set()
@@ -286,6 +289,35 @@ def pytest_collection_modifyitems(session, config, items) -> None:
         items[:] = [items[i] for i in order]
 
 
+def _load_part() -> tuple[str, tuple[set[int], int, frozenset, frozenset]] | None:
+    if not (_ACTIVE and (f := os.environ.get("VERITY_SUITE_PART"))):
+        return None
+    with open(f) as fh:
+        p = json.load(fh)
+    return p["dir"], (set(p["ks"]), p["m"], frozenset(p["mine"]), frozenset(p["every"]))
+
+
+_part = _load_part()
+
+
+def in_part(rel: str, ks: set[int], m: int, mine: frozenset, every: frozenset) -> bool:
+    """Whether test file ``rel`` (from the suite's directory) is in parts ``ks`` of ``m``: by `suites.partition`'s assignment
+    (``mine`` of ``every``), and a file pytest collects that it doesn't list by its path's hash, so every file the suite's own
+    collection finds runs in exactly one part."""
+    if rel in every:
+        return rel in mine
+    return int(hashlib.sha256(rel.encode()).hexdigest()[:8], 16) % m + 1 in ks
+
+
+def pytest_ignore_collect(collection_path, config):
+    """Under `suites.py --files` (`VERITY_SUITE_PART`): a test file outside the run's part isn't collected, nor imported."""
+    name = collection_path.name
+    if _part is None or not name.endswith(".py") or not (name.startswith("test_") or name.endswith("_test.py")):
+        return None
+    rel = os.path.relpath(collection_path, _part[0]).replace(os.sep, "/")
+    return None if in_part(rel, *_part[1]) else True
+
+
 def _ours(name: str) -> bool:
     """Whether module ``name``'s top-level package is this checkout's: it resolves inside `VERITY_SUITE_ROOT` and outside
     site-packages, which a workspace's venv may put inside the tree."""
@@ -315,7 +347,7 @@ def importorskip(modname: str, minversion: str | None = None, reason: str | None
             pytest.fail(f"pytest.importorskip({modname!r}): {e.name} is not importable, and {e.name.partition('.')[0]} is this "
                         "checkout's, so it moved or is gone. Import it from where it is now, plainly: importorskip is for a "
                         "third-party package an install may lack", pytrace=False)
-    except Exception:
+    except Exception:  # noqa: BLE001  (any other failure is pytest's importorskip's to report, below)
         pass
     return _pytest_importorskip(modname, minversion, reason, exc_type=exc_type)
 
@@ -394,5 +426,5 @@ def pytest_sessionfinish(session, exitstatus) -> None:
                           "watched": sorted(_watched), "passed": passed, "failed": sorted(_failed), "reads": reads, **used,
                           "traced": sorted(_traced), "untraced": {m: sorted(v) for m, v in sorted(untraced.items())}},
                          indent=1)
-    with open(os.environ["VERITY_SUITE_REPORT"], "w") as f:
+    with open(_REPORT, "w") as f:
         f.write(payload)

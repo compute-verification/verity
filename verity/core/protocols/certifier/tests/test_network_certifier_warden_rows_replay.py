@@ -6,8 +6,8 @@ windows and directions, and a certificate the warden signed over another digest,
   wiring, so a crossed, duplicate or padding read, and a wiring the warden didn't sign, are refused, and no read carries
   log2 N bits.
 
-The link-window is synthetic: connection A (ordinal 0) holds rows 0 and 1, connection B (ordinal 1) row 0, so row 1's
-last r slots are padding (empty: cells no connection sent)."""
+The execution phase is synthetic: connection A (ordinal 0) holds rows 0 and 1, connection B (ordinal 1) row 0, so row
+1's last r slots are padding (empty: cells no connection sent)."""
 from __future__ import annotations
 
 import dataclasses

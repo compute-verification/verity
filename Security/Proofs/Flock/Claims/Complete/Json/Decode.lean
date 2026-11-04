@@ -88,7 +88,7 @@ def streamRec (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array 
 
 /-- **The honest record, decoded.** -/
 def sessOf (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray) (points : Array (Array F128))
-    (streams : Array (Array Round)) (proofs : Array ByteArray) : Session :=
+    (streams : Array (Array Round)) (proofs : Array ByteArray) : RunRecord :=
   { rootF := spec.sigma, rootB, publics := spec.tables.map fun _ => ByteArray.empty, points, y := yOf spec,
     streams := (spec.repStreams.zip streams).map (streamRec spec h rootB),
     proofSha := (spec.repStreams.zip proofs).map fun q => (q.1.2.2, hexOf (dgOf spec h q.2)) }
@@ -152,7 +152,7 @@ theorem decode_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray
       rintro ⟨hn, hg, D, hD, hDs⟩ hdvs
       simp only [Option.getD_some] at hdvs
       have hn' : dv ≠ Json.null := fun e => hn (same_null (e ▸ hdvs.symm))
-      obtain ⟨c, hc⟩ := S.canon_ok d hg
+      obtain ⟨c, hc, -⟩ := S.canon_ok d hg
       have hc' : canon dv = .ok c := by rw [← S.canon_same _ _ hdvs, hc]
       rw [ho₂ hn']
       simp only [Draw.check, hc, hc', ok_bind, bne_self_eq_false, Bool.false_eq_true, ite_false, hD, hDs]

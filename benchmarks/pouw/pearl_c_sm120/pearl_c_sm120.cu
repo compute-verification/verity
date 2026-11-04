@@ -306,7 +306,7 @@ template <int MODE, int TM, int BN, int G, int RB = BK, int PF = 0> DEV void gem
   }
 }
 
-// The 128 x 128 GEMMs on bc-fb55a759's mainloop (mainloop_sm120.cuh: TMA into 3 stages of 128 bytes of depth, a producer
+// The 128 x 128 GEMMs on the TMA mainloop (mainloop_sm120.cuh: TMA into 3 stages of 128 bytes of depth, a producer
 // warpgroup, 8 consumer warps of 64 x 32, the chain word for word gemm_body's), with gemm_body's epilogues.  p10 the four
 // tensor maps (ml::Maps; P_A, P_B the peel's, else A, B again).
 constexpr int ML_NT = 384;
