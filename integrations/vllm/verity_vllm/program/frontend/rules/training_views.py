@@ -229,7 +229,7 @@ def _permute_dims(node, rank: int) -> tuple[int, ...]:
 @dataclass(eq=False)
 class StaticFloat:
     """A float tensor the step fixes without reading a value (a literal, the causal mask, a fill), as torch computes it on the CPU;
-    it becomes constant gates only where an op reads it."""
+    it becomes constant gates only where an op reads it. A bf16 one is held as the f32 tensor of its values."""
     tensor: torch.Tensor
 
     def __repr__(self) -> str:
@@ -288,8 +288,8 @@ class StaticFloats(ViewRule):
     any tensor: only its shape is read), `full` / `ones` / `zeros`, `where.self` of a static condition and static values, and views
     of these, computed by torch on the CPU (`StaticFloat`)."""
     info = _info("StaticFloats", "aten float makers, fills, where.self of static operands, and views of static float tensors",
-                 "the result is float32", "every operand read for its value is static", "no gates: constants are made where read",
-                 kind="view")
+                 "the result is float32 or bfloat16", "every operand read for its value is static",
+                 "no gates: constants are made where read", kind="view")
 
     def targets(self):
         return _MAKERS | _VIEWS
@@ -305,8 +305,8 @@ class StaticFloats(ViewRule):
         return a
 
     def applies(self, node, ctx):
-        if ctx.dtype_of(node) != torch.float32:
-            return "the result is not float32"
+        if ctx.dtype_of(node) not in (torch.float32, torch.bfloat16):
+            return "the result is not float32 or bfloat16"
         t = node.target
         if t in _VIEWS:
             return True if isinstance(ctx.val(node.args[0]), StaticFloat) else "the operand is not a static float tensor"
@@ -330,7 +330,7 @@ class StaticFloats(ViewRule):
                     aten.full.default: lambda: node.args[1], aten.ones.default: lambda: 1.0, aten.zeros.default: lambda: 0.0,
                     aten.fill.Scalar: lambda: node.args[1]}[t]()
             out = torch.full(S, fill, dtype=torch.float32)
-        out = out.to(torch.float32).contiguous()
+        out = out.to(ctx.dtype_of(node)).to(torch.float32).contiguous()
         if tuple(out.shape) != tuple(S):
             refuse("shape", node, ctx.module_path(node), f"static {list(out.shape)} vs {list(S)}")
         ctx.define(node, StaticFloat(out))

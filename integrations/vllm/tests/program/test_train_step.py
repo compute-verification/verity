@@ -1,9 +1,10 @@
 """The training-step frontend (`program.frontend.train_step`, `derive_graph`, the training rules): each training rule's Program run
-on small CPU tensors of even and odd lengths, bit for bit against torch where the rule states torch CPU's own f32 operation, and
-where the reference vocabulary's arithmetic is its own (sequential sums, a correctly rounded exp) bit for bit against the rule's
-stated arithmetic, composed from the evaluators of the Definitions it names, and to a tolerance against torch; the functional AdamW
-against `torch.optim.AdamW(foreach=False)`; `BoxPermute` against torch's permute; and the lf model's s step derived in reference
-mode, which is refused at its one op with no Definition (`_log_softmax`: `F32LogRn`)."""
+on small CPU tensors of even and odd lengths, bit for bit against torch where the rule states torch CPU's own f32 operation (in
+bf16, its f32 operation on the widened operands rounded once), and where the reference vocabulary's arithmetic is its own
+(sequential sums, a correctly rounded exp) bit for bit against the rule's stated arithmetic, composed from the evaluators of the
+Definitions it names, and to a tolerance against torch; the functional AdamW against `torch.optim.AdamW(foreach=False)`;
+`BoxPermute` against torch's permute; the tiny step in f32 and in bf16 (its linears' operands cast, as autocast casts them); and
+the lf model's s step derived in reference mode, which is refused at its one op with no Definition (`_log_softmax`: `F32LogRn`)."""
 from __future__ import annotations
 
 import bisect
@@ -51,6 +52,8 @@ def _bits(x: torch.Tensor) -> list[int]:
     x = x.detach().contiguous().reshape(-1)
     if x.dtype == torch.float32:
         return x.view(torch.int32).numpy().astype(np.uint32).tolist()
+    if x.dtype == torch.bfloat16:
+        return x.view(torch.int16).numpy().astype(np.uint16).tolist()
     return [int(v) & ((1 << (8 * x.element_size())) - 1) for v in x.tolist()]
 
 
@@ -67,10 +70,10 @@ class _IeeeSqrt(TorchDispatchMode):
 
 
 def _run(f, *xs) -> tuple[torch.Tensor, torch.Tensor]:
-    """(the Program's outputs, torch's with IEEE sqrt), each as one flat f32 tensor."""
+    """(the Program's outputs, torch's with IEEE sqrt), each as one flat f32 tensor (bf16 words widened)."""
     prog = _program(f, *xs)
     tab = materialize(prog, [_bits(x) for x in xs])
-    got = np.array([tab[g] for g in prog.circuit.root_outputs()], dtype=np.uint32).view(np.float32)
+    got = np.array([tab[g] << 32 - gate_width(prog, g) for g in prog.circuit.root_outputs()], dtype=np.uint32).view(np.float32)
     with _IeeeSqrt():
         want = torch.cat([t.detach().reshape(-1).float() for t in f(*xs)])
     return torch.from_numpy(got.copy()), want
@@ -103,6 +106,7 @@ ROW, COL = _data(16, seed=3), _data(4, 1, seed=4)
 #: odd lengths, where torch's vectorized loops end in a scalar tail: 67 elements, and rows of 67
 X67, Y67, POS67 = _data(67, seed=8), _data(67, seed=9), _data(67, positive=True, seed=10)
 M67, N67, ROW67, COL3 = _data(3, 67, seed=11), _data(3, 67, seed=12), _data(67, seed=13), _data(3, 1, seed=14)
+XB, POSB, X67B, M67B = (t.to(torch.bfloat16) for t in (X, POS, X67, M67))
 
 
 def _elementwise(x, y, pos, m, row, col) -> dict:
@@ -133,10 +137,40 @@ def _elementwise(x, y, pos, m, row, col) -> dict:
     }
 
 
+def _elementwise_bf16(x, y, pos, m, row, col) -> dict:
+    """The element-wise cases of bf16 values (the f32 inputs rounded) that torch's bf16 kernels compute as one f32 operation rounded
+    to bf16, numbers bf16 holds among them, and of a bf16 and an f32 value, which torch computes in f32."""
+    xb, yb, pb, mb, rb, cb = (t.to(torch.bfloat16) for t in (x, y, pos, m, row, col))
+    return {
+        "add": (lambda a, b: (a + b,), (xb, yb)),
+        "sub": (lambda a, b: (a - b,), (xb, yb)),
+        "mul": (lambda a, b: (a * b,), (xb, yb)),
+        "div": (lambda a, b: (a / b,), (xb, pb)),
+        "add_scalar": (lambda a: (a + 0.375,), (xb,)),
+        "sub_scalar": (lambda a: (a - 1.5,), (xb,)),
+        "mul_scalar": (lambda a: (a * 0.375,), (xb,)),
+        "div_scalar": (lambda a: (a / 3.0,), (xb,)),
+        "one_minus": (lambda a: (torch.empty_like(a).fill_(1.0) - a,), (xb,)),
+        "mul_row": (lambda a, r: (a * r,), (mb, rb)),
+        "mul_col": (lambda a, c: (a * c,), (mb, cb)),
+        "neg": (lambda a: (-a,), (xb,)),
+        "sqrt": (lambda a: (torch.sqrt(a),), (pb,)),
+        "reciprocal": (lambda a: (torch.reciprocal(a),), (pb,)),
+        "pow2": (lambda a: (a ** 2,), (xb,)),
+        "pow_half": (lambda a: (a ** 0.5,), (pb,)),
+        "pow_m1": (lambda a: (a ** -1,), (pb,)),
+        "mul_mixed": (lambda a, b: (a * b,), (xb, y)),
+        "add_mixed": (lambda a, b: (a + b,), (x, yb)),
+        "mul_row_mixed": (lambda a, r: (a * r,), (mb, row)),
+    }
+
+
 #: the rules torch CPU computes with the same f32 operations: bit for bit
 EXACT = {
     **_elementwise(X, Y, POS, X, ROW, COL),
     **{f"{k}_67": case for k, case in _elementwise(X67, Y67, POS67, M67, ROW67, COL3).items()},
+    **{f"{k}_bf16": case for k, case in _elementwise_bf16(X, Y, POS, X, ROW, COL).items()},
+    **{f"{k}_bf16_67": case for k, case in _elementwise_bf16(X67, Y67, POS67, M67, ROW67, COL3).items()},
     "nll_backward": (lambda go, logp, t, tw: (aten.nll_loss_backward(go, logp, t, None, 1, -100, tw),),
                      (torch.tensor(1.0), X, torch.tensor([3, 0, 15, 7]), torch.tensor(4.0))),
     "nll_backward_ignored": (lambda go, logp, t, tw: (aten.nll_loss_backward(go, logp, t, None, 1, 0, tw),),
@@ -207,6 +241,20 @@ def _exp_scaled(x):
 def _sigmoid(x):
     """`Unary`'s sigmoid: `F32Div_v1(1, F32Add_v1(F32ExpRn_v1(F32Neg_v1(x)), 1))`."""
     return [P.F32Div.evaluate(ONE, P.F32Add.evaluate(R.F32ExpRn.evaluate(SC.F32Neg.evaluate(v)), ONE)) for v in _bits(x)]
+
+
+def _exp(x):
+    """`Unary`'s exp: `F32ExpRn_v1(x)`."""
+    return [R.F32ExpRn.evaluate(v) for v in _bits(x)]
+
+
+def _in_bf16(ref):
+    """`ref`'s f32 arithmetic on bf16 operands, as the bf16 rules compute it: each word widened (`Bf16ToF32_v1`), each result rounded
+    (`F32ToBf16Rn_v1`), the bf16 word read as `_run` reads it (widened)."""
+    def widen(x):
+        w = np.array([P.Bf16ToF32.evaluate(v) for v in _bits(x)], dtype=np.uint32)
+        return torch.from_numpy(w.view(np.float32).reshape(tuple(x.shape)).copy())
+    return lambda *xs: [P.F32ToBf16Rn.evaluate(v) << 16 for v in ref(*map(widen, xs))]
 
 
 def _safe_softmax(x):
@@ -295,6 +343,14 @@ CLOSE = {
                             _nll_forward(0)),
     "nll_forward_67": (lambda logp, t: aten.nll_loss_forward(logp, t, None, 1, -100),
                        (_data(5, 67, seed=18), torch.tensor([3, -100, 66, 7, 0])), _nll_forward(-100)),
+    "sigmoid_bf16": (lambda x: (torch.sigmoid(x),), (XB,), _in_bf16(_sigmoid)),
+    "sigmoid_bf16_67": (lambda x: (torch.sigmoid(x),), (X67B,), _in_bf16(_sigmoid)),
+    "exp_bf16": (lambda x: (torch.exp(x),), (XB,), _in_bf16(_exp)),
+    "mm_bf16": (lambda a, b: (a @ b,), (XB, _data(16, 8, seed=5).to(torch.bfloat16)), _in_bf16(_mm)),
+    "mm_bf16_67": (lambda a, b: (a @ b,), (M67B, _data(67, 5, seed=15).to(torch.bfloat16)), _in_bf16(_mm)),
+    "bmm_bf16": (lambda a, b: (torch.bmm(a, b),),
+                 (_data(2, 4, 16, seed=6).to(torch.bfloat16), _data(2, 16, 4, seed=7).to(torch.bfloat16)),
+                 _in_bf16(lambda a, b: [w for i in range(a.shape[0]) for w in _mm(a[i], b[i])])),
 }
 
 
@@ -322,8 +378,9 @@ def test_rule_is_its_stated_arithmetic(name: str) -> None:
 
 @pytest.mark.parametrize("name", sorted(CLOSE))
 def test_rule_close(name: str) -> None:
+    """Against torch: f32 to a few ulps; bf16 to about one bf16 ulp, where the f32 results' difference crosses a rounding."""
     got, want = _close(name)
-    torch.testing.assert_close(got, want, rtol=2e-6, atol=1e-6)
+    torch.testing.assert_close(got, want, **(dict(rtol=1e-2, atol=1e-5) if "_bf16" in name else dict(rtol=2e-6, atol=1e-6)))
 
 
 def test_log_softmax_refused_with_the_definition_it_needs() -> None:
@@ -331,6 +388,18 @@ def test_log_softmax_refused_with_the_definition_it_needs() -> None:
     rep = derive_graph(gm, (X,), mode="reference", rules=training_rules(), name="T")
     u = rep.unsupported
     assert isinstance(u, Unsupported) and u.reason == "numerics_unregistered" and "F32LogRn" in u.hint, u
+
+
+@pytest.mark.parametrize("f, x, why", [
+    (lambda a: (a ** 3,), XB, "rounds in between"), (lambda a: (a ** -2,), POSB, "rounds in between"),
+    (lambda a: (torch.rsqrt(a),), POSB, "rounds in between"), (lambda a: (a ** -0.5,), POSB, "rounds in between"),
+    (lambda a: (a + 0.1,), XB, "bf16 doesn't hold"), (lambda a: (a * 0.1,), XB, "bf16 doesn't hold")])
+def test_bf16_rounding_in_between_is_refused(f, x, why: str) -> None:
+    """Where torch's bf16 kernel rounds otherwise than once after one f32 operation, the rules refuse: `pow` 3 and -2 round the
+    square to bf16, `rsqrt`'s scalar loop the square root, and `add` rounds a number to bf16 where `mul` keeps its f32 value."""
+    gm = make_fx(f, tracing_mode="fake")(x)
+    u = derive_graph(gm, (x,), mode="reference", rules=training_rules(), name="T").unsupported
+    assert isinstance(u, Unsupported) and u.reason == "numerics_unregistered" and why in u.hint, u
 
 
 def _adamw_inputs(seed: int = 0, n: int = 64):
@@ -409,6 +478,24 @@ def test_tiny_step_survey_lists_its_one_hole_and_holds_no_program() -> None:
     assert s.census["totals"]["gates"] > 0 and "F32Add_v1" in s.primitives
     assert s.theta["names"] == [f"param_{n}".replace(".", "_") for n in layout.params]
     assert s.theta["bits"] == 32 * sum(p.numel() for p in model.parameters())
+
+
+def test_tiny_bf16_step() -> None:
+    """The tiny step with its linears' operands cast to bf16, as bf16 autocast casts them (`LM(matmul_dtype=torch.bfloat16)`). With
+    the log-free loss every op derives, and each bf16 matrix product is `LinearRef_v1` rows of bf16 words (attention's are f32:
+    torch's math path computes it from upcast operands); with the cross-entropy the survey's one hole is `_log_softmax`, as in f32,
+    and the casts are among the primitives."""
+    model, batch = meta_step("tiny", 2, ctx=16, vocab=64, matmul_dtype=torch.bfloat16)
+    opt = AdamW(**ADAMW)
+    ex = export_step(model, square_loss, opt, batch)
+    prog = step_report(model, square_loss, opt, batch, exported=ex).result
+    assert not isinstance(prog, Unsupported), prog
+    bf16 = ["DT='bf16'" in nd.fn.id for nd in prog.root.body.nodes if nd.fn.id.startswith("LinearRef_v1")]
+    mms = sum(n.target is aten.mm.default and n.meta["val"].dtype == torch.bfloat16 for n in ex[0].graph.nodes)
+    assert sum(bf16) == mms > 0 and not all(bf16), (sum(bf16), len(bf16), mms)
+    s = step_report(model, loss_fn, opt, batch, survey=True, exported=export_step(model, loss_fn, opt, batch))
+    assert [(h["op"], h["reason"]) for h in s.holes] == [("aten._log_softmax.default", "numerics_unregistered")]
+    assert {P.Bf16ToF32.id, P.F32ToBf16Rn.id} <= set(s.primitives)
 
 
 def test_tiny_step_theta_is_the_parameters() -> None:
