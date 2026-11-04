@@ -6,7 +6,8 @@ verdicts, valid ones and one or two changes to each. A disagreement is the Pytho
 The Python held to it is `one_stage` itself (`registration.check`, `draw.derive`, `check_draw`, `audit.audit_record`, `profile`,
 `wrong_units`, `registered.registered_entries` and `domain`) behind the protocol's decoders, which this file writes as the
 Lean reads them (`OneStage.paramsOfJson`, `commitmentOf`, `evidenceOf`), for the `draw` piece `coins.draw_first` on
-`OwnRandomness` over the given bytes, for the `select` piece the challenger's sample from a Spec's selection rule on
+`OwnRandomness` over the given bytes, for the `link_points` piece `link_points` (its law held as `draw_first` holds
+one, `coins.law_problem`), for the `select` piece the challenger's sample from a Spec's selection rule on
 (`service.selection_law`, `draw.derive` and `service.select_draw` on fixed coins, with the bytes it read), for the
 `slots` piece that sample in the claims' slots, read off `partition.strata`, `partition.unit_gates` and the root's input
 nodes (`slots`), for the `hidden_offsets`, `hidden_locate` and `hidden_witness` pieces `hidden_draw` on honest and
@@ -55,21 +56,22 @@ import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.core.protocols.pouw import audit as PA
 from verity.core.protocols.pouw.protocol import tagged
-from verity.core.protocols.profile import Bernoulli, Stratified, Stratum
+from verity.core.protocols.profile import Bernoulli, Stratified, Stratum, work_k
 from verity.core.protocols.sampled_proofs import service
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
-                                                            partition as P, produced as PD, registered as G,
-                                                            registration as R)
-from verity.core.protocols.sampled_proofs.challenger import (COIN_BYTES, NO_TREE, SHARED_TREE, UNUSED_TREE,
-                                                             ChallengerKey, CoinError)
-from verity.core.protocols.sampled_proofs.coins import OwnRandomness, coins_reason, draw_coins, draw_first
+                                                            link_points as LP, partition as P, produced as PD,
+                                                            proofs as PF, registered as G, registration as R)
+from verity.core.protocols.sampled_proofs.challenger import (COIN_BYTES, NO_TREE, SAMPLE_LINK_FIRST, SHARED_TREE,
+                                                             UNUSED_TREE, ChallengerKey, CoinError, sample_link_first)
+from verity.core.protocols.sampled_proofs.coins import OwnRandomness, coins_reason, draw_coins, draw_first, law_problem
+from verity.core.protocols.sampled_proofs.coins import ran_out as draw_ran_out
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program, input_id, is_input
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, RecordType, Tuple, Value
 
-from test_challenger_difftest import DRAW_MUTATIONS, Drawn, _flip, _mutated, lms_verify
+from test_challenger_difftest import DRAW_MUTATIONS, ORDERS, Drawn, _flip, _mutated, lms_verify
 
 PACKAGE = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -601,7 +603,8 @@ def _registered_reads(verdicts: dict) -> None:
 def _registration(p: dict, rec) -> tuple[str, ...]:
     return R.check(rec, p["program"], p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
-                   p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held")).codes
+                   p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
+                   p.get("link_members", ())).codes
 
 
 def _coins_of(p: dict, c: tuple[dict, bytes], e: dict) -> bytes | None:
@@ -667,6 +670,17 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
     public = {"bound": wrong["bound"], "drawn": list(e["draw"]["units"]),
               "per_template": wrong.get("per_template"), "proved": DR.proved(e["draw"])}
     return "accept", public, {**profile, "delta": str(profile["delta"])}
+
+
+def _ran_out(p: dict, rec: dict, src: bytes) -> bool:
+    """`OneStage.ranOut`: whether the coins `src` run out before the draw under the verifier's law as derived ends
+    (`coins.ran_out`); false when the law doesn't derive, the record names no population or the draw refuses otherwise."""
+    if not _nat(rec.get("population")):
+        return False
+    try:
+        return draw_ran_out(DR.derive(p["program"], p["query"], p["law"], p["work_table"]), rec["population"], src)
+    except (P.QueryRefused, ValueError, TypeError):
+        return False
 
 
 def covered_params(j) -> dict:
@@ -850,6 +864,22 @@ def draw(j):
         raise D.Reject(str(e)) from None
 
 
+def ran_out(j):
+    """`coins.ran_out` on `draw`'s input: whether that draw runs out of the source's bytes; refused where `draw` is."""
+    j = _json(j)
+    if not isinstance(j, dict) or not isinstance(j.get("law"), dict):
+        raise D.Reject("law is not an object")
+    if not _nat(j.get("population")):
+        raise D.Reject("population is not a natural number")
+    if not isinstance(j.get("source"), str):
+        raise D.Reject("source is not hex")
+    src = PR.unhex(j["source"])
+    try:
+        return {"ran_out": draw_ran_out(j["law"], j["population"], src)}
+    except (ValueError, TypeError) as e:
+        raise D.Reject(str(e)) from None
+
+
 def _rule(j) -> service.Selection:
     """`Select.Rule.ofJson`: a selection rule as `to_json` writes it, exactly its keys, of the kinds a `Stream` runs."""
     kind = j.get("rule") if isinstance(j, dict) else None
@@ -952,6 +982,46 @@ def pop_order(j):
         raise RuntimeError(f"the strategy drew a descriptor this file has no program for: {sha[:16]}")
     ok = P.in_order(PROGRAMS[sha], query, n)
     return {"layout": ok, "ranges": ok}
+
+
+def public_units(j):
+    """Whether a public file's ``indices`` are exactly the ``[lo, hi)`` ranges ``units``' units, ascending
+    (`proofs.units_exactly`, `PublicUnits.exactly`)."""
+    j = _json(j)
+    units, indices = (j.get("units"), j.get("indices")) if isinstance(j, dict) else (None, None)
+    if not (isinstance(units, list)
+            and all(isinstance(r, list) and len(r) == 2 and all(map(_nat, r)) and r[0] < r[1] for r in units)):
+        raise D.Reject("units is not a list of [lo, hi] with 0 <= lo < hi")
+    if not (isinstance(indices, list) and all(map(_nat, indices))):
+        raise D.Reject("indices is not a list of natural numbers")
+    return {"exactly": PF.units_exactly(units, indices)}
+
+
+def link_points(j):
+    """Each member's fewest and most drawn units under the law over the population when the draw ends (None where none
+    does), and the members whose link points differ (`link_points.bounds`, `refused`; Lean `LinkPoints.piece`)."""
+    j = _json(j)
+    if not (isinstance(j, dict) and _nat(j.get("population"))):
+        raise D.Reject("the population is not a natural number")
+    law, n = j.get("law"), j["population"]
+    if not isinstance(law, dict) or (why := law_problem(law, n)):
+        raise D.Reject(f"the law: {why}" if isinstance(law, dict) else "the law is not an object")
+    if not isinstance(j.get("members"), list):
+        raise D.Reject("the members are not a list")
+    members = []
+    for m in j["members"]:
+        if not (isinstance(m, dict) and _nat(m.get("vus_per_block"))):
+            raise D.Reject("a member's vus_per_block is not a natural number")
+        us = m.get("units")
+        if not (isinstance(us, list) and us and all(isinstance(r, list) and len(r) == 2 and all(map(_int, r))
+                                                    and 0 <= r[0] < r[1] for r in us)):
+            raise D.Reject("a member's units are not a nonempty list of [lo, hi] with 0 <= lo < hi")
+        members.append((us, m["vus_per_block"]))
+    try:
+        return {"bounds": [None if b is None else list(b) for b in LP.bounds(law, n, members)],
+                "refused": LP.refused(law, n, members)}
+    except ValueError as e:
+        raise D.Reject(str(e)) from None
 
 
 def bound(j):
@@ -1965,6 +2035,11 @@ def _sha(b: bytes) -> str:
 #: `OneStageZk.NO_CHALLENGER`
 NO_CHALLENGER = ("the parameters name no challenger: the draw's coins are the auditor's challenger's signed release "
                  "(challenger, with window_root), never the prover's record")
+#: `OneStageZk.MULTI_REFUSED`
+MULTI_REFUSED = ("the per-member form (proofs.members) is refused until the guarantee for a sample over several members' "
+                 "statements under one draw is in the lock: verify one statement (proofs {circuit, registered})")
+#: `OneStageZk.RAN_OUT`
+WINDOW_RAN_OUT = "the draw ran out of the challenger's coins: the window fails, with no retry and no redraw"
 
 
 def decode_params_v2(j) -> dict:
@@ -1977,11 +2052,12 @@ def decode_params_v2(j) -> dict:
     return p
 
 
-def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: int = 1) -> tuple[Drawn, dict, dict]:
+def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: int = 1,
+                     order: str = "honest") -> tuple[Drawn, dict, dict]:
     """A draw under `law` from the coins of a challenger session its ledger opens withheld, released after `rec`'s
     digest and read as `draw_first` reads them, the session's challenger sampling and opening `trees` coin trees too
-    (`TreeSession`): the session, the draw, and the evidence's `coins` (the session's record without the key, which the
-    verifier's parameters name)."""
+    (`TreeSession`), its log in `order` (`ORDERS`): the session, the draw, and the evidence's `coins` (the session's
+    record without the key, which the verifier's parameters name)."""
     mine = DR.derive(s.program, s.query, law, None)
 
     def reads(coins) -> bytes:
@@ -1993,7 +2069,7 @@ def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: 
             return b
         draw_first(OwnRandomness(source), mine, s.population)
         return bytes(got)
-    d = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=reads, trees=trees)
+    d = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=reads, trees=trees, order=order)
     at = [0]
 
     def source(k: int) -> bytes:
@@ -2001,6 +2077,25 @@ def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: 
         return d.read[at[0] - k:at[0]]
     coins = {k: v for k, v in d.evidence(d.segment.to_json()).items() if k != "key"}
     return d, draw_first(OwnRandomness(source), mine, s.population), coins
+
+
+def _challenger_audit(server, rng: random.Random, s: Setup, law: dict, rec: dict, trees: int,
+                      order: str = "honest") -> tuple[Drawn, dict, dict, dict]:
+    """An audit v1 accepts on the verdict its evidence hands in and the coins of a challenger sampling `trees` coin
+    trees, its log in `order` (`_challenger_draw`): the challenger's session, v1's evidence, that evidence without its
+    verdicts, and v1's parameters naming the challenger, v2's without its `proofs`."""
+    ch, d, coins = _challenger_draw(rng, s, law, rec, trees, order)
+    proved = DR.proved(d)
+    evidence = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
+                "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
+    params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
+              "law": law, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
+              "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
+              "window_root": ch.ledger.window["root"], "work_table": None}
+    v1 = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
+    assert D.replay(ONE_STAGE, v1, server)[0] == "accept"
+    return ch, evidence, {k: v for k, v in evidence.items() if k != "verdicts"}, params
 
 
 def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
@@ -2020,18 +2115,7 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     circuit, public = b"not a circuit file", b"not a public file"
 
     def audit(trees: int) -> tuple[Drawn, dict, dict, dict]:
-        ch, d, coins = _challenger_draw(rng, s, law, rec, trees)
-        proved = DR.proved(d)
-        evidence = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
-                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
-                    "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
-        params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
-                  "law": law, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
-                  "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
-                  "window_root": ch.ledger.window["root"], "work_table": None}
-        v1 = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
-        assert D.replay(ONE_STAGE, v1, server)[0] == "accept"
-        base = {k: v for k, v in evidence.items() if k != "verdicts"}
+        ch, evidence, base, params = _challenger_audit(server, rng, s, law, rec, trees)
         return ch, evidence, base, params | {"proofs": {"circuit": _sha(circuit), "registered": None}}
 
     ch, evidence, base, p2 = audit(1)
@@ -2067,6 +2151,268 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
         "reject", "evidence: proofs: the sessions are not the evidence's sessions, in order")
     got = run(base | {"proofs": proofs([])}, p={k: v for k, v in p2.items() if k != "proofs"})
     assert got[0] == "reject" and got[1].startswith("params: the parameters name no proofs"), got
+
+
+def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
+    """v2 holds its challenger session's release log to the sample, then the link, then the other rounds
+    (`OneStageZk.orderHeld`, `Challenger.sampleLinkFirst`) before any session's record is read. Of three audits v1
+    accepts, their coin trees all as the challenger logged them: the honest log goes on to its session's verdict; one
+    releasing a coin of the sample after a tree's link is opened (`sample-late`), and one whose first round opened is
+    of another stream than the link's (`link-late`), are refused (`SAMPLE_LINK_FIRST`). The Python twin
+    (`challenger.sample_link_first`) agrees; `test_challenger_difftest.py` holds it to Lean's piece."""
+    s = SETUPS[3]
+    law = {"k": 2, "law": "subset"}
+    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                   WINDOW, leaf_layer=LEAF)
+    circuit, public = b"not a circuit file", b"not a public file"
+    for order in ORDERS:
+        ch, _, base, p = _challenger_audit(server, random.Random(f"v2-order-{order}"), s, law, rec, 1, order)
+        record = D.canonical(ch.trees[0].record).encode()
+        proofs = {"public": _sha(public), "sessions": [{"name": "s", "record": _sha(record), "reps": {}}]}
+        case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec),
+                "evidence": _hex(base | {"proofs": proofs, "sessions": ["s"]}),
+                "params": p | {"proofs": {"circuit": _sha(circuit), "registered": None}}}
+        out = server_v2.exchange(_json(case))
+        want = ("verdict flock-verify/s did not accept" if order == "honest"
+                else f"proofs: coins: {SAMPLE_LINK_FIRST}")
+        assert (out["verdict"], out["reason"]) == ("reject", want), order
+        assert sample_link_first("draw", bytes.fromhex(R.digest(rec)), ch.s.lines[1:]) == (order == "honest"), order
+
+
+#: `OneStageZk.membersHeld`'s reason for a statement of other than exactly one session.
+ONE_SESSION = "a statement is exactly one session on live coins, never retried, and an undrawn member has no statement"
+#: `OneStageZk.runFrom`'s reason for a member's statement whose public file's units are not exactly its member's.
+NOT_EXACTLY = ("units: the public file's units.indices are not exactly the member's units, ascending: slot i of its "
+               "table is the member's i-th unit")
+
+
+def _public_file(*units: int) -> bytes:
+    """A public file's header line naming ``units``, all `OneStageZk.runFrom` reads before a session runs."""
+    return D.canonical({"units": {"indices": list(units)}}).encode() + b"\n"
+
+
+def test_v2_per_member_runs_each_statement_on_its_members_inputs(server, server_v2):
+    """v2's per-member form (`OneStageZk.runMembers`): parameters naming each member's units, circuit and registered
+    file, evidence naming one statement per drawn member, its sessions the evidence's in statement order. Parameters
+    whose members' units meet, that name no member, or a member with empty units, an empty name, other keys or units
+    a proof block not positive are refused, and so is evidence whose statement names no member or has other keys. The
+    audit v1 accepts is, with its proofs per member: rejected by the coin trees' check across statements (a tree no
+    statement's session used, or one serving two members' statements), by the session's own verdict on its member's
+    circuit (another member's circuit no blob holds is not read), and for a statement naming a member the parameters
+    don't, a statement of no session (an undrawn member has no statement), a circuit no blob holds, a public file whose
+    units are not exactly its member's in ascending order (shifted, reordered, short, another member's, or no units
+    header: `PublicUnits.exactly`, the `public_units` piece), proofs in the other form than the parameters', or proved
+    units the statements didn't prove.
+    The refusal of what would accept (`MULTI_REFUSED`) needs an accepted session: `stage_zk_one_statement` proves it."""
+    s, law = SETUPS[3], {"k": 2, "law": "subset"}
+    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                   WINDOW, leaf_layer=LEAF)
+    rng = random.Random("v2-members")
+    circuits = {"m0": b"not a circuit file", "m1": b"not another circuit file"}
+    publics = {"m0": _public_file(0, 1), "m1": _public_file(2, 3, 4)}
+    members = {"m0": {"circuit": _sha(circuits["m0"]), "registered": None, "units": [[0, 2]], "vus_per_block": 1},
+               "m1": {"circuit": _sha(circuits["m1"]), "registered": None, "units": [[2, 5]], "vus_per_block": 1}}
+    ch, _, base, p1 = _challenger_audit(server, rng, s, law, rec, 1)
+    _, _, base0, p0 = _challenger_audit(server, rng, s, law, rec, 0)
+    p1, p0 = (p | {"proofs": {"members": members}} for p in (p1, p0))
+    record = D.canonical(ch.trees[0].record).encode()
+    blobs = [circuits["m0"].hex(), circuits["m1"].hex(), publics["m0"].hex(), publics["m1"].hex(), record.hex()]
+
+    def run(e, p=p1, blobs_=blobs):
+        case = {"blobs": list(blobs_), "commitment": _hex(rec), "evidence": _hex(e), "params": p}
+        out = server_v2.exchange(_json(case))
+        return out["verdict"], out["reason"]
+
+    def sessions(names):
+        return [{"name": n, "record": _sha(record), "reps": {}} for n in names]
+
+    def statements(*sts, pubs=publics):
+        return {"statements": [{"member": m, "public": _sha(pubs.get(m, b"")), "sessions": sessions(ns)}
+                               for m, ns in sts]}
+
+    def per_member(*sts, b=base, pubs=publics):
+        return b | {"proofs": statements(*sts, pubs=pubs), "sessions": [n for _, ns in sts for n in ns]}
+
+    assert run(per_member()) == (
+        "reject", f"proofs: the challenger's release log shows 1 coin trees and the sessions use 0: {UNUSED_TREE}")
+    assert run(per_member(("m0", ["s"]))) == ("reject", "verdict flock-verify/s did not accept")
+    assert run(per_member(("m0", ["s"])), blobs_=blobs[:1] + blobs[2:]) == (
+        "reject", "verdict flock-verify/s did not accept")
+    got = run(per_member(("m1", ["s"])), blobs_=blobs[:1] + blobs[2:])
+    assert got[0] == "reject" and got[1].startswith("proofs: member m1: circuit: no blob has the SHA-512"), got
+    for pub, why in ((_public_file(1, 2), NOT_EXACTLY), (_public_file(1, 0), NOT_EXACTLY),
+                     (_public_file(0), NOT_EXACTLY), (_public_file(0, 1, 2), NOT_EXACTLY), (publics["m1"], NOT_EXACTLY),
+                     (b"not a public file", "the public file's header is not JSON"),
+                     (b'{"units":{}}\n', "the public file's header names no units.indices")):
+        assert run(per_member(("m0", ["s"]), pubs={"m0": pub}), blobs_=[*blobs, pub.hex()]) == (
+            "reject", f"proofs: member m0: {why}"), pub
+    assert run(per_member(("m0", ["s"]), ("m1", ["t"]))) == (
+        "reject", f"proofs: session t's coins are not the challenger's: {SHARED_TREE}")
+    assert run(per_member(("m2", ["s"]))) == ("reject", "proofs: member m2: the parameters name no such member")
+    assert run(per_member(("m0", []), b=base0), p=p0) == (
+        "reject", f"proofs: member m0: its statement has 0 sessions: {ONE_SESSION}")
+    assert run(per_member(b=base0), p=p0) == (
+        "reject", "proofs: the units the sessions proved are not the evidence's proved_units")
+    assert run(base | {"proofs": {"public": _sha(publics["m0"]), "sessions": sessions(["s"])}, "sessions": ["s"]}) == (
+        "reject", "proofs: the evidence's proofs are one statement's (public, sessions) and the parameters' per member "
+                  "(members)")
+    assert run(per_member(("m0", ["s"])), p=p1 | {"proofs": {"circuit": members["m0"]["circuit"], "registered": None}}) == (
+        "reject", "proofs: the evidence's proofs are per member (statements) and the parameters' one statement's "
+                  "(circuit, registered)")
+    assert run(per_member(("m0", ["s"]), ("m1", ["t"])) | {"sessions": ["t", "s"]}) == (
+        "reject", "evidence: proofs: the sessions are not the evidence's sessions, in order")
+    one = {"public": _sha(publics["m0"]), "sessions": []}
+    for proofs_, why in (({"statements": [one | {"member": ""}]}, "proofs: a statement's member is not a member's name"),
+                         ({"statements": [one]}, "the keys of a statement of the proofs are not member, public, sessions"),
+                         ({"statements": {}}, "proofs: statements is not a list")):
+        assert run(base0 | {"proofs": proofs_}, p=p0) == ("reject", f"evidence: {why}"), proofs_
+    m0 = members["m0"]
+    for proofs_, why in (({"members": {**members, "m1": m0 | {"units": [[1, 5]]}}},
+                          "proofs: unit 1 is in two members' units: a unit is one member's"),
+                         ({"members": {"m0": m0 | {"units": [[0, 2], [1, 2]]}}},
+                          "proofs: unit 1 is in two members' units: a unit is one member's"),
+                         ({"members": {}}, "proofs: members names no member"),
+                         ({"members": {"m0": m0 | {"units": []}}},
+                          "proofs: member m0's units are not a nonempty list of [lo, hi] with 0 <= lo < hi"),
+                         ({"members": {"m0": m0 | {"units": [[2, 2]]}}},
+                          "proofs: member m0's units are not a nonempty list of [lo, hi] with 0 <= lo < hi"),
+                         ({"members": {"": m0}}, "proofs: a member's name is empty"),
+                         ({"members": {"m0": m0 | {"pin": None}}},
+                          "the keys of member m0 are not circuit, registered, units, vus_per_block"),
+                         ({"members": {"m0": m0 | {"vus_per_block": 0}}},
+                          "proofs: member m0's vus_per_block is not a positive natural number"),
+                         ({"members": {"m0": m0 | {"vus_per_block": True}}},
+                          "proofs: member m0's vus_per_block is not a positive natural number"),
+                         ({"members": members, "circuit": m0["circuit"]}, "the keys of proofs are not circuit, registered")):
+        assert run(per_member(), p=p1 | {"proofs": proofs_}) == ("reject", f"params: {why}"), proofs_
+
+
+def test_v2_per_member_holds_its_statements_to_the_members_order_and_one_session_each(server, server_v2):
+    """v2's per-member statements are public structure (`OneStageZk.membersHeld`), held before any session runs, on
+    sessions whose coins are the challenger's two trees: statements out of the members' order (by first unit, so `m10`
+    after `m2`, not by name) are refused, and so are a member's second statement and a statement of two sessions; in the
+    members' order, exactly one session each, each session runs and its own verdict rejects (no blob holds a circuit
+    file)."""
+    s, law = SETUPS[3], {"k": 2, "law": "subset"}
+    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                   WINDOW, leaf_layer=LEAF)
+    circuits = {"m2": b"not a circuit file", "m10": b"not another circuit file"}
+    publics = {"m2": _public_file(0, 1), "m10": _public_file(2, 3, 4)}
+    members = {"m2": {"circuit": _sha(circuits["m2"]), "registered": None, "units": [[0, 2]], "vus_per_block": 1},
+               "m10": {"circuit": _sha(circuits["m10"]), "registered": None, "units": [[2, 5]], "vus_per_block": 1}}
+    ch, _, base, p = _challenger_audit(server, random.Random("v2-members-order"), s, law, rec, 2)
+    p = p | {"proofs": {"members": members}}
+    records = [D.canonical(t.record).encode() for t in ch.trees]
+    blobs = [circuits["m2"].hex(), circuits["m10"].hex(), *(b.hex() for b in publics.values()),
+             *(r.hex() for r in records)]
+
+    def run(*sts):
+        statements = [{"member": m, "public": _sha(publics[m]),
+                       "sessions": [{"name": n, "record": _sha(records[t]), "reps": {}} for n, t in ss]} for m, ss in sts]
+        e = base | {"proofs": {"statements": statements}, "sessions": [n for _, ss in sts for n, _ in ss]}
+        case = {"blobs": list(blobs), "commitment": _hex(rec), "evidence": _hex(e), "params": p}
+        out = server_v2.exchange(_json(case))
+        return out["verdict"], out["reason"]
+
+    assert run(("m10", [("s", 0)]), ("m2", [("t", 1)])) == (
+        "reject", "proofs: member m2: its statement follows member m10's, whose units start after its own: the statements "
+                  "are in the members' order (by first unit, the registration's), one order for one statement")
+    assert run(("m2", [("s", 0)]), ("m2", [("t", 1)])) == (
+        "reject", "proofs: member m2: a second statement: a member's units are one statement's")
+    assert run(("m2", [("s", 0), ("t", 1)])) == ("reject", f"proofs: member m2: its statement has 2 sessions: {ONE_SESSION}")
+    assert run(("m2", [("s", 0)]), ("m10", [("t", 1)])) == ("reject", "verdict flock-verify/s did not accept")
+
+
+def test_v2_per_member_registration_refuses_a_member_whose_link_points_vary(server, server_v2):
+    """The per-member form's registration (`Registration.check`'s `link-points`, `link_points.refused`), run before any
+    session's verdict is read; only the first member has a statement. Over 10 units under `subset:9`, a draw that ends
+    holds 8 or 9 of a member of units 0-8 (and 0 or 1 of the member of unit 9), whose link points differ at one unit a
+    proof block (3 and 4), so it is refused; at two both give 3 and the audit goes on to its session's verdict, which
+    rejects (no blob holds a circuit file). Under `subset:2` every draw that ends holds 2 of a member of all 10, so at
+    one unit a proof block it is not refused; a draw that runs out of coins fails the window
+    (`test_v2_per_member_fails_a_window_whose_draw_ran_out`). A member with a unit outside the population is refused.
+    The Python registration's codes are Lean's."""
+    s = Setup(P.population_program(PAIR, 10), P.template_instance_query(PAIR.id))
+    PROGRAMS[s.sha512] = s.program
+    circuit = b"not a circuit file"
+
+    def run(law: dict, members: dict[str, tuple[list, int]]) -> tuple:
+        rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                       WINDOW, leaf_layer=LEAF)
+        ch, _, base, p = _challenger_audit(server, random.Random("v2-link-points"), s, law, rec, 1)
+        record = D.canonical(ch.trees[0].record).encode()
+        first, (units, _) = next(iter(members.items()))
+        public = _public_file(*(u for lo, hi in units for u in range(lo, hi)))
+        ms = {m: {"circuit": _sha(circuit), "registered": None, "units": us, "vus_per_block": g}
+              for m, (us, g) in members.items()}
+        e = base | {"proofs": {"statements": [{"member": first, "public": _sha(public), "sessions": [
+            {"name": "s", "record": _sha(record), "reps": {}}]}]}, "sessions": ["s"]}
+        case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec), "evidence": _hex(e),
+                "params": p | {"proofs": {"members": ms}}}
+        out = server_v2.exchange(_json(case))
+        return (out["verdict"], out["reason"]), _registration(
+            decode_params_v2(p) | {"link_members": list(members.values())}, rec)
+
+    nine, two = {"k": 9, "law": "subset"}, {"k": 2, "law": "subset"}
+    assert run(nine, {"m0": ([[0, 9]], 1), "m1": ([[9, 10]], 1)}) == (
+        ("reject", "registration: link-points"), ("link-points",))
+    assert run(nine, {"m0": ([[0, 9]], 2), "m1": ([[9, 10]], 1)}) == (
+        ("reject", "verdict flock-verify/s did not accept"), ())
+    assert run(two, {"m0": ([[0, 10]], 1)}) == (("reject", "verdict flock-verify/s did not accept"), ())
+    assert run(two, {"m0": ([[0, 11]], 2)}) == (("reject", "registration: link-points"), ("link-points",))
+
+
+def test_link_points_refuses_a_law_none_of_whose_draws_ends():
+    """`link_points.refused` refuses a law no draw of which ends (`NEVER_ENDS`, `ends`): `subset:11` over 10 units, a
+    Bernoulli law of denominator 0, a stratum drawing more units than it has; `subset:10` and `bernoulli 0/0` end. These
+    are `LinkPoints`' `#guard`s. The `link_points` piece can't reach them, since `Draw.flockLaw` (`coins.law_problem`)
+    refuses a subset above the population and a denominator of 0, and a stratum's rule draws at most its units."""
+    stratum = {"k": 3, "law": "stratified", "strata": [{"k": 3, "template": "a", "units": [[0, 2]]}]}
+    assert LP.ends({"k": 10, "law": "subset"}, 10) and LP.ends({"law": "bernoulli", "p": "0/0"}, 10)
+    for law in ({"k": 11, "law": "subset"}, {"law": "bernoulli", "p": "1/0"}, stratum):
+        assert not LP.ends(law, 10)
+        with pytest.raises(ValueError, match=f"^{LP.NEVER_ENDS}$"):
+            LP.refused(law, 10, [([[0, 10]], 1)])
+
+
+def test_v2_per_member_fails_a_window_whose_draw_ran_out(server, server_v2):
+    """A per-member window whose draw runs out of the challenger's coins fails before its coin trees or any session is
+    read (`OneStageZk.RAN_OUT`, `OneStage.ranOut`): its challenger opened one coin after the registration, 64 bytes, and
+    `subset:9` over 10 units reads at least 226. Nothing redraws it and no fallback draws every unit. On coins that last
+    the same window goes on to its session's verdict, and the one-statement form on the coins that run out is rejected
+    by v1's coins check after its session. The Python twin (`_ran_out` on `_coins_of`'s coins) agrees."""
+    s = Setup(P.population_program(PAIR, 10), P.template_instance_query(PAIR.id))
+    PROGRAMS[s.sha512] = s.program
+    law = {"k": 9, "law": "subset"}
+    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                   WINDOW, leaf_layer=LEAF)
+    rng = random.Random("v2-ran-out")
+    ch, _, base, p = _challenger_audit(server, rng, s, law, rec, 1)
+    short = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=lambda coins: coins(64), trees=1)
+    short_base = base | {"coins": {k: v for k, v in short.evidence(short.segment.to_json()).items() if k != "key"}}
+    short_p = p | {"challenger": {"key": short.s.key.to_json(), "label": "draw"}, "window_root": short.ledger.window["root"]}
+    circuit, public = b"not a circuit file", _public_file(*range(10))
+    members = {"m0": {"circuit": _sha(circuit), "registered": None, "units": [[0, 10]], "vus_per_block": 1}}
+
+    def run(d: Drawn, b: dict, p: dict, per_member: bool) -> tuple:
+        record = D.canonical(d.trees[0].record).encode()
+        sessions = [{"name": "s", "record": _sha(record), "reps": {}}]
+        proofs = ({"statements": [{"member": "m0", "public": _sha(public), "sessions": sessions}]} if per_member
+                  else {"public": _sha(public), "sessions": sessions})
+        own = {"members": members} if per_member else {"circuit": _sha(circuit), "registered": None}
+        case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec),
+                "evidence": _hex(b | {"proofs": proofs, "sessions": ["s"]}), "params": p | {"proofs": own}}
+        out = server_v2.exchange(_json(case))
+        return out["verdict"], out["reason"]
+
+    def twin(b: dict, p: dict) -> bool:
+        p = decode_params_v2(p)
+        return _ran_out(p, rec, _coins_of(p, (rec, bytes.fromhex(R.digest(rec))), b))
+
+    assert run(short, short_base, short_p, True) == ("reject", f"draw: {WINDOW_RAN_OUT}")
+    assert run(short, short_base, short_p, False) == ("reject", "draw: coins: the randomness source ran out")
+    assert run(ch, base, p, True) == ("reject", "verdict flock-verify/s did not accept")
+    assert twin(short_base, short_p) and not twin(base, p)
 
 
 def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
@@ -2445,7 +2791,7 @@ def _changed_law(law: dict, change, x: int) -> dict:
         return law
 
 
-DRAW = D.Port(PIECES, "draw", draw, st.one_of(
+DRAW_INPUTS = st.one_of(
     st.builds(lambda a, src: {"law": a["record"]["law"], "population": a["record"]["population"], "source": src},
               changed_audits(most=0), SOURCE),
     st.builds(lambda a, f, x, dn, src: {"law": _changed_law(a["record"]["law"], f, x),
@@ -2456,7 +2802,9 @@ DRAW = D.Port(PIECES, "draw", draw, st.one_of(
     st.builds(lambda law, n, src: {"law": law, "population": n, "source": src}, SIMPLE_LAWS | laws(6),
               st.integers(0, 40), SHORT_SOURCE),
     st.builds(lambda law, n, src: {"law": law, "population": n, "source": src}, JSON, st.integers(0, 6) | JSON,
-              SHORT_SOURCE | st.sampled_from(["", "0", "zz", "AB", "ab cd"]) | JSON)), package=PACKAGE)
+              SHORT_SOURCE | st.sampled_from(["", "0", "zz", "AB", "ab cd"]) | JSON))
+DRAW = D.Port(PIECES, "draw", draw, DRAW_INPUTS, package=PACKAGE)
+RAN_OUT = D.Port(PIECES, "ran_out", ran_out, DRAW_INPUTS, package=PACKAGE)
 #: Law texts `draw.parse_law` or `draw.parse_rate` refuses or reads oddly: digits of other scripts, signs, spaces, a
 #: second separator, leading zeros, a missing or zero argument.
 ODD_LAW_TEXTS = ["subset:", "subset", "", "subset:\u0663", "work:\u00b2", "stratified:\uff11", "bernoulli:1/\u0662",
@@ -2561,6 +2909,67 @@ SLOTS = D.Port(PIECES, "slots", slots, st.one_of(selections(), selections(), cha
 POP_ORDER = D.Port(PIECES, "pop_order", pop_order, st.one_of(*[st.builds(
     lambda part, dn: {"population": max(0, part[2] + dn), "program": part[0], "query": part[1]}, partitions(),
     st.sampled_from([0, 0, 0, -1, 1]))] * 3, JSON), package=PACKAGE)
+
+
+def _units_case(units: list, how: int, x: int) -> dict:
+    """``units`` with their own units ascending, or those shifted, reversed, short of one, or with ``x`` added."""
+    want = [u for lo, hi in sorted(map(tuple, units)) for u in range(lo, hi)]
+    at = x % (len(want) + 1)
+    return {"indices": [want, [u + 1 for u in want], want[::-1], want[:-1], [*want, x], [*want[:at], x, *want[at:]]][how],
+            "units": units}
+
+
+PUBLIC_UNITS = D.Port(PIECES, "public_units", public_units, st.one_of(
+    *[st.builds(_units_case, st.lists(st.builds(lambda lo, n: [lo, lo + n], st.integers(0, 12), st.integers(1, 5)),
+                                      max_size=3), st.integers(0, 5), st.integers(0, 20))] * 2,
+    st.builds(lambda u, i: {"indices": i, "units": u}, st.lists(st.lists(st.integers(-1, 6), max_size=3), max_size=3),
+              st.lists(st.integers(-1, 6), max_size=6)),
+    JSON), package=PACKAGE)
+def _cut(population: int, cuts: list[int], owners: list[int]) -> list[list[list[int]]]:
+    """`[0, population)` cut at `cuts` (each modulo `population + 1`), its `i`-th range `owners[i % len(owners)]`'s: each
+    owner's ranges, ascending, the owners in the order of their first range."""
+    edges = sorted({0, population, *(c % (population + 1) for c in cuts)})
+    out: dict[int, list] = {}
+    for i, r in enumerate(zip(edges, edges[1:])):
+        out.setdefault(owners[i % len(owners)], []).append(list(r))
+    return list(out.values())
+
+
+def _link_case(kind: str, k: int, population: int, strata: tuple, works: list[int], members: tuple, gs: list[int],
+               bad: int) -> dict:
+    """A `link_points` input: a `kind` law of `k` over `population` units, a stratified or work law's strata cut by
+    `strata` (`_cut`) with each stratum's k its rule's (work `works`, floor 1), and members cut by `members`, each `gs`
+    units a proof block; `bad` from 1 to 4 breaks one member: a unit past the population, two of its ranges meeting, no
+    unit a proof block, or no range."""
+    n_k = k % population + 1 if population else k
+    if kind == "subset":
+        law = {"k": k % (population + 2), "law": kind}
+    elif kind == "bernoulli":
+        law = {"law": kind, "p": ["0/1", "1/2", "1/1", "2/2", "3/7", "0/3"][k % 6]}
+    elif kind == "stratified":
+        law = {"k": n_k, "law": kind, "strata": [{"k": DR.stratum_k(n_k, LP.size(rs), population), "template": f"t{i}",
+                                                  "units": rs} for i, rs in enumerate(_cut(population, *strata))]}
+    else:
+        ss = [{"floor": 1, "template": f"t{i}", "units": rs, "work": works[i % len(works)]}
+              for i, rs in enumerate(_cut(population, *strata))]
+        total = sum(t["work"] * LP.size(t["units"]) for t in ss)
+        law = {"k": n_k, "law": kind, "strata": [{**t, "k": work_k(n_k, t["work"], LP.size(t["units"]), total, 1)}
+                                                 for t in ss] if total else ss}
+    ms = [{"units": us, "vus_per_block": gs[i % len(gs)]} for i, us in enumerate(_cut(population, *members))]
+    if 1 <= bad <= 4 and ms:
+        m = ms[k % len(ms)]
+        m |= [{"units": [*m["units"], [population, population + 1]]}, {"units": [*m["units"], m["units"][0]]},
+              {"vus_per_block": 0}, {"units": []}][bad - 1]
+    return {"law": law, "members": ms, "population": population}
+
+
+CUTS = st.tuples(st.lists(st.integers(0, 60), max_size=6), st.lists(st.integers(0, 3), min_size=1, max_size=4))
+LINK_POINTS = D.Port(PIECES, "link_points", link_points, st.one_of(
+    *[st.builds(_link_case, st.sampled_from(["subset", "bernoulli", "stratified", "work"]), st.integers(0, 60),
+                st.integers(0, 40), CUTS, st.lists(st.integers(0, 5), min_size=1, max_size=3), CUTS,
+                st.lists(st.integers(1, 5), min_size=1, max_size=3), st.integers(0, 9))] * 3,
+    st.builds(lambda law, n, ms: {"law": law, "members": ms, "population": n}, JSON, st.integers(-1, 9), JSON),
+    JSON), package=PACKAGE)
 STRATA = st.lists(st.builds(lambda name, size, dk: {"k": max(0, size - dk), "name": name, "size": size},
                             st.sampled_from(["a", "b", "c", "unit"]), st.integers(0, 14), st.integers(0, 14)),
                   min_size=1, max_size=3, unique_by=lambda s: s["name"])
@@ -3238,10 +3647,11 @@ pieces = D.server_fixture(DECODE)
 
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
-              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (DESIGN, 300), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
+              (CHECK_DRAW, 500), (DRAW, 500), (RAN_OUT, 300), (SELECT, 600), (DESIGN, 300), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
-              (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300)]
+              (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300), (PUBLIC_UNITS, 300),
+              (LINK_POINTS, 500)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
