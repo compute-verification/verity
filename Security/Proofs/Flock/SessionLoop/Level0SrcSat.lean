@@ -81,7 +81,7 @@ theorem wordAt_of (b : ByteArray) (o : Nat) (a : F128) (h : ∀ k < 16, b.get! (
       rw [if_neg (show ¬ 8 + k < 8 by omega), Nat.add_sub_cancel_left]
 
 theorem getElem!_default (c : Nat) : (default : Array F128)[c]! = 0 := by
-  rw [getElem!_neg _ _ (Nat.not_lt_zero c)]
+  rw [getElem!_neg (default : Array F128) c (Nat.not_lt_zero c)]
   rfl
 
 theorem rangeMap_get! {α : Type} [Inhabited α] (f : Nat → α) {n i : Nat} (h : i < n) :
@@ -131,7 +131,7 @@ theorem extract_of_get (d : ByteArray) (o : Nat) (y : ByteArray) (hn : o + y.siz
     have h2' : k < y.size := h2
     have hk := h k h2'
     rw [FlockSoundness.Discharge.ZkView.get!_eq, FlockSoundness.Discharge.ZkView.get!_eq,
-      getElem!_pos _ _ (by rw [ByteArray.size_data]; omega), getElem!_pos _ _ h2] at hk
+      getElem!_pos d.data (o + k) (by rw [ByteArray.size_data]; omega), getElem!_pos y.data k h2] at hk
     rw [Array.getElem_extract]
     exact hk
 
@@ -292,11 +292,11 @@ theorem Loop.level0Src_tapeSrc (x : Msg) (w : Flock.Wit) : Loop.Level0Src Loop.t
     rw [FlockComplete.JsonRT.packed_size, hmL, ← hm, Nat.add_sub_cancel]
   have he : ∀ e c, ¬ (e < _root_.Flock.Zk.EXTRA_LANES ∧ c < 2 ^ (Masked.lv0 x j).cols) →
       (Masked.linkIn x w t j).extra e c = 0 := fun e c h => by
-    show (if c < 2 ^ (Masked.lv0 x j).cols then (Masked.exeTape t).extra j.val e c else 0) = 0
+    show (if c < 2 ^ (Masked.lv0 x j).cols then _ else (0 : F128)) = 0
     by_cases hc : c < 2 ^ (Masked.lv0 x j).cols
     · have he4 : ¬ e < 4 := fun he4 => h ⟨he4, hc⟩
       rw [if_pos hc]
-      show Masked.ext4 _ 0 e = 0
+      show Masked.ext4 _ (0 : F128) e = 0
       unfold Masked.ext4
       rw [if_neg (show ¬ e = 0 by omega), if_neg (show ¬ e = 1 by omega), if_neg (show ¬ e = 2 by omega),
         if_neg (show ¬ e = 3 by omega)]
@@ -305,7 +305,7 @@ theorem Loop.level0Src_tapeSrc (x : Msg) (w : Flock.Wit) : Loop.Level0Src Loop.t
     rw [Masked.salt_linkIn x w t j hq]
     have hq' : q < Masked.schMax + Masked.schMax :=
       lt_of_lt_of_le (hq.trans_eq h5.symm) (Nat.add_le_add hz.nS hz.nU)
-    show (Masked.saltAt (Masked.cellAt t j.val) 0 0 q).size = 192
+    show (Masked.saltAt _ 0 0 q).size = 192
     unfold Masked.saltAt
     rw [if_pos rfl, if_pos rfl, Masked.fAt_lt _ _ hq']
     exact Masked.saltBytes_size _
