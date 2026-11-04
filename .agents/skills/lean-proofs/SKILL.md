@@ -3,7 +3,8 @@ name: lean-proofs
 description: >
   How to work on Lean in Verity: where a new Lean file or package goes, the edit loop (verity lean try FILE, lake env lean
   in the file's package; scratch probes with #print axioms, exact? and trace_state; profiling a slow proof), building and auditing with
-  tools/verity/lean/check.py and its fast path, stating assumptions as named Props, freezing and listing guarantees in
+  tools/verity/lean/check.py and its fast path, stating a guarantee (witnesses before the proof, counted extractors and
+  simulators, what "proved" means), stating assumptions as named Props, freezing and listing guarantees in
   lean-audit.json, moving them without a landing DM (--moved), the shape of a property, watching dependencies for
   proofs of what we assume (tools/verity/lean/upstream.py), keeping parallel Lean lanes out of each other's files and
   build directories, and the standing Lean rulings. Use when adding or changing Lean proofs, definitions or
@@ -79,6 +80,32 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   congruence lemma Mathlib had already. Don't unfold a `→+` or `→*` in `simp`; prove its `_apply` lemma by `rfl` and simp
   with that.
 
+## Stating a guarantee
+
+- **Statement first, then its witnesses, then an attack on it, then an ask for each new premise, then the proof.** State
+  the guarantee on a `sorry` stub in your lane branch, list it and run `--update`, so the record shows if it moves. Never
+  make a guarantee easier: no stronger input relation, weaker output relation, smaller challenge space, unmotivated
+  hypothesis, or verifier check moved into an assumption.
+- **Witness a contract before proving over it.** A statement over every system meeting a contract (a compiler, a
+  composition, an interface) has its honest and nontrivial lemmas (Standing rulings) before its proof, the honest one an
+  instance meeting the whole contract with at least two sessions or rounds: a clause one session meets can fail at every
+  deployed shape (an iff two sequential sessions break), leaving each theorem over it vacuous. List the theorem as a
+  guarantee so `witnesses` holds it; a statement under `claims.not` as "proved" escapes that.
+- **Extractors and simulators are counted programs**, `Claims.Extractor` (a rerun program; `RP.eval` counts its SHA-512
+  calls and reruns) and `Claims.Simulator` (`SP.eval`), a simulator fixed before the witness. Never a function, a
+  structure of free fields or `Classical.choose`: hm96 is statistically hiding, so a free extractor opens every
+  commitment to an honest trace, meets every hypothesis and empties the incorrect set. A cost is what the program
+  evaluates, never a declared field. `tests/test_lean_vocabulary.py` refuses a second `Extractor` or `Simulator` type.
+- **The verifier derives what soundness reads.** A set soundness depends on (the ports that must be registered, the
+  sampled units, the bound roots) is computed in Lean from public registered data (the registered circuit's interface,
+  the registration), never read from a file `verity.ml` or an integration writes, which only supplies values checked
+  against it; else the guarantee covers what the writer chose (a registered output bound instead of registered).
+- **"Proved" is four checks**, each named when only some hold: it elaborates (`verity lean try`, whose "lean exit 0" says
+  only that); `#print axioms` of it and of each lemma you added shows only `propext`, `Classical.choice` and `Quot.sound`
+  (a `sorry` below it shows as `sorryAx`); a full `check.py` replayed it through the kernel (the fast path doesn't); an
+  agent other than its prover red-teamed its statement. Otherwise say which: "elaborates, rests on `X`'s sorry",
+  "proved, not replayed".
+
 ## Assumptions and guarantees
 
 - **An assumption is a named `Prop`** in its area's `Definitions/<Area>/Assumptions` (Flock's in
@@ -87,10 +114,6 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   (`verity.core.claims`) and gives its rationale; a ledger points to it. `--update` lists every premise a guarantee
   takes that this repository defines, and every assumption a premise mentions, with a digest, so strengthening a
   premise is a record change. AGENTS.md "Lean" has the rest.
-- **Statement first, then an attack on it, then an ask for each new premise, then the proof.** State the guarantee on
-  a `sorry` stub in your lane branch, list it and run `--update`, so the record shows if it moves. Never make a guarantee
-  easier: no stronger input relation, weaker output relation, smaller challenge space, unmotivated hypothesis, or
-  verifier check moved into an assumption.
 - **List what you cite**: a guarantee a ledger, table or PR cites as proved is in `guarantees`, its record committed with
   the proof.
 - **Watch upstream for what you assume**: a named assumption or hand proof a pinned dependency could prove gets an
