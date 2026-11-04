@@ -127,10 +127,9 @@ receives of it the same way: the piece, V3c's audit, the registered compiler, th
 the window circuit's counts, a log among them a finding (the steps' logs stay on the node). An advice length, a compile,
 or a φ carrying the requests is a finding too, and on any finding the run fails with those files kept on the node
 (`served_verdicts.sh`'s RECEIVED-SCAN). The leak guard (`--public`) moves any file the piece doesn't declare out of its
-directory. Split in two
-around V3c (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with the scan on V3c's
-committed window (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its
-`period` runs the consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of
+directory. Split in two around V3c (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with
+the scan on V3c's committed window (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog
+trees), and its `period` runs the consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of
 V3c's; each step releases through its own hold.
 
 `attacks.py` lists what the served path must refuse or charge (`table`): each attack with its case, the check that

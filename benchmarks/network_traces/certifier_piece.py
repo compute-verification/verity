@@ -61,8 +61,8 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
      the same prompt and streamed ids; and of the requests the endpoint recorded carrying that run, no two name one
      certified request and every certified request is one; else reject. These read the endpoint's records, the
      prover's, in the clear: they refuse what a relay between the network certifier and an honest endpoint does
-     (`attacks.py`). What binds the committed values to the certified cells is the scan's state, which the period
-     check holds to the compute audit's ``SCAN_STATE`` (`stateTied`).
+     (`attacks.py`); the verdict of record waits on the egress tie, which binds the committed values to the certified
+     cells.
   3. The chain (`served_session.py chain`: chain_record.sh's network certifier path, certs, N2 and scan, which opens
      no endpoint records or advice) on the kept run, its run dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so
      nothing of the witness reaches a record. N2 takes every execution phase of a run of at most 8 (`sized`). Its

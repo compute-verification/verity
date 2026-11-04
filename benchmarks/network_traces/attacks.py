@@ -18,10 +18,9 @@ the check or the term (``by``), the reason its verdict names (``reason``), and t
 - ``proof``: Lean's registered reads of the network certifier's signed rows (`warden_rows.refusal`);
 - ``clear``: a check in the clear on what the prover records or opens: the piece's `certifier_piece.bind`, which
   reads the endpoint's records against the certified I/O (it refuses what a relay between the network certifier and
-  an honest endpoint does; what binds the committed values to the certified cells is the scan's state, which the
-  period check holds to the compute audit's ``SCAN_STATE``, `stateTied`), the records audit's compile of an execution
-  phase's advice opening (`prove_path.compile_advice`), and ADVICE-LINE (`served_verdicts.advice_line`); a ``waits``
-  names the piece whose refusal of record hasn't landed.
+  an honest endpoint does; the verdict of record waits on the egress tie, which binds the committed values to the
+  certified cells), the records audit's compile of an execution phase's advice opening (`prove_path.compile_advice`),
+  and ADVICE-LINE (`served_verdicts.advice_line`); a ``waits`` names the piece whose refusal of record hasn't landed.
 An attack the served rehearsal plays (``served``) also names the network certifier's check's outcome (``gate``: True
 when it accepts the run) and the piece's (``piece``): ``bound`` (steps 1 and 2 pass), ``reject``, or ``missing``
 (`certifier_piece.NotRun`: no served answer certified, the certifier missing). An attack with ``waits`` lands with the
