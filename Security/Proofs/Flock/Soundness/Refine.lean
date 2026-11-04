@@ -22,6 +22,8 @@ import Proofs.Flock.Soundness.Refine.Table
 import Proofs.Flock.Soundness.Refine.StmtOf
 import Proofs.Flock.Soundness.Refine.Regions
 import Proofs.Flock.Soundness.Refine.Walk
+import Proofs.Flock.Soundness.Refine.OkLe
+import Proofs.Flock.Soundness.Refine.Lookups
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Live
 import Proofs.Flock.Soundness.Refine.LiveSim
