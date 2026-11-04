@@ -1,5 +1,5 @@
-"""Any number of codec words for 8 units a key byte, as Model.lean counts on main: `EncodeChainHardness` is false for
-every `E ≥ 1`.
+"""Any number of codec words for 8 units a key byte in budgeted units alone: no price of `E ≥ 1` budgeted units a
+word holds.
 
 `free_codec.py`'s word was free only under the earlier count: its XORs and long division narrow through one-word
 gathers, a unit each under the fix. This module needs no narrowing at all. Every intermediate value is a bit, and the
@@ -18,8 +18,8 @@ The circuit computes the codec with the field's arithmetic built from those gate
 conditional subtraction of `p`, double-and-add products, square-and-multiply for `ρ`'s exponent), and every word's tweak
 from word 1's, `t_i = i·t_1 mod p` (`Draw.tweak`: `t_i = τ·i mod p`, so `t_1 = τ`). It reads the coin slots
 `(const, r, l)`, `(mask, l)` and `(tweak, 1, l)` once: `8·(k + 2)·n/8` units for the whole block, whatever its number
-of words. At p1024 and `k = 3` that is 5,120 units, so `EncodeChainHardness p1024 3 B E ε`'s conclusion
-`q·E·(n − 1) ≤ budgeted·(n − 1)` fails at every `q > 5120/E`, for every `B` (there is no budgeted gate) and every
+of words. At p1024 and `k = 3` that is 5,120 units, so a price of `E` budgeted units a word,
+`q·E·(n − 1) ≤ budgeted·(n − 1)`, fails at every `q > 5120/E`, for every `B` (there is no budgeted gate) and every
 `ε < 1` (it is right on every sample). The stacking property then capped no MAC (`Property` capped rounding,
 compare-select, gather and fold units; property/v1's census reads its MACs as informational), so these circuits also
 satisfied it at any caps that allowed the key's gather units.
@@ -32,7 +32,7 @@ squarings and 1,018 multiplications a root), is ≈ 1.1·10^11 MACs (modeled fro
 coins, so every product of two values that both depend on run or coin data is a data product, one unit whatever its
 operands' ranges (`dataProducts`, `nonlinear`), and `Property` caps the data products per certified byte read. Every
 AND here on two run-time bits is a data product, so the block costs its key's 40 units and 36,152 data products a word
-at n = 8 (`Builder.nonlinear_units`), and a squaring ≈ 17n² of them; `EncodeChainHardness` is replaced by
+at n = 8 (`Builder.nonlinear_units`), and a squaring ≈ 17n² of them; the encode bound rests on
 `SquaringFloor` and `ChainSum`, priced in nonlinear units (`test_bitwise_codec.py`).
 """
 

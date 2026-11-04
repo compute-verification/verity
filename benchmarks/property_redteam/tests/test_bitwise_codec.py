@@ -1,6 +1,6 @@
 """The bit-level codec (`bitwise_codec.py`): a block of codec words for 8 units a key byte under Model.lean's budgeted
-count, right on every sample tried, `Proven`, with no budgeted gate and no run input: the counterexample to
-`EncodeChainHardness` at every `E ≥ 1`. In nonlinear units (`nonlinear`: the budgeted units and the data products) each
+count, right on every sample tried, `Proven`, with no budgeted gate and no run input: no price of `E ≥ 1` budgeted
+units a word holds. In nonlinear units (`nonlinear`: the budgeted units and the data products) each
 of its ANDs on two run-time bits is a data product and costs a unit, and its words cost what `SquaringFloor` and
 `ChainSum` price."""
 
@@ -99,9 +99,10 @@ def test_units_do_not_grow_with_the_block(block8):
         check_block(b, outs, BC.draw_inputs(n, c, cs, K, tau, payload), want)
 
 
-def test_the_conjecture_fails_at_p1024():
-    """`EncodeChainHardness p1024 3 B E ε`'s conclusion for this circuit, `q·E·(n − 1) ≤ budgeted·(n − 1) + 0·E`, with
-    `budgeted = 8·(3 + 2)·128`: false at the headline `E` for one word, and at `E = 1` for 5,121 words (all below p)."""
+def test_no_budgeted_price_holds_at_p1024():
+    """A price of `E` budgeted units a word at p1024 and `k = 3`, `q·E·(n − 1) ≤ budgeted·(n − 1) + 0·E`, for this
+    circuit, with `budgeted = 8·(3 + 2)·128`: false at the former headline `E` for one word, and at `E = 1` for 5,121
+    words (all below p)."""
     n, k, L = 1024, 3, 128
     units = 8 * (k + 2) * L
     assert units == 5120
@@ -126,7 +127,7 @@ def test_nonlinear_units_charge_each_and(block8):
 def test_bitwise_squaring_pays_its_partial_products():
     """A bitwise squaring (`Field.mul` of a word by itself, double-and-add) pays at least `n²` data products at three
     toy fields: its `n(n − 1)/2` distinct partial-product ANDs and its adders' carries. At p1024 the partial products
-    alone are 523,776 a squaring, far above `SquaringFloor`'s `e = 374`, so the counterexample to `EncodeChainHardness`
+    alone are 523,776 a squaring, far above `SquaringFloor`'s `e = 374`, so this codec, free in budgeted units,
     pays more than `ChainSum`'s `E = 3 · 1021 · 374` a word."""
     for n, c in ((8, 5), (16, 17), (32, 5)):
         b = S.Builder()

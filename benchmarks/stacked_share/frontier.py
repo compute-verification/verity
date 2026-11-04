@@ -57,7 +57,7 @@ CLASSES = ("roundings", "compare_select", "gathers", "folds", "products")
 #: conjectured, `SquaringFloor` and `ChainSum` at 2^-40 (k S (2L - 1 + L - d), L = 128); best found, the seam square's 16,544
 #: nonlinear units a squaring times a word's k S squarings
 E_WORD = {"conjectured": 1_145_562, "best found": 16_544 * 3 * 1021}
-#: the conjectured E in property/v1's budgeted units (`EncodeChainHardness`, since falsified), for the "before" column:
+#: the conjectured E in property/v1's budgeted units (a price the bitwise codec refutes), for the "before" column:
 #: f as this census had it, without data products
 E_BEFORE = {"conjectured": 364_497}
 LIFETIMES = {"10 min": 600, "1 h": 3600}

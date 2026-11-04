@@ -6,8 +6,8 @@
 word's `k·S` chained squarings cost their sum, so `E = k·S·e`. `e = (2L − 1) + (L − d(ε))`, `L = n/8 = 128`,
 `d = d₀ + ⌈log₂(1/ε)/8⌉`, `d₀ = 4`: `e = 374` at `ε = 2^−40` (`E = 1,145,562` a word), `e = 376` at `ε = 2^−20`
 (`E = 1,151,688`). A squaring circuit under `e` nonlinear units on more than `ε` of its inputs falsifies
-`SquaringFloor`. They replace `EncodeChainHardness` (`EncodeChain.lean`), the two at once in budgeted units, which
-`bitwise_codec.py` falsified.
+`SquaringFloor`. Priced in budgeted units alone, the two at once, the word is cheap at any price: `bitwise_codec.py`
+builds it.
 
 **What this module ports.** A scalar (Python-int, so p1024-sized) port of `Security/Definitions/Accounting/Gates/Model.lean`
 (at 8225774747): `Op` (a gather with its table-read `low`),

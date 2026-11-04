@@ -73,7 +73,7 @@ fan-in floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate
   lane is free when one of its multiplicands is a constant or registered value, and one unit when both depend on a
   run or coin input (`dynamic`), whatever their width or range: an exact product of two data values is a universal
   gate (an AND of two bits is one, and the bitwise codec computes any function with them,
-  `Accounting.SecurityProofs.Gates.EncodeChainRefuted`). A projection by the weights is free; attention's `QKᵀ` and
+  `benchmarks/property_redteam/bitwise_codec.py`). A projection by the weights is free; attention's `QKᵀ` and
   `PV` are data products. Every other nonlinear operation (a rounding, comparison or selection, exp, a division, a
   gather at a data-dependent index) is a budgeted gate and pays its units above. **The nonlinear units**
   (`nonlinear`) are the budgeted units and the data products: the circuit's multiplicative complexity in this model,

@@ -5,8 +5,8 @@ The gate model (`Security/Definitions/Accounting/Gates/Model.lean`, `dataProduct
 whose coefficients are fixed before the run's coins: constants, registered values (the pre-committed weights),
 additions and wiring. Every s8-family lane whose two multiplicands both depend on a run input is a *data product*, one
 unit whatever their width or range: an exact product of two data values is a universal gate (an AND of two bits is one,
-and a bitwise codec computes any function with them for free otherwise, `Accounting.SecurityProofs.Gates.
-EncodeChainRefuted`, `bitwise_codec.py`). Every other nonlinear op is a budgeted unit, as property/v1 counts it.
+and a bitwise codec computes any function with them for free otherwise, `bitwise_codec.py`). Every other nonlinear
+op is a budgeted unit, as property/v1 counts it.
 `Property` caps the data products per certified byte read, beside the budgeted classes.
 
 `ProductsPass` is property/v1's pass (`verity.ml.circuits.stacking`) that also counts each family step's data products,

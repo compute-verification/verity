@@ -1,5 +1,5 @@
 """Squaring mod p1024 in 6b's model (`squaring.py`) and the free codec word (`free_codec.py`): what they cost and that they
-compute what they claim. The costs are the round-4 result against `EncodeChainHardness`'s `e = 119` a squaring."""
+compute what they claim. The costs are the round-4 result against the budgeted-unit price `e = 119` a squaring."""
 
 from __future__ import annotations
 

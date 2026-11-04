@@ -8,7 +8,6 @@ import Proofs.Accounting.Headline
 import Proofs.Accounting.HeadlineDc
 import Proofs.Accounting.HeadlineDc.Meets
 import Proofs.Accounting.Gates.Rows
-import Proofs.Accounting.Gates.Bitwise
 import Proofs.Accounting.Bandwidth
 import Proofs.Accounting.ChainWork
 import Proofs.Accounting.Prob

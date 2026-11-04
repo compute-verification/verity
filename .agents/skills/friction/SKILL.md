@@ -177,9 +177,8 @@ Protocols and claims:
   the circuit can't learn a coin, and verifier coins stay public. Only the weights may take a private encoding from a
   trusted third party, salted after the commitment with secrets the prover never sees, as one deployment variant.
 - No private or trapdoor encoding for KV. Credited dynamic memory rests on the public codec, and the stacking
-  bound on the named conjecture `EncodeChainHardness`, with the claims resting on it listed as conditional.
-  (`EncodeChainHardness` is falsified, `EncodeChainRefuted`; the bound now rests on `SquaringFloor` and
-  `ChainSum` in the repriced gate model, a thin lane a compare-select unit, listed the same way.)
+  bound on the named conjectures `SquaringFloor` and `ChainSum` in the repriced gate model (a thin lane a
+  compare-select unit), with the claims resting on them listed as conditional.
 - Memory and bandwidth accounting: no bound assumes the weights are incompressible, and a scheme may refuse
   all-zero weights; exhaustion is over the node's whole memory, KV included; no overhead target beyond 99%; guarantees
   are for the whole node. PoUB treats the prover's resources as one pool (conservation, no identity

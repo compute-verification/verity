@@ -38,10 +38,6 @@
    "owner": "@compute-accounting",
    "digest": "0506b11a4a3f1738de9dabb70892c42e45fc8838e62bf1820606b0ffe0c242d5"
   },
-  "Accounting.Assumptions.EncodeChainHardness": {
-   "owner": "@memory-accounting",
-   "digest": "bf0e57c7189036ddbcc6e681ffe2433caa636d40169a587fb3cdbcd24a943314"
-  },
   "Accounting.Assumptions.KeyBinding": {
    "owner": "@memory-accounting",
    "digest": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
@@ -3996,12 +3992,6 @@
    "signature": ["Accounting.SecurityProofs.Gates.EncodeBudget : Accounting.Guarantees.Gates.EncodeBudget"],
    "assumptions": [],
    "type_hash": "99a6dd943ff4b0f93d32cee23f1a9a0b38c571fcde163c3b96d9fbaf700c32d9"
-  },
-  "Accounting.SecurityProofs.Gates.EncodeChainRefuted": {
-   "owner": "@memory-accounting",
-   "signature": ["Accounting.SecurityProofs.Gates.EncodeChainRefuted : Accounting.Guarantees.Gates.EncodeChainRefuted"],
-   "assumptions": [],
-   "type_hash": "8d77a81116cefbba9ece553211efa41bd1aca9497500487ccfb33ab4c42746af"
   },
   "Accounting.SecurityProofs.Gates.EncodeCost": {
    "owner": "@memory-accounting",
@@ -13921,7 +13911,6 @@
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": "lemma: the forking step behind the remote audit's receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which PooledDraw and the drawn memory-line guarantees charge, over a session and its receipts, not a Lean function: with the held row by definition the plurality of the rows the receipt shows over window t's continuations (Accounting.Remote.Draw.Receipts.held, at Accounting.Remote.Draw.cont) and no premise beyond L_t holding every receipt window t opens, the binding term is at most sum_t sqrt(|L_t| s_t (fork_t + split_t)), fork_t the chance that two runs from window t's cut on independent openings coins hash a SHA-512 collision between one receipt's two openings' checks (Receipts.Broken, Hash.SecurityProofs.RowBinding) and split_t the chance that their roots, ranks or verifiers differ (Receipts.Split); split_t is not bounded here: the deployed prover holds no coin commitment until the session's outcome, but that window t's roots read only its cut is not a premise (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": "lemma: ReceiptsBindingOfFork under claim cr/sha-512 (Claims.StrictBirthday) at each window's fork finder (Accounting.Remote.Draw.Receipts.finder, at q_t SHA-512 calls): the receipts' binding term is at most sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), not a Lean function; where the window's cut fixes its roots split_t = 0 and it is sum_t sqrt(|L_t| s_t) q_t/2^256.5 (Accounting.SecurityProofs.Remote.Binding.binding_le_of_fixed), ledger.binding's form, which the code charges at the session's bounds (L_t the most receipts a window of the session can have, s_t its draw cap), not at one record's U_t and s'_t; that the deployed play's cut fixes the roots is not a premise (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod": "frozen (no-function,hash): It is BandwidthOfAuditPerRun on a period's coins: it carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to PoUB's per-period guarantee (PeriodRun.Sound at .poub) of an abstract period of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/JointPeriod.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
-   "Accounting.SecurityProofs.Gates.EncodeChainRefuted": "frozen (no-function): A counterexample to the named conjecture EncodeChainHardness, a circuit of the gate model with no budgeted gate that computes more words of the codec than its units allow, inside the conjecture's floor at every field of whole bytes with room for them, not a property of a Lean function.",
    "Accounting.SecurityProofs.Gates.FoolingCap": "frozen (no-function): A counting bound over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean), every set of inputs and every list of outputs read mod 2^j, not a property of a Lean function: the property's census check has no Lean code yet.",
    "Flock.SecurityProofs.SampledKSLiveV3": "frozen (no-function): SampledKSLiveV2 on the event that the verifiers accept the files, proved from it; it reads SampledKSLiveV3 (Security/Proofs/Flock/Bridge/Refused.lean), whose event is flock-verify --zk's acceptance (Flock.PortRoots.check: row/v1, row/v2 or row-seg/v1 ports, distinct names, no colliding per-schema roots) and the sampled-proofs run's Slots.popOk, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
    "Verity.SecurityProofs.NaiveBeatsStrassenServed": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model, on each of four fixed instances, rather than a Lean function's acceptance.",
@@ -14094,11 +14083,6 @@
     "status": "open",
     "test": "verity/core/protocols/pous/tests/test_pous_p2_ring.py::test_p2_ring_round_secure_at_a_scaled_point",
     "why": "P2 in the ring model per round, at every block count from 2^19 to 2^25: at a boundary held at most rho*|C| bits, outside an event of mass k*eps0 over k rounds, a uniform challenge is answered with probability at most 1 - p given the earlier answers; open, and, if p is prime, it forces p = 0 at D >= 32,894 (Q >= 2, L >= 65,789) whenever eps0 < 1 and m/N <= 1 - p + eps0 at L >= 2^(t+1) for m blocks kept without t low bits (p = 0.043 false from L >= 2^167 at 2^19 when eps0 <= 2^-130), which Security/Proofs/Pous/P2/RoundTests.lean proves."
-   },
-   "Accounting.Assumptions.EncodeChainHardness": {
-    "status": "falsified",
-    "test": "benchmarks/property_redteam/tests/test_bitwise_codec.py::test_the_conjecture_fails_at_p1024",
-    "why": "In the circuit model, computing q distinct words of the masked k-round codec's encoding, less parity, on more than ε of the draws costs q·E budgeted units less E/(n−1) per run-input bit, inside the floor its statement carries (ε ≥ 2^−64, k ≥ 1, p ≥ 2^66, p ≡ 3 mod 4); false at every E ≥ 1 and every B inside that floor (26 Oct 2026, Accounting.SecurityProofs.Gates.EncodeChainRefuted, note:20261026T0110Z-report-s5-lowerbounds): an AND of two bits is a free s8-family MAC and NOT a free affine map, so a restricted circuit with no budgeted gate and no run input computes any number of words for the key's gather units (bitwise_codec.py, 8 units a key byte). The model now charges every product of two data values a unit (Gates.nonlinear), and SquaringFloor and ChainSum replace it; it stays listed so that anything citing it shows up."
    },
    "Accounting.Assumptions.TS.LinSteer": {
     "status": "falsified",
@@ -14485,13 +14469,6 @@
     "Eq (instHMod.hMod F.p 4) 3": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "words.Nodup": "words.Nodup taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (i : Nat), List.instMembership.mem words i → instLTNat.lt i F.p": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.Gates.EncodeChainRefuted": {
-    "instLENat.le εden (instHMul.hMul (instHPow.hPow 2 64) εnum)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (instHPow.hPow 2 66) F.p": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod F.p 4) 3": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod F.n 8) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLTNat.lt (instHMul.hMul 72 (instHMul.hMul (instHAdd.hAdd k 2) F.bytes)) F.p": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Gates.EncodeCost": {
     "instLENat.le E (instHMul.hMul (instHMul.hMul k F.squarings) e)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -17152,13 +17129,6 @@
    },
    "guarantees": ["Nci.SecurityProofs.CapabilityFloor", "Nci.SecurityProofs.CapabilityFloorHonest"]
   },
-  "Definitions.Accounting.Assumptions.EncodeChain": {
-   "digest": "4ef5264146c987fc18c7cabf85131e048a4ddfd9dae8bd3696ce51facd990d03",
-   "definitions": {
-    "Accounting.Assumptions.EncodeChainHardness": "bf0e57c7189036ddbcc6e681ffe2433caa636d40169a587fb3cdbcd24a943314"
-   },
-   "guarantees": ["Accounting.SecurityProofs.Gates.EncodeChainRefuted"]
-  },
   "Definitions.Accounting.Assumptions.PouwFloor": {
    "digest": "4f9b562c931e2da9c956607655fcd71f416e3789589c2c2a40b16527b84a2885",
    "definitions": {
@@ -18226,7 +18196,6 @@
    "guarantees": [
     "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.Gates.EncodeBudget",
-    "Accounting.SecurityProofs.Gates.EncodeChainRefuted",
     "Accounting.SecurityProofs.Gates.EncodeCost",
     "Accounting.SecurityProofs.Gates.RhoPairs",
     "Accounting.SecurityProofs.Gates.SquaringCarry",
@@ -18438,7 +18407,6 @@
     "Accounting.SecurityProofs.Gates.DeclaredWindow",
     "Accounting.SecurityProofs.Gates.DitherRange",
     "Accounting.SecurityProofs.Gates.EncodeBudget",
-    "Accounting.SecurityProofs.Gates.EncodeChainRefuted",
     "Accounting.SecurityProofs.Gates.EncodeCost",
     "Accounting.SecurityProofs.Gates.Exp2Lut127Range",
     "Accounting.SecurityProofs.Gates.F32ToS8RziRange",
@@ -18877,13 +18845,6 @@
     "Accounting.SecurityProofs.Gates.SquaringUnits",
     "Accounting.SecurityProofs.Gates.UnitsFooling"
    ]
-  },
-  "Definitions.Accounting.Guarantees.GatesBitwise": {
-   "digest": "11bf9ade6456b8e9875feeb541fbca8b8fab63db904bdc9515603832d9dcc060",
-   "definitions": {
-    "Accounting.Guarantees.Gates.EncodeChainRefuted": "34f205a158aa075674d9945f3302b515802336831d6bc535a60b883391d0ec0a"
-   },
-   "guarantees": ["Accounting.SecurityProofs.Gates.EncodeChainRefuted"]
   },
   "Definitions.Accounting.Guarantees.HMu": {
    "digest": "b08f25418b8b3ef93f63d5d8f7b9c510362dcaae40b3dd50eac0975a13776b68",

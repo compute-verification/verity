@@ -1,6 +1,5 @@
 """The falsification tests of `Accounting.Assumptions.SquaringFloor` and `ChainSum` (Security/Definitions/Accounting/
-Assumptions/SquaringChain.lean), which replace the falsified `EncodeChainHardness` (EncodeChain.lean, refuted by
-`Accounting.SecurityProofs.Gates.EncodeChainRefuted`): every known construction of a squaring mod p1024 in the circuit
+Assumptions/SquaringChain.lean): every known construction of a squaring mod p1024 in the circuit
 model costs at least `e = (2L − 1) + (L − d(ε))` nonlinear units, `L = n/8` and `d(ε) = d₀ + log₂(1/ε)/8` with
 `d₀ = 4`, at every `ε ≥ 2^−64` (`test_squaring_floor_known_constructions`), and chained squarings cost their sum
 (`test_chain_sum_known_chains`).
@@ -15,7 +14,7 @@ operands (`OperandBits`). The nonlinear units are the budgeted units and the dat
 seeded inputs and checked against `pow(a, 2, p)` on every input (`ε = 1`, so `e = 3L − 1 − d₀`); a cheaper one, added
 here, fails the test and falsifies `SquaringFloor` at `e`. Its budgeted units are also the test of the per-squaring
 statement `Accounting.Guarantees.Gates.Renormalization` at `c = 0` (`L − d(ε)`): its outputs are limbs congruent to the
-square. The bitwise codec, which refuted `EncodeChainHardness`, pays a data product an AND
+square. The bitwise codec, free in budgeted units, pays a data product an AND
 (`benchmarks/property_redteam/tests/test_bitwise_codec.py`).
 
 `Renormalization` has a floor on `ε` because circuits with no budgeted gate refute it below one: on the `a` whose

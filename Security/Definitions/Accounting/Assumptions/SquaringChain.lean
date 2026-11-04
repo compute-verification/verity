@@ -4,12 +4,12 @@ import Definitions.Accounting.Gates.Codec
 /-!
 # The encode bound's conjectures in nonlinear units: a floor per squaring, and a chain costs its sum (trusted)
 
-What the encode bound (`Definitions/Accounting/Guarantees/Gates.lean`, `EncodeBudget`) assumes in place of the
-falsified `EncodeChainHardness`: two named `Prop`s, each taken as a hypothesis, never an `axiom`. Both are genuine math,
-conjectures: each sits under `shape.conjectures` with a falsification test that runs, and every claim
-resting on them is conditional. Both are priced in the model's nonlinear units (`Gates.nonlinear`: its budgeted units
-and its data products, every operation but a linear map whose coefficients are fixed before the coins), the units the
-stacking property caps (`Gates.Property`), so `E` is the encoder's multiplicative complexity in the gate model.
+What the encode bound (`Definitions/Accounting/Guarantees/Gates.lean`, `EncodeBudget`) assumes: two named `Prop`s, each
+taken as a hypothesis, never an `axiom`. Both are genuine math, conjectures: each sits under `shape.conjectures` with a
+falsification test that runs, and every claim resting on them is conditional. Both are priced in the model's nonlinear
+units (`Gates.nonlinear`: its budgeted units and its data products, every operation but a linear map whose coefficients
+are fixed before the coins), the units the stacking property caps (`Gates.Property`), so `E` is the encoder's
+multiplicative complexity in the gate model.
 
 * `SquaringFloor F e ε`: one squaring mod `p`, from a word's canonical bytes to `L = n/8` byte-format limbs congruent
   to its square, right on more than `ε` of the words, costs at least `e` nonlinear units, at `ε ≥ 2^−64` and
@@ -19,13 +19,12 @@ stacking property caps (`Gates.Property`), so `E` is the encoder's multiplicativ
   (`Gates.EncodeBound F k B (k · S · e) ε`), at `ε ≥ 2^−64`, `k ≥ 1`, `p ≥ 2^66` and `p ≡ 3 mod 4`. Sloth's
   sequentiality (Lenstra–Wesolowski), stated in the model.
 
-**Why two.** `EncodeChainHardness` was the two at once, priced in budgeted units, and the model refuted it
-(`Accounting.SecurityProofs.Gates.EncodeChainRefuted`): an exact product of two data values is a universal gate (an AND
-of two bits is one), and it was a free MAC, so a bitwise codec computes any number of words for the key's gather units.
-The model now charges every product of two data values, whatever its operands' ranges, and the claim splits where its
-evidence does: a squaring's floor is a question about one squaring, on which multiplicative complexity, Lemma R and the
-known constructions bear; the chain's additivity is a sequentiality question about representations between squarings,
-which they don't.
+**Why two, in nonlinear units.** An exact product of two data values is a universal gate (an AND of two bits is one), so
+priced in budgeted units alone, with products free, a bitwise codec computes any number of words for the key's gather
+units (`benchmarks/property_redteam/bitwise_codec.py`). The model charges every product of two data values, whatever its
+operands' ranges, and the claim splits where its evidence does: a squaring's floor is a question about one squaring, on
+which multiplicative complexity, Lemma R and the known constructions bear; the chain's additivity is a sequentiality
+question about representations between squarings, which they don't.
 
 **Price.** At p1024 (`L = 128`), `e(ε) = (2L − 1) + (L − d(ε))` with `d(ε) = d₀ + ⌈log₂(1/ε)/8⌉` and `d₀ = 4`: `2L − 1
 = 255` data products for the square's column sums and Lemma R's `L − d(ε)` budgeted units to carry them back to bytes.
@@ -85,8 +84,19 @@ distinct words (each below `p`), byte for byte less their parity, on more than `
 `q · k · S · e · (n − 1) ≤ nonlinear C · (n − 1) + runBits C · k · S · e` (`Gates.EncodeBound`). Each word costs its
 `k · S` squarings, or its `n − 1` bits as run input.
 
-**The floor.** It is claimed at `ε ≥ 2^−64`, `k ≥ 1`, `p ≥ 2^66` and `p ≡ 3 mod 4`, `EncodeChainHardness`'s floor, for
-the reasons its docstring gives: below each a circuit with no unit computes a word. It doesn't say `p` is prime.
+**The floor.** It is claimed at `ε ≥ 2^−64`, `k ≥ 1`, `p ≥ 2^66` and `p ≡ 3 mod 4`, and says nothing outside them.
+Below each, a circuit with no unit computes a word (the examples after `EncodeCost` in `Proofs/Accounting/Gates.lean`
+put these outside the floor):
+
+* at `ε = 0`, the constant bytes of one draw's target are right on that draw;
+* at `k = 0` the encoding is the payload word itself, registered before the draw;
+* at a field narrower than a byte the target has no bytes, and below `p = 2^66` a constant target can be right on
+  more than `2^−64` of the draws: at `⟨8, 5⟩`, `k = 3`, one draw is, and at `p = 3` every target is `0`. At a prime
+  `p ≡ 3 mod 4` the last round's constant is uniform and `ρ` takes each value from at most two inputs, so a constant
+  target is right on at most `4/p` of the draws, `≤ 2^−64` from `p = 2^66`;
+* at `p ≢ 3 mod 4` `ρ` is no square root (at `p = 2^n` it is `0` on every even input).
+
+It doesn't say `p` is prime, since p1024's primality has no Lean proof here.
 
 **Why it should hold.** A root is `S` squarings in sequence, each reading the last one's output, and the word's `k`
 roots are in sequence too (`ρ(σ(x) + c_r + t)`), so no squaring starts before the one before it ends: Sloth's
