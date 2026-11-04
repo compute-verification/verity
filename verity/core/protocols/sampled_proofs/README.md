@@ -142,9 +142,8 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   draw's coins as v1 does (`OneStage.coinsOf`; `oneStageZkReads` in `Security/Properties/Challenger.lean`) and holds
   the session's record to the coin trees the signed release log shows the challenger sampled and opened
   (`SampledProofs/ChallengerTrees.lean`, `challenger.sessions_tree_reason`): its `coin_tree` the one tree logged, its
-  link points and round coins that tree's openings after its link's roots and each round's message, its link's
-  `root_B` of the length the statement fixes, `2^cap₀` digests, refused before that message is hashed so that it parses
-  one way (`LINK_ROOT_LEN`, the lengths from the session's own setup: `OneStageZk.rootBTables`). Then it runs
+  link points and round coins that tree's openings after its link's roots and each round's message, each `root_B`
+  the length its statement fixes, refused before the hash (`LINK_ROOT_LEN`). Then it runs
   `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds
   `proved_units` to what the session proved, and hands its verdict to v1's `checkAt` at those coins.
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
