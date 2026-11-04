@@ -48,9 +48,8 @@ Two kinds of committed run:
     prove_path.py serve-standin --bundle DIR --row-dir DIR --workload F --out RUN [--hf-config F] [--cap-bits L]
     prove_path.py circuit --serve-run DIR --window K --partition F --advice FILE --out FILE [--hf-config F] [--target F] \\
         [--cap-bits L] [--transfer-gate T ...]
-    prove_path.py window-circuit --serve-run DIR --window K --row-dir DIR --advice FILE --out FILE [--cap N] [--description] \\
-        [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--pin NAME=ROOT ...] [--pins FILE ...] [--hf-config F] [--target F] \\
-        [--cap-bits L]
+    prove_path.py window-circuit --compiler FILE --registration FILE --out FILE [--cap N] [--description] \\
+        [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--pin NAME=ROOT ...] [--pins FILE ...]
     prove_path.py class-size --serve-run DIR --window K --row-dir DIR --advice FILE \\
         [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--probe SLOTS,PROMPT,OUTPUTS] [--hf-config F] [--target F] [--cap-bits L]
     prove_path.py window-commit --serve-run DIR --window K --row-dir DIR --advice FILE --key FILE --registration FILE \\
@@ -96,15 +95,20 @@ Two kinds of committed run:
   no row dir), and the length it charges. ``records_audit.py`` audits a window
   from the records its integration hands Verity alone (``circuit.json``, the registration and the values, the advice's
   opening) and imports no `verity_vllm`; this file's ``audit`` holds a window to the vLLM run's own records.
-* **window-circuit**: the same advice through I2 as its window class's one Circuit (`window_circuit_of_advice`, V3; the
-  class ``--class``, by default the class of record, `window_circuit.CLASS_OF_RECORD`: 8 slots, 4 at each of buckets 0
-  and 16, 1,024 prompt ids and 64 outputs, the certifier run of record's envelope at the fixed slots; every slot's
-  Program whatever the window's requests, each placed at the window's first boundary): its record (or ``--description``,
-  its description) and its input count at the verifier's pins (``--pin NAME=ROOT``, the roots it fixed before the run,
-  each of its parameter alone, a weight's ``weights/<label>@<words>``; ``--pins REGISTRATION``, each weight's hiding root
+* **window-circuit** (the verifier): its window class's one Circuit from the class alone (`window_circuit_of_class`, V3;
+  the class ``--class``, by default the class of record, `window_circuit.CLASS_OF_RECORD`: 8 slots, 4 at each of
+  buckets 0 and 16, 1,024 prompt ids and 64 outputs, the certifier run of record's envelope at the fixed slots), under
+  the registered compiler the run publishes (``--compiler``, **compiler**'s document, held to the advice registration's
+  binding: `registered_of_compiler`): every slot's class Program, read from no serve dir, advice, request or row dir.
+  Whether the window's requests fit the class is the prover's, which **window-commit** refuses where they don't. It
+  writes its record (or ``--description``, its description) and its input count at the verifier's pins (``--pin
+  NAME=ROOT``, the roots it fixed before the run, each of its parameter alone, a weight's ``weights/<label>@<words>``;
+  ``--pins REGISTRATION``, each weight's hiding root
   as the committer registered it before the first window's coins, `window_weights.weights_registration`'s ``{program,
   values}``, never a root computed from a checkpoint; a registered read counts registered only where the window's
-  registration, `verity-vllm advice`'s, records the pinned root for its parameter, and any other is free), which
+  registration, `verity-vllm advice`'s as the run publishes it (``--registration``, `served_verdicts.py
+  public-registration`: the advice's length padded to the cap), records the pinned root for its parameter, and any
+  other is free), which
   ``records_audit.py count`` recounts from the record alone. A5 audits it once the committer writes each
   unit's rows as the record's members.
 * **class-size**: that Circuit's padded size at ``--class``, too large to lower there (`class_size_of_advice`): one class
@@ -1144,32 +1148,59 @@ def window_class_of(arg: str | None) -> Any:
     return CLASS_OF_RECORD if arg is None else WindowClass(*(int(x) for x in arg.split(",")))
 
 
-def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
-    """A served window's advice through I2 as its window class's one Circuit (V3: `window_circuit.window_circuit` at
-    ``--class``, a class Program a slot flattened into units, every input row wired or registered, the weights' or the
-    network certifier's scan state rows), written to
-    ``--out`` as its circuit record from its description alone (`interface.descriptor_record`, members stated at ``--cap``
-    units), or with ``--description`` as the description `interface.input_count` reads, no program built. -> the advice's
-    length in bits, ℓ, and the record's input count at the verifier's pins (``--pin NAME=ROOT``, ``--pins FILE``: `pins_of`),
-    each held to the root the window's registration (``advice/w<K>/registration.json``) records for its parameter
-    (`registration_roots`)."""
-    from verity_vllm.program.predict.build import Unexpressible
-    from verity_vllm.program.predict.steps import compile_steps
-    from verity_vllm.program.predict.window_circuit import window_circuit
+def registered_of_compiler(doc: Mapping[str, Any], registration: Mapping[str, Any]) -> Any:
+    """The registered compiler a served run publishes (``compiler``'s document, `compiler_doc`) as the verifier takes it:
+    its φ, default seed and ℓ, once its name and digest are those the window's advice registration binds
+    (``binding.compiler``) and recompute from those fields, this tree's served code (`served_compiler.served_identity`)
+    and its pinned model's transfer gates of record (`served_compiler.served_gates`). A ValueError where any differs."""
+    from verity_vllm.program.predict.phi import Phi
+    from verity_vllm.program.predict.steps import Registered
 
-    compiler, data, pins = compiler_of_args(a), Path(a.advice).read_bytes(), pins_of(a.pin, a.pins)
-    compile_advice(compiler, data)
-    registered, cls = compiler.inner.registered, window_class_of(a.window_class)
+    try:
+        registered = Registered.of(Phi.from_json(doc["phi"]), int(doc["default_seed"]), int(doc["cap_bits"]))
+    except (KeyError, TypeError, ValueError, AttributeError) as e:
+        raise ValueError(f"the registered compiler's document states no φ, default seed and ℓ ({type(e).__name__}: "
+                         f"{e})") from None
+    name, code = SC.served_identity()
+    if doc.get("served") != {"name": name, "digest": code}:
+        raise ValueError(f"the registered compiler runs the server's code {doc.get('served')}, and this tree's is "
+                         f"{name} at {code[:16]}…: the verifier's tree must hold the server's")
+    pin = registered.phi.model
+    gates = SC.served_gates({"model": pin.get("repo"), "revision": pin.get("revision")}, doc.get("transfer_gates") or ())
+    c = Capped(I2Compiler(registered, {}, "", name=name, transfer_gates=gates, code=code), registered.cap_bits)
+    bound = (registration.get("binding") or {}).get("compiler")
+    if {"name": c.name, "digest": c.digest} != {"name": doc.get("name"), "digest": doc.get("digest")} or bound != {
+            "name": c.name, "digest": c.digest}:
+        raise ValueError(f"the registered compiler's digest from its fields is {c.digest[:16]}…, the document says "
+                         f"{str(doc.get('digest'))[:16]}… and the advice registration binds {bound}: not one compiler")
+    return registered
+
+
+def window_circuit_of_class(a: argparse.Namespace) -> dict[str, Any]:
+    """The verifier's record of a served window's class circuit (V3: `window_circuit.class_circuit` at ``--class``, a
+    class Program a slot flattened into units, every input row wired or registered, the weights' or the network
+    certifier's scan state rows), from the class and the registered compiler the run publishes (``--compiler``,
+    `registered_of_compiler`, held to the advice registration's binding) alone: it reads no serve dir, advice, request or
+    row dir. Written to ``--out`` as its circuit record from its description alone (`interface.descriptor_record`,
+    members stated at ``--cap`` units), or with ``--description`` as the description `interface.input_count` reads, no
+    program built. -> the record's input count at the verifier's pins (``--pin NAME=ROOT``, ``--pins FILE``: `pins_of`),
+    each held to the root the window's advice registration as the run publishes it (``--registration``, its length
+    padded to the cap) records for its parameter (`registration_roots`)."""
+    from verity_vllm.program.predict.build import Unexpressible
+    from verity_vllm.program.predict.window_circuit import class_circuit
+
+    registration, pins = json.loads(Path(a.registration).read_text()), pins_of(a.pin, a.pins)
+    registered = registered_of_compiler(json.loads(Path(a.compiler).read_text()), registration)
+    cls = window_class_of(a.window_class)
     t0 = time.time()
     try:
-        circuit = window_circuit(registered, compile_steps(registered, compiler.unpad(data), compiler.inner.ingress), cls)
+        circuit = class_circuit(registered, cls)
     except Unexpressible as e:
-        raise ValueError(f"I2's window circuit refuses the advice: {e}") from None
+        raise ValueError(f"I2's class circuit refuses the class: {e}") from None
     lowered = time.time() - t0
     doc = circuit.description() if a.description else IF.descriptor_record(circuit, a.cap)
     Path(a.out).write_bytes(IF.circuit_bytes(doc))
-    roots = registration_roots(json.loads((Path(a.serve_run) / "advice" / f"w{a.window}" / "registration.json").read_text()))
-    return {"bits": 8 * len(data), "count": IF.input_count(doc, pins=pins, roots=roots),
+    return {"count": IF.input_count(doc, pins=pins, roots=registration_roots(registration)),
             "seconds": {"circuit": round(lowered, 1), "record": round(time.time() - t0 - lowered, 1)}}
 
 
@@ -1611,10 +1642,13 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument(flag, required=True)
     p.add_argument("--window", type=int, required=True)
     p.add_argument("--transfer-gate", action="append", default=[])
-    p = sub.add_parser("window-circuit", help="a served window's advice through I2 as one Circuit (V3), its record written to --out")
-    for flag in ("--serve-run", "--row-dir", "--advice", "--out"):
-        p.add_argument(flag, required=True)
-    p.add_argument("--window", type=int, required=True)
+    p = sub.add_parser("window-circuit", help="the verifier's record of a served window's class circuit (V3), from the class "
+                       "and the run's registered compiler alone, written to --out")
+    p.add_argument("--out", required=True)
+    p.add_argument("--compiler", required=True, help="the run's registered compiler as it publishes it (`prove_path.py "
+                   "compiler`'s document), held to the advice registration's binding")
+    p.add_argument("--registration", required=True, help="the window's advice registration as the run publishes it "
+                   "(`served_verdicts.py public-registration`), whose compiler and roots the circuit and pins are held to")
     p.add_argument("--cap", type=int, default=64, help="units a member (a statement), the record's stated cap")
     p.add_argument("--description", action="store_true", help="write the circuit's description (templates, wires and "
                    "declarations), not its record: no program is built")
@@ -1658,10 +1692,10 @@ def main(argv: list[str] | None = None) -> int:
     for name in ("audit", "circuit"):
         sub.choices[name].add_argument("--vllm-python", help="ignored: the verifier writes its own Builds from its compile, "
                                        "with no vLLM (own_builds)")
-    for name in ("compiler", "serve-standin", "circuit", "window-circuit", "class-size", "window-commit"):
+    for name in ("compiler", "serve-standin", "circuit", "class-size", "window-commit"):
         sub.choices[name].add_argument("--hf-config")
         sub.choices[name].add_argument("--cap-bits", type=int, default=CAP_BITS)
-    for name in ("compiler", "circuit", "window-circuit", "class-size", "window-commit"):
+    for name in ("compiler", "circuit", "class-size", "window-commit"):
         sub.choices[name].add_argument("--target")
     a = ap.parse_args(argv)
     if a.cmd == "compiler":
@@ -1670,7 +1704,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "window-commit":
         a.bundle = str(Path(a.row_dir) / "commit" / "replay_bundle_p0")
     if a.cmd in ("circuit", "window-circuit", "class-size", "window-commit", "weights-registration"):
-        commands = {"circuit": circuit_of_advice, "window-circuit": window_circuit_of_advice, "class-size": class_size_of_advice,
+        commands = {"circuit": circuit_of_advice, "window-circuit": window_circuit_of_class, "class-size": class_size_of_advice,
                     "window-commit": window_commit_of_advice, "weights-registration": weights_registration_of_serve}
         try:
             print(json.dumps(commands[a.cmd](a), sort_keys=True))

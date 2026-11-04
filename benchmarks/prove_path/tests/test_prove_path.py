@@ -744,7 +744,7 @@ def _served(tmp_path: Path, monkeypatch, *, root: str = "aa" * 64, scheme: str =
     (adv / "registration.json").write_text(json.dumps({
         "schema": "verity-vllm/advice-registration/v1", "scheme": AW.SCHEME, "binding": bound,
         "compiler": {**bound["compiler"], "cap_bits": CAP, "inner": {"name": SERVER[0], "digest": SERVER[1]}},
-        "window": 0, "commit": {"run_id": "RUN/w0", "run_root": pub}}))
+        "rows": len(reg.salts), "row_bits": AW.ROW_BITS, "window": 0, "commit": {"run_id": "RUN/w0", "run_root": pub}}))
     (adv / "private" / "advice.bin").write_bytes(data)
     (adv / "private" / "opening.json").write_text(json.dumps(AW.opening(data, reg)))
 
