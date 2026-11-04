@@ -18,8 +18,8 @@ execution phase. The
 network verdict of record is `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share
 credit: it accepts only when every window of the egress profile (a served link's profile) is registered in order and
 its outcome of record accepted, so a rejected or late window, one with no outcome, and a gap in the registrations each
-reject the link; on a network certifier link every window's egress tie must accept it too (`egress`, below). A run's is
-the AND over its links'.
+reject the link; on a network certifier link each execution phase's egress tie must accept it too (`egress`, below). A
+run's is the AND over its links'.
 
 **The period draw** (`LinkWindows.period_draw`) samples the link-windows instead. The prover first commits the
 period: every window's salted root (`root`), which the challenger records before it reads a coin (a coin source with
@@ -125,8 +125,8 @@ head's counts are the profile's (and the ingress head's, where that end declares
 the profile. The egress grid is the head's counts filled with the head's frames in order (`grid.fill`), and the head's
 digest binds both, so the frames are the rest of the grid, and N2 says nothing of them. On a network certifier link
 the egress tie holds them (`scan_service`): its proof that the network certifier's egress rows are the ones the
-committed trace renders is what `network_verdict(egress=…)` reads, and the link's network verdict counts a window only
-where that tie accepted it. On any other link nothing here holds the egress grid to the Program's.
+committed trace renders is what `network_verdict(egress=…)` reads, and the link's network verdict counts an execution
+phase only where that tie accepted it. On any other link nothing here holds the egress grid to the Program's.
 
 **A served link** (`LinkWindows(served=served.ServedProfile(…))`) has egress counts that follow its requests' arrivals
 and the run-time syncs, so no profile fixes them before the run. Its proof block is `NetworkServedLinkWindow` v4{EGRESS,
@@ -150,8 +150,8 @@ digest. Its public items are `PUBLIC_WARDEN`. The in-the-clear check is the open
 records' cells are the scan's, and the certifier's host audit doesn't read a network certifier's records. Its network
 verdict takes the link's egress tie (`network_verdict(egress=scan_service.Scans(…))`, the verifier's own: an
 `EgressTie` of this link, its certifier session and the schedule whose digest `WardenProfile` names, on this link's
-grid) and refuses a window the tie doesn't accept, so a run whose egress differs from the committed trace by one token
-is refused though its counts accept; without a tie it refuses the link by name (`EGRESS_TIED`).
+grid) and refuses an execution phase the tie doesn't accept, so a run whose egress differs from the committed trace by
+one token is refused though its counts accept; without a tie it refuses the link by name (`EGRESS_TIED`).
 
 A link whose egress end has no occupancy profile and is neither served nor a warden's has no verdict
 (`ValueError`, failing closed): nothing would hold its egress timing.
@@ -1291,8 +1291,8 @@ class LinkWindows:
         (or ``all`` at K = n), and its units are the Lean's.
 
         On a network certifier link the verdict holds the egress to the committed trace too: `egress`, the verifier's
-        own egress tie (`scan_service.Scans`), must accept every window 0 … n − 1, and a window it doesn't accept is in
-        `refused`. Every window, sampled or not, since the scan's registrations are not among the roots a period
+        own egress tie (`scan_service.Scans`), must accept every execution phase 0 … n − 1, and a phase it doesn't accept
+        is in `refused`: every phase, sampled or not, since the scan's registrations are not among the roots a period
         commits. Without one the link is refused by name, `why[EGRESS_TIED]`, and `refused` lists N2's own refusals
         alone. `egress` is the tie's registrations and accepted bits (None without one), which `digest` binds.
 

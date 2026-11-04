@@ -1,5 +1,5 @@
 """A stand-in for N2's proof of an execution phase, for the ingress tie's of an ingress execution phase (`prove_tie`)
-and for the egress tie's of one member of a link-window's scan (`prove_scan`), for tests: what Flock's prover behind
+and for the egress tie's of one member of an execution phase's scan (`prove_scan`), for tests: what Flock's prover behind
 the ZK server would deliver, and a stand-in for the verifier's own run of Flock's Lean verifier (`proofs.verify`),
 which reads each session's verdict from the session file the stand-in prover writes. The proof's outputs are the proof
 block's on the prover's rows by each gate's reference (`LinkWindows.outputs`, `IngressTie.outputs`,

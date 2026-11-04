@@ -149,7 +149,7 @@ def scan_root(members: Sequence[tuple[Any, int, int]], nb: int, every: int) -> P
         return coll_concat(signature(S_)[1], outs)
 
     defn = CompositeDefinition(
-        "NetworkScanWindow", 1, ("templates", "counts", "nb", "every"), signature, body, register=False,
+        "NetworkScanPhase", 1, ("templates", "counts", "nb", "every"), signature, body, register=False,
         doc="the step-indexed scan's execution phase in the generator form: each template one batch over its proof "
             "blocks, every ingress block's prog<j> its boundary's row of lane j's slot entries")
     return Program(bind(defn, templates=tuple(P.template_id(t) for t, _, _ in members),

@@ -16,9 +16,10 @@ A spec-level reference for network accounting's timing channel:
   is at the profile. On a network certifier link the egress tie (`scan_service`, below) holds the frames, the rest of
   the egress grid, to the committed trace (N3, the content check prototyped in `benchmarks/network_sim`, is retired,
   superseded by it). The network verdict of record is
-  `LinkWindows.network_verdict`, the AND over the link's execution phases with no ε or share credit: every window of the
-  egress profile registered in order with an accepted outcome and, on a network certifier link, its egress tie accepted
-  (`network_verdict(egress=…)`), and a rejected, late, missing, untied or out-of-order window rejects the link;
+  `LinkWindows.network_verdict`, the AND over the link's execution phases with no ε or share credit: every execution
+  phase of the egress profile registered in order with an accepted outcome and, on a network certifier link, its egress
+  tie accepted (`network_verdict(egress=…)`), and a rejected, late, missing, untied or out-of-order phase rejects the
+  link;
 - a served link's counts (`served`, `LinkWindows(served=ServedProfile(F, F_in, windows, own))`), whose egress end has no
   occupancy profile: N2's served proof block, `NetworkServedLinkWindow`, adds a Boolean Definition,
   `NetworkServedCounts_v1` (678,795 ANDs at T = 600, F = 1024, F_in = 1, R = 6, R_in = 1), that holds the egress
