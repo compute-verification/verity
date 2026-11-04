@@ -2,8 +2,12 @@
 # PoUW's piece of a served H1 window with its drawn units proved (served_verdicts.sh's POUW_CMD): drawn.py (the CLI of
 # verity_vllm.protocols.pouw.h1.drawn, reading --checkpoint with the live challenger's model registry) stages each
 # drawn call's J10-R units on the window's own registered values, and each drawn unit of a lanes-form K as its lanes and
-# combine; each staged statement is proved by one loopback C-Flock --zk session drawing all its instances
-# (hidden_zk/job.sh's `session`, at the slot its circuit file's META names), drawn.py writes the statements file and
+# combine; each staged statement is proved by one C-Flock --zk session drawing all its instances (hidden_zk/job.sh's
+# `session`, at the slot its circuit file's META names), one session at a time, its prover under the ZK server
+# (FC_FIREWALL=1, FC_HOST_WITNESS=1: the Lean session loop flock-firewall, live PROTOCOL.md §10.4, whose Hello is set up
+# on the statement's own program.json and partition.json, the Program and partition credit verifies it under, so what
+# leaves for the live verifier is the loop's), as h1_prove/job.sh, live.sh and h1_lanes/served.sh prove theirs; the
+# live verifier (`serve --zk --operator loopback`) listens on 127.0.0.1 beside it. drawn.py writes the statements file and
 # checks it as credit does, and then `served_verdicts.py pouw` judges the window with it as --statements (the Lean verdict
 # of record refuses the lanes form until its mirror: H1_DRAWN_ONLY=1 stops at drawn.py's check).
 #   POUW_CMD='bash benchmarks/pouw/h1_prove/drawn.sh "$1" "$2" "$3"'      (served_verdicts.sh runs it in the tree)
@@ -12,23 +16,29 @@
 #      files, --lanes K)  H1_CHECKPOINT (the served model's
 #      safetensors dir, b/<K>'s rows) or H1_WEIGHTS (an npz of w<i>, s<i>)  H1_GATE and H1_MODEL (the auditor's model-key
 #      for b/<K>, the server's --h1-model; or H1_WEIGHTS_KEY, a key file)  H1_DRAW_K (else period.json's)
-#      FLOCK_PROVE, FLOCK_SELFTEST, FLOCK_VERIFY (prebuilt; else job.sh builds them under HZ_CACHE)  H1_DRAWN_MEM_GB (the
-#      job's budget, default 90% of the host's memory)  H1_ZK_SERVER_GB (a session's ZK server cap, default 88)
+#      FLOCK_PROVE, FLOCK_SELFTEST, FLOCK_VERIFY (prebuilt; else job.sh builds them under HZ_CACHE)  FC_FIREWALL_LEAN (the
+#      ZK server's flock-firewall, prebuilt; else built beside FLOCK_VERIFY)  H1_DRAWN_MEM_GB (the job's budget, default
+#      90% of the host's memory)  H1_ZK_SERVER_GB (a session's live verifier, `serve --zk`, its cap, default 88)
+#      H1_ZK_LEAN_GB (what the prover's share leaves the ZK server's Lean processes, default 48)  H1_FIREWALL (1; 0 the
+#      unfirewalled --zk path, for a cost comparison only: no ZK server serves it)
 #      PY (served_verdicts.sh's venv python, default .venv's)  H1_DRAWN_ONLY=1: write and check the statements, no verdict
 #      H1_DRAWN_CHECK=0: no drawn.py check, for a caller whose credit verifies the statements itself
 #      H1_DRAWN_WORK (a private directory on the node: the scratch directory goes in it and is kept, so the proof files
 #      statements.json names outlive drawn.sh for that caller; it holds the staged witness)
-# Memory: staging is capped at 90% of H1_DRAWN_MEM_GB. A session's ZK server and prover then run side by side, each under
-# an address-space cap (job.sh's vlimit): the server gets H1_ZK_SERVER_GB and the prover the rest of H1_DRAWN_MEM_GB. The
-# default is sized to a K 2048 lane session (2^27 slots: 24.4M ANDs, k_log 26, m 29; a combine is 4223 ANDs), which peaked
-# at 65.4 GiB resident in the server and 61.3 GiB in the prover, 238 s to prove at 8 threads (r20261102-160857-5d19):
-# each side's cap is its peak plus ~35%, since an address space outgrows resident memory by the allocator's arenas and
-# the threads' stacks. So a K 2048 window wants H1_DRAWN_MEM_GB >= 88 + 83 = 171 (a ~195 GB H200 host's 90% is ~174),
-# and drawn.sh refuses before staging only when the prover's share is below its 62 GB resident peak. A larger K's lane
-# is measured again before it runs.
-# Out: PIECE_DIR/drawn/ (statements.json and job.log, and sessions/<statement>/: the ZK server's log, the prover's LIVE
-# verdict lines and both sides' wall seconds and peak RSS, kept whether the session passed or failed; the server is the
-# verifier, so none of it is witness), then served_verdicts.py pouw's files in PIECE_DIR. The staging (stage/: the plan
+# Memory: staging is capped at 90% of H1_DRAWN_MEM_GB. A session's live verifier and prover then run side by side, each
+# under an address-space cap (`ulimit -S -v`): the verifier gets H1_ZK_SERVER_GB and the prover the rest of
+# H1_DRAWN_MEM_GB less H1_ZK_LEAN_GB. The ZK server's Lean processes are the prover's children, and under an
+# address-space cap their runtime can't create its threads, so they start through a wrapper that lifts the soft cap
+# they inherit: they are bounded by the H1_ZK_LEAN_GB the prover's cap leaves them and the job's cgroup, not by a
+# limit of their own. The verifier's default is sized to an unfirewalled K 2048 lane session (2^27 slots: 24.4M ANDs,
+# k_log 26, m 29; a combine is 4223 ANDs), which peaked at 65.4 GiB resident in the verifier and 61.3 GiB in the
+# prover, 238 s to prove at 8 threads (r20261102-160857-5d19): each side's cap is its peak plus ~35%, since an address
+# space outgrows resident memory by the allocator's arenas and the threads' stacks. drawn.sh refuses before staging
+# when the prover's cap is below its 62 GB resident peak, so a K 2048 window wants H1_DRAWN_MEM_GB >= 88 + 48 + 62 = 198
+# (H1_DRAWN_MEM_GB=400: the prover's cap is 264). A larger K's lane is measured again before it runs.
+# Out: PIECE_DIR/drawn/ (statements.json and job.log, and sessions/<statement>/: the live verifier's log, the prover's
+# LIVE verdict lines and both sides' wall seconds, peak RSS and CPU seconds, kept whether the session passed or failed;
+# serve is the verifier, so none of it is witness), then served_verdicts.py pouw's files in PIECE_DIR. The staging (stage/: the plan
 # and each statement's witness files and session) and job.sh's other logs, the prover's stderr among them, go to a
 # `mktemp -d` scratch directory removed on exit (kept with H1_DRAWN_WORK): PIECE_DIR is under the run's $OUT, and a staged
 # witness never goes there.
@@ -45,11 +55,31 @@ export HZ_MEM_GB=${H1_DRAWN_MEM_GB:-$(awk '/MemTotal/ {print int($2 * 0.9 / 1048
 # shellcheck source=../hidden_zk/job.sh
 . benchmarks/pouw/hidden_zk/job.sh
 trap 'cp "$OUT/job.log" "$P/drawn/" 2>/dev/null; rm -rf "$W"; [ -n "${H1_DRAWN_WORK:-}" ] || rm -rf "$SCR"' EXIT
-SERVE_GB=${H1_ZK_SERVER_GB:-88}
-PROVE_GB=$(( MEM_GB - SERVE_GB ))
-[ "$PROVE_GB" -ge 62 ] || { log "drawn: the prover's share, $MEM_GB - $SERVE_GB (H1_ZK_SERVER_GB) = $PROVE_GB GB, is below a K 2048" \
-  "lane session's 62 GB peak: raise H1_DRAWN_MEM_GB (a larger host, or a CPU node) or, for a smaller K, lower H1_ZK_SERVER_GB"; exit 1; }
+FW=${H1_FIREWALL:-1}
+SERVE_GB=${H1_ZK_SERVER_GB:-88} LEAN_GB=0
+[ "$FW" = 1 ] && LEAN_GB=${H1_ZK_LEAN_GB:-48}
+PROVE_GB=$(( MEM_GB - SERVE_GB - LEAN_GB ))
+[ "$PROVE_GB" -ge 62 ] || { log "drawn: the prover's cap, $MEM_GB - $SERVE_GB (H1_ZK_SERVER_GB) - $LEAN_GB (H1_ZK_LEAN_GB) =" \
+  "$PROVE_GB GB, is below a K 2048 lane session's 62 GB peak: raise H1_DRAWN_MEM_GB (a larger host, or a CPU node) or," \
+  "for a smaller K, lower H1_ZK_SERVER_GB"; exit 1; }
+vlimit() { echo "ulimit -S -v $(( $1 * 1024 * 1024 ));"; }
 setup
+if [ "$FW" = 1 ]; then
+  FWL=${FC_FIREWALL_LEAN:-${LEAN%/*}/flock-firewall}
+  if [ ! -x "$FWL" ]; then
+    command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
+    (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FWL" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
+      > "$OUT/build-firewall.log" 2>&1
+  fi
+  [ -x "$FWL" ] || { tail -20 "$OUT/build-firewall.log" 2>/dev/null; log "drawn: no ZK server frame at $FWL (lake build" \
+    "flock-firewall beside FLOCK_VERIFY, or FC_FIREWALL_LEAN)"; exit 1; }
+  sha256sum "$FWL" | tee -a "$OUT/binaries.sha256" | tee -a "$OUT/job.log"
+  printf '#!/usr/bin/env bash\nulimit -S -v "$(ulimit -H -v)" && exec %q "$@"\n' "$FWL" > "$W/flock-firewall" \
+    && chmod 700 "$W/flock-firewall" || exit 1
+  export FC_FIREWALL_LEAN=$W/flock-firewall
+fi
+log "drawn: ZK server $([ "$FW" = 1 ] && echo "on ($FWL)" || echo "OFF (H1_FIREWALL=0)"), caps: verifier $SERVE_GB GB," \
+  "prover $PROVE_GB GB, its ZK server's Lean $LEAN_GB GB left"
 export PYTHONPATH=$SRC:$SRC/integrations/vllm:$SRC/verity/ml/flock/python${PYTHONPATH:+:$PYTHONPATH}
 WK=$SCR/stage ST=$P/drawn/statements.json
 args=(--circuits "${H1_CIRCUITS:?H1_CIRCUITS: pouw_h1_circuits --out, with the drawn K file}")
@@ -73,6 +103,12 @@ for d in $("$PY" -c 'import json, sys; p = json.load(open(sys.argv[1])); print("
   D=${d%:*} N=${d##*:} O=$OUT/$(basename "${d%:*}")
   mkdir -p "$O" && rm -rf "$D/sessions"
   log "drawn: $(basename "$D"): --zk session over its $N drawn units"
+  if [ "$FW" = 1 ]; then
+    [ -s "$D/program.json" ] && [ -s "$D/partition.json" ] \
+      || { log "drawn: $(basename "$D"): no program.json and partition.json to set the ZK server's Hello up on"; exit 1; }
+    export FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_STATEMENT=verity/flock-circuit
+    export FC_FIREWALL_HELLO_ARGS="--partition $D/partition.json --program $D/program.json"
+  fi
   session "$D" "$O"; rc=$?
   keep "$O" "$(basename "$D")"
   log "drawn: $(basename "$D"): serve {$(grep -o '"wall_s": [^}]*' "$O/serve.time" 2>/dev/null)}" \
@@ -80,6 +116,7 @@ for d in $("$PY" -c 'import json, sys; p = json.load(open(sys.argv[1])); print("
   [ "$rc" = 0 ] && grep -q '"accepted":true' "$O/prove.out" \
     || { log "drawn: $(basename "$D"): --zk session FAILED: $(tail -1 "$O/prove.out") $(tail -1 "$O/serve.log")"; exit 1; }
 done
+unset FC_FIREWALL FC_HOST_WITNESS FC_FIREWALL_STATEMENT FC_FIREWALL_HELLO_ARGS
 "$PY" "$J/../h1_prove/drawn.py" statements --work "$WK" --out "$ST" 2>&1 | tee -a "$OUT/job.log"
 [ "${PIPESTATUS[0]}" = 0 ] || exit 1
 if [ "${H1_DRAWN_CHECK:-1}" != 0 ]; then

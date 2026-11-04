@@ -34,7 +34,8 @@ records), or ``--prover``. DIR is `pouw_h1_circuits`' output, whose manifest bin
    the manifest's (the one the period-open committed), read and never composed (`FileStager`: the K 2048 J10-R
    composition takes hundreds of GB), each unit's outputs J10-R's word reference's (`h1zy.reference`) and its ok 1.
    ``--recompose`` builds K's flat statement (`stager`, bound to the manifest's bind) instead, its lowered outputs held to
-   the word reference's. W/c<call>/ gets inst.bin, pub.bin, pin.txt and circuit.txt; W/plan.json lists them.
+   the word reference's. W/c<call>/ gets inst.bin, pub.bin, pin.txt and circuit.txt, and program.json and partition.json,
+   the window Program and `credit.partition_of`'s object credit verifies it under (`bind_files`); W/plan.json lists them.
 
 **The lanes form** (`credit`'s, `leaf_lanes`): at a K --circuits' manifest commits as ``lane<K>`` and ``combine<K>``
 (`credit.form_of`; `pouw_h1_circuits --lanes K`), each drawn unit is a leaf proved as its (R/4)(C/8) lanes and the combine
@@ -46,12 +47,14 @@ rows) are committed after the draw, ``<prefix>partials@<u>`` under the window's 
 (`receipt_value`, `h1zy.reference` of each of the call's units) and held to the root the window registered; each
 statement's ``--registered`` file is credit's own (`credit.leaf_registered_file`), its known rows (``pub``, ``admit`` and
 ``o0``) committed under `leaf_lanes.known_salt`, and its ok the word reference's (`h1zy.lane_reference`,
-`h1zy.combine_reference`), refused unless 1. W/u<unit>-<statement>/ gets each statement's files; W/plan.json lists them
+`h1zy.combine_reference`), refused unless 1. W/u<unit>-<statement>/ gets each statement's files, its program.json and
+partition.json its leaf Program and `credit.leaf_partition_of`'s object (`bind_files`); W/plan.json lists them
 under ``leaves`` beside the record (``produced``) and each leaf Program's descriptor (``leaf_programs``, the manifest's
 ``<file>.program.json``).
 
 ``statements``: after each W/c<call>/ and W/u<unit>-<statement>/ is proved (`hidden_zk/job.sh`'s ``session``: exactly
-one session, all its instances drawn), the statements file: each call's `challenger.statement` (circuit, pub.bin, its
+one session, all its instances drawn, its prover under the ZK server on those two files, ``h1_prove/drawn.sh``), the
+statements file: each call's `challenger.statement` (circuit, pub.bin, its
 session), and with leaves the lanes evidence (`credit.LANES_KEYS`: ``leaf_programs``, ``produced`` and those statements
 with each leaf statement's ``unit`` and ``statement``).
 
@@ -455,6 +458,13 @@ class FileStager:
         return {"meta": self.meta, "outs": self.outs, "salts": salts, "circuit_sha512": self.pin}
 
 
+def bind_files(d: Path, program: bytes, partition: dict) -> None:
+    """A statement's ``program.json`` and ``partition.json`` in `d`: the Program and partition object credit verifies it
+    under (`credit._asks`), which the ZK server's Lean ``Hello`` is set up on (``FC_FIREWALL_HELLO_ARGS``)."""
+    (d / "program.json").write_bytes(program)
+    (d / "partition.json").write_text(json.dumps(partition))
+
+
 # -- the lanes form ---------------------------------------------------------------------------------------------------------
 
 def leaf_stagers(k: int, tile: Sequence[int], circuits: Path, manifest: dict) -> dict[str, tuple[FileStager, Path, str]]:
@@ -515,7 +525,7 @@ def stage_leaves(a: Any, win: dict, k: int, units: list[int], values: dict[str, 
         for st in LL.statements(*lay["tile"]):
             kind, ln = st
             rows, salts, registered, reg = leaf_statement(win, u, st, x, values, tree, {name: tree.root.hex()}, draw_root)
-            stager, circuit, _desc = stagers[kind]
+            stager, circuit, desc = stagers[kind]
             tag = f"u{u}-{kind}" + ("" if ln is None else str(ln))
             d = work / tag
             got = stager.stage(rows, d, _random(32), salts=salts, indices=[0], set_name=f"pouw-h1-w{a.window}-{tag}",
@@ -524,6 +534,11 @@ def stage_leaves(a: Any, win: dict, k: int, units: list[int], values: dict[str, 
             (d / "circuit.txt").unlink(missing_ok=True)
             (d / "circuit.txt").symlink_to(circuit)
             (d / "registered.json").write_text(json.dumps(reg))
+            leaf_program, unit_id = bytes.fromhex(desc), CR.leaf_unit_id(win["shape"], k, kind)
+            if unit_id is None:
+                raise Refused(f"K = {k}'s {kind} leaf: the window's template at K is not the zy unit, so credit names no "
+                              "leaf partition to verify it under")
+            bind_files(d, leaf_program, CR.leaf_partition_of(hashlib.sha512(leaf_program).hexdigest(), unit_id))
             plan["leaves"].append({"unit": u, "statement": [kind, ln], "k": k, "dir": str(d.resolve()), "instances": 1,
                                    "circuit": str(circuit), "pin": got["circuit_sha512"]})
         print(f"STAGED leaf {u}: its {LL.lanes(*lay['tile'])} lanes and combine", flush=True)
@@ -634,6 +649,7 @@ def stage(a: Any) -> int:
             (d / "circuit.txt").unlink(missing_ok=True)
             (d / "circuit.txt").symlink_to(circuit)
             (d / "registered.json").write_text(json.dumps(reg))
+            bind_files(d, win["raw"], CR.partition_of(win["program"], win["shape"]))
             plan["calls"].append({"call": c, "k": k, "dir": str(d.resolve()), "units": units, "instances": len(units),
                                   "circuit": str(circuit), "pin": got["circuit_sha512"]})
             print(f"STAGED call {c}: units {units}", flush=True)
