@@ -5,6 +5,8 @@ public import Proofs.Flock.SessionLoop.FinRepXs
 public import Proofs.Flock.SessionLoop.FinRepView
 public import Proofs.Flock.Claims.ZK.PiopFree
 public import Proofs.Flock.Claims.ZK.Round1Root
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The views' cut PIOP returns where the firewall's rep did
