@@ -3121,17 +3121,17 @@
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "type_hash": "debf2afa03a59d1d37dd902e4a99f3a2a5f9eb834c327dad8c7a697a6b101048",
    "missing": "honest",
-   "why": "its honest lemma at the deployed record (NetTiming.Witness.SampledAuditAccepted_honest) concludes KSWired at layouts with no wiring, and takes the assembled record's hypotheses (DrawFixed, SessionRuns, InnerNumbers, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope), which are no named assumptions, so the rule cannot hold it as the honest witness"
+   "why": "its honest lemma at the deployed record (NetTiming.Witness.SampledAuditAccepted_honest) concludes KSWired at layouts with no wiring, and takes the assembled record's hypotheses (DrawFixed, SessionRuns, InnerNumbers, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope), which are no named assumptions, so the rule cannot hold it as the honest witness; at a wired layout NetTiming.ksWired_deployed concludes KSWired at the deployed record from SessionKS, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope and WiredReads, likewise no named assumptions"
   },
   "NetTiming.SecurityProofs.SampledLeakAccepted": {
    "type_hash": "43970f90d531d3e7171623b15c9ce94eef5f67c55a52c6b00059cca4d554f37d",
    "missing": "honest",
-   "why": "its honest lemma at the deployed record (NetTiming.Witness.SampledLeakAccepted_honest) concludes KSWired, the decoder's radius and a charge at layouts with no wiring, and takes the assembled record's hypotheses (DrawFixed, SessionRuns, InnerNumbers, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope), which are no named assumptions, so the rule cannot hold it as the honest witness"
+   "why": "its honest lemma at the deployed record (NetTiming.Witness.SampledLeakAccepted_honest) concludes KSWired, the decoder's radius and a charge at layouts with no wiring, and takes the assembled record's hypotheses (DrawFixed, SessionRuns, InnerNumbers, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope), which are no named assumptions, so the rule cannot hold it as the honest witness; at a wired layout NetTiming.ksWired_deployed concludes KSWired at the deployed record from SessionKS, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope and WiredReads, likewise no named assumptions"
   },
   "NetTiming.SecurityProofs.SampledLeakRegistered": {
    "type_hash": "0eeee44bc28dd8a98e2c2545e9f4418b9741a630c9cfd62f72773757c1f9e3b3",
    "missing": "honest",
-   "why": "its honest lemma at the deployed record (NetTiming.Witness.SampledLeakRegistered_honest) concludes KSWired, binding, the decoder's radius and a charge at layouts with no wiring, and takes the assembled record's hypotheses (DrawFixed, SessionRuns, InnerNumbers, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope), which are no named assumptions, so the rule cannot hold it as the honest witness"
+   "why": "its honest lemma at the deployed record (NetTiming.Witness.SampledLeakRegistered_honest) concludes KSWired, binding, the decoder's radius and a charge at layouts with no wiring, and takes the assembled record's hypotheses (DrawFixed, SessionRuns, InnerNumbers, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope), which are no named assumptions, so the rule cannot hold it as the honest witness; at a wired layout NetTiming.ksWired_deployed concludes KSWired at the deployed record from SessionKS, DrawSlots, SessionOpens, InteriorFixed, ProgramScope, ChecksScope and WiredReads, likewise no named assumptions"
   },
   "Pous.SecurityProofs.BandPubMeets14": "cc0a571f0b841ecb8d43acbf6b871e6cc71d9c7f83d30199fc0e717b117175f9",
   "Pous.SecurityProofs.BandPubMeets14Global": "c6339d61d58538bdee3dfd430d8eb58fb714ba7c635b54a1300d7d20ff438066",
