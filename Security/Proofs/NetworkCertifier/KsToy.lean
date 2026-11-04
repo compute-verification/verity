@@ -351,21 +351,32 @@ theorem ksNotD_noRLeakTap (H : Msg → Msg) (δ : ℝ) (x : Msg) (w : Claims.Sam
 
 /-! ## The finders find nothing -/
 
-theorem noHash_checkRevealed_notCm {R : Type} (l : List (List Msg × Opening Bool)) :
-    NoHash (checkRevealed (R := R) notCm l) :=
-  noHash_flatMapRP _ (fun _ => noHash_bind _ _ trivial fun _ => trivial) l
+/-- At a commitment whose openings make no call, checking what a witness reveals makes no call. -/
+theorem noHash_checkRevealed {R : Type} (Cm : CommitmentScheme Bool)
+    (hCm : ∀ roots o, ∃ b, Cm.opens roots o = .ret b) (l : List (List Msg × Opening Bool)) :
+    NoHash (checkRevealed (R := R) Cm l) := by
+  refine noHash_flatMapRP _ (fun p => ?_) l
+  obtain ⟨b, hb⟩ := hCm p.1 p.2
+  show NoHash ((ofOC (Cm.opens p.1 p.2)).bind _)
+  rw [hb]
+  exact noHash_bind _ _ trivial fun _ => trivial
 
-theorem ksNotD_unitExt_noHash (decode : List (ℕ × Unit) → List Unit) (x : Msg) (s : Claims.Sampling.AuditStatement)
-    (u : ℕ) (r : Fin ((ksNotD Coin).V.k x) → Coin) (v : Seen) (ρ : (ksNotD Coin).UnitCoins x) :
-    NoHash (unitExt (ksNotD Coin) decode x s u r v ρ) := by
-  have hs : (ksNotD Coin).session x u v = some ([], v) := rfl
-  simp only [unitExt, hs]
-  refine noHash_bind _ _ (noHash_firstWait _ _ _ _ _) fun o => ?_
-  cases o with
-  | none => trivial
-  | some wF => exact noHash_checkRevealed_notCm _
+/-- At a commitment whose openings make no call, a checked unit's extraction makes no call of its own. -/
+theorem noHash_unitExt {Col T : Type} [DecidableEq Col] [Zero Col] (D : Claims.Sampling.Deploy Coin Col T)
+    (hCm : ∀ roots o, ∃ b, D.commit.opens roots o = .ret b) (decode : List (ℕ × Col) → List T) (x : Msg)
+    (s : Claims.Sampling.AuditStatement) (u : ℕ) (r : Fin (D.V.k x) → Coin) (v : Seen) (ρ : D.UnitCoins x) :
+    NoHash (unitExt D decode x s u r v ρ) := by
+  unfold unitExt
+  split
+  · trivial
+  · -- The wait's coin lists are generalized first: unifying against them unfolds `List.finRange`.
+    generalize ((List.finRange (D.innerWaits x)).map fun i =>
+      (List.finRange (D.innerCap x)).map fun j => forkOn (D.rounds x u) r (ρ i j)) = rss
+    refine noHash_bind _ _ (noHash_firstWait _ _ _ _ rss) fun o => ?_
+    cases o with
+    | none => trivial
+    | some wF => exact noHash_checkRevealed _ hCm _
 
-omit [Inhabited Coin] in
 /-- As `noHash_E`, at a deployment whose unit extractions make no call of their own. -/
 theorem noHash_E_of {Col T : Type} [DecidableEq Col] [Zero Col] (D : Claims.Sampling.Deploy Coin Col T)
     (decode : List (ℕ × Col) → List T)
@@ -389,7 +400,7 @@ theorem noHash_E_of {Col T : Type} [DecidableEq Col] [Zero Col] (D : Claims.Samp
 theorem ksNotD_noHash (decode : List (ℕ × Unit) → List Unit) (x : Msg) (r₀ : Fin ((ksNotD Coin).V.k x) → Coin)
     (c : (Claims.Sampling.E (ksNotD Coin) decode).C x) :
     NoHash ((Claims.Sampling.E (ksNotD Coin) decode).ext x r₀ c) :=
-  noHash_E_of (ksNotD Coin) decode (ksNotD_unitExt_noHash decode) x r₀ c
+  noHash_E_of (ksNotD Coin) decode (noHash_unitExt (ksNotD Coin) (fun _ _ => ⟨_, rfl⟩) decode) x r₀ c
 
 theorem ksNotD_bext (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit) (x : Msg) :
     (Bext H (ksNotD Coin).V (Claims.Sampling.E (ksNotD Coin) decode) Unit silentP x).Pr H = 0 := by
