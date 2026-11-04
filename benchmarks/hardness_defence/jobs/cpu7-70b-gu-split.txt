@@ -1,0 +1,2 @@
+# 70B gate and up at 2% on the layers whose top 128 directions hold over 17% of ||q||^2 (screen.py, run r20261104-082313-608c), with the split
+70b-gu-split --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 0,1,2,3,4,5,8,9,33 --match gate_proj,up_proj --fast --ranks 8,16,32,64,128,256 --workers 18

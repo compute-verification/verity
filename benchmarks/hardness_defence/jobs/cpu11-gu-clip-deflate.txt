@@ -1,0 +1,8 @@
+# 70B gate and up, the six most concentrated layers, at a 20% clip
+70b-gu-clip20 --hf unsloth/Meta-Llama-3.1-70B --target 0.2 --layers 0,2,3,5,9,33 --match gate_proj,up_proj --fast --ranks 8,16,32,64,128,256 --workers 12
+# deflation: the top 32 directions served apart, the rest clipped to 2%, on the nearly low-rank matrices
+70b-defl32-gu --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 0,5,9,33 --match gate_proj,up_proj --deflate 32 --fast --ranks 8,16,32,64,128,256 --workers 8
+70b-defl32-l0 --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 0 --match q_proj,k_proj,v_proj --deflate 32 --fast --ranks 16,32,48,64,96,128,192,256 --workers 3
+70b-defl32-l1v --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 1 --match v_proj --deflate 32 --fast --ranks 16,32,48,64,96,128 --workers 1
+70b-defl8-l0 --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 0 --match q_proj,k_proj,v_proj --deflate 8 --fast --ranks 16,32,48,64,96,128,192,256 --workers 3
+70b-defl8-l1v --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 1 --match v_proj --deflate 8 --fast --ranks 16,32,48,64,96,128 --workers 1
