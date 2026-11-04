@@ -18,8 +18,9 @@ make the unit's proof block correct wherever the values carry those that open (`
   the unit (`TableSetup`); none where it doesn't set up. The openings are computed from the witness; only the table's
   setup is chosen, and it is unique (`DrawSetupZHJP.table_congr`). At most one per committed wire (`revealsLe`).
 * **What the record takes beside acceptance**:
-  * `SessionIns`: flock-verify's reading of the session's statement at every draw file is `--zk` at `A`'s inputs, with
-    no public input words, and sets up as `A`'s session at that draw. v2's names give it (`sessionIns_of`);
+  * `SessionIns`: wherever flock-verify reads the session's statement at a draw file that fits its length words, the
+    reading is `--zk` at `A`'s inputs, with no public input words, and sets up as `A`'s session at the draw file's JSON.
+    v2's names give it (`sessionIns_of`, through `read_sess`);
   * `KeptFits`: every draw file the draw file round keeps fits the statement's length words (`Fits`);
   * `ProvedIn`: every unit the coins draw is one the kept draw file proves, below the population. v2 credits the
     public file's `units.indices` of the instances the draw names (`provedOf`), so this holds where those indices are
@@ -34,7 +35,6 @@ namespace Verity.Sampled.Record
 
 open Claims Claims.Sampling
 open Lean (Json)
-open FlockDeploy (Ins)
 open FlockSoundness.Discharge.Exec (mPtsOf)
 open FlockSoundness.Discharge.Composed (inputsJ nTab)
 open FlockSoundness.Discharge.ZkHidden (DrawSetupZHJP planZHJP tabZHJP)
@@ -108,13 +108,14 @@ theorem revealsLe (o : Own) (e : Ext) (he : e.reveal = revealRec A) (hN : ∀ x,
 
 /-! ## What the record takes -/
 
-/-- **flock-verify reads the session's statement as `A`'s session**: at every draw file, `--zk` at `A`'s tags, with
-no public input words, set up at `A`'s inputs and the draw. -/
+/-- **flock-verify reads the session's statement as `A`'s session**: wherever it reads the statement at a draw file
+that fits its length words, the reading is `--zk` at `A`'s tags, with no public input words, set up at `A`'s inputs and
+the draw file's JSON. -/
 def SessionIns (o : Own) : Prop :=
-  ∀ (d : Msg) (J : Json), FlockDeploy.jsonOf "draw" ⟨d.toArray⟩ = .ok J →
-    ∃ si : Ins, ({ baseRaw A o with draw := some ⟨d.toArray⟩ } : FlockDeploy.Raw).ins = .ok si ∧
-      si.read.zk = true ∧ si.read.tags = FlockSoundness.Discharge.ZkExec.zkTags A.I ∧ si.read.publicInputs = none ∧
-      si.read.setup = Flock.Stmt.setupTables (FlockSoundness.Discharge.ZkExec.zkTags A.I) A.I.circuitFile
+  ∀ (d : Msg) (r : Flock.Readable.Read), Fits A o d → FlockDeploy.readOf true (sessStmt A o d) = some r →
+    ∃ J, FlockDeploy.jsonOf "draw" ⟨d.toArray⟩ = .ok J ∧
+      r.zk = true ∧ r.tags = FlockSoundness.Discharge.ZkExec.zkTags A.I ∧ r.publicInputs = none ∧
+      r.setup = Flock.Stmt.setupTables (FlockSoundness.Discharge.ZkExec.zkTags A.I) A.I.circuitFile
         A.I.publicFile (FlockSoundness.Discharge.ZkExec.zkCoins A.I) A.I.count A.I.tables (some (Flock.norm J))
         A.I.partition A.I.program
 
@@ -143,14 +144,14 @@ theorem zkCoins_inputsAt (hc1 : A.I.count = 1) :
   rw [hc1]
   rfl
 
-/-- **v2's names give `SessionIns`**, at one table and v2's partition object (`ins_sess`). -/
+/-- **v2's names give `SessionIns`**, at one table and v2's partition object (`read_sess`). -/
 theorem sessionIns_of {o : Own} (hn : Names A o p bs) (hpl : A.I.tags.plainLeaves = false)
     {rd : _root_.SampledProofs.OneStageZk.Reads}
     (hrd : _root_.SampledProofs.OneStageZk.readsOf p.own.registered = .ok rd) (hc1 : A.I.count = 1)
     (hpart : A.I.partition = some p.own.partition) : SessionIns A o := by
-  intro d J hJ
-  obtain ⟨si, hi, hm, hdr⟩ := ins_sess hn hpl hrd hJ
-  refine ⟨si, hi, hm.zk, hm.read_tags.trans (zkTags_inputsAt hc1), hm.publicInputs, ?_⟩
+  intro d r hf hr
+  obtain ⟨si, J, rfl, hm, hJ, hdr⟩ := read_sess hn hpl hrd hf hr
+  refine ⟨J, hJ, hm.zk, hm.read_tags.trans (zkTags_inputsAt hc1), hm.publicInputs, ?_⟩
   rw [hm.read_setup hdr, zkTags_inputsAt hc1, zkCoins_inputsAt hc1, hc1, hpart, hn.program, ← hn.tables]
   rfl
 
@@ -158,23 +159,10 @@ end Names
 
 /-! ## The run's session -/
 
-theorem jsonOf_of_provedOf {d : Msg} {a : Array ℕ} (h : provedOf A d = some a) :
-    ∃ J, FlockDeploy.jsonOf "draw" ⟨d.toArray⟩ = .ok J := by
-  unfold provedOf at h
-  cases hj : FlockDeploy.jsonOf "draw" ⟨d.toArray⟩ with
-  | error _ => simp [hj, Except.toOption] at h
-  | ok J => exact ⟨J, rfl⟩
-
 theorem take_coinsAt {k : ℕ} (r : Fin k → FlockDeploy.Coin) :
     ((List.range (DRAW_ROUNDS + 1)).map (coinSeq r)).take DRAW_ROUNDS = coinsAt r := by
   rw [← List.map_take, List.take_range, Nat.min_eq_left (by omega : DRAW_ROUNDS ≤ DRAW_ROUNDS + 1)]
   rfl
-
-theorem readOf_raw {w : FlockDeploy.Raw} (hfits : Verity.Recursive.Part.RawFits w) (hzk : w.zk = true) {si : Ins}
-    (hins : w.ins = .ok si) : FlockDeploy.readOf true w.encode = some si.read := by
-  unfold FlockDeploy.readOf FlockDeploy.insOf
-  rw [Verity.Recursive.Part.decode_encode_fits hfits]
-  simp [hzk, hins, Except.toOption]
 
 /-! The record's fields, at a statement `x` held equal to `xOf A o` (`hx`) rather than substituted: a step that unfolds
 a field at `xOf A o` itself evaluates the statement's bytes. -/
@@ -252,24 +240,24 @@ theorem nTab_one (hc1 : A.I.count = 1) : nTab A.I = 1 := by
   unfold FlockSoundness.Discharge.Composed.nTab
   exact ite_eq_left (by omega)
 
-/-- **A Flock witness the session's statement checks satisfies its one table**: flock-verify reads the statement as
-`A`'s session at the kept draw file (`SessionIns`, `readOf_raw`), which sets up one table (`setupTables_okHP`) that the
-witness satisfies (`tableLowers`). -/
+/-- **A Flock witness the session's statement checks satisfies its one table**: flock-verify reads the statement at the
+kept draw file as `A`'s session at the draw file's JSON (`SessionIns`), which sets up one table (`setupTables_okHP`)
+that the witness satisfies (`tableLowers`). -/
 theorem session_lowers (o : Own) (hc1 : A.I.count = 1) (hins : SessionIns A o) (hfits : KeptFits A o) {d : Msg}
-    {cs : List FlockDeploy.Coin} (hdOk : drawOk A o d cs) {J : Json}
-    (hJ : FlockDeploy.jsonOf "draw" ⟨d.toArray⟩ = .ok J) {wF : Claims.Flock.Wit}
+    {cs : List FlockDeploy.Coin} (hdOk : drawOk A o d cs) {wF : Claims.Flock.Wit}
     (hchk : Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (sessStmt A o d) wF = true) :
-    ∃ st, Flock.Stmt.setupHidden (FlockSoundness.Discharge.ZkExec.zkTags A.I) A.I.circuitFile A.I.publicFile
+    ∃ J, FlockDeploy.jsonOf "draw" ⟨d.toArray⟩ = .ok J ∧
+      ∃ st, Flock.Stmt.setupHidden (FlockSoundness.Discharge.ZkExec.zkTags A.I) A.I.circuitFile A.I.publicFile
         (FlockSoundness.Discharge.ZkExec.zkCoins A.I) A.I.tables (some (Flock.norm J)) A.I.partition A.I.program =
         .ok st ∧ Flock.Zk.shapeOk st = .ok () ∧
       ∀ hwf : FlockSoundness.Refine.StmtWF st,
         (FlockSoundness.Refine.stmtOf st hwf (FlockSoundness.Refine.regionsOf st)).Satisfies
           (Flock.Readable.zOf 1 wF 0 st.m) := by
-  obtain ⟨si, hraw, hzk, htags, hpin, hsetup⟩ := hins d J hJ
-  have hread : FlockDeploy.readOf true (sessStmt A o d) = some si.read := readOf_raw (hfits d cs hdOk) rfl hraw
   obtain ⟨pp, hpb, hpP, hR⟩ := Flock.Readable.relS_of_check (decode := FlockDeploy.readOf true) hchk
   unfold Flock.Readable.parseBytes at hpb
-  rw [hread, Option.bind_some] at hpb
+  obtain ⟨rr, hrr, hpb⟩ := Option.bind_eq_some_iff.1 hpb
+  obtain ⟨J, hJ, hzk, htags, hpin, hsetup⟩ := hins d rr (hfits d cs hdOk) hrr
+  refine ⟨J, hJ, ?_⟩
   unfold Flock.Readable.Read.parse at hpb
   obtain ⟨sts, hts, rfl⟩ := Option.map_eq_some_iff.1 hpb
   have hsh := Flock.Readable.tablesOf_shapeOk hts hzk
@@ -279,7 +267,7 @@ theorem session_lowers (o : Own) (hc1 : A.I.count = 1) (hins : SessionIns A o) (
     (FlockSoundness.Discharge.ZkExec.zkTags_hiddenOutputs A.I).trans A.hTags.1
   rcases FlockSoundness.Discharge.HiddenExec.setupTables_okHP hh hsu with ⟨-, st, hst, -, rfl⟩ | ⟨hc, -⟩
   · refine ⟨st, hst, FlockSoundness.Discharge.ZkExec.array_forM_ok hsh 0 (by simp), fun hwf => ?_⟩
-    have ht : si.read.tags.typed = false := by
+    have ht : rr.tags.typed = false := by
       rw [htags, FlockSoundness.Discharge.ZkExec.zkTags_typed]
       exact A.ht
     exact Flock.Readable.tableLowers (j := 0) (st := st) hpP ht hpin hR rfl hwf
@@ -374,13 +362,12 @@ theorem sessionOpens (o : Own) (e : Ext) (hv2 : Flock.Bridge.RowsV2 A.D.unroll) 
   obtain rfl : s = stmtA A := Option.some.inj (hs.symm.trans (parse_at A o e hx))
   obtain rfl : Pt = partA A := Option.some.inj (hPt.symm.trans (record_partition A o e _))
   obtain ⟨d, hdOk, hl⟩ := accepted_draw A o e hx P ω r hacc
-  obtain ⟨J, hJ⟩ := jsonOf_of_provedOf A hdOk.1
   rw [checked_at A o e hx] at hq
   have hud : u ∈ drawn A (drawBytes (coinsAt r)) := List.mem_of_getElem? hq
   rw [session_at A o e hx, sessionOf_kept A o hl hdOk.2] at hsess
   obtain ⟨rfl, -⟩ := Prod.mk.inj (Option.some.inj hsess)
   rw [record_flockParse] at hchk
-  obtain ⟨st, hst, hshape, hsat⟩ := session_lowers A o hc1 hins hfits hdOk hJ hchk
+  obtain ⟨J, hJ, st, hst, hshape, hsat⟩ := session_lowers A o hc1 hins hfits hdOk hchk
   obtain ⟨hun, hne, hy⟩ := session_table A o hc1 hpr hdOk hJ hst hshape hud
   refine ⟨Flock.Bridge.blockOf A.P A.κ ⟨u, hun⟩,
     Flock.Bridge.blocks_partOf_getElem? A.P (Flock.Bridge.nsOf_sum A.hpop) ⟨u, hun⟩, fun val ι hval => ?_⟩
