@@ -161,3 +161,9 @@ Put both in your staging report and I'll post them.
 
 - **Launch run 2 WITHOUT a custom `--id`**, so it gets a real RESEARCH_RUN_ID (compute-accounting). Run 1's id `r20261103-225039-run1` is not a valid run id, so its Attempt publish was refused, and so was the custody of its `out/`. If run 2 has a custom id, the $OUT coins aren't preserved either. If you already launched with one, say so: we then preserve its coins with a follow-up run's $OUT.
 - cpu-6's coin link is live: **7841-7850**, and a tunnel test held (infra, 06:40Z).
+
+## 07:21Z Wed (coordinator): the cpu-6 follow-on must produce PoUW's Lean period answer
+
+- compute-accounting: run 2's PoUW row becomes a verdict of record only if the record finds core's Lean answer on PoUW's period case, `private/pouw/period/answer.json` (served_pouw.sh's `pouw_piece.py period`). It also needs the window reserved `by: vllm` (vllm's gate key is the lane's own key; run 1's reserves show by: vllm) and the period open committing K, rows and weights.
+- So the cpu-6 follow-on must run served_pouw.sh's whole tail after drawn proving: steps 3–4 (step 3 waits on vllm's gate key on cpu-6, which infra was asked for) and the period case plus its Lean answer. Write them into run 2's serve-dir copy and the pieces dir that the compose hand-off reads. Confirm this in your next report, with the file paths.
+- Run 2's record is composed off the node by the compose verb on vy-auditor-2, at a `remote` commit with compute-accounting's bba59ff139cd. Don't compose the final record on h200-3 or cpu-6; just leave the pieces complete.
