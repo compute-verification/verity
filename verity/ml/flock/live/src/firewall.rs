@@ -414,8 +414,9 @@ impl LeanFinish {
     /// opening (`rep_body`): its constraints go to `cons` (`Finish.consBytes`), then each of its rounds to `round`, which relays
     /// it onto the rep's stream and answers it with the coins the stream answered it, or with None to stop the rep (which ends
     /// the finish). The finish hands each round to the session loop's frame before it comes here, and the frame releases its
-    /// own round (`Frame.innerSched`), stopping the rep where the relayed one differs; the finish refuses a request whose
-    /// `final_c` is not the one its passed values fix, and coins that are not the ones the frame took (`Finish.coinsWhy`).
+    /// own round (`Frame.innerSched`), stopping the rep where the relayed one differs, and at a round the finish did not hand
+    /// it, whatever is relayed; the finish refuses a request whose `final_c` is not the one its passed values fix, and coins
+    /// that are not the ones the frame took (`Finish.coinsWhy`).
     /// Returns the names of the constraints that fail on the rep's pads (`Finish.namesBytes`); where there are none, its proof
     /// file is then [`Self::rep`]'s, on every round's coins.
     pub fn inner(&mut self, i: usize, r: usize, body: &[u8], round: &mut dyn FnMut(&[u8], usize) -> Option<Vec<F128>>,

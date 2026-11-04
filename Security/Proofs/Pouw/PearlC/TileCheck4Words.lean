@@ -2,7 +2,6 @@ module
 
 public import Proofs.Pouw.PearlC.TileCheck4
 public import Proofs.Pouw.PearlC.Block4Sem
-public import Proofs.Pouw.PearlC.TileProtocol
 public import Proofs.Pouw.PearlC.TileGamma
 
 /-!

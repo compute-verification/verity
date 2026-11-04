@@ -57,7 +57,6 @@ def test_a_family_and_what_it_reads(tree):
                                                          "reads": [{"task": "toy-b:b", "output": "o"}]}]}
     doc = graph.listing(tree, {"other"}, listers=reader)
     assert [t["id"] for t in doc["tasks"]] == ["other:y", "toy-b:b", "toy:a"]
-    assert [t["id"] for t in graph.closure(doc, {"toy-b:b"})] == ["toy:a", "toy-b:b"]
     with pytest.raises(graph.GraphError, match="no family nope"):
         graph.listing(tree, {"nope"}, listers=LISTERS)
 
@@ -78,27 +77,47 @@ def test_a_task_s_graph_is_the_part_of_the_listing_that_running_it_needs(tree):
         graph.task_graph(tree, "toy:zz", listers=LISTERS)
 
 
-def test_a_run_takes_its_graph_from_its_commit_s_listing_alone(tree, tmp_path):
+def test_a_task_s_part_is_what_its_run_reads_of_the_listing(tree):
     doc = graph.listing(tree, listers=LISTERS)
+    b = next(t for t in doc["tasks"] if t["id"] == "toy-b:b")
+    part = graph.part(doc, "toy-b:b")
+    assert part == {"schema": doc["schema"], "commit": doc["commit"], "envs": {"py": doc["envs"]["py"]},
+                    "files": {p: doc["files"][p] for p in sorted({*b["inputs"], "pyproject.toml", "uv.lock"})},
+                    "tasks": [b, {"id": "toy:a", "outputs": [{"name": "o", "path": "out/a"}]}]}, \
+        "of a task it reads, the outputs it reads alone: the part grows with the task's reads, not with what lies under them"
+    assert graph.part(doc, "other:x")["tasks"] == [next(t for t in doc["tasks"] if t["id"] == "other:x")]
+
+
+def test_a_run_takes_a_listing_or_its_part_where_the_files_its_key_reads_are_its_bytes(tree, tmp_path):
+    doc = graph.listing(tree, listers=LISTERS)
+    part = graph.part(doc, "toy-b:b")
     f = tmp_path / "graph.json"
-    for given, ok in ((doc, True), ({**doc, "tasks": graph.closure(doc, {"toy-b:b"})}, True), ({**doc, "commit": None}, False),
-                      ({**doc, "commit": "0" * 40}, False), ({**doc, "schema": "verity-graph/v1"}, False)):
+    for given in (doc, part, {**doc, "commit": None}, {**part, "commit": "0" * 40}):
         f.write_bytes(contract.canonical(given))
-        if ok:
-            assert graph.given(tree, f, "toy-b:b") == given, "the listing, or the part of it the task needs"
-        else:
-            with pytest.raises(graph.GraphError, match="isn't graph/v2 of this checkout's commit"):
-                graph.given(tree, f, "toy-b:b")
-    f.write_bytes(contract.canonical({**doc, "tasks": [t for t in doc["tasks"] if t["id"] != "toy:a"]}))
-    with pytest.raises(graph.GraphError, match="no task toy:a in the graph"):
-        graph.given(tree, f, "toy-b:b")
+        assert graph.given(tree, f, "toy-b:b") == given, "the listing or the part, whatever commit it names"
+    for given, error in (({**part, "schema": "verity-graph/v1"}, "isn't graph/v2 \\(ValueError: schema"),
+                         ([part], "isn't graph/v2 \\(TypeError"), ({**part, "envs": {}}, "isn't graph/v2 \\(KeyError: 'py'"),
+                         ({**part, "tasks": part["tasks"][:1]}, "lacks toy:a's o, which toy-b:b reads"),
+                         ({**part, "files": {**part["files"], "src/b.txt": contract.digest(b"other\n")}},
+                          "isn't this checkout's: src/b.txt differs here"),
+                         ({**part, "envs": {"py": {**part["envs"]["py"], "digest": contract.digest(b"")}}},
+                          "env py's digest isn't the one its spec files give")):
+        f.write_bytes(contract.canonical(given))
+        with pytest.raises(graph.GraphError, match=error):
+            graph.given(tree, f, "toy-b:b")
+    f.write_bytes(contract.canonical(part))
+    with pytest.raises(graph.GraphError, match="no task toy:zz in --graph"):
+        graph.given(tree, f, "toy:zz")
     f.write_bytes(b"{")
     with pytest.raises(graph.GraphError, match="--graph"):
         graph.given(tree, f, "toy:a")
-    f.write_bytes(contract.canonical(doc))
+    f.write_bytes(contract.canonical(part))
+    (tree / "new.txt").write_text("untracked\n")
     (tree / "src/a.txt").write_text("changed\n")
-    with pytest.raises(graph.GraphError, match="none: the tree is dirty"):
-        graph.given(tree, f, "toy:a")
+    assert graph.given(tree, f, "toy-b:b") == part, "a file its key doesn't read may differ: toy:a's input, an untracked file"
+    (tree / "uv.lock").write_text("version = 2\n")
+    with pytest.raises(graph.GraphError, match="uv.lock differs here"):
+        graph.given(tree, f, "toy-b:b")
 
 
 def test_covered_files_follow_the_table(tree):

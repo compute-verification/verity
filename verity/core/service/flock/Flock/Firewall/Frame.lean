@@ -47,6 +47,7 @@ module
 public import Flock.Zk
 public import Flock.ZkLigerito
 public import Flock.Firewall.Coins
+public import Flock.JsonParse
 
 @[expose] public section
 
@@ -698,7 +699,7 @@ def serveWith (get : USize → IO ByteArray) (ch : Chan) (hk : Hooks) : IO UInt3
     ch.flush
     return (0 : UInt32)
   let first ← ch.getLine
-  let (l, mask) ← match Json.parse first >>= start with
+  let (l, mask) ← match JsonParse.parse first >>= start with
     | .ok x => pure x
     | .error e => return (← refuse s!"the rep's start: {e}")
   let d ← match ← drawsWith get l with

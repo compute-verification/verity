@@ -1,6 +1,8 @@
 """`rec_circuits`: a V* statement's circuit text built once per shape and read back after."""
 from __future__ import annotations
 
+import json
+
 import pytest
 from test_rec_outer import PROGRAM, _coefs, _queries, _top
 from test_rec_residuals import S_SMALL
@@ -32,8 +34,9 @@ def test_a_kept_residuals_circuit_is_the_one_built(tmp_path, monkeypatch):
 @pytest.mark.slow
 def test_a_level_staged_from_its_kept_circuit_writes_the_verifiers_files_it_wrote_when_built(tmp_path, monkeypatch):
     """The second staging of one level shape reads its circuit back and skips its own replay of the unit (`opened` and
-    `summed` unknown); the circuit, program, partition and reads files are byte for byte the first staging's. Staging a level
-    takes about a minute; no cheaper statement reaches `rec_outer.stage`'s kept path."""
+    `summed` unknown); the circuit, program and partition files are byte for byte the first staging's, and so is the reads
+    file but for the roots of the prover's own rows ``row`` and ``aux``, which each staging registers under fresh salts.
+    Staging a level takes about a minute; no cheaper statement reaches `rec_outer.stage`'s kept path."""
     monkeypatch.setenv(RC.ENV, str(tmp_path / "cache"))
     qs, layers = _queries(level=1)
     (level,) = O.levels(qs)
@@ -43,7 +46,13 @@ def test_a_level_staged_from_its_kept_circuit_writes_the_verifiers_files_it_wrot
     s = [O.stage(level, tmp_path / d, chain, coefs, tops) for d in ("built", "kept")]
     assert not s[0]["circuit_kept"] and s[0]["opened"] == 3 and s[0]["not_opened"] == [(1, 1)]
     assert s[1]["circuit_kept"] and s[1]["opened"] is None and s[1]["not_opened"] is None
-    assert {k: v for k, v in s[1].items() if k not in ("circuit_kept", "opened", "not_opened", "summed", "not_summed")} == \
-        {k: v for k, v in s[0].items() if k not in ("circuit_kept", "opened", "not_opened", "summed", "not_summed")}
-    for f in ("circuit.txt", "program.json", "partition.json", "registered.json"):
+    fresh = ("rows_root", "aux_root")
+    skip = ("circuit_kept", "opened", "not_opened", "summed", "not_summed", *fresh)
+    assert {k: v for k, v in s[1].items() if k not in skip} == {k: v for k, v in s[0].items() if k not in skip}
+    assert all(s[1][k] != s[0][k] for k in fresh)
+    for f in ("circuit.txt", "program.json", "partition.json"):
         assert (tmp_path / "kept" / f).read_bytes() == (tmp_path / "built" / f).read_bytes(), f
+    own = [json.loads((tmp_path / d / "registered.json").read_text())["ports"] for d in ("built", "kept")]
+    unrooted = lambda ports: {nm: {k: v for k, v in e.items() if not (nm in ("row", "aux") and k == "root")}  # noqa: E731
+                              for nm, e in ports.items()}
+    assert unrooted(own[1]) == unrooted(own[0]) and own[0].keys() >= {"row", "aux"}
