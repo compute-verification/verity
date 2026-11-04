@@ -65,6 +65,11 @@ sampled like any other proof block (under ``stratified:K``, a stratum a table), 
 summary's ``tie`` names W, and for Pearl+'s W what holds its roots to the ones its passes credited: Pearl+'s verdict, the
 prover's development verifier (`PEARL_CREDIT`).
 
+``--day N --day-log LOG``: the window is day N's, and the deployment's registration log declares the day's one circuit
+(`verity.core.protocols.registration.Declaration`). R2 holds the registration's program to it (`declared_day`, one-stage's
+Declared day), a negative moves the declaration to another program, and the summary's ``day`` names the day's declared
+program.
+
 The negatives (`negatives` before the sample, a5's after it) cost Lean verifies of their own; ``--skip-negatives`` leaves
 them out of an audit (its summary says so), for a run of several audits of one circuit, which runs them in its first.
 
@@ -77,7 +82,7 @@ quotes the warm's beside it.
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
         --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--tie W [--tie-prefix P]] [--skip-negatives] \\
-        [--compose-cache DIR]
+        [--compose-cache DIR] [--day N --day-log LOG [--day-params FILE]]
     records_audit.py warm --window DIR --law L [--template-sets DIR] --compose-cache DIR [--jobs N]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
     records_audit.py period --window DIR --audit DIR --out FILE [--pin NAME=ROOT ...] [--pins FILE ...]
@@ -155,6 +160,8 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
+from verity.core import site as ST  # noqa: E402
+from verity.core.protocols import registration as G  # noqa: E402
 from verity.core.protocols.certifier.ingress_scan import SCAN_STATE  # noqa: E402
 from verity.core.protocols.pouw import credit as CR  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
@@ -562,6 +569,25 @@ PEARL_CREDIT = ("W's roots are the ones Pearl+'s verdict credits (`served_passes
                 "proof hides")
 
 
+def declared_day(day: int | None, log: str | None, params: str | None) -> dict[str, Any]:
+    """``--day N --day-log LOG``: the window's day and the declarations of the registration log the verifier holds (its
+    view's, `registration.check_log` under ``--day-params``, by default the log's composite under an auditor of no sheets or
+    keys), as one-stage's R2 takes them (a5's ``declared``); empty without ``--day``. ValueError where core's check refuses
+    the log."""
+    if day is None:
+        if log or params:
+            raise ValueError("--day-log and --day-params go with --day")
+        return {}
+    if not log:
+        raise ValueError("--day needs --day-log, the registration log whose declarations R2 reads")
+    composite, entries = G.log_of(json.loads(Path(log).read_text()))
+    p = G.params_of(json.loads(Path(params).read_text())) if params else (composite, ST.Auditor())
+    got = G.check_log(p, (composite, entries))
+    if got[0] != "accept":
+        raise ValueError(f"--day-log {log}: core's check refuses it, {got[1]}")
+    return {"day": day, "declarations": got[1]["declarations"]}
+
+
 def tie_row(tied: Mapping[str, Any]) -> dict[str, Any]:
     """The audit summary's ``tie`` for a5's ``tie`` (`tie_of`): W's digest and the values tied to it, and for Pearl+'s window
     record (a W whose window names a Pearl-C scheme) what credits its roots (`PEARL_CREDIT`)."""
@@ -822,6 +848,7 @@ def audit(a: argparse.Namespace) -> int:
             if e.get("value") in tie_pins and roots.setdefault(e["value"], e["root"]) != e["root"]:
                 raise ValueError(f"the window's registration records two roots for {e['value']!r}")
         reads = IF.registered_reads(doc, mine, pins, registered=REG)
+        day = declared_day(a.day, a.day_log, a.day_params)
     except (ValueError, KeyError, TypeError) as e:
         row = {"ok": False, "refused": {"records": f"{type(e).__name__}: {e}"}, "seconds": round(time.time() - t0, 1)}
         (out / "summary.json").write_text(json.dumps(row, indent=1, sort_keys=True))
@@ -848,7 +875,7 @@ def audit(a: argparse.Namespace) -> int:
     a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, a.law
     a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else (),
                              own=set(ties) | set(untied) | set(tie_pins))
-    a.tie = tied
+    a.tie, a.declared = tied, day
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
     manager, a.coins, finisher = AC.start(a.challenger, mine.run, [0], out / "challenger", a.main, ssh_key=a.gate_key,
@@ -875,6 +902,8 @@ def audit(a: argparse.Namespace) -> int:
         row["registered"] = {"pins": counted, "roots": roots, "members": len(reads)}
     if tied:
         row["tie"] = tie_row(tied)
+    if day:
+        row["day"] = {"day": day["day"], "declared": [d["program"] for d in day["declarations"] if d["day"] == day["day"]]}
     acts = committed_activations(w)
     if acts is not None:
         row["activations"] = acts
@@ -988,6 +1017,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--tie-prefix", help="with --tie: W's descriptor's PREFIX, which its tables' names take "
                    "(`credit.window_table`; h1/ for PoUW H1's window). Without it, W names each value as the circuit does "
                    "(Pearl+'s)")
+    p.add_argument("--day", type=int, default=None, help="the window's day, by its index among the monitoring period's days: "
+                   "R2 holds the registration's program to the day's one declaration in --day-log (`declared_day`)")
+    p.add_argument("--day-log", help="with --day: the deployment's registration log (verity/registration/log/v1)")
+    p.add_argument("--day-params", help="with --day: the log's parameters, {auditor, composite} (default the log's composite "
+                   "under an auditor of no sheets or keys)")
     p.add_argument("--skip-negatives", action="store_true", help="no negatives in this audit (module docstring): a run of "
                    "several audits runs them in its first")
     p.add_argument("--compose-cache", help="a5's compose cache, which `warm` filled under this tree and FLOCK_* environment: "

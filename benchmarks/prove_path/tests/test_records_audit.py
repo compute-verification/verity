@@ -17,6 +17,8 @@
   states them; one whose program takes values only tied to the earlier registration that registered them first
   (`tie_of`), its readers' reads registered at that record's roots;
 * a window's audit is one compute audit of the network certifier's period (`period`), its scan state's reads registered;
+* a declared day (``--day``, `declared_day`) hands R2 the registration log's declarations, so a program other than the
+  day's is refused;
 * `source` and the negatives refuse what the records don't bind, and `fixed_before_draw` refuses advice re-committed after
   the coins;
 * the gate's coins (``--challenger gate:USER@HOST``) reach the challenger's session with the peer and the key record;
@@ -650,7 +652,7 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     seen, owned = {}, []
 
     def audit(a, sets, out, mine, served, source, port, summary, more, **kw):
-        seen.update(tie=a.tie, outputs=a.outputs, registered=kw["registered"])
+        seen.update(tie=a.tie, outputs=a.outputs, registered=kw["registered"], declared=a.declared)
         return {"audit": {"accepted": True}}, True
 
     def output_class(circuit, given=(), own=frozenset()):
@@ -681,6 +683,44 @@ def test_the_audit_ties_a_window_whose_circuit_takes_values_to_the_earlier_regis
     assert summary["tie"] == {"record": R.digest(got.w), "values": [got.name]}
     assert summary["registered"]["roots"] == summary["registered"]["pins"] == {got.name: got.entry["root"]}
     assert summary["leak"]["registered"] == 8 * 8 * K and "unpinned" not in summary["leak"]
+    assert seen["declared"] == {} and "day" not in summary
+    from verity.core.protocols import registration as G
+    day = G.chain("remote", [G.Declaration(0, got.rec["program"])])
+    (tmp_path / "log.json").write_bytes(G.committed("remote", day))
+    assert RA.main([*base, "--out", str(tmp_path / "day"), "--tie", str(got.w_file), "--tie-prefix", "h1/", "--day", "0",
+                    "--day-log", str(tmp_path / "log.json")]) == 1
+    assert seen["declared"] == {"day": 0, "declarations": [day[0].declared()]}
+    assert json.loads((tmp_path / "day" / "summary.json").read_text())["day"] == {"day": 0, "declared": [got.rec["program"]]}
+
+
+def test_a_declared_day_holds_the_registrations_program_to_the_days_one_declaration(written, tmp_path):
+    """``--day N --day-log LOG`` (`declared_day`): the declarations of a registration log core's check accepts, which R2
+    takes with the day. The window's program declared for its day passes R2; a day declared to another program is refused
+    (``R2-declared``), and a day the log doesn't declare too (``R2-undeclared``). A log declaring a day twice is core's
+    ``duplicate-declaration``, and day options without ``--day`` are refused, each before any session."""
+    from verity.core.protocols import registration as G
+
+    mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_law(LAW), None)
+    program, log = written.rec["program"], tmp_path / "log.json"
+    entries = G.chain("remote", [G.Declaration(3, program, (TID,)), G.Declaration(4, "0" * 128)])
+    log.write_bytes(G.committed("remote", entries))
+    assert RA.declared_day(None, None, None) == {}
+    day = RA.declared_day(3, str(log), None)
+    assert day == {"day": 3, "declarations": [e.declared() for e in entries]}
+
+    def r2(d: dict) -> list[str]:
+        v = R.check(written.rec, mine.program, mine.query, D.parse_law(LAW), CS.SCHEME, {}, **d)
+        return sorted(c for c in v.codes if c.startswith("R2"))
+    assert r2(day) == []
+    assert r2({**day, "day": 4}) == ["R2-declared"] and r2({**day, "day": 5}) == ["R2-undeclared"]
+    twice = tmp_path / "twice.json"
+    twice.write_bytes(G.committed("remote", G.chain("remote", [G.Declaration(3, program), G.Declaration(3, "0" * 128)])))
+    with pytest.raises(ValueError, match="core's check refuses it, entry 1: duplicate-declaration"):
+        RA.declared_day(3, str(twice), None)
+    with pytest.raises(ValueError, match="go with --day"):
+        RA.declared_day(None, str(log), None)
+    with pytest.raises(ValueError, match="needs --day-log"):
+        RA.declared_day(3, None, None)
 
 
 def _audited(window: Path, out: Path, registration: dict | None = None, accepted: bool = True) -> Path:
