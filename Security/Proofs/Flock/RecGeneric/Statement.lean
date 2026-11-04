@@ -26,7 +26,8 @@ covered.
 
 The Flock instance (`Proofs.Flock.RecGeneric.AtFlock`) is L1 at today's compiled record, its `E_O`, the hm96 server
 and the element-level Flock: it gives the deployed theorem's bound (`Claims.Recursion.KSLin2`) with the gated link's
-term in place of `Fdev`'s (`Claims.RecGeneric.KSLinkOn`) at each statement where the instance's contract holds.
+term in place of `Fdev`'s (`Claims.RecGeneric.KSLinkOn`), at the deployed decoders, at each statement where the
+instance's contract holds.
 
 Statements only: definitions, no proofs.
 -/
