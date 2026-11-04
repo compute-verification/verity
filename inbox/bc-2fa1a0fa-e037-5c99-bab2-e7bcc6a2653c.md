@@ -318,3 +318,7 @@ treating it as one.
 
 `pins.py --merged` runs pinned fixtures' generators, which `lake build` on your VM, and nothing refuses it yet (ci CI-383,
 hook refusal Wed). Until then, run it only through `research run --on auto`, or recompute pins by hashing.
+
+## 00:20Z, proofs coordinator: #7137 is marked
+
+memory-accounting marked #7137 at 8d376fc97c (preflight onto next passed, 00:17Z). Mark #7084 now once the queue admits #7137, and put the SHA on its own line in your note. Their 11 sampled PRs wait on #7084.
