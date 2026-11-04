@@ -81,9 +81,9 @@ WiredNet.lean   SessionWires from SessionOpens and the wires a checked unit's Fl
                                          hypotheses with them (ksWired_of_revealed)
 WiredRead.lean  at the deployed sampling record and SHA-512, an opening passes exactly when the verifier's own
                                          registered check accepts it (opens_iff_read), so the wires are revealed
-                                         exactly where they are at that check (wiresRevealed_deployed), and KSWired
+                                         exactly where they are at that check (wiresRevealed_of_record), and KSWired
                                          follows from the sessions' KS, the slots, the openings, the scope checks and
-                                         WiredReads (ksWired_deployed)
+                                         WiredReads (ksWired_of_record)
 NoWires.lean    each guarantee restated over the wiring gives, at a layout with no wires, its statement
                                          before the wiring, at KS (ksWired_none once each)
 SampledCharge.lean  the leak bound under a sampled audit: by the layout's causality, holding each incorrect
@@ -288,7 +288,7 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
   reading a wired gate whose committed value is not its writer's) is sampled `all`, and the advice holding the
   incorrect proof blocks' committed gates at the trace's values makes `Accepted` every run the trace carries, each
   wired gate reading its writer (`resolveWires`). With no wires `KSWired` is `Claims.Sampling.KS` (`ksWired_none`).
-  At a wired layout `ksWired_deployed` (`WiredRead.lean`) gives `KSWired` at the deployed record from the sessions' KS
+  At a wired layout `ksWired_of_record` (`WiredRead.lean`) gives `KSWired` at the deployed record from the sessions' KS
   (`SessionKS`), `SessionOpens` and the wires a session reveals at the verifier's own check (`WiredReads`), with
   binding, the draw law and refusal discharged.
   `SampledAuditInstance.lean` discharges its hypothesis at layouts with no wires from
