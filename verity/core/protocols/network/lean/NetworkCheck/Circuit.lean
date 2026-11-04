@@ -33,6 +33,11 @@ the rows its wires fill (`wired`), the rows its registered reads, table reads an
 
 namespace NetworkCheck.Period
 
+/-- Whether `j` is the string `s`: `Json`'s `==` on strings, by a match a proof unfolds. -/
+def isStr (j : Lean.Json) (s : String) : Bool := match j with
+  | .str x => x == s
+  | _ => false
+
 /-- A type's bits: its leaves' widths summed. -/
 def bitsOf (t : Flock.Program.Ty) : Nat := t.widths.foldl (· + ·) 0
 
@@ -67,7 +72,7 @@ namespace NetworkCheck.Circuit
 
 open Lean (Json toJson)
 open Flock.Program (Prog Defn Ty)
-open NetworkCheck.Period (bitsOf templateNodes inputArg inputGates)
+open NetworkCheck.Period (isStr bitsOf templateNodes inputArg inputGates)
 
 abbrev Wire := SampledProofs.Wires.Wire
 abbrev Wiring := SampledProofs.Wires.Wiring
@@ -251,8 +256,8 @@ def recordOf (P : Prog) (j : Json) : Except String Record := do
       is no ingress gate"
   | .ok _ => throw "the circuit's ingress is not a list"
   | .error _ => pure ()
-  unless j.getObjValD "format" == .str FORMAT do throw s!"the circuit's format is not {FORMAT}"
-  unless j.getObjValD "program" == .str (Flock.hexOf P.sha512) do
+  unless isStr (j.getObjValD "format") FORMAT do throw s!"the circuit's format is not {FORMAT}"
+  unless isStr (j.getObjValD "program") (Flock.hexOf P.sha512) do
     throw "the circuit's program is not the audit's Program's SHA-512"
   let cap ← natAt j "cap"
   let named ← (← arrOf "templates" (← field j "templates")).mapM fun t => do
@@ -604,7 +609,7 @@ def segmentOf (i : Nat) (j : Json) : Except String Segment := do
 /-- The certificate's segments and wires: its keys exactly `{format, segments, wires}`, its format `ORDER`. -/
 def orderLists (j : Json) : Except String (List Json × List Json) := do
   sameKeys j ["format", "segments", "wires"] ""
-  unless j.getObjValD "format" == .str ORDER do throw ""
+  unless isStr (j.getObjValD "format") ORDER do throw ""
   pure (← arrOf "" (← field j "segments"), ← arrOf "" (← field j "wires"))
 
 def pairOf (p : Json) : Except String (Nat × Nat) := do

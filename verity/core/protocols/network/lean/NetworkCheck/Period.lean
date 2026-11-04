@@ -1164,11 +1164,6 @@ def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array
   unless f.units == 2 * s.window do refuse s!"{what}: profile: {f.units} units, not the scan's 2T = {2 * s.window}"
   pure (f, (tiedAudits audits reg).foldl (fun n i => n + ((p.audits[i]?.map (·.free)).getD 0)) 0)
 
-/-- Whether `j` is the string `s`: `Json`'s `==` on strings, by a match a proof unfolds. -/
-def isStr (j : Json) (s : String) : Bool := match j with
-  | .str x => x == s
-  | _ => false
-
 /-- Whether pin `(p, root)` is registration `reg`'s window's registered root for parameter `p` (its
 `registered_roots`, `interface.held_params`: the hex compared without case). -/
 def pinHeld (reg : Json) (pin : String × String) : Bool :=
