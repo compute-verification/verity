@@ -349,6 +349,20 @@ def evaluate(book, model, choose):
     return worst, credited / total_macs(model), unpriced, natural, unsplit
 
 
+def served_map(book, model, choose) -> dict:
+    """What a defence serves off design U's 2% codes: a clip target, or `out` for EXACT's matrices; a matrix credited
+    at a margin or uncredited otherwise is served as design U."""
+    out = {}
+    for t in all_tensors(model):
+        var, credit = choose(book, model, t)
+        if credit == 0 and t in EXACT.get(model, ()):
+            out[t] = "out"
+        elif credit and var and var != U:
+            assert var[1:] == U[1:], f"{t}: {var} isn't a clip qat.py serves"
+            out[t] = var[0]
+    return out
+
+
 def short(t: str) -> str:
     return f"L{layer(t)} {kind(t).removesuffix('_proj')}"
 
@@ -357,8 +371,14 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--runs", type=Path, default=Path.home() / ".research" / "runs")
     ap.add_argument("--matrices", action="store_true", help="also every matrix the split or a defence moves")
+    ap.add_argument("--map", choices=MODELS, help="print --defence's targets map for MODEL (qat.py --targets: a clip "
+                    "target, or `out` for a matrix served exact; arm70b-out.sh) and stop")
+    ap.add_argument("--defence", default=RECOMMENDED, choices=DEFENCES)
     args = ap.parse_args()
     book = load(args.runs)
+    if args.map:
+        print(json.dumps(served_map(book, args.map, DEFENCES[args.defence]), indent=1))
+        return
     print("| defence | model | sm_120 0.84 / 1.48 / 1.78 | H200 0.84 / 1.48 / 1.78 | least set by | MACs credited | "
           f"unpriced | within {NEAR} of the line: natural order only / unsplit |")
     print("|---|---|---|---|---|---|---|---|")
