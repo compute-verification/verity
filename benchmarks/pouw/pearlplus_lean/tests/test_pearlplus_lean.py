@@ -211,6 +211,28 @@ def test_a_salt_dead_element_over_the_row_cap(exe, tmp_path, monkeypatch):
     assert without["verdict"] == "accept" and not any(v["reason"] for v in without["verdicts"])
 
 
+def test_the_forming_term_reads_a_block_every_credited_word_flags_and_not_one_some_flag(exe, tmp_path, monkeypatch):
+    """E's ∀ over the credited columns both ways (`forming_elements`, `Rule.rowElements`): under the zero key, credited row
+    11 of the first call has atom-words flagging its blocks 0 … 3, all in one column.  On 16 x 16 tiles some of the row's
+    16 credited words flag each block and the rest don't, so no block is inert and its debit is the chain's, 160, over
+    its row cap, with or without the term.  On 16 x 1 tiles that column's tile has one credited word, which flags all
+    four blocks, so every element of the row is inert and the tile's debit is 672, 160 without the term.  The Lean's
+    verdicts are the Python's on both, under each ``over_cap`` rule."""
+    cases = [((16, 16), 16, "A row 11's replayed debit 160 exceeds", "A row 11's replayed debit 160 exceeds"),
+             ((16, 1), 64, "the replayed debit 672 exceeds", "the replayed debit 160 exceeds")]
+    paths = []
+    for tile, draws, why, _ in cases:
+        path = T.proved_pass(tmp_path / f"{tile[0]}x{tile[1]}", H100, key=bytes(32), tile=tile)[0]
+        paths.append(path)
+        for rule in (None, *VR.OVER_CAP):
+            got = same(exe, [path], draws, over_cap=rule)
+            assert any(why in (v["reason"] or "") for v in got["verdicts"]), (tile, rule, got["verdicts"])
+    monkeypatch.setattr(T.CW.D, "forming_elements", lambda flags, dead, device=None: 0)
+    for path, (tile, draws, _, without) in zip(paths, cases):
+        out = VR.verify_passes([path], draws, 1, "test", T.published(path), SOURCE, test_instance=True)
+        assert any(without in (v["reason"] or "") for v in out["verdicts"]), tile
+
+
 def test_openings_that_fail(exe, tmp_path):
     """A weight row, an activation row or a transcript leaf that isn't what the pass committed; a file whose size or
     SHA-256 isn't its manifest entry's; and records that leave out the excluded row."""
