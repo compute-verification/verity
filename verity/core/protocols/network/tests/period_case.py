@@ -1506,6 +1506,16 @@ def read_circuit(text: str) -> CircuitHeader:
         i += 1 + int(n)
     if "unit" not in nets or meta.get("out_net", "unit") not in nets:
         raise D.Reject("no unit circuit, or META's out_net is no circuit")
+    for w in meta.get("wires", []):
+        if len(w) != 6:
+            raise D.Reject("META: a wire is not six fields")
+        if (n := next((n for n in (w[0], w[3]) if n not in nets), None)) is not None:
+            raise D.Reject(f"META: unknown circuit {n}")
+    for x in meta.get("leaf_cuts", []):
+        if len(x) != 4:
+            raise D.Reject("META: a leaf cut is not [circuit, unit, port, leaf]")
+        if x[0] != "unit":
+            raise D.Reject("META: a leaf cut into anything but a unit")
     return CircuitHeader(hashlib.sha512(text.encode()).hexdigest(), meta, _nat(meta.get("units_per_vu"), "META"),
                          meta["leaves_in"], meta["leaves_out"], *nets["unit"], meta.get("out_net", "unit") == "unit")
 
@@ -1526,6 +1536,15 @@ def bits_why(c: CircuitHeader, keys: frozenset[str], template: str) -> str | Non
     if len(c.leaves_in) != c.upv or len(c.leaves_out) != c.upv or any(
             len(c.leaves_in[k]) != len(gi) or len(c.leaves_out[k]) != len(go) for k in range(c.upv)):
         return "the circuit file's leaf maps are not one per template instance over its unit's ports"
+    wired: dict[tuple[int, int], int] = {}
+    for kp in [(x[1], x[2]) for x in c.meta.get("leaf_cuts", [])] + [
+            (w[1], w[2]) for w in c.meta.get("wires", []) if w[0] == "unit"]:
+        wired[kp] = wired.get(kp, 0) + 1
+    for k in range(c.upv):
+        for p in range(len(gi), sum(len(g[2]) for g in c.in_groups)):
+            if wired.get((k, p), 0) != 1:
+                return (f"input port {p} of the circuit file's unit, template instance {k}, is not wired exactly once by "
+                        "a leaf cut or a wire")
     if len(set(outs)) != len(outs):
         return "the circuit file's unit returns an output word twice"
     if n_in != c.in_words * WORD:
@@ -1611,12 +1630,19 @@ def reference_with(case: dict, texts: list[str]) -> dict:
                     digest=lambda c: tagged_sha512(COMMITMENT_TAG, c.bytes))
 
 
-def circuit_file(program: str, partition: str | None, upv: int = LISTED_UPV, **meta) -> str:
+#: the toy unit net's header line: one input word of two 16-bit leaf ports, its output word on computed rows
+TOY_HEAD = "flock-ir-unit/v2 toy 146 145 1 0 1 2 16 16 1 1 1 1 16"
+#: a header for the same rows with a second input word, one 16-bit cut port (port 2), and the output word past it; the
+#: period's check reads only the header, never the rows
+CUT_HEAD = "flock-ir-unit/v2 toy 273 272 2 0 1 2 16 16 1 1 1 16 1 2 1 1 16"
+
+
+def circuit_file(program: str, partition: str | None, upv: int = LISTED_UPV, head: str = TOY_HEAD, **meta) -> str:
     """A flat circuit file of `NetworkCheck.CircuitFile`'s toy unit net (one input word of two 16-bit ports, its output
-    word on computed rows) at `upv` template instances a VU, each its own output word, META binding the Program's
-    SHA-512 `program` and, given one, the `verity/partition/v1` digest `partition`; `meta` overrides META's keys. The
-    period's check reads only its SHA-512 and header."""
-    net = ["flock-ir-unit/v2 toy 146 145 1 0 1 2 16 16 1 1 1 1 16"] + [
+    word on computed rows), its header line `head`, at `upv` template instances a VU, each its own output word, META
+    binding the Program's SHA-512 `program` and, given one, the `verity/partition/v1` digest `partition`; `meta`
+    overrides META's keys. The period's check reads only its SHA-512 and header."""
+    net = [head] + [
         f"1 {i} 1 {i}" if i < 32 else "0 0" if i < 128 else f"2 {i - 128} {i - 112} 1 145" if i < 144
         else "1 128 1 145" if i == 144 else "1 145 1 145" for i in range(146)]
     m = {"format": CIRCUIT_FORMAT, "statement": CIRCUIT_STATEMENT, "units_per_vu": upv,
@@ -1626,10 +1652,10 @@ def circuit_file(program: str, partition: str | None, upv: int = LISTED_UPV, **m
                       f"{CIRCUIT_BLOCK} unit {len(net)}", *net]) + "\n"
 
 
-def listed_files(case: dict, upv: int = LISTED_UPV, **meta) -> list[str]:
+def listed_files(case: dict, upv: int = LISTED_UPV, head: str = TOY_HEAD, **meta) -> list[str]:
     """The circuit files `circuit_file` writes for each file a case's audits list, in `Listing.files`' order: each
     audit's Program's SHA-512 and its record's partition digest."""
-    return [circuit_file(program_sha512(a["program"]), record_partition(a["circuit"], ""), upv, **meta)
+    return [circuit_file(program_sha512(a["program"]), record_partition(a["circuit"], ""), upv, head, **meta)
             for a in case["params"]["audits"] if "circuits" in a for _ in a["circuits"]]
 
 

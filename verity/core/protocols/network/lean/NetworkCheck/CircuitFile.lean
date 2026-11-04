@@ -153,7 +153,8 @@ private def intLists (j : Json) (k : String) : Flock.V (Array (Array Int)) := do
   (← Flock.J.arr j k ctx).mapM fun u => do (← Flock.J.asArr u s!"{ctx}.{k}").mapM fun x => Flock.J.asInt x s!"{ctx}.{k}"
 
 /-- **The circuit file's header as a `Flock.Circuit`**: its name, SHA-512 `sha`, nets (each its header, no rows), units
-per VU, unit net, the net returning the outputs (META `out_net`, the unit by default), leaf maps and META. A file of
+per VU, unit net, the net returning the outputs (META `out_net`, the unit by default), leaf maps, wires and leaf cuts
+(META `wires` and `leaf_cuts`, read as `Flock.Circuit.parse` and `Flock.HmRow` read them) and META. A file of
 another format than `Flock.Tags.circuit`'s, a typed template's (`flock-circuit/types`) among them, is refused. -/
 def ofHeader (sha : ByteArray) (lines : Array String) : Flock.V Flock.Circuit := do
   let tags := Flock.Tags.circuit
@@ -179,8 +180,27 @@ def ofHeader (sha : ByteArray) (lines : Array String) : Flock.V Flock.Circuit :=
   let some outNet := nets.findIdx? (·.1 == outName) | throw s!"META: unknown circuit {outName}"
   let leavesOut ← (← intLists mj "leaves_out").mapM fun u => u.mapM fun x =>
     if x < 0 then (throw "META: a negative output leaf" : Flock.V Nat) else pure x.toNat
+  let netOf := fun (n : String) => match nets.findIdx? (·.1 == n) with
+    | some i => (pure i : Flock.V Nat)
+    | none => throw s!"META: unknown circuit {n}"
+  let wires ← match mj.getObjVal? "wires" with
+    | .ok w => (← Flock.J.asArr w "wires").mapM fun x => do
+      let a ← Flock.J.asArr x "wire"
+      if a.size != 6 then throw "META: a wire is not six fields"
+      pure (⟨(← netOf (← Flock.J.asStr a[0]! "wire"), ← Flock.J.asNat a[1]! "wire", ← Flock.J.asNat a[2]! "wire"),
+        (← netOf (← Flock.J.asStr a[3]! "wire"), ← Flock.J.asNat a[4]! "wire", ← Flock.J.asNat a[5]! "wire")⟩ :
+        Flock.Wire)
+    | .error _ => pure #[]
+  let leafCuts ← match mj.getObjVal? "leaf_cuts" with
+    | .ok (.arr a) => a.mapM fun w => do
+      let x ← Flock.J.asArr w "a leaf cut"
+      if x.size != 4 then throw "META: a leaf cut is not [circuit, unit, port, leaf]"
+      if (x[0]!.getStr?).toOption != some "unit" then throw "META: a leaf cut into anything but a unit"
+      pure (← Flock.J.asNat x[1]! "a leaf cut", ← Flock.J.asNat x[2]! "a leaf cut", ← Flock.J.asNat x[3]! "a leaf cut")
+    | _ => pure #[]
   return { (default : Flock.Circuit) with name, sha, nets, upv := ← Flock.J.nat mj "units_per_vu" ctx, unitNet,
-                                          outNet, leavesIn := ← intLists mj "leaves_in", leavesOut, metaJ := mj }
+                                          outNet, leavesIn := ← intLists mj "leaves_in", leavesOut, wires, leafCuts,
+                                          metaJ := mj }
 
 /-- A whole file's SHA-512 and its header's circuit, from its hash and lines. -/
 def result (hs : Hasher) (ls : Lines) : Flock.V (ByteArray × Flock.Circuit) := do
@@ -228,14 +248,27 @@ private def toyNet : Array String :=
         (b.inGroups ++ b.outGroups).map (fun g => (g.col, g.words, g.bits))
   | _, _ => false
 
-/-- A file of that unit net at two units a VU, each instance returning its own output word. -/
-private def toyFile : ByteArray :=
+/-- A file of that unit net at two units a VU, each instance returning its own output word, its META's other fields
+`extra`. -/
+private def toyFileWith (extra : List (String × Json)) : ByteArray :=
   let ns (xs : List Nat) : Json := Json.arr (xs.toArray.map Lean.toJson)
-  let mj := Json.mkObj [("format", .str Flock.Tags.circuit.fileFormat),
+  let mj := Json.mkObj ([("format", .str Flock.Tags.circuit.fileFormat),
     ("statement", .str Flock.Tags.circuit.statement), ("units_per_vu", Lean.toJson (2 : Nat)),
-    ("leaves_in", Json.arr #[ns [0, 1], ns [2, 3]]), ("leaves_out", Json.arr #[ns [0], ns [1]])]
+    ("leaves_in", Json.arr #[ns [0, 1], ns [2, 3]]), ("leaves_out", Json.arr #[ns [0], ns [1]])] ++ extra)
   (String.intercalate "\n" ([s!"{Flock.Tags.circuit.fileFormat} toy", s!"META {mj.compress}",
     s!"{Flock.Tags.circuit.blockKeyword} unit {toyNet.size}"] ++ toyNet.toList) ++ "\n").toUTF8
+
+private def toyFile : ByteArray := toyFileWith []
+
+private def jn (k : Nat) : Json := Lean.toJson k
+
+#guard match ofChunks (toyFileWith [("wires", Json.arr #[Json.arr #["unit", jn 1, jn 2, "unit", jn 0, jn 0]]),
+    ("leaf_cuts", Json.arr #[Json.arr #["unit", jn 0, jn 2, jn 5]])]) 64 with
+  | .ok (_, c) => c.wires.map (fun w => (w.dst, w.src)) == #[((0, 1, 2), (0, 0, 0))] && c.leafCuts == #[(0, 2, 5)]
+  | .error _ => false
+#guard match ofChunks (toyFileWith [("wires", Json.arr #[Json.arr #["stage", jn 1, jn 2, "unit", jn 0, jn 0]])]) 64 with
+  | .error e => e == "META: unknown circuit stage"
+  | .ok _ => false
 
 #guard [1, 7, 64, 1000, toyFile.size].all fun k => match ofChunks toyFile k with
   | .ok (sha, c) => sha.data == (Flock.Sha512.hash toyFile).data && c.name == "toy" && c.upv == 2 && c.unitNet == 0 &&
