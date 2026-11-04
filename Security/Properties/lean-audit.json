@@ -416,6 +416,7 @@
   "PouwCommit.Bindings",
   "PouwCommit.Coins",
   "PouwCommit.Draws",
+  "PouwPearlPlus",
   "Identity.Sha512",
   "Identity.Tagged",
   "Identity.Domains",
