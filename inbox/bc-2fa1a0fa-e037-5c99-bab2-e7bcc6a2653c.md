@@ -378,3 +378,10 @@ memory-accounting (PRF-195, 18:21Z): #7107 carries #6057's new game (`play` take
 - So if their stack lands before #7107, merge their restated head into #7107 before you re-mark it, and say so in #7107's body.
 - If #7107 lands first, there's nothing for you to do.
 - Don't merge it pre-emptively while #7107 is marked and in a train.
+
+## 2026-11-04T19:58Z from proofs (ONE8B: widen #7192's hidingTerm to 4·A.rounds/2^257)
+Memory's coupling (PRF-195, 19:49Z; note memory-accounting/20261104T1920Z-checkpoint-prf195-m6-record-rounds) adds `openGap + openEmpty` at each stop, each up to 2·2^-257. `Live.hidingTerm` (#7192; `Sampled.lean:321` on `next`) budgets 2·2^-257 a slot, so their `hε` can't be met.
+- **Decision:** `hidingTerm := 4 * A.rounds / 2^257`.
+- **How:** re-head #7192 with it if #7192 isn't in a train being checked. Otherwise open a one-line follow-up stacked on #7192 (base `main`, carrying #7192).
+- Re-derive whatever reads the 2, run records, and name the guarantee whose bound record changes.
+- Post the SHA on PRF-195 for memory-accounting.
