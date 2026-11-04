@@ -5,8 +5,8 @@ import Proofs.NetworkCertifier.Assumptions.SampledCode
 /-!
 # The monitoring period's honest and nontrivial lemmas
 
-`PeriodLeakAccepted` and `PooledLeakAccepted` each have an `honest` and a `nontrivial` lemma, listed in the lock's
-`witnesses`, and neither takes a binder over its instance:
+`PeriodLeakAccepted`, `PeriodLeakRegistered` and `PooledLeakAccepted` each have an `honest` and a `nontrivial` lemma,
+listed in the lock's `witnesses`, and neither takes a binder over its instance:
 
 * `PeriodLeakAccepted_honest`: under `SampledCodeRuns`, the one named assumption, the premises that are no named
   assumption hold at the deployed instance: `Claims.Sampling.KS` at SHA-512 at the deployed sampling record
@@ -17,6 +17,10 @@ import Proofs.NetworkCertifier.Assumptions.SampledCode
   (`trusted-host`), a named assumption.
 * `PeriodLeakAccepted_nontrivial`: the per-window bound fails at the accepting verifier `tapD` at SHA-512, at
   `δ = 1/8` (`tapD_bound_fails`).
+* `PeriodLeakRegistered` takes `PeriodLeakAccepted`'s premises and the registration's openings `ops`, whose
+  `RegOpens` is an antecedent of its per-window part, so `PeriodLeakAccepted_honest` is its honest lemma too.
+  `PeriodLeakRegistered_nontrivial`: its per-window bound fails at `tapD` likewise, with a registration with no
+  openings, which opens every registered input when none is registered (`tapD_reg_bound_fails`).
 * `PooledLeakAccepted_honest`: its premises on the schedules, at `fxQueue`'s alone: each fits the format (`hfit`) and
   sends at most 6 cells a connection (`hcap`). Stated as their conjunction, not as `fits` alone: the witnesses rule
   reads a statement that is one definition applied by unfolding it once, and `fits` is a field.

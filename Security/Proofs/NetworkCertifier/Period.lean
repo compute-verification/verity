@@ -12,7 +12,7 @@ A window that meets `WindowGood`, whose observations the network certifier regis
 at `reg` (`mem_accSeqsSampled_of_windowGood`). The observations are the trusted network certifier's record of the cells
 it sends, so the client's view reads back from them under its schedule, one its record format holds
 (`tap_cells_read`): the views, and the secrets
-they decode to, number at most `#Ss` times the size of the product of those sets (`encard_periodGood_le`). The record
+they decode to, number at most `#Ss` times the size of the product of those sets (`encard_period_le`). The record
 holds the fail cells and the padding too, so the count needs no separate charge for them: the bound's
 `∏_c (cap_c + 1)`, one fail choice per connection, is room here. `periodLeak` adds the per-window bound at
 the network certifier's rows (`sampledLeak_tap`).
@@ -56,7 +56,8 @@ theorem mem_accSeqsSampled_of_windowGood {H : Msg → Msg} {D : Deploy Coin Col 
 
 /-- **The count over any good event that puts each window's observations among `AccSeqsSampled`'s sequences**, with
 the registered inputs pinned at `ρ i`: the secrets whose observations the network certifier's one run gives number at
-most `#Ss` times the size of the product of those sets (`encard_periodGood_le`, `encard_periodGoodReg_le`). -/
+most `#Ss` times the size of the product of those sets. `periodLeak` counts over `WindowGood`, and
+`periodLeak_registered` over `WindowGoodReg`. -/
 theorem encard_period_le (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ)
     (reg : AuditStatement → Finset ℕ) (Dj : ℕ) {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition)
     (ρ : Fin n → ℕ → Bool) (op : Fin n → ℕ → List (Obs L K S) → List Bool) (β : Fin n → ℕ)
@@ -111,7 +112,7 @@ theorem encard_period_le (L K S : ℕ) (lay : AuditStatement → BoundaryGates L
         exact_mod_cast Nat.le_mul_of_pos_left _ hcap1
 
 /-- **The leak through the network certifier over a monitoring period**: `Guarantees.PeriodLeakAccepted`, from
-`sampledLeak_tap` with the registered inputs pinned (`adviceIn_asReg`), and `encard_periodGood_le`. -/
+`sampledLeak_tap` with the registered inputs pinned (`adviceIn_asReg`), and `encard_period_le` over `WindowGood`. -/
 theorem periodLeak : Guarantees.PeriodLeakAccepted := by
   intro Coin Col T _ _ _ _ _ H D hks L K S lay k δ decode hδ hdec reg Dj n sw Pw hPw ρ op β hβ Conn Cell Srv Dev Z _
     arr f tap run htrust cap Ss hcap hfit Zs schedOf srvOf hs dec hdz x wit tops hb

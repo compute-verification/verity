@@ -105,7 +105,11 @@ registered input (`WindowGoodReg`):
 * where at every window's statement the network certifier registers its observations at that window's operator
   (`TapOpens`), a covert sender's secrets whose every window meets `WindowGoodReg`, its registration opening `ρ i` at
   the registered inputs, number at most
-  `#Ss · ∏_c (cap c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`. -/
+  `#Ss · ∏_c (cap c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`.
+
+`RegOpens` restricts which openings `ops` the first part speaks of, those that open the registered roots: a choice of
+`ops`, not a claim about the prover's honesty. Two different openings of one registered input are a collision
+`B_reg` covers. -/
 def PeriodLeakRegistered : Prop :=
   ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (hks : KS H D) (L K S : ℕ)
