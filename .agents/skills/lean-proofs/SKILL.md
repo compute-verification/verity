@@ -74,7 +74,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   [Loogle](https://loogle.lean-lang.org). A lemma another package proves is imported or moved, not proved again.
 - **A slow declaration**: measure (`set_option profiler true in`; `#count_heartbeats in` in a Mathlib package), then fix
   the proof: `simp only [...]` outside terminal calls, a split-out lemma, a smaller `decide`. An override that stays has
-  its reason in a `--` comment on or above it. Keep files to a few hundred declarations.
+  its reason in a `--` comment on or above it. Keep modules under 2000 lines (Standards).
 - **`X.congr_simp is declared by a replayed module and by one it imports`**: `simp` realized a structure constructor's
   congruence lemma Mathlib had already. Don't unfold a `→+` or `→*` in `simp`; prove its `_apply` lemma by `rfl` and simp
   with that.
@@ -83,8 +83,8 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 
 - **An assumption is a named `Prop`** in its area's `Definitions/<Area>/Assumptions` (Flock's in
   `Proofs/Flock/Soundness/Assumptions` until its spec is extracted), taken as a hypothesis by each theorem that needs it
-  and listed by name in the lock's `assumptions` with its owner. Its docstring opens with its claim id
-  (`verity.core.claims`) and gives its rationale; a ledger points to it. `--update` lists every premise a guarantee
+  and listed by name in the lock's `assumptions` with its owner. Its docstring gives its rationale, a primitive
+  assumption's opening with its claim id (`verity.core.claims`); a ledger points to it. `--update` lists every premise a guarantee
   takes that this repository defines, and every assumption a premise mentions, with a digest, so strengthening a
   premise is a record change. AGENTS.md "Lean" has the rest.
 - **Statement first, then an attack on it, then an ask for each new premise, then the proof.** State the guarantee on
@@ -110,6 +110,24 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   open with a falsification test that runs, or falsified, taking every property resting on it off the list. Every `def G
   : Prop` of a `Guarantees` module is a listed guarantee or frozen. Adding a frozen entry is a claims change: rather
   restate the guarantee, or move what isn't a property to `Proofs/`.
+
+## Standards
+
+Each check prints its fix. What was off when it came is a cap in `tests/test_lean_packages.py` equal to its count: lower
+the cap with the count.
+
+- **Guarantees in four names**: `X.SecurityProofs.G : X.Guarantees.G` under the area's root, which `four_names` lists;
+  witnesses and frozen guarantees aside, `four_names_except` holds the rest, and only shrinks.
+- **Other names as Mathlib's**: snake_case theorems, UpperCamel Props and types, lowerCamel functions. Witnesses are
+  `G_honest` and `G_nontrivial`, a claim's `C_fails` and `C_meets_<record>`.
+- **No older name** (GLOSSARY.md) in a new declaration's name: sample, not "draw" (`RETIRED_NAMES`).
+- **No lemma in the spec** but one a definition's proof field needs (`SPEC_THEOREMS`), and no statement reads `Proofs/`
+  (`TREES_EXCEPT`).
+- **A docstring on each spec definition a guarantee reads**, saying what it means: the landing DM shows it
+  (`UNDOCUMENTED`).
+- **Modules under 2000 lines**, Lean's unit of rebuild: put new declarations beside a long one (`OVERLONG`).
+- **No `import all` of an in-tree module**: move the proof into it, or `@[expose]` what it reads (`IMPORT_ALL`).
+- **No binder named `X`** where ArkLib is imported: its `notation3 "X"` makes `X` a token.
 
 ## Before the PR
 
