@@ -156,6 +156,10 @@ CUTS = {
 }
 
 
+class NoCut(ValueError):
+    """No cut of a panel fits the route's limits."""
+
+
 def cut(p: dict) -> dict:
     """`p` cut to the route's limits: its first cut (`CUTS`) whose body fits, with the console's note."""
     name = p["id"].split("/", 1)[1]
@@ -165,15 +169,21 @@ def cut(p: dict) -> dict:
         q["note"] = note if len(note) <= NOTE_MAX else note[:NOTE_MAX - 1] + "…"
         if len(body(q)) <= BODY_MAX:
             return q
-    raise ValueError(f"{p['id']}: no cut fits {BODY_MAX} bytes (the last is {len(body(q))})")
+    raise NoCut(f"{p['id']}: no cut fits {BODY_MAX} bytes (the last is {len(body(q))})")
 
 
 def write(src: Path, out: Path) -> dict[str, dict]:
-    """Each of `src`'s panels (te_core.plots' DIR/<name>.json) cut, written to `out`/<name>.json."""
+    """Each of `src`'s panels (te_core.plots' DIR/<name>.json) cut, written to `out`/<name>.json. None of them is on the
+    console, so a panel no cut fits is left out, with why on stderr, rather than failing the re-score that writes them."""
     out.mkdir(parents=True, exist_ok=True)
     made = {}
     for name in NAMES:
-        made[name] = cut(json.loads((src / f"{name}.json").read_text()))
+        p = json.loads((src / f"{name}.json").read_text())
+        try:
+            made[name] = cut(p)
+        except NoCut as e:
+            print(f"te_core.console: {e}, so {out / name}.json is left out", file=sys.stderr)
+            continue
         (out / f"{name}.json").write_bytes(body(made[name]))
     return made
 

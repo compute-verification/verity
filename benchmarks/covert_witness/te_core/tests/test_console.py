@@ -73,3 +73,18 @@ def test_write_cuts_every_panel(tmp_path):
         (tmp_path / f"{n}.json").write_text(json.dumps(p))
     made = console.write(tmp_path, tmp_path / "console")
     assert sorted(made) == sorted(NAMES) and all((tmp_path / "console" / f"{n}.json").exists() for n in NAMES)
+
+
+def test_write_leaves_out_a_panel_no_cut_fits(tmp_path, capsys):
+    """None of te_core.plots' panels is on the console, so one too large for every cut is left out of console/ and the
+    others are still written; `cut` itself refuses it."""
+    from te_core.plots import NAMES
+    big = "a2-efficiency-floor"
+    for n in NAMES:
+        p = p1(2000, 9) if n == big else p1(5, 1)
+        (tmp_path / f"{n}.json").write_text(json.dumps(p | {"id": f"training/{n}"}))
+    made = console.write(tmp_path, tmp_path / "console")
+    assert sorted(made) == sorted(set(NAMES) - {big}) and not (tmp_path / "console" / f"{big}.json").exists()
+    assert f"training/{big}: no cut fits" in capsys.readouterr().err
+    with pytest.raises(console.NoCut):
+        console.cut(p1(2000, 9) | {"id": f"training/{big}"})
