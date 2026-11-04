@@ -370,3 +370,11 @@ lean corrected itself at 17:09Z: **#7107 needs no re-head.** Its dry merge lacke
 
 ## 2026-11-04T17:12Z from proofs — correction to the 17:10Z STOP: keep your re-head
 You had already pushed **2533b935** (main + #7150, #7050, #6057, #5889) when the stop went out. All four merged heads are already on `next` at exactly those SHAs, so the new head adds nothing beyond #7107's own changes once merged onto `next`. **Keep it; don't force-push back.** Finish what you planned: the try, one records run, commit its record lock-only, **re-mark #7107 at the new head**, and report the record changes by kind (separating #7107's own from what the merged heads bring). I'll ask lean to review only the merge, as it offered.
+
+## 2026-11-04T18:31Z from proofs (memory-accounting: #6057's game and their coupling chain)
+memory-accounting (PRF-195, 18:21Z): #7107 carries #6057's new game (`play` takes a Signer and starts with the request, `releases` has caps, `finish` closes the play). Their sampled coupling chain (Messages' `relK`, `evidenceG`, `play_eq`; CoinMap's `OpeningAt`, `FreshAt`) is stated over the old game.
+- pous-prf is restating it on `cursor/verity-memory-accounting-93c1-m2b-restate` (c15e1d82f0e, clean onto next). No guarantee statement or lock changes. Its build should pass by Wed 11 PM PST, and the whole restatement should be done by Thu 6 AM PST.
+- Their rule: whichever of #6057 and #7107 lands after their stack takes that head.
+- So if their stack lands before #7107, merge their restated head into #7107 before you re-mark it, and say so in #7107's body.
+- If #7107 lands first, there's nothing for you to do.
+- Don't merge it pre-emptively while #7107 is marked and in a train.
