@@ -1,6 +1,6 @@
 # Sourced by run_point.sh (a spec's `setup`): the int8 Llama-3.1-8B pin (checkpoints-int8.json's LLAMA31_8B_INT8, a recipe
 # pin made on the node, never downloaded) in the node's HF cache, made by benchmarks/hash/dither/pin.sh when its snapshot is
-# missing, and lake on the PATH, since PoUW's in-process coins are the Lean verifier of record's (`pouw.verifier.coins`
+# missing, and lake on the PATH, since PoUW's in-process coins are the Lean verifier's (`pouw.verifier.coins`
 # builds pouw-check-difftest once a process). pin.sh's output goes to $RESEARCH_RUN_DIR/out/setup.
 INT8_SNAPSHOT=$("$VENV/bin/python" -c 'import json; print(next(c["local_path"] for c in json.load(open(
   "integrations/vllm/manifests/checkpoints-int8.json"))["checkpoints"] if c["role"] == "LLAMA31_8B_INT8"))')
