@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 import json
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -15,6 +16,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location("rename_move_under_test", HERE.parent / "rename.py")
 M = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = M      # `--jobs` hands its workers `M._rewrite`, which pickle finds by its module's name
 spec.loader.exec_module(M)
 
 MAP = HERE / "fixtures" / "rename_map.toml"
@@ -353,6 +355,19 @@ def test_the_move_on_a_toy_tree(toy, capsys):
     assert M.main(["--map", str(MAP), "--root", str(toy)]) == 0
     assert "files rewritten: 0, files moved: 0, pins repinned: 0" in capsys.readouterr().out
     assert git(toy, "status", "--porcelain") == "" and git(toy, "rev-parse", "HEAD:") == head
+
+
+def test_the_move_in_many_processes_is_the_move_in_one(toy, tmp_path_factory, capsys, monkeypatch):
+    """`--jobs` splits the rewriting among forked processes: the staged tree and the report are one process's."""
+    monkeypatch.setattr(M, "CHUNK", 2)
+    other = tmp_path_factory.mktemp("other")
+    git(other, "clone", "-q", str(toy), ".")
+    got = {}
+    for root, jobs in ((toy, "1"), (other, "4")):
+        capsys.readouterr()
+        assert M.main(["--map", str(MAP), "--root", str(root), "--jobs", jobs]) == 0
+        got[jobs] = (git(root, "write-tree"), capsys.readouterr().out)
+    assert got["1"] == got["4"] and "files rewritten: 0" not in got["1"][1]
 
 
 def test_the_moves_are_those_of_the_tree_re_recorded(toy, capsys):

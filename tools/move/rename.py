@@ -25,7 +25,9 @@ branch across it):
 5. appends its renamed paths to research's `moves.json` once, as `layout.py` does, each moved path up to the end of each
    run of renamed parts (`.../warden/`, not each file under it, and `.../warden/tests/test_warden.py` besides), so that a
    branch carried across the move appends the same entry unless it adds a path that renames a part below a renamed one.
-It refuses a dirty worktree, and a second run changes nothing.
+It refuses a dirty worktree, and a second run changes nothing. The first step runs in `--jobs` forked processes (by
+default the cores it may use, at most 32), since `restack.py` runs it once for each branch it carries; a file's new text
+reads only that file and the map, so the result is one process's.
 
 A map with `scope = "prose"` renames only prose, the part of a move `tools/verity/check/move_check.py` certifies without a
 build: a word that stands as a word in a comment, a docstring or Markdown's text (`regions`, `prose_word`), never one in
@@ -37,10 +39,12 @@ from __future__ import annotations
 
 import argparse
 import bisect
+import concurrent.futures
 import fnmatch
 import hashlib
 import importlib.util
 import json
+import multiprocessing
 import os
 import posixpath
 import re
@@ -61,6 +65,7 @@ PIN = re.compile(r"^([0-9a-f]{64})  (.+)$", re.M)
 PINS_PY = "tools/verity/check/pins.py"              # the pins of Lean sources, some of them JSON (`json_pins`)
 MANIFEST = "lake-manifest.json"
 MOVES = L.MOVES                                     # research's record of each move's renamed paths
+JOBS, CHUNK = 32, 64                                # at most this many processes rewrite files, this many files a task
 EXPORTS = re.compile(r"^__all__\s*\+?=\s*[\[(][^\])]*[\])]", re.M)   # a Python module's `__all__`: names, never data
 # a space of a phrase: one, a line break and what starts the next line, or a break between two string literals Python joins
 GAP = r"""(?: ["']\n[ \t]*[rbfRBF]{0,2}["']|["']\n[ \t]*[rbfRBF]{0,2}["'] | |\n[ \t]*(?:(?:///?|--|#|\*) )?)"""
@@ -678,6 +683,47 @@ def record(root: Path, moves: list[tuple[str, str]]) -> str | None:
     return json.dumps(doc, indent=2) + "\n"
 
 
+#: what the workers `rewrite` forks read: (root, words, run)
+_FORKED: tuple = ()
+
+
+def _rewrite(files: list[str]) -> tuple[dict[str, str], Counter, Counter]:
+    """The new text of each of `files` that the words change, the words renamed (by old and new) and the words left standing
+    (by file and word)."""
+    root, words, run = _FORKED
+    texts, counts, kept = {}, Counter(), Counter()
+    for p in files:
+        lock = posixpath.basename(p) == POLICY
+        text = (root / p).read_text() if lock else run._read(p)      # a lock is larger than `layout`'s text limit
+        if text is None:
+            continue
+        here = Counter()
+        new = words.sub(text, p, record_spans(text) if lock else [], counts, here)
+        kept.update({(p, w): n for w, n in here.items()})
+        if new != text:
+            texts[p] = new
+    return texts, counts, kept
+
+
+def rewrite(root: Path, words: Words, run: L.Run, files: list[str], jobs: int) -> tuple[dict[str, str], Counter, Counter]:
+    """`_rewrite` of `files`, in `jobs` forked processes when that is more than one: a file's new text reads that file and
+    the map alone, so it is what one process writes, in the same order."""
+    global _FORKED
+    _FORKED = (root, words, run)
+    chunks = [files[i:i + CHUNK] for i in range(0, len(files), CHUNK)]
+    if jobs > 1 and len(chunks) > 1:
+        with concurrent.futures.ProcessPoolExecutor(min(jobs, len(chunks)), mp_context=multiprocessing.get_context("fork")) as ex:
+            parts = list(ex.map(_rewrite, chunks))
+    else:
+        parts = [_rewrite(c) for c in chunks]
+    texts, counts, kept = {}, Counter(), Counter()
+    for t, c, k in parts:
+        texts.update(t)
+        counts.update(c)
+        kept.update(k)
+    return texts, counts, kept
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--map", type=Path, required=True, help="the word map (`tests/fixtures/rename_map.toml` is an example)")
@@ -685,6 +731,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--moves", action="store_true", help="print the declaration renames this tree's locks need, for the Lean check's `--update --moved`")
     ap.add_argument("--allow-dirty", action="store_true")
+    ap.add_argument("--jobs", type=int, default=min(JOBS, len(os.sched_getaffinity(0))),
+                    help=f"the processes that rewrite files (default: the cores this process may use, at most {JOBS})")
     a = ap.parse_args(argv)
     root = (a.root or Path(L.git(HERE, "rev-parse", "--show-toplevel").strip())).resolve()
     words = Words(tomllib.loads(a.map.read_text()))
@@ -708,20 +756,8 @@ def main(argv: list[str] | None = None) -> int:
     if fold := sorted(n for n in dest.values() if folded[n.lower()] > 1):
         raise SystemExit("paths that would differ only in case:\n  " + "\n  ".join(fold[:50]))
 
-    counts, kept, texts = Counter(), Counter(), {}
-    for p in present:
-        if words.excluded(p) or os.path.islink(root / p) or p in fixed:
-            continue
-        lock = posixpath.basename(p) == POLICY
-        text = (root / p).read_text() if lock else run._read(p)      # a lock is larger than `layout`'s text limit
-        if text is None:
-            continue
-        keep = record_spans(text) if lock else []
-        here = Counter()
-        new = words.sub(text, p, keep, counts, here)
-        kept.update({(p, w): n for w, n in here.items()})
-        if new != text:
-            texts[p] = new
+    todo = [p for p in present if not (words.excluded(p) or os.path.islink(root / p) or p in fixed)]
+    texts, counts, kept = rewrite(root, words, run, todo, a.jobs)
     pins = {p: t for p in present if posixpath.basename(p) == PINS and (t := repin(root, words, p, texts, dest)) is not None}
     tracked = set(present)
     pins |= {p: t for p, key, under in json_pins(root)
