@@ -9,10 +9,10 @@ program, the scan's descriptor and each scan registration's the scan Program pin
 the scan's annotations, which no digest covers, or a schedule no class pins) is a finding in either layout, naming no
 value; DIR without the period's files (the split's chain step) holds the scan's answers to some class's Program.
 A key a table declares by no name comes from the source it names: an answer's bounds per template from the templates its
-profile draws by, a report step's bounds from the δs the chain bounds at (`chain_record.eps_at_delta`'s). A key from
-anywhere else is a finding naming the source, never the key, and another key of a fixed vocabulary (the scan state's
-port and runs, the profile's level, the placement's parties) a field of no declared kind; a bare ``*`` is left only
-where `OPEN` lists it.
+profile draws by, a report step's bounds from the δs the chain bounds at (`chain_record.eps_at_delta`'s), a scan round's
+members from its link-windows and the schedule's lanes (`scan_zk.members_of`'s). A key from anywhere else is a finding
+naming the source, never the key, and another key of a fixed vocabulary (the scan state's port and runs, the profile's
+level, the placement's parties) a field of no declared kind; a bare ``*`` is left only where `OPEN` lists it.
 What either development check would feed the record is a finding naming the check: an advice binding in an audit's registration (what `records_audit.py audit --opening`
 opens), at any length, the padded width included, and the chain's endpoint step (CR_ENDPOINT's rebuild), or any step
 the active-warden path doesn't run. On a finding the piece refuses, releasing nothing, its findings (file and key path)
@@ -267,13 +267,12 @@ def test_dirs_files_are_the_pieces():
 
 
 #: the bare ``*`` keys no source names yet, by the files' declarations, each its key path's tail to the ``*``: in DIR a
-#: scan round's members, a committed window's registered values, the parameters' pins and the report's negatives; in
-#: V3c's audit and the received files, their owners'. It only shrinks.
+#: committed window's registered values, the parameters' pins and the report's negatives; in V3c's audit and the
+#: received files, their owners'. It only shrinks.
 OPEN = {
-    "DOCS": {"window.members.*", "window.registered_roots.*", "window.activations.values.*", "audits[].pins.*",
-             "negatives_refused.*"},
-    "V3C_DOCS": {"checks_before_draw.*", "checks.*", "wrong_units.per_template.*", "window.members.*",
-                 "window.registered_roots.*", "window.activations.values.*"},
+    "DOCS": {"window.registered_roots.*", "window.activations.values.*", "audits[].pins.*", "negatives_refused.*"},
+    "V3C_DOCS": {"checks_before_draw.*", "checks.*", "wrong_units.per_template.*", "window.registered_roots.*",
+                 "window.activations.values.*"},
     "RECEIVED": {"registered_roots.*", "values.*", "unrooted.*", "count.*", "seconds.*"},
 }
 
@@ -328,6 +327,48 @@ def test_a_key_from_anywhere_but_its_source_is_a_finding_naming_the_source(tmp_p
         ("case.json", "evidence.windows[].answer.public.per_template.<template>", KS.SOURCES["template"][1]),
         ("chain/report/report.json", "steps.n2.eps_at_delta.incorrect_at_delta.<delta>", KS.SOURCES["delta"][1])]
     assert not any(SECRET in str(f) or "0.25" in str(f) for f in found)
+    assert KS.main([str(d)]) == 1
+
+
+def test_a_scan_rounds_members_are_of_its_link_windows_and_the_schedules_lanes(tmp_path, period):
+    """A round's members (`scan_zk.members_of`) scan clean in either layout: the honest round's ``first``, ``last`` and
+    each of its link-windows' ingress and egress (the rows form's one link-window, the scan's answers' group), and the
+    block round's one a lane of the period's schedule (``block-c<j>``). A member of another link-window or lane, a
+    lane's beside no period (the scan's answers), and any other key is a finding at ``<member>`` naming the source,
+    never the key."""
+    case, answer = _case(period)
+    lanes, unit = case["params"]["schedule"]["lanes"], {"template": "t", "units": [0]}
+    honest = dict.fromkeys(("first", "ingress-0", "last", "egress-0"), unit)
+    block = {f"block-c{j}": unit for j in range(lanes)}
+    planted = {"ingress-1": unit, SECRET: unit}, {f"block-c{lanes}": unit}
+
+    def members(windows: dict, audits: dict) -> dict:
+        com = json.loads(bytes.fromhex(case["commitment"]))
+        com["windows"][0]["window"] = SCAN_WINDOW | {"members": windows}
+        com["audits"][0]["window"] = SCAN_WINDOW | {"members": audits}
+        return {**case, "commitment": canonical_json(com).hex()}
+
+    for hold in (False, True):
+        assert KS.scan(_dir(tmp_path / f"honest-{hold}", members(honest, block), answer, hold))[0] == []
+        d = _dir(tmp_path / f"planted-{hold}", members(honest | planted[0], block | planted[1]), answer, hold)
+        found = KS.scan(d)[0]
+        assert sorted((f.file, f.path, f.why) for f in found) == sorted(
+            (*_where("commitment", f"{part}[].window.members.<member>", hold), KS.SOURCES["member"][1])
+            for part in ("windows", "windows", "audits"))
+        assert not any(k in str(f) for f in found for k in (SECRET, "ingress-1", f"block-c{lanes}"))
+    d = _dir(tmp_path / "answers", case, answer)
+    (d / "chain" / "scan").mkdir(parents=True)
+    group = dict.fromkeys(("first", "ingress-0", "ingress-1", "last", "egress-0", "egress-1"), unit)
+    (d / "chain" / "scan" / "answers.json").write_text(json.dumps({
+        "format": "answers", "delta": "1/100", "windows": [{"window": 0}, {"window": 1}],
+        "registration": {"program": case["params"]["program"], "window": SCAN_WINDOW | {"members": group}}}))
+    assert KS.scan(d)[0] == []
+    (d / "chain" / "scan" / "answers.json").write_text(json.dumps({
+        "format": "answers", "delta": "1/100", "windows": [{"window": 0}, {"window": 1}],
+        "registration": {"program": case["params"]["program"], "window": SCAN_WINDOW | {
+            "members": group | {"egress-2": unit, "block-c0": unit}}}}))
+    assert [(f.file, f.path, f.why) for f in KS.scan(d)[0]] == [
+        ("chain/scan/answers.json", "registration.window.members.<member>", KS.SOURCES["member"][1])] * 2
     assert KS.main([str(d)]) == 1
 
 

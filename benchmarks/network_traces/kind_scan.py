@@ -12,12 +12,13 @@ every served run and refuses on a finding, releasing nothing): `DOCS`' files, th
 and evidence hex, `certifier_piece.write_case`, as the composite reads it) or as the three files ``network-period`` reads
 (DIR/period). Each file's JSON is walked to its leaves, the commitment's and evidence's bytes decoded as JSON, and each
 leaf's key path (a list's items ``[]``) must match one its file declares: ``<name>`` is any one key its source gives
-(`SOURCES`: a template the answer's profile draws by, a δ the chain's report bounds at), a key from anywhere else a
-finding naming the source in its place, never the key; ``*`` is any one key, in the tables no source names yet; and
-``**`` everything below, a Program's descriptor (`DESCRIPTOR`, the circuit, which is structure) or a development check's
-field. A list's length and an object's keys are the shape of the leaves they hold. So a field no declaration names, one
-a change adds included, is a finding until its kind is declared here: a window's own number, a count of its requests,
-the advice's length.
+(`SOURCES`: a template the answer's profile draws by, a δ the chain's report bounds at, a member of a scan round of
+the period's link-windows and lanes, DIR/period's files read inside the one case they split, `PERIOD_FILES`), a key
+from anywhere else a finding naming the source in its place, never the key; ``*`` is any one key, in the tables no
+source names yet; and ``**`` everything below, a Program's descriptor (`DESCRIPTOR`, the circuit, which is structure)
+or a development check's field. A list's length and an object's keys are the shape of the leaves they hold. So a field
+no declaration names, one a change adds included, is a finding until its kind is declared here: a window's own number,
+a count of its requests, the advice's length.
 
 A descriptor is structure only as the Program the verifier fixes, so DIR's Programs are held to it (`pinned`): the
 parameters' ``program``, the scan's descriptor (``scan``) and each scan registration's Program (the commitment's windows'
@@ -53,9 +54,10 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import re
 import sys
 from collections import Counter
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -101,12 +103,39 @@ ENDPOINT = Development("the chain's endpoint rebuild (CR_ENDPOINT: the endpoint'
 STEPS = ("custody", "certificates", "n2", "scan", "lean")
 #: the δs the chain's report bounds at, as `chain_record.eps_at_delta` keys them (`chain_record.DELTAS`)
 DELTA_KEYS = frozenset({"0.5", "9.54e-07"})
-#: each ``<name>`` key's source (module docstring): a fixed set, or the strings at a key path of the nearest object
-#: enclosing the key's own that holds the path's first field; and why a key from elsewhere is a finding
-SOURCES: dict[str, tuple[frozenset[str] | str, str]] = {
+#: a scan round's member names (`scan_zk.members_of`): its link-windows' (``first``, ``last``, link-window ``w``'s
+#: ingress and egress) and its lanes' (lane ``j``'s block)
+MEMBER = re.compile(r"first|last|(?:ingress|egress)-(?P<w>0|[1-9][0-9]*)|block-c(?P<j>0|[1-9][0-9]*)")
+
+
+def _below(digits: str, n: int) -> bool:
+    """Whether the decimal ``digits`` name a number below ``n``."""
+    return len(digits) <= len(str(n)) and int(digits) < n
+
+
+def _members(up: tuple[dict, ...]) -> Callable[[str], bool]:
+    """Whether a key is a member of a scan round a registration the objects ``up`` enclose states (`MEMBER`): a
+    link-window's below the round's link-windows, those of the nearest object holding ``windows`` (the scan's answers'
+    group, or the period's, each of whose windows is one link-window's round), ``first`` and ``last`` where it has one;
+    a lane's below the period's schedule's lanes (``params.schedule.lanes``), none where no period encloses it."""
+    G = len(next((o["windows"] for o in reversed(up) if isinstance(o.get("windows"), list)), ()))
+    lanes = next((x for x in _at(_holding(up, "params"), _segments("params.schedule.lanes")) if type(x) is int), 0)
+
+    def has(key: str) -> bool:
+        m = MEMBER.fullmatch(key)
+        return m is not None and (_below(m["j"], lanes) if m["j"] is not None else _below(m["w"] or "0", G))
+    return has
+
+
+#: each ``<name>`` key's source (module docstring), and why a key from elsewhere is a finding: a fixed set, the strings
+#: at a key path of the nearest object enclosing the key's own that holds the path's first field, or what a function
+#: of the enclosing objects (outermost first) admits
+SOURCES: dict[str, tuple[frozenset[str] | str | Callable[[tuple[dict, ...]], Callable[[str], bool]], str]] = {
     "template": ("profile.levels[].draw.strata[].name",
                  "not a template the answer's profile draws by (profile.levels[].draw.strata[].name)"),
     "delta": (DELTA_KEYS, "not a δ the chain's report bounds at (chain_record.DELTAS)"),
+    "member": (_members, "not a member of a scan round of the period's link-windows and lanes (scan_zk.members_of: "
+                         "first, last, ingress-<w>, egress-<w>, block-c<j>)"),
 }
 
 
@@ -124,12 +153,12 @@ RECORD = {"**": S}
 ENTRY = {"value": S, "root": M, "leaves": S, "words": S, "word_bits": S, "domain": S}
 #: a one-stage registration (`one_stage.registration.record`): the digests and population of the Program and query, the
 #: law the verifier's sampling design over them, the roots and registered values hiding commitments under domains of
-#: their structure; its window the provenance: a scan round's account and members, its state's reads (`stateRead`'s
-#: runs, ``sin`` and ``o1``) and row 0's opening (`stateEmpty`: the empty state, which the protocol fixes, its width and
-#: salt structure and its path's siblings hiding commitments; no unit reads leaf 0), each under the state's port
-#: ``scan/state`` (`stateName`, the one key the verifier reads them at), or a committed window's run root, circuit
-#: record, class, per-window values, registered roots and index leaf. The window's own number is none of them, and the
-#: advice's binding (`interface.advice_binding`) is `OPENING`'s.
+#: their structure; its window the provenance: a scan round's account and members (``<member>``), its state's reads
+#: (`stateRead`'s runs, ``sin`` and ``o1``) and row 0's opening (`stateEmpty`: the empty state, which the protocol
+#: fixes, its width and salt structure and its path's siblings hiding commitments; no unit reads leaf 0), each under
+#: the state's port ``scan/state`` (`stateName`, the one key the verifier reads them at), or a committed window's run
+#: root, circuit record, class, per-window values, registered roots and index leaf. The window's own number is none of
+#: them, and the advice's binding (`interface.advice_binding`) is `OPENING`'s.
 REGISTRATION = {
     "format": S, "protocol": S, "program": S, "query": S, "partition": S, "population": S, "scheme": S, "leaf_layer": S,
     "anchors[]": S, "previous": M,
@@ -137,7 +166,8 @@ REGISTRATION = {
     "law.strata[].units[][]": S, "law.strata[].work": S, "law.strata[].floor": S,
     "roots[].port": S, "roots[].leaves": S, "roots[].domain": S, "roots[].root": M,
     **under("registered[]", ENTRY),
-    "window.kind": S, "window.link": S, "window.of": S, "window.members.*.template": S, "window.members.*.units[]": S,
+    "window.kind": S, "window.link": S, "window.of": S, "window.members.<member>.template": S,
+    "window.members.<member>.units[]": S,
     **{f"window.reads.scan/state.{r}.{k}": S for r in ("sin", "o1") for k in ("leaf", "units[]")},
     "window.empty.scan/state.words": S, "window.empty.scan/state.salt": S, "window.empty.scan/state.path": M,
     "window.run": M, "window.circuit": S, "window.order": S, "window.index_leaf": M, "window.registered_roots.*": M,
@@ -223,6 +253,10 @@ DOCS: dict[str, dict[str, Any]] = {
     "piece.json": {"server": S, "rc": O, "limit": S},
 }
 HEX = {"case.json": ("commitment", "evidence")}
+#: DIR/period's files by the part of the case each is: each walked inside the case the three make, so a source reads its
+#: siblings there as it reads case.json's
+PERIOD_FILES = {"commitment": "period/commitment.bin", "evidence": "period/evidence.json",
+                "params": "period/params.json"}
 #: text files, each declared whole, its text not read: a piece's refusal (`certifier_piece.REFUSED`), the protocol's
 #: output
 TEXT = {"refused.txt": O}
@@ -326,13 +360,20 @@ def _at(value: Any, segs: list[str]) -> Iterator[Any]:
         yield from _at(value[segs[0]], segs[1:])
 
 
-def _source(name: str, up: tuple[dict, ...]) -> frozenset[str]:
-    """The keys ``<name>`` takes in an object the objects ``up`` enclose, outermost first (`SOURCES`)."""
+def _holding(up: tuple[dict, ...], key: str) -> dict | None:
+    """The innermost of the objects ``up`` (outermost first) that holds ``key``."""
+    return next((o for o in reversed(up) if key in o), None)
+
+
+def _source(name: str, up: tuple[dict, ...]) -> Callable[[str], bool]:
+    """Whether a key is one ``<name>`` takes in an object the objects ``up`` enclose, outermost first (`SOURCES`)."""
     at = SOURCES[name][0]
-    if not isinstance(at, str):
-        return at
-    segs = _segments(at)
-    return frozenset(v for v in _at(next((o for o in reversed(up) if segs[0] in o), None), segs) if isinstance(v, str))
+    if callable(at):
+        return at(up)
+    if isinstance(at, str):
+        segs = _segments(at)
+        at = frozenset(v for v in _at(_holding(up, segs[0]), segs) if isinstance(v, str))
+    return at.__contains__
 
 
 def _name(path: tuple[str, ...]) -> str:
@@ -352,7 +393,7 @@ def _leaves(value: Any, nodes: list[dict], path: tuple[str, ...] = (), up: tuple
         sources = {w: _source(w, up) for w, _ in named}
         for k, v in value.items():
             kids = [c for n in nodes for c in (n.get(k), n.get("*")) if c is not None]
-            kept = [c for w, c in named if kids or k in sources[w]]
+            kept = [c for w, c in named if sources[w](k)]
             if named and not kids and not kept:
                 yield (*path, f"<{named[0][0]}>"), [Unsourced(SOURCES[named[0][0]][1])], None
             else:
@@ -365,9 +406,10 @@ def _leaves(value: Any, nodes: list[dict], path: tuple[str, ...] = (), up: tuple
         yield path, [n[_KIND] for n in nodes if _KIND in n], value
 
 
-def scan_doc(rel: str, doc: Any, kinds: Counter, docs: Mapping[str, Mapping[str, Any]] = DOCS) -> list[Finding]:
+def scan_doc(rel: str, doc: Any, kinds: Counter, docs: Mapping[str, Mapping[str, Any]] = DOCS,
+             up: tuple[dict, ...] = ()) -> list[Finding]:
     """``doc``'s findings, as the file ``rel`` of a dir ``docs`` declares (`DOCS`, a piece's DIR), each leaf counted in
-    ``kinds`` by its kind."""
+    ``kinds`` by its kind, ``up`` the objects a source reads around it (`PERIOD_FILES`' case)."""
     for k in HEX.get(rel, ()) if docs is DOCS else ():
         if isinstance(doc, dict) and isinstance(doc.get(k), str):
             try:
@@ -375,7 +417,7 @@ def scan_doc(rel: str, doc: Any, kinds: Counter, docs: Mapping[str, Mapping[str,
             except ValueError as e:
                 return [Finding(rel, k, f"isn't hex of JSON ({type(e).__name__})")]
     out = []
-    for path, declared, value in _leaves(doc, [_trie(docs[rel])]):
+    for path, declared, value in _leaves(doc, [_trie(docs[rel])], up=up):
         if not declared:
             out.append(Finding(rel, _name(path), f"a {type(value).__name__} of no declared kind"))
         elif len(set(declared)) > 1:
@@ -418,9 +460,9 @@ def pinned(seen: Mapping[str, Any]) -> list[Finding]:
     case, out, pins = seen.get("case.json"), [], []
     periods = [("case.json", "params.", case.get("params"), "case.json", "commitment.", _hex(case, "commitment"))
                ] if isinstance(case, dict) else []
-    if {"period/params.json", "period/commitment.bin"} & seen.keys():
-        periods.append(("period/params.json", "", seen.get("period/params.json"), "period/commitment.bin", "",
-                        seen.get("period/commitment.bin")))
+    if {PERIOD_FILES["params"], PERIOD_FILES["commitment"]} & seen.keys():
+        periods.append((PERIOD_FILES["params"], "", seen.get(PERIOD_FILES["params"]), PERIOD_FILES["commitment"], "",
+                        seen.get(PERIOD_FILES["commitment"])))
     for pf, pp, params, cf, cp, commitment in periods:
         params = params if isinstance(params, dict) else {}
         try:
@@ -461,7 +503,8 @@ def _json(rel: str, p: Path, out: list[Finding]) -> Any:
 
 def scan(d: Path, docs: Mapping[str, Mapping[str, Any]] = DOCS) -> tuple[list[Finding], Counter]:
     """Every file under ``d`` scanned by its declaration in ``docs`` (module docstring; `DOCS`, a piece's DIR, its
-    Programs held to the verifier's: `pinned`): the findings, and the leaves counted by kind."""
+    period's files inside their case, `PERIOD_FILES`, and its Programs held to the verifier's: `pinned`): the
+    findings, and the leaves counted by kind."""
     kinds, out, seen = Counter(), [], {}
     for p in sorted(x for x in d.rglob("*") if x.is_file() or x.is_symlink()):
         rel = p.relative_to(d).as_posix()
@@ -472,8 +515,10 @@ def scan(d: Path, docs: Mapping[str, Mapping[str, Any]] = DOCS) -> tuple[list[Fi
             out.append(Finding(rel, "", "a file the verifier would receive that no declaration covers"))
             continue
         if (doc := _json(rel, p, out)) is not None:
-            out += scan_doc(rel, doc, kinds, docs)
             seen[rel] = doc
+    case = {k: seen[f] for k, f in PERIOD_FILES.items() if f in seen} if docs is DOCS else {}
+    for rel, doc in seen.items():
+        out += scan_doc(rel, doc, kinds, docs, (case,) if rel in PERIOD_FILES.values() and case else ())
     return out + (pinned(seen) if docs is DOCS else []), kinds
 
 
