@@ -406,7 +406,7 @@ theorem loadedGivesUp_nontrivial :
 
 /-- `plan` takes the honest pass's run at one draw: the draw names its one tile. -/
 theorem planMeans_honest :
-    plan (honestRun 1) = .ok ⟨[honestPass], runCommitment [honestPass], honestSource, [(0, 0)], 1⟩ := by
+    plan (honestRun 1) = .ok ⟨[honestPass], runCommitment [honestPass], honestSource, [(0, 0)], 1, [(0, 0)]⟩ := by
   apply eq_ok_of_toOption
   simp only [plan, honestRun, List.mapM_cons, List.mapM_nil, loadedGivesUp_honest, PouwCheck.PearlPlus.drawKey, key?,
     FlockSoundness.Randomness.derive, qsort_run]
@@ -424,7 +424,7 @@ theorem planMeans_nontrivial : ¬ (acceptAllPlan.root = runCommitment acceptAllP
 drawn tile is replayed on the fixed operand's noise that `check` derives itself (`fixedNoise`: 2k noise lines and R²
 FP32 chains of k = 1,024), past what one kernel computation reaches. -/
 theorem acceptMeans_honest : (check (honestRun 0) noOpening).accept = true := by
-  have h : plan (honestRun 0) = .ok ⟨[honestPass], runCommitment [honestPass], honestSource, [], 0⟩ := by
+  have h : plan (honestRun 0) = .ok ⟨[honestPass], runCommitment [honestPass], honestSource, [], 0, []⟩ := by
     apply eq_ok_of_toOption
     simp only [plan, honestRun, List.mapM_cons, List.mapM_nil, loadedGivesUp_honest]
     decide +kernel
@@ -440,13 +440,15 @@ theorem acceptMeans_nontrivial : ∀ pl, ¬ ((acceptAllCheck emptyRun noOpening)
 
 namespace Witness
 
-/-- `checkTile` passes a tile on which each of its checks passes, at a call that commits no y: the tile is the
-verifier's own, the openings cover it and open against their roots, the words formed from the opened rows at the noise
-`wn'` are `ch`, their leaf is the opened one, and the rule passes. Each hypothesis is one computation the kernel does on
-its own. -/
-theorem checkTile_eq_none {p : Pass} {wn : Except String Words.FixedNoise} {tid : Nat} {o : TileOpening} {pos : Nat}
-    {rows cols : List Nat} {wn' : Words.FixedNoise} {ops : Words.Ops} {ch : Words.Checked}
+/-- `checkTile`'s outcome on a tile on which each of its other checks passes, at a call that commits no y: the tile is
+the verifier's own and its call in the scheme's domain, the openings cover it and open against their roots, the words
+formed from the opened rows at the noise `wn'` are `ch`, their leaf is the opened one, and its rows keep the per-row rules;
+the inert-work bound's verdict `bound` is the tile's, a pass at `none` and over the bound at `some why`. Each hypothesis
+is one computation the kernel does on its own. -/
+theorem checkTile_eq_outcome {p : Pass} {wn : Except String Words.FixedNoise} {tid : Nat} {o : TileOpening} {pos : Nat}
+    {rows cols : List Nat} {wn' : Words.FixedNoise} {ops : Words.Ops} {ch : Words.Checked} {bound : Option String}
     (ht : p.tile? tid = some (pos, rows, cols))
+    (hd : p.scheme.domainReason p.records[pos]!.matmul = none)
     (hc : (o.a.map (·.position) != rows || o.b.map (·.position) != cols) = false)
     (ha : o.a.all (opens (rowsDomain (activationBinding p.salt p.records[pos]!.matmul.index)
       p.records[pos]!.matmul.index p.records[pos]!.matmul.m HM96 false) p.rootsA[pos]! ROW_SCHEMA) = true)
@@ -460,12 +462,14 @@ theorem checkTile_eq_none {p : Pass} {wn : Except String Words.FixedNoise} {tid 
       (o.b.map (openedValue ·.value)) = .ok ops)
     (hch : Words.checked ops = .ok ch)
     (hleaf : (Words.leaf ch != openedValue o.leaf.value) = false)
-    (hr : Rule.checkOpened p.scheme p.records[pos]! rows cols ops = none)
+    (hrows : Rule.rowsFailure p.records[pos]! rows cols ops = none)
+    (hcap : Rule.capCheck p.scheme p.records[pos]! rows cols ops = .ok bound)
     (hy : p.yRoots[pos]! = none) :
-    checkTile p wn tid o = none := by
+    checkTile p wn tid o = (match bound with | none => .pass | some why => .overCap why) := by
   subst hwn
-  simp only [checkTile, ht, hc, ha, hb, hl, bind, Except.bind, he, hch, pure, Except.pure, hleaf, hr, hy,
-    Bool.not_true, Bool.false_eq_true, ↓reduceIte]
+  cases bound <;>
+  simp only [checkTile, ht, hd, hc, ha, hb, hl, bind, Except.bind, he, hch, pure, Except.pure, hleaf, hrows, hcap, hy,
+    Bool.not_true, Bool.false_eq_true, ↓reduceIte] <;>
   rfl
 
 deriving instance DecidableEq for Words.Formed, Words.Ops, Words.Checked
@@ -736,21 +740,28 @@ theorem test_checked : Words.checked testOps = .ok testChecked := by
 
 theorem test_leaf : (Words.leaf testChecked != openedValue testOpening.leaf.value) = false := by decide +kernel
 
-theorem test_rule : Rule.checkOpened testPass.scheme testPass.records[0]! [0] [0] testOps = none := by decide +kernel
+theorem test_domain : testPass.scheme.domainReason testPass.records[0]!.matmul = none := by decide +kernel
+
+theorem test_rows : Rule.rowsFailure testPass.records[0]! [0] [0] testOps = none := by decide +kernel
+
+theorem test_cap : Rule.capCheck testPass.scheme testPass.records[0]! [0] [0] testOps = .ok none := by
+  apply eq_ok_of_toOption
+  decide +kernel
 
 theorem test_y : testPass.yRoots[0]! = none := rfl
 
 end Witness
 
-/-- The test tile passes `checkTile` at the test noise: its A row, its B row and its leaf open against the test pass's
-roots, the words formed from its rows are its leaf's, and the rule keeps its cap. `TileAcceptMeans` ranges over every
+/-- The test tile passes `checkTile` at the test noise: its call is in the scheme's domain, its A row, its B row and its
+leaf open against the test pass's roots, the words formed from its rows are its leaf's, its rows keep the per-row rules,
+and its credited cell's replayed inert work is within the inert-work bound. `TileAcceptMeans` ranges over every
 noise `wn`: the deployed check's is `fixedNoise` of the pass's salt and B's root (`noiseOf`), one instance, and this is
 another, the test noise `testNoise`, given rather than derived (deriving it is 2k = 256 noise lines and 32 × 32 FP32
-chains of k = 128). Each check is its own kernel computation (`Witness.checkTile_eq_none`), the formed words and the
+chains of k = 128). Each check is its own kernel computation (`Witness.checkTile_eq_outcome`), the formed words and the
 checked words given as the Python computes them (`Witness.testOps`, `Witness.testChecked`). -/
-theorem tileAcceptMeans_honest : checkTile testPass (.ok testNoise) 0 testOpening = none :=
-  checkTile_eq_none test_tile test_covers test_opensA test_opensB test_opensLeaf rfl test_encode test_checked test_leaf
-    test_rule test_y
+theorem tileAcceptMeans_honest : checkTile testPass (.ok testNoise) 0 testOpening = .pass :=
+  checkTile_eq_outcome (bound := none) test_tile test_domain test_covers test_opensA test_opensB test_opensLeaf rfl
+    test_encode test_checked test_leaf test_rows test_cap test_y
 
 /-- A tile check that accepts every tile passes tile 0 of a pass with no calls, which is no tile of the verifier's own. -/
 theorem tileAcceptMeans_nontrivial :
@@ -759,14 +770,14 @@ theorem tileAcceptMeans_nontrivial :
   cases h
 
 /-- The rule passes the tile of one 1 × 128 × 1 call whose two rows are credited: both rows keep the per-row rules, and each
-of the word's four atoms changes its total, so none is flagged and the replayed debit is 0. -/
+of the word's four atoms changes its total, so none is flagged and the replayed inert work is 0. -/
 theorem tileKeepsTheCap_honest :
     Rule.checkOpened capScheme capRecord [0] [0] capOps = none ∧ (capRecord.credited [0] [0]).1 ≠ [] ∧
       (capRecord.credited [0] [0]).2 ≠ [] := by
   refine ⟨by decide +kernel, by decide, by decide⟩
 
 /-- A rule that accepts every tile passes the tile of `capRecord` whose word has 32 codes, less than one promotion group,
-on which the debit replay refuses, so no debit is replayed for its credited cell. -/
+on which the inert-work replay refuses, so no inert work is replayed for its credited cell. -/
 theorem tileKeepsTheCap_nontrivial :
     ∀ words, ¬ ((capRecord.credited [0] [0]).1.mapM (fun i => (capRecord.credited [0] [0]).2.mapM fun j =>
       Rule.wordDebit shortOps.a.codes[[0].idxOf i]! shortOps.b.codes[[0].idxOf j]!) = .ok words) := by

@@ -40,7 +40,7 @@ def noOpening (_pass _tile : Nat) : Except String TileOpening := .error "no open
 def acceptAllCheck (_i : Input) (_opener : Nat → Nat → Except String TileOpening) : RunAnswer := { accept := true }
 
 /-- The plan that a `plan` accepting every run returns: no passes and an empty root. -/
-def acceptAllPlan : Plan := ⟨[], .empty, .empty, [], 0⟩
+def acceptAllPlan : Plan := ⟨[], .empty, .empty, [], 0, []⟩
 
 /-- A record of the pass that a `load` accepting every manifest returns: one 1 × 1 × 1 call with two voluntary A rows. -/
 def acceptAllRecord : UnitRecord := { matmul := ⟨0, 1, 1, 1, 0⟩, realRows := 1, kKept := 1, voluntaryA := [0, 0] }
@@ -61,7 +61,7 @@ def capSide : Words.Formed :=
 /-- `capRecord`'s tile formed: both rows `capSide`. -/
 def capOps : Words.Ops := ⟨capSide, capSide, #[], #[]⟩
 
-/-- `capSide` with 32 codes, less than one promotion group of 128, so the debit replay refuses its words. -/
+/-- `capSide` with 32 codes, less than one promotion group of 128, so the inert-work replay refuses its words. -/
 def shortSide : Words.Formed := { capSide with codes := #[Array.replicate 32 0x38] }
 
 /-- `capRecord`'s tile with `shortSide`'s codes. -/
