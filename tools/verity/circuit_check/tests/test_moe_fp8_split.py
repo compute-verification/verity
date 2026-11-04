@@ -25,7 +25,7 @@ import pytest
 
 FIXTURE = Path(__file__).parent / "fixtures" / "moe_fp8_split.json"
 FAMILY = ("moe", "moe_pad", "moe_difftest", "boolean_moe", "fp8", "fp8_moe", "boolean_fp8", "boolean_fp8_moe", "nvfp4", "boolean_gather")
-#: the difftest stayed in the integration when the registry moved to `verity.ml.definitions` (tools/move/defs_map.toml)
+#: the difftest stays in the integration; the registry is `verity.ml.definitions`
 MODULES = tuple("verity_vllm.program.moe_difftest" if m == "moe_difftest" else f"verity.ml.definitions.registry.{m}" for m in FAMILY)
 
 

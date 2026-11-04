@@ -45,6 +45,80 @@ markers = [
 ]
 
 [tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/check/test_pouw_ncp_v2_end_to_end.py",
+    "tests/check/test_replay_definitions.py",
+    "tests/check/test_sampled_replay.py",
+    "tests/check/test_sampled_replay_aliased_module.py",
+    "tests/check/test_sampled_replay_batched_gemm.py",
+    "tests/check/test_sampled_replay_cublas_gemm.py",
+    "tests/check/test_sampled_replay_fp8.py",
+    "tests/check/test_sampled_replay_stoch.py",
+    "tests/check/test_served_check.py",
+    "tests/check/test_weights_of_record.py",
+    "tests/commit/test_native_plans.py",
+    "tests/commit/test_row_tables_device.py",
+    "tests/commit/test_weights_pin_acceptance.py",
+    "tests/lint/test_merge_allowlist.py",
+    "tests/lint/test_ruff.py",
+    "tests/migrate/test_superseded_quarantine.py",
+    "tests/ops/test_epoch_row.py",
+    "tests/ops/test_pod_bootstrap.py",
+    "tests/pipeline/test_admission_commit.py",
+    "tests/pipeline/test_advice_commit.py",
+    "tests/pipeline/test_advice_windows.py",
+    "tests/pipeline/test_boundary_plan.py",
+    "tests/pipeline/test_commit_group.py",
+    "tests/pipeline/test_commit_plan.py",
+    "tests/pipeline/test_commit_tree_of_record.py",
+    "tests/pipeline/test_config_run.py",
+    "tests/pipeline/test_cublas_names.py",
+    "tests/pipeline/test_experiment_index.py",
+    "tests/pipeline/test_fallback_reads.py",
+    "tests/pipeline/test_gpu_lease.py",
+    "tests/pipeline/test_hot_commit.py",
+    "tests/pipeline/test_release_json.py",
+    "tests/pipeline/test_research_tools.py",
+    "tests/pipeline/test_row.py",
+    "tests/pipeline/test_row_group.py",
+    "tests/pipeline/test_row_tables_stream.py",
+    "tests/pipeline/test_serve_advice.py",
+    "tests/pipeline/test_serve_h1.py",
+    "tests/pipeline/test_serve_seal.py",
+    "tests/pipeline/test_source_identity.py",
+    "tests/pipeline/test_tp_gpu_lease.py",
+    "tests/pipeline/test_tp_post_load_tensors.py",
+    "tests/pipeline/test_tp_replay_deferred.py",
+    "tests/pipeline/test_tp_run_root.py",
+    "tests/program/predict/test_aot.py",
+    "tests/program/predict/test_aot_row.py",
+    "tests/program/predict/test_batch.py",
+    "tests/program/predict/test_predict.py",
+    "tests/program/predict/test_steps.py",
+    "tests/program/test_dense_rows.py",
+    "tests/program/test_derive_transfer.py",
+    "tests/program/test_derived_rows.py",
+    "tests/program/test_gemm_target_correspondence.py",
+    "tests/program/test_jit_build_dir.py",
+    "tests/program/test_padded_commit_tiny.py",
+    "tests/program/test_twins.py",
+    "tests/properties/test_glm53_bf16_gemm_capture.py",
+    "tests/protocols/remote_bandwidth/test_remote_session.py",
+    "tests/protocols/test_credit_gate.py",
+    "tests/protocols/test_pouw_device.py",
+    "tests/protocols/test_pouw_h1.py",
+    "tests/protocols/test_pouw_h1_commit.py",
+    "tests/protocols/test_pouw_h1_live.py",
+    "tests/protocols/test_pouw_h1_registered_device.py",
+    "tests/protocols/test_pouw_h1_tables_device.py",
+    "tests/protocols/test_pouw_pearl_c_served.py",
+    "tests/protocols/test_rt4_h1_challenger.py",
+    "tests/test_target_family.py",
+    "tests/tools/test_ratchet_gate.py",
+    "tests/tools/test_scorecard.py",
+    "tests/tools/test_suite_parts.py",
+]
 # In place of its dependencies' directories (`inputs_only`): `verity` whole, since the code identity (`source_identity.code_identity`,
 # the hot Commit worker's key, which tests/pipeline computes over this tree) hashes every file of it; of `research`, what the
 # package imports (`research.store.tool`, `research.telemetry.source_identity`) and the store CLI that `store_io` starts for a
@@ -64,6 +138,8 @@ markers = [
 # The tests build and run the Lake packages whose lakefiles they list: tests/pipeline/test_row_tables_stream.py
 # `sampled-proofs-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-check-difftest` and test_remote_session.py
 # `remote-audit-verifier`.
+# tests/protocols/pouw_h1_circuits.py lowers K's circuit file with h1_prove's h1unit.py under hidden_zk's fast_stage.py and the
+# compact_stage.py it imports (test_pouw_h1_drawn.py builds one), and reads the live Program from h1_prove's live.py (test_pouw_h1_circuits.py).
 inputs_only = true
 inputs = ["verity", "verity/README.md", "tools/config/verity_config", "fixtures/artifacts.json", "examples/vllm/workloads/SHA256SUMS", ".gitignore",
           "verity/core/service/sampled_proofs/lakefile.toml", "verity/core/protocols/pouw/lean/check/lakefile.toml",
@@ -85,7 +161,9 @@ inputs = ["verity", "verity/README.md", "tools/config/verity_config", "fixtures/
           "tools/research/src/research/runs.py", "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py", "tools/research/src/research/waitcap.py",
           "tools/research/src/research/store", "tools/research/src/research/telemetry", "tools/research/tests/fixtures/run_v0.2",
           "tools/research/src/research/withdraw.py",
-          "tools/research/src/research/__main__.py"]
+          "tools/research/src/research/__main__.py",
+          "benchmarks/pouw/h1_prove/h1unit.py", "benchmarks/pouw/h1_prove/live.py",
+          "benchmarks/pouw/hidden_zk/fast_stage.py", "benchmarks/pouw/hidden_zk/compact_stage.py"]
 parallel = true
 # benchmarks/pouw/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears;
 # tests/engine/int8_attention_sass.py reads the int8 attention kernels' SASS with the PoUW SASS gate's nvdisasm parser
@@ -99,3 +177,180 @@ worker_gb = 8
 # the full suite takes about 10,000 s on 5 workers, past suites.py's SUITE_TIMEOUT_S; `--quick` leaves out the tests over 5 s
 # (their `slow` marks)
 timeout_s = 14400
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/acquire/test_attention_source.py",
+    "tests/acquire/test_dsv4_attention_source.py",
+    "tests/acquire/test_dsv4_mhc_source.py",
+    "tests/acquire/test_dsv4_route_source.py",
+    "tests/acquire/test_route_source.py",
+]
+paths = ["integrations/vllm/verity_vllm/check", "integrations/vllm/verity_vllm/properties"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/acquire/test_norm_tap_src.py"]
+paths = ["integrations/vllm/verity_vllm/acquire/norm_tap_src"]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/check/test_capture_map.py",
+    "tests/pipeline/test_tp_gpu_lease.py",
+    "tests/pipeline/test_tp_rejudge.py",
+]
+paths = ["integrations/vllm/verity_vllm/pipeline/tp"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/check/test_challenge_seeds.py"]
+paths = ["integrations/vllm/verity_vllm", "verity/ml/circuits"]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/check/test_commit_verdict_replay_seed_of_record.py",
+    "tests/check/test_g4_addressed_instances.py",
+    "tests/check/test_verdict.py",
+    "tests/observe/test_gen_batch_engine_arg.py",
+    "tests/pipeline/test_replay_plan.py",
+    "tests/pipeline/test_tp_build_width.py",
+    "tests/pipeline/test_workload_file.py",
+]
+paths = ["integrations/vllm/verity_vllm/pipeline"]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/check/test_gates_fixtures.py",
+    "tests/engine/test_env.py",
+    "tests/observe/test_fold_build_versions.py",
+    "tests/program/predict/test_predict.py",
+    "tests/program/test_twins.py",
+    "tests/test_no_by_name_rules.py",
+]
+paths = ["integrations/vllm/verity_vllm"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/check/test_tp2_d90_fixture.py"]
+paths = ["integrations/vllm/verity_vllm/check/match", "integrations/vllm/verity_vllm/check/replay"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/commit/test_native_jit_load.py"]
+paths = ["integrations/vllm/verity_vllm/commit/committer/hidden_gpu_src"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/commit/test_pinned_pool_exact.py", "tests/observe/test_pouw_fold.py"]
+paths = ["integrations/vllm/verity_vllm", "verity/core/protocols/remote_bandwidth", "verity/ml/circuits"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/engine/collectives/test_tp_collective.py", "tests/properties/test_quarantine_lint.py"]
+paths = ["integrations/vllm/verity_vllm/program/quarantine"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/engine/test_gen_llama.py", "tests/engine/test_gen_ov_easy.py"]
+paths = ["integrations/vllm/verity_vllm/observe/fold", "integrations/vllm/verity_vllm/pipeline"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/lint/test_p16_cli_callers.py"]
+paths = ["integrations/vllm/tools"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/lint/test_ratchet.py"]
+paths = ["integrations/vllm/tests/lint"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/lint/test_ruff.py"]
+paths = ["integrations/vllm/tests", "integrations/vllm/tools"]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/pipeline/test_advice_commit.py",
+    "tests/pipeline/test_boundary_plan.py",
+    "tests/pipeline/test_commit_plan.py",
+    "tests/pipeline/test_commit_tree_of_record.py",
+    "tests/pipeline/test_serve_seal.py",
+]
+paths = ["integrations/vllm", "verity"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/pipeline/test_circuit_db.py"]
+paths = ["tools/research/src/research"]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/pipeline/test_config_run.py",
+    "tests/pipeline/test_tp_run_root.py",
+    "tests/pipeline/test_tp_world_n.py",
+]
+paths = ["integrations/vllm/verity_vllm/acquire", "integrations/vllm/verity_vllm/pipeline/tp"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/pipeline/test_glue.py"]
+paths = ["integrations/vllm/tests", "integrations/vllm/verity_vllm", "verity"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/pipeline/test_row.py"]
+paths = ["benchmarks/remote_session", "integrations/vllm", "verity"]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/pipeline/test_serve_advice.py",
+    "tests/program/predict/test_aot.py",
+    "tests/program/predict/test_aot_row.py",
+    "tests/program/predict/test_steps.py",
+    "tests/program/test_dense_family_boundary.py",
+]
+paths = ["integrations/vllm/verity_vllm", "verity"]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/pipeline/test_serve_remote.py",
+    "tests/protocols/remote_bandwidth/test_in_place_gpu.py",
+    "tests/protocols/remote_bandwidth/test_remote_session.py",
+]
+paths = ["benchmarks/remote_session", "verity/core/protocols/remote_bandwidth"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/pipeline/test_serve_row.py"]
+paths = [
+    "integrations/vllm/verity_vllm/engine",
+    "integrations/vllm/verity_vllm/pipeline",
+    "verity/core/protocols/certifier",
+    "verity/ml/crypto",
+]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/program/predict/test_window_circuit.py",
+    "tests/program/predict/test_window_circuit_fa3.py",
+    "tests/program/predict/test_window_circuit_int8.py",
+]
+paths = ["verity/ml/circuits/ops"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/program/predict/test_window_rows.py"]
+paths = ["verity/core/protocols/certifier"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/program/test_compiled_relations_warm_vml.py"]
+paths = ["integrations/vllm/verity_vllm/check"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/program/test_moe_fp8_definition_imports.py"]
+paths = ["verity/ml/definitions/registry"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/program/test_prims_serve_boundaries.py"]
+paths = ["verity/ml/definitions"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/protocols/test_pous_option.py"]
+paths = ["benchmarks/pous/p2_v1"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/query/test_word.py"]
+paths = ["integrations/vllm/verity_vllm/pipeline", "verity/ml/circuits"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_imports_resolve.py", "tests/test_no_dead_modules.py"]
+paths = ["integrations/vllm/tests", "integrations/vllm/verity_vllm"]

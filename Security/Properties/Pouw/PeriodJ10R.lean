@@ -212,10 +212,10 @@ noncomputable def prefixLen (ws : CreditWindows Ω n) (x : Paths Ω n) : ℕ :=
 end CreditWindows
 
 open Classical in
-/-- **The accepted prefix's live words**: the words of each window's live tiles (`Period.liveAt`), over the windows
+/-- **The accepted prefix's live words**: the words of each window's live tiles (`WindowPlay.liveAt`), over the windows
 before the first refusal. `Properties.Pouw.Period.checkedLive` with `Credit.window`'s prefix. -/
 noncomputable def creditLive {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
-    (Wp : Period C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
+    (Wp : WindowPlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
     (x : Paths (Paths C Cd.rounds × B) n) : ℝ :=
   ∑ w : Fin n, if ws.AcceptedUpTo x w then ∑ t : Fin Np, (liveWords Sc Cd Np (Wp.liveAt x w) t : ℝ) else 0
 
@@ -229,7 +229,7 @@ noncomputable def tileRun {C Ξ V : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ)
     (ws : CreditWindows (Coin C Ξ m σ sT) n) (opened : Paths (Coin C Ξ m σ sT) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Coin C Ξ m σ sT) n → Fin n → Fin (tileCount σ sT) → (ℕ → V) → Prop) :
-    PeriodRun C (Equiv.Perm (Fin (tileCount σ sT)) × Ξ) m (k sT) (tileCount σ sT) n V where
+    Outcomes C (Equiv.Perm (Fin (tileCount σ sT)) × Ξ) m (k sT) (tileCount σ sT) n V where
   accepted x w _ := WindowAccepts (ws.reg x w) (ws.ev x w)
   opened x w i := opened x w (unitOf (tileAt σ sT (drawOf (hk sT) (coinAt x w).2 i)))
   rel := rel
@@ -367,7 +367,7 @@ a useful `(c, η)`. The one computational premise covers exact matrix
 products only, so this claim is to be proved in the slot's model or designed away (the no-fold receipt),
 not assumed; until then it is a named premise. -/
 def SharedNoiseLucks {ι K C Ω : Type} [Fintype C] (Sc : Scheme K) (Cd : Declared ι) {Np M n : ℕ}
-    (Wp : Period C Ω (Fin Np) M n) : Prop :=
+    (Wp : WindowPlay C Ω (Fin Np) M n) : Prop :=
   Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) ∧
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) ∧
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0))
@@ -398,7 +398,7 @@ def H1J10RCheckedCreditPeriod : Prop :=
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V) (enc : C → ByteArray)
     (place : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → Fin (tileCount σ sT) → Place)
     (tile : Noise → List (List ℕ) → Fin (tileCount σ sT) → (ℕ → V) → Prop)
-    (Wp : Period C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
+    (Wp : WindowPlay C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
     (Pl : Play (Coin C Ξ Cd.rounds σ sT) n K T L U)
     (folded : Paths (Coin C Ξ Cd.rounds σ sT) n → ℝ) (ρ δs δbind δks : ℝ),
     Scope Sc Cd δs →

@@ -1,7 +1,7 @@
 import Flock.Hm96
 import Flock.HmRow
 import Randomness
-import MemoryChallenger.FrameV3
+import Attest.FrameV3Sha512
 
 /-!
 # The memory challenger's records and coins

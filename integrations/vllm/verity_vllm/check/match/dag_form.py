@@ -9,19 +9,19 @@ import json
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  #
 
-def _producer(P: C.Prog, t) -> int | None:
+def _producer(P: C.RootView, t) -> int | None:
     if t[0] != "N":
         return None
     return P.steps[t[1]][t[2]]
 
 
-def _producers(P: C.Prog, t) -> list[int]:
+def _producers(P: C.RootView, t) -> list[int]:
     """Every producer instance of a canonical N source, record form or progression."""
     from verity_vllm.program.compact import n_producers
     return n_producers(P.steps, t)
 
 
-def live_cone(P: C.Prog) -> set[int]:
+def live_cone(P: C.RootView) -> set[int]:
     """Instances in the backward cone of the LAST TokenSelect: everything the served token sequence depends on (each TokenSelect
     feeds the next step's embedding, so the chain reaches every served TokenSelect). What falls outside is DEAD for serving — with a
     chunked prefill vLLM v1 runs the sampler on every scheduled request, including a partially-prefilled one, and DISCARDS that
@@ -41,7 +41,7 @@ def live_cone(P: C.Prog) -> set[int]:
     return live
 
 
-def dag_hashes(P: C.Prog, only: set[int] | None = None) -> dict[int, str]:
+def dag_hashes(P: C.RootView, only: set[int] | None = None) -> dict[int, str]:
     """Emission-order-insensitive canonical form: every instance hashed by (spec, form, operand sources, out type) where a node
     source carries its PRODUCER'S HASH (Merkle) instead of its (step, index) position. Two Programs with equal multisets hold the
     same computations over the same weights/prompt reads with the same dependency trees; only the order in which the fold emitted
@@ -75,5 +75,5 @@ def dag_hashes(P: C.Prog, only: set[int] | None = None) -> dict[int, str]:
     return hashes
 
 
-def dag_multiset(P: C.Prog, only: set[int] | None = None) -> collections.Counter:
+def dag_multiset(P: C.RootView, only: set[int] | None = None) -> collections.Counter:
     return collections.Counter(dag_hashes(P, only).values())

@@ -394,7 +394,7 @@ theorem coefTie_staged {b : Brings} {IV : Claims.Verifier Coin}
   obtain ⟨cr, dr, hrows, ⟨what, hcv⟩, -⟩ := FlockSoundness.Discharge.Recursion.open_of_check hco
   refine ⟨inn, cr, dr, hinn, hrows, fun hnr => ?_⟩
   obtain ⟨hqc, ptc, hptc, hwords, hL8, hcols⟩ := coefCols_staged (w := w) hS hr hss hsv hpc hx ht hdin i
-  obtain ⟨prog, hprog, hpv⟩ := OpenDirs.check5_bytes_lt hS hck hr hpc hsu h0 hidx hown hcv hqc hnN hnr hnp
+  obtain ⟨prog, hprog, hpv⟩ := ResLower.check5_bytes_lt hS hck hr hpc hsu h0 hidx hown hcv hqc hnN hnr hnp
   have hst : openSetupSt (RecCoins.Source.atC3 i0.src i0.inner i0.commits) sts[0] =
       commitIns cr (RecCoins.verifierSalt prog RecCoins.COEF_VALUE) ++
         commitIns dr (RecCoins.verifierSalt prog RecCoins.DIRS_VALUE) := by
@@ -478,7 +478,7 @@ level, and `verifierRows` gives the same `κ` and contexts at check 5's shape an
 (`verifierRows_filter`, `verifierRows_comb`, `verifierRows_congr`); `coefRead`'s lanes are the level's (`levelMatch`)
 and its `alphaOf` the level's context's (`alphaOf_eq`). -/
 theorem coefTieR_of {untr : TrReader} {b : Brings} {pieces : Msg → List OpenPiece} {Bk : Msg → ℕ} {s : ℕ}
-    {x : Msg} {c : ℕ → Coin} {st : Claims.Recursion.Stmt} (hst : parse x = some st)
+    {x : Msg} {c : ℕ → Coin} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) (hR : OpenLower.PiecesInRangeR pieces)
     (hI : OpenLower.InnerCoinsR untr b Bk s x c) : CoefTieR untr b pieces Bk s x c := by
   intro xO hsh i spec sts hsu ht f inn hf hload r ss lv LANES HH n hr hss hsv cr dr hop q hq ho
@@ -567,7 +567,7 @@ theorem coefTieR_of {untr : TrReader} {b : Brings} {pieces : Msg → List OpenPi
 /-- **`CoefTieR` at a dense compiled statement**, from the verifier's checks and the pieces' ranges
 (`innerCoinsR_staged`). -/
 theorem coefTieR_dense {b : Brings} {pieces : Msg → List OpenPiece} {Bk : Msg → ℕ} {s : ℕ} {x : Msg}
-    {c : ℕ → Coin} {st0 : Claims.Recursion.Stmt} (hst : parse x = some st0)
+    {c : ℕ → Coin} {st0 : Claims.Recursion.CompiledStatement} (hst : parse x = some st0)
     (hd : Claims.Recursion.Form.Dense st0.form) (hR : OpenLower.PiecesInRangeR pieces)
     (hB : RestRead.kI x ≤ Bk (xIOf x)) : CoefTieR recRead b pieces Bk s x c :=
   coefTieR_of hst hd hR (OpenLower.innerCoinsR_staged hst hd hB)

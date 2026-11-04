@@ -237,9 +237,9 @@ class CircuitTypeTable:
         #: per root: the flat circuit's ANDs and its types' (their difference: the sharing a type boundary stops)
         self.shared: list[tuple[str, int, int]] = []
 
-    def type_of(self, build, name: str, kind: str, label: str | None = None) -> str:
+    def type_of(self, build, name: str, kind: str, label: str | None = None, circuit: Circuit | None = None) -> str:
         """The type of the circuit ``build()`` makes, and every type below it: validated, the root evaluated against the flat
-        circuit. Returns the root's digest."""
+        circuit (``circuit``, one ``build()`` made already, else built here). Returns the root's digest."""
         from verity.ml.circuits import library
 
         _patch()
@@ -247,7 +247,7 @@ class CircuitTypeTable:
         for d, t in types.items():
             if d not in self.types:
                 CT.validate(t, lambda x: types.get(x) or self.types[x])
-        C = build()
+        C = build() if circuit is None else circuit
         if not _evaluate_type(types, root, C):
             raise AssertionError(f"the types of {name} disagree with its circuit")
         self.evaluated += 1
@@ -1006,7 +1006,7 @@ def _empty(fid, gates) -> dict:
 def _leaf_lookup(params):
     """``leaf(k) -> (parameter name, width)`` for the Call's k-th input leaf, without listing the leaves (an embedding table
     parameter has over 10^8)."""
-    from verity.ml.circuits.types import Array, Record, Tuple
+    from verity.ml.circuits.types import Array, RecordType, Tuple
 
     starts, names, types, o = [], [], [], 0
     for name, t in params:
@@ -1021,9 +1021,9 @@ def _leaf_lookup(params):
         while True:
             if isinstance(t, Array):
                 t, k = t.elem, k % t.elem.leaves
-            elif isinstance(t, (Tuple, Record)):
+            elif isinstance(t, (Tuple, RecordType)):
                 for f in t.fields:
-                    f = f[1] if isinstance(t, Record) else f
+                    f = f[1] if isinstance(t, RecordType) else f
                     if k < f.leaves:
                         t = f
                         break

@@ -371,6 +371,63 @@ def test_a_target_holds_its_own_reads_and_resolutions(tmp_path):
     assert set(top["enums"]) == {"syn"} and {"top", "other", "idle"} <= set(top["enums"]["syn"])   # `load_registries` listed it
 
 
+def test_a_target_s_reads_declare_the_paths_their_lookup_takes(tmp_path, monkeypatch):
+    """`cache.declared` of SynTop's entry: the files of the modules it holds and of their import sites, its binding file and
+    its pin's file; the listing of the package `load_registries` enumerated, not the modules that lists (`lookup` holds an
+    unheld one by its name, through a move); each path the search for its modules asked about, so a module put where the
+    search would find it first is a change of what it declares; whether it read the registries (every reached Definition's
+    registrar).  SynOther's leaves out what only SynTop's build imported, and a code object's pseudo-file is no path."""
+    from circuit_check import cache as CC
+
+    root = _tree(tmp_path)
+    _run(root)
+    monkeypatch.syspath_prepend(str(root))
+    assert CC.declared(root, {"files": ["<frozen abc>", "<string>"]}) == {"files": [], "listed": [], "probes": [],
+                                                                          "registry": False}
+    top, other = (CC.declared(root, _entry(root, t)["reads"]) for t in ("SynTop_v1", "SynOther_v1"))
+    assert {"syn/__init__.py", "syn/top.py", "syn/sub.py", "syn/shape.py", "syn/prims.py", "syn/check.py", "syn/h.py",
+            "targets.py", _pin("SynTop_v1")} <= set(top["files"]), top["files"]
+    assert "syn" in top["listed"] and "syn/idle.py" not in top["files"] and top["registry"], top
+    assert {"syn/top/__init__.py", "syn/sub/__init__.py"} <= set(top["probes"]), top["probes"]
+    assert not {"syn/top.py", "syn/sub.py", "syn/shape.py", _pin("SynTop_v1")} & set(other["files"]), other["files"]
+    assert {"syn/other.py", _pin("SynOther_v1")} <= set(other["files"]), other["files"]
+
+
+def test_a_sidecar_whose_source_inspect_looked_for_is_declared_by_where_it_is(tmp_path, monkeypatch):
+    """The first check a process runs looks for the source of every module loaded (`syn.check`'s `inspect` lookup, as torch's
+    import does), each binding file among them (``present``).  `lookup` holds such a sidecar by whether it is where its module
+    is, so an edit of one no target is bound by reuses every target; `cache.declared` declares its path as a probe, not its
+    bytes, so a task keyed on the declaration isn't rerun by that edit either."""
+    from circuit_check import cache as CC
+
+    root = _tree(tmp_path)
+    side = "syn/extra.circuit-check.py"
+    (root / side).write_text("def _model_roots():\n    return []\n")
+    _run(root)
+    reads = [_entry(root, t)["reads"] for t in ("SynOther_v1", "SynTop_v1")]
+    assert any("syn.extra.circuit-check" in r["present"] for r in reads), reads
+    monkeypatch.syspath_prepend(str(root))
+    for r in reads:
+        d = CC.declared(root, r)
+        assert side not in d["files"] and (side in d["probes"]) == ("syn.extra.circuit-check" in r["present"]), d
+    _edit(root, side, "return []", "return []  # no roots")
+    assert _run(root)["hits"] == ["SynOther_v1", "SynTop_v1"]
+
+
+def test_what_a_read_set_holds_beyond_its_declaration_is_undeclared():
+    from circuit_check import cache as CC
+
+    now = {"files": ["a.py", "b.py"], "listed": ["d"], "probes": ["p/__init__.py"], "registry": True}
+    assert CC.undeclared(now, now) == {} and CC.undeclared(now, {**now, "files": ["a.py", "b.py", "c.py"]}) == {}
+    assert CC.undeclared(now, {"files": ["a.py"], "listed": ["d"], "probes": [], "registry": False}) == {
+        "files": ["b.py"], "probes": ["p/__init__.py"], "registry": True}
+    assert CC.undeclared({**now, "registry": False}, None) == {"files": ["a.py", "b.py"], "listed": ["d"],
+                                                               "probes": ["p/__init__.py"]}
+    assert CC.undeclared({**now, "untracked": ["build/x.so"]}, now) == {"untracked": ["build/x.so"]}   # no task declares one
+    # a path declared by its bytes or its listing is declared by its kind too
+    assert CC.undeclared({**now, "probes": ["a.py", "d", "e"]}, now) == {"probes": ["e"]}
+
+
 #: the harness with `syn` served as hatch's `dev-mode-exact` serves core's `verity`: by `editables`' finder, after the path-based
 #: one, with the tree's root on no `sys.path` entry
 EXACT = HARNESS.replace("sys.path.insert(0, str(root))",

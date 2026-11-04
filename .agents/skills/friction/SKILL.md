@@ -153,8 +153,11 @@ Landing:
 Protocols and claims:
 
 - Credit and every report of computation are in AND gates (tentative). 𝓜's resources appear only inside
-  exclusion, which reports in AND gates. Credit is a statement about values; SAK is exclusion's premise only. Whoever
-  finds a reason this is wrong floats it at once.
+  exclusion, which reports in AND gates. Whoever finds a reason this is wrong floats it at once.
+- Credit of declared size, values certified, is a statement about values (sampled proofs'). Compute credit (Dither's;
+  PoUW's bar is now T1–T3) also needs values that read live noise and SAK's lower bound, so SAK is a premise of compute
+  credit as well as of exclusion (ASK-166). SAK is over noised operands only, never prover-chosen ones (pinned weights,
+  served activations, un-noised outputs), and an un-noised call earns no compute credit (ASK-174).
 - A workload is what a datacenter runs over a monitoring period (its Programs, their inputs and placement), at
   every scale; workloads compose, and "row" never names one.
 - The network certifier is one device on each AI server's uplink, whose one code run under one `trusted-host` gives
@@ -196,7 +199,7 @@ Protocols and claims:
 - The end goal is sampled proofs through recursion with hidden unit circuits and a hidden partition; the auditor
   checks only padded counts. One key per protecting party, sampled once at setup from the OS before anything else, public
   and a constant in V\*; hm96's pinned key stays only where a key is wired into a circuit, as a named exception. Salts
-  are sampled from the OS, not expanded by a PRG.
+  are sampled from the OS, not expanded by a PRG, but the lead keys its instances under one window key (`Hash.Keyed`).
 - A circuit restatement of a verifier (VBridge's V\*) is proved in one direction, that the circuit accepting
   implies the verifier accepts; completeness stays a test.
 - `hash-derived-key` (`Hm96Hiding` at the pinned key) stays a named assumption, and nobody works on proving the

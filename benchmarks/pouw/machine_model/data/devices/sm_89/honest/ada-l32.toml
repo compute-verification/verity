@@ -1,4 +1,4 @@
-# Honest at L = 32 on the L40S as EPS1 ADA measured it: `honest32`, 8 IMMA.16832 then duo on each of their 32 words a
+# Honest at L = 32 on the L40S as measured: `honest32`, 8 IMMA.16832 then duo on each of their 32 words a
 # lane (LOP3 + IMAD + LEA.HI a word), operands in registers. The fastest of 2, 4, 6 and 8 warps a SMSP is 6's,
 # 22.33 words/SM/clk = 0.70 of IMMA.16832's 32 (T1 gives 1/2 here: every k32 form writes 32 words/SM/clk).
 name = "ada-l32"

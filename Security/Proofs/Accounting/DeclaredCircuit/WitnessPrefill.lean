@@ -577,10 +577,10 @@ theorem meets (n P N ρ S q Xr Lr qr τ L B εnum εden : ℕ) {Ω Ca Ch : Type}
     Assumptions.CircuitCarriers (fun c y => (honestSession n P N ρ S (Lr * τ) q hlink hq).session
         (steer0 n P N ρ Ω Ca c y))
       (RateSketch.steeredStore enc choose (passLayout n P N ρ Ω Ca)) (passLayout n P N ρ Ω Ca)
-      (joined n P N ρ Ω Ca) (Xr * τ) L B εnum εden ([] : Gates.Dag Unit) (aud n P N) ∧
+      (joined n P N ρ Ω Ca) (Xr * τ) L B εnum εden ([] : Gates.IntDag Unit) (aud n P N) ∧
     Assumptions.SteeredLayout (passLayout n P N ρ Ω Ca) (steer0 n P N ρ Ω Ca) ∧
     RateSketch.LifetimeCapped (passLayout n P N ρ Ω Ca) (joined n P N ρ Ω Ca) L ∧
-    Gates.Restricted B ([] : Gates.Dag Unit) ∧ Gates.Property caps (aud n P N) ([] : Gates.Dag Unit) ∧
+    Gates.Restricted B ([] : Gates.IntDag Unit) ∧ Gates.Property caps (aud n P N) ([] : Gates.IntDag Unit) ∧
     (∀ v < (aud n P N).windows, (aud n P N).reads v ≤ P * N * 4096) ∧
     (∀ x : RateSketch.StackedCoins Ω Ca (1 + n * P * (N + 4)) n P N ρ 1,
       (placement n P N τ val).Deadlines (passBind n P N) τ ∧
@@ -656,7 +656,7 @@ theorem applies (hG : Guarantees.DeclaredCircuitRequirement) (n P N ρ S q Xr Lr
   intro T G a Aud layout steer A W p ℓ grp bind addr
   obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8⟩ :=
     meets n P N ρ S q Xr Lr qr τ L B εnum εden enc choose caps hcaps val hval hL hlink hq hqr
-  exact hG n P N ρ S q G Xr Lr qr τ k a L E es B εnum εden T 1 ε δ ([] : Gates.Dag Unit) caps Aud enc choose layout
+  exact hG n P N ρ S q G Xr Lr qr τ k a L E es B εnum εden T 1 ε δ ([] : Gates.IntDag Unit) caps Aud enc choose layout
     steer (joined n P N ρ Ω Ca) A W p ℓ grp bind (fun _ => kvStore n P N val) (fun _ => kvPlan n P N) addr
     hn hP hN hE hrank hkey hsq hcs hEle hfloor h1 h2 h3 h4 h5 h6 h7 h8
 

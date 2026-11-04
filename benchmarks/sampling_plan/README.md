@@ -38,9 +38,9 @@ zero-work subcircuits at their floor.
   dimension a flag). Every op is a proof block of its Definition: the linears `ScaledMmS8Coordinate_v1` (or tiles of
   them), attention `GemmCoordinate_v2` on the BF16 step, the residual `Bf16Add_v1`, and the row ops (RMSNorm, the s8
   quantizer, softmax, ReLU, the embedding, argmax) as stubs, each id `stub:`, until they land, row ops whole, shared,
-  chunked or recomputed. The harm is faulty ANDs, the same whatever the cut, with the faulty proof blocks (IntegrityPeriod's W)
+  chunked or recomputed. The harm is incorrect ANDs, the same whatever the cut, with the incorrect proof blocks (IntegrityPeriod's W)
   beside it. It writes the frontier of expected Flock cost (every serve-time commitment and the replay in it) against
-  certified faulty ANDs at δ, the share of its ANDs the block's own GPU time buys, the chosen plan for `--share` (1e-3,
+  certified incorrect ANDs at δ, the share of its ANDs the block's own GPU time buys, the chosen plan for `--share` (1e-3,
   the small model's knee, held fixed), its certificate recomputed through `Stratified.harm_bound` and `count_bound` at
   δ = 1% and 1e-6, the pooled bound over a week, a month and a year on one server and on an assumed 10,000 (an assumed
   20-minute block: neither is in the census), and the plan as the GPU loop registers it (`handoff`): one
@@ -53,7 +53,7 @@ zero-work subcircuits at their floor.
   the pooled bound over any period (IntegrityHorizon) at δ = 1% and 1e-6. It prices each window's statements and drawn
   units, the replay and, beside them, the commitment of every unit's outputs; compares the static matmuls as 128-channel
   tiles (`--tiles`) and softmax and PV padded to the context (`--pad`); and gives the frontier over the share, the
-  sampling block length in blocks that proves within its own GPU time, and the faulty ANDs (`Stratified.harm_bound`, not a Lean
+  sampling block length in blocks that proves within its own GPU time, and the incorrect ANDs (`Stratified.harm_bound`, not a Lean
   guarantee).
 - `demo_a.py`: Demo A's frontier on one H200: plain INT8 weights, no P2 decode, a block of 16,384 requests at a
   6.35 s step, 32 steps a request, on the Definition map (`examples/h200/e2e_h200/plan.py`: every subcircuit a
