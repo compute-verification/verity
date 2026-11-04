@@ -89,9 +89,10 @@ one execution phase, proved only where m is 1.
 
 **Re-proof inputs** (``reproof``, `REPROOF`): what a later re-proof of the run's sampled units needs, each wire a sampled
 unit reads then proved inside its session: the committed values and their openings for every sampled unit and the units
-that write what it reads, the registration, the live draw and its receipt, and the public files, each by where it is (the
-serve dir's by their paths there, naming no window) and what it holds, with whether the run wrote each of OUT's and how
-each must be kept (``kept``, `REPROOF_KEPT`). The serve dir's are witness, kept off OUT and custody in a copy off the
+that write what it reads, the registration, the live draw, its receipt and the challenger's release of its coins, and the
+public files, each by where it is (the serve dir's by their paths there, naming no window) and what it holds, with whether
+the run wrote each of OUT's and how each must be kept (``kept``, `REPROOF_KEPT`). The serve dir's are witness, kept off
+OUT and custody in a copy off the
 served node (``--reproof-copy`` NODE:/PATH, ``--reproof-listing``, a listing of it kept off OUT): ``copy`` names its node
 and path, and each serve-dir input says whether the listing holds each file its path names and at least one file under
 each directory it names, never their bytes or digests; with no copy given, ``copy`` is missing with why.
@@ -424,6 +425,9 @@ REPROOF = {
              "the live draw and its receipt, the stream's record that it received the registration before it read a coin"),
     "coins": ("serve dir", "v3c-w<K>-<class>/audit/challenger/",
               "the live challenger session the draw read its coins from"),
+    "release": ("serve dir", "v3c-w<K>-<class>/audit/window/release.json",
+                "the challenger's release of the draw's coins (`a5.drawn_by`: its key, the window root and the coins, "
+                "settled), which a later v2 case of the drawn units names, so it reads the same draw"),
     "advice": ("serve dir", "advice/w<K>/",
                "the advice's registration and its opening (private/advice.bin), which the window circuit reads under its "
                "hiding root"),

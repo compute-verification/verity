@@ -128,8 +128,9 @@ negatives.
   `composite.py` leaves it out: an H1 window has no `v1` case, and no `period` case outside a period or without its drawn
   units' proof outcomes.
 - `v2_case.py`: sampled proofs v2's `--cases` directory from a served window's kept files (`case_v2` of its v1 case,
-  partition, public file, sessions and circuit file), with its own Lean answer with `--exe`. A circuit file the run didn't
-  keep is rebuilt by the command its `m0/compose.log` records and used only at the log's pin.
+  partition, public file, sessions and circuit file, and the challenger's release of the draw's coins, `release.json`,
+  which names the challenger v2 requires), with its own Lean answer with `--exe`. A circuit file the run didn't keep is
+  rebuilt by the command its `m0/compose.log` records and used only at the log's pin.
 - `kept_composite.sh SRC [K]`: remote's and onsite's Lean verdicts on a served run's kept records (`served_verdicts.sh`'s
   `out/`, or a tarball of it) on a CPU node: it builds the products and the pieces' checks, writes PoUW's pieces
   (`pouw_piece.py`; the period from the kept `pieces/pouw/`, `main.txt`, `H1_KEY_SHA512` and the drawn and live legs'

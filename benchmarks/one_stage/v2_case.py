@@ -5,9 +5,12 @@
 
 ``--window`` is the window directory `prove_path/run.sh` keeps (``out/sampled-proofs/served/window``): its v1 case
 (``case.json``), the verifier's partition (``partition.json``), ``m0/`` with the public file, ``compose.log`` and the
-circuit file, and ``session-m0/sessions/*/`` with each session's ``session.json`` and ``*.bin``. The case is a5.py's
-`case_v2` of those: v1's params with the partition and ``proofs: {circuit, registered: null}``, v1's commitment, the
-evidence with the sessions' proofs, and the blobs' paths.
+circuit file, ``session-m0/sessions/*/`` with each session's ``session.json`` and ``*.bin``, and the challenger's release
+of the draw's coins (``release.json``, `a5.RELEASE`) where the audit drew on a challenger's session. The case is a5.py's
+`case_v2` of those: v1's params with
+the partition, ``proofs: {circuit, registered: null}`` and the release's challenger and window root, v1's commitment, the
+evidence with the sessions' proofs and the release's coins, and the blobs' paths. A window with no release names no
+challenger, which v2 refuses (`OneStageZk.NO_CHALLENGER`).
 
 A run that didn't keep the circuit file gets it rebuilt in ``--scratch`` by the command its ``m0/compose.log`` records
 (`compose_circuit.py` over the verifier's synthetic input set, `run.sh`'s ``verity_numerical.bench.generate --n 4 --seed
@@ -16,7 +19,8 @@ anyway. The case goes to ``--out`` private as `composite.py` reads it (0700, its
 ``params.json``, ``commitment.bin``, ``evidence.json`` and, with ``--exe`` (``sampled-proofs-one-stage-zk``),
 ``answer.json``. A blob with no file leaves only ``missing.json`` saying why, so `composite.py` leaves the protocol out.
 
-Prints one ``V2CASE`` line (the pin, where the circuit file came from, the sessions and blobs) and, with ``--exe``, one
+Prints one ``V2CASE`` line (the pin, where the circuit file came from, whether it names a challenger, the sessions and
+blobs) and, with ``--exe``, one
 ``V2`` line with the answer's verdict only: the whole answer is witness-adjacent (its query is the partition's digest) and
 stays in ``--out``. Exits as the check does (0 accept, 1 reject, 2 undecided), 2 for a missing case, 0 without ``--exe``.
 """
@@ -82,7 +86,10 @@ def case(window: Path, scratch: Path) -> tuple[dict, str, int]:
     if not circuit.is_file():
         got, how = rebuild(c, scratch)
         circuit = got or circuit
-    v2 = a5.case_v2(v1, names, proof=PF.Proof(circuit, pub, sessions), circuit=c["pin"], registered=None, tables=[])
+    release = window / a5.RELEASE
+    drawn = json.loads(release.read_text()) if release.is_file() else None
+    v2 = a5.case_v2(v1, names, proof=PF.Proof(circuit, pub, sessions), circuit=c["pin"], registered=None, tables=[],
+                    drawn=drawn)
     return v2, how, len(sessions)
 
 
@@ -110,8 +117,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     a = ap.parse_args(argv)
     v2, how, n = case(a.window, a.scratch)
     gone = write(a.out, v2, how)
-    print("V2CASE " + json.dumps({"circuit": v2["params"]["proofs"]["circuit"], "circuit_file": how, "sessions": n,
-                                  "blobs": len(v2["blobs"]), "missing": gone}), flush=True)
+    print("V2CASE " + json.dumps({"circuit": v2["params"]["proofs"]["circuit"], "circuit_file": how,
+                                  "challenger": "challenger" in v2["params"], "sessions": n, "blobs": len(v2["blobs"]),
+                                  "missing": gone}), flush=True)
     if gone:
         return 2
     if not a.exe:
