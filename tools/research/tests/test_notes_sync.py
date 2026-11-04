@@ -603,7 +603,7 @@ def broker(monkeypatch):
 
 
 def test_a_cursor_agent_gets_the_notes_token_from_the_broker_without_the_secret(broker, monkeypatch):
-    """INF-425: Daniel's personal token expires 12 Nov; a cloud VM reaches the notes with the agents' GitHub App instead."""
+    """A cloud VM reaches the notes with the agents' GitHub App, without a personal token in its secrets."""
     assert NS.notes_token(now=BROKER_NOW) == "broker-token-1"
     assert broker["seen"] == [("Bearer oidc-for-token", {"scope": "notes"})]
     assert NS.os.environ[NS.TOKEN_ENV] == "broker-token-1", "in the environment, where git's helper reads it"

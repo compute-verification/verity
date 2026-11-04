@@ -69,7 +69,7 @@ from .secret_hint import FRESH_SHELL, lost
 SYNC_ENV = "RESEARCH_NOTES_SYNC"
 TOKEN_ENV = "RESEARCH_NOTES_TOKEN"
 SOURCE_ENV, EXPIRES_ENV = "RESEARCH_NOTES_TOKEN_SOURCE", "RESEARCH_NOTES_TOKEN_EXPIRES"
-#: the agents' GitHub broker: a Cursor agent's identity buys an hour's token for the notes repository (INF-425)
+#: the agents' GitHub broker: a Cursor agent's identity buys an hour's token for the notes repository
 GITHUB_BROKER = "https://website-docs-sage.vercel.app/api/agent-github/token"
 REFRESH_S, BROKER_RETRY_S = 300, 60
 NOTES_URL = "https://github.com/compute-verification/research-notes.git"
