@@ -40,7 +40,7 @@ instance rows (`Flock.Bridge.rowsAgree_circuitRows`). `BitsLower`: where a Bits 
 units, the bridge's lowering, positions and proof blocks are Bits' (`Flock.Bridge.LaysOut.progOf_eq`,
 `Flock.Bridge.blockOf_eq`). `BitsKeys`: Bits' source keys are the bridge's (`Flock.Bridge.keyIdx_eq`). `BitsKeyProg`:
 Bits' key program lays out a circuit file's and its units, so the bridge's program, positions and proof blocks are
-Bits' (`Flock.Bridge.progOf_keyProg`, `Flock.Bridge.posOf_keyProg`, `Flock.Bridge.blockOf_keyProg`). `BitsRowMap`:
+Bits' (`Flock.Bridge.progOf_keyProg`, `Flock.Bridge.posOf_keyProg`, `Flock.Bridge.blockOf_bitsKeyProg`). `BitsRowMap`:
 Bits' row map is the bridge's: at an input gate (`Flock.Bridge.rowBit_keyRowOf`, `Flock.Bridge.rowBit_wire`) and at a
 returned output's bit (`Flock.Bridge.outRowBit_outBitRow`, `Flock.Bridge.outRowBit_outRowOf`). -/
 
