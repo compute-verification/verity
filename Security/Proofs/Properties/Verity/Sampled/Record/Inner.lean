@@ -38,11 +38,11 @@ theorem inScope_sess {d : Msg} {s : Ins} {spec : Flock.SessionSpec} {sts : Array
   obtain ⟨t, -, -, -, -, hst, -⟩ := shape_sess hins hsu
   have hz : s.read.zk = true := FlockDeploy.Raw.ins_zk hins
   have hpi : s.read.publicInputs = none := FlockDeploy.Raw.ins_publicInputs hins
-  obtain ⟨-, -, hp2, hr⟩ := FlockDeploy.read_setup_in (FlockDeploy.Ins.setup_read hsu) hpi
+  obtain ⟨-, -, hp2, hr⟩ := RecDeploy.read_setup_in (FlockDeploy.Ins.setup_read hsu) hpi
   have hsh := Claims.Bridge.Custody.setup_shapeOk hsu hz
   refine ⟨by simp [hst], fun st hst' => ?_, fun st hst' => hr st hst', hp2.le⟩
   obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 (Array.mem_toList_iff.1 hst')
-  have h1 := Flock.Readable.array_forM_ok hsh j hj
+  have h1 : Flock.Zk.shapeOk sts[j] = .ok () := Flock.Readable.array_forM_ok hsh j hj
   unfold Flock.Zk.shapeOk at h1
   obtain ⟨_, hq, -⟩ := bind_ok h1
   exact FlockDeploy.KS.queries0_range hq
@@ -68,11 +68,20 @@ theorem ins_of_setupOf {d : Msg} (hfits : Fits A o d) {s : Ins} {spec : Flock.Se
 theorem N₀_none {x : Msg} (h : FlockDeploy.setupOf true x = none) : FlockDeploy.N₀ true x = 0 := by
   simp only [FlockDeploy.N₀, FlockDeploy.tables, h, List.map_nil, List.sum_nil]
 
+/-- A statement's `N₀` is its numbers' second. -/
+theorem N₀_of_nums {x : Msg} {k : ℕ} {N : ℝ} (h : Nums x = (k, N)) : FlockDeploy.N₀ true x = N := by
+  have h2 := congrArg Prod.snd h
+  simpa only [Nums] using h2
+
+/-- Statements with the same numbers have the same `N₀`. -/
+theorem N₀_eq_of_nums {x y : Msg} (h : Nums x = Nums y) : FlockDeploy.N₀ true x = FlockDeploy.N₀ true y := by
+  have h2 := congrArg Prod.snd h
+  simpa only [Nums] using h2
+
 /-- **The reference statement's `N₀` is positive**: it is its one table's level-0 codeword length. -/
 theorem N₀_pos (h : ∃ d, RefOk A o d) : 0 < FlockDeploy.N₀ true (xS₀ A o) := by
-  obtain ⟨-, t, -, hset, -⟩ : RefOk A o (d₀ A o) := Classical.epsilon_spec h
-  have hN : FlockDeploy.N₀ true (xS₀ A o) = FlockDeploy.tableLen true t := congrArg Prod.snd (nums_one hset)
-  rw [hN]
+  obtain ⟨_, t, -, hset, -⟩ : RefOk A o (d₀ A o) := Classical.epsilon_spec h
+  rw [show xS₀ A o = sessStmt A o (d₀ A o) from rfl, N₀_of_nums (nums_one hset)]
   unfold FlockDeploy.tableLen
   positivity
 
@@ -89,10 +98,9 @@ theorem kept_in (h : ∃ d, RefOk A o d) {d : Msg} (hn : numsOk A o d) (hf : Fit
     ∃ s spec sts, FlockDeploy.ZkIn (sessStmt A o d) s spec sts ∧ sts.size ≤ 1 := by
   cases hsd : FlockDeploy.setupOf true (sessStmt A o d) with
   | none =>
-    have hN : FlockDeploy.N₀ true (sessStmt A o d) = FlockDeploy.N₀ true (xS₀ A o) := congrArg Prod.snd hn
-    have := N₀_pos h
-    rw [← hN, N₀_none hsd] at this
-    exact absurd this (lt_irrefl 0)
+    have hpos := N₀_pos h
+    rw [← N₀_eq_of_nums hn, N₀_none hsd] at hpos
+    exact absurd hpos (lt_irrefl _)
   | some p =>
     obtain ⟨s, spec, sts⟩ := p
     obtain ⟨hins, hsu⟩ := ins_of_setupOf hf hsd
@@ -100,32 +108,38 @@ theorem kept_in (h : ∃ d, RefOk A o d) {d : Msg} (hn : numsOk A o d) (hf : Fit
     exact ⟨s, spec, sts, zkIn_of_inScope hsd hin, hin.1.le⟩
 
 /-- **The session a view shows** is the reference statement's or a kept draw file's. -/
-theorem sessionOf_fst (v : Seen) :
+theorem sessionOf_fst (v : Claims.Seen) :
     (sessionOf A o v).1 = xS₀ A o ∨ ∃ d, numsOk A o d ∧ Fits A o d ∧ (sessionOf A o v).1 = sessStmt A o d := by
   unfold sessionOf
   split
   · split_ifs with h
-    · exact .inr ⟨_, h.1, h.2, rfl⟩
-    · exact .inl rfl
-  · exact .inl rfl
+    · exact .inr ⟨_, h.1, h.2, by simp only⟩
+    · exact .inl (by simp only [refused])
+  · exact .inl (by simp only [refused])
+
+theorem code_tables (e : Ext) (x : Msg) : (code A o e).tables x = 1 := rfl
+
+theorem code_innerN₀ (e : Ext) (x : Msg) : (code A o e).innerN₀ x = FlockDeploy.N₀ true (xS₀ A o) := by
+  simp only [code]
 
 /-- **`SessionsIn` at the record**: every session's statement is in Flock's masked scope at one table, with the
 reference's `N₀`, wherever a reference draw file exists. -/
 theorem sessionsIn (e : Ext) (h : ∃ d, RefOk A o d) : SamplingDeploy.SessionsIn (code A o e) := by
   intro x u v xS vS hs
   change (if x = xOf A o then some (sessionOf A o v) else none) = some (xS, vS) at hs
+  rw [code_tables, code_innerN₀]
   by_cases hx : x = xOf A o
   swap
-  · rw [if_neg hx] at hs
+  · rw [ite_eq_right hx] at hs
     cases hs
-  rw [if_pos hx] at hs
+  rw [ite_eq_left hx] at hs
   have hxS : xS = (sessionOf A o v).1 := (congrArg Prod.fst (Option.some.inj hs)).symm
   subst hxS
   rcases sessionOf_fst (A := A) (o := o) v with h1 | ⟨d, hn, hf, h1⟩
   · rw [h1]
     exact ⟨ref_in h, rfl⟩
   · rw [h1]
-    exact ⟨kept_in h hn hf, congrArg Prod.snd hn⟩
+    exact ⟨kept_in h hn hf, N₀_eq_of_nums hn⟩
 
 /-- **`InnerNumbers` at the record**, wherever a reference draw file exists. -/
 theorem innerNumbers (e : Ext) (h : ∃ d, RefOk A o d) : Claims.Sampling.InnerNumbers (record A o e) :=
