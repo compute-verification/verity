@@ -262,7 +262,8 @@ def wrap(model, target: float | None, rotate: bool = False, log=print, targets: 
     target elsewhere, its weight rotated first with rotate; returns per matrix its c and overflow.
 
     With frozen, each is a FrozenQLinear whose codes come from W·R formed in float64 on the weight's device and then
-    rounded to fp32, as the latent path holds it, and the original weight is dropped: a bf16 model too large for fp32."""
+    rounded to fp32, as the latent path holds it, and overwrite the bf16 weight in place (codes within ±127 are exact in
+    bf16): a bf16 model too large for fp32, wrapped in the memory it was loaded in plus one matrix's temporaries."""
     info, rots, targets = {}, {}, targets or {}
     for name, parent, attr in block_linears(model):
         lin = getattr(parent, attr)
@@ -279,7 +280,9 @@ def wrap(model, target: float | None, rotate: bool = False, log=print, targets: 
                 w = (rotate_t(lin.weight) if rotate else lin.weight.double()).float()
                 c, ov = calibrate(w, tgt)
                 s = row_scale(w, c)
-                q = codes(w, s).to(torch.bfloat16)
+                q = lin.weight.detach()
+                assert q.dtype == torch.bfloat16, q.dtype
+                q.copy_(codes(w, s))
             del w
             setattr(parent, attr, FrozenQLinear(q, s, c, rot))
         else:

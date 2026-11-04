@@ -162,6 +162,17 @@ def evaluate(model, tok, wt_ids, val_ids, args, zs: bool) -> dict:
     return ev
 
 
+def even_memory(model: str, slack_gib: float = 8) -> dict[int, str] | None:
+    """Per visible GPU an even share of a local sharded checkpoint plus slack, so a device map spreads it instead of
+    filling GPU 0 first, and every GPU keeps room for `quant.wrap`'s float64 temporaries; None for anything else."""
+    idx = Path(model) / "model.safetensors.index.json"
+    if not idx.exists():
+        return None
+    total = json.loads(idx.read_text())["metadata"]["total_size"]
+    n = torch.cuda.device_count()
+    return {i: f"{math.ceil(total / n / 2**30 + slack_gib)}GiB" for i in range(n)}
+
+
 def export(model, path: Path) -> dict:
     from safetensors.torch import save_file
 
@@ -236,7 +247,7 @@ def main(argv=None) -> int:
     if args.device_map:
         assert args.tokens == 0, "--device-map evaluates only"
         model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.bfloat16, attn_implementation="sdpa",
-                                                     device_map=args.device_map)
+                                                     device_map=args.device_map, max_memory=even_memory(args.model))
         res["device_map"] = {k: str(v) for k, v in getattr(model, "hf_device_map", {}).items()}
     else:
         model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.float32,
