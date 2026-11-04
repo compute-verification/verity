@@ -299,7 +299,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--source-identity", default=None, help=argparse.SUPPRESS)   # machine side: JSON {commit, tree, dirty} of the shipped source
     ns, harness_opts = ap.parse_known_args(opts)
     ns.started = started
-    if ns.id is not None:
+    if ns.id is not None and not ns.claimed:
         from .store import ids as store_ids
 
         if not store_ids.is_run_id(ns.id):
