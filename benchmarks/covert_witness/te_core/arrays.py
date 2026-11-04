@@ -7,10 +7,12 @@ linear layer's forward, input-gradient and weight-gradient products are a triang
 F = √(2(1 − 1/ω)) = 2/√3 (`io_bound.SHARE`), the figure's F where M holds a backward product (`share`); the forward
 products alone and the weight gradients alone, one of each a layer, have no triangle, ω = 2 and F = 1, the figure's F
 on them. An array is
-the words of one value, an operand's root through views and casts (`io_bound._root`: the casts of one value are one
-array), so micro-batches' activations are their own arrays and a weight they share is one. Two products on one pair
-refuse F (`refusal`); a step with a clique of more than three charges F at its own ω, and one whose forward products
-or weight gradients hold a triangle charges them F at theirs.
+the words of one value, an operand's root through views and casts (`io_bound._root`) taken as its value (`values`:
+the casts and copies of one value are one array, and so is a recomputation, the same op on the same values, as an
+activation checkpoint's rerun of its forward), so micro-batches' activations are their own arrays and a weight they
+share is one. Two products on one pair, or one of a value with itself, refuse F (`refusal`), so M keeps one copy of
+each product; a step with a clique of more than three charges F at its own ω, and one whose forward products or
+weight gradients hold a triangle charges them F at theirs.
 
 M is te_core.formalism.he_of_rows' on the step's rows: both operands affected, not one array times itself, no
 gathered operand, not the optimizer's and not attention's (`of_step`, which a step's rows must agree with). Every
@@ -27,6 +29,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import operator
 import sys
 import time
 from collections import defaultdict
@@ -36,6 +39,8 @@ from . import io_bound
 
 #: products a repeated pair names in what `check` returns
 SHOWN = 4
+#: ops whose result holds its first argument's value, a copy or a cast, which `values` takes as that argument
+SAME = {"clone", "contiguous", "detach", "alias", "_to_copy", "to", "lift_fresh", "lift_fresh_copy", "type_as"}
 
 
 def share(omega: int | None, floor: float = io_bound.SHARE) -> float:
@@ -68,15 +73,53 @@ def clique(adj: dict) -> list:
     return best
 
 
+def values(gm) -> dict:
+    """Each node of the graph `gm` → its value's class: one op on the same values and constants is one value, so a
+    recomputation is its original's, a copy or a cast (`SAME`) is its argument's, and a placeholder or an attribute is
+    its own. A class can join values the step keeps apart (two draws of randomness, a storage read before and after
+    an in-place write), which only adds repeated pairs."""
+    ids: dict = {}
+    of: dict = {}
+
+    def key(a):
+        if hasattr(a, "op") and hasattr(a, "args"):
+            return ("node", of[a])
+        if isinstance(a, (list, tuple)):
+            return tuple(key(x) for x in a)
+        if isinstance(a, dict):
+            return tuple((k, key(v)) for k, v in sorted(a.items()))
+        return repr(a)
+
+    from te_core.capture.structure import _pk
+
+    for n in gm.graph.nodes:
+        if n.op == "call_function":
+            if n.target is not operator.getitem and _pk(n.target) in SAME and n.args and hasattr(n.args[0], "op"):
+                of[n] = of[n.args[0]]
+                continue
+            k = (str(n.target), key(n.args), key(dict(n.kwargs)))
+        elif n.op in ("placeholder", "get_attr"):
+            k = (n.op, n.target)
+        else:
+            k = (n.op, n.name)
+        of[n] = ids.setdefault(k, len(ids))
+    return of
+
+
 def check(products: list[dict]) -> dict:
     """ω and the repeated pairs of M's `products`, each {"node", "phase", "arrays": [a, b], "dw", ...}: {"omega",
     "clique", "omega_forward" and "omega_dw" (the forward products' graph's and the weight gradients'), "arrays"
-    (vertices), "products", "repeated": [{"pair", "products" (the first `SHOWN` nodes), "count"}]}."""
+    (vertices), "products", "repeated": [{"pair", "products" (the first `SHOWN` nodes), "count"}], "loops" (the
+    products of one array with itself)}."""
     pairs: dict = defaultdict(list)
     adj = {x: defaultdict(set) for x in ("M", "forward", "dw")}
+    loops = []
     for p in products:
         a, b = p["arrays"]
         pairs[tuple(sorted((a, b)))].append(p["node"])
+        if a == b:
+            loops.append(p["node"])
+            continue
         for x in ("M", "forward" if p["phase"] == "forward" else None, "dw" if p.get("dw") else None):
             if x:
                 adj[x][a].add(b)
@@ -86,32 +129,43 @@ def check(products: list[dict]) -> dict:
                 for k, v in sorted(pairs.items(), key=lambda kv: (-len(kv[1]), kv[0])) if len(v) > 1]
     return {"omega": len(top), "clique": sorted(top), "omega_forward": len(clique(dict(adj["forward"]))),
             "omega_dw": len(clique(dict(adj["dw"]))), "arrays": len(adj["M"]), "products": len(products),
-            "repeated": repeated}
+            "repeated": repeated, "loops": loops}
 
 
 def refusal(arrays: dict | None) -> str | None:
-    """Why F has no figure on M with `check`'s result: two of its products on one pair of arrays (HEShared's (ii)), in
-    plain words, since a panel publishes it (the pairs and their products are `check`'s `repeated`); None where it has
-    one or the graph isn't measured."""
-    if not arrays or not arrays["repeated"]:
+    """Why F has no figure on M with `check`'s result, in plain words, since a panel publishes it: two of its products
+    on one pair of arrays (HEShared's (ii); the pairs and their products are `check`'s `repeated`), or a product of
+    one array with itself, its value's copy or recomputation (`loops`), which M must leave out as it leaves out one
+    array times itself; None where it has one or the graph isn't measured."""
+    if not arrays:
         return None
-    n = sum(r["count"] for r in arrays["repeated"])
-    return (f"unmeasured: the step's array graph puts {n} of M's products on {len(arrays['repeated'])} pair(s) of "
-            f"arrays, two or more a pair, and the shared-arrays factor F is proved only where M's products are on "
-            f"distinct pairs of arrays")
+    why = []
+    if arrays["repeated"]:
+        n = sum(r["count"] for r in arrays["repeated"])
+        why.append(f"puts {n} of M's products on {len(arrays['repeated'])} pair(s) of arrays, two or more a pair")
+    if arrays.get("loops"):
+        why.append(f"has {len(arrays['loops'])} of M's products of one value with a copy or a recomputation of itself")
+    if not why:
+        return None
+    return (f"unmeasured: the step's array graph {' and '.join(why)}, and the shared-arrays factor F is proved only "
+            f"where M's products are on distinct pairs of distinct arrays")
 
 
 def of_step(g) -> list[dict]:
     """M's products on a recorded step (te_core.capture.script's `record`), each {"node", "op", "part", "phase",
-    "arrays", "dw"}, its operands' roots through views and casts and whether it is a weight gradient (a backward
-    product contracting over tokens, as he_of_rows has it). Refused where M's count differs from the step's rows'
-    (te_core.formalism.he_of_rows' M)."""
+    "arrays", "dw"}: its operands' arrays, each its root through views and casts as a value (`values`, named by the
+    class's first node), and whether it is a weight gradient (a backward product contracting over tokens, as
+    he_of_rows has it). Refused where M's count differs from the step's rows' (te_core.formalism.he_of_rows' M)."""
     from te_core.capture import products as P
     from te_core.capture.structure import _gemms, _pk
 
     vs = P._Values(g)
     gathered = P._gathered(vs, P._made(vs))
     by_name = {n.name: n for n in vs.nodes}
+    of = values(vs.gm)
+    first: dict = {}
+    for n in vs.gm.graph.nodes:
+        first.setdefault(of[n], n.name)
     out = []
     for m in g.matmuls:
         n = by_name[m.node]
@@ -126,7 +180,7 @@ def of_step(g) -> list[dict]:
         if sum(x in m.token_dims for x in ("m", "k", "n")) >= 2:
             continue
         out.append({"node": n.name, "op": _pk(n.target), "part": m.part, "phase": m.phase,
-                    "arrays": [io_bound._root(x).name for x in (A, B)],
+                    "arrays": [first[of[io_bound._root(x)]] for x in (A, B)],
                     "dw": m.phase == "backward" and sorted(m.token_dims) == ["k"]})
     rows = ((g.formalism or {}).get("products") or {}).get("rows")
     if rows is not None:

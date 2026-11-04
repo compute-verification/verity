@@ -40,7 +40,7 @@ def test_a_recorded_steps_m_is_its_layers_triangles_on_distinct_pairs_micro_batc
     g = record(tmp_path, monkeypatch, "--update", "inplace")
     one = arrays.check(arrays.of_step(g))
     assert (one["omega"], one["omega_forward"], one["omega_dw"], one["arrays"], one["products"]) == (3, 2, 2, 6, 6)
-    assert one["repeated"] == [] and arrays.refusal(one) is None
+    assert one["repeated"] == one["loops"] == [] and arrays.refusal(one) is None
     block = g.formalism["products"] | {"arrays": one}
     got = formalism.products_of_trace(block)
     assert got["arrays"] == one and all(v["arrays"] == one for v in got.get("at", {}).values())
@@ -66,4 +66,27 @@ def test_f_is_at_the_graphs_clique_number_and_a_repeated_pair_refuses_with_its_p
     assert again["repeated"] == [{"pair": ["W0", "X0"], "products": ["f0", "f0r"], "count": 2}]
     why = arrays.refusal(again)
     assert why.startswith("unmeasured: the step's array graph puts 2 of M's products on 1 pair(s) of arrays")
-    assert "W0" not in why and "f0" not in why
+    assert "W0" not in why and "f0" not in why and again["loops"] == []
+
+
+def test_a_recomputation_a_copy_and_a_cast_are_their_originals_value_so_m_keeps_one_copy_of_each_product():
+    """An activation checkpoint reruns its forward: the rerun's product reads the original's values in both operands,
+    so its arrays are the original's and the pair repeats, as it does for a product on a copy cast down and back; a
+    product of a value with its own rerun is a loop. Each refuses F; products on other values stay apart."""
+    import torch
+    from torch.fx.experimental.proxy_tensor import make_fx
+
+    def step(x, w, v):
+        h, again = torch.relu(x @ w), torch.relu(x @ w)
+        return h @ v, again @ v, x.clone().to(torch.bfloat16).float() @ w, torch.relu(x @ v) @ v, h @ again.t()
+
+    gm = make_fx(step)(torch.randn(4, 8), torch.randn(8, 8), torch.randn(8, 8))
+    of = arrays.values(gm)
+    products = [{"node": n.name, "phase": "forward", "arrays": [of[io_bound._root(a)] for a in n.args[:2]]}
+                for n in gm.graph.nodes if n.target is torch.ops.aten.mm.default]
+    assert len(products) == 8 and len({of[n] for n in gm.graph.nodes if n.op == "placeholder"}) == 3
+    got = arrays.check(products)
+    assert sorted(r["count"] for r in got["repeated"]) == [2, 3] and len(got["loops"]) == 1
+    assert got["omega"] == 2 and got["arrays"] == 5
+    why = arrays.refusal(got)
+    assert "puts 5 of M's products on 2 pair(s)" in why and "1 of M's products of one value with a copy" in why

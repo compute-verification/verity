@@ -101,7 +101,8 @@ most that. The kinds:
   log doesn't keep whether an operand depends on the update, `LOG_UNKNOWN`), on rows that predate `SYSTEM_FROM`
   (`HE_RETRACE`), past `BETA_K`'s last k (`HE_PAST`), from `HEAD_K` on a model's products (`HE_HEAD`), on a
   step whose elementwise ops fan out into an operand (`p_match_reason`) and on a step whose array graph puts two of
-  M's products on one pair of arrays (te_core.arrays' `refusal`), and never priced on a
+  M's products on one pair of arrays or has one of a value with its copy or recomputation (te_core.arrays'
+  `refusal`), and never priced on a
   trace of another program (`FRESH_OTHER`). The products come from `products_of` (steps captured by capture_step or
   capture_fn) or `products_of_trace` (the product rows a recorded program's trace keeps from te_core 4.8 on,
   te_core.capture.products), each at the k it classifies them at, a trace's at every k of the console's dial too
@@ -1441,8 +1442,8 @@ def he_products(m: Measured, c: float, k: float) -> tuple[float | None, str | No
     products (`LOG_UNKNOWN`), on rows that predate `SYSTEM_FROM` (`HE_RETRACE`), on products without M
     (`HE_NO_ROWS`), past `BETA_K`'s last k (`HE_PAST`), from `HEAD_K` on products that don't say which are the
     head's (`HE_HEAD`), on a step whose elementwise ops fan out into an operand (`p_match_reason`) and on products
-    whose step's array graph (their `arrays`, te_core.arrays' `check`) puts two of M's on one pair of arrays
-    (`arrays.refusal`), and never priced on a trace of another program (`FRESH_OTHER`); with that graph, F is at its
+    whose step's array graph (their `arrays`, te_core.arrays' `check`) puts two of M's on one pair of arrays or has one
+    of a value with itself (`arrays.refusal`), and never priced on a trace of another program (`FRESH_OTHER`); with that graph, F is at its
     clique numbers (`he_figure`), which it read beside the repeated pairs (`arrays`). A weight's β is at most the
     record's code bits (`delta_bits`) over M's trained weights where M counts them, and τ is the record's."""
     p = m.products
@@ -1475,7 +1476,7 @@ def he_products(m: Measured, c: float, k: float) -> tuple[float | None, str | No
         return None, HE_HEAD, got
     graph = p.get("arrays")
     if graph is not None:
-        got["arrays"] = {x: graph[x] for x in ("omega", "omega_forward", "omega_dw", "repeated")}
+        got["arrays"] = {x: graph.get(x) for x in ("omega", "omega_forward", "omega_dw", "repeated", "loops")}
         why = arrays.refusal(graph)
         if why:
             return None, why, got

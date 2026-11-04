@@ -799,7 +799,7 @@ def test_the_products_term_charges_m_its_least_pair_where_a_layers_arrays_differ
 def graph(omega: int = 3, forward: int = 2, dw: int = 2, repeated: list | None = None) -> dict:
     """A step's array graph as te_core.arrays' `check` writes one."""
     return {"omega": omega, "clique": [], "omega_forward": forward, "omega_dw": dw, "arrays": 6, "products": 6,
-            "repeated": repeated or []}
+            "repeated": repeated or [], "loops": []}
 
 
 def test_the_products_term_takes_f_at_the_steps_array_graph_and_refuses_two_products_on_one_pair():
