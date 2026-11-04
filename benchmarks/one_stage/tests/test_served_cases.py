@@ -224,8 +224,8 @@ def h1_registration(previous: str | None = None, entry: int = 0) -> dict:
 def tied_v1_case(w: dict) -> dict:
     """v1's case over the window's record R as V3c's window-commit writes it under H1's tie: a v2 record of the toy's
     population, which takes the window's tables as values ahead of its templates' parameters, registering each at W's
-    root, domain and leaves, chained right after W; its params the v2 params (``parameters``, ``outputs``, ``log`` [W],
-    ``row_schemas``)."""
+    root, domain and leaves, chained right after W; its params the v2 params as a5 writes them under the tie
+    (`replay.params` with ``log`` [W], the registered words, ``outputs`` and ``schemas``, `a5.tie`)."""
     templates = [PAIR, TRIPLE]
     program = P.mixed_population_program([(t, SLOTS) for t in templates],
                                          values=[(name, leaves, 16) for name, _, leaves in TABLES])
@@ -236,10 +236,9 @@ def tied_v1_case(w: dict) -> dict:
                    {"kind": "served", "run": "r-served-cases", "row": 0}, previous=R.digest(w),
                    registered=[{**reused[value], "value": name} for name, value, _ in TABLES])
     params = RP.params(program, query, law, ports, None, "1/100", partition=P.partition(program, query), log=[w],
-                       registered={name: 1 for name, _, _ in TABLES})
-    params |= {"outputs": {name: {"record": R.digest(w), "value": value} for name, value, _ in TABLES},
-               "parameters": [[n, t.to_json()] for n, t in program.fn.signature()[0]],
-               "row_schemas": {name: G.SCHEMA_V2 for name, _, _ in TABLES}}
+                       registered={name: 1 for name, _, _ in TABLES},
+                       outputs={name: {"record": R.digest(w), "value": value} for name, value, _ in TABLES},
+                       schemas={name: G.SCHEMA_V2 for name, _, _ in TABLES})
     evidence = {"draw": {"units": [0]}, "sessions": ["5e" * 64], "verdicts": {"m0": {"accepted": True}}}
     return {"commitment": codec.canonical_json(rec).hex(), "evidence": codec.canonical_json(evidence).hex(),
             "params": json.loads(json.dumps(params))}

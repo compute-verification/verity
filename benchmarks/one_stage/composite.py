@@ -1,6 +1,6 @@
 """Onsite's or remote's case from its subprotocols' cases, and the Lean verdict on it (`onsite check`, `remote check`).
 
-    composite.py onsite|remote --cases DIR ... --private-out DIR --public-out DIR [--exe PATH]
+    composite.py onsite|remote --cases DIR ... --private-out DIR --public-out DIR [--exe PATH] [--development WHY]
 
 Each ``--cases`` is a private directory (0700, its files 0600, as the pieces write it) holding one subprotocol's case,
 or a directory whose subdirectories each hold one. A case is the subprotocol's case as its own `serve` reads it,
@@ -29,6 +29,10 @@ With ``--exe``, it runs ``EXE check params.json commitment.bin evidence.json BLO
 accept, 1 reject, 2 undecided. It decides nothing itself: a subprotocol with no case, or whose directory lacks its case
 or its answer, is left out of the product's case, and Lean's verdict on that case is the composite's (a rejection
 naming the missing case). Such a run is labelled ``NOT_ESTABLISHED``, naming what is missing. 64 is a usage error.
+
+``--development WHY`` labels a composite that claims no record (one composed on the served node, which the prover
+controls: `served_composite.sh`): ``composite.json`` carries ``development`` WHY, and ``DEVELOPMENT WHY`` is the first
+line of its ``verdicts.txt`` and of what it prints after its ``COMPOSITE`` line.
 """
 from __future__ import annotations
 
@@ -164,10 +168,10 @@ def exceptions(product: str) -> list[str]:
 
 
 def public_record(product: str, commitment: bytes, cases: Sequence[dict[str, Any]], gone: Sequence[str],
-                  verdict: dict[str, str] | None) -> dict[str, Any]:
+                  verdict: dict[str, str] | None, development: str | None = None) -> dict[str, Any]:
     """What ``--public-out`` may hold: no evidence, no params bodies and no answer bodies."""
     return {"product": PRODUCTS[product], "commitment": commitment.hex(), "missing": list(gone), "verdict": verdict,
-            "exceptions": exceptions(product),
+            "exceptions": exceptions(product), **({"development": development} if development else {}),
             "cases": [{"params_sha512": hashlib.sha512(canonical(p["params"])).hexdigest(),
                        "commitment": p["commitment"].hex()} | outcome(p["id"], p["answer"]) for p in cases]}
 
@@ -213,7 +217,8 @@ def run(a: argparse.Namespace) -> int:
     write_private(priv, files)
     cases = sorted(found, key=lambda p: p["id"])
     gone = missing(a.product, found)
-    lines = [line("PIECE", outcome(p["id"], p["answer"])) for p in cases]
+    lines = [f"DEVELOPMENT {a.development}"] if a.development else []
+    lines += [line("PIECE", outcome(p["id"], p["answer"])) for p in cases]
     lines += [f"NOT_ESTABLISHED missing {', '.join(gone)}"] if gone else []
     cmd = [a.exe or a.product, "check", *(str(priv / n) for n in ("params.json", "commitment.bin", "evidence.json")),
            *blobs]
@@ -226,7 +231,7 @@ def run(a: argparse.Namespace) -> int:
         lines.append(line("VERDICT", verdict) + ("" if answer else f" (exit {p.returncode}; its stderr is in --private-out)"))
         rc = p.returncode
     lines += [f"EXCEPTION {x}" for x in exceptions(a.product)]
-    record = canonical(public_record(a.product, commitment, cases, gone, verdict))
+    record = canonical(public_record(a.product, commitment, cases, gone, verdict, a.development))
     text = "".join(f"{ln}\n" for ln in lines).encode()
     try:
         check_public(record + b"\n" + text, found)
@@ -253,6 +258,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--private-out", type=Path, required=True, help="the composed case and the answers (0700)")
     ap.add_argument("--public-out", type=Path, required=True, help="verdicts, commitments and params digests only")
     ap.add_argument("--exe", help="the product's executable, to run its check")
+    ap.add_argument("--development", help="why this composite claims no record: its outputs lead with it")
     return run(ap.parse_args(argv))
 
 
