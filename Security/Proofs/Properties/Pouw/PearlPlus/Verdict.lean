@@ -9,8 +9,8 @@ import Proofs.Properties.Pouw.Commit
 `YIsTheUnscale`, by unfolding the port's definitions step by step: each `Except` chain one bind at a time (`bind_ok`),
 each `for` loop by induction over its list with the loop's state as the invariant's, and the replay's tasks by their pure
 model (a task's `get` is its function's value). The unscale is the Definition's through `Properties.Evaluator`'s FP32
-equalities. A tile over its cap gets `checkOpened`'s refusal as its verdict, so a tile that passes keeps the cap
-(`TileKeepsTheCap`).
+equalities. A tile over its inert-work bound gets `checkOpened`'s refusal as its verdict, so a tile that passes keeps the
+inert-work bound (`TileKeepsTheCap`).
 -/
 
 namespace Properties.Pouw.PearlPlus
@@ -516,7 +516,7 @@ theorem tileAcceptMeans : TileAcceptMeans := by
     obtain ⟨hyp, hyo⟩ := not_or_true hy'
     exact ⟨ys, hys, eq_of_not_bne hyp, of_not_not hyo, h⟩
 
-/-! ## A tile's cap -/
+/-! ## A tile's inert-work bound -/
 
 theorem mapM_ok_length {ε α β : Type} {f : α → Except ε β} :
     ∀ {l : List α} {l' : List β}, l.mapM f = .ok l' → l'.length = l.length
