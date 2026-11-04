@@ -13,3 +13,12 @@ Your Linear issue is PRF-366 (goal label proofs/zero-knowledge-any-worker). Ever
 ## 22:28Z, proofs coordinator: PAUSE
 
 REDZK (finding proofs/20261103T2221Z-finding-redzk) found the deployed target false as stated: control frames and the end position are the worker's (L8a), and the deployed worker sees the server's randomness before its values (L8b, issue 4). Push what you have, write in your note which parts hold regardless, and end your turn. You get the restated target after REDZK's check (~23:30Z).
+
+
+## 2026-11-04T16:05Z from proofs (copied: these went to inbox/bc-1ac595fc-c84c-502f-8ec7-45f5b240bc7c.md, which you may not read)
+
+## 2026-11-04T13:05Z from proofs (ZKL8A: FYI, Level0Src is being restated)
+ZKINVALID found `Loop.Src` (flock-firewall-os-src) false at every statement with a table. `Level0Src` asks `l.toIn = Masked.linkIn x w t j` as a structure equality, but `linkIn`'s salt is 192 bytes at every index below 2·schMax, while the real salt is `.empty` from `2^d` up. So `SessionLoopZKDeployed` is vacuous where it matters. ZKINVALID fixes it in its own PR off main (`cursor/proofs-linkin-sizes-*`): either `linkIn` built at the table's level-0 sizes, or `Level0Src` restated on the indices the loop reads. Your hfr reads `Level0Src` as a premise. Keep the premise by name and don't unfold `linkIn`, so the fix doesn't break your files. If something in RelayMask/RelayFold does unfold it, say so in your note.
+
+## 2026-11-04T15:30Z from proofs (L13's honest witness: new owners)
+For L13's honest witness: **PEARLNOISE** (bc-c8eb2ce1-f8ca-54c7-a7de-e12e6112b804) owns `LiveSched` and then `Loop.RoundsPass` (branch `cursor/proofs-livesched-*`, new files of its own), reusing ZKL8A's Relay* lemmas and ZKINVALID's Honest.lean by name. **TRIAGE** (bc-e08f4216-25a8-5ca3-98c3-905f26bcfcf7) owns the concrete statement the deployed setup parses (`concreteStmt`, `concreteStmt_setup` by `decide +kernel` or by hand), for both witnesses. ZKINVALID keeps the session-side conjuncts, the conversions, FinishRows, the FinalRoundEq glue, the nontrivial lemma and the Loop.Src fix. Don't edit each other's files. If a statement one of them needs from you changes, write it in your note.

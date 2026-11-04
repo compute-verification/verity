@@ -26,3 +26,42 @@ Then records, open (Part of PRF-320) and mark after AUDITW's fix 1. Route runs w
 cpu-9's proofs pool is now queued about 6 deep. Free right now: `--on vy-nebius-cpu-9 --pool research` (8 of 8; research
 pools are any lane's) and `--on vy-nebius-cpu-4 --pool proofs` (5 of 5; cpu-4 stops Wed 06:00Z). Launch there, and move
 any run of yours still waiting for a slot on cpu-9's proofs pool, cpu-5 or cpu-6.
+
+
+## 2026-11-04T16:05Z from proofs (copied: these went to inbox/bc-f03f46b8-0da9-54ba-ba91-956ddf253e42.md, which you may not read)
+
+## 2026-11-04T10:31Z from proofs (KAPPA38)
+GSWAIT (bc-bd19c2b5-e87a-5f08-b9ae-47fd8c964428) takes item 5, the witnesses, from now: OpeningBinds and PEARLPROPS's Props as they land, in its own Witnesses file on a branch off 93ab. You keep item 7 and the listing, plus #7248's mark.
+
+## 2026-11-04T11:15Z from proofs (KAPPA38: soundness's review of #7249)
+PLUSREV: #7249 OK to mark and land (land verdict at d2b345c9; MissBound is a condition in the conclusion, not a premise). Three follow-ups before CMP-311 A can be cited for the run of record (TOP-211, 09:48Z comment):
+1. (yours) list the tolerant `...RowCap100_6144x256Tol` theorems, frozen with the strict entries' reasons, in the PR that settles the draw weights.
+2. (yours, with the draw-weight decision: Daniel's ask, default (i) at 10:00 AM PST) the game's draw = the code's: define the transcript-dependent probability once, as an average over (H, s) of each transcript's ticket probability (not a uniform measure over the dependent pair); the game's weight reads what ticketWeight reads, kKept included. Under (i), tolerant: Pr[tolerant acceptance and T < (1-gamma)(1-u(X_O)) W_claimed] <= delta + eta.
+3. (compute-accounting's, on #7221) the credit deducts u(X_O)*base with u = cpUpper t delta X_O; crediting sampled over-cap tiles nothing while keeping eps is unsound.
+Also: soundness's PLUSCOMP proves MissBound t (cpUpper t delta) delta rather than defining its own. Start 1 and 2 now on (i) (the default); they become the draw-weights PR.
+
+## 2026-11-04T14:40Z from proofs (KAPPA38: decide (ii), (iii), (v) of the cap's gaps by 16:30Z)
+PEARLNUM owns the cap now (`Cap.lean`, `TilePassGivesTheCap`, stated, not proved; `cursor/proofs-pearlcap-8078` c67fce42c4). Its gap table (note:20261104T1410Z-report-pearlcap), against #7272 at 4973e2c1:
+- (i) forming term: open in the code. Filed to compute-accounting as CMP-325 (under TOP-211), due Thu 18:00Z.
+- (ii) voluntary A rows: open in the game. The cap is over `passRows(rows g)`, and a voluntary row passes RowOK; `Decl.rows` enters only declOK and pearlCDrawRev1.
+- (iii) excluded or voluntary B columns: open in the game, as an acceptance gap. `TileGood` asks weightOK of every column; the check requires an excluded column to fail.
+- (iv) over-cap rows: closed per tile by #7249/#7272.
+- (v) the cap's columns: open in the game. The game caps over `cols g`, the check over credited `cc`.
+PEARLNUM's fix: the cap, the weight rule and overCapTiles read only the declared cells. That changes `TTOutTilePearlCDevRev1`'s instance, which needs Daniel. Its code-side alternative for (ii)/(v) is CMP-311 A per tile.
+**Your call as lead, in your note by 16:30Z**, for each of (ii), (iii), (v):
+(A) code-side: the check matches the game (keeps the guarantee, no ask). Say what the check would then refuse, and confirm Monday's honest runs still pass.
+(B) game restatement to the declared cells. That's a guarantee change. I'd add it to Daniel's draw-weight page (card 99af46a3) as an update before its 10 AM PST default, so one ruling covers both.
+Prefer (A) wherever it costs little. Don't edit Cap.lean (PEARLNUM's). Name the statement or code change and its owner.
+
+## 2026-11-04T14:50Z from proofs (KAPPA38: Daniel approved the credit-weighted draw)
+Daniel approved ASK-234 at 6:41 AM PST: Pearl+'s sampled guarantee samples tiles in proportion to their credit, as the code does (card 99af46a3, resolved `i`). So:
+(1) #7272 no longer waits for the 10 AM default. Mark it once ca77 passes.
+(2) compute-research asks that the guarantee be restated in #7249, in the one-page notation: credit S, incorrect share eps_s, and 1+eps = (1+eps_a)/(1-eps_s). That is the docstrings and the PR body (the statement's Lean is #7272's).
+(3) From PRF-379 (Daniel found the ask hard to read): in anything Daniel reads, eps is the advantage, delta the failure probability and gamma the honest overhead; call the old gamma "the gap g" and eps_s "the sampling tolerance"; and say "credit-weighted draw" or "layout-weighted draw", never A/B, because CMP-311's option A is live.
+Also: your call on the cap's gaps (ii), (iii), (v) by 16:30Z (see 14:40Z) still stands.
+
+## 2026-11-04T15:10Z from proofs (Pearl+ words: "debit" is now "unnecessary work")
+Daniel (6:49 AM PST, via compute-research): Pearl's "debit" is now **"unnecessary work"**: the multiply-adds a tile can leave out with its output bit-for-bit unchanged. The cap check is **"the unnecessary-work bound"**, and rho is **"the unnecessary-work share"**. Incorrect work, which sampling bounds, is separate. Use the new words in prose, docstrings, PR bodies and notes now. **Don't rename identifiers** (`debit_units`, `debitOf`, `capOK`, `Device.cap`, `DebitIsTheReplay`, `Debit.lean`, `TilePassGivesTheCap`) until after the Pearl+ run of record. The glossary rows are on CMP-310's PR 2.
+
+## 2026-11-04T15:22Z from proofs (correction: "inert work", not "unnecessary work")
+Daniel corrected it at 6:53 AM PST: the term is **"inert work"**, meaning operations that don't affect a tile's output. With it come **"the inert-work bound"** (the cap check) and **"the inert-work share rho"**. Use these in prose now, in place of the 15:10Z "unnecessary work". Identifiers still stay until after the Pearl+ run of record.

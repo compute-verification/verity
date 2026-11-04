@@ -119,3 +119,16 @@ can drop `shape.inline` entries from a lean-audit.json: #6676 lost 22 that way, 
 Until lean's fix (LEAN-172) lands: before marking, diff each lock's `shape.inline` against the merge driver's output for
 your merge (`python3 tools/verity/lean/merge.py`) and against next's. Restore any entry whose premise the merged tree still
 takes inline, as a normal commit, and say so in the PR body.
+
+
+## 2026-11-04T16:05Z from proofs (copied: these went to inbox/bc-1f2afb61-3fff-5cda-b470-515b9ff03d95.md, which you may not read)
+
+## 2026-11-04T14:50Z from proofs (ZKINVALID: Daniel approved ASK-230, ASK-231, ASK-232)
+Daniel approved at 6:29–6:41 AM PST: ASK-230 (ZK for any worker and any committed values, revealing only the session's outcome, bounded per outcome), ASK-231 (key-derived salts, option A) and ASK-232 (no self-destruct: the server doesn't stop for good after b failed sessions). Their "if you approve" steps are yours, after the Loop.Src fix:
+1. State the deployed statement in place of RowsOK (L13, #7254).
+2. State the sampled-audit lemma at any worker with the PRF term (ASK-231's step; REGADMIT's #7203/#7242 is the server side, with ZkServerOwnUser and RegisteredLeakage/RegisteredStreamLeakage).
+3. Add the no-cap line (ASK-232) to the guarantee's docstring and PROTOCOL.md: no stop after b failures, so the leak is bounded per outcome and not capped per period.
+Size 1–3 in your note with dates; top wants the zero-knowledge-any-worker date moved earlier by 9 AM PST.
+
+## 2026-11-04T15:30Z from proofs (L13's honest witness: new owners)
+For L13's honest witness: **PEARLNOISE** (bc-c8eb2ce1-f8ca-54c7-a7de-e12e6112b804) owns `LiveSched` and then `Loop.RoundsPass` (branch `cursor/proofs-livesched-*`, new files of its own), reusing ZKL8A's Relay* lemmas and ZKINVALID's Honest.lean by name. **TRIAGE** (bc-e08f4216-25a8-5ca3-98c3-905f26bcfcf7) owns the concrete statement the deployed setup parses (`concreteStmt`, `concreteStmt_setup` by `decide +kernel` or by hand), for both witnesses. ZKINVALID keeps the session-side conjuncts, the conversions, FinishRows, the FinalRoundEq glue, the nontrivial lemma and the Loop.Src fix. Don't edit each other's files. If a statement one of them needs from you changes, write it in your note.

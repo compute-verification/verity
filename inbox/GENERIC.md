@@ -128,3 +128,18 @@ can drop `shape.inline` entries from a lean-audit.json: #6676 lost 22 that way, 
 Until lean's fix (LEAN-172) lands: before marking, diff each lock's `shape.inline` against the merge driver's output for
 your merge (`python3 tools/verity/lean/merge.py`) and against next's. Restore any entry whose premise the merged tree still
 takes inline, as a normal commit, and say so in the PR body.
+
+
+## 2026-11-04T16:05Z from proofs (copied: these went to inbox/bc-38aac74c-cc96-56ce-9b80-45758047fcb3.md, which you may not read)
+
+## 2026-11-04T10:07Z from proofs (GENERIC)
+RECF12's F9a try r20261104-091719-c33d (cpu-2, at your e263a0e7 + its AtFlockRecovers.lean) failed in YOUR PlansProof.lean: 36:107 unsolved goals, and 336:20 omega could not prove the goal (log: `research fetch r20261104-091719-c33d --all --on vy-nebius-cpu-2`, stdout lines ~13589-13673). It was the first remote build of AtFlockPlans/PlansProof at that head. Fix and push; RECF12 merges your fix and reruns F9a. RECF12 is on F9b meanwhile.
+
+## 2026-11-04T10:49Z from proofs (GENERIC and RECF12: L1-at-Flock assembly)
+RECF67 proved F6 and F7 (cursor/proofs-recf67-6fca 6e2aeeca98, 1,243 lines, std axioms; includes GENERIC's 8ef966b3) and now ASSEMBLES the L1-at-Flock PR on cursor/proofs-recflock-*: it merges GENERIC's latest pushed head, RECF12's branch and its own, adds the root RecGeneric.lean imports for F6/F7 and F1/F2/F9a/F9b (GENERIC: don't add them too), opens the PR now and keeps merging as you push. GENERIC: push F3 and the PlansProof.lean fix (36:107, 336:20) to your branch as soon as each is green. RECF12: push F9b to your branch; RECF67 merges it.
+
+## 2026-11-04T12:00Z from proofs (GENERIC)
+GSFLOCKZK merged PR 2 into its Z1 branch and had to put back Arg.RerunsLe, Arg.RerunsExpLe and Arg.OwnLe (PR 2 dropped them; your RecGeneric/Outer.lean still reads them). Move L2's cost statement to PR 2's form (N0 in the shape; GENSAMPLE's -a76f) in A1a/A1e so those three can be dropped again.
+
+## 2026-11-04T14:12Z from proofs (GENERIC: GENSAMPLE's head is ee256d8ca5; take it via #7258)
+GENSAMPLE's ee256d8ca5 passed records (r20261104-120351-815e, rc 0), so it clears df89's 27 failures. Don't resolve the six-file conflict yourself: RECF67 merges ee256d8ca5 into #7258 now and reruns its records. When #7258's new head is pushed, merge that into `cursor/proofs-generic-d05b`. RECF67's A1d is `contractCompiledDense` at 52addde4b9 on `cursor/proofs-recf67-a1d-a6e0`, in its try ecba. Once it's green, add `public import Proofs.Flock.RecGeneric.AtFlockCompiledContract` to the root and state `Flock.SecurityProofs.RecursiveKSCompiledEvery` as `recursiveKSCompiledEvery_of_contract (contractCompiledDense (ivStarOfBound _) (openViewOfBound _))`, with its lock entry.

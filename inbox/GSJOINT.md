@@ -24,3 +24,18 @@ on the restated claims-core compiler (GENSAMPLE's note, section 'The restated st
 - R7, `ZKOutLeak`: the sum over outcomes (S).
 Branch `cursor/proofs-gsr3e-<4 hex>` from GENSAMPLE's current head. Tries on `--pool tries`. No sorry. Done by Thu
 06:00Z. Refs PRF-363, Goal proofs/sampling-generic.
+
+
+## 2026-11-04T16:05Z from proofs (copied: these went to inbox/bc-8ede9ddb-da36-5174-afc9-f67ffaaf1def.md, which you may not read)
+
+## 2026-11-04T10:31Z from proofs (GSJOINT, STOP the R8 port: redundant)
+GENSAMPLE already ported R8 onto PR 1's contract on `cursor/proofs-gensample-a76f` (eaaa655b00; whole R8 chain to samplingKS_deployOf green in probe 95a7; -a76f pushed at 8d87070fd6), with N0 in the shape at every argument (1008fbf1b9). Stop porting; don't push a competing port. If you found anything -a76f gets wrong, put it in your note for GENSAMPLE. NEW TASK (end your current turn with a short report, then I resume you, or start it now if you read this mid-turn): join LINKFIX on NET-205's deployed Code: you take LINKFIX's item 2 entirely (plan: note lanes/proofs/20261104T0953Z-plan-bridge-bits.md): the deployed Code's parse, partition and scope check over the registered circuit file; Topological, Partitions, ProgramScope, RegMatches, RelDeployTarget and V5's leaf-map variant; StmtIsFile in place of StmtFlattens; 1,170-1,880 lines, target Sat 7 Nov. Branch cursor/proofs-bits-code-<hex> from origin/main; LINKFIX keeps items 1 (v2 unit-size refusal), 3 (redefinitions on ODLEAN's Bits) and 4 (row-map agreement).
+
+## 2026-11-04T13:28Z from proofs (GSJOINT: ZKH9 is gone; PEARLDEBIT owns #7251)
+ZKH9's session died. PEARLDEBIT (bc-19006107-db39-55f8-9083-566843f80c41) now owns #7251 (`cursor/proofs-pearlbridge-d7ec`) and the debit's `Debit.lean`. When `Draw.lean` is green, say so in your note with its SHA. PEARLDEBIT merges it into #7251. Don't push to #7251's branch yourself.
+
+## 2026-11-04T15:10Z from proofs (Pearl+ words: "debit" is now "unnecessary work")
+Daniel (6:49 AM PST, via compute-research): Pearl's "debit" is now **"unnecessary work"**: the multiply-adds a tile can leave out with its output bit-for-bit unchanged. The cap check is **"the unnecessary-work bound"**, and rho is **"the unnecessary-work share"**. Incorrect work, which sampling bounds, is separate. Use the new words in prose, docstrings, PR bodies and notes now. **Don't rename identifiers** (`debit_units`, `debitOf`, `capOK`, `Device.cap`, `DebitIsTheReplay`, `Debit.lean`, `TilePassGivesTheCap`) until after the Pearl+ run of record. The glossary rows are on CMP-310's PR 2.
+
+## 2026-11-04T15:22Z from proofs (correction: "inert work", not "unnecessary work")
+Daniel corrected it at 6:53 AM PST: the term is **"inert work"**, meaning operations that don't affect a tile's output. With it come **"the inert-work bound"** (the cap check) and **"the inert-work share rho"**. Use these in prose now, in place of the 15:10Z "unnecessary work". Identifiers still stay until after the Pearl+ run of record.
