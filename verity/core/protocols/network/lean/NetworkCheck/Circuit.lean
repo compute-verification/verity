@@ -18,8 +18,7 @@ of their description (AGENTS.md "Design rules"), never per unit:
   laid out as C-Flock's decoder lays one out, within its resolution's walk (`NciCheck.Desc`), and topological.
 * **The wires** (`SampledProofs.Wires.check`), with the templates' rows read off their Definitions (`templateOf`,
   `interface.layout`); each wire's reader row is its writer's output field leaf for leaf, in leaves of one width
-  (`leavesOk`), and each leaf of a wired output field is a gate with operands, at member 0 (`writersComputed`): no
-  input passed through and no constant, so a wired gate's writer is a gate its template computes.
+  (`leavesOk`). A writer's leaf may be a constant or an input its template passes through.
 * **The declarations** (`declRects`): the registered parameters, tables, reads, table reads and openings well formed
   for the templates (`interface.check_inputs`), and no row filled twice by a wire or a declaration (`apart`). A record
   that lists its members, declares ingress, or registers values or formats beside its reads is refused.
@@ -350,25 +349,6 @@ def leavesOk (P : Prog) (r : Record) : Bool :=
       | _, _ => false
     | _, _ => false
 
-/-- Leaf `l` of root template node `k`'s return, at member 0, is a gate with operands: neither an input gate (a
-parameter's leaf passed through) nor a constant. -/
-def computedLeaf (P : Prog) (k l : Nat) : Bool :=
-  match Flock.Program.resolve P (P.child P.rootScope k 0) ((templateDef P k).body.ret.get l) with
-  | .ok g => match P.gate g with
-    | .ok (_, ops, _) => !ops.isEmpty
-    | .error _ => false
-  | .error _ => false
-
-/-- **Every wired output is computed**: each leaf of each output field a wire reads is a gate with operands
-(`computedLeaf`), at the writer template's member 0. Member 0 stands for every member: each runs the template's body,
-whose return names the same nodes and parameters, and under `populationOk` each member's parameters are input gates. -/
-def writersComputed (P : Prog) (r : Record) : Bool :=
-  (r.wiring.wires.map fun w => (w.writer, w.out)).eraseDups.all fun (tid, o) => match nodeOf P r tid with
-    | some k => match fieldOf (templateDef P k).ret o with
-      | some (t, off, _) => (List.range t.leaves).all fun l => computedLeaf P k (off + l)
-      | none => false
-    | none => false
-
 /-! ## The declarations -/
 
 /-- The rows a wire or declaration fills: reader template `reader`'s port `port`, units `[lo, hi)`, rows `[r0, r1)`. -/
@@ -665,10 +645,12 @@ def refusalWhy (e : SampledProofs.Wires.Refusal) : String :=
 
 /-- **The circuit check**: record `record` read against Program `P` (`recordOf`) is its population program
 (`populationOk`); its wires pass `SampledProofs.Wires.check`, each reader row its writer's output field leaf for leaf
-(`leavesOk`) and each wired output computed (`writersComputed`); its declarations are well formed and fill no row a
+(`leavesOk`); its declarations are well formed and fill no row a
 wire or another declaration fills (`declRects`, `apart`); and `order` ranks every wire's writers below its readers
-(`ordered`). `pins` are the registered parameters the verifier pinned whose window root the audit's registration
-records as the pin, `{param: root}`. On acceptance, the record's `Counts`. -/
+(`ordered`). A writer leaf may be a constant or an input its template passes through: the order ranks the chain's
+writers below its readers, so it ends at a computed gate, a constant, or a free or registered input. `pins` are the
+registered parameters the verifier pinned whose window root the audit's registration records as the pin,
+`{param: root}`. On acceptance, the record's `Counts`. -/
 def check (P : Prog) (record order pins : Json) : Except String Counts := do
   let r ← recordOf P record
   unless populationOk P r do
@@ -681,9 +663,6 @@ def check (P : Prog) (record order pins : Json) : Except String Counts := do
     | .error e => throw (refusalWhy e)
   unless leavesOk P r do
     throw "wires: a reader row is not its writer's output field leaf for leaf, in leaves of one width"
-  unless writersComputed P r do
-    throw "wires: a wired output field has a leaf that is an input passed through or a constant, no gate its template \
-      computes"
   let rects ← declRects r.wiring r.registered
   unless apart rects (r.wiring.wires.map wireRect) do
     throw "the circuit's inputs: a row filled by two of its wires, registered reads, table reads or openings"
