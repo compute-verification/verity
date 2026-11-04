@@ -9,7 +9,7 @@
                                                                the readers an older record lists
 
 `.gitattributes` names this driver for every `lean-audit.json`, and git runs it when both sides changed the file. A record is
-a map of entries by name: the guarantees, the modules under `reads`, the assumptions, the dependencies, and the policy's own
+a map of entries by name: the guarantees, the modules under `reads`, the assumptions, the open premises, the dependencies, and the policy's own
 sections. Each side's change to an entry (added, changed or removed) applies. Under `reads`, which two branches adding
 guarantees that read one module both change, the module's definitions merge the same way, and its digest is recomputed
 from the merged definitions (`audit.module_digest`). A side written before guarantees were called that (`pins`) is read
@@ -19,14 +19,15 @@ is read without them, so a branch from before the lock dropped them merges with 
 What the build determines never refuses: the records `check.py --update` writes from it and a train's Lean check
 (`--regenerate`) rewrites on the merged tree whenever they differ (`audit.RECORD_DIFFERENCE`, `audit.regenerated`). Those are
 a guarantee's record (signature, named assumptions, type hash: restated on both sides, the merged tree's statement decides
-it), each `reads` group (which definitions the guarantees read, and each one's hash) and an assumption's `digest`.
+it), each `reads` group (which definitions the guarantees read, and each one's hash) and an assumption's or open
+premise's `digest`.
 Where the sides disagree the merge takes the union (a definition the other side changed while one side stopped reading
 it) or ours' value (a hash or a record both sides changed differently), and names each in one line on stderr. A definition
 one side reads nowhere while the other kept it as the base had it is dropped (`gone`): none of that side's guarantees
 reads it, so in the merged tree only the other side's new or restated guarantees can, and one moved to another module
 leaves the old one (`moved`); a group left without definitions is dropped. Whether a guarantee is listed is
 not the build's: one side's removal applies over the other's change to its record. What only a person writes still
-refuses when both sides changed it differently: an `owner`, a `shape` or `frozen` entry (a `shape.inline` entry is one
+refuses when both sides changed it differently: an `owner`, an open premise's `issue` or `due`, a `shape` or `frozen` entry (a `shape.inline` entry is one
 premise of a guarantee, so two sides that each add or drop premises of one guarantee merge: `DEEPER`; a premise both
 sides give different reasons keeps ours', since the check asks only that one be given), a dependency's
 revision, a policy entry (a layer's field, a `compile_time` digest). A `shape.inline` premise one side dropped while the
@@ -101,7 +102,7 @@ CAP_ENTRY = re.compile(r'\s*"([^"\\]*)"\s*:\s*(\d+)\s*')
 #: where a merged string array wraps
 WIDTH = 120
 #: the sections `check.py --update` writes in sorted order; the others keep ours' order, with theirs' new entries after it
-SORTED = {"assumptions", "guarantees", "reads", "dependencies", "compile_time"}
+SORTED = {"assumptions", "open", "guarantees", "reads", "dependencies", "compile_time"}
 #: sections whose entries are maps merged entry by entry in turn (`upstream`'s `scan` and `watch`, `shape`'s `properties`,
 #: `frozen` and `conjectures`, `trees`' `except`)
 NESTED = {"upstream", "shape", "claims", "trees"}
@@ -236,21 +237,24 @@ def guarantees(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) 
     return out
 
 
-def assumptions(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) -> dict:
-    """The named assumptions entry by entry, each one's `owner` (hand-written) apart from its `digest` (the build's: the hash
-    its `reads` record holds), which merges as `derived`.  An entry one side removed and the other changed is kept: the
-    train's Lean check drops it when no guarantee of the merged tree reads it (`assumptions.unread`)."""
+def assumptions(o: dict, a: dict, b: dict, why: list[str], candidate: list[str], section: str = "assumptions") -> dict:
+    """The named assumptions (or, ``section`` `open`, the open premises) entry by entry, each one's hand-written fields
+    (`owner`; an open premise's `issue` and `due` too) apart from its `digest` (the build's: the hash its `reads` record
+    holds), which merges as `derived`.  An entry one side removed and the other changed is kept: the train's Lean check
+    drops it when no guarantee of the merged tree reads it (`assumptions.unread`, `open.unread`)."""
     out = {}
-    for k in keys("assumptions", a, b):
+    for k in keys(section, a, b):
         x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
         if not all(isinstance(r, dict) for r in (x, y, z) if r is not MISSING):
-            v = one(f"assumptions[{k}]", x, y, z, why)
+            v = one(f"{section}[{k}]", x, y, z, why)
         elif MISSING in (y, z):
-            v = derived(f"assumptions[{k}]", x, y, z, candidate)
+            v = derived(f"{section}[{k}]", x, y, z, candidate)
         else:
-            d = derived(f"assumptions[{k}].digest", owned(x, "digest"), owned(y, "digest"), owned(z, "digest"), candidate)
-            who = one(f"assumptions[{k}].owner", owned(x), owned(y), owned(z), why)
-            v = ({} if who is MISSING else {"owner": who}) | ({} if d is MISSING else {"digest": d})
+            v = {}
+            for f in ("owner", "digest", "issue", "due"):
+                w = (derived if f == "digest" else one)(f"{section}[{k}].{f}", owned(x, f), owned(y, f), owned(z, f),
+                                                        candidate if f == "digest" else why)
+                v |= {} if w is MISSING else {f: w}
         if v is not MISSING:
             out[k] = v
     return out
@@ -412,8 +416,8 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
             v = reads({} if o is MISSING else o, {} if a is MISSING else a, {} if b is MISSING else b, why, candidate, records)
         elif k == "guarantees" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = guarantees({} if o is MISSING else o, a, b, why, candidate)
-        elif k == "assumptions" and all(isinstance(s, dict) for s in (o, a, b) if s is not MISSING):
-            v = assumptions(*({} if s is MISSING else s for s in (o, a, b)), why, candidate)
+        elif k in ("assumptions", "open") and all(isinstance(s, dict) for s in (o, a, b) if s is not MISSING):
+            v = assumptions(*({} if s is MISSING else s for s in (o, a, b)), why, candidate, k)
             v = MISSING if not v and MISSING in (a, b) else v
         elif k in JUDGED and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = judged(k, {} if o is MISSING else o, a, b, candidate)

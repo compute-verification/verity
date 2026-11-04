@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Verity's security status as one canonical document, `verity/status/v0`, for the site's status page: every guarantee a
-`lean-audit.json` lists, proved outright or resting on named assumptions, each lock's named assumptions, and the results of
+`lean-audit.json` lists, proved outright or resting on premises, each lock's listed premises (its named assumptions,
+`kind` `assumption`, and its open premises, `kind` `open` with the `issue` and `due` date that discharge them), and the results of
 record the tree's data files name. Stdlib only; it reads the tree at one commit through git, never the working files.
 
     status_export.py --root REPO [--rev REV] [--facts DIR] --out FILE
@@ -108,7 +109,7 @@ def premised(lock: dict, sources: list[dict]) -> dict[str, list[str] | None]:
     it}: each premise headed by a constant of an `Assumptions` module or of a module the repository builds, and one that is
     an alias of listed assumptions as those (check.py's `judge` and `assumption_records`)."""
     own = set().union(*map(own_modules, sources)) if sources else set()
-    listed = set(lock.get("assumptions") or {})
+    listed = set(lock.get("assumptions") or {}) | set(lock.get("open") or {})
     heads: dict[str, set[str] | None] = {}
     unfolds: dict = {}
     for name, rec in sorted((lock.get("guarantees") or {}).items()):
@@ -144,9 +145,9 @@ def lean_status(locks: dict[str, dict], facts: Path | None) -> tuple[list[dict],
     packages, guarantees, assumptions = [], [], []
     for path, lock in sorted(locks.items()):
         pkg = package_of(path)
-        gs, named = lock.get("guarantees") or {}, lock.get("assumptions") or {}
-        named = named if isinstance(named, dict) else {}
-        packages.append({"path": pkg, "guarantees": len(gs), "assumptions": len(named)})
+        gs, named, opened = lock.get("guarantees") or {}, lock.get("assumptions") or {}, lock.get("open") or {}
+        named, opened = (x if isinstance(x, dict) else {} for x in (named, opened))
+        packages.append({"path": pkg, "guarantees": len(gs), "assumptions": len(named), "open": len(opened)})
         prem = premised(lock, facts_sources(facts, pkg)) if facts else {}
         for name, rec in gs.items():
             read = prem.get(name)
@@ -154,8 +155,11 @@ def lean_status(locks: dict[str, dict], facts: Path | None) -> tuple[list[dict],
             guarantees.append({"name": name, "package": pkg, "owner": rec.get("owner") or "",
                                "statement": list(rec.get("signature") or []), "assumptions": got,
                                "premises_read": read is not None, "status": status_of(got, read is not None)})
-        assumptions += [{"name": a, "package": pkg, "owner": (r or {}).get("owner") or "", "digest": (r or {}).get("digest")}
-                        for a, r in named.items()]
+        assumptions += [{"name": a, "package": pkg, "owner": (r or {}).get("owner") or "", "digest": (r or {}).get("digest"),
+                         "kind": "assumption"} for a, r in named.items()]
+        assumptions += [{"name": a, "package": pkg, "owner": (r or {}).get("owner") or "", "digest": (r or {}).get("digest"),
+                         "kind": "open", "issue": (r or {}).get("issue"), "due": (r or {}).get("due")}
+                        for a, r in opened.items()]
     key = lambda e: (e["package"], e["name"])  # noqa: E731
     return sorted(packages, key=lambda p: p["path"]), sorted(guarantees, key=key), sorted(assumptions, key=key)
 

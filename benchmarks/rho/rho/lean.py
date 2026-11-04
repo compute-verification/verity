@@ -1,7 +1,7 @@
 """Where a citation stands, read from the locks: what a bound's or a cut's status is, rather than what it says.
 
 `status(name)` is `proved` when a lock lists a proof of the statement `name` (a guarantee whose signature ends in
-`: name`), `assumption` when a lock lists `name` as a named assumption, `draft` for a paper statement (`draft:` ids, not
+`: name`), `assumption` when a lock lists `name` as a premise (a named assumption, or an open one), `draft` for a paper statement (`draft:` ids, not
 yet in Lean), `evidence` for a run or a finding (`art:`, `note:`), and `absent` for a Lean name no lock lists. An
 argument is only as good as its weakest citation (`weakest`; evidence doesn't weaken it).
 """
@@ -28,6 +28,7 @@ def _locks() -> tuple[frozenset[str], frozenset[str]]:
         for entry in lock["guarantees"].values():
             proved.update(s.rsplit(" : ", 1)[-1] for s in entry["signature"])
         assumed.update(lock["assumptions"])
+        assumed.update(lock.get("open") or {})
     return frozenset(proved), frozenset(assumed)
 
 

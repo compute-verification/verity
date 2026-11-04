@@ -138,6 +138,13 @@ def test_what_only_a_person_writes_still_refuses_beside_derived_candidates():
         return rec | {"assumptions": {"P.Hyp": {"owner": who, "digest": "a" * 64}}}
     assert M.merge(hyp(base, "@lean"), hyp(ours, "@proofs"), hyp(theirs, "@circuits"))[1] == [
         "assumptions[P.Hyp].owner: changed on both sides, differently"]
+    def opened(rec, issue, due="2026-11-30"):
+        return rec | {"open": {"P.Sound": {"owner": "@lean", "digest": "a" * 64, "issue": issue, "due": due}}}
+    assert M.merge(opened(base, "LEAN-1"), opened(ours, "LEAN-2"), opened(theirs, "LEAN-3"))[1] == [
+        "open[P.Sound].issue: changed on both sides, differently"]
+    merged, why = M.merge(opened(base, "LEAN-1"), opened(ours, "LEAN-2"), opened(theirs, "LEAN-1", "2026-12-31"))
+    assert why == [] and merged["open"]["P.Sound"] == {"owner": "@lean", "digest": "a" * 64, "issue": "LEAN-2",
+                                                       "due": "2026-12-31"}, "one side's issue, the other's due date"
 
 
 def test_an_owner_merges_apart_from_the_statement():

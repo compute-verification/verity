@@ -2,9 +2,11 @@
 guarantee says waits on nobody, and he is shown it.
 
 The spec is what each package's `lean-audit.json` records: every guarantee's statement (its printed signature and type
-hash, and the named assumptions it rests on, its `premises`: a change to those is shown), every definition the statements
-read (its hash, under `reads`), every named assumption no `reads` record holds
-(its `digest` under `assumptions`, of it and the definitions it reads: one that gains a digest is shown as recorded), what
+hash, and the premises it rests on, its `premises`: a premise it gains or drops is shown), every definition the statements
+read (its hash, under `reads`), every listed premise no `reads` record holds (its `digest` under `assumptions` or `open`,
+of it and the definitions it reads: one that gains a digest is shown as recorded), the named assumptions (`assumptions`:
+one added or removed is shown, and so is a premise that becomes one) and the open premises (`open`: one listed, one
+discharged, and a new issue or due date are shown; an assumption that becomes open is tallied), what
 the shape rule exempts (`shape.frozen`:
 an entry added there is shown with its reason), and the compiled code allowed on a verifier's path (`verifier.allow`: an
 entry added there is shown). Between the main the push replaced and the one it
@@ -69,19 +71,36 @@ def _definitions(doc: dict) -> dict[str, tuple[str | None, str]]:
     return out
 
 
+def _listed(doc: dict) -> dict[str, tuple[str, dict]]:
+    """{premise: (its section, `assumptions` or `open`, its entry)} over the record's listed premises."""
+    out: dict[str, tuple[str, dict]] = {}
+    for k in ("open", "assumptions"):
+        section = doc.get(k) or {}
+        if isinstance(section, dict):
+            out |= {n: (k, r if isinstance(r, dict) else {}) for n, r in section.items()}
+    return out
+
+
 def _assumptions(doc: dict) -> dict[str, str | None]:
-    """{named assumption: its record's `digest`, None without one} for the entries no `reads` record holds as a definition:
+    """{listed premise: its record's `digest`, None without one} for the entries no `reads` record holds as a definition:
     a premise whose statement and what it reads only its own digest records (one under `reads` shows as a definition)."""
-    a = doc.get("assumptions") or {}
     held = _definitions(doc)
-    return {n: (r or {}).get("digest") for n, r in a.items() if n not in held} if isinstance(a, dict) else {}
+    return {n: r.get("digest") for n, (_, r) in _listed(doc).items() if n not in held}
 
 
 def _premises(rec: dict) -> list[str] | None:
-    """A guarantee record's `premises`, the named assumptions its statement rests on; None in a record written before
-    records held them."""
+    """The premises a guarantee's record says its statement rests on, named assumptions and open premises alike (one
+    that moves between them is no change to what the statement takes); None in a record written before records held
+    them."""
     p = rec.get("premises")
-    return [x for x in p if isinstance(x, str)] if isinstance(p, list) else None
+    p = {"assumptions": p} if isinstance(p, list) else p
+    if not isinstance(p, dict):
+        return None
+    return sorted({x for k in ("assumptions", "open") for x in (p.get(k) or []) if isinstance(x, str)})
+
+
+def _ticket(r: dict) -> str:
+    return f"{r.get('issue')}, due {r.get('due')}"
 
 
 def _frozen(doc: dict) -> dict[str, str]:
@@ -124,9 +143,12 @@ def _package(path: str) -> str:
 def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) -> list[tuple[str, str, str]]:
     """(package, kind, text) of every change from the records ``olds`` to ``news`` ({record path: record}), matched by name
     and type hash across all of them, so a guarantee or definition that moved from one record to another is no change.
-    The kinds are `changed`, `removed`, `premises` (the named assumptions a guarantee's record says it rests on changed;
-    `premised`, text "", for a record that lists them for the first time), `definition`, `assumption` (an assumption's digest changed under its name),
-    `recorded` (an assumption listed before, with a digest now), `frozen` (an entry added to `shape.frozen`, the guarantees and
+    The kinds are `changed`, `removed`, `premises` (the premises a guarantee's record says it rests on changed;
+    `premised`, text "", for a record that lists them for the first time), `definition`, `assumption` (a listed premise's
+    digest changed under its name), `recorded` (a premise listed before, with a digest now), `assumed` (a named assumption
+    added, or an open premise now one), `unassumed` (a named assumption no longer listed), `open` (an open premise
+    listed), `opened` (text "": a named assumption now open), `discharged` (an open premise no longer listed),
+    `ticket` (an open premise's issue or due date changed), `frozen` (an entry added to `shape.frozen`, the guarantees and
     statements exempt from the shape rule, matched by name across records like a guarantee), `conjecture` (an entry of
     `shape.conjectures` added or with a new status), `compiled` (an entry added to `verifier.allow`) and `new`, in that order (what an existing guarantee says comes first,
     so a DM cut at `LIMIT` loses new guarantees' signatures before anything else), and `moved` (text ""): a guarantee now in
@@ -169,17 +191,35 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
         for name, h in _assumptions(d).items():
             aa.setdefault(name, set()).add(h)
     for p, d in news.items():
+        sections = _listed(d)
         for name, h1 in sorted(_assumptions(d).items()):
             before = {h for h in aa.get(name, ()) if h is not None}
             if h1 is None or name not in aa or h1 in before:
                 continue
+            what = "open premise" if sections[name][0] == "open" else "assumption"
             if not before:
-                out.append((_package(p), "recorded", f"• assumption `{name}` recorded: its statement and the definitions it "
+                out.append((_package(p), "recorded", f"• {what} `{name}` recorded: its statement and the definitions it "
                                                      f"reads are now digested in its record"))
             elif not sources:
                 out.append((_package(p), "rehashed", ""))
             else:
-                out.append((_package(p), "assumption", f"• assumption `{name}` changed: its statement or a definition it reads"))
+                out.append((_package(p), "assumption", f"• {what} `{name}` changed: its statement or a definition it reads"))
+    la = {n: (_package(p), e) for p, d in olds.items() for n, e in _listed(d).items()}
+    lb = {n: (_package(p), e) for p, d in news.items() for n, e in _listed(d).items()}
+    for n, (p, (kind, r)) in sorted(lb.items()):
+        was = la[n][1] if n in la else None
+        if kind == "assumptions" and (was is None or was[0] == "open"):
+            out.append((p, "assumed", f"• named assumption `{n}` listed" + (f" (was open: {_ticket(was[1])})" if was else "")))
+        elif kind == "open" and was is None:
+            out.append((p, "open", f"• open premise `{n}` listed ({_ticket(r)})"))
+        elif kind == "open" and was[0] == "assumptions":
+            out.append((p, "opened", ""))
+        elif kind == "open" and _ticket(r) != _ticket(was[1]):
+            out.append((p, "ticket", f"• open premise `{n}`: {_ticket(r)} (was {_ticket(was[1])})"))
+    for n, (p, (kind, r)) in sorted(la.items()):
+        if n not in lb:
+            out.append((p, "unassumed", f"• named assumption `{n}` no longer listed") if kind == "assumptions" else
+                       (p, "discharged", f"• open premise `{n}` discharged: no longer listed ({_ticket(r)})"))
     fa = {n for d in olds.values() for n in _frozen(d)}
     out += [(_package(p), "frozen", f"• frozen `{n}` (doesn't have the shape yet): {why}")
             for p, d in news.items() for n, why in sorted(_frozen(d).items()) if n not in fa]
@@ -214,13 +254,17 @@ def _tally(kinds: list[str]) -> str:
                      if k in kinds])
     g = ", ".join(([g] if g else []) + ([f"{kinds.count('moved')} moved here"] if "moved" in kinds else []))
     d = ", ".join(f"{kinds.count(k)} {w}" for k, w in (("definition", "changed"), ("rehashed", "rehashed")) if k in kinds)
-    a = ", ".join(f"{kinds.count(k)} {w}" for k, w in (("assumption", "changed"), ("recorded", "recorded")) if k in kinds)
+    a = ", ".join(f"{kinds.count(k)} {w}" for k, w in (("assumption", "changed"), ("recorded", "recorded"),
+                                                       ("assumed", "named"), ("unassumed", "no longer named"),
+                                                       ("open", "open listed"), ("opened", "now open"),
+                                                       ("discharged", "discharged"), ("ticket", "re-ticketed"))
+                  if k in kinds)
     f = ", ".join(f"{kinds.count(k)} {w}" for k, w in (("frozen", "frozen"), ("conjecture", "conjectures marked"))
                   if k in kinds)
     f = f"shape: {f}" if f else ""
     v = f"verifier: {kinds.count('compiled')} allowed" if "compiled" in kinds else ""
     return "; ".join(([f"guarantees: {g}"] if g else []) + ([f"definitions: {d}"] if d else [])
-                     + ([f"assumptions: {a}"] if a else []) + ([f] if f else []) + ([v] if v else []))
+                     + ([f"premises: {a}"] if a else []) + ([f] if f else []) + ([v] if v else []))
 
 
 def web(repo: Path, remote: str) -> str | None:

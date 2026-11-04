@@ -76,7 +76,7 @@ def test_a_guarantee_is_proved_only_when_its_premises_were_read_and_name_no_assu
         "A.SecurityProofs.Unread": ("unknown", [], False),
         "A.SecurityProofs.Moved": ("unknown", [], False),
     }
-    assert doc["packages"] == [{"path": "Sec", "guarantees": 6, "assumptions": 2}]
+    assert doc["packages"] == [{"path": "Sec", "guarantees": 6, "assumptions": 2, "open": 0}]
     assert [g["name"] for g in doc["guarantees"]] == sorted(LOCK["guarantees"])
     assert [(a["name"], a["owner"]) for a in doc["assumptions"]] == [("A.Assumptions.One", "@lean"), ("A.Assumptions.Two", "@proofs")]
 
