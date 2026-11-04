@@ -105,7 +105,7 @@ theorem stepWith_ivstar (S : Server) (V : Verifier Coin) (ans : Coin → Msg) (H
     · simp only [List.length_append, List.length_singleton]
       omega
     · simp only [List.length_append, List.length_singleton, List.append_nil, List.range'_succ, List.map_cons,
-        List.append_assoc, List.singleton_append, List.cons_append, List.nil_append]
+        List.append_assoc, List.cons_append, List.nil_append]
 
 /-- **`Open(V, S)`'s run on replayed messages, in closed form**: at `k ≥ 1` rounds, each message before the last
 answered by its coin, then the last answered by the decision on all `k` (`decAt`), whose calls are the run's. -/
@@ -244,6 +244,10 @@ theorem decAt_acc (S : Server) (V : Verifier Coin) (ans : Coin → Msg) (H : Msg
     simp [List.getElem?_eq_getElem hj]
   obtain ⟨h1, h2⟩ := allOC_true H _ hok _ hmem
   exact ⟨h1, fun e he => hokl e (h2 e he)⟩
+
+theorem coinSeq_iv (S : Server) (V : Verifier Coin) (ans : Coin → Msg) (x : Msg)
+    (r : Fin ((S.IVStar V ans).k x) → Coin) : @coinSeq Coin _ ((S.IVStar V ans).k x) r = @coinSeq Coin _ (V.k x) r :=
+  rfl
 
 /-- `Open(V, S)`'s answer at round `j` of a run it accepts at the coins `r`: the round's coin before the last, then
 acceptance. -/
