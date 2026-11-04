@@ -232,7 +232,8 @@ with `b` the audit's bound on faulty proof blocks at its δ (one-stage's `bound`
 sample leaves possible; `drawn` is the sample's `k`, or its `Σ k` stratified),
 `faulty_bits` = `b · bits`, with `bits` the most one of its Program's proof blocks is charged, `vuBits upv words` =
 `upv · 16 · words + 2` over its templates: `words` its template's parameters' and return's 16-bit words (`paramWords`
-and `wordsOf`, a leaf of `w` bits ⌈w / 16⌉ of them: the committed values `faultyBits` counts, a faulty proof block's
+and `retWords`, each parameter and each return field packed on whole words of its own, as `SampledProofs.Bits.check`
+holds its circuit file's ports: the committed values `faultyBits` counts, a faulty proof block's
 input gates and the outputs it computes that other proof blocks or the client read, in the words a unit's ports carry),
 `upv` its circuit file's template instances a VU (`charged`; 1 with no files) and 2 the unit's gates 0 and 1, which no
 check here fixes; `units` (`N`) counts VUs, so with files each template's instances over its `upv`; `jitter` = `⌈log2 Dj^steps⌉`, and `K` the sum of the terms. The schedules term counts every assignment
@@ -321,6 +322,7 @@ open Lean (Json toJson)
 open Flock (V)
 open NetworkCertifier (ClockSync)
 open NetworkCheck.Check (Certificate ratOf)
+open SampledProofs.Bits (bitsOf wordsOf retWords)
 
 def protocolId : String := "verity/certifier/v0"
 def commitmentTag : String := "verity-network-certifier/period/v0"
@@ -552,11 +554,7 @@ def egressParams : Array String := #["state"]
 /-- Parameters' bits: their types' summed. -/
 def paramBits (ps : Array (String × Flock.Program.Ty)) : Nat := ps.foldl (fun n p => n + bitsOf p.2) 0
 
-/-- A type's 16-bit words: `⌈w / 16⌉` a leaf of `w` bits, as a unit's ports lay its committed values out, a word a
-port (`SampledProofs.Bits.check`). -/
-def wordsOf (t : Flock.Program.Ty) : Nat := t.widths.foldl (fun n w => n + (w + 15) / 16) 0
-
-/-- Parameters' words: their types' summed. -/
+/-- Parameters' words: each packed on whole 16-bit words of its own (`SampledProofs.Bits.wordsOf`), summed. -/
 def paramWords (ps : Array (String × Flock.Program.Ty)) : Nat := ps.foldl (fun n p => n + wordsOf p.2) 0
 
 /-- The most bits a wrong VU of `upv` instances of a template of `words` words commits: its instances' ports, 16 bits
@@ -564,8 +562,9 @@ a word, and gates 0 and 1 of its statement, which unit 0 owns where the statemen
 file being unable to see κ. -/
 def vuBits (upv words : Nat) : Nat := upv * (16 * words) + 2
 
-#guard wordsOf (.array 3 (.value 1)) == 3 && wordsOf (.tuple #[.value 16, .value 17, .array 2 (.value 32)]) == 7 &&
-  paramWords #[("a", .value 8), ("b", .array 4 (.value 16))] == 5 && vuBits 2 5 == 162
+#guard paramWords #[("a", .value 8), ("b", .array 4 (.value 16))] == 5 && paramWords #[("a", .array 3 (.value 1))] == 1 &&
+  retWords (.tuple #[.value 16, .value 17, .array 2 (.value 32)]) == 7 && retWords (.array 3 (.value 1)) == 1 &&
+  vuBits 2 5 == 162
 
 /-- The collections a part of references names: its space and index, or each item's of an explicit part. -/
 def partNames : Flock.Program.Part → Array (Bool × Nat)
@@ -707,7 +706,7 @@ before bucket a: the entry of an audit's `registered`, or of the scan's, whose v
 def stateValue : String := "verity/certifier/scan-state/v1"
 
 /-- A root template's charge: its descriptor id, its members (template instances) and the 16-bit words one instance
-commits, its parameters' and its return's (`paramWords`, `wordsOf`). -/
+commits, its parameters' and its return's (`paramWords`, `retWords`). -/
 structure Charged where
   template : String
   members : Nat
@@ -719,7 +718,7 @@ def chargesOf (P : Flock.Program.Prog) : Array Charged :=
   (templateNodes P).toArray.map fun k =>
     let x := (P.defs[P.root]!).body.nodes[k]!
     let d := P.defs[x.fn]!
-    { template := d.key, members := x.members, words := paramWords d.params + wordsOf d.ret }
+    { template := d.key, members := x.members, words := paramWords d.params + retWords d.ret }
 
 /-- What an audit's or the scan's listed circuit files are held to (`circuitsWhy`): its Program, its root templates'
 charges (`chargesOf`), each one's file's SHA-512 (its listing, a file a root template, in order) and, for an audit, the
@@ -1052,8 +1051,8 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
     is not topological, so a gate's operands could be gates after it"
   pure { steps := T, free := 0,
          ingress := vuBits 1 (max (paramWords df.params) ((later.map fun (_, d) => paramWords d.params).getD 0) +
-           wordsOf df.ret),
-         egress := vuBits 1 (paramWords de.params + wordsOf de.ret), entries := s.lanes * nb * bitsOf ety }
+           retWords df.ret),
+         egress := vuBits 1 (paramWords de.params + retWords de.ret), entries := s.lanes * nb * bitsOf ety }
 
 /-- The rows form's keys with the scan's listed circuit files (`scan_circuits`, a file a root template of the scan's
 Program, `listedOf`). -/

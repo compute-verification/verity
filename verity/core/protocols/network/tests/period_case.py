@@ -322,13 +322,21 @@ def bits_of(t) -> int:
 
 
 def words_of(t) -> int:
-    """`wordsOf`: a descriptor type's leaves' 16-bit words, ⌈w / 16⌉ a leaf of w bits."""
-    kind = t[0]
-    if kind == "Value":
-        return -(-t[1] // 16)
-    if kind == "Array":
-        return t[1] * words_of(t[2])
-    return sum(words_of(f if kind == "Tuple" else f[1]) for f in t[1])
+    """`SampledProofs.Bits.wordsOf`: a descriptor type's bits packed on whole 16-bit words."""
+    return -(-bits_of(t) // 16)
+
+
+def ret_words(t) -> int:
+    """`SampledProofs.Bits.retWords`: a return's fields (a tuple's or a record's, else the return), each packed on whole
+    16-bit words of its own."""
+    fields = t[1] if t[0] == "Tuple" else [f[1] for f in t[1]] if t[0] == "Record" else [t]
+    return sum(words_of(f) for f in fields)
+
+
+def def_sig(d: dict) -> tuple[list, list]:
+    """A Definition's parameters and return as `Flock.Program.decode` reads them: a primitive's own, a composite's
+    body's."""
+    return (d["params"], d["ret"]) if d["form"] == "primitive" else (d["body"]["params"], d["body"]["ret_type"])
 
 
 def vu_bits(upv: int, words: int) -> int:
@@ -661,9 +669,9 @@ class Listing:
 
 def charges_of(j: dict) -> list[tuple[str, int, int]]:
     """`chargesOf`: each root template's descriptor id, members and the 16-bit words one instance commits, its
-    parameters' and its return's (`words_of`)."""
+    parameters' and its return's (`words_of`, `ret_words`)."""
     defs, callees = j["definitions"], j["callees"]
-    return [(k, _members(x), sum(words_of(t) for _, t in d["body"]["params"]) + words_of(d["body"]["ret_type"]))
+    return [(k, _members(x), sum(words_of(t) for _, t in d["body"]["params"]) + ret_words(d["body"]["ret_type"]))
             for x in defs[j["root"]]["body"]["nodes"] if (d := defs[k := callees[x["fn"]]])["form"] != "primitive"]
 
 
@@ -843,8 +851,8 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
                        "topological, so a gate's operands could be gates after it")
     words = lambda ps: sum(words_of(t) for _, t in ps)  # noqa: E731
     return Scan(T, 0, vu_bits(1, max([words(bf["params"]), *(words(b["params"]) for _, b in later)])
-                               + words_of(bf["ret_type"])),
-                vu_bits(1, words(be["params"]) + words_of(be["ret_type"])), L * nb * bits_of(ety))
+                               + ret_words(bf["ret_type"])),
+                vu_bits(1, words(be["params"]) + ret_words(be["ret_type"])), L * nb * bits_of(ety))
 
 
 def params(j) -> Params:

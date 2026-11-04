@@ -40,9 +40,6 @@ def isStr (j : Lean.Json) (s : String) : Bool := match j with
   | .str x => x == s
   | _ => false
 
-/-- A type's bits: its leaves' widths summed. -/
-def bitsOf (t : Flock.Program.Ty) : Nat := t.widths.foldl (· + ·) 0
-
 /-- The root's template nodes, in order: those calling a composite. -/
 def templateNodes (P : Flock.Program.Prog) : List Nat :=
   let nodes := (P.defs[P.root]!).body.nodes
@@ -77,7 +74,8 @@ namespace NetworkCheck.Circuit
 
 open Lean (Json toJson)
 open Flock.Program (Prog Defn Ty)
-open NetworkCheck.Period (isStr bitsOf templateNodes inputArg inputGates)
+open NetworkCheck.Period (isStr templateNodes inputArg inputGates)
+open SampledProofs.Bits (bitsOf fieldsOf)
 
 abbrev Wire := SampledProofs.Wires.Wire
 abbrev Wiring := SampledProofs.Wires.Wiring
@@ -87,12 +85,6 @@ def FORMAT : String := "verity/window-circuit/v1"
 def ORDER : String := "verity/wire-order/v1"
 
 /-! ## The templates' rows, off their Definitions -/
-
-/-- A return's fields: a tuple's or a record's, else the return itself (`interface._fields`). -/
-def fieldsOf : Ty → List Ty
-  | .tuple fs => fs.toList
-  | .record fs => fs.toList.map (·.2)
-  | t => [t]
 
 /-- A parameter's outer length: its outermost array's, 1 when it is no array. -/
 def outerOf : Ty → Nat
