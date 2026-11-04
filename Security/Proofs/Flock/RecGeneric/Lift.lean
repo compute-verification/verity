@@ -122,16 +122,16 @@ often as its plan there asks about a rerun that accepts at a bad draw or at one 
 `R_O`**: runs map to reruns uniformly (`unifMap_extendDraw`), named and with coins alike (`named_extend`,
 `coins_extend`), accepting alike off those reruns (`accAt_iff`), and a collision among runs' calls is one among their
 reruns' searched evaluations (`findColl_cover`), which are true (`rerunCalls_true`). -/
-theorem PrAt_le_lift (F : RunFinder Coin) (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c)
-    (hn : I.V.k (K.xI x) ≤ K.V.k x) (hRp : K.Replays H x) (hT : K.CallsTrue H x)
+theorem PrAt_le_lift (F : RunFinder Coin) (hCF : I.LastCoinFree H) (decC : Msg → Coin)
+    (hdec : ∀ c, decC (I.ans c) = c) (hn : I.V.k (K.xI x) ≤ K.V.k x) (hRp : K.Replays H x) (hT : K.CallsTrue H x)
     (hL : K.CallsLogColl H (S.IVStar I.V I.ans) x) [Fintype Ω] [Nonempty Ω] :
     F.PrAt H (runModel H I.V (K.innerPO I S H P x decC) (K.xI x) (K.keepAO I S H P x)) (K.xI x) ≤
       F.PrAt H (K.innerModel (S.IVStar I.V I.ans) H P x) (K.xI x) +
         F.PrAsk (K.innerModel (S.IVStar I.V I.ans) H P x) (K.xI x) fun ω u =>
           (K.BadO I S H P x ω u ∨ K.OutRO H P x ω u) ∧ (K.innerModel (S.IVStar I.V I.ans) H P x).acc ω u := by
   refine F.PrAt_le_map H _ _ extendDraw (unifMap_extendDraw hn) _ (K.xI x) (named_extend decC hn)
-    (coins_extend decC hn) (fun ω u hu => accAt_iff decC hdec hn ω u hu) fun ω l g h => ?_
-  refine findColl_cover (P := P) decC hdec hRp hL ω (fun p hp => ?_) (fun p hp => ?_) h
+    (coins_extend decC hn) (fun ω u hu => accAt_iff hCF decC hdec hn ω u hu) fun ω l g h => ?_
+  refine findColl_cover (P := P) hCF decC hdec hRp hL ω (fun p hp => ?_) (fun p hp => ?_) h
   · obtain ⟨e, -, hpe⟩ := List.mem_flatMap.1 hp
     exact rerunCalls_true (P := P) hRp hT ω (extendDraw (g e)) p hpe
   · obtain ⟨e, he, hpe⟩ := List.mem_flatMap.1 hp

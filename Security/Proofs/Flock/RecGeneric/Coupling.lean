@@ -47,7 +47,7 @@ variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {K : Co
 
 omit [Nonempty Coin] in
 /-- **`P_O`'s run at a draw accepts exactly where it is kept.** -/
-theorem innerFO_acc_iff (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c) (ω : Ω)
+theorem innerFO_acc_iff (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c) (ω : Ω)
     (d : (Fin (K.V.k x) → Coin) × K.EO.C x) :
     (K.innerFO I S H P x decC ω d).out = .acc ↔ K.keepDO I S H P x ω d = true := by
   constructor
@@ -59,7 +59,7 @@ theorem innerFO_acc_iff (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c)
     rw [e] at h
     simp [abortTrace] at h
   · intro hk
-    obtain ⟨⟨w, hw, -⟩, hacc, ha⟩ : K.GivesRO H P x ω d ∧
+    obtain ⟨⟨w, hw, hRO⟩, hacc, ha⟩ : K.GivesRO H P x ω d ∧
         (K.dec (S.IVStar I.V I.ans) H x d.1 (K.wits H P x ω d)).out = .acc ∧ K.AgreesO I S H P x ω d := by
       simpa only [Comp.keepDO, decide_eq_true_eq] using hk
     have hacc' : (K.view (S.IVStar I.V I.ans) H x d.1 w).out = .acc := by
@@ -67,7 +67,7 @@ theorem innerFO_acc_iff (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c)
       exact hacc
     unfold Comp.innerFO
     rw [ite_eq_left hk]
-    exact (runO decC hdec ω d hw hacc' ha).2.1
+    exact (runO hCF decC hdec ω d hw hRO hacc' ha).2.1
 
 omit [Nonempty Coin] in
 /-- A kept draw is not bad. -/
@@ -99,14 +99,15 @@ omit [Nonempty Coin] in
 /-- **`P_O`'s aborting run accepts exactly where its rerun's inner view does**, but where the rerun accepts at a bad
 draw or at one where `E_O` gives witnesses outside `R_O`: a kept run's rerun accepts, and off those draws an accepting
 rerun is kept. -/
-theorem accAt_iff (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c) (hn : I.V.k (K.xI x) ≤ K.V.k x) (ω : Ω)
+theorem accAt_iff (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c)
+    (hn : I.V.k (K.xI x) ≤ K.V.k x) (ω : Ω)
     (t : (Fin (I.V.k (K.xI x)) → Coin) × (Fin (K.V.k x) → Coin) × K.EO.C x)
     (h : ¬ ((K.BadO I S H P x ω (extendDraw t) ∨ K.OutRO H P x ω (extendDraw t)) ∧
       (K.innerModel (S.IVStar I.V I.ans) H P x).acc ω (extendDraw t))) :
     (runModel H I.V (K.innerPO I S H P x decC) (K.xI x) (K.keepAO I S H P x)).acc ω t ↔
       (K.innerModel (S.IVStar I.V I.ans) H P x).acc ω (extendDraw t) := by
   show (abortRun H (K.innerPO I S H P x decC) I.V (K.xI x) (K.keepAO I S H P x) ω t).out = .acc ↔ _
-  rw [abortRun_eqO decC hn, innerFO_acc_iff decC hdec]
+  rw [abortRun_eqO decC hn, innerFO_acc_iff hCF decC hdec]
   refine ⟨fun hk => ?_, fun ha => (keepDO_iff_acc (fun hb => h ⟨Or.inl hb, ha⟩) (fun ho => h ⟨Or.inr ho, ha⟩)).2 ha⟩
   simp only [Comp.keepDO, decide_eq_true_eq] at hk
   exact hk.2.1
@@ -156,8 +157,9 @@ omit [Nonempty Coin] in
 /-- **`P_O`'s aborting run records only calls its rerun's searched evaluations hold, or those collide**: a kept run's
 calls are its inner view's (`runO`), which are among `E_O`'s witnesses' there, in `R_O`, or collide there
 (`CallsLogColl`); an aborted run records none. -/
-theorem innerFO_vLog_sub (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c) (hRp : K.Replays H x)
-    (hL : K.CallsLogColl H (S.IVStar I.V I.ans) x) (ω : Ω) (d : (Fin (K.V.k x) → Coin) × K.EO.C x) :
+theorem innerFO_vLog_sub (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c)
+    (hRp : K.Replays H x) (hL : K.CallsLogColl H (S.IVStar I.V I.ans) x) (ω : Ω)
+    (d : (Fin (K.V.k x) → Coin) × K.EO.C x) :
     (∀ e ∈ (K.innerFO I S H P x decC ω d).vLog, e ∈ K.rerunCalls H P x ω d) ∨
       ∃ u v, findColl (K.rerunCalls H P x ω d) = some (u, v) ∧ Collision H u v := by
   by_cases hk : K.keepDO I S H P x ω d = true
@@ -167,7 +169,7 @@ theorem innerFO_vLog_sub (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c
     have hacc' : (K.view (S.IVStar I.V I.ans) H x d.1 w).out = .acc := by
       rw [hw] at hacc
       exact hacc
-    have hrun := runO decC hdec ω d hw hacc' ha
+    have hrun := runO hCF decC hdec ω d hw hRO hacc' ha
     have hF : K.innerFO I S H P x decC ω d =
         run H (K.innerPO I S H P x decC) I.V (K.xI x) ω (firstCoins (I.V.k (K.xI x)) d.1) := by
       unfold Comp.innerFO
@@ -192,15 +194,16 @@ omit [Nonempty Coin] in
 /-- **A collision among `P_O`'s aborting runs' calls is one among their reruns' searched evaluations**, where every
 run's call is among some rerun's searched evaluations that the true list `L'` holds: each run's calls are among its
 rerun's, or those collide (`innerFO_vLog_sub`). -/
-theorem findColl_cover (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c) (hRp : K.Replays H x)
-    (hL : K.CallsLogColl H (S.IVStar I.V I.ans) x) (ω : Ω) {L L' : List (Msg × Msg)} (ht : ∀ p ∈ L', H p.1 = p.2)
+theorem findColl_cover (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c)
+    (hRp : K.Replays H x) (hL : K.CallsLogColl H (S.IVStar I.V I.ans) x) (ω : Ω) {L L' : List (Msg × Msg)}
+    (ht : ∀ p ∈ L', H p.1 = p.2)
     (hc : ∀ e ∈ L, ∃ d, e ∈ (K.innerFO I S H P x decC ω d).vLog ∧ ∀ p ∈ K.rerunCalls H P x ω d, p ∈ L')
     (h : (findColl L).isSome) : ∃ u v, findColl L' = some (u, v) ∧ Collision H u v := by
   have hs : (findColl L').isSome := by
     by_contra hn
     refine hn (findColl_isSome_of_sub H ht (fun e he => ?_) h)
     obtain ⟨d, hed, hsub⟩ := hc e he
-    rcases innerFO_vLog_sub decC hdec hRp hL ω d with h1 | ⟨u, v, huv, -⟩
+    rcases innerFO_vLog_sub hCF decC hdec hRp hL ω d with h1 | ⟨u, v, huv, -⟩
     · exact hsub e (h1 e hed)
     · exact absurd (findColl_isSome_of_sub H ht hsub (Option.isSome_iff_exists.2 ⟨_, huv⟩)) hn
   obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 hs
