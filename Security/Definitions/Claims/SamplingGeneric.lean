@@ -102,7 +102,13 @@ namespace Arg
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
 /-- The extractor's coins at a shape: per wait, its `cap` coin vectors over the shape's rounds. -/
-abbrev EC (A : Arg Coin) (s : A.Sh) : Type := Fin (A.waits s) → Fin (A.cap s) → Fin (A.rounds s) → Coin
+def EC (A : Arg Coin) (s : A.Sh) : Type := Fin (A.waits s) → Fin (A.cap s) → Fin (A.rounds s) → Coin
+
+instance instFintypeEC (A : Arg Coin) (s : A.Sh) : Fintype (A.EC s) :=
+  inferInstanceAs (Fintype (Fin _ → Fin _ → Fin _ → Coin))
+
+instance instNonemptyEC (A : Arg Coin) (s : A.Sh) : Nonempty (A.EC s) :=
+  inferInstanceAs (Nonempty (Fin _ → Fin _ → Fin _ → Coin))
 
 /-- **The extractor's rerun program** at the judged run's coins `r₀`: `E^rep` at `A`'s parts, its coin vectors the
 shape's (`EC`) read over the statement's rounds (`wf`). -/
