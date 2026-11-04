@@ -39,8 +39,7 @@ composite's acceptance to that run, and so to `SampledKSLiveV3`, comes with one-
 The draw happens after the registration, so the prover fixes everything a drawn proof block's statement depends on
 before any coin. In the remote protocol the coins come from the auditor's challenger (or, until proofs retires it, the
 verifier's own draw), under three Lean premises, `ChallengerLogsCoins`, `FlipsAfterRecorded` and `VerifierReadsLog`;
-onsite adds two premises about where the challenger runs, `CoinsConfidential` (in Lean) and `OneClock` (prose)
-("Where things are").
+onsite adds two prose premises, `CoinsConfidential` and `OneClock` ("Where things are").
 
 ## Outline
 

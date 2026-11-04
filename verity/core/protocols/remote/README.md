@@ -136,8 +136,7 @@ PoUW `--zk`), and a chain can be "none" while each piece is proved.
 ## Assumptions
 
 Each is a named `Prop` in a lock's `assumptions` (`Security/lean-audit.json`, and `Security/Properties/lean-audit.json`
-for the `Properties.*` ones), one line in plain words, except the two coin premises below, which no remote guarantee
-takes.
+for the `Properties.*` ones), one line in plain words, except the two coin premises below, which are prose only.
 
 Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means"):
 
@@ -150,11 +149,10 @@ Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means
 - `trusted-host` (`Verity.Assumptions.TrustedHost`, `Security/Definitions/Core/Assumptions.lean`): the challenger is
   the auditor's device on a host the developer doesn't control, and the custody above rests on it; the verifier runs
   on an auditor host too. In Lean, only onsite's guarantees (network certification's) read `TrustedHost` itself.
-- `CoinsConfidential` and `OneClock`: onsite's premises about where the challenger runs, named in
-  `verity/core/protocols/sampled_proofs/README.md`. `CoinsConfidential` is `Pouw.Assumptions.CoinsConfidential`
-  (`Security/Definitions/Pouw/Assumptions/Dither.lean`, in the lock), which only PoUW's pooled `FleetSound` takes;
-  `OneClock` (the challenger's release times and the network certifier's ingress times share one clock) is prose
-  only. No remote guarantee takes either as a hypothesis.
+- `CoinsConfidential` (the challenger's coins reach the developer's machine only over auditor-host paths) and
+  `OneClock` (its release times and the network certifier's ingress times share one clock): premises about where the
+  challenger runs, stated in prose in `verity/core/protocols/sampled_proofs/README.md` and not yet in Lean. No `.lean`
+  file defines either, and no guarantee takes either as a hypothesis.
 
 PoUW, as `H1CheckedCreditPeriod` takes them (the general `CheckedCreditPeriod` takes all but `SaltIsLiveCoin` and
 `StagedPins`):
