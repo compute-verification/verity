@@ -65,6 +65,12 @@ theorem root_eq (i : In) {s : _root_.Flock.Schedule} {tPad : Nat} (hz : Zk.sched
   unfold root
   rw [hz]
 
+/-- `sumF` reads its terms below `n` only. -/
+theorem sumF_congr {n : Nat} {f f' : Nat → F128} (h : ∀ c, c < n → f c = f' c) :
+    FlockComplete.sumF n f = FlockComplete.sumF n f' := by
+  unfold FlockComplete.sumF
+  exact List.foldl_ext _ _ _ fun a c hc => by simp only [h c (List.mem_range.1 hc)]
+
 /-- **Level 0's rows read the extra lanes below `2^cols` and the paddings of the `2^lanes + 4` lanes below `t_pad`
 only.** -/
 theorem rows_congr (lv : Level) (tPad : Nat) (g : Array F128) {extra extra' lanePad lanePad' : Nat → Nat → F128}
@@ -82,9 +88,8 @@ theorem rows_congr (lv : Level) (tPad : Nat) (g : Array F128) {extra extra' lane
   by_cases h : l < 2 ^ lv.lanes
   · simp only [h, ↓reduceIte]
   · simp only [h, ↓reduceIte]
-    congr 1
-    unfold FlockComplete.sumF
-    exact List.foldl_ext _ _ _ fun a c hc => by rw [he _ c (List.mem_range.1 hc)]
+    refine congrArg (· + _) ?_
+    exact sumF_congr fun c hc => by simp only [he _ c hc]
 
 end Flock.Firewall.Link
 
