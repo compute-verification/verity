@@ -204,18 +204,21 @@ def _circuit(pr: dict) -> None:
 
 def _members(ms: Any) -> dict:
     """`OneStageZk.membersOf`: the per-member form's members by name, each a nonempty name, exactly its keys, its
-    circuit (`_circuit`) and its units `[lo, hi)` ranges of naturals, no unit in two members' ranges."""
+    circuit (`_circuit`), its units `[lo, hi)` ranges of naturals and its circuit's units a proof block, positive, no unit
+    in two members' ranges."""
     if not isinstance(ms, dict):
         raise Reject("proofs: members is not an object from a member's name to its units, circuit and registered")
     for name in sorted(ms):
         if not name:
             raise Reject("proofs: a member's name is empty")
-        _keys(ms[name], _with_interface(ms[name], ["circuit", "registered", "units"]), f"member {name}")
+        _keys(ms[name], _with_interface(ms[name], ["circuit", "registered", "units", "vus_per_block"]), f"member {name}")
         _circuit(ms[name])
         rs = ms[name]["units"]
         if not (isinstance(rs, list) and rs and all(isinstance(r, list) and len(r) == 2 and all(type(x) is int for x in r)
                                                     and 0 <= r[0] < r[1] for r in rs)):
             raise Reject(f"proofs: member {name}'s units are not a nonempty list of [lo, hi] with 0 <= lo < hi")
+        if not (type(ms[name]["vus_per_block"]) is int and ms[name]["vus_per_block"] > 0):
+            raise Reject(f"proofs: member {name}'s vus_per_block is not a positive natural number")
     if not ms:
         raise Reject("proofs: members names no member")
     rs = sorted((r for m in ms.values() for r in m["units"]), key=lambda r: r[0])
@@ -229,7 +232,8 @@ def _one_stage_params(rest: dict) -> dict:
     """`OneStageZk.paramsOfJson` behind `VStar.Recursive.Sampled`'s refusal of v1: ``proofs``, exactly the circuit file's
     SHA-512, the verifier's registered file or null and, when named, the registered circuit record's SHA-512 or null
     (`_circuit`), or the per-member form's ``members`` (`_members`), then v1's params (`decode_params_v2`, which refuses
-    them naming no challenger) with a partition object."""
+    them naming no challenger) with a partition object; the members' units and units a proof block are the
+    registration's (``link_members``, its `link-points`)."""
     if "proofs" not in rest:
         raise Reject(f"the parameters name no proofs: {V1_REFUSED}")
     pr = rest["proofs"]
@@ -243,6 +247,7 @@ def _one_stage_params(rest: dict) -> dict:
     if p["partition"] is None:
         raise Reject("partition is null: the sessions are verified against the verifier's own partition object")
     return {**p, "proofs": pr, "members": members,
+            "link_members": [(m["units"], m["vus_per_block"]) for _, m in sorted((members or {}).items())],
             "reads_registered": PROOFS.reads_registered(canonical(rest["program"]).encode())}
 
 

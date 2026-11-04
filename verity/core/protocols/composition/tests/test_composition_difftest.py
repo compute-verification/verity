@@ -137,8 +137,9 @@ def _v1(a: dict) -> dict:
             "evidence": {**_without(a["evidence"], "proofs"), "verdicts": {}}}
 
 
-#: The per-member form's one member over `empty_draws`' files: one unit, the circuit file `BLOBS` hold, no registered file.
-MEMBER = {"circuit": _sha(CIRCUIT), "registered": None, "units": [[0, 1]]}
+#: The per-member form's one member over `empty_draws`' files: one unit, the circuit file `BLOBS` hold, no registered file,
+#: one unit a proof block.
+MEMBER = {"circuit": _sha(CIRCUIT), "registered": None, "units": [[0, 1]], "vus_per_block": 1}
 
 
 def _per_member(a: dict, members: dict | None = None, statements: list | None = None) -> dict:
@@ -159,8 +160,9 @@ def _statement(member: str) -> dict:
 #: at the params), v1's evidence under v2's params (refused by name at the evidence), v2's evidence naming verdicts,
 #: params naming no challenger or no partition, a circuit or public file no blob holds, proved units no session proved,
 #: a session whose coins are no tree the challenger logged, coins on another window or none; and in the per-member form
-#: (`_per_member`), a statement naming no member or of no session, two members' units meeting, a member's units or keys
-#: malformed, the evidence's proofs in the other form than the params', and proved units no session proved. A statement's
+#: (`_per_member`), a statement naming no member or of no session, two members' units meeting, a member's units, keys or
+#: units a proof block malformed, a member's units outside the population (the registration's `link-points`), the
+#: evidence's proofs in the other form than the params', and proved units no session proved. A statement's
 #: other refusals (a member twice, statements out of the members' order, a circuit or public file in no blob, a public
 #: file whose units are not exactly its member's) come after its one session's coins are held to a tree the challenger
 #: logged, outside the mirror: sampled proofs' difftest holds them on the challenger's trees, and its `public_units`
@@ -185,6 +187,8 @@ V2_BREAKS = {
     "members-meet": lambda a: _per_member(a, members={"m0": MEMBER, "m1": {**MEMBER, "units": [[0, 2]]}}),
     "member-units": lambda a: _per_member(a, members={"m0": {**MEMBER, "units": [[1, 1]]}}),
     "member-keys": lambda a: _per_member(a, members={"m0": _without(MEMBER, "units")}),
+    "member-block": lambda a: _per_member(a, members={"m0": {**MEMBER, "vus_per_block": 0}}),
+    "member-link-points": lambda a: _per_member(a, members={"m0": {**MEMBER, "units": [[0, 1000]]}}),
     "no-members": lambda a: _per_member(a, members={}),
     "member-evidence": lambda a: {**_per_member(a), "evidence": a["evidence"]},
     "member-params": lambda a: {**_per_member(a), "params": a["params"]},
