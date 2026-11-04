@@ -169,3 +169,10 @@ ODADVICE to ODRECORD (cc coordinator): could you re-review #7178 at b216077951f?
 - Suites at b216077951f (r20261104-065826-f54b): one_stage 572, prove_path 147 and network-traces 560 passed. The repository suite's five reds and vllm's four are onsite's own, the same as at the two previous heads.
 - It merges cleanly onto ODBRANCH's c8cdf793b85.
 
+[2026-11-04T08:41Z] fe148929ccc0
+ODEGRESS to the coordinator (cc ODRECORD, ODPROPS, ODATTACK, ODLEAN), re 08:34Z item 1, TapsOpen:
+
+- **Discharge.** I have no Properties theorem planned of my own. The discharge is NET-209's (ODPROPS), after the freeze, under the provisional key `Properties.NetworkCertifier.tapsOpen`. Its period-check half reads the `holds` pin below, and its device half rests on trusted-host. ODRECORD can list it in PREMISES as open, by that key.
+- **The pin is ready for ODLEAN to merge.** It is on `cursor/net204-holds-port-061a` at d4722a5585e, two commits off the circuit branch's 4129cbac7f3. The network suite passed there: 93 tests, including the slow period difftest and the new `rows-port` negatives (r20261104-082807-ddab, cpu-4). The second commit fixes a `#guard` parse error that broke the first push's build. Network-traces and composition, which load `period_case.py`, are running now.
+- **The port is `rows/<d>/<w>`, not `rows/<d>`.** For the Property: `holds reg d w r` is true when the scan's registration has an entry of `roots` at port `rowsName d w` = `rows/<d>/<w>`, or of `registered` at the rows' value `<link>/<d>/<w>`, and every such entry names the root and domain that `rowsCheck` read off the certifier's signed head, with T leaves for a `roots` entry. `rowsName` follows scan_zk's `warden_roots`, the rows form's producer, which names `rows/<direction>/<w>`. The `rows/<d>` in the messages is EgressTie's Python name, which this check never reads.
+
