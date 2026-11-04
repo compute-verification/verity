@@ -13652,7 +13652,7 @@
    "Accounting.SecurityProofs.RateSketchTable": "completeness: like Accounting.SecurityProofs.RateSketchHonest, a device (a LayoutDevice of Security/Definitions/Accounting/RateAuditSketchLayout.lean, whose memory holds any function of the store) accepted at every signs, oracle and data, here one that reads N * d bits from a table of card Sig * N * d bits for any digest of at most 2^d values, below Accounting.SecurityProofs.RateAuditSketch's floor: a counterexample outside the verbatim class (rate-sketch-verbatim), not a property of a function",
    "Accounting.SecurityProofs.RateTensorSketchTable": "completeness: Accounting.SecurityProofs.RateSketchTable at the tensor-core sketch (Accounting.RateSketch.sketch, 32-byte sectors, k_s INT32 words), reading N * 32 * k_s bits at any number of rows k_s: a counterexample outside the verbatim class, not a property of a function",
    "Accounting.SecurityProofs.SketchRankFiber": "frozen (premise): Like Accounting.SecurityProofs.SketchBinds, it is a property of Accounting.RateSketch.sketch under a hypothesis on the window's signs (every sector's block has rank at least r over Q), which is neither an acceptance of the sketch nor a premise under shape.premises; Accounting.SecurityProofs.RateAuditTensorSketchRank prices the hypothesis as Pr_sigma[exists u, rank < r].",
-   "Flock.SecurityProofs.RecursiveAuditC3": "restatable: sampled proofs at the recursive configuration (SampledProofsRecursive at RecVerdict, sampled proofs' case at V*'s compiled check, verity/sampled-proofs/recursive/v1, dense form only); (i), a probability statement (Verity.Game.prob, not under shape.events) whose event is the composed verdict and then sampled proofs' claim failing on the extracted transcript, takes beside the decoders' list-decoding spec (decOK) the strategy's recursive session (SessionIn), the draw's and the extraction's hypotheses (hK₀, hdraw, hX, hread, hcoll) and live-verifier (LiveCoins), none a premise; it fits once the session and those hypotheses are derived from the vocabulary or restated as premises, and Verity.Game.prob is listed under shape.events. Its λ is λ₂ = 135.7 (route 2C, read off the accepted run at the deployed caps); the bound record's λ (Claims.Recursion.lam), which no theorem evaluates at the deployment, is one (i) doesn't use.",
+   "Flock.SecurityProofs.RecursiveAuditC3": "restatable: sampled proofs at the recursive configuration (SampledProofsRecursive at RecVerdict, sampled proofs' case at V*'s compiled check, verity/sampled-proofs/recursive/v1, dense form only); (i), a probability statement (Verity.Game.prob, not under shape.events) whose event is the composed verdict and then sampled proofs' claim failing on the extracted transcript, takes beside the decoders' list-decoding spec (decOK) the strategy's recursive session (SessionIn), the draw's and the extraction's hypotheses (hK₀, hdraw, hX, hread, hcoll) and live-verifier (LiveCoins), none a premise; it fits once the session and those hypotheses are derived from the vocabulary or restated as premises, and Verity.Game.prob is listed under shape.events. Its knowledge-soundness term (Dep.ksAt) is t'·2^-λ at λ₂ = 135.7 (route 2C, read off the accepted run at the deployed caps), and at a statement at the deployment's tables (Dep.OneTable) the least of it and route 2C's split bound κ + t'·ε at κ = 2^-167.7 and ε = 2^-166.95 (RecDeploy.kappa_eps_oneTable_cap, at the run's call caps); the bound record's λ (Claims.Recursion.lam), which no theorem evaluates at the deployment, is one (i) doesn't use.",
    "Accounting.SecurityProofs.RemoteSessionConservationSketch": "frozen (no-function,hash): It composes the verbatim-sector tensor-sketch rank bound at every candidate pass with a causal session's pooled draws; the one shared store and every device read, link sector, rebuild and correct receipt are explicit, but the random-oracle game is not the rate audit's code.",
    "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketchSum at the deployed 16-row, 4 KiB-tile and draw parameters, with the two draw terms bounded by 2^-40 and each pass's grinding candidates' queries priced once by the named per-pass hash budget (Accounting.Assumptions.SketchHashBudget): its query term (n P) qtot/2^96 stays explicit, non-vacuous at the measured caps where the product form's was 2^14.",
    "Flock.SecurityProofs.ClaimsStated": "frozen (no-function): It states no property of the verifier: it reads each claim of Security/Definitions/Claims.lean, so the lock records their text, and a claim leaves it when a guarantee states that claim at the deployed verifier.",
@@ -55001,6 +55001,7 @@
     "Claims.Flock.Complete_meets_plain",
     "Claims.Flock.Complete_meets_zk",
     "Claims.Witness.Recursion.Complete_meets_deployed",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
    ]
@@ -55770,6 +55771,13 @@
    },
    "guarantees": ["Flock.Guarantees.recursiveKSDeployed_nontrivial", "Flock.SecurityProofs.RecursiveKSDeployed"]
   },
+  "Proofs.Flock.Claims.Recursion.KappaEpsCap": {
+   "digest": "9ad6880f14386c9d8702813e3ef9b06357f46690d5b26643d6f41eef4006c2af",
+   "definitions": {
+    "RecDeploy.OneTableAt": "a783319eac5fbc748d8a76699c52c3d982b64b49c2f06d345dabafadec30450f"
+   },
+   "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
+  },
   "Proofs.Flock.Claims.Recursion.LamDeployed": {
    "digest": "c9a575438089b152338874e8972ac157a0efc5c5334c67a77120b5e7a965a135",
    "definitions": {
@@ -55778,6 +55786,7 @@
    "guarantees": [
     "Flock.Guarantees.recursiveKSDeployed_nontrivial",
     "Flock.Guarantees.recursiveKS_nontrivial",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
    ]
@@ -63063,6 +63072,7 @@
    "guarantees": [
     "Claims.Flock.Complete_meets_plain",
     "Claims.Witness.Recursion.Complete_meets_deployed",
+    "Flock.SecurityProofs.RecursiveAuditC3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -70656,7 +70666,7 @@
    ]
   },
   "Proofs.Properties.Verity.Recursive": {
-   "digest": "4ca3d26446bd1cb38340bc6744b05a516f5f272ee6db91dce6f60f43dc96061d",
+   "digest": "1e8929953e9ae1859626f04ba65bf5eabacd45e43430fdae0ee8b31d1e5d2d9e",
    "definitions": {
     "Verity.Recursive.Dep": "c3514fcc465eb6f95c65f836d9e46823a4f839810af5713e98d5f58c51f99fb0",
     "Verity.Recursive.Dep.Bd": "a8b0b26fffefc7fa2b053b6a4374ddc83b96ca0f3c7b84ab631cd759e28ea88d",
@@ -70664,6 +70674,7 @@
     "Verity.Recursive.Dep.E": "58e2cb0a9633884d0036d02329330ff7d62ba34d7234e2b71c7f2510b844070a",
     "Verity.Recursive.Dep.FinderCR": "dacd94bbbf05db7803f4ca58ee38ef766a1aa5192df13c83eff16e0036e795fc",
     "Verity.Recursive.Dep.I": "7ee7c67f10a8cbee06d8eaa690f41509b664486bc1698a4d811a02139670ef30",
+    "Verity.Recursive.Dep.OneTable": "82cc6d22b9b54bc55201a496690c138e5d5fa2d123639f039db792f847792330",
     "Verity.Recursive.Dep.R": "3e12178bb5d447e7bf49a949bdbf4198c89870029a33b2aa1523d2b5758ef5d6",
     "Verity.Recursive.Dep.Sample": "e0e36c21e9f74a39ce78a0d7ae183e353feef15379f695b1b414e1fd2ee13db2",
     "Verity.Recursive.Dep.SessionCR": "80c000734646aff9d405fb42fbd9997e23a78babd568e4d74aa28f2d52e27a89",
@@ -70674,10 +70685,11 @@
     "Verity.Recursive.Dep.bindBudget": "28160a87f3aae056314292a5c1f811fb44ad580a77cb0a2c80816dec9a34c766",
     "Verity.Recursive.Dep.decI": "d86429402280279461847452bfdee7d5bcf8fa280877e267e8ded7a2e0058330",
     "Verity.Recursive.Dep.decO": "53931dde0e211b122181e131e36d0fa0040ae6c93b94cde89bd085603c0005c0",
-    "Verity.Recursive.Dep.delta": "6f8491b1360a6ad32fc91639bd2013ab88ab3d55f4bd28b7ee3c2bd936cbd180",
+    "Verity.Recursive.Dep.delta": "ae749c2e400c9aa56742ba34bfef864404a880127f6fecebcdb1a0254844c752",
     "Verity.Recursive.Dep.errAt": "34223853720366262b4f1657cf2661bd7a8fcf3db71f666af7c1c106fd5f8bb9",
     "Verity.Recursive.Dep.extract": "4ffbaad485ef5c692b8d9857818da686418684c57248f15cb96e0be12581496e",
     "Verity.Recursive.Dep.hd": "529d85dc1d3bb163b10766391478000c87e1d4f5afd8634780e864efbb1d0254",
+    "Verity.Recursive.Dep.ksAt": "16b8b06bf1de5e53d138250e74b8c9e940b33ff31548968328f78b46a076568c",
     "Verity.Recursive.Dep.nOf": "3f2c4c445cfca27b81857c7ce504f2a72edecda392a2e311310951c28279fa65",
     "Verity.Recursive.Dep.recRest": "8e0b534bbde16ec1185f66e11a5da75f3c198b5d331df6ec18ea0077ff0061b1",
     "Verity.Recursive.Dep.runs": "867baff3a89fb4d05e12cff68e9e2611130852f8291ee6aa5b84ac236e6eb8ae",
@@ -70716,14 +70728,14 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Properties.Verity.Recursive.Audit": {
-   "digest": "eddd96d892f0634e51130c4e7f66c12ee7b599b3370595f334f4235a905d591a",
+   "digest": "c5aaaa69cec11078a8d28019f13a009cde6582df3d476d1589bf671815c1e801",
    "definitions": {
     "Flock.Guarantees.RecursiveAuditC3": "276606ee9b5ef51b7f47ab55c77f056669dca4d974e626a2d02ab33233974fce",
     "Verity.Recursive.Dep.deployed": "2a21d5fa32c8b67769272d621f88e0d54986c0073dcf05e76414eec499e43d90",
     "Verity.Recursive.SampledProofsRecursive": "68ba28f2d2d842d887a996e04352e4dec95bfaf4dbd662dc55a02d0fcd0b3a5f",
     "Verity.Recursive.SampledProofsRecursiveAt": "4344a2288a2373cbe594fc4d9b8f371cf54af82007a0751dfa0f056d02114f2b",
     "Verity.Recursive.nI₀": "22f7bb249a856dc44878734b3697246fb55f5bba188167c468e37f33cd5b2b73",
-    "Verity.Recursive.vS₀": "7598dc5a0114d2d82bf7d6a4793b5283831389070cab535a291af22a63c0f4af"
+    "Verity.Recursive.vS₀": "b9e8d79ee678dabc8832a41fdf6917879cabdaedf6d7ab209660814acb4c3dee"
    },
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
