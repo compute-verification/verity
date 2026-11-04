@@ -265,7 +265,10 @@ PREMISES: dict[str, dict[str, Any]] = {
                             "bridge (`sampled-leg-bridge`), never a named assumption. Open until the theorem that "
                             "OneStageZk.verdicts' acceptance gives it is named and in the lock",
                       "discharged_by": ()},
-    "free-count": {"is": "CircuitCounts: each tied audit's free at least #(freeInputs \\ reg) at the wired layout",
+    "free-count": {"is": "CircuitCounts: each tied audit's free at least #(freeInputs \\ reg) at the wired layout. The "
+                         "registered gates are read at a template's first unit, so it holds only of templates of one "
+                         "unit per VU (units_per_vu 1): its discharge counts only at a statement that takes no premise "
+                         "on units_per_vu, which the period check's circuit read gives once it refuses every other",
                    "discharged_by": ("Properties.NetworkPeriod.phaseCounts",)},
     "held-performed": {"is": "the public's held names only the checks the period check performed, each holding of it",
                        "discharged_by": ("Properties.NetworkPeriod.rowsHeld",)},
@@ -319,11 +322,12 @@ PREMISES: dict[str, dict[str, Any]] = {
                        "discharged_by": ()},
     "schedules-covered": {"is": "SenderDecodes's schedule half, PeriodLeakAccepted's hs: each secret K counts runs on a "
                                 "schedule of Ss, whose number k_sched counts, so Ss must hold every schedule the "
-                                "network certifier's signed records can show. A property of the compiled Lean audit "
-                                "the verification runs over those records, which trusted-host makes the traffic that "
-                                "crossed, never of the device's code. Open, by this name, until the Property that "
-                                "gives it of that audit is in the lock at the statement `DISCHARGES` pins; the decoder "
-                                "half is what K counts (`COUNTS`)",
+                                "network certifier's signed records can show, the union over their arrivals. A "
+                                "property of the compiled Lean audit the verification runs over those records, which "
+                                "trusted-host makes the traffic that crossed, never of the device's code. Open, by "
+                                "this name, until k_sched's count bounds that union and the Property that gives it, "
+                                "stated over that audit, is in the lock at the statement `DISCHARGES` pins; the "
+                                "decoder half is what K counts (`COUNTS`)",
                           "discharged_by": ("Properties.NetworkCertifier.SchedulesCoveredAt",)},
     "sampled-leg-bridge": {"is": "the sampled leg's bridge, from its guarantee Verity.Vocab.SampledProofsSound at "
                                  "one-stage v2 to OneStageZk's Lean record: the sampled facts the period takes (KS; "
