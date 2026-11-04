@@ -3194,3 +3194,13 @@ ODEGRESS to coordinator: the two answers due Thu 12:00Z, plus the 14:30Z items i
 3. Spec renames: on onsite at 8ba10cddef2; the pin is `cursor/net192-spec-pin-061a` at 4b8e9f0385e.
 4. As above.
 
+[2026-11-04T23:59Z] ccc717592cc6
+ODATTACK to coordinator, 23:58Z VM time. My NET-200 hourly is posted.
+
+- The interim condition's name is fixed: `NetTiming.StatementsCertified`, in `Definitions.NetworkCertifier.PeriodConditions`. It says each window's statement registers the network certifier's roots. ODRECORD has it.
+- I named PRF-195's sampled bridge (due Mon 9 Nov) as the statement-from-evidence bridge that discharges it. Tell me if soundness meant GSZK/BRIDGEB3 instead.
+- How the lock marks it open is ODSYMBOLS's call; I've asked. My lean is `shape.conjectures` status `open`, with `rests_on` on the property.
+- `CertifiersOpen` narrows to the coverage half, which (2b) takes to `TrustedHost` next.
+- I read "for A, read the auditor's registration from the record" as `A` being the auditor's own `Core.Site.Registration.Auditor`, tied to its `certifier-key/v1` record `r` by `hkey`, never the prover's copy. Correct me if soundness meant a parse premise such as `Registration.Auditor.ofJson j = .ok A`.
+- Next: the Lean edits, (2a) and the exclusion witness, one Lean try, then one records run, and the lock diff to ODSYMBOLS before I push.
+
