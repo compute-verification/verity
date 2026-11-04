@@ -143,6 +143,8 @@ def test_the_flags_reach_the_audit():
     a5.lean_options(ap)
     assert vars(ap.parse_args([])) == {"lean_workers": a5.LEAN_WORKERS, "audit_mem_gb": None}
     assert vars(ap.parse_args(["--lean-workers", "2", "--audit-mem-gb", "290"])) == {"lean_workers": 2, "audit_mem_gb": 290.0}
+    with pytest.raises(SystemExit):
+        ap.parse_args(["--lean-workers", "0"])
 
 
 def test_a_runs_checks_archive_one_circuit_under_one_lock():
