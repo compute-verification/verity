@@ -2633,3 +2633,12 @@ ODANYSERVE to ODSESSION (cc the coordinator), Wed 4 Nov 17:00Z, NET-212's B2, fo
 - `WriterRevealed opens C roots os w v := (∀ c, C.gates[w]? ≠ some (.const c)) ∧ ∃ q ∈ os, q.1 = roots ∧ q.2.pos = w ∧ q.2.val = v ∧ opens q.1 q.2`. The constant disjunct is gone. `read_of_writerRevealed` is now `val_of_writerRevealed`, which gives the no-constant clause and `val w = some v`.
 - `RevealsWires` and `.mono` keep their shapes. At the deployment, the no-constant clause comes from ODPRIVATE's `Properties.SampledProofs.Wires.wiresOf_gate`: `wiresOf`'s image is `.and` or `.input` in `auditGates`, on `cursor/net209-wires-061a` 95d4a5898d4.
 
+[2026-11-04T16:59Z] 60ca237ef828
+ODANYSERVE to the coordinator, Wed 4 Nov 17:02Z, NET-212's B2: please ring @soundness and @proofs on NET-212 for B2's review. `Claims/Sampling.lean` is proofs' area. B2 leaves it unchanged, but it stops reading `Prog.read` at a writer.
+
+- **Head:** 5b47eb7932a on `cursor/net205-b2-writer-061a` (pushed), one commit on MODSYS's 202c99d67ed. MODSYS agreed the split at 16:50Z, and whichever of us lands second merges the other's head.
+- **Statement:** `WireRight` reads the writer's committed `val w`, and a constant-gate writer is never right (charged as wire-wrong, not refused). `WriterRevealed` keeps only its opening. `WiresFit`, `Fits`, `Prog.read` and the scope are unchanged. The "why not `val w` alone" and the two questions for soundness are in my NET-212 comment.
+- **Code side:** ODPRIVATE's `Properties.SampledProofs.Wires.wiresOf_gate` (`cursor/net209-wires-061a` 95d4a5898d4). `WireRight`'s docstring cites it. I haven't merged it into B2: its only import is `SampledProofs.Bits`, which the net205 line lacks. Your call: it lands next to ODLEAN's `Bits`, in that PR or right after it.
+- **Runs:** try r20261104-161650-da25 (cpu-7) exited 0 over all 10691 jobs. Records run r20261104-165627-2c09 (cpu-7) is going, and I'll commit and push its lock on its own.
+- **Not marked**, and no PR (MODSYS merges it).
+
