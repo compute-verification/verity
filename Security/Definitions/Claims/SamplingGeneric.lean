@@ -421,6 +421,7 @@ def histOf (ms : List (Msg × Out)) : List (Msg × Msg) :=
     | .msg m => m
     | _ => [])
 
+open Classical in
 /-- `A`'s simulator at the session statement `xS`, given the outcome `o`, on the coins `C` read as its own through a
 bijection; nothing where there is none. -/
 noncomputable def simAt {St : Type} (S : SimOut St) (C : Type) (xS : Msg) (o : St) (c : C) : SP (List (Msg × Out)) :=
