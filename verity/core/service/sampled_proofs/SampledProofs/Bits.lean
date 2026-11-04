@@ -25,7 +25,7 @@ describes, where each of its gates sits, and each unit's gates and inputs. The s
 * `Members`, `base`, `wiresOf`: an audit's members, each a statement on a circuit file over some of the partition's VUs,
   side by side, and each source bit's wire to the first claims position at its commitment position, compared at the
   partition's VUs: the writer's output bit, else the first copy.
-* `width P g`: the width of the leaf a Program's layout gate `g` produces.
+* `defWidth d`, `width P g`: the width of a primitive's leaf, and of the leaf a Program's layout gate `g` produces.
 * `check c P tmpl`: why Bits doesn't lay `c` out as template `tmpl` of `P`, or none.
 
 The circuit file holds each unit's Boolean circuit as a whole, not each primitive's: no row is a primitive's own, so a
@@ -372,26 +372,40 @@ def wiresOf (ms : Members) (x : Nat) : Option Nat :=
 
 /-! ## A Program's leaf widths -/
 
-/-- **The width of the leaf a Program's layout gate `g` produces**: its primitive's `Value<w>`, and 0 where the layout has
-no gate `g`. -/
+/-- **The width of a primitive's leaf**: its `Value<w>` return's `w`, and 0 for any other return. An input primitive's
+id names the same width, which `Flock.Program.decode` holds it to. -/
+def defWidth (d : Flock.Program.Defn) : Nat :=
+  match d.ret with
+  | .value w => w
+  | _ => 0
+
+/-- **The width of the leaf a Program's layout gate `g` produces**: its primitive's (`defWidth`), and 0 where the layout
+has no gate `g`. -/
 def width (P : Flock.Program.Prog) (g : Nat) : Nat :=
   match P.gate g with
-  | .ok (p, _, _) => match (P.defs[p]!).ret with
-    | .value w => w
-    | _ => 0
+  | .ok (p, _, _) => defWidth P.defs[p]!
   | .error _ => 0
 
 /-! ## The file against its Program -/
 
 /-- **Why Bits doesn't lay out the circuit file `c` as template `tmpl` of the Program `P`**, or none: the template is
-no Definition of `P`, no template instance makes a unit, the unit net's constant sits among its input words (`Rows.ofNet`
-and `srcKey` split the inputs at different columns), a net other than the unit returns the outputs (`keyProg`'s
-outputs are the unit net's), or a returned output bit sits on no computed row, so that every writer is a copy row and
-none an input or a constant. -/
+no Definition of `P`, no template instance makes a unit, a port of the unit's first input or output group is not one
+16-bit word (`srcAt` and `outCol` place a port's bits in one), the leaf maps are not one per template instance over the
+unit's ports (a typed template's block, whose wiring is derived, has none), the unit net's constant sits among its
+input words (`Rows.ofNet` and `srcKey` split the inputs at different columns), a net other than the unit returns the
+outputs (`keyProg`'s outputs are the unit net's), or a returned output bit sits on no computed row, so that every writer
+is a copy row and none an input or a constant. -/
 def check (c : Flock.Circuit) (P : Flock.Program.Prog) (tmpl : String) : Option String :=
   let R0 := Rows.ofNet c.unit
+  let gi := (c.unit.inGroups.getD 0 default).bits
+  let go := (c.unit.outGroups.getD 0 default).bits
   if !P.defs.any (·.id == tmpl) then some s!"the circuit file's template {tmpl} is no Definition of the Program"
   else if c.upv == 0 then some "the circuit file's unit holds no template instance"
+  else if gi.any (· != 16) || go.any (· != 16) then
+    some "a port of the circuit file's unit is not one 16-bit word"
+  else if c.leavesIn.size != c.upv || c.leavesOut.size != c.upv || (List.range c.upv).any fun k =>
+      (c.leavesIn.getD k #[]).size != gi.size || (c.leavesOut.getD k #[]).size != go.size then
+    some "the circuit file's leaf maps are not one per template instance over its unit's ports"
   else if R0.nIn != c.unit.inWords * Flock.WORD then
     some "the circuit file's unit net has its constant among its input words"
   else if c.outNet != c.unitNet then some "the circuit file returns its outputs from a net other than its unit"
@@ -430,12 +444,18 @@ private def mixed : String :=
   | .ok P => (List.range 7).map (width P) == [16, 16, 1, 1, 1, 32, 0]
   | .error _ => false
 
+/-- A file of one template instance on a unit of no ports. -/
+private def bare : Flock.Circuit := { (default : Flock.Circuit) with upv := 1, leavesIn := #[#[]], leavesOut := #[#[]] }
+
+private def refuses (why : String) : Option String → Bool := Option.any (·.startsWith why)
+
 #guard match Flock.Program.decode mixed.toUTF8 with
-  | .ok P => check { (default : Flock.Circuit) with upv := 1 } P "TMix_v1" == none &&
-      (check { (default : Flock.Circuit) with upv := 1 } P "TOther_v1").isSome &&
-      (check default P "TMix_v1").isSome &&
-      (check { (default : Flock.Circuit) with upv := 1, outNet := 1 } P "TMix_v1").isSome &&
-      (check { (default : Flock.Circuit) with upv := 1, leavesOut := #[#[0]] } P "TMix_v1").isSome
+  | .ok P => check bare P "TMix_v1" == none &&
+      refuses "the circuit file's template" (check bare P "TOther_v1") &&
+      refuses "the circuit file's unit holds no" (check default P "TMix_v1") &&
+      refuses "the circuit file returns" (check { bare with outNet := 1 } P "TMix_v1") &&
+      refuses "the circuit file's leaf maps" (check { bare with leavesOut := #[#[0]] } P "TMix_v1") &&
+      refuses "the circuit file's leaf maps" (check { bare with leavesIn := #[] } P "TMix_v1")
   | .error _ => false
 
 #guard wiresOf [] 0 == none
@@ -480,7 +500,12 @@ private def toyMs : Members := [(toyA, #[0, 1]), (toyB, #[0, 1])]
 #guard wiresOf [(toyA, #[0, 1]), (toyB, #[2, 3])] (360 + 2 + 128 + 5) == none
 #guard wiresOf [(toyA, #[0, 1]), (toyB, #[1, 3])] (360 + 2 + 5) == some 329
 #guard match Flock.Program.decode mixed.toUTF8 with
-  | .ok P => check toyA P "TMix_v1" == none
+  | .ok P => check toyA P "TMix_v1" == none &&
+      refuses "a port of the circuit file's unit"
+        (check { toyA with nets := #[("unit", { toyNet with inGroups := #[⟨0, 1, #[16, 8]⟩] })] } P "TMix_v1") &&
+      refuses "the circuit file's leaf maps" (check { toyA with leavesIn := #[#[]] } P "TMix_v1") &&
+      refuses "a returned output bit"
+        (check { toyA with nets := #[("unit", { toyNet with outGroups := #[⟨0, 1, #[16]⟩] })] } P "TMix_v1")
   | .error _ => false
 
 end SampledProofs.Bits
