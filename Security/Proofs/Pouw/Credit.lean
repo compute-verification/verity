@@ -356,6 +356,78 @@ theorem establishedSound_of (htile : Properties.Pouw.Strata.StrataTile) : Establ
 (`Properties.Pouw.Strata.strataTile`), so the total work `established` passes `epsAt` is the strata's. -/
 theorem establishedSound : EstablishedSound := establishedSound_of Properties.Pouw.Strata.strataTile
 
+/-! ## The draw coin's session is withheld (`DrawWithheld`) -/
+
+section Withheld
+
+open SampledProofs.Challenger (ChallengerKey trustedSessionOf withheldOn)
+
+theorem bind_eq_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {v : β} (h : (x >>= f) = .ok v) :
+    ∃ a, x = .ok a ∧ f a = .ok v := by
+  cases x with
+  | error e => cases h
+  | ok a => exact ⟨a, rfl, h⟩
+
+theorem drawSession_withheld {ledger : Json} {k : ChallengerKey} {pins main session : Json} {root : String} {x}
+    (h : PouwCheck.Credit.drawSession ledger k pins main session root = .ok x) : withheldOn ledger root = true := by
+  unfold PouwCheck.Credit.drawSession at h
+  obtain ⟨_, -, h⟩ := bind_eq_ok h
+  by_cases hw : withheldOn ledger root = true
+  · exact hw
+  · simp [hw] at h
+    cases h
+
+theorem creditedDraw_withheld {ledger : Json} {k : ChallengerKey} {pins main draw : Json} {root : ByteArray}
+    (h : PouwCheck.Credit.Internal.creditedDraw ledger k pins main draw root = .ok ()) :
+    ∃ r, PouwCheck.get draw "root" = .str r ∧ withheldOn ledger r = true := by
+  unfold PouwCheck.Credit.Internal.creditedDraw at h
+  dsimp only at h
+  split at h
+  · next hr =>
+    obtain ⟨_, hx, -⟩ := bind_eq_ok h
+    refine ⟨Flock.hexOf root, ?_, drawSession_withheld hx⟩
+    revert hr; cases PouwCheck.get draw "root" <;> simp [PouwCheck.str?]
+  · cases h
+
+theorem drawWithheld : DrawWithheld := by
+  intro key ledger pins main salt calls served commit rounds draw got h
+  unfold PouwCheck.Credit.Internal.credited at h
+  obtain ⟨⟨k, out, root⟩, -, h⟩ := bind_eq_ok h
+  obtain ⟨u, hu, -⟩ := bind_eq_ok h
+  cases u
+  exact creditedDraw_withheld hu
+
+/-- The draw session's step (`drawSession`) accepts every session the ledger opens withheld on the draw root and
+`trustedSessionOf` trusts, as a withheld deployment's is. -/
+theorem drawSession_honest {ledger : Json} {k : ChallengerKey} {pins main session : Json} {root : String} {x}
+    (ht : trustedSessionOf ledger (Json.mkObj [("root", Json.str root)]) k pins main session = .ok x)
+    (hw : withheldOn ledger root = true) : PouwCheck.Credit.drawSession ledger k pins main session root = .ok x := by
+  simp [PouwCheck.Credit.drawSession, ht, hw, Except.mapError]
+
+/-- **`DrawWithheld`'s nontrivial lemma**: its conclusion fails at the empty ledger, which opens no session, and the draw
+`{root: ""}`, for every root `r`: the empty ledger withholds no draw root. -/
+theorem drawWithheld_nontrivial :
+    ∀ r : String, ¬ (PouwCheck.get (Json.mkObj [("root", Json.str "")]) "root" = .str r ∧
+      withheldOn (.arr #[]) r = true) := by
+  rintro r ⟨-, hw⟩
+  simp [withheldOn] at hw
+
+/-- **`DrawWithheld` fails at a verifier that accepts everything**: such a verifier credits the empty ledger and the draw
+`{root: ""}`, where the conclusion fails (`drawWithheld_nontrivial`). -/
+theorem drawWithheld_acceptAll
+    (f : Json → Json → Json → Json → Json → Json → Json → Json → Json → Json → Except (String × String) (List Nat))
+    (hall : ∀ key ledger pins main salt calls served commit rounds draw,
+      ∃ got, f key ledger pins main salt calls served commit rounds draw = .ok got) :
+    ¬ ∀ key ledger pins main salt calls served commit rounds draw got,
+      f key ledger pins main salt calls served commit rounds draw = .ok got →
+        ∃ r, PouwCheck.get draw "root" = .str r ∧ withheldOn ledger r = true := by
+  intro h
+  obtain ⟨got, hf⟩ := hall .null (.arr #[]) .null .null .null .null .null .null .null (Json.mkObj [("root", Json.str "")])
+  obtain ⟨r, hr, hw⟩ := h _ _ _ _ _ _ _ _ _ _ _ hf
+  exact drawWithheld_nontrivial r ⟨hr, hw⟩
+
+end Withheld
+
 /-- **The grouped draw misses a set of blocks of work `ε·C` with probability at most `δ`** (`GroupedDrawMisses`): the
 blocks of `Bb` miss every drawn group exactly when their leaves `Bb.image leafOf` are all missed, and those leaves do at
 least the blocks' work, so `workDrawMisses` at `B = Bb.image leafOf`. -/

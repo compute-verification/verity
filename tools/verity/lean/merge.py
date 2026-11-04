@@ -41,12 +41,19 @@ a verdict: `check`'s Lean audit rebuilds every record of the merged tree and fai
 train's (`--regenerate`) commits the regenerated records on landing, and the landing DM shows each one that changed
 against `main`.
 
+Git runs a driver from the worktree of the side merged into, so a branch whose checkout took older merge rules would merge
+`main`, or another branch, by those (`deferred`): when `origin/main` has changed this file or `check.py` since the checkout took
+them, and the checkout neither edited them nor committed a `merge.py` of its own, this file runs `origin/main`'s copy of its
+directory instead and says so on stderr. `research queue` runs the drivers of the tip it merges onto already (`base_drivers`).
+
 The layer rules (`layers`), which two branches that each widen a layer for a guarantee both change, merge field by field: `imports`
 and `except` as lists, `why` as a list of its `; ` clauses (`layers`). Every list of names (the roots, `meaning`, `proved_in`,
 `claims.modules`, `shape.premises`...), which two branches that each add a module both change, merges as a list (`items`). For a `.lean` file (`--lean`, `lean-imports` in
 `.gitattributes`), git's own merge runs and only a conflict all of whose sides are import lines (each one import in any form
 `headers.py` reads: `public import`, `meta import`, `import all`) is merged, as a list: two branches
-that each add a guarantee's module to `Guarantees.lean` merge, and any other conflict stays git's. For a `lakefile.toml`
+that each add a guarantee's module to `Guarantees.lean` merge, and any other conflict stays git's. When one side's file is on
+the module system and the other's isn't (a branch made before the port), the one that isn't is ported first (`modules.py`), as
+rerunning the codemod on that branch would. For a `lakefile.toml`
 (`--lakefile`, `lakefile-lists`), a conflict all of whose sides are `[[require]]` blocks merges as a set of blocks, and one all
 of whose sides are a string array's items (`roots`) merges as a list, wrapped as ours wraps it: two branches that each require a
 package or add a root to `Security/Properties` merge. Any other conflict, and a result that is not TOML, stays git's. In
@@ -102,6 +109,10 @@ DEEPER = {"shape[inline]"}
 #: the witness rule's sections, merged entry by entry with theirs' value where the sides disagree (`judged`)
 JUDGED = {"unwitnessed", "witnesses"}
 MISSING = object()
+#: the landed drivers a checkout's older one defers to (`deferred`), and the files whose history decides that: this file and
+#: the `check.py` it loads
+MAIN = "origin/main"
+RULES = ("tools/verity/lean/merge.py", "tools/verity/lean/check.py")
 
 
 def one(path: str, o, a, b, why: list[str]):
@@ -482,6 +493,34 @@ def _imports(lines: list[str]) -> bool:
     return all(_import(s) or not s.strip() for s in lines)
 
 
+@functools.cache
+def _modules():
+    """`modules.py`, loaded only to merge a `.lean` file: the record driver runs where `merge.py` and `check.py` are alone."""
+    return A.sibling("modules")
+
+
+def _ported(sides: tuple[Path, Path, Path], tmp: Path) -> tuple[Path, Path, Path]:
+    """A `.lean` file's three sides, each that isn't on the module system ported (`modules.py`, its copy under ``tmp``) when
+    ours or theirs is: what a branch made before the port takes by rerunning the codemod.  Unported, the port's change to
+    every header line conflicts with that branch's imports, and an import either side removed is still in the other's
+    spelling.  A side the codemod refuses stays as it is."""
+    M = _modules()
+    texts = [p.read_text() for p in sides]
+    if not any(M.is_module(t) for t in texts[1:]):
+        return sides
+    out = []
+    for name, p, t in zip(("base", "ours", "theirs"), sides, texts):
+        try:
+            new = M.port(t)
+        except ValueError as e:
+            print(f"merge.py --lean: the {name} side stays off the module system: {e}", file=sys.stderr)
+            new = t
+        if new != t:
+            (p := tmp / name).write_text(new)
+        out.append(p)
+    return out[0], out[1], out[2]
+
+
 def _import_names(text: str) -> set[str]:
     return {s.strip() for s in text.splitlines() if _import(s)}
 
@@ -680,17 +719,20 @@ def lean(base: Path, ours: Path, theirs: Path, resolvers=None) -> tuple[str, int
     """(the merged text, the number of conflicts left) of a `.lean` file: git's own merge (`git merge-file`), then each conflict
     whose three sides are only `import` lines merged as lists of imports (`items`), so two branches that each add a module to
     an import list merge.  Every import outside a conflict left is then held to the whole files' imports (`kept`), once
-    each: one side removed stays removed wherever git's hunks put it.  Any other conflict is left as git writes it.
-    ``resolvers`` (each `(base, ours, theirs)` lines to the merged lines, or None) replace the imports rule, and with them
-    no import is filtered."""
+    each: one side removed stays removed wherever git's hunks put it.  Any other conflict is left as git writes it.  When
+    ours or theirs is on the module system, the sides that aren't are ported first (`_ported`), so the merge is of what
+    each side changed beyond the port.  ``resolvers`` (each `(base, ours, theirs)` lines to the merged lines, or None)
+    replace the imports rule, and with them no side is ported and no import is filtered."""
     keep = None
-    if resolvers is None:
-        keep = kept(*(_import_names(p.read_text()) for p in (base, ours, theirs)))
-        resolvers = (lambda o, a, b: [s for s in items([s for s in o if s.strip()], [s for s in a if s.strip()],
-                                                       [s for s in b if s.strip()])]
-                     if _imports(a) and _imports(o) and _imports(b) else None,)
-    p = subprocess.run(["git", "merge-file", "-p", "--diff3", "-L", "ours", "-L", "base", "-L", "theirs", str(ours), str(base),
-                        str(theirs)], capture_output=True, text=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        if resolvers is None:
+            base, ours, theirs = _ported((base, ours, theirs), Path(tmp))
+            keep = kept(*(_import_names(p.read_text()) for p in (base, ours, theirs)))
+            resolvers = (lambda o, a, b: [s for s in items([s for s in o if s.strip()], [s for s in a if s.strip()],
+                                                           [s for s in b if s.strip()])]
+                         if _imports(a) and _imports(o) and _imports(b) else None,)
+        p = subprocess.run(["git", "merge-file", "-p", "--diff3", "-L", "ours", "-L", "base", "-L", "theirs", str(ours),
+                            str(base), str(theirs)], capture_output=True, text=True)
     if p.returncode < 0 or p.returncode > 127:
         raise ValueError(f"git merge-file failed: {p.stderr.strip()}")
     out, left, lines, n, seen = [], 0, p.stdout.splitlines(keepends=True), 0, set()
@@ -847,6 +889,38 @@ def load(path: Path) -> dict:
     return A.as_guarantees(json.loads(text)) if text.strip() else {}
 
 
+def deferred(argv: list[str]) -> int | None:
+    """Run the driver ``argv`` names with `MAIN`'s copy of this directory when git runs this file from its worktree, unedited,
+    and `MAIN` has changed the merge rules (`RULES`) since this checkout took them while the checkout committed no `merge.py`
+    of its own: that run's exit status, else None, and this file merges. Git runs a driver from the worktree of the side
+    merged into, so a branch that merges another into an older checkout would merge by the rules that checkout took: one from
+    before `held` applies a side's drop of `shape.inline` premises the merged tree still prints, and that tree's records fail
+    `guarantees.inline-hypothesis`. Without `MAIN` (a test's repository) this file merges, and a copy outside the worktree
+    (the one this runs, and those `research queue`'s `base_drivers` runs, the drivers of the tip it merges onto) never
+    defers."""
+
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", *args], capture_output=True)
+    top = git("rev-parse", "--show-toplevel")
+    if top.returncode or (Path(top.stdout.decode().strip()) / "tools" / "verity" / "lean").resolve() != HERE:
+        return None
+    tip = git("rev-parse", "-q", "--verify", f"{MAIN}^{{commit}}").stdout.decode().strip()
+    if (not tip or git("diff", "--quiet", "HEAD", "--", *RULES).returncode
+            or not git("rev-list", "-n1", tip, "^HEAD", "--", *RULES).stdout.strip()
+            or git("rev-list", "-n1", "HEAD", f"^{tip}", "--", RULES[0]).stdout.strip()):
+        return None
+    ls = git("ls-tree", "-z", tip, "--", f"{Path(RULES[0]).parent}/").stdout
+    with tempfile.TemporaryDirectory(prefix="lean-merge-driver-") as tmp:
+        for e in filter(None, ls.split(b"\0")):
+            meta, path = e.decode().split("\t", 1)
+            if meta.split()[1] == "blob":
+                (out := Path(tmp) / path).parent.mkdir(parents=True, exist_ok=True)
+                out.write_bytes(git("cat-file", "blob", meta.split()[2]).stdout)
+        print(f"merge.py: merging with {MAIN}'s drivers ({tip[:10]}), which changed the merge rules since this checkout "
+              f"took them", file=sys.stderr)
+        return subprocess.run([sys.executable, str(Path(tmp) / RULES[0]), *argv]).returncode
+
+
 def install(repo: Path) -> None:
     """Register the driver in ``repo``'s git config, as this file's path from the top of the worktree (git runs drivers
     there)."""
@@ -894,6 +968,8 @@ def main(argv: list[str]) -> int:
         return 0
     if len(a.files) not in (3, 4):
         ap.error("name BASE OURS THEIRS [PATH], or --install, or --normalize FILE...")
+    if (rc := deferred(argv)) is not None:
+        return rc
     base, ours, theirs = a.files[:3]
     path = a.files[3] if len(a.files) == 4 else ours
     if a.lean or a.lakefile or a.caps:

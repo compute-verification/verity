@@ -11,6 +11,7 @@ holds it to `Json.compress` on the writers' shared vectors.
 -/
 import Lean.Data.Json
 import Flock.Bytes
+import Flock.JsonParse
 
 namespace Flock.RecordText
 
@@ -59,13 +60,13 @@ def refusal : String :=
 
 /-- **S0: the record is in its canonical text**: it parses, and `printT` of what it parses to is the record. -/
 def check (text : String) : V Unit :=
-  match Json.parse text with
+  match JsonParse.parse text with
   | .ok j => if printT j == text then pure () else throw refusal
   | .error e => throw s!"record: not JSON: {e}"
 
 /-- **S0's soundness**: a record S0 accepts is what `printT` prints of what it parses to, so two accepted records that
 parse alike are one text. -/
-theorem check_ok {text : String} (h : check text = .ok ()) : ∃ j, Json.parse text = .ok j ∧ printT j = text := by
+theorem check_ok {text : String} (h : check text = .ok ()) : ∃ j, JsonParse.parse text = .ok j ∧ printT j = text := by
   unfold check at h
   split at h
   · rename_i j hj
@@ -76,7 +77,7 @@ theorem check_ok {text : String} (h : check text = .ok ()) : ∃ j, Json.parse t
   · cases h
 
 /-- S0 accepts a text that is `printT` of what it parses to. -/
-theorem check_of {text : String} {j : Json} (hp : Json.parse text = .ok j) (he : printT j = text) :
+theorem check_of {text : String} {j : Json} (hp : JsonParse.parse text = .ok j) (he : printT j = text) :
     check text = .ok () := by
   unfold check
   rw [hp]
@@ -85,7 +86,7 @@ theorem check_of {text : String} {j : Json} (hp : Json.parse text = .ok j) (he :
 
 /-- **Two records S0 accepts that parse alike are one text.** -/
 theorem check_inj {r r' : String} (h' : check r' = .ok ()) (h : check r = .ok ())
-    (hp : Json.parse r' = Json.parse r) : r' = r := by
+    (hp : JsonParse.parse r' = JsonParse.parse r) : r' = r := by
   obtain ⟨j', hj', e'⟩ := check_ok h'
   obtain ⟨j, hj, e⟩ := check_ok h
   rw [hj', hj] at hp
