@@ -1040,7 +1040,7 @@ theorem read_run {dev : History} {log : List Release} (hP : PrintsLog dev log) {
     {out : List Release} (h : readLog label after recs (r.released label after) r.log = some out) :
     List.Forall₂ ReadOf out log := by
   obtain ⟨hp, hξ⟩ := hP pk w r hr ho
-  obtain ⟨c, roots, -, hroots⟩ := hcr
+  obtain ⟨c, roots, -, hroots⟩ := id hcr
   rw [readLog_head hroots] at h
   have hT := trees_log hts
   have hn : (r.log.filterMap helloRoot).Nodup := hT.roots ▸ hT.nodup
