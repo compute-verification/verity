@@ -337,8 +337,8 @@ def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: 
           art: str | None = None) -> tuple[dict, dict]:
     """The panel and what it rests on: every candidate's ρ, binding and basis beside the table's at each policy it
     holds (`check`, `TABLE`) where the table is this te_core's (else `check_skipped` says whose it is), the candidates
-    the scorer's rows don't give (`missing`) and the reached runs with no trace yet (`untraced`). `art` names the
-    tables in the source."""
+    the scorer's rows don't give (`missing`) and the reached runs with no trace yet (`untraced`). The source names the
+    tables by `art` where given (within console's `SOURCE_MAX`), else by their time."""
     from te_core import algorithm_policy
 
     src = tables / "algorithm-policy" / "tables" / "algorithm-policy.json"
@@ -423,8 +423,8 @@ def build(tables: Path, ledger: Path, steps: Path, runs: dict[str, str], stamp: 
                 rows.append(labelled(at | row, label))
     p = {"id": PANEL, "title": "Red teaming by model size: standard training's rho and the frontier's least S = p*rho",
          "kind": "table", "updated_at": stamp,
-         "source": f"python islands/ladder-v3/size_scaling.py build (training's slowdown code {VERSION}; frontier: the "
-                   f"scorer's algorithm-policy table of {made}{f' ({art})' if art else ''}; steps traced in "
+         "source": f"python islands/ladder-v3/size_scaling.py build (training's slowdown code {VERSION}; the scorer's "
+                   f"algorithm-policy table {art or f'of {made}'}; steps traced in "
                    f"{', '.join(sorted(set(runs.values()))) or 'no run'})",
          "note": note(), "columns": COLUMNS, "rows": [[r.get(c) for c in COLUMNS] for r in rows]}
     missing = sorted({r["record"] for r in reached if checkpoint(r["record"]) not in measured})
