@@ -97,7 +97,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   commitment to an honest trace, meets every hypothesis and empties the incorrect set. A cost is what the program
   evaluates, never a declared field. `tests/test_lean_vocabulary.py` refuses a second `Extractor` or `Simulator` type.
 - **The verifier derives what soundness reads.** A set soundness depends on (the ports that must be registered, the
-  sampled units, the bound roots) is computed in Lean from public registered data (the registered circuit's interface,
+  sampled proof blocks, the bound roots) is computed in Lean from public registered data (the registered circuit's interface,
   the registration), never read from a file `verity.ml` or an integration writes, which only supplies values checked
   against it; else the guarantee covers what the writer chose (a registered output bound instead of registered).
 - **"Proved" is four checks**, each named when only some hold: it elaborates (`verity lean try`, whose "lean exit 0" says
