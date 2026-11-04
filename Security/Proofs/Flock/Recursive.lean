@@ -43,6 +43,9 @@ import Proofs.Flock.Recursive.FirewallAdaptive
 import Proofs.Flock.Recursive.PublicAudit
 import Proofs.Flock.Recursive.PublicAuditProof
 import Proofs.Flock.Recursive.HoloExec
+import Proofs.Flock.Recursive.FirewallObj
+import Proofs.Flock.Recursive.FirewallSteps
+import Proofs.Flock.Recursive.FirewallHonest
 import Proofs.Flock.Recursive.StageKinds
 import Proofs.Flock.Recursive.HoloCoins
 import Proofs.Flock.Recursive.HoloSched
