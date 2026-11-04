@@ -12,7 +12,14 @@ commit you ask it to. The jobs it runs are data in `ci.toml`: each has an owner,
 `verity check tests|circuits|lean` runs only those parts and what their jobs need. `check.py`'s docstring lists the rest: shards,
 `--deferred STEP,...`, `--plan` and `--slots`.
 
-A job with `gate = false` in `ci.toml` is off the merge gate: a recorded check and its shards leave it out, and `research
+The runners (`suites.py`, `circuit-check`, `check.py`'s steps) report real verdicts and nothing else: a test, target or step
+that failed is failed, whoever is fixing it. What gates and what may stay red is drive's config, `policy.toml`
+(`research.policy`), which drive reads at the commit it judges. An allowance there (`[[allow]]`: an id, its owner, when it
+expires in UTC, and why) covers one suite, one test or one circuit-check failure: drive takes such a failure as not red (no
+culprit, no revert, no hold on `main`) until it expires, and then rings its owner and names the allowance. The quick tier
+applies `main`'s allowances the same way.
+
+A job in `policy.toml`'s `off_gate` is off the merge gate: a recorded check and its shards leave it out, and `research
 merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`. Each runs after landing, in the run that
 checks `checked`'s tip, and doesn't hold `main`. A red `circuit-check` reverts its culprit at once and lands no PR touching its
 inputs until it passes; a red `ratchet-gate` reverts its culprit as any other after-landing red does. `circuit-check` goes back
@@ -109,8 +116,11 @@ resolved lock entries and installed versions, Python, the platform, the base ima
 the environment check gives that step, a split suite's part `suites.part_key` (its own test files and the suite's shared
 inputs), and its argv pins the partition (`SUITE:K/M@digest`, which `suites.py` refuses on a machine whose record partitions
 otherwise); a Lake package's, `lean_audit.components` (its content and its path dependencies' and
-provers', the auditor's files, the toolchain pin) with Python and the base image; a job in `check.STEP_KEYS`, that step's key.
-So keys are of the machine that lists them: list on a worker. These have no key yet, and run whenever they're in the graph: the
+provers', the auditor's files, the toolchain pin) with Python and the base image; a job in `check.STEP_KEYS`, the git ids of its
+`inputs` paths (which cover what that step's key reads of the tree) under the environment a suite's key reads. What a step's
+key reads of the machine (the kernel release, `rustc -vV`, the slot's paths) check's own cache keys where the task runs, so a
+lister and a worker on other slots or hosts list one key. So keys are of the machine that lists them only as a suite's are
+(Python, the platform, the base image): list on a worker. These have no key yet, and run whenever they're in the graph: the
 builds (no declared inputs, read guard or keyed outputs), circuit-check's slices (it keys each target, from a task list only a
 run builds), and the jobs that keep no verdict (`lean-unit-cut`, `lean-changed`, `ratchet-gate`). The preflight is no task: a
 worker's `uv sync --locked` refuses a lock that isn't current, each suite fetches the fixtures it reads, and the repository's
