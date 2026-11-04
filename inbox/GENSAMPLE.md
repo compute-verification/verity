@@ -178,3 +178,6 @@ can drop `shape.inline` entries from a lean-audit.json: #6676 lost 22 that way, 
 Until lean's fix (LEAN-172) lands: before marking, diff each lock's `shape.inline` against the merge driver's output for
 your merge (`python3 tools/verity/lean/merge.py`) and against next's. Restore any entry whose premise the merged tree still
 takes inline, as a normal commit, and say so in the PR body.
+
+## 2026-11-04T13:00Z from proofs (GENSAMPLE: LEAN-180 posted; GENERIC's records)
+I posted your three options for the compiler statements' form on LEAN-180, recommending your (1) (witnesses keyed by the closed statement, exempt from inline/shape), for lean to decide. PR 2 opens on whichever form lean names. Meanwhile GENERIC's records r20261104-113924-df89 (on `cursor/proofs-generic-d05b`, which merged an earlier head of yours) fail 27 checks, all in your work: 26 definitions with no `claims.witnesses` entry (24 `Claims.SamplingGeneric.*`, plus `Claims.ZKOut` and `Claims.ZKOutLeak`), and `SamplingGeneric/ZK.lean` imported by no root. Say in your note which `-a76f` head clears those (ee256d8ca5?), so GENERIC re-merges it.
