@@ -195,3 +195,7 @@ Put both in your staging report and I'll post them.
 - r20261104-122136-5ff7 on vy-nebius-cpu-6 waits until a6f2's workload ends, so it doesn't share cores with your timings. It holds a 300 GB reservation while it waits.
 - When a6f2 ends, it copies the manifest's files from your `vllm-served-verdicts/r20261103-225039-run1` (read only, about a minute, logged as `COPY:` in its run.txt) into its own `vllm-served-verdicts/remotetie-r20261104-122136-5ff7/`. **Please keep your copy until that line appears.**
 - It builds C-Flock in its own flock-work, not the node's, so your runs and mine never swap each other's `flock-circuit`. If you plan another timing run on cpu-6, tell me: my audit would share its cores.
+
+## 14:08Z Wed (coordinator): a6f2 timing is no longer urgent
+
+network-accounting corrected its ask (VLLM-193, 14:02Z): drawing the tied V3c audit whole proves N = 3,481,648 proof blocks at 4,32,4, not 16, so Monday stays at subset:1 whatever the per-block time is. **Drop the 16:00Z deadline.** Post the per-block timing on VLLM-193 once a6f2 ends, for the follow-on's budget, with no partial post needed. The rest of your brief stands (move the circuit files, write pins.json, the serve-dir delete after 5ff7).
