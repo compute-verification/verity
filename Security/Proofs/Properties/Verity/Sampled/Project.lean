@@ -325,6 +325,32 @@ theorem RoundsReach.toStop_modes {β : Type} {fin : LiveOutJ J mPts → β} {roo
     rw [hoq]
     exact Pos.modes_eq hi (((Pos.le_rewrite _ _).trans (Pos.le_consume _)).trans hq) _
 
+variable {D M dg J B} in
+/-- **A trace's outcome is `fin` of the live session's outcome** at the trace's roots and link points: with the rounds
+the submissions answered along it leave, in order, and the proof files decoded from the play on the tape it ends on.
+Each answered submission is decoded at the stop after a position the trace passes through, which keeps the
+invariant; its coins are ones `B` doesn't hold of there, and the rest of the trace runs from that position. -/
+theorem RoundsReach.out {β : Type} {fin : LiveOutJ J mPts → β} {rootB : Array ByteArray}
+    {pts : Fin 2 → Fin mPts → 𝔽} {N : ℕ} {rs : Fin J → Fin 2 → List Flock.Round} {p : Pos g σ Claims.Msg (Fin R)}
+    {o : β × CoinTape g σ} (hr : RoundsReach D M dg J B fin rootB pts N rs p o) :
+    ∃ as : List (Pos g σ Claims.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽))),
+      o.1 = fin ⟨rootB, pts, as.foldl (fun rs a =>
+        addRoundJ rs a.2.1.tab a.2.1.rep (roundOf dg a.2.1.bytes a.2.1.n a.2.2)) rs,
+          D.proofs (CoinTape.run g σ o.2)⟩ ∧
+      ∀ a ∈ as, (∀ Ks₀ : Fin R → DigestCut Claims.Msg g, p.Inv Ks₀ → a.1.Inv Ks₀) ∧
+        D.sub J a.1.toStop.modes = some a.2.1 ∧
+        ¬ B a.1.toStop.g' J a.2.1 a.2.2 ∧ ∃ N' rs', RoundsReach D M dg J B fin rootB pts (N' + 1) rs' a.1 o := by
+  induction hr with
+  | zero rs p => exact ⟨[], rfl, fun _ h => by simp at h⟩
+  | stop N rs p _ => exact ⟨[], rfl, fun _ h => by simp at h⟩
+  | round N rs p s c o hs hB ho ih =>
+    obtain ⟨as, h1, h2⟩ := ih
+    refine ⟨(p, ⟨s, c⟩) :: as, h1, fun a ha => ?_⟩
+    rcases List.mem_cons.1 ha with rfl | ha
+    · exact ⟨fun _ h => h, hs, hB, N, rs, .round N rs p s c o hs hB ho⟩
+    · obtain ⟨hi, h3, h4, h5⟩ := h2 a ha
+      exact ⟨fun Ks₀ h => hi Ks₀ (Pos.inv_consume (Pos.inv_rewrite (Pos.toStop_spec h).2.2 _)), h3, h4, h5⟩
+
 /-! ### The joint law's tape -/
 
 open Classical in
@@ -549,6 +575,57 @@ theorem firstStop_modes (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.gam
   obtain ⟨q, hq, _, hoq⟩ := hr.through (Pos.inv_consume (Pos.inv_rewrite hi _))
   rw [hoq]
   exact Pos.modes_eq hi (((Pos.le_rewrite _ _).trans (Pos.le_consume _)).trans hq) _
+
+/-- **An outcome on the joint law's support off `BL` and `B` is the writer's** at the draw of a widened sample, the
+decoded registration and a live session's outcome: the roots decoded at the first stop, link points `BL` doesn't hold
+of there, the rounds the trace from the first stop leaves (`RoundsReach.out`), and the proof files decoded from the play
+on the tape beside the outcome. -/
+theorem reachesOff_out (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
+    (D : Decoders A.rounds A.Reg) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) (BL : LinkHold A.mP)
+    (B : RoundHold) {o : A.Out × CoinTape (V.game θ F c) σ} (h : ReachesOff V θ F c A rd σ D M BL B o) :
+    ∃ (ω : (A.extend M.widening).L.Ω) (pts : Fin 2 → Fin A.mP → 𝔽)
+      (reps : Fin (A.J ((A.extend M.widening).L.draw ω) (regOf V θ F c A rd σ D)) → Fin 2 → List Flock.Round),
+      ¬ BL (firstStop V θ F c A rd σ M ω).g' pts ∧
+      o.1 = (regOf V θ F c A rd σ D, (A.extend M.widening).L.draw ω,
+        A.wr ((A.extend M.widening).L.draw ω) (regOf V θ F c A rd σ D)
+          ⟨D.root (firstStop V θ F c A rd σ M ω).modes, pts, reps, D.proofs (CoinTape.run (V.game θ F c) σ o.2)⟩) := by
+  obtain ⟨ω, pts, hL, hr⟩ := h
+  obtain ⟨_, h1, -⟩ := hr.out
+  exact ⟨ω, pts, _, hL, h1⟩
+
+variable {V θ F c} in
+/-- **Off the misses, a stop decodes the message the play reveals there**: at the stop after a position of a trace that
+keeps the invariant at the rounds' cuts, where the tape the trace ends on misses at no round and its play reveals `w`
+at the cut of a round fixed at the stop, the stop's most likely message for that round is `w`. -/
+theorem RoundsReach.modes_noMiss {A : Live} {rd : Reading A.rounds} {σ : Strategy (V.game θ F c)}
+    {D : Decoders A.rounds A.Reg} {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} {B : RoundHold} {J N : ℕ}
+    {β : Type} {fin : LiveOutJ J A.mP → β} {rootB : Array ByteArray} {pts : Fin 2 → Fin A.mP → 𝔽}
+    {rs : Fin J → Fin 2 → List Flock.Round} {p : Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds)}
+    {o : β × CoinTape (V.game θ F c) σ} (hr : RoundsReach D M A.dg J B fin rootB pts (N + 1) rs p o)
+    (hp : p.Inv (roundCuts V θ F c rd)) (hn : NoMiss V θ F c rd σ o.2) {i : Fin A.rounds}
+    (hi : (p.toStop.Ks i).isHere = true) {w : Claims.Msg}
+    (hw : (roundCut V θ F c rd i).cut.revealOn σ o.2 = some w) : p.toStop.modes i = some w := by
+  rw [hr.toStop_modes hp]
+  dsimp only
+  rw [ite_eq_left hi]
+  by_contra hne
+  exact hn.1 i ((DigestCut.missOn_iff _ _ _).2 ⟨w, hw, hne⟩)
+
+/-- **Off the misses, the first stop decodes the message the play reveals there** (`firstStop_modes`). -/
+theorem firstStop_modes_noMiss (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c))
+    (D : Decoders A.rounds A.Reg) (M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP) (B : RoundHold)
+    (ω : (A.extend M.widening).L.Ω) (pts : Fin 2 → Fin A.mP → 𝔽) {J : ℕ} {β : Type} {fin : LiveOutJ J A.mP → β}
+    {rootB : Array ByteArray} {o : β × CoinTape (V.game θ F c) σ}
+    (hr : RoundsReach D M A.dg J B fin rootB pts A.N (fun _ _ => [])
+      ((firstStop V θ F c A rd σ M ω).rewrite (M.link (firstStop V θ F c A rd σ M ω) pts)).consume o)
+    (hn : NoMiss V θ F c rd σ o.2) {i : Fin A.rounds} (hi : ((firstStop V θ F c A rd σ M ω).Ks i).isHere = true)
+    {w : Claims.Msg} (hw : (roundCut V θ F c rd i).cut.revealOn σ o.2 = some w) :
+    (firstStop V θ F c A rd σ M ω).modes i = some w := by
+  rw [firstStop_modes V θ F c A rd σ D M B ω pts hr]
+  dsimp only
+  rw [ite_eq_left hi]
+  by_contra hne
+  exact hn.1 i ((DigestCut.missOn_iff _ _ _).2 ⟨w, hw, hne⟩)
 
 /-- **An event of the period's tape under the joint law off `BL` and `B`**: over the widened sample, the session's
 share off them from the play's start (`sessionOff`). -/
