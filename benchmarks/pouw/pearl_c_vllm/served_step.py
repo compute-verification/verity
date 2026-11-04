@@ -125,29 +125,22 @@ def _patch_engine(llm) -> None:
 
 def _live(arm):
     """`arm` with its salt coin from a live session on the auditor host when ``PEARLC_CHALLENGER_GATE`` and
-    ``PEARLC_CHALLENGER_PEER`` are set (`bench_arm.PearlCArm`'s) and the arm serves Pearl-C through the PoUW option: a
-    session reserved on infra's gate (`bench_arm._LiveSession`), which the option opens on its salt epoch's root
-    (`salt.epoch_open_root` of the weights' root and the epoch's number) and draws its salt coin from
-    (`pouw_h1_window.salt_session`), through the pouw settings ``challenger`` (this node's 127.0.0.1, at the port the
-    gate's open answers), ``session`` (the reserve answer), ``gate`` and ``period`` (the lane's open period the
-    reserve joined, which the option refuses when it is H1's). Returns the arm and the reserve answer, None when the
-    arm's coins stay in-process."""
+    ``PEARLC_CHALLENGER_PEER`` are set (`bench_arm.PearlCArm`'s) and the arm serves Pearl-C through the PoUW option
+    (`bench_arm.live_coins`, which the option refuses when the reserve joined an H1 period). Returns the arm and the
+    reserve answer, None when the arm's coins stay in-process."""
     import dataclasses
 
-    from benchmarks.pouw.pearl_c_vllm.bench_arm import PearlCArm, _LiveSession
-    from verity_vllm.protocols.pouw.h1 import window as PHW
+    from benchmarks.pouw.pearl_c_vllm.bench_arm import PearlCArm, live_coins
     from verity_vllm.protocols.pouw import pearl_c as PPD
     env = PearlCArm()
-    if not any(e.partition(":")[2] in PPD.SCHEMES for e in arm.protocols) or (env.gate_command, env.peer) == (None, None):
+    if not any(e.partition(":")[2] in PPD.SCHEMES for e in arm.protocols):
         return arm, None
-    if env.gate_command is None or env.peer is None:
-        raise SystemExit("live coins take PEARLC_CHALLENGER_GATE (the gate's ssh command) and PEARLC_CHALLENGER_PEER "
-                         "(this node's name in the challenger host's peers) together")
-    session = _LiveSession(env.gate_command, env.peer, env.epoch, env.lane)
     config = dict(arm.protocols_config or {})
-    config["pouw"] = {**config.get("pouw", {}), "challenger": "127.0.0.1:0", "session": session.reserved,
-                      "gate": PHW.gate_of(session.gate.call), "period": session.period}
-    return dataclasses.replace(arm, protocols_config=config), session.reserved
+    try:
+        config["pouw"], reserved = live_coins(config.get("pouw", {}), env.gate_command, env.peer, env.epoch, env.lane)
+    except ValueError as e:
+        raise SystemExit(str(e)) from None
+    return (arm, None) if reserved is None else (dataclasses.replace(arm, protocols_config=config), reserved)
 
 
 def _engine(spec_name: str, arm_id: str):

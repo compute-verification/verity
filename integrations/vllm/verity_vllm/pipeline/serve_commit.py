@@ -265,7 +265,7 @@ class CommitWindows:
     (`serve_h1.H1Windows`) opens on each window once its committer is installed and closes first at its close, before the
     committer comes off or its window is detached, its hooks being on top of the committer's; what its ``close`` returns is
     the window line's ``pouw_h1``, and when that is a `Future` (its release off the loop) the line is written once it
-    resolves, the loop and the sealer going on."""
+    resolves, the loop and the sealer going on. An arm with ``sealed`` hears each window's seal line, or why it has none."""
 
     def __init__(self, committer: Any, out: Path, *, run_id: str, window_steps: int, idle_close_steps: int = 1,
                  eos_ids: Sequence[int] = (), decode: Callable[[Sequence[int]], str] | None = None,
@@ -539,11 +539,20 @@ class CommitWindows:
 
     def _no_release(self, rec: dict[str, Any], com: Any, job: Any) -> None:
         """A window that reaches no seal, so no draw-gated release: `serve_release.Draws.discard`, its device pool pieces freed,
-        so the next windows' steps don't wait on them (``rec["release"]``)."""
-        if self.release is not None and com is not None and not isinstance(job, tuple):
-            why = rec.get("error") or (job or {}).get("error") or "the window has no seal"
+        so the next windows' steps don't wait on them (``rec["release"]``); and the arm hears why (`_sealed`)."""
+        if isinstance(job, tuple):
+            return
+        why = rec.get("error") or (job or {}).get("error") or "the window has no seal"
+        if self.release is not None and com is not None:
             if (got := self.release.discard(rec["window"], com, f"not sealed: {why}")) is not None:
                 rec["release"] = got
+        self._sealed({"window": rec["window"], "error": f"not sealed: {why}"})
+
+    def _sealed(self, line: Mapping[str, Any]) -> None:
+        """The arm's ``sealed(window, line)``, when it has one: the window's seals.jsonl line once written, or why it has none
+        (``error``), so a release that reads the sealed window (`serve_tie.WindowTie`) waits on the event, not the disk."""
+        if callable(sealed := getattr(self.arm, "sealed", None)):
+            sealed(int(line["window"]), dict(line))
 
     def _record(self, c: _Closed, rc: Any, readback: Any, lap: Callable[[str], None]) -> tuple[dict[str, Any], Any]:
         """The closed window's line of windows.jsonl as its finalize and readback make it, with its served rows and its seal's
@@ -692,6 +701,7 @@ class CommitWindows:
                     self.seals.append(line)
                 with open(self.out / "seals.jsonl", "a") as fh:
                     fh.write(json.dumps(line) + "\n")
+                self._sealed(line)
                 if self.mirror is not None:
                     self.mirror()
 
