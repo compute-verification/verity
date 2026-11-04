@@ -135,7 +135,7 @@ from verity.ml.windows import interface as IF
 from . import scan_state as SS
 from .build import Unexpressible
 from .steps import RequestUnit, request_program
-from .window_builder import WEIGHTS, Grain, Row, _Builder, _spans, _step, _word, inference
+from .window_builder import WEIGHTS, Grain, Row, _Builder, _spans, _step, _word, entries, order, placed
 
 NAME = "verity-vllm/window"
 PROMPT = "prompt"
@@ -327,7 +327,7 @@ class _Program:
 
     def lower(self, j: int, node: Any) -> None:
         """Node ``j`` lowered into units, each of the Program's slot and the node's step: its position, which each
-        embedding opens (`_token`)."""
+        embedding opens (`_token`); and timed, node j's (`_Builder.timed`)."""
         if node.form != "call":
             raise Unexpressible(f"{self.name}: node {j} is a {node.form}, not a call")
         ret = node.fn.signature()[1]
@@ -341,8 +341,9 @@ class _Program:
         step = self.position - (family != "Embedding")
         if step < 0:
             raise Unexpressible(f"{self.name}: node {j} ({node.fn.id}) comes before its first position's embedding")
-        self.b.label = (self.slot_index, step)
+        self.b.label, self.b.node = (self.slot_index, step), j
         lower(j, node)
+        self.b.timed()
 
     def _Embedding(self, j: int, node: Any) -> None:
         V, H = node.fn.bindings["V"], node.fn.bindings["H"]
@@ -696,12 +697,14 @@ def stop_ids(registered: Any) -> tuple[int, ...]:
 @dataclass(frozen=True)
 class Lowered:
     """A class circuit with what its lowering knows (`window_rows` fills its units from it): the class Program's function, each
-    slot's lowered Program (node j's output as the rows that hold it, ``outs[j]``) and each template's runs of units by their
-    (slot, step), ``(at, count, slot, step)``."""
+    slot's lowered Program (node j's output as the rows that hold it, ``outs[j]``), each template's runs of units by their
+    (slot, step), ``(at, count, slot, step)``, and the circuit's wire-order certificate (`window_builder.order`), which a
+    window's ``order.json`` is."""
     circuit: IF.Circuit
     fn: Any
     programs: tuple[_Program, ...]
     spans: dict[str, list[tuple[int, int, int, int]]]
+    order: dict[str, Any]
 
 
 def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None, grain: Grain = _GRAIN,
@@ -740,11 +743,13 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     params = {**b.params, SS.SCAN_STATE: cls.buckets * scan.bindings["NS"]}
     reg = IF.Registered(dict(sorted(params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)), tuple(roots),
                         tuple(openings))
+    ents = entries(b.spans, programs, b.times)
+    pieces = placed(IF.coalesce(b.wires), [e for e, _, _ in ents])
     circuit = IF.Circuit(name, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()),
                          external=(f"{descriptor_id(scan)}/state", f"{progs[0].entry_unit[0]}/o0"),
-                         wires=tuple(IF.coalesce(b.wires)), cuts=b.cuts, registered=reg,
-                         blocks=IF.Blocks(programs, cls.positions, tuple(inference(b.spans, programs))))
-    return Lowered(circuit, fn, tuple(progs), b.spans)
+                         wires=tuple(w for w, _, _ in pieces), cuts=b.cuts, registered=reg,
+                         blocks=IF.Blocks(programs, cls.positions, tuple(e for e, _, _ in ents)))
+    return Lowered(circuit, fn, tuple(progs), b.spans, order(pieces, ents))
 
 
 def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN, name: str = NAME,

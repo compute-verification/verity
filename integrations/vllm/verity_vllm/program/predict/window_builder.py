@@ -149,6 +149,12 @@ class _Builder:
     #: the (slot, step) the next units are of, and each template's runs of units by theirs, ``(at, count, slot, step)``
     label: tuple[int, int] | None = None
     spans: dict[str, list[tuple[int, int, int, int]]] = field(default_factory=dict)
+    #: the class Program node the next units are of, and each template's runs' times in `spans`' order, ``[node, sub]``:
+    #: sub the run's place on the longest path through its node's runs that read one another (`timed`)
+    node: int = 0
+    times: dict[str, list[list[int]]] = field(default_factory=dict)
+    made: list[tuple[str, int, int, list[int]]] = field(default_factory=list)
+    timed_feeds: int = 0
     #: each attention Definition's head plan (`window_circuit._Program._plan`), read once whatever its slots and layers
     plans: dict[str, list[tuple[Any, list[tuple[str, tuple[Any, ...]]]]]] = field(default_factory=dict)
     #: the weights record's weights, ``(label, first word, words)`` in order, and the registered parameters read of them
@@ -170,7 +176,35 @@ class _Builder:
         self.units[tid] = max(self.units.get(tid, 0), (base + count) * self.programs)
         at = base * self.programs + slot * count
         self.spans.setdefault(tid, []).append((at, count, *self.label))
+        time = [self.node, 0]
+        self.times.setdefault(tid, []).append(time)
+        self.made.append((tid, at, count, time))
         return tid, at
+
+    def timed(self) -> None:
+        """Time the runs a slot's node just made: each one after every run of the node it reads, whatever order they were
+        made in (an embedding read is made before the token unit it reads, a select's combine before its ``x0``)."""
+        made, feeds = self.made, self.feeds[self.timed_feeds:]
+        self.made, self.timed_feeds = [], len(self.feeds)
+
+        def run(tid: str, unit: int) -> int | None:
+            return next((k for k, (t, at, n, _) in enumerate(made) if t == tid and at <= unit < at + n), None)
+
+        reads: dict[int, set[int]] = {}
+        for f in feeds if len(made) > 1 else ():
+            if (r := run(f.tid, f.at)) is not None:
+                reads.setdefault(r, set()).update(w for x in {(x.tid, x.unit) for x in f.rows} if (w := run(*x)) is not None)
+        sub = [0] * len(made)
+        for _ in range(len(made) + 1):
+            longer = [(r, sub[w] + 1) for r, ws in reads.items() for w in ws if sub[w] >= sub[r]]
+            for r, s in longer:
+                sub[r] = max(sub[r], s)
+            if not longer:
+                break
+        else:
+            raise Unexpressible(f"node {self.node}: its units read one another in a cycle")
+        for (*_, time), s in zip(made, sub):
+            time[1] = s
 
     def feed(self, tid: str, port: str, at: int, count: int, rows: Sequence[Row],
              lead: tuple[tuple[int, int], ...] = ()) -> None:
@@ -294,41 +328,227 @@ def _rows(fn: Any, cuts: dict[str, int] | None) -> int:
     return len(lay.cut(cuts)) + len(lay.outs)
 
 
-def _follow(groups: list[tuple[int, tuple[tuple[int, str], ...], int]], axis: str,
-            delta: int) -> list[tuple[int, tuple[tuple[int, str], ...], int]]:
-    """``groups`` (first unit, digits as ``(radix, axis)``, step), consecutive, with each run of like ones (one digits, their
-    steps ``delta`` apart) as one whose first digit is ``axis``, of the run's length."""
+Time = tuple[int, int]
+#: an entry before it is one: its first unit, its digits as ``(radix, axis)``, its step, its first unit's time and its time
+#: a digit
+_Group = tuple[int, tuple[tuple[int, str], ...], int, Time, tuple[Time, ...]]
+
+
+def _minus(a: Time, b: Time) -> Time:
+    return a[0] - b[0], a[1] - b[1]
+
+
+def _follow(groups: list[_Group], axis: str, delta: int) -> list[_Group]:
+    """``groups``, consecutive, with each run of like ones (one digits and time a digit, their steps ``delta`` apart and
+    their times one step apart) as one whose first digit is ``axis``, of the run's length and its time that step."""
     out, i = [], 0
     while i < len(groups):
-        at, digits, step = groups[i]
+        at, digits, step, t, dt = groups[i]
         j = i + 1
-        while j < len(groups) and groups[j][1] == digits and groups[j][2] == step + (j - i) * delta:
+        while j < len(groups) and groups[j][1:3] == (digits, step + (j - i) * delta) and groups[j][4] == dt \
+                and _minus(groups[j][3], groups[j - 1][3]) == _minus(groups[i + 1][3], t):
             j += 1
-        out.append((at, (((j - i, axis),) if j > i + 1 else ()) + digits, step))
+        out.append((at, ((j - i, axis),) + digits, step, t, (_minus(groups[i + 1][3], t),) + dt) if j > i + 1 else groups[i])
         i = j
     return out
 
 
-def inference(spans: dict[str, list[tuple[int, int, int, int]]], slots: int) -> list[IF.InferenceEntry]:
-    """Each template's units as inference entries (`interface.InferenceEntry`): its runs in unit order, an allocation's
-    slots' runs of one length at one step side by side, are one entry (the slot, then the run), and like entries that follow
-    on merge, at one step under a ``-`` digit, then at consecutive steps under a ``step`` digit. Refused where a template's
-    units aren't such runs."""
+def entries(spans: dict[str, list[tuple[int, int, int, int]]], slots: int,
+            times: dict[str, list[list[int]]] | None = None) -> list[tuple[IF.InferenceEntry, Time, tuple[Time, ...]]]:
+    """Each template's units as inference entries (`interface.InferenceEntry`), each with its first unit's time and its
+    time a digit (`_Builder.times`; one time for all when ``times`` is None): its runs in unit order, an allocation's slots'
+    runs of one length, step and time side by side, are one entry (the slot, then the run, neither moving the time), and
+    like entries that follow on, their times one step apart, merge: at one step under a ``-`` digit, again until none
+    merges (a layer's two quantizers are a digit, its layers another), then at consecutive steps under a ``step`` digit.
+    So each entry's time is affine in its digits. Refused where a template's units aren't such runs."""
     out = []
     for tid, spans_ in spans.items():
-        merged: list[tuple[int, int, int, int]] = []
-        for at, n, slot, step in sorted(spans_):
-            if merged and merged[-1][2:] == (slot, step):
-                merged[-1] = (merged[-1][0], merged[-1][1] + n, slot, step)
+        merged: list[tuple[int, int, int, int, Time]] = []
+        for (at, n, slot, step), t in sorted(zip(spans_, (tuple(t) for t in times[tid]) if times else [(0, 0)] * len(spans_))):
+            if merged and merged[-1][2:] == (slot, step, t):
+                merged[-1] = (merged[-1][0], merged[-1][1] + n, slot, step, t)
             else:
-                merged.append((at, n, slot, step))
-        groups = []
+                merged.append((at, n, slot, step, t))
+        groups: list[_Group] = []
         for i in range(0, len(merged), slots):
             g = merged[i:i + slots]
-            if [r[2] for r in g] != list(range(slots)) or len({(r[1], r[3]) for r in g}) != 1:
-                raise Unexpressible(f"{tid}: units from {g[0][0]} are not {slots} slots' runs of one length at one step")
-            groups.append((g[0][0], ((slots, "slot"),) + (((g[0][1], "-"),) if g[0][1] > 1 else ()), g[0][3]))
-        for axis, delta in (("-", 0), ("step", 1)):
-            groups = _follow(groups, axis, delta)
-        out += [IF.InferenceEntry(tid, at, tuple(r for r, _ in d), tuple(a for _, a in d), step) for at, d, step in groups]
+            if [r[2] for r in g] != list(range(slots)) or len({(r[1], r[3], r[4]) for r in g}) != 1:
+                raise Unexpressible(f"{tid}: units from {g[0][0]} are not {slots} slots' runs of one length at one step and "
+                                    "one time")
+            digits = ((slots, "slot"),) + (((g[0][1], "-"),) if g[0][1] > 1 else ())
+            groups.append((g[0][0], digits, g[0][3], g[0][4], ((0, 0),) * len(digits)))
+        while len(nxt := _follow(groups, "-", 0)) < len(groups):
+            groups = nxt
+        groups = _follow(groups, "step", 1)
+        out += [(IF.InferenceEntry(tid, at, tuple(r for r, _ in d), tuple(a for _, a in d), step), t, dt)
+                for at, d, step, t, dt in groups]
     return out
+
+
+#: the wire-order certificate's format (`order`)
+ORDER = "verity/wire-order/v1"
+
+
+def _places(radix: Sequence[int]) -> list[int]:
+    """Each digit's place value in mixed radix ``radix``, the first digit the slowest."""
+    out, p = [], 1
+    for r in reversed(radix):
+        out.append(p)
+        p *= r
+    return out[::-1]
+
+
+def _sides(w: IF.Wire) -> tuple[tuple[str, int, list[int]], tuple[str, int, list[int]]]:
+    """``w``'s writer side and reader side, each its template, its unit at digits 0 and each digit's unit stride: the
+    writer's its steps, the reader's its place among the reader units, the cut digit's 0."""
+    reader = _places(w.radix[:-1]) + [0] if w.cut[1] > 1 else _places(w.radix)
+    return (w.writer, w.base, list(w.step)), (w.reader, w.at, reader)
+
+
+def _place(o: int, strides: Sequence[int], radix: Sequence[int],
+           e: IF.InferenceEntry) -> tuple[list[int], dict[int, tuple[int, int]]] | None:
+    """Units ``o + Σ d_k·strides[k]`` (``d`` over ``radix``) in entry ``e``'s digits: ``o``'s digits, and each moving digit's
+    position of ``e`` and multiple there (the position of radix past 1 with the greatest place dividing its stride); None
+    where a digit has none."""
+    places, out = _places(e.radix), {}
+    for k, (r, t) in enumerate(zip(radix, strides)):
+        if r > 1 and t:
+            q = next((q for q, (R, p) in enumerate(zip(e.radix, places)) if R > 1 and t % p == 0), None)
+            if q is None:
+                return None
+            out[k] = (q, t // places[q])
+    return [(o - e.at) // p % R for R, p in zip(e.radix, places)], out
+
+
+def _reach(digits: list[int], moves: dict[int, tuple[int, int]], radix: Sequence[int], q: int,
+           but: int | None = None) -> tuple[int, int]:
+    """The least and the greatest digit ``q`` reaches as the digits that move it (but ``but``) run over their radices."""
+    ms = [(m, radix[k]) for k, (p, m) in moves.items() if p == q and k != but]
+    return digits[q] + sum(min(0, m * (r - 1)) for m, r in ms), digits[q] + sum(max(0, m * (r - 1)) for m, r in ms)
+
+
+def _misfit(w: IF.Wire, es: Sequence[IF.InferenceEntry]) -> tuple[int, int] | tuple[()] | None:
+    """None where each of ``w``'s sides moves its entry's digits without a carry (`order`), else the refinement that
+    fixes the first carry, ``(digit, f)`` (`_refined`: the digit's fast part the largest of its radix's divisors that
+    fits), or ``()`` where none does."""
+    cut = len(w.radix) - 1 if w.cut[1] > 1 else None
+    for (_, o, strides), e in zip(_sides(w), es):
+        got = _place(o, strides, w.radix, e)
+        if got is None:
+            return ()
+        digits, moves = got
+        reach = [_reach(digits, moves, w.radix, q) for q in range(len(e.radix))]
+        q = next((q for q, (lo, hi) in enumerate(reach) if lo < 0 or hi > e.radix[q] - 1), None)
+        if q is None:
+            continue
+        for k in sorted((k for k, (p, _) in moves.items() if p == q and k != cut),
+                        key=lambda k: -abs(moves[k][1]) * (w.radix[k] - 1)):
+            m, (lo, hi) = moves[k][1], _reach(digits, moves, w.radix, q, k)
+            room = e.radix[q] - 1 - hi if m > 0 else lo
+            f = max((f for f in range(2, w.radix[k]) if w.radix[k] % f == 0 and abs(m) * (f - 1) <= room), default=0)
+            if f:
+                return k, f
+        return ()
+    return None
+
+
+def _wire(w: IF.Wire, radix: Sequence[int], step: Sequence[int], **at: Any) -> IF.Wire:
+    """``w`` over digits ``radix`` and ``step`` instead, and ``at``'s other fields; its digits of radix 1 dropped."""
+    d = [(r, s) for r, s in zip(radix, step) if r > 1] or [(1, 0)]
+    f = {"at": w.at, "base": w.base, "cut": w.cut, **at}
+    return IF.Wire(w.reader, w.port, w.writer, w.out, f["at"], tuple(r for r, _ in d), f["base"], tuple(s for _, s in d),
+                   f["cut"])
+
+
+def _refined(w: IF.Wire, k: int, f: int) -> IF.Wire:
+    """``w`` with digit ``k`` (radix R, step t) as two, ``(R / f, t·f)`` then ``(f, t)``: the same rows."""
+    return _wire(w, w.radix[:k] + (w.radix[k] // f, f) + w.radix[k + 1:], w.step[:k] + (w.step[k] * f, w.step[k]) + w.step[k + 1:])
+
+
+def _entries_of(w: IF.Wire, find: Any) -> tuple[int, int] | None:
+    """The one entry ``w``'s writer units lie in and the one its reader units do, None where either side's lie in two."""
+    got = []
+    for t, o, strides in _sides(w):
+        ends = {find(t, o + sum(f(0, s * (r - 1)) for r, s in zip(w.radix, strides))) for f in (min, max)}
+        if len(ends) > 1:
+            return None
+        got.append(ends.pop())
+    return got[0], got[1]
+
+
+def _values(w: IF.Wire, k: int, v: int, n: int) -> IF.Wire:
+    """``w`` at values ``[v, v + n)`` of digit ``k``, every slower digit of radix 1."""
+    return _wire(w, w.radix[:k] + (n,) + w.radix[k + 1:], w.step, at=w.at + v * _sides(w)[1][2][k], base=w.base + v * w.step[k])
+
+
+def _pieces(w: IF.Wire, ents: Sequence[IF.InferenceEntry], find: Any) -> list[tuple[IF.Wire, int, int]]:
+    """``w`` as wires of the same rows, each with its writer entry and reader entry (`placed`)."""
+    while (got := _entries_of(w, find)) is not None:
+        fix = _misfit(w, [ents[k] for k in got])
+        if fix is None:
+            return [(w, *got)]
+        if not fix:
+            break
+        w = _refined(w, *fix)
+    c0, C = w.cut
+    rows = [_pieces(_wire(w, w.radix[:-1], w.step[:-1], base=w.base + v * w.step[-1], cut=(c0 + v, 1)), ents, find)
+            for v in range(C)] if C > 1 else []
+    k = next((k for k, r in enumerate(w.radix[:len(w.radix) - (C > 1)]) if r > 1), None)
+    if k is None or rows and all(len(p) == 1 for p in rows):
+        return [p for ps in rows for p in ps]
+    runs: list[list[Any]] = []
+    for v in range(w.radix[k]):
+        key = _entries_of(_values(w, k, v, 1), find) if got is None else None
+        if runs and key is not None and runs[-1][2] == key:
+            runs[-1][1] += 1
+        else:
+            runs.append([v, 1, key])
+    return [p for v, n, _ in runs for p in _pieces(_values(w, k, v, n), ents, find)]
+
+
+def placed(wires: Sequence[IF.Wire], ents: Sequence[IF.InferenceEntry]) -> list[tuple[IF.Wire, int, int]]:
+    """``wires`` as wires of the same rows, each inside one writer entry and one reader entry of ``ents`` (its units'
+    entries, by index) and moving one digit of each a digit without a carry, in the order `interface.coalesce` gives:
+    a digit that moves two of an entry's digits is refined into two (`_refined`), and a wire still across entries or out of
+    their digits is cut, into its rows where that alone places it, else its slowest digit into runs of values whose units
+    lie in one writer entry and one reader entry (out of its entries' digits, into its values), and placed again."""
+    by: dict[str, tuple[list[int], list[int]]] = {}
+    for k, e in sorted(enumerate(ents), key=lambda x: (x[1].template, x[1].at)):
+        by.setdefault(e.template, ([], []))[0].append(e.at)
+        by[e.template][1].append(k)
+
+    def find(t: str, u: int) -> int:
+        starts, ks = by.get(t, ([], []))
+        j = bisect.bisect_right(starts, u) - 1
+        if j < 0 or u >= ents[ks[j]].at + ents[ks[j]].units:
+            raise Unexpressible(f"{t}: unit {u} is in no inference entry")
+        return ks[j]
+
+    out = [p for w in wires for p in _pieces(w, ents, find)]
+    return sorted(out, key=lambda p: (p[0].reader, p[0].port, p[0].at, p[0].cut))
+
+
+def order(pieces: Sequence[tuple[IF.Wire, int, int]], ents: Sequence[tuple[IF.InferenceEntry, Time, tuple[Time, ...]]]
+          ) -> dict[str, Any]:
+    """The circuit's wire-order certificate (`ORDER`) for its wires ``pieces`` (`placed`) and its entries ``ents``
+    (`entries`): each entry a segment ranked by its units' time, node·S + sub with S past every sub, affine in its digits;
+    each wire its writer segment and its reader segment. A wire is ordered where every writer unit's rank is below its
+    reader unit's: each side's rank is affine in the wire's digits (`_place`), so its greatest rank(writer) - rank(reader)
+    is a sum over the digits. Refused where a wire isn't ordered."""
+    S = 1 + max((t[1] + sum(max(0, d[1] * (r - 1)) for d, r in zip(dt, e.radix)) for e, t, dt in ents), default=0)
+    segs = [{"template": e.template, "at": e.at, "radix": list(e.radix), "c": t[0] * S + t[1],
+             "r": [d[0] * S + d[1] for d in dt]} for e, t, dt in ents]
+    for i, (w, *ks) in enumerate(pieces):
+        K, a = [], []
+        for (_, o, strides), k in zip(_sides(w), ks):
+            got = _place(o, strides, w.radix, ents[k][0])
+            if got is None:
+                raise ValueError(f"wire {i} {w.doc()}: not placed in entry {k}")
+            digits, moves = got
+            K.append(segs[k]["c"] + sum(r * b for r, b in zip(segs[k]["r"], digits)))
+            a.append([segs[k]["r"][moves[j][0]] * moves[j][1] if j in moves else 0 for j in range(len(w.radix))])
+        reach = K[0] - K[1] + sum(max(0, (x - y) * (r - 1)) for x, y, r in zip(*a, w.radix))
+        if reach >= 0:
+            raise Unexpressible(f"wire {i} {w.doc()}: rank(writer) - rank(reader) reaches {reach} >= 0; its writer isn't made "
+                                "before its reader")
+    return {"format": ORDER, "segments": segs, "wires": [list(ks) for _, *ks in pieces]}

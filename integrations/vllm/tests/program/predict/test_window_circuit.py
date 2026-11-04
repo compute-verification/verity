@@ -142,15 +142,15 @@ def test_a_3_request_and_an_8_request_window_at_the_class_of_records_slots_are_o
 
 def test_the_slots_entries_are_one_member_a_lane_in_boundary_order():
     """At the class of record's slots, the wires into the slots' entries begin and end at every lane's nb = 2 slots and
-    nowhere else, and no server block ends among them, so `interface.members` (which cuts a template's batch only there
-    and at the cap) makes the entry template one member a lane, ``<descriptor id>/c<j>``: its ``o0`` rows lane j's
-    entries, slot nb·j + b at leaf b, each lane's a hiding row with its own root in the window's registration, which the
-    network certifier's scan reads as lane j's Programs."""
+    nowhere else, so `interface.members` (which cuts a template's batch only there and at the cap) makes the entry template
+    one member a lane, ``<descriptor id>/c<j>``: its ``o0`` rows lane j's entries, slot nb·j + b at leaf b, each lane's a
+    hiding row with its own root in the window's registration, which the network certifier's scan reads as lane j's
+    Programs."""
     eight = _circuit(EIGHT, cls=SLOTS, placed=[(0, 1)] * 4 + [(16, 17)] * 4)
     entry = {_label(fn): IF.descriptor_id(fn) for fn, _ in eight.templates}[ENTRY]
     nb = SLOTS.slots // SLOTS.lanes
     ends = {x for w in eight.wires if w.reader == entry for x in (w.at, w.at + w.reader_units)}
-    assert ends == set(range(0, SLOTS.slots + 1, nb)) and not eight.server_ends().get(entry)
+    assert ends == set(range(0, SLOTS.slots + 1, nb))
 
 
 def test_the_class_of_record_takes_both_windows_to_its_one_class_circuit(monkeypatch):
@@ -185,8 +185,8 @@ def test_a_request_anchored_at_16_with_64_outputs_is_expressible(monkeypatch):
 
 def test_the_description_grows_with_the_class_programs_nodes_not_its_slots():
     """Each allocation's slots sit side by side in its template, so every slot's copy of a wire or read pattern is one: the
-    class of record's slots at 2 and at 8 Programs have the same 118 wires besides the scan's, 88 registered reads (87
-    of the weights, one of the scan state), root reads, openings and 59 inference entries, the 8 Programs 4 times the units.
+    class of record's slots at 2 and at 8 Programs have the same 197 wires besides the scan's, 88 registered reads (87
+    of the weights, one of the scan state), root reads, openings and 60 inference entries, the 8 Programs 4 times the units.
     The scan's wires are a lane's outputs (lane-major, so a lane's slots follow on), each output named for its lane: its
     token, slot, head and the entry's occupancy word (4 at 2 Programs, both lane 0's, and 4 a lane at 8), whatever the
     boundaries."""
@@ -194,7 +194,7 @@ def test_the_description_grows_with_the_class_programs_nodes_not_its_slots():
     two, eight = (class_circuit(reg, SLOTS, n, GRAIN, provable=False) for n in (2, None))
     shape = [(len(c.wires), len(c.registered.reads), len(c.registered.roots), len(c.registered.openings),
               len(c.blocks.inference)) for c in (two, eight)]
-    assert shape == [(122, 88, 2, 1, 59), (134, 88, 2, 1, 59)] and two.ids == eight.ids
+    assert shape == [(201, 88, 2, 1, 60), (213, 88, 2, 1, 60)] and two.ids == eight.ids
     scan = IF.descriptor_id(next(fn for fn, _ in eight.templates if fn.name == "ScanSlots"))
     assert [sum(w.writer == scan for w in c.wires) for c in (two, eight)] == [4, 4 * SLOTS.lanes]
     assert sum(n for _, n in eight.templates) == 4 * sum(n for _, n in two.templates) == 5552
@@ -212,7 +212,9 @@ def test_the_circuit_is_a_class_program_a_slot_in_units_by_template_and_wire_pat
     (`SelectCollect_v1`), and its last position's its entry too (`SelectEntry_v1`). A port read as m writer rows is cut m ways, each
     row its writer's as it is (a key block's keys and values a row a position, the fused norm's ``x`` a row a slice), and
     the wiring is a pattern per run, the two slots' one, not a wire per unit, but for the scan's outputs, named for their
-    lane. The external rows are the scan state rows the slots read and their entries."""
+    lane, each pattern inside one writer entry and one reader entry (`window_builder.placed`: a key block's keys and
+    values a pattern a layer and key, a GEMM's rows a pattern an allocation). The external rows are the scan state rows the
+    slots read and their entries."""
     circuit, ids = window
     label = {tid: name for name, tid in ids.items()}
     attn = "AttnBlockFirst_v1{{D=16,NVIS={},BN=128}}"
@@ -227,24 +229,24 @@ def test_the_circuit_is_a_class_program_a_slot_in_units_by_template_and_wire_pat
         **{s: {"best": 4, "idx": 4} for s in (COLLECT0, COLLECT, ENTRY)}}
     family = {tid: name.split("{")[0] for name, tid in ids.items()}
     assert Counter((family[w.reader], w.port, family[w.writer], w.out) for w in circuit.wires) == {
-        ("AttnBlockFirst_v1", "k", "RoPEHead_v1", "o0"): 5, ("AttnBlockFirst_v1", "q", "RoPEHead_v1", "o0"): 5,
-        ("AttnBlockFirst_v1", "v", "Gemm_v2", "o0"): 5, ("AttnHeadEnd_v1", "l", "AttnBlockFirst_v1", "o1"): 5,
+        ("AttnBlockFirst_v1", "k", "RoPEHead_v1", "o0"): 30, ("AttnBlockFirst_v1", "q", "RoPEHead_v1", "o0"): 10,
+        ("AttnBlockFirst_v1", "v", "Gemm_v2", "o0"): 30, ("AttnHeadEnd_v1", "l", "AttnBlockFirst_v1", "o1"): 5,
         ("AttnHeadEnd_v1", "o", "AttnBlockFirst_v1", "o2"): 5, ("EmbeddingRead_v1", "tok", "ScanSlots_v2", "o0"): 1,
         ("EmbeddingRead_v1", "tok", "ScanSlots_v2", "o4"): 1, ("EmbeddingRead_v1", "tok", "TokenFeed_v1", "o0"): 1,
         ("EmbeddingRead_v1", "tok", "SelectCollect_v1", "o0"): 1, ("Gemm_v2", "x", "AttnHeadEnd_v1", "o0"): 1,
         ("Gemm_v2", "x", "RMSNormFusedCuda_v2", "o0"): 16, ("Gemm_v2", "x", "RMSNormTriton_v5", "o0"): 5,
         ("Gemm_v2", "x", "SiluMul_v2", "o0"): 1, ("RMSNormFusedCuda_v2", "res", "EmbeddingRead_v1", "o0"): 5,
-        ("RMSNormFusedCuda_v2", "res", "RMSNormFusedCuda_v2", "o1"): 5, ("RMSNormFusedCuda_v2", "x", "Gemm_v2", "o0"): 20,
-        ("RMSNormTriton_v5", "x", "EmbeddingRead_v1", "o0"): 1, ("RoPEHead_v1", "x", "Gemm_v2", "o0"): 20,
+        ("RMSNormFusedCuda_v2", "res", "RMSNormFusedCuda_v2", "o1"): 15, ("RMSNormFusedCuda_v2", "x", "Gemm_v2", "o0"): 20,
+        ("RMSNormTriton_v5", "x", "EmbeddingRead_v1", "o0"): 2, ("RoPEHead_v1", "x", "Gemm_v2", "o0"): 20,
         ("SelectCollect_v1", "best", "TokenSelectGroups_v1", "o0"): 2, ("SelectCollect_v1", "head", "ScanSlots_v2", "o3"): 1,
         ("SelectCollect_v1", "head", "ScanSlots_v2", "o7"): 1, ("SelectCollect_v1", "idx", "TokenSelectGroups_v1", "o1"): 2,
         ("SelectCollect_v1", "state", "SelectCollect_v1", "o1"): 2, ("SelectCollect_v1", "x0", "Gemm_v2", "o0"): 2,
         ("SelectEntry_v1", "best", "TokenSelectGroups_v1", "o0"): 1, ("SelectEntry_v1", "idx", "TokenSelectGroups_v1", "o1"): 1,
         ("SelectEntry_v1", "occ", "ScanSlots_v2", "o2"): 1, ("SelectEntry_v1", "occ", "ScanSlots_v2", "o6"): 1,
         ("SelectEntry_v1", "state", "SelectCollect_v1", "o1"): 1, ("SelectEntry_v1", "x0", "Gemm_v2", "o0"): 1,
-        ("SiluMul_v2", "gu", "Gemm_v2", "o0"): 1, ("TokenFeed_v1", "sel", "SelectCollect_v1", "o0"): 2,
+        ("SiluMul_v2", "gu", "Gemm_v2", "o0"): 10, ("TokenFeed_v1", "sel", "SelectCollect_v1", "o0"): 2,
         ("TokenFeed_v1", "slot", "ScanSlots_v2", "o1"): 1, ("TokenFeed_v1", "slot", "ScanSlots_v2", "o5"): 1,
-        ("TokenFeed_v1", "slot", "TokenFeed_v1", "o1"): 1, ("TokenSelectGroups_v1", "x", "Gemm_v2", "o0"): 1}
+        ("TokenFeed_v1", "slot", "TokenFeed_v1", "o1"): 1, ("TokenSelectGroups_v1", "x", "Gemm_v2", "o0"): 5}
     assert circuit.external == (f"{ids[SCAN]}/state", f"{ids[ENTRY]}/o0")
 
 
@@ -473,20 +475,21 @@ def _labels(circuit) -> dict[str, np.ndarray]:
 
 def test_the_blocks_put_each_unit_at_its_slot_and_its_positions_step(window):
     """The inference block (`interface.Blocks`): the class's 2 slots are its slots and its 5 positions its steps, each
-    allocation's units an entry of its slots' runs side by side, like entries merged. Position p's embedding and select
-    with its collector are step p, its feed (p = 1..3) step p, a slot's scan read step 0 and its entry step 4, a head's Calls
-    over T keys step T - 1 (their digits layer, slot, head; the ends one template over every step), and the entries tile
-    every template.
+    allocation's units an entry of its slots' runs side by side, like entries merged where their times step evenly
+    (`window_builder.entries`). Position p's embedding and select with its collector are step p, its feed (p = 1..3) step
+    p, a slot's scan read step 0 and its entry step 4, a head's Calls over T keys step T - 1 (their digits layer, slot,
+    head; the ends one template over every step), and the entries tile every template. The embedding is two entries: below
+    the prompt cap its node makes the feed it reads first, past it none.
     Every wire's writer is of its reader's slot at its step or before: a slot reads only its own units, a position only its
     own and earlier positions'."""
     circuit, ids = window
     label = {tid: name for name, tid in ids.items()}
-    assert (circuit.blocks.slots, circuit.blocks.steps, len(circuit.blocks.inference)) == (2, 5, 59)
+    assert (circuit.blocks.slots, circuit.blocks.steps, len(circuit.blocks.inference)) == (2, 5, 60)
     by: dict[str, list] = {}
     for e in circuit.blocks.inference:
         by.setdefault(label[e.template], []).append((e.at, e.radix, e.axes, e.step))
     assert set(by) == set(ids)
-    assert by[EMB] == [(0, (5, 2), ("step", "slot"), 0)]
+    assert by[EMB] == [(0, (4, 2), ("step", "slot"), 0), (8, (2,), ("slot",), 4)]
     assert by[SCAN] == by[COLLECT0] == [(0, (2,), ("slot",), 0)]
     assert by[FEED] == by[COLLECT] == [(0, (3, 2), ("step", "slot"), 1)] and by[ENTRY] == [(0, (2,), ("slot",), 4)]
     att = "AttnBlockFirst_v1{{D=16,NVIS={},BN=128}}"
@@ -503,16 +506,27 @@ def test_the_blocks_put_each_unit_at_its_slot_and_its_positions_step(window):
 
 
 def test_inference_entries_are_the_slots_runs_side_by_side():
-    """`window_builder.inference` takes a template's runs in unit order (a slot's are allocated before the next slot's, each allocation's
-    slots side by side), merges its units of one (slot, step) into runs, takes each ``slots`` runs (slots 0, 1, ... of one
-    length at one step) as an entry, and merges like entries that follow on at one step under a ``-`` digit, then at
-    consecutive steps under a ``step`` digit; units that aren't such runs are refused by name."""
-    assert WB.inference({"t": [(0, 1, 0, 0), (1, 1, 0, 0), (2, 2, 1, 0), (4, 2, 0, 1), (6, 2, 1, 1)]}, 2) == [
+    """`window_builder.entries` takes a template's runs in unit order (a slot's are allocated before the next slot's, each
+    allocation's slots side by side), merges its units of one (slot, step, time) into runs, takes each ``slots`` runs (slots
+    0, 1, ... of one length at one step and time) as an entry, and merges like entries that follow on, their times one step
+    apart, at one step under a ``-`` digit until none merges, then at consecutive steps under a ``step`` digit, so each
+    entry's time is affine in its digits: two layers of two allocations at one step (at nodes 0, 1 and 10, 11) are a digit
+    a layer and a digit an allocation, and a third layer whose allocations are two nodes apart (20, 22) an entry of its
+    own. Units that aren't such runs are refused by name."""
+    def inference(spans, times=None):
+        return [e for e, _, _ in WB.entries({"t": spans}, 2, times and {"t": times})]
+
+    assert inference([(0, 1, 0, 0), (1, 1, 0, 0), (2, 2, 1, 0), (4, 2, 0, 1), (6, 2, 1, 1)]) == [
         IF.InferenceEntry("t", 0, (2, 2, 2), ("step", "slot", "-"), 0)]
     for spans in ([(0, 1, 0, 3), (1, 1, 1, 3), (2, 1, 0, 3), (3, 1, 1, 3)], [(0, 1, 0, 3), (2, 1, 0, 3), (1, 1, 1, 3), (3, 1, 1, 3)]):
-        assert WB.inference({"t": spans}, 2) == [IF.InferenceEntry("t", 0, (2, 2), ("-", "slot"), 3)]
-    with pytest.raises(Unexpressible, match=r"t: units from 0 are not 2 slots' runs of one length at one step"):
-        WB.inference({"t": [(0, 2, 0, 0), (2, 1, 1, 0)]}, 2)
+        assert inference(spans) == [IF.InferenceEntry("t", 0, (2, 2), ("-", "slot"), 3)]
+    with pytest.raises(Unexpressible, match=r"t: units from 0 are not 2 slots' runs of one length at one step and one time"):
+        inference([(0, 2, 0, 0), (2, 1, 1, 0)])
+    spans = [(2 * k + s, 1, s, 0) for k in range(6) for s in range(2)]
+    times = [[n, 0] for n in (0, 0, 1, 1, 10, 10, 11, 11, 20, 20, 22, 22)]
+    assert WB.entries({"t": spans}, 2, {"t": times}) == [
+        (IF.InferenceEntry("t", 0, (2, 2, 2), ("-", "-", "slot"), 0), (0, 0), ((10, 0), (1, 0), (0, 0))),
+        (IF.InferenceEntry("t", 8, (2, 2), ("-", "slot"), 0), (20, 0), ((2, 0), (0, 0)))]
 
 
 def test_every_input_row_is_wired_or_registered_counted_from_the_description(window):
