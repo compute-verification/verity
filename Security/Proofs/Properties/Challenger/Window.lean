@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Challenger.Session
 public import Proofs.Properties.Challenger.CanonRead
+import all Init.Data.String.Defs
 
 /-!
 # A draw's window is one the device's own ledger opens, or a break

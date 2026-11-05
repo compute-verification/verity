@@ -4,6 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Record
 public import Proofs.Properties.Verity.Sampled.Record.Session
 public import Proofs.Properties.Verity.Recursive.ScheduleInner
 public import Proofs.Properties.Verity.Recursive.PartStatement
+import all Init.Data.String.Defs
 
 /-!
 # v2's acceptance is the record's, past the draw file round
