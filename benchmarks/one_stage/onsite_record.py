@@ -31,8 +31,9 @@ established``, its Lean answer's accept beside it (``answer``), and its bound co
 ``credit`` (`CREDIT`) names the drawn members it credits, those whose --registered file the audit completed at the
 window's committed roots and whose Lean verdict accepted it reporting exactly its reads (the audit's published record,
 `AUDIT`), and lists every other drawn member as not credited, by name, with why; ``missing`` where the record states no
-completion. ``of_record`` holds when every verdict accepted and every drawn member is credited, the condition for the
-demo's run of record, naming the verdicts not established and the members not credited; ``placement`` is the network
+completion. ``of_record`` holds when every verdict but PoUW's accepted and every drawn member is credited, the condition
+for the demo's run of record, naming the verdicts not established, the members not credited and the verdict it doesn't
+read (``not_claimed``: PoUW's, `NOT_CLAIMED`, listed as it is, missing and development where its row is); ``placement`` is the network
 certifier's answer's, which host ran each party.
 
 **Coins** (``coins``, `COINS`): sampled proofs' coins as the run's COINS lines in verdicts.txt name them (the served
@@ -244,13 +245,16 @@ DAY = (f"{DAY_OPEN}: the record doesn't claim the run served one program a day. 
 NO_ADVICE_LINE = "the run published no ADVICE-LINE (served_verdicts.sh's, on a serve-openai --advice run)"
 POUW_OPEN = "pouw-freed-compute"
 POUW = (f"{POUW_OPEN}: the record credits no PoUW freed compute, and no figure of PoUW's row reaches it (`row_verdict`), "
-        "so none is in any total here. Not claimed, by this name: OnsiteFreed (Definitions.Pouw.Guarantees.OnsiteFreed) "
+        "so none is in any total here, and whether the run is of record doesn't read PoUW's verdict (`NOT_CLAIMED`). "
+        "Not claimed, by this name: OnsiteFreed (Definitions.Pouw.Guarantees.OnsiteFreed) "
         "reads Dither's headlines (Pouw.Dither.FreedSound, WorkSound), which are stated for the no-fold round "
         "(noFoldRound) and describe neither Dither v3.2's proof block nor the PoUW piece the run serves. That piece is "
         "PoUW H1 + fx1 (eps1-sm120-h1fx1, served_verdicts.sh's default POUW=h1), checked over H1's J10-R period "
         "(PouwCheck.Credit.window), a development run under the lane's development key that credits nothing; Pearl+ "
         "(POUW=pearlplus: served_pearlplus.sh, its own seeded load after the window's serve) is a development piece "
         "too, untied, and credits nothing. ``served`` is what each COINS line says the run's PoUW piece was")
+#: the verdicts ``of_record.holds`` doesn't read, since the record claims nothing of them (`POUW`)
+NOT_CLAIMED = ("PoUW",)
 #: the PoUW clause of the run's COINS line (served_verdicts.sh's H1_COINS), which runs up to the bandwidth audit's
 POUW_SAID = re.compile(r"; (PoUW.*?); the bandwidth audit's")
 #: where sampled proofs' audit publishes its record (`served_integrity.public_copy`)
@@ -649,13 +653,13 @@ def network_row(out: Path, rows: Mapping[str, Any], run: str | None) -> tuple[An
 
 def row_verdict(rows: Mapping[str, Any], key: str, src: str | None = None) -> dict[str, Any]:
     """A verdict from the window report's row ``key`` (from ``src``, default the report's): a missing, dropped or
-    development row is missing, with its why."""
+    development row is missing, with its why, and a development row says so (``development``)."""
     src = src or f"record/verdicts.json protocols.{key}"
     r = rows.get(key)
     if not isinstance(r, Mapping):
         return missing(f"the window report has no {key} row", src)
     if r.get("verdict") in ("missing", "dropped"):
-        return missing(str(r.get("why")), src)
+        return missing(str(r.get("why")), src) | ({"development": True} if "development" in r else {})
     out = {"protocol": r.get("protocol"), "verdict": r.get("verdict"), "from": src}
     return out | ({"reason": r["reason"]} if r.get("reason") else {})
 
@@ -1158,12 +1162,13 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
         "serving": {"missing": NO_SERVING} if serving is None else {
             "window_steps": serving[0], "max_tokens": serving[1], "is": SERVING},
         "verdicts": v, "coins": drawn, "one_program_a_day": day(out), "pouw_freed_compute": pouw(out),
-        "of_record": {"holds": all(x["verdict"] == "accept" for x in v.values()) and credited(paid),
+        "of_record": {"holds": all(x["verdict"] == "accept" for k, x in v.items() if k not in NOT_CLAIMED)
+                               and credited(paid),
                       "missing": [k for k, x in v.items() if x["verdict"] == "missing"],
                       "not_accepting": [k for k, x in v.items()
                                         if x["verdict"] not in ("accept", "missing", NOT_ESTABLISHED)],
                       "not_established": [k for k, x in v.items() if x["verdict"] == NOT_ESTABLISHED],
-                      "not_credited": list(paid.get("not_credited") or ())}
+                      "not_credited": list(paid.get("not_credited") or ()), "not_claimed": list(NOT_CLAIMED)}
                      | ({"uncredited": paid["missing"]} if "missing" in paid else {})
                      | ({"conditional_on": held} if held else {}),
         "placement": profile.get("placement"), "advice_charge": advice,

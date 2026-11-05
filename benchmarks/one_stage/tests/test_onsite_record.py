@@ -24,7 +24,7 @@ verdict is not established and its bound conditional on it. Sampled proofs credi
 as not credited. PoUW's freed compute is never credited or claimed, whatever its row states, and neither is one
 program a day, each open by name beside what the run's lines say. The run's `publish` leaves the record as written.
 The run is of record only when every verdict, the onsite composite's included, accepted and every drawn member is
-credited. Its caller's serving settings, S and MAX_TOKENS, both or neither, label the record and its line, missing
+credited, PoUW's verdict aside: the record claims nothing of it, and lists it as its row states it. Its caller's serving settings, S and MAX_TOKENS, both or neither, label the record and its line, missing
 where it states none; runs' records at two settings go beside each other, each run's figures labelled with its own
 settings and ℓ_a, and a record of another format, or stating no settings, is refused by path."""
 from __future__ import annotations
@@ -285,7 +285,7 @@ def test_a_rehearsal_records_each_missing_part_with_its_why_and_no_figure(tmp_pa
     assert v["inference-only"]["verdict"] == v["onsite"]["verdict"] == "missing"
     assert rec["of_record"] == {"holds": False, "missing": ["PoUW", "inference-only", "remote", "the network certifier",
                                                             "onsite"], "not_accepting": [], "not_established": [],
-                                "not_credited": []}
+                                "not_credited": [], "not_claimed": ["PoUW"]}
     assert rec["coins"]["open_draws"] == [] and "missing" in rec["coins"]["draws"]
     assert rec["bound"] == {"missing": "the network certifier's verdict is missing (CERTIFIER_CMD unset: the network "
                                        "certifier in front of the serving endpoint): only its accepted answer certifies K"}
@@ -1134,10 +1134,10 @@ def test_the_run_is_of_record_only_with_the_onsite_composite_accepting(tmp_path)
         "the network certifier": "accept", "onsite": "missing"}
     assert rec["verdicts"]["onsite"]["why"] == "the run has no composite of verity/remote-network/v0"
     assert rec["of_record"] == {"holds": False, "missing": ["onsite"], "not_accepting": [], "not_established": [],
-                                "not_credited": []}
+                                "not_credited": [], "not_claimed": ["PoUW"]}
     doc = json.loads((with_onsite(out) / "composite" / "remote-network" / "composite.json").read_text())
     assert OR.record(out)["of_record"] == {"holds": True, "missing": [], "not_accepting": [], "not_established": [],
-                                           "not_credited": []}
+                                           "not_credited": [], "not_claimed": ["PoUW"]}
     (out / "composite" / "remote-network" / "composite.json").write_text(json.dumps(
         doc | {"missing": [OR.NETWORK], "verdict": {"id": OR.ONSITE, "verdict": "reject", "refusal": "components"}}))
     rec = OR.record(out)
@@ -1145,7 +1145,7 @@ def test_the_run_is_of_record_only_with_the_onsite_composite_accepting(tmp_path)
                                          "from": "composite/remote-network/composite.json",
                                          "not_established": [OR.NETWORK]}
     assert rec["of_record"] == {"holds": False, "missing": [], "not_accepting": ["onsite"], "not_established": [],
-                                "not_credited": []}
+                                "not_credited": [], "not_claimed": ["PoUW"]}
 
 
 def test_while_certifier_key_is_open_an_accepted_network_verdict_is_not_established_and_its_bound_conditional_on_it(
@@ -1163,7 +1163,8 @@ def test_while_certifier_key_is_open_an_accepted_network_verdict_is_not_establis
     assert {k: nv[k] for k in ("protocol", "verdict", "answer", "open", "why")} == {
         "protocol": OR.NETWORK, "verdict": OR.NOT_ESTABLISHED, "answer": "accept", "open": cond, "why": OR.KEY_OPEN}
     assert rec["of_record"] == {"holds": False, "missing": [], "not_accepting": [],
-                                "not_established": ["the network certifier"], "not_credited": [], "conditional_on": cond}
+                                "not_established": ["the network certifier"], "not_credited": [],
+                                "not_claimed": ["PoUW"], "conditional_on": cond}
     of = rec["bound"]["of_record"]
     assert (rec["bound"]["K"], of["open"], of["conditional_on"], of["K"]) == (K, cond, cond, KR)
     assert rec["periods"]["conditional_on"] == rec["composite_error"]["conditional_on"] == cond
@@ -1234,6 +1235,34 @@ def test_pouw_credits_no_freed_compute_whatever_its_row_states_and_is_not_claime
     assert not {123456789, 987654321} & set(numbers(rec))
     assert json.loads(capsys.readouterr().out.strip()[7:])["not_claimed"] == [OR.DAY_OPEN, OR.POUW_OPEN]
     assert all(x in OR.POUW for x in ("OnsiteFreed", "noFoldRound", "eps1-sm120-h1fx1", "credits nothing", "Pearl+"))
+
+
+@pytest.mark.parametrize("work, verdict", [
+    ({"verdict": "missing", "why": "development run, credits nothing: toy", "development": {"verdict": "accept"}},
+     {"verdict": "missing", "why": "development run, credits nothing: toy", "development": True}),
+    ({"protocol": "verity/pouw/period/v1", "verdict": "reject", "reason": "toy"},
+     {"protocol": "verity/pouw/period/v1", "verdict": "reject", "reason": "toy"}),
+])
+def test_whether_the_run_is_of_record_reads_no_pouw_verdict_which_stays_listed_as_it_is(tmp_path, capsys, work, verdict):
+    """An otherwise accepted run, every member credited, whose PoUW row is a development piece's (missing, crediting
+    nothing) or a rejection: the run is of record, since the record claims nothing of PoUW (`NOT_CLAIMED`), and PoUW's
+    verdict is listed as its row states it, missing and development or rejected, and not claimed."""
+    out = with_onsite(accepted(tmp_path))
+    report = json.loads((out / "record" / "verdicts.json").read_text())
+    report["protocols"]["work"] = {"owner": "compute-accounting", **work}
+    (out / "record" / "verdicts.json").write_text(json.dumps(report))
+    assert OR.main([str(out)]) == 0
+    rec = json.loads((out / "record" / "onsite.json").read_text())
+    assert rec["verdicts"]["PoUW"] == verdict | {"from": "record/verdicts.json protocols.work",
+                                                 "not_claimed": OR.POUW_OPEN}
+    gone = ["PoUW"] * (verdict["verdict"] == "missing")
+    assert rec["of_record"] == {"holds": True, "missing": gone, "not_accepting": ["PoUW"] * (not gone),
+                                "not_established": [], "not_credited": [], "not_claimed": ["PoUW"]}
+    line = json.loads(capsys.readouterr().out.strip()[7:])
+    assert (line["of_record"], line["verdicts"]["PoUW"]) == (True, verdict["verdict"])
+    report["protocols"]["integrity"]["verdict"] = "reject"
+    (out / "record" / "verdicts.json").write_text(json.dumps(report))
+    assert OR.record(out)["of_record"]["holds"] is False
 
 
 @pytest.mark.parametrize("n2, scan, named", [("subset:8", "all", ["the period draw"]),
