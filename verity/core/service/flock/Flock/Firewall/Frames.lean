@@ -14,18 +14,22 @@ issues every request to it, on the schedule `Drive.reqs` fixes. Nothing the prov
   (`Frame.innerSched`) on the rounds the loop's finish computed for the rep before they went to the host
   (`Sessions.inner`, `Finish.serve`'s `inner`), so the host only relays them. At a round the finish has not computed,
   the frame takes no device round: whatever the host relays fails, the frame's own round on the finish's rounds so far
-  stands in, and the rep stops, so the session's `Finish` leaves without proofs. Rep 1's frame first takes
-  rep 0's algebraic-phase coins (`prior`). What leaves is the frame's release, at the stream's first round after its
-  domain frame (`domainFrame`, `Transcript.init`'s).
+  stands in, and the rep stops, so the session's `Finish` leaves without proofs. A stop is the session's: once any rep's
+  frame of it stopped (a failed round, a refused one, a failed worker's rounds; `Sessions.stopped`), the frame takes no
+  device round at any of its reps' rounds, and every rep of the session stops, its rounds leaving as the scheduled ones
+  of a stopped rep. Rep 1's frame first takes rep 0's algebraic-phase coins (`prior`). What leaves is the frame's
+  release, at the stream's first round after its domain frame (`domainFrame`, `Transcript.init`'s).
 * `coins`: once the coins answered that round open the committed tree (`State.answer`), the frame takes them
   (`feedOf` the answer), and the opening goes on with them where the round was its; the prover receives them only once the frame did.
-* `finish`: the session's `Finish` leaves only once every rep's frame answers `finish` at its end, not stopped.
+* `finish`: the session's `Finish` leaves only once every rep's frame answers `finish` at its end, not stopped
+  (`finishOf`).
 * `ask`: the prover learns each rep's next place (`place`), so that a rep whose device stopped goes on with the
   schedule's rounds, which the frame stands in for, and the values the frame took (`vals`), which its finish request
   carries: the prover keeps no schedule and no check of its own. Its answer only reads the loop's frames (`askOf`).
 
-A round and a round's coins are pure steps of the loop's frames (`roundStep`, `coinsStep`, on the `Sessions` as a
-value); `round` and `coins` only read the sessions, run the step, put the rep's frame back and log. Between its start
+A round, a round's coins and a `Finish` are pure steps of the loop's frames (`roundStep`, `coinsStep`, `finishOf`, on
+the `Sessions` as a value); `round`, `coins` and `finish` only read the sessions, run the step, put the rep's frame back
+and log. Between its start
 (`startRep`) and its session's end (`close`) a rep's frame is written by them alone, at its own session's requests, one
 at a time, so no other task puts back a frame from before one of them. So what a rep's frame takes is a function of the
 loop's frames and the request alone.
@@ -130,6 +134,10 @@ def Sessions.find (R : Sessions) (sid i r : Nat) : Option (Nat × Rep) := do
 /-- That frame, its state set to `p`. -/
 def Sessions.put (R : Sessions) (p : Rep) : Sessions :=
   { R with reps := R.reps.map fun q => if q.sid == p.sid && q.table == p.table && q.rep == p.rep then p else q }
+
+/-- **Whether session `sid` stopped** in the loop's frames `R`: a frame of one of its reps stopped (`Masker.stopped`: a
+round of the rep failed, or the frame refused one), from which on every rep of the session stops (`roundPlace`). -/
+def Sessions.stopped (R : Sessions) (sid : Nat) : Bool := R.reps.any fun p => p.sid == sid && p.st.m.stopped
 
 /-- **The live session named `name`** (`Level0.nameOf`) in the loop's frames `R` and level 0s `L0`, for a request `what`;
 else why not: a name no live session has, or a session before its `Hello`. -/
@@ -238,7 +246,9 @@ algebraic-phase coins), the round's place, whether it is the stream's first roun
 round in that place, if it takes none; or why the round has none. The place is `placeOf`'s, but past the opening: there
 the inner proof's round `j` is the frame's own (`Frame.innerSched`) on the rounds the loop's finish computed for the rep
 (`Sessions.innerOf`). At a round `j` the finish has not computed, the frame takes no device round: whatever the host
-relays, the frame fails it, and its own round on the finish's rounds so far stands in (`roundStep`). -/
+relays, the frame fails it, and its own round on the finish's rounds so far stands in (`roundStep`). Nor does it take
+one at any round of a session that stopped (`Sessions.stopped`): the session stops at its first failure, and every rep's
+round from there on leaves as the scheduled round of a stopped rep, whatever the device sent. -/
 def roundPlace (R : Sessions) (L0 : Level0.Slots) (sid i r : Nat) (dom content : ByteArray) (n : Nat) :
     Except String (Rep × Frame.Place × Bool × Option String) := do
   let some (_, p) := R.find sid i r | throw s!"a round of table {i} rep {r}, whose frame the loop has not started"
@@ -259,15 +269,16 @@ def roundPlace (R : Sessions) (L0 : Level0.Slots) (sid i r : Nat) (dom content :
       | (.ok, st') => p := { p with st := st' }
       | (a, _) => throw s!"rep 0's algebraic-phase coins: {replyWhy a}"
   let (place, _, p') ← placeOf R.salts l0 s p (s.spec.domain name r).toUTF8
+  let stopped := if R.stopped sid then some s!"session {sid} stopped at a rep's failure" else none
   match place with
   | .own =>
     let j := p'.st.m.inner.getD 0
     let fin := R.innerOf l0.root r
     if Frame.INNER_ROUNDS ≤ j then throw s!"a round after the inner proof's {Frame.INNER_ROUNDS}"
-    let noDevice := if j < fin.size then none
+    let noDevice := if j < fin.size then stopped
       else some s!"table {i} rep {r}'s inner round {j}, which the loop's finish has not computed"
     return (p', .sched (Frame.innerSched p'.cfg p'.st.m fin n j), first, noDevice)
-  | _ => return (p', place, first, none)
+  | _ => return (p', place, first, stopped)
 
 /-- A round's effect on the loop: what leaves (or why nothing does), the rep's frame after it, which the loop puts back,
 the rank check's result where the round made it, and the round and why the rep stopped where the round stopped it. -/
@@ -337,19 +348,21 @@ def coins (reg : IO.Ref Sessions) (sid i r : Nat) (cs : Array F128) : IO (Except
     return .ok ()
   | .error e => return .error e
 
-/-- **Whether session `sid`'s `Finish` may leave**: every rep of its `tables` tables has a frame, which answers `finish`
-at its end, not stopped; else why not. -/
-def finish (reg : IO.Ref Sessions) (sid tables : Nat) : IO (Except String Unit) := do
-  let R ← reg.get
+/-- **Whether session `sid`'s `Finish` may leave**, in the loop's frames `R`: every rep of its `tables` tables has a
+frame, which answers `finish` at its end, not stopped; else why not. -/
+def finishOf (R : Sessions) (sid tables : Nat) : Except String Unit := do
   for i in [0:tables] do
     for r in [0:2] do
-      let some (_, p) := R.find sid i r | return .error s!"a Finish where table {i} rep {r}'s frame never started"
+      let some (_, p) := R.find sid i r | throw s!"a Finish where table {i} rep {r}'s frame never started"
       match Frame.step p.cfg p.st .finish with
       | (.done false, _) => pure ()
-      | (.done true, _) => return .error s!"{Frame.STOP}the Lean frame stopped table {i} rep {r}"
-      | (.refuse why, _) | (.err why, _) | (.stop why, _) => return .error s!"table {i} rep {r}: {why}"
-      | _ => return .error s!"table {i} rep {r}: no answer to finish"
-  return .ok ()
+      | (.done true, _) => throw s!"{Frame.STOP}the Lean frame stopped table {i} rep {r}"
+      | (.refuse why, _) | (.err why, _) | (.stop why, _) => throw s!"table {i} rep {r}: {why}"
+      | _ => throw s!"table {i} rep {r}: no answer to finish"
+
+/-- `finishOf` on the loop's frames as they are. -/
+def finish (reg : IO.Ref Sessions) (sid tables : Nat) : IO (Except String Unit) :=
+  return finishOf (← reg.get) sid tables
 
 /-- **What the loop holds of table `i`'s rep `r`** on the level 0 of root `root`, in its frames `R` and level 0s `L0`
 (`Finish.Own`): the draws its frame took at its start, which the loop's finish proves the rep with (`Finish.drawsOf`), and
