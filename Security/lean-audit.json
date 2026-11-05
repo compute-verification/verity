@@ -17215,6 +17215,12 @@
     "Claims.ZKMal.CoinLayer.helloMsg": "b9fcb577caf64ca123406e3b8db53df697981be39ade62394117ec812d8d6d92"
    }
   },
+  "Proofs.Flock.Claims.ZK.LinkRecheck": {
+   "digest": "75b457653b4db75351ae54bdc4dc892224ae761981ac52f709feb9e16211ff5e",
+   "definitions": {
+    "Claims.ZKMal.Masked.linkIn": "aad36d20478ae14a727a243c4d335e5a8d479669d651a0b61a62e10ad79c8bf4"
+   }
+  },
   "Proofs.Flock.Claims.ZK.Reference": {
    "digest": "08e1af1c56a74d5f63dc68a7f0340e41ac2eac56dd06ae9f420d92758a2c107b",
    "definitions": {
