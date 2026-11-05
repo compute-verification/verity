@@ -1,6 +1,8 @@
-import Properties.Verity.Subprotocols
-import Proofs.Properties.Verity.Soundness
-import Proofs.Core.Game.Prob
+module
+
+public import Properties.Verity.Subprotocols
+public import Proofs.Properties.Verity.Soundness
+public import Proofs.Core.Game.Prob
 
 /-!
 # Each subprotocol's target from its bound at its component, and soundness from those bounds
@@ -27,6 +29,8 @@ subprotocol that decides an `Audit` (`Subprotocol.ofAudit`), from a per-period g
 (`Accounting.PeriodRun.Sound`) coupled to the game's coins; the inference-only policy's claim is about the declaration
 and reads no coin, so its bound is its own.
 -/
+
+@[expose] public section
 
 namespace Verity
 
