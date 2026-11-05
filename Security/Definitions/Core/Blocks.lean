@@ -182,7 +182,7 @@ definition. `ε` is a function of the adversary's moves (`S_φ`, `hold`, `keep`)
 the labels' PRF advantage against the distinguisher those moves make (the standard-model term, as
 `Pous.Guarantees.StreamedWipe` adds `Pous.StreamedWipe.prfAdvantage`), and `δ_net` once the network certifier's count of
 the egress enters. A constant `ε` reads the labels as ideal. `Pous.Guarantees.StreamedWipe` is the streamed game's
-proved bound. The bridge from an accepted verdict to this bound is memory-accounting's, in a package that sees both. -/
+proved bound. The bridge from an accepted verdict to this bound belongs in a package that sees both. -/
 def SurvivorBound [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] (foreignBits : ℕ)
     (ε : (S_φ : ℕ) → ((Fin S_φ → Bool) → Device.State d) →
       (Device.State d → (Fin w.egress → Bool) → Ch → Fin S_φ → Bool) → ℝ≥0∞) : Prop :=
