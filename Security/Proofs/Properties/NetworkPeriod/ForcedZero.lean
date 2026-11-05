@@ -313,7 +313,7 @@ theorem table_forced {tags : Tags} {zk : Bool} {cf pf : ByteArray} {tables : Lis
 
 /-- **No pair of Δ fills a forced-zero column**, at the verifier's statement check and setup. -/
 theorem forcedZeroUnfilled : ForcedZeroUnfilled := by
-  unfold ForcedZeroUnfilled ForcedZeroUnfilledOf
+  unfold ForcedZeroUnfilled ForcedZeroUnfilledAt
   intro tags zk cf pf tables count registered coins draw partition program work stratified closure spec sts
     hck hset st hst
   obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 (Array.mem_toList_iff.1 hst)
@@ -444,6 +444,7 @@ theorem session_block_zero {I : Witness.Inputs} (ht : I.tags = Tags.circuit) (hT
 Δ has the pair `(0, 0)`, at the forced-zero column 0 of `forcedStmt`'s one unit slot, it fails. -/
 theorem forcedZeroUnfilled_nontrivial : ¬ ForcedZeroUnfilledOf acceptAllScope fillForced := by
   intro h
+  unfold ForcedZeroUnfilledOf ForcedZeroUnfilledAt at h
   have hu : forcedStmt.c.unit = forcedNet := rfl
   have h0 : 0 ∈ NetworkCheck.Period.forcedCols forcedStmt.c := by
     simp only [forcedCols_eq, List.mem_filter, List.mem_range, NetworkCheck.Period.forcedZero, Sparse.row,

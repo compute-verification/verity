@@ -15,6 +15,7 @@ and the output rows' messages, which sit in other nets' slots, and the unit's in
 wires copy into. A column no port holds is none of these. The statement check refuses a typed statement
 (`ProvedScope.statementRules`) and the setup a pinned output (`HmRow.pinnedCount`), so neither's Δ is among these.
 
+* `ForcedZeroUnfilledAt`: what it says of a session's tables.
 * `ForcedZeroUnfilledOf check setup`: the statement at any statement check and session setup.
 * `ForcedZeroUnfilled`: at the verifier's own (`ProvedScope.check`, `Stmt.setupTables`).
 * `acceptAllScope`, `fillForced`: a statement check that accepts everything and a setup whose one table's Δ fills a
@@ -41,10 +42,18 @@ abbrev TablesSetup : Type :=
     Option ByteArray → Option (Nat × Array (String × Nat × Nat)) → Option Nat → Option (Std.HashMap Nat (Array Nat)) →
     Option ByteArray → V (SessionSpec × Array Stmt)
 
-/-- **No pair of Δ fills a forced-zero column, at the statement check `check` and the setup `setup`.** Wherever `check`
-accepts a session's statement, holding no public input words of its own, and `setup` sets the session up without them,
-every table `st` has the circuit `Flock.ProvedScope.circuitOf` parses, and no pair of `st`'s Δ_A or Δ_B has its row at
-column `p` of unit slot `s`, for `p` a forced-zero column of `st`'s circuit (`NetworkCheck.Period.forcedCols`). -/
+/-- What `ForcedZeroUnfilled` says of a session set up from the tags `tags`, the circuit file `cf` and the lookup tables
+`tables` as the tables `sts`: every table `st` has the circuit `Flock.ProvedScope.circuitOf` parses, and no pair of
+`st`'s Δ_A or Δ_B has its row at column `p` of unit slot `s`, for `p` a forced-zero column of `st`'s circuit
+(`NetworkCheck.Period.forcedCols`). -/
+def ForcedZeroUnfilledAt (tags : Tags) (cf : ByteArray) (tables : List (String × ByteArray)) (sts : Array Stmt) :
+    Prop :=
+  ∀ st ∈ sts.toList, ProvedScope.circuitOf tags cf tables = .ok st.c ∧
+    ∀ s < st.c.unitRange.count, ∀ p ∈ NetworkCheck.Period.forcedCols st.c,
+      ∀ q ∈ st.da.toList ++ st.db.toList, q.1 ≠ st.c.unitRange.slot s + p
+
+/-- `ForcedZeroUnfilled` of the statement check `check` and the setup `setup`: `ForcedZeroUnfilledAt` of every session
+whose statement `check` accepts, holding no public input words of its own, and that `setup` sets up without them. -/
 def ForcedZeroUnfilledOf (check : ScopeCheck) (setup : TablesSetup) : Prop :=
   ∀ (tags : Tags) (zk : Bool) (cf pf : ByteArray) (tables : List (String × ByteArray)) (count : Nat) (registered : Bool)
     (coins : Coins) (draw partition : Option Lean.Json) (program : Option ByteArray)
@@ -52,16 +61,25 @@ def ForcedZeroUnfilledOf (check : ScopeCheck) (setup : TablesSetup) : Prop :=
     (closure : Option (Std.HashMap Nat (Array Nat))) (spec : SessionSpec) (sts : Array Stmt),
     check tags zk cf pf tables count false registered = .ok () →
     setup tags cf pf coins count tables draw partition program work stratified closure none = .ok (spec, sts) →
-    ∀ st ∈ sts.toList, ProvedScope.circuitOf tags cf tables = .ok st.c ∧
-      ∀ s < st.c.unitRange.count, ∀ p ∈ NetworkCheck.Period.forcedCols st.c,
-        ∀ q ∈ st.da.toList ++ st.db.toList, q.1 ≠ st.c.unitRange.slot s + p
+    ForcedZeroUnfilledAt tags cf tables sts
 
-/-- **No pair of Δ fills a forced-zero column**, at the verifier's statement check (`Flock.ProvedScope.check`) and
-setup (`Flock.Stmt.setupTables`). Its two literals are the `--zk` verifier's call (`Flock.Witness.scope`,
-`Flock.Witness.setupOf`): `false` is the check's `publicInputs`, the one value at which the check accepts (it refuses
-public input ports, `ProvedScope.statementRules`), and `none` is the setup's public input words, which the verifier's
-setup leaves at their default. The plain path's statement check (`Flock.ProvedScope.checkP`) is not covered. -/
-def ForcedZeroUnfilled : Prop := ForcedZeroUnfilledOf ProvedScope.check @Stmt.setupTables
+/-- **No pair of Δ fills a forced-zero column.** If the verifier's statement check (`Flock.ProvedScope.check`) accepts a
+session's statement and its setup (`Flock.Stmt.setupTables`) sets the session up as the tables `sts`, every table `st`
+has the circuit `Flock.ProvedScope.circuitOf` parses, and no pair of `st`'s Δ_A or Δ_B has its row at column `p` of unit
+slot `s`, for `p` a forced-zero column of `st`'s circuit (`NetworkCheck.Period.forcedCols`): `ForcedZeroUnfilledOf` at
+those two. Its two literals are the `--zk` verifier's call (`Flock.Witness.scope`, `Flock.Witness.setupOf`): `false` is
+the check's `publicInputs`, the one value at which the check accepts (it refuses public input ports,
+`ProvedScope.statementRules`), and `none` is the setup's public input words, which the verifier's setup leaves at their
+default. The plain path's statement check (`Flock.ProvedScope.checkP`) is not covered. -/
+def ForcedZeroUnfilled : Prop :=
+  ∀ (tags : Tags) (zk : Bool) (cf pf : ByteArray) (tables : List (String × ByteArray)) (count : Nat) (registered : Bool)
+    (coins : Coins) (draw partition : Option Lean.Json) (program : Option ByteArray)
+    (work : Option (Nat × Array (String × Nat × Nat))) (stratified : Option Nat)
+    (closure : Option (Std.HashMap Nat (Array Nat))) (spec : SessionSpec) (sts : Array Stmt),
+    ProvedScope.check tags zk cf pf tables count false registered = .ok () →
+    Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure none =
+      .ok (spec, sts) →
+    ForcedZeroUnfilledAt tags cf tables sts
 
 /-- A statement check that accepts every statement: what `ForcedZeroUnfilledOf` must fail at, beside `fillForced`. -/
 def acceptAllScope : ScopeCheck := fun _ _ _ _ _ _ _ _ => .ok ()
