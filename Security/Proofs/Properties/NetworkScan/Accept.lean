@@ -4,13 +4,14 @@ import Proofs.Properties.Nci.BodiesOk
 /-!
 # What `NetworkCheck.Period.scanOf`'s acceptance gives of the scan's Program
 
-`scanOf_accepted` reads `scanProg`'s steps one by one, at the Program `scanOf` decodes (`scanOf_scanProg`; each check a
-`need`, so each step a bind), and keeps what
+`scanProg_accepted` reads `scanProg`'s steps one by one (each check a `need`, so each step a bind), and keeps what
 `NetTiming.BoundaryGates.Fits`'s first two parts rest on (`Accepted`): the description's layout and walk checks, the
 egress template's node (a batch of `T`, returning a u16 and the row, every leaf its own, all `T` instances' leaves
-returned by the root in one run), each step's ingress bucket (`Ingress`: a batch member, its first parameter the row,
-its first argument one input node's leaves), and the Program topological (`Prog.orderViolation`) with two templates,
-or three where the window has a later step, which part (3) reads, its root one of its Definitions.
+returned by the root in one run), each step's ingress bucket (`Ingress`: a batch member, its first parameter `row`, of
+the schedule's row type, its first argument one input node's leaves), and the Program topological
+(`Prog.orderViolation`) with two templates, or three where the window has a later step, which part (3) reads, its root
+one of its Definitions, its Definitions' keys distinct (`keysUnique`) and no template keyed as an input
+(`Flock.Program.isInputId`). `scanOf_accepted` is it at the Program `scanOf` decodes (`scanOf_scanProg`).
 -/
 
 namespace Properties.NetworkScan.Fits
@@ -35,12 +36,12 @@ abbrev bucket (P : Prog) (t : ℕ) : ℕ × ℕ :=
 /-- The schedule's row: `S · B` bytes of 8 bits. -/
 abbrev rowTy (s : Schedule) : Ty := .array (s.allocation * s.cellBytes) (.array 8 (.value 1))
 
-/-- What `scanOf` checks of an ingress bucket `km`: member `km.2` of a template's batch, the template's first parameter
-the schedule's row, the node's first argument one input node's leaves. -/
+/-- What `scanProg` checks of an ingress bucket `km`: member `km.2` of a template's batch, the template's first
+parameter `row`, of the schedule's row type, the node's first argument one input node's leaves. -/
 def Ingress (P : Prog) (s : Schedule) (km : ℕ × ℕ) : Prop :=
   km.1 ∈ templateNodes P ∧ (node P km.1).form = .batch ∧ km.2 < (node P km.1).n ∧
-    0 < (callee P km.1).params.size ∧ ((callee P km.1).params[0]!).2 = rowTy s ∧
-    ∃ kr, ((node P km.1).args[0]?).bind (inputArg P) = some kr
+    0 < (callee P km.1).params.size ∧ ((callee P km.1).params[0]!).1 = "row" ∧
+    ((callee P km.1).params[0]!).2 = rowTy s ∧ ∃ kr, ((node P km.1).args[0]?).bind (inputArg P) = some kr
 
 /-- **What an accepted scan's Program is**, as `NetTiming.BoundaryGates.Fits`'s first two parts read it. -/
 structure Accepted (P : Prog) (s : Schedule) : Prop where
@@ -55,6 +56,8 @@ structure Accepted (P : Prog) (s : Schedule) : Prop where
   topo : P.orderViolation = none
   shape : (∃ a e, templateNodes P = [a, e] ∧ s.window ≤ 1) ∨ ∃ a b e, templateNodes P = [a, b, e]
   root_lt : P.root < P.defs.size
+  keys : keysUnique P = true
+  inputs : ∀ k ∈ templateNodes P, Flock.Program.isInputId (callee P k).key = false
 
 theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {y : β} (h : (x >>= f) = .ok y) :
     ∃ a, x = .ok a ∧ f a = .ok y := by
@@ -102,6 +105,20 @@ theorem split_three {β : Type} {g : ℕ → β} {l : List ℕ} {f b : β} (h : 
     exact ⟨a, a', e, rfl, h'.1, h'.2⟩
   | _ :: _ :: _ :: _ :: _, h => simp at h
 
+theorem name_of_map {xs : Array (String × Ty)} {ys : Array String} {nm : String} (h : xs.map (·.1) = ys)
+    (hx : ys[0]? = some nm) : (xs[0]!).1 = nm := by
+  subst h
+  rw [Array.getElem?_map, Option.map_eq_some_iff] at hx
+  obtain ⟨a, ha, rfl⟩ := hx
+  obtain ⟨hlt, e⟩ := Array.getElem?_eq_some_iff.1 ha
+  rw [getElem!_pos xs _ hlt, e]
+
+theorem firstParams_row (lanes : ℕ) : (firstParams lanes)[0]? = some "row" := by
+  rw [firstParams, Array.getElem?_append_left (xs := #["row"]) (i := 0) (by decide)] <;> rfl
+
+theorem ingressParams_row (lanes : ℕ) : (ingressParams lanes)[0]? = some "row" := by
+  rw [ingressParams, Array.getElem?_append_left (xs := #["row", "sin"]) (i := 0) (by decide)] <;> rfl
+
 /-- **`scanOf` is `scanProg` at the decoded Program**: if `scanOf` accepts the scan `j`, whose canonical text `c`
 decodes to `P`, then `scanProg` accepts `P` with the same terms. -/
 theorem scanOf_scanProg {j : Lean.Json} {program : String} {s : Schedule} {sc : Scan} {c : String} {P : Prog}
@@ -115,12 +132,10 @@ theorem scanOf_scanProg {j : Lean.Json} {program : String} {s : Schedule} {sc : 
   obtain rfl : P = P' := by cases hP'; rfl
   exact h
 
-/-- **What `scanOf`'s acceptance gives**: an accepted scan's canonical text decodes to a Program of the generator
-form, as `Accepted` states it. -/
-theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : Scan} {c : String} {P : Prog}
-    (h : scanOf j program s = .ok sc) (hc : Flock.canon j = .ok c) (hd : Flock.Program.decode c.toUTF8 = .ok P) :
-    Accepted P s := by
-  replace h := scanOf_scanProg h hc hd
+/-- **What `scanProg`'s acceptance gives**: an accepted scan's Program is of the generator form, as `Accepted`
+states it. -/
+theorem scanProg_accepted {P : Prog} {program : String} {s : Schedule} {sc : Scan}
+    (h : scanProg P program s = .ok sc) : Accepted P s := by
   unfold scanProg at h
   obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨root, hroot, h⟩ := bind_ok h
@@ -129,8 +144,19 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
   obtain rfl : root = P.defs[P.root]! := by
     obtain ⟨hlt, e⟩ := Array.getElem?_eq_some_iff.1 hroot
     rw [getElem!_pos P.defs _ hlt, e]
-  obtain ⟨_, -, h⟩ := bind_ok h
-  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, hku, h⟩ := bind_ok h
+  obtain ⟨_, hinp, h⟩ := bind_ok h
+  replace hku := need_ok hku
+  replace hinp := need_ok hinp
+  have hins : ∀ k ∈ templateNodes P, Flock.Program.isInputId (callee P k).key = false := by
+    intro k hk
+    rw [Array.all_eq_true_iff_forall_mem] at hinp
+    have h1 := hinp _ (Array.mem_map.2 ⟨k, List.mem_toArray.2 hk, rfl⟩)
+    have h2 : (!Flock.Program.isInputId (callee P k).key) = true := h1
+    first
+      | rwa [Bool.not_eq_true'] at h2
+      | simpa using h2
+  clear hinp
   obtain ⟨⟨xe, de⟩, hback, h⟩ := bind_ok h
   replace hback := needSome_ok hback
   obtain ⟨_, h2, h⟩ := bind_ok h
@@ -215,7 +241,7 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
       omega
     · exact .inr ⟨a, b, e, hts⟩
   refine ⟨⟨h9.1.1, h9.1.2, h9.2⟩, hemem, ⟨form_batch hxeb, hxen⟩, BodiesOk.ty_beq h7, h11, hret, ?_, h15, hshape,
-    hrlt⟩
+    hrlt, hku, hins⟩
   rcases hpick with ⟨a, e, hts, hfa, rfl⟩ | ⟨a, b, e, hts, hfa, rfl⟩
   · simp only [Prod.mk.injEq] at hfa
     obtain ⟨rfl, rfl⟩ := hfa
@@ -227,7 +253,8 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
     have hb0 : bucket P 0 = (a, 0) := by simp [bucket, hts]
     obtain ⟨kr, hkr⟩ := Option.isSome_iff_exists.1 (hrows (node P a) (by simp))
     rw [hb0]; unfold Ingress; try dsimp only
-    exact ⟨by simp [hts], form_batch hxf, by omega, by omega, BodiesOk.ty_beq hr0, kr, hkr⟩
+    exact ⟨by simp [hts], form_batch hxf, by omega, by omega, name_of_map hn1 (firstParams_row _),
+      BodiesOk.ty_beq hr0, kr, hkr⟩
   · simp only [Prod.mk.injEq] at hfa
     obtain ⟨rfl, rfl⟩ := hfa
     simp only [Option.all_some] at hnl hrl
@@ -246,11 +273,20 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
         have hb0 : bucket P 0 = (a, 0) := by simp [bucket, hts]
         obtain ⟨kr, hkr⟩ := Option.isSome_iff_exists.1 (hrows (node P a) (by simp))
         rw [hb0]; unfold Ingress; try dsimp only
-        exact ⟨by simp [hts], form_batch hxf, by omega, by omega, BodiesOk.ty_beq hr0, kr, hkr⟩
+        exact ⟨by simp [hts], form_batch hxf, by omega, by omega, name_of_map hn1 (firstParams_row _),
+          BodiesOk.ty_beq hr0, kr, hkr⟩
       · have hbt : bucket P t = (b, t - 1) := by simp [bucket, t0, hts]
         obtain ⟨kr, hkr⟩ := Option.isSome_iff_exists.1 (hrows (node P b) (by simp))
         rw [hbt]; unfold Ingress; try dsimp only
-        exact ⟨by simp [hts], form_batch hcond.1, by omega, by omega, BodiesOk.ty_beq hrl, kr, hkr⟩
+        exact ⟨by simp [hts], form_batch hcond.1, by omega, by omega,
+          name_of_map (beq_iff_eq.1 hnl) (ingressParams_row _), BodiesOk.ty_beq hrl, kr, hkr⟩
     · cases hln
+
+/-- **What `scanOf`'s acceptance gives**: an accepted scan's canonical text decodes to a Program of the generator
+form, as `Accepted` states it. -/
+theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : Scan} {c : String} {P : Prog}
+    (h : scanOf j program s = .ok sc) (hc : Flock.canon j = .ok c) (hd : Flock.Program.decode c.toUTF8 = .ok P) :
+    Accepted P s :=
+  scanProg_accepted (scanOf_scanProg h hc hd)
 
 end Properties.NetworkScan.Fits
