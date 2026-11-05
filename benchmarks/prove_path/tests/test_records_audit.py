@@ -884,13 +884,14 @@ def _declared(program: str, **kw: object) -> tuple[str, None, dict]:
                                  "pinned": PIN, "program": program, **kw}
 
 
-def _window(session: str, reserve_seq: int, root: str, by: str = "hash") -> list[tuple[str, str, dict]]:
-    """A lane's reserve and v2 open of the window at ``root``, on day DAY0 by its signed ``started_utc``."""
+def _window(session: str, reserve_seq: int, root: str, by: str = "hash", reserved_at: str = "2026-10-20T09:30:00Z",
+            expires: str = "2026-10-20T09:40:00Z", opened_at: str = "2026-10-20T09:31:00Z") -> list[tuple[str, str, dict]]:
+    """A lane's reserve and v2 open of the window at ``root``, on day DAY0 by its signed ``started_utc`` (``opened_at``)."""
     reserved = {"by": by, "peer": "vy-nebius-1", "scheme": "verity/test/coins/v1", "epoch": 0,
-                "families": [["pouw/salt", 1], ["pouw/round", 3]], "minutes": 10, "started_utc": "2026-10-20T09:30:00Z",
-                "expires_utc": "2026-10-20T09:40:00Z"}
+                "families": [["pouw/salt", 1], ["pouw/round", 3]], "minutes": 10, "started_utc": reserved_at,
+                "expires_utc": expires}
     opened = {"window": {"root": root}, "reserve": reserve_seq, **{k: v for k, v in reserved.items() if k in _auditor().RESERVED},
-              "opened_by": by, "started_utc": "2026-10-20T09:31:00Z", "host": "vy-challenger-1.x", "pinned": PIN}
+              "opened_by": by, "started_utc": opened_at, "host": "vy-challenger-1.x", "pinned": PIN}
     return [("reserve", session, reserved), ("open", session, opened)]
 
 
@@ -960,6 +961,46 @@ def test_the_device_day_reads_the_devices_own_ledger_and_refuses_a_copy_pous_cut
     with pytest.raises(ValueError, match="the auditor's ledger is refused"):
         RA.device_day(cut, root, key, _verify(key))
     assert RA.device_day(lines, root, key, _verify(key))["declarations"][0]["program"] == program
+
+
+def test_a_window_that_crosses_utc_midnight_belongs_to_its_opens_day(written, tmp_path):
+    """Soundness's midnight fixture: a window whose open the device signs at 23:58 on day D and whose end (its steps
+    and close) falls on D+1 is a window of day D, its open's ``started_utc``. Declared for D, R2 accepts it under D,
+    though the lane declares D+1 after midnight while it runs, and W's naming of D+1's declaration is refused. Declared
+    only for D+1, after midnight, it reads no declaration and R2 refuses it (``R2-undeclared``). Declared only for D+1
+    ahead of the open, the device would have refused the open, and a ledger holding it is refused."""
+    from verity.core.protocols import registration as G
+    mine, _doc, _sets = RA.verifier_window(written.dir, D.parse_law(LAW), None)
+    program, root = written.rec["program"], "01" * 64
+
+    def r2(d: dict) -> list[str]:
+        v = R.check(written.rec, mine.program, mine.query, D.parse_law(LAW), CS.SCHEME, {}, **d)
+        return sorted(c for c in v.codes if c.startswith("R2"))
+    def late(reserve_seq: int) -> list[tuple[str, str, dict]]:
+        return _window(S1, reserve_seq, root, reserved_at="2026-10-20T23:55:00Z", expires="2026-10-21T00:05:00Z",
+                       opened_at="2026-10-20T23:58:00Z")
+    next_day = _declared(program, day=DAY0 + 1, declared_utc="2026-10-21T00:01:00Z")
+    end = ("end", S1, {"rc": 0, "closed": True, "ended": "closed by the client", "files": {}, "released": None,
+                       "complete": False, "record_leaf": None, "commitment": None, "refused_hellos": 0,
+                       "ended_utc": "2026-10-21T00:04:00Z"})
+
+    lines, key, _ = _device_ledger(tmp_path / "d", [_declared(program), *late(1), next_day, end])
+    got = RA.device_day(lines, root, key, _verify(key))
+    assert got == {"day": DAY0, "declarations": [{"blocks": ["t"], "day": DAY0, "program": program}]} and r2(got) == []
+    on_d = G.Declaration(DAY0, program, ("t",)).digest()
+    assert RA.device_day(lines, root, key, _verify(key), {"window": {"day": DAY0, "declaration": on_d}}) == got
+    with pytest.raises(ValueError, match=f"not one of day {DAY0}'s in the challenger's ledger"):
+        RA.device_day(lines, root, key, _verify(key),
+                      {"window": {"day": DAY0 + 1, "declaration": G.Declaration(DAY0 + 1, program, ("t",)).digest()}})
+
+    lines, key, _ = _device_ledger(tmp_path / "d1", [*late(0), next_day, end])
+    got = RA.device_day(lines, root, key, _verify(key))
+    assert got == {"day": DAY0, "declarations": []} and r2(got) == ["R2-undeclared"]
+
+    ahead = _declared(program, day=DAY0 + 1, declared_utc="2026-10-20T23:50:00Z")
+    lines, key, _ = _device_ledger(tmp_path / "ahead", [ahead, *late(1), end])
+    with pytest.raises(ValueError, match=f"opens on day {DAY0}, which its lane hash hasn't declared"):
+        RA.device_day(lines, root, key, _verify(key))
 
 
 def _audited(window: Path, out: Path, registration: dict | None = None, accepted: bool = True) -> Path:
