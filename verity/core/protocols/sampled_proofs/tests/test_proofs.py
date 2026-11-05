@@ -120,7 +120,8 @@ def test_a_session_lean_accepts_in_a_form_the_mirror_refuses_is_refused(tmp_path
 
 
 def _template(d: Path, const: int, meta: dict) -> Path:
-    """A circuit file's head: META and a ``unit`` circuit of one input group of one word, its constant at row `const`."""
+    """A circuit file's head: META and a ``unit`` circuit of one input group of one word, its constant at row
+    `const`."""
     circuit = d / "circuit.txt"
     circuit.write_text(f"flock-circuit/v1 u\nMETA {json.dumps(meta)}\nCIRCUIT unit 2\n"
                        f"flock-ir-unit/v2 u {const + 1} {const} 1 0 1 1 16 1 1 1 1 16\n0 0\n")
@@ -133,8 +134,8 @@ TEMPLATES = {"a computed row, 16 bits": (PF.WORD + 1, {"units_per_vu": 1, "leave
              "the widest class": (PF.WORD + 1, {"units_per_vu": 2, "leaves_out": [list(range(8192))] * 2}, None),
              "one leaf past it": (PF.WORD + 1, {"units_per_vu": 2,
                                                 "leaves_out": [list(range(8192)), list(range(8193))]}, PF.WIDE_WHY),
-             "a leaf map past units_per_vu is no unit's": (PF.WORD + 1, {"units_per_vu": 1,
-                                                                         "leaves_out": [[0], list(range(16384))]}, None)}
+             "a leaf map past units_per_vu is no unit's": (
+                 PF.WORD + 1, {"units_per_vu": 1, "leaves_out": [[0], list(range(16384))]}, None)}
 
 
 @pytest.mark.parametrize("const, meta, want", TEMPLATES.values(), ids=TEMPLATES.keys())
@@ -145,8 +146,8 @@ def test_the_mirror_of_the_template_check_refuses_what_lean_refuses(tmp_path, co
 
 
 def test_a_session_lean_accepts_on_a_template_the_mirror_refuses_is_rejected_with_its_reason(tmp_path, monkeypatch):
-    """`verify` rejects a session the verifier accepts on a circuit `template_why` refuses, with v2's reason, as a finding
-    rather than a refusal of the run."""
+    """`verify` rejects a session the verifier accepts on a circuit `template_why` refuses, with v2's reason, as a
+    finding rather than a refusal of the run."""
     circuit = _template(tmp_path, PF.WORD, {"units_per_vu": 1, "leaves_out": [[0]]})
     public = tmp_path / "pub.bin"
     public.write_bytes(b"{}\n")

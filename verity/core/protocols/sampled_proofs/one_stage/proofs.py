@@ -63,8 +63,8 @@ TABLES_WHY = "a shared-row public file (header shared_rows) under --zk"
 #: `OneStageZk.NO_ROW_WHY` and `WIDE_WHY` (`template_why`), v2's refusals of the unit template
 NO_ROW_WHY = ("the circuit's template instance has no computed row (units_per_vu is 0, or the unit net computes none): "
               "a proof block of no gate")
-WIDE_WHY = ("a template instance returns more than 262144 bits (16 per output leaf of its units_per_vu units): past the "
-            "widest size class")
+WIDE_WHY = ("a template instance returns more than 262144 bits (16 per output leaf of its units_per_vu units): past "
+            "the widest size class")
 #: `OneStageZk.UNIT_CLASS_MAX`: the widest public size class of a proof block's outputs, in bits
 UNIT_CLASS_MAX = 262144
 #: `Flock.WORD`: the rows of an input word
