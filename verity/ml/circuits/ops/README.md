@@ -21,8 +21,8 @@ and its docstring lists what it registers. The terms and the front doors are [`v
 | `kv_cache` | the BF16 -> E4M3 conversion of a KV-cache append |
 
 `ops.boolean` holds their Boolean versions: each module the next version of an `ops` module's word Definitions, the same
-function on bits. Their builders are `verity.ml.circuits.boolean`'s (`forms`, `gather`, `trace`) and
-`verity.ml.circuits.silicon`'s (`fp`, `fp4`, `tc_step`), and `ops.boolean.trace_cache` lets a prover's or a developer's
+function on bits. They are built with `verity.ml.circuits.boolean`'s `forms`, `gather` and `trace` and
+`verity.ml.circuits.silicon`'s `fp`, `fp4` and `tc_step`, and `ops.boolean.trace_cache` lets a prover's or a developer's
 build reuse traced circuits across processes (a verifier never does).
 
 Beside the modules are each Definition module's binding file and pins (`<module>.circuit-check.py`,

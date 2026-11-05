@@ -11,8 +11,8 @@ reaches is one of these or a 1-bit input.
   view a Boolean Definition takes and returns what its word Definition does. A port's format is metadata the view never
   reads.
 - `forms`: GF(2) linear forms and the registered compiler that counts ANDs.
-- `trace`: a Boolean Definition from a builder's run over `forms`, written as And/Xor/Not gates; `trace.word_of` gives the
-  word Definition a Boolean Definition computes.
+- `trace`: a Boolean Definition from a registered compiler's run over `forms`, written as And/Xor/Not gates;
+  `trace.word_of` gives the word Definition a Boolean Definition computes.
 - `gather` and `table`: a word, or the entry of a table the program brings, selected by an index, as a multiplexer tree.
 
 The Boolean versions of the primitive circuits are [`verity.ml.circuits.ops`](../ops/README.md)'s (`ops.boolean`), and of
