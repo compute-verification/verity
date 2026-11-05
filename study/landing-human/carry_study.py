@@ -119,11 +119,17 @@ _MARKS: dict = {}
 _EXCLUDES: list = []
 
 
+_HEADS: dict = {}
+
+
 def _init(t: dict, verdicts: dict, marks: dict, excludes: list) -> None:
     _T.update(t)
     _VERDICTS.update(verdicts)
     _MARKS.update(marks)
     _EXCLUDES.extend(excludes)
+    for key in verdicts:
+        n, h = key.split("@")
+        _HEADS.setdefault(h, []).append(int(n))
 
 
 @functools.lru_cache(maxsize=None)
@@ -159,8 +165,8 @@ def marked_at(pr: int, head: str, ts: str) -> bool:
 
 def trusted_at(ts: str, pr: int, loose: bool = False):
     """`carry.trust` as of ``ts``: landed is an ancestor of `main`'s or `checked`'s tip; a parent a merge brings in is also
-    trusted inside another PR's current marked head that its verdicts land and that doesn't contain the merge.  ``loose`` takes
-    any head the verdicts land, marked or not."""
+    trusted when it is exactly another PR's current marked head that its verdicts land.  ``loose`` takes any commit inside
+    another PR's head that its verdicts land, marked or not, and not containing the merge (the rule before it was narrowed)."""
     landed = [x for x in (tip_at(_T, "main", ts), tip_at(_T, "checked", ts)) if x]
 
     def trusted(c: str, merge: str | None = None) -> bool:
@@ -168,10 +174,12 @@ def trusted_at(ts: str, pr: int, loose: bool = False):
             return True
         if merge is None:
             return False
+        if not loose:
+            return any(n != pr and landable_at(f"{n}@{c}", ts) and marked_at(n, c, ts) for n in _HEADS.get(c, ()))
         above = set(_contains(merge))
         for ref in _contains(c):
             _, _, n, h = ref.split("/")
-            if ref not in above and int(n) != pr and landable_at(f"{n}@{h}", ts) and (loose or marked_at(int(n), h, ts)):
+            if ref not in above and int(n) != pr and landable_at(f"{n}@{h}", ts):
                 return True
         return False
 

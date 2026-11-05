@@ -6,13 +6,14 @@ they merge in from off that line is other work.  A new head ``new`` carries the 
 of ``new`` and each commit of that line is one of:
 
 - landed (`trusted` with no merge: an ancestor of the landing branch);
-- a merge whose other parents are each trusted (`trusted(parent, merge)`: landed, or in another PR's marked head with a land
-  verdict that doesn't itself contain ``merge``, so that PR's own verdict covers what it brings and drive lands it first), and
-  whose tree is what the queue's own merge of its parents gives (`queue.merged_tree`: the merge drivers of its first parent,
-  each pin rebuilt) in every file but the generated ones;
+- a merge whose other parents are each trusted (`trusted(parent, merge)`: landed, or exactly another open PR's marked head
+  that its verdicts land, which drive's containment, `Queue._contained`, lands first on that verdict), and whose tree is what
+  the queue's own merge of its parents gives (`queue.merged_tree`: the merge drivers of its first parent, each pin rebuilt) in
+  every file but the generated ones;
 - a commit that changes only generated files (a lock's records regenerated, a pin rebuilt).
 
-No other PR's verdict vouches for a commit of the PR's own line: a PR stacked on this one was reviewed over it, not for it.
+No other PR's verdict vouches for a commit of the PR's own line (a PR stacked on this one was reviewed over it, not for it),
+nor for an older head of that PR or anything inside another PR's head that its own verdict doesn't cover.
 
 With ``lowrisk`` given, a delta whose own commits and hand resolutions change only files the low-risk lane lands with no
 verdict at all (drive.toml's `lowrisk_excludes`: docs, benchmarks, most tests) carries it too: drive would land that change on
@@ -112,7 +113,7 @@ def delta(repo: Path, old: str, new: str, trusted: Callable[[str, str | None], b
         off = [p for p in ps[1:] if not _ok(repo, "merge-base", "--is-ancestor", p, ps[0])]
         for p in off:
             if not trusted(p, c):
-                return Delta("untrusted-parent", f"{c[:12]} merges {p[:12]}, which is neither landed nor in another PR's "
+                return Delta("untrusted-parent", f"{c[:12]} merges {p[:12]}, which is neither landed nor another PR's "
                              "marked head with a land verdict", len(rows))
         merged += off
         if len(ps) > 2:
@@ -149,17 +150,13 @@ def delta(repo: Path, old: str, new: str, trusted: Callable[[str, str | None], b
 
 def trust(repo: Path, landed: Iterable[str], heads: Iterable[str] = ()) -> Callable[[str, str | None], bool]:
     """``trusted`` for `delta`: a commit that is one of ``landed`` (the landing branch's tip) or an ancestor of one, and, as a
-    parent a merge brings in, also one in a head of ``heads`` (other PRs' marked heads with a land verdict) that doesn't
-    contain that merge."""
-    landed, heads = [t for t in landed if t], [h for h in heads if h]
-
-    def within(c: str, t: str) -> bool:
-        return c == t or _ok(repo, "merge-base", "--is-ancestor", c, t)
+    parent a merge brings in, also one of ``heads`` (other open PRs' marked heads that their verdicts land)."""
+    landed, heads = [t for t in landed if t], {h for h in heads if h}
 
     def trusted(c: str, merge: str | None = None) -> bool:
-        if any(within(c, t) for t in landed):
+        if any(c == t or _ok(repo, "merge-base", "--is-ancestor", c, t) for t in landed):
             return True
-        return merge is not None and any(within(c, h) and not within(merge, h) for h in heads)
+        return merge is not None and c in heads
 
     return trusted
 

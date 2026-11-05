@@ -122,6 +122,9 @@ def test_merging_another_prs_head_carries_only_once_that_head_is_trusted(repo: P
     branch(repo, "above", "pr")
     above = commit(repo, {"docs/README.md": "above\n"}, "a reviewed PR stacked on the new head")
     assert carry.delta(repo, old, new, landed(repo, above)).kind == "untrusted-parent"
+    git(repo, "checkout", "-q", "other")
+    newer = commit(repo, {"b.py": "other, re-headed\n"}, "the other PR moves on")
+    assert carry.delta(repo, old, new, landed(repo, newer)).kind == "untrusted-parent"
 
 
 def test_a_reviewed_pr_built_on_the_old_head_and_merged_back_carries(repo: Path):
