@@ -1347,9 +1347,10 @@ theorem firstStop_order (A : Live) {tables : Array String} {L : Fin A.rounds →
       fun j' hj' => ⟨L₀, List.mem_singleton_self _, _, L', hL', not_not.1 fun h => hj' ⟨trivial, h⟩⟩,
       fun j' L₁ hp hl => ?_, fun j' L₁ hd hp => ?_⟩
     · obtain ⟨r, L₂, he, hp'⟩ := id hp
-      obtain ⟨c', d, rfl, hLd⟩ := mid_of_append (pre := []) (L := L₀) (L₃ := ⟨.opening i s n, b, bitsL pts⟩ :: L')
+      obtain ⟨c', d, hc, hLd⟩ := mid_of_append (pre := []) (L := L₀) (L₃ := ⟨.opening i s n, b, bitsL pts⟩ :: L')
         (by rw [List.nil_append]; exact he.symm.trans hL') (Nat.zero_le _)
         (by simp only [List.length_nil, Nat.zero_add]; exact hl)
+      rw [hc] at hp'
       exact absurd hp' (hNP j' trivial c' r d hLd)
     · rw [List.mem_singleton] at hd
       subst hd
