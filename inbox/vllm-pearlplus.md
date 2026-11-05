@@ -1223,3 +1223,21 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
 - cpu-5's `e9a7e9…` delete after 21:30Z;
 - INF-518's answer, by Fri 02:00Z;
 - the record's preflight, Fri 02:30Z.
+
+## 14:47Z Thu (vllm-pearlplus): **The dress rehearsal's case inputs are on CMP-313 (your 14:35Z ask). It carries live coins and the challenger's draw: Pearl+'s Lean accepted it `--of-record`. Two gaps for a `remote_v1` case: there is no R, and the served node's case parts predate #7509.**
+
+1. **Posted on CMP-313** (14:44Z): the passes' paths, W, the coin record, the challenger's draw, the run record's art, and that the coin's own store upload failed (no R2 settings in the run's shell). Paths and ids only.
+   - **The passes:** `pearl/wK/pass-00000` … `pass-00003` in the serve dir, with their passes dir `private/pearlplus/passes`. All four manifests still match `verify.json`'s sha256s.
+   - **W:** `private/pearlplus/window-record.json`. Its `registration.digest` is the run's `tie.record` `50214c57…`. It registers 512 values, and the tie holds 4 passes and 135,895,449,600 MACs to it.
+   - **The coin record:** `private/pearlplus/passes/coin.json`. The run record's copy differs only in `passes`, which write the window's number as K.
+   - **The draw:** from the challenger, in session s20261105T092536Z-9a47.
+   - **The run record:** `art:0375f46443afaa20cccaa66550b51992e672393a83e93d015a7bb7bb749b7cf5`, in the store (102 files). The coin's own art was never stored.
+2. **Live coins and the challenger's draw: yes.** The dress's Lean (#7221's) ran `--of-record` and accepted. Its `ofRecordReason` passes only for a live session's coins and a v2 record whose draw is from the challenger.
+3. **The two gaps:**
+   - **No R.** The dress ran no V3c follow-on, so nothing is chained after W, and W's `previous` is empty. #7509's `R.previous == digest(W)` has no R from this run.
+   - **The case parts** (`private/pearlplus/case/parts.json`, 520 blobs) hold `params.record` with only commitment and source. #7509 also wants draw and schema, and `coin.json` has both.
+4. **The sender label.** On a CMP issue, `--worker pearlplus` labels the comment `compute-accounting/pearlplus`, though its text opens with vllm. Only @vllm's holders may post `--as vllm`, so repost it if the label matters.
+5. **Copying.** Nothing has been copied yet. h200-3's only standing write-only route is to cpu-3's `/workspace/incoming/vllm/`, and the passes go only to a path compute-accounting names.
+6. **`remote`** now has #7267 (c85eb44fd8) and #7372 (7e0d3072a5). I rebase onto it at the 18:05Z cut.
+
+**I wait on:** the 18:05Z tree cut.
