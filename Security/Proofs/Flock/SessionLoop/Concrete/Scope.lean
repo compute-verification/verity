@@ -84,14 +84,14 @@ theorem circuitOf_cW (ls lh : HmNets.Laid) (H : ByteArray) (A B A' B' : Sparse) 
     (hck : ∀ c : Circuit, (c.nets.getD c.shaNet default).2 = shaB A B → (c.nets.getD c.hmNet default).2 = hmB A' B' →
       HmNets.check c = .ok ()) :
     ProvedScope.circuitOf tz (bytesOf ls lh) [] = .ok (cW ls lh H A B A' B' s1) := by
-  rewrite [ProvedScope.circuitOf, if_neg (show ¬ (tz.hiddenOutputs = true) by rw [hidden_tz]; decide)]
+  rewrite [ProvedScope.circuitOf, ite_eq_right (show ¬ (tz.hiddenOutputs = true) by rw [hidden_tz]; decide)]
   exact parse_cW ls lh H A B A' B' s1 hH hls hlh hps hph hc1 hc2 hck
 
 theorem publicOf_cW (ls lh : HmNets.Laid) (H : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 : String)
     (hu1 : canon unitsJ = .ok s3) (hu2 : canon (HmRow.unitsEntry (cW ls lh H A B A' B' s1) #[0]) = .ok s3)
     (hd : canonUtf8 (hdrJ (hexOf H)) = .ok s4) :
     ProvedScope.publicOf tz (cW ls lh H A B A' B' s1) (pubOf (hexOf H)) = .ok (pubV ls lh H A B A' B' s1 s3 s4) := by
-  rewrite [ProvedScope.publicOf, if_neg (show ¬ (tz.hiddenOutputs = true) by rw [hidden_tz]; decide)]
+  rewrite [ProvedScope.publicOf, ite_eq_right (show ¬ (tz.hiddenOutputs = true) by rw [hidden_tz]; decide)]
   exact load_pubV ls lh H A B A' B' s1 s3 s4 hu1 hu2 hd
 
 /-- **The circuit and public file pass `check`'s circuit rules**: no shared-row public file, no template, wires that feed
@@ -136,7 +136,7 @@ theorem tablesOf_of {r : Read} {spec : _root_.Flock.SessionSpec} {st : _root_.Fl
   unfold Read.tablesOf
   rewrite [hs]
   dsimp only
-  rewrite [if_pos hz, forM_one, hk]
+  rewrite [ite_eq_left hz, forM_one, hk]
   rfl
 
 /-- A parsed statement whose scope check passes and whose tables' sizes `sizesOk` takes passes `Parsed.scope`. -/
