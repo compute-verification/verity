@@ -75,7 +75,7 @@ from verity.ml.commitments import hm96, row_table as RT
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.hm96 import batch as HB
-from verity.ml.commitments.merkle import CommitmentDomain, levels, merkle_depth
+from verity.ml.commitments.merkle import CommitmentDomain, levels, merkle_depth, tree_levels
 from verity.ml.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
                                            sha512_row_prefix, sha512_row_seg_digest, sha512_row_v2_prefix)
@@ -774,6 +774,25 @@ def window_bytes(members: Sequence[Member], row_tables: Sequence[RowTable] = ())
     return out
 
 
+def string_levels(dom: CommitmentDomain, schema: str, strings: bytes) -> tuple[tuple[bytes, ...], ...]:
+    """Every level of the tree over rows given by their ``b || c`` (``strings``, concatenated, one row a leaf of ``schema``)
+    under ``dom``, its root last: the tree `commit_ports` folds a port of those rows to."""
+    if len(strings) != dom.count * BC_BYTES:
+        raise ValueError(f"{len(strings)} bytes of strings, not {dom.count} rows' b || c")
+    leaf_h, s = hashlib.sha512(INST.leaf_prefix(INST.default_key)), memoryview(strings)
+    return tree_levels(dom, [dom.leaf(i, i, schema, _copy_update(leaf_h, s[i * BC_BYTES:(i + 1) * BC_BYTES]))
+                             for i in range(dom.count)])
+
+
+def tree_path(lv: Sequence[Sequence[bytes]], position: int) -> bytes:
+    """Leaf ``position``'s path in the tree of levels ``lv`` (`string_levels`): its siblings, leaf level first."""
+    out = b""
+    for level in lv[:-1]:
+        out += level[position ^ 1]
+        position >>= 1
+    return out
+
+
 def leaf_layer(publics: Mapping[str, bytes]) -> str:
     """``LEAF_LAYER`` over ``{member: public body}``."""
     return hashlib.sha512(canonical_json({t: hashlib.sha512(b).hexdigest() for t, b in publics.items()})).hexdigest()
@@ -988,16 +1007,18 @@ class Bodies:
             out[mask] = held[1 if salts else 0][theirs]
         return out
 
-    def copy(self, k: int, f: Any) -> None:
-        """Member ``k``'s prover body (`Committed.private_body`) into ``f``."""
+    def copy(self, k: int, f: Any, port_major: bool = False) -> None:
+        """Member ``k``'s prover body (`Committed.private_body`) into ``f``; ``port_major``: an instance-major member's body
+        laid out as a shared-row member's is, each port's rows, then each port's salts (`flock_inputs.complete`)."""
         mem, left = self.members[k], self.left(k)
-        if not left:
+        relay = port_major and not mem.get("shared_rows")
+        if not left and not relay:
             with open(self.dir / f"m{k}-private.bin", "rb") as g:
                 shutil.copyfileobj(g, f, VALUE_CHUNK)
             return
         ports, leaves = [(p, int(w)) for p, w in mem["ports"]], self.leaves(k)
         self.own(k)
-        if mem.get("shared_rows"):
+        if mem.get("shared_rows") or relay:
             for salts in (False, True):
                 for p, w in ports:
                     step = max(1, VALUE_CHUNK // (SALT_BYTES if salts else 2 * w))
@@ -1014,9 +1035,10 @@ class Bodies:
                 f.write(np.ascontiguousarray(piece, dtype=np.uint8 if salts else "<u2").tobytes())
 
 
-def copy_private(window_dir: str | Path, win: Mapping[str, Any], k: int, f: Any) -> None:
-    """Member ``k``'s prover body (`Committed.private_body`) from its window's files into ``f`` (`Bodies`)."""
-    Bodies(window_dir, win).copy(k, f)
+def copy_private(window_dir: str | Path, win: Mapping[str, Any], k: int, f: Any, port_major: bool = False) -> None:
+    """Member ``k``'s prover body (`Committed.private_body`) from its window's files into ``f`` (`Bodies`), port-major
+    with ``port_major`` (`Bodies.copy`)."""
+    Bodies(window_dir, win).copy(k, f, port_major)
 
 
 def read_private(window_dir: str | Path, win: Mapping[str, Any], k: int) -> bytes:
