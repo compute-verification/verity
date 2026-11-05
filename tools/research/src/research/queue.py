@@ -540,7 +540,8 @@ class GitHub:
         return r.stdout.strip() or None if r.returncode == 0 else None
 
     def close(self, number: int, comment: str) -> None:
-        """Close PR ``number`` with ``comment`` (drive's stale rule, `research.stale`), as `gh` is authenticated here: drive's App."""
+        """Close PR ``number`` with ``comment`` (drive's stale and unlandable rules: `research.stale`, `drive.Driver._unlandable`),
+        as `gh` is authenticated here: drive's App."""
         try:
             r = subprocess.run(["gh", "pr", "close", str(number), "--repo", self.repo, "--comment", comment], capture_output=True,
                                text=True, timeout=GH_TIMEOUT_S)
@@ -580,6 +581,8 @@ GATE_PATH_RE = re.compile(r"[\w.-]+(?:/[\w.-]+)*\.py")
 LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+|[\w.*?\[\]-]+")
 #: drive.toml's `executor`: off, shadow (beside the after-landing run) or on (in its place)
 EXECUTOR_MODES = ("off", "shadow", "on")
+#: drive.toml's `close_unlandable`: off, log (each close it would make, only logged) or on
+CLOSE_UNLANDABLE = ("off", "log", "on")
 #: the keys a flag of drive's command line can set (`DriveFlags.override`), each as `--KEY` with `_` as `-`
 COMMAND_LINE = ("on", "marked_after", "regenerate_locks", "first", "after_landing_no_cache")
 
@@ -621,6 +624,9 @@ class DriveFlags:
     stale_close_days: int = 0
     #: PRs the stale rule never judges: their owners keep them open with a reason
     stale_keep: tuple[int, ...] = ()
+    #: close each open PR nothing will land, its head carried by a landed PR of the same owner or its change already on
+    #: `land_into` (`drive.Driver._unlandable`): "on"; "log", only log each it would close; "off"
+    close_unlandable: str = "off"
     #: the after-landing run as N runs at once, shard K of ci.toml's plan with N shards each (`drive.Driver.start_postland`):
     #: 1, or a plan's N; it takes about its longest shard rather than every step on one slot; "auto" or "auto:MAX", the shard
     #: planner's N (`tools/verity/check/shards.py`), at most MAX (default its MAX_SHARDS), each shard `--shard auto:K/N`
@@ -686,10 +692,11 @@ class DriveFlags:
             if type(doc["max_lean_checks"]) is not int or doc["max_lean_checks"] < 1:
                 raise bad("max_lean_checks", "a whole number, 1 or more")
             got["max_lean_checks"] = doc["max_lean_checks"]
-        if "executor" in doc:
-            if doc["executor"] not in EXECUTOR_MODES:
-                raise bad("executor", f"one of {', '.join(EXECUTOR_MODES)}")
-            got["executor"] = doc["executor"]
+        for k, modes in (("executor", EXECUTOR_MODES), ("close_unlandable", CLOSE_UNLANDABLE)):
+            if k in doc:
+                if doc[k] not in modes:
+                    raise bad(k, f"one of {', '.join(modes)}")
+                got[k] = doc[k]
         if "executor_enqueue" in doc:
             v = doc["executor_enqueue"]
             if not (isinstance(v, list) and v and all(isinstance(x, str) and x for x in v)):
@@ -6317,7 +6324,8 @@ def main(argv: list[str]) -> int:
             Driver(q, on=flags.on, regenerate_locks=flags.regenerate_locks, after_landing_no_cache=flags.after_landing_no_cache,
                    reviews=labels.reviews, ready_by=labels.ready_by, max_lean_checks=flags.max_lean_checks,
                    stale_days=flags.stale_days, stale_close_days=flags.stale_close_days,
-                   stale_keep=flags.stale_keep, after_landing_shards=flags.after_landing_shards,
+                   stale_keep=flags.stale_keep, close_unlandable=flags.close_unlandable,
+                   after_landing_shards=flags.after_landing_shards,
                    lowrisk_lane=flags.lowrisk_lane, lowrisk_per_tick=flags.lowrisk_per_tick,
                    lowrisk_excludes=flags.lowrisk_excludes, executor=flags.executor,
                    executor_enqueue=flags.executor_enqueue).tick(dry_run=a.dry_run)

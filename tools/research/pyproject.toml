@@ -47,6 +47,7 @@ untraced = [
     "tests/test_drive_red_fixes.py",
     "tests/test_drive_review.py",
     "tests/test_drive_stale.py",
+    "tests/test_drive_unlandable.py",
     "tests/test_env_credentials.py",
     "tests/test_evict_src.py",
     "tests/test_evict_src_local.py",
@@ -186,6 +187,7 @@ tests = [
     "tests/test_drive_red_fixes.py",
     "tests/test_drive_review.py",
     "tests/test_drive_stale.py",
+    "tests/test_drive_unlandable.py",
 ]
 paths = ["tools/verity/check/gates"]
 
