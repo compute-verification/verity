@@ -16,7 +16,12 @@ verity is imported only by bf16 and ex2, so the card can import the unit modules
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
+
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike
 
 F32_NAN = 0x7FFFFFFF
 BF16_NAN = 0x7FFF
@@ -29,47 +34,47 @@ LOG2E = 0x3FB8AA3B
 EPS = 0x3727C5AC
 
 
-def u32(a) -> np.ndarray:
+def u32(a: ArrayLike) -> np.ndarray:
     return np.asarray(a).astype(np.uint32)
 
 
-def _f(a) -> np.ndarray:
+def _f(a: ArrayLike) -> np.ndarray:
     return u32(a).view(np.float32)
 
 
-def canon(r) -> np.ndarray:
+def canon(r: ArrayLike) -> np.ndarray:
     """f32 results as words, every NaN 0x7FFFFFFF."""
     r = np.asarray(r, np.float32)
     return np.where(np.isnan(r), np.uint32(F32_NAN), r.view(np.uint32)).astype(np.uint32)
 
 
-def fadd(a, b) -> np.ndarray:
+def fadd(a: ArrayLike, b: ArrayLike) -> np.ndarray:
     with np.errstate(all="ignore"):
         return canon(_f(a) + _f(b))
 
 
-def fsub(a, b) -> np.ndarray:
+def fsub(a: ArrayLike, b: ArrayLike) -> np.ndarray:
     with np.errstate(all="ignore"):
         return canon(_f(a) - _f(b))
 
 
-def fmul(a, b) -> np.ndarray:
+def fmul(a: ArrayLike, b: ArrayLike) -> np.ndarray:
     with np.errstate(all="ignore"):
         return canon(_f(a) * _f(b))
 
 
-def fdiv(a, b) -> np.ndarray:
+def fdiv(a: ArrayLike, b: ArrayLike) -> np.ndarray:
     with np.errstate(all="ignore"):
         return canon(_f(a) / _f(b))
 
 
-def fsqrt(a) -> np.ndarray:
+def fsqrt(a: ArrayLike) -> np.ndarray:
     """sqrt(-0) = -0; a NaN or a negative nonzero operand 0x7FFFFFFF."""
     with np.errstate(all="ignore"):
         return canon(np.sqrt(_f(a)))
 
 
-def widen(b) -> np.ndarray:
+def widen(b: ArrayLike) -> np.ndarray:
     return np.asarray(b).astype(np.uint32) << np.uint32(16)
 
 
@@ -77,7 +82,7 @@ def f32word(v: float) -> int:
     return int(np.float32(v).view(np.uint32))
 
 
-def bf16(a) -> np.ndarray:
+def bf16(a: ArrayLike) -> np.ndarray:
     from verity.ml.kernels.tc import f2fp_bf16_batch
     a = u32(a)
     if a.size == 0:
@@ -85,7 +90,7 @@ def bf16(a) -> np.ndarray:
     return np.asarray(f2fp_bf16_batch(a.reshape(-1))[0]).astype(np.uint16).reshape(a.shape)
 
 
-def ex2(a) -> np.ndarray:
+def ex2(a: ArrayLike) -> np.ndarray:
     from verity.ml.circuits.evaluation import evaluate_batch
     from verity.ml.circuits.ops import mufu
     a = u32(a)
@@ -94,7 +99,7 @@ def ex2(a) -> np.ndarray:
     return np.asarray(evaluate_batch(mufu.MufuEx2Ftz, a.reshape(-1)), np.uint32).reshape(a.shape)
 
 
-def s8(a) -> np.ndarray:
+def s8(a: ArrayLike) -> np.ndarray:
     """s8 words (uint8)."""
     v = _f(a)
     with np.errstate(all="ignore"):
@@ -102,19 +107,19 @@ def s8(a) -> np.ndarray:
     return r.astype(np.int8).view(np.uint8)
 
 
-def order16(x) -> np.ndarray:
+def order16(x: ArrayLike) -> np.ndarray:
     """An integer whose order is the bf16 values' (+0 and -0 equal); a NaN gets one too, so callers test isnan16."""
     x = np.asarray(x).astype(np.int64)
     m = x & 0x7FFF
     return np.where(x & 0x8000, -m, m)
 
 
-def isnan16(x) -> np.ndarray:
+def isnan16(x: ArrayLike) -> np.ndarray:
     x = np.asarray(x).astype(np.int64)
     return ((x & 0x7F80) == 0x7F80) & ((x & 0x7F) != 0)
 
 
-def relu16(x, on: bool = True) -> np.ndarray:
+def relu16(x: ArrayLike, on: bool = True) -> np.ndarray:
     """x < 0 ? +0 : x on bf16 words: -0 and every NaN are themselves."""
     x = np.asarray(x).astype(np.uint16)
     if not on:
@@ -122,7 +127,7 @@ def relu16(x, on: bool = True) -> np.ndarray:
     return np.where(~isnan16(x) & (order16(x) < 0), np.uint16(0), x).astype(np.uint16)
 
 
-def seq_sum(words, axis: int = -1) -> np.ndarray:
+def seq_sum(words: ArrayLike, axis: int = -1) -> np.ndarray:
     """f32 words summed along ``axis`` in ascending index from +0, one RN add at a time."""
     w = np.moveaxis(u32(words), axis, -1)
     acc = np.zeros(w.shape[:-1], np.uint32)
