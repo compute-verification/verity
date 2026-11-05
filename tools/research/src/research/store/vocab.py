@@ -406,9 +406,9 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "reason as its ref; drive's review landing counts one only by a reviewer who isn't the PR's owner",
        REVIEW_VERDICTS),
     _k(PREFLIGHT, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>: a JSON object, a preflight's verdict on its merge onto a base "
-       "({base: the base's tree, tree: the merged tree, why: the refusal or null, onto: the base commit, of: pool or ready}); "
-       "by drive from a pool run (`research queue preflight`, its run id as the ref) or by `ready --mark`'s marker; drive's "
-       "sync reads them into `preflights`"),
+       "({base: the base's tree, tree: the merged tree or null, why: the refusal or null, onto: the base commit, of: pool or "
+       "ready}); by drive from a pool run (`research queue preflight`, its run id as the ref) or by `ready --mark`'s marker; "
+       "drive's sync reads them into `preflights`, and takes no refusal of ready's"),
     _k(LEAN_REVIEW, GROUP_VERIFICATION, TEXT, "on pr:<n>@<head>: the art: id of a `tools/verity/lean/check.py --update` report (its audit.json); a lean-audit.json "
        "change it printed whole as the same statements (moved under --moved, printed differently, rehashed); a record only, since no merge "
        "needs a statement reviewer"),

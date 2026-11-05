@@ -174,9 +174,9 @@ as the sync merges it (`merged_tree`), the merged tree's
 Lean is ported as the sync ports it (`ported`), and the checks run on that tree.  The merge runs the merge drivers of the commit it
 merges onto, as the sync's clone defines them (`base_drivers`): a branch's older checkout would run its own `tools/verity/lean/merge.py`, and one from before `--caps` reports a conflict in
 `tests/test_lean_packages.py` the sync never sees.  `--no-preflight` skips it, for the lander.  `next` moves after the mark, so the merged tree's
-cheap checks run again on each merge drive's sync makes, as pool runs (`Preflight.onto`, `Queue._preflighted`): see `next`.  A
-mark's pass that ran them all records its verdict for that sync (`Preflight._record`), so a sync that merges the head onto the
-same tree admits it with no pool run.
+cheap checks run again on each merge drive's sync makes, as pool runs (`Preflight.onto`, `Queue._preflighted`): see `next`.  The
+preflight records its verdict in the store, by the marker, whether a pool judges drive's merges or not (`Preflight._record`): its
+refusal, or a pass that ran all those cheap checks, which a sync that merges the head onto the same tree takes with no pool run.
 
 Records gate.  A head whose own records run printed `AUDIT: FAIL` fails a train's Lean check, about 50 minutes later.
 So `ready` (and `judge`) first refuse a head whose change against the landing branch (drive.toml's `land_into` at `main`:
@@ -2277,8 +2277,9 @@ class Queue:
     def _stored(self, ns: list[int], entries: dict[int, Entry], flights: dict) -> None:
         """The store's verdicts of the heads of ``ns`` (`preflight` labels on `pr:{n}@{head}`: `verdicts`, else this store's
         own), the newest of each pair, into ``flights``' `before` where it doesn't hold that pair yet: a mark's pass
-        (`Preflight._record`) and the pool runs' verdicts another clone's sync took (`_take`).  A label of another shape is no
-        verdict, and a head whose labels can't be pulled is judged without them, the sync logging how many."""
+        (`Preflight._record`) and the pool runs' verdicts another clone's sync took (`_take`).  A mark's refusal, of checks the
+        sync doesn't run, is the marker's, and a label of another shape is no verdict; a head whose labels can't be pulled is
+        judged without them, the sync logging how many."""
         unread: list[tuple[int, QueueError]] = []
         for n in ns:
             head = entries[n].pr.head
@@ -4380,10 +4381,11 @@ class Preflight:
 
     Drive's sync runs the part of (b) that needs no environment of the merged tree's again (`onto`) on each merge it makes onto
     `next` that no recorded verdict stands for, as a pool run (`PreflightPool`, `pool_preflight`), and a PR enters `next` only
-    once it passes there (`Queue._preflighted`).  Given ``by`` (`ready`'s --by), a pass whose checks ran all that `onto` runs is
-    recorded for that sync: a `preflight` label on `pr:{n}@{head}` ({base: the base's tree, tree: the merged tree, why: null,
-    onto: the base, of: ready}), which the mark's write-through takes to the store's remote, so a sync that merges the head onto
-    the same tree admits it with no pool run."""
+    once it passes there (`Queue._preflighted`).  Given ``by`` (`ready`'s --by), its verdict is recorded in the store whether a
+    pool judges drive's merges or not: a refusal, or a pass whose checks ran all that `onto` runs, as a `preflight` label on
+    `pr:{n}@{head}` ({base: the base's tree, tree: the merged tree or null, why: the refusal or null, onto: the base, of: ready})
+    on the store's remote.  A sync that merges the head onto the same tree admits it on that pass with no pool run, and never
+    takes the refusal as its own: it judges a merge of a head marked with `--no-preflight` itself."""
 
     def __init__(self, repo: Path, remote: str, store, *, sync: tuple[str, ...] | None = PREFLIGHT_SYNC, python: str | None = None,
                  budget_s: float = PREFLIGHT_CHECKS_S, jobs: int = PREFLIGHT_JOBS, clock: Callable[[], float] = time.monotonic,
@@ -4458,25 +4460,34 @@ class Preflight:
         skipped = [n for n in notes if not isinstance(n, Ran)]
         took = "; ".join([f"{self.clock() - start:.0f} s", *(n for n in notes if isinstance(n, Ran))])
         if found:
-            return (f"the preflight of its head merged onto {onto} refused it ({took}"
-                    + (f"; checks skipped: {'; '.join(skipped)}" if skipped else "") + "):\n  - " + "\n  - ".join(found)
-                    + "\n  (`--no-preflight` skips the preflight: the lander's)")
+            refusal = (f"the preflight of its head merged onto {onto} refused it ({took}"
+                       + (f"; checks skipped: {'; '.join(skipped)}" if skipped else "") + "):\n  - " + "\n  - ".join(found)
+                       + "\n  (`--no-preflight` skips the preflight: the lander's)")
+            self._record(pr, base, tree, refusal)
+            return refusal
         if covered:
             self._record(pr, base, tree)
         said = f"checks skipped: {'; '.join(skipped)}; the checks that ran passed" if skipped else "nothing refused"
         self.log(f"research queue: preflight: #{pr.number} at {pr.head[:12]} merged onto {onto}: {said} ({took})")
         return None
 
-    def _record(self, pr: PR, base: str, tree: str) -> None:
-        """The pass of ``pr``'s head merged onto ``base``, ``tree``, for drive's sync (`Queue._stored`): a `preflight` label by
-        ``by`` on its `pr:{n}@{head}`, which `_mark`'s write-through takes to the store's remote with the mark."""
+    def _record(self, pr: PR, base: str, tree: str | None, why: str | None = None) -> None:
+        """The verdict of ``pr``'s head merged onto ``base``, ``tree`` (None: it doesn't merge), ``why`` its refusal or None, a
+        pass: a `preflight` label by ``by`` on its `pr:{n}@{head}`, pushed to the store's remote here, since no mark follows a
+        refusal.  Drive's sync (`Queue._stored`) takes a pass as its own and never a refusal."""
         if self.by is None or self.store is None:
             return
-        value = {"base": _tree(self.repo, base), "tree": tree, "why": None, "onto": base, "of": "ready"}
+        from .store.cli import _label_write_through
+
+        target = label_target(pr.number, pr.head)
         try:
-            self.store.add_label(label_target(pr.number, pr.head), vocab.PREFLIGHT, value, self.by)
-        except Exception as e:  # noqa: BLE001  (a pass unrecorded costs drive's sync a pool run, never the mark)
-            self.log(f"research queue: preflight: its pass isn't recorded for drive's sync ({type(e).__name__}: {e})")
+            value = {"base": _tree(self.repo, base), "tree": tree, "why": why, "onto": base, "of": "ready"}
+            self.store.add_label(target, vocab.PREFLIGHT, value, self.by)
+            said, lost = _label_write_through(self.store, target)
+        except Exception as e:  # noqa: BLE001  (an unrecorded verdict costs drive's sync a pool run, never the mark)
+            said, lost = f"{type(e).__name__}: {e}", True
+        if lost:
+            self.log(f"research queue: preflight: its verdict on #{pr.number} at {pr.head[:12]} isn't on the store's remote: {said}")
 
     def _only_moved(self, base: str, files: list[str]) -> list[str]:
         """The moves drive regenerated below ``base`` (`queue_log`) that ``files``, a merge's conflicts, are all files of, when

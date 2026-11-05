@@ -854,8 +854,8 @@ def test_a_new_head_is_preflighted_though_its_change_onto_next_is_the_old_heads_
 
 
 def test_a_marks_recorded_pass_admits_its_merge_onto_the_same_base_with_no_pool_run_and_stands_as_a_pool_runs(world, capsys):
-    """`ready --mark`'s preflight records its pass for drive's sync (`Preflight._record`), and the mark's write-through takes it
-    to the store's remote, from where a sync on a clone and store of its own (`StoreLabels.preflights`) admits the head merged
+    """`ready --mark`'s preflight records its pass for drive's sync (`Preflight._record`) on the store's remote, from where a
+    sync on a clone and store of its own (`StoreLabels.preflights`) admits the head merged
     onto the same base tree with no pool run.  A mark whose checks didn't all run records nothing, and its merge waits for a
     run.  A recorded pass stands onto a rebuilt base as a pool run's does (`Queue._standing`)."""
     from research.queue import MarkOnly, StoreLabels, ready
@@ -884,6 +884,42 @@ def test_a_marks_recorded_pass_admits_its_merge_onto_the_same_base_with_no_pool_
         ("lane-2", {"base": tree(one), "tree": tree(members[1].commit), "why": None, "onto": one, "of": "ready"})]
     world.gh.ready.discard((1, h1))
     assert [m.pr for m in q.sync()[0]] == [2] and len(pool.launched) == 1, world.logs
+
+
+def test_a_marks_refusal_is_recorded_on_the_stores_remote_with_no_pool_in_play_and_no_sync_takes_it_as_its_own(world, capsys):
+    """`ready --mark`'s preflight records its refusal too (`Preflight._record`), by the marker, and takes it to the store's
+    remote though no mark follows, with no drive or pool in play: a conflict, which has no merged tree, and a suite that fails
+    to collect on the merged tree, each the refusal the mark printed.  A sync never takes a mark's refusal as its own: the head
+    marked with `--no-preflight` waits off `next` for a pool run of the same merge, and enters on its pass."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    _preflight_main(world)
+    (world.tmp / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{world.tmp / "vault"}"\nwrite_through = true\n')
+    world.gh.put(2, h2 := world.change({"pkg/rows.json": '{"r9": 1}\n'}), ready=False)
+    world.gh.put(3, h3 := world.change(ROWS_TEST), ready=False)
+    for n in (2, 3):
+        assert ready(world.gh, world.store, n, f"lane-{n}", MarkOnly(), preflight=_preflight(world, by=f"lane-{n}")) == 1
+    err = capsys.readouterr().err
+    elsewhere = StoreLabels(LocalStore(world.tmp / "elsewhere", config_path=world.tmp / "store.toml"), log=world.logs.append)
+    next_ = _git(world.origin, "rev-parse", "refs/heads/next")
+    base = _git(world.origin, "rev-parse", f"{next_}^{{tree}}")
+    [two], [three] = elsewhere.preflights(2, h2), elsewhere.preflights(3, h3)
+    for n, h, lab in ((2, h2, two), (3, h3, three)):
+        assert lab.by == f"lane-{n}" and f"research queue ready: #{n} is not marked ready at {h[:12]}: {lab.value['why']}" in err
+        assert (lab.value["base"], lab.value["onto"], lab.value["of"]) == (base, next_, "ready"), lab.value
+    assert two.value["tree"] is None and "it conflicts with `next` at" in two.value["why"], two.value
+    assert isinstance(three.value["tree"], str) and "`pytest --collect-only` in pkg fails" in three.value["why"], three.value
+    world.gh.put(3, h3)                                                           # the lander's mark, with `--no-preflight`
+    drive = LocalStore(world.tmp / "drive-store", config_path=world.tmp / "store.toml")
+    q = world.queue()
+    q.store, q.verdicts = drive, StoreLabels(drive, log=world.logs.append).preflights
+    pool = _pool(q)
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1] and pool.judged() == [(3, next_)] and entries[3].state == "waiting", world.logs
+    [(_, _, merge, _)] = pool.launched[0][1]
+    assert _tree_of(q)(merge) == three.value["tree"], "the sync's merge is the one the mark refused"
+    pool.end()
+    assert [m.pr for m in q.sync()[0]] == [1, 3], world.logs
 
 
 def test_heads_whose_recorded_verdicts_cant_be_pulled_wait_for_pool_runs_and_the_sync_says_so_once(world):
@@ -3502,7 +3538,7 @@ def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monk
     assert research_main(base) == 0 and research_main([*base, "--no-preflight"]) == 0
     assert research_main([*base[:3], "--local", *base[4:]]) == 0
     assert isinstance(seen[0], Q.Preflight) and seen[1] is None
-    assert seen[0].by == "lane-3", "the mark's preflight records its pass for drive's sync, by the marker"
+    assert seen[0].by == "lane-3", "the mark's preflight records its verdict in the store, by the marker"
     assert [(p.lean.on, p.lean.by) for p in (seen[0], seen[2])] == [(Q.PREFLIGHT_LEAN_ON, "lane-3")] * 2, \
         "--mark and --local ship the Lean step to a node too"
     assert all(isinstance(g, Q.RecordsGate) for g in gates) and len(gates) == 3        # the records gate isn't the preflight's
