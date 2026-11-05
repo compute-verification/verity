@@ -15,7 +15,8 @@ replay block. Only the failure event changes: its candidate sets are sets `Y` of
 block of any set at least as large as `Y` in every cell (`above`), which every kept outer run's incorrect set at its own
 interior values is.
 
-* `escCell_nonneg`, `escCell_le_one`, `escCell_anti`: a cell's escape is a probability, antitone in the incorrect count.
+* `escCell_nonneg`, `escCell_le_one`, `escCell_zero`, `escCell_anti`: a cell's escape is a probability, `1` at no
+  incorrect proof block and antitone in their count.
 * `prod_filter_eq_sum`, `Ex_esc_le`: **the first stage**. Catching each replay block independently, `∏_{ρ∈S} e_ρ` is
   the sum over sets `T` of the indicator that `S` misses `T` times `T`'s weight, so its average over the replay sample
   is at most `P̄_a` (`Sessions.replayDraws`).
@@ -45,6 +46,12 @@ theorem escCell_le_one (n k m : ℕ) : escCell n k m ≤ 1 := by
   unfold escCell
   rw [div_le_one (by exact_mod_cast Nat.choose_pos (min_le_right k n))]
   exact_mod_cast Nat.choose_le_choose _ (Nat.sub_le n m)
+
+/-- A cell with no incorrect proof block always escapes. -/
+theorem escCell_zero (n k : ℕ) : escCell n k 0 = 1 := by
+  unfold escCell
+  rw [Nat.sub_zero]
+  exact div_self (by exact_mod_cast (Nat.choose_pos (min_le_right k n)).ne')
 
 /-- **A cell's escape is antitone** in its incorrect count. -/
 theorem escCell_anti (n k : ℕ) {m m' : ℕ} (h : m ≤ m') : escCell n k m' ≤ escCell n k m := by

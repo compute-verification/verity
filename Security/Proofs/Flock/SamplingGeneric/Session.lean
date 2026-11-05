@@ -422,7 +422,7 @@ theorem selRounds_none {L : Compiled Coin A} {x : Msg} {sel : List ℕ → Optio
   unfold selRounds
   rw [h]
 
-omit [Nonempty Coin] in
+omit [Fintype Coin] [Nonempty Coin] in
 /-- Resampling the picked slot's block's session's rounds keeps them (`fixed`). -/
 theorem selRounds_resample {H : Msg → Msg} {L : Compiled Coin A} (hS : L.RunsFixed H) {x : Msg}
     (sel : List ℕ → Option (Fin (L.nPU x))) (r d σ : Fin (L.V.k x) → Coin) :
