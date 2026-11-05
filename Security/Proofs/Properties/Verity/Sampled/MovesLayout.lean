@@ -214,8 +214,7 @@ at `Live.layout` and `Live.tables`, and at the sample-coupled coin map under `fi
 the rounds' empty classes, beside a play that the sampled verdict accepts, that misses nowhere and whose log v2's
 check read is the device's, is the writer's at the widened sample, the decoded registration and an outcome whose moves
 are those v2's files decode to (`MovesOf`). It takes, for the record's sample (`recordDraw_firstStop`, at the session
-tied to v2's verifier, `SetsUp.popTied`, whose draw files `norm` fixes, `SetsUp.norm_dj`, and at v2's log at its coins,
-`drawReadAll_coinsRead`), that v2 holds the record's draw to its own (`DrawHeld`) and reads the sample's coins of the
+tied to v2's verifier, `SetsUp.popTied`, and at v2's log at its coins, `drawReadAll_coinsRead`), that v2 holds the record's draw to its own (`DrawHeld`) and reads the sample's coins of the
 family `label` answering `after` (`hN`); that v2's order refusal passes (`OrderHeld`), which gives that every release of that family precedes every
 opening (`freshBefore_verdict`) and that the device's log opens the session stream first (`linkFirst_verdict`); and,
 for the rep rounds (`firstStop_reps_verdict`), that the log opens only the record's rounds. That the log has an opening
@@ -278,7 +277,7 @@ theorem ReachesOff.movesOf {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
     ⟨?_, ?_, ?_, hreps text proofs spec sts sess hrec hpr hs hd, proofs_of_sent reg A.layout hpr⟩⟩
   · rw [sample_extend]
     exact recordDraw_firstStop fieldEnc hA hA.popTied (drawReadAll_coinsRead k) hH
-      (readingAt_picks A.tables A.layout record recordDigest) hm hsrc hA.norm_dj ω
+      (readingAt_picks A.tables A.layout record recordDigest) hm hsrc ω
       (firstStop_playReaches V θ F c A _ σ _ ω hr) hv hl hN hP hrec
   · exact firstStop_rootB hA rfl rfl hr hn hv hl hfirst hLA hc h₀ hrec hs hd
   · exact (link_pts hA hθ hv hl hL₀ rfl hno (hfirst L₀ _ L' hL₀ i s₀ n₀ rfl hno) rfl hrec hs hd).symm

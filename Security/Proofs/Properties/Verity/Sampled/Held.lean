@@ -5,19 +5,16 @@ public import Proofs.Properties.Verity.Sampled.RecordDraw
 /-!
 # What v2 holds of the record's draw
 
-The record's draw (`recordDraw_firstStop`, `MovesOf`'s clause (i)) reads v2's log at its coins (`DrawReadAll`), v2's
-hold on the record's `unit_draw` (`DrawHeld`) and the session's draw files' fixed point under `norm`. This module
-gives what v2's code and the session give of them.
+The record's draw (`recordDraw_firstStop`, `MovesOf`'s clause (i)) reads v2's log at its coins (`DrawReadAll`) and
+v2's hold on the record's `unit_draw` (`DrawHeld`). This module gives what v2's code gives of them.
 
 * **v2's log at its coins** (`drawReadAll_coinsRead`): `coinsRead` is `logRead` (`coinsRead_eq_logRead`), whose read
   shows the draw wherever v2 accepts (`drawReadAll_logRead`).
-* **The session's draw files** (`SetsUp.norm_dj`): the session v2 sets up draws by a law other than the work law
-  (`SetsUp.nowork`), whose printed draw files `norm` fixes (`Live.norm_dj`).
 * **v2 accepts only a subset draw** (`recordDraw_subset`): where v2's case accepts, the record v2 reads holds a draw,
   since `verify --zk` refuses a session without one (`verdictOf_drawn`); its law is one a soundness claim draws by at
   `--zk` (`ProvedScope.drawLaw`, `lawWhy_zk`), the subset or the stratified law; and the session v2 sets up has no
-  `--stratified` input, so `Stmt.setupTables` refuses a stratified draw (`setupTables_stratified`). So `DrawHeld`'s
-  `recordDrawn` at the law `Drew` reads, the verifier's own, holds only where that law is a subset law.
+  `--stratified` input, so `Stmt.setupTables` refuses a stratified draw (`setupTables_stratified`). So `DrawHeld` reads
+  the record's draw at the subset law of the units v2 drew, whatever law v2 drew them by.
 -/
 
 @[expose] public section
@@ -34,13 +31,6 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 /-- **v2's log at its coins shows the draw** wherever v2 accepts: `coinsRead` is `logRead`. -/
 theorem drawReadAll_coinsRead (k : Verity.Registration.Composite) : DrawReadAll k coinsRead :=
   coinsRead_eq_logRead ▸ drawReadAll_logRead k
-
-/-! ## The session's draw files -/
-
-/-- **`norm` fixes the draw files of the session v2 sets up**: its law is not the work law. -/
-theorem SetsUp.norm_dj {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A) :
-    ∀ S, Flock.norm (A.dj S) = A.dj S :=
-  A.norm_dj hA.nowork
 
 /-! ## v2 accepts only a subset draw -/
 

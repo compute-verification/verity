@@ -95,7 +95,7 @@ theorem ReachesOff.recordDraw (e : 𝔽 ≃ (Fin 128 → Bool)) {V : Vocab d α}
     (hrd : PicksOpenings rd) (hm : _root_.SampledProofs.Challenger.MAX_COINS ≤ m)
     (hsrc : ∀ ω, _root_.Properties.SampledProofs.bytesOf (A.src ω 0) =
       _root_.Properties.SampledProofs.bytesOf (coinBytes m 64 (κ ω) 0))
-    (hfix : ∀ S, Flock.norm (A.dj S) = A.dj S) {o : A.Out × CoinTape (V.game θ F c) σ}
+    {o : A.Out × CoinTape (V.game θ F c) σ}
     (h : ReachesOff V θ F c A rd σ D (sampleMap e V θ F c A rd σ label after κ) BL B o)
     (hv : V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ o.2))
     (hl : Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ o.2))
@@ -116,7 +116,7 @@ theorem ReachesOff.recordDraw (e : 𝔽 ≃ (Fin 128 → Bool)) {V : Vocab d α}
   obtain ⟨ω, pts, reps, hL, h1, hreach⟩ := h.out_reaches
   refine ⟨ω, pts, reps, hL, h1, fun record hrec => ?_⟩
   rw [sample_extend]
-  exact recordDraw_firstStop e hA ht hR hH hrd hm hsrc hfix ω hreach hv hl hN hP hrec
+  exact recordDraw_firstStop e hA ht hR hH hrd hm hsrc ω hreach hv hl hN hP hrec
 
 /-! ## The rep rounds, stop by stop -/
 
