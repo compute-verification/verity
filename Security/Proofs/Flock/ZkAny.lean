@@ -79,6 +79,7 @@ its schedule so far gives and the frame after it keeping that schedule; and `Env
 the deployed loop against the model's run, the model's messages the slots took one more than the openings the
 auditor answered, given its step at the `Commit`, each frame round and the `Finish` and an invariant of the loop kept
 at every other slot, the step at the `Hello` and at every other slot proved; and a frame round at its slot before a
-stop, which the session lets through. -/
+stop, which the session lets through, and the step at it, given what the loop's frames and the model hold there and the
+invariant kept. -/
 
 @[expose] public section
