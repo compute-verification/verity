@@ -69,8 +69,9 @@ def TablesAgree (F R : Array ByteArray) : Prop :=
   ∀ t ∈ Flock.MUFU_TABLES, ∀ a b, tableFile t.sha512 F = some a → tableFile t.sha512 R = some b → a = b
 
 theorem tableFile_hash {sha : String} {F : Array ByteArray} {a : ByteArray} (h : tableFile sha F = some a) :
-    Flock.hexOf (Flock.Sha512.hash a) = sha :=
-  beq_iff_eq.1 (Array.find?_some h)
+    Flock.hexOf (Flock.Sha512.hash a) = sha := by
+  unfold tableFile at h
+  exact beq_iff_eq.1 (Array.find?_some h)
 
 theorem tablePair_collision {F R : Array ByteArray} {sha : String} {u v : Claims.Msg}
     (h : tablePair F R sha = some (u, v)) : Claims.Collision Verity.sha512Msg u v := by
@@ -129,8 +130,10 @@ theorem sha512Msg_of_sha512 {a b : Claims.Msg} (h : Verity.sha512 a = Verity.sha
       rw [Array.length_toList] at h2; exact h2
     have hi64 : i < 64 := by rw [ByteArray.size_data, ha] at h1'; exact h1'
     have hi := congrFun h ⟨i, hi64⟩
+    have h1s : i < (Flock.Sha512.hash ⟨a.toArray⟩).size := h1'
+    have h2s : i < (Flock.Sha512.hash ⟨b.toArray⟩).size := h2'
     rw [Array.getElem_toList, Array.getElem_toList]
-    simpa [Verity.sha512, Array.getD, h1', h2'] using hi
+    simpa [Verity.sha512, Array.getD, h1', h2', h1s, h2s] using hi
 
 /-- **The file a digest names has the digest**, where the committed files hold one with it. -/
 theorem namedFile_digest {h : Option Hash.Digest} {F : Array ByteArray}
@@ -139,7 +142,9 @@ theorem namedFile_digest {h : Option Hash.Digest} {F : Array ByteArray}
   unfold namedFile
   cases hfind : F.find? (fun f => decide (h = some (Verity.sha512 f.data.toList))) with
   | none => exact absurd (decide_eq_true hh) (Array.find?_eq_none.1 hfind f hf)
-  | some g => exact of_decide_eq_true (Array.find?_some hfind)
+  | some g =>
+    have hg := of_decide_eq_true (Array.find?_some hfind)
+    exact hg
 
 /-- **A file finder below one success names one file**: where both the committed files and the registered files hold
 a file with the digest, a file finder that outputs no collision with probability `1` names the registered file. -/
@@ -394,18 +399,19 @@ theorem fileCR {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {σ : Veri
     (h : I.stage.finderCR .sampled θ F c σ) :
     (I.base.fileFinder θ F).Pr Verity.sha512Msg < 1 ∧ (I.base.publicFinder θ F).Pr Verity.sha512Msg < 1 ∧
       (tableFinder F (I.base.registered θ)).Pr Verity.sha512Msg < 1 := by
-  have hl := List.forall_iff_forall_mem.1 h
+  have hl : finderCROf (I.fileSpecs θ F c) σ := h
+  obtain ⟨h1, h2, h3⟩ := hl
   have lt2 : ((2 : ℕ) : ℝ) / 2 ^ (256 : ℝ) < 1 := budget_lt (by norm_num)
-  have ltT : ((2 * Flock.MUFU_TABLES.length : ℕ) : ℝ) / 2 ^ (256 : ℝ) < 1 := budget_lt (by decide)
-  exact ⟨lt_of_le_of_lt (hl _ (List.Mem.head _)) lt2, lt_of_le_of_lt (hl _ (List.Mem.tail _ (List.Mem.head _))) lt2,
-    lt_of_le_of_lt (hl _ (List.Mem.tail _ (List.Mem.tail _ (List.Mem.head _)))) ltT⟩
+  have hT : Flock.MUFU_TABLES.length = 4 := rfl
+  have ltT : ((2 * Flock.MUFU_TABLES.length : ℕ) : ℝ) / 2 ^ (256 : ℝ) < 1 := budget_lt (by rw [hT]; norm_num)
+  exact ⟨lt_of_le_of_lt h1 lt2, lt_of_le_of_lt h2 lt2, lt_of_le_of_lt h3 ltT⟩
 
 /-- **`Deployed` at the deployed vocabulary**, from the commitment format's openings and the strict premises, at
 constructions whose read finder and forger are the binding's (`Binding.withBinding`, `Constructions.assembled`). -/
 theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = Binding.readFinder I.base I.dev θ F c σ)
     (hKf : ∀ θ F c σ, K.forger θ F c σ = Binding.forger I.base I.dev θ F c σ) (hO : I.OpensAt) (hF : I.StrictAt K) :
     Deployed (I.vocab K) (I.lift K) I.sessions where
-  setsUp θ F A h := setsUp_congr rfl rfl rfl rfl rfl (I.sessions_some h).2
+  setsUp θ F A h := setsUp_congr (V := I.base) rfl rfl rfl rfl rfl (I.sessions_some h).2
   digests θ := digestsAt_of (I.vocab K) I.programDigest I.publicDigest I.read θ
   coinsRead _ := rfl
   finder θ F c σ := (hKr θ F c σ).symm
@@ -419,6 +425,7 @@ theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = Binding.readFind
     rw [dif_pos he]
     refine (cast_heq _ _).trans ?_
     rw [hc]
+    exact HEq.rfl
   opens θ F A h c := hO θ F A (I.sessions_some h).1 (I.sessions_some h).2 c
   finderCR θ F A h c σ hcr := by
     obtain ⟨hs, hm, hr⟩ := hF θ F A h c σ hcr
@@ -440,9 +447,19 @@ some play's sampled verdict accepts, are files the deployment's session is the o
 def SessionAt (k : Verity.Registration.Composite) : Prop :=
   ∀ θ F, (∃ p, ParamsAt θ p) → I.base.circuitFile θ F = I.base.circuitFile θ (I.base.registered θ) →
     I.base.publicFile θ F = I.base.publicFile θ (I.base.registered θ) → TablesAgree F (I.base.registered θ) →
-    (∃ c (σ : Verity.Game.Strategy (I.base.game θ F c)) (t : Verity.Game.Tape (I.base.game θ F c) σ),
-      I.base.Verdict k .sampled (Verity.Game.Tape.out _ σ t)) →
+    (∃ c o, Verity.Game.Reaches (I.base.game θ F c) o ∧ I.base.Verdict k .sampled o) →
     ∃ A, I.session θ = some A ∧ SetsUp I.base θ F A
+
+/-- A play that some strategy wins with nonzero probability is won on some tape. -/
+theorem exists_tape_of_prob_ne {β : Type} {p : β → Prop} {g : Verity.Game β} {σ : Verity.Game.Strategy g}
+    (h : Verity.Game.prob p g σ ≠ 0) : ∃ t : Verity.Game.Tape g σ, p (Verity.Game.Tape.out g σ t) := by
+  by_contra hn
+  simp only [not_exists] at hn
+  refine h (le_antisymm ?_ zero_le)
+  calc Verity.Game.prob p g σ = Verity.Game.prCoin fun t => p (Verity.Game.Tape.out g σ t) :=
+        Verity.Game.prob_eq_prCoin _ _ σ
+    _ ≤ Verity.Game.prCoin fun _ : Verity.Game.Tape g σ => False := Verity.Game.prCoin_mono fun t ht => hn t ht
+    _ = 0 := Verity.Game.prCoin_false
 
 /-- **`Covers` at the deployed vocabulary**: where the deployment's sessions hold none, an accepting play's files pass
 the file check, so under the further finders' premises they name the registered files and agree with the registered
@@ -451,28 +468,19 @@ theorem covers (k : Verity.Registration.Composite) (hRg : I.RegisteredFiles) (hS
     Covers (I.vocab K) k I.sessions := by
   intro θ F hS hP c σ hcr
   by_contra hne
-  have hacc : ∃ t : Verity.Game.Tape (I.base.game θ F c) σ,
-      (I.vocab K).Verdict k .sampled (Verity.Game.Tape.out _ σ t) := by
-    by_contra hn
-    push_neg at hn
-    refine hne (le_antisymm ?_ (zero_le _))
-    calc Verity.Game.prob (fun o => (I.vocab K).Verdict k .sampled o) ((I.vocab K).game θ F c) σ
-        = Verity.Game.prCoin fun t => (I.vocab K).Verdict k .sampled (Verity.Game.Tape.out _ σ t) :=
-          Verity.Game.prob_eq_prCoin _ _ σ
-      _ ≤ Verity.Game.prCoin fun t => (fun _ => False) (Verity.Game.Tape.out ((I.vocab K).game θ F c) σ t) :=
-          Verity.Game.prCoin_mono fun t h => hn t h
-      _ = Verity.Game.prob (fun _ => False) ((I.vocab K).game θ F c) σ := (Verity.Game.prob_eq_prCoin _ _ σ).symm
-      _ = 0 := Verity.Game.prob_false _ σ
-  obtain ⟨t, hv⟩ := hacc
-  obtain ⟨hθ, hF, -⟩ := Binding.play_reaches (Verity.Game.Tape.reaches_out _ σ t)
+  obtain ⟨t, hv⟩ := exists_tape_of_prob_ne hne
+  have hreach : Verity.Game.Reaches (I.base.game θ F c) (Verity.Game.Tape.out _ σ t) :=
+    Verity.Game.Tape.reaches_out _ σ t
+  have hv' : I.base.Verdict k .sampled (Verity.Game.Tape.out _ σ t) := hv
+  obtain ⟨hθ, hF, -⟩ := Binding.play_reaches hreach
   have hreg : I.base.Registered θ F := by
-    have h1 := hv.1
+    have h1 := hv'.1
     rw [hθ, hF] at h1
     exact h1
   have hR := hRg θ hP
   obtain ⟨h1, h2, h3⟩ := I.fileCR hcr
   obtain ⟨A, hA, hs⟩ := hSa θ F hP (namedFile_eq hreg.1 hR.1 h1) (namedFile_eq hreg.2 hR.2 h2) (tablesAgree_of h3)
-    ⟨c, σ, t, hv⟩
+    ⟨c, _, hreach, hv'⟩
   rw [I.sessions_of hA hs] at hS
   cases hS
 
