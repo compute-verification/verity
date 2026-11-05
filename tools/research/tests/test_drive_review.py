@@ -1797,7 +1797,8 @@ def test_a_red_ratchet_gate_names_the_merge_it_fails_as_the_culprit(world, monke
 def test_ratchet_gate_judges_above_the_last_tip_its_gate_passed_at_while_verified_stays_below(world, monkeypatch, tmp_path):
     """While another step stays red, `verified` doesn't move, and a ratchet-gate based there re-judged every landing since in
     each run, the run's long pole.  Its base is the tip of the last run whose ratchet-gate passed (`train.sh --ratchet-base`),
-    and the run's `--base` stays the last verified commit."""
+    and the run's `--base` stays the last verified commit: the run on the red's revert, launched in the tick that reverts
+    it, judges none of the landings its red run's gate passed."""
     _owning(world, {"lane-2": [], "pkg-owner": ["pkg/"]})
     h = Review(world, monkeypatch)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
@@ -1815,12 +1816,10 @@ def test_ratchet_gate_judges_above_the_last_tip_its_gate_passed_at_while_verifie
     pl = h.postland()
     assert pl["verified"] == verified and pl["red"]["suite pkg"]["culprit"][0] == 2, world.logs
     assert pl["ratchet_judged"] == {"tip": t1, "base": verified, "failed": []}
-    world.gh.put(3, world.change({"b.txt": "3\n"}))
-    h.review(3)
-    assert h.tick().startswith("landed #3"), world.logs
+    assert _subject(world, "main").startswith('Revert "Queue: #2'), world.logs
     t2, _, kw = h.posted[-1]
     assert t2 == _main(world) != t1 and kw["base"] == verified == h.postland()["verified"] and kw["ratchet_base"] == t1
-    assert [m.pr for m in h.d.landed_since(kw["ratchet_base"], t2)] == [3]                # #1 and #2 aren't judged again
+    assert h.d.landed_since(kw["ratchet_base"], t2) == []                                 # #1 and #2 aren't judged again
     assert any(f"; ratchet-gate judges those above {t1[:12]}" in line for line in world.logs), world.logs
 
 
