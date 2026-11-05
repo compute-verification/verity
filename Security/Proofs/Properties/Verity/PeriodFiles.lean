@@ -23,7 +23,7 @@ blobs. A composite whose every component accepts as much on the larger blobs ans
 `tiedSameB_covers`), so at onsite, and at remote with the network certifier with PoUW or without, the verifier of
 record answers on `bs ++ cs` as the executable that reads `cs` by path answers on `bs` (`agree_onsite`, `agree_rn`,
 `agree_rnn`, `Verity.circuit_files_by_path_agree`). An executable that accepts everything is not one the verifier of
-record agrees with (`acceptAll_disagrees`), and at a period of no link-window and no audit the period read by path
+record agrees with (`Verity.circuit_files_by_path_agree_nontrivial`), and at a period of no link-window and no audit the period read by path
 and the period among the blobs both accept (`Verity.circuit_files_by_path_agree_honest`).
 -/
 
@@ -1169,10 +1169,6 @@ theorem agree_onsite : Verity.CircuitFilesByPathAgreeAt .onsite := by
 
 /-! ## An executable that accepts everything -/
 
-/-- An executable that accepts every case. -/
-def acceptAllByPath (_ _ _ : ByteArray) (_ _ : Array ByteArray) : Core.Answer :=
-  { protocol := "", verdict := .accept, reason := none, digest := none, published := none, profile := none }
-
 theorem ff_not_ascii : (ByteArray.mk #[0xff]).data.all (· < 0x7f) = false := by
   cases h : (ByteArray.mk #[0xff]).data.all (· < 0x7f)
   · rfl
@@ -1194,16 +1190,14 @@ theorem verifier_refuses_ff (k : Verity.Registration.Composite) (c e : ByteArray
   rw [hm] at hp
   cases hp
 
-/-- **Where an executable that accepts everything stands for the one that reads the circuit files by path, the
-verifier of record disagrees with it**: at parameters holding the byte `0xff` and no blobs, it refuses, and nothing
-collides. -/
-theorem acceptAll_disagrees (k : Verity.Registration.Composite) :
-    ¬ ∀ (p c e : ByteArray) (bs cs : Array ByteArray), (acceptAllByPath p c e bs cs).verdict = .accept →
-      (Verity.verifier k).answer p c e (bs ++ cs) = acceptAllByPath p c e bs cs ∨
-        Hash.CollisionIn Verity.sha512 ((bs ++ cs).toList.map (·.data.toList)) := by
+/-- **`Verity.circuit_files_by_path_agree`'s nontrivial lemma**: where an executable that accepts everything
+(`Verity.acceptAllByPath`) stands for the one that reads the circuit files by path, onsite's verifier of record
+disagrees with it: at parameters holding the byte `0xff` and no blobs, it refuses, and nothing collides. -/
+theorem _root_.Verity.circuit_files_by_path_agree_nontrivial :
+    ¬ Verity.FilesByPathAgreeWith .onsite Verity.acceptAllByPath := by
   intro h
   rcases h (ByteArray.mk #[0xff]) ByteArray.empty ByteArray.empty #[] #[] rfl with h | h
-  · exact verifier_refuses_ff k _ _ _ (congrArg Core.Answer.verdict h)
+  · exact verifier_refuses_ff .onsite _ _ _ (congrArg Core.Answer.verdict h)
   · obtain ⟨x, hx, -⟩ := h
     simp at hx
 
