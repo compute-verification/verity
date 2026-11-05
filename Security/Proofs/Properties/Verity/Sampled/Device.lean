@@ -6,6 +6,7 @@ public import Proofs.Properties.NetworkCertifier.LinkWindow
 public import Proofs.Core.Game.Tape
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
+import all Init.Data.String.Defs
 
 /-!
 # The device's history at a play: the run that printed the play's log
