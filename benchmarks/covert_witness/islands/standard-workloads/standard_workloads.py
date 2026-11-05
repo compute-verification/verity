@@ -15,7 +15,8 @@ of the runs, refused unless traced by a te_core from `TRACED_SINCE` to the one i
 read from the newest te_core's trace) and a row per workload and measured
 dial setting: its workload, model, dials (te_core.workloads' arguments), run id and record art, what the run was beside
 them (`about`, and a `note`), `last_untraced` where the trace can't reach the run's last step (why, in its
-`input_status`), and `rounds` for a generation run (the island's generate.py); or, for a workload no run measures,
+`input_status`), and `rounds` for a generation run (the island's generate.py), with `learner` for an RL run read
+whole, its rollouts plus its learner; or, for a workload no run measures,
 `modelled` (what the model is) in place of the run, its art and its trace: its row is te_core.workloads' model of the
 workload at its dials, with the model's products at each point (workloads.with_products) priced as a run's are, its
 run cell `MODELLED` with what the model is, its dials cell every argument of the model, and each input the model's
@@ -70,7 +71,14 @@ counting more is refused. A priced record is read with these substitutions (`ROU
 `input_status`): every GEMM on the served codes (W4A4, emulated in bf16 on their decoded values) priced as NVFP4
 (gemm/fp4); Δ the served update's bits from the run's notes (every served matrix's codes and scales with the gains in
 bf16, or the LoRA in bf16); and Δ_grad, the partial gradient and the gradient cut 0, a round having no backward (the
-trace's cut holds its decode loop's values).
+trace's cut holds its decode loop's values). A `learner` row (RL's) is the whole run instead, the rollouts (its rounds,
+read as a rounds row's) plus the learner (its training steps), each part's quantities its own traced step's (a
+training step after the first update, whose structure the learner's steps share), a row with no traced training step
+refused: its rounds' GEMMs on the served codes are priced as NVFP4 and their structure's Δ_grad, partial gradient and
+gradient cut are 0 (`NO_BACKWARD`), so Fit binds on the learner's measured Δ_grad, and Δ is the run's E, as a training
+row's; its `input_status` carries the rollouts' substitutions beside the learner's measured quantities (`LEARNER`), and
+its run cell and details give each part's share of its gates (`shares`, of the parts te_core.formalism.of_record makes,
+`part_names`).
 
 DIR gets the uncut table, each row with its labels, parts, its own session (`own_session`) and a distillation row's
 student's (`student_session`), and formalism.at, formalism.published and the one bound (reading A's, formalism.bound)
@@ -150,6 +158,18 @@ _NO_BACKWARD = "assumed: 0, a round having no backward (the trace's gradient cut
 _DEFAULT = "at the console's default"
 ROUNDS = {"C_gates": _PRICED, "w_gates": _PER_TOKEN, "sigma": "assumed: the trace's share of a round's gates in token ops",
           "w_fit_gates": _PER_TOKEN, "delta_grad_bits": _NO_BACKWARD}
+#: a learner row's rounds' traced structure's backward quantities: none, a round having no backward
+NO_BACKWARD = {"delta_grad_bits": 0.0, "partial_cut_bits": 0.0, "grad_cut_bits": 0.0}
+_ROLLOUTS = ("assumed: the rollouts' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded "
+             "values) priced as an NVFP4 GEMM")
+#: a learner row's substitutions, its rollouts' (`ROUNDS`') beside its learner's measured quantities; `LEARNER_W_FIT`
+#: where the rollouts' w is the least of its parts', the one Fit's compute block binds on
+LEARNER = {"C_gates": f"{_ROLLOUTS}, beside the learner's counted gates",
+           "w_gates": f"{_ROLLOUTS}, times their trace's token share, per forward position, beside the learner's "
+                      f"measured token gates per token",
+           "sigma": "assumed: the rollouts' at their trace's share of a round's gates in token ops, beside the "
+                    "learner's measured share"}
+LEARNER_W_FIT = f"{_ROLLOUTS}, times their trace's token share, per forward position: the rollouts' w, the least part's"
 #: a rounds row's rests_on and its kinds' why where a traced round's trace counts fewer tokens than its forward
 #: positions (`axis`): every ρ column, its inputs and their sources null
 NO_AXIS = "unmeasured: the capture puts decode positions on no token axis"
@@ -227,30 +247,35 @@ def coded(row: list, served: set[tuple[int, int]]) -> bool:
     return row[2].split(".")[0] in GEMMS and tuple(json.loads(row[3])[-1][-2:]) in served
 
 
-def rounds(record: dict, notes: dict, served: set[tuple[int, int]]) -> dict:
+def rounds(record: dict, notes: dict, served: set[tuple[int, int]], learner: bool = False) -> dict:
     """`record` (generate.py's: each training step, and a round after each of `notes`' rounds) as its rounds alone,
     the setup and the tail without work and the run's last checkpoint its one, each round's tokens its prompts' (the
     counter's, which counts data-stream positions, so no sampled id) and every GEMM on served codes (`coded`) marked
-    NVFP4."""
+    NVFP4; with `learner`, the whole run: its rounds so, and its training steps, their structures, the setup and the
+    tail as they are."""
     at = round_at(notes)
     if len(record["steps"]) != notes["args"]["steps"] + len(at):
         raise ValueError(f"{len(record['steps'])} steps, not {notes['args']['steps']} training steps and "
                          f"{len(at)} rounds: not generate.py's layout")
-    steps = [dict(s) for s in record["steps"] if s["step"] in at]
+    steps = [dict(s) for s in record["steps"] if learner or s["step"] in at]
     for s in steps:
-        r = at[s["step"]]
-        if s["tokens"] != r["sequences"] * r["prompt"]:
+        r = at.get(s["step"])
+        if r and s["tokens"] != r["sequences"] * r["prompt"]:
             raise ValueError(f"round at step {s['step']}: {s['tokens']} tokens counted, not its prompts' ({r})")
-    structures = {}
-    for sid in {s["struct"] for s in steps}:
+    ours = {s["struct"] for s in steps if s["step"] in at}
+    if both := ours & {s["struct"] for s in record["steps"] if s["step"] not in at}:
+        raise ValueError(f"round structure {', '.join(sorted(both))} is a training step's too: not generate.py's "
+                         f"layout")
+    structures = dict(record["structures"]) if learner else {}
+    for sid in ours:
         st = record["structures"][sid]
         log = [[*r[:3], f"{r[3]} {FP4}" if coded(r, served) else r[3], *r[4:]] for r in st["log"]]
         if any(r[0] == "bwd" for r in log):
             raise ValueError(f"round structure {sid} has a backward")
         structures[sid] = st | {"log": log}
     none = {"by": {}, "macs": 0}
-    return record | {"steps": steps, "structures": structures, "setup": record["setup"] | none,
-                     "tail": record.get("tail", {}) | none, "checkpoints": record["checkpoints"][-1:]}
+    kept = {} if learner else {"setup": record["setup"] | none, "tail": record.get("tail", {}) | none}
+    return record | {"steps": steps, "structures": structures, "checkpoints": record["checkpoints"][-1:]} | kept
 
 
 def round_formalism(notes: dict, tensors: dict) -> dict:
@@ -329,6 +354,37 @@ def untraced(record: dict, structures: dict[str, dict], last_why: str | None = N
     return out
 
 
+def part_names(record: dict, structures: dict[str, dict], rounds: set[int]) -> list[str]:
+    """What each part te_core.formalism.of_record makes of the whole run `record` with the traced `structures` holds,
+    in its order: the setup's and the tail's where they have work ("setup", "tail"), then each step structure's
+    (te_core.annotate.with_structures's) as its steps first come, "rollouts" where its steps are the `rounds`, else
+    "learner"; refused where one holds both."""
+    names = [k for k in ("setup", "tail") if (record.get(k) or {}).get("by")]
+    kinds: dict[str, set[str]] = {}
+    for s, a in zip(record["steps"], annotate.with_structures(record, structures)["steps"]):
+        kinds.setdefault(a["struct"], set()).add("rollouts" if s["step"] in rounds else "learner")
+    if both := [sid for sid, k in kinds.items() if len(k) > 1]:
+        raise ValueError(f"structure {', '.join(both)} holds a round and a training step")
+    return names + [k.pop() for k in kinds.values()]
+
+
+def shares(m: formalism.Measured, names: list[str]) -> dict[str, float]:
+    """Each named part's share of `m`'s gates (`names`, `part_names`'), the parts of a name summed."""
+    return {n: sum(p.gates for p, k in zip(m.parts, names) if k == n) / m.gates for n in dict.fromkeys(names)}
+
+
+def split(share: dict[str, float]) -> str:
+    """A learner row's two parts' shares of its gates, as its run cell gives them."""
+    return f"the rollouts {100 * share['rollouts']:.3g}% of its gates and the learner {100 * share['learner']:.3g}%"
+
+
+def learner_status(m: formalism.Measured, names: list[str]) -> dict[str, str]:
+    """A learner row's substitutions (`LEARNER`), w_fit's where the rollouts' w is the least of its parts'
+    (`names`, `part_names`')."""
+    least = min((p.token_gates / p.tokens, n) for p, n in zip(m.parts, names) if p.tokens)[1]
+    return LEARNER | ({"w_fit_gates": LEARNER_W_FIT} if least == "rollouts" else {})
+
+
 def past_last(structures: dict[str, dict], last: int) -> tuple[dict[str, dict], dict[str, list]]:
     """The traced `structures` without the read-backs their traces list past the run's `last` step (the program's code
     after it, which no step's graph carries, such as a harness reading the run's outputs), and those read-backs by
@@ -346,10 +402,11 @@ def past_last(structures: dict[str, dict], last: int) -> tuple[dict[str, dict], 
 
 
 def measured(row: dict, traced: dict[int, dict]) -> tuple[formalism.Measured, dict, dict]:
-    """A row's quantities: its run's last checkpoint, or its rounds (`rounds`), ingested with the run's `traced` steps'
-    structures, each structure's its latest traced step's (`structures` in what the row read); the start's shape and
-    what the row read, a distillation run's student's shape among it (`student`, from the run's notes) and a rounds
-    row's traced rounds' tokens beside their forward positions (`axis`)."""
+    """A row's quantities: its run's last checkpoint, or its rounds (`rounds`; a learner row's with its training
+    steps), ingested with the run's `traced` steps' structures, each structure's its latest traced step's
+    (`structures` in what the row read); the start's shape and what the row read, a distillation run's student's shape
+    among it (`student`, from the run's notes), a rounds row's traced rounds' tokens beside their forward positions
+    (`axis`) and a learner row's parts and their shares of its gates (`part_names`, `shares`)."""
     root = fetch(row["art"], "run/run.json", "meta.json")
     record = json.loads((root / "run" / "run.json").read_text())
     meta = json.loads((root / "meta.json").read_text())
@@ -368,15 +425,24 @@ def measured(row: dict, traced: dict[int, dict]) -> tuple[formalism.Measured, di
                         "measured": {k: t["measured"].get(k) for k in TRACE_FACTS}}
                        for step, t in sorted(traced.items())], "structures": latest} | (
         {"past_last_step": after} if after else {})
+    learner, at = bool(row.get("learner")), round_at(notes) if row.get("rounds") else {}
     if row.get("rounds"):
         if not traced:
             raise SystemExit(f"{PANEL}: rounds {row['run']}: no round is traced: trace its rounds (islands/{NAME}/"
                              f"job.sh) and name the traces in the rows")
+        if learner and all(step in at or step < min(at) for step in traced):
+            raise SystemExit(f"{PANEL}: rl {row['run']}: no learner step is traced: trace a training step after its "
+                             f"first update (islands/{NAME}/job.sh) and name the trace in the rows")
         matrices = [n for n in tensors if n.startswith("blocks.") and len(tensors[n][1]) == 2]
         names = matrices + (["embed"] if notes["args"]["head"] == "fp4" else [])
-        record = rounds(record, notes, {(tensors[n][1][1], tensors[n][1][0]) for n in names})
-        record["formalism"] = round_formalism(notes, tensors)
-        read |= {"rounds": notes["rounds"], "round_steps": [s["step"] for s in record["steps"]],
+        record = rounds(record, notes, {(tensors[n][1][1], tensors[n][1][0]) for n in names}, learner)
+        if learner:
+            ours = {s["struct"] for s in record["steps"] if s["step"] in at}
+            structures = {sid: st | {"formalism": st["formalism"] | NO_BACKWARD}
+                          if sid in ours and st.get("formalism") else st for sid, st in structures.items()}
+        else:
+            record["formalism"] = round_formalism(notes, tensors)
+        read |= {"rounds": notes["rounds"], "round_steps": [s["step"] for s in record["steps"] if s["step"] in at],
                  "forward_positions": forward_positions(notes), "axis": axis(notes, traced),
                  "fp4_macs": sum(r[5] * sum(s["struct"] == sid for s in record["steps"])
                                  for sid, st in record["structures"].items() for r in st["log"] if r[3].endswith(FP4))}
@@ -392,7 +458,13 @@ def measured(row: dict, traced: dict[int, dict]) -> tuple[formalism.Measured, di
     read |= {"checkpoint": got["checkpoint_step"], "steps": len(record["steps"]),
              "tokens": sum(s.get("tokens", 0) for s in record["steps"]), "invalid": got["invalid"]} | student
     m = formalism.measure(got, shape)
-    return (no_backward(m) if row.get("rounds") else m), shape, read
+    if learner:
+        parts = part_names(record, structures, set(at))
+        if len(parts) != len(m.parts) or {"rollouts", "learner"} - set(parts):
+            raise ValueError(f"rl {row['run']}: parts {parts} beside the slowdown code's {len(m.parts)}: not the "
+                             f"rollouts and the learner")
+        read |= {"parts": parts, "shares": shares(m, parts)}
+    return (no_backward(m) if row.get("rounds") and not learner else m), shape, read
 
 
 def no_backward(m: formalism.Measured) -> formalism.Measured:
@@ -582,7 +654,8 @@ def build(spec: dict, revs: tuple[str, str, str], stamp: str | None = None) -> t
                 raise SystemExit(f"{PANEL}: {what}: {'; '.join(bad)}")
             session, pts = own(shape)
             ms, w_fwd, dials = dict.fromkeys(pts, m), policy.w_fwd(shape), r["dials"]
-            said = "; ".join(r[x] for x in ("about", "note") if r.get(x))
+            said = "; ".join([*(r[x] for x in ("about", "note") if r.get(x)),
+                              *([split(read["shares"])] if "shares" in read else [])])
             run = f"{r['run']} {r['art']}" + (f" ({said})" if said else "")
             if r.get("rounds") and off_axis(what, read["axis"]):
                 cells = {"workload": r["workload"], "model": r["model"], "dials": compact(dials), "run": run,
@@ -605,8 +678,8 @@ def build(spec: dict, revs: tuple[str, str, str], stamp: str | None = None) -> t
             student = s | {"published": formalism.published(m, s["gates"], algorithm_policy.OWN_K, READING)}
         try:
             cell = priced(m, w_fwd, at)
-            st = (modelled_status(m, bound) if "modelled" in r else
-                  status(m, ROUNDS if r.get("rounds") else None, read, pts))
+            over = learner_status(m, read["parts"]) if r.get("learner") else ROUNDS if r.get("rounds") else None
+            st = modelled_status(m, bound) if "modelled" in r else status(m, over, read, pts)
         except ValueError as e:
             raise SystemExit(f"{PANEL}: {what}: {e}") from None
         if inf := [name for name, v in (one | ({"student": student["published"]} if student else {})).items()
