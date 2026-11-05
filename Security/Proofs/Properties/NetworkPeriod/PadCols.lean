@@ -1,11 +1,11 @@
 import Properties.NetworkPeriod
 
 /-!
-# `padCols` counts the input columns no port covers and no forced zero holds
+# `padCols` counts the input columns no port covers that are not forced zeros
 
 `padCols` marks each port's columns in one pass (`padMark_getD`, `padMarks_getD`); `padCols_eq` states its count as the
-filter over the unit's input columns with `SampledProofs.Bits.srcKey`'s search for a port, beside the rows' test for a
-forced zero, so a bound on the columns no port covers and no forced zero holds reads `padCols`. It needs nothing of the
+filter over the unit's input columns with `SampledProofs.Bits.srcKey`'s search for a port, beside `forcedZero`, so a
+bound on the columns no port covers that are not forced zeros reads `padCols`. It needs nothing of the
 ports: a mark past the input columns marks none of them, and a column marked twice counts once.
 -/
 
@@ -64,18 +64,15 @@ theorem padMarks_getD (ps : List (ℕ × ℕ)) (h : Array Bool) (c : ℕ) :
 theorem pad_not_eq {x y : Bool} {p : Prop} (hx : x = true ↔ p) (hy : y = true ↔ ¬ p) : (!x) = y := by
   cases x <;> cases y <;> simp_all
 
-/-- **`padCols` is the count of the unit's input columns no port covers and no forced zero holds**: the columns below
-`min (inWords · WORD) constPos` for which `srcKey`'s search over `Flock.portCols` finds no port, and, when the unit's
-input rows were read, whose row is not empty in both A and B. -/
+/-- **`padCols` is the count of the unit's input columns no port covers that are not forced zeros**: the columns below
+`min (inWords · WORD) constPos` for which `srcKey`'s search over `Flock.portCols` finds no port and `forcedZero` does not
+hold. -/
 theorem padCols_eq (cf : Flock.Circuit) :
     padCols cf = ((List.range (min (cf.unit.inWords * Flock.WORD) cf.unit.constPos)).filter fun c =>
       ((List.range (Flock.portCols cf.unit.inGroups).size).find? fun p =>
         decide (((Flock.portCols cf.unit.inGroups).getD p (0, 0)).1 ≤ c ∧
           c < ((Flock.portCols cf.unit.inGroups).getD p (0, 0)).1 +
-            ((Flock.portCols cf.unit.inGroups).getD p (0, 0)).2)).isNone &&
-        (!(min (cf.unit.inWords * Flock.WORD) cf.unit.constPos ≤ cf.unit.a.rows &&
-            min (cf.unit.inWords * Flock.WORD) cf.unit.constPos ≤ cf.unit.b.rows) ||
-          !(cf.unit.a.row c).isEmpty || !(cf.unit.b.row c).isEmpty)).length := by
+            ((Flock.portCols cf.unit.inGroups).getD p (0, 0)).2)).isNone && !forcedZero cf c).length := by
   unfold padCols
   dsimp only
   congr 1

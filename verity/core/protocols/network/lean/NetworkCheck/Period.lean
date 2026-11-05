@@ -2032,20 +2032,23 @@ def circuitsWhy (l : Listing) (fs : Array (ByteArray × Flock.Circuit)) : Option
       given"
   else (want.zip fs).findSome? fun ((w, s, x, k), (sha, cf)) => fileWhy w s x k sha cf
 
+/-- **Input column `c` of a circuit file's unit is a forced zero**: the unit's input rows were read (its A and B hold its
+input columns' rows) and row `c` is empty in A and in B, so Flock's relation holds its value to `0 · 0` in every
+block. `Flock.Net.ofRows` lets an input row be only that or a self row `[c]·[c]`, which holds either bit. -/
+def forcedZero (cf : Flock.Circuit) (c : Nat) : Bool :=
+  let nIn := min (cf.unit.inWords * Flock.WORD) cf.unit.constPos
+  nIn ≤ cf.unit.a.rows && nIn ≤ cf.unit.b.rows && (cf.unit.a.row c).isEmpty && (cf.unit.b.row c).isEmpty
+
 /-- **A circuit file's unit's input padding**: its unit net's input columns (`SampledProofs.Bits.Rows.ofNet`'s `nIn`)
-that no port holds (`Flock.portCols`) and whose row is not a forced zero, counted as columns. Δ fills such a column from
-no row, so its value is the prover's, a free input of each VU, unless its row is empty in A and in B: Flock's relation
-holds an empty row's value to `0 · 0`, and `Flock.Net.ofRows` lets an input row be only that or a self row `[c]·[c]`,
-which holds either bit. A unit whose input rows were not read (its A or B shorter than its input columns) counts every
-such column. It marks each port's columns once, so it costs the input columns plus the ports' widths, never their
-product. -/
+that no port holds (`Flock.portCols`) and that are not forced zeros (`forcedZero`), counted as columns. Δ fills such a
+column from no row, so its value is the prover's, a free input of each VU. A unit whose input rows were not read counts
+every column no port holds. It marks each port's columns once, so it costs the input columns plus the ports' widths,
+never their product. -/
 def padCols (cf : Flock.Circuit) : Nat :=
   let nIn := min (cf.unit.inWords * Flock.WORD) cf.unit.constPos
-  let read := nIn ≤ cf.unit.a.rows && nIn ≤ cf.unit.b.rows
   let held := (Flock.portCols cf.unit.inGroups).foldl
     (fun h q => (List.range q.2).foldl (fun h t => h.set! (q.1 + t) true) h) (Array.replicate nIn false)
-  ((List.range nIn).filter fun c =>
-    !held.getD c false && (!read || !(cf.unit.a.row c).isEmpty || !(cf.unit.b.row c).isEmpty)).length
+  ((List.range nIn).filter fun c => !held.getD c false && !forcedZero cf c).length
 
 /-- **Root templates `ts`' VUs' input padding**, `fs` their circuit files in order: `Σ members / upv · padCols` over
 the templates, each at its file's `units_per_vu` and padding. An audit's is `padFree (chargesOf P) fs` at its Program
@@ -2110,8 +2113,10 @@ column 20 that no port holds, and forced zeros. Only column 20 counts. -/
   | .ok m =>
     let n : Flock.Net :=
       { (default : Flock.Net) with inWords := 1, constPos := Flock.WORD + 1, inGroups := #[⟨0, 1, #[16]⟩] }
-    let n := { n with aT := .pure m, bT := .pure m, unitLog := 8 }
-    padCols { (default : Flock.Circuit) with nets := #[("unit", n)], unitNet := 0 } == 1
+    let n' := { n with aT := .pure m, bT := .pure m, unitLog := 8 }
+    let cf : Flock.Circuit := { (default : Flock.Circuit) with nets := #[("unit", n')], unitNet := 0 }
+    padCols cf == 1 && forcedZero cf 30 && !forcedZero cf 20 && !forcedZero cf 3 &&
+      !forcedZero { (default : Flock.Circuit) with nets := #[("unit", n)], unitNet := 0 } 30
   | .error _ => false
 #guard (circuitsWhy { audits := #[some toyListed] } #[]).isSome
 #guard (circuitsWhy { audits := #[none, some toyListed] } #[(.empty, default), (.empty, default)]) ==
