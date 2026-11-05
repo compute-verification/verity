@@ -633,11 +633,11 @@
    }
   },
   "Flock.Firewall.Contract": {
-   "digest": "733f8396b3281f9334d5b9a18bc51f5d7f0d2761d330471289398033801340ac",
+   "digest": "7e9ae667809158c6fae5159a12dd635d1d582e95d56ac4df78747bf774ef07ef",
    "definitions": {
     "Flock.Firewall.Contract.By": "d91fb21fc66675874eb81a58c294ef88d3b1b06b3de8d8421c92c9264583a53e",
     "Flock.Firewall.Contract.By.casesOn": "2b6107e1f89c6e2113a2dec80173ed689020034ea2d503bde43c893b99319c03",
-    "Flock.Firewall.Contract.By.name": "f70498ab4e5dad0870071919780ec432f015f8a530d65ef6ab0450633c809358",
+    "Flock.Firewall.Contract.By.name": "ce6b8bcf3cc1c97f0d639ab15905a6bc4085c507ae0294057985d5b256724694",
     "Flock.Firewall.Contract.By.own": "89a4962b5c522aec3161a27b4f99ef52ad0f3a5e177a9f4a656b683d9af1fae8",
     "Flock.Firewall.Contract.By.rec": "0053858acc265323cfd64a72ce692f3307488f696240115fbd4189080eaa39fd",
     "Flock.Firewall.Contract.By.recheck": "4d73027880bec0f8b742ded9b35f7a82511d5af0cc8d0d693444863fd20239a9",
@@ -694,7 +694,7 @@
     "Flock.Firewall.Contract.commitBC": "27bd408fc640be0ed9d38299371f18e5bfe8548c6fe5c866c16d0dae82f44c52",
     "Flock.Firewall.Contract.commitLeaf": "061fcd6212240735b5518536e4f880809e86c4aa76929a19184bd58b19dee3b7",
     "Flock.Firewall.Contract.f128Eq": "06f815dea54e5a81e488c815b05aa2bebbe31de291353fd8d84e9225f50f46b3",
-    "Flock.Firewall.Contract.fixes": "4b522085796b3b39f6051bea33ebcd638b5ac3fda5742a3aa9bbacfab59b48c6",
+    "Flock.Firewall.Contract.fixes": "bd77d7fb5c20a93948cc06ca37dda15bdd53e9d5a9dfa2865fd828249294631c",
     "Flock.Firewall.Contract.go": "9666a06c665093ae560006e69a2eedc34fb3cf99dc636cd0579994321e99a9ab",
     "Flock.Firewall.Contract.need": "6b4de406b9b94627197f7ff5799c90ad473e2c802b1dff66074f1282aee15087",
     "Flock.Firewall.Contract.owes": "1339a4385eb937c0624dfeaa45d2005d1ba3e286eaac6d0148ed676d52a71280",
