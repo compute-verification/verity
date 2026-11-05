@@ -1,0 +1,41 @@
+{
+ "schema": "lean-unread-caps/v1",
+ "areas": {
+  "Definitions/Core": {
+   "modules": 1,
+   "lines": 103
+  },
+  "Definitions/Pouw": {
+   "modules": 27,
+   "lines": 1997
+  },
+  "Proofs/Accounting": {
+   "modules": 1,
+   "lines": 124
+  },
+  "Proofs/Core": {
+   "modules": 3,
+   "lines": 252
+  },
+  "Proofs/Flock": {
+   "modules": 166,
+   "lines": 29057
+  },
+  "Proofs/NetworkCertifier": {
+   "modules": 3,
+   "lines": 462
+  },
+  "Proofs/Population": {
+   "modules": 7,
+   "lines": 1374
+  },
+  "Proofs/Pous": {
+   "modules": 1,
+   "lines": 60
+  },
+  "Proofs/Pouw": {
+   "modules": 47,
+   "lines": 4303
+  }
+ }
+}
