@@ -1,9 +1,11 @@
 module
 
-public import Definitions.Accounting.Assumptions.EncodeChain
+public import Proofs.Accounting.Lemmas.EncodeChain
 
 /-!
-# Bits for free: the encode chain's conjecture fails in the circuit model (trusted statement)
+# Bits for free: the encode chain's conjecture fails in the circuit model
+
+These are steps of proofs, not guarantees: they sit with the proofs, and no record of the lock pins them.
 
 In `Definitions/Accounting/Gates/Model.lean` as it stands, a Boolean circuit of any size costs no unit: AND of two
 values in `{0, 1}` is an s8-family step `0 + u·v` with u8 operands, whose derived interval is `[0,1]·[0,1] = [0, 1]`,

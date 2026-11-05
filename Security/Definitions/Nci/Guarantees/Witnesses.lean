@@ -1,7 +1,12 @@
 module
 
 public import Definitions.Nci.Witness
-public import Definitions.Nci.Guarantees
+public import Definitions.Nci.Assumptions
+public import Definitions.Nci.Threads
+public import Definitions.Core.Circuit
+public import Definitions.Core.RegisteredCircuit
+public import Definitions.Core.Partition
+public import Definitions.Nci
 public import Definitions.Nci.Dampener
 public import Definitions.Nci.Reads
 public import Definitions.Nci.Assumptions.Threads
@@ -30,9 +35,8 @@ witnesses at the toy circuit (`Nci.Capability.Toy`, with the instances of `Nci.W
 
 The premise each `X_nontrivial` drops is the one the bound rests on: the coverage `κ` when the bound is a share of the
 reference circuit (at the threading `T0` of no counted multiplication, every bound is `0`), `ThetaRegistered` when it is
-in the read cap `k` (at `Dθ`, the declaration registering the token too, the toy complies at `k = 0`), the size of the
-reference circuit for `Training`, the sessions for `Inference`, `WindowsHold` for the dampener, and PoUW's soundness
-(`PouwSound`) for the remote dampener. The cover theorem's joins (`Nci.Cover.Guarantees.CoverTraining` and
+in the read cap `k` (at `Dθ`, the declaration registering the token too, the toy complies at `k = 0`), `WindowsHold`
+for the dampener, and PoUW's soundness (`PouwSound`) for the remote dampener. The cover theorem's joins (`Nci.Cover.Guarantees.CoverTraining` and
 `CoverTrainingAligned`) are stated at the multiplication blocks `mb0` of no product, where coverage `α₀ > 0` fails;
 `CoverTrainingChained` at the toy's two products on its bit view, where at depth `0` the cap `k < c_w D` fails.
 -/
@@ -182,132 +186,29 @@ def DampenerThreadedSlots_nontrivial : Prop :=
             min (residualShare 0 2) (memoryCap (T0 D).reuse 1 0 ((1 : ℕ) / (2 : ℕ) : ℝ) 1 (1 / 2) (1 / 2) * (1 + 1 / 1)) +
           declaredShare 1 (rhoT ((1 : ℕ) / (2 : ℕ) : ℝ) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0)
 
-/-- **`Inference`'s premises hold together** at the toy: its circuit is Boolean, and its one proof block is a session of
-`c = 2` gates reading the weight, registered, and its prompt, the token, of `k = 1` bit. -/
-def Inference_honest : Prop :=
-  D.D.Boolean ∧ Assumptions.Sessions D P1 (fun _ => {1}) 2 1
-
-/-- **`Inference` without sessions**: with no prompt, the toy's proof block is no session at `k = 0`, and the toy does
-not comply at `(2, 0)`, its block reading the token. -/
-def Inference_nontrivial : Prop :=
-  D.D.Boolean ∧ ¬ Assumptions.Sessions D P1 (fun _ => ∅) 2 0 ∧ ¬ Complies 2 0 D
-
-/-- **`Training`'s premises hold together** at the toy, at coverage `κ = 0`: every declaration that implements it and
-complies runs the chain of no multiplication. -/
-def Training_honest : Prop :=
-  0 < D.D.size D.D.computed ∧ Assumptions.InClass D 2 1 1 1 0 1
-
-/-- **`Training` without a computed gate**: the declaration of no gates is in the class at `κ = 1`, every chain's
-coverage of no gate being complete, and its slowdown factor is `0`, below `κ F > 0`: it implements itself and complies
-with no proof block, at `0 / 0 = 0`. -/
-def Training_nontrivial : Prop :=
-  ¬ 0 < E0.D.size E0.D.computed ∧ 0 < 2 ∧ 0 < 1 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 ∧ Assumptions.InClass E0 2 1 1 1 1 1 ∧
-    ¬ (ENNReal.ofReal (1 * F ((1 : ℕ) / (2 : ℕ) : ℝ) 1 1 1 1) ≤ slowdown (Complies 2 1) E0)
-
-/-- **`UpdatedMatMul`'s premises hold together** at the toy, with `c = 2`, `k = 1`, `b_w = b_a = 1/2` and the
-one-product chain `ch1` of inner dimension `d = 1`: an inference block holding the product reads the token, one fresh bit,
-and is charged half a bit for its weight entry and half for its input entry. -/
-def UpdatedMatMul_honest : Prop :=
-  Complies 2 1 D ∧ Assumptions.InnerAtLeast ch1 1 ∧ Assumptions.ActivationsIncompressible D ch1 2 1 (1 / 2) (1 / 2) ∧
-    Assumptions.PartialSumsIncompressible D ch1 2 1 (1 / 2) (1 / 2)
-
-/-- **`UpdatedMatMul` without incompressible activations**: charging `b_w = 1` and `b_a = 2`, more than the one bit an
-inference block holding the product reads, `F ≥ 3/2` and the bound `F · 2G ≤ size(D)` fails, `G = 1` and
-`size(D) = 2`. -/
-def UpdatedMatMul_nontrivial : Prop :=
-  0 < 2 ∧ 0 < 1 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) < 2 ∧ Assumptions.InnerAtLeast ch1 1 ∧ Complies 2 1 D ∧
-    ¬ Assumptions.ActivationsIncompressible D ch1 2 1 1 2 ∧ Assumptions.PartialSumsIncompressible D ch1 2 1 1 2 ∧
-    ¬ (F ((1 : ℕ) / (2 : ℕ) : ℝ) 1 1 2 1 * (2 * ch1.G) ≤ D.D.size D.D.computed)
-
-/-- **`UpdatedMatMulReads`' premises hold together** at the toy's one proof block, with `c = 2`, `k = 1`,
-`b_w = b_a = 1/2` and the chain `ch1`. -/
-def UpdatedMatMulReads_honest : Prop :=
-  Assumptions.InnerAtLeast ch1 1 ∧ Assumptions.SmallBlocks D P1 2 1 ∧
-    Assumptions.ActivationsIncompressible D ch1 2 1 (1 / 2) (1 / 2) ∧
-    Assumptions.PartialSumsIncompressible D ch1 2 1 (1 / 2) (1 / 2)
-
-/-- **`UpdatedMatMulReads` without incompressible activations**: `UpdatedMatMul_nontrivial`'s charges, at which the read
-factor is at least `3/2`, above the one bit the toy's proof block reads. -/
-def UpdatedMatMulReads_nontrivial : Prop :=
-  (0 : ℝ) < 1 ∧ (0 : ℝ) < 2 ∧ Assumptions.InnerAtLeast ch1 1 ∧ Assumptions.SmallBlocks D P1 2 1 ∧
-    ¬ Assumptions.ActivationsIncompressible D ch1 2 1 1 2 ∧ Assumptions.PartialSumsIncompressible D ch1 2 1 1 2 ∧
-    ¬ (ch1.G * readFactor 1 1 2 1 ≤ ∑ u, (novelReads D (P1.gates u) : ℝ))
-
-/-- **`ContainedTraining`'s premises hold together** at the toy, with `c = 2`, `k = 1`, `b_w = b_a = 1/2`, `κ = 1`, the
-chain `ch1` at `dd = 1` and the run of the toy with every input `1` as the registered values: the product's value is the
-token's, two values for one bit of charge. -/
-def ContainedTraining_honest : Prop :=
-  Complies 2 1 D ∧ Assumptions.ThetaRegistered D D M1 ∧
-    Assumptions.ActivationsSupport D ones ch1 (1 + 1 / 2 + 1 / 2) (1 / 2) (1 / 2) ∧
-    Assumptions.PartialSumsSupport D ones ch1 2 1 (1 / 2) (1 / 2) ∧ Assumptions.Coverage 1 D (2 * ch1.G)
-
-/-- **`ContainedTraining` without coverage**: at the chain `ch0` of no multiplication, charging `b_w = 1` and
-`b_a = 2`, `κ = 1` is no coverage, and `κ F size(r) ≤ size(d)` fails, `F ≥ 3/2`. -/
-def ContainedTraining_nontrivial : Prop :=
-  0 < 2 ∧ 0 < 1 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) < 2 ∧ (∀ ℓ, 1 ≤ (ch0 C).d ℓ) ∧ Complies 2 1 D ∧
-    Assumptions.ThetaRegistered D D M1 ∧ Assumptions.ActivationsSupport D ones (ch0 C) (1 + 1 + 2) 1 2 ∧
-    Assumptions.PartialSumsSupport D ones (ch0 C) 2 1 1 2 ∧ ¬ Assumptions.Coverage 1 D (2 * (ch0 C).G) ∧
-    ¬ (1 * F ((1 : ℕ) / (2 : ℕ) : ℝ) 1 1 2 1 * D.D.size D.D.computed ≤ D.D.size D.D.computed)
-
-/-- **`ContainedMatMulOn`'s premises hold together** at the toy, with `c = 2`, `k = K = 1`, `b_w = b_a = 1/2`, `μ = 1`,
-the chain `ch1` at `dd = emax = 1`, and no dark gate. -/
-def ContainedMatMulOn_honest : Prop :=
-  Complies 2 1 D ∧ Assumptions.ThetaRegistered D D M1 ∧ Assumptions.DarkReads M1 1 ∧
-    Assumptions.ActivationsSupport D ones ch1 (1 + 1 / 2 + 1 / 2) (1 / 2) (1 / 2) ∧
-    Assumptions.PartialSumsSupport D ones ch1 2 1 (1 / 2) (1 / 2)
-
-/-- **`ContainedMatMulOn` without `ThetaRegistered`**: `Dθ` complies at `k = 0`, and the bound fails, its right side `0`
-and the product at gate `2`, which `Dθ` computes, charged `μ b_a / max(emax, K/(4 b_w dd)) = 1/2`. -/
-def ContainedMatMulOn_nontrivial : Prop :=
-  (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ 0 < 2 ∧ ((0 : ℕ) : ℝ) ≤ 1 ∧ (0 : ℝ) ≤ 1 ∧ (1 : ℝ) ≤ 1 ∧
-    (∀ ℓ, 1 ≤ ch1.d ℓ) ∧ (∀ ℓ, ch1.e ℓ ≤ 1) ∧ Complies 2 0 Dθ ∧ ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
-    Assumptions.DarkReads Mθ 1 ∧ Assumptions.ActivationsSupport D ones ch1 (1 + 1 / 2 + 1 / 2) (1 / 2) (1 / 2) ∧
-    Assumptions.PartialSumsSupport D ones ch1 2 1 (1 / 2) (1 / 2) ∧
-    ¬ (max (min ((1 + √1) ^ 2 * (1 / 2 * (1 / 2) * 1 / 1)) (√2 * (1 + √1) * √(1 - 1) * (1 / 2 * √(1 / 2 / 1))))
-          (1 * (1 / 2) / max (1 : ℝ) (1 / (4 * (1 / 2) * 1))) *
-        (univ.filter fun p : (ℓ : Fin ch1.L) × Fin ch1.N × Fin (ch1.e ℓ) × Fin (ch1.d ℓ) =>
-          ch1.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ Mθ.S).card ≤
-      ((0 : ℕ) / (2 : ℕ) : ℝ) * Dθ.D.size Dθ.D.computed + (1 - 1) * D.D.width Mθ.dark)
-
-/-- **`ContainedTrainingOn`'s premises hold together**: `ContainedMatMulOn_honest`'s instance at coverage `κ = 1`. -/
-def ContainedTrainingOn_honest : Prop :=
-  Complies 2 1 D ∧ Assumptions.ThetaRegistered D D M1 ∧ Assumptions.DarkReads M1 1 ∧
-    Assumptions.ActivationsSupport D ones ch1 (1 + 1 / 2 + 1 / 2) (1 / 2) (1 / 2) ∧
-    Assumptions.PartialSumsSupport D ones ch1 2 1 (1 / 2) (1 / 2) ∧ Assumptions.Coverage 1 D (2 * ch1.G)
-
-/-- **`ContainedTrainingOn` without `ThetaRegistered`**: `ContainedMatMulOn_nontrivial`'s instance at coverage `κ = 1`;
-the bound's left side is `1/2 · κ size(r) = 1` and its right side `0`. -/
-def ContainedTrainingOn_nontrivial : Prop :=
-  (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ 0 < 2 ∧ ((0 : ℕ) : ℝ) ≤ 1 ∧ (0 : ℝ) ≤ 1 ∧ (1 : ℝ) ≤ 1 ∧
-    (∀ ℓ, 1 ≤ ch1.d ℓ) ∧ (∀ ℓ, ch1.e ℓ ≤ 1) ∧ Complies 2 0 Dθ ∧ ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
-    Assumptions.DarkReads Mθ 1 ∧ Assumptions.ActivationsSupport D ones ch1 (1 + 1 / 2 + 1 / 2) (1 / 2) (1 / 2) ∧
-    Assumptions.PartialSumsSupport D ones ch1 2 1 (1 / 2) (1 / 2) ∧ Assumptions.Coverage 1 D (2 * ch1.G) ∧
-    ¬ (max (min ((1 + √1) ^ 2 * (1 / 2 * (1 / 2) * 1 / 1)) (√2 * (1 + √1) * √(1 - 1) * (1 / 2 * √(1 / 2 / 1))))
-          (1 * (1 / 2) / max (1 : ℝ) (1 / (4 * (1 / 2) * 1))) *
-        (1 * D.D.size D.D.computed - 2 * Mθ.dark.card) ≤
-      2 * (((0 : ℕ) / (2 : ℕ) : ℝ) * Dθ.D.size Dθ.D.computed + (1 - 1) * D.D.width Mθ.dark))
-
 /-- **`IncompressibleContainedTraining`'s premises hold together** at the toy, with `c = 2`, `k = 1`,
 `b_w = b_a = 1/2`, `κ = 1`, the chain `ch1` and the threading `T1`. -/
 def IncompressibleContainedTraining_honest : Prop :=
   Complies 2 1 D ∧ Assumptions.ThetaRegistered D D M1 ∧
     Assumptions.TrainingIncompressible D ch1 T1 2 1 (1 / 2) (1 / 2) ∧ Assumptions.Coverage 1 D (2 * ch1.G)
 
-/-- **`IncompressibleContainedTraining` without coverage**: `ContainedTraining_nontrivial`'s instance, at the threading
-`T0`. -/
+/-- **`IncompressibleContainedTraining` without coverage**: at the chain `ch0` of no multiplication and the threading
+`T0`, charging `b_w = 1` and `b_a = 2`, `κ = 1` is no coverage, and `κ F size(r) ≤ size(d)` fails, `F ≥ 3/2`. -/
 def IncompressibleContainedTraining_nontrivial : Prop :=
   0 < 2 ∧ 0 < 1 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) < 2 ∧ (∀ ℓ, 1 ≤ (ch0 C).d ℓ) ∧ Complies 2 1 D ∧
     Assumptions.ThetaRegistered D D M1 ∧ Assumptions.TrainingIncompressible D (ch0 C) (T0 D) 2 1 1 2 ∧
     ¬ Assumptions.Coverage 1 D (2 * (ch0 C).G) ∧
     ¬ (1 * F ((1 : ℕ) / (2 : ℕ) : ℝ) 1 1 2 1 * D.D.size D.D.computed ≤ D.D.size D.D.computed)
 
-/-- **`IncompressibleContainedMatMulOn`'s premises hold together**: `ContainedMatMulOn_honest`'s instance, with
-`TrainingIncompressible` at the threading `T1`. -/
+/-- **`IncompressibleContainedMatMulOn`'s premises hold together** at the toy, with `c = 2`, `k = K = 1`,
+`b_w = b_a = 1/2`, `μ = 1`, the chain `ch1` at `dd = emax = 1`, no dark gate, and `TrainingIncompressible` at the
+threading `T1`. -/
 def IncompressibleContainedMatMulOn_honest : Prop :=
   Complies 2 1 D ∧ Assumptions.ThetaRegistered D D M1 ∧ Assumptions.DarkReads M1 1 ∧
     Assumptions.TrainingIncompressible D ch1 T1 2 1 (1 / 2) (1 / 2)
 
-/-- **`IncompressibleContainedMatMulOn` without `ThetaRegistered`**: `ContainedMatMulOn_nontrivial`'s instance. -/
+/-- **`IncompressibleContainedMatMulOn` without `ThetaRegistered`**: `Dθ` complies at `k = 0`, and the bound fails, its
+right side `0` and the product at gate `2`, which `Dθ` computes, charged `μ b_a / max(emax, K/(4 b_w dd)) = 1/2`. -/
 def IncompressibleContainedMatMulOn_nontrivial : Prop :=
   (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ 0 < 2 ∧ ((0 : ℕ) : ℝ) ≤ 1 ∧ (0 : ℝ) ≤ 1 ∧ (1 : ℝ) ≤ 1 ∧
     (∀ ℓ, 1 ≤ ch1.d ℓ) ∧ (∀ ℓ, ch1.e ℓ ≤ 1) ∧ Complies 2 0 Dθ ∧ ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
@@ -324,7 +225,8 @@ def IncompressibleContainedTrainingOn_honest : Prop :=
   Complies 2 1 D ∧ Assumptions.ThetaRegistered D D M1 ∧ Assumptions.DarkReads M1 1 ∧
     Assumptions.TrainingIncompressible D ch1 T1 2 1 (1 / 2) (1 / 2) ∧ Assumptions.Coverage 1 D (2 * ch1.G)
 
-/-- **`IncompressibleContainedTrainingOn` without `ThetaRegistered`**: `ContainedTrainingOn_nontrivial`'s instance. -/
+/-- **`IncompressibleContainedTrainingOn` without `ThetaRegistered`**: `IncompressibleContainedMatMulOn_nontrivial`'s
+instance at coverage `κ = 1`; the bound's left side is `1/2 · κ size(r) = 1` and its right side `0`. -/
 def IncompressibleContainedTrainingOn_nontrivial : Prop :=
   (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ 0 < 2 ∧ ((0 : ℕ) : ℝ) ≤ 1 ∧ (0 : ℝ) ≤ 1 ∧ (1 : ℝ) ≤ 1 ∧
     (∀ ℓ, 1 ≤ ch1.d ℓ) ∧ (∀ ℓ, ch1.e ℓ ≤ 1) ∧ Complies 2 0 Dθ ∧ ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
