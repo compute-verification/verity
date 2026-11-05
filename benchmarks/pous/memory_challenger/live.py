@@ -1,5 +1,5 @@
 """The memory challenger's process in the harness's timed audit (`p2-v3-mc-gpu`): `verity.core.protocols.pous.
-memory_challenger` against the responder, over the harness's responder wire (`band_gpu/memory_challenger.py`).
+memory_challenger` against the responder, over the harness's responder wire (`benchmarks/pous/band_gpu/memory_challenger.py`).
 
     python benchmarks/pous/memory_challenger/live.py --ready READY.json --leaves DIGESTS.bin --out AUDIT.json [--audits N]
         [--pings N] [--k K] [--verifier-cpu C] [--limit-ns N] [--calibrate-only] [--clock logical] [--strict]
