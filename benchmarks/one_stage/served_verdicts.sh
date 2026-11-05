@@ -155,7 +155,7 @@
 #     CERTIFIER-CHAIN line says, and always after them in a deferral's follow-on, whose node is held to the audit's
 #     memory alone (after them, only once V3c wrote period.json), within
 #     CERTIFIER_TIMEOUT (default 4h), and the period check once both are done and V3c wrote period.json, within
-#     CERTIFIER_PERIOD_TIMEOUT (default 60m), each as `bash -c CMD _ D K DIR V3C` in TREE with DIR $OUT/pieces/certifier
+#     CERTIFIER_PERIOD_TIMEOUT (default 12h, a period's listed circuit files each read whole), each as `bash -c CMD _ D K DIR V3C` in TREE with DIR $OUT/pieces/certifier
 #     and V3C V3c's $D/v3c-w<K>-<class>. V3c then takes the window commit, the longer of the chain and V3c's audit
 #     (their sum on a node that holds only one), and the period check, which the run's --timeout holds beside the other
 #     steps. The period check writes the
@@ -616,7 +616,7 @@ v3c_period() {  # V3c's audit as one compute audit of the network certifier's pe
 certifier_step() {  # $1 chain|period: the split network certifier's step on V3c's window (step 6), if its command is set
   local cmd lim dir=$OUT/pieces/certifier rc
   if [ "$1" = chain ]; then cmd=${CERTIFIER_CHAIN_CMD:-} lim=${CERTIFIER_TIMEOUT:-4h}
-  else cmd=${CERTIFIER_PERIOD_CMD:-} lim=${CERTIFIER_PERIOD_TIMEOUT:-60m}; fi
+  else cmd=${CERTIFIER_PERIOD_CMD:-} lim=${CERTIFIER_PERIOD_TIMEOUT:-12h}; fi
   [ -n "$cmd" ] || return 0
   mkdir -p "$dir"
   (cd "$TREE" && timeout -k 1m "$lim" bash -c "$cmd" _ "$D" "$K" "$dir" "$VW") > "$dir/$1.log" 2>&1

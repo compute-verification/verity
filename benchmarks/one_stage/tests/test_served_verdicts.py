@@ -1815,7 +1815,7 @@ def test_v3c_runs_the_certifiers_chain_beside_its_audit_and_its_period_check_on_
     assert rc == 0, lines
     assert order[:3] == ["compiler", "window-circuit", "window-commit"] and order[-1] == "period-check"
     assert sorted(order[3:-1]) == ["audit", "chain", "period"] and order.index("audit") < order.index("period")
-    assert limits[:2] == ["30m", "120m"] and sorted(limits[2:-1]) == ["180m", "4h"] and limits[-1] == "60m"
+    assert limits[:2] == ["30m", "120m"] and sorted(limits[2:-1]) == ["180m", "4h"] and limits[-1] == "12h"
     vw, pieces = tmp_path / "serve" / f"v3c-w7-{W63K4.replace(',', '-')}", tmp_path / "out" / "pieces" / "certifier"
     assert (tmp_path / "order.args").read_text().split() == [str(tmp_path / "serve"), "7", str(pieces), str(vw)]
     assert not _window_data(tmp_path / "out", 7), _window_data(tmp_path / "out", 7)
@@ -1846,7 +1846,7 @@ def test_v3c_runs_the_certifiers_chain_after_its_audit_on_a_node_that_holds_only
     why before either starts, and the period check still runs last, on both."""
     rc, lines, order, limits = _v3c(tmp_path, **extra)
     assert rc == 0, lines
-    assert order[3:] == ["audit", "period", "chain", "period-check"] and limits[2:] == ["180m", "4h", "60m"]
+    assert order[3:] == ["audit", "period", "chain", "period-check"] and limits[2:] == ["180m", "4h", "12h"]
     node, chain = extra.get("NODE_MEM_GB", "512"), extra.get("CERTIFIER_CHAIN_MEM_GB", "96")
     heads = [line.split(" (")[0].split(":")[0] for line in lines]
     assert heads[3:] == ["CERTIFIER-CHAIN after V3c's audit", f"V3C-AUDIT class {W63K4}", "V3C-PERIOD", "CERTIFIER-CHAIN",
@@ -2671,7 +2671,7 @@ def test_a_deferral_with_the_split_certifier_behind_its_front_leaves_the_chain_a
     products = {"remote": ["remote"], "remote-network": ["remote", "remote-network"]}[product]
     assert rc == 0 and order == ["audit", "period", "chain", "period-check", "record",
                                  *(f"composite-{x}" for x in products), "onsite"], (lines, order)
-    assert limits == ["180m", "4h", "60m", *["60m"] * len(products)]
+    assert limits == ["180m", "4h", "12h", *["60m"] * len(products)]
     assert (tmp_path / "order.args").read_text().split() == [str(d), "7", str(pieces), str(d / f"v3c-w7-{VTAG}")]
     assert json.loads((pieces / "answer.json").read_text()) == {"protocol": "verity/certifier/v9", "verdict": "accept"}
     record = json.loads((tmp_path / "order.record").read_text())
