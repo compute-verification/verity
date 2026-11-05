@@ -74,7 +74,7 @@ theorem lookups_given {tags : Tags} {bytes : ByteArray} {tables : List (String �
   case' some t =>
     simp (config := { zeta := false }) only [Option.isSome_some, ↓reduceIte, Option.mapM_some] at h
   all_goals
-    ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) sha jp0 at h)
+    (extract_lets (config := { underBinder := false, onlyGivenNames := true }) sha jp0 at h)
     split at h
     swap
     · obtain ⟨_, hte, -⟩ := FlockSoundness.except_bind_ok h; cases hte
@@ -82,13 +82,13 @@ theorem lookups_given {tags : Tags} {bytes : ByteArray} {tables : List (String �
     (have hh := FlockSoundness.except_bind_ok h; clear h; obtain ⟨text, hte, h⟩ := hh)
     cases hte
     simp (config := { zeta := false }) only [jp0] at h
-    ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) lines0 lines head jp1 at h)
+    (extract_lets (config := { underBinder := false, onlyGivenNames := true }) lines0 lines head jp1 at h)
     replace h := FlockSoundness.ite_throw_ok h
     simp (config := { zeta := false }) only [jp1] at h
-    ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) name metaLine jp2 at h)
+    (extract_lets (config := { underBinder := false, onlyGivenNames := true }) name metaLine jp2 at h)
     obtain ⟨hmeta, h⟩ := FlockSoundness.ite_throw_ok' h
     simp (config := { zeta := false }) only [jp2] at h
-    ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp3 at h)
+    (extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp3 at h)
     split at h
     swap
     · obtain ⟨_, hte, -⟩ := FlockSoundness.except_bind_ok h; cases hte
@@ -99,15 +99,15 @@ theorem lookups_given {tags : Tags} {bytes : ByteArray} {tables : List (String �
     simp (config := { zeta := false }) only [jp3] at h
     (have hh := FlockSoundness.except_bind_ok h; clear h; obtain ⟨f1, -, h⟩ := hh)
     (have hh := FlockSoundness.except_bind_ok h; clear h; obtain ⟨f2, -, h⟩ := hh)
-    ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp4 at h)
+    (extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp4 at h)
     replace h := FlockSoundness.ite_throw_ok h
     simp (config := { zeta := false }) only [jp4] at h
-    ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp5 jp6 at h)
+    (extract_lets (config := { underBinder := false, onlyGivenNames := true }) jp5 jp6 at h)
     obtain ⟨classSha, h⟩ : ∃ classSha, jp5 classSha = .ok c := by
       split at h
       · replace h := FlockSoundness.ite_throw_ok h
         simp (config := { zeta := false }) only [jp6] at h
-        ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) part rule jp7 at h)
+        (extract_lets (config := { underBinder := false, onlyGivenNames := true }) part rule jp7 at h)
         replace h := FlockSoundness.ite_throw_ok h
         simp (config := { zeta := false }) only [jp7] at h
         obtain ⟨cs, -, h⟩ := FlockSoundness.except_bind_ok h
@@ -115,18 +115,18 @@ theorem lookups_given {tags : Tags} {bytes : ByteArray} {tables : List (String �
       · obtain ⟨cs, -, h⟩ := FlockSoundness.except_bind_ok h
         exact ⟨cs, h⟩
     simp (config := { zeta := false }) only [jp5] at h
-    ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets0 at0 at h)
+    (extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets0 at0 at h)
     (have hh := FlockSoundness.except_bind_ok h; clear h; obtain ⟨s1, -, h⟩ := hh)
-    ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets1 at h)
+    (extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets1 at h)
     (have hh := FlockSoundness.except_bind_ok h; clear h; obtain ⟨u1, -, h⟩ := hh)
-    ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpT at h)
+    (extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpT at h)
     -- a template's derived keys are checked before the join point (`TEMPLATE_DERIVED`)
     obtain ⟨uT, h⟩ : ∃ uT, jpT uT = .ok c := by
       first
       | exact ⟨⟨⟩, h⟩
       | (obtain ⟨u, -, h⟩ := FlockSoundness.except_bind_ok h; exact ⟨u, h⟩)
     simp (config := { zeta := false }) only [jpT] at h
-    ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpL at h)
+    (extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpL at h)
     obtain ⟨lks, hlks, h⟩ : ∃ lks : Array (String × Json), lookupNames bytes = lks.map (·.1) ∧ jpL lks = .ok c := by
       split at h
       · rename_i kvs hk
@@ -136,13 +136,13 @@ theorem lookups_given {tags : Tags} {bytes : ByteArray} {tables : List (String �
       · rename_i hk
         obtain ⟨l, hl, h⟩ := FlockSoundness.except_bind_ok h
         cases hl
-        exact ⟨_, hnames.trans (by first | simp only [lookupsOf, hk, Array.map_empty] | simp [lookupsOf, hk]), h⟩
+        exact ⟨_, hnames.trans (by simp only [lookupsOf, hk, Array.map_empty]), h⟩
       · obtain ⟨l, hl, -⟩ := FlockSoundness.except_bind_ok h
         cases hl
       · rename_i e hk
         obtain ⟨l, hl, h⟩ := FlockSoundness.except_bind_ok h
         cases hl
-        exact ⟨_, hnames.trans (by first | simp only [lookupsOf, hk, Array.map_empty] | simp [lookupsOf, hk]), h⟩
+        exact ⟨_, hnames.trans (by simp only [lookupsOf, hk, Array.map_empty]), h⟩
     simp (config := { zeta := false }) only [jpL] at h
     (have hh := FlockSoundness.except_bind_ok h; clear h; obtain ⟨s2, hlook, -⟩ := hh)
     rw [← Array.forIn_toList] at hlook
@@ -150,28 +150,28 @@ theorem lookups_given {tags : Tags} {bytes : ByteArray} {tables : List (String �
       refine forIn_steps_all _ ?_ lks.toList _ _ hlook
       intro a b s hstep
       obtain ⟨lname, spec⟩ := a
-      ((try beta_reduce at hstep); extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets at hstep)
+      (extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets at hstep)
       split at hstep
       · rename_i pinned hp
-        ((try beta_reduce at hstep); extract_lets (config := { underBinder := false, onlyGivenNames := true }) size at hstep)
+        (extract_lets (config := { underBinder := false, onlyGivenNames := true }) size at hstep)
         (have hh := FlockSoundness.except_bind_ok hstep; clear hstep; obtain ⟨_, -, hstep⟩ := hh)
         (have hh := FlockSoundness.except_bind_ok hstep; clear hstep; obtain ⟨_, -, hstep⟩ := hh)
         (have hh := FlockSoundness.except_bind_ok hstep; clear hstep; obtain ⟨_, -, hstep⟩ := hh)
-        ((try beta_reduce at hstep); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpA at hstep)
+        (extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpA at hstep)
         replace hstep := FlockSoundness.ite_throw_ok hstep
         simp (config := { zeta := false }) only [jpA] at hstep
         (have hh := FlockSoundness.except_bind_ok hstep; clear hstep; obtain ⟨n, -, hstep⟩ := hh)
         (have hh := FlockSoundness.except_bind_ok hstep; clear hstep; obtain ⟨lo, -, hstep⟩ := hh)
-        ((try beta_reduce at hstep); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpB at hstep)
+        (extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpB at hstep)
         replace hstep := FlockSoundness.ite_throw_ok hstep
         simp (config := { zeta := false }) only [jpB] at hstep
         split at hstep
         · rename_i nm words hw
-          ((try beta_reduce at hstep); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpC at hstep)
+          (extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpC at hstep)
           replace hstep := FlockSoundness.ite_throw_ok hstep
           simp (config := { zeta := false }) only [jpC] at hstep
           (have hh := FlockSoundness.except_bind_ok hstep; clear hstep; obtain ⟨net, -, hstep⟩ := hh)
-          ((try beta_reduce at hstep); extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets' at hstep)
+          (extract_lets (config := { underBinder := false, onlyGivenNames := true }) nets' at hstep)
           have hs' := Except.ok.inj hstep
           subst hs'
           refine ⟨⟨⟨pinned, List.mem_of_find?_eq_some hp, ?_⟩, words, ?_⟩, _, rfl⟩
