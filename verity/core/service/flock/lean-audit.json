@@ -76,6 +76,8 @@
   "Flock.Test.FramesInner",
   "Flock.Test.FrameStep",
   "Flock.Test.SessionPlace",
+  "Flock.Test.FramesAsk",
+  "Flock.Test.FramesStop",
   "Flock.Test.RegionBytes",
   "Flock.Test.PlainHidden",
   "Flock.Test.Served",
