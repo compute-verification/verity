@@ -107,6 +107,7 @@
 #     registration of the deployment, both the auditor's and never the prover's node's, without which the network
 #     certifier's verdict is not established; its check that the files remote's sampled proofs case registers are the
 #     ones its params name by SHA-512 (the serve dir's private/sampled-proofs/case.json, where the composite wrote it),
+#     its public file the one V3c's audit pinned at staging, before the draw (its window/public-pin.json),
 #     without which neither that verdict nor a composite's that reads the case is; and, where the composite wrote the
 #     inference-only case, where its α and Γ
 #     came from, its private policy.json's read: off the run's own division, or ALPHA and GAMMA, never a registered
@@ -1064,8 +1065,10 @@ EOF
 }
 onsite_record() {  # the onsite record ($OUT/record/onsite.json, the header's), which gates nothing
   local io=() sp=() c=$D/private/inference-only s=$D/private/sampled-proofs/case.json
+  local pin=${VW:+$VW/audit/window/public-pin.json}
   [ ! -f "$c/case.json" ] || io=(--inference-only-case-policy "$c/policy.json")
   [ ! -f "$s" ] || sp=(--sampled-proofs-case "$s")
+  [ -z "$pin" ] || [ ! -f "$pin" ] || sp+=(--public-pin "$pin")
   "$TPY" benchmarks/one_stage/onsite_record.py "$OUT" --window-steps "$WINDOW_STEPS" --max-tokens "$MAX_TOKENS" \
     ${ADVICE_CHARGE:+--advice-charge "$ADVICE_CHARGE"} \
     ${REPROOF_COPY:+--reproof-copy "$REPROOF_COPY"} ${REPROOF_LISTING:+--reproof-listing "$REPROOF_LISTING"} \

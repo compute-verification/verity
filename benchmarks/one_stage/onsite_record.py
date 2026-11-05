@@ -4,7 +4,7 @@ node, a datacenter and the world. It reads only the run's public $OUT and decide
 
     python benchmarks/one_stage/onsite_record.py OUT [--window-steps S --max-tokens M] [--advice-charge FILE]
         [--certifier-key RECORD --site-registration FILE] [--inference-only-case-policy FILE]
-        [--sampled-proofs-case FILE] [--to FILE]
+        [--sampled-proofs-case FILE --public-pin FILE] [--to FILE]
     python benchmarks/one_stage/onsite_record.py --beside RECORD [RECORD ...] --to FILE
 
 `served_verdicts.sh` runs it after its composite step on a run with the network certifier's piece, and its one
@@ -65,7 +65,9 @@ the registration asserts, is the auditor's placement under trusted-host (`STANDI
 sessions were verified against (`PERIOD`); and the remote theorem's registered-files condition (`registered_files`):
 each file remote's sampled proofs case (``--sampled-proofs-case``) registers, the circuit file and the public file, is
 by SHA-512 the one its params θ name (proofs.circuit, proofs.public), θ held to the params each composite that reads the
-case states, the files hashed here and never read off the evidence.
+case states, the files hashed here and never read off the evidence, and the public file the one a5 pinned at staging,
+before the draw (``--public-pin``, `pinned`), the pin's bodies held to the registration the challenger's coins committed
+to by their leaf layer.
 
 **Sampled proofs' guarantee** (``sampled_proofs``, `SAMPLED`), from its accepted row's answer, else ``missing``: what
 its draw establishes, ε at δ, per window (``per_window``: its bound at its profile's δ over the window's n proof blocks) and
@@ -466,7 +468,14 @@ CHECKED = {
                       "its first blob, the circuit file, θ's proofs.circuit, and its second, the public file, θ's "
                       "proofs.public. θ is held by SHA-512 over its canonical JSON to the params each of the run's "
                       "composites that reads the case states for it (params_sha512), and the files are hashed here, "
-                      "never read off the evidence, whose digests are the prover's. It holds where no composite of the "
+                      "never read off the evidence, whose digests are the prover's. Where θ names the public file, that "
+                      "file is also the one a5 pinned at staging, before the draw (--public-pin, a5's public-pin.json, "
+                      "`pinned`): by SHA-512 and its body's, a member's of the pin, whose bodies' leaf layer is the one "
+                      "the registration the case commits to holds (R4), the case's commitment the one each composite "
+                      "that reads the case states, so the registration the challenger's coins committed to. A public "
+                      "file changed after the draw isn't the pin's, nor is a pin rewritten to it, unless only its header "
+                      "changed and the pin with it: the pin binds the header only as the audit's own output, and "
+                      "publicHeld its scheme, roots, domains and population. It holds where no composite of the "
                       "run reads the case. Where either doesn't hold the network verdict is not established and there "
                       "is no bound (`LISTING_UNMET`, `FILES_UNMET`), and where the registered-files condition doesn't, "
                       "neither is the verdict of a composite that reads the case; where θ names no proofs.public, the "
@@ -668,7 +677,8 @@ LISTING_UNMET = (f"{AUDITOR_LISTING} doesn't hold (``checked``): a circuit file 
                  "the run published as the file its audit's sessions were verified against, so the Lean answer's "
                  "accept (``answer``) establishes no network verdict, and the record states no bound")
 FILES_UNMET = (f"{AUDITOR_LISTING}'s {REGISTERED_FILES} condition doesn't hold (``checked``): a file remote's sampled "
-               "proofs case registers isn't, by SHA-512, the one its params θ name, or the run can't say, so a Lean "
+               "proofs case registers isn't, by SHA-512, the one its params θ name, or its public file the one pinned "
+               "at staging before the draw, or the run can't say, so a Lean "
                "accept (``answer``) establishes no verdict of the network certifier or of a composite that reads that "
                "case, and the record states no bound")
 PUBLIC_UNBOUND = ("the public file isn't bound on this form: remote's sampled proofs case's params θ name no "
@@ -1475,17 +1485,59 @@ def auditor_listing(out: Path, case: Any) -> dict[str, Any]:
     return res | {"holds": True}
 
 
-def registered_files(found: Mapping[str, tuple[str, dict[str, Any]]], case: Path | None) -> dict[str, Any]:
+def pinned(pin: Path | None, commitment: Any, stated: set[Any], public: Path) -> str | None:
+    """Why the public file remote's sampled proofs case registers, ``public``, isn't the one a5 pinned at staging,
+    before the draw (``pin``, a5's ``public-pin.json``: by member key, each public file's SHA-512 and its body's, and
+    their leaf layer), else None. The pin's bodies are, by their leaf layer, those the registration the case commits to
+    holds (``commitment``, which each composite that reads the case states, ``stated``): the registration the
+    challenger's coins committed to, which R4 held to the bodies before the draw. And ``public`` is, by SHA-512 and its
+    body's, a pinned member's."""
+    from verity.ml.circuits.codec import canonical_json
+
+    if pin is None:
+        return "the run gave no --public-pin, the public file's SHA-512 pinned at staging before the draw"
+    try:
+        doc = json.loads(pin.read_bytes())
+        members = {k: (m["file"], m["body"]) for k, m in doc["members"].items()}
+        layer = doc["leaf_layer"]
+    except (OSError, AttributeError, KeyError, TypeError, ValueError) as e:
+        return f"--public-pin isn't a pin of the public files at staging: {type(e).__name__}"
+    if stated != {commitment}:
+        return "the case's commitment isn't the one each composite that reads the case states"
+    try:
+        registered = json.loads(bytes.fromhex(commitment))["leaf_layer"]
+    except (KeyError, TypeError, ValueError) as e:
+        return f"the case's commitment isn't a registration record naming a leaf layer: {type(e).__name__}"
+    bodies = hashlib.sha512(canonical_json({k: b for k, (_, b) in members.items()})).hexdigest()
+    if not (isinstance(registered, str) and registered == layer == bodies):
+        return ("--public-pin's bodies aren't, by their leaf layer, those the registration the case commits to holds "
+                "(R4)")
+    whole, body = hashlib.sha512(), hashlib.sha512()
+    with open(public, "rb") as f:
+        whole.update(f.readline())
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            whole.update(chunk)
+            body.update(chunk)
+    if (whole.hexdigest(), body.hexdigest()) not in members.values():
+        return "the public file the case registers isn't, by SHA-512, one --public-pin pinned at staging before the draw"
+    return None
+
+
+def registered_files(found: Mapping[str, tuple[str, dict[str, Any]]], case: Path | None,
+                     pin: Path | None = None) -> dict[str, Any]:
     """`CHECKED`'s auditor-listing, its registered-files condition: the files remote's sampled proofs case at ``case``
-    (`SAMPLED_ID`'s, ``{"params", "blobs", ...}``) registers, the circuit file and then the public file
+    (`SAMPLED_ID`'s, ``{"params", "commitment", "blobs", ...}``) registers, the circuit file and then the public file
     (`proofs.evidence_v2`'s order), are by SHA-512 those its params θ name (``proofs.circuit``, ``proofs.public``), θ
-    held by SHA-512 to the params each composite in ``found`` that reads the case states for it. ``holds``,
-    ``read_by``, those composites' ids, ``compared``, the files θ names, ``why`` where it doesn't hold, and ``unbound``
-    (`PUBLIC_UNBOUND`) where θ names no public file."""
+    held by SHA-512 to the params each composite in ``found`` that reads the case states for it, and the public file
+    the one a5 pinned at staging, before the draw (``pin``, `pinned`). ``holds``, ``read_by``, those composites' ids,
+    ``compared``, the files θ names, ``why`` where it doesn't hold, and ``unbound`` (`PUBLIC_UNBOUND`) where θ names no
+    public file."""
     import composite as CO
 
     stated = {p: c.get("params_sha512") for p, (_, doc) in found.items() for c in doc.get("cases") or ()
               if c.get("id") == SAMPLED_ID}
+    commits = {c.get("commitment") for _, doc in found.values() for c in doc.get("cases") or ()
+               if c.get("id") == SAMPLED_ID}
     res: dict[str, Any] = {"holds": False, "read_by": sorted(stated)}
     if not stated:
         return res | {"holds": True}
@@ -1514,6 +1566,8 @@ def registered_files(found: Mapping[str, tuple[str, dict[str, Any]]], case: Path
         if got != proofs.get(half):
             return res | {"why": f"the {half} file the case registers (its blob {i}) isn't, by SHA-512, θ's "
                                  f"proofs.{half}"}
+    if "public" in proofs and (why := pinned(pin, doc.get("commitment"), commits, blobs[1])) is not None:
+        return res | {"why": why}
     return res | {"holds": True}
 
 
@@ -1616,12 +1670,14 @@ def alpha_gamma(path: Path | None) -> dict[str, str]:
 def record(out: Path, advice_charge: Path | None = None, copy: str | None = None,
            listing: Path | None = None, serving: tuple[int, int] | None = None, tie: bool = False,
            certifier_key: Path | None = None, site_registration: Path | None = None,
-           case_policy: Path | None = None, sampled_case: Path | None = None) -> dict[str, Any]:
+           case_policy: Path | None = None, sampled_case: Path | None = None,
+           public_pin: Path | None = None) -> dict[str, Any]:
     """OUT's onsite record (module docstring), with the re-proof inputs' ``copy`` and its ``listing`` where given
     (`reproof`, ``tie`` where H1_TIE ties the window), the run's ``serving`` settings, S and MAX_TOKENS, where its
     caller states them (`SERVING`), the auditor's inputs the run's checks read, its ``certifier_key`` record and its
     ``site_registration`` (`auditor_record`), the inference-only case's private policy.json, ``case_policy``
-    (`alpha_gamma`), and remote's sampled proofs case, ``sampled_case`` (`registered_files`); FileNotFoundError where
+    (`alpha_gamma`), and remote's sampled proofs case, ``sampled_case``, with a5's ``public_pin`` of its public file
+    (`registered_files`); FileNotFoundError where
     `served_verdicts.py record` wrote no report."""
     report = json.loads((out / "record" / "verdicts.json").read_text())
     if report.get("format") != EXTENDS:
@@ -1651,7 +1707,7 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
                      if c.get("id") == NETWORK), None) if composite in found else None
     listed = auditor_listing(out, case) if case is not None else {
         "is": CHECKED[AUDITOR_LISTING], "holds": False, "why": f"no case lists the period's audits: {no_case}"}
-    files = registered_files(found, sampled_case)
+    files = registered_files(found, sampled_case, public_pin)
     checked = {AUDITOR_RECORD: auditor_record((case or {}).get("params"), composed, certifier_key, site_registration),
                AUDITOR_LISTING: listed | {"holds": listed["holds"] and files["holds"], "registered_files": files}
                | ({"why": files["why"]} if listed["holds"] and not files["holds"] else {})}
@@ -1862,6 +1918,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                     help=f"remote's sampled proofs case under the serve dir ({SAMPLED_ID}'s, served_cases.py's "
                          "private/sampled-proofs/case.json), whose registered files auditor-listing holds to its "
                          "params' digests (`registered_files`)")
+    ap.add_argument("--public-pin", type=Path, metavar="FILE",
+                    help="a5's pin of the audit's public files at staging, before the draw (its out's "
+                         "public-pin.json), to which auditor-listing holds the public file the case registers "
+                         "(`pinned`)")
     ap.add_argument("--to", type=Path,
                     help="the record's path (default OUT/record/onsite.json); with --beside, where the records go "
                          "beside each other")
@@ -1871,7 +1931,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                                                                      a.reproof_listing, a.window_steps, a.max_tokens,
                                                                      a.certifier_key, a.site_registration,
                                                                      a.inference_only_case_policy,
-                                                                     a.sampled_proofs_case)):
+                                                                     a.sampled_proofs_case, a.public_pin)):
             ap.error("--beside reads the records written, with --to alone: where they go beside each other")
         try:
             doc = beside(a.beside)
@@ -1892,7 +1952,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     serving = None if a.window_steps is None else (a.window_steps, a.max_tokens)
     try:
         rec = record(a.out, a.advice_charge, a.reproof_copy, a.reproof_listing, serving, a.h1_tie,
-                     a.certifier_key, a.site_registration, a.inference_only_case_policy, a.sampled_proofs_case)
+                     a.certifier_key, a.site_registration, a.inference_only_case_policy, a.sampled_proofs_case,
+                     a.public_pin)
     except FileNotFoundError as e:
         print(f"ONSITE: not written: {e.filename} is missing", file=sys.stderr)
         return 1
