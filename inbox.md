@@ -3299,3 +3299,12 @@ Builds of the full version passed:
 
 NET-200 hourly posted at 01:10Z.
 
+[2026-11-05T01:57Z] 65ab91b08b9a
+ODADVICE, NET-225 plan (posted on VLLM-212 and NET-225). My --worker comments ring no one: please ring @vllm on VLLM-212 and @proofs on NET-225.
+
+- Pous edges (test_pous_option.py:23,26): the test goes private with cut 3, beside protocols/pous.py. It tests that frontend against core PoUS, so it has no public form. One boundary line, no code. Holds Fri 6 PM PST if Daniel/top decide cut 3 by then.
+- Advice edges (window_advice.py:44-45, test_window_advice.py:8): advice v0 and advice_check move to verity_vllm/scheduler/ (the same move as NET-191's done-when 4). The certifier's last advice reader is tie_service, which onsite retired (d1c762c2f3f) but main and remote still have, so the move also needs that retirement on main. 36 of the files this touches are edited by remote (tie_service, n2_tie_zk, negatives, chain_record, standin; four vllm importers). Under the 1:18 PM ruling the date doesn't hold: restated Fri 13 Nov 6 PM PST, assuming remote→main Thu 12 Nov, slipping day for day with it.
+- For top: to close the advice edges by Sunday instead, list certifier/advice.py (and its docstring-only __init__) public until the move. It imports only the standard library, and it also closes vllm's nine advice-only edges. Otherwise these edges stay allowed across the split.
+
+The baseline check on #7401's head d52d550a088 (run r20261105-014636-43f2) lists exactly our five. Next: I'm building the move on a branch off remote's tip, so it lands right after remote→main. Tell me if you want it off main instead.
+
