@@ -42,8 +42,8 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    --collect-only` in a suite
                                                    whose inputs its change touches, or breaks the build of a Lean module that
                                                    is or imports what it changes (on a warm Lean tree: here on a node, else
-                                                   on vy-nebius-cpu-9, else vy-nebius-cpu-5, whatever the tier; refused
-                                                   when neither can build them),
+                                                   on the first node of PREFLIGHT_LEAN_ON that starts it, whatever the tier;
+                                                   refused when none can build them),
                                                    naming the PR on `next` that owns it, or
                                                    drops from a Lean lock it changes a shape.inline premise or shape.frozen
                                                    key `next`'s statements still need (naming each; the sync leaves such a
@@ -3106,7 +3106,7 @@ SLOT = ("python3", "tools/verity/check/slot.py")
 #: `research queue ready`'s exit when the tier never started: nothing failed, and nothing is marked
 READY_NOT_STARTED = 3
 #: a lane's own test run, which no landing needs (a PR lands on `checked` on a review; the full check after decides `main`)
-LANE_RUN = ('`research run --on vy-nebius-cpu-K --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
+LANE_RUN = ('`research run --on auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
             'uv run tools/verity/check/suites.py --changed $(git rev-parse origin/main) --quick"`')
 
 
@@ -3374,11 +3374,11 @@ PREFLIGHT_MIN_FREE = 0.25
 PREFLIGHT_LEAN_MODULES = 40
 PREFLIGHT_LEAN_S = 180.0
 #: where the Lean step builds, whatever the mark's tier, when this machine keeps no warm Lean tree: the first of these nodes that
-#: starts the build (each keeps `build` Lean slots, cpu-9 the most; cpu-1's are congested, and cpu-3 and cpu-8 are stopped).  The
-#: one place to move it
+#: starts the build, each keeping `build` Lean slots, which `research run --on auto` doesn't place by (it takes a pool, whose
+#: cold tree builds nothing in the step's budget).  The one place to move it
 PREFLIGHT_LEAN_ON = ("vy-nebius-cpu-9", "vy-nebius-cpu-5")
-#: the `research run` pool it takes there: none, as `verity lean try --on vy-nebius-cpu-9` runs, since the node's `build` Lean slots
-#: are the gate; a node without them would take its `research` pool
+#: the `research run` pool it takes there: none, since the node's `build` Lean slots are the gate; a node without them would take
+#: its `research` pool
 PREFLIGHT_LEAN_POOL: str | None = None
 #: the merged tree's builder (`lean_changed.py --build FILE...`, on a `build` Lean slot's warm tree), and its last line's prefix
 LEAN_BUILDER, LEAN_BUILD_LINE = "tools/verity/lean/lean_changed.py", "lean-build: "
@@ -4375,7 +4375,7 @@ class MarkOnly:
 #: the Lean fast path's result kind (`lean_changed.py --records`), and the Lean check's step in a check's result
 FAST_KIND, LEAN_AUDIT_STEP = "lean-fast/v1", "lean-audit"
 #: the fast path's command, which `RecordsGate` names for each package it can't vouch for
-RECORDS_COMMAND = ("research run --on vy-nebius-cpu-1 --pool research --project verity --source . --cwd clone --declared-output "
+RECORDS_COMMAND = ("research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone --declared-output "
                    "'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records {pkg} --update")
 #: where a records run keeps, under its `--out`, PKG's record `--update` wrote when it differs from the commit's lock (each
 #: package's, PKG's and a requirer's, is also under `record/<path>/`)
