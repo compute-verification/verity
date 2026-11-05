@@ -71,6 +71,13 @@ NOT_PATHS = {
     ("Security/Proofs/Flock/Recursive/HPortTie.lean", "lc.h"): "a Lean name, a field of `holoRep_refines`' output",
     ("Security/Proofs/Flock/Soundness/Discharge/Composed/Inner.lean", "l.c"): "a Lean name, `verifyInner`'s target",
 }
+#: (document, token as written): a dead path left as `main` writes it because a demo branch rewrites those lines, and a
+#: file a demo branch edits isn't rewritten until it lands. Unlike `NOT_PATHS` it has no currency check, so the demo
+#: branch's landing, which drops the mention, needs no edit here; the entry leaves after it.
+WAITING = {
+    ("Security/Definitions/NetworkCertifier/Schedule.lean", "verity/protocols/accounting/communication/certifier/schedule.py"):
+        "the `remote` demo branch rewrites this docstring",
+}
 
 _TOKEN = re.compile(r"`([^`\s]+)`|\]\(([^)\s]+)\)")
 _SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+-]*:")
@@ -151,7 +158,8 @@ def dead(doc: str, path: str, link: bool, tree) -> bool:
 def dead_paths(tree, read=lambda d: (ROOT / d).read_text(errors="replace")) -> list[tuple[str, int, str]]:
     """(document, line, token as written) for each path a document of ``tree`` names that the tree lacks."""
     return [(doc, n, raw) for doc in documents(tree[0]) for n, line in lines(doc, read(doc))
-            for raw, path, link in mentions(line) if (doc, raw) not in NOT_PATHS and dead(doc, path, link, tree)]
+            for raw, path, link in mentions(line)
+            if (doc, raw) not in NOT_PATHS and (doc, raw) not in WAITING and dead(doc, path, link, tree)]
 
 
 def test_every_path_a_document_names_exists():
