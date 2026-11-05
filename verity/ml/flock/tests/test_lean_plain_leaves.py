@@ -69,6 +69,14 @@ def test_the_plain_leaf_identity_is_the_provers():
     assert "t.pinnedLeafScheme.map Firewall.canonForm == some (Firewall.canonForm leafSchemePlain)" in _lean_def("plainLeaves")
 
 
+def test_the_pinned_leaf_scheme_is_a_constant():
+    """`plainLeaves` compares by `canonForm`, which is coarser than `Json`'s `==` on numbers (`0.0` prints as `0`), and the
+    two agree on the constants `pinnedLeafScheme` takes. A scheme read from input would widen the plain-leaves refusal."""
+    sets = [m.strip() for p in LEAN.rglob("*.lean") if ".lake" not in p.parts
+            for m in re.findall(r"pinnedLeafScheme := ([^,}\n]+)", p.read_text())]
+    assert sets and all(re.fullmatch(r"some leafScheme\w+", m) for m in sets), sets
+
+
 def test_a_plain_leaf_opening_carries_an_empty_salt_vector():
     """The pinned patch serializes `opened_salts` in every opening, "empty for unsalted leaves", so Lean decodes an unsalted
     opening of an hm96-row statement (the inner statement's) with an empty vector, not `631567f7`'s absent one."""
