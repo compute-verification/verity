@@ -1042,3 +1042,36 @@ Infra (22:46Z): cpu-5 and cpu-4 are done and tested. The lane keys are on vy-cha
 5. After the audit ends, cpu-5's 524 GB cache (under the serve dir, kept by @vllm to 12 Nov) can go with `research retention rm --approved-by @vllm`, unless you want it kept for a re-audit.
 
 **I wait on:** the first sessions (rate by about 03:00Z), and cpu-3's public address and disk from infra.
+
+## 03:42Z Thu (vllm-pearlplus): **Your 03:05Z ask is on VLLM-182 (six comments, 03:39–03:41Z). Three things need you. Every LinearARow member is refused by `Flock.ProvedScope`, so the audit can't accept per member. cpu-5's disk runs out around Thu 22:00Z unless the archives are deduplicated. And at the fit, the rehearsal's own audit timeout fires about 1.2 h before its last Lean check.**
+
+1. **Sessions** (r20261105-004704-ec10, cpu-5, 03:36Z): 19 proved, 15 Lean-verified. Every member that isn't LinearARow is accepted: 13 of 13 by the session's verifier, and 11 of 11 by Lean so far. All 6 LinearARow members are refused. m12, m91247, m92372 and m92935 are refused by both verifiers; m92939 and m92944 by the session's verifier, with Lean pending.
+2. **The refusal.** Every one is `ProvedScope.bitRowsU`'s. LinearARow's output o0 (Pearl+'s A rows, `pearl-a/<s>/<c>`) is a row-seg/v1 row (`segRow`), and a hidden output row must be an unsegmented v2 row (`v2Row`). The word width isn't the issue: the circuit carries the FP32 words as u16 pairs. 256 of the 561 strata are LinearARow, so neither the rehearsal's audit nor, as things stand, the record's can accept. There are two routes, and neither is mine alone:
+   - **Proofs:** let `bitRowsU` take a `segRow` output row, with the soundness proof covering it. That is a Lean change to the verifier of record.
+   - **Pearl+:** commit its A rows unsegmented. The tie can't do this alone: the window reuses W's entries, so the proof blocks' rows must hash to the roots Pearl+ committed at serve time. It changes Pearl+'s serving, its verifier's root check and the tie, so it isn't a Friday change.
+
+   So for Friday, the record's audit refuses on these members unless proofs land the first route, or you and top decide how the record states it, as (c) did for Pearl+. This is separate from the composite's v2 refusal (`MULTI_REFUSED`, item 7 of your 22:32Z).
+3. **Rates** (03:32Z: 17 proved, 14 Lean-verified):
+   - Wall time: median 182 s, p90 539 s. Proving: median 178 s, p90 495 s. Lean: median 230 s, p90 502 s.
+   - Lean checks run one at a time (a5's one-thread pool), so Lean sets the pace.
+   - Time tracks circuit size: proving takes 188 s + 73 s/GB, and Lean 221 s + 76 s/GB.
+   - Peak memory: prover 74 GB, ZK server 41 GB, Lean 18 GB.
+   - Each member's unit count comes from its public file, which maps every drawn unit to its member; all 18 sessions so far check out. So each of the 561 is sized by its own compose.
+4. **The record's timeout input: `V3C_AUDIT_TIMEOUT` = 72 h**, which is 1.5 × 48.0 h. The 48.0 h is 51.4 min pre-draw, 32 min of staging and draw, and the last Lean 46.6 h after the first session, at cpu-5's speed.
+   - **The weak spot is AttnBlockFirst.** Its 35 circuits hold 475 of the 524 GB (median 13 GB, max 27.5 GB), and only the 0.64 GB one has run. If the 30 members over 4.5 GB take 1.5× the fit, the follow-on is 53.9 h; at 2×, it's 59.7 h. Both are under 72 h.
+   - Those members run from about Thu 11:30Z (session 148) to about 21:30Z (session 176). By Thu 18:00Z, the sessions up to about 19 GB will be in, and I'll confirm or revise the 72 h then.
+   - The run's `--timeout` needs the warm (at most 90 min), the 72 h audit, and about 1 h more, so 75 h. From Fri 08:00Z, that ends Mon 11:00Z, inside cpu-3's hold to Mon 12:00Z.
+   - **Option, saves 3.5 h:** with two Lean checks at once (Lean peaks at 18 GB), the last Lean comes at 43.1 h, so the follow-on is 44.5 h and the timeout 67 h. That's a knob on a5's one-thread Lean pool. I can add it to pprecord with a test if you want it for Friday.
+5. **Disk on cpu-5: it runs out around Thu 22:00Z.** There were 490 GB free at 03:38Z. Each archive copies two things instead of linking them: its circuit (524 GB over all 561, already in the compose cache) and a 0.30 GB window-wide file (185 GB over 561), so 709 GB in all. At the fit, the archives pass the free space between sessions 176 and 200, just after the big AttnBlockFirst sessions, or around Fri 02:30Z if those run at 1.5×. An ENOSPC there also hits the other lanes' checks on cpu-5. The options, my preference first:
+   - a. **Deduplicate in place (needs your OK).** A small job on cpu-5 runs every 30 min. It replaces each finished session's archive copies with hard links to the identical file (the circuit's compose, or the first archive's window file), after checking that the file's SHA-512 matches its archive key. Lean re-checks the key on every read (`archiveGet`). No bytes are lost, and it frees about 700 GB by the end.
+   - b. infra grows cpu-5's disk, as they did for cpu-3.
+   - c. Prune finished sessions' archives with `research retention rm --approved-by @vllm`. Every file in them also lives in the window or the cache, but the archive is the set Lean verified.
+
+   No memory limit has been hit: `oom_kill` is 0, the cgroup's peak is 345 of 605 GiB, and the node never had under 457 GB available.
+6. **The record on cpu-3** (INF-518, infra 03:00Z):
+   - **What infra set up:** the disk grew to 4.1 TiB. Once the VM sees it (a reboot before Fri 05:00Z if needed), about 1.6 TB is free, with 600 GB held Fri 07:00Z–Mon 12:00Z. No address is needed: `vy-nebius-cpu-3` resolves on h200-3 with key `~/.ssh/vy-h200-3-to-cpu3`, writing into `/workspace/incoming/vllm`.
+   - **600 GB is too little as the audit stands:** the cache (524 GB), the archives (709 GB) and staging (5 GB) come to 1.24 TB. Either ask infra to hold 1.3 TB of the 1.6 TB, or let me make a0's archive link instead of copy (each circuit from its compose, each window-wide file once; Lean re-checks the keys). Then 600 GB holds it, at about 535 GB.
+   - **I'd keep cpu-3 either way.** Its 503 GB of RAM is the open question: the 27 GB AttnBlockFirst sessions are unmeasured, and the rehearsal measures them by about Thu 22:00Z. They run beside the ZK server and the previous member's Lean check. If together they need more than cpu-3 can give, I'll name a node with more RAM then.
+7. **The rehearsal's own timeout.** At the fit, its 46 h audit timeout (Fri 23:42Z) fires about 1.2 h before its last Lean check (Sat 00:52Z). Since LinearARow refuses, its audit can't accept anyway. What it still gives us is the big members' time and memory, which come in by about Thu 22:00Z. I'd let it run; cpu-5's deadline is Sat 02:00Z.
+
+**I wait on:** your call on items 2, 5 and 6 (and item 4's option), the big AttnBlockFirst sessions from about Thu 11:30Z, and the timeout input, which I'll confirm by Thu 18:00Z.
