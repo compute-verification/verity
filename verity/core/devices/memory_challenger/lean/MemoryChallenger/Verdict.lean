@@ -1,6 +1,8 @@
-import CoreProtocol.Protocol
-import MemoryChallenger.Records
-import MemoryChallenger.SignedMessage
+module
+
+public import CoreProtocol.Protocol
+public import MemoryChallenger.Records
+public import MemoryChallenger.SignedMessage
 
 /-!
 # The verdict on a signed session
@@ -14,6 +16,8 @@ reasons are the Python's, word for word.
 A scheme is an LMS parameter set under its id (`SCHEMES`: S1's, `LMS` at `Lms.deployed`, and nothing else). The test
 signers' schemes (`TEST_SCHEMES`, `pous_test_signer.SCHEMES`) are accepted only where a caller passes them.
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger
 

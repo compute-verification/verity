@@ -1,5 +1,7 @@
-import Proofs.Flock.Bridge.Canon
-import Flock.PortRoots
+module
+
+public import Proofs.Flock.Bridge.Canon
+public import Flock.PortRoots
 
 /-!
 # `SampledKSLiveV2`'s file preconditions, refused by the verifiers (`SampledKSLiveV3`)
@@ -23,6 +25,8 @@ refuses the registration (`SampledProofs.Run.run`,
   without the three hypotheses. `sampledKSLiveV3_of` derives it from `SampledKSLiveV2`: files that pass give V2's
   hypotheses, and at files that fail the event is empty.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 
@@ -78,7 +82,8 @@ open Classical in
 of distinct names, and no two registered roots, each framed at its port's schema, one root under different domains, at
 the public file's population), the
 sampled-proofs run passes the registration's population (`Bridge.RunPopOk`: the descriptor `desc` and the query `qr`
-give the game's `n` units in order), and the claims relation fails. It has none of V2's hypotheses `RowsOk`,
+give the game's `n` units in order, in the strata `Bridge.nsOf desc qr` the statement's partition lays), and the claims
+relation fails. It has none of V2's hypotheses `RowsOk`,
 `dupName = none`, `rootsColl = none` and `PopMatches`; the game's `n` is the public file's population (`pub.n = n`).
 Its knowledge finders' budgets are V2's, `2(t' + v)` and `t' + v`. `SampledKSLiveV2` implies it (`sampledKSLiveV3_of`). -/
 def SampledKSLiveV3 : Prop :=
@@ -140,8 +145,8 @@ def SampledKSLiveV3 : Prop :=
     FlockSoundness.Assumptions.LinkCRZCAt execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ)
       k Rw M t' →
     prob (fun o => (Bridge.LiveAcceptsKS I o ∧ Bridge.RunPopOk desc qr n) ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P κ)
-          (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
+        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
+          (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
         ksAvgStrictZ (planZHJ dj y₀) L k (2 * (t' + v)) (t' + v) (reg σ) +

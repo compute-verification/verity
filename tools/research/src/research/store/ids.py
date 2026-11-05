@@ -1,7 +1,8 @@
 """Identifier syntax (README §1): `art:<sha256 hex>`, `drv:<sha256 hex>`, attempt id == run id (`r20260922-105905-2021`), a
 pull request at one head, `pr:<number>@<40-hex commit>` (the merge queue's grants), a checkpoint at one revision,
 `ckpt:<HF repo id>@<40-hex revision>` (its weights' staging), a check's task by its key, `task:<sha512 hex>` (the executor's
-verdicts), and a commit, `commit:<40-hex>` (drive's shadow record of a check of it), which only labels target.
+verdicts and results; a graph/v2 key without its `sha512:`), and a commit, `commit:<40-hex>` (the executor's graphs of it and
+drive's shadow record of a check of it), which only labels target.
 
 The store checks syntax, never existence: a ref may name an artifact that lives only remotely.
 """

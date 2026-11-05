@@ -1,4 +1,6 @@
-import Proofs.Properties.RemoteAudit.Shared
+module
+
+public import Proofs.Properties.RemoteAudit.Shared
 
 /-!
 # The session link windows a draw (`SessionDrawsRecords`, `AcceptedDrawsOpenable`)
@@ -21,6 +23,8 @@ Under `Inv`'s `sizes` a window's record has its plans as passes, so the draw's l
 (`lengthsOf_draw`, `passCount_draw`): `sessionDrawsRecords`. With `acceptDrawsOpenable` on the openings each window
 passed with, `acceptedDrawsOpenable`.
 -/
+
+@[expose] public section
 
 open RemoteAudit RemoteAudit.Session
 

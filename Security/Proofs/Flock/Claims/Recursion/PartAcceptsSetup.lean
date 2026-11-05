@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.KSLin2LayR
+module
+
+public import Proofs.Flock.Claims.Recursion.KSLin2LayR
 
 /-!
 # `DecompB` and `Joint` with the verifier's own evaluations in the escape (`DecompBV`, `JointV`)
@@ -21,6 +23,8 @@ run's V\* statements, and `lamLin2`'s `v` bounds `setupCalls`), so nothing downs
 * `vstarAcceptsV_boundV`, `ksLin2_route_stagedV`, `ksLin2_stepsC_atV`, `ksLin2_stepsC_layRV` and `ksLin2_deployedR_layRV`: the `P` routes at
   `DecompBV`, at the run's V\* statements (`runVstar`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion.VStarB
 

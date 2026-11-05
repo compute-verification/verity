@@ -1,7 +1,9 @@
-import Definitions.Pous.Accounting.Params
-import Definitions.Pous.Model.FreeBlocks
-import Definitions.Pous.Model.M1p
-import Definitions.Pous.Assumptions.P2
+module
+
+public import Definitions.Pous.Accounting.Params
+public import Definitions.Pous.Model.FreeBlocks
+public import Definitions.Pous.Model.M1p
+public import Definitions.Pous.Assumptions.P2
 
 /-!
 # The `m1p` statements at P2's parameters (trusted)
@@ -19,6 +21,8 @@ All but the last are theorems about `m1p` only, not about the concrete P2: none 
 roots or time. The last reaches square–mask–square only in the ring model (`p2ring`) and only under its hypothesis, a
 named conjecture. So none of them says the deployed P2 is secure.
 -/
+
+@[expose] public section
 
 namespace Pous.Guarantees
 

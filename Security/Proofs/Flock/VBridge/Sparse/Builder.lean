@@ -1,6 +1,8 @@
-import Proofs.Flock.VBridge.Sparse.Steps
-import Proofs.Flock.VBridge.Sparse.Residuals
-import Proofs.Flock.VBridge.Pinned
+module
+
+public import Proofs.Flock.VBridge.Sparse.Steps
+public import Proofs.Flock.VBridge.Sparse.Residuals
+public import Proofs.Flock.VBridge.Pinned
 
 /-!
 # The sparse-phase unit's residuals are `Defs`' structure
@@ -11,6 +13,8 @@ message ports' offsets are `Defs`' `w` offsets (`mp_offsets`) and the verifier r
 (`vp_all`). So the names `steps` reads are the builder's (`used_mem`, `sound_steps`' hypothesis), and residual `nm`'s
 value at `w`, `v` (`rval`) is `Defs`' `rget` of `resArr` (`rval_rget`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Sparse
 

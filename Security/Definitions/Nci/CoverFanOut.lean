@@ -1,4 +1,6 @@
-import Definitions.Nci.Cover
+module
+
+public import Definitions.Nci.Cover
 
 /-!
 # The cover theorem's fan-in/fan-out tightening: the vocabulary
@@ -18,6 +20,8 @@ computation, checkable on a named circuit, as `MulBlocks.Upstream` is for the br
 * `Keyed.readSet`, `Keyed.heldSet`, `Keyed.Spent`: the values a block reads, the ones it holds, and the reads the
   fan-out argument charges.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover
 

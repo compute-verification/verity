@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ZkSlackW
-import Proofs.Flock.Claims.KS.PlainSlackFit
+module
+
+public import Proofs.Flock.Claims.KS.ZkSlackW
+public import Proofs.Flock.Claims.KS.PlainSlackFit
 
 /-!
 # The slack fits the masked weight's room at the coupling's chances
@@ -18,6 +20,8 @@ weights before the last round total at most `8ε` (`Claims.Flock.sum_slackW_le`)
 * `zk_slackFitW_δN`: at the chances `FnFork.δN GF128 65536 n` of the coupling at `fnAt`, where every revealed length
   before the last round is positive.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

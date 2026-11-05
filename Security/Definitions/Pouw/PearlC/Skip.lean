@@ -1,5 +1,7 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Definitions.Pouw.PearlC.Defs
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Definitions.Pouw.PearlC.Defs
 
 /-!
 # Pearl-C's skip debit (definitions only)
@@ -16,6 +18,8 @@ module imports no proofs, so the game may read it.
 * **The unit's debits** (`unitFlags`, `chainDebit`, `needed`, `neededSet`): the word flags over the unit's words, the
   flagged atoms at a credit per atom, and the `A′` elements some word reads in an unflagged atom.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Skip
 

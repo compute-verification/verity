@@ -1,4 +1,6 @@
-import Randomness
+module
+
+public import Randomness
 
 /-!
 # The decode an audit with verification flag bit 0 checks
@@ -18,6 +20,8 @@ D(c)      (d(σ_K(d(c))) − t) mod p, d(z) = ±z² mod p (− for odd z), σ_K(
 The audit needs only `D` on one block. `PousCheck.Keys` and `PousCheck.P2` (the setup check) state the same maps at both
 prefixes; when both are in one tree this module is theirs at the spec's prefix.
 -/
+
+@[expose] public section
 
 namespace PousCheck.Wire.Codec
 

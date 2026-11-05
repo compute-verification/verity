@@ -1,6 +1,8 @@
-import Definitions.Nci.Ldl
-import Mathlib.Basic.ENNReal.Real
-import Mathlib.Basic.Real.ENatENNReal
+module
+
+public import Definitions.Nci.Ldl
+public import Mathlib.Basic.ENNReal.Real
+public import Mathlib.Basic.Real.ENatENNReal
 
 /-!
 # Local description length: the named premises
@@ -9,6 +11,8 @@ Two premises, each its own named `Prop` so that what each costs is visible. `Eva
 the fixed decoder that Lemma 1 uses; `ActivationRate` is Corollary 4b's lower bound on the description length of each
 block's activations.
 -/
+
+@[expose] public section
 
 namespace Nci.Ldl.Assumptions
 

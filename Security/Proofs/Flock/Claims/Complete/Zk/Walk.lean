@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Zk.Json.Files
-import Proofs.Flock.Claims.Complete.Walk
-import Proofs.Flock.Claims.Complete.Json.Canon
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Json.Files
+public import Proofs.Flock.Claims.Complete.Walk
+public import Proofs.Flock.Claims.Complete.Json.Canon
 
 /-!
 # The masked session's reps, by index
@@ -13,6 +15,8 @@ proof rep `j` returns, on the table's trace, its masked commitment, the extra cl
 `RunZk.walk`: at the run, the record decodes to those streams, every recorded round retained, and each rep's decoded
 masked proof is the proof that rep returned (`ZkView.decode_encode`, given `RepShapedZk`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

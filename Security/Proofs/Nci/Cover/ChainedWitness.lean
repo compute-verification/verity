@@ -1,5 +1,7 @@
-import Definitions.Nci.Guarantees.CoverChained
-import Proofs.Nci.CoveringTwoCostsWitness
+module
+
+public import Definitions.Nci.Guarantees.CoverChained
+public import Proofs.Nci.CoveringTwoCostsWitness
 
 /-!
 # `CoverTrainingChained` is not vacuous
@@ -13,6 +15,8 @@ wide, so its bits (`bitDecl tcDecl`) are its gates (`bt`) with nothing registere
 computed gate (`onePerGate`): each has one gate and reads two fresh input bits, a `(1, 2)`-partition, so it complies at `(c, k) = (1, 2)`,
 and `k = 2 < c_w D = 5/2`. The block size is `s = w₀ c + k + width(θ) = 3`.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs.ChainedWitness
 

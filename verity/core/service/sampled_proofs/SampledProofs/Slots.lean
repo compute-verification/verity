@@ -18,7 +18,11 @@ verifier evaluates, as the claims read it, and the slots of the proof blocks a d
 * **JSON.** The layout's JSON keeps a block's keys `unit` and `pus` (its gates as a list of one `[lo, hi]`), and
   `checked` its `[slot, 0]` pairs, until a format version: the difftest's Python side reads them.
 -/
-import SampledProofs.Select
+module
+
+public import SampledProofs.Select
+
+@[expose] public section
 
 namespace SampledProofs.Slots
 

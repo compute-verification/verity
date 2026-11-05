@@ -1,7 +1,10 @@
-import Proofs.Flock.Claims.Recursion.DecodeTiesVals
-import Proofs.Flock.C3.Reps.SentKeys
-import Proofs.Flock.VBridge.Family.Runs
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+module
+
+public import Proofs.Flock.Claims.Recursion.DecodeTiesVals
+public import Proofs.Flock.C3.Reps.SentKeys
+public import Proofs.Flock.VBridge.Family.Runs
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+import all Init.Data.Array.Basic
 
 /-!
 # A w that holds the rounds' values decodes to the proof
@@ -19,6 +22,8 @@ w's entry `i` is the proof's value at the `i`-th (`keyVal`), which is what the f
 * **w from the frames** (`chunks_vals`, `wHolds_of_frames`): a rep's chunks absorb its frames' values, none pending,
   so a w that starts with its rounds' values, in order, holds them.
 -/
+
+@[expose] public section
 
 namespace FlockDecodeTies
 

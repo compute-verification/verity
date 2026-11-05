@@ -138,6 +138,55 @@ def test_a_build_slot_takes_the_slot_path(fast, tmp_path, monkeypatch):
     assert any("taking the slot path" in s for s in said)
 
 
+def test_the_slot_path_reads_the_node_s_artifact_cache_and_fills_it_only_from_a_package_that_passed(fast, tmp_path,
+                                                                                                   monkeypatch):
+    _, tree, calls = fast
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    put = []
+
+    def run(argv, **kw):
+        calls.append((argv, kw.get("cwd")))
+        _reported(argv, True)
+        return type("P", (), {"returncode": 1 if argv[-1].endswith("Req") else 0})()
+
+    def fake_put(self, reports, since=None, log=print):
+        put.append((self.store, reports, since))
+        return 3
+
+    monkeypatch.setattr(LC.subprocess, "run", run)
+    monkeypatch.setattr(LC.LA.LakeArtifacts, "put", fake_put)
+    said = []
+    assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 1
+    store = (tmp_path / "lean-artifacts").resolve()
+    assert [a[a.index("--artifacts") + 1] for a, _ in calls] == [str(store)] * 2
+    assert [(s, p) for s, p, _ in put] == [(store, {tree / "pkg": {"package": str(tree / "pkg"), "sandbox": True}})], \
+        "the package that passed, with check.py's report on it; a requirer that failed puts nothing"
+    assert isinstance(put[0][2], float) and any("3 module version(s) new in the artifact cache" in s for s in said)
+
+
+def _reported(argv: list[str], sandbox: bool) -> None:
+    """check.py's report on the package ``argv`` names, under its `--out`, built in the sandbox or not."""
+    out = Path(argv[argv.index("--out") + 1])
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "audit.json").write_text(json.dumps({"packages": [{"package": argv[-1], "sandbox": sandbox}]}))
+
+
+def test_a_records_build_outside_the_sandbox_puts_nothing_in_the_artifact_cache(fast, tmp_path, monkeypatch):
+    """Records runs fill the store check's audit stages from, and check.py builds without the sandbox where `unshare` is
+    missing, where compile-time code could leave in the build what it chose: such a package puts nothing there, though it
+    passed."""
+    _, tree, _ = fast
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    fake = LC.subprocess.run
+    monkeypatch.setattr(LC.subprocess, "run", lambda argv, **kw: _reported(argv, False) or fake(argv, **kw))
+    said = []
+    assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 0
+    assert [s for s in said if "artifact cache" in s] == [s for q in ("pkg", "pkg/Req") for s in (
+        f"lean-audit: {tree / q}: its report doesn't say it was built in the sandbox, so none of its modules go into the "
+        "artifact cache", f"lean-records: {q}: 0 module version(s) new in the artifact cache")]
+    assert not (tmp_path / "lean-artifacts" / "keys").exists()
+
+
 def test_dev_cache_takes_that_path_even_where_a_build_slot_is_granted(fast, tmp_path, monkeypatch):
     root, tree, calls = fast
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", lambda *a, **k: pytest.fail("--dev-cache takes no build slot"))
@@ -295,6 +344,37 @@ def test_damaged_finds_each_module_an_interrupted_build_left_half_written(tmp_pa
     (lib / "P" / "NoOlean.olean").unlink()
     assert LC.damaged(lib) == sorted(bad)
     assert LC.damaged(tmp_path / "none") == []
+
+
+def test_damaged_reads_each_output_a_module_system_trace_names_beside_it(tmp_path):
+    """A `module` file's trace names three oleans (`o`), `.ir` (`r`) and `.ir.sig` (`rs`) beside its `.ilean`, as Lean 4.34's
+    Lake writes them, all but the `.ilean` in the olean format; each is checked as the `.olean` is."""
+    lib = tmp_path / "lib"
+    outs = {"o": ["a1.olean", "a2.olean.server", "a3.olean.private"], "i": "b1.ilean", "r": "c1.ir", "rs": "c2.ir.sig",
+            "c": "d1.c", "m": True}
+
+    def ported(name: str) -> Path:
+        base = lib / name
+        base.parent.mkdir(parents=True, exist_ok=True)
+        for n in [*outs["o"], outs["i"], outs["r"], outs["rs"]]:
+            digest, _, ext = n.partition(".")
+            f = base.with_name(f"{base.name}.{ext}")
+            f.write_bytes(b"x" if ext == "ilean" else b"olean\x02rest")
+            f.with_name(f"{f.name}.hash").write_text(digest)
+            os.utime(f, ns=(10**18, 10**18))
+        t = base.with_suffix(".trace")
+        t.write_text(json.dumps({"outputs": outs}))
+        return t
+
+    ported("P/Good")
+    bad = [ported("P/NoPrivate"), ported("P/NotServer"), ported("P/NotIr"), ported("P/StaleIr"), ported("P/NoSig")]
+    (lib / "P" / "NoPrivate.olean.private").unlink()
+    for f in (lib / "P" / "NotServer.olean.server", lib / "P" / "NotIr.ir"):
+        f.write_bytes(b"\0\0\0")
+        os.utime(f, ns=(10**18, 10**18))
+    (lib / "P" / "StaleIr.ir.hash").write_text("zz")
+    (lib / "P" / "NoSig.ir.sig").unlink()
+    assert LC.damaged(lib) == sorted(bad)
 
 
 def torn(lib: Path, name: str) -> Path:

@@ -1,8 +1,10 @@
-import Definitions.Nci.BitDecl
-import Definitions.Nci.Dark
-import Definitions.Nci.Assumptions.Baseline
-import Definitions.Nci.Assumptions.CoveringTwoCosts
-import Definitions.Nci.Assumptions.CoverTraining
+module
+
+public import Definitions.Nci.BitDecl
+public import Definitions.Nci.Dark
+public import Definitions.Nci.Assumptions.Baseline
+public import Definitions.Nci.Assumptions.CoveringTwoCosts
+public import Definitions.Nci.Assumptions.CoverTraining
 
 /-!
 # The cover theorem on a compliant declaration, counting the covering bound's chained multiplication blocks
@@ -34,6 +36,8 @@ In the covering bound's form: `|𝓜*| ≤ (size(d) / c) · ((k / c_w)(k / c_a) 
 `α₀ c / ((k / c_w)(k / c_a) + k)`. At `c_w = b`, `c_a = 1` this is `CoverTraining`'s factor with `𝓜*` in place of the
 certified products.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.Guarantees
 
