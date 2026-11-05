@@ -65,8 +65,8 @@ uv run tools/verity/check/suites.py --explain SUITE       # why a suite would ru
 ~~~
 
 `research run` returns once the job starts, and `research status RUN` checks back on it. To record a check of a clean
-commit as an Attempt, run `uv run python tools/verity/check/check.py --record --on auto --pool research` from the
-checkout: it waits in the research pool `research run --on auto` would spill to.
+commit as an Attempt, run `uv run python tools/verity/check/check.py --record --on vy-nebius-cpu-1 --pool research` from
+the checkout.
 
 ## Tasks (`tasks/v1`)
 
