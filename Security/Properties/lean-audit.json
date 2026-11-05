@@ -71,7 +71,9 @@
   "Properties.Firewall",
   "Properties.Core.Site"
  ],
- "proved_in": ["../Proofs"],
+ "proved_in": [
+  "../Proofs"
+ ],
  "assumptions_module": "Definitions.Assumptions",
  "assumptions": {},
  "domain": {
@@ -870,58 +872,84 @@
  ],
  "witnesses": {
   "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
-   "honest": ["MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest"],
+   "honest": [
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest"
+   ],
    "nontrivial": "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial"
   },
   "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned": {
-   "honest": ["MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned_honest"],
+   "honest": [
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned_honest"
+   ],
    "nontrivial": "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned_nontrivial"
   },
   "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound": {
-   "honest": ["MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_honest"],
+   "honest": [
+    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_honest"
+   ],
    "nontrivial": "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_nontrivial"
   },
   "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses": {
-   "honest": ["Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest"],
+   "honest": [
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest"
+   ],
    "nontrivial": "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial"
   },
   "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
    "nontrivial": "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial"
   },
   "Properties.Site.refuses": {
-   "honest": ["Properties.Site.refuses_honest"],
+   "honest": [
+    "Properties.Site.refuses_honest"
+   ],
    "nontrivial": "Properties.Site.refuses_nontrivial"
   },
   "Properties.Site.entryValid": {
-   "honest": ["Properties.Site.entryValid_honest"],
+   "honest": [
+    "Properties.Site.entryValid_honest"
+   ],
    "nontrivial": "Properties.Site.entryValid_nontrivial"
   },
   "Properties.Site.checks": {
-   "honest": ["Properties.Site.checks_honest"],
+   "honest": [
+    "Properties.Site.checks_honest"
+   ],
    "nontrivial": "Properties.Site.checks_nontrivial"
   },
   "Properties.Site.refusedAt": {
-   "honest": ["Properties.Site.refusedAt_honest"],
+   "honest": [
+    "Properties.Site.refusedAt_honest"
+   ],
    "nontrivial": "Properties.Site.refusedAt_nontrivial"
   },
   "Verity.soundness_at_of_targets": {
-   "honest": ["Verity.soundness_at_of_targets_honest"],
+   "honest": [
+    "Verity.soundness_at_of_targets_honest"
+   ],
    "nontrivial": "Verity.soundness_at_of_targets_nontrivial"
   },
   "Verity.soundness_of_subprotocols": {
-   "honest": ["Verity.soundness_of_subprotocols_honest"],
+   "honest": [
+    "Verity.soundness_of_subprotocols_honest"
+   ],
    "nontrivial": "Verity.soundness_of_subprotocols_nontrivial"
   },
   "Verity.remote_soundness_of_subprotocols": {
-   "honest": ["Verity.remote_soundness_of_subprotocols_honest"],
+   "honest": [
+    "Verity.remote_soundness_of_subprotocols_honest"
+   ],
    "nontrivial": "Verity.remote_soundness_of_subprotocols_nontrivial"
   },
   "Properties.Composition.acceptSame": {
-   "honest": ["Properties.Composition.acceptSame_honest"],
+   "honest": [
+    "Properties.Composition.acceptSame_honest"
+   ],
    "nontrivial": "Properties.Composition.acceptSame_nontrivial"
   },
   "Properties.Composition.acceptTied": {
-   "honest": ["Properties.Composition.acceptTied_honest"],
+   "honest": [
+    "Properties.Composition.acceptTied_honest"
+   ],
    "nontrivial": "Properties.Composition.acceptTied_nontrivial"
   },
   "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
@@ -934,11 +962,15 @@
    "nontrivial": "Properties.Remote.SecurityProofs.acceptComplies_nontrivial"
   },
   "Properties.Firewall.admitNext": {
-   "honest": ["Properties.Firewall.admitNext_honest"],
+   "honest": [
+    "Properties.Firewall.admitNext_honest"
+   ],
    "nontrivial": "Properties.Firewall.admitNext_nontrivial"
   },
   "Properties.Firewall.afterOnTime": {
-   "honest": ["Properties.Firewall.afterOnTime_honest"],
+   "honest": [
+    "Properties.Firewall.afterOnTime_honest"
+   ],
    "nontrivial": "Properties.Firewall.afterOnTime_nontrivial"
   }
  },
@@ -1396,10 +1428,7 @@
    "type_hash": "0a5a8587306039ac56bd80bb22e51b54fd93b73bcbe024711dfededd8df676dd",
    "unfolded_hash": "45e3bf3646137dca6b32b86ff8e967d79c0fd50fd5108d2aea419a4b1bd9d39b"
   },
-  "Properties.Pouw.ServedValues.SecurityProofs.rightValues": {
-   "type_hash": "7d4c471713d37a6d31db1e6c5edf681d9307b72177d18ecd4e657b9726c9f0cb",
-   "unfolded_hash": "2347e695e39e28405ea07cc1f048e2f7cbd8225d252fb64fb36f99e0beeadee3"
-  },
+  "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "7d4c471713d37a6d31db1e6c5edf681d9307b72177d18ecd4e657b9726c9f0cb",
   "Properties.Pouw.Strata.strataTile": {
    "type_hash": "07c9b7e8a5f4540b0dffa844b4267783364faf2588a265c6864a012a27771566",
    "unfolded_hash": "bd0d82257d001c27c7e38f32d742cc2b34ff5195278f4a0dae28b972986370e9"
@@ -1668,7 +1697,11 @@
  },
  "layers": {
   "Properties.Pouw": {
-   "imports": ["PouwWindow", "PouwCheck", "PouwCommit"],
+   "imports": [
+    "PouwWindow",
+    "PouwCheck",
+    "PouwCommit"
+   ],
    "except": [
     "Properties.Pouw.Credit",
     "Properties.Pouw.Period",
@@ -1681,7 +1714,9 @@
    "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.Pouw.Commit": {
-   "imports": ["PouwCommit"],
+   "imports": [
+    "PouwCommit"
+   ],
    "except": [],
    "why": "the commitments' properties are stated against the port's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
@@ -1718,7 +1753,10 @@
    "sealed": true
   },
   "Properties.CertifierDevice": {
-   "imports": ["CertifierDevice.Device", "CertifierDevice.Issuer"],
+   "imports": [
+    "CertifierDevice.Device",
+    "CertifierDevice.Issuer"
+   ],
    "except": [],
    "why": "the properties are stated against the device's own step and issuer, on Lean core: nothing of Mathlib or of `security`"
   },
@@ -1732,7 +1770,10 @@
     "Definitions.Pous.Assumptions",
     "Properties.Identity"
    ],
-   "except": ["Properties.Pous.Period", "Properties.Pous.Wipe"],
+   "except": [
+    "Properties.Pous.Period",
+    "Properties.Pous.Wipe"
+   ],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
   "Properties.Pous.Period": {
@@ -1750,29 +1791,48 @@
    "why": "a period's PoUS audit is stated over the deployed check it is about and the joint run of the device model (`Definitions.Accounting`) whose capacity audit it is, never over a proof"
   },
   "Properties.Identity": {
-   "imports": ["Identity.Tagged"],
+   "imports": [
+    "Identity.Tagged"
+   ],
    "except": [],
    "why": "the bridge is stated against core's identity hash and C-Flock's SHA-512, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.NetworkCertifier": {
-   "imports": ["NetworkCheck.Check", "NetworkCheck.LinkWindow", "Properties.Identity", "Lms.Sign"],
+   "imports": [
+    "NetworkCheck.Check",
+    "NetworkCheck.LinkWindow",
+    "Properties.Identity",
+    "Lms.Sign"
+   ],
    "except": [],
    "why": "the properties are stated against the code's own functions, the check's and N2's link-window verdict of record's, and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof"
   },
   "Properties.Evaluate": {
-   "imports": ["Evaluate", "Definitions.Core.Scalar", "Definitions.Core.Fp32", "Definitions.Core.Prims"],
+   "imports": [
+    "Evaluate",
+    "Definitions.Core.Scalar",
+    "Definitions.Core.Fp32",
+    "Definitions.Core.Prims"
+   ],
    "except": [],
    "why": "the evaluator's equalities are stated against its functions and the `Definitions.Core` modules they copy, which import nothing of Mathlib",
    "sealed": true
   },
   "Properties.NetworkRecords": {
-   "imports": ["NetworkCheck.RecordsGrid", "Properties.NetworkCertifier"],
+   "imports": [
+    "NetworkCheck.RecordsGrid",
+    "Properties.NetworkCertifier"
+   ],
    "except": [],
    "why": "what the records check's acceptance means is stated against its own functions and the reference Program's grid, with v2's statements of the evidence, the syncs and the heads, never a proof"
   },
   "Properties.SampledProofs": {
-   "imports": ["SampledProofs"],
-   "except": ["Properties.SampledProofs.Draw"],
+   "imports": [
+    "SampledProofs"
+   ],
+   "except": [
+    "Properties.SampledProofs.Draw"
+   ],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.CertifierNetwork": {
@@ -1787,7 +1847,10 @@
    "why": "the guarantees join the device's statements and the check's, with the network lane's premise (`Definitions.NetworkCertifier.Premises`) and the reference Program they are read against: stated over their definitions, never a proof"
   },
   "Properties.RemoteAudit": {
-   "imports": ["RemoteAudit", "Properties.RemoteAudit"],
+   "imports": [
+    "RemoteAudit",
+    "Properties.RemoteAudit"
+   ],
    "except": [
     "Properties.RemoteAudit.Pooled",
     "Properties.RemoteAudit.Line",
@@ -1800,7 +1863,10 @@
    "sealed": true
   },
   "Properties.Accounting": {
-   "imports": ["Definitions.Accounting", "CircuitRequirement"],
+   "imports": [
+    "Definitions.Accounting",
+    "CircuitRequirement"
+   ],
    "except": [
     "Properties.Accounting.Compose",
     "Properties.Accounting.Served",
@@ -1812,12 +1878,19 @@
    "why": "the requirement code's equalities are stated against its functions and the `Definitions.Accounting.Requirement` definitions they copy, never a proof"
   },
   "Properties.SampledProofs.Draw": {
-   "imports": ["Definitions.Claims", "SampledProofs"],
+   "imports": [
+    "Definitions.Claims",
+    "SampledProofs"
+   ],
    "except": [],
    "why": "what the draw misses is stated against `Select.select`'s slots (`SampledProofs.Slots`) and the claims' miss probability `P_a` (`Definitions.Claims`), never a proof"
   },
   "Properties.Accounting.Compose": {
-   "imports": ["Definitions.Accounting", "SampledProofs", "Properties.SampledProofs.Draw"],
+   "imports": [
+    "Definitions.Accounting",
+    "SampledProofs",
+    "Properties.SampledProofs.Draw"
+   ],
    "except": [],
    "why": "a declared circuit's proof units, commit coins and draw (`Definitions.Accounting.Compose`) are stated against the verifier's own partition of its program (`SampledProofs.Slots.layout`) and the challenger's draw from bytes (`SampledProofs.Select.select`, read as `Properties.SampledProofs.bytesOf` reads them), never a proof"
   },
@@ -1832,12 +1905,19 @@
    "why": "the served window's units and draw (`Definitions.Accounting.Served`) are stated against each call's Program's partition (`SampledProofs.Slots.layout`, `SampledProofs.Partition.units`) and the verifier's population draw (`SampledProofs.Draw.drawUnits`, from bytes as `Properties.SampledProofs.bytesOf` reads them), beside `Properties.Compose.UnitsOfLayout`, never a proof"
   },
   "Properties.Pouw.Credit": {
-   "imports": ["Definitions.Pouw.RelativeSecurity", "Properties.Pouw.Strata", "Properties.SampledProofs.Draw"],
+   "imports": [
+    "Definitions.Pouw.RelativeSecurity",
+    "Properties.Pouw.Strata",
+    "Properties.SampledProofs.Draw"
+   ],
    "except": [],
    "why": "the ε a credit reports is stated against the code's strata, law and epsAt (`Properties.Pouw.Strata`, on Lean core), its draw as `Properties.SampledProofs.bytesOf` reads uniform streams and its probability `Pouw.RelativeSecurity.prob` (`Definitions.Pouw.RelativeSecurity`), never a proof"
   },
   "Properties.RemoteAudit.Pooled": {
-   "imports": ["Definitions.Accounting", "RemoteAudit"],
+   "imports": [
+    "Definitions.Accounting",
+    "RemoteAudit"
+   ],
    "except": [],
    "why": "the pooled bound the verifier computes (`RemoteAudit.Pooled`) and the W the memory line reads (`RemoteAudit.Line`) are stated against the draw's model they cover (`Definitions.Accounting.Remote.Draw`), never a proof"
   },
@@ -1853,27 +1933,46 @@
    "why": "the memory line of record is stated against the line's and the verifier's own functions (RemoteAudit) and the memory model's trace, paced session, draw and premises (Definitions.Accounting.Remote, Definitions.Accounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
   },
   "Properties.RemoteAudit.Schedule": {
-   "imports": ["Definitions.Accounting", "RemoteAudit"],
+   "imports": [
+    "Definitions.Accounting",
+    "RemoteAudit"
+   ],
    "except": [],
    "why": "the schedule check (`RemoteAudit.Schedule`) is stated against the code, and the gap it leaves against the layout vocabulary it feeds (`Definitions.Accounting.Schedule`), never a proof"
   },
   "Properties.Pouw.Period": {
-   "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck"],
+   "imports": [
+    "Definitions.Accounting",
+    "Definitions.Accounting.Assumptions",
+    "PouwCheck"
+   ],
    "except": [],
    "why": "the period's work at the deployed check's accepted prefix is stated against the check's own verdict (`PouwCheck.protocol.check`) and the accounting model's period, its proofs and its named claims (`Definitions.Accounting.ComposePeriod`, `Definitions.Accounting.Assumptions`), never a proof"
   },
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod": {
-   "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "Properties.Pouw.Period"],
+   "imports": [
+    "Definitions.Accounting",
+    "Definitions.Accounting.Assumptions",
+    "Properties.Pouw.Period"
+   ],
    "except": [],
    "why": "a joint period's audit bridge is stated over the joint period (`Definitions.Accounting.JointPeriod`), the bridge's realization and the H200's price (`Definitions.Accounting.JointBridge`), its named premises (`Definitions.Accounting.Assumptions.CreditedWords`) and the source protocol's period statement (`Properties.Pouw.Period`), never a proof"
   },
   "Properties.Accounting.DeclaredCircuit": {
-   "imports": ["Definitions.Accounting", "Properties.RemoteAudit.Schedule"],
+   "imports": [
+    "Definitions.Accounting",
+    "Properties.RemoteAudit.Schedule"
+   ],
    "except": [],
    "why": "the declared circuit's requirement at the committed steering cap is stated over the memory model's game and premises (`Definitions.Accounting`, `Accounting.Guarantees.DeclaredCircuitRequirement`'s module) and the schedule check's statements and gap (`Properties.RemoteAudit.Schedule`), never a proof"
   },
   "Properties.Pouw.PeriodJ10R": {
-   "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck", "Properties.Pouw.Period"],
+   "imports": [
+    "Definitions.Accounting",
+    "Definitions.Accounting.Assumptions",
+    "PouwCheck",
+    "Properties.Pouw.Period"
+   ],
    "except": [],
    "why": "the period's credit at served H1's accepted prefix is stated against its own verdict (`PouwCheck.Credit.window`) and draw (`Credit.drawnOf`), the accounting model's period and J10-R's noise (`Definitions.Accounting.ComposePeriod`, `Definitions.Accounting.TS.J10R`), its named claims and `Properties.Pouw.Period`'s salt premise, never a proof"
   },
@@ -1888,52 +1987,87 @@
    "why": "a protocol's per-period guarantee read as the coins model's (`PeriodRun.Sound`) is stated over the period (`Definitions.Accounting.JointPeriod`), its bridge (`Definitions.Accounting.JointBridge`), the bridge's named claims (`Definitions.Accounting.Assumptions`) and the protocol's own period statement (`Properties.Pous.Period`, `Properties.Pouw.Period`), never a proof"
   },
   "Properties.Accounting.JointBridge.WorkOfCreditedWords": {
-   "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions"],
+   "imports": [
+    "Definitions.Accounting",
+    "Definitions.Accounting.Assumptions"
+   ],
    "except": [],
    "why": "a joint period's PoUW bridge from a credit in words is stated over the joint period (`Definitions.Accounting.JointPeriod`), its realization (`Definitions.Accounting.JointBridge.CreditedWords`) and its named premises (`Definitions.Accounting.Assumptions.CreditedWords`), never a proof or a source protocol's statement"
   },
   "Properties.NetworkPeriod": {
-   "imports": ["NetworkCheck.Period", "Mathlib.Algebra.BigOperators.Fin"],
+   "imports": [
+    "NetworkCheck.Period",
+    "Mathlib.Algebra.BigOperators.Fin"
+   ],
    "except": [],
    "why": "what the period check's rows-form K counts is stated against its own terms (`rowsTerms`) and Mathlib's finite products, never a proof"
   },
   "Properties.Composition": {
-   "imports": ["CoreComposition.Product", "CoreComposition.Registered", "CoreComposition.Tie"],
+   "imports": [
+    "CoreComposition.Product",
+    "CoreComposition.Registered",
+    "CoreComposition.Tie"
+   ],
    "except": [],
    "why": "the properties are stated against the composition's own functions and the core interface's, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.RemoteAudit.Component": {
-   "imports": ["RemoteAudit", "Properties.RemoteAudit.Line"],
+   "imports": [
+    "RemoteAudit",
+    "Properties.RemoteAudit.Line"
+   ],
    "except": [],
    "why": "the bandwidth component's refinement is stated against its own check (`RemoteAudit.Protocol`) and the memory line of record (`Properties.RemoteAudit.Line`), whose model vocabulary it reads through that module; never a proof"
   },
   "Properties.Pouw.ServedValues": {
-   "imports": ["Definitions.Core.Formalism", "Properties.Pouw.PeriodJ10R"],
+   "imports": [
+    "Definitions.Core.Formalism",
+    "Properties.Pouw.PeriodJ10R"
+   ],
    "except": [],
    "why": "the served period's values in AND gates are stated against served H1's period and premises (`Properties.Pouw.PeriodJ10R`) and the AND count (`Definitions.Core.Formalism`), never a proof"
   },
   "Properties.Challenger": {
-   "imports": ["CoreProtocol", "SampledProofs", "Flock", "Lms", "Lean"],
+   "imports": [
+    "CoreProtocol",
+    "SampledProofs",
+    "Flock",
+    "Lms",
+    "Lean"
+   ],
    "except": [],
    "why": "the challenger's binding is stated against the code's own functions (the interface's `Live`, the challenger's reader `drawCoins`, its record, close and ledger messages) and a model of the device's log on Lean core: nothing of Mathlib or of `security`, never a proof"
   },
   "Properties.Pouw.ServedWork": {
-   "imports": ["Definitions.Pouw.Dither", "Definitions.Pouw.Assumptions.ServedWork", "Properties.Pouw.PeriodJ10R"],
+   "imports": [
+    "Definitions.Pouw.Dither",
+    "Definitions.Pouw.Assumptions.ServedWork",
+    "Properties.Pouw.PeriodJ10R"
+   ],
    "except": [],
    "why": "the served protocol's work is stated over the words guarantee at the served protocol's accepted prefix (`Properties.Pouw.PeriodJ10R`), the accelerator model (`Definitions.Pouw.Dither`) and SAK at the served words (`Definitions.Pouw.Assumptions.ServedWork`), never a proof"
   },
   "Properties.Pouw.ServedFreed": {
-   "imports": ["Definitions.Pouw.Dither", "Properties.Pouw.ServedWork"],
+   "imports": [
+    "Definitions.Pouw.Dither",
+    "Properties.Pouw.ServedWork"
+   ],
    "except": [],
    "why": "the served protocol's onsite freed compute is stated over its remote work guarantee (`Properties.Pouw.ServedWork`) and the accelerator model's period and freed compute (`Definitions.Pouw.Dither`), never a proof"
   },
   "Properties.NetworkScan": {
-   "imports": ["NetworkCheck.Period", "Definitions.NetworkCertifier.SampledAudit"],
+   "imports": [
+    "NetworkCheck.Period",
+    "Definitions.NetworkCertifier.SampledAudit"
+   ],
    "except": [],
    "why": "the scan's layout and its fit are stated against the period check's `scanOf`, C-Flock's decoder and resolution, and the sampled audit's scope (`NetTiming.ScopeAcc`, `NetTiming.Layout.Fits`), never a proof"
   },
   "Properties.Pous.Wipe": {
-   "imports": ["Definitions.Accounting.Wipe", "MemoryChallenger.WipeProtocol"],
+   "imports": [
+    "Definitions.Accounting.Wipe",
+    "MemoryChallenger.WipeProtocol"
+   ],
    "except": [],
    "why": "an accepted wipe's survivor bound is stated against the wipe protocol's check (`MemoryChallenger.WipeProtocol`) and core's device and its wipe (`Definitions.Core.Blocks`), through the streamed wipe's prover strategy and observed event on that device (`Definitions.Accounting.Wipe`), never a proof"
   },
@@ -1949,17 +2083,28 @@
    "why": "a party's signed periods are stated over the code that checks them (Attest.Period, Lms.Hss), the memory challenger's string framing, the claims' collision finders (Claims.Finder) and the party assumptions (Accounting.Assumptions.Parties), never over a proof"
   },
   "Properties.Pouw.PeriodJ10RStrata": {
-   "imports": ["Properties.Pouw.PeriodJ10R"],
+   "imports": [
+    "Properties.Pouw.PeriodJ10R"
+   ],
    "except": [],
    "why": "the period's credit over several tile strata is stated against the one-stratum statement's own vocabulary (`Properties.Pouw.PeriodJ10R`: its verdict `PouwCheck.Credit.window`, its coins, tile run and premises) read at each stratum's view of the period's coins, never a proof"
   },
   "Properties.Flock": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Flock", "Flock", "Properties.Flock"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.Flock",
+    "Flock",
+    "Properties.Flock"
+   ],
    "except": [],
    "why": "the circuit a parsed C-Flock circuit file is built into (`Placed.keyProg`, `Layout.outsOf`, `Built`) is defined over the verifier's own types and checks (`Flock.Circuit`, `Flock.Net`) and C-Flock's circuit vocabulary (`Definitions.Flock.Circuit`), and is core's circuit and partition (`Definitions.Core`) at the parsed and the committed file (`Flock.Bridge.circuitOf`, `circuitOfFile`), never a proof"
   },
   "Properties.Annot": {
-   "imports": ["Flock.Annot", "Flock.AnnotExpand"],
+   "imports": [
+    "Flock.Annot",
+    "Flock.AnnotExpand"
+   ],
    "except": [],
    "why": "the annotation check's property is stated against C-Flock's Flock.Annot and its per-gate reference, on Lean core: nothing of Mathlib or of `security`"
   },
@@ -1986,7 +2131,10 @@
    "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, and the coin device's tree as the code builds it (Flock.CoinTree's spec, Flock.Hm96's leaf and commit string), never over a proof"
   },
   "Properties.Core": {
-   "imports": ["Definitions.Core", "CoreProtocol.Site"],
+   "imports": [
+    "Definitions.Core",
+    "CoreProtocol.Site"
+   ],
    "except": [],
    "why": "the Site's code is stated against its own functions (`Core.Site`, `CoreProtocol.Site`) and the spec's Site and registration they copy (`Definitions.Core.Site`), never a proof"
   },
@@ -2003,7 +2151,9 @@
    "why": "remote's acceptance is stated over the composite's own function (CoreRemote), the composition's properties, the shared definitions and the policy's properties it reads, never over a proof"
   },
   "Properties.Firewall": {
-   "imports": ["Firewall"],
+   "imports": [
+    "Firewall"
+   ],
    "except": [],
    "why": "the record's rules are stated against the release side's own functions (`Firewall.Record`, `Firewall.Release`), on Lean core: nothing of Mathlib or of `security`, never a proof"
   }
@@ -2017,7 +2167,9 @@
  "guarantees": {
   "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": {
    "owner": "@lean",
-   "signature": ["Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld : Accounting.Bridge.SpaceOfPeriodHeld"],
+   "signature": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld : Accounting.Bridge.SpaceOfPeriodHeld"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2044,7 +2196,10 @@
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Accounting.Assumptions.HelpWithinCertifier", "Accounting.Assumptions.WordCostsMacs"],
+    "open": [
+     "Accounting.Assumptions.HelpWithinCertifier",
+     "Accounting.Assumptions.WordCostsMacs"
+    ],
     "reads": []
    },
    "type_hash": "b5df1631d6de9f44fb5a1e710b018846b0292957df4809e64c54ceeda837320f",
@@ -2390,7 +2545,9 @@
   },
   "MemoryChallenger.Properties.SecurityProofs.judgeAccepts": {
    "owner": "@memory-accounting",
-   "signature": ["MemoryChallenger.Properties.SecurityProofs.judgeAccepts : MemoryChallenger.Properties.JudgeAccepts"],
+   "signature": [
+    "MemoryChallenger.Properties.SecurityProofs.judgeAccepts : MemoryChallenger.Properties.JudgeAccepts"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2403,7 +2560,9 @@
   },
   "MemoryChallenger.Properties.SecurityProofs.judgeSigned": {
    "owner": "@memory-accounting",
-   "signature": ["MemoryChallenger.Properties.SecurityProofs.judgeSigned : MemoryChallenger.Properties.JudgeSigned"],
+   "signature": [
+    "MemoryChallenger.Properties.SecurityProofs.judgeSigned : MemoryChallenger.Properties.JudgeSigned"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2416,7 +2575,9 @@
   },
   "MemoryChallenger.Properties.SecurityProofs.verdictAccepts": {
    "owner": "@memory-accounting",
-   "signature": ["MemoryChallenger.Properties.SecurityProofs.verdictAccepts : MemoryChallenger.Properties.VerdictAccepts"],
+   "signature": [
+    "MemoryChallenger.Properties.SecurityProofs.verdictAccepts : MemoryChallenger.Properties.VerdictAccepts"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2429,7 +2590,9 @@
   },
   "MemoryChallenger.Properties.SecurityProofs.verdictSigned": {
    "owner": "@memory-accounting",
-   "signature": ["MemoryChallenger.Properties.SecurityProofs.verdictSigned : MemoryChallenger.Properties.VerdictSigned"],
+   "signature": [
+    "MemoryChallenger.Properties.SecurityProofs.verdictSigned : MemoryChallenger.Properties.VerdictSigned"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2442,12 +2605,16 @@
   },
   "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
    "owner": "@memory-accounting",
-   "signature": ["MemoryChallenger.Properties.SecurityProofs.wipeSigned : MemoryChallenger.Properties.WipeSigned"],
+   "signature": [
+    "MemoryChallenger.Properties.SecurityProofs.wipeSigned : MemoryChallenger.Properties.WipeSigned"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["MemoryChallenger.Properties.WipeRun.Plays"],
+    "open": [
+     "MemoryChallenger.Properties.WipeRun.Plays"
+    ],
     "reads": []
    },
    "type_hash": "d6470f687cf2a253da6d169a327aadd13e2a197fa938232b5b1606f612f44561",
@@ -2473,7 +2640,9 @@
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Pous.Component.AcceptsAll"],
+    "open": [
+     "Pous.Component.AcceptsAll"
+    ],
     "reads": []
    },
    "type_hash": "33f7abc2366880d43c453c6ef7f93c829313485d13e4d3112049d6c68e127c27"
@@ -2523,7 +2692,9 @@
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["MemoryChallenger.Properties.WipeRun.Plays"],
+    "open": [
+     "MemoryChallenger.Properties.WipeRun.Plays"
+    ],
     "reads": []
    },
    "type_hash": "e4d7d2b8de22df378d0f33f6efe0c752254c307a497c0f9536c9998eeebe6058"
@@ -2576,7 +2747,9 @@
   },
   "NciCheck.Properties.SecurityProofs.AcceptsExactly": {
    "owner": "@network-accounting",
-   "signature": ["NciCheck.Properties.SecurityProofs.AcceptsExactly : NciCheck.Properties.AcceptsExactly"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.AcceptsExactly : NciCheck.Properties.AcceptsExactly"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2589,7 +2762,9 @@
   },
   "NciCheck.Properties.SecurityProofs.BaselineProvenance": {
    "owner": "@compute-accounting",
-   "signature": ["NciCheck.Properties.SecurityProofs.BaselineProvenance : NciCheck.Properties.BaselineProvenance"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.BaselineProvenance : NciCheck.Properties.BaselineProvenance"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2602,7 +2777,9 @@
   },
   "NciCheck.Properties.SecurityProofs.CheckAccepts": {
    "owner": "@network-accounting",
-   "signature": ["NciCheck.Properties.SecurityProofs.CheckAccepts : NciCheck.Properties.CheckAccepts"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.CheckAccepts : NciCheck.Properties.CheckAccepts"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2615,7 +2792,9 @@
   },
   "NciCheck.Properties.SecurityProofs.CheckRefuses": {
    "owner": "@network-accounting",
-   "signature": ["NciCheck.Properties.SecurityProofs.CheckRefuses : NciCheck.Properties.CheckRefuses"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.CheckRefuses : NciCheck.Properties.CheckRefuses"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2628,7 +2807,9 @@
   },
   "NciCheck.Properties.SecurityProofs.CheckedCoverTraining": {
    "owner": "@training",
-   "signature": ["NciCheck.Properties.SecurityProofs.CheckedCoverTraining : NciCheck.Properties.CheckedCoverTraining"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.CheckedCoverTraining : NciCheck.Properties.CheckedCoverTraining"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2649,7 +2830,9 @@
   },
   "NciCheck.Properties.SecurityProofs.Decodes": {
    "owner": "@network-accounting",
-   "signature": ["NciCheck.Properties.SecurityProofs.Decodes : NciCheck.Properties.Decodes"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.Decodes : NciCheck.Properties.Decodes"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2662,12 +2845,16 @@
   },
   "NciCheck.Properties.SecurityProofs.DescAgrees": {
    "owner": "@training",
-   "signature": ["NciCheck.Properties.SecurityProofs.DescAgrees : NciCheck.Properties.DescAgrees"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.DescAgrees : NciCheck.Properties.DescAgrees"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["NciCheck.Properties.Expands"],
+    "open": [
+     "NciCheck.Properties.Expands"
+    ],
     "reads": []
    },
    "type_hash": "506961290b2f0eda7be289c734ef3118e07ef8ca90df7209165da2094cda0f21",
@@ -2675,7 +2862,9 @@
   },
   "NciCheck.Properties.SecurityProofs.DescReports": {
    "owner": "@training",
-   "signature": ["NciCheck.Properties.SecurityProofs.DescReports : NciCheck.Properties.DescReports"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.DescReports : NciCheck.Properties.DescReports"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2694,7 +2883,9 @@
   },
   "NciCheck.Properties.SecurityProofs.DescThrottles": {
    "owner": "@training",
-   "signature": ["NciCheck.Properties.SecurityProofs.DescThrottles : NciCheck.Properties.DescThrottles"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.DescThrottles : NciCheck.Properties.DescThrottles"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2715,7 +2906,9 @@
   },
   "NciCheck.Properties.SecurityProofs.DescThrottlesDark": {
    "owner": "@training",
-   "signature": ["NciCheck.Properties.SecurityProofs.DescThrottlesDark : NciCheck.Properties.DescThrottlesDark"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDark : NciCheck.Properties.DescThrottlesDark"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2736,7 +2929,9 @@
   },
   "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots": {
    "owner": "@training",
-   "signature": ["NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots : NciCheck.Properties.DescThrottlesDarkSlots"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots : NciCheck.Properties.DescThrottlesDarkSlots"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2757,7 +2952,9 @@
   },
   "NciCheck.Properties.SecurityProofs.DescThrottlesSlots": {
    "owner": "@training",
-   "signature": ["NciCheck.Properties.SecurityProofs.DescThrottlesSlots : NciCheck.Properties.DescThrottlesSlots"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.DescThrottlesSlots : NciCheck.Properties.DescThrottlesSlots"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2778,7 +2975,9 @@
   },
   "NciCheck.Properties.SecurityProofs.DescWitnesses": {
    "owner": "@training",
-   "signature": ["NciCheck.Properties.SecurityProofs.DescWitnesses : NciCheck.Properties.DescWitnesses"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.DescWitnesses : NciCheck.Properties.DescWitnesses"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2796,7 +2995,9 @@
   },
   "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
    "owner": "@network-accounting",
-   "signature": ["NciCheck.Properties.SecurityProofs.ProtocolAccepts : NciCheck.Properties.ProtocolAccepts"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.ProtocolAccepts : NciCheck.Properties.ProtocolAccepts"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2836,7 +3037,9 @@
   },
   "NciCheck.Properties.SecurityProofs.RejectsExactly": {
    "owner": "@network-accounting",
-   "signature": ["NciCheck.Properties.SecurityProofs.RejectsExactly : NciCheck.Properties.RejectsExactly"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.RejectsExactly : NciCheck.Properties.RejectsExactly"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2849,7 +3052,9 @@
   },
   "NciCheck.Properties.SecurityProofs.Reports": {
    "owner": "@network-accounting",
-   "signature": ["NciCheck.Properties.SecurityProofs.Reports : NciCheck.Properties.Reports"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.Reports : NciCheck.Properties.Reports"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2867,7 +3072,9 @@
   },
   "NciCheck.Properties.SecurityProofs.Throttles": {
    "owner": "@lean",
-   "signature": ["NciCheck.Properties.SecurityProofs.Throttles : NciCheck.Properties.Throttles"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.Throttles : NciCheck.Properties.Throttles"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2887,7 +3094,9 @@
   },
   "NciCheck.Properties.SecurityProofs.ThrottlesDark": {
    "owner": "@lean",
-   "signature": ["NciCheck.Properties.SecurityProofs.ThrottlesDark : NciCheck.Properties.ThrottlesDark"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.ThrottlesDark : NciCheck.Properties.ThrottlesDark"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2907,7 +3116,9 @@
   },
   "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots": {
    "owner": "@lean",
-   "signature": ["NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots : NciCheck.Properties.ThrottlesDarkSlots"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots : NciCheck.Properties.ThrottlesDarkSlots"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2927,7 +3138,9 @@
   },
   "NciCheck.Properties.SecurityProofs.ThrottlesSlots": {
    "owner": "@lean",
-   "signature": ["NciCheck.Properties.SecurityProofs.ThrottlesSlots : NciCheck.Properties.ThrottlesSlots"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.ThrottlesSlots : NciCheck.Properties.ThrottlesSlots"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -2947,12 +3160,18 @@
   },
   "NciCheck.Properties.SecurityProofs.Witnesses": {
    "owner": "@network-accounting",
-   "signature": ["NciCheck.Properties.SecurityProofs.Witnesses : NciCheck.Properties.Witnesses"],
+   "signature": [
+    "NciCheck.Properties.SecurityProofs.Witnesses : NciCheck.Properties.Witnesses"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["NciCheck.Properties.LaysOut", "NciCheck.Properties.Names", "NciCheck.Properties.Parses"],
+    "open": [
+     "NciCheck.Properties.LaysOut",
+     "NciCheck.Properties.Names",
+     "NciCheck.Properties.Parses"
+    ],
     "reads": []
    },
    "type_hash": "d9f255e477992784b174c2ec19e62a74285cab29e74c5516ab850ccd97937f29",
@@ -2960,7 +3179,9 @@
   },
   "Pous.Component.SecurityProofs.runAccepts": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.Component.SecurityProofs.runAccepts : Pous.Component.RunAccepts"],
+   "signature": [
+    "Pous.Component.SecurityProofs.runAccepts : Pous.Component.RunAccepts"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3000,7 +3221,9 @@
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Pous.EndToEnd.AcceptedAt"],
+    "open": [
+     "Pous.EndToEnd.AcceptedAt"
+    ],
     "reads": []
    },
    "type_hash": "4bdbbc1dafa32086e3fe354f8e3b7d3441554445b2e54eceda3b9059ad17c1db"
@@ -3019,7 +3242,9 @@
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Pous.Component.AcceptsAll"],
+    "open": [
+     "Pous.Component.AcceptsAll"
+    ],
     "reads": []
    },
    "type_hash": "01950969f54875465e0aee46dc84f3ac02d53c4f0ec7ecad8307ae34d599426f"
@@ -3049,11 +3274,15 @@
   },
   "Pous.Component.SecurityProofs.runBinds": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.Component.SecurityProofs.runBinds : Pous.Component.RunBinds"],
+   "signature": [
+    "Pous.Component.SecurityProofs.runBinds : Pous.Component.RunBinds"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["Core.Protocol.Accepts"],
+    "domain": [
+     "Core.Protocol.Accepts"
+    ],
     "open": [],
     "reads": []
    },
@@ -3090,7 +3319,9 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["Core.Protocol.Accepts"],
+    "domain": [
+     "Core.Protocol.Accepts"
+    ],
     "open": [],
     "reads": []
    },
@@ -3110,7 +3341,9 @@
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Pous.Component.AcceptsAll"],
+    "open": [
+     "Pous.Component.AcceptsAll"
+    ],
     "reads": []
    },
    "type_hash": "a859641de48e9964059f341fffb59ef357e85595aea2c1e18ce8e70527328030"
@@ -3142,7 +3375,9 @@
   },
   "Pous.Component.SecurityProofs.runDigest": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.Component.SecurityProofs.runDigest : Pous.Component.RunDigest"],
+   "signature": [
+    "Pous.Component.SecurityProofs.runDigest : Pous.Component.RunDigest"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3155,7 +3390,9 @@
   },
   "Pous.Component.SecurityProofs.wipeAccepts": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.Component.SecurityProofs.wipeAccepts : Pous.Component.WipeAccepts"],
+   "signature": [
+    "Pous.Component.SecurityProofs.wipeAccepts : Pous.Component.WipeAccepts"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3200,7 +3437,9 @@
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Pous.Component.WipeChecked"],
+    "open": [
+     "Pous.Component.WipeChecked"
+    ],
     "reads": []
    },
    "type_hash": "512194c71d7ab9ea466852fe314d7cbc69530028b4f45f8471329223b5f9b90f"
@@ -3220,7 +3459,9 @@
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Pous.Component.AcceptsAll"],
+    "open": [
+     "Pous.Component.AcceptsAll"
+    ],
     "reads": []
    },
    "type_hash": "bd724c9b075b560f379cd86659ac6fe4fc3312c2280f631d26995143f62ff7c5"
@@ -3250,7 +3491,9 @@
   },
   "Pous.Component.SecurityProofs.wipeDigest": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.Component.SecurityProofs.wipeDigest : Pous.Component.WipeDigest"],
+   "signature": [
+    "Pous.Component.SecurityProofs.wipeDigest : Pous.Component.WipeDigest"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3263,7 +3506,9 @@
   },
   "Pous.EndToEnd.SecurityProofs.drawAtMost": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.EndToEnd.SecurityProofs.drawAtMost : Pous.EndToEnd.DrawAtMost"],
+   "signature": [
+    "Pous.EndToEnd.SecurityProofs.drawAtMost : Pous.EndToEnd.DrawAtMost"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3276,7 +3521,9 @@
   },
   "Pous.EndToEnd.SecurityProofs.drawExact": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.EndToEnd.SecurityProofs.drawExact : Pous.EndToEnd.DrawExact"],
+   "signature": [
+    "Pous.EndToEnd.SecurityProofs.drawExact : Pous.EndToEnd.DrawExact"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3289,12 +3536,17 @@
   },
   "Pous.EndToEnd.SecurityProofs.endToEndRing": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.EndToEnd.SecurityProofs.endToEndRing : Pous.EndToEnd.EndToEndRing"],
+   "signature": [
+    "Pous.EndToEnd.SecurityProofs.endToEndRing : Pous.EndToEnd.EndToEndRing"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Pous.P2.Assumptions.CoinCommitHides", "Pous.P2.Assumptions.P2RingAuditSecure"],
+    "open": [
+     "Pous.P2.Assumptions.CoinCommitHides",
+     "Pous.P2.Assumptions.P2RingAuditSecure"
+    ],
     "reads": []
    },
    "type_hash": "5dc7c76ddb97e183be16c13ca978691fc8dafb21666007a67234aaa14048fee3",
@@ -3302,12 +3554,16 @@
   },
   "Pous.EndToEnd.SecurityProofs.endToEndRingAt": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.EndToEnd.SecurityProofs.endToEndRingAt : Pous.EndToEnd.EndToEndRingAt"],
+   "signature": [
+    "Pous.EndToEnd.SecurityProofs.endToEndRingAt : Pous.EndToEnd.EndToEndRingAt"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Pous.P2.Assumptions.CoinCommitHides"],
+    "open": [
+     "Pous.P2.Assumptions.CoinCommitHides"
+    ],
     "reads": []
    },
    "type_hash": "8a2fa5565cc1fbff11be2e5f537c45bb40d039c5afcc127fdb4bc170ec7cad79",
@@ -3315,12 +3571,17 @@
   },
   "Pous.EndToEnd.SecurityProofs.endToEndRingDemo": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.EndToEnd.SecurityProofs.endToEndRingDemo : Pous.EndToEnd.EndToEndRingDemo"],
+   "signature": [
+    "Pous.EndToEnd.SecurityProofs.endToEndRingDemo : Pous.EndToEnd.EndToEndRingDemo"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Pous.P2.Assumptions.CoinCommitHides", "Pous.P2.Assumptions.P2RingRoundSecureWide"],
+    "open": [
+     "Pous.P2.Assumptions.CoinCommitHides",
+     "Pous.P2.Assumptions.P2RingRoundSecureWide"
+    ],
     "reads": []
    },
    "type_hash": "546221b46d92f2d2cb6b089f0785c30ab4693396289366bdd87bf65f058783bc",
@@ -3328,12 +3589,17 @@
   },
   "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.EndToEnd.SecurityProofs.endToEndRingDeployed : Pous.EndToEnd.EndToEndRingDeployed"],
+   "signature": [
+    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed : Pous.EndToEnd.EndToEndRingDeployed"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Pous.P2.Assumptions.CoinCommitHides", "Pous.P2.Assumptions.P2RingAuditSecure"],
+    "open": [
+     "Pous.P2.Assumptions.CoinCommitHides",
+     "Pous.P2.Assumptions.P2RingAuditSecure"
+    ],
     "reads": []
    },
    "type_hash": "0cef57124c5093d2f8e3861680cb48d6367ac85be9af5d45d083d6d66c616544",
@@ -3341,12 +3607,17 @@
   },
   "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure : Pous.EndToEnd.EndToEndRingOfRoundSecure"],
+   "signature": [
+    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecure : Pous.EndToEnd.EndToEndRingOfRoundSecure"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Pous.P2.Assumptions.CoinCommitHides", "Pous.P2.Assumptions.P2RingRoundSecure"],
+    "open": [
+     "Pous.P2.Assumptions.CoinCommitHides",
+     "Pous.P2.Assumptions.P2RingRoundSecure"
+    ],
     "reads": []
    },
    "type_hash": "9004a9310d4f4f332fdcf802e52f38d4ac34a87eba173a2707f1956bef3eba23",
@@ -3361,7 +3632,10 @@
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Pous.P2.Assumptions.CoinCommitHides", "Pous.P2.Assumptions.P2RingRoundSecureWide"],
+    "open": [
+     "Pous.P2.Assumptions.CoinCommitHides",
+     "Pous.P2.Assumptions.P2RingRoundSecureWide"
+    ],
     "reads": []
    },
    "type_hash": "22975c3572a489f0c16b6897c370af64c5d0fdd390a8ccc46aaaf0844408e850",
@@ -3369,7 +3643,9 @@
   },
   "Pous.EndToEnd.SecurityProofs.honestPassesAccepts": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.EndToEnd.SecurityProofs.honestPassesAccepts : Pous.EndToEnd.HonestPassesAccepts"],
+   "signature": [
+    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts : Pous.EndToEnd.HonestPassesAccepts"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3382,7 +3658,9 @@
   },
   "Pous.EndToEnd.SecurityProofs.honestPassesRing": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.EndToEnd.SecurityProofs.honestPassesRing : Pous.EndToEnd.HonestPassesRing"],
+   "signature": [
+    "Pous.EndToEnd.SecurityProofs.honestPassesRing : Pous.EndToEnd.HonestPassesRing"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3395,12 +3673,16 @@
   },
   "Pous.EndToEnd.SecurityProofs.runCheckAccepts": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.EndToEnd.SecurityProofs.runCheckAccepts : Pous.EndToEnd.RunCheckAccepts"],
+   "signature": [
+    "Pous.EndToEnd.SecurityProofs.runCheckAccepts : Pous.EndToEnd.RunCheckAccepts"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Pous.EndToEnd.Shaped"],
+    "open": [
+     "Pous.EndToEnd.Shaped"
+    ],
     "reads": []
    },
    "type_hash": "71902a65dd8a9adc2df40323be3e5de079a94eea74277938847d0dceba81ecad",
@@ -3408,12 +3690,16 @@
   },
   "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt : Pous.EndToEnd.RunCheckAcceptsAt"],
+   "signature": [
+    "Pous.EndToEnd.SecurityProofs.runCheckAcceptsAt : Pous.EndToEnd.RunCheckAcceptsAt"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Pous.EndToEnd.ShapedAt"],
+    "open": [
+     "Pous.EndToEnd.ShapedAt"
+    ],
     "reads": []
    },
    "type_hash": "d739e355c470adec077c55bcab72e4f9643a5c3b0a930e25382fb477cd500d78",
@@ -3421,7 +3707,9 @@
   },
   "Pous.Period.SecurityProofs.obligationHeld": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.Period.SecurityProofs.obligationHeld : Pous.Period.ObligationHeld"],
+   "signature": [
+    "Pous.Period.SecurityProofs.obligationHeld : Pous.Period.ObligationHeld"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3439,7 +3727,9 @@
   },
   "Pous.Period.SecurityProofs.periodCapacity": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.Period.SecurityProofs.periodCapacity : Pous.Period.PeriodCapacity"],
+   "signature": [
+    "Pous.Period.SecurityProofs.periodCapacity : Pous.Period.PeriodCapacity"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3458,7 +3748,9 @@
   },
   "Pous.Period.SecurityProofs.periodHeld": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.Period.SecurityProofs.periodHeld : Pous.Period.PeriodHeld"],
+   "signature": [
+    "Pous.Period.SecurityProofs.periodHeld : Pous.Period.PeriodHeld"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3476,7 +3768,9 @@
   },
   "Pous.Period.SecurityProofs.periodHeldAt": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.Period.SecurityProofs.periodHeldAt : Pous.Period.PeriodHeldAt"],
+   "signature": [
+    "Pous.Period.SecurityProofs.periodHeldAt : Pous.Period.PeriodHeldAt"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3493,7 +3787,9 @@
   },
   "Pous.Period.SecurityProofs.periodHeldDemo": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.Period.SecurityProofs.periodHeldDemo : Pous.Period.PeriodHeldDemo"],
+   "signature": [
+    "Pous.Period.SecurityProofs.periodHeldDemo : Pous.Period.PeriodHeldDemo"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3510,7 +3806,9 @@
   },
   "Pous.Period.SecurityProofs.periodHeldDeployed": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.Period.SecurityProofs.periodHeldDeployed : Pous.Period.PeriodHeldDeployed"],
+   "signature": [
+    "Pous.Period.SecurityProofs.periodHeldDeployed : Pous.Period.PeriodHeldDeployed"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3528,12 +3826,18 @@
   },
   "Pous.Period.SecurityProofs.periodHeldHonest": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.Period.SecurityProofs.periodHeldHonest : Pous.Period.PeriodHeldHonest"],
+   "signature": [
+    "Pous.Period.SecurityProofs.periodHeldHonest : Pous.Period.PeriodHeldHonest"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Pous.Period.Audits.Certified", "Pous.Period.Audits.OnTime", "Pous.Period.Drawn"],
+    "open": [
+     "Pous.Period.Audits.Certified",
+     "Pous.Period.Audits.OnTime",
+     "Pous.Period.Drawn"
+    ],
     "reads": []
    },
    "type_hash": "0c2ce207dd511643080c822b63b74fc12ea1a144b1af463c4694ad85d5956fd8",
@@ -3541,7 +3845,9 @@
   },
   "Pous.Period.SecurityProofs.periodHeldNontrivial": {
    "owner": "@memory-accounting",
-   "signature": ["Pous.Period.SecurityProofs.periodHeldNontrivial : Pous.Period.PeriodHeldNontrivial"],
+   "signature": [
+    "Pous.Period.SecurityProofs.periodHeldNontrivial : Pous.Period.PeriodHeldNontrivial"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3554,11 +3860,15 @@
   },
   "PousCheck.Properties.SecurityProofs.acceptsDecodes": {
    "owner": "@memory-accounting",
-   "signature": ["PousCheck.Properties.SecurityProofs.acceptsDecodes : PousCheck.Properties.AcceptsDecodes"],
+   "signature": [
+    "PousCheck.Properties.SecurityProofs.acceptsDecodes : PousCheck.Properties.AcceptsDecodes"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["Core.Protocol.Accepts"],
+    "domain": [
+     "Core.Protocol.Accepts"
+    ],
     "open": [],
     "reads": []
    },
@@ -3567,7 +3877,9 @@
   },
   "PousCheck.Properties.SecurityProofs.deployed": {
    "owner": "@memory-accounting",
-   "signature": ["PousCheck.Properties.SecurityProofs.deployed : PousCheck.Properties.Deployed"],
+   "signature": [
+    "PousCheck.Properties.SecurityProofs.deployed : PousCheck.Properties.Deployed"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3580,7 +3892,9 @@
   },
   "PousCheck.Properties.SecurityProofs.publishesRoot": {
    "owner": "@memory-accounting",
-   "signature": ["PousCheck.Properties.SecurityProofs.publishesRoot : PousCheck.Properties.PublishesRoot"],
+   "signature": [
+    "PousCheck.Properties.SecurityProofs.publishesRoot : PousCheck.Properties.PublishesRoot"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3593,12 +3907,16 @@
   },
   "PousCheck.Properties.SecurityProofs.timedAuditAccepts": {
    "owner": "@memory-accounting",
-   "signature": ["PousCheck.Properties.SecurityProofs.timedAuditAccepts : PousCheck.Properties.TimedAuditAccepts"],
+   "signature": [
+    "PousCheck.Properties.SecurityProofs.timedAuditAccepts : PousCheck.Properties.TimedAuditAccepts"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["PousCheck.Properties.TimedAuditAccepted"],
+    "open": [
+     "PousCheck.Properties.TimedAuditAccepted"
+    ],
     "reads": []
    },
    "type_hash": "0f53ba049259791adadc5f1d70c663732dd8fd92cf36ccfdd2d5758122d1bbd4",
@@ -3612,7 +3930,9 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["Core.Protocol.Accepts"],
+    "domain": [
+     "Core.Protocol.Accepts"
+    ],
     "open": [
      "NetTiming.DeviceIntact",
      "Properties.NetworkCertifier.Observes",
@@ -3632,7 +3952,9 @@
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["NetTiming.DeviceIntact"],
+    "open": [
+     "NetTiming.DeviceIntact"
+    ],
     "reads": []
    },
    "type_hash": "e6864860dcc529afba634806f512b5d695318aac5fc33da7bcbd8452570ec5dd",
@@ -3640,12 +3962,16 @@
   },
   "Properties.CertifierDevice.completeRows": {
    "owner": "@network-accounting",
-   "signature": ["Properties.CertifierDevice.completeRows : Properties.CertifierDevice.CompleteRows"],
+   "signature": [
+    "Properties.CertifierDevice.completeRows : Properties.CertifierDevice.CompleteRows"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Properties.CertifierDevice.EgressAt"],
+    "open": [
+     "Properties.CertifierDevice.EgressAt"
+    ],
     "reads": []
    },
    "type_hash": "28bc8acc17dd7535643026874267be8fb71cdc347f655c135d3c613215a5b6a6",
@@ -3653,7 +3979,9 @@
   },
   "Properties.CertifierDevice.contentIndependent": {
    "owner": "@network-accounting",
-   "signature": ["Properties.CertifierDevice.contentIndependent : Properties.CertifierDevice.ContentIndependent"],
+   "signature": [
+    "Properties.CertifierDevice.contentIndependent : Properties.CertifierDevice.ContentIndependent"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3666,12 +3994,16 @@
   },
   "Properties.CertifierDevice.failClosed": {
    "owner": "@network-accounting",
-   "signature": ["Properties.CertifierDevice.failClosed : Properties.CertifierDevice.FailClosed"],
+   "signature": [
+    "Properties.CertifierDevice.failClosed : Properties.CertifierDevice.FailClosed"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Properties.CertifierDevice.EgressAt"],
+    "open": [
+     "Properties.CertifierDevice.EgressAt"
+    ],
     "reads": []
    },
    "type_hash": "e21f4f333b07742207112c7c3b3129dfbf940b434ec1c2e4273f54e572b4571a",
@@ -3679,7 +4011,9 @@
   },
   "Properties.CertifierDevice.issuerVerifies": {
    "owner": "@network-accounting",
-   "signature": ["Properties.CertifierDevice.issuerVerifies : Properties.CertifierDevice.IssuerVerifies"],
+   "signature": [
+    "Properties.CertifierDevice.issuerVerifies : Properties.CertifierDevice.IssuerVerifies"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3692,7 +4026,9 @@
   },
   "Properties.CertifierDevice.linkSchedule": {
    "owner": "@network-accounting",
-   "signature": ["Properties.CertifierDevice.linkSchedule : Properties.CertifierDevice.LinkSchedule"],
+   "signature": [
+    "Properties.CertifierDevice.linkSchedule : Properties.CertifierDevice.LinkSchedule"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3705,12 +4041,16 @@
   },
   "Properties.CertifierDevice.records": {
    "owner": "@network-accounting",
-   "signature": ["Properties.CertifierDevice.records : Properties.CertifierDevice.Records"],
+   "signature": [
+    "Properties.CertifierDevice.records : Properties.CertifierDevice.Records"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Properties.CertifierDevice.EgressAt"],
+    "open": [
+     "Properties.CertifierDevice.EgressAt"
+    ],
     "reads": []
    },
    "type_hash": "3d10d8c7be7195759652912607c6aa1859289fc9b053d0891c0df0d5576643f3",
@@ -3718,7 +4058,9 @@
   },
   "Properties.Composition.acceptMeans": {
    "owner": "@proofs",
-   "signature": ["Properties.Composition.acceptMeans : Properties.Composition.AcceptMeans"],
+   "signature": [
+    "Properties.Composition.acceptMeans : Properties.Composition.AcceptMeans"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3731,7 +4073,9 @@
   },
   "Properties.Composition.acceptSame": {
    "owner": "@soundness",
-   "signature": ["Properties.Composition.acceptSame : Properties.Composition.AcceptSame"],
+   "signature": [
+    "Properties.Composition.acceptSame : Properties.Composition.AcceptSame"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3779,7 +4123,9 @@
   },
   "Properties.Composition.acceptTied": {
    "owner": "@soundness",
-   "signature": ["Properties.Composition.acceptTied : Properties.Composition.AcceptTied"],
+   "signature": [
+    "Properties.Composition.acceptTied : Properties.Composition.AcceptTied"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3823,7 +4169,9 @@
   },
   "Properties.Composition.answerAccepts": {
    "owner": "@proofs",
-   "signature": ["Properties.Composition.answerAccepts : Properties.Composition.AnswerAccepts"],
+   "signature": [
+    "Properties.Composition.answerAccepts : Properties.Composition.AnswerAccepts"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3836,7 +4184,9 @@
   },
   "Properties.Composition.bindCollision": {
    "owner": "@proofs",
-   "signature": ["Properties.Composition.bindCollision : Properties.Composition.BindCollision"],
+   "signature": [
+    "Properties.Composition.bindCollision : Properties.Composition.BindCollision"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3879,7 +4229,9 @@
   },
   "Properties.Evaluator.Casts.bf16ToF32": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Casts.bf16ToF32 : Properties.Evaluator.Casts.Bf16ToF32"],
+   "signature": [
+    "Properties.Evaluator.Casts.bf16ToF32 : Properties.Evaluator.Casts.Bf16ToF32"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3892,7 +4244,9 @@
   },
   "Properties.Evaluator.Casts.bitLength": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Casts.bitLength : Properties.Evaluator.Casts.BitLength"],
+   "signature": [
+    "Properties.Evaluator.Casts.bitLength : Properties.Evaluator.Casts.BitLength"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3905,7 +4259,9 @@
   },
   "Properties.Evaluator.Casts.dyadicLt": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Casts.dyadicLt : Properties.Evaluator.Casts.DyadicLt"],
+   "signature": [
+    "Properties.Evaluator.Casts.dyadicLt : Properties.Evaluator.Casts.DyadicLt"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3918,7 +4274,9 @@
   },
   "Properties.Evaluator.Casts.e2m1NanCode": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Casts.e2m1NanCode : Properties.Evaluator.Casts.E2m1NanCode"],
+   "signature": [
+    "Properties.Evaluator.Casts.e2m1NanCode : Properties.Evaluator.Casts.E2m1NanCode"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3931,7 +4289,9 @@
   },
   "Properties.Evaluator.Casts.e2m1Up": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Casts.e2m1Up : Properties.Evaluator.Casts.E2m1Up"],
+   "signature": [
+    "Properties.Evaluator.Casts.e2m1Up : Properties.Evaluator.Casts.E2m1Up"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3944,7 +4304,9 @@
   },
   "Properties.Evaluator.Casts.e4m3Nan": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Casts.e4m3Nan : Properties.Evaluator.Casts.E4m3Nan"],
+   "signature": [
+    "Properties.Evaluator.Casts.e4m3Nan : Properties.Evaluator.Casts.E4m3Nan"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3957,7 +4319,9 @@
   },
   "Properties.Evaluator.Casts.e4m3ToF32": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Casts.e4m3ToF32 : Properties.Evaluator.Casts.E4m3ToF32"],
+   "signature": [
+    "Properties.Evaluator.Casts.e4m3ToF32 : Properties.Evaluator.Casts.E4m3ToF32"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3970,7 +4334,9 @@
   },
   "Properties.Evaluator.Casts.f2fpBf16": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Casts.f2fpBf16 : Properties.Evaluator.Casts.F2fpBf16"],
+   "signature": [
+    "Properties.Evaluator.Casts.f2fpBf16 : Properties.Evaluator.Casts.F2fpBf16"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3983,7 +4349,9 @@
   },
   "Properties.Evaluator.Casts.f32ToBf16Rn": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Casts.f32ToBf16Rn : Properties.Evaluator.Casts.F32ToBf16Rn"],
+   "signature": [
+    "Properties.Evaluator.Casts.f32ToBf16Rn : Properties.Evaluator.Casts.F32ToBf16Rn"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -3996,7 +4364,9 @@
   },
   "Properties.Evaluator.Casts.f32ToE2m1Sat": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Casts.f32ToE2m1Sat : Properties.Evaluator.Casts.F32ToE2m1Sat"],
+   "signature": [
+    "Properties.Evaluator.Casts.f32ToE2m1Sat : Properties.Evaluator.Casts.F32ToE2m1Sat"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4009,7 +4379,9 @@
   },
   "Properties.Evaluator.Casts.f32ToE4m3Sat": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Casts.f32ToE4m3Sat : Properties.Evaluator.Casts.F32ToE4m3Sat"],
+   "signature": [
+    "Properties.Evaluator.Casts.f32ToE4m3Sat : Properties.Evaluator.Casts.F32ToE4m3Sat"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4022,7 +4394,9 @@
   },
   "Properties.Evaluator.Casts.roundEvenDyadic": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Casts.roundEvenDyadic : Properties.Evaluator.Casts.RoundEvenDyadic"],
+   "signature": [
+    "Properties.Evaluator.Casts.roundEvenDyadic : Properties.Evaluator.Casts.RoundEvenDyadic"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4035,7 +4409,9 @@
   },
   "Properties.Evaluator.Fp32.addWith": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.addWith : Properties.Evaluator.Fp32.AddWith"],
+   "signature": [
+    "Properties.Evaluator.Fp32.addWith : Properties.Evaluator.Fp32.AddWith"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4048,7 +4424,9 @@
   },
   "Properties.Evaluator.Fp32.bf16Add": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.bf16Add : Properties.Evaluator.Fp32.Bf16Add"],
+   "signature": [
+    "Properties.Evaluator.Fp32.bf16Add : Properties.Evaluator.Fp32.Bf16Add"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4061,7 +4439,9 @@
   },
   "Properties.Evaluator.Fp32.bf16AddF2fp": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.bf16AddF2fp : Properties.Evaluator.Fp32.Bf16AddF2fp"],
+   "signature": [
+    "Properties.Evaluator.Fp32.bf16AddF2fp : Properties.Evaluator.Fp32.Bf16AddF2fp"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4074,7 +4454,9 @@
   },
   "Properties.Evaluator.Fp32.bf16MulBf16": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.bf16MulBf16 : Properties.Evaluator.Fp32.Bf16MulBf16"],
+   "signature": [
+    "Properties.Evaluator.Fp32.bf16MulBf16 : Properties.Evaluator.Fp32.Bf16MulBf16"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4087,7 +4469,9 @@
   },
   "Properties.Evaluator.Fp32.bf16MulF32": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.bf16MulF32 : Properties.Evaluator.Fp32.Bf16MulF32"],
+   "signature": [
+    "Properties.Evaluator.Fp32.bf16MulF32 : Properties.Evaluator.Fp32.Bf16MulF32"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4100,7 +4484,9 @@
   },
   "Properties.Evaluator.Fp32.bf16NanF2fp": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.bf16NanF2fp : Properties.Evaluator.Fp32.Bf16NanF2fp"],
+   "signature": [
+    "Properties.Evaluator.Fp32.bf16NanF2fp : Properties.Evaluator.Fp32.Bf16NanF2fp"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4113,7 +4499,9 @@
   },
   "Properties.Evaluator.Fp32.bf16NanTorch": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.bf16NanTorch : Properties.Evaluator.Fp32.Bf16NanTorch"],
+   "signature": [
+    "Properties.Evaluator.Fp32.bf16NanTorch : Properties.Evaluator.Fp32.Bf16NanTorch"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4126,7 +4514,9 @@
   },
   "Properties.Evaluator.Fp32.bf16ToF32Bits": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.bf16ToF32Bits : Properties.Evaluator.Fp32.Bf16ToF32Bits"],
+   "signature": [
+    "Properties.Evaluator.Fp32.bf16ToF32Bits : Properties.Evaluator.Fp32.Bf16ToF32Bits"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4139,7 +4529,9 @@
   },
   "Properties.Evaluator.Fp32.decode": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.decode : Properties.Evaluator.Fp32.Decode"],
+   "signature": [
+    "Properties.Evaluator.Fp32.decode : Properties.Evaluator.Fp32.Decode"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4152,7 +4544,9 @@
   },
   "Properties.Evaluator.Fp32.decodedAddRn": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.decodedAddRn : Properties.Evaluator.Fp32.DecodedAddRn"],
+   "signature": [
+    "Properties.Evaluator.Fp32.decodedAddRn : Properties.Evaluator.Fp32.DecodedAddRn"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4165,7 +4559,9 @@
   },
   "Properties.Evaluator.Fp32.decodedMul": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.decodedMul : Properties.Evaluator.Fp32.DecodedMul"],
+   "signature": [
+    "Properties.Evaluator.Fp32.decodedMul : Properties.Evaluator.Fp32.DecodedMul"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4178,7 +4574,9 @@
   },
   "Properties.Evaluator.Fp32.divWith": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.divWith : Properties.Evaluator.Fp32.DivWith"],
+   "signature": [
+    "Properties.Evaluator.Fp32.divWith : Properties.Evaluator.Fp32.DivWith"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4191,7 +4589,9 @@
   },
   "Properties.Evaluator.Fp32.f32AddFtzV2": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.f32AddFtzV2 : Properties.Evaluator.Fp32.F32AddFtzV2"],
+   "signature": [
+    "Properties.Evaluator.Fp32.f32AddFtzV2 : Properties.Evaluator.Fp32.F32AddFtzV2"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4204,7 +4604,9 @@
   },
   "Properties.Evaluator.Fp32.f32AddV2": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.f32AddV2 : Properties.Evaluator.Fp32.F32AddV2"],
+   "signature": [
+    "Properties.Evaluator.Fp32.f32AddV2 : Properties.Evaluator.Fp32.F32AddV2"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4217,7 +4619,9 @@
   },
   "Properties.Evaluator.Fp32.f32DivV2": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.f32DivV2 : Properties.Evaluator.Fp32.F32DivV2"],
+   "signature": [
+    "Properties.Evaluator.Fp32.f32DivV2 : Properties.Evaluator.Fp32.F32DivV2"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4230,7 +4634,9 @@
   },
   "Properties.Evaluator.Fp32.f32Fma": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.f32Fma : Properties.Evaluator.Fp32.F32Fma"],
+   "signature": [
+    "Properties.Evaluator.Fp32.f32Fma : Properties.Evaluator.Fp32.F32Fma"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4243,7 +4649,9 @@
   },
   "Properties.Evaluator.Fp32.f32FmaBits": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.f32FmaBits : Properties.Evaluator.Fp32.F32FmaBits"],
+   "signature": [
+    "Properties.Evaluator.Fp32.f32FmaBits : Properties.Evaluator.Fp32.F32FmaBits"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4256,7 +4664,9 @@
   },
   "Properties.Evaluator.Fp32.f32FmaFtz": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.f32FmaFtz : Properties.Evaluator.Fp32.F32FmaFtz"],
+   "signature": [
+    "Properties.Evaluator.Fp32.f32FmaFtz : Properties.Evaluator.Fp32.F32FmaFtz"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4269,7 +4679,9 @@
   },
   "Properties.Evaluator.Fp32.f32FmaFtzV2": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.f32FmaFtzV2 : Properties.Evaluator.Fp32.F32FmaFtzV2"],
+   "signature": [
+    "Properties.Evaluator.Fp32.f32FmaFtzV2 : Properties.Evaluator.Fp32.F32FmaFtzV2"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4282,7 +4694,9 @@
   },
   "Properties.Evaluator.Fp32.f32FmaSubFtz": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.f32FmaSubFtz : Properties.Evaluator.Fp32.F32FmaSubFtz"],
+   "signature": [
+    "Properties.Evaluator.Fp32.f32FmaSubFtz : Properties.Evaluator.Fp32.F32FmaSubFtz"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4295,7 +4709,9 @@
   },
   "Properties.Evaluator.Fp32.f32FmaSubFtzV2": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.f32FmaSubFtzV2 : Properties.Evaluator.Fp32.F32FmaSubFtzV2"],
+   "signature": [
+    "Properties.Evaluator.Fp32.f32FmaSubFtzV2 : Properties.Evaluator.Fp32.F32FmaSubFtzV2"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4308,7 +4724,9 @@
   },
   "Properties.Evaluator.Fp32.f32FmaV2": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.f32FmaV2 : Properties.Evaluator.Fp32.F32FmaV2"],
+   "signature": [
+    "Properties.Evaluator.Fp32.f32FmaV2 : Properties.Evaluator.Fp32.F32FmaV2"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4321,7 +4739,9 @@
   },
   "Properties.Evaluator.Fp32.f32GpuNan": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.f32GpuNan : Properties.Evaluator.Fp32.F32GpuNan"],
+   "signature": [
+    "Properties.Evaluator.Fp32.f32GpuNan : Properties.Evaluator.Fp32.F32GpuNan"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4334,7 +4754,9 @@
   },
   "Properties.Evaluator.Fp32.f32Gt": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.f32Gt : Properties.Evaluator.Fp32.F32Gt"],
+   "signature": [
+    "Properties.Evaluator.Fp32.f32Gt : Properties.Evaluator.Fp32.F32Gt"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4347,7 +4769,9 @@
   },
   "Properties.Evaluator.Fp32.f32Max": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.f32Max : Properties.Evaluator.Fp32.F32Max"],
+   "signature": [
+    "Properties.Evaluator.Fp32.f32Max : Properties.Evaluator.Fp32.F32Max"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4360,7 +4784,9 @@
   },
   "Properties.Evaluator.Fp32.f32MaxBits": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.f32MaxBits : Properties.Evaluator.Fp32.F32MaxBits"],
+   "signature": [
+    "Properties.Evaluator.Fp32.f32MaxBits : Properties.Evaluator.Fp32.F32MaxBits"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4373,7 +4799,9 @@
   },
   "Properties.Evaluator.Fp32.f32MulFtzV2": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.f32MulFtzV2 : Properties.Evaluator.Fp32.F32MulFtzV2"],
+   "signature": [
+    "Properties.Evaluator.Fp32.f32MulFtzV2 : Properties.Evaluator.Fp32.F32MulFtzV2"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4386,7 +4814,9 @@
   },
   "Properties.Evaluator.Fp32.f32MulV2": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.f32MulV2 : Properties.Evaluator.Fp32.F32MulV2"],
+   "signature": [
+    "Properties.Evaluator.Fp32.f32MulV2 : Properties.Evaluator.Fp32.F32MulV2"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4399,7 +4829,9 @@
   },
   "Properties.Evaluator.Fp32.f32Nan": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.f32Nan : Properties.Evaluator.Fp32.F32Nan"],
+   "signature": [
+    "Properties.Evaluator.Fp32.f32Nan : Properties.Evaluator.Fp32.F32Nan"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4412,7 +4844,9 @@
   },
   "Properties.Evaluator.Fp32.f32SubFtzV2": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.f32SubFtzV2 : Properties.Evaluator.Fp32.F32SubFtzV2"],
+   "signature": [
+    "Properties.Evaluator.Fp32.f32SubFtzV2 : Properties.Evaluator.Fp32.F32SubFtzV2"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4425,7 +4859,9 @@
   },
   "Properties.Evaluator.Fp32.f32ToBf16RnBits": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.f32ToBf16RnBits : Properties.Evaluator.Fp32.F32ToBf16RnBits"],
+   "signature": [
+    "Properties.Evaluator.Fp32.f32ToBf16RnBits : Properties.Evaluator.Fp32.F32ToBf16RnBits"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4438,7 +4874,9 @@
   },
   "Properties.Evaluator.Fp32.fmaWith": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.fmaWith : Properties.Evaluator.Fp32.FmaWith"],
+   "signature": [
+    "Properties.Evaluator.Fp32.fmaWith : Properties.Evaluator.Fp32.FmaWith"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4451,7 +4889,9 @@
   },
   "Properties.Evaluator.Fp32.ftzBits": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.ftzBits : Properties.Evaluator.Fp32.FtzBits"],
+   "signature": [
+    "Properties.Evaluator.Fp32.ftzBits : Properties.Evaluator.Fp32.FtzBits"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4464,7 +4904,9 @@
   },
   "Properties.Evaluator.Fp32.guardNegInfZero": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.guardNegInfZero : Properties.Evaluator.Fp32.GuardNegInfZero"],
+   "signature": [
+    "Properties.Evaluator.Fp32.guardNegInfZero : Properties.Evaluator.Fp32.GuardNegInfZero"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4477,7 +4919,9 @@
   },
   "Properties.Evaluator.Fp32.infWord": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.infWord : Properties.Evaluator.Fp32.InfWord"],
+   "signature": [
+    "Properties.Evaluator.Fp32.infWord : Properties.Evaluator.Fp32.InfWord"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4490,7 +4934,9 @@
   },
   "Properties.Evaluator.Fp32.mulWith": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.mulWith : Properties.Evaluator.Fp32.MulWith"],
+   "signature": [
+    "Properties.Evaluator.Fp32.mulWith : Properties.Evaluator.Fp32.MulWith"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4503,7 +4949,9 @@
   },
   "Properties.Evaluator.Fp32.roundRn": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.roundRn : Properties.Evaluator.Fp32.RoundRn"],
+   "signature": [
+    "Properties.Evaluator.Fp32.roundRn : Properties.Evaluator.Fp32.RoundRn"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4516,7 +4964,9 @@
   },
   "Properties.Evaluator.Fp32.roundSum": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.roundSum : Properties.Evaluator.Fp32.RoundSum"],
+   "signature": [
+    "Properties.Evaluator.Fp32.roundSum : Properties.Evaluator.Fp32.RoundSum"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4529,7 +4979,9 @@
   },
   "Properties.Evaluator.Fp32.zeroWord": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Fp32.zeroWord : Properties.Evaluator.Fp32.ZeroWord"],
+   "signature": [
+    "Properties.Evaluator.Fp32.zeroWord : Properties.Evaluator.Fp32.ZeroWord"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4542,7 +4994,9 @@
   },
   "Properties.Evaluator.Gates.andBits": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Gates.andBits : Properties.Evaluator.Gates.AndBits"],
+   "signature": [
+    "Properties.Evaluator.Gates.andBits : Properties.Evaluator.Gates.AndBits"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4555,7 +5009,9 @@
   },
   "Properties.Evaluator.Gates.notBit": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Gates.notBit : Properties.Evaluator.Gates.NotBit"],
+   "signature": [
+    "Properties.Evaluator.Gates.notBit : Properties.Evaluator.Gates.NotBit"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4568,7 +5024,9 @@
   },
   "Properties.Evaluator.Gates.xorBits": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Gates.xorBits : Properties.Evaluator.Gates.XorBits"],
+   "signature": [
+    "Properties.Evaluator.Gates.xorBits : Properties.Evaluator.Gates.XorBits"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4581,7 +5039,9 @@
   },
   "Properties.Evaluator.Scalar.bitAnd": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Scalar.bitAnd : Properties.Evaluator.Scalar.BitAnd"],
+   "signature": [
+    "Properties.Evaluator.Scalar.bitAnd : Properties.Evaluator.Scalar.BitAnd"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4594,7 +5054,9 @@
   },
   "Properties.Evaluator.Scalar.f32Fabs": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Scalar.f32Fabs : Properties.Evaluator.Scalar.F32Fabs"],
+   "signature": [
+    "Properties.Evaluator.Scalar.f32Fabs : Properties.Evaluator.Scalar.F32Fabs"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4607,7 +5069,9 @@
   },
   "Properties.Evaluator.Scalar.f32Fmaxf": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Scalar.f32Fmaxf : Properties.Evaluator.Scalar.F32Fmaxf"],
+   "signature": [
+    "Properties.Evaluator.Scalar.f32Fmaxf : Properties.Evaluator.Scalar.F32Fmaxf"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4620,7 +5084,9 @@
   },
   "Properties.Evaluator.Scalar.f32IsNan": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Scalar.f32IsNan : Properties.Evaluator.Scalar.F32IsNan"],
+   "signature": [
+    "Properties.Evaluator.Scalar.f32IsNan : Properties.Evaluator.Scalar.F32IsNan"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4633,7 +5099,9 @@
   },
   "Properties.Evaluator.Scalar.f32NanPtx": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Scalar.f32NanPtx : Properties.Evaluator.Scalar.F32NanPtx"],
+   "signature": [
+    "Properties.Evaluator.Scalar.f32NanPtx : Properties.Evaluator.Scalar.F32NanPtx"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4646,7 +5114,9 @@
   },
   "Properties.Evaluator.Scalar.f32Neg": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Scalar.f32Neg : Properties.Evaluator.Scalar.F32Neg"],
+   "signature": [
+    "Properties.Evaluator.Scalar.f32Neg : Properties.Evaluator.Scalar.F32Neg"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4659,7 +5129,9 @@
   },
   "Properties.Evaluator.Scalar.i32Add": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Scalar.i32Add : Properties.Evaluator.Scalar.I32Add"],
+   "signature": [
+    "Properties.Evaluator.Scalar.i32Add : Properties.Evaluator.Scalar.I32Add"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4672,7 +5144,9 @@
   },
   "Properties.Evaluator.Scalar.i32Le": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Scalar.i32Le : Properties.Evaluator.Scalar.I32Le"],
+   "signature": [
+    "Properties.Evaluator.Scalar.i32Le : Properties.Evaluator.Scalar.I32Le"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4685,7 +5159,9 @@
   },
   "Properties.Evaluator.Scalar.order": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Scalar.order : Properties.Evaluator.Scalar.Order"],
+   "signature": [
+    "Properties.Evaluator.Scalar.order : Properties.Evaluator.Scalar.Order"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4698,7 +5174,9 @@
   },
   "Properties.Evaluator.Scalar.selectBf16": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Scalar.selectBf16 : Properties.Evaluator.Scalar.SelectBf16"],
+   "signature": [
+    "Properties.Evaluator.Scalar.selectBf16 : Properties.Evaluator.Scalar.SelectBf16"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4711,7 +5189,9 @@
   },
   "Properties.Evaluator.Scalar.selectI32": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.Scalar.selectI32 : Properties.Evaluator.Scalar.SelectI32"],
+   "signature": [
+    "Properties.Evaluator.Scalar.selectI32 : Properties.Evaluator.Scalar.SelectI32"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4724,7 +5204,9 @@
   },
   "Properties.Evaluator.TC.ampereBf16Dot16": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.TC.ampereBf16Dot16 : Properties.Evaluator.TC.AmpereBf16Dot16"],
+   "signature": [
+    "Properties.Evaluator.TC.ampereBf16Dot16 : Properties.Evaluator.TC.AmpereBf16Dot16"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4737,7 +5219,9 @@
   },
   "Properties.Evaluator.TC.ampereBf16M16n8k16": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.TC.ampereBf16M16n8k16 : Properties.Evaluator.TC.AmpereBf16M16n8k16"],
+   "signature": [
+    "Properties.Evaluator.TC.ampereBf16M16n8k16 : Properties.Evaluator.TC.AmpereBf16M16n8k16"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4750,7 +5234,9 @@
   },
   "Properties.Evaluator.TC.bf16Class": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.TC.bf16Class : Properties.Evaluator.TC.Bf16Class"],
+   "signature": [
+    "Properties.Evaluator.TC.bf16Class : Properties.Evaluator.TC.Bf16Class"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4763,7 +5249,9 @@
   },
   "Properties.Evaluator.TC.bf16Product": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.TC.bf16Product : Properties.Evaluator.TC.Bf16Product"],
+   "signature": [
+    "Properties.Evaluator.TC.bf16Product : Properties.Evaluator.TC.Bf16Product"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4776,7 +5264,9 @@
   },
   "Properties.Evaluator.TC.bf16ProductTotal": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.TC.bf16ProductTotal : Properties.Evaluator.TC.Bf16ProductTotal"],
+   "signature": [
+    "Properties.Evaluator.TC.bf16ProductTotal : Properties.Evaluator.TC.Bf16ProductTotal"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4789,7 +5279,9 @@
   },
   "Properties.Evaluator.TC.bitLength": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.TC.bitLength : Properties.Evaluator.TC.BitLength"],
+   "signature": [
+    "Properties.Evaluator.TC.bitLength : Properties.Evaluator.TC.BitLength"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4802,7 +5294,9 @@
   },
   "Properties.Evaluator.TC.fp32Class": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.TC.fp32Class : Properties.Evaluator.TC.Fp32Class"],
+   "signature": [
+    "Properties.Evaluator.TC.fp32Class : Properties.Evaluator.TC.Fp32Class"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4815,7 +5309,9 @@
   },
   "Properties.Evaluator.TC.fp32Term": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.TC.fp32Term : Properties.Evaluator.TC.Fp32Term"],
+   "signature": [
+    "Properties.Evaluator.TC.fp32Term : Properties.Evaluator.TC.Fp32Term"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4828,7 +5324,9 @@
   },
   "Properties.Evaluator.TC.fp32Value": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.TC.fp32Value : Properties.Evaluator.TC.Fp32Value"],
+   "signature": [
+    "Properties.Evaluator.TC.fp32Value : Properties.Evaluator.TC.Fp32Value"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4841,7 +5339,9 @@
   },
   "Properties.Evaluator.TC.groupStepTotal": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.TC.groupStepTotal : Properties.Evaluator.TC.GroupStepTotal"],
+   "signature": [
+    "Properties.Evaluator.TC.groupStepTotal : Properties.Evaluator.TC.GroupStepTotal"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4854,7 +5354,9 @@
   },
   "Properties.Evaluator.TC.groupSum": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.TC.groupSum : Properties.Evaluator.TC.GroupSum"],
+   "signature": [
+    "Properties.Evaluator.TC.groupSum : Properties.Evaluator.TC.GroupSum"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4867,7 +5369,9 @@
   },
   "Properties.Evaluator.TC.hopperBf16Dot16": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.TC.hopperBf16Dot16 : Properties.Evaluator.TC.HopperBf16Dot16"],
+   "signature": [
+    "Properties.Evaluator.TC.hopperBf16Dot16 : Properties.Evaluator.TC.HopperBf16Dot16"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4880,7 +5384,9 @@
   },
   "Properties.Evaluator.TC.hopperBf16WgmmaK16": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.TC.hopperBf16WgmmaK16 : Properties.Evaluator.TC.HopperBf16WgmmaK16"],
+   "signature": [
+    "Properties.Evaluator.TC.hopperBf16WgmmaK16 : Properties.Evaluator.TC.HopperBf16WgmmaK16"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4893,7 +5399,9 @@
   },
   "Properties.Evaluator.TC.packFp32": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.TC.packFp32 : Properties.Evaluator.TC.PackFp32"],
+   "signature": [
+    "Properties.Evaluator.TC.packFp32 : Properties.Evaluator.TC.PackFp32"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4906,7 +5414,9 @@
   },
   "Properties.Evaluator.TC.packValue": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.TC.packValue : Properties.Evaluator.TC.PackValue"],
+   "signature": [
+    "Properties.Evaluator.TC.packValue : Properties.Evaluator.TC.PackValue"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4919,7 +5429,9 @@
   },
   "Properties.Evaluator.TC.pipelineK": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.TC.pipelineK : Properties.Evaluator.TC.PipelineK"],
+   "signature": [
+    "Properties.Evaluator.TC.pipelineK : Properties.Evaluator.TC.PipelineK"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4932,7 +5444,9 @@
   },
   "Properties.Evaluator.TC.runGroups": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.TC.runGroups : Properties.Evaluator.TC.RunGroups"],
+   "signature": [
+    "Properties.Evaluator.TC.runGroups : Properties.Evaluator.TC.RunGroups"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4945,7 +5459,9 @@
   },
   "Properties.Evaluator.TC.tcDotTotal": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.TC.tcDotTotal : Properties.Evaluator.TC.TcDotTotal"],
+   "signature": [
+    "Properties.Evaluator.TC.tcDotTotal : Properties.Evaluator.TC.TcDotTotal"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4958,7 +5474,9 @@
   },
   "Properties.Evaluator.TC.valueInfSign": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.TC.valueInfSign : Properties.Evaluator.TC.ValueInfSign"],
+   "signature": [
+    "Properties.Evaluator.TC.valueInfSign : Properties.Evaluator.TC.ValueInfSign"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4971,7 +5489,9 @@
   },
   "Properties.Evaluator.TC.valueIsNaN": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.TC.valueIsNaN : Properties.Evaluator.TC.ValueIsNaN"],
+   "signature": [
+    "Properties.Evaluator.TC.valueIsNaN : Properties.Evaluator.TC.ValueIsNaN"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4984,7 +5504,9 @@
   },
   "Properties.Evaluator.TC.valueTerm": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.TC.valueTerm : Properties.Evaluator.TC.ValueTerm"],
+   "signature": [
+    "Properties.Evaluator.TC.valueTerm : Properties.Evaluator.TC.ValueTerm"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -4997,7 +5519,9 @@
   },
   "Properties.Evaluator.TC.zero": {
    "owner": "@circuits",
-   "signature": ["Properties.Evaluator.TC.zero : Properties.Evaluator.TC.Zero"],
+   "signature": [
+    "Properties.Evaluator.TC.zero : Properties.Evaluator.TC.Zero"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5010,7 +5534,9 @@
   },
   "Properties.Firewall.admitNext": {
    "owner": "@proofs",
-   "signature": ["Properties.Firewall.admitNext : Properties.Firewall.AdmitNext"],
+   "signature": [
+    "Properties.Firewall.admitNext : Properties.Firewall.AdmitNext"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5054,7 +5580,9 @@
   },
   "Properties.Firewall.afterOnTime": {
    "owner": "@proofs",
-   "signature": ["Properties.Firewall.afterOnTime : Properties.Firewall.AfterOnTime"],
+   "signature": [
+    "Properties.Firewall.afterOnTime : Properties.Firewall.AfterOnTime"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5100,7 +5628,9 @@
   },
   "Properties.Firewall.outOfTurnStops": {
    "owner": "@proofs",
-   "signature": ["Properties.Firewall.outOfTurnStops : Properties.Firewall.OutOfTurnStops"],
+   "signature": [
+    "Properties.Firewall.outOfTurnStops : Properties.Firewall.OutOfTurnStops"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5113,7 +5643,9 @@
   },
   "Properties.Firewall.stopEnds": {
    "owner": "@proofs",
-   "signature": ["Properties.Firewall.stopEnds : Properties.Firewall.StopEnds"],
+   "signature": [
+    "Properties.Firewall.stopEnds : Properties.Firewall.StopEnds"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5126,7 +5658,9 @@
   },
   "Properties.Identity.streamIsFlock": {
    "owner": "@network-accounting",
-   "signature": ["Properties.Identity.streamIsFlock : Properties.Identity.StreamIsFlock"],
+   "signature": [
+    "Properties.Identity.streamIsFlock : Properties.Identity.StreamIsFlock"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5139,7 +5673,9 @@
   },
   "Properties.Identity.taggedIsFlock": {
    "owner": "@network-accounting",
-   "signature": ["Properties.Identity.taggedIsFlock : Properties.Identity.TaggedIsFlock"],
+   "signature": [
+    "Properties.Identity.taggedIsFlock : Properties.Identity.TaggedIsFlock"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5158,8 +5694,13 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["Core.Protocol.Accepts"],
-    "open": ["NetTiming.DeviceIntact", "Properties.NetworkCertifier.Declares"],
+    "domain": [
+     "Core.Protocol.Accepts"
+    ],
+    "open": [
+     "NetTiming.DeviceIntact",
+     "Properties.NetworkCertifier.Declares"
+    ],
     "reads": []
    },
    "type_hash": "c8aafb7a6a13db849ae25237b62ea987e1165cc75c194b0ad265b5908068c101",
@@ -5167,12 +5708,18 @@
   },
   "Properties.NetworkCertifier.acceptsLinkWindows": {
    "owner": "@network-accounting",
-   "signature": ["Properties.NetworkCertifier.acceptsLinkWindows : Properties.NetworkCertifier.AcceptsLinkWindows"],
+   "signature": [
+    "Properties.NetworkCertifier.acceptsLinkWindows : Properties.NetworkCertifier.AcceptsLinkWindows"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["Core.Protocol.Accepts"],
-    "open": ["Properties.NetworkCertifier.Declares"],
+    "domain": [
+     "Core.Protocol.Accepts"
+    ],
+    "open": [
+     "Properties.NetworkCertifier.Declares"
+    ],
     "reads": []
    },
    "type_hash": "a374000c189ed27fa1b6cc18a391c22904be180eff3e1a897574253e30383a90",
@@ -5180,11 +5727,15 @@
   },
   "Properties.NetworkCertifier.acceptsOneRecordEach": {
    "owner": "@network-accounting",
-   "signature": ["Properties.NetworkCertifier.acceptsOneRecordEach : Properties.NetworkCertifier.AcceptsOneRecordEach"],
+   "signature": [
+    "Properties.NetworkCertifier.acceptsOneRecordEach : Properties.NetworkCertifier.AcceptsOneRecordEach"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["Core.Protocol.Accepts"],
+    "domain": [
+     "Core.Protocol.Accepts"
+    ],
     "open": [],
     "reads": []
    },
@@ -5193,7 +5744,9 @@
   },
   "Properties.NetworkCertifier.answerAccepts": {
    "owner": "@network-accounting",
-   "signature": ["Properties.NetworkCertifier.answerAccepts : Properties.NetworkCertifier.AnswerAccepts"],
+   "signature": [
+    "Properties.NetworkCertifier.answerAccepts : Properties.NetworkCertifier.AnswerAccepts"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5206,7 +5759,9 @@
   },
   "Properties.NetworkCertifier.decodeRefusals": {
    "owner": "@network-accounting",
-   "signature": ["Properties.NetworkCertifier.decodeRefusals : Properties.NetworkCertifier.DecodeRefusals"],
+   "signature": [
+    "Properties.NetworkCertifier.decodeRefusals : Properties.NetworkCertifier.DecodeRefusals"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5219,7 +5774,9 @@
   },
   "Properties.NetworkCertifier.linkWindowAcceptMeans": {
    "owner": "@network-accounting",
-   "signature": ["Properties.NetworkCertifier.linkWindowAcceptMeans : Properties.NetworkCertifier.LinkWindowAcceptMeans"],
+   "signature": [
+    "Properties.NetworkCertifier.linkWindowAcceptMeans : Properties.NetworkCertifier.LinkWindowAcceptMeans"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5247,12 +5804,16 @@
   },
   "Properties.NetworkCertifier.undecidedPending": {
    "owner": "@network-accounting",
-   "signature": ["Properties.NetworkCertifier.undecidedPending : Properties.NetworkCertifier.UndecidedPending"],
+   "signature": [
+    "Properties.NetworkCertifier.undecidedPending : Properties.NetworkCertifier.UndecidedPending"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Properties.NetworkCertifier.Declares"],
+    "open": [
+     "Properties.NetworkCertifier.Declares"
+    ],
     "reads": []
    },
    "type_hash": "a05ea3c29485b57f1351694086727a7e589280465cbb3946d268bc09227a7edb",
@@ -5275,7 +5836,9 @@
   },
   "Properties.NetworkPeriod.clockKBoundsCount": {
    "owner": "@network-accounting",
-   "signature": ["Properties.NetworkPeriod.clockKBoundsCount : Properties.NetworkPeriod.ClockKBoundsCount"],
+   "signature": [
+    "Properties.NetworkPeriod.clockKBoundsCount : Properties.NetworkPeriod.ClockKBoundsCount"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5288,7 +5851,9 @@
   },
   "Properties.NetworkPeriod.rowsKBoundsCount": {
    "owner": "@network-accounting",
-   "signature": ["Properties.NetworkPeriod.rowsKBoundsCount : Properties.NetworkPeriod.RowsKBoundsCount"],
+   "signature": [
+    "Properties.NetworkPeriod.rowsKBoundsCount : Properties.NetworkPeriod.RowsKBoundsCount"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5301,7 +5866,9 @@
   },
   "Properties.NetworkPeriod.rowsProgWired": {
    "owner": "@network-accounting",
-   "signature": ["Properties.NetworkPeriod.rowsProgWired : Properties.NetworkPeriod.RowsProgWired"],
+   "signature": [
+    "Properties.NetworkPeriod.rowsProgWired : Properties.NetworkPeriod.RowsProgWired"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5329,7 +5896,9 @@
   },
   "Properties.NetworkPeriod.rowsStateTied": {
    "owner": "@network-accounting",
-   "signature": ["Properties.NetworkPeriod.rowsStateTied : Properties.NetworkPeriod.RowsStateTied"],
+   "signature": [
+    "Properties.NetworkPeriod.rowsStateTied : Properties.NetworkPeriod.RowsStateTied"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5357,7 +5926,9 @@
   },
   "Properties.NetworkPeriod.rowsTiedDrawn": {
    "owner": "@network-accounting",
-   "signature": ["Properties.NetworkPeriod.rowsTiedDrawn : Properties.NetworkPeriod.RowsTiedDrawn"],
+   "signature": [
+    "Properties.NetworkPeriod.rowsTiedDrawn : Properties.NetworkPeriod.RowsTiedDrawn"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5385,12 +5956,17 @@
   },
   "Properties.NetworkRecords.acceptMeans": {
    "owner": "@network-accounting",
-   "signature": ["Properties.NetworkRecords.acceptMeans : Properties.NetworkRecords.AcceptMeans"],
+   "signature": [
+    "Properties.NetworkRecords.acceptMeans : Properties.NetworkRecords.AcceptMeans"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Properties.NetworkCertifier.Declares", "Properties.NetworkRecords.FramesOf"],
+    "open": [
+     "Properties.NetworkCertifier.Declares",
+     "Properties.NetworkRecords.FramesOf"
+    ],
     "reads": []
    },
    "type_hash": "4ee7e6626901cee51276b7be734ca7c3b2daeea3810674d3e4b0983856b300cf",
@@ -5398,12 +5974,17 @@
   },
   "Properties.NetworkRecords.answerAcceptMeans": {
    "owner": "@network-accounting",
-   "signature": ["Properties.NetworkRecords.answerAcceptMeans : Properties.NetworkRecords.AnswerAcceptMeans"],
+   "signature": [
+    "Properties.NetworkRecords.answerAcceptMeans : Properties.NetworkRecords.AnswerAcceptMeans"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Properties.NetworkCertifier.Declares", "Properties.NetworkRecords.FramesOf"],
+    "open": [
+     "Properties.NetworkCertifier.Declares",
+     "Properties.NetworkRecords.FramesOf"
+    ],
     "reads": []
    },
    "type_hash": "c5c91cdf640198af01ce5e2e90ba3ba4e42c21fc97c0610eb0ad09a01671615c",
@@ -5411,7 +5992,9 @@
   },
   "Properties.NetworkRecords.noGridAcceptsMore": {
    "owner": "@network-accounting",
-   "signature": ["Properties.NetworkRecords.noGridAcceptsMore : Properties.NetworkRecords.NoGridAcceptsMore"],
+   "signature": [
+    "Properties.NetworkRecords.noGridAcceptsMore : Properties.NetworkRecords.NoGridAcceptsMore"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5424,7 +6007,9 @@
   },
   "Properties.NetworkRecords.noGridMeans": {
    "owner": "@network-accounting",
-   "signature": ["Properties.NetworkRecords.noGridMeans : Properties.NetworkRecords.NoGridMeans"],
+   "signature": [
+    "Properties.NetworkRecords.noGridMeans : Properties.NetworkRecords.NoGridMeans"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5437,7 +6022,9 @@
   },
   "Properties.Pouw.Check.acceptMeans": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Check.acceptMeans : Properties.Pouw.Check.AcceptMeans"],
+   "signature": [
+    "Properties.Pouw.Check.acceptMeans : Properties.Pouw.Check.AcceptMeans"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5450,7 +6037,9 @@
   },
   "Properties.Pouw.Check.acceptedDraw": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Check.acceptedDraw : Properties.Pouw.Check.AcceptedDraw"],
+   "signature": [
+    "Properties.Pouw.Check.acceptedDraw : Properties.Pouw.Check.AcceptedDraw"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5463,7 +6052,9 @@
   },
   "Properties.Pouw.Check.acceptedInRange": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Check.acceptedInRange : Properties.Pouw.Check.AcceptedInRange"],
+   "signature": [
+    "Properties.Pouw.Check.acceptedInRange : Properties.Pouw.Check.AcceptedInRange"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5476,7 +6067,9 @@
   },
   "Properties.Pouw.Check.acceptedIsTheService's": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Check.acceptedIsTheService's : Properties.Pouw.Check.AcceptedIsTheService's"],
+   "signature": [
+    "Properties.Pouw.Check.acceptedIsTheService's : Properties.Pouw.Check.AcceptedIsTheService's"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5489,7 +6082,9 @@
   },
   "Properties.Pouw.Check.commitmentKeepsBytes": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Check.commitmentKeepsBytes : Properties.Pouw.Check.CommitmentKeepsBytes"],
+   "signature": [
+    "Properties.Pouw.Check.commitmentKeepsBytes : Properties.Pouw.Check.CommitmentKeepsBytes"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5502,7 +6097,9 @@
   },
   "Properties.Pouw.Check.digestIsOneStage's": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Check.digestIsOneStage's : Properties.Pouw.Check.DigestIsOneStage's"],
+   "signature": [
+    "Properties.Pouw.Check.digestIsOneStage's : Properties.Pouw.Check.DigestIsOneStage's"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5515,7 +6112,9 @@
   },
   "Properties.Pouw.Check.neverNull": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Check.neverNull : Properties.Pouw.Check.NeverNull"],
+   "signature": [
+    "Properties.Pouw.Check.neverNull : Properties.Pouw.Check.NeverNull"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5528,7 +6127,9 @@
   },
   "Properties.Pouw.Check.publishesPublic": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Check.publishesPublic : Properties.Pouw.Check.PublishesPublic"],
+   "signature": [
+    "Properties.Pouw.Check.publishesPublic : Properties.Pouw.Check.PublishesPublic"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5541,7 +6142,9 @@
   },
   "Properties.Pouw.Check.undecidedOnlyFromService": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Check.undecidedOnlyFromService : Properties.Pouw.Check.UndecidedOnlyFromService"],
+   "signature": [
+    "Properties.Pouw.Check.undecidedOnlyFromService : Properties.Pouw.Check.UndecidedOnlyFromService"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5554,7 +6157,9 @@
   },
   "Properties.Pouw.Commit.coinAccepts": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Commit.coinAccepts : Properties.Pouw.Commit.CoinAccepts"],
+   "signature": [
+    "Properties.Pouw.Commit.coinAccepts : Properties.Pouw.Commit.CoinAccepts"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5567,7 +6172,9 @@
   },
   "Properties.Pouw.Commit.coinBinding": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Commit.coinBinding : Properties.Pouw.Commit.CoinBinding"],
+   "signature": [
+    "Properties.Pouw.Commit.coinBinding : Properties.Pouw.Commit.CoinBinding"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5580,7 +6187,9 @@
   },
   "Properties.Pouw.Commit.coinNumbers": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Commit.coinNumbers : Properties.Pouw.Commit.CoinNumbers"],
+   "signature": [
+    "Properties.Pouw.Commit.coinNumbers : Properties.Pouw.Commit.CoinNumbers"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5593,7 +6202,9 @@
   },
   "Properties.Pouw.Commit.coinRaises": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Commit.coinRaises : Properties.Pouw.Commit.CoinRaises"],
+   "signature": [
+    "Properties.Pouw.Commit.coinRaises : Properties.Pouw.Commit.CoinRaises"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5606,7 +6217,9 @@
   },
   "Properties.Pouw.Commit.depthServed": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Commit.depthServed : Properties.Pouw.Commit.DepthServed"],
+   "signature": [
+    "Properties.Pouw.Commit.depthServed : Properties.Pouw.Commit.DepthServed"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5619,7 +6232,9 @@
   },
   "Properties.Pouw.Commit.domainRefusals": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Commit.domainRefusals : Properties.Pouw.Commit.DomainRefusals"],
+   "signature": [
+    "Properties.Pouw.Commit.domainRefusals : Properties.Pouw.Commit.DomainRefusals"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5632,7 +6247,9 @@
   },
   "Properties.Pouw.Commit.drawCoinAccepts": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Commit.drawCoinAccepts : Properties.Pouw.Commit.DrawCoinAccepts"],
+   "signature": [
+    "Properties.Pouw.Commit.drawCoinAccepts : Properties.Pouw.Commit.DrawCoinAccepts"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5645,7 +6262,9 @@
   },
   "Properties.Pouw.Commit.drawShape": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Commit.drawShape : Properties.Pouw.Commit.DrawShape"],
+   "signature": [
+    "Properties.Pouw.Commit.drawShape : Properties.Pouw.Commit.DrawShape"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5658,7 +6277,9 @@
   },
   "Properties.Pouw.Commit.epochSaltAccepts": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Commit.epochSaltAccepts : Properties.Pouw.Commit.EpochSaltAccepts"],
+   "signature": [
+    "Properties.Pouw.Commit.epochSaltAccepts : Properties.Pouw.Commit.EpochSaltAccepts"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5671,7 +6292,9 @@
   },
   "Properties.Pouw.Commit.frameInjective": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Commit.frameInjective : Properties.Pouw.Commit.FrameInjective"],
+   "signature": [
+    "Properties.Pouw.Commit.frameInjective : Properties.Pouw.Commit.FrameInjective"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5684,7 +6307,9 @@
   },
   "Properties.Pouw.Commit.frameSizes": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Commit.frameSizes : Properties.Pouw.Commit.FrameSizes"],
+   "signature": [
+    "Properties.Pouw.Commit.frameSizes : Properties.Pouw.Commit.FrameSizes"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5697,7 +6322,9 @@
   },
   "Properties.Pouw.Commit.keyRefusals": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Commit.keyRefusals : Properties.Pouw.Commit.KeyRefusals"],
+   "signature": [
+    "Properties.Pouw.Commit.keyRefusals : Properties.Pouw.Commit.KeyRefusals"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5710,7 +6337,9 @@
   },
   "Properties.Pouw.Commit.keySize": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Commit.keySize : Properties.Pouw.Commit.KeySize"],
+   "signature": [
+    "Properties.Pouw.Commit.keySize : Properties.Pouw.Commit.KeySize"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5723,7 +6352,9 @@
   },
   "Properties.Pouw.Commit.leafRefusals": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Commit.leafRefusals : Properties.Pouw.Commit.LeafRefusals"],
+   "signature": [
+    "Properties.Pouw.Commit.leafRefusals : Properties.Pouw.Commit.LeafRefusals"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5736,7 +6367,9 @@
   },
   "Properties.Pouw.Commit.saltRefusals": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Commit.saltRefusals : Properties.Pouw.Commit.SaltRefusals"],
+   "signature": [
+    "Properties.Pouw.Commit.saltRefusals : Properties.Pouw.Commit.SaltRefusals"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5749,7 +6382,9 @@
   },
   "Properties.Pouw.Commit.saltSize": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Commit.saltSize : Properties.Pouw.Commit.SaltSize"],
+   "signature": [
+    "Properties.Pouw.Commit.saltSize : Properties.Pouw.Commit.SaltSize"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5762,7 +6397,9 @@
   },
   "Properties.Pouw.Commit.taggedSize": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Commit.taggedSize : Properties.Pouw.Commit.TaggedSize"],
+   "signature": [
+    "Properties.Pouw.Commit.taggedSize : Properties.Pouw.Commit.TaggedSize"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5775,7 +6412,9 @@
   },
   "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Credit.SecurityProofs.drawWithheld : Properties.Pouw.Credit.DrawWithheld"],
+   "signature": [
+    "Properties.Pouw.Credit.SecurityProofs.drawWithheld : Properties.Pouw.Credit.DrawWithheld"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5807,7 +6446,9 @@
   },
   "Properties.Pouw.Credit.SecurityProofs.epsAtSound": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Credit.SecurityProofs.epsAtSound : Properties.Pouw.Credit.EpsAtSound"],
+   "signature": [
+    "Properties.Pouw.Credit.SecurityProofs.epsAtSound : Properties.Pouw.Credit.EpsAtSound"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5820,7 +6461,9 @@
   },
   "Properties.Pouw.Credit.SecurityProofs.establishedSound": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Credit.SecurityProofs.establishedSound : Properties.Pouw.Credit.EstablishedSound"],
+   "signature": [
+    "Properties.Pouw.Credit.SecurityProofs.establishedSound : Properties.Pouw.Credit.EstablishedSound"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5833,7 +6476,9 @@
   },
   "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses": {
    "owner": "@proofs",
-   "signature": ["Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses : Properties.Pouw.Credit.GroupedDrawMisses"],
+   "signature": [
+    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses : Properties.Pouw.Credit.GroupedDrawMisses"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5905,7 +6550,9 @@
   },
   "Properties.Pouw.Credit.SecurityProofs.workDrawMisses": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Credit.SecurityProofs.workDrawMisses : Properties.Pouw.Credit.WorkDrawMisses"],
+   "signature": [
+    "Properties.Pouw.Credit.SecurityProofs.workDrawMisses : Properties.Pouw.Credit.WorkDrawMisses"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5918,7 +6565,9 @@
   },
   "Properties.Pouw.LiveSalt.acceptMeans": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.LiveSalt.acceptMeans : Properties.Pouw.LiveSalt.AcceptMeans PouwCheck.liveSaltCheck"],
+   "signature": [
+    "Properties.Pouw.LiveSalt.acceptMeans : Properties.Pouw.LiveSalt.AcceptMeans PouwCheck.liveSaltCheck"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5931,7 +6580,9 @@
   },
   "Properties.Pouw.LiveSalt.epochRootBinding": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.LiveSalt.epochRootBinding : Properties.Pouw.LiveSalt.EpochRootBinding"],
+   "signature": [
+    "Properties.Pouw.LiveSalt.epochRootBinding : Properties.Pouw.LiveSalt.EpochRootBinding"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5944,7 +6595,9 @@
   },
   "Properties.Pouw.LiveSalt.liveCoinBinding": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.LiveSalt.liveCoinBinding : Properties.Pouw.LiveSalt.LiveCoinBinding"],
+   "signature": [
+    "Properties.Pouw.LiveSalt.liveCoinBinding : Properties.Pouw.LiveSalt.LiveCoinBinding"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5957,12 +6610,16 @@
   },
   "Properties.Pouw.LiveSalt.onePair": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.LiveSalt.onePair : Properties.Pouw.LiveSalt.OnePair PouwCheck.liveSaltCheck"],
+   "signature": [
+    "Properties.Pouw.LiveSalt.onePair : Properties.Pouw.LiveSalt.OnePair PouwCheck.liveSaltCheck"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Properties.Pouw.LiveSalt.EpochRoot"],
+    "open": [
+     "Properties.Pouw.LiveSalt.EpochRoot"
+    ],
     "reads": []
    },
    "type_hash": "57869adb3ff29c03998916c610afca59953d0f995b5afeef79df776645a3b476",
@@ -5970,12 +6627,16 @@
   },
   "Properties.Pouw.LiveSalt.oneRoot": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.LiveSalt.oneRoot : Properties.Pouw.LiveSalt.OneRoot PouwCheck.liveSaltCheck"],
+   "signature": [
+    "Properties.Pouw.LiveSalt.oneRoot : Properties.Pouw.LiveSalt.OneRoot PouwCheck.liveSaltCheck"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Properties.Pouw.LiveSalt.Accepted"],
+    "open": [
+     "Properties.Pouw.LiveSalt.Accepted"
+    ],
     "reads": []
    },
    "type_hash": "abbe54e38c4154054c2447d5e6952206cbe7635ce6145e379905a461377a40a0",
@@ -5983,7 +6644,9 @@
   },
   "Properties.Pouw.LiveSalt.rowSeedBinding": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.LiveSalt.rowSeedBinding : Properties.Pouw.LiveSalt.RowSeedBinding"],
+   "signature": [
+    "Properties.Pouw.LiveSalt.rowSeedBinding : Properties.Pouw.LiveSalt.RowSeedBinding"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -5996,7 +6659,9 @@
   },
   "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod : Properties.Pouw.Period.CheckedCreditPeriod"],
+   "signature": [
+    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod : Properties.Pouw.Period.CheckedCreditPeriod"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6021,7 +6686,9 @@
   },
   "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod : Properties.Pouw.Period.CheckedWorkPeriod"],
+   "signature": [
+    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod : Properties.Pouw.Period.CheckedWorkPeriod"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6134,7 +6801,9 @@
   },
   "Properties.Pouw.Served.SecurityProofs.servedFreed": {
    "owner": "@compute-research",
-   "signature": ["Properties.Pouw.Served.SecurityProofs.servedFreed : Properties.Pouw.Served.ServedFreed"],
+   "signature": [
+    "Properties.Pouw.Served.SecurityProofs.servedFreed : Properties.Pouw.Served.ServedFreed"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6170,7 +6839,9 @@
   },
   "Properties.Pouw.Served.SecurityProofs.servedWork": {
    "owner": "@compute-research",
-   "signature": ["Properties.Pouw.Served.SecurityProofs.servedWork : Properties.Pouw.Served.ServedWork"],
+   "signature": [
+    "Properties.Pouw.Served.SecurityProofs.servedWork : Properties.Pouw.Served.ServedWork"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6203,7 +6874,9 @@
   },
   "Properties.Pouw.ServedValues.SecurityProofs.rightValues": {
    "owner": "@compute-research",
-   "signature": ["Properties.Pouw.ServedValues.SecurityProofs.rightValues : Properties.Pouw.ServedValues.RightValues"],
+   "signature": [
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues : Properties.Pouw.ServedValues.RightValues"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6229,7 +6902,9 @@
   },
   "Properties.Pouw.Strata.strataTile": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Strata.strataTile : Properties.Pouw.Strata.StrataTile"],
+   "signature": [
+    "Properties.Pouw.Strata.strataTile : Properties.Pouw.Strata.StrataTile"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6242,7 +6917,9 @@
   },
   "Properties.Pouw.Window.bucket8192": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.bucket8192 : Properties.Pouw.Window.Bucket8192"],
+   "signature": [
+    "Properties.Pouw.Window.bucket8192 : Properties.Pouw.Window.Bucket8192"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6255,7 +6932,9 @@
   },
   "Properties.Pouw.Window.bucketCost": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.bucketCost : Properties.Pouw.Window.BucketCost"],
+   "signature": [
+    "Properties.Pouw.Window.bucketCost : Properties.Pouw.Window.BucketCost"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6268,7 +6947,9 @@
   },
   "Properties.Pouw.Window.bucketCost3": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.bucketCost3 : Properties.Pouw.Window.BucketCost3"],
+   "signature": [
+    "Properties.Pouw.Window.bucketCost3 : Properties.Pouw.Window.BucketCost3"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6281,7 +6962,9 @@
   },
   "Properties.Pouw.Window.bucketCredits": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.bucketCredits : Properties.Pouw.Window.BucketCredits"],
+   "signature": [
+    "Properties.Pouw.Window.bucketCredits : Properties.Pouw.Window.BucketCredits"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6294,7 +6977,9 @@
   },
   "Properties.Pouw.Window.bucketRefuses": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.bucketRefuses : Properties.Pouw.Window.BucketRefuses"],
+   "signature": [
+    "Properties.Pouw.Window.bucketRefuses : Properties.Pouw.Window.BucketRefuses"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6307,7 +6992,9 @@
   },
   "Properties.Pouw.Window.drawMisses": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.drawMisses : Properties.Pouw.Window.DrawMisses"],
+   "signature": [
+    "Properties.Pouw.Window.drawMisses : Properties.Pouw.Window.DrawMisses"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6320,12 +7007,16 @@
   },
   "Properties.Pouw.Window.floorPointGreatest": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.floorPointGreatest : Properties.Pouw.Window.FloorPointGreatest"],
+   "signature": [
+    "Properties.Pouw.Window.floorPointGreatest : Properties.Pouw.Window.FloorPointGreatest"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Properties.Pouw.Window.IsPoint"],
+    "open": [
+     "Properties.Pouw.Window.IsPoint"
+    ],
     "reads": []
    },
    "type_hash": "afe73b1ea23134dac58880fb9ef88e285709653a31536f16a088d9230a2c05c1",
@@ -6333,7 +7024,9 @@
   },
   "Properties.Pouw.Window.floorPointRefuses": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.floorPointRefuses : Properties.Pouw.Window.FloorPointRefuses"],
+   "signature": [
+    "Properties.Pouw.Window.floorPointRefuses : Properties.Pouw.Window.FloorPointRefuses"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6346,7 +7039,9 @@
   },
   "Properties.Pouw.Window.kPrimeExactAtEquality": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.kPrimeExactAtEquality : Properties.Pouw.Window.KPrimeExactAtEquality"],
+   "signature": [
+    "Properties.Pouw.Window.kPrimeExactAtEquality : Properties.Pouw.Window.KPrimeExactAtEquality"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6359,7 +7054,9 @@
   },
   "Properties.Pouw.Window.kPrimeLeast": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.kPrimeLeast : Properties.Pouw.Window.KPrimeLeast"],
+   "signature": [
+    "Properties.Pouw.Window.kPrimeLeast : Properties.Pouw.Window.KPrimeLeast"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6372,7 +7069,9 @@
   },
   "Properties.Pouw.Window.kPrimeRefuses": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.kPrimeRefuses : Properties.Pouw.Window.KPrimeRefuses"],
+   "signature": [
+    "Properties.Pouw.Window.kPrimeRefuses : Properties.Pouw.Window.KPrimeRefuses"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6385,7 +7084,9 @@
   },
   "Properties.Pouw.Window.kPrimeServed": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.kPrimeServed : Properties.Pouw.Window.KPrimeServed"],
+   "signature": [
+    "Properties.Pouw.Window.kPrimeServed : Properties.Pouw.Window.KPrimeServed"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6398,7 +7099,9 @@
   },
   "Properties.Pouw.Window.levelRefuses": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.levelRefuses : Properties.Pouw.Window.LevelRefuses"],
+   "signature": [
+    "Properties.Pouw.Window.levelRefuses : Properties.Pouw.Window.LevelRefuses"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6411,7 +7114,9 @@
   },
   "Properties.Pouw.Window.levelsCount": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.levelsCount : Properties.Pouw.Window.LevelsCount"],
+   "signature": [
+    "Properties.Pouw.Window.levelsCount : Properties.Pouw.Window.LevelsCount"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6424,7 +7129,9 @@
   },
   "Properties.Pouw.Window.levelsRefuses": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.levelsRefuses : Properties.Pouw.Window.LevelsRefuses"],
+   "signature": [
+    "Properties.Pouw.Window.levelsRefuses : Properties.Pouw.Window.LevelsRefuses"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6437,7 +7144,9 @@
   },
   "Properties.Pouw.Window.levelsServed": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.levelsServed : Properties.Pouw.Window.LevelsServed"],
+   "signature": [
+    "Properties.Pouw.Window.levelsServed : Properties.Pouw.Window.LevelsServed"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6450,7 +7159,9 @@
   },
   "Properties.Pouw.Window.onGridMeans": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.onGridMeans : Properties.Pouw.Window.OnGridMeans"],
+   "signature": [
+    "Properties.Pouw.Window.onGridMeans : Properties.Pouw.Window.OnGridMeans"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6463,12 +7174,16 @@
   },
   "Properties.Pouw.Window.padLeast": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.padLeast : Properties.Pouw.Window.PadLeast"],
+   "signature": [
+    "Properties.Pouw.Window.padLeast : Properties.Pouw.Window.PadLeast"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Properties.Pouw.Window.IsPoint"],
+    "open": [
+     "Properties.Pouw.Window.IsPoint"
+    ],
     "reads": []
    },
    "type_hash": "79d2f7f93dc38938fe0a7c43e793bb9480c21422210ec02f198f40d585f99b5e",
@@ -6476,7 +7191,9 @@
   },
   "Properties.Pouw.Window.padRefuses": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.padRefuses : Properties.Pouw.Window.PadRefuses"],
+   "signature": [
+    "Properties.Pouw.Window.padRefuses : Properties.Pouw.Window.PadRefuses"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6489,12 +7206,16 @@
   },
   "Properties.Pouw.Window.pointEnumerates": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.pointEnumerates : Properties.Pouw.Window.PointEnumerates"],
+   "signature": [
+    "Properties.Pouw.Window.pointEnumerates : Properties.Pouw.Window.PointEnumerates"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Properties.Pouw.Window.IsPoint"],
+    "open": [
+     "Properties.Pouw.Window.IsPoint"
+    ],
     "reads": []
    },
    "type_hash": "0f6f4da17e2495b903d233db371fd0e01c4da3c9f0d31e5b77da417317a9f20f",
@@ -6502,7 +7223,9 @@
   },
   "Properties.Pouw.Window.pointRefuses": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.pointRefuses : Properties.Pouw.Window.PointRefuses"],
+   "signature": [
+    "Properties.Pouw.Window.pointRefuses : Properties.Pouw.Window.PointRefuses"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6515,7 +7238,9 @@
   },
   "Properties.Pouw.Window.publicItems_eq": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.publicItems_eq : Properties.Pouw.Window.PublicItems"],
+   "signature": [
+    "Properties.Pouw.Window.publicItems_eq : Properties.Pouw.Window.PublicItems"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6528,7 +7253,9 @@
   },
   "Properties.Pouw.Window.workAtRefuses": {
    "owner": "@compute-accounting",
-   "signature": ["Properties.Pouw.Window.workAtRefuses : Properties.Pouw.Window.WorkAtRefuses"],
+   "signature": [
+    "Properties.Pouw.Window.workAtRefuses : Properties.Pouw.Window.WorkAtRefuses"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6541,7 +7268,9 @@
   },
   "Properties.Remote.SecurityProofs.acceptComplies": {
    "owner": "@soundness",
-   "signature": ["Properties.Remote.SecurityProofs.acceptComplies : Properties.Remote.AcceptComplies"],
+   "signature": [
+    "Properties.Remote.SecurityProofs.acceptComplies : Properties.Remote.AcceptComplies"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6578,7 +7307,9 @@
   },
   "Properties.Remote.SecurityProofs.acceptInferenceOnly": {
    "owner": "@soundness",
-   "signature": ["Properties.Remote.SecurityProofs.acceptInferenceOnly : Properties.Remote.AcceptInferenceOnly"],
+   "signature": [
+    "Properties.Remote.SecurityProofs.acceptInferenceOnly : Properties.Remote.AcceptInferenceOnly"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6650,7 +7381,9 @@
   },
   "Properties.RemoteAudit.Component.acceptIsVerified": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.Component.acceptIsVerified : Properties.RemoteAudit.Component.AcceptIsVerified"],
+   "signature": [
+    "Properties.RemoteAudit.Component.acceptIsVerified : Properties.RemoteAudit.Component.AcceptIsVerified"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6663,7 +7396,9 @@
   },
   "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.Line.SecurityProofs.lineHeld : Properties.RemoteAudit.Line.LineHeld"],
+   "signature": [
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld : Properties.RemoteAudit.Line.LineHeld"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6717,7 +7452,9 @@
   },
   "Properties.RemoteAudit.Line.lineChecked": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.Line.lineChecked : Properties.RemoteAudit.Line.LineChecked"],
+   "signature": [
+    "Properties.RemoteAudit.Line.lineChecked : Properties.RemoteAudit.Line.LineChecked"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6730,7 +7467,9 @@
   },
   "Properties.RemoteAudit.Line.lineRegistered": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.Line.lineRegistered : Properties.RemoteAudit.Line.LineRegistered"],
+   "signature": [
+    "Properties.RemoteAudit.Line.lineRegistered : Properties.RemoteAudit.Line.LineRegistered"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6743,7 +7482,9 @@
   },
   "Properties.RemoteAudit.Line.stretchBound": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.Line.stretchBound : Properties.RemoteAudit.Line.StretchBound"],
+   "signature": [
+    "Properties.RemoteAudit.Line.stretchBound : Properties.RemoteAudit.Line.StretchBound"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6756,7 +7497,9 @@
   },
   "Properties.RemoteAudit.Shared.acceptDrawsOpenable": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.Shared.acceptDrawsOpenable : Properties.RemoteAudit.Shared.AcceptDrawsOpenable"],
+   "signature": [
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable : Properties.RemoteAudit.Shared.AcceptDrawsOpenable"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6784,7 +7527,9 @@
   },
   "Properties.RemoteAudit.Shared.drawIsSubset": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.Shared.drawIsSubset : Properties.RemoteAudit.Shared.DrawIsSubset"],
+   "signature": [
+    "Properties.RemoteAudit.Shared.drawIsSubset : Properties.RemoteAudit.Shared.DrawIsSubset"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6812,7 +7557,9 @@
   },
   "Properties.RemoteAudit.Shared.recordKeptAfterDraw": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.Shared.recordKeptAfterDraw : Properties.RemoteAudit.Shared.RecordKeptAfterDraw"],
+   "signature": [
+    "Properties.RemoteAudit.Shared.recordKeptAfterDraw : Properties.RemoteAudit.Shared.RecordKeptAfterDraw"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6825,7 +7572,9 @@
   },
   "Properties.RemoteAudit.Shared.sessionDrawsRecords": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.Shared.sessionDrawsRecords : Properties.RemoteAudit.Shared.SessionDrawsRecords"],
+   "signature": [
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords : Properties.RemoteAudit.Shared.SessionDrawsRecords"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6838,7 +7587,9 @@
   },
   "Properties.RemoteAudit.acceptChecksOpenings": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.acceptChecksOpenings : Properties.RemoteAudit.AcceptChecksOpenings"],
+   "signature": [
+    "Properties.RemoteAudit.acceptChecksOpenings : Properties.RemoteAudit.AcceptChecksOpenings"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6851,7 +7602,9 @@
   },
   "Properties.RemoteAudit.acceptDrawsOpenable": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.acceptDrawsOpenable : Properties.RemoteAudit.AcceptDrawsOpenable"],
+   "signature": [
+    "Properties.RemoteAudit.acceptDrawsOpenable : Properties.RemoteAudit.AcceptDrawsOpenable"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6864,7 +7617,9 @@
   },
   "Properties.RemoteAudit.acceptOpensDraws": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.acceptOpensDraws : Properties.RemoteAudit.AcceptOpensDraws"],
+   "signature": [
+    "Properties.RemoteAudit.acceptOpensDraws : Properties.RemoteAudit.AcceptOpensDraws"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6877,7 +7632,9 @@
   },
   "Properties.RemoteAudit.acceptedMinPasses": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.acceptedMinPasses : Properties.RemoteAudit.AcceptedMinPasses"],
+   "signature": [
+    "Properties.RemoteAudit.acceptedMinPasses : Properties.RemoteAudit.AcceptedMinPasses"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6890,7 +7647,9 @@
   },
   "Properties.RemoteAudit.appendsInOrder": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.appendsInOrder : Properties.RemoteAudit.AppendsInOrder"],
+   "signature": [
+    "Properties.RemoteAudit.appendsInOrder : Properties.RemoteAudit.AppendsInOrder"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6903,7 +7662,9 @@
   },
   "Properties.RemoteAudit.changedReadsDistinct": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.changedReadsDistinct : Properties.RemoteAudit.ChangedReadsDistinct"],
+   "signature": [
+    "Properties.RemoteAudit.changedReadsDistinct : Properties.RemoteAudit.ChangedReadsDistinct"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6916,7 +7677,9 @@
   },
   "Properties.RemoteAudit.chunkedIsWhole": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.chunkedIsWhole : Properties.RemoteAudit.ChunkedIsWhole"],
+   "signature": [
+    "Properties.RemoteAudit.chunkedIsWhole : Properties.RemoteAudit.ChunkedIsWhole"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6929,7 +7692,9 @@
   },
   "Properties.RemoteAudit.drawIsSubset": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.drawIsSubset : Properties.RemoteAudit.DrawIsSubset"],
+   "signature": [
+    "Properties.RemoteAudit.drawIsSubset : Properties.RemoteAudit.DrawIsSubset"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6942,7 +7707,9 @@
   },
   "Properties.RemoteAudit.lifetimeCapped": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.lifetimeCapped : Properties.RemoteAudit.LifetimeCapped"],
+   "signature": [
+    "Properties.RemoteAudit.lifetimeCapped : Properties.RemoteAudit.LifetimeCapped"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6955,7 +7722,9 @@
   },
   "Properties.RemoteAudit.lineCoversSession": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.lineCoversSession : Properties.RemoteAudit.LineCoversSession"],
+   "signature": [
+    "Properties.RemoteAudit.lineCoversSession : Properties.RemoteAudit.LineCoversSession"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6968,7 +7737,9 @@
   },
   "Properties.RemoteAudit.liveIsRun": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.liveIsRun : Properties.RemoteAudit.LiveIsRun"],
+   "signature": [
+    "Properties.RemoteAudit.liveIsRun : Properties.RemoteAudit.LiveIsRun"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6981,7 +7752,9 @@
   },
   "Properties.RemoteAudit.openingsUnreadUntilDrawn": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.openingsUnreadUntilDrawn : Properties.RemoteAudit.OpeningsUnreadUntilDrawn"],
+   "signature": [
+    "Properties.RemoteAudit.openingsUnreadUntilDrawn : Properties.RemoteAudit.OpeningsUnreadUntilDrawn"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -6994,7 +7767,9 @@
   },
   "Properties.RemoteAudit.passesChained": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.passesChained : Properties.RemoteAudit.PassesChained"],
+   "signature": [
+    "Properties.RemoteAudit.passesChained : Properties.RemoteAudit.PassesChained"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7007,7 +7782,9 @@
   },
   "Properties.RemoteAudit.passesReadDistinct": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.passesReadDistinct : Properties.RemoteAudit.PassesReadDistinct"],
+   "signature": [
+    "Properties.RemoteAudit.passesReadDistinct : Properties.RemoteAudit.PassesReadDistinct"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7020,7 +7797,9 @@
   },
   "Properties.RemoteAudit.passesStepped": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.passesStepped : Properties.RemoteAudit.PassesStepped"],
+   "signature": [
+    "Properties.RemoteAudit.passesStepped : Properties.RemoteAudit.PassesStepped"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7033,7 +7812,9 @@
   },
   "Properties.RemoteAudit.planReadsDistinct": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.planReadsDistinct : Properties.RemoteAudit.PlanReadsDistinct"],
+   "signature": [
+    "Properties.RemoteAudit.planReadsDistinct : Properties.RemoteAudit.PlanReadsDistinct"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7046,7 +7827,9 @@
   },
   "Properties.RemoteAudit.pooledCovers": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.pooledCovers : Properties.RemoteAudit.PooledCovers"],
+   "signature": [
+    "Properties.RemoteAudit.pooledCovers : Properties.RemoteAudit.PooledCovers"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7059,7 +7842,9 @@
   },
   "Properties.RemoteAudit.pooledCoversSession": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.pooledCoversSession : Properties.RemoteAudit.PooledCoversSession"],
+   "signature": [
+    "Properties.RemoteAudit.pooledCoversSession : Properties.RemoteAudit.PooledCoversSession"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7072,7 +7857,9 @@
   },
   "Properties.RemoteAudit.receiptsBelowLimit": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.receiptsBelowLimit : Properties.RemoteAudit.ReceiptsBelowLimit"],
+   "signature": [
+    "Properties.RemoteAudit.receiptsBelowLimit : Properties.RemoteAudit.ReceiptsBelowLimit"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7085,7 +7872,9 @@
   },
   "Properties.RemoteAudit.recordKeptAfterDraw": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.recordKeptAfterDraw : Properties.RemoteAudit.RecordKeptAfterDraw"],
+   "signature": [
+    "Properties.RemoteAudit.recordKeptAfterDraw : Properties.RemoteAudit.RecordKeptAfterDraw"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7098,7 +7887,9 @@
   },
   "Properties.RemoteAudit.releasedStayOut": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.releasedStayOut : Properties.RemoteAudit.ReleasedStayOut"],
+   "signature": [
+    "Properties.RemoteAudit.releasedStayOut : Properties.RemoteAudit.ReleasedStayOut"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7111,26 +7902,34 @@
   },
   "Properties.RemoteAudit.scheduleChecked": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.scheduleChecked : Properties.RemoteAudit.ScheduleChecked"],
+   "signature": [
+    "Properties.RemoteAudit.scheduleChecked : Properties.RemoteAudit.ScheduleChecked"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
     "open": [],
-    "reads": ["Properties.RemoteAudit.ScheduleChecked"]
+    "reads": [
+     "Properties.RemoteAudit.ScheduleChecked"
+    ]
    },
    "type_hash": "7d24cf63d2813c8aadbbcdeb5bcb4efc9f33c59451af0dae591fd359ca0e8e1e",
    "unfolded_hash": "145c3e8c995e26fadf5921b476c25b19917904556be12ed6e15fb296a4b1c4b1"
   },
   "Properties.RemoteAudit.scheduleFixesLayout": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.RemoteAudit.scheduleFixesLayout : Properties.RemoteAudit.ScheduleFixesLayout"],
+   "signature": [
+    "Properties.RemoteAudit.scheduleFixesLayout : Properties.RemoteAudit.ScheduleFixesLayout"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
     "open": [],
-    "reads": ["Properties.RemoteAudit.ScheduleFixesLayout"]
+    "reads": [
+     "Properties.RemoteAudit.ScheduleFixesLayout"
+    ]
    },
    "type_hash": "9208ff59300d11ed98f57101b871efd1e060561660733e3b6083c1dab8da6a9e",
    "unfolded_hash": "05200ef6f50931e03b88116c26dec93324ef67c3084d4527fdc8c1d65b634766"
@@ -7157,14 +7956,20 @@
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Properties.RemoteAudit.ScheduleLayoutGap"],
-    "reads": ["Accounting.Assumptions.SteeredLayout"]
+    "open": [
+     "Properties.RemoteAudit.ScheduleLayoutGap"
+    ],
+    "reads": [
+     "Accounting.Assumptions.SteeredLayout"
+    ]
    },
    "type_hash": "be81031b23d2333f173c7540da5dd2c2e8fc393ce9d84ee7118d5b1bd70c1f53"
   },
   "Properties.Requirement.credited": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.credited : Properties.Requirement.Credited"],
+   "signature": [
+    "Properties.Requirement.credited : Properties.Requirement.Credited"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7177,7 +7982,9 @@
   },
   "Properties.Requirement.creditedBits": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.creditedBits : Properties.Requirement.CreditedBits"],
+   "signature": [
+    "Properties.Requirement.creditedBits : Properties.Requirement.CreditedBits"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7190,7 +7997,9 @@
   },
   "Properties.Requirement.creditedReadBits": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.creditedReadBits : Properties.Requirement.CreditedReadBits"],
+   "signature": [
+    "Properties.Requirement.creditedReadBits : Properties.Requirement.CreditedReadBits"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7203,7 +8012,9 @@
   },
   "Properties.Requirement.creditedReads": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.creditedReads : Properties.Requirement.CreditedReads"],
+   "signature": [
+    "Properties.Requirement.creditedReads : Properties.Requirement.CreditedReads"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7216,7 +8027,9 @@
   },
   "Properties.Requirement.credits": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.credits : Properties.Requirement.Credits"],
+   "signature": [
+    "Properties.Requirement.credits : Properties.Requirement.Credits"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7229,7 +8042,9 @@
   },
   "Properties.Requirement.follows": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.follows : Properties.Requirement.Follows"],
+   "signature": [
+    "Properties.Requirement.follows : Properties.Requirement.Follows"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7242,7 +8057,9 @@
   },
   "Properties.Requirement.held": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.held : Properties.Requirement.Held"],
+   "signature": [
+    "Properties.Requirement.held : Properties.Requirement.Held"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7255,7 +8072,9 @@
   },
   "Properties.Requirement.incomplete": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.incomplete : Properties.Requirement.Incomplete"],
+   "signature": [
+    "Properties.Requirement.incomplete : Properties.Requirement.Incomplete"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7268,7 +8087,9 @@
   },
   "Properties.Requirement.ingress": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.ingress : Properties.Requirement.Ingress"],
+   "signature": [
+    "Properties.Requirement.ingress : Properties.Requirement.Ingress"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7281,7 +8102,9 @@
   },
   "Properties.Requirement.live": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.live : Properties.Requirement.Live"],
+   "signature": [
+    "Properties.Requirement.live : Properties.Requirement.Live"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7294,7 +8117,9 @@
   },
   "Properties.Requirement.liveBits": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.liveBits : Properties.Requirement.LiveBits"],
+   "signature": [
+    "Properties.Requirement.liveBits : Properties.Requirement.LiveBits"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7307,7 +8132,9 @@
   },
   "Properties.Requirement.liveBlocks": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.liveBlocks : Properties.Requirement.LiveBlocks"],
+   "signature": [
+    "Properties.Requirement.liveBlocks : Properties.Requirement.LiveBlocks"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7320,7 +8147,9 @@
   },
   "Properties.Requirement.liveIn": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.liveIn : Properties.Requirement.LiveIn"],
+   "signature": [
+    "Properties.Requirement.liveIn : Properties.Requirement.LiveIn"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7333,7 +8162,9 @@
   },
   "Properties.Requirement.planMatches": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.planMatches : Properties.Requirement.PlanMatches"],
+   "signature": [
+    "Properties.Requirement.planMatches : Properties.Requirement.PlanMatches"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7346,7 +8177,9 @@
   },
   "Properties.Requirement.read": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.read : Properties.Requirement.Read"],
+   "signature": [
+    "Properties.Requirement.read : Properties.Requirement.Read"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7359,7 +8192,9 @@
   },
   "Properties.Requirement.readBits": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.readBits : Properties.Requirement.ReadBits"],
+   "signature": [
+    "Properties.Requirement.readBits : Properties.Requirement.ReadBits"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7372,7 +8207,9 @@
   },
   "Properties.Requirement.readBlocks": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.readBlocks : Properties.Requirement.ReadBlocks"],
+   "signature": [
+    "Properties.Requirement.readBlocks : Properties.Requirement.ReadBlocks"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7385,7 +8222,9 @@
   },
   "Properties.Requirement.readIn": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.readIn : Properties.Requirement.ReadIn"],
+   "signature": [
+    "Properties.Requirement.readIn : Properties.Requirement.ReadIn"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7398,7 +8237,9 @@
   },
   "Properties.Requirement.reads": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.reads : Properties.Requirement.Reads"],
+   "signature": [
+    "Properties.Requirement.reads : Properties.Requirement.Reads"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7411,7 +8252,9 @@
   },
   "Properties.Requirement.region": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.region : Properties.Requirement.Region"],
+   "signature": [
+    "Properties.Requirement.region : Properties.Requirement.Region"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7424,7 +8267,9 @@
   },
   "Properties.Requirement.resident": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.resident : Properties.Requirement.Resident"],
+   "signature": [
+    "Properties.Requirement.resident : Properties.Requirement.Resident"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7437,7 +8282,9 @@
   },
   "Properties.Requirement.stepRegion": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.stepRegion : Properties.Requirement.StepRegion"],
+   "signature": [
+    "Properties.Requirement.stepRegion : Properties.Requirement.StepRegion"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7450,7 +8297,9 @@
   },
   "Properties.Requirement.storeMatches": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.storeMatches : Properties.Requirement.StoreMatches"],
+   "signature": [
+    "Properties.Requirement.storeMatches : Properties.Requirement.StoreMatches"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7463,7 +8312,9 @@
   },
   "Properties.Requirement.topological": {
    "owner": "@memory-accounting",
-   "signature": ["Properties.Requirement.topological : Properties.Requirement.Topological"],
+   "signature": [
+    "Properties.Requirement.topological : Properties.Requirement.Topological"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7476,7 +8327,9 @@
   },
   "Properties.SampledProofs.SecurityProofs.designWellFormed": {
    "owner": "@proofs",
-   "signature": ["Properties.SampledProofs.SecurityProofs.designWellFormed : Properties.SampledProofs.DesignWellFormed"],
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.designWellFormed : Properties.SampledProofs.DesignWellFormed"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7489,7 +8342,9 @@
   },
   "Properties.SampledProofs.SecurityProofs.drawMisses": {
    "owner": "@proofs",
-   "signature": ["Properties.SampledProofs.SecurityProofs.drawMisses : Properties.SampledProofs.DrawMisses"],
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.drawMisses : Properties.SampledProofs.DrawMisses"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7502,12 +8357,16 @@
   },
   "Properties.SampledProofs.acceptMeans": {
    "owner": "@proofs",
-   "signature": ["Properties.SampledProofs.acceptMeans : Properties.SampledProofs.AcceptMeans"],
+   "signature": [
+    "Properties.SampledProofs.acceptMeans : Properties.SampledProofs.AcceptMeans"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Properties.SampledProofs.ExpectsV2"],
+    "open": [
+     "Properties.SampledProofs.ExpectsV2"
+    ],
     "reads": []
    },
    "type_hash": "8b5d59c8e389ebb7fca362bc1f59eb906994cdeb37ade677622b6b55e7d43910",
@@ -7515,7 +8374,9 @@
   },
   "Properties.SampledProofs.bernoulliBounds": {
    "owner": "@proofs",
-   "signature": ["Properties.SampledProofs.bernoulliBounds : Properties.SampledProofs.BernoulliBounds"],
+   "signature": [
+    "Properties.SampledProofs.bernoulliBounds : Properties.SampledProofs.BernoulliBounds"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7528,7 +8389,9 @@
   },
   "Properties.SampledProofs.digestIsRecord's": {
    "owner": "@proofs",
-   "signature": ["Properties.SampledProofs.digestIsRecord's : Properties.SampledProofs.DigestIsRecord's"],
+   "signature": [
+    "Properties.SampledProofs.digestIsRecord's : Properties.SampledProofs.DigestIsRecord's"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7541,7 +8404,9 @@
   },
   "Properties.SampledProofs.fleetHaltIsFinal": {
    "owner": "@proofs",
-   "signature": ["Properties.SampledProofs.fleetHaltIsFinal : Properties.SampledProofs.FleetHaltIsFinal"],
+   "signature": [
+    "Properties.SampledProofs.fleetHaltIsFinal : Properties.SampledProofs.FleetHaltIsFinal"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7554,7 +8419,9 @@
   },
   "Properties.SampledProofs.haltCoversOperator": {
    "owner": "@proofs",
-   "signature": ["Properties.SampledProofs.haltCoversOperator : Properties.SampledProofs.HaltCoversOperator"],
+   "signature": [
+    "Properties.SampledProofs.haltCoversOperator : Properties.SampledProofs.HaltCoversOperator"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7567,7 +8434,9 @@
   },
   "Properties.SampledProofs.haltEndsOpen": {
    "owner": "@proofs",
-   "signature": ["Properties.SampledProofs.haltEndsOpen : Properties.SampledProofs.HaltEndsOpen"],
+   "signature": [
+    "Properties.SampledProofs.haltEndsOpen : Properties.SampledProofs.HaltEndsOpen"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7580,7 +8449,9 @@
   },
   "Properties.SampledProofs.haltIsFinal": {
    "owner": "@proofs",
-   "signature": ["Properties.SampledProofs.haltIsFinal : Properties.SampledProofs.HaltIsFinal"],
+   "signature": [
+    "Properties.SampledProofs.haltIsFinal : Properties.SampledProofs.HaltIsFinal"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7593,7 +8464,9 @@
   },
   "Properties.SampledProofs.noAcceptAfterHalt": {
    "owner": "@proofs",
-   "signature": ["Properties.SampledProofs.noAcceptAfterHalt : Properties.SampledProofs.NoAcceptAfterHalt"],
+   "signature": [
+    "Properties.SampledProofs.noAcceptAfterHalt : Properties.SampledProofs.NoAcceptAfterHalt"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7606,7 +8479,9 @@
   },
   "Properties.Site.checks": {
    "owner": "@lean",
-   "signature": ["Properties.Site.checks : Properties.Site.Checks"],
+   "signature": [
+    "Properties.Site.checks : Properties.Site.Checks"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7635,7 +8510,9 @@
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Verity.Site.Boundary"],
+    "open": [
+     "Verity.Site.Boundary"
+    ],
     "reads": []
    },
    "type_hash": "adca6ff5253544af0d324781a65ce7a8b47069ab3153dd4a456faab8aaa7063c"
@@ -7664,12 +8541,16 @@
   },
   "Properties.Site.entryValid": {
    "owner": "@lean",
-   "signature": ["Properties.Site.entryValid : Properties.Site.EntryValid"],
+   "signature": [
+    "Properties.Site.entryValid : Properties.Site.EntryValid"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Verity.Site.Boundary"],
+    "open": [
+     "Verity.Site.Boundary"
+    ],
     "reads": []
    },
    "type_hash": "8a89c567162cc9fa3f76cdf2e094f88fd657e778e58d1f37f25dd9b1ce78749f",
@@ -7693,7 +8574,9 @@
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Verity.Site.Boundary"],
+    "open": [
+     "Verity.Site.Boundary"
+    ],
     "reads": []
    },
    "type_hash": "98c3c342f109d3c30375ebbd555b968ea8ce4285536799e234ff832f049d4e21"
@@ -7721,7 +8604,9 @@
   },
   "Properties.Site.fold": {
    "owner": "@lean",
-   "signature": ["Properties.Site.fold : Properties.Site.Fold"],
+   "signature": [
+    "Properties.Site.fold : Properties.Site.Fold"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7734,12 +8619,16 @@
   },
   "Properties.Site.refusedAt": {
    "owner": "@lean",
-   "signature": ["Properties.Site.refusedAt : Properties.Site.RefusedAt"],
+   "signature": [
+    "Properties.Site.refusedAt : Properties.Site.RefusedAt"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Verity.Site.Boundary"],
+    "open": [
+     "Verity.Site.Boundary"
+    ],
     "reads": []
    },
    "type_hash": "bded101a69bef766ebdd41f5169a68b8093d468663cfbc1fe206581d58ac002c",
@@ -7795,7 +8684,9 @@
   },
   "Properties.Site.refuses": {
    "owner": "@lean",
-   "signature": ["Properties.Site.refuses : Properties.Site.Refuses"],
+   "signature": [
+    "Properties.Site.refuses : Properties.Site.Refuses"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -7855,12 +8746,18 @@
   },
   "Verity.remote_soundness_of_subprotocols": {
    "owner": "@soundness",
-   "signature": ["Verity.remote_soundness_of_subprotocols : Verity.RemoteSoundness"],
+   "signature": [
+    "Verity.remote_soundness_of_subprotocols : Verity.RemoteSoundness"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Verity.Vocab.InferenceOnlySound", "Verity.Vocab.PouwSound", "Verity.Vocab.SampledProofsSound"],
+    "open": [
+     "Verity.Vocab.InferenceOnlySound",
+     "Verity.Vocab.PouwSound",
+     "Verity.Vocab.SampledProofsSound"
+    ],
     "reads": [
      "Hash.Assumptions.LmsForger",
      "Hash.Assumptions.LmsForger.Forges",
@@ -7936,12 +8833,16 @@
   },
   "Verity.soundness_at_of_targets": {
    "owner": "@soundness",
-   "signature": ["Verity.soundness_at_of_targets : Verity.SoundnessOf"],
+   "signature": [
+    "Verity.soundness_at_of_targets : Verity.SoundnessOf"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Verity.Vocab.Target"],
+    "open": [
+     "Verity.Vocab.Target"
+    ],
     "reads": [
      "Hash.Assumptions.LmsForger",
      "Hash.Assumptions.LmsForger.Forges",
@@ -8025,7 +8926,9 @@
   },
   "Verity.soundness_of_subprotocols": {
    "owner": "@soundness",
-   "signature": ["Verity.soundness_of_subprotocols : Verity.Soundness"],
+   "signature": [
+    "Verity.soundness_of_subprotocols : Verity.Soundness"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
@@ -8124,7 +9027,9 @@
    "Properties.RemoteAudit.Line.Premises",
    "Properties.RemoteAudit.Schedule"
   ],
-  "statements": ["Properties"],
+  "statements": [
+   "Properties"
+  ],
   "properties": {
    "MemoryChallenger.Properties.SecurityProofs.judgeAccepts": {
     "function": "MemoryChallenger.Judge.judge",
@@ -8191,7 +9096,11 @@
     "outcome": "none"
    },
    "Properties.CertifierDevice.issuerVerifies": {
-    "function": ["CertifierDevice.Issuer.certify", "Lms.Params.make", "Lms.key"],
+    "function": [
+     "CertifierDevice.Issuer.certify",
+     "Lms.Params.make",
+     "Lms.key"
+    ],
     "outcome": "accept"
    },
    "Properties.CertifierDevice.linkSchedule": {
@@ -8615,7 +9524,10 @@
     "outcome": "none"
    },
    "Properties.Pouw.Check.neverNull": {
-    "function": ["PouwCheck.protocol.profileJson", "PouwCheck.protocol.publicJson"],
+    "function": [
+     "PouwCheck.protocol.profileJson",
+     "PouwCheck.protocol.publicJson"
+    ],
     "outcome": "none"
    },
    "Properties.Pouw.Check.publishesPublic": {
@@ -8689,11 +9601,17 @@
     "outcome": "accept"
    },
    "Properties.Pouw.Commit.saltRefusals": {
-    "function": ["PouwCommit.saltOf", "PouwCommit.unverifiedSalt"],
+    "function": [
+     "PouwCommit.saltOf",
+     "PouwCommit.unverifiedSalt"
+    ],
     "outcome": "accept"
    },
    "Properties.Pouw.Commit.saltSize": {
-    "function": ["PouwCommit.saltOf", "PouwCommit.unverifiedSalt"],
+    "function": [
+     "PouwCommit.saltOf",
+     "PouwCommit.unverifiedSalt"
+    ],
     "outcome": "accept"
    },
    "Properties.Pouw.Commit.taggedSize": {
@@ -8777,7 +9695,10 @@
     "outcome": "accept"
    },
    "Properties.Pouw.Window.pointEnumerates": {
-    "function": ["PouwWindow.level", "PouwWindow.point"],
+    "function": [
+     "PouwWindow.level",
+     "PouwWindow.point"
+    ],
     "outcome": "none"
    },
    "Properties.Pouw.Window.pointRefuses": {
@@ -8845,7 +9766,10 @@
     "outcome": "accept"
    },
    "Properties.RemoteAudit.acceptedMinPasses": {
-    "function": ["RemoteAudit.Session.run", "RemoteAudit.Session.State.outcome"],
+    "function": [
+     "RemoteAudit.Session.run",
+     "RemoteAudit.Session.State.outcome"
+    ],
     "outcome": "accept"
    },
    "Properties.RemoteAudit.passesStepped": {
@@ -8865,7 +9789,10 @@
     "outcome": "accept"
    },
    "Properties.RemoteAudit.releasedStayOut": {
-    "function": ["RemoteAudit.Session.run", "RemoteAudit.Session.step"],
+    "function": [
+     "RemoteAudit.Session.run",
+     "RemoteAudit.Session.step"
+    ],
     "outcome": "accept"
    },
    "Properties.RemoteAudit.lifetimeCapped": {
@@ -8929,7 +9856,10 @@
     "outcome": "none"
    },
    "Properties.SampledProofs.SecurityProofs.designWellFormed": {
-    "function": ["SampledProofs.Slots.layout", "Properties.SampledProofs.slotDesign"],
+    "function": [
+     "SampledProofs.Slots.layout",
+     "Properties.SampledProofs.slotDesign"
+    ],
     "outcome": "accept"
    },
    "Properties.SampledProofs.SecurityProofs.drawMisses": {
@@ -8989,7 +9919,10 @@
     "outcome": "accept"
    },
    "Properties.SampledProofs.noAcceptAfterHalt": {
-    "function": ["SampledProofs.Stream.run", "Properties.SampledProofs.runs"],
+    "function": [
+     "SampledProofs.Stream.run",
+     "Properties.SampledProofs.runs"
+    ],
     "outcome": "accept"
    },
    "Properties.SampledProofs.fleetHaltIsFinal": {
@@ -9017,15 +9950,27 @@
     "outcome": "accept"
    },
    "Properties.Pouw.Credit.SecurityProofs.workDrawMisses": {
-    "function": ["PouwCheck.Credit.strata", "PouwCheck.Credit.law", "PouwWindow.kPrime"],
+    "function": [
+     "PouwCheck.Credit.strata",
+     "PouwCheck.Credit.law",
+     "PouwWindow.kPrime"
+    ],
     "outcome": "accept"
    },
    "Properties.Pouw.Credit.SecurityProofs.epsAtSound": {
-    "function": ["PouwCheck.Credit.strata", "PouwCheck.Credit.law", "PouwWindow.epsAt"],
+    "function": [
+     "PouwCheck.Credit.strata",
+     "PouwCheck.Credit.law",
+     "PouwWindow.epsAt"
+    ],
     "outcome": "accept"
    },
    "Properties.Pouw.Credit.SecurityProofs.establishedSound": {
-    "function": ["PouwCheck.Credit.strata", "PouwCheck.Credit.law", "PouwCheck.Credit.established"],
+    "function": [
+     "PouwCheck.Credit.strata",
+     "PouwCheck.Credit.law",
+     "PouwCheck.Credit.established"
+    ],
     "outcome": "accept"
    },
    "Properties.Pouw.Strata.strataTile": {
@@ -9105,7 +10050,10 @@
     "outcome": "accept"
    },
    "Properties.RemoteAudit.Shared.acceptDrawsOpenable": {
-    "function": ["RemoteAudit.draws", "RemoteAudit.checkWindow"],
+    "function": [
+     "RemoteAudit.draws",
+     "RemoteAudit.checkWindow"
+    ],
     "outcome": "accept"
    },
    "Properties.RemoteAudit.Shared.drawIsSubset": {
@@ -9261,7 +10209,10 @@
     "outcome": "accept"
    },
    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound": {
-    "function": ["MemoryChallenger.WipeProtocol.check", "MemoryChallenger.WipeProtocol.decodeCommitment"],
+    "function": [
+     "MemoryChallenger.WipeProtocol.check",
+     "MemoryChallenger.WipeProtocol.decodeCommitment"
+    ],
     "outcome": "accept"
    },
    "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned": {
@@ -9297,7 +10248,11 @@
     "outcome": "accept"
    },
    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses": {
-    "function": ["PouwCheck.Credit.strata", "PouwCheck.Credit.law", "PouwWindow.kPrime"],
+    "function": [
+     "PouwCheck.Credit.strata",
+     "PouwCheck.Credit.law",
+     "PouwWindow.kPrime"
+    ],
     "outcome": "accept"
    },
    "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
@@ -9353,7 +10308,10 @@
     "outcome": "accept"
    },
    "Properties.Firewall.stopEnds": {
-    "function": ["Core.Firewall.admit", "Core.Firewall.stop"],
+    "function": [
+     "Core.Firewall.admit",
+     "Core.Firewall.stop"
+    ],
     "outcome": "none"
    },
    "Properties.Firewall.outOfTurnStops": {
@@ -9463,7 +10421,10 @@
     "why": "P2 in the ring model at the deployed point accepts a rho-bounded, (D, Q, L)-bounded responder with probability at most 1% + 2^-129 + 2^-130; open, and, if p is prime, false at D >= 32,894 (Q >= 2, L >= 65,789) for every k (PousP2Ring.tight_p16448, Security/Proofs/Pous/P2/RingTight.lean), and at L >= 2^30 for k <= 88 (PousP2Ring.not_meetsOn_b19_k88, Security/Proofs/Pous/P2/RingTrunc.lean); and, at k = 105, from L >= 2^169 with D >= 2 and Q >= 2 (Pous.Period.SecurityProofs.not_p2RingAuditSecure_trunc, Security/Proofs/Pous/PeriodDeployed.lean: 501,819 blocks without their low 168 bits), so the deployed budget (16,446, 2^20, 2^64) lies outside every refuted region. Its test plays the ring-model audit at a scaled point (w = 184, 16 blocks, lambda = 9) with those two attacks and seeded bounded responders."
    }
   },
-  "events": ["Claims.Pr", "Pouw.pr"],
+  "events": [
+   "Claims.Pr",
+   "Pouw.pr"
+  ],
   "inline": {
    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": {
     "PousCheck.Properties.AcceptsDecodes": "PousCheck.Properties.AcceptsDecodes taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -22560,18 +23521,27 @@
   "witnesses": {
    "Pous.Component.SecurityProofs.runAccepts": {
     "fails": "Pous.Component.SecurityProofs.runAccepts_fails",
-    "meets": ["Pous.Component.SecurityProofs.runAccepts_complete", "Pous.Component.SecurityProofs.runAccepts_meets"],
+    "meets": [
+     "Pous.Component.SecurityProofs.runAccepts_complete",
+     "Pous.Component.SecurityProofs.runAccepts_meets"
+    ],
     "by": "Pous.Component.SecurityProofs.runAccepts_by"
    },
    "Pous.Component.SecurityProofs.runBinds": {
     "fails": "Pous.Component.SecurityProofs.runBinds_fails",
-    "meets": ["Pous.Component.SecurityProofs.runAccepts_complete", "Pous.Component.SecurityProofs.runBinds_meets"],
+    "meets": [
+     "Pous.Component.SecurityProofs.runAccepts_complete",
+     "Pous.Component.SecurityProofs.runBinds_meets"
+    ],
     "break": "Pous.Component.SecurityProofs.runBinds_break_fails",
     "by": "Pous.Component.SecurityProofs.runBinds_by"
    },
    "Pous.Component.SecurityProofs.wipeAccepts": {
     "fails": "Pous.Component.SecurityProofs.wipeAccepts_fails",
-    "meets": ["Pous.Component.SecurityProofs.wipeAccepts_complete", "Pous.Component.SecurityProofs.wipeAccepts_meets"],
+    "meets": [
+     "Pous.Component.SecurityProofs.wipeAccepts_complete",
+     "Pous.Component.SecurityProofs.wipeAccepts_meets"
+    ],
     "by": "Pous.Component.SecurityProofs.wipeAccepts_by"
    }
   },
