@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
 
 /-!
 # Table `j`'s tags: the identity alone differs, which the circuit and public parses do not read
@@ -6,6 +8,8 @@ import Proofs.Flock.Soundness.Discharge.Exec.Setup
 `tagsAt tags count j` (`Exec/Setup.lean`) is `tags` at one table and `tags` with `Tags.tableIdentity count j` as its
 identity at several. `HmRow.parse` and `HmRow.loadPublic` read no identity, so they agree at every table's tags.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

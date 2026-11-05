@@ -1,4 +1,6 @@
-import Proofs.Properties.NetworkRecords.Check
+module
+
+public import Proofs.Properties.NetworkRecords.Check
 
 /-!
 # What the records check's acceptance means: the proof
@@ -7,6 +9,8 @@ The check accepts exactly when the evidence fits, the parameters have their dige
 (`check_accept`); a link-window without one has its one complete record, the Program's (`egress_none`,
 `ingress_none`), so acceptance means `ProgramRecords` (`acceptMeans`, `answerAcceptMeans`).
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check (Params Certified Link Evidence Grid Profile LinkWindow manifestSet)

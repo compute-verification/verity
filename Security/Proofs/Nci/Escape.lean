@@ -1,4 +1,6 @@
-import Definitions.Nci.Assumptions.Remote
+module
+
+public import Definitions.Nci.Assumptions.Remote
 
 /-!
 # The escaped blocks under sampled proofs
@@ -10,6 +12,8 @@ other), so their expected work is at most the escaped blocks' plus `B`; and each
 `1 − q` given that it is reached, so the escaped blocks' expected work is at most `(1 − q)` times theirs
 (`expected_filter` swaps the expectation into each block's probability).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

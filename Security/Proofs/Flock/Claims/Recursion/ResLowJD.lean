@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.ResPiecesD
-import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+module
+
+public import Proofs.Flock.Claims.Recursion.ResPiecesD
+public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
 
 /-!
 # `ResLowJ` at the concrete `rec-residuals` pieces, from `ResLowered`
@@ -11,6 +13,8 @@ as an algebra part (`.inner`), which is `resLowered_parts`' `hin`, and a `Joint`
 * `ownRD_inner`: the part `ownRD` names is an algebra part of V\*'s list at the inner shape `readX` read.
 * `resLowJ_of_resLowered`: `ResLowJ` at `DeployedR.layR elem`, `resPD` and `ownRD`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.DecompBR
 

@@ -1,11 +1,15 @@
-import Proofs.Flock.Recursive.VStarCheck
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+module
+
+public import Proofs.Flock.Recursive.VStarCheck
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 
 /-!
 # Piece (h): V*'s files parse
 
 What `vstarParsesScoped_of_list` rests on: `built_of_parse`, a parsed circuit's unit is a net `Net.ofRows` built.
 -/
+
+@[expose] public section
 
 namespace FlockC3.VStarList
 

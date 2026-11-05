@@ -1,5 +1,7 @@
-import Mathlib.Algebra.Order.BigOperators.Ring.Finset
-import Mathlib.Analysis.Real.Sqrt
+module
+
+public import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+public import Mathlib.Analysis.Real.Sqrt
 
 /-!
 # The main theorem's inequalities after Loomis–Whitney
@@ -22,6 +24,8 @@ inner dimension, `K = αΓ` the per-IU read cap and `μ` the weight on the two r
   (`isGreatest_min_one_add_sqrt`, and `isGreatest_F` in the draft's variables), and a total read cap of `α size(D)` makes
   `size(D) / 2G ≥ F` (`F_le_div_of_reads`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FrameShape
+module
+
+public import Proofs.Flock.Claims.ZK.FrameShape
 
 /-!
 # A device round that passes the frame's check
@@ -12,6 +14,8 @@ frames `fs` and its squeeze, this file shows `v` is the bytes of frames alike to
 * any bytes agreeing with frames' outside their values are alike frames' (`encs_refill`, `frame_refill`), since any 16
   bytes are a value's as the frame reads them (`toBytes_readWord`, `u64OfLE_byte`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
-import Proofs.Flock.Soundness.Discharge.HiddenDec.Assemble
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
+public import Proofs.Flock.Soundness.Discharge.HiddenDec.Assemble
 
 /-!
 # R11b's message half at the hidden-output headline: `DecodesOn` at the hidden tables
@@ -11,3 +13,5 @@ import Proofs.Flock.Soundness.Discharge.HiddenDec.Assemble
 * `Statements.lean`: the frozen statements (`TagsOkH`, `DrawOkH`, `opnAtH`, `DecodesOnExecH`).
 * `Assemble.lean`: `decodesOn_execH`.
 -/
+
+@[expose] public section

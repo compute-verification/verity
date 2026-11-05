@@ -1,4 +1,6 @@
-import Definitions.Accounting.TS.ProofLayer
+module
+
+public import Definitions.Accounting.TS.ProofLayer
 
 /-!
 # A sampled window's proofs: what (I8) reads of its drawn units (trusted)
@@ -48,6 +50,8 @@ they hold: a layer's `cut` is no later than the protocol's real commitment of ea
 and the modes are the run's (a unit is paid only if the run computed it, from the values it committed, under its
 noise).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS
 

@@ -2,8 +2,12 @@
 The hm96 slot outputs the commit string `b ‖ c` (`Binding.commitString`) of a row's bytes and a salt, bit for bit and as
 bytes, when its inputs hold the row's last chaining value and block and the salt.
 -/
-import Proofs.Flock.Soundness.Binding.Leaf
-import Proofs.Flock.Soundness.Discharge.Hm.Mask
+module
+
+public import Proofs.Flock.Soundness.Binding.Leaf
+public import Proofs.Flock.Soundness.Discharge.Hm.Mask
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hm
 

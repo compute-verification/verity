@@ -1,4 +1,8 @@
-import Proofs.Flock.Claims.Sampling.Select.Misses
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.Misses
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # The design the draw runs is well formed (`Properties.SampledProofs.DesignWellFormed`)
@@ -11,6 +15,8 @@ import Proofs.Flock.Claims.Sampling.Select.Misses
 * `designWellFormed`.
 -/
 
+@[expose] public section
+
 open SampledProofs
 
 namespace Properties.SampledProofs.SecurityProofs
@@ -21,9 +27,9 @@ open Claims.Sampling
 theorem nat_toJson (m : ℕ) : nat? (Lean.toJson m) = some m := by
   simp [nat?, int?, Lean.toJson, Lean.JsonNumber.fromNat]
 
-theorem getD_k (v : Json) (m : ℕ) : getD (Json.mkObj [("law", v), ("k", Lean.toJson m)]) "k" = Lean.toJson m := rfl
+theorem getD_k (v : Json) (m : ℕ) : getD (Json.mkObj [("law", v), ("k", Lean.toJson m)]) "k" = Lean.toJson m := (rfl)
 
-theorem getD_p (v : Json) : getD (Json.mkObj [("law", "bernoulli"), ("p", v)]) "k" = Json.null := rfl
+theorem getD_p (v : Json) : getD (Json.mkObj [("law", "bernoulli"), ("p", v)]) "k" = Json.null := (rfl)
 
 /-- **A law `parseLaw` writes names `k ≥ 1`**, where it names a `k`: `subset:K`, `stratified:K` and `work:K` at
 `K ≥ 1`, and a Bernoulli law none. -/

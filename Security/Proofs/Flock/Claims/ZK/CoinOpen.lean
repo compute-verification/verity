@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.ZK.CoinLayer
-import Proofs.Flock.Claims.ZK.Interact
-import Flock.Firewall.Coins
-import Flock.Firewall.Contract
+module
+
+public import Proofs.Flock.Claims.ZK.CoinLayer
+public import Proofs.Flock.Claims.ZK.Interact
+public import Flock.Firewall.Coins
+public import Flock.Firewall.Contract
 
 /-!
 # The Lean coin check is the deployed coin layer's (`Flock.Firewall.Coins`)
@@ -24,6 +26,8 @@ verdict over a session is `Release.start` at the answer, then `Release.openAll` 
   (`Claims/ZK/Refine.lean`) at SHA-512: where `allOk` of the openings fails, the Lean check refuses. The transport ends
   the session at that refusal (`coin_tree::Checked`), so the frame takes no coins past it.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal.CoinOpen
 

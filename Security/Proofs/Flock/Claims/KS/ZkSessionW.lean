@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.ZkPads
+module
+
+public import Proofs.Flock.Claims.KS.ZkPads
 
 /-!
 # Off the masked table on a witness lane
@@ -17,6 +19,8 @@ The fork events `Flock.joinEscZ` joins have no level-0 term. The weight `C` list
 masked tables' weight spends it as the `2` that covers `k`'s ceiling (`FlockDeploy.KS.cZ_sum_le_tableWeight`, the pads'
 weight at the deployed pads' domain), so a level-0 event needs the weight to grow.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

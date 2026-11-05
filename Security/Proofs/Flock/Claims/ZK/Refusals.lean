@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.ExeLayout
+module
+
+public import Proofs.Flock.Claims.ZK.ExeLayout
 
 /-!
 # The masked session's last round where a table refuses its coins
@@ -18,6 +20,8 @@ executable refuses at each:
 `Flock.zk_deployZk_masked_exe_stop_gap` is `Flock.zk_deployZk_masked_exe_gap` at a stopping plan with it in place of
 `HonestOffOn`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

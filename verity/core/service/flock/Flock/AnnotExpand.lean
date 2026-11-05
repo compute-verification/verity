@@ -11,7 +11,11 @@ The layout is the descriptor's (`Flock.Program`, §6): member `m` of node `j` of
 gates `[off + offsets[j] + m·G, off + offsets[j] + (m + 1)·G)`, `G` the callee's gates (one for a primitive). An input
 gate is one a primitive whose id is an input id computes (`Program.isInputId`), as `Prog.gate` locates it.
 -/
-import Flock.Annot
+module
+
+public import Flock.Annot
+
+@[expose] public section
 
 namespace Flock.Annot
 

@@ -1,5 +1,7 @@
-import Definitions.Core.Site
-import CoreProtocol.Site
+module
+
+public import Definitions.Core.Site
+public import CoreProtocol.Site
 
 /-!
 # The Site's code: its fold and its check are the spec's
@@ -20,6 +22,8 @@ the Site, log, digests and auditor a code value denotes (`site`, `log`, `digests
 The code's difftest (`site-difftest`) holds it to `verity.core.site`, so these carry the Python Site to the spec. A code
 figure (`Core.Site.Figure`, a nonnegative `Rat`) denotes the same rational in `ℚ≥0` (`figure`).
 -/
+
+@[expose] public section
 
 open scoped NNRat
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.PlainDraw
-import Proofs.Flock.Claims.KS.DecodeHidden
-import Proofs.Flock.Claims.KS.PlainDrawK
+module
+
+public import Proofs.Flock.Claims.KS.PlainDraw
+public import Proofs.Flock.Claims.KS.DecodeHidden
+public import Proofs.Flock.Claims.KS.PlainDrawK
 
 /-!
 # flock-verify's acceptance at a draw value, through `keep`
@@ -25,6 +27,8 @@ decodes to through `keep`. At `keep := id` they are `PlainDrawAcc`'s:
   `drawSetup_of_accepts`, `tableAt_of_accepts`, `drawSetupH_of_accepts`, `tableAtH_of_acceptsI` at the draw `some d`,
   with no premise on a record's draw.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.AtDraw
 
