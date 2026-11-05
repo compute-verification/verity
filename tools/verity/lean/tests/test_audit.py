@@ -596,6 +596,9 @@ def test_every_record_difference_code_is_one_update_settles():
     dpol = {k: v for k, v in opol.items() if k != "open"} | {"domain": {"P.Sound": scope}}
     cfacts, cpol = cited()
     cites = cpol["domain"]["P.Guarantees.U"]
+
+    def lifted(body):
+        return facts(pins={"P.t": fact() | {"lift": {"head": "P.T", "module": "P.Defs", "unfolded_sha256": sha(body)}}})
     cases = {
         "guarantees.unrecorded": (POLICY, facts()),
         "assumptions.unrecorded": (pol | {"assumptions": {"P.Hyp": {"owner": "@lean"}}}, facts()),
@@ -631,6 +634,7 @@ def test_every_record_difference_code_is_one_update_settles():
         "domain.uncited": (cpol | {"domain": {"P.Guarantees.U": {k: v for k, v in cites.items() if k != "cites"}}}, cfacts),
         "domain.unlisted": ({k: v for k, v in cpol.items() if k != "domain"}, cfacts),
         "shape.inline-unlisted": (pol | {"shape": {"inline": {"P.gone": {"x = y": "why"}}}}, facts()),
+        "guarantees.unfolded-hash": (recorded(lifted("first")), lifted("restated")),
     }
     assert set(cases) == A.RECORD_DIFFERENCE
     for code, (policy, now) in cases.items():
@@ -2640,6 +2644,63 @@ def test_an_unwitnessed_guarantee_is_listed_with_its_statement_and_the_list_only
                                 "unwitnessed": {"P.b": h}}, {"P": "Q"}) == {
         "witnesses": {"Q.a": {"honest": ["Q.a_h"], "nontrivial": "Q.a_n"}}, "unwitnessed": {"Q.b": h}}
     assert A.renamed_witnesses(POLICY, {"P": "Q"}) == {}
+
+
+def lifted_pin(body: str) -> dict:
+    """`P.SecurityProofs.G : P.Guarantees.G` as `Facts.lean` reports it, with `P.Guarantees.G` defined as ``body``: its
+    signature and type hash are the constant's, and only `lift`'s hash of it unfolded once reads the body."""
+    return fact(signature="P.SecurityProofs.G : P.Guarantees.G", hyps=[], reads=[], h="00000000000000cc") | {
+        "lift": {"head": "P.Guarantees.G", "module": "P.Guarantees", "unfolded_sha256": sha(body)}}
+
+
+def test_a_restated_definition_a_guarantee_is_stated_as_changes_its_record():
+    """A guarantee stated as `theorem G : Guarantees.G` has the constant's signature and type hash, which a restated body
+    leaves alone: its record also holds the hash of the statement with the definition unfolded once (`unfolded_hash`), so
+    the restatement is a changed record, which `--update` settles, and a record without the hash fails until `--update`
+    writes it."""
+    pol = {**POLICY, "assumptions": {}, "guarantees": {"P.SecurityProofs.G": {"owner": "@lean"}}}
+    was, now = (facts(pins={"P.SecurityProofs.G": lifted_pin(b)}) for b in ("∀ n, P.f n = n", "∀ n, P.f n ≤ n"))
+    fails, rec = A.judge(pol, was, FILES, update=True)
+    assert fails == [] and rec["guarantees"]["P.SecurityProofs.G"]["unfolded_hash"] == sha("∀ n, P.f n = n")
+    assert A.judge(rec, was, FILES)[0] == []
+    (restated,) = A.judge(rec, now, FILES)[0]
+    assert restated.code == "guarantees.unfolded-hash" and restated.entry == "P.SecurityProofs.G"
+    assert str(restated).startswith("guarantees: P.SecurityProofs.G's statement, its definition P.Guarantees.G unfolded once, "
+                                    "changed (") and "the definition was restated" in str(restated)
+    assert A.RECORD_DIFFERENCE.match(restated)
+    regen = A.regenerated(rec, now, FILES, [restated])
+    assert regen["guarantees"]["P.SecurityProofs.G"]["unfolded_hash"] == sha("∀ n, P.f n ≤ n")
+    assert regen["guarantees"]["P.SecurityProofs.G"]["signature"] == rec["guarantees"]["P.SecurityProofs.G"]["signature"]
+    old = {**rec, "guarantees": {"P.SecurityProofs.G": {k: v for k, v in rec["guarantees"]["P.SecurityProofs.G"].items()
+                                                         if k != "unfolded_hash"}}}
+    (unkeyed,) = A.judge(old, was, FILES)[0]
+    assert unkeyed.code == "guarantees.unfolded-hash" and "has no hash in its record" in str(unkeyed)
+    assert "unfolded_hash" not in A.judge(pol, facts(), FILES, update=True)[1]["guarantees"]["P.SecurityProofs.G"]
+
+
+def test_an_unwitnessed_entry_of_a_restated_definition_fails():
+    """Of a guarantee stated as a definition, the `unwitnessed` entry holds the statement unfolded once (`unfolded_hash`)
+    beside its type hash: a restated body fails it as a changed statement does, and `--update` drops it. `--update` writes
+    the hash into an entry without one (a whole exemption becomes {type_hash, unfolded_hash}, a half keeps its `missing` and
+    `why`)."""
+    body = wbody("P.Holds", binders=["∀", "→", "→"])
+    pol, f = witnessed({"lift": lifted_pin("P.Holds, first")["lift"], "body": body})
+    _, g = witnessed({"lift": lifted_pin("P.Holds, restated")["lift"], "body": body})
+    h, u = f["pins"]["P.sound"]["type_sha256"], sha("P.Holds, first")
+    bare = {**POLICY, "guarantees": {"P.sound": {"owner": "@lean", "type_hash": h}}}
+    keyed = {**bare, "unwitnessed": {"P.sound": {"type_hash": h, "unfolded_hash": u}}}
+    assert witness_codes(keyed, f) == []
+    assert A.unwitnessed_kept(keyed, f, {}) == keyed["unwitnessed"]
+    assert witness_codes(keyed, g) == ["witnesses.unwitnessed-changed"]
+    assert A.unwitnessed_kept(keyed, g, {}) == {}
+    assert A.unwitnessed_kept({**bare, "unwitnessed": {"P.sound": h}}, f, {}) == keyed["unwitnessed"]
+    half = {"type_hash": h, "missing": "nontrivial", "why": "PRF-212: not yet closed"}
+    honest_only = {**pol, "witnesses": {"P.sound": {"honest": ["P.sound_honest"]}}, "unwitnessed": {"P.sound": half}}
+    assert A.unwitnessed_kept(honest_only, f, {}) == {"P.sound": half | {"unfolded_hash": u}}
+    keyed_half = {**honest_only, "unwitnessed": {"P.sound": half | {"unfolded_hash": u}}}
+    assert witness_codes(keyed_half, f) == []
+    assert witness_codes(keyed_half, g) == ["witnesses.unwitnessed-changed"]
+    assert witness_codes({**bare, "unwitnessed": {"P.sound": {"type_hash": h, "unfolded_hash": 3}}}, f) == ["witnesses.form"]
 
 
 def test_a_premise_witnesses_assumed_lists_is_taken_and_every_other_premise_is_concluded():

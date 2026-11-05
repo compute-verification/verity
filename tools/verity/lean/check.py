@@ -61,9 +61,11 @@ environment extension loaded, so none of the package's code runs), and replays t
                  hypothesis that is not a listed premise, or no longer says what its record says:
                  signature, named assumptions, premises (the named assumptions, domain hypotheses and open premises its
                  statement rests on, and the assumptions-module `Prop`s it only reads, `assumption_records`),
-                 type hash, and (under `reads`, per module) the definitions the guarantees
-                 read and the digest of those definitions, which with the type hashes fix what each guarantee reads, so
-                 the record lists no readers (one that does fails until `--update`); the hashes are SHA-256 over a
+                 type hash and, for a statement that is a definition under `meaning` (`theorem G : Guarantees.G`), the
+                 hash of that statement with the definition unfolded once (`unfolded_hash`, `Facts.lean`'s `liftOf`),
+                 so a restated definition changes the guarantee's record, and (under `reads`, per module) the
+                 definitions the guarantees read and the digest of those definitions, which with the type hashes fix
+                 what each guarantee reads, so the record lists no readers (one that does fails until `--update`); the hashes are SHA-256 over a
                  canonical form of the term that ignores what `Expr.hash` ignores (records written with its 32 bits are
                  checked as they are until `--update` rewrites them); a record written before guarantees were called
                  that holds them as `pins`, and is read so (`as_guarantees`); or an entry has no `owner`, the handle
@@ -78,7 +80,7 @@ environment extension loaded, so none of the package's code runs), and replays t
                  witness doesn't have that form, ranges over its instance instead of building it, takes a hypothesis
                  that is no named assumption the lock lists, or is an honest one at an accept-all verifier
                  (`witness_failures`), unless `unwitnessed`, which only shrinks, lists the guarantee with its
-                 statement's hash
+                 statement's hash (and its `unfolded_hash`)
     reads        a definition a guarantee's statement reads lies outside the spec (the `layers` prefixes) of its package
                  and of the packages it requires by path, and outside a pinned dependency, unless a `reads_exempt`
                  prefix lists its module with a reason (an entry that exempts nothing fails too); or it lies in a spec
@@ -1438,7 +1440,8 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
             fails.append(Failure("four-names", name, f"four names: {name} is a guarantee of {name.split('.')[0]}, which "
                                  f"`four_names` lists, so it is stated as `X.SecurityProofs.G : X.Guarantees.G` with `G` a "
                                  f"definition of a `Guarantees` module (`check.py --lift` writes it), or is not a guarantee"))
-        now = {"signature": f["signature"].splitlines(), "assumptions": sorted(set(named)), "type_hash": f["type_sha256"]}
+        now = {"signature": f["signature"].splitlines(), "assumptions": sorted(set(named)), "type_hash": f["type_sha256"]} | (
+            {"unfolded_hash": u} if (u := (f.get("lift") or {}).get("unfolded_sha256")) else {})
         kept[name] = ({"owner": who} if who else {}) | now
         recorded.add(name)
         if update:
@@ -1448,13 +1451,17 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                                  f"and commit the record"))
             continue
         compared.add(name)
-        for k in ("signature", "assumptions", "type_hash"):
-            built = f["type_hash"] if k == "type_hash" and len(rec.get(k, "")) == OLD else now[k]
+        for k in ("signature", "assumptions", "type_hash", "unfolded_hash"):
+            built = f["type_hash"] if k == "type_hash" and len(rec.get(k, "")) == OLD else now.get(k)
             if rec.get(k) != built:
                 diff = "\n".join(difflib.unified_diff(rec.get("signature", []), now["signature"], "recorded", "built", lineterm="",
                                                       n=1)) if k == "signature" else f"{rec.get(k)} -> {built}"
-                fails.append(Failure(f"guarantees.{k.replace('_', '-')}", name,
-                                     f"guarantees: {name}'s {k.replace('_', ' ')} changed:\n{diff}"))
+                lift = f.get("lift") if k == "unfolded_hash" and built else None
+                fails.append(Failure(f"guarantees.{k.replace('_', '-')}", name, (
+                    f"guarantees: {name}'s statement, its definition {lift['head']} unfolded once, "
+                    + (f"changed ({diff}): the definition was restated" if rec.get(k) else "has no hash in its record")
+                    + "; run `check.py --update` and commit the record" if lift else
+                    f"guarantees: {name}'s {k.replace('_', ' ')} changed:\n{diff}")))
                 compared.discard(name)
                 break
     reads = guarantee_reads(facts)
@@ -1501,7 +1508,8 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         kind = {a: kinds.get(a) or ("assumptions" if a in records else "domain" if a in domains else "open") for a in takes}
         now = {k: sorted(a for a in takes if kind[a] == k) for k in ("assumptions", "domain", "open")}
         now["reads"] = sorted(read_props(facts["pins"][name], policy) - takes)
-        kept[name] = {k: v for k, v in r.items() if k != "type_hash"} | {"premises": now, "type_hash": r["type_hash"]}
+        kept[name] = {k: v for k, v in r.items() if k not in ("type_hash", "unfolded_hash")} | {
+            "premises": now, "type_hash": r["type_hash"]} | ({"unfolded_hash": r["unfolded_hash"]} if "unfolded_hash" in r else {})
         if name in compared and (was := policy["guarantees"][name].get("premises")) != now:
             was = was if isinstance(was, dict) else {}
             change = "; ".join(f"{k} {', '.join(was.get(k) or []) or 'none'} -> {', '.join(now[k]) or 'none'}"
@@ -2062,7 +2070,10 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
     A guarantee in scope without witnesses fails unless `unwitnessed` ({guarantee: its record's type hash}, the
     guarantees in scope when the rule came) lists it with the hash of its statement as built, or, under `--moved`, with that
     of its text under the old names when its record has that hash too (renamed, it says the same, and `--update` re-keys
-    the entry): a new guarantee, and one whose statement changed, carry both. An entry {type_hash, missing, why} exempts only the half `missing` names, of a
+    the entry): a new guarantee, and one whose statement changed, carry both. Of a guarantee whose statement is a
+    definition (`lift`), the entry also holds the hash of that statement with the definition unfolded once
+    (`unfolded_hash`), so a restated definition fails it as a changed statement does (`--update` writes the hash into an
+    entry without one). An entry {type_hash, missing, why} exempts only the half `missing` names, of a
     guarantee whose `witnesses` entry lists the other (`unwitnessed_entry`). An entry beside the witnesses it would exempt,
     or of a witness, does nothing (the witnesses are held to their form) and `--update` drops it, so a PR that brings
     witnesses and one that lists the guarantee land in either order. An entry whose guarantee the lock doesn't list yet
@@ -2079,7 +2090,8 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
                              f"package; remove the entry"))
     for g in sorted(g for g, v in allow.items() if unwitnessed_entry(v) is None):
         fails.append(Failure("witnesses.form", g, f"witnesses: unwitnessed[{g}] is its type hash, or {{type_hash, missing: "
-                             f"honest or nontrivial, why}} for a guarantee whose `witnesses` entry lacks that half"))
+                             f"honest or nontrivial, why}} for a guarantee whose `witnesses` entry lacks that half, each "
+                             f"with `unfolded_hash` for a guarantee whose statement is a definition"))
     for g in sorted(guarantees):
         pin = facts["pins"].get(g, {})
         if g in wit or pin.get("kind") != "theorem" or (g in allow and unwitnessed_entry(allow[g]) is None):
@@ -2098,7 +2110,9 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
                                      f"{half} witness, and `witnesses` lists none of its: list the other half there"))
                 continue
             mv, rec = pin.get("moved") or {}, guarantees.get(g) or {}
-            if h != pin.get("type_sha256") and not (h == mv.get("sha256") == rec.get("type_hash")):
+            u = unwitnessed_unfolded(allow[g])
+            if (h != pin.get("type_sha256") and not (h == mv.get("sha256") == rec.get("type_hash"))) or (
+                    u is not None and u != (pin.get("lift") or {}).get("unfolded_sha256") and u != mv.get("unfolded_sha256")):
                 fails.append(Failure("witnesses.unwitnessed-changed", g, f"witnesses: {g} changed since `unwitnessed` "
                                      + (f"exempted its {half} witness, so it carries that witness now" if half else
                                         f"listed it, and the rule holds it to witnesses ({why}), so it carries them now")
@@ -2247,22 +2261,39 @@ def unwitnessed_kept(policy: dict, facts: dict, kept: dict) -> dict:
         exempt = (g not in ws) if half is None else (isinstance(ws.get(g), dict) and not ws[g].get(half))
         if h is None or not exempt or g in wit or pin.get("kind") != "theorem" or not witness_scope(g, policy, pin):
             continue
-        built, mv = pin.get("type_sha256"), pin.get("moved") or {}
+        built, mv, was = pin.get("type_sha256"), pin.get("moved") or {}, unwitnessed_unfolded(v)
+        unfolded = (pin.get("lift") or {}).get("unfolded_sha256")
+        if was is not None and was != unfolded and was != mv.get("unfolded_sha256"):
+            continue
         if h == built or (h == rec.get("type_hash") and (h == mv.get("sha256") or lifted_into(rec, new, pin, mv))):
-            out[g] = built if half is None else {**v, "type_hash": built}
+            keyed = {"unfolded_hash": unfolded} if unfolded else {}
+            if half is None:
+                out[g] = {"type_hash": built} | keyed if keyed else built
+            else:
+                out[g] = {k: x for k, x in v.items() if k != "unfolded_hash"} | {"type_hash": built} | keyed
     return out
 
 
 def unwitnessed_entry(v) -> tuple[str, str | None] | None:
     """An `unwitnessed` entry as (its type hash, the half it exempts): a hash exempts both witnesses, and
-    {type_hash, missing: honest or nontrivial, why} only that half of a guarantee whose `witnesses` entry lists the other;
-    None for any other form."""
+    {type_hash, missing: honest or nontrivial, why} only that half of a guarantee whose `witnesses` entry lists the other.
+    Of a guarantee whose statement is a definition (`lift`), the entry is a dict with that definition's statement unfolded
+    once, `unfolded_hash`, beside them ({type_hash, unfolded_hash} exempts both); None for any other form."""
     if isinstance(v, str):
         return v, None
-    if isinstance(v, dict) and isinstance(v.get("type_hash"), str) and v.get("missing") in ("honest", "nontrivial") \
-            and isinstance(v.get("why"), str) and v["why"] and set(v) == {"type_hash", "missing", "why"}:
+    if not (isinstance(v, dict) and isinstance(v.get("type_hash"), str)) or not isinstance(v.get("unfolded_hash", ""), str):
+        return None
+    rest = set(v) - {"type_hash", "unfolded_hash"}
+    if not rest and "unfolded_hash" in v:
+        return v["type_hash"], None
+    if rest == {"missing", "why"} and v["missing"] in ("honest", "nontrivial") and isinstance(v["why"], str) and v["why"]:
         return v["type_hash"], v["missing"]
     return None
+
+
+def unwitnessed_unfolded(v) -> str | None:
+    """An `unwitnessed` entry's `unfolded_hash`, None without one."""
+    return v.get("unfolded_hash") if isinstance(v, dict) else None
 
 
 #: what a guarantee's inline hypotheses may be instead (`inline_failures`), and what to do with any other
@@ -2695,6 +2726,7 @@ class Codes(frozenset):
 #: `why`, one no honest witness concludes, and every other failure take a person
 RECORD_DIFFERENCE = Codes({
     "guarantees.signature", "guarantees.assumptions", "guarantees.type-hash",       # its record's statement differs
+    "guarantees.unfolded-hash",                                                     # or its definition, unfolded once
     "guarantees.premises-changed",                                                  # or what it rests on
     "guarantees.reads-new", "guarantees.reads-gone", "guarantees.reads-changed",    # a `reads` group differs
     "guarantees.reads-digest", "guarantees.readers",                                # or still lists its readers

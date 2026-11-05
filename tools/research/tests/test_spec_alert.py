@@ -40,6 +40,19 @@ def test_a_restated_guarantee_shows_its_statement_before_and_after():
     assert "P.t : 1 = 1" in lines[0] and lines[0].index("P.t : 1 = 1") < lines[0].index("after:") < lines[0].index("P.t : 2 = 2")
 
 
+def test_a_restated_definition_a_guarantee_is_stated_as_shows_it_changed():
+    """`theorem G : Guarantees.G` keeps its signature and type hash when `Guarantees.G`'s body is restated; its
+    `unfolded_hash` moves, and the DM shows it changed. A record that gains the hash, or a push with no Lean input changed,
+    shows nothing."""
+    sig = "P.SecurityProofs.G : P.Guarantees.G"
+    was, now = (_doc({"P.SecurityProofs.G": _g(sig, H1) | {"unfolded_hash": u}}) for u in (H2, H3))
+    (line,) = spec.changes(was, now)
+    assert line.startswith("• changed guarantee `P.SecurityProofs.G`: its definition, unfolded once, says something else")
+    assert sig in line
+    assert spec.changes(_doc({"P.SecurityProofs.G": _g(sig, H1)}), now) == []
+    assert [k for _, k, _ in spec._across({"a": was}, {"a": now}, sources=False)] == []
+
+
 def test_new_and_removed_guarantees_are_listed_and_a_move_is_not():
     old = _doc({"P.t": _g("P.t : A", H1), "P.gone": _g("P.gone : B", H2)})
     new = _doc({"Q.t": _g("Q.t : A", H1), "P.new": _g("P.new : C", H3)})

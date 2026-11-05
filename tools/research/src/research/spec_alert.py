@@ -2,8 +2,9 @@
 guarantee says waits on nobody, and he is shown it.
 
 The spec is what each package's `lean-audit.json` records: every guarantee's statement (its printed signature and type
-hash, and the premises it rests on, its `premises`: a premise it gains or drops is shown), every definition the statements
-read (its hash, under `reads`), every listed premise no `reads` record holds (its `digest` under `assumptions`, `domain`
+hash; for one stated as a definition, that statement unfolded once, `unfolded_hash`, so a restated definition shows its
+guarantee changed; and the premises it rests on, its `premises`: a premise it gains or drops is shown), every definition
+the statements read (its hash, under `reads`), every listed premise no `reads` record holds (its `digest` under `assumptions`, `domain`
 or `open`, of it and the definitions it reads: one that gains a digest is shown as recorded), the named assumptions
 (`assumptions`: one added or removed is shown, and so is a premise that becomes one), the domain hypotheses (`domain`:
 one listed, with its `why`, one no longer listed, and a new `why` are shown) and the open premises (`open`: one listed,
@@ -140,11 +141,22 @@ def _signature(rec: dict) -> str:
     return "```\n" + "\n".join(lines).replace("```", "'''") + "\n```"
 
 
-def _restated(a: dict, b: dict) -> bool:
+def _restated(a: dict, b: dict, sources: bool = True) -> bool:
+    """Whether a guarantee's record says something else: its type hash or, where both records hold one and a Lean input
+    changed, the hash of its statement with its definition unfolded once (`unfolded_hash`), which a restated definition
+    moves under the same signature."""
     ha, hb = a.get("type_hash") or "", b.get("type_hash") or ""
     if len(ha) != len(hb):                      # one record rehashed (32-bit to SHA-256): only the printed statement compares
         return a.get("signature") != b.get("signature")
-    return ha != hb
+    ua, ub = a.get("unfolded_hash"), b.get("unfolded_hash")
+    return ha != hb or (sources and bool(ua and ub) and ua != ub)
+
+
+def _changed(n: str, a: dict, b: dict) -> str:
+    if a.get("signature") == b.get("signature"):
+        return (f"• changed guarantee `{n}`: its definition, unfolded once, says something else (the `reads` record holds "
+                f"its new text's hash):\n{_signature(b)}")
+    return f"• changed guarantee `{n}`, before:\n{_signature(a)}\nafter:\n{_signature(b)}"
 
 
 def _package(path: str) -> str:
@@ -174,8 +186,8 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
     gone = {n: r for n, (_, r) in a.items() if n not in b}
     came = {n: r for n, (_, r) in b.items() if n not in a}
     renamed = {r.get("type_hash") for r in gone.values()} & {r.get("type_hash") for r in came.values()} - {None, ""}
-    out = [(b[n][0], "changed", f"• changed guarantee `{n}`, before:\n{_signature(a[n][1])}\nafter:\n{_signature(b[n][1])}")
-           for n in sorted(set(a) & set(b)) if _restated(a[n][1], b[n][1])]
+    out = [(b[n][0], "changed", _changed(n, a[n][1], b[n][1]))
+           for n in sorted(set(a) & set(b)) if _restated(a[n][1], b[n][1], sources)]
     out += [(a[n][0], "removed", f"• removed guarantee `{n}`") for n, r in sorted(gone.items()) if r.get("type_hash") not in renamed]
     for n in sorted(set(a) & set(b)):
         was, now = _premises(a[n][1]), _premises(b[n][1])
@@ -252,7 +264,7 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
             for p, d in news.items() for x in _allowed(d) if x not in va]
     out += [(b[n][0], "new", f"• new guarantee `{n}`\n{_signature(r)}")
             for n, r in sorted(came.items()) if r.get("type_hash") not in renamed]
-    out += [(b[n][0], "moved", "") for n in sorted(set(a) & set(b)) if a[n][0] != b[n][0] and not _restated(a[n][1], b[n][1])]
+    out += [(b[n][0], "moved", "") for n in sorted(set(a) & set(b)) if a[n][0] != b[n][0] and not _restated(a[n][1], b[n][1], sources)]
     return out
 
 
