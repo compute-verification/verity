@@ -20,7 +20,7 @@ Notes are records, never messages.
   research msg linear project create NAME --team KEY... [--lead USER] [--target D] [--description-file F]
   research msg linear milestone create|edit PROJECT NAME [--date D] [--description-file F] [--rename NEW]
   research msg read --thread TS [--since TS] | --since TS | --as NAME [--peek] [--urgent] [--json]  # --as: NAME's unread doorbells
-  research msg names open|read|close|list [--as NAME] [--forward-to @NAME] [--succeeds] [--poster BC_ID]  # the names you answer to
+  research msg names open|read|close|list|revoke [--as NAME] [--forward-to @NAME] [--succeeds] [--poster BC_ID]  # the names you answer to
   research msg traffic [--hours H] [--json]                        # the monitor: doorbells, pauses, dropped names, unanswered asks
   research msg traffic --latency [--hours H] [--json]              # per lane: asks, answered (by record), median and p90 minutes
   research msg pickup --thread TS                                  # 👀 on an ask you own
@@ -2477,6 +2477,7 @@ def _now_stamp() -> str:
 
 
 def cmd_inbox(ns: argparse.Namespace, reg: dict) -> int:
+    names_options(ns)
     routes = routes_of(ns)
     if ns.verb == "list":
         for h in reg["handles"]:                                    # a clone not pulled since the name opened lists it too
@@ -2493,6 +2494,8 @@ def cmd_inbox(ns: argparse.Namespace, reg: dict) -> int:
     name = (ns.handle or "").lstrip("@")
     if not NAME_RE.match(name):
         raise SlackError(f"--as {ns.handle!r}: a name is lower case letters, digits, '.', '_' and '-'")
+    if ns.verb == "revoke":
+        return inbox_revoke(ns, routes, name)
     if ns.verb == "open":
         if not any(h["handle"] == name for h in reg["handles"]):
             raise SlackError(f"@{name} is not a lead's handle: only leads get names, and workers are reached through their lead; "
@@ -2515,6 +2518,40 @@ def cmd_inbox(ns: argparse.Namespace, reg: dict) -> int:
         print(f"@{name} closed" + (f"; its doorbells ring @{r['forward_to']}" if r["forward_to"] else ""))
         return 0
     return inbox_read(ns, reg, r)
+
+
+#: the options each `names` verb reads; any other one given is refused, so a mistyped intent can't fall through to the verb
+NAMES_OPTIONS = {"open": ("holder", "succeeds", "poster", "remit"), "close": ("forward_to",), "read": ("peek", "urgent", "json"),
+                 "list": ("json",), "revoke": ("poster",)}
+
+
+def names_options(ns: argparse.Namespace) -> None:
+    """Refuse an option the verb doesn't read, naming what does: `close --poster` would otherwise close the whole name."""
+    given = [k for k in ("holder", "succeeds", "poster", "remit", "forward_to", "peek", "urgent", "json") if getattr(ns, k, None)]
+    if bad := [k for k in given if k not in NAMES_OPTIONS[ns.verb]]:
+        flags = ", ".join("--" + k.replace("_", "-") for k in bad)
+        users = sorted({v for k in bad for v, opts in NAMES_OPTIONS.items() if k in opts})
+        hint = ("; to stop one agent posting as a name, run `research msg names revoke --as NAME --poster BC_ID`"
+                if "poster" in bad else f"; {flags} is for `names {' or '.join(users)}`")
+        raise SlackError(f"names {ns.verb} takes no {flags}, and did nothing{hint}")
+
+
+def inbox_revoke(ns: argparse.Namespace, routes: Routes, name: str) -> int:
+    """Remove agents from `name`'s posters (`names open --poster` added them); the inbox stays open with its holder."""
+    if not ns.poster:
+        raise SlackError(f"names revoke needs --poster BC_ID: the agent that stops posting as @{name}")
+    r = routes.local.get(name) or routes.get_route(name, fresh=True)   # the clone's copy is the fresher; the published one lags
+    if not r or r.get("closed"):
+        raise SlackError(f"@{name} has no open inbox, so no posters to revoke")
+    have = list(r.get("posters", []))
+    if missing := [p for p in ns.poster if p not in have]:
+        raise SlackError(f"@{name} has no poster {', '.join(missing)}; its posters: {', '.join(have) or 'none'}")
+    keep = [p for p in have if p not in ns.poster]
+    new = {k: v for k, v in r.items() if k != "posters"} | ({"posters": keep} if keep else {})
+    if not ns.dry_run:
+        print(publish_route(routes.root, new, f"routes.d: @{name} revokes {', '.join(ns.poster)}"))
+    print(f"@{name}: {', '.join(ns.poster)} no longer post as it; its inbox stays open")
+    return 0
 
 
 def inbox_open(ns: argparse.Namespace, reg: dict, routes: Routes, name: str) -> int:
@@ -4151,13 +4188,14 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--quiet", action="store_true", help="ring only the names it starts with: no reply needed")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT")
     p.add_argument("--report", action="store_true", help="a program's report (drive, the merge train), held to no length")
-    p = cmd("names", "the leads' names, each an inbox thread: open, read, close, list")
-    p.add_argument("verb", choices=("open", "read", "close", "list"))
+    p = cmd("names", "the leads' names, each an inbox thread: open, read, close, list, revoke (a poster)")
+    p.add_argument("verb", choices=("open", "read", "close", "list", "revoke"))
     p.add_argument("--as", dest="handle", default=None, metavar="NAME", help="the inbox's name: your handle")
     p.add_argument("--holder", default=None, metavar="BC_ID", help="open: the agent that holds it (default: this agent)")
     p.add_argument("--succeeds", action="store_true", help="open: take over an inbox another agent holds (a successor)")
     p.add_argument("--poster", action="append", default=[], metavar="BC_ID",
-                   help="open: another agent that posts as this name (`--as`), such as a lane of its holder's; repeatable")
+                   help="open: another agent that posts as this name (`--as`), such as a lane of its holder's; revoke: one "
+                        "that stops; repeatable")
     p.add_argument("--remit", default=None, metavar="TEXT", help="open: what the name is for, one line (a successor keeps it)")
     p.add_argument("--forward-to", default=None, metavar="@NAME", help="close: whose doorbell rings instead")
     p.add_argument("--peek", action="store_true", help="read: don't mark them read")

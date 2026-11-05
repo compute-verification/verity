@@ -2411,6 +2411,30 @@ def test_names_open_keeps_a_suffix_the_published_route_doesnt_show_yet(fake, reg
     assert json.loads((routes_dirs[0] / "memory-accounting.json").read_text())["branch_suffixes"] == ["93c1", "6cd3"]
 
 
+def test_names_close_refuses_poster_and_revoke_removes_one_poster_keeping_the_inbox_open(fake, registry, routes_dirs, tmp_path,
+                                                                                         capsys, monkeypatch):
+    """`close --poster` once closed a whole name when one worker's grant was meant: close refuses an option it doesn't read,
+    and `revoke` takes one agent off the name's posters while its inbox stays open."""
+    notes_clone(tmp_path)
+    monkeypatch.setenv("RESEARCH_NOTES_CITE_CHECK", "0")
+    holder, lane, other = ("bc-1f5fcd84-768c-5ac6-a73e-0e3a950e61ef", "bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac",
+                           "bc-0ddba11c-0000-4000-8000-000000000001")
+    box = inbox(fake, routes_dirs, "vllm", holder=holder)
+    for d in routes_dirs:
+        add_route(d, "vllm", box, holder=holder, posters=[lane, other])
+    path = routes_dirs[0] / "vllm.json"
+    rc, _, err = run(capsys, "names", "close", "--as", "vllm", "--poster", lane)
+    assert rc == 2 and "names close takes no --poster, and did nothing" in err and "names revoke --as NAME --poster" in err
+    assert json.loads(path.read_text()).get("closed") is None
+    rc, _, err = run(capsys, "names", "close", "--as", "vllm", "--peek")
+    assert rc == 2 and "--peek is for `names read`" in err
+    rc, out, _ = run(capsys, "names", "revoke", "--as", "vllm", "--poster", lane)
+    r = json.loads(path.read_text())
+    assert rc == 0 and "no longer post as it" in out and r["posters"] == [other] and r.get("closed") is None
+    rc, _, err = run(capsys, "names", "revoke", "--as", "vllm", "--poster", lane)
+    assert rc == 2 and f"@vllm has no poster {lane}" in err
+
+
 def test_names_open_poster_lets_another_agent_post_as_it_and_a_successor_keeps_it(fake, registry, routes_dirs, tmp_path, capsys, monkeypatch):
     """Another agent (a lane of the holder's) posts as a handle when its route's `posters` name it, so it may post `--as`
     it, and a successor keeps it."""
