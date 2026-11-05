@@ -88,8 +88,11 @@ set, a draw session's on the auditor host opened on the run's commitment, `bench
 `verify_run`'s "The coin record"), and replays ``--draws`` work-weighted tiles over all of them and
 each pass's exclusion tiles.  A tile that passes every check but its inert-work bound is credited nothing under
 ``--over-cap uncredited`` (the default, CMP-311 option A; the credit takes the draws on such tiles, X_O) and rejects the run
-under ``--over-cap reject``; the verdict records which (``over_cap``).  The passes are of one salt and, but under
-``--test-instance`` (a test instance's passes, whose verdict credits nothing), of the served instance, k_min 1,024 at 64 x 64 tiles.  It writes the details to ``--out``, with, where
+under ``--over-cap reject``; the verdict records which (``over_cap``).  The run of record takes ``--over-cap uncredited``
+and volunteers no row (``volunteer-needed`` says ``no``, so the pipelines run no ``volunteer``): a volunteered A row
+uncredits its whole band of 64 rows, and a B row its block of 64 columns (`pearl_c_work.UnitRecord.credited`), a third
+or more of an honest run's credit, where the over-cap tiles it would spare cost under half a percent.  The passes are
+of one salt and, but under ``--test-instance`` (a test instance's passes, whose verdict credits nothing), of the served instance, k_min 1,024 at 64 x 64 tiles.  It writes the details to ``--out``, with, where
 ``served.json`` says which passes the timed call made and no ``--manifest`` names others, the credit over those retained
 alone (`timed_credit`), and the core answer (`answer_of`'s form, ``public.work.credited`` the MACs credited at Pearl's Assumption 1 at ``--delta``) to ``--answer``
 (default ``answer.json`` beside ``--out``, the file `served_verdicts.sh` reads as a piece's core answer), prints one line
