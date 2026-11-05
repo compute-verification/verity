@@ -1,6 +1,7 @@
 """A committed table: a matrix over F whose rows are Reed–Solomon encoded, committed column by column in a frame-v3-sha512
 tree (`verity.ml.commitments.merkle`). Column j's leaf value is a fresh 64-byte salt, then the column's r elements
-(8 bytes each, little-endian), under the schema `SCHEMA`; the salt hides a column until it is opened.
+(8 bytes each, little-endian), under the schema `SCHEMA`; the salt hides a column until it is opened. Columns open
+together, under one multiproof (`verity.ml.commitments.multiproof`).
 
 A table's domain binds its shape (`Shape.binding`), so a root names one role, size and code.
 """
@@ -9,19 +10,18 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 
 from verity.ml.commitments.indexed import RangeU64Domain
-from verity.ml.commitments.limits import VerificationLimits
-from verity.ml.commitments.merkle import Commitment, CommitmentDomain, MerkleTree, Opening, verify_opening
+from verity.ml.commitments.merkle import CommitmentDomain, MerkleTree
+from verity.ml.commitments.multiproof import multiproof, verify_multiproof
 
 from . import code
 from .field import P, from_bytes, to_bytes
 
 SCHEMA = "verity/lin/column/v0"
 SALT_BYTES = 64
-_LIMITS = VerificationLimits()
 
 
 @dataclass(frozen=True)
@@ -72,35 +72,37 @@ class Table:
     def root(self) -> bytes:
         return self._tree.commitment.root
 
-    def open(self, j: int) -> Opening:
-        return self._tree.open(j)
+    def open(self, js: Iterable[int]) -> bytes:
+        """The columns at `js` and one multiproof for them (`verity.ml.commitments.multiproof`), as `columns` reads them."""
+        ranks = sorted(set(js))
+        proof = multiproof(self._tree, ranks)
+        return (len(ranks).to_bytes(4, "big") + b"".join(j.to_bytes(8, "big") + self._values[j] for j in ranks)
+                + len(proof).to_bytes(4, "big") + b"".join(proof))
 
 
-def column(shape: Shape, root: bytes, opening: Opening) -> list[int] | None:
-    """The column an opening authenticates under `root`, or None."""
-    if not verify_opening(shape.domain, Commitment(root, shape.n), opening, SCHEMA, _LIMITS):
-        return None
-    if len(opening.value) != SALT_BYTES + 8 * shape.rows:
-        return None
-    return from_bytes(opening.value[SALT_BYTES:])
-
-
-def opening_bytes(o: Opening) -> bytes:
-    return (o.position.to_bytes(8, "big") + len(o.value).to_bytes(8, "big") + o.value
-            + len(o.path).to_bytes(2, "big") + b"".join(o.path))
-
-
-def parse_opening(data: bytes) -> tuple[Opening, bytes] | None:
-    """One opening from the head of `data`, and the rest; None if it doesn't parse."""
+def columns(shape: Shape, root: bytes, data: bytes) -> tuple[dict[int, list[int]] | None, str]:
+    """The columns `data` opens under `root`, by index, or None and why: `encoding` when it doesn't parse, `column-path`
+    when the multiproof doesn't reconstruct the root."""
+    value_len = SALT_BYTES + 8 * shape.rows
     try:
-        pos = int.from_bytes(data[:8], "big")
-        k = int.from_bytes(data[8:16], "big")
-        value = data[16:16 + k]
-        rest = data[16 + k:]
-        depth = int.from_bytes(rest[:2], "big")
-        path = tuple(rest[2 + 64 * i:2 + 64 * (i + 1)] for i in range(depth))
-        if len(value) != k or any(len(p) != 64 for p in path):
-            return None
-        return Opening(pos, value, path), rest[2 + 64 * depth:]
-    except (ValueError, IndexError):
-        return None
+        count, at = int.from_bytes(data[:4], "big"), 4
+        values: dict[int, bytes] = {}
+        for _ in range(count):
+            j = int.from_bytes(data[at:at + 8], "big")
+            values[j] = data[at + 8:at + 8 + value_len]
+            at += 8 + value_len
+        k, at = int.from_bytes(data[at:at + 4], "big"), at + 4
+        proof = [data[at + 64 * i:at + 64 * (i + 1)] for i in range(k)]
+    except IndexError:
+        return None, "encoding"
+    if (len(values) != count or at + 64 * k != len(data) or any(len(v) != value_len for v in values.values())
+            or any(len(p) != 64 for p in proof) or any(not 0 <= j < shape.n for j in values)):
+        return None, "encoding"
+    domain = shape.domain
+    leaves = {j: domain.leaf(j, j, SCHEMA, v) for j, v in values.items()}
+    if not verify_multiproof(root, shape.n, domain.domain_id, leaves, proof, hash="sha512"):
+        return None, "column-path"
+    cols = {j: from_bytes(v[SALT_BYTES:]) for j, v in values.items()}
+    if any(c is None for c in cols.values()):
+        return None, "encoding"
+    return cols, ""

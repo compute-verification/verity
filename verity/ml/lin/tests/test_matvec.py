@@ -96,9 +96,26 @@ def test_a_tampered_column_is_refused():
     messages, log = _run(st, *tables)
     assert messages[-1].label == "weights/open"
     data = bytearray(messages[-1].data)
-    data[16 + 64 + 3] ^= 1
+    data[4 + 8 + 64 + 3] ^= 1
     messages[-1] = Message(messages[-1].label, bytes(data))
     assert matvec.verify(st, messages, log) == "column-path"
+
+
+def test_columns_other_than_the_drawn_ones_are_refused():
+    """A valid multiproof of columns the coin didn't draw (the session's last message, so no coin follows it)."""
+    st, wt, at, yt = _case()
+    messages, log = _run(st, wt, at, yt)
+    messages[-1] = Message(messages[-1].label, wt.open(range(PARAMS.queries)))
+    assert matvec.verify(st, messages, log) == "column-position"
+
+
+def test_ends_whose_product_is_not_the_last_claim_are_refused():
+    st, *tables = _case()
+    messages, log = _run(st, *tables)
+    i = next(i for i, m in enumerate(messages) if m.label == "ends")
+    g_at, a_at = F.ext_from_bytes(messages[i].data)
+    messages[i] = Message("ends", F.ext_bytes(F.add(g_at, F.ONE)) + F.ext_bytes(a_at))
+    assert matvec.verify(st, messages, log) == "sumcheck-final"
 
 
 def test_a_message_changed_after_its_coin_is_refused():

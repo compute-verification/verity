@@ -19,8 +19,9 @@ an E-row encodes coordinate by coordinate.
 A table is r rows of `width` elements, encoded to U ∈ F^{r×n}. Column j is committed as one leaf of a frame-v3-sha512 tree
 over the domain `CommitmentDomain(SHA-512(shape), -1, range-u64(0, n))`, `shape` the canonical JSON of
 `{"format": "verity/lin/table/v0", "role", "rows", "width", "blowup"}`; the leaf's schema is `verity/lin/column/v0` and
-its value a fresh 64-byte salt followed by the column's r elements. An opening is the position (u64 big-endian), the
-value's length (u64) and value, the path's length (u16) and its 64-byte siblings, leaf level first.
+its value a fresh 64-byte salt followed by the column's r elements. Columns open together: the count of distinct columns
+(u32 big-endian), then each column ascending as its index (u64) and leaf value, then one frame-v3-sha512 multiproof
+(`verity.ml.commitments.multiproof`: its length as u32, then its 64-byte nodes).
 
 ## 3. Sessions and coins
 
@@ -28,24 +29,28 @@ A session's transcript starts at SHA-512(`verity/lin/transcript/v0\0` ‖ statem
 data) moves it to SHA-512(`verity/lin/message/v0\0` ‖ previous ‖ u64be(len label) ‖ label ‖ u64be(len data) ‖ data).
 Every coin is the challenger's, flipped after the transcript digest it follows is recorded and logged beside it. The
 verifier reads coins from that log in order and refuses an entry whose digest or length isn't the one it rebuilt
-(`coin-order`). Field elements are drawn from coin bytes by rejection (8 bytes below p), an E element as three, and a
-column index as 8 bytes mod n.
+(`coin-order`). Samples are drawn from the coin's raw bytes with no hash, by sampled proofs' exact rule
+(`coins.OwnRandomness`, Lean's `Flock.Draw`): `uniform(m)` reads ⌈(bitlen(m) + 64)/8⌉-byte big-endian words and returns
+the first below the largest multiple of m, mod m. An element of F is `uniform(p)`, one of E three of them, a column
+index `uniform(n)`.
 
 ## 4. A linear claim
 
 The claim is g·M·e = v on a committed table, g ∈ E^r, e ∈ E^width, v ∈ E (`linear`):
 
 1. The prover sends w = g·M; the verifier refuses unless ⟨w, e⟩ = v (`claim`).
-2. A coin β sets γ = (β^0, …, β^{r−1}); the prover sends z = γ·M.
-3. A coin draws t column indices (with replacement); the prover opens each. The verifier refuses an opening that isn't at
-   the drawn index (`column-position`) or doesn't verify under the root (`column-path`), and unless
-   Enc(w)[j] = Σ_i g_i U[i, j] (`column-claim`) and Enc(z)[j] = Σ_i γ_i U[i, j] (`column-proximity`).
+2. A coin draws γ, r independent uniform elements of E; the prover sends z = γ·M.
+3. A coin draws t column indices (with replacement); the prover opens them (§2). The verifier refuses openings that don't
+   parse (`encoding`), don't reconstruct the root (`column-path`) or aren't exactly the drawn columns
+   (`column-position`), and unless, at each, Enc(w)[j] = Σ_i g_i U[i, j] (`column-claim`) and
+   Enc(z)[j] = Σ_i γ_i U[i, j] (`column-proximity`).
 
-Let e₀ = ⌊(d − 1)/3⌋. If U is e₀-far from every codeword matrix, then γ·U is e₀-far from the code except with probability
-(r − 1)·n/|E| (proximity gaps in the unique-decoding regime, for γ the powers of one coin), and each query catches
-Enc(z) ≠ γ·U with probability at least (e₀ + 1)/n. Otherwise U decodes uniquely to M*, and w ≠ g·M* makes Enc(w) differ
-from g·U in at least d − e₀ columns. A claim false of M* is so accepted with probability at most
-max(1 − (e₀ + 1)/n, 1 − (d − e₀)/n)^t + (r − 1)·n/|E|. At blowup 4 that is (3/4)^t to first order; t = 241 (the default,
+Let e₀ = ⌊(d − 1)/3⌋, so 3e₀ < d. If U is e₀-far from every codeword matrix, then γ·U, a uniform word of U's row span over
+E, is e₀-close to the code with probability at most d/|E| (Ligero's Lemma 4.5, [AHIV22], proved with no `sorry` as
+`ProximityToRS.prob_of_bad_pts` in the ArkLib that `Security/Proofs` pins; U over F is e₀-far over E too), and each query
+then catches Enc(z) ≠ γ·U with probability at least (e₀ + 1)/n. Otherwise U decodes uniquely to M*, and w ≠ g·M* makes
+Enc(w) differ from g·U in at least d − e₀ columns. A claim false of M* is so accepted with probability at most
+max(1 − (e₀ + 1)/n, 1 − (d − e₀)/n)^t + d/|E|. At blowup 4 that is (3/4)^t to first order; t = 241 (the default,
 `matvec.queries(100, width, 4)`) gives 2^-100.
 
 ## 5. The matrix–vector statement

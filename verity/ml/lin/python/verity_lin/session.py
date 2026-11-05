@@ -102,8 +102,15 @@ class VerifierSession:
 Session = ProverSession | VerifierSession
 
 
+def word_bytes(n: int) -> int:
+    """The bytes `Reader.uniform(n)` reads a try: ⌈(bitlen(n) + 64) / 8⌉."""
+    return (n.bit_length() + 64 + 7) // 8
+
+
 class Reader:
-    """Exact samplers over one coin's bytes, drawing more coins from the session when a rejection runs past them."""
+    """Exact samplers over raw coin bytes, with no hash and no derivation: `uniform(n)` is sampled proofs' and the Lean
+    verifier's (`coins.OwnRandomness`, `Flock.Draw`): it reads `word_bytes(n)`-byte big-endian words and returns the first
+    below the largest multiple of n, mod n. A rejection past the coin's bytes draws another coin from the session."""
 
     def __init__(self, session: Session, nbytes: int) -> None:
         self._s = session
@@ -116,21 +123,25 @@ class Reader:
         out, self._buf = self._buf[:k], self._buf[k:]
         return out
 
-    def field(self) -> int:
+    def uniform(self, n: int) -> int:
+        if n < 1:
+            raise ValueError("uniform(n) needs n > 0")
+        w = word_bytes(n)
+        limit = (256**w // n) * n
         while True:
-            x = int.from_bytes(self._take(8), "little")
-            if x < P:
-                return x
+            x = int.from_bytes(self._take(w), "big")
+            if x < limit:
+                return x % n
 
     def ext(self) -> Ext:
-        return (self.field(), self.field(), self.field())
+        return (self.uniform(P), self.uniform(P), self.uniform(P))
 
-    def index(self, n: int) -> int:
-        """Uniform in [0, n) for n a power of two at most 2^64."""
-        if n < 1 or n & (n - 1) or n > 1 << 64:
-            raise ValueError(f"{n} is not a power of two at most 2^64")
-        return int.from_bytes(self._take(8), "little") % n
+
+def ext_coins(session: Session, k: int) -> list[Ext]:
+    """k independent uniform elements of E from one coin."""
+    reader = Reader(session, 3 * word_bytes(P) * k)
+    return [reader.ext() for _ in range(k)]
 
 
 def ext_coin(session: Session) -> Ext:
-    return Reader(session, 32).ext()
+    return ext_coins(session, 1)[0]
