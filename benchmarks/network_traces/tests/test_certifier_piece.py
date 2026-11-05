@@ -526,22 +526,24 @@ def test_a_rehearsal_the_gates_check_failed_late_leaves_the_certifier_missing_no
 def test_the_case_is_written_only_from_period_files_the_leak_guard_left(tmp_path, warden):
     """`composite.py` reads a case's commitment and evidence as hex, where the leak guard finds only a binary witness
     file's pieces: so the case is written from DIR/period after the guard has read its files raw in the hold and
-    released them, and not at all when the guard moved one of them (here the evidence, holding a witness file's text)."""
+    released them, and not at all when the guard moved one of them (here the evidence, holding a witness file's text).
+    Its params list no circuit files, so the case names none."""
     fetch = tmp_path / "fetch.tar.gz"
     fetch.write_bytes(warden["fetch"].read_bytes())
     unpacked, run = CP.unpack(fetch)
+    params = b'{"audits":[],"k":1,"scan_circuits":[]}'
     for name, evidence in (("clean", b'{"windows":[]}'), ("leaky", (run / "witness" / "certified.jsonl").read_bytes())):
         d, hold = tmp_path / name, tmp_path / f"{name}-held"
         d.mkdir()
         (hold / "period").mkdir(parents=True)
-        for f, b in (("params.json", b'{"k":1}'), ("commitment.bin", b"\1\2"), ("evidence.json", evidence)):
+        for f, b in (("params.json", params), ("commitment.bin", b"\1\2"), ("evidence.json", evidence)):
             (hold / "period" / f).write_bytes(b)
         g = CP.guard(d, hold, unpacked, tmp_path / f"{name}-quarantine")
         CP.write_case(d)
         if name == "clean":
             assert g == 0 and not (d / "period").exists()
-            assert (d / CP.CASE).read_bytes() == b'{"commitment":"0102","evidence":"%s","params":{"k":1}}\n' % (
-                evidence.hex().encode())
+            assert (d / CP.CASE).read_bytes() == b'{"commitment":"0102","evidence":"%s","params":%s}\n' % (
+                evidence.hex().encode(), params)
         else:
             assert g == 3 and not (d / CP.CASE).exists()
             assert sorted(p.name for p in (d / "period").iterdir()) == ["commitment.bin", "params.json"]
@@ -916,7 +918,7 @@ def test_a_split_step_that_cant_run_refuses_keeping_both_logs(case, tmp_path, wa
             "no chain step": "no chain.json in DIR: the chain step (CERTIFIER_CHAIN_CMD) didn't run",
             "a scan of no v3c": f"the chain's scan read no V3c window, not {v3c / 'window'}",
             "no period.json": "the period's rows case: FileNotFoundError",
-            "no window-circuit record": "the verifier's window-circuit record: FileNotFoundError",
+            "no window-circuit record": f"the verifier's window-circuit record: 0 beside {v3c} ",
             "no record": "no auditor's record of the network certifier's deployment (--certifier-key, CERTIFIER_KEY)",
             "re-signed fetch": "witness/deployment.json names another key than the auditor's record's"}[case] in why, why
     logs = {"chain.log", "period.log"} - ({"chain.log"} if case == "no chain step" else set())
