@@ -285,7 +285,10 @@ with no effect on them; its `sync`, `land` and `drive` still run only on drive (
 Files.  The queue works only in its own clone (`--workdir`, default ~/.research/queue/NAME for `--repo OWNER/NAME`, else
 ~/.research/queue/verity) of its remote (`--remote`, default https://github.com/OWNER/NAME.git for `--repo`, else the caller's
 origin; one naming another repository on GitHub than `--repo` is refused: `remote_and_repo`), and fetches with forced refspecs: a
-local copy of a branch that wasn't force-fetched once put a train on a stale base.  `state.json` beside the clone
+local copy of a branch that wasn't force-fetched once put a train on a stale base.  Only a clone the queue made has its origin
+set to the remote (`Queue._clone`): it sets `research.queueclone` in each clone's git config, and those it made before that are
+at ~/.research/queue/verity.  Any other checkout keeps its origin, so a push from it still goes where its owner meant, and one
+whose origin is another repository than the remote is refused before anything in it changes.  `state.json` beside the clone
 keeps ejections and the notices sent; losing it costs a retry.  One queue command runs at a time per workdir (`queue.lock`), and
 one that only reads (`status`, `review` without N) holds it only while it clones and fetches, not while it reads labels.  The
 clone authenticates as the caller's checkout does (`credential_args`): a cloud VM sets its credential helper in the checkout's
@@ -393,7 +396,10 @@ LANDED_WINDOW = 2000
 SLUG_RE = re.compile(r"github\.com[:/]+([^/]+/[^/]+?)(?:\.git)?/?$")
 #: OWNER/NAME on GitHub, as `--repo` takes it
 REPO_ARG_RE = re.compile(r"[\w.-]+/[\w.-]+")
-#: the queue's clone with no --repo or --workdir
+#: the git config key the queue sets to `true` in each clone it makes (`Queue._clone`): only such a clone, or one at `WORKDIR`, has
+#: its origin set to the queue's remote
+CLONE_MARK = "research.queueclone"
+#: the queue's clone with no --repo or --workdir: one there without `CLONE_MARK` is one the queue made before it set it (drive's)
 WORKDIR = Path.home() / ".research" / "queue" / "verity"
 AUTH_FAILED_RE = re.compile(r"could not read (Username|Password)|Authentication failed|unable to get password")
 #: what decides how a check runs and what it passes: a `main` that changed any of it re-checks the queue rather than land on it
@@ -450,6 +456,13 @@ def redacted(url: str) -> str:
 def slug(url: str) -> str | None:
     """The OWNER/NAME a GitHub URL names (https or ssh, with or without `.git`, whatever user it carries), else None."""
     return (m := SLUG_RE.search(url)) and m.group(1)
+
+
+def same_repository(a: str, b: str) -> bool:
+    """Whether two remote URLs name one repository: on GitHub by OWNER/NAME in any case (`slug`), elsewhere (a path) by the URL
+    itself."""
+    sa, sb = slug(a), slug(b)
+    return (sa or "").lower() == (sb or "").lower() if sa or sb else a.rstrip("/") == b.rstrip("/")
 
 
 def remote_and_repo(remote: str | None, repo: str | None, cwd: Path) -> tuple[str, str]:
@@ -1490,12 +1503,29 @@ class Queue:
             raise QueueError(f"git {' '.join(args)}: {err}{hint}")
         return r
 
+    def _ours(self) -> bool:
+        """Whether the workdir is a clone the queue made: one whose git config has `CLONE_MARK`, which the queue sets in each
+        clone it makes, or `WORKDIR`, where it cloned before it set it."""
+        return (_git(self.workdir, "config", "--local", "--get", CLONE_MARK, check=False).stdout.strip() == "true"
+                or self.workdir.resolve() == WORKDIR.resolve())
+
     def _clone(self) -> None:
+        """Clone the remote into the workdir, or bring the checkout there to the remote's state.  The origin of a clone the queue
+        made (`_ours`) follows the remote; any other checkout keeps its own, and one whose origin names another repository
+        than the remote is refused before anything in it changes."""
         if fresh := not (self.workdir / ".git").exists():
             self.workdir.parent.mkdir(parents=True, exist_ok=True)
-            self._remote(self.workdir.parent, "clone", "-q", self.remote, str(self.workdir))
-        # the caller's origin as it is now: a token embedded in the URL the clone was made from rotates
-        _git(self.workdir, "remote", "set-url", "origin", self.remote)
+            self._remote(self.workdir.parent, "clone", "-q", "--config", f"{CLONE_MARK}=true", self.remote, str(self.workdir))
+        if fresh or self._ours():
+            # the caller's origin as it is now: a token embedded in the URL the clone was made from rotates
+            _git(self.workdir, "remote", "set-url", "origin", self.remote)
+        elif not same_repository(origin := _git(self.workdir, "remote", "get-url", "origin", check=False).stdout.strip(),
+                                 self.remote):
+            here, there = redacted(origin), redacted(self.remote)
+            raise QueueError(f"{self.workdir} is a checkout the queue didn't clone (its git config has no {CLONE_MARK}), whose "
+                             f"origin, {here or 'unset'}, is another repository than the queue's remote {there}, and the queue "
+                             f"never repoints such a checkout: pass --workdir a directory of its own, where the queue clones "
+                             f"{there}" + (f", or --remote {here}, the repository that checkout is a clone of" if here else ""))
         # `.gitattributes` names these drivers; `git_env` gives them to the queue's own git, but without them in the clone's
         # config any other git in it (one by hand) merges the records line by line
         from .clone import Refused, set_drivers
