@@ -1,6 +1,6 @@
 """The timed audit's verdict of record, two ways: the memory challenger's `timed_audit.verdict` (the Python reference,
-`protocol.TimedAudit` replayed on the record) and `pous_check`'s `pous-timed-audit` (`PousCheck.TimedAudit`), on generated records and on the
-records of runs.
+`protocol.TimedAudit` replayed on the record) and `pous_check`'s `pous-timed-audit` (`PousCheck.TimedAudit`), on
+generated records and on the records of runs.
 
     uv run python verity/core/protocols/pous/check/timed_audit.py --generated [--out FILE]
     uv run python verity/core/protocols/pous/check/timed_audit.py --replay RUN_DIR... [--out FILE]
