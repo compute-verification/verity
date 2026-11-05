@@ -75,13 +75,9 @@ theorem sessions_size {trees : Array LoggedTree} {records : Array (String × Jso
     have hu' : u.size = records.size := by rw [hu]; simp
     rw [← hu']
     try dsimp only at hg
-    first
-      | (split at hg
-         · exact (beq_iff_eq.1 ‹_›).symm
-         · cases hg)
-      | (by_contra hne
-         have hb : (u.size == trees.size) = false := beq_eq_false_iff_ne.2 fun e => hne e.symm
-         simp [hb] at hg)
+    split at hg
+    · exact (beq_iff_eq.1 ‹_›).symm
+    · cases hg
   · rintro ⟨name, record⟩ u s hs
     split at hs
     case h_1 => exact .inl ⟨_, _, hs.symm⟩
@@ -144,7 +140,7 @@ theorem link_some {trees : Array LoggedTree} {record : Json} (h : sessionTreeRea
   obtain ⟨-, -, hps⟩ := hlink
   refine ⟨points, ?_⟩
   unfold Verity.Sampled.recordRound
-  rw [if_pos (by simp), hps]
+  rw [ite_eq_left (by simp), hps]
   exact hpts
 
 /-! ## The first opening -/
@@ -225,10 +221,7 @@ theorem first_open {pre : List String} {line : String} {ts : Array LoggedTree} {
   · obtain rfl := Except.ok.inj (hev.symm.trans hev')
     have he0 : t.opened = #[] := hI.1 hno t htm
     refine ⟨?_, root, hroot, ?_⟩
-    · first
-        | (rw [hk, hk0, he0, Array.filter_empty, Array.size_empty])
-        | (rw [hk, hk0, he0]; rfl)
-        | simp [hk, hk0, he0, Array.filter_empty]
+    · rw [hk, hk0, he0, Array.filter_empty, Array.size_empty]
     · obtain ⟨t', ht', htr⟩ := root_mem_modify (i := i) hf htm
       exact ⟨t', ht', htr.trans hroot'⟩
   · obtain ⟨hk', root', hroot'', t', ht', htr'⟩ := hI.2 p₀ l p₁' d' hp' hno htl' hev' hT'

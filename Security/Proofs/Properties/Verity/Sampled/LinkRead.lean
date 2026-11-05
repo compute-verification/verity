@@ -36,7 +36,7 @@ theorem step_open {records : List Json} {ts ts' : List (String × Json)} {d : Js
         | some rec => ((Verity.Sampled.recordRound rec stream k).map Verity.bitsOfBytes).getD []
         | none => []) := by
   unfold Verity.Sampled.treeStep at h
-  rw [if_neg (by simp [hT])] at h
+  rw [ite_eq_right (by simp [hT])] at h
   simp only [Option.bind_eq_bind] at h
   split at h
   · rename_i root hroot
@@ -66,7 +66,7 @@ theorem step_hello {records : List Json} {ts ts' : List (String × Json)} {d : J
     (hT : jsonStrIs (getD d "event") TREE_EVENT = true) :
     ∃ root sj spec, r.frame = .hello spec ∧ ts' = ts ++ [(root, sj)] ∧ Verity.Sampled.specOf sj = some spec := by
   unfold Verity.Sampled.treeStep at h
-  rw [if_pos hT] at h
+  rw [ite_eq_left hT] at h
   simp only [Option.bind_eq_bind] at h
   split at h
   · split at h
