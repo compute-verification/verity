@@ -435,6 +435,7 @@ def build() -> dict:
         "program_digest": codec.program_digest(desc),
         "alias_writer": [[label, list(at) if at else None, enc.refs(r, at)] for label, at, r in ALIAS],
         "alias_reader": {"node": 12, "arg": 0, "refs": [list(r) for r in _root_nodes(D)[12].args[0].refs]},
+        "definition_digest": [[fid, codec.definition_digest(e, desc)] for fid, e in sorted(desc["definitions"].items())],
         "decoder_rejects": rejects,
         "input_ids": [[i, bool(INPUT_ID.fullmatch(i))] for i in INPUT_IDS],
         "input_lowering": [[t, [[n.fn.id, n.form, list(n.axes), n.n] for n in Program(_identity(t)).root.body.nodes]] for t in LOWERINGS],
@@ -590,11 +591,63 @@ def test_the_alias_and_flat_concatenation(live, decoded):
     assert VECTORS["alias_reader"]["refs"] == expand(earlier) + [["n", 3, 0], ["n", 5, 1]]
 
 
+def canonical_entry(desc: dict, fid: str) -> dict:
+    """§4.8 restated: the entry with the tables inline and every sequence flat, an alias replaced by the parts it stands for."""
+    e = json.loads(json.dumps(desc["definitions"][fid]))
+    if e["form"] != "composite":
+        return e
+    rows: list[list[list]] = []
+
+    def parts(j) -> list:
+        if "alias" in j:
+            return rows[j["alias"][0]][j["alias"][1]]
+        return [p for x in j["concat"] for p in parts(x)] if "concat" in j else [j]
+
+    def written(ps: list):
+        return ps[0] if len(ps) == 1 else {"concat": ps}
+
+    for nd in e["body"]["nodes"]:
+        rows.append([parts(a["refs"]) for a in nd["args"]])
+        nd["fn"], nd["out"] = desc["callees"][nd["fn"]], desc["types"][nd["out"]]
+        for a, ps in zip(nd["args"], rows[-1]):
+            a["type"], a["refs"] = desc["types"][a["type"]], written(ps)
+    e["body"]["ret"] = written(parts(e["body"]["ret"]))
+    return e
+
+
+def test_the_definition_digest(live, decoded):
+    assert live["definition_digest"] == VECTORS["definition_digest"]
+    desc = json.loads(VECTORS["descriptor"])
+    assert [fid for fid, _ in VECTORS["definition_digest"]] == sorted(desc["definitions"])
+    v0 = codec.encode_program(Program(PROG), codec.SCHEMA_V0)
+    for fid, digest in VECTORS["definition_digest"]:
+        assert hashlib.sha512(jcs(canonical_entry(desc, fid))).hexdigest() == digest
+        assert codec.definition_digest(codec.definition_entry(decoded.defs[fid])) == digest
+        assert codec.definition_digest(v0["definitions"][fid]) == digest
+    root = canonical_entry(desc, desc["root"])["body"]["nodes"][12]["args"][0]["refs"]
+    assert "alias" not in json.dumps(root) and expand(root) == VECTORS["alias_reader"]["refs"]
+
+
 @pytest.mark.parametrize("label,edit,why", REJECT, ids=[r[0] for r in REJECT])
 def test_the_decoder_refuses(live, label, edit, why):
     got = dict(live["decoder_rejects"])[label]
     assert got == dict(VECTORS["decoder_rejects"])[label], REWRITE
     assert got is not None and why in got
+
+
+def test_the_self_contained_entry_and_v0(decoded):
+    """§4.7: a v0 descriptor's definitions are the self-contained entries, which a v0 decode gives back; a v1 decode flattens
+    node 12's nested concatenation, the same references, so the root's entry, and only it, differs."""
+    program = Program(PROG)
+    v0 = codec.encode_program(program, codec.SCHEMA_V0)
+    assert sorted(v0) == ["annotations", "definitions", "program_fn", "root", "schema"]
+    assert v0["definitions"][v0["root"]] == codec.definition_entry(program.root)
+    assert codec.encode_program(codec.decode_program(v0, REG), codec.SCHEMA_V0)["definitions"] == v0["definitions"]
+    via_v1 = {**v0, "definitions": codec.encode_program(decoded, codec.SCHEMA_V0)["definitions"]}
+    assert [k for k in v0["definitions"] if via_v1["definitions"][k] != v0["definitions"][k]] == [v0["root"]]
+    nested, flat = _node(v0, 12)["args"][0]["refs"], _node(via_v1, 12)["args"][0]["refs"]
+    assert any("concat" in p for p in nested["concat"]) and not any("concat" in p for p in flat["concat"])
+    assert expand(nested) == expand(flat)
 
 
 # -- 5. programs and Input nodes ------------------------------------------------------------------------------------------------

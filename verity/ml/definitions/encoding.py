@@ -1,10 +1,9 @@
-"""A specialization's Definitions in the codec's v0 form (`encode_specialization`), a Definition's digest (`definition_digest`), and the
-values of a varying static a row's graph is partitioned at (`word_values`): what a row's Program graph
-(`verity_vllm.pipeline.program_graph`) and Flock's statements (`verity_flock.boolean_export`, `class_statement`) share.
+"""A specialization's Definitions in the codec's v0 form (`encode_specialization`), and the values of a varying static a row's
+graph is partitioned at (`word_values`): what a row's Program graph (`verity_vllm.pipeline.program_graph`) and Flock's statements
+(`verity_flock.boolean_export`, `class_statement`) share.
 """
 from __future__ import annotations
 
-import hashlib
 from typing import Any
 
 
@@ -32,12 +31,6 @@ def encode_specialization(fn) -> tuple[str, dict[str, dict[str, Any]]]:
     return top, keep
 
 
-def definition_digest(d: dict[str, Any]) -> str:
-    """sha256 of a definition's canonical JSON (`verity.ml.circuits.codec.canonical_json`), fold hints excluded."""
-    from verity.ml.circuits.codec import canonical_json
-    return hashlib.sha256(canonical_json({k: v for k, v in d.items() if k != "fold"})).hexdigest()
-
-
 #: a varying group with more values than this is partitioned at fewer: with a key-block size BN (attention's T), at its first values and
 #: every multiple of BN with the value before it and the three after it -- a head's unit count is affine in T between those, its gates
 #: and committed words nearly so (the k16 PV steps; within 0.1 % of the exact count) -- else at WORD_SAMPLES values; the rest
@@ -54,4 +47,4 @@ def word_values(vals: list[int], block: int | None = None) -> list[int]:
     return sorted({vals[round(i * (len(vals) - 1) / (WORD_SAMPLES - 1))] for i in range(WORD_SAMPLES)})
 
 
-__all__ = ["WORD_EXACT", "WORD_SAMPLES", "definition_digest"]
+__all__ = ["WORD_EXACT", "WORD_SAMPLES"]
