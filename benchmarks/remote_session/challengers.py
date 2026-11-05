@@ -2,12 +2,12 @@
 (`coins.SessionCoins`, `sampled_proofs.challenger`):
 
 - `Local`: a `LiveChallenger` in the verifier's process, sampling from `secrets.token_bytes`.
-- `Serve`: the challenger's own process, `benchmarks/live_challenger/serve.py`, started for the session on the
-  verifier's machine with its LMS key (`--challenger-key`), reached over its 127.0.0.1 by `sampled_proofs.remote`'s
-  client. It flips its coins in the Lean (`one_stage.verifier.coins`), signs its record before it listens and its
-  release log when the client closes the session. Not the auditor host: the verifier's machine is the audit's (never
-  the prover's), but no ledger opens the session for its window, so the read is `challenger.session_of`'s, under the
-  key the run wrote.
+- `Serve`: the challenger's own process, the command its caller hands in (`verifier_process.py`'s is
+  `benchmarks/live_challenger/serve.py`), started for the session on the verifier's machine with its LMS key
+  (`--challenger-key`), reached over its 127.0.0.1 by `sampled_proofs.remote`'s client. It flips its coins in the Lean
+  (`one_stage.verifier.coins`), signs its record before it listens and its release log when the client closes the
+  session. Not the auditor host: the verifier's machine is the audit's (never the prover's), but no ledger opens the
+  session for its window, so the read is `challenger.session_of`'s, under the key the run wrote.
 - `ChallengerGate`: the auditor's challenger host, through its gate (`benchmarks/live_challenger/auditor.py`)
   under the lane's own gate key, over ssh (`ssh_gate`). Each session is reserved for this machine (`--peer`), inside
   the audit's period, and opened at its window root R (`coins.window`; the ledger opens one session a root, ever); the
@@ -26,7 +26,11 @@ window root R, each window's openings coin after its last root. Its `reason` is 
 session's `complete` (the gate's end's, and `Serve`'s read of the same signed log) is whether the challenger released
 every coin it committed to: a session reserves only the families it uses (`coins.families`), so an honest session
 that ran to its end is complete and one cut short is not. A gate session's record names the `peer` it reserved for
-(`--challenger-peer`), which `auditor_line.py` holds the ledger's reserve and open to."""
+(`--challenger-peer`), which `auditor_line.py` holds the ledger's reserve and open to.
+
+A served or gate session's signatures are checked with the `verify` its caller hands in (`challenger.Verify`, LMS at
+the key's parameters: `verifier_process.lms_verify`), as `challenger.session_of` takes it: a verifier reads no
+`verity.ml` code beyond its frozen edges."""
 from __future__ import annotations
 
 import hashlib
@@ -36,7 +40,6 @@ import secrets
 import shlex
 import socket
 import subprocess
-import sys
 import tarfile
 import time
 from pathlib import Path
@@ -45,24 +48,12 @@ from typing import Callable, Sequence
 from verity.core.protocols.remote_bandwidth import audit, coins
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs import remote
-from verity.ml.commitments.scheme import DIGEST_BYTES
-from verity.ml.crypto import lms
 
 ROOT = Path(__file__).resolve().parents[2]
-SERVE = ROOT / "benchmarks" / "live_challenger" / "serve.py"
 KINDS = ("local", "serve", "gate")
 GATE_PORTS = range(7811, 7900)
 """The ports the gate gives its sessions (`auditor.PORTS`), each bound on this machine's 127.0.0.1 by its certifier
 coin link to the host: the verifier's own port is none of them."""
-
-
-def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
-    """`challenger.Verify`: LMS over SHA-512 at the key's (64, W, H)."""
-    p = lms.Params(DIGEST_BYTES["sha512"], key.W, key.H)
-    try:
-        return lms.verify(p, key.public, message, lms.Signature.decode(p, signature))
-    except ValueError:
-        return False
 
 
 def session_id(registration: bytes, k: int, run: str) -> str:
@@ -86,13 +77,15 @@ class Local:
 
 
 class Serve:
-    """Session coins from `serve.py`, one process a session, its `out/` under `out`/SESSION, its key in `key`
-    (made there on first use at `params`, `W,H`, or `lms.DEPLOYED`'s)."""
+    """Session coins from the challenger's own process, `command` (its words before the session's flags, run from the
+    tree's root), one process a session, its `out/` under `out`/SESSION, its key in `key` (made there on first use at
+    `params`, `W,H`, or `lms.DEPLOYED`'s), its signatures checked with `verify`."""
 
     kind = "serve"
 
-    def __init__(self, out: Path, key: Path, params: str | None = None, python: str = sys.executable) -> None:
-        self.out, self.key, self.params, self.python = out, key, params, python
+    def __init__(self, out: Path, key: Path, params: str | None = None, *, command: Sequence[str],
+                 verify: Ch.Verify) -> None:
+        self.out, self.key, self.params, self.command, self.verify = out, key, params, tuple(command), verify
         self.run = secrets.token_hex(4)
         self._live: dict[int, tuple[subprocess.Popen, Path, str, remote.RemoteChallenger]] = {}
 
@@ -103,7 +96,7 @@ class Serve:
         families = json.dumps([list(f) for f in coins.families(windows, appends, per_coin)])
         with open(self.out / f"{sid}.log", "w") as log:
             proc = subprocess.Popen(
-                [self.python, str(SERVE), "--out", str(out), "--port", "0", "--scheme", coins.SCHEME,
+                [*self.command, "--out", str(out), "--port", "0", "--scheme", coins.SCHEME,
                  "--families", families, "--session", sid,
                  "--epoch", str(k), "--key", str(self.key), "--host", socket.gethostname(),
                  *(["--params", self.params] if self.params else [])],
@@ -111,7 +104,8 @@ class Serve:
         line = proc.stdout.readline().split()
         if line[:1] != ["listening"] or len(line) != 2:
             proc.wait()
-            raise RuntimeError(f"serve.py for {sid} did not listen (exit {proc.returncode}; {self.out / sid}.log)")
+            raise RuntimeError(f"the challenger's process for {sid} did not listen (exit {proc.returncode}; "
+                               f"{self.out / sid}.log)")
         try:
             client = remote.RemoteChallenger.connect(line[1])
         except (Ch.CoinError, OSError):
@@ -134,7 +128,7 @@ class Serve:
         try:
             key = Ch.ChallengerKey.from_json(json.loads((out / remote.KEY).read_text()))
             files = remote.session_files(out)
-            signed, received, _ = Ch.session_of(key, files["record"], files["log"], files["close"], lms_verify)
+            signed, received, _ = Ch.session_of(key, files["record"], files["log"], files["close"], self.verify)
         except (Ch.CoinError, OSError, ValueError) as e:
             return {**doc, "reason": f"the challenger's session is not readable or not signed: {e}"}
         released = {label: len(received.get(label, ())) for label, _ in signed.families}
@@ -162,17 +156,19 @@ class ChallengerGate:
     """Session coins from the auditor host's challenger, one gate session a session, its fetched directory, the ledger
     and the host's pins log under `out`. `pin` is the SHA-512 of the challenger's public key, `period` the audit's
     period on the ledger (the lane opens it, `period-open`, before the first session), `main` the auditor's own
-    first-parent list of main (`remote.main_lines`; None: every session is refused), `minutes` each reserve's (the
-    most a session serves). `address` is where the open's session listens on this machine, `pause` runs between two
-    looks for what the host hasn't done yet (a tunnel, an end entry), at most `polls` times."""
+    first-parent list of main (`remote.main_lines`; None: every session is refused), `verify` what checks the ledger's
+    and the session's signatures, `minutes` each reserve's (the most a session serves). `address` is where the open's
+    session listens on this machine, `pause` runs between two looks for what the host hasn't done yet (a tunnel, an end
+    entry), at most `polls` times."""
 
     kind = "gate"
 
-    def __init__(self, out: Path, call: Call, peer: str, pin: str, period: str, main: list[str] | None, *,
-                 minutes: int = 120, address: Callable[[dict], str] = lambda answer: f"127.0.0.1:{answer['port']}",
+    def __init__(self, out: Path, call: Call, peer: str, pin: str, period: str, main: list[str] | None,
+                 verify: Ch.Verify, *, minutes: int = 120,
+                 address: Callable[[dict], str] = lambda answer: f"127.0.0.1:{answer['port']}",
                  pause: Callable[[], None] = lambda: time.sleep(1), polls: int = 600) -> None:
         self.out, self.call, self.peer, self.pin, self.period, self.minutes = out, call, peer, pin, period, minutes
-        self.main, self.address, self.pause, self.polls = main, address, pause, polls
+        self.main, self.verify, self.address, self.pause, self.polls = main, verify, address, pause, polls
         self._key: Ch.ChallengerKey | None = None
         self._live: dict[int, tuple[dict, remote.RemoteChallenger]] = {}
 
@@ -252,24 +248,32 @@ class ChallengerGate:
         except (Ch.CoinError, OSError, ValueError, KeyError, tarfile.TarError) as e:
             return {**doc, "reason": f"the auditor's session is not readable: {e}"}
         return {**doc, "end": {f: end["body"].get(f) for f in ("rc", "closed", "released", "complete", "ended")},
-                "reason": s.trusted_reason(self.out / sid / "out", [ledger], self.key(), lines, self.main, lms_verify,
+                "reason": s.trusted_reason(self.out / sid / "out", [ledger], self.key(), lines, self.main, self.verify,
                                            self.period)}
 
 
-def of(kind: str, out: Path, key: Path | None, params: str | None, *, ssh: str | None = None, peer: str | None = None,
-       pin: str | None = None, period: str | None = None, main: Path | None = None,
-       minutes: int = 120) -> Local | Serve | ChallengerGate:
-    """`--challenger KIND`'s source; `serve` needs its key directory, `gate` the host's ssh, this machine's peer name
-    there, the challenger key's pin, the audit's period and the auditor's first-parent list of main, read here so a
-    missing or unreadable one refuses the run before its first session."""
+def of(kind: str, out: Path, key: Path | None, params: str | None, *, verify: Ch.Verify | None = None,
+       serve: Sequence[str] | None = None, ssh: str | None = None, peer: str | None = None, pin: str | None = None,
+       period: str | None = None, main: Path | None = None, minutes: int = 120) -> Local | Serve | ChallengerGate:
+    """`--challenger KIND`'s source; `serve` needs its key directory and the challenger's process (`serve`, its
+    command), `gate` the host's ssh, this machine's peer name there, the challenger key's pin, the audit's period and
+    the auditor's first-parent list of main, read here so a missing or unreadable one refuses the run before its first
+    session. Both check the challenger's signatures with `verify`, which the process's entry hands in
+    (`verifier_process.py`)."""
     if kind == "local":
         return Local()
+    if kind in ("serve", "gate") and verify is None:
+        raise ValueError(f"--challenger {kind} checks the challenger's signatures with the LMS verify its process's "
+                         "entry hands in, and this process was handed none: run verifier_process.py")
     if kind == "serve":
         if key is None:
             raise ValueError("--challenger serve needs --challenger-key DIR, the challenger's LMS key directory, "
                              "outside the run's out/")
+        if serve is None:
+            raise ValueError("--challenger serve starts the challenger's process its entry hands in, and this process "
+                             "was handed none: run verifier_process.py")
         out.mkdir(parents=True, exist_ok=True)
-        return Serve(out, key, params)
+        return Serve(out, key, params, command=serve, verify=verify)
     if kind == "gate":
         if ssh is None or peer is None or pin is None or period is None or main is None:
             raise ValueError("--challenger gate needs --challenger-ssh WORDS (ssh's -i KEY and the host), "
@@ -278,5 +282,6 @@ def of(kind: str, out: Path, key: Path | None, params: str | None, *, ssh: str |
                              "--challenger-main FILE (the auditor's own `git rev-list --first-parent origin/main`)")
         first_parent = remote.main_lines(main)
         out.mkdir(parents=True, exist_ok=True)
-        return ChallengerGate(out, ssh_gate(shlex.split(ssh)), peer, pin, period, first_parent, minutes=minutes)
+        return ChallengerGate(out, ssh_gate(shlex.split(ssh)), peer, pin, period, first_parent, verify,
+                              minutes=minutes)
     raise ValueError(f"--challenger is one of {KINDS}")

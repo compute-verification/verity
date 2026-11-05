@@ -1,5 +1,5 @@
 """Serving's step rate under the audit, with the driver's reference (`prover.CpuBackend`) as the prover's backend: the
-verifier's process (`verifier.py`) on a loopback port and the prover in this one, each session a kv:1 session whose
+verifier (`verifier_process.py`) on a loopback port and the prover in this one, each session a kv:1 session whose
 serving is a modelled engine (`Engine`: step s takes STEP_MS, BUSY of it spinning in Python as an engine's scheduler
 holds the GIL and the rest asleep as it waits on the GPU, and writes a page when s + 1 is a multiple of EVERY). Each
 regime STEP_MS:EVERY:BUSY[:KS] runs its engine alone (unaudited), then one session for each of its KS (slash-separated,
@@ -40,7 +40,7 @@ from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
 import prover  # noqa: E402
 from benchmarks.remote_session import wire  # noqa: E402
 
-VERIFIER = HERE.parents[1] / "benchmarks" / "remote_session" / "verifier.py"
+VERIFIER = HERE.parents[1] / "benchmarks" / "remote_session" / "verifier_process.py"
 
 
 def engine_step(ms: float, busy: float) -> None:
