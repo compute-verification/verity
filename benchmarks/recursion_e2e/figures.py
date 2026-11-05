@@ -7,7 +7,8 @@ adversary resource model, ``adversary.json``'s reference). Every figure says its
 What is scaled is the same for every pooled figure: every machine of the fleet is audited as this run's session audited
 its window, one recursive session a machine a window, each as this one; the world's compute counts as machines of the
 datacenter's size (`gpus_per_machine`). The session covers its statement, the window's drawn blocks: its AND gates are the
-inner statement's (its units times one unit's ANDs, from the circuit), the compute it proves, not the window's.
+inner statement's (its instances, each of ``units_per_vu`` units, times one unit's ANDs, from the circuit), the compute it
+proves, not the window's.
 
 * **Cost** (measured, then scaled): the session's steps (``SESSION_STEPS``) end to end, their wall and CPU seconds (each
   step's ``/usr/bin/time -v``: the prover, the ZK server and Lean's verifier together), its proofs' bytes and its release
@@ -100,7 +101,8 @@ def session(doc: dict[str, Any], times: dict[str, dict[str, float] | None]) -> d
     """The measured session: its statement's ANDs, each session step's wall and CPU seconds (``times``, each step's first
     invocation's ``/usr/bin/time -v``), its proofs and its schedule."""
     st = doc.get("staged") or {}
-    n, a = st.get("n"), st.get("unit_ands")
+    # a stage.json without units_per_vu gives no count: one unit an instance would undercount a VU of several
+    n, u, a = st.get("n"), st.get("units_per_vu"), st.get("unit_ands")
     steps = {s: (t := times.get(s)) and {"wall_s": round(t["wall_s"], 3), "cpu_s": round(t["cpu_s"], 3)} for s in SESSION_STEPS}
     rows = doc.get("rows", [])
     proofs = sum(r.get("proof_bytes") or 0 for r in rows if r["step"] == "oprove" and not r["stage"].startswith("outer forged-"))
@@ -108,8 +110,8 @@ def session(doc: dict[str, Any], times: dict[str, dict[str, float] | None]) -> d
     rel = doc.get("release") or {}
     parts = len(rel.get("parts") or []) or len([r for r in rows if r["step"] == "oprove" and not r["stage"].startswith("outer forged-")])
     whole = all(steps.values())
-    return {"statement": {"subcircuit": st.get("subcircuit"), "unit": st.get("unit"), "units": n, "unit_ands": a,
-                          "ands": n * a if n and a else None},
+    return {"statement": {"subcircuit": st.get("subcircuit"), "unit": st.get("unit"), "units": n, "units_per_vu": u,
+                          "unit_ands": a, "ands": n * u * a if n and u and a else None},
             "parts": parts, "steps": steps, "complete": whole,
             "wall_s": round(sum(v["wall_s"] for v in steps.values() if v), 3) if whole else None,
             "cpu_s": round(sum(v["cpu_s"] for v in steps.values() if v), 3) if whole else None,
@@ -188,7 +190,7 @@ def markdown(fig: dict[str, Any]) -> str:
     s = fig["session"]
     st = s["statement"]
     lines = ["", "**The session's figures.** One recursive session over "
-             f"{st['units']} x {st['unit']} ({_e(st['ands'])} ANDs proved), {s['parts']} parts, "
+             f"{st['units']} x {st['units_per_vu']} x {st['unit']} ({_e(st['ands'])} ANDs proved), {s['parts']} parts, "
              f"{_e(s['wall_s'])} s wall and {_e(s['cpu_s'])} CPU s over {', '.join(SESSION_STEPS)}"
              + (f", released on a {_e(s['release']['schedule_s'])} s schedule (ok: {_e(s['release']['ok'])})" if s.get("release") else "")
              + ".", "", f"- Cost: {fig['basis']['cost']}.", f"- Knowledge soundness: {fig['basis']['ks']}.",
