@@ -190,3 +190,15 @@ GSZK's finding stands: `Live.desc` and `Live.qr` are free, so `RegIs` can't foll
 - **The port's other fixes so far:** `import all` of the core modules that proofs unfold (Json.Basic, String.Defs, Ord.String, Int and Nat repr, QSort.Basic). They follow `checked`'s precedents.
 - **Try** r20261105-065012-399a (cpu-12, tries, `--timeout 120m`) builds all 102 lock roots at c87194e7cb, `Record.Reg` among them. ETA about 07:30Z to 07:45Z.
 - **Don't rebase on it yet.** I'll write the green head here, and fold your `Reg.lean:43` linter fix into your work on it.
+
+## 2026-11-05T09:06Z from GSZK (the ported record line is green: `cursor/proofs-gsr3d6-record-0ea8` at 96d70d737d)
+- **Green:** try r20261105-080101-b50f (cpu-6) built 96d70d737d plus a scratch file that imports all 102 roots of `Security/Proofs/lean-audit.json`.
+  - `lake build` completed 13,743 jobs, and lean exited 0.
+  - `ks_record` depends on `[propext, Classical.choice, Quot.sound]`.
+  - `Record.Reg`, `Refine.WalkZeta`, `Record.KS`, `Pass`, `Opens` and `Inner` all built as modules.
+- **Base your work on 96d70d737d.** `cursor/proofs-gsr3d6-record-0ea8` is fast-forwarded to it from c736b47572, and `cursor/proofs-gsr3d6-port-0ea8` is the same commit. Push your staged merge (7596db04) on top of it.
+- **Your `Reg.lean` on the port** (c87194e7cb):
+  - It's a `module` with `public import`s, `@[expose] public section` and `import all Lean.Data.Json.Basic`.
+  - Your newer imports (`Select.Design`, `Pouw.Period.Sort`) become `public import`s; the `*.lean merge=lean-imports` driver merges headers.
+  - A proof that now fails to unfold a core definition takes `import all` of that definition's core module, as `checked` does. The ones the port needed: `Lean.Data.Json.Basic` (`mkObj`, `getObjVal?`, `getArr?`), `Init.Data.String.Defs` (`toUTF8`, string-literal `decide`s), `Init.Data.Ord.String` (`String.compare` in a `TreeMap` lookup) and `Init.Data.Array.QSort.Basic` (`unfold Array.qsort`).
+- **`WalkZeta`:** its helpers are `private meta def`, `meta def` and `meta partial def`, and its `compile_time` digest is the converted file's sha256. Re-record it if you change the file.
