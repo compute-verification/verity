@@ -49,6 +49,7 @@ IMPORT = re.compile(r"^(public\s+)?(meta\s+)?import\s+(all\s+)?(\S+)")
 SYNTAX_DEF = re.compile(r'^(?:scoped |local )?(?:elab|macro|syntax|notation|infix[lr]?|prefix|postfix)\b[^"\n]*"([^"]+)"',
                         re.M)
 OPEN = re.compile(r"^open(\s+scoped)?((?:[ \t]+[^\s()]+)+)[ \t]*$")
+OPEN_ONLY = re.compile(r"^open[ \t]+([^\s()]+)[ \t]*\(([^()]*)\)[ \t]*$")
 LOCAL_SYNTAX = re.compile(r"^local\s+(?:elab|macro|syntax|notation|infix[lr]?|prefix|postfix)\b")
 TOKEN = re.compile(r"[\w'!?]+")
 BRACKETS = {"(": ")", "{": "}", "[": "]", "⦃": "⦄"}
@@ -281,6 +282,30 @@ def drop_import(text: str, mod: str) -> str:
     return "".join(keep) + body
 
 
+def flagged(header: str, mod: str | None = None) -> list[str]:
+    """The header's `import all` and `meta import` lines (of `mod` alone, given one), as written: a module that takes
+    declarations from this one needs them as they are, since a plain import neither exposes a body nor runs at
+    compile time."""
+    return [ln.strip() for ln in nl_lines(header)
+            if (m := IMPORT.match(ln.strip())) and (m.group(2) or m.group(3)) and mod in (None, m.group(4))]
+
+
+def add_line(text: str, line: str) -> str:
+    """`text` with the import `line` after its last import, unless it holds that line already."""
+    header, body = split_header(text)
+    hl = nl_lines(header)
+    if line in (ln.strip() for ln in hl):
+        return text
+    idx = max((k for k, ln in enumerate(hl) if IMPORT.match(ln.strip())), default=len(hl) - 1)
+    hl.insert(idx + 1, line + "\n")
+    return "".join(hl) + body
+
+
+def retarget(line: str, mod: str) -> str:
+    m = IMPORT.match(line)
+    return f"{m.group(1) or ''}{m.group(2) or ''}import {m.group(3) or ''}{mod}"
+
+
 def binders(text: str) -> list[str] | None:
     """A `variable` command's binder groups, or None when it holds anything else (a comment, an `in`)."""
     rest, out, k = text[len("variable"):], [], 0
@@ -324,9 +349,10 @@ def kept_binders(groups: list[str], used: set[str]) -> list[bool]:
 
 
 def prune(text: str, known: set[str], avail: set[str], used: str | None = None) -> tuple[str, list[str]]:
-    """`text` without what it can no longer resolve: each namespace of a plain top-level `open` line that is declared in
-    the tree (`known`) but by none of the modules it now imports (`avail`), as Lean resolves the name from the
-    namespaces open there; a namespace no in-tree module declares (Mathlib's) stays. With `used` (the text of the
+    """`text` without what it can no longer resolve: each namespace of a top-level `open` line (`open N`, `open N in`,
+    `open N (names)`) that is declared in the tree (`known`) but by none of the modules it now imports (`avail`), as
+    Lean resolves the name from the namespaces open there and those opened before it; a namespace no in-tree module
+    declares (Mathlib's) stays. With `used` (the text of the
     declarations it holds), each named `variable` binder neither `used`, an `include` or `omit` nor a kept binder names
     goes too, and so does a `local` notation or macro whose atom nothing kept holds: not `used`, a kept binder, another
     command or a kept notation. Returns the text and what went."""
@@ -350,27 +376,41 @@ def prune(text: str, known: set[str], avail: set[str], used: str | None = None) 
     live: set[int] = set()
     while (more := {k for k, a in syn.items() if a in ctx + "".join(units[j].own() for j in live)}) != live:
         live = more
-    out, ns, gone = [header], [[]], []
+    out, ns, gone, opened = [header], [[]], [], set()
+
+    def spaces(n: str) -> set[str]:
+        cur = [c for f in ns for c in f]
+        return {".".join(cur[:j] + [n]) for j in range(len(cur) + 1)} | {f"{p}.{n}" for p in opened}
+
     for k, u in enumerate(units):
         o, e = OPENER.match(u.head), END.match(u.head)
         if o and not u.head.startswith("/-"):
             ns.append(o.group(2).split(".") if o.group(1) == "namespace" and o.group(2) else [])
         elif e and len(ns) > 1:
             ns.pop()
-        m = OPEN.match(u.own().rstrip("\n")) if len(u.lines) == 1 else None
-        if m and not {"in", "hiding", "renaming"} & set(m.group(2).split()):
-            cur = [c for f in ns for c in f]
+        line = u.own().rstrip("\n") if len(u.lines) == 1 else ""
+        m, only = OPEN.match(line), OPEN_ONLY.match(line)
+        words = m.group(2).split() if m else []
+        tail = words[-1:] if words[-1:] == ["in"] else []
+        if m and not {"in", "hiding", "renaming"} & set(words[:len(words) - len(tail)]):
             keep = []
-            for n in m.group(2).split():
-                cands = {".".join(cur[:k] + [n]) for k in range(len(cur) + 1)}
+            for n in words[:len(words) - len(tail)]:
+                cands = spaces(n)
                 if cands & known and not cands & avail:
                     gone.append(f"open {n}")
                 else:
                     keep.append(n)
+                    if not tail:
+                        opened |= cands & (known | avail) or {n}
             if not keep:
                 continue
-            if len(keep) < len(m.group(2).split()):
-                out.append(f"open{m.group(1) or ''} {' '.join(keep)}\n" + "".join(u.blank))
+            if len(keep) + len(tail) < len(words):
+                out.append(f"open{m.group(1) or ''} {' '.join(keep + tail)}\n" + "".join(u.blank))
+                continue
+        elif only:
+            cands = spaces(only.group(1))
+            if cands & known and not cands & avail:
+                gone.append(f"open {only.group(1)} ({only.group(2).strip()})")
                 continue
         elif k in syn and k not in live:
             gone.append(u.head)
@@ -500,6 +540,7 @@ def split(tree: Tree, op: dict, log: list[str]) -> None:
     imps += [m for m in syntax_from(tree, text, closure) if m not in imps]
     shown = ", ".join(f"`{u.name.split('.')[-1]}`" for u in moved[:6]) + (", …" if len(moved) > 6 else "")
     out = ("module\n\n" if style else "") + "".join(f"{'public ' if style else ''}import {i}\n" for i in imps)
+    out += "".join(ln + "\n" for ln in flagged(header))
     out += f"\n/-! {shown}: the declarations of `{src}` that its importers read without the rest of it. -/\n"
     out += emit(moved)
     known = tree.spaces([src, *closure])
@@ -513,7 +554,10 @@ def split(tree: Tree, op: dict, log: list[str]) -> None:
     tree.write(src, add_import(rest, new, None) if op.get("source_imports_new") else rest)
     for imp in op.get("importers", []):
         if imp in tree.mods:
-            tree.write(imp, add_import(tree.read(imp), new, src))
+            t = add_import(tree.read(imp), new, src)
+            for ln in flagged(split_header(t)[0], src):
+                t = add_line(t, retarget(ln, new))
+            tree.write(imp, t)
         else:
             log.append(f"  {new}: importer {imp} isn't in the tree")
     uses = op.get("uses", {})
@@ -601,6 +645,9 @@ def merge(tree: Tree, op: dict, log: list[str]) -> None:
     for i in imports_of(h1):
         if i != into:
             t = add_import(t, i, None)
+    for ln in flagged(h1):
+        if IMPORT.match(ln).group(4) != into:
+            t = add_line(t, ln)
     t = drop_import(t, mod)
     h2, b2 = split_header(t)
     # every scope `mod` leaves open closes before `into`'s own text, a public section included
@@ -616,7 +663,10 @@ def merge(tree: Tree, op: dict, log: list[str]) -> None:
             continue
         txt = tree.read(m)
         if mod in imports_of(split_header(txt)[0]):
-            tree.write(m, drop_import(add_import(txt, into, mod), mod))
+            t = add_import(txt, into, mod)
+            for ln in flagged(split_header(t)[0], mod):
+                t = add_line(t, retarget(ln, into))
+            tree.write(m, drop_import(t, mod))
     tree.write(mod, None)
     log.append(f"merge {mod} into {into}: {sum(u.decl for u in units1)} declarations")
 

@@ -108,6 +108,31 @@ def test_a_merge_closes_its_scopes_before_the_destination_text(tree):
     assert tree.files[tree.mods["Proofs.Toy.Src"]] is None
 
 
+def test_a_split_and_a_merge_keep_the_imports_that_expose_bodies_or_run_at_compile_time(tree):
+    flags = "import all Init.Data.Array.Basic\nmeta import Proofs.Toy.Base\n"
+    tree.write("Proofs.Toy.Src", tree.read("Proofs.Toy.Src").replace("public import Proofs.Toy.Base\n",
+                                                                    "public import Proofs.Toy.Base\n" + flags))
+    tree.write("Proofs.Toy.User", tree.read("Proofs.Toy.User").replace("public import Proofs.Toy.Src\n",
+                                                                      "public import Proofs.Toy.Src\nimport all Proofs.Toy.Src\n"))
+    M.split(tree, SPLIT, [])
+    assert flags in M.split_header(tree.read("Proofs.Toy.SrcA"))[0]
+    user = M.split_header(tree.read("Proofs.Toy.User"))[0]
+    assert "import all Proofs.Toy.SrcA\n" in user and "Proofs.Toy.Src\n" not in user
+    M.merge(tree, {"kind": "merge", "module": "Proofs.Toy.SrcA", "into": "Proofs.Toy.Src"}, [])
+    assert "import all Init.Data.Array.Basic\n" in M.split_header(tree.read("Proofs.Toy.Src"))[0]
+    assert "import all Proofs.Toy.Src\n" in M.split_header(tree.read("Proofs.Toy.User"))[0]
+
+
+def test_an_open_of_a_namespace_it_cannot_see_goes_in_every_form():
+    decl = "theorem t : True := trivial\n"
+    text = f"module\n\nnamespace Toy\nopen Inner (c)\nopen Nat Inner in\n{decl}open Inner in\n{decl}end Toy\n"
+    out, gone = M.prune(text, {"Toy.Inner"}, set(), decl)
+    assert out == f"module\n\nnamespace Toy\nopen Nat in\n{decl}{decl}end Toy\n"
+    assert gone == ["open Inner (c)", "open Inner", "open Inner"]
+    text = f"module\n\nopen Flock\nopen Inner\n{decl}"
+    assert M.prune(text, {"Inner", "Flock", "Flock.Inner"}, {"Flock", "Flock.Inner"}, decl) == (text, [])
+
+
 def test_a_name_it_cannot_find_stops_it_before_anything_is_written(tmp_path, tree):
     root = tree.root
     m = root / "map.toml"
