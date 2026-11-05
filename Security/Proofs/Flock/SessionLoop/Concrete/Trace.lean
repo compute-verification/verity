@@ -252,6 +252,9 @@ theorem UN_a_lt : ∀ c < 128, ∀ y ∈ (UN.a.row (128 + c)).toList, y < 16 := 
 /-- The unit's input rows past its 16 inputs are empty. -/
 theorem UN_empty : ∀ c < 112, UN.a.row (16 + c) = #[] ∧ UN.b.row (16 + c) = #[] := by decide +kernel
 
+/-- The unit's 16 input rows read themselves. -/
+theorem UN_in : ∀ t < 16, UN.a.row t = #[t] ∧ UN.b.row t = #[t] := by decide +kernel
+
 /-! ## The trace -/
 
 /-- The `sha512x3` slot's inputs: `cv0` the midstate's bits, every other input 0 (the row's bits and the unused
@@ -505,6 +508,49 @@ theorem zIn_gap {i : ℕ} (h : 524800 ≤ i) : zIn i = false := by
   rw [ite_eq_right (show ¬ i < 262144 by omega), ite_eq_right (show ¬ i < 524288 by omega)]
   exact decide_eq_false (by omega)
 
+/-- **Δ at a unit leaf row**, at a statement whose Δ is `E`: the leaf run's self pair and its source's. -/
+theorem delta_leaf {da : Array (ℕ × ℕ)} (hda : da.toList = E) {x : ℕ} (hx : 524288 ≤ x ∧ x < 524304) (j : ℕ) :
+    deltaEntry da x j = (((if x = j then 1 else 0) + (if leafSrc (x - 524288) = j then 1 else 0) : ℕ) : ZMod 2) := by
+  rw [deltaEntry_eq_count, hda, count_E, count_run, count_run, count_run, count_run,
+    ite_eq_right (show ¬ (262144 ≤ x ∧ x < 262144 + 512) by omega),
+    ite_eq_right (show ¬ (512 ≤ x ∧ x < 512 + 1024) by omega),
+    ite_eq_left (show 524288 ≤ x ∧ x < 524288 + 16 by omega),
+    ite_eq_right (show ¬ (0 ≤ x ∧ x < 0 + 512) by omega)]
+  have h4 : [(518144, 518144), (518144, PIN), (524544, 524544), (524544, PIN)].count (x, j) = 0 :=
+    List.count_eq_zero.2 fun hm => by
+      simp only [List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false] at hm
+      omega
+  rw [h4]
+  simp only [Nat.zero_add, Nat.add_zero]
+
+theorem count_one (t j : ℕ) : (((#[t] : Array ℕ).toList.count j : ℕ) : ZMod 2) = if j = t then 1 else 0 := by
+  show ((([t] : List ℕ).count j : ℕ) : ZMod 2) = _
+  by_cases h : j = t
+  · subst h; simp [List.count_cons]
+  · rw [ite_eq_right h]; simp [List.count_cons, Ne.symm h]
+
+/-- A row's own entry, cancelled by Δ's self pair, leaves Δ's copy of its source. -/
+theorem ite_cancel (j x src : ℕ) : ((if j = x then (1 : ZMod 2) else 0) +
+    (((if x = j then 1 else 0) + if src = j then 1 else 0 : ℕ) : ZMod 2)) = if j = src then 1 else 0 := by
+  by_cases h1 : j = x
+  · rw [ite_eq_left h1, ite_eq_left h1.symm]
+    by_cases h2 : src = j
+    · rw [ite_eq_left h2, ite_eq_left h2.symm]; decide
+    · rw [ite_eq_right h2, ite_eq_right (Ne.symm h2)]; decide
+  · rw [ite_eq_right h1, ite_eq_right (Ne.symm h1), zero_add, Nat.zero_add]
+    by_cases h2 : src = j
+    · rw [ite_eq_left h2, ite_eq_left h2.symm]; simp
+    · rw [ite_eq_right h2, ite_eq_right (Ne.symm h2)]; simp
+
+/-- **The trace is 0 at the unit's leaf sources**: they are inputs of the `sha512x3` slot past `cv0`. -/
+theorem zIn_leaf {t : ℕ} (ht : t < 16) : zIn (leafSrc t) = false := by
+  have h1 : 262704 ≤ leafSrc t ∧ leafSrc t < 262720 := by unfold leafSrc; split <;> omega
+  unfold zIn vS
+  rw [ite_eq_right (show ¬ leafSrc t < 262144 by omega), ite_eq_left (show leafSrc t < 524288 by omega),
+    Total.laidVal_input (show leafSrc t - 262144 < inRowsOf SHA_IN by rw [inRows_SHA_IN]; omega)]
+  unfold xS
+  exact ite_eq_right (show ¬ leafSrc t - 262144 < 512 by omega)
+
 variable {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
   (hda : st.da.toList = E) (hrs : st.c.ranges.toList.map (fun r => (r.kind, r.slotLog, r.pos0, r.count)) = RS)
 include hda hrs
@@ -575,6 +621,60 @@ theorem holds_unitPad (hk : st.c.kLog = 22) (htm : st.c.tmpl = none) (hU : st.c.
   · rw [hsl]; omega
   · rw [block_zC (S := L.model regs) hk, zIn_unit (i := r.val) (by omega) (by omega)]
     rfl
+
+omit hrs in
+/-- **A unit leaf row copies its source**: its slot entry reads the row itself, and Δ's leaf run cancels that and reads
+the source. -/
+theorem copyRow_unitLeaf (htm : st.c.tmpl = none) (hU : st.c.unit = UN) (hs1 : st.c.unitRange.count = 1)
+    (hsl : st.c.unitRange.slot 0 = 524288) {r : Fin (2 ^ (L.model regs).kLog)} (hr : 524288 ≤ r.val ∧ r.val < 524304)
+    (src : Fin (2 ^ (L.model regs).kLog)) (hsrc : src.val = leafSrc (r.val - 524288)) :
+    CopyRow (L.model regs) r src := by
+  have hB := L.built_flat htm
+  have hs : 0 < st.c.unitRange.count := by omega
+  have hW : 0 < 2 ^ st.c.unit.unitLog := Nat.two_pow_pos _
+  have hc : r.val - 524288 < 2 ^ st.c.unit.unitLog := by rw [hU]; show _ < 512; omega
+  have hr' : r.val = st.c.unitRange.slot 0 + (r.val - 524288) := by rw [hsl]; omega
+  have hin := UN_in (r.val - 524288) (by omega)
+  rw [← hU] at hin
+  have hlk : st.c.unit.lookup = none := L.unit_lookup
+  have hd := delta_leaf hda (x := r.val) hr
+  have key : ∀ (e : Kind → ℕ → ℕ → ZMod 2),
+      (∀ j', e (.net st.c.unitNet) (r.val - 524288) j' = if j' = r.val - 524288 then 1 else 0) →
+      ∀ j : ℕ, rangesEntry st e r.val j = if j = r.val then 1 else 0 := by
+    intro e he j
+    rw [hr', L.rangesEntry_unit hs hc e j,
+      ite_slot_eq (v := e (.net st.c.unitNet) (r.val - 524288)) hW hc he, ← L.slot_eq]
+  have hA : ∀ j', slotEntryA st (.net st.c.unitNet) (r.val - 524288) j' = if j' = r.val - 524288 then 1 else 0 := by
+    intro j'
+    show sparseEntry st.c.unit.a (r.val - 524288) j' = _
+    rw [sparseEntry_built_a hB, hin.1, count_one]
+  have hBe : ∀ j', slotEntryB st (.net st.c.unitNet) (r.val - 524288) j' = if j' = r.val - 524288 then 1 else 0 := by
+    intro j'
+    show sparseEntry st.c.unit.b (r.val - 524288) j' + lookupEntry st.c.unit.lookup (r.val - 524288) j' = _
+    rw [sparseEntry_built_b hB, hin.2, count_one, hlk]
+    simp only [lookupEntry, add_zero]
+  refine ⟨fun j => ?_, fun j => ?_⟩
+  · show rangesEntry st (slotEntryA st) r.val j.val + deltaEntry st.da r.val j.val = _
+    rw [key (slotEntryA st) hA, hd, ite_cancel, ← hsrc]
+    exact if_congr Fin.ext_iff.symm rfl rfl
+  · show rangesEntry st (slotEntryB st) r.val j.val + deltaEntry st.db r.val j.val = _
+    rw [L.delta_b, key (slotEntryB st) hBe, hd, ite_cancel, ← hsrc]
+    exact if_congr Fin.ext_iff.symm rfl rfl
+
+omit hrs in
+/-- **The unit's leaf rows hold** at the trace: each copies its source, and the trace is 0 at both. -/
+theorem holds_unitLeaf (hk : st.c.kLog = 22) (htm : st.c.tmpl = none) (hU : st.c.unit = UN)
+    (hs1 : st.c.unitRange.count = 1) (hsl : st.c.unitRange.slot 0 = 524288) (o : Fin (2 ^ (L.model regs).nbl))
+    {r : Fin (2 ^ (L.model regs).kLog)} (hr : 524288 ≤ r.val ∧ r.val < 524304) :
+    ((L.model regs).A₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r *
+        ((L.model regs).B₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r =
+      (L.model regs).block (zC (L.model regs).m) o r := by
+  have hsrc : leafSrc (r.val - 524288) < 2 ^ (L.model regs).kLog := by
+    have : leafSrc (r.val - 524288) < 262720 := by unfold leafSrc; split <;> omega
+    exact lt_of_lt_of_le this (by rw [show (L.model regs).kLog = 22 from hk]; norm_num)
+  refine copyRow_holds (copyRow_unitLeaf L regs hda htm hU hs1 hsl hr ⟨_, hsrc⟩ rfl) ?_
+  rw [block_zC (S := L.model regs) hk, block_zC (S := L.model regs) hk, zIn_unit (i := r.val) hr.1 (by omega),
+    Fin.val_mk, zIn_leaf (t := r.val - 524288) (by omega)]
 
 end place
 
