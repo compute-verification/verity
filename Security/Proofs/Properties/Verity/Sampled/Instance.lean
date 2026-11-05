@@ -292,12 +292,24 @@ noncomputable def recordSpec (A : Live) (θ : ByteArray) (F : Array ByteArray) (
     exact_mod_cast h
   claim := .cr
 
+/-- **The bound digests' two-continuation finder as a further finder**: `K`'s at the session `A`, asked under
+`cr/sha-512` at its `2t + 2h` calls (`Constructions.bind_calls`). -/
+noncomputable def bindSpec (A : Live) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
+    FinderSpec (I.base.game θ F c) (I.base.cost θ F c) where
+  finder σ := K.bindFinder A θ F c σ
+  budget t := 2 * t + 2 * A.h
+  calls σ x := by
+    have h := K.bind_calls A θ F c σ x
+    unfold Live.qM at h
+    exact_mod_cast h
+  claim := .cr
+
 /-- **The session's two-continuation finders as further finders**: at the deployment's session, one per round
-(`msgSpec`) and the record's (`recordSpec`); none elsewhere. -/
+(`msgSpec`), the record's (`recordSpec`) and the bound digests' (`bindSpec`); none elsewhere. -/
 noncomputable def strictSpecs (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
     List (FinderSpec (I.base.game θ F c) (I.base.cost θ F c)) :=
   match I.sessions θ F with
-  | some A => (List.finRange A.rounds).map (I.msgSpec K A θ F c) ++ [I.recordSpec K A θ F c]
+  | some A => (List.finRange A.rounds).map (I.msgSpec K A θ F c) ++ [I.recordSpec K A θ F c, I.bindSpec K A θ F c]
   | none => []
 
 noncomputable def findersOf : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
@@ -420,8 +432,10 @@ noncomputable def liftStage : Constructions (I.stage K) where
   forger := K.forger
   msgFinder := K.msgFinder
   recordFinder := K.recordFinder
+  bindFinder := K.bindFinder
   msg_calls := K.msg_calls
   record_calls := K.record_calls
+  bind_calls := K.bind_calls
 
 /-- **The constructions at the deployed vocabulary**: `K`'s, whose strategies are the same. -/
 noncomputable def lift : Constructions (I.vocab K) where
@@ -431,8 +445,10 @@ noncomputable def lift : Constructions (I.vocab K) where
   forger := K.forger
   msgFinder := K.msgFinder
   recordFinder := K.recordFinder
+  bindFinder := K.bindFinder
   msg_calls := K.msg_calls
   record_calls := K.record_calls
+  bind_calls := K.bind_calls
 
 /-! ## The fields of `Deployed` -/
 
@@ -461,18 +477,22 @@ theorem strictCR {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {A : Liv
     {σ : Verity.Game.Strategy ((I.stage K).game θ F c)} (hA : I.sessions θ F = some A)
     (h : (I.stage K).finderCR .sampled θ F c σ) :
     (∀ j, Claims.StrictBirthday Verity.sha512Msg (K.msgFinder A θ F c σ j)) ∧
-      Claims.StrictBirthday Verity.sha512Msg (K.recordFinder A θ F c σ) := by
+      Claims.StrictBirthday Verity.sha512Msg (K.recordFinder A θ F c σ) ∧
+      Claims.StrictBirthday Verity.sha512Msg (K.bindFinder A θ F c σ) := by
   have hall := List.forall_iff_forall_mem.1 (show finderCROf (I.fileSpecs θ F c ++ I.strictSpecs K θ F c) σ from h)
   have hs : I.strictSpecs K θ F c =
-      (List.finRange A.rounds).map (I.msgSpec K A θ F c) ++ [I.recordSpec K A θ F c] := by
+      (List.finRange A.rounds).map (I.msgSpec K A θ F c) ++ [I.recordSpec K A θ F c, I.bindSpec K A θ F c] := by
     unfold strictSpecs
     rw [hA]
   refine ⟨fun j => hall (I.msgSpec K A θ F c j) (List.mem_append_right _ ?_),
-    hall (I.recordSpec K A θ F c) (List.mem_append_right _ ?_)⟩
+    hall (I.recordSpec K A θ F c) (List.mem_append_right _ ?_),
+    hall (I.bindSpec K A θ F c) (List.mem_append_right _ ?_)⟩
   · rw [hs]
     exact List.mem_append_left _ (List.mem_map.2 ⟨j, List.mem_finRange j, rfl⟩)
   · rw [hs]
-    exact List.mem_append_right _ (List.mem_singleton_self _)
+    exact List.mem_append_right _ (by simp)
+  · rw [hs]
+    exact List.mem_append_right _ (by simp)
 
 /-- **`Deployed` at the deployed vocabulary**, from the commitment format's openings, at constructions whose read
 finder and forger are the binding's (`Binding.withBinding`, `Constructions.assembled`): the leg's per-finder premises
@@ -497,9 +517,9 @@ theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = Binding.readFind
     exact HEq.rfl
   opens θ F A h c := hO θ F A (I.sessions_some h).1 (I.sessions_some h).2 c
   finderCR θ F A h c σ hcr hpr := by
-    obtain ⟨hm, hr⟩ := I.strictCR K h hcr
+    obtain ⟨hm, hr, hb⟩ := I.strictCR K h hcr
     obtain ⟨h1, h2, -⟩ := I.fileCR K hcr
-    exact ⟨hpr A h, hm, hr, strict_of_zero (pr_unit h1), strict_of_zero (pr_unit h2)⟩
+    exact ⟨hpr A h, hm, hr, hb, strict_of_zero (pr_unit h1), strict_of_zero (pr_unit h2)⟩
   premises _ _ _ _ := Iff.rfl
   delta θ F A h t := by
     show A.delta t _ ≤ ((I.session θ).map fun A => A.delta t (I.base.crBound θ .sampled t)).getD 0
