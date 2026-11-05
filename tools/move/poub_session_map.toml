@@ -2,10 +2,12 @@
 # moves and rewrites. `benchmarks/` is measurement only, and live_verifier's host runs this verifier on the auditor's host,
 # so it goes into PoUB's package (`verity/core/protocols/remote_bandwidth/session/`).
 #
-# - `verifier.py` (the verifier's process), `lean_verifier.py` (the Lean verifier it runs beside `audit.AuditRun`),
-#   `checks.py` (its worker processes), `challengers.py` (where a session's coins come from) and `wire.py` (the framed
-#   messages between the two processes) move under their own names, so `benchmarks.remote_session.wire` becomes
+# - `verifier.py` (the verifier), `lean_verifier.py` (the Lean verifier it runs beside `audit.AuditRun`), `checks.py`
+#   (its worker processes), `challengers.py` (where a session's coins come from) and `wire.py` (the framed messages
+#   between the two processes) move under their own names, so `benchmarks.remote_session.wire` becomes
 #   `verity.core.protocols.remote_bandwidth.session.wire`. Their importers name them by package (an edit before the move).
+# - `verifier_process.py`, the verifier's process, stays: it hands `verifier.main` the LMS verify (`verity.ml.crypto`)
+#   and the live challenger's `serve.py`, which a verifier imports none of (an edit before the move).
 # - The prover's side stays: `prover.py`, `device.py` and `inplace.py` import core, torch and `benchmarks.word_codec`, and
 #   `auditor_line.py`, the analysis of a gate run's records, reads the certifier's audit.
 # - The package's `__init__.py` lands before the move.
