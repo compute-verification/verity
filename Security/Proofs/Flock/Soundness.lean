@@ -155,6 +155,7 @@ public import Proofs.Flock.Soundness.Refine
 public import Proofs.Flock.Soundness.E2E
 public import Proofs.Flock.Soundness.GateRows
 public import Proofs.Flock.Soundness.StrictCR
+public import Proofs.Flock.Soundness.Teeth
 public import Proofs.Flock.Soundness.Types.Units
 public import Proofs.Flock.Soundness.Types.Program
 public import Proofs.Flock.Soundness.Types.ProgramPlaces
