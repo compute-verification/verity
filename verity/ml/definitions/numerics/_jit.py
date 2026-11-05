@@ -16,6 +16,7 @@ check's repository guard looked.
 from __future__ import annotations
 
 import contextlib
+import ctypes
 import hashlib
 import os
 import subprocess
@@ -109,6 +110,14 @@ def atomic_build(lib: Path, sources: Sequence[Path], compile_to: Callable[[Path]
             with contextlib.suppress(FileNotFoundError):
                 tmp_p.unlink()
     return lib
+
+
+def load(build: Callable[..., Path]) -> ctypes.CDLL:
+    """The library ``build()`` publishes, opened; rebuilt once with ``build(force=True)`` when it fails to open."""
+    try:
+        return ctypes.CDLL(str(build()))
+    except OSError:  # a stale or foreign-platform .so (e.g. copied from another machine): rebuild here
+        return ctypes.CDLL(str(build(force=True)))
 
 
 def cxx_compile(out: Path, src: Path, *, cwd: Path | None = None, extra: Sequence[str] = ()) -> None:

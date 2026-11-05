@@ -25,13 +25,6 @@ KERNEL = FT.KERNEL
 DOMAIN = FT.DOMAIN
 
 
-def fdiv(a, b) -> np.ndarray:
-    """`div.rn.f32`: RN(a / b) with subnormals, every NaN 0x7FFFFFFF."""
-    a, b = np.broadcast_arrays(FT._w(a), FT._w(b))
-    with np.errstate(all="ignore"):
-        return FT._gpu(DR.div_rn(a, b))
-
-
 # ---- the gather and the rows ------------------------------------------------------------------------------------------------
 
 def e8m0_shl_bf16(x) -> np.ndarray:
@@ -119,7 +112,7 @@ def head(q, k, valid, scale_bits: int, BN: int, sink) -> np.ndarray:
     lw = [FT.fadd(FT.fadd(st.l[:, 4 * w], st.l[:, 4 * w + 1]), FT.fadd(st.l[:, 4 * w + 2], st.l[:, 4 * w + 3])) for w in (0, 1)]
     total = FT.fadd(lw[0], lw[1])
     den = FT.fadd(total, FT.exp2f(FT.fadd(FT.fmul(sink, FT.L2E), FT.neg(st.m))))
-    return DR.f2fp_bf16(FT.fmul(st.o, np.where(FT.feq(total, 0), U32(0), fdiv(FT.F_ONE, den))[:, None]))
+    return DR.f2fp_bf16(FT.fmul(st.o, np.where(FT.feq(total, 0), U32(0), FT.fdiv(FT.F_ONE, den))[:, None]))
 
 
 def prefill(q, kv, idx, n, skv, sink, *, BN: int, SCALE: float) -> np.ndarray:
