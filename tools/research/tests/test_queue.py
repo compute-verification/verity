@@ -1090,16 +1090,15 @@ def test_a_pool_launch_sends_each_merge_from_a_worktree_at_the_tip_and_the_verdi
     _git(clone, "checkout", "-q", "--detach", main)
     (run_dir / "inputs").mkdir(parents=True)
     shutil.copy(d / "pr-2.bundle", run_dir / "inputs" / "pr-2.bundle")
-    monkeypatch.setenv(result.ENV_RUN_ID, r2)
-    monkeypatch.setenv(result.ENV_RUN_DIR, str(run_dir))
+    env = {result.ENV_RUN_ID: r2, result.ENV_RUN_DIR: str(run_dir)}
     said: list[str] = []
-    assert Q.pool_preflight(2, two, main, repo=clone, log=said.append) == 0
+    assert Q.pool_preflight(2, two, main, repo=clone, log=said.append, environ=env) == 0
     got = result.check(run_dir, r2)
     assert got.valid and got.doc["kind"] == Q.PREFLIGHT_KIND and got.doc["validation"]["status"] == "passed", got.errors
     assert {f: got.doc["preflight"][f] for f in ("pr", "head", "onto", "base", "commit", "tree", "why")} == {
         "pr": 2, **{f: runs["2"][f] for f in ("head", "onto", "base", "commit", "tree")}, "why": None}
     assert said[-1] == f"research queue preflight: #2 at {two[:12]} merged onto {main[:12]}: passed", said
-    assert Q.pool_preflight(2, two, runs["2"]["commit"], repo=clone, log=said.append) == 1
+    assert Q.pool_preflight(2, two, runs["2"]["commit"], repo=clone, log=said.append, environ=env) == 1
     assert f"research queue preflight: #2 at {two[:12]} not judged: the bundle's merge " in capsys.readouterr().err
 
     states[r1] = ("failed", 1, str(world.tmp / "run-1"))

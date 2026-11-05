@@ -326,7 +326,7 @@ import time
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Mapping
 
 from . import linear, quick_tier, waitcap
 from .gates import git_env
@@ -4969,17 +4969,19 @@ class PreflightPool:
 
 
 def pool_preflight(n: int, head: str, onto: str, bundle: Path | None = None, repo: Path | None = None,
-                   log: Callable[[str], None] = print) -> int:
+                   log: Callable[[str], None] = print, environ: Mapping[str, str] | None = None) -> int:
     """`research queue preflight N --head H --onto P [--bundle F]`, a pool run of drive's sync (`PreflightPool`): in ``repo`` (this
     clone of `next` at ``onto``), the sync's merge of PR ``n``'s head ``head`` onto ``onto``, fetched from ``bundle`` (default the
     run's input `pr-N.bundle`), judged by `Preflight.onto`.  Its verdict ({pr, head, onto, base: its tree, commit, tree: the
     merge's, why: the refusal or null, log: what the preflight said}) goes to the run's result.json (`PREFLIGHT_KIND`) and to
-    ``log``.  0 once judged, whatever the verdict; 1 when it couldn't judge."""
+    ``log``.  The run's id and directory are ``environ``'s (the process's by default), as `research run` gives a workload
+    them.  0 once judged, whatever the verdict; 1 when it couldn't judge."""
     from . import result
 
+    environ = os.environ if environ is None else environ
     try:
         repo = Path(repo or _out(Path.cwd(), "rev-parse", "--show-toplevel"))
-        run_id, run_dir = os.environ.get(result.ENV_RUN_ID), os.environ.get(result.ENV_RUN_DIR)
+        run_id, run_dir = environ.get(result.ENV_RUN_ID), environ.get(result.ENV_RUN_DIR)
         if bundle is None:
             if not run_dir:
                 raise QueueError(f"no --bundle, and no run directory (${result.ENV_RUN_DIR}) to find pr-{n}.bundle in")
