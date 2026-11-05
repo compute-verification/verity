@@ -14,9 +14,10 @@ composite's other subprotocols look those up among the blobs. A period that list
 
 * `blobProtocol` is the composites' verifier of record. Each listed file is the blob with its listed SHA-512
   (`Core.Blobs.get`, `filesOf`).
-* `readProtocol fs` is what a composite's executable runs when a period's files are too large to hold as blobs. The
-  files are read by path within a budget (`NetworkCheck.PeriodFiles.read`), and held as `ofRead` holds their bytes:
-  the last `NetworkCheck.Period.scanCount` of them, the scan's, whole, and the others trimmed.
+* `readProtocol n fs` is what a composite's executable runs when a period's files are too large to hold as blobs. The
+  files are read by path within a budget (`NetworkCheck.PeriodFiles.read`), and held as `ofRead n` holds their bytes:
+  the last `n` of them (`NetworkCheck.Period.scanCount` of the parameters), the scan's, whole, and the others trimmed.
+  A period whose listing has another number of scan files is refused (`readCheck`).
 
 Where the blobs hold the listed files' bytes, the two give one verdict (`blobProtocol_check`).
 -/
@@ -36,12 +37,16 @@ doesn't parse, named by its place. -/
 def ofFiles (l : Listing) (bs : Array ByteArray) : V (Array (ByteArray × Flock.Circuit)) :=
   (l.files.zip bs).zipIdx.mapM fun (((_, scan, _, _), b), i) => (ofFile scan b).mapError (s!"circuit file {i}: " ++ ·)
 
-/-- **The files `bs` as `NetworkCheck.PeriodFiles.read` holds them**, read at their paths on the period's parameters
-`j`: the last `scanCount j`, the scan's, whole, and the others trimmed, each as `ofFile` holds it; or the first that
-doesn't parse, named by its place. -/
-def ofRead (j : Lean.Json) (bs : Array ByteArray) : V (Array (ByteArray × Flock.Circuit)) :=
-  let k := bs.size - scanCount j
+/-- **The files `bs` as `NetworkCheck.PeriodFiles.read` holds them**, read at their paths with the last `n` as the
+scan's (`scanCount` of the period's parameters): those whole, and the others trimmed, each as `ofFile` holds it; or the
+first that doesn't parse, named by its place. -/
+def ofRead (n : Nat) (bs : Array ByteArray) : V (Array (ByteArray × Flock.Circuit)) :=
+  let k := bs.size - n
   bs.zipIdx.mapM fun (b, i) => (ofFile (k ≤ i) b).mapError (s!"circuit file {i}: " ++ ·)
+
+/-- How many files listing `l` lists for the scan (`scan_circuits`), the last of `Listing.files`: 0 where it lists
+none. -/
+def Listing.scanFiles (l : Listing) : Nat := (l.scan.map (·.files.size)).getD 0
 
 /-- **The files listing `l` lists, among the blobs `bs`**, in its order: each the blob whose SHA-512 is its listing's
 (`Core.Blobs.get`); or the first that no blob has, named by its place. -/
@@ -73,10 +78,24 @@ def filesCheck (fs : V (Array (ByteArray × Flock.Circuit))) (p : Params × List
     | some (i, t) => .reject s!"circuit files: circuit file {i} is the pinned lookup table {t}, by its SHA-512"
     | none => if !p.2.listed && fs.isEmpty then check p.1 c e else checkWith fs p c e
 
-/-- **The period protocol with its listed files `fs`, read by path** (`NetworkCheck.PeriodFiles.read`), or with why they
-couldn't be read: `filesCheck fs`. A composite's executable runs it as the network certifier's subprotocol when the files
-are given by path. It reads no blobs. -/
-def readProtocol (fs : V (Array (ByteArray × Flock.Circuit))) : Core.Protocol := protocolBy (filesCheck fs)
+/-- **The period's check with its files `fs` read by path, the last `n` of them as the scan's**: refused where the
+period lists another number of scan files (`Listing.scanFiles`), since the reader held the files as scan's or audit's
+by `n` before the parameters were decoded; else `filesCheck fs`. -/
+def readCheck (n : Nat) (fs : V (Array (ByteArray × Flock.Circuit))) (p : Params × Listing) (c : Commitment)
+    (e : Evidence) : Core.Outcome Public Profile :=
+  if p.2.scanFiles != n then
+    .reject s!"circuit files: the last {n} were read as the scan's, but the period lists {p.2.scanFiles} scan_circuits"
+  else filesCheck fs p c e
+
+/-- At the listing's own number of scan files, the check by path is `filesCheck`. -/
+theorem readCheck_scanFiles (fs : V (Array (ByteArray × Flock.Circuit))) (p : Params × Listing) (c : Commitment)
+    (e : Evidence) : readCheck p.2.scanFiles fs p c e = filesCheck fs p c e := by
+  simp [readCheck]
+
+/-- **The period protocol with its listed files `fs`, read by path** (`NetworkCheck.PeriodFiles.read`) with the last `n`
+as the scan's, or with why they couldn't be read: `readCheck n fs`. A composite's executable runs it as the network
+certifier's subprotocol when the files are given by path. It reads no blobs. -/
+def readProtocol (n : Nat) (fs : V (Array (ByteArray × Flock.Circuit))) : Core.Protocol := protocolBy (readCheck n fs)
 
 /-- **The period protocol with its listed files among the caller's blobs**, the composites' verifier of record: each
 listed file is the blob with its listed SHA-512 (`filesOf`), and the check is `filesCheck`'s. Without blobs, a period
@@ -90,15 +109,16 @@ hold each file the period lists, as the bytes `b` (`blobsOf`), `blobProtocol` ch
 checks it with those bytes read as `NetworkCheck.PeriodFiles.read` reads the files at their paths (`ofFiles`). -/
 theorem blobProtocol_check (p : Params × Listing) (c : Commitment) (e : Evidence) (bs : Core.Blobs)
     (b : Array ByteArray) (h : blobsOf p.2 bs = .ok b) :
-    blobProtocol.checkBlobs p c e bs = (readProtocol (ofFiles p.2 b)).check p c e := by
-  show filesCheck (blobsOf p.2 bs >>= ofFiles p.2) p c e = filesCheck (ofFiles p.2 b) p c e
-  rw [h]
+    blobProtocol.checkBlobs p c e bs = (readProtocol p.2.scanFiles (ofFiles p.2 b)).check p c e := by
+  show filesCheck (blobsOf p.2 bs >>= ofFiles p.2) p c e = readCheck p.2.scanFiles (ofFiles p.2 b) p c e
+  rw [readCheck_scanFiles, h]
   rfl
 
 /-- Both forms share the period protocol's id and decoders: only the check differs. -/
 theorem blobProtocol_id : blobProtocol.id = protocolId := rfl
 
-theorem readProtocol_id (fs : V (Array (ByteArray × Flock.Circuit))) : (readProtocol fs).id = protocolId := rfl
+theorem readProtocol_id (n : Nat) (fs : V (Array (ByteArray × Flock.Circuit))) : (readProtocol n fs).id = protocolId :=
+  rfl
 
 /- A period that lists nothing needs no blob; a listed file is found by its SHA-512, and one that isn't, or doesn't
 parse, is named by its place. -/
@@ -121,10 +141,10 @@ parse, is named by its place. -/
   (match filesOf l (.ofArray #[b]) with
     | .error e => e.startsWith "circuit file 0: "
     | .ok _ => false) &&
-  (match ofRead .null #[b] with
+  (match ofRead 0 #[b] with
     | .error e => e.startsWith "circuit file 0: "
     | .ok _ => false) &&
-  (match ofRead .null #[] with
+  (match ofRead 0 #[] with
     | .ok fs => fs.isEmpty
     | .error _ => false)
 
