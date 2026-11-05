@@ -18,10 +18,13 @@ the `Hello`'s proved:
 * `LoopAt`: the loop between two of the session's requests: its frames, its level-0 slots and how many of the model's
   messages the session's slots took.
 * `LoopRead`: what the relay reads at a slot as the loop answers it, and the loop at the session's next request: the
-  `Hello`'s nonce the relay drew, the `Commit`'s roots `commitRead` reads off the slots, a frame round as the loop ran
-  it (`RoundRun`) on the worker's value at the model's history, the `Finish`'s proofs the loop's proof files as
-  `Proof` frames; at the `Commit` and each frame round the auditor answering as `V*` did, and at the `Finish` the run
-  having a message there; at every other slot only the updates between the session's requests (`Between`).
+  `Hello`'s nonce the relay drew; the `Commit`'s roots `commitRead` reads off the slots, the coin tree's streams the
+  session's, and the firewall's own link at the level 0s the loop drew for the session; a frame round as the loop ran
+  it (`RoundRun`) on the worker's value at the model's history; at the `Finish`, once the hold's barrier passes, the
+  session not stopped, the run at its last round, the firewall's own `Finish` not stopping, the worker's value the
+  firewall's own, and that message the `Final` of the loop's proof files as `Proof` frames; at the `Commit` and each
+  frame round the auditor answering as `V*` did, and at the `Finish` the run having a message there; at every other
+  slot only the updates between the session's requests (`Between`).
 * `LoopReads`: the requests to come, each read so, up to the session's stop or end.
 * `LoopFacts`: the session going on (`Reach`, no stop), its Σ, domain frames, reps and labels the setup's, each rep
   whose stream had no round yet with its frame absent or fresh (`FreshAt`), and the model's messages the slots took:
@@ -92,22 +95,36 @@ structure LoopAt where
 /-- **What the relay reads at a slot of kind `k` of session `sid`**, from the session `st` and placement `pl`, as the
 loop at `σ` answers it serving the model's run `M`, the loop being at `σ'` at the session's next request: at the
 `Hello` the nonce `nonce` the relay drew; at the `Commit` the roots `commitRead` reads off the loop's level-0 slots at
-the session's tables (the setup's, each with its statement's `m`); at a frame round a `RoundRun` from `σ`'s frames
-and level 0s to `σ'`'s frames, its content the worker's value at the model's history so far; at the `Finish` the
-loop's proof files as `Proof` frames, once the hold's barrier passes. At the `Commit` and each frame round the auditor
-answers as `V*` did (`LoopModel.Ans`), and at the `Finish` the run has a message. Between the session's requests only
+the session's tables (the setup's, each with its statement's `m`), the coin tree's streams the session's
+(`streamsOk`), and the firewall's own message the link at the roots of the level 0s `ls` the loop drew for the session
+(`AfterDraw`); at a frame round a `RoundRun` from `σ`'s frames and level 0s to `σ'`'s frames, its content the worker's
+value at the model's history so far; at the `Finish`, once the hold's barrier passes, the session not stopped, the run
+at its last round, the firewall's own `Finish` not stopping, the worker's value the firewall's own, and that message
+the `Final` of the loop's proof files as `Proof` frames. At the `Commit` and each frame round the auditor answers as
+`V*` did (`LoopModel.Ans`), and at the `Finish` the run has a message. Between the session's requests only
 the updates of the loop's other requests come (`Between`), and each slot that reads a model message takes one. -/
 def LoopRead {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (sts : Array Stmt)
     (nonce : ByteArray) : Session.Kind → State → Placed → Env → LoopAt → LoopAt → Prop
   | .hello, _, _, e, σ, σ' => e.nonce = nonce ∧ Between sid σ.R σ'.R ∧ σ'.c = σ.c + 1
   | .commit, _, _, e, σ, σ' =>
     M.Ans σ.c e ∧ (∃ f, e.commit = (commitRead σ.L0 sid (spec.tables.zip (sts.map (·.m))) f).1) ∧
+      (∃ ct, _root_.Flock.Firewall.Session.streamsOk spec sts ct = true) ∧
+      (∃ (ls : Array _root_.Flock.Firewall.Level0.Level0) (publics : List ByteArray), AfterDraw sid ls σ.L0 ∧
+        M.L.ownMsg M.x M.w M.ρ (M.hist σ.c) = 0 :: FlockDeploy.linkBody (ls.toList.map (·.root)) publics ∧
+        ls.size < 2 ^ 64 ∧ publics.length < 2 ^ 64 ∧ (∀ l ∈ ls, l.root.size < 2 ^ 64) ∧
+        ∀ b ∈ publics, b.size < 2 ^ 64) ∧
       Between sid σ.R σ'.R ∧ σ'.c = σ.c + 1
   | .round stream n, st, pl, e, σ, σ' =>
     M.Ans σ.c e ∧ (∃ i r dom, ∃ v : Claims.Msg, M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) ∧
       RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R) ∧ σ'.c = σ.c + 1
   | .finish, _, _, e, σ, σ' =>
-    σ.c < M.τ.length ∧ (∃ ps : Array ByteArray, e.barrier none = none → e.proofs = proofsOf spec ps) ∧
+    σ.c < M.τ.length ∧
+      (e.barrier none = none → σ.R.stopped sid = false ∧ σ.c = M.L.last M.x ∧
+        M.L.finStops M.x M.w M.ρ (M.hist σ.c) = false ∧
+        M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (M.L.ownMsg M.x M.w M.ρ (M.hist σ.c), false) ∧
+        ∃ f : FlockDeploy.Final, M.L.ownMsg M.x M.w M.ρ (M.hist σ.c) = f.encode ∧ e.proofs = proofsOf spec f.proofs ∧
+          f.stmt.length < 2 ^ 64 ∧ f.record.toUTF8.size < 2 ^ 64 ∧ f.proofs.size < 2 ^ 64 ∧
+          ∀ b ∈ f.proofs, b.size < 2 ^ 64) ∧
       σ'.c = σ.c + 1
   | _, _, _, _, σ, σ' => Between sid σ.R σ'.R ∧ σ'.c = σ.c
 

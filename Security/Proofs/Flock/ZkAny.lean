@@ -42,6 +42,8 @@ public import Proofs.Flock.ZkAny.RelayGap
 public import Proofs.Flock.ZkAny.RelayAlg
 public import Proofs.Flock.ZkAny.RelayFresh
 public import Proofs.Flock.ZkAny.RelayLoop
+public import Proofs.Flock.ZkAny.RelayLoopCommit
+public import Proofs.Flock.ZkAny.RelayLoopFinish
 public import Proofs.Flock.ZkAny.RelayLoopRound
 public import Proofs.Flock.ZkAny.RelayReps
 
@@ -79,9 +81,11 @@ rounds as the placeholder's; and at a stream's first round on a frame as its sta
 its schedule so far gives and the frame after it keeping that schedule; and `EnvPre` from the relay's invariant at
 the deployed loop against the model's run, the model's messages the slots took one more than the openings the
 auditor answered, given its step at the `Commit`, each frame round and the `Finish` and an invariant of the loop kept
-at every other slot, the step at the `Hello` and at every other slot proved; and a frame round at its slot before a
-stop, which the session lets through, and the step at it, given what the loop's frames and the model hold there and the
-invariant kept; and the session's reps and labels the setup's rep streams' once its `Hello` left, so a round's rep its
-stream's own and no other rep stream's. -/
+at every other slot, the step at the `Hello` and at every other slot proved; and the step at the `Commit`, where the
+firewall's own link is at the level 0 the loop drew for the session, and at the `Finish`, where the session's stop is
+whether an earlier round of the model's run failed; and a frame round at its slot before a stop, which the session
+lets through, and the step at it, given what the loop's frames and the model hold there and the invariant kept; and
+the session's reps and labels the setup's rep streams' once its `Hello` left, so a round's rep its stream's own and no
+other rep stream's. -/
 
 @[expose] public section
