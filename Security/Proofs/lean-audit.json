@@ -101,6 +101,7 @@
   "Proofs.Properties.Verity.Sampled.LinkFirst",
   "Proofs.Properties.Verity.Sampled.MovesLayout",
   "Proofs.Properties.Verity.Sampled.SampleNamed",
+  "Proofs.Properties.Verity.Sampled.Digest",
   "Proofs.Properties.Verity.Sampled.MovesReachAt",
   "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledLog",

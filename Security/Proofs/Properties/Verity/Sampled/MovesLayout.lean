@@ -23,8 +23,9 @@ three sit together inside the writer's output.
   The order the record's draw and the first stop take, that the sample's coins precede every opening and that the first
   opening is the session stream's, comes from v2's order refusal (`OrderHeld`: `freshBefore_verdict`,
   `linkFirst_verdict`).
-* **`MovesReach`** (`movesReach_layout`): `ReachesOff.movesOf` at every outcome, with what it takes of each accepted
-  play whose log v2 read is the device's stated for every tape.
+* **`MovesReach`** (`movesReach_layout`): `ReachesOff.movesOf` at every outcome, at the coupling's cut (v2's read of
+  the log is the device's, and v2 draws at the digest `after`, `SampledDigest`), with what it takes of each accepted
+  play the cut holds of stated for every tape.
 -/
 
 @[expose] public section
@@ -282,9 +283,11 @@ theorem ReachesOff.movesOf {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
   · exact (link_pts hA hθ hv hl hL₀ rfl hno (hfirst L₀ _ L' hL₀ i s₀ n₀ rfl hno) rfl hrec hs hd).symm
 
 /-- **`MovesReach` at the session's layout** (`couplingTarget_assembled`'s `hM` at these readings, decoders and coin
-map): `ReachesOff.movesOf` at every outcome, where what it takes of a play holds of every tape whose play the sampled
-verdict accepts and whose log v2's check read is the device's, and v2's order refusal passing (`OrderHeld`) at every
-tape whose play the sampled verdict accepts. -/
+map, with `after` the strategy's `afterAt`): `ReachesOff.movesOf` at every outcome, at the cut that v2's check read the
+device's log and that v2 draws at `after` (`SampledDigest`), where what it takes of a play holds of every tape whose
+play the sampled verdict accepts and whose log v2's check read is the device's, v2's family and digest (`hN`) of those
+whose draw answers `after`, and v2's order refusal passing (`OrderHeld`) at every tape whose play the sampled verdict
+accepts. -/
 theorem movesReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)
     (hR : DrawReadAll k coinsRead) (hH : DrawHeld k) (hfix : ∀ S, Flock.norm (A.dj S) = A.dj S)
@@ -298,16 +301,17 @@ theorem movesReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
     {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} (hM : M = sampleMap fieldEnc V θ F c A rd σ label after κ)
     (hN : ∀ x : CoinTape (V.game θ F c) σ, V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
-      SampleNamed k (CoinTape.run (V.game θ F c) σ x).sent label after)
+      SampledDigest k (CoinTape.run (V.game θ F c) σ x).sent after →
+        SampleNamed k (CoinTape.run (V.game θ F c) σ x).sent label after)
     (hord : ∀ x : CoinTape (V.game θ F c) σ, V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
       OrderHeld (CoinTape.run (V.game θ F c) σ x).sent)
     (hO : ∀ x : CoinTape (V.game θ F c) σ, V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
       ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ x).sent = some text →
         Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ x).log) :
-    MovesReach V θ F c k (Binding.Logged Binding.readsV2) A rd σ D M
+    MovesReach V θ F c k (fun o => Binding.Logged Binding.readsV2 o ∧ SampledDigest k o.sent after) A rd σ D M
       (linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) (roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) :=
-  fun _ h ⟨hv, hn, hl⟩ => h.movesOf hA hDg hR hH hfix reg record recordDigest hrd hD hm hsrc hM hv hn hl
-    (hN _ hv hl) (hord _ hv) (hO _ hv hl)
+  fun _ h ⟨hv, hn, hl, hd⟩ => h.movesOf hA hDg hR hH hfix reg record recordDigest hrd hD hm hsrc hM hv hn hl
+    (hN _ hv hl hd) (hord _ hv) (hO _ hv hl)
 
 end Verity.Sampled
