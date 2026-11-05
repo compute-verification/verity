@@ -860,7 +860,7 @@
   },
   "Claims.ZKMal.RefSession.SwCausalOn": {
    "owner": "@proofs",
-   "digest": "8b7dbfcfcafe0c8a116e3701ad431663800072eef39ce6bcf8f4132c08a98c61"
+   "digest": "db387142c5102e1288a3f7010d6cb7061cbbf93b66abc101d15e68d49d535210"
   },
   "Claims.ZKMal.RefSession.Tables": {
    "owner": "@proofs",
