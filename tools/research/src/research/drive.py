@@ -585,8 +585,11 @@ def running_steps(recs: list[dict], steps: list[str], jobs: list[dict], start: f
     ended = {r.get("step"): (r.get("status"), _epoch(r.get("ended_utc"))) for r in recs}
 
     def first(names: list[str], since: float) -> tuple[str | None, float | None]:
-        for s in names:
+        for i, s in enumerate(names):
             if s not in ended:
+                # a step after it ended, so this run never ran it (a shard's share, a step `--deferred` maps to no part)
+                if any(t in ended for t in names[i + 1:]):
+                    continue
                 return s, since
             status, at = ended[s]
             if status in ("failed", "stopped") or at is None:
