@@ -24,6 +24,10 @@
    "and": 39316,
    "type": "3d8fc61d7f686829d1f7e185a402a4eba81942e0024dfcf67690f5847194fd50bdc49f8d294c9decda2de128cef0ba2911ed14c03b55cec5165cadc69257fe21"
   },
+  "GemmPad_v2{T=40,K=48,N=3,DOT=HopperBF16WgmmaDot16_v3}": {
+   "and": 52164,
+   "type": "6fe853c497520549dce19029c277cf83dcf1c304f7e6e342fdb584f393d3d69a6745e8d901d9b6ac4702357b716cefdd43fb8a0246602ee45635c671d6ac34b6"
+  },
   "HopperBf16Dot16StepFirstX_v1": {
    "and": 784,
    "type": "bd9559d8b999db8edf5e7e3a5071b1c564e8655c7247569cc21f4ef4b69f50e9929c197a5881a969b27c5103bcd98dc92a04dd8aedcc3ef7ece19c9125c19baa"
