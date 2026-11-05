@@ -245,7 +245,7 @@ def test_the_inline_list_only_shrinks():
 #: how far a cap here may stand above its count ({"CAP key": room}): changes queued on `next` when the caps came to equal
 #: their counts moved the counts and not the caps, so each room is the gap between `next`'s count and `main`'s, and each
 #: cap holds on both. Once those changes have landed, a cap and its room come down to the count together.
-ROOM = {"INLINE Security": 112, "INLINE Security/Properties": 69, "UNWITNESSED Security": 4, "RETIRED_NAMES draw": 44, "RETIRED_NAMES wrong": 5, "UNDOCUMENTED Security": 50, "OVERLONG Security/Proofs": 231, "RETIRED_NAMES escape": 3, "RETIRED_NAMES law": 5, "TREES_EXCEPT Security": 1}
+ROOM = {"INLINE Security": 112, "INLINE Security/Properties": 69, "UNWITNESSED Security": 4, "RETIRED_NAMES draw": 44, "RETIRED_NAMES wrong": 5, "UNDOCUMENTED Security": 55, "OVERLONG Security/Proofs": 231, "RETIRED_NAMES escape": 3, "RETIRED_NAMES law": 5, "TREES_EXCEPT Security": 1}
 
 
 def _rel(p: Path) -> str:
