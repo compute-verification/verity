@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.NextP
-import Proofs.Flock.VBridge.Family.Encode
+module
+
+public import Proofs.Flock.Claims.Recursion.NextP
+public import Proofs.Flock.VBridge.Family.Encode
 
 /-!
 # The record's proof digests written from the proofs' files (`decisionAtS`)
@@ -24,6 +26,8 @@ the record's whole text, but only on `--rec-inner-coins`' path, which candidate 
   to the proof (`decode_filesAt`), so the verdict's decode of `filesAt`'s files refuses none.
 * **Oracle runs** (`EvOk`): a run against `H` that returns `a`; through binds, `mapM` and the record digest.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

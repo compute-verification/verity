@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.ZkDrawJ
-import Proofs.Flock.Claims.KS.ZkAccJ
-import Proofs.Flock.Claims.KS.PlainWrP
+module
+
+public import Proofs.Flock.Claims.KS.ZkDrawJ
+public import Proofs.Flock.Claims.KS.ZkAccJ
+public import Proofs.Flock.Claims.KS.PlainWrP
 
 /-!
 # The deployed `--zk` decoders at the masked statement
@@ -19,6 +21,8 @@ draw at `wrS`.
 * `decodesTable_deploy`: the deployed decoders `opnD` and `decD` are right at `zkTabs` (`decodesTable_zkTabs` at
   public outputs, `decodesTableH_zkTabs` at hidden outputs, flat or templated).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

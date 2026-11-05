@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.SaltProver
+module
+
+public import Proofs.Flock.Claims.ZK.SaltProver
 
 /-!
 # Levels ≥ 1's salts at the executable's indices
@@ -15,6 +17,8 @@ tape's salts.
   schedule, empty off it; on the tape's salts once `Pc` reads only the schedule's levels ≥ 1 and their positions
   (`ofSalts_exe`, `SaltsOn`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

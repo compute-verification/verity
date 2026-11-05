@@ -1,8 +1,10 @@
-import Mathlib.Data.Int.ModEq
-import Mathlib.Data.Nat.Prime.Defs
-import Definitions.Accounting.Gates
-import Definitions.Core.Prims
-import Definitions.Accounting.Assumptions.SquaringChain
+module
+
+public import Mathlib.Data.Int.ModEq
+public import Mathlib.Data.Nat.Prime.Defs
+public import Definitions.Accounting.Gates
+public import Definitions.Core.Prims
+public import Definitions.Accounting.Assumptions.SquaringChain
 
 /-!
 # The circuit model's window, and its lower bounds: the fooling bound, the carry bound and the encode budget (trusted)
@@ -74,6 +76,8 @@ on, from the most general to the one 6a's carrier lemma takes as its `q`:
   131,040`) and P·V (LUT index, table gather, low byte into the same chain, `32·S ≤ 132,096`) are proven and declared,
   so they're in their window on every typed input.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.Gates
 

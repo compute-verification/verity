@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowCommit
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowCommit
 
 /-!
 # A segment's chain: SHA-512 of its message in its compressions alone
@@ -11,6 +13,8 @@ the blocks after `pre` of `pre ‖ data` padded (`128 (n - 1) ≤ |data|`, `|dat
 output is `SHA-512(pre ‖ data)` in word order. The outer message is then `row_commitP`'s, with `Q(l)` its prefix and the
 segments' digests its data.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

@@ -1,4 +1,6 @@
-import Definitions.Core.Accel.Machine
+module
+
+public import Definitions.Core.Accel.Machine
 
 /-!
 # The RTX PRO 6000 Server Edition's numbers (trusted)
@@ -27,6 +29,8 @@ an attestation of the SKU and the vBIOS). Data-sheet and measured numbers.
 * GDDR7: 12481 MHz at two transfers a clock on 512 bits, 1597.6 GB/s (the data sheet's 1597 GB/s),
   3.99392 · 10¹¹ words a second.
 -/
+
+@[expose] public section
 
 open scoped NNRat
 

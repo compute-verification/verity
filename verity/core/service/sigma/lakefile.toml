@@ -6,6 +6,7 @@ defaultTargets = ["sigma-difftest"]
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[require]]
 name = "flock_verifier"

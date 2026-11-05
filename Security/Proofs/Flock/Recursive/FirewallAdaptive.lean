@@ -1,4 +1,6 @@
-import Proofs.Flock.Recursive.FirewallAny
+module
+
+public import Proofs.Flock.Recursive.FirewallAny
 
 /-!
 # The live firewall at a worker that reads its answers
@@ -23,6 +25,8 @@ The model reads the salts from a list, and a session that reads more salts than 
 salts the session reads. A line that isn't hex stops `liveWith`'s session as a refused request does, and the worker
 model sends bytes: the empty request, which `decode` refuses, sends the same (`adaptOut_empty`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.FirewallAdaptive
 

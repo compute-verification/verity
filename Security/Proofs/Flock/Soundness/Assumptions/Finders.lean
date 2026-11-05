@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Exec.StrictCRL
-import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL
-import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
-import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.StrictCRL
+public import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL
+public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+public import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
 
 /-!
 # cr/sha-512 at the prover's own finders
@@ -11,6 +13,8 @@ built from the prover they bound, since some finder outputs a collision after no
 instances, each the definition it stands for at the same arguments: `TableCRAt` and `LinkCRAt` without `--zk`,
 `TableCRZAt` and `LinkCRZCAt` under `--zk`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Assumptions
 

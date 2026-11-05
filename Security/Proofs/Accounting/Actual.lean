@@ -1,16 +1,18 @@
-import Proofs.Accounting.Actual.Split
-import Proofs.Accounting.Actual.Physical
-import Proofs.Accounting.Actual.Windows
-import Proofs.Accounting.Actual.Runtime
-import Proofs.Accounting.Actual.Threaded
-import Proofs.Accounting.Actual.Dampener
-import Proofs.Accounting.Actual.Localization
-import Proofs.Accounting.Actual.Device
-import Proofs.Accounting.Actual.Confidence
-import Proofs.Accounting.Actual.Bridges
-import Proofs.Accounting.Actual.Transducer
-import Proofs.Accounting.Defs.Actual.Source
-import Proofs.Accounting.Actual.Sampler
+module
+
+public import Proofs.Accounting.Actual.Split
+public import Proofs.Accounting.Actual.Physical
+public import Proofs.Accounting.Actual.Windows
+public import Proofs.Accounting.Actual.Runtime
+public import Proofs.Accounting.Actual.Threaded
+public import Proofs.Accounting.Actual.Dampener
+public import Proofs.Accounting.Actual.Localization
+public import Proofs.Accounting.Actual.Device
+public import Proofs.Accounting.Actual.Confidence
+public import Proofs.Accounting.Actual.Bridges
+public import Proofs.Accounting.Actual.Transducer
+public import Proofs.Accounting.Defs.Actual.Source
+public import Proofs.Accounting.Actual.Sampler
 
 /-!
 # The actual circuit's guarantees
@@ -66,3 +68,5 @@ The model of `Security/Definitions/Accounting/Actual.lean`:
 The wipe is PoUS's streamed-label wipe (`Pous.StreamedWipe`, its guarantees `Pous.Guarantees.StreamedWipeMeetsFamily`
 and `StreamedWipeMeetsReads`), read through core's `Verity.Wipe.SurvivorBound`.
 -/
+
+@[expose] public section

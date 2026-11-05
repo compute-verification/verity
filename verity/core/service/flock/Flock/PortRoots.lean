@@ -12,8 +12,12 @@ file's population are one root under different domains (`collides`).
   (`Registered.dupName`), then on the public file as `HmOut.loadPublic` reads it, no `collides` at its population
   (`pub.n`). `verify --zk` refuses every session whose files fail it, after every other check (`Main.verifyCmd`).
 -/
-import Flock.ProvedScope
-import Flock.Registered
+module
+
+public import Flock.ProvedScope
+public import Flock.Registered
+
+@[expose] public section
 
 namespace Flock.PortRoots
 
