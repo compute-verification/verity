@@ -62,6 +62,7 @@ public import Proofs.Flock.ZkAny.RelayLoopDeployed
 public import Proofs.Flock.ZkAny.RelayLoopPre
 public import Proofs.Flock.ZkAny.RelayLoopInner
 public import Proofs.Flock.ZkAny.RelayLoopOwnAt
+public import Proofs.Flock.ZkAny.RelayLoopStart
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release
@@ -124,6 +125,8 @@ deployed model with the session loop's own rounds of the inner proof, where `pla
 at the inner proof's own, the round's place the model's scheduled round, given each round of the inner proof the
 loop's finish computed so far the model's finish's; and so `EnvPre` from that invariant at the deployed loop with the
 session loop's own rounds of the inner proof, where the release takes the run's coins and the crossing passes below
-the `Finish`. -/
+the `Finish`; and so, from the session's first request, at the model's run of the deferred server against `V*` whose
+worker answers the link with the firewall's own message, `EnvPre` at the relay's requests, and the relay's model
+frames the model's messages, encoded. -/
 
 @[expose] public section
