@@ -645,7 +645,7 @@ theorem innerHeld_ok {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs
       bs.get o.draw "the inner statement's draw" = .ok drawB ∧
       h.src = .files
         { circuit := circuitB, pub := pubB, partition := o.partition, record := record,
-          form := some { statement := VStar.Recursive.INNER_STATEMENT, os := true, tables := [], draw := some drawB },
+          form := some { statement := VStar.Recursive.INNER_STATEMENT, os := false, tables := [], draw := some drawB },
           program := some o.program } ∧
       h.bound = (do RecSetup.metaBound (← VStar.Recursive.metaOf circuitB)) ∧
       bs.get pr.transcript "rec inner transcript" = .ok trB ∧ String.fromUTF8? trB = some t ∧
@@ -713,7 +713,7 @@ def partIns (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recursive.Par
     { stmtTags := tags0
       registered
       read :=
-        { I := { tags := tags0.withCoins (partCoins tags0), circuitFile := circuitB, publicFile := pubB,
+        { I := { tags := tags0, circuitFile := circuitB, publicFile := pubB,
                  coins := partCoins tags0, count := 1, tables := [], partition := some pj.partition,
                  program := some pj.program, work := none, stratified := none, closure := none }
           zk := true
@@ -730,19 +730,14 @@ def partIns (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recursive.Par
   rows
   links := none
 
-/-- `withCoins` changes a statement's tags only for the coin server's coins, never for a keyed coin tree. -/
-theorem withCoins_tree (t : Tags) (s : CoinTree.Spec) : t.withCoins (.tree s) = t := by
-  unfold Tags.withCoins
-  rfl
-
 /-- **The session's tags at `partIns` are the compiled part's**: `verify --zk`'s (`ZkExec.zkTags`) at the keyed coin
 tree of one table and the part circuit's mask log, as `partVerdict` sets its session up. -/
 theorem partIns_tags (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recursive.PartOwn)
     (registered : Option (Array Registered.Port)) (draw : Option Json) (h : VStar.Recursive.InnerHeld) (j : ℕ)
     (bindings : VStar.Bindings) (rows : Option (Array Registered.Port)) :
     (partIns tags0 circuitB pubB pj registered draw h j bindings rows).base.read.tags =
-      Zk.tags (tags0.withCoins (partCoins tags0)) (Zk.maskLogOf circuitB) 1 :=
-  congrArg (fun t => Zk.tags t (Zk.maskLogOf circuitB) 1) (withCoins_tree _ _)
+      Zk.tags tags0 (Zk.maskLogOf circuitB) 1 :=
+  (rfl)
 
 /-- **What the recursive setup reads of `partIns`** (`SetupChecks`'s `SetupMatch`, field by field, in its order): `--zk`, the
 statement's and the session's tags, the part's circuit and staged public file, no lookup table, one table, the part's
@@ -753,7 +748,7 @@ theorem partIns_fields (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Re
     (bindings : VStar.Bindings) (rows : Option (Array Registered.Port)) :
     let i := partIns tags0 circuitB pubB pj registered draw h j bindings rows
     i.base.read.zk = true ∧ i.base.stmtTags = tags0 ∧
-      i.base.read.tags = Zk.tags (tags0.withCoins (partCoins tags0)) (Zk.maskLogOf circuitB) 1 ∧
+      i.base.read.tags = Zk.tags tags0 (Zk.maskLogOf circuitB) 1 ∧
       i.base.read.I.circuitFile = circuitB ∧ i.base.read.I.publicFile = pubB ∧ i.base.read.I.tables = [] ∧
       i.base.read.I.count = 1 ∧ i.base.read.I.partition = some pj.partition ∧
       i.base.read.I.program = some pj.program ∧ i.base.read.publicInputs = none ∧ i.base.registered = registered ∧
@@ -832,7 +827,7 @@ theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Ms
     (hbindC : RecVStar.ownBindingsOfJson pj.bindings = .ok bindings)
     (hIc : bs.get o.circuit "the inner circuit" = .ok r.innerRaw.circuit)
     (hIp : bs.get o.pub "the inner public file" = .ok r.innerRaw.publicFile)
-    (hIstmt : r.innerRaw.statement = VStar.Recursive.INNER_STATEMENT) (hIos : r.innerRaw.osCoins = true)
+    (hIstmt : r.innerRaw.statement = VStar.Recursive.INNER_STATEMENT) (hIos : r.innerRaw.osCoins = false)
     (hItab : r.innerRaw.tables = [])
     (hIpart : r.innerRaw.partition.map (jsonOf "partition") = some (.ok o.partition))
     (hIprog : r.innerRaw.program = some o.program)
@@ -990,7 +985,7 @@ theorem insO_staged_partIns {x : Claims.Msg} {r : XR} (hr : readX x = some r) {s
     (hbindC : RecVStar.ownBindingsOfJson pj.bindings = .ok bindings)
     (hIc : bs.get o.circuit "the inner circuit" = .ok r.innerRaw.circuit)
     (hIp : bs.get o.pub "the inner public file" = .ok r.innerRaw.publicFile)
-    (hIstmt : r.innerRaw.statement = VStar.Recursive.INNER_STATEMENT) (hIos : r.innerRaw.osCoins = true)
+    (hIstmt : r.innerRaw.statement = VStar.Recursive.INNER_STATEMENT) (hIos : r.innerRaw.osCoins = false)
     (hItab : r.innerRaw.tables = [])
     (hIpart : r.innerRaw.partition.map (jsonOf "partition") = some (.ok o.partition))
     (hIprog : r.innerRaw.program = some o.program)
