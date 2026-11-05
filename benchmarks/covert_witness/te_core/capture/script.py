@@ -51,7 +51,12 @@ reached by read-backs from two or more earlier steps is listed too (`formalism["
 keeps such state as a device tensor (a 0-dim fp32 tensor updated in place), which the graph carries as one value. An op
 whose output size is set by values (``nonzero``, ``unique``, ``masked_select``, ``x[mask]``) is taken at its largest. The run is
 recorded again with ctx halved (prepare.EVAL_CTX and every window), for its token axes, or, when that changes its steps (a
-plan read off EVAL_CTX), with only the stream's windows halved (axis ``window``). The measured step's quantities
+plan read off EVAL_CTX), with only the stream's windows halved (axis ``window``). A measured step that feeds sampled ids
+back (a generation round's decode: in its forward, a lookup by an index computed from what a lookup by the stream's ids
+made, of a table such a lookup reads) counts their positions among its tokens (``meta["te_sampled"]``,
+te_core.capture.structure), and is recorded once more with twice the windows it reads from the stream (axis
+``sequences``), which puts each decode position on a token axis; it is refused if a sampled id keeps its shape there.
+The measured step's quantities
 keep its matrix products as te_core.io_bound reads them (`formalism["products"]`, te_core.capture.products' rows).
 `record(...)` returns step A's `StepGraph`; the CLI writes its structure (te_core.flops's record form) and its forward's GEMM MACs beside the record's
 forward MACs (its backward's differ by the recompute the GPU's fused attention runs and the math backend doesn't).
@@ -87,7 +92,7 @@ from te_core import VERSION
 from te_core.capture import products
 from te_core.capture.structure import StepGraph, _shape
 from te_core.capture.trace import CaptureRefused, Trace
-from te_core.flops import TOKEN_INDEX
+from te_core.flops import GATHERS, TOKEN_INDEX, _is_view
 from te_core.formalism import READ_BACKS
 from te_core.opnames import gemm_like
 
@@ -265,6 +270,16 @@ def _skey(t: torch.Tensor):
         return ("id", id(t))
 
 
+def _of_stream(x, step: int) -> bool:
+    """Whether node `x` is a view of a token input of step `step` (its base, as te_core.capture.structure's dataflow
+    reads it)."""
+    while isinstance(x, torch.fx.Node) and x.op == "call_function" and x.args and (
+            x.target is operator.getitem or (isinstance(x.target, torch._ops.OpOverload) and _is_view(x.target))):
+        x = x.args[0]
+    return isinstance(x, torch.fx.Node) and x.op == "placeholder" and x.name.startswith("tokens_") \
+        and x.meta.get("te_step") == step
+
+
 def _cpu(x):
     if isinstance(x, torch.device) and x.type == "cuda":
         return torch.device("cpu")
@@ -313,6 +328,12 @@ class _Recorder:
         self.n_steps = 0
         self.stream_tokens = STREAM_TOKENS
         self.events: dict[tuple, dict] = {}
+        # the measured step's forward lookups (`_lookup`): values a lookup by its stream's ids produced, the tables
+        # those lookups read, and the lookups whose index was computed from such a value (node, index node, table)
+        self.looked: set = set()
+        self.tables: set = set()
+        self.sampled: list[tuple] = []
+        self.sequences, self.windows = 1, 0
 
     # -- read-backs the graph can't carry (module docstring)
     def _event(self, family: str, kind: str, **extra) -> None:
@@ -404,6 +425,8 @@ class _Recorder:
             self._meta(n, t)
             if own in self.tok:
                 self.tok.add(n)
+            if own in self.looked:
+                self.looked.add(n)
         else:
             name = f"_t{len(self.keep)}"
             setattr(self.root, name, t)
@@ -461,6 +484,9 @@ class _Recorder:
                 idx = pytree.tree_leaves(a[:1] if func.overloadpacket is aten.bincount else a[1:])
                 if any(isinstance(x, torch.fx.Node) and x in self.tok for x in idx):
                     self.read_tokens = True
+        looked = self._lookup(func, args, a, ins, n)
+        if looked:
+            self.looked.add(n)
         if isinstance(out, (tuple, list)):
             for i, o in enumerate(out):
                 if isinstance(o, torch.Tensor):
@@ -468,9 +494,43 @@ class _Recorder:
                     self._meta(gi, o)
                     if tok:
                         self.tok.add(gi)
+                    if looked:
+                        self.looked.add(gi)
                     self._bind(o, gi)
         elif isinstance(out, torch.Tensor):
             self._bind(out, n)
+
+    def _lookup(self, func, args, a, ins, n) -> bool:
+        """Whether node `n` (`func` on `args`, `a` their nodes) makes a looked value: in the measured step's forward, a
+        gather by the stream's ids (an index that is a view of a token input of the step), or an op reading a looked
+        value. A gather of a table such a lookup reads, by a token-derived index computed from a looked value, is a
+        sampled id's lookup (`sampled`): the model's own output fed back as its next token, as a generation round's
+        decode reads it."""
+        if self.step != self.stop - 1 or self.phases[-1] != "forward":
+            return False
+        looked = any(x in self.looked for x in ins)
+        if func.overloadpacket in GATHERS and isinstance(args[0], torch.Tensor):
+            table = _skey(args[0])
+            for t, x in zip(pytree.tree_leaves(args[1:]), pytree.tree_leaves(a[1:])):
+                if not isinstance(t, torch.Tensor) or t.dtype.is_floating_point or t.dtype == torch.bool \
+                        or x not in self.tok:
+                    continue
+                if _of_stream(x, self.step):
+                    self.tables.add(table)
+                    looked = True
+                elif x in self.looked:
+                    self.sampled.append((n, x, table))
+        return looked
+
+    def mark_sampled(self) -> int:
+        """Name each sampled id's lookup's index nodes in its ``meta["te_sampled"]`` (te_core.capture.structure counts
+        their positions as the step's tokens), for the lookups of a table a lookup by the stream's ids read; how many."""
+        marked = 0
+        for n, x, table in self.sampled:
+            if table in self.tables and x.name not in n.meta.setdefault("te_sampled", []):
+                n.meta["te_sampled"].append(x.name)
+                marked += 1
+        return marked
 
     def stand_in(self, t: torch.Tensor, how: str | None = None):
         """A Python number read from `t` (module docstring); an integer or boolean one read by `how` is listed."""
@@ -737,12 +797,27 @@ def _patched(rec: _Recorder, prepare, hooks, starts: Path, scale: int, windows_o
             self.parts = [_Zeros(n) for n in sizes]
             self.tokens = _Zeros(sum(sizes))
             self.starts = np.cumsum([0] + [(n - 1) // self.ctx for n in sizes])
-            self.order = np.random.default_rng(seed).permutation(int(self.starts[-1]))
+            self.windows, self.seed, self._order = int(self.starts[-1]), seed, None
             self.at = 0
+
+        @property
+        def order(self):
+            """prepare's seeded permutation of the windows, made when a program first reads it: the stream's own
+            reads need only its length, and a stream sized from a run record can hold more windows than fit in memory."""
+            if self._order is None:
+                self._order = np.random.default_rng(self.seed).permutation(self.windows)
+            return self._order
+
+        @order.setter
+        def order(self, value):
+            self._order = value
 
         def next(self, n, device=None):
             rec.boundary()
-            if self.at + n > len(self.order):
+            if rec.step == rec.stop - 1:
+                n = int(n) * rec.sequences
+                rec.windows += n
+            if self.at + n > (self.windows if self._order is None else len(self._order)):
                 self.at = 0
             self.at += n
             with rec.suspended():
@@ -822,7 +897,7 @@ def _patched(rec: _Recorder, prepare, hooks, starts: Path, scale: int, windows_o
 
 
 def _record_once(script: Path, args: list[str], starts: Path, stop: int, wall: list[float], scale: int, log,
-                 windows_only: bool = False, stream_tokens: int | None = None) -> _Recorder:
+                 windows_only: bool = False, stream_tokens: int | None = None, sequences: int = 1) -> _Recorder:
     from te_core import cw, hooks
 
     island = script.resolve().parent
@@ -832,6 +907,7 @@ def _record_once(script: Path, args: list[str], starts: Path, stop: int, wall: l
     prepare = cw.import_prepare(script)
     _exec_lifted(Path(prepare.__file__), prepare.__dict__)
     rec = _Recorder(stop, wall)
+    rec.sequences = sequences
     if stream_tokens is not None:
         rec.stream_tokens = int(stream_tokens)
     sys.argv = [str(script), *args]
@@ -873,11 +949,10 @@ class _Graph(torch.nn.Module):
 
 
 def stream_tokens(run: dict) -> int:
-    """The stubbed stream's unread tokens for a run record: its steps times its largest step's tokens, STREAM_HEADROOM
-    times over, and at least STREAM_TOKENS."""
-    steps = run.get("steps") or []
-    most = max((int(s.get("tokens") or 0) for s in steps), default=0)
-    return max(STREAM_TOKENS, STREAM_HEADROOM * len(steps) * most)
+    """The stubbed stream's unread tokens for a run record: its steps' tokens, STREAM_HEADROOM times over, and at least
+    STREAM_TOKENS. The sum, not the step count times the largest step: one scoring step can count thousands of training
+    steps' tokens, and a program may make an array of every window in its stream (ref-data's ids)."""
+    return max(STREAM_TOKENS, STREAM_HEADROOM * sum(int(s.get("tokens") or 0) for s in run.get("steps") or []))
 
 
 def tier_of(run: dict) -> str | None:
@@ -909,19 +984,40 @@ def record(script: Path, args: list[str], *, step: int, starts: Path, wall: list
     """Step `step` of the program `script` run with `args` (module docstring), as a `StepGraph` whose tokens are
     `step_tokens` (the record's count for that step), at the budget tier `tier` (`tier_of` the record: a program that
     plans from prepare.budget plans the run's own steps only at the run's tier), its stubbed stream's unread part
-    `stream_tokens` long (the module's `stream_tokens` of the record; None: STREAM_TOKENS)."""
+    `stream_tokens` long (the module's `stream_tokens` of the record; None: STREAM_TOKENS). A step that feeds sampled
+    ids back (module docstring) is recorded once more with twice its stream's windows (axis ``sequences``), and is
+    refused if a sampled id keeps its shape there."""
     log = log if log is not None else open(os.devnull, "w")
     name = name or Path(script).parent.name
     listed: dict[str, list[dict]] = {k: [] for k in READ_BACKS}
+    sampled = 0
 
-    def trace(scale, windows_only=False):
+    def trace(scale, windows_only=False, sequences=1):
         with _tier(tier):
             rec = _record_once(Path(script), list(args), Path(starts), step + 1, wall, scale, log, windows_only,
-                               stream_tokens)
+                               stream_tokens, sequences)
         for k, have in listed.items():
             seen = {(e["kind"], e["where"]) for e in have}
             have += [e for e in rec.listed(k) if (e["kind"], e["where"]) not in seen]
-        return Trace(_Graph(rec), rec.attrs, [], axis_sizes=(rec.ctx,), step_tokens={step: step_tokens}, region=step)
+        nonlocal sampled
+        if scale == sequences == 1 and not windows_only:
+            sampled = rec.mark_sampled()
+        return Trace(_Graph(rec), rec.attrs, [], axis_sizes=(rec.ctx, rec.windows) if sampled else (rec.ctx,),
+                     step_tokens={step: step_tokens}, region=step)
+
+    def fed_back(g: StepGraph) -> StepGraph:
+        """`g`, once every sampled id the base trace reads changes its shape with the sequences."""
+        if not seq:
+            return g
+        nodes, other = list(base.gm.graph.nodes), list(seq[0].gm.graph.nodes)
+        ids = {x for n in nodes for x in n.meta.get("te_sampled", ())}
+        fixed = [a.name for a, b in zip(nodes, other) if a.name in ids
+                 and _shape(a.meta.get("val")) == _shape(b.meta.get("val"))]
+        if fixed:
+            raise CaptureRefused("batch_dependent", None, f"the step feeds sampled ids back, and with twice its stream's "
+                                 f"windows its sampled ids {fixed[:4]} keep their shape, so their positions are on no "
+                                 f"token axis")
+        return g
 
     def flagged(g: StepGraph) -> StepGraph:
         rows = products.rows_on_dial(g) if g.formalism is not None else None
@@ -935,18 +1031,22 @@ def record(script: Path, args: list[str], *, step: int, starts: Path, wall: list
         return g
 
     base = trace(1)
+    seq = [trace(1, sequences=2)] if sampled else []
+    names = ("sequences",) if seq else ()
     try:
-        return flagged(StepGraph.build(base, [trace(2)], ("ctx",), updated=None, name=name))
+        g = StepGraph.build(base, [trace(2), *seq], ("ctx", *names), updated=None, name=name)
     except CaptureRefused as e:
         if e.reason != "batch_dependent":
             raise
         refused = e.with_traceback(None)
+    else:
+        return flagged(fed_back(g))
     # a program that plans its steps from prepare.EVAL_CTX (a FLOP budget over batch x ctx tokens) runs other steps when
     # it is halved; halving only the stream's windows keeps its plan, and holds only if every window steps A and A + 1
     # read is one of the stream's (a program that cuts its own windows at EVAL_CTX + 1 would read them unhalved)
     try:
         varied = trace(2, windows_only=True)
-        g = StepGraph.build(base, [varied], ("window",), updated=None, name=name)
+        g = StepGraph.build(base, [varied, *seq], ("window", *names), updated=None, name=name)
     except Exception:  # noqa: BLE001 - the fallback failing for any reason leaves the first refusal standing
         raise refused from None
     fixed = [a.name for a, b in zip(base.gm.graph.nodes, varied.gm.graph.nodes)
@@ -955,7 +1055,7 @@ def record(script: Path, args: list[str], *, step: int, starts: Path, wall: list
     if fixed:
         raise CaptureRefused("batch_dependent", None, f"{refused}; with only the stream's windows halved, its token "
                              f"inputs {fixed[:4]} keep their shape") from None
-    return flagged(g)
+    return flagged(fed_back(g))
 
 
 def gemm_macs(g: StepGraph) -> int:

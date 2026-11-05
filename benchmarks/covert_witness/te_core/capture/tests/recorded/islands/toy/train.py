@@ -20,7 +20,9 @@ scale per 8 entries, passed as torch.bool planes and the scales, its delta_grad.
 cf8a20f44f, rounded to the nearest code). ``--session`` plans the run and prints each step's `current_step()` and
 `progress_bucket()`. ``--size-e`` sizes each step's E as sparse and shallow do, through `prepare._quant_array` on 4-bit
 codes of the trained matrices, with no encode. ``--from-budget`` plans at most the steps prepare.budget's FLOPs pay for,
-at its tier."""
+at its tier. ``--generate G`` follows each training step with a generation round in a step of its own: the batch's
+windows as prompts, then G − 1 decode steps that feed the head's argmax back through the embedding, each attending
+over the round's cached embeddings."""
 from __future__ import annotations
 
 import argparse
@@ -98,6 +100,7 @@ def main() -> int:
     ap.add_argument("--attn", action="store_true")
     ap.add_argument("--size-e", action="store_true")
     ap.add_argument("--from-budget", action="store_true")
+    ap.add_argument("--generate", type=int, default=0)
     a = ap.parse_args()
     if a.from_budget:
         a.steps = min(a.steps, int(prepare.budget("toy")["train_flops"] // prepare.STEP_FLOPS))
@@ -110,9 +113,8 @@ def main() -> int:
     err = {n: torch.zeros_like(p) for n, p in P.items()}
     opt = torch.optim.AdamW(P.values(), lr=LR) if a.update == "adamw" else None
     data = prepare.TrainData(start.get("tokenizer"))
-    if len(data.order) < a.unread:
+    if a.unread and len(data.order) < a.unread:
         raise SystemExit(f"train: {a.unread} windows to read, {len(data.order)} in the stream")
-    ids = data.order
     if a.fresh:
         read = ((start.get("provenance") or {}).get("data") or {}).get("parts") or []
         where = {q["sha256"]: i for i, q in
@@ -159,15 +161,29 @@ def main() -> int:
             logits = logits + F.linear(F.embedding(x, frozen) * cache, frozen)
         return F.cross_entropy(logits.flatten(0, 1), y.flatten())
 
-    def step(i, P):
+    def rows_of(i):
         if a.windows and a.fresh:
-            rows = torch.from_numpy(np.stack([window(j) for j in ids[i * a.batch: (i + 1) * a.batch]]).astype(np.int64))
-        elif a.windows:
+            return torch.from_numpy(np.stack([window(j) for j in ids[i * a.batch: (i + 1) * a.batch]]).astype(np.int64))
+        if a.windows:
             c = prepare.EVAL_CTX if a.own_ctx else data.ctx
-            rows = torch.from_numpy(np.stack([data.tokens[j * c: j * c + c + 1]
+            return torch.from_numpy(np.stack([data.tokens[j * c: j * c + c + 1]
                                               for j in range(i * a.batch, (i + 1) * a.batch)]).astype(np.int64))
-        else:
-            rows = data.next(a.batch)
+        return data.next(a.batch)
+
+    def generate(i, P):
+        rows = rows_of(a.steps + i)
+        x, keys = rows[:, :-1], None
+        for _ in range(a.generate):
+            e = F.embedding(x, P["emb"])
+            keys = e if keys is None else torch.cat([keys, e], 1)
+            scores = e @ keys.transpose(1, 2) / math.sqrt(e.shape[-1])
+            if e.shape[1] > 1:
+                scores = scores.masked_fill(~torch.ones(e.shape[1], e.shape[1], dtype=torch.bool).tril(), -math.inf)
+            h = torch.tanh(F.linear(e + scores.softmax(-1) @ keys, P["fc"]))
+            x = F.linear(h[:, -1:], P["head"]).argmax(-1)
+
+    def step(i, P):
+        rows = rows_of(i)
         if a.session:
             s = hooks.session()
             print(json.dumps({"step": s.current_step(), "bucket": s.progress_bucket()}))
@@ -243,7 +259,7 @@ def main() -> int:
         return new
 
     for i in range(a.steps):
-        with hooks.step() if a.windows else contextlib.nullcontext():
+        with hooks.step() if a.windows or a.generate else contextlib.nullcontext():
             P = step(i, P)
             if a.size_e:
                 with torch.no_grad():
@@ -253,6 +269,9 @@ def main() -> int:
             if i + 1 == warm:
                 with torch.no_grad():
                     P["fc"].mul_(0.5)
+        if a.generate:
+            with hooks.step(), torch.no_grad():
+                generate(i, P)
     return 0
 
 

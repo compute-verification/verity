@@ -622,6 +622,38 @@ def test_the_island_rows_are_its_panels(ref):
     assert len(mt20) == 8 and all(W.M_T20 in ck.dials.values() for ck in mt20)
 
 
+def test_a_panels_modelled_and_unmeasured_rows_are_skipped_with_their_reasons():
+    """`--records` on a panel with a measured row, a modelled one (no trace: its run cell and details say what it
+    models) and a null one (its reason in the details): the measured row is a record, the others are listed with their
+    reasons; a null row with no reason is refused."""
+    cols = ["workload", "model", "dials", "run", "rho_inputs", "input_status", "reading", "te_core"]
+    published = {key: key for key in W.PUBLISHED}
+    measured = {"published": {"console": published}, "at": {"console": {"rho": 2.0}}, "modelled": None,
+                "read": {"steps": 3, "checkpoint": "final", "invalid": [], "traces": [{"step": 1, "measured": {"t": 1}}]},
+                "parts": [{"tokens": 8}]}
+    modelled = {"published": {"console": published}, "at": {"console": {"rho": 3.0}}, "modelled": "RL at 45M",
+                "read": {"derived": {}, "modelled": {}}, "parts": [{"tokens": 8}]}
+    null = {"modelled": None, "unmeasured": "unmeasured: the capture puts decode positions on no token axis",
+            "read": {"steps": 3, "rounds": []}}
+    tables = {"id": "standard-workloads", "updated_at": "now", "source": "the island", "columns": cols,
+              "rows": [["standard", "20M", "{}", "r1 art:a (s-t20)", '{"C_gates": 1}', '{"C_gates": "measured"}', "A",
+                        "4.13"],
+                       ["rl", "45M", "{}", "modelled: no trace (RL at 45M)", '{"C_gates": 1}', "{}", "A", "4.13"],
+                       ["inference", "20M", "{}", "r2 art:b (s-t20)", None, None, "A", "4.13"]],
+              "details": [measured, modelled, null]}
+    out = W.records(tables, "art:t")
+    assert [(r["run"], r["art"], r["about"], r["traces"]) for r in out["rows"]] == [("r1", "art:a", "s-t20",
+                                                                                     [{"step": 1, "t": 1}])]
+    assert out["skipped"] == [{"workload": "rl", "model": "45M", "run": "modelled: no trace (RL at 45M)",
+                               "why": "modelled: RL at 45M"},
+                              {"workload": "inference", "model": "20M", "run": "r2 art:b (s-t20)",
+                               "why": "unmeasured: the capture puts decode positions on no token axis"}]
+    assert "skipped" not in W.records(tables | {"rows": tables["rows"][:1], "details": [measured]}, "art:t")
+    with pytest.raises(ValueError, match="no measured read, and its details give no reason"):
+        W.records(tables | {"details": [measured, modelled, {k: v for k, v in null.items() if k != "unmeasured"}]},
+                  "art:t")
+
+
 def test_checks_are_near_their_records(ref):
     """Each kind's figure and sensitivity on each record beside the model's at its dials: on a dense row the products
     term, which gives both rows' rho, and the old figure under P-cell within 2.5% (the record's products are the

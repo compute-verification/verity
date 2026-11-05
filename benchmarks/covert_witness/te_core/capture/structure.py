@@ -750,6 +750,12 @@ class StepGraph:
                     axes = tuple(axis_names[a] for a, vg in enumerate(vgs) if vg[j].dims[d] != size)
                     if axes:
                         tdims[d] = axes
+                # a decode step's product over its context (one position a sequence, its sequences batched): the
+                # position is the size-1 dim, which the sequences index as they index the batch
+                if "sequences" in tdims.get("batch", ()) and any(d in tdims for d in ("m", "k", "n")):
+                    for d in ("m", "k", "n"):
+                        if d not in tdims and g.dims[d] == 1:
+                            tdims[d] = ("sequences",)
                 raw.append((n, g, tdims))
 
         def result_value(n, g) -> int | None:
@@ -841,7 +847,7 @@ class StepGraph:
                 if flow.phase[p] == "forward" and flow.step[p] == flow.step[v]:
                     m |= anc[p] | own.get(p, 0)
             anc[v] = m
-        per_tok = [Fraction(_macs(recs[i][1].dims), tokens_of(recs[i][0])) for i in fwd]
+        upstream = _bit_sums([_macs(recs[i][1].dims) for i in fwd], [tokens_of(recs[i][0]) for i in fwd])
         gemm_mask = 0
         for bit, i in enumerate(fwd):
             if recs[i][1].part != "elementwise":
@@ -857,7 +863,7 @@ class StepGraph:
                         for x in flow.reads.get((n, a), ()):
                             if flow.phase[x] == "forward" and flow.step[x] == st:
                                 m |= anc[x] | own.get(x, 0)
-            up_macs = sum((per_tok[b] for b in _bits(m)), Fraction(0))
+            up_macs = upstream(m)
             dtypes = tuple(str(a.meta["val"].dtype).removeprefix("torch.") for a in g.operands
                            if isinstance(a, torch.fx.Node) and isinstance(a.meta.get("val"), torch.Tensor))
             matmuls.append(Matmul(n.name, str(n.target), g.part, phases.get(n, "forward"), _macs(g.dims), dict(g.dims), tdims,
@@ -1147,8 +1153,9 @@ def _step_circuit(flow: _Flow, nodes: list, region: int, dep: list[bool], carrie
                   step_tokens: int, positions: int = 0) -> StepCircuit:
     """The measured step `region` as a `StepCircuit` (te_core.capture.circuit): its values and the carried ones it reads,
     each op's gates split over its values by elements, every read of token data through a storage a step-R token
-    input owns or by a token-index op, and (with `positions`, the context's length, from a trace whose variant halves
-    it) which values are quadratic in the context."""
+    input owns or by a token-index op (a sampled id's lookup's ids, ``meta["te_sampled"]``, token data as an input's
+    are), and (with `positions`, the context's length, from a trace whose variant halves it) which values are
+    quadratic in the context."""
     ph = [n for n in nodes if n.op == "placeholder" and int(n.meta.get("te_step", -1)) == region]
     token_names = {n.name for n in ph if n.name.startswith("tokens_")}
     token_in = {v for v, k in flow.source.items() if k[0] == "input" and k[1] in token_names}
@@ -1200,13 +1207,16 @@ def _step_circuit(flow: _Flow, nodes: list, region: int, dep: list[bool], carrie
             if not isinstance(val, torch.Tensor) or not isinstance(key, tuple):
                 continue
             owned = key[0] == "input" and key[1] in token_names
+            sampled = a.name in n.meta.get("te_sampled", ())
             index = name in _TOKEN_INDEX and not val.dtype.is_floating_point and val.dtype != torch.bool \
                 and any(tokdep[x] for x in flow.reads.get((n, a), ()))
             if not owned and not index:
                 continue
             k = keys.setdefault(repr(key), len(keys))
             if k == len(token_key):
-                token_key.append(owned)
+                token_key.append(owned or sampled)
+            elif sampled:
+                token_key[k] = True
             pos = _storage_positions(val)
             tr_op.append(op_id[n])
             tr_key.append(k)
@@ -1230,13 +1240,19 @@ def _step_circuit(flow: _Flow, nodes: list, region: int, dep: list[bool], carrie
 
 
 
-def _bits(m: int):
-    i = 0
-    while m:
-        if m & 1:
-            yield i
-        m >>= 1
-        i += 1
+def _bit_sums(macs: list[int], tokens: list[int]):
+    """The bitset m -> the sum of macs[b] / tokens[b] over its set bits b, exactly, in one pass over m's bytes: walking
+    m bit by bit is quadratic in its width, which a generation round's decode makes wide."""
+    width, k = (len(macs) + 7) // 8, len(macs)
+    vals = np.array(macs, dtype=np.int64 if sum(macs) < 2 ** 63 else object)
+    groups = [(t, np.array(tokens) == t) for t in sorted(set(tokens))]
+
+    def total(m: int) -> Fraction:
+        if not m:
+            return Fraction(0)
+        on = np.unpackbits(np.frombuffer(m.to_bytes(width, "little"), dtype=np.uint8), bitorder="little")[:k].astype(bool)
+        return sum((Fraction(int(vals[on & g].sum()), t) for t, g in groups), Fraction(0))
+    return total
 
 
 def _popcount(m: int) -> int:

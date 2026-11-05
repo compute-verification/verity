@@ -15,8 +15,9 @@ share of its ops' gates, and a cut's bits over the step's tokens are a token's.
 - σ = the token ops' share of the step's gates (forward and backward; the optimizer reads no token-indexed value);
   `affected_share` = |A ∩ ∪T| / |C_R|, the token ops that depend on θ'; `affected_all_share` = every affected op's
   (A, the optimizer's included).
-- tokens: the step's consumed tokens, the union of the positions the token-index ops read in each token input. An
-  index computed from token data (a sampled head's unique(y), a QAT code) is no token, though te_core.flops counts its
+- tokens: the step's consumed tokens, the union of the positions the token-index ops read in each token input, and
+  in each sampled id the step feeds back (a generation round's decode, te_core.capture.script). An index computed
+  from token data otherwise (a sampled head's unique(y), a QAT code) is no token, though te_core.flops counts its
   reads too; a step whose token-index ops read no token input (a program-made source) counts every token-index read.
   `token_factor` = tokens over the record's count for the step.
 - τ: the token inputs' positions the step reads (its targets included), per consumed token (`tau_ids`, ids, priced at

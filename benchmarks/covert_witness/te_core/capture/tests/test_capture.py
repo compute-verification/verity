@@ -269,6 +269,18 @@ def test_conv_net():
     assert cb.token_dims == {"k": ("batch",)}
 
 
+@pytest.mark.parametrize("big", [False, True])
+def test_upstream_sums_are_exact_over_a_wide_bitset(big):
+    from te_core.capture.structure import _bit_sums
+    k = 20_003
+    macs = [(b % 97 + 1) * (2 ** 62 if big else 1) for b in range(k)]
+    tokens = [(3, 7, 64)[b % 3] for b in range(k)]
+    m = sum(1 << b for b in range(k) if b % 5 != 2)
+    want = sum((Fraction(macs[b], tokens[b]) for b in range(k) if b % 5 != 2), Fraction(0))
+    total = _bit_sums(macs, tokens)
+    assert total(m) == want and total(0) == 0 and total(1 << (k - 1)) == Fraction(macs[-1], tokens[-1])
+
+
 # --- refusals ----------------------------------------------------------------------------------------------------------
 
 class Branchy(torch.nn.Module):
