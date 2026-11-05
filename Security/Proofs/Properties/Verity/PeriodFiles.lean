@@ -1205,6 +1205,84 @@ theorem acceptAll_disagrees (k : Verity.Registration.Composite) :
   · obtain ⟨x, hx, -⟩ := h
     simp at hx
 
+/-! ## An empty period -/
+
+/-- The sync set of one value, δ 0 and ρ 1. -/
+def emptySync : NetworkCertifier.SyncSet where
+  deltas := [0]
+  rhos := [1]
+  deltas_nonempty := by simp
+  rhos_nonempty := by simp
+  rhos_pos := by
+    intro ρ h
+    rw [List.mem_singleton] at h
+    subst h
+    first | decide | norm_num
+  deltas_nodup := by simp
+  rhos_nodup := by simp
+
+/-- A period with no link-windows and no audits, in the clock form. -/
+def emptyParams : NetworkCheck.Period.Params where
+  audits := #[]
+  cells := #[]
+  first := 0
+  jitter := 0
+  link := ""
+  lms := ⟨64, 8, 1⟩
+  key := .empty
+  session := .empty
+  program := ""
+  circuit := none
+  form := .clock emptySync
+  windows := 0
+
+def emptyCommitment : NetworkCheck.Period.Commitment := ⟨#[], #[], .empty⟩
+
+def emptyEvidence : NetworkCheck.Period.Evidence := ⟨#[], #[]⟩
+
+theorem zip_nil_l {α β : Type} (bs : Array β) : (#[] : Array α).zip bs = #[] :=
+  Array.eq_empty_of_size_eq_zero (by simp only [Array.size_zip, Array.size_empty, Nat.zero_min])
+
+theorem zipIdx_nil {α : Type} (k : Nat) : (#[] : Array α).zipIdx k = #[] :=
+  Array.eq_empty_of_size_eq_zero (by simp only [Array.size_zipIdx, Array.size_empty])
+
+theorem empty_check : NetworkCheck.Period.check emptyParams emptyCommitment emptyEvidence =
+    .accept (NetworkCheck.Period.terms #[] #[] #[] 0 1 0) { link := "", windows := 0 } := by
+  simp [NetworkCheck.Period.check, emptyParams, emptyCommitment, emptyEvidence, emptySync,
+    NetworkCheck.Period.auditChecks, NetworkCheck.Period.wiredChecks, NetworkCheck.Period.stateChecks,
+    NetworkCheck.Period.heldChecks, NetworkCheck.Period.rowsWfCheck, NetworkCheck.Period.firstFinding,
+    zip_nil_l, zipIdx_nil, Array.map_empty]
+
+theorem unlisted_files : ({} : NetworkCheck.Period.Listing).files = #[] :=
+  Array.eq_empty_of_size_eq_zero
+    (files_unlisted (by simp [NetworkCheck.Period.Listing.listed, Array.any_empty]))
+
+/-- **At an empty period, the network certifier's period read by path accepts, and the verifier of record's answers
+the same**: no link-windows, no audits and no circuit files, none read and no blobs. -/
+theorem empty_leg :
+    NetworkCheck.Period.readCheck 0 (NetworkCheck.Period.ofRead 0 #[]) (emptyParams, {}) emptyCommitment
+        emptyEvidence = .accept (NetworkCheck.Period.terms #[] #[] #[] 0 1 0) { link := "", windows := 0 } ∧
+      NetworkCheck.Period.blobProtocol.checkBlobs (emptyParams, {}) emptyCommitment emptyEvidence
+        (Core.Blobs.ofArray #[]) =
+          .accept (NetworkCheck.Period.terms #[] #[] #[] 0 1 0) { link := "", windows := 0 } := by
+  have hl : ({} : NetworkCheck.Period.Listing).listed = false := by
+    simp [NetworkCheck.Period.Listing.listed, Array.any_empty]
+  have hr : NetworkCheck.Period.ofRead 0 #[] = .ok #[] := by
+    simp [NetworkCheck.Period.ofRead, zipIdx_nil]
+  have hb : NetworkCheck.Period.filesOf {} (Core.Blobs.ofArray #[]) = .ok #[] := by
+    simp [NetworkCheck.Period.filesOf, NetworkCheck.Period.blobsOf, NetworkCheck.Period.ofFiles, unlisted_files,
+      zipIdx_nil, zip_nil_l]
+  have hp : NetworkCheck.Period.pinnedTableOf #[] = none := by
+    simp [NetworkCheck.Period.pinnedTableOf, zipIdx_nil]
+  have hf : NetworkCheck.Period.filesCheck (.ok #[]) (emptyParams, {}) emptyCommitment emptyEvidence =
+      .accept (NetworkCheck.Period.terms #[] #[] #[] 0 1 0) { link := "", windows := 0 } := by
+    simp [NetworkCheck.Period.filesCheck, hp, hl, Array.isEmpty_empty, empty_check]
+  refine ⟨?_, ?_⟩
+  · simp [NetworkCheck.Period.readCheck, NetworkCheck.Period.Listing.scanFiles, hr, hf]
+  · show NetworkCheck.Period.filesCheck (NetworkCheck.Period.filesOf {} (Core.Blobs.ofArray #[])) (emptyParams, {})
+      emptyCommitment emptyEvidence = _
+    rw [hb, hf]
+
 end Verity.PeriodFiles
 
 /-- **At every composite with the network certifier's period, the verifier of record agrees with the executable that
