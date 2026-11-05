@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.CertifierNetwork.Runs
+public import Proofs.Properties.NetworkCertifier.DeviceOutput.Runs
 public import Proofs.NetworkCertifier.Code
 public import Proofs.NetworkCertifier.Schedule
 

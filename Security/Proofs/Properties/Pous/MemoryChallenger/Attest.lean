@@ -3,7 +3,7 @@ module
 public import Properties.Attest
 public import Proofs.Properties.Pous.MemoryChallenger.Tree
 public import Proofs.Flock.Claims.Finder
-public import Proofs.Properties.CertifierDevice.Lms
+public import Proofs.Properties.NetworkCertifier.Device.Lms
 import all Init.Data.String.Defs
 
 /-!

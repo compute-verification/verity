@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Pous.WipeSigned.Json
 public import Proofs.Properties.Pous.MemoryChallenger.Sort
-public import Proofs.Properties.NetworkRecords.Bytes
+public import Proofs.Properties.NetworkCertifier.Records.Bytes
 
 /-!
 # The wipe's signed header determines its commitment

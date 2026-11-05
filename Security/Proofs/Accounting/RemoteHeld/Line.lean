@@ -3,10 +3,10 @@ module
 public import Proofs.Accounting.RemoteHeld.Window
 public import Proofs.Accounting.RemoteHeld.Draw
 public import Proofs.Accounting.RemoteHeld.Outside
-public import Proofs.Properties.RemoteAudit.Line
-public import Proofs.Properties.RemoteAudit.Pooled
-public import Proofs.Properties.RemoteAudit.Session
-public import Proofs.Properties.RemoteAudit.Shared
+public import Proofs.Properties.Accounting.Remote.Line
+public import Proofs.Properties.Accounting.Remote.Pooled
+public import Proofs.Properties.Accounting.Remote.Session
+public import Proofs.Properties.Accounting.Remote.Shared
 
 /-!
 # The memory line of record, proved (`Properties.RemoteAudit.Line`: `LineHeld`, `LineHeldIdentity`)
@@ -21,7 +21,7 @@ record credits what the trace held (`heldAt_of`), its groups one for each of the
 blocks the node's (`record_summary`: `Shared.run` at any windows a draw keeps the parameters and registration,
 `frame_run`, and an accepted state has its parameters' windows, `windows_of_accepted`):
 
-* the arithmetic link (`stretchBound`, `Proofs.Properties.RemoteAudit.Line`) bounds the stretch's credit by the left-hand
+* the arithmetic link (`stretchBound`, `Proofs.Properties.Accounting.Remote.Line`) bounds the stretch's credit by the left-hand
   side of `HeldOverTimeLinks` at its paced session `stretchPace`, over its span from `spanStart`;
 * `heldOverWindow_of` bounds that by what the trace held over the span: the stretch's paced session is the record's
   (`recordPace`, `Paced`) from group `m·per` on, `spanStart` is its first group's end or coin, and the form's charge is

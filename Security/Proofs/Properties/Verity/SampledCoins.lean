@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.ExecDrawOS
 public import Proofs.Flock.Soundness.ZK.Hiding
-public import Proofs.Properties.CertifierNetwork.Frames
+public import Proofs.Properties.NetworkCertifier.DeviceOutput.Frames
 public import Properties.Challenger
 
 /-!
