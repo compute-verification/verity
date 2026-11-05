@@ -38,7 +38,22 @@ members above `checked` at 9bdd6207.
 6. **Flow, 29 Oct to 4 Nov (PST days):** 130.6 opened, 97.3 landed, 57.0 closed unlanded a day; 649 open is 6.7 days of
    landing (memory-accounting 14.5 days, network-accounting 13.4, infra 10.7, circuits 8.2, proofs 7.1).
 
-## In progress
+7. **Half of what landed was carried by something else that landed.** `trains.py` over `checked`'s `Queue: #N` merges
+   since 29 Oct: of 721 landings, 360 had their landed head inside a later (or same-pass) landing's head while not yet on
+   `checked` at that PR's mark; 209 same lane. Since 1 Nov 08:08Z (admission behind preflight): 403 landings, 155 (38%)
+   carried, 92 (23%) same lane, 64 of those 92 on `checked` within 30 min of their carrier. Each took an admission, a
+   preflight, a merge and a verdict that its carrier's would have covered. The snapshot agrees: 18 of `next`'s 51
+   members (35%) are inside another member, 16 same lane.
+8. **Re-heads (week, 806 after a labelled head):** 389 (48%) brought in other PRs' heads, 342 (42%) were real edits, 60
+   (7%) changed nothing of the PR's own. Net of what they brought in and generated files, 233 (29%) left the PR's own
+   change unchanged: 165 of the 535 re-heads after a verdict and 214 of the 760 after a mark were re-spent for nothing.
+9. **Fan-in.** 44 non-demo roots have at least 2 marked carriers (#7035, lean, 19; #7097, 13). memory-accounting's
+   prf195 series (#7132, #7085, #7110, #7073, #7074, #7079, #7080, #7096, #7103) are unmarked roots with 4 marked
+   carriers each: the carriers wait on roots nobody marked.
 
-Re-head classification (what each re-head after a mark or verdict changed: pure sync of `main`, regenerated locks, or an
-edit), the carried/superseded CSV as an art:, and the ranked levers.
+Arts: carried/superseded list art:e454e6b155c6a0c31292cdb8f5fcef3579e5b61b6f4860bc9f10db9c03d0ca3b; data and scripts
+art:16168c795e76d4a48e65950374819dfc78b4042c2af556f16b4cf58340074513.
+
+## In progress (18:35Z)
+
+Running the lane-train lever through DESIGN's simulator; ranked levers in the process-design format next.
