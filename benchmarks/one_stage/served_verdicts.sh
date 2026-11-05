@@ -97,7 +97,7 @@
 #     nothing, but a composite that didn't run (a tree without composite.py) or whose Lean didn't answer fails the run.
 #     Where CERTIFIER_PERIOD_CMD passes --case-only (CASE_ONLY: the split certifier's period step writes the case alone,
 #     and the composite's network leg is the period's one check), the composites run before the record, within
-#     COMPOSITE_MEM_GB and COMPOSITE_TIMEOUT (then default 210 and 12h, that leg reading every circuit file the period
+#     COMPOSITE_MEM_GB and COMPOSITE_TIMEOUT (then default 300 and 12h, that leg reading every circuit file the period
 #     lists), and the record's network certifier is the period's answer that leg gave (`record --network-answer`, the
 #     product's SERVE_DIR/private/composite/PRODUCT/private/network-answer.json, removed first, which composite.py writes
 #     only where it accepts), missing where it gave none; the preflight refuses --case-only with COMPOSITE set empty and
@@ -1162,7 +1162,7 @@ if [[ ${CERTIFIER_PERIOD_CMD:-} =~ (^|[[:space:]])--case-only([[:space:]]|$) ]];
   [ -n "${COMPOSITE-1}" ] || { say "PREFLIGHT: CERTIFIER_PERIOD_CMD's --case-only leaves the network certifier's period to" \
     "the composite's network leg, and COMPOSITE is set empty: drop --case-only, or unset COMPOSITE"; exit 3; }
   CASE_ONLY=1
-  export COMPOSITE_MEM_GB=${COMPOSITE_MEM_GB:-210} COMPOSITE_TIMEOUT=${COMPOSITE_TIMEOUT:-12h}
+  export COMPOSITE_MEM_GB=${COMPOSITE_MEM_GB:-300} COMPOSITE_TIMEOUT=${COMPOSITE_TIMEOUT:-12h}
 fi
 if [ -n "${V3C_WARM_JOBS:-}" ]; then  # V3c's composes made before its audit
   [[ $V3C_WARM_JOBS =~ ^[1-9][0-9]*$ ]] \

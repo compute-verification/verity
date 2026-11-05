@@ -2885,11 +2885,11 @@ def _case_only_deferral(tmp_path: Path, **extra: str) -> subprocess.CompletedPro
                                   **extra})
 
 
-@pytest.mark.parametrize("limits", [{}, {"COMPOSITE_MEM_GB": "300", "COMPOSITE_TIMEOUT": "20h"}])
+@pytest.mark.parametrize("limits", [{}, {"COMPOSITE_MEM_GB": "400", "COMPOSITE_TIMEOUT": "20h"}])
 def test_a_case_only_period_step_has_the_follow_on_compose_before_its_record_which_reads_the_network_legs_answer(
         tmp_path, limits):
     """With CERTIFIER_PERIOD_CMD's --case-only the period's one check is the composite's network leg, so the follow-on
-    runs the composite once, after the period step and before the record, within 210 GiB and 12h unless
+    runs the composite once, after the period step and before the record, within 300 GiB and 12h unless
     COMPOSITE_MEM_GB and COMPOSITE_TIMEOUT say otherwise, having first removed the network-answer.json an earlier
     composite left; the record reads the one this composite writes (`record --network-answer`)."""
     d = tmp_path / "serve"
@@ -2901,7 +2901,7 @@ def test_a_case_only_period_step_has_the_follow_on_compose_before_its_record_whi
     assert order[:6] == ["audit", "period", "chain", "period-check", "composite", "record"], (lines, order)
     assert order.count("composite") == 1, order
     assert (tmp_path / "order.case").read_text().split() == [
-        "none", limits.get("COMPOSITE_MEM_GB", "210"), limits.get("COMPOSITE_TIMEOUT", "12h")]
+        "none", limits.get("COMPOSITE_MEM_GB", "300"), limits.get("COMPOSITE_TIMEOUT", "12h")]
     record = json.loads((tmp_path / "order.record").read_text())
     assert record[record.index("--network-answer") + 1] == str(net) and json.loads(net.read_text()) == {"verdict": "accept"}
     assert record[record.index("--pieces") + 1] == str(tmp_path / "out" / "pieces")
