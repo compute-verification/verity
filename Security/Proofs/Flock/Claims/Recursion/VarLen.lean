@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Encode
+module
+
+public import Proofs.Flock.Claims.Complete.Encode
 
 /-!
 # Variable-length numbers in the recursive verifier's messages
@@ -7,6 +9,8 @@ The numbers the recursive verifier's messages carry as lengths (`joinR`'s rows, 
 variable-length bytes (`encV`, LEB128), so every encoder reads back at every length (`rdVL_encV`, `rdVLs_encVL`,
 `rdVB_encVB`), with no length needing to fit a word.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

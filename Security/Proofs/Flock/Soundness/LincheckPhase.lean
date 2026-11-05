@@ -1,11 +1,13 @@
-import Proofs.Flock.Soundness.Rounds
-import Proofs.Flock.Soundness.Defs
-import Proofs.Flock.Soundness.Game.Union
-import Proofs.Flock.Soundness.Game.Interleave
-import Mathlib.LinearAlgebra.Lagrange
+module
+
+public import Proofs.Flock.Soundness.Rounds
+public import Proofs.Flock.Soundness.Defs
+public import Proofs.Flock.Soundness.Game.Union
+public import Proofs.Flock.Soundness.Game.Interleave
+public import Mathlib.LinearAlgebra.Lagrange
 
 /-!
-# The lincheck phase (PROTOCOL.md §10)
+# The lincheck phase (`Flock.Piop`)
 
 For one codeword near the committed table, whose witness `z` makes the `c` claim and the region
 claims true: the doomed zerocheck says the `a` claim, the `b` claim or the pin fails. Then the
@@ -24,6 +26,8 @@ lincheck ends with a true `ab` claim for `z` with probability at most `(2 + 2(k_
 
 `lincheck_phase_of_card` takes the union over a list of at most `L` codewords.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

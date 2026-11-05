@@ -1,5 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Defs
-import Proofs.Flock.Soundness.Discharge.Integrate
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Commit
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Defs
+public import Proofs.Flock.Soundness.Discharge.Integrate
 
 /-!
 # The tables and sites of a one-table hidden-output session
@@ -24,6 +27,8 @@ read off its layout (`Refine.stmtOf`, which reads `Δ` and the regions `setupHid
 `drawSetupH_of_accepts` and `tableAtH_of_accepts` (`Accepted.lean`): at a draw flock-verify accepts under hidden
 outputs, the table is `stmtOf` of the statement it accepted.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.HiddenExec
 

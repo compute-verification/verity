@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.BoundMergedLin
-import Proofs.Flock.Claims.Recursion.VCallsAt
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundMergedLin
+public import Proofs.Flock.Claims.Recursion.VCallsAt
 
 /-!
 # `Fdev`'s link over the draws' evaluations
@@ -14,6 +16,8 @@ draws' evaluations (`drawCalls`), which `FdevV`'s output searches:
 * `Bound.linkOutV_collO`, `Bound.Pr_badO_le_linV`, `Bound.Pr_badO_le_PrFdevV`: `P_O`'s bad draws at most
   `k_I·(Pr[FdevV] + 1/(M+1))`.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 
@@ -98,7 +102,8 @@ theorem Bound.linkOutV_collO (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlo
     ⟨hg, by simp only [fork_fork]; exact hgv, by simp only [fork_fork]; exact Ne.symm hfv⟩
   simp only [forkCollV, fork_fork] at hfc
   have hv' : firstPick (linkG H D (Inner.ofFlock Bd.deploy decI) DO decO P x j ω r) M us = some v := hv
-  simp only [linkOutV, hv', Option.getD_some]
+  have hg' : linkG H D (Inner.ofFlock Bd.deploy decI) DO decO P x j ω r u := hg
+  simp only [linkOutV, hg', hv', ↓reduceIte, Option.getD_some]
   exact hfc
 
 /-- **`P_O`'s bad draws, linearly, over the draws' evaluations**: `Pr_badO_le_lin` with `FdevV`. -/

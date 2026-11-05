@@ -1,32 +1,32 @@
 """A recorded remote session replayed through both verifiers, `RemoteAudit.Session` (the definition, served by
-`remote-audit-difftest` as `session`) and `audit.Session` (`ra_cases.session`), their verdicts and reasons compared.
+`remote-audit-difftest` as `session`) and `audit.AuditRun` (`ra_cases.session`), their verdicts and reasons compared.
 
 A record is one of two kinds:
 
-* A transcript: the difftest's case, every event the verifier's `Session` saw with the clock it read, its W + ⌈W/g⌉
+* A transcript: the difftest's case, every event the verifier's `AuditRun` saw with the clock it read, its W + ⌈W/g⌉
   coins (g its `groups_per_coin`, 1 when absent) and its append coins. Both verifiers replay all of it and must give every event the same result, and the session the same
   outcome and record. The outcome is the verdict, and a rejection's failure, window and draw are its reason. Given
-  the `verifier.json` that recorded it (`--record`), the outcome must be the recorded one. A transcript written before
-  it named its session's pace (20 Oct) replays only with the pace its `verifier.json` gives, and only if its bytes are
+  the `verifier.json` that recorded it (`--record`), the outcome must be the recorded one. A transcript that doesn't
+  name its session's pace replays only with the pace its `verifier.json` gives, and only if its bytes are
   the ones whose sha256 that record keeps: replayed unpaced, a paced session's windows would be held to no cap on their
   roots.
 * A remote session's `verifier.json` (`verity/remote-session/verifier/v0`). Per session it keeps the registration,
-  the parameters, each window's challenge release, boundary and pass arrivals on the verifier's clock, its draws, and
+  the parameters, each window's challenge release, boundary and pass arrivals on the verifier's clock, its samples, and
   for an accepted session each pass's length and step. It keeps no roots, plans, coins or openings, and of appends and
   releases only their counts. `case_of` makes a case of what it keeps: each pass a root (synthetic) at its arrival, the
   registered store its plan (an accepted pass's recorded length when that is shorter) and its step the recorded one
-  (else its count in the session), each boundary at its time and each draw closed at its last window at its time
+  (else its count in the session), each boundary at its time and each sample closed at its last window at its time
   (every window at `groups_per_coin` 1), under synthetic coins and with no appends, releases or openings. A session
-  recorded before the window was stated (13 Oct, 36e0ea654) may have a window shorter than its `window_ns`, a
-  boundary today's `Session` refuses; its case states its shortest. A session drawn more than one window a coin at
+  recorded before the window was stated (commit 36e0ea654) may have a window shorter than its `window_ns`, a
+  boundary today's `AuditRun` refuses; its case states its shortest. A session drawn more than one window a coin at
   one window in flight isn't replayed: no property covers it, and the driver refuses it. Both verifiers replay that
   case as above, and `held` holds their verdict to the recorded one:
-  - an accepted session draws every draw, each as many receipts as recorded over its windows;
+  - an accepted session samples every sample, each as many receipts as recorded over its windows;
   - one rejected for a failure the record keeps the cause of (`KEPT`: too few passes in a window) is rejected the same
     at the same window;
   - one rejected for any other failure is rejected nowhere in what is replayed, and draws as many receipts as recorded
     in each window it drew. Its cause is in what the record doesn't keep: its openings, plans, appends or steps, or
-    the root it rejected, whose arrival the verifier records only once `Session.receive` takes it (so not a late one).
+    the root it rejected, whose arrival the verifier records only once `AuditRun.receive` takes it (so not a late one).
   Both verifiers also recompute the registration's digest from its fields, which must be the recorded one, unless the
   registration was recorded before it named its layout and rows (`LATER`), when the digest bound neither. A record
   that keeps the verifier's registry (`--registry`) has both verifiers read it back, which must write it out as
@@ -86,7 +86,7 @@ def digests(reg: dict, s: D.Server) -> tuple[D.Outcome, D.Outcome]:
 
 def summary(outcome: D.Outcome) -> dict:
     """A session's verdict and reasons from one verifier's answer: its outcome (None while a window is unverified), the
-    first rejection (failure, window, draw), how many calls it refused, and each window's draw count."""
+    first rejection (failure, window, draw), how many calls it refused, and each window's sample count."""
     kind, text = outcome
     if kind != "output":
         return {kind: text[:500]}
@@ -137,7 +137,7 @@ def codec_of(name: str) -> dict:
     return {"field": field, "masked": masked == ["masked"], "rounds": int(rounds[1:])}
 
 
-#: What a registration has named, and its digest bound, since 13 Oct 09:24Z (36e0ea654). One recorded before names
+#: What a registration has named, and its digest bound, since commit 36e0ea654. One recorded before names
 #: neither: it had the one layout and its kind's rows, and its digest is one neither verifier computes now.
 LATER = ("layout", "rows")
 
@@ -167,13 +167,13 @@ def pace_json(session: dict) -> dict | None:
 
 
 def last_of(t: int, g: int, W: int) -> int:
-    """The last window of window t's draw at `groups_per_coin` g: min((t // g + 1)g, W) − 1, t itself at g = 1."""
+    """The last window of window t's sample at `groups_per_coin` g: min((t // g + 1)g, W) − 1, t itself at g = 1."""
     return min((t // g + 1) * g, W) - 1
 
 
 def case_of(reg: dict, session: dict) -> tuple[dict, dict]:
     """The case of what a `verifier.json` session keeps (the module's docstring), and how each part of it was made. Drawn
-    `groups_per_coin` g windows a coin, each draw closes at its last window, at the time its draws were sent, under
+    `groups_per_coin` g windows a coin, each sample closes at its last window, at the time its samples were sent, under
     W + ⌈W/g⌉ coins."""
     W, N, g = session["windows"], reg["blocks"], session.get("groups_per_coin", 1)
     record = session.get("record") or {}

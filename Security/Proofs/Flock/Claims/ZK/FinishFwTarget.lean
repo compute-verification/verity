@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FinishFwRep
-import Flock.Firewall.Drive
+module
+
+public import Proofs.Flock.Claims.ZK.FinishFwRep
+public import Flock.Firewall.Drive
 
 /-!
 # A deployed rep's ring-switch target is the opening's
@@ -18,6 +20,8 @@ statement's region claims' points.
 
 Neither reads the worker's clear values: `openT` reads `ν`, which reads the witness alone.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

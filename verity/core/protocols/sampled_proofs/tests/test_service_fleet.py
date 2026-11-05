@@ -14,7 +14,7 @@ import test_service_sessions as T
 from test_service import SESSION, Clock, _lean, _ports, _record, _refused, _round, _stream
 
 
-def _open(stream: S.Stream, n: int = 6) -> S.Registration:
+def _open(stream: S.Stream, n: int = 6) -> S.WindowCommitmentRecord:
     """A registration the stream receives and leaves open."""
     previous = R.digest(stream._entries[-1].registration.record) if stream._entries else None
     return stream.register(_record(n, row=len(stream._entries), previous=previous), _ports(n))
@@ -28,7 +28,7 @@ def _fleet(*operators: str, budget: int = 1, clock: Clock | None = None) -> tupl
 
 
 def test_a_budget_of_one_halts_the_operator_at_its_first_failure():
-    """b = 1: one reject halts every stream of the operator. The other stream's draw, delivered and pending its verdicts,
+    """b = 1: one reject halts every stream of the operator. The other stream's sample, delivered and pending its verdicts,
     ends `halted` with no failure of its own, and its accepted verdicts come too late; every call on either stream is
     refused, so is another stream for the operator, and another operator's stream runs on."""
     fleet, (a, b, c) = _fleet("o", "o", "p")
@@ -45,7 +45,7 @@ def test_a_budget_of_one_halts_the_operator_at_its_first_failure():
     assert b._entries[0].outcome.verdict.detail == {"halted": cause} and b._entries[0].outcome.profile is None
     assert _refused(lambda: b.outcome(db, _lean(), {"statement": "stub"})) == ("halted",)
     for s, d in ((a, da), (b, db)):
-        for call in (s.ready, s.salt, lambda: _open(s), lambda: s.select(d.registration), lambda: s.session([d]),
+        for call in (s.ready, lambda: s.salt_released(b"\x01", 0.0), lambda: _open(s), lambda: s.select(d.registration), lambda: s.session([d]),
                      lambda: s.deliver(d, [SESSION]), lambda: s.outcome(d, _lean(), {})):
             assert _refused(call) == ("halted",)
     assert _refused(lambda: fleet.attach(_stream(), "o")) == ("halted",)

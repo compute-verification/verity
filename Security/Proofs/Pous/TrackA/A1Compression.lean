@@ -1,14 +1,16 @@
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Fintype.Powerset
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.GCongr
-import Mathlib.Tactic.Linarith
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
+module
+
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Data.Fintype.Powerset
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.GCongr
+public import Mathlib.Tactic.Linarith
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
 
 /-!
 # A1, the compression lemma: `PousProofs.a1_compression_card` and `a1_compression_pr`, as drafted
@@ -17,6 +19,8 @@ import Proofs.Pous.Accounting.Numbers
 The probability form divides by `|α|`. This is the converse of `exists_code` in `thm1ii` and `thm1-family`
 (a code from a cardinality bound); neither implies the other, so there is nothing to reuse here.
 -/
+
+@[expose] public section
 
 namespace PousProofs
 

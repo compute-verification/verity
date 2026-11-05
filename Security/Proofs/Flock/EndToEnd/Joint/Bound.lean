@@ -1,6 +1,8 @@
-import Proofs.Flock.EndToEnd.Joint.Drawn
-import Proofs.Flock.EndToEnd.Joint.Prod
-import Proofs.Flock.Soundness.Game.Union
+module
+
+public import Proofs.Flock.EndToEnd.Joint.Drawn
+public import Proofs.Flock.EndToEnd.Joint.Prod
+public import Proofs.Flock.Soundness.Game.Union
 
 /-!
 # Proof of the joint stratified bound, per sampling block and pooled over a period
@@ -15,6 +17,8 @@ import Proofs.Flock.Soundness.Game.Union
   `Σ_t (ε_ks,t + ε_bind,t)` by `period_union`, or every draw misses with the product of the escapes below `δ` (else the
   wrong units would be within the budget, `Stratified.within_of_le`), at most `δ` by `period_prod`.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

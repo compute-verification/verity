@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.Rounds
+module
+
+public import Proofs.Flock.Claims.KS.Rounds
 
 /-!
 # The fork bound's slack and one more escape per round
@@ -23,6 +25,8 @@ collision (`forkEv`) and `F_K` the accepting run with a collision (`oneEv`, `for
   one more event a round are still two a round, so they fit the plain weight when `Σ_i C_i ≤ 2·2^{d₀}·Q₀`
   (`slackEsc_fitsFork_plain`, from `plain_fork_room`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

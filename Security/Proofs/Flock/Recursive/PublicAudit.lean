@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.Property
-import Proofs.Flock.Recursive.Firewall
+module
+
+public import Proofs.Flock.Recursive.Property
+public import Proofs.Flock.Recursive.Firewall
 
 /-!
 # The recursive audit at public units (trusted)
@@ -35,8 +37,10 @@ What it takes, against `RecursiveAudit`:
   `RecursiveFirewallPrivate` takes.
 
 Its proof is `Flock.SecurityProofs.PublicAudit` (`Proofs.Flock.Recursive.PublicAuditProof`). Its non-vacuity is to be
-shown at one recorded recursive run with a public inner unit (the F1 gate).
+shown at one recorded recursive run with a public inner unit (`test_lean_witness.py`).
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 
@@ -49,11 +53,11 @@ set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
 /-- **Lean's verifier builds the inner statement from its own partition object and program**: `setupTables` at the inner
-tags, the coin server's coins and one table, given the circuit and public files and the verifier's own `obj` and `prog`,
-returns `st`, and `Flock.Zk.schedule` accepts its `m`. -/
+tags, the challenger's coin tree (`RecVStar.innerTree`) and one table, given the circuit and public files and the
+verifier's own `obj` and `prog`, returns `st`, and `Flock.Zk.schedule` accepts its `m`. -/
 def AcceptsPublic (obj : Lean.Json) (prog : ByteArray) (st : Flock.Stmt) : Prop :=
   (∃ (cf pf : ByteArray) (spec : Flock.SessionSpec),
-    Flock.Stmt.setupTables Flock.RecVStar.innerTags cf pf Flock.Coins.os 1 (partition := some obj)
+    Flock.Stmt.setupTables Flock.RecVStar.innerTags cf pf Flock.RecVStar.innerTree 1 (partition := some obj)
       (program := some prog) = .ok (spec, #[st])) ∧
   ∃ p, Flock.Zk.schedule st.m = .ok p
 
@@ -105,12 +109,11 @@ with the salt a free witness wire, so a commitment to a wrong row under a fresh 
 with probability at most `4·hidingGap` (`VacuityProbes.Hm96Opens.opens_to_any_row`, `shift_reachable`, probes
 outside this tree). For any cheater the event is then nearly empty, and (i) bounds it, not a wrong computation.
 The fix is the knowledge form the claims API states recursion in; `EndToEndHidden` avoids this by extraction. The
-knowledge form, `Claims.Recursion.KS`, is at the recursion's level `Claims.Recursion.lam`: about 65 bits
-per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128` target under every weight.
-Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`),
-but `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still
-open (`RecDeploy.ksLin2_deployed_open`), Holo statements being candidate 3's own model, and `BitsLin2` at those
-statements follows from it (`bitsLin2On_of_ksLin2On`). This fork form states no bits. -/
+knowledge form, `Claims.Recursion.KS`, is at the recursion's level `Claims.Recursion.lam`, which no theorem evaluates
+at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records
+(`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's dense statements (`KSLin2On` at
+`RecDeploy.DenseAt`) is proved (`Flock.SecurityProofs.RecursiveKS`), Holo statements being candidate 3's own model, and
+`BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). This fork form states no bits. -/
 def PublicAudit : Prop :=
   (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]
     -- the registration's draws, a finite space with an element, and the units each draws

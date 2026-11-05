@@ -1,5 +1,7 @@
-import Definitions.Accounting.Joint
-import Definitions.Accounting.RateAudit
+module
+
+public import Definitions.Accounting.Joint
+public import Definitions.Accounting.RateAudit
 
 /-!
 # The rate audit's game as the bandwidth audit of a joint run (trusted)
@@ -19,6 +21,8 @@ work the compute audit certifies, so the rebuild's ops are another account's, an
 theirs together are within the device's priced work over the window: what the compute audit certifies is not
 available to rebuild.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

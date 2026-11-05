@@ -1,4 +1,6 @@
-import RemoteAudit
+module
+
+public import RemoteAudit
 
 /-!
 # The remote bandwidth audit's verifier: what its Lean verdicts mean (`RemoteAudit`)
@@ -61,6 +63,8 @@ one request at a time on the coins the challenger sent and settles each window's
 `Shared.run g` (`Session.run` at g = 1) accepts on the events its transcript records, at two windows in flight, is
 `Properties.RemoteAudit.Live` (`LiveIsRun`).
 -/
+
+@[expose] public section
 
 open RemoteAudit
 

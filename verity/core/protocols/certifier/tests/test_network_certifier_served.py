@@ -1,5 +1,5 @@
 """N2's served profile (`served`): the circuit held to its reference, the derivation held to the Program's grid on an
-idle run, and served link-windows through the proof system: honest traffic accepted in every window, salted or not,
+idle run, and served execution phases through the proof system: honest traffic accepted in every window, salted or not,
 and a late block, an extra frame, a dropped frame and a request whose response straddles the window's end each
 refused."""
 
@@ -275,8 +275,8 @@ def test_the_circuit_is_its_reference(key):
 
 
 def test_the_served_unit_is_n2s_beside_the_served_counts(tmp_path):
-    """The served unit holds N2's checks and the served counts as one gate, the spec declares the window's sync and the
-    served sizes public, and a served link has no egress occupancy profile and one T and τ_b on both ends."""
+    """The served proof block holds N2's checks and the served counts as one gate, the spec declares the window's sync
+    and the served sizes public, and a served link has no egress occupancy profile and one T and τ_b on both ends."""
     lw = Run(tmp_path).lw
     assert lw.unit.id == "NetworkServedLinkWindow_v4{EGRESS=(9,8,0),INGRESS=(9,8,0),SERVED=(8,3,1,2,2,0)}"
     assert lw.spec.public == PUBLIC_SERVED and {"sync", "served"} <= {p.item for p in lw.spec.public}

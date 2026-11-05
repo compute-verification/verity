@@ -1,12 +1,14 @@
-import Proofs.Flock.Claims.KS.PlainLeafKS
-import Proofs.Flock.Claims.KS.PlainLeafKSK
-import Proofs.Flock.Claims.KS.ZkAbortR
-import Proofs.Flock.Claims.Recursion.BoundDeploy
+module
+
+public import Proofs.Flock.Claims.KS.PlainLeafKS
+public import Proofs.Flock.Claims.KS.PlainLeafKSK
+public import Proofs.Flock.Claims.KS.ZkAbortR
+public import Proofs.Flock.Claims.Recursion.BoundDeploy
 
 /-!
 # (P1) at the intended choice, with no premise
 
-`Bound.PlainKSAbort` at every element-level verifier, `KSBoundRoute`'s ∀-form, is false where that verifier accepts
+`Bound.PlainKSAbort` at every element-level verifier, `KSBoundRouteCols`' ∀-form, is false where that verifier accepts
 everything (`PlainKSAbortFails`), so (P1) stays a premise there. At the intended choice it holds with no premise
 (`RecDeploy.plainKSAbort_deployed`): `DE`'s steps, columns and weight the deployed plain verifier's own, where `DE` is
 `deployPlainTrim` (`deE_plainTrim`), at the deployed relation.
@@ -22,6 +24,8 @@ everything (`PlainKSAbortFails`), so (P1) stays a premise there. At the intended
   `KSAbort_of_tableBoundOnAccR`, as the masked `zk_KSAbortR` does.
 * **At `VK keep`** (`plain_tableBoundθOnAccRK`): the plain table bound counted per round at `deployPlainK keep`.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

@@ -1,12 +1,14 @@
-import Proofs.Flock.Claims.Recursion.VerdictTargetL
-import Proofs.Flock.Claims.Recursion.RoundSizes
-import Proofs.Flock.Claims.Recursion.VerdictPublics
-import Proofs.Flock.Claims.Recursion.VerdictFramed
-import Proofs.Flock.Claims.Recursion.VerdictRowDCover
-import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
-import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
-import Proofs.Flock.Claims.Recursion.VerdictRowECoin
-import Proofs.Flock.Claims.Recursion.DecodeAt
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictTargetL
+public import Proofs.Flock.Claims.Recursion.RoundSizes
+public import Proofs.Flock.Claims.Recursion.VerdictPublics
+public import Proofs.Flock.Claims.Recursion.VerdictFramed
+public import Proofs.Flock.Claims.Recursion.VerdictRowDCover
+public import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
+public import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
+public import Proofs.Flock.Claims.Recursion.VerdictRowECoin
+public import Proofs.Flock.Claims.Recursion.DecodeAt
 
 /-!
 # `NonVacuous`'s row targets from the rows' deployed forms
@@ -27,6 +29,8 @@ proved. `targets_of_open`: every target from row E, `TargetRDep`, `TargetDMerkle
 `targets_of_rows`: the same at row E's accumulators `accR`, with row E from its pieces' running sums (`targetE_rowD`);
 `targets_of_rowsJ`: with `TargetDecode` from `DecodeAt.decode_at`, with no JSON premise.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
