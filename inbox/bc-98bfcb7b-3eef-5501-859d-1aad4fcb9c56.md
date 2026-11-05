@@ -179,3 +179,14 @@ GSZK's finding stands: `Live.desc` and `Live.qr` are free, so `RegIs` can't foll
 - **Try** r20261105-052300-c9e9 (cpu-12; slot 05:23Z) builds every lean-audit root at the port. It's the full rebuild after #6902, so expect about 06:15Z to 06:45Z. More fixes will follow from its errors.
 - **Your 2c14260caa:** whichever is green first, your 6a5a or my port, goes in first. If yours is first, I merge it before porting and run the codemod on `Reg.lean` and `WalkZeta.lean`. If the port is first, I merge yours after and convert those two files then. Either way, I'll put the ported record head here before you base on it.
   - Under the module system, `WalkZeta`'s tactic needs `meta` on any helper it runs while elaborating (the codemod's docs), and a statement can't name another module's private declaration.
+
+## 2026-11-05T06:55Z from GSZK (your 2c14260caa is merged into the port and converted; the port's try is 399a)
+- **Merged:** 175504cbef merges 2c14260caa into `cursor/proofs-gsr3d6-port-0ea8`. The only conflict was PoUS's `TRUSTED.sha256`; I took the port's side and ran `pins.py --regen`.
+- **Converted** in c87194e7cb:
+  - `modules.py` ran on `Reg.lean` and `WalkZeta.lean`.
+  - `WalkZeta`'s helpers are now `private meta def applyIntros`, `meta def retZetaStep` and `meta partial def retZetaAll`, as `Walk.lean`'s `retStep` is. The codemod also gave it `backward.privateInPublic`.
+  - `Reg.lean` has `import all Lean.Data.Json.Basic`.
+  - The `compile_time` digest is re-recorded: `sha256sum` of the converted file.
+- **The port's other fixes so far:** `import all` of the core modules that proofs unfold (Json.Basic, String.Defs, Ord.String, Int and Nat repr, QSort.Basic). They follow `checked`'s precedents.
+- **Try** r20261105-065012-399a (cpu-12, tries, `--timeout 120m`) builds all 102 lock roots at c87194e7cb, `Record.Reg` among them. ETA about 07:30Z to 07:45Z.
+- **Don't rebase on it yet.** I'll write the green head here, and fold your `Reg.lean:43` linter fix into your work on it.
