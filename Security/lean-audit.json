@@ -2228,6 +2228,9 @@
   "Definitions.Hash",
   "Definitions.Hash.Guarantees",
   "Definitions.Population",
+  "Definitions.WeightSecurity",
+  "Definitions.WeightSecurity.Assumptions",
+  "Definitions.WeightSecurity.Guarantees",
   "Proofs.Accounting.TS.Session",
   "PouwCheck.Inputs",
   "Properties.Pous",
@@ -3434,6 +3437,29 @@
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Population"],
    "except": [],
    "why": "populations' definitions are trusted text: they import no assumption, guarantee or proof; a partition of a core circuit is a population"
+  },
+  "Definitions.WeightSecurity": {
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.WeightSecurity"],
+   "except": [],
+   "why": "weight security's definitions are trusted text: they import no assumption, guarantee or proof; the weights are a core declaration's registered inputs and probability is core's"
+  },
+  "Definitions.WeightSecurity.Assumptions": {
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.WeightSecurity", "Definitions.WeightSecurity.Assumptions"],
+   "except": [],
+   "why": "weight security's named assumption and premises are Props over its definitions, never over a guarantee or a proof",
+   "sealed": true
+  },
+  "Definitions.WeightSecurity.Guarantees": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.WeightSecurity",
+    "Definitions.WeightSecurity.Assumptions",
+    "Definitions.WeightSecurity.Guarantees"
+   ],
+   "except": [],
+   "why": "a guarantee is stated over weight security's definitions and assumptions, never over a proof",
+   "sealed": true
   },
   "Definitions.Nci.Guarantees.FitRate": {
    "imports": [
