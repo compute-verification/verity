@@ -160,7 +160,8 @@ theorem stop_round {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : 
     {Jr : Json}
     (hF : List.Forall₂ Binding.Read.Of (lr.map Binding.Read.ofV2) (CoinTape.run (V.game θ F c) σ o.2).log)
     (hread : readLog label after [Jr] ξ lines = some lr) (hct : coinTreesOf lines = .ok trees)
-    (h1 : trees.size = 1) (hJt : sessionTreeReason trees Jr = none) {text : String} {spec : Flock.SessionSpec}
+    (h1 : trees.size = 1) {tabsB : Array (String × Option ℕ)}
+    (hJt : sessionTreeReason trees tabsB Jr = none) {text : String} {spec : Flock.SessionSpec}
     {tabs : Array Flock.Setup} {proofs : Array ByteArray} {sess : Flock.RunRecord}
     (hrec : sentRecord (CoinTape.run (V.game θ F c) σ o.2).sent = some text)
     (hJ : Flock.JsonParse.parse text = .ok Jr) (hd : Flock.Record.decode spec text = .ok sess)
@@ -190,7 +191,7 @@ theorem stop_round {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : 
     recordRounds_decode hd hJ hnT hst'
   have hkR : k < st.rounds.size := by
     have h := hO m _ L' hlog i s n rfl _ hname'
-    rwa [streamOpenings_eq_openedOf, hk, hrr] at h
+    rwa [hk, hrr] at h
   rw [hlog] at hF
   obtain ⟨pre, y, post, hlr, hpre, hy, -⟩ := forall₂_split (List.forall₂_map_left_iff.1 hF)
   have hy' : (Binding.Read.ofV2 y).Of ⟨.opening i s n, b, roundBits fieldEnc cs⟩ := hy
@@ -315,7 +316,8 @@ theorem rep_rounds {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : 
     {Jr : Json}
     (hV : List.Forall₂ Binding.Read.Of (lr.map Binding.Read.ofV2) (CoinTape.run (V.game θ F c) σ o.2).log)
     (hread : readLog label after [Jr] ξ lines = some lr) (hct : coinTreesOf lines = .ok trees)
-    (h1 : trees.size = 1) (hJt : sessionTreeReason trees Jr = none) {text : String} {spec : Flock.SessionSpec}
+    (h1 : trees.size = 1) {tabsB : Array (String × Option ℕ)}
+    (hJt : sessionTreeReason trees tabsB Jr = none) {text : String} {spec : Flock.SessionSpec}
     {tabs : Array Flock.Setup} {proofs : Array ByteArray} {sess : Flock.RunRecord}
     (hrec : sentRecord (CoinTape.run (V.game θ F c) σ o.2).sent = some text)
     (hJ : Flock.JsonParse.parse text = .ok Jr) (hd : Flock.Record.decode spec text = .ok sess)
@@ -462,7 +464,8 @@ theorem firstStop_reps {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {
     {Jr : Json}
     (hV : List.Forall₂ Binding.Read.Of (lr.map Binding.Read.ofV2) (CoinTape.run (V.game θ F c) σ o.2).log)
     (hread : readLog label' after' [Jr] ξ lines = some lr) (hct : coinTreesOf lines = .ok trees)
-    (h1 : trees.size = 1) (hJt : sessionTreeReason trees Jr = none) {text : String} {spec : Flock.SessionSpec}
+    (h1 : trees.size = 1) {tabsB : Array (String × Option ℕ)}
+    (hJt : sessionTreeReason trees tabsB Jr = none) {text : String} {spec : Flock.SessionSpec}
     {tabs : Array Flock.Setup} {proofs : Array ByteArray} {sess : Flock.RunRecord}
     (hrec : sentRecord (CoinTape.run (V.game θ F c) σ o.2).sent = some text)
     (hJ : Flock.JsonParse.parse text = .ok Jr) (hd : Flock.Record.decode spec text = .ok sess)
