@@ -179,12 +179,13 @@ def audit_record(completed: tuple[str, ...] = (MEMBER,), reported: dict[str, boo
             "registered_reads": {"ok": all(reported.values()), "chunks": {m: {"ok": ok} for m, ok in reported.items()}}}
 
 
+AUDITED = audit_record()
 CREDITED = {"credited": [MEMBER], "not_credited": {}, "from": str(OR.AUDIT), "is": OR.CREDIT}
 
 
 def served_out(tmp_path: Path, *, network: dict | None = None, work: dict | None = None, case: dict | None = None,
                composites: dict[str, dict] | None = None, coins: str | None = GATE,
-               audit: dict | None = audit_record()) -> Path:
+               audit: dict | None = AUDITED) -> Path:
     """A toy $OUT: sampled proofs accepted, its audit's record ``audit`` (none where None), PoUW and the network
     certifier missing unless given, the given composites and certifier case, and its COINS line, its sampled-proofs part
     ``coins`` (none where None)."""
@@ -217,7 +218,8 @@ def chain_report(n2: str = "all", scan: str = "all") -> dict:
     return {"steps": {s: {"eps_at_delta": {"law": law, "eps": "0"}} for s, law in (("n2", n2), ("scan", scan))}}
 
 
-#: the record's chain draws where each takes everything
+#: the chain report whose draws each take everything, and the record's chain draws read from it
+ALL = chain_report()
 ALL_DRAWN = {"laws": {"the period draw": "all", "the scan's draw": "all"}, "open": [], "from": str(OR.CHAIN_REPORT),
              "is": OR.CHAIN_DRAWS}
 
@@ -236,7 +238,7 @@ def commitment(*audits: dict) -> str:
 def accepted(tmp_path: Path, public: dict = PUBLIC, windows: int = 1, caps: list[int] | None = None,
              schedule: dict = SCHEDULE, audits: tuple[dict, ...] = (NO_ADVICE,),
              registration: dict | None = PUBLISHED, coins: str | None = GATE,
-             draws: dict | None = chain_report()) -> Path:
+             draws: dict | None = ALL) -> Path:
     """A run whose network certifier accepted ``public``, its case the period's of ``windows`` execution phases at
     ``schedule``, whose caps are the schedule's (`Schedule.caps`) unless given, and whose commitment holds ``audits``'
     registrations, with ``registration`` its published advice registration, none where None, ``coins`` its COINS
@@ -1170,7 +1172,7 @@ def test_while_certifier_key_is_open_an_accepted_network_verdict_is_not_establis
 
 
 @pytest.mark.parametrize("audit, credited, not_credited, missing", [
-    (audit_record(), [MEMBER], {}, None),
+    (AUDITED, [MEMBER], {}, None),
     (audit_record((MEMBER, "ToyNorm"), {MEMBER: True, "ToyNorm": False}), [MEMBER], {"ToyNorm": OR.UNREPORTED}, None),
     (audit_record((MEMBER, "ToyNorm"), {MEMBER: True}), [MEMBER], {"ToyNorm": OR.UNREPORTED}, None),
     (audit_record((MEMBER,), {MEMBER: True, "ToyNorm": True}), [MEMBER], {"ToyNorm": OR.UNLISTED}, None),
