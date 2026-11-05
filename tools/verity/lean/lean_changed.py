@@ -1,25 +1,26 @@
 """`lean_changed`: Lean's early job, which `check` runs as its lean-changed step. `lake build` of every Lake package whose Lean
-audit misses (`lean_audit.py`: its inputs changed since a pass kept on this machine), on a tree this machine keeps built, so a
-module that no longer compiles (two merges git combines cleanly that Lean doesn't) fails the run in minutes rather than when
-the audit's cold build reaches it.
+audit misses (`lean_audit.py`: its inputs changed since a pass kept on this machine), on the step tree (`lean-changed` under
+the check cache, or `--tree`), which this machine keeps built, so a module that no longer compiles (two merges git combines
+cleanly that Lean doesn't) fails the run in minutes rather than when the audit's cold build reaches it.  Its `--records`,
+`--try` and `--build` work on a slot tree instead, one per `build` slot (below).
 
     python tools/verity/lean/lean_changed.py --cache DIR --deps DIR --tree DIR
     python tools/verity/lean/lean_changed.py --records PKG [--update [--moved FILE]] [--out DIR] [--dev-cache] [--rebuild]   a lane's records
     python tools/verity/lean/lean_changed.py --try FILE   a lane's edit loop on a node (`verity lean try FILE --on NODE`)
     python tools/verity/lean/lean_changed.py [--no-wait] --build FILE...   the ready mark's preflight's Lean step (`build_files`)
 
-`--try` elaborates one file (FILE: its path from the repository's root) on the same warm tree as `--records`, under the same
+`--try` elaborates one file (FILE: its path from the repository's root) on the slot tree `--records` builds on, under the same
 `build` slot, tree lock, sync, `repair` and dependencies, for the closure of the package that owns FILE only: there it runs
 `lake build +MODULE:deps` (FILE's imports; Lake rebuilds only what changed since the slot's last build) and then
 `lake env lean FILE` in that package's directory, and exits with lean's status; when that status is an import clash (an
 import declaring what an earlier one did), the two modules it names lose their traces (`clashed`), so the next try rebuilds
 them against the outputs in place. It never runs check.py, so it reads and writes
-no record; where the node grants no `build` slot it refuses, naming the nodes that do. Dependencies the tree holds that no
+no record; where the node grants no `build` slot it refuses, naming the nodes that do. Dependencies the slot tree holds that no
 `--records` run took (not in its `links.json`) are kept as they are; without a sandbox Lake runs unsandboxed, and fetches
 dependencies the node does not keep.
 
 `--records` is a lane's fast path to the records in PKG's `lean-audit.json` (PKG: its path, or a unique part of one):
-`tools/verity/lean/check.py --build --no-replay --no-runs` on PKG in a tree kept per slot, which prints what the audit prints,
+`tools/verity/lean/check.py --build --no-replay --no-runs` on PKG in a slot tree (one per slot), which prints what the audit prints,
 `--update`'s review included, after a build of only what changed since that slot's last run, which restores each module the
 node's artifact cache holds under its key (`check.py --artifacts`, `lean_audit.LakeArtifacts`, the one the audit
 reads); each package whose check.py passes, its report saying it built in the sandbox, puts the modules its build
@@ -30,19 +31,20 @@ pool, or with `--dev-cache` (a slot tree whose dependencies are fetched cold bui
 instead (`dev_records`): `check.py --dev-cache --build --no-replay --no-runs` on this
 checkout's PKG, then its requirers, each build restored from the published cache (Security: about 40 minutes), with the same
 reports, record keep and kind; that path builds in this checkout, so a run takes it only with `--cwd clone`. It says which
-path it took, and a recorded run's `result.json` names it (`path`: `slot` or `dev-cache`). Slot `build/I`'s tree is
+path it took, and a recorded run's `result.json` names it (`path`: `slot` or `dev-cache`). Slot `build/I`'s slot tree is
 `lean-records/build-I` under the check cache, whoever holds that slot's lock owns it, and check.py inherits the lock's
-descriptor, so the slot is held until check.py exits; with no SLOTS (a laptop) the tree is `lean-records/local`. `--tree` names another only under `lean-records/`. The tree's fetched dependencies are its own copy
-of the audit's (taken once per manifest and toolchain, else fetched cold), never links, so what Lake writes there stays out of
-what the audit keeps. That bounds Lake's own writes, not compile-time code: check.py builds in its sandbox only where the
+descriptor, so the slot is held until check.py exits; with no SLOTS (a laptop) it is `lean-records/local`. `--tree` names
+another, only under `lean-records/`. A slot tree's fetched dependencies are its own copy of the audit's (taken once per
+manifest and toolchain, else fetched cold), never links (the step tree's are links, below), so what Lake writes there stays
+out of what the audit keeps. That bounds Lake's own writes, not compile-time code: check.py builds in its sandbox only where the
 machine allows one, and without it that code can write anything this user can, the audit's kept dependencies and passes
 included, as any build this user runs by hand can. `--update` writes the record back into this checkout, but not in a recorded
 run, whose source tree the commit's other runs share: there it is in the run's `lean-audit/audit-*/`, and on either path a
 record that changed is also kept as `lean-audit/record/<path>/lean-audit.json` (PKG's also as
 `lean-audit/record/lean-audit.json`), which `research queue`'s records gate reads, each with a line saying what to commit it
-over. A run marks the tree (`DIRTY`: its id, package and phase) while it works there and clears the mark when it ends
+over. A run marks the slot tree (`DIRTY`: its id, package and phase) while it works there and clears the mark when it ends
 without a check.py killed, so the next run knows a tree left mid-way (a run cancelled, timed out or killed for memory) and
-says so. Before each build it `repair`s the tree: a module an interrupted build or a restore from Lake's cache left half-written (an output its trace lists missing, an `.olean` that is
+says so. Before each build it `repair`s the slot tree: a module an interrupted build or a restore from Lake's cache left half-written (an output its trace lists missing, an `.olean` that is
 not one, a `.hash` that is not the trace's or is older than its output) loses its trace and `.hash` files, so Lake rebuilds
 it, as does a module's `.hash` file when the module has no trace, and after a run left mid-way, a package's fetched dependencies that run was taking, or that hold such a
 module or a checkout other than the manifest's, are taken again. A spec whose `proved_in` package's build did not pass
@@ -51,9 +53,9 @@ never reads that package's `.lake` (`check.proved`), which an earlier or interru
 Then it audits, the same way, every package whose guarantees' records read PKG's build (`requirers`: PKG is in its
 `closure`, by path or by `proved_in`), each after those it requires and on the records this run regenerated before it, its
 reports under `requirer-<path>/` beside PKG's. A change to what another package's pinned guarantees read
-(`Security/Properties`' when `Security` changes) fails here, not at a train's check. With `--update`, a requirer whose every
+(`Security/Properties`' when `Security` changes) fails here, not at the Lean check of `next`. With `--update`, a requirer whose every
 failure is a record difference (`settles`) is audited again with `--update` (and `--moved`), so one run regenerates every
-lock the change moved; one failing for any other reason fails. The exit status is the first failure's. A tree
+lock the change moved; one failing for any other reason fails. The exit status is the first failure's. A slot tree
 keeps the copies of the packages one run audits (about 170k inodes, 8 GB each), so auditing another package that fetches
 dependencies there drops the rest first.
 
@@ -64,7 +66,7 @@ each lock this run regenerated as check.py left it, so a commit of the records `
 run when such a pass, or the Lean check's own pass (`lean_audit.key`), is kept on these inputs on this node (`kept`), or
 when HEAD merges a commit of `main` into one whose records passed, possibly through further such merges, and each merge took
 every Lean input of the package whole from main's side, its locks aside, which must be `merge.py`'s merge of the two sides
-(`merged`). That lock is a candidate, never a verdict: the train's Lean check rebuilds every record and regenerates one
+(`merged`). That lock is a candidate, never a verdict: the Lean check of `next` rebuilds every record and regenerates one
 that differs. `--rebuild`, and `--moved`, run every package.
 
 Its result is of kind `FAST_KIND`, never a Lean verdict: no kernel replay and no tests. The kind is written into the
@@ -73,8 +75,8 @@ in a recorded run, into its `result.json`, the Attempt's result. `check` fails i
 one without the replay (`check.lean_fast`), and `research merge` refuses an attempt whose result is of that kind
 (`research.merge.REFUSED_KINDS`), whatever `--tool` recorded it.
 
-The tree (`--tree`) holds each such package's tracked files, and those of the packages it requires by path or names under
-`proved_in`, at their paths in this repository, with each package's own `.lake`: Lake rebuilds only the modules that changed since its last build there and
+The step tree holds the tracked files of each package whose audit misses, and those of the packages it requires by path or
+names under `proved_in`, at their paths in this repository, with each package's own `.lake`: Lake rebuilds only the modules that changed since its last build there and
 what imports them. A package's fetched dependencies are hard links to the ones the audit keeps (`--deps`, `lean_audit.WarmDeps`),
 taken under their lock while the tree has none for its manifest and toolchain; the build runs in the audit's sandbox
 (`tools/verity/lean/sandbox.sh`), where they are mounted read-only, so it cannot write what the audit reads, and a concurrent audit can
@@ -87,12 +89,12 @@ guarantee reads changed, a guarantee gone, a `reads` digest no longer its defini
 build reaches it.
 
 The audit still builds and audits every package cold and decides the run: a pass here vouches for nothing. So this step fails
-only on a Lean error at a position in one of the tree's own `.lean` files, or on a guarantee the audit fails (`judge`'s
+only on a Lean error at a position in one of the step tree's own `.lean` files, or on a guarantee the audit fails (`judge`'s
 failures whose code is under `guarantees.` or `assumptions.`). Anything else that stops a build (no sandbox or `lake` here, dependencies this machine doesn't keep
 yet, another check holding the tree, a dependency the links lack) skips the package by name and drops its links, so the next
 run takes the audit's again; anything that stops a reading (a policy that can't be read, `Facts.lean` failing) skips its
 guarantees by name.
-`check.py` ends the run when this step fails, even under `--keep-going`. Delete the tree to start it over.
+`check.py` ends the run when this step fails, even under `--keep-going`. Delete the step tree to start it over.
 """
 from __future__ import annotations
 
@@ -672,7 +674,7 @@ def merged(pkg: str, files: list[str]) -> str | None:
     """Why this checkout's records of ``pkg`` need no run although its inputs are new, or None: HEAD merges a commit of `main`
     into a commit whose records passed (`kept`), possibly through further such merges, and each merge takes every Lean input
     of ``pkg`` from one side whole, its locks aside, which are `merge.py`'s merge of the two sides. The lock is then a candidate,
-    never a verdict: the train's Lean check rebuilds every record and regenerates one that differs."""
+    never a verdict: the Lean check of `next` rebuilds every record and regenerates one that differs."""
     prefixes = sorted({*closure(pkg), LA.LEAN_TOOL.rstrip("/"), *tool_inputs(files)})
     if git("status", "--porcelain", "--untracked-files=no", "--", *prefixes) != "":
         return None
@@ -710,7 +712,7 @@ def merged(pkg: str, files: list[str]) -> str | None:
         took.append(m[:12])
         if hit := kept(pkg, fb, blob_reader({f: hb[f] for f in closure_inputs(pkg, fb) if f in hb})):
             return (f"HEAD merges main's {', '.join(took)} into {b[:12]}, where {hit}; every Lean input it changed is main's "
-                    f"and its lock merge.py's merge: a candidate, which the train's Lean check rebuilds and compares (a record "
+                    f"and its lock merge.py's merge: a candidate, which the Lean check of `next` rebuilds and compares (a record "
                     f"that differs is regenerated there)")
         c = b
     return None
@@ -875,7 +877,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                     f"check and research merge refuse; reports in {mine_out}")
                 # Keep the regenerated record now: the next requirer iteration's `sync` restores the committed one over
                 # it, and a recorded run never writes ROOT (the commit's shared source tree), so without this copy the
-                # record a lane must commit survives nowhere the run keeps (LEAN-10).
+                # record a lane must commit survives nowhere the run keeps.
                 if (b := checked(p, pkg, got, tree / p / LOCK, committed[f"{p}/{LOCK}"], up, update, out, log)) is not None:
                     new[f"{p}/{LOCK}"] = b
                 if got == 0:
@@ -1288,8 +1290,9 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="lean_changed.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("--cache", type=Path, default=LA.COMMON.cache_dir() / "lean-audit", help="the audit's kept passes")
     ap.add_argument("--deps", type=Path, default=LA.COMMON.cache_dir() / "lean-deps", help="the audit's kept dependencies")
-    ap.add_argument("--tree", type=Path, help="the tree this step keeps built (default: lean-changed, or with --records "
-                    f"{RECORDS}/build-I, the Lean slot's, under the check cache; with --records it must be under {RECORDS}/)")
+    ap.add_argument("--tree", type=Path, help="the step tree this step keeps built (default: lean-changed), or with --records, "
+                    f"--try or --build the slot tree ({RECORDS}/build-I, the Lean slot's), under the check cache; with those it "
+                    f"must be under {RECORDS}/")
     ap.add_argument("--records", metavar="PKG",
                     help=f"audit PKG's records without the kernel replay, on a tree kept per Lean slot of pool {FAST_POOL}, "
                     f"else with check.py --dev-cache on this checkout (a {FAST_KIND} result, which no merge accepts)")
