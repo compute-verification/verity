@@ -8,6 +8,7 @@ import NetworkCheck.Circuit
 import NetworkCheck.Members
 import NetworkCheck.CircuitFile
 import NetworkCheck.Period
+import NetworkCheck.PeriodFiles
 import NetworkCheck.RowsAudit
 import NetworkCheck.LinkWindow
 
@@ -52,5 +53,6 @@ first VU (`interface._members`), from the record alone, held to `interface.membe
 /-!
 `NetworkCheck.CircuitFile` reads a circuit file whole, as a session's verifier parses it, for the period's
 check with its listed circuit files (`NetworkCheck.Period.protocolWith`, `network-period check … CIRCUIT…`), which
-holds each to its template with `SampledProofs.Bits.check`.
+holds each to its template with `SampledProofs.Bits.check`. `NetworkCheck.PeriodFiles` reads a period's listed files
+within a budget of files and bytes at once, for `network-period` and for a protocol that composes the period's.
 -/
