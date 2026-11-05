@@ -12,11 +12,12 @@ runs: `trusted-host` covers only that its signed records are the traffic that cr
 guarantee reading this takes it there.
 
 `SchedulesCoveredAt` is `NetTiming.SchedulesCovered` into the schedules whose `(r, D)` is registered and which fit the
-rows format (`RowsFormat.Fits`), at the registered set `Θ = {(r, D)}` of the audit's parameters: if the audit accepts a
-run's records over its `W` windows, they show at most the `lanes·W·T` connections the period's caps count, and the
-schedule they show has the parameters' `r` and `D` and fits a well-formed rows format of `T`-bucket windows at
-`S = lanes·r` slots. It reads no arrivals: it holds of every run's records, so of every run a client's strategy makes
-against the node's egress.
+network certifier's own rows format (`NetTiming.cellRows`, `RowsFormat.Fits`), at the registered set `Θ = {(r, D)}` of
+the audit's parameters: if the audit accepts a run's records over its `W` windows, they show at most the `lanes·W·T`
+connections the period's caps count, and the schedule they show has the parameters' `r` and `D` and fits the format's
+`B`-byte frames of `T`-bucket windows at `S = lanes·r` slots, on any egress link and with any jitter classes and
+statuses. It reads no arrivals: it holds of every run's records, so of every run a client's strategy makes against the
+node's egress.
 
 `wardenOf` reads the audit's schedule as a `NetTiming.WardenSchedule` over the period's connections: connection `c` is
 ordinal `c + 1`, and one past the run's sends no cell and is admitted past the run, `D` buckets after the one before
@@ -41,15 +42,21 @@ def wardenOf (p : Params) (n : ℕ) (s : Schedule) : NetTiming.WardenSchedule (F
   cells c := s.cells.getD c.val 0
 
 /-- **The schedule accepted records show is registered and fits**: if `audit` accepts a run's records over its `W`
-windows, they show at most the `lanes·W·T` connections the caps count, and the schedule they show is in
-`{s | (s.r, s.D) ∈ Θ ∧ F.Fits S W s}` at `Θ = {(r, D)}` and `S = lanes·r`, for every well-formed rows format `F` of
-the period's connections whose windows are `T` buckets. -/
+windows, they show at most the `N = lanes·W·T` connections the caps count, and the schedule they show is in
+`{s | (s.r, s.D) ∈ Θ ∧ (cellRows B N link T jitter status).Fits S W s}` at `Θ = {(r, D)}`, `B` the parameters' cell
+bytes and `S = lanes·r`, on every egress link `link` and with every jitter class `jitter` and status `status`. -/
 def SchedulesCoveredAt : Prop :=
-  ∀ (p : Params) {Cell : Type} {L K : ℕ} (ingress egress fails : Array Record) (sum : Summary)
-    (F : NetTiming.RowsFormat (Fin (periodConns p egress.size)) Cell L K),
-    F.Wf → F.T = p.window → audit p ingress egress fails = .ok sum →
+  ∀ (p : Params) (ingress egress fails : Array Record) (sum : Summary) {L K : ℕ} (link : Fin L)
+    (jitter : NetTiming.WardenSchedule (Fin (periodConns p egress.size)) →
+      (Fin (periodConns p egress.size) → NetTiming.Arrivals (NetTiming.FrameCell (p.cellBytes - 9))) → ℕ → ℕ)
+    (status : NetTiming.WardenSchedule (Fin (periodConns p egress.size)) →
+      (Fin (periodConns p egress.size) → NetTiming.Arrivals (NetTiming.FrameCell (p.cellBytes - 9))) → ℕ → Fin K →
+        NetTiming.Status),
+    audit p ingress egress fails = .ok sum →
       sum.schedule.adm.size ≤ periodConns p egress.size ∧
         wardenOf p egress.size sum.schedule ∈
-          {s | (s.r, s.D) ∈ ({(p.slots, p.delay)} : Set (ℕ × ℕ)) ∧ F.Fits (p.lanes * p.slots) egress.size s}
+          {s | (s.r, s.D) ∈ ({(p.slots, p.delay)} : Set (ℕ × ℕ)) ∧
+            (NetTiming.cellRows p.cellBytes (periodConns p egress.size) link p.window jitter status).Fits
+              (p.lanes * p.slots) egress.size s}
 
 end Properties.NetworkCertifier

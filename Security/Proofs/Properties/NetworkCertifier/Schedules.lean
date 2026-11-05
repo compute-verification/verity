@@ -13,6 +13,10 @@ buckets from `a_i + D` to `H` (`data_le`): its lane ends in the run. A bucket of
 most `S`; one of the `D` after it at most the last's; and one later only the cells of one connection past the run, which
 `wardenOf` admits `D` buckets apart. `rows_step` (`RowsStep.lean`) walks the audit's `do` blocks as Flock's `walk_step`
 does, and names each bound value after its binder.
+
+The bound holds for every well-formed format of the period's connections and `T`-bucket windows (`auditCovered`).
+`Fits` reads only a format's connections and its windows, so the network certifier's own format, `cellRows`, fits a
+schedule exactly when `unaryFormat`, a well-formed one, does (`cellRows_fits_iff`), and the proof reads it there.
 -/
 
 open NetworkCertifier.Rows
@@ -942,33 +946,7 @@ theorem auditCovered {p : Params} {C : Type} {L K : ℕ} {ingress egress fails :
       fits_of F hF hT hr hl (Nat.mul_pos hW hT') heg hrow hadm hdata hNle
         (fun i hi => Nat.lt_of_lt_of_eq (hfirst i hi) heg) hcount hX⟩
 
-end Properties.NetworkCertifier.RowsAudit
-
-namespace Properties.NetworkCertifier
-
-/-- **`SchedulesCoveredAt`**: the schedule an accepted run's records show is registered and fits the rows format. -/
-theorem schedulesCoveredAt : SchedulesCoveredAt := by
-  intro p C L K ingress egress fails sum F hF hT h
-  obtain ⟨h1, h2⟩ := RowsAudit.auditCovered F hF hT h
-  refine ⟨h1, ?_⟩
-  show _ ∧ _
-  exact ⟨Set.mem_singleton _, h2⟩
-
-end Properties.NetworkCertifier
-
-/-! ### The witnesses
-
-`SchedulesCoveredAt`'s hypotheses hold at the deployed parameters (`warden.WardenParams`: `B = 256`, `r = 4`, `D = 10`,
-16 lanes, `T = 600`, `egress_cells = 4096`): the audit accepts a window in which no connection is admitted
-(`schedulesCoveredAt_honest`), beside a well-formed rows format of 600-bucket windows (`unaryFormat`, each frame its
-connection and its kind in unary). It accepts a run that carries a connection too, at `r = D = 1`, one lane and `T = 2`
-(`schedulesCoveredAt_honestLane`): connection 1 is admitted at bucket 0, pads its delay and ends in bucket 1. The
-lane's 256-byte cells at the deployed parameters are past what the kernel evaluates in a declaration's budget. Its
-conclusion fails for a schedule the audit never shows (`schedulesCoveredAt_nontrivial`): seventeen connections admitted
-in bucket 0 at the deployed parameters put 68 frames in its 64 slots. The audit's verdicts are evaluated by the kernel
-(`decide +kernel`) through `ok_of_view`, which reads an accepted summary off its fields. -/
-
-namespace Properties.NetworkCertifier.RowsAudit
+/-! ### The network certifier's format, read at a well-formed one -/
 
 def kindTag : NetTiming.CellView Unit → ℕ
   | .pad => 0
@@ -1008,6 +986,44 @@ theorem unaryFormat_wf (n T : ℕ) : (unaryFormat n T).Wf := by
     exact ⟨Fin.ext h1, by rw [h2, kindOfTag_tag]⟩
   · exact (h (by rw [h1]; exact c.isLt)).elim
 
+/-- A schedule fits `cellRows` exactly when it fits `unaryFormat` of the same connections and windows: `Fits` reads
+only a format's connections and its windows' buckets. -/
+theorem cellRows_fits_iff {L K : ℕ} (B N : ℕ) (link : Fin L) (T : ℕ)
+    (jitter : NetTiming.WardenSchedule (Fin N) → (Fin N → NetTiming.Arrivals (NetTiming.FrameCell (B - 9))) → ℕ → ℕ)
+    (status : NetTiming.WardenSchedule (Fin N) → (Fin N → NetTiming.Arrivals (NetTiming.FrameCell (B - 9))) → ℕ →
+      Fin K → NetTiming.Status) (S n : ℕ) (s : NetTiming.WardenSchedule (Fin N)) :
+    (NetTiming.cellRows B N link T jitter status).Fits S n s ↔ (unaryFormat N T).Fits S n s :=
+  Iff.rfl
+
+end Properties.NetworkCertifier.RowsAudit
+
+namespace Properties.NetworkCertifier
+
+/-- **`SchedulesCoveredAt`**: the schedule an accepted run's records show is registered and fits the network
+certifier's rows format, read at `unaryFormat` (`cellRows_fits_iff`). -/
+theorem schedulesCoveredAt : SchedulesCoveredAt := by
+  intro p ingress egress fails sum L K link jitter status h
+  obtain ⟨h1, h2⟩ :=
+    RowsAudit.auditCovered (RowsAudit.unaryFormat _ p.window) (RowsAudit.unaryFormat_wf _ _) rfl h
+  refine ⟨h1, ?_⟩
+  show _ ∧ _
+  exact ⟨Set.mem_singleton _, (RowsAudit.cellRows_fits_iff _ _ link _ jitter status _ _ _).2 h2⟩
+
+end Properties.NetworkCertifier
+
+/-! ### The witnesses
+
+`SchedulesCoveredAt`'s hypotheses hold at the deployed parameters (`warden.WardenParams`: `B = 256`, `r = 4`, `D = 10`,
+16 lanes, `T = 600`, `egress_cells = 4096`): the audit accepts a window in which no connection is admitted
+(`schedulesCoveredAt_honest`). It accepts a run that carries a connection too, at `r = D = 1`, one lane and `T = 2`
+(`schedulesCoveredAt_honestLane`): connection 1 is admitted at bucket 0, pads its delay and ends in bucket 1. The
+lane's 256-byte cells at the deployed parameters are past what the kernel evaluates in a declaration's budget. Its
+conclusion fails for a schedule the audit never shows (`schedulesCoveredAt_nontrivial`): seventeen connections admitted
+in bucket 0 at the deployed parameters put 68 frames in its 64 slots. The audit's verdicts are evaluated by the kernel
+(`decide +kernel`) through `ok_of_view`, which reads an accepted summary off its fields. -/
+
+namespace Properties.NetworkCertifier.RowsAudit
+
 theorem ok_of_view {p : Params} {ingress egress fails : Array Record} {adm cells : Array ℕ} {i e : ℕ}
     (h : ((audit p ingress egress fails).toOption.map fun s =>
       (s.schedule.adm, s.schedule.cells, s.ingressCells, s.egressCells)) = some (adm, cells, i, e)) :
@@ -1025,37 +1041,32 @@ end Properties.NetworkCertifier.RowsAudit
 
 namespace Properties.NetworkCertifier
 
-/-- **`SchedulesCoveredAt` meets the deployed parameters**: the audit accepts a window of empty rows, and a well-formed
-rows format of its 600-bucket windows exists. -/
+/-- **`SchedulesCoveredAt` meets the deployed parameters**: the audit accepts a window of empty rows. -/
 theorem schedulesCoveredAt_honest :
-    ∃ F : NetTiming.RowsFormat (Fin (periodConns ⟨256, 4, 10, 16, 600, 4096⟩ 1)) Unit 1 1,
-      F.Wf ∧ F.T = 600 ∧
-        audit ⟨256, 4, 10, 16, 600, 4096⟩ #[⟨none, Array.replicate 600 (Array.replicate 64 none)⟩]
-            #[⟨none, Array.replicate 600 (Array.replicate 64 none)⟩]
-            #[⟨none, Array.replicate 600 (Array.replicate 16 none)⟩] =
-          .ok ⟨⟨#[], #[]⟩, 0, 0⟩ :=
-  ⟨RowsAudit.unaryFormat _ 600, RowsAudit.unaryFormat_wf _ _, rfl, RowsAudit.ok_of_view (by decide +kernel)⟩
+    audit ⟨256, 4, 10, 16, 600, 4096⟩ #[⟨none, Array.replicate 600 (Array.replicate 64 none)⟩]
+        #[⟨none, Array.replicate 600 (Array.replicate 64 none)⟩]
+        #[⟨none, Array.replicate 600 (Array.replicate 16 none)⟩] =
+      .ok ⟨⟨#[], #[]⟩, 0, 0⟩ :=
+  RowsAudit.ok_of_view (by decide +kernel)
 
 /-- **`SchedulesCoveredAt` meets a run with a connection**: at `r = D = 1`, one lane and `T = 2`, connection 1's
 ingress is its `END` in bucket 0, and its egress pads its delay in bucket 0 and ends in bucket 1. -/
 theorem schedulesCoveredAt_honestLane :
-    ∃ F : NetTiming.RowsFormat (Fin (periodConns ⟨10, 1, 1, 1, 2, 1⟩ 1)) Unit 1 1,
-      F.Wf ∧ F.T = 2 ∧
-        audit ⟨10, 1, 1, 1, 2, 1⟩
-            #[⟨none, #[#[some ((⟨.fin, 1, .empty⟩ : Cell).encode 10)], #[none]]⟩]
-            #[⟨none, #[#[some ((Cell.pad 1).encode 10)], #[some ((⟨.fin, 1, .empty⟩ : Cell).encode 10)]]⟩]
-            #[⟨none, #[#[none], #[none]]⟩] =
-          .ok ⟨⟨#[0], #[1]⟩, 1, 2⟩ :=
-  ⟨RowsAudit.unaryFormat _ 2, RowsAudit.unaryFormat_wf _ _, rfl, RowsAudit.ok_of_view (by decide +kernel)⟩
+    audit ⟨10, 1, 1, 1, 2, 1⟩
+        #[⟨none, #[#[some ((⟨.fin, 1, .empty⟩ : Cell).encode 10)], #[none]]⟩]
+        #[⟨none, #[#[some ((Cell.pad 1).encode 10)], #[some ((⟨.fin, 1, .empty⟩ : Cell).encode 10)]]⟩]
+        #[⟨none, #[#[none], #[none]]⟩] =
+      .ok ⟨⟨#[0], #[1]⟩, 1, 2⟩ :=
+  RowsAudit.ok_of_view (by decide +kernel)
 
 /-- **`SchedulesCoveredAt` fails without the audit**: seventeen connections admitted in bucket 0 at the deployed
-parameters, as a verifier that accepted everything could report, overload its 64 slots in a format of 600-bucket
-windows, whatever its encoding (`Fits` reads only a format's connections and its windows). -/
+parameters, as a verifier that accepted everything could report, overload the 64 slots of the network certifier's
+format of 600-bucket windows. -/
 theorem schedulesCoveredAt_nontrivial :
     ¬ (wardenOf ⟨256, 4, 10, 16, 600, 4096⟩ 1 ⟨Array.replicate 17 0, Array.replicate 17 4⟩ ∈
       {s | (s.r, s.D) ∈ ({(4, 10)} : Set (ℕ × ℕ)) ∧
-        (⟨List.finRange _, fun _ => [], fun _ => none, 0, 600, fun _ _ _ => 0, fun _ _ _ _ => .complete⟩ :
-          NetTiming.RowsFormat (Fin (periodConns ⟨256, 4, 10, 16, 600, 4096⟩ 1)) Unit 1 1).Fits 64 1 s}) := by
+        (NetTiming.cellRows (L := 1) (K := 1) 256 (periodConns ⟨256, 4, 10, 16, 600, 4096⟩ 1) 0 600
+          (fun _ _ _ => 0) (fun _ _ _ _ => .complete)).Fits 64 1 s}) := by
   intro hm
   simp only [Set.mem_ofPred_eq, NetTiming.RowsFormat.Fits] at hm
   exact absurd (hm.2.2 0) (by decide +kernel)
