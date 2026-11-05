@@ -213,6 +213,18 @@
    "owner": "@network-accounting",
    "digest": "35b47a0bae4d98550943cb5e4a66ecb4ecddeb3d6093fd79cd1feac4e18e0060"
   },
+  "NetTiming.SchedulesCovered": {
+   "owner": "@network-accounting",
+   "digest": "767ae474e9250336583b74a2c21af271e6294275cae4b0a63d321bcfde447cea"
+  },
+  "NetTiming.SenderDecodes": {
+   "owner": "@network-accounting",
+   "digest": "621346fd7e57e053597eb741c016a7e58395610b3992ceaea041b53d40c15e1b"
+  },
+  "NetTiming.WindowsPlaced": {
+   "owner": "@network-accounting",
+   "digest": "3c51a220f192b89d144ab2db548f09204a5039ae593305a11714cb5cabd0b157"
+  },
   "Pous.Component.AcceptsAll": {
    "owner": "@memory-accounting",
    "digest": "cb7eae488cf26c205bd5d1f15d61503cc8f20355de28e53ec03069969f7a850f"
@@ -377,21 +389,9 @@
    "owner": "@memory-accounting",
    "digest": "8f521d01c94735a34b39b53e869845d8e29035ef05968ef7b0e56349a19d1937"
   },
-  "NetTiming.SchedulesCovered": {
+  "NetTiming.CertifiersOpen": {
    "owner": "@network-accounting",
-   "digest": "767ae474e9250336583b74a2c21af271e6294275cae4b0a63d321bcfde447cea"
-  },
-  "NetTiming.SenderDecodes": {
-   "owner": "@network-accounting",
-   "digest": "621346fd7e57e053597eb741c016a7e58395610b3992ceaea041b53d40c15e1b"
-  },
-  "NetTiming.TapsOpen": {
-   "owner": "@network-accounting",
-   "digest": "fc5a60237f1fc714c2469442c21862bf65776a0b8e47658e90c9e51a899704ae"
-  },
-  "NetTiming.WindowsPlaced": {
-   "owner": "@network-accounting",
-   "digest": "3c51a220f192b89d144ab2db548f09204a5039ae593305a11714cb5cabd0b157"
+   "digest": "ad412ebfdf03e7a0fdc82fab3fa136ab9ed079e97d80b1bda82c0a25b015e1a4"
   }
  },
  "meaning": [
@@ -781,7 +781,7 @@
   "Properties.NetworkPeriodLeak.periodLeakRegistered": {
    "type_hash": "44cdb5237c228e784efc929c72eef7cc3d6073213057570e63f333529806d1c0",
    "missing": "honest",
-   "why": "its premises at the network certifier's rows are the sampled leg's (KSBy at the wired check at the layout's wires, until Claims.Sampling.KSByDeployed discharges it, and CommitmentScheme.Binds at each deployment), whose honest lemmas at the deployed record (NetTiming.Witness.SampledAuditAccepted_honest at layouts with no wiring, NetTiming.ksWired_of_record at a wired one) take the assembled record's hypotheses, which are no named assumptions; both are conditional on the sampled leg's bridge, which is to discharge those hypotheses at the record. Of the period's named conditions, its honest half is to conclude WindowsPlaced and SchedulesCovered at the deployed record, not take them; it takes SenderDecodes and TrustedHost, and owes no CertifiersOpen, the antecedent of the statement's count. Its rows format's Wf is no premise: the period check refuses a schedule whose frames don't read back (NetworkCheck.Period.rowsWf), so its acceptance gives rowsWf (Properties.NetworkPeriod.rowsWf_of_accept) and with it Wf at the network certifier's frames (Properties.NetworkPeriod.cellRows_wf_of_rowsWf), and the served schedule w63 passes rowsWf over every period of fewer than 2^25 link-windows (Properties.NetworkPeriodLeak.rowsWf_served)"
+   "why": "its premises at the network certifier's rows are the sampled leg's (KSBy at the wired check at the layout's wires, until Claims.Sampling.KSByDeployed discharges it, and CommitmentScheme.Binds at each deployment), whose honest lemmas at the deployed record (NetTiming.Witness.SampledAuditAccepted_honest at layouts with no wiring, NetTiming.ksWired_of_record at a wired one) take the assembled record's hypotheses, which are no named assumptions; both are conditional on the sampled leg's bridge, which is to discharge those hypotheses at the record. Of the period's named conditions, its honest half is to conclude WindowsPlaced and SchedulesCovered at the deployed record, not take them; it takes SenderDecodes and TrustedHost, and owes no CertifiersOpen, the antecedent of the statement's count. The network certifier's key, session and LMS parameters are the auditor's record of it (NetTiming.NetworkCertifierRecord), the key the auditor's registration holds for the device. Its rows format's Wf is no premise: the period check refuses a schedule whose frames don't read back (NetworkCheck.Period.rowsWf), so its acceptance gives rowsWf (Properties.NetworkPeriod.rowsWf_of_accept) and with it Wf at the network certifier's frames (Properties.NetworkPeriod.cellRows_wf_of_rowsWf), and the served schedule w63 passes rowsWf over every period of fewer than 2^25 link-windows (Properties.NetworkPeriodLeak.rowsWf_served)"
   },
   "Properties.NetworkRecords.acceptMeans": "4ee7e6626901cee51276b7be734ca7c3b2daeea3810674d3e4b0983856b300cf",
   "Properties.NetworkRecords.answerAcceptMeans": "c5c91cdf640198af01ce5e2e90ba3ba4e42c21fc97c0610eb0ad09a01671615c",
@@ -8051,6 +8051,7 @@
     "Core.Site.sheets": "bb0652019e0ed170c021de7e2007e7ce420422460a60b5c99119ffcebb7817f1"
    },
    "guarantees": [
+    "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.Site.checks",
     "Properties.Site.checks_honest",
     "Properties.Site.checks_nontrivial",
@@ -11115,11 +11116,11 @@
    "guarantees": ["Properties.NetworkPeriodLeak.periodLeakRegistered"]
   },
   "Definitions.NetworkCertifier.PeriodConditions": {
-   "digest": "334fee96c85c00f3b8f2c9346673e210a2fc434858dcce27c06d578b96ad7bd1",
+   "digest": "73b6998d16732c729aa06c3385b491be864ce22e95975de1ce37e5c6c243e11f",
    "definitions": {
+    "NetTiming.CertifiersOpen": "ad412ebfdf03e7a0fdc82fab3fa136ab9ed079e97d80b1bda82c0a25b015e1a4",
     "NetTiming.SchedulesCovered": "767ae474e9250336583b74a2c21af271e6294275cae4b0a63d321bcfde447cea",
     "NetTiming.SenderDecodes": "621346fd7e57e053597eb741c016a7e58395610b3992ceaea041b53d40c15e1b",
-    "NetTiming.TapsOpen": "fc5a60237f1fc714c2469442c21862bf65776a0b8e47658e90c9e51a899704ae",
     "NetTiming.WindowsPlaced": "3c51a220f192b89d144ab2db548f09204a5039ae593305a11714cb5cabd0b157"
    },
    "guarantees": ["Properties.NetworkPeriodLeak.periodLeakRegistered"]
@@ -23792,9 +23793,13 @@
    ]
   },
   "Properties.NetworkPeriodLeak": {
-   "digest": "7cd1f7bd530b2651109fdfe6309b8afd3c4f6ce3fb93539b2ffd5d05af3fb3b1",
+   "digest": "4e58fe6a45d74824c6002f449a26a6429fb66516381653169cd04991b5e11e6c",
    "definitions": {
-    "Properties.NetworkPeriodLeak.PeriodLeakRegistered": "d6fe3cfb9c61a9ccae7367a039803d0659328686ad4f25428053cb92f718ae65",
+    "NetTiming.NetworkCertifierRecord": "8f893fb143733d57ee6e3f0205fa3ff56b86165971c1644700718af0b6191087",
+    "NetTiming.NetworkCertifierRecord.key": "695c1529cdd6c288b6636c18b19309b137ccf86e359c9bf8a26aad887de79b47",
+    "NetTiming.NetworkCertifierRecord.lms": "cb56d02ace08650a81c26e691594365cad684f8d872740a92ed096b90168b5ff",
+    "NetTiming.NetworkCertifierRecord.session": "16e0091df6855b6455b2434284e44a1439202a7a39e89ac7c8ee1317d1fc135f",
+    "Properties.NetworkPeriodLeak.PeriodLeakRegistered": "058a7d9f0d75ec5602df292d819d4ab8af483d27d8c16605ad19fe6797316b39",
     "Properties.NetworkPeriodLeak.PeriodLeakRegisteredNontrivial": "bc602f1084474deef790898eb5a809155c3d79dbb5a52fd9bb8332864090322b"
    },
    "guarantees": [
