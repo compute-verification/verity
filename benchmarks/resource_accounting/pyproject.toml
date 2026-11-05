@@ -20,3 +20,10 @@ inputs = ["benchmarks/pouw/harness/price_twins.py", "benchmarks/pouw/harness/pri
           "verity/core/protocols/sampled_proofs/__init__.py", "verity/core/protocols/sampled_proofs/challenger.py",
           "verity/ml/__init__.py", "verity/ml/circuits",
           "verity/ml/commitments", "verity/ml/crypto", "verity/ml/kernels", "verity/ml/randomness"]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_resource_accounting.py"]
+paths = ["benchmarks/bandwidth"]

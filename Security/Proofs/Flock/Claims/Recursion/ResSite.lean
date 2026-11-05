@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.ResTieVV
-import Proofs.Flock.Claims.Recursion.PastIn
+module
+
+public import Proofs.Flock.Claims.Recursion.ResTieVV
+public import Proofs.Flock.Claims.Recursion.PastIn
 
 /-!
 # A staged `rec-residuals` part's site, from the verifier's checks
@@ -19,6 +21,8 @@ verifier ran on the part's table:
 
 `resTie_dense` is `resTie_resVRead` with all of these discharged; `hidx` stays a hypothesis (`labels_run`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 

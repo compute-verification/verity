@@ -1,5 +1,7 @@
-import Proofs.Accounting.TS.Session.Tile.Guarantees
-import Proofs.Accounting.TS.HeldSound
+module
+
+public import Proofs.Accounting.TS.Session.Tile.Guarantees
+public import Proofs.Accounting.TS.HeldSound
 
 /-!
 # A tile unit's proof layer with its Definition's checks is sound through its C-Flock sessions (the proof)
@@ -13,6 +15,8 @@ same rows, so `AcceptedLive` is its acceptance's first conjunct. Its unsound eve
 `Accounting.Assumptions.TS.TileChecks`, which `TileComputes` gives at the tile's `K`
 (`Accounting.TS.Tile.tileChecks_of_computes`), gives each drawn unit's decoded cells.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Tile
 

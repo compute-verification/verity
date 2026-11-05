@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.CallsAgreeE
-import Proofs.Flock.Claims.Recursion.LastColsDeployed
-import Proofs.Flock.Claims.Recursion.LastBindsClosed
+module
+
+public import Proofs.Flock.Claims.Recursion.CallsAgreeE
+public import Proofs.Flock.Claims.Recursion.LastColsDeployed
+public import Proofs.Flock.Claims.Recursion.LastBindsClosed
 
 /-!
 # (P4) at the element-level inner verifier
@@ -13,6 +15,8 @@ all at any `keep`, and none of them reads a digest of an encoding. With the call
 (`RecDeploy.plainLastBindsE_sha512`), and the deployed bound record at `VE`'s steps meets (P4) modulo what `E*` reads,
 with no premise (`RecDeploy.lastBindsEC_deployedE_sha512`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

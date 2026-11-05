@@ -1,5 +1,7 @@
-import Properties.Pous
-import Definitions.Pous.P2.Cost
+module
+
+public import Properties.Pous
+public import Definitions.Pous.P2.Cost
 
 /-!
 # Proofs of the PoUS setup check's properties (`Properties.Pous`), and what is not a claim
@@ -18,6 +20,8 @@ Stated here, open, and claims of no one:
   canonical `c < p`, read mod `2^b`. With `Decodes` (which reads `decodeValue`), it would tie what the check accepts to
   `p2ring`'s `dec`, which the model's audit statements read. Nothing cites it as proved.
 -/
+
+@[expose] public section
 
 namespace PousCheck.Properties
 

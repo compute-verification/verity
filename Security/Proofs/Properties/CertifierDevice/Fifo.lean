@@ -1,4 +1,6 @@
-import Proofs.Properties.CertifierDevice.Trace
+module
+
+public import Proofs.Properties.CertifierDevice.Trace
 
 /-!
 # The certifier device, proved: complete records are the Program's
@@ -11,6 +13,8 @@ never faults (by `FailClosed`), so each of its rows is the FIFO's release, which
 each frame is handed at the bucket `NetworkCertifier.handingBuckets` gives it (`completeRows_honest`). `Complete` drops
 that condition: a frame handed late faults its window.
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierDevice.Proofs
 

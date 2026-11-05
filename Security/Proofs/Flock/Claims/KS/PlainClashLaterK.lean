@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.PlainClashLater
+module
+
+public import Proofs.Flock.Claims.KS.PlainClashLater
 
 /-!
 # The live self-clash past level 0, at `wrPDK keep`
@@ -15,6 +17,8 @@ outcome (`recordsLiveAtDK_wrPDK`), and the clashes they give by `laterEntriesCla
 The run-level half (`rawLevelCols_plain`, `plainClashQL`, `plainSimLaterClashAt`) reads `P`'s run at the verifier, and
 is not restated here.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.PlainDraw
 

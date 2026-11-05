@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.TmplUnitAt
+module
+
+public import Proofs.Flock.Soundness.TmplUnitAt
 
 /-!
 # A hidden-output file's statement circuit
@@ -9,6 +11,8 @@ other file's circuit as `HmOut.parse` does. A consumer of `HmOut.parseStmt … =
 the flat file's `HmOut.parse`, or the templated file's committed circuit `ct` with `c = HmOut.unrolled ct`, which is `ct`
 with its unit net the logical one (`unrolled_of_parseTmpl`, `unrolled_unit`, `unrolled_built`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

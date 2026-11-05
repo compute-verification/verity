@@ -1,5 +1,7 @@
-import Proofs.Flock.EndToEndHidden.Statement
-import Proofs.Flock.EndToEnd.Period.Run
+module
+
+public import Proofs.Flock.EndToEndHidden.Statement
+public import Proofs.Flock.EndToEnd.Period.Run
 
 /-!
 # The integrity audit over a period, per sampling block and pooled (trusted)
@@ -29,6 +31,8 @@ proofs are `Flock.SecurityProofs.IntegrityPeriod`, `IntegrityPeriodLog` and `Int
 
 C-Flock's definitions are still in its proofs package, so, like `EndToEndHidden`, this module imports them.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

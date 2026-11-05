@@ -1,8 +1,10 @@
-import Definitions.Pouw.Receipt.Duo
-import Mathlib.Basic.Finite.Prod
-import Mathlib.Data.Fintype.Card
-import Mathlib.Data.Nat.Prime.Basic
-import Mathlib.Tactic.LinearCombination
+module
+
+public import Definitions.Pouw.Receipt.Duo
+public import Mathlib.Basic.Finite.Prod
+public import Mathlib.Data.Fintype.Card
+public import Mathlib.Data.Nat.Prime.Basic
+public import Mathlib.Tactic.LinearCombination
 
 /-!
 # duo's words are bound: one word, and runs of two, three and four words at every state
@@ -33,6 +35,8 @@ one constant for every `X`. Unless `B ≡ 0 (mod 2^r₁)`, four values of `X` ar
 values of that constant (`carry_bv`, for `r₁ ≤ n − 3`). So `B ≡ 0` for every `u₂`: at `u₂ = 0`, `d₂ ⊕ k₂ ≡ 0`, and at
 `u₂ = 1`, `a₂ + 1 ≡ 0 (mod 2^r₁)`, which the hypothesis on `a₂` rules out.
 -/
+
+@[expose] public section
 
 namespace Pouw.ReceiptProofs
 

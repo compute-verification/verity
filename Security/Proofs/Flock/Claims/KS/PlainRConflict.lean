@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainR
-import Proofs.Flock.Claims.Recursion.ConflictTiedE
+module
+
+public import Proofs.Flock.Claims.KS.PlainR
+public import Proofs.Flock.Claims.Recursion.ConflictTiedE
 
 /-!
 # Conflicts tied to collisions at the deployed reader `VR rd`
@@ -19,6 +21,8 @@ at `nextR`'s decision, which runs the verdict at the record's parsed value (`ver
   their joined logs (`plainR_conflictTied`), which discharges `plainR_KSFlockLin`'s first premise
   (`plainR_KSFlockLin_of_table`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

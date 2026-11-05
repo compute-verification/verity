@@ -3,7 +3,12 @@
 `instance` and derivation `mod:G` (`G` as written by `toString`, `0 < G ≤ 2^16`), every port so; it then holds instance
 `i`'s word of port `k` to `i mod G_k`.
 -/
-import Flock.HmRow
+module
+
+public import Flock.HmRow
+meta import Flock.HmRow
+
+@[expose] public section
 
 namespace Flock.Test.DerivedPos
 

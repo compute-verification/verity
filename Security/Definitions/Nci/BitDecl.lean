@@ -1,5 +1,7 @@
-import Definitions.Nci.BitView
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+module
+
+public import Definitions.Nci.BitView
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
 /-!
 # A declaration bit by bit, as a declaration
@@ -22,6 +24,8 @@ the unit of the NCI policy's novel reads and of the covering bound's costs (an a
 Its wiring is the bit view's: the bit view of its gates (`Proofs.Nci.Cover.Gates`' `ofGates (bitDecl d)`) is
 `Circuit.ofDecl d` by definition.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover
 

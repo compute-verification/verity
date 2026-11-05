@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.SlotBatch
-import Proofs.Flock.Soundness.Discharge.ZkLink.Push
+module
+
+public import Proofs.Flock.Claims.KS.SlotBatch
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Push
 
 /-!
 # A schedule through the pushing chooser
@@ -15,6 +17,8 @@ where it holds of the compiled one:
   `Lock.PreSched` through `Lock.rightSame`, `Lock.leftSame` and `batchPush`;
 * `lead_push`: `Lock.Lead` through two interleaved locksteps and what follows them.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

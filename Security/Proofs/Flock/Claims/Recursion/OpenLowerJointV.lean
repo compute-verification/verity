@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
+module
+
+public import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
 
 /-!
 # The composition at the parts' own messages, landing on `DecompBV` (`decompBV_lastSplitP_sharesJV`)
@@ -10,6 +12,8 @@ evaluations too. `decompBV_lastSplitP_sharesJV` asks `hlowP` under `JointV` at `
 `DecompBV` at `PartAcceptsV` (`decompBV_of_jointV`), the form `RecDeploy.ksLin2_deployedR_layRV` takes. `JointV` gives
 `Joint` at `PartAccepts` (`joint_of_jointP`, `jointP_of_jointV`), so a share proved under `Joint` is one under `JointV`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.OpenLower
 
