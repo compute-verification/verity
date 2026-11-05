@@ -2613,9 +2613,9 @@ def test_the_preflight_merges_with_the_drivers_of_next_not_those_of_the_older_ch
 
 
 def test_the_sync_merges_onto_each_tip_with_that_tips_drivers_not_those_of_its_checkout(world):
-    """Drive's clone sits at `checked`'s tip, so its `merge.py` predates one a member of `next` brings, and the sync ran that old
-    driver for every merge above that member: on 4 Nov a PR's lock merged onto `next` with `main`'s `merge.py`, which predated
-    readerless reads, and the Security lock's 1,309 reads groups became 4.  Each merge now runs the tip's own drivers."""
+    """Drive's clone sits at `checked`'s tip, so its `merge.py` can predate one a member of `next` brings, and the sync ran that
+    old driver for every merge above that member: a PR's lock merged onto `next` by a `merge.py` from before readerless reads
+    collapsed the Security lock's reads groups.  Each merge now runs the tip's own drivers."""
     caps = "tests/test_lean_packages.py"
 
     def counts(sec: int, props: int) -> str:
