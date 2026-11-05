@@ -17,7 +17,8 @@ cut at its residual add (`_Program.norms`): part AT its words of the node's seco
 (Pearl+'s tables, `_Program._cut`) takes each cut linear's value, its y, as registered: its `LinearOut_v1` unit holds it as
 its output rows and, each word widened to FP32, as its input row, which the window commits by reference from the call's y
 that `Rows.value` makes of them, and a served y is taken under any statics of its Definition, which the circuit never
-computes (`Slot`'s ``cut``).
+computes (`Slot`'s ``cut``), at every prompt position, the last layer's too, which prefill prunes there but the engine
+computes (`Served`).
 Every other unit holds its Definition's function of the window's values:
 - a slot's `ScanSlots_v2` every lane's first token and slot, occupancy word and head of the scan state row at its anchor
   (`io_shell.scan_reference`; its lane's row is the slot's, `scan_slots`), every later position's `TokenFeed_v1` below the
@@ -158,7 +159,8 @@ class Slot:
     state row at its anchor (occupancy, prompt length, ids; `scan_slots`), ``weights`` the weights record's
     fields and ``served`` its request's served values,
     None for an empty slot; ``cut`` the nodes a circuit cut at its linears takes as registered (`Lowered.cut`), whose
-    served value is taken under any statics of its Definition. Each node's value (its return fields) and source, each
+    served value is taken under any statics of its Definition and at every prompt position, a pruned one's too
+    (`Served`'s ``cut``). Each node's value (its return fields) and source, each
     position's token and, below the class's prompt cap, the slot its `TokenFeed_v1` reads and the one it carries on."""
 
     def __init__(self, fn: Any, cls: WindowClass, row: Sequence[int], weights: Weights, served: Served | None = None,
@@ -183,7 +185,8 @@ class Slot:
         self.slots: list[list[int] | None] = []
         self.carried: list[list[int] | None] = []
         for j, node in enumerate(fn.body.nodes):
-            self._node(j, node, None if served is None else served(self.position[j], j - first[self.position[j]], node))
+            self._node(j, node, None if served is None
+                       else served(self.position[j], j - first[self.position[j]], node, j in self.cut))
 
     def _node(self, j: int, node: Any, served: tuple[str, list[np.ndarray]] | None) -> None:
         fam, fields, what = node.fn.name, _fields(node.fn), f"node {j} ({node.fn.id}) at position {self.position[j]}"
@@ -316,6 +319,28 @@ def _sites(ops: Sequence[tuple[str, tuple[str, ...]]]) -> dict[tuple[str, tuple[
     return out
 
 
+#: a narrowed linear's member (`RM.NARROWED_MEMBER`): its widest rows' member and its width
+_NARROWED = re.compile(RM.NARROWED_MEMBER.format(member="(.+)", width=r"(\d+)"))
+
+
+def _fold_narrowed(ops: dict[tuple[str, tuple[str, ...]], list[Mapping[str, Any]]],
+                   last: dict[tuple[str, tuple[str, ...]], int]) -> list[tuple[str, tuple[str, ...]]]:
+    """Fold each prefill op of a narrowed linear's rows (members `RM.NARROWED_MEMBER`: the last layer's fused qkv on the
+    prompt rows before the last, its keys' and values' columns) into the op of its widest rows at its op path, whose one
+    row is the last position's: one op, a row a prompt position, each its widest row's spec and members at that position.
+    -> the ops folded into. A narrowed op with no such op beside it stays, for the prefill's check to name."""
+    out = []
+    for o in [o for o in ops if o[1] and all(_NARROWED.fullmatch(m) for m in o[1])]:
+        w = (o[0], tuple(_NARROWED.fullmatch(m)[1] for m in o[1]))
+        if len(ops.get(w, ())) != 1:
+            continue
+        rows, end = sorted(ops.pop(o), key=lambda d: int(d["row"])), ops[w][0]
+        del last[o]
+        ops[w] = [{**end, "row": int(d["row"])} for d in rows] + [{**end, "row": len(rows)}]
+        out.append(w)
+    return out
+
+
 @dataclass
 class Served:
     """One request's served values by class node: its Program's rows as `ProgramIndex.describe` gives them, each with its
@@ -327,7 +352,11 @@ class Served:
     position's, where prefill prunes it; the ops in the order of their last prompt position's rows, the one position that
     computes them all, which is the class Program's node order within a position however the prefill interleaves the
     others. A pruned op's one row is its member's last of the prompt's where the record binds the member at a row a prompt
-    position (the engine computes the last layer at them all; only the logits gather a row a request), else its only one.
+    position (the engine computes the last layer at them all; only the logits gather a row a request), else its only one;
+    one the circuit never computes, a cut linear (``cut``), is read a row a prompt position from those rows.
+    A narrowed linear's rows (the last layer's fused qkv, keys' and values' columns only on the prompt rows before the
+    last) are its node's there, beside its widest rows' one row, the last position's (`_fold_narrowed`): the node is read
+    a row a prompt position, each its widest member's whole row, which the record must bind at every prompt position.
     Step s ≥ 1 is position LP − 1 + s, a row each of those ops, matched to them by site (`_sites`), since a call
     boundary's op path names an fx node numbered over the request's steps. A row of another Definition than its class
     node's is refused by name; one of its Definition at other statics is `Slot`'s to hold to the class node's value."""
@@ -349,12 +378,18 @@ class Served:
         for i, d in enumerate(steps.get(0, ())):
             ops.setdefault(_op(d), []).append(d)
             last[_op(d)] = i
+        folded = _fold_narrowed(ops, last)
         order = sorted(ops, key=last.__getitem__)
         self.prefill = [sorted(ops[o], key=lambda d: int(d["row"])) for o in order]
         self.LP = max((len(v) for v in self.prefill), default=0)
         for (op, _), v in zip(order, self.prefill):
             if [int(d["row"]) for d in v] not in (list(range(self.LP)), [0]):
                 raise ValueError(f"{op}: prefill rows {[d['row'] for d in v]}, not one a prompt position nor the last one's")
+        for o in folded:
+            n = sorted({self.bound(0, o[0], str(m)) / int(width) for m, width, _dtype in ops[o][0]["members"]})
+            if n != [self.LP]:
+                raise ValueError(f"{o[0]}: a narrowed linear's node, read whole at every prompt position, its widest members "
+                                 f"bound at {n} rows, not a row a prompt position ({self.LP})")
         site = _sites(order)
         sites = set(site.values())
         self.decode = []
@@ -389,16 +424,18 @@ class Served:
 
         return cls(rows, lambda s, op, m, lo, hi: store.words(rid, arrive + s, at.get((s, op), op), m, lo, hi), bound)
 
-    def __call__(self, p: int, k: int, node: Any) -> tuple[str, list[np.ndarray]] | None:
+    def __call__(self, p: int, k: int, node: Any, cut: bool = False) -> tuple[str, list[np.ndarray]] | None:
         """Position ``p``'s node ``k`` (``node``, its index within its position) as served, its row's spec and its values;
-        None where the engine didn't compute it."""
+        None where the engine didn't compute it. A node ``cut``, which the circuit never computes (a cut linear), is read
+        at every prompt position though prefill prunes it, its member's row there, and refused by name where the record
+        binds it at the last one alone."""
         if k >= len(self.prefill):
             raise ValueError(f"node {k} of a position, past the served request's {len(self.prefill)} ops a position")
         pruned = False
         if p < self.LP:
             v = self.prefill[k]
             pruned = len(v) != self.LP
-            d = v[p] if not pruned else v[0] if p == self.LP - 1 else None
+            d = v[p] if not pruned else v[0] if p == self.LP - 1 or cut else None
         else:
             d = self.decode[p - self.LP][k] if p - self.LP < len(self.decode) else None
         if d is None:
@@ -417,7 +454,10 @@ class Served:
             if n not in ({self.LP}, {1}):
                 raise ValueError(f"{op}: its one prefill row's members bound at {sorted(n)} rows, not a row a prompt position "
                                  f"({self.LP}) nor one")
-            row = self.LP - 1 if n == {self.LP} else 0
+            if n == {1} and p < self.LP - 1:
+                raise ValueError(f"{op}: a node the circuit never computes, pruned at the prompt rows before the last, its "
+                                 f"members bound at its last one alone, not a row a prompt position ({self.LP})")
+            row = p if n == {self.LP} else 0
         out = []
         for m, width, _dtype in members:
             a, why = self.read(step, op, str(m), row * int(width), (row + 1) * int(width))

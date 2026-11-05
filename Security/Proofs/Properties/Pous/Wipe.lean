@@ -390,7 +390,7 @@ theorem honestRead_honestFill {ι : Type} {d : Accounting.Device ι} {n : ℕ} (
   · omega
 
 theorem wipeSurvivorBoundHonest : WipeSurvivorBoundHonest := by
-  refine ⟨fun q hk0 hk => certify_zero hk0 hk, ?_⟩
+  refine ⟨fun q hk0 hk => certify_zero (Nat.one_le_iff_ne_zero.mpr hk0.out) hk, ?_⟩
   intro ι d C B s b n k h carry
   refine ⟨rfl, ?_, fun σ L c => ⟨fun i => ?_, le_rfl⟩⟩
   · show (Finset.univ : Finset (Fin 0 → Bool)).card ≤ 2 ^ 0
