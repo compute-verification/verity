@@ -285,8 +285,14 @@ theorem hexOf_toList (b : ByteArray) :
   rw [foldl_eq, foldl_push]
   simp
 
+/-- Decided as a `Bool`: with Batteries in scope, `decide` on `∀ c ∈ l, _` picks
+`Char.instDecidableForallOfDecidablePred_batteries`, which runs through every `Char`. -/
 theorem hexByte_hexC : ∀ k, k < 256 → ∀ c ∈ (hexOf ⟨#[k.toUInt8]⟩).toList, HexC c := by
-  unfold HexC; decide +kernel
+  have hb : (List.range 256).all (fun k => (hexOf ⟨#[k.toUInt8]⟩).toList.all fun c =>
+      c != '"' && c != '\\' && 0x20 ≤ c.val && c != '\n') = true := by decide +kernel
+  intro k hk c hc
+  have h := Bool.and_eq_true _ _ ▸ List.all_eq_true.1 (List.all_eq_true.1 hb k (List.mem_range.2 hk)) c hc
+  exact ⟨h.1, bne_iff_ne.1 h.2⟩
 
 theorem hexOf_hexC (b : ByteArray) : ∀ c ∈ (hexOf b).toList, HexC c := by
   rw [hexOf_toList]
