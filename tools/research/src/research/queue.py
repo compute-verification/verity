@@ -374,7 +374,7 @@ NO_ISSUE_RE = re.compile(r"^[ \t>*_]*Issue:[ \t]*none:[ \t]*(\S.*?)[ \t]*$", re.
 #: each live goal KEY's labels name (`with_goals`), and a ready mark needs one naming a live goal, or `NO_ISSUE_LINE` (`goal_gate`)
 GOAL_LINE = "Goal {id}"
 GOAL_RE = re.compile(r"^[ \t>*_]*Goal:?[ \t]+`?([A-Za-z0-9](?:[\w./-]*[A-Za-z0-9])?)`?[ \t.]*$", re.M)
-#: the Goals page's goals (id and status) as this machine last read them, which the goal gate reads when the page can't be
+#: the Goals page's goals (id and status) as this machine last read them, which the goal gate reads when the page can't be read
 GOALS_CACHE = Path("~/.research/cache/goals.json")
 #: a key after any of Linear's magic words (closing, non-closing or relation), whatever its team
 ISSUE_LINK_RE = re.compile(r"(?i)\b(?:refs?|references|part of|contributes to|towards?|relates to|related to|close[sd]?|closing|"
