@@ -23,9 +23,9 @@ or the repository's own (`REPO_AUDIT`, read after the store's files) holds that 
 otherwise.
 
 A twin lifted to a guarantee is pinned as `Pouw.SecurityProofs.PearlC.G : Pouw.Guarantees.PearlC.G`, whose signature
-states no γ. Its statement is the body of the definition `G`, read from the Lean source of the audit's definitions tree
-(`trees`), and checked as a signature is. A lifted twin whose `G` that tree doesn't define, or whose body states no
-literal γ, fails the table (`TwinError`).
+states no γ. Its statement is the body of the definition `G`, read from the Lean source of `Pouw/Guarantees/` in the
+audit's definitions tree (`trees`), and checked as a signature is. A lifted twin whose `G` that source doesn't define,
+or whose body states no literal γ, fails the table (`TwinError`).
 
   python price_twins.py STORE_ROOT [--out price_twins.json]   regenerate the table from the POUS Project store's pins
   python price_twins.py --repository-only                     re-read only the repository's pins, keeping the store's rows
@@ -102,14 +102,15 @@ def _q(num: str, den: str | None) -> Fraction:
 
 def lifted_definitions(audit: dict, lean: Path) -> dict[str, str]:
     """The body of each `Pouw.Guarantees` definition a guarantee of the audit is lifted to (`X : G`, its signature), from
-    the Lean source under `lean` of the audit's definitions tree (`trees`' `definitions` roots), with whitespace
+    the Lean source under `lean` of `Pouw/Guarantees/` in the audit's definitions tree (`trees`' `definitions` roots;
+    `tools/verity/lean/check.py --lift` writes a lifted statement into a module under `Guarantees`), with whitespace
     collapsed: `def G : Prop :=` and the indented lines after it, in `namespace` G's prefix, or `def _root_.G : Prop :=`
-    in any namespace (how `tools/verity/lean/check.py --lift` writes it). The audit's `reads` aren't read: a merged lock's
-    are a candidate until the Lean check regenerates them (`tools/verity/lean/merge.py`)."""
+    in any namespace (how `--lift` writes it). The audit's `reads` aren't read: a merged lock's are a candidate until the
+    Lean check regenerates them (`tools/verity/lean/merge.py`)."""
     names = {m[2] for name, pin in guarantees(audit).items()
              if (m := _LIFTED.fullmatch(" ".join(" ".join(pin["signature"]).split()))) and m[1] == name}
-    texts = [p.read_text() for root in audit["trees"]["definitions"] if (lean / root).is_dir()
-             for p in sorted((lean / root).rglob("*.lean"))] if names else []
+    dirs = [lean / root / "Pouw" / "Guarantees" for root in audit["trees"]["definitions"]]
+    texts = [p.read_text() for d in dirs if d.is_dir() for p in sorted(d.rglob("*.lean"))] if names else []
     out = {}
     for d in sorted(names):
         ns, short = d.rsplit(".", 1)
