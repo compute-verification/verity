@@ -17,9 +17,8 @@ same one: two records' digests reject onsite whatever the subprotocols answer. P
 also be on one store (`store`): two stores reject onsite unless it rejects already.
 
 A stated exception: the policy's v0 publishes the declared division and each inference block's profile (its gates and
-fresh-input bits) in the clear. Onsite composes it as an exception to everything-zero-knowledge, ruled for one run
-("Let's run it in the clear tonight as a stated exception.") and extended to the demos' runs until v1's private form
-(the division committed under hiding leaves, compliance proved, a padded profile) replaces it.
+fresh-input bits) in the clear. Onsite composes it as an exception to everything-zero-knowledge, for the demos' runs,
+until v1's private form (the division committed under hiding leaves, compliance proved, a padded profile) replaces it.
 -/
 import CoreComposition.Blobs
 import CoreComposition.Cases

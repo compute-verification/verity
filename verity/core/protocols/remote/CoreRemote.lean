@@ -13,9 +13,8 @@ commitment and sampled proofs' are the run's record, and both must commit to the
 must name that record as its Commit record (`windows`). Two records reject remote whatever the subprotocols answer.
 
 A stated exception: the policy's v0 publishes the declared division and each inference block's profile (its gates and
-fresh-input bits) in the clear. Remote composes it as an exception to everything-zero-knowledge, ruled for one run
-("Let's run it in the clear tonight as a stated exception.") and extended to the demos' runs until v1's private form
-(the division committed under hiding leaves, compliance proved, a padded profile) replaces it.
+fresh-input bits) in the clear. Remote composes it as an exception to everything-zero-knowledge, for the demos' runs,
+until v1's private form (the division committed under hiding leaves, compliance proved, a padded profile) replaces it.
 -/
 import CoreComposition.Blobs
 import CoreComposition.Cases

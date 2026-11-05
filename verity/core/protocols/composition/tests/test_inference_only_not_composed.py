@@ -29,8 +29,7 @@ COMPOSITES = {"Core.Onsite": PROTOCOLS / "onsite/CoreOnsite.lean", "Core.Remote"
 IN_THE_CLEAR = {V0: "the division, and each inference block's gates and fresh-input bits"}
 #: The protocols of `IN_THE_CLEAR` a composite may compose, each with its reason. KNOWN only shrinks: an entry no
 #: composite composes any more fails `test_known_only_shrinks`.
-KNOWN = {"verity/inference-only/v0": "stated exception (Daniel's ruling), extended to the demos' runs until v1's "
-                                     "private form replaces it"}
+KNOWN = {"verity/inference-only/v0": "stated exception for the demos' runs until v1's private form replaces it"}
 
 
 def v0_names() -> set[str]:
