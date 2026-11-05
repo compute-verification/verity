@@ -1,11 +1,15 @@
-import Definitions.Pouw.Assumptions.Dimension.H100PeakTc
-import Proofs.Pouw.Dimension.H100WProofs
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100PeakTc
+public import Proofs.Pouw.Dimension.H100WProofs
 
 /-!
 # The citation with no measurement at `tc`: proofs
 
 `floorTcPeakTc` is by `decide`, and `distinctWritesPeakTc` instantiates `distinctWritesLegacy` at `a = 32`, `c = 8`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

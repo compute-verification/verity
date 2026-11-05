@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.FinOpen
-import Proofs.Flock.Claims.Recursion.RecRecord
+module
+
+public import Proofs.Flock.Claims.Recursion.FinOpen
+public import Proofs.Flock.Claims.Recursion.RecRecord
 
 /-!
 # `KSLin2` and `BitsLin2` at the model of the coin server's record
@@ -22,6 +24,8 @@ The reader is not vacuous: `recRead_honest` reads an honest three-round run back
 `#guard`s run `readRecord` on the plain session's honest record bytes. Neither witnesses the open premises, which no
 concrete record can until they are proved.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

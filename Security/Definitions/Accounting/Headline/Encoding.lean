@@ -1,5 +1,7 @@
-import Definitions.Accounting.TS.Routes
-import Definitions.Accounting.TS.Sheet
+module
+
+public import Definitions.Accounting.TS.Routes
+public import Definitions.Accounting.TS.Sheet
 
 /-!
 # Exact data for a headline instance (trusted)
@@ -18,6 +20,8 @@ model on it and its floor program ♭, each given as exact data the machine mode
   `b_T = 0`, no filler and both slacks 0 (FOLD-OPT and FILL-OPT at `μ = 0`).
 * `labelled`: a labelled program from its four parts.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Headline
 

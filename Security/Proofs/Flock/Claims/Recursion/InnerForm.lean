@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.DeployScope
-import Proofs.Flock.Claims.Recursion.VStarCross
-import Proofs.Flock.Soundness.Discharge.Hidden.Spec
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployScope
+public import Proofs.Flock.Claims.Recursion.VStarCross
+public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 
 /-!
 # Flock's plain verifier sets the inner statement up as its files do
@@ -26,6 +28,8 @@ statement up as one table at the `m`, `k_log` and region count, and with the poi
   (`regions_size`).
 -/
 
+@[expose] public section
+
 namespace RecDeploy
 
 open Flock FlockSoundness.Refine
@@ -35,11 +39,11 @@ open Claims (Msg)
 
 /-- A file read as JSON, where its text parses. -/
 theorem jsonOf_of {b : ByteArray} {t : String} {d : Lean.Json} {g : String → String}
-    (ht : String.fromUTF8? b = some t) (hd : (Lean.Json.parse t).mapError g = .ok d) (what : String) :
+    (ht : String.fromUTF8? b = some t) (hd : (Flock.JsonParse.parse t).mapError g = .ok d) (what : String) :
     FlockDeploy.jsonOf what b = .ok d := by
   unfold FlockDeploy.jsonOf
   simp only [ht]
-  cases hp : Lean.Json.parse t with
+  cases hp : Flock.JsonParse.parse t with
   | error e => rw [hp] at hd; cases hd
   | ok j => rw [hp] at hd; cases hd; rfl
 
@@ -93,15 +97,19 @@ theorem checkShape_files {i : RecVStar.Inner} {f : RecCoins.Files} {u : Unit}
   obtain ⟨spec, st, hf, e1, e2, e3, e4, -, hform⟩ := checkShape_spec h
   exact ⟨spec, st, hf, e1, e2, e3, e4, hform⟩
 
-/-- **The inner statement's shared-row tables are within the cap**: where `RecSetup.checkShape` passes on the inner
-statement's files, each shared-row table of the statement they set up holds at most `RecBudget.MAX_INNER_ROWS` rows. -/
+/-- **The inner statement's public file is within the cap**: where `RecSetup.checkShape` passes on the inner
+statement's files, the statement they set up has at most `RecBudget.MAX_INNER_ROWS` instances, and each of its
+shared-row tables at most that many rows. -/
 theorem checkShape_rows {i : RecVStar.Inner} {f : RecCoins.Files} {u : Unit}
     (h : RecSetup.checkShape (some i) (some (.files f)) = .ok u) :
-    ∃ spec st, f.stmt "the inner session" = .ok (spec, st) ∧
+    ∃ spec st, f.stmt "the inner session" = .ok (spec, st) ∧ st.pub.n ≤ RecBudget.MAX_INNER_ROWS ∧
       ∀ t, st.pub.tables = some t → ∀ r ∈ t.counts, r ≤ RecBudget.MAX_INNER_ROWS := by
   obtain ⟨spec, st, hf, -, -, -, -, hr, -⟩ := checkShape_spec h
-  refine ⟨spec, st, hf, fun t ht r hrt => ?_⟩
   unfold RecBudget.innerRows at hr
+  by_cases hn : RecBudget.MAX_INNER_ROWS < st.pub.n
+  · simp [hn, throw, throwThe, MonadExceptOf.throw] at hr
+  rw [if_neg hn] at hr
+  refine ⟨spec, st, hf, Nat.le_of_not_lt hn, fun t ht r hrt => ?_⟩
   rw [ht] at hr
   by_cases ha : (t.counts.any (RecBudget.MAX_INNER_ROWS < ·)) = true
   · simp [ha, throw, throwThe, MonadExceptOf.throw] at hr
@@ -194,11 +202,12 @@ theorem drawn_full {T : Tags} {cf pf : ByteArray} {co co' : Coins} {tb : List (S
 /-- **The files set the inner statement up as one hidden-output table at no draw** (`RecCoins.Files.stmt`). -/
 theorem files_stmt {f : RecCoins.Files} {spec : SessionSpec} {st : Stmt}
     (h : f.stmt "the inner session" = .ok (spec, st)) :
-    Stmt.setupHidden RecCoins.innerTags f.circuit f.pub Coins.os [] none (some f.partition) none = .ok st ∧
+    Stmt.setupHidden RecCoins.innerTags f.circuit f.pub Coins.os [] none (some f.partition) f.program = .ok st ∧
       spec = st.spec := by
   unfold RecCoins.Files.stmt at h
   have hh : RecCoins.innerTags.hiddenOutputs = true := rfl
-  cases hs : Stmt.setupTables RecCoins.innerTags f.circuit f.pub Coins.os 1 (partition := some f.partition) with
+  cases hs : Stmt.setupTables RecCoins.innerTags f.circuit f.pub Coins.os 1 (partition := some f.partition)
+      (program := f.program) with
   | error e => simp [hs, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
   | ok q =>
     obtain ⟨spec0, sts0⟩ := q
@@ -234,7 +243,7 @@ theorem innerSetup_files {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecSco
     | none => simp [filesOf, hq] at hheld
     | some p => exact ⟨p, rfl⟩
   have hfs : filesOf r = some (.files ⟨r.innerRaw.circuit, r.innerRaw.publicFile, p, "", none,
-      some (innerFormOf r.innerRaw)⟩) := by rw [filesOf, hp]; rfl
+      some (innerFormOf r.innerRaw), r.innerRaw.program⟩) := by rw [filesOf, hp]; rfl
   rw [hfs] at hsh
   obtain ⟨spec', st', hstm, -, -, -, -, hform⟩ := checkShape_files hsh
   obtain ⟨hst', hspec'⟩ := files_stmt hstm

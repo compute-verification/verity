@@ -1,4 +1,6 @@
-import Proofs.Properties.Nci.BodiesOk
+module
+
+public import Proofs.Properties.Nci.BodiesOk
 
 /-!
 # What `ReadsExact` reads of the decoder and of `BodiesOk`
@@ -12,6 +14,8 @@ wherever `Prog.orderViolation` passes. `reached` marks the root and the callees 
 (`reached_spec`), so it marks only Definitions of `order_closed`'s call-closed set; a composite of that set is
 `body_ok`'s, and a primitive's body is empty.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program

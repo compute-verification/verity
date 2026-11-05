@@ -1,4 +1,6 @@
-import Definitions.Hash.Guarantees
+module
+
+public import Definitions.Hash.Guarantees
 
 /-!
 # What the hash area's binding proofs share
@@ -8,6 +10,8 @@ digest are equal or such a collision (`eq_or_collisionIn`). A digest's bytes are
 back: `be k n` determines `n` below `256^k`, `padTo` of two messages of one length shorter than the block determines
 the message, and a frame's parts are what follows its tag.
 -/
+
+@[expose] public section
 
 namespace Hash.BindingProofs
 

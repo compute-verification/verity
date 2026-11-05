@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Sampling.Binding
+module
+
+public import Proofs.Flock.Claims.Sampling.Binding
 
 /-!
 # Waiting for accepted reruns: the truncation and the union over wrong sets
@@ -18,6 +20,8 @@ probability that the wait comes up short, or that for some set `B` among `S` eve
   `2k/K + e^{−k/8}` (`log 2 < 7/8`).
 * `wait_bad_le`: **the bound**, through a union over `S` capped at `1`: `a·min(1, |S|·(y/a)^k) ≤ |S|^{1/k}·y`.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

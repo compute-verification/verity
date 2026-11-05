@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.CallsBridge
-import Proofs.Flock.Claims.Recursion.CallsAgree
+module
+
+public import Proofs.Flock.Claims.Recursion.CallsBridge
+public import Proofs.Flock.Claims.Recursion.CallsAgree
 
 /-!
 # The deployed plain verifier binds its last message's calls, up to the decoder's slack
@@ -11,6 +13,8 @@ two accepted plain decisions with the same files and rep rounds make one set of 
 (`FlockDeploy.KS.plain_calls_agree`): that is `RecDeploy.plainCallsOfProofs_sha512`. So (P4) at the deployed bound
 record, at SHA-512, rests on the decoder's canonicity alone (`RecDeploy.lastBindsEC_deployed_sha512_of_canonical`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

@@ -1,8 +1,10 @@
-import Properties.Pouw.PeriodJ10R
-import Definitions.Accounting.TS.Hashed
-import Proofs.Accounting.Compose.BindingOfECR
-import Proofs.Accounting.RemoteHeld.Binding
-import Proofs.Hash.RowBinding
+module
+
+public import Properties.Pouw.PeriodJ10R
+public import Definitions.Accounting.TS.Hashed
+public import Proofs.Accounting.Compose.BindingOfECR
+public import Proofs.Accounting.RemoteHeld.Binding
+public import Proofs.Hash.RowBinding
 
 /-!
 # A drawn layer's binding from its hashed openings
@@ -29,6 +31,8 @@ open terms are explicit.
 Neither open term is bounded here: no premise ties an accepted proof's `opened` to a verified opening of its
 position's leaf, and none fixes a position's verifier, root and rank by its cut.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.PeriodJ10R.SecurityProofs.Binding
 

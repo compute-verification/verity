@@ -1,6 +1,8 @@
-import Definitions.Accounting.TS.Drawn
-import Definitions.Hash.RowLeaf
-import Definitions.Core.Interaction
+module
+
+public import Definitions.Accounting.TS.Drawn
+public import Definitions.Hash.RowLeaf
+public import Definitions.Core.Interaction
 
 /-!
 # A sampled window's openings as frame-v3-sha512 paths (trusted)
@@ -33,6 +35,8 @@ credit guarantees rules either out yet: none ties a layer's `opened` to an openi
 soundness is about its relation alone), and none fixes a position's root by its cut (a window's registration is fixed
 before its draw coin, not before the coins its draw follows).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS
 

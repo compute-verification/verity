@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.SplitInner
+module
+
+public import Proofs.Flock.Claims.ZK.SplitInner
 
 /-!
 # `InnerSlot` and `InnerTriple`
@@ -8,6 +10,8 @@ Two of `SplitInner`'s statements, each from its `SimInner` lemma at `InnerAt`'s 
 * **`innerSlot_holds`**: the shared phases end at the rep's `ε` slot (`innerPre_slot`).
 * **`innerTriple_holds`**: the cut's `ρ_in`, `σ_in` are the session's at the honest pads (`innerTripleE`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

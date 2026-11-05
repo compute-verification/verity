@@ -2,8 +2,12 @@
 PROTOCOL.md §3: the verifier as one total function of its inputs, `Accept` or `Reject reason`.
 `verifyRep` is §9–§14 on one rep's replay transcript; `verify` adds the session checks S1–S18.
 -/
-import Flock.Statement
-import Flock.Ligerito
+module
+
+public import Flock.Statement
+public import Flock.Ligerito
+
+@[expose] public section
 
 namespace Flock
 
@@ -34,7 +38,7 @@ def Setup.ofCircuit (st : Stmt) : Setup :=
 def pcsParams (ms : MerkleScheme) (sch : Schedule) : PcsParams := ⟨sch.m.toUInt64, 1, sch.k0.toUInt64, 1, none, ms.pcsIndex⟩
 
 /-- §9–§14 for table `i`'s rep `r`; returns the proof's flattened cap. -/
-def verifyRep (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session) (i r : Nat) (bytes : ByteArray) : V ByteArray := do
+def verifyRep (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : RunRecord) (i r : Nat) (bytes : ByteArray) : V ByteArray := do
   let t := spec.tables[i]!
   let name := s!"{t}/rep{r}"
   let some stream := sess.streams.find? (·.name == name) | throw s!"S11: no stream {name}"

@@ -5,6 +5,14 @@ testpaths = ["tests", "hbm_audit/tests", "fast_decode/tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/test_pous_harness.py",
+    "tests/test_pous_p2_bandwidth.py",
+    "tests/test_pous_p2v1.py",
+    "tests/test_pous_served_case.py",
+    "tests/test_pous_served_wipe.py",
+]
 # tests/ checks the harness against PoUS itself (verity.core.protocols.pous) and the census's hardware ids;
 # pod.sh runs bench/placement.py's deployment gate (GATE_ROLE). Of `verity`, what the tests import, and what the `lake` they
 # run and the Lean programs they start (pous-timed-audit, memory-challenger-verdict) read, which no tracer sees: those
@@ -37,6 +45,9 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "benchmarks/one_stage/served_verdicts.py", "examples/h200/interfaces/verity_e2e_demo/block_record.py",
           "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/audit.py",
           "verity/core/protocols/pouw/coins.py", "verity/core/protocols/pouw/core_check.py",
+          "verity/core/protocols/sampled_proofs/one_stage/registration.py",
+          "verity/core/protocols/sampled_proofs/one_stage/draw.py",
+          "verity/core/protocols/sampled_proofs/one_stage/verdict.py",
           "verity/core/protocols/pouw/protocol.py", "verity/core/protocols/pouw/salt.py",
           "verity/core/protocols/pouw/window.py", "verity/core/protocols/sampled_proofs/one_stage/__init__.py",
           "verity/core/protocols/sampled_proofs/one_stage/partition.py",
@@ -44,3 +55,10 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           # the deployment layer and its wire, which the memory challenger's and the wipe's sides are started through
           # (`deploy.stream.Side`) and the challenger's parties run on
           "verity/core/deploy", "verity/core/wire"]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_pous_wipe_resume.py"]
+paths = ["verity/core/deploy", "verity/core/protocols/pous", "verity/core/wire"]

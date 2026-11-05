@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.FailClosed.Numeric
-import Proofs.Flock.Soundness.Discharge.ZkSession.Numbers
+module
+
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Numeric
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Numbers
 
 /-!
 # Flock's table error at the deployed parameters: `ε_table ≤ 2^{−205}`, with and without `--zk`
@@ -17,6 +19,8 @@ most `2^{−205}` per table, at every statement in scope:
   `padRepError ≲ 2^{−102.5}`, and one kernel check per `m` (`m1_check_zk`). Its worst case is `2^{−205.008}`, at
   `m = 34`.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock.Numbers
 

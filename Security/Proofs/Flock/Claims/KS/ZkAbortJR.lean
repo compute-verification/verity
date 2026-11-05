@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.ZkAbortR
+module
+
+public import Proofs.Flock.Claims.KS.ZkAbortR
 
 /-!
 # The recursion's KS over the masked record at every number of tables, from every table's bound counted per round
@@ -18,6 +20,8 @@ from that bound alone (`FlockDeploy.KS.zk_KSAbortJR`, `FlockDeploy.KS.zk_KSFlock
 masked prover where some run accepts (`FlockDeploy.KS.zk_tableBoundJOnAccR_of_simWJ`,
 `FlockDeploy.KS.zk_KSAbort_of_simWJ_tables`, `FlockDeploy.KS.zk_KSFlock_of_simWJ_tables`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

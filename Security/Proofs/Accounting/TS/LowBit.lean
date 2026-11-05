@@ -1,6 +1,8 @@
-import Definitions.Accounting.Guarantees.TS.LowBit
-import Mathlib.Data.FinEnum
-import Mathlib.Data.Fintype.Card
+module
+
+public import Definitions.Accounting.Guarantees.TS.LowBit
+public import Mathlib.Data.FinEnum
+public import Mathlib.Data.Fintype.Card
 
 /-!
 # A one-register fold's low bit
@@ -11,6 +13,8 @@ map on two bits that is onto in each argument is `a ⊕ e ⊕ h(0, 0)`, so each 
 and a run adds them all. `LiLowBit`: an odd multiplier keeps bit 0, an addition XORs its operands' bits 0, and so does
 an XOR.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS
 
