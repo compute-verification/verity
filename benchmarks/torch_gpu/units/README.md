@@ -42,7 +42,7 @@ uv sync --all-packages --extra torch-cpu
 PROCS=16 bash benchmarks/torch_gpu/units/build.sh /tmp/units-ship
 mkdir -p IN && tar -C /tmp/units-ship -cf IN/units-ship.tar .
 # on an H200 with CUDA torch and `gpu-lease`: the sweeps, the check at B = 1, 7, 128, 4096, 16384 and 20480, then timing
-# at 4096 and 16384 (with IN/units-old.tar, an earlier build's ship, timed beside it if present)
+# at 4096 and 16384
 OUT=DIR IN=IN bash benchmarks/torch_gpu/units/session.sh
 # on an RTX PRO 6000: the sweeps alone, ops 0 to 10
 SWEEP_ONLY=1 OUT=DIR IN=IN bash benchmarks/torch_gpu/units/session.sh
