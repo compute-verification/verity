@@ -40,7 +40,7 @@ def noOpening (_pass _tile : Nat) : Except String TileOpening := .error "no open
 def acceptAllCheck (_i : Input) (_opener : Nat → Nat → Except String TileOpening) : RunAnswer := { accept := true }
 
 /-- The plan that a `plan` accepting every run returns: no passes and an empty root. -/
-def acceptAllPlan : Plan := ⟨[], .empty, .empty, [], 0, []⟩
+def acceptAllPlan : Plan := ⟨[], .empty, .empty, [], 0, [], none⟩
 
 /-- A record of the pass that a `load` accepting every manifest returns: one 1 × 1 × 1 call with two voluntary A rows. -/
 def acceptAllRecord : UnitRecord := { matmul := ⟨0, 1, 1, 1, 0⟩, realRows := 1, kKept := 1, voluntaryA := [0, 0] }
@@ -54,9 +54,10 @@ def capScheme : Scheme := { kMin := 128, tileM := 1, tileN := 1 }
 /-- One 1 × 128 × 1 call, its one tile `[0] × [0]`: its A row real, both rows kept whole and credited. -/
 def capRecord : UnitRecord := { matmul := ⟨0, 1, 128, 1, 0⟩, realRows := 1, kKept := 128 }
 
-/-- One formed row of 128 words: each word 1.0 and each code E4M3 1.0, with ρ = α = 1.0. -/
+/-- One formed row of 128 words: each word 1.0 and each code E4M3 1.0, with ρ = α = 1.0 and β = ρ·α·`S5_LINE`. -/
 def capSide : Words.Formed :=
-  ⟨#[Array.replicate 128 0x38], #[0x3F800000], #[0x3F800000], #[#[]], #[Array.replicate 128 0x3F800000]⟩
+  ⟨#[Array.replicate 128 0x38], #[0x3F800000], #[0x3F800000], #[0x3AB504F3], #[#[]],
+    #[Array.replicate 128 0x3F800000]⟩
 
 /-- `capRecord`'s tile formed: both rows `capSide`. -/
 def capOps : Words.Ops := ⟨capSide, capSide, #[], #[]⟩
@@ -921,6 +922,6 @@ def testRun : Input :=
 def testOpener (_pass _tile : Nat) : Except String TileOpening := .ok testOpening
 
 /-- `testRun`'s plan: the test pass, its run commitment, the verifier's source, and the one tile its one draw names. -/
-def testPlan : Plan := ⟨[testPass], runCommitment [testPass], honestSource, [(0, 0)], 1, [(0, 0)]⟩
+def testPlan : Plan := ⟨[testPass], runCommitment [testPass], honestSource, [(0, 0)], 1, [(0, 0)], none⟩
 
 end Properties.Pouw.PearlPlus
