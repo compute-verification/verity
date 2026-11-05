@@ -5,8 +5,12 @@ So the satisfying witness holds the `sha512x3` and `hm96` rows at every compress
 `hmSlot_of_sat`), and `port_commit_rows` gives the row's commit string at its `hm96` slot's outputs (`row_bc_of_sat`),
 given the port's words fill its chunks and the block holds Δ's copies into the slots' `cv` and `pad` inputs.
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Place
-import Proofs.Flock.Soundness.ExecTemplateSetup
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Place
+public import Proofs.Flock.Soundness.ExecTemplateSetup
+
+@[expose] public section
 
 open Flock FlockLevel3
 

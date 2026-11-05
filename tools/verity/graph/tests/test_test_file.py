@@ -184,6 +184,14 @@ def test_what_a_test_file_reads_that_its_source_does_not_name(tmp_path):
         "what its suite's [[tool.verity.tests.reads]] declare it reads, for the test files it names alone"
 
 
+def test_built_paths_are_the_expression_s_matches():
+    texts = ['a/"b"', 'x = a.b /\n  "c" / "d"', 'Path(__file__)/"x"', ' / "x"', 'a\u2003/"x"', 'f(a)\t/ \'b\' / "c"',
+             'a / b / "c"', '"q"/"x"', 'a[0].parent/"x"/"y" HERE/"z"', '\u00e9a/"x"', 'a.b.c/"x"a/"y"', "x/'", 'a/"b"/"c"/',
+             'a()/"b"', (ROOT / "tools/verity/graph/tests/test_test_file.py").read_text()]
+    for t in texts:
+        assert [m.span() for m in family._built_paths(t)] == [m.span() for m in family._BUILT_PATH.finditer(t)], t[:60]
+
+
 @pytest.mark.parametrize("reads, refused", [
     ('tests = ["tests/test_gone.py"]\npaths = ["lib/assets"]\n', "names none of the suite's test files"),
     ('tests = ["tests/test_walk.py"]\npaths = ["lib/gone"]\n', "is no file or directory of the tree"),

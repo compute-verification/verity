@@ -1,6 +1,8 @@
-import Proofs.Flock.C3.Compose.HoloStageCoins
-import Proofs.Flock.C3.RegLevels.LgHeld
-import Proofs.Flock.Recursive.HPortTie
+module
+
+public import Proofs.Flock.C3.Compose.HoloStageCoins
+public import Proofs.Flock.C3.RegLevels.LgHeld
+public import Proofs.Flock.Recursive.HPortTie
 
 /-!
 # `LaterCoins` at the verifier's map, from its hold of the inner session
@@ -16,6 +18,8 @@ record facts the stages read are named below (`RecordPoints` … `RepStagesCount
 `histPts`: a source with its link points set to the history's first coin under `holoMap`, where `hpts`
 (`PointsFromHistory`) is `pointsFromHistory_histPts`. At a free source it does not follow from the rest.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 
@@ -43,7 +47,7 @@ variable {Cm Coin : Type}
 session whose points read as the run's link points (`laterCoins_of_held`'s `hdec`, `hu`). -/
 def RecordPoints (wr : List (Cm × Coin) → Lean.Json × String) {e : ExecHolo} (t : List (Cm × Coin))
     (u : C3Run e) : Prop :=
-  ∃ (spec : Flock.SessionSpec) (sess : Flock.Session), Flock.Record.decode spec (wr t).2 = .ok sess ∧
+  ∃ (spec : Flock.SessionSpec) (sess : Flock.RunRecord), Flock.Record.decode spec (wr t).2 = .ok sess ∧
     holoPts e.cls.mPts sess.points = u.pts
 
 /-- **Hypothesis (`stageHeldW_sparse`'s `hh`): the verifier holds the inner transcript** at the history. -/
@@ -91,7 +95,7 @@ theorem laterCoins_holo {st : Flock.Stmt} {hp : HoloParams} {Cm : Type}
       Lean.Json × String}
     {held : Lean.Json × String → Except String RecVStar.InnerCommits} {sparse : Option RecSparse.Shape}
     {ish : RecVStar.Inner} {tbl : String} {bc : Cm → String → Nat → List UInt8} {spec : Flock.SessionSpec}
-    {sess : Flock.Session} {cs : RecVStar.InnerCommits} {c3 : RecCoins.C3} {unit : String}
+    {sess : Flock.RunRecord} {cs : RecVStar.InnerCommits} {c3 : RecCoins.C3} {unit : String}
     {rep rs : Array RecVStar.SchedRound} {sp : RecSparse.Shape} {sh : RecVStar.StackedShape}
     {x : RecVStar.InnerStream} {S : ℕ} {stmt : Fin S → VStar.Stmt} {Vs : Fin S → VStmt} {Reg' : Type}
     {M : FlockC3.Reps.StackedMaps stmt Vs} {zs : (s : Fin S) → (Vs s).Outer Reg'} {Lb : (s : Fin S) → (Vs s).Bits}

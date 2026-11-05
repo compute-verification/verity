@@ -1,4 +1,6 @@
-import Definitions.NetworkCertifier.SampledCharge
+module
+
+public import Definitions.NetworkCertifier.SampledCharge
 
 /-!
 # The network certifier's rows: its registration at the transfer gates, and the leak relation at them
@@ -22,6 +24,8 @@ A constant gate is committed by nobody, and every trace holds the program's cons
 program holds constant the network certifier's record must be that constant (an ingress gate is an input,
 `BoundaryGates.Fits`).
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.InnerAcceptsKS
-import Proofs.Flock.Claims.Recursion.VStar
+module
+
+public import Proofs.Flock.Claims.Recursion.InnerAcceptsKS
+public import Proofs.Flock.Claims.Recursion.VStar
 
 /-!
 # The recursion's KS from V*'s parts
@@ -28,6 +30,8 @@ This file is that chain with those three facts in place of `CallsOpen` and `Call
 protocol's KS against provers that may abort, the session facts, and V*'s parts at the deployed readers
 (`codeFacts_of_staging`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion.VStar
 

@@ -54,6 +54,11 @@ PUBLIC = {
                                           "its digest",
     "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "
                                      "Program it declares (H1Windows), which a period's offline Program must equal",
+    "verity_vllm.protocols.pouw.h1.drawn": "I1: a served H1 window's drawn calls staged as C-Flock statements and checked as "
+                                           "credit does (main), which benchmarks/pouw/h1_prove/drawn.py runs",
+    "verity_vllm.protocols.pouw.h1.receipts": "I1: served H1's receipt producer, the zy receipts serve-openai's "
+                                              "--h1-receipts registers (Receipts) and its noise kernel, which PoUW's "
+                                              "benchmarks time and gate",
 }
 
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.
@@ -149,7 +154,6 @@ KNOWN = frozenset({
     "verity_vllm.protocols.linear.api",
     "verity_vllm.protocols.linear.vllm_site",
     "verity_vllm.protocols.pouw",
-    "verity_vllm.protocols.pouw.device",
     "verity_vllm.protocols.pouw.h1",
     "verity_vllm.protocols.pouw.h1.challenger",
     "verity_vllm.protocols.pouw.h1.handoff",
@@ -158,7 +162,6 @@ KNOWN = frozenset({
     "verity_vllm.protocols.pouw.h1.registered",
     "verity_vllm.protocols.pouw.h1.served",
     "verity_vllm.protocols.pouw.h1.window",
-    "verity_vllm.protocols.pouw.native",
     "verity_vllm.protocols.pouw.pearl_c",
     "verity_vllm.protocols.pouw.pearl_c.graphs",
     "verity_vllm.protocols.pouw.pearl_c.grouped",

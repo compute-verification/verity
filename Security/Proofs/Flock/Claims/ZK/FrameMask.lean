@@ -1,4 +1,8 @@
-import Proofs.Flock.Claims.ZK.FrameParse
+module
+
+public import Proofs.Flock.Claims.ZK.FrameParse
+import all Init.Data.String.Defs
+import all Init.Data.Array.Basic
 
 /-!
 # What the frame releases of a round: the device's frames, masked
@@ -26,6 +30,8 @@ folds over:
   masked prover's: the frame's pad at pad `j`'s absorbed position (`absPos`) is the draws' pad `j`
   (`padAt_ofDraws_absPos`), which on `tapeOfDraws` is the masked prover's (`padsOf_tapeOfDraws`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

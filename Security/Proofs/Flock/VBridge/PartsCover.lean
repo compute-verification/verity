@@ -1,6 +1,8 @@
-import Proofs.Flock.VBridge.PartS
-import Proofs.Flock.VBridge.Algebra.ToVStar
-import Proofs.Flock.Soundness.ExecDraw
+module
+
+public import Proofs.Flock.VBridge.PartS
+public import Proofs.Flock.VBridge.Algebra.ToVStar
+public import Proofs.Flock.Soundness.ExecDraw
 
 /-!
 # The parts' residuals cover S's
@@ -13,6 +15,8 @@ E's stage theorems read) returns them:
 * `residuals_zero_of_parts`: a part's residual `k` is S's residual `R[k]` (`PartS.res_partS`), at part ports reading S's
   ports where the part's index says; with `groups_cover`, every residual of S is zero.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Parts
 

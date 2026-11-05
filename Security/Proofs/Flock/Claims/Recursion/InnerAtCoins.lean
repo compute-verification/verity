@@ -1,5 +1,9 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowDTie
-import Proofs.Flock.Claims.Recursion.RestLens
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowDTie
+public import Proofs.Flock.Claims.Recursion.RestLens
+import all Init.Data.Repr
+import all Init.Data.String.Defs
 
 /-!
 # Check 5's inner session at a staged part is the inner statement at the coins
@@ -24,6 +28,8 @@ record's rounds are the transcript's, but for the one round of no coins `repCoin
 claims at the first coin's link points (`innerCoinsR_of`), and `rep_canon` gives a rep's verifier rows at
 `canonRounds`, the coin side of `VVTie`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.InnerAt
 
@@ -246,7 +252,7 @@ stream, or one fewer, skipping the round `j` of `R`'s stream that has no coins. 
 theorem coinTie_sized (hq : ∀ (a : Array Json) (lt : Json → Json → Bool) x, x ∈ a.qsort lt → x ∈ a)
     {tr : Json} {record : String} {reg : Option Json} {bound : Option String}
     {shape : Option RecVStar.StackedShape} {cs : RecVStar.InnerCommits} {ish : RecVStar.Inner} {tt : String}
-    {spec : SessionSpec} {sess : Session} {name : String} {st : StreamRec}
+    {spec : SessionSpec} {sess : RunRecord} {name : String} {st : StreamRec}
     (hic : RecVStar.innerCommits tr record reg bound shape = .ok cs)
     (hR : RecSetup.checkReads ish tt tr record cs = .ok ())
     (hdec : Record.decode spec record = .ok sess) (hst : sess.streams.find? (·.name == name) = some st) :
@@ -551,7 +557,7 @@ theorem src_staged {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ} {i 
     (h : insO (staged st x ms s) = some i) :
     ∃ r rec, readX x = some r ∧ ∃ pj, r.partition = some pj ∧
       i.src = some (.files ⟨r.innerRaw.circuit, r.innerRaw.publicFile, pj, rec, none,
-        some (innerFormOf r.innerRaw)⟩) := by
+        some (innerFormOf r.innerRaw), r.innerRaw.program⟩) := by
   have hne : staged st x ms s ≠ [] := fun he => by rw [he, insO_nil] at h; cases h
   obtain ⟨r, p, hr, -, hd⟩ := staged_decode hne
   obtain ⟨-, hpa, -⟩ := readX_spec hr
@@ -606,7 +612,8 @@ theorem stmt_unit {f : RecCoins.Files} {u u' : String} {p : SessionSpec × Stmt}
     f.stmt u' = .ok p := by
   unfold RecCoins.Files.stmt at h ⊢
   revert h
-  cases Stmt.setupTables RecCoins.innerTags f.circuit f.pub Coins.os 1 (partition := some f.partition) with
+  cases Stmt.setupTables RecCoins.innerTags f.circuit f.pub Coins.os 1 (partition := some f.partition)
+      (program := f.program) with
   | error e => intro h; cases h
   | ok q =>
     obtain ⟨spec, sts⟩ := q
@@ -713,13 +720,15 @@ theorem staged_innerAt {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : 
   have hload' : RecCoins.Inner.load unit f' = .ok inn := hload
   obtain ⟨specL, stL, hstL, hm, hkl, -⟩ := load_fields hload'
   obtain ⟨f0, spec', st', s'', spec'', st'', hfs0, hstm, hset', hmm, hkk, -⟩ := innerSetup_files hr ha
-  have hf0 : f0 = ⟨r.innerRaw.circuit, r.innerRaw.publicFile, pj, "", none, some (innerFormOf r.innerRaw)⟩ := by
+  have hf0 : f0 = ⟨r.innerRaw.circuit, r.innerRaw.publicFile, pj, "", none, some (innerFormOf r.innerRaw),
+      r.innerRaw.program⟩ := by
     rw [filesOf, hpj] at hfs0
     simp only [Option.map_some, Option.some.injEq, RecCoins.Source.files.injEq] at hfs0
     exact hfs0.symm
   subst hf0
   have hstL' : RecCoins.Files.stmt "the inner session"
-      ⟨r.innerRaw.circuit, r.innerRaw.publicFile, pj, "", none, some (innerFormOf r.innerRaw)⟩ =
+      ⟨r.innerRaw.circuit, r.innerRaw.publicFile, pj, "", none, some (innerFormOf r.innerRaw),
+      r.innerRaw.program⟩ =
         .ok (specL, stL) :=
     stmt_unit (u := unit) (by rw [← hstL, hfs unit]; rfl)
   rw [hstm] at hstL'

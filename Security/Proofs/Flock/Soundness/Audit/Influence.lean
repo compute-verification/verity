@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Audit.TwoStage
-import Proofs.Flock.Soundness.Audit.Harm
+module
+
+public import Proofs.Flock.Soundness.Audit.TwoStage
+public import Proofs.Flock.Soundness.Audit.Harm
 
 /-!
 # Influence through a separator
@@ -28,6 +30,8 @@ circuit's outputs, since commitments and leaves are outputs that the verifier se
   is delivered, recover `m` from an accepted audit with probability at most `2^H · ∑_{j ≤ K} C(n, j) / |M|` plus the
   audit's error: the value bits and the location term together. `card_guess_le` is its counting step.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

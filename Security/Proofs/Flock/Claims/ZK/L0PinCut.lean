@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.ZK.L0Pin
-import Proofs.Flock.Claims.ZK.L0PinCoins
-import Proofs.Flock.SessionLoop.FinRounds
-import Proofs.Flock.SessionLoop.FinCommits
+module
+
+public import Proofs.Flock.Claims.ZK.L0Pin
+public import Proofs.Flock.Claims.ZK.L0PinCoins
+public import Proofs.Flock.SessionLoop.FinRounds
+public import Proofs.Flock.SessionLoop.FinCommits
 
 /-!
 # The cut session in rep `2j + r`'s level 0 rounds
@@ -26,6 +28,8 @@ return, which is what this feeds.
   PIOP's target and basis `ligBasis`, any table `t`, and the pads `padsL0` of the source. **`runCut_cutL0_of_ret`** is
   it with rep `0`'s claim points read off its return (`repCut_points`), so the earlier reps need only return.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

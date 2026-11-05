@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkSession.Compose
-import Proofs.Flock.Soundness.SoundnessPad
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Compose
+public import Proofs.Flock.Soundness.SoundnessPad
 
 /-!
 # C-Flock ZK's masked Ligerito level 0 (live/PROTOCOL.md §1, §4, §7)
@@ -21,6 +23,8 @@ acceptance probability (`ligeritoPadZK_couple`). Unmasking each message at `h` t
 the claim forms evaluate at `h` to the clear claims (`fold_couple`), and when the row vanishes `T'` is the clear
 restart, after which the two games are the same game.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkSession
 

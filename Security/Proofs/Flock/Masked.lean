@@ -1,6 +1,8 @@
-import Proofs.Flock.Masked.Statement
-import Proofs.Flock.Claims.KS.ZkExtend
-import Proofs.Flock.Claims.ZK.Assemble
+module
+
+public import Proofs.Flock.Masked.Statement
+public import Proofs.Flock.Claims.KS.ZkExtend
+public import Proofs.Flock.Claims.ZK.Assemble
 
 /-!
 # Proofs of C-Flock's masked guarantees
@@ -9,6 +11,8 @@ import Proofs.Flock.Claims.ZK.Assemble
 * `Flock.SecurityProofs.MaskedZK : Flock.Guarantees.MaskedZK` is `Claims.ZKMal.Flock.zk_deployZk_masked_exe_split` at
   `FlockDeploy.sha512`, whose `hOf` is SHA-512 (`FlockDeploy.hOf_sha512`) (G2).
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

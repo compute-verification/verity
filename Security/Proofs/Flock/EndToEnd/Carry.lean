@@ -1,6 +1,8 @@
-import Proofs.Flock.EndToEnd.Carry.Statement
-import Proofs.Flock.EndToEnd.Blocks
-import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
+module
+
+public import Proofs.Flock.EndToEnd.Carry.Statement
+public import Proofs.Flock.EndToEnd.Blocks
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
 
 /-!
 # Proof of the integrity audit over a monitoring period of blocks, with carried state
@@ -24,6 +26,8 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
 * `Flock.SecurityProofs.IntegrityBlock_of_IntegrityBlockCarried`: `IntegrityBlockCarried` at `CarriedBlocks.ofServer`
   is `IntegrityBlock`, so the carried form strengthens it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

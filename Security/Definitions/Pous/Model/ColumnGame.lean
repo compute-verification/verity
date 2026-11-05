@@ -1,5 +1,7 @@
-import Mathlib.Data.Fintype.Prod
-import Definitions.Pous.Model.Labelling
+module
+
+public import Mathlib.Data.Fintype.Prod
+public import Definitions.Pous.Model.Labelling
 
 /-!
 # The two-directional column game over P3's two-layer labels
@@ -14,6 +16,8 @@ so the adversary can hold a lower label one column at a time. Here a holding has
 lower columns `(w, u)` (cost `1`) and whole top labels (cost `n`), and an inverse query is a move of the game, not a
 charge in the bound.
 -/
+
+@[expose] public section
 
 namespace Pous.ColumnGame
 

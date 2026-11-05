@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Level0
-import Proofs.Flock.Claims.Complete.ZkTables.Table
-import Proofs.Flock.Claims.Complete.ZkTables.View
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Level0
+public import Proofs.Flock.Claims.Complete.ZkTables.Table
+public import Proofs.Flock.Claims.Complete.ZkTables.View
 
 /-!
 # Masked completeness from its parts
@@ -16,6 +18,8 @@ The prover's rank refusal (`rankCheckP`) enters `RunsRest` only: a rep returns w
 holds, and `complete_jsonT` takes the mask-rank bound at the verifier's coins (`MaskRank.MaskRankBound`) for the
 other side, that a good case's coins pass the check.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 
@@ -73,10 +77,10 @@ theorem innerRest (H : Claims.Msg → Claims.Msg) : InnerRest H := by
 /-- **Masked completeness from its parts**: `complete_jsonT` from level 0's four premises (`Level0`), the rest of
 `RepShapedT` and `ProverRunsT`, and the mask-rank bound; `LigeritoT` and `InnerT` follow from `Level0.Verifier`
 (`ligeritoRest`, `innerRest`). -/
-theorem complete_jsonT_of_parts (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
+theorem complete_jsonT_of_parts (H : Claims.Msg → Claims.Msg) 
     (h0 : Level0.ProverRuns) (h1 : Level0.ProverShape) (h2 : Level0.Lanes) (h3 : Level0.Verifier)
     (gS : ShapeRest H) (gR : RunsRest H) (hMR : MaskRank.MaskRankBound) :
     Claims.Flock.Complete H (deployZk Readable.relation) :=
-  complete_jsonT H S (gS h1) (gR h0 h2 h3) (ligeritoRest H h3) (innerRest H h3) hMR
+  complete_jsonT H (gS h1) (gR h0 h2 h3) (ligeritoRest H h3) (innerRest H h3) hMR
 
 end FlockComplete.ZkTables

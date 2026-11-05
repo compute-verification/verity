@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.Interact
+module
+
+public import Proofs.Flock.Claims.ZK.Interact
 
 /-!
 # A run cut at a round
@@ -7,6 +9,8 @@ import Proofs.Flock.Claims.ZK.Interact
 then the message `stop`. `stopAt pm t stop` is the prover `pm` stopped at round `t`, and its run is its own run cut
 there (`interact_stopAt`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
