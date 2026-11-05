@@ -774,6 +774,58 @@ def test_the_record_accepts_only_when_every_subprotocol_accepts_on_its_node_and_
         assert rec["legs"][leg]["server"] == "vy-dc-h200-2" and rec["composed"]["elsewhere"] == [leg]
 
 
+#: the split certifier's period step's answer under ``--case-only`` (`certifier_piece.case_only`): undecided, binding the
+#: case's commitment
+CASE_ONLY_ANSWER = {"protocol": "verity/certifier/v0", "verdict": "undecided", "commitment": "cd" * 64, "public": None,
+                    "profile": None, "reason": "case only: the period lists circuit files, which the composite's "
+                                               "network leg reads; this piece ran no network-period"}
+NETWORK_ANSWER = {"verdict": "accept", "reason": None, "commitment": "cd" * 64, **ACCEPTS["certifier"]}
+
+
+@pytest.mark.parametrize("piece, answer, want", [
+    (CASE_ONLY_ANSWER, NETWORK_ANSWER, "accept"),
+    (CASE_ONLY_ANSWER, None, "missing"),
+    (CASE_ONLY_ANSWER, {**NETWORK_ANSWER, "commitment": "ef" * 64}, "error"),
+    (CASE_ONLY_ANSWER, {**NETWORK_ANSWER, "public": None}, "error"),
+    ({**CASE_ONLY_ANSWER, "verdict": "reject", "reason": "the chain rejected"}, NETWORK_ANSWER, "reject"),
+])
+def test_with_network_answer_the_record_takes_a_case_only_period_steps_answer_from_the_composites_network_leg(
+        tmp_path, monkeypatch, capsys, piece, answer, want):
+    """``record --network-answer``: where the split certifier's period step wrote the case alone (its answer undecided),
+    the network certifier's row is the answer the composite's network leg gave the period (`composite.py`'s
+    network-answer.json), about the server the piece's piece.json names, so remote-network-no-pouw composes accept from
+    it beside sampled proofs'. With no such file (the composite didn't accept) the certifier is missing, naming why,
+    and the record pending; a file binding another commitment than the piece's, or not a core answer, is its error; and
+    a piece that answered itself (here a reject) keeps its own row, whatever the file."""
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None, _registration=None: _accepted())
+    (d := tmp_path / "pieces" / "certifier").mkdir(parents=True)
+    (d / "answer.json").write_text(json.dumps(piece))
+    (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
+    net = tmp_path / "composite" / "remote-network-no-pouw" / "private" / "network-answer.json"
+    if answer:
+        net.parent.mkdir(parents=True)
+        net.write_text(json.dumps(answer) + "\n")
+    (tmp_path / "serve").mkdir()
+    rc = S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1",
+                 "--sampled-proofs", str(tmp_path / "audit"), "--registration", str(tmp_path / "registration.json"),
+                 "--pieces", str(tmp_path / "pieces"), "--out", str(tmp_path / "record"), "--node", "vy-dc-h200",
+                 "--product", "remote-network-no-pouw", "--network-answer", str(net)])
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
+    row = report["protocols"]["communication"]
+    assert row["verdict"] == want and report["servers"]["communication"] == "vy-dc-h200", row
+    if want == "accept":
+        assert (row["answer"], row["quantity"], row["commitment"]) == (answer, answer["public"], "cd" * 64)
+        assert rc == 0 and (line["composed"], line["record_missing"], line["check"]) == ("accept", [], {}), line
+    elif want == "missing":
+        assert row["why"] == S.NO_NETWORK_ANSWER and line["missing"]["the network certifier"] == S.NO_NETWORK_ANSWER
+        assert rc == 0 and line["composed"] == "pending" and line["record_missing"] == ["certifier"]
+    else:
+        assert rc == 1 and (line["composed"], line["by"]) == ("reject", ["the network certifier"])
+        assert want == "reject" or row["reason"].startswith("the composite's network answer")
+
+
 def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(tmp_path, monkeypatch, capsys):
     """PRODUCT=remote: `pieces` runs PoUW's piece and no onsite one, whatever its command, printing a DROPPED line for
     each; the record names PoUS, the bandwidth audit, the network certifier and the wipe dropped, neither missing nor
@@ -1952,12 +2004,16 @@ def test_pp_main_comes_before_main_file_as_the_line_v3cs_session_pins_on(tmp_pat
      "PREFLIGHT: the split certifier runs its chain and its period check, and CERTIFIER_PERIOD_CMD is unset"),
     (("v3c",), {"CERTIFIER_CHAIN_CMD": None, "PRODUCT": "remote-network"},
      "PREFLIGHT: the split certifier runs its chain and its period check, and CERTIFIER_CHAIN_CMD is unset"),
+    (("v3c",), {"CERTIFIER_PERIOD_CMD": f"{PERIOD} --case-only", "PRODUCT": "remote-network", "COMPOSITE": ""},
+     "PREFLIGHT: CERTIFIER_PERIOD_CMD's --case-only leaves the network certifier's period to the composite's network "
+     "leg, and COMPOSITE is set empty: drop --case-only, or unset COMPOSITE"),
 ])
 def test_the_split_certifier_needs_v3c_and_no_whole_piece_beside_it(tmp_path, args, extra, line):
     """The split's period check writes the certifier's answer from V3c's period.json, so the preflight refuses it beside
     CERTIFIER_CMD, the whole piece's command, and with either of its two commands unset (a chain with no period check
-    answers nothing, and a period check with no chain refuses); and V3c's audit is sampled proofs' of record, so it
-    refuses a run that leaves V3c out, split or not, before anything runs."""
+    answers nothing, and a period check with no chain refuses), and its --case-only, which leaves the check to the
+    composite's network leg, with COMPOSITE set empty; and V3c's audit is sampled proofs' of record, so it refuses a run
+    that leaves V3c out, split or not, before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, args, **extra)
     assert (rc, lines, order) == (3, [line], [])
 
@@ -2803,6 +2859,62 @@ def test_a_follow_on_whose_split_certifier_answered_nothing_records_its_refusal_
     assert S.piece("communication", pieces) == (
         {"verdict": "missing", "owner": "network-accounting", "why": "its piece refused to run: the chain refused"},
         ("vy-dc-h200", "real"))
+
+
+#: a composite step that notes, beside `FAKE_SERVED_COMPOSITE`'s arguments, whether a network-answer.json was there when
+#: it ran and its limits, then writes the product's as composite.py does where it accepts
+CASE_COMPOSITE = FAKE_SERVED_COMPOSITE + '''
+n="$1/private/composite/$PRODUCT/private/network-answer.json"
+printf "%s\\n" "$([ -e "$n" ] && echo stale || echo none)" "$COMPOSITE_MEM_GB" "$COMPOSITE_TIMEOUT" > "$ORDER.case"
+mkdir -p "${n%/*}" && echo '{"verdict": "accept"}' > "$n"'''
+
+
+def _case_only_deferral(tmp_path: Path, **extra: str) -> subprocess.CompletedProcess:
+    """`_deferred` with the network certifier in front and the split certifier's period step writing the case alone
+    (``--case-only``), the served node's stand-in left in its pieces (``extra`` adds to the environment)."""
+    for f in KEPT:
+        (tmp_path / "serve" / f).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "serve" / f).write_text(f)
+    _deferral_stand_in(tmp_path / "served-out" / "pieces" / "certifier")
+    return _deferred(tmp_path, **{"PRODUCT": "remote-network-no-pouw", "CERTIFIER_FRONT": "front",
+                                  "CERTIFIER_CHAIN_CMD": CHAIN, "CERTIFIER_PERIOD_CMD": f"{CASE_ONLY} --case-only",
+                                  **extra})
+
+
+@pytest.mark.parametrize("limits", [{}, {"COMPOSITE_MEM_GB": "300", "COMPOSITE_TIMEOUT": "20h"}])
+def test_a_case_only_period_step_has_the_follow_on_compose_before_its_record_which_reads_the_network_legs_answer(
+        tmp_path, limits):
+    """With CERTIFIER_PERIOD_CMD's --case-only the period's one check is the composite's network leg, so the follow-on
+    runs the composite once, after the period step and before the record, within 210 GiB and 12h unless
+    COMPOSITE_MEM_GB and COMPOSITE_TIMEOUT say otherwise, having first removed the network-answer.json an earlier
+    composite left; the record reads the one this composite writes (`record --network-answer`)."""
+    d = tmp_path / "serve"
+    assert _case_only_deferral(tmp_path).returncode == 0
+    net = d / "private" / "composite" / "remote-network-no-pouw" / "private" / "network-answer.json"
+    net.parent.mkdir(parents=True)
+    net.write_text('{"verdict": "accept", "stale": true}')
+    _rc, lines, order, _limits = _follow(tmp_path, CASE_COMPOSITE, **limits)
+    assert order[:6] == ["audit", "period", "chain", "period-check", "composite", "record"], (lines, order)
+    assert order.count("composite") == 1, order
+    assert (tmp_path / "order.case").read_text().split() == [
+        "none", limits.get("COMPOSITE_MEM_GB", "210"), limits.get("COMPOSITE_TIMEOUT", "12h")]
+    record = json.loads((tmp_path / "order.record").read_text())
+    assert record[record.index("--network-answer") + 1] == str(net) and json.loads(net.read_text()) == {"verdict": "accept"}
+    assert record[record.index("--pieces") + 1] == str(tmp_path / "out" / "pieces")
+
+
+@pytest.mark.parametrize("extra, why", [
+    ({"PRODUCT": "remote"}, "PRODUCT=remote composes none: drop --case-only"),
+    ({"COMPOSITE": ""}, "COMPOSITE is set empty: drop --case-only, or unset COMPOSITE"),
+])
+def test_a_follow_on_refuses_a_case_only_period_step_with_no_composite_network_leg_to_check_it(tmp_path, extra, why):
+    """A deferral whose period step writes the case alone needs the composite's network leg, its one check: its follow-on
+    refuses it under remote, whose record drops the network certifier and whose composite has no network leg, and with
+    COMPOSITE set empty, before anything runs."""
+    assert _case_only_deferral(tmp_path, **extra).returncode == 0
+    rc, lines, order, _limits = _follow(tmp_path)
+    assert (rc, lines, order) == (3, ["PREFLIGHT: CERTIFIER_PERIOD_CMD's --case-only leaves the network certifier's period "
+                                      f"to the composite's network leg, and {why}"], [])
 
 
 def _script(path: Path, body: str) -> None:

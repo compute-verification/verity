@@ -95,6 +95,13 @@
 #     unless COMPOSITE is set empty,
 #     the product's composites' Lean verdicts on the run's cases (`served_composite.sh`'s docstring). Their verdicts gate
 #     nothing, but a composite that didn't run (a tree without composite.py) or whose Lean didn't answer fails the run.
+#     Where CERTIFIER_PERIOD_CMD passes --case-only (CASE_ONLY: the split certifier's period step writes the case alone,
+#     and the composite's network leg is the period's one check), the composites run before the record, within
+#     COMPOSITE_MEM_GB and COMPOSITE_TIMEOUT (then default 210 and 12h, that leg reading every circuit file the period
+#     lists), and the record's network certifier is the period's answer that leg gave (`record --network-answer`, the
+#     product's SERVE_DIR/private/composite/PRODUCT/private/network-answer.json, removed first, which composite.py writes
+#     only where it accepts), missing where it gave none; the preflight refuses --case-only with COMPOSITE set empty and
+#     under PRODUCT=remote, which composes no network leg.
 #     With the network certifier in the run, its piece (CERTIFIER_CMD) or its front (CERTIFIER_FRONT), `onsite_record.py`
 #     then writes the onsite demo's record
 #     ($OUT/record/onsite.json: every verdict its run of record needs, the network bound term by term and over each
@@ -241,7 +248,8 @@
 # host it composed on, served_node false, and that it read a prover-side copy; its pieces the served node's, but for the
 # network certifier's where the deferral has the split certifier: what its chain and period check left here, beside the
 # served node's piece.json, so its answer is about the served node, which remote-network's record reads) and the
-# composite (`served_composite.sh`, SERVED_NODE the served node), and under ONSITE the onsite record, as the served
+# composite (`served_composite.sh`, SERVED_NODE the served node; under CASE_ONLY before the record, as in step 5), and
+# under ONSITE the onsite record, as the served
 # node's run would (with REPROOF_COPY and REPROOF_LISTING); its $OUT is published as every run's is.
 # POUW=pearlplus (default h1) makes Pearl+ PoUW's piece instead: H1_GATE defaults empty (set, the preflight refuses
 # it), and POUW_CMD to 'bash benchmarks/one_stage/served_pearlplus.sh "$1" "$2" "$3"' within POUW_TIMEOUT 120m, which
@@ -987,11 +995,18 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
       || return 1
     pieces=$OUT/pieces
   fi
+  local net=
+  if [ -n "$CASE_ONLY" ]; then  # the composite's network leg is the period's check, whose answer the record reads
+    net=$D/private/composite/$PRODUCT/private/network-answer.json
+    rm -f "$net"
+    TPY=$TPY SERVED_NODE=$SERVED_NODE bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
+  fi
   "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$VW/audit" \
     --registration "$VW/window/registration.json" --pieces "$pieces" --out "$OUT/record" --product "$PRODUCT" \
-    --node "$SERVED_NODE" 2>&1 | publish_lines
+    --node "$SERVED_NODE" ${net:+--network-answer "$net"} 2>&1 | publish_lines
   rec=${PIPESTATUS[0]}
-  [ -z "${COMPOSITE-1}" ] || TPY=$TPY SERVED_NODE=$SERVED_NODE bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
+  [ -n "$CASE_ONLY" ] || [ -z "${COMPOSITE-1}" ] \
+    || TPY=$TPY SERVED_NODE=$SERVED_NODE bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
   drop_circuits all || dc=1
   [ -z "${ONSITE:-}" ] || onsite_record
   echo "---- verdicts"; cat "$OUT/verdicts.txt"
@@ -1139,6 +1154,15 @@ if [ -n "${CERTIFIER_CHAIN_CMD:-}${CERTIFIER_PERIOD_CMD:-}" ]; then  # the split
     [ -n "${!v:-}" ] || { say "PREFLIGHT: the split certifier runs its chain and its period check, and $v is unset"; exit 3; }
   done
   SPLIT=1
+fi
+CASE_ONLY=
+if [[ ${CERTIFIER_PERIOD_CMD:-} =~ (^|[[:space:]])--case-only([[:space:]]|$) ]]; then  # the composite's network leg checks the period
+  [ "$PRODUCT" != remote ] || { say "PREFLIGHT: CERTIFIER_PERIOD_CMD's --case-only leaves the network certifier's period to" \
+    "the composite's network leg, and PRODUCT=remote composes none: drop --case-only"; exit 3; }
+  [ -n "${COMPOSITE-1}" ] || { say "PREFLIGHT: CERTIFIER_PERIOD_CMD's --case-only leaves the network certifier's period to" \
+    "the composite's network leg, and COMPOSITE is set empty: drop --case-only, or unset COMPOSITE"; exit 3; }
+  CASE_ONLY=1
+  export COMPOSITE_MEM_GB=${COMPOSITE_MEM_GB:-210} COMPOSITE_TIMEOUT=${COMPOSITE_TIMEOUT:-12h}
 fi
 if [ -n "${V3C_WARM_JOBS:-}" ]; then  # V3c's composes made before its audit
   [[ $V3C_WARM_JOBS =~ ^[1-9][0-9]*$ ]] \
@@ -1407,18 +1431,24 @@ TPY=$TREE/.venv/bin/python
 [ -z "$CERT" ] || { wait "$CERT"; publish_lines < "$OUT/pieces-certifier.txt"; }
 
 # 5. one record of every verdict, sampled proofs' V3c's audit on the window commit's registration (missing, said why,
-# where the audit is deferred)
+# where the audit is deferred); under CASE_ONLY the composite first, whose network leg answers the period
 wait "$IOV"
+comp=0 NET_ANSWER=
+if [ -n "$CASE_ONLY" ] && [ -z "$DEFER" ]; then
+  NET_ANSWER=$D/private/composite/$PRODUCT/private/network-answer.json
+  rm -f "$NET_ANSWER"
+  TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
+fi
 "$TPY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" --sampled-proofs "$VW/audit" \
   --registration "$VW/window/registration.json" --pieces "$OUT/pieces" --out "$OUT/record" --product "$PRODUCT" \
   ${DEFER:+--deferred "$DEFERRED_WHAT, to a follow-on on a node with the memory, which composes the final record: $DEFER"} \
-  2>&1 | publish_lines
+  ${NET_ANSWER:+--network-answer "$NET_ANSWER"} 2>&1 | publish_lines
 rec=${PIPESTATUS[0]}
 private_pieces
 left=0
 [ -z "$DEFER" ] || defer "$DEFER" || left=1
-comp=0
-[ -n "$DEFER" ] || [ -z "${COMPOSITE-1}" ] || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
+[ -n "$DEFER" ] || [ -n "$NET_ANSWER" ] || [ -z "${COMPOSITE-1}" ] \
+  || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
 [ -z "${CERTIFIER_CMD:-}${CERTIFIER_FRONT:-}" ] || onsite_record
 measure
 echo "---- verdicts"; cat "$OUT/verdicts.txt"
