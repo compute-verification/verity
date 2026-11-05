@@ -41,16 +41,28 @@ theorem fiberMisses_le {Ω Q Y B C D R : Type} [Fintype Ω] [Nonempty Ω] [Finty
     fun p h => h p.1.1 p.2 rfl rfl
   have hown : prCoin (fun p : (Ω × Q) × Y => ¬ FiberMisses My c H x P (H (x p.1.1 + My p.2, c p.2)) (P p.1.1))
       = 1 := by
-    simp [prCoin, hno, FlockSoundness.Game.avg_const]
+    unfold prCoin
+    calc avg _ = avg (fun _ : (Ω × Q) × Y => (1 : ℝ≥0∞)) := by
+          congr 1
+          funext p
+          simp [hno p]
+      _ = 1 := FlockSoundness.Game.avg_const _
+  have hl : avg (fun w : Ω × Q => prCoin fun u : B × Y => FiberMisses My c H x P (H (u.1, c u.2)) (bits w.2))
+      = avg fun q : Q => prCoin fun u : B × Y => FiberMisses My c H x P (H (u.1, c u.2)) (bits q) :=
+    (FlockSoundness.ZK.avg_prod_split _).trans (FlockSoundness.Game.avg_const
+      (avg fun q : Q => prCoin fun u : B × Y => FiberMisses My c H x P (H (u.1, c u.2)) (bits q)))
+  have hr : avg (fun w : Ω × Q => prCoin fun u : B × Y => FiberMisses My c H x P (H (u.1, c u.2)) (P w.1))
+      = avg fun ω : Ω => prCoin fun u : B × Y => FiberMisses My c H x P (H (u.1, c u.2)) (P ω) :=
+    (FlockSoundness.ZK.avg_prod_split _).trans (congrArg avg (funext fun ω => FlockSoundness.Game.avg_const
+      (prCoin fun u : B × Y => FiberMisses My c H x P (H (u.1, c u.2)) (P ω))))
   have hswap : prCoin (fun p : (Ω × Q) × (B × Y) => FiberMisses My c H x P (H (p.2.1, c p.2.2)) (bits p.1.2))
       = prCoin (fun p : (Ω × Q) × (B × Y) => FiberMisses My c H x P (H (p.2.1, c p.2.2)) (P p.1.1)) := by
     rw [FlockSoundness.ZK.prCoin_prod_split
         (fun (w : Ω × Q) (u : B × Y) => FiberMisses My c H x P (H (u.1, c u.2)) (bits w.2)),
       FlockSoundness.ZK.prCoin_prod_split
-        (fun (w : Ω × Q) (u : B × Y) => FiberMisses My c H x P (H (u.1, c u.2)) (P w.1)),
-      FlockSoundness.ZK.avg_prod_split, FlockSoundness.ZK.avg_prod_split]
-    simp only [FlockSoundness.Game.avg_const]
-    exact (hlaw fun r => prCoin fun u : B × Y => FiberMisses My c H x P (H (u.1, c u.2)) r).symm
+        (fun (w : Ω × Q) (u : B × Y) => FiberMisses My c H x P (H (u.1, c u.2)) (P w.1))]
+    exact hl.trans ((hlaw fun r => prCoin fun u : B × Y => FiberMisses My c H x P (H (u.1, c u.2)) r).symm.trans
+      hr.symm)
   have hideal : prCoin (fun p : (Ω × Q) × (B × Y) => FiberMisses My c H x P (H (p.2.1, c p.2.2)) (P p.1.1))
       ≤ δ₁ := by
     have a := FlockSoundness.ZK.prCoin_add_not
