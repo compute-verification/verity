@@ -28,7 +28,7 @@ def readAll (files : List String) (whole : Nat) : IO (Except String (Array (Byte
 def main (args : List String) : IO UInt32 := do
   match args with
   | "check" :: p :: c :: e :: files@(_ :: _) =>
-    match ← readAll files (← NetworkCheck.Period.scanFiles p) with
+    match ← readAll files (NetworkCheck.Period.scanCount (← NetworkCheck.Period.paramsAt p)) with
     | .ok fs => (NetworkCheck.Period.protocolWith fs).main ["check", p, c, e]
     | .error why => (NetworkCheck.Period.refusing s!"circuit files: {why}").main ["check", p, c, e]
   | _ => NetworkCheck.Period.protocol.main args
