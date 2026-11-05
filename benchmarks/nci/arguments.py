@@ -5,8 +5,7 @@
 * ``premises``: theorems, assumptions, constructions, estimates, policy rules and models, each with its ``status`` and
   references: findings (``sources/``), parameter estimates, Lean names (``Security/lean-audit.json``), library
   algorithms and board rows.
-* ``attacks``: from the red teams and the workstreams, each with its severity, the claims it targets, its status and
-  repair (a premise id or prose).
+* ``attacks``: each with its severity, the claims it targets, its status and repair (a premise id or prose).
 * ``plans``: the evidence the blue teams proposed, with the round-2 red team's verdict.
 """
 

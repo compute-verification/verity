@@ -31,12 +31,7 @@
    "tseng-2024-qtip",
    "kimiteam-2025-kimi-k2",
    "moonshotai-2025-kimi-k2-config"
-  ],
-  "capability": {
-   "demonstrated": "generational",
-   "evidence": [],
-   "note": "the reference case: standard training"
-  }
+  ]
  },
  {
   "id": "pretrain-full-subspace-arch",
@@ -135,12 +130,7 @@
    "shenfeld-2025-rls-razor",
    "deepseek-2025-r1",
    "moonshotai-2025-kimi-k2-config"
-  ],
-  "capability": {
-   "demonstrated": "broad",
-   "evidence": [],
-   "note": "frontier reasoning gains come from this configuration"
-  }
+  ]
  },
  {
   "id": "rl-rank1-lora-all-experts",
@@ -168,14 +158,7 @@
   "sources": [
    "schulman-2025-lora-without-regret",
    "moonshotai-2025-kimi-k2-config"
-  ],
-  "capability": {
-   "demonstrated": "broad",
-   "evidence": [
-    "schulman-2025-lora-without-regret/1"
-   ],
-   "note": "rank-1 LoRA matches full RL at 8B dense; untested on a 1T MoE"
-  }
+  ]
  },
  {
   "id": "rl-lora-xs-all-modules",
@@ -229,14 +212,7 @@
   "notes": "Qwen-7B goes from 76% to 95% on GSM8K with 10k parameters (Qwen-specific; Llama needs about 500 params for 85%).",
   "sources": [
    "morris-2026-tinylora"
-  ],
-  "capability": {
-   "demonstrated": "elicit",
-   "evidence": [
-    "morris-2026-tinylora/6"
-   ],
-   "note": "elicitation of existing skill"
-  }
+  ]
  },
  {
   "id": "mezo-seed-finetune",
@@ -264,13 +240,6 @@
   "sources": [
    "malladi-2023-mezo"
   ],
-  "capability": {
-   "demonstrated": "narrow",
-   "evidence": [
-    "malladi-2023-mezo/4"
-   ],
-   "note": "within 1% of fine-tuning on 7/11 tasks at 13B"
-  },
   "decode_flops_table": 4.16e+16,
   "state_splits": false
  },
@@ -300,13 +269,6 @@
   "sources": [
    "qiu-2025-es-at-scale"
   ],
-  "capability": {
-   "demonstrated": "narrow",
-   "evidence": [
-    "qiu-2025-es-at-scale/3"
-   ],
-   "note": "beats PPO and GRPO on Countdown at 7-8B; a re-run finds near-parity"
-  },
   "decode_flops_table": 3.12e+16,
   "state_splits": false
  },
@@ -364,14 +326,7 @@
   "notes": "No weights change, so kappa = 0 and the proven bound is 1 by design: this is the shared headroom. U is raw text; arithmetic-coded against the base model it would be about 8x smaller, so under kimi-k2-1m-coded this row overstates its cost.",
   "sources": [
    "zhang-2025-ace"
-  ],
-  "capability": {
-   "demonstrated": "narrow",
-   "evidence": [
-    "zhang-2025-ace/2"
-   ],
-   "note": "+10.6 points on agent tasks"
-  }
+  ]
  },
  {
   "id": "steering-vectors",

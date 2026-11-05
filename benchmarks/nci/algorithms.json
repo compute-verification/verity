@@ -157,13 +157,7 @@
      "charles-2025-diloco-scaling/7"
     ],
     "metric": "loss vs data-parallel, M = 4",
-    "compute_range_flop": [
-     1.5e+17,
-     6.9e+20
-    ],
     "multiplier": 0.95,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "Derived: 0.66 at 35M, 0.95 at 2.4B; M = 1-2 about 1.0-1.1 at 2.4B."
    },
    {
@@ -171,10 +165,7 @@
      "douillard-2023-diloco/1"
     ],
     "metric": "quality vs synchronous, 8 workers",
-    "compute_range_flop": null,
     "multiplier": 1.0,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "500x less."
    },
    {
@@ -182,10 +173,7 @@
      "therien-2025-muloco/1"
     ],
     "metric": "benchmarks vs DP AdamW, 15B, K = 16",
-    "compute_range_flop": null,
     "multiplier": 1.0,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "Matches."
    },
    {
@@ -194,13 +182,7 @@
      "charles-2025-diloco-scaling/6"
     ],
     "metric": "C4 eval loss vs data-parallel at 20 tokens/param, M = 4",
-    "compute_range_flop": [
-     6.9e+20,
-     1.2e+22
-    ],
     "multiplier": 0.94,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Derived with the data-parallel law's slope (d ln L/d ln C about -0.0477): M = 4 0.947 (2.4B), 0.945 (4B), 0.942 (10B); M = 2 1.03, 1.04, 1.04. The replica penalty stopped shrinking above 2.4B."
    },
    {
@@ -209,13 +191,7 @@
      "kale-2025-eager-diloco/2"
     ],
     "metric": "C4 eval loss vs data-parallel at Chinchilla budgets, H = 30",
-    "compute_range_flop": [
-     9.4e+17,
-     1.9e+20
-    ],
     "multiplier": 1.0,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "Derived: 0.87 at 100M, 0.92-0.93 at 200M-500M, 1.0 at 1B; losses given to 0.01."
    },
    {
@@ -224,10 +200,7 @@
      "kolehmainen-2025-noloco/2"
     ],
     "metric": "C4 validation perplexity vs FSDP, 6.8B, 16 replicas x 4 pipeline stages",
-    "compute_range_flop": null,
     "multiplier": 0.48,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "Derived from 17.3 vs 15.7; NoLoCo 0.66; token budget not Chinchilla-matched; 16 replicas."
    },
    {
@@ -236,13 +209,7 @@
      "douillard-2026-decoupled-diloco/2"
     ],
     "metric": "downstream average vs data-parallel, asynchronous M = 8, 2B-9B",
-    "compute_range_flop": [
-     3.1e+20,
-     7.6e+21
-    ],
     "multiplier": 1.0,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Matches at 2B/5B/9B; downstream, not loss."
    },
    {
@@ -251,10 +218,7 @@
      "qi-2025-dilocox/2"
     ],
     "metric": "training loss vs AllReduce, 107B, 4,000 steps",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "0.30 nats worse; not converged; not convertible."
    },
    {
@@ -263,10 +227,7 @@
      "he-2024-localsgd-scaling/2"
     ],
     "metric": "fitted loss law vs DDP in parameters, 8 nodes, to 3B",
-    "compute_range_flop": null,
     "multiplier": 1.11,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "A ratio in parameters (about 1.23 in compute) extrapolated past 3B; token budgets not Chinchilla-matched; kept out of the multiplier."
    },
    {
@@ -274,19 +235,12 @@
      "charles-2025-diloco-scaling/8"
     ],
     "metric": "EXTRAPOLATION of Table 7's independent power laws in N, M = 4",
-    "compute_range_flop": [
-     1e+24,
-     1e+26
-    ],
     "multiplier": 1.29,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "EXTRAPOLATION, do not use as multiplier: the same fit predicts 1.08 at 10B where 0.94 was measured, and its leave-one-out residual (charles-2025-diloco-scaling/9) exceeds the gaps it extrapolates."
    }
   ],
   "multiplier": {
    "value": 0.94,
-   "trend": "constant",
    "evidence": [
     "charles-2025-diloco-scaling/2",
     "charles-2025-diloco-scaling/6"
@@ -329,10 +283,7 @@
      "belilovsky-2019-dgl/1"
     ],
     "metric": "ImageNet top-1 vs end-to-end (CNN)",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "VGG-11 layer-wise -0.3 points; per-layer DGL (K = 10) on VGG-13 -2.2; total compute not reported; no LM result at any scale."
    }
   ]
@@ -401,10 +352,7 @@
      "zhang-2024-scaling-meets-finetuning/3"
     ],
     "metric": "fine-tuning loss vs PEFT size, 1B-16B (not pretraining)",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Adapter-size scaling ineffective; the law mispredicts at 16B."
    },
    {
@@ -413,13 +361,7 @@
      "glentis-2025-param-efficient-survey/3"
     ],
     "metric": "held-out loss, frozen random base + rank-512 adapters from init, 1B",
-    "compute_range_flop": [
-     1.05e+20,
-     1.05e+20
-    ],
     "multiplier": 0.26,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Rank d/4, not 16: the nearest pretraining point."
    }
   ],
@@ -517,10 +459,7 @@
      "hinton-2022-forward-forward/1"
     ],
     "metric": "queries to equal accuracy, convex worst case (theory)",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "m ~ 1.5/d, tight: 1.5e-9 / 1.5e-10 / 1.5e-11 / 1.5e-12 at 1e9-1e12 parameters (extrapolation)."
    },
    {
@@ -531,10 +470,7 @@
      "gan-2026-neural-thickets/1"
     ],
     "metric": "queries to equal loss in effective dimension (theory)",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "m ~ 1.5/ED; ED is unmeasured for pretraining and is largest from random init to low loss."
    },
    {
@@ -543,10 +479,7 @@
      "allaire-2025-zo-pretraining/3"
     ],
     "metric": "pretraining loss at equal data, population 2 / one query",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "MeZO's regime underperforms or diverges from scratch; for pretraining it is bounded by zo-sgd's 4e-4."
    }
   ],
@@ -585,13 +518,7 @@
      "dahal-2026-dust/6"
     ],
     "metric": "FLOPs to equal held-out loss vs tuned SGD backprop, 37.7M transformer, weight-space ES at 64 forward passes per update",
-    "compute_range_flop": [
-     4.8e+16,
-     9.7e+16
-    ],
     "multiplier": 0.00036,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "6.3e-4 at 10M tokens, 3.6e-4 at 20M; 2.35 nats behind backprop. Worst-case theory 3/d; calibrated to this cell with effective dimension proportional to d: 1.4e-5 to 1.4e-8 at 1e9-1e12 (extrapolation)."
    },
    {
@@ -600,16 +527,12 @@
      "gan-2026-neural-thickets/2"
     ],
     "metric": "post-training accuracy at equal FLOPs, 0.5B-8B",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Random search matches RL only near pretrained weights; from an untrained net it is a needle in a haystack."
    }
   ],
   "multiplier": {
    "value": 0.00036,
-   "trend": "shrinks-with-scale",
    "evidence": [
     "dahal-2026-dust/6"
    ],
@@ -651,10 +574,7 @@
      "larsen-2022-degrees-of-freedom/1"
     ],
     "metric": "accuracy at a fixed random-subspace dimension",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "A fixed 4,096-seed pool is a fixed 4,096-dimensional subspace; even with exact gradients a 400x subspace reaches 78% of SGD on CIFAR-10 and more steps don't help. m -> 0 for pretraining targets."
    }
   ],
@@ -694,13 +614,7 @@
      "gundlach-2025-origin/9"
     ],
     "metric": "compute to equal held-out loss vs modern Transformer (E=1.9 subtracted)",
-    "compute_range_flop": [
-     1000000000000000.0,
-     1e+18
-    ],
     "multiplier": 0.0385,
-    "trend": "exponent-change",
-    "exponent_change": null,
     "note": "Measured: 6.28x at loss 5.3, 26x at 4.4."
    },
    {
@@ -709,13 +623,7 @@
      "gundlach-2025-origin/15"
     ],
     "metric": "same, from Gundlach's fitted exponents",
-    "compute_range_flop": [
-     1.3e+22,
-     1.3e+22
-    ],
     "multiplier": 0.00138,
-    "trend": "exponent-change",
-    "exponent_change": null,
     "note": "EXTRAPOLATION by the authors: 725x at 1.3e22; 6x at 1e15 and more than 100x at 1e23."
    },
    {
@@ -725,13 +633,7 @@
      "ho-2026-least-understood/4"
     ],
     "metric": "same, gap proportional to C^0.15-0.29 through the quoted points",
-    "compute_range_flop": [
-     1e+24,
-     1e+26
-    ],
     "multiplier": 0.00039,
-    "trend": "exponent-change",
-    "exponent_change": null,
     "note": "EXTRAPOLATION: gap 140-2,600x at 1e24 and 290-9,900x at 1e26; experiments stop at 1e18."
    },
    {
@@ -739,16 +641,12 @@
      "ho-2024-algorithmic-progress/2"
     ],
     "metric": "compute-equivalent gain of the Transformer (observational)",
-    "compute_range_flop": null,
     "multiplier": 0.139,
-    "trend": "exponent-change",
-    "exponent_change": null,
     "note": "7.2x (CI 3.3-45.7x)."
    }
   ],
   "multiplier": {
    "value": 0.0385,
-   "trend": "exponent-change",
    "evidence": [
     "gundlach-2025-origin/9"
    ],
@@ -790,13 +688,7 @@
      "gundlach-2025-origin/2"
     ],
     "metric": "CEG at equal held-out loss, SwiGLU vs GeLU, 3.6M params",
-    "compute_range_flop": [
-     1000000000000000.0,
-     1e+17
-    ],
     "multiplier": 1.17,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Measured."
    },
    {
@@ -804,13 +696,7 @@
      "gundlach-2025-origin/3"
     ],
     "metric": "same, RoPE vs sinusoidal",
-    "compute_range_flop": [
-     1000000000000000.0,
-     1e+17
-    ],
     "multiplier": 1.44,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Measured."
    },
    {
@@ -818,13 +704,7 @@
      "gundlach-2025-origin/5"
     ],
     "metric": "same, pre-RMSNorm vs post-RMSNorm (1.09x vs pre-LayerNorm)",
-    "compute_range_flop": [
-     1000000000000000.0,
-     1e+17
-    ],
     "multiplier": 1.87,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Measured."
    },
    {
@@ -833,19 +713,12 @@
      "ho-2026-least-understood/4"
     ],
     "metric": "same, assumed scale-invariant",
-    "compute_range_flop": [
-     1e+24,
-     1e+26
-    ],
     "multiplier": 1.17,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "EXTRAPOLATION: holds only if the near-identical exponents measured up to 1e18 persist 6-8 orders higher."
    }
   ],
   "multiplier": {
    "value": 1.17,
-   "trend": "constant",
    "evidence": [
     "gundlach-2025-origin/2"
    ],
@@ -889,13 +762,7 @@
      "gundlach-2025-origin/11"
     ],
     "metric": "CEG at equal held-out loss, modern vs retro Transformer (measured composite)",
-    "compute_range_flop": [
-     1000000000000000.0,
-     1e+18
-    ],
     "multiplier": 1.33,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Ablations multiply to 3.43x; the measured composite is 1.33x."
    },
    {
@@ -904,13 +771,7 @@
      "gundlach-2025-origin/16"
     ],
     "metric": "scale-invariant innovations at the 2023 frontier (experiment plus literature)",
-    "compute_range_flop": [
-     1.3e+22,
-     1.3e+22
-    ],
     "multiplier": 2.6,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "A constant 2x against dense Transformers means 0% growth per year."
    },
    {
@@ -918,16 +779,12 @@
      "sanderson-2025-compute-paths/1"
     ],
     "metric": "combined CEG, nanoGPT",
-    "compute_range_flop": null,
     "multiplier": 3.5,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Upper end."
    }
   ],
   "multiplier": {
    "value": 1.33,
-   "trend": "constant",
    "evidence": [
     "gundlach-2025-origin/7",
     "gundlach-2025-origin/11"
@@ -969,10 +826,7 @@
      "so-2021-primer/4"
     ],
     "metric": "compute to vanilla Transformer's final held-out perplexity, LM1B, 35M, library-default hyperparameters",
-    "compute_range_flop": null,
     "multiplier": 2.12,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "2.12 / 2.13 / 1.72 across three library and hardware setups."
    },
    {
@@ -980,10 +834,7 @@
      "so-2021-primer/4"
     ],
     "metric": "same, Primer over Transformer++ (derived ratio)",
-    "compute_range_flop": null,
     "multiplier": 1.38,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Derived: 1.29-1.55."
    },
    {
@@ -992,10 +843,7 @@
      "so-2021-primer/1"
     ],
     "metric": "loss vs compute, C4, 20M-1.9B",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Parallel lines mean a constant reduction factor; only absolute savings grow."
    },
    {
@@ -1003,10 +851,7 @@
      "so-2021-primer/2"
     ],
     "metric": "FLAGGED downstream: compute to equal one-shot, 1.9B",
-    "compute_range_flop": null,
     "multiplier": 3.0,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Not held-out loss."
    },
    {
@@ -1014,16 +859,12 @@
      "so-2021-primer/5"
     ],
     "metric": "masked LM",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Not obviously better than Transformer++."
    }
   ],
   "multiplier": {
    "value": 1.3,
-   "trend": "constant",
    "evidence": [
     "so-2021-primer/4",
     "so-2021-primer/3"
@@ -1065,16 +906,12 @@
      "sanderson-2025-compute-paths/2"
     ],
     "metric": "CEG vs standard attention, nanoGPT compact to full",
-    "compute_range_flop": null,
     "multiplier": 0.931,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "MQA 0.673 -> 0.931; sparse attention 0.515 -> 0.964."
    }
   ],
   "multiplier": {
    "value": 0.931,
-   "trend": "grows-with-scale",
    "evidence": [
     "sanderson-2025-compute-paths/2"
    ],
@@ -1115,10 +952,7 @@
      "tay-2022-scaling-vs-architectures/2"
     ],
     "metric": "perplexity drop base -> large",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "exponent-change",
-    "exponent_change": null,
     "note": "2.7% vs 8.4% for the Transformer: a worse exponent."
    }
   ],
@@ -1160,13 +994,7 @@
      "gu-2023-mamba/1"
     ],
     "metric": "loss under the Chinchilla protocol",
-    "compute_range_flop": [
-     2e+18,
-     2e+20
-    ],
     "multiplier": 1.0,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Matches Transformer++ at 125M-1.3B."
    },
    {
@@ -1174,10 +1002,7 @@
      "gu-2023-mamba/2"
     ],
     "metric": "loss at fixed size, 300B tokens",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Mamba-3B matches Transformers twice its size (not compute-matched)."
    },
    {
@@ -1185,13 +1010,7 @@
      "waleffe-2024-mamba-empirical/1"
     ],
     "metric": "5-shot MMLU, 8B, 1.1T tokens",
-    "compute_range_flop": [
-     5.3e+22,
-     5.3e+22
-    ],
     "multiplier": null,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "About 15 points behind the Transformer on in-context tasks."
    },
    {
@@ -1199,16 +1018,12 @@
      "dao-2024-mamba2/1"
     ],
     "metric": "throughput of the core layer",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "2-8x faster than Mamba."
    }
   ],
   "multiplier": {
    "value": 1.0,
-   "trend": "constant",
    "evidence": [
     "gu-2023-mamba/1"
    ],
@@ -1251,13 +1066,7 @@
      "de-2024-griffin/1"
     ],
     "metric": "held-out loss vs MQA Transformer",
-    "compute_range_flop": [
-     1e+18,
-     1e+21
-    ],
     "multiplier": null,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Lowest loss at every budget; slightly above 1."
    },
    {
@@ -1265,13 +1074,7 @@
      "waleffe-2024-mamba-empirical/2"
     ],
     "metric": "12-task average, 8B, 3.5T tokens",
-    "compute_range_flop": [
-     1.7e+23,
-     1.7e+23
-    ],
     "multiplier": null,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "+2.65 points over the 8B Transformer."
    },
    {
@@ -1279,10 +1082,7 @@
      "yang-2024-gated-deltanet/1"
     ],
     "metric": "LM and retrieval benchmarks vs Mamba2",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Gated DeltaNet hybrids improve further."
    }
   ],
@@ -1324,10 +1124,7 @@
      "shen-2024-linear-scaling/1"
     ],
     "metric": "loss vs LLaMA at equal FLOPs, 70M-7B, 300B tokens",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Same scaling trend, better perplexity, worse retrieval."
    },
    {
@@ -1335,10 +1132,7 @@
      "beck-2025-xlstm-scaling/1"
     ],
     "metric": "loss at equal compute, 80M-7B",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Pareto-dominates Transformers (authors' comparison)."
    },
    {
@@ -1346,16 +1140,12 @@
      "peng-2023-rwkv/1"
     ],
     "metric": "quality at matched size, up to 14B",
-    "compute_range_flop": null,
     "multiplier": 1.0,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "On par."
    }
   ],
   "multiplier": {
    "value": 1.0,
-   "trend": "constant",
    "evidence": [
     "peng-2023-rwkv/1"
    ],
@@ -1397,16 +1187,12 @@
      "ye-2024-diff-transformer/2"
     ],
     "metric": "parameters or tokens to equal loss",
-    "compute_range_flop": null,
     "multiplier": 1.54,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "About 65% of parameters or tokens, 830M-13B; 62.2% at 11B-equivalent."
    }
   ],
   "multiplier": {
    "value": 1.54,
-   "trend": "constant",
    "evidence": [
     "ye-2024-diff-transformer/1",
     "ye-2024-diff-transformer/2"
@@ -1448,10 +1234,7 @@
      "loshchilov-2024-ngpt/1"
     ],
     "metric": "training steps to equal accuracy",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "4-20x fewer steps depending on context length; per-step cost is higher."
    }
   ],
@@ -1491,16 +1274,12 @@
      "zhu-2024-hyperconnections/1"
     ],
     "metric": "tokens to equal loss, OLMoE-1B-7B",
-    "compute_range_flop": null,
     "multiplier": 1.8,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Advantage kept to 500B tokens."
    }
   ],
   "multiplier": {
    "value": 1.8,
-   "trend": "unknown",
    "evidence": [
     "zhu-2024-hyperconnections/1"
    ],
@@ -1541,16 +1320,12 @@
      "pagnoni-2024-blt/1"
     ],
     "metric": "loss at equal training FLOPs vs Llama 3 BPE, up to 8B",
-    "compute_range_flop": null,
     "multiplier": 1.0,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Parity; up to 50% inference-FLOP savings at small loss cost."
    }
   ],
   "multiplier": {
    "value": 1.0,
-   "trend": "constant",
    "evidence": [
     "pagnoni-2024-blt/1"
    ],
@@ -1595,13 +1370,7 @@
      "schwethelm-2026-iso-depth-looped/2"
     ],
     "metric": "held-out loss at equal training FLOPs, joint law over r in {1,2,4,8}",
-    "compute_range_flop": [
-     4e+17,
-     2.15e+19
-    ],
     "multiplier": 0.55,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "phi = 0.46: m = r^(phi-1) at equal tokens (0.69 r=2, 0.47 r=4, 0.33 r=8); 0.58 at r=4 with re-allocation; no compute dependence, so 0.47-0.58 at r=4 at 1e24-1e26 (extrapolation)."
    },
    {
@@ -1609,13 +1378,7 @@
      "schwethelm-2026-iso-depth-looped/3"
     ],
     "metric": "held-out loss r=4 vs r=1",
-    "compute_range_flop": [
-     4e+20,
-     4e+20
-    ],
     "multiplier": 0.54,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "0.061 nats."
    },
    {
@@ -1623,13 +1386,7 @@
      "saunshi-2025-looped/1"
     ],
     "metric": "held-out perplexity vs iso-FLOP dense, 1B/250B tokens",
-    "compute_range_flop": [
-     1.5e+21,
-     1.5e+21
-    ],
     "multiplier": 0.52,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "12x2 vs 24x1: +0.065 nats."
    },
    {
@@ -1637,13 +1394,7 @@
      "schwethelm-2026-iso-depth-looped/4"
     ],
     "metric": "same law with hyperconnections",
-    "compute_range_flop": [
-     4e+17,
-     2.15e+19
-    ],
     "multiplier": 0.62,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "phi = 0.65."
    },
    {
@@ -1651,10 +1402,7 @@
      "lan-2020-albert/1"
     ],
     "metric": "fine-tuned downstream average at matched score, BERT",
-    "compute_range_flop": null,
     "multiplier": 0.6,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Downstream, not loss."
    },
    {
@@ -1664,16 +1412,12 @@
      "csordas-2024-moeut/3"
     ],
     "metric": "C4 perplexity at equal MACs, up to 1B, 6.6B tokens",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Sharing plus MoE beats undertrained baselines; plain sharing is not compute-efficient."
    }
   ],
   "multiplier": {
    "value": 0.55,
-   "trend": "constant",
    "evidence": [
     "schwethelm-2026-iso-depth-looped/2",
     "schwethelm-2026-iso-depth-looped/3",
@@ -1721,13 +1465,7 @@
      "krajewski-2024-finegrained-moe/2"
     ],
     "metric": "compute to equal loss vs dense",
-    "compute_range_flop": [
-     1e+19,
-     1e+25
-    ],
     "multiplier": 20,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "20x at 1e20, over 40x past 1e25 (extrapolated from 129M-3.7B fits, E = 64)."
    },
    {
@@ -1736,13 +1474,7 @@
      "tian-2025-efficiency-leverage/2"
     ],
     "metric": "efficiency leverage at 1T tokens",
-    "compute_range_flop": [
-     5e+21,
-     5e+21
-    ],
     "multiplier": 7,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "0.85B-active MoE equals a 6.1B dense model."
    },
    {
@@ -1750,10 +1482,7 @@
      "dai-2024-deepseekmoe/1"
     ],
     "metric": "compute to match LLaMA2 7B",
-    "compute_range_flop": null,
     "multiplier": 2.5,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Different data."
    },
    {
@@ -1761,10 +1490,7 @@
      "gundlach-2025-origin/8"
     ],
     "metric": "literature estimate at fixed expert count",
-    "compute_range_flop": null,
     "multiplier": 2,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Conservative bound."
    },
    {
@@ -1772,10 +1498,7 @@
      "ludziejewski-2025-joint-moe/1"
     ],
     "metric": "loss under a joint memory and compute budget",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Still better than dense when total parameters are capped."
    },
    {
@@ -1784,13 +1507,7 @@
      "abnar-2025-parameters-vs-flops/2"
     ],
     "metric": "held-out loss at equal FLOPs vs MoE sparsity",
-    "compute_range_flop": [
-     3e+19,
-     1e+21
-    ],
     "multiplier": null,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Optimal sparsity approaches 1 at every budget; same-perplexity sparse models do worse on reading comprehension (abnar/3); memory and communication ignored (abnar/4)."
    },
    {
@@ -1798,19 +1515,12 @@
      "he-2024-peer/1"
     ],
     "metric": "held-out C4 perplexity at isoFLOP, converted with the table's own dense slope (0.22)",
-    "compute_range_flop": [
-     6e+18,
-     2e+19
-    ],
     "multiplier": 1.6,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "PEER 1.9 at 6e18 to 1.6 at 2e19; two points."
    }
   ],
   "multiplier": {
    "value": 20,
-   "trend": "grows-with-scale",
    "evidence": [
     "krajewski-2024-finegrained-moe/1",
     "krajewski-2024-finegrained-moe/2"
@@ -1853,10 +1563,7 @@
      "fedus-2021-switch/1"
     ],
     "metric": "step-time speedup to equal quality, T5-Base",
-    "compute_range_flop": null,
     "multiplier": 7,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Up to 7x; 4x over T5-XXL at trillion parameters."
    },
    {
@@ -1865,13 +1572,7 @@
      "clark-2022-routed-scaling/2"
     ],
     "metric": "effective parameter gain from routing",
-    "compute_range_flop": [
-     1.2e+19,
-     1e+21
-    ],
     "multiplier": null,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "Improvement shrinks with base size; zero past 937B (S-BASE) at 130B fixed tokens."
    },
    {
@@ -1879,19 +1580,12 @@
      "he-2024-peer/1"
     ],
     "metric": "held-out C4 perplexity at isoFLOP, converted",
-    "compute_range_flop": [
-     6e+18,
-     2e+19
-    ],
     "multiplier": 1.4,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "1.6 at 6e18 to 1.4 at 2e19."
    }
   ],
   "multiplier": {
    "value": 4,
-   "trend": "shrinks-with-scale",
    "evidence": [
     "fedus-2021-switch/1",
     "clark-2022-routed-scaling/1",
@@ -1935,13 +1629,7 @@
      "jin-2025-journey-matters/4"
     ],
     "metric": "held-out loss at equal compute, counting non-zero-weight FLOPs",
-    "compute_range_flop": [
-     3.7e+18,
-     6.8e+20
-    ],
     "multiplier": 1.0,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Chinchilla with the average parameter count fits sparse and dense; m = 1 by construction (past 6.8e20 is extrapolation)."
    },
    {
@@ -1949,13 +1637,7 @@
      "jin-2025-journey-matters/3"
     ],
     "metric": "same, counting real FLOPs (masked dense matmuls)",
-    "compute_range_flop": [
-     3.7e+18,
-     6.8e+20
-    ],
     "multiplier": 0.4,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "N_avg/N_init: 0.4 at 80% final sparsity, about 0.7 at 50%."
    },
    {
@@ -1963,10 +1645,7 @@
      "evci-2020-rigl/1"
     ],
     "metric": "char-LM loss vs dense-then-prune",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Negative, small GRU."
    },
    {
@@ -1974,10 +1653,7 @@
      "frantar-2023-sparsity-scaling/1"
     ],
     "metric": "loss at fixed non-zero parameters",
-    "compute_range_flop": null,
     "multiplier": 1.0,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "Sparsity becomes optimal only when training well past Chinchilla."
    },
    {
@@ -1985,16 +1661,12 @@
      "frantar-2023-sparsity-scaling/2"
     ],
     "metric": "equivalent dense size, 75% sparsity",
-    "compute_range_flop": null,
     "multiplier": 2.15,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Parameter multiplier in the infinite-data limit, not a compute multiplier."
    }
   ],
   "multiplier": {
    "value": 1.0,
-   "trend": "constant",
    "evidence": [
     "jin-2025-journey-matters/1",
     "frantar-2023-sparsity-scaling/1"
@@ -2038,10 +1710,7 @@
      "raposo-2024-mod/1"
     ],
     "metric": "training loss at equal FLOPs",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Up to 1.5% better log-probability objective; m_A slightly above 1."
    },
    {
@@ -2049,10 +1718,7 @@
      "zhang-2020-pld/1"
     ],
     "metric": "pre-training time to equal downstream accuracy, BERT",
-    "compute_range_flop": null,
     "multiplier": 2.5,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Claimed."
    },
    {
@@ -2060,10 +1726,7 @@
      "kaddour-2023-no-train-no-gain/1"
     ],
     "metric": "gain vs fully-decayed baseline",
-    "compute_range_flop": null,
     "multiplier": 1.0,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Layer-dropping gains vanish against a tuned baseline."
    },
    {
@@ -2072,19 +1735,12 @@
      "raposo-2024-mod/2"
     ],
     "metric": "training loss at equal FLOPs, isoFLOP 6e18-1e20, 60M-3B",
-    "compute_range_flop": [
-     6e+18,
-     1e+20
-    ],
     "multiplier": 1.3,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Up to 1.5% better objective, about 0.03-0.05 nats at 0.15-0.2 nats per e-fold; training, not held-out, loss."
    }
   ],
   "multiplier": {
    "value": 1.2,
-   "trend": "unknown",
    "evidence": [
     "raposo-2024-mod/1",
     "kaddour-2023-no-train-no-gain/1"
@@ -2130,13 +1786,7 @@
      "gundlach-2025-origin/10"
     ],
     "metric": "CEG of Chinchilla over Kaplan allocation (analytic, Chinchilla law)",
-    "compute_range_flop": [
-     1e+16,
-     1e+24
-    ],
     "multiplier": 10,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "Below 10x over 1e16-1e24."
    },
    {
@@ -2144,13 +1794,7 @@
      "gundlach-2025-origin/13"
     ],
     "metric": "same",
-    "compute_range_flop": [
-     1.3e+22,
-     1.3e+22
-    ],
     "multiplier": 3.7,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "3.67x here and 9.4x at 2e23."
    },
    {
@@ -2158,13 +1802,7 @@
      "ho-2024-algorithmic-progress/4"
     ],
     "metric": "compute-equivalent multiplier, Chinchilla over Kaplan",
-    "compute_range_flop": [
-     1e+21,
-     2.5e+24
-    ],
     "multiplier": 4,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "1.75x at GPT-2 scale, 4x at PaLM scale."
    },
    {
@@ -2173,13 +1811,7 @@
      "besiroglu-2024-chinchilla-replication/2"
     ],
     "metric": "same, Appendix B closed form recomputed",
-    "compute_range_flop": [
-     1e+24,
-     1e+26
-    ],
     "multiplier": 17.5,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "EXTRAPOLATION: 17.5 / 46 / 129x at 1e24 / 1e25 / 1e26 with Chinchilla constants; 7.8 / 17 / 39x with the Besiroglu refit. The Kaplan arm is a counterfactual nobody trains."
    },
    {
@@ -2190,10 +1822,7 @@
      "bi-2024-deepseek-llm/1"
     ],
     "metric": "optimal N(C) exponent",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "exponent-change",
-    "exponent_change": null,
     "note": "0.73 vs 0.5, explained by non-embedding counts at small scale; 0.45-0.58 depending on data quality."
    },
    {
@@ -2202,19 +1831,12 @@
      "sardana-2023-beyond-chinchilla/1"
     ],
     "metric": "compute at equal held-out loss, 200 tokens per parameter vs optimal (derived, Besiroglu law)",
-    "compute_range_flop": [
-     1e+20,
-     1e+26
-    ],
     "multiplier": 0.61,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "0.67 to 0.58 at 200 t/p; 0.83 to 0.75 at 100 t/p. Over-training is a constant penalty."
    }
   ],
   "multiplier": {
    "value": 1.0,
-   "trend": "constant",
    "evidence": [
     "hoffmann-2022-chinchilla/1"
    ],
@@ -2255,19 +1877,12 @@
      "muennighoff-2023-data-constrained/1"
     ],
     "metric": "loss vs unique-data training, up to 9B / 900B tokens",
-    "compute_range_flop": [
-     null,
-     4.9e+22
-    ],
     "multiplier": 1.0,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Negligible loss change up to 4 epochs; value decays to zero beyond."
    }
   ],
   "multiplier": {
    "value": 1.0,
-   "trend": "constant",
    "evidence": [
     "muennighoff-2023-data-constrained/1"
    ],
@@ -2310,10 +1925,7 @@
      "penedo-2024-fineweb/2"
     ],
     "metric": "FLAGGED downstream: tokens to equal MMLU, 1.71B",
-    "compute_range_flop": null,
     "multiplier": 10,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Benchmark-targeted."
    },
    {
@@ -2321,13 +1933,7 @@
      "li-2024-dclm/1"
     ],
     "metric": "FLAGGED downstream: compute to equal 53-task average, 7B, vs Llama 3 8B",
-    "compute_range_flop": [
-     1.1e+23,
-     1.1e+23
-    ],
     "multiplier": 6.6,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Confounded by other differences."
    },
    {
@@ -2335,10 +1941,7 @@
      "penedo-2024-fineweb/3"
     ],
     "metric": "held-out perplexity on Paloma domains at equal compute, FineWeb-Edu vs FineWeb, 1.71B",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Worse on broad web text (common-crawl +0.235 nats per token, reddit); better on Wikipedia, pes2o and code."
    },
    {
@@ -2346,10 +1949,7 @@
      "goyal-2024-data-filtering-compute/1"
     ],
     "metric": "FLAGGED vision-language: CLIP accuracy vs compute",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "Aggressive filtering loses once the filtered pool repeats."
    },
    {
@@ -2358,16 +1958,12 @@
      "magnusson-2023-paloma/1"
     ],
     "metric": "choice of held-out corpus",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "The validation set can flip which data recipe wins."
    }
   ],
   "multiplier": {
    "value": 1.0,
-   "trend": "unknown",
    "evidence": [
     "penedo-2024-fineweb/3",
     "lourie-2025-unreliable/2"
@@ -2411,10 +2007,7 @@
      "ankner-2024-perplexed/1"
     ],
     "metric": "steps to baseline downstream, 3B",
-    "compute_range_flop": null,
     "multiplier": 1.45,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "125M reference."
    },
    {
@@ -2422,10 +2015,7 @@
      "marion-2023-when-less-is-more/1"
     ],
     "metric": "loss with pruned data",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Beats the baseline on as little as 30% of the data."
    },
    {
@@ -2434,16 +2024,12 @@
      "sorscher-2022-beyond-scaling/2"
     ],
     "metric": "error vs pruned dataset size",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "exponent-change",
-    "exponent_change": null,
     "note": "Exponential scaling in theory; metrics scale poorly to ImageNet."
    }
   ],
   "multiplier": {
    "value": 1.45,
-   "trend": "unknown",
    "evidence": [
     "ankner-2024-perplexed/1"
    ],
@@ -2484,16 +2070,12 @@
      "tirumala-2023-d4/1"
     ],
     "metric": "efficiency gain at 6.7B",
-    "compute_range_flop": null,
     "multiplier": 1.2,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "20% efficiency gain."
    }
   ],
   "multiplier": {
    "value": 1.2,
-   "trend": "unknown",
    "evidence": [
     "tirumala-2023-d4/1"
    ],
@@ -2535,10 +2117,7 @@
      "xie-2023-doremi/1"
     ],
     "metric": "FLAGGED downstream: steps to baseline accuracy, 8B; baseline is the Pile's untuned default weights",
-    "compute_range_flop": null,
     "multiplier": 2.6,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Proxy compute excluded."
    },
    {
@@ -2546,10 +2125,7 @@
      "xie-2023-doremi/2"
     ],
     "metric": "held-out per-domain Pile log-perplexity, 8B, equal steps",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Improves all domains; magnitude given only in Figure 4."
    },
    {
@@ -2557,10 +2133,7 @@
      "xie-2023-doremi/3"
     ],
     "metric": "FLAGGED downstream: steps to baseline, 280M-1B, same-size proxy",
-    "compute_range_flop": null,
     "multiplier": 4,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Does not shrink across 280M-1B."
    },
    {
@@ -2568,16 +2141,12 @@
      "zhang-2025-curriculum/1"
     ],
     "metric": "steps to baseline, early/mid training",
-    "compute_range_flop": null,
     "multiplier": 1.4,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "Unchanged."
    }
   ],
   "multiplier": {
    "value": 2.6,
-   "trend": "constant",
    "evidence": [
     "xie-2023-doremi/1",
     "xie-2023-doremi/2"
@@ -2622,10 +2191,7 @@
      "maini-2024-wrap/1"
     ],
     "metric": "speed-up on C4",
-    "compute_range_flop": null,
     "multiplier": 3,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Rephraser compute excluded."
    },
    {
@@ -2633,10 +2199,7 @@
      "datologyai-2025-beyondweb/1"
     ],
     "metric": "speed-up vs open web data",
-    "compute_range_flop": null,
     "multiplier": 7.7,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "2.7x vs Nemotron-Synth."
    },
    {
@@ -2644,10 +2207,7 @@
      "gunasekar-2023-phi1/1"
     ],
     "metric": "HumanEval at 1.3B / 7B tokens",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Task-specific."
    },
    {
@@ -2655,13 +2215,7 @@
      "nguyen-2025-rewire/1"
     ],
     "metric": "unique-data-equivalent at equal tokens, downstream",
-    "compute_range_flop": [
-     6e+21,
-     6e+21
-    ],
     "multiplier": 2,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Rewrites worth about 2x unique web data at 1-7B in a data-limited regime."
    },
    {
@@ -2669,10 +2223,7 @@
      "nguyen-2025-rewire/2"
     ],
     "metric": "downstream, synthetic only",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Synthetic-only data is worse than raw."
    },
    {
@@ -2680,13 +2231,7 @@
      "su-2024-nemotron-cc/1"
     ],
     "metric": "downstream at matched tokens",
-    "compute_range_flop": [
-     4.8e+22,
-     4.8e+22
-    ],
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "+1.5 points."
    },
    {
@@ -2694,13 +2239,7 @@
      "su-2024-nemotron-cc/2"
     ],
     "metric": "downstream vs Llama 3.1 8B (not matched)",
-    "compute_range_flop": [
-     7.2e+23,
-     7.2e+23
-    ],
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "+0.5 points average."
    },
    {
@@ -2708,10 +2247,7 @@
      "abdin-2024-phi4/2"
     ],
     "metric": "MMLU, 12 epochs of synthetic vs fresh web",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Synthetic repeated beats fresh web on MMLU."
    },
    {
@@ -2719,10 +2255,7 @@
      "dohmatob-2024-strong-collapse/1"
     ],
     "metric": "theory",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Collapse bound."
    },
    {
@@ -2730,13 +2263,7 @@
      "maini-2024-wrap/2"
     ],
     "metric": "held-out Pile perplexity at equal training compute, 1.3B, C4-only baseline",
-    "compute_range_flop": [
-     1.2e+21,
-     2.3e+21
-    ],
     "multiplier": 2.4,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Derived: more than 10% lower perplexity is about 0.105 nats, about 2.4x via the Besiroglu law (illustrative); the narrow baseline means part of the gain is domain coverage."
    },
    {
@@ -2744,10 +2271,7 @@
      "ho-2026-least-understood/5"
     ],
     "metric": "accounting",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Generator compute must be counted, or m is bounded only by the generator; under the policy a registered generator is free."
    },
    {
@@ -2756,19 +2280,12 @@
      "kang-2025-synthetic-scaling/3"
     ],
     "metric": "tokens to equal held-out loss at a fixed 1B model, 1B-200B tokens, vs CommonCrawl",
-    "compute_range_flop": [
-     6e+18,
-     1.2e+21
-    ],
     "multiplier": null,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "5-10x at larger data budgets; fixed model size, so mostly over-trained and not against a compute-optimal reference. An 8B generator does as well as a 70B one; generation compute excluded."
    }
   ],
   "multiplier": {
    "value": 2.4,
-   "trend": "unknown",
    "evidence": [
     "maini-2024-wrap/2"
    ],
@@ -2809,13 +2326,7 @@
      "gu-2024-miniplm/2"
     ],
     "metric": "held-out loss at fixed size, extrapolated",
-    "compute_range_flop": [
-     7.2e+22,
-     7.2e+22
-    ],
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Extrapolated 0.06 nats below plain pretraining for a 1.2B student at 1T and 10T tokens; a fixed-size tokens multiplier, not a frontier multiplier."
    }
   ],
@@ -2855,10 +2366,7 @@
      "gloeckle-2024-mtp/2"
     ],
     "metric": "generative benchmark gain",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "12-17% more coding problems at 13B; increasingly useful with size."
    }
   ],
@@ -2898,13 +2406,7 @@
      "tay-2022-ul2r/1"
     ],
     "metric": "FLAGGED downstream: compute to equal few-shot performance, PaLM 540B",
-    "compute_range_flop": [
-     2.5e+24,
-     2.5e+24
-    ],
     "multiplier": 2,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "The only in-scope gain measured at frontier scale."
    },
    {
@@ -2912,16 +2414,12 @@
      "tay-2022-ul2r/2"
     ],
     "metric": "held-out causal LM loss",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Losses not comparable; no held-out-loss measure exists."
    }
   ],
   "multiplier": {
    "value": 2,
-   "trend": "unknown",
    "evidence": [
     "tay-2022-ul2r/1"
    ],
@@ -2963,10 +2461,7 @@
      "nie-2024-mdm/1"
     ],
     "metric": "compute to equal validation loss",
-    "compute_range_flop": null,
     "multiplier": 0.0625,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Same exponent as AR."
    },
    {
@@ -2975,16 +2470,12 @@
      "prabhudesai-2025-diffusion-data/2"
     ],
     "metric": "loss under repeated data",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "exponent-change",
-    "exponent_change": null,
     "note": "Overtakes AR past a critical compute when data is scarce."
    }
   ],
   "multiplier": {
    "value": 0.0625,
-   "trend": "constant",
    "evidence": [
     "nie-2024-mdm/1"
    ],
@@ -3026,10 +2517,7 @@
      "gundlach-2025-origin/6"
     ],
     "metric": "CEG vs AdamW",
-    "compute_range_flop": null,
     "multiplier": 0.53475935828877,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Scale-invariant gap."
    },
    {
@@ -3037,16 +2525,12 @@
      "zhao-2024-deconstructing-optimizers/1"
     ],
     "metric": "optimum and robustness",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "The only optimizer clearly worse than Adam."
    }
   ],
   "multiplier": {
    "value": 0.53475935828877,
-   "trend": "constant",
    "evidence": [
     "gundlach-2025-origin/6"
    ],
@@ -3090,13 +2574,7 @@
      "liu-2025-muon-scalable/3"
     ],
     "metric": "training FLOPs to equal validation loss, compute-optimal; AdamW grid-searched",
-    "compute_range_flop": [
-     2.1e+19,
-     3.5e+20
-    ],
     "multiplier": 1.92,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "Muon reuses AdamW's hyperparameters."
    },
    {
@@ -3104,13 +2582,7 @@
      "liu-2025-muon-scalable/2"
     ],
     "metric": "same, from fitted laws 2.506C^-0.052 vs 2.608C^-0.054",
-    "compute_range_flop": [
-     1e+24,
-     1e+26
-    ],
     "multiplier": 1.36,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "EXTRAPOLATION: m proportional to C^-0.037: 1.36 / 1.25 / 1.15 at 1e24 / 1e25 / 1e26."
    },
    {
@@ -3118,10 +2590,7 @@
      "essential-2025-muon-practical/1"
     ],
     "metric": "tokens to equal loss, 100M-4B",
-    "compute_range_flop": null,
     "multiplier": 1.15,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Unchanged."
    },
    {
@@ -3131,13 +2600,7 @@
      "wen-2025-fantastic-optimizers/7"
     ],
     "metric": "speedup vs tuned AdamW",
-    "compute_range_flop": [
-     2e+18,
-     1.4e+21
-    ],
     "multiplier": 1.1,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "1.4x to 1.1x."
    },
    {
@@ -3146,19 +2609,12 @@
      "wen-2025-fantastic-optimizers/4"
     ],
     "metric": "same, log-linear in C",
-    "compute_range_flop": [
-     1e+24,
-     1e+26
-    ],
     "multiplier": 1.0,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "EXTRAPOLATION: crosses 1 near 2e22; floored at 1."
    }
   ],
   "multiplier": {
    "value": 1.1,
-   "trend": "shrinks-with-scale",
    "evidence": [
     "wen-2025-fantastic-optimizers/1",
     "wen-2025-fantastic-optimizers/4",
@@ -3205,10 +2661,7 @@
      "wen-2025-fantastic-optimizers/6"
     ],
     "metric": "speedup vs tuned AdamW, 300-520M",
-    "compute_range_flop": null,
     "multiplier": 1.25,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "SOAP 1.2-1.3x."
    },
    {
@@ -3217,13 +2670,7 @@
      "wen-2025-fantastic-optimizers/6"
     ],
     "metric": "same, log-linear in C",
-    "compute_range_flop": [
-     1e+24,
-     1e+26
-    ],
     "multiplier": 1.0,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "EXTRAPOLATION: reaches about 1 by 1e22."
    },
    {
@@ -3231,10 +2678,7 @@
      "kasimbeg-2025-algoperf/1"
     ],
     "metric": "wall-clock vs NadamW",
-    "compute_range_flop": null,
     "multiplier": 1.28,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Unchanged."
    },
    {
@@ -3244,16 +2688,12 @@
      "kaddour-2023-no-train-no-gain/1"
     ],
     "metric": "speedup vs Adam",
-    "compute_range_flop": null,
     "multiplier": 1.0,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "Unchanged."
    }
   ],
   "multiplier": {
    "value": 1.25,
-   "trend": "shrinks-with-scale",
    "evidence": [
     "wen-2025-fantastic-optimizers/6"
    ],
@@ -3296,13 +2736,7 @@
      "wen-2025-fantastic-optimizers/3"
     ],
     "metric": "slowdown vs AdamW",
-    "compute_range_flop": [
-     2e+18,
-     1.4e+21
-    ],
     "multiplier": 0.95,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "At most 5% slower; Lion's gap widens and Adam-mini's narrows with scale."
    },
    {
@@ -3311,16 +2745,12 @@
      "zhang-2024-adam-mini/1"
     ],
     "metric": "LM quality vs Adam",
-    "compute_range_flop": null,
     "multiplier": 1.0,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Similar or better."
    }
   ],
   "multiplier": {
    "value": 0.95,
-   "trend": "unknown",
    "evidence": [
     "wen-2025-fantastic-optimizers/3"
    ],
@@ -3362,10 +2792,7 @@
      "shazeer-2018-adafactor/1"
     ],
     "metric": "translation quality vs Adam",
-    "compute_range_flop": null,
     "multiplier": 1.0,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Comparable."
    },
    {
@@ -3373,16 +2800,12 @@
      "zhao-2024-deconstructing-optimizers/1"
     ],
     "metric": "LM optimum and robustness",
-    "compute_range_flop": null,
     "multiplier": 1.0,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Comparable to Adam."
    }
   ],
   "multiplier": {
    "value": 1.0,
-   "trend": "unknown",
    "evidence": [
     "shazeer-2018-adafactor/1"
    ],
@@ -3423,16 +2846,12 @@
      "dettmers-2021-8bit-optimizers/1"
     ],
     "metric": "quality vs 32-bit Adam, up to 1.5B",
-    "compute_range_flop": null,
     "multiplier": 1.0,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Maintains 32-bit performance."
    }
   ],
   "multiplier": {
    "value": 1.0,
-   "trend": "constant",
    "evidence": [
     "dettmers-2021-8bit-optimizers/1"
    ],
@@ -3474,10 +2893,7 @@
      "ma-2024-swan/1"
     ],
     "metric": "tokens to equal perplexity, 350M-1.3B",
-    "compute_range_flop": null,
     "multiplier": 2,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Claimed."
    },
    {
@@ -3485,10 +2901,7 @@
      "wen-2025-fantastic-optimizers/8"
     ],
     "metric": "regime of the claim",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "Below 1x Chinchilla, where matrix optimizers gain most."
    }
   ],
@@ -3531,10 +2944,7 @@
      "gundlach-2025-origin/4"
     ],
     "metric": "loss vs cosine",
-    "compute_range_flop": null,
     "multiplier": 1.0,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Under 5% across schedules."
    },
    {
@@ -3542,16 +2952,12 @@
      "kasimbeg-2025-algoperf/1"
     ],
     "metric": "wall-clock, self-tuning AlgoPerf",
-    "compute_range_flop": null,
     "multiplier": 1.08,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Schedule-Free AdamW."
    }
   ],
   "multiplier": {
    "value": 1.0,
-   "trend": "constant",
    "evidence": [
     "hagele-2024-wsd/1",
     "gundlach-2025-origin/4"
@@ -3595,10 +3001,7 @@
      "micikevicius-2022-fp8/1"
     ],
     "metric": "quality vs 16-bit, up to 175B",
-    "compute_range_flop": null,
     "multiplier": 1.0,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Matches."
    },
    {
@@ -3606,13 +3009,7 @@
      "fishman-2024-fp8-trillion/1"
     ],
     "metric": "loss vs BF16, 7B on 2T tokens",
-    "compute_range_flop": [
-     8.4e+22,
-     8.4e+22
-    ],
     "multiplier": 1.0,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "On par, 34% higher throughput."
    },
    {
@@ -3620,19 +3017,12 @@
      "kumar-2024-precision-scaling/4"
     ],
     "metric": "compute-optimal precision",
-    "compute_range_flop": [
-     null,
-     2.7e+20
-    ],
     "multiplier": null,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "7-8 bits are compute-optimal, independent of compute."
    }
   ],
   "multiplier": {
    "value": 1.0,
-   "trend": "constant",
    "evidence": [
     "fishman-2024-fp8-trillion/1"
    ],
@@ -3675,13 +3065,7 @@
      "nvidia-2025-nvfp4/7"
     ],
     "metric": "loss vs FP8, 12B on 10T tokens",
-    "compute_range_flop": [
-     7.2e+23,
-     7.2e+23
-    ],
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "1.5% relative loss gap; 0.5% after switching the forward pass to higher precision."
    },
    {
@@ -3690,10 +3074,7 @@
      "castro-2025-quartet/5"
     ],
     "metric": "accuracy-vs-computation",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Competitive with FP8/FP16; loss gap tied to forward error."
    }
   ],
@@ -3734,10 +3115,7 @@
      "ma-2024-bitnet-b158/2"
     ],
     "metric": "perplexity at equal size and tokens",
-    "compute_range_flop": null,
     "multiplier": 1.0,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Matches from 3B."
    },
    {
@@ -3745,19 +3123,12 @@
      "kaushal-2024-spectra/1"
     ],
     "metric": "benchmarks, 3.9B, 300B tokens",
-    "compute_range_flop": [
-     7e+21,
-     7e+21
-    ],
     "multiplier": 1.0,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Matches the float 3.9B."
    }
   ],
   "multiplier": {
    "value": 1.0,
-   "trend": "unknown",
    "evidence": [
     "kaushal-2024-spectra/1"
    ],
@@ -3800,10 +3171,7 @@
      "douillard-2025-streamingdiloco/5"
     ],
     "metric": "loss vs data-parallel, 1B",
-    "compute_range_flop": null,
     "multiplier": 1.0,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Slightly better with 400x fewer bits exchanged."
    },
    {
@@ -3812,19 +3180,12 @@
      "kale-2025-eager-diloco/2"
     ],
     "metric": "C4 eval loss vs data-parallel at Chinchilla budgets, one-inner-step overlap, H = 30",
-    "compute_range_flop": [
-     9.4e+17,
-     1.9e+20
-    ],
     "multiplier": 1.0,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "2.48 vs 2.49 at 1B; 3.21 vs 3.19 at 100M (0.87). Eager outer-step overlap: 0.58 at 100M to 0.92 at 1B, 0.77 at H = 100."
    }
   ],
   "multiplier": {
    "value": 1.0,
-   "trend": "grows-with-scale",
    "evidence": [
     "kale-2025-eager-diloco/1"
    ],
@@ -3865,16 +3226,12 @@
      "peng-2024-demo/5"
     ],
     "metric": "loss vs AdamW-DDP, 300M-1B",
-    "compute_range_flop": null,
     "multiplier": 1.0,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Up to 85x less data per GPU."
    }
   ],
   "multiplier": {
    "value": 1.0,
-   "trend": "unknown",
    "evidence": [
     "peng-2024-demo/5"
    ],
@@ -3916,10 +3273,7 @@
      "sarfi-2025-sparseloco/6"
     ],
     "metric": "final loss vs dense DiLoCo, 178M-2B",
-    "compute_range_flop": null,
     "multiplier": 1.0,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "Lower loss at 97-99% sparsity."
    },
    {
@@ -3927,19 +3281,12 @@
      "lidin-2026-covenant72b/5"
     ],
     "metric": "zero-shot benchmarks vs LLaMA-2-70B (2T tokens), 72B on 1.1T tokens",
-    "compute_range_flop": [
-     4.8e+23,
-     4.8e+23
-    ],
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "No matched baseline: MMLU 67.1 vs 65.6, HellaSwag 80.6 vs 84.3, ARC-C 56.8 vs 57.4; not convertible. The existing multiplier is against DiLoCo; against data-parallel multiply by about 0.94."
    }
   ],
   "multiplier": {
    "value": 1.0,
-   "trend": "constant",
    "evidence": [
     "sarfi-2025-sparseloco/6"
    ],
@@ -3982,10 +3329,7 @@
      "ramasinghe-2025-protocolmodels/10"
     ],
     "metric": "C4 training loss against wall-clock time vs centralized, 8B",
-    "compute_range_flop": null,
     "multiplier": 1.0,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Training loss only, at a run length not stated and not shown compute-optimal; equal throughput, so about equal compute."
    },
    {
@@ -3993,13 +3337,7 @@
      "ramasinghe-2025-protocolmodels/9"
     ],
     "metric": "validation perplexity at compute-optimal, 640M, about 12B tokens",
-    "compute_range_flop": [
-     4.6e+19,
-     4.6e+19
-    ],
     "multiplier": 1.0,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "C4 12.53 vs 12.61; compression ratio at this width not stated."
    },
    {
@@ -4007,13 +3345,7 @@
      "janson-2026-mapl/4"
     ],
     "metric": "compute at equal held-out loss on the paper's uncompressed curve, 500M, 6x (derived)",
-    "compute_range_flop": [
-     3e+19,
-     3e+19
-    ],
     "multiplier": 0.11,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "Loss 3.09 / 3.12 (P = 4 / 8) vs 2.84; the uncompressed curve, interpolated log-linearly, reaches it at 2.9e18-3.8e18 FLOP: 0.1-0.125."
    },
    {
@@ -4022,13 +3354,7 @@
      "janson-2026-mapl/4"
     ],
     "metric": "compute at equal held-out loss on the paper's uncompressed curve, 1B, 8x (derived)",
-    "compute_range_flop": [
-     1.2e+20,
-     1.2e+20
-    ],
     "multiplier": 0.04,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "Loss 3.05 / 3.08 vs 2.68; the uncompressed curve, interpolated log-linearly, reaches it at 4.1e18-5.3e18 FLOP: 0.034-0.044. The AdamW version (3.38) is above the 150M baseline's loss."
    }
   ],
@@ -4072,10 +3398,7 @@
      "li-2022-btm/1"
     ],
     "metric": "compute to equal perplexity, 64 domains",
-    "compute_range_flop": null,
     "multiplier": 2.5,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "22.4B total parameters vs a Transformer with 2.5x the compute; gains grow with domain count."
    },
    {
@@ -4084,13 +3407,7 @@
      "filippova-2024-smalltalk/2"
     ],
     "metric": "test perplexity at equal training FLOPs vs dense 1.3B, 32 x 335M experts",
-    "compute_range_flop": [
-     2.2e+21,
-     2.5e+21
-    ],
     "multiplier": 1.0,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "9.07 vs 9.1 at 2.5e21 vs 2.2e21 FLOP; the 1.3B baseline is 10x overtrained, so 0.9-1.0 against a compute-optimal reference (derived)."
    },
    {
@@ -4099,10 +3416,7 @@
      "gururangan-2023-cbtm/2"
     ],
     "metric": "C4 perplexity, training FLOPs incl. OPT seed, vs OPT-6.7B continued",
-    "compute_range_flop": null,
     "multiplier": 3.5,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "Reference not compute-optimal."
    },
    {
@@ -4111,16 +3425,12 @@
      "sukhbaatar-2024-btx/2"
     ],
     "metric": "downstream average vs dense, Llama-2 7B seed, same data",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "BTM top-2 43.4 vs dense 44.5 (negative); BTX with a joint MoE finetune 47.9."
    }
   ],
   "multiplier": {
    "value": 1.0,
-   "trend": "unknown",
    "evidence": [
     "filippova-2024-smalltalk/1",
     "filippova-2024-smalltalk/2"
@@ -4165,13 +3475,7 @@
      "moon-2026-greedy-local/2"
     ],
     "metric": "NLL gap to end-to-end, K = 2, 400M",
-    "compute_range_flop": [
-     1.9e+18,
-     1.9e+19
-    ],
     "multiplier": 0.84,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Derived from +0.027 nats (first-block MTP auxiliary)."
    },
    {
@@ -4180,13 +3484,7 @@
      "moon-2026-greedy-local/3"
     ],
     "metric": "NLL gap to end-to-end, K = 4, 400M",
-    "compute_range_flop": [
-     1.9e+18,
-     1.9e+19
-    ],
     "multiplier": 0.67,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "Derived from +0.062 nats; the K = 4 gap shrinks from 125M to 400M."
    },
    {
@@ -4194,10 +3492,7 @@
      "siddiqui-2023-blockwise-ssl/1"
     ],
     "metric": "ImageNet linear probe, 4 blocks",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Vision: 1.1% below end-to-end."
    },
    {
@@ -4205,10 +3500,7 @@
      "belilovsky-2019-dgl/1"
     ],
     "metric": "ImageNet top-1 vs backprop, K = 2-4 modules (CNN)",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Vision: VGG-13 K = 4 +1.2, VGG-19 K = 2 +1.1, ResNet-152 K = 2 +0.1 points."
    },
    {
@@ -4216,16 +3508,12 @@
      "wang-2021-infopro/1"
     ],
     "metric": "CIFAR-10 test error vs end-to-end, ResNet-32, K = 2-16",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Vision: 7.37% to 10.30/16.07/21.19/24.59% at K = 2/4/8/16; the gap grows steeply with K."
    }
   ],
   "multiplier": {
    "value": 0.84,
-   "trend": "unknown",
    "evidence": [
     "moon-2026-greedy-local/2"
    ],
@@ -4267,10 +3555,7 @@
      "fournier-2023-forward-gradient/2"
     ],
     "metric": "accuracy vs backprop, CNNs",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "Random guesses fail in high dimension; local-loss guesses help."
    },
    {
@@ -4278,10 +3563,7 @@
      "ren-2023-forward-gradient-local-losses/3"
     ],
     "metric": "ImageNet top-1 test error vs backprop, equal epochs",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "58.37% vs 36.82% even with many local losses."
    },
    {
@@ -4290,10 +3572,7 @@
      "baydin-2022-forward-gradient/1"
     ],
     "metric": "accuracy / wall-clock vs backprop, MNIST-CIFAR10",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "Up to 2x wall-clock on MNIST; a significant gap remains on CIFAR10."
    },
    {
@@ -4302,10 +3581,7 @@
      "ren-2023-forward-gradient-local-losses/2"
     ],
     "metric": "estimator variance (theory)",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "Weight perturbation m ~ 1.2/d (1.2e-9 to 1.2e-12); activity perturbation m ~ 1.5/width (7e-4 to 6e-5) at 1e9-1e12 (extrapolation)."
    }
   ],
@@ -4345,10 +3621,7 @@
      "sarkar-2025-eggroll/8"
     ],
     "metric": "GPU-hours vs backprop SGD, int8 RNN LM",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Beats backprop at equal data with about 180x the GPU-hours."
    },
    {
@@ -4356,10 +3629,7 @@
      "sarkar-2025-eggroll/1"
     ],
     "metric": "throughput vs batch inference",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Up to 91% of inference throughput."
    },
    {
@@ -4368,13 +3638,7 @@
      "dahal-2026-dust/7"
     ],
     "metric": "FLOPs to equal held-out loss vs tuned SGD backprop, 37.7M transformer, 16,384 forward passes per update",
-    "compute_range_flop": [
-     1.2e+18,
-     2.5e+19
-    ],
     "multiplier": 1.1e-05,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "4.6e-5 at 1M, 1.6e-5 at 10M, 1.1e-5 at 20M tokens; 1.23 nats behind at 20M; cosine with the gradient below 0.05 at 128k."
    },
    {
@@ -4382,13 +3646,7 @@
      "dahal-2026-dust/6"
     ],
     "metric": "same, cheapest cell (64 forward passes)",
-    "compute_range_flop": [
-     4.8e+16,
-     9.7e+16
-    ],
     "multiplier": 0.00036,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "Best EGGROLL cell per FLOP."
    },
    {
@@ -4396,16 +3654,12 @@
      "chaubard-2026-soma/3"
     ],
     "metric": "test nats/byte at about 150 GPU-h, about 8.44M models",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "2.21 vs 2.00-2.11 for SPSA and 1.76 for SOMA N=2."
    }
   ],
   "multiplier": {
    "value": 0.00036,
-   "trend": "shrinks-with-scale",
    "evidence": [
     "dahal-2026-dust/6"
    ],
@@ -4448,10 +3702,7 @@
      "allaire-2025-zo-pretraining/5"
     ],
     "metric": "time to accuracy vs FO, Llama2-20M",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "Days vs hours; time is O(n) larger."
    },
    {
@@ -4460,10 +3711,7 @@
      "chen-2024-deepzero/5"
     ],
     "metric": "accuracy vs FO, ResNet-20",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Approaches FO only on a small CNN."
    },
    {
@@ -4472,10 +3720,7 @@
      "chaubard-2026-soma/3"
     ],
     "metric": "validation nats/byte at equal GPU-hours vs BPTT, about 8.44M byte-level LSTM",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "m < 0.33 (loose): BPTT at 50 GPU-h (1.02) beats monolithic SPSA at about 150 GPU-h (2.00-2.11)."
    },
    {
@@ -4486,10 +3731,7 @@
      "hinton-2022-forward-forward/1"
     ],
     "metric": "queries to equal accuracy, convex worst case (theory)",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "m ~ 1.5/d, tight: 1.5e-9 / 1.5e-10 / 1.5e-11 / 1.5e-12 at 1e9-1e12 parameters (extrapolation)."
    },
    {
@@ -4500,16 +3742,12 @@
      "gan-2026-neural-thickets/1"
     ],
     "metric": "queries to equal loss in effective dimension (theory)",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "m ~ 1.5/ED; ED is unmeasured for pretraining and is largest from random init to low loss."
    }
   ],
   "multiplier": {
    "value": 0.0004,
-   "trend": "shrinks-with-scale",
    "evidence": [
     "dahal-2026-dust/6",
     "chaubard-2026-soma/3"
@@ -4554,13 +3792,7 @@
      "busbridge-2025-distillation-scaling/4"
     ],
     "metric": "held-out CE at equal student compute, teacher free",
-    "compute_range_flop": [
-     3e+19,
-     3e+21
-    ],
     "multiplier": null,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "Law keeps L_S > L_T, so targets at or below the teacher are unreachable. Extrapolated m for target L_T+0.1: 1.8-2.4 (1e24 teacher), 2.7-4.2 (1e26); for L_T+0.02: 0.6-1.0."
    },
    {
@@ -4568,13 +3800,7 @@
      "anshumann-2025-sparse-logit/1"
     ],
     "metric": "held-out LM loss at equal student tokens, teacher free",
-    "compute_range_flop": [
-     1.8e+21,
-     1.8e+21
-    ],
     "multiplier": 1.35,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "3B student, Llama-3-8B teacher, 100B tokens, 0.026 nats; m 1.2-1.5 depending on the slope used."
    },
    {
@@ -4582,13 +3808,7 @@
      "anshumann-2025-sparse-logit/2"
     ],
     "metric": "held-out LM loss at equal student tokens, teacher free",
-    "compute_range_flop": [
-     1.8e+19,
-     1.8e+20
-    ],
     "multiplier": null,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "300M student: m about 1.5 at 10B tokens, about 0.95 at 100B tokens (16x Chinchilla)."
    },
    {
@@ -4597,13 +3817,7 @@
      "rawat-2024-salt/2"
     ],
     "metric": "held-out log-perplexity at equal steps, smaller teacher",
-    "compute_range_flop": [
-     9e+21,
-     9e+21
-    ],
     "multiplier": 1.1,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "1.5B teacher, 2.8B student, KD for the first 36K of 208K steps; KD for the whole run ends 0.2 nats worse."
    },
    {
@@ -4611,10 +3825,7 @@
      "gemma-team-2024-gemma2/1"
     ],
     "metric": "parameter-equivalent at equal tokens, validation perplexity",
-    "compute_range_flop": null,
     "multiplier": 2.5,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "200M-1B students, 7B teacher; token count not stated."
    },
    {
@@ -4622,10 +3833,7 @@
      "gu-2024-miniplm/1"
     ],
     "metric": "downstream at equal FLOPs including online teacher",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Counting teacher inference, KD is no better than plain pretraining at 200M."
    },
    {
@@ -4633,16 +3841,12 @@
      "peng-2024-pretraining-distillation/1"
     ],
     "metric": "benchmark average, 1.9B student",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "+1.6%."
    }
   ],
   "multiplier": {
    "value": 1.3,
-   "trend": "shrinks-with-scale",
    "evidence": [
     "anshumann-2025-sparse-logit/1",
     "rawat-2024-salt/1",
@@ -4686,13 +3890,7 @@
      "muralidharan-2024-minitron/2"
     ],
     "metric": "downstream at equal student tokens vs random init",
-    "compute_range_flop": [
-     2.4e+21,
-     9.6e+21
-    ],
     "multiplier": 4,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Pruned and distilled 4B at 100B tokens beats random init at 400B (MMLU 37.8 vs 26.2); 15B teacher free."
    },
    {
@@ -4701,13 +3899,7 @@
      "sreenivas-2024-minitron-practice/2"
     ],
     "metric": "downstream vs the teacher's own from-scratch recipe",
-    "compute_range_flop": [
-     1.8e+22,
-     1.8e+22
-    ],
     "multiplier": 40,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Target is a copy of the teacher. Assumes the ~100B-token teacher correction is free; the policy throttles it."
    },
    {
@@ -4716,16 +3908,12 @@
      "xia-2023-sheared-llama/1"
     ],
     "metric": "family cost with the teacher's training counted",
-    "compute_range_flop": null,
     "multiplier": 1.8,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "The earlier entry."
    }
   ],
   "multiplier": {
    "value": 4,
-   "trend": "unknown",
    "evidence": [
     "muralidharan-2024-minitron/2"
    ],
@@ -4766,13 +3954,7 @@
      "du-2024-gstack/1"
     ],
     "metric": "training loss, base FLOPs counted",
-    "compute_range_flop": [
-     1.26e+22,
-     1.26e+22
-    ],
     "multiplier": 1.55,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Authors' log-curve extension to 8T tokens is extrapolation (du-2024-gstack/2)."
    },
    {
@@ -4780,19 +3962,12 @@
      "saunshi-2024-midas/1"
     ],
     "metric": "held-out loss, all stages counted",
-    "compute_range_flop": [
-     3e+21,
-     2.4e+22
-    ],
     "multiplier": 1.24,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "1.24-1.26x at 1B, 2B and 8B, loss within 0.003 at 8B."
    }
   ],
   "multiplier": {
    "value": 1.3,
-   "trend": "constant",
    "evidence": [
     "saunshi-2024-midas/1",
     "du-2024-gstack/1"
@@ -4835,10 +4010,7 @@
      "wang-2023-ligo/1"
     ],
     "metric": "compute vs scratch",
-    "compute_range_flop": null,
     "multiplier": 2,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Up to 50% saved."
    },
    {
@@ -4846,10 +4018,7 @@
      "samragh-2024-hypercloning/1"
     ],
     "metric": "time to random-init final accuracy",
-    "compute_range_flop": null,
     "multiplier": 3,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "2.2-4x."
    },
    {
@@ -4857,13 +4026,7 @@
      "chen-2022-bert2bert/1"
     ],
     "metric": "steps to equal quality, source model free",
-    "compute_range_flop": [
-     5e+19,
-     5e+19
-    ],
     "multiplier": 1.85,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "bert2BERT."
    },
    {
@@ -4871,16 +4034,12 @@
      "yao-2024-msg/1"
     ],
     "metric": "compute to equal quality, all stages counted",
-    "compute_range_flop": null,
     "multiplier": 1.4,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "1.4 for GPT-2, 2.2 for BERT."
    }
   ],
   "multiplier": {
    "value": 1.8,
-   "trend": "shrinks-with-scale",
    "evidence": [
     "wang-2023-ligo/1",
     "chen-2022-bert2bert/1",
@@ -4925,10 +4084,7 @@
      "liew-2025-upcycling-scaling/2"
     ],
     "metric": "held-out loss, upcycled vs MoE from scratch",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "L = A D1^-a1 D2^(-a2+a3 log D1) + E. With D1 = D2, seed-free m reaches 1 at D* = 4B tokens for a 1B seed (fit); extrapolated about 1B tokens at 10B and 0.08-0.4B for 1e24-1e26-scale seeds (log base ambiguous)."
    },
    {
@@ -4937,13 +4093,7 @@
      "nakamura-2025-drop-upcycling/2"
     ],
     "metric": "downstream at equal MoE training FLOPs vs dense",
-    "compute_range_flop": [
-     1.98e+22,
-     7.43e+22
-    ],
     "multiplier": 3.75,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Partial re-initialization; 1.6 with the seed counted. Plain upcycling slows later."
    },
    {
@@ -4952,13 +4102,7 @@
      "he-2024-upcycling-moe/2"
     ],
     "metric": "MMLU vs continued dense on the same 1T tokens",
-    "compute_range_flop": [
-     9e+22,
-     9e+22
-    ],
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "+2.3 MMLU at 1/8 of the seed's budget."
    },
    {
@@ -4966,19 +4110,12 @@
      "wei-2024-skywork-moe/1"
     ],
     "metric": "vs MoE from scratch",
-    "compute_range_flop": [
-     3.6e+20,
-     1.1e+21
-    ],
     "multiplier": 1,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "Parity at 2/3 of the seed budget; scratch wins at 2x."
    }
   ],
   "multiplier": {
    "value": 1.5,
-   "trend": "shrinks-with-scale",
    "evidence": [
     "liew-2025-upcycling-scaling/1",
     "wei-2024-skywork-moe/1",
@@ -5022,19 +4159,12 @@
      "wang-2023-retro-study/1"
     ],
     "metric": "parameter-equivalent at equal tokens, held-out perplexity",
-    "compute_range_flop": [
-     2.5e+20,
-     1.6e+22
-    ],
     "multiplier": 3,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "Derived 3.0x, 4.0x, 5.2x, then about 3.1x (extrapolated) from 126M to 8.3B; the gain is on knowledge tasks only (wang-2023-retro-study/2), and the database is the training corpus, so validation overlap is possible."
    }
   ],
   "multiplier": {
    "value": 3,
-   "trend": "shrinks-with-scale",
    "evidence": [
     "wang-2023-retro-study/1",
     "borgeaud-2021-retro/2"
@@ -5080,13 +4210,7 @@
      "su-2025-galore2/2"
     ],
     "metric": "validation loss vs 8-bit Adam, 7B / 500B tokens",
-    "compute_range_flop": [
-     2.1e+22,
-     2.1e+22
-    ],
     "multiplier": 1.0,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Lags to 150B tokens, ahead from about 200B."
    },
    {
@@ -5095,10 +4219,7 @@
      "zhao-2024-galore/2"
     ],
     "metric": "perplexity vs 8-bit Adam, 7B, 19.7B tokens",
-    "compute_range_flop": null,
     "multiplier": 1.0,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "14.65 vs 14.61."
    },
    {
@@ -5106,10 +4227,7 @@
      "zhu-2024-apollo/1"
     ],
     "metric": "pre-training vs AdamW",
-    "compute_range_flop": null,
     "multiplier": 1.0,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Rank-1 APOLLO-Mini on par."
    },
    {
@@ -5117,10 +4235,7 @@
      "glentis-2025-param-efficient-survey/1"
     ],
     "metric": "perplexity vs tuned full-rank",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Full-rank is best."
    },
    {
@@ -5128,13 +4243,7 @@
      "glentis-2025-param-efficient-survey/3"
     ],
     "metric": "held-out loss vs Stable-SPAM full-rank, 1B/13.1B tokens",
-    "compute_range_flop": [
-     1.05e+20,
-     1.05e+20
-    ],
     "multiplier": 0.34,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "GaLore 15.57 gives 0.34 (0.21-0.43 over the slope range); Fira 15.10 gives 0.46. Against Glentis's own AdamW (16.52): 1.8 and 2.5."
    },
    {
@@ -5143,13 +4252,7 @@
      "chen-2024-fira/2"
     ],
     "metric": "held-out loss vs copied full-rank Adam, 1B",
-    "compute_range_flop": [
-     1.05e+20,
-     1.05e+20
-    ],
     "multiplier": 2.3,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Untuned baseline and method; not adopted."
    },
    {
@@ -5157,19 +4260,12 @@
      "chen-2024-fira/3"
     ],
     "metric": "vs GaLore only, 7B/19.7B tokens",
-    "compute_range_flop": [
-     8.3e+20,
-     8.3e+20
-    ],
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "No full-rank 7B run."
    }
   ],
   "multiplier": {
    "value": 1.0,
-   "trend": "unknown",
    "evidence": [
     "su-2025-galore2/2",
     "glentis-2025-param-efficient-survey/3"
@@ -5212,10 +4308,7 @@
      "lialin-2023-relora/3"
     ],
     "metric": "held-out loss vs full-rank, 1.3B, converted",
-    "compute_range_flop": null,
     "multiplier": 0.76,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Derived: +0.44 ppl, about +0.03 nats, after a 33% full-rank warm start; baseline not swept."
    },
    {
@@ -5223,10 +4316,7 @@
      "huh-2024-lora-the-explorer/1"
     ],
     "metric": "samples to converge vs standard training",
-    "compute_range_flop": null,
     "multiplier": 0.71,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Derived 1/1.4 (LTE)."
    },
    {
@@ -5235,13 +4325,7 @@
      "loeschcke-2024-loqt/2"
     ],
     "metric": "held-out loss vs full-rank, 1B/13.1B tokens",
-    "compute_range_flop": [
-     1.05e+20,
-     1.05e+20
-    ],
     "multiplier": 1.0,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "15.55 vs copied 15.56, one seed; 0.34 against Stable-SPAM's 13.97. Nothing above 1B trained to convergence."
    },
    {
@@ -5249,10 +4333,7 @@
      "weiss-2025-relora-slm/1"
     ],
     "metric": "loss vs full-rank, 11M-66M, no warm start",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "The gap widens with size."
    },
    {
@@ -5261,16 +4342,12 @@
      "lialin-2023-relora/3"
     ],
     "metric": "perplexity vs full training, up to 1.3B",
-    "compute_range_flop": null,
     "multiplier": 1.0,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Needs a full-rank warm start (33% of steps at 1.3B)."
    }
   ],
   "multiplier": {
    "value": 0.76,
-   "trend": "unknown",
    "evidence": [
     "lialin-2023-relora/2"
    ],
@@ -5312,13 +4389,7 @@
      "glentis-2025-param-efficient-survey/3"
     ],
     "metric": "held-out loss vs Stable-SPAM full-rank, 1B/13.1B tokens, CoLA at 0.5x compute",
-    "compute_range_flop": [
-     1.05e+20,
-     1.05e+20
-    ],
     "multiplier": 0.7,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "15.52 vs 13.97 = +0.105 nats at half compute; against its own copied baseline (15.56) the same run gives 2.0."
    },
    {
@@ -5326,13 +4397,7 @@
      "liu-2025-cola/2"
     ],
     "metric": "held-out loss vs 8-bit Adam, 7B/19.7B tokens",
-    "compute_range_flop": [
-     8.3e+20,
-     8.3e+20
-    ],
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "12.73 vs 14.61 at half compute, below compute-optimal, copied baseline; not adopted."
    },
    {
@@ -5340,19 +4405,12 @@
      "liu-2025-cola/3"
     ],
     "metric": "held-out loss vs own full-rank, 350M at 8x Chinchilla",
-    "compute_range_flop": [
-     1.1e+20,
-     1.1e+20
-    ],
     "multiplier": 2.9,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "13.96 vs 14.47 at half compute; own baseline."
    }
   ],
   "multiplier": {
    "value": 0.7,
-   "trend": "unknown",
    "evidence": [
     "liu-2025-cola/1",
     "glentis-2025-param-efficient-survey/3"
@@ -5394,10 +4452,7 @@
      "ahn-2025-dion/1"
     ],
     "metric": "validation loss vs full-rank Muon, 354M-3B",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "Larger models increasingly robust to r = d/16."
    },
    {
@@ -5405,13 +4460,7 @@
      "amsel-2026-dion3/2"
     ],
     "metric": "held-out loss vs tuned NorMuon, 1B/100B tokens",
-    "compute_range_flop": [
-     6e+20,
-     6e+20
-    ],
     "multiplier": 1.13,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "About -0.012 nats; against NorMuon, not AdamW."
    },
    {
@@ -5419,19 +4468,12 @@
      "amsel-2026-dion3/3"
     ],
     "metric": "held-out loss vs NorMuon, 3B-14B on 10B tokens",
-    "compute_range_flop": [
-     1.8e+20,
-     8.4e+20
-    ],
     "multiplier": 1.3,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "-0.012 (3B) to -0.027 (14B); far below Chinchilla tokens."
    }
   ],
   "multiplier": {
    "value": 1.0,
-   "trend": "grows-with-scale",
    "evidence": [
     "ahn-2025-dion/1",
     "amsel-2026-dion3/2"
@@ -5476,13 +4518,7 @@
      "janson-2026-spectron/3"
     ],
     "metric": "held-out loss at equal FLOPs, rank d/4, vs Muon dense",
-    "compute_range_flop": [
-     2.2e+18,
-     3.57e+19
-    ],
     "multiplier": 1.0,
-    "trend": "constant",
-    "exponent_change": null,
     "note": "454M = 780M dense. N_opt ~ C^0.479 vs 0.49: 0.85-0.89 of the dense size at 1e24-1e26 (extrapolation). Rank d/8 collapses (janson-2026-spectron/2)."
    },
    {
@@ -5490,13 +4526,7 @@
      "glentis-2025-param-efficient-survey/6"
     ],
     "metric": "held-out loss vs Stable-SPAM, 1B, with restarts, 0.5x compute",
-    "compute_range_flop": [
-     1.05e+20,
-     1.05e+20
-    ],
     "multiplier": 1.0,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "15.01 gives 0.98; plain low-rank 18.22 gives 0.14."
    },
    {
@@ -5505,19 +4535,12 @@
      "han-2024-sltrain/3"
     ],
     "metric": "held-out loss vs copied full-rank, 1B",
-    "compute_range_flop": [
-     1.05e+20,
-     1.05e+20
-    ],
     "multiplier": 1.0,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "0.38 against Stable-SPAM at dense FLOPs; worse than GaLore at 7B/1.4B tokens."
    }
   ],
   "multiplier": {
    "value": 1.0,
-   "trend": "constant",
    "evidence": [
     "janson-2026-spectron/1"
    ],
@@ -5559,19 +4582,12 @@
      "glentis-2025-param-efficient-survey/3"
     ],
     "metric": "held-out loss vs Stable-SPAM, 1B/13.1B tokens",
-    "compute_range_flop": [
-     1.05e+20,
-     1.05e+20
-    ],
     "multiplier": 0.26,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "15.83 vs 13.97 at 1.12x FLOPs; 1.4 against Glentis's AdamW; 0.11 in the GaLore-paper table (19.21)."
    }
   ],
   "multiplier": {
    "value": 0.26,
-   "trend": "unknown",
    "evidence": [
     "glentis-2025-param-efficient-survey/3"
    ],
@@ -5612,13 +4628,7 @@
      "he-2024-peer/1"
     ],
     "metric": "held-out C4 perplexity at isoFLOP, converted",
-    "compute_range_flop": [
-     6e+18,
-     2e+19
-    ],
     "multiplier": 1.6,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "1.9 to 1.6; two points."
    },
    {
@@ -5627,16 +4637,12 @@
      "berges-2024-memory-layers/2"
     ],
     "metric": "downstream accuracy vs dense compute, up to 8B/1T tokens",
-    "compute_range_flop": null,
     "multiplier": 2,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "Downstream only; loses MBPP and PIQA at 8B."
    }
   ],
   "multiplier": {
    "value": 1.6,
-   "trend": "shrinks-with-scale",
    "evidence": [
     "he-2024-peer/1"
    ],
@@ -5676,13 +4682,7 @@
      "amsel-2026-dion3/2"
     ],
     "metric": "held-out loss vs tuned NorMuon, 1B/100B tokens",
-    "compute_range_flop": [
-     6e+20,
-     6e+20
-    ],
     "multiplier": 1.13,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "About -0.012 nats."
    },
    {
@@ -5690,19 +4690,12 @@
      "amsel-2026-dion3/3"
     ],
     "metric": "held-out loss vs NorMuon, 3B-14B on 10B tokens",
-    "compute_range_flop": [
-     1.8e+20,
-     8.4e+20
-    ],
     "multiplier": 1.3,
-    "trend": "grows-with-scale",
-    "exponent_change": null,
     "note": "Undertrained."
    }
   ],
   "multiplier": {
    "value": 1.1,
-   "trend": "unknown",
    "evidence": [
     "amsel-2026-dion3/2"
    ],
@@ -5742,13 +4735,7 @@
      "dahal-2026-dust/9"
     ],
     "metric": "FLOPs to equal held-out loss vs tuned SGD-momentum backprop, 37.7M transformer, 64 draws",
-    "compute_range_flop": [
-     3800000000000000.0,
-     7.7e+16
-    ],
     "multiplier": 0.015,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "3.2e-2 at 1M, 2.2e-2 at 10M, 1.5e-2 at 20M tokens."
    },
    {
@@ -5758,13 +4745,7 @@
      "dahal-2026-dust/4"
     ],
     "metric": "same, 1,024-16,384 draws",
-    "compute_range_flop": [
-     6.3e+16,
-     2e+19
-    ],
     "multiplier": 0.0016,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "Beats backprop per token at 1M tokens with 1k draws (m about 3.6e-3); 0.17 nats behind at 20M with 16k (about 1.6e-4)."
    },
    {
@@ -5772,13 +4753,7 @@
      "dahal-2026-dust/5"
     ],
     "metric": "loss gap at 16k draws and 10M tokens across 2.0M-243M parameters",
-    "compute_range_flop": [
-     5.3e+17,
-     6.4e+19
-    ],
     "multiplier": null,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "The gap grows by only 0.047 nats over 120x parameters."
    },
    {
@@ -5787,16 +4762,12 @@
      "chaubard-2026-soma/2"
     ],
     "metric": "population for fixed estimate quality (theory)",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "K grows with layers x width: 1.25e-3 / 3.1e-4 / 7.5e-5 / 1.9e-5 at 1e9-1e12 (extrapolation; Dust's own size sweep declines far more slowly)."
    }
   ],
   "multiplier": {
    "value": 0.015,
-   "trend": "shrinks-with-scale",
    "evidence": [
     "dahal-2026-dust/9"
    ],
@@ -5839,16 +4810,12 @@
      "raen-2026-which-layers-bp/2"
     ],
     "metric": "perplexity at similar wall-clock (RoBERTa); matched budget at Llama-1B up to 50M tokens",
-    "compute_range_flop": null,
     "multiplier": 1.0,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "The crossover sits at about 0.25% of Chinchilla tokens; past it, full backprop wins."
    }
   ],
   "multiplier": {
    "value": 1.0,
-   "trend": "shrinks-with-scale",
    "evidence": [
     "shen-2021-reservoir-transformers/1",
     "raen-2026-which-layers-bp/1"
@@ -5897,10 +4864,7 @@
      "zhong-2024-random-transformers/2"
     ],
     "metric": "reachable quality vs fully trained",
-    "compute_range_flop": null,
     "multiplier": 0.05,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "A random 512-wide transformer with only its embeddings trained equals a fully trained 0.7M model; tokens unmatched. BatchNorm-only reaches 32% top-5 on ImageNet."
    }
   ],
@@ -5941,10 +4905,7 @@
      "launay-2020-dfa-scales/2"
     ],
     "metric": "perplexity at equal epochs vs backprop",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "52.0 vs 29.8: a 0.56-nat gap."
    },
    {
@@ -5952,10 +4913,7 @@
      "bartunov-2018-bio-scalability/1"
     ],
     "metric": "accuracy vs backprop as tasks scale",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "shrinks-with-scale",
-    "exponent_change": null,
     "note": "Biologically motivated alternatives fall further behind on harder tasks."
    }
   ],
@@ -5996,19 +4954,12 @@
      "douillard-2024-dipaco/3"
     ],
     "metric": "C4 validation perplexity vs dense 1.3B, compute-matched (derived)",
-    "compute_range_flop": [
-     7.7e+21,
-     7.7e+21
-    ],
     "multiplier": 0.05,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "256 paths of 150M match a dense 1.3B at about 21.5x its FLOPs; the authors call it significantly less FLOP-efficient and did not study its scaling."
    }
   ],
   "multiplier": {
    "value": 0.05,
-   "trend": "unknown",
    "evidence": [
     "douillard-2024-dipaco/1"
    ],
@@ -6049,10 +5000,7 @@
      "shing-2025-diffusionblocks/3"
     ],
     "metric": "MAUVE and generative perplexity vs end-to-end AR, 12 layers, 4 blocks",
-    "compute_range_flop": null,
     "multiplier": null,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "LM1B MAUVE 0.71 vs 0.50, OpenWebText 0.82 vs 0.85; perplexity is non-trivial to compute, so no held-out loss."
    }
   ],
@@ -6093,16 +5041,12 @@
      "ajanthan-2025-async-pp/2"
     ],
     "metric": "validation perplexity vs synchronous GPipe at equal iterations, 8 stages, 134M-1B",
-    "compute_range_flop": null,
     "multiplier": 1.0,
-    "trend": "unknown",
-    "exponent_change": null,
     "note": "27.72 vs 30.63 WikiText perplexity at 134M; iteration-matched, not compute-optimal."
    }
   ],
   "multiplier": {
    "value": 1.0,
-   "trend": "unknown",
    "evidence": [
     "ajanthan-2025-async-pp/1"
    ],
