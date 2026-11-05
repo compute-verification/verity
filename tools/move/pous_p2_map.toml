@@ -1,0 +1,47 @@
+# P2's Python reference out of benchmarks: what `tools/move/layout.py --map tools/move/pous_p2_map.toml` moves and rewrites.
+# `benchmarks/` is measurement only, and PoUS's Lean check holds its difftests to this Python, so it goes into PoUS's
+# package, beside the scheme it builds on (`schemes/p2.py`) and the verifier whose tree it reads (`verifier.py`).
+#
+# - `reference.py` (the scheme on the CPU), `wire.py` (`p2-audit-wire/v4`'s frames and its reference verifier) and
+#   `vectors.py`, with the three vector files they pin and write, move from `benchmarks/pous/p2_v1/` to
+#   `verity/core/protocols/pous/p2/` under their own names, so `p2_v1.reference` becomes
+#   `verity.core.protocols.pous.p2.reference`. `p2_v1` is a root (`[roots]`), since its importers put `benchmarks/pous` on
+#   the import path and import it as a top-level package.
+# - The package's `__init__.py` lands before the move.
+# Nothing is edited or deleted, and no file is added. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", p2_v1 = "benchmarks/pous/p2_v1" }
+new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", p2_v1 = "benchmarks/pous/p2_v1" }
+
+[paths]
+"benchmarks/pous/p2_v1/reference.py" = "verity/core/protocols/pous/p2/reference.py"
+"benchmarks/pous/p2_v1/wire.py" = "verity/core/protocols/pous/p2/wire.py"
+"benchmarks/pous/p2_v1/vectors.py" = "verity/core/protocols/pous/p2/vectors.py"
+"benchmarks/pous/p2_v1/vectors.json" = "verity/core/protocols/pous/p2/vectors.json"
+"benchmarks/pous/p2_v1/audit-vectors.json" = "verity/core/protocols/pous/p2/audit-vectors.json"
+"benchmarks/pous/p2_v1/audit-negative-vectors.json" = "verity/core/protocols/pous/p2/audit-negative-vectors.json"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), and files
+# whose bytes a digest pins.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
+# Kept as written: the moved files' own directory (`HERE = Path(__file__).resolve().parent`), which stays their own since
+# the vector files they read and write move with them; and a docstring's path from `benchmarks/pous` (`p2_v1/reference.py`),
+# which `move_check.py` reads as no moved path, fixed after the move.
+keep_in = { "verity/core/protocols/pous/p2/*.py" = ["benchmarks/pous/p2_v1"], "benchmarks/pous/tests/test_pous_p2v1.py" = ["benchmarks/pous/p2_v1/reference.py"] }
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`)
+"p2_v1.reference" = "verity.core.protocols.pous.p2.reference"
+"p2_v1.vectors" = "verity.core.protocols.pous.p2.vectors"
+"p2_v1.wire" = "verity.core.protocols.pous.p2.wire"
