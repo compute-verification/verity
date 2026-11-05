@@ -1,5 +1,7 @@
-import Definitions.Pous.P2.Cost
-import Definitions.Pous.P2.Rounds
+module
+
+public import Definitions.Pous.P2.Cost
+public import Definitions.Pous.P2.Rounds
 
 /-!
 # P2's open steps in the ring model (named assumptions)
@@ -12,6 +14,8 @@ through `Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure` and the graded boun
 statement takes, and `P2RingReducesToM1p`, the reduction the spec states, which implies it through the proved `m1p`
 row: `Pous.SecurityProofs.P2RingAuditSecureOfReduces`).
 -/
+
+@[expose] public section
 
 namespace Pous.P2.Assumptions
 

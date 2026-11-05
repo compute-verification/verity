@@ -1,5 +1,7 @@
-import Definitions.Accounting.TS.Routes
-import Definitions.Pouw.RelativeSecurity
+module
+
+public import Definitions.Accounting.TS.Routes
+public import Definitions.Pouw.RelativeSecurity
 
 /-!
 # The two plays: full checking and sampling (trusted)
@@ -18,6 +20,8 @@ fresh coins on `Ω`, each round one live σ (and, when sampling, the round's dra
   `d_w ≤ Λ · (−ln Pr[pass | past])`, SAMPLING's budget.
 * `RoundGame.deficientRounds`: the rounds with a positive share along the realized coins.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS
 

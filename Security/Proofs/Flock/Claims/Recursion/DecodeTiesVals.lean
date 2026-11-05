@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.NextR
-import Proofs.Flock.C3.Reps.LigNames
+module
+
+public import Proofs.Flock.Claims.Recursion.NextR
+public import Proofs.Flock.C3.Reps.LigNames
 
 /-!
 # A rep's frames absorb its proof's values in w's order
@@ -16,6 +18,8 @@ value off the proof, and `T`.
 * **The rounds' names** (`ligRounds_els`, `rounds_els`): Ligerito's rounds, through `ligRounds_eq`'s folds and level
   loop, flatten to `ligEls`; at a plain shape, all the rounds flatten to the four lists in turn.
 -/
+
+@[expose] public section
 
 namespace FlockDecodeTies
 

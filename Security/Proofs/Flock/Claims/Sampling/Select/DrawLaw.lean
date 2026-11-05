@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Sampling.KS
-import Proofs.Flock.Claims.Sampling.Session
-import Proofs.Flock.Claims.Sampling.Select.Misses
+module
+
+public import Proofs.Flock.Claims.Sampling.KS
+public import Proofs.Flock.Claims.Sampling.Session
+public import Proofs.Flock.Claims.Sampling.Select.Misses
 
 /-!
 # The draw law from the deployed draw (`Claims.Sampling.DrawLaw`)
@@ -14,6 +16,8 @@ import Proofs.Flock.Claims.Sampling.Select.Misses
   from uniform bytes of the coins.
 * `drawLaw_of_slots`: `DrawLaw` there, from `drawMisses`.
 -/
+
+@[expose] public section
 
 open SampledProofs
 open Lean (Json)

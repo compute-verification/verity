@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.ZkTables.ShapeGo
-import Proofs.Flock.Claims.Complete.Zk.Level0Premises
-import Proofs.Flock.Claims.Complete.Zk.Level0Verifier
-import Proofs.Flock.Claims.Complete.Zk.RankDeployed
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.ShapeGo
+public import Proofs.Flock.Claims.Complete.Zk.Level0Premises
+public import Proofs.Flock.Claims.Complete.Zk.Level0Verifier
+public import Proofs.Flock.Claims.Complete.Zk.RankDeployed
 
 /-!
 # Masked completeness
@@ -19,35 +21,37 @@ mask rank) are `BadZk`'s, so the error is `εZk`'s with no further term. `comple
 `complete_jsonT_honestPR_of_rank` state it with the prover and the error written out.
 -/
 
+@[expose] public section
+
 namespace FlockComplete.L0
 
 open Flock FlockComplete FlockDeploy ZkTables
 
-theorem complete_jsonT_closed (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
+theorem complete_jsonT_closed (H : Claims.Msg → Claims.Msg) 
     (hMR : MaskRank.MaskRankBound) : Claims.Flock.Complete H (deployZk Readable.relation) :=
-  complete_jsonT_of_level0 H S proverRuns proverShape lanes verifier hMR
+  complete_jsonT_of_level0 H proverRuns proverShape lanes verifier hMR
 
-theorem complete_jsonT_of_rank (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
+theorem complete_jsonT_of_rank (H : Claims.Msg → Claims.Msg) 
     (hD : MaskRank.DeployedRankBound) (hS : MaskRank.SmallSlotBound) :
     Claims.Flock.Complete H (deployZk Readable.relation) :=
-  complete_jsonT_closed H S (MaskRank.maskRankBound_of hD hS)
+  complete_jsonT_closed H (MaskRank.maskRankBound_of hD hS)
 
 /-- **Masked completeness at the JSON specification alone**: `complete_jsonT_closed` with its rank premise
 discharged (`MaskRank.maskRankBound`). -/
-theorem complete_jsonT_of_spec (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon) :
+theorem complete_jsonT_of_spec (H : Claims.Msg → Claims.Msg) :
     Claims.Flock.Complete H (deployZk Readable.relation) :=
-  complete_jsonT_closed H S MaskRank.maskRankBound
+  complete_jsonT_closed H MaskRank.maskRankBound
 
 /-- **`flock-circuit --zk`'s prover is complete** at the deployed masked verifier and relation, with error
 `ZkTables.δc H`. -/
-theorem complete_jsonT_honestPR (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
+theorem complete_jsonT_honestPR (H : Claims.Msg → Claims.Msg) 
     (hMR : MaskRank.MaskRankBound) :
     CompleteWith H (deployZk Readable.relation) ZkTables.honestPR (ZkTables.δc H) :=
-  complete_jsonT_closed H S hMR
+  complete_jsonT_closed H hMR
 
-theorem complete_jsonT_honestPR_of_rank (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon)
+theorem complete_jsonT_honestPR_of_rank (H : Claims.Msg → Claims.Msg) 
     (hD : MaskRank.DeployedRankBound) (hS : MaskRank.SmallSlotBound) :
     CompleteWith H (deployZk Readable.relation) ZkTables.honestPR (ZkTables.δc H) :=
-  complete_jsonT_of_rank H S hD hS
+  complete_jsonT_of_rank H hD hS
 
 end FlockComplete.L0

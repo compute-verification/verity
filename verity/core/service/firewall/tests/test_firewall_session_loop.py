@@ -2,7 +2,9 @@
 directory, with a scripted auditor on the far side and files no statement sets up from (the loop starts; a `Hello` would
 be refused at its setup). A session's `Ping`s are the loop's to answer until its first other request, which is admitted
 or refused on the record before anything of the session reaches the auditor; a refused session reaches nothing of it.
-An admitted session's proofs are held, and a stop at its `Finish`, or a cut, is recorded. Each record is the one
+An admitted session's proofs are held, and a stop at its `Finish`, or a cut, is recorded. Each request of an admitted
+session leaves at most once, at its place, and once the loop refuses one nothing more of the session reaches the auditor,
+its `Ping`s the loop's to answer to the end. Each record is the one
 `verity_flock.firewall` writes for the same ops, byte for byte, and the slot orders two sessions. A session that goes,
 released at its time through the whole loop, is the end-to-end check (`flock-circuit prove --firewall-state`)."""
 
@@ -252,3 +254,76 @@ def test_the_slot_orders_two_sessions(exe, tmp_path):
                    {"event": "wait", "part": "L0"}, {"event": "stop", "part": "L0", "why": "the prover ended the session before its Finish"},
                    {"event": "slot", "part": "L0"}, {"event": "refused", "part": "L0"}]
     assert FW.Firewall(state).stopped(s)["part"] == "L0" and FW.Firewall(state).failures("s") == 1
+
+
+HELLO = b"\x01" + _bytes(b"{}")
+COMMIT = b"\x07" + _bytes(b"") + struct.pack("<I", 0) + struct.pack("<I", 0)
+EARLY_ROUND = b"\x04" + _bytes(b"st") + _bytes(b"c") + struct.pack("<I", 1)
+LINK = b"\x02" + _bytes(b"\0" * 32)
+OPEN = b"\x03" + _bytes(b"t/rep0") + _bytes(b"") + _bytes(b"label") + b"\0" * 8
+#: every kind of request a prover may send after a stop, `Ping`s among them
+AFTER = [ping(b"p"), ping(b"\0" * 64), REGISTER, HELLO, LINK, OPEN, COMMIT, EARLY_ROUND, PROOF, b"\x63", ping(b"p")]
+
+
+def _stopped(exe, tmp_path, frames: list[bytes], after: list[bytes]):
+    """An admitted session whose last request of `frames` the loop refuses, then `after` and its `Finish`: the refusal's
+    reason, the answers to `after`, the verdict, every frame the auditor received, and the session's `s`."""
+    fw = FW.Firewall(tmp_path / "lean")
+    s = fw.open("s", ["L0", "L1"])
+    fw.finish(s)
+    auditor = Auditor()
+    lp = Loop(exe, tmp_path / "lean", s, "L0", auditor, tmp_path)
+    c = lp.connect()
+    got = [call(c, f) for f in frames]
+    assert all(r[:1] != b"\x03" for r in got[:-1]), got
+    why = refusal(got[-1])
+    answers = [call(c, f) for f in after]
+    v = verdict(call(c, FINISH))
+    assert _read(c) is None
+    c.close()
+    lp.close()
+    return why, answers, v, [f for conn in auditor.got for f in conn], s
+
+
+@pytest.mark.parametrize("frames, why", [
+    ([REGISTER, EARLY_ROUND], STOP + "coins before the step-0 coin commitment"),
+    ([REGISTER, HELLO], STOP + "the Lean Hello: setup: "),
+])
+def test_nothing_reaches_the_auditor_after_the_loops_refusal(exe, tmp_path, frames, why):
+    """Once the loop refuses an admitted session (here a round before the step-0 coin commitment, or a `Hello` its setup
+    refuses), every request after it is refused for the same reason without reaching the auditor, `Register`, `Hello`,
+    `Link`, `Open` and a `Proof` among them, and each `Ping` is answered `Ok` by the loop: the auditor receives the
+    session's `Register` and nothing more, though the prover knows why it stopped. Its `Finish` is the stop, recorded as
+    Python records it."""
+    got, answers, v, sent, s = _stopped(exe, tmp_path, frames, AFTER)
+    assert got.startswith(why), got
+    assert [a for f, a in zip(AFTER, answers) if f[:1] == b"\x09"] == [OK] * 3
+    assert [refusal(a) for f, a in zip(AFTER, answers) if f[:1] != b"\x09"] == [got] * (len(AFTER) - 3)
+    assert v == {"accepted": False, "why": f"FIREWALL-REFUSED: {got}: recursive session {s} stopped at L0"}
+    assert sent == [REGISTER]
+    py = FW.Firewall(tmp_path / "py")
+    py.finish(py.open("s", ["L0", "L1"]))
+    with py.slot(s, "L0"):
+        py.admit(s, "L0")
+        py.stop(s, "L0", got)
+    assert record(tmp_path / "lean") == record(tmp_path / "py")
+
+
+@pytest.mark.parametrize("frames, why, left", [
+    ([REGISTER, REGISTER], "a second Register", [REGISTER]),
+    ([ping(b"p"), REGISTER, ping(b"p"), ping(b"p"), REGISTER], "a second Register", [REGISTER]),
+    ([HELLO], "a Hello before the Register", []),
+    ([REGISTER, LINK], "a Link before the session's Hello", [REGISTER]),
+    ([REGISTER, OPEN], "an Open of t/rep0, which is none of the session's rep streams", [REGISTER]),
+    ([REGISTER, COMMIT], "coins before the step-0 coin commitment", [REGISTER]),
+])
+def test_a_request_out_of_its_place_never_leaves(exe, tmp_path, frames, why, left):
+    """Before any stop each request leaves once, at its place in the honest prover's order, and a `Ping` never does: a
+    second `Register`, a `Hello` before the `Register`, and a `Link` or `Open` before the `Hello` are refused before they
+    reach the auditor, and stop the session. `test_lean_session.py` takes the places past `Hello` at a statement the loop
+    sets up, `Flock.Test.SessionPlace` those past `Commit`, and `flock-circuit`'s firewalled selftests the honest session
+    accepted."""
+    got, answers, v, sent, _ = _stopped(exe, tmp_path, frames, AFTER)
+    assert got == STOP + why, got
+    assert all(a == OK if f[:1] == b"\x09" else refusal(a) == got for f, a in zip(AFTER, answers))
+    assert not v["accepted"] and sent == left

@@ -1,9 +1,11 @@
-import Proofs.Flock.C3.RegLevels.SrcRun
-import Proofs.Flock.Soundness.Refine.OpeningConverse
-import Proofs.Flock.VBridge.Algebra.RingSwitch
-import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
-import Proofs.Flock.Soundness.Discharge.Exec.Shape
-import Proofs.Flock.Recursive.ForkRuns
+module
+
+public import Proofs.Flock.C3.RegLevels.SrcRun
+public import Proofs.Flock.Soundness.Refine.OpeningConverse
+public import Proofs.Flock.VBridge.Algebra.RingSwitch
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
+public import Proofs.Flock.Soundness.Discharge.Exec.Shape
+public import Proofs.Flock.Recursive.ForkRuns
 
 /-!
 # n7's levels: ring switching's output is the opening's (`OpenRel`)
@@ -17,6 +19,8 @@ the three rounds retaining the bytes each answers). That play is one on a tape (
 shape (`opening_exact`), so it is the source's opening steps when their messages and coins are the play's, and its
 output is `u.opened` (`PlaysT.det`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

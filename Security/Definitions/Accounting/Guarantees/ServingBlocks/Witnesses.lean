@@ -1,5 +1,7 @@
-import Definitions.Accounting.Guarantees.ServingBlocks
-import Definitions.Accounting.ServingBlocks.Instances
+module
+
+public import Definitions.Accounting.Guarantees.ServingBlocks
+public import Definitions.Accounting.ServingBlocks.Instances
 
 /-!
 # The serving-block bound: honest and nontrivial lemmas
@@ -23,6 +25,8 @@ with its probability.
 
 The proofs are in `Security/Proofs/Accounting/ServingBlocks/Witnesses.lean`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.ServingBlocks
 

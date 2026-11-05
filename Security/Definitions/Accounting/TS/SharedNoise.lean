@@ -1,4 +1,6 @@
-import Definitions.Accounting.TS.Receipt
+module
+
+public import Definitions.Accounting.TS.Receipt
 
 /-!
 # One noise seed a call: the call's coin and a tile's own part of it (trusted)
@@ -41,6 +43,8 @@ column tile 0. Tile `(I, J)` reads its rows' noise from the seed at the position
 columns' noise and its fold keys from its own position. A call is then one `CallCoin 1 g` per row block and band, each
 from its own seed.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS
 

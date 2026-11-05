@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.ExecDrawOS
-import Proofs.Flock.Soundness.Discharge.Exec.Pts
+module
+
+public import Proofs.Flock.Soundness.ExecDrawOS
+public import Proofs.Flock.Soundness.Discharge.Exec.Pts
 
 /-!
 # How many units the live law draws
@@ -20,6 +22,8 @@ is every unit (`execOS_draw_card_or`).
   at `mPtsOf c.g n` on the others. So one `mPts` serves every draw of the law when those two agree; otherwise the runs
   that read past the source's bytes set up at another.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

@@ -40,8 +40,9 @@ def _root(name: str) -> bytes:
 class _Auditor:
     """The challenger gate (`challenger_host.Gate`) and the auditor host's challenger in this process: `run` answers the Commit's
     gate requests (`CC.ChallengerGate`'s argv, one shell word after the command) as the gate's forced command does, refusing a
-    second open for a root; an open starts that challenge phase's challenger, signed under `KEY` at the gate's next leaves, which
-    the Commit reaches over a socket pair. `end` appends the challenge phase's end entry once its client closed it, and `heads`
+    second open for a root; an open starts that challenge phase's challenger (withheld, `remote.open_session`, when its
+    reserve said ``--withhold``), signed under `KEY` at the gate's next leaves, which the Commit reaches over a socket
+    pair. `end` appends the challenge phase's end entry once its client closed it, and `heads`
     writes the ledger (or the lines given) where a verifier reads it."""
 
     def __init__(self, tmp_path, monkeypatch) -> None:
@@ -57,22 +58,23 @@ class _Auditor:
         if words[0] == "reserve":
             sid = f"s20261021T1200{len(self.sessions):02d}Z-{len(self.sessions):04x}"
             families = json.loads(opts["--families"])
-            e = self.gate.reserve(sid, families, scheme=opts["--scheme"], peer=opts["--peer"])
-            self.sessions[sid] = {"families": families, "scheme": opts["--scheme"]}
+            withheld = {"withheld": True} if "--withhold" in words else {}
+            e = self.gate.reserve(sid, families, scheme=opts["--scheme"], peer=opts["--peer"], **withheld)
+            self.sessions[sid] = {"families": families, "scheme": opts["--scheme"], "withhold": bool(withheld)}
             return 0, json.dumps({"session": sid, "seq": e["seq"], "peer": opts["--peer"], "by": "vllm",
-                                  "expires_utc": e["body"]["expires_utc"], "period": None})
+                                  "expires_utc": e["body"]["expires_utc"], "period": None, **withheld})
         if words[0] == "open":
             sid, root = opts["--session"], opts["--root"]
             if any(s.get("root") == root for s in self.sessions.values()):
                 return 3, json.dumps({"refused": f"root {root[:16]} has a session"})
             answer = self.gate.open(sid, root)
-            self._serve(sid, root)
+            self._serve(sid, root, self.sessions[sid]["withhold"])
             return 0, json.dumps(answer)
         if words[0] == "status":
             return 0, json.dumps({"session": words[1], "commitment": self.sessions[words[1]]["commitment"]})
         return 3, json.dumps({"refused": f"no verb {words[0]}"})
 
-    def _serve(self, sid: str, root: str) -> None:
+    def _serve(self, sid: str, root: str, withhold: bool = False) -> None:
         s = self.sessions[sid]
         challenger = LC.LiveChallenger(s["scheme"], 0, [tuple(f) for f in s["families"]],
                                        CH.entropy(len(self.sessions) + 40))
@@ -83,7 +85,7 @@ class _Auditor:
 
         def sign(m: bytes) -> bytes:
             return lms.sign_at(PRIVATE, leaves.pop() if leaves else self.gate.take(), m).encode()
-        session = R.open_session(challenger, KEY, f"{CH.HOST}.{sid}", sign, directory, sid)
+        session = R.open_session(challenger, KEY, f"{CH.HOST}.{sid}", sign, directory, sid, withhold)
         ours, theirs = socket.socketpair()
 
         def serve() -> None:

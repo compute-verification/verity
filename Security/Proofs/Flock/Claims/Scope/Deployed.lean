@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Scope.Fit
-import Proofs.Flock.Claims.DeployInputs
+module
+
+public import Proofs.Flock.Claims.Scope.Fit
+public import Proofs.Flock.Claims.DeployInputs
 
 /-!
 # The deployed relation at the deployed parser
@@ -11,6 +13,8 @@ The deployed record's parser is `FlockDeploy.parse` (`parseOf` at the verifier's
 * `relS_deployed`: `RelS` of an in-scope statement the deployed parser accepts is every table's `Layout.model` satisfied
   (`Fit.relS_layout`; `InScope` gives the untyped form without public input ports it needs).
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 

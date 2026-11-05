@@ -105,7 +105,7 @@ def test_a_commit_runs_period_open_commits_its_declared_fixed_length(tmp_path, m
     decl = PH.Static((1,) * 32, 3, 32, 4)
     files = {"k4096": "2b" * 64, "k14336": "3c" * 64, CR.LIVE: "4d" * 64}
     argv = GPU.period_open_argv("o1", "a" * 128, 7, decl, files)
-    assert argv[:11] == ["period-open", "--name", "o1", "--cap", "1", "--circuit", "a" * 128, "--draw-k", "7",
+    assert argv[:11] == ["period-open", "--name", "o1", "--cap", "2", "--circuit", "a" * 128, "--draw-k", "7",
                          "--rows", "32"]
     length = _auditor(monkeypatch).length_of(argv[argv.index("--length") + 1])
     assert length == GPU.fixed_length(decl) == {"max_tokens": [3] * 32, "stop": "fixed"}

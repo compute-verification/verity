@@ -1,5 +1,7 @@
-import Proofs.Pouw.Fp8Atom.H1TRunningProofs
-import Proofs.Pouw.Fp8Atom.H1TGapStaging
+module
+
+public import Proofs.Pouw.Fp8Atom.H1TRunningProofs
+public import Proofs.Pouw.Fp8Atom.H1TGapStaging
 
 /-!
 # H-1T at bounded `k` (staging, unpinned)
@@ -17,6 +19,8 @@ bounded forms of `h1tDistinctLive`, `h1tRunningOfDistinct`, `h1tGamma` and `h1tG
   `|R_p| < 2^31` (ulp at most 128) for `k ≤ 9,048` (`T ≤ 312`, which covers 8,192³), and `|R_p| < 2^32` (ulp at most
   256) for `k ≤ 18,096` (`T ≤ 624`, which covers 16,384³).
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T.Bounded
 

@@ -1,7 +1,9 @@
-import Definitions.Accounting.TS
-import Definitions.Accounting.Gates.Model
-import Definitions.Accounting.Device
-import Definitions.Pouw.Window
+module
+
+public import Definitions.Accounting.TS
+public import Definitions.Accounting.Gates.Model
+public import Definitions.Accounting.Device
+public import Definitions.Pouw.Window
 
 /-!
 # PoUW as a compile pass over an arbitrary declared circuit (trusted)
@@ -126,6 +128,8 @@ The physical layer:
   for a seeded window. The ledger, not this statement, decides how much of a device's time the certificates it
   admits may claim.
 -/
+
+@[expose] public section
 
 namespace Accounting.Compose
 
@@ -357,8 +361,10 @@ unit's gate reads, glue fed by one) before the next round's; and a receipt, whic
 later round's root up to the draw's. A run input committed after its reader's coin lets the prover choose tokens or
 decode feedback to match the reader's noise: that breaks (H-μ)'s salt-independence (E3) for the reader.
 
-Today's code has a coin a round, and nothing shows that it meets this order. A live window's coins are its salt coin, its
-draw coin and one round coin a round (`verity/core/protocols/pouw/window.py`'s `live_families`). Round r's coin opens
+Today's code has a coin a round, and nothing shows that it meets this order. A live window's coins are its salt coin and
+one round coin a round (`verity/core/protocols/pouw/window.py`'s `live_families`), and its draw coin is a session of its
+own (`DRAW_FAMILIES`), opened withheld on the draw root so its coin root is released only after the prover's
+commitment. Round r's coin opens
 once, after the round root the challenger's signed log shows it received (`core_check.rounds`), and round r's noise key
 is that coin's and that root's (`window.round_key`). Each round's root commits that round's rows of every A value
 before its coin (`credit.a_link`). A seeded window's coins are still one salt a window and the draw

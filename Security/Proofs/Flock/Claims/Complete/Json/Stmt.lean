@@ -1,8 +1,14 @@
-import Proofs.Flock.Claims.Complete.Json.Session
-import Proofs.Flock.Soundness.Discharge.Hidden.Spec
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Session
+public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+public import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Proofs.Flock.Claims.Complete.Json.Parse
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import all Init.Data.Ord.String
 
 /-!
 # What the record needs of the statement, from its setup
@@ -24,6 +30,8 @@ tree its coins name.
   the keys it reads, each a string, a natural number or an array of them (`good_stratified`, `good_subset`), so it is
   printable.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 
@@ -255,7 +263,7 @@ theorem setupOne_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables 
 /-! ## The public header's draw -/
 
 set_option maxHeartbeats 4000000 in
-/-- The public file's header is a rebuilt object (`Flock.norm` of what `Json.parse` read). -/
+/-- The public file's header is a rebuilt object (`Flock.norm` of what `JsonParse.parse` read). -/
 theorem loadPublic_header {tags : Tags} {c : Circuit} {f : ByteArray} {pop : Public}
     (h : HmRow.loadPublic tags c f = .ok pop) : (∃ j, pop.header = Flock.norm j) ∧ ∃ m, pop.header = .obj m := by
   unfold HmRow.loadPublic at h
