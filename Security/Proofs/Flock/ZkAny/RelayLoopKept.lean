@@ -11,7 +11,8 @@ At a frame round's slot the round is the model's next, on its rep stream's rep, 
 frame is kept; so `LoopJ` is kept there given `RoundFacts` and `RepJ` of the round's own rep one round on:
 
 * `rep_at`, `rep_index`: rep stream `2 * i + r` is table `i`'s rep `r`. `rep_eq`: two rep streams at one index are
-  one. `rep_of_name`: where the rep streams' names are distinct, two of one name are at one index.
+  one. `rep_of_name`: where the rep streams' names are distinct, two of one name are at one index; `tables_inj`: and
+  two tables of one name are one.
 * `locate_fst_succ`: the next round's stream is at or after this round's.
 * **`round_rep`**: a frame round's rep is the model's next round's rep stream, among the setup's. `repJ_cur`: past
   its stream's first round the rep has `RepJ`; `freshAt_cur`: at it, the rep's frame is fresh.
@@ -83,6 +84,20 @@ theorem rep_of_name {spec : SessionSpec} (hnd : (spec.repStreams.toList.map (·.
   rw [e] at a
   rw [e'] at b
   exact a.symm.trans b
+
+/-- **Where the rep streams' names are distinct, two tables of one name are one**: each table's rep 0 stream is named
+after it. -/
+theorem tables_inj {spec : SessionSpec} (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup) {i j : Nat}
+    {name : String} (hi : spec.tables[i]? = some name) (hj : spec.tables[j]? = some name) : i = j := by
+  have mem : ∀ k, spec.tables[k]? = some name →
+      (k, 0, s!"{name}/rep{(0 : Nat)}") ∈ spec.repStreams.toList := by
+    intro k hk
+    obtain ⟨hlt, he⟩ := Array.getElem?_eq_some_iff.mp hk
+    rw [Array.mem_toList_iff, _root_.Flock.SessionSpec.repStreams, Array.mem_flatMap]
+    refine ⟨k, Array.mem_range.mpr hlt, Array.mem_map.mpr ⟨0, by simp, ?_⟩⟩
+    rw [getElem!_pos spec.tables k hlt, he]
+  have := rep_of_name hnd (mem i hi) (mem j hj)
+  omega
 
 /-- **The next round's stream is at or after this round's.** -/
 theorem locate_fst_succ : ∀ (rs : List Nat) (k i : Nat),
@@ -451,7 +466,7 @@ theorem loopKept_round {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
   obtain ⟨e', he'⟩ := LoopModel.hist_succ M hlt
   refine ⟨?_, fun h => ?_, fun i' r' s' hmem' hseen => ?_, stepK_plan he hJ.plan,
     seenAt_round hnd hmem hkr hl hl' hJ.seenAt, fun h => absurd h (by rw [hcc, hF.count hsent]; omega),
-    fun _ => built_stays hst (hJ.built (by rw [hF.count hsent]; omega))⟩
+    fun _ => builtAt_stays hst (hJ.built (by rw [hF.count hsent]; omega))⟩
   · rw [hsent', hsent, hcc, he', Bool.true_and]
     exact stopped_roundRun hRA hv hr hreq hro hae hb hsa hco e'
   · rw [hsent', hsent] at h
