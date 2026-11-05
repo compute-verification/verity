@@ -42,6 +42,8 @@ public import Proofs.Flock.ZkAny.RelayGap
 public import Proofs.Flock.ZkAny.RelayAlg
 public import Proofs.Flock.ZkAny.RelayFresh
 public import Proofs.Flock.ZkAny.RelayLoop
+public import Proofs.Flock.ZkAny.RelayLoopCommit
+public import Proofs.Flock.ZkAny.RelayLoopFinish
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release
@@ -77,6 +79,8 @@ rounds as the placeholder's; and at a stream's first round on a frame as its sta
 its schedule so far gives and the frame after it keeping that schedule; and `EnvPre` from the relay's invariant at
 the deployed loop against the model's run, the model's messages the slots took one more than the openings the
 auditor answered, given its step at the `Commit`, each frame round and the `Finish` and an invariant of the loop kept
-at every other slot, the step at the `Hello` and at every other slot proved. -/
+at every other slot, the step at the `Hello` and at every other slot proved; and the step at the `Commit`, where the
+firewall's own link is at the level 0 the loop drew for the session, and at the `Finish`, where the session's stop is
+whether an earlier round of the model's run failed. -/
 
 @[expose] public section
