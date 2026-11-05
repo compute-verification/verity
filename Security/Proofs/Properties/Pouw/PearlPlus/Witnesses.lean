@@ -333,7 +333,8 @@ theorem refusedBeforeTheCoin_honest : plan emptyRun = .error emptyRefusal := rfl
 /-- A verdict that accepts every run (`acceptAllCheck`) answers the run `plan` refuses with an acceptance, not the refusal. -/
 theorem refusedBeforeTheCoin_nontrivial :
     ¬ (acceptAllCheck emptyRun noOpening =
-      { accept := false, reason := some emptyRefusal.reason, refused := emptyRefusal.refused }) := by
+      { accept := false, reason := some emptyRefusal.reason, refused := emptyRefusal.refused, overCap := emptyRun.overCap,
+        tie := emptyRefusal.tie }) := by
   intro h
   cases h
 
@@ -387,7 +388,7 @@ theorem qsort_salt (x y z : Part) :
 theorem qsort_run (x : Part) : ([("run", x)].toArray.qsort fun a b => decide (a.1 < b.1)) = #[("run", x)] := by
   cbv
 
-deriving instance DecidableEq for Matmul, UnitRecord, Scheme, Pass, Plan
+deriving instance DecidableEq for Matmul, UnitRecord, Scheme, Tied, Pass, Plan
 
 end Witness
 
@@ -410,10 +411,10 @@ theorem loadedGivesUp_nontrivial :
 
 /-- `plan` takes the honest pass's run at one draw: the draw names its one tile. -/
 theorem planMeans_honest :
-    plan (honestRun 1) = .ok ⟨[honestPass], runCommitment [honestPass], honestSource, [(0, 0)], 1, [(0, 0)]⟩ := by
+    plan (honestRun 1) = .ok ⟨[honestPass], runCommitment [honestPass], honestSource, [(0, 0)], 1, [(0, 0)], none⟩ := by
   apply eq_ok_of_toOption
-  simp only [plan, honestRun, List.mapM_cons, List.mapM_nil, loadedGivesUp_honest, PouwCheck.PearlPlus.drawKey, key?,
-    FlockSoundness.Randomness.derive, qsort_run]
+  simp only [plan, afterTie, honestRun, List.mapM_cons, List.mapM_nil, loadedGivesUp_honest, PouwCheck.PearlPlus.drawKey,
+    key?, FlockSoundness.Randomness.derive, qsort_run]
   decide +kernel
 
 /-- A `plan` that accepts every run with `acceptAllPlan` gives a root that is not the run commitment of its passes, a
@@ -426,7 +427,7 @@ theorem planMeans_nontrivial : ¬ (acceptAllPlan.root = runCommitment acceptAllP
 
 /-- `plan` takes the honest pass's run at no draws: no tile to open. -/
 theorem Witness.plan_honestRun0 :
-    plan (honestRun 0) = .ok ⟨[honestPass], runCommitment [honestPass], honestSource, [], 0, []⟩ := by
+    plan (honestRun 0) = .ok ⟨[honestPass], runCommitment [honestPass], honestSource, [], 0, [], none⟩ := by
   apply eq_ok_of_toOption
   simp only [plan, honestRun, List.mapM_cons, List.mapM_nil, loadedGivesUp_honest]
   decide +kernel
@@ -483,7 +484,7 @@ theorem checkTile_eq_outcome {p : Pass} {wn : Except String Words.FixedNoise} {t
 deriving instance DecidableEq for Words.Formed, Words.Ops, Words.Checked
 
 /-- The test tile's formed operands and peel factors as the Python forms them (`PearlC.encode`): A's and B's codes,
-α, ρ, E′ and FP32 words, and P_A's and P_B's rows of BF16 words. -/
+α, ρ, β, E′ and FP32 words, and P_A's and P_B's rows of BF16 words. -/
 def testOps : Words.Ops where
   a :=
     { codes := #[
@@ -495,7 +496,7 @@ def testOps : Words.Ops where
             0xd2, 0x30, 0x64, 0x5f, 0x53, 0xef, 0xed, 0x6b, 0x6e, 0x75, 0xeb, 0x73, 0xdb, 0xf0, 0x5c, 0xf6,
             0x67, 0xe5, 0x3e, 0x41, 0xf1, 0xe3, 0xe2, 0x6f, 0x5d, 0x60, 0x59, 0xed, 0x69, 0x69, 0xeb, 0x61,
             0x65, 0xee, 0xf6, 0x66, 0x4e, 0x5a, 0x6a, 0x75, 0xe2, 0x70, 0x67, 0x72, 0x6f, 0xe4, 0x6b, 0x72]],
-      alpha := #[0x42a5f708], rho := #[0x3f4584ca],
+      alpha := #[0x42a5f708], rho := #[0x3f4584ca], beta := #[0x3db51798],
       ep := #[
           #[0xc9, 0xba, 0xb8, 0x45, 0x43, 0xcd, 0xc6, 0xcb, 0xca, 0x40, 0x4b, 0x48, 0x23, 0x3a, 0x4a, 0x4d,
             0xc6, 0xb5, 0x48, 0x43, 0x3b, 0xcb, 0x4b, 0xbe, 0xc6, 0xb9, 0x4d, 0xc6, 0xc2, 0x4a, 0x45, 0x4b]],
@@ -526,7 +527,7 @@ def testOps : Words.Ops where
             0xeb, 0x67, 0xf4, 0xe6, 0xc8, 0xed, 0xe8, 0xe1, 0x44, 0x6b, 0x70, 0xf2, 0xe2, 0x72, 0x74, 0x6f,
             0x5b, 0x67, 0xe6, 0xe4, 0x53, 0x3d, 0x6d, 0x57, 0x3e, 0xf1, 0x6c, 0x64, 0x55, 0xee, 0x75, 0x6e,
             0x72, 0xe6, 0xdc, 0xef, 0x6b, 0x74, 0xea, 0x62, 0x6b, 0xeb, 0x4d, 0xcf, 0xe1, 0x6f, 0xce, 0xad]],
-      alpha := #[0x429201a5], rho := #[0x3f64bff6],
+      alpha := #[0x429201a5], rho := #[0x3f64bff6], beta := #[0x3db8813e],
       ep := #[
           #[0x32, 0xca, 0xca, 0xbc, 0x44, 0xbb, 0x4b, 0x41, 0xcc, 0xc4, 0xcc, 0x44, 0x98, 0xbe, 0x41, 0xc9,
             0x4c, 0xc6, 0xc6, 0xca, 0x40, 0xc6, 0x44, 0xce, 0x4d, 0xbd, 0xc1, 0xa4, 0xbb, 0xc9, 0xcb, 0xcd]],
@@ -773,21 +774,27 @@ theorem tileAcceptMeans_nontrivial :
   intro pos rows cols _ _ h
   cases h
 
-/-- The rule passes the tile of one 1 × 128 × 1 call whose two rows are credited: both rows keep the per-row rules, and each
-of the word's four atoms changes its total, so none is flagged and the replayed inert work is 0. -/
+/-- The rule passes the tile of one 1 × 128 × 1 call whose two rows are credited: both rows keep the per-row rules, each
+of the word's four atoms changes its total, so none is flagged, and no element of the A row is salt-dead (`capSide`), so
+none is a forming element and the replayed inert work is 0. -/
 theorem tileKeepsTheCap_honest :
     Rule.checkOpened capScheme capRecord [0] [0] capOps = none ∧ (capRecord.credited [0] [0]).1 ≠ [] ∧
       (capRecord.credited [0] [0]).2 ≠ [] := by
   refine ⟨by decide +kernel, by decide, by decide⟩
 
 /-- A rule that accepts every tile passes the tile of `capRecord` whose word has 32 codes, less than one promotion group,
-on which the inert-work replay refuses, so no inert work is replayed for its credited cell. -/
+on which the inert-work replay refuses, so neither its words' flags nor its forming elements are replayed for its
+credited cell. -/
 theorem tileKeepsTheCap_nontrivial :
-    ∀ words, ¬ ((capRecord.credited [0] [0]).1.mapM (fun i => (capRecord.credited [0] [0]).2.mapM fun j =>
-      Rule.wordDebit shortOps.a.codes[[0].idxOf i]! shortOps.b.codes[[0].idxOf j]!) = .ok words) := by
-  intro words h
+    ∀ (words : List (List (Array Bool × Nat))) (elems : List Nat),
+      ¬ ((capRecord.credited [0] [0]).1.mapM (fun i => (capRecord.credited [0] [0]).2.mapM fun j =>
+          Rule.wordFlags shortOps.a.codes[[0].idxOf i]! shortOps.b.codes[[0].idxOf j]!) = .ok words ∧
+        ((capRecord.credited [0] [0]).1.zip words).mapM (fun (iw : Nat × List (Array Bool × Nat)) =>
+          Rule.rowElements shortOps.a.alpha[[0].idxOf iw.1]! shortOps.a.beta[[0].idxOf iw.1]!
+            shortOps.a.x[[0].idxOf iw.1]! (iw.2.map Prod.fst)) = .ok elems) := by
+  intro words _ ⟨h, _⟩
   have : ((capRecord.credited [0] [0]).1.mapM (fun i => (capRecord.credited [0] [0]).2.mapM fun j =>
-      Rule.wordDebit shortOps.a.codes[[0].idxOf i]! shortOps.b.codes[[0].idxOf j]!)).toOption = none := by
+      Rule.wordFlags shortOps.a.codes[[0].idxOf i]! shortOps.b.codes[[0].idxOf j]!)).toOption = none := by
     decide +kernel
   rw [h] at this
   cases this
@@ -799,8 +806,8 @@ theorem tileKeepsTheCap_nontrivial :
 manifest, `plan` draws its one tile, and the replay derives the fixed operand's noise itself (`fixedNoise`), which is the
 test noise (`Witness.test_noise`), and passes the tile on it (`tileAcceptMeans_honest`). The noise is 2k = 256 noise lines
 and 32 × 32 FP32 chains of k = 128: each 16 lines and each 4 rows of G are one kernel computation, in modules of their
-own, one per kind (`Proofs.Properties.Pouw.PearlPlus.Noise`), and the replay and the noise are proved over their steps as parameters
-(`Witness.replayWith`, `Witness.fixedNoiseWith`), so the kernel never reduces a step of unknown arguments. -/
+own, one per kind (`Proofs.Properties.Pouw.PearlPlus.Noise`), and the replay and the noise are proved over their steps
+as parameters (`Witness.replayWith`, `Witness.fixedNoiseWith`), so the kernel never reduces a step of unknown arguments. -/
 
 namespace Witness
 
@@ -976,7 +983,7 @@ theorem test_load : load honestCoins testManifest = .ok testPass := by
 
 theorem test_plan : plan testRun = .ok testPlan := by
   apply eq_ok_of_toOption
-  simp only [plan, testRun, List.mapM_cons, List.mapM_nil, test_load, PouwCheck.PearlPlus.drawKey, key?,
+  simp only [plan, afterTie, testRun, List.mapM_cons, List.mapM_nil, test_load, PouwCheck.PearlPlus.drawKey, key?,
     FlockSoundness.Randomness.derive, qsort_run]
   decide +kernel
 
