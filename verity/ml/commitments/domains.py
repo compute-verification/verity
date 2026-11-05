@@ -1,6 +1,6 @@
 """One table of domain separators: every versioned string a protocol hashes, derives from or commits under, or names its
-records, schemes and protocols by. The Lean is `Identity.Domains`
-(`verity/core/primitives/identity/Identity/Domains.lean`), beside the tagged SHA-512 most of them key; this module mirrors
+records, schemes and protocols by. The Lean is `Randomness.Domains`
+(`verity/core/primitives/randomness/Randomness/Domains.lean`), beside the tagged SHA-512 most of them key; this module mirrors
 it beside `identity.tagged_sha512`.
 
 A constant's name is in today's words. Its bytes are what committed formats, pinned vectors and recorded runs carry, so

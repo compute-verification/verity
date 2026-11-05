@@ -1,6 +1,6 @@
 import PouwWindow.Side
 import PouwWindow.Record
-import Identity.Domains
+import Randomness.Domains
 
 /-!
 # The tile instances' public inputs (`window.py`, "The tile instances' public inputs")
