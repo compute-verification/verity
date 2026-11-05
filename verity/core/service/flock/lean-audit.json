@@ -80,6 +80,7 @@
   "Flock.Test.Served",
   "Flock.Test.RequireLink",
   "Flock.Test.FV3",
+  "Flock.Test.Legacy",
   "VStar",
   "Flock.Annot",
   "Flock.AnnotExpand",
