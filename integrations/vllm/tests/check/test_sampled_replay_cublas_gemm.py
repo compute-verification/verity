@@ -82,7 +82,7 @@ def test_the_evaluator_cites_the_h200_capture_and_agrees_with_the_route_table():
     """The provenance's split counts are the route table's at every (shape, M) the capture ran (the scan maps the same routes),
     and the Definitions' conformance cites the same record."""
     from tests.properties import glm53_bf16_gemm_capture_gpu as X
-    from verity_vllm.program.frontend.conformance import status_of
+    from verity.ml.circuits.defs import conformance_label
 
     p = C.PROVENANCE
     assert p["scan"].startswith(BC.CUBLAS_ROUTES["run_record"])
@@ -97,7 +97,7 @@ def test_the_evaluator_cites_the_h200_capture_and_agrees_with_the_route_table():
         for m, split in case["SPLIT_K"].items():
             assert BC.default_cublas_split_k(name.split("/")[1], int(m), case["K"], case["N"]) == split, (name, m)
     for d in (CB.GemmF32OutWord, CB.CublasSplitKGemmF32OutWord, CB.CublasSplitKGemmWord):
-        assert status_of(d.conformance) == "exact-model-tested"
+        assert conformance_label(d.conformance) == "exact-model-tested"
         assert p["record"][:16] in d.conformance and p["art"]["record"] in d.conformance
 
 
