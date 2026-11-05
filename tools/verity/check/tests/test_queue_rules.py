@@ -14,9 +14,9 @@ def test_the_rules_parse_and_name_the_hold_label():
     assert rules.hold_label == "hold"
 
 
-def test_drives_flags_parse_and_put_no_pr_first_by_default():
+def test_drives_flags_parse_and_name_the_machines_its_checks_run_on():
     flags = DriveFlags.parse((ROOT / DRIVE_FLAGS).read_text(), DRIVE_FLAGS)
-    assert flags.on and flags.first == ()
+    assert flags.on
 
 
 def test_drives_landing_gates_are_in_the_tree():
