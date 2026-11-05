@@ -27,7 +27,8 @@ peak), then O(proof) a session: so a protocol verifies one statement a stratum, 
 The one-stage audit's v2 (`V2`, `SampledProofs.OneStageZk`) runs this verifier inside the audit's own Lean, on the files
 as content-addressed blobs: `check_v2` hands it v1's inputs with the verdicts replaced by the files' digests
 (`evidence_v2`) and the files themselves, and `verdicts_v2` is that run's verdicts alone, which the difftest holds to
-`verify`'s.
+`verify`'s. Both hand the verifier only the pinned MUFU tables the circuit file's lookups name (`lookup_tables`,
+`OneStageZk.tablesFor`), which are all the parse reads.
 
 Building takes the lock `verifier.BUILD_LOCK` takes: Lake builds the flock package in place for `sampled-proofs-verifier`
 too, and two builds at once would rewrite one module's C under each other.
@@ -45,6 +46,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from verity.ml.circuits import library
+
 from .verifier import BUILD_LOCK, CORE
 from .verifier import PACKAGE as V2_PACKAGE
 
@@ -60,6 +63,11 @@ _CHUNK = 1 << 24
 SCOPE_WHY = ("a circuit outside the unit's form under --zk (scopeOkH: the unit reads its one input group and returns the "
              "outputs)")
 TABLES_WHY = "a shared-row public file (header shared_rows) under --zk"
+#: `Flock.MUFU_TABLES`, in its order: the pinned tables a circuit file's lookup may read, each found by its words' SHA-512
+#: (`library.table`)
+MUFU_TABLES = ("rsq", "sqrt", "rcp", "ex2")
+#: the ASCII whitespace `String.trimAsciiEnd` drops
+_ASCII_SPACE = " \t\r\n"
 
 
 class LeanError(RuntimeError):
@@ -162,6 +170,41 @@ def _refusal(why: str) -> str:
     return f"refused: {why}: a statement form the soundness proof does not cover"
 
 
+def lookup_names_of(head: bytes) -> list[str]:
+    """`OneStageZk.lookupNames` on a circuit file's head `head` (its first two lines at least): the keys of META's
+    ``lookups`` object, sorted, as `HmRow.parse` reads them (the second line, ``META `` then JSON); none when that line is
+    not this or names no ``lookups`` object. Lean also reads none from a file whose later bytes are not UTF-8, which the
+    parse refuses before it reads a table."""
+    lines = head.split(b"\n", 2)
+    try:
+        text = (lines[1] if len(lines) > 1 else b"").decode().rstrip(_ASCII_SPACE)
+        m = json.loads(text[len("META "):]) if text.startswith("META ") else None
+    except ValueError:
+        return []
+    lookups = m.get("lookups") if isinstance(m, dict) else None
+    return sorted(lookups) if isinstance(lookups, dict) else []
+
+
+def lookup_names(circuit: Path) -> list[str]:
+    """`lookup_names_of` the circuit file at `circuit`, read from its head."""
+    with open(circuit, "rb") as f:
+        return lookup_names_of(f.readline() + f.readline())
+
+
+def lookup_tables(circuit: Path, tables: Sequence[Path]) -> list[tuple[str, Path]]:
+    """`OneStageZk.tablesFor`: of the pinned MUFU tables in `MUFU_TABLES`' order, each one the circuit file's lookups
+    name (`lookup_names`), with the first of `tables` holding its words, found by their SHA-512 as Lean finds a blob.
+    The parse reads no other table, so another one handed changes no verdict."""
+    names = set(lookup_names(circuit))
+    want = {library.table(n).sha512: n for n in MUFU_TABLES if n in names}
+    found: dict[str, Path] = {}
+    for t in tables if want else ():
+        name = want.get(file_sha512(t))
+        if name is not None:
+            found.setdefault(name, t)
+    return [(n, found[n]) for n in MUFU_TABLES if n in found]
+
+
 def reads_registered(program: bytes) -> bool:
     """Whether the program descriptor `program` has an input bound at registration (a `RegisteredInput<w>_v1` among its
     `definitions`), or has no `definitions` object to tell: True unless it names none."""
@@ -181,11 +224,14 @@ def proved_units(public: Path, session: Path) -> tuple[int, ...]:
 
 
 def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapping[str, Any],
-           registered: Mapping[str, Any] | None = None) -> tuple[list[Finding] | None, tuple[str, str] | None]:
+           registered: Mapping[str, Any] | None = None,
+           tables: Sequence[Path] = ()) -> tuple[list[Finding] | None, tuple[str, str] | None]:
     """Each of `proof`'s sessions verified by C-Flock's Lean verifier against the verifier's own `program` (its
     descriptor's bytes), `partition` and `registered` file (None only for a program that reads no registered value, such
     as N2's, whose proof block opens the committed value inside its circuit), on the circuit file the auditor committed as
-    `circuit_sha512`; the findings in session order and None, or None and the refusal (``registered``: `registered` is
+    `circuit_sha512`, handed (``--tables``) the pinned MUFU tables among `tables` that its lookups name
+    (`lookup_tables`, as the v2 audit hands them); the findings in session order and None, or None and the refusal
+    (``registered``: `registered` is
     None and the program reads registered values, `reads_registered`; ``circuit``: the circuit file is not the
     committed one; ``proof``: a file is missing or the verifier's answer is not one verdict a session naming the
     partition object's program; ``form``: the verifier accepted a session whose files `ks_form_why` refuses). A session
@@ -218,6 +264,11 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
         if registered is not None:
             files["registered"].write_text(json.dumps(registered))
             reads = ["--registered", str(files["registered"])]
+        if held := lookup_tables(proof.circuit, tables):
+            Path(d, "tables").mkdir()
+            for name, t in held:
+                Path(d, "tables", f"{name}.u32").symlink_to(t.resolve())
+            reads += ["--tables", str(Path(d, "tables"))]
         p = subprocess.run([str(executable()), "verify", "--zk", "--statement", STATEMENT, "--circuit", str(proof.circuit),
                             "--public", str(proof.public), "--partition", str(files["partition"]),
                             "--program", str(files["program"]), *reads,
@@ -287,11 +338,14 @@ def evidence_v2(proof: Proof, names: Sequence[str] | None = None) -> tuple[dict,
 
 
 def verdicts_v2(proof: Proof, *, circuit_sha512: str, program: Mapping[str, Any], partition: Mapping[str, Any],
-                registered: Mapping[str, Any] | None = None) -> tuple[list[Finding] | None, str | None]:
-    """`verify`, by the v2 audit's own run of the verifier on `proof`'s files as blobs
-    (`sampled-proofs-one-stage-zk verdicts`): the findings in session order (``session`` the directory's name) and None,
-    or None and Lean's refusal. `program` is the descriptor as JSON."""
+                registered: Mapping[str, Any] | None = None,
+                tables: Sequence[Path] = ()) -> tuple[list[Finding] | None, str | None]:
+    """`verify`, by the v2 audit's own run of the verifier on `proof`'s files as blobs, `tables` among them
+    (`sampled-proofs-one-stage-zk verdicts`, which hands the verifier the ones the circuit's lookups name): the findings
+    in session order (``session`` the directory's name) and None, or None and Lean's refusal. `program` is the
+    descriptor as JSON."""
     pr, blobs = evidence_v2(proof)
+    blobs += list(tables)
     own = {"circuit": circuit_sha512, "partition": dict(partition), "program": dict(program),
            "registered": None if registered is None else dict(registered)}
     with tempfile.TemporaryDirectory(prefix="verity-proofs-v2-") as d:
@@ -334,6 +388,7 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
         raise LeanError(f"{V2_EXE} check answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
 
 
-__all__ = ["EXE", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "V2", "V2_EXE", "Finding", "LeanError", "Proof",
-           "check_v2", "evidence_v2", "executable", "file_sha512", "ks_form_why", "proved_units", "reads_registered",
-           "v2_executable", "verdicts_v2", "verify"]
+__all__ = ["EXE", "MUFU_TABLES", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "V2", "V2_EXE", "Finding",
+           "LeanError", "Proof", "check_v2", "evidence_v2", "executable", "file_sha512", "ks_form_why", "lookup_names",
+           "lookup_names_of", "lookup_tables", "proved_units", "reads_registered", "v2_executable", "verdicts_v2",
+           "verify"]

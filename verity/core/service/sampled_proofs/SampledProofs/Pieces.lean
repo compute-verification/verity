@@ -58,6 +58,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and drawn rows' writers.
 * `wires_drawn`, `wires_drawn_unrolled`: the wire check on the drawn units alone (`Wires.Summary.drawnOk`, each drawn
   wired row's public string its writer's) and on the reference's entries whose unit is drawn.
+* `lookup_names`: the tables a circuit file's lookups name (`OneStageZk.lookupNames`), the only pinned tables the
+  one-stage audit's v2 hands the verifier.
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
 `select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `check_draw`,
@@ -81,6 +83,7 @@ public import SampledProofs.Produced
 public import SampledProofs.HiddenDraw
 public import SampledProofs.PartitionRef
 public import SampledProofs.WiresDrawn
+public import SampledProofs.OneStageZk
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -572,6 +575,12 @@ def run (j : Json) : V Json := do
             statement := getD j "statement", delta := getD j "delta", provedUnits, instances,
             served := getD j "served", sessionRoots := getD j "session_roots", coins := getD j "coins" }
 
+/-- `{"circuit"}`, a circuit file's bytes in hex, to the tables its lookups name (`OneStageZk.lookupNames`), the only
+pinned tables v2 hands the verifier (`OneStageZk.tablesFor`). -/
+def lookupNames (j : Json) : V Json := do
+  let c ← Flock.unhex (← Flock.J.str j "circuit" "the case")
+  return Json.arr ((OneStageZk.lookupNames c).map Json.str)
+
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("registration", registration),
    ("registered", registered),
@@ -593,7 +602,7 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_draw_coins", Challenger.drawCoinsPiece),
    ("challenger_coin_trees", Challenger.coinTreesPiece), ("challenger_session_trees", Challenger.sessionTreesPiece),
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
-   ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef)]
+   ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef), ("lookup_names", lookupNames)]
 
 def verifier : List (String × (Json → V Json)) :=
   [("registration", registration), ("matches_public", matchesPublic), ("select", select), ("check_draw", checkDraw),

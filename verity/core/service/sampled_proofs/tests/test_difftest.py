@@ -56,8 +56,8 @@ from verity_difftest import protocol as PR
 from verity.core.protocols.profile import Bernoulli, Stratified, Stratum
 from verity.core.protocols.sampled_proofs import service
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
-                                                            partition as P, produced as PD, registered as G,
-                                                            registration as R)
+                                                            partition as P, produced as PD, proofs as PF,
+                                                            registered as G, registration as R)
 from verity.core.protocols.sampled_proofs.challenger import (COIN_BYTES, NO_TREE, SHARED_TREE, UNUSED_TREE,
                                                              ChallengerKey, CoinError)
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, coins_reason, draw_coins, draw_first
@@ -3201,6 +3201,45 @@ HIDDEN_LOCATE = D.Port(PIECES, "hidden_locate", hidden_locate, st.one_of(*[hidde
 HIDDEN_WITNESS = D.Port(PIECES, "hidden_witness", hidden_witness, st.one_of(*[hidden_cases("hidden_witness")] * 4, JSON),
                         package=PACKAGE)
 
+#: what a circuit file's META ``lookups`` may name: the pinned tables, other library tables, and any short key in the BMP
+LOOKUP_KEYS = st.sampled_from([*PF.MUFU_TABLES, "tanh_mufu", "lg2"]) | st.text(
+    st.characters(max_codepoint=0xFFFF, blacklist_categories=("Cs",)), max_size=4)
+
+
+@st.composite
+def circuit_heads(draw) -> dict:
+    """A circuit file as v2 reads its lookups: its header, then a second line that is ``META `` and a JSON object whose
+    ``lookups`` is an object of pinned and other names, or one that isn't (``lookups`` null, a list, a number or absent,
+    META a list, another prefix, JSON cut short, a byte that isn't UTF-8), with trailing ASCII whitespace or not, and the
+    file's next lines or not."""
+    lookups = draw(st.one_of(
+        st.dictionaries(LOOKUP_KEYS, st.just({}) | st.integers(0, 3) | st.text("ab", max_size=2), max_size=5),
+        st.dictionaries(LOOKUP_KEYS, st.just({}), max_size=5), st.none(), st.lists(LOOKUP_KEYS, max_size=2),
+        st.integers(0, 2)))
+    meta = {"format": "flock-circuit", **({} if _one_in(draw, 6) else {"lookups": lookups})}
+    text = json.dumps([meta] if _one_in(draw, 12) else meta, ensure_ascii=draw(st.booleans()), separators=draw(st.sampled_from([None, (",", ":")])))
+    line = draw(st.sampled_from(["META ", "META ", "META ", "META", "XMETA ", "meta "])) + text
+    if _one_in(draw, 10):
+        line = line[:draw(st.integers(0, len(line)))]
+    line += draw(st.sampled_from(["", "", " ", "\t", " \r"]))
+    data = b"flock-circuit u\n" + line.encode() + draw(st.sampled_from([b"", b"\n", b"\nCIRCUIT unit 0\n"]))
+    if _one_in(draw, 12):
+        data = data.replace(b"META", b"META\xff", 1)
+    return {"circuit": data.hex()}
+
+
+def lookup_names(v) -> list[str]:
+    """`OneStageZk.lookupNames`, `one_stage.proofs.lookup_names_of` on the case's circuit file; a case naming none in
+    lowercase hex is refused."""
+    c = v.get("circuit") if isinstance(v, dict) else None
+    if not isinstance(c, str) or not re.fullmatch("(?:[0-9a-f]{2})*", c):
+        raise D.Reject("the case names no circuit file in lowercase hex")
+    return PF.lookup_names_of(bytes.fromhex(c))
+
+
+LOOKUP_NAMES = D.Port(PIECES, "lookup_names", lookup_names, st.one_of(circuit_heads(), circuit_heads(), JSON),
+                      package=PACKAGE)
+
 pieces = D.server_fixture(DECODE)
 
 
@@ -3209,7 +3248,7 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRAT
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
-              (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400)]
+              (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (LOOKUP_NAMES, 400)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])
