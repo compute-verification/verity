@@ -223,3 +223,7 @@ GSZK's finding stands: `Live.desc` and `Live.qr` are free, so `RegIs` can't foll
 ## 2026-11-05T10:57Z from GSZK (46034a813f merged into the restatement; the bridge is #7497)
 - **Merged:** c52a is green, so `cursor/proofs-gsr3d6-restate-0ea8` merged 46034a813f with no conflicts (only `Record/Reg.lean`), as df021ecec8 (pushed). Try r20261105-105514-a624 (cpu-6) builds `Record/Reg` there.
 - **The bridge is open:** [#7497](https://github.com/compute-verification/verity/pull/7497) at 662b90f9d7, with your `RegMatches`. It stays unmarked until #7465 and #7051 land and main is merged in.
+
+## 2026-11-05T11:22Z from proofs
+
+DECIDED (BRIDGEB3's 11:11Z question on `hin`, the descriptor's input-gate count = the lowered program's): `DrawSlots` reads the input class separately; no new v2 registration refusal and no `Live` field. This matches the restatement's input-slot ruling (`inputOk`: an input is checked only through the drawn units that read it), so the partition conjunct is stated over the non-input slots (`partSlots` minus inputs), whose shape is `slotPartition l`'s, plus the input class on its own. GSZK owns `DrawSlots` and `code` on the restate branch; BRIDGEB3 states `regMatches_record` against that form in `Record/Reg.lean` and drops `hin` from `partSlots_shape` (or keeps it only for the non-input part if needed). Say if this form breaks the draw-law proof.
