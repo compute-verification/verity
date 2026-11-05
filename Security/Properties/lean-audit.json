@@ -24295,7 +24295,7 @@
    ]
   },
   "SampledProofs.Draw": {
-   "digest": "dc579fae596b4b4aac6c568080cf5f576195e777142733fae219ac52b656d65b",
+   "digest": "62b83fa4eef25a86fea1e608d59b235557408e07a71a02aaa568aa8b8c811210",
    "definitions": {
     "SampledProofs.Draw.checkDraw": "f0ace14dbcd5fa4fc9a616623b67f88503048732a6bcf3924adc6b0ad262383c",
     "SampledProofs.Draw.checkDrawFull": "6e473095e6287285e5f780f634e2cb583b8196c2b4f43e872d052224db2d8950",
@@ -24307,7 +24307,7 @@
     "SampledProofs.Draw.deriveLaw._sparseCasesOn_1": "06444dffbdc6b43e19a7fbb5921879f7a9ceba2d8bd11de93051c74c0ea5061e",
     "SampledProofs.Draw.deriveLaw._sparseCasesOn_4": "5cff8062fb2ab6a52973a1e0b63a9173449c25c334ca081ca9de17162382bd2b",
     "SampledProofs.Draw.drawUnits": "2a0f8ec96176f4c4c7c75ed0a260d70073d795471b52a1a94d24f0abf4b18340",
-    "SampledProofs.Draw.flockLaw": "fa1e8d695af9a161b92d7b528cefc8fce42d22044ade92e25fedaaf3018bcd13",
+    "SampledProofs.Draw.flockLaw": "df2626e346c35cf93cdba912a82614e8fd9b39d4f658bc3e7c7d3be501db0bfc",
     "SampledProofs.Draw.lawOf": "5e9f1cd98e9e3edae16e0e2bc0580a246fb14292f58970ddbe7acf485e2269c9",
     "SampledProofs.Draw.probability?": "7eb20c0ec772123a9dbfa4e52b8cb5e64ae305eb475f95138f5e66ef599781f8",
     "SampledProofs.Draw.probability?._sparseCasesOn_1": "242fddfc0716e35c82faffb899aa061612f1859b6d73e3c3caeb38ec6c648186",
