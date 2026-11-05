@@ -1337,6 +1337,6 @@
   "Security/Proofs/lake-manifest.json": "ff93ba694c8590e42a4a230477990c192059d3929935f71021592c8eb1217c89",
   "Security/Proofs/lean-toolchain": "8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632",
   "verity/core/service/flock/Flock/Hash.lean": "5391ec97b9943f9049f466319b821b757818e8fe6f63379cb3ba5fc3640f362b",
-  "verity/core/service/flock/Flock/Draw.lean": "08916cce465bbde53440d372cb84a6e2e87dd7367df9fbfd5b21a3cd25286575"
+  "verity/core/service/flock/Flock/Draw.lean": "02e1c503c5b7139370b8141bb7de35d04e8b82733821b85f580d891464e120d7"
  }
 }
