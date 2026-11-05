@@ -32,7 +32,7 @@ theorem fdev_pr_noCalls (H : Msg → Msg) (D : Recursion.Deploy Coin) (hc : ∀ 
   rw [Pr_congr fun s => iff_false_intro ?_]
   · exact Pr_false
   · rintro ⟨u, v, h, -⟩
-    simp only [Fdev, linkOut, hc, List.append_nil, findColl, reduceCtorEq] at h
+    simp only [Fdev, linkOut, hc, List.append_nil, findColl, ite_self, reduceCtorEq] at h
 
 /-- `B_I` finds nothing where the outer witnesses record no call. -/
 theorem binner_pr_noCalls (H : Msg → Msg) (D : Recursion.Deploy Coin) (hc : ∀ x ws, D.calls x ws = [])

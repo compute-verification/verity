@@ -204,7 +204,8 @@ registration's layout (`nsOf`). At `subset kd` and the first `K₀` proof blocks
 (`Bridge.pa_all`). Its named assumptions are V2's, with `live-verifier` at `own` and the draw file's law `lawF`
 (`RecordCustodyZKJPLaw`), and the registration's law is on its layout's strata and `lawF` on strata of sizes `nsF`, both
 drawing `kd` proof blocks (`Bridge.LawOn`). The draw file's law need not be the registration's: `δ` is the miss of the
-law the verifier draws by. At `lawF = law` and `nsF = nsOf desc qr` it is the registration's. -/
+law the verifier draws by. At `lawF = law` and `nsF = nsOf desc qr` it is the registration's. The link finders are
+charged `t'` per run (`cTZC`), one run's SHA-512 evaluations, the prover's and the verifier's: V2's `t' + v`. -/
 def SampledKSLiveV5 : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
