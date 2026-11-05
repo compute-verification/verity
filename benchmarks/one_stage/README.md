@@ -227,7 +227,10 @@ negatives.
   `served_verdicts.sh` writes after its composite step when the network certifier is in the run: its piece
   (`CERTIFIER_CMD`, or the split's `CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`) or its front (`CERTIFIER_FRONT`). It holds every verdict
   the run of record needs (sampled proofs, PoUW, inference-only, remote, the network certifier, onsite), each missing
-  with its why where the run has no answer. The inference-only verdict says where its case's α and Γ came from, never
+  with its why where the run has no answer. Sampled proofs' verdict is its leg in the composite of record, the outcome
+  of remote's sampled proofs case there (one-stage v2), never the window report's integrity row, the records audit's
+  one-stage v1 answer, which is no verdict: where the composite of record has no such case, it is not established, the
+  row's answer beside it, and credits no member. The inference-only verdict says where its case's α and Γ came from, never
   a registered policy: off the run's own division, so the verdict confirms the division against itself, where the
   case's private `policy.json` says so (its `read`, the one field the record reads), else the run's `ALPHA` and `GAMMA`.
   It checks two obligations on the auditor's configuration on each run (``checked``), reading only the auditor's inputs: `auditor-record`, that the period's key, LMS parameters and
@@ -247,8 +250,9 @@ negatives.
   lock holds PeriodLeakRegistered at its pinned statement taking hA, hr and hkey as `auditor-record` and that check
   holds; while it is open, an accepted network verdict is not established, its Lean answer's accept beside it, and its
   bound conditional on `certifier-key` by name. Where `auditor-listing` doesn't hold, the verdict is not established
-  and there is no bound; where its registered-files condition doesn't, neither is a composite's that reads the case;
-  and where θ names no public file, the public file isn't bound and sampled proofs' verdict is not established.
+  and there is no bound; where its registered-files condition doesn't, neither is a composite's that reads the case,
+  nor sampled proofs', its leg there; and where θ names no public file, the public file isn't bound and sampled proofs'
+  verdict is not established.
   Sampled proofs credits only the drawn members whose `--registered` file its audit completed at the window's
   committed roots and whose Lean verdict of record reported exactly that file's reads, and lists every other drawn
   member as not credited, by name; PoUW's freed compute is credited nowhere and not claimed, by name, beside the PoUW
