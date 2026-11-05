@@ -1403,4 +1403,235 @@ theorem firstStop_order (A : Live) {tables : Array String} {L : Fin A.rounds →
 
 end First
 
+/-! ## The answered stops of one stream -/
+
+/-- **Each element of a list a `Forall₂` relates to another is beside one of the other's in their zip.** -/
+theorem forall₂_zip_right {α β : Type} {Rel : α → β → Prop} {l₁ : List α} {l₂ : List β}
+    (h : List.Forall₂ Rel l₁ l₂) {b : β} (hb : b ∈ l₂) : ∃ a, (a, b) ∈ l₁.zip l₂ := by
+  induction h with
+  | nil => exact absurd hb List.not_mem_nil
+  | @cons a b' l₁ l₂ _ _ ih =>
+    rw [List.zip_cons_cons]
+    rcases List.mem_cons.1 hb with e | hb
+    · rw [e]
+      exact ⟨a, List.mem_cons_self ..⟩
+    · obtain ⟨a', ha'⟩ := ih hb
+      exact ⟨a', List.mem_cons_of_mem _ ha'⟩
+
+/-- **A frame that opens tree `i`'s stream `s` is an opening of it.** -/
+theorem opening_of_opensAt {fr : Frame} {i s : ℕ} (h : fr.opensAt i s = true) : ∃ n, fr = .opening i s n := by
+  cases fr with
+  | opening i' s' n =>
+    have h' : i' = i ∧ s' = s := by simpa [Frame.opensAt] using h
+    exact ⟨n, by rw [h'.1, h'.2]⟩
+  | _ => simp [Frame.opensAt] at h
+
+/-- **A log with no opening, then an opening of tree `i`, has first opened tree `i`.** -/
+theorem firstOpened_opening {L₀ : List Release} (h : firstOpened L₀ = none) {r : Release} {i s n : ℕ}
+    (hr : r.frame = .opening i s n) (d : List Release) : firstOpened (L₀ ++ r :: d) = some i := by
+  unfold firstOpened at h ⊢
+  rw [List.findSome?_append, h, Option.none_or]
+  simp [List.findSome?_cons, hr]
+
+/-- **A log past a log with no opening and the opening of tree `i` after it has first opened tree `i`.** -/
+theorem firstOpened_past {L₀ : List Release} (h₀ : firstOpened L₀ = none) {r₀ : Release} {i s n : ℕ}
+    (hr₀ : r₀.frame = .opening i s n) {L' m R₁ : List Release} (he : m ++ R₁ = L₀ ++ r₀ :: L')
+    (hlt : L₀.length < m.length) : firstOpened m = some i := by
+  obtain ⟨d, rfl⟩ := prefix_le he hlt.le
+  cases d with
+  | nil => simp at hlt
+  | cons x d =>
+    rw [List.append_assoc, List.cons_append] at he
+    obtain ⟨hx, -⟩ := List.cons.inj (List.append_cancel_left he)
+    rw [hx]
+    exact firstOpened_opening h₀ hr₀ d
+
+/-- **What a tree's stream is named stays as the log grows.** -/
+theorem helloSpecs_bind_append {β : Type} {L₁ : List Release} {i : ℕ} {f : Flock.CoinTree.Spec → Option β} {y : β}
+    (h : ((helloSpecs L₁)[i]?.bind f) = some y) (d : List Release) :
+    ((helloSpecs (L₁ ++ d))[i]?.bind f) = some y := by
+  cases hsp : (helloSpecs L₁)[i]? with
+  | none =>
+    rw [hsp, Option.bind_none] at h
+    cases h
+  | some sp =>
+    rw [helloSpecs_getElem?_append hsp d]
+    rw [hsp] at h
+    exact h
+
+/-- **Two streams of one tree with one name are one**, where each tree of the log `Lg` names its streams distinctly:
+a stream of tree `i` after a log `Lg` continues, and a stream of that tree in `Lg`, with one name. -/
+theorem stream_eq {Lg m R₁ : List Release} (he : Lg = m ++ R₁) (hn : ∀ sp ∈ helloSpecs Lg, sp.streams.toList.Nodup)
+    {i s s' : ℕ} {o : Option String} (hsp : ∃ sp, (helloSpecs m)[i]? = some sp ∧ s' < sp.streams.size)
+    (h' : ((helloSpecs m)[i]?.bind fun sp => sp.streams[s']?) = o)
+    (h : ((helloSpecs Lg)[i]?.bind fun sp => sp.streams[s]?) = o) : s' = s := by
+  obtain ⟨sp, hsp, hlt⟩ := hsp
+  have hsp' : (helloSpecs Lg)[i]? = some sp := by
+    rw [he]
+    exact helloSpecs_getElem?_append hsp R₁
+  rw [hsp, Option.bind_some] at h'
+  rw [hsp', Option.bind_some, ← h'] at h
+  refine nodup_getElem?_inj (hn sp (List.mem_of_getElem? hsp')) (a := sp.streams[s']) ?_ ?_
+  · rw [Array.getElem?_toList, Array.getElem?_eq_getElem hlt]
+  · rw [Array.getElem?_toList, h, Array.getElem?_eq_getElem hlt]
+
+/-- **No rep stream is named the session's.** -/
+theorem rep_ne_session {tables : Array String} {t r : ℕ} :
+    tables[t]?.map (repStreamName · r) ≠ some _root_.SampledProofs.Challenger.TREE_SESSION := by
+  intro h
+  cases hta : tables[t]? with
+  | none =>
+    rw [hta] at h
+    cases h
+  | some a =>
+    rw [hta] at h
+    have e : repStreamName a r = _root_.SampledProofs.Challenger.TREE_SESSION := Option.some.inj h
+    have := repStreamName_ne a r
+    rw [e] at this
+    simp at this
+
+/-- **The release after the first stop's log is the log's first opening**, at the readings at a layout with a link
+slot: where each opening of `Lg` is one the device serves, every release a round picks in `Lg` is after `L₀` or one
+of the logs `ms`, each longer than `L₀`, and `Lg` has an opening after `L₀`, `L₀` has none (`link_picks`). -/
+theorem firstOpened_link {R : ℕ} {tables : Array String} {L : Fin R → Slot} {record : Exchange → Option Claims.Msg}
+    {recordDigest : Claims.Msg} {Lg L₀ L' : List Release} {ms : List (List Release)} (hS : LogServed Lg)
+    {jl : Fin R} (hjl : L jl = .link)
+    (hcov : ∀ j L₁, PicksIn (readingAt tables L record recordDigest).round Lg j L₁ → L₁ = L₀ ∨ L₁ ∈ ms)
+    (hgt : ∀ m ∈ ms, L₀.length < m.length) {r₀ : Release} {i s n : ℕ} (hL₀ : Lg = L₀ ++ r₀ :: L')
+    (hr₀ : r₀.frame = .opening i s n) : firstOpened L₀ = none := by
+  obtain ⟨L₁, r, L₂, he, hl⟩ := link_picks tables hS _ L₀ (Nat.lt_succ_self _) r₀ L' i s n hL₀ hr₀
+  obtain ⟨-, -, -, -, -, hfo⟩ := id hl
+  rcases hcov jl L₁ ⟨r, L₂, he, by show slotRound tables (L jl) L₁ r.frame; rw [hjl]; exact hl⟩ with e | hm
+  · rw [← e]
+    exact hfo
+  · obtain ⟨d, rfl⟩ := prefix_le (he.symm.trans hL₀) (hgt L₁ hm).le
+    cases d with
+    | nil => exact absurd (hgt _ hm) (by rw [List.append_nil]; exact lt_irrefl _)
+    | cons x d =>
+      rw [List.append_assoc, List.cons_append] at he
+      obtain ⟨hx, -⟩ := List.cons.inj (List.append_cancel_left (he.symm.trans hL₀))
+      rw [hx] at hfo
+      exact absurd hfo (firstOpened_ne_none L₀ hr₀ d)
+
+section Stream
+
+variable {g : Game Exchange} {σ : Strategy g} {R J : ℕ} {Reg : Type}
+
+/-- **The answered stops of one stream are at its openings, in order**, at the readings and the decoders at a layout
+`L`, injective, of distinct tables: where the answered stops `as` each release their round's coins after the logs `ms`
+of `Lg` (`firstStop_order`), each longer than `L₀` and than the one before, every release a round picks in `Lg` is
+after `L₀` or one of `ms`, each opening of `Lg` is one the device serves, each tree of `Lg` names its streams
+distinctly, `L₀` has no opening and is followed by an opening of tree `i`'s stream named the session's, tree `i`'s
+stream `s` is named table `t`'s rep `r`, and the layout has a slot for each of `Lg`'s openings of it, the logs after
+which the stops submitting on table `t`'s rep `r` release their coins are the logs before each of `Lg`'s openings of
+`s`, in order. -/
+theorem stream_logs (reg : Option Claims.Msg → Reg) {tables : Array String} {L : Fin R → Slot}
+    (hL : Function.Injective L) (ht : tables.toList.Nodup) (record : Exchange → Option Claims.Msg)
+    (recordDigest : Claims.Msg) (bitsOf : (s : SubmitJ J) → (Fin s.n → 𝔽) → List Bool)
+    {as : List (Pos g σ Claims.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽)))} {ms : List (List Release)}
+    {Lg L₀ L' : List Release}
+    (hF : List.Forall₂ (fun a m => (decodersAt reg L).sub J a.1.toStop.modes = some a.2.1 ∧
+      LoggedAfter (readingAt tables L record recordDigest).round a.1.toStop m (bitsOf a.2.1 a.2.2) Lg) as ms)
+    (hgt : ∀ m ∈ ms, L₀.length < m.length) (hpw : ms.Pairwise (fun m m' => m.length < m'.length))
+    (hcov : ∀ j L₁, PicksIn (readingAt tables L record recordDigest).round Lg j L₁ → L₁ = L₀ ∨ L₁ ∈ ms)
+    (hS : LogServed Lg) (hn : ∀ sp ∈ helloSpecs Lg, sp.streams.toList.Nodup) {r₀ : Release} {i s₀ n₀ : ℕ}
+    (hL₀ : Lg = L₀ ++ r₀ :: L') (hr₀ : r₀.frame = .opening i s₀ n₀) (h₀ : firstOpened L₀ = none)
+    (hses : ((helloSpecs L₀)[i]?.bind fun sp => sp.streams[s₀]?) =
+      some _root_.SampledProofs.Challenger.TREE_SESSION)
+    (t : Fin J) (r : Fin 2) {s : ℕ}
+    (hs : ((helloSpecs Lg)[i]?.bind fun sp => sp.streams[s]?) = tables[t.val]?.map (repStreamName · r.val))
+    (hcovL : ∀ k < openedOf Lg i s, ∃ j, L j = .rep t.val r k) :
+    ((as.zip ms).filter fun x => decide (x.1.2.1.tab = t ∧ x.1.2.1.rep = r)).map Prod.snd =
+      prefixesWhere (fun r => r.frame.opensAt i s) Lg := by
+  have hlen := hF.length_eq
+  have hfo : ∀ m R₁, Lg = m ++ R₁ → L₀.length < m.length → firstOpened m = some i := fun m R₁ he hlt =>
+    firstOpened_past h₀ hr₀ (he.symm.trans hL₀) hlt
+  refine filter_logs (by rw [List.map_snd_zip hlen.ge]; exact hpw) (fun a => decide (a.2.1.tab = t ∧ a.2.1.rep = r))
+    fun m => ⟨?_, ?_⟩
+  · rintro ⟨⟨⟨q, sub, cs⟩, m'⟩, hx, hpx, hxm⟩
+    have hxm' : m' = m := hxm
+    rw [← hxm']
+    obtain ⟨hsub0, hlog0⟩ := List.forall₂_zip hF hx
+    have hsub : (decodersAt reg L).sub J q.toStop.modes = some sub := hsub0
+    have hlog : LoggedAfter (readingAt tables L record recordDigest).round q.toStop m' (bitsOf sub cs) Lg := hlog0
+    obtain ⟨t', ht', r', k', mm, j', i', s', n', b', L'', -, -, hsa, hfo', hname, -, he⟩ :=
+      LoggedAfter.slot reg hL ht record recordDigest hsub hlog
+    have e1 : sub.tab = t := (of_decide_eq_true hpx).1
+    have e2 : sub.rep = r := (of_decide_eq_true hpx).2
+    have ht't : t' = t.val := by
+      have h := congrArg Fin.val e1
+      rw [hsa] at h
+      exact h
+    have hr'r : r' = r := by
+      rw [hsa] at e2
+      exact e2
+    have hii : i' = i := by
+      rw [hfo m' _ he (hgt m' (List.of_mem_zip hx).2)] at hfo'
+      exact (Option.some.inj hfo').symm
+    obtain ⟨sp, hsp, hslt, -⟩ := hS m' _ L'' i' s' n' he rfl
+    rw [hii] at hsp
+    rw [hii, ht't, hr'r] at hname
+    have hss := stream_eq he hn ⟨sp, hsp, hslt⟩ hname hs
+    exact ⟨_, L'', he, by simp [Frame.opensAt, hii, hss]⟩
+  · rintro ⟨x, L₂, he, hx⟩
+    obtain ⟨n, hxn⟩ := opening_of_opensAt hx
+    have hsv := hS m x L₂ i s n he hxn
+    have hlt : L₀.length < m.length := by
+      by_contra hle
+      obtain ⟨d, hd⟩ := prefix_le (hL₀.symm.trans he) (by omega)
+      cases d with
+      | nil =>
+        have h1 := helloSpecs_bind_append hses (r₀ :: L')
+        rw [← hL₀] at h1
+        rw [List.append_nil] at hd
+        rw [hd] at hL₀
+        obtain ⟨hrx, -⟩ := List.cons.inj (List.append_cancel_left (hL₀.symm.trans he))
+        rw [hrx, hxn] at hr₀
+        obtain ⟨-, hss, -⟩ := Frame.opening.inj hr₀
+        rw [← hss, hs] at h1
+        exact rep_ne_session h1
+      | cons y d =>
+        rw [hd, List.append_assoc, List.cons_append] at hL₀
+        obtain ⟨hxy, -⟩ := List.cons.inj (List.append_cancel_left (hL₀.symm.trans he))
+        rw [hd, hxy] at h₀
+        exact firstOpened_ne_none m hxn d h₀
+    have hfm := hfo m _ he hlt
+    obtain ⟨sp, hsp, -⟩ := id hsv
+    have hname : ((helloSpecs m)[i]?.bind fun sp => sp.streams[s]?) =
+        tables[t.val]?.map (repStreamName · r.val) := by
+      have hsp' : (helloSpecs Lg)[i]? = some sp := by
+        rw [he]
+        exact helloSpecs_getElem?_append hsp _
+      rw [hsp, Option.bind_some]
+      rw [hsp', Option.bind_some] at hs
+      exact hs
+    have hk : openedOf m i s < openedOf Lg i s := by
+      rw [he]
+      exact openedOf_lt m hxn L₂
+    obtain ⟨j, hj⟩ := hcovL _ hk
+    have hpick : (readingAt tables L record recordDigest).round j m x.frame := by
+      show slotRound tables (L j) m x.frame
+      rw [hj]
+      exact ⟨i, s, n, hxn, hsv, hfm, hname, rfl⟩
+    have hmm : m ∈ ms := by
+      rcases hcov j m ⟨x, L₂, he, hpick⟩ with e | h
+      · rw [e] at hlt
+        exact absurd hlt (lt_irrefl _)
+      · exact h
+    obtain ⟨⟨q, sub, cs⟩, hz⟩ := forall₂_zip_right hF hmm
+    obtain ⟨hsub0, hlog0⟩ := List.forall₂_zip hF hz
+    have hsub : (decodersAt reg L).sub J q.toStop.modes = some sub := hsub0
+    obtain ⟨j', i', s', n', b', L'', -, hall, hP', he'⟩ := hlog0
+    obtain ⟨hxe, -⟩ := List.cons.inj (List.append_cancel_left (he.symm.trans he'))
+    rw [hxe] at hpick
+    obtain ⟨t', ht', r', k', mm, hLj', -, hsa⟩ := stop_slot reg hL ht record recordDigest hsub hall hP'
+    rw [readingAt_unique hL ht record recordDigest hP' hpick, hj] at hLj'
+    obtain ⟨ht't, hr'r, -⟩ := Slot.rep.inj hLj'
+    refine ⟨((q, ⟨sub, cs⟩), m), hz, decide_eq_true ?_, rfl⟩
+    show sub.tab = t ∧ sub.rep = r
+    rw [hsa]
+    exact ⟨Fin.ext ht't.symm, hr'r.symm⟩
+
+end Stream
+
 end Verity.Sampled
