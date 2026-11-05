@@ -26,6 +26,12 @@ the tape beside it, clause by clause of `MovesOf`:
   openings, `stop_round` at each and `openedOf_eq_recordRounds` for their count. It takes, about v2's read and the
   record, that each round the record gives a stream gives coins (`hsome`), that each stream it gives rounds of is a
   stream of the tree read (`hkey`), and that each opening answers its round's digest (`hans`).
+* **The rep rounds at a `ReachesOff` witness** (`firstStop_reps`, clause (iv)): at a layout with a link slot and one
+  table, an outcome reached at a widened sample and link points off the held-off events is the writer's there at rep
+  rounds that are the record's, where the log's first opening is the session stream's: the first stop fixes a cut
+  (`firstStop_fixes`), the trace's answered stops are in order in the log (`firstStop_order`), the link's opening is the
+  log's first (`firstOpened_link`), and `rep_rounds` at each rep. It is stated at the witness, so that `MovesReach`
+  reads every clause at one sample, one set of link points and one set of rep rounds.
 -/
 
 @[expose] public section
@@ -413,5 +419,94 @@ theorem rep_rounds {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : 
       (fun a => roundOf A.dg a.2.1.bytes a.2.1.n a.2.2) as (fun _ _ => []) ⟨0, htv⟩ r).trans ?_
     rw [hfil, hR, hnil]
     all_goals rfl
+
+/-- **The rep rounds at a sample the joint law's support is reached at** (`MovesOf`'s clause (iv) at a `ReachesOff`
+witness): at the readings and the decoders at a layout `L`, injective, of distinct tables, whose rep slots are of a
+plan's one table and which has a link slot, and at the sample-coupled coin map under `fieldEnc`, an outcome with a
+widened sample `ω` and link points `pts` off the link's empty class, with a trace off the rounds' empty class from the
+first stop ending on it, is the writer's at `ω`, `pts` and some rep rounds; where the tape beside it misses nowhere, its
+log has an opening, its trees name their streams distinctly, its first opening is the session stream's
+(`SampleLinkFirst`'s second conjunct), the layout has a slot for each opening of a rep stream, and v2's read and the
+record are as `rep_rounds` takes them, those rep rounds are the record's (`repRounds`), at every table and rep
+(`firstStop_fixes`, `firstStop_order`, `firstOpened_link`, `rep_rounds`). It takes the witness, not `ReachesOff`, since
+the rep rounds sit inside the writer's output with the roots and the link points, which the other clauses read at the
+same witness. -/
+theorem firstStop_reps {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {A : Live}
+    (reg : Option Claims.Msg → A.Reg) {tables : Array String} {L : Fin A.rounds → Slot}
+    (hL : Function.Injective L) (ht : tables.toList.Nodup) (record : Exchange → Option Claims.Msg)
+    (recordDigest : Claims.Msg) (hLJ : ∀ S R j t r k, L j = .rep t r k → t < A.J S R)
+    (hJ1 : ∀ S R, A.J S R = 1) {jl : Fin A.rounds} (hjl : L jl = .link) (hRN : A.rounds ≤ A.N + 1)
+    {rd : Reading A.rounds} (hrd : rd = readingAt tables L record recordDigest) {σ : Strategy (V.game θ F c)}
+    {D : Decoders A.rounds A.Reg} (hD : D = decodersAt reg L) {label : String} {after : ByteArray} {m : ℕ}
+    {κ : A.Ω → Fin m → Fin 512 → Bool} {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP}
+    (hM : M = sampleMap fieldEnc V θ F c A rd σ label after κ) (ω : (A.extend M.widening).L.Ω)
+    (pts : Fin 2 → Fin A.mP → 𝔽) {o : A.Out × CoinTape (V.game θ F c) σ}
+    (hL0 : ¬ linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1) (firstStop V θ F c A rd σ M ω).g' pts)
+    (hr : RoundsReach D M A.dg (A.J ((A.extend M.widening).L.draw ω) (regOf V θ F c A rd σ D))
+      (roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1))
+      (fun t => (regOf V θ F c A rd σ D, (A.extend M.widening).L.draw ω,
+        A.wr ((A.extend M.widening).L.draw ω) (regOf V θ F c A rd σ D) t))
+      (D.root (firstStop V θ F c A rd σ M ω).modes) pts A.N (fun _ _ => [])
+      ((firstStop V θ F c A rd σ M ω).rewrite (M.link (firstStop V θ F c A rd σ M ω) pts)).consume o)
+    (hn : NoMiss V θ F c rd σ o.2)
+    (hop : ∃ L₁ r L₂ i s n, (CoinTape.run (V.game θ F c) σ o.2).log = L₁ ++ r :: L₂ ∧ r.frame = .opening i s n)
+    (hnd : ∀ sp ∈ helloSpecs (CoinTape.run (V.game θ F c) σ o.2).log, sp.streams.toList.Nodup)
+    (hfirst : ∀ pre r post, (CoinTape.run (V.game θ F c) σ o.2).log = pre ++ r :: post → ∀ i s n,
+      r.frame = .opening i s n → (∀ q ∈ pre, ∀ i' s' n', q.frame ≠ .opening i' s' n') →
+        ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = some _root_.SampledProofs.Challenger.TREE_SESSION)
+    (hcovL : ∀ i s (r : Fin 2),
+      ((helloSpecs (CoinTape.run (V.game θ F c) σ o.2).log)[i]?.bind fun sp => sp.streams[s]?) =
+        tables[0]?.map (repStreamName · r.val) →
+      ∀ k < openedOf (CoinTape.run (V.game θ F c) σ o.2).log i s, ∃ j, L j = .rep 0 r k)
+    {label' : String} {after' ξ : ByteArray} {lines : List String} {lr : List Release} {trees : Array LoggedTree}
+    {Jr : Json}
+    (hV : List.Forall₂ Binding.Read.Of (lr.map Binding.Read.ofV2) (CoinTape.run (V.game θ F c) σ o.2).log)
+    (hread : readLog label' after' [Jr] ξ lines = some lr) (hct : coinTreesOf lines = .ok trees)
+    (h1 : trees.size = 1) (hJt : sessionTreeReason trees Jr = none) {text : String} {spec : Flock.SessionSpec}
+    {tabs : Array Flock.Setup} {proofs : Array ByteArray} {sess : Flock.RunRecord}
+    (hrec : sentRecord (CoinTape.run (V.game θ F c) σ o.2).sent = some text)
+    (hJ : Flock.JsonParse.parse text = .ok Jr) (hd : Flock.Record.decode spec text = .ok sess)
+    (hv : Flock.Zk.verify spec tabs text proofs = .ok ()) (hret : spec.retainRounds = true)
+    (h512 : spec.sha512Digests = true) (hdg : spec.dg = A.dg) (htab : tables = spec.tables)
+    (h0 : 0 < spec.tables.size) (hO : OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ o.2).log)
+    (hsome : ∀ name, ∀ k < recordRounds Jr name, (recordRound Jr name k).isSome)
+    (hkey : ∀ name, 0 < recordRounds Jr name → ∃ i si, KeyAt (heldTrees trees) i si (recordTree Jr) name)
+    (hans : ∀ {pre post : List Release} {y : Release} {i s n : ℕ} {name : String} {st : Flock.StreamRec},
+      lr = pre ++ y :: post → y.frame = .opening i s n →
+      ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = some name →
+      (name == _root_.SampledProofs.Challenger.TREE_SESSION) = false →
+      sess.streams.find? (·.name == name) = some st → openedOf pre i s < st.rounds.size →
+      y.answers = st.rounds[openedOf pre i s]!.sha) :
+    ∃ reps : Fin (A.J ((A.extend M.widening).L.draw ω) (regOf V θ F c A rd σ D)) → Fin 2 → List Flock.Round,
+      o.1 = (regOf V θ F c A rd σ D, (A.extend M.widening).L.draw ω,
+        A.wr ((A.extend M.widening).L.draw ω) (regOf V θ F c A rd σ D)
+          ⟨D.root (firstStop V θ F c A rd σ M ω).modes, pts, reps, D.proofs (CoinTape.run (V.game θ F c) σ o.2)⟩) ∧
+      ∀ j r, reps j r = repRounds spec sess j.val r.val := by
+  subst hrd hD hM
+  have hK := firstStop_fixes V θ F c A (readingAt tables L record recordDigest) σ
+    (sampleMap fieldEnc V θ F c A (readingAt tables L record recordDigest) σ label after κ)
+    (readingAt_picks tables L record recordDigest) tables jl
+    (fun pre fr h => by
+      show slotRound tables (L jl) pre fr
+      rw [hjl]
+      exact h) ω _ hr hop
+  obtain ⟨L₀, as, ms, ⟨hlog₀, -⟩, ho, hF, hI, hgt, hpw, hcov⟩ := firstStop_order V θ F c A hL ht (hLJ _ _)
+    record recordDigest reg rfl rfl σ
+    (sampleMap fieldEnc V θ F c A (readingAt tables L record recordDigest) σ label after κ)
+    (linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) (B := roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1))
+    (linkBits fieldEnc) (fun _ _ => rfl) (fun _ _ h => h) (fun _ x => roundBits fieldEnc x) (fun _ _ _ => rfl)
+    (fun _ _ _ h => h) ω pts hK hL0 hr rfl (picksOnce_readingAt tables L record recordDigest hnd) hRN
+  refine ⟨_, ho, fun j r => ?_⟩
+  obtain ⟨_, i, s₀, n₀, b₀, L', -, -, -, hL₀⟩ := hlog₀
+  have hS := logServed_run V θ F c σ o.2
+  have h₀ := firstOpened_link hS hjl hcov hgt hL₀ rfl
+  have hses := hfirst L₀ _ L' hL₀ i s₀ n₀ rfl fun q hq i' s' n' hqf => by
+    have h' := List.findSome?_eq_none_iff.1 h₀ q hq
+    simp [hqf] at h'
+  have htz : j.val = 0 := Nat.lt_one_iff.1 (lt_of_lt_of_eq j.isLt (hJ1 _ _))
+  exact rep_rounds reg hL ht record recordDigest hn hF hI hgt hpw hcov hS hnd hL₀ rfl h₀ hses j htz r
+    (fun s hs k hk => by
+      rw [htz] at hs ⊢
+      exact hcovL i s r hs k hk) hV hread hct h1 hJt hrec hJ hd hv hret h512 hdg htab h0 hO hsome hkey hans
 
 end Verity.Sampled
