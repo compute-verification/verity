@@ -21,7 +21,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   a session's (`Challenger.sessionsTreeReason`); else the check refuses, before any session is verified;
 * **check**: `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
-  (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path, its last the files' ports and roots,
+  (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path, its last the files' ports, domains and roots,
   `Flock.PortRoots.checkOf`, and the form `Flock.Guarantees.SampledKSLiveV3` covers, or at a shared-row public file
   `SampledKSLiveV5`'s, `Flock.KsScope.checkOf`); then v1's
   `check` on those verdicts, one of
