@@ -752,11 +752,12 @@ theorem TreeLines.sub {lines lines' : List String} (h : TreeLines recs lines) (h
 a tree's root is no other tree's, and its round is opened once (`trees_log`), so a record's round is that line's
 (`Trees.round_held`). -/
 theorem tree_lines {log : List String} {ts : Array LoggedTree} (h : coinTreesOf log = .ok ts)
-    (hrecs : ∀ rec ∈ recs, sessionTreeReason ts rec = none) : TreeLines recs log := by
+    (hrecs : ∀ rec ∈ recs, ∃ tabs, sessionTreeReason ts tabs rec = none) : TreeLines recs log := by
   have hT := trees_log h
   refine ⟨hT.spec, fun l hl j hev hnt hop R S k C hR hS hk hC rec hrec htree cs hcs => ?_⟩
   obtain ⟨t, ht, htr, o, ho, hoc⟩ := hT.opened l hl j hev hnt hop R S k C hR hS hk hC
-  obtain ⟨t', ht', htr', o', ho', hoc'⟩ := Trees.round_held (hrecs rec hrec) hcs
+  obtain ⟨tabs, htabs⟩ := hrecs rec hrec
+  obtain ⟨t', ht', htr', o', ho', hoc'⟩ := Trees.round_held htabs hcs
   have e : t' = t := List.inj_on_of_nodup_map hT.nodup (Array.mem_toList_iff.2 ht') (Array.mem_toList_iff.2 ht)
     (htr'.symm.trans (htree.trans htr.symm))
   subst e
@@ -897,7 +898,7 @@ a run its ledger opens withheld on a window, whose log `coinTreesOf` reads trees
 `readLines` reads the run's lines after their head, at the run's released coins, as `log`. -/
 theorem read_run {dev : History} {log : List Release} (hP : PrintsLog dev log) {pk : ByteArray} {w : String}
     {r : Properties.Challenger.Run} (hr : r ∈ dev.runs pk) (ho : OpensOn dev pk w r.id) {ts : Array LoggedTree}
-    (hts : coinTreesOf r.log = .ok ts) (hrecs : ∀ rec ∈ recs, sessionTreeReason ts rec = none)
+    (hts : coinTreesOf r.log = .ok ts) (hrecs : ∀ rec ∈ recs, ∃ tabs, sessionTreeReason ts tabs rec = none)
     {out : List Release} (h : readLines label after recs r.log.tail [] none (r.released label after) = some out) :
     List.Forall₂ ReadOf out log := by
   obtain ⟨hp, hξ⟩ := hP pk w r hr ho
