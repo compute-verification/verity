@@ -34,11 +34,11 @@ def staged(tmp_path_factory):
     """The plain-leaves circuit, the instances' x rows, the description row and another of the class's width."""
     pytest.importorskip("verity_numerical")
     from verity_numerical.bench import templates as TM
-    from synthetic_sets import synthetic_set
+    from verity_numerical.bench.generate import generate
     from verity_numerical.bench.input_sets import InputSet
 
     d = tmp_path_factory.mktemp("inner-registered")
-    s = InputSet.open(synthetic_set(TM.rope_head(64), N, 20261009, d / "set")["path"])
+    s = InputSet.open(generate(TM.rope_head(64), N, 20261009, d / "set")["path"])
     text = FC.compose(FC.lowering_for_set(s), s.subcircuit, statics=FC.set_statics(s), leaf_scheme=FC.LEAF_SCHEME_PLAIN)
     (d / "circuit.txt").write_text(text)
     rng = np.random.default_rng(20261009)
