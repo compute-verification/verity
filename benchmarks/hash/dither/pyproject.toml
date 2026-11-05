@@ -14,3 +14,7 @@ inputs = ["tools/config/verity_config", "verity/__init__.py", "verity/settings.p
 [[tool.verity.tests.reads]]
 tests = ["tests/test_j10r_ws.py", "tests/test_settings.py"]
 paths = ["benchmarks/hash/dither"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_h1u_domain.py"]
+paths = ["benchmarks/hash/dither/h1u.cu"]
