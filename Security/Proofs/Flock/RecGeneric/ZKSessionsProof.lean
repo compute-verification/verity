@@ -66,7 +66,7 @@ def sRun (H : Msg → Msg) (x xO : Msg) (wo : ℕ → S.WS) {Θ : Type} (Vs : VS
 `pre`. -/
 def lrun (H : Msg → Msg) (x xO : Msg) (wo : ℕ → S.WS) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (pre : List Msg) (m i : ℕ)
     (t : S.tapes x m) : List (Msg × Out) :=
-  ZKMal.interact (askAfter H Vs xO θ pre) (fun h => ((L.cnext x xO wo m i h t).eval H).1) (L.rounds x xO m i) []
+  Claims.interact (askAfter H Vs xO θ pre) (fun h => ((L.cnext x xO wo m i h t).eval H).1) (L.rounds x xO m i) []
 
 theorem sRun_length (H : Msg → Msg) (x xO : Msg) (wo : ℕ → S.WS) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (pre : List Msg)
     (i : ℕ) (t : S.NS x × S.ΩS x) : (L.sRun H x xO wo Vs θ pre i t).length ≤ S.kS (L.xs x xO i) := by
@@ -83,7 +83,7 @@ theorem lrun_succ (H : Msg → Msg) (x xO : Msg) (wo : ℕ → S.WS) {Θ : Type}
     L.lrun H x xO wo Vs θ pre (m + 1) i (tA, tB) =
       ZKMal.cont (S.kS (L.xs x xO i)) (L.sRun H x xO wo Vs θ pre i tA)
         (L.lrun H x xO wo Vs θ (pre ++ (L.sRun H x xO wo Vs θ pre i tA).map Prod.fst) m (i + 1) tB) := by
-  have hA : ZKMal.interact (askAfter H Vs xO θ pre)
+  have hA : Claims.interact (askAfter H Vs xO θ pre)
       (fun h => ((L.cnext x xO wo (m + 1) i h (tA, tB)).eval H).1) (S.kS (L.xs x xO i)) [] =
       L.sRun H x xO wo Vs θ pre i tA := by
     unfold sRun
@@ -97,15 +97,15 @@ theorem lrun_succ (H : Msg → Msg) (x xO : Msg) (wo : ℕ → S.WS) {Θ : Type}
   unfold ZKMal.cont
   by_cases hg : ZKMal.goesOn (S.kS (L.xs x xO i)) (L.sRun H x xO wo Vs θ pre i tA) = true
   · rw [ite_eq_left hg, ite_eq_left hg]
-    have hl : (ZKMal.histOf (L.sRun H x xO wo Vs θ pre i tA)).length = S.kS (L.xs x xO i) := by
+    have hl : (Claims.histOf (L.sRun H x xO wo Vs θ pre i tA)).length = S.kS (L.xs x xO i) := by
       rw [ZKMal.histOf_length]; exact ZKMal.goesOn_length hg
-    rw [← List.append_nil (ZKMal.histOf (L.sRun H x xO wo Vs θ pre i tA)), ZKMal.interact_shift,
+    rw [← List.append_nil (Claims.histOf (L.sRun H x xO wo Vs θ pre i tA)), ZKMal.interact_shift,
       ZKMal.histOf_map_fst]
     congr 2
     · funext as
       simp only [askAfter, List.append_assoc]
     · funext h'
-      have hn : ¬ (ZKMal.histOf (L.sRun H x xO wo Vs θ pre i tA) ++ h').length < S.kS (L.xs x xO i) := by
+      have hn : ¬ (Claims.histOf (L.sRun H x xO wo Vs θ pre i tA) ++ h').length < S.kS (L.xs x xO i) := by
         rw [List.length_append]; omega
       simp only [cnext, ite_eq_right hn, List.drop_left' hl]
   · rw [ite_eq_right hg, ite_eq_right hg]
