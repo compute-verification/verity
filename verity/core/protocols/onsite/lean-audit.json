@@ -1,9 +1,10 @@
 {
- "roots": ["CoreOnsite", "CoreRemoteNetwork", "CoreComposites"],
+ "roots": ["CoreOnsite", "CoreRemoteNetwork", "CoreRemoteNetworkNoPouw", "CoreComposites"],
  "exempt": {
   "OnsiteMain": "the onsite executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
   "ProductMain": "the product executable's entry point, one line; its command is Core.Composites.main, audited under CoreComposites",
-  "RemoteNetworkMain": "the remote-network executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol"
+  "RemoteNetworkMain": "the remote-network executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
+  "RemoteNetworkNoPouwMain": "the remote-network-no-pouw executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol"
  },
  "layers": {
   "CoreOnsite": {
@@ -28,10 +29,15 @@
    "except": [],
    "why": "remote with the network certifier: code over remote's composite and the network certifier's period, no Mathlib and nothing of Security"
   },
-  "CoreComposites": {
-   "imports": ["CoreOnsite", "CoreProtocol.Cli", "CoreRemote", "CoreRemoteNetwork"],
+  "CoreRemoteNetworkNoPouw": {
+   "imports": ["CoreComposition.Cases", "CoreComposition.Stubs", "CoreRemoteNetwork"],
    "except": [],
-   "why": "the composite a deployment's listed subprotocols make, onsite, remote or remote with the network certifier: code over the three composites, no Mathlib and nothing of Security"
+   "why": "remote with the network certifier, without PoUW: code over remote with the network certifier's subprotocols but PoUW's period, and its egress tie, no Mathlib and nothing of Security"
+  },
+  "CoreComposites": {
+   "imports": ["CoreOnsite", "CoreProtocol.Cli", "CoreRemote", "CoreRemoteNetwork", "CoreRemoteNetworkNoPouw"],
+   "except": [],
+   "why": "the composite a deployment's listed subprotocols make, onsite, remote, or remote with the network certifier with PoUW or without: code over the four composites, no Mathlib and nothing of Security"
   }
  },
  "dependencies": {
