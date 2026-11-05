@@ -5,6 +5,8 @@ public import Proofs.Flock.Level3.RowV2
 public import Proofs.Hash.Bytes
 public import Definitions.Hash.RowV2
 public import Definitions.Hash.Hm96
+import all Init.Data.String.Defs
+import all Init.Data.Array.Basic
 
 /-!
 # The row's message and hm96's prefixes are the spec's
