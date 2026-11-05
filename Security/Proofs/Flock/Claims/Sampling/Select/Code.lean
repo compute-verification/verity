@@ -113,7 +113,8 @@ theorem ite_eq_ok {c : Prop} [Decidable c] {a j : Json} {rest : V Json}
   · left; rw [ite_eq_left_of_eq_true _ _ (eq_true hc)] at h; exact ⟨hc, Except.ok.inj h⟩
   · right; rw [ite_eq_right_of_eq_false _ _ (eq_false hc)] at h; exact ⟨hc, h⟩
 
--- `run` unfolds to 48 decided leaves under one `match` or `if` per step; splitting them takes about 3 minutes.
+-- `run` unfolds to about 50 decided leaves under one `match` or `if` per step; splitting them takes minutes. A refusal
+-- is tried at reducible transparency, so that a decided leaf fails it without unfolding `Json.mkObj`.
 set_option maxHeartbeats 4000000 in
 /-- **A decided run passed its registration and ran the draw of record**: `run` either refuses at a step or passed the
 population, R1–R7 under the law of the rule over it (`Rule.over`, a rate law's `subset:K`), and the draw's own check,
@@ -137,8 +138,8 @@ theorem run_decided (i : Input) (j : Json) (h : run i = .ok j) :
     first
     | split at h
     | focus (cases h; done)
-    | (obtain ⟨_, h⟩ | ⟨_, h⟩ := ite_eq_ok h; exact Or.inl ⟨_, _, h.symm⟩)
-    | exact Or.inl ⟨_, _, (Except.ok.inj h).symm⟩
+    | (obtain ⟨_, h⟩ | ⟨_, h⟩ := ite_eq_ok h; with_reducible exact Or.inl ⟨_, _, h.symm⟩)
+    | with_reducible exact Or.inl ⟨_, _, (Except.ok.inj h).symm⟩
     | exact Or.inr ⟨_, _, _, by assumption, by assumption, by assumption, by assumption, by assumption, _,
         by assumption, _, by assumption, _, _, _, by assumption, by assumption, _, _, _, _, _, (Except.ok.inj h).symm⟩
 
