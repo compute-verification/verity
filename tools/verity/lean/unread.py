@@ -154,16 +154,10 @@ class Tree:
         return "/".join(rel[:2])
 
     def lines(self, mod: str) -> int:
-        try:
-            return len((self.root / self.module_file[mod]).read_text(errors="replace").splitlines())
-        except OSError:
-            return 0
+        return len((self.root / self.module_file[mod]).read_text(errors="replace").splitlines())
 
     def source_imports(self, mod: str) -> list[str]:
-        try:
-            return HEADERS.imports((self.root / self.module_file[mod]).read_text(errors="replace")) or []
-        except OSError:
-            return []
+        return HEADERS.imports((self.root / self.module_file[mod]).read_text(errors="replace")) or []
 
 
 def log(msg: str) -> None:
@@ -309,12 +303,9 @@ def citations(tree: Tree, candidates: set[str]) -> tuple[dict[str, list[str]], d
         if f.endswith(("lean-audit.json", "lake-manifest.json")) or suffix not in CITED_BY + DOCS:
             continue
         p = tree.root / f
-        try:
-            if p.stat().st_size > CITE_MAX_BYTES:
-                continue
-            text = p.read_text(errors="replace")
-        except OSError:
+        if not p.is_file() or p.stat().st_size > CITE_MAX_BYTES:
             continue
+        text = p.read_text(errors="replace")
         hits = {m.rstrip(".") for m in DOTTED.findall(text)} & candidates
         for h in hits:
             (docs if suffix in DOCS else code)[h].append(f)
