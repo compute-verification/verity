@@ -1,7 +1,7 @@
 [project]
 name = "verity-bench"
 version = "0.1.0"
-description = "Shared benchmark harnesses for Verity integrations and backends."
+description = "Shared benchmark harnesses for Verity's integrations."
 requires-python = ">=3.12"
 dependencies = ["verity-config", "verity-vllm"]
 
