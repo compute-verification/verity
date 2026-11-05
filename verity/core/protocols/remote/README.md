@@ -239,10 +239,9 @@ The time credit adds the data sheet's rates.
 
 **Establishes.** The registered circuit divides into inference blocks of at most Γ gates, each reading at most α_f
 fresh bits per gate, anything outside the registered information θ (`Nci.CompliesRate Γ α_f`); and θ is registered
-information. On a Boolean circuit a partition meeting that is a (c, k)-partition with c = Γ and k = ⌊α_f·Γ⌋
+information. On a Boolean circuit such a partition is a (c, k)-partition with c = Γ and k = ⌊α_f·Γ⌋
 (`Verity.Partition.IsCK`), the hypothesis part 6's local bounds take. With gates up to W bits wide, the bit-level
-expansion meets it at Γ·W gates and k = ⌊α_f·Γ·W⌋. `DampenerRemote` takes `Nci.CompliesRate Γ α_f` of d, what the
-check checks.
+expansion meets it at Γ·W gates and k = ⌊α_f·Γ·W⌋. `DampenerRemote` takes `Nci.CompliesRate Γ α_f` of d.
 
 **How it is checked.**
 
@@ -510,9 +509,9 @@ The slowdown, `DampenerRemote`:
 - `Nci.Assumptions.WeightsIncompressible` (`Security/Definitions/Nci/Assumptions/Threads.lean`): no small subcircuit
   rebuilds the weights it uses from fewer bits than their width. It is the older form, which the local bounds below
   replace (`Security/README.md`, part 2).
-- `Nci.CompliesRate Γ α` (`Security/Definitions/Nci.lean`): the registration divides into inference blocks of at most
-  Γ gates, each reading at most α fresh input bits per gate. `DampenerRemote` takes it as a hypothesis; part 4 is what
-  discharges it once its open links close.
+- `Nci.CompliesRate Γ α` (`Security/Definitions/Nci.lean`), the policy: inference blocks of at most Γ gates, each
+  reading at most α fresh bits per gate. `DampenerRemote` takes it as a hypothesis; part 4 is what discharges it once
+  its open links close.
 
 The local bounds (part 6):
 
