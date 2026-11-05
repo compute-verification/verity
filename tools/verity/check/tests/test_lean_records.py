@@ -22,6 +22,12 @@ spec = importlib.util.spec_from_file_location("check_for_lean_records", ROOT / "
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
 
+
+@pytest.fixture(autouse=True)
+def no_store(monkeypatch):
+    """No test asks this machine's store (`stored`, through `research`)."""
+    monkeypatch.setattr(LC, "stored", lambda *a, **k: None)
+
 #: `check.py` as far as `--records` sees it: its arguments, working directory, threads, Lean slot and the lock files it holds
 #: open logged; reports under `--out` as `--no-replay` leaves them (no replay time); `--update` writing a record
 FAKE_AUDIT = """\
