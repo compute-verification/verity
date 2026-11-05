@@ -623,10 +623,10 @@ def test_the_selftest_swaps_the_tail_that_circuit_stage_forged(monkeypatch, tmp_
     build (sha512, glue), its `tail_swapped` runs on that statement and passes."""
     pytest.importorskip("verity_numerical")
     from verity_numerical.bench import templates as TM
-    from verity_numerical.bench.generate import generate
+    from synthetic_sets import synthetic_set
     from verity_numerical.bench.input_sets import InputSet
 
-    s = InputSet.open(generate(TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5), 2, 3, tmp_path / "set")["path"])
+    s = InputSet.open(synthetic_set(TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5), 2, 3, tmp_path / "set")["path"])
     low = FC.lowering_for_set(s)
     d = tmp_path / "st"
     FC.stage(low, s, 0, 2, d)
