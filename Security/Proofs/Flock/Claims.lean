@@ -95,7 +95,6 @@ public import Proofs.Flock.Claims.Recursion.LastBindsClosed
 public import Proofs.Flock.Claims.Recursion.KSLin2PlainClosed
 public import Proofs.Flock.Claims.Recursion.VStarParts
 public import Proofs.Flock.Claims.Recursion.VStarPartsHolo
-public import Proofs.Flock.Claims.Recursion.VStarPartsDense
 public import Proofs.Flock.Claims.Recursion.DeployReg
 public import Proofs.Flock.Claims.Recursion.VStarPartsSparse
 public import Proofs.Flock.Claims.Recursion.VStarPartsSparseDeploy
@@ -328,7 +327,6 @@ public import Proofs.Flock.Claims.CompleteFails
 public import Proofs.Flock.Claims.Sampling
 public import Proofs.Flock.Claims.KS.ZkAccepts
 public import Proofs.Flock.Claims.Witnesses
-public import Proofs.Flock.Claims.WrongUnits
 public import Proofs.Flock.Claims.Recursion.OutTopRows
 public import Proofs.Flock.Claims.Recursion.ResPiecesD
 public import Proofs.Flock.Claims.Recursion.SideCapPos

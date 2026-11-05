@@ -20,9 +20,9 @@ game circuit and partition as core's), `circuitOf D hU n` and `partsOf D hU n` (
   is one about core's.
 * `circuitOf_eq` and `partsOf_eq` restate the key program's circuit and partition as the ones `circuitOf` and `partsOf`
   embed (by definition), and `partsOf_wrong` its wrong units as theirs.
-* The wrong-units bridge, the converse of `Flock.Claims.WrongUnits` (faulty ⇒ wrong): a unit wrong in the wire values a
-  witness opens (`openedOf`) is faulty in the sampling statement (`wrong_subset_faulty`), because a unit that is not faulty
-  is correct on its openings (`correct_of_progCorrect`), under any design and strata. So `RelS` at
+* The wrong-units bridge: a unit wrong in the wire values a witness opens (`openedOf`) is faulty in the sampling
+  statement (`wrong_subset_faulty`), because a unit that is not faulty is correct on its openings
+  (`correct_of_progCorrect`), under any design and strata. So `RelS` at
   `δ = C(n − K₀, kd)/C(n, kd)` under `subset kd` leaves fewer than `K₀` wrong units (`card_wrong_lt_of_relS`), at every
   circuit, every witness and every strata, with no side condition, and at the parsed file's circuit
   (`card_wrong_partsOf_lt`).
