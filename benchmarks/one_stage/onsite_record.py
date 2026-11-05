@@ -6,13 +6,15 @@ node, a datacenter and the world. It reads only the run's public $OUT and decide
     python benchmarks/one_stage/onsite_record.py --beside RECORD [RECORD ...] --to FILE
 
 `served_verdicts.sh` runs it after its composite step on a run with the network certifier's piece, and its one
-``ONSITE`` line goes to the run's verdicts.txt.
+``ONSITE`` line goes to the run's verdicts.txt. That line, and each run's in the ``ONSITE-BESIDE`` line, names the
+composite of record by its id and states that no verified compute is credited (``compute``, `NO_COMPUTE_CLAIM`).
 
 **Serving** (``serving``, `SERVING`): the run's S (served_verdicts.sh's WINDOW_STEPS) and MAX_TOKENS as its caller
 states them, which no file of OUT does, else ``missing`` (`NO_SERVING`); they label every figure of the record and its
 line. ``--beside`` sets runs' records beside each other (`BESIDE`, `BESIDE_IS`): each run's figure of record, what is
-open under it, ℓ_a and period cells, labelled with its run, tree and serving settings and what they are conditional
-on, and none carried to another's settings; a record stating no serving settings is refused (`UNLABELLED`).
+open under it, ℓ_a and period cells, labelled with its run, tree and serving settings, its composite of record, that it
+credits no verified compute and what they are conditional on, and none carried to another's settings; a record stating
+no serving settings is refused (`UNLABELLED`).
 
 **Verdicts** (`VERDICTS`), each ``{protocol, verdict, from}`` with the answer's ``reason`` or ``refusal``, or, where the
 run wrote no answer, ``missing`` and ``why``:
@@ -284,6 +286,9 @@ WITHOUT_POUW = (f"the composite of record where the run has one: the network cer
                 f"(`NOT_CLAIMED_WITHOUT_POUW`); its error sums no PoUW term. Where the run has none, it is {ONSITE}")
 #: ``of_record.verified_compute``: the record credits no verified compute under any composite (`POUW`)
 NO_VERIFIED_COMPUTE = "none"
+#: ``compute`` in the run's ONSITE and ONSITE-BESIDE lines, at the composite of record's id, so that no reader of a line
+#: takes the composite's verdict for a claim of compute
+NO_COMPUTE_CLAIM = "no verified compute is credited: {}'s verdict is no compute claim"
 #: the PoUW clause of the run's COINS line (served_verdicts.sh's H1_COINS), which runs up to the bandwidth audit's
 POUW_SAID = re.compile(r"; (PoUW.*?); the bandwidth audit's")
 #: where sampled proofs' audit publishes its record (`served_integrity.public_copy`)
@@ -694,7 +699,8 @@ NO_SERVING = ("the run's caller stated no serving settings (--window-steps and -
               "WINDOW_STEPS and MAX_TOKENS)")
 BESIDE = "verity/onsite-network-records-beside/v1"
 BESIDE_IS = ("each run's figures from its own record, beside the others', each labelled with its serving settings "
-             "(`SERVING`), ℓ_a, its composite of record (`WITHOUT_POUW`), what its figures are conditional on "
+             "(`SERVING`), ℓ_a, its composite of record by id (`WITHOUT_POUW`) and the verified compute it credits, "
+             "none (`NO_COMPUTE_CLAIM`), what its figures are conditional on "
              "(`COINS`), what it doesn't claim (`DAY`, `POUW`) and the drawn members it doesn't credit (`CREDIT`): its "
              "figure of record, what is open under it, "
              "each period's cells (bits and share of the weights), and sampled proofs' guarantee per window and "
@@ -1382,7 +1388,8 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
 
 def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
     """The ``ONSITE`` line: the run's serving settings, each verdict, whether the run is of record, its composite of
-    record by id (`WITHOUT_POUW`) and the verified compute it credits, none, and what every figure is conditional on
+    record by id (`WITHOUT_POUW`) and the verified compute it credits, none, stated at that id (``compute``,
+    `NO_COMPUTE_CLAIM`), and what every figure is conditional on
     (`COINS`; open for a record that read no coins), what the record doesn't claim (`DAY`, `POUW`), the drawn members it
     doesn't credit (`CREDIT`), K of record and what is open under it, its δ_net's terms, eps's split and connections,
     the composite's stated error, the year's datacenter cell, sampled proofs' guarantee per window and pooled
@@ -1393,6 +1400,7 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
     return {"serving": {k: s[k] for k in ("window_steps", "max_tokens")} if "window_steps" in s else None,
             "verdicts": {k: x["verdict"] for k, x in rec["verdicts"].items()}, "of_record": rec["of_record"]["holds"],
             **{k: rec["of_record"].get(k) for k in ("composite", "verified_compute")},
+            "compute": NO_COMPUTE_CLAIM.format(rec["of_record"].get("composite") or "the composite of record"),
             "conditional_on": rec["of_record"].get("conditional_on", []) if "coins" in rec else [COINS_OPEN],
             "not_claimed": [DAY_OPEN] * (rec.get("one_program_a_day") or {"open": True})["open"] + [POUW_OPEN],
             "not_credited": rec["of_record"].get("not_credited", []),
@@ -1449,7 +1457,8 @@ def beside(paths: Sequence[Path]) -> dict[str, Any]:
             raise ValueError(f"{path} {UNLABELLED}")
         runs.append({"record": str(path), "run": rec.get("run"), "tree": rec.get("tree"), "serving": line["serving"],
                      "ell_a": (rec["advice_charge"].get("cap") or {}).get("ell_a"), "of_record": line["of_record"],
-                     "composite": line["composite"], "conditional_on": line["conditional_on"], "not_claimed": line["not_claimed"],
+                     **{k: line[k] for k in ("composite", "verified_compute", "compute")},
+                     "conditional_on": line["conditional_on"], "not_claimed": line["not_claimed"],
                      "not_credited": line["not_credited"], "K": line["K"], "open": line["open"],
                      "periods": cells(rec.get("periods")), "sampled_proofs": line["sampled_proofs"]})
     return {"format": BESIDE, "is": BESIDE_IS, "runs": runs}
@@ -1495,7 +1504,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1
         a.to.parent.mkdir(parents=True, exist_ok=True)
         a.to.write_text(json.dumps(doc, indent=1, sort_keys=True, ensure_ascii=False) + "\n")
-        print("ONSITE-BESIDE " + json.dumps([{k: r[k] for k in ("run", "serving", "ell_a", "conditional_on",
+        print("ONSITE-BESIDE " + json.dumps([{k: r[k] for k in ("run", "serving", "ell_a", "composite",
+                                                                 "verified_compute", "compute", "conditional_on",
                                                                  "not_claimed", "not_credited", "K", "open")}
                                              for r in doc["runs"]], sort_keys=True, ensure_ascii=False), flush=True)
         return 0

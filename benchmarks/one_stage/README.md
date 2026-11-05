@@ -231,7 +231,9 @@ negatives.
   stays listed as its row states it (missing and development for a development piece). Its composite of record, named
   by its id, is the network certifier's composite without PoUW where the run has one (registered under its own id in
   `Core.Composites`), and then whether the run is of record reads that composite and its subprotocols, and not remote's
-  composite, which composes PoUW's case; else it is remote-network's. Either way the record credits no verified compute.
+  composite, which composes PoUW's case; else it is remote-network's. Either way the record credits no verified compute,
+  and its `ONSITE` line, like each run's in `--beside`'s `ONSITE-BESIDE` line, names the composite by its id and says so
+  in words: "no verified compute is credited: <id>'s verdict is no compute claim".
   Sampled proofs' guarantee is what its draw establishes, ε at δ, per window (its answer's bound over the window's n
   proof blocks) and pooled, never the window's alone: at most ⌊ln(1/δ)/q⌋ incorrect proof blocks over any number of
   windows each drawing k of n (q = k/n, `Flock.Guarantees.IntegrityHorizon`), stated for each monitoring period for the
