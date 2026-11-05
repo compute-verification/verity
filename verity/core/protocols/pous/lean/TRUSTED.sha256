@@ -30,7 +30,6 @@ d4e23d02c460bd064956d651d6aa2d517519d6997bbc0601f8ad98586437e995  ../../../../..
 ed98fc49994f820253ad4dc068b246bed6cb037c34c9c5d77240c2de2d255633  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipe.lean
 bc87800f3b17293256663a7542f03ac94a9311a5eb5587b02093d40ad5ab7145  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipeDisk.lean
 6a78d725575707542e39bca6736f1428f82674a912d1ccf2b9f266a6937cebe1  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipeFamily.lean
-c7ad7427575299488d32dee98e0d83944d5c8a255645ecbde696f481058baf43  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipeInfo.lean
 ad1662b306e79da2f66b28110f82f0aa06ed139e3cc89daaf3bbce67ed872118  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipeReads.lean
 0ee29741b81d074dfcd5ad835b2666c928f8ac0fdba1dbd49ea84dafa73a33e3  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipeServer.lean
 acf09233af2216787e955917bae556837d4c95542fc47aa7cced22f33589748b  ../../../../../Security/Definitions/Pous/Model/Audit.lean
@@ -55,7 +54,6 @@ afd018fe7edf11a5ba06002ac19291658d793d4d197056738b8fd0523a700142  ../../../../..
 8daeddd594dc99e458d2bec3d46018f86cc02ae64ae40fe3be83a34b4a115cae  ../../../../../Security/Definitions/Pous/Model/SegLift.lean
 025b844b2d1ea50f1dc3d98a0eacf2ba46c6b15bbb537cfcf8e196d49b1afae5  ../../../../../Security/Definitions/Pous/Model/StreamedWipe.lean
 9d40cd6128e4c1cb74d2b30396586d95987c2725a56e29a545c76d723d6dbc12  ../../../../../Security/Definitions/Pous/Model/StreamedWipeDisk.lean
-2da796936b69e597f43f413823aea1dd2b2719f966235a0521f95f69f6de569a  ../../../../../Security/Definitions/Pous/Model/StreamedWipeInfo.lean
 e31f381d9d09ce4da101d73eeb21620d95965d52a512c85916eb4d02736d6670  ../../../../../Security/Definitions/Pous/Model/StreamedWipeServer.lean
 153eff72ee6481f62aedceb945bcaa2a47dd99097ec4813a931d844367d4854b  ../../../../../Security/Definitions/Pous/P2/Clip.lean
 f81d8b62e9df1d6afa57f64831422ad9be4cdbd1276b3334908ef81a13f29b0e  ../../../../../Security/Definitions/Pous/P2/Cost.lean

@@ -20,7 +20,6 @@ public import Definitions.Pous.Guarantees.StreamedWipeFamily
 public import Definitions.Pous.Guarantees.StreamedWipeReads
 public import Definitions.Pous.Guarantees.StreamedWipeServer
 public import Definitions.Pous.Guarantees.StreamedWipeDisk
-public import Definitions.Pous.Guarantees.StreamedWipeInfo
 public import Definitions.Pouw
 public import Definitions.NetworkCertifier
 public import Definitions.NetworkCertifier.Guarantees.SampledAudit
