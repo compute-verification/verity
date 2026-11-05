@@ -7,16 +7,20 @@ warm-up's passes are rounds 0 and 1 and a dropped pass keeps its number; call c 
 W lists only the retained rounds the timed call made (`write`: a retained warm-up round is refused, since the verdict
 ties every retained round to W), each under its own number. Each call registers its A rows ``pearl-a/<s>/<c>``: its m₁₆
 committed rows of K FP32 words, at its ``root_a``, under `audit.activation_binding`'s domain; and its y
-``pearl-y/<s>/<c>``: its real rows of N FP32 words, at its y root, under `served_y.y_domain`'s (`entries`). Both are hm96
-rows of 32-bit words, the entries `verify_run.tie` holds to each call's root and recomputed domain.
+``pearl-y/<s>/<c>``: its real rows of N FP32 words, at its y root, under `served_y.y_domain`'s (`entries`). Each weight w
+the calls read registers its B rows once, ``pearl-b/<w>``: its n rows of K FP32 words, at the weight's root, under
+`audit.weight_binding`'s domain (`b_entries`), the tree PoUW reads B from and the epoch's weights' root folds, so the
+weights PoUW credits are a registered value of the one log. All are hm96 rows of 32-bit words, the entries
+`verify_run.tie` holds to each call's and weight's root and recomputed domain.
 
 ``served_passes.py retain --window-record W`` writes it: it drops the warm-up's rounds, writes the retention, then W over
 the rounds it retains. It reads the served run's ``served.json`` (`SERVED_SCHEMA`: its passes as `served_passes` records
 them, and its coins, `coins_of`), which ``served_passes.py serve`` and serve-openai's Pearl+ arm (`serve_pearl`) write.
 
-The audited window's registration, chained right after W, registers each value as W's (`reuse`): the rows the audited
-circuit's proof blocks make of it, committed as Pearl+ committed them, so its entry is W's, and one-stage's R7 takes it
-as an output value of W (records_audit's `tie_of`)."""
+The audited window's registration, chained right after W, registers each call's value as W's (`reuse`): the rows the
+audited circuit's proof blocks make of it, committed as Pearl+ committed them, so its entry is W's, and one-stage's R7
+takes it as an output value of W (records_audit's `tie_of`). The circuit is cut at its linears and reads no B row, so
+W's B rows are no value of it."""
 from __future__ import annotations
 
 import json
@@ -26,7 +30,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity.core.protocols.pouw.audit import HM96, activation_binding, hm96_salt, rows_domain
+from verity.core.protocols.pouw.audit import HM96, activation_binding, hm96_salt, rows_domain, weight_binding
 from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as REG
 from verity.ml.commitments import CommitmentDomain
 from verity.ml.commitments.merkle import tree_levels
@@ -85,12 +89,21 @@ def y_value(s: int, c: int) -> str:
     return f"pearl-y/{s}/{c}"
 
 
-def entries(man: Mapping[str, Any], s: int) -> list[dict[str, Any]]:
-    """Round ``s``'s entries, from its pass's manifest ``man``: each call's A rows, then its y. ValueError for a pass whose
-    rows aren't hm96 rows, or a call that commits no y."""
+def b_value(w: int) -> str:
+    """Weight ``w``'s B rows."""
+    return f"pearl-b/{w}"
+
+
+def _hm96(man: Mapping[str, Any], s: int) -> None:
     hashing = PPD.scheme_of(man["scheme"]).commitment_hash
     if hashing != HM96:
         raise ValueError(f"round {s}'s pass commits {hashing} rows, and W registers {HM96} rows")
+
+
+def entries(man: Mapping[str, Any], s: int) -> list[dict[str, Any]]:
+    """Round ``s``'s entries, from its pass's manifest ``man``: each call's A rows, then its y. ValueError for a pass whose
+    rows aren't hm96 rows, or a call that commits no y."""
+    _hm96(man, s)
     salt, out = bytes.fromhex(man["salt"]), []
     for c, u in enumerate(man["matmuls"]):
         if "y" not in u:
@@ -104,6 +117,36 @@ def entries(man: Mapping[str, Any], s: int) -> list[dict[str, Any]]:
     return out
 
 
+def b_entries(man: Mapping[str, Any], s: int) -> list[dict[str, Any]]:
+    """The B rows of the weights round ``s``'s pass reads, from its manifest ``man``, by ascending weight id: each weight's
+    n rows of K FP32 words (its calls' n and k), at its root, under `audit.weight_binding`'s domain. ValueError for a pass
+    whose rows aren't hm96 rows, or a weight it commits no root of."""
+    _hm96(man, s)
+    shapes: dict[int, tuple[int, int]] = {}
+    for u in man["matmuls"]:
+        shapes.setdefault(u["weight"], (u["n"], u["k"]))
+    out = []
+    for w in sorted(shapes):
+        n, k = shapes[w]
+        if "root" not in (man.get("weights") or {}).get(str(w), {}):
+            raise ValueError(f"round {s}'s pass commits no root of weight {w}, whose B rows W registers")
+        out.append({"value": b_value(w), "root": bytes.fromhex(man["weights"][str(w)]["root"]).hex(), "leaves": n,
+                    "words": k, "domain": rows_domain(weight_binding(w), -2, n, HM96).domain_id.hex(), G.WIDTH_KEY: WORD_BITS})
+    return out
+
+
+def _weights(manifests: Sequence[Mapping[str, Any]], rounds: Sequence[int]) -> list[dict[str, Any]]:
+    """Every weight's B rows over the passes (`b_entries`), each once, in the order the passes first read them. ValueError
+    for a weight two passes commit as other rows."""
+    out: dict[str, dict[str, Any]] = {}
+    for s, m in zip(rounds, manifests):
+        for e in b_entries(m, s):
+            if out.setdefault(e["value"], e) != e:
+                raise ValueError(f"round {s}'s pass commits {e['value']} as other rows than an earlier round's: W registers "
+                                 "one install's weights")
+    return list(out.values())
+
+
 def _rounds(manifests: Sequence[Mapping[str, Any]], rounds: Sequence[int] | None) -> list[int]:
     got = list(range(len(manifests))) if rounds is None else list(rounds)
     if len(got) != len(manifests) or not all(type(s) is int and s >= 0 for s in got) or got != sorted(set(got)):
@@ -114,16 +157,18 @@ def _rounds(manifests: Sequence[Mapping[str, Any]], rounds: Sequence[int] | None
 def record(manifests: Sequence[Mapping[str, Any]], previous: str | None = None,
            rounds: Sequence[int] | None = None) -> dict[str, Any]:
     """W over passes' manifests in order, pass i round ``rounds[i]`` (default i), chained after ``previous`` (the digest of
-    the prover's last one-stage record, `registration.digest`; None for its first). ValueError for no pass, rounds that
-    aren't one a pass in order, or passes of two salts."""
+    the prover's last one-stage record, `registration.digest`; None for its first): every call's entries, round by round,
+    then every weight's B rows. ValueError for no pass, rounds that aren't one a pass in order, passes of two salts, or a
+    weight two passes commit as other rows."""
     if not manifests:
         raise ValueError("W registers the calls of a run's retained rounds, and it retains none")
     head = manifests[0]
     if other := next((m["salt"] for m in manifests if m["salt"] != head["salt"]), None):
         raise ValueError(f"W is one epoch's: its passes are under salts {head['salt'][:16]}… and {other[:16]}…")
+    at = _rounds(manifests, rounds)
     return {"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL,
             "window": {"kind": "served", "entry": head["entry"], "scheme": head["scheme"], "salt": head["salt"]},
-            "registered": [e for s, m in zip(_rounds(manifests, rounds), manifests) for e in entries(m, s)],
+            "registered": [*(e for s, m in zip(at, manifests) for e in entries(m, s)), *_weights(manifests, at)],
             "previous": previous}
 
 
@@ -166,8 +211,8 @@ class Committed(G.Registered):
 
 def reuse(w: Mapping[str, Any], manifests: Sequence[Mapping[str, Any]],
           rows_of: Callable[[str, int, np.ndarray], np.ndarray], rounds: Sequence[int] | None = None) -> dict[str, Committed]:
-    """The values W registers (``w``, the window record of ``manifests`` at ``rounds``: `record`), each as the audited
-    circuit's registered value: the rows ``rows_of(name, rows, empty)`` gives (`window_rows.Rows.value`: u16 words, an
+    """The calls' values W registers (``w``, the window record of ``manifests`` at ``rounds``: `record`; its B rows are no
+    value of the audited circuit), each as the audited circuit's registered value: the rows ``rows_of(name, rows, empty)`` gives (`window_rows.Rows.value`: u16 words, an
     FP32 word's two low first, every row no proof block makes ``empty``, zero), each salted with `audit.hm96_salt` under
     its pass's ``hm96_salt_key`` at the call's index for A and `served_y.HM96_Y` past it for y. ValueError unless ``w`` is
     the record of ``manifests`` and each value's entry is W's: the proof blocks don't make the rows Pearl+ committed, or
@@ -196,5 +241,5 @@ def reuse(w: Mapping[str, Any], manifests: Sequence[Mapping[str, Any]],
     return out
 
 
-__all__ = ["KEEP", "SERVED_SCHEMA", "WORD_BITS", "Committed", "a_value", "coins_of", "entries", "macs", "record", "reuse",
-           "served_passes", "write", "y_value"]
+__all__ = ["KEEP", "SERVED_SCHEMA", "WORD_BITS", "Committed", "a_value", "b_entries", "b_value", "coins_of", "entries", "macs",
+           "record", "reuse", "served_passes", "write", "y_value"]
