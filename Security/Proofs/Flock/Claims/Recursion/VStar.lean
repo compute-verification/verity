@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.InnerAccepts
-import Proofs.Flock.Claims.Recursion.Registered
+module
+
+public import Proofs.Flock.Claims.Recursion.InnerAccepts
+public import Proofs.Flock.Claims.Recursion.Registered
 
 /-!
 # `VStarAccepts` at the deployed readers, reduced to V*'s parts
@@ -81,6 +83,8 @@ the inner verifier.
   message's digest under the salt's mask, as hm96 rows open (`Deploy.zeroCommit`'s form). It binds wherever the salt's
   and the message's encodings are injective.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion.VStar
 

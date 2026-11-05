@@ -1,4 +1,6 @@
-import NciCheck.Baseline
+module
+
+public import NciCheck.Baseline
 
 /-! `nci-check [--unrolled] INSTANCE TRUSTED`: the verdict on one instance, as JSON on stdout. By default the instance is
 `NciCheck.Desc`'s (θ and the owners per root node) with θ's `provenance`, checked at the size of the description and then
@@ -7,6 +9,8 @@ parameters: `NciCheck.Baseline`); `--unrolled` reads one of `NciCheck.Check` (pe
 check, the reference the description-sized one is held to. `nci-check --policy [--unrolled] INSTANCE` runs the policy
 check alone, without θ's provenance: a measurement of `NciCheck.Desc` (`benchmarks/verifier_cost/`), not the check of
 record. -/
+
+@[expose] public section
 
 def main (args : List String) : IO UInt32 := do
   let usage := "usage: nci-check [--unrolled] INSTANCE TRUSTED | nci-check --policy [--unrolled] INSTANCE"

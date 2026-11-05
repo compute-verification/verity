@@ -1,5 +1,7 @@
-import Proofs.Flock.Bridge.Canon
-import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
+module
+
+public import Proofs.Flock.Bridge.Canon
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
 
 /-!
 # The deployed commitment at a leaf map (shared rows)
@@ -27,6 +29,8 @@ digests are the tables' rows), so the leaf map is the verifier's, at every accep
 
 No unit's ref is pinned to `⌊u / G⌋` here: these hold at every ref the verifier accepts.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

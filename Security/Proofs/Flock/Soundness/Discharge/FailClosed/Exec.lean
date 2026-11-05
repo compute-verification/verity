@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.HdecCor.Headlines
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+module
+
+public import Proofs.Flock.Soundness.Discharge.HdecCor.Headlines
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 
 /-!
 # The non-ZK headlines, over what flock-verify accepts
@@ -16,6 +18,8 @@ under hidden outputs whether the circuit's wires feed its unit or its outputs (`
 feed neither, so the unit returns the outputs (`Layout.outNet_of_wiresFeed`); where they feed either, the headline is
 `FailClosed.General`'s, at the template instance's program. The original headlines remain, as lemmas.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.FailClosed
 

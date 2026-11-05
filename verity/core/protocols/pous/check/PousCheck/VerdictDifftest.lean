@@ -1,6 +1,8 @@
-import Flock.Canon
-import Flock.Hash
-import PousCheck.Verdict
+module
+
+public import Flock.Canon
+public import Flock.Hash
+public import PousCheck.Verdict
 
 /-!
 # The verdict unit's difftest: `PousCheck.Verdict`'s functions on JSON
@@ -17,6 +19,8 @@ holds each one's output to the Definition `verdict_circuit.PousVerdict`, compile
 Both refuse the statics `verdict_circuit` refuses (it admits `K ≥ 1`, `1 ≤ LIMIT < 2⁶⁴`); `eval` refuses a session
 that is not `K` records of 92 bytes and `K` digests of 64.
 -/
+
+@[expose] public section
 
 namespace PousCheck.VerdictDifftest
 

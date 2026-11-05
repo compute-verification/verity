@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.BatchSched
+module
+
+public import Proofs.Flock.Claims.KS.BatchSched
 
 /-!
 # A round at one table, read at the batch's schedule
@@ -14,6 +16,8 @@ round follows from the same predicate, one coin further on, at the strategies af
 * `paused_round`: the paused games before position `t`;
 * `front_round`, `sess_round0`, `sess_round1`: a table in front, and the session's table at rep 0 and at rep 1.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

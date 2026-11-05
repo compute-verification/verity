@@ -1,4 +1,6 @@
-import Proofs.Pouw.Eps1.WordLocal
+module
+
+public import Proofs.Pouw.Eps1.WordLocal
 
 /-!
 # Theorem C's count in M3: class-P programs over issue slots
@@ -11,6 +13,8 @@ only incidences of its fields at their own segments (a field's prefix comes from
 with `e_k ≤ 32` caps `Σ_k e_k` at 65 (`sum_le_65`: two 32-entry fields and a one-entry field). Writers create at most
 `w` each by hypothesis, and are `L·m·n` distinct instructions (`out_injective`), each alone in its slot.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Eps1.ClassP
 

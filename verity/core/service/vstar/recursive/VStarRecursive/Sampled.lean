@@ -11,7 +11,14 @@ Sampled proofs (`verity/sampled-proofs/v1`), a `Core.BlobProtocol`: one-stage v1
 * **check**: that form's check, the recursive audit's on the blobs (one-stage v1 reads none); evidence of the other form
   rejects.
 -/
-import VStarRecursive.Protocol
+module
+
+public import VStarRecursive.Protocol
+meta import VStarRecursive.Protocol
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace VStar.Recursive.Sampled
 

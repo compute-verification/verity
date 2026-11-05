@@ -4,7 +4,12 @@ registered reads (`--registered`), whatever the public file's header names; with
 verifier's ports and refuses a statement whose header was stripped. The programs are `TMin(x, r) = x + r`
 (`test_format_spec`'s primitives), with `r` bound per run or at registration.
 -/
-import Flock.Test.RegComplete
+module
+
+public import Flock.Test.RegComplete
+meta import Flock.Test.RegComplete
+
+@[expose] public section
 
 namespace Flock.Test.RegProgram
 

@@ -1,4 +1,6 @@
-import PouwCheck.Verified
+module
+
+public import PouwCheck.Verified
 
 /-!
 # A period's committed circuit files (`credit.committed_files`)
@@ -7,6 +9,8 @@ The circuit files a period's open committed, which `credit.period_credit` verifi
 statements on (`credit._lean_committed_files`, through `pouw-check-difftest`'s `credit-committed-files`), with
 `credit.committed_files` the Python reference the difftest (`tests/test_live_verified_difftest.py`) holds to it.
 -/
+
+@[expose] public section
 
 namespace PouwCheck.CommittedFiles
 

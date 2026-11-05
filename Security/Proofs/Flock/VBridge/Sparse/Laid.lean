@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.Sparse.Builder
-import Proofs.Flock.VBridge.ResUnit
+module
+
+public import Proofs.Flock.VBridge.Sparse.Builder
+public import Proofs.Flock.VBridge.ResUnit
 
 /-!
 # The sparse-phase unit laid out
@@ -16,6 +18,8 @@ The verifier's `rec-sparse/…` unit is `Flock.RecSparse.unitLaid sh`: one input
   slots' types (`SparseIn`), its output columns from `sparseBase` hold `outOf`'s residuals, 128 bits each, and with `T > 1`
   from bit 512 each type with its low `T_LOG` bits cleared.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Sparse
 

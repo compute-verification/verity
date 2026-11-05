@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.SlotDistOn
-import Proofs.Flock.Claims.KS.ZkKSAlign
+module
+
+public import Proofs.Flock.Claims.KS.SlotDistOn
+public import Proofs.Flock.Claims.KS.ZkKSAlign
 
 /-!
 # The masked simulated fork's alignment at `τ`
@@ -28,6 +30,8 @@ no `τ` (`opTauZ`). So the distance holds on the paths that can end well (`Lock.
   (`schedC_simAtJZ_dead`), so the `τ` fork bound holds outright (`zkSimForkLeTau`), and with it masked knowledge
   soundness (`zk_KS`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game.Lock
 

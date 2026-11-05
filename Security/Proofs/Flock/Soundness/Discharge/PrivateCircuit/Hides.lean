@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Defs
+module
+
+public import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Defs
 
 /-!
 # Hiding, from events to tests
@@ -6,6 +8,8 @@ import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Defs
 `Hides.avg_le`: a registration that hides every event up to `ε` hides every test with values in `[0, 1]` up to `ε`: at
 the set `A` of views more likely at `p` than at `p'`, the test's gain is at most `Pr_p[A] - Pr_{p'}[A]`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PrivateCircuit
 

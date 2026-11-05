@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.Deploy
-import Proofs.Flock.Claims.Recursion.ComposeShared
+module
+
+public import Proofs.Flock.Claims.Recursion.Deploy
+public import Proofs.Flock.Claims.Recursion.ComposeShared
 
 /-!
 # `flock-verify rec-compose` at the compiled verifier's parts
@@ -23,6 +25,8 @@ before any session opened, and the parts' sessions are exactly the ones it opene
 retried until it accepts is refused. That the record is the challenger's, and that the challenger logs every `Hello` it
 answers, is the auditor-trusted challenger's (`trusted-host`), as its other records are.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

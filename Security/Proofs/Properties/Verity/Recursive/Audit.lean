@@ -1,7 +1,9 @@
-import Proofs.Properties.Verity.Recursive.Target
-import Proofs.Flock.Claims.Recursion.CallsClosed
-import Proofs.Flock.Recursive.KSProved
-import Proofs.Flock.Recursive.FirewallZK
+module
+
+public import Proofs.Properties.Verity.Recursive.Target
+public import Proofs.Flock.Claims.Recursion.CallsClosed
+public import Proofs.Flock.Recursive.KSProved
+public import Proofs.Flock.Recursive.FirewallZK
 
 /-!
 # The recursive audit over sampled proofs' recursive form
@@ -21,6 +23,8 @@ component), at every composite, with zero knowledge (`RecursiveFirewallPrivate`)
 The form is dense only: `recursive/v1` refuses every other, and `RecursiveKSAt` covers the dense statements
 (`DenseAt`). Candidate 3's Holo statement is `Flock.Guarantees.RecursiveAuditHolo`.
 -/
+
+@[expose] public section
 
 namespace Verity.Recursive
 

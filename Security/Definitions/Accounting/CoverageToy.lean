@@ -1,4 +1,6 @@
-import Definitions.Accounting.Slowdown
+module
+
+public import Definitions.Accounting.Slowdown
 
 /-!
 # The floor's toy instance
@@ -9,6 +11,8 @@ position holds `[ω]` are acceptable, and the input says nothing. The covered st
 a run's gate count. A guess, the one-gate run writing a fixed bit at the output position, lacks the structure and
 reaches the target on half the coins; no computation does better, since a position holds one gate.
 -/
+
+@[expose] public section
 
 namespace Accounting.Slowdown.Toy
 
