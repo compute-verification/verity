@@ -76,17 +76,6 @@ def frontier(srcs):
     return out
 
 
-def need_of(unit, up):
-    need = {b for k in P.members[up] for b in P.uses[k] if P.unit.get(b) == unit}
-    stack = list(need)
-    while stack:
-        for b in P.uses[stack.pop()]:
-            if P.unit.get(b) == unit and b not in need:
-                need.add(b)
-                stack.append(b)
-    return need
-
-
 def q(xs):
     return "[" + ", ".join(f'"{x}"' for x in xs) + "]"
 
@@ -134,7 +123,7 @@ for i, op in enumerate(ops):
         print(f"op {i}: split {op['source']} for {op['for_importer']}: "
               f"{'source' if not P.members.get(unit) else 'importer'} not in the tree: left out")
         continue
-    need = need_of(unit, up)
+    need = P.need(unit, up)
     if not need or need == P.members[unit]:
         print(f"op {i}: split {op['source']} for {op['for_importer']}: the importer needs "
               f"{'none' if not need else 'all'} of it: left out")

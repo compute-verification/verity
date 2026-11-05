@@ -27,6 +27,7 @@ AUX = re.compile(r"^(_.*|proof_\d+|match_\d+|eq_\d+|eq_def|induct|induct_unfoldi
                  r"noConfusion|noConfusionType|below|brecOn|binductionOn|ibelow|mk|sizeOf_spec|inj|injEq|congr_simp|"
                  r"ext|ext_iff|spec_\d+|unfold|hcongr_\d+|splitter|else_eq|eq_iff|sizeOf|ctorIdx|toCtorIdx|ofNat|"
                  r"proof_\d+_\d+|inj_\d+)$")
+MATCHER = re.compile(r"\.match_\d+$")
 
 
 def owner_full(n: str) -> str:
@@ -141,11 +142,17 @@ class Plan:
 
         sys.setrecursionlimit(100000)
         self.uses, self.used_by = defaultdict(set), defaultdict(set)
+        # `matches[b]`: the nodes of b's module that use one of b's matchers. Lean reuses a matcher for an identical
+        # `match` only inside the module that made it, so such a node elaborates to something else away from b.
+        self.matches = defaultdict(set)
         self.dropped = 0
+        name_of = {cid: name for cid, mi, kind, name, deps in consts}
         for cid, mi, kind, name, deps in consts:
             a = node_of[cid]
             for d in deps:
                 b = node_of.get(d)
+                if b and b != a and b[0] == a[0] and MATCHER.search(name_of[d]):
+                    self.matches[b].add(a)
                 if b and b != a:
                     if b[0] != a[0] and b[0] not in closure_of(a[0]):
                         self.dropped += 1  # a name two modules share (a private one, a realized core one)
@@ -218,6 +225,19 @@ class Plan:
         del self.deps[A]
         self.weight.pop(A, None)
         self.weight[B] = self.part_time(None, self.members[B])
+
+    def need(self, unit, up):
+        """What `up` uses of `unit`, with what that uses there, and the declarations there that use one of its
+        matchers (`matches`), which must stay in their matcher's module."""
+        need = {b for k in self.members[up] for b in self.uses[k] if self.unit.get(b) == unit}
+        stack = list(need)
+        while stack:
+            x = stack.pop()
+            for b in self.uses[x] | self.matches[x]:
+                if self.unit.get(b) == unit and b not in need:
+                    need.add(b)
+                    stack.append(b)
+        return need
 
     def try_split(self, unit, need):
         """The deps and weights after cutting `need` out of `unit` into a new unit; returns (changes, new_name)."""
@@ -302,14 +322,7 @@ def main():
             up, unit = p[i], p[i + 1]
             if len(P.members.get(unit, ())) < 2 or up not in P.members:
                 continue
-            need = {b for k in P.members[up] for b in P.uses[k] if P.unit.get(b) == unit}
-            stack = list(need)
-            while stack:
-                k = stack.pop()
-                for b in P.uses[k]:
-                    if P.unit.get(b) == unit and b not in need:
-                        need.add(b)
-                        stack.append(b)
+            need = P.need(unit, up)
             if not need or need == P.members[unit]:
                 continue
             lo, rest, dl, dr, imps = P.try_split(unit, need)
