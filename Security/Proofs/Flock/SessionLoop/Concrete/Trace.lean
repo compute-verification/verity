@@ -74,7 +74,6 @@ and a net's row the product of its XORs (`netRow_holds`).
 open Flock FlockLevel3 FlockSoundness FlockSoundness.Discharge.Hm
 open Flock.HmNets hiding and
 
-set_option maxHeartbeats 0 -- `deltaL_cW` and the slot facts evaluate the concrete circuit's Δ and ranges in the kernel
 set_option maxRecDepth 200000
 
 namespace FlockDeploy.Concrete.Trace
@@ -177,6 +176,8 @@ def E : List (ℕ × ℕ) :=
 
 section cW
 
+set_option maxHeartbeats 0 -- `deltaL_cW` evaluates the concrete circuit's Δ in the kernel
+
 variable (ls lh : HmNets.Laid) (H : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 s6 : String)
   (hello : ByteArray → Nat → String)
 
@@ -206,6 +207,8 @@ One slot per range: `hm96` (net 2) at 0 and `sha512x3` (net 1) at `2^18`, each `
 `sha512x3`'s and the unit's (`constPairs_cW`). -/
 
 section facts
+
+set_option maxHeartbeats 2000000 -- the kernel evaluates the parsed circuit's fields and the unit net `UN`
 
 variable (ls lh : HmNets.Laid) (H : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 s6 : String)
   (hello : ByteArray → Nat → String)
@@ -254,8 +257,6 @@ theorem hmRange_cW : ((cW ls lh H A B A' B' s1).rangeOf (cW ls lh H A B A' B' s1
     ((cW ls lh H A B A' B' s1).rangeOf (cW ls lh H A B A' B' s1).hmNet).slot 0 = 0 :=
   ⟨by kernel_rfl', by kernel_rfl', by kernel_rfl'⟩
 
-end facts
-
 /-- The unit's computed rows read only its 16 input rows: rows `128 … 143` copy one input each, the rest are empty. -/
 theorem UN_a_lt : ∀ c < 128, ∀ y ∈ (UN.a.row (128 + c)).toList, y < 16 := by decide +kernel
 
@@ -264,6 +265,11 @@ theorem UN_empty : ∀ c < 112, UN.a.row (16 + c) = #[] ∧ UN.b.row (16 + c) = 
 
 /-- The unit's 16 input rows read themselves. -/
 theorem UN_in : ∀ t < 16, UN.a.row t = #[t] ∧ UN.b.row t = #[t] := by decide +kernel
+
+/-- The unit's rows past its constant are empty. -/
+theorem UN_past : ∀ c < 255, UN.a.row (257 + c) = #[] ∧ UN.b.row (257 + c) = #[] := by decide +kernel
+
+end facts
 
 /-! ## The trace -/
 
@@ -652,21 +658,23 @@ theorem hm_outs :
   rw [List.size_toArray, hl]
   decide
 
+/-- **A layout's output group ends at its constant.** Stated over any builder state, so no proof at a concrete net
+compares its unfolded row count. -/
+theorem outStart_span (s : HmNets.St) (inBits outBits : Array ℕ) (outs : Array HmNets.Lin) :
+    outStart s inBits outBits + spanOf outBits = (layout s inBits outBits outs).constPos :=
+  (HmNets.layout_rows s inBits outBits outs).1.symm
+
 /-- The `sha512x3` net's output group ends at its constant. -/
 theorem sha_end (hn : Properties.Flock.Nets.FixedNetsBuild) :
     outStart (compression3.run HmNets.St.empty).2 SHA_IN SHA_OUT + spanOf SHA_OUT = 256000 := by
-  have h := (HmNets.layout_rows (compression3.run HmNets.St.empty).2 SHA_IN SHA_OUT
-    (compression3.run HmNets.St.empty).1.2.flatten.toArray).1
-  rw [← HmNets.shaLaid_eq, shaLaid_constPos hn] at h
-  exact h.symm
+  rw [outStart_span _ _ _ (compression3.run HmNets.St.empty).1.2.flatten.toArray, ← HmNets.shaLaid_eq]
+  exact shaLaid_constPos hn
 
 /-- The `hm96` net's output group ends at its constant. -/
 theorem hm_end (hn : Properties.Flock.Nets.FixedNetsBuild) :
     outStart ((hm96Row Hm96.Default512.key).run HmNets.St.empty).2 HM_IN HM_OUT + spanOf HM_OUT = PIN := by
-  have h := (HmNets.layout_rows ((hm96Row Hm96.Default512.key).run HmNets.St.empty).2 HM_IN HM_OUT
-    ((hm96Row Hm96.Default512.key).run HmNets.St.empty).1.2.2.2.toArray).1
-  rw [← HmNets.hmLaid_eq, hmLaid_constPos hn] at h
-  exact h.symm
+  rw [outStart_span _ _ _ ((hm96Row Hm96.Default512.key).run HmNets.St.empty).1.2.2.2.toArray, ← HmNets.hmLaid_eq]
+  exact hmLaid_constPos hn
 
 theorem xorRow_congr {v w : ℕ → Bool} {cs : Array ℕ} (h : ∀ j ∈ cs.toList, v j = w j) :
     xorRow v cs = xorRow w cs := by
@@ -677,30 +685,12 @@ theorem xorRow_congr {v w : ℕ → Bool} {cs : Array ℕ} (h : ∀ j ∈ cs.toL
   | cons a l ih =>
     simp only [List.foldr_cons, h a (by simp), ih fun j hj => h j (by simp [hj])]
 
-/-- **A layout's last rows read its constant**, in A and in B. -/
-theorem layout_last (st : HmNets.St) (inBits outBits : Array ℕ) (outs : Array HmNets.Lin) :
-    (∃ P, (layout st inBits outBits outs).ra = P ++ #[#[(layout st inBits outBits outs).constPos]]) ∧
-      ∃ P, (layout st inBits outBits outs).rb = P ++ #[#[(layout st inBits outBits outs).constPos]] :=
-  ⟨⟨_, rfl⟩, ⟨_, rfl⟩⟩
-
-theorem getD_last {P : Array (Array ℕ)} {x : Array ℕ} {i : ℕ} (h : (P ++ #[x]).size = i + 1) :
-    (P ++ #[x]).getD i #[] = x := by
-  have hp : P.size = i := by simpa using h
-  rw [Flock.HmNets.getD_append_right (le_of_eq hp), hp, Nat.sub_self]
-  rfl
-
-/-- **The `sha512x3` net's constant row reads itself**, in A and in B. -/
+/-- **The `sha512x3` net's constant row reads itself**, in A and in B: `Net.ofRows` checks it. -/
 theorem shaLaid_const (hn : Properties.Flock.Nets.FixedNetsBuild) :
     (HmNets.shaLaid ()).ra.getD 256000 #[] = #[256000] ∧ (HmNets.shaLaid ()).rb.getD 256000 #[] = #[256000] := by
-  obtain ⟨⟨P, hP⟩, ⟨Q, hQ⟩⟩ := layout_last (compression3.run HmNets.St.empty).2 SHA_IN SHA_OUT
-    (compression3.run HmNets.St.empty).1.2.flatten.toArray
-  rw [← HmNets.shaLaid_eq, shaLaid_constPos hn] at hP hQ
-  have ha := hn.1.1
-  have hb := hn.1.2.1
-  rw [hP] at ha
-  rw [hQ] at hb
-  rw [hP, hQ]
-  exact ⟨getD_last (i := 256000) ha, getD_last (i := 256000) hb⟩
+  obtain ⟨-, -, -, -, -, -, -, -, ha, hb, -⟩ := Net.ofRows_ok hn.1.2.2.1
+  rw [shaLaid_constPos hn] at ha hb
+  exact ⟨ha, hb⟩
 
 /-- At the `sha512x3` slot's constant row, its laid row's self entry and the slot constant's self pair cancel, leaving
 the pin. -/
@@ -727,9 +717,6 @@ theorem zIn_shaConst (hn : Properties.Flock.Nets.FixedNetsBuild) : zIn 518144 = 
   show vS 256000 = true
   rw [← shaLaid_constPos hn]
   exact (Total.sha_total xS).1
-
-/-- The unit's rows past its constant are empty. -/
-theorem UN_past : ∀ c < 255, UN.a.row (257 + c) = #[] ∧ UN.b.row (257 + c) = #[] := by decide +kernel
 
 theorem ite_flip (x j : ℕ) : (if x = j then 1 else 0 : ℕ) = if j = x then 1 else 0 := if_congr eq_comm rfl rfl
 
