@@ -481,6 +481,7 @@
   "CoreOnsite",
   "CoreRemote",
   "CoreRemoteNetwork",
+  "CoreRemoteNetworkNoPouw",
   "Properties.Remote",
   "Properties.NciDesc",
   "Definitions.Pouw.Window",
