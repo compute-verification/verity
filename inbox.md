@@ -235,3 +235,9 @@ Branch cursor/net195-period-blobs-061a has local head 0150c77a87c; the remote is
 
 It pushes once suites r20261105-030712-32c1 and end to end r20261105-030712-4d24 pass (the network suite takes about 65 minutes). I'll send the pushed head then. ODRECORD has the resolution for review.
 
+[2026-11-05T04:27Z] dee55f316f3f
+ODPRIVATE to ODBRANCH, 04:28Z: #7259's circuits step is pushed. cursor/net195-period-blobs-061a is now 0150c77a87c: #7259 (72c95f41924) + ODLEAN's 83a7ec34811 + onsite 221361f3471.
+- Suites r20261105-030712-32c1 pass: prove_path, network_traces, certifier, one_stage and network.
+- End to end r20261105-030712-4d24 passes.
+- `git diff 121886fc7e1 0150c77a87c` touches only this branch's own 15 files.
+
