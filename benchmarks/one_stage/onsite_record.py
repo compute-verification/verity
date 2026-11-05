@@ -37,7 +37,7 @@ read (``not_claimed``: PoUW's, `NOT_CLAIMED`, listed as it is, missing and devel
 certifier's answer's, which host ran each party.
 
 **Sampled proofs' guarantee** (``sampled_proofs``, `SAMPLED`), from its accepted row's answer, else ``missing``: what
-its draw establishes, ε at δ, per window (``window``: its bound at its profile's δ over the window's n proof blocks) and
+its draw establishes, ε at δ, per window (``per_window``: its bound at its profile's δ over the window's n proof blocks) and
 pooled (``pooled``, `POOLED`): at most ⌊ln(1/δ)/q⌋ incorrect proof blocks over any number of windows, each drawing k of
 its n proof blocks (q = k/n), by `Flock.Guarantees.IntegrityHorizon`, and for each monitoring period of
 `leak_bounds.PERIODS` that count for the serving node, a datacenter's and the world's links (each link's at δ / links,
@@ -285,12 +285,13 @@ UNLISTED = "the audit's record lists its Lean verdict but no completion of its -
 #: where the window report keeps sampled proofs' answer, whose profile and public its guarantee reads
 SAMPLED_FROM = f"record/verdicts.json protocols.{ROWS['sampled proofs']}.answer"
 SAMPLED = ("sampled proofs' guarantee, what its draw establishes, ε at δ, per window and pooled over each monitoring "
-           "period, never the window's alone. A window (``window``): its answer's bound at its integrity profile's δ "
+           "period, never the window's alone. A window (``per_window``): its answer's bound at its integrity profile's δ "
            "over the window's n proof blocks, ε = bound / n (Flock.Guarantees.EndToEndHidden: an accepted window holds "
            "more incorrect proof blocks than its bound with probability at most δ + ε_ks + δ_link). A draw of k of n "
            "proof blocks leaves most of them unchecked, so at k = 1 and δ at most 1/n its bound is n − 1: what a draw "
            "establishes is the pooled count (``pooled``, `POOLED`)")
-POOLED = ("Flock.Guarantees.IntegrityHorizon: over T windows played by one adaptive prover, each a --zk session under "
+POOLED = ("Flock.Guarantees.IntegrityHorizon: over T sampling blocks (``sampling_blocks``), each a window's audit, "
+          "played by one adaptive prover, each a --zk session under "
           "hidden outputs drawing a uniform k-subset of its n proof blocks on its own live coins, q = k / n, every "
           "window accepts while their incorrect proof blocks total at least ln(1/δ)/q with probability at most "
           "δ + Σ_t (ε_ks,t + δ_link,t), whatever T is. So a monitoring period's windows hold at most ⌊ln(1/δ)/q⌋ "
@@ -887,7 +888,7 @@ def sampled(row: Any, verdict: Mapping[str, Any], phase_s: Fraction | None, why:
         return g | {"error": f"its answer's profile or public lacks a field: {type(e).__name__}: {e}"}
     if not (0 < n and 0 <= b <= n and 0 < delta < 1):
         return g | {"error": f"its answer's bound {b} over {n} proof blocks at δ {delta} states no ε"}
-    g["window"] = {"units": n, "law": law, "delta": str(delta), "bound": b, "epsilon": str(Fraction(b, n)),
+    g["per_window"] = {"units": n, "law": law, "delta": str(delta), "bound": b, "epsilon": str(Fraction(b, n)),
                      "statement": "Flock.Guarantees.EndToEndHidden"}
     k = law.get("subset") if isinstance(law, Mapping) and len(levels) == 1 else None
     if not (isinstance(k, int) and 0 < k <= n):
@@ -895,7 +896,7 @@ def sampled(row: Any, verdict: Mapping[str, Any], phase_s: Fraction | None, why:
     q = Fraction(k, n)
     pooled: dict[str, Any] = {
         "statement": "Flock.Guarantees.IntegrityHorizon", "is": POOLED, "q": str(q), "incorrect_at_most": horizon(q, delta),
-        "error": {"delta": str(delta), "unvalued": "Σ_t (ε_ks,t + δ_link,t) over the cell's windows"},
+        "error": {"delta": str(delta), "unvalued": "Σ_t (ε_ks,t + δ_link,t) over the cell's sampling blocks"},
         "gates": {"missing": NO_GATES}}
     if phase_s is None:
         return g | {"pooled": pooled | {"periods": {"missing": why}}}
@@ -906,11 +907,11 @@ def sampled(row: Any, verdict: Mapping[str, Any], phase_s: Fraction | None, why:
         **{where: {"rule": POOLED_RULES["links"], "sources": v["sources"]} for where, v in refs.items()}}}
     for name, seconds in LB.PERIODS.items():
         w = math.ceil(Fraction(seconds) / phase_s)
-        pooled[name] = {"seconds": seconds, "windows": w}
+        pooled[name] = {"seconds": seconds, "sampling_blocks": w}
         for where, L in links.items():
             blocks = w * L * n
             f = min(L * horizon(q, delta, L), blocks)
-            pooled[name][where] = {"links": L, "windows": w * L, "proof_blocks": blocks, "incorrect_at_most": f,
+            pooled[name][where] = {"links": L, "sampling_blocks": w * L, "proof_blocks": blocks, "incorrect_at_most": f,
                                    "share": float(Fraction(f, blocks)), "how": "scaled",
                                    "rule": "window-to-period" if where == "node" else where}
     return g | {"pooled": pooled}
@@ -1364,14 +1365,14 @@ def guarantee(g: Mapping[str, Any] | None) -> Any:
     ``missing`` or ``error`` where it states none; None for a record that has none."""
     if not isinstance(g, Mapping):
         return None
-    if "window" not in g:
+    if "per_window" not in g:
         return {k: g[k] for k in ("missing", "error") if k in g}
     p = g["pooled"]
     pooled = p if "q" not in p else {"incorrect_at_most": p["incorrect_at_most"]} | (
         {"periods": p["periods"]} if "periods" in p else {
             name: {where: {k: p[name][where][k] for k in ("incorrect_at_most", "share")}
                    for where in ("node", "datacenter", "world")} for name in LB.PERIODS})
-    return {"window": {k: g["window"][k] for k in ("epsilon", "delta", "units", "law")}, "pooled": pooled}
+    return {"per_window": {k: g["per_window"][k] for k in ("epsilon", "delta", "units", "law")}, "pooled": pooled}
 
 
 def cells(p: Mapping[str, Any] | None) -> Any:
