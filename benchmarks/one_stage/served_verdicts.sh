@@ -112,7 +112,10 @@
 #     REPROOF_COPY's copy of the serve dir's, NODE:/PATH, checked against REPROOF_LISTING, its listing kept off $OUT;
 #     and its checks of the auditor's inputs, CERTIFIER_KEY's record of the network certifier and SITE_REGISTRATION's
 #     registration of the deployment, both the auditor's and never the prover's node's, without which the network
-#     certifier's verdict is not established; and, where the composite wrote the inference-only case, where its α and Γ
+#     certifier's verdict is not established; its check that the files remote's sampled proofs case registers are the
+#     ones its params name by SHA-512 (the serve dir's private/sampled-proofs/case.json, where the composite wrote it),
+#     without which neither that verdict nor a composite's that reads the case is; and, where the composite wrote the
+#     inference-only case, where its α and Γ
 #     came from, its private policy.json's read: off the run's own division, or ALPHA and GAMMA, never a registered
 #     policy); its ONSITE line gates nothing.
 #     PRODUCT (default onsite) is the product the run composes: onsite every subprotocol; remote sampled proofs and PoUW
@@ -253,8 +256,9 @@
 # checks run its python (`uv sync --all-packages --extra torch-cpu`, its log sync.log), makes no window commit (it holds the served
 # node's, the tie's or untied step 6's, in the copy, as there), runs the split certifier's chain and period
 # check after V3c's audit (their answer and case in its own $OUT/pieces/certifier), then removes the window's circuit
-# files, which nothing after reads but the composite those its cases name (a v2 case's, the network certifier's period's;
-# `drop_circuits`, its V3C-CIRCUITS line), then runs
+# files, which nothing after reads but the composite those its cases name (a v2 case's, which the onsite record reads
+# too, and the network certifier's period's; `drop_circuits`, its V3C-CIRCUITS line; those after the onsite record),
+# then runs
 # REPROOF_CMD where it is set (`bash -c CMD _ D K VW` in TREE, its log the serve dir's private/reproof.log and its last
 # line the REPROOF line: a command that copies the serve dir's re-proof inputs off the node and writes REPROOF_LISTING, and fails the
 # follow-on where it fails; it runs whatever V3c's audit gave, a failed audit's inputs kept as well), composes the
@@ -1045,8 +1049,8 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
   rec=${PIPESTATUS[0]}
   [ -n "$CASE_ONLY" ] || [ -z "${COMPOSITE-1}" ] \
     || TPY=$TPY SERVED_NODE=$SERVED_NODE bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
-  drop_circuits all || dc=1
   [ -z "${ONSITE:-}" ] || onsite_record
+  drop_circuits all || dc=1
   echo "---- verdicts"; cat "$OUT/verdicts.txt"
   [ "$vrc" = 0 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ] && [ "$rp" = 0 ] && [ "$dc" = 0 ]
 }
@@ -1055,8 +1059,9 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
 # copies under circuits/), recomposable from the public registration and the templates, the audit's window/summary.json
 # naming each by the SHA-512 its sessions were held to: removed once the period check has read them, before the re-proof
 # copy (whose inputs name the circuit by that pin alone) and the node's next window; with $1 all, also a file the audit's
-# v2 case names (window/case-v2.json's blobs) or the network certifier's case does (its period's circuits/ copies, which
-# $OUT/pieces/certifier/case.json's circuits name), each of which the composite reads first.
+# v2 case names (window/case-v2.json's blobs), which the composite and the onsite record read first, or the network
+# certifier's case does (its period's circuits/ copies, which $OUT/pieces/certifier/case.json's circuits name), which the
+# composite reads first.
 drop_circuits() {
   local said
   said=$("$SAY_PY" - "$VW" "${1:-}" "$OUT/pieces/certifier/case.json" <<'EOF'
@@ -1089,13 +1094,14 @@ EOF
   [ -z "$said" ] || say "V3C-CIRCUITS removed, the window's circuit files, recomposable and named by their pins: $said"
 }
 onsite_record() {  # the onsite record ($OUT/record/onsite.json, the header's), which gates nothing
-  local io=() c=$D/private/inference-only
+  local io=() sp=() c=$D/private/inference-only s=$D/private/sampled-proofs/case.json
   [ ! -f "$c/case.json" ] || io=(--inference-only-case-policy "$c/policy.json")
+  [ ! -f "$s" ] || sp=(--sampled-proofs-case "$s")
   "$TPY" benchmarks/one_stage/onsite_record.py "$OUT" --window-steps "$WINDOW_STEPS" --max-tokens "$MAX_TOKENS" \
     ${ADVICE_CHARGE:+--advice-charge "$ADVICE_CHARGE"} \
     ${REPROOF_COPY:+--reproof-copy "$REPROOF_COPY"} ${REPROOF_LISTING:+--reproof-listing "$REPROOF_LISTING"} \
     ${CERTIFIER_KEY:+--certifier-key "$CERTIFIER_KEY"} ${SITE_REGISTRATION:+--site-registration "$SITE_REGISTRATION"} \
-    "${io[@]}" ${H1_TIE:+--h1-tie} 2>&1 | publish_lines
+    "${io[@]}" "${sp[@]}" ${H1_TIE:+--h1-tie} 2>&1 | publish_lines
 }
 
 advice_charge() {  # the test run's every closed window's advice and advice_charge.py's record of it (the header's)

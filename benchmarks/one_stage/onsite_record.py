@@ -3,7 +3,8 @@ record needs, the network certifier's bound term by term, and that bound over ea
 node, a datacenter and the world. It reads only the run's public $OUT and decides nothing:
 
     python benchmarks/one_stage/onsite_record.py OUT [--window-steps S --max-tokens M] [--advice-charge FILE]
-        [--certifier-key RECORD --site-registration FILE] [--inference-only-case-policy FILE] [--to FILE]
+        [--certifier-key RECORD --site-registration FILE] [--inference-only-case-policy FILE]
+        [--sampled-proofs-case FILE] [--to FILE]
     python benchmarks/one_stage/onsite_record.py --beside RECORD [RECORD ...] --to FILE
 
 `served_verdicts.sh` runs it after its composite step on a run with the network certifier's piece, and its one
@@ -36,9 +37,12 @@ run wrote no answer, ``missing`` and ``why``:
 
 While `certifier-key` is open (`PREMISES`, `KEY_OPEN`), an accepted network certifier's verdict is ``not
 established``, its Lean answer's accept beside it (``answer``), and its bound conditional on it by name; so is it
-where `auditor-listing` doesn't hold (`LISTING_UNMET`), with no bound. Where the composite of record read the period's
-circuit files by path (its composite.json's ``circuit_files``, `BY_PATH`), the verdict is the composed executable's,
-and while `composite-congruence` is open its accept and its bound are conditional on it by name. Sampled proofs'
+where `auditor-listing` doesn't hold (`LISTING_UNMET`, `FILES_UNMET`), with no bound, and where its registered-files
+condition doesn't, so is the accepted verdict of remote's composite and of the composite of record where it reads
+remote's sampled proofs case; where that case's params name no public file, so is sampled proofs' (`PUBLIC_UNBOUND`).
+Where the composite of record read the period's circuit files by path (its composite.json's ``circuit_files``,
+`BY_PATH`), the verdict is the composed executable's, and while `composite-congruence` is open its accept and its bound
+are conditional on it by name. Sampled proofs'
 ``credit`` (`CREDIT`) names the drawn members it credits, those whose --registered file the audit completed at the
 window's committed roots and whose Lean verdict accepted it reporting exactly its reads (the audit's published record,
 `AUDIT`), and lists every other drawn member as not credited, by name, with why; ``missing`` where the record states no
@@ -60,7 +64,10 @@ holds and the lock holds that guarantee taking them. The registration's link fig
 measured, and nothing here reads them; that the node has no egress but the uplink the network certifier splits, which
 the registration asserts, is the auditor's placement under trusted-host (`STANDING`), which no file establishes.
 `auditor-listing` (`auditor_listing`): each circuit file the period lists is, by SHA-512, the file its sessions were
-verified against, an audit's (`PERIOD`) or the scan's (`SCAN`).
+verified against, an audit's (`PERIOD`) or the scan's (`SCAN`); and the remote theorem's registered-files condition
+(`registered_files`): each file remote's sampled proofs case (``--sampled-proofs-case``) registers, the circuit file and
+the public file, is by SHA-512 the one its params θ name (proofs.circuit, proofs.public), θ held to the params each
+composite that reads the case states, the files hashed here and never read off the evidence.
 
 **Sampled proofs' guarantee** (``sampled_proofs``, `SAMPLED`), from its accepted row's answer, else ``missing``: what
 its draw establishes, ε at δ, per window (``per_window``: its bound at its profile's δ over the window's n proof blocks) and
@@ -431,6 +438,10 @@ RESTATE_TIED = ("to be restated before any pin of it counts, and never a dischar
 #: PeriodLeakRegistered, a property of the period check's acceptance, by its name in `LOCKS`
 PERIOD_REGISTERED = "Properties.NetworkPeriodLeak.periodLeakRegistered"
 AUDITOR_RECORD, AUDITOR_LISTING = "auditor-record", "auditor-listing"
+#: remote's sampled proofs case (`served_cases.SAMPLED`), whose params θ the remote theorem's registered-files condition
+#: reads (`registered_files`)
+SAMPLED_ID = "verity/sampled-proofs/v1"
+REGISTERED_FILES = "registered-files"
 #: the auditor's configuration of the run, each an obligation the record checks on the run's inputs (``checked``), by
 #: the name `RESTS_ON`'s takes and `PREMISES` give it: never a named assumption, and never charged
 CHECKED = {
@@ -457,8 +468,18 @@ CHECKED = {
                       "it is. It compares SHA-512s and "
                       "doesn't re-hash the files: the period's listing and those records are the auditor's own outputs "
                       "in OUT. It holds where the period lists none, and not where the run has no case of the period "
-                      "to say what it lists, or no record of the files it lists. Where it doesn't hold the network "
-                      "verdict is not established and there is no bound (`LISTING_UNMET`)"),
+                      "to say what it lists, or no record of the files it lists. With it, the remote theorem's "
+                      f"registered-files condition on its sampled leg (``registered_files``, `registered_files`): each "
+                      f"file remote's sampled proofs case ({SAMPLED_ID}, --sampled-proofs-case) registers where its "
+                      "params θ name a digest is, by SHA-512, that digest's: its first blob, the circuit file, θ's "
+                      "proofs.circuit, and its second, the public file, θ's proofs.public. θ is held by SHA-512 over its "
+                      "canonical JSON to the params each of the run's composites that reads the case states for it "
+                      "(params_sha512), and the files are hashed here, never read off the evidence, whose digests are "
+                      "the prover's. It holds where no composite of the run reads the case. Where either doesn't hold "
+                      "the network verdict is not established and there is no bound (`LISTING_UNMET`, `FILES_UNMET`), "
+                      "and where the registered-files condition doesn't, neither is the verdict of a composite that "
+                      "reads the case; where θ names no proofs.public, the public file isn't bound, and sampled proofs' "
+                      "verdict is not established (`PUBLIC_UNBOUND`)"),
 }
 #: the guarantees the tight K rests on, by their names in `LOCKS`: PeriodLeakRegistered's count, at the values the
 #: registration opens at its registered inputs, is K's; PeriodLeakAccepted's is the same count at the trace's values
@@ -668,6 +689,14 @@ KEY_OPEN = (f"{CERTIFIER_KEY} is open: the lock doesn't hold PeriodLeakRegistere
 LISTING_UNMET = (f"{AUDITOR_LISTING} doesn't hold (``checked``): a circuit file the period lists isn't, by SHA-512, one "
                  "the run published as the file its audit's sessions were verified against, so the Lean answer's "
                  "accept (``answer``) establishes no network verdict, and the record states no bound")
+FILES_UNMET = (f"{AUDITOR_LISTING}'s {REGISTERED_FILES} condition doesn't hold (``checked``): a file remote's sampled "
+               "proofs case registers isn't, by SHA-512, the one its params θ name, or the run can't say, so a Lean "
+               "accept (``answer``) establishes no verdict of the network certifier or of a composite that reads that "
+               "case, and the record states no bound")
+PUBLIC_UNBOUND = ("the public file isn't bound on this form: remote's sampled proofs case's params θ name no "
+                  "proofs.public, so the remote theorem's registered-files condition binds the circuit file alone, and "
+                  "sampled proofs' accept (``answer``) establishes no verdict. The evidence's digest of the public file, "
+                  "the prover's, is never read in its place")
 #: why a premise a guarantee states is open where no run's check was read
 NOT_CHECKED = "no run's inputs were checked"
 #: each theorem of `PREMISES`' ``discharged_by`` that has been read, by its name in `LOCKS`, as `RESTS_ON` gives a
@@ -1485,6 +1514,48 @@ def auditor_listing(out: Path, case: Any) -> dict[str, Any]:
     return res | {"holds": True}
 
 
+def registered_files(found: Mapping[str, tuple[str, dict[str, Any]]], case: Path | None) -> dict[str, Any]:
+    """`CHECKED`'s auditor-listing, its registered-files condition: the files remote's sampled proofs case at ``case``
+    (`SAMPLED_ID`'s, ``{"params", "blobs", ...}``) registers, the circuit file and then the public file
+    (`proofs.evidence_v2`'s order), are by SHA-512 those its params θ name (``proofs.circuit``, ``proofs.public``), θ
+    held by SHA-512 to the params each composite in ``found`` that reads the case states for it. ``holds``,
+    ``read_by``, those composites' ids, ``compared``, the files θ names, ``why`` where it doesn't hold, and ``unbound``
+    (`PUBLIC_UNBOUND`) where θ names no public file."""
+    import composite as CO
+
+    stated = {p: c.get("params_sha512") for p, (_, doc) in found.items() for c in doc.get("cases") or ()
+              if c.get("id") == SAMPLED_ID}
+    res: dict[str, Any] = {"holds": False, "read_by": sorted(stated)}
+    if not stated:
+        return res | {"holds": True}
+    if case is None:
+        return res | {"why": f"the run's composites read {SAMPLED_ID}'s case, and the run gave no --sampled-proofs-case"}
+    try:
+        doc = json.loads(case.read_bytes())
+        theta, blobs, proofs = doc["params"], [Path(b) for b in doc["blobs"]], dict(doc["params"]["proofs"])
+    except (OSError, KeyError, TypeError, ValueError) as e:
+        return res | {"why": f"--sampled-proofs-case isn't a case whose params name proofs and which names its blobs: "
+                             f"{type(e).__name__}"}
+    if set(stated.values()) != {hashlib.sha512(CO.canonical(theta)).hexdigest()}:
+        return res | {"why": f"--sampled-proofs-case's params aren't, by SHA-512, those each composite that reads "
+                             f"{SAMPLED_ID}'s case states (its params_sha512)"}
+    res["compared"] = [h for h in ("circuit", "public") if h in proofs]
+    if "public" not in proofs:
+        res["unbound"] = PUBLIC_UNBOUND
+    for i, half in enumerate(("circuit", "public")):
+        if half == "public" and half not in proofs:
+            continue
+        try:
+            with open(blobs[i], "rb") as f:
+                got = hashlib.file_digest(f, "sha512").hexdigest()
+        except (IndexError, OSError) as e:
+            return res | {"why": f"the case's {half} file (its blob {i}) can't be read: {type(e).__name__}"}
+        if got != proofs.get(half):
+            return res | {"why": f"the {half} file the case registers (its blob {i}) isn't, by SHA-512, θ's "
+                                 f"proofs.{half}"}
+    return res | {"holds": True}
+
+
 def of_record(public: Mapping[str, Any], ell: Sequence[int], K: int, prem: Mapping[str, Any],
               conditional: Sequence[str] = ()) -> dict[str, Any]:
     """The figure of record (`OPEN`) from the period's public, the audits' caps ``ell``, the tight K's premises
@@ -1584,12 +1655,13 @@ def alpha_gamma(path: Path | None) -> dict[str, str]:
 def record(out: Path, advice_charge: Path | None = None, copy: str | None = None,
            listing: Path | None = None, serving: tuple[int, int] | None = None, tie: bool = False,
            certifier_key: Path | None = None, site_registration: Path | None = None,
-           case_policy: Path | None = None) -> dict[str, Any]:
+           case_policy: Path | None = None, sampled_case: Path | None = None) -> dict[str, Any]:
     """OUT's onsite record (module docstring), with the re-proof inputs' ``copy`` and its ``listing`` where given
     (`reproof`, ``tie`` where H1_TIE ties the window), the run's ``serving`` settings, S and MAX_TOKENS, where its
     caller states them (`SERVING`), the auditor's inputs the run's checks read, its ``certifier_key`` record and its
-    ``site_registration`` (`auditor_record`), and the inference-only case's private policy.json, ``case_policy``
-    (`alpha_gamma`); FileNotFoundError where `served_verdicts.py record` wrote no report."""
+    ``site_registration`` (`auditor_record`), the inference-only case's private policy.json, ``case_policy``
+    (`alpha_gamma`), and remote's sampled proofs case, ``sampled_case`` (`registered_files`); FileNotFoundError where
+    `served_verdicts.py record` wrote no report."""
     report = json.loads((out / "record" / "verdicts.json").read_text())
     if report.get("format") != EXTENDS:
         raise ValueError(f"record/verdicts.json is {report.get('format')!r}, not {EXTENDS}")
@@ -1616,22 +1688,32 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     case, no_case = period_case(out)
     composed = next((c.get("params_sha512") for c in found[composite][1].get("cases") or ()
                      if c.get("id") == NETWORK), None) if composite in found else None
+    listed = auditor_listing(out, case) if case is not None else {
+        "is": CHECKED[AUDITOR_LISTING], "holds": False, "why": f"no case lists the period's audits: {no_case}"}
+    files = registered_files(found, sampled_case)
     checked = {AUDITOR_RECORD: auditor_record((case or {}).get("params"), composed, certifier_key, site_registration),
-               AUDITOR_LISTING: auditor_listing(out, case) if case is not None else {
-                   "is": CHECKED[AUDITOR_LISTING], "holds": False, "why": f"no case lists the period's audits: {no_case}"}}
+               AUDITOR_LISTING: listed | {"holds": listed["holds"] and files["holds"], "registered_files": files}
+               | ({"why": files["why"]} if listed["holds"] and not files["holds"] else {})}
     by_path = composite in found and found[composite][1].get("circuit_files") == BY_PATH
     prem = premises(LOCKS, checked=checked, by_path=by_path)
     drawn, draws = coins(out), chain_draws(out)
     cond = [COINS_OPEN] if drawn["open"] else []
     if cond:
         v["sampled proofs"]["conditional_on"] = cond
+    unlisted = [LISTING_UNMET] * (not listed["holds"]) + [FILES_UNMET] * (not files["holds"])
     unmet = {n: why for n, why, x in ((CERTIFIER_KEY, KEY_OPEN, CERTIFIER_KEY in prem["open"]),
-                                      (AUDITOR_LISTING, LISTING_UNMET, not checked[AUDITOR_LISTING]["holds"])) if x}
+                                      (AUDITOR_LISTING, "; ".join(unlisted), bool(unlisted))) if x}
     if nv["verdict"] == "accept" and unmet:
         v["the network certifier"] = nv | {"verdict": NOT_ESTABLISHED, "answer": nv["verdict"], "open": list(unmet),
                                            "why": "; ".join(unmet.values())}
     elif nv["verdict"] == "accept" and CONGRUENCE in prem["open"]:
         v["the network certifier"] = nv | {"conditional_on": [CONGRUENCE]}
+    withheld = [(k, FILES_UNMET) for k, p in (("remote", REMOTE), ("onsite", composite))
+                if not files["holds"] and p in files["read_by"]]
+    withheld += [("sampled proofs", PUBLIC_UNBOUND)] * ("unbound" in files)
+    for k, why in withheld:
+        if v[k]["verdict"] == "accept":
+            v[k] = v[k] | {"verdict": NOT_ESTABLISHED, "answer": "accept", "open": [REGISTERED_FILES], "why": why}
     accepted = nv["verdict"] == "accept" and AUDITOR_LISTING not in unmet
     open_draws = ["sampled proofs' draw"] * bool(cond) + (draws["open"] if accepted else [])
     drawn |= {"open": bool(open_draws), "open_draws": open_draws, "draws": draws}
@@ -1818,6 +1900,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                     help="the inference-only case's private policy.json under the serve dir (served_cases.py's, not "
                          "$OUT/inference-only-policy.json), of which only its read is read: where the case's α and Γ "
                          "came from, the run's ALPHA and GAMMA where it doesn't exist (`alpha_gamma`)")
+    ap.add_argument("--sampled-proofs-case", type=Path, metavar="FILE",
+                    help=f"remote's sampled proofs case under the serve dir ({SAMPLED_ID}'s, served_cases.py's "
+                         "private/sampled-proofs/case.json), whose registered files auditor-listing holds to its "
+                         "params' digests (`registered_files`)")
     ap.add_argument("--to", type=Path,
                     help="the record's path (default OUT/record/onsite.json); with --beside, where the records go "
                          "beside each other")
@@ -1826,7 +1912,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         if a.to is None or a.h1_tie or any(x is not None for x in (a.out, a.advice_charge, a.reproof_copy,
                                                                      a.reproof_listing, a.window_steps, a.max_tokens,
                                                                      a.certifier_key, a.site_registration,
-                                                                     a.inference_only_case_policy)):
+                                                                     a.inference_only_case_policy,
+                                                                     a.sampled_proofs_case)):
             ap.error("--beside reads the records written, with --to alone: where they go beside each other")
         try:
             doc = beside(a.beside)
@@ -1847,7 +1934,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     serving = None if a.window_steps is None else (a.window_steps, a.max_tokens)
     try:
         rec = record(a.out, a.advice_charge, a.reproof_copy, a.reproof_listing, serving, a.h1_tie,
-                     a.certifier_key, a.site_registration, a.inference_only_case_policy)
+                     a.certifier_key, a.site_registration, a.inference_only_case_policy, a.sampled_proofs_case)
     except FileNotFoundError as e:
         print(f"ONSITE: not written: {e.filename} is missing", file=sys.stderr)
         return 1
