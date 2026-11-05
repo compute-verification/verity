@@ -87,7 +87,7 @@ structure CoinOpening where
   path : Array ByteArray
   deriving BEq, Inhabited
 
-/-- The session's `k` coins over `blocks` blocks, committed on the device before the session and released after it. -/
+/-- The session's `k` coins over `blocks` blocks, committed before the session. -/
 structure CoinTree where
   session : ByteArray
   blocks : Nat

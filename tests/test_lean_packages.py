@@ -74,9 +74,10 @@ def test_one_mathlib():
 #: a partition once a derived circuit's registration built
 #: its one-block partition (`RegisteredCircuit.ofCircuit`), the six C-Flock statements whose claim or verifier read
 #: lies in a module of `trees`' `except`, once the rule read through those, and C-Flock's `LoopInnerRound0Own`, which
-#: reads a claim, from a PR on `next`; and the two exclusion bounds a definition hides, once `Facts.lean`'s `chain`
-#: recorded the bound it ends at
-UNWITNESSED = {"Security": 562, "Security/Properties": 234, "verity/core/service/flock": 8}
+#: reads a claim, from a PR on `next`; the two exclusion bounds a definition hides, once `Facts.lean`'s `chain`
+#: recorded the bound it ends at; and C-Flock's three joint-sample statements (`JointSampledV5`, `JointShareV5`,
+#: `JointHorizonV5`), whose acceptance is flock-verify's as `SampledKSLiveV5`'s is, until they read a verifier record
+UNWITNESSED = {"Security": 565, "Security/Properties": 234, "verity/core/service/flock": 8}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -234,7 +235,7 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: the 392 premises of the lemmas and completeness theorems the lock stopped listing and the guarantees deleted with the
 #: falsified conjectures they rest on; a renamed or restated premise counts twice, under both texts, until `--update`
 #: drops the one no tree prints
-INLINE = {"Security": 1553, "Security/Properties": 528, "verity/core/service/flock": 6}
+INLINE = {"Security": 1567, "Security/Properties": 528, "verity/core/service/flock": 6}
 
 
 def test_the_inline_list_only_shrinks():

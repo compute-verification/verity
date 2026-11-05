@@ -5,14 +5,14 @@ public import Proofs.NetworkCertifier.PeriodSum
 public import Mathlib.Analysis.SpecialFunctions.Log.Basic
 
 /-!
-# The incorrect proof blocks over a monitoring period: the escapes multiply
+# The wrong units over a monitoring period: the escapes multiply
 
-A uniform `k`-subset of `n` blocks misses a set of `f` blocks with probability `C(n - f, k) / C(n, k)`, at most
-`(1 - k/n)^f` (`choose_sub_le`, `pr_disjoint_le`). Over windows on independent coins, each with its incorrect
-set fixed before its own draw, every draw missing its window's set while the sets hold `F` blocks in total has
+A uniform `k`-subset of `n` units misses a set of `f` units with probability `C(n - f, k) / C(n, k)`, at most
+`(1 - k/n)^f` (`choose_sub_le`, `pr_disjoint_le`). Over windows on independent coins, each with its wrong
+set fixed before its own draw, every draw missing its window's set while the sets hold `F` units in total has
 probability at most `r^F` when each window's miss has probability at most `r` to the power of its set's size
 (`pr_adaptive_le`, by induction over the windows: the first window's coins, then the rest's at each of them). With
-each window's soundness error added by a union bound, that is `horizonIncorrectBlocks`.
+each window's soundness error added by a union bound, that is `horizonWrongUnits`.
 -/
 
 @[expose] public section
@@ -223,8 +223,8 @@ theorem pr_adaptive_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0 : 0
 
 /-! ### The monitoring period -/
 
-/-- **The incorrect proof blocks over a monitoring period**: `Guarantees.PooledIncorrectBlocksLe`. -/
-theorem horizonIncorrectBlocks : Guarantees.PooledIncorrectBlocksLe := by
+/-- **The wrong units over a monitoring period**: `Guarantees.PooledWrongUnitsLe`. -/
+theorem horizonWrongUnits : Guarantees.PooledWrongUnitsLe := by
   intro m Ω _ _ n k draw hcard hunif W hW acc ε hsound q hq0 hq1 hq F
   refine ⟨?_, fun δ hδ hlog => ?_⟩
   · classical
