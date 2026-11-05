@@ -12,7 +12,7 @@ The policy exploits an asymmetry: an inference episode (a chat session) reads li
 
 The developer represents its computations as Boolean circuits that capture their numerical semantics down to the silicon (the logical circuit need not match the physical one's structure). Verity provides a [Python API](verity/README.md) for building and querying massive Boolean circuits, and a library of primitive circuits for NVIDIA accelerators' low-level semantics, tested with the [Hawkeye](https://arxiv.org/abs/2603.20421) methodology.
 
-The subprotocols run composed in composite protocols ([`README.md`](README.md) lists them): onsite, for an auditor with devices at the datacenter, composes sampled proofs, the inference-only policy, PoUW, PoUS, [PoUB](verity/core/protocols/remote_bandwidth/README.md) over PoUS's store, network certification and the wipe; remote, for an auditor with none, sampled proofs, the policy and PoUW; remote with the network certifier adds network certification to remote's, with PoUW or without.
+The subprotocols run in composite protocols ([`README.md`](README.md) lists them): onsite, for an auditor with devices at the datacenter, composes sampled proofs, the inference-only policy, PoUW, PoUS, [PoUB](verity/core/protocols/remote_bandwidth/README.md) over PoUS's store, network certification and the wipe; remote, for an auditor with none, sampled proofs, the policy and PoUW; remote with the network certifier adds network certification, with PoUW or without.
 
 ## How an audit works
 
