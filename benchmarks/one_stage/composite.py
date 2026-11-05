@@ -149,16 +149,13 @@ def compose(product: str, pieces: Sequence[dict[str, Any]]) -> tuple[dict, bytes
     return params, commitment, canonical(evidence), blobs
 
 
-def network_answer(answer: str | None, pieces: Sequence[dict[str, Any]]) -> bytes | None:
-    """The network certifier's period's own answer, read off the product's accepted answer line ``answer``; none where
-    the product didn't accept or has no network certifier's case."""
-    try:
-        a = json.loads(answer) if answer else {}
-    except ValueError:
-        return None
+def network_answer(answer: str, pieces: Sequence[dict[str, Any]]) -> bytes | None:
+    """The network certifier's period's own answer, read off the product's answer line ``answer``, which `outcome` read
+    as accepted; none where the product has no network certifier's case."""
     cert = [p for p in pieces if p["id"] == NETWORK]
-    if not isinstance(a, dict) or a.get("verdict") != "accept" or not cert:
+    if not cert:
         return None
+    a = json.loads(answer)
     return canonical({"commitment": cert[0]["digest"].hex(), "profile": a["profile"][NETWORK], "protocol": NETWORK,
                       "public": a["public"][NETWORK], "reason": None, "verdict": "accept"})
 
@@ -257,9 +254,9 @@ def run(a: argparse.Namespace) -> int:
         p = subprocess.run(cmd, capture_output=True, text=True, check=False)
         answer = p.stdout.strip().splitlines()[-1] if p.stdout.strip() else None
         write_private(priv, {"answer.json": f"{answer or ''}\n".encode(), "check.err": p.stderr.encode()})
-        if (net := network_answer(answer, found)) is not None:
-            write_private(priv, {"network-answer.json": net + b"\n"})
         verdict = outcome(PRODUCTS[a.product], answer)
+        if answer and verdict["verdict"] == "accept" and (net := network_answer(answer, found)) is not None:
+            write_private(priv, {"network-answer.json": net + b"\n"})
         lines.append(line("VERDICT", verdict) + ("" if answer else f" (exit {p.returncode}; its stderr is in --private-out)"))
         rc = p.returncode
     lines += [f"EXCEPTION {x}" for x in exceptions(a.product)]
