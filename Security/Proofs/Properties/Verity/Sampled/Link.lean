@@ -328,8 +328,9 @@ theorem checkBlobsAt_link {p : _root_.SampledProofs.OneStageZk.Params} {c : _roo
     rw [hsch0]
     exact ⟨_, rfl⟩
   have hrt : _root_.SampledProofs.OneStageZk.rootBTables p.own bs record = #[(tags0.table, some n)] := by
+    obtain ⟨r, d, hr1, hd1, rfl⟩ := hrd
     unfold _root_.SampledProofs.OneStageZk.rootBTables
-    simp only [htab, ht, hc, hpb, hrd, hst, bind, Except.bind, pure, Except.pure, Except.toOption,
+    simp only [htab, ht, hc, hpb, hr1, hd1, hst, bind, Except.bind, pure, Except.pure, Except.toOption,
       Array.mapIdx_singleton, Option.bind_some, Array.getElem?_eq_getElem h0, hn]
   have h1 := treesHeld_one hs hb hr hth
   rw [hrt] at h1
