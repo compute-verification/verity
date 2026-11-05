@@ -10,7 +10,10 @@
 
 `.gitattributes` names this driver for every `lean-audit.json`, and git runs it when both sides changed the file. A record is
 a map of entries by name: the guarantees, the modules under `reads`, the assumptions, the open premises, the domain
-hypotheses, the dependencies, and the policy's own sections. Each side's change to an entry (added, changed or removed) applies. Under `reads`, which two branches adding
+hypotheses, the dependencies, and the policy's own sections. Each side's change to an entry (added, changed or removed) applies.
+An entry sits in one section of a group (`EXCLUSIVE`: a claim's `claims.witnesses`, `not`, `generic`; a premise's
+`assumptions`, `domain`, `open`): one side moved between them from the base is where that side put it, and one both sides
+placed differently refuses, naming both sections (`exclusive`). Under `reads`, which two branches adding
 guarantees that read one module both change, the module's definitions merge the same way, and its digest is recomputed
 from the merged definitions (`audit.module_digest`). A side written before guarantees were called that (`pins`) is read
 under today's names (`audit.as_guarantees`), and a side whose `reads` groups still list their readers (`audit.READER_KEYS`)
@@ -116,6 +119,9 @@ MISSING = object()
 #: the `check.py` it loads
 MAIN = "origin/main"
 RULES = ("tools/verity/lean/merge.py", "tools/verity/lean/check.py")
+#: sections an entry sits in at most one of (`exclusive`), by the section holding them (None: the record): a claim is
+#: witnessed, excused or generic, and a premise is a named assumption, a domain hypothesis or open
+EXCLUSIVE = (("claims", ("witnesses", "not", "generic")), (None, ("assumptions", "domain", "open")))
 
 
 def one(path: str, o, a, b, why: list[str]):
@@ -402,6 +408,37 @@ def layers(o: dict, a: dict, b: dict, why: list[str]) -> dict:
     return out
 
 
+def exclusive(base: dict, ours: dict, theirs: dict, why: list[str]) -> tuple[dict, dict]:
+    """Ours and theirs with each entry of an `EXCLUSIVE` group where the side that moved it put it: an entry one side moved
+    between the group's sections from the base leaves the sections the other side still has it in, whatever that side
+    changed there (`Claims.ZKOutLeak`, which `main` moved from `claims.not` to `claims.generic`, kept under both beside a
+    branch's older reason, and the Lean check refuses an entry in two sections).  An entry both sides placed differently,
+    each away from the base, is refused, naming both sections.  A side that removed an entry places it nowhere, and the
+    sections merge it as any removal."""
+    sides = [base, ours, theirs]
+    for parent, group in EXCLUSIVE:
+        def held(rec: dict) -> dict:
+            top = rec if parent is None else rec.get(parent)
+            return {s: top[s] if isinstance(top, dict) and isinstance(top.get(s), dict) else {} for s in group}
+        o, a, b = (held(s) for s in sides)
+        for n in sorted({n for side in (o, a, b) for s in group for n in side[s]}):
+            x, y, z = (tuple(s for s in group if n in side[s]) for side in (o, a, b))
+            if y == z or () in (y, z):
+                continue
+            if x in (y, z):
+                stale, kept = (1, z) if y == x else (2, y)
+                sides[stale] = rec = dict(sides[stale])
+                if parent is not None:
+                    rec[parent] = rec = dict(rec[parent])
+                for s in set(x) - set(kept):
+                    rec[s] = {k: v for k, v in rec[s].items() if k != n}
+            else:
+                where = " and ".join(f"{s}[{n}]" if parent is None else f"{parent}.{s}[{n}]" for s in (*y, *z))
+                why.append(f"{n}: ours put it under {', '.join(y)} and theirs under {', '.join(z)}, from "
+                           f"{', '.join(x) or 'neither'} in the base ({where}): it sits in one of {', '.join(group)}")
+    return sides[1], sides[2]
+
+
 def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = None) -> tuple[dict, list[str]]:
     """(the merged record, why it is refused: empty when it merged).  A pure function of the three records.  ``candidate``
     collects the records the build determines (`RECORD_DIFFERENCE`'s kinds: guarantees' records, `reads`, assumptions'
@@ -409,6 +446,7 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
     regenerates; and the `shape.inline` premises `held` keeps."""
     why: list[str] = []
     candidate = [] if candidate is None else candidate
+    ours, theirs = exclusive(base, ours, theirs, why)
     out = {}
     for k in keys("", ours, theirs):
         o, a, b = base.get(k, MISSING), ours.get(k, MISSING), theirs.get(k, MISSING)
