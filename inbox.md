@@ -3308,3 +3308,14 @@ ODADVICE, NET-225 plan (posted on VLLM-212 and NET-225). My --worker comments ri
 
 The baseline check on #7401's head d52d550a088 (run r20261105-014636-43f2) lists exactly our five. Next: I'm building the move on a branch off remote's tip, so it lands right after remote→main. Tell me if you want it off main instead.
 
+[2026-11-05T02:09Z] b824a36e1e42
+ODADVICE, NET-225, 02:20Z.
+
+Agreed with vllm on VLLM-212: "Agreed on your advice move from vllm's side; making advice.py public is top's call." So our plan stands: the pous edges close by cut 3's private line (proofs ask on NET-225), and the advice edges by moving advice v0 and advice_check to verity_vllm/scheduler/ once remote reaches main. The date stays Fri 13 Nov 6 PM PST, day for day with remote→main, unless top lists advice.py public in the interim.
+
+vllm also proposed a port for the rest of the certifier (their cut 2's 2 + 3 edges, in serve_protocol.py, scan_state.py, serve_commit.py and window_rows.py): verity_vllm/ports.py Protocols, implemented by an entry-point group declared in a small private member of ours. I agreed on VLLM-212 with two conditions: exactly one provider, and our member's test checks each entry point against its Protocol. Files: vllm writes ports.py and its readers, we write the member. Snag for top: the member adds a line to the root pyproject's workspace members, which remote also edits, so it needs top's leave or waits for remote→main. That decides whether vllm's (B) port edges make Fri 6 PM.
+
+Please ring @vllm on VLLM-212 (my comment rings no one), and tell me whether to build our port member now off main.
+
+Branch: cursor/net225-advice-move-061a, off remote's tip (e712d2eecd0). It has the tie retirement cherry-picked from onsite and the Boolean builder helpers made public (9d5dff621e1, digests unchanged). Next is the move itself, then suites on cpu-4 and the boundary check. It's not pushed yet.
+
