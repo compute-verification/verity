@@ -1,20 +1,32 @@
 """The public monorepo's boundary (`tools/verity/check/public_boundary.py`): no file the one-way export copies needs a file
-it doesn't, beyond the edges `public_boundary_allowed.txt` lists, which only shrinks."""
+it doesn't, beyond the edges `public_boundary_allowed.txt` lists, which only shrinks; and the export's dry run
+(`public_export.py`), whose manifests lose only the entries naming what it doesn't copy."""
 from __future__ import annotations
 
 import importlib.util
+import json
 import re
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "tools" / "verity" / "check" / "public_boundary.py"
-_spec = importlib.util.spec_from_file_location("public_boundary_under_test", SCRIPT)
-PB = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(PB)
+EXPORT = ROOT / "tools" / "verity" / "check" / "public_export.py"
+
+
+def _load(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+PB = _load("public_boundary_under_test", SCRIPT)
+PE = _load("public_export_under_test", EXPORT)
 
 
 def test_no_public_file_needs_one_the_export_does_not_copy() -> None:
@@ -180,3 +192,201 @@ def test_a_shell_command_over_lines_is_still_read(tmp_path: Path, script: str, l
         (tmp_path / f).write_text(text, encoding="utf-8")
     assert [(e.line, e.target) for e in PB.Tree(tmp_path, files=files).edges("verity/pub/x.sh")] == [
         (line, "tools/priv/pyproject.toml")]
+
+
+LAKEFILE = '''name = "pub"
+srcDir = "src"
+defaultTargets = ["Pub", "Agg", "gone-exe", "tool"]
+
+# a dependency the export copies
+[[require]]
+name = "kept"
+path = "../kept"
+
+# one it doesn't
+[[require]]
+name = "priv"
+path = "../../tools/priv"
+
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "v4.0.0"
+
+[[lean_lib]]
+name = "Pub"
+roots = ["Pub.A", "Pub.B",
+  "Pub.Gone"]
+
+# an aggregate root the export lacks, over a module it copies
+[[lean_lib]]
+name = "Agg"
+
+[[lean_lib]]
+name = "Nothing"
+
+[[lean_exe]]
+name = "gone-exe"
+root = "Gone.Main"
+
+[[lean_exe]]
+name = "tool"
+root = "Tool"
+
+[leanOptions]
+autoImplicit = false
+'''
+LAKE_COPIED = {"verity/kept/lakefile.toml", "verity/pub/src/Pub/A.lean", "verity/pub/src/Pub/B/C.lean",
+               "verity/pub/src/Agg/X.lean", "verity/pub/src/Tool.lean"}
+
+
+def test_a_lakefile_loses_only_what_names_a_file_the_export_does_not_copy() -> None:
+    """A root stays while the export copies a module at or below it; a library or executable with none goes, and so does a
+    default target whose root file the export lacks, whose modules then build one by one."""
+    new, dropped = PE.rewrite_lakefile(LAKEFILE, "verity/pub", LAKE_COPIED)
+    assert dropped == [("require", "priv"), ("root", "Pub.Gone"), ("lean_lib", "Nothing"), ("lean_exe", "gone-exe"),
+                       ("defaultTarget", "Pub"), ("defaultTarget", "Agg"), ("defaultTarget", "gone-exe")]
+    old = tomllib.loads(LAKEFILE)
+    assert tomllib.loads(new) == old | {
+        "defaultTargets": ["tool"], "require": [old["require"][0], old["require"][2]],
+        "lean_lib": [{"name": "Pub", "roots": ["Pub.A", "Pub.B"]}, {"name": "Agg"}], "lean_exe": [old["lean_exe"][1]]}
+    assert "# a dependency the export copies" in new and "# an aggregate root" in new
+    assert "# one it doesn't" not in new, "a dropped table's comment goes with it"
+    assert PE.lean_targets(new, "verity/pub", old, LAKE_COPIED) == {
+        "default": ["tool"], "modules": ["Agg.X", "Pub.A", "Pub.B.C"], "missing_roots": ["Pub.B", "Agg"]}
+
+
+def test_a_manifest_loses_the_path_packages_the_export_does_not_copy() -> None:
+    doc = {"version": "1.1.0", "packages": [
+        {"type": "path", "name": "kept", "dir": "../kept", "configFile": "lakefile.toml"},
+        {"type": "path", "name": "priv", "dir": "../../tools/priv", "configFile": "lakefile.toml"},
+        {"type": "git", "name": "mathlib", "url": "https://github.com/leanprover-community/mathlib4", "rev": "abc"}]}
+    new, dropped = PE.rewrite_manifest(json.dumps(doc), "verity/pub", LAKE_COPIED)
+    assert dropped == [("package", "priv")]
+    assert [p["name"] for p in json.loads(new)["packages"]] == ["kept", "mathlib"]
+
+
+WORKSPACE = '''[project]
+name = "root"
+dependencies = ["numpy"]
+
+[tool.uv]
+conflicts = [
+    [{ extra = "cpu" }, { package = "pubdist", extra = "gpu" }],
+    [{ extra = "cpu" }, { package = "privdist", extra = "gpu" }],
+]
+
+[tool.uv.workspace]
+members = ["verity/pub", "tools/priv"]
+
+[tool.uv.sources]
+pubdist = { workspace = true }
+privdist = { workspace = true }
+torch = { index = "cpu" }
+
+[dependency-groups]
+# the dev group
+dev = ["pytest>=8", "pubdist", "privdist"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "tools/priv/tests"]
+
+[tool.verity.tests]
+untraced = [
+    "tests/test_a.py",
+    "tests/test_gone.py",
+]
+'''
+
+
+def test_the_workspace_loses_what_names_a_distribution_or_path_the_export_does_not_copy() -> None:
+    """A line of a nested array that starts with `[` is no table's header."""
+    new, dropped = PE.rewrite_workspace(WORKSPACE, {"pyproject.toml", "verity/pub/pyproject.toml", "tests/test_a.py"},
+                                        {"pubdist", "root"}, {"pubdist", "privdist", "root"})
+    assert sorted(dropped) == sorted([
+        ("conflict", json.dumps([{"extra": "cpu"}, {"package": "privdist", "extra": "gpu"}])), ("member", "tools/priv"),
+        ("source", "privdist"), ("dependency-groups.dev", "privdist"), ("testpaths", "tools/priv/tests"),
+        ("untraced", "tests/test_gone.py")])
+    old = tomllib.loads(WORKSPACE)
+    assert tomllib.loads(new) == old | {
+        "tool": {"uv": {"conflicts": old["tool"]["uv"]["conflicts"][:1], "workspace": {"members": ["verity/pub"]},
+                        "sources": {"pubdist": {"workspace": True}, "torch": {"index": "cpu"}}},
+                 "pytest": {"ini_options": {"testpaths": ["tests"]}}, "verity": {"tests": {"untraced": ["tests/test_a.py"]}}},
+        "dependency-groups": {"dev": ["pytest>=8", "pubdist"]}}
+    assert "# the dev group" in new
+
+
+@pytest.mark.parametrize("text", [
+    '[tool.uv]\nconflicts = [\n    [\n        { package = "privdist" },\n        { extra = "cpu" },\n    ],\n]\n',
+    '[dependency-groups]\ndev = ["privdist", { include-group = "x" }]\n',
+])
+def test_a_rewrite_it_cannot_lay_out_fails_closed(text: str) -> None:
+    """A layout the line-wise rewrite would get wrong is an error, never a manifest that reads as something else."""
+    with pytest.raises(ValueError, match="public_export"):
+        PE.rewrite_workspace(text, {"pyproject.toml"}, set(), {"privdist"})
+
+
+def test_the_export_is_one_fresh_commit_of_the_public_set(judged, tmp_path_factory) -> None:
+    root, _, _ = judged
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "add", *TREE], cwd=root, check=True)
+    tree, boundary = PE.PB.Tree(root, files=TREE), PE.PB.Boundary.load(root / "boundary.toml")
+    j = PE.PB.judge(tree, boundary)
+    dest = tmp_path_factory.mktemp("export")
+    got = PE.export(tree, boundary, j, dest)
+
+    def git(*args: str) -> list[str]:
+        return subprocess.run(["git", *args], cwd=dest, capture_output=True, text=True, check=True).stdout.split()
+
+    assert sorted(git("ls-files")) == sorted(j.public)
+    assert git("rev-list", "--count", "HEAD") == ["1"]
+    assert got["rewrites"] == {"verity/pub/lakefile.toml": ["require priv"]}
+    assert [e.split(": ", 1)[1] for e in got["edges_cut"]] == ["lake require priv -> tools/priv/lakefile.toml"]
+    assert got["lean_targets"]["verity/pub"]["modules"] == ["Pub"]
+    assert "priv" not in (dest / "verity/pub/lakefile.toml").read_text(encoding="utf-8")
+
+
+def test_the_export_refuses_a_destination_it_would_overwrite(tmp_path: Path) -> None:
+    (tmp_path / "full").mkdir()
+    (tmp_path / "full" / "f").write_text("", encoding="utf-8")
+    for dest, root in ((tmp_path / "in", tmp_path), (tmp_path / "full", tmp_path / "elsewhere")):
+        with pytest.raises(SystemExit):
+            PE.main([str(dest), "--root", str(root)])
+    assert not (tmp_path / "in").exists()
+
+
+def test_leftovers_are_counted_by_area_and_kind(tmp_path: Path) -> None:
+    (tmp_path / "verity/pub/x").mkdir(parents=True)
+    (tmp_path / "verity/pub/x/a.py").write_text("# art:abc1, from bc-0123456789 on cursor/proofs-pubsplit-67ca\n",
+                                                encoding="utf-8")
+    (tmp_path / "verity/pub/x/b.bin").write_bytes(b"\0art:abc1")
+    got = PE.scrub(tmp_path, ["verity/pub/x/a.py", "verity/pub/x/b.bin"])
+    assert got["by_area"] == {"verity/pub/x": {"art": 1, "agent": 1, "branch": 1}}
+    assert got["not_read_binary_or_large"] == ["verity/pub/x/b.bin"]
+
+
+def test_third_party_pins_are_read_without_fetching(tmp_path: Path) -> None:
+    files = {"a/lake-manifest.json": json.dumps({"packages": [
+                 {"type": "git", "name": "mathlib", "url": "https://github.com/leanprover-community/mathlib4", "rev": "abc"},
+                 {"type": "path", "name": "b", "dir": "../b"}]}),
+             "a/setup.sh": "git clone -q https://github.com/succinctlabs/flock.git\ncd flock && git checkout -q b684b12\n",
+             "uv.lock": ('version = 1\n[[package]]\nname = "numpy"\nversion = "2.0.0"\nsource = { registry = "https://pypi.org/simple" }\n'
+                         '[[package]]\nname = "pub"\nversion = "0.1.0"\nsource = { editable = "verity/pub" }\n')}
+    for f, text in files.items():
+        (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / f).write_text(text, encoding="utf-8")
+    got = PE.licenses_static(tmp_path, sorted(files))
+    assert [(p["name"], p["rev"]) for p in got["lean"]] == [("mathlib", "abc")]
+    assert got["python_locked"] == ["numpy==2.0.0"]
+    assert [(u["url"], u["rev"]) for u in got["upstream"]] == [("https://github.com/succinctlabs/flock", "b684b12")]
+
+
+@pytest.mark.slow
+def test_this_trees_export_rewrites_every_manifest_it_copies(tmp_path: Path) -> None:
+    """This tree's export, in a process of its own: each manifest it rewrites reads as the old one less the entries it
+    drops, or the export fails. A manifest laid out in a way the rewrite doesn't know fails here, not on the export's day."""
+    r = subprocess.run([sys.executable, str(EXPORT), str(tmp_path / "export"), "--report", str(tmp_path / "report.json")],
+                       cwd=ROOT, capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    report = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
+    assert report["rewrites"] and report["lean_targets"]
