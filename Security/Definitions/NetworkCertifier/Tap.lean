@@ -16,8 +16,9 @@ connection (`verity/core/protocols/certifier/warden_rows.py`; `Definitions.Netwo
 format). So on every schedule the format holds (`TapRecord.fits`: a record of the monitoring period's buckets, each of
 `S` slots, holds a schedule whose frames fall in them, at most `S` a bucket), the frames that crossed the wire read back
 from the record under the schedule (`TapRecord.read_record`). What else the record holds, each step's jitter class and
-statuses, may depend on anything the tap saw. The server's bytes after a connection's fail cell, or past its lane's end, reach the tap but
-neither the client nor the record: the record fixes what the client received, not everything the server sent.
+statuses, may depend on anything the tap saw. The server's bytes after a connection's fail cell, or past its lane's
+end, reach the tap but neither the client nor the record: the record fixes what the client received, not everything
+the server sent.
 
 The tap is stated here, over `TrustedHost`'s shape (a device, its run and its code), so that core's device vocabulary
 can lift it as it is: `TapRecord` and `tapCode` read nothing of network accounting but the warden's code.
