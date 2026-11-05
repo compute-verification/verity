@@ -15,13 +15,14 @@ and in `overCapTiles` over it. The credit does: the tolerant audit's deduction g
 The check's bound (`Rule.capCheck`, as `TileKeepsTheCap` states it) is on the record's credited rows and columns under
 the band rule (`UnitRecord.credited`: a real row neither excluded nor in a 64-row band with a voluntary A row, and a
 column whose 64-column block holds no excluded or voluntary B row). It counts `n` times each credited word's replayed
-inert work and `64·|cc|` per forming element of a credited row (`Rule.rowElements`). A tile that keeps a row and a column
-carries a ticket (`CarriesATicket`). Such a tile has no voluntary row and no excluded or voluntary column, its filler
-rows are zero and fail the rules, and its excluded rows fail them, so the check's credited rows are the tile's
+inert work and `64·|cc|` per forming element of a credited row (`Rule.rowElements`). A tile that keeps a row and a
+column carries a ticket (`CarriesATicket`). Such a tile has no voluntary row and no excluded or voluntary column, its
+filler rows are zero and fail the rules, and its excluded rows fail them, so the check's credited rows are the tile's
 `passRows` and its credited columns all its columns.
 
-* `tilePassGivesTheCap`: a passed tile that carries a ticket is within the bound. The check's word inert work is the game's
-  chain (`wordFlagsIsTheReplay`, `codes_eq`) on rows that pass the rules exactly when the game's do (`RowsAreTheRules`).
+* `tilePassGivesTheCap`: a passed tile that carries a ticket is within the bound. The check's inert work per word is
+  the game's chain (`wordFlagsIsTheReplay`, `codes_eq`) on rows that pass the rules exactly when the game's do
+  (`RowsAreTheRules`).
   The check's element count covers the game's forming elements (`formingElems_le`, `row_forming`): an element the game
   finds salt-dead the check finds salt-dead (`saltDeadP_iff_ends_hopper` and the check's float arithmetic,
   `saltDead_of_ends`), and an element whose block every column's word flags the check counts by those flags. The
@@ -414,8 +415,8 @@ theorem debitUnits_eq (n c a z e : ℕ) : Rule.debitUnits n c a z e = n * (40 * 
   show n * ((32 + 32 / 4) * a + 32 * z) + 64 * c * e = _
   norm_num
 
-/-- The check's inert work on a tile, summed as `TileKeepsTheCap` sums it, is `n` times its words' `40·F + 32·Z` and `64·|cc|`
-per element. -/
+/-- The check's inert work on a tile, summed as `TileKeepsTheCap` sums it, is `n` times its words' `40·F + 32·Z` and
+`64·|cc|` per element. -/
 theorem rowDebit_sum (n c : ℕ) (ws : List (List (Array Bool × ℕ))) (es : List ℕ) (h : ws.length = es.length) :
     ((ws.zip es).map fun (we : List (Array Bool × ℕ) × ℕ) => Rule.debitUnits n c
       (we.1.foldl (fun t w => t + (w.1.filter id).size) 0) (we.1.foldl (fun t w => t + w.2) 0) we.2).foldl
@@ -488,8 +489,8 @@ theorem sum_fin_filter {β : Type} [AddCommMonoid β] {m n : ℕ} (P C : Finset 
   · intro q hq
     rw [dite_eq_left ⟨hP _ (Finset.mem_product.1 hq).1, hC _ (Finset.mem_product.1 hq).2⟩]
 
-/-- At the H100 record a tile's chain inert work is `40` per flagged atom and `32` per later +0 promotion, summed over its
-cells. -/
+/-- At the H100 record a tile's chain inert work is `40` per flagged atom and `32` per later +0 promotion, summed over
+its cells. -/
 theorem tileChainDebit_cells {Q R S : Type} (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U : Pouw.PearlC.Workload)
     (u : ℕ) (act : Codes) (P C : Finset ℕ) (hP : ∀ i ∈ P, i < (U.layout.shape u).m)
     (hC : ∀ j ∈ C, j < (U.layout.shape u).n) :
