@@ -51,6 +51,20 @@ Trace: every `Queue: #N` merge on `checked`'s first-parent history (3114 merges,
    44, their tests), `TRUSTED.sha256`, `GLOSSARY.md`, READMEs. The landing code itself is the hottest code file: ~110
    PRs a week change `queue.py`/`drive.py`, each a change of the rules mid-flight.
 
+7. **What actually sits at `next`'s bottom (real data, Nov 1 15:30 – Nov 5 16:15, 97 h, 535 tips' membership):** a
+   reviewed Lean change 70% of the time (67 h), a reviewed non-Lean change 25%, an unreviewed member 5% (5 h). Behind
+   a Lean bottom, reviewed non-Lean members waited ~1,400 member-hours and reviewed Lean members ~1,800 (≈ 2,450 and
+   3,100 PR-hours a week); unreviewed ones ~200. Lean bottoms came in 36 stretches, median 1.6 h (about one Lean check
+   and a pass), but 14 stretches over 2 h hold 51 of the 68 h (failed, rerun or cancelled checks). So the bottom-of-stack
+   block is mostly a Lean change awaiting its Lean check, not a missing verdict: ci's park of an unreviewed bottom covers
+   the 5%. `_reviewed_below` should land reviewed non-Lean members past a Lean check and doesn't, for reasons in drive's
+   log ("low-risk lane skipped ..."): no sync that tick, a check that can't move, `_circuit_held`, `Entry.after`, gates,
+   the 20-a-tick cap. `nonlean_first` and `reviewed_first` went false on Oct 29 17:57Z (0442f57427, "next lands as one
+   checked commit"), the day the regression began; turning `nonlean_first` back on is one line (the simulator gives it
+   little alone, since admission caps throughput there; the real waiting it targets is ~2,450 PR-hours a week).
+8. **Admission is the throughput cap**: about 4–5 a sync (CI-342), the sync's preflights on the control pod's 4 vCPUs
+   within a 120 s budget; the calibrated model agrees (≤ 4 a pass).
+
 ## 2. Simulator (assumptions stated)
 
 `sim.py` replays the real ready marks (Oct 29 on, with the 247-PR backlog marked earlier) with each PR's real review
