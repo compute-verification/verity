@@ -4331,7 +4331,13 @@ def test_a_remote_quick_tier_placed_in_a_research_pool_runs_through_that_pools_s
 def test_place_on_auto_spills_to_a_research_pool_only_when_no_auto_machine_can_be_read(tmp_path):
     from research import queue as Q
 
-    repo = Path(__file__).resolve().parents[3]
+    repo = tmp_path / "repo"
+    (repo / "tools/verity/check").mkdir(parents=True)
+    (repo / "tools/verity/check/check.py").write_text(
+        'AUTO = ("vy-nebius-2",)\n'
+        "def read_slots(names):\n    return {}\n"
+        "def choose(names, docs, priority=False):\n"
+        '    return None, "no machine\'s slots could be read", [f"{n}: {d}" for n, d in docs.items()]\n')
     spilled = []
 
     def spill(r):
