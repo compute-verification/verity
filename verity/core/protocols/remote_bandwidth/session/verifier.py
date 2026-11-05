@@ -136,10 +136,10 @@ from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line, t
 from verity.core.protocols.remote_bandwidth import store as rstore
 from verity.core.protocols.sampled_proofs.challenger import Verify
 
-from benchmarks.remote_session import challengers
-from benchmarks.remote_session import lean_verifier as lv
-from benchmarks.remote_session import wire
-from benchmarks.remote_session.checks import Checks
+from verity.core.protocols.remote_bandwidth.session import challengers
+from verity.core.protocols.remote_bandwidth.session import lean_verifier as lv
+from verity.core.protocols.remote_bandwidth.session import wire
+from verity.core.protocols.remote_bandwidth.session.checks import Checks
 
 CHECK_BATCH = 1024
 """Openings a Lean thread checks at once (`checkWindowChunked`)."""

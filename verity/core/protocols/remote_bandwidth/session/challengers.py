@@ -49,7 +49,7 @@ from verity.core.protocols.remote_bandwidth import audit, coins
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs import remote
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[5]
 KINDS = ("local", "serve", "gate")
 GATE_PORTS = range(7811, 7900)
 """The ports the gate gives its sessions (`auditor.PORTS`), each bound on this machine's 127.0.0.1 by its certifier

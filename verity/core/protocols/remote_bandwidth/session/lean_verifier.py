@@ -24,7 +24,7 @@ from typing import Any
 
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[5]
 PACKAGE = ROOT / "verity/core/protocols/remote_bandwidth/lean"
 EXE = "remote-audit-verifier"
 REFUSED = {"refused": True}

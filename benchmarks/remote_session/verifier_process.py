@@ -1,4 +1,4 @@
-"""PoUB's session verifier as a process: `benchmarks/remote_session/verifier.py`'s `main`, on this command line, handed
+"""PoUB's session verifier as a process: `verity/core/protocols/remote_bandwidth/session/verifier.py`'s `main`, on this command line, handed
 what a verifier imports none of (it reads no `verity.ml` code beyond its frozen edges): the LMS verify a served or gate
 session's signatures are checked with (`lms_verify`), and the challenger's own process `--challenger serve` starts for a
 session (`SERVE`). Its usage is `verifier.py`'s. live_verifier's host runs it under `python3 -I`, which puts neither
@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from benchmarks.remote_session import verifier
+from verity.core.protocols.remote_bandwidth.session import verifier
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.ml.commitments.scheme import DIGEST_BYTES
 from verity.ml.crypto import lms
