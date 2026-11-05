@@ -88,6 +88,8 @@
   "Proofs.Properties.Verity.Sampled.ParseBridge",
   "Proofs.Properties.Verity.Sampled.Readings",
   "Proofs.Properties.Verity.Sampled.Stops",
+  "Proofs.Properties.Verity.Sampled.OpenEmpty",
+  "Proofs.Properties.Verity.Sampled.Counts",
   "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledLog",
   "Proofs.Properties.Verity.SampledRead",
