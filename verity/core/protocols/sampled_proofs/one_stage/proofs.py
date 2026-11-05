@@ -17,7 +17,7 @@ its registered finding (each port's value and opened root) and the proof blocks 
 indices of the instances its session sampled (`unit_draw`), read only off a session the verifier accepted.
 
 `ks_form_why` mirrors `verify --zk`'s refusal of a circuit outside the unit's form the sampled audit's knowledge
-soundness (`SampledKSLiveV4`, and `SampledKSLiveV5` at a shared-row public file) covers, on the circuit file's head
+soundness (`SampledKSLiveV3`, and `SampledKSLiveV5` at a shared-row public file) covers, on the circuit file's head
 (`Flock.KsScope.filesWhy`, which `flock-verify ks-form` runs alone). A session Lean accepts whose files it refuses is a
 ``form`` refusal, so the mirror can only refuse more.
 
@@ -79,7 +79,8 @@ class Proof:
 @dataclass(frozen=True)
 class Finding:
     """One session's verdict from the verifier's own run: accepted or not and why, the program its verdict names, its
-    registered finding (port -> {value, root}) and the global proof blocks it proved (none unless accepted)."""
+    registered finding (port -> {value, root}), the global proof blocks it proved (none unless accepted) and the rows it
+    opened (its verdict's ``openings``, which `produced.shared` reads; None when it reports none)."""
 
     session: str
     accepted: bool
@@ -87,6 +88,7 @@ class Finding:
     program: str | None
     registered: dict
     units: tuple[int, ...]
+    openings: Any = None
 
 
 @functools.cache
@@ -237,7 +239,7 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
             return None, ("proof", f"session {s}'s verdict names program {v.get('program_sha512')}, not the partition "
                                    f"object's {want}")
         out.append(Finding(str(s), ok, str(v.get("why", "")), v.get("program_sha512"), v.get("registered") or {},
-                           proved_units(proof.public, s) if ok else ()))
+                           proved_units(proof.public, s) if ok else (), v.get("openings")))
     return out, None
 
 

@@ -134,7 +134,9 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
   --kind fixture/v1 --file|--tree PATH --preserve`, its id and path into the registry and its path into `.gitignore`.
   The control pod exports `next`'s registry every 5 minutes, so the fixture needs no ask. `suites.py` fetches it before the suites that read it (`research data fetch-fixtures` by hand, as before
   `cargo test`), checks every byte against its id, and keys the suite on the id. A verifier's fixtures are the prover's
-  bytes, never regenerated in its test; when a test can recompute an expected output, pin its digest, not the file.
+  bytes, never regenerated in its test; when a test can recompute an expected output, pin its digest, not the file. A
+  fixture its test module rewrites from the tree (``python MODULE --write``) is a `Writer` in `tools/verity/check/pins.py`,
+  rewritten by `uv run python tools/verity/check/pins.py --write PATH`, which the test's failure names (`tests/test_pins.py`).
 
 ## Dummy credentials
 
