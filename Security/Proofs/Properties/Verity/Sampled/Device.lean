@@ -51,6 +51,8 @@ fixes from what the play fixed (`Deployment.setupOf`).
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 open private pairs from SampledProofs.ChallengerSession
 

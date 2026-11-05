@@ -26,6 +26,8 @@ agree:
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 open Lean (Json)
 open SampledProofs (getD field? nat?)
