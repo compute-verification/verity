@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.FinExe
-import Proofs.Flock.Claims.ZK.CausalExe
-import Proofs.Flock.Claims.ZK.FrameRounds
+module
+
+public import Proofs.Flock.Claims.ZK.FinExe
+public import Proofs.Flock.Claims.ZK.CausalExe
+public import Proofs.Flock.Claims.ZK.FrameRounds
 
 /-!
 # A rep's rank check from the source, at coins that show no refusal
@@ -22,6 +24,8 @@ refusal shows (`not_refused_of_admits`), so the check passes there.
   at most `i`, so at any coins that are the opened ones through the rep's rank check. **At admitted coins**
   (`rankOk_of_admits`, `rank_at_admits`) no refusal shows at any `i`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.RankAt
 

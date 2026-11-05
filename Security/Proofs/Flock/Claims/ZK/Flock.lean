@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.ZK.GKProof
-import Proofs.Flock.Claims.ZK.GKCost
-import Proofs.Flock.Claims.ZK.GKExp
-import Proofs.Flock.Claims.ZK.CoinCheck
-import Proofs.Flock.Claims.ZK.Prefix
-import Proofs.Flock.Claims.DeployCode
+module
+
+public import Proofs.Flock.Claims.ZK.GKProof
+public import Proofs.Flock.Claims.ZK.GKCost
+public import Proofs.Flock.Claims.ZK.GKExp
+public import Proofs.Flock.Claims.ZK.CoinCheck
+public import Proofs.Flock.Claims.ZK.Prefix
+public import Proofs.Flock.Claims.DeployCode
 
 /-!
 # Flock's zero knowledge against a malicious verifier, from its committed coins
@@ -89,6 +91,8 @@ hypotheses of `Flock.zkR_gkE_hm96` and of the theorems that discharge them, each
   rounds' (`1 + rounds` where the statement sets up, none where it does not). Zero knowledge reads nothing else of
   `FlockDeploy.deployZk` but its `zk`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

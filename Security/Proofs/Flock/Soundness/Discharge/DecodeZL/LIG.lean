@@ -1,5 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # Ligerito's rounds carry its messages (R11b)
@@ -12,6 +16,8 @@ the level loop (`carriesP_levels`, by recursion on the levels left, ending at `y
 schedules fold 4 lanes above level 0, so `ligShape`'s pattern is the rounds' (`isCoin_rec`), and their caps and query
 counts fit the frames' bounds (`fast100_small`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.DecodeZL
 

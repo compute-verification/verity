@@ -1,5 +1,7 @@
-import PousCheck.Merkle
-import RemoteAudit.Window
+module
+
+public import PousCheck.Merkle
+public import RemoteAudit.Window
 
 /-!
 # A P2 store's registration, receipts and openings: `p2.py`
@@ -23,6 +25,10 @@ blocks on the registration's vk root, by PoUS's own leaf and RFC 9162 path check
 `verifyPath`) and `receipt` (y recomputed from the four blocks). Nothing here decodes a block: vk's leaves are of the
 `C*` the verifier decoded to the committed W at PoUS's setup (`PousCheck.P2` is P2's decode).
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit.P2
 

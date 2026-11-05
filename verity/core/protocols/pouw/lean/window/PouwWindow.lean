@@ -1,19 +1,21 @@
-import PouwWindow.Grid
-import PouwWindow.Draw
-import PouwWindow.Public
-import PouwWindow.Json
-import PouwWindow.Length
-import PouwWindow.Entry
-import PouwWindow.Record
-import PouwWindow.Side
-import PouwWindow.Statement
-import PouwWindow.Inputs
-import PouwWindow.Rounds
-import PouwWindow.Lanes
-import PouwWindow.KnownRows
-import PouwWindow.OwnPorts
-import PouwWindow.FullDraw
-import PouwWindow.RegFile
+module
+
+public import PouwWindow.Grid
+public import PouwWindow.Draw
+public import PouwWindow.Public
+public import PouwWindow.Json
+public import PouwWindow.Length
+public import PouwWindow.Entry
+public import PouwWindow.Record
+public import PouwWindow.Side
+public import PouwWindow.Statement
+public import PouwWindow.Inputs
+public import PouwWindow.Rounds
+public import PouwWindow.Lanes
+public import PouwWindow.KnownRows
+public import PouwWindow.OwnPorts
+public import PouwWindow.FullDraw
+public import PouwWindow.RegFile
 
 /-!
 # PoUW's audit window as executable Lean
@@ -36,3 +38,5 @@ frame-v3-sha512 domains, C-Flock's SHA-512 and hm96, core's tagged identity), an
 outside this root, so what imports the window imports no harness. Its properties are stated in
 `Security/Properties/Pouw.lean`.
 -/
+
+@[expose] public section

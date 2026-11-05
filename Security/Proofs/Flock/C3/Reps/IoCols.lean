@@ -1,8 +1,10 @@
-import Proofs.Flock.C3.Reps.TsRead
-import Proofs.Flock.C3.Reps.SrcOpens
-import Proofs.Flock.VBridge.Decode
-import Proofs.Flock.VBridge.Verifier
-import Proofs.Flock.C3.Reps.ReadCol
+module
+
+public import Proofs.Flock.C3.Reps.TsRead
+public import Proofs.Flock.C3.Reps.SrcOpens
+public import Proofs.Flock.VBridge.Decode
+public import Proofs.Flock.VBridge.Verifier
+public import Proofs.Flock.C3.Reps.ReadCol
 
 /-!
 # The openings' columns: in range, and read under a stage's mask
@@ -18,6 +20,8 @@ import Proofs.Flock.C3.Reps.ReadCol
   follows (`rowColsRead_of`) from `OpenCols`, the row columns' keys (`RowKeys`, a circuit fact) and `SelPort` at the
   ports they key (`RowSel`); vacuously where no stage reads a consistency sum (`rowColsRead_of_noCons`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

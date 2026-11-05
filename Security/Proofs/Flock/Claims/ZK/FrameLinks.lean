@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.PrefixLive
-import Proofs.Flock.Claims.DeployK
-import Flock.Firewall.Frames
+module
+
+public import Proofs.Flock.Claims.ZK.PrefixLive
+public import Proofs.Flock.Claims.DeployK
+public import Flock.Firewall.Frames
 
 /-!
 # A live session's link points
@@ -9,6 +11,8 @@ import Flock.Firewall.Frames
 coordinates at two points, so the link fits in `Frames.COIN_MAX` words. These are the setup facts
 `ofLoop_progChecks_of` takes as `hP`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal.Masked
 

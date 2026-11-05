@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.SlotsCalls
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.PartsVStar
-import Proofs.Flock.Recursive.VStarCheck
+module
+
+public import Proofs.Flock.Claims.Recursion.SlotsCalls
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+public import Proofs.Flock.Claims.Recursion.PartsVStar
+public import Proofs.Flock.Recursive.VStarCheck
 
 /-!
 # The later caps' ports and the slots' row prefixes, off `readX` (`SaltRowsJ` at `layR`)
@@ -19,6 +21,8 @@ words in order. That settles both facts `slotsRecorded_of` takes:
 
 `saltRowsJ_layR`: `SaltRowsJ` at `layR elem` and `finalR`, with no hypothesis; `saltRowRest_layR` with it.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.OpenSlots
 

@@ -1,5 +1,7 @@
-import Properties.Flock.Circuit.Outs
-import Properties.Flock.Circuit.CircuitOf
+module
+
+public import Properties.Flock.Circuit.Outs
+public import Properties.Flock.Circuit.CircuitOf
 
 /-!
 # The circuit a registered C-Flock circuit file describes
@@ -11,3 +13,5 @@ committed circuit and public files). They are stated over the executable verifie
 sit in the properties tree, where a property's statement may read them. Each module says where its definitions
 moved from; the proofs about them stay in `Proofs.Flock.Soundness`.
 -/
+
+@[expose] public section

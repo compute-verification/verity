@@ -1,6 +1,10 @@
-import Proofs.Flock.C3.Compose.HoloCoinTys
-import Proofs.Flock.C3.VStarList.Shape
-import Proofs.Flock.Recursive.HoloRepCoins
+module
+
+public import Proofs.Flock.C3.Compose.HoloCoinTys
+public import Proofs.Flock.C3.VStarList.Shape
+public import Proofs.Flock.Recursive.HoloRepCoins
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The sparse phases' and R's streams at the model's coins
@@ -23,6 +27,8 @@ The inner shape's sparse phases' and R's streams (`holoStreams`, at the verifier
   `kLog` and `claims` reach are the head (`repHead`, `repRounds_tail`), and past it, evaluating `repRounds` at each `m`
   below 36 at one `kLog` and `claims` gives the rest.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

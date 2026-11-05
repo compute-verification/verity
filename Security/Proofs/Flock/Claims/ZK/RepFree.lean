@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FinishSrc
-import Proofs.Flock.Claims.ZK.PiopFree
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSrc
+public import Proofs.Flock.Claims.ZK.PiopFree
 
 /-!
 # The cut rep returns on its coins alone
@@ -15,6 +17,8 @@ from a log of the same size, with a log of the same size, whatever values either
 * **`ligeritoPZk_cut_fw`**: the firewall's masked Ligerito opening and the cut's, from logs of one size: where the
   firewall's returns, the cut's returns, with as many messages, lane challenges and out-of-domain values.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

@@ -1,5 +1,7 @@
-import Proofs.Properties.Nci.BodiesOk.Nonneg
-import Proofs.Properties.Nci.BodiesOk.Node
+module
+
+public import Proofs.Properties.Nci.BodiesOk.Nonneg
+public import Proofs.Properties.Nci.BodiesOk.Node
 
 /-!
 # The decoder's invariant
@@ -9,6 +11,8 @@ Every Definition it appends is `DefOk`: a primitive one gate with an empty body;
 earlier Definition as `NodeOk` says (`buildNode_spec`), and every reference of its body names a leaf of a parameter or
 of a node's declared output (`Walk.parsePartsIn_valid`). `decode_spec` proves it by induction on the fuel.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program

@@ -1,3 +1,5 @@
+module
+
 /-!
 # Naive tiled against Strassen in the tensor-core model (trusted)
 
@@ -18,6 +20,8 @@ over `⌈a/d⌉`; or a 2 × 2 scheme from a given list, each product on the comb
 ranges over `(a - 1)·‖u‖₁ + 1` values, reduced mod `m` when `m > 0` (a CRT residue). An atom at depth budget `l`
 multiplies `2^l`-leaf blocks, so it costs `8^l · weight8`; naive tiled, the s8 atom at `(256, 256)`, costs `8^(l+1)`.
 -/
+
+@[expose] public section
 
 namespace Verity.Accel.NaiveStrassen
 
