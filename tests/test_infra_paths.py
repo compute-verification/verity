@@ -41,11 +41,7 @@ INFRA_PATHS = {
     # the guard: Cursor's project hooks and the environment's start run it by its path here
     ".cursor/hooks.json": "shim",
     "tools/agent-guard": "shim",
-    "tests/test_agent_guard_boot.py": "infra",
     "tests/test_agent_guard_hook.py": "infra",
-    "tests/test_agent_guard_oom.py": "infra",
-    "tests/test_shell_hook.py": "infra",
-    "tests/test_task_hook.py": "infra",
     # the environment's install command runs it by its path here
     "tools/lean": "shim",
     # the layout move, which drive regenerates and certifies
