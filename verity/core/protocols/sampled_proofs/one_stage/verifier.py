@@ -333,6 +333,20 @@ def select(python: Mapping[str, Any], read: bytes, rule: Mapping[str, Any], prog
     return dict(got["draw"] if RECORD_VERDICT == "lean" else python), Verdict(True, (), {}, verifiers)
 
 
+def select_second(python: Mapping[str, Any], read: bytes, sample: Sequence[int], n: int,
+                  k: int) -> tuple[dict[str, Any], Verdict]:
+    """A two-stage design's second stage by the verifier: the Lean's `Select.selectSecond` on `read`, the bytes of the
+    challenger's coins that the Python sample `python` (`service.select_second`'s) read in order, over the replay sample
+    `sample`, `n` proof blocks in each replay block and `k` of them sampled in each; compared as `select` compares."""
+    got = lean("select_second", {"sample": list(sample), "n": n, "k": k, "source": read.hex()})
+    mine = {"draw": dict(python), "read": len(read)}
+    verifiers = {"of_record": RECORD_VERDICT, "lean": {"refused": got["refused"]} if "refused" in got else
+                 {"read": got.get("read")}, "python": {"read": len(read)}}
+    if "refused" in got or got.get("read") != len(read) or not _same(got.get("draw"), python):
+        return dict(python), Verdict(False, (DISAGREE,), {DISAGREE: {"lean": dict(got), "python": mine}}, verifiers)
+    return dict(got["draw"] if RECORD_VERDICT == "lean" else python), Verdict(True, (), {}, verifiers)
+
+
 def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, query: Mapping[str, Any],
         law: Mapping[str, Any], scheme: str, ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None,
         anchors: Sequence[Any], log: Iterable[Mapping[str, Any]], work_table: Mapping[str, Any] | None,
@@ -344,7 +358,8 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         session_roots: Mapping[str, str] | None = None, *, supplied: Mapping[str, Any] | None = None,
         pinned: Mapping[str, str] | None = None, binding: Mapping[str, str] | None = None,
         schemas: Mapping[str, str] | None = None, window_root: str | None = None,
-        held: Sequence[str] | None = None, coins: Mapping[str, Any] | None = None) -> Verdict:
+        held: Sequence[str] | None = None, coins: Mapping[str, Any] | None = None,
+        interior: Mapping[str, Any] | None = None) -> Verdict:
     """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "symbol", "public", "audit"}`, the audit record without its
     `verifiers`): on `check`'s copies, `check_public`'s values and declared items, the receipt's challenger and place in
@@ -353,24 +368,49 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     `coins`, their evidence (`coins.coins_reason`'s), that the bytes the sample read are the coins the session the ledger
     opens for `window_root` released after the registration's digest, and refuses the select step where they aren't or
     `coins` is missing (code `coins`); for one that read none, `coins` must be None. Where the two differ,
-    or the Lean refuses a step, the verdict fails with `DISAGREE` alone."""
+    or the Lean refuses a step, the verdict fails with `DISAGREE` alone.
+
+    Under a two-stage design `interior` is the interior registration and the second stage (`Run.Interior`): its
+    `program`, `query`, `law` and `copies` (as `check` takes them, the binding `binding`), one replay block's Program
+    (`replay`), its `values`, `record` and `received`, the bytes the second stage read (`read`) and their evidence
+    (`coins`), and its `proved_units`, `instances`, `served` and `session_roots`; `python` then holds its
+    `{"receipt", "draw", "read", "audit"}` under `interior`."""
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
-    got = lean("run", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
-                                         registered, supplied, pinned, binding, schemas, window_root, held),
-                       "record": dict(rec), "rule": dict(rule), "values": [{"name": n, "registered": r} for n, r in values],
-                       "public": list(declared), "challenger": challenger, "received": received, "source": read.hex(),
-                       "closure": None if closure is None else [[u, list(cs)] for u, cs in closure.items()],
-                       "sessions": list(sessions), "verdicts": {k: dict(verdicts[k]) for k in sorted(verdicts)},
-                       "outputs": list(outputs), "statement": dict(statement), "delta": exact,
-                       "proved_units": None if proved_units is None else list(proved_units), "instances": instances,
-                       "served": None if served is None else list(served),
-                       "session_roots": None if session_roots is None else dict(session_roots),
-                       "coins": None if coins is None else dict(coins)})
-    if isinstance(got.get("audit"), str):
-        try:
-            got = {**got, "audit": json.loads(got["audit"])}
-        except ValueError:
-            got = {"refused": f"{EXE} answered a run whose record is not JSON: {got['audit'][:500]}"}
+    args = {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
+                              registered, supplied, pinned, binding, schemas, window_root, held),
+            "record": dict(rec), "rule": dict(rule), "values": [{"name": n, "registered": r} for n, r in values],
+            "public": list(declared), "challenger": challenger, "received": received, "source": read.hex(),
+            "closure": None if closure is None else [[u, list(cs)] for u, cs in closure.items()],
+            "sessions": list(sessions), "verdicts": {k: dict(verdicts[k]) for k in sorted(verdicts)},
+            "outputs": list(outputs), "statement": dict(statement), "delta": exact,
+            "proved_units": None if proved_units is None else list(proved_units), "instances": instances,
+            "served": None if served is None else list(served),
+            "session_roots": None if session_roots is None else dict(session_roots),
+            "coins": None if coins is None else dict(coins)}
+    if interior is not None:
+        it = interior
+        i_ports, i_leaf, i_anchors, i_log, i_registered, i_supplied, i_pinned, i_schemas, i_window, i_held = it["copies"]
+        args["interior"] = {
+            "params": _params(it["program"], it["query"], it["law"], scheme, i_ports, i_leaf, i_anchors, i_log, None,
+                              None, i_registered, i_supplied, i_pinned, binding, i_schemas, i_window, i_held),
+            "replay": codec.encode_program(it["replay"]),
+            "values": [{"name": n, "registered": r} for n, r in it["values"]], "record": dict(it["record"]),
+            "received": it["received"], "source": it["read"].hex(),
+            "coins": None if it["coins"] is None else dict(it["coins"]),
+            "proved_units": None if it["proved_units"] is None else list(it["proved_units"]),
+            "instances": it["instances"], "served": None if it["served"] is None else list(it["served"]),
+            "session_roots": None if it["session_roots"] is None else dict(it["session_roots"])}
+    got = lean("run", args)
+    for path in (("audit",), ("interior", "audit")):
+        at = got
+        for key in path[:-1]:
+            at = at.get(key) if isinstance(at, dict) else None
+        if isinstance(at, dict) and isinstance(at.get(path[-1]), str):
+            try:
+                at[path[-1]] = json.loads(at[path[-1]])
+            except ValueError:
+                got = {"refused": f"{EXE} answered a run whose record is not JSON: {at[path[-1]][:500]}"}
+                break
     side = (lambda r: {"refused": r["refused"]} if "refused" in r else
             {"step": r["step"], "codes": r["codes"]} if "step" in r else {"symbol": r.get("symbol")})
     verifiers = {"of_record": RECORD_VERDICT, "lean": side(got), "python": side(python)}
