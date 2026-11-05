@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.CallsLe
+module
+
+public import Proofs.Flock.Claims.Recursion.CallsLe
 
 /-!
 # A rep's SHA-512 calls on every run
@@ -8,6 +10,8 @@ its strata whatever the coins (`positions_size`), so a level's queries cost `qc 
 verification does hashes only through the transcript's squeezes, which cost nothing beyond the transcript's potential
 (`CallsLe`): the zerocheck, the lincheck and the ring switch cost `0` (`cs_zerocheck`, `cs_lincheck`, `cs_ringSwitch`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

@@ -1,11 +1,13 @@
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Ring
-import Definitions.Pouw.PearlC.Defs
-import Definitions.Pouw.PearlC.Skip
-import Proofs.Pouw.Fp8Atom.H1TAtomProofs
-import Proofs.Pouw.Fp8Atom.Fp32Proofs
+module
+
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.NormNum
+public import Mathlib.Tactic.Ring
+public import Definitions.Pouw.PearlC.Defs
+public import Definitions.Pouw.PearlC.Skip
+public import Proofs.Pouw.Fp8Atom.H1TAtomProofs
+public import Proofs.Pouw.Fp8Atom.Fp32Proofs
 
 /-!
 # P1: freezing under promotion every `G` atoms (staging)
@@ -20,6 +22,8 @@ every atom of a set inside one group whose joint skip does (`joint_complete`); j
 `Skip.wordFlags` flag every atom skippable with some set of its group's atoms (`joint_flagsComplete`, `Forming`'s
 `FlagsComplete` for `WordSkippable`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Freeze
 

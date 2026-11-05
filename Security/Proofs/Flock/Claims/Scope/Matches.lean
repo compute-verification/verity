@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Scope.Sizes
+module
+
+public import Proofs.Flock.Claims.Scope.Sizes
 
 /-!
 # `Claims.Flock.ScopeMatches` at the verifier's parser and scope check
@@ -11,6 +13,8 @@ and whose table `j` is the verifier's table `j` alone (`tableOf`):
 * `scope_iff`: the readable scope holds exactly when the verifier parses the statement and `Parsed.scope` passes;
 * `scopeMatches`: `ScopeMatches` holds, with `--zk` and without.
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 

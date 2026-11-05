@@ -1,4 +1,6 @@
-import Proofs.Pouw.PearlC.DeviceRev1Gamma
+module
+
+public import Proofs.Pouw.PearlC.DeviceRev1Gamma
 
 /-!
 # rev1's H100 rows are satisfiable
@@ -11,6 +13,8 @@ fits rev1's `W_ref` (unit by unit, or tile by tile), on an in-domain workload (`
 whose unit, or first tile, is within the cap and has positive rev1 credit. The cost models are `witnessCM` and `witnessTileCM` at rev1's protocol and tiles; they show
 satisfiability only.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.FirewallZK
-import Proofs.Flock.Soundness.ZK.HidingSalted
+module
+
+public import Proofs.Flock.Recursive.FirewallZK
+public import Proofs.Flock.Soundness.ZK.HidingSalted
 
 /-!
 # The firewall's commitments when the worker reads the salts
@@ -9,6 +11,8 @@ salts before `i` (`encSalted`). `FirewallZK.recursiveZK_salted` is `recursiveZK_
 `ε_o + n_h·δ`, with T1 over leaves whose digests read the earlier salts (`ZK.ideal_leaves_salted`) in place of T1 over
 adaptive leaves.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.FirewallZK
 

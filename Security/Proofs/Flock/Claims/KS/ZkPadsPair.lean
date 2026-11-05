@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.ZkClashPads
+module
+
+public import Proofs.Flock.Claims.KS.ZkClashPads
 
 /-!
 # The masked pads fork's two-run clash
@@ -22,6 +24,8 @@ to one top with different pairs collide in the two runs' joined logs (`tiedColl_
 * `opPadsAtZ_nul`: the dead branches' empty openings open no pads position (`2 ≤ N`, `two_le_zkTabsN`).
 * `zkSimForkLePads_of`, `zk_KS_of_padsAlign`: the pads fork bound, and masked KS, from the pads alignment.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

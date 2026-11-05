@@ -34,7 +34,7 @@ luck = "Accounting.Guarantees.FillerLuck.PinnedFillBlocksDeficit, once the fille
 
 [skip.served]
 eps = 0.00976
-source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 5.961 SMSP-cycles a 4096-MAC MMA on DC-90; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 8K prefill: the linears' co32c recombination 0.217%; lm_head's co32c recombination 1.28e-07%; QKᵀ's cohalf sums 0.0738%; P·V's pv digits, epilogue and scaling 0.685%. With P·V's served output checked it is 0.976% (8B) / 0.473% (70B) there. Skip terms: the checked leaves' vector work only the served output needs at the TS model's gap (TS_EPS of TS_CHEAT, pv_ts), on sm_120's instruction counts for the same kernel source, on this device's Π"
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭, ♭ 5.961 SMSP-cycles a 4096-MAC MMA on DC-90; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 8K prefill: the linears' co32c recombination 0.217%; lm_head's co32c recombination 1.28e-07%; QKᵀ's cohalf sums 0.0738%; P·V's pv digits, epilogue and scaling 0.685%. With P·V's served output checked it is 0.976% (8B) / 0.473% (70B) there. Skip terms: the checked leaves' vector work only the served output needs at the TS model's gap (TS_EPS of TS_CHEAT, pv_ts), on sm_120's instruction counts for the same kernel source, on this device's Π"
 
 [mand.fold]
 eps = 0.0
@@ -42,18 +42,18 @@ source = "named assumptions: LI at 1 lane instruction a word is the cheapest imp
 
 [clock]
 eps = 0.0
-source = "f_H unmeasured on the H200 (EPS1 DC measured f_max = 1980 MHz at default clocks): 0 here, so γ with the clock gap is γ, a lower bound"
+source = "f_H unmeasured on the H200 (f_max = 1980 MHz at default clocks, @h200-fmax): 0 here, so γ with the clock gap is γ, a lower bound"
 
 [luck]
 delta = 4.547473508864641e-13
 p = 0.75
 checks = 48000
-source = "SPEC §5: Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41"
+source = "Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41"
 
 [baseline]          # honest's own lane program: its words belong to the baseline, not to ε
 name = "dp4a"
 program = { IMAD = 8 }
-source = "dp4a at 8 IDP4A a word at L = 32, on IMAD's class as sm_120 prices it (no IDP4A kind in EPS1 DC's census); no LDS kind either, so its loads are unpriced"
+source = "dp4a at 8 IDP4A a word at L = 32, on IMAD's class as sm_120 prices it (no IDP4A kind in this device's census); no LDS kind either, so its loads are unpriced"
 
 [routes]
 lanes = true

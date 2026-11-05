@@ -1,5 +1,7 @@
-import Proofs.Accounting.TS.Session.Group.Premises
-import Proofs.Accounting.TS.Session.Lanes.Canon
+module
+
+public import Proofs.Accounting.TS.Session.Group.Premises
+public import Proofs.Accounting.TS.Session.Lanes.Canon
 
 /-!
 # A leaf's group of linked sessions realizes one unit, any shape (the statement)
@@ -16,6 +18,8 @@ registered served roots (the reads built from `own` and the one-read check). At 
 it is `Accounting.Guarantees.TS.LeafLanesSound`'s argument, which proves `GroupRealizes` there from `LaneLowers` and
 `CombineLowers`. It sits in the proofs package because the sessions do (`reads_exempt`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

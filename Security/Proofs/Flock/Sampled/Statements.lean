@@ -1,4 +1,6 @@
-import Proofs.Flock.Sampled.Defs
+module
+
+public import Proofs.Flock.Sampled.Defs
 
 /-!
 # F2's statements: sampling with prover-chosen batching, the partition hidden
@@ -27,6 +29,8 @@ each one.
   simulated from the reveal list alone: the menu, the draw's size, the padded sessions and the owed outputs; and under
   the law, except on the honest prover's abort, of probability at most δ, which reveals the type mix.
 -/
+
+@[expose] public section
 
 namespace FlockSampled
 

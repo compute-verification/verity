@@ -1,5 +1,7 @@
-import VStar.Sha
-import VStar.Residuals
+module
+
+public import VStar.Sha
+public import VStar.Residuals
 
 /-!
 # `RecOpen{LANES, H}`: one inner Ligerito opening (`verity_flock.rec_open`)
@@ -14,6 +16,8 @@ Ports, u16 words: `row` `8 LANES`, `aux` `A(H) = 64 max(1, ⌈H / 2⌉)` (the si
 one row the unit does not read), `acc` 64, `coef` `16 LANES`, `dirs` 64, whose words 0 and 1 hold the position's `H` low
 bits; `out` 64 and `acc_out` 64.
 -/
+
+@[expose] public section
 
 namespace VStar
 

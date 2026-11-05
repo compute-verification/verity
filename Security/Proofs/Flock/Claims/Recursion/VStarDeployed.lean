@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.HpLast
+module
+
+public import Proofs.Flock.Claims.Recursion.HpLast
 
 /-!
 # The deployed reference prover's pieces with the last round as the deployed inner prover sends it (`refPartsFin`)
@@ -11,6 +13,8 @@ deployed inner prover's last message lays them, so the inner prover sends `finMs
 * **The outer witnesses** (`witFin`): `vstarWit` at the inner rounds before the last, the history `finMsg` reads, so
   the last message is the one the witnesses assemble (`hpLast`'s `hfin`) by construction (`witFin_take`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 

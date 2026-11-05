@@ -1,31 +1,33 @@
-import Proofs.Flock.Claims.Recursion.Serve
-import Proofs.Flock.Claims.Recursion.Wald
-import Proofs.Flock.Claims.Recursion.Compose
-import Proofs.Flock.Claims.Recursion.Transport
-import Proofs.Flock.Claims.Recursion.Cost
-import Proofs.Flock.Claims.Recursion.CostExp
-import Proofs.Flock.Claims.Recursion.Finders
-import Proofs.Flock.Claims.Recursion.Hybrid
-import Proofs.Flock.Claims.Recursion.KS
-import Proofs.Flock.Claims.Recursion.OuterKS
-import Proofs.Flock.Claims.Recursion.Inner
-import Proofs.Flock.Claims.Recursion.Abort
-import Proofs.Flock.Claims.Recursion.InnerAbort
-import Proofs.Flock.Claims.Recursion.PlurLin
-import Proofs.Flock.Claims.Recursion.BadLin
-import Proofs.Flock.Claims.Recursion.KSLin
-import Proofs.Flock.Claims.Recursion.Gap
-import Proofs.Flock.Claims.Recursion.Registered
-import Proofs.Flock.Claims.Recursion.FlockAbort
-import Proofs.Flock.Claims.Recursion.AbortWait
-import Proofs.Flock.Claims.Recursion.AbortFork
-import Proofs.Flock.Claims.Recursion.FlockKSAbort
-import Proofs.Flock.Claims.Recursion.FlockKSAcc
-import Proofs.Flock.Claims.Recursion.FlockKSDeploy
-import Proofs.Flock.Claims.Recursion.FlockKSRecord
-import Proofs.Flock.Claims.Recursion.FlockKSOnAcc
-import Proofs.Flock.Claims.Recursion.KSStated
-import Proofs.Flock.Claims.Recursion.Scope
+module
+
+public import Proofs.Flock.Claims.Recursion.Serve
+public import Proofs.Flock.Claims.Recursion.Wald
+public import Proofs.Flock.Claims.Recursion.Compose
+public import Proofs.Flock.Claims.Recursion.Transport
+public import Proofs.Flock.Claims.Recursion.Cost
+public import Proofs.Flock.Claims.Recursion.CostExp
+public import Proofs.Flock.Claims.Recursion.Finders
+public import Proofs.Flock.Claims.Recursion.Hybrid
+public import Proofs.Flock.Claims.Recursion.KS
+public import Proofs.Flock.Claims.Recursion.OuterKS
+public import Proofs.Flock.Claims.Recursion.Inner
+public import Proofs.Flock.Claims.Recursion.Abort
+public import Proofs.Flock.Claims.Recursion.InnerAbort
+public import Proofs.Flock.Claims.Recursion.PlurLin
+public import Proofs.Flock.Claims.Recursion.BadLin
+public import Proofs.Flock.Claims.Recursion.KSLin
+public import Proofs.Flock.Claims.Recursion.Gap
+public import Proofs.Flock.Claims.Recursion.Registered
+public import Proofs.Flock.Claims.Recursion.FlockAbort
+public import Proofs.Flock.Claims.Recursion.AbortWait
+public import Proofs.Flock.Claims.Recursion.AbortFork
+public import Proofs.Flock.Claims.Recursion.FlockKSAbort
+public import Proofs.Flock.Claims.Recursion.FlockKSAcc
+public import Proofs.Flock.Claims.Recursion.FlockKSDeploy
+public import Proofs.Flock.Claims.Recursion.FlockKSRecord
+public import Proofs.Flock.Claims.Recursion.FlockKSOnAcc
+public import Proofs.Flock.Claims.Recursion.KSStated
+public import Proofs.Flock.Claims.Recursion.Scope
 
 /-! The ZK-recursion compiler's claims proofs: serving one rerun program's reruns by another's (`Serve`), `E^rep`'s
 weighted reruns by Wald's identity (`Wald`), the composed extractor, `E^rep` served by the outer extractor, with its
@@ -37,3 +39,5 @@ charged at every rerun (`Hybrid`), and the recursion's `KS` from the outer Flock
 protocol's KS at the served runs (`KS`), and that outer KS at each session from Flock's own KS at the outer deployment,
 the session's prover simulating the rest of the compiled verifier around it (`OuterKS`); and `ScopeMatches` at the
 compiled verifier's parser and scope check (`Scope`). -/
+
+@[expose] public section

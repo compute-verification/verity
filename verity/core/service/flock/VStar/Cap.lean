@@ -1,5 +1,7 @@
-import VStar.Compose
-import VStar.Unit
+module
+
+public import VStar.Compose
+public import VStar.Unit
 
 /-!
 # `RecCap`: one node of a Ligerito level's committed tops (`verity_flock.rec_cap`)
@@ -19,6 +21,8 @@ The unit's one output `out` is the row's padding, words 32 to 63, then 32 zero w
 (`rec-cap-zero`, `RecCoins.checkCap`), so the statement holds exactly where every `top` row is a node's row. Ports, u16
 words: `top` 64, `out` 64. No AND: the unit is the hm96 slots' binding of the rows.
 -/
+
+@[expose] public section
 
 namespace VStar
 

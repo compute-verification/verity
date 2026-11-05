@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Scope.Matches
-import Flock.Registered
-import Flock.RecSetup
-import Proofs.Flock.Claims.JsonNorm
+module
+
+public import Proofs.Flock.Claims.Scope.Matches
+public import Flock.Registered
+public import Flock.RecSetup
+public import Proofs.Flock.Claims.JsonNorm
 
 /-!
 # The deployed verifier's statement: its bytes, its parser and its setup
@@ -31,6 +33,8 @@ session's statement (`Stmt.setupTables`), each table's registered reads (`checkR
 hm96-sha512 rows, which `verifyCmd` sets up on its compression circuit and then always refuses (such a session has no
 draw, `drawLaw zk tags false none`); the deployed form does not carry `--comp`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 
