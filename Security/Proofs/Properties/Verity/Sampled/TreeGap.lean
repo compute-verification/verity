@@ -70,11 +70,10 @@ is the gap of the Hankel product of `κ`'s bits beside the salt hash of the salt
 theorem hidingGap_tree (ν : ByteArray) (κ : Fin 2047 → Bool) :
     hidingGap (treeMy (treeKey κ)) (treeC ν) =
       hidingGap (hankel (n := 512) (l := 1536) (bitsZ 2047 κ)) (treeC ν ∘ (bitsZ 1536).symm) := by
+  have hc : (treeC ν ∘ (bitsZ 1536).symm) ∘ bitsZ 1536 = treeC ν := by
+    rw [Function.comp_assoc, Equiv.symm_comp_self, Function.comp_id]
   rw [← hidingGap_comp_equiv (bitsZ 1536) (hankel (n := 512) (l := 1536) (bitsZ 2047 κ))
-    (treeC ν ∘ (bitsZ 1536).symm), treeMy_treeKey_eq_comp]
-  congr 1
-  funext y
-  simp only [Function.comp_apply, Equiv.symm_apply_apply]
+    (treeC ν ∘ (bitsZ 1536).symm), hc, treeMy_treeKey_eq_comp]
 
 /-- **The sum over the key of a coin tree's hiding gap** is the sum over the keys over `ZMod 2` of the Hankel product's
 gap (`hidingGap_tree`). -/
