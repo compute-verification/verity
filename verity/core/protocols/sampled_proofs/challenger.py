@@ -169,10 +169,11 @@ records leaves the host, so the signed close covers them:
 `after` is the round's message's SHA-512 (the record's ``msg_sha512``), and for the link points (stream ``session``,
 round 0) the SHA-512 of the link's ``root_F`` and each table's ``root_B`` (`link_after`).  `released_roots_of` reads past
 these lines (`tree_line`), `coin_trees_of` reads them, and `session_tree_reason` holds a session's record to them: its
-``coin_tree`` a tree the log shows sampled, its link points and every round's coins that tree's logged openings.
-`sessions_tree_reason` holds an audit's sessions to them, one tree a session and every tree a session's, so no statement's
-coins are flipped twice.  The tree's root and key leave at ``Hello``, as C-Flock's coin server releases them, so its
-unopened coins rest on the tree's hm96 hiding.
+``coin_tree`` a tree the log shows sampled, its link's ``root_b`` keys exactly its session's tables (`LINK_TABLES`), each
+entry the length its table's statement fixes (`LINK_ROOT_LEN`, refused before the hash so the hashed message parses one
+way), its link points and every round's coins that tree's logged openings.  `sessions_tree_reason` holds an audit's sessions to
+them, one tree a session and every tree a session's, so no statement's coins are flipped twice.  The tree's root and key
+leave at ``Hello``, as C-Flock's coin server releases them, so its unopened coins rest on the tree's hm96 hiding.
 
 The first client is PoUW's live window (`verity.core.protocols.pouw.window`, "Live windows"): its salt, its sample and
 its round coins, round r's opened after round r's root.  The module reads only the standard library,
@@ -188,7 +189,7 @@ import os
 import re
 import string
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -886,6 +887,16 @@ def link_after(root_f: bytes, root_b: dict[str, bytes]) -> bytes:
 
 TREE_RECORD_FORM = ("its record names no coin_tree, link {points, root_b, root_f} and streams [{stream, rounds: [{coins, "
                     "msg_sha512, n}]}] in lowercase hex, as a --zk session's record does")
+# The link points are opened after every ``root_b`` entry (`link_after`) and C-Flock reads only the session's tables'
+# (S5), so a key of no table, or a table without its key, would let the prover pick a table's ``root_B`` after them.
+LINK_TABLES = "its link's root_b keys are not exactly its session's tables"
+# `link_after` hashes ``root_F`` and each table's ``root_B`` in table name order with no length prefix. A table's
+# ``root_B`` is its proof's level-0 cap, 2^cap0 digests of its Merkle scheme at its statement's m, so its statement fixes
+# its length. Refusing any other length before the hash is what makes the message parse one way: the ``root_B``s are its
+# last bytes, each of its table's length in table order, and ``root_F`` is the rest. Without it one message could read
+# as other roots.
+LINK_ROOT_LEN = ("its link's root_b for a table is not the length its statement fixes for that table's root_B "
+                 "(2^cap0 digests)")
 
 
 def _record_coins(cs: Any) -> bytes | None:
@@ -894,13 +905,16 @@ def _record_coins(cs: Any) -> bytes | None:
     return b"".join(bytes.fromhex(c) for c in cs)
 
 
-def session_tree_reason(trees: dict[str, LoggedTree], record: Any) -> str | None:
-    """Why `record`, a ``--zk`` session's record (its ``session.json``), doesn't show its coins to be ones the
-    challenger's release log shows it released (`trees`, `coin_trees_of`'s); None when it does.  Its ``coin_tree`` must
-    be one the log shows sampled, its key, nonce, root and spec; its link points (``link.points``, in order) that tree's
-    ``session`` round 0, opened after the roots its link commits (`link_after` of ``link.root_f`` and ``link.root_b``);
-    and each round ``k`` of each of its ``streams`` that tree's round ``k`` of the stream, its ``n`` coins opened after
-    its message (``msg_sha512``) and whose SHA-512 is its ``coins``' (`coins_digest`)."""
+def session_tree_reason(trees: dict[str, LoggedTree], tables: Mapping[str, int | None], record: Any) -> str | None:
+    """Why `record`, a ``--zk`` session's record (its ``session.json``) on the tables `tables`, each with the byte
+    length its statement fixes for its ``root_B`` (None where the caller set up no statement), doesn't show its coins
+    to be ones the challenger's release log shows it released (`trees`, `coin_trees_of`'s); None when it does.  Its
+    ``coin_tree`` must be one the log shows sampled, its key, nonce, root and spec; its link's ``root_b`` keys exactly
+    `tables` (`LINK_TABLES`), each entry its table's length (`LINK_ROOT_LEN`), checked before the hash below so that the
+    message it hashes parses one way; its link points (``link.points``, in order) that tree's ``session`` round 0,
+    opened after the roots its link commits (`link_after` of ``link.root_f`` and ``link.root_b``); and each round ``k``
+    of each of its ``streams`` that tree's round ``k`` of the stream, its ``n`` coins opened after its message
+    (``msg_sha512``) and whose SHA-512 is its ``coins``' (`coins_digest`)."""
     ct = record.get("coin_tree") if isinstance(record, dict) else None
     t = trees.get(ct["root"]) if isinstance(ct, dict) and type(ct.get("root")) is str else None
     if t is None:
@@ -910,10 +924,14 @@ def session_tree_reason(trees: dict[str, LoggedTree], record: Any) -> str | None
     link, streams = record.get("link"), record.get("streams")
     if not isinstance(link, dict) or not isinstance(link.get("root_b"), dict) or type(link.get("points")) is not list:
         return TREE_RECORD_FORM
+    if sorted(link["root_b"]) != sorted(tables):
+        return LINK_TABLES
     root_f, root_b = _hex(link.get("root_f")), {k: _hex(v) for k, v in link["root_b"].items()}
     points = _record_coins([c for p in link["points"] for c in (p if type(p) is list else [None])])
     if root_f is None or None in root_b.values() or points is None or type(streams) is not list:
         return TREE_RECORD_FORM
+    if any(n is not None and len(root_b[table]) != n for table, n in tables.items()):
+        return LINK_ROOT_LEN
     o = t.opening(CT.SESSION, 0)
     if o is None or (o.n, o.after, o.coins) != (len(points) // 16, link_after(root_f, root_b).hex(),
                                                  hashlib.sha512(points).hexdigest()):
@@ -932,15 +950,16 @@ def session_tree_reason(trees: dict[str, LoggedTree], record: Any) -> str | None
     return None
 
 
-def sessions_tree_reason(trees: dict[str, LoggedTree], records: Sequence[tuple[str, Any]]) -> str | None:
-    """Why the ``--zk`` sessions `records`, each its name and its record, don't show their coins to be the ones the
-    challenger's release log shows it sampled and opened (`trees`, `coin_trees_of`'s), one tree a session; None when
-    they do.  In order, each session's coins must be its tree's (`session_tree_reason`), a tree no earlier session's
-    (`SHARED_TREE`); and every tree the log shows must be a session's (`UNUSED_TREE`), so no statement's coins are
-    flipped twice."""
+def sessions_tree_reason(trees: dict[str, LoggedTree],
+                         records: Sequence[tuple[str, Mapping[str, int | None], Any]]) -> str | None:
+    """Why the ``--zk`` sessions `records`, each its name, its tables with their ``root_B`` lengths
+    (`session_tree_reason`'s) and its record, don't show their coins to be the ones the challenger's release log shows
+    it sampled and opened (`trees`, `coin_trees_of`'s), one tree a session; None when they do.  In order, each
+    session's coins must be its tree's (`session_tree_reason`), a tree no earlier session's (`SHARED_TREE`); and every
+    tree the log shows must be a session's (`UNUSED_TREE`), so no statement's coins are flipped twice."""
     used: list[str] = []
-    for name, record in records:
-        why = session_tree_reason(trees, record)
+    for name, tables, record in records:
+        why = session_tree_reason(trees, tables, record)
         root = record["coin_tree"]["root"] if why is None else None
         if why is None and root in used:
             why = SHARED_TREE
@@ -1860,7 +1879,7 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "order_reason", "record_many", "record_message", "record_reason", "released_roots_of", "root_of",
            "session_named", "session_of", "trusted_commitment", "trusted_reason", "trusted_session_of", "verify_ledger",
            "verify_periods", "withheld_on", "write_record",
-           "MAX_BLOCK", "MAX_ROUNDS_LOG", "MAX_TREE_COINS", "MAX_TREE_LINES", "NO_TREE", "OPEN_EVENT", "SHARED_TREE",
-           "TREE_EVENT", "TREE_RECORD_FORM", "TREE_SPEC_FORM", "UNUSED_TREE", "LoggedTree", "TreeOpening",
+           "LINK_ROOT_LEN", "LINK_TABLES", "MAX_BLOCK", "MAX_ROUNDS_LOG", "MAX_TREE_COINS", "MAX_TREE_LINES", "NO_TREE", "OPEN_EVENT",
+           "SHARED_TREE", "TREE_EVENT", "TREE_RECORD_FORM", "TREE_SPEC_FORM", "UNUSED_TREE", "LoggedTree", "TreeOpening",
            "coin_trees_of", "coins_digest", "link_after", "session_tree_reason", "sessions_tree_reason", "tree_line",
            "tree_spec_reason"]
