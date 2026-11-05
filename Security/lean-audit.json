@@ -152,8 +152,8 @@
   "NetTiming.Guarantees.SampledAuditAccepted": {
    "owner": "@proofs",
    "digest": "559db99f683821879b48c8850d8fd77e243272bdbda83d3aaa8a7cdc7a38f2af",
-   "cites": "NetTiming.SecurityProofs.SampledAuditAccepted",
-   "why": "NetTiming.SecurityProofs.SampledAuditAccepted's statement, another listed guarantee"
+   "why": "NetTiming.SecurityProofs.SampledAuditAccepted's statement, another listed guarantee",
+   "cites": "NetTiming.SecurityProofs.SampledAuditAccepted"
   },
   "RecDeploy.PartIn": {
    "owner": "@proofs",
@@ -780,6 +780,24 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Accounting.Gates.IntOp.IsDerived": {
+   "owner": "@memory-accounting",
+   "digest": "21c6d624c311198dd432d0ec5c505cc61961a7cc2d1e8f9beac8391b64caffb4",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Accounting.Gates.IntOp.IsMma": {
+   "owner": "@memory-accounting",
+   "digest": "5225dbb503519b108f796b52f67ad0515f13734bbc0d6ac9b67093595af3d52f",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Accounting.Gates.Iv.Mem": {
+   "owner": "@memory-accounting",
+   "digest": "1714dd2696742affaad674f4da850964a01b48572519711b31083845d54cb74d",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "Accounting.Gates.Property": {
    "owner": "@memory-accounting",
    "digest": "cca267382696a493400aed3d716834fdcaa6b813e8e395a4e2b9e670196f5c12",
@@ -1170,6 +1188,12 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Accounting.TS.Dataflow.Runs": {
+   "owner": "@compute-accounting",
+   "digest": "40634b2e7a2eab515450a98e875ace3b1421497dc4de80f971d169da87f1bf60",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "Accounting.TS.Dataflow.Sees": {
    "owner": "@compute-accounting",
    "digest": "1aaf6acf17a26090bb6aae2c0c56ee10b0ce47a73c72270c33101cea3e89a3a0",
@@ -1245,6 +1269,12 @@
   "Accounting.TS.LiUnits.same": {
    "owner": "@compute-accounting",
    "digest": "5927b5e65e850cafe10034645ae1177813a5c245c0e2c5b63c0c8d10187f6a2d",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Accounting.TS.Model.FloorKnown": {
+   "owner": "@compute-accounting",
+   "digest": "8b85e4070adec68ec3d4328b59d53909c02eed7179cfea7f2d6d79f45f868c6c",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -1428,9 +1458,87 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Claims.Out64": {
+   "owner": "@proofs",
+   "digest": "35f6c91fd42935ab0960d14720a80caec791d835ff64a8e6312007e1b107bdac",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Claims.Recursion.R": {
+   "owner": "@proofs",
+   "digest": "60c01a02b549f4424875d50bd3a3df908323700aa7b729387fd47ecd81e610d2",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Claims.Recursion.RPriv": {
+   "owner": "@proofs",
+   "digest": "49d648cc9cef7a19ab0f031bbd9d32bb80515097dc8a86283bcaa3370049828e",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Claims.Recursion.Scope": {
+   "owner": "@proofs",
+   "digest": "45f9421e121745700e6942d6b8503bb470de24729ea9e92f18eb53ae06b88bc5",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "Claims.Sampling.KS": {
    "owner": "@proofs",
    "digest": "33b65996171d0478084ebb76475db9a2763cd9a1ac2ed40bd46d75dd3ce0f3e2",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Claims.Sampling.PrivateCircuit.Fits": {
+   "owner": "@proofs",
+   "digest": "24112cd715fb564fa24e1e75189fddbcb14df7f2ba073735ddb87bbf657c5241",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Claims.Sampling.Rhon": {
+   "owner": "@proofs",
+   "digest": "3cb4e93f0cf7943b424a7be761d9ead3a164dd325bc59d460cf20629ca8f41ba",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Claims.Sampling.Scope": {
+   "owner": "@proofs",
+   "digest": "c86322865f5a384db4b92a4249ffaf091d6f819532151b7cda01648c6ca2847f",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Claims.SamplingGeneric.Arg.KS": {
+   "owner": "@proofs",
+   "digest": "3c1a24cf577163684ee286a639b91a2e7f460eb0acf3c31997fde367092651dc",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Claims.SamplingGeneric.Compiled.OpenCallsLe": {
+   "owner": "@proofs",
+   "digest": "240e61974b75645833c0f95ae02f47cb674dada6c380ae1480eeb7ce29f7df41",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Claims.SamplingGeneric.Compiled.Scope": {
+   "owner": "@proofs",
+   "digest": "a8711fb89d051d62f4852a2a177baf5d84781ac11493a4a0f128f32c51edb387",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Claims.SamplingGeneric.Compiled.Sessions": {
+   "owner": "@proofs",
+   "digest": "f9c14e5eae2450a9bbc584071a25fab7966af6e88225012f2a91b96d21757bbb",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Claims.SamplingGeneric.ZkArg.ZK": {
+   "owner": "@proofs",
+   "digest": "0f8e9af2b7ea5b069e9da304ec981bda6e8823ab793ca046eb1c443b19135eb9",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Claims.SamplingGeneric.ZkCompiled.ZkSessions": {
+   "owner": "@proofs",
+   "digest": "3eaa17424bd52d59b856195fc919ec2a7b136733b1427bcd5f67a41d3662c2c4",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -1473,6 +1581,12 @@
   "Claims.ZKMal.RefSession.TapeOK": {
    "owner": "@proofs",
    "digest": "c37691efde0491469d6667237a4646754ebce59c2560b100da335098c47a637c",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Claims.ZKOut": {
+   "owner": "@proofs",
+   "digest": "b5fef602df1505af31194518104067a8dab396bf09cf142cab385e821d2134a1",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -1608,6 +1722,18 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "FlockComplete.RecordFitsAt": {
+   "owner": "@proofs",
+   "digest": "eceb480c22ac30e4335aa60dbd3da8758e9dc62fe07c0366517813ec189c642c",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "FlockComplete.RegionsFit": {
+   "owner": "@proofs",
+   "digest": "546678e83deeb19adf6840000481c3dbe8914bb0fa24b91fa31b65ef5b1f4874",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "FlockSoundness.Assumptions.LinkCRAt": {
    "owner": "@proofs",
    "digest": "54f1596725c64b488d92de3b28e1b65bd106b82fb7340d6e295841ea82416c30",
@@ -1734,15 +1860,99 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "FlockSoundness.Audit.Partitioning.CertifiesLeak": {
+   "owner": "@proofs",
+   "digest": "49818a158eddf66e2a7ef4008c8b03b4834003e62ae4d590e8c04841a6b3d6c3",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "FlockSoundness.Built": {
    "owner": "@proofs",
    "digest": "548f5cb7cc68be48e8bf183062c88ea8d4c8d1f5b00cc16dcf13911c3165b96f",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "FlockSoundness.Discharge.Composed.CoinedSetup.Admits": {
+   "owner": "@proofs",
+   "digest": "52a5f8e3b25576d4f5de1f104a82efb9ec5ca1ca8c20ffcd8235a04c365277d5",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "FlockSoundness.Discharge.Composed.CoinedSetup.Valid": {
+   "owner": "@proofs",
+   "digest": "fde18efffa150c4deabef08a1f170554c5996229a79a27f3678363403c20ef94",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "FlockSoundness.Discharge.Composed.TagsOkZJ": {
    "owner": "@proofs",
    "digest": "9819dd3abf8a7632a4c98a664eb1f260b71c560e6b5f1687df9fb842f351d912",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "FlockSoundness.Discharge.DecodeZLJ.RecordsLiveJ": {
+   "owner": "@proofs",
+   "digest": "f6818a158985af9d677dd1e573b4ce28b6ecf6f56f5904e43ca56963798f46e3",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "FlockSoundness.Discharge.Exec.SessCRL": {
+   "owner": "@proofs",
+   "digest": "64ccd9d6e3d2fd8239ca5360b5b4bfd76b4c34abb568ea44302544f3cf8824f1",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "FlockSoundness.Discharge.FailClosed.FlockVerifyAcceptsR": {
+   "owner": "@proofs",
+   "digest": "7177e7863bf23bbdf8576702a9cf6cc86ed620b9217be214a380c25507b0337a",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "FlockSoundness.Discharge.FailClosed.LiveDesign": {
+   "owner": "@proofs",
+   "digest": "e4acdc7f682cb26f47bc0ee8567609fa8601be5eb2b82df58c3b68499960aca7",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "FlockSoundness.Discharge.FailClosed.ScopeR": {
+   "owner": "@proofs",
+   "digest": "dbb60c4cc8ce9b3ce42cc864ddc891dec215f6d739409c06a4e0cc318808dc9a",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "FlockSoundness.Discharge.FailClosed.ScopeZ": {
+   "owner": "@proofs",
+   "digest": "0d56eaaa795626cbf5348f99f7459708fe5d4797bbfd2b3f73b4b916a06f4cd9",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "FlockSoundness.Discharge.FailClosed.ScopeZR": {
+   "owner": "@proofs",
+   "digest": "9919bdb3c42ffeda77e584b1c81ca2012512c6cf96814f7208140ed13c273f83",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "FlockSoundness.Discharge.FailClosed.VerifiesP": {
+   "owner": "@proofs",
+   "digest": "f0aeb1f94dedadc8c56a55bc9bebc6b96219e5923c533dbd4fe3d9d34b4d4a42",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "FlockSoundness.Discharge.Hm.stHolds": {
+   "owner": "@proofs",
+   "digest": "794facfb551c127786bb8c3d2276fa3f2d4fba44298a157f4d2cd23a13082540",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "FlockSoundness.Discharge.PlainHJ.DrawOkPHJ": {
+   "owner": "@proofs",
+   "digest": "9fd719efc97c24115c29e23a5bf7aa6239eaf033662a6aa337249c15c784f69e",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "FlockSoundness.Discharge.PlainJ.DrawOkPJ": {
+   "owner": "@proofs",
+   "digest": "f14a0430f001afa18284c35cc1c18f58e1ddbf66d6b6802ef6da8d863b033ad7",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -1806,6 +2016,18 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "FlockSoundness.Discharge.ZkReg.OwnReadsH": {
+   "owner": "@proofs",
+   "digest": "d4108f6682768fb7c01ce66683efd88edba9d74b34d8e9f81e94d2139b976867",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "FlockSoundness.Discharge.ZkReg.OwnReadsHJ": {
+   "owner": "@proofs",
+   "digest": "e9aeedec7fad74902c6d756469f6931815c8b93e9b49fb3395f722b292580164",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "FlockSoundness.Model.Statement.LinkLayout": {
    "owner": "@proofs",
    "digest": "b37e44f0312955e52492256533b24acdc935490aeddd9708281231159bd4adce",
@@ -1815,6 +2037,18 @@
   "FlockSoundness.StrictCR.Finder.CR": {
    "owner": "@proofs",
    "digest": "4234584c8c100c10bc25e561da0e248d6b2c394ea401c2310eac1fcb610131e6",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "FlockVBridge.Carries": {
+   "owner": "@proofs",
+   "digest": "269a4f699df5b6aa8f1d3da224ca578265b5c7341893ef0430bb54fed1350ea5",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Hash.Collision": {
+   "owner": "@proofs",
+   "digest": "6352b7c1183e5a22df83ca267ec49a423df2fbf74845e167f5927c3873f3c545",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -2226,15 +2460,33 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "NetTiming.RegOpens": {
+   "owner": "@proofs",
+   "digest": "3850a7c66f0831ecef305940173495a0e6f0ea1dad8b7132e758e9b75dd9f168",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "NetTiming.Regenerates": {
    "owner": "@network-accounting",
    "digest": "0d433e5271a1ae85c0d7fde2eacabd9de68f97a6760809219bdf1ab0ba5234ec",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "NetTiming.ScopeAcc": {
+   "owner": "@network-accounting",
+   "digest": "c7fd760721042dfff5fa8908b38893d3749f30682f2cda072d1b29a9550d03f5",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "NetTiming.StatusComplete": {
    "owner": "@network-accounting",
    "digest": "e76c46b0a2f8b619b953aeb4331cd813ba0128cec464f244821bd9c6d4ea7f06",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "NetTiming.TapOpens": {
+   "owner": "@network-accounting",
+   "digest": "c255ee50b3f647891674ae16946a2b432a7c5e50b3c4c83d5be987e2e98ee44d",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -2628,6 +2880,12 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Pouw.Dither.Prover.Passes": {
+   "owner": "@compute-research",
+   "digest": "d7f4ccf9d45beb93859280167894c73c5fd746732fa810df6ceb85fdd190bbf8",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "Pouw.Eps1.ClassP": {
    "owner": "@compute-accounting",
    "digest": "a701827ced69a6601de286c0a09f129a13cb0c797905954636c3ae3ad8bb16d2",
@@ -2910,6 +3168,12 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Pouw.PearlC.HiddenAudit.ProverBounded": {
+   "owner": "@compute-accounting",
+   "digest": "1bbb2f517195f5184e0645318d4127f392d6de4329d0afefd1dfbf94f72f9dfc",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "Pouw.PearlC.PearlCDevice.RowLocal": {
    "owner": "@compute-accounting",
    "digest": "933b2f2d2e86b8e477121efd03065429e661d8daeaf81a740244b6908bde9469",
@@ -2943,6 +3207,18 @@
   "Pouw.Workload.InDomain": {
    "owner": "@compute-accounting",
    "digest": "4c6906588d3bd24bfe0c02960ad2153360f4fb933cf00700cb76cb6c8a58df8e",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "RecDeploy.Coined": {
+   "owner": "@proofs",
+   "digest": "e7ce0aaf46d5fcb411bde1a93234cfae262107ea8aeb2bda6bbfab846df045d0",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "RecDeploy.DenseAt": {
+   "owner": "@proofs",
+   "digest": "dc8cfde2fd1b6c2269a4a3384efe5c336a57689d7c83068e3e8819582e3467e2",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -3036,6 +3312,12 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Verity.Circuit.IsAnd": {
+   "owner": "@lean",
+   "digest": "cde2e6a8622514f4f062846ba8ed7eb96f4d3ce2ad0c1c095dbe1f376dd4d10a",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "Verity.Committed.Honest": {
    "owner": "@lean",
    "digest": "c3f32aeb6eaac8b444a4289e3b60c65616ec8e84eb541e1b0aaa7272e9b3c3f1",
@@ -3054,6 +3336,12 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Verity.Partition.Correct": {
+   "owner": "@proofs",
+   "digest": "78b891db9c227aedecdb4465a0fae50b84cc37ab777bcbdfdc69f5ac0662feee",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "Verity.Partition.IsCK": {
    "owner": "@lean",
    "digest": "a78011b108a9369070c518c56ec7264ee084cb9aab661d2ab5ba77a6b4c26cd2",
@@ -3066,6 +3354,12 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Verity.Vocab.Opens": {
+   "owner": "@proofs",
+   "digest": "8c2dbb92fed3bc51341915fba1b730320bd0b1ed1f1830d8b78e654ac8457445",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "Verity.Wipe.OfRun.Preserves": {
    "owner": "@lean",
    "digest": "e5a18c882a919461ccda131ee6ea3333a0da7219bf5bd1acb6ae8cb161db689d",
@@ -3075,300 +3369,6 @@
   "Verity.Wipe.SurvivorBound": {
    "owner": "@lean",
    "digest": "59c32110ad37a324988ebec3721ddbed31555090ee2b008b734c1651b3387da1",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Accounting.Gates.IntOp.IsDerived": {
-   "owner": "@memory-accounting",
-   "digest": "21c6d624c311198dd432d0ec5c505cc61961a7cc2d1e8f9beac8391b64caffb4",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Accounting.Gates.IntOp.IsMma": {
-   "owner": "@memory-accounting",
-   "digest": "5225dbb503519b108f796b52f67ad0515f13734bbc0d6ac9b67093595af3d52f",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Accounting.Gates.Iv.Mem": {
-   "owner": "@memory-accounting",
-   "digest": "1714dd2696742affaad674f4da850964a01b48572519711b31083845d54cb74d",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Accounting.TS.Dataflow.Runs": {
-   "owner": "@compute-accounting",
-   "digest": "40634b2e7a2eab515450a98e875ace3b1421497dc4de80f971d169da87f1bf60",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Accounting.TS.Model.FloorKnown": {
-   "owner": "@compute-accounting",
-   "digest": "8b85e4070adec68ec3d4328b59d53909c02eed7179cfea7f2d6d79f45f868c6c",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Claims.Out64": {
-   "owner": "@proofs",
-   "digest": "35f6c91fd42935ab0960d14720a80caec791d835ff64a8e6312007e1b107bdac",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Claims.Recursion.R": {
-   "owner": "@proofs",
-   "digest": "60c01a02b549f4424875d50bd3a3df908323700aa7b729387fd47ecd81e610d2",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Claims.Recursion.RPriv": {
-   "owner": "@proofs",
-   "digest": "49d648cc9cef7a19ab0f031bbd9d32bb80515097dc8a86283bcaa3370049828e",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Claims.Recursion.Scope": {
-   "owner": "@proofs",
-   "digest": "45f9421e121745700e6942d6b8503bb470de24729ea9e92f18eb53ae06b88bc5",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Claims.Sampling.PrivateCircuit.Fits": {
-   "owner": "@proofs",
-   "digest": "24112cd715fb564fa24e1e75189fddbcb14df7f2ba073735ddb87bbf657c5241",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Claims.Sampling.Rhon": {
-   "owner": "@proofs",
-   "digest": "3cb4e93f0cf7943b424a7be761d9ead3a164dd325bc59d460cf20629ca8f41ba",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Claims.Sampling.Scope": {
-   "owner": "@proofs",
-   "digest": "c86322865f5a384db4b92a4249ffaf091d6f819532151b7cda01648c6ca2847f",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Claims.SamplingGeneric.Arg.KS": {
-   "owner": "@proofs",
-   "digest": "3c1a24cf577163684ee286a639b91a2e7f460eb0acf3c31997fde367092651dc",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Claims.SamplingGeneric.Compiled.OpenCallsLe": {
-   "owner": "@proofs",
-   "digest": "240e61974b75645833c0f95ae02f47cb674dada6c380ae1480eeb7ce29f7df41",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Claims.SamplingGeneric.Compiled.Scope": {
-   "owner": "@proofs",
-   "digest": "a8711fb89d051d62f4852a2a177baf5d84781ac11493a4a0f128f32c51edb387",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Claims.SamplingGeneric.Compiled.Sessions": {
-   "owner": "@proofs",
-   "digest": "f9c14e5eae2450a9bbc584071a25fab7966af6e88225012f2a91b96d21757bbb",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Claims.SamplingGeneric.ZkArg.ZK": {
-   "owner": "@proofs",
-   "digest": "0f8e9af2b7ea5b069e9da304ec981bda6e8823ab793ca046eb1c443b19135eb9",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Claims.SamplingGeneric.ZkCompiled.ZkSessions": {
-   "owner": "@proofs",
-   "digest": "3eaa17424bd52d59b856195fc919ec2a7b136733b1427bcd5f67a41d3662c2c4",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Claims.ZKOut": {
-   "owner": "@proofs",
-   "digest": "b5fef602df1505af31194518104067a8dab396bf09cf142cab385e821d2134a1",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockComplete.RecordFitsAt": {
-   "owner": "@proofs",
-   "digest": "eceb480c22ac30e4335aa60dbd3da8758e9dc62fe07c0366517813ec189c642c",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockComplete.RegionsFit": {
-   "owner": "@proofs",
-   "digest": "546678e83deeb19adf6840000481c3dbe8914bb0fa24b91fa31b65ef5b1f4874",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Audit.Partitioning.CertifiesLeak": {
-   "owner": "@proofs",
-   "digest": "49818a158eddf66e2a7ef4008c8b03b4834003e62ae4d590e8c04841a6b3d6c3",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Discharge.Composed.CoinedSetup.Admits": {
-   "owner": "@proofs",
-   "digest": "52a5f8e3b25576d4f5de1f104a82efb9ec5ca1ca8c20ffcd8235a04c365277d5",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Discharge.Composed.CoinedSetup.Valid": {
-   "owner": "@proofs",
-   "digest": "fde18efffa150c4deabef08a1f170554c5996229a79a27f3678363403c20ef94",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Discharge.DecodeZLJ.RecordsLiveJ": {
-   "owner": "@proofs",
-   "digest": "f6818a158985af9d677dd1e573b4ce28b6ecf6f56f5904e43ca56963798f46e3",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Discharge.Exec.SessCRL": {
-   "owner": "@proofs",
-   "digest": "64ccd9d6e3d2fd8239ca5360b5b4bfd76b4c34abb568ea44302544f3cf8824f1",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Discharge.FailClosed.FlockVerifyAcceptsR": {
-   "owner": "@proofs",
-   "digest": "7177e7863bf23bbdf8576702a9cf6cc86ed620b9217be214a380c25507b0337a",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Discharge.FailClosed.LiveDesign": {
-   "owner": "@proofs",
-   "digest": "e4acdc7f682cb26f47bc0ee8567609fa8601be5eb2b82df58c3b68499960aca7",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Discharge.FailClosed.ScopeR": {
-   "owner": "@proofs",
-   "digest": "dbb60c4cc8ce9b3ce42cc864ddc891dec215f6d739409c06a4e0cc318808dc9a",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Discharge.FailClosed.ScopeZ": {
-   "owner": "@proofs",
-   "digest": "0d56eaaa795626cbf5348f99f7459708fe5d4797bbfd2b3f73b4b916a06f4cd9",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Discharge.FailClosed.ScopeZR": {
-   "owner": "@proofs",
-   "digest": "9919bdb3c42ffeda77e584b1c81ca2012512c6cf96814f7208140ed13c273f83",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Discharge.FailClosed.VerifiesP": {
-   "owner": "@proofs",
-   "digest": "f0aeb1f94dedadc8c56a55bc9bebc6b96219e5923c533dbd4fe3d9d34b4d4a42",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Discharge.Hm.stHolds": {
-   "owner": "@proofs",
-   "digest": "794facfb551c127786bb8c3d2276fa3f2d4fba44298a157f4d2cd23a13082540",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Discharge.PlainHJ.DrawOkPHJ": {
-   "owner": "@proofs",
-   "digest": "9fd719efc97c24115c29e23a5bf7aa6239eaf033662a6aa337249c15c784f69e",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Discharge.PlainJ.DrawOkPJ": {
-   "owner": "@proofs",
-   "digest": "f14a0430f001afa18284c35cc1c18f58e1ddbf66d6b6802ef6da8d863b033ad7",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Discharge.ZkReg.OwnReadsH": {
-   "owner": "@proofs",
-   "digest": "d4108f6682768fb7c01ce66683efd88edba9d74b34d8e9f81e94d2139b976867",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Discharge.ZkReg.OwnReadsHJ": {
-   "owner": "@proofs",
-   "digest": "e9aeedec7fad74902c6d756469f6931815c8b93e9b49fb3395f722b292580164",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockVBridge.Carries": {
-   "owner": "@proofs",
-   "digest": "269a4f699df5b6aa8f1d3da224ca578265b5c7341893ef0430bb54fed1350ea5",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Hash.Collision": {
-   "owner": "@proofs",
-   "digest": "6352b7c1183e5a22df83ca267ec49a423df2fbf74845e167f5927c3873f3c545",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "NetTiming.RegOpens": {
-   "owner": "@proofs",
-   "digest": "3850a7c66f0831ecef305940173495a0e6f0ea1dad8b7132e758e9b75dd9f168",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "NetTiming.ScopeAcc": {
-   "owner": "@network-accounting",
-   "digest": "c7fd760721042dfff5fa8908b38893d3749f30682f2cda072d1b29a9550d03f5",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "NetTiming.TapOpens": {
-   "owner": "@network-accounting",
-   "digest": "c255ee50b3f647891674ae16946a2b432a7c5e50b3c4c83d5be987e2e98ee44d",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.Dither.Prover.Passes": {
-   "owner": "@compute-research",
-   "digest": "d7f4ccf9d45beb93859280167894c73c5fd746732fa810df6ceb85fdd190bbf8",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pouw.PearlC.HiddenAudit.ProverBounded": {
-   "owner": "@compute-accounting",
-   "digest": "1bbb2f517195f5184e0645318d4127f392d6de4329d0afefd1dfbf94f72f9dfc",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "RecDeploy.Coined": {
-   "owner": "@proofs",
-   "digest": "e7ce0aaf46d5fcb411bde1a93234cfae262107ea8aeb2bda6bbfab846df045d0",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "RecDeploy.DenseAt": {
-   "owner": "@proofs",
-   "digest": "dc8cfde2fd1b6c2269a4a3384efe5c336a57689d7c83068e3e8819582e3467e2",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Verity.Circuit.IsAnd": {
-   "owner": "@lean",
-   "digest": "cde2e6a8622514f4f062846ba8ed7eb96f4d3ce2ad0c1c095dbe1f376dd4d10a",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Verity.Partition.Correct": {
-   "owner": "@proofs",
-   "digest": "78b891db9c227aedecdb4465a0fae50b84cc37ab777bcbdfdc69f5ac0662feee",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Verity.Vocab.Opens": {
-   "owner": "@proofs",
-   "digest": "8c2dbb92fed3bc51341915fba1b730320bd0b1ed1f1830d8b78e654ac8457445",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   }
@@ -18180,10 +18180,10 @@
     "assumptions": [],
     "domain": [],
     "open": ["Nci.Capability.Selects"],
-    "reads": []
+    "reads": ["Nci.Assumptions.DescriptionHard"]
    },
    "type_hash": "6dab089a301f5257866b903d1c9e885c0031f7aac94c698f704a25d534a87173",
-   "unfolded_hash": "8bf802ab33261abf2cb1142f263a1848695338f37134a4cc31320c8a031844aa"
+   "unfolded_hash": "85332aed73c91f3207ecc5c2eae83725f7fe27ac9e57cc7037f1b00ae1920000"
   },
   "Nci.SecurityProofs.ImportOrRecompute": {
    "owner": "@training",
@@ -18736,10 +18736,10 @@
     "assumptions": [],
     "domain": [],
     "open": ["Nci.Capability.Selects"],
-    "reads": []
+    "reads": ["Nci.Assumptions.MinEntropyHard"]
    },
    "type_hash": "e2b5ec98cd836215e65e15aaab67dc73d7bd2032a760d166e02e303fc86aa0d7",
-   "unfolded_hash": "4897db233d18137b12d9b67a4f44d3fdf8cdd3ddc56237f7497160047f774c3c"
+   "unfolded_hash": "5a1a85db855181c3a1ea49b75dcbc395880353be13a3e0ee7da6871d99d56005"
   },
   "Nci.SecurityProofs.ThreadedContainedInfo": {
    "owner": "@lean",
@@ -29071,18 +29071,15 @@
    },
    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "HA.ProverBounded σ q": "HA.ProverBounded taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "HA.ProverBounded σ q": "HA.ProverBounded taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "HA.ProverBounded σ q": "HA.ProverBounded taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -35962,10 +35959,10 @@
    }
   },
   "Definitions.Nci.Guarantees.Capability.Witnesses": {
-   "digest": "fb8dce2e725f1063b4f928759e914a22e53135a4c79cd4a639a3bab80426bdff",
+   "digest": "60685ed067a4fc54ff7ad82b493955ec1d2282e800908511ed29ba41196f24c4",
    "definitions": {
     "Nci.Guarantees.HeldBudgetHonest": "5db0a66d388088af0c8826f3d1e27067f9828d0bdbd8a6602ddf84b02b0b1f0f",
-    "Nci.Guarantees.HeldBudgetNontrivial": "571e5511728d55cab5de7761f4055578ca12ed95ff0901d9e05006508d3ea66e",
+    "Nci.Guarantees.HeldBudgetNontrivial": "6ead30cfb4fe65aed17e3d370f11e5b1201ec1cd2ad8da585848f08b4e687532",
     "Nci.Guarantees.ImportOrRecomputeHonest": "6078c3a58c854085d04473d0bb830408664d7c92624db14e630f51955692dd53",
     "Nci.Guarantees.ImportOrRecomputeNontrivial": "1f49c9fe0040e7f54630aefa931bd0fa117d6d5ba05bd921c6b6f7e55ec1514f",
     "Nci.Guarantees.IncidenceCapHonest": "6b066eb05e8af78956c035b3001bad56b7876ced08824ab6094b1fc7355ef2d4",
@@ -35981,7 +35978,7 @@
     "Nci.Guarantees.RecoveredBudgetHonest": "67d40a42a3047b33c2e04427306faa14dd54bd837a232107606833bd2fee695f",
     "Nci.Guarantees.RecoveredBudgetNontrivial": "6a72e326bd551493b3355d23ef5f739fe4bb8bef437d17f105a391cc10ef47b4",
     "Nci.Guarantees.StatHeldBudgetHonest": "31e0331f3739f3fbc173b41a82885bdc6dd84e0f3384c58fa6de2e18c61de1aa",
-    "Nci.Guarantees.StatHeldBudgetNontrivial": "126292e9a8c5d52439c2e4b660706a44d851da598daadd9f189d685549f5937e",
+    "Nci.Guarantees.StatHeldBudgetNontrivial": "0ad5068f6a5a056e195a4fa7a0115313eea0b2505db154fe4ed53791f1290323",
     "Nci.Guarantees.WeightedProductCapHonest": "f6a60c4b9c1b45915ee73a308305e007f7b7ce819b9896f58c934831120a3f2f",
     "Nci.Guarantees.WeightedProductCapNontrivial": "03baff52aa9b1b353113d124749572ae1f1a100fb7b4a606044adc8c68ece5c9"
    }
