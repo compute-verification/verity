@@ -1951,8 +1951,10 @@ class Driver:
             pl.pop("gated_by", None)
 
     def _shards(self, run: dict) -> list[list[Path]]:
-        """The run dirs of each shard of ``run`` (``groups``, its twins'; an unsharded run is one), each fetched once a tick."""
-        return [self._evidence(Verdict("failed", " ".join(g))) for g in run.get("groups") or [run["ids"]]]
+        """The run dirs of each shard of ``run`` (``groups``, its twins', by run id; an unsharded run is one), fetched once a
+        tick."""
+        dirs = self._evidence(Verdict("failed", " ".join(run["ids"])))
+        return [[d for d in dirs if d.name in g] for g in run["groups"]] if run.get("groups") else [dirs]
 
     def _shard_steps(self, run: dict) -> list[dict[str, str | None]] | None:
         """`shard_steps` of ``run``'s shards, one whose twin exited 0 known by its steps.jsonl."""
