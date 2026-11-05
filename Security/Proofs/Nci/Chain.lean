@@ -1,5 +1,7 @@
-import Definitions.Nci.Guarantees
-import Proofs.Core
+module
+
+public import Definitions.Nci.Guarantees
+public import Proofs.Core
 
 /-!
 # Lemmas 1 and 2: what an IU reads at full and other positions
@@ -12,6 +14,8 @@ is split (`other_positions`). With incompressibility, they give the reads the th
 
 `training_of_updatedMatMul` derives the bound for training from the bound for updated matrix multiplications.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

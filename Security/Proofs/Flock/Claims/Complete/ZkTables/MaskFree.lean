@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.MaskedTables
-import Proofs.Flock.Claims.Complete.ZkTables.Ready
+module
+
+public import Proofs.Flock.Claims.ZK.MaskedTables
+public import Proofs.Flock.Claims.Complete.ZkTables.Ready
 
 /-!
 # The deployed relation does not read the mask slots
@@ -11,6 +13,8 @@ isolated (`maskIsolated_of_layout`): its rows hold at any bits, and no other row
 `c`'s share of the mask witness is `Composed.zWith` at the share of `w` and the words' bits (`zOf_maskW`), which
 satisfies the table's lowered statement where `w`'s share does (`satisfies_zWith`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

@@ -18,10 +18,20 @@ order (`Flock.Bridge.partOf` at the file's key program, `Placed.keyProg`):
   of the sizes `sizes` gives, the `ns` of `partOf`. O(the strata's ranges + the public file's units), which the setup
   reads already.
 -/
-import Flock.Circuit
-import Flock.RecResiduals
-import Flock.KnownRead
-import SampledProofs.Partition
+module
+
+public import Flock.Circuit
+public import Flock.RecResiduals
+public import Flock.KnownRead
+public import SampledProofs.Partition
+meta import Flock.Circuit
+meta import Flock.RecResiduals
+meta import Flock.KnownRead
+meta import SampledProofs.Partition
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.FilePart
 

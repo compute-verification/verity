@@ -1,7 +1,11 @@
-import Definitions.Pouw.PearlC.PeelFp4Vectors
-import Proofs.Pouw.PearlC.PeelFp4Proofs
+module
+
+public import Definitions.Pouw.PearlC.PeelFp4Vectors
+public import Proofs.Pouw.PearlC.PeelFp4Proofs
 
 /-! # `PeelFp4Checks`' rows, operands, bases and noise lines, which its parts read -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.PeelFp4Checks
 

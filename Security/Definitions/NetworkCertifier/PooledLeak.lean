@@ -1,4 +1,6 @@
-import Definitions.NetworkCertifier.SampledCharge
+module
+
+public import Definitions.NetworkCertifier.SampledCharge
 
 /-!
 # A monitoring period of sampled audits: each window's leak relation at its witness's faulty set
@@ -10,6 +12,8 @@ before its draw: the draws bound how many units those sets hold in total, and th
 once. `LeakAt` is the leak relation at one faulty set, and `PooledGood` is every window's at its own set, with the
 sets' total below a bound.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

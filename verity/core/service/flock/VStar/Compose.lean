@@ -1,6 +1,8 @@
-import Flock.HmRow
-import VStar.Stream
-import VStar.Unit
+module
+
+public import Flock.HmRow
+public import VStar.Stream
+public import VStar.Unit
 
 /-!
 # The `flock-circuit` file of a unit (`verity_flock.circuit.compose`)
@@ -12,6 +14,8 @@ prefix, midstate and padding), the slot ranges and the block size they give (`pl
 the all-zero instance's outputs and each row's `b ‖ c` under a zero salt (`dummy`), the rows' wires, and the statement's
 bindings (`Bindings`), which come from core's descriptor codec and are taken as given here.
 -/
+
+@[expose] public section
 
 namespace VStar
 

@@ -1,4 +1,6 @@
-import Properties.Flock.Circuit.Keyed
+module
+
+public import Properties.Flock.Circuit.Keyed
 
 /-!
 # `uniform`'s gates, units and rows
@@ -7,6 +9,8 @@ import Properties.Flock.Circuit.Keyed
 (`op_uniform_input`, `unit_uniform_val`), and gate `k + v·nComp + i` is unit `v`'s row `i`, its columns wired as
 `colVal` says (`op_uniform_row`).
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge.FilePart
 

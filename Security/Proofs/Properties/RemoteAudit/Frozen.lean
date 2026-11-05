@@ -1,4 +1,6 @@
-import Proofs.Properties.RemoteAudit.Coins
+module
+
+public import Proofs.Properties.RemoteAudit.Coins
 
 /-!
 # A drawn window's record is kept (`RecordKeptAfterDraw`)
@@ -14,6 +16,8 @@ Its openable receipts are kept with it: `checkOpening` reads the appends only fo
 (`appendOf`, `checkOpening_congr`), the block a drawn pass reads is below the store's extent then (`record_reads`), and
 every append after starts at that extent or above (`firsts_big`), so `appendOf` finds the same one (`appendOf_extend`).
 -/
+
+@[expose] public section
 
 open RemoteAudit RemoteAudit.Session
 

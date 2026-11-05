@@ -1,6 +1,10 @@
-import Proofs.Flock.Claims.Recursion.NextShaS17
-import Proofs.Flock.Claims.Recursion.NextShaRep
-import Proofs.Flock.Claims.Recursion.CallsAgree
+module
+
+public import Proofs.Flock.Claims.Recursion.NextShaS17
+public import Proofs.Flock.Claims.Recursion.NextShaRep
+public import Proofs.Flock.Claims.Recursion.CallsAgree
+import all Lean.Data.Json.Basic
+import all Init.Data.Array.Basic
 
 /-!
 # The last step's decision with no proof file decoded (`decisionAtS_eval`)
@@ -32,6 +36,8 @@ the reader parts read them, and no part's check is yet known to hold it. The dec
 substituted value, whose digests the decision computes from the files (`decisionAtS`'s `mapM`), and S17 then passes on
 them by construction.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

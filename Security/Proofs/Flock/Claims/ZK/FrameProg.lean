@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.FrameReal
-import Proofs.Flock.Claims.ZK.FrameSched
-import Proofs.Flock.Claims.ZK.FrameState
+module
+
+public import Proofs.Flock.Claims.ZK.FrameReal
+public import Proofs.Flock.Claims.ZK.FrameSched
+public import Proofs.Flock.Claims.ZK.FrameState
 
 /-!
 # The loop's frame state is the deployed frame's check's (`ProgChecks`)
@@ -14,6 +16,8 @@ of any device round, at the tape's draws and its scheduled round, leaves the sam
   releases a round, the check at an alike configuration `c'` of a scheduled round of alike frames `fs'` against itself
   releases one too, from the same state, its state the same but for `stopped`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -1335,7 +1339,7 @@ theorem takeAt_ok {n : ℕ} {b : Bool} {cN cP : Cfg} {p : Masker} {f : Except St
     cases b with
     | true =>
       simp only [↓reduceIte] at h
-      exact Or.inr (Or.inl ⟨hn, rfl, h⟩)
+      exact Or.inr (Or.inl ⟨hn, rfl, (bind_rankStop_ok h).1⟩)
     | false =>
       simp only [Bool.false_eq_true, ↓reduceIte] at h
       cases ha : p.answer cP cs with
@@ -1376,7 +1380,7 @@ theorem repOf_add_two {x : Msg} {s0 : _} {spec : SessionSpec} {sts : Array Stmt}
 
 open Loop in
 /-- **At a rep's round past its first the loop's frame checks it at the state the last coins leave**: the state of
-the same rep, which released the last round. -/
+the same rep, which released the last round, past the rank stop. -/
 theorem ofLoop_frameAnswer_same (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -1388,8 +1392,8 @@ theorem ofLoop_frameAnswer_same (T : ZKMal.CoinLayer.TableData)
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : h1.length = q + 1)
     (hj : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).2 = j + 1) :
     (ofLoop T L₀ real).frameAnswer x ρ (e0 :: h1) =
-      (progOf x (h1.map fun p => ZKMal.CoinLayer.rd p.2)).answer ((ofLoop T L₀ real).cfg x ρ (e0 :: h1))
-        (coinsAt x (e0 :: h1)) := by
+      ((progOf x (h1.map fun p => ZKMal.CoinLayer.rd p.2)).answer ((ofLoop T L₀ real).cfg x ρ (e0 :: h1))
+        (coinsAt x (e0 :: h1)) >>= rankStop ((ofLoop T L₀ real).cfg x ρ (e0 :: h1))) := by
   obtain ⟨q', rfl⟩ : ∃ q', q = q' + 1 := by
     rcases q with _ | q'
     · rw [locate_zero] at hj
@@ -1467,6 +1471,7 @@ theorem ofLoop_progChecks_step (T : ZKMal.CoinLayer.TableData)
     · cases hA
   rw [ofLoop_frameAnswer_same T L₀ real x ρ (m0, r0) h1 hx (by rw [← hcs1, List.length_map] at hq1; exact hq1) hj,
     hcs1] at hF
+  replace hF := (bind_rankStop_ok hF).1
   have hsch : schedOf (real x w ρ) x cs = some (rsched.getD (j + 1) (.empty, 0)).1 := by
     have := schedOf_eq (real x w ρ) x cs hx hq1 (by rw [hk1]; exact hreal) (by rw [hk1, hj]; exact hrs0)
       (by rw [hj]; exact hlt)
@@ -1823,11 +1828,7 @@ theorem loop_round_in_plan (T : CoinLayer.TableData)
     {s0 : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt} {q : ℕ}
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : h.length = q + 2) : q < (roundsOf spec sts).sum := by
   by_contra hlt
-  have ho : (loop loopNr T L).opens x ρ h = true := by
-    unfold answered at hA
-    split at hA
-    · assumption
-    · cases hA
+  have ho : (loop loopNr T L).opens x ρ h = true := (answered_ok hA).1
   match h, hq, ho, hne with
   | [], hq, _, _ => simp at hq
   | [_], hq, _, _ => simp only [List.length_cons, List.length_nil] at hq; omega

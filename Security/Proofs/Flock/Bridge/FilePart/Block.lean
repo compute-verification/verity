@@ -1,5 +1,7 @@
-import Proofs.Flock.Bridge.FilePart.Uniform
-import Proofs.Flock.Bridge.Lowers
+module
+
+public import Proofs.Flock.Bridge.FilePart.Uniform
+public import Proofs.Flock.Bridge.Lowers
 
 /-!
 # The proof blocks of `k` input gates and `n` units of `m` rows
@@ -9,6 +11,8 @@ are `k + 3m·u, …, k + 3m·(u + 1) − 1` (`unitGates_of`). On `k = 2 + n·B` 
 `2 + v·B + b` exactly when `b` is a source some row reads, the inputs unit `u` owns sit at `2 + u·B + b`, in order
 (`insOf_of`).
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge.FilePart
 

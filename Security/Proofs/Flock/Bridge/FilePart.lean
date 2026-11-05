@@ -1,8 +1,10 @@
-import Proofs.Flock.Bridge.FilePart.Srcs
-import Proofs.Flock.Bridge.FilePartTarget
-import Proofs.Flock.Bridge.Targets
-import Proofs.Flock.C3.Reps.ReadWhole
-import Proofs.Flock.Soundness.Discharge.Layout.Scope
+module
+
+public import Proofs.Flock.Bridge.FilePart.Srcs
+public import Proofs.Flock.Bridge.FilePartTarget
+public import Proofs.Flock.Bridge.Targets
+public import Proofs.Flock.C3.Reps.ReadWhole
+public import Proofs.Flock.Soundness.Discharge.Layout.Scope
 
 /-!
 # The circuit file's partition, computed (`FilePartTarget`, proved), and `RelDeployTarget`'s partition hypothesis
@@ -29,6 +31,8 @@ the circuit's constants:
   read stratum by stratum, are the units in order, of sizes `ns` (`FilePart.sizes`), and the public file's units are
   `0, …, N − 1`, `N` their sum: the `ns` and `n` of `filePartOf`.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

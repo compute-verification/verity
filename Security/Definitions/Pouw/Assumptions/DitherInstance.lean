@@ -1,4 +1,6 @@
-import Definitions.Pouw.DitherInstance
+module
+
+public import Definitions.Pouw.DitherInstance
 
 /-!
 # The headline on the cards: the auditor's devices, causality, and the held inventory premise (trusted)
@@ -23,6 +25,8 @@ import Definitions.Pouw.DitherInstance
   protocol binds hashing to the cards instead. The fleet's transfer from the model to the devices reads it beside
   `Assumptions.CardWithinAccel`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Assumptions
 
