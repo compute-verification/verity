@@ -18,13 +18,14 @@ public import Proofs.Flock.ZkAny.RelaySame
   them at the model's history so far.
 * `nextAt`: the model's next round's rep stream and its index there. `SeenAt`: the rep streams seen are those with a
   round before the model's next. `seenAt_nil`: none before the model's first round.
-* `Built`: every level 0 bound to the session one `Level0.ofDraws` gave. `built_stays`: kept where the session's
-  tables' level 0 stay. `build_of_ofDraws`, `cap_of_drawn`: such a level 0 is a `build`, so its table's commitment's
-  cap is its root. `built_commit`: past the session's `Commit`, where the loop drew level 0s that `ofDraws` gave.
+* `BuiltAt`: every level 0 bound to the session the one the loop drew for its table, `Level0.ofDraws` on what the
+  host and the operating system handed it for the table's rep 0 (`LoopModel.src`). `builtAt_stays`: kept where the
+  session's tables' level 0 stay. `build_of_ofDraws`, `cap_of_drawn`: such a level 0 is a `build`, so its table's
+  commitment's cap is its root. `builtAt_commit`: past the session's `Commit`, where the loop drew those level 0s.
 * `LoopJ`: the session stopped in the loop's frames exactly where its `Hello` left and an earlier round of the model's
   run failed; no stream seen before the `Hello` left; `RepJ` at each rep stream seen; the session's plan the setup's
-  (`PlanOk`); `SeenAt` at the model's history so far; no stream seen before the model's link; and `Built` past the
-  `Commit`.
+  (`PlanOk`); `SeenAt` at the model's history so far; no stream seen before the model's link; `BuiltAt` past the
+  `Commit`; and the session's entry the setup's once its `Hello` left (`SessOn`).
 * `repJ_stays`: updates that keep the rep's frame and what the session's rounds read of it (`Stays`) keep `RepJ`, the
   model's history as it was.
 * **`loopKept_ctl`**, `loopKept_ctl_all`: `LoopJ` is kept at every slot that reads no model message.
@@ -137,13 +138,18 @@ theorem seenAt_nil {spec : SessionSpec} {sts : Array Stmt} {h : List (Claims.Msg
   rw [show h.length - 2 = 0 by omega, Loop.locate_zero] at h0
   exact absurd h0 (Nat.lt_irrefl 0)
 
-/-- **Every level 0 the slots `L0` bind to session `sid` is one `Level0.ofDraws` gave.** -/
-def Built (L0 : _root_.Flock.Firewall.Level0.Slots) (sid : Nat) : Prop :=
+/-- **Every level 0 the slots `L0` bind to session `sid` is the one the loop drew for its table**, against the model's
+run `M`: bound for the table `name`, it is `Level0.ofDraws` at table `j`'s statement's `m` on what the host and the
+operating system handed the loop for rep stream `2j` (`LoopModel.src`), `name` being table `j`'s. -/
+def BuiltAt {W Rr : Type} (M : LoopModel W Rr) (spec : SessionSpec) (sts : Array Stmt)
+    (L0 : _root_.Flock.Firewall.Level0.Slots) (sid : Nat) : Prop :=
   ∀ name l0, _root_.Flock.Firewall.Level0.ofSession L0 sid name = some l0 →
-    ∃ m g d, _root_.Flock.Firewall.Level0.ofDraws m g d = .ok l0
+    ∃ j g d hi, spec.tables[j]? = some name ∧ M.src (2 * j) = .ok (g, d, hi) ∧
+      _root_.Flock.Firewall.Level0.ofDraws sts[j]!.m g d = .ok l0
 
-/-- `Built` is kept where the session's tables' level 0 stay (`Stays`). -/
-theorem built_stays {sid : Nat} {σ σ' : LoopAt} (hs : Stays sid σ σ') (h : Built σ.L0 sid) : Built σ'.L0 sid := by
+/-- `BuiltAt` is kept where the session's tables' level 0 stay (`Stays`). -/
+theorem builtAt_stays {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {sts : Array Stmt} {sid : Nat}
+    {σ σ' : LoopAt} (hs : Stays sid σ σ') (h : BuiltAt M spec sts σ.L0 sid) : BuiltAt M spec sts σ'.L0 sid := by
   intro name l0 hl
   rw [hs.1 name] at hl
   exact h name l0 hl
@@ -190,14 +196,17 @@ theorem cap_of_drawn {m : Nat} {g : Array F128} {d : ByteArray} {l : _root_.Floc
   rw [hcm]
   exact cap_root_build hb
 
-/-- **Past the session's `Commit` each level 0 bound to it is one the loop drew for it**: where the loop drew `ls` for
-the session (`DrawInv`: none bound to it yet, and the level 0s drawn for it `ls`'s), each one `Level0.ofDraws` gave,
-every level 0 the slots `commitRead` leaves bind to the session is one of them (`commit_inv`). -/
-theorem built_commit {R : _root_.Flock.Firewall.Level0.Slots} {sid : Nat}
-    {ls : Array _root_.Flock.Firewall.Level0.Level0} {tables : Array (String × Nat)} {f : ByteArray}
-    (hd : DrawInv sid ls R)
-    (hdr : ∀ j (hj : j < ls.size), ∃ m g d, _root_.Flock.Firewall.Level0.ofDraws m g d = .ok ls[j]) :
-    Built (commitRead R sid tables f).2 sid := by
+/-- **Past the session's `Commit` each level 0 bound to it is the one the loop drew for its table**: where the loop drew
+`ls` for the session (`DrawInv`: none bound to it yet, and the level 0s drawn for it `ls`'s), table `j`'s being
+`Level0.ofDraws` at its statement's `m` on what the host and the operating system handed the loop for rep stream `2j`,
+the level 0 the slots `commitRead` leaves bind to the session's table `name` is the one drawn for the table the
+`Commit` binds as `name`, the setup's table of that name (`commit_inv`). -/
+theorem builtAt_commit {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {sts : Array Stmt}
+    {R : _root_.Flock.Firewall.Level0.Slots} {sid : Nat} {ls : Array _root_.Flock.Firewall.Level0.Level0}
+    {f : ByteArray} (hd : DrawInv sid ls R)
+    (hdr : ∀ j (hj : j < ls.size), ∃ g d hi, M.src (2 * j) = .ok (g, d, hi) ∧
+      _root_.Flock.Firewall.Level0.ofDraws sts[j]!.m g d = .ok ls[j]) :
+    BuiltAt M spec sts (commitRead R sid (spec.tables.zip (sts.map (·.m))) f).2 sid := by
   have hR : ∀ name l0, _root_.Flock.Firewall.Level0.ofSession R sid name = some l0 → False := by
     intro name l0 h
     unfold _root_.Flock.Firewall.Level0.ofSession at h
@@ -210,27 +219,42 @@ theorem built_commit {R : _root_.Flock.Firewall.Level0.Slots} {sid : Nat}
     exact (hR name l0 h).elim
   · rw [hr] at h
     dsimp only at h
-    rcases hc : _root_.Flock.Firewall.Level0.commit R sid tables roots with e | R'
+    rcases hc : _root_.Flock.Firewall.Level0.commit R sid (spec.tables.zip (sts.map (·.m))) roots with e | R'
     · rw [hc] at h
       exact (hR name l0 h).elim
     · rw [hc] at h
       have h' : _root_.Flock.Firewall.Level0.ofSession R' sid name = some l0 := h
-      obtain ⟨-, hI⟩ := commit_inv hc
+      obtain ⟨hmap, hI⟩ := commit_inv hc
       unfold _root_.Flock.Firewall.Level0.ofSession at h'
       obtain ⟨s, hs, rfl⟩ := Option.map_eq_some_iff.mp h'
       have hb : s.bound = some (sid, name) := by simpa using Array.find?_some hs
-      obtain ⟨s₀, hs₀, hl, hown, -, hbd | ⟨t, -, hown'⟩⟩ := hI.same s (Array.mem_of_find?_eq_some hs)
-      · exact (hd.unbound s₀ hs₀ name (by rw [← hbd]; exact hb)).elim
-      · obtain ⟨hj, hl0⟩ := hd.draws s₀ hs₀ (by rw [← hown]; exact hown')
-        obtain ⟨m, g, d, hm⟩ := hdr _ hj
-        exact ⟨m, g, d, by rw [hl, hl0]; exact hm⟩
+      have hsm := Array.mem_of_find?_eq_some hs
+      obtain ⟨x, hx, hxn, hown, htx⟩ := hI.bound hd.unbound s hsm name hb
+      obtain ⟨s₀, hs₀, hl, hown₀, ht₀, -⟩ := hI.same s hsm
+      obtain ⟨hj, hl0⟩ := hd.draws s₀ hs₀ (by rw [← hown₀]; exact hown)
+      obtain ⟨k, hk, rfl⟩ := List.getElem_of_mem hx
+      simp only [List.length_zip, List.length_range] at hk
+      have hk1 : k < roots.length := by omega
+      have hk2 : k < (spec.tables.zip (sts.map (·.m))).toList.length := by omega
+      simp only [List.getElem_zip, List.getElem_range] at hxn htx
+      have hname : spec.tables[k]? = some name := by
+        have e := congrArg (·[k]?) hmap
+        simp only [List.getElem?_map, List.getElem?_eq_getElem hk1, List.getElem?_eq_getElem hk2, Option.map_some,
+          Option.some.injEq, hxn] at e
+        rw [Array.getElem_toList, Array.getElem_zip] at e
+        rw [e]
+        exact Array.getElem?_eq_getElem _
+      have htk : s₀.table = k := by rw [← ht₀, htx]
+      obtain ⟨g, d, hi, hsrc, hod⟩ := hdr s₀.table hj
+      exact ⟨s₀.table, g, d, hi, by rw [htk]; exact hname, hsrc, by rw [hl, hl0]; exact hod⟩
 
 /-- **The relay's invariant at the deployed loop**, against the model's run `M`, at the session `st`, the streams whose
 rounds came being `seen`, the loop at `σ`: the session stopped in the loop's frames exactly where its `Hello` left and
 an earlier round of the model's run failed (`liveBefore`); no stream seen before the `Hello` left; `RepJ` at each rep
 stream seen; the session's plan the setup's once its `Hello` left; the streams seen those with a round before the
-model's next (`SeenAt`); none seen while the session's slots took at most the model's `Hello`; and past the
-`Commit` every level 0 bound to the session one `Level0.ofDraws` gave (`Built`). -/
+model's next (`SeenAt`); none seen while the session's slots took at most the model's `Hello`; past the `Commit`
+every level 0 bound to the session the one the loop drew for its table (`BuiltAt`); and once its `Hello` left the
+session's entry the setup's (`SessOn`). -/
 structure LoopJ {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (sts : Array Stmt)
     (seen : List String) (st : State) (σ : LoopAt) : Prop where
   stop : σ.R.stopped sid = (st.sent && !M.L.toSrv.liveBefore M.wk M.x M.w M.ρ M.κ (M.hist σ.c))
@@ -239,7 +263,8 @@ structure LoopJ {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSp
   plan : PlanOk spec sts st
   seenAt : SeenAt spec sts (M.hist σ.c) seen
   early : σ.c ≤ 1 → seen = []
-  built : 2 ≤ σ.c → Built σ.L0 sid
+  built : 2 ≤ σ.c → BuiltAt M spec sts σ.L0 sid
+  sess : st.sent = true → SessOn spec sts σ.R sid
 
 /-- **`RepJ` is kept from one of the session's requests to the next** where the updates between keep the rep's frame
 (`Kept`) and what the session's rounds read of it (`Stays`), and the slot took no model message. -/
@@ -275,7 +300,8 @@ theorem loopKept_ctl {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Sess
   rw [hs seen]
   refine ⟨?_, fun h => hJ.unsent (by rw [hsent] at h; exact h),
     fun i r s hmem hseen => repJ_stays (hbt.1 i r) hst hcc (hJ.reps i r s hmem hseen), stepK_plan he hJ.plan, ?_,
-    fun h => hJ.early (by rwa [hcc] at h), fun h => built_stays hst (hJ.built (by rwa [hcc] at h))⟩
+    fun h => hJ.early (by rwa [hcc] at h), fun h => builtAt_stays hst (hJ.built (by rwa [hcc] at h)),
+    fun h => sessOn_sessKept hbt.2 (hJ.sess (by rw [hsent] at h; exact h))⟩
   · rw [hsent, hcc, stopped_sessKept hbt.2]
     exact hJ.stop
   · rw [hcc]
@@ -303,12 +329,12 @@ session has sent its `Hello`, the model's `Hello` round passed, and the updates 
 theorem loopKept_hello {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {nonce : ByteArray} : LoopKept M sid spec sts nonce (LoopJ M sid spec sts) .hello := by
   intro seen st pl e σ σ' hsl he hF hJ hra hgo
-  obtain ⟨-, hbt, hcc, hlb⟩ := hra
+  obtain ⟨-, hbt, hcc, hlb, hso⟩ := hra
   have hs0 : st.sent = false := (slot_hello hsl).2
   have hseen : seen = [] := hJ.unsent hs0
   have hsent := stepK_hello_sent hgo
   refine ⟨?_, fun h => ?_, fun i r s _ hc => ?_, stepK_plan he hJ.plan, ?_, fun _ => hseen,
-    fun h => absurd h (by rw [hcc, hF.start hs0]; omega)⟩
+    fun h => absurd h (by rw [hcc, hF.start hs0]; omega), fun _ => hso he⟩
   · rw [hsent, hlb, stopped_sessKept hbt.2, hJ.stop, hs0]
     rfl
   · rw [hsent] at h
@@ -344,12 +370,10 @@ theorem loopKept_commit {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : S
   intro seen st pl e σ σ' hsl he hF hJ hra _
   obtain ⟨⟨hlt, -⟩, ⟨_, -, hL0⟩, -, ⟨_, _, hda, hdr, -⟩, hbt, hcc⟩ := hra
   obtain ⟨hs1, -, hop⟩ := slot_commit hsl
-  have hbuilt : Built σ'.L0 sid := by
+  have hbuilt : BuiltAt M spec sts σ'.L0 sid := by
     intro name l0 hl
     rw [hL0 name] at hl
-    refine built_commit (afterDraw_inv hda) (fun j hj => ?_) name l0 hl
-    obtain ⟨g, d, _, -, h⟩ := hdr j hj
-    exact ⟨_, g, d, h⟩
+    exact builtAt_commit (afterDraw_inv hda) hdr name l0 hl
   have hc1 : σ.c = 1 := by
     have := hF.count hs1
     omega
@@ -367,7 +391,8 @@ theorem loopKept_commit {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : S
   have ht : (M.hist σ'.c).take 1 = M.hist 1 := histOf_take_take M.τ (i := σ'.c) (i' := 1) (by omega)
   have hlb1 := liveBefore_one M.L M.wk M.x M.w M.ρ M.κ _ hl1 (by omega)
   have hlb2 := liveBefore_two M.L M.wk M.x M.w M.ρ M.κ _ hl2 hlast (by rw [ht]; exact hwk)
-  refine ⟨?_, fun _ => hseen, fun i r s _ hc => ?_, stepK_plan he hJ.plan, ?_, fun _ => hseen, fun _ => hbuilt⟩
+  refine ⟨?_, fun _ => hseen, fun i r s _ hc => ?_, stepK_plan he hJ.plan, ?_, fun _ => hseen, fun _ => hbuilt,
+    fun _ => sessOn_sessKept hbt.2 (hJ.sess hs1)⟩
   · rw [hsent, stopped_sessKept hbt.2, hJ.stop, hlb1, hlb2]
   · simp [seenAfter, hseen] at hc
   · show SeenAt spec sts (M.hist σ'.c) seen

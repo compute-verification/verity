@@ -53,6 +53,7 @@ public import Proofs.Flock.ZkAny.RelayLoopSalts
 public import Proofs.Flock.ZkAny.RelayLoopFacts
 public import Proofs.Flock.ZkAny.RelayLoopCur
 public import Proofs.Flock.ZkAny.RelayLoopFirst
+public import Proofs.Flock.ZkAny.RelayLoopL0
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release

@@ -17,9 +17,12 @@ public import Proofs.Flock.ZkAny.RelaySwitch
   begun its opening.
 * **`repJ_same_first`**: so the frame the session's next request finds keeps `SameInv` for the stream's first round
   (`roundRun_same_first`), the readied frame being the rep's run from its start (`repRun_first0`, `roundPlace_prior`)
-  and the model's state the rep's start (`ofLoop_answered_switch`), its placeholder, configuration and schedule the
+  and   the model's state the rep's start (`ofLoop_answered_switch`), its placeholder, configuration and schedule the
   model's (`freshOf_ok`, `ofLoop_cfgAlike`, `Sched.schedSoFar_alike`), the round's count the plan's, and the table's
-  commitment's cap the level-0 root (`Built`, `cap_of_drawn`).
+  level 0 the one the loop drew (`BuiltAt`), so giving a table whose commitment's cap is its root
+  (`tab_of_placeholder`, `cap_of_drawn`).
+* `tab_of_same`, `tab_of_placeholder`: a level 0 at another's `m` and `t_pad` gives a table where it does, so one
+  drawn at the table's `m` gives one where the rep's placeholder is there.
 -/
 
 @[expose] public section
@@ -141,19 +144,68 @@ theorem roundRun_alg_first {sid : Nat} {st : State} {pl : Placed} {stream : Stri
     simp only [Loop.coinsOf, h1, h2]
   exact ⟨_, hat, key { q with st := st', vals := v } _ _ hto' hop', hod'⟩
 
+/-- **A level 0 of another's `m` and `t_pad` gives a table where it does.** -/
+theorem tab_of_same {st : _root_.Flock.Setup} {l l' : _root_.Flock.Firewall.Level0.Level0}
+    {t : _root_.Flock.Firewall.Finish.Tab} (h : _root_.Flock.Firewall.Finish.tabOfLevel0 st l = .ok t)
+    (hm : l'.m = l.m) (htp : l'.tPad = l.tPad) : ∃ t', _root_.Flock.Firewall.Finish.tabOfLevel0 st l' = .ok t' := by
+  unfold _root_.Flock.Firewall.Finish.tabOfLevel0 at h ⊢
+  rw [hm, htp]
+  simp only [bind, Except.bind] at h ⊢
+  split at h
+  · cases h
+  rename_i h1
+  rw [ite_eq_right h1]
+  split at h
+  · cases h
+  rename_i h2
+  rw [ite_eq_right h2]
+  rcases hs : _root_.Flock.Zk.schedule st.m with e | ⟨sch, tPad⟩
+  · rw [hs] at h
+    cases h
+  · rw [hs] at h
+    simp only at h ⊢
+    split at h
+    · cases h
+    rename_i h3
+    rw [ite_eq_right h3]
+    exact ⟨_, rfl⟩
+
+/-- **A level 0 drawn at the table's `m` gives a table**, where rep stream `k`'s placeholder is there: the
+placeholder's level 0 gives one, at the same `m` and the `t_pad` of its schedule (`Level0.ofDraws_ok`). -/
+theorem tab_of_placeholder {spec : SessionSpec} {sts : Array Stmt} {k : Nat} {link : Array F128} {c' : Cfg}
+    {t' : _root_.Flock.Firewall.Finish.Tab} {dom' : ByteArray} {xs' : Array (Array F128)} {hi' : Array ByteArray}
+    (hph : Loop.placeholder spec sts k link = .ok (c', t', dom', xs', hi')) {g : Array F128} {d : ByteArray}
+    {l : _root_.Flock.Firewall.Level0.Level0} (hl : _root_.Flock.Firewall.Level0.ofDraws sts[k / 2]!.m g d = .ok l) :
+    ∃ t, _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit sts[k / 2]!) l = .ok t := by
+  have bok : ∀ {α β : Type} {x : V α} {f : α → V β} {b : β}, x >>= f = .ok b → ∃ a, x = .ok a ∧ f a = .ok b := by
+    intro α β x f b hb
+    cases x with
+    | error e => cases hb
+    | ok a => exact ⟨a, rfl, hb⟩
+  unfold Loop.placeholder at hph
+  obtain ⟨⟨lay, mask⟩, -, hph⟩ := bok hph
+  obtain ⟨⟨sch, tPad⟩, -, hph⟩ := bok hph
+  obtain ⟨l₀, hl₀, hph⟩ := bok hph
+  obtain ⟨t₀, ht₀, -⟩ := bok hph
+  obtain ⟨hm, -, ⟨s, hz, -⟩, -⟩ := _root_.Flock.Firewall.Level0.ofDraws_ok hl
+  obtain ⟨hm₀, -, ⟨s₀, hz₀, -⟩, -⟩ := _root_.Flock.Firewall.Level0.ofDraws_ok hl₀
+  exact tab_of_same ht₀ (hm.trans hm₀.symm) (Prod.mk.inj (Except.ok.inj (hz.symm.trans hz₀))).2
+
 open Loop LeanRelease in
 /-- **The round's own rep one round on, from its stream's first round, where the next round is the same stream's**:
 at the loop's own frames (`hrel`), the session's entry being the setup's with the `Commit`'s words as its link
 (`hK2`), the model's own table at the rep the one the rep's level 0 gives (`hK3`; of the placeholder's shape where
-`real` answers the loop's own, `hR`, within the bounds `hS` and `hP` give), the table's level 0 giving a table
-(`hT`) and every level 0 bound to the session one `Level0.ofDraws` gave (`Built`), where the round is the first of
+`real` answers the loop's own, `hR`, within the bounds `hS` and `hP` give), and every level 0 bound to the session the
+one the loop drew for its table (`BuiltAt`), the rep streams' names distinct (`hnd`), where the round is the first of
 table `i`'s rep `r`'s stream (`hk`), the rep's frame fresh (`FreshAt`) and readied at the model's state but for
 `stopped` (`hu₀`): the frame the session's next request finds keeps `SameInv` for the stream's first round
 (`roundRun_same_first`), the frame `roundPlace` readied being the rep's run from its start (`repRun_first0` at rep 0,
 `roundPlace_prior` at rep 1), the model's state the rep's start (`ofLoop_answered_switch`), its placeholder,
-configuration and schedule the model's (`freshOf_ok`, `ofLoop_cfgAlike`, `Sched.schedSoFar_alike`) and the round's
-count the plan's (`Loop.loopNr_succ`, `Count.plan_sched`), with its opening unbegun (`roundRun_alg_first`); the rep's
-salts are not read, the algebraic phase having a round past the first's coins. -/
+configuration and schedule the model's (`freshOf_ok`, `ofLoop_cfgAlike`, `Sched.schedSoFar_alike`), the table's level
+0 the one drawn at its statement's `m` (`tables_inj`), so giving a table as the placeholder's does
+(`tab_of_placeholder`) whose commitment's cap is its root (`cap_of_drawn`), and the round's count the plan's
+(`Loop.loopNr_succ`, `Count.plan_sched`), with its opening unbegun (`roundRun_alg_first`); the rep's salts are not
+read, the algebraic phase having a round past the first's coins. -/
 theorem repJ_same_first (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -184,11 +236,8 @@ theorem repJ_same_first (T : ZKMal.CoinLayer.TableData)
       _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 → rel.sts[i]? = some stm →
       _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t →
       ∃ hr, real M.x M.w M.ρ (2 * i + r) = .ok (t, hr))
-    (hT : ∀ (rel : Release) (name : String) (l0 : _root_.Flock.Firewall.Level0.Level0) (stm : Stmt),
-      sessAt σ.R sid = some rel → rel.spec.tables[i]? = some name →
-      _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 → rel.sts[i]? = some stm →
-      ∃ t, _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t)
-    (hB : Built σ.L0 sid) (hfr : FreshAt σ.R sid i r) (hfs : (frameAt σ.R sid i r).isSome)
+    (hB : BuiltAt M spec sts σ.L0 sid) (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup)
+    (hfr : FreshAt σ.R sid i r) (hfs : (frameAt σ.R sid i r).isSome)
     (hpc : ∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c))
     (hr : RoundRun sid st pl stream (loopNr M.x h1.length) i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R)
     (hreq : st.request pl (.round stream (loopNr M.x h1.length)) = none) {q : Rep} {pl' : Place} {f : Bool}
@@ -227,10 +276,6 @@ theorem repJ_same_first (T : ZKMal.CoinLayer.TableData)
   have hsa : sessAt σ.R sid = some rel := hss
   obtain ⟨hsp, hsts, hlk⟩ := hK2 rel hsa
   rw [hh, List.tail_cons] at hlk
-  obtain ⟨t, htab⟩ := hT rel name l0 stm hsa hn hl0 hstm'
-  have hcap : _root_.Flock.Firewall.Finish.flat t.cm0.cap = l0.root := by
-    obtain ⟨m, g, d, hd⟩ := hB name l0 hl0
-    exact cap_of_drawn hd htab
   have hst' : rel.sts[p.table]? = some stm := by
     rw [hpt]
     exact hstm'
@@ -285,6 +330,12 @@ theorem repJ_same_first (T : ZKMal.CoinLayer.TableData)
   have hstmb : sts[i]! = stm := by
     obtain ⟨hlt, he⟩ := Array.getElem?_eq_some_iff.mp hstm'
     rw [← hsts, getElem!_pos rel.sts i hlt, he]
+  obtain ⟨jb, gb, db, _, hjb, -, hdb⟩ := hB name l0 hl0
+  rw [tables_inj (j := i) hnd hjb (by rw [← hsp]; exact hn), hstmb] at hdb
+  obtain ⟨t, htab⟩ : ∃ t, _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t := by
+    have h := tab_of_placeholder (g := gb) (d := db) (l := l0) hph' (by rw [hdiv, hstmb]; exact hdb)
+    rwa [hdiv, hstmb] at h
+  have hcap : _root_.Flock.Firewall.Finish.flat t.cm0.cap = l0.root := cap_of_drawn hdb htab
   have hdom : (rel.spec.domain name r).toUTF8 = dom' := by rw [hdm, hdiv, hmod, hname, hsp]
   have hkl : 2 * i + r < spec.repStreams.size := rep_lt_size hmem
   have hls := wordsAt_zero_size M.x (cs := h1.map fun y => ZKMal.CoinLayer.rd y.2)
