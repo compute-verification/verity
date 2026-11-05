@@ -24419,7 +24419,7 @@
    ]
   },
   "SampledProofs.ChallengerTrees": {
-   "digest": "849a0987a9b6c11ef8b3cd1f390f89270ec3f51185d6b1bd2d8470ede75591e2",
+   "digest": "bdbd600e334f79556940216a4157c39b72eef3934f73c0467fb9850f93feab6b",
    "definitions": {
     "SampledProofs.Challenger.LoggedTree": "885ea6f8fcb5591d9bbb4b603865b76ffdf652083bbbff692a634efdf096f032",
     "SampledProofs.Challenger.LoggedTree.key": "e940f525be182c1d1571a352e1cd449dd4a86123311c0c57cbc48538b843ae17",
@@ -24449,6 +24449,7 @@
     "SampledProofs.Challenger.isTreeSpec": "5bbb98cd952d1a78bf0da2880458954c4e6c049e6983bc3bdc4bd7975dad75c4",
     "SampledProofs.Challenger.isTreeSpec._sparseCasesOn_3": "7d0325932917a222b8be7ad4567c468f277ae569c585c2d8951014a95253d226",
     "SampledProofs.Challenger.linkAfter": "9134ba7b2df795021b258df443b0136b91f379a4a42d4abdc290347744a91e68",
+    "SampledProofs.Challenger.recordCoins?": "ad53d7ff5d64c593532deb0dcc78c37ea5b0caf48161325381f19a55b9443b84",
     "SampledProofs.Challenger.sessionTreeReason": "ee4ab80906ed247adc882ce15e406ccb71fd070a854e6aa1c722a544049d7d1a",
     "SampledProofs.Challenger.sessionTreeReason._sparseCasesOn_9": "1b56b3602811edd94be432523815f320a65d4ac7971bf21cd6ef958a2015f89c",
     "SampledProofs.Challenger.sessionsTreeReason": "d2871461274c408e1676fd0697eccb2f8671f3d132cc29d5a5471de98a54f421",
