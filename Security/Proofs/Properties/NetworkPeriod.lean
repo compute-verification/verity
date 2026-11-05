@@ -22,7 +22,7 @@ On acceptance a rows-form period has no `rowsWfCheck` finding (`rowsWf_of_accept
 certifier's of `B` bytes for its `lanes · windows · window` connections, read back (`cellRows_wf_of_rowsWf`,
 `NetTiming.RowsFormat.Wf` at `NetTiming.cellRows`).
 
-`padCols` counts the input columns no port covers (`padCols_eq`, in `PadCols`).
+`padCols` counts the input columns no port covers and no forced zero holds (`padCols_eq`, in `PadCols`).
 -/
 
 namespace Properties.NetworkPeriod

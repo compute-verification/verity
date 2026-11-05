@@ -5,14 +5,14 @@ import NetworkCheck.CircuitFile
 and `check PARAMS COMMITMENT EVIDENCE CIRCUIT…`, the period's check with its listed circuit files
 (`NetworkCheck.Period.protocolWith`). The last files, as many as the parameters' `scan_circuits` lists (`scanFiles`), are
 the scan's: each is read whole, as the scan's sessions' verifier parses it (`NetworkCheck.CircuitFile.readWhole`), one
-after another so one file's text is held at a time. Every other file is read in chunks, its header alone parsed
-(`NetworkCheck.CircuitFile.read`), the files side by side, a dedicated thread a file, since the default task pool runs
-only a few tasks at once. A file that can't be read rejects the period, naming the first such file by its place in the
-listing. -/
+after another so one file's text is held at a time. Every other file is read in chunks, its header and its unit's input
+rows parsed (`NetworkCheck.CircuitFile.read`), the files side by side, a dedicated thread a file, since the default task
+pool runs only a few tasks at once. A file that can't be read rejects the period, naming the first such file by its
+place in the listing. -/
 
 /-- How many circuit files the parameters at `p` list for the scan (`scan_circuits`): 0 where they are not canonical JSON
-(`Core.canonicalJson`) or list none. A miscount reads a scan's file header-only, which the check refuses
-(`NetworkCheck.Period.fileWhy`), or an audit's whole, which reads more of it than the check needs. -/
+(`Core.canonicalJson`) or list none. A miscount reads a scan's file in chunks, never its computed rows, which the check
+refuses (`NetworkCheck.Period.fileWhy`), or an audit's whole, which reads more of it than the check needs. -/
 def scanFiles (p : String) : IO Nat := do
   let b ← tryCatch (IO.FS.readBinFile p) fun _ => pure ByteArray.empty
   match Core.canonicalJson b with
