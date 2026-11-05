@@ -536,8 +536,7 @@ claim's share, the published certificate's. The writer, the device's bytes and t
 deployment's session's (`Deployed`). -/
 structure SetsUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (A : Live) : Prop where
   params : ∃ p, ParamsAt θ p ∧ A.I.partition = some p.own.partition ∧ A.I.program = some p.own.program ∧
-    lawAt p.base.verifier A.n = .ok A.law ∧ ByteArray.mk A.desc.toArray = p.own.program ∧
-    A.qr = p.base.verifier.query
+    lawAt p.base.verifier A.n = .ok A.law ∧ p.own.program = ⟨A.desc.toArray⟩ ∧ p.base.verifier.query = A.qr
   tags : Flock.Tags.find? _root_.SampledProofs.OneStageZk.STATEMENT = some A.I.tags
   count : A.I.count = 1
   work : A.I.work = none
