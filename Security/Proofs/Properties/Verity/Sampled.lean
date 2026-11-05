@@ -57,7 +57,7 @@ files and at the strategy a strategy of the period's game projects to. This modu
   recomputation of public input words), the committed circuit and public files and the vocabulary's reading of them,
   the law the draw reads over the population (`lawAt`), the statement's descriptor and the registration's query the
   verifier's program and query, the draw's bytes the coins the coin commitment gives the parameters' challenger family,
-  and the claim's share.
+  the claim's share, and a law other than the work law.
 * **The device's log as v2's check reads it** (`coinsRead`): the releases the signed log in v2's evidence shows, in
   order, each with the bits v2 reads of it, read with v2's own tests. A line `SampledProofs.Challenger.treeLine` passes
   is a coin tree's, its own release, told apart and its tree and stream found by the tests
@@ -635,9 +635,9 @@ reads over the population (`lawAt`), and the statement's descriptor and the regi
 the coins of the parameters' challenger family, as many as the coin commitment's families give it (`Vocab.families`),
 `COIN_BYTES` bytes each; the statement's tags, one table, no work, stratified or closure input and no recomputation of
 public input words, as `SampledProofs.OneStageZk.inputsOf` hands them; the committed circuit and public files, and the
-vocabulary's reading of the files (`Vocab.read`) as the session's, its lookup tables included; and the claim's share,
-the published certificate's. The device's bytes and the bound's parameters are the deployment's session's
-(`Deployed`). -/
+vocabulary's reading of the files (`Vocab.read`) as the session's, its lookup tables included; the claim's share,
+the published certificate's; and a law other than the work law, whose draw files `norm` doesn't fix. The device's bytes
+and the bound's parameters are the deployment's session's (`Deployed`). -/
 structure SetsUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (A : Live) : Prop where
   params : ∃ p, ParamsAt θ p ∧ A.I.partition = some p.own.partition ∧ A.I.program = some p.own.program ∧
     lawAt p.base.verifier A.n = .ok A.law ∧
@@ -655,6 +655,7 @@ structure SetsUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (A : Li
   publicFile : A.I.publicFile = V.publicFile θ F
   read : V.read θ F = A.fileRead
   share : (V.certOf θ).ε = A.ε
+  nowork : ∀ K ws, A.law ≠ .work K ws
 
 /-- **v2's parameters name the vocabulary's digests, and the vocabulary reads the lookup tables as v2 does**: under
 v2's parameters in `θ`, the bytes v2's hex digests of the circuit file and the public file decode to are the

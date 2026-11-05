@@ -2,6 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.RootB
 public import Proofs.Properties.Verity.Sampled.LinkFirst
+public import Proofs.Properties.Verity.Sampled.Held
 
 /-!
 # `MovesReach` at the session's layout
@@ -209,23 +210,23 @@ theorem SetsUp.popTied {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {
 
 -- `decodersAt`'s roots search `List.finRange A.rounds`, which unification would otherwise unfold at `A.rounds`'s value
 attribute [local irreducible] Live.rounds Live.N in
-/-- **`MovesOf` at a witness of the joint law's support, at the session's layout**: at the readings and the decoders
-at `Live.layout` and `Live.tables`, and at the sample-coupled coin map under `fieldEnc`, an outcome off the link's and
-the rounds' empty classes, beside a play that the sampled verdict accepts, that misses nowhere and whose log v2's
-check read is the device's, is the writer's at the widened sample, the decoded registration and an outcome whose moves
-are those v2's files decode to (`MovesOf`). It takes, for the record's sample (`recordDraw_firstStop`, at the session
-tied to v2's verifier, `SetsUp.popTied`), that v2 reads the sample's coins of the family `label` answering `after`
-(`hN`); that v2's order refusal passes (`OrderHeld`), which gives that every release of that family precedes every
-opening (`freshBefore_verdict`) and that the device's log opens the session stream first (`linkFirst_verdict`); and,
-for the rep rounds (`firstStop_reps_verdict`), that the log opens only the record's rounds. That the log has an opening
-and that its trees name their streams distinctly come from the verdict (`verdict_opens`, `verdict_nodup`), that each
-opening of a rep stream answers the record's round's digest from v2's read and the record (`rep_answers`), and the
-session's one link round and its `N` live rounds from `Live.rounds_eq`. The roots (`firstStop_rootB`) and the link
-points (`link_pts`) read the same first opening. -/
+/-- **`MovesOf` at a witness of the joint law's support, at the session's layout**: at the readings and the decoders at
+`Live.layout` and `Live.tables`, and at the sample-coupled coin map under `fieldEnc`, an outcome off the link's and the
+rounds' empty classes, beside a play that the sampled verdict accepts, that misses nowhere and whose log v2's check read
+is the device's, is the writer's at the widened sample, the decoded registration and an outcome whose moves are those
+v2's files decode to (`MovesOf`). It takes, for the record's sample (`recordDraw_firstStop`, at the session tied to v2's
+verifier, `SetsUp.popTied`, whose draw files `norm` fixes, `SetsUp.norm_dj`, and at v2's log at its coins,
+`drawReadAll_coinsRead`), that v2 holds the record's draw to its own (`DrawHeld`) and reads the sample's coins of the
+family `label` answering `after` (`hN`); that v2's order refusal passes (`OrderHeld`), which gives that every release of
+that family precedes every opening (`freshBefore_verdict`) and that the device's log opens the session stream first
+(`linkFirst_verdict`); and, for the rep rounds (`firstStop_reps_verdict`), that the log opens only the record's rounds.
+That the log has an opening and that its trees name their streams distinctly come from the verdict (`verdict_opens`,
+`verdict_nodup`), that each opening of a rep stream answers the record's round's digest from v2's read and the record
+(`rep_answers`), and the session's one link round and its `N` live rounds from `Live.rounds_eq`. The roots
+(`firstStop_rootB`) and the link points (`link_pts`) read the same first opening. -/
 theorem ReachesOff.movesOf {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)
-    (hR : DrawReadAll k coinsRead) (hH : DrawHeld k) (hfix : ∀ S, Flock.norm (A.dj S) = A.dj S)
-    (reg : Option Claims.Msg → A.Reg)
+    (hH : DrawHeld k) (reg : Option Claims.Msg → A.Reg)
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading A.rounds}
     (hrd : rd = readingAt A.tables A.layout record recordDigest) {σ : Strategy (V.game θ F c)}
     {D : Decoders A.rounds A.Reg} (hD : D = decodersAt reg A.layout) {label : String} {after : ByteArray} {m : ℕ}
@@ -277,8 +278,9 @@ theorem ReachesOff.movesOf {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
   refine ⟨_, _, _, ho, fun text proofs spec sts sess hrec hpr hs hd =>
     ⟨?_, ?_, ?_, hreps text proofs spec sts sess hrec hpr hs hd, proofs_of_sent reg A.layout hpr⟩⟩
   · rw [sample_extend]
-    exact recordDraw_firstStop fieldEnc hA hA.popTied hR hH (readingAt_picks A.tables A.layout record recordDigest) hm
-      hsrc hfix ω (firstStop_playReaches V θ F c A _ σ _ ω hr) hv hl hN hP hrec
+    exact recordDraw_firstStop fieldEnc hA hA.popTied (drawReadAll_coinsRead k) hH
+      (readingAt_picks A.tables A.layout record recordDigest) hm hsrc hA.norm_dj ω
+      (firstStop_playReaches V θ F c A _ σ _ ω hr) hv hl hN hP hrec
   · exact firstStop_rootB hA rfl rfl hr hn hv hl hfirst hLA hc h₀ hrec hs hd
   · exact (link_pts hA hθ hv hl hL₀ rfl hno (hfirst L₀ _ L' hL₀ i s₀ n₀ rfl hno) rfl hrec hs hd).symm
 
@@ -290,8 +292,7 @@ whose draw answers `after`, and v2's order refusal passing (`OrderHeld`) at ever
 accepts. -/
 theorem movesReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)
-    (hR : DrawReadAll k coinsRead) (hH : DrawHeld k) (hfix : ∀ S, Flock.norm (A.dj S) = A.dj S)
-    (reg : Option Claims.Msg → A.Reg)
+    (hH : DrawHeld k) (reg : Option Claims.Msg → A.Reg)
     (record : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) {rd : Reading A.rounds}
     (hrd : rd = readingAt A.tables A.layout record recordDigest) {σ : Strategy (V.game θ F c)}
     {D : Decoders A.rounds A.Reg} (hD : D = decodersAt reg A.layout) {label : String} {after : ByteArray} {m : ℕ}
@@ -311,7 +312,7 @@ theorem movesReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
         Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ x).log) :
     MovesReach V θ F c k (fun o => Binding.Logged Binding.readsV2 o ∧ SampledDigest k o.sent after) A rd σ D M
       (linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) (roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) :=
-  fun _ h ⟨hv, hn, hl, hd⟩ => h.movesOf hA hDg hR hH hfix reg record recordDigest hrd hD hm hsrc hM hv hn hl
+  fun _ h ⟨hv, hn, hl, hd⟩ => h.movesOf hA hDg hH reg record recordDigest hrd hD hm hsrc hM hv hn hl
     (hN _ hv hl hd) (hord _ hv) (hO _ hv hl)
 
 end Verity.Sampled
