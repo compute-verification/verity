@@ -1,4 +1,8 @@
+import Batteries.Tactic.OpenPrivate
+import Flock.TmplUnroll
 import Properties.SampledProofs.Covered
+import Proofs.Flock.Claims.CanonEq
+import Proofs.Properties.Pouw.LiveSalt.Canon
 import Proofs.Properties.SampledProofs
 import Proofs.Properties.Composition
 import Std.Data.TreeMap.Raw.WF
@@ -13,10 +17,15 @@ verdicts (`Covered.checkBlobsAt_accept`), which gives R7 and `UnitsProved` (`acc
 value R7 holds is then reported, by a verdict, under a root that canonical JSON equality (`jeq`, injective on strings by
 `Properties.Composition.Esc.canonStr_split`) makes the held one. `GatesHeld` reads `HeldCovered` at the port
 `Bits.rowBit` names (`Covered.rowBit_port`), which `Flock.Registered.checkComplete` finds among the registered reads.
+
+The `nontrivial` witnesses break each conclusion where R7 holds a value to a root (`Covered.heldRoot_pinned`, whose
+registered domain computes: `Covered.domain_ok`): `heldCovered_nontrivial` with no registered file, and
+`gatesHeld_nontrivial` at a port reading the value at another root.
 -/
 
 open Lean (Json)
 open SampledProofs
+open private tagged from Flock.Registered
 
 namespace Properties.SampledProofs
 
@@ -817,6 +826,110 @@ theorem rowBit_port {c : Flock.Circuit} {n g : Nat} {rp : Bits.RowPos} (h : Bits
   · cases h
   · exact srcPos_port (fun _ _ _ hk => srcKey_lt hk) h
 
+/-! ## The witnesses' verifier: R7 holds `x` to the root it pins -/
+
+theorem mapM_singleton {α β : Type} {f : α → Flock.V β} {a : α} {b : β} (h : f a = pure b) :
+    #[a].mapM f = pure #[b] := by
+  rw [Array.mapM_eq_mapM_toList]
+  show List.toArray <$> [a].mapM f = _
+  rw [List.mapM_cons, List.mapM_nil, h]
+  try rfl
+
+theorem mem_ofList {l : List (String × Json)} {x : String × Json}
+    (hx : x ∈ (Std.TreeMap.Raw.ofList l compare).toArray) : x ∈ l := by
+  obtain ⟨k, v⟩ := x
+  rw [Std.TreeMap.Raw.mem_toArray_iff_getElem?_eq_some Std.TreeMap.Raw.WF.ofList, getElem?_ofList,
+    Option.map_eq_some_iff] at hx
+  obtain ⟨⟨k', v'⟩, hy, hv⟩ := hx
+  have hk : k' = k := by simpa using List.find?_some hy
+  have hm := List.mem_reverse.1 (List.mem_of_find?_eq_some hy)
+  dsimp only at hv
+  rw [hk, hv] at hm
+  exact hm
+
+/-- A JSON value `Flock.canonUtf8` writes whatever it holds: a string or a natural number. -/
+def Prim (j : Json) : Prop := (∃ s, j = .str s) ∨ ∃ n : Nat, j = Lean.toJson n
+
+theorem canonUtf8_prim {j : Json} (h : Prim j) : ∃ s, Flock.canonUtf8 j = .ok s := by
+  rcases h with ⟨s, rfl⟩ | ⟨n, rfl⟩
+  · exact ⟨_, Properties.Pouw.LiveSalt.Canon.canon_str s⟩
+  · exact ⟨_, Properties.Pouw.LiveSalt.Canon.canon_nat n⟩
+
+theorem canonUtf8_mkObj {l : List (String × Json)} (h : ∀ x ∈ l, Prim x.2) :
+    ∃ s, Flock.canonUtf8 (Json.mkObj l) = .ok s := by
+  show ∃ s, Flock.canonUtf8 (.obj (Std.TreeMap.Raw.ofList l compare)) = .ok s
+  rw [Properties.Pouw.LiveSalt.Canon.canon_obj]
+  refine Flock.TmplUnroll.bind_ok_of (FlockDeploy.array_mapM_ok fun x hx => ?_) fun _ => ⟨_, rfl⟩
+  obtain ⟨s, hs⟩ := canonUtf8_prim (h x (mem_ofList hx))
+  exact ⟨(x.1, s), by rw [hs]; try rfl⟩
+
+theorem tagged_ok (frame : String) (H : ByteArray → ByteArray) (tag : String) {m : Json}
+    (h : ∃ s, Flock.canonUtf8 m = .ok s) : ∃ b, tagged frame H tag m = .ok b := by
+  obtain ⟨s, hs⟩ := h
+  unfold tagged
+  rw [hs]
+  exact ⟨_, rfl⟩
+
+/-- A 16-bit registered value's domain computes: its binding's manifest holds only strings and natural numbers. -/
+theorem domain_ok (program value : String) (words leaves : Nat) :
+    ∃ d, Flock.Registered.domainWith program value words leaves 16 [] = .ok d := by
+  unfold Flock.Registered.domainWith
+  try dsimp only
+  split
+  · rename_i h
+    exact absurd h (by decide)
+  · try dsimp only
+    first
+      | refine Flock.TmplUnroll.bind_ok_of (tagged_ok _ _ _ (canonUtf8_mkObj ?_)) fun _ =>
+          Flock.TmplUnroll.bind_ok_of (tagged_ok _ _ _ (canonUtf8_mkObj ?_)) fun _ => ⟨_, rfl⟩
+      | refine Flock.TmplUnroll.bind_ok_of ⟨(), rfl⟩ fun _ =>
+          Flock.TmplUnroll.bind_ok_of (tagged_ok _ _ _ (canonUtf8_mkObj ?_)) fun _ =>
+            Flock.TmplUnroll.bind_ok_of (tagged_ok _ _ _ (canonUtf8_mkObj ?_)) fun _ => ⟨_, rfl⟩
+    · intro x hx
+      simp only [List.mem_append, List.mem_cons, List.mem_nil_iff, or_false, or_assoc] at hx
+      rcases hx with rfl | rfl | rfl | rfl | rfl | hx
+      · exact .inl ⟨_, rfl⟩
+      · exact .inl ⟨_, rfl⟩
+      · exact .inl ⟨_, rfl⟩
+      · exact .inr ⟨_, rfl⟩
+      · exact .inr ⟨_, rfl⟩
+      · split at hx
+        · simp at hx
+        · rw [List.mem_singleton] at hx
+          subst hx
+          exact .inr ⟨_, rfl⟩
+    · intro x hx
+      simp only [List.mem_cons, List.mem_nil_iff, or_false] at hx
+      rcases hx with rfl | rfl | rfl <;> exact .inr ⟨_, rfl⟩
+
+theorem ownEntries_pinned (prog : Program) (r : String) :
+    ∃ e : Registered.Entry, Registration.ownEntries (pinnedVerifier prog r) = .ok #[e] ∧ e.value = "x" := by
+  obtain ⟨d, hd⟩ := domain_ok (Flock.hexOf prog.desc.sha512) "x" 1 1
+  have hd' : Registered.domainAt (Flock.hexOf prog.desc.sha512) "x" 1 1 16 none = pure d := hd
+  have hw : Registered.width { name := "x", ty := .value 16, gates := some (0, 1) } = pure 16 := by
+    simp [Registered.width, Registered.widthSet]
+  have hr : ∀ s, Registered.rowLeaves { name := "x", ty := .value 16, gates := some (0, 1) } s 1 16 = pure 1 := by
+    intro s
+    unfold Registered.rowLeaves
+    split
+    · rfl
+    · simp [Registered.widthSet]
+  refine ⟨{ value := "x", leaves := 1, words := 1, wordBits := 16, domain := Flock.hexOf d }, ?_, rfl⟩
+  unfold Registration.ownEntries Registered.entries
+  apply mapM_singleton
+  simp [pinnedVerifier, hw, hr, hd']
+
+/-- R7 holds `x` to `r` at `pinnedVerifier`: its one entry computes, and its log and earlier outputs add no root. -/
+theorem heldRoot_pinned (prog : Program) (r : String) : HeldRoot (pinnedVerifier prog r) "x" r := by
+  obtain ⟨e, he, hev⟩ := ownEntries_pinned prog r
+  refine ⟨#[e], #[e], #[("x", r)], he, ?_, ⟨e, by simp, hev⟩, ?_⟩
+  · first
+      | (simp [Registration.applyOutputs, Registration.heldRoots, pinnedVerifier]; done)
+      | rfl
+  · first
+      | (simp [heldFor, pinnedVerifier]; done)
+      | rfl
+
 end Covered
 
 open Covered
@@ -925,5 +1038,30 @@ theorem gatesHeld : GatesHeld := by
   rw [hown] at hown'
   obtain rfl := Option.some.inj hown'
   exact hall q hq rfl hu
+
+/-- **`HeldCovered`'s conclusion fails where R7 holds a value and no registered file is read**: at `pinnedVerifier`
+R7 holds `x` to `r` (`Covered.heldRoot_pinned`), and a verifier that accepts everything without the verifier's
+registered file (`OneStageZk.readsOf none`) has no registered reads, so no port reads `x` at `r`. -/
+theorem heldCovered_nontrivial : ∀ (rd : OneStageZk.Reads) (own : Array Flock.Registered.Port),
+    ¬ (OneStageZk.readsOf none = .ok rd ∧ rd.registered = some own ∧
+      (∃ q ∈ own, q.value = "x" ∧ Flock.hexOf q.root = "r") ∧
+      ∀ q ∈ own, q.value = "x" → (∀ q' ∈ own, q'.name = q.name → q' = q) → Flock.hexOf q.root = "r") := by
+  rintro rd own ⟨hrd, hown, -⟩
+  have h0 : OneStageZk.readsOf none = .ok ⟨none, #[], #[]⟩ := rfl
+  rw [h0] at hrd
+  cases Except.ok.inj hrd
+  first | cases hown | simp at hown
+
+/-- **`GatesHeld`'s conclusion fails at a port reading a held value at another root**: R7 holds `x` to `"r"` at
+`pinnedVerifier` (`Covered.heldRoot_pinned`), and `loosePort`, the one port named `row`, reads `x` at the empty root. -/
+theorem gatesHeld_nontrivial :
+    ¬ ((∃ q ∈ #[loosePort], q.name = "row") ∧ ∀ q ∈ #[loosePort], q.name = "row" →
+      (∀ q' ∈ #[loosePort], q'.name = q.name → q' = q) →
+        ∀ r, HeldRoot (pinnedVerifier default "r") q.value r → Flock.hexOf q.root = r) := by
+  rintro ⟨-, h⟩
+  have h2 := h loosePort (by simp) rfl (fun q' hq' _ => by simpa using hq') "r" (Covered.heldRoot_pinned default "r")
+  have h1 : Flock.hexOf loosePort.root = "" := by first | rfl | decide
+  rw [h1] at h2
+  first | exact absurd h2 (by decide) | simp at h2
 
 end Properties.SampledProofs

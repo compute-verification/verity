@@ -22,6 +22,8 @@ record's roots (`Properties.SampledProofs.UnitsProved`). Together, R7's roots ar
   registered row, on a circuit every port of which is a port of the verifier's registered reads
   (`Flock.Registered.checkComplete`), reads a port of them named after that row, and that port, where no other port has
   its name, is at the root R7 holds its value to.
+* `pinnedVerifier` and `loosePort`: the instance at which their `nontrivial` witnesses break each conclusion, a verifier
+  that pins one value and a port reading it at another root.
 
 They take no premise: they are properties of the check's own functions.
 -/
@@ -71,5 +73,17 @@ def GatesHeld : Prop :=
           Bits.rowBit c n g = some rp → (∃ q ∈ own, q.name = rp.row) ∧
             ∀ q ∈ own, q.name = rp.row → (∀ q' ∈ own, q'.name = q.name → q' = q) →
               ∀ r, HeldRoot p.base.verifier q.value r → Flock.hexOf q.root = r
+
+/-- The `nontrivial` witnesses' verifier: it expects one value `x` registered (a 16-bit parameter of one gate, in rows of
+one word), pinned to the root `r`, and logs, fills and reads nothing else, so R7 holds `x` to `r` (`HeldRoot`). -/
+def pinnedVerifier (prog : Program) (r : String) : Registration.Verifier :=
+  { program := prog, query := .null, law := .null, workTable := none, scheme := "", ports := #[], leafLayer := none,
+    anchors := #[], log := #[], partition := none, registered := #[("x", 1)],
+    params := #[{ name := "x", ty := .value 16, gates := some (0, 1) }], pinned := #[("x", r)] }
+
+/-- A port named `row` reading `x` at the empty root, whose hex `""` is not the root `pinnedVerifier` pins `x` to. -/
+def loosePort : Flock.Registered.Port :=
+  { name := "row", value := "x", root := .empty, leaves := 1, words := some 1, wordBits := 16, domain := .empty,
+    readsRel := #[] }
 
 end Properties.SampledProofs
