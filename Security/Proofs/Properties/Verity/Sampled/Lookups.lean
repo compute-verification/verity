@@ -56,23 +56,22 @@ theorem lookupNames_eq {bytes : ByteArray} {text ml : String} {mj : Json}
     lookupNames bytes = lookupsOf mj := by
   subst hml
   unfold lookupNames
-  first
-  | (simp only [hs, hm, hj, ↓reduceIte]; done)
-  | (rw [hs]; dsimp only; rw [if_neg hm, hj])
-  | simp [hs, hm, hj]
+  rw [hs]
+  dsimp only
+  rw [ite_cond_eq_false _ _ (eq_false hm), hj]
 
 set_option maxHeartbeats 4000000 in
 /-- **The parse finds each lookup's table**: every name in the lookups of a circuit file `HmRow.parse` accepts with the
 tables `tables` (`lookupNames`) is a pinned table's, and `tables` holds one under it. -/
 theorem lookups_given {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
-    {tmpl : Option Typed.Template} {pre : Array (String × Net)} {c : Circuit}
+    {tmpl : Option Typed.Template} {pre : Array (String × Flock.Net)} {c : Flock.Circuit}
     (h : HmRow.parse tags bytes tables tmpl pre = .ok c) :
     ∀ l ∈ lookupNames bytes, (∃ t ∈ MUFU_TABLES, t.name = l) ∧ ∃ w, (l, w) ∈ tables := by
   unfold HmRow.parse at h
-  cases tmpl with
-  | none =>
+  cases tmpl
+  case' none =>
     simp (config := { zeta := false }) only [Option.isSome_none, Bool.false_eq_true, ↓reduceIte, Option.mapM_none] at h
-  | some t =>
+  case' some t =>
     simp (config := { zeta := false }) only [Option.isSome_some, ↓reduceIte, Option.mapM_some] at h
   all_goals
     ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) sha jp0 at h)
@@ -190,7 +189,7 @@ theorem lookups_given {tags : Tags} {bytes : ByteArray} {tables : List (String �
     exact hall a (Array.mem_toList_iff.2 ha)
 
 /-- **`HmOut.parse` finds each lookup's table**: it is `HmRow.parse` on the same file and tables (`parse_cases`). -/
-theorem lookups_given_hmOut {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+theorem lookups_given_hmOut {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
     (h : HmOut.parse tags bytes tables = .ok c) :
     ∀ l ∈ lookupNames bytes, (∃ t ∈ MUFU_TABLES, t.name = l) ∧ ∃ w, (l, w) ∈ tables := by
   obtain ⟨-, ⟨-, hc⟩ | ⟨-, -, -, -, hc, -⟩ | ⟨-, -, -, hc, -⟩⟩ := FlockSoundness.Discharge.Hidden.parse_cases h
