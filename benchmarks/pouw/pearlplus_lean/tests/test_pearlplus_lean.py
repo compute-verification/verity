@@ -493,15 +493,16 @@ def test_a_pass_that_is_not_ws(exe, tmp_path):
 @pytest.mark.parametrize("name, passes", [("run", ("prefill", "decode")), ("control", ("prefill", "decode", "control"))])
 def test_a_recorded_h200_run(exe, name, passes):
     """An H200 run's retained passes, the served run's (accepted) and with its control pass, whose activations aren't the
-    ones it committed (rejected): under each ``over_cap`` rule the Lean's verdict is the Python's on them at the draw
-    count and source the Python recorded, and under ``uncredited``, the run of record's, it accepts or rejects as the
-    recorded verdict did (written before the forming term and the band rule, so its credit isn't today's)."""
+    ones it committed (rejected): under ``over_cap`` ``uncredited``, the run of record's, the Lean's verdict is the
+    Python's on them at the draw count and source the Python recorded, and accepts or rejects as the recorded verdict did
+    (written before the forming term and the band rule, so its credit isn't today's).  It is the one case on a served
+    instance's 64 x 64 tiles at k_min 1,024; each Lean replay takes about 45 minutes on a CPU node, so ``reject`` is left
+    to the CPU cases."""
     d = Path(RECORDED)
     rec = json.loads((d / "verdicts" / f"{name}.json").read_text())
     paths = [d / "passes" / p / "manifest.json" for p in passes]
     coins, source = d / "passes" / "coins.json", bytes.fromhex(rec["source"])
-    for rule in VR.OVER_CAP:
-        want = answer(VR.verify_passes(paths, rec["draws"], len(os.sched_getaffinity(0)), "test", VR.epoch_coins(coins), source,
-                                       over_cap=rule))
-        assert rule != VR.UNCREDITED or want["verdict"] == rec["answer"]["verdict"], want["reason"]
-        assert lean(exe, paths, rec["draws"], source, coins=coins, over_cap=rule) == want, rule
+    want = answer(VR.verify_passes(paths, rec["draws"], len(os.sched_getaffinity(0)), "test", VR.epoch_coins(coins), source,
+                                   over_cap=VR.UNCREDITED))
+    assert want["verdict"] == rec["answer"]["verdict"], want["reason"]
+    assert lean(exe, paths, rec["draws"], source, coins=coins, over_cap=VR.UNCREDITED) == want
