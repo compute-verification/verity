@@ -89,6 +89,7 @@
   "Proofs.Properties.Verity.Sampled.LinkTrees",
   "Proofs.Properties.Verity.Sampled.LinkRead",
   "Proofs.Properties.Verity.Sampled.LinkPts",
+  "Proofs.Properties.Verity.Sampled.RecordDraw",
   "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledLog",
   "Proofs.Properties.Verity.SampledRead",
