@@ -6037,7 +6037,13 @@
    "type_hash": "4198130083bf4a4c93fa88d9a4f9a93a5c3b3259d18d82ed0453302fa0f3e6f4"
   },
   "Claims.Sampling.KSBy_fails": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Sampling.KSBy_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) :",
+    "  Exists fun D => Not (Claims.Sampling.KSBy H D Claims.Sampling.correctOk)"
+   ],
+   "assumptions": [],
+   "type_hash": "32596b9ae7b41911e90a0ada3791042ee9914e6d44902e5ead8ac2f837c86f1e"
   },
   "Claims.Sampling.KSCount_fails": {
    "owner": "@proofs",
@@ -22547,6 +22553,7 @@
     "Claims.Sampling.Bits_fails",
     "Claims.Sampling.Complete_fails",
     "Claims.Sampling.Efficient_fails",
+    "Claims.Sampling.KSBy_fails",
     "Claims.Sampling.KSCount_fails",
     "Claims.Sampling.KS_fails",
     "Claims.Sampling.Nontrivial_fails",
@@ -22994,7 +23001,7 @@
    ]
   },
   "Definitions.Claims.Sampling": {
-   "digest": "d9f2e4d00d689168ab44bf291c2c694c84fb9c8ea902178b7d9fecef72c41684",
+   "digest": "525768803b991d11979f638f108e1c0b1a57ef9d4b0639ad3e1dae87c6ab834b",
    "definitions": {
     "Claims.Sampling.AuditStatement": "14dca2945e169db647822bc5ada687c2bc9d3c764e14fe1a86a63ed6862061f8",
     "Claims.Sampling.AuditStatement.design": "91e2b9592fce2faa8cd2c622f9b00f2a3a45f4a39d15b8793549795948ce108d",
@@ -23015,6 +23022,7 @@
     "Claims.Sampling.Binding": "0bd48abf74d29412972210378926b0968b6359be458a97aced7ba0f75620ae05",
     "Claims.Sampling.Bits": "32127d04d1abb75b3b4b6338f14750f5b6108b2f69d3cbd8b969c35e07cfed91",
     "Claims.Sampling.BitsLin": "12104e21f4e2f56bfd5155466aa311b5bb32a85e1a8487d7f7dcabd2598f5e16",
+    "Claims.Sampling.BlockCheck": "826d47709d1f4633fc8a0c0e99d725528f3b583922cfb2baf91003357878e5b0",
     "Claims.Sampling.BoundaryFaulty": "df548114fb099f7b1fe0ec4a1f684fcdd419a3ebae3eb0d8de71c8ca2494d80e",
     "Claims.Sampling.CommitmentScheme": "f16d42f6cd8b9ee922f24a2204f69509e7537e3892abff5873b1e225db7fd5f2",
     "Claims.Sampling.CommitmentScheme.Binds": "3721109897c7352486ba0cc4c2d6a6c330af86f384b982fe0bb34b397ca8e748",
@@ -23063,7 +23071,9 @@
     "Claims.Sampling.Faulty": "5ba34c79566d772b9fabfa657a1d5a1228cf558b0788f69793993fd346f7334a",
     "Claims.Sampling.FaultyBoundary": "2d7d9c96d6f06d47da143a445b28728b5da45398bf64fc320600db2317cb8127",
     "Claims.Sampling.InScope": "e9ce0f984e182875fb1c4d7e79fc2a89130881c245150293e81c9b6a2986e7c9",
+    "Claims.Sampling.IncorrectBy": "d1814abef1e17b8598b3dd1516fe3f88e48907777da4a79b5c9177e499d03a5f",
     "Claims.Sampling.KS": "33b65996171d0478084ebb76475db9a2763cd9a1ac2ed40bd46d75dd3ce0f3e2",
+    "Claims.Sampling.KSBy": "59faf1fee511bf765c65f95cb23805288bbb6be952587c82e7bb774bab65cfed",
     "Claims.Sampling.KSCount": "2efbb9432a8bc328bb911364ff9eceba711c48f28c6a06625967f2ae42354688",
     "Claims.Sampling.KSLinOn": "3cd3242c014dcfc2396edb1804401628881a6073f98b1da31842b3655b58e08b",
     "Claims.Sampling.LogColl": "556b27152133c315374dc4629cb20ba9925e4044187c7529eb9fb9c86de3ce30",
@@ -23112,6 +23122,7 @@
     "Claims.Sampling.Prog.wires._sparseCasesOn_1": "87b9f7f5605a459f7d747d2d55dfc19c79516c4c2f4746a95ea58fc5f9c622cd",
     "Claims.Sampling.Query": "8b0f68d5f4f1e79282adb0797878c15261606d156c382f52a1a52aacb8e609ba",
     "Claims.Sampling.R": "3f9bdbc4144449b2bf68bce494c6dc6145f28a6832b15aba575b7e0741951eae",
+    "Claims.Sampling.RBy": "01382dd56ba01896436ed1084b1af7f59657f58a9a46154f1ae5f8a0e6b3eec9",
     "Claims.Sampling.RCount": "c0f9b80ba26ed25d7b7f50e14e3d53f980129fe3868836fe84ac08db68a7f33d",
     "Claims.Sampling.RelS": "33cd8ec6255a0a63bb4a6b0176309bf1929fa939087aec157093b63b954854ab",
     "Claims.Sampling.Rhon": "3cb4e93f0cf7943b424a7be761d9ead3a164dd325bc59d460cf20629ca8f41ba",
@@ -23147,9 +23158,11 @@
     "Claims.Sampling.classesPa": "1a9908b32e1ccba5cbbdf8270eb5194612daad9afbf1c1dad62015cadcc33a17",
     "Claims.Sampling.classesPa._sparseCasesOn_1": "4741fd7a40dab4dc667f81d0b784966659776dad758f504959ea1b541d966c19",
     "Claims.Sampling.committed": "22df212fb72ce74a19e26f8872e3485f5f8121ae32b0a01d4e3d5afb27e0a4e3",
+    "Claims.Sampling.correctOk": "287c818843405a06ffb86a47ddf56d77c537b1ba90fc9391c044fa0b4340dc66",
     "Claims.Sampling.faulty": "98d5637298d99791f6f17938dd68ef0e09f363464b6b7d2a9cc65c662937ebe9",
     "Claims.Sampling.flatMapRP": "bea068d72aa648819f676ab064d266d0db072b368e2a84b32cd502e1b3d78c4d",
     "Claims.Sampling.forkOn": "f86f748aae578ded533b09d6e9840b27a07f961c663c062b12c550b359a18e65",
+    "Claims.Sampling.incorrectBy": "874239cb8f449bda2c48bf246df285d0b0ad66342d7d2bd551e3af0ee2806208",
     "Claims.Sampling.instDecidableEqBGate": "9352d07d9bab8e8f6b39d537474b7c73b29fdd005cef32a21b1c2c38d8b26bd9",
     "Claims.Sampling.instDecidableEqBGate.decEq": "9aed4716ee68f3cebe56a55e16e99f1fd3907559c230098775cb77532d579fd3",
     "Claims.Sampling.lamLin": "982170ab965dfa31a00902f80cbfaa5ae369b4702912481358c2a94085d4a4c4",
@@ -23181,6 +23194,7 @@
     "Claims.Sampling.Bits_fails",
     "Claims.Sampling.Complete_fails",
     "Claims.Sampling.Efficient_fails",
+    "Claims.Sampling.KSBy_fails",
     "Claims.Sampling.KSCount_fails",
     "Claims.Sampling.KSLinOn_fails",
     "Claims.Sampling.KS_fails",
@@ -23837,6 +23851,7 @@
     "Claims.Sampling.Bits_fails",
     "Claims.Sampling.Complete_fails",
     "Claims.Sampling.Efficient_fails",
+    "Claims.Sampling.KSBy_fails",
     "Claims.Sampling.KSCount_fails",
     "Claims.Sampling.KS_fails",
     "Claims.Sampling.Nontrivial_fails",
@@ -24058,6 +24073,7 @@
     "Claims.Flock.scope_meets_zk",
     "Claims.Sampling.Bits_fails",
     "Claims.Sampling.Efficient_fails",
+    "Claims.Sampling.KSBy_fails",
     "Claims.Sampling.KSCount_fails",
     "Claims.Sampling.KS_fails",
     "Claims.Witness.Recursion.BitsFlock_fails",
@@ -24998,6 +25014,7 @@
     "Claims.Sampling.Bits_fails",
     "Claims.Sampling.Complete_fails",
     "Claims.Sampling.Efficient_fails",
+    "Claims.Sampling.KSBy_fails",
     "Claims.Sampling.KSCount_fails",
     "Claims.Sampling.KSLinOn_fails",
     "Claims.Sampling.KS_fails",
@@ -25317,6 +25334,7 @@
     "Claims.Sampling.Bits_fails",
     "Claims.Sampling.Complete_fails",
     "Claims.Sampling.Efficient_fails",
+    "Claims.Sampling.KSBy_fails",
     "Claims.Sampling.KSCount_fails",
     "Claims.Sampling.KSLinOn_fails",
     "Claims.Sampling.KS_fails",
