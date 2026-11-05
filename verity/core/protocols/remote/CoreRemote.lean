@@ -229,8 +229,9 @@ private def readsFile : Json := Json.mkObj [("format", Flock.Registered.FORMAT),
     ("leaves", x.getObjValD "leaves"), ("reads", Json.arr #[Json.null]), ("root", x.getObjValD "root"),
     ("value", x.getObjValD "value"), ("words", x.getObjValD "words")])))]
 
-/-- The auditor's challenger, whose signed release the draw's coins come in: an LMS key over SHA-512. -/
-private def challenger : Json := Json.mkObj [("key", Json.mkObj [("H", 5), ("W", 8),
+/-- The auditor's challenger, whose signed release the draw's coins come in: an LMS key over SHA-512 at `Lms.deployed`'s
+parameters, the only ones v2 reads a challenger's signatures under (`OneStageZk.KEY_PARAMS`). -/
+private def challenger : Json := Json.mkObj [("key", Json.mkObj [("H", 20), ("W", 1),
   ("public", String.join (List.replicate 80 "c1"))]), ("label", "draw")]
 
 /-- One-stage v2's params: v1's over the log `log`, with `outputs`, the challenger and `W`'s open root as the window's,
