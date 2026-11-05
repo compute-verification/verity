@@ -57,9 +57,10 @@ theorem _root_.Flock.Bridge.constsOfP_isInput {c : Flock.Circuit} {hU : Built c.
 /-- **V5's assembly** (`Bridge.AssemblyTargetV5`). -/
 theorem _root_.Flock.Bridge.assemblyTargetV5 : Bridge.AssemblyTargetV5 := by
   intro hT hF hE n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots desc qr hpop law kd hlaw hdiv dj S₀ d₀ y₀
-    wr dg N Ω _ _ Lb src hA3 hTags lawF hCust hsz k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q L P vb σ Xr Cc Lm rows roots
-    Cd κ r ns δ hTab hLink
+    wr dg N Ω _ _ Lb src hA3 hTags lawF nsF hlawF hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q L P vb σ Xr Cc Lm rows
+    roots Cd κ r ns δ hTab hLink
   classical
+  have hsz := Bridge.lawOn_size hlawF hCust.2
   have hns : ns.sum = n := Bridge.nsOf_sum hpop
   by_cases hrel : Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ r desc q roots)
       (Bridge.partOf P κ ns) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr)
