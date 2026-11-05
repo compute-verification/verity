@@ -1,5 +1,8 @@
 module
 
+public import Mathlib.Data.Fin.Tuple.Take
+public import Mathlib.Logic.Equiv.Fin.Basic
+public import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
 public import Proofs.Flock.Soundness.ZK.RealLeaves
 public import Proofs.Properties.Verity.Sampled.CoinMap
 
@@ -7,19 +10,25 @@ public import Proofs.Properties.Verity.Sampled.CoinMap
 # An opening's empty class at one hm96 leaf
 
 An opening of a coin tree's leaf releases the leaf's first coins, which the verifier compares with live coins drawn
-after the leaf was committed. The opening's class at those coins (`OpeningAt.classOf`) holds each draw with the leaf's
-hash that releases them, and `openEmpty` is the probability that it is empty. In the abstract: a leaf
-`H(x(ω) + M·y, c(y))` of uniform coins `ω` and salt `y`, a release `P ω`, and live coins `u` whose bits `bits u` have
-the release's law. `fiberMisses_le` bounds by `2·δ₁` the probability that no coins and salt with the leaf's hash
-release `bits u`. That is T1's bound twice. T1 makes the leaf ideal, so the event no longer reads the coins, and
-`bits u` may be swapped for the release `P ω`. T1 on the complement then makes the leaf real again, where the leaf's
-own coins and salt release `P ω`.
+after the leaf was committed. The opening's class at those coins (`OpeningAt.classOf`) holds each round with the leaf's
+hash that releases them, and `openEmpty` is the probability that it is empty.
 
-* **The empty class below the block** (`OpeningAt.oneMore`, `OpeningAt.classOf_eq_empty`, `emptyAt_of_lt_block`,
-  `openEmpty_eq_one`): `classOf` holds the draws released as the bits at every description of the node, and a node's
-  descriptions are not one. A description that opens fewer coins than a block has a twin that opens one coin more,
-  whose continuation is the releases' at no frame (`relK` at `0`) reading only the release's first coins. The two
-  release bits of two lengths, so the class is empty at every release, and the empty class has probability one.
+* **At an hm96 leaf** (`FiberMisses`, `fiberMisses_le`): a leaf `H(x(ω) + M·y, c(y))` of uniform coins `ω` and salt
+  `y`, a release `P ω`, and live coins `u` whose bits `bits u` have the release's law. `fiberMisses_le` bounds by `2·δ₁`
+  the probability that no coins and salt with the leaf's hash release `bits u`. That is T1's bound twice. T1 makes the
+  leaf ideal, so the event no longer reads the coins, and `bits u` may be swapped for the release `P ω`. T1 on the
+  complement then makes the leaf real again, where the leaf's own coins and salt release `P ω`.
+* **A coin tree's leaf is an hm96 leaf** (`treeX`, `treeMy`, `treeC`, `treeH`, `leaf_eq_treeH`, `treeMisses_le`): a
+  draw's leaf is `H(x(ω) + M·y, c(y))`, with `x(ω)` the round digest of the draw's coins, `M·y` hm96-sha512's mask of its
+  salt under the tree's key and `c(y)` the salt's hash, so `fiberMisses_le` bounds the miss at the tree's leaf.
+* **The empty class, averaged over the device's draw** (`OpeningAt.AtLeaf`, `OpeningAt.misses_of_emptyAt`,
+  `openEmpty_avg_le`): where the play ends in a close that records its log, a node's class is empty at `bits` only where
+  no round with the drawn round's leaf is released as `bits` (`OpeningAt.classOf_nonempty`). At a node that every draw
+  `d₀` of one leaf (its nonce, key, stream, round and count) describes, `openEmpty` averaged over the draw is at most
+  `2·δ₁`.
+* **The round's law** (`avg_take`, `avg_opened_roundBits`, `openEmpty_avg_le_round`): a draw's first `m` coins of a
+  block of at least `m` have the law of a round's `m` live challenges as bits (`roundBits`), so the bound holds at the
+  coin map's release.
 -/
 
 @[expose] public section
@@ -90,47 +99,114 @@ theorem fiberMisses_le {Ω Q Salt B C D R : Type} [Fintype Ω] [Nonempty Ω] [Fi
     _ ≤ δ₁ + δ₁ := add_le_add hideal le_rfl
     _ = 2 * δ₁ := (two_mul δ₁).symm
 
-/-! ## The empty class below the block -/
+/-! ## A coin tree's leaf -/
 
-/-- Lists of `w` bits each: the first `n + 1` lists' bits, cut to `w · n`, are the first `n` lists' bits. -/
-theorem flatten_take_succ {w : ℕ} : ∀ (L : List (List Bool)) (n : ℕ), (∀ x ∈ L, x.length = w) →
-    ((L.take (n + 1)).flatten).take (w * n) = (L.take n).flatten
-  | [], _, _ => by simp
-  | x :: L, 0, _ => by simp
-  | x :: L, n + 1, h => by
-    have hx : x.length = w := h x List.mem_cons_self
-    rw [List.take_succ_cons, List.take_succ_cons, List.flatten_cons, List.flatten_cons, List.take_append,
-      List.take_of_length_le (by rw [hx, Nat.mul_add_one]; exact Nat.le_add_left w (w * n)), hx,
-      show w * (n + 1) - w = w * n by rw [Nat.mul_add_one, Nat.add_sub_cancel],
-      flatten_take_succ L n fun y hy => h y (List.mem_cons_of_mem _ hy)]
+open FlockSoundness.Discharge.ZkView (Bits bitsOf bytesOf)
+open FlockSoundness.Discharge.Hm (bitL eq_of_bitL get!_eq_getD)
 
-/-- Lists of `w` bits each: the first `n` lists hold `w` bits for each list taken. -/
-theorem flatten_take_length {w : ℕ} : ∀ (L : List (List Bool)) (n : ℕ), (∀ x ∈ L, x.length = w) →
-    ((L.take n).flatten).length = w * min n L.length
-  | [], _, _ => by simp
-  | x :: L, 0, _ => by simp
-  | x :: L, n + 1, h => by
-    rw [List.take_succ_cons, List.flatten_cons, List.length_append, h x List.mem_cons_self,
-      flatten_take_length L n fun y hy => h y (List.mem_cons_of_mem _ hy), List.length_cons, min_add_add_right]
-    ring
+/-- A coin tree's salt as its 192 bytes, from the draw's 1536 bits (`TreeDraw.leaf`'s). -/
+def treeSalt (y : Fin 1536 → Bool) : ByteArray := bytesOfBits 192 fun t => if h : t < 1536 then y ⟨t, h⟩ else false
 
-/-- A draw's coins are 128 bits each. -/
-theorem ofFn_lengths {block : ℕ} (d : TreeDraw block) :
-    ∀ x ∈ List.ofFn (fun i => List.ofFn (d.1 i)), x.length = 128 := by
-  intro x hx
-  obtain ⟨i, rfl⟩ := List.mem_ofFn.1 hx
-  exact List.length_ofFn
+/-- **The round digest** of stream `s`'s round `r` under the nonce `ν` at the block of coins `ω`, as bits: the hm96
+leaf's `x(ω)` (`treeLeaf`'s). -/
+def treeX (ν : ByteArray) (s r : ℕ) {block : ℕ} (ω : Fin block → Fin 128 → Bool) : Bits :=
+  bitsOf (treeHash ν (treeTag "round" ++ Flock.be32 s.toUInt32 ++ Flock.be32 r.toUInt32 ++
+    (TreeDraw.coins (ω, fun _ => false)).foldr (fun c t => treeHash ν (treeTag "chain" ++ c ++ t))
+      (treeHash ν (treeTag "tail"))))
 
-/-- A draw's first `n + 1` coins' bits, cut to `128 · n`, are its first `n` coins' bits. -/
-theorem opened_take_succ {block : ℕ} (d : TreeDraw block) (n : ℕ) :
-    (TreeDraw.opened d (n + 1)).take (128 * n) = TreeDraw.opened d n :=
-  flatten_take_succ _ n (ofFn_lengths d)
+/-- **hm96-sha512's mask of a coin tree's salt** under the key `key`, `M·y`, as bits. -/
+def treeMy (key : ByteArray) (y : Fin 1536 → Bool) : Bits := bitsOf (Flock.Hm96.sha512.mask key (treeSalt y))
 
-/-- A draw's first `n` coins of a block are `128 · n` bits. -/
-theorem opened_length_eq {block : ℕ} (d : TreeDraw block) {n : ℕ} (h : n ≤ block) :
-    (TreeDraw.opened d n).length = 128 * n := by
-  unfold TreeDraw.opened
-  rw [flatten_take_length _ n (ofFn_lengths d), List.length_ofFn, min_eq_left h]
+/-- A coin tree's hm96 instance under the nonce `ν`: hm96-sha512 with the tree's hash. -/
+abbrev treeHm (ν : ByteArray) : Flock.Hm96 := { Flock.Hm96.sha512 with hash := treeHash ν }
+
+/-- **A coin tree's salt hash** under the nonce `ν`, `c(y) = H(SALT_PREFIX ‖ y)`. -/
+def treeC (ν : ByteArray) (y : Fin 1536 → Bool) : ByteArray := (treeHm ν).saltDigest (treeSalt y)
+
+/-- **A coin tree's leaf from its commit string's halves** under the nonce `ν` and the key `key`:
+`H(LEAF_PREFIX(key) ‖ b ‖ c)`. -/
+def treeH (ν key : ByteArray) (p : Bits × ByteArray) : ByteArray :=
+  treeHash ν (Flock.Hm96.sha512.leafPrefix key ++ (bytesOf (k := 64) p.1 ++ p.2))
+
+/-- **Two strings' first 64 bytes, XORed**, are the bytes of the sum of their bits. -/
+theorem xorBytes_eq (x m : ByteArray) :
+    ByteArray.mk ((Array.range 64).map fun i => x.get! i ^^^ m.get! i) = bytesOf (k := 64) (bitsOf x + bitsOf m) := by
+  have hA : ((Array.range 64).map fun i => x.get! i ^^^ m.get! i).toList.length = 64 := by
+    rw [Array.toList_map, List.length_map, Array.toList_range, List.length_range]
+  have hB : (bytesOf (k := 64) (bitsOf x + bitsOf m)).data.toList.length = 64 := by
+    rw [bytesOf, Array.toList_ofFn, List.length_ofFn]
+  refine ByteArray.ext (Array.toList_inj.mp (eq_of_bitL (by rw [hA, hB]) fun t ht => ?_))
+  rw [hA] at ht
+  have ht' : t < 512 := ht
+  rw [FlockSoundness.Discharge.ZkView.bitL_bytesOf (k := 64) _ ht', bitL]
+  rw [Array.toList_map, Array.toList_range, List.getD_eq_getElem?_getD, List.getElem?_map,
+    List.getElem?_range (show t / 8 < 64 by omega), Option.map_some, Option.getD_some]
+  rw [UInt8.toNat_xor, Nat.testBit_xor, get!_eq_getD, get!_eq_getD]
+  simp only [Pi.add_apply, bitsOf, bitL]
+  exact FlockSoundness.Discharge.ZkView.xor_ind _ _
+
+/-- hm96's mask reads only the instance's salt and digest sizes. -/
+theorem mask_eq_of_sizes {h h' : Flock.Hm96} (hs : h.saltBytes = h'.saltBytes) (hd : h.digestBytes = h'.digestBytes)
+    (key y : ByteArray) : h.mask key y = h'.mask key y := by
+  unfold Flock.Hm96.mask
+  rw [hs, hd]
+
+/-- **A coin tree's commit string** is the bytes of `x + M·y`, then the salt's hash. -/
+theorem treeCommitString_eq (ν key x y : ByteArray) :
+    (treeHm ν).commitString key x y =
+      bytesOf (k := 64) (bitsOf x + bitsOf ((treeHm ν).mask key y)) ++ (treeHm ν).saltDigest y := by
+  rw [← xorBytes_eq]
+  rfl
+
+/-- **A draw's leaf is an hm96 leaf** `H(x(ω) + M·y, c(y))` of its coins `ω` and salt `y`. -/
+theorem leaf_eq_treeH {block : ℕ} (ν key : ByteArray) (s r : ℕ) (ω : Fin block → Fin 128 → Bool)
+    (y : Fin 1536 → Bool) :
+    TreeDraw.leaf ν key s r (ω, y) = treeH ν key (treeX ν s r ω + treeMy key y, treeC ν y) := by
+  dsimp only [TreeDraw.leaf, treeLeaf]
+  rw [treeCommitString_eq, mask_eq_of_sizes (h := treeHm ν) (h' := Flock.Hm96.sha512) rfl rfl]
+  rfl
+
+/-- **No draw with a coin tree's leaf releases the live bits, with probability at most `2·δ₁`** (`fiberMisses_le` at
+`leaf_eq_treeH`). Over a uniform draw `p.1` and live coins `p.2` whose bits `bits p.2` have the law of a draw's first
+`n` coins (`hlaw`), this is the probability that no draw `d` with `p.1`'s leaf has its first `n` coins `bits p.2`. -/
+theorem treeMisses_le {block : ℕ} (ν key : ByteArray) (s r n : ℕ) {Q : Type} [Fintype Q] [Nonempty Q]
+    (bits : Q → List Bool) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding (treeMy key) (treeC ν) δ₁)
+    (hlaw : ∀ G : List Bool → ℝ≥0∞,
+      avg (fun ω : Fin block → Fin 128 → Bool => G (TreeDraw.opened (ω, fun _ => false) n)) = avg fun u => G (bits u)) :
+    prCoin (fun p : TreeDraw block × Q => ∀ d : TreeDraw block,
+      TreeDraw.leaf ν key s r d = TreeDraw.leaf ν key s r p.1 → TreeDraw.opened d n ≠ bits p.2) ≤ 2 * δ₁ := by
+  let e : ((Fin block → Fin 128 → Bool) × Q) × (Fin 1536 → Bool) ≃ TreeDraw block × Q :=
+    ⟨fun q => ((q.1.1, q.2), q.1.2), fun p => ((p.1.1, p.2), p.1.2), fun _ => rfl, fun _ => rfl⟩
+  calc prCoin (fun p : TreeDraw block × Q => ∀ d : TreeDraw block,
+        TreeDraw.leaf ν key s r d = TreeDraw.leaf ν key s r p.1 → TreeDraw.opened d n ≠ bits p.2)
+      = prCoin (fun q : ((Fin block → Fin 128 → Bool) × Q) × (Fin 1536 → Bool) => ∀ d : TreeDraw block,
+          TreeDraw.leaf ν key s r d = TreeDraw.leaf ν key s r (q.1.1, q.2) → TreeDraw.opened d n ≠ bits q.1.2) :=
+        (FlockSoundness.ZK.prCoin_congr_equiv e fun p : TreeDraw block × Q => ∀ d : TreeDraw block,
+          TreeDraw.leaf ν key s r d = TreeDraw.leaf ν key s r p.1 → TreeDraw.opened d n ≠ bits p.2).symm
+    _ ≤ prCoin (fun q : ((Fin block → Fin 128 → Bool) × Q) × (Fin 1536 → Bool) =>
+          FiberMisses (treeMy key) (treeC ν) (treeH ν key) (treeX ν s r)
+            (fun ω => TreeDraw.opened (ω, fun _ => false) n)
+            (treeH ν key (treeX ν s r q.1.1 + treeMy key q.2, treeC ν q.2)) (bits q.1.2)) :=
+        prCoin_mono fun q hq ω y hl => hq (ω, y) (by rw [leaf_eq_treeH, leaf_eq_treeH]; exact hl)
+    _ ≤ 2 * δ₁ := fiberMisses_le (treeMy key) (treeC ν) hT1 (treeH ν key) (treeX ν s r)
+          (fun ω => TreeDraw.opened (ω, fun _ => false) n) bits hlaw
+
+/-- **A uniform block's first `m` entries are uniform**: an average over `Fin block → X` of what reads only the first
+`m ≤ block` entries is its average over `Fin m → X`. -/
+theorem avg_take {X : Type} [Fintype X] [Nonempty X] {m block : ℕ} (hm : m ≤ block) (f : (Fin m → X) → ℝ≥0∞) :
+    avg (fun ω : Fin block → X => f (Fin.take m hm ω)) = avg f := by
+  obtain ⟨k, rfl⟩ := Nat.exists_eq_add_of_le hm
+  let e : (Fin m → X) × (Fin k → X) ≃ (Fin (m + k) → X) :=
+    (Equiv.sumArrowEquivProdArrow (Fin m) (Fin k) X).symm.trans (Equiv.arrowCongr finSumFinEquiv (Equiv.refl X))
+  have he : ∀ p, Fin.take m hm (e p) = p.1 := fun p => funext fun i => by
+    show Sum.elim p.1 p.2 (finSumFinEquiv.symm (Fin.castAdd k i)) = p.1 i
+    rw [finSumFinEquiv_symm_apply_castAdd]
+    rfl
+  calc avg (fun ω : Fin (m + k) → X => f (Fin.take m hm ω))
+      = avg (fun p : (Fin m → X) × (Fin k → X) => f (Fin.take m hm (e p))) :=
+        (avg_equiv e fun ω => f (Fin.take m hm ω)).symm
+    _ = avg (fun p : (Fin m → X) × (Fin k → X) => f p.1) := congrArg avg (funext fun p => congrArg f (he p))
+    _ = avg f := (avg_prod _).trans (congrArg avg (funext fun a => avg_const (f a)))
 
 end Verity.Game
 
@@ -139,59 +215,88 @@ namespace Verity.Sampled
 open Verity.Game
 open scoped ENNReal
 
-/-- **The node's description that opens one coin more**: `o`'s node, as the releases' continuation at no frame (`relK`
-at `0`) that reads the release's first `o.n` coins as `o`'s continuation does. It describes the node wherever `o`
-does, since a draw's first `o.n + 1` coins hold its first `o.n` (`opened_take_succ`). -/
-noncomputable def OpeningAt.oneMore {β : Type} {g' : Game β} (o : OpeningAt g') : OpeningAt g' where
-  T := o.T
-  p := o.p
-  i := o.i
-  s := o.s
-  n := o.n + 1
-  b := o.b
-  k := 0
-  fs := o.fs
-  ts := o.ts
-  f log := relK o.k o.fs (o.ts.set o.i (o.T.bump o.p.1)) fun log' =>
-    o.f (⟨.opening o.i o.s o.n, o.b, (log.headD ⟨.opening o.i o.s o.n, o.b, []⟩).coins.take (128 * o.n)⟩ :: log')
-  iF := o.iF
-  iN := o.iN
-  eq := o.eq.trans (congrArg (@Game.coin β _ o.iF o.iN) (funext fun d => by
-    show _ = relK o.k o.fs (o.ts.set o.i (o.T.bump o.p.1)) fun log' =>
-      o.f (⟨.opening o.i o.s o.n, o.b, (TreeDraw.opened d.1 (o.n + 1)).take (128 * o.n)⟩ :: log')
-    rw [opened_take_succ]))
+local notation "𝔽" => FlockLevel3.GF128
 
-open Classical in
-/-- **An opening's class is empty below the block**: where a description `o'` of the node opens fewer coins than a
-block, no round is released as `bits` both at `o'` and at the description that opens one coin more
-(`OpeningAt.oneMore`), whose releases are 128 bits longer. -/
-theorem OpeningAt.classOf_eq_empty {β : Type} {g' : Game β} (o o' : OpeningAt g') (h : o'.n < o'.T.spec.block)
-    (bits : List Bool) : o.classOf bits = ∅ := by
-  refine Finset.eq_empty_of_forall_notMem fun d hd => ?_
-  have h1 := congrArg List.length ((Finset.mem_filter.1 hd).2 o')
-  have h2 := congrArg List.length ((Finset.mem_filter.1 hd).2 o'.oneMore)
-  have e1 : 128 * o'.n = bits.length := (opened_length_eq _ h.le).symm.trans h1
-  have e2 : 128 * (o'.n + 1) = bits.length :=
-    (opened_length_eq (n := o'.n + 1) _ (Nat.succ_le_of_lt h)).symm.trans h2
-  omega
+/-! ## The empty class at an opening's node -/
 
-/-- **Below the block, every release is in the empty class**: where a description of an opening's node opens fewer
-coins than a block, `EmptyAt` holds at every release (`OpeningAt.classOf_eq_empty`). -/
-theorem emptyAt_of_lt_block {β : Type} {g' : Game β} (o' : OpeningAt g') (h : o'.n < o'.T.spec.block)
-    (bits : List Bool) : EmptyAt g' bits := by
-  have hn : Nonempty (OpeningAt g') := ⟨o'⟩
-  refine ⟨Classical.choice hn, by unfold openingOf; rw [dite_eq_left hn], ?_⟩
-  rw [OpeningAt.classOf_eq_empty _ o' h bits]
-  exact Finset.not_nonempty_empty
+namespace OpeningAt
 
-/-- **Below the block, the opening's empty class has probability one** (`emptyAt_of_lt_block`). -/
-theorem openEmpty_eq_one {β P : Type} [Fintype P] [Nonempty P] {g' : Game β} (o' : OpeningAt g')
-    (h : o'.n < o'.T.spec.block) (bits : P → List Bool) : openEmpty g' bits = 1 := by
-  unfold openEmpty prCoin
-  calc avg _ = avg (fun _ : P => (1 : ℝ≥0∞)) := by
-        congr 1
-        funext c
-        simp [emptyAt_of_lt_block o' h (bits c)]
-    _ = 1 := FlockSoundness.Game.avg_const _
+variable {β : Type} {E : List Release → Game β} {g' : Game β}
+
+/-- **A description at one leaf**: `o` opens, under the nonce `ν` and the key `key`, stream `s`'s round `r` with the
+count `n` in a block of `block` coins, at the device's draw `d₀` of that round. -/
+structure AtLeaf (o : OpeningAt E g') (ν key : ByteArray) (s r n : ℕ) {block : ℕ} (d₀ : TreeDraw block) : Prop where
+  nonce_eq : o.T.nonce = ν
+  key_eq : treeKey o.T.sample.1 = key
+  stream_eq : (o.p.1 : ℕ) = s
+  round_eq : (o.p.2 : ℕ) = r
+  count_eq : o.n = n
+  block_eq : o.T.spec.block = block
+  draw_eq : HEq (o.T.sample.2 o.p.1 o.p.2) d₀
+
+/-- **The empty class misses at the leaf**: where the play ends in a close that records its log and `o` describes the
+node at the draw `d₀`'s leaf, an empty class at `bits` means no draw with `d₀`'s leaf has its first `n` coins `bits`
+(`classOf_nonempty`). -/
+theorem misses_of_emptyAt {lg : β → List Release} (hE : RecordsLog lg E) (o : OpeningAt E g') {ν key : ByteArray}
+    {s r n block : ℕ} {d₀ : TreeDraw block} (h : o.AtLeaf ν key s r n d₀) {bits : List Bool} (he : EmptyAt E g' bits) :
+    ∀ d : TreeDraw block, TreeDraw.leaf ν key s r d = TreeDraw.leaf ν key s r d₀ → TreeDraw.opened d n ≠ bits := by
+  obtain ⟨o₀, -, hne⟩ := he
+  obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl, hd⟩ := h
+  obtain rfl := eq_of_heq hd
+  intro d hl hb
+  exact hne (OpeningAt.classOf_nonempty hE o₀ o ⟨d, congrArg ByteArray.data hl⟩ hb)
+
+end OpeningAt
+
+/-- **An opening's empty class has probability at most `2·δ₁`, averaged over the device's draw** at one leaf. Where the
+play ends in a close that records its log and, at each draw `d₀` of stream `s`'s round `r`, the node `g' d₀` has a
+description at `d₀`'s leaf (`ho`), the probability that its class is empty at live coins whose bits `bits u` have the law
+of a draw's first `n` coins (`hlaw`), averaged over the draw, is at most `2·δ₁` (`treeMisses_le`). -/
+theorem openEmpty_avg_le {β : Type} {lg : β → List Release} {E : List Release → Game β} (hE : RecordsLog lg E)
+    (ν key : ByteArray) (s r n : ℕ) {block : ℕ} (g' : TreeDraw block → Game β)
+    (ho : ∀ d₀, ∃ o : OpeningAt E (g' d₀), o.AtLeaf ν key s r n d₀) {Q : Type} [Fintype Q] [Nonempty Q]
+    (bits : Q → List Bool) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding (treeMy key) (treeC ν) δ₁)
+    (hlaw : ∀ G : List Bool → ℝ≥0∞,
+      avg (fun ω : Fin block → Fin 128 → Bool => G (TreeDraw.opened (ω, fun _ => false) n)) = avg fun u => G (bits u)) :
+    avg (fun d₀ : TreeDraw block => openEmpty E (g' d₀) bits) ≤ 2 * δ₁ :=
+  calc avg (fun d₀ : TreeDraw block => openEmpty E (g' d₀) bits)
+      ≤ avg (fun d₀ : TreeDraw block => prCoin fun u : Q => ∀ d : TreeDraw block,
+          TreeDraw.leaf ν key s r d = TreeDraw.leaf ν key s r d₀ → TreeDraw.opened d n ≠ bits u) :=
+        avg_mono fun d₀ => prCoin_mono fun _u hu => (ho d₀).elim fun o h => o.misses_of_emptyAt hE h hu
+    _ = prCoin (fun p : TreeDraw block × Q => ∀ d : TreeDraw block,
+          TreeDraw.leaf ν key s r d = TreeDraw.leaf ν key s r p.1 → TreeDraw.opened d n ≠ bits p.2) :=
+        (FlockSoundness.ZK.prCoin_prod_split _).symm
+    _ ≤ 2 * δ₁ := treeMisses_le ν key s r n bits hT1 hlaw
+
+/-! ## The round's law -/
+
+variable (e : 𝔽 ≃ (Fin 128 → Bool))
+
+/-- **A draw's first `m` coins have a round's law**: in a block of at least `m` coins, a uniform draw's first `m` coins
+are released as the bits of `m` uniform live challenges (`roundBits`). -/
+theorem avg_opened_roundBits {block m : ℕ} (hm : m ≤ block) (G : List Bool → ℝ≥0∞) :
+    avg (fun ω : Fin block → Fin 128 → Bool => G (TreeDraw.opened (ω, fun _ => false) m)) =
+      avg fun c : Fin m → 𝔽 => G (roundBits e c) := by
+  have h1 : ∀ ω : Fin block → Fin 128 → Bool, TreeDraw.opened (ω, fun _ => false) m =
+      (List.ofFn fun i => List.ofFn (Fin.take m hm ω i)).flatten := fun ω => by
+    rw [TreeDraw.opened, ← Fin.ofFn_take_eq_take_ofFn hm]
+    rfl
+  calc avg (fun ω : Fin block → Fin 128 → Bool => G (TreeDraw.opened (ω, fun _ => false) m))
+      = avg (fun ω : Fin block → Fin 128 → Bool => G (List.ofFn fun i => List.ofFn (Fin.take m hm ω i)).flatten) :=
+        congrArg avg (funext fun ω => congrArg G (h1 ω))
+    _ = avg (fun a : Fin m → Fin 128 → Bool => G (List.ofFn fun i => List.ofFn (a i)).flatten) :=
+        avg_take hm fun a => G (List.ofFn fun i => List.ofFn (a i)).flatten
+    _ = avg fun c : Fin m → 𝔽 => G (roundBits e c) :=
+        (avg_equiv (Equiv.piCongrRight fun _ => e) fun a => G (List.ofFn fun i => List.ofFn (a i)).flatten).symm
+
+/-- **An opening's empty class at a round's release has probability at most `2·δ₁`, averaged over the device's draw**
+(`openEmpty_avg_le` at `avg_opened_roundBits`): the release is a round's `m` live challenges as bits, and the opening's
+count `m` fits in the block. -/
+theorem openEmpty_avg_le_round {β : Type} {lg : β → List Release} {E : List Release → Game β}
+    (hE : RecordsLog lg E) (ν key : ByteArray) (s r : ℕ) {block m : ℕ} (hm : m ≤ block)
+    (g' : TreeDraw block → Game β) (ho : ∀ d₀, ∃ o : OpeningAt E (g' d₀), o.AtLeaf ν key s r m d₀)
+    {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding (treeMy key) (treeC ν) δ₁) :
+    avg (fun d₀ : TreeDraw block => openEmpty E (g' d₀) (roundBits e : (Fin m → 𝔽) → List Bool)) ≤ 2 * δ₁ :=
+  openEmpty_avg_le hE ν key s r m g' ho (roundBits e) hT1 (avg_opened_roundBits e hm)
 
 end Verity.Sampled
