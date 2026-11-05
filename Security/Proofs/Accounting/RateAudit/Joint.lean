@@ -1,6 +1,8 @@
-import Mathlib
-import Proofs.Accounting.Device
-import Proofs.Accounting.RateAudit.Audit
+module
+
+public import Mathlib
+public import Proofs.Accounting.Device
+public import Proofs.Accounting.RateAudit.Audit
 
 /-!
 # Proof that the rate audit is a joint run's bandwidth guarantee, with the rebuilds charged as compute
@@ -11,6 +13,8 @@ game's compute, covered by the other accounts' work, is within `F·T − W` (`Ru
 footprint is at most its ingress, which the bandwidth account's reads cover. So the joint event is inside `RateAudit`'s
 at `F = F·T − W`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs
 

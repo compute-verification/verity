@@ -1,8 +1,8 @@
-# θ for the RTX PRO 6000 Blackwell Server Edition (sm_120; ACCEL CALIB, CMP-115; note:compute-research/20261026T0140Z-draft-
-# accel-calib): every rate, capacity and clock the accelerator model reads, each with its vendor document first (`sheet`,
-# `grade`, `source`), then the census or a measured run (`measured`, `runs`), or the run that would measure it (`gap`).
-# The schema is data/devices/sm_90/theta.toml's. The census is at the node's 2,092 MHz lock, and a SM-clock's rate holds at
-# any clock; the whitepaper's figures are the Workstation Edition's at its 2,617 MHz boost (the same 188-SM GB202).
+# θ for the RTX PRO 6000 Blackwell Server Edition (sm_120; ACCEL CALIB): every rate, capacity and clock the accelerator
+# model reads, each with its vendor document first (`sheet`, `grade`, `source`), then the census or a measured run
+# (`measured`, `runs`), or the run that would measure it (`gap`). The schema is data/devices/sm_90/theta.toml's. The
+# census is at the node's 2,092 MHz lock, and a SM-clock's rate holds at any clock; the whitepaper's figures are the
+# Workstation Edition's at its 2,617 MHz boost (the same 188-SM GB202).
 gpu = "RTX PRO 6000 Blackwell Server Edition (sm_120)"
 sms = 188
 sms_source = "RTX Blackwell whitepaper v1.1, Appendix A, Table 4 (pp. 46-47): 'SMs 188' for the RTX PRO 6000 Blackwell (Workstation and Max-Q); the Server Edition's page states none; the device reports 188"
@@ -25,9 +25,10 @@ measured = "the Server Edition's page states no clock; its 'TF32 Tensor Core 234
 mhz = 2430
 grade = "measured (driver)"
 source = "no Server Edition document states a clock"
-measured = "nvidia-smi's maximum SM clock on vy-nebius-1 is 2430 MHz (census rtx-pro-6000-server/e4m3); the census is taken at the node's 2,092 MHz lock (machine_model README 'Devices')"
+measured = "nvidia-smi's maximum SM clock on the deployed node is 2430 MHz (census rtx-pro-6000-server/e4m3); the census is taken at the node's 2,092 MHz lock (machine_model README 'Devices')"
 
-# ---- tensor cores: dense MACs a SM-clock, by format and shape -------------------------------------------------------------
+# ---- tensor cores: dense MACs a SM-clock, by format and shape
+# -------------------------------------------------------------
 
 [[rate]]
 key = "tensor.s8.k32"
@@ -39,7 +40,7 @@ figure = 1007.6
 grade = "whitepaper"
 source = "WP Table 4 'Peak INT8 Tensor TOPS 1007.6/2015.2' at 2617 MHz, 188 SMs; DS (Server) 'FP8 2 PFLOPS' sparse"
 measured = 1023.8
-runs = "census M: every MMA kind holds the tensor pipe 16 SMSP-cycles (4,096 MACs a SMSP every 16: 1023.8 measured); note:20261015T0608Z-draft-census-sm120, r20260930-111747-26f3"
+runs = "census M: every MMA kind holds the tensor pipe 16 SMSP-cycles (4,096 MACs a SMSP every 16: 1023.8 measured), r20260930-111747-26f3"
 
 [[rate]]
 key = "tensor.s8.k16"
@@ -153,7 +154,7 @@ unit = "MACs/SM/clk"
 grade = "none"
 source = "the WP has no FP64 row; CPG Table 7, CC 12.0, FP64 non-tensor 2 results a SM-clock"
 measured = 1.75
-runs = "DMMA.8x8x4 584 SMSP-cycles for 256 FMAs (tensor_kinds M1, note:20261017T0321Z-draft-eps1-tensor §2.1, r20261017-041103-d35d)"
+runs = "DMMA.8x8x4 584 SMSP-cycles for 256 FMAs (tensor_kinds M1, r20261017-041103-d35d)"
 
 [[rate]]
 key = "tensor.b1.k256"
@@ -162,7 +163,7 @@ unit = "b1 MACs/SM/clk"
 grade = "none"
 source = "absent natively on sm_120: no data-sheet row, and ptxas emulates it"
 measured = 0
-runs = "emulated, 99-436 SMSP-cycles a b1 form (note:20261017T0321Z-draft-eps1-tensor §2.1, r20260930-111747-26f3: 'Native b1 and int4 are absent on sm_120')"
+runs = "emulated, 99-436 SMSP-cycles a b1 form (r20260930-111747-26f3: 'Native b1 and int4 are absent on sm_120')"
 
 [[rate]]
 key = "tensor.s4"
@@ -171,9 +172,10 @@ unit = "MACs/SM/clk"
 grade = "none"
 source = "absent natively on sm_120 (the WP has no INT4 row)"
 measured = 0
-runs = "emulated: s4 k64 334 SMSP-cycles, u4 k64 69.5 (note:20261017T0321Z-draft-eps1-tensor §2.1, r20260930-111747-26f3)"
+runs = "emulated: s4 k64 334 SMSP-cycles, u4 k64 69.5 (r20260930-111747-26f3)"
 
-# ---- the lane pipes ----------------------------------------------------------------------------------------------------------
+# ---- the lane pipes
+# ----------------------------------------------------------------------------------------------------------
 
 [[rate]]
 key = "issue"
@@ -183,7 +185,7 @@ sheet = 4
 grade = "Programming Guide"
 source = "CPG §18.10 (CC 12.0): 4 warp schedulers, each issuing one instruction a clock (DS-120's DS_issue)"
 measured = 4.0
-runs = "census issue row: 1 warp instruction a SMSP-cycle in any mix; fadd + lop3, imad + lop3 pairs reach 4.005 (note:20261015T0608Z-draft-census-sm120 §2, r20261016-021315-23c1)"
+runs = "census issue row: 1 warp instruction a SMSP-cycle in any mix; fadd + lop3, imad + lop3 pairs reach 4.005 (r20261016-021315-23c1)"
 
 [[rate]]
 key = "alu.iadd3"
@@ -195,7 +197,7 @@ figure = 126.0
 grade = "whitepaper and Programming Guide"
 source = "CPG Table 7, CC 12.0: '32-bit integer add, extended-precision add, subtract' 128; WP Table 4 'Peak INT32 TOPS (non-Tensor)' 126.0 at 2617 MHz (128 lanes, an op 2) and p. 11: INT32 unified with the FP32 cores, 'not all INT operations can attain 2x'"
 measured = 64
-runs = "census A 2.0 warp instructions/SM/clk: LOP3, IADD3, SHF, PRMT, I2FP, F2FP one ALU pipe (LOP3 with IADD3 2.0 together; LOP3 with IMAD 4.0: the 128 needs the IMAD pipe's add too); note:20261015T0608Z-draft-census-sm120 §2"
+runs = "census A 2.0 warp instructions/SM/clk: LOP3, IADD3, SHF, PRMT, I2FP, F2FP one ALU pipe (LOP3 with IADD3 2.0 together; LOP3 with IMAD 4.0: the 128 needs the IMAD pipe's add too)"
 
 [[rate]]
 key = "alu.lop3"
@@ -243,7 +245,7 @@ sheet = 16
 grade = "Programming Guide"
 source = "CPG Table 7, CC 12.0: 'population count' 16"
 measured = 16
-runs = "census XU 8 SMSP-cycles (POPC, BREV, FLO, MUFU.EX2); note:20261015T0608Z-draft-census-sm120 §2"
+runs = "census XU 8 SMSP-cycles (POPC, BREV, FLO, MUFU.EX2)"
 
 [[rate]]
 key = "imad"
@@ -253,7 +255,7 @@ sheet = 64
 grade = "Programming Guide"
 source = "CPG Table 7, CC 12.0: '32-bit integer multiply, multiply-add, extended-precision multiply-add' 64"
 measured = 64
-runs = "census I 2.0 warp instructions/SM/clk (IMAD, IDP.4A); note:20261015T0608Z-draft-census-sm120 §2"
+runs = "census I 2.0 warp instructions/SM/clk (IMAD, IDP.4A)"
 
 [[rate]]
 key = "imad.wide"
@@ -263,7 +265,7 @@ sheet = 32
 grade = "Programming Guide"
 source = "CPG Table 7, CC 12.0, footnote 6: '32 for extended-precision'"
 measured = 31.8
-runs = "0.994 warp instructions/SM/clk alone (r20261012-181304-f51c, note:20261012T1919Z-report-squaring-ceiling-final); census IW 1.02 with its margin"
+runs = "0.994 warp instructions/SM/clk alone (r20261012-181304-f51c); census IW 1.02 with its margin"
 
 [[rate]]
 key = "imad.hi"
@@ -281,7 +283,7 @@ unit = "lanes/SM/clk"
 grade = "none"
 source = "no CPG row"
 measured = 64
-runs = "census I 2.0 (IDP.4A with IMAD: 256 INT8 MACs a SM-clock, a quarter of IMMA.16832's 1024); note:20261015T0608Z-draft-census-sm120 §2"
+runs = "census I 2.0 (IDP.4A with IMAD: 256 INT8 MACs a SM-clock, a quarter of IMMA.16832's 1024)"
 
 [[rate]]
 key = "ffma"
@@ -293,7 +295,7 @@ figure = 126.0
 grade = "whitepaper and Programming Guide"
 source = "WP Table 4 'Peak FP32 TFLOPS (non-Tensor) 126.0'; CPG Table 7, CC 12.0: '32-bit floating-point add, multiply, multiply-add' 128"
 measured = 124.3
-runs = "census F 3.885 warp instructions/SM/clk with at most 2 register sources; 2.644 (84.6 lanes) with 3 distinct register sources, register-bank bound; note:20261015T0608Z-draft-census-sm120 §2"
+runs = "census F 3.885 warp instructions/SM/clk with at most 2 register sources; 2.644 (84.6 lanes) with 3 distinct register sources, register-bank bound"
 
 [[rate]]
 key = "hfma2"
@@ -305,7 +307,7 @@ figure = 126.0
 grade = "whitepaper (the CPG says 256)"
 source = "WP Table 4 'Peak FP16 TFLOPS (non-Tensor) 126.0' at 2617 MHz: 128 FP16 FMAs a SM-clock; CPG Table 7, CC 12.0, '16-bit floating-point add, multiply, multiply-add' says 256, which the WP and the census refute"
 measured = 125.9
-runs = "census H 1.967 warp instructions/SM/clk × 64 halves (63 lanes); note:20261015T0608Z-draft-census-sm120 §2"
+runs = "census H 1.967 warp instructions/SM/clk × 64 halves (63 lanes)"
 
 [[rate]]
 key = "dfma"
@@ -345,7 +347,8 @@ source = "no vendor document gives it"
 measured = 3.06
 runs = "census UP 0.766 a SMSP-cycle (USHF, ULEA, ULOP3 alone; UIMAD 0.67); r20261017-055801-e051"
 
-# ---- register file, memories -------------------------------------------------------------------------------------------
+# ---- register file, memories
+# -------------------------------------------------------------------------------------------
 
 [[rate]]
 key = "rf.read"
@@ -354,7 +357,7 @@ unit = "words/SM/clk"
 grade = "none"
 source = "no vendor document states register-file bandwidth; the CPG's operand bound is issue × 3 sources × 32 lanes = 384 words a SM-clock"
 measured = 253.8
-runs = "FFMA with 3 distinct register sources 2.644 warp instructions/SM/clk × 3 × 32, register-bank bound (cuda_pipes.cu, note:20261015T0608Z-draft-census-sm120 §2); with 2 sources and an immediate 3.885 × 2 × 32 = 248.6"
+runs = "FFMA with 3 distinct register sources 2.644 warp instructions/SM/clk × 3 × 32, register-bank bound (cuda_pipes.cu); with 2 sources and an immediate 3.885 × 2 × 32 = 248.6"
 
 [[rate]]
 key = "smem.read"
@@ -364,7 +367,7 @@ sheet = 128
 grade = "Programming Guide"
 source = "CPG 'Shared Memory': 32 banks, each 32 bits a clock (DS-120's DS_smem)"
 measured = 127.6
-runs = "census R6r: LDS.128 127.6 B a SM-clock (LDS.32 0.5 warp instructions/SM/clk: 64 B); note:20261015T0608Z-draft-census-sm120, r20261017-034149-3f95"
+runs = "census R6r: LDS.128 127.6 B a SM-clock (LDS.32 0.5 warp instructions/SM/clk: 64 B), r20261017-034149-3f95"
 
 [[rate]]
 key = "smem.bcast"
@@ -393,7 +396,7 @@ unit = "B/SM/clk"
 grade = "none"
 source = "no vendor figure; L1 and shared memory are one 128 KB array a SM (WP Table 4: 24,064 KB over 188 SMs)"
 measured = 86
-runs = "census LDG: LDG.128 0.168 warp instructions/SM/clk × 512 B; note:20261015T0608Z-draft-census-sm120"
+runs = "census LDG: LDG.128 0.168 warp instructions/SM/clk × 512 B"
 
 [[rate]]
 key = "l2.read"
@@ -412,9 +415,10 @@ sheet = 1.597e12
 grade = "data sheet"
 source = "DS (Server) 'Memory Bandwidth 1597 GB/s, 512-bit GDDR7' (WP Table 4: 1792 GB/s for the Workstation Edition, 28 Gbps)"
 measured = 1.51e12
-runs = "a streaming 16-B load stand-in for a decode step: 22.6 GB in 15.0 ms (r20261018-085257-dde2, note:hash/20261018T0632Z-draft-intpipe §6a); a calibrated stand-in, not a peak probe"
+runs = "a streaming 16-B load stand-in for a decode step: 22.6 GB in 15.0 ms (r20261018-085257-dde2); a calibrated stand-in, not a peak probe"
 
-# ---- capacities --------------------------------------------------------------------------------------------------------
+# ---- capacities
+# --------------------------------------------------------------------------------------------------------
 
 [[capacity]]
 key = "registers"
@@ -439,7 +443,7 @@ value = 134217728
 unit = "B"
 grade = "whitepaper"
 source = "WP Table 4 'L2 Cache Size 131072 KB'; p. 9: the full GB202's 128 MB 'as used in RTX PRO 6000 Blackwell'"
-gap = "read cudaDeviceProp.l2CacheSize on a vy-nebius node (no GPU time)"
+gap = "read cudaDeviceProp.l2CacheSize on a deployed node (no GPU time)"
 
 [[capacity]]
 key = "hbm"
@@ -457,7 +461,8 @@ unit = "warps/SM"
 grade = "Programming Guide"
 source = "CPG §20, CC 12.0: 'Maximum number of resident warps per SM 48'"
 
-# ---- exact paths ----------------------------------------------------------------------------------------------------------
+# ---- exact paths
+# ----------------------------------------------------------------------------------------------------------
 
 [[path]]
 format = "s8/u8"
@@ -493,9 +498,9 @@ isa = "PTX §9.7.14.5"
 format = "b1, s4/u4"
 native = "none: emulated by ptxas (b1 99-436, s4 k64 334, u4 k64 69.5 SMSP-cycles)"
 exact = "–"
-isa = "PTX lists them for sm_80+; note:20261017T0321Z-draft-eps1-tensor §2.1, r20260930-111747-26f3"
+isa = "PTX lists them for sm_80+"
 
-# ---- FP8 atom semantics (PEARLC-MODEL, CMP-119) -----------------------------------------------------------------------------
+# ---- FP8 atom semantics --------------------------------------------------------------------------------------------
 
 [[fp8]]
 form = "mma.sync m16n8k32 kind::f8f6f4 .f32.e4m3.e4m3 (QMMA.16832), and .e5m2"
@@ -505,9 +510,10 @@ alignment = "every term rescaled to a 26-bit significand (the BF16 pipeline's ad
 accumulation = "summed exactly, normalized to 26 bits by truncation, then to FP32 by truncation; the accumulator's 24 bits fit the 26-bit adder, so unlike Hopper's 14-bit FP8 adder it isn't truncated a step (the B200's tcgen05 kind::f8f6f4 is the same pipeline to the bit)"
 promotion = "none needed: the FP32 accumulator chains step to step (Pearl's B200 path, pearl_kw.py Device b200: W = 25, width 26)"
 rate = "1023.8 MACs/SM/clk (tensor.e4m3.k32), as every native form; MXFP8 (QMMA.SF) the same; no FP8 k16 form is timed"
-source = "verity.ml.circuits.silicon models.BLACKWELL_SM120_E4M3_M16N8K32 (groups (32,), width 26, floor -133): RTX PRO 6000 Server Edition, lane vllm-sm120-tc-gemm, r20260930-030915-23f3 fitted by r20260930-031244-ecbc (6,434,816 elements, 0 mismatches; Ada's (16,16)/14 and Hopper's (32,)/14 refuted), r20260930-041757-0bde evaluated by r20260930-052000-e32d (25,040,128, 0), r20260930-063457-5410 at a 2,100 MHz lock (25,041,024, 0); E5M2 BLACKWELL_SM120_E5M2_M16N8K32 (r20260930-031447-a5ad, r20260930-063527-4d6b). NVIDIA documents state none of this"
+source = "verity.ml.circuits.silicon models.BLACKWELL_SM120_E4M3_M16N8K32 (groups (32,), width 26, floor -133): RTX PRO 6000 Server Edition, fitted on 6,434,816 elements (0 mismatches; Ada's (16,16)/14 and Hopper's (32,)/14 refuted), evaluated on 25,040,128 (0), and on 25,041,024 at a 2,100 MHz lock (0); E5M2 BLACKWELL_SM120_E5M2_M16N8K32. NVIDIA documents state none of this"
 
-# ---- B_RF writers (schema in data/devices/sm_90/theta.toml) ----------------------------------------------------------------
+# ---- B_RF writers (schema in data/devices/sm_90/theta.toml)
+# ----------------------------------------------------------------
 
 [[writer]]
 name = "mma.sync m16n8k32 s8"
@@ -577,7 +583,7 @@ pipe = "fma"
 [[joint]]
 name = "JI3e_0"
 other = 1.000
-source = "census JI3e_0: MMA 8.115 + every other vector-pipe warp instruction 1.000 SMSP-cycles (ISSUE r1-r3, r5, r6; r20261016-064548-6098 ... r20261017-035245-089f)"
+source = "census JI3e_0: MMA 8.115 + every other vector-pipe warp instruction 1.000 SMSP-cycles (ISSUE r1-r3, r5, r6)"
 
 [[joint]]
 name = "JI3e_1"
@@ -589,12 +595,12 @@ name = "JI3e_2"
 other = 0.172
 source = "census JI3e_2: MMA 15.539 + every other 0.172"
 
-# ---- the units RT-UNITS lists (CMP-139) outside the rates above: their rates, then a verdict a unit ---------------------
+# ---- the units outside the rates above: their rates, then a verdict a unit ----------------------------------
 # A reduction unit is an adding route d reads, at an upper bound where no run has timed it. Every 32-bit add it makes
 # moves a word through a shared-memory or L1 port (CPG 'Shared Memory': 32 banks, each 32 bits a clock), so 32 a
 # SM-clock bounds each. Every add moves more than one word (a read-modify-write, and a bulk reduction's source read),
 # so the true rate is lower: 32 over-allows the route, the safe side, and costs γ and ε at most what these routes
-# lower d by (RT-UNITS U12). Only TMA's bulk reduction takes no lane: one instruction moves a whole bulk.
+# lower d by. Only TMA's bulk reduction takes no lane: one instruction moves a whole bulk.
 
 [[rate]]
 key = "smem.atom"
@@ -716,7 +722,7 @@ what = "host cores a GPU on the nodes we run"
 value = 12
 unit = "cores/GPU"
 grade = "measured (the VM's CPU count)"
-source = "vy-nebius-1 and -2: 192 vCPUs (tools/research/src/research/pods/nebius/check.py), a VM of 2 sockets × 48 cores × 2 threads on 2 × Xeon 6776P (note:ra-squaring-ceiling/20261012T1919Z-report-squaring-ceiling-final), 8 GPUs"
+source = "the deployed nodes: 192 vCPUs (tools/research/src/research/pods/nebius/check.py), a VM of 2 sockets × 48 cores × 2 threads on 2 × Xeon 6776P, 8 GPUs"
 
 [[unit]]
 key = "tensor"
@@ -842,7 +848,7 @@ gap = "an OptiX probe of ray-triangle tests a SM-clock with exact barycentrics (
 
 [[unit]]
 key = "clocks"
-what = "clock limits: the census's 2,092 MHz lock, fmax 2,430 MHz on vy-nebius-1, the Workstation Edition's 2,617 MHz boost"
+what = "clock limits: the census's 2,092 MHz lock, fmax 2,430 MHz on the deployed node, the Workstation Edition's 2,617 MHz boost"
 verdict = "scale"
 why = "θ's rates are a SM-clock's, so d, the exchange rate, B_RF and r_H don't move with the clock; per-second figures use the clock the node runs at; the driver caps it at fmax, and a higher clock speeds the honest kernel too"
 
@@ -868,17 +874,18 @@ rates = ["host.link", "sha512", "host.sha512", "host.int8", "host.dram"]
 bound = 0.00254262
 against = "sha512"
 why = "the host computes every compression of data it holds, so for any host the words' bytes bound it: the no-fold receipt's v1 packs 32 four-byte words into a 1024-bit hiding leaf block under a binary tree, κ = 2 compressions a 128 B of words, so host.link's 64e9 B/s carry 1e9 compressions' worth a second, 1e9 / (188 SMs · 2,092 MHz, sha512's measured clock) = 0.00254262 a SM-clock; the share of device time it frees is that over the card's hashing rate whatever L is (the link runs through the tensor time too), up to hashing's own share. Our node binds first at its cores: 12 a GPU at host.sha512's 3.012e7 = 3.61e8 a second (Priority Core Turbo's 4.6 GHz on 8 cores a socket adds 3%), 9.19e-4 a SM-clock, 5.07% of the measured sha512. Its AMX: 12 cores at host.int8 = 4.79e13 exact s8 MACs a second, 9.51% of the WP's 1,007.6 TOPS dense (5.04e14 MACs)"
-gap = "the prover chooses the host (P9), so a bound tighter than the link's needs the node's inventory from someone other than the prover, a claim for Daniel; κ of the receipt PROTO-DESIGN freezes (v2's 8-block leaves and 16-ary tree: about 1.1); sha512_mb, an AMX loop on the host (CPU only, cpu-3/4/5 only if their SKU is the 6776P) and a pinned device-to-host copy (GPU queue)"
+gap = "the prover chooses the host (P9), so a bound tighter than the link's needs the node's inventory from someone other than the prover, an open claim; κ of the receipt PROTO-DESIGN freezes (v2's 8-block leaves and 16-ary tree: about 1.1); sha512_mb, an AMX loop on the host (CPU only, cpu-3/4/5 only if their SKU is the 6776P) and a pinned device-to-host copy (GPU queue)"
 
 # The built kernel's SASS a compression, for SHA-512's ceiling on the card's pipes (`sha_ceiling`): `alu` on the ALU
-# pipe; `rotates` rotations or shifts (two SHF each) and `adds` 2-input 64-bit adds (built as `add_form`) may go to IMAD.
+# pipe; `rotates` rotations or shifts (two SHF each) and `adds` 2-input 64-bit adds (built as `add_form`) may go to
+# IMAD.
 [sha512_mix]
 alu = 3415
 other = 0
 rotates = 864
 adds = 760
 add_form = "IADD.64"
-overlap = "yes: θ's census issues LOP3 and IMAD together at 4.0 warp instructions a SM-clock (alu.iadd3's runs); commit_gpu's SHA_ROT r3 (480 rotations, two IMAD.HI and two IMAD each) at 5.28 against 7.13 G/s fits IMAD.HI at about 16 lanes a SM-clock, not a shared pipe (RT-UNITS U8, revised), so with IMAD.HI unmeasured here the ceiling without it is the one on measured rates"
+overlap = "yes: θ's census issues LOP3 and IMAD together at 4.0 warp instructions a SM-clock (alu.iadd3's runs); commit_gpu's SHA_ROT r3 (480 rotations, two IMAD.HI and two IMAD each) at 5.28 against 7.13 G/s fits IMAD.HI at about 16 lanes a SM-clock, not a shared pipe, so with IMAD.HI unmeasured here the ceiling without it is the one on measured rates"
 source = "benchmarks/pouw/commit_gpu/README.md 'What decides the speed': our kernel's 1728 SHF (864 rotations and shifts), 927 LOP3 and 760 IADD.64 a block, every one on the integer pipe"
 
 [[public]]

@@ -1,4 +1,6 @@
-import RemoteAudit.Session
+module
+
+public import RemoteAudit.Session
 
 /-!
 # One openings coin over several windows: `audit.Params.groups_per_coin`
@@ -18,6 +20,8 @@ and the registry run `run g` and `step g` (`Flight`, `Registry.step`), the verif
 coin with its last window's close only (`Verifier.withCoin`), and the line of record reads a record drawn g > 1 a coin
 by its draws (`Line.ofSummaryAt`), at two windows in flight only (`Line.SHARED`).
 -/
+
+@[expose] public section
 
 namespace RemoteAudit.Shared
 

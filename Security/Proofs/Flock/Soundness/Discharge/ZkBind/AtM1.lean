@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkBind.At
-import Proofs.Flock.Soundness.Discharge.ZkLink.M1
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkBind.At
+public import Proofs.Flock.Soundness.Discharge.ZkLink.M1
 
 /-!
 # The compiled `--zk` count curve at the `--zk` tables, at C-Flock ZK's parameters
@@ -8,6 +10,8 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.M1
 plan `planZAt` is at C-Flock ZK's parameters (`planZAt_M1`, from `ZkLink.tableAtZK_M1`: what `verify --zk` checks at
 setup), so `ksAvgStrictZ_le_m1` applies with no hypothesis on the tables.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkBind
 

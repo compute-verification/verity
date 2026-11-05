@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.VerdictPieces
-import Proofs.Flock.Claims.Recursion.NextShaDec
-import Proofs.Flock.Claims.Recursion.DeployChecked
-import Proofs.Flock.Claims.JsonNorm
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictPieces
+public import Proofs.Flock.Claims.Recursion.NextShaDec
+public import Proofs.Flock.Claims.Recursion.DeployChecked
+public import Proofs.Flock.Claims.JsonNorm
 
 /-!
 # `hrest`'s base checks: the verdict's other checks hold off any witnesses
@@ -28,8 +30,10 @@ opened proofs' lengths are the prover's (`rd` reads them from the last message, 
 pieces), so no statement fact gives them. `decR` fixes both where it takes the statement for the last message's and
 refuses proofs that are not shaped. `DrawTied` is a statement fact: the session's `unitDraw` is the statement's draw.
 At several tables the setup sets it to the draw; at one table it is read back from the public file's parsed header,
-which only `JsonSpec.parse_wf` (a field of a named premise) makes a well-formed tree.
+which the parser makes a well-formed tree (`FlockComplete.JsonRT.parse_wf`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -198,7 +202,7 @@ theorem holdsR_after (rd : Msg → Option FinalP) (x : Msg) (as : List Msg) (cs 
 /-- **`hrest`'s base checks, at the reading**: at the inner statement of every compiled statement the outer reader
 parses, on as many coins as messages, each of the verdict's other checks holds. -/
 def BasesHold (rd : Msg → Option FinalP) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), parse x = some st → ∀ b ∈ VerdictP.bases, ∀ (as : List Msg)
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), parse x = some st → ∀ b ∈ VerdictP.bases, ∀ (as : List Msg)
     (cs : List Coin), as.length = cs.length → holdsR FlockDeploy.sha512 rd b (xIOf x) as cs
 
 /-- **The base checks hold** where the reading fixes the last message's statement and refuses unshaped proofs, the
@@ -232,7 +236,7 @@ theorem restBase_holds (rd : Msg → Option FinalP) (hB : BasesHold rd) {Q : Typ
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
     (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
     (rel' : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (bB : Brings) (L : LayoutB)
-    (IV : Claims.Verifier Coin) {x : Msg} {st : Claims.Recursion.Stmt} (hx : (recBound rel' bB L IV).parse x = some st)
+    (IV : Claims.Verifier Coin) {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : (recBound rel' bB L IV).parse x = some st)
     {b : VerdictR} (hb : b ∈ VerdictP.bases) (c : ℕ → Coin) (ms : List Msg) :
     (IVCheck.elem (DeployCheck.last (ReadCheck.verdict (VerdictP.base b))) :
         IVCheck (DeployCheck (ReadCheck (VerdictP Q)))).Holds FlockDeploy.sha512

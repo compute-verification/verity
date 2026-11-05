@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.ExecTemplateSetup
+module
+
+public import Proofs.Flock.Soundness.ExecTemplateSetup
 
 /-!
 # A typed flat class's unit, placed (1e for flat classes)
@@ -14,6 +16,8 @@ a flat class: `parseTyped` parses the file with the unit's net first (`HmRow.par
 - `setupH_flatRealizes`, `setupH_flatPlacement`: so at each unit slot, the accepted statement realizes the unit's composed
   rows (`Layout.realizes`) and places them (`Realizes.placement`), the table class's `placed` there.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 
@@ -169,7 +173,7 @@ theorem setupH_flatLayout (ht : tags.typed = true)
         (by rw [← P.recNet]; exact RecOpen.check_congr rfl rfl rfl rfl rfl rfl rfl),
         (by rw [← P.recResiduals]; exact RecResiduals.check_congr rfl rfl),
         (by rw [← P.recSparse]; exact RecSparse.check_congr rfl rfl),
-        (by rw [← P.recOpening]; exact RecOpening.check_congr rfl rfl), P.typed⟩
+        (by rw [← P.recOpening]; exact RecOpening.check_congr rfl rfl), P.typed, P.tmpl⟩
     refine ⟨by rw [hc], ?_, layout_of P' hpin hda hdb hm hk⟩
     have h0 : c'.nets[0]? = some ("unit", net) := by
       rw [← Array.getElem?_toList, hmore]
@@ -196,7 +200,7 @@ theorem setupH_flatRealizes (ht : tags.typed = true)
   have hunit := (setupH_flatLayout ht h hr).2.1
   obtain ⟨hflat, name, hnet, hpast, -⟩ := read_flat' hr
   have hlog : net.unitLog ≤ 32 := hunit ▸ (setupH_flatLayout ht h hr).2.2.unitLog_le hs
-  refine (setupH_flatLayout ht h hr).2.2.realizes regs hs ?_
+  refine (setupH_flatLayout ht h hr).2.2.realizes regs hs (by rw [hunit]; exact netOfD_built hnet) ?_
   rw [hunit]
   exact netRows_flat k.hd hflat hnet hlog hpast
 

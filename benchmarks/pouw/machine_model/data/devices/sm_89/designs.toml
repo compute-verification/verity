@@ -1,8 +1,8 @@
 # What every design in designs/ shares, as data/designs.toml does for sm_120: the proof block and the coins, which
 # are the protocol's, not the device's. Each design file states the rest itself (honest, L, the clock, luck and
 # baseline are the device's).
-unit = "whole"      # the proof block, a table of data/adapt.toml: whole dot products (decision 72)
+unit = "whole"      # the proof block, a table of data/adapt.toml: whole dot products
 
 [coins]             # the challenger's live coins: one σ a request, drawn after the circuit and its inputs are committed
 bits = 1            # a noised entry's coin, uniform on {0, …, 2^bits − 1}: 1-bit coins carried (PPL-DITHER-SIZE)
-source = "decision 72's order (commit the circuit and its inputs, draw σ once, evaluate); 1-bit coins (note:20261017T0310Z-report-eps1-program, QSTAR r2 and CALC r2)"
+source = "the one-σ order (commit the circuit and its inputs, draw σ once, evaluate); 1-bit coins"

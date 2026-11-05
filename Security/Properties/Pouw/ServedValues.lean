@@ -1,5 +1,7 @@
-import Definitions.Core.Formalism
-import Properties.Pouw.PeriodJ10R
+module
+
+public import Definitions.Core.Formalism
+public import Properties.Pouw.PeriodJ10R
 
 /-!
 # The served PoUW's values in AND gates (`PouwCheck.Credit.window`, J10-R)
@@ -38,7 +40,7 @@ which adds SAK to H1.
   `(1 − ε_skip)₊·S`.
 
 *No algorithmic premise.* Being about values, it takes no SAK and no premise beyond H1's: `TileDrawIsCoin` (the draw),
-`TileServiceSound` (the proof service's soundness, open), `RegisteredBeforeDraw`, `SaltIsLiveCoin` and
+`TileServiceSound` (the proof system's soundness, open), `RegisteredBeforeDraw`, `SaltIsLiveCoin` and
 `SharedNoiseLucks`, with the structure H1 reads (`Scope`, the live share `ρ`, the game and its prefix, the binding at
 `δ_bind`). `SharedNoiseLucks` is its one computational premise: the fold receipts' detection, which is to be
 proved in the slot's model or designed away by the no-fold receipt, not assumed. It drops H1's `UnitFixed` (and
@@ -47,6 +49,8 @@ the play's `folded` words): it reads the right blocks themselves, not the play's
 Its `δ_s` is δ_coin and its `n·(δ_bind + δ_ks)` is δ_crypto. `BlockMap` is a named map from words to gates of the
 registered circuit, the unit the PoUW component's `Holds` is restated in.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.ServedValues
 
@@ -86,7 +90,7 @@ open Classical in
 /-- **The credited size `S`**: the live size of every block of the windows before the first refusal
 (`CreditWindows.AcceptedUpTo`), `creditLive` with each block's size in place of its words. -/
 noncomputable def creditedSize {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
-    (Wp : Period C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
+    (Wp : WindowPlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
     (sz : Fin Np → ℕ) (x : Paths (Paths C Cd.rounds × B) n) : ℝ :=
   ∑ w : Fin n, if ws.AcceptedUpTo x w then ∑ t : Fin Np, (liveSize Sc Cd Np (Wp.liveAt x w) sz t : ℝ) else 0
 
@@ -141,7 +145,7 @@ def RightValues : Prop :=
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V) (enc : C → ByteArray)
     (place : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → Fin (tileCount σ sT) → Place)
     (tile : Noise → List (List ℕ) → Fin (tileCount σ sT) → (ℕ → V) → Prop)
-    (Wp : Period C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
+    (Wp : WindowPlay C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
     (Pl : Play (Coin C Ξ Cd.rounds σ sT) n K T L U) (ρ δs δbind δks : ℝ),
     Scope Sc Cd δs →
     0 < ρ → ρ ≤ 1 →

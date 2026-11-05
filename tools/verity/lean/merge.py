@@ -3,6 +3,7 @@
     python tools/verity/lean/merge.py BASE OURS THEIRS [PATH]   what git runs (`%O %A %B %P`): the merge is written to OURS
     python tools/verity/lean/merge.py --lean BASE OURS THEIRS [PATH]   the same for a `.lean` file (`lean-imports`)
     python tools/verity/lean/merge.py --lakefile BASE OURS THEIRS [PATH]   the same for a `lakefile.toml` (`lakefile-lists`)
+    python tools/verity/lean/merge.py --caps BASE OURS THEIRS [PATH]   the same for `tests/test_lean_packages.py` (`lean-caps`)
     python tools/verity/lean/merge.py --install [REPO]         register the drivers in the repository's git config, once per clone
     python tools/verity/lean/merge.py --normalize FILE...      recompute each `reads` digest from its definitions
 
@@ -17,38 +18,61 @@ What the build determines never refuses: the records `check.py --update` writes 
 (`--regenerate`) rewrites on the merged tree whenever they differ (`audit.RECORD_DIFFERENCE`, `audit.regenerated`). Those are
 a guarantee's record (signature, named assumptions, type hash: restated on both sides, the merged tree's statement decides
 it), each `reads` group (which guarantees read which definition, and each definition's hash) and an assumption's `digest`.
-Where the sides disagree the merge takes the union (a definition or a module one side stopped reading, readers as sets
-less those the merged record no longer lists, a group left without readers or definitions dropped) or ours' value (a
-hash or a record both sides changed differently), and names each in one line on stderr. Whether a guarantee is listed is
+Where the sides disagree the merge takes the union (a definition or a module one side stopped reading, unless that side
+moved the definition to another module, where alone it stays (`moved`), or renamed or deleted it, which its record says by
+reading it nowhere while it states every reader of the module as the base did (`gone`); readers as sets less those the
+merged record no longer lists, a group left without readers or definitions dropped) or ours' value (a hash or a record
+both sides changed differently), and names each in one line on stderr. Whether a guarantee is listed is
 not the build's: one side's removal applies over the other's change to its record. What only a person writes still
-refuses when both sides changed it differently: an `owner`, a `shape` or `frozen` entry, a dependency's revision, a policy
-entry (a layer's field, a `compile_time` digest).
+refuses when both sides changed it differently: an `owner`, a `shape` or `frozen` entry (a `shape.inline` entry is one
+premise of a guarantee, so two sides that each add or drop premises of one guarantee merge: `DEEPER`; a premise both
+sides give different reasons keeps ours', since the check asks only that one be given), a dependency's
+revision, a policy entry (a layer's field, a `compile_time` digest). A `shape.inline` premise one side dropped while the
+other has it as the base had it stays, while the merged record lists its guarantee (`held`): a side whose `--update` ran on
+an older tree drops a text the other side's tree still prints, and the Lean check fails on a missing entry but not on one
+whose premise no longer offends, which the next `--update` drops. An `unwitnessed` or `witnesses` entry the sides
+changed differently, or one removed and the other changed, is theirs' (`JUDGED`): its value follows the statement as each
+side's tree builds it (a type hash, the witnesses a form needs), so the incoming side's, the newer tree's when drive stacks
+a PR, stands as a candidate, which the Lean check of the merged commit judges.
 
 Exit 0: merged. Exit 1: refused, the entries named on stderr and OURS left as it was, which git reports as a conflict; then
 regenerate the record on the merged tree (`check.py --update`), as without the driver. A merged record is a candidate, never
 a verdict: `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference, as for any record; a
-train's (`--regenerate`) commits the regenerated records on landing, and Daniel's landing DM shows each one that changed
+train's (`--regenerate`) commits the regenerated records on landing, and the landing DM shows each one that changed
 against `main`.
+
+Git runs a driver from the worktree of the side merged into, so a branch whose checkout took older merge rules would merge
+`main`, or another branch, by those (`deferred`): when `origin/main` has changed this file or `check.py` since the checkout took
+them, and the checkout neither edited them nor committed a `merge.py` of its own, this file runs `origin/main`'s copy of its
+directory instead and says so on stderr. `research queue` runs the drivers of the tip it merges onto already (`base_drivers`).
 
 The layer rules (`layers`), which two branches that each widen a layer for a guarantee both change, merge field by field: `imports`
 and `except` as lists, `why` as a list of its `; ` clauses (`layers`). Every list of names (the roots, `meaning`, `proved_in`,
 `claims.modules`, `shape.premises`...), which two branches that each add a module both change, merges as a list (`items`). For a `.lean` file (`--lean`, `lean-imports` in
-`.gitattributes`), git's own merge runs and only a conflict all of whose sides are `import` lines is merged, as a list: two branches
-that each add a guarantee's module to `Guarantees.lean` merge, and any other conflict stays git's. For a `lakefile.toml`
+`.gitattributes`), git's own merge runs and only a conflict all of whose sides are import lines (each one import in any form
+`headers.py` reads: `public import`, `meta import`, `import all`) is merged, as a list: two branches
+that each add a guarantee's module to `Guarantees.lean` merge, and any other conflict stays git's. When one side's file is on
+the module system and the other's isn't (a branch made before the port), the one that isn't is ported first (`modules.py`), as
+rerunning the codemod on that branch would. For a `lakefile.toml`
 (`--lakefile`, `lakefile-lists`), a conflict all of whose sides are `[[require]]` blocks merges as a set of blocks, and one all
 of whose sides are a string array's items (`roots`) merges as a list, wrapped as ours wraps it: two branches that each require a
 package or add a root to `Security/Properties` merge. Any other conflict, and a result that is not TOML, stays git's. In
 both, an import, a require or a root that one side removed stays removed, judged on the whole files (`kept`), so a line the
-other side moved can't bring it back.
+other side moved can't bring it back. For `tests/test_lean_packages.py` (`--caps`, `lean-caps`), each of its ratchet caps
+(`UNWITNESSED = {...}`, `INLINE = {...}`) merges over the whole files as counters, each key theirs' count plus ours' change
+from the base, so two branches that each witness or grandfather guarantees merge, and a conflict whose sides differ only in
+comment lines takes theirs'; any other conflict stays git's.
 """
 from __future__ import annotations
 
 import argparse
+import functools
 import importlib.util
 import json
 import os
 import re
 import subprocess
+import tempfile
 import tomllib
 import sys
 from pathlib import Path
@@ -64,9 +88,14 @@ NAME = "lean-audit"
 LEAN = "lean-imports"
 #: the lakefiles' driver (`--lakefile`)
 LAKEFILE = "lakefile-lists"
+#: `tests/test_lean_packages.py`'s driver (`--caps`)
+CAPS = "lean-caps"
 #: a lakefile's `[[require]]` block line, and a line of a string array's items (`roots = ["A", "B",`, `"C"]`)
 REQUIRE_LINE = re.compile(r'\s*(\[\[require\]\]|(name|path|git|rev|scope|version|subDir)\s*=\s*\S.*)\s*$')
 ITEM_LINE = re.compile(r'\s*(\w+\s*=\s*\[)?\s*("[^"]*"\s*,?\s*)+\]?\s*$')
+#: a ratchet cap's line (`UNWITNESSED = {"Security": 355, "verity/core/service/flock": 7}`), and one of its entries
+CAP_LINE = re.compile(r'(\s*(?:UNWITNESSED|INLINE) = )\{([^{}]*)\}\s*$')
+CAP_ENTRY = re.compile(r'\s*"([^"\\]*)"\s*:\s*(\d+)\s*')
 #: where a merged string array wraps
 WIDTH = 120
 #: the sections `check.py --update` writes in sorted order; the others keep ours' order, with theirs' new entries after it
@@ -74,7 +103,16 @@ SORTED = {"assumptions", "guarantees", "reads", "dependencies", "compile_time"}
 #: sections whose entries are maps merged entry by entry in turn (`upstream`'s `scan` and `watch`, `shape`'s `properties`,
 #: `frozen` and `conjectures`, `trees`' `except`)
 NESTED = {"upstream", "shape", "claims", "trees"}
+#: nested maps whose entries are maps merged one level deeper still: `shape.inline`'s guarantees, each {premise: why} merged
+#: premise by premise, a guarantee left with none dropped (the check refuses an empty one, and `--update` drops it)
+DEEPER = {"shape[inline]"}
+#: the witness rule's sections, merged entry by entry with theirs' value where the sides disagree (`judged`)
+JUDGED = {"unwitnessed", "witnesses"}
 MISSING = object()
+#: the landed drivers a checkout's older one defers to (`deferred`), and the files whose history decides that: this file and
+#: the `check.py` it loads
+MAIN = "origin/main"
+RULES = ("tools/verity/lean/merge.py", "tools/verity/lean/check.py")
 
 
 def one(path: str, o, a, b, why: list[str]):
@@ -103,18 +141,43 @@ def names(o, a, b) -> bool:
     return ok(a) and ok(b) and (o is MISSING or ok(o))
 
 
-def entries(path: str, o: dict, a: dict, b: dict, why: list[str], depth: int = 1) -> dict:
-    """Maps merged entry by entry; ``depth`` > 1 merges entries that are maps entry by entry too, and lists of names merge
-    as lists."""
+def entries(path: str, o: dict, a: dict, b: dict, why: list[str], depth: int = 1,
+            candidate: list[str] | None = None) -> dict:
+    """Maps merged entry by entry; ``depth`` > 1 merges entries that are maps entry by entry too (one level more under a
+    `DEEPER` path), and lists of names merge as lists. A `shape.inline` premise both sides give different reasons keeps
+    ours' reason, named in ``candidate``: the check asks only that a reason be given."""
     out = {}
     for k in keys(path, a, b):
         x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
         if depth > 1 and isinstance(y, dict) and isinstance(z, dict) and (x is MISSING or isinstance(x, dict)):
-            v = entries(f"{path}[{k}]", {} if x is MISSING else x, y, z, why, depth - 1)
+            sub = f"{path}[{k}]"
+            v = entries(sub, {} if x is MISSING else x, y, z, why, depth - 1 + (sub in DEEPER), candidate)
+            v = MISSING if path in DEEPER and not v else v
         elif depth > 1 and names(x, y, z):
             v = items([] if x is MISSING else x, y, z)
+        elif (path.startswith("shape[inline][") and isinstance(y, str) and isinstance(z, str) and y != z
+              and x not in (y, z) and (x is MISSING or isinstance(x, str))):
+            v = y
+            if candidate is not None:
+                candidate.append(f"{path}[{k}] (ours' reason)")
         else:
             v = one(f"{path}[{k}]", x, y, z, why)
+        if v is not MISSING:
+            out[k] = v
+    return out
+
+
+def judged(section: str, o: dict, a: dict, b: dict, candidate: list[str]) -> dict:
+    """A `JUDGED` section merged entry by entry: a side's change applies, and an entry the sides changed differently (or
+    one removed, the other changed) is theirs', named in ``candidate``."""
+    out = {}
+    for k in keys(section, a, b):
+        x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
+        why: list[str] = []
+        v = one(f"{section}[{k}]", x, y, z, why)
+        if why:
+            v = z
+            candidate.append(f"{section}[{k}] (theirs)")
         if v is not MISSING:
             out[k] = v
     return out
@@ -196,17 +259,23 @@ def core(group):
     return None if group is None else (A.definitions(group), sorted(group.get("guarantees", [])))
 
 
-def group(m: str, x: dict, y: dict, z: dict, why: list[str], candidate: list[str]) -> dict:
+def group(m: str, x: dict, y: dict, z: dict, why: list[str], candidate: list[str], dropped: dict | None = None) -> dict:
     """One module's `reads` entry, both sides having changed it: definitions entry by entry, readers as sets.  A definition one
     side no longer reads while the other still reads it stays, with the other side's hash: the record does not say which
-    guarantees read it, so the union is the candidate (``candidate``), and the train's Lean check regenerates the group.  A
-    hash both sides changed differently is ours' (`derived`)."""
+    guarantees read it, so the union is the candidate (``candidate``), and the train's Lean check regenerates the group.  But
+    when the dropping side's `gone` (``dropped``, by "ours" and "theirs") says it renamed or deleted it, and the other side kept
+    its hash, the removal applies: the union would bring back a read of a definition the merged tree no longer has (a
+    `J10R.Layout` renamed `NoiseLayout` would stay beside the new name).  A hash both sides changed differently is ours'
+    (`derived`)."""
     xd, yd, zd = A.definitions(x), A.definitions(y), A.definitions(z)
     defs = {}
     for d in sorted(set(xd) | set(yd) | set(zd)):
         p, q, r = xd.get(d, MISSING), yd.get(d, MISSING), zd.get(d, MISSING)
         if p is not MISSING and (q is MISSING) != (r is MISSING):
-            defs[d] = q if r is MISSING else r
+            h = q if r is MISSING else r
+            if h == p and dropped and dropped["ours" if q is MISSING else "theirs"](d):
+                continue
+            defs[d] = h
             candidate.append(f"reads[{m}].definitions[{d}]")
         elif (v := derived(f"reads[{m}].definitions[{d}]", p, q, r, candidate)) is not MISSING:
             defs[d] = v
@@ -216,7 +285,31 @@ def group(m: str, x: dict, y: dict, z: dict, why: list[str], candidate: list[str
     return {"definitions": defs, "guarantees": sorted((yp & zp) | (yp - xp) | (zp - xp))}
 
 
-def reads(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) -> dict:
+def gone(m: str, o: dict, side: dict, other: dict, records: tuple[dict, dict, dict], candidate: list[str]):
+    """Whether a definition of module ``m`` that ``side`` (its `reads`) no longer lists anywhere was renamed or deleted there,
+    as `group` asks: every guarantee that read ``m`` at the base is, on that side, removed or stated as at the base, so the same
+    statements no longer reach it.  One the side restated may only have stopped reading it, which leaves the union.  A removal
+    the other side's new or restated readers of ``m`` may still need is named in ``candidate``."""
+    base, mine, others = records
+    listed = {d for g in side.values() for d in A.definitions(g)}
+
+    def same(rec: dict, g: str) -> bool:
+        return g not in rec or (g in base and A.unowned(rec[g]) == A.unowned(base[g]))
+    kept = all(same(mine, g) for g in (o.get(m) or {}).get("guarantees", []))
+    new = any(not same(others, g) for g in (other.get(m) or {}).get("guarantees", []))
+
+    def ask(d: str) -> bool:
+        if d in listed or not kept:
+            return False
+        if new:
+            candidate.append(f"reads[{m}].definitions[{d}] (removed)")
+        return True
+    return ask
+
+
+def reads(o: dict, a: dict, b: dict, why: list[str], candidate: list[str],
+          records: tuple[dict, dict, dict] = ({}, {}, {})) -> dict:
+    """The `reads` sections merged module by module (`group`), ``records`` being the base's, ours' and theirs' guarantees."""
     out = {}
     for m in sorted(set(a) | set(b)):
         x, y, z = o.get(m), a.get(m), b.get(m)
@@ -226,16 +319,44 @@ def reads(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) -> di
             g = z
         elif core(z) == core(x):
             g = y
-        elif y is None or z is None:
-            g = group(m, x or {}, y or {}, z or {}, why, [])
-            candidate.append(f"reads[{m}]")
         else:
-            g = group(m, x or {}, y, z, why, candidate)
+            drop = {"ours": gone(m, o, a, b, records, candidate),
+                    "theirs": gone(m, o, b, a, (records[0], records[2], records[1]), candidate)}
+            if y is None or z is None:
+                g = group(m, x or {}, y or {}, z or {}, why, [], drop)
+                candidate.append(f"reads[{m}]")
+            else:
+                g = group(m, x or {}, y, z, why, candidate, drop)
         if g is not None:
-            defs = A.definitions(g)
-            out[m] = {"digest": A.module_digest(defs), "definitions": dict(sorted(defs.items())),
-                      "guarantees": sorted(g.get("guarantees", []))}
-    return out
+            out[m] = {"definitions": dict(sorted(A.definitions(g).items())), "guarantees": sorted(g.get("guarantees", []))}
+    moved(o, a, b, out, candidate)
+    return {m: {"digest": A.module_digest(g["definitions"]), **g} for m, g in out.items()}
+
+
+def moved(o: dict, a: dict, b: dict, out: dict, candidate: list[str]) -> None:
+    """A Lean declaration lives in one module: a definition one side moved (it added it under another module of the merged
+    table and no longer lists it under this one) leaves the module the other side's group kept it in, and is no longer the
+    candidate `group` named.  Its hash is the mover's; when the other side changed it in the old module, or added
+    guarantees there that may read it in the new one, the new module's group is the candidate."""
+    def defs(s: dict, m: str) -> dict:
+        return A.definitions(s.get(m) or {})
+    where: dict[str, list[str]] = {}
+    for m, g in out.items():
+        for d in g["definitions"]:
+            where.setdefault(d, []).append(m)
+    for d, ms in where.items():
+        for m in ms:
+            to = next((n for n in ms if n != m and d in out[n]["definitions"] for s in (a, b)
+                       if d in defs(s, n) and d not in defs(o, n) and d not in defs(s, m)), None)
+            if to is None:
+                continue
+            del out[m]["definitions"][d]
+            if f"reads[{m}].definitions[{d}]" in candidate:
+                candidate.remove(f"reads[{m}].definitions[{d}]")
+            kept = a if d in defs(a, m) else b
+            new = set((kept.get(m) or {}).get("guarantees", [])) - set((o.get(m) or {}).get("guarantees", []))
+            if defs(kept, m).get(d) != defs(o, m).get(d) or new & set(out[m]["guarantees"]):
+                candidate.append(f"reads[{to}] (definitions moved from {m})")
 
 
 def items(o: list, a: list, b: list) -> list:
@@ -277,29 +398,33 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
     """(the merged record, why it is refused: empty when it merged).  A pure function of the three records.  ``candidate``
     collects the records the build determines (`RECORD_DIFFERENCE`'s kinds: guarantees' records, `reads`, assumptions'
     digests) merged although the sides disagree on them: the union or ours' value, which the train's Lean check
-    regenerates."""
+    regenerates; and the `shape.inline` premises `held` keeps."""
     why: list[str] = []
     candidate = [] if candidate is None else candidate
     out = {}
     for k in keys("", ours, theirs):
         o, a, b = base.get(k, MISSING), ours.get(k, MISSING), theirs.get(k, MISSING)
         if k == "reads":
-            v = reads({} if o is MISSING else o, {} if a is MISSING else a, {} if b is MISSING else b, why, candidate)
+            records = tuple(s.get("guarantees") if isinstance(s.get("guarantees"), dict) else {} for s in (base, ours, theirs))
+            v = reads({} if o is MISSING else o, {} if a is MISSING else a, {} if b is MISSING else b, why, candidate, records)
         elif k == "guarantees" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = guarantees({} if o is MISSING else o, a, b, why, candidate)
         elif k == "assumptions" and all(isinstance(s, dict) for s in (o, a, b) if s is not MISSING):
             v = assumptions(*({} if s is MISSING else s for s in (o, a, b)), why, candidate)
             v = MISSING if not v and MISSING in (a, b) else v
+        elif k in JUDGED and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
+            v = judged(k, {} if o is MISSING else o, a, b, candidate)
         elif k == "layers" and isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
             v = layers({} if o is MISSING else o, a, b, why)
         elif names(o, a, b):
             v = items([] if o is MISSING else o, a, b)
         elif isinstance(a, dict) and isinstance(b, dict) and (o is MISSING or isinstance(o, dict)):
-            v = entries(k, {} if o is MISSING else o, a, b, why, 2 if k in NESTED else 1)
+            v = entries(k, {} if o is MISSING else o, a, b, why, 2 if k in NESTED else 1, candidate)
         else:
             v = one(k, o, a, b, why)
         if v is not MISSING:
             out[k] = v
+    held(base, ours, theirs, out, candidate)
     kept = set(out.get("guarantees", {}))
     for m, g in list(out.get("reads", {}).items()):
         if extra := sorted(set(g["guarantees"]) - kept):
@@ -311,20 +436,93 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
     return out, why
 
 
+def held(base: dict, ours: dict, theirs: dict, out: dict, candidate: list[str]) -> None:
+    """Put back into the merged record ``out`` each `shape.inline` premise of a guarantee ``out`` lists that one side dropped
+    while the other has it with the base's reason, each named in ``candidate`` as `shape[inline][G][P] (kept)`.  A side whose
+    `--update` ran on an older tree drops a text the other side's tree still prints (a renamed definition's old and new texts
+    are both listed until no tree prints the old one), and the lock doesn't say which side's tree the merged tree prints
+    like.  The Lean check fails on an offending premise of a listed guarantee that `shape.inline` doesn't list, and
+    `--update` adds none, while an entry whose premise no longer offends fails nothing and the next `--update` drops it
+    (`check.py`'s `inline_failures`), so the premise stays.  A guarantee ``out`` doesn't list gets nothing back: `--update`
+    keeps an unlisted guarantee's entries until the lock lists it."""
+    def inline(s: dict) -> dict:
+        spec = s.get("shape")
+        v = spec.get("inline") if isinstance(spec, dict) else None
+        return v if isinstance(v, dict) else {}
+
+    def premises(s: dict, g: str) -> dict | None:
+        v = s.get(g, {})
+        return v if isinstance(v, dict) else None
+    spec, listed = out.get("shape"), out.get("guarantees")
+    if not isinstance(spec, dict) or not isinstance(listed, dict) or not isinstance(spec.get("inline", {}), dict):
+        return
+    o, a, b, merged = inline(base), inline(ours), inline(theirs), dict(spec.get("inline", {}))
+    for g in o:
+        x, y, z, m = premises(o, g), premises(a, g), premises(b, g), premises(merged, g)
+        if g not in listed or None in (x, y, z, m):
+            continue
+        if keep := {p: w for p, w in x.items() if (p in y) != (p in z) and (y if p in y else z)[p] == w}:
+            merged[g] = m | keep
+            candidate.extend(f"shape[inline][{g}][{p}] (kept)" for p in keep)
+    if merged != spec.get("inline", {}):
+        spec["inline"] = merged
+
+
 def kept(o: set, a: set, b: set) -> set:
     """The names a three-way merge of whole files keeps: (A ∩ B) ∪ (A − O) ∪ (B − O), what both sides have and what either
     added.  A name one side removed while the other kept it stays removed, however git splits the file into hunks: a line
     one side moved shows in a hunk as an addition, and the hunk alone would bring back what the other side removed
-    (#4690 onto `next`, 26 Oct: `Definitions.Accounting`'s retired import came back and Security stopped building)."""
+    (a retired import, such as `Definitions.Accounting`'s, would come back and stop Security building)."""
     return (a & b) | (a - o) | (b - o)
 
 
+@functools.cache
+def _headers():
+    """`headers.py`, loaded only to merge a `.lean` file: the record driver runs where `merge.py` and `check.py` are alone."""
+    return A.sibling("headers")
+
+
+def _import(line: str) -> bool:
+    """Whether ``line`` is one import and nothing else, in any form a header takes (`headers.py`: `public import`...)."""
+    H = _headers()
+    h = H.header(line)
+    return h is not None and len(h.imports) == 1 and not h.module and not h.prelude and H.skip(line, h.end) == len(line)
+
+
 def _imports(lines: list[str]) -> bool:
-    return all(s.startswith("import ") or not s.strip() for s in lines)
+    return all(_import(s) or not s.strip() for s in lines)
+
+
+@functools.cache
+def _modules():
+    """`modules.py`, loaded only to merge a `.lean` file: the record driver runs where `merge.py` and `check.py` are alone."""
+    return A.sibling("modules")
+
+
+def _ported(sides: tuple[Path, Path, Path], tmp: Path) -> tuple[Path, Path, Path]:
+    """A `.lean` file's three sides, each that isn't on the module system ported (`modules.py`, its copy under ``tmp``) when
+    ours or theirs is: what a branch made before the port takes by rerunning the codemod.  Unported, the port's change to
+    every header line conflicts with that branch's imports, and an import either side removed is still in the other's
+    spelling.  A side the codemod refuses stays as it is."""
+    M = _modules()
+    texts = [p.read_text() for p in sides]
+    if not any(M.is_module(t) for t in texts[1:]):
+        return sides
+    out = []
+    for name, p, t in zip(("base", "ours", "theirs"), sides, texts):
+        try:
+            new = M.port(t)
+        except ValueError as e:
+            print(f"merge.py --lean: the {name} side stays off the module system: {e}", file=sys.stderr)
+            new = t
+        if new != t:
+            (p := tmp / name).write_text(new)
+        out.append(p)
+    return out[0], out[1], out[2]
 
 
 def _import_names(text: str) -> set[str]:
-    return {s.strip() for s in text.splitlines() if s.startswith("import ")}
+    return {s.strip() for s in text.splitlines() if _import(s)}
 
 
 def _blocks(lines: list[str]) -> list[str] | None:
@@ -371,8 +569,11 @@ def _array(o: list[str], a: list[str], b: list[str], keep: set | None = None) ->
     sides = [[s for s in side if s.strip()] for side in (o, a, b)]
     if not sides[1] or not all(ITEM_LINE.match(s) for side in sides for s in side):
         return None
-    opening = lambda side: (m.group(1) if side and (m := ITEM_LINE.match(side[0])) and m.group(1) else None)
-    closes = lambda side: bool(side) and side[-1].rstrip().endswith("]")
+    def opening(side):
+        return m.group(1) if side and (m := ITEM_LINE.match(side[0])) and m.group(1) else None
+
+    def closes(side):
+        return bool(side) and side[-1].rstrip().endswith("]")
     if sides[2] and (opening(sides[2]) != opening(sides[1]) or closes(sides[2]) != closes(sides[1])):
         return None
     head = opening(sides[1])
@@ -518,23 +719,26 @@ def lean(base: Path, ours: Path, theirs: Path, resolvers=None) -> tuple[str, int
     """(the merged text, the number of conflicts left) of a `.lean` file: git's own merge (`git merge-file`), then each conflict
     whose three sides are only `import` lines merged as lists of imports (`items`), so two branches that each add a module to
     an import list merge.  Every import outside a conflict left is then held to the whole files' imports (`kept`), once
-    each: one side removed stays removed wherever git's hunks put it.  Any other conflict is left as git writes it.
-    ``resolvers`` (each `(base, ours, theirs)` lines to the merged lines, or None) replace the imports rule, and with them
-    no import is filtered."""
+    each: one side removed stays removed wherever git's hunks put it.  Any other conflict is left as git writes it.  When
+    ours or theirs is on the module system, the sides that aren't are ported first (`_ported`), so the merge is of what
+    each side changed beyond the port.  ``resolvers`` (each `(base, ours, theirs)` lines to the merged lines, or None)
+    replace the imports rule, and with them no side is ported and no import is filtered."""
     keep = None
-    if resolvers is None:
-        keep = kept(*(_import_names(p.read_text()) for p in (base, ours, theirs)))
-        resolvers = (lambda o, a, b: [s for s in items([s for s in o if s.strip()], [s for s in a if s.strip()],
-                                                       [s for s in b if s.strip()])]
-                     if _imports(a) and _imports(o) and _imports(b) else None,)
-    p = subprocess.run(["git", "merge-file", "-p", "--diff3", "-L", "ours", "-L", "base", "-L", "theirs", str(ours), str(base),
-                        str(theirs)], capture_output=True, text=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        if resolvers is None:
+            base, ours, theirs = _ported((base, ours, theirs), Path(tmp))
+            keep = kept(*(_import_names(p.read_text()) for p in (base, ours, theirs)))
+            resolvers = (lambda o, a, b: [s for s in items([s for s in o if s.strip()], [s for s in a if s.strip()],
+                                                           [s for s in b if s.strip()])]
+                         if _imports(a) and _imports(o) and _imports(b) else None,)
+        p = subprocess.run(["git", "merge-file", "-p", "--diff3", "-L", "ours", "-L", "base", "-L", "theirs", str(ours),
+                            str(base), str(theirs)], capture_output=True, text=True)
     if p.returncode < 0 or p.returncode > 127:
         raise ValueError(f"git merge-file failed: {p.stderr.strip()}")
     out, left, lines, n, seen = [], 0, p.stdout.splitlines(keepends=True), 0, set()
 
     def emit(s: str):
-        if keep is not None and s.startswith("import "):
+        if keep is not None and _import(s):
             if s.strip() not in keep or s.strip() in seen:
                 return
             seen.add(s.strip())
@@ -559,9 +763,162 @@ def lean(base: Path, ours: Path, theirs: Path, resolvers=None) -> tuple[str, int
     return "".join(out), left
 
 
+def _cap_lines(lines: list[str]) -> dict[str, dict[str, int]] | None:
+    """A conflict side's ratchet caps ({its line up to `{`: its counts by key}), blank lines aside, or None when it holds
+    anything else."""
+    out: dict[str, dict[str, int]] = {}
+    for s in lines:
+        if not s.strip():
+            continue
+        m = CAP_LINE.match(s)
+        if m is None or m.group(1) in out:
+            return None
+        found = [CAP_ENTRY.fullmatch(p) for p in m.group(2).split(",")] if m.group(2).strip() else []
+        if None in found:
+            return None
+        out[m.group(1)] = {e.group(1): int(e.group(2)) for e in found}
+    return out
+
+
+def _counted(base: dict[str, int], ours: dict[str, int], theirs: dict[str, int]) -> dict[str, int] | None:
+    """One cap's counts merged as counters: each key theirs' count plus ours' change from the base (a key a side lacks counts
+    as the base's, or 0), in ours' order with theirs' new keys after the key theirs has before them.  None when a count would
+    go below 0 (both sides dropped the same entries: the count is the merged lock's, which only `check.py` can say)."""
+    counts = {k: theirs.get(k, base.get(k, 0)) + ours.get(k, base.get(k, 0)) - base.get(k, 0)
+              for k in items([], list(ours), list(theirs))}
+    return None if any(n < 0 for n in counts.values()) else counts
+
+
+def _cap_line(head: str, counts: dict[str, int], end: str) -> str:
+    return head + "{" + ", ".join(f'"{k}": {n}' for k, n in counts.items()) + "}" + end
+
+
+def _caps(o: list[str], a: list[str], b: list[str]) -> list[str] | None:
+    """A conflict all of whose sides are the same ratchet caps' lines, merged as counters (`_counted`).  None when a side
+    holds anything else, the sides hold different caps, or a count would go below 0."""
+    x, y, z = _cap_lines(o), _cap_lines(a), _cap_lines(b)
+    if x is None or y is None or z is None or not y or not set(x) == set(y) == set(z):
+        return None
+    out = []
+    for s in a:
+        m = CAP_LINE.match(s)
+        if m is None:
+            out.append(s)
+            continue
+        counts = _counted(x[m.group(1)], y[m.group(1)], z[m.group(1)])
+        if counts is None:
+            return None
+        out.append(_cap_line(m.group(1), counts, "\n" if s.endswith("\n") else ""))
+    return out
+
+
+def _comments(o: list[str], a: list[str], b: list[str]) -> list[str] | None:
+    """A conflict whose sides differ only in comment lines (`#`), blank lines aside: theirs'.  None when their code differs."""
+    def code(side):
+        return [s for s in side if s.strip() and not s.lstrip().startswith("#")]
+    return list(b) if code(a) == code(b) else None
+
+
+def _file_caps(text: str) -> dict[str, tuple[str, dict[str, int]]] | None:
+    """A whole file's ratchet caps ({its line up to `{`: (the line, its counts by key)}), or None when a cap's line appears
+    twice (a side git left in conflict) or holds anything but counts."""
+    out: dict[str, tuple[str, dict[str, int]]] = {}
+    for s in text.splitlines(keepends=True):
+        if CAP_LINE.match(s) is None:
+            continue
+        got = _cap_lines([s])
+        if got is None:
+            return None
+        (head, counts), = got.items()
+        if head in out:
+            return None
+        out[head] = (s, counts)
+    return out
+
+
+def caps(base: Path, ours: Path, theirs: Path) -> tuple[str, int]:
+    """(the merged text, the number of conflicts left) of `tests/test_lean_packages.py`.  Each ratchet cap merges over the
+    whole files: a line both sides changed alike as that line, else as counters (`_counted`).  While git's own merge runs,
+    each cap's line stands as one placeholder (`HEAD{}`) on every side, so the count never conflicts with the comment above
+    it, and a conflict whose sides differ only in comment lines takes theirs' (`_comments`); the merged counts then replace
+    the placeholders.  So two branches that each move a cap and reword its comment merge, whatever the bases git's
+    recursive merge combines (it runs this driver on them too).  A cap both sides hold and the base lacks (both brought the
+    file's caps, from a base before them) merges key by key as the larger count, since counters would add the same entries
+    twice.  Where a side's caps can't be read whole (a cap's line twice, the sides holding different caps) or a count would
+    go below 0, the conflicts merge one by one instead: one whose sides are only cap lines as counters (`_caps`), one that
+    differs only in comments as theirs'.  Any other conflict is left as git writes it."""
+    def one_by_one():
+        return lean(base, ours, theirs, (_caps, _comments))
+
+    texts = [p.read_text() for p in (base, ours, theirs)]
+    found = [_file_caps(t) for t in texts]
+    if None in found or not found[1] or not set(found[1]) == set(found[2]) or not set(found[0]) <= set(found[1]):
+        return one_by_one()
+    merged: dict[str, str] = {}
+    for head, (line, counts) in found[1].items():
+        if found[2][head][0] == line:
+            merged[head] = line.rstrip("\n")
+        elif head not in found[0]:
+            other = found[2][head][1]
+            merged[head] = _cap_line(head, {k: max(counts.get(k, 0), other.get(k, 0))
+                                            for k in items([], list(counts), list(other))}, "")
+        elif (n := _counted(found[0][head][1], counts, found[2][head][1])) is not None:
+            merged[head] = _cap_line(head, n, "")
+        else:
+            return one_by_one()
+    with tempfile.TemporaryDirectory() as tmp:
+        sides = []
+        for name, text in zip(("base", "ours", "theirs"), texts):
+            (side := Path(tmp) / name).write_text("".join(
+                m.group(1) + "{}" + ("\n" if s.endswith("\n") else "") if (m := CAP_LINE.match(s)) else s
+                for s in text.splitlines(keepends=True)))
+            sides.append(side)
+        text, left = lean(*sides, (_comments,))
+    lines = text.splitlines(keepends=True)
+    for head, line in merged.items():
+        at = [i for i, s in enumerate(lines) if s.rstrip("\n") == head + "{}"]
+        if not at or (len(at) > 1 and not left):
+            return one_by_one()
+        for i in at:
+            lines[i] = line + ("\n" if lines[i].endswith("\n") else "")
+    return "".join(lines), left
+
+
 def load(path: Path) -> dict:
     text = path.read_text()
     return A.as_guarantees(json.loads(text)) if text.strip() else {}
+
+
+def deferred(argv: list[str]) -> int | None:
+    """Run the driver ``argv`` names with `MAIN`'s copy of this directory when git runs this file from its worktree, unedited,
+    and `MAIN` has changed the merge rules (`RULES`) since this checkout took them while the checkout committed no `merge.py`
+    of its own: that run's exit status, else None, and this file merges. Git runs a driver from the worktree of the side
+    merged into, so a branch that merges another into an older checkout would merge by the rules that checkout took: one from
+    before `held` applies a side's drop of `shape.inline` premises the merged tree still prints, and that tree's records fail
+    `guarantees.inline-hypothesis`. Without `MAIN` (a test's repository) this file merges, and a copy outside the worktree
+    (the one this runs, and those `research queue`'s `base_drivers` runs, the drivers of the tip it merges onto) never
+    defers."""
+
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", *args], capture_output=True)
+    top = git("rev-parse", "--show-toplevel")
+    if top.returncode or (Path(top.stdout.decode().strip()) / "tools" / "verity" / "lean").resolve() != HERE:
+        return None
+    tip = git("rev-parse", "-q", "--verify", f"{MAIN}^{{commit}}").stdout.decode().strip()
+    if (not tip or git("diff", "--quiet", "HEAD", "--", *RULES).returncode
+            or not git("rev-list", "-n1", tip, "^HEAD", "--", *RULES).stdout.strip()
+            or git("rev-list", "-n1", "HEAD", f"^{tip}", "--", RULES[0]).stdout.strip()):
+        return None
+    ls = git("ls-tree", "-z", tip, "--", f"{Path(RULES[0]).parent}/").stdout
+    with tempfile.TemporaryDirectory(prefix="lean-merge-driver-") as tmp:
+        for e in filter(None, ls.split(b"\0")):
+            meta, path = e.decode().split("\t", 1)
+            if meta.split()[1] == "blob":
+                (out := Path(tmp) / path).parent.mkdir(parents=True, exist_ok=True)
+                out.write_bytes(git("cat-file", "blob", meta.split()[2]).stdout)
+        print(f"merge.py: merging with {MAIN}'s drivers ({tip[:10]}), which changed the merge rules since this checkout "
+              f"took them", file=sys.stderr)
+        return subprocess.run([sys.executable, str(Path(tmp) / RULES[0]), *argv]).returncode
 
 
 def install(repo: Path) -> None:
@@ -572,7 +929,9 @@ def install(repo: Path) -> None:
     driver = f"python3 {Path(os.path.relpath(HERE / 'merge.py', top)).as_posix()} %O %A %B %P"
     for name, what, argv in ((NAME, "lean-audit.json: each side's guarantees, reads and dependencies", driver),
                              (LEAN, ".lean: each side's imports", driver.replace(" %O", " --lean %O")),
-                             (LAKEFILE, "lakefile.toml: each side's requires and roots", driver.replace(" %O", " --lakefile %O"))):
+                             (LAKEFILE, "lakefile.toml: each side's requires and roots", driver.replace(" %O", " --lakefile %O")),
+                             (CAPS, "tests/test_lean_packages.py: each side's change to the ratchet caps",
+                              driver.replace(" %O", " --caps %O"))):
         for k, v in (("name", f"{what} (tools/verity/lean/merge.py)"), ("driver", argv)):
             subprocess.run(["git", "config", f"merge.{name}.{k}", v], cwd=repo, check=True)
         print(f"merge.py: merge.{name}.driver = {argv} (in {top})")
@@ -597,6 +956,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--lean", action="store_true", help="BASE OURS THEIRS [PATH] are a `.lean` file's: merge its import lists")
     ap.add_argument("--lakefile", action="store_true", help="BASE OURS THEIRS [PATH] are a `lakefile.toml`'s: merge its "
                     "`[[require]]` blocks and string arrays")
+    ap.add_argument("--caps", action="store_true", help="BASE OURS THEIRS [PATH] are `tests/test_lean_packages.py`'s: merge "
+                    "its ratchet caps (`UNWITNESSED`, `INLINE`) as counters")
     a = ap.parse_args(argv)
     if a.install is not None:
         install(a.install)
@@ -607,13 +968,15 @@ def main(argv: list[str]) -> int:
         return 0
     if len(a.files) not in (3, 4):
         ap.error("name BASE OURS THEIRS [PATH], or --install, or --normalize FILE...")
+    if (rc := deferred(argv)) is not None:
+        return rc
     base, ours, theirs = a.files[:3]
     path = a.files[3] if len(a.files) == 4 else ours
-    if a.lean or a.lakefile:
-        text, left = lakefile(base, ours, theirs) if a.lakefile else lean(base, ours, theirs)
+    if a.lean or a.lakefile or a.caps:
+        text, left = (lakefile if a.lakefile else caps if a.caps else lean)(base, ours, theirs)
         ours.write_text(text)
         if left:
-            what = "requires and string arrays" if a.lakefile else "import lists"
+            what = "requires and string arrays" if a.lakefile else "the ratchet caps" if a.caps else "import lists"
             print(f"merge.py: {path}: {left} conflict(s) beyond {what}", file=sys.stderr)
         return 1 if left else 0
     candidate: list[str] = []
@@ -625,9 +988,14 @@ def main(argv: list[str]) -> int:
         print(f"merge.py: {path}: refused; regenerate the record on the merged tree (`check.py --update`):", file=sys.stderr)
         print("\n".join(f"  {w}" for w in why), file=sys.stderr)
         return 1
-    if candidate:
+    named = list(dict.fromkeys(candidate))
+    if rest := [c for c in named if not c.endswith(" (kept)")]:
         print(f"merge.py: {path}: merged derived records as a candidate (the union, or ours' value where marked), which the "
-              f"train's Lean check regenerates: {'; '.join(dict.fromkeys(candidate))}", file=sys.stderr)
+              f"train's Lean check regenerates: {'; '.join(rest)}", file=sys.stderr)
+    if inline := [c for c in named if c.endswith(" (kept)")]:
+        print(f"merge.py: {path}: kept shape.inline premises one side dropped and the other has as the base had them, which "
+              f"`check.py --update` drops where the merged tree's premise no longer offends: {'; '.join(inline)}",
+              file=sys.stderr)
     ours.write_text(A.text(merged))
     return 0
 

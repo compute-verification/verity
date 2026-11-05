@@ -285,7 +285,7 @@ def build(arm: str, scratch, gpu_mem: float):
             def __init__(self, t, key, h1c, h1o, gate, dev):
                 super().__init__(t, key, h1c, h1o, gate, dev, g, "s" in flags, "p" in flags)
 
-        DO.Window = Served
+        DO.DitherState = Served
         llm = _build(MIX, scratch, gpu_mem)
         llm.dither_mod = RTXBand(llm.dither_win)
         return llm

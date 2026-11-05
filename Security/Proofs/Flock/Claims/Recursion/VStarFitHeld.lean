@@ -1,8 +1,14 @@
-import Proofs.Flock.Claims.Recursion.VStarHh
-import Proofs.Flock.Claims.Recursion.VStarCap0
-import Proofs.Flock.Claims.Recursion.VStarPortsM
-import Proofs.Flock.Claims.Recursion.OpensReads
-import Proofs.Flock.C3.Reps.RoundLinks
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarHh
+public import Proofs.Flock.Claims.Recursion.VStarCap0
+public import Proofs.Flock.Claims.Recursion.VStarPortsM
+public import Proofs.Flock.Claims.Recursion.OpensReads
+public import Proofs.Flock.C3.Reps.RoundLinks
+import all Init.Data.String.TakeDrop
+import all Init.Data.String.Slice
+import all Init.Data.String.Pattern.String
+import all Init.Data.String.Pattern.Basic
 
 /-!
 # The slots a part holds are fitted to their rounds' rows (`hfit_A0`)
@@ -22,6 +28,8 @@ the last that part `s`'s message reads at `layoutBTops` (`msgAt`) is as many hm9
 Part `s`'s stager accepts (`hok`) and its circuit is the staged one (`hS`, for `checkParsed` and the slots' input
 columns, `rowHidden_staged`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 
@@ -80,6 +88,7 @@ theorem ownPort_ne_top {sv : _root_.VStar.Stmt} {q : String × String × Array (
   | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | cap _ _ => simp [RecVStar.ownPorts] at hq
+  | link _ _ _ => simp [RecVStar.ownPorts] at hq
 
 /-- A round's rows read off a longer history are the same. -/
 theorem roundRows_take (I : InnerRec) (w : Claims.Flock.Wit) (ρ : I.Tape) (hist : List (Msg × Msg)) {K i : ℕ}
@@ -358,6 +367,7 @@ theorem fit_stream (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg 
   | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | cap _ _ => simp [RecVStar.ownPorts] at hq
+  | link _ _ _ => simp [RecVStar.ownPorts] at hq
   | sparse _ _ =>
     first | cases hpin | simp [_root_.VStar.In.partIn, throw, throwThe, MonadExceptOf.throw] at hpin
   | opening _ _ _ _ _ _ =>

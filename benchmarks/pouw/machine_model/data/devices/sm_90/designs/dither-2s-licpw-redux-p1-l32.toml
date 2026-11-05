@@ -1,19 +1,19 @@
-# dither-2s-licpw-redux-l32 with ffill at p = 1, no luck credit (decision 99: a filler's credit is the theorem its check
+# dither-2s-licpw-redux-l32 with ffill at p = 1, no luck credit (a filler's credit is the theorem its check
 # meets): the H200's reading without ffill's check (ffill_ref.receipt). Honest still runs the filler, so γ counts it; the
 # floor program ♭ and the cheater leave it out, so ε_skip is this design's own at that ♭.
 base = "dither-2s-licpw-redux-l32"
 name = "dither-2s-licpw-redux-p1-l32"
 title = "Dither-2S, LI-CP-W redux, ffill at p = 1, L = 32"
-summary = "dither-2s-licpw-redux-l32 with ffill (0.0703 a word) at p = 1, no luck credit (decision 99): honest runs the filler, the cheater and ♭ leave it out"
+summary = "dither-2s-licpw-redux-l32 with ffill (0.0703 a word) at p = 1, no luck credit: honest runs the filler, the cheater and ♭ leave it out"
 
 [filler]
 per_word = 0.0703125
 mix = { FFMA = 2, IMAD = 1 }
 route = "lanes"
-source = "dither-2s-licpw-redux-l32's filler (ffill, FILL-OPT), credited as if no check met a luck theorem (decision 99)"
+source = "dither-2s-licpw-redux-l32's filler (ffill, FILL-OPT), credited as if no check met a luck theorem"
 p = 1.0
 
 [skip.served]
 eps = 0.005927
 at = { "DC-90-ri" = 0.005927, "DS-90" = 0.008583 }
-source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 6.077 SMSP-cycles a 4096-MAC MMA on DC-90 (this design's own, decision 90: LI-CP-W with its checkpoint at the fold routes' cheapest mix, on DC-90 0.383 cp-ats2, 0.335 cp-red2 and 0.282 cp-ats8; on DC-90-ri at the generic CP_RED2 and CP_RED8, the loops' memory, control and warp-reduce classes the H200 timed beside the IGMMA on the JI90 lines (r20261021-070616-d06c, r20261021-074303-da7f): 0.593%; the filler left out at p = 1), 4.188 on DS-90 (cp-red2; 6.186 and 4.25 at REDUX); the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, every served output free, at 8B 2K prefill: P·V's peel. Skip terms as dither-2s-licpw-redux-l32's (note:20261017T0320Z-draft-eps1-calc Round 11)"
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭, ♭ 6.077 SMSP-cycles a 4096-MAC MMA on DC-90 (this design's own: LI-CP-W with its checkpoint at the fold routes' cheapest mix, on DC-90 0.383 cp-ats2, 0.335 cp-red2 and 0.282 cp-ats8; on DC-90-ri at the generic CP_RED2 and CP_RED8, the loops' memory, control and warp-reduce classes the H200 timed beside the IGMMA on the JI90 lines: 0.593%; the filler left out at p = 1), 4.188 on DS-90 (cp-red2; 6.186 and 4.25 at REDUX); the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode, every served output free, at 8B 2K prefill: P·V's peel. Skip terms as dither-2s-licpw-redux-l32's"

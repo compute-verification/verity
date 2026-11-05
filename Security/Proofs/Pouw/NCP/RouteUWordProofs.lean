@@ -1,7 +1,9 @@
-import Definitions.Pouw.Assumptions.NCP.RouteUWord
-import Proofs.Pouw.NCP.ChainProofs
-import Proofs.Pouw.NCP.RouteUProofs
-import Definitions.Pouw.Guarantees.NCP
+module
+
+public import Definitions.Pouw.Assumptions.NCP.RouteUWord
+public import Proofs.Pouw.NCP.ChainProofs
+public import Proofs.Pouw.NCP.RouteUProofs
+public import Definitions.Pouw.Guarantees.NCP
 
 /-!
 # The word layer on route U: proofs
@@ -14,6 +16,8 @@ import Definitions.Pouw.Guarantees.NCP
   `ncpWordFloor` with `reductionOnlyIfU` in place of `reductionOnlyIf`.
 * `int7Int32UPos`, `wrapFinalOnlyIndU`, `wrapWordFloorIndU`: `ChainProofs`' wrap argument on route U.
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP.RouteUWordProofs
 

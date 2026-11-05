@@ -1,5 +1,5 @@
 /-
-Layout (iv) of a templated unit (PRF-133): the committed position of each of its columns, given per Definition, so the
+Layout (iv) of a templated unit: the committed position of each of its columns, given per Definition, so the
 lincheck fold can read a templated unit from its description. No verifier path reads it yet.
 
 Each Definition is laid out once, from its callees' layouts. Its own columns keep their order, in runs; a call's copies
@@ -15,7 +15,11 @@ A placed copy's positions are affine in its Definition's: a column at local posi
 is at `A + B·p`, with `B` a product of lane counts, a power of two. `posMap` is the reference, every column's position
 (O(unrolled)); `posOf` one column's, through the call tree.
 -/
-import Flock.Tmpl
+module
+
+public import Flock.Tmpl
+
+@[expose] public section
 
 namespace Flock.Tmpl
 

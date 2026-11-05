@@ -1,4 +1,6 @@
-import Proofs.Flock.VBridge.AlgHolds
+module
+
+public import Proofs.Flock.VBridge.AlgHolds
 
 /-!
 # `AlgebraHolds` from each part's residuals vanishing
@@ -9,6 +11,8 @@ verifier values `vv` that read the rep's `w` at `wIdx` of the group's ports and 
 group's `V`, `AlgebraHolds` holds. `vv`'s agreement with `v` is the tie a caller takes from check 5 (`ResTie`) at the
 verifier's values; it stays a hypothesis here.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.OfVStar
 

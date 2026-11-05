@@ -1,4 +1,6 @@
-import Definitions.Pouw.Receipt.Duo
+module
+
+public import Definitions.Pouw.Receipt.Duo
 
 /-!
 # fx1, sm_120's receipt fold (trusted)
@@ -11,6 +13,8 @@ is multiplied by an odd key `m = key_mul(1, (4J + e)·32)` and the product is ab
 
 For odd `m`, `d ↦ d·m` is a bijection of the words, so every statement about duo's words carries over to fx1's.
 -/
+
+@[expose] public section
 
 namespace Pouw.Receipt
 

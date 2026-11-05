@@ -1,4 +1,6 @@
-import Definitions.Accounting.HMu
+module
+
+public import Definitions.Accounting.HMu
 
 /-!
 # (H-μ⁺) from the coins: Lemma B, the point mass of fresh noise, and Lemma B′ for persistent patterns (trusted)
@@ -34,6 +36,8 @@ What the coins can't give, and so what stays a premise:
   `y ⊕ rotl(z, 16)` projection), Lemma B′ needs a fibre bound at the start state the cheater knows. (Inj) alone gives
   none, and an all-state no-kernel statement isn't one.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.HMu
 

@@ -1,6 +1,5 @@
 """The wide word codecs, byte-exact: Sloth over p = 2^127 − 1, 2^255 − 19, 2^521 − 1, 2^256 − 189 and 2^512 − 569, in
-the fused GEMM's layout, with the encoded words tagged by the bandwidth audit's `ro-blake3/v1`
-(`verity.core.protocols.bandwidth.tags`).
+the fused GEMM's layout.
 
 ~~~text
 field      p127 = 2^127 − 1, p521 = 2^521 − 1, p256 = 2^256 − 189, p512 = 2^512 − 569 (3 mod 4); p255 = 2^255 − 19
@@ -20,6 +19,9 @@ decode     x ↦ ρ⁻¹(x) − c_j − t(i), j = k − 1 … 0; a word decodes 
 word       y < p as `limbs` little-endian u32 limbs (4, 8, 17, 8, 16: 16, 32, 68, 32, 64 bytes)
 ~~~
 
+The fields, and ρ and ρ⁻¹ at p = 3 mod 4, are the store codec's (`verity.core.protocols.remote_bandwidth.codec`'s
+`Field`, `rho` and `rho_inv`); p255's ρ and the keys are this module's.
+
 The fused GEMM's layout is the word codec's (`codec.fragment_stream`): tasks of one 16-row block and 512 columns, in
 order (row block, column chunk); in each task lane l's 256 bytes of its mma.m16n8k32 A fragments are the little-endian
 integer S, and its word w carries bits w·b … w·b + b − 1 of S (b = `payload`), L = ⌈2048 / b⌉ words a lane
@@ -27,9 +29,7 @@ integer S, and its word w carries bits w·b … w·b + b − 1 of S (b = `payloa
 i = 32·L·q + 32·w + l.
 
 The store E is the tasks' records in order. Record q is, for w in 0 … L − 1, for limb e, for lane l, u32le(limb e of
-word (q, l, w)): a warp's load of one limb reads 128 contiguous bytes. Block j = 32·q + l of the bandwidth audit is
-lane l's L words of task q, each `word_bytes` little-endian, in order; its tag is `ro-blake3/v1`'s
-BLAKE3-keyed(K, u64be j ‖ E_j), and the tags are committed 16 to a leaf under the audit's tree.
+word (q, l, w)): a warp's load of one limb reads 128 contiguous bytes.
 """
 
 from __future__ import annotations
@@ -41,6 +41,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from verity.core.protocols.remote_bandwidth import codec as RB
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import codec  # noqa: E402
@@ -51,16 +53,23 @@ TWEAK_INDEX = (1 << 32) - 1
 LANES, TASK_TILES, TASK_COLS, LANE_BYTES = codec.LANES, codec.TASK_TILES, codec.TASK_COLS, codec.LANE_BYTES
 
 
-@dataclass(frozen=True, slots=True)
-class Field:
-    name: str
-    bits: int
-    p: int
-    limbs: int
-    payload: int
+class Field(RB.Field):
+    """The store codec's field (`RB.Field`, p = 2^n − c) in the fused GEMM's packing: `bits` = n, the default
+    `payload` its `payload_bits`, and a word stored as its `limbs` u32 limbs."""
+
+    __slots__ = ()
+
+    @property
+    def bits(self) -> int:
+        return self.n
+
+    @property
+    def payload(self) -> int:
+        return self.payload_bits
 
     @property
     def word_bytes(self) -> int:
+        """A stored word's bytes, its limbs': 68 at p521, whose field's S is 66."""
         return 4 * self.limbs
 
     @property
@@ -92,13 +101,8 @@ class Field:
         return self.record_bytes(payload) / (LANES * LANE_BYTES)
 
 
-FIELDS = {
-    127: Field("p127", 127, (1 << 127) - 1, 4, 126),
-    255: Field("p255", 255, (1 << 255) - 19, 8, 254),
-    521: Field("p521", 521, (1 << 521) - 1, 17, 520),
-    256: Field("p256", 256, (1 << 256) - 189, 8, 256),
-    512: Field("p512", 512, (1 << 512) - 569, 16, 512),
-}
+FIELDS = {f.bits: f for f in (Field("p127", 127, 1), Field("p255", 255, 19), Field("p521", 521, 1),
+                               Field("p256", 256, 189), Field("p512", 512, 569))}
 
 
 def field(bits: int) -> Field:
@@ -147,16 +151,14 @@ def legendre(a: int, p: int) -> int:
 
 
 def rho(a: int, f: Field) -> int:
-    """Sloth's square-root permutation of Z_p."""
+    """Sloth's square-root permutation of Z_p: the store codec's (`RB.rho`) at p = 3 mod 4."""
+    if f.three_mod_four:
+        return RB.rho(a, f)
     p = f.p
     if not 0 <= a < p:
         raise ValueError("ρ takes a canonical element")
     if a == 0:
         return 0
-    if f.three_mod_four:
-        s = pow(a, (p + 1) // 4, p)
-        want_odd = s * s % p != a
-        return s if (s & 1) == want_odd else p - s
     if legendre(a, p) == 1:
         s, want_odd = _sqrt_5mod8(a, p), False
     else:
@@ -186,13 +188,13 @@ def rho_fast_5mod8(a: int, p: int = P255) -> int:
 
 
 def rho_inv(y: int, f: Field) -> int:
+    if f.three_mod_four:
+        return RB.rho_inv(y, f)
     p = f.p
     if not 0 <= y < p:
         raise ValueError("ρ⁻¹ takes a canonical element")
     q = y * y % p
-    if y & 1 == 0:
-        return q
-    return (p - q) % p if f.three_mod_four else 2 * q % p
+    return q if y & 1 == 0 else 2 * q % p
 
 
 @dataclass(frozen=True, slots=True)
@@ -302,35 +304,6 @@ def store_bytes(words: list[list[int]], f: Field) -> bytes:
                 for lane in range(LANES):
                     out += struct.pack("<I", words[q * LANES + lane][wi] >> (32 * e) & 0xFFFFFFFF)
     return bytes(out)
-
-
-def block(words: list[list[int]], j: int, f: Field, tb: int = 1) -> bytes:
-    """E_j: lane j mod 32's words of tasks tb·(j div 32) … tb·(j div 32) + tb − 1 (tb adjacent K-chunks of the same
-    rows, one warp of the fused GEMM each)."""
-    q, lane = divmod(j, LANES)
-    return b"".join(word_bytes(y, f) for t in range(tb) for y in words[LANES * (tb * q + t) + lane])
-
-
-# --- the bandwidth audit's tags over the encoded words ---------------------------------------------------------------
-
-def tags_of(words: list[list[int]], f: Field, seed: bytes, base: int = 0, tb: int = 1) -> list[bytes]:
-    from verity.core.protocols.bandwidth import tags
-
-    assert len(words) % (LANES * tb) == 0
-    keyed = tags.get("ro-blake3/v1").keyed(seed)
-    return [keyed(base + j, block(words, j, f, tb)) for j in range(len(words) // tb)]
-
-
-def leaves_of(ys: list[bytes], seed: bytes) -> list[bytes]:
-    from verity.core.protocols.bandwidth import tags
-
-    return tags.leaves(tags.get("ro-blake3/v1"), seed, ys)
-
-
-def root_of(ys: list[bytes], seed: bytes) -> bytes:
-    from verity.core.protocols.pous.verifier import MerkleTree
-
-    return MerkleTree(leaves_of(ys, seed)).root
 
 
 def random_weights(n: int, kdim: int, seed: int) -> bytes:

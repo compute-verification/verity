@@ -6,7 +6,12 @@ through its statement's pin (`plainBytes`), so upstream's form, without the tag,
 Each form is refused where the other is pinned, and so is every other byte after the end, a plain file whose
 `matrix_evals` holds one pair, and a query, claim or consistency grinding nonce other than 0 (R4), each with its reason.
 -/
-import Flock.ZkProof
+module
+
+public import Flock.ZkProof
+meta import Flock.ZkProof
+
+@[expose] public section
 
 namespace Flock.Test.ProofCanon
 

@@ -1,4 +1,4 @@
-"""A result's interaction record and the measurement protocol it must meet: what ``cell check`` and C-Flock's ``register``
+"""A result's interaction record and the measurement protocol it must meet: what ``cell check`` and Flock's ``register``
 read of a ``bench-result/v1`` document.
 
 The interaction model is t = compute + rounds x RTT + bytes / bandwidth, with the
