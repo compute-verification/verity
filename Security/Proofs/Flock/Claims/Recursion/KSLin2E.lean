@@ -1,11 +1,13 @@
-import Proofs.Flock.Claims.Recursion.TopsOpens
-import Proofs.Flock.Claims.Recursion.LastColsE
-import Proofs.Flock.Claims.Recursion.ConflictTiedE
-import Proofs.Flock.Claims.Recursion.LastBindsEC
-import Proofs.Flock.Claims.Recursion.CallsAgree
-import Proofs.Flock.Claims.Recursion.VStarCross
-import Proofs.Flock.Claims.Recursion.SetupCalls
-import Proofs.Flock.Claims.Recursion.PartAccepts
+module
+
+public import Proofs.Flock.Claims.Recursion.TopsOpens
+public import Proofs.Flock.Claims.Recursion.LastColsE
+public import Proofs.Flock.Claims.Recursion.ConflictTiedE
+public import Proofs.Flock.Claims.Recursion.LastBindsEC
+public import Proofs.Flock.Claims.Recursion.CallsAgree
+public import Proofs.Flock.Claims.Recursion.VStarCross
+public import Proofs.Flock.Claims.Recursion.SetupCalls
+public import Proofs.Flock.Claims.Recursion.PartAccepts
 
 /-!
 # `KSLin2` and `BitsLin2` at the element-level inner verifier's steps (`FlockDeploy.VE`)
@@ -34,6 +36,8 @@ at least the runs the one at the deployed plain verifier's accepts, and the hone
 the B corollaries to `VE`; no theorem here derives the bound at the deployed plain verifier's steps from the one at
 `VE`'s.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -254,8 +258,9 @@ theorem bitsLin2_deployedE_recRead (b : Brings)
 (`recTr`) and `VE`'s steps, from `DecompB` and `htab`**: `ksLin2_deployedE_recRead` at the brings whose transcript is
 `recTr aux nOf hd recRest`, with its inner check `PartAccepts` (`exists_chk_iff`), `ReadsBackB` from `readsBack_recTr`
 and `ReadersTrue` from `readersTrue_layoutBTops`, as `ksLin2_deployed_partAccepts` is at the deployed plain
-verifier's steps. What stays open: `DecompB` at what each part's circuit accepts, at `VE`'s bound, and the plain
-record's table bound at the abort law at `VE` (`htab`). This bounds no number by itself: those premises are open. -/
+verifier's steps. Its premises are `DecompB` at what each part's circuit accepts, at `VE`'s bound, and the plain
+record's table bound at the abort law at `VE` (`htab`); `Flock.SecurityProofs.RecursiveKS` proves `KSLin2` at the
+deployed reader with none. -/
 theorem ksLin2_deployedE_partAccepts (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)

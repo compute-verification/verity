@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ForkAlign
-import Proofs.Flock.Soundness.Discharge.Exec.Shape
+module
+
+public import Proofs.Flock.Claims.KS.ForkAlign
+public import Proofs.Flock.Soundness.Discharge.Exec.Shape
 
 /-!
 # A slot's distance in coins, independent of the strategy
@@ -14,6 +16,8 @@ meets that node after the same number of coins, or never meets it, the alignment
   then `SlotAt` holds at `j` against every strategy. `Dist.mono`, `Dist.bind`: weakening keeps it, and a lockstep
   with no such node and an exact shape (`Exact`) in front adds the shape's coins (`coinsK`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game.Lock
 

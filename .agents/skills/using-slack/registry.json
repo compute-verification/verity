@@ -161,6 +161,7 @@
       "owns": [
         "integrations/",
         "benchmarks/served_units/",
+        "benchmarks/unit_block/",
         "benchmarks/served_commit/",
         "benchmarks/g2/",
         "tools/verity/circuit_check/",
@@ -169,6 +170,7 @@
         "benchmarks/tc_probe_fp4/",
         "benchmarks/load_time/",
         "benchmarks/bool_build_cost/",
+        "benchmarks/f32_exhaustive/",
         "verity/ml/circuits/ops/",
         "integrations/vllm/verity_vllm/program/",
         "integrations/vllm/verity_vllm/query/",
@@ -299,7 +301,10 @@
       "charter": "note:compute-accounting/20261019T2230Z-report-lane-split",
       "usergroup": "S0CBZ2L8542",
       "linear": "CMP",
-      "linear_label": "lane:compute-research"
+      "linear_label": "lane:compute-research",
+      "owns": [
+        "verity/hardware/"
+      ]
     },
     {
       "handle": "memory-accounting",
@@ -324,7 +329,6 @@
         "benchmarks/rate_squaring/",
         "benchmarks/remote_session/",
         "benchmarks/resource_accounting/",
-        "benchmarks/serve_bandwidth/",
         "benchmarks/stacked_share/",
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
@@ -466,6 +470,7 @@
         "tools/config/",
         "tools/verity/check/",
         "tools/verity/cli/",
+        "tools/verity/graph/",
         "tools/move/",
         "tools/research/src/research/queue.py",
         "tools/research/src/research/quick_tier.py",
@@ -604,6 +609,7 @@
       "linear": "BENCH",
       "owns": [
         "benchmarks/harness/",
+        "benchmarks/overhead/",
         "benchmarks/recursion_e2e/",
         "benchmarks/specs/",
         "infra/cluster/kinds/benchmarks.toml",

@@ -1,17 +1,19 @@
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Fintype.Powerset
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.GCongr
-import Mathlib.Tactic.Linarith
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
-import Proofs.Pous.Thm1.Theorem1iTimed
-import Proofs.Pous.Thm1.Theorem1iiSeq
-import Proofs.Pous.Thm1.Theorem1iiiTimed
+module
+
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Data.Fintype.Powerset
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.GCongr
+public import Mathlib.Tactic.Linarith
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
+public import Proofs.Pous.Thm1.Theorem1iTimed
+public import Proofs.Pous.Thm1.Theorem1iiSeq
+public import Proofs.Pous.Thm1.Theorem1iiiTimed
 
 /-!
 # A3′, the sequential audit from a per-run Lemma A (pinned as `Pous.Guarantees.A3Prime` and `A3PrimeLam`)
@@ -29,6 +31,8 @@ per-block responder. `E` is the event `¬G ∨ ∃ h, G ∧ R_h(s_h, ·)` is rig
    (`pr_seq_le`) gives `((g − 1)/B)^k`.
 2. `Pr[E] ≤ Pr[¬G] + Σ_h Pr[G ∧ …] ≤ Pr[¬G] + |Hist|·Γ`, with `|Hist| = Σ_{j<k} B^j = (B^k − 1)/(B − 1)`.
 -/
+
+@[expose] public section
 
 namespace PousThm1
 

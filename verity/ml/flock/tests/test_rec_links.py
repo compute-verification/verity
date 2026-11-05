@@ -1,6 +1,6 @@
-"""The link table (`verity_flock.rec_links`) and its reference check: the prover's rows, their padding to the public grid and
-their commitment as advice, and the mirror held to `Flock.RecLinks.check` (``flock-rec-links``) on every vector, honest
-and refused, each refusal code at least once."""
+"""The link table (`verity_flock.rec_links`) and its reference check: the prover's rows, their padding to the public grid,
+their registration as V*'s registered value ``rec-links``, the links read from the inner statement's own, and the mirror
+held to `Flock.RecLinks.check` (``flock-rec-links``) on every vector, honest and refused, each refusal code at least once."""
 from __future__ import annotations
 
 import json
@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 from verity_flock import rec_links as R
 
-from verity.ml.commitments import advice
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-rec-links"
@@ -46,18 +46,37 @@ def test_every_vector_has_its_verdict_and_every_refusal_is_exercised():
     assert {what for _, kind, what in verdicts if kind == "refused"} == set(R.CODES)
 
 
-def test_the_committed_table_opens_row_by_row_and_reveals_only_its_count_and_root():
+def test_a_row_is_its_bytes_as_u16_words_little_endian():
+    row = R.encode(R.LinkEntry(1, 2, 70000, 4))
+    w = R.words(row)
+    assert len(w) == R.ROW_WORDS == 64
+    assert b"".join(x.to_bytes(2, "little") for x in w) == row
+    with pytest.raises(ValueError):
+        R.words(row[:-2])
+
+
+def test_the_registered_table_opens_row_by_row_under_the_verifiers_domain_and_reveals_only_its_count_and_root():
     links = [R.LinkEntry(u + 1, 0, u, 0) for u in range(17)]
-    reg = R.register(links)
-    n, bits = len(reg.rows), 8 * R.ROW_BYTES
-    assert n == R.grid(17) == 18
+    prog = "ab" * 64
+    reg = R.register(prog, links)
+    n = reg.leaves
+    assert n == R.grid(17) == 18 and reg.value == R.VALUE and reg.words == R.ROW_WORDS
+    dom = G.domain(prog, R.VALUE, R.ROW_WORDS, n)
     for i in range(n):
-        o = reg.open(i)
-        assert advice.verify(reg.root, n, bits, R.BINDING, o)
-        assert R.decode(o.row) == (links[i] if i < 17 else None)
-    forged = advice.Opening(3, R.encode(R.LinkEntry(9, 0, 2, 0)), reg.salts[3], reg.open(3).path)
-    assert not advice.verify(reg.root, n, bits, R.BINDING, forged)
-    assert R.register(links).root != reg.root
+        assert G.verify_read(dom, reg.root, i, reg.bcs[i], reg.path(i))
+        assert R.decode(b"".join(x.to_bytes(2, "little") for x in reg.rows[i])) == (links[i] if i < 17 else None)
+    forged = R.register(prog, [R.LinkEntry(9, 0, 2, 0)] + links[1:], reg.salts)
+    assert forged.bcs[0] != reg.bcs[0] and forged.bcs[1:] == reg.bcs[1:]
+    assert not G.verify_read(dom, reg.root, 0, forged.bcs[0], reg.path(0))
+    assert not G.verify_read(G.domain("cd" * 64, R.VALUE, R.ROW_WORDS, n), reg.root, 1, reg.bcs[1], reg.path(1))
+    assert R.register(prog, links).root != reg.root
+
+
+def test_the_tables_links_are_the_inner_statements_own_by_row_port():
+    ports = ["x", "x_cut", "w", "y"]
+    assert R.entries(ports, [[1, "x_cut", 0], [2, "x_cut", 1]]) == [R.LinkEntry(1, 1, 0, 0), R.LinkEntry(2, 1, 1, 0)]
+    with pytest.raises(ValueError, match="not a row port"):
+        R.entries(ports, [[1, "z", 0]])
 
 
 @pytest.mark.slow

@@ -1,3 +1,5 @@
+module
+
 /-!
 # The PoUS verdict unit as code
 
@@ -15,6 +17,8 @@ holds `prog` to the Definition's compiled circuit gate for gate (`PousCheck.Verd
 The builders read an array's size, and the parts of a pair they still need, before they push to the array, so that it is
 not shared and each push is in place: at `K = 132` the unit has 318,154 gates.
 -/
+
+@[expose] public section
 
 namespace PousCheck.Verdict
 

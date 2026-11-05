@@ -13,7 +13,23 @@ package = false
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_interop.py"]
+paths = ["benchmarks/pous/p2_v1"]
+
 [tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/test_interop.py",
+    "tests/test_run.py",
+    "tests/test_run_protocol.py",
+    "tests/test_setup_difftest.py",
+    "tests/test_timed_audit.py",
+    "tests/test_verdict_difftest.py",
+]
 # Test-only: `lake` builds this package and, through its path requires, the core protocol interface and C-Flock's verifier's
 # Lean (`Flock/`, which PousCheck reaches through Flock.HmRow, and the package's configuration); the vectors are `p2_v1`'s
 # files, which the vector tests read. `interop.py` holds the Lean to the wire's Python reference (`p2_v1`'s package, `wire.py`
@@ -31,12 +47,12 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness",
           "verity/core/protocols/interface", "verity/core/primitives/identity", "verity/core/primitives/randomness", "verity/core/service/flock/Flock",
           "verity/core/service/flock/lakefile.toml", "verity/core/service/flock/lake-manifest.json",
-          # the deployment layer and its wire, which the period hook's memory challenger is started through
-          # (`deploy.stream.Side`) and runs on
-          "verity/core/deploy", "verity/core/wire",
           "verity/core/service/flock/lean-toolchain", "benchmarks/pous/p2_v1/vectors.json",
           "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/reference.py", "benchmarks/pous/p2_v1/wire.py",
           "benchmarks/pous/p2_v1/audit-vectors.json", "benchmarks/pous/p2_v1/audit-negative-vectors.json",
           "benchmarks/pous/band_gpu/__init__.py",
           "benchmarks/pous/band_gpu/memory_challenger.py", "benchmarks/pous/band_gpu/harness.py",
-          "verity/core/devices/memory_challenger/lean", "verity/core/attest/lean", "verity/core/primitives/lms/lean"]
+          "verity/core/devices/memory_challenger/lean", "verity/core/attest/lean", "verity/core/primitives/lms/lean",
+          # the deployment layer and its wire, which the period hook's memory challenger is started through
+          # (`deploy.stream.Side`) and runs on
+          "verity/core/deploy", "verity/core/wire"]

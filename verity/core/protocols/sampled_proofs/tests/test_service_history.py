@@ -13,8 +13,10 @@ from test_registered import (BINDING, BOUND, LAW, MIXED, Q, SCHEME, SERVED, _mix
                              _record as _registered_record, _seeded_case)
 from test_service import DELTA, PAIR, RUN, SESSION, Clock, _lean, _ports, _record, _spec
 
+import fake_challenger as FC
 
-class _Whole(S.Stream):
+
+class _Whole(FC.Stream):
     """A stream whose every check reads its whole log, as a stream's did before it kept what R6 and R7 read."""
 
     def _earlier(self, record, supplied=None):
@@ -33,9 +35,9 @@ class _Counted(list):
         return super().__iter__()
 
 
-def _stream(cls=S.Stream, spec=None, budget=10 ** 6, clock=None) -> S.Stream:
+def _stream(cls=FC.Stream, spec=None, budget=10 ** 6, clock=None) -> S.Stream:
     return cls(spec or _spec(proof_deadline=60.0), PAIR, budget=budget, delta=DELTA, challenger="challenger-test",
-               coins=lambda n: b"\x07" * n, clock=clock or Clock())
+               clock=clock or Clock())
 
 
 def _refusal(e: S.Refused) -> tuple:
@@ -59,7 +61,7 @@ def test_a_registration_reads_the_same_records_whatever_the_history(monkeypatch)
 
     monkeypatch.setattr(S.V, "check", spy)
     monkeypatch.setattr(S.V, "stream", rules_spy)
-    for cls, rounds in ((S.Stream, 30), (_Whole, 6)):
+    for cls, rounds in ((FC.Stream, 30), (_Whole, 6)):
         given.clear()
         stream = _stream(cls)
         stream._log, stream._entries, stream._rule_entries = _Counted(), _Counted(), _Counted()
@@ -71,7 +73,7 @@ def test_a_registration_reads_the_same_records_whatever_the_history(monkeypatch)
             stream.outcome(draw, _lean(accepted=i % 3 != 1), {"statement": "stub"})
             prev = reg.digest
         assert len(stream._log) == rounds and stream.failures == rounds // 3 and not stream.stopped
-        if cls is S.Stream:
+        if cls is FC.Stream:
             assert given == [0] + [1] * (rounds - 1)
             assert stream._log.walks == stream._entries.walks == stream._rule_entries.walks == 0
             assert max(held) == 1 and len(held) > 4 * rounds
@@ -124,7 +126,7 @@ def _one_stage(cls) -> tuple[list, tuple, tuple, tuple, S.Stream]:
     return calls, stream.log, stream.records, stream.symbols, stream
 
 
-class _Forgetful(S.Stream):
+class _Forgetful(FC.Stream):
     """A stream that leaves the records whose window has no key out of its checks."""
 
     def _earlier(self, record, supplied=None):
@@ -140,7 +142,7 @@ def test_the_verdicts_log_and_records_are_the_whole_logs():
     stream's; the stream ran into each refusal, logged windows that aren't plain JSON, and counted its failures. A stream
     that leaves those windows' records out of its checks gives other verdicts: the Lean's R6 reads them (round 25's
     window is round 23's, a tuple, as a list)."""
-    *got, stream = _one_stage(S.Stream)
+    *got, stream = _one_stage(FC.Stream)
     *want, _ = _one_stage(_Whole)
     assert got == want
     calls, _, _, symbols = got

@@ -1,4 +1,4 @@
-// H1 + fx1's unit (pouw.circuit.h1tile) fused on sm_90a / sm_100a, bit for bit served_h1/receipts.py's
+// H1 + fx1's unit (pouw.circuit.h1tile) fused on sm_90a / sm_100a, bit for bit pouw_h1_receipts'
 // `call_receipts`: a served call's A [M, K] and B [N, K] s8, its units the full 32 x 32 tiles in
 // row-block-major order, unit u at position base + u.
 //
@@ -3571,8 +3571,8 @@ __global__ void __launch_bounds__(256) h1jr_cols(const UCallR* __restrict__ call
 }
 
 // H1U_JSWZ = G (h1umjc; 0 is the launch's order): H1U_SWZ's order for its units, G row tiles at a time column tile by
-// column tile, so B's lines and the column tiles are read from DRAM once for G row tiles (unitsbench --j10r at
-// T = M = 2048, step_multi_j10rc: G 0 256.8, 8 240.6, 16 236.0, 32 233.1, 64 237.3 ms)
+// column tile, so B's lines and the column tiles are read from DRAM once for G row tiles.  32: the fastest G of
+// unitsbench --j10r's sweep (0, 8, 16, 32, 64) at T = M = 2048, step_multi_j10rc
 #ifndef H1U_JSWZ
 #define H1U_JSWZ 32
 #endif

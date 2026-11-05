@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.VerdictPieces
-import Proofs.Flock.Claims.Recursion.ResAccepts
-import Proofs.Flock.Claims.Recursion.OpenedPlain
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictPieces
+public import Proofs.Flock.Claims.Recursion.ResAccepts
+public import Proofs.Flock.Claims.Recursion.OpenedPlain
 
 /-!
 # The `rec-open` pieces of the verdict, as the parts compute them
@@ -23,6 +25,8 @@ level's cap. `OpenedPlain.opened_plain_of` reduces that to one fact per query (`
   `RecCoins.checkOpen`'s `dirs`, and its climb's top is the cap's entry there, `checkOpenTops`).
 * `bits_of_dirsRow`: the `dirs` tie at the registered `dirsRow` words gives `OpenTie`'s bits.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

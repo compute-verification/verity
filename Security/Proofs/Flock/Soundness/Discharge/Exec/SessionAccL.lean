@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Exec.SessionSoundL
-import Proofs.Flock.Soundness.SessionAcc
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionSoundL
+public import Proofs.Flock.Soundness.SessionAcc
 
 /-!
 # Knowledge soundness of a salted table in the session, from accepted reruns
@@ -8,6 +10,8 @@ import Proofs.Flock.Soundness.SessionAcc
 session's outputs that implies the table accepts, with probability `ε`, `ε · Pr[the table extracted from k ≥ 1 reruns
 in which Acc holds is uncommitted] ≤ ε_c⁻ + N₀·ε/(ek) + √(k·adv₀)`, every term computed in the salted session.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 
