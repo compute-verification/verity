@@ -52,10 +52,6 @@ IDS = Path(__file__).with_name("catalog_ids.json")
 def pinned() -> list[str]:
     return json.loads(IDS.read_text())
 
-COUNT += 20  # `torch_words`' 10 word primitives and `boolean_torch_words`' 10 Boolean versions, a line of its own
-
-COUNT += 2  # `cublas_bf16`'s GemmPad_v1 and GemmPad_v2, a line of its own so it merges with any other change to the count
-
 
 def test_the_catalog_loads_every_definition_and_no_other():
     got = fresh()
