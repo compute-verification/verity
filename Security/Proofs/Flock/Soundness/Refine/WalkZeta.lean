@@ -39,7 +39,7 @@ def retZetaStep (g : MVarId) : MetaM (Option (List MVarId)) := g.withContext do
   let at_ (m : Expr) : MetaM MVarId := g.replaceTargetDefEq (mkApp3 ty.getAppFn (ty.getArg! 0) m (ty.getArg! 2))
   let m := (ty.getArg! 1).headBeta.consumeMData
   if m != ty.getArg! 1 then return some [← at_ m]
-  let lemma (n : Name) : MetaM Expr := mkConstWithFreshMVarLevels n
+  let lem (n : Name) : MetaM Expr := mkConstWithFreshMVarLevels n
   match m with
   | .letE n t v b _ =>
     if t.isForall then
@@ -47,15 +47,15 @@ def retZetaStep (g : MVarId) : MetaM (Option (List MVarId)) := g.withContext do
       some <$> applyIntros g (← mkAppOptM ``ret_jp #[t.bindingDomain!, ty.getArg! 0, ty.getArg! 2, v, body])
     else return some [← at_ (b.instantiate1 v)]
   | _ =>
-  if m.isAppOfArity ``Bind.bind 6 then return some (← applyIntros g (← lemma ``ret_bind'))
+  if m.isAppOfArity ``Bind.bind 6 then return some (← applyIntros g (← lem ``ret_bind'))
   if m.isAppOfArity ``Pure.pure 4 then
-    let gs ← g.apply (← lemma ``ret_pure)
+    let gs ← g.apply (← lem ``ret_pure)
     return some (← gs.flatMapM fun g => g.withContext do
       let g ← g.replaceTargetDefEq (← instantiateMVars (← g.getType)).headBeta
       try g.refl; return [] catch _ => return [g])
-  if m.isAppOfArity ``MonadExcept.throw 5 then return some (← g.apply (← lemma ``ret_throw))
-  if m.isAppOfArity ``ite 5 then return some (← applyIntros g (← lemma ``ret_ite))
-  if m.isAppOfArity ``dite 5 then return some (← applyIntros g (← lemma ``ret_dite))
+  if m.isAppOfArity ``MonadExcept.throw 5 then return some (← g.apply (← lem ``ret_throw))
+  if m.isAppOfArity ``ite 5 then return some (← applyIntros g (← lem ``ret_ite))
+  if m.isAppOfArity ``dite 5 then return some (← applyIntros g (← lem ``ret_dite))
   if m.getAppFn.isFVar then
     for d in ← getLCtx do
       let found ← forallTelescope (← instantiateMVars d.type) fun _ r =>
