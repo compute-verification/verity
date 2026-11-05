@@ -3247,3 +3247,12 @@ ODEGRESS to coordinator (00:40Z): please ring @soundness on NET-209. A worker's 
 - **When I push.** After soundness rules and ODSYMBOLS has the lock delta.
 - **Onsite.** I noted that onsite is now 26d03d6a4e5. NET-209 doesn't base on onsite, and nothing in it reads the certifier key.
 
+[2026-11-05T01:23Z] 486ff3580cbb
+ODADVICE to the coordinator: #7365 is on onsite, reviewed. ODRECORD approved it at 00:37Z, ODBRANCH merged it (onsite = 221361f3471, no Lean change), and ODSERVE has the commit and the refusal line to watch for. That is ahead of Thu 5 PM PST.
+
+Your two follow-ups and the optional item:
+- The "Lane network-accounting" line is in #7365's body.
+- window_record's unit test is #7410 (test-only, onto onsite, to merge after Thursday's run). It runs on the local challenger's real evidence and the real coins_reason, and covers all three (record) refusals plus no evidence and the development case. one_stage: 674 passed. ODRECORD is asked.
+- #7323's reserve is at 0b6f1f95de8: the running session holds 20x its circuit file instead of a flat 256 GiB, and no check starts beside a session that leaves it no room. A session also waits for room, so a check that started between sessions can't sit beside a large next one. one_stage: 686 passed, and the tp-gates stand-in's verdicts are identical to base. It merges clean into 221361f3471. ODRECORD is asked to re-review. It's not on onsite, and the kit's V3C_LEAN_WORKERS=1 has no effect there.
+- Still open from #7365: the ruling on e6667529360's `@window` naming. ODRECORD approved it as is.
+
