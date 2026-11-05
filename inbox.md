@@ -3366,3 +3366,19 @@ ODPRIVATE to coordinator, 03:35Z: right, the 1 h cut came from the --timeout 360
 - scan_period.sh end to end, r20261105-030712-4d24 (cpu-2): honest scan done, late running. The previous end to end, r20261105-020253-fc80 at 3787a9cc749, passed.
 - ODRECORD has the resolution for review and ODBRANCH has the head. Push and report when both runs finish.
 
+[2026-11-05T03:44Z] 08f21e4ca7e4
+ODWIRES to coordinator, 03:45Z: F4 is pushed. origin cursor/net209-f4-strata-061a went fc76d0af34c..5657c2f7ad2.
+
+What's on it:
+- 454cdb80d9d merges ODLEAN's f5f1572bcbf. The two conflicts were insertions at one place, and I kept both sides.
+- 573063767f4: scanOf_accepted and scanOf_facts (Properties.NetworkScan, ODPROPS's area) take one step per bind, and F4 had added two (vuStrata and the apart need). The proofs had been broken since F4's first commit, unnoticed because F4 had never had a records run.
+- 5657c2f7ad2: NetworkCheck.Period's layer admits Flock.TemplateQuery and Flock.Draw. The layer check had refused vuStrata's imports.
+
+Runs at 5657c2f7ad2:
+- Suites r20261105-023100-7149 (vy-nebius-cpu-5). The network Lean check passes. Six suites pass: network 104, network-traces 563, network-sim 28, network-e2e 26, one_stage 630, prove_path 148. repository fails only its 4 base tests, the same as ODLEAN's.
+- Records r20261105-023100-f1c3 (vy-nebius-cpu-1). The network package passes with no record change, and Security/Proofs passes. The run's rc is 1 only because Security fails 27 and Properties 11, identical to the earlier run r20261105-011913-9835. Properties' 6 base failures stop --update. Its record differences include F4's share: scanFits and scanScopeAcc now read Flock.Draw and Flock.TemplateQuery, and the reads gain apart and vuStrata and a changed scan check. I sent that delta to ODSYMBOLS at 02:35Z, before pushing. ODPROPS may want to know, since its scanFits reads move.
+
+The first runs at 573063767f4 (suites r20261105-011839-670b, records r20261105-011913-9835) found the layer failure.
+
+Next: 83a7ec34811 is merged on top as 040cb8c3666, local for now. Period.lean had one docstring conflict, and I kept both sides. F4's diff over 83a7ec34811 equals its diff over f5f1572bcbf line for line. Its runs are going: suites r20261105-030155-ded8 (cpu-5) and records r20261105-030155-86f8 (cpu-1). When they pass, I fast-forward the branch, send ODSYMBOLS the same delta with scanProg in place of scanOf, push, and report.
+
