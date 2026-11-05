@@ -41,7 +41,7 @@ class FakeLinear:
         self.relations, self.wrote = [], []
         self.users = [{"id": "U1", "name": "Daniel Reuter"}, {"id": "U2", "name": "Verity Asks"}]
         self.asked, self.ask_filter, self.tags = [], None, {}
-        self.attached, self.reviewed = [], None
+        self.reviewed = None
 
     @staticmethod
     def _issue(x: str) -> dict:
@@ -76,11 +76,6 @@ class FakeLinear:
                 self.relations = [r for r in self.relations if r["id"] != v["id"]]
             return {"data": {m[1]: {"success": True, "project": {"url": "https://linear.app/x/project/1"},
                                     "projectUpdate": {"url": "https://linear.app/x/update/1"}}}}
-        if "attachmentLinkGitHubPR" in q:
-            if (v["i"], v["u"]) in self.attached:
-                return {"errors": [{"message": "Duplicate attachment"}]}
-            self.attached.append((v["i"], v["u"]))
-            return {"data": {"attachmentLinkGitHubPR": {"success": True}}}
         if "toState { name }" in q:
             self.reviewed = v["f"]
             nodes = [{"id": i["id"], "history": i.get("history", {"nodes": []})} for i in self.open if i["id"] in v["f"]["id"]["in"]]
@@ -523,7 +518,7 @@ def test_the_audit_finds_each_kind_once_on_its_issue_and_nothing_on_the_rest(tmp
     assert by[("INF-2", "orphan")] == {"issue": "INF-2", "url": "https://linear.app/x/issue/INF-2", "title": "The auditor-only host",
                                        "team": "INF", "lane": "infra", "state": "Todo", "kind": "orphan",
                                        "fix": "filed 68 h ago and in no project: put it in its project and milestone (`research "
-                                              "msg linear place INF-2 PROJECT --milestone M`), or cancel it with a one-line reason"}
+                                              "msg linear place INF-2 PROJECT --milestone M`), or move it to Backlog"}
     assert '`research msg linear place INF-3 "E2E toy deployment on one H200" --milestone M`' in by[("INF-3", "milestone")]["fix"]
     assert by[("INF-6", "quiet")]["fix"].startswith("no comment or start for 25 h: comment one line")
     assert by[("INF-8", "stale")]["fix"].startswith("not updated or commented on for 8 days: plan it")
@@ -582,7 +577,9 @@ def audit_of(tmp_path, issues: list[dict]) -> list[tuple[str, str]]:
     return [(f["issue"], f["kind"]) for f in linear.Linear(KEY, fake, cache=tmp_path / "t").audit({"INF": "infra"}, now=AUDIT_NOW)]
 
 
-def test_an_issue_in_no_project_is_an_orphan_48_h_after_it_was_filed_in_backlog_and_triage_too(tmp_path):
+def test_an_open_issue_in_no_project_is_an_orphan_48_h_after_it_was_filed_and_a_backlog_one_never_is(tmp_path):
+    """Backlog is where an issue that serves no goal waits, so only open work (Triage, Todo, In Progress, In Review) is held
+    to a project."""
     loose = {"project": None, "projectMilestone": None}
     assert audit_of(tmp_path, [
         issue("INF-60", "Backlog", **loose, createdAt=ago(49)),
@@ -590,7 +587,8 @@ def test_an_issue_in_no_project_is_an_orphan_48_h_after_it_was_filed_in_backlog_
         issue("INF-62", "Triage", **loose, createdAt=ago(49)),
         issue("INF-63", "Todo", **loose, createdAt=ago(47)),                               # taken up, but not 48 h old
         issue("INF-64", "Backlog", dueDate="2026-10-01", title="Parked\u2026", createdAt=ago(49)),   # Backlog: not overdue, no title
-    ]) == [("INF-60", "orphan"), ("INF-62", "orphan")]
+        issue("INF-65", "Todo", **loose, createdAt=ago(49)),
+    ]) == [("INF-62", "orphan"), ("INF-65", "orphan")]
 
 
 def test_an_open_issue_on_a_milestone_dated_before_today_is_lapsed_and_one_dated_today_is_not(tmp_path):
@@ -626,8 +624,8 @@ def test_in_review_24_h_with_no_open_pr_attached_is_unlinked_and_landed_isnt_sai
     found = linear.Linear(KEY, fake, cache=tmp_path / "t").audit({"INF": "infra"}, now=AUDIT_NOW)
     assert [(f["issue"], f["kind"]) for f in found] == [("INF-80", "unlinked"), ("INF-83", "unlinked"), ("INF-84", "landed"),
                                                         ("INF-85", "unlinked"), ("INF-86", "quiet")]
-    assert found[0]["fix"] == ("In Review 25 h with no open PR attached: attach it (`research msg linear link INF-80 PR`; a PR "
-                               "naming the issue doesn't attach it), or move it back to In Progress")
+    assert found[0]["fix"] == ("In Review 25 h with no open PR attached: attach it (`research queue link N --issue INF-80`; a "
+                               "PR naming the issue doesn't attach it), or move it back to In Progress")
 
 
 STRAYS = [
@@ -673,23 +671,6 @@ def test_only_close_strays_cancels_a_stray_with_a_comment_naming_the_rule_and_th
     assert rc == 2 and "--as HANDLE" in err and len(lin.moved) == 1
 
 
-def test_link_attaches_each_pr_by_number_or_url_and_says_so_when_linear_has_it_already(fake, registry, capsys, lin):
-    url = "https://github.com/compute-verification/verity/pull/{}".format
-    rc, out, _ = run(capsys, "linear", "link", "INF-1", "6820", "#6821", "https://github.com/other/repo/pull/7")
-    assert rc == 0 and out.splitlines() == [f"INF-1 linked {url(6820)}", f"INF-1 linked {url(6821)}",
-                                            "INF-1 linked https://github.com/other/repo/pull/7"]
-    assert lin.attached == [("I1", url(6820)), ("I1", url(6821)), ("I1", "https://github.com/other/repo/pull/7")]
-    rc, out, _ = run(capsys, "linear", "link", "INF-1", url(6820), "6822")                 # Linear: "Duplicate attachment"
-    assert rc == 0 and out.splitlines() == [f"INF-1 already links {url(6820)}", f"INF-1 linked {url(6822)}"]
-    n = len(lin.calls)
-    rc, _, err = run(capsys, "linear", "link", "INF-1", "6823", "--dry-run")
-    assert rc == 2 and "linear link has no --dry-run" in err and len(lin.calls) == n
-    rc, _, err = run(capsys, "linear", "link", "INF-1", "6823", "PRF-12")
-    assert rc == 2 and "PR 'PRF-12': give its number" in err and len(lin.calls) == n                   # none is attached
-    rc, _, err = run(capsys, "linear", "link", "INF-1")
-    assert rc == 2 and "give the PRs to attach" in err
-
-
 def test_audit_prints_each_lanes_findings_and_their_counts_and_exits_1_on_any(fake, registry, capsys, lin):
     lin.open = [issue("INF-2", "Todo", project=None, projectMilestone=None), issue("INF-9", title="x\u2026"), issue("DAN-1"),
                 issue("CMP-3", dueDate=None, labels={"nodes": [{"name": "lane:compute-research"}]})]
@@ -702,7 +683,7 @@ def test_audit_prints_each_lanes_findings_and_their_counts_and_exits_1_on_any(fa
         "@compute-research (1):", "  CMP-3 undated: set the date it lands, its milestone's at the latest (`research msg linear edit "
                                   "CMP-3 --due YYYY-MM-DD`), or move it to Backlog",
         "@infra (2):", "  INF-2 orphan: filed 68 h ago and in no project: put it in its project and milestone (`research msg linear "
-                       "place INF-2 PROJECT --milestone M`), or cancel it with a one-line reason",
+                       "place INF-2 PROJECT --milestone M`), or move it to Backlog",
         "  INF-9 title: retitle it to the deliverable, with no handle, sender, time or trailing \u2026 (`research msg linear edit "
         "INF-9 --title T`)"]
     assert err == ""                                                                              # every team read

@@ -16,7 +16,6 @@ Notes are records, never messages.
   research msg close --as NAME --thread TS [--link URL] [--note T] [--declined WHY]   # ✅ or ❌: a status line, and the reaction on an ask
   research msg linear check|state|comment|list|audit|place|edit ... # Linear through the app, never the MCP connector (`linear -h`)
   research msg linear audit [TEAM ...] [--lane HANDLE] [--close-strays --as HANDLE]   # findings; the flag cancels the strays
-  research msg linear link ISSUE PR [PR ...]                       # attach PRs (numbers or URLs); a PR naming the issue doesn't
   research msg linear relate ISSUE blocks|blocked-by|related|duplicate OTHER | unrelate ISSUE OTHER
   research msg linear update PROJECT --health onTrack|atRisk|offTrack --body-file F   # a project update
   research msg linear project create NAME --team KEY... [--lead USER] [--target D] [--description-file F]
@@ -1964,8 +1963,7 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
     [--lane HANDLE]` (exit 1 on any finding; a team the app can't read is named and skipped; `--close-strays --as HANDLE`
     also cancels the strays, a line each on stderr), `place ISSUE PROJECT
     [--milestone M]` (`--asks [--asker NAME]`: the ledger of people's asks), `edit ISSUE [--title T] [--due D|none]
-    [--file BRIEF.md] [--parent ID] [--label L [--remove]]`, `link ISSUE PR...` (one Linear has attached already is said
-    so, exit 0), `relate ISSUE
+    [--file BRIEF.md] [--parent ID] [--label L [--remove]]`, `relate ISSUE
     blocks|blocked-by|related|duplicate OTHER`, `unrelate ISSUE OTHER`, `update PROJECT --health H --body-file F`,
     `project create NAME --team KEY... [--lead USER] [--target D] [--description-file F]` and `milestone create|edit
     PROJECT NAME [--date D] [--description-file F] [--rename NEW]`. Each prints one line; a refusal exits 2."""
@@ -2061,10 +2059,6 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
             print(f"{made['identifier']} {made['url']}" + (f" on {board}" if board else ""))
             return 0
         issue = need(ns.target, "the ISSUE (e.g. INF-12)")
-        if ns.verb == "link":
-            need(value, "the PRs to attach (numbers, #N or URLs)")
-            print("\n".join(lin.link(issue, ns.value)))
-            return 0
         if ns.verb == "relate":
             if len(ns.value) != 2:
                 raise SlackError(f"linear relate: give ISSUE {'|'.join(linear.RELATE)} OTHER")
@@ -4188,8 +4182,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                       "the ledger of people's asks, delivered or not; `--close-strays --as HANDLE`: also cancel each stray "
                       "with a comment naming the rule), `place ISSUE PROJECT [--milestone M]` (by name "
                       "prefixes), `edit ISSUE [--title T] [--due YYYY-MM-DD|none] [--file BRIEF.md] [--parent ID] [--label L "
-                      "[--remove]]`, `link ISSUE PR...` (attach each PR, a number or URL; naming the issue in a PR attaches "
-                      "nothing), `relate ISSUE blocks|blocked-by|related|"
+                      "[--remove]]`, `relate ISSUE blocks|blocked-by|related|"
                       "duplicate OTHER` (Linear moves a duplicate to its Duplicate status), `unrelate ISSUE OTHER`, `update "
                       "PROJECT --health onTrack|atRisk|offTrack --body-file F` (a project update), `project create NAME --team "
                       "KEY... [--lead USER] [--target YYYY-MM-DD] [--description-file F]`, `milestone create|edit PROJECT NAME "
@@ -4200,7 +4193,6 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("target", nargs="?", help="state, comment, place, edit, relate, unrelate: the issue (INF-12); list, audit: the "
                                              "team (a handle or its key); update: the project; project, milestone: create or edit")
     p.add_argument("value", nargs="*", help="state: the state's name; comment: the text; place: the project; audit: more teams; "
-                                            "link: the issue's PRs (N, #N or a pull URL); "
                                             "relate: the kind and the other issue; unrelate: the other issue; project create: "
                                             "its name; milestone: the project (one word or quoted) and the milestone's name")
     p.add_argument("--state", default=None, metavar="NAME", help="list: only issues in this state (default: every open one)")
@@ -4231,7 +4223,6 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--close-strays", action="store_true",
                    help="audit: also cancel each stray it finds (an ask in another lane's team nobody took up or touched for "
                         "48 h), with a comment from --as naming the rule; without it the audit only reports")
-    next(a for a in p._actions if a.dest == "verb").choices += ("link",)
     p.add_argument("--label", default=None, metavar="L", help="edit: add this label (`asker:NAME`, `asker-ok`)")
     p.add_argument("--remove", action="store_true", help="edit --label: remove it instead")
     p.add_argument("--milestone", default=None, metavar="M", help="place: the project's milestone, a prefix of its name (M3)")

@@ -14,9 +14,8 @@ ask carries `asker:<name>` (`--asker`), is done only when its outcome exists, an
 recently closed, so the audit also finds those parked, unstaffed, slipped or restated (ASK_KINDS) and `research msg linear
 audit --asks` is their ledger.  `close_strays` cancels the asks the audit finds stray, and only on `research msg linear audit
 --close-strays`.  `edit` changes an issue's title, due date, description
-or parent, `relate` and `unrelate` its relations, `link` attaches its PRs, `update` posts a project update, `create_project`
-and `milestone` make projects and milestones, all through the app, so nobody writes through the Linear MCP connector, which
-acts as Daniel.  None of them sends a state. Stdlib only."""
+or parent, `relate` and `unrelate` its relations, `update` posts a project update, `create_project` and `milestone` make
+projects and milestones, all through the app, so nobody writes through the Linear MCP connector, which acts as Daniel.  None of them sends a state. Stdlib only."""
 from __future__ import annotations
 
 import base64
@@ -47,8 +46,6 @@ ORPHAN_H = 48                                                    # filed this lo
 UNLINKED_H = 24                                                  # In Review this long, it has an attached open PR
 STRAY_H = 48                                                     # an ask in another lane's team untouched this long is closed
 FROM_LABEL = "from:"                                             # the handle that filed an ask: `from:top`
-PR_URL = "https://github.com/compute-verification/verity/pull/{}"
-PR_ARG_RE = re.compile(r"#?(\d+)|https://github\.com/[\w.-]+/[\w.-]+/pull/\d+")
 STRAY_NOTE = (f"Canceled by the Linear audit's stray rule: an ask filed in another lane's team that nobody took up (a project "
               f"and a due date) or touched for {STRAY_H} h. If it is still wanted, its owner reopens it with a project and a date.")
 AUDIT_PAGE = 25                                                  # first: 50 with the nested fields is "Query too complex"
@@ -210,13 +207,6 @@ def asker_label(name: str) -> str:
     if not ASKER_RE.fullmatch(who):
         raise LinearError(f"asker {name!r}: give the person's first name in lower case (daniel)")
     return ASKER_LABEL + who
-
-
-def pr_url(pr: str) -> str:
-    """A PR as `link` attaches it: a number (`N` or `#N`) is this repository's (PR_URL), and a GitHub pull URL is kept."""
-    if not (m := PR_ARG_RE.fullmatch(pr.strip())):
-        raise LinearError(f"PR {pr!r}: give its number (N or #N) or its URL (https://github.com/OWNER/REPO/pull/N)")
-    return PR_URL.format(m[1]) if m[1] else m[0]
 
 
 def _team_filter(teams: list[str]) -> dict:
@@ -526,12 +516,12 @@ class Linear:
               waiting: Callable[[list[int]], bool] | None = None) -> list[dict]:
         """One pass over the issues not closed (LIVE_TYPES), of `teams` (names or keys) or every team: each finding
         {issue, url, title, team, lane, state, kind, fix}, by lane, issue and kind (AUDIT_KINDS).  These hold in Backlog too:
-        - orphan: in no project, ORPHAN_H after it was filed.  lapsed: its milestone's target date is before today (UTC).
+        - lapsed: its milestone's target date is before today (UTC).
         - stray: labelled `from:<handle>` in another lane's team (the team has a handle, and the issue's lane isn't that one),
           not a person's ask, nobody took it up (it isn't started, and lacks a project or a due date) and nothing touched it
           (an update, a comment, a child's) for STRAY_H.  `close_strays` closes these; the audit only reports them.
-        The rest hold on open issues (OPEN_TYPES):
-        - milestone: in a project with milestones, with none set.
+        The rest hold on open issues (OPEN_TYPES), Backlog being where an issue that serves no goal waits:
+        - orphan: in no project, ORPHAN_H after it was filed.  milestone: in a project with milestones, with none set.
         - undated: Todo, In Progress or In Review with no due date.  overdue: due before today (UTC).
         - quiet: In Progress with no comment and no start for QUIET_H (the last comment's and the start's times, not updatedAt,
           which bulk edits move).  stale: Todo neither updated nor commented on for STALE_D days (a comment leaves
@@ -592,9 +582,9 @@ class Linear:
             landed = (state in ("In Progress", "In Review") and prs and all(p["status"] in ("merged", "closed") for p in prs)
                       and not (last and closed and last > closed))
             found = {
-                "orphan": not project and now - _epoch(i["createdAt"]) > ORPHAN_H * 3600
+                "orphan": live and not project and now - _epoch(i["createdAt"]) > ORPHAN_H * 3600
                 and f"filed {(now - _epoch(i['createdAt'])) / 3600:.0f} h ago and in no project: put it in its project and "
-                    f"milestone (`research msg linear place {ident} PROJECT --milestone M`), or cancel it with a one-line reason",
+                    f"milestone (`research msg linear place {ident} PROJECT --milestone M`), or move it to Backlog",
                 "milestone": live and project and staged.get(project["id"]) and not ms
                 and f"set the milestone it serves (`research msg linear place {ident} \"{project['name']}\" --milestone M`)",
                 "lapsed": project and ms.get("targetDate") and ms["targetDate"] < today
@@ -620,8 +610,8 @@ class Linear:
                     f"In Progress with a comment naming the piece left (`research msg linear comment {ident} TEXT`)",
                 "unlinked": state == "In Review" and not landed and all(p["status"] in ("merged", "closed") for p in prs)
                 and now - entered > UNLINKED_H * 3600
-                and f"In Review {(now - entered) / 3600:.0f} h with no open PR attached: attach it (`research msg linear link "
-                    f"{ident} PR`; a PR naming the issue doesn't attach it), or move it back to In Progress",
+                and f"In Review {(now - entered) / 3600:.0f} h with no open PR attached: attach it (`research queue link N "
+                    f"--issue {ident}`; a PR naming the issue doesn't attach it), or move it back to In Progress",
                 "stray": bool(sender) and key in owners and sender != lane and not asker and i["state"]["type"] != "started"
                 and not (project and i.get("dueDate")) and idle_d * 24 > STRAY_H
                 and f"filed by {sender} in {key}, not taken up (a project and a date) and untouched for {idle_d * 24:.0f} h: take it "
@@ -653,25 +643,6 @@ class Linear:
             iid = self.issue_id(f["issue"])
             self.comment(iid, sender, STRAY_NOTE)
             out.append(f"{f['issue']} {self.move(iid, 'canceled')}: a stray ({f['fix'].split(':')[0]})")
-        return out
-
-    def link(self, issue: str, prs: list[str]) -> list[str]:
-        """Attach each PR (`pr_url`) to the issue through Linear's GitHub integration (`attachmentLinkGitHubPR`): a line
-        each, and one Linear has attached already is said so, not refused.  A PR whose title or body names the issue isn't
-        attached by that."""
-        urls = [pr_url(p) for p in prs]
-        if not urls:
-            raise LinearError("link: give the ISSUE and at least one PR (a number or its URL)")
-        iid, out = self.issue_id(issue), []
-        for u in urls:
-            try:
-                self.gql("mutation($i: String!, $u: String!) { attachmentLinkGitHubPR(issueId: $i, url: $u) { success } }",
-                         {"i": iid, "u": u})
-                out.append(f"{issue} linked {u}")
-            except LinearError as e:
-                if "duplicate" not in str(e).lower():
-                    raise
-                out.append(f"{issue} already links {u}")
         return out
 
     def asks(self, owners: dict[str, str] | None = None, teams: list[str] | None = None, now: float | None = None,
