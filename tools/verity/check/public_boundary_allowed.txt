@@ -108,6 +108,8 @@ benchmarks/one_stage/warden_replay.py -> benchmarks/network_traces
 benchmarks/one_stage/warden_replay.py -> benchmarks/network_traces/warden_serve.py
 benchmarks/one_stage/warden_replay.py -> verity/core/protocols/certifier/warden.py
 benchmarks/one_stage/zk_cost.sh -> benchmarks/proof_throughput/verify.sh
+benchmarks/recursion_e2e/figures.py -> benchmarks/census
+benchmarks/recursion_e2e/figures.py -> verity/core/protocols/pous/wipe_monitoring.py
 benchmarks/recursion_e2e/run.py -> tools/research/pyproject.toml
 benchmarks/recursion_e2e/settings.py -> benchmarks/harness
 benchmarks/recursion_e2e/settings.py -> benchmarks/harness/verity_bench/settings.py
