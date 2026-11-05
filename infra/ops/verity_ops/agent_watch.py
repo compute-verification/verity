@@ -1328,8 +1328,8 @@ class Watch:
             if p not in parents:
                 parents[p] = self.parent_handle(p, coords) if p else None
             handle = parents[p] or c.get("owner")
-            if agent in listed and handle:
-                self.owners[agent] = handle
+            if agent in listed and parents[p]:                  # a stray's owner (infra) is never its owner here: it isn't resumed
+                self.owners[agent] = parents[p]
             w = self.workers.setdefault(agent, {"heard": 0.0})
             w.update(parent=p, lane=w.get("lane") or handle or "", handle=w.get("handle") or handle,
                      heard=max(w["heard"], c["t"]), name=w.get("name") or c.get("name") or "")

@@ -2444,6 +2444,29 @@ def test_a_sender_no_route_knows_is_watched_as_infras_until_a_route_claims_it(tm
     assert stray not in w.children and w.workers[stray]["handle"] == "vllm"
 
 
+def test_a_listed_stray_stays_unowned_and_is_never_resumed_as_infras(tmp_path):
+    """A stray the agent list has (launched through the API) read as infra's owned agent: its next run routed as infra's worker
+    and the watch resumed it. Its owner is infra only for the watch's rings; its runs stay unowned, and nothing resumes it."""
+    stray = "bc-cdcdcdcd-cdcd-cdcd-cdcd-cdcdcdcdcdcd"
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    api._agents.append({"id": stray, "name": "an API-launched agent", "status": "IDLE", "latestRunId": "run-s",
+                        "updatedAt": W.iso(T0 - 1800)})
+    api._runs["run-s"] = dict(FINISHED)
+    api.convs[stray] = [("user_message", "Do the thing.")]
+    w.sweep(lambda r: None)
+    for i in range(2):
+        clock.t += 60
+        node_run(roots["vy-nebius-1"], f"r20261105-11000{i}-000{i}", clock.t, by=f"https://cursor.com/agents/{stray}")
+        clock.t += 5 * 60
+        w.sweep(lambda r: None)
+    assert stray not in w.owners and stray not in w.awaiting
+    assert all(r["role"] == "unknown" for r in ended(tmp_path)), "both runs go to infra as unowned"
+    while clock.t < T0 + 3 * 3600:
+        clock.t += 300
+        w.sweep(lambda r: None)
+    assert not [p for p, _ in api.posts if p == f"/v1/agents/{stray}/runs"], "never resumed"
+
+
 def test_a_relaunched_worker_routes_as_its_lanes_worker_and_the_watch_resumes_it(tmp_path):
     """INF-143: a relaunched worker is an agent the list has, so `watch_workers` drops it from the workers it reads; its runs
     resolved as nobody's. Its workers.d entry (launched by its coordinator) makes it its lane's worker: its run's end routes to
