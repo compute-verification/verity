@@ -275,6 +275,11 @@ def innerOk (o : Own) (circuitB pubB drawB : ByteArray) : V Unit := do
   Flock.ProvedScope.drawLaw false tags false draw
   Flock.ProvedScope.check tags false circuitB pubB [] 1 false false
 
+/-- How each part's setup is told to set the inner statement up (`--rec-inner-statement`, `--rec-inner-draw`), which
+`RecSetup.checkForm` holds to the inner statement's files: no lookup table, at the inner statement's draw `drawB`. -/
+def innerForm (drawB : ByteArray) : Flock.RecCoins.InnerForm :=
+  { statement := INNER_STATEMENT, tables := [], draw := some drawB }
+
 /-- What every part's check reads of the inner session: the inner shape, the inner statement's files (check 5's
 source), what the inner circuit's META binds, the coin server's transcript as `verify` holds it and its link points. -/
 structure InnerHeld where
@@ -300,7 +305,7 @@ def innerHeld (o : Own) (pr : Proofs) (bs : Core.Blobs) : V InnerHeld := do
   (innerOk o circuitB pubB drawB).mapError (s!"rec inner statement: Flock's plain verifier refuses it: " ++ ·)
   let src : Flock.RecCoins.Source := .files
     { circuit := circuitB, pub := pubB, partition := o.partition, record,
-      form := some { statement := INNER_STATEMENT, tables := [], draw := some drawB },
+      form := some (innerForm drawB),
       program := some o.program }
   let bound : V (Option String × Option Flock.RecVStar.StackedShape) := do Flock.RecSetup.metaBound (← metaOf circuitB)
   let transcriptB ← bs.get pr.transcript "rec inner transcript"
@@ -618,6 +623,14 @@ def main (args : List String) : IO UInt32 := do
     return if r.toOption.isSome then 0 else 1
   | _ => protocol.main args
 
+/-- The inner session's full draw over `n` units (`rec_live.full_draw`): the stratified law at `K = n`, every unit drawn. -/
+private def fullDrawB (n : Nat) (k : Nat := n) : ByteArray :=
+  (Flock.Draw.UnitDraw.toJson { law := .stratified k #[{ template := "t", units := #[(0, n)], k }], population := n,
+    units := Array.range k }).compress.toUTF8
+
+-- each part's setup accepts the form `innerHeld` tells it, at its files' units (`checkForm` reads only `n` of them)
+#guard (Flock.RecSetup.checkForm (some (innerForm (fullDrawB 4))) { (default : Flock.Stmt) with n := 4 }).toOption.isSome
+#guard (Flock.RecSetup.checkForm (some (innerForm (fullDrawB 4 3))) { (default : Flock.Stmt) with n := 4 }).toOption.isNone
 #guard lineEnd "ab\ncd".toUTF8 0 == 2
 #guard lineEnd "ab\ncd".toUTF8 3 == 5
 #guard ((metaOf "c x\nMETA {\"a\":1}\nrest".toUTF8).toOption.map (·.compress)) == some "{\"a\":1}"
