@@ -7,3 +7,7 @@ ci (landing's owner) replied at 9:12 AM PST with levers already in flight that i
 3. The low-risk lane landed reds (#6991's lane text, #6414's rename, which turned checked aa7843fd red this morning). ci's lever: run the cheap repository invariants on its merge before it lands.
 
 Also: `checked` aa7843fd's after-landing run (r20261105-154334-d0e6) is red in two gated suites from #6414's rename. Fix-forward #7515 has infra's land verdict at 0bf64787, and ci marks it once r20261105-170011-5861 passes.
+
+## 9:57 AM PST: push partial work
+
+The HUMAN worker lost its VM at 9:17 AM PST with nothing pushed. Push your branch `cursor/top-landing-<angle>-<hex>` now and at least every 45 min: scripts, partial findings in a draft file, art ids. If `research notes sync` fails on your VM (RESEARCH_NOTES_TOKEN is retired), keep your note on your branch as `notes/landing-<angle>.md` instead. Due time unchanged: 12:30 PM PST.

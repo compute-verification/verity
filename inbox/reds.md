@@ -14,3 +14,7 @@ Also: `checked` aa7843fd's after-landing run (r20261105-154334-d0e6) is red in t
 (1) verity-core-composition, 5 difftests: Lean rejects at #6980's 'params: the keys of proofs…' where Python says undecided; the fix f3d4e6f4 rides in #7084, which #7399 carries.
 (2) verity-flock, 7 tests: test_lean_plain_tree's [os] case (#7502 should fix it) and test_lean_witness's F1 cases, 'registered reads (complete): the statement's port row…', which ci reads as #6996's setup; proofs is checking with a run (reply 1793899303.708069).
 So `main` (c6ba5690, unmoved since 2:51 AM PST) waits on #7399 and #7502 together, plus F1. Use it as a case: how a red carried from an earlier `checked` commit went unnoticed, and how many landings a red at the bottom held.
+
+## 9:57 AM PST: push partial work
+
+The HUMAN worker lost its VM at 9:17 AM PST with nothing pushed. Push your branch `cursor/top-landing-<angle>-<hex>` now and at least every 45 min: scripts, partial findings in a draft file, art ids. If `research notes sync` fails on your VM (RESEARCH_NOTES_TOKEN is retired), keep your note on your branch as `notes/landing-<angle>.md` instead. Due time unchanged: 12:30 PM PST.

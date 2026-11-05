@@ -11,3 +11,7 @@ Also: `checked` aa7843fd's after-landing run (r20261105-154334-d0e6) is red in t
 ## 9:25 AM PST
 
 CI-436 (lean to ci, filed 9:00 AM PST): the executor graph's Security and Properties lock tasks fail because of the lock runner, not main (check.py passes). `runners/lean_lock.py` links every package's build lib to one shared out/lean and symlinks .lake/packages, which Lake realpaths, so Mathlib's names read as the repo's own premises. L3MEASURE's fix PR (LEAN-145) follows #7193 today, and CI-340's flip should wait for it. Count it on the fine-grained check's critical path.
+
+## 9:57 AM PST: push partial work
+
+The HUMAN worker lost its VM at 9:17 AM PST with nothing pushed. Push your branch `cursor/top-landing-<angle>-<hex>` now and at least every 45 min: scripts, partial findings in a draft file, art ids. If `research notes sync` fails on your VM (RESEARCH_NOTES_TOKEN is retired), keep your note on your branch as `notes/landing-<angle>.md` instead. Due time unchanged: 12:30 PM PST.
