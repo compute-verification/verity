@@ -652,13 +652,16 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     assert (p["key"], p["session"], p["schedule"], p["link"]) == (dep["key"]["public"], dep["session"], dep["params"],
                                                                   WS.LINK)
     assert (p["program"], p["windows"], p["first"]) == (reg["program"], 1, 0)
-    caps = PC.params(p).schedule.caps(1)
+    pp, listing = PC.params_listed(p)
+    assert listing.audits == (None,) and listing.scan.files == tuple(stagers[f"joint/{tp}"]["pin"]
+                                                                     for tp in sz.TEMPLATES)
+    caps = pp.schedule.caps(1)
     assert p["cells"] == caps == [sz.TEST.params.egress_cells] * (sz.TEST.params.lanes * T) and caps
     assert p["audits"] == [{"program": encode_program(block), "steps": 0}]
-    assert PC.params(p).audits[0].free == E * sz.IS.entry_bits(cls)
+    assert pp.audits[0].free == E * sz.IS.entry_bits(cls)
     key = sz.PA.template_id(defs["block"])
     digest = PC.slot_entry_digest(encode_program(block), key)
-    assert PC.params(p).audits[0].entries == ((key, E, digest),) and E == T // cls.EVERY * cls.NR
+    assert pp.audits[0].entries == ((key, E, digest),) and E == T // cls.EVERY * cls.NR
     assert digest not in PC.SLOT_ENTRY_PINS
     assert p["scan"] == json.loads((scan / "joint" / "program.json").read_text())
     assert p["scan_circuits"] == [{"sha512": stagers[f"joint/{tp}"]["pin"], "template": sz.PA.template_id(defs[tp])}
@@ -680,7 +683,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
 
     ins = {tp: sum(w(b) for _, b in ports[tp][0]) for tp in ports}
     # each parameter and each return field on whole 16-bit words of its own, o0 one
-    assert PC.params(p).scan == PC.Scan(
+    assert pp.scan == PC.Scan(
         T, 0, PC.vu_bits(1, max(ins["first"], ins["ingress"] if T > 1 else 0) + 1 + w(bits["first"]["o1"])
                          + w(bits["first"]["o2"])),
         PC.vu_bits(1, ins["egress"] + 1 + w(bits["egress"]["o1"])), E * bits["first"]["prog0"])
