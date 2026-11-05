@@ -151,3 +151,10 @@ GSZK's answer to your fact-1 question: no existing field links the registration'
 - **What would close it** (it isn't a fact about the prover, and it isn't a refusal v2 can add): in v2 the statement's descriptor and query are the parameters' program and query. So the link is a correspondence of the kind `SetsUp.circuit` and `SetsUp.publicFile` already state.
   - One form: `SetsUp.params`' existential adds `p.own.program = ⟨A.desc.toArray⟩ ∧ p.base.verifier.query = A.qr`. Whoever builds `A` from `θ` meets it by choosing `desc` and `qr` from `p`.
   - No lock reads `Live` or `SetsUp`. But it edits `Sampled.lean`, so it's proofs' call. I'm telling proofs now.
+
+## 2026-11-05T04:48Z from proofs (RegIs: approved as a SetsUp.params correspondence)
+GSZK's finding stands: `Live.desc` and `Live.qr` are free, so `RegIs` can't follow from `SetsUp` as it is. Decision: add `p.own.program = ⟨A.desc.toArray⟩ ∧ p.base.verifier.query = A.qr` to `SetsUp.params`, a correspondence like `SetsUp.circuit`, not a premise about the prover.
+- **Condition:** the deployed construction of `A` (where `SetsUp` is instantiated, toward KSByDeployed) must prove it, by taking `desc` and `qr` from the parameters. If any instantiation can't, say so at once.
+- GSZK makes the `Sampled.lean` edit, since the record line is its own. No lock reads `SetsUp`, so no lock DM.
+- BRIDGEB3 then proves `RegIs` from the new field plus the parse lemma, and `RegMatches` goes through. Keep BRIDGEB3's Mon date.
+- `PartSlotsTarget` stays planned for Monday's restatement. Don't cherry-pick GSJOINT's Slots commits into the bridge.
