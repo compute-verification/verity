@@ -1,7 +1,8 @@
 """Replay `research.carry` over every re-verdict of a window: each land verdict at a PR's new head when an older head of that PR
 already had one.  For each, the verdict `carry` would have given with no reviewer, judged as of the verdict's time: a merged
-parent is trusted when it is an ancestor of `main`'s or `checked`'s tip then (GitHub's push activity) or of another PR's head
-whose verdicts then landed it (each reviewer's newest; a hold by anyone keeps it).
+parent is trusted when it is an ancestor of `main`'s or `checked`'s tip then (GitHub's push activity) or of another PR's
+current marked head whose verdicts then landed it (each reviewer's newest; a hold by anyone keeps it).  ``loose`` repeats it
+trusting any head the verdicts land, marked or not, to show what the mark requirement removes.
 
     uv run --no-sync python study/landing-human/carry_study.py LABELS.json ACT_DIR OUT.json [--jobs N] [--marks | --holds]
 
@@ -114,12 +115,14 @@ def hold_pairs(labels: list[dict]) -> list[dict]:
 
 _T: dict = {}
 _VERDICTS: dict = {}
+_MARKS: dict = {}
 _EXCLUDES: list = []
 
 
-def _init(t: dict, verdicts: dict, excludes: list) -> None:
+def _init(t: dict, verdicts: dict, marks: dict, excludes: list) -> None:
     _T.update(t)
     _VERDICTS.update(verdicts)
+    _MARKS.update(marks)
     _EXCLUDES.extend(excludes)
 
 
@@ -142,7 +145,21 @@ def landable_at(key: str, ts: str) -> bool:
     return "land" in newest.values() and "hold" not in newest.values()
 
 
-def trusted_at(ts: str, pr: int):
+def marked_at(pr: int, head: str, ts: str) -> bool:
+    """Whether ``head`` is, as of ``ts``, the PR's head drive would land: its newest ready label is a mark, and no other head
+    of the PR was marked after it."""
+    state: dict[str, tuple[str, bool]] = {}
+    for mts, h, value in _MARKS.get(pr, ()):
+        if mts <= ts:
+            state[h] = (mts, value)
+    if head not in state or not state[head][1]:
+        return False
+    return all(not v or t <= state[head][0] for h, (t, v) in state.items() if h != head)
+
+
+def trusted_at(ts: str, pr: int, loose: bool = False):
+    """A commit is trusted when it is landed (an ancestor of `main`'s or `checked`'s tip) or an ancestor of another PR's
+    current marked head that its verdicts land; ``loose`` takes any head the verdicts land, marked or not."""
     landed = [x for x in (tip_at(_T, "main", ts), tip_at(_T, "checked", ts)) if x]
 
     def trusted(c: str) -> bool:
@@ -150,7 +167,7 @@ def trusted_at(ts: str, pr: int):
             return True
         for ref in _contains(c):
             _, _, n, h = ref.split("/")
-            if int(n) != pr and landable_at(f"{n}@{h}", ts):
+            if int(n) != pr and landable_at(f"{n}@{h}", ts) and (loose or marked_at(int(n), h, ts)):
                 return True
         return False
 
@@ -162,9 +179,13 @@ def judge(p: dict) -> dict:
 
     try:
         strict = carry.delta(REPO, p["old"], p["new"], trusted_at(p["ts"], p["pr"]))
-        wide = carry.delta(REPO, p["old"], p["new"], trusted_at(p["ts"], p["pr"]), lowrisk=lambda fs: lowrisk(fs, _EXCLUDES))
-        out = {**p, **strict.as_dict(), "wide": wide.as_dict()}
+        out = {**p, **strict.as_dict(), "wide": strict.as_dict(), "loose": strict.as_dict()}
+        if strict.carries:
+            return out
+        out["wide"] = carry.delta(REPO, p["old"], p["new"], trusted_at(p["ts"], p["pr"]),
+                                  lowrisk=lambda fs: lowrisk(fs, _EXCLUDES)).as_dict()
         if strict.kind == "untrusted-parent":
+            out["loose"] = carry.delta(REPO, p["old"], p["new"], trusted_at(p["ts"], p["pr"], loose=True)).as_dict()
             out["later"] = carry.delta(REPO, p["old"], p["new"], trusted_at("2026-11-05T17:30:00Z", p["pr"])).as_dict()
         return out
     except Exception as e:  # noqa: BLE001
@@ -179,15 +200,21 @@ def main() -> None:
     for r in sorted(labels, key=lambda r: r["ts"]):
         if r["key"] == "reviewed" and r["value"] in ("land", "hold"):
             verdicts[f"{r['pr']}@{r['head']}"].append((r["ts"], r["by"], r["value"]))
+    marks: dict[int, list] = collections.defaultdict(list)
+    for r in sorted(labels, key=lambda r: r["ts"]):
+        if r["key"] == "ready":
+            marks[r["pr"]].append((r["ts"], r["head"], r["value"] is True))
     ps = mark_pairs(labels) if "--marks" in sys.argv else hold_pairs(labels) if "--holds" in sys.argv else pairs(labels)
     excludes = tomllib.loads(git("show", "origin/main:tools/verity/check/drive.toml").stdout)["lowrisk_excludes"]
-    with ProcessPoolExecutor(jobs, initializer=_init, initargs=(tips(Path(act_dir)), dict(verdicts), excludes)) as ex:
+    init = (tips(Path(act_dir)), dict(verdicts), dict(marks), excludes)
+    with ProcessPoolExecutor(jobs, initializer=_init, initargs=init) as ex:
         res = list(ex.map(judge, ps, chunksize=8))
     json.dump(res, open(out_path, "w"), indent=0)
     c = collections.Counter(r["kind"] for r in res)
     w = collections.Counter(r.get("wide", {}).get("kind") for r in res)
     print(len(res), "re-verdicts;", sum(r["carries"] for r in res), "carry (strict);", dict(c.most_common()))
     print(sum(r.get("wide", {}).get("carries", False) for r in res), "carry (with low-risk deltas);", dict(w.most_common()))
+    print(sum(r.get("loose", {}).get("carries", False) for r in res), "carry trusting unmarked or superseded heads (loose)")
     print(sum(r.get("later", {}).get("carries", False) for r in res), "untrusted-parent ones that carry once their parents are reviewed")
 
 
