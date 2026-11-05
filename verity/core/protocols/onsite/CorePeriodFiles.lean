@@ -57,7 +57,8 @@ read by path. -/
 def main (protocolWith : BlobProtocol → BlobProtocol) (args : List String) : IO UInt32 := do
   let P := protocolWith NetworkCheck.Period.blobProtocol
   let usage : IO UInt32 := do
-    IO.eprintln s!"usage: {P.id} id | check PARAMS COMMITMENT EVIDENCE [BLOB ...] [--circuits CIRCUIT ... [--read-gb N]] | serve"
+    IO.eprintln (s!"usage: {P.id} id | check PARAMS COMMITMENT EVIDENCE [BLOB ...] " ++
+      "[--circuits CIRCUIT ... [--read-gb N]] | serve")
     return 64
   match args with
   | "check" :: p :: c :: e :: rest =>
