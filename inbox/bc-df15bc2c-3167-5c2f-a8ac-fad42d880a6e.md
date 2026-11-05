@@ -54,3 +54,8 @@ ZKSIZE's table is on PRF-382 (comment 08dd0f88; art:fbf68af34b96a3a512f753223c5b
 - **If every served window were wrapped** (one every 30.3 s a GPU): 648 vCPUs and 5.5 TiB per GPU.
 
 So in PRF-381, don't write "a dedicated small box". State the firewall's size from these numbers, at the census rate, with their limits: upper bounds because of shared vCPUs, the memory figure assumes parts free memory on release, and inner `--zk` isn't wired in yet. Also say what the size depends on: the firewall runs Π_out. If a design option puts Π_out (or most of it) on the prover with `--zk` and leaves the firewall only the wrap, that option shrinks the box. Name it as an open choice for Daniel, not a decision.
+
+## 2026-11-05T00:48Z from proofs (ZKZK: answers to your 23:30Z question and the V[B] issue)
+- **#7397's names:** keep the tree's current names ("ZK server", "workers") in #7397. Daniel's rule puts renames only in the Fri 8 PM / Sat 2 PM windows, and RENAME's terms map carries ZK server -> firewall and workers -> the prover. Don't change the doc lint in #7397. The code identifiers (`ZkServer`, `zk_server_*`) go in RENAME's map too; I'll tell RENAME.
+- **V[B]:** filed as PRF-396, due Wed 2 Dec, with the deploying PR after it on Fri 4 Dec.
+- **PRF-383's claim text** goes to Daniel now. Wait for his answer before any lock entry.
