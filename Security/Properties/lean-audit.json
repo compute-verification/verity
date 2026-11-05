@@ -36,6 +36,7 @@
   "Properties.NetworkPeriod.Placed",
   "Properties.Core.Period",
   "Properties.NetworkScan",
+  "Properties.NetworkScan.Honest",
   "Properties.SampledProofs",
   "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Halt",
@@ -664,6 +665,10 @@
   "Properties.NetworkPeriod.wrongBoundsDrawn": {
    "honest": ["Properties.NetworkPeriod.wrongBoundsDrawn_honest"],
    "nontrivial": "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial"
+  },
+  "Properties.NetworkScan.scanFits": {
+   "honest": ["Properties.NetworkScan.scanFits_honest"],
+   "nontrivial": "Properties.NetworkScan.scanFits_nontrivial"
   }
  },
  "unwitnessed": {
@@ -756,7 +761,7 @@
   "Properties.NetworkPeriod.scanWindowsPlaced": {
    "type_hash": "e9dedfc752c9606c233f7c1ef9c8b0d87ca8955ce390931958bf5645cb3b9ff1",
    "missing": "honest",
-   "why": "its premises at the deployed parse are the sampled leg's bridge facts (StmtBits, and WrongBounds at the audit's published bound, which wrongBounds_of_countBound gives from the code's strata), whose honest lemmas at the deployed record take the assembled record's hypotheses, which are no named assumptions"
+   "why": "its honest lemma at the deployed scan takes FilesOf and PaddingUnread at the deployed Program's circuit files, which no lemma gives yet (scanFits_honest gives FilesOf and RowsRead at a Program of one ingress and one egress template), and the sampled leg's bridge facts, StmtBits and WrongBounds at the audit's published bound (wrongBoundsDrawn gives it at a strata draw), whose honest lemmas at the deployed record take the assembled record's hypotheses, which are no named assumptions"
   },
   "Properties.NetworkRecords.acceptMeans": "4ee7e6626901cee51276b7be734ca7c3b2daeea3810674d3e4b0983856b300cf",
   "Properties.NetworkRecords.answerAcceptMeans": "c5c91cdf640198af01ce5e2e90ba3ba4e42c21fc97c0610eb0ad09a01671615c",
@@ -3340,6 +3345,15 @@
    "signature": ["Properties.NetworkRecords.noGridMeans : Properties.NetworkRecords.NoGridMeans"],
    "assumptions": [],
    "type_hash": "9e643a105f5704513bd184fa62a05149067300421a23658f5650e0bfc18672ee"
+  },
+  "Properties.NetworkScan.scanFits": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkScan.scanFits_honest": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkScan.scanFits_nontrivial": {
+   "owner": "@network-accounting"
   },
   "Properties.Period.monitoringPeriodIsSpec": {
    "owner": "@network-accounting",
@@ -6277,11 +6291,20 @@
     "outcome": "accept"
    },
    "Properties.NetworkPeriod.scanWindowsPlaced": {
-    "function": ["NetworkCheck.Period.scanOf", "Flock.canon"],
+    "function": ["NetworkCheck.Period.scanProg", "SampledProofs.Bits.check", "SampledProofs.Bits.readsWhy"],
     "outcome": "accept"
    },
    "Properties.NetworkPeriod.wrongBoundsDrawn": {
     "function": ["SampledProofs.Bound.strataOf", "SampledProofs.Bound.boundOf"],
+    "outcome": "accept"
+   },
+   "Properties.NetworkScan.scanFits": {
+    "function": [
+     "NetworkCheck.Period.scanProg",
+     "SampledProofs.Bits.check",
+     "SampledProofs.Bits.readsWhy",
+     "Flock.TemplateQuery.evaluate"
+    ],
     "outcome": "accept"
    }
   },
@@ -6391,7 +6414,6 @@
    "Properties.NetworkPeriod.rowsStateAnchored_nontrivial": "lemma: RowsStateAnchored's nontrivial lemma: RowsStateAnchoredAt fails at a rows-form period of one phase whose tied audit's circuit record reads the scan's state from base 3, past its slots' anchors, which a verifier that accepts everything accepts",
    "Properties.NetworkPeriod.rowsStateHeld_honest": "completeness: RowsStateHeld's honest lemma: the period check accepts a rows-form period of no phase, and an audit whose SCAN_STATE is its one phase's scan's state, at its root and domain, is held there and charged its stateFree",
    "Properties.NetworkPeriod.rowsStateHeld_nontrivial": "lemma: RowsStateHeld's nontrivial lemma: RowsStateHeldAt fails at a rows-form period of one phase whose tied audit's SCAN_STATE is at another root than its scan's state, under a public charging that audit its stateFree, 4 of its 9 free inputs, which a verifier that accepts everything could publish",
-   "Properties.NetworkScan.ScanFits": "unstated: an accepted scan's layout, at Bits' positions (inBit, outBit) and with no wires, fits its audit's members' joint program at circuit files that read their row parameters (RowsRead); an open statement, whose proof gets a guarantee entry",
    "Properties.NetworkScan.ScanScopeAcc": "unstated: an accepted scan's statements, each its audit's members' joint program at circuit files that read their row parameters (RowsRead), are in the sampled audit's scope at the scan's Bits layout; an open statement, whose proof gets a guarantee entry",
    "Properties.NetworkCertifier.CircuitCounts": "unstated: an accepted circuit record's free count bounds its audit's members' joint program's free inputs outside its registered rows, at the record's wires (recordWires) and at circuit files whose units read no input padding (PaddingUnread, a premise of its own); an open statement, whose proof gets a guarantee entry"
   },
