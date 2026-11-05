@@ -5,7 +5,8 @@ The call that commits a serving step's proof-block outputs: every proof block's 
 proof block opens by replaying its own request. `slots.py` is the CPU reference and this file's executable form;
 `slots_gpu.py` runs the same call on the GPU (or on its host twin) on the SHA-512 engine
 (`benchmarks/torch_gpu/sha512_rows/`): the engine hashes rows into hm96 leaves and builds frame-v3 levels, and
-`slots_gpu.py` lays them out as one subtree per slot. `fixtures/commit-slots-v1.json` is the interface's fixture.
+`slots_gpu.py` lays them out as one subtree per slot. `verity/ml/commitments/tests/fixtures/commit-slots-v1.json` is the
+interface's fixture.
 
 ## The call
 
