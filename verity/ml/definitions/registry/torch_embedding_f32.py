@@ -6,7 +6,7 @@ the GPU's FADD (`F32Add_v2`: round to nearest, nothing flushed, every NaN 0x7FFF
     EmbeddingGradF32Sort_v1{M, V, H}        (t, g) -> Tuple<Array<M, I32>, Array<M, Array<H, F32>>>
     EmbeddingGradF32Swap_v1{H}              (a, b: I32, x, y: Array<H, F32>) -> Tuple<I32, I32, Array<H, F32>, Array<H, F32>>
     EmbeddingGradF32SegmentStep_v1{V, NP, FEATURE}
-                                            (carry, k, nx: I32, end: BIT) -> Tuple<carry, Tuple<Array<2, BIT>, BIT, I32>>
+                                            (carry, k, nx: I32) -> Tuple<carry, Tuple<Array<2, BIT>, BIT, I32>>
     EmbeddingGradF32Step_v1{FEATURE}        (carry, f: Array<2, BIT>, g: F32) -> Tuple<carry, F32>
     EmbeddingGradF32Run_v1{N, FEATURE}      (carry, f: Array<N, Array<2, BIT>>, g: Array<N, F32>) -> Tuple<carry, Array<N, F32>>
     EmbeddingGradF32Move_v1{H}              (m: I32, pa: BIT, sa: I32, xa: Array<H, F32>, pb: BIT, sb: I32, xb: Array<H, F32>)
@@ -57,7 +57,7 @@ __all__ = ["EmbeddingGradF32", "EmbeddingGradF32Move", "EmbeddingGradF32Route", 
 I32, F32, BIT = Value(32), Value(32), Value(1)
 FLAGS = Array(2, BIT)
 SEG = Tuple(FLAGS, BIT, I32)
-SEG_CARRY = Tuple(BIT, I32, I32, I32, I32)
+SEG_CARRY = Tuple(I32, I32, I32, I32)
 M32 = 0xFFFFFFFF
 #: the most bits a sort key may have: an `I32Le_v1` operand that is nonnegative compares as unsigned
 KEY_BITS = 31
@@ -146,21 +146,21 @@ def _segment_signature(S: Any):
         _statics(S, k, lo, hi)
     if r := _key_refusal(S.NP, S.V):
         raise ValueError(r)
-    return (("carry", SEG_CARRY), ("k", I32), ("nx", I32), ("end", BIT)), Tuple(SEG_CARRY, SEG)
+    return (("carry", SEG_CARRY), ("k", I32), ("nx", I32)), Tuple(SEG_CARRY, SEG)
 
 
 @composite("EmbeddingGradF32SegmentStep", 1, ["V", "NP", "FEATURE"], _segment_signature, conformance=_CONF,
            refuse=_refuse_segment)
-def EmbeddingGradF32SegmentStep(B, S, carry, k, nx, end):
-    """One sorted token, its key k, the next token's key nx and end (it is the last): its flags (seg, start), mark and shift. seg
-    is its id's first token; start a partial's first, every 10th of its id's tokens (with FEATURE, the first of its id's tokens
-    in a chunk of 32 positions); mark its id's last, the id below V; shift z + (e << NP), z the unmarked tokens before it and e
-    its id less the marked ones. The carry: whether a token came before, its id bits, the count mod 10 or chunk, z and the
-    marked count << NP."""
-    started, prev, st, z, r = (carry[i] for i in range(5))
+def EmbeddingGradF32SegmentStep(B, S, carry, k, nx):
+    """One sorted token, its key k and the next token's key nx (0xFFFFFFFF after the last, which no id bits equal): its flags
+    (seg, start), mark and shift. seg is its id's first token; start a partial's first, every 10th of its id's tokens (with
+    FEATURE, the first of its id's tokens in a chunk of 32 positions); mark its id's last, the id below V; shift z + (e << NP),
+    z the unmarked tokens before it and e its id less the marked ones. The carry: the token before's id bits (0xFFFFFFFF before
+    the first), the count mod 10 or chunk, z and the marked count << NP."""
+    prev, st, z, r = (carry[i] for i in range(4))
     lo = (1 << S.NP) - 1
     idk = B.call(U32And, k, _c(B, ~lo))
-    same = B.call(BitAnd, started, B.call(I32Eq, idk, prev))
+    same = B.call(I32Eq, idk, prev)
     if S.FEATURE:
         chunk = B.call(U32And, k, _c(B, lo & -CHUNK))
         start = B.call(BitOr, B.call(BitNot, same), B.call(BitNot, B.call(I32Eq, chunk, st)))
@@ -169,12 +169,12 @@ def EmbeddingGradF32SegmentStep(B, S, carry, k, nx, end):
         n = B.call(SelectI32, same, st, _c(B, 0))
         start = B.call(I32Eq, n, _c(B, 0))
         st = B.call(SelectI32, B.call(I32Eq, n, _c(B, NROWS - 1)), _c(B, 0), B.call(I32Add, n, _c(B, 1)))
-    last = B.call(BitOr, end, B.call(BitNot, B.call(I32Eq, idk, B.call(U32And, nx, _c(B, ~lo)))))
+    last = B.call(BitNot, B.call(I32Eq, idk, B.call(U32And, nx, _c(B, ~lo))))
     mark = B.call(BitAnd, last, B.call(BitNot, B.call(I32Eq, idk, _c(B, S.V << S.NP))))
     shift = B.call(I32Add, z, B.call(I32Sub, idk, r))
     z = B.call(I32Add, z, B.call(SelectI32, mark, _c(B, 0), _c(B, 1)))
     r = B.call(I32Add, r, B.call(SelectI32, mark, _c(B, 1 << S.NP), _c(B, 0)))
-    return tuple_of(tuple_of(_c(B, 1, 1), idk, st, z, r), tuple_of(array_of([B.call(BitNot, same), start]), mark, shift))
+    return tuple_of(tuple_of(idk, st, z, r), tuple_of(array_of([B.call(BitNot, same), start]), mark, shift))
 
 
 def _carry(feature: int):
@@ -251,7 +251,8 @@ def EmbeddingGradF32Route(B, S, p, s, x):
     slot less its place among the present items, the slots ascending, no two items meet and item k lands at k - z + e."""
     M, V, H, NP = S.M, S.V, S.H, position_bits(S.M)
     zero = _c(B, 0)
-    gone = (_c(B, 0, 1), zero, Coll(Array(H, F32), broadcast(*zero.refs[0], H)))
+    # absent is computed: a 1-bit constant's Boolean version is the bare primitive, which the bits compiler doesn't price
+    gone = (B.call(I32Eq, zero, _c(B, 1)), zero, Coll(Array(H, F32), broadcast(*zero.refs[0], H)))
     move = bind(EmbeddingGradF32Move, H=H)
 
     def stage(items, src, j: int) -> list:
@@ -289,11 +290,9 @@ def EmbeddingGradF32(B, S, t, g):
     M, V, H, NP, F = S.M, S.V, S.H, position_bits(S.M), int(S.M <= FEATURE_MAX)
     srt = B.call(bind(EmbeddingGradF32Sort, M=M, V=V, H=H), t, g)
     keys, rows = srt[0], srt[1]
-    off, on, zero = _c(B, 0, 1), _c(B, 1, 1), _c(B, 0)
-    nx = Coll(keys.type, concat([keys.refs.slice(1, M), keys[M - 1].refs]))
-    end = Coll(Array(M, BIT), concat([broadcast(*off.refs[0], M - 1), on.refs]))
-    seg = B.scan(bind(EmbeddingGradF32SegmentStep, V=V, NP=NP, FEATURE=F), tuple_of(off, zero, zero, zero, zero),
-                 xs=(keys, nx, end))[1]
+    zero, none = _c(B, 0), _c(B, M32)
+    nx = Coll(keys.type, concat([keys.refs.slice(1, M), none.refs]))
+    seg = B.scan(bind(EmbeddingGradF32SegmentStep, V=V, NP=NP, FEATURE=F), tuple_of(none, zero, zero, zero), xs=(keys, nx))[1]
     cw, r = _carry(F).leaves, rows.refs
     o = B.batch(bind(EmbeddingGradF32Run, N=M, FEATURE=F), Coll(Array(H, _carry(F)), broadcast(*zero.refs[0], H * cw)),
                 _fields([seg], M, 0, 2, FLAGS), Coll(Array(H, Array(M, F32)), Strided(r.space, r.idx, r.base, M, 1, H, H * M)),
