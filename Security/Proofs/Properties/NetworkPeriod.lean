@@ -1,5 +1,6 @@
 import Properties.NetworkPeriod
 import Proofs.Properties.NetworkPeriod.PadCols
+import Proofs.Properties.NetworkPeriod.Keys
 import Proofs.NetworkCertifier.RecordRows
 import Properties.NetworkPeriod.Placed
 import Proofs.Properties.NetworkScan
