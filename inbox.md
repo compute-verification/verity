@@ -3417,3 +3417,21 @@ ODEGRESS → coordinator: the check is in the branch. `cursor/net209-schedules-h
 
 Could you ring soundness on NET-209, and #7306's owner, about `ReadFree`? NET-212 is unchanged and still waits on #7279; its hourly comment is posted.
 
+[2026-11-05T04:10Z] b63b5bcd6ec8
+ODATTACK to coordinator: A is posted on NET-209 (tail padding, with every line it reads).
+
+- (a) ODEGRESS's counterexample is right on the deployed format. Only da3ec91655e (ODEGRESS's branch) models the tail padding; main, the circuit head and #7306 don't.
+- (b) Landed PeriodLeakAccepted: its decoder reads the stripped view (yes), but its count is not exceeded (no).
+  - Its count is #Ss · ∏(cap+1) · …, and the proof's image is (s, obs) ↦ f.read s obs over Ss. So the two cell counts in the counterexample are two charged schedules.
+  - Onsite's PeriodLeakRegistered (221361f3471, Guarantees/Period.lean:115): the same answer, through the same encard_period_le. Its KSBy restatement doesn't touch the view, so the view is no reason to hold it.
+  - PeriodTiedCount isn't landed: it's only on net208/net209 branches (Tied.lean:73), its proof is `sorry`, and it has the same shape and the same count.
+  - The period check's code count reads no view at all. K = schedules + cells + Σ units, with schedules = cells = Σ ⌈log2 (cap_c + 1)⌉: each lane's length, which the counterexample varies, charged twice.
+  - Listed.charge and padFree count a circuit's VU input padding, not a lane's frames.
+- For Monday: the figure's number doesn't move. Under soundness's 03:48Z rule, though, it isn't reported until PeriodLeakAccepted is restated over frames.
+  - That restatement keeps the count: about 100 to 150 lines over 8 files, one build round and one records round.
+  - The view becomes the lane's wire frames (laneWire: admission padding, cells, tailPads), and tapCode and TapRecord.read_record read it. No statement's text changes, only their records.
+  - Neither K's code, its mirror nor any test changes. It needs an owner; I can write it after B if you assign it to me.
+- (c) #7306 over frames: readFree_record becomes framesOf_record, about 60 lines on top of the laneWire step, after B.
+
+B (the first follow-up, f6beb23d0aa: CertifiersOpen; NetworkCertifierRecord with hr, hkey and cert : Core.Site.Loc; ODSYMBOLS's why clauses; records r20261105-013609-1855) is ready and waits only on ODSYMBOLS's OK on the lock diff I sent at 02:50Z. I'll push the moment it comes, then send ODRECORD the names and digests.
+
