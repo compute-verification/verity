@@ -1,5 +1,7 @@
-import Definitions.Nci.Formalism
-import Proofs.Core.Circuit
+module
+
+public import Definitions.Nci.Formalism
+public import Proofs.Core.Circuit
 
 /-!
 # The training formalism v2: reconstruction, and the three kinds of a block's inputs
@@ -13,6 +15,8 @@ Two lemmas of the formalism (`Definitions.Nci.Formalism`), which its theorems re
 * `reads_split` (§2): `in(I)` is a block's registered values, its data and its computed values, and `in(I) \ θ`, what
   `k` bounds, is the last two. `mem_inputs_of_mem_θ`, a registered value is an input, makes it set algebra.
 -/
+
+@[expose] public section
 
 namespace Nci.Formalism
 

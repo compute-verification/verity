@@ -1,4 +1,6 @@
-import Definitions.Nci
+module
+
+public import Definitions.Nci
 
 /-!
 # An exact tiling at `(c, k)` complies at its rate
@@ -9,6 +11,8 @@ blocks have exactly `c` gates complies at `c` gates per block and the rate `k / 
 tiling as its hypothesis). The guarantees are stated over `CompliesRate`, the form the inference-only check's verdicts
 read.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

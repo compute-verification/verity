@@ -1,4 +1,6 @@
-import Definitions.Nci.Assumptions.Formalism
+module
+
+public import Definitions.Nci.Assumptions.Formalism
 
 /-!
 # The training formalism v2: its theorems
@@ -43,6 +45,8 @@ of work, its factors explicit, and it reads the upper bounds A1 gives, never bes
 The counting lemma, the token kind's cap, Slowdown, Fit's bounds and Security each have an honest and a nontrivial
 lemma (`Definitions.Nci.Guarantees.Formalism.Witnesses`).
 -/
+
+@[expose] public section
 
 namespace Nci.Formalism.Guarantees
 

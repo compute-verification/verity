@@ -1,5 +1,7 @@
-import Definitions.Nci.Guarantees.Formalism
-import Definitions.Nci.Formalism.Instances
+module
+
+public import Definitions.Nci.Guarantees.Formalism
+public import Definitions.Nci.Formalism.Instances
 
 /-!
 # The training formalism v2: honest and nontrivial lemmas
@@ -37,6 +39,8 @@ which no check reads yet, would supply the deployed premises.
 
 The proofs are in `Security/Proofs/Nci/Formalism/Witnesses.lean`.
 -/
+
+@[expose] public section
 
 namespace Nci.Formalism.Guarantees
 

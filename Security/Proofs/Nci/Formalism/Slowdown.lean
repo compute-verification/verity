@@ -1,9 +1,11 @@
-import Definitions.Nci.Guarantees.Formalism
-import Proofs.Core.Circuit
-import Proofs.Nci.Formalism.Reconstruction
-import Proofs.Nci.Formalism.Fit
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Tactic.GCongr
+module
+
+public import Definitions.Nci.Guarantees.Formalism
+public import Proofs.Core.Circuit
+public import Proofs.Nci.Formalism.Reconstruction
+public import Proofs.Nci.Formalism.Fit
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Tactic.GCongr
 
 /-!
 # The training formalism v2: the counting lemma over kinds, the token kind's cap, Slowdown and Security
@@ -24,6 +26,8 @@ Each lower bound `X ≤ ρ` is proved as `X ≤ m c / |C|` for a partition `P` i
    blocks are (`tokenGates_subset`), with its cap a block; **Security** is it with A2:
    `ρ̲ p H(ℓ*) ≤ ρ̲ |C| ≤ m c ≤ N n c`.
 -/
+
+@[expose] public section
 
 namespace Nci.Formalism
 

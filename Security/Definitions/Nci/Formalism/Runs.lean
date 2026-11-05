@@ -1,4 +1,6 @@
-import Definitions.Nci.Formalism.Training
+module
+
+public import Definitions.Nci.Formalism.Training
 
 /-!
 # The training formalism v2: runs, losses and the honest cost
@@ -15,6 +17,8 @@ not from the answer): `H(ℓ*)` is `honestCost methods ℓ ℓ*`, and a run's in
 `Run.inefficiency`. A run's update **stays within** `D` bits (`Run.Within`) when its total update `Δ` is at most `D`:
 the bins of `Δ`, the update profiles along which A2's floor is measured.
 -/
+
+@[expose] public section
 
 namespace Nci.Formalism
 

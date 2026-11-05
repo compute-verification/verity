@@ -1,6 +1,8 @@
-import Mathlib.Basic.NNReal.Basic
-import Definitions.Core.Annotation
-import Definitions.Nci.Formalism.Inference
+module
+
+public import Mathlib.Basic.NNReal.Basic
+public import Definitions.Core.Annotation
+public import Definitions.Nci.Formalism.Inference
 
 /-!
 # The training formalism v2, §3: the annotation, A1's values, and the token kind's work
@@ -48,6 +50,8 @@ That a cap bounds the token work within A1's budget, `Σ_{T ∈ S} W_T(f_T, ν) 
 `ν + Σ_{T ∈ S} a_T(f_T) ≤ k`, is the named assumption `training-token-work`
 (`Nci.Formalism.Assumptions.TokenWork`): A1 prices a block's reads and says nothing of how much token work they reach.
 -/
+
+@[expose] public section
 
 namespace Nci.Formalism
 

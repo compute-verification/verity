@@ -1,6 +1,8 @@
-import Definitions.Nci.Formalism.Runs
-import Mathlib.Data.Fin.VecNotation
-import Mathlib.Tactic.FinCases
+module
+
+public import Definitions.Nci.Formalism.Runs
+public import Mathlib.Data.Fin.VecNotation
+public import Mathlib.Tactic.FinCases
 
 /-!
 # The training formalism v2: the instances its witnesses are stated at (trusted)
@@ -25,6 +27,8 @@ one registered input, the weight `θ`.
 
 `silent` is the decoder that outputs nothing, so every total update is `⊤`, within `D = ⊤` bits.
 -/
+
+@[expose] public section
 
 namespace Nci.Formalism
 

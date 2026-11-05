@@ -1,4 +1,6 @@
-import Definitions.Nci.Formalism
+module
+
+public import Definitions.Nci.Formalism
 
 /-!
 # The training formalism v2, §4: the assumptions A1, the token-work bound and A2
@@ -34,6 +36,8 @@ import Definitions.Nci.Formalism
   circuit that outputs a run's `θ'` as constants reaches the same loss at about `|θ'|` gates, so over every circuit the
   floor fails at any `p · H(ℓ*)` above that (`Definitions.Nci.Formalism.Runs`).
 -/
+
+@[expose] public section
 
 namespace Nci.Formalism.Assumptions
 

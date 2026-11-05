@@ -1,7 +1,9 @@
-import Definitions.Nci.Formalism.Circuits
-import Definitions.Nci.Formalism.Inference
-import Definitions.Nci.Formalism.Training
-import Definitions.Nci.Formalism.Runs
+module
+
+public import Definitions.Nci.Formalism.Circuits
+public import Definitions.Nci.Formalism.Inference
+public import Definitions.Nci.Formalism.Training
+public import Definitions.Nci.Formalism.Runs
 
 /-!
 # The training formalism v2
@@ -26,3 +28,5 @@ the split of a block's inputs are proved beside them (`Nci.Formalism.reconstruct
 and `Δ_grad` count values, which are bits; `s` is tokens and `r` gates a bit. The instances the theorems' witnesses are
 stated at are `Definitions.Nci.Formalism.Instances`.
 -/
+
+@[expose] public section

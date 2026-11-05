@@ -1,5 +1,7 @@
-import Mathlib.Logic.Relation
-import Definitions.Core.Formalism
+module
+
+public import Mathlib.Logic.Relation
+public import Definitions.Core.Formalism
 
 /-!
 # Structure: methods, realizations, decompositions and attainable profiles
@@ -52,6 +54,8 @@ Memory is not a block quantity: what wipes and bandwidth bound is what a time-or
 * `Realizes` forbids registering anything extra: the execution's registered gates are exactly the images of the
   evaluation's, so an execution cannot register precomputed tables. Registration happens once, at the start.
 -/
+
+@[expose] public section
 
 namespace Verity.Structure
 

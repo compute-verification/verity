@@ -1,6 +1,8 @@
-import Mathlib.Basic.ENNReal.Inv
-import Mathlib.Data.Fintype.Powerset
-import Definitions.Nci.Formalism.Circuits
+module
+
+public import Mathlib.Basic.ENNReal.Inv
+public import Mathlib.Data.Fintype.Powerset
+public import Definitions.Nci.Formalism.Circuits
 
 /-!
 # The training formalism v2, §2: inference
@@ -32,6 +34,8 @@ import Definitions.Nci.Formalism.Circuits
   blocks** (`TrainingBlocks`) any of the three, and each block holds between `c - d` and `c` gates of the computation,
   `d` the decoder's. `ServingFits` and `TrainingFits` are Fit's conditions on what they read.
 -/
+
+@[expose] public section
 
 namespace Nci.Formalism
 

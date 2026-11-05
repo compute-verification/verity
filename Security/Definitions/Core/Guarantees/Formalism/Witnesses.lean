@@ -1,5 +1,7 @@
-import Definitions.Core.Guarantees.Formalism
-import Definitions.Core.Formalism.Instances
+module
+
+public import Definitions.Core.Guarantees.Formalism
+public import Definitions.Core.Formalism.Instances
 
 /-!
 # The size of a `(c, k)`-partitioned circuit: honest and nontrivial lemmas
@@ -11,6 +13,8 @@ the bound, `|C| = 3 > 2 · 1`.
 
 The proofs are in `Security/Proofs/Core/Formalism/Witnesses.lean`.
 -/
+
+@[expose] public section
 
 namespace Verity.Guarantees
 

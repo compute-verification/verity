@@ -1,6 +1,8 @@
-import Definitions.Nci.Guarantees.Formalism
-import Proofs.Core.Circuit
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
+module
+
+public import Definitions.Nci.Guarantees.Formalism
+public import Proofs.Core.Circuit
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
 # The training formalism v2: Fit
@@ -12,6 +14,8 @@ blocks gives `B c / |C| ≥ 1` once `|C| > 0`. A partition into inference blocks
 `ρ = 1` (`slowdown_eq_one`). Fit bounds what a compute, reduction or update application block reads beyond `θ` by the
 sizes of its pieces (`compute_reads_le`, `training_reads_le`).
 -/
+
+@[expose] public section
 
 namespace Nci.Formalism
 

@@ -1,5 +1,7 @@
-import Definitions.Core.Formalism
-import Mathlib.Data.Fin.VecNotation
+module
+
+public import Definitions.Core.Formalism
+public import Mathlib.Data.Fin.VecNotation
 
 /-!
 # A `(c, k)`-partition and a partition that is none (trusted)
@@ -12,6 +14,8 @@ one registered input, and gates 1, 2 and 3 each read the gate before.
   `c = 2`. The first reads only the registered gate 0, and gate 3 reads gate 2, the second's one unregistered input bit.
 * `Counter`: the three operation gates in one proof block, above `c = 2`, so `|C| = 3` is above `c · B = 2`.
 -/
+
+@[expose] public section
 
 namespace Verity.Formalism
 

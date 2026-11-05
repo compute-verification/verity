@@ -1,7 +1,9 @@
-import Proofs.Nci.Formalism.Reconstruction
-import Proofs.Nci.Formalism.Fit
-import Proofs.Nci.Formalism.Slowdown
-import Proofs.Nci.Formalism.Witnesses
+module
+
+public import Proofs.Nci.Formalism.Reconstruction
+public import Proofs.Nci.Formalism.Fit
+public import Proofs.Nci.Formalism.Slowdown
+public import Proofs.Nci.Formalism.Witnesses
 
 /-!
 # Proofs of the training formalism v2's theorems
@@ -13,3 +15,5 @@ nontrivial lemmas
 (`Proofs.Nci.Formalism.Witnesses`). The lemmas they rest on, reconstruction and the three kinds of a block's inputs, are
 `Proofs.Nci.Formalism.Reconstruction`.
 -/
+
+@[expose] public section

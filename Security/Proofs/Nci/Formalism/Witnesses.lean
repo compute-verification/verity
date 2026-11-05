@@ -1,7 +1,9 @@
-import Proofs.Nci.Formalism.Slowdown
-import Definitions.Nci.Guarantees.Formalism.Witnesses
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Tactic.NormNum
+module
+
+public import Proofs.Nci.Formalism.Slowdown
+public import Definitions.Nci.Guarantees.Formalism.Witnesses
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Tactic.NormNum
 
 /-!
 # The training formalism v2: honest and nontrivial lemmas
@@ -21,6 +23,8 @@ too. A1 holds at every inference block at `(c, k) = (2, 2)` (`Pair.cutCost`), an
 reads two bits, the new weight and token `0`'s value, is charged two (`Pair.charge`): it pays once for token `0`'s
 value, which both tokens read, and nothing for token `1`'s, which it computes.
 -/
+
+@[expose] public section
 
 namespace Nci.Formalism
 

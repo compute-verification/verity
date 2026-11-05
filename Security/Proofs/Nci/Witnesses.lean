@@ -1,11 +1,13 @@
-import Definitions.Nci.Guarantees.Witnesses
-import Proofs.Nci.Rate
-import Proofs.Nci.Reads
-import Proofs.Nci.RemotePeriod
-import Proofs.Nci.Capability.Witnesses
-import Proofs.Core.Circuit
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Mathlib.Tactic.Linarith
+module
+
+public import Definitions.Nci.Guarantees.Witnesses
+public import Proofs.Nci.Rate
+public import Proofs.Nci.Reads
+public import Proofs.Nci.RemotePeriod
+public import Proofs.Nci.Capability.Witnesses
+public import Proofs.Core.Circuit
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
+public import Mathlib.Tactic.Linarith
 
 /-!
 # The inference-only policy's guarantees: proofs of their witnesses
@@ -16,6 +18,8 @@ so the toy complies at `Γ = 2` and the rate `α = 1/2`, and with the token regi
 `(1, 0)`-threaded and its weights incompressible at half a bit each, read off the toy's sixteen sets of gates; `T0` has
 no counted multiplication and bound `e`; and `F` is positive.
 -/
+
+@[expose] public section
 
 namespace Nci.Witness
 

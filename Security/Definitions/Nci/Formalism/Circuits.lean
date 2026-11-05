@@ -1,4 +1,6 @@
-import Definitions.Core.Formalism
+module
+
+public import Definitions.Core.Formalism
 
 /-!
 # The training formalism v2, §1: circuits
@@ -22,6 +24,8 @@ Section 1 of the training formalism v2, on core's one circuit type `Verity.Circu
 Core's circuits are more general than §1's: values of any width, output gates, gates in topological order. A circuit of
 §1 is the `Wellformed` case, and nothing in this formalism reads the rest.
 -/
+
+@[expose] public section
 
 namespace Nci.Formalism
 
