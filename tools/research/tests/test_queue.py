@@ -4699,18 +4699,39 @@ def test_dropped_entries_keeps_a_premise_moved_under_a_new_key_and_one_of_a_guar
         f"shape.inline[G]: {long[:60]}…"]
 
 
-def test_the_preflight_refuses_a_head_whose_lock_merge_drops_a_premise_next_needs_naming_it_and_the_fix(world, capsys):
+def test_the_preflight_refuses_a_head_whose_lock_merge_drops_a_frozen_key_next_needs_naming_it_and_the_fix(world, capsys):
     from research.queue import MarkOnly, StoreLabels, ready
 
     _preflight_main(world, _lock_files())
-    world.gh.put(2, h2 := world.change({"pkg/lean-audit.json": _lock_text(lambda d: d["shape"]["inline"]["G"].pop("p1"))}),
+    world.gh.put(2, h2 := world.change({"pkg/lean-audit.json": _lock_text(lambda d: d["shape"]["frozen"].pop("F"))}),
                  ready=False)
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 1
     err = capsys.readouterr().err
     assert [ln for ln in err.splitlines() if ln.startswith("  - ")] == [
-        "  - its lock merge onto `next` drops 1 entry `next`'s statements still need: pkg/lean-audit.json: shape.inline[G]: p1: "
+        "  - its lock merge onto `next` drops 1 entry `next`'s statements still need: pkg/lean-audit.json: shape.frozen[F]: "
         "restore it verbatim from `next` in a lock-only commit (`git show origin/next:PATH`) and mark that head"], err
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is False and _no_worktree_left(world)
+
+
+def test_a_premise_the_heads_own_regeneration_dropped_is_no_refusal_and_one_the_merge_alone_drops_is(world):
+    """`check.py --update` keeps a premise only while a statement prints it, so a premise the head's own lock dropped against
+    its merge base is printed nowhere at the head: a stale entry, which the head may drop though `next`'s lock still lists it.
+    One the head's lock keeps and the merge drops is still refused."""
+    from research.queue import lock_drops
+
+    _move_main(world, _lock_files())
+    main = _git(world.origin, "rev-parse", "main")
+    stale = world.change({"pkg/lean-audit.json": _lock_text(lambda d: d["shape"]["inline"]["G"].pop("p1"))})
+    _git(world.dev, "fetch", "-q", "origin")
+    assert lock_drops(world.dev, main, stale) == []
+
+    def new(d: dict) -> None:
+        d["guarantees"]["N"] = {"type_hash": "n"}
+
+    kept = world.change({"pkg/lean-audit.json": _lock_text(new)})
+    lost = world.change({"pkg/lean-audit.json": _lock_text(lambda d: (new(d), d["shape"]["inline"]["G"].pop("p1")))})
+    _git(world.dev, "fetch", "-q", "origin")
+    assert lock_drops(world.dev, main, kept, lost) == ["pkg/lean-audit.json: shape.inline[G]: p1"]
 
 
 def test_the_sync_leaves_off_next_a_head_whose_lock_merge_drops_what_next_needs_and_keeps_the_refusal_for_its_owner(world):

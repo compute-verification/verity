@@ -4095,8 +4095,11 @@ def lock_drops(repo: Path, base: str, head: str, merged: str | None = None) -> l
     """`dropped_entries` of each lock (`lean-audit.json`, `LEAN_FIXTURES` aside) that ``head``'s change from its merge base with
     ``base`` touches, from ``base`` to ``merged`` (a commit or tree; by default ``head`` merged onto ``base`` as the sync merges
     it, with ``base``'s merge drivers, so `tools/verity/lean/merge.py` merges the locks), each prefixed by the lock's path.  A
-    lock either side lacks is the head's to add or remove, one that doesn't parse is named, and a diff or merge git can't make
-    finds nothing: the train's Lean check still fails on a dropped premise."""
+    drop ``head``'s own lock already makes against that merge base is no refusal: its records run regenerated the lock, and
+    `check.py --update` keeps a premise only while a statement prints it, so a premise it dropped is printed nowhere at the head
+    (a stale entry); only what the merge alone drops is named.  A lock either side lacks is the head's to add or remove, one
+    that doesn't parse is named, and a diff or merge git can't make finds nothing: the train's Lean check still fails on a
+    dropped premise."""
     r = _git(repo, "diff", "--name-only", "--no-renames", f"{base}...{head}", check=False)
     locks = [f for f in r.stdout.splitlines() if posixpath.basename(f) == LEAN_LOCK and not f.startswith(LEAN_FIXTURES)]
     if r.returncode or not locks:
@@ -4109,19 +4112,32 @@ def lock_drops(repo: Path, base: str, head: str, merged: str | None = None) -> l
         if m.returncode not in (0, 1) or not m.stdout.split():
             return []
         merged = m.stdout.split()[0]
-    blobs = _blobs(repo, [f"{c}:{f}" for f in locks for c in (base, merged)])
+    fork = _git(repo, "merge-base", base, head, check=False).stdout.strip()
+    blobs = _blobs(repo, [f"{c}:{f}" for f in locks for c in (base, merged, fork, head) if c])
     out = []
     for f in locks:
         if f"{base}:{f}" not in blobs or f"{merged}:{f}" not in blobs:
             continue
         try:
-            was, now = (json.loads(blobs[f"{c}:{f}"]) for c in (base, merged))
+            was, now, had, has = (json.loads(blobs[k]) if k in blobs else None
+                                  for k in (f"{base}:{f}", f"{merged}:{f}", f"{fork}:{f}", f"{head}:{f}"))
         except ValueError as e:
-            out.append(f"{f}: not JSON on `{BRANCH}` or merged ({e}), so what it drops can't be told")
+            out.append(f"{f}: not JSON on `{BRANCH}`, merged, at the merge base or at the head ({e}), so what it drops can't be "
+                       "told")
             continue
         if isinstance(was, dict) and isinstance(now, dict):
-            out += [f"{f}: {d}" for d in dropped_entries(was, now)]
+            own = _own_drops(had, has)
+            out += [f"{f}: {d}" for d in dropped_entries(was, now) if d not in own]
     return out
+
+
+def _own_drops(fork: object, head: object) -> set[str]:
+    """The `shape.inline` premises `dropped_entries` finds from the lock at the merge base (``fork``) to the head's own
+    (``head``), both parsed: what the head's regeneration dropped itself, empty when either is missing.  A frozen key is no
+    regeneration's to drop, so its drop stays refused."""
+    if not (isinstance(fork, dict) and isinstance(head, dict)):
+        return set()
+    return {d for d in dropped_entries(fork, head) if d.startswith("shape.inline[")}
 
 
 def lock_drop_refusal(drops: list[str], onto: str = BRANCH) -> str:
