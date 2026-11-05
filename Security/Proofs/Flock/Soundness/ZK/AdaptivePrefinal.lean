@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Claims.Hm96
 public import Definitions.Core.Game
 public import Definitions.Flock.ZK.Cut
 public import Proofs.Flock.Soundness.ZK.Adaptivity

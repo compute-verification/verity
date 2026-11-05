@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Claims.Hm96
 public import Definitions.Flock.ZK.Cut
 public import Definitions.Flock.ZK.RealView
 public import Proofs.Flock.Claims.ZK.GK

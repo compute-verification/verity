@@ -1,11 +1,12 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.PlainReg.Defs
-public import Proofs.Flock.Soundness.Discharge.PlainReg.BindH
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineInst
-import all Init.Data.Array.Basic
+public import Proofs.Flock.Soundness.Discharge.PlainReg.BindH
+public import Proofs.Flock.Soundness.Discharge.PlainReg.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedH
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
 public import Proofs.Flock.Soundness.Registered.ReadsX
+import all Init.Data.Array.Basic
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime

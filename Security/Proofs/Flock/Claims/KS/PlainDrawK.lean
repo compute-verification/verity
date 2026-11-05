@@ -1,8 +1,12 @@
 module
 
-public import Proofs.Flock.Claims.KS.PlainDrawKDefs
 public import Proofs.Flock.Claims.DeployVK
+public import Proofs.Flock.Claims.KS.PlainDrawKDefs
+public import Proofs.Flock.Claims.Recursion.CallsBridgeE
+public import Proofs.Flock.Claims.Recursion.FlockKSDeployK
+public import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
 import Flock.With.Deployed
+import Flock.With.SetupEq
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -35,11 +39,10 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Bridge.CustodyPlain
 import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.KS.PlainQueryRound
 import Proofs.Flock.Claims.KS.Width
-import Proofs.Flock.Claims.Recursion.CallsBridgeE
-import Proofs.Flock.Claims.Recursion.FlockKSDeployK
-import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Std.Tactic.BVDecide.Normalize.Prop
 

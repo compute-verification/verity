@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Hidden.Unrolled
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -15,7 +16,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Hidden.Facts
-import Proofs.Flock.Soundness.Discharge.Hidden.Unrolled
 import Proofs.Flock.Soundness.Discharge.Layout.QSort
 import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 import Proofs.Flock.Soundness.ParseStmt

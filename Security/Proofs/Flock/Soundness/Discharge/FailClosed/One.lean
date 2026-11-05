@@ -1,12 +1,21 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHidden
-public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered
-public import Proofs.Flock.Soundness.Discharge.FailClosed.PlainRegistered
 public import Proofs.Flock.Soundness.Assumptions.Custody
 public import Proofs.Flock.Soundness.Assumptions.CustodyZk
 public import Proofs.Flock.Soundness.Assumptions.Finders
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Composed
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Design
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Exec
+public import Proofs.Flock.Soundness.Discharge.FailClosed.General
+public import Proofs.Flock.Soundness.Discharge.FailClosed.PlainRegistered
+public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHidden
+public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered
+public import Proofs.Flock.Soundness.Discharge.PlainHJ
 public import Proofs.Flock.Soundness.Discharge.PlainHJ.Bind
+public import Proofs.Flock.Soundness.Discharge.PlainHJ.Decode
+public import Proofs.Flock.Soundness.Discharge.PlainJ
+public import Proofs.Flock.Soundness.Discharge.PlainJ.Decode
+public import Proofs.Flock.Soundness.ExecStrataOf
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -24,8 +33,6 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.CROnly.Hiding
 import Proofs.Flock.Soundness.Discharge.Composed.Headline
 import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Reps
-import Proofs.Flock.Soundness.Discharge.FailClosed.Composed
-import Proofs.Flock.Soundness.Discharge.FailClosed.General
 import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
@@ -38,7 +45,6 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
-import Proofs.Flock.Soundness.ExecStrataOf
 
 /-!
 # Soundness: one theorem over everything flock-verify accepts

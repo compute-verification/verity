@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Json.Session
 public import Proofs.Flock.Claims.Complete.Runs
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -33,7 +34,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Discharge
-import Proofs.Flock.Claims.Complete.Json.Session
 import Proofs.Flock.Soundness.Refine.Arith
 import Std.Tactic.BVDecide.Normalize.Prop
 

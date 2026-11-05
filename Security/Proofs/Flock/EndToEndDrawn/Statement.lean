@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -15,7 +16,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
 
 /-!
 # C-Flock's one-stage audit, end to end, at the drawn units (trusted)

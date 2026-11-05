@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.KS.PlainLeafDecK
+import Flock.Desc
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -32,8 +33,13 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Bridge.CustodyPlain
 import Proofs.Flock.Claims.KS.PlainDrawK
+import Proofs.Flock.Claims.KS.ZkDecodeW
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
+import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
 import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
+import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteHP
 
 /-!
 # The deployed plain decoders at plain SHA-512 leaves

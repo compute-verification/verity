@@ -1,28 +1,28 @@
 module
 
-public import Proofs.Flock.EndToEnd.Period.Run
 public import Flock.Desc
+public import Mathlib.Tactic.Echelon.Zsqrtd
+public import Mathlib.Tactic.NormNum.Irrational
+public import Mathlib.Tactic.NormNum.IsCoprime
+public import Mathlib.Tactic.NormNum.IsSquare
+public import Mathlib.Tactic.NormNum.LegendreSymbol
+public import Mathlib.Tactic.NormNum.ModEq
+public import Mathlib.Tactic.NormNum.NatFib
+public import Mathlib.Tactic.NormNum.NatLog
+public import Mathlib.Tactic.NormNum.NatSqrt
+public import Mathlib.Tactic.NormNum.Ordinal
+public import Mathlib.Tactic.NormNum.Parity
+public import Mathlib.Tactic.NormNum.Prime
+public import Mathlib.Tactic.NormNum.RealSqrt
+public import Proofs.Flock.EndToEnd.Period.Run
 public import Proofs.Flock.Soundness.Assumptions.Zk
 public import Proofs.Flock.Soundness.Discharge.Composed.Defs
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDefs
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundRuns
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
-import Mathlib.Tactic.Echelon.Zsqrtd
-import Mathlib.Tactic.NormNum.Irrational
-import Mathlib.Tactic.NormNum.IsCoprime
-import Mathlib.Tactic.NormNum.IsSquare
-import Mathlib.Tactic.NormNum.LegendreSymbol
-import Mathlib.Tactic.NormNum.ModEq
-import Mathlib.Tactic.NormNum.NatFib
-import Mathlib.Tactic.NormNum.NatLog
-import Mathlib.Tactic.NormNum.NatSqrt
-import Mathlib.Tactic.NormNum.Ordinal
-import Mathlib.Tactic.NormNum.Parity
-import Mathlib.Tactic.NormNum.Prime
-import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundRuns
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
 
 /-!
 # The joint stratified bound: one detection budget over a sampling block's whole draw, and over a period (trusted)

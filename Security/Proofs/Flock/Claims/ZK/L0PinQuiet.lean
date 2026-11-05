@@ -1,12 +1,14 @@
 module
 
-import all Init.Data.String.Defs
-import all Init.Data.Array.Basic
 public import Batteries.Data.ByteArray
 public import Flock.Firewall.Skeleton
 public import Flock.With.Sim
+public import Mathlib.NumberTheory.LucasLehmer
+public import Proofs.Flock.Claims.ZK.FrameCount
 public import Proofs.Flock.Claims.ZK.FrameParse
 import Flock.With.SimWalk
+import all Init.Data.Array.Basic
+import all Init.Data.String.Defs
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -21,7 +23,6 @@ import Mathlib.Geometry.Euclidean.Altitude
 import Mathlib.NumberTheory.Chebyshev
 import Mathlib.NumberTheory.Height.NumberField
 import Mathlib.NumberTheory.Height.Projectivization
-import Mathlib.NumberTheory.LucasLehmer
 import Mathlib.NumberTheory.SelbergSieve
 import Mathlib.RingTheory.Radical.NatInt
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -38,7 +39,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.ZK.FrameCount
 import Proofs.Flock.Claims.ZK.FrameSched
 
 /-!

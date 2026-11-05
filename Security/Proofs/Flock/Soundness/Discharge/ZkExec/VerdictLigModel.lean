@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
 public import Proofs.Flock.Soundness.Refine.Ligerito
 import Mathlib.Tactic.Echelon.Zsqrtd

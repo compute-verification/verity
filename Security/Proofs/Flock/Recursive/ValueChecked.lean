@@ -1,5 +1,7 @@
 module
 
+public import Proofs.Flock.C3.PubRows.Shape
+public import Proofs.Flock.Recursive.ValueInner
 public import Proofs.Flock.Recursive.ValueSrc
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -15,7 +17,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Recursive.ValueFinder
-import Proofs.Flock.Recursive.ValueInner
 import Proofs.Flock.Recursive.ValueSource
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup

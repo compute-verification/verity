@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.ZK.FrameOwn
 public import Proofs.Flock.Claims.ZK.SessionLean
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

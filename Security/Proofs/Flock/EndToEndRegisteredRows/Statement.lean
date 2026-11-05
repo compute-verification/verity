@@ -1,12 +1,13 @@
 module
 
 public import Flock.Desc
-public import Proofs.Flock.Soundness.Discharge.ZkLink.Rows
 public import Proofs.Flock.Soundness.Assumptions.Zk
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Rows
 public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
 public import Proofs.Flock.Soundness.Registered.ReadsX
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -21,7 +22,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
 
 /-!
 # C-Flock's one-stage audit, end to end, with the rows link (trusted)

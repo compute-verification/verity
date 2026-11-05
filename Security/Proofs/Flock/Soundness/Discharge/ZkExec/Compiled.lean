@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Live
 public import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Inh
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -17,7 +18,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.ZkExec.Refines
 import Proofs.Flock.Soundness.Discharge.ZkLink.Count
-import Proofs.Flock.Soundness.Discharge.ZkLink.Inh
 import Proofs.Flock.Soundness.Discharge.ZkLink.One
 
 /-!

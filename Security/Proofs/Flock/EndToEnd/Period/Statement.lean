@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.EndToEnd.Period.Run
 public import Flock.Desc
+public import Proofs.Flock.EndToEnd.Period.Run
 public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -18,7 +19,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
 
 /-!
 # The integrity audit over a period, per sampling block and pooled (trusted)

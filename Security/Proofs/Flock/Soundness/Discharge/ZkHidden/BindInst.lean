@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineInst
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Inst
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -15,7 +16,6 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineInst
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Count
 

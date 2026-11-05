@@ -1,10 +1,11 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
-public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
-import all Init.Data.Array.Basic
+public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedH
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
 public import Proofs.Flock.Soundness.Registered.ReadsX
+import all Init.Data.Array.Basic
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime

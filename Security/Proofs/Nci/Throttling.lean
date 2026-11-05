@@ -1,5 +1,12 @@
 module
 
+public import Definitions.Core.Partition
+public import Definitions.Nci.Guarantees
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Mathlib.Analysis.Real.Sqrt
+public import Mathlib.Basic.Real.Basic
+public import Mathlib.Data.Finset.Defs
+public import Mathlib.Data.Fintype.Defs
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

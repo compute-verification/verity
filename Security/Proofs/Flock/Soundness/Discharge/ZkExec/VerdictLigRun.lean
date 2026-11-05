@@ -1,5 +1,7 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigFinal
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigModel
 public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigPad
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational

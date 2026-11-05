@@ -1,5 +1,16 @@
 module
 
+public import Definitions.Core.Circuit
+public import Definitions.Core.Declaration
+public import Definitions.Nci
+public import Definitions.Nci.Assumptions
+public import Definitions.Nci.Guarantees
+public import Definitions.Nci.Support
+public import Mathlib.Basic.Real.Basic
+public import Mathlib.Data.Finset.Defs
+public import Mathlib.Data.Fintype.Card
+public import Mathlib.Data.Fintype.Defs
+public import Mathlib.Tactic.SetNotationForOrder
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

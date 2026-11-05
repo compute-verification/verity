@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.BindStmt
+public import Proofs.Flock.Soundness.Discharge.ZkReg
 public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
 public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
 public import Proofs.Flock.Soundness.Registered.ReadsX

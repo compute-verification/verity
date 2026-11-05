@@ -1,6 +1,10 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.ZkBind
+public import Proofs.Flock.Soundness.Discharge.ZkExec
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Coin
+public import Proofs.Flock.Soundness.Discharge.ZkLink
+public import Proofs.Flock.Soundness.Discharge.ZkView
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime

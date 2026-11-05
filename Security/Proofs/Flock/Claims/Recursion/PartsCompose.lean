@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.BoundRoute
 public import Proofs.Flock.Claims.Recursion.PartAccepts
 public import Std.Tactic.BVDecide.Normalize.BitVec
 import Mathlib.Algebra.Order.Floor.Extended
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Recursion.BoundRoute
 import Proofs.Flock.Claims.Recursion.DeployChecked
 
 /-!

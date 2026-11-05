@@ -1,7 +1,9 @@
 module
 
 public import Flock.With.VerifyE
+public import Proofs.Flock.Claims.DeployK
 public import Proofs.Flock.Claims.KS.ConflictMerkle
+public import Proofs.Flock.Claims.KS.ConflictRun
 public import Proofs.Flock.Claims.KS.ConflictWithin
 public import Proofs.Flock.Claims.KS.Joint
 import Flock.With.SimVerify
@@ -37,8 +39,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.DeployK
-import Proofs.Flock.Claims.KS.ConflictRun
 import Proofs.Flock.Claims.KS.PlainQueryRound
 import Proofs.Flock.Claims.KS.Width
 import Proofs.Flock.Claims.ZkQueryRound
