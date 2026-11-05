@@ -5,6 +5,8 @@ public import Proofs.Pous.PeriodAt
 public import Proofs.Pous.PeriodDeployed
 public import Proofs.Accounting.Prob
 import all Init.Data.String.Defs
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # Proof of PoUS's per-period guarantee in the shared coin game

@@ -5,6 +5,18 @@ public import Proofs.Accounting.RemoteHeld.Draw
 public import Proofs.Pouw.Prob
 import all Init.Data.Array.Basic
 import all Init.Data.String.Defs
+import all Init.Data.Range.Basic
+import all Init.Data.Rat.Basic
+import all Init.Data.Ord.String
+import all Init.Data.Repr
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import all Std.Data.TreeMap.Raw.Basic
+import all Std.Data.DTreeMap.Raw.Basic
+import all Std.Data.DTreeMap.Internal.Def
+import all Std.Data.DTreeMap.Internal.Balancing
+import all Std.Data.DTreeMap.Internal.Operations
+import all Std.Data.DTreeMap.Internal.Queries
 
 /-!
 # The bandwidth component's properties hold at the honest node and fail at a verifier that accepts everything
