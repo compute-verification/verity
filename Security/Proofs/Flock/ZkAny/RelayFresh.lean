@@ -201,9 +201,10 @@ theorem roundPlace_first_of {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Sl
 
 /-- **A rep's frame after its stream's first round keeps its schedule so far**: at a `RoundRun` of the stream's first
 round on a fresh frame, whose round releases and whose coins the rep's frame took off the auditor's answer, at the
-table, extras and salts the session and the loop's salts give it, where the table's commitment's cap is the level-0
-root, the round is in the place the schedule so far gives the frame's first round, unless that is the inner proof's
-own, and the frame the session's next round finds keeps that schedule. -/
+table and extras the session gives it, and the salts the loop's salts give it where `withAlg` scheduled no rounds
+(`hsalt`, where `placeOf` reads them), where the table's commitment's cap is the level-0 root, the round is in the
+place the schedule so far gives the frame's first round, unless that is the inner proof's own, and the frame the
+session's next round finds keeps that schedule. -/
 theorem roundRun_repInv_first {sid : Nat} {st : State} {pl : Placed} {stream : String} {n i r : Nat}
     {dom content : ByteArray} {e : Env} {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {R₃ : Sessions}
     (hr : RoundRun sid st pl stream n i r dom content e R L0 R₃) (hreq : st.request pl (.round stream n) = none)
@@ -220,7 +221,7 @@ theorem roundRun_repInv_first {sid : Nat} {st : State} {pl : Placed} {stream : S
     (hw : _root_.Flock.Firewall.Frames.withAlg s l0 name p = .ok p') {t : _root_.Flock.Firewall.Finish.Tab}
     {xs : Array (Array F128)} {hi : Array ByteArray} {stm : Stmt} {c : Array F128} {r0 : ByteArray} {q0 : Nat}
     (hst : s.sts[p.table]? = some stm) (hlink : s.link = some c)
-    (hsalt : R.salts.find? (fun x => x.1 == l0.root && x.2.1 == p.rep) = some (r0, q0, hi))
+    (hsalt : p'.alg.size = 0 → R.salts.find? (fun x => x.1 == l0.root && x.2.1 == p.rep) = some (r0, q0, hi))
     (htab : _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t)
     (hcap : _root_.Flock.Firewall.Finish.flat t.cm0.cap = l0.root)
     (hxs : xs = _root_.Flock.Firewall.Drive.extras stm (_root_.Flock.Firewall.Drive.linkPoints stm c))
@@ -243,13 +244,19 @@ theorem roundRun_repInv_first {sid : Nat} {st : State} {pl : Placed} {stream : S
   obtain ⟨htb, hrp', hco, -, -, -⟩ := withAlg_keep hw
   obtain ⟨p'', pl₀, n₀, hpo, hpl, hp''⟩ := roundPlace_first_of hf hrp hfst hss hn hl0 hw
   have hI'' : Loop.RepInv t (s.spec.domain name r).toUTF8 xs hi p'' ∧ p''.table = p.table ∧ p''.rep = p.rep ∧
-      p''.coins = p.coins := by
+      p''.coins = p.coins ∧ p''.alg = p'.alg := by
     rcases hp'' with rfl | ⟨st₁, rfl⟩
-    · exact ⟨hI', htb, hrp', hco⟩
-    · exact ⟨⟨hI'.alg, hI'.toOpening, hI'.opening⟩, htb, hrp', hco⟩
-  obtain ⟨hI₂, htb₂, hrp₂, hco₂⟩ := hI''
+    · exact ⟨hI', htb, hrp', hco, rfl⟩
+    · exact ⟨⟨hI'.alg, hI'.toOpening, hI'.opening⟩, htb, hrp', hco, rfl⟩
+  obtain ⟨hI₂, htb₂, hrp₂, hco₂, hal₂⟩ := hI''
+  have hsalt₂ : p''.alg.size ≤ p''.coins.size → p''.opened = false → p''.opening = none →
+      R.salts.find? (fun x => x.1 == l0.root && x.2.1 == p''.rep) = some (r0, q0, hi) := by
+    intro hle _ _
+    rw [hal₂, hco₂, hp.coins, Array.size_empty] at hle
+    rw [hrp₂]
+    exact hsalt (by omega)
   obtain ⟨q', hpo', hinv⟩ := Loop.placeOf_sched R.salts l0 s p'' (s.spec.domain name r).toUTF8
-    (by rw [htb₂]; exact hst) hlink (by rw [hrp₂]; exact hsalt) htab hxs hI₂ (by rw [hrp₂, hco₂]; exact hsc)
+    (by rw [htb₂]; exact hst) hlink hsalt₂ htab hxs hI₂ (by rw [hrp₂, hco₂]; exact hsc)
   rw [hpo] at hpo'
   simp only [Except.ok.injEq, Prod.mk.injEq] at hpo'
   obtain ⟨hpl0, -, hqq⟩ := hpo'
