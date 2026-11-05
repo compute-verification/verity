@@ -245,7 +245,7 @@ def test_the_step_without_its_stand_ins_is_the_step_on_every_special_class(stand
     want = BS.evaluate_words(stand_in, acc, a, b).astype(np.uint64)
     bad = np.flatnonzero(got.reshape(len(acc)) != want.reshape(len(acc)))
     assert not bad.size, f"{raw.id}: {bad.size} of {len(acc)} differ from {stand_in.id}, first {bad[:5]}"
-    _agree(raw, [acc, a, b])
+    assert_agrees(raw, [acc, a, b])
     out = got.reshape(len(acc)).astype(np.uint32)
     finite = ((acc & 0x7F800000) != 0x7F800000) & ((a & 0x7F80) != 0x7F80).all(1) & ((b & 0x7F80) != 0x7F80).all(1)
     inf = (out & 0x7FFFFFFF) == 0x7F800000
