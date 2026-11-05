@@ -6036,6 +6036,9 @@
    "assumptions": [],
    "type_hash": "4198130083bf4a4c93fa88d9a4f9a93a5c3b3259d18d82ed0453302fa0f3e6f4"
   },
+  "Claims.Sampling.KSBy_fails": {
+   "owner": "@proofs"
+  },
   "Claims.Sampling.KSCount_fails": {
    "owner": "@proofs",
    "signature": [
