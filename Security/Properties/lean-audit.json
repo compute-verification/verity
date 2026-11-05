@@ -15,6 +15,7 @@
   "Properties.Pouw.Lead.Commit",
   "Properties.Pouw.Lead.V2",
   "Properties.Pouw.PearlPlus",
+  "Properties.Pouw.PearlPlus.Witnesses",
   "Properties.Pouw.PearlPlusDraw",
   "Properties.Nci",
   "Properties.Nci.Threads",
@@ -653,6 +654,38 @@
   "Pous.Period.SecurityProofs.periodHeldSha512At": {
    "honest": ["Pous.Period.SecurityProofs.periodHeldGame_honest"],
    "nontrivial": "Pous.Period.SecurityProofs.periodHeldSha512_nontrivial"
+  },
+  "Properties.Pouw.PearlPlus.openingBinds": {
+   "honest": ["Properties.Pouw.PearlPlus.openingBinds_honest"],
+   "nontrivial": "Properties.Pouw.PearlPlus.openingBinds_nontrivial"
+  },
+  "Properties.Pouw.PearlPlus.planMeans": {
+   "honest": ["Properties.Pouw.PearlPlus.planMeans_honest"],
+   "nontrivial": "Properties.Pouw.PearlPlus.planMeans_nontrivial"
+  },
+  "Properties.Pouw.PearlPlus.acceptMeans": {
+   "honest": ["Properties.Pouw.PearlPlus.acceptMeans_honest", "Properties.Pouw.PearlPlus.acceptMeans_drawn"],
+   "nontrivial": "Properties.Pouw.PearlPlus.acceptMeans_nontrivial"
+  },
+  "Properties.Pouw.PearlPlus.refusedBeforeTheCoin": {
+   "honest": ["Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest"],
+   "nontrivial": "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_nontrivial"
+  },
+  "Properties.Pouw.PearlPlus.loadedGivesUp": {
+   "honest": ["Properties.Pouw.PearlPlus.loadedGivesUp_honest"],
+   "nontrivial": "Properties.Pouw.PearlPlus.loadedGivesUp_nontrivial"
+  },
+  "Properties.Pouw.PearlPlus.tileAcceptMeans": {
+   "honest": ["Properties.Pouw.PearlPlus.tileAcceptMeans_honest", "Properties.Pouw.PearlPlus.tileAcceptMeans_derived"],
+   "nontrivial": "Properties.Pouw.PearlPlus.tileAcceptMeans_nontrivial"
+  },
+  "Properties.Pouw.PearlPlus.tileKeepsTheCap": {
+   "honest": ["Properties.Pouw.PearlPlus.tileKeepsTheCap_honest"],
+   "nontrivial": "Properties.Pouw.PearlPlus.tileKeepsTheCap_nontrivial"
+  },
+  "Properties.Pouw.PearlPlus.yIsTheUnscale": {
+   "honest": ["Properties.Pouw.PearlPlus.yIsTheUnscale_honest"],
+   "nontrivial": "Properties.Pouw.PearlPlus.yIsTheUnscale_nontrivial"
   }
  },
  "unwitnessed": {
@@ -878,6 +911,7 @@
     "Properties.Pouw.ServedValues",
     "Properties.Pouw.Lead.V2",
     "Properties.Pouw.PearlPlus",
+    "Properties.Pouw.PearlPlus.Witnesses",
     "Properties.Pouw.PearlPlusDraw"
    ],
    "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
@@ -3330,11 +3364,73 @@
    "assumptions": [],
    "type_hash": "90efc0f384a07f296425b858eeab58b576755ec019e505e27a543b218c5533e9"
   },
+  "Properties.Pouw.PearlPlus.acceptMeans_drawn": {
+   "owner": "@proofs"
+  },
+  "Properties.Pouw.PearlPlus.acceptMeans_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.Pouw.PearlPlus.acceptMeans_nontrivial": {
+   "owner": "@proofs"
+  },
   "Properties.Pouw.PearlPlus.loadedGivesUp": {
    "owner": "@proofs",
    "signature": ["Properties.Pouw.PearlPlus.loadedGivesUp : Properties.Pouw.PearlPlus.LoadedGivesUp"],
    "assumptions": [],
    "type_hash": "fe144c78782881cad675b441c5aa96bdee8c785945e202e6ee26025fa7f9281a"
+  },
+  "Properties.Pouw.PearlPlus.loadedGivesUp_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.Pouw.PearlPlus.loadedGivesUp_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Properties.Pouw.PearlPlus.openingBinds": {
+   "owner": "@proofs",
+   "signature": ["Properties.Pouw.PearlPlus.openingBinds : Properties.Pouw.PearlPlus.OpeningBinds"],
+   "assumptions": [],
+   "type_hash": "a560bbbd721ebe49e4d4a0da055047d140e3fb49b0deda524bbac30ef3deec22"
+  },
+  "Properties.Pouw.PearlPlus.openingBinds_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Pouw.PearlPlus.openingBinds_honest :",
+    "  Exists fun d =>",
+    "    Exists fun root =>",
+    "      Exists fun sib =>",
+    "        And",
+    "          (Eq (PouwCommit.rowsDomain { data := Array.replicate 64 0 } (-1) 2 PouwCheck.PearlPlus.HM96 Bool.true)",
+    "            (Except.ok d))",
+    "          (Eq",
+    "            (PouwCheck.PearlPlus.opens (Except.ok d) root PouwCommit.TILE_SCHEMA",
+    "              { position := 0, value := { data := Array.replicate 256 0 }, path := List.cons sib List.nil })",
+    "            Bool.true)"
+   ],
+   "assumptions": [],
+   "type_hash": "a495628608bec81c92d4047cd1b69b8eab1ebc2ee21f701dc5e7fd8f3e95e971"
+  },
+  "Properties.Pouw.PearlPlus.openingBinds_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Pouw.PearlPlus.openingBinds_nontrivial :",
+    "  Not",
+    "    (Or (Eq (Properties.Pouw.PearlPlus.witnessOpening 0).value (Properties.Pouw.PearlPlus.witnessOpening 1).value)",
+    "      (Exists fun x =>",
+    "        And",
+    "          (List.instMembership.mem",
+    "            (Properties.Pouw.PearlPlus.rowsHashed Properties.Pouw.PearlPlus.witnessDomain",
+    "              (Properties.Pouw.PearlPlus.witnessOpening 0))",
+    "            x)",
+    "          (Exists fun y =>",
+    "            And",
+    "              (List.instMembership.mem",
+    "                (Properties.Pouw.PearlPlus.rowsHashed Properties.Pouw.PearlPlus.witnessDomain",
+    "                  (Properties.Pouw.PearlPlus.witnessOpening 1))",
+    "                y)",
+    "              (And (Ne x y) (Eq (Flock.Sha512.hash x) (Flock.Sha512.hash y))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "c1fd9b07b6e988fbe3cf29cb0cd0b9d269134a7f278394d11b6a6cc8a7e1d84e"
   },
   "Properties.Pouw.PearlPlus.planMeans": {
    "owner": "@proofs",
@@ -3342,11 +3438,23 @@
    "assumptions": [],
    "type_hash": "3824aad752bcde7f7623cbf22f9be6692c3423041bbb695ccbffdf3504ac7449"
   },
+  "Properties.Pouw.PearlPlus.planMeans_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.Pouw.PearlPlus.planMeans_nontrivial": {
+   "owner": "@proofs"
+  },
   "Properties.Pouw.PearlPlus.refusedBeforeTheCoin": {
    "owner": "@proofs",
    "signature": ["Properties.Pouw.PearlPlus.refusedBeforeTheCoin : Properties.Pouw.PearlPlus.RefusedBeforeTheCoin"],
    "assumptions": [],
    "type_hash": "04a994afa72912a80e8367b3a327cd717d628c83ee8ad19f3ec1f9c4a2ff6feb"
+  },
+  "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_nontrivial": {
+   "owner": "@proofs"
   },
   "Properties.Pouw.PearlPlus.tileAcceptMeans": {
    "owner": "@proofs",
@@ -3354,17 +3462,38 @@
    "assumptions": [],
    "type_hash": "1265aedc4151ebc55099699be6188cabde6f3925129e6028d774eb1198a9630d"
   },
+  "Properties.Pouw.PearlPlus.tileAcceptMeans_derived": {
+   "owner": "@proofs"
+  },
+  "Properties.Pouw.PearlPlus.tileAcceptMeans_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.Pouw.PearlPlus.tileAcceptMeans_nontrivial": {
+   "owner": "@proofs"
+  },
   "Properties.Pouw.PearlPlus.tileKeepsTheCap": {
    "owner": "@proofs",
    "signature": ["Properties.Pouw.PearlPlus.tileKeepsTheCap : Properties.Pouw.PearlPlus.TileKeepsTheCap"],
    "assumptions": [],
    "type_hash": "23077127b35df41a81f887f61bef24cba194bd4dc3c51edf05eeeef7cb548407"
   },
+  "Properties.Pouw.PearlPlus.tileKeepsTheCap_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.Pouw.PearlPlus.tileKeepsTheCap_nontrivial": {
+   "owner": "@proofs"
+  },
   "Properties.Pouw.PearlPlus.yIsTheUnscale": {
    "owner": "@proofs",
    "signature": ["Properties.Pouw.PearlPlus.yIsTheUnscale : Properties.Pouw.PearlPlus.YIsTheUnscale"],
    "assumptions": [],
    "type_hash": "d4c155b5e234c30aa1928e5a2b90c9c4fdc91887d2fbf2c6968720f79c98d211"
+  },
+  "Properties.Pouw.PearlPlus.yIsTheUnscale_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.Pouw.PearlPlus.yIsTheUnscale_nontrivial": {
+   "owner": "@proofs"
   },
   "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod": {
    "owner": "@compute-accounting",
@@ -6006,6 +6135,10 @@
       "outcome": "accept"
      }
     ]
+   },
+   "Properties.Pouw.PearlPlus.openingBinds": {
+    "function": ["PouwCommit.rowsDomain", "PouwCheck.PearlPlus.opens"],
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -6019,7 +6152,6 @@
    "Properties.Served.DrawMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.drawMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
-   "Properties.Pouw.PearlPlus.OpeningBinds": "unstated: two openings of one position of an hm96 tree, both accepted against its root, open one value, or two different messages hashed in checking them (`rowsHashed`) have one SHA-512 digest; proved (`Properties.Pouw.PearlPlus.openingBinds`), and listed under guarantees once it has its witnesses",
    "Properties.Pouw.PearlPlus.WorkIsTheCredit": "unstated: the work an accepted run publishes is `creditAtAssumption` over the plan's passes at the run's draws, the draws that landed on a tile over its inert-work bound (X_O) and δ = 1/100, crediting nothing on a test instance's input, and a refused or rejected run publishes none; a draft statement, unproved, which gets a guarantee entry once red team has read it",
    "Properties.Pouw.LiveSalt.epochRootBinding": "restatable: its hypotheses, 64-byte weights' roots and epochs below 2^64, are not an acceptance of `epochOpenRoot`, which returns on any input; stated over `PouwCheck.liveSaltCheck`'s acceptances, whose weights' roots are SHA-512 digests and whose `pass_index` is refused at 2^64 (`PASS_FORM`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Properties.Pouw.LiveSalt.rowSeedBinding": "restatable: its hypotheses, call indices and rows below 2^32 and two different pairs, are not an acceptance of `rowSeed`, which returns on any input; stated over the Pearl-C period's credit (CMP-82), which refuses a call index of 2^32 or more (`CALL_RANGE`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
