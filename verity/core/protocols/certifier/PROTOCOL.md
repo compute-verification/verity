@@ -29,7 +29,9 @@ Where each part is stated in Lean:
 - the audit: `NetworkCheck.Check` (`verity/network-certificate/v4`) and `NetworkCheck.Records`
   (`verity/network-records/v3`);
 - one execution phase's verdict of record: `NetworkCheck.LinkWindow`;
-- a period, onsite's communication component: `NetworkCheck.Period` (`verity/certifier/v0`).
+- a period, onsite's communication component: `NetworkCheck.Period` (`verity/certifier/v0`);
+- an active network certifier's run audited as rows over its certified records: `NetworkCheck.RowsAudit`
+  (`verity/network-rows/v1`), over the certifier program's `NetworkCertifier.Rows`.
 
 ## Zero knowledge: what ties the checks, and the named gap
 
@@ -1362,7 +1364,7 @@ the replay's cost at served shapes and its split into proof blocks.
 
 `active.Proxy` runs the certifiers on one boundary link of a live byte stream. It is an asyncio TCP proxy, the I/O shell
 around `grid.Certifier`, `schedule`'s handing rule, `commitment` and `audit`, and it adds no record format. Its records are
-`grid.Record`s, published raw or through `commitment.commit`, and `Audit.check_link` and `check_ingress_link` read
+`grid.BlockGrid`s, published raw or through `commitment.commit`, and `Audit.check_link` and `check_ingress_link` read
 them.
 
 - **The link** is one TCP connection to the peer outside. Every frame on it is B bytes: a header (kind u8, stream u32,

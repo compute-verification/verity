@@ -3,8 +3,9 @@
 * an accepted audit record is sampled proofs' accept: the registration's digest, the drawn and proved units with the bound
   on wrong units at δ, and the profile as `Core.Integrity` with δ an exact ratio, all read back by the core answer's
   decoder; the report's ε is that bound over the window's units;
-* a refusal of the records, a check before the sample that failed, an audit record that doesn't accept and advice fixed
-  after the sample each reject by name, with no public outputs or profile;
+* a refusal of the records, a check before the sample that failed, one after it that left no audit record (a drawn
+  member whose --registered file the audit couldn't complete, by name), an audit record that doesn't accept and advice
+  fixed after the sample each reject by name, with no public outputs or profile;
 * an audit that left nothing behind is an error, not a verdict, and so is one that opened the advice (``--opening``, a
   development check), accepted or not;
 * an audit record decided at δ = 0.01 (a float in the record) is the exact ratio 1/100 in the profile;
@@ -49,6 +50,20 @@ def record(accepted: bool, **checks) -> dict:
             "wrong_units": {"delta": 0.5, "of": 1024, "bound": 3} if accepted else None}
 
 
+#: a drawn member, and the audit's checks after the draw as `a5.complete_drawn` leaves them: its --registered file
+#: completed, with the ports it named, or refused for a port with no committed tree
+MEMBER = "ToyGemm"
+COMPLETED = {"wiring": {"ok": True, "codes": [], "detail": {}},
+             "registered_complete": {"ok": True, "codes": [], "detail": {}, "record": "auditor",
+                                     "members": {MEMBER: {"window_ports": 2, "parameter_ports": 1}}}}
+UNCOMPLETED = {"wiring": {"ok": True, "codes": [], "detail": {}},
+               "registered_complete": {"ok": False, "codes": [MEMBER], "record": "auditor", "members": {},
+                                       "detail": {MEMBER: "port o0 has no committed tree"}}}
+#: the member's Lean verdict of record's reads beside its completed file's (`tables.reported_reads`)
+READS = {"ok": True, "chunks": {MEMBER: {"ok": True, "reads": {"o0": "ab" * 64}, "reported": {"o0": "ab" * 64}}}}
+AFTER_DRAW = {"checks_before_draw": {"registration": True}, "checks": {"registration": {"ok": True}, **UNCOMPLETED}}
+
+
 def test_an_accepted_audit_is_an_accept(tmp_path):
     out = write(tmp_path / "a", {"checks_before_draw": {"registration": True}, "fixed_before_draw": {"ok": True}},
                 record(True))
@@ -70,6 +85,7 @@ def test_an_accepted_audit_is_an_accept(tmp_path):
     ({"checks_before_draw": {"registration": True}, "audit": {"accepted": False, "outcome": "coins refused"}}, None,
      "no audit record: "),
     ({"fixed_before_draw": {"ok": False, "codes": ["after-the-draw"]}}, record(True), "not fixed before the draw: after"),
+    (AFTER_DRAW, None, f"after the draw: registered_complete ({MEMBER})"),
 ])
 def test_refusals_reject_by_name(tmp_path, summary, rec, why):
     a = I.answer(write(tmp_path / "a", summary, rec), REG)
@@ -177,15 +193,22 @@ def _kind_scan():
     ({"fixed_before_draw": {"ok": False, "codes": ["after-the-draw"]}}, "accepted"),
     ({"checks_before_draw": {"registration": True},
       "audit": {"why": {f"lean-verify/m{k}": "session files: no such file" for k in range(5)}}}, "unproved"),
+    (AFTER_DRAW, None),
+    ({"checks_before_draw": {"registration": True}, "fixed_before_draw": {"ok": True}}, "completed"),
 ])
 def test_the_public_copy_is_what_answer_reads_and_answers_as_the_audit_does(tmp_path, summary, rec):
     """`public_copy` of an audit that also wrote what `answer` doesn't read (the window's number, its requests and
     population, a check's detail, the verdicts and statement): the copy holds none of it, answers as the audit does
-    (an accept, each refusal, and Lean's refusals with the drawn units not proved), and every field of it is one of the
-    public kinds as `kind_scan.py --received` declares V3c's audit (`V3C_DOCS`)."""
+    (an accept, each refusal, a drawn member's file the audit couldn't complete, and Lean's refusals with the drawn
+    units not proved), and every field of it is one of the public kinds as `kind_scan.py --received` declares V3c's
+    audit (`V3C_DOCS`). Of the checks after the draw and the registered reads it keeps what the onsite record credits
+    members by: each check's outcome with the drawn members completed, by name, and each member's reads' outcome, not
+    the ports, roots and values they compared."""
     if rec == "unproved":
         rec = {**record(False, proved=False), "draw": {**DRAW, "strata": [{"template": "T", "units": [[0, 8]]}]}}
         rec["checks"]["proved"]["detail"] = {"units": {"drawn": [5, 700], "statement": [700]}}
+    if rec == "completed":
+        rec = {**record(True), "checks_after_draw": COMPLETED, "registered_reads": READS}
     s, r = _planted(summary, record(True) if rec == "accepted" else rec)
     out = write(tmp_path / "audit", s, r)
     I.public_copy(out, tmp_path / "copy")
@@ -194,6 +217,13 @@ def test_the_public_copy_is_what_answer_reads_and_answers_as_the_audit_does(tmp_
         text = (tmp_path / "copy" / f).read_text() if (tmp_path / "copy" / f).exists() else ""
         assert '"window"' not in text and '"requests"' not in text and '"population": 37' not in text, (f, text)
     assert (tmp_path / "copy" / "window").exists() == (rec is not None)
+    copied = json.loads((tmp_path / "copy" / "summary.json").read_text())
+    if "checks" in summary:
+        assert copied["checks"]["registered_complete"] == {"ok": False, "codes": [MEMBER], "members": []}
+    if isinstance(rec, dict) and "checks_after_draw" in rec:
+        copied = json.loads((tmp_path / "copy" / "window" / "audit.json").read_text())
+        assert copied["checks_after_draw"]["registered_complete"] == {"ok": True, "codes": [], "members": [MEMBER]}
+        assert copied["registered_reads"] == {"ok": True, "chunks": {MEMBER: {"ok": True}}}
     KS = _kind_scan()
     found, kinds = KS.scan(tmp_path / "copy", KS.V3C_DOCS)
     assert found == [] and sum(kinds.values()) and KS.scan(out, KS.V3C_DOCS)[0], found
