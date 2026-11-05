@@ -1,8 +1,8 @@
 """Proof overhead against a proof block's output width, and what the exfiltration bound makes of each curve.
 
-    python overhead.py --flock RUN_OUT [--card h200-sxm-141gb] --out DIR
+    python overhead.py --flock RUN_OUT [RUN_OUT ...] [--card h200-sxm-141gb] --out DIR
 
-``RUN_OUT`` is a `benchmarks/flock_s8_block` run's ``out/`` whose ``STATEMENTS`` hold two instance counts for each block shape:
+Each ``RUN_OUT`` is a `benchmarks/flock_s8_block` run's ``out/``; their ``STATEMENTS`` hold two instance counts for each shape:
 ``K:N:R`` (a block of one int8 row against R rows, packed, every instance's own rows: R·K MACs, 32·R output bits) or
 ``K:N:PxC`` (a tile of C rows of x against P rows of W, one u16 leaf an s8: P·C·K MACs, 32·P·C output bits). Per shape:
 
@@ -206,12 +206,12 @@ def _plot(a, bs: list[dict], res: dict) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    p.add_argument("--flock", type=Path, required=True)
+    p.add_argument("--flock", type=Path, nargs="+", required=True, help="one or more flock_s8_block runs' out/")
     p.add_argument("--card", default="h200-sxm-141gb")
     p.add_argument("--out", type=Path, required=True)
     a = p.parse_args(argv)
     peak = peak_macs(a.card)
-    bs = blocks(_summary(a.flock))
+    bs = blocks({"statements": {k: v for out in a.flock for k, v in _summary(out)["statements"].items()}})
     if len(bs) < 2:
         print("overhead: fewer than two shapes with two instance counts each", file=sys.stderr)
         return 1
