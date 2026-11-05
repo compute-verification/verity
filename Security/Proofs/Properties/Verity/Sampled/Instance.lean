@@ -71,7 +71,8 @@ def TablesAgree (F R : Array ByteArray) : Prop :=
 theorem tableFile_hash {sha : String} {F : Array ByteArray} {a : ByteArray} (h : tableFile sha F = some a) :
     Flock.hexOf (Flock.Sha512.hash a) = sha := by
   unfold tableFile at h
-  exact beq_iff_eq.1 (Array.find?_some h)
+  have h' := Array.find?_some h
+  exact beq_iff_eq.1 h'
 
 theorem tablePair_collision {F R : Array ByteArray} {sha : String} {u v : Claims.Msg}
     (h : tablePair F R sha = some (u, v)) : Claims.Collision Verity.sha512Msg u v := by
@@ -143,8 +144,8 @@ theorem namedFile_digest {h : Option Hash.Digest} {F : Array ByteArray}
   cases hfind : F.find? (fun f => decide (h = some (Verity.sha512 f.data.toList))) with
   | none => exact absurd (decide_eq_true hh) (Array.find?_eq_none.1 hfind f hf)
   | some g =>
-    have hg := of_decide_eq_true (Array.find?_some hfind)
-    exact hg
+    have hg := Array.find?_some hfind
+    exact of_decide_eq_true hg
 
 /-- **A file finder below one success names one file**: where both the committed files and the registered files hold
 a file with the digest, a file finder that outputs no collision with probability `1` names the registered file. -/

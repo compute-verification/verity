@@ -5,6 +5,8 @@ public import Proofs.Accounting.RemoteHeld.Draw
 public import Proofs.Pouw.Prob
 import all Init.Data.Array.Basic
 import all Init.Data.String.Defs
+import all Init.Data.Array.DecidableEq
+import all Init.Data.List.Sort.Basic
 import all Init.Data.Range.Basic
 import all Init.Data.Rat.Basic
 import all Init.Data.Ord.String
