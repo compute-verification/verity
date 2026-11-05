@@ -22,7 +22,7 @@ keeps the old words until its owners rename it, so this scan skips code spans an
 record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too.
 
 PoUB, the protocol over a node's registered store, goes by that name alone (``POUB_TERMS``, GLOSSARY) in every
-scanned file, PENDING's too, but the bandwidth audit's over PoUS's store and the archive's (``POUB_ELSEWHERE``). Its
+scanned file, PENDING's too, but the archive's (``POUB_ELSEWHERE``). Its
 wire constants, domain tags, Lake targets and package path (`verity/remote-bandwidth/v0`, `remote-audit-difftest`,
 `remote_bandwidth`) are hyphenated or underscored, so this scan never reads them; they stay until PoUB's next version
 and its package's move.
@@ -53,8 +53,8 @@ POUB_TERMS = {"remote bandwidth audit, remote bandwidth, remote audit, proof of 
 _WRAP = r"(?:[ \t]+|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
 _POUB_TERM = re.compile(rf"\b(?:remote{_WRAP}(?:bandwidth|audit)s?|proof{_WRAP}of{_WRAP}useful{_WRAP}bandwidth)\b",
                         re.I)
-#: Where the words name something else: the bandwidth audit over PoUS's store, and the archive.
-POUB_ELSEWHERE = ("archive/", "verity/core/protocols/bandwidth/")
+#: Where the words name something else: the archive.
+POUB_ELSEWHERE = ("archive/",)
 #: Files whose retired names a PR queued on `next` adds or rewrites the lines beside, until it lands and PoUB's rename
 #: follows it.
 POUB_PENDING = dict.fromkeys(
@@ -319,8 +319,7 @@ def test_poub_goes_by_its_name():
     assert not bad, (
         "a retired name of PoUB, the protocol over a node's registered store: say "
         + "; ".join(f'{new} for "{old}"' for old, new in POUB_TERMS.items())
-        + f" ({GLOSSARY}). The bandwidth audit over PoUS's store is not PoUB ({', '.join(POUB_ELSEWHERE)} keep their"
-        + " words); a wire constant, a domain tag or a path keeps its hyphen or underscore"
+        + f" ({GLOSSARY}); {', '.join(POUB_ELSEWHERE)} keeps its words; a wire constant, a domain tag or a path keeps its hyphen or underscore"
         + " (`verity/remote-bandwidth/v0`, `remote_bandwidth`), and bytes a digest or a vector hashes go in ALLOWED"
         + " with their reason:\n"
         + "\n".join(f"  {f}:{n}: {term}" for f, n, term in bad))
@@ -394,8 +393,8 @@ def test_the_scan_reads_the_network_terms():
 
 def test_the_scan_reads_poub_names():
     """PoUB's retired names, on toy files, wrapped or capitalized, in code and docs alike: a hyphenated or underscored
-    constant, target or path, `RemoteAudit`, a pending file, the bandwidth audit's and the archive's files, the Lean and
-    the Glossary's row stay."""
+    constant, target or path, `RemoteAudit`, a pending file, the archive's files, the Lean and the Glossary's row
+    stay."""
     docs = {
         "a.py": '"""The remote bandwidth audit and a Remote\n    Audit; proof of useful\n    bandwidth."""\n'
                 'D = "verity/remote-bandwidth/v0"  # remote_bandwidth.audit, RemoteAudit, remote-audit-difftest\n'
@@ -403,7 +402,6 @@ def test_the_scan_reads_poub_names():
         "b.md": "Remote bandwidth sessions; the remote audits, a remote regime.\n",
         "c.lean": "-- the remote bandwidth audit",
         "verity/README.md": "the remote bandwidth audit",
-        "verity/core/protocols/bandwidth/PROTOCOL.md": "a remote bandwidth window",
         "archive/x.md": "the remote audit",
         GLOSSARY: '| "remote bandwidth audit", "remote audit" | PoUB |\n| other | the remote audit |\n',
     }
