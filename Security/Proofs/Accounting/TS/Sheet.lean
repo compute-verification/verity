@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.Guarantees.Sheet
+public import Proofs.Accounting.Lemmas.Sheet
 
 /-!
 # The data-sheet axioms' bridges

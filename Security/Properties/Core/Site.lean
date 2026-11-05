@@ -139,8 +139,7 @@ def ofEntry (e : Verity.Site.Entry) : Core.Site.Entry :=
   ⟨e.sheets.map ofSheet, e.locs.map ofLoc, e.links.map ofLink⟩
 
 /-- The code's entry of the registration of a spec entry. -/
-def ofRegEntry : Verity.Registration.Entry → Core.Site.Registration.Entry
-  | .site p e => .site p (ofEntry e)
+def ofRegEntry (e : Verity.Registration.Entry) : Core.Site.Registration.Entry := .site e.previous (ofEntry e.added)
 
 /-- The spec's composite of a code composite. -/
 def composite : Core.Site.Registration.Composite → Verity.Registration.Composite
