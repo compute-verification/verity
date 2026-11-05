@@ -41,8 +41,9 @@ def bitsZ (n : ℕ) : (Fin n → Bool) ≃ (Fin n → ZMod 2) := Equiv.piCongrRi
 
 /-- **The hiding gap reads its salts only up to a bijection**: reindexing the salts of the mask `My` and the salt hash
 `c` by `e` leaves the gap unchanged. -/
-theorem hidingGap_comp_equiv {Y Y' B C : Type} [Fintype Y] [Fintype Y'] [Fintype B] [DecidableEq B] [DecidableEq C]
-    (e : Y' ≃ Y) (My : Y → B) (c : Y → C) : hidingGap (My ∘ e) (c ∘ e) = hidingGap My c := by
+theorem hidingGap_comp_equiv {Salt Salt' B C : Type} [Fintype Salt] [Fintype Salt'] [Fintype B] [DecidableEq B]
+    [DecidableEq C] (e : Salt' ≃ Salt) (My : Salt → B) (c : Salt → C) :
+    hidingGap (My ∘ e) (c ∘ e) = hidingGap My c := by
   have himg : univ.image (c ∘ e) = univ.image c := by
     classical
     rw [← image_image, image_univ_equiv]
@@ -50,8 +51,9 @@ theorem hidingGap_comp_equiv {Y Y' B C : Type} [Fintype Y] [Fintype Y'] [Fintype
   rw [himg, Fintype.card_congr e, Fintype.card_congr ((Equiv.refl B).prodCongr e)]
   congr 1
   refine sum_congr rfl fun v _ => ?_
-  have h1 : #{y : Y' | ((My ∘ e) y, (c ∘ e) y) = v} = #{y : Y | (My y, c y) = v} := card_equiv e fun y => by simp
-  have h2 : #{p : B × Y' | (p.1, (c ∘ e) p.2) = v} = #{p : B × Y | (p.1, c p.2) = v} :=
+  have h1 : #{y : Salt' | ((My ∘ e) y, (c ∘ e) y) = v} = #{y : Salt | (My y, c y) = v} :=
+    card_equiv e fun y => by simp
+  have h2 : #{p : B × Salt' | (p.1, (c ∘ e) p.2) = v} = #{p : B × Salt | (p.1, c p.2) = v} :=
     card_equiv ((Equiv.refl B).prodCongr e) fun p => by simp
   rw [h1, h2]
 
@@ -83,7 +85,7 @@ theorem sum_hidingGap_tree (ν : ByteArray) :
   Fintype.sum_equiv (bitsZ 2047) _ _ (hidingGap_tree ν)
 
 /-- **A map into 64-byte strings takes at most `2^512` values**: their bits tell them apart. -/
-theorem card_image_le_of_size64 {Y : Type} [Fintype Y] (c : Y → ByteArray) (hc : ∀ y, (c y).size = 64) :
+theorem card_image_le_of_size64 {Dom : Type} [Fintype Dom] (c : Dom → ByteArray) (hc : ∀ y, (c y).size = 64) :
     #(univ.image c) ≤ 2 ^ 512 := by
   have hlen : ∀ y, (c y).data.toList.length = 64 := fun y => by rw [Array.length_toList, ByteArray.size_data, hc]
   have hinj : Set.InjOn (bitsOf : ByteArray → Bits) (univ.image c : Finset ByteArray) := by
