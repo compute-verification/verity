@@ -31,11 +31,12 @@ RS = ROOT / "benchmarks" / "remote_session"
 PACKAGING = ROOT / "tools" / "research" / "src" / "research" / "pods" / "nebius" / "verifier"
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(RS))
+sys.path.insert(0, str(ROOT))
 
-import challengers  # noqa: E402
+from benchmarks.remote_session import challengers  # noqa: E402
 import host as H  # noqa: E402
 import store_layout as SL  # noqa: E402
-import verifier as V  # noqa: E402
+from benchmarks.remote_session import verifier as V  # noqa: E402
 
 T0 = datetime(2026, 10, 21, 13, 0, 0, tzinfo=timezone.utc)
 T1 = datetime(2026, 10, 21, 13, 30, 0, tzinfo=timezone.utc)

@@ -29,11 +29,10 @@ import threading
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "remote_session"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-import verifier as V
-import wire
+from benchmarks.remote_session import verifier as V
+from benchmarks.remote_session import wire
 
 from verity.core.protocols.remote_bandwidth import audit
 
