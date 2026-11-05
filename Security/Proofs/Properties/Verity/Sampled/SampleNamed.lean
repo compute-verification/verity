@@ -92,6 +92,25 @@ theorem mapM_keys {β : Type _} {f : β → Option (String × ByteArray)} {key :
         subst h
         rw [List.map_cons, List.map_cons, hk a b ha, mapM_keys hk hl]
 
+/-- Each entry of a list an `Option` `mapM` succeeds on has its value among the values. -/
+theorem mapM_entry {β γ : Type _} {f : β → Option γ} :
+    ∀ {l : List β} {ys : List γ}, l.mapM f = some ys → ∀ x ∈ l, ∃ y ∈ ys, f x = some y
+  | [], _, _, x, hx => absurd hx List.not_mem_nil
+  | a :: l, ys, h, x, hx => by
+    cases ha : f a with
+    | none => simp [List.mapM_cons, ha] at h
+    | some b =>
+      cases hl : l.mapM f with
+      | none => simp [List.mapM_cons, ha, hl] at h
+      | some zs =>
+        simp only [List.mapM_cons, ha, hl, Option.pure_def, Option.bind_eq_bind, Option.bind_some,
+          Option.some.injEq] at h
+        subst h
+        rcases List.mem_cons.1 hx with rfl | hx
+        · exact ⟨b, List.mem_cons.2 (Or.inl rfl), ha⟩
+        · obtain ⟨y, hy, e⟩ := mapM_entry hl x hx
+          exact ⟨y, List.mem_cons.2 (Or.inr hy), e⟩
+
 /-- **v2 draws at the digest sampled proofs' case commits**: where composite `k` accepted what the prover sent and
 v2's case in it accepts at the draw `dr`, the digests the commitment binds (`BindsAt`), keyed by distinct ids, give
 sampled proofs `dr`'s digest. -/
@@ -117,7 +136,7 @@ theorem draw_after {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e 
       (List.map_map ..).symm.trans (congrArg (List.map (·.id)) hfst)
     rw [hkeys, h2]
     exact components_nodup k s
-  · obtain ⟨y, hy, hfy⟩ := Properties.Composition.mapM_some hds' x hx
+  · obtain ⟨y, hy, hfy⟩ := mapM_entry hds' x hx
     have hdg : Properties.Composition.digestOf x.1 x.2.2.commitment = some c.digest := by
       rw [hx1]
       show Properties.Composition.digestOf _root_.SampledProofs.OneStage.protocol x.2.2.commitment = _
