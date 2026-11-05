@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Refine.LiveSim
-import Proofs.Flock.Soundness.Game.Union
+module
+
+public import Proofs.Flock.Soundness.Refine.LiveSim
+public import Proofs.Flock.Soundness.Game.Union
 
 /-!
 # The static shape of a rep
@@ -17,6 +19,8 @@ it. A rep may only stop early, on a reject.
   `repC_spine`: compiled Ligerito and a whole rep have spines, `repShape`, which read only the dimensions, the number
   of claims and the schedule.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

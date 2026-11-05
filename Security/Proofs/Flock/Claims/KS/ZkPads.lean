@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.ZkXferJ
+module
+
+public import Proofs.Flock.Claims.KS.ZkXferJ
 
 /-!
 # The masked level-0 rows' extra lanes
@@ -19,6 +21,8 @@ level-0 row check reads its pair of them.
   rep `0`'s list with no extra lane), so the masked session's bound (`session_sound_of_table_accZ_sc`) bounds the
   uncommitted acceptance at `oracleOf C` by its term off any oracle that agrees with `oracleOf C` on the witness lanes.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

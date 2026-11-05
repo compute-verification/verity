@@ -1,19 +1,21 @@
-import Definitions.Claims.SamplingGeneric
-import Proofs.Flock.SamplingGeneric.Fails
-import Proofs.Flock.SamplingGeneric.Split
-import Proofs.Flock.SamplingGeneric.Assemble
-import Proofs.Flock.SamplingGeneric.Coins
-import Proofs.Flock.SamplingGeneric.Session
-import Proofs.Flock.SamplingGeneric.Count
-import Proofs.Flock.SamplingGeneric.Bits
-import Proofs.Flock.SamplingGeneric.Reg
-import Proofs.Flock.SamplingGeneric.Efficient
-import Proofs.Flock.SamplingGeneric.Counter
-import Proofs.Flock.SamplingGeneric.Deployed
-import Proofs.Flock.SamplingGeneric.Instance
-import Proofs.Flock.SamplingGeneric.ZK
-import Proofs.Flock.SamplingGeneric.FlockZk
-import Proofs.Flock.SamplingGeneric.Complete
+module
+
+public import Definitions.Claims.SamplingGeneric
+public import Proofs.Flock.SamplingGeneric.Fails
+public import Proofs.Flock.SamplingGeneric.Split
+public import Proofs.Flock.SamplingGeneric.Assemble
+public import Proofs.Flock.SamplingGeneric.Coins
+public import Proofs.Flock.SamplingGeneric.Session
+public import Proofs.Flock.SamplingGeneric.Count
+public import Proofs.Flock.SamplingGeneric.Bits
+public import Proofs.Flock.SamplingGeneric.Reg
+public import Proofs.Flock.SamplingGeneric.Efficient
+public import Proofs.Flock.SamplingGeneric.Counter
+public import Proofs.Flock.SamplingGeneric.Deployed
+public import Proofs.Flock.SamplingGeneric.Instance
+public import Proofs.Flock.SamplingGeneric.ZK
+public import Proofs.Flock.SamplingGeneric.FlockZk
+public import Proofs.Flock.SamplingGeneric.Complete
 
 /-!
 # The sampled compiler in the claims core, at Flock
@@ -66,6 +68,8 @@ and the server's error, under the premises `Claims.ZKServer.Flock.zk_server_lean
 at most its session's error, the session's coins being uniform once the coins off its rounds are fixed, and a union
 bound over the first `K` slots gives the compiled error.
 -/
+
+@[expose] public section
 
 namespace Claims.SamplingGeneric
 

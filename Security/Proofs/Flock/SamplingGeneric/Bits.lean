@@ -1,6 +1,8 @@
-import Definitions.Claims.SamplingGeneric
-import Proofs.Flock.Claims.Sampling.Bext
-import Proofs.Flock.SamplingGeneric.Fails
+module
+
+public import Definitions.Claims.SamplingGeneric
+public import Proofs.Flock.Claims.Sampling.Bext
+public import Proofs.Flock.SamplingGeneric.Fails
 
 /-!
 # The sampled compiler's bits
@@ -10,6 +12,8 @@ import Proofs.Flock.SamplingGeneric.Fails
 bounds are `CompilerEfficient`'s second and third conjuncts, and `CompilerBits` takes `CompilerEfficient`'s premises,
 so `CompilerKS` and `CompilerEfficient` give `CompilerBits` (`compilerBits_of`).
 -/
+
+@[expose] public section
 
 namespace Claims.SamplingGeneric
 

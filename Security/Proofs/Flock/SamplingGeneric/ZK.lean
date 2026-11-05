@@ -1,9 +1,11 @@
-import Definitions.Claims.SamplingGeneric
-import Proofs.Flock.Claims.Recursion.SeqPrefix
-import Proofs.Flock.Claims.ZK.Congr
-import Proofs.Flock.Claims.KS.FnFork
-import Proofs.Flock.Claims.KS.Wait
-import Proofs.Flock.Claims.Sampling.Wait
+module
+
+public import Definitions.Claims.SamplingGeneric
+public import Proofs.Flock.Claims.Recursion.SeqPrefix
+public import Proofs.Flock.Claims.ZK.Congr
+public import Proofs.Flock.Claims.KS.FnFork
+public import Proofs.Flock.Claims.KS.Wait
+public import Proofs.Flock.Claims.Sampling.Wait
 
 /-!
 # The sampled compiler is zero knowledge (`CompilerZK`)
@@ -25,6 +27,8 @@ the composed simulator (`hyb_zero`), since the framing's messages are functions 
   outcome; `errAt`: `err`'s term at a session.
 * **`compilerZK : CompilerZK`**.
 -/
+
+@[expose] public section
 
 namespace Claims.SamplingGeneric
 

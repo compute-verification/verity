@@ -1,5 +1,7 @@
-import Proofs.Flock.SamplingGeneric.Assemble
-import Proofs.Flock.SamplingGeneric.Bits
+module
+
+public import Proofs.Flock.SamplingGeneric.Assemble
+public import Proofs.Flock.SamplingGeneric.Bits
 
 /-!
 # Why the contract counts the opening checks
@@ -16,6 +18,8 @@ reveal of one opening whose check is one SHA-512 call, and `openCalls = oc`. `Lâ
 at any compiled verifier: at an accepted run, the outer body's at the kept outer runs (`Compiled.length_ownLog_E`), `k`
 of them when every run accepts (`Compiled.length_outerList_all`).
 -/
+
+@[expose] public section
 
 namespace Claims.SamplingGeneric
 

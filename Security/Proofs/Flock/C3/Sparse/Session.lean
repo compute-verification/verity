@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Compose.Family
+module
+
+public import Proofs.Flock.C3.Compose.Family
 
 /-!
 # Piece (d): RecSparse at session level
@@ -8,6 +10,8 @@ import Proofs.Flock.C3.Compose.Family
 done (`VBridge/Sparse/`: `check_sparse`, `laid_sparse`, `sparse_refines`, `sparsePhase_plays`); this piece lifts it to
 the sessions' accepted layers, as `HRuns` lifts `run_of_algebra`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Sparse
 

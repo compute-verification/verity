@@ -1,6 +1,8 @@
-import Proofs.Flock.Bridge.Targets
-import Proofs.Flock.Bridge.Lowers
-import Proofs.Flock.Claims.Sampling.EndToEndDraw
+module
+
+public import Proofs.Flock.Bridge.Targets
+public import Proofs.Flock.Bridge.Lowers
+public import Proofs.Flock.Claims.Sampling.EndToEndDraw
 
 /-!
 # The bridge's slot count, `P_a`, count lemma and scope
@@ -18,6 +20,8 @@ of population slots), and
 Scope: `designOf r` is well formed on `partOf P κ ns` when `r` is well formed on the strata `ns`
 (`designOf_wellFormed`).
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainDrawAccJK
-import Proofs.Flock.Claims.KS.PlainDrawDecK
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawAccJK
+public import Proofs.Flock.Claims.KS.PlainDrawDecK
 
 /-!
 # The deployed plain decoders at the draw, at the parsed record
@@ -7,6 +9,8 @@ import Proofs.Flock.Claims.KS.PlainDrawDecK
 `PlainDrawDecK` at `wrPDJK` and `plainVerdictAtJK` (`plain_hdecAtJK`, `plain_hdecHAtJK`), on `PlainDrawAccJK`'s
 acceptance lemmas. `PlaysCoin`'s erasure lemmas are `PlainDrawDecK`'s.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.PlainDraw
 

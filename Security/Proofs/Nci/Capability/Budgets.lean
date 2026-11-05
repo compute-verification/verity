@@ -1,9 +1,11 @@
-import Definitions.Nci.Guarantees.Capability.Budgets
-import Proofs.Nci.Capability.Items
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Mathlib.Probability.ProbabilityMassFunction.Constructions
-import Mathlib.Tactic.Linarith
+module
+
+public import Definitions.Nci.Guarantees.Capability.Budgets
+public import Proofs.Nci.Capability.Items
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
+public import Mathlib.Probability.ProbabilityMassFunction.Constructions
+public import Mathlib.Tactic.Linarith
 
 /-!
 # Local bounds: proofs of the budgets
@@ -17,6 +19,8 @@ import Mathlib.Tactic.Linarith
   (`Committed.recompute_congr`), at most `2^k` views, so one view, and the held value it gives, has probability at
   least `2^-k`, which min-entropy hardness bounds by `2^(Λ − price)`.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

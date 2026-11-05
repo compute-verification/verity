@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Witnesses.SamplingGenericCost
-import Proofs.Flock.Claims.Witnesses.SamplingGenericZK
-import Proofs.Flock.Claims.Deploy
+module
+
+public import Proofs.Flock.Claims.Witnesses.SamplingGenericCost
+public import Proofs.Flock.Claims.Witnesses.SamplingGenericZK
+public import Proofs.Flock.Claims.Deploy
 
 /-!
 # The generic sampled compiler's statements say something
@@ -18,6 +20,8 @@ and a nontrivial one, at which its conclusion fails. Each builds its instance: c
   check calls more than it counts) fails `Efficient`; and `talkL` (a talking prover, a silent simulator) fails
   `ZkCompiled.ZK`.
 -/
+
+@[expose] public section
 
 namespace Claims.SamplingGeneric
 

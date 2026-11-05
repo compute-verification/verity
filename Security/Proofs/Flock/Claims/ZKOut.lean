@@ -1,5 +1,7 @@
-import Definitions.Claims.ZKOut
-import Proofs.Flock.Claims.ZK.NonVacuous
+module
+
+public import Definitions.Claims.ZKOut
+public import Proofs.Flock.Claims.ZK.NonVacuous
 
 /-!
 # Zero knowledge with a public outcome: the leak form
@@ -11,6 +13,8 @@ number of outcomes times the simulator's that draws the outcome uniformly (`pr_p
 `ZKOut` is not true of everything (`ZKOut_fails`): the quiet prover against the verifier that accepts its first
 message, with a simulator that outputs the empty transcript, fails it at every error below `1`.
 -/
+
+@[expose] public section
 
 namespace Claims
 

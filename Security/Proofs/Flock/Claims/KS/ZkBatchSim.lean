@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ZkLiveSched
-import Proofs.Flock.Claims.KS.ZkBatch
+module
+
+public import Proofs.Flock.Claims.KS.ZkLiveSched
+public import Proofs.Flock.Claims.KS.ZkBatch
 
 /-!
 # The masked simulated strategy follows the batch's schedule at the deployed tables
@@ -19,6 +21,8 @@ count is short of both of table `j`'s reps' rounds (`zk_slot_lt`):
   `r · repRounds + zkCapDist` is below `2 · repRounds`;
 * `zkBatchAlign`, `zkSlotAlign`: `ZkBatchAlign` holds at every message, and with it `ZkSlotAlign`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

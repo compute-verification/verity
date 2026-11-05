@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.DeployHonest
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployHonest
 
 /-!
 # The honest compiled run's inner rounds are the inner prover's messages (`run_msg_inner`)
@@ -8,6 +10,8 @@ is the inner prover's (`b.ref.PI w`) at the inner statement, after the run's ear
 prover's tape `ω.1`: `refP` hands the inner rounds to the inner prover, and the compiled verifier answers each with its
 coin, so the run gets past them (`run_length_ge`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

@@ -1,19 +1,21 @@
-import Proofs.Flock.Claims.Witnesses.Shared
-import Proofs.Flock.Claims.Witnesses.Flock
-import Proofs.Flock.Claims.Witnesses.Sampling
-import Proofs.Flock.Claims.Witnesses.SamplingGeneric
-import Proofs.Flock.Claims.Witnesses.SamplingGenericCost
-import Proofs.Flock.Claims.Witnesses.SamplingGenericZK
-import Proofs.Flock.Claims.Witnesses.SamplingGenericCompiler
-import Proofs.Flock.Claims.Witnesses.SamplingGenericComplete
-import Proofs.Flock.Claims.Witnesses.ZKOutLeak
-import Proofs.Flock.Claims.Witnesses.Recursion
-import Proofs.Flock.Claims.Witnesses.RecursionMeets
-import Proofs.Flock.Claims.Witnesses.RecursionLin
-import Proofs.Flock.Claims.Witnesses.RecursionLin2
-import Proofs.Flock.Claims.Witnesses.Stated
-import Proofs.Flock.Claims.Witnesses.Meets
-import Proofs.Flock.Claims.Witnesses.BindingMeets
+module
+
+public import Proofs.Flock.Claims.Witnesses.Shared
+public import Proofs.Flock.Claims.Witnesses.Flock
+public import Proofs.Flock.Claims.Witnesses.Sampling
+public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
+public import Proofs.Flock.Claims.Witnesses.SamplingGenericCost
+public import Proofs.Flock.Claims.Witnesses.SamplingGenericZK
+public import Proofs.Flock.Claims.Witnesses.SamplingGenericCompiler
+public import Proofs.Flock.Claims.Witnesses.SamplingGenericComplete
+public import Proofs.Flock.Claims.Witnesses.ZKOutLeak
+public import Proofs.Flock.Claims.Witnesses.Recursion
+public import Proofs.Flock.Claims.Witnesses.RecursionMeets
+public import Proofs.Flock.Claims.Witnesses.RecursionLin
+public import Proofs.Flock.Claims.Witnesses.RecursionLin2
+public import Proofs.Flock.Claims.Witnesses.Stated
+public import Proofs.Flock.Claims.Witnesses.Meets
+public import Proofs.Flock.Claims.Witnesses.BindingMeets
 
 /-!
 # Refutation witnesses
@@ -34,3 +36,5 @@ sampling `Binding`'s at the deployed sampling record (`SamplingDeploy.deploy`). 
 under `claims.generic` with the guarantee that states it, which the lock's `witnesses` holds to an honest and a
 nontrivial lemma (`SamplingGenericCompiler`, `SamplingGenericComplete`, `ZKOutLeak`).
 -/
+
+@[expose] public section
