@@ -17,8 +17,9 @@ square root of a two-continuation finder's success (`Core.Game.TwoRun`), one fin
   miss at none of a family of cuts, plus each cut's miss (`DigestCut.prob_le_noMiss_add_missP`), and at cuts whose
   revealed messages open one digest, plus the square root of each cut's finder's success
   (`DigestCut.prob_le_noMiss_add_sqrt`).
-* **The period's game as one game** (`relK`, `releases_bind`, `game_eq_relK`): the device's releases and then the
-  evidence, each release's continuation carrying the log after it, so a cut follows the frames the prover sends.
+* **The period's game as one game** (`relK`, `releases_bind`, `game_eq_relK`): the prover's request, the device's
+  releases and then the close (`finish`), each release's continuation carrying the log after it, so a cut follows the
+  frames the prover sends.
 * **Where the messages are fixed** (`Reading`): round `j` at the first frame the prover sends that the reading's
   `round j` picks after the device's log before it, its digest the bytes the frame answers (an opening's `after`, the
   SHA-512 of the round's message, `SampledProofs.Challenger.linkAfter` and each rep round's `msg_sha512`); the record
@@ -276,13 +277,12 @@ theorem releases_bind {β : Type} :
           funext d
           exact releases_bind k _ _ _
 
-/-- The evidence after the device's log `log`, and how the play ends. -/
-def evidenceG (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (log : List Release) : Game Exchange :=
-  .send (ByteArray × Array ByteArray) fun e => .ret ⟨θ, F, c, log, e.1, e.2⟩
-
-theorem play_eq (fs : List (String × ℕ)) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
-    play fs θ F c = relK (frames fs) fs [] (evidenceG θ F c) :=
-  releases_bind _ _ _ _
+theorem play_eq (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
+    play fs D θ F c = .send ByteArray fun a => relK (frames fs) fs [] (finish D θ F c a) := by
+  show Game.send ByteArray _ = _
+  congr 1
+  funext a
+  exact releases_bind _ _ _ _
 
 /-! ## The cuts at the frames the prover sends -/
 
@@ -345,10 +345,11 @@ open scoped ENNReal
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The period's game is the device's releases, then the evidence**, as one game. -/
+/-- **The period's game is the prover's request, the device's releases, then the close**, as one game. -/
 theorem game_eq_relK (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
-    V.game θ F c = relK (frames (V.families θ)) (V.families θ) [] (evidenceG θ F c) :=
-  play_eq _ θ F c
+    V.game θ F c = .send ByteArray fun a =>
+      relK (frames (V.families θ)) (V.families θ) [] (finish (V.signer θ) θ F c a) :=
+  play_eq _ _ θ F c
 
 /-- **Where a session's messages are fixed, and what the evidence reveals for them**, at `R` rounds. Round `j` is fixed
 at the first frame the prover sends that `round j` picks, after the device's log before it; its digest is the bytes
@@ -368,10 +369,11 @@ abbrev Readings := (A : Live) → ByteArray → Array ByteArray → ByteArray �
 
 variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) {R : ℕ}
 
-/-- **Round `j`'s cut**: at the first frame round `j`'s reading picks, the messages the evidence reveals for it that
-open the bytes the frame answers. -/
+/-- **Round `j`'s cut**: after the prover's request, at the first frame round `j`'s reading picks, the messages the
+evidence reveals for it that open the bytes the frame answers. -/
 noncomputable def roundCut (rd : Reading R) (j : Fin R) : DigestCut.AgreeCut sha512Msg (V.game θ F c) :=
-  (frameCut (rd.round j) (rd.reveal j) _ _ _ (evidenceG θ F c) []).cast (game_eq_relK V θ F c).symm
+  (DigestCut.AgreeCut.send fun a : ByteArray => frameCut (rd.round j) (rd.reveal j) (frames (V.families θ))
+    (V.families θ) [] (finish (V.signer θ) θ F c a) []).cast (game_eq_relK V θ F c).symm
 
 /-- **The record's cut**: at the play's start, the records the evidence reveals that open the record's digest. -/
 noncomputable def recordCut (rd : Reading R) : DigestCut.AgreeCut sha512Msg (V.game θ F c) :=
