@@ -1710,7 +1710,7 @@ def test_a_shard_whose_failure_names_nothing_runs_again_once_elsewhere_ringing_i
                                                                                                  first, again):
     """A failure naming no failing test and no error line (a kill, a crash with no output) may be its machine's, and its
     culprit, named by the suite's declared inputs alone, would be reverted at once.  Its shard runs again once instead, stopped
-    if it still runs, on the machines of `on` it didn't run on, as it was launched, and @infra is rung with the run, its
+    if it still runs, on the machines of `on` it didn't run on, as it was launched, and `INFRA` is rung with the run, its
     machine and what failed: nothing is red or reverted.  The rerun's pass passes the shard; failing so again, it is red and
     its culprit is reverted, and the shard runs no third time."""
     h, tip, machines, shard1 = _two_shards(world, monkeypatch, tmp_path)
@@ -1743,7 +1743,7 @@ def test_a_shard_whose_failure_names_nothing_runs_again_once_elsewhere_ringing_i
 
 def test_a_shard_failure_naming_a_failing_test_is_red_at_once_and_runs_its_shard_no_more(world, monkeypatch, tmp_path):
     """Only a failure that names nothing runs its shard again: one naming its failing test is red in the tick that reads it,
-    its culprit reverted, and @infra hears nothing."""
+    its culprit reverted, and `INFRA` hears nothing."""
     h, tip, _, shard1 = _two_shards(world, monkeypatch, tmp_path)
     h.run_state["r-post-2"] = ("done", 1, None, None, "m2")
     h.evidence = [shard1, _suite_failed(tmp_path, "r-post-2", test="tests/test_x.py::test_y")]
