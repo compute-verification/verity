@@ -1,7 +1,8 @@
 """The served window's partition in the planner's two modes: Llama-3.2-1B int8 at T 8,192 on the H200, one step
 a window, cut into proof blocks at each rung of a ladder, for the free-compute target and the exfiltration target,
 priced proving only (`PROVING_ONLY`, Lean's `GranularityOptimum`) and proving plus `w` times the serve-time commitment
-(`n b(s) h`, paid on every proof block, drawn or not) at two readings of h, a hashed byte's cost.
+(`n b(s) h`, paid on every proof block, drawn or not) at two readings of h, a hashed byte's cost; and the second mode
+again under a code-based commitment at each rate ρ of `RATES`.
 
 A model, not a measurement: each input carries its status (M measured, D derived, A assumed) and source (`IN`, read
 from `served_window_inputs.json`).
@@ -29,11 +30,18 @@ work (free compute) or by width (exfiltration), through `grain_costs`, the laws 
 `ExfiltrationOptimum`.  `planner`: the rung's parts as strata through `for_target` under the density bound, its
 statements shared (`CostModel.shared`), at `commit_weight` 0 or w.
 
+**The code-based commitment.**  The served values committed in Flock's field as rows encoded at rate ρ, their codeword
+columns Merkle-hashed at serve time (about 1/ρ the bytes, at h), and opened by Flock's own commitment through linear
+claims: no proof block hashes a row in circuit (`Part.hashed` leaves its ANDs), and the hm96 commitment is gone.  The
+encoding and the openings' own work in Flock are not priced, so its proving is a floor.  Each proof block's fit and its
+statement's share stay today's (`inputs.cap`, which the hm96 and SHA-512 slots only enlarge), and no rung's fit turns on
+those slots: a rung that misses C-Flock's block misses it on its own ANDs and rows' bits.
+
 **Targets.**  Free compute: C = `EPS` of the scope's MACs, at the window and pooled over each monitoring period
 (`wipe_monitoring.PERIODS`: a week, a month and a year) of windows at the stock step; the draws are about Λ/ε whatever
 the scope, the commitment grows with it.  Exfiltration: ℓ = `LEAK_BITS` a window.
 
-    uv run python benchmarks/sampling_plan/served_window.py --out DIR [--weight W] [--no-planner]
+    uv run python benchmarks/sampling_plan/served_window.py --out DIR [--weight W] [--rates R ...] [--no-planner]
 """
 from __future__ import annotations
 
@@ -41,6 +49,7 @@ import argparse
 import json
 import sys
 from dataclasses import dataclass, replace
+from fractions import Fraction
 from math import log, log2
 from pathlib import Path
 
@@ -60,6 +69,8 @@ DELTA = float(WINDOW_DELTA)
 LAMBDA = log(1 / DELTA)
 EPS = 0.01
 LEAK_BITS = 2.0 ** 30
+#: the code-based commitment's rates ρ: a codeword is 1/ρ its row
+RATES = (1 / 2, 1 / 4)
 #: the pieces' ANDs (their circuit-check pins: `verity/ml/circuits/ops/*.circuit-check.json`)
 F32_FMA, F32_MUL, F32_ADD, F32_MAX, EX2, RCP, F2BF16, F32_DIV, S8_CLAMP = 4498, 2406, 823, 283, 688, 197, 77, 2493, 71
 F32_RINT = 275
@@ -83,8 +94,9 @@ TILES = ((2, 2), (4, 4), (16, 16), (64, 64), (128, 128))
 @dataclass(frozen=True)
 class Part:
     """One stratum of a rung: `units` proof blocks a window of `work` MACs each, `out_bits` wide, committing `commit_bytes`
-    at serve time, of `ands` ANDs, the rows they open included; `gates` and `rows` are its widest proof block's own ANDs
-    and the rows it opens (bytes each), what C-Flock's block holds."""
+    at serve time, of `ands` ANDs, the rows they open included (`hashed` of them, their openings at hm96's `row_ands`);
+    `gates` and `rows` are its widest proof block's own ANDs and the rows it opens (bytes each), what C-Flock's block
+    holds."""
 
     name: str
     units: int
@@ -94,6 +106,7 @@ class Part:
     ands: float
     gates: float
     rows: tuple[int, ...]
+    hashed: float
 
     @property
     def k_log(self) -> int:
@@ -109,9 +122,14 @@ class Part:
         return cap(round(self.gates), self.rows) or 1
 
 
+def openings(rows: tuple[float, ...]) -> float:
+    """The ANDs of opening `rows` at hm96's `row_ands`."""
+    return sum(row_ands(round(r)) for r in rows)
+
+
 def opened(gates: float, rows: tuple[float, ...]) -> float:
-    """A proof block's ANDs with its rows' openings at hm96's `row_ands`."""
-    return gates + sum(row_ands(round(r)) for r in rows)
+    """A proof block's ANDs with its rows' openings."""
+    return gates + openings(rows)
 
 
 def token_layers() -> int:
@@ -177,16 +195,17 @@ def attention_parts() -> list[Part]:
     g_tail, rows_tail = attention_block(tail, True)
     g_last, rows_last = attention_block(kb, True)
     return [Part("attention", round(tl * heads * before), 2 * hd * kb, 8 * state, state, opened(g, rows), g,
-                 tuple(map(round, rows))),
+                 tuple(map(round, rows)), hashed=openings(rows)),
             Part("attention last", tl * heads, 2 * hd * tail, 16 * hd, 2 * hd, opened(g_tail, rows_tail), g_last,
-                 tuple(map(round, rows_last)))]
+                 tuple(map(round, rows_last)), hashed=openings(rows_tail))]
 
 
 def rest_parts() -> list[Part]:
     """Attention (`attention_parts`) and the row ops (one 16-bit coordinate each, at today's units)."""
     tl = token_layers()
     rows = row_op_bytes() / 2
-    return attention_parts() + [Part("row ops", round(tl * rows), 0.0, 16, 2, ROW_OP_ANDS, ROW_OP_GATES, ROW_OP_ROWS)]
+    return attention_parts() + [Part("row ops", round(tl * rows), 0.0, 16, 2, ROW_OP_ANDS, ROW_OP_GATES, ROW_OP_ROWS,
+                                     hashed=openings(ROW_OP_ROWS))]
 
 
 def coord_ands(k: int) -> float:
@@ -197,7 +216,8 @@ def linear_parts(rung: str) -> list[Part]:
     tl, out = token_layers(), []
     for op, (k, n) in LINEARS.items():
         if rung == "coord":
-            out.append(Part(op, tl * n, k, 16, 2, coord_ands(k), k // 32 * S8_STEP + EPILOGUE, (k, k, 4, 4, 2)))
+            out.append(Part(op, tl * n, k, 16, 2, coord_ands(k), k // 32 * S8_STEP + EPILOGUE, (k, k, 4, 4, 2),
+                            hashed=openings((k, k, 4, 4, 2))))
         elif rung.startswith("chunk"):
             c = min(int(rung.split()[1]), k)
             last = c / k
@@ -205,12 +225,13 @@ def linear_parts(rung: str) -> list[Part]:
             ands = c // 32 * S8_STEP + 2 * row_ands(c) + 2 * row_ands(4) \
                 + last * (EPILOGUE + 2 * row_ands(4) + row_ands(2))
             out.append(Part(op, tl * n * (k // c), c, bits, bits / 8, ands, c // 32 * S8_STEP + EPILOGUE,
-                            (c, c, 4, 4, 4, 4, 2)))
+                            (c, c, 4, 4, 4, 4, 2), hashed=openings((c, c, 4, 4)) + last * openings((4, 4, 2))))
         else:
             r, c = map(int, rung.split()[1].split("x"))
             cells = r * c
             gates, rows = cells * (k // 32 * S8_STEP + EPILOGUE), (k,) * (r + c) + (4 * r, 4 * c, 2 * cells)
-            out.append(Part(op, tl * n // cells, cells * k, 16 * cells, 2 * cells, opened(gates, rows), gates, rows))
+            out.append(Part(op, tl * n // cells, cells * k, 16 * cells, 2 * cells, opened(gates, rows), gates, rows,
+                            hashed=openings(rows)))
     return out
 
 
@@ -219,7 +240,8 @@ def _fused(name: str, units: int, int8: float, bf16: float, nbytes: float, out_b
     scales, the K and V it reads, its input and output) at hm96's per-byte rate."""
     per_byte = (row_ands(1 << 20) - row_ands(0)) / (1 << 20)
     gates = int8 * S8_STEP / 32 + bf16 * F32_FMA + row_ops
-    return Part(name, units, int8 + bf16, 8 * out_bytes, out_bytes, gates + nbytes * per_byte, gates, (round(nbytes),))
+    return Part(name, units, int8 + bf16, 8 * out_bytes, out_bytes, gates + nbytes * per_byte, gates, (round(nbytes),),
+                hashed=nbytes * per_byte)
 
 
 def fused_parts(rung: str) -> list[Part]:
@@ -255,6 +277,11 @@ def rungs() -> dict[str, list[Part]]:
     out |= {f"tile {r}x{c}": linear_parts(f"tile {r}x{c}") + rest_parts() for r, c in TILES}
     out |= {name: fused_parts(name) for name in ("attn|mlp token", "layer token", "4 layers token")}
     return out
+
+
+def coded(parts: list[Part]) -> list[Part]:
+    """The rung under the code-based commitment: each proof block's ANDs less its rows' in-circuit hashing."""
+    return [replace(p, ands=p.ands - p.hashed, hashed=0.0) for p in parts]
 
 
 def fitted() -> Fitted:
@@ -322,12 +349,12 @@ def scopes() -> dict[str, float]:
     return {"window": 1.0} | {name: seconds / IN["step_s"].value for name, seconds in wipe_monitoring.PERIODS}
 
 
-def run(weight: float = 1.0, *, plan: bool = True) -> dict:
+def run(weight: float = 1.0, *, rates: tuple[float, ...] = RATES, plan: bool = True) -> dict:
     m = fitted().model()
     ladder = rungs()
     work_window = sum(p.units * p.work for p in ladder["coord"])
     out = {"inputs": {k: v.__dict__ for k, v in IN.items()}, "model": LLAMA_1B, "delta": DELTA, "eps": EPS,
-           "leak_bits": LEAK_BITS, "weight": weight, "work_window": work_window,
+           "leak_bits": LEAK_BITS, "weight": weight, "code_rates": list(rates), "work_window": work_window,
            "rates": {"per_and": m.per_and, "staged_per_and": m.staged_per_and, "statement_fixed": m.statement_fixed,
                      "statement_per_and": m.statement_per_and},
            "h_mac_times": {k: h * IN["peak_macs"].value for k, h in readings().items()},
@@ -339,33 +366,40 @@ def run(weight: float = 1.0, *, plan: bool = True) -> dict:
                             "unit_work": unit_work(parts)}
                      for name, parts in ladder.items()},
            "results": []}
-    modes = {"proving only": PROVING_ONLY, f"proving + {weight:g} x commit": weight}
+    commit = f"proving + {weight:g} x commit"
+    schemes = [("hm96", None, ladder, {"proving only": PROVING_ONLY, commit: weight})]
+    schemes += [(f"code ρ {Fraction(rho).limit_denominator()}", rho, {name: coded(parts) for name, parts in ladder.items()},
+                 {commit: weight}) for rho in rates]
     cases = [(scope, "work", windows) for scope, windows in scopes().items()] + [("window", "leak", 1.0)]
     for scope, target, windows in cases:
-        for hname, h in readings().items():
-            for mode, w in modes.items():
-                rows = []
-                for name, parts in ladder.items():
-                    parts_s = scale(parts, windows)
-                    kw = {"work": EPS * work_window * windows} if target == "work" else {"leak": LEAK_BITS}
-                    by = "work" if target == "work" else "bits"
-                    g = grain(name, parts_s, m, by)
-                    lean = grain_costs([g], DELTA, h=h, weight=w, **kw)[0]
-                    marginal = grain_costs([grain(name, parts_s, m, by, marginal=True)], DELTA, h=h, weight=w, **kw)[0]
-                    row = {"rung": name, "fits": out["rungs"][name]["fits"], "work": unit_work(parts),
-                           "mean_work": g.work, "lean": lean, "lean_marginal": marginal}
-                    if plan:
-                        row["planner"] = planner(name, parts_s, m, h=h, weight=w, **kw)
-                    rows.append(row)
-                fit_rows = [r for r in rows if r["fits"]]
-                out["results"].append({
-                    "scope": scope, "target": target, "h": hname, "mode": mode, "weight": w, "rows": rows,
-                    "best_lean": min(fit_rows, key=lambda r: r["lean"]["total"])["rung"],
-                    "best_lean_any": min(rows, key=lambda r: r["lean"]["total"])["rung"],
-                    "best_marginal_any": min(rows, key=lambda r: r["lean_marginal"]["total"])["rung"],
-                    "best_planner": None if not plan else min(
-                        (r for r in fit_rows if r["planner"]), key=lambda r: r["planner"]["total"])["rung"],
-                    "serve_s": windows * IN["step_s"].value})
+        for hname, h_byte in readings().items():
+            for scheme, rho, ladder_s, modes in schemes:
+                h = h_byte / (rho or 1.0)
+                for mode, w in modes.items():
+                    rows = []
+                    for name, parts in ladder_s.items():
+                        parts_s = scale(parts, windows)
+                        kw = {"work": EPS * work_window * windows} if target == "work" else {"leak": LEAK_BITS}
+                        by = "work" if target == "work" else "bits"
+                        g = grain(name, parts_s, m, by)
+                        lean = grain_costs([g], DELTA, h=h, weight=w, **kw)[0]
+                        marginal = grain_costs([grain(name, parts_s, m, by, marginal=True)], DELTA, h=h, weight=w,
+                                               **kw)[0]
+                        row = {"rung": name, "fits": out["rungs"][name]["fits"], "work": unit_work(parts),
+                               "mean_work": g.work, "lean": lean, "lean_marginal": marginal}
+                        if plan:
+                            row["planner"] = planner(name, parts_s, m, h=h, weight=w, **kw)
+                        rows.append(row)
+                    fit_rows = [r for r in rows if r["fits"]]
+                    out["results"].append({
+                        "scope": scope, "target": target, "h": hname, "scheme": scheme, "rate": rho, "mode": mode,
+                        "weight": w, "rows": rows,
+                        "best_lean": min(fit_rows, key=lambda r: r["lean"]["total"])["rung"],
+                        "best_lean_any": min(rows, key=lambda r: r["lean"]["total"])["rung"],
+                        "best_marginal_any": min(rows, key=lambda r: r["lean_marginal"]["total"])["rung"],
+                        "best_planner": None if not plan else min(
+                            (r for r in fit_rows if r["planner"]), key=lambda r: r["planner"]["total"])["rung"],
+                        "serve_s": windows * IN["step_s"].value})
     out["sqrt_law"] = sqrt_law(m, weight)
     return out
 
@@ -401,29 +435,32 @@ def _g(x: float) -> str:
 
 
 def render(out: dict) -> str:
-    lines = [f"# Served window, Llama-3.2-1B int8 T 8,192: proof-block size in two modes (δ = 2^-40, ε = {EPS:.0%}, "
-             f"ℓ = 2^{log2(LEAK_BITS):.0f} bits a window)", ""]
-    lines.append("GPU-seconds (proving: RTX PRO 6000 ZK fit, modelled for these units; commitment: H200 SHA-512 at h). "
-                 "'x serve' divides by the scope's stock serving time. s* is the cheapest rung every proof block of which "
-                 f"C-Flock's block holds (k_log <= {K_MAX} at the composer's occupancy, `inputs.cap`; attention in key blocks "
-                 f"of {attention_keys()}) and the size classes; 'any' includes the rungs that don't.")
-    lines += ["", "| scope | target | h | mode | s* (lean) | s* (MACs a gate_up block) | total | prove | commit | x serve | "
-              "s* (planner) | planner total | s* any, as fitted | s* any, marginal |",
-              "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    lines = [f"# Served window, Llama-3.2-1B int8 T 8,192: proof-block size in two modes and under a code-based commitment "
+             f"(δ = 2^-40, ε = {EPS:.0%}, ℓ = 2^{log2(LEAK_BITS):.0f} bits a window)", ""]
+    lines.append("GPU-seconds (proving: RTX PRO 6000 ZK fit, modelled for these units; commitment: H200 SHA-512 at h, hm96's "
+                 "rows, or at h/ρ, a code at rate ρ whose proof blocks hash no row in circuit, its encoding and openings "
+                 "unpriced). 'x serve' divides by the scope's stock serving time. s* is the cheapest rung every proof block "
+                 f"of which C-Flock's block holds (k_log <= {K_MAX} at the composer's occupancy, `inputs.cap`; attention in "
+                 f"key blocks of {attention_keys()}) and the size classes; 'any' includes the rungs that don't.")
+    lines += ["", "| scope | target | h | commitment | mode | s* (lean) | s* (MACs a gate_up block) | total | prove | commit | "
+              "x serve | s* (planner) | planner total | s* any, as fitted | s* any, marginal |",
+              "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in out["results"]:
         best = next(x for x in r["rows"] if x["rung"] == r["best_lean"])
         pl = next((x for x in r["rows"] if x["rung"] == r["best_planner"]), None)
         lean = best["lean"]
-        lines.append(f"| {r['scope']} | {r['target']} | {r['h']} | {r['mode']} | {r['best_lean']} | {_g(best['work'])} | "
+        lines.append(f"| {r['scope']} | {r['target']} | {r['h']} | {r['scheme']} | {r['mode']} | {r['best_lean']} | "
+                     f"{_g(best['work'])} | "
                      f"{_g(lean['total'])} | {_g(lean['prove'])} | {_g(lean['commit'])} | "
                      f"{_g(lean['total'] / r['serve_s'])} | {r['best_planner'] or '-'} | "
                      f"{'-' if pl is None else _g(pl['planner']['total'])} | {r['best_lean_any']} | "
                      f"{r['best_marginal_any']} |")
     keys = [(s, "work") for s in scopes()] + [("window", "leak")]
-    lines += ["", "Each rung's total, GPU-seconds (lean view, h 398 GB/s, proving + w x commit), as fitted / marginal:", "",
-              "| rung | fits | widest block's k_log | proof blocks a window | committed GB a window | "
+    lines += ["", "Each rung's total, GPU-seconds (lean view, hm96, h 398 GB/s, proving + w x commit), as fitted / marginal:",
+              "", "| rung | fits | widest block's k_log | proof blocks a window | committed GB a window | "
               + " | ".join(f"{s} {t}" for s, t in keys) + " |", "|---|---|---|---|---|" + "---|" * len(keys)]
-    pick = {(r["scope"], r["target"]): r for r in out["results"] if r["h"] == "h 398 GB/s" and r["weight"] > 0}
+    pick = {(r["scope"], r["target"]): r for r in out["results"]
+            if r["h"] == "h 398 GB/s" and r["scheme"] == "hm96" and r["weight"] > 0}
     for name, info in out["rungs"].items():
         cells = []
         for key in keys:
@@ -445,10 +482,14 @@ def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--weight", type=float, default=1.0, help="w, the commitment's weight in the second mode")
+    ap.add_argument("--rates", type=float, nargs="+", default=list(RATES),
+                    help="the code-based commitment's rates ρ, each in (0, 1]")
     ap.add_argument("--no-planner", action="store_true", help="the lean view only")
     args = ap.parse_args(argv)
+    if not all(0 < r <= 1 for r in args.rates):
+        ap.error("a code's rate ρ is in (0, 1]")
     args.out.mkdir(parents=True, exist_ok=True)
-    out = run(args.weight, plan=not args.no_planner)
+    out = run(args.weight, rates=tuple(args.rates), plan=not args.no_planner)
     (args.out / "served_window.json").write_text(json.dumps(out, indent=1, default=str))
     table = render(out)
     (args.out / "served_window.md").write_text(table + "\n")
