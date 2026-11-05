@@ -356,9 +356,11 @@ def test_an_auto_after_landing_run_launches_the_planners_n_shards_of_one_plan_af
     h.run_state.update({"r-post-1": ("done", 0, None), "r-post-2": ("done", 75, None)})
     if gone:
         os.unlink(plan)
+        planner.answer = (None, None)
         h.tick()
         assert len(h.posted) == 3 and len(planner.asked) == 2 and not (world.tmp / "plan-1").exists(), "a new plan first"
         plan = str(world.tmp / "plan-2" / AUTO_PLAN)
+        planner.answer = (_plan_doc(2), None)
     h.tick()
     assert [(kw.get("shard"), kw.get("shard_plan")) for _, _, kw in h.posted[3:]] == [("auto:1/2", plan), ("auto:2/2", plan)]
     assert len(planner.asked) == 1 + gone, "a shard that never started: the run again, whole, on the plan it had"
