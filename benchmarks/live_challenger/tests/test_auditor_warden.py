@@ -256,7 +256,7 @@ def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_re
 @pytest.mark.parametrize("argv, witness", [
     (["--ssh", "fetch {run}"], False),
     (["--ssh", "fetch {run}", "--key", "-"], False),
-    (["--ssh", "fetch {run}", "--key", "memory-accounting"], False),
+    (["--ssh", "fetch {run}", "--key", "lane-b"], False),
     (["--ssh", "fetch {run}", "--key", LANE], True),
     (["fetch", "{run}"], True),
 ])
@@ -425,7 +425,7 @@ def test_a_scan_rehearsal_takes_its_prompts_off_stdin_into_its_witness_alone_and
     assert "groups.json" in end["files"] and json.loads((d / "out" / "groups.json").read_text())["groups"]
     public = b"".join(p.read_bytes() for p in (d / "out").rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
     assert b"70001" not in public
-    rc, blob = A.gate(["--ssh", f"fetch {run}", "--key", "memory-accounting"], host)
+    rc, blob = A.gate(["--ssh", f"fetch {run}", "--key", "lane-b"], host)
     assert rc == 0 and not any(n.startswith(f"{run}/witness") for n in tar_names(blob))
     rc, blob = A.gate(["--ssh", f"fetch {run}", "--key", LANE], host)
     assert rc == 0 and f"{run}/witness/prompts.json" in tar_names(blob)
