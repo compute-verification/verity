@@ -15,6 +15,10 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/ml/crypto", "verity/ml/randomness",
           # PoUS's setup, P2 and vk, which a P2 store is under (`p2.py`)
           "verity/core/protocols/pous",
+          # the memory challenger's code, which PoUS's period.py, run.py and wipe modules import
+          "verity/core/devices/__init__.py", "verity/core/devices/memory_challenger/__init__.py",
+          "verity/core/devices/memory_challenger/memory_challenger.py",
+          "verity/core/devices/memory_challenger/challenger_party.py",
           # the deployment layer and its wire, which the session's parties run on (`session_parties.py`)
           "verity/core/wire", "verity/core/deploy",
           # the circuit model's codec rows and the primitives' range rows, which test_encode_chain.py and

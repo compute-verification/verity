@@ -42,6 +42,10 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__
           "verity/core/protocols/onsite", "verity/core/protocols/remote", "verity/core/protocols/interface",
           "verity/core/protocols/pouw", "verity/core/protocols/sampled_proofs",
           "verity/core/protocols/network", "verity/core/protocols/certifier",
+          # the memory challenger's code, which PoUS's modules import, beside its Lean (`lean/`)
+          "verity/core/devices/__init__.py", "verity/core/devices/memory_challenger/__init__.py",
+          "verity/core/devices/memory_challenger/memory_challenger.py",
+          "verity/core/devices/memory_challenger/challenger_party.py",
           "verity/core/protocols/pous", "verity/core/protocols/remote_bandwidth",
           "verity/core/devices/memory_challenger/lean", "verity/core/attest/lean",
           "verity/core/service/sampled_proofs", "verity/core/service/flock", "verity/core/primitives/lms/lean",
