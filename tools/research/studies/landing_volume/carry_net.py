@@ -1,13 +1,15 @@
 """For each re-head that brought in other PRs' heads (carry_in.py's CSV): whether the PR's own edit, net of what it brought in,
 is unchanged, i.e. every file whose zero-context edit differs between the old and the new head is a file one of the brought-in
-PRs changes, or a generated file (reheads.GENERATED).  Then a verdict on the old head judged the same own change.
+PRs changes, or a generated file (reheads.GENERATED; none under STRICT=1, since a reviewer reads a lock's merge too).  Then a
+verdict on the old head judged the same own change.
 
-    python3 carry_net.py REHEADS_CARRY_CSV LABELS_JSON REPO OUT_CSV OPEN_JSON CLOSED_JSON...
+    [STRICT=1] python3 carry_net.py REHEADS_CARRY_CSV LABELS_JSON REPO OUT_CSV OPEN_JSON CLOSED_JSON...
 """
 from __future__ import annotations
 
 import csv
 import json
+import os
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -54,7 +56,8 @@ def main(carry_csv, labels_json, repo, out_csv, *prs_json):
                 if not subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor", h, b]).returncode:
                     mb = g(repo, "merge-base", cb, h).strip()
                     theirs |= set(g(repo, "diff", "--no-renames", "--name-only", mb, h).split())
-        mine = {f for f in differ - theirs if not any(f.endswith(s) or f"/{s}" in f for s in GENERATED)}
+        gen = () if os.environ.get("STRICT") == "1" else GENERATED
+        mine = {f for f in differ - theirs if not any(f.endswith(s) or f"/{s}" in f for s in gen)}
         return {**r, "net": "unchanged" if not mine else "changed", "own_differ": len(mine)}
 
     with ThreadPoolExecutor(16) as ex:
