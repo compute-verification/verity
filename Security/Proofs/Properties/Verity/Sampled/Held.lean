@@ -115,7 +115,7 @@ theorem drawLaw_ok {zk : Bool} {tags : Flock.Tags} {pt : Bool} {dj : Json}
     simp only [hD] at h
     cases hw : Flock.ProvedScope.lawWhy zk tags pt D with
     | some why => simp [hw] at h
-    | none => exact ⟨D, rfl, rfl⟩
+    | none => exact ⟨D, rfl, hw⟩
 
 /-- **The laws a soundness claim draws by at `--zk`**, at public tables: the subset and the stratified law. -/
 theorem lawWhy_zk {tags : Flock.Tags} {D : Flock.Draw.UnitDraw}
