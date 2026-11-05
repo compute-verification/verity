@@ -1,5 +1,7 @@
-import Definitions.Nci.Guarantees.Activations
-import Proofs.Nci.Threads
+module
+
+public import Definitions.Nci.Guarantees.Activations
+public import Proofs.Nci.Threads
 
 /-!
 # Proofs of NCI's activations bound over all of training
@@ -18,6 +20,8 @@ activations is not full, which is the threading inequality that counting takes.
 Through a partial containment (`ActivationsBoundOn`), each IU of a compliant division of the declaration computes a piece
 of `S` that is small and reads no more than the IU (`piece`, `novelReads_piece`), and the pieces divide `S`.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

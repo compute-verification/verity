@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ERep
+module
+
+public import Proofs.Flock.Claims.ERep
 
 /-!
 # `E^rep`'s expected reruns, and `ERepCost`
@@ -14,6 +16,8 @@ Between reruns, Flock's `assemble` checks each table's decoded list once (`Flock
 `find?` makes table by table): at most the lists' lengths summed (`Flock.assembleCounted_spec`), which `Flock.Efficient`
 bounds by `p` at each table's opened word's encoded length (`Flock.assemble_checks_le`).
 -/
+
+@[expose] public section
 
 namespace Claims
 

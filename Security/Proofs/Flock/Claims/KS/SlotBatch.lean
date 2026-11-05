@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.SlotPost
+module
+
+public import Proofs.Flock.Claims.KS.SlotPost
 
 /-!
 # A slot's coin count in a batch whose games pause and resume
@@ -25,6 +27,8 @@ The count is the same:
   and then `FollowR`, in order, after `n` coins in all, and the lockstep's game by `FollowL`, put a slot met after `k`
   coins by the lockstep's own strategy at `n + k`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game.Lock
 

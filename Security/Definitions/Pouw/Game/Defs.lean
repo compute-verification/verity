@@ -1,6 +1,8 @@
-import Definitions.Pouw.Basic.Prob
-import Definitions.Pouw.Basic.Mat
-import Definitions.Pouw.Basic.QTree
+module
+
+public import Definitions.Pouw.Basic.Prob
+public import Definitions.Pouw.Basic.Mat
+public import Definitions.Pouw.Basic.QTree
 
 /-!
 # The γ-gap game (trusted; problem statement §3.2–§3.5)
@@ -29,6 +31,8 @@ Simplifications (each listed in `STATEMENTS.md` with its bridge or as a gap):
 * a finite oracle `Q → R` and a uniform salt type `S` (the chain's instance is `Fin (2^128)`);
 * deterministic adversaries (`Definitions/Pouw/Basic/Prob.lean`).
 -/
+
+@[expose] public section
 
 namespace Pouw
 

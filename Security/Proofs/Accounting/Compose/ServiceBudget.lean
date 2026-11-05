@@ -1,5 +1,7 @@
-import Definitions.Accounting.Guarantees.Compose
-import Proofs.Accounting.TS.Stages
+module
+
+public import Definitions.Accounting.Guarantees.Compose
+public import Proofs.Accounting.TS.Stages
 
 /-!
 # The service's window budget: proof
@@ -17,6 +19,8 @@ import Proofs.Accounting.TS.Stages
   by `1 + ν(L_F − p·W_F) + ν₀(L_0 − p0·W_0)`, and `SplitStages.LuckAt` with `lk ≤ p`, `lk0 ≤ p0` on every tile of
   positive weight gives `E[L_F] ≤ p·E[W_F]` and `E[L_0] ≤ p0·E[W_0]`, so its mean is at most `1`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Compose.Budget
 

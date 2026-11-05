@@ -1,5 +1,7 @@
-import Proofs.Nci.Cover.Checked
-import Proofs.Nci.Cover.Chained
+module
+
+public import Proofs.Nci.Cover.Checked
+public import Proofs.Nci.Cover.Chained
 
 /-!
 # A verdict of compliance carries the covering bound's factor on the chained multiplication blocks
@@ -11,6 +13,8 @@ compliance (`Witnesses`), and `CheckedCoverTrainingChained` states it of every v
 `NciCheck.Baseline.evaluate`, on every expansion of the instance, and `checkedCoverTrainingChained` proves it from
 `SecurityProofs.DescAgrees`. It is stated here in `Proofs/`, so it is no guarantee.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs
 

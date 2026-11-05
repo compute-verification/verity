@@ -1,5 +1,9 @@
-import Mathlib.Data.List.Induction
-import Definitions.Core.Site
+module
+
+public import Mathlib.Data.List.Induction
+public import Definitions.Core.Site
+import all Init.Data.Repr
+import all Init.Data.ToString.Basic
 
 /-!
 # The registration: its check, and the Site along it
@@ -19,6 +23,8 @@ import Definitions.Core.Site
   onsite site refuses (`Registration.Example.remote_refusals`); and a device's model read off the Site
   (`Registration.Example.gpu0_device`).
 -/
+
+@[expose] public section
 
 namespace Verity
 

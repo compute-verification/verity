@@ -38,9 +38,20 @@ statement at the inner shape, in order. Any other form is refused, as are a part
 
 Without blobs (`toProtocol`) every check rejects: no blob holds the inner circuit file.
 -/
-import CoreProtocol.Blobs
-import SampledProofs.OneStageZk
-import Flock
+module
+
+public import CoreProtocol.Blobs
+public import SampledProofs.OneStageZk
+public import Flock
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
+meta import CoreProtocol.Blobs
+meta import SampledProofs.OneStageZk
+meta import Flock
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace VStar.Recursive
 

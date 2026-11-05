@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ZkFitsW
-import Proofs.Flock.Claims.KS.ForkSlack
+module
+
+public import Proofs.Flock.Claims.KS.ZkFitsW
+public import Proofs.Flock.Claims.KS.ForkSlack
 
 /-!
 # The masked weight's room for one more event per round, and the slack's escapes
@@ -23,6 +25,8 @@ that fits the room (`Claims.Flock.SlackFitW`) the merged escapes fit the deploye
 escapes are on accepted first runs, the fork accepting or the first run alone colliding (`Claims.Escapes.OnAcc₁`,
 `Claims.Flock.slackEscW_onAcc₁`).
 -/
+
+@[expose] public section
 
 namespace Claims
 

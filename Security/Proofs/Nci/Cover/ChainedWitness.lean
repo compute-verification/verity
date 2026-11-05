@@ -1,6 +1,8 @@
-import Definitions.Nci.Guarantees.CoverChained
-import Proofs.Nci.CoveringTwoCostsWitness
-import Proofs.Nci.Rate
+module
+
+public import Definitions.Nci.Guarantees.CoverChained
+public import Proofs.Nci.CoveringTwoCostsWitness
+public import Proofs.Nci.Rate
 
 /-!
 # `CoverTrainingChained` is not vacuous
@@ -15,6 +17,8 @@ computed gate (`onePerGate`): each has one gate and reads two fresh input bits, 
 one gate, so it complies at `Γ = 1` and the rate `α = 2`, and `α Γ = 2 < c_w D = 5/2`. The block size is
 `s = w₀ Γ + α Γ + width(θ) = 3`.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs.ChainedWitness
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.ResLowerD
-import Proofs.Flock.C3.PubRows.Check
+module
+
+public import Proofs.Flock.Claims.Recursion.ResLowerD
+public import Proofs.Flock.C3.PubRows.Check
 
 /-!
 # P3's halves that read no other part: a part's end reads, and two chains with one step
@@ -18,6 +20,8 @@ per component. The copy's `acc0` and `acc1` are rows of the outer witness's own 
   chain that carries row D's sums at its rep's ends reads `elemReadC (Top.accRC rd key)` plus one offset per component.
   What's left for `AccPorts` is that chain: the outer witness's `rec-acc` rows, which the copy reads at its ends.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 

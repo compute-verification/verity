@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Refine.LiveCompiled
-import Definitions.Flock.HoloCompiled
+module
+
+public import Proofs.Flock.Soundness.Refine.LiveCompiled
+public import Definitions.Flock.HoloCompiled
 
 /-!
 # a1l, step 6's pieces: every message of the holographic tables' sub-games has an inhabited type
@@ -8,6 +10,8 @@ import Definitions.Flock.HoloCompiled
 `LiveCompiled` proves the compiled ones'), the holographic lincheck's, the sparse phase's (`drawFin`, `degRounds`), the
 registered phase's at any `fin` whose games all have it, and each rep's (`holoRep`, `holoRepC`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

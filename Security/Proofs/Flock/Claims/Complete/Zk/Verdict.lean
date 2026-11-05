@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Verdict
-import Proofs.Flock.Claims.Complete.Zk.Session
+module
+
+public import Proofs.Flock.Claims.Complete.Verdict
+public import Proofs.Flock.Claims.Complete.Zk.Session
 
 /-!
 # The masked verdict accepts when each of its checks passes
@@ -16,6 +18,8 @@ composes into acceptance. B's checks are the plain ones (`checks_ok`, generic in
 * **The masked verdict** (`zk_verifyWith_ok`): `verifyWith_ok`'s checks, the keyed coin tree, and each table's `--zk`
   schedule (`zkSchedsOf`) in place of fast100's.
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy Transcript
 

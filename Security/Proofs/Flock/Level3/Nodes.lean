@@ -4,8 +4,12 @@
 polynomial of degree below 128 that vanishes on `S` from its values on `Λ`. φ8 is additive, so each node set is a
 subspace or a coset, and the barycentric denominator `Π_{j ≠ i} (x_i − x_j)` is the executable's `den`.
 -/
-import Proofs.Flock.Level3.ArithFacts
-import Mathlib.LinearAlgebra.Lagrange
+module
+
+public import Proofs.Flock.Level3.ArithFacts
+public import Mathlib.LinearAlgebra.Lagrange
+
+@[expose] public section
 
 open Polynomial Flock
 

@@ -1,8 +1,10 @@
-import Definitions.Nci.Guarantees.CoverTraining
-import Proofs.Nci.Pull
-import Proofs.Nci.Cover.Area
-import Proofs.Nci.Cover.Bits
-import Proofs.Nci.Cover.Sum
+module
+
+public import Definitions.Nci.Guarantees.CoverTraining
+public import Proofs.Nci.Pull
+public import Proofs.Nci.Cover.Area
+public import Proofs.Nci.Cover.Bits
+public import Proofs.Nci.Cover.Sum
 
 /-!
 # The cover theorem on a declaration that complies with the NCI policy, proved
@@ -15,6 +17,8 @@ so its gate is a computed gate of `c`, in some piece, whose block computes it (`
 the IUs (`sum_area_le`), `b #P ≤ (α² Γ + b α) size(d)`. `training_of_block_bound` is this route for any per-block
 bound of the same form, which the whole-word variant (`Aligned`) reuses.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 

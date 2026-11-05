@@ -1,9 +1,11 @@
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
-import Definitions.Pous.Model.BandGraph
+module
+
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
+public import Definitions.Pous.Model.BandGraph
 
 /-!
 # Band-graph combinatorics (game-independent)
@@ -13,6 +15,8 @@ among the `k` predecessors) and its **ends** (none among the `k` successors), th
 (parents `v − k, …, v − 1`, a `basePath`), and the counting lemmas the column-saving certificate uses. Nothing here
 refers to the column game.
 -/
+
+@[expose] public section
 
 namespace PousP3Column
 

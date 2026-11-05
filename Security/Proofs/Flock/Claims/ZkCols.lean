@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZkDecodeFlock
-import Flock.ZkProof
+module
+
+public import Proofs.Flock.Claims.ZkDecodeFlock
+public import Flock.ZkProof
 
 /-!
 # The masked verifier's opened level-0 columns: `cols` for a masked run
@@ -31,6 +33,8 @@ What the reader takes from a run is a `ZkRun`: the table's `m`, `kLog`, claim co
 and Merkle widths, and each rep's recorded rounds and proof bytes. Reading those off `Seen` is the deployed verifier's
 message layout's (`Deploy.V`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

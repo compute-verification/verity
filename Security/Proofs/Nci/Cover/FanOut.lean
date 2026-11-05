@@ -1,7 +1,9 @@
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Data.Finset.Prod
-import Proofs.Nci.Cover.FanOutRootCost
-import Proofs.Nci.Cover.Additive
+module
+
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Data.Finset.Prod
+public import Proofs.Nci.Cover.FanOutRootCost
+public import Proofs.Nci.Cover.Additive
 
 /-!
 # The fan-out bounds
@@ -13,6 +15,8 @@ they number at most the block's reads (`readSet_card_le`), or `ValueReadHardness
 the parameters. The rest is arithmetic: linear for `FanOutIntensity`, AM–GM (`four_mul_le_sq`) and the larger endpoint
 for `FanOutReadIntensity`. The cover bounds are `cover_sum` on the intensities.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 

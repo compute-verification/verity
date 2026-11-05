@@ -1,6 +1,8 @@
-import Mathlib.Analysis.SpecialFunctions.Log.Basic
-import Definitions.Population.DrawPressure
-import Proofs.Population.Exfiltration
+module
+
+public import Mathlib.Analysis.SpecialFunctions.Log.Basic
+public import Definitions.Population.DrawPressure
+public import Proofs.Population.Exfiltration
 
 /-!
 # Detection pressure of the deployed draw
@@ -18,6 +20,8 @@ whose wrong set has `K` units escapes with probability `C(n - K, k) / C(n, k)`.
 * `draw_tail_cum`: so through `tail_cum`, with probability at least `1 - δ` what leaves up to and including the first
   detection is below `ℓ + (n/k) ln (1/δ)`, for every adaptive strategy and every horizon.
 -/
+
+@[expose] public section
 
 namespace Population.Exfil
 

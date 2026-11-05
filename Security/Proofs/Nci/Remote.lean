@@ -1,6 +1,8 @@
-import Definitions.Nci.Guarantees.Remote
-import Proofs.Nci.Dampener
-import Proofs.Nci.Escape
+module
+
+public import Definitions.Nci.Guarantees.Remote
+public import Proofs.Nci.Dampener
+public import Proofs.Nci.Escape
 
 /-!
 # Proofs of the compute dampener, remote protocol
@@ -17,6 +19,8 @@ hardware-multiple forms (`remote_core`); the union of the two events has probabi
 (`prob_or_le`), so the complement has probability at least `1 − p/ε' − J ((1 − q)/q) B/(θ C)` (`prob_ge_of_not`), `μ`
 summing to 1 (`prob_add_not`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

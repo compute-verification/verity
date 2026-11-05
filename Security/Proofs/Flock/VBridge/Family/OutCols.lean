@@ -1,6 +1,8 @@
-import Proofs.Flock.VBridge.Family.Names
-import Proofs.Flock.Soundness.Discharge.Hm.Site
-import Proofs.Flock.Soundness.Discharge.Layout.OutPin
+module
+
+public import Proofs.Flock.VBridge.Family.Names
+public import Proofs.Flock.Soundness.Discharge.Hm.Site
+public import Proofs.Flock.Soundness.Discharge.Layout.OutPin
 
 /-!
 # A part's `out` columns, from the verifier's own checks
@@ -19,6 +21,8 @@ The parts' `v` and row columns (`PartVCols`, `PartRowCols`, `PartRowBits`) are a
 (`Aliased.srcKey`) read copy 0's leaf map and the ports' names and words, which only META's `leaves_in` and `ports`
 give, and META is read by `Flock.JsonParse.parse`, which no proof here evaluates.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.OfVStar
 

@@ -1,5 +1,7 @@
-import Definitions.Nci.Guarantees.Dampener
-import Proofs.Nci.Threads
+module
+
+public import Definitions.Nci.Guarantees.Dampener
+public import Proofs.Nci.Threads
 
 /-!
 # Proofs of the compute dampener
@@ -11,6 +13,8 @@ exact) and `window_linear` (`Λ = e`, one window); `windows_cap` turns the serve
 hypothesis. `DampenerThreadedSlots` discharges the declared computation's bound with `ThreadedThrottledSlots`, and
 `DampenerThreaded` is its instance at one slot per weight gate.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

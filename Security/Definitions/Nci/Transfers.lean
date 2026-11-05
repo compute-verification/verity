@@ -1,5 +1,7 @@
-import Definitions.Core.Partition
-import Definitions.Nci.Covering
+module
+
+public import Definitions.Core.Partition
+public import Definitions.Nci.Covering
 
 /-!
 # Transfer gates: what one machine sends another
@@ -24,6 +26,8 @@ are `(machine a).inner ∩ (machine b).ins`, apart from one kind of gate. A gate
 constant: a computed gate that reads nothing) is an input of `machine a`, not an inner gate, but `transfers` counts it,
 since `b` reads it from `a` and `novelReads` charges `b` for it.
 -/
+
+@[expose] public section
 
 namespace Nci
 
