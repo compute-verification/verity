@@ -2301,6 +2301,10 @@
   "Verity.Wipe.SurvivorBound": {
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
+  },
+  "FlockSoundness.Model.Statement.Satisfies": {
+   "owner": "@network-accounting",
+   "digest": "afd6169d8f84abe4a2835cf4a83800b231865b7f19c333043f3e6b6fffe18069"
   }
  },
  "meaning": [
@@ -7266,13 +7270,41 @@
    "type_hash": "84c0e48cb401d6662d94c2c1f395aeedc6aeeac630cd5e87ee5bb6e6e09009d0"
   },
   "Flock.SecurityProofs.ZeroRowForced": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": ["Flock.SecurityProofs.ZeroRowForced : Flock.Guarantees.ZeroRowForced"],
+   "assumptions": [],
+   "type_hash": "4fa5bde0e7f11516b4e82df5e963ca6677e035087c9e4529a6eec8bd0f24616d"
   },
   "Flock.SecurityProofs.ZeroRowForced_honest": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "Flock.SecurityProofs.ZeroRowForced_honest :",
+    "  And",
+    "    ({ m := 6, kLog := 6, hk := ⋯, hk6 := ⋯, pin := 0, A₀ := Matrix.single 0 0 1, B₀ := Matrix.single 0 0 1,",
+    "          regions := List.nil }.Satisfies",
+    "      fun a => ite (Eq a.val 0) 1 0)",
+    "    (Eq",
+    "      ({ m := 6, kLog := 6, hk := ⋯, hk6 := ⋯, pin := 0, A₀ := Matrix.single 0 0 1, B₀ := Matrix.single 0 0 1,",
+    "            regions := List.nil }.A₀",
+    "        1)",
+    "      0)"
+   ],
+   "assumptions": [],
+   "type_hash": "a94c4ec46e921094d2e7da3f0236ba1dd1527973e227a844b751d30443ccd4f6"
   },
   "Flock.SecurityProofs.ZeroRowForced_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "Flock.SecurityProofs.ZeroRowForced_nontrivial :",
+    "  Not",
+    "    (Eq",
+    "      ({ m := 6, kLog := 6, hk := ⋯, hk6 := ⋯, pin := 0, A₀ := Matrix.single 0 0 1, B₀ := Matrix.single 0 0 1,",
+    "            regions := List.nil }.block",
+    "        (fun a => ite (instLENat.le a.val 1) 1 0) 0 1)",
+    "      0)"
+   ],
+   "assumptions": [],
+   "type_hash": "8b458121eea9f2b2dfdc1fd2f16f7a85f000ed351edb90f98bce43d4f4bbca24"
   },
   "Flock.SecurityProofs.recursiveZK_os_gap": {
    "owner": "@proofs",
@@ -27010,6 +27042,13 @@
    },
    "guarantees": ["Flock.SecurityProofs.SamplingClaimsStated"]
   },
+  "Definitions.Flock.Guarantees.Statement": {
+   "digest": "717a69e42486d3e743bc41185d4565d27f0873e6734b09a4853f7359226ae02e",
+   "definitions": {
+    "Flock.Guarantees.ZeroRowForced": "1fb13ac485e7d7d36ffbdb853da127857ce2bf8e8f78ab3e72268e866417af86"
+   },
+   "guarantees": ["Flock.SecurityProofs.ZeroRowForced"]
+  },
   "Definitions.Flock.Holo": {
    "digest": "d9a5c26f591f4192c76b807efdffeec5323fbff5f20a3ce65a64cd0dcc16cc34",
    "definitions": {
@@ -27628,6 +27667,9 @@
     "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.SampledKSLiveV5",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
+    "Flock.SecurityProofs.ZeroRowForced",
+    "Flock.SecurityProofs.ZeroRowForced_honest",
+    "Flock.SecurityProofs.ZeroRowForced_nontrivial",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.table_sound",
