@@ -28,7 +28,8 @@ model's release being the loop's own frames':
 * `PlaceFacts`: what the model holds at the place `roundPlace` readies a round at: its scheduled round, its masking
   state but for `stopped`, and where `v` fails the crossing. `placeSt_seen`: its masking state at a round of a stream
   seen, from the rep's `SameInv`. **`placeSched_later`**: its scheduled round past a stream's first round, from
-  `StreamAt` and `RealAt`, or `placeOf` places the round at the inner proof's own.
+  `StreamAt` and `RealAt`, or `placeOf` places the round at the inner proof's own. **`placeSched_seen`**: the same at
+  a round of a stream seen, from `LoopJ` and the model's link on the session's entry.
 * `roundPlace_scheduled_later`: past a stream's first round, on a frame keeping its schedule so far on the loop's
   table, extras and salts, which are the model's, the round's place is the model's scheduled round, or the schedule
   has no round there (the inner proof's own).
@@ -459,6 +460,66 @@ theorem placeSched_later {T : ZKMal.CoinLayer.TableData}
       htab rfl hIR hsc
     rw [hsz, h] at hq'
     exact ⟨_, q', hq'⟩
+
+/-- **`PlaceFacts.sched` at a round of a stream seen**: at the slot of a round of `stream`, table `i`'s rep `r`, where
+`LoopFacts` and `LoopJ` hold, `seen` has a round of `stream`, the model's tables and salts are the loop's (`RealAt`)
+and the session's entry carries the model's link, the round's place is the model's scheduled round, or `placeOf`
+places it at the inner proof's own on the rep's frame, the session's entry, the table's name and its level 0
+(`placeSched_later`): `RepJ` gives the rep's `StreamAt`, `SessOn` the entry's setup, and `SeenAt` the round past the
+stream's first. -/
+theorem placeSched_seen {T : ZKMal.CoinLayer.TableData}
+    {M : LoopModel Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
+    {L₀ : LeanRelease Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
+    {real : Msg → Claims.Flock.Wit →
+      (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
+      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+    {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} (hD : LoopModel.Deployed M L₀ real s0 spec sts)
+    {sid : Nat} {seen : List String} {st : State} {pl : Placed} {σ : LoopAt} {stream : String} {n i r : Nat}
+    (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
+    (hJ : LoopJ M sid spec sts seen st σ) (hrep : streamRep st stream = (i, r)) (hlt : σ.c < M.τ.length)
+    (hseen : seen.contains stream = true) (hR : RealAt M real sid σ)
+    (hlink : ∀ rel, sessAt σ.R sid = some rel →
+      rel.link = some (Loop.wordsAt M.x ((M.hist σ.c).tail.map fun e => ZKMal.CoinLayer.rd e.2) 0))
+    {dom content : ByteArray} {q : Rep} {pc : Place} {f : Bool} {nd : Option String}
+    (hrp : _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i r dom content n = .ok (q, pc, f, nd)) :
+    pc = .sched ⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c)
+        (computedOf (M.L.computed M.x M.w M.ρ (M.hist σ.c)))).toArray⟩ ∨
+      ∃ (p : Rep) (rel : _root_.Flock.Firewall.Frames.Release) (name : String)
+        (l0 : _root_.Flock.Firewall.Level0.Level0),
+        frameAt σ.R sid i r = some p ∧ sessAt σ.R sid = some rel ∧ rel.spec.tables[i]? = some name ∧
+        _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 ∧
+        ∃ n' q', _root_.Flock.Firewall.Frames.placeOf σ.R.salts l0 rel p (rel.spec.domain name r).toUTF8 =
+          .ok (.own, n', q') := by
+  obtain ⟨hsent, hop, -, -⟩ := slot_round hsl
+  obtain ⟨hk0, hmem⟩ := round_rep hsl hF hJ hrep hlt hD.names
+  have hlen : (M.hist σ.c).length = opened st + 1 := by
+    rw [M.length_hist (Nat.le_of_lt hlt), hF.count hsent]
+  obtain ⟨e0, h1, hh⟩ : ∃ e0 h1, M.hist σ.c = e0 :: h1 := by
+    cases hc : M.hist σ.c with
+    | nil =>
+      rw [hc, List.length_nil] at hlen
+      omega
+    | cons e0 h1 => exact ⟨e0, h1, by first | rfl | exact hc⟩
+  have hq : h1.length = opened st - 1 + 1 := by
+    rw [hh, List.length_cons] at hlen
+    omega
+  have h2 : 0 < (nextAt spec sts (M.hist σ.c)).2 := by
+    rcases (hJ.seenAt i r stream hmem).1 hseen with h | ⟨-, h⟩
+    · omega
+    · exact h
+  have hk : nextAt spec sts (M.hist σ.c) = (2 * i + r, (nextAt spec sts (M.hist σ.c)).2 - 1 + 1) := by
+    refine Prod.ext hk0.symm ?_
+    show (nextAt spec sts (M.hist σ.c)).2 = (nextAt spec sts (M.hist σ.c)).2 - 1 + 1
+    omega
+  obtain ⟨p, rel, name, l0, hfa, hss, hn, hl0, hA⟩ := hJ.reps i r stream hmem hseen
+  obtain ⟨hspec, hsts⟩ := (hJ.sess hsent).eq hss
+  have hl := hlink rel hss
+  rw [hh, List.tail_cons] at hl
+  rcases placeSched_later hD (rep_lt_two hmem) hR hh hq hk hfa hss hn hl0 hA hspec hsts hl hrp with h | h
+  · exact .inl h
+  · exact .inr ⟨p, rel, name, l0, hfa, hss, hn, hl0, h⟩
 
 /-- **`RoundFacts` at a frame round's slot of the deployed loop**: at the slot of a round of `n` coins of `stream`,
 where `LoopFacts` and `LoopJ` hold, the session's slots took fewer than the run's messages, and the loop ran the round
