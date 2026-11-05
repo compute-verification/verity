@@ -70,8 +70,8 @@ there.
   slot, the first stop's log has no opening; and where the opening after it is of the session's stream and the layout
   has a slot for each of the log's openings of a rep stream, the stops submitting on that stream release their coins
   after the logs before each of its openings, in order.
-* **The rounds of one stream** (`map_fst_filter_zip`, `rounds_of_logs`): so the rounds a trace appends to a stream are
-  one per opening of it, the `k`-th after the log that has opened it `k` times.
+* **The rounds of one stream** (`map_fst_filter_zip`, `rounds_of_logs`, `stream_rounds`): so the rounds a trace appends
+  to a stream are one per opening of it, the `k`-th after the log that has opened it `k` times.
 -/
 
 @[expose] public section
@@ -1857,5 +1857,42 @@ theorem rounds_of_logs {γ : Type _} {δ : Type _} {xs : List γ} {ms : List (Li
   refine List.map_congr_left fun x hx => ?_
   obtain ⟨hx, hpx⟩ := List.mem_filter.1 hx
   exact hf x.1 x.2 hx hpx
+
+section StreamRounds
+
+variable {g : Game Exchange} {σ : Strategy g} {R J : ℕ} {Reg : Type}
+
+/-- **The rounds the answered stops leave on table `t`'s rep `r` stream are one per opening of it**, at the readings
+and the decoders at a layout `L`, injective, of distinct tables, under `stream_logs`'s premises: where the round each
+answered stop on that stream appends is `f` at the count of the stream's openings its log has, the stream's rounds are
+`f` at none, one, and so on up to the count of them in `Lg`. -/
+theorem stream_rounds (reg : Option Claims.Msg → Reg) {tables : Array String} {L : Fin R → Slot}
+    (hL : Function.Injective L) (ht : tables.toList.Nodup) (record : Exchange → Option Claims.Msg)
+    (recordDigest : Claims.Msg) (bitsOf : (s : SubmitJ J) → (Fin s.n → 𝔽) → List Bool) (dg : ByteArray → ByteArray)
+    {as : List (Pos g σ Claims.Msg (Fin R) × ((s : SubmitJ J) × (Fin s.n → 𝔽)))} {ms : List (List Release)}
+    {Lg L₀ L' : List Release}
+    (hF : List.Forall₂ (fun a m => (decodersAt reg L).sub J a.1.toStop.modes = some a.2.1 ∧
+      LoggedAfter (readingAt tables L record recordDigest).round a.1.toStop m (bitsOf a.2.1 a.2.2) Lg) as ms)
+    (hgt : ∀ m ∈ ms, L₀.length < m.length) (hpw : ms.Pairwise (fun m m' => m.length < m'.length))
+    (hcov : ∀ j L₁, PicksIn (readingAt tables L record recordDigest).round Lg j L₁ → L₁ = L₀ ∨ L₁ ∈ ms)
+    (hS : LogServed Lg) (hn : ∀ sp ∈ helloSpecs Lg, sp.streams.toList.Nodup) {r₀ : Release} {i s₀ n₀ : ℕ}
+    (hL₀ : Lg = L₀ ++ r₀ :: L') (hr₀ : r₀.frame = .opening i s₀ n₀) (h₀ : firstOpened L₀ = none)
+    (hses : ((helloSpecs L₀)[i]?.bind fun sp => sp.streams[s₀]?) =
+      some _root_.SampledProofs.Challenger.TREE_SESSION)
+    (t : Fin J) (r : Fin 2) {s : ℕ}
+    (hs : ((helloSpecs Lg)[i]?.bind fun sp => sp.streams[s]?) = tables[t.val]?.map (repStreamName · r.val))
+    (hcovL : ∀ k < openedOf Lg i s, ∃ j, L j = .rep t.val r k) (f : ℕ → Flock.Round)
+    (hf : ∀ a m, (a, m) ∈ as.zip ms → a.2.1.tab = t ∧ a.2.1.rep = r →
+      roundOf dg a.2.1.bytes a.2.1.n a.2.2 = f (openedOf m i s)) :
+    as.foldl (fun rs a => addRoundJ rs a.2.1.tab a.2.1.rep (roundOf dg a.2.1.bytes a.2.1.n a.2.2))
+      (fun _ _ => []) t r = (List.range (openedOf Lg i s)).map f := by
+  refine (foldl_addRoundJ (fun a => a.2.1.tab) (fun a => a.2.1.rep) (fun a => roundOf dg a.2.1.bytes a.2.1.n a.2.2)
+    as (fun _ _ => []) t r).trans ((List.nil_append _).trans ?_)
+  exact rounds_of_logs hF.length_eq (fun a => decide (a.2.1.tab = t ∧ a.2.1.rep = r))
+    (fun a => roundOf dg a.2.1.bytes a.2.1.n a.2.2) f
+    (stream_logs reg hL ht record recordDigest bitsOf hF hgt hpw hcov hS hn hL₀ hr₀ h₀ hses t r hs hcovL)
+    fun a m hx hp => hf a m hx (of_decide_eq_true hp)
+
+end StreamRounds
 
 end Verity.Sampled
