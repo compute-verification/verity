@@ -37,10 +37,10 @@ class FakeLinear:
         self.state_type = "backlog"
         self.projects, self.open, self.updated, self.refuse_project = PROJECTS, [], [], False
         self.visible, self.team_key = None, "INF"
-        self.parent = {"id": "P1", "project": {"id": "PJ1"}, "projectMilestone": {"id": "MS3"}}
-        self.relations, self.wrote = [], []
         self.project_teams = {"PJ3": [{"id": "T-infra", "key": "INF"}]}
         self.project_state = {"PJ3": {"targetDate": "2026-10-28", "status": {"name": "In Progress"}}}
+        self.parent = {"id": "P1", "project": {"id": "PJ1"}, "projectMilestone": {"id": "MS3"}}
+        self.relations, self.wrote = [], []
         self.users = [{"id": "U1", "name": "Daniel Reuter"}, {"id": "U2", "name": "Verity Asks"}]
         self.asked, self.ask_filter, self.tags = [], None, {}
 
@@ -95,13 +95,13 @@ class FakeLinear:
             return {"data": {"a": {**a, "relations": {"nodes": [r for r in self.relations if r["issue"] == a]},
                                    "inverseRelations": {"nodes": [r for r in self.relations if r["relatedIssue"] == a]}},
                              "b": self._issue(v["b"])}}
+        if "projects(filter" in q:
+            return {"data": {"projects": {"nodes": [{"name": p["name"]} for p in self.projects if p["name"].lower() == v["n"].lower()]}}}
         if "projectStatuses" in q:
             return {"data": {"projectStatuses": {"nodes": [{"id": f"PS-{n}", "name": n} for n in
                                                            ("Backlog", "Planned", "In Progress", "Completed", "Canceled")]}}}
         if "project(id:" in q:
             return {"data": {"project": self._project(v["id"])}}
-        if "projects(filter" in q:
-            return {"data": {"projects": {"nodes": [{"name": p["name"]} for p in self.projects if p["name"].lower() == v["n"].lower()]}}}
         if "users(first" in q:
             return {"data": {"users": {"nodes": self.users}}}
         if q.startswith("{ teams(first"):
