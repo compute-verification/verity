@@ -1,0 +1,14 @@
+[package]
+name = "served-pcs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+flock-core = { workspace = true }
+flock-field = { workspace = true }
+flock-hash = { workspace = true }
+sha2 = { workspace = true }
+bincode = { workspace = true }
+rayon = { workspace = true }
