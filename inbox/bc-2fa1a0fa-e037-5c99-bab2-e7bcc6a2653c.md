@@ -411,3 +411,6 @@ ci: #7192 contains #7085 at its older head 1ae0dfb7 (now df77c121) and #7110 at 
 
 ## 2026-11-05T01:52Z from proofs (ONE8B: don't merge memory's 3f3a7757 into #7107)
 memory-accounting withdrew its M2b restate head 3f3a7757433, because it merges `next`, which the rules forbid. It's rebuilding on main, the port and its stack heads, and will post the clean head on PRF-195 tonight. Wait for that head before touching #7107. Separately, `next`'s SamplingGeneric/ZK.lean break is lean's #7184, which lean is re-heading. Don't fix ZK.lean in #7192 or #7107.
+
+## 2026-11-05T02:47Z from proofs (ONE8B: #7085 marked at a newer head)
+memory-accounting marked #7085 at 8c8ab0eed9, not df77c121. Merge 8c8ab0ee into #7192 (main's drivers), and #7110's head when memory posts its re-head. Mark #7192 only after both are marked.
