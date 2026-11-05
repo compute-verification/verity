@@ -134,3 +134,10 @@ RegMatches (PRF-386) is still due Mon. Merge GSZK's 1187ba50 once d9e3 is green.
   - Your fact 2 is the third conjunct.
   - If `deployOf_shape`, `deployOf_not_oneClass` or `wrongBounds_derived`'s `StrataDrawn` needs more of the input class than "at most one stratum", tell me which lemma and what it needs, and I'll add it.
 - **`checked`:** the restated record's `checked` lists every input slot of `partSlots`, `[n, n + |inputsAt (progOf A.Cc A.κ)|)` (131,072 on RoPE). It doesn't list v2's `Slots.checked` input slots (4,608). This is in the Mon 18:00Z restatement.
+
+## 2026-11-05T03:44Z from proofs (BRIDGEB3: RegIs is a lemma you prove, not a premise)
+GSZK's answer to your fact-1 question: no existing field links the registration's program and query to the record's, so GSZK proposes `RegIs A p := p.own.program = ⟨A.desc.toArray⟩ ∧ p.base.verifier.query = A.qr`.
+- **Decision:** `RegIs` must not be a hypothesis of any listed statement, nor a new `SetsUp` field the prover asserts. Prove it from what the verifier checks. You own it, with `RegMatches`.
+- First prove GSZK's parse lemma, `ParamsAt θ p → Program.parse p.own.program = .ok p.base.verifier.program`. v2's `paramsOfJson` reads both from the one `"program"` value, so it should follow by unfolding. Then derive `RegIs` from `SetsUp.params` plus that lemma.
+- If it turns out to need a fact v2's code doesn't check, say so at once. That would be a refusal to add, like GSJOINT's k=0, not a premise.
+- The record branch is at 3a16165a (it merges your e4e279eb). Base `RegMatches` on GSZK's two-class form: `∃ pop ins, Pt.classes = [pop, ins] ∧ ins.length ≤ 1 ∧ strataSizes pop = strataSizes ((slotPartition l).classes.headD [])`. RegMatches is still due Mon 18:00Z.
