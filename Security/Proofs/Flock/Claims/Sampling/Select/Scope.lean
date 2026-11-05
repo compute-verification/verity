@@ -60,7 +60,7 @@ theorem scopeMatches_of [Fintype Coin] (D : Deploy Coin Col T) (hslots : DrawSlo
   · rintro ⟨s, Pt, hx, hP, htop, hpart, -⟩
     exact ⟨s, Pt, hx, hP, htop, hpart⟩
   · rintro ⟨s, Pt, hx, hP, htop, hpart⟩
-    obtain ⟨rule, d, query, table, -, l, pop, -, -, -, -, hl, rfl, hpop, hds, -, -⟩ := hslots x s Pt hx hP
+    obtain ⟨rule, d, query, table, -, l, pop, -, -, -, hl, rfl, hpop, hds, -, -⟩ := hslots x s Pt hx hP
     obtain ⟨first, hfirst⟩ := slotDesign_two hds
     have hwf := designWellFormed rule d query table l s.design hl hds
     rw [hfirst] at hwf
