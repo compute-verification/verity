@@ -168,7 +168,7 @@ part of the theorem. It is exact under fixed-length frames (W3): N frames of B b
 `Cs` all of them, `log2 #Cs` is the `N·B` bits read.
 
 **The shipped schedule** (`NetTiming.Protocol.Schedule`). `constantRate T W ss frames` is `schedule.py`'s Program:
-windows of `T` buckets, `W` of them with advice, one clock-sync value of `ss` (Σ_sync) per window, and the Program's
+windows of `T` buckets, `W` of them with advice, one clock-sync value of `ss` (𝒮_sync) per window, and the Program's
 frames, anchors and logical indices `frames ins c ℓ`, read from the ingress and the content advice. A frame is eligible
 at `anchor + δ + ⌊λ/ρ⌋`, handed at `h(k) = max(eligible(k), h(k−1))`, and released by `fifoGrid`. Its advice type is
 `Ac × (Fin W → ss.Elem)`, so the sync is its only timing advice by definition, and Theorem 3's clock-sync form holds for
@@ -353,11 +353,11 @@ lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The wit
 1. **Steps are buckets across all of ∂X.** The note states its bounds per link-window. The guarantees count steps, and
    Theorem 1(b)'s tree lemma is still stated per step. The per-window ones read the horizon of the run's first `m` whole
    windows of `T` buckets, `n = m·T`, each with its parent's hypotheses at that horizon and no other: the shipped
-   schedule's bound is `#Ac · (#Σ_sync · D^T)^m` (`EncardAccSeqsLeConstantRatePerWindow`,
+   schedule's bound is `#Ac · (ss.size · D^T)^m` (`EncardAccSeqsLeConstantRatePerWindow`,
    `EncardDecodableLeConstantRatePerWindow`), and the ingress bound `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment
    (`EncardIngressObsDecodableLePerWindow`, and its `Contents` version). The egress factor per window is the bound's,
    not a count per window: content advice and an earlier window's sync can first show in a later window, so one window
-   may continue a given prefix in more than `#Σ_sync · D^T` ways. So the egress bound is cumulative from the run's
+   may continue a given prefix in more than `ss.size · D^T` ways. So the egress bound is cumulative from the run's
    first window, and a temporal unit that starts later is not bounded by its own windows. Ingress is not affected:
    `Packed`, `Allocated` and `JitterBounded` bound every step's branching whatever came before.
 2. **The Program reads ingress up to and including step t.** The note's W1 lag allows only ingress before t. This is
@@ -411,6 +411,6 @@ The constant-rate Program adds these:
     audit enforces it (`Audit.syncs`). A clock per link is a different advice type, covered by
     `EncardAccSeqsLeAdvice` directly.
 16. **The allocation is the slot count `S`** on every egress link, as in Python, where a row has `allocation` slots.
-17. **In-set advice.** The advice ranges over `ss.Elem`, the values of Σ_sync: a run whose declared sync is outside the
+17. **In-set advice.** The advice ranges over `ss.Elem`, the values of 𝒮_sync: a run whose declared sync is outside the
     set is an `advice` violation and rejected, so its advice is never counted. `ExpectedRowCausal` takes any clock-sync
     values, in the set or not, which is what the audit's verdicts on earlier windows rely on.
