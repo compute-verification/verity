@@ -162,8 +162,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           binding: Mapping[str, str] | None = None,
           outputs: Mapping[str, Mapping[str, str]] | None = None,
           schemas: Mapping[str, str] | None = None, window_root: str | None = None,
-          held: Sequence[str] | None = None, day: int | None = None,
-          declarations: Sequence[Mapping[str, Any]] | None = None, members: Sequence[LP.Member] = ()) -> Verdict:
+          held: Sequence[str] | None = None, members: Sequence[LP.Member] = (), day: int | None = None,
+          declarations: Sequence[Mapping[str, Any]] | None = None) -> Verdict:
     """R1-R7 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
