@@ -23,17 +23,8 @@ open Placed SampledProofs.OneStageZk
 theorem templateOk_iff (c : Flock.Circuit) :
     templateOk c = .ok () ↔ c.upv ≠ 0 ∧ returnedBits c ≤ UNIT_CLASS_MAX := by
   unfold templateOk
-  split
-  · exact iff_of_false (fun h => nomatch h) fun h => h.1 ‹_›
-  · split
-    · exact iff_of_false (fun h => nomatch h) fun h => absurd h.2 (Nat.not_le.2 ‹_›)
-    · exact iff_of_true rfl ⟨‹_›, Nat.le_of_not_gt ‹_›⟩
-
-theorem templateOk_iff' (c : Flock.Circuit) :
-    templateOk c = .ok () ↔ c.upv ≠ 0 ∧ returnedBits c ≤ UNIT_CLASS_MAX := by
-  unfold templateOk
   by_cases h1 : c.upv = 0 <;> by_cases h2 : returnedBits c > UNIT_CLASS_MAX <;>
-    simp [h1, h2, bind, Except.bind, throw, throwThe, MonadExceptOf.throw, pure, Except.pure] <;> omega
+    (simp [h1, h2, bind, Except.bind, throw, throwThe, MonadExceptOf.throw, pure, Except.pure]; omega)
 
 /-- **Where v2's template check passes, the key program's units fit the slots**: each has a lowered gate and commits
 at most `unitClassMax` values. -/
