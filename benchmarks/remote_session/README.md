@@ -14,8 +14,10 @@ reference (`CpuBackend`) as the prover's backend, and the Lean line test where `
 side a machine: `ROLE=verifier` on a machine the developer doesn't control and `ROLE=prover` on the developer's, with no
 default (`ROLE=both` runs the two on one machine, a test of the scripts that audits nothing).
 
-- `verifier.py`: the verifier's process. It runs the Lean verifier, `remote-audit-verifier` (`lean_verifier.py`),
-  beside `audit.AuditRun`, and refuses a run where the two differ.
+- `verifier_process.py`: the verifier's process, which these scripts and live_verifier's host run: `verifier.py`'s
+  `main`, handed what a verifier imports none of, the LMS verify a served or gate session's signatures are checked with
+  and the live challenger's `serve.py`. `verifier.py` runs the Lean verifier, `remote-audit-verifier`
+  (`lean_verifier.py`), beside `audit.AuditRun`, and refuses a run where the two differ.
 - `prover.py`: the prover's process; its GPU backend is `device.py` with `session.cu` (which includes
   `benchmarks/codec_tensor/reader.cu`), `inplace.py` reads vLLM's tensors in place, and `serve.py` serves vLLM as the prover.
 - `auditor_line.py`: the memory line on the auditor's clock, computed by the Lean (`line_record`) and held equal to `line.py`'s.
