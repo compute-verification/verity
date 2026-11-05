@@ -1,5 +1,9 @@
-import Proofs.Flock.Claims.Complete.ZkTables.View
-import Proofs.Flock.Claims.Complete.Zk.LigeritoPos
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.View
+public import Proofs.Flock.Claims.Complete.Zk.LigeritoPos
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The masked prover's rep: its round count
@@ -9,6 +13,8 @@ import Proofs.Flock.Claims.Complete.Zk.LigeritoPos
   rounds. The verifier's masked Ligerito, on the prover's rounds, ends where the prover's did (`Level0.Verifier`),
   which is `k_0 + 7 + 11 R` rounds on (`zkLigeritoWith_pos`), and the inner proof adds four.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

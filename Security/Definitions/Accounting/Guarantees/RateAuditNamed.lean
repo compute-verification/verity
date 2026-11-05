@@ -1,7 +1,9 @@
-import Definitions.Accounting.RateAudit
-import Definitions.Accounting.RateAuditInteractive
-import Definitions.Accounting.RateAuditRemote
-import Definitions.Accounting.RateAuditPooled
+module
+
+public import Definitions.Accounting.RateAudit
+public import Definitions.Accounting.RateAuditInteractive
+public import Definitions.Accounting.RateAuditRemote
+public import Definitions.Accounting.RateAuditPooled
 
 /-!
 # Conservation over tiers with named words (trusted)
@@ -22,6 +24,8 @@ oracle value is that word's receipt. Two of the run's queries with one oracle va
 The prover is one undifferentiated resource: these conserve the words read, rebuilt or held, whichever devices or
 parties read, rebuild or hold them, with no assumption on who they are.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

@@ -1,4 +1,6 @@
-import Proofs.Properties.CertifierDevice.Late
+module
+
+public import Proofs.Properties.CertifierDevice.Late
 
 /-!
 # The certifier device, proved: a complete record is the FIFO's release of what was handed
@@ -11,6 +13,8 @@ enqueued at the bucket that handed it, where the shaper's `queued` count is the 
 Under honest timing those buckets are the Program's handing buckets (`hands_honest`): a run whose windows are all
 complete reads its records as the Program's through `completeRows_honest`.
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierDevice.Proofs
 

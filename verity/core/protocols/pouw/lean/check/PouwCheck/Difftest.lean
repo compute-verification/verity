@@ -1,9 +1,11 @@
-import Difftest
-import PouwCheck.Check
-import PouwCheck.Chunks
-import PouwCheck.Opening
-import PouwCheck.Pass
-import PouwCheck.Rounds
+module
+
+public import Difftest
+public import PouwCheck.Check
+public import PouwCheck.Chunks
+public import PouwCheck.Opening
+public import PouwCheck.Pass
+public import PouwCheck.Rounds
 
 /-!
 # The difftest's functions: the check's Lean behind `Difftest.serve`
@@ -48,6 +50,8 @@ The lead's window (`PouwCheck.Lead`, `circuit/lead.py`'s), a refusal as `{"refus
 * `lead-window` (`record`, `weights_root`, `stream`, `prover`, `key_leaf` as hex, `calls`, `events` the certifier's
   record): `window_refusal` as `{"reason"}`, null when the window holds.
 -/
+
+@[expose] public section
 
 namespace PouwCheck.Difftest
 

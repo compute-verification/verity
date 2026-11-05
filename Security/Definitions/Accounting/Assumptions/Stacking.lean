@@ -1,4 +1,6 @@
-import Definitions.Accounting.Carrier
+module
+
+public import Definitions.Accounting.Carrier
 
 /-!
 # Stacking's named assumptions: bound keys, the declared circuit's carriers, the steered layout (trusted)
@@ -20,6 +22,8 @@ each a named `Prop` taken as a hypothesis, never an `axiom`:
   (`Accounting.ScheduleDeterministic`, `RemoteAudit.Schedule.check`): the bits of the schedule each credited plan is
   the verifier's plan of.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions
 

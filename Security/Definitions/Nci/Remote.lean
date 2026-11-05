@@ -1,4 +1,6 @@
-import Definitions.Nci.Dampener
+module
+
+public import Definitions.Nci.Dampener
 
 /-!
 # The compute dampener, remote protocol: the vocabulary
@@ -26,6 +28,8 @@ residual read there is `r̂ + ε_W W_cert/C`.
 with `reference_efficiency=False` (`benchmarks/nci`'s compute dampener on `tiers.evaluate`'s terms);
 `hardwareMultiple` is the one a developer needs.
 -/
+
+@[expose] public section
 
 namespace Nci.Dampener
 

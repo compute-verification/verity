@@ -1,6 +1,8 @@
-import Proofs.Accounting.Memory.Counting
-import Proofs.Pous.Thm1.Theorem1iiSeq
-import Definitions.Accounting.Guarantees.Memory
+module
+
+public import Proofs.Accounting.Memory.Counting
+public import Proofs.Pous.Thm1.Theorem1iiSeq
+public import Definitions.Accounting.Guarantees.Memory
 
 /-!
 # Memory adds: the composition with PoUS's guarantee
@@ -14,6 +16,8 @@ counting core, a uniform `z` has a fibre above `2^(N − q + k) ≤ 2^S` at a gi
 `2^-k`, so at some one of the `c` rounds with probability at most `c · 2^-k` (`pr_heavy_le`, `adds_core`). The
 isolation forms are the general ones at `H = 0`.
 -/
+
+@[expose] public section
 
 namespace Accounting.MemoryProofs
 

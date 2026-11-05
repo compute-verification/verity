@@ -1,6 +1,8 @@
-import Definitions.NetworkCertifier.Guarantees.Pooled
-import Proofs.NetworkCertifier.PeriodSum
-import Mathlib.Analysis.SpecialFunctions.Log.Basic
+module
+
+public import Definitions.NetworkCertifier.Guarantees.Pooled
+public import Proofs.NetworkCertifier.PeriodSum
+public import Mathlib.Analysis.SpecialFunctions.Log.Basic
 
 /-!
 # The incorrect proof blocks over a monitoring period: the escapes multiply
@@ -12,6 +14,8 @@ probability at most `r^F` when each window's miss has probability at most `r` to
 (`pr_adaptive_le`, by induction over the windows: the first window's coins, then the rest's at each of them). With
 each window's soundness error added by a union bound, that is `horizonIncorrectBlocks`.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

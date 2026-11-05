@@ -1,6 +1,8 @@
-import CertifierDevice.Certifier
-import CertifierDevice.Online
-import CertifierDevice.Served
+module
+
+public import CertifierDevice.Certifier
+public import CertifierDevice.Online
+public import CertifierDevice.Served
 
 /-!
 # The shaper and the bucketer: the reference's certifiers fed frames as they arrive
@@ -11,6 +13,8 @@ handing rule, `h(k) = max(eligible(k), h(k−1))` under the declared sync of the
 behind the certifier's own salt frame at a window's first bucket, and on a served link only as whole requests its
 admission rule admits).
 -/
+
+@[expose] public section
 
 namespace CertifierDevice
 

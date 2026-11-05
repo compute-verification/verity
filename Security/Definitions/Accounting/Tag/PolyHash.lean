@@ -1,7 +1,9 @@
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Data.ZMod.Defs
-import Mathlib.Probability.Distributions.Uniform
-import Definitions.Accounting.Tag.Prob
+module
+
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Data.ZMod.Defs
+public import Mathlib.Probability.Distributions.Uniform
+public import Definitions.Accounting.Tag.Prob
 
 /-!
 # The keyed polynomial hash over `GF(2^31 − 1)` (trusted)
@@ -20,6 +22,8 @@ A word enters the field as its residue: `int(w) % MOD` in the reference, one Mer
 GPU, which agrees mod `p`. Since `2^32 > 2p`, every word has another word with its residue (`w` and `w ± p`), so the
 hash binds residues, not words: two blocks whose words agree mod `p` hash alike at every key.
 -/
+
+@[expose] public section
 
 namespace Accounting.Tag
 

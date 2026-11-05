@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.ServedWork
-import Properties.Pouw.PeriodJ10R
+module
+
+public import Definitions.Pouw.Assumptions.ServedWork
+public import Properties.Pouw.PeriodJ10R
 
 /-!
 # The served PoUW protocol's work: priced work on the prover's machines from an accepted period
@@ -47,6 +49,8 @@ whether `SAKServed` holds on 𝓜 is open.
 
 The proof is `Proofs.Pouw.ServedWork`; `Proofs.Pouw.ServedWork.Honest` has its honest and nontrivial lemmas.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Served
 

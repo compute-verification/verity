@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Session
-import Proofs.Flock.Soundness.Game.Prob
+module
+
+public import Proofs.Flock.Soundness.Session
+public import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Several tables in one batched session (`Flock.Record`)
@@ -24,6 +26,8 @@ For a unit read from table `j`, these are the unit's `ksFail` (`failProbB`), its
 (`extractProbB` of the link event), its `cover` (`one_le_fail_add_B'`) and its knowledge bound
 (`joint_le_B'`), in `ℝ≥0∞` as `Audit.ExtractionAnalysis` takes them.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

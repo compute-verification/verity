@@ -1,10 +1,12 @@
-import Proofs.Accounting.RemoteHeld.Window
-import Proofs.Accounting.RemoteHeld.Draw
-import Proofs.Accounting.RemoteHeld.Outside
-import Proofs.Properties.RemoteAudit.Line
-import Proofs.Properties.RemoteAudit.Pooled
-import Proofs.Properties.RemoteAudit.Session
-import Proofs.Properties.RemoteAudit.Shared
+module
+
+public import Proofs.Accounting.RemoteHeld.Window
+public import Proofs.Accounting.RemoteHeld.Draw
+public import Proofs.Accounting.RemoteHeld.Outside
+public import Proofs.Properties.RemoteAudit.Line
+public import Proofs.Properties.RemoteAudit.Pooled
+public import Proofs.Properties.RemoteAudit.Session
+public import Proofs.Properties.RemoteAudit.Shared
 
 /-!
 # The memory line of record, proved (`Properties.RemoteAudit.Line`: `LineHeld`), and memory held from it
@@ -33,6 +35,8 @@ to the line's W, and on it every stretch of the line credits what the trace held
 * the weights' credit follows from the held credit (`weights_le`): a set of `w` registered blocks misses at most
   `N − w` of those in node memory at a tick (`card_le_inter`).
 -/
+
+@[expose] public section
 
 namespace Properties.RemoteAudit.Line.SecurityProofs
 

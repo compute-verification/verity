@@ -147,4 +147,5 @@ ids, alert bots' ids and the humans' Slack ids are recorded by hand.
 
 The app's manifest is `slack-app.json` beside this file: `research msg slack-app export|diff|apply` (`diff` exits 1 on
 drift). New scopes take effect after Daniel approves the install page `apply` prints; `apply` needs the app
-configuration token, which rotates in a 0600 state file on the control pod (`$RESEARCH_SLACK_APP_STATE`).
+configuration token, which rotates in a 0600 state file on the control pod (`$RESEARCH_SLACK_APP_STATE`). So `slack-app`
+runs only there, and no agent holds the token. When a refresh token is spent, a person writes a new pair into that file.

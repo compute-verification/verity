@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.Replay.Satisfies
-import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.Lincheck
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.Satisfies
+public import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Lincheck
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
 
 /-!
 # The lincheck's algebra at the deployed relation
@@ -20,6 +22,8 @@ passes the verifier's checks (§10).
 * `lcAlgebra`: at a good case the trace is the witness's bits (`traceOf_z`), its A and B sides are the statement's
   (`toZ_mulBlocks`, through `Case.model`'s `placedA = matA`), and `lcAlgebra_of` applies.
 -/
+
+@[expose] public section
 
 namespace FlockLevel3
 

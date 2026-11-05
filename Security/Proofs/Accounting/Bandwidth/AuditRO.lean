@@ -1,7 +1,9 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.Bandwidth
-import Definitions.Accounting.Guarantees.RemotePass
-import Proofs.Accounting.Bandwidth.Chip
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.Bandwidth
+public import Definitions.Accounting.Guarantees.RemotePass
+public import Proofs.Accounting.Bandwidth.Chip
 
 /-!
 # PoUB's per-pass lemma, the bandwidth audit v0 in the random-oracle model: the proof
@@ -16,6 +18,8 @@ contents of at least `k` blocks (`queried`):
   device memory, side sources and regeneration answered with, and which `k` of its queries named blocks, determine
   those `k` blocks given the oracle, since replaying the chip recomputes its queries (`Chip.replay_trace`).
 -/
+
+@[expose] public section
 
 namespace Bandwidth
 

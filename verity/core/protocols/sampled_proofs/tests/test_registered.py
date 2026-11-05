@@ -32,12 +32,12 @@ TABLE = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]]
 SCHEME = "frame-v3-sha512/hm96-sha512"
 LAW = {"law": "subset", "k": 2}
 SERVED = {"kind": "served", "row": 7, "run": "r-registered"}
-#: a 16-bit registration's root as `registered.py` computed it before `word_bits`: three 64-word rows, salts 01.., 02.., 03..
-ROOT_16 = ("17b12eea66ca473baf95f834bcdef8bbb94001549fa85061f3b0166d795d2812"
-           "7d5db86a105ab3ceb1821cf9f57a66323a873f55355370fdeff6bd7e2cfd8a07")
+#: a 16-bit registration's root: three 64-word rows, salts 01.., 02.., 03..
+ROOT_16 = ("511a71aa555f05f2b992997f7d6fe2af8e225c2a378ace51d54c18642f73193e"
+           "5f4a2e5773666a0fc342aa1911db7806cdbcb3d144a6fd8ffd0d9c6b0426d557")
 #: a 32-bit registration's root: one row of eps and the softmax scale at D = 64, salt 09..
-ROOT_32 = ("111850c621f50137b50e36ee9e22fe8cefd28761e8b7ad98b175eaf0e8c7413d"
-           "27364f184783f7680bf638c9b039154a53ef8908faba261a4eb208c22552c40f")
+ROOT_32 = ("c0263747d89040d789185af524ea46e535071948299eb60851799b78fd3a9168"
+           "c5e79be456e606dd9eaa5516e6d5b6013536c24f1fe17ba13dd09a37150a62b0")
 
 
 #: each proof block's seed group: the row of `pouw.roots` it reads
@@ -100,15 +100,16 @@ def test_the_registered_root_is_the_hm96_rows_tree_under_its_own_domain():
     assert again.root != reg.root and set(again.bcs).isdisjoint(reg.bcs)
 
 
-def test_a_16_bit_value_keeps_the_bytes_it_had_before_word_bits():
-    """16 is the default width: its domain binds the five keys it always did, and a whole-block row is the port's row
-    as it stands, so a 16-bit value's domain, leaves and root are the ones registered before `word_bits` (`ROOT_16`)."""
-    from verity.ml.commitments.identity import identity_digest
+def test_a_16_bit_value_binds_only_the_five_keys():
+    """16 is the default width: its domain binds the five keys alone, under the SHA-512 identity frame (64 bytes), and a
+    whole-block row is the port's row as it stands (`ROOT_16`)."""
+    from verity.ml.commitments.identity import identity_digest_sha512
 
     prog = P.program_digest(_program())
-    binding = identity_digest(G.REGISTERED_DOMAIN, {"program": prog, "value": "W", "schema": G.SCHEMA, "words": 2, "leaves": 5})
+    binding = identity_digest_sha512(G.REGISTERED_DOMAIN, {"program": prog, "value": "W", "schema": G.SCHEMA, "words": 2,
+                                                           "leaves": 5})
     assert G.domain(prog, "W", 2, 5).domain_id == G.domain(prog, "W", 2, 5, 16).domain_id
-    assert G.domain(prog, "W", 2, 5).binding == bytes.fromhex(binding)
+    assert G.domain(prog, "W", 2, 5).binding == binding and len(binding) == 64
     row = list(range(1, 65))
     assert G.row_words(row) == row and G.row_digest(row) == sha512_row_digest(row, 16, ROLE_X)
     rows = [[(r * 64 + j) * 1009 % 65536 for j in range(64)] for r in range(3)]

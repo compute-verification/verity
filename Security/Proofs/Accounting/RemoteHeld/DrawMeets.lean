@@ -1,5 +1,7 @@
-import Proofs.Accounting.RemoteHeld.Draw
-import Proofs.Accounting.RemoteHeld.Meets
+module
+
+public import Proofs.Accounting.RemoteHeld.Draw
+public import Proofs.Accounting.RemoteHeld.Meets
 
 /-!
 # The drawn guarantees' premises meet, and their conclusions bite
@@ -20,6 +22,8 @@ that accepts everything (`*_nontrivial`).
   so every advantage is `0`; and its pooled bound is `0`. Each conclusion then claims probability at most
   `δ + 2^-64` (and `δs`) for an event of probability `1`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Remote.DrawMeets
 

@@ -1,25 +1,27 @@
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Analysis.SpecialFunctions.Log.Base
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Mathlib.Basic.Real.Basic
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Data.Fintype.Option
-import Mathlib.Data.Fintype.Powerset
-import Mathlib.Data.Fintype.Sum
-import Mathlib.Data.List.Chain
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.GCongr
-import Mathlib.Tactic.Linarith
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
-import Proofs.Pous.Thm1.Theorem1iTimed
-import Proofs.Pous.Thm1.Theorem1iiSeq
-import Proofs.Pous.Thm1.Theorem1iiiTimed
-import Proofs.Pous.B5.StackedOneWay
+module
+
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Analysis.SpecialFunctions.Log.Base
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
+public import Mathlib.Basic.Real.Basic
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Data.Fintype.Option
+public import Mathlib.Data.Fintype.Powerset
+public import Mathlib.Data.Fintype.Sum
+public import Mathlib.Data.List.Chain
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.GCongr
+public import Mathlib.Tactic.Linarith
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
+public import Proofs.Pous.Thm1.Theorem1iTimed
+public import Proofs.Pous.Thm1.Theorem1iiSeq
+public import Proofs.Pous.Thm1.Theorem1iiiTimed
+public import Proofs.Pous.B5.StackedOneWay
 
 /-!
 # From "fewer than `k` answerable" to a sampled audit, and the stacked one-way graph's audit bound
@@ -44,6 +46,8 @@ preprocessor (the state after that history) and per-challenge programs, so `b5_s
 It builds on `Pous.SecurityProofs.B5.StackedOneWay` (Claim 13, B5 and the bridge) and the Theorem 1 library (`PousThm1`,
 `Pous.SecurityProofs.Thm1`).
 -/
+
+@[expose] public section
 
 namespace PousThm1
 

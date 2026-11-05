@@ -1,6 +1,8 @@
-import Proofs.Flock.Level3.ArithFacts
-import Proofs.Flock.Claims.Counted
-import Proofs.Flock.Claims.RootFindCost
+module
+
+public import Proofs.Flock.Level3.ArithFacts
+public import Proofs.Flock.Claims.Counted
+public import Proofs.Flock.Claims.RootFindCost
 
 /-!
 # The root finder over GF(2^128)
@@ -12,6 +14,8 @@ basis spans). It lists exactly the roots of a nonzero polynomial, each once (`ro
 meets `Claims.DecoderComplexity` at the input's length, with `roots128Cost = 64·129²·(d + 3)^4`
 (`roots128_complexity`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

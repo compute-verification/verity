@@ -1,23 +1,25 @@
-import Proofs.Population.Determinacy
-import Proofs.Population.Necessity
-import Proofs.Population.Egress
-import Proofs.Population.Pointer
-import Proofs.Population.Leakage
-import Proofs.Population.Work
-import Proofs.Population.Instance
-import Proofs.Population.Oblivious
-import Proofs.Population.Transfer
-import Proofs.Population.Converse
-import Proofs.Population.HonestCone
-import Proofs.Population.LongValue
-import Proofs.Population.NecessitySkeleton
-import Proofs.Population.NecessityMatrix
-import Proofs.Population.Exfiltration
-import Proofs.Population.ExfiltrationBound
-import Proofs.Population.ExfiltrationExamples
-import Proofs.Population.DrawPressure
-import Proofs.Population.JointPressure
-import Proofs.Population.ChiPool
+module
+
+public import Proofs.Population.Determinacy
+public import Proofs.Population.Necessity
+public import Proofs.Population.Egress
+public import Proofs.Population.Pointer
+public import Proofs.Population.Leakage
+public import Proofs.Population.Work
+public import Proofs.Population.Instance
+public import Proofs.Population.Oblivious
+public import Proofs.Population.Transfer
+public import Proofs.Population.Converse
+public import Proofs.Population.HonestCone
+public import Proofs.Population.LongValue
+public import Proofs.Population.NecessitySkeleton
+public import Proofs.Population.NecessityMatrix
+public import Proofs.Population.Exfiltration
+public import Proofs.Population.ExfiltrationBound
+public import Proofs.Population.ExfiltrationExamples
+public import Proofs.Population.DrawPressure
+public import Proofs.Population.JointPressure
+public import Proofs.Population.ChiPool
 
 /-!
 # Populations: which object each policy needs of sampled proofs' guarantee
@@ -85,3 +87,5 @@ commitment, what leaves through the halt is at most `cum + Δ ℓ`, so under the
 `(1 + Δ) ℓ + (n/k) ln (1/δ)` with probability at least `1 - δ`, and at most `j (ℓ + n/k) + Δ ℓ` on average through the
 halt the `j`-th detection triggers.
 -/
+
+@[expose] public section

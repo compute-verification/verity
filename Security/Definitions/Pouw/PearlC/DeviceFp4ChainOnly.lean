@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.DeviceFp4Issue
+module
+
+public import Definitions.Pouw.PearlC.DeviceFp4Issue
 
 /-!
 # Pearl-C4's chain-only reading at an FP4 record (definitions only, staged)
@@ -7,6 +9,8 @@ The forming-credit reading credits the salt-dependent forming (`fs` per activati
 credits the unit without it, as `creditChainOnly` does at the H100 and `DeviceChainOnly` does for FP8: `creditFp4` less
 `fs·m·k`. The cap stays on the full credit, so a unit within it keeps at least `creditFp4 − fs·m·k − ρ·creditFp4`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

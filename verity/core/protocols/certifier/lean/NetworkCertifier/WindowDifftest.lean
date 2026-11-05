@@ -1,5 +1,7 @@
-import NetworkCertifier.WindowCharge
-import Lean.Data.Json
+module
+
+public import NetworkCertifier.WindowCharge
+public import Lean.Data.Json
 
 /-!
 # The window charge's difftest: advice v1's whole window against `window_charge.reference_window`, on random instances
@@ -23,6 +25,8 @@ order (`advice`).
   window, each `ok` 0 a `null`;
 * `charges`: `charges` of the windows' advice, from the book's first carry, or `null` when a window refuses.
 -/
+
+@[expose] public section
 
 namespace NetworkCertifier.WindowCharge.WindowDifftest
 

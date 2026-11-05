@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.MaskFamily
-import Proofs.Flock.Claims.DeployTables
-import Proofs.Flock.Claims.ZK.MaskTape
+module
+
+public import Proofs.Flock.Claims.ZK.MaskFamily
+public import Proofs.Flock.Claims.DeployTables
+public import Proofs.Flock.Claims.ZK.MaskTape
 
 /-!
 # The deployed masked session at one tape
@@ -24,6 +26,8 @@ every statement: `zkTableCap` cells, one per table, each statement reading its t
 * `Flock.zk_deployZk_masked_layout_gap`: `Flock.zk_deployZk_masked_gap` at any layout's tape, `hT` discharged; what is
   left is the round plan's `Causal` and the three rounds at that tape.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

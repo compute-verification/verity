@@ -1,5 +1,7 @@
-import Proofs.Flock.Bridge.V5.Statement
-import Proofs.Flock.Bridge.EndToEndHiddenC
+module
+
+public import Proofs.Flock.Bridge.V5.Statement
+public import Proofs.Flock.Bridge.EndToEndHiddenC
 
 /-!
 # `EndToEndHiddenV5`, from `OpeningsCanonTargetV5`
@@ -15,6 +17,8 @@ import Proofs.Flock.Bridge.EndToEndHiddenC
   `execSel` under the law, whose escape of `W` is at most the law's `P_a` of `W` under A3 (`execSel_escape_le`), and the
   last term in closed form as `endToEndHiddenC_of`'s.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Layout
 

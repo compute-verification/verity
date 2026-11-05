@@ -1,6 +1,8 @@
-import Proofs.Population.Determinacy
-import Proofs.Core.Circuit
-import Definitions.Population.Partition
+module
+
+public import Proofs.Population.Determinacy
+public import Proofs.Core.Circuit
+public import Definitions.Population.Partition
 
 /-!
 # Sampled proofs' partitions as populations
@@ -20,6 +22,8 @@ import Definitions.Population.Partition
   order (`Partition.compose_cone`, which holds for every partition); an opaque unit with the same dataflow would not
   have it (`Necessity.cycle_two_fixed_points`).
 -/
+
+@[expose] public section
 
 namespace Verity.Partition
 

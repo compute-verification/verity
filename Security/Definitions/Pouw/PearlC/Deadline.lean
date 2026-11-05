@@ -1,5 +1,7 @@
-import Definitions.Pouw.Game.Deadline
-import Definitions.Pouw.PearlC.Game
+module
+
+public import Definitions.Pouw.Game.Deadline
+public import Definitions.Pouw.PearlC.Game
 
 /-!
 # The deadline in Pearl-C's game (trusted)
@@ -8,6 +10,8 @@ import Definitions.Pouw.PearlC.Game
 their budget by the deadline and what the deadline reads of them are restated here. The named assumption is
 `Pouw.Assumptions.HonestClock`, the one both games read, at `CostModel.adversaries`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

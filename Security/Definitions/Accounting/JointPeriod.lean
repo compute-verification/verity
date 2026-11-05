@@ -1,5 +1,7 @@
-import Definitions.Accounting.Joint
-import Definitions.Core.Partition
+module
+
+public import Definitions.Accounting.Joint
+public import Definitions.Core.Partition
 
 /-!
 # A period audited by every protocol, and what each audit's guarantee says about it (trusted)
@@ -28,6 +30,8 @@ leak over a period of sampled audits for communication, and the sampled audit's 
 Two parts of the run are fields until their shared definitions exist: the verdicts (`accepts`), as in
 `Accounting.Run`, and the network certifier's claim (`commWithin`), which its period statement is to define.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

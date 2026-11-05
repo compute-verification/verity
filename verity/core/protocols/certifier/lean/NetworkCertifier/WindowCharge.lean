@@ -1,4 +1,6 @@
-import NetworkCertifier.AdviceV1
+module
+
+public import NetworkCertifier.AdviceV1
 
 /-!
 # The certifier program: advice v1's whole window charged (`ChargeCount_v2`)
@@ -9,6 +11,8 @@ core only: a bin is `AdviceV1.bitlen` where the reference reads Mathlib's `Nat.s
 a list where the reference takes them as a function on `Fin W`. `Proofs.NetworkCertifier.Code` (`CodeChargesWhole`)
 proves `charges` equal to the reference's.
 -/
+
+@[expose] public section
 
 namespace NetworkCertifier.WindowCharge
 

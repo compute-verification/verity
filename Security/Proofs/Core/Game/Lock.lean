@@ -1,6 +1,8 @@
-import Proofs.Core.Game.Expect
-import Proofs.Core.Game.Interleave
-import Definitions.Core.Game.Lock
+module
+
+public import Proofs.Core.Game.Expect
+public import Proofs.Core.Game.Interleave
+public import Definitions.Core.Game.Lock
 
 /-!
 # Lockstep coupling of an oracle game with its compiled game
@@ -24,6 +26,8 @@ off the table chosen at that slot is at most `√(N · Q · Pr[fork conflict])`:
 
 The definitions are in `Definitions.Core.Game.Lock`.
 -/
+
+@[expose] public section
 
 namespace Verity
 

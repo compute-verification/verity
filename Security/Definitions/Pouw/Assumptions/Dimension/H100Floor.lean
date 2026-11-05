@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.Dimension.H100W
-import Definitions.Pouw.Assumptions.Dimension.H100LoopFree
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100W
+public import Definitions.Pouw.Assumptions.Dimension.H100LoopFree
 
 /-!
 # `MH100`'s floor table, and the distinct-writes bound for citing the hardware (trusted statements; draft semantics)
@@ -55,6 +57,8 @@ review lists the measurements.
   too, m8n8k4 and `mma.sp` included, since every one was priced at 32 a register or more. Its marker stays with
   `h100Floor`'s.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.CallsOfProofs
+module
+
+public import Proofs.Flock.Claims.Recursion.CallsOfProofs
 
 /-!
 # (P4) at the deployed bound record, at SHA-512, with no premise
@@ -8,6 +10,8 @@ V*'s proof-file decoder accepts a plain proof's one file alone (`Flock.decodePro
 `RecDeploy.CanonicalProofFiles` (`RecDeploy.canonicalProofFiles`). With the columns half and the calls half proved at
 SHA-512 (`CallsOfProofs`), (P4) holds at the deployed bound record (`RecDeploy.lastBindsEC_deployed_sha512_closed`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

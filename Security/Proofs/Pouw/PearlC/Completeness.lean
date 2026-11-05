@@ -1,8 +1,10 @@
-import Definitions.Pouw.PearlC.Completeness
-import Definitions.Pouw.PearlC.DevicePricesLoop
-import Definitions.Pouw.Assumptions.PearlC.HonestCap
-import Proofs.Pouw.PearlC.HonestWords
-import Proofs.Pouw.Copy
+module
+
+public import Definitions.Pouw.PearlC.Completeness
+public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Definitions.Pouw.Assumptions.PearlC.HonestCap
+public import Proofs.Pouw.PearlC.HonestWords
+public import Proofs.Pouw.Copy
 
 /-!
 # The sampled audit's completeness from the honest tiles' measured cap rate
@@ -16,6 +18,8 @@ import Proofs.Pouw.Copy
 * **The served models** at v1's record under rev1 at the cap 1/1,000, the honest cast at 8.72: Llama-3.1-8B's and
   Qwen3-8B's served layouts (`pearlCDomainDevShapes`), whose units are at most `2^16` deep.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

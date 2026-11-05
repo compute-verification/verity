@@ -1,7 +1,9 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeedK
-import Proofs.Pouw.PearlC.RowSeedCode
-import Proofs.Pouw.PearlC.DeviceGamma
-import Proofs.Pouw.PearlC.TileGammaTol
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeedK
+public import Proofs.Pouw.PearlC.RowSeedCode
+public import Proofs.Pouw.PearlC.DeviceGamma
+public import Proofs.Pouw.PearlC.TileGammaTol
 
 /-!
 # Per-row seeds at a census k: the tile cap `ρ` and a wider row cap `ρr` (compute accounting's file)
@@ -24,6 +26,8 @@ TT_OUT per tile at `ρr`, through (C2) at `ρr`:
   over its cap and credits it nothing. The strict forms are its case `u 0 = ε_s`, `u x = 1` otherwise
   (`gammaSampled_of_tol`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

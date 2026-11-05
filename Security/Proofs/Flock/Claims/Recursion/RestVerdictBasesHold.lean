@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
-import Proofs.Flock.Claims.Recursion.RestVerdictCustody
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
+public import Proofs.Flock.Claims.Recursion.RestVerdictCustody
 
 /-!
 # `hrest`'s base checks, at every reader
@@ -20,6 +22,8 @@ reads no witness and no prover: every fact is about `decR` and the statement's s
 `DrawTied` asks the tie at statements without a draw too, where at one table the header may carry any `unit_draw`;
 `.after` reads it only where the statement carries one (`holdsR_afterS`, `DrawTiedS`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

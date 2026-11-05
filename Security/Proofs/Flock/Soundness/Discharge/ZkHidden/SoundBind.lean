@@ -1,8 +1,12 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Count
-import Proofs.Flock.Soundness.Discharge.ZkBind.Shadow
-import Proofs.Flock.Soundness.Discharge.ZkBind.BindX
-import Proofs.Flock.Soundness.Discharge.ZkBind.At
-import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Count
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Shadow
+public import Proofs.Flock.Soundness.Discharge.ZkBind.BindX
+public import Proofs.Flock.Soundness.Discharge.ZkBind.At
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
+
+@[expose] public section
 
 set_option Elab.async false
 

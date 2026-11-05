@@ -1,7 +1,9 @@
-import Definitions.Accounting.TS
-import Definitions.Accounting.Gates.Model
-import Definitions.Accounting.Device
-import Definitions.Pouw.Window
+module
+
+public import Definitions.Accounting.TS
+public import Definitions.Accounting.Gates.Model
+public import Definitions.Accounting.Device
+public import Definitions.Pouw.Window
 
 /-!
 # PoUW as a compile pass over an arbitrary declared circuit (trusted)
@@ -126,6 +128,8 @@ The physical layer:
   for a seeded window. The ledger, not this statement, decides how much of a device's time the certificates it
   admits may claim.
 -/
+
+@[expose] public section
 
 namespace Accounting.Compose
 

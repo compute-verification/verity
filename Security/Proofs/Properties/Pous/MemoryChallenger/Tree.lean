@@ -1,5 +1,7 @@
-import Properties.Pous.MemoryChallenger
-import Proofs.Properties.NetworkCertifier.Bytes
+module
+
+public import Properties.Pous.MemoryChallenger
+public import Proofs.Properties.NetworkCertifier.Bytes
 
 /-!
 # The records tree binds its values
@@ -9,6 +11,8 @@ each of the nodes over the pairs below (`next`, `lev`, `levels_eq`). Every node 
 parts are length-prefixed, so under no collision among the strings two trees hash (`treeStrings`, `CF`) one root gives
 one level below it, down to the leaves, and one leaf one value (`tree_bind`).
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger.Properties.SecurityProofs.Tree
 

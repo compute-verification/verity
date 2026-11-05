@@ -1,15 +1,17 @@
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Fintype.Powerset
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.GCongr
-import Mathlib.Tactic.Linarith
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
-import Proofs.Pous.Thm1.Theorem1iTimed
+module
+
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Data.Fintype.Powerset
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.GCongr
+public import Mathlib.Tactic.Linarith
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
+public import Proofs.Pous.Thm1.Theorem1iTimed
 
 /-!
 # Report Theorem 1(ii), sequential: `PousProofs.theorem1_ii_seq`, as drafted
@@ -25,6 +27,8 @@ some history, the wrong predictions fit: `S + B + #wrong·ℓ ≤ β`.
    by counting) against `TimedINC` bounds the event by `π`. A union bound over the `B^j` histories of each
    length `j < k` (`pr_exists_le`) gives `Pr[E] ≤ (Σ_{j<k} B^j)·π`.
 -/
+
+@[expose] public section
 
 namespace PousThm1
 

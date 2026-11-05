@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.Forced
-import Proofs.Flock.Claims.ZK.Rewind
+module
+
+public import Proofs.Flock.Claims.ZK.Forced
+public import Proofs.Flock.Claims.ZK.Rewind
 
 /-!
 # The Goldreich–Kahan simulator meets `ZKmalR`
@@ -25,6 +27,8 @@ runs send one `Hello` to one verifier, agree up to that coin's opening, and each
 commitment (`real_chk_log`). Over `N` rewinds that is at most `N` times `Fork`'s success (`Pr_exists_coord_le`,
 `pr_collR_le`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

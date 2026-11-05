@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Zk.PiopGo
-import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckMasked
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.PiopGo
+public import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckMasked
 
 /-!
 # The zerocheck's two constraints vanish at the masked prover's pads
@@ -13,6 +15,8 @@ is the soundness analysis's `Masks` (`zcZ_masks`). Its evaluations of the replay
 * `finalAB_zero`: `zerocheck final a·b` vanishes at pads with `h_ab = h_a·h_b`, for a trace satisfying the block R1CS
   bitwise and outer coins other than `1` (`Zc.fold_final`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

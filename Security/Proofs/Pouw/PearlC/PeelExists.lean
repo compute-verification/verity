@@ -1,5 +1,7 @@
-import Proofs.Pouw.PearlC.RowStats
-import Proofs.Pouw.PearlC.HonestWords
+module
+
+public import Proofs.Pouw.PearlC.RowStats
+public import Proofs.Pouw.PearlC.HonestWords
 
 /-!
 # The peel's rows exist (proofs)
@@ -22,6 +24,8 @@ that holds on every input whose codes are not NaN, by magnitudes:
   `pc8EntryOK_of_noise` is `Pc8EntryOK` at such a step from `Noise8OK` alone: `A′`'s and `B̃`'s codes are E4M3 casts,
   never NaN; the bases' codes are `Noise8OK`'s; and `be8`'s words are BF16 words of `E′`'s codes, at most `448`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.PeelExists
 

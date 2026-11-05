@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.HonestHalf
-import Proofs.Flock.Claims.Recursion.VStarRowsFit
-import Proofs.Flock.Claims.Recursion.IrDep
+module
+
+public import Proofs.Flock.Claims.Recursion.HonestHalf
+public import Proofs.Flock.Claims.Recursion.VStarRowsFit
+public import Proofs.Flock.Claims.Recursion.IrDep
 
 /-!
 # The honest half of `RecursiveKSAt`'s non-vacuity at the deployed V\* (`honest_half_tops`)
@@ -27,6 +29,8 @@ What it takes is the run accepting (`HonestRunAccepted`), V\*'s gate-level compl
 (`HonestWitSatisfies`), no collision among a part's recorded calls (`NoCollAt`) and the tape exception (`hTops`: the
 reps' tops differ at every level above 0).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.HonestHalfTops
 

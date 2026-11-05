@@ -1,12 +1,14 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Sigma
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Fintype.BigOperators
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Sigma
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Data.Fintype.BigOperators
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
 
 /-!
 # B3: hash-chain sequentiality in the parallel-query model
@@ -23,6 +25,8 @@ output hits `x_{D+1} = H(c_D)` with probability `1/m`.
 
 Only the total work enters, so the same proof gives `(Q + 1)/m` for `OracleAlgorithm.Bounded D Q` (`b3_chain_bounded`).
 -/
+
+@[expose] public section
 
 namespace PousPebbling
 

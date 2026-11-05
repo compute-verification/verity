@@ -1,5 +1,7 @@
-import Mathlib.Logic.Equiv.Fin.Basic
-import Definitions.Pous.Model.StreamedWipe
+module
+
+public import Mathlib.Logic.Equiv.Fin.Basic
+public import Definitions.Pous.Model.StreamedWipe
 
 /-!
 # The streamed-label wipe: the honest server is accepted
@@ -7,6 +9,8 @@ import Definitions.Pous.Model.StreamedWipe
 The server that keeps every label, `M = N · b` bits and no egress, answers every challenge after any history, so
 `Accepts` holds on every run (`honest_accepts`): the guarantee's acceptance is not vacuous.
 -/
+
+@[expose] public section
 
 namespace PousStreamedWipe
 

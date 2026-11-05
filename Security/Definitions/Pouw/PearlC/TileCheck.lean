@@ -1,5 +1,7 @@
-import Definitions.Pouw.PearlC.Tile
-import Definitions.Core.Partition
+module
+
+public import Definitions.Pouw.PearlC.Tile
+public import Definitions.Core.Partition
 
 /-!
 # The tile check as a circuit, and what it computes (trusted; L3's statement)
@@ -40,6 +42,8 @@ of its own (L7). `εPearlC` stays TT_OUT's, and a proof system's error stays in 
 A tile check says something only when it is the deployed Program: a circuit nobody tied to the Program meets L3 with
 any `op`s. The tie is the Program's descriptor digest and a test against `verity.ir`, beside the instance.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

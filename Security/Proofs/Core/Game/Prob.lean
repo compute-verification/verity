@@ -1,5 +1,7 @@
-import Proofs.Core.Game.Union
-import Definitions.Core.Game.Prob
+module
+
+public import Proofs.Core.Game.Union
+public import Definitions.Core.Game.Prob
 
 /-!
 # Probabilities for a fixed prover strategy
@@ -16,6 +18,8 @@ they use:
 
 The definitions are in `Definitions.Core.Game.Prob`.
 -/
+
+@[expose] public section
 
 namespace Verity.Game
 

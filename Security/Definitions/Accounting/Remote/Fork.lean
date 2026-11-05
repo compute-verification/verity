@@ -1,5 +1,7 @@
-import Definitions.Accounting.Remote.Draw
-import Definitions.Accounting.TS.Drawn
+module
+
+public import Definitions.Accounting.Remote.Draw
+public import Definitions.Accounting.TS.Drawn
 
 /-!
 # The receipts' fork game (trusted)
@@ -24,6 +26,8 @@ plurality of the rows a receipt shows (`Receipts.Shows`) over those continuation
   cost is `q`, the SHA-512 calls of two runs of the prover and the verifier's checks of their openings; claim
   `cr/sha-512` (`Claims.StrictBirthday`) bounds its chance by `q²/2^513`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Remote.Draw
 

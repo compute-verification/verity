@@ -1,10 +1,12 @@
-import Proofs.Pous.Statements
-import Proofs.Pous.Thm1.Theorem1iTimed
-import Proofs.Pous.Thm1.Theorem1iiSeq
-import Proofs.Pous.Thm1.Theorem1iiiTimed
-import Proofs.Pous.Graded.Theorem
-import Proofs.Pous.Continuous.MissCount
-import Proofs.Pous.Continuous.Verifier
+module
+
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Thm1.Theorem1iTimed
+public import Proofs.Pous.Thm1.Theorem1iiSeq
+public import Proofs.Pous.Thm1.Theorem1iiiTimed
+public import Proofs.Pous.Graded.Theorem
+public import Proofs.Pous.Continuous.MissCount
+public import Proofs.Pous.Continuous.Verifier
 
 /-!
 # The continuous audit from `TimedINC`: `Pous.Guarantees.PerAnswer` and `Pous.Guarantees.ContinuousAudit`
@@ -29,6 +31,8 @@ depends only on the indices up to its own (`contRecords_ofFn`), and a hit return
    because the indices are independent of the setup and so each round's history is bad with probability at most
    `(β + 1)·π`.
 -/
+
+@[expose] public section
 
 namespace PousContinuous
 

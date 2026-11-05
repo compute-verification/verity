@@ -1,7 +1,13 @@
-import CoreProtocol.Cli
-import CoreProtocol.Ratio
-import MemoryChallenger.Protocol
-import MemoryChallenger.WipeJudge
+module
+
+public import CoreProtocol.Cli
+public import CoreProtocol.Ratio
+public import MemoryChallenger.Protocol
+public import MemoryChallenger.WipeJudge
+meta import CoreProtocol.Cli
+meta import CoreProtocol.Ratio
+meta import MemoryChallenger.Protocol
+meta import MemoryChallenger.WipeJudge
 
 /-!
 # The wipe as a core protocol
@@ -32,6 +38,10 @@ is `M` and `eps` 0, the vacuous statement, and the profile names each gap. The b
 `protocol` (`verity/wipe/v0`) accepts S1's LMS (`SCHEMES`) only; `testProtocol`, under an id of its own, the test
 signers' schemes and only them.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace MemoryChallenger.WipeProtocol
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.VStarFit
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarFit
 
 /-!
 # A slot of the deployed builder's witness outputs the inner prover's commit string
@@ -16,6 +18,8 @@ commit string the inner prover sent for the row the stager placed there:
 
 `rowHidden_staged` gives the row's input columns at every slot `layoutBTops` reads at a staged part.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 

@@ -1,6 +1,8 @@
-import CertifierDevice.Driver
-import Lms.Sign
-import NetworkCheck.Check
+module
+
+public import CertifierDevice.Driver
+public import Lms.Sign
+public import NetworkCheck.Check
 
 /-!
 # The issuer: one network certificate per closed link-window
@@ -39,6 +41,8 @@ certificate of the key's whose digest the sync and the salt open, signed under t
 certificate signs a record digest salted and a clock certificate a clock digest, each under its own tag, so one opens as
 the other only on a SHA-512 collision.
 -/
+
+@[expose] public section
 
 namespace CertifierDevice
 

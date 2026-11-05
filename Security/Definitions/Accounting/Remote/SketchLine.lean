@@ -1,6 +1,8 @@
-import Definitions.Accounting.Remote.Draw
-import Definitions.Accounting.Remote.Outside
-import Definitions.Accounting.Remote.Sketch
+module
+
+public import Definitions.Accounting.Remote.Draw
+public import Definitions.Accounting.Remote.Outside
+public import Definitions.Accounting.Remote.Sketch
 
 /-!
 # The memory line's coins as a sketch outcome (trusted)
@@ -23,6 +25,8 @@ any way, so a device that reads an openings coin early is one of the model's.
   of its pass), which the relay prover meets, and `SketchBound (T.sketch O) δ` is `SketchBoundAt T O δ` over the line's
   coins.
 -/
+
+@[expose] public section
 
 namespace Accounting.Remote.Sketch
 

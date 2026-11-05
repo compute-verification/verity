@@ -10,6 +10,7 @@ defaultTargets = ["VStarRecursive", "vstar-recursive"]
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[require]]
 name = "core_protocol"

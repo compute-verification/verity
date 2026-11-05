@@ -7,7 +7,12 @@ draw. `RecSetup.innerDrawn`: an inner session's record whose `unit_draw` is abse
 is refused, from the inner statement's files or the verifier's inner coins alike; one with a draw passes, and so does a
 session without the inner record.
 -/
-import Flock.RecSetup
+module
+
+public import Flock.RecSetup
+meta import Flock.RecSetup
+
+@[expose] public section
 
 namespace Flock.Test.FullDraw
 

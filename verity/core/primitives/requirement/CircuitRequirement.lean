@@ -1,4 +1,6 @@
-import Std.Data.HashSet
+module
+
+public import Std.Data.HashSet
 
 /-!
 # A declared circuit's requirement, computed
@@ -18,6 +20,8 @@ ascending where a function returns one, and membership goes through a hash set b
 time linear in the wiring, and `packs` sorts the values by block and offset and compares neighbours: a registry row of
 tens of thousands of gates runs in seconds.
 -/
+
+@[expose] public section
 
 namespace CircuitRequirement
 

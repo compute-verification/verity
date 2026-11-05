@@ -5,7 +5,9 @@
 # that starts in lower case is not preceded by a letter or digit (`network_warden`, `I.warden`), one that starts in upper
 # case not by an upper-case letter (`witnessWarden`), and neither is followed by a lower-case letter (`gatewayLeaf` is
 # renamed, `wardens` has a rule of its own). An old word with a space, a dot or a slash in it is preceded by no word
-# character or hyphen ("2-GPU worker" stays). Each [[words_in]] holds words for the files its globs match only, renamed
+# character or hyphen ("2-GPU worker" stays), but for one that starts with an apostrophe, which follows a possessive
+# ("'s gateway"), and its space is a line break too (with the indentation and comment marker that start the next line),
+# which the new word keeps at the same space. Each [[words_in]] holds words for the files its globs match only, renamed
 # as whole words and before [words]; one that ends in a dot is a namespace, renamed only at the start of a name
 # (`Warden.Obs`, not `NetTiming.Warden.obs`). A path is renamed with the same words, so a file moves where its references
 # now point. Declarations keep their place in the locks' records: `rename.py --moves` prints the renames that `audit.py

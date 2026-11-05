@@ -1,4 +1,6 @@
-import NetworkCheck.RecordsGrid
+module
+
+public import NetworkCheck.RecordsGrid
 
 /-!
 # The records check's byte payloads are v4's bits
@@ -15,6 +17,8 @@ of the evidence agree, and so do the grids, the clock and the frame-size check t
   (through `expectedGrids` and `RecordsGrid.expectedGrids_eq`);
 - `unitSync_toEvidence` and `frameBytes_toEvidence`: the unit's clock and the frame-size refusal are v4's.
 -/
+
+@[expose] public section
 
 namespace NetworkCheck.RecordsBytes
 

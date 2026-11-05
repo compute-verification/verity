@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ERepCost
+module
+
+public import Proofs.Flock.Claims.ERepCost
 
 /-!
 # Serving one rerun program's reruns by another's
@@ -16,6 +18,8 @@ prover's runs, the composed program
 So the worst cases multiply (`RP.serve_runs_le`, `RP.serve_hashes_le`), and the expected cost is the inner stage's
 reruns weighted by the outer stage's cost at each (`RP.serve_runs_cast`, which `Recursion/Wald.lean` averages).
 -/
+
+@[expose] public section
 
 namespace Claims
 

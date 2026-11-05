@@ -1,4 +1,6 @@
-import Definitions.Pouw.Dither
+module
+
+public import Definitions.Pouw.Dither
 
 /-!
 # SAK at the served words: the work premise of `Properties.Pouw.Served.ServedWork` (trusted)
@@ -21,6 +23,8 @@ The four Russians' method then pays at least an `alu` lane a MAC, but `SAKMatmul
 price that leaves those pipes cheap, and `SAKResidual`, which would carry them, is not adopted. Whether `SAKServed`
 holds on 𝓜 is open.
 -/
+
+@[expose] public section
 
 namespace Pouw.Assumptions
 

@@ -1,4 +1,6 @@
-import Definitions.Accounting.TS.Sheet
+module
+
+public import Definitions.Accounting.TS.Sheet
 
 /-!
 # The H200's data sheet (generated)
@@ -17,6 +19,8 @@ tile, and `Device.lean`'s side channels don't list NVLink peer offload.
 `uv run machine-model --device sm_90 sheet --lean` prints this file from
 `benchmarks/pouw/machine_model/data/devices/sm_90/sheet.toml`, and the machine model's tests hold it to that output.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Sheets.H200
 

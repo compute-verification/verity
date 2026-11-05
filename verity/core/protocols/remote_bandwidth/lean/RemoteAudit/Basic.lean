@@ -1,5 +1,7 @@
-import Flock.Hash
-import Randomness
+module
+
+public import Flock.Hash
+public import Randomness
 
 /-!
 # Bytes and SHA-512
@@ -8,6 +10,8 @@ The byte encodings the remote audit's formats use (`int.to_bytes`, `int.from_byt
 are frame-v3-sha512 (`Flock.FV3.Sha512`): a receipt tree and the payload tree start at 0, an append's tree at its first
 index.
 -/
+
+@[expose] public section
 
 namespace RemoteAudit
 

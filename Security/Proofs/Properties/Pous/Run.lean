@@ -1,7 +1,9 @@
-import Properties.Pous.EndToEnd
-import Proofs.Properties.Pous.TimedAudit
-import Proofs.Properties.Pous.MemoryChallenger
-import Proofs.Properties.Pous.Setup
+module
+
+public import Properties.Pous.EndToEnd
+public import Proofs.Properties.Pous.TimedAudit
+public import Proofs.Properties.Pous.MemoryChallenger
+public import Proofs.Properties.Pous.Setup
 
 /-!
 # The composed check's property, proved
@@ -17,6 +19,8 @@ block, or two of the run's strings collide.
 
 `runCertifies` composes it with the setup check's `acceptsDecodes` and `publishesRoot` (`Proofs.Properties.Pous.Setup`).
 -/
+
+@[expose] public section
 
 namespace Pous.EndToEnd.SecurityProofs
 

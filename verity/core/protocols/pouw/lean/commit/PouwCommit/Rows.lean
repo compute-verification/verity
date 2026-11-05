@@ -1,8 +1,10 @@
-import Flock.Hm96
-import Flock.HmRow
-import PouwCommit.Frame
-import PouwCommit.Bindings
-import Identity.Domains
+module
+
+public import Flock.Hm96
+public import Flock.HmRow
+public import PouwCommit.Frame
+public import PouwCommit.Bindings
+public import Identity.Domains
 
 /-!
 # The protocol's row and tile trees (`audit.rows_domain`, `Hm96Domain`, `commit_rows`, `transcript_domain`)
@@ -17,6 +19,10 @@ leaf is the frame's plain leaf over the value under the tree's schema (`verity/p
 the key, with a 64-bit counter and the tree's 64-bit nonce (`hm96_salt`). It builds a plain tree only for a caller that
 says its rows are public.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PouwCommit
 

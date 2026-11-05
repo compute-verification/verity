@@ -1,5 +1,7 @@
-import Mathlib
-import Definitions.Accounting.Bandwidth
+module
+
+public import Mathlib
+public import Definitions.Accounting.Bandwidth
 
 /-!
 # Chip programs: congruence, replay from a trace, and counting
@@ -8,6 +10,8 @@ import Definitions.Accounting.Bandwidth
 `replay_trace`: given the oracle, the run's queries are a function of the chip program and its trace, the bits device
 memory, side sources and regeneration answered with. The counting lemmas turn per-fiber bounds into bounds on `pr`.
 -/
+
+@[expose] public section
 
 namespace Bandwidth
 

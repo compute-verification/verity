@@ -1,4 +1,6 @@
-import NciCheck.Baseline
+module
+
+public import NciCheck.Baseline
 
 /-!
 # What θ's provenance check's acceptance means
@@ -25,6 +27,8 @@ binding premise equal roots already give equal rows.
 Proved as `NciCheck.Properties.SecurityProofs.BaselineProvenance : NciCheck.Properties.BaselineProvenance` in
 `Proofs.Properties.Nci.Baseline`.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties
 

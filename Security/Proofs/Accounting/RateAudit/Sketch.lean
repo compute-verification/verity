@@ -1,7 +1,9 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditSketch
-import Proofs.Accounting.Bandwidth.AuditRO
-import Proofs.Accounting.RateAudit.Chip
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.RateAuditSketch
+public import Proofs.Accounting.Bandwidth.AuditRO
+public import Proofs.Accounting.RateAudit.Chip
 
 /-!
 # The rate audit with a sketch-then-hash tag: the proof
@@ -18,6 +20,8 @@ An accepted run whose compute is within `F` and whose footprint is short of the 
 Otherwise at least `k` tiles were queried and each, with the stream, was obtained whole, and counting the sectors
 obtained puts the footprint at the floor (`floor_le_of_complete`).
 -/
+
+@[expose] public section
 
 namespace Accounting.RateSketch
 

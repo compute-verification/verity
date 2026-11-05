@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.CROnly.Hm96Sha512
-import Proofs.Flock.Soundness.ZK.Session
-import Proofs.Flock.Soundness.ZK.AdaptivePrefinal
+module
+
+public import Proofs.Flock.Soundness.CROnly.Hm96Sha512
+public import Proofs.Flock.Soundness.ZK.Session
+public import Proofs.Flock.Soundness.ZK.AdaptivePrefinal
 
 /-!
 # The ZK theorems with hm96 hiding discharged
@@ -16,6 +18,8 @@ These are zero-knowledge statements, about what the prover's messages reveal (at
 `V*` for Lemma C), over any tables `T`. None is a soundness statement, so the `--zk` verifier's place for `final_c'`
 is outside them.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.CROnly
 

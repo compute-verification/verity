@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Audit.Partitioning.Model
+module
+
+public import Proofs.Flock.Soundness.Audit.Partitioning.Model
 
 /-!
 # Optimal partitioning: the guarantees
@@ -42,6 +44,8 @@ on the leak, not leaks an adversary achieves.
   replay unit `i` escapes with probability `∏_i (1 − p + p · C(N − m_i, k)/C(N, k))`, which for `p < 1` is
   `exp(−∑_i ψ(m_i))`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Partitioning.Guarantees
 

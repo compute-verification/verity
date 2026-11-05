@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Refine.Final
-import Flock.With.Verify
+module
+
+public import Proofs.Flock.Soundness.Refine.Final
+public import Flock.With.Verify
 
 /-!
 # The rounds the shipped verifier reads
@@ -8,6 +10,8 @@ import Flock.With.Verify
 consume (S15). Its squeezes are the oracle's (`squeezeWith`), but which round each one reads does not depend on the
 hash: a squeeze of `n ≠ 0` coins reads round `t.k` and moves to `t.k + 1`, whatever `hs` is.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

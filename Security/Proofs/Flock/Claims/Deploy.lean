@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.DeployOC
-import Proofs.Flock.Claims.DeployInputs
-import Proofs.Flock.Claims.JsonEq
-import Proofs.Flock.Level3.ArithFacts
-import Flock.With.Deployed
-import Flock.With.SetupEq
-import Flock.RecordText
+module
+
+public import Proofs.Flock.Claims.DeployOC
+public import Proofs.Flock.Claims.DeployInputs
+public import Proofs.Flock.Claims.JsonEq
+public import Proofs.Flock.Level3.ArithFacts
+public import Flock.With.Deployed
+public import Flock.With.SetupEq
+public import Flock.RecordText
 
 /-!
 # Flock's deployed verifier in public-coin form (`Deploy.V`)
@@ -37,6 +39,8 @@ accepts exactly when the setup against `H` (`setupWith (hOf H)`) and at its sess
 SHA-512 oracle (`sha512`) the setup is the statement's and the verdict the deployed `verify` (`Zk.verify`)
 (`next_decide_sha512`, `next_decide_log_sha512`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

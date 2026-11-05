@@ -8,6 +8,7 @@ defaultTargets = ["CoreRemote", "remote", "remote-v1"]
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[require]]
 name = "flock_verifier"

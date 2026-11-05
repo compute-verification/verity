@@ -1,5 +1,7 @@
-import Proofs.Pouw.PearlC.Fp4IssueGamma
-import Definitions.Pouw.Guarantees.PearlC
+module
+
+public import Proofs.Pouw.PearlC.Fp4IssueGamma
+public import Definitions.Pouw.Guarantees.PearlC
 
 /-!
 # Pearl-C4's chain-only γ, at any FP32 price and scale path (staged)
@@ -10,6 +12,8 @@ FADD 8.00 and `1047/125` = 8.376, on both scale paths, each with the chain-only 
 
 Held, as the forming-credited twins are: `tt-out/fp4-sm120` is rated D until the base-split fix.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

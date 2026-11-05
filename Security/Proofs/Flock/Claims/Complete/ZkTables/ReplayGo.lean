@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Zk.RingSwitch
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.RingSwitch
 
 /-!
 # The masked replay returns on the prover's rounds
@@ -15,6 +17,8 @@ send recorded, whose bytes are the ones the replay framed, since the replay abso
   replay names the prover's transcripts in full rather than through `set`: the kernel times out on the combined
   proof otherwise.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

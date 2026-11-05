@@ -1,7 +1,9 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.RateAudit
-import Proofs.Accounting.Bandwidth.AuditRO
-import Proofs.Accounting.RateAudit.Chip
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.RateAudit
+public import Proofs.Accounting.Bandwidth.AuditRO
+public import Proofs.Accounting.RateAudit.Chip
 
 /-!
 # The rate audit in the random-oracle model: the proof
@@ -24,6 +26,8 @@ well as the store. A `Device` is one (`Device.toRelay`), and so is an interactiv
 compression never reads the side sources, only the bits the chip read from them, so it holds for any; the guessed tag
 needs sources that ignore the oracle (`RelayDevice.audit`), and `Relay.lean` bounds the rest.
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 

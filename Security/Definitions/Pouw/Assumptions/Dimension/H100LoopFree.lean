@@ -1,4 +1,6 @@
-import Definitions.Pouw.Assumptions.Dimension.H100Assumptions
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100Assumptions
 
 /-!
 # `MH100`'s loop-free price table (Round 8; draft semantics)
@@ -27,6 +29,8 @@ form and every `wgmma` shape, and legacy tensor-core forms as measured).
 with one source and an immediate each, and 21.33 at full dispatch (the FP64 pipe's bound). So a bound on `cost100` at
 these prices bounds additive-W1 work. A time bound needs a maximum over resources.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

@@ -1,5 +1,7 @@
-import Properties.Pous.WipeSigned
-import Proofs.Properties.Pous.MemoryChallenger.Tree
+module
+
+public import Properties.Pous.WipeSigned
+public import Proofs.Properties.Pous.MemoryChallenger.Tree
 
 /-!
 # The wipe's records tree binds its values
@@ -8,6 +10,8 @@ import Proofs.Properties.Pous.MemoryChallenger.Tree
 only the leaves' schema differs, so under no collision among the strings two trees hash (`wipeTreeStrings`) one root
 gives one level below it, down to the leaves, and one leaf one value (`tree_bind`).
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger.Properties.SecurityProofs.WipeTree
 

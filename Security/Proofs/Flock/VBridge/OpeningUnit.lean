@@ -1,4 +1,6 @@
-import Proofs.Flock.VBridge.ResUnit
+module
+
+public import Proofs.Flock.VBridge.ResUnit
 
 /-!
 # The verifier's `rec-opening/…` unit
@@ -15,6 +17,8 @@ grouping and renumbering cut from the opening's S (`RecOpening.structureOf`). Th
   `w` at the part's indices and whose `v` port registered bits of `vv` at `V` holds the part's residuals at part ports
   that read them (`decode_resUnit`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.OfVStar
 

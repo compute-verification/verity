@@ -1,6 +1,8 @@
-import Definitions.Core.Accel.H200
-import Definitions.Accounting.Sheets.H200
-import Mathlib.Tactic.NormNum
+module
+
+public import Definitions.Core.Accel.H200
+public import Definitions.Accounting.Sheets.H200
+public import Mathlib.Tactic.NormNum
 
 /-!
 # The H200's tensor rates against its data sheet
@@ -13,6 +15,8 @@ The H200's table, held to the sheet's dense peaks (`Accounting.TS.Sheets.H200`, 
 * `tensor_sheet_clock`: off f64 they are the sheet's figures exactly, its per-SM-clock peaks times its SMs at the
   1830 MHz tensor clock ceiling the table takes the tensor at; f64's weight is rounded down, so its rate is above the sheet's.
 -/
+
+@[expose] public section
 
 open scoped NNRat
 

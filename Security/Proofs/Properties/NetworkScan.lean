@@ -1,7 +1,9 @@
-import Properties.NetworkScan
-import Proofs.Properties.NetworkScan.Fits
-import Proofs.Properties.NetworkScan.Causal
-import Proofs.Flock.SamplingScope
+module
+
+public import Properties.NetworkScan
+public import Proofs.Properties.NetworkScan.Fits
+public import Proofs.Properties.NetworkScan.Causal
+public import Proofs.Flock.SamplingScope
 
 /-!
 # An accepted scan's statements are in the sampled audit's scope, from its layout fitting
@@ -17,6 +19,8 @@ The witnesses (the two-lemma rule): `scan_honest` exhibits what both take that n
 `scanFits_nontrivial` and `scanScopeAcc_nontrivial` show neither conclusion is trivial, at a circuit that returns
 nothing (`not_fits_of_no_outs`).
 -/
+
+@[expose] public section
 
 namespace Properties.NetworkScan
 

@@ -1,8 +1,10 @@
-import Flock.Hash
-import Flock.Bytes
-import Flock.FV3
-import PouwCommit.Tagged
-import Identity.Domains
+module
+
+public import Flock.Hash
+public import Flock.Bytes
+public import Flock.FV3
+public import PouwCommit.Tagged
+public import Identity.Domains
 
 /-!
 # frame-v3 trees (`verity.ml.commitments.merkle`) over range positions
@@ -14,6 +16,8 @@ tagged hash; its leaves, nodes, pads and empty root are `Flock.FV3.Domain`'s. Wh
 refuses: a binding or owner `CommitmentDomain` refuses (`Domain.mk?`), a frame `merkle._frame` refuses (`frameHash?`), and
 `verify_opening`'s checks and limits (`Domain.verify`).
 -/
+
+@[expose] public section
 
 namespace PouwCommit
 

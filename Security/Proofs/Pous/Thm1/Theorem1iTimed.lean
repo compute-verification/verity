@@ -1,14 +1,16 @@
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Fintype.Powerset
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.GCongr
-import Mathlib.Tactic.Linarith
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
+module
+
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Data.Fintype.Powerset
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.GCongr
+public import Mathlib.Tactic.Linarith
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
 
 /-!
 # Report Theorem 1(i), timed: `PousProofs.theorem1_i_timed`, as drafted
@@ -19,6 +21,8 @@ state. `A₁` is the compressor, and each round runs the expander on the challen
 every challenge sequence is answered correctly (`seqAnswers_keep`), so
 `Pr_setup[rebuild] ≤ Pr[audit accepts] ≤ δ + ε` (`pr_le_outcome`).
 -/
+
+@[expose] public section
 
 namespace PousThm1
 

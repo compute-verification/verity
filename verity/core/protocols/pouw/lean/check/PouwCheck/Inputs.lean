@@ -1,11 +1,13 @@
-import CoreProtocol.Protocol
-import CoreProtocol.Profile
-import Flock.Draw
-import Flock.WindowRecord
-import PouwCheck.Json
-import PouwCheck.Tile
-import PouwWindow.Length
-import Identity.Domains
+module
+
+public import CoreProtocol.Protocol
+public import CoreProtocol.Profile
+public import Flock.Draw
+public import Flock.WindowRecord
+public import PouwCheck.Json
+public import PouwCheck.Tile
+public import PouwWindow.Length
+public import Identity.Domains
 
 /-!
 # The check's three inputs (`core_check.py`, "the three inputs")
@@ -21,6 +23,8 @@ import Identity.Domains
 
 Each decoder refuses with `core_check.py`'s message, and `Core.Protocol.answer` prefixes it with the input's name.
 -/
+
+@[expose] public section
 
 namespace PouwCheck
 

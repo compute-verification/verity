@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
-import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
+public import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
 
 /-!
 # The verifier's basis is the batched basis's extension
@@ -13,6 +15,8 @@ import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
 * **The rep's claims** (`claims_xsize`): every claim a rep opens has `m − 6` coordinates, so its switched claim's
   suffix point has `m − 7`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

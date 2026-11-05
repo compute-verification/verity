@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Copies
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegShape
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Copies
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegShape
 
 /-!
 # Δ at a segmented row, and Δ for rows of every kind
@@ -10,6 +12,8 @@ the outer message's for `j = s`, and every message bit that is not a row bit (`H
 the forced-zero row, or a copy of a segment's last output. `delta_flat_any` is `delta_flat_all` for rows of every kind,
 each row's pairs `rowPairsAny`: `rowPairsOf`'s for an unsegmented row, `segPairsOf`'s for a segmented one.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

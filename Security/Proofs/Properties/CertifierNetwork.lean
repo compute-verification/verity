@@ -1,6 +1,8 @@
-import Proofs.Properties.CertifierNetwork.Defs
-import Proofs.Properties.CertifierNetwork.Accepted
-import Proofs.Properties.CertifierNetwork.Instance
+module
+
+public import Proofs.Properties.CertifierNetwork.Defs
+public import Proofs.Properties.CertifierNetwork.Accepted
+public import Proofs.Properties.CertifierNetwork.Instance
 
 /-!
 # The certifier device's output is accepted: completeness, proved
@@ -13,6 +15,8 @@ closed run publishes, one per link-window, each of its grid (`Proofs.CertifierNe
 (`Proofs.CertifierNetwork.Accepted`). It is completeness, not a guarantee: `Proofs.CertifierNetwork.Instance` gives one
 configuration, issuer and run where its hypotheses hold.
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierNetwork
 

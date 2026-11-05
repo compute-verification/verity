@@ -1,8 +1,10 @@
-import Proofs.Flock.Recursive.Property
-import Proofs.Flock.Recursive.Private
-import Proofs.Flock.Recursive.FirewallZK
-import Proofs.Flock.Recursive.Loads
-import Proofs.Flock.Recursive.ForkInnerC
+module
+
+public import Proofs.Flock.Recursive.Property
+public import Proofs.Flock.Recursive.Private
+public import Proofs.Flock.Recursive.FirewallZK
+public import Proofs.Flock.Recursive.Loads
+public import Proofs.Flock.Recursive.ForkInnerC
 
 /-!
 # The recursive audit's property: its proof and what it rests on
@@ -32,6 +34,8 @@ the property, each to become a lemma at the executable or a refusal of the verif
 files parse to `Vs` (`VStarParses`, until gap 4), and the obligation on our code that every session's inputs carry the
 tags their name names (`TagsFound`, `_hF`), which with refusal (5)'s name equation makes them V*'s (`find?_circuit`).
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

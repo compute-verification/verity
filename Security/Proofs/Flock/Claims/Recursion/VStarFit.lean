@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.VStarDeployed
-import Proofs.Flock.Claims.Recursion.SeqPrefix
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarDeployed
+public import Proofs.Flock.Claims.Recursion.SeqPrefix
 
 /-!
 # The inner prover's rows fitted to the compiled statement (`InnerRec.fit`)
@@ -18,6 +20,8 @@ So the deployed prover's rows are counted and sized from `x`'s schedule and port
 already of that shape `fit` changes nothing. `strs` is the round's commit strings, and the inner prover's message is
 their concatenation (`P_eval`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 

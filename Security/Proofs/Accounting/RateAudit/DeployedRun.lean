@@ -1,5 +1,7 @@
-import Proofs.Accounting.RateAudit.Deployed
-import Proofs.Accounting.Remote
+module
+
+public import Proofs.Accounting.RateAudit.Deployed
+public import Proofs.Accounting.Remote
 
 /-!
 # The deployed session as a run of the remote audit: its routes, and conservation at the same `γ`
@@ -16,6 +18,8 @@ import Proofs.Accounting.Remote
 `γ` the deployed game's `Deployed.gammaPass`. The remote model's probability is real (`Pouw.pr`), the game's in `ℝ≥0∞`
 (`Pous.pr`); `pouw_pr_le` carries a bound across.
 -/
+
+@[expose] public section
 
 namespace Accounting.Remote
 

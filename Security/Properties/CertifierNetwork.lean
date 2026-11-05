@@ -1,5 +1,7 @@
-import Properties.CertifierDevice
-import Properties.NetworkCertifier
+module
+
+public import Properties.CertifierDevice
+public import Properties.NetworkCertifier
 
 /-!
 # The certifier device's output as the network certificate check reads it
@@ -13,6 +15,8 @@ copy of a certified record, and the check's parameters of the device's configura
 **The unit is one link pair**, the device's: `active.py`'s `Proxy` runs one boundary link (`egressLink`, `ingressLink`),
 and `service.LinkWindows` is "network accounting's protocol on one link".
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierNetwork
 

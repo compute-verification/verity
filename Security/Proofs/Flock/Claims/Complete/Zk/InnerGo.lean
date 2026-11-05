@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
-import Proofs.Flock.Claims.Complete.Zk.Json.Files
-import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
-import Proofs.Flock.Claims.Complete.Replay.Steps
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.InnerMerkle
+public import Proofs.Flock.Claims.Complete.Zk.Json.Files
+public import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
+public import Proofs.Flock.Claims.Complete.Replay.Steps
 
 /-!
 # The masked prover's inner proof, and the verifier's inner check on it
@@ -16,6 +18,8 @@ import Proofs.Flock.Claims.Complete.Replay.Steps
   the prover's, `τ` opens its commitment, the batched check holds (`innerP_batched`, `innerY_batched`), and each
   query's column is consistent with `Y` (`innerY_column`) and climbs to the pads' root (`innerTree_climb`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

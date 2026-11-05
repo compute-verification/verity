@@ -1,5 +1,8 @@
-import Properties.SampledProofs
-import Proofs.Properties.Challenger
+module
+
+public import Properties.SampledProofs
+public import Proofs.Properties.Challenger
+import all Init.Data.Array.QSort.Basic
 
 /-! # Proofs of sampled proofs' one-stage property (`Properties.SampledProofs`)
 
@@ -9,6 +12,8 @@ the join point it calls (`jp_ite`, `jp_ite'`), unfolds the join points one at a 
 the pipeline one check at a time (`ite_addCode_nil`, `ite_push_nil`). `acceptMeans_iff` says what the check accepts and
 that it accepts all of it; `acceptMeans` is its first half and `acceptMeans_complete` the converse.
 -/
+
+@[expose] public section
 
 open Lean (Json)
 open SampledProofs

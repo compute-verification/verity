@@ -1,4 +1,6 @@
-import Proofs.Accounting.BoundReceipt.Audit
+module
+
+public import Proofs.Accounting.BoundReceipt.Audit
 
 /-!
 # Receipts bound to the matmul when the locations' answers depend on the mix (`e > 0`)
@@ -8,6 +10,8 @@ as they are, each at a fixed mix. The guess is taken over the node's queries ins
 location queried block `j`'s point, a mix that differs only there gives the same receipts (`QueryDetermined`), so a
 right receipt there is a guess, at most one value of the mix in `2^h` for each location's receipt.
 -/
+
+@[expose] public section
 
 namespace Accounting.BoundReceipt.InteractiveNode
 

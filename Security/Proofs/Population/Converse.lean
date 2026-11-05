@@ -1,5 +1,7 @@
-import Proofs.Population.Transfer
-import Definitions.Population.AddressMap
+module
+
+public import Proofs.Population.Transfer
+public import Definitions.Population.AddressMap
 
 /-!
 # The converse: a corruptible address needs the padding's cones
@@ -22,6 +24,8 @@ public values. This file shows that nothing smaller works.
   egress, yet with the one-bit pointer step incorrect the egress takes `2 ^ N` values, more than the `|V| ^ |writes B| = 2`
   the capacity theorem would give were the honest run's upstream the public one.
 -/
+
+@[expose] public section
 
 namespace Population.AddressMap
 

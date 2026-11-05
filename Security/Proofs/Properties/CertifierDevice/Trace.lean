@@ -1,4 +1,6 @@
-import Proofs.Properties.CertifierDevice.Step
+module
+
+public import Proofs.Properties.CertifierDevice.Step
 
 /-!
 # The certifier device, proved: over a trace
@@ -8,6 +10,8 @@ Every prefix of a trace leaves a `Good` state whose egress tick count is `egress
 `n` (`egressAt_unique`). The rows `ρ` and statuses `σ` of `Records` are the ones the device's ticks compute (`rowOf`,
 `statusOf`); the open window's rows are always the `ρ` of its earlier buckets (`rows_inv`).
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierDevice.Proofs
 

@@ -1,7 +1,9 @@
-import PouwCommit.Coins
-import PouwCommit.Draws
-import PouwCommit.Rows
-import Lean.Data.Json
+module
+
+public import PouwCommit.Coins
+public import PouwCommit.Draws
+public import PouwCommit.Rows
+public import Lean.Data.Json
 
 /-!
 # The difftest: the Python held to PoUW's commitments in Lean, its verifier of record, on generated cases
@@ -24,6 +26,8 @@ is not it, naming the Lean's. The kinds:
 * `sampled`, `pearl_draw`: the clear audit's work-weighted draws over given tickets, `Sampled.select`'s and
   `clear_work.draw`'s (`benchmarks/pouw/clear`).
 -/
+
+@[expose] public section
 
 namespace PouwCommit.Difftest
 

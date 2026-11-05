@@ -1,4 +1,6 @@
-import Definitions.Pous.Model.Continuous
+module
+
+public import Definitions.Pous.Model.Continuous
 
 /-!
 # The continuous audit's memory challenger enforces its three rules
@@ -15,6 +17,8 @@ in `Security/Definitions/Pous/Model/Continuous.lean`, for every machine.
 3. **Every answer past `Δ` is counted.** `hit_on_time`: a hit took at most `D` units and `Q` queries and returned the
    right block. `late_not_hit`: an answer past `(D, Q)` is never a hit.
 -/
+
+@[expose] public section
 
 namespace PousContinuous
 

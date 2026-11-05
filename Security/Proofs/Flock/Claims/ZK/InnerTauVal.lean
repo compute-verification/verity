@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.SplitInner
+module
+
+public import Proofs.Flock.Claims.ZK.SplitInner
 
 /-!
 # `InnerTauVal` from its seven rows
@@ -17,6 +19,8 @@ import Proofs.Flock.Claims.ZK.SplitInner
 * **`TauRep`**, **`TauLig`**, **`tauRows_of`**: `TauRows` as its first five rows (the replay's three and the two
   ring-switch rows) and its last two (level 0's lane limbs); `innerTauVal_of_rows : TauRep → TauLig → InnerTauVal`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 open Claims FlockSoundness.ZK

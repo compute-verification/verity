@@ -1,4 +1,6 @@
-import Proofs.Properties.CertifierDevice.Shaper
+module
+
+public import Proofs.Properties.CertifierDevice.Shaper
 
 /-!
 # The certifier device, proved: one step
@@ -10,6 +12,8 @@ certifier's link and parameters; its actions never write the link and publish on
 (`step_quiet`). A live egress tick ticks the shaper once and writes its row, `r · B` bytes, then publishes the window's
 record at its last bucket (`step_egress`).
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierDevice.Proofs
 

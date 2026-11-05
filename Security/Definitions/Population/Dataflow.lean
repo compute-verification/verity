@@ -1,6 +1,8 @@
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Data.Finset.Prod
-import Mathlib.Logic.Relation
+module
+
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.Finset.Prod
+public import Mathlib.Logic.Relation
 
 /-!
 # Populations: units over committed value slots, with public dataflow
@@ -35,6 +37,8 @@ luck.
 `DynPopulation` is the object a machine trace is: its read sets depend on values, as a VM step reads memory at an
 address it holds. It is here so that the counterexamples can be stated against it.
 -/
+
+@[expose] public section
 
 namespace Population
 

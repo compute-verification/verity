@@ -1,13 +1,15 @@
-import Proofs.Accounting.Compose.ServiceCovers
-import Definitions.Accounting.Guarantees.Compose
-import Proofs.Accounting.TS
-import Proofs.Accounting.Compose.ServiceBudget
-import Proofs.Accounting.Compose.SplitRateMerged
-import Proofs.Accounting.Compose.BindingOfECR
-import Proofs.Accounting.Compose.CircuitWork
-import Proofs.Accounting.Compose.WholeLuckOfEntropy
-import Proofs.Accounting.Compose.CircuitWorkSeeded
-import Proofs.Pouw.RelativeSecurity
+module
+
+public import Proofs.Accounting.Compose.ServiceCovers
+public import Definitions.Accounting.Guarantees.Compose
+public import Proofs.Accounting.TS
+public import Proofs.Accounting.Compose.ServiceBudget
+public import Proofs.Accounting.Compose.SplitRateMerged
+public import Proofs.Accounting.Compose.BindingOfECR
+public import Proofs.Accounting.Compose.CircuitWork
+public import Proofs.Accounting.Compose.WholeLuckOfEntropy
+public import Proofs.Accounting.Compose.CircuitWorkSeeded
+public import Proofs.Pouw.RelativeSecurity
 
 /-!
 # PoUW's credit on an arbitrary declared circuit: proofs
@@ -118,6 +120,8 @@ Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers
    entropy conjunct bounds each `Σ_b [S ⊆ Lk]` by `|B|·e^{−Σ_S h}`, and the sum folds back to
    `|B|·Π_v (e^{−h_v}·e^{x_v} + (1 − e^{−h_v})·e^{−κ₀x_v})`, each factor in `[0, 1]`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Compose
 

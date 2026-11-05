@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Flat
-import Proofs.Flock.Soundness.Discharge.Hidden.Public
-import Proofs.Flock.Soundness.Discharge.Hm.Bc
-import Proofs.Flock.Soundness.Discharge.Hm.Site
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Flat
+public import Proofs.Flock.Soundness.Discharge.Hidden.Public
+public import Proofs.Flock.Soundness.Discharge.Hm.Bc
+public import Proofs.Flock.Soundness.Discharge.Hm.Site
+public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 
 /-!
 # An output row's registered `b ‖ c` (`OutputsCommitted`)
@@ -17,6 +19,8 @@ In a satisfying witness of an untyped hidden-output statement, at block `o`, tem
   of `outSrc` (`msg_copy`), the output word's bit below the port's words and the forced-zero row past them
   (`Hm.zero_bit`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

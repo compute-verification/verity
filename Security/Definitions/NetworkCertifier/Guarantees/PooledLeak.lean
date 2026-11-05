@@ -1,5 +1,7 @@
-import Definitions.NetworkCertifier.Guarantees.Period
-import Definitions.NetworkCertifier.PooledLeak
+module
+
+public import Definitions.NetworkCertifier.Guarantees.Period
+public import Definitions.NetworkCertifier.PooledLeak
 
 /-!
 # The leak through the network certifier over a monitoring period of sampled audits
@@ -36,6 +38,8 @@ audits they are `Flock.Guarantees.SampledKSLive` at each window's history (at `K
 `SampledLeakAccepted` (P2), neither discharged yet, so nothing here bounds the deployed system over a monitoring period
 until that discharge lands.
 -/
+
+@[expose] public section
 
 namespace NetTiming.Guarantees
 

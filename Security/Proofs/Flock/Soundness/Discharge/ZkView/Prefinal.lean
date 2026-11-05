@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
 
 /-!
 # Lemma C at the `--zk` wire
@@ -13,6 +15,8 @@ structure `H(x ⊕ M·y, c(y))` (`leafSplit`, through `HonestMsg`):
 * `he` with `k = 1`: `randAt T c` is a bijection (`randAt_bijective`), each table's randomness being its base and its
   pre-final leaves' seeds placed by `T.s0`, `T.sP` (`Coined.unRand` reads them back).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkView
 

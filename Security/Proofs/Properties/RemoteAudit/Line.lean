@@ -1,6 +1,8 @@
-import Properties.RemoteAudit.Line
-import Mathlib.Algebra.Order.BigOperators.Group.List
-import Mathlib.Algebra.BigOperators.Ring.List
+module
+
+public import Properties.RemoteAudit.Line
+public import Mathlib.Algebra.Order.BigOperators.Group.List
+public import Mathlib.Algebra.BigOperators.Ring.List
 
 /-!
 # The memory line's arithmetic link, proved (`Properties.RemoteAudit.Line`: `LineChecked`, `StretchBound`,
@@ -19,6 +21,8 @@ first is the fractional knapsack's optimum (`le_fillR`, over `fillR`, the greedy
 model's `fill` is at most the code's (`stretch_fill`). `stretch_bound_of` puts the terms together: the code's `lost` is
 `S + (2·L·R + fill)/span` with `S` the chips' blocks, `chip/b` rounded up, as `ChipCeiling` reads them.
 -/
+
+@[expose] public section
 
 namespace Properties.RemoteAudit.Line
 

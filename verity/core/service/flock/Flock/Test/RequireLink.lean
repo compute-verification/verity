@@ -5,7 +5,12 @@ an object, so `Record.decode` keeps `==`'s verdicts. A record whose `config.requ
 refused only later (here at S6, which finds no `root_f`); every other value is refused at S3/F1, and an absent one as
 missing.
 -/
-import Flock.Record
+module
+
+public import Flock.Record
+meta import Flock.Record
+
+@[expose] public section
 
 namespace Flock.Test.RequireLink
 

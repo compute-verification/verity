@@ -1,7 +1,9 @@
-import Mathlib
-import Properties.CertifierDevice
-import Proofs.Properties.CertifierDevice.Complete
-import Proofs.Properties.CertifierDevice.Issuer
+module
+
+public import Mathlib
+public import Properties.CertifierDevice
+public import Proofs.Properties.CertifierDevice.Complete
+public import Proofs.Properties.CertifierDevice.Issuer
 
 /-!
 # The certifier device's properties, proved
@@ -13,6 +15,8 @@ one step's (`Proofs.CertifierDevice.Step`, `Proofs.CertifierDevice.Trace`), comp
 the issuer's from LMS's correctness (`Proofs.CertifierDevice.Lms`, `Proofs.CertifierDevice.Issuer`), which is
 completeness and no guarantee (`Proofs.CertifierDevice.Lms.lmsCorrect`).
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierDevice
 

@@ -1,6 +1,8 @@
-import MemoryChallenger.WipeProtocol
-import Properties.Pous.MemoryChallenger
-import Definitions.Pous.Model.StreamedWipe
+module
+
+public import MemoryChallenger.WipeProtocol
+public import Properties.Pous.MemoryChallenger
+public import Definitions.Pous.Model.StreamedWipe
 
 /-!
 # An accepted wipe is the memory challenger's own run, and that run is the streamed wipe's accepted session
@@ -42,6 +44,8 @@ under a key, each signed once, and the key signs PoUS's sessions too: `wipe_part
 `SignedWipeParty.Signed`, all the model's key signs, holds both. A key also used for another role is outside the model, and the forgery disjunct
 is an EUF-CMA break only under that one-role reading, as for PoUS's sessions (`Challengers`).
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger.Properties
 

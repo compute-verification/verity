@@ -29,7 +29,11 @@ input of the reader, or `out` no output of the writer), `cut` (its rows are not 
 `cuts`, or `cuts` doesn't divide the wire's reader rows), `width` (a reader row's words are not the writer row's), `bounds` (a reader unit or a writer outside its
 template), then `overlap` (some reader row wired twice).
 -/
-import Lean.Data.Json
+module
+
+public import Lean.Data.Json
+
+@[expose] public section
 
 namespace SampledProofs.Wires
 

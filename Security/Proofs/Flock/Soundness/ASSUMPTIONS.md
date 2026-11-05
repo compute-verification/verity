@@ -61,7 +61,7 @@ hash, nor false of every hash.
   at most `q²/2^513`: the generic birthday bound `q(q − 1)/(2·2^512)` for a budget fixed in advance (`DESIGN.md` §1).
 - **The budgets are not checked.** `StrictCR.Finder.CR H F q` takes `SHA512CRStrict` with the cost `q` on every outcome,
   so nothing in Lean ties `q` to the evaluations the finder makes. Each budget must bound its finder's real SHA-512
-  evaluations, for `t′` one session run's (as in `LinkCR`) and `v` one opening's verification:
+  evaluations, for `t′` the prover's in one session run and `v` one opening's verification:
   - `qF ≥ 2t′ + 2v`, for the rewinding finders (two runs after a cap, and the two conflicting openings verified);
   - `qS ≥ t′ + v`, for the self-clash finder (one run, one further verification);
   - `qT ≥ 2t′ + 2v`, for `tr`'s finder (`TreeRewind.finder`: two runs after the registration);
@@ -69,11 +69,13 @@ hash, nor false of every hash.
   - `qG ≥ (1 + 5M)·t′ + 2k·v`, for zero knowledge's simulator finder (`ZK.GK.Model.finder`: the GK simulator with cap
     `M`, at most `1 + 5M` runs of `V*` on every outcome by `sim_runs_le`, then T6's extraction, which re-verifies the
     two views' `k` coin openings each and hashes at most `2(|path| + 3 + n)` aligned inputs, `coinPairs_length_le`);
-  - `t′` itself, for the link finders stopped at `q` (`CROnly.LinkCRStrict`, `hCRs`). `q` is checked in Lean: the stopped
-    finder's cost, `truncCost`, is at most `q` on every outcome. But that is the modeled cost, `t′` per run played
-    (`cT`), so under the strict form `t′` must bound every run on every outcome, not on average: the prover's
-    evaluations, and the acceptance check `accω` the finder runs on each. The openings' verification and the extraction
-    (`rdT`, `cand`) are charged nowhere, and must fit in `t′` or in `q`'s slack.
+  - a per-run cost `≥ t′ + v`, for the link finders stopped at `q` (the `t'` of `CROnly.LinkCRStrict` and `hCRs`).
+    `q` is checked in Lean: the stopped finder's cost, `truncCost`, is at most `q` on every outcome. But that is the
+    modeled cost, the per-run cost times the runs played (`cT`), so under the strict form the per-run cost must bound
+    every run on every outcome, not on average: the prover's evaluations and the verifier's, whose verdict `accω` reads
+    (as `SampledKSLiveV2` charges its link finders). The extraction (`rdT`) reads only openings that verification
+    checked, and its decoding (`cand`) evaluates no SHA-512 but is charged nowhere, so it must fit in the per-run cost
+    or in `q`'s slack.
 
   A smaller budget makes the hypothesis a claim about SHA-512 that `cr/sha-512` doesn't make, and a bound cited with it
   is unsupported. Tying the five to one per-run count in the signatures would check this in Lean; it is a follow-up.

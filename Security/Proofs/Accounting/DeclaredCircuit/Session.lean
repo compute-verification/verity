@@ -1,6 +1,8 @@
-import Mathlib
-import Proofs.Accounting.DeclaredCircuit
-import Proofs.Accounting.DeclaredCircuit.Slack
+module
+
+public import Mathlib
+public import Proofs.Accounting.DeclaredCircuit
+public import Proofs.Accounting.DeclaredCircuit.Slack
 
 /-!
 # The session's passes, each priced at its prefix
@@ -14,6 +16,8 @@ made `k + 1` correct digest queries behind unobtained positions with probability
 uniform blocks (`pr_badK_pass_le`). With the rank tail once a window, a session in which some window has rank-poor signs
 or some pass one of the two events costs `n·ε + n·P·G·N/2^512 + n·P·(2^a·(q_tot/2^96)^(k+1) + δ)` (`pr_session_le`).
 -/
+
+@[expose] public section
 
 namespace Accounting.RateSketch
 

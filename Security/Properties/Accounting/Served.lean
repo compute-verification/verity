@@ -1,6 +1,8 @@
-import Definitions.Accounting.Served
-import Properties.Accounting.Compose
-import SampledProofs.Draw
+module
+
+public import Definitions.Accounting.Served
+public import Properties.Accounting.Compose
+public import SampledProofs.Draw
 
 /-!
 # The served window's units and draw are the service's, per call (`SampledProofs.Slots.layout`, `Draw.drawUnits`)
@@ -32,6 +34,8 @@ These are stated, not proved. The units and population conjuncts are facts of fo
 once by evaluation; the forms' Programs differ in each unit's spans, never in the unit count, so `population` is one for
 all three. The draw conjunct is a property of `drawUnits`, with no premise.
 -/
+
+@[expose] public section
 
 open Lean (Json)
 open Pouw.RelativeSecurity (prob)

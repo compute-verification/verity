@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.ZerocheckPhase
+module
+
+public import Proofs.Flock.Soundness.ZerocheckPhase
 
 /-!
 # Ligerito's coins (`Flock.Ligerito`)
@@ -13,6 +15,8 @@ The pieces of the Ligerito phase that do not depend on its weight bookkeeping:
 * the consistency coins `α` batch per-query mismatches through `eq(α)`: a nonzero mismatch survives
   with probability at most `⌈log2 Q⌉/|F|` (`prCoin_eqList_le`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

@@ -13,14 +13,18 @@ program and applies the query itself; it never takes a population or a unit inde
 gates off one `table`, each root callee's gate count computed once through a memo (`gatesMemo`) and each range's offset
 once, where `TemplateQuery.gates` recomputes both per unit.
 -/
-import Flock.HmRow
-import Flock.TemplateQuery
-import Flock.Draw
-import Flock.Extract
-import Flock.Qcall
-import SampledProofs.Json
-import SampledProofs.Program
-import Std.Data.HashMap
+module
+
+public import Flock.HmRow
+public import Flock.TemplateQuery
+public import Flock.Draw
+public import Flock.Extract
+public import Flock.Qcall
+public import SampledProofs.Json
+public import SampledProofs.Program
+public import Std.Data.HashMap
+
+@[expose] public section
 
 namespace SampledProofs.Partition
 

@@ -1,4 +1,6 @@
-import Definitions.Pouw.Dimension.Defs
+module
+
+public import Definitions.Pouw.Dimension.Defs
 
 /-!
 # `MH100`'s price table and the hypothesis `H32`
@@ -65,6 +67,8 @@ Each definition below was checked against what was measured on one H200 SXM (`sm
 * **`FragLanes`**: it restricts the adversary's multiplicands, which no measurement can check, so its marker stays.
   The H200 doesn't need it, since no tensor-core form there costs under 32 a register.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

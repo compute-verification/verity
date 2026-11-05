@@ -1,4 +1,6 @@
-import Proofs.Flock.EndToEndRegistered.Statement
+module
+
+public import Proofs.Flock.EndToEndRegistered.Statement
 
 /-!
 # Proof of C-Flock's end-to-end guarantee with registered reads
@@ -11,6 +13,8 @@ with its first conjunct's first and last terms in closed form, as `EndToEnd` is 
 descriptor unrolls to (`Flock.Desc.parse_flat`), and each flat form is its statement at `Desc.single c`
 (`Flock.Desc.parse_single`).
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

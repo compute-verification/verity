@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.ResLowerDeployed
-import Proofs.Flock.Claims.Recursion.NumsFixedR
-import Proofs.Flock.Recursive.VStarCheck
-import Proofs.Flock.Soundness.Discharge.Hidden.Public
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
+module
+
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+public import Proofs.Flock.Claims.Recursion.NumsFixedR
+public import Proofs.Flock.Recursive.VStarCheck
+public import Proofs.Flock.Soundness.Discharge.Hidden.Public
+public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
 
 /-!
 # A staged part's numbers don't read its public file
@@ -25,6 +27,8 @@ So the numbers agree at any two rounds where the staged statement sets up (`nums
 (`numsOf_staged`), and `vstarAt` is the staged statement itself (`vstarAt_staged`). Nothing here assumes the verifier's
 own public input words (`--public-inputs`) are absent: the walks of `Stmt.setupTables` and `Stmt.setupHidden` take any.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

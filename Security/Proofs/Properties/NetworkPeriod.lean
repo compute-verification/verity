@@ -1,5 +1,10 @@
-import Properties.NetworkPeriod
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
+module
+
+public import Properties.NetworkPeriod
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
+import all Init.Data.Array.Basic
 
 /-!
 # Each form's `K` bounds `PeriodLeakAccepted`'s count: the proofs of `ClockKBoundsCount` and `RowsKBoundsCount`
@@ -11,6 +16,8 @@ connections and the windows (the compute audits, or the scans) are sums over `Fi
 `RowsProgWired` and `RowsStateTied` read the check's refusals off its findings: on acceptance every finding is none
 (`firstFinding_none`), each link-window's `wiredCheck` and `stateCheck` among them.
 -/
+
+@[expose] public section
 
 namespace Properties.NetworkPeriod
 

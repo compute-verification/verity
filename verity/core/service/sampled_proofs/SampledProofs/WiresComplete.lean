@@ -1,9 +1,13 @@
-import SampledProofs.WiresSound
+module
+
+public import SampledProofs.WiresSound
 
 /-! **`check` is complete against its unrolled reference** (`check_complete`): whatever `checkRef` accepts, `check`
 accepts, for wires whose radices are 1 or more (as every wire `Wire.ofJson` reads is). With `check_sound` the two decide
 the same circuits: the span is attained (a reader index reaches the least writer and one the greatest), and two wires
 of one port whose rectangles meet wire a reader row twice. -/
+
+@[expose] public section
 
 namespace SampledProofs.Wires
 

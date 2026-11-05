@@ -1,13 +1,15 @@
-import Proofs.Accounting.Bandwidth.AuditRO
-import Proofs.Accounting.Bandwidth.Honest
-import Proofs.Accounting.Bandwidth.Relay
-import Proofs.Accounting.Bandwidth.Interactive
-import Proofs.Accounting.Actual.Physical
-import Proofs.Accounting.Bandwidth.Ticked
-import Proofs.Accounting.Bandwidth.Causal
-import Proofs.Accounting.Bandwidth.Joint
-import Proofs.Accounting.Bandwidth.TickedJoint
-import Proofs.Accounting.Bandwidth.CausalJoint
+module
+
+public import Proofs.Accounting.Bandwidth.AuditRO
+public import Proofs.Accounting.Bandwidth.Honest
+public import Proofs.Accounting.Bandwidth.Relay
+public import Proofs.Accounting.Bandwidth.Interactive
+public import Proofs.Accounting.Actual.Physical
+public import Proofs.Accounting.Bandwidth.Ticked
+public import Proofs.Accounting.Bandwidth.Causal
+public import Proofs.Accounting.Bandwidth.Joint
+public import Proofs.Accounting.Bandwidth.TickedJoint
+public import Proofs.Accounting.Bandwidth.CausalJoint
 
 /-! The bandwidth audit v0's proofs: the guarantee in the random-oracle model, PoUB's per-pass lemma
 (`Accounting.SecurityProofs.Remote.AuditRO`), its completeness (`Bandwidth.SecurityProofs.HonestPasses`), the guarantee
@@ -23,3 +25,5 @@ form); and bandwidth additivity by counting, for a device that also holds a secr
 (`Bandwidth.SecurityProofs.Ticked.audit_joint`; `Ticked.audit_joint_capacity`, the capacity form), and for the chip of a
 strategy causal from every tick over the store and that secret (`Bandwidth.SecurityProofs.Causal.audit_joint`), and
 from its links (`Causal.audit_links_joint`; `Causal.audit_capacity_joint`, the capacity form). -/
+
+@[expose] public section

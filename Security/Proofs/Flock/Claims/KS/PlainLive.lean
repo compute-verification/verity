@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainLead
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.PlainLead
+public import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The plain simulator's live strategy submits rep 0's rounds first
@@ -14,6 +16,8 @@ least two levels. So its live strategy, read through `liveSession_eq` as its byt
 * `plainRepNs_length`: `|plainRepNs| = repRounds` at two levels or more;
 * `plainSchedAlign`: so `PlainSchedAlign` holds at every statement.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

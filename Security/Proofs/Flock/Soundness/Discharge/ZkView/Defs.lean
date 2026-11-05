@@ -1,11 +1,13 @@
-import Proofs.Flock.Soundness.Discharge.Hm.Mask
-import Proofs.Flock.Verifier.Hash
-import Flock.Zk
-import Proofs.Flock.Level3.ArithFacts
-import Proofs.Flock.Soundness.CROnly.ZKKey
-import Proofs.Flock.Soundness.Headline
-import Proofs.Flock.Soundness.Registered.Binding
-import Proofs.Flock.Soundness.Types.ProgramPlaces
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Mask
+public import Proofs.Flock.Verifier.Hash
+public import Flock.Zk
+public import Proofs.Flock.Level3.ArithFacts
+public import Proofs.Flock.Soundness.CROnly.ZKKey
+public import Proofs.Flock.Soundness.Headline
+public import Proofs.Flock.Soundness.Registered.Binding
+public import Proofs.Flock.Soundness.Types.ProgramPlaces
 
 /-!
 # The `--zk` tables at the executable's leaves, and the honest prover's pre-final messages
@@ -29,6 +31,8 @@ a level-0 leaf is `MerkleScheme.hm96Sha512.leaf` of its row (68 lanes: the `2^kâ
   session stops at `c`'s coins, with the leaves at each position given; `honest T out hc` is the prover as a strategy
   against an adaptive verifier, `Causal` saying that its message `i` reads the answers before `i` only.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkView
 

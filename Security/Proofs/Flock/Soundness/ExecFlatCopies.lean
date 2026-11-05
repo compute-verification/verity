@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.ExecFlatClass
-import Proofs.Flock.Soundness.Types.ProgramPlaces
-import Properties.Flock.Circuit.Keys
+module
+
+public import Proofs.Flock.Soundness.ExecFlatClass
+public import Proofs.Flock.Soundness.Types.ProgramPlaces
+public import Properties.Flock.Circuit.Keys
 
 /-!
 # A typed flat class's input copies and forced-zero rows (1e for flat classes)
@@ -16,6 +18,8 @@ pair, over the net's self row there:
 - `Layout.placed_zero`: each unit slot's row past its useful rows is a forced-zero row;
 - `setupH_flatTableClass`: the flat class's `TableClass`, from the statement `Stmt.setupH` accepted.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

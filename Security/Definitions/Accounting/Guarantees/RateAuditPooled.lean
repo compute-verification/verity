@@ -1,5 +1,7 @@
-import Definitions.Accounting.RateAuditRemote
-import Definitions.Accounting.RateAuditPooled
+module
+
+public import Definitions.Accounting.RateAuditRemote
+public import Definitions.Accounting.RateAuditPooled
 
 /-!
 # The causal bound over the monitoring period (trusted)
@@ -22,6 +24,8 @@ coins (or, under Fiat–Shamir, the random oracle's, as in `Rate.Chain`).
 The prover is one undifferentiated resource (`Definitions/Accounting/RateAuditPooled.lean`): these bound the correct
 receipts, and with conservation the words read, rebuilt or held, whichever devices or parties hold them.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

@@ -1,14 +1,16 @@
-import NciCheck.Check
-import NciCheck.Difftest
-import NciCheck.Desc
-import NciCheck.DescDifftest
-import NciCheck.DescLiveness
-import NciCheck.DescFuzz
-import NciCheck.Baseline
-import NciCheck.BaselineDifftest
-import NciCheck.Count
-import NciCheck.CountDifftest
-import NciCheck.Protocol
+module
+
+public import NciCheck.Check
+public import NciCheck.Difftest
+public import NciCheck.Desc
+public import NciCheck.DescDifftest
+public import NciCheck.DescLiveness
+public import NciCheck.DescFuzz
+public import NciCheck.Baseline
+public import NciCheck.BaselineDifftest
+public import NciCheck.Count
+public import NciCheck.CountDifftest
+public import NciCheck.Protocol
 
 /-!
 # The NCI policy's check
@@ -39,3 +41,5 @@ computed gates divide into at most `n` proof blocks of a `(c, k)`-partition (`Nc
 activations of the block Definitions the declaration names, with each block Definition's Boolean gates from the gate
 table and its fresh bits from `NciCheck.Desc`'s summaries; `NciCheck.CountDifftest` holds it to the Python reference.
 -/
+
+@[expose] public section

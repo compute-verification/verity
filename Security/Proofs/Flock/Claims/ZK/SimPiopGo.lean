@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.SimZerocheck
-import Proofs.Flock.Claims.Complete.Zk.RingSwitch
+module
+
+public import Proofs.Flock.Claims.ZK.SimZerocheck
+public import Proofs.Flock.Claims.Complete.Zk.RingSwitch
 
 /-!
 # A rep's PIOP from the cut, against the session's (`SimPiop`'s lincheck, ring switch and PIOP)
@@ -18,6 +20,8 @@ import Proofs.Flock.Claims.Complete.Zk.RingSwitch
   cut's coins from `l.size` on plus their pads (`PiopSrc`), the cut's PIOP (`piopCut`) and the session's (`piopPZk`)
   return the same after the same bodies, or throw the same error after the same bodies.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

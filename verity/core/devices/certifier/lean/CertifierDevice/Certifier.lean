@@ -1,5 +1,7 @@
-import NetworkCertifier.Run
-import NetworkCheck.Certificate
+module
+
+public import NetworkCertifier.Run
+public import NetworkCheck.Certificate
 
 /-!
 # One link's certifier: constant-rate, left-packed, FIFO and fail-closed
@@ -8,6 +10,8 @@ The executable form of `grid.py`'s `Certifier` and `BlockGrid` (W1–W6). A grid
 B, τ_b, Q), the record's status is `NetworkCertifier.Status`, and a slot holds a frame's bytes or padding (`none`), as in
 `grid.Row`.
 -/
+
+@[expose] public section
 
 namespace CertifierDevice
 

@@ -1,6 +1,8 @@
-import Proofs.Population.Oblivious
-import Proofs.Population.Leakage
-import Proofs.Population.Work
+module
+
+public import Proofs.Population.Oblivious
+public import Proofs.Population.Leakage
+public import Proofs.Population.Work
 
 /-!
 # The damage theorems need no obliviousness
@@ -20,6 +22,8 @@ What these do not give is isolation: they count the egress an incorrect proof bl
 from. `vm_honest_wiring_fails` is the pointer machine meeting this bound (its pointer step's cone holds every output)
 while the honest wiring's upstream would bound it by `2`.
 -/
+
+@[expose] public section
 
 namespace Population.DynPopulation
 

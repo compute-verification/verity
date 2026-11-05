@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FrameRanked
-import Proofs.Flock.Claims.ZK.FrameBeta
+module
+
+public import Proofs.Flock.Claims.ZK.FrameRanked
+public import Proofs.Flock.Claims.ZK.FrameBeta
 
 /-!
 # The frames refuse a rank-deficient mask slot (`FrameUnrefused`'s rank fault)
@@ -24,6 +26,8 @@ held (`Ranked.ownReqs_rank`); what it read is the session's:
   round is inside the inner proof or owes coins.
 * **`LeanRelease.rank_unrefused`**: the fault.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

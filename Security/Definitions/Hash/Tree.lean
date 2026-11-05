@@ -1,5 +1,7 @@
-import Mathlib
-import Definitions.Hash.Basic
+module
+
+public import Mathlib
+public import Definitions.Hash.Basic
 
 /-!
 # frame-v3 trees over a hash (trusted)
@@ -24,6 +26,8 @@ its id is `H(frame "domain" [binding, uint (owner + 2), positions, uint count])`
 identity `tagged_sha512("veritor/indexed-domain/range/v1", {"start":0,"step":1,"stop":count})`, and rank `r`'s position
 is `r`.
 -/
+
+@[expose] public section
 
 namespace Hash.Tree
 

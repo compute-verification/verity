@@ -1,4 +1,6 @@
-import Definitions.Pouw.Assumptions.Fp8Atom.H1TTile
+module
+
+public import Definitions.Pouw.Assumptions.Fp8Atom.H1TTile
 
 /-!
 # H-1T's per-tile count statement (a named assumption)
@@ -25,6 +27,8 @@ simulation evidence. `MH100w` is straight-line, so branching is outside it. Two 
 `γ = 0` a program right on every tile at every salt is never in the event (`tth1tAllRight`, from `H1TGamma`, over
 every tiling), and it holds at `γ = 1`, `η = 0` for every domain (`tth1tSat`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T
 

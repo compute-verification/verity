@@ -1,4 +1,6 @@
-import Definitions.Core.TC.Pipeline
+module
+
+public import Definitions.Core.TC.Pipeline
 
 /-!
 # The step relation
@@ -18,6 +20,8 @@ reads nothing from `Verity.TC.Spec`: the relation and the semantics are independ
 * **Products the checker computes itself** (`both`, `fin_inf`, `any_inf * any_ninf`, `inf_out * neg_inf`, the running
   product of the "attained" chain) appear as those products, and the `MUL`s that check them against themselves are kept.
 -/
+
+@[expose] public section
 
 namespace Verity.TC.Relation
 

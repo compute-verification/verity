@@ -1,9 +1,11 @@
-import Proofs.Pouw.Fp8Atom.Fp32Proofs
-import Proofs.Pouw.PearlC.FreezeP
-import Proofs.Pouw.PearlC.Cap.IntForm
-import Proofs.Pouw.PearlC.Cap.SaltDeadStep
-import Proofs.Pouw.PearlC.Cap.SaltDead
-import Proofs.Pouw.PearlC.Cap.Pins
+module
+
+public import Proofs.Pouw.Fp8Atom.Fp32Proofs
+public import Proofs.Pouw.PearlC.FreezeP
+public import Proofs.Pouw.PearlC.Cap.IntForm
+public import Proofs.Pouw.PearlC.Cap.SaltDeadStep
+public import Proofs.Pouw.PearlC.Cap.SaltDead
+public import Proofs.Pouw.PearlC.Cap.Pins
 
 /-!
 # The cap circuit's Lean pieces
@@ -13,3 +15,5 @@ open rulings: the circuit's integer tests and their 32-bit words (`Cap.IntForm`)
 (`Cap.Pins`), and the salt-dead two-ends lemma that lets RowA decide `saltDeadP` from two evaluations of the forming
 step (`Cap.SaltDead`, on the step's monotone read in `Cap.SaltDeadStep`).
 -/
+
+@[expose] public section

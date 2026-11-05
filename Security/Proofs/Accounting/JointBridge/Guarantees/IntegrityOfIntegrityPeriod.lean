@@ -1,5 +1,7 @@
-import Definitions.Accounting.JointPeriod
-import Proofs.Flock.EndToEnd.Period.Statement
+module
+
+public import Definitions.Accounting.JointPeriod
+public import Proofs.Flock.EndToEnd.Period.Statement
 
 /-!
 # The integrity audit of a period is C-Flock's integrity audit over a monitoring period's sampling blocks (trusted)
@@ -14,6 +16,8 @@ is then `PeriodRun.Sound` for the sampled audit at error `δ + Σ_t (ε_ks,t + �
 C-Flock's definitions are still in its proofs package, so, like `Flock.Guarantees.IntegrityHorizon`, this module imports
 them.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

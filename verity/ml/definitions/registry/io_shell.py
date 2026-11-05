@@ -278,7 +278,8 @@ def feed_reference(slot: list[int], sel: int | None, NP: int) -> tuple[int, list
 
 
 @composite("TokenFeed", 1, ["NP", "FIRST"], feed_sig, refuse=feed_refuse,
-           conformance="vLLM's input id at a position: the prompt's below its length, else the previous position's sample")
+           conformance="not-yet-established: vLLM's input id at a position, the prompt's below its length, else the previous "
+                       "position's sample")
 def TokenFeed(B, S, slot, sel=None):
     """A class Program's token at a position and the slot it carries to the next (the module docstring)."""
     o = word_ops(B)
@@ -366,7 +367,8 @@ def collect_reference(a: list[int], tok: int, KO: int, FIRST: bool) -> list[int]
 
 
 @composite("OutCollect", 1, ["KO", "FIRST"], collect_sig, refuse=collect_refuse,
-           conformance="vLLM's output ids of a request: its samples from its prompt's last position on, KO at most")
+           conformance="not-yet-established: vLLM's output ids of a request, its samples from its prompt's last position on, KO "
+                       "at most")
 def OutCollect(B, S, a, tok):
     """A slot's outputs carried to the next position, this position's shifted in while it is one of the KO from the prompt's
     last (the module docstring)."""
@@ -420,8 +422,8 @@ def entry_reference(occ: int, state: list[int], KO: int, IDB: int, NP: int, STOP
 
 
 @composite("SlotEntry", 1, ["KO", "IDB", "NP", "STOP"], entry_sig, refuse=entry_refuse,
-           conformance="a request's output count and ids as vLLM served them: up to max_tokens and its first stop id, "
-                       "KO + 1 where the class can't hold it")
+           conformance="not-yet-established: a request's output count and ids as vLLM served them, up to max_tokens and its "
+                       "first stop id, KO + 1 where the class can't hold it")
 def SlotEntry(B, S, occ, state):
     """A slot's entry of the network certifier's Programs' row (the module docstring): ``read`` the slot's occupancy
     bit, then n and the kept outputs; output i is kept while the slot is occupied, its prompt 1 to NP ids, i <
@@ -481,7 +483,8 @@ def select_entry_sig(S):
 
 
 @composite("SelectCollect", 1, ["V", "C", "KO", "FIRST"], select_collect_sig, refuse=select_refuse,
-           conformance="vLLM's sample at a position and its output ids so far: TokenSelectCombine_v2, then OutCollect_v1")
+           conformance="not-yet-established: vLLM's sample at a position and its output ids so far, TokenSelectCombine_v2, then "
+                       "OutCollect_v1")
 def SelectCollect(B, S, x0, best, idx, a):
     """A position's select over its groups' bests and indices and ``logits[0]`` (`TokenSelectCombine_v2{V, C}`), and the
     slot's outputs carried on with it (`OutCollect_v1{KO, FIRST}`): (the select, the state)."""
@@ -505,8 +508,8 @@ def SelectCollectV2(B, S, x0, best, idx, a):
 
 
 @composite("SelectEntry", 1, ["V", "C", "KO", "FIRST", "IDB", "NP", "STOP"], select_entry_sig, refuse=select_refuse,
-           conformance="vLLM's last sample, its request's outputs and their count: TokenSelectCombine_v2, OutCollect_v1, "
-                       "then SlotEntry_v1")
+           conformance="not-yet-established: vLLM's last sample, its request's outputs and their count, "
+                       "TokenSelectCombine_v2, OutCollect_v1, then SlotEntry_v1")
 def SelectEntry(B, S, x0, best, idx, a, occ):
     """The last position's select (`TokenSelectCombine_v2{V, C}`), collected (`OutCollect_v1{KO, FIRST}`), and the slot's
     entry of that state and its occupancy word (`SlotEntry_v1{KO, IDB, NP, STOP}`): the entry."""

@@ -1,7 +1,9 @@
-import Mathlib.LinearAlgebra.Matrix.Rank
-import Definitions.Accounting.RateAuditSketch
-import Definitions.Accounting.RateAuditSketchInteractive
-import Definitions.Accounting.RateAuditSketchLayout
+module
+
+public import Mathlib.LinearAlgebra.Matrix.Rank
+public import Definitions.Accounting.RateAuditSketch
+public import Definitions.Accounting.RateAuditSketchInteractive
+public import Definitions.Accounting.RateAuditSketchLayout
 
 /-!
 # The rate audit with a sketch-then-hash tag (trusted)
@@ -25,6 +27,8 @@ the claims registry carries the class to a deployed device (`rate-sketch-verbati
   digest of at most `2^d` values has a device accepted on every coin that reads `d` bits per tile.
 * `RateTensorSketchTable`: the same at the deployed tag, `32·k_s` bits per tile, at any number of rows `k_s`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

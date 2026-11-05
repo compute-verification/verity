@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.LincheckPhase
-import Proofs.Flock.Soundness.OpeningPhase
-import Proofs.Flock.Soundness.ListSize
-import Mathlib.Data.Nat.BitIndices
+module
+
+public import Proofs.Flock.Soundness.LincheckPhase
+public import Proofs.Flock.Soundness.OpeningPhase
+public import Proofs.Flock.Soundness.ListSize
+public import Mathlib.Data.Nat.BitIndices
 
 /-!
 # The link points (`Flock.Statement`)
@@ -17,6 +19,8 @@ probability, and a union bound runs over the list and the regions.
 The layout of the point (`Statement.LinkLayout`): each region's free bits are distinct and read
 link coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …` fit inside the point.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

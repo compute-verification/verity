@@ -1,4 +1,6 @@
-import Definitions.Accounting.TS.J10R
+module
+
+public import Definitions.Accounting.TS.J10R
 
 /-!
 # Checks of J10-R's noise against the Python
@@ -12,6 +14,8 @@ import Definitions.Accounting.TS.J10R
 - `layout_4096` … `prefill_k14336`: RB and CB, today's 612 compressions a unit at a warp and `K = 4096`, and J10-R's over a
   call at decode (32 × 4096: 41,506 over 128 units, 324.27 a unit) and prefill.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.J10RChecks
 

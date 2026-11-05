@@ -1,11 +1,16 @@
-import Batteries.Tactic.OpenPrivate
-import Properties.RemoteAudit.Schedule
-import Proofs.Properties.RemoteAudit.Plan
-import Proofs.Properties.RemoteAudit.Window
-import Definitions.Accounting.Assumptions.Stacking
-import Mathlib.Tactic.Choose
-import Mathlib.Data.Fintype.Pigeonhole
-import Batteries.Lean.Except
+module
+
+public import Batteries.Tactic.OpenPrivate
+public import Properties.RemoteAudit.Schedule
+public import Proofs.Properties.RemoteAudit.Plan
+public import Proofs.Properties.RemoteAudit.Window
+public import Definitions.Accounting.Assumptions.Stacking
+public import Mathlib.Tactic.Choose
+public import Mathlib.Data.Fintype.Pigeonhole
+public import Batteries.Lean.Except
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.Repr
 
 /-!
 # The schedule check fixes each credited pass's plan (`ScheduleChecked`, `ScheduleFixesLayout`)
@@ -49,6 +54,8 @@ Each guarantee's premises hold at the deployed shape, one pass over all 13002342
 and each conclusion is false for some input a verifier that accepted everything would take (the `_nontrivial`
 lemmas): the lock's `witnesses`.
 -/
+
+@[expose] public section
 
 open RemoteAudit
 

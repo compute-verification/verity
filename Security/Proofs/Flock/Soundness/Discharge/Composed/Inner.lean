@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Base
-import Proofs.Flock.Soundness.Instance
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckMasked
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.Lincheck
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Base
+public import Proofs.Flock.Soundness.Instance
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckMasked
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Lincheck
 
 /-!
 # The inner proof's fields of a draw's `--zk` table
@@ -27,6 +29,8 @@ the level-0 lanes, the clear values, Ligerito's value lists and the verifier's r
 **Open inputs** (each a named definition, until the coin vector carries it): level 0's out-of-domain point
 (`oodPoint`, the drawn coin `RestZK.oodPt`) and levels ≥ 1's bytes (a `LigProver`'s). `InnerHolds` reads none of them.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

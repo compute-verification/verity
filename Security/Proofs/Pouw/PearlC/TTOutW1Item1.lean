@@ -1,6 +1,8 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutW1
-import Proofs.Pouw.PearlC.HonestWords
-import Proofs.Pouw.Copy
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+public import Proofs.Pouw.PearlC.HonestWords
+public import Proofs.Pouw.Copy
 
 /-!
 # Guessing a `1 × 1 × k` unit's two output words at W1
@@ -39,6 +41,8 @@ useful word `(0, 0, 0)`. The adversary `guessAdv` has no preprocessing and suppl
   126 words the program never wrote. How rare such draws are is a property of the noise, which this file does not bound.
 `ttOutPearlCDevW1_of_old`: the refuted form implies the narrowed one, so the narrowing only weakens the assumption.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.TTOutW1Item1
 

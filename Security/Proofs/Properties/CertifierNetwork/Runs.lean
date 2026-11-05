@@ -1,7 +1,9 @@
-import Properties.CertifierNetwork.Runs
-import Proofs.Properties.CertifierNetwork.Records
-import Proofs.Properties.CertifierNetwork.Certify
-import Proofs.Properties.NetworkCertifier.Run
+module
+
+public import Properties.CertifierNetwork.Runs
+public import Proofs.Properties.CertifierNetwork.Records
+public import Proofs.Properties.CertifierNetwork.Certify
+public import Proofs.Properties.NetworkCertifier.Run
 
 /-!
 # An accepted run's records are the Program's (5a)
@@ -16,6 +18,8 @@ that the same head (`head_inj`) (`device_record`). The device publishes one reco
 (`unique`, from `Inv`), so each record it published on its links is the one the check accepted: complete, since the
 check's is settled, and on egress of the Program's grid (`recordHead_grid_inj`).
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check

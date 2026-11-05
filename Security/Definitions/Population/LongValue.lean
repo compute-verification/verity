@@ -1,5 +1,7 @@
-import Definitions.Population.Dataflow
-import Mathlib.Data.Fintype.Option
+module
+
+public import Definitions.Population.Dataflow
+public import Mathlib.Data.Fintype.Option
 
 /-!
 # Long values: slots that may hold no value of their width
@@ -20,6 +22,8 @@ or that the slot has none. This file is the vocabulary for that view.
 * `Collides` and `CollisionStep`: two different strings that climb to one position give a collision of the hash among
   the run's hashed strings. `CollisionStep` is a named assumption, taken as a hypothesis.
 -/
+
+@[expose] public section
 
 namespace Population
 

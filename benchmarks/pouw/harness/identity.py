@@ -80,24 +80,27 @@ def check(env: dict[str, str], gpu: int, device_count: int, uuid: str, expected_
             "cuda_visible_devices": cvd, "cuda_device_order": env["CUDA_DEVICE_ORDER"]}
 
 
-#: what the card must be (the pods' bootstrap check): an RTX PRO 6000 Blackwell, sm_120 with 188 SMs, driver 575 or later
-CARD_NAME, CARD_CAPABILITY, CARD_SMS, MIN_DRIVER = "RTX PRO 6000", "12.0", 188, 575
+#: what the card must be (the pods' bootstrap check), by its name within the device's: an RTX PRO 6000 Blackwell, sm_120 with
+#: 188 SMs, driver 575 or later; or an H200 (`verity bench overhead`'s card), sm_90 with 132 SMs, driver 550 or later
+CARDS = {"RTX PRO 6000": ("12.0", 188, 575, "sm_120a"), "H200": ("9.0", 132, 550, "sm_90a")}
 
 
 def check_card(name: str, capability: str, sms: int, driver: str) -> dict:
+    known = next((c for c in CARDS if c in name), None)
+    if known is None:
+        raise IdentityError(f"not the card: name {name!r} is none of {', '.join(map(repr, CARDS))}")
+    want_cap, want_sms, min_driver, arch = CARDS[known]
     problems = []
-    if CARD_NAME not in name:
-        problems.append(f"name {name!r} lacks {CARD_NAME!r}")
-    if capability != CARD_CAPABILITY:
-        problems.append(f"compute capability {capability}, not {CARD_CAPABILITY}")
-    if sms != CARD_SMS:
-        problems.append(f"{sms} SMs, not {CARD_SMS}")
+    if capability != want_cap:
+        problems.append(f"compute capability {capability}, not {want_cap}")
+    if sms != want_sms:
+        problems.append(f"{sms} SMs, not {want_sms}")
     try:
         major = int(driver.split(".")[0])
     except ValueError:
         major = -1
-    if major < MIN_DRIVER:
-        problems.append(f"driver {driver!r}, need {MIN_DRIVER} or later")
+    if major < min_driver:
+        problems.append(f"driver {driver!r}, need {min_driver} or later")
     if problems:
         raise IdentityError("not the card: " + "; ".join(problems))
-    return {"name": name, "capability": capability, "sms": sms, "driver": driver}
+    return {"name": name, "capability": capability, "sms": sms, "driver": driver, "arch": arch}
