@@ -181,16 +181,16 @@ def main(argv: list[str] | None = None) -> int:
     else:
         outputs, serving = np.stack([r.tokens_out for r in results], 1), None
     legs = {
-        "integrity": L._entry("integrity", "fixture", replayed=replay["drawn"], mismatches=replay["mismatches"],
+        "integrity": L._entry("fixture", replayed=replay["drawn"], mismatches=replay["mismatches"],
                               stands_in_for="C-Flock --zk proving the drawn units and Lean's ACCEPT"),
         "pous": L.pous_spot_reads(store, a.pous_reads, a.run_id.encode()),
-        "bandwidth": L.not_run("bandwidth", "M4: memory-accounting's audit reads against the demo card's store"),
+        "bandwidth": L.not_run("M4: the bandwidth audit's reads against the demo card's store"),
         "certifier": L.certifier(prompts, outputs),
         "wipe": L.wipe_reload(store, lambda: drive([r.salt_key for r in results],
                                                    Params(shape, store, a.device, a.weights == "resident"))[1][-1].root,
                               results[-1].root),
-        "pouw": L.not_run("pouw", "per-call-noise tiles, a --subcircuit of the registration")
-        if not subs else L._entry("pouw", "fixture", subcircuits={s.name: s.manifest() for s in subs},
+        "pouw": L.not_run("per-call-noise tiles, a --subcircuit of the registration")
+        if not subs else L._entry("fixture", subcircuits={s.name: s.manifest() for s in subs},
                                   mismatches=sum(getattr(s, "mismatches", 0) for s in subs)),
     }
     store.close()
@@ -199,7 +199,7 @@ def main(argv: list[str] | None = None) -> int:
         weights={**weights.manifest(), **params.describe(), "registration_digest_test_key":
                  weights.registration_digest() if weights.nbytes <= DIGEST_BYTES else None},
         store={**store.describe(), "seconds": t_store,
-               "stands_in_for": None if store.kind == "p2-v4" else "memory-accounting's P2-encoded store and its decode call"},
+               "stands_in_for": None if store.kind == "p2-v4" else "PoUS's P2-encoded store and its decode call"},
         commit={**committer.describe(), "context": "fixture"},
         results=results, prompts=prompts, outputs=outputs, replay=replay, legs=legs,
         extra={"serving": serving, "tamper": a.tamper or None, "registration": registration, "micro_batch": a.micro_batch or a.batch,

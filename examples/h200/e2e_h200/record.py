@@ -7,7 +7,7 @@
   step).
 * ``record.json``: the run (shape, batch, steps, device), the weights and the store, each step's slots, positions, finished
   requests and commitment root, the requests' and outputs' digests, the replay's verdict, and each leg as ``real``,
-  ``fixture`` or ``not-run`` with its owner.
+  ``fixture`` or ``not-run``.
 """
 from __future__ import annotations
 
