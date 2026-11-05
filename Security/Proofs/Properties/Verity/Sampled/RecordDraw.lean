@@ -1038,7 +1038,7 @@ theorem recordDraw_firstStop (e : 𝔽 ≃ (Fin 128 → Bool)) {V : Vocab d α} 
   rw [firstStop_sampleMap e V θ F c A rd σ label after κ ω] at hreach
   have hθ : x.params = θ := by
     have h0 : PlayReaches (V.game θ F c) σ x := playReaches_walk _ _ _ _ _ x hreach
-    obtain ⟨log, s, h⟩ := playReaches_bind (f := finish (V.signer θ) θ F c σ.1)
+    obtain ⟨log, s, h⟩ := PlayReaches.of_bind (f := finish (V.signer θ) θ F c σ.1)
       (releases (frames (V.families θ)) (V.families θ) []) σ.2 h0
     exact (reaches_finish ⟨s, h⟩).1
   obtain ⟨L, hc, hO⟩ := walkFill_req (label := label) (after := after) hrd (frames (V.families θ)) (V.families θ)
