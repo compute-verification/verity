@@ -14,6 +14,7 @@ public import Definitions.Nci.Transfers
 public import Definitions.Nci.Dark
 public import Definitions.Nci.Packed
 public import Definitions.Nci.Covering
+public import Definitions.Nci.Capability
 public import Definitions.Pous
 public import Definitions.Pous.Guarantees.StreamedWipeFamily
 public import Definitions.Pous.Guarantees.StreamedWipeReads

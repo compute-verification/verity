@@ -25,9 +25,13 @@ Anything else is answered `err WHY`. `answer` is the whole of it but the socket.
 one started again opens a new epoch, in which no earlier session registers. Only the ZK server, under its own OS user,
 starts the service (`zk-server-own-user`).
 -/
-import Flock.Firewall.Salts
-import Flock.Witness
-import Std.Async.TCP
+module
+
+public import Flock.Firewall.Salts
+public import Flock.Witness
+public import Std.Async.TCP
+
+@[expose] public section
 
 namespace Flock.Firewall.Values
 
