@@ -184,3 +184,6 @@ Cap.lean: band rule = bandCredited, forming test = formingCapOK (lean CKFORM3b).
 [2026-11-04T23:48Z] 100086a0c5c0
 PEARLCAP: py13 (r20261104-222847-eff0, cpu-3) finished at df3b87fcfa1. verity-pouw-benchmarks 1358 passed, benchmarks/one_stage 656 passed, benchmarks/pouw/pearlplus_lean 16 passed 1 failed: only test_a_salt_dead_element_over_the_row_cap, the missing test_instance=True at test_pearlplus_lean.py:210 from my report. With that one line in #7221 final head, every suite I touch passes. Removing my worktree now; done.
 
+[2026-11-05T02:22Z] ae9f753bdac8
+PEARLLEAN #7221: not final at 4f5f3d132a6. Its recorded-H200 difftest case computed the Python's verdict live with verify_passes' default scalar replay, which ran >1h50m at 12 cores (r20261105-002100-7d8d, cancelled before its timeout). One test-only commit, a65ea734468, makes it use the batch replay with the every-256th scalar cross-check that served_passes.py verify uses (the recorded verdict was batch too). Difftest at a65e: r20261105-022151-507c. Suites at 4f5f (pouw benchmarks, one_stage, pearlplus_lean): r20261105-013316-a4ff, still running; a65e doesn't touch their inputs except pearlplus_lean, which 507c covers. Final report follows.
+
