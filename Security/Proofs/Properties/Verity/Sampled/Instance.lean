@@ -202,7 +202,9 @@ def CostsRead (V : Vocab d α) (dev : Exchange → Properties.Challenger.History
 (`base`), whose signer is the deployed device's (`deployment`, `signer`), whose reading of the committed files and
 digests are v2's (`read`, `programDigest`, `publicDigest`) and whose declared calls cover the deployed device's reading
 at its history (`costs`, `Device.dev`); and the session the deployment runs at each parameters (`session`), whose
-bound's parameters `θ` fixes. -/
+bound's parameters `θ` fixes. A deployed instance fills `signer` at its construction, by `rfl` or a lemma, as the honest
+instance does; no theorem takes the signer's equation as a hypothesis of its own, and `couplingTarget_at` reads it
+from this field. -/
 structure Instance (d : Accounting.Device ι) (α : Type) [Fintype α] where
   base : Vocab d α
   deployment : Device.Deployment
