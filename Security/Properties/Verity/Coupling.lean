@@ -27,17 +27,19 @@ own coins. This module states the coupling between the two and the bounds it car
   (`Accounting.PeriodRun`) whose coins are in bijection with the coins drawn up front (`Vocab.PeriodCoupling`), whose
   verdict `acc` refines and whose claim refines `b`'s in the play, meeting `PeriodRun.Sound` within the published `δ`,
   with the rest of the event (a log out of place, the coupling's break) bounded by the forger's and the finder's terms
-  (`Vocab.PeriodCoupling.BreakBound`), gives `b`'s target at `acc` in the play. At `acc = ComponentAccepts` it is
-  `Vocab.ComponentBound`, which is then no longer a hypothesis of `SoundnessOfComponents` for that subprotocol.
+  (`Vocab.PeriodCoupling.BreakBound`; together `Vocab.PeriodsCouple`), gives `b`'s target at `acc` in the play. At
+  `acc = ComponentAccepts` it is `Vocab.ComponentBound`, which is then no longer a hypothesis of
+  `SoundnessOfComponents` for that subprotocol.
 * **The wipe** (`WipeTarget`): the wipe's guarantee (`Verity.Wipe.SurvivorBound`) is over its own draw, and its coupling
-  to the play is `Verity.Wipe.OfRun.Preserves`; with the wipe's verdict refining `acc`, they give the wipe's target at
-  `acc`.
-* **Soundness** (`SoundnessOfUpFront`): at every composite, each subprotocol's bound at its component, or its bound
-  over the coins drawn up front, gives `Vocab.SoundnessAt`.
+  to the play (`Vocab.WipeCoupling`) is `Verity.Wipe.OfRun.Preserves`, the wipe's verdict refining `acc` and the
+  survivor error within the wipe's; with them it gives the wipe's target at `acc`. `Preserves` reads the foreign
+  content as uniform on the play.
+* **Soundness** (`SoundnessOfUpFront`): at every composite, each subprotocol's bound at its component, over the coins
+  drawn up front, or as its target (`Vocab.SubprotocolBound`), gives `Vocab.SoundnessAt`.
 
 A subprotocol whose claim reads the coin trees' coins (sampled proofs) is bounded at every resolution of them only if a
-prover choosing them can't break it, so its bound stays at its component (`Vocab.ComponentBound`). The inference-only
-policy's claim reads no coin, so its bound is its own.
+prover choosing them can't break it, so its bound stays at its component (`Vocab.ComponentBound`) or its target
+(`Vocab.Target`), proved in the play itself. The inference-only policy's claim reads no coin, so its bound is its own.
 -/
 
 namespace Verity
@@ -45,20 +47,32 @@ namespace Verity
 open Accounting Core
 open scoped ENNReal
 
-/-- **The coin commitment's coins, drawn up front**: for each of the families `fs`, each of its coins, 512 bits. Family
-`j`'s coin `n` is the one the device releases when the family goes from `n + 1` coins left to `n`. -/
-abbrev UpFront (fs : List (String × ℕ)) : Type := (j : Fin fs.length) → Fin fs[j].2 → Fin 512 → Bool
+/-- **The coin commitment's coins, drawn up front**: for each of the families `fs`, in order, each of its coins, 512
+bits. A family's coin `n` is the one the device releases when the family goes from `n + 1` coins left to `n`. -/
+def UpFront : List (String × ℕ) → Type
+  | [] => PUnit
+  | (_, n) :: fs => (Fin n → Fin 512 → Bool) × UpFront fs
+
+instance UpFront.instFintype : (fs : List (String × ℕ)) → Fintype (UpFront fs)
+  | [] => inferInstanceAs (Fintype PUnit)
+  | (_, n) :: fs => have := UpFront.instFintype fs; inferInstanceAs (Fintype ((Fin n → Fin 512 → Bool) × UpFront fs))
+
+instance UpFront.instNonempty : (fs : List (String × ℕ)) → Nonempty (UpFront fs)
+  | [] => inferInstanceAs (Nonempty PUnit)
+  | (_, n) :: fs => have := UpFront.instNonempty fs; inferInstanceAs (Nonempty ((Fin n → Fin 512 → Bool) × UpFront fs))
 
 /-- **The coins left of the family `l`** in `fs`: of the first family labelled `l`, the one `takeCoin` takes from; `0`
 where no family is. -/
-def coinsLeft (fs : List (String × ℕ)) (l : String) : ℕ := ((fs.find? fun p => decide (p.1 = l)).map (·.2)).getD 0
+def coinsLeft : List (String × ℕ) → String → ℕ
+  | [], _ => 0
+  | (l', n) :: fs, l => if l' = l then n else coinsLeft fs l
 
 /-- **Coin `n` of the family `l`, drawn up front**: coin `n` of the first family of `fs` labelled `l`; all zero where
 no family is or the family has no coin `n`. -/
-def UpFront.read {fs : List (String × ℕ)} (t : UpFront fs) (l : String) (n : ℕ) : Fin 512 → Bool :=
-  match (List.finRange fs.length).find? fun j => decide (fs[j].1 = l) with
-  | some j => if h : n < fs[j].2 then t j ⟨n, h⟩ else fun _ => false
-  | none => fun _ => false
+def UpFront.read : {fs : List (String × ℕ)} → UpFront fs → String → ℕ → Fin 512 → Bool
+  | [], _, _, _ => fun _ => false
+  | (l', c) :: _, t, l, n =>
+    if l' = l then (if h : n < c then t.1 ⟨n, h⟩ else fun _ => false) else UpFront.read t.2 l n
 
 /-- **The coin trees' coins, resolved from the device's log**: at a coin tree's `Hello`, after the releases `pre`, the
 sample for its shape and nonce; at an opening of the `i`-th tree for its stream `s`'s first `n` coins, after the releases
@@ -192,6 +206,35 @@ def PeriodCoupling.BreakBound {acc : Exchange → Prop} {k : Verity.Registration
     ENNReal.ofReal ((V.forger (.ofAudit b) θ F c σ).Pr lmsVerify) +
       V.loss (.ofAudit b) θ (ENNReal.ofReal ((V.finder (.ofAudit b) θ F c σ).Pr sha512Msg))
 
+/-- **The plays at `b`'s subprotocol couple to period runs**: at every `θ`, `F`, `c`, strategy and resolution of the
+coin trees' coins there is a period run coupled to the play (`PeriodCoupling`) that meets `b`'s per-period guarantee
+(`Accounting.PeriodRun.Sound`) within `b`'s published `δ` at the strategy's calls, and whose rest of the event is bounded
+by the forger's and the finder's terms where the finder meets `FinderCR` (`PeriodCoupling.BreakBound`). -/
+def PeriodsCouple (acc : Exchange → Prop) (k : Verity.Registration.Composite) (b : Audit) : Prop :=
+  ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (ρ : TreeCoins),
+    ∃ (q : V.PeriodCoupling acc k b θ F c σ ρ) (δ : ℝ), q.run.Sound (V.certOf θ) q.price b δ ∧
+      ENNReal.ofReal δ ≤ V.delta θ (.ofAudit b) (V.cost θ F c σ) ∧
+      (V.FinderCR (.ofAudit b) θ F c σ → q.BreakBound)
+
+/-- **The plays couple to the wipe's game at the survivor error `ε`, for the verdict `acc`**: every play read at the
+wipe's boundary is distributed as the wipe's game draws it at its strategy (`Verity.Wipe.OfRun.Preserves`), `acc`
+implies the wipe's verdict on the play (`Verity.Wipe.OfRun.accepts`), and `ε` at the play's moves at the boundary is at
+most the wipe's error at the strategy. -/
+structure WipeCoupling [Fintype V.Seed] [Nonempty V.Seed] [Fintype V.Spots] [Nonempty V.Spots]
+    (acc : Exchange → Prop)
+    (ε : (θ : ByteArray) → (F : Array ByteArray) → (S_φ : ℕ) → ((Fin S_φ → Bool) → Device.State d) →
+      (Device.State d → (Fin (V.wipe θ F).egress → Bool) → V.Spots → Fin S_φ → Bool) → ℝ≥0∞) : Prop where
+  preserves : ∀ θ F c σ, (V.wipeRun θ F c σ).Preserves σ
+  verdict : ∀ θ F c σ o, acc o → (V.wipeRun θ F c σ).accepts o
+  error : ∀ θ F c σ, ε θ F (V.wipeRun θ F c σ).S_φ (V.wipeRun θ F c σ).hold (V.wipeRun θ F c σ).keep ≤
+    V.error .wipe θ F c σ
+
+/-- **Subprotocol `a`'s bound at composite `k`, in one of three forms**: at its compiled component in the play
+(`ComponentBound`), at its compiled component over the coins drawn up front (`UpFrontBound`), or as its target in the
+play (`Target`, as a piece that proves it at its verdict directly gives it). -/
+def SubprotocolBound (k : Verity.Registration.Composite) (a : Subprotocol) : Prop :=
+  V.ComponentBound k a ∨ V.UpFrontBound k a ∨ V.Target k a
+
 end Vocab
 
 /-- **A subprotocol's target in the play from its bound over the coins drawn up front.** On any device, for any names
@@ -208,42 +251,36 @@ def CoinsCouple : Prop :=
 `V`, any verdict `acc`, composite `k` and `Audit` `b`: if at every `θ`, `F`, `c`, strategy and resolution of the coin
 trees' coins there is a period run coupled to the play (`Vocab.PeriodCoupling`) that meets `b`'s per-period guarantee
 (`Accounting.PeriodRun.Sound`) within `b`'s published `δ` at the strategy's calls, and whose rest of the event is
-bounded by the forger's and the finder's terms where the finder meets `FinderCR` (`BreakBound`), then `b`'s subprotocol
+bounded by the forger's and the finder's terms where the finder meets `FinderCR` (`BreakBound`; `Vocab.PeriodsCouple`),
+then `b`'s subprotocol
 meets its target at `acc` in the play. At `acc = ComponentAccepts k (.ofAudit b)` it is
 `Vocab.ComponentBound k (.ofAudit b)`. -/
 def TargetOfPeriods : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α) (acc : Exchange → Prop)
     (k : Verity.Registration.Composite) (b : Audit),
-    (∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (ρ : TreeCoins),
-      ∃ (q : V.PeriodCoupling acc k b θ F c σ ρ) (δ : ℝ), q.run.Sound (V.certOf θ) q.price b δ ∧
-        ENNReal.ofReal δ ≤ V.delta θ (.ofAudit b) (V.cost θ F c σ) ∧
-        (V.FinderCR (.ofAudit b) θ F c σ → q.BreakBound)) →
-    V.TargetFor acc k (.ofAudit b)
+    V.PeriodsCouple acc k b → V.TargetFor acc k (.ofAudit b)
 
 /-- **The wipe's target in the play from its survivor bound.** On any device, for any names `V` whose wipe's seeds and
 spot reads are finite, any verdict `acc`, composite `k` and survivor error `ε`: if the wipe meets its survivor bound at
 the published threshold and `ε` (`Verity.Wipe.SurvivorBound`), every play read at the wipe's boundary is distributed as
 the wipe's game draws it at its strategy (`Verity.Wipe.OfRun.Preserves`), `acc` implies the wipe's verdict on the play
-(`Verity.Wipe.OfRun.accepts`), and `ε` at the play's moves at the boundary is at most the wipe's error at the strategy,
-then the wipe meets its target at `acc` in the play. -/
+(`Verity.Wipe.OfRun.accepts`), and `ε` at the play's moves at the boundary is at most the wipe's error at the strategy
+(`Vocab.WipeCoupling`), then the wipe meets its target at `acc` in the play. -/
 def WipeTarget : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α) [Fintype V.Seed] [Nonempty V.Seed] [Fintype V.Spots]
     [Nonempty V.Spots] (acc : Exchange → Prop) (k : Verity.Registration.Composite)
     (ε : (θ : ByteArray) → (F : Array ByteArray) → (S_φ : ℕ) → ((Fin S_φ → Bool) → Device.State d) →
       (Device.State d → (Fin (V.wipe θ F).egress → Bool) → V.Spots → Fin S_φ → Bool) → ℝ≥0∞),
-    (∀ θ F, (V.wipe θ F).SurvivorBound (V.foreignBits θ) (ε θ F)) →
-    (∀ θ F c σ, (V.wipeRun θ F c σ).Preserves σ) →
-    (∀ θ F c σ o, acc o → (V.wipeRun θ F c σ).accepts o) →
-    (∀ θ F c σ, ε θ F (V.wipeRun θ F c σ).S_φ (V.wipeRun θ F c σ).hold (V.wipeRun θ F c σ).keep ≤
-      V.error .wipe θ F c σ) →
+    (∀ θ F, (V.wipe θ F).SurvivorBound (V.foreignBits θ) (ε θ F)) → V.WipeCoupling acc ε →
     V.TargetFor acc k .wipe
 
-/-- **Soundness at every composite's verifier of record, from its subprotocols' bounds at their components or over the
-coins drawn up front.** On any device, for any names `V` and any composite `k`, if each of `k`'s subprotocols meets its
-bound at its compiled component in the play (`Vocab.ComponentBound`) or over the coins drawn up front
-(`Vocab.UpFrontBound`), then `k`'s compiled verifier is sound (`Vocab.SoundnessAt`). -/
+/-- **Soundness at every composite's verifier of record, from its subprotocols' bounds at their components, over the
+coins drawn up front, or as targets.** On any device, for any names `V` and any composite `k`, if each of `k`'s
+subprotocols meets its bound at its compiled component in the play (`Vocab.ComponentBound`), over the coins drawn up
+front (`Vocab.UpFrontBound`), or as its target in the play (`Vocab.Target`; `Vocab.SubprotocolBound`), then `k`'s compiled
+verifier is sound (`Vocab.SoundnessAt`). -/
 def SoundnessOfUpFront : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α) (k : Verity.Registration.Composite),
-    (∀ a ∈ subprotocols k, V.ComponentBound k a ∨ V.UpFrontBound k a) → V.SoundnessAt k
+    (∀ a ∈ subprotocols k, V.SubprotocolBound k a) → V.SoundnessAt k
 
 end Verity

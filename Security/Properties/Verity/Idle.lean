@@ -167,7 +167,7 @@ def coupling (δ : ℝ≥0∞) (acc : Exchange → Prop) (k : Verity.Registratio
   C := fileRead.circuit
   I := Unit
   Ω _ := Unit
-  coins := ⟨fun _ j => j.elim0, fun _ _ => (), fun _ => rfl, fun _ => funext fun j => j.elim0⟩
+  coins := ⟨fun _ => PUnit.unit, fun _ _ => (), fun _ => rfl, fun _ => rfl⟩
   run := periodRun
   price _ := 0
   brk _ := False
