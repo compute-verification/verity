@@ -58,7 +58,7 @@ typedef struct {
     const uint8_t* hm96_prefixes;
     const uint64_t* hm96_tables;
     long long hm96_level0_leaves;   // the level-0 tree's leaves: tree 0 (level 0's salts) is refused at any other size
-    // M1 (lane flock-zk, verity/ml/flock/live/PROTOCOL.md §8), zk_on: Ligerito level 0's hiding. The level-0 codeword has the
+    // M1 (verity/ml/flock/live/PROTOCOL.md §8), zk_on: Ligerito level 0's hiding. The level-0 codeword has the
     // witness's 2^initial_k lanes and 4 uniform ones (zk_extra: 4 lanes of L words), every lane's message padded by
     // (X_L + c)·μ (zk_pads: t_pad words per lane, lane-major, the witness's lanes first); the lane phase folds rep zk_rep's pair
     // (ligerito_zk.cuh); the proof stream ends in the zk section (fc_write_zk). zk_tamper: the negatives (LigZk::tamper).
@@ -284,23 +284,21 @@ struct FcTape {
     }
 };
 
-__device__ static inline uint64_t fc_rotr(uint64_t x, int r) { return (x >> r) | (x << (64 - r)); }
-
 __device__ static void fc_sha_compression(FcTape& t, const uint64_t* cv, const uint64_t* msg, uint64_t* out) {
     uint64_t w[80];
     for (int i = 0; i < 16; i++) w[i] = msg[i];
     for (int i = 16; i < 80; i++) {
-        const uint64_t s0 = fc_rotr(w[i - 15], 1) ^ fc_rotr(w[i - 15], 8) ^ (w[i - 15] >> 7);
-        const uint64_t s1 = fc_rotr(w[i - 2], 19) ^ fc_rotr(w[i - 2], 61) ^ (w[i - 2] >> 6);
+        const uint64_t s0 = sx::s0<0>(w[i - 15]);
+        const uint64_t s1 = sx::s1<0>(w[i - 2]);
         w[i] = t.add(t.add(t.add(w[i - 16], s0), w[i - 7]), s1);
     }
     uint64_t a = cv[0], b = cv[1], c = cv[2], d = cv[3], e = cv[4], f = cv[5], g = cv[6], h = cv[7];
     for (int i = 0; i < 80; i++) {
-        const uint64_t s1 = fc_rotr(e, 14) ^ fc_rotr(e, 18) ^ fc_rotr(e, 41);
+        const uint64_t s1 = sx::S1<0>(e);
         t.push(e); t.push(f ^ g);
-        const uint64_t ch = g ^ (e & (f ^ g));
-        const uint64_t t1 = t.add(t.add(t.add(t.add(h, s1), ch), SHA512_K[i]), w[i]);
-        const uint64_t s0 = fc_rotr(a, 28) ^ fc_rotr(a, 34) ^ fc_rotr(a, 39);
+        const uint64_t ch = sx::ch(e, f, g);
+        const uint64_t t1 = t.add(t.add(t.add(t.add(h, s1), ch), sx::K_DEV[i]), w[i]);
+        const uint64_t s0 = sx::S0<0>(a);
         t.push(a ^ c); t.push(b ^ c);
         const uint64_t mj = c ^ ((a ^ c) & (b ^ c));
         const uint64_t t2 = t.add(s0, mj);
@@ -791,7 +789,7 @@ static int fc_fold(const FlockCudaProveParams* P, const FlockCircuitParams* N, c
     return 0;
 }
 
-// ---- M1 (lane flock-zk): level 0's commitment with its hiding, and the zk section of the proof stream -------------------
+// ---- M1: level 0's commitment with its hiding, and the zk section of the proof stream ----------------------------------
 
 // One batch of level-0 lanes before the transform: lane `lane`'s message (src at pos·s_pos + lane·s_lane, zero past l) plus its
 // padding, c·μ at [0, t_pad) and μ at [l, l + t_pad) (verity's flock-zk patch, zk::lane_codeword; c = x).
