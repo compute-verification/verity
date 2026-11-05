@@ -261,8 +261,8 @@ def roundPlace (R : Sessions) (L0 : Level0.Slots) (sid i r : Nat) (dom content :
     let j := p'.st.m.inner.getD 0
     let fin := R.innerOf l0.root r
     if Frame.INNER_ROUNDS ≤ j then throw s!"a round after the inner proof's {Frame.INNER_ROUNDS}"
-    if fin.size ≤ j then throw s!"table {i} rep {r}'s inner round {j}, which the loop's finish has not computed"
-    return (p', .sched (Frame.innerSched p'.cfg p'.st.m fin n j), first, none)
+    else if fin.size ≤ j then throw s!"table {i} rep {r}'s inner round {j}, which the loop's finish has not computed"
+    else return (p', .sched (Frame.innerSched p'.cfg p'.st.m fin n j), first, none)
   | _ => return (p', place, first, none)
 
 /-- A round's effect on the loop: what leaves (or why nothing does), the rep's frame after it, which the loop puts back,
