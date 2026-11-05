@@ -96,7 +96,7 @@ structure Input where
   coins : Json := Json.null
   interior : Option Interior := none
 
-private abbrev refused (step : String) (codes : Array String) : Json :=
+private def refused (step : String) (codes : Array String) : Json :=
   Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]
 
 private def hexDigit (c : Char) : Bool := ('0' ≤ c && c ≤ '9') || ('a' ≤ c && c ≤ 'f')
