@@ -145,12 +145,11 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   So are each session's: before any verdict, the check holds every session's record to the coin trees the signed
   release log shows the challenger sampled and opened (`SampledProofs/ChallengerTrees.lean`,
   `challenger.sessions_tree_reason`): its `coin_tree` a logged tree, its link points and round coins that tree's
-  openings after its link's roots and each round's message, one tree per session and every tree a session's. That log
-  must release the sample, then the link, then the other rounds (`challenger.sample_link_first`,
-  `one_stage.proofs.order_why`): no coin of the challenger family after the registration's digest released after a
-  round is opened, and the first round opened a tree's `session` stream. `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
-  to `verify`'s. Onsite and remote (`Core.Onsite`, `Core.Remote`) read v1 as `VStar.Recursive.Sampled`'s one-stage
-  form, never alone; switching it to v2 is what is left.
+  openings after its link's roots and each round's message, one tree per session and every tree a session's, the
+  sample released before any round, the link first (`order_why`). `one_stage.proofs.check_v2` calls both, and
+  `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds to `verify`'s. Onsite and remote
+  (`Core.Onsite`, `Core.Remote`) read v1 as `VStar.Recursive.Sampled`'s one-stage form, never alone; switching it to
+  v2 is what is left.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the prover's
   machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
@@ -420,9 +419,7 @@ Code and records call a sampling design a `law`; the name stays until a format v
   Lean verifier reads them.
 - `check_draw` also holds the draw's population to the registration's.
 
-Pinned by `tests/test_one_stage.py` (`test_draw_checks`, `test_derive_expands_the_rule_over_the_verifiers_program`,
-`test_derive_expands_the_work_rule_over_the_verifiers_table`, `test_stratified_draw_checks`,
-`test_work_draw_checks_and_closures`).
+Pinned by `tests/test_one_stage.py`'s checks of each sampling design's text, objects and expansion.
 
 ### What a proof block's work may count
 
