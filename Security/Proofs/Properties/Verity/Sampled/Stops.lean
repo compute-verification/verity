@@ -596,6 +596,19 @@ theorem readingAt_served {R : ℕ} (tables : Array String) (L : Fin R → Slot) 
     obtain ⟨rfl, rfl, rfl⟩ := Frame.opening.inj hfr
     exact hS
 
+/-- **Each element of a list a `Forall₂` relates to another is beside one of the other's in their zip.** -/
+theorem forall₂_zip_right {α : Type _} {β : Type _} {Rel : α → β → Prop} {l₁ : List α} {l₂ : List β}
+    (h : List.Forall₂ Rel l₁ l₂) {b : β} (hb : b ∈ l₂) : ∃ a, (a, b) ∈ l₁.zip l₂ := by
+  induction h with
+  | nil => exact absurd hb List.not_mem_nil
+  | @cons a b' l₁ l₂ _ _ ih =>
+    rw [List.zip_cons_cons]
+    rcases List.mem_cons.1 hb with e | hb
+    · rw [e]
+      exact ⟨a, List.mem_cons_self ..⟩
+    · obtain ⟨a', ha'⟩ := ih hb
+      exact ⟨a', List.mem_cons_of_mem _ ha'⟩
+
 section Order
 
 variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R mPts : ℕ} {D : Decoders R Reg}
@@ -912,7 +925,7 @@ theorem covers_of_length {R : ℕ} {P : Fin R → List Release → Frame → Pro
 
 /-- **The rounds a list of submissions appends to a stream**: the stream's rounds before, then the rounds of the
 submissions on it, in order. -/
-theorem foldl_addRoundJ {J : ℕ} {γ : Type} (tab : γ → Fin J) (rep : γ → Fin 2) (rd : γ → Flock.Round) :
+theorem foldl_addRoundJ {J : ℕ} {γ : Type _} (tab : γ → Fin J) (rep : γ → Fin 2) (rd : γ → Flock.Round) :
     ∀ (as : List γ) (rs₀ : Fin J → Fin 2 → List Flock.Round) (t : Fin J) (r : Fin 2),
       as.foldl (fun rs a => addRoundJ rs (tab a) (rep a) (rd a)) rs₀ t r =
         rs₀ t r ++ (as.filter fun a => tab a = t ∧ rep a = r).map rd
@@ -974,9 +987,9 @@ theorem mem_prefixesWhere {α : Type} {q : α → Bool} :
         exact ⟨r, L₂, by rw [he, List.cons_append], hr⟩
     · rintro ⟨r, L₂, he, hr⟩
       rw [List.cons_append] at he
-      obtain ⟨rfl, he⟩ := List.cons.inj he
+      obtain ⟨rfl, he'⟩ := List.cons.inj he
       rw [prefixesWhere]
-      exact List.mem_append_right _ (List.mem_map.2 ⟨p, mem_prefixesWhere.2 ⟨r, L₂, he, hr⟩, rfl⟩)
+      exact List.mem_append_right _ (List.mem_map.2 ⟨p, mem_prefixesWhere.2 ⟨r, L₂, he', hr⟩, rfl⟩)
 
 theorem pairwise_prefixesWhere {α : Type} (q : α → Bool) :
     ∀ l : List α, (prefixesWhere q l).Pairwise (fun a b => a.length < b.length)
@@ -1017,6 +1030,13 @@ theorem countP_prefixesWhere {α : Type} (q : α → Bool) :
         rw [List.countP_cons, countP_prefixesWhere q xs k p hp]
         simp [hx]
 
+/-- **The logs before each element `q` holds of have none, one, and so on of them.** -/
+theorem map_countP_prefixesWhere {α : Type} (q : α → Bool) (l : List α) :
+    (prefixesWhere q l).map (·.countP q) = List.range (l.countP q) := by
+  refine List.ext_getElem (by rw [List.length_map, List.length_range, length_prefixesWhere]) fun k h₁ h₂ => ?_
+  rw [List.getElem_map, List.getElem_range]
+  exact countP_prefixesWhere q l k _ (List.getElem?_eq_getElem _)
+
 /-- **Two lists of logs, each strictly longer than the one before, with the same members are one.** -/
 theorem eq_of_mem_iff_of_sorted {α : Type} : ∀ {l₁ l₂ : List (List α)},
     l₁.Pairwise (fun a b => a.length < b.length) → l₂.Pairwise (fun a b => a.length < b.length) →
@@ -1046,7 +1066,7 @@ theorem eq_of_mem_iff_of_sorted {α : Type} : ∀ {l₁ l₂ : List (List α)},
 them**: where the logs of `xs` are each longer than the one before, and one of them whose element `p` holds of is a log
 exactly where `Lg` opens tree `i`'s stream `s` after it, those logs are the ones before each of `Lg`'s openings of that
 stream, in order. -/
-theorem filter_logs {γ : Type} {Lg : List Release} {i s : ℕ} {xs : List (γ × List Release)}
+theorem filter_logs {γ : Type _} {Lg : List Release} {i s : ℕ} {xs : List (γ × List Release)}
     (hpw : (xs.map Prod.snd).Pairwise (fun m m' => m.length < m'.length)) (p : γ → Bool)
     (hp : ∀ m, (∃ x ∈ xs, p x.1 = true ∧ x.2 = m) ↔ ∃ r L₂, Lg = m ++ r :: L₂ ∧ r.frame.opensAt i s = true) :
     (xs.filter fun x => p x.1).map Prod.snd = prefixesWhere (fun r => r.frame.opensAt i s) Lg := by
@@ -1348,7 +1368,7 @@ theorem firstStop_order (A : Live) {tables : Array String} {L : Fin A.rounds →
       fun j' L₁ hp hl => ?_, fun j' L₁ hd hp => ?_⟩
     · obtain ⟨r, L₂, he, hp'⟩ := id hp
       obtain ⟨c', d, hc, hLd⟩ := mid_of_append (pre := []) (L := L₀) (L₃ := ⟨.opening i s n, b, bitsL pts⟩ :: L')
-        (by rw [List.nil_append]; exact he.symm.trans hL') (Nat.zero_le _)
+        (L₁ := L₁) (r := r) (L₂ := L₂) (by rw [List.nil_append]; exact he.symm.trans hL') (Nat.zero_le _)
         (by simp only [List.length_nil, Nat.zero_add]; exact hl)
       rw [hc] at hp'
       exact absurd hp' (hNP j' trivial c' r d hLd)
@@ -1366,8 +1386,8 @@ theorem firstStop_order (A : Live) {tables : Array String} {L : Fin A.rounds →
   · exact fun j' L₁ hp => (hc j' L₁ hp).imp_left List.mem_singleton.1
   · refine covers_of_length hU (j₀ := j) ⟨_, L', hL', hj⟩ (fun m hm => ?_) hgt
       (hpw.imp fun h e => by subst e; exact lt_irrefl _ h) (by rw [← hF.length_eq, hN]; exact hRN)
-    obtain ⟨a, -, -, j', i', s', n', b', L'', -, -, hj', he'⟩ :=
-      Properties.Challenger.CanonRead.forall₂_mem_right hF m hm
+    obtain ⟨a, ha⟩ := forall₂_zip_right hF hm
+    obtain ⟨-, j', i', s', n', b', L'', -, -, hj', he'⟩ := List.forall₂_zip hF ha
     exact ⟨j', _, L'', he', hj'⟩
   · exfalso
     obtain ⟨r, L₂, he, hp₁⟩ := hall₁ j₁ hj₁
@@ -1404,19 +1424,6 @@ theorem firstStop_order (A : Live) {tables : Array String} {L : Fin A.rounds →
 end First
 
 /-! ## The answered stops of one stream -/
-
-/-- **Each element of a list a `Forall₂` relates to another is beside one of the other's in their zip.** -/
-theorem forall₂_zip_right {α β : Type} {Rel : α → β → Prop} {l₁ : List α} {l₂ : List β}
-    (h : List.Forall₂ Rel l₁ l₂) {b : β} (hb : b ∈ l₂) : ∃ a, (a, b) ∈ l₁.zip l₂ := by
-  induction h with
-  | nil => exact absurd hb List.not_mem_nil
-  | @cons a b' l₁ l₂ _ _ ih =>
-    rw [List.zip_cons_cons]
-    rcases List.mem_cons.1 hb with e | hb
-    · rw [e]
-      exact ⟨a, List.mem_cons_self ..⟩
-    · obtain ⟨a', ha'⟩ := ih hb
-      exact ⟨a', List.mem_cons_of_mem _ ha'⟩
 
 /-- **A frame that opens tree `i`'s stream `s` is an opening of it.** -/
 theorem opening_of_opensAt {fr : Frame} {i s : ℕ} (h : fr.opensAt i s = true) : ∃ n, fr = .opening i s n := by
@@ -1633,5 +1640,38 @@ theorem stream_logs (reg : Option Claims.Msg → Reg) {tables : Array String} {L
     exact ⟨Fin.ext ht't.symm, hr'r.symm⟩
 
 end Stream
+
+/-! ## The rounds of one stream -/
+
+/-- **The elements of a zip whose first `p` holds of, first parts only, are the first list's that `p` holds of**,
+where the lists are of one length. -/
+theorem map_fst_filter_zip {α : Type _} {β : Type _} (p : α → Bool) :
+    ∀ (xs : List α) (ys : List β), xs.length = ys.length →
+      ((xs.zip ys).filter fun x => p x.1).map Prod.fst = xs.filter p
+  | [], _, _ => by simp
+  | _ :: _, [], h => by simp at h
+  | x :: xs, y :: ys, h => by
+    have ih := map_fst_filter_zip p xs ys (by simp only [List.length_cons] at h; omega)
+    rw [List.zip_cons_cons, List.filter_cons, List.filter_cons]
+    by_cases hx : p x = true
+    · rw [if_pos (show p (x, y).1 = true from hx), if_pos hx, List.map_cons]
+      exact congrArg (x :: ·) ih
+    · rw [if_neg (show ¬ p (x, y).1 = true from hx), if_neg hx]
+      exact ih
+
+/-- **The rounds of the elements `p` holds of are one per log `q` holds after, in order**: where the logs `ms` beside
+the elements `xs` whose first `p` holds of are the logs of `Lg` before each release `q` holds of (`stream_logs`), and
+each such element's round is `f` at the count of those releases its log has, the rounds of `xs`'s elements `p` holds
+of are `f` at none, one, and so on up to the count of them in `Lg`. -/
+theorem rounds_of_logs {γ : Type _} {δ : Type _} {xs : List γ} {ms : List (List Release)} (hlen : xs.length = ms.length)
+    (p : γ → Bool) (rd : γ → δ) (f : ℕ → δ) {q : Release → Bool} {Lg : List Release}
+    (h : ((xs.zip ms).filter fun x => p x.1).map Prod.snd = prefixesWhere q Lg)
+    (hf : ∀ a m, (a, m) ∈ xs.zip ms → p a = true → rd a = f (m.countP q)) :
+    (xs.filter p).map rd = (List.range (Lg.countP q)).map f := by
+  rw [← map_fst_filter_zip p xs ms hlen, List.map_map, ← map_countP_prefixesWhere q Lg, ← h, List.map_map,
+    List.map_map]
+  refine List.map_congr_left fun x hx => ?_
+  obtain ⟨hx, hpx⟩ := List.mem_filter.1 hx
+  exact hf x.1 x.2 hx hpx
 
 end Verity.Sampled
