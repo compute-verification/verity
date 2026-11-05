@@ -237,7 +237,8 @@ def sampPart : Claims.Sampling.Partition := ⟨[[[[0, 1, 2]]]]⟩
 def sampDesign : Claims.Sampling.Design := ⟨[.bernoulli 1 2]⟩
 
 theorem sampLay_fits : notLay.Fits sampProg 1 := by
-  refine ⟨fun t _ ℓ σ g hg => ?_, fun t _ g hg => ?_, fun t _ t' _ htt' => absurd htt' (by omega)⟩
+  refine ⟨fun t _ ℓ σ g hg => ?_, fun t _ g hg => ?_, fun t _ t' _ htt' => absurd htt' (by omega),
+    wiresFit_none rfl _ _⟩
   · simp [notLay, slotGates] at hg
     subst hg
     decide
@@ -322,9 +323,10 @@ theorem obs1_sampAcc :
       (notLay.egress 0 ℓ) σ = if valOver sampProg (notLay.inputOf 1 [[false]] (fun _ => false)) (fun _ => none) 1 then
         some (([] : List ℕ).map (valOver sampProg (notLay.inputOf 1 [[false]] (fun _ => false)) (fun _ => none)))
       else none := rfl
-  show some [] = rowOf (valOver sampProg (notLay.inputOf 1 [[false]] (fun _ => false)) (fun _ => none))
+  show some [] = rowOf (valOver sampProg (resolveWires sampProg notLay.wires
+    (notLay.inputOf 1 [[false]] (fun _ => false)) (fun _ => none) sampProg.gates.length) (fun _ => none))
     (notLay.egress 0 ℓ) σ
-  rw [hrow, sampProg_val _ hin]
+  rw [resolveWires_nil (wires := notLay.wires) rfl, hrow, sampProg_val _ hin]
   rfl
 
 /-! ## The network certifier's openings at the negation -/
@@ -362,8 +364,10 @@ theorem obs0_notAcc (δ : ℝ) (As : Set (ℕ → Bool)) :
   obtain ⟨_, hrows, -⟩ := hacc 0 Nat.one_pos
   have hin : notLay.inputOf 1 [[false]] a 0 = false := rfl
   have h1 : (none : Option (List Bool)) =
-      rowOf (valOver notProg (notLay.inputOf 1 [[false]] a) (fun _ => none)) (notLay.egress 0 0) 0 :=
+      rowOf (valOver notProg (resolveWires notProg notLay.wires (notLay.inputOf 1 [[false]] a) (fun _ => none)
+        notProg.gates.length) (fun _ => none)) (notLay.egress 0 0) 0 :=
     congrFun (congrFun hrows 0) 0
+  rw [resolveWires_nil (wires := notLay.wires) rfl] at h1
   have hrow : rowOf (valOver notProg (notLay.inputOf 1 [[false]] a) (fun _ => none)) (notLay.egress 0 0) 0 =
       if valOver notProg (notLay.inputOf 1 [[false]] a) (fun _ => none) 1 then
         some (([] : List ℕ).map (valOver notProg (notLay.inputOf 1 [[false]] a) (fun _ => none)))
