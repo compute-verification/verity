@@ -38,6 +38,9 @@ import tables as T  # noqa: E402
 
 QK = ("q_proj", "k_proj")
 WITHIN = 0.10
+# What the rank grid resolves of the svd curve: 70B L53 q, priced 8 ranks apart around its knee, moves by up to 1.6e-4
+# with no trend, so the least over unpriced ranks can sit that far under the least priced, parabola or not
+GRID = 2e-4
 # trange.py's runs: out/<model>-<kind>/trange.jsonl
 TRANGE = ("r20261105-195722-5423", "r20261105-200552-43b9")
 
@@ -185,9 +188,11 @@ def analyse(book, gen, choose):
     return rows
 
 
-def revised(rows, base):
-    """base with each credited q and k at min(its credit, its generous least / 1.05)."""
-    new = {(r["model"], r["t"]): r["new_credit"] for r in rows}
+def revised(rows, base, margin=0.0):
+    """base with each credited q and k at min(its credit, its generous least / 1.05); with a margin, at
+    min(its credit, (min(its generous least, its knee's parabola) − margin) / 1.05)."""
+    new = {(r["model"], r["t"]): min(1.0, (min(r["least"], r["fit"] or math.inf) - margin) / T.LINE) if margin
+           else r["new_credit"] for r in rows}
 
     def choose(book, model, t):
         var, credit = base(book, model, t)
@@ -239,31 +244,38 @@ def main():
                   f"{min(free)[0]:.4f} ({min(free)[1]}); isvd@lr1 below the generous least on "
                   f"{sum((r['isvd_lr1'] or math.inf) < r['least'] for r in R)}")
     print()
+    margined = revised(rows, rec, GRID)
     print("Least generous over credit among credited q and k, per chip@price, at the recommended credits and at the "
-          "revised ones (each at min(its credit, its generous least / 1.05)):")
+          "revised ones (each at min(its credit, its generous least / 1.05); with the rank grid's margin, at "
+          f"min(its credit, (min(its least, its knee's parabola) − {GRID:g}) / 1.05)):")
     print()
     print("| model | credits | sm_120 0.84 / 1.48 / 1.78 | H200 0.84 / 1.48 / 1.78 | under 1.05 | MACs credited |")
     print("|---|---|---|---|---|---|")
     for model in T.MODELS:
         R = [r for r in rows if r["model"] == model]
-        for name, cred in (("recommended", "credit"), ("revised", "new_credit")):
-            cells = [" / ".join(f"{min(r['per_key'][f'{c}@{p}'] / r[cred] for r in R):.3f}" for p in T.PRICES)
+        for name, ch in (("recommended", rec), ("revised", choose), ("revised, with the grid's margin", margined)):
+            cr = {r["t"]: ch(book, model, r["t"])[1] for r in R}
+            cells = [" / ".join(f"{min(r['per_key'][f'{c}@{p}'] / cr[r['t']] for r in R):.3f}" for p in T.PRICES)
                      for c in ("sm120", "h200")]
-            n_under = sum(r["least"] / r[cred] < T.LINE - 1e-12 for r in R)
-            ch = rec if cred == "credit" else choose
+            n_under = sum(r["least"] / cr[r["t"]] < T.LINE - 1e-12 for r in R)
             _w, share, _u, _n, _s = T.evaluate(book, model, ch)
             print(f"| {model} | {name} | {cells[0]} | {cells[1]} | {n_under} | {100 * share:.3f}% |")
     print()
     print("The revised point against the exact routes, every matrix (tables.evaluate):")
     print()
-    print("| model | sm_120 0.84 / 1.48 / 1.78 | H200 0.84 / 1.48 / 1.78 | least set by | MACs credited |")
-    print("|---|---|---|---|---|")
+    print("| model | credits | sm_120 0.84 / 1.48 / 1.78 | H200 0.84 / 1.48 / 1.78 | least set by | MACs credited |")
+    print("|---|---|---|---|---|---|")
     for model in T.MODELS:
-        worst, share, _u, _n, _s = T.evaluate(book, model, choose)
-        cells = [" / ".join(f"{worst[f'{c}@{p}'][0]:.3f}" for p in T.PRICES) for c in ("sm120", "h200")]
-        k0 = min(T.KEYS, key=lambda k: worst[k][0])
-        print(f"| {model} | {cells[0]} | {cells[1]} | {T.short(worst[k0][1])} ({worst[k0][2]}, {k0}) | "
-              f"{100 * share:.3f}% |")
+        for name, ch in (("revised", choose), ("revised, with the grid's margin", margined)):
+            worst, share, _u, _n, _s = T.evaluate(book, model, ch)
+            cells = [" / ".join(f"{worst[f'{c}@{p}'][0]:.3f}" for p in T.PRICES) for c in ("sm120", "h200")]
+            k0 = min(T.KEYS, key=lambda k: worst[k][0])
+            print(f"| {model} | {name} | {cells[0]} | {cells[1]} | {T.short(worst[k0][1])} ({worst[k0][2]}, {k0}) | "
+                  f"{100 * share:.3f}% |")
+    near = [f"{r['model']} {T.short(r['t'])} {r['least'] / r['credit']:.5f}" for r in rows
+            if T.LINE <= r["least"] / r["credit"] < T.LINE + GRID]
+    print()
+    print(f"Credited q and k within the grid's {GRID:g} above the line: {', '.join(near) or 'none'}")
     gains = [(r["gain"], r["model"], T.short(r["t"])) for r in rows if r["gain"] is not None]
     fits = [(r["least"] - r["fit"], r["model"], T.short(r["t"])) for r in rows if r["fit"] is not None]
     print()
@@ -320,6 +332,7 @@ def live_report(book, gen, rec, rows, matrices):
     live = gen.live_book(book)
     lrows = analyse(live, gen, rec)
     lchoose = revised(lrows, rec)
+    lmargined = revised(lrows, rec, GRID)
     print()
     print("From the exact split to the generous bound, each credited q and k's least over the leaf: the exact least as "
           "priced (E), at live digits (L), the exact split's residual with its factors at lr1 (I) and the generous "
@@ -361,7 +374,8 @@ def live_report(book, gen, rec, rows, matrices):
     for model in T.MODELS:
         for name, ch in (("recommended, as priced", held), ("each q, k at its generous least / 1.05, as priced", held_g),
                          ("the recommended rule at live digits", rec),
-                         ("and each q, k at its generous least / 1.05", lchoose)):
+                         ("and each q, k at its generous least / 1.05", lchoose),
+                         ("and with the grid's margin", lmargined)):
             worst, share, _u, _n, _s = T.evaluate(live, model, ch)
             cells = [" / ".join(f"{worst[f'{c}@{p}'][0]:.3f}" for p in T.PRICES) for c in ("sm120", "h200")]
             k0 = min(T.KEYS, key=lambda k: worst[k][0])
@@ -376,11 +390,13 @@ def live_report(book, gen, rec, rows, matrices):
     print("|---|---|---|---|---|")
     for model in T.MODELS:
         R = [r for r in lrows if r["model"] == model]
-        for name, cred in (("the recommended rule at live digits", "credit"), ("revised", "new_credit")):
-            cells = [" / ".join(f"{min(r['per_key'][f'{c}@{p}'] / r[cred] for r in R):.3f}" for p in T.PRICES)
+        for name, ch in (("the recommended rule at live digits", rec), ("revised", lchoose),
+                         ("revised, with the grid's margin", lmargined)):
+            cr = {r["t"]: ch(live, model, r["t"])[1] for r in R}
+            cells = [" / ".join(f"{min(r['per_key'][f'{c}@{p}'] / cr[r['t']] for r in R):.3f}" for p in T.PRICES)
                      for c in ("sm120", "h200")]
             print(f"| {model} | {name} | {cells[0]} | {cells[1]} | "
-                  f"{sum(r['least'] / r[cred] < T.LINE - 1e-12 for r in R)} |")
+                  f"{sum(r['least'] / cr[r['t']] < T.LINE - 1e-12 for r in R)} |")
     if matrices:
         print()
         print("| model | matrix | credit as priced | exact least | at live digits | its route | over the credit | "
