@@ -493,11 +493,10 @@ theorem checkForm_ok {name inner : String} {links : Option (String × Nat)} {s :
     obtain ⟨h6, h⟩ := ite_error_ok h
     obtain ⟨h7, h⟩ := ite_error_ok h
     obtain ⟨h8, h⟩ := ite_error_ok h
-    obtain ⟨h9, h⟩ := ite_error_ok h
-    obtain ⟨h10, -⟩ := ite_error_ok h
+    obtain ⟨h9, -⟩ := ite_error_ok h
     unfold Shared.Complete
     refine ⟨by rw [hr, Decidable.byContradiction hi], some_of h1, some_of h2, some_of h3, ?_, some_of h5, some_of h6,
-      some_of h7, some_of h8, some_of h9, Decidable.byContradiction h10⟩
+      some_of h7, some_of h8, Decidable.byContradiction h9⟩
     cases e : s.innerCoins with
     | none => rfl
     | some _ => rw [e] at h4; exact absurd rfl h4
