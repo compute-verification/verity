@@ -293,6 +293,14 @@ negatives.
   input against the listing by its path alone: each file it names, and at least one file under each directory it names.
   Under `H1_TIE` (`--h1-tie`, which `served_verdicts.sh` passes) the circuit it names is the record reading H1's tables,
   `window-circuit-w<K>-<class>-tie.json`.
+- `site_registration.py CERTIFIER_KEY OUT --node NODE --certifier ID --beta BITS --latency TICKS [--site SITE]`: the
+  auditor's registration of its network certifier's deployment, `SITE_REGISTRATION` (`onsite_record.py`'s
+  `--site-registration`), written on the auditor's side from its own `certifier-key/v1` record, `CERTIFIER_KEY`, and the
+  ids and uplink figures it is given, never from the prover's node or its deployment.json: remote-network's params,
+  their auditor holding the record's public key under ID, and a log of one site entry placing ID, the auditor's network
+  certifier with that key, on NODE's uplink, a link from NODE to ID and one from ID to the outside, each of capacity
+  BITS a tick each way and latency TICKS ticks. It writes OUT only where `registration.params_of` reads the params back
+  and `registration.check_log` accepts the log under them, and refuses a record of a run in front of another node.
 - `advice_charge.py ADVICE --run RUN --to FILE`: honest serving's advice charge from `verity-vllm advice`'s output
   over a test run with public inputs: each Commit period's advice bits, unpadded, beside its requests' prompt and
   output lengths and finishes, labelled as that run's. `served_verdicts.sh advice-charge` serves such a run
