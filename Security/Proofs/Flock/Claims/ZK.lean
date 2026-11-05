@@ -115,7 +115,7 @@ public import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 public import Proofs.Flock.Claims.ZK.Compose
 public import Proofs.Flock.Claims.ZK.Layout
 public import Proofs.Flock.Claims.ZK.Cut
-public import Definitions.Claims.ZKOut
+public import Proofs.Flock.Claims.ZK.DeferredOut
 public import Proofs.Flock.Claims.ZK.Stop
 public import Proofs.Flock.Claims.ZK.LinkFft
 public import Proofs.Flock.Claims.ZK.LinkRecheck

@@ -1,8 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.ZK.SessionLean
-public import Proofs.Flock.Claims.ZK.Server
-public import Definitions.Claims.ZKOut
+public import Proofs.Flock.Claims.ZK.DeferredOut
 
 /-!
 # Flock's ZK server per outcome
