@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Properties.RemoteAudit.Sort
+public import Proofs.Properties.Accounting.Remote.Sort
 public import Proofs.Properties.Nci.Desc
 
 /-!

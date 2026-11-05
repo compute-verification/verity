@@ -3,7 +3,7 @@ module
 public import CoreRemote
 public import Definitions.Core
 public import Properties.Composition
-public import Properties.NciDesc
+public import Properties.Nci.Desc
 public import Properties.Nci.Baseline
 public import Properties.SampledProofs
 

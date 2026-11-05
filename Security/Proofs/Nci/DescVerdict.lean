@@ -6,7 +6,7 @@ public import Proofs.Properties.Nci.DescVerdict
 /-!
 # A verdict of compliance of the description-sized check carries the thread bound
 
-Each thread bound of `Properties.NciDesc.Verdict`, from `DescAgrees` (`SecurityProofs.DescAgrees`,
+Each thread bound of `Properties.Nci.Desc.Verdict`, from `DescAgrees` (`SecurityProofs.DescAgrees`,
 `Proofs.Properties.Nci.Agrees`) and the bound of a verdict of `NciCheck.evaluate` (`Throttles` and its forms,
 `Proofs.Nci.Verdict`), through `Proofs.Properties.Nci.DescVerdict`.
 -/

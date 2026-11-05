@@ -6,7 +6,7 @@ public import Proofs.Properties.Pous.WipeSigned.Header
 public import Proofs.Properties.Pous.WipeSigned.Inputs
 public import Proofs.Properties.Pous.WipeSigned.Run
 public import Proofs.Properties.Pous.MemoryChallenger
-public import Proofs.Properties.CertifierDevice.Lms
+public import Proofs.Properties.NetworkCertifier.Device.Lms
 public import Mathlib.Tactic.SplitIfs
 import all Init.Data.String.Defs
 

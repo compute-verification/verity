@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Nci
-public import Properties.NciDesc
+public import Properties.Nci.Desc
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 

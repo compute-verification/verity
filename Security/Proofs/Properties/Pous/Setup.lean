@@ -1,7 +1,7 @@
 module
 
 public import Properties.Pous
-public import Proofs.Properties.Identity
+public import Proofs.Properties.Hash.Identity
 
 /-!
 # Proofs of the setup check's two properties (`Properties.Pous`): `acceptsDecodes` and `publishesRoot`

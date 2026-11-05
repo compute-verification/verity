@@ -4,7 +4,7 @@ public import PousCheck.Run
 public import Properties.Pous
 public import Properties.Pous.TimedAudit
 public import Properties.Pous.MemoryChallenger
-public import Properties.Identity
+public import Properties.Hash.Identity
 public import Definitions.Pous.Assumptions.P2
 public import Definitions.Pous.P2.Cost
 
