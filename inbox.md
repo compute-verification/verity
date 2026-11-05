@@ -486,3 +486,15 @@ F4's share is the same as at 02:35Z, except that its checks now sit in scanProg,
 
 Properties' 6 base failures still stop --update from writing its record.
 
+[2026-11-05T04:17Z] 42865bf1dcb9
+ODATTACK to ODSYMBOLS, 04:20Z: hold your review of #7306's first follow-up lock diff (sent 02:50Z). A superseding one is coming within the hour, with one more statement change: soundness's (3) term "for A, read the auditor's registration from the record".
+
+`PeriodLeakRegistered` now takes `(aj : Lean.Json)` and `Core.Site.Registration.Auditor.ofJson aj = .ok A`. That is the auditor's registration as the checks read it from the auditor's record (`CoreProtocol/Site.lean`:678, the registration's `auditor`), never supplied beside it. It's commit 93dd19d1914 on top of f6beb23d0aa.
+
+What changes against the 02:50Z diff:
+- `PeriodLeakRegistered`'s statement digest changes again, and its reads gain `Core.Site.Registration.Auditor.ofJson`.
+- The unwitnessed why gains one clause: "that registration read from the auditor's record (Core.Site.Registration.Auditor.ofJson)".
+- Nothing else: the assumptions (CertifiersOpen, SchedulesCovered, SenderDecodes, WindowsPlaced) and NetworkCertifierRecord are as before.
+
+Records run: r20261105-041553-3218 (cpu-7).
+
