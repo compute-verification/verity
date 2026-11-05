@@ -2924,8 +2924,9 @@ def test_the_follow_on_removes_the_windows_circuit_files_after_its_period_check_
     reproof = f'echo reproof >> "$ORDER"; {LEFT.format(at=vw, step="reproof")}; echo "REPROOF COPY: PASS"'
     rc, lines, order, _limits = _follow(tmp_path, composite, records_audit=COMPOSED_AUDIT,
                                         V2_CASE="1" if keeps == "v2" else None, REPROOF_CMD=reproof)
-    steps, onsite = (["chain", "period-check"], ["onsite"]) if split else ([], [])
-    assert rc == 0 and order == ["audit", "period", *steps, "reproof", "record", "composite", *onsite], (lines, order)
+    steps, piece, onsite = (["chain", "period-check"], ["pieces"], ["onsite"]) if split else ([], [], [])
+    assert rc == 0 and order == ["audit", "period", *steps, "reproof", *piece, "record", "composite", *onsite], (
+        lines, order)
     said = "V3C-CIRCUITS removed, the window's circuit files, recomposable and named by their pins: "
     heads = [x.split(" ")[0] for x in lines[5:]]
     assert heads == ["V3C-AUDIT", "V3C-PERIOD", *(["CERTIFIER-CHAIN", "CERTIFIER-PERIOD"] if split else []),
