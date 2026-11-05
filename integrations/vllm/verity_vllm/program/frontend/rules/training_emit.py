@@ -2,7 +2,9 @@
 
     _const(ctx, node, bits, w)          one constant gate per distinct word in the derivation
     _operand(ctx, node, a, S)           an element-wise operand broadcast to the output shape, as f32 words
-    _ew(ctx, node, fn, ops, S)          `fn` element by element over the output shape
+    _word_operand(ctx, node, a, S, dt)  an element-wise operand broadcast to the output shape, as words of its own dtype
+    _ew(ctx, node, fn, ops, S, w)       `fn` element by element over the output shape
+    _tree(ctx, node, fn, v, n, rows, w) `fn` folded pairwise over n terms of `rows` words
     _TrainRule                          a rule of reference mode
 """
 
@@ -19,17 +21,19 @@ from verity.ml.circuits.refs import Affine, Coll, Strided, broadcast, concat
 from verity.ml.circuits.types import Array, Value
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import ref_prims as R
-from verity_vllm.program.frontend.derive import refuse
+from verity.ml.definitions.registry import torch_words as W
+from verity_vllm.program.frontend.derive import StaticIndex, refuse
 from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.rules.base import OpRule
 from verity_vllm.program.frontend.rules.training_views import _PARTS, StaticFloat, _view_expand
 from verity_vllm.program.frontend.strided_views import _tensor_type
-from verity_vllm.program.frontend.value_types import shape_of
+from verity_vllm.program.frontend.value_types import WIDTH_OF_DTYPE, shape_of
 
 aten = torch.ops.aten
-F32, BF16, BIT = Value(32), Value(16), Value(1)
+F32, BF16, BIT, I64 = Value(32), Value(16), Value(1), Value(64)
 _DT = {torch.float32: "f32", torch.bfloat16: "bf16"}
 _NAMES = {**_DT, torch.bool: "bool", torch.int64: "int64"}
+_INT_VIEW = {8: torch.uint8, 16: torch.int16, 32: torch.int32, 64: torch.int64}
 
 
 def _bits(x: float) -> int:
@@ -60,7 +64,8 @@ def _call(ctx, node, fn, *args) -> Coll:
 def _const(ctx, node, bits: int, w: int = 32) -> Coll:
     """One constant gate per distinct word in the derivation (a node a refused rule removed is made again)."""
     cache = ctx.state.setdefault("train_consts", {})
-    fn = const(w, bits & ((1 << w) - 1))
+    bits &= (1 << w) - 1
+    fn = const(w, bits)
     k = cache.get((w, bits))
     if k is None or k >= len(ctx.B.nodes) or ctx.B.nodes[k].fn is not fn:
         _call(ctx, node, fn)
@@ -68,9 +73,16 @@ def _const(ctx, node, bits: int, w: int = 32) -> Coll:
     return Coll(Value(w), Affine("n", k, 0, 1))
 
 
-def _static_coll(ctx, node, t: torch.Tensor) -> Coll:
-    """A static f32 tensor as references to one constant gate per distinct word, run by run."""
-    bits = t.contiguous().view(torch.int32).reshape(-1).numpy().astype(np.uint32)
+def _words(t: torch.Tensor, w: int) -> np.ndarray:
+    """A static tensor's words, `w` bits wide, as unsigned integers (a bool tensor's 1 or 0)."""
+    t = t.detach().contiguous().reshape(-1)
+    t = t.to(torch.uint8) if w == 1 else t.view(_INT_VIEW[w])
+    return t.numpy().astype(np.uint64) & np.uint64((1 << w) - 1)
+
+
+def _static_words(ctx, node, bits: np.ndarray, w: int = 32) -> Coll:
+    """Static words of `w` bits (unsigned) as references to one constant gate per distinct word, run by run."""
+    bits = np.asarray(bits).reshape(-1)
     n = bits.size
     starts = np.concatenate([[0], np.flatnonzero(np.diff(bits)) + 1])
     if starts.size > _PARTS:
@@ -78,9 +90,14 @@ def _static_coll(ctx, node, t: torch.Tensor) -> Coll:
     ends = np.concatenate([starts[1:], [n]])
     parts = []
     for a, b in zip(starts.tolist(), ends.tolist()):
-        c = _const(ctx, node, int(bits[a]))
+        c = _const(ctx, node, int(bits[a]), w)
         parts.append(broadcast(c.refs.space, c.refs.idx, c.refs.base, b - a))
-    return Coll(Array(n, F32), concat(parts))
+    return Coll(Array(n, Value(w)), concat(parts))
+
+
+def _static_coll(ctx, node, t: torch.Tensor) -> Coll:
+    """A static f32 tensor as references to one constant gate per distinct word, run by run."""
+    return _static_words(ctx, node, _words(t.to(torch.float32), 32))
 
 
 def _shape(ctx, a) -> tuple[int, ...]:
@@ -116,12 +133,30 @@ def _operand_ok(ctx, a, dtypes=(torch.float32,)) -> str | None:
     return None
 
 
+def _word_ok(ctx, a, dtype) -> str | None:
+    """None if `a` is read as `dtype`'s words with no conversion: a value or a static tensor of `dtype`, or a Python bool (for
+    bool) or int (for an integer dtype); else why not."""
+    if not isinstance(a, torch.fx.Node):
+        ok = isinstance(a, bool) if dtype == torch.bool else type(a) is int and not dtype.is_floating_point
+        return None if ok else f"operand {a!r} of a {dtype} result"
+    if not isinstance(ctx.val(a), (Coll, StaticIndex, StaticFloat)):
+        return f"{a.name} is not a value ({type(ctx.val(a)).__name__})"
+    if ctx.dtype_of(a) != dtype:
+        return f"numerics_unregistered: {a.name} has dtype {ctx.dtype_of(a)}, not {dtype} (a conversion in between)"
+    return None
+
+
+def _converted(ctx, node, x: Coll, fn, w: int) -> Coll:
+    """`fn` on each word of the value x, in its shape: words `w` bits wide."""
+    S, w_in = shape_of(x.type)
+    if x.type.leaves == 1:
+        return Coll(_tensor_type(S, w), _call(ctx, node, fn, Coll(Value(w_in), x.refs)).refs)
+    return _batch(ctx, node, fn, x.reshape(Array(math.prod(S), Value(w_in))), axes=(0,)).reshape(_tensor_type(S, w))
+
+
 def _widened(ctx, node, x: Coll) -> Coll:
     """A bf16 value's words widened to f32 (`Bf16ToF32_v1`, exact), in its shape."""
-    S = shape_of(x.type)[0]
-    if x.type.leaves == 1:
-        return Coll(_tensor_type(S, 32), _call(ctx, node, P.Bf16ToF32, Coll(BF16, x.refs)).refs)
-    return _batch(ctx, node, P.Bf16ToF32, x.reshape(Array(math.prod(S), BF16)), axes=(0,)).reshape(_tensor_type(S, 32))
+    return _converted(ctx, node, x, P.Bf16ToF32, 32)
 
 
 def _rounded(ctx, node, y: Coll, S: tuple[int, ...], fn=P.F32ToBf16Rn) -> Coll:
@@ -134,20 +169,34 @@ def _rounded(ctx, node, y: Coll, S: tuple[int, ...], fn=P.F32ToBf16Rn) -> Coll:
     return _batch(ctx, node, fn, y.reshape(Array(math.prod(S), F32)), axes=(0,)).reshape(_tensor_type(S, 16))
 
 
-def _from_bits(ctx, node, x: Coll) -> Coll:
-    """A bool value's words as f32, in its shape: 1.0 or +0 (`SelectF32_v1`), as torch converts a bool to a float."""
+def _from_bits(ctx, node, x: Coll, dtype=torch.float32) -> Coll:
+    """A bool value's words as f32 (1.0 or +0, `SelectF32_v1`) or int64 (1 or 0, `SelectI64_v1`), in its shape, as torch converts
+    a bool."""
     S = shape_of(x.type)[0]
-    one, zero = _const(ctx, node, _bits(1.0)), _const(ctx, node, 0)
+    f32 = dtype == torch.float32
+    fn, w = (SC.SelectF32, 32) if f32 else (W.SelectI64, 64)
+    one, zero = _const(ctx, node, _bits(1.0) if f32 else 1, w), _const(ctx, node, 0, w)
     if x.type.leaves == 1:
-        return Coll(_tensor_type(S, 32), _call(ctx, node, SC.SelectF32, Coll(BIT, x.refs), one, zero).refs)
+        return Coll(_tensor_type(S, w), _call(ctx, node, fn, Coll(BIT, x.refs), one, zero).refs)
     flat = x.reshape(Array(math.prod(S), BIT))
-    return _batch(ctx, node, SC.SelectF32, flat, one, zero, axes=(0, None, None)).reshape(_tensor_type(S, 32))
+    return _batch(ctx, node, fn, flat, one, zero, axes=(0, None, None)).reshape(_tensor_type(S, w))
+
+
+def _broadcast(x: Coll, S: tuple[int, ...], w: int, where: str) -> tuple[Coll, int | None]:
+    """(collection, batch axis) of the value x broadcast to the shape `S`, its words `w` bits wide: one shared word, or `S`'s
+    elements."""
+    if x.type.leaves == 1:
+        return Coll(Value(w), x.refs), None
+    sx = tuple(shape_of(x.type)[0])
+    if sx != tuple(S):
+        x = _view_expand(x.reshape(_tensor_type([1] * (len(S) - len(sx)) + list(sx), w)), list(S), where)
+    return x.reshape(Array(math.prod(S), Value(w))), 0
 
 
 def _operand(ctx, node, a, S: tuple[int, ...]) -> tuple[Coll, int | None]:
     """(collection, batch axis) of an element-wise operand broadcast to the output shape `S`: a shared word, or `S`'s elements;
-    f32 words, a bf16 value's widened and a bool value's 1.0 or +0. `a` is a Python number, a node or a `StaticFloat`."""
-    n = math.prod(S)
+    f32 words, a bf16 value's widened, a bool value's 1.0 or +0 and an int64 value's rounded to nearest (`I64ToF32Rn_v1`). `a` is
+    a Python number, a node or a `StaticFloat`."""
     if isinstance(a, (int, float)):
         return _const(ctx, node, _bits(a)), None
     v = a if isinstance(a, StaticFloat) else ctx.val(a)
@@ -156,30 +205,55 @@ def _operand(ctx, node, a, S: tuple[int, ...]) -> tuple[Coll, int | None]:
             return _const(ctx, node, _bits(v.tensor.reshape(()).item())), None
         return _static_coll(ctx, node, v.tensor.broadcast_to(S)), 0
     x = ctx.coll(a)
-    if ctx.dtype_of(a) == torch.bfloat16:
+    dt = ctx.dtype_of(a)
+    if dt == torch.bfloat16:
         x = _widened(ctx, node, x)
-    elif ctx.dtype_of(a) == torch.bool:
+    elif dt == torch.bool:
         x = _from_bits(ctx, node, x)
-    sx = tuple(shape_of(x.type)[0])
-    if x.type.leaves == 1:
-        return Coll(F32, x.refs), None
-    if sx != tuple(S):
-        x = _view_expand(x.reshape(_tensor_type([1] * (len(S) - len(sx)) + list(sx), 32)), list(S), node.name)
-    return x.reshape(Array(n, F32)), 0
+    elif dt == torch.int64:
+        x = _converted(ctx, node, x, W.I64ToF32Rn, 32)
+    return _broadcast(x, S, 32, node.name)
 
 
-def _ew(ctx, node, fn, ops: list[tuple[Coll, int | None]], S: tuple[int, ...]) -> Coll:
-    """`fn` element by element over the output shape `S`."""
+def _word_operand(ctx, node, a, S: tuple[int, ...], dtype) -> tuple[Coll, int | None]:
+    """(collection, batch axis) of an operand `_word_ok` accepts, broadcast to `S`, as `dtype`'s words."""
+    w = WIDTH_OF_DTYPE[dtype]
+    if not isinstance(a, torch.fx.Node):
+        return _const(ctx, node, int(a), w), None
+    v = ctx.val(a)
+    if isinstance(v, (StaticIndex, StaticFloat)):
+        t = v.tensor.to(dtype)
+        if t.numel() == 1:
+            return _const(ctx, node, int(_words(t, w)[0]), w), None
+        return _static_words(ctx, node, _words(t.broadcast_to(S), w), w), 0
+    return _broadcast(ctx.coll(a), S, w, node.name)
+
+
+def _ew(ctx, node, fn, ops: list[tuple[Coll, int | None]], S: tuple[int, ...], w: int = 32) -> Coll:
+    """`fn` element by element over the output shape `S`, its result words `w` bits wide."""
     n = math.prod(S)
     args, axes = [c for c, _ in ops], [ax for _, ax in ops]
     if n == 1 and all(ax is None for ax in axes):
         out = _call(ctx, node, fn, *args)
-        return out if not S else Coll(_tensor_type(S, 32), out.refs)
-    return _batch(ctx, node, fn, *args, axes=axes, n=n).reshape(_tensor_type(S, 32))
+        return out if not S else Coll(_tensor_type(S, w), out.refs)
+    return _batch(ctx, node, fn, *args, axes=axes, n=n).reshape(_tensor_type(S, w))
 
 
-def _flat(c: Coll, S) -> tuple[Coll, int]:
-    return c.reshape(Array(math.prod(S), F32)), 0
+def _flat(c: Coll, S, w: int = 32) -> tuple[Coll, int]:
+    return c.reshape(Array(math.prod(S), Value(w))), 0
+
+
+def _tree(ctx, node, fn, v: Coll, n: int, rows: int, w: int) -> Coll:
+    """`fn` folded over n terms of `rows` words each (term j's word r at j * rows + r of `v`): the first half of the terms with
+    the second, a level a batch, an odd term carried. The `rows` words; any fold of an associative and commutative `fn` (an
+    integer add) is this one."""
+    while n > 1:
+        h = n // 2
+        s = _batch(ctx, node, fn, v[:h * rows], v[h * rows:2 * h * rows], axes=(0, 0))
+        if n % 2:
+            s = Coll(Array((h + 1) * rows, Value(w)), concat([s.refs, v[2 * h * rows:].refs]))
+        v, n = s, h + n % 2
+    return v
 
 
 def _rows(x: Coll, S) -> tuple[Coll, int, int]:

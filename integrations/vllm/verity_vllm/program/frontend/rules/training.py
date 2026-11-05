@@ -11,14 +11,16 @@ sum in blocks). Matrix products and the element-wise ops of `Binary` and `Unary`
 (`Bf16ToF32_v1`, exact), performs the f32 operation and rounds a bf16 result once (`F32ToBf16Rn_v1`), as torch CPU's bf16 kernels
 do; where torch's bf16 kernel rounds otherwise, the rule refuses. At a compute capability `cc`, a bf16 `mm` is instead F.linear's
 GEMM as that GPU's cuBLAS computes it (`Matmul`): the route its capture fitted (`cublas_bf16.train_route`), each k16 step the tensor
-core's dot (`HopperBF16WgmmaDot16_v1`); `add`, `sub`, `mul` and `div` are the GPU's (`Binary`); and a vector norm or a sum of a
-whole tensor is its `reduce_kernel`'s (`rules.training_reduce.FullReduce`). A training op with no Definition to lower it to is
-refused with the Definition it needs (`_log_softmax`: a correctly-rounded f32 log, `F32LogRn`).
+core's dot (`HopperBF16WgmmaDot16_v1`); `add`, `sub`, `mul` and `div` are the GPU's (`Binary`); a vector norm or a sum of a
+whole tensor is its `reduce_kernel`'s (`rules.training_reduce.FullReduce`); and the conversions to bf16 and to and from f16 and a
+`kthvalue` are its own (`rules.training_masks`). A training op with no Definition to lower it to is refused with the Definition it
+needs (`_log_softmax`: a correctly-rounded f32 log, `F32LogRn`).
 
     training_rules(min_view_leaves, cc) -> RuleSet     the training rule set
 
-Views and static float tensors are `rules.training_views`'s, matrix products `rules.training_matmul`'s and the helpers the rules
-emit with `rules.training_emit`'s; a survey of what the rules refuse is `rules.training_survey`'s.
+Views and static float tensors are `rules.training_views`'s, matrix products `rules.training_matmul`'s, comparisons, masks,
+integer sums, conversions, table lookups and `kthvalue` `rules.training_masks`'s and the helpers the rules emit with
+`rules.training_emit`'s; a survey of what the rules refuse is `rules.training_survey`'s.
 """
 
 from __future__ import annotations
@@ -38,6 +40,7 @@ from verity_vllm.program.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.training_emit import (_DT, BIT, F32, _batch, _bits, _call, _const, _ew, _flat, _iota,
                                                               _operand, _operand_ok, _ones, _per_row, _ref, _rounded, _rows, _shape,
                                                               _tokens, _TrainRule, _widened, aten)
+from verity_vllm.program.frontend.rules.training_masks import Cast, Clamp, Compare, Index, IntSum, KthValue, Logic, Where
 from verity_vllm.program.frontend.rules.training_matmul import Matmul
 from verity_vllm.program.frontend.rules.training_reduce import FullReduce
 from verity_vllm.program.frontend.rules.training_views import BoxPermute, StaticFloat, StaticFloats, _info, _view_permute
@@ -62,18 +65,21 @@ def _alpha(node):
 
 
 class Binary(_TrainRule):
-    """`add` / `sub` / `mul` / `div` (`.Tensor`, `.Scalar`) of f32, bf16 or bool values, static float tensors and Python numbers,
-    broadcast, element by element as torch's CPU kernels compute them: `F32Add_v1`, `F32Sub_v1`, `F32Mul_v1`, `F32Div_v1` (true
-    division), and `add` (`sub`) with alpha != 1 one `F32Fma_v1(b, f32(alpha), a)` (`-alpha`). A bf16 operand is widened, a bool
-    one is 1.0 or +0 (`SelectF32_v1`) and a bf16 result rounded once (`F32ToBf16Rn_v1`). A number is its f32 word, but in a bf16
-    `add` or `sub` torch CPU first rounds it (and a 0-d static) to bf16. At a compute capability `cc` they are the GPU's: the same
-    operations with its NaN (`F32Add_v2`, `F32Sub_v2`, `F32Mul_v2`, `F32Div_v2`, `F32Fma_v2`), a bf16 result rounded by
-    `F2fpBf16_v1`, every number its f32 word, and a division by a number the product by its reciprocal, `RN(1 / f32(s))`, which
-    torch's CUDA kernel computes on the host. Refused: a bf16 add with alpha != 1, a rounding mode, and at `cc` a division by a 0-d
-    static tensor (the GPU multiplies by a CPU scalar's reciprocal and divides by a device tensor, and the graph doesn't say which)."""
-    info = _info("Binary", "aten add/sub/mul/div .Tensor/.Scalar with broadcasting, f32 or bf16", "operands are f32, bf16 or bool "
-                 "values, static float tensors or Python numbers", "alpha != 1 only for an f32 add or sub", "no rounding_mode",
-                 "at cc: no division by a 0-d static tensor", "one batch over the output's elements")
+    """`add` / `sub` / `mul` / `div` (`.Tensor`, `.Scalar`) of f32, bf16, bool or int64 values, static float tensors and Python
+    numbers, broadcast, element by element as torch's CPU kernels compute them: `F32Add_v1`, `F32Sub_v1`, `F32Mul_v1`, `F32Div_v1`
+    (true division), and `add` (`sub`) with alpha != 1 one `F32Fma_v1(b, f32(alpha), a)` (`-alpha`). A bf16 operand is widened,
+    a bool one is 1.0 or +0 (`SelectF32_v1`), an int64 one of an f32 result rounded to nearest (`I64ToF32Rn_v1`) and a bf16
+    result rounded once (`F32ToBf16Rn_v1`). A number is its f32 word, but in a bf16 `add` or `sub` torch CPU first rounds it (and
+    a 0-d static) to bf16. At a compute capability `cc` they are the GPU's: the same operations with its NaN (`F32Add_v2`,
+    `F32Sub_v2`, `F32Mul_v2`, `F32Div_v2`, `F32Fma_v2`), a bf16 result rounded by `F2fpBf16_v1`, every number its f32 word, and a
+    division by a number the product by its reciprocal, `RN(1 / f32(s))`, which torch's CUDA kernel computes on the host.
+    Refused: a bf16 add with alpha != 1, an int64 operand of a bf16 result (torch rounds it to bf16 first), a rounding mode, and
+    at `cc` a division by a 0-d static tensor (the GPU multiplies by a CPU scalar's reciprocal and divides by a device tensor, and
+    the graph doesn't say which)."""
+    info = _info("Binary", "aten add/sub/mul/div .Tensor/.Scalar with broadcasting, f32 or bf16", "operands are f32, bf16, bool or "
+                 "int64 values, static float tensors or Python numbers", "alpha != 1 only for an f32 add or sub",
+                 "int64 operands only of an f32 result", "no rounding_mode", "at cc: no division by a 0-d static tensor",
+                 "one batch over the output's elements")
 
     def __init__(self, cc: tuple[int, int] | None = None):
         self.cc = cc
@@ -88,11 +94,14 @@ class Binary(_TrainRule):
             return "numerics_unregistered: a rounding mode"
         if _alpha(node) != 1 and ctx.dtype_of(node) != torch.float32:
             return "numerics_unregistered: a bf16 add with alpha != 1"
-        whys = [w for w in (_operand_ok(ctx, a, (*_DT, torch.bool)) for a in node.args[:2]) if w]
+        whys = [w for w in (_operand_ok(ctx, a, (*_DT, torch.bool, torch.int64)) for a in node.args[:2]) if w]
         if whys:
             return whys[0]
         if all(not (isinstance(a, torch.fx.Node) and isinstance(ctx.val(a), Coll)) for a in node.args[:2]):
             return "no operand is a value (a static result: StaticFloats)"
+        if ctx.dtype_of(node) != torch.float32 and any(isinstance(a, torch.fx.Node) and ctx.dtype_of(a) == torch.int64
+                                                       for a in node.args[:2]):
+            return "numerics_unregistered: an int64 operand of a bf16 result (torch rounds it to bf16 first)"
         b = node.args[1]
         if (self.cc and _BINARY[node.target] == "div" and isinstance(b, torch.fx.Node) and isinstance(ctx.val(b), StaticFloat)
                 and _shape(ctx, b) == ()):
@@ -132,22 +141,23 @@ class Binary(_TrainRule):
 
 
 class Unary(_TrainRule):
-    """`neg`, `sqrt`, `rsqrt`, `reciprocal`, `exp`, `sigmoid`, `pow.Tensor_Scalar` of an f32 or bf16 value, as torch's CPU kernels
-    compute them: `rsqrt` = 1 / sqrt, `sigmoid` = 1 / (1 + exp(-x)), `pow` 2 / 3 products, 0.5 sqrt, -0.5 rsqrt, -1 and -2
-    reciprocals, 1 the operand, 0 one; `exp` is `F32ExpRn_v1` (correctly rounded, where torch's vectorized exp is not). `sqrt` is
-    IEEE's (`F32Sqrt_v1`, as CUDA's `sqrt.rn`); torch CPU's (and its `pow` 0.5) is MKL's, which is not IEEE's on some CPUs. A bf16
-    operand is widened and the result rounded to bf16, except where torch's bf16 kernel rounds in between, which is refused: `pow`
-    3 and -2 round the square, and `rsqrt` (and `pow` -0.5) the square root in its scalar loop."""
-    info = _info("Unary", "aten neg/sqrt/rsqrt/reciprocal/exp/sigmoid/pow.Tensor_Scalar of f32 or bf16", "the operand is an f32 or "
-                 "bf16 value", "pow's exponent is one torch special-cases (0, 0.5, 1, 2, 3, -0.5, -1, -2)",
-                 "bf16: not rsqrt, nor pow 3, -2 or -0.5", "one batch per step over the elements")
+    """`neg`, `abs`, `sqrt`, `rsqrt`, `reciprocal`, `exp`, `sigmoid`, `pow.Tensor_Scalar` of an f32 or bf16 value, as torch's CPU
+    kernels compute them: `abs` clears the sign bit (`F32Fabs_v1`, f32 only), `rsqrt` = 1 / sqrt, `sigmoid` = 1 / (1 + exp(-x)),
+    `pow` 2 / 3 products, 0.5 sqrt, -0.5 rsqrt, -1 and -2 reciprocals, 1 the operand, 0 one; `exp` is `F32ExpRn_v1` (correctly
+    rounded, where torch's vectorized exp is not). `sqrt` is IEEE's (`F32Sqrt_v1`, as CUDA's `sqrt.rn`); torch CPU's (and its `pow`
+    0.5) is MKL's, which is not IEEE's on some CPUs. A bf16 operand is widened and the result rounded to bf16, except where torch's
+    bf16 kernel rounds in between, which is refused: `pow` 3 and -2 round the square, and `rsqrt` (and `pow` -0.5) the square root
+    in its scalar loop; a bf16 `abs` is refused too (torch's CPU kernel keeps a NaN's payload, its CUDA kernel rounds through f32)."""
+    info = _info("Unary", "aten neg/abs/sqrt/rsqrt/reciprocal/exp/sigmoid/pow.Tensor_Scalar of f32 or bf16", "the operand is an f32 "
+                 "or bf16 value", "pow's exponent is one torch special-cases (0, 0.5, 1, 2, 3, -0.5, -1, -2)",
+                 "bf16: not abs or rsqrt, nor pow 3, -2 or -0.5", "one batch per step over the elements")
 
     def targets(self):
-        return {aten.neg.default, aten.sqrt.default, aten.rsqrt.default, aten.reciprocal.default, aten.exp.default,
-                aten.sigmoid.default, aten.pow.Tensor_Scalar}
+        return {aten.neg.default, aten.abs.default, aten.sqrt.default, aten.rsqrt.default, aten.reciprocal.default,
+                aten.exp.default, aten.sigmoid.default, aten.pow.Tensor_Scalar}
 
     def applies(self, node, ctx):
-        why = _operand_ok(ctx, node.args[0], tuple(_DT))
+        why = _operand_ok(ctx, node.args[0], (torch.float32,) if node.target is aten.abs.default else tuple(_DT))
         if why or not isinstance(ctx.val(node.args[0]), Coll):
             return why or "the operand is not a value"
         e = node.args[1] if node.target is aten.pow.Tensor_Scalar else None
@@ -175,6 +185,8 @@ class Unary(_TrainRule):
         x = _flat(_widened(ctx, node, x) if ctx.dtype_of(node.args[0]) == torch.bfloat16 else x, S)
         if t is aten.neg.default:
             y = ew(SC.F32Neg, x)
+        elif t is aten.abs.default:
+            y = ew(SC.F32Fabs, x)
         elif t is aten.sqrt.default or e == 0.5:
             y = ew(R.F32Sqrt, x)
         elif t is aten.rsqrt.default or e == -0.5:
@@ -526,21 +538,25 @@ class EmbeddingDenseBackward(_TrainRule):
 
 def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None) -> RuleSet:
     """The default rules with the training rules: views of static floats, `BoxPermute` (views of more than `min_view_leaves` leaves
-    that are not one run) and `Matmul` before them, the element-wise, reduction, softmax, loss and embedding rules after.
-    `min_view_leaves` is 0 by default: the default views write a permuted view of fewer leaves than their limit as a list of its
-    leaves, which the root's replay then substitutes as one reference part per leaf.  `cc` (`cublas_bf16.TRAIN_CC`): bf16 `mm`s as
-    that GPU's cuBLAS computes them (`Matmul`), every add, sub, mul and div as its kernels do (`Binary`, placed first, before
-    the default rules' CPU kinds) and a whole tensor's vector norm or sum as its `reduce_kernel` does (`FullReduce`, before
-    `Reduce`), in the rule set ``training-cc<major>.<minor>``."""
+    that are not one run) and `Matmul` before them, the element-wise, reduction, softmax, loss, embedding, comparison, mask,
+    integer, conversion, lookup and order-statistic rules after. `min_view_leaves` is 0 by default: the default views write a
+    permuted view of fewer leaves than their limit as a list of its leaves, which the root's replay then substitutes as one
+    reference part per leaf.  `cc` (`cublas_bf16.TRAIN_CC`): bf16 `mm`s as that GPU's cuBLAS computes them (`Matmul`), every add,
+    sub, mul and div as its kernels do (`Binary`) and the conversions to bf16 and to and from f16 as its kernels do (`Cast`), both
+    placed first, before the default rules' CPU kinds, a whole tensor's vector norm or sum as its `reduce_kernel` does
+    (`FullReduce`, before `Reduce`) and `kthvalue` as its radix select does (`KthValue`), in the rule set
+    ``training-cc<major>.<minor>``."""
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
 
-    first = [StaticFloats(), BoxPermute(min_view_leaves), Matmul(cc)] + ([Binary(cc)] if cc else [])
-    last = ([] if cc else [Binary()]) + [Unary(), Lerp(), Addcmul(), FullReduce(cc), Reduce(), SafeSoftmax(), SoftmaxBackward(),
-                                         LogSoftmax(), LogSoftmaxBackward(), NllLossForward(), NllLossBackward(),
-                                         EmbeddingDenseBackward()]
+    first = [StaticFloats(), BoxPermute(min_view_leaves), Matmul(cc)] + ([Binary(cc), Cast(cc)] if cc else [])
+    last = ([] if cc else [Binary()]) + [Unary(), Lerp(), Addcmul(), FullReduce(cc), Reduce(), IntSum(), SafeSoftmax(),
+                                         SoftmaxBackward(), LogSoftmax(), LogSoftmaxBackward(), NllLossForward(),
+                                         NllLossBackward(), EmbeddingDenseBackward(), Compare(), Logic(), Where(), Clamp(cc),
+                                         Index(), KthValue(cc)] + ([] if cc else [Cast()])
     name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}"
     return RuleSet(name, first + list(DEFAULT_RULES.rules) + last, list(DEFAULT_RULES.families))
 
 
-__all__ = ["training_rules", "Matmul", "Binary", "Unary", "Lerp", "Addcmul", "FullReduce", "Reduce", "SafeSoftmax", "SoftmaxBackward",
-           "LogSoftmax", "LogSoftmaxBackward", "NllLossForward", "NllLossBackward", "EmbeddingDenseBackward"]
+__all__ = ["training_rules", "Matmul", "Binary", "Unary", "Lerp", "Addcmul", "FullReduce", "Reduce", "IntSum", "SafeSoftmax",
+           "SoftmaxBackward", "LogSoftmax", "LogSoftmaxBackward", "NllLossForward", "NllLossBackward", "EmbeddingDenseBackward",
+           "Compare", "Logic", "Where", "Clamp", "Cast", "Index", "KthValue"]
