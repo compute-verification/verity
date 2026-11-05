@@ -18,8 +18,10 @@ public import Proofs.Flock.SoundAtBridge
 public import Proofs.Flock.ZeroKnowledgeHidden
 public import Proofs.Flock.Masked
 public import Proofs.Flock.SessionLoop
+public import Proofs.Flock.SessionLoop.Fill
 public import Proofs.Flock.SessionLoop.Honest
 public import Proofs.Flock.SessionLoop.Leak
+public import Proofs.Flock.SessionLoop.RepSrcSat
 public import Proofs.Flock.SessionLoop.Concrete
 public import Proofs.Flock.SessionLoop.Concrete.Stmt
 public import Proofs.Flock.Recursive
@@ -30,6 +32,8 @@ public import Proofs.Flock.VBridge
 public import Proofs.Flock.Sampled
 public import Proofs.Flock.Claims
 public import Proofs.Flock.SamplingClaims
+public import Proofs.Flock.SamplingGeneric
+public import Proofs.Flock.SamplingGeneric.Masked
 public import Proofs.Flock.Bridge
 public import Proofs.Flock.Bridge.Transports
 public import Proofs.Flock.Bridge.TransportsRefs

@@ -341,7 +341,8 @@ theorem fixCoinModel_link (S : RefSession) (vs : S.SwVals) (H : Msg → Msg) (R 
     refine List.map_congr_left fun j _ => ?_
     unfold fixMsgAt
     rw [S.cutV_swViewsAt, ite_eq_left hA]
-  · refine ⟨hV x w hR, fun j => hD x c j, fun p => (hT x hx).1 p _, ⟨vs x w ν c, fun (t : S.Tape) => ?_⟩,
+  · refine Proto.TCoinModel.swLink_inr (G := S.fixP vs (List.ofFn c)) (x := x) _ H ν c w ?_
+    refine ⟨hV x w hR, fun j => hD x c j, fun p => (hT x hx).1 p _, ⟨vs x w ν c, fun (t : S.Tape) => ?_⟩,
       fun (t : S.Tape) => ?_⟩
     · refine (S.fixP_realVec vs H x w ν t c).trans ?_
       show (List.range (refK x + 1)).map (S.fixMsgAt x (S.wt x w) c (vs x w ν c) t) =

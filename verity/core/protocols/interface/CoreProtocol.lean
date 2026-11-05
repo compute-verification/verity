@@ -10,6 +10,7 @@ public import CoreProtocol.Cli
 public import CoreProtocol.Example
 public import CoreProtocol.Blobs
 public import CoreProtocol.BlobsExample
+public import CoreProtocol.Site
 public import CoreProtocol.Registration
 
 @[expose] public section
