@@ -33,7 +33,7 @@ structure Args where
   ofRecord : Bool := false
   manifests : List String := []
 
-partial def parse : List String → Args → Except String Args
+def parse : List String → Args → Except String Args
   | [], a => pure a
   | "--coins" :: v :: rest, a => parse rest { a with coins := some v }
   | "--draws" :: v :: rest, a => match v.toNat? with

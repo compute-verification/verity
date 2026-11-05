@@ -12,8 +12,8 @@ read as a served run's they are refused (their tile is not 64 x 64), as passes o
 refused at load on both sides. Passes salted by a live session's coins load under that session's commitment, and a coin
 record's challenger draw (the v2 record's ``draw``) holds only as coin ``pouw/draw`` 0 of a draw session opened after the
 run's commitment, its coin the record's source; ``--of-record`` takes no other draw. `test_a_recorded_h200_run` does the
-same on an H200 run's retained passes against the verdicts the Python recorded on them, where `POUW_PEARLPLUS_RECORDED`
-names a directory holding them (`passes/` and `verdicts/{run,control}.json`).
+same on an H200 run's retained passes at the draw count and source of the verdicts the Python recorded on them, where
+`POUW_PEARLPLUS_RECORDED` names a directory holding them (`passes/` and `verdicts/{run,control}.json`).
 
 Where the Python raises past its own verdict the Lean refuses instead, and no case here reaches it: a debit replay or a
 checked U that rejects (the Lean names it), and an opening whose leaf doesn't parse (an opening that fails). The Lean also
@@ -146,6 +146,18 @@ def test_an_honest_pass(exe, tmp_path):
         assert works[0] == works[1] == works[2]
 
 
+def test_an_excluded_weight_row_zeroes_its_block(exe, tmp_path):
+    """The band rule on both sides: weight 1's row 20 fails liveness, so it is excluded and takes its block of 64 columns,
+    all 32 of the second call's.  That call has no ticket and no credited cell, its exclusion tile is opened and passes,
+    and the run's credited cells' MACs (``macs``; a test instance's credit is 0) are the first call's alone, its 19
+    credited rows x 16 columns at |K| = 128."""
+    path = T.proved_pass(tmp_path, H100, bad_b=20)[0]
+    for rule in (None, *VR.OVER_CAP):
+        got = same(exe, [path], 16, over_cap=rule)
+        assert got["verdict"] == "accept" and got["work"]["over_cap_draws"] == 0
+        assert (got["work"]["macs"], got["work"]["credited_tiles"]) == (19 * 16 * 128, 2)
+
+
 def test_a_row_over_its_cap_and_its_give_up(exe, tmp_path):
     """Under the zero key a credited row is over its row cap: under ``reject`` the run is rejected; under ``uncredited``
     (the default) it is accepted, each tile over its inert-work bound ok with its bound's reason and credited nothing,
@@ -179,6 +191,63 @@ def test_a_row_over_its_cap_and_its_give_up(exe, tmp_path):
         path.write_text(json.dumps({**man, "matmuls": [{**x, "voluntary_a": given} if x is u else x for x in man["matmuls"]]}))
         got = same(exe, [path])
         assert got["verdict"] == "reject" and why in got["reason"] and got["source"] is None
+
+
+def test_a_salt_dead_element_over_the_row_cap(exe, tmp_path, monkeypatch):
+    """P3's forming term: credited row 9 holds one entry 300 times its RMS, which keeps the per-row rules and is salt-dead
+    (its forming's two ends round to one code), inert work of fs·|cols|/n = 64 that puts the row over its inert-work
+    bound, 41 at k = 128, where its words flag no atom. Under ``reject`` both verdicts reject the run on that tile; under
+    ``uncredited`` both accept it with that tile, and only it, over its bound; without the term the Python's finds no
+    tile over."""
+    path = T.proved_pass(tmp_path, H100, spike=300.0)[0]
+    why = "A row 9's replayed debit 64 exceeds its cap 41 (the row cap"
+    over = same(exe, [path], 16, over_cap=VR.REJECT)
+    assert over["verdict"] == "reject" and why in over["reason"]
+    took = same(exe, [path], 16)
+    reasons = [v["reason"] for v in took["verdicts"] if v["reason"]]
+    assert took["verdict"] == "accept" and reasons and all(why in r for r in reasons)
+    monkeypatch.setattr(T.CW.D, "forming_elements", lambda flags, dead, device=None: 0)
+    without = answer(VR.verify_passes([path], 16, 1, "test", T.published(path), SOURCE, test_instance=True))
+    assert without["verdict"] == "accept" and not any(v["reason"] for v in without["verdicts"])
+
+
+def test_the_forming_term_reads_a_block_every_credited_word_flags_and_not_one_some_flag(exe, tmp_path, monkeypatch):
+    """E's ∀ over the credited columns both ways (`forming_elements`, `Rule.rowElements`): under the zero key, credited row
+    11 of the first call has atom-words flagging its blocks 0 … 3, all in one column.  On 16 x 16 tiles some of the row's
+    16 credited words flag each block and the rest don't, so no block is inert and its debit is the chain's, 160, over
+    its row cap, with or without the term.  On 16 x 1 tiles that column's tile has one credited word, which flags all
+    four blocks, so every element of the row is inert and the tile's debit is 672, 160 without the term.  The Lean's
+    verdicts are the Python's on both, under each ``over_cap`` rule."""
+    cases = [((16, 16), 16, "A row 11's replayed debit 160 exceeds", "A row 11's replayed debit 160 exceeds"),
+             ((16, 1), 64, "the replayed debit 672 exceeds", "the replayed debit 160 exceeds")]
+    paths = []
+    for tile, draws, why, _ in cases:
+        path = T.proved_pass(tmp_path / f"{tile[0]}x{tile[1]}", H100, key=bytes(32), tile=tile)[0]
+        paths.append(path)
+        for rule in (None, *VR.OVER_CAP):
+            got = same(exe, [path], draws, over_cap=rule)
+            assert any(why in (v["reason"] or "") for v in got["verdicts"]), (tile, rule, got["verdicts"])
+    monkeypatch.setattr(T.CW.D, "forming_elements", lambda flags, dead, device=None: 0)
+    for path, (tile, draws, _, without) in zip(paths, cases):
+        out = VR.verify_passes([path], draws, 1, "test", T.published(path), SOURCE, test_instance=True)
+        assert any(without in (v["reason"] or "") for v in out["verdicts"]), tile
+
+
+def test_the_forming_term_reads_a_row_some_of_whose_blocks_are_inert(exe, tmp_path, monkeypatch):
+    """E's per-block read on one row (`forming_elements`, `Rule.rowElements`) where neither its all-inert shortcut nor a
+    salt-dead element decides: under key 4, on 16 x 1 tiles, tile 14's one flagged row has its one credited word flag one
+    of its four atom blocks and not the other three, and no element of the tile is salt-dead.  So 32 of the row's 128
+    elements are inert and the tile's debit is 168 (40 for the flagged atom-word, 4 per inert element), 40 without the
+    term; reading the three unflagged blocks as the inert ones would make it 424.  The Lean's verdicts are the Python's
+    under each ``over_cap`` rule."""
+    path = T.proved_pass(tmp_path, H100, key=bytes([4]) * 32, tile=(16, 1))[0]
+    for rule in (None, *VR.OVER_CAP):
+        got = same(exe, [path], 96, over_cap=rule)
+        assert any(v["tile"] == 14 and "the replayed debit 168 exceeds the cap 38" in (v["reason"] or "")
+                   for v in got["verdicts"]), (rule, got["verdicts"])
+    monkeypatch.setattr(T.CW.D, "forming_elements", lambda flags, dead, device=None: 0)
+    out = VR.verify_passes([path], 96, 1, "test", T.published(path), SOURCE, test_instance=True)
+    assert any(v["tile"] == 14 and "the replayed debit 40 exceeds the cap 38" in (v["reason"] or "") for v in out["verdicts"])
 
 
 def test_openings_that_fail(exe, tmp_path):
@@ -424,10 +493,17 @@ def test_a_pass_that_is_not_ws(exe, tmp_path):
 @pytest.mark.parametrize("name, passes", [("run", ("prefill", "decode")), ("control", ("prefill", "decode", "control"))])
 def test_a_recorded_h200_run(exe, name, passes):
     """An H200 run's retained passes, the served run's (accepted) and with its control pass, whose activations aren't the
-    ones it committed (rejected): the Lean's verdict is the one the Python recorded, under the rule it recorded."""
+    ones it committed (rejected): under ``over_cap`` ``uncredited``, the run of record's, the Lean's verdict is the
+    Python's on them at the draw count and source the Python recorded, and accepts or rejects as the recorded verdict did
+    (written before the forming term and the band rule, so its credit isn't today's).  The Python replays as ``served_passes.py
+    verify`` does, on the batch forms with every 256th tile on the scalar reference too (the scalar replay alone takes
+    hours here).  It is the one case on a served instance's 64 x 64 tiles at k_min 1,024; each Lean replay takes about 45
+    minutes on a CPU node, so ``reject`` is left to the CPU cases."""
     d = Path(RECORDED)
-    want = json.loads((d / "verdicts" / f"{name}.json").read_text())
+    rec = json.loads((d / "verdicts" / f"{name}.json").read_text())
     paths = [d / "passes" / p / "manifest.json" for p in passes]
-    got = lean(exe, paths, want["draws"], bytes.fromhex(want["source"]), coins=d / "passes" / "coins.json",
-               over_cap=want.get("over_cap", VR.REJECT))
-    assert got == answer(want)
+    coins, source = d / "passes" / "coins.json", bytes.fromhex(rec["source"])
+    want = answer(VR.verify_passes(paths, rec["draws"], len(os.sched_getaffinity(0)), "test", VR.epoch_coins(coins), source,
+                                   fast=True, cross_check=256, over_cap=VR.UNCREDITED))
+    assert want["verdict"] == rec["answer"]["verdict"], want["reason"]
+    assert lean(exe, paths, rec["draws"], source, coins=coins, over_cap=VR.UNCREDITED) == want
