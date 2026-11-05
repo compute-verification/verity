@@ -311,6 +311,68 @@ theorem zeroRow_outside {st : Stmt} (L : FlockSoundness.Layout st)
   · show rangesEntry st (slotEntryB st) r.val j.val + deltaEntry st.db r.val j.val = 0
     rw [rangesEntry_outside hc, L.delta_b, hd, add_zero]
 
+/-- **A unit slot's constant row copies the pin.** -/
+theorem copyRow_unitConst {st : Stmt} (L : FlockSoundness.Layout st)
+    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {s₀ : ℕ} (hs : s₀ < st.c.unitRange.count)
+    {r : Fin (2 ^ (L.model regs).kLog)} (hr : r.val = st.c.unitRange.slot s₀ + st.c.unit.constPos) :
+    CopyRow (L.model regs) r (L.model regs).pin := by
+  refine ⟨fun j => ?_, fun j => ?_⟩
+  · rw [show (L.model regs).A₀ r j = placedA st r j from rfl, L.placedA_const hs r j hr]
+    exact if_congr Fin.ext_iff.symm rfl rfl
+  · rw [show (L.model regs).B₀ r j = placedB st r j from rfl, L.placedB_const hs r j hr]
+    exact if_congr Fin.ext_iff.symm rfl rfl
+
+/-- **The pin's row copies itself.** -/
+theorem copyRow_pin {st : Stmt} (L : FlockSoundness.Layout st)
+    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) :
+    CopyRow (L.model regs) (L.model regs).pin (L.model regs).pin := by
+  refine ⟨fun j => ?_, fun j => ?_⟩
+  · rw [show (L.model regs).A₀ (L.model regs).pin j = placedA st ⟨st.pin, L.pin_lt⟩ j from rfl, (L.placed_pin j).1]
+    exact if_congr Fin.ext_iff.symm rfl rfl
+  · rw [show (L.model regs).B₀ (L.model regs).pin j = placedB st ⟨st.pin, L.pin_lt⟩ j from rfl, (L.placed_pin j).2]
+    exact if_congr Fin.ext_iff.symm rfl rfl
+
+/-- **The trace is 1 at the pin**, at the verifier's `hm96` net: the pin is that net's constant column. -/
+theorem vH_pin (hn : Properties.Flock.Nets.FixedNetsBuild) : vH PIN = true := by
+  have hcp : (hmLaid ()).constPos = PIN := (Net.ofRows_ok hn.2.2.2.1).2.2.2.2.1.symm.trans rfl
+  rw [← hcp]
+  exact (Total.hm_total xH).1
+
+theorem zIn_pin (hn : Properties.Flock.Nets.FixedNetsBuild) : zIn PIN = true := by
+  unfold zIn
+  rw [ite_eq_left (show PIN < 262144 by decide)]
+  exact vH_pin hn
+
+theorem zIn_unitConst : zIn 524544 = true := by
+  unfold zIn
+  rw [ite_eq_right (show ¬ 524544 < 262144 by decide), ite_eq_right (show ¬ 524544 < 524288 by decide)]
+  exact decide_eq_true rfl
+
+/-- **The trace is 1 at the pin** in every block. -/
+theorem block_pin {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
+    (hn : Properties.Flock.Nets.FixedNetsBuild) (hk : st.c.kLog = 22) (hpin : st.pin = PIN)
+    (o : Fin (2 ^ (L.model regs).nbl)) : (L.model regs).block (zC (L.model regs).m) o (L.model regs).pin = 1 := by
+  rw [block_zC (S := L.model regs) hk]
+  show (if zIn st.pin then 1 else 0) = 1
+  rw [hpin, zIn_pin hn]
+  rfl
+
+/-- **The pin's row and the unit's constant row hold** at the trace: both copy the pin, and the trace is 1 at both. -/
+theorem holds_pins {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
+    (hn : Properties.Flock.Nets.FixedNetsBuild) (hk : st.c.kLog = 22) (hpin : st.pin = PIN)
+    (hs : 0 < st.c.unitRange.count) (hu : st.c.unitRange.slot 0 + st.c.unit.constPos = 524544)
+    (o : Fin (2 ^ (L.model regs).nbl)) {r : Fin (2 ^ (L.model regs).kLog)} (hr : r.val = PIN ∨ r.val = 524544) :
+    ((L.model regs).A₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r *
+        ((L.model regs).B₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r =
+      (L.model regs).block (zC (L.model regs).m) o r := by
+  rcases hr with hr | hr
+  · have he : r = (L.model regs).pin := Fin.ext (hr.trans hpin.symm)
+    subst he
+    exact copyRow_holds (copyRow_pin L regs) rfl
+  · refine copyRow_holds (copyRow_unitConst L regs hs (hr.trans hu.symm)) ?_
+    rw [block_pin L regs hn hk hpin o, block_zC (S := L.model regs) hk, hr, zIn_unitConst]
+    rfl
+
 theorem count_E (x j : ℕ) : E.count (x, j) =
     [(518144, 518144), (518144, PIN), (524544, 524544), (524544, PIN)].count (x, j) +
       (run 262144 512 (constSrcW msW)).count (x, j) + (run 512 1024 (constSrcW padW)).count (x, j) +
@@ -374,7 +436,8 @@ theorem copyRow_mask {r : Fin (2 ^ (L.model regs).kLog)} (hr : 1048576 ≤ r.val
   have hcov : FlockLevel3.covers R r.val := by
     unfold FlockLevel3.covers
     rw [hs, hp, hc]
-    norm_num <;> omega
+    norm_num
+    omega
   have hd := delta_free hda (x := r.val) (by omega)
   have key : ∀ e : Kind → ℕ → ℕ → ZMod 2, (∀ i i', e .mask i i' = if i = i' then 1 else 0) →
       ∀ j : Fin (2 ^ (L.model regs).kLog), rangesEntry st e r.val j.val = if j = r then 1 else 0 := by
