@@ -767,7 +767,9 @@ def lean_passes(out: Path, done: list[dict], lc=None) -> dict[str, str]:
         if any(f not in reports for f in doc.get("failed") or []):
             return {}
         regenerated = doc.get("regenerated") or {}
-    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+        print(f"check: lean-audit's report can't be read ({type(e).__name__}: {e}), so the result lists no Lean passes",
+              file=sys.stderr)
         return {}
     lc = lc or _load("lean_changed", LEAN_JOBS)
     ok = [p for p, r in sorted(reports.items()) if r.get("failures") == [] and not r.get("settled") and p not in regenerated

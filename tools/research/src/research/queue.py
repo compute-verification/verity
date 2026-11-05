@@ -4644,12 +4644,13 @@ def lean_keys(repo: Path, commit: str, pkgs: Iterable[str] | None = None) -> dic
     if r.returncode:
         raise QueueError(f"`{KEY_COMMAND} --inputs-key` at {commit[:12]} exited {r.returncode}: "
                          f"{(r.stderr or r.stdout).strip()[-300:]}")
+    bad = QueueError(f"`{KEY_COMMAND} --inputs-key` at {commit[:12]} printed no {{package: key}}: {r.stdout.strip()[-200:]}")
     try:
         keys = json.loads(r.stdout)
     except ValueError:
-        keys = None
+        raise bad from None
     if not isinstance(keys, dict) or not all(isinstance(k, str) and isinstance(v, str) for k, v in keys.items()):
-        raise QueueError(f"`{KEY_COMMAND} --inputs-key` at {commit[:12]} printed no {{package: key}}: {r.stdout.strip()[-200:]}")
+        raise bad
     return keys
 
 
@@ -4877,7 +4878,8 @@ class RecordsGate:
             try:
                 art = (json.loads(doc).get("outputs") or {}).get("result")
                 meta = (self.store.index.artifact(art) or {}).get("manifest", {}).get("meta") or {} if isinstance(art, str) else {}
-            except (ValueError, TypeError, AttributeError):
+            except (ValueError, TypeError, AttributeError) as e:
+                out.append(f"run {rid} of {head[:12]}: its result can't be read ({type(e).__name__}: {e}), so it says nothing")
                 continue
             step = rec = None
             if meta.get("kind") in CHECK_KINDS:
