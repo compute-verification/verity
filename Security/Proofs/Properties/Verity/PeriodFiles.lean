@@ -1212,9 +1212,13 @@ theorem empty_check : NetworkCheck.Period.check emptyParams emptyCommitment empt
 theorem unlisted_files : ({} : NetworkCheck.Period.Listing).files = #[] :=
   Array.eq_empty_of_size_eq_zero (files_unlisted (by simp [NetworkCheck.Period.Listing.listed]))
 
-/-- **`Verity.circuit_files_by_path_agree`'s honest lemma, at the network certifier's period**: at a period of no
-link-window and no audit (`emptyParams`), the period with its circuit files read by path, none, accepts, and the
-verifier of record's period, finding them among no blobs, accepts with the same terms. -/
+/-- **`Verity.circuit_files_by_path_agree`'s honest lemma, at the network certifier's period**, the one component the
+executable that reads the circuit files by path composes otherwise than the verifier of record: at a period of no
+link-window and no audit (`emptyParams`) with an empty listing, so no circuit file is read by path, the period read by
+path accepts, and the verifier of record's period, finding none among no blobs, accepts with the same terms. That a
+period listing a circuit file accepts with it read by path as it does with it among the blobs is checked by the
+composition suite's difftest `test_the_network_certifiers_circuit_files_are_read_by_path_or_among_the_blobs`, through
+the composites' Lean executable. -/
 theorem _root_.Verity.circuit_files_by_path_agree_honest :
     NetworkCheck.Period.readCheck 0 (NetworkCheck.Period.ofRead 0 #[]) (emptyParams, {}) emptyCommitment
         emptyEvidence = .accept (NetworkCheck.Period.terms #[] #[] #[] 0 1 0) { link := "", windows := 0 } ∧
