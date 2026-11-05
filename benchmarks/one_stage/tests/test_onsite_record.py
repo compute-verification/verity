@@ -166,12 +166,18 @@ ACCEPTED = "NetTiming.SecurityProofs.PeriodLeakAccepted"
 (COVERED,) = OR.PREMISES["schedules-covered"]["discharged_by"]
 
 
+def applying(by_path: bool = False) -> dict:
+    """`PREMISES` that apply to a run whose composite of record read circuit files by path where ``by_path``, else to
+    one that read none."""
+    return {n: p for n, p in OR.PREMISES.items() if by_path or not p.get("by_path")}
+
+
 def discharged() -> dict:
     """``premises`` of a lock listing every discharge and each guarantee the tight K rests on at the statement it
     names, none with an assumption."""
     found = {n: {"is": p["is"], "discharged_by": list(p["discharged_by"]), "missing": [], "unpinned": {}, "assumes": [],
                  "takes": []} | ({"stated_by": p["stated_by"], "checked": p["checked"]} if "stated_by" in p else {})
-             for n, p in OR.PREMISES.items()}
+             for n, p in applying().items()}
     return {"is": OR.DISCHARGE,
             "from": "Security/lean-audit.json and Security/Properties/lean-audit.json guarantees and reads",
             "premises": found, "standing": OR.STANDING, "counts": OR.COUNTS, "open": [], "unread": [],
@@ -528,10 +534,10 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
     of = rec["bound"]["of_record"]
     assert UNPINNED == ["NetTiming.SecurityProofs.PeriodTiedCount"] and OR.CERTIFIER_KEY not in UNNAMED
     assert (of["held"], of["open"], of["K"]) == (
-        ["free", "circuit"], [*(n for n in OR.PREMISES if n != OR.CERTIFIER_KEY), *UNPINNED], K + 2 ** 23 + 1)
-    assert {"sampled-leg-bridge", "reg-opens-at"} <= set(of["open"])
+        ["free", "circuit"], [*(n for n in applying() if n != OR.CERTIFIER_KEY), *UNPINNED], K + 2 ** 23 + 1)
+    assert {"sampled-leg-bridge", "reg-opens-at"} <= set(of["open"]) and OR.CONGRUENCE not in of["open"]
     assert [p["missing"] for p in of["premises"]["premises"].values()] == [
-        list(p["discharged_by"]) for p in OR.PREMISES.values()]
+        list(p["discharged_by"]) for p in applying().values()]
     assert [of["premises"]["premises"][n]["discharged_by"] for n in UNNAMED] == [[]] * len(UNNAMED)
     assert of["premises"]["rests_on"][UNPINNED[0]] == {"missing": "not in the lock",
                                                        "takes": RESTS_ON[UNPINNED[0]]["takes"],
@@ -703,7 +709,43 @@ def test_a_discharge_the_properties_lock_lists_counts_as_one_the_guarantees_lock
     monkeypatch.setattr(OR, "LOCKS", (lock, props))
     assert held_both(tmp_path / "both")["bound"]["of_record"]["open"] == []
     monkeypatch.setattr(OR, "LOCKS", (lock,))
-    assert held_both(tmp_path / "one")["bound"]["of_record"]["open"] == [*OR.PREMISES, OR.PERIOD_REGISTERED]
+    assert held_both(tmp_path / "one")["bound"]["of_record"]["open"] == [*applying(), OR.PERIOD_REGISTERED]
+
+
+#: the theorem that discharges composite-congruence
+(AGREE,) = OR.PREMISES[OR.CONGRUENCE]["discharged_by"]
+
+
+def by_path(out: Path) -> Path:
+    """``out`` with its composite of record, onsite's, having read the period's circuit files by path (`OR.BY_PATH`)."""
+    f = out / "composite" / "remote-network" / "composite.json"
+    f.write_text(json.dumps(json.loads(f.read_text()) | {"circuit_files": OR.BY_PATH}))
+    return out
+
+
+@pytest.mark.parametrize("listed", [False, True])
+def test_a_composite_that_read_circuit_files_by_path_accepts_conditional_on_congruence_until_the_lock_holds_it(
+        tmp_path, lock, listed):
+    """Where the composite of record read the period's circuit files by path, the network verdict is the composed
+    executable's, which CircuitFilesByPathAgree ties to the Lean verifier's answer. With that theorem not in the lock,
+    composite-congruence is open by name: the accept and the figure of record are conditional on it, and the figure
+    charges ℓ_a + 1 with the tight K beside it. With the theorem in the lock at the statement `DISCHARGES` pins, it
+    closes and nothing is conditional. Where the composite read none, the premise doesn't apply (`applying`)."""
+    if not listed:
+        write_lock(lock, {AGREE: None})
+    assert applying(by_path=True).keys() - applying().keys() == {OR.CONGRUENCE}
+    rec = record(by_path(accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"]))))
+    nv, of = rec["verdicts"]["the network certifier"], rec["bound"]["of_record"]
+    assert (nv["verdict"], rec["of_record"]["holds"]) == ("accept", True)
+    assert list(of["premises"]["premises"]) == list(applying(by_path=True))
+    assert of["premises"]["premises"][OR.CONGRUENCE]["missing"] == ([] if listed else [AGREE])
+    if listed:
+        assert ("conditional_on" in nv, of["open"], of["K"], "conditional_on" in of) == (False, [], K, False)
+        assert "conditional_on" not in rec["of_record"]
+    else:
+        assert (nv["conditional_on"], of["open"], of["K"], of["conditional_on"]) == (
+            [OR.CONGRUENCE], [OR.CONGRUENCE], KR, [OR.CONGRUENCE])
+        assert rec["of_record"]["conditional_on"] == [OR.CONGRUENCE]
 
 
 @pytest.mark.parametrize("text, error", [(None, "FileNotFoundError"), ("{", "JSONDecodeError"), ("{}", "KeyError")])

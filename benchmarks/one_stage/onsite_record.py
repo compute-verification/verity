@@ -33,7 +33,9 @@ run wrote no answer, ``missing`` and ``why``:
 
 While `certifier-key` is open (`PREMISES`, `KEY_OPEN`), an accepted network certifier's verdict is ``not
 established``, its Lean answer's accept beside it (``answer``), and its bound conditional on it by name; so is it
-where `auditor-listing` doesn't hold (`LISTING_UNMET`), with no bound. Sampled proofs'
+where `auditor-listing` doesn't hold (`LISTING_UNMET`), with no bound. Where the composite of record read the period's
+circuit files by path (its composite.json's ``circuit_files``, `BY_PATH`), the verdict is the composed executable's,
+and while `composite-congruence` is open its accept and its bound are conditional on it by name. Sampled proofs'
 ``credit`` (`CREDIT`) names the drawn members it credits, those whose --registered file the audit completed at the
 window's committed roots and whose Lean verdict accepted it reporting exactly its reads (the audit's published record,
 `AUDIT`), and lists every other drawn member as not credited, by name, with why; ``missing`` where the record states no
@@ -607,10 +609,23 @@ PREMISES: dict[str, dict[str, Any]] = {
                                  "SampledCodeRuns or another premise about the deployed Python. Open until the bridge's "
                                  "theorem is in the lock",
                            "discharged_by": ()},
+    "composite-congruence": {"is": "CircuitFilesByPathAgree at the composite of record's product (k ≠ remote): where "
+                                   "the composite read the period's circuit files by path (``by_path``, `BY_PATH`), "
+                                   "its accept is the Lean verifier's answer on the blobs with those files appended, "
+                                   "or a SHA-512 collision among them, which the guarantee counts with its other "
+                                   "collisions. It covers an accept only, and applies only where the composite read "
+                                   "files by path. There it is open, by this name, until the lock holds the theorem at "
+                                   "the statement `DISCHARGES` pins, and while it is open the network verdict is the "
+                                   "composed executable's, conditional on it by name, as its bound is (`UNCHARGED`)",
+                             "discharged_by": ("Verity.circuit_files_by_path_agree",), "by_path": True},
 }
 #: the premises no charge covers: while one is open the bound, the figure of record, its periods and the composite's
 #: error are conditional on it by name, never charged for it
-UNCHARGED = ("certifier-key",)
+UNCHARGED = ("certifier-key", "composite-congruence")
+CONGRUENCE = "composite-congruence"
+#: what a composite.json's ``circuit_files`` says where the composite read the period's circuit files by path
+#: (`composite.py`'s ``--circuits``)
+BY_PATH = "by path"
 CERTIFIER_KEY = "certifier-key"
 NOT_ESTABLISHED = "not established"
 KEY_OPEN = (f"{CERTIFIER_KEY} is open: the lock doesn't hold PeriodLeakRegistered at the statement `RESTS_ON` pins, "
@@ -1233,8 +1248,9 @@ def statement(lock: Mapping[str, Any], g: str) -> str | None:
 
 
 def premises(locks: Sequence[Path], root: Path = ROOT,
-             checked: Mapping[str, Mapping[str, Any]] | None = None) -> dict[str, Any]:
-    """The tight K's premises as ``locks`` record their discharges (`DISCHARGE`): each of `PREMISES` with the theorems
+             checked: Mapping[str, Mapping[str, Any]] | None = None, by_path: bool = False) -> dict[str, Any]:
+    """The tight K's premises as ``locks`` record their discharges (`DISCHARGE`): each of `PREMISES` that applies (one
+    marked ``by_path`` only where the composite of record read circuit files by path, ``by_path``), with the theorems
     no lock lists (``missing``), those one lists at a statement `DISCHARGES` doesn't pin (``unpinned``, each with the
     lock's digest), the named assumptions of those one lists that don't stand and their pins don't take (``assumes``)
     and the premises their pins take (``takes``), and for one a guarantee states, that guarantee (``stated_by``), the
@@ -1268,7 +1284,8 @@ def premises(locks: Sequence[Path], root: Path = ROOT,
         if "restate" in r:
             rests[g]["restate"] = r["restate"]
     found, ready = {}, {}
-    for name, p in PREMISES.items():
+    applies = {n: p for n, p in PREMISES.items() if by_path or not p.get("by_path")}
+    for name, p in applies.items():
         pins = {t: DISCHARGES.get(t) or {"statement": None, "takes": {}} for t in p["discharged_by"]}
         missing = [t for t in pins if t not in listed]
         unpinned = {t: stated.get(t) for t, pin in pins.items()
@@ -1290,7 +1307,7 @@ def premises(locks: Sequence[Path], root: Path = ROOT,
     done: set[str] = set()
     while new := {n for n, t in ready.items() if n not in done and t <= done}:
         done |= new
-    open_ = [n for n in PREMISES if n not in done]
+    open_ = [n for n in applies if n not in done]
     open_ += sorted({a for g, x in rests.items() for a in x.get("assumptions", ())
                      if a not in RESTS_ON[g]["takes"] and a not in STANDING}
                     | {g for g, x in rests.items() if {"missing", "restated", "restate"} & set(x)})
@@ -1519,7 +1536,8 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     checked = {AUDITOR_RECORD: auditor_record((case or {}).get("params"), composed, certifier_key, site_registration),
                AUDITOR_LISTING: auditor_listing(out, case) if case is not None else {
                    "is": CHECKED[AUDITOR_LISTING], "holds": False, "why": f"no case lists the period's audits: {no_case}"}}
-    prem = premises(LOCKS, checked=checked)
+    by_path = composite in found and found[composite][1].get("circuit_files") == BY_PATH
+    prem = premises(LOCKS, checked=checked, by_path=by_path)
     drawn, draws = coins(out), chain_draws(out)
     cond = [COINS_OPEN] if drawn["open"] else []
     if cond:
@@ -1529,6 +1547,8 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     if nv["verdict"] == "accept" and unmet:
         v["the network certifier"] = nv | {"verdict": NOT_ESTABLISHED, "answer": nv["verdict"], "open": list(unmet),
                                            "why": "; ".join(unmet.values())}
+    elif nv["verdict"] == "accept" and CONGRUENCE in prem["open"]:
+        v["the network certifier"] = nv | {"conditional_on": [CONGRUENCE]}
     accepted = nv["verdict"] == "accept" and AUDITOR_LISTING not in unmet
     open_draws = ["sampled proofs' draw"] * bool(cond) + (draws["open"] if accepted else [])
     drawn |= {"open": bool(open_draws), "open_draws": open_draws, "draws": draws}
