@@ -5,9 +5,12 @@ its lift to the transcript and the Ligerito state).
 -/
 module
 
-public import Flock.With.Verify
 public import Flock.With.Sim
-import Flock.With.SimWalk
+public import Flock.With.SimWalk
+public import Flock.With.Verify
+import Std.Data.HashMap
+import Std.Data.HashSet
+import Std.Data.TreeMap.Raw.Lemmas
 
 @[expose] public section
 

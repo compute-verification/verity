@@ -2,6 +2,8 @@ module
 
 public import Flock.Canon
 public import Identity.Sha512
+meta import Flock.Canon
+meta import Identity.Sha512
 
 /-!
 The tagged SHA-512 identity hash (`verity/ml/commitments/identity.py`'s `tagged_sha512` and `identity_digest_sha512`):

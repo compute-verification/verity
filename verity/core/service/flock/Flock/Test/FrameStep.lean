@@ -6,6 +6,7 @@ rep's coins after the first round are refused; and `run` ends at the first answe
 module
 
 public import Flock.Firewall.Frame
+meta import Flock.Firewall.Frame
 
 @[expose] public section
 

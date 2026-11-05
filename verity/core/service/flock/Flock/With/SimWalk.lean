@@ -5,6 +5,8 @@ compiling, so it is alone here, the module `compile_time` lists, apart from the 
 -/
 module
 
+public import Flock.With.Sim
+
 
 @[expose] public section
 

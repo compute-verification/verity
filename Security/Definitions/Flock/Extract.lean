@@ -1,5 +1,7 @@
 module
 
+public import Definitions.Flock.Game.Expect
+public import Mathlib.Analysis.SpecialFunctions.Exp
 import Mathlib.Algebra.Order.BigOperators.Expect
 import Mathlib.Algebra.Order.Field.Power
 import Mathlib.Analysis.Complex.Order

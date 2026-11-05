@@ -12,6 +12,8 @@ module
 
 public import Flock.KsScope
 public import Flock.Test.Wires
+meta import Flock.KsScope
+meta import Flock.Test.Wires
 
 @[expose] public section
 

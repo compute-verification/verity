@@ -1,7 +1,8 @@
 module
 
-public meta import Aesop.BuiltinRules
 public import Flock.Bytes
+public import Proofs.Flock.Soundness.Refine.Rep
+public meta import Aesop.BuiltinRules
 public meta import Mathlib.Tactic.Simps
 public meta import Mathlib.Tactic.ToAdditive
 public meta import Mathlib.Tactic.ToDual

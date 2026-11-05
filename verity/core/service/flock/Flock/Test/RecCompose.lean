@@ -13,6 +13,7 @@ closed or going on past its close, and a record that is not one or holds an even
 module
 
 public import Flock.RecCompose
+meta import Flock.RecCompose
 
 @[expose] public section
 

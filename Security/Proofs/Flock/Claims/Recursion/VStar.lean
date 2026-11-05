@@ -1,8 +1,8 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.InnerAbort
 public import Proofs.Flock.Claims.Recursion.InnerAccepts
 public import Proofs.Flock.Claims.Recursion.Registered
-public import Proofs.Flock.Claims.Recursion.InnerAbort
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -38,7 +38,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Finder
-import Proofs.Flock.Claims.KS.Wait
 import Proofs.Flock.Claims.Prob
 import Std.Tactic.BVDecide.Normalize.Prop
 

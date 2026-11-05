@@ -1,5 +1,6 @@
 module
 
+public import Mathlib
 public import Mathlib.CategoryTheory.Category.Basic
 public import Mathlib.Combinatorics.SimpleGraph.Acyclic
 public import Mathlib.LinearAlgebra.Matrix.Rank

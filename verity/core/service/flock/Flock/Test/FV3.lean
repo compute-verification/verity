@@ -1,6 +1,7 @@
 module
 
 public import Flock.FV3
+meta import Flock.FV3
 
 /-! `FV3.Sha256` and `FV3.Sha512` domains against `verity.ml.commitments.merkle`: binding bytes `0 … 31`, owner 3, the
 values `[i] * (i + 1)` at rank `i` under schema `"sch"`, and the opening of the last position. -/

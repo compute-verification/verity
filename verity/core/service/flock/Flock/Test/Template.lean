@@ -8,6 +8,7 @@ bindings carry the label.
 module
 
 public import Flock.RecVStar
+meta import Flock.RecVStar
 
 @[expose] public section
 

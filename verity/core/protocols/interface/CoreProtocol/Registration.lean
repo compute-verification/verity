@@ -3,6 +3,8 @@ module
 public import CoreProtocol.Protocol
 public import Flock.Hash
 public import Lean.Data.Json.FromToJson.Basic
+meta import CoreProtocol.Protocol
+meta import Flock.Hash
 
 /-!
 # The registration log

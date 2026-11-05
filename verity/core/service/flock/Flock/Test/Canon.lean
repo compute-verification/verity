@@ -5,7 +5,11 @@ each reads back to its value through the verifier's parser.
 -/
 module
 
+public import Flock.Canon
+public import Flock.JsonParse
 public import Lean.Data.Json.Basic
+meta import Flock.Canon
+meta import Flock.JsonParse
 
 @[expose] public section
 

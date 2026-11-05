@@ -1,8 +1,10 @@
 module
 
-public import Definitions.Pouw.Witness
 public import Definitions.Pouw.Assumptions.Dither
 public import Definitions.Pouw.Assumptions.ShaRealize
+public import Definitions.Pouw.Witness
+public import Proofs.Pouw.Dither
+public import Proofs.Pouw.ShaRealize
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star
@@ -38,8 +40,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Pouw.Dither
-import Proofs.Pouw.ShaRealize
 
 /-!
 # `WorkSound`'s premises hold together

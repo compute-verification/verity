@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.Guarantees.ServingBlocks.Witnesses
+public import Proofs.Accounting.ServingBlocks
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Data.Rat.Cast.Order
 import Mathlib.Tactic.NormNum.Abs

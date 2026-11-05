@@ -9,6 +9,7 @@ Each form is refused where the other is pinned, and so is every other byte after
 module
 
 public import Flock.ZkProof
+meta import Flock.ZkProof
 
 @[expose] public section
 

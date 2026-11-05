@@ -1,10 +1,11 @@
 module
 
-public import Proofs.Flock.Claims.GS.Decode
-public import Proofs.Flock.Claims.DecodeFlock
-public import Proofs.Flock.Claims.RootFindGF128
 public import Mathlib.RingTheory.PiTensorProduct
 public import Mathlib.RingTheory.WittVector.IsPoly
+public import Proofs.Flock.Claims.DecodeFlock
+public import Proofs.Flock.Claims.GS.Decode
+public import Proofs.Flock.Claims.RootFindGF128
+public import ToMathlib.Algebra.BigOperators.Finset
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

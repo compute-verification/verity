@@ -2,10 +2,10 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.Event
 public import Proofs.Flock.Soundness.Discharge.Layout.Site
+public import Proofs.Flock.Soundness.Refine.Setup
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
 import Proofs.Flock.Soundness.Discharge.Layout.QSort
-import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # The tables and sites of a one-table session

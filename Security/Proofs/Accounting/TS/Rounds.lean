@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Pouw.RelativeSecurity
+public import Definitions.Accounting.Guarantees.TS
 public import Definitions.Accounting.TS.Play
+public import Proofs.Pouw.RelativeSecurity
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

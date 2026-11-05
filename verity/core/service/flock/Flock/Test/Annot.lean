@@ -8,6 +8,9 @@ them (`verity/core/difftest/tests/test_annot.py` builds them, and holds the sets
 module
 
 public import Flock.AnnotExpand
+public import Flock.JsonParse
+meta import Flock.AnnotExpand
+meta import Flock.JsonParse
 
 @[expose] public section
 

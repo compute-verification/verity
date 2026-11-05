@@ -3,6 +3,7 @@ module
 public import Definitions.NetworkCertifier.RecordRows
 public import Definitions.NetworkCertifier.Tap
 public import Mathlib.Data.Fin.VecNotation
+meta import Definitions.NetworkCertifier.RecordRows
 
 /-!
 # The network certifier's rows read back its lanes

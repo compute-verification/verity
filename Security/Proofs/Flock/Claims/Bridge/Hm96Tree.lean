@@ -1,9 +1,10 @@
 module
 
-public import Proofs.Flock.Claims.Bridge.Committed
 public import Mathlib.CategoryTheory.Category.Basic
+public import Mathlib.Geometry.Euclidean.Projection
 public import Mathlib.RingTheory.WittVector.IsPoly
 public import Mathlib.Tactic.ENatToNat
+public import Proofs.Flock.Claims.Bridge.Committed
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

@@ -11,7 +11,11 @@ The command after `IDS` is the core CLI's (`CoreProtocol.Cli`), of the composite
 module
 
 public import CoreOnsite
+public import CoreProtocol.Cli
 public import CoreRemote
+meta import CoreOnsite
+meta import CoreProtocol.Cli
+meta import CoreRemote
 
 @[expose] public section
 set_option backward.privateInPublic true

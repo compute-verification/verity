@@ -1,6 +1,9 @@
 module
 
+public import CoreProtocol.Cli
 public import PouwCheck.Credit
+meta import CoreProtocol.Cli
+meta import PouwCheck.Credit
 
 /-!
 # A PoUW period as a `Core.Protocol`: `verity/pouw/period/v1`

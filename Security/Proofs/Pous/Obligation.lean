@@ -1,7 +1,8 @@
 module
 
-public import Properties.Pous.Obligation
 public import Definitions.Pous.Guarantees.Obligation
+public import Mathlib.Topology.Path
+public import Properties.Pous.Obligation
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pous.P2.Rounds
 import Proofs.Pous.Period

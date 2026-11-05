@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.Guarantees.TS.Steer
 public import Mathlib.Tactic.ENatToNat
+public import Proofs.Accounting.TS.Stages
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Star.Real
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Accounting.TS.Stages
 
 /-!
 # Steering under one σ: proofs

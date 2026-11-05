@@ -1,7 +1,10 @@
 module
 
-public import PousCheck.Setup
+public import CoreProtocol.Cli
 public import CoreProtocol.Protocol
+public import PousCheck.Setup
+meta import CoreProtocol.Cli
+meta import PousCheck.Setup
 
 /-!
 # The public-encoder setup as a core protocol

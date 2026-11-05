@@ -1,8 +1,13 @@
 module
 
-public import NetworkCheck.Records
+public import Difftest
 public import NetworkCheck.LinkWindow
 public import NetworkCheck.Period
+public import NetworkCheck.Records
+import Flock.Sizes
+import Std.Data.HashMap
+import Std.Data.HashSet
+import Std.Data.TreeMap.Raw.Lemmas
 
 /-! The `network-records` executable: `Core.Protocol.main` of `NetworkCheck.Records.protocol`, and `network-records verdicts`,
 `Difftest.serve` of every link-window's verdict on a `serve` case, with the grid compared (`verdicts`) or not

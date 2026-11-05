@@ -18,8 +18,11 @@ anything that may import that (a composition's decoder) may import this.
 module
 
 public import Flock.Bytes
+public import Flock.Canon
+public import Lean.Data.Json
 public import Lean.Data.Json.Parser
-import Flock.Canon
+meta import Flock.Canon
+meta import Lean.Data.Json
 
 @[expose] public section
 set_option backward.privateInPublic true

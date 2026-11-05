@@ -9,6 +9,7 @@ output leaves as the check requires them, its output words in order (read off it
 module
 
 public import Flock.RecVStar
+meta import Flock.RecVStar
 
 @[expose] public section
 

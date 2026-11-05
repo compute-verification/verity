@@ -1,6 +1,16 @@
 module
 
 public import Definitions.Accounting.Guarantees.CoinFlow
+public import Mathlib.Algebra.DirectSum.Internal
+public import Mathlib.Geometry.Euclidean.Projection
+public import Mathlib.MeasureTheory.Measure.FiniteMeasure
+public import Mathlib.MeasureTheory.Measure.ProbabilityMeasure
+public import Mathlib.NumberTheory.LucasLehmer
+public import Mathlib.RepresentationTheory.Homological.GroupCohomology.LowDegree
+public import Mathlib.RingTheory.FractionalIdeal.Basic
+public import Proofs.Accounting.HMu.Luck
+import Definitions.Claims
+import Mathlib
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -15,7 +25,6 @@ import Mathlib.Geometry.Euclidean.Altitude
 import Mathlib.NumberTheory.Chebyshev
 import Mathlib.NumberTheory.Height.NumberField
 import Mathlib.NumberTheory.Height.Projectivization
-import Mathlib.NumberTheory.LucasLehmer
 import Mathlib.NumberTheory.SelbergSieve
 import Mathlib.RingTheory.Radical.NatInt
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -32,7 +41,9 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Accounting.HMu.Luck
+import Proofs.Accounting.Tag.Basic
+import Proofs.Accounting.Tag.LittlewoodOfford
+import Proofs.Accounting.Tag.Signs
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

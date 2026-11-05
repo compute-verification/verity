@@ -1,5 +1,8 @@
 module
 
+public import Flock.Bytes
+meta import Flock.Bytes
+
 /-!
 Byte-level encodings P2 shares with core: fixed-width unsigned big-endian integers (`int.to_bytes(n, "big")` and
 `int.from_bytes(b, "big")`, at a block's 2,056 bytes in tens of microseconds). Nothing here is P2's.

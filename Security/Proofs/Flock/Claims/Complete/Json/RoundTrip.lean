@@ -1,19 +1,21 @@
 module
 
-public import Flock.JsonParse
-public import Flock.Canon
-public import Proofs.Flock.Claims.Complete.Json.Value
-public import Proofs.Flock.Claims.Complete.Prover.Print
-import all Init.Data.Array.QSort.Basic
-import all Init.Data.Repr
-import all Init.Data.Int.Repr
-import all Lean.Data.Json.Basic
 public import Aesop.BuiltinRules
+public import Batteries.Tactic.OpenPrivate
+public import Flock.Canon
+public import Flock.JsonParse
 public import Mathlib.Data.Subtype
 public import Mathlib.Tactic.Attr.Core
 public import Mathlib.Tactic.Basic
 public import Mathlib.Tactic.ToAdditive
-import Batteries.Tactic.OpenPrivate
+public import Proofs.Flock.Claims.Complete.Json.Value
+public import Proofs.Flock.Claims.Complete.Prover.Print
+public import Std.Data.TreeMap.Raw.Lemmas
+public import Std.Data.TreeMap.Raw.WF
+import all Init.Data.Array.QSort.Basic
+import all Init.Data.Int.Repr
+import all Init.Data.Repr
+import all Lean.Data.Json.Basic
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -48,8 +50,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Std.Data.TreeMap.Raw.Lemmas
-import Std.Data.TreeMap.Raw.WF
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 

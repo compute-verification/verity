@@ -40,7 +40,6 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Presheaf
 import Proofs.Flock.Claims.Aggregate
 import Proofs.Flock.Claims.Finder
-import Proofs.Flock.Claims.KS.Wait
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Recursion.Abort
 import Std.Tactic.BVDecide.Normalize.BitVec

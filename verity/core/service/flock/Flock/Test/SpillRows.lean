@@ -8,6 +8,8 @@ bytes' end and the padding's start, the `hm96` block only padding: H1's tile rec
 module
 
 public import Flock.Circuit
+public import Flock.ProvedScope
+meta import Flock.ProvedScope
 
 @[expose] public section
 

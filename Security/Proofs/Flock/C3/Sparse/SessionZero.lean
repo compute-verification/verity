@@ -16,7 +16,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.RegLevels.OutRegs
 import Proofs.Flock.C3.RegLevels.ValueTie
-import Proofs.Flock.C3.Sparse.PubChecked
 import Proofs.Flock.Recursive.ValueFinder
 import Proofs.Flock.Recursive.ValueInner
 import Proofs.Flock.VBridge.Sparse.Unit

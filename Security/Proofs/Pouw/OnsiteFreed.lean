@@ -1,9 +1,11 @@
 module
 
-public import Definitions.Pouw.Guarantees.OnsiteFreed
 public import Definitions.Pouw.Assumptions.Dither
+public import Definitions.Pouw.Guarantees.OnsiteFreed
 public import Definitions.Pouw.Witness
 public import Mathlib.Tactic.ENatToNat
+public import Proofs.Pouw.Dither
+public import Proofs.Pouw.DitherWitness
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.ExponentialBounds
@@ -37,8 +39,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Pouw.Dither
-import Proofs.Pouw.DitherWitness
 
 /-!
 # The onsite PoUW protocol's freed compute: the proof

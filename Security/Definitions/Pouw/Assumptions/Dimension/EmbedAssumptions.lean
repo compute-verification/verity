@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Pouw.Assumptions.Dimension.OpenPipe
 public import Definitions.Pouw.Dimension.Lift
 
 /-!

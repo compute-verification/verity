@@ -1,19 +1,21 @@
 module
 
 public import Aesop.BuiltinRules
-public meta import Aesop.BuiltinRules
 public import Batteries.Data.ByteArray
 public import Batteries.Data.List.Basic
 public import Flock.With.Log
 public import Mathlib.Data.Nat.Notation
 public import Mathlib.Tactic.Basic
-public meta import Mathlib.Tactic.Simps
 public import Mathlib.Tactic.Simps
 public import Mathlib.Tactic.ToAdditive
-public meta import Mathlib.Tactic.ToAdditive
 public import Mathlib.Tactic.ToDual
-public meta import Mathlib.Tactic.ToDual
+public import Proofs.Flock.Claims.KS.ConflictWithin
+public import Proofs.Flock.Soundness.Refine.Walk
 public import Std.Do.Triple.SpecLemmas
+public meta import Aesop.BuiltinRules
+public meta import Mathlib.Tactic.Simps
+public meta import Mathlib.Tactic.ToAdditive
+public meta import Mathlib.Tactic.ToDual
 public meta import Std.Do.Triple.SpecLemmas
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

@@ -26,6 +26,8 @@ private form (the division committed under hiding leaves, compliance proved, a p
 -/
 module
 
+public import CoreComposition.Blobs
+public import CoreComposition.Cases
 public import CoreComposition.Tie
 public import MemoryChallenger.WipeProtocol
 public import NciCheck.Protocol
@@ -33,8 +35,21 @@ public import NetworkCheck.Period
 public import PousCheck.RunProtocol
 public import PouwCheck.Period
 public import RemoteAudit.P2Protocol
+public import SampledProofs.OneStage
+public import SampledProofs.OneStageZk
 public import VStarRecursive.Sampled
-import CoreComposition.Cases
+meta import CoreComposition.Blobs
+meta import CoreComposition.Cases
+meta import CoreComposition.Tie
+meta import MemoryChallenger.WipeProtocol
+meta import NciCheck.Protocol
+meta import NetworkCheck.Period
+meta import PousCheck.RunProtocol
+meta import PouwCheck.Period
+meta import RemoteAudit.P2Protocol
+meta import SampledProofs.OneStage
+meta import SampledProofs.OneStageZk
+meta import VStarRecursive.Sampled
 
 @[expose] public section
 

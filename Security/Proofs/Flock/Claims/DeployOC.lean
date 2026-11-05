@@ -1,9 +1,10 @@
 module
 
-public import Flock.With.SimSetup
 public import Batteries.Data.ByteArray
 public import Definitions.Core.Interaction
+public import Flock.With.SimSetup
 public import Mathlib.Control.Lawful
+public import Mathlib.NumberTheory.LucasLehmer
 import Flock.With.SimVerify
 import Flock.With.SimZk
 import Mathlib.Algebra.Order.Floor.Extended
@@ -20,7 +21,6 @@ import Mathlib.Geometry.Euclidean.Altitude
 import Mathlib.NumberTheory.Chebyshev
 import Mathlib.NumberTheory.Height.NumberField
 import Mathlib.NumberTheory.Height.Projectivization
-import Mathlib.NumberTheory.LucasLehmer
 import Mathlib.NumberTheory.SelbergSieve
 import Mathlib.RingTheory.Radical.NatInt
 import Mathlib.Tactic.Echelon.Zsqrtd

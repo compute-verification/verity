@@ -7,9 +7,12 @@ rejects when one failed, and is undecided when fewer than k were drawn.
 -/
 module
 
+public import CoreProtocol.Cli
 public import CoreProtocol.Profile
 public import CoreProtocol.Protocol
 import Lean.Data.Json.FromToJson.Basic
+meta import CoreProtocol.Cli
+meta import CoreProtocol.Profile
 
 @[expose] public section
 set_option backward.privateInPublic true

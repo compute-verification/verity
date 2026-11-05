@@ -8,6 +8,8 @@ module
 
 public import Flock.Test.Tmpl
 public import Flock.TmplValue
+meta import Flock.Test.Tmpl
+meta import Flock.TmplValue
 
 @[expose] public section
 

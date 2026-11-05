@@ -1,20 +1,20 @@
 module
 
-import all Init.Data.Array.Basic
-import all Init.Data.Array.DecidableEq
-import all Init.Data.String.Defs
-import all Init.Data.Range.Basic
-import all Init.Data.Repr
-import all Init.Data.List.SplitOn.Basic
-import all Init.Data.Nat.Power2.Basic
-import all Std.Data.DHashMap.Basic
-import all Std.Data.DHashMap.Internal.AssocList.Basic
-import all Std.Data.DHashMap.Internal.Defs
-import all Std.Data.DHashMap.Raw
+public import Mathlib.Algebra.Module.Torsion.Basic
+public import Mathlib.Algebra.Ring.Subsemiring.Defs
+public import Mathlib.Combinatorics.SimpleGraph.AdjMatrix
+public import Mathlib.RepresentationTheory.Invariants
 public import Mathlib.Tactic.Bound
 public import Mathlib.Tactic.ENatToNat
 public import Proofs.Properties.CertifierNetwork.Defs
 public import Std.Tactic.BVDecide.Normalize.Prop
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.List.SplitOn.Basic
+import all Init.Data.Nat.Power2.Basic
+import all Init.Data.Range.Basic
+import all Init.Data.Repr
+import all Init.Data.String.Defs
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -49,6 +49,10 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Properties.CertifierDevice.Lms
 import Proofs.Properties.CertifierNetwork.Accepted
 import Proofs.Properties.CertifierNetwork.Encode
+import all Std.Data.DHashMap.Basic
+import all Std.Data.DHashMap.Internal.AssocList.Basic
+import all Std.Data.DHashMap.Internal.Defs
+import all Std.Data.DHashMap.Raw
 
 /-!
 # The completeness statements' honest cases, instantiated

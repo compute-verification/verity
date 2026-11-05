@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Sites
 public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Sites
 public import Proofs.Flock.Soundness.Discharge.Layout.Outs
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -18,7 +19,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Headline
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Discharge.Layout.QSort
 
 @[expose] public section

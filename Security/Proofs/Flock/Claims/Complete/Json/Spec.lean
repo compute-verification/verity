@@ -1,10 +1,15 @@
 module
 
-public import Proofs.Flock.Claims.Complete.Json.Value
-public import Proofs.Flock.Claims.JsonEq
-import all Lean.Data.Json.Basic
-import all Init.Data.Ord.String
+public import Definitions.Claims
 public import Definitions.Core.Interaction
+public import Flock.Canon
+public import Proofs.Flock.Claims.Complete.Json.RoundTrip
+public import Proofs.Flock.Claims.Complete.Json.Value
+public import Proofs.Flock.Claims.Complete.Prover.Print
+public import Proofs.Flock.Claims.JsonEq
+public import Std.Data.TreeMap.Raw.Lemmas
+import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

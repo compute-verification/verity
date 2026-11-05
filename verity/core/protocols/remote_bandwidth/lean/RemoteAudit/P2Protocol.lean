@@ -1,8 +1,12 @@
 module
 
+public import CoreProtocol.Cli
+public import CoreProtocol.Protocol
 public import CoreProtocol.Ratio
 public import RemoteAudit.Verifier
-public import CoreProtocol.Protocol
+meta import CoreProtocol.Cli
+meta import CoreProtocol.Ratio
+meta import RemoteAudit.Verifier
 
 /-!
 # A session over PoUS's P2 store as a core protocol

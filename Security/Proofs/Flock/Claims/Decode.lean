@@ -1,7 +1,10 @@
 module
 
-public import Proofs.Flock.Claims.Counted
 public import ArkLib.Data.CodingTheory.GuruswamiSudan.GuruswamiSudan
+public import Mathlib.NumberTheory.LucasLehmer
+public import Proofs.Flock.Claims.Counted
+import Definitions.Claims
+import Mathlib
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Star.Real
@@ -17,7 +20,6 @@ import Mathlib.Geometry.Euclidean.Altitude
 import Mathlib.NumberTheory.Chebyshev
 import Mathlib.NumberTheory.Height.NumberField
 import Mathlib.NumberTheory.Height.Projectivization
-import Mathlib.NumberTheory.LucasLehmer
 import Mathlib.NumberTheory.SelbergSieve
 import Mathlib.RingTheory.Radical.NatInt
 import Mathlib.RingTheory.WittVector.IsPoly

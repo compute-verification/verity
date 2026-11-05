@@ -6,8 +6,11 @@ form, a duplicate key and a text that isn't JSON are each refused.
 -/
 module
 
+public import Flock.JsonParse
 public import Flock.RecordText
 public import Lean.Data.Json.Printer
+meta import Flock.JsonParse
+meta import Flock.RecordText
 
 @[expose] public section
 

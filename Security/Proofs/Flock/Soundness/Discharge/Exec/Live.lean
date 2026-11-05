@@ -4,12 +4,12 @@ public import Proofs.Flock.Soundness.Discharge.Exec.Event
 public import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL
 public import Proofs.Flock.Soundness.Discharge.Exec.StrictCRL
 public import Proofs.Flock.Soundness.Headline
+public import Proofs.Flock.Soundness.Refine.LiveCompiled
 public import Proofs.Flock.Soundness.Refine.LiveSim
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Exec.HeadlineL
 import Proofs.Flock.Soundness.Game.Basic
 import Proofs.Flock.Soundness.Game.Prob
-import Proofs.Flock.Soundness.Refine.LiveCompiled
 import Proofs.Flock.Soundness.Refine.Plays
 
 /-!

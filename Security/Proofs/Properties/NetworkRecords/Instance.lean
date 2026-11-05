@@ -1,11 +1,14 @@
 module
 
+public import Batteries.Data.ByteArray
+public import Mathlib.Algebra.Ring.Subsemiring.Defs
+public import Mathlib.Tactic.ENatToNat
+public import Proofs.Properties.NetworkRecords.Accept
+public import Properties.NetworkRecords
+import Difftest
 import all Init.Data.Array.Basic
 import all Init.Data.Array.DecidableEq
 import all Init.Data.Repr
-public import Batteries.Data.ByteArray
-public import Mathlib.Tactic.ENatToNat
-public import Properties.NetworkRecords
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -37,8 +40,18 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
+import NetworkCheck.RecordsBytes
+import Proofs.Properties.CertifierDevice.Basic
+import Proofs.Properties.CertifierDevice.Lms
+import Proofs.Properties.CertifierNetwork.Encode
+import Proofs.Properties.Identity
+import Proofs.Properties.NetworkCertifier
 import Proofs.Properties.NetworkCertifier.Check
-import Proofs.Properties.NetworkRecords.Accept
+import Proofs.Properties.NetworkCertifier.Grid
+import Proofs.Properties.NetworkRecords.Bytes
+import Proofs.Properties.NetworkRecords.Check
+import Proofs.Properties.NetworkRecords.Commit
+import Proofs.Properties.NetworkRecords.Program
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

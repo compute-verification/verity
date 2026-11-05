@@ -1,6 +1,8 @@
 module
 
+public import Mathlib.CategoryTheory.Types.Basic
 public import Proofs.Pous.P2.Domain
+public import Proofs.Pous.P2.RingBasic
 public import Proofs.Pous.Sanity
 public import Proofs.Pous.Thm1.Theorem1iTimed
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal

@@ -1,6 +1,7 @@
 module
 
 public import Aesop.BuiltinRules
+public import Definitions.Pouw.PearlC.DeviceFp4
 public import Mathlib.Tactic.Attr.Core
 import Mathlib.Algebra.Order.AbsoluteValue.Basic
 import Mathlib.Data.Finset.Attr

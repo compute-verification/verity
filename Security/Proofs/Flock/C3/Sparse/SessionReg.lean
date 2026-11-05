@@ -1,7 +1,7 @@
 module
 
-public import Proofs.Flock.C3.Sparse.MsgsLayers
 public import Proofs.Flock.C3.Reps.WRead
+public import Proofs.Flock.C3.Sparse.MsgsLayers
 public import Proofs.Flock.C3.VStarList.Shape
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
@@ -18,7 +18,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.C3.Compose.RsFacts
-import Proofs.Flock.C3.Sparse.PubChecked
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.ZkExec.Setup

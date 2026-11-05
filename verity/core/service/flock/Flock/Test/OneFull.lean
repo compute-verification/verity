@@ -6,6 +6,7 @@ would be) is refused, and so are two tables and none. Without an inner shape it 
 module
 
 public import Flock.RecSetup
+meta import Flock.RecSetup
 
 @[expose] public section
 

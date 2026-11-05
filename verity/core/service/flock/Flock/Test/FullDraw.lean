@@ -10,6 +10,7 @@ session without the inner record.
 module
 
 public import Flock.RecSetup
+meta import Flock.RecSetup
 
 @[expose] public section
 

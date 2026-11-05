@@ -1,6 +1,8 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
 public import Proofs.Flock.Soundness.Discharge.ZkView.Statements
+public import Proofs.Flock.Verifier.Hash
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -17,8 +19,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.CROnly.ZK
-import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
-import Proofs.Flock.Verifier.Hash
 import VCVio.Prelude.Core
 
 /-!

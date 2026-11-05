@@ -1,5 +1,7 @@
 module
 
+public import Definitions.Core.TC.Relation
+
 /-!
 # The range and is-zero gadgets, chunk by chunk
 

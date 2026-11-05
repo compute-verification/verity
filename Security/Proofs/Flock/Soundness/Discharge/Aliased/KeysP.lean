@@ -6,6 +6,7 @@ public import Mathlib.Data.Int.Notation
 public import Mathlib.Tactic.Attr.Core
 public import Mathlib.Tactic.ToAdditive
 public import Mathlib.Tactic.ToDual
+public import Proofs.Flock.Soundness.Discharge.Aliased.Keys
 public import Properties.Flock.Circuit.Keys
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.CategoryTheory.Category.Init

@@ -7,6 +7,7 @@ every `fast100` level is below.
 module
 
 public import Flock.RecCoins
+meta import Flock.RecCoins
 
 @[expose] public section
 

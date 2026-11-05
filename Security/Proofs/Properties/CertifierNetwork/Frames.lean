@@ -1,8 +1,7 @@
 module
 
-public import Proofs.Properties.CertifierNetwork.Defs
-public import Proofs.Flock.C3.PubRows.Check
 public import Proofs.Properties.CertifierDevice.Step
+public import Proofs.Properties.CertifierNetwork.Defs
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

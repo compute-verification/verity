@@ -1,7 +1,8 @@
 module
 
-public import Definitions.Pouw.PearlC.PeelFp4Vectors
 public import Definitions.Pouw.PearlC.DeviceFp4
+public import Definitions.Pouw.PearlC.PeelFp4Vectors
+public import Proofs.Pouw.PearlC.PeelFp4Proofs
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Tactic.Positivity.Finset
 

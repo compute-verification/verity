@@ -1,16 +1,17 @@
 module
 
-import all Init.Data.List.Control
 public import Aesop.BuiltinRules
 public import Batteries.Data.ByteArray
 public import Flock.With.Log
 public import Mathlib.Algebra.GroupWithZero.Nat
 public import Mathlib.Tactic.Basic
+public import Mathlib.Tactic.ToDual
+public import Proofs.Flock.Claims.Recursion.LogWalk
+public import Std.Do.Triple.SpecLemmas
 public meta import Mathlib.Tactic.Basic
 public meta import Mathlib.Tactic.ToAdditive
-public import Mathlib.Tactic.ToDual
 public meta import Mathlib.Tactic.ToDual
-public import Std.Do.Triple.SpecLemmas
+import all Init.Data.List.Control
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -44,7 +45,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Recursion.LogWalk
 import VCVio.Prelude.Core
 
 /-!

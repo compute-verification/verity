@@ -1,8 +1,12 @@
 module
 
 public import Definitions.Accounting.Guarantees.RateAuditRemote
+public import Mathlib
 public import Mathlib.Algebra.Group.End
 public import Mathlib.Tactic.ENatToNat
+public import Proofs.Accounting.RateAudit.Conservation
+public import Proofs.Accounting.RateAudit.Interactive
+public import Proofs.Accounting.RateAudit.Windows
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,8 +38,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Accounting.RateAudit.Conservation
-import Proofs.Accounting.RateAudit.Windows
 
 /-!
 # Chained passes: the proof

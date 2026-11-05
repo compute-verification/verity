@@ -1,8 +1,10 @@
 module
 
-public import Flock.JsonParse
 public import Aesop.BuiltinRules
+public import Flock.JsonParse
+public import Proofs.Flock.Claims.Complete.Json.Spec
 public import Proofs.Flock.Claims.Complete.Json.Value
+public import Std.Data.TreeMap.Raw.WF
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,7 +38,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Json.RoundTrip
 import Std.Data.TreeMap.Raw.Lemmas
-import Std.Data.TreeMap.Raw.WF
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

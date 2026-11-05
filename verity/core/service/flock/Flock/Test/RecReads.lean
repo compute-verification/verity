@@ -8,7 +8,10 @@ repeats the key `"rounds"` with other coins, which `JsonParse.parse` reads and `
 -/
 module
 
+public import Flock.JsonParse
 public import Flock.RecSetup
+meta import Flock.JsonParse
+meta import Flock.RecSetup
 
 @[expose] public section
 

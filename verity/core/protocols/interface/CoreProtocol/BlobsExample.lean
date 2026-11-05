@@ -7,6 +7,8 @@ module
 
 public import CoreProtocol.Blobs
 public import CoreProtocol.Example
+meta import CoreProtocol.Blobs
+meta import CoreProtocol.Example
 
 @[expose] public section
 

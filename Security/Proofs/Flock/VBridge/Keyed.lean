@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.VBridge.Unit
 public import Proofs.Flock.Soundness.Discharge.Const.Inst
+public import Proofs.Flock.Soundness.Discharge.Placed.Wiring
+public import Proofs.Flock.VBridge.Unit
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -18,7 +19,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Audit.Circuit
-import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 import VCVio.Prelude.Core
 
 /-!

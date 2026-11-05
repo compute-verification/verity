@@ -7,6 +7,9 @@ open to their roots, and `--rec-links ROOT:N` is read only at a table's root and
 module
 
 public import Flock.RecLinkTree
+public import Flock.RecLinks
+meta import Flock.RecLinkTree
+meta import Flock.RecLinks
 
 @[expose] public section
 

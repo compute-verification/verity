@@ -7,6 +7,7 @@ proves a unit reads only its wires.
 module
 
 public import Flock.Test.RegProgram
+meta import Flock.Test.RegProgram
 
 @[expose] public section
 

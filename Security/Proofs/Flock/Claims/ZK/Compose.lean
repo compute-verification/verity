@@ -1,7 +1,11 @@
 module
 
-public import Proofs.Flock.Claims.ZK.Interact
 public import Definitions.Claims.IndexedTapes
+public import Mathlib.NumberTheory.LucasLehmer
+public import Proofs.Flock.Claims.ZK.Indexed
+public import Proofs.Flock.Claims.ZK.Interact
+public import Proofs.Flock.Claims.ZK.Rewind
+import Mathlib
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -16,7 +20,6 @@ import Mathlib.Geometry.Euclidean.Altitude
 import Mathlib.NumberTheory.Chebyshev
 import Mathlib.NumberTheory.Height.NumberField
 import Mathlib.NumberTheory.Height.Projectivization
-import Mathlib.NumberTheory.LucasLehmer
 import Mathlib.NumberTheory.SelbergSieve
 import Mathlib.RingTheory.Radical.NatInt
 import Mathlib.RingTheory.WittVector.IsPoly
@@ -37,7 +40,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
-import Proofs.Flock.Claims.ZK.Rewind
 import Proofs.Flock.Claims.ZK.Statement
 import Std.Tactic.BVDecide.Normalize.Prop
 

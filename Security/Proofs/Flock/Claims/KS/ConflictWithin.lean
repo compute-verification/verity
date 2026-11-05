@@ -1,6 +1,8 @@
 module
 
+public import Proofs.Flock.Claims.KS.ConflictMerkle
 public import Proofs.Flock.Claims.KS.ConflictOC
+public import Proofs.Flock.Soundness.Refine.Rep
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -32,8 +34,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.KS.ConflictMerkle
-import Proofs.Flock.Soundness.Refine.Rep
 import Std.Tactic.BVDecide.Normalize.Prop
 import VCVio.Prelude.Core
 
