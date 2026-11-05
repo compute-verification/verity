@@ -11,7 +11,8 @@ the place of the rep's next scheduled round leaves the loop's state after it (`r
 
 * `round_unstop`: a round the frame releases at a state alike the model's for it, at the model's configuration, in the
   place of the rep's next scheduled round with its coin count, leaves a state alike the loop's after the round.
-* `cfg_of_rep`: the model's configuration reads the history only through its round's rep.
+* `cfg_of_rep`, `cfg_same`: the model's configuration reads the history only through its round's rep, so it is one for
+  a rep's round past its first and the round before it.
 * **`roundRun_step`**: so at a `RoundRun` past the rep's first round whose next round is the same rep's, where the
   frame `roundPlace` readied has the model's configuration and its state but for `stopped`, in the place of the rep's
   next scheduled round with its count, the frame the session's next round finds is its run one round on, at the
@@ -80,6 +81,36 @@ theorem cfg_of_rep {W Rr : Type} (L : LeanRelease W Rr) (x : Msg) (ρ : Rr) {h h
   rw [hr]
 
 open Loop LeanRelease in
+/-- **The model's configuration for a rep's round is the one for the same rep's next**: where the round after
+`e0 :: h1` and one more message is past its rep's first (`hj`), the round after `e0 :: h1` is the same rep's, so the
+model's configuration is one for both histories. -/
+theorem cfg_same (T : ZKMal.CoinLayer.TableData)
+    (L₀ : LeanRelease Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
+    (real : Msg → Claims.Flock.Wit →
+      (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
+      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (x : Msg) (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
+    (e0 : Msg × Msg) (h1 : List (Msg × Msg)) {s0 : _} {spec : SessionSpec} {sts : Array Stmt} {q₀ j : Nat}
+    (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : h1.length = q₀ + 1)
+    (hj : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 h1.length).2 = j + 1) (e : Msg × Msg) :
+    (ofLoop T L₀ real).cfg x ρ (e0 :: h1) = (ofLoop T L₀ real).cfg x ρ (e0 :: (h1 ++ [e])) := by
+  apply cfg_of_rep
+  have e1 : (e0 :: h1).length = q₀ + 2 := by
+    simp only [List.length_cons]
+    omega
+  have e2 : (e0 :: (h1 ++ [e])).length = q₀ + 1 + 2 := by
+    simp only [List.length_cons, List.length_append, List.length_nil]
+    omega
+  have hj' : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 (q₀ + 1)).2 = j + 1 := by
+    rw [← hq]
+    exact hj
+  show repOf x (e0 :: h1).length = repOf x (e0 :: (h1 ++ [e])).length
+  rw [e1, e2, repOf_add_two hx, repOf_add_two hx]
+  have hp := congrArg Prod.fst (locate_pred (roundsOf spec sts) 0 q₀ j hj')
+  exact hp
+
+open Loop LeanRelease in
 /-- **A rep's frame at the session's next round, at the model's state, from the model's state at this one**: at a
 `RoundRun` at the model's count whose content is the worker's message `v`, past the rep's first round (`hj₀`) and
 whose next round is the same rep's (`hj`), whose round releases and whose coins the rep's frame took off the auditor's
@@ -127,23 +158,8 @@ theorem roundRun_step (T : ZKMal.CoinLayer.TableData)
       RepRun pre (ev ++ [(loopNr x h1.length, if nd.isSome then ByteArray.empty else (⟨v.toArray⟩ : ByteArray), pl',
         _root_.Flock.Firewall.Frames.feedOf (loopNr x h1.length) a.data.toList)]) p ∧
       unstop p.st.m = unstop m := by
-  have hrep : (ofLoop T L₀ real).rep x (e0 :: h1).length =
-      (ofLoop T L₀ real).rep x (e0 :: (h1 ++ [(v, a.data.toList)])).length := by
-    have e1 : (e0 :: h1).length = q₀ + 2 := by
-      simp only [List.length_cons]
-      omega
-    have e2 : (e0 :: (h1 ++ [(v, a.data.toList)])).length = q₀ + 1 + 2 := by
-      simp only [List.length_cons, List.length_append, List.length_nil]
-      omega
-    have hj' : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 (q₀ + 1)).2 = j + 1 := by
-      rw [← hq]
-      exact hj
-    show repOf x (e0 :: h1).length = repOf x (e0 :: (h1 ++ [(v, a.data.toList)])).length
-    rw [e1, e2, repOf_add_two hx, repOf_add_two hx]
-    have hp := congrArg Prod.fst (locate_pred (roundsOf spec sts) 0 q₀ j hj')
-    exact hp
   have hcfg : CfgAlike q.cfg ((ofLoop T L₀ real).cfg x ρ (e0 :: (h1 ++ [(v, a.data.toList)]))) := by
-    rw [hcq, cfg_of_rep (ofLoop T L₀ real) x ρ hrep]
+    rw [hcq, cfg_same T L₀ real x ρ e0 h1 hx hq hj (v, a.data.toList)]
     exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
   have hu : unstop (_root_.Flock.Firewall.Frame.step q.cfg q.st (.round (loopNr x h1.length)
       (if nd.isSome then ByteArray.empty else (⟨v.toArray⟩ : ByteArray)) pl')).2.m =

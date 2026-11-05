@@ -35,6 +35,7 @@ public import Proofs.Flock.ZkAny.RelayProg
 public import Proofs.Flock.ZkAny.RelayPlace
 public import Proofs.Flock.ZkAny.RelayWords
 public import Proofs.Flock.ZkAny.RelayCount
+public import Proofs.Flock.ZkAny.RelaySame
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release
@@ -59,6 +60,8 @@ rep past its first to the same rep's next, at the model's configuration and stat
 session's next round finds at the model's state for that round; and past a stream's first round the readied
 frame `placeOf`'s, its round in the place its schedule so far gives and the frame after it keeping that schedule;
 and a rep's frame holding the history's words for its rounds so far from one round of the rep to the next; and its
-configuration kept, and a round's count its frame's schedule's where it is the placeholder's. -/
+configuration kept, and a round's count its frame's schedule's where it is the placeholder's; and so, from one
+round of a rep to the same rep's next, the rep's frame at the model's configuration, masking state and words, keeping
+its schedule so far, its round in that schedule's place. -/
 
 @[expose] public section
