@@ -55,7 +55,6 @@ public import Proofs.Pouw.FpG1.H1
 public import Proofs.Pouw.Game
 public import SampledProofs.HiddenDraw
 public import Proofs.Pouw.H1Zy
-public import Proofs.Pouw.Lead
 public import Proofs.Pouw.LiveCredit
 public import Proofs.Pouw.M1
 public import Proofs.Pouw.MerkleExtract
@@ -195,12 +194,9 @@ public import Proofs.Pouw.TileBound.Proofs
 public import Proofs.Pouw.TileBound.Witness
 public import Proofs.Pouw.Window
 public import Proofs.Pouw.Witness
-public import Proofs.Pouw.Writes
 
 /-!
 # PoUW's proofs
-
-`Writes` holds the proofs of what writing distinct words costs, one a guarantee under the guarantee's own name.
 
 Every theorem of the package and every lemma behind it, over `Definitions.Pouw`'s definitions and `Definitions.Pouw.Assumptions`'
 named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` (`Barrier`, `Dimension`,
