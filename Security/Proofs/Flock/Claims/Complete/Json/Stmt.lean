@@ -5,9 +5,7 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 public import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
 public import Proofs.Flock.Soundness.Discharge.Exec.Setup
-public import Flock.JsonParse
-public import Std.Data.TreeMap.Raw.WF
-public import Proofs.Flock.Claims.Complete.Json.Spec
+public import Proofs.Flock.Claims.Complete.Json.Parse
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 import all Init.Data.Ord.String
