@@ -8,7 +8,8 @@ public import Proofs.Properties.Verity.Recursive.Audit
 # Sampled proofs' recursive form at the deployment, from the targets still open
 
 `RecursiveForm V k`, the leg's target at parameters that don't name the one-stage form (`ParamsAt`), from
-`Flock.SecurityProofs.RecursiveKS` through the recursive configuration's target (`Recursive.sampledProofsRecursive_of_ks`):
+`Flock.SecurityProofs.RecursiveKS` through the recursive configuration's target
+(`Recursive.sampledProofsRecursive_of_ks`):
 
 * **the verdict** (`recVerdict_of_verdict`): off the one-stage form, the sampled verdict is the recursive
   configuration's (`Recursive.RecVerdict`), and its parameters name the recursive form (`RecParamsAt`). Sampled proofs'
@@ -183,9 +184,9 @@ theorem errAt_le (R : RecSession V k θ F c σ) :
   unfold Vocab.error Accounting.condError Recursive.Dep.errAt
   beta_reduce
   by_cases hV : V.finderCR .sampled θ F c σ ∧ V.FinderCR .sampled θ F c σ ∧ V.Unforgeable .sampled θ F c σ
-  · rw [if_pos hV, if_pos (R.finderCR hV)]
+  · rw [ite_eq_left hV, ite_eq_left (R.finderCR hV)]
     exact R.delta.trans (le_self_add.trans le_self_add)
-  · rw [if_neg hV]
+  · rw [ite_eq_right hV]
     exact le_top
 
 end RecSession
