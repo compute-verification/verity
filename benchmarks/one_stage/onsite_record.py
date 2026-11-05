@@ -201,7 +201,7 @@ EPS = {"is": "δ_net's δ part alone: m · δ and each charged audit's δ",
 #: failure by δ + ε_ks + ε_bind + ε_tap
 ERRORS = {
     "ε_ks": {"is": "the knowledge error, κ(δ) − δ + √(γ·Pr[B])",
-             "source": "Claims.Sampling.KS at the deployment, PeriodLeakAccepted's hypothesis"},
+             "source": "Claims.Sampling.KSBy at the deployment's wired check, PeriodLeakAccepted's hypothesis"},
     "ε_bind": {"is": "the binding error, Pr[B_ext]: an accepted extraction that disagrees with the committed trace",
                "source": "Claims.Sampling.Bext, a SHA-512 collision in the run (CommitmentScheme.Binds)"},
     "ε_tap": {"is": "Pr[B_tap]: the extracted trace's openings colliding with the network certifier's",
@@ -388,16 +388,16 @@ RESTATE_TIED = ("to be restated before any pin of it counts, and never a dischar
 #: be restated, why, which keeps it open at any statement. Parameters the record states (δ ≥ 0) aren't listed
 RESTS_ON: dict[str, dict[str, Any]] = {
     "NetTiming.SecurityProofs.PeriodLeakAccepted": {
-        "statement": "0db3f3a734d201ea45375c21d5f216e32657736e057303e8cb3291e0732a3531",
-        "takes": {"Claims.Sampling.KS": "sampled-leg-bridge", "Claims.Flock.ListWithin": "sampled-leg-bridge",
+        "statement": "a0a9c23666273efec9d2ddef896331f0d5a3699e707f317fe3de4e7189f29a17",
+        "takes": {"Claims.Sampling.KSBy": "sampled-leg-bridge", "Claims.Flock.ListWithin": "sampled-leg-bridge",
                   "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge",
                   "Verity.Assumptions.TrustedHost": "Verity.Assumptions.TrustedHost",
                   "hPw": "windows-placed", "hβ": "windows-placed", "hcap": "schedules-held",
                   "hfit": "schedules-held", "hs": "schedules-covered", "hdz": "client-decodes",
                   "NetTiming.ScopeAcc": "wires-fit", "NetTiming.TapOpens": "taps-open"}},
     "NetTiming.SecurityProofs.PeriodLeakRegistered": {
-        "statement": "a950c611a388e2a0afa380e293fdc65946330ba10ed90b6f8f567883d6f1af09",
-        "takes": {"Claims.Sampling.KS": "sampled-leg-bridge", "Claims.Flock.ListWithin": "sampled-leg-bridge",
+        "statement": "2865cabaa8bda7278b8ef4a4811e4c8bf858af621fffa21481551790b29a7a45",
+        "takes": {"Claims.Sampling.KSBy": "sampled-leg-bridge", "Claims.Flock.ListWithin": "sampled-leg-bridge",
                   "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge",
                   "Verity.Assumptions.TrustedHost": "Verity.Assumptions.TrustedHost",
                   "NetTiming.WindowsPlaced": "windows-placed", "NetTiming.SchedulesHeld": "schedules-held",
@@ -543,7 +543,9 @@ PREMISES: dict[str, dict[str, Any]] = {
                                 "decoder, is what K counts (`COUNTS`)",
                           "discharged_by": ("Properties.NetworkCertifier.schedulesCoveredAt",)},
     "sampled-leg-bridge": {"is": "the sampled leg's bridge, from its guarantee Verity.Vocab.SampledProofsSound at "
-                                 "one-stage v2 to OneStageZk's Lean record: the sampled facts the period takes (KS; "
+                                 "one-stage v2 to OneStageZk's Lean record: the sampled facts the period takes (KSBy at "
+                                 "the wired check at the layout's wires, KS where it has none, from KS_of's hypotheses "
+                                 "and the record's check of each session's wired reads, WiredReads; "
                                  "ListWithin, the decoder's list at Flock's radius; Binds, the trace commitment's "
                                  "binding; at the per-member record, the only form with wires, SessionKS, the sessions' "
                                  "KS, which SessionKS_of can't give there, its SessionRuns failing at more than one "
