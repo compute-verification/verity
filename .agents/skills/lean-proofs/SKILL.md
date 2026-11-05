@@ -136,7 +136,9 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 - Record your lock at your own head, then mark (`ready` refuses a changed lock no records run of that head passed); a
   passing Lean check, a clean merge of `main` over a passing head, or a commit of exactly the records under `record/` a
   passing run kept needs no new run. A records run whose only failures are record differences exits 0 with
-  `outcome: regenerated` and keeps each record under `record/`; any other failure exits non-zero. A train regenerates records that differ only because another PR moved what yours
+  `outcome: regenerated` and keeps each record under `record/`; any other failure exits non-zero. A run on inputs whose
+  records already passed (on that node, or in a result the node's store holds) builds nothing; `lean_changed.py
+  --inputs-key PKG` prints the key it looks up. A train regenerates records that differ only because another PR moved what yours
   reads; re-record only what it can't (a refused conflict, `shape`, a move's map).
 
 ## Standing rulings
