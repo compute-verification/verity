@@ -1123,3 +1123,57 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
 4. **cpu-5's ec10** runs untouched. I read its big AttnBlockFirst sessions from about 11:30Z.
 
 **I wait on:** the dress rehearsal (ETA about 11:30Z), then ec10's big sessions.
+
+## 10:08Z Thu (vllm-pearlplus): **ec10 ran out of inodes, not bytes. I deleted what it left on cpu-5 with `retention rm`, so cpu-5 now has 1.28M inodes and 953 GB free; the e9a7e9… file stays for ODLEAN. The record's follow-on needs about 1.0M inodes and 1.28 TB. That fits cpu-3's 1.3 TB hold only if the follow-on deletes each archive after its Lean verdict, and cpu-3 doesn't see its 4.1 TiB yet. The tally is on VLLM-182.**
+
+1. **What ran out (your 09:30Z item 1).**
+   - **Inodes.** cpu-5's /workspace is ext4 with a fixed 8,380,416 inodes. Free inodes hit 0 at 08:41:59–08:42:10Z and again at 08:42:46Z, while bytes never fell below 457 GB free. The write that failed was session m93097's `prove.log`.
+   - **Where.** ec10 worked in the serve dir's copy, `vllm-served-verdicts/r20261104-223945-eeab/v3c-w0-4-32-4/`, not in a scratch dir. Its scratch clone was removed at exit, as usual. The copy held 885,554 inodes:
+     - the deferral's window copy: 386,195;
+     - the 128,631 member dirs the audit makes at its start, one for every member of the population, not just the 561 drawn: 495,603;
+     - the compose cache: 2,245 inodes, but 524 GB;
+     - the 96 session dirs: 2,093.
+   - **Why it ran out.** ec10 started with 1.04M inodes free, and the member dirs left about 0.54M. drive's check jobs move cpu-5's free inodes by up to about 1.26M, and at 08:42Z one of those swings took the rest.
+   - **Sessions:** 96 of 561 started, and 95 were proved and Lean-verified. The 96th was proved and m0 accepted it, but the exhaustion stopped it before its Lean check. The audit then drained its queued Lean checks and exited at 09:21Z.
+   - **Per-session growth:** 22 inodes and 0.53 GB on average (median 0.39 GB, max 4.6 GB). It is all the Lean archive: `flock-verify archive-put` copies the member's circuit (no hard link), the window's 0.30 GB `circuit.json` and its public inputs into `session-mN/archive/`.
+   - **Cleaned** in r20261105-095549-4645, after a dry run that refused nothing (`--approved-by @vllm`, `--ref` your 09:30Z order and 03:52Z decision):
+     - **Deleted:** the window copy, the 128,631 member dirs and 1,120 of the cache's 1,122 entries, 129,752 paths in all.
+     - **Effect:** cpu-5 went from 222k to 1.28M free inodes (98% to 85% used), and from 474 GB to 953 GB free (54% used).
+     - **Kept:**
+       - `compose-cache/e9a7e9…` and its marker (27.5 GB), until 21:30Z;
+       - the 96 session dirs (about 2,200 inodes, 50 GB of logs, ZK session records and Lean archives);
+       - `audit/challenger`, `tie.json` and the window-level records;
+       - `private/`, `pearlplus/` and the run dir.
+     - **Memory:** ec10's 320 GB reservation is gone. It has no ramlock file, and `research mem` counts only the checks' reservations.
+     - **Next:** I delete e9a7e9… after 21:30Z. Say if the session dirs should go too; that's one `retention rm` for 50 GB.
+2. **The record's follow-on (item 2).** These figures come from ec10's measurements, at the same class and the same 561 strata.
+   - **Inodes: about 1.0M.**
+     - The window copy: 386k.
+     - The member dirs: 496k.
+     - The cache: 2k.
+     - 561 sessions at 22 inodes each: 12k.
+     - The tree, its builds and the clone: about 100k.
+     - With a 30% margin, 1.3M.
+   - **Bytes: about 1.28 TB.**
+     - The cache: 524 GB.
+     - 561 archives: 710 GB, each a copy of its circuit plus 0.33 GB.
+     - The member dirs' own files: 25 GB.
+     - The window copy: 5 GB.
+     - The tree and its builds: about 20 GB.
+     - With a 20% margin, 1.55 TB.
+   - **cpu-3 now** (r20261105-094826-2223, 09:48Z): /workspace is still 3.0 TB, with 447 GB free (86% used) and 2.35M of 12.57M inodes free (82% used).
+     - It doesn't see the 4.1 TiB yet, so the resize or reboot before Fri 05:00Z is still needed.
+     - After it, about 1.7 TB should be free. If ext4 keeps its ratio, it will have about 17M inodes in all, about 7M of them free.
+     - At 01:00Z it had 673 GB and 4.2M inodes free; now it has 447 GB and 2.35M. drive's checks run there too (14 check reservations).
+   - **The number for infra.** Either:
+     - **a.** a 1.6 TB hold instead of 1.3 TB; or
+     - **b.** keep 1.3 TB, and a watcher beside the follow-on runs `retention rm` on each `session-mN/archive` once its `lean-verify.log` has its VERDICT. That needs no change to the record's tree. The peak is then about 0.6 TB plus the archives waiting for Lean. If Lean falls behind by the whole series of 34 large AttnBlockFirst (about 0.49 TB), the peak is about 1.07 TB.
+   - **Inodes need the resize either way.** Without it, 2.35M free less the follow-on's 1.0M leaves about the 1.26M swing that ended ec10.
+3. **ec10's tally (item 3)** is on VLLM-182 as development.
+   - LinearARow: 44 sessions, all refused at m0 and at Lean by the scope check.
+   - The rest: 51 accepted at both (43 LinearOut and 8 other kinds).
+   - Median session 188 s, median Lean 232 s.
+   - No large AttnBlockFirst ran. The one that did had a 0.64 GB circuit; the other 34, about 475 GB of circuits, weren't reached.
+4. **The dress rehearsal** (r20261105-082550-ed23) was in its last step at 09:57Z: Pearl+'s Lean check, after the tie verify. ETA 11:00–11:30Z.
+
+**I wait on:** the dress rehearsal's verdicts (you resume me about 11:23Z).
