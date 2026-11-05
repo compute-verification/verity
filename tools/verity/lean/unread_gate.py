@@ -17,8 +17,8 @@ a PR (a ``Queue: #N`` merge), else its merge base with ``MAIN``, as `markdown_ca
   a path no file there has.
 - Otherwise it runs the ratchet on both trees, ``LO``'s and ``HEAD``'s, from the facts the audits of `Security` and
   `Security/Proofs` wrote (`lean_audit.facts_file`, by each package's key): ``LO``'s, else ``MAIN``'s, as this machine keeps them
-  (a node's passes, or this gate's cache) or as one of the `SCAN` newest recorded checks published them in the evidence
-  store. Each area whose wholly unread modules, or their declarations, ``HEAD`` takes above both its cap and ``LO``'s count
+  (a node's passes, or this gate's cache) or as a recorded check published them in the evidence store: one of that commit
+  (a train's Lean check runs before it lands), else one of the `SCAN` newest. Each area whose wholly unread modules, or their declarations, ``HEAD`` takes above both its cap and ``LO``'s count
   fails, naming each module that went, the mentions that kept it (each at its file and line at ``LO``) and the fix.
 
 It runs ``MAIN``'s `unread.py`, `lean_audit.py` and their helpers (`git archive`, `CODE`), so the change it judges can't change
@@ -265,24 +265,28 @@ def plausible(lo: str, gone: dict[tuple[str, str], list[str]]) -> dict[tuple[str
     return {s: fs for s, fs in gone.items() if could(*s)}
 
 
-def stored(keys: dict[str, str], cache: Path, recorded: str, store=None, scan: int = SCAN) -> tuple[dict[str, Path], list[str]]:
-    """({package: its facts file in ``cache``} for each of ``keys`` ({package: key}) that one of the ``scan`` newest recorded
-    checks (``recorded``, `common.RECORDED_CHECKS`) published (`STORED`), checked against the sha256 its listing gives; what
-    kept the store from being read, if anything)."""
+def stored(keys: dict[str, str], cache: Path, recorded: str, store=None, scan: int = SCAN,
+           commits: tuple[str, ...] = ()) -> tuple[dict[str, Path], list[str]]:
+    """({package: its facts file in ``cache``} for each of ``keys`` ({package: key}) that a recorded check (``recorded``,
+    `common.RECORDED_CHECKS`) published (`STORED`), checked against the sha256 its listing gives; what kept the store from
+    being read, if anything).  The checks of ``commits`` come first, however old (a `main` that stays put for days outlives
+    the ``scan`` newest), then the ``scan`` newest."""
     want = {k: p for p, k in keys.items()}
     got: dict[str, Path] = {}
     errors: list[str] = []
+    ended = f"{recorded} AND state IN ('done', 'failed', 'cancelled')"
     try:
         if store is None:
             from research.store.local import LocalStore
             store = LocalStore()
         if store.remote is not None:
             store.refresh(attempts_only=True)
-        rows = store.index.sql(f"SELECT id FROM attempts WHERE {recorded} AND state IN ('done', 'failed', 'cancelled') "
-                               "ORDER BY start_utc DESC LIMIT ?", (scan,))
+        rows = [*(store.index.sql(f"SELECT id FROM attempts WHERE {ended} AND source_commit IN ({', '.join('?' * len(commits))}) "
+                                  "ORDER BY start_utc DESC", commits) if commits else []),
+                *store.index.sql(f"SELECT id FROM attempts WHERE {ended} ORDER BY start_utc DESC LIMIT ?", (scan,))]
     except Exception as e:  # noqa: BLE001  (no store here: the gate says it can't judge, naming why)
         return got, [f"the evidence store can't be read here ({type(e).__name__}: {e})"]
-    for (rid,) in rows:
+    for rid in dict.fromkeys(r for (r,) in rows):
         try:
             art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
             for f in store.listing(art) if art else []:
@@ -306,9 +310,10 @@ def stored(keys: dict[str, str], cache: Path, recorded: str, store=None, scan: i
     return got, errors
 
 
-def facts_of(LA, tree: Path, files: list[str], cache: Path, work: Path) -> tuple[dict[str, str], dict[str, Path], list[str]]:
-    """The keys of the packages the ratchet reads the facts of (`lean_audit.UNREAD_FACTS`) on ``tree``, and the facts of each
-    that this gate's cache, this machine's Lean check (a node's kept passes) or the store holds, and why the store gave none."""
+def facts_of(LA, rev: str, tree: Path, files: list[str], cache: Path, work: Path) -> tuple[dict[str, str], dict[str, Path], list[str]]:
+    """The keys of the packages the ratchet reads the facts of (`lean_audit.UNREAD_FACTS`) on ``tree`` (``rev``'s), and the
+    facts of each that this gate's cache, this machine's Lean check (a node's kept passes) or the store holds, and why the
+    store gave none."""
     LA.ROOT = tree
     keys = {p: LA.key(p, files, LA.FLAGS) for p in LA.UNREAD_FACTS}
     got: dict[str, Path] = {}
@@ -320,7 +325,7 @@ def facts_of(LA, tree: Path, files: list[str], cache: Path, work: Path) -> tuple
             got[p] = f
     errors: list[str] = []
     if missing := {p: k for p, k in keys.items() if p not in got}:
-        more, errors = stored(missing, cache, LA.COMMON.RECORDED_CHECKS)
+        more, errors = stored(missing, cache, LA.COMMON.RECORDED_CHECKS, commits=(rev,))
         got |= more
     return keys, got, errors
 
@@ -330,16 +335,16 @@ def judge(U, LA, base: str, lo: str, top: str, gone: dict[tuple[str, str], list[
     "facts"}."""
     files_lo, files_top = tracked(lo), tracked(top)
     tree = archive(lo, work / "tree")
-    keys, facts, errors = facts_of(LA, tree, files_lo, cache, work)
+    keys, facts, errors = facts_of(LA, lo, tree, files_lo, cache, work)
     on_main, notes = False, []
     if len(facts) < len(keys):
         keys_base, facts_base, errors_base = (keys, facts, []) if base == lo else \
-            facts_of(LA, archive(base, work / "base"), tracked(base), cache, work)
+            facts_of(LA, base, archive(base, work / "base"), tracked(base), cache, work)
         if len(facts_base) < len(keys_base):
             listed = "; ".join(f"{r[:12]}: " + ", ".join(f"{p} {k[:12]}" for p, k in ks.items())
                                for r, ks in {lo: keys, base: keys_base}.items())
             raise CantJudge(f"the facts of the Lean of {lo[:12]} and of `main` {base[:12]} aren't all kept here or published "
-                            f"by the {SCAN} newest recorded checks ({listed})"
+                            f"by a recorded check of either or by the {SCAN} newest ({listed})"
                             + (f": {'; '.join((errors + errors_base)[:3])}" if errors + errors_base else ""))
         keys, facts, on_main = keys_base, facts_base, True
         notes.append(f"judged on the facts of `main` {base[:12]}'s Lean: not all of {lo[:12]}'s are kept or stored")

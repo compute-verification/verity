@@ -140,7 +140,7 @@ def test_a_change_that_leaves_each_name_somewhere_or_that_a_lean_check_reads_pas
 
 
 def test_with_none_of_the_tree_s_facts_it_can_t_judge_and_with_main_s_it_judges_on_those(repo, tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(G, "stored", lambda keys, cache, recorded: ({}, ["no store in this test"]))
+    monkeypatch.setattr(G, "stored", lambda keys, cache, recorded, commits: ({}, ["no store in this test"]))
     base = git(repo, "rev-parse", "HEAD")
     top = commit(repo, "drop the name", {"tools/lonely.py": ""})
     assert G.main([base, top]) == 2
@@ -159,13 +159,16 @@ def test_with_none_of_the_tree_s_facts_it_can_t_judge_and_with_main_s_it_judges_
 
 class Store:
     """The few calls of `research.store.local.LocalStore` the lookup makes, over ``runs`` (newest first: (id, {path: (bytes,
-    the sha256 its listing names)}))."""
+    the sha256 its listing names)})), each run of the commit ``of`` names, if any."""
 
     remote = None
 
-    def __init__(self, runs):
+    def __init__(self, runs, of=None):
         self.runs = dict(runs)
-        self.index = type("Index", (), {"sql": staticmethod(lambda q, args: [(rid,) for rid, _ in runs][:args[0]])})()
+        of = of or {}
+        self.index = type("Index", (), {"sql": staticmethod(
+            lambda q, args: [(rid,) for rid, _ in runs if of.get(rid) in args] if "source_commit" in q
+            else [(rid,) for rid, _ in runs][:args[0]])})()
 
     def get_attempt(self, rid):
         return {"outputs": {"run_files": f"art:{rid}"}}
@@ -193,3 +196,7 @@ def test_the_store_lookup_takes_the_newest_recorded_check_s_facts_of_each_key_wh
     (tmp_path / "none").mkdir()
     got, errors = G.stored({"Security": k1}, tmp_path / "none", "1", store=Store(runs[:1]), scan=1)
     assert got == {} and errors == [f"r3: {at(k1)} isn't the bytes its listing names"]
+    (tmp_path / "old").mkdir()
+    got, _ = G.stored({"Security": k1}, tmp_path / "old", "1", store=Store([runs[0], runs[2]], {"r1": "c" * 40}), scan=1,
+                      commits=("c" * 40,))
+    assert got["Security"].read_bytes() == b"oldest", "a check of the commit judged is read however many checks ran since"
