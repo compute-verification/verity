@@ -163,7 +163,6 @@ theorem recRaw_read_encode {w : RecRaw} (h : RecRawFits w) (rest : List UInt8) :
     run_bind_of (rdOptBytes h7 _), run_bind_of (rdOptBytes h8 _), run_bind_of (rdOptBytes h9 _),
     run_bind_of (rdOptBytes h10 _), run_bind_of (rdOptBytes h11 _),
     run_bind_of (rdOpt_encOpt (fun t ht rest => FlockComplete.rdStr_encStr (h12 t ht) rest) _),
-    run_bind_of (rdOpt_encOpt (fun b _ rest => rdBool_encBool b rest) _),
     run_bind_of (rdOpt_encOpt (fun ts hts rest => rdTables (h13 ts hts) rest) _), run_bind_of (rdOptBytes h14 _),
     run_bind_of (rdOpt_encOpt (fun l hl rest => by
       rw [List.append_assoc, run_bind_of (FlockComplete.rdBytes_encBytes (h15 l hl).1 _),
