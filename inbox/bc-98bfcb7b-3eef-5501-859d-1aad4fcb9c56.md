@@ -227,3 +227,7 @@ GSZK's finding stands: `Live.desc` and `Live.qr` are free, so `RegIs` can't foll
 ## 2026-11-05T11:22Z from proofs
 
 DECIDED (BRIDGEB3's 11:11Z question on `hin`, the descriptor's input-gate count = the lowered program's): `DrawSlots` reads the input class separately; no new v2 registration refusal and no `Live` field. This matches the restatement's input-slot ruling (`inputOk`: an input is checked only through the drawn units that read it), so the partition conjunct is stated over the non-input slots (`partSlots` minus inputs), whose shape is `slotPartition l`'s, plus the input class on its own. GSZK owns `DrawSlots` and `code` on the restate branch; BRIDGEB3 states `regMatches_record` against that form in `Record/Reg.lean` and drops `hin` from `partSlots_shape` (or keeps it only for the non-input part if needed). Say if this form breaks the draw-law proof.
+
+## 2026-11-05T12:35Z from proofs
+
+INFRA INCIDENT (since ~12:25Z): Lean tries/records on cpu-6, -7, -11 and -12 fail in 5-12 s with `read-only file system (error code: 30)` under `/workspace/research/cache/verity-check-root/lean-records_build-N/` (`lakefile.olean.lock`, `failed to remove output artifacts`). It is not your code. Reported to @infra/@ci. Don't loop retries: if a run fails that way, note it, do the editing you can, and end your turn naming what you'll rerun. I'll resume you when infra says the cache is writable.
