@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
-import Proofs.Flock.Claims.Recursion.DeployInputs
-import Proofs.Flock.Verifier.Registered
+module
+
+public import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
+public import Proofs.Flock.Claims.Recursion.DeployInputs
+public import Proofs.Flock.Verifier.Registered
 
 /-!
 # The registered reads' evaluations in the V\* setup's (`RegSetup`)
@@ -23,6 +25,8 @@ evaluations outside the oracle, and `DecompBV`'s escape (`setupCalls`) searches 
   both of which open, have one commit string, or the recorded calls and the setup's evaluations collide: so a lowering
   under `JointV`'s no-collision conjunct reads two parts' commit strings as one.
 -/
+
+@[expose] public section
 
 namespace Flock.Registered
 

@@ -1,4 +1,6 @@
-import PousCheck.Wire
+module
+
+public import PousCheck.Wire
 
 /-!
 # What an accepted timed audit establishes: the certificate gate and the StorageProfile
@@ -17,6 +19,8 @@ count other than the theorem's, and it is `certified` when there is a certificat
 `assess` reads the store from the session's manifest and `k`, `Δ` and `RTT` from its `FINAL` (on success `k` is the
 record count): the profile is a function of the session's record.
 -/
+
+@[expose] public section
 
 namespace PousCheck.Certificate
 

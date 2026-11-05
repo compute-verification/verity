@@ -1,6 +1,8 @@
-import Properties.Pous.PeriodDeployed
-import Proofs.Pous.Period
-import Proofs.Pous.P2.RingTrunc
+module
+
+public import Properties.Pous.PeriodDeployed
+public import Proofs.Pous.Period
+public import Proofs.Pous.P2.RingTrunc
 
 /-!
 # Proofs of PoUS's per-period guarantee at the deployed ring budget, and of its honest and nontrivial lemmas
@@ -19,6 +21,8 @@ S₀ = 8,169,621,180`; `⌊854,000 · 349 / 36,155⌋ = 8,243 ≤ 16,446`; and `
 The empty period has probability 1 of the accept-all event, and the honest one held `105 · FULL` bit-ticks
 (`periodHeldNontrivial`).
 -/
+
+@[expose] public section
 
 namespace Pous.Period.SecurityProofs
 

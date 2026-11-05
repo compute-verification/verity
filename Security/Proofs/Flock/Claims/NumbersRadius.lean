@@ -1,4 +1,9 @@
-import Proofs.Flock.Claims.NumbersDeploy
+module
+
+public import Proofs.Flock.Claims.NumbersDeploy
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Init.Data.Nat.Power2.Basic
 
 /-!
 # The radius `ε_table` is computed at, and the decoder's
@@ -18,6 +23,8 @@ word. Both count the positions, out of `2^d`, at which every lane they read agre
   below the plain radius at every `m` (`zk_radius_ge`, `zk_radius_lt_plain`). `CommittedPad` reads the `2^k0` witness
   lanes (`padWits`, `padList … 0 0`), and so does the masked decoder's code (`zkWidth_eq`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock.Numbers
 

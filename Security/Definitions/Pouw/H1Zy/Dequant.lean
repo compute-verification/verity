@@ -1,4 +1,6 @@
-import Mathlib.Data.Int.Basic
+module
+
+public import Mathlib.Data.Int.Basic
 
 /-!
 # `PouwZyDequant_v1`, the served dequant, on words (trusted)
@@ -15,6 +17,8 @@ Its primitives' word evaluators, by integer arithmetic on the encodings:
 `PouwZyDequant_v2`, the circuit, is circuits' three Boolean pieces (`S32ToF32Rn_v2`, two `F32Mul_v4`, `F2fpBf16_v2`) whose
 word view this is. `Proofs.Pouw.H1Zy.DequantVectors` holds it to the Python evaluators on vectors through each case.
 -/
+
+@[expose] public section
 
 namespace Pouw.H1Zy
 

@@ -1,4 +1,6 @@
-import Definitions.Pous.P2.Rounds
+module
+
+public import Definitions.Pous.P2.Rounds
 
 /-!
 # The mutable store: versioned, coin-keyed blocks and the snapshot an audit window reads (trusted)
@@ -13,6 +15,8 @@ its current version, whose tag is `tag j`. A tag names its block, so `tag` is in
 primitive, a point of `ringRO N w p`, and `rest tag ω` the key pairs of every tag outside it (earlier versions, and
 blocks the snapshot doesn't hold).
 -/
+
+@[expose] public section
 
 namespace Pous.Mutable
 

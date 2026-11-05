@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Audit.Influence
-import Mathlib.Data.Fin.VecNotation
-import Mathlib.Tactic.FinCases
-import Mathlib.Tactic.Positivity
+module
+
+public import Proofs.Flock.Soundness.Audit.Influence
+public import Mathlib.Data.Fin.VecNotation
+public import Mathlib.Tactic.FinCases
+public import Mathlib.Tactic.Positivity
 
 /-!
 # The influence theorems are not vacuous
@@ -25,6 +27,8 @@ trivial; the others show only that the hypotheses can be met.
 * `Ex.exfil`: `audit_exfiltration`'s hypotheses hold together, for a one-bit message, with `A`'s audit at `0`, `Gen`'s
   exits, the harm bound `Ex.hH` (each unit's exported width), and `k = n = 2`, where `miss 3 = 0 < δ` (`Ex.hk`).
 -/
+
+@[expose] public section
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit Finset
 open scoped ENNReal

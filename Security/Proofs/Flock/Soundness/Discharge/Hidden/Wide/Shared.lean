@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.V2
-import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
-import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
-import Proofs.Flock.Soundness.Discharge.Hidden.SpecOf
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.V2
+public import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+public import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
+public import Proofs.Flock.Soundness.Discharge.Hidden.SpecOf
 
 /-!
 # Shared rows (`OutputsCommittedWide`, `OutputsBindingWide`)
@@ -10,6 +12,8 @@ A shared-row population's drawn `b ‖ c` are its proved units' (`Layout.drawn_d
 `Layout.pop_digest_sizeW`, in `Layout/SharedRows.lean`). `bc_drawnW` is `bc_drawnH` without `pop.tables = none`, and
 `outputs_committed_wide'` is `outputs_committed_v2'`'s argument through it.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Files
-import Proofs.Flock.Claims.Complete.Json.Canon
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Files
+public import Proofs.Flock.Claims.Complete.Json.Canon
 
 /-!
 # The reps' checks at several tables
@@ -22,6 +24,8 @@ the inner proof (`RepChecksAt`).
   premises at every good case (`StmtAt`, `ProverRunsAt`, `RepShapedAt`, `RepChecksAt`), one table's included, through
   `complete_of_at`, in place of `complete_zk`'s.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

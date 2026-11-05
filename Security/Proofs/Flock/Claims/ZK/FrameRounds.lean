@@ -1,7 +1,11 @@
-import Proofs.Flock.Claims.ZK.SimZerocheck
-import Proofs.Flock.Claims.ZK.FrameMask
-import Proofs.Flock.Claims.ZK.Release
-import Proofs.Flock.Claims.ZK.Refine
+module
+
+public import Proofs.Flock.Claims.ZK.SimZerocheck
+public import Proofs.Flock.Claims.ZK.FrameMask
+public import Proofs.Flock.Claims.ZK.Release
+public import Proofs.Flock.Claims.ZK.Refine
+import all Init.Data.String.Defs
+import all Init.Data.Array.Basic
 
 /-!
 # The cut's zerocheck and lincheck, round by round, and the frame's release of the device's
@@ -39,6 +43,8 @@ and matches them:
   each pad added back (`RoundHonest`, `roundFrames_of_honest`). At the session with the frame's stops that is
   `LiveRoundEq` and `FillRoundEq` (`liveRoundEq_of_frames`, `liveRoundEq_of_honest`, `fillRoundEq_of_frames`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

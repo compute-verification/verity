@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.NextRHonest
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
-import Proofs.Flock.VBridge.Family.Encode
+module
+
+public import Proofs.Flock.Claims.Recursion.NextRHonest
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+public import Proofs.Flock.VBridge.Family.Encode
 
 /-!
 # An honest rep from the completeness model's shape
@@ -11,6 +13,8 @@ lengths a decoded proof has (`decodeProof_sizes`), and its schedule has at least
 `Lengths` has them since the verifier refuses any other (R4), so with the unabsorbed fields as V\* takes them it is an
 honest rep (`honestRep_of_shaped`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

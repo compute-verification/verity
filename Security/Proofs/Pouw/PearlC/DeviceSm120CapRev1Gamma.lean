@@ -1,6 +1,8 @@
-import Proofs.Pouw.PearlC.DeviceSm120KernelGamma
-import Definitions.Pouw.Guarantees.PearlC
-import Proofs.Pouw.PearlC.TTOutW1
+module
+
+public import Proofs.Pouw.PearlC.DeviceSm120KernelGamma
+public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.PearlC.TTOutW1
 
 /-!
 # v1 under rev1 at a stricter cap, FP32 at the issue-bound add (FP8 security's file)
@@ -14,6 +16,8 @@ The FADD-8.00 price twin of v1's restatement at the cap 1/1,000 (`DeviceCapRev1G
   8192³ and `5273/1466810` (0.35949%) at 16384³, per unit and per audit tile. The in-loop twins are larger (0.36949%,
   0.35973%), so the price-twin ledger publishes those.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

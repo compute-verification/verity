@@ -1,4 +1,9 @@
-import Proofs.Properties.NetworkRecords.Accept
+module
+
+public import Proofs.Properties.NetworkRecords.Accept
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.Repr
 
 /-!
 # An instance: a unit whose records are the Program's, which the check accepts
@@ -9,6 +14,8 @@ One egress link `out` with no frames and one ingress link `in`, one window of on
 parameters' digests: `parametersDigest` reads `Flock.canonUtf8`, well-founded recursion the kernel does not evaluate, so
 they are taken as given.
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check (Params Link Evidence)

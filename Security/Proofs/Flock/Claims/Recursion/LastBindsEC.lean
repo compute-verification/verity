@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.BindsDeployed
-import Proofs.Flock.Claims.Recursion.FlockKSDeploy
-import Proofs.Flock.Claims.Recursion.DeployMargin
+module
+
+public import Proofs.Flock.Claims.Recursion.BindsDeployed
+public import Proofs.Flock.Claims.Recursion.FlockKSDeploy
+public import Proofs.Flock.Claims.Recursion.DeployMargin
 
 /-!
 # The route modulo what `E*` reads: what it needs of the last round
@@ -14,6 +16,8 @@ draw (`innerF_vLog_sub`). So the route reads (P4) as `Bound.LastBindsEC`, where 
 verifier meets: its decision passes the coins with the last dropped (`RecDeploy.lastStepFree_of_V`,
 `RecDeploy.lastCoinFree_deployed`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

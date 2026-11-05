@@ -1,5 +1,7 @@
-import Definitions.Pous.Assumptions.P2
-import Proofs.Pous.P2.RingBasic
+module
+
+public import Definitions.Pous.Assumptions.P2
+public import Proofs.Pous.P2.RingBasic
 
 /-!
 # P2 in the ring model: recomputing a block breaks the requirement (tightness)
@@ -12,6 +14,8 @@ exponent the responder spends `2(n + 1)` multiplication rounds, `2` key queries 
 always right (`recBlock_run`). So `MeetsOn` fails at every `D ≥ 2(n + 1)` (`tight`), at P2's modulus `D ≥ 32,894`
 (`tight_p16448`).
 -/
+
+@[expose] public section
 
 namespace PousP2Ring
 

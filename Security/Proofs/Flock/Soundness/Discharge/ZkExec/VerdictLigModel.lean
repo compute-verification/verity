@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
 
 /-!
 # The model's masked level 0, with its values
@@ -8,6 +10,8 @@ lane coins (`foldRoundsZK_val`), `ρ` is its two coins (`drawKs_two`), level 0's
 (`queryAndBatchPadC_plays`), and `ligeritoPadZC_model` composes the masked level 0 from runs of its parts, as the non-ZK
 session's `ligeritoC_model`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

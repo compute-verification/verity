@@ -1,4 +1,6 @@
-import Definitions.Population.Dataflow
+module
+
+public import Definitions.Population.Dataflow
 
 /-!
 # Integrity: robust determinacy from single assignment and acyclicity
@@ -12,6 +14,8 @@ import Definitions.Population.Dataflow
 * `exists_correct`: a checked population has, on every input, an assignment in which every unit is correct
   (`eval`, by well-founded recursion over the slots).
 -/
+
+@[expose] public section
 
 namespace Population.Dataflow
 

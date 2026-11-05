@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.Split
+module
+
+public import Proofs.Flock.Claims.ZK.Split
 
 /-!
 # The checks the deployed cut passes, from the refusals its coins show
@@ -15,6 +17,8 @@ are answered by round `n` passes, at any coin plan reading the claim points, `β
 * `famGuard_of`: the check at a seen slot passes (`RankBad`, `rhoIndependent`, `β.isZero` refused otherwise);
   `famPasses_of`: so does every check before it.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 
