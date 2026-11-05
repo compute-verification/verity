@@ -100,6 +100,7 @@
   "Proofs.Properties.Verity.Sampled.RootB",
   "Proofs.Properties.Verity.Sampled.LinkFirst",
   "Proofs.Properties.Verity.Sampled.MovesLayout",
+  "Proofs.Properties.Verity.Sampled.Held",
   "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledLog",
   "Proofs.Properties.Verity.SampledRead",
