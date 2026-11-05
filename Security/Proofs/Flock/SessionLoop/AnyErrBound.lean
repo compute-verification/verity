@@ -9,13 +9,13 @@ public import Proofs.Flock.Claims.Bridge.Hm96Tree
 
 `Loop.anyErr` reads three things that are not numbers: the session's leaf count, hm96's hiding gap at the pinned key,
 and the go and unswitched provers' collision finders' success (`Fork`). Each is bounded here by a parameter: a leaf cap
-`L`, the bound `δ₁` at which hm96 hides (`Claims.Hm96Hiding`), and the SHA-512 calls per run of the prover (`c`) and of
-`V*` (`q`), at which `ecr/sha-512` (`ExpectedCR`) bounds each finder's success by `2(c + q)/2^256`.
+`L`, the bound `δ₁` at which hm96 hides (`Claims.Hm96Hiding`), and the SHA-512 calls per run `q`, the prover's and
+`V*`'s together, at which `ecr/sha-512` (`ExpectedCR`) bounds each finder's success by `2q/2^256`.
 
 * `CROnly.hidingGap_le_of_hiding`: where hm96 hides at a finite `δ₁`, its gap is at most `δ₁`, at the event where the
   real pair is no less likely than the ideal one (`CROnly.half_sum_abs_eq`).
-* `Fork.pr_le`: `Fork`'s success is at most `2(c + q)/2^256` where it meets `ExpectedCR` and each of its runs makes at
-  most `c` prover calls and `q` verifier calls.
+* `Fork.pr_le`: `Fork`'s success is at most `2q/2^256` where it meets `ExpectedCR` and each of its runs makes at most
+  `q` calls, the prover's and the verifier's together.
 * `Loop.Budget`: that at the go and unswitched provers.
 * `Loop.errAt`: `Loop.anyErr` at the leaf cap, a bound on the gap and the calls, a number.
 * `Loop.anyErr_le`: `anyErr ≤ errAt` at those bounds.
@@ -74,21 +74,21 @@ end FlockSoundness.CROnly
 namespace Claims
 
 /-- **`Fork`'s success at a call budget**: where `Fork` meets `ExpectedCR` and each run of the prover against `V*`
-makes at most `c` prover calls and `q` verifier calls, it finds a collision with probability at most `2(c + q)/2^256`:
-its cost is two runs'. -/
+makes at most `q` SHA-512 calls, the prover's and `V*`'s together, it finds a collision with probability at most
+`2q/2^256`: its cost is two runs'. -/
 theorem Fork.pr_le {N Ω Θ : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] {H : Msg → Msg}
-    {P : Prover (N × Ω)} {Vs : VStar Θ} {θ : Θ} {x : Msg} {c q : ℕ} (hF : ExpectedCR H (Fork H P Vs θ x))
-    (hc : ∀ ω, (runStar H P Vs x ω θ).pLog.length ≤ c) (hq : ∀ ω, (runStar H P Vs x ω θ).vLog.length ≤ q) :
-    (Fork H P Vs θ x).Pr H ≤ 2 * (c + q) / 2 ^ (256 : ℝ) := by
+    {P : Prover (N × Ω)} {Vs : VStar Θ} {θ : Θ} {x : Msg} {q : ℕ} (hF : ExpectedCR H (Fork H P Vs θ x))
+    (hq : ∀ ω, (runStar H P Vs x ω θ).pLog.length + (runStar H P Vs x ω θ).vLog.length ≤ q) :
+    (Fork H P Vs θ x).Pr H ≤ 2 * q / 2 ^ (256 : ℝ) := by
   refine le_trans hF (div_le_div_of_nonneg_right ?_ (by positivity))
-  calc Ex (fun s => ((Fork H P Vs θ x).cost s : ℝ)) ≤ Ex (fun _ : (Fork H P Vs θ x).S => (2 * (c + q) : ℝ)) :=
+  calc Ex (fun s => ((Fork H P Vs θ x).cost s : ℝ)) ≤ Ex (fun _ : (Fork H P Vs θ x).S => (2 * q : ℝ)) :=
         Ex_mono fun s => by
-          have h : (Fork H P Vs θ x).cost s ≤ 2 * (c + q) := by
+          have h : (Fork H P Vs θ x).cost s ≤ 2 * q := by
             dsimp only [Fork]
-            have := hc (s.1, s.2.1); have := hq (s.1, s.2.1); have := hc (s.1, s.2.2); have := hq (s.1, s.2.2)
+            have := hq (s.1, s.2.1); have := hq (s.1, s.2.2)
             omega
           exact_mod_cast h
-    _ = 2 * (c + q) := Ex_const _
+    _ = 2 * q := Ex_const _
 
 end Claims
 
@@ -98,25 +98,25 @@ open Claims Claims.ZKMal Claims.ZKServer
 open FlockSoundness.Discharge FlockSoundness.CROnly
 
 /-- **The provers' calls at a budget**, at the statement `x`, witness `w`, `V*` and its tape `θ`: at the go and the
-unswitched prover, each run makes at most `c` prover calls and `q` verifier calls, and the prover's `Fork` meets
-`ExpectedCR` (`ecr/sha-512`). -/
+unswitched prover, each run against `V*` makes at most `q` SHA-512 calls, the prover's and `V*`'s together (as the
+finders' bounds count a run's calls), and the prover's `Fork` meets `ExpectedCR` (`ecr/sha-512`). -/
 def Budget (T : CoinLayer.TableData) (vs : (CoinLayer.session loopNr T).SwVals)
     (L₀ : LeanRelease Flock.Wit ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit → (CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand →
       ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
-    (x : Msg) (w : Flock.Wit) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (c q : ℕ) : Prop :=
+    (x : Msg) (w : Flock.Wit) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (q : ℕ) : Prop :=
   (ExpectedCR CoinOpen.shaH (Fork CoinOpen.shaH (((anyStops T L₀ real).goP vs).prover w) Vs θ x) ∧
-    ∀ ω, (runStar CoinOpen.shaH (((anyStops T L₀ real).goP vs).prover w) Vs x ω θ).pLog.length ≤ c ∧
+    ∀ ω, (runStar CoinOpen.shaH (((anyStops T L₀ real).goP vs).prover w) Vs x ω θ).pLog.length +
       (runStar CoinOpen.shaH (((anyStops T L₀ real).goP vs).prover w) Vs x ω θ).vLog.length ≤ q) ∧
   (ExpectedCR CoinOpen.shaH (Fork CoinOpen.shaH (((anyStops T L₀ real).unP vs).prover w) Vs θ x) ∧
-    ∀ ω, (runStar CoinOpen.shaH (((anyStops T L₀ real).unP vs).prover w) Vs x ω θ).pLog.length ≤ c ∧
+    ∀ ω, (runStar CoinOpen.shaH (((anyStops T L₀ real).unP vs).prover w) Vs x ω θ).pLog.length +
       (runStar CoinOpen.shaH (((anyStops T L₀ real).unP vs).prover w) Vs x ω θ).vLog.length ≤ q)
 
-/-- **The error per outcome as a number**, at `t` repetitions, a leaf cap `L`, a hiding bound `δ₁` and `c` prover and
-`q` verifier calls per run: where the release goes on, `8Lδ₁ + 24tLδ₁ + 2·3^{-t} + 4t·3^t·2(c + q)/2^256`; where it
-stops, the same with `8t` in place of `24t`. -/
-noncomputable def errAt (t L c q : ℕ) (δ₁ : ℝ) (o : Bool) : ℝ :=
-  8 * L * δ₁ + (if o then 24 else 8) * t * L * δ₁ + 2 * (1 / 3) ^ t + 4 * t * 3 ^ t * (2 * (c + q) / 2 ^ (256 : ℝ))
+/-- **The error per outcome as a number**, at `t` repetitions, a leaf cap `L`, `q` SHA-512 calls per run and a bound
+`δ₁` on hm96's gap: where the release goes on, `8Lδ₁ + 24tLδ₁ + 2·3^{-t} + 4t·3^t·2q/2^256`; where it stops, the same
+with `8t` in place of `24t`. -/
+noncomputable def errAt (t L q : ℕ) (δ₁ : ℝ) (o : Bool) : ℝ :=
+  8 * L * δ₁ + (if o then 24 else 8) * t * L * δ₁ + 2 * (1 / 3) ^ t + 4 * t * 3 ^ t * (2 * q / 2 ^ (256 : ℝ))
 
 /-- **`anyErr` is at most `errAt`** where the session has at most `L` leaves, hm96's hiding gap is at most `δ₁`, and
 the provers' calls are at the budget (`Budget`). -/
@@ -124,17 +124,17 @@ theorem anyErr_le (T : CoinLayer.TableData) (vs : (CoinLayer.session loopNr T).S
     (L₀ : LeanRelease Flock.Wit ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit → (CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand →
       ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)) (t : ℕ) {x : Msg} {w : Flock.Wit}
-    {Θ : Type} {Vs : VStar Θ} {θ : Θ} {L c q : ℕ} {δ₁ : ℝ} (hL : (CoinLayer.session loopNr T).nLeaves x ≤ L)
-    (hδ : hidingGap ZkView.My ZkView.saltHash ≤ δ₁) (hB : Budget T vs L₀ real x w Vs θ c q) (o : Bool) :
-    anyErr T vs L₀ real t x w Θ Vs θ o ≤ errAt t L c q δ₁ o := by
+    {Θ : Type} {Vs : VStar Θ} {θ : Θ} {L q : ℕ} {δ₁ : ℝ} (hL : (CoinLayer.session loopNr T).nLeaves x ≤ L)
+    (hδ : hidingGap ZkView.My ZkView.saltHash ≤ δ₁) (hB : Budget T vs L₀ real x w Vs θ q) (o : Bool) :
+    anyErr T vs L₀ real t x w Θ Vs θ o ≤ errAt t L q δ₁ o := by
   have hn : ((CoinLayer.session loopNr T).nLeaves x : ℝ) ≤ L := by exact_mod_cast hL
   have hg := hidingGap_nonneg ZkView.My ZkView.saltHash
   have hnd : ((CoinLayer.session loopNr T).nLeaves x : ℝ) * hidingGap ZkView.My ZkView.saltHash ≤ L * δ₁ :=
     mul_le_mul hn hδ hg (Nat.cast_nonneg _)
   have h4 : (0 : ℝ) ≤ 4 * t * 3 ^ t := by positivity
   obtain ⟨⟨hFg, hcg⟩, hFu, hcu⟩ := hB
-  have hPg := Fork.pr_le hFg (fun ω => (hcg ω).1) (fun ω => (hcg ω).2)
-  have hPu := Fork.pr_le hFu (fun ω => (hcu ω).1) (fun ω => (hcu ω).2)
+  have hPg := Fork.pr_le hFg hcg
+  have hPu := Fork.pr_le hFu hcu
   have h8 := mul_le_mul_of_nonneg_left hnd (by norm_num : (0 : ℝ) ≤ 8)
   cases o
   · have h8t := mul_le_mul_of_nonneg_left hnd (by positivity : (0 : ℝ) ≤ 8 * t)
@@ -160,7 +160,7 @@ set_option synthInstance.maxHeartbeats 1000000
 
 /-- **A sampled audit's view at any values, at the deployed session loop, its error a number.**
 `SampledAuditAnyDeployed` with its premise `εS` replaced by `Loop.errAt` at a leaf cap `L`, a hiding bound `δ₁` and
-`c` prover and `q` verifier SHA-512 calls per run. In place of that premise it takes that hm96 hides at the pinned key
+`q` SHA-512 calls per run, the prover's and `V*`'s together. In place of that premise it takes that hm96 hides at the pinned key
 at a finite `δ₁` (`Claims.Hm96Hiding`), that every statement a session may take has at most `L` leaves, and that at
 each session the go and unswitched provers' runs against its `V*` are at the budget, each prover's `Fork` meeting
 `ExpectedCR` (`Loop.Budget`). Then the bound is `SampledAuditAnyDeployed`'s with `N·2δ₁` for the record and `errAt` at
@@ -187,7 +187,7 @@ def _root_.Flock.Guarantees.SampledAuditAnyDeployedAt : Prop :=
       (eC : ∀ j ρ χ b, CB j ≃
         (Loop.anySim Masked.dataE (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) (Loop.realOf src) t).C
           (Q.x j ρ χ b))
-      (L c q : ℕ) (δ₁ : ℝ≥0∞),
+      (L q : ℕ) (δ₁ : ℝ≥0∞),
     ZkServerOwnUser st →
     (∀ j p χ π b, (CoinLayer.session Loop.loopNr Masked.dataE).UnCausal (Q.i j p χ π b).1 ∧
       LeanRelease.TrustsStop (CoinLayer.session Loop.loopNr Masked.dataE) (Q.i j p χ π b).1
@@ -198,7 +198,7 @@ def _root_.Flock.Guarantees.SampledAuditAnyDeployedAt : Prop :=
     (∀ j ρ χ b, (CoinLayer.session Loop.loopNr Masked.dataE).nLeaves (Q.x j ρ χ b) ≤ L) →
     (∀ j p χ π b, Loop.Budget Masked.dataE (Q.i j p χ π b).1
         (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) (Loop.realOf src) (Q.x j (recOf sv n v st p) χ b)
-        (Q.w j p χ π b) (Q.Vs j (recOf sv n v st p) χ b) (Q.θ j (recOf sv n v st p) χ b) c q) →
+        (Q.w j p χ π b) (Q.Vs j (recOf sv n v st p) χ b) (Q.θ j (recOf sv n v st p) χ b) q) →
     ∀ (s : Tup (fun _ => Bool) ℓ) (E : RegistrationRecord S O T R → Xs → Tup (fun _ => List (Msg × Out)) ℓ → Prop),
       prCoin (fun z : (K × (Fin m → S)) × Xs × Tup (fun _ =>
           ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce ×
@@ -225,14 +225,14 @@ def _root_.Flock.Guarantees.SampledAuditAnyDeployedAt : Prop :=
                   s z.2))) +
             N * (2 * δ₁)) +
           sv.forgeAdvantage n m v (st k₀ v) +
-            Tup.errs (fun _ o => ENNReal.ofReal (Loop.errAt t L c q δ₁.toReal o)) ℓ s
+            Tup.errs (fun _ o => ENNReal.ofReal (Loop.errAt t L q δ₁.toReal o)) ℓ s
 
 theorem SampledAuditAnyDeployedAt : Flock.Guarantees.SampledAuditAnyDeployedAt := by
-  intro K S V O T R Xs Θ D _ _ _ _ _ _ _ _ N CB _ _ sv Hc dig g hout n m v v₀ st k₀ ℓ t ht Rl hV L₀ src Q eC L c q δ₁
+  intro K S V O T R Xs Θ D _ _ _ _ _ _ _ _ N CB _ _ sv Hc dig g hout n m v v₀ st k₀ ℓ t ht Rl hV L₀ src Q eC L q δ₁
     hown hok hR hk hT1 hδ₁ hL hB s E
   have hδ := FlockSoundness.CROnly.hidingGap_le_of_hiding hT1 hδ₁
   refine (SampledAuditAnyDeployed sv Hc dig g hout n m v v₀ st k₀ ℓ t ht Rl hV L₀ src Q eC
-    (fun _ o => ENNReal.ofReal (Loop.errAt t L c q δ₁.toReal o)) hown hok hR hk
+    (fun _ o => ENNReal.ofReal (Loop.errAt t L q δ₁.toReal o)) hown hok hR hk
     (fun j p χ π b o => ENNReal.ofReal_le_ofReal (Loop.anyErr_le _ _ _ _ t (hL _ _ _ _) hδ (hB j p χ π b) o))
     s E).trans ?_
   have hg : ENNReal.ofReal (FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash) ≤ δ₁ :=
@@ -264,7 +264,7 @@ def _root_.Flock.Guarantees.SampledAuditAnyRelayDeployedAt : Prop :=
       (eC : ∀ j ρ χ b, CB j ≃
         (Loop.anySim Masked.dataE (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) (Loop.realOf src) t).C
           (Q.x j ρ χ b))
-      (L c q : ℕ) (δ₁ : ℝ≥0∞),
+      (L q : ℕ) (δ₁ : ℝ≥0∞),
     ZkServerOwnUser st →
     (∀ j p χ π b, (CoinLayer.session Loop.loopNr Masked.dataE).UnCausal (Q.i j p χ π b).1 ∧
       LeanRelease.TrustsStop (CoinLayer.session Loop.loopNr Masked.dataE) (Q.i j p χ π b).1
@@ -281,7 +281,7 @@ def _root_.Flock.Guarantees.SampledAuditAnyRelayDeployedAt : Prop :=
     (∀ j ρ χ b, (CoinLayer.session Loop.loopNr Masked.dataE).nLeaves (Q.x j ρ χ b) ≤ L) →
     (∀ j p χ π b, Loop.Budget Masked.dataE (Q.i j p χ π b).1
         (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) (Loop.realOf src) (Q.x j (recOf sv n v st p) χ b)
-        (Q.w j p χ π b) (Q.Vs j (recOf sv n v st p) χ b) (Q.θ j (recOf sv n v st p) χ b) c q) →
+        (Q.w j p χ π b) (Q.Vs j (recOf sv n v st p) χ b) (Q.θ j (recOf sv n v st p) χ b) q) →
     ∀ (s : Tup (fun _ => Bool × ℕ) ℓ) (E : RegistrationRecord S O T R → Xs → Tup (fun _ => List ByteArray) ℓ → Prop),
       prCoin (fun z : (K × (Fin m → S)) × Xs × Tup (fun _ =>
           ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce ×
@@ -303,14 +303,14 @@ def _root_.Flock.Guarantees.SampledAuditAnyRelayDeployedAt : Prop :=
                   s z.2))) +
             N * (2 * δ₁)) +
           sv.forgeAdvantage n m v (st k₀ v) +
-            Tup.errs (fun _ o => ENNReal.ofReal (Loop.errAt t L c q δ₁.toReal o.1)) ℓ s
+            Tup.errs (fun _ o => ENNReal.ofReal (Loop.errAt t L q δ₁.toReal o.1)) ℓ s
 
 theorem SampledAuditAnyRelayDeployedAt : Flock.Guarantees.SampledAuditAnyRelayDeployedAt := by
-  intro K S V O T R Xs Θ D _ _ _ _ _ _ _ _ N CB _ _ sv Hc dig g hout n m v v₀ st k₀ ℓ t ht Rl hV L₀ src Q eC L c q δ₁
+  intro K S V O T R Xs Θ D _ _ _ _ _ _ _ _ N CB _ _ sv Hc dig g hout n m v v₀ st k₀ ℓ t ht Rl hV L₀ src Q eC L q δ₁
     hown hok hR hk hE hRd hT1 hδ₁ hL hB s E
   have hδ := FlockSoundness.CROnly.hidingGap_le_of_hiding hT1 hδ₁
   refine (SampledAuditAnyRelayDeployed sv Hc dig g hout n m v v₀ st k₀ ℓ t ht Rl hV L₀ src Q eC
-    (fun _ o => ENNReal.ofReal (Loop.errAt t L c q δ₁.toReal o)) hown hok hR hk hE hRd
+    (fun _ o => ENNReal.ofReal (Loop.errAt t L q δ₁.toReal o)) hown hok hR hk hE hRd
     (fun j p χ π b o => ENNReal.ofReal_le_ofReal (Loop.anyErr_le _ _ _ _ t (hL _ _ _ _) hδ (hB j p χ π b) o))
     s E).trans ?_
   have hg : ENNReal.ofReal (FlockSoundness.CROnly.hidingGap ZkView.My ZkView.saltHash) ≤ δ₁ :=
