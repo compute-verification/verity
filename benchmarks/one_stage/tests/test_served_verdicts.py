@@ -2472,7 +2472,7 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
         f"{tree}; this node holds no row dir to count it from",
         f"COINS sampled proofs: {FOLLOW_COINS}; the other protocols' as the served node's COINS line names them"]
     assert lines[3].startswith(f"WINDOW-COMMIT class {W63K4} at H1's close") and lines[4].endswith("PASS")
-    assert [x.split(" ")[0] for x in lines[5:]] == ["V3C-AUDIT", "V3C-PERIOD", "RECORD", "COMPOSITE:"]
+    assert [x.split(" ")[0] for x in lines[5:]] == ["V3C-AUDIT", "V3C-PERIOD", "V3C-CIRCUITS", "RECORD", "COMPOSITE:"]
     assert lines[-1] == "COMPOSITE: composed on cpu-6" and limits == ["180m"]
     assert _audited(tmp_path) == {"--law": "stratified:1", "--tie": str(d / "h1" / "w7" / "registration.json"),
                                   "--tie-prefix": "h1/", "--ports": "3"}
@@ -2567,8 +2567,8 @@ def test_a_deferral_carries_the_served_nodes_inference_only_verdict_into_the_fol
     assert json.loads((dd / "inference-only.json").read_text()) == verdict
     rc, lines, order, _limits = _follow(tmp_path)
     assert rc == 0 and order == ["audit", "period", "record", "composite"], (lines, order)
-    assert [x.split(" ")[0] for x in lines[5:]] == ["V3C-AUDIT", "V3C-PERIOD", "INFERENCE-ONLY:", "RECORD",
-                                                    "COMPOSITE:"]
+    assert [x.split(" ")[0] for x in lines[5:]] == ["V3C-AUDIT", "V3C-PERIOD", "V3C-CIRCUITS", "INFERENCE-ONLY:",
+                                                    "RECORD", "COMPOSITE:"]
     assert json.loads((tmp_path / "out" / "record" / "inference-only.json").read_text()) == verdict
 
 
@@ -2642,15 +2642,15 @@ LEFT = '(cd "{at}" && find . -name circuit.txt | sort) > "$ORDER.left-{step}"'
 
 
 @pytest.mark.parametrize("v2, first, last", [
-    (None, "4 files, 14 bytes freed", None),
-    ("1", "3 files, 10 bytes freed; 1 the v2 case names, after the composite", "1 file, 4 bytes freed"),
+    (None, "5 files, 40 bytes freed", None),
+    ("1", "4 files, 36 bytes freed; 1 the v2 case names, after the composite", "1 file, 4 bytes freed"),
 ])
 def test_the_follow_on_removes_the_windows_circuit_files_after_its_period_check_before_the_reproof_copy(
         tmp_path, v2, first, last):
     """Once the period check has read them, the follow-on removes the window's every circuit file under V3c's dir (each
-    member's, links and all, and the warm's cache), so the re-proof copy finds none and the node's next window has the
-    disk, saying how many and the bytes freed; the openings stay. A file the audit's v2 case names waits for the
-    composite, which reads it, and goes after."""
+    member's, links and all, the warm's cache, and the period's copy under circuits/), so the re-proof copy finds none
+    and the node's next window has the disk, saying how many and the bytes freed; the openings stay. A file the audit's
+    v2 case names waits for the composite, which reads it, and goes after."""
     assert _deferred(tmp_path).returncode == 0
     vw = tmp_path / "serve" / f"v3c-w7-{VTAG}"
     composite = f"{FAKE_SERVED_COMPOSITE}\n{LEFT.format(at=vw, step='composite')}"
