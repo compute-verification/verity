@@ -40,8 +40,7 @@ every one (`Proofs.Properties.NetworkPeriodLeak`'s `periodLeakRegistered_strateg
 
 The network certifier's LMS parameters, key and session, against which the check verifies its certificates, are the
 period's `p.lms`, `p.key` and `p.session`. The statement says where they come from: the auditor's record of its
-network certifier's deployment (`NetTiming.NetworkCertifierRecord`; its key is the auditor challenger's
-`certifier_key`, `CertifierClient` in `verity/core/protocols/certifier/active.py`), whose key the auditor's
+network certifier's deployment (`NetTiming.NetworkCertifierRecord`, `certifier-key/v1`), whose key the auditor's
 registration `A` holds for the device `cert` (`Core.Site`'s `Owners`: `A.key x.id = some x.key`), the device whose
 run `trusted-host` covers. `A` is read from the auditor's record `aj` as the checks read it
 (`Core.Site.Registration.Auditor.ofJson`, the registration's `auditor`), never supplied beside it.
@@ -61,10 +60,9 @@ statement and prover break it.
 
 namespace NetTiming
 
-/-- **The auditor's record of its network certifier's deployment**: the LMS parameters, public key and session it read
-off its own device, never a field of the evidence or the prover's copy of the run. The auditor challenger holds the
-key as `certifier_key` (`CertifierClient`, `verity/core/protocols/certifier/active.py`). The period check's `Params`
-carry them (`NetworkCheck.Period.Params`: its key, LMS parameters and session are this record's). -/
+/-- **The auditor's record of its network certifier's deployment** (`certifier-key/v1`): the LMS parameters, public key
+and session it read off its own device, never a field of the evidence or the prover's copy of the run. The period
+check's `Params` carry them (`NetworkCheck.Period.Params`: its key, LMS parameters and session are this record's). -/
 structure NetworkCertifierRecord where
   lms : Lms.Params
   key : ByteArray
