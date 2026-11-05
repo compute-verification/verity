@@ -3004,8 +3004,8 @@ def further(*lemmas, guarantee=None, **over):
 
 
 def test_a_guarantee_may_list_further_nontrivial_witnesses_each_dropping_another_premise():
-    """`nontrivial` is one theorem or a list of them (NET-200's rows and clock clauses, each with an exclusion lemma and a
-    `Wf` negation). The first is held to the guarantee's kind as ever; each after it, whatever the kind, is in the
+    """`nontrivial` is one theorem or a list of them (a network guarantee's rows and clock clauses, each with an exclusion
+    lemma and a `Wf` negation). The first is held to the guarantee's kind as ever; each after it, whatever the kind, is in the
     exclusion form at an explicit instance, (the other premises hold) ∧ ¬ (a named premise) ∧ ¬ (the conclusion), drops
     a premise no earlier one drops, builds its instance and takes only listed assumptions. Every listed name is a witness,
     held to neither `shape` nor `four_names`, and a list counts as the `nontrivial` half an `unwitnessed` entry would
@@ -3059,7 +3059,7 @@ def test_a_guarantee_may_list_further_nontrivial_witnesses_each_dropping_another
     assert witness_codes(*unlisted) == ["witnesses.unlisted-witness"]
 
     h = f["pins"]["P.sound"]["type_sha256"]
-    half = {"type_hash": h, "missing": "nontrivial", "why": "NET-200: the clock clause's Wf negation"}
+    half = {"type_hash": h, "missing": "nontrivial", "why": "the clock clause's Wf negation"}
     assert witness_codes({**pol, "unwitnessed": {"P.sound": half}}, f) == []
     assert A.unwitnessed_kept({**pol, "unwitnessed": {"P.sound": half}}, f, {}) == {}
     assert A.renamed_witnesses({"witnesses": {"P.a": {"honest": ["P.a_h"], "nontrivial": ["P.a_n", "P.a_m"]}}},
@@ -3086,8 +3086,8 @@ def test_an_exclusion_theorems_further_nontrivial_witness_drops_another_premise_
 
 
 def test_a_premise_free_guarantee_lists_no_further_nontrivial_witness():
-    """A premise-free exclusion theorem's one `nontrivial` lemma is the bare `¬ bound` (#7114), and a further one drops a
-    premise like any other (NET-200), so with none to drop it fails."""
+    """A premise-free exclusion theorem's one `nontrivial` lemma is the bare `¬ bound`, and a further one drops a premise
+    like any other, so with none to drop it fails."""
     cover = {"name": "P.Covering.load", "module": "P.Covering", "kind": "def", "hash": "6" * 32}
     g = {"reads": [cover], "premises": [], "hypotheses": [],
          "body": wbody("LE.le", binders=["∀", "∀"], conclusion=[wk("LE.le", ["P.Covering.load"])])}
