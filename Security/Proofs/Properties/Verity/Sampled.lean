@@ -90,10 +90,11 @@ files and at the strategy a strategy of the period's game projects to. This modu
     subset law of `kd` units it is `C(n − K₀, kd)/C(n, kd)` with `K₀ = ⌊εn⌋ + 1`;
   * the tables' knowledge term at the worst registration (`ksAvgStrictZ`) and the link term at `t + w` per run
     (`sessionDelta`);
-  * each round the device opens after a digest of the prover's message, and the record the commitment is a digest of:
-    a two-continuation finder (`twoRun`), which runs the play twice after the digest and outputs the two messages the
-    evidence reveals when they differ, at `2t + 2h` SHA-512 calls. The most likely message misses with probability at
-    most the square root of the finder's success, so each adds `√((2t + 2h)²/2^513)`;
+  * each round the device opens after a digest of the prover's message, the record the commitment is a digest of, and
+    the message the composition's commitment is the SHA-512 of (the digests it binds, among them the one v2's draw
+    answers): a two-continuation finder (`twoRun`), which runs the play twice after the digest and outputs the two
+    messages the evidence reveals when they differ, at `2t + 2h` SHA-512 calls. The most likely message misses with
+    probability at most the square root of the finder's success, so each adds `√((2t + 2h)²/2^513)`;
   * each leaf the device's coin trees hold in the play, twice, since the prover sees every leaf before it chooses what to
     open: the leaf's coins against fresh ones, at the mean over the device's fresh tree key of hm96's hiding gap
     (`CROnly.hidingGap`), which the leftover hash lemma bounds by `2^-257` a leaf, so `Claims.Hm96Hiding` holds at it
@@ -190,8 +191,8 @@ structure Live where
   /-- the tree openings the session reads after a digest of the prover's message: its link points' and each rep
   round's -/
   rounds : ℕ
-  /-- hashing one message the device or the commitment takes a digest of (a round's message, the record), in SHA-512
-  calls -/
+  /-- hashing one message the device or the commitment takes a digest of (a round's message, the record, the digests
+  the composition's commitment binds), in SHA-512 calls -/
   h : ℕ
 
 attribute [instance] Live.fΩ Live.nΩ
@@ -383,10 +384,10 @@ the most likely revealed message misses with probability at most the root of the
 noncomputable def twoRun (q : ℝ) : ℝ≥0∞ := ENNReal.ofReal (Real.sqrt (q ^ 2 / 2 ^ (513 : ℝ)))
 
 /-- **The leg's δ at the session, `t` SHA-512 calls and the read finder's bound `cr`**: the session's error, a
-two-continuation term per round opened after a digest and one for the record, the coin trees' hiding term
-(`Live.hidingTerm`), the two file finders' `2²/2^513`, and `cr`. -/
+two-continuation term per round opened after a digest, one for the record and one for the digests the composition's
+commitment binds, the coin trees' hiding term (`Live.hidingTerm`), the two file finders' `2²/2^513`, and `cr`. -/
 noncomputable def delta (t : ℕ) (cr : ℝ) : ℝ≥0∞ :=
-  A.sessionDelta t + A.rounds * twoRun (A.qM t) + twoRun (A.qM t) + A.hidingTerm +
+  A.sessionDelta t + A.rounds * twoRun (A.qM t) + twoRun (A.qM t) + twoRun (A.qM t) + A.hidingTerm +
     2 * ENNReal.ofReal ((2 : ℝ) ^ 2 / 2 ^ (513 : ℝ)) + ENNReal.ofReal cr
 
 /-- **The tables' knowledge term at the widened sample is the session's**: the draw reads only the session's bytes. -/
@@ -498,8 +499,9 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 releases the strategy may ask for (`coins`) and the C-Flock live strategy it is read as at the session widened by them
 (`project`); the read finder (`Vocab.finder`'s: a collision among the strings v2 hashes in reading the device's log and
 trees and those the device hashes) and the forger of the device's signature (`Vocab.forger`'s); and the
-two-continuation finders, one per round the device opens after a digest of the prover's message and one for the record
-the commitment is a digest of, each at most `2t + 2h` SHA-512 calls on every coin (`Live.qM`). -/
+two-continuation finders, one per round the device opens after a digest of the prover's message, one for the record
+the commitment is a digest of, and one for the digests the composition's commitment binds, each at most `2t + 2h`
+SHA-512 calls on every coin (`Live.qM`). -/
 structure Constructions (V : Vocab d α) where
   coins : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     Verity.Game.Strategy (V.game θ F c) → Widening
@@ -513,10 +515,14 @@ structure Constructions (V : Vocab d α) where
     Verity.Game.Strategy (V.game θ F c) → Fin A.rounds → Claims.Finder
   recordFinder : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     Verity.Game.Strategy (V.game θ F c) → Claims.Finder
+  bindFinder : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
+    Verity.Game.Strategy (V.game θ F c) → Claims.Finder
   msg_calls : ∀ A θ F c σ j (x : (msgFinder A θ F c σ j).S),
     ((msgFinder A θ F c σ j).cost x : ℝ) ≤ A.qM (V.cost θ F c σ)
   record_calls : ∀ A θ F c σ (x : (recordFinder A θ F c σ).S),
     ((recordFinder A θ F c σ).cost x : ℝ) ≤ A.qM (V.cost θ F c σ)
+  bind_calls : ∀ A θ F c σ (x : (bindFinder A θ F c σ).S),
+    ((bindFinder A θ F c σ).cost x : ℝ) ≤ A.qM (V.cost θ F c σ)
 
 /-- **The session a strategy of the period's game is projected into**: `A` widened by the coins the projection reads. -/
 noncomputable abbrev Constructions.live {V : Vocab d α} (K : Constructions V) (A : Live) (θ : ByteArray)
@@ -531,15 +537,17 @@ structure FinderCR (V : Vocab d α) (K : Constructions V) (A : Live) (θ : ByteA
   session : (K.live A θ F c σ).FinderCR (K.project A θ F c σ) (V.cost θ F c σ)
   msg : ∀ j, Claims.StrictBirthday Verity.sha512Msg (K.msgFinder A θ F c σ j)
   record : Claims.StrictBirthday Verity.sha512Msg (K.recordFinder A θ F c σ)
+  bind : Claims.StrictBirthday Verity.sha512Msg (K.bindFinder A θ F c σ)
   file : Claims.StrictBirthday Verity.sha512Msg (V.fileFinder θ F)
   publicFile : Claims.StrictBirthday Verity.sha512Msg (V.publicFinder θ F)
 
 /-- **The coupling, the projection's target at the session `A`**: the plays of the period's game whose sampled verdict
 accepts are at most as likely as the live audit's plays, at the session widened by the projection's coins and the
 strategy projected there, that flock-verify `--zk` accepts at `own` (`LiveAcceptsZKP`), plus the square root of each
-two-continuation finder's success (one per round the device opens after a digest of the prover's message, and one for
-the record), the coin trees' hiding term (`Live.hidingTerm`, at every leaf the device's trees hold), the read finder's
-collision and the forger's forgery of the device's signature. Its pieces are the draw (the device's coins the draw reads, `Properties.Challenger.CoinsFromLog`, are the
+two-continuation finder's success (one per round the device opens after a digest of the prover's message, one for the
+record, and one for the digests the composition's commitment binds), the coin trees' hiding term (`Live.hidingTerm`,
+at every leaf the device's trees hold), the read finder's collision and the forger's forgery of the device's
+signature. Its pieces are the draw (the device's coins the draw reads, `Properties.Challenger.CoinsFromLog`, are the
 live audit's draw), the rounds (each round's coins, from the coin trees' log, are the live session's) and the messages
 (each message the evidence reveals is the projected strategy's). The leg reads it at each session v2 sets up on the
 parameters and the committed files. -/
@@ -550,7 +558,8 @@ def CouplingTarget (V : Vocab d α) (k : Verity.Registration.Composite) (K : Con
       FlockSoundness.Game.prob (fun o => LiveAcceptsZKP A.I A.own o) (K.live A θ F c σ).game
           (K.project A θ F c σ) +
         (∑ j, ENNReal.ofReal (Real.sqrt ((K.msgFinder A θ F c σ j).Pr Verity.sha512Msg)) +
-          ENNReal.ofReal (Real.sqrt ((K.recordFinder A θ F c σ).Pr Verity.sha512Msg)) + A.hidingTerm +
+          ENNReal.ofReal (Real.sqrt ((K.recordFinder A θ F c σ).Pr Verity.sha512Msg)) +
+          ENNReal.ofReal (Real.sqrt ((K.bindFinder A θ F c σ).Pr Verity.sha512Msg)) + A.hidingTerm +
           ENNReal.ofReal ((K.readFinder θ F c σ).Pr Verity.sha512Msg) +
           ENNReal.ofReal ((K.forger θ F c σ).Pr Verity.lmsVerify))
 

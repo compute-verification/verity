@@ -1221,60 +1221,65 @@ noncomputable def sampleMaps (rd : Readings)
 variable (k : Verity.Registration.Composite)
 
 omit θ F c in
-/-- **The coupling at the projection, off the coin map's premises within a term**: `couplingTarget_withProject` off the
-held-off events `BL` and `B`, with the coin map's premise discharged by `couples_of_close` at each commitment and
-strategy, wherever the start's term and the stops' (`γL` and `BL`'s probability at the first stop, `γ` and `B`'s at
-each later one) sum to at most the hiding term. -/
+/-- **The coupling at the projection, off the coin map's premises within a term**: `couplingTarget_withProject` at the
+cut `P` and `Q`, off the held-off events `BL` and `B`, with the coin map's premise discharged by `couples_of_close` at
+each commitment and strategy, wherever the start's term and the stops' (`γL` and `BL`'s probability at the first stop,
+`γ` and `B`'s at each later one) sum to at most the hiding term. -/
 theorem couplingTarget_withProject_of_close (rd : Readings) (K : Constructions V)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
       Decoders A.rounds A.Reg)
     (M : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP)
     (A : Live) (P : Exchange → Prop) (θ : ByteArray) (F : Array ByteArray)
+    (Q : (c : ByteArray) → Strategy (V.game θ F c) → Exchange → Prop)
     (BL : (c : ByteArray) → Strategy (V.game θ F c) → LinkHold A.mP)
     (B : (c : ByteArray) → Strategy (V.game θ F c) → RoundHold)
     (γ : (c : ByteArray) → (σ : Strategy (V.game θ F c)) → Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds) →
       (j : ℕ) → SubmitJ j → ℝ≥0∞)
     (γL : (c : ByteArray) → (σ : Strategy (V.game θ F c)) → Pos (V.game θ F c) σ Claims.Msg (Fin A.rounds) → ℝ≥0∞)
     (ε₀ : (c : ByteArray) → Strategy (V.game θ F c) → ℝ≥0∞)
-    (ha : LoggedBound V k (K.withProject V rd D M) P θ F)
+    (ha : LoggedBound V k (K.withProject V rd D M) P θ F) (hq : DigestBound V k (K.withProject V rd D M) A θ F Q)
     (hR : ∀ c σ, (M A θ F c σ).RoundClose (γ c σ)) (hL : ∀ c σ, (M A θ F c σ).LinkClose (γL c σ))
     (hF : ∀ c σ, FirstStopFresh V θ F c A (rd A θ F c) σ (M A θ F c σ))
     (hS : ∀ c σ, StartWithin V θ F c A σ (M A θ F c σ) (ε₀ c σ))
     (hε : ∀ c σ, ε₀ c σ + couplesErr V θ F c A (rd A θ F c) σ (D A θ F c σ) (M A θ F c σ)
       (fun q j s => γ c σ q j s + prCoin (B c σ q.g' j s)) (fun q => γL c σ q + prCoin (BL c σ q.g')) ≤
         A.hidingTerm)
-    (hD : ∀ c σ, Decodes V θ F c k P A (rd A θ F c) σ (D A θ F c σ) (M A θ F c σ) (BL c σ) (B c σ)) :
+    (hD : ∀ c σ, Decodes V θ F c k (fun o => P o ∧ Q c σ o) A (rd A θ F c) σ (D A θ F c σ) (M A θ F c σ) (BL c σ)
+      (B c σ)) :
     CouplingTarget V k ((K.withProject V rd D M).withMessages rd) A θ F :=
-  couplingTarget_withProject V k rd K D M A P θ F BL B ha
+  couplingTarget_withProject V k rd K D M A P θ F Q BL B ha hq
     (fun c σ => couples_of_within V θ F c
       (couples_of_close V θ F c A _ σ _ _ (BL c σ) (B c σ) (hR c σ) (hL c σ) (hF c σ) (hS c σ)) (hε c σ)) hD
 
 omit θ F c in
 /-- **The coupling at the projection with the sample-coupled coin maps**: `couplingTarget_withProject` at
-`sampleMaps`, off the empty classes (`linkEmpty`, `roundEmpty`), whose coin map's premise holds within the openings'
-gaps and empty classes over the stops wherever the session's coins are uniform (`sampleMap_couples`), at each
-commitment and strategy where those terms are at most the hiding term. -/
+`sampleMaps` and the cut `P` and `Q`, off the empty classes (`linkEmpty`, `roundEmpty`), whose coin map's premise
+holds within the openings' gaps and empty classes over the stops wherever the session's coins are uniform
+(`sampleMap_couples`), at each commitment and strategy where those terms are at most the hiding term. -/
 theorem couplingTarget_withProject_of_sample (rd : Readings) (K : Constructions V)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
       Decoders A.rounds A.Reg)
     (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String)
     (after : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → ByteArray) {m : ℕ}
     (κ : (A : Live) → A.Ω → Fin m → Fin 512 → Bool) (A : Live) (P : Exchange → Prop) (θ : ByteArray)
-    (F : Array ByteArray) (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ A ω)) = avg H)
+    (F : Array ByteArray) (Q : (c : ByteArray) → Strategy (V.game θ F c) → Exchange → Prop)
+    (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ A ω)) = avg H)
     (ha : LoggedBound V k (K.withProject V rd D (sampleMaps e V rd label after κ)) P θ F)
+    (hq : DigestBound V k (K.withProject V rd D (sampleMaps e V rd label after κ)) A θ F Q)
     (hε : ∀ c σ, couplesErr V θ F c A (rd A θ F c) σ (D A θ F c σ) (sampleMaps e V rd label after κ A θ F c σ)
       (fun q _ s => openGap (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
         openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
       (fun q => openGap (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
         openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤
         A.hidingTerm)
-    (hD : ∀ c σ, Decodes V θ F c k P A (rd A θ F c) σ (D A θ F c σ) (sampleMaps e V rd label after κ A θ F c σ)
-      (linkEmpty e (finish (V.signer θ) θ F c σ.1)) (roundEmpty e (finish (V.signer θ) θ F c σ.1))) :
+    (hD : ∀ c σ, Decodes V θ F c k (fun o => P o ∧ Q c σ o) A (rd A θ F c) σ (D A θ F c σ)
+      (sampleMaps e V rd label after κ A θ F c σ) (linkEmpty e (finish (V.signer θ) θ F c σ.1))
+      (roundEmpty e (finish (V.signer θ) θ F c σ.1))) :
     CouplingTarget V k ((K.withProject V rd D (sampleMaps e V rd label after κ)).withMessages rd) A θ F :=
-  couplingTarget_withProject V k rd K D (sampleMaps e V rd label after κ) A P θ F
-    (fun c σ => linkEmpty e (finish (V.signer θ) θ F c σ.1)) (fun c σ => roundEmpty e (finish (V.signer θ) θ F c σ.1)) ha
-    (fun c σ => couples_of_within V θ F c (sampleMap_couples e V θ F c A (rd A θ F c) σ (D A θ F c σ)
+  couplingTarget_withProject V k rd K D (sampleMaps e V rd label after κ) A P θ F Q
+    (fun c σ => linkEmpty e (finish (V.signer θ) θ F c σ.1)) (fun c σ => roundEmpty e (finish (V.signer θ) θ F c σ.1))
+    ha hq (fun c σ => couples_of_within V θ F c (sampleMap_couples e V θ F c A (rd A θ F c) σ (D A θ F c σ)
       (label θ F c σ) (after θ F c σ) (κ A) hκ) (hε c σ)) hD
 
 end Verity.Sampled

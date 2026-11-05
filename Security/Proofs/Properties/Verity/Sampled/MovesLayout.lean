@@ -19,8 +19,9 @@ three sit together inside the writer's output.
   to the session's draw file at the sample (`recordDraw_firstStop`), the roots decoded at the first stop are the
   record's `root_B` (`firstStop_rootB`), the link points are the record's (`link_pts`), and the proof files are v2's
   (`proofs_of_sent`).
-* **`MovesReach`** (`movesReach_layout`): `ReachesOff.movesOf` at every outcome, with what it takes of each accepted
-  play whose log v2 read is the device's stated for every tape.
+* **`MovesReach`** (`movesReach_layout`): `ReachesOff.movesOf` at every outcome, at the coupling's cut (v2's read of
+  the log is the device's, and v2 draws at the digest `after`, `SampledDigest`), with what it takes of each accepted
+  play the cut holds of stated for every tape.
 -/
 
 @[expose] public section
@@ -272,8 +273,10 @@ theorem ReachesOff.movesOf {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
       hs hd).symm
 
 /-- **`MovesReach` at the session's layout** (`couplingTarget_assembled`'s `hM` at these readings, decoders and coin
-map): `ReachesOff.movesOf` at every outcome, where what it takes of a play holds of every tape whose play the sampled
-verdict accepts and whose log v2's check read is the device's. -/
+map, with `after` the strategy's `afterAt`): `ReachesOff.movesOf` at every outcome, at the cut that v2's check read the
+device's log and that v2 draws at `after` (`SampledDigest`), where what it takes of a play holds of every tape whose
+play the sampled verdict accepts and whose log v2's check read is the device's, and v2's family and digest
+(`hN`) of those whose draw answers `after`. -/
 theorem movesReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (h0r : 0 < A.rounds)
     (hRN : A.rounds ≤ A.N + 1) (ht : PopTied θ A) (hR : DrawReadAll k coinsRead) (hH : DrawHeld k)
@@ -287,7 +290,8 @@ theorem movesReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
     {M : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP} (hM : M = sampleMap fieldEnc V θ F c A rd σ label after κ)
     (hN : ∀ x : CoinTape (V.game θ F c) σ, V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
-      SampleNamed k (CoinTape.run (V.game θ F c) σ x).sent label after)
+      SampledDigest k (CoinTape.run (V.game θ F c) σ x).sent after →
+        SampleNamed k (CoinTape.run (V.game θ F c) σ x).sent label after)
     (hP : ∀ x : CoinTape (V.game θ F c) σ, V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
       ∀ pre r post, (CoinTape.run (V.game θ F c) σ x).log = pre ++ r :: post → ∀ i s n,
@@ -306,9 +310,9 @@ theorem movesReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
       ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ x).sent = some text →
         Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ x).log) :
-    MovesReach V θ F c k (Binding.Logged Binding.readsV2) A rd σ D M
+    MovesReach V θ F c k (fun o => Binding.Logged Binding.readsV2 o ∧ SampledDigest k o.sent after) A rd σ D M
       (linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) (roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) :=
-  fun _ h ⟨hv, hn, hl⟩ => h.movesOf hA hDg h0r hRN ht hR hH hfix reg record recordDigest hrd hD hm hsrc hM hv hn hl
-    (hN _ hv hl) (hP _ hv hl) (hfirst _ hv hl) (hcovL _ hv hl) (hO _ hv hl)
+  fun _ h ⟨hv, hn, hl, hd⟩ => h.movesOf hA hDg h0r hRN ht hR hH hfix reg record recordDigest hrd hD hm hsrc hM hv hn
+    hl (hN _ hv hl hd) (hP _ hv hl) (hfirst _ hv hl) (hcovL _ hv hl) (hO _ hv hl)
 
 end Verity.Sampled
