@@ -189,7 +189,7 @@ def component : Verity.Registration.Composite → Subprotocol → Option BlobPro
   | .remoteNetworkNoPouw, _ => none
 
 /-- Composite `k`'s subprotocols: those it has a component for. Remote's and remote with the network certifier's, with
-work or without, are subsets of onsite's. -/
+PoUW or without, are subsets of onsite's. -/
 def subprotocols (k : Verity.Registration.Composite) : Finset Subprotocol :=
   Finset.univ.filter fun a => (component k a).isSome
 

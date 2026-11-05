@@ -279,7 +279,7 @@ namespace Registration
 open Site (Sheet)
 
 /-- The composite a site's log is registered for: onsite, whose boundary links the auditor's certifiers split and whose
-memory its challengers reach; remote, where neither need hold; or remote with the network certifier, with work or
+memory its challengers reach; remote, where neither need hold; or remote with the network certifier, with PoUW or
 without, whose boundary links the auditor's certifiers split and whose memory no challenger need reach. -/
 inductive Composite
   | onsite

@@ -91,7 +91,7 @@ name = "CoreRemoteNetworkNoPouw"
 name = "remote-network-no-pouw"
 root = "RemoteNetworkNoPouwMain"
 
-# The composite a configuration's subprotocols make, onsite, remote, or remote with the network certifier with work or
+# The composite a configuration's subprotocols make, onsite, remote, or remote with the network certifier with PoUW or
 # without, and no other: `product IDS id | check | serve` (CoreComposites.lean).
 [[lean_lib]]
 name = "CoreComposites"
