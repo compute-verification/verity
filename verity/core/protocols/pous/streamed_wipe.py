@@ -24,14 +24,15 @@ session has four steps:
    (`challenge`), reads the receipt time before it hashes anything (`receive`), and checks every 64-byte answer against
    `L_{c_j}`.  The first late or wrong batch ends the session: no batch is retried, and no index is redrawn.
 4. **Sign.** One signature over `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records root)`, where the header is the
-   commitment, how the session ended, the fill's times and the egress the network certifier counted over the session
-   (`close`), and the records root is the frame-v3-sha512 root of the batch records.
+   commitment, how the session ended, the fill's times and the egress count the challenger's operator gave it (`close`),
+   which stands for a network certifier's count over the session and which nothing checks, and the records root is the
+   frame-v3-sha512 root of the batch records.
 
 A batch record is `u32 b ‖ u32 first ‖ u32 count ‖ u64 send_ns ‖ u64 receipt_ns ‖ u32 wrong ‖ SHA-512(indices ‖
 answers)` (96 bytes).  The guarantee (`PROTOCOL.md`; Lean `Pous.Guarantees.StreamedWipe`) covers the sequential reveal,
 batch size 1 (`WipeParams.covered`); a larger batch lets an answer depend on the whole batch, which the proof doesn't
 cover yet, so `verdict` refuses it.  `verdict` is what a verifier checks of a signed session; its public output is the
-verdict and the egress the network certifier counted, in whole MiB (15 bits), which the bound reads.  Its Lean port decides it
+verdict and the signed egress count, in whole MiB (15 bits), which the bound reads.  Its Lean port decides it
 (`MemoryChallenger.StreamedWipe` and `wipe_verdict.judge` in `verity/core/devices/memory_challenger/lean/`, reading the
 records' `to_json`), and `verdict` here is the reference that port is difftested against.  `retained_bits` and
 `challenges_for` are the guarantee's bound, which says how much of the prior content can survive an accepted wipe.

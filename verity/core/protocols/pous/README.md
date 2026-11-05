@@ -136,9 +136,11 @@ A period's wipe is `wipe_period`: one streamed wipe of the node, the memory chal
 wipe's component of onsite Verity, `verity/wipe/v0` (`MemoryChallenger.WipeProtocol`, `wipe-protocol` in
 `verity/core/devices/memory_challenger/lean/`). An accepted wipe publishes `M` (every declared tier), the reads `k` the
 memory challenger chose (`wipe_party --reads`, 2152 by default; the prover never names them), `r = ratio(k)` and the
-foreign content it may leave, `StreamedWipeMeetsReads`' `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `2^-128` with
-the egress counted (`R` the declared memory past the fill), and `M` (vacuous) otherwise; an unsigned session is
-undecided. `wipe_period.leg(period_dir, node, out)` is the wipe's leg of the all-protocols period runner.
+foreign content it may leave, `StreamedWipeMeetsReads`' `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `2^-128`
+(`R` the declared memory past the fill, `E` the egress count the challenger signs), and `M` (vacuous) otherwise; an
+unsigned session is undecided. The challenger signs the count its operator gives it, which no verifier holds to a
+network certifier's count over the session: the bound rests on the deployment's giving at least that count.
+`wipe_period.leg(period_dir, node, out)` is the wipe's leg of the all-protocols period runner.
 `wipe_monitoring` reports one accepted wipe over a week, a month and a year of a deployment's machines, each wiped
 every `cadence_s` seconds (a day by default), at δ = 1% and 10⁻⁶: the T wipes, at most M − 1 of them failing their bound
 except with δ (`prCoin_count_le_choose`'s count bound, which PoUB's period shares), every one
@@ -155,7 +157,8 @@ one on its own host. The leg's record names what the bound doesn't cover (`uncer
 no network certifier counts (the placement's `links`: `wipe.links`, and the challenger's as the prover connected to it),
 the node's memory outside the declared tier (`undeclared_tiers`: the device's past the declared tier, which a GPU's leg
 declares whole, the host's DRAM, its disks), a GPU's driver reserve when NVML gave no total (the leg declares the larger
-of CUDA's and NVML's totals, and NVML's counts the reserve: `wipe_store.Cuda.info`) and an egress signed `UNCOUNTED`. It
+of CUDA's and NVML's totals, and NVML's counts the reserve: `wipe_store.Cuda.info`) and an egress signed `UNCOUNTED` or a
+count its operator gave. It
 also carries the session's window, `t0` (the prover connected) and `t1` (the session signed) on the challenger's clock,
 which a network certifier counts the egress over.
 `wipe.disk` puts the node's disks in the same session (`wipe_store.Disk`, laid ahead of the card or host memory by
