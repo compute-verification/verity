@@ -145,8 +145,10 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   So are each session's: before any verdict, the check holds every session's record to the coin trees the signed
   release log shows the challenger sampled and opened (`SampledProofs/ChallengerTrees.lean`,
   `challenger.sessions_tree_reason`): its `coin_tree` a logged tree, its link points and round coins that tree's
-  openings after its link's roots and each round's message, one tree per session and every tree a session's.
-  `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
+  openings after its link's roots and each round's message, one tree per session and every tree a session's. That log
+  must release the sample, then the link, then the other rounds (`challenger.sample_link_first`,
+  `one_stage.proofs.order_why`): no coin of the challenger family after the registration's digest released after a
+  round is opened, and the first round opened a tree's `session` stream. `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
   to `verify`'s. Onsite and remote (`Core.Onsite`, `Core.Remote`) read v1 as `VStar.Recursive.Sampled`'s one-stage
   form, never alone; switching it to v2 is what is left.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by

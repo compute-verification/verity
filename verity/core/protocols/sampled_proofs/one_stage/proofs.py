@@ -27,7 +27,8 @@ peak), then O(proof) a session: so a protocol verifies one statement a stratum, 
 The one-stage audit's v2 (`V2`, `SampledProofs.OneStageZk`) runs this verifier inside the audit's own Lean, on the files
 as content-addressed blobs: `check_v2` hands it v1's inputs with the verdicts replaced by the files' digests
 (`evidence_v2`) and the files themselves, and `verdicts_v2` is that run's verdicts alone, which the difftest holds to
-`verify`'s.
+`verify`'s. `order_why` mirrors its refusal of a challenger release log out of the order the sample, then the link,
+then the other rounds (`OneStageZk.orderHeld`).
 
 Building takes the lock `verifier.BUILD_LOCK` takes: Lake builds the flock package in place for `sampled-proofs-verifier`
 too, and two builds at once would rewrite one module's C under each other.
@@ -45,6 +46,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from ..challenger import SAMPLE_LINK_FIRST, sample_link_first
+from .registration import digest as registration_digest
 from .verifier import BUILD_LOCK, CORE
 from .verifier import PACKAGE as V2_PACKAGE
 
@@ -263,6 +266,18 @@ def v2_executable() -> Path:
     return V2_PACKAGE / ".lake" / "build" / "bin" / V2_EXE
 
 
+def order_why(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Mapping[str, Any]) -> str | None:
+    """`OneStageZk.orderHeld`'s refusal, with its reason: the challenger session's release log in v1's `evidence`
+    (``coins``' ``session``'s ``log``), after its head, not the sample, then the link, then the other rounds
+    (`challenger.sample_link_first`) at the parameters' challenger family (`params`' ``challenger``'s ``label``) and the
+    registration `record`'s digest; None when it is. `check_v2` answers it under ``proofs:`` before any session's record
+    is read, once the log's coin trees parse (`challenger.coin_trees_of`), which it refuses first."""
+    log = evidence["coins"]["session"]["log"]
+    if sample_link_first(params["challenger"]["label"], bytes.fromhex(registration_digest(record)), log[1:]):
+        return None
+    return f"coins: {SAMPLE_LINK_FIRST}"
+
+
 def _canonical(x: Any) -> bytes:
     """`x` in the canonical JSON `Core.canonicalJson` reads, for the integers, strings, lists and objects of ASCII keys
     these inputs hold."""
@@ -316,8 +331,9 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
     auditor's circuit digest and the verifier's registered file, the registration `record`, and v1's `evidence` with
     its ``verdicts`` replaced by `proof`'s ``proofs`` (`evidence_v2`, under the evidence's ``sessions``); the outcome
     line. `params` must name the auditor's challenger and its window (``challenger``, ``window_root``), whose signed
-    release in the evidence's ``coins`` the draw reads: v2 refuses parameters naming none. Each session's record must be
-    on a coin tree that release log shows the challenger sampled and opened, one tree a session and every tree a
+    release in the evidence's ``coins`` the draw reads: v2 refuses parameters naming none. That release log must release
+    the sample, then the link, then the other rounds (`challenger.sample_link_first`, `order_why`), and each session's
+    record must be on a coin tree it shows the challenger sampled and opened, one tree a session and every tree a
     session's (`challenger.sessions_tree_reason`)."""
     pr, blobs = evidence_v2(proof, evidence["sessions"])
     p2 = {**params, "proofs": {"circuit": circuit_sha512, "registered": registered}}
@@ -335,5 +351,5 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
 
 
 __all__ = ["EXE", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "V2", "V2_EXE", "Finding", "LeanError", "Proof",
-           "check_v2", "evidence_v2", "executable", "file_sha512", "ks_form_why", "proved_units", "reads_registered",
-           "v2_executable", "verdicts_v2", "verify"]
+           "check_v2", "evidence_v2", "executable", "file_sha512", "ks_form_why", "order_why", "proved_units",
+           "reads_registered", "v2_executable", "verdicts_v2", "verify"]
