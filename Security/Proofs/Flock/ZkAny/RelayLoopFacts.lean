@@ -12,6 +12,7 @@ public import Proofs.Flock.ZkAny.RelayFollow
 public import Proofs.Flock.ZkAny.RelayLoopCur
 public import Proofs.Flock.ZkAny.RelayLoopL0
 public import Proofs.Flock.ZkAny.RelayLoopFirst
+public import Proofs.Flock.ZkAny.RelayRoundTook
 public import Proofs.Flock.SessionLoop.Statement
 
 /-!
@@ -44,6 +45,10 @@ model's release being the loop's own frames':
   table, extras and salts, which are the model's, the round's place is the model's scheduled round, or the schedule
   has no round there (the inner proof's own).
 * `slot_masked`: a frame round's slot is the model's masked round below the `Finish`.
+* `rep_seen`: at a frame round's slot, the stream is seen exactly where the model's last round was the same rep's.
+* **`answered_of_round`**: the model answers a frame round's slot's history where the loop took the coins so far
+  (`LoopModel.TookAt`), given the next rep's start at a stream's first round and, at a stream seen, the round's place
+  the model's scheduled round, the opening's first wherever the rank stop fails (`rank_of_release`).
 * **`roundFacts_loop`**: `RoundFacts` at a frame round's slot of the deployed loop, given the model's answer there and
   `PlaceFacts` at the round's place.
 * `LeanRelease.CrossPasses`: the named hypothesis on the Rust release that its checks (`cross`) fail no frame round
@@ -1074,6 +1079,119 @@ theorem slot_masked {T : ZKMal.CoinLayer.TableData}
   have h1 : ¬((M.hist σ.c).length = 1 ∨ (M.hist σ.c).length = M.L.last M.x) := by omega
   unfold LeanRelease.kindAt
   rw [ite_eq_right h0, ite_eq_right h1]
+
+/-- **A stream is seen exactly where the model's last round was its rep's**: at the slot of a round of `stream`,
+table `i`'s rep `r`, where `LoopFacts` and `LoopJ` hold at the deployed loop, the model's history so far is past the
+`Hello` and the `Commit`, and `seen` has a round of `stream` exactly where it is past a later one whose last round was
+of the same rep: the model's next round is the stream's past its first exactly there (`SeenAt`), and each round's rep
+is its stream's (`LeanRelease.repOf_add_two`, `Loop.locate_pred`, `Loop.locate_first`). -/
+theorem rep_seen {T : ZKMal.CoinLayer.TableData}
+    {M : LoopModel Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
+    {L₀ : LeanRelease Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
+    {real : Msg → Claims.Flock.Wit →
+      (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
+      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+    {s0 : FlockDeploy.Ins} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
+    (hD : LoopModel.Deployed M L₀ real s0 spec sts) {seen : List String} {st : State} {pl : Placed} {σ : LoopAt}
+    {stream : String} {n i r : Nat} (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
+    (hJ : LoopJ M sid spec sts seen st σ) (hrep : streamRep st stream = (i, r)) (hlt : σ.c < M.τ.length) :
+    2 ≤ (M.hist σ.c).length ∧ (seen.contains stream = true ↔
+      3 ≤ (M.hist σ.c).length ∧ M.L.rep M.x (M.hist σ.c).length = M.L.rep M.x ((M.hist σ.c).length - 1)) := by
+  obtain ⟨hsent, hop, -, -⟩ := slot_round hsl
+  obtain ⟨hk0, hmem⟩ := round_rep hsl hF hJ hrep hlt hD.names
+  have hlen : (M.hist σ.c).length = opened st + 1 := by
+    rw [M.length_hist (Nat.le_of_lt hlt), hF.count hsent]
+  have hro : ∀ k, M.L.rep M.x k = Loop.repOf M.x k := fun k => by
+    rw [hD.rel]
+    rfl
+  obtain ⟨q₀, hq₀⟩ : ∃ q₀, (M.hist σ.c).length = q₀ + 2 := ⟨opened st - 1, by omega⟩
+  have hnx : nextAt spec sts (M.hist σ.c) = ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 q₀ := by
+    unfold nextAt
+    rw [hq₀, Nat.add_sub_cancel]
+  have hS := hJ.seenAt i r stream hmem
+  rw [hnx] at hS hk0
+  refine ⟨by omega, fun hs => ?_, fun hc => ?_⟩
+  · have hp : 0 < (ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 q₀).2 := by
+      rcases hS.1 hs with h | ⟨-, h⟩
+      · omega
+      · exact h
+    obtain ⟨q₁, rfl⟩ : ∃ q₁, q₀ = q₁ + 1 := by
+      rcases q₀ with _ | q₁
+      · rw [Loop.locate_zero] at hp
+        omega
+      · exact ⟨q₁, rfl⟩
+    have e := Loop.locate_pred (Loop.roundsOf spec sts) 0 q₁
+      ((ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 (q₁ + 1)).2 - 1) (by omega)
+    refine ⟨by omega, ?_⟩
+    rw [hro, hro, hq₀, show q₁ + 1 + 2 - 1 = q₁ + 2 by omega, LeanRelease.repOf_add_two hD.setup,
+      LeanRelease.repOf_add_two hD.setup, e]
+  · obtain ⟨h3, he⟩ := hc
+    cases hs : seen.contains stream
+    · have h0 : (ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 q₀).2 = 0 := by
+        rcases Nat.eq_zero_or_pos (ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 q₀).2 with h | h
+        · exact h
+        · exact absurd ((hS.2 hk0 h).symm.trans hs) (by decide)
+      obtain ⟨q₁, rfl⟩ : ∃ q₁, q₀ = q₁ + 1 := ⟨q₀ - 1, by omega⟩
+      rw [hro, hro, hq₀, show q₁ + 1 + 2 - 1 = q₁ + 2 by omega, LeanRelease.repOf_add_two hD.setup,
+        LeanRelease.repOf_add_two hD.setup] at he
+      exact absurd h0 (Loop.locate_first _ 0 q₁ he)
+    · rfl
+
+/-- **The model takes the coins after a frame round's slot's history**: at the slot of a round of `stream`, table
+`i`'s rep `r`, where `LoopFacts` and `LoopJ` hold at the deployed loop, the loop took the coins so far
+(`LoopModel.TookAt`) and the round goes out, the model answers its history so far, given the next rep's start at a
+stream's first round (`hfr`) and, at a round of a stream seen, the round's place the model's scheduled round (`hsc`),
+the opening's first wherever the rank stop fails at the model's coin-step state (`hal`). The transport's check, the
+frame's earlier takings and its coin step are the loop's (`LeanRelease.answered_of_took`); at a round of a stream seen
+the frame is at that state but for `stopped` (`placeSt_seen`) and releases the round (`roundStep_out`), so the rank
+stop passes (`rank_of_release`). -/
+theorem answered_of_round {T : ZKMal.CoinLayer.TableData}
+    {M : LoopModel Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
+    {L₀ : LeanRelease Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
+    {real : Msg → Claims.Flock.Wit →
+      (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
+      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+    {s0 : FlockDeploy.Ins} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
+    (hD : LoopModel.Deployed M L₀ real s0 spec sts) {seen : List String} {st : State} {pl : Placed} {e : Env}
+    {σ σ' : LoopAt} {stream : String} {n i r : Nat} {dom : ByteArray} {v : Claims.Msg}
+    (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
+    (hJ : LoopJ M sid spec sts seen st σ) (htk : M.TookAt st σ.c) (hlt : σ.c < M.τ.length)
+    (hr : RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R)
+    (hpc : ∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) (ho : ∃ o, e.round = .ok o)
+    (hfr : seen.contains stream = false → ∃ m, M.L.fresh M.x (M.hist σ.c) = .ok m)
+    (hsc : seen.contains stream = true → ∀ q pc f nd,
+      _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i r dom ⟨v.toArray⟩ n = .ok (q, pc, f, nd) →
+      pc = .sched ⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c)
+        (computedOf (M.L.computed M.x M.w M.ρ (M.hist σ.c)))).toArray⟩)
+    (hal : seen.contains stream = true → ∀ m, M.L.answeredR M.x M.ρ (M.hist σ.c) = .ok m →
+      LeanRelease.rankFails (M.L.cfg M.x M.ρ (M.hist σ.c)) m = true →
+      Flags.PcsRound (⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c)
+        (computedOf (M.L.computed M.x M.w M.ρ (M.hist σ.c)))).toArray⟩, n)) :
+    ∃ m, M.L.answered M.x M.ρ (M.hist σ.c) = .ok m := by
+  obtain ⟨hsent, -, -, -⟩ := slot_round hsl
+  obtain ⟨C, hC⟩ := Option.isSome_iff_exists.mp (hF.reach.sess hsent)
+  obtain ⟨h2, hiff⟩ := rep_seen hD hsl hF hJ hr.rep_eq hlt
+  obtain ⟨o, hro⟩ := ho
+  have hout := (hr.round (request_round_slot hF.reach hF.live hsl)).symm.trans hro
+  obtain ⟨q, pc, f, nd, hrp⟩ := roundPlace_of_out hout
+  obtain ⟨_, p, hfd⟩ := roundPlace_find hrp
+  have hfa : frameAt σ.R sid i r = some p := by
+    rw [← find_frameAt, hfd]
+    rfl
+  refine LeanRelease.answered_of_took (htk.opens hC) htk.2.1 htk.2.2 h2 (fun hsw => ?_) (fun m hm h3 hs => ?_)
+  · cases hsn : seen.contains stream
+    · exact hfr hsn
+    · obtain ⟨h3, he⟩ := hiff.1 hsn
+      exact absurd he (hsw h3)
+  · have hsn : seen.contains stream = true := hiff.2 ⟨h3, hs⟩
+    obtain ⟨out, vd, hst, -⟩ := roundStep_out hrp hout
+    exact rank_of_release (placeSt_seen hsl hF hJ hr.rep_eq hlt hD.names hsn hrp)
+      ((roundPlace_cfg hfd hrp).trans (hpc p hfa)) (Prod.ext hst rfl)
+      (fun m' hm' hrk => ⟨_, hsc hsn q pc f nd hrp, hal hsn m' hm' hrk⟩) m hm
 
 /-- **`RoundFacts` at a frame round's slot of the deployed loop**: at the slot of a round of `n` coins of `stream`,
 where `LoopFacts` and `LoopJ` hold, the session's slots took fewer than the run's messages, and the loop ran the round

@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.ZkAny.RelayTook
 public import Proofs.Flock.ZkAny.RelayTaken
 public import Proofs.Flock.ZkAny.RelayRank
+public import Proofs.Flock.ZkAny.RelayCarry
 
 /-!
 # The model takes the coins after a frame round's history, from what the loop took
@@ -21,6 +22,8 @@ label of the round it releases:
 * **`rank_of_release`**: where a frame releases a device round at a state alike the coin step's, at the model's
   configuration, in the place of a round that is the opening's first wherever the rank stop fails, the rank stop
   passes (`Flags.rankFails_of_step`).
+* `ofLoop_fed`, **`coins_run_fed`**: where the frame takes a round's coins at a state alike the model's after the
+  round, the model's coin step takes them one message on (`fed`, by `answer_unstop`), whatever the round after.
 -/
 
 @[expose] public section
@@ -135,6 +138,53 @@ theorem rank_of_release {W Rr : Type} {L : LeanRelease W Rr} {x : Msg} {ρ : Rr}
     have h' := rankFails_of_release (hu m hm) hb hs
     rw [hr] at h'
     cases h'
+
+open Loop LeanRelease in
+/-- **Where the frame takes the last coins of `e0 :: h1` at a state alike the model's after its last round**, at a
+configuration alike that round's rep's, the model's coin step takes them. -/
+theorem ofLoop_fed (T : ZKMal.CoinLayer.TableData)
+    (L₀ : LeanRelease Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
+    (real : Msg → Claims.Flock.Wit →
+      (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
+      Nat → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (x : Msg) (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
+    (e0 : Msg × Msg) (h1 : List (Msg × Msg)) {c : Cfg} (hc : CfgAlike c ((ofLoop T L₀ real).cfgAt x ρ h1.length))
+    {st st' : _root_.Flock.Firewall.Frame.State}
+    (hu : unstop st.m = unstop (progOf x (h1.map fun p => ZKMal.CoinLayer.rd p.2)))
+    (hco : _root_.Flock.Firewall.Frame.step c st (.coins (.ok (coinsAt x (e0 :: h1)))) = (.ok, st')) :
+    (ofLoop T L₀ real).fed x ρ (e0 :: h1) = true := by
+  obtain ⟨a', ha', -⟩ := answer_unstop hc hu (_root_.Flock.Firewall.Frame.answer_of_step hco)
+  show (decide ((e0 :: h1).length ≤ 2) || ((progOf x (h1.map fun p => ZKMal.CoinLayer.rd p.2)).answer
+    ((ofLoop T L₀ real).cfgAt x ρ ((e0 :: h1).length - 1)) (coinsAt x (e0 :: h1))).isOk) = true
+  rw [List.length_cons, Nat.add_sub_cancel, ha']
+  simp [Except.isOk, Except.toBool]
+
+open Loop LeanRelease in
+/-- **The coins of a frame round the loop took, one message on**: where the frame the round put back is at the
+configuration of the round's rep and, but for `stopped`, at the model's state after the round, and takes the round's
+coins, the model's coin step takes them, whatever the round after (`coins_run_answered`'s premises but its answer). -/
+theorem coins_run_fed (T : ZKMal.CoinLayer.TableData)
+    (L₀ : LeanRelease Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
+    (real : Msg → Claims.Flock.Wit →
+      (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
+      Nat → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (x : Msg) (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
+    (e0 : Msg × Msg) (h1 : List (Msg × Msg)) (v : Msg) (a : ByteArray) {p₁ : _root_.Flock.Firewall.Frames.Rep}
+    (hc : CfgAlike p₁.cfg ((ofLoop T L₀ real).cfg x ρ (e0 :: h1)))
+    (hu : unstop p₁.st.m = unstop (progOf x ((h1 ++ [(v, a.data.toList)]).map fun p => ZKMal.CoinLayer.rd p.2)))
+    {st₂ : _root_.Flock.Firewall.Frame.State}
+    (hco : _root_.Flock.Firewall.Frame.step p₁.cfg p₁.st
+      (.coins (.ok (_root_.Flock.Firewall.Frames.feedOf (loopNr x h1.length) a.data.toList))) = (.ok, st₂)) :
+    (ofLoop T L₀ real).fed x ρ (e0 :: (h1 ++ [(v, a.data.toList)])) = true := by
+  rw [← coinsAt_cons_snoc x e0 h1 v] at hco
+  have e : (ofLoop T L₀ real).cfg x ρ (e0 :: h1) =
+      (ofLoop T L₀ real).cfgAt x ρ (h1 ++ [(v, a.data.toList)]).length := by
+    rw [List.length_append, List.length_singleton]
+    rfl
+  rw [e] at hc
+  exact ofLoop_fed T L₀ real x ρ e0 (h1 ++ [(v, a.data.toList)]) hc hu hco
 
 end Relay
 
