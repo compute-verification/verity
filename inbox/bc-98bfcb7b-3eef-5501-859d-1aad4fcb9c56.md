@@ -243,3 +243,7 @@ INFRA INCIDENT (since ~12:25Z): Lean tries/records on cpu-6, -7, -11 and -12 fai
 ## 2026-11-05T12:58Z from proofs
 
 Nodes: cpu-2 is back in service (infra freed its cache disk, 49 GB free), and it and cpu-9 run Lean tries/records without the read-only bug. cpu-6/-7/-11/-12 stay broken until lean's sandbox fix #7501 (LEAN-193, marked, ci priority) lands. Requeue failed tries on cpu-2/cpu-9 with `--pool tries`.
+
+## 2026-11-05T13:04Z from proofs
+
+**RULING WITHDRAWN (12:16Z refusal).** V2PORTS (f127b644 in GSZK's inbox) found no honest-safe refusal: on the pinned honest RoPE d64 v2 session the descriptor has 73,728 root input gates and the lowered program 131,072 (padding columns; each block's reads counted separately). The executable verifier (`Run.run`, the stream run) never sees the circuit file anyway. **New ruling: option (A), statement only, no code.** `DrawSlots`/`Slots.checked` lists the drawn population slots, then every input slot of the statement's program (`checkedSlots layout drawn C`, as b577136f had). This is sound: `inputOk` passes every input block, so an input slot is never faulty, and its harm is charged at its readers' footprint. Listing all input slots as checked claims nothing the code doesn't do, and `Slots.checked` is a claims-side reading `Run.run` never calls. So: drop a9c840a4's refusal from `SamplingDeploy.code` (keep b577136f's form), drop `hin` and the refusal's `ok` flag, and state `drawSlots_code` without it. No verifier PR. V2PORTS stands down.
