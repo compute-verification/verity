@@ -436,9 +436,30 @@ SAMPLED_PROOFS = Ported(SAMPLED_PROOFS_V1, sampled_proofs, blobs=True)
 ONE_STAGE_V1 = Ported("verity/sampled-proofs/one-stage/v1", ONE_STAGE.answer)
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
-#: Pearl+'s run verdict, remote's work in its composite of record: no case is recorded for it, so it refuses a
-#: commitment that isn't JSON, as Pearl+'s decoder does, and has no answer to any other case
+#: Pearl+'s run verdict, remote's work in its composite of record: on the served run a test records for it
+#: (`pearl_plus_answer`), and else it refuses a commitment that isn't JSON, as Pearl+'s decoder does, and has no answer
+#: to any other case
 PEARL_PLUS = Recorded("verity/pouw/pearl-plus/v1")
+#: `PouwCheck.PearlPlus.Protocol.commitmentTag`
+PEARL_PLUS_TAG = "verity/pouw/pearl-plus/manifests/v1"
+
+
+def pearl_plus_answer(commitment: bytes, verified: dict) -> dict:
+    """Pearl+'s outcome on a served run whose Python verdict ``served_passes.py verify`` recorded (`verified`, its
+    ``verify.json``), framed as `PouwCheck.PearlPlus.Protocol` frames the check's: its digest SHA-512(`PEARL_PLUS_TAG` ‖
+    0 ‖ the commitment's bytes), and on acceptance its public the credit at δ (`publicJson`) and its profile the draws
+    asked for, the tiles drawn and the passes (`profileJson`)."""
+    a, digest = verified["answer"], hashlib.sha512(PEARL_PLUS_TAG.encode() + b"\0" + commitment).digest()
+    if a["verdict"] != ACCEPT:
+        return P.outcome(PEARL_PLUS.id, a["verdict"], a["reason"], digest)
+    w, pr = a["public"]["work"], a["profile"]
+    public = {"credited": w["credited"], "credited_tiles": w["credited_tiles"], "delta": pr["delta"],
+              "epsilon": w["epsilon"], "macs": w["macs"], "rho": w["rho"]}
+    profile = {"draws": verified["draws"], "drawn": len(pr["tiles"]) - pr["exclusion_tiles"],
+               "passes": len(a["public"]["passes"])}
+    return P.outcome(PEARL_PLUS.id, ACCEPT, None, digest, public, profile)
+
+
 BANDWIDTH = Recorded("verity/remote-bandwidth/p2/v0")
 #: The wipe, `MemoryChallenger.WipeProtocol.protocol`.
 WIPE = Ported("verity/wipe/v0", WIPE_CASES.answer)
