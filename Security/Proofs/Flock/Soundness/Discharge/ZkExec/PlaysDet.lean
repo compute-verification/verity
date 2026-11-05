@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Refine.Run
-import Mathlib.SetTheory.Cardinal.Finite
-import Mathlib.SetTheory.Cardinal.NatCard
+module
+
+public import Proofs.Flock.Soundness.Refine.Run
+public import Mathlib.SetTheory.Cardinal.Finite
+public import Mathlib.SetTheory.Cardinal.NatCard
 
 /-!
 # A run has one result
@@ -12,6 +14,8 @@ one step its node's type allows.
 * `fin_fun_inj`: `Fin n → F` determines `n`.
 * `plays_det`: two runs of one game on the same messages and coins end in the same result.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

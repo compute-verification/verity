@@ -1,4 +1,6 @@
-import Properties.Verity.Game
+module
+
+public import Properties.Verity.Game
 
 /-!
 # Soundness at the verifier of record, composed from its subprotocols' targets
@@ -20,10 +22,13 @@ of onsite's, from its three (sampled proofs, PoUW and the inference-only policy)
 strategy in one game.
 
 Each target is a hypothesis until its subprotocol's piece proves it at its component, and `Vocab`'s fields are given
-until each piece defines its own: v2's reading of the blob, the positions, the rounds and the releases each component
-read, the extractor and the finders, the gates computed, the world, the declaration's registered inputs, the wipe and the
-play read at its boundary, and the published certificates, thresholds, errors and collision terms.
+until each piece defines its own: v2's reading of the committed files, the positions, the coin commitment's families and
+the device's log each component read, the extractor and the finders, the gates computed, the world, the declaration's
+registered inputs, the wipe and the play read at its boundary, and the published certificates, thresholds, errors and
+collision terms.
 -/
+
+@[expose] public section
 
 namespace Verity
 

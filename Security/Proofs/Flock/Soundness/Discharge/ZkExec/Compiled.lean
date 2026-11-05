@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.Refines
-import Proofs.Flock.Soundness.Discharge.ZkLink
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Refines
+public import Proofs.Flock.Soundness.Discharge.ZkLink
 
 /-!
 # flock-verify `--zk`'s headline at the compiled `--zk` table
@@ -23,6 +25,8 @@ named in the hypotheses: `hdec : DecodesZK …` (the per-transcript refinement, 
 prover outside A2 (`linkBoundZC`). Open and not a hypothesis: the coin tree (the live audit draws each round's coins
 fresh; `Discharge/ZkCoins`), and `J > 1` (the plan has one table).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

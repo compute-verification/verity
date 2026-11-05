@@ -1,12 +1,14 @@
-import Proofs.Nci.Cover.Area
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Finset.Prod
-import Mathlib.Basic.Real.Basic
-import Mathlib.Tactic.GCongr
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.Ring
+module
+
+public import Proofs.Nci.Cover.Area
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Data.Finset.Prod
+public import Mathlib.Basic.Real.Basic
+public import Mathlib.Tactic.GCongr
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.Ring
 
 /-!
 # The cover theorem: the additive charge's two steps
@@ -15,6 +17,8 @@ import Mathlib.Tactic.Ring
 disjoint inputs, `x + y ≤ k`, AM–GM bounds the rectangle they price, `4 x y ≤ k²` (`four_mul_le_sq`): the fan-out and
 partial-sum tiers use it, and so does `Nci.Cover.Guarantees.CoveringBoundAdditive`, in `Nci.Covering`'s vocabulary.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 

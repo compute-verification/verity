@@ -1,5 +1,7 @@
-import Definitions.Accounting.Schedule
-import RemoteAudit.Schedule
+module
+
+public import Definitions.Accounting.Schedule
+public import RemoteAudit.Schedule
 
 /-!
 # The schedule check fixes each credited pass's plan (`RemoteAudit.Schedule`)
@@ -24,6 +26,8 @@ cap `a` at every coin gives `ScheduleDeterministic` at `a` and `SteeredLayout` a
 (`scheduleDeterministic_of_checked`, `steered_of_checked`). The cap is fixed before the coins, so it is one `a` at
 every coin, where the bits of the schedule published after them can follow the coins.
 -/
+
+@[expose] public section
 
 open RemoteAudit
 

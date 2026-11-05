@@ -1,8 +1,10 @@
-import Definitions.Nci.Guarantees.Capability.Witnesses
-import Proofs.Nci.Capability.Items
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Mathlib.Probability.Distributions.Uniform
-import Mathlib.Tactic.Linarith
+module
+
+public import Definitions.Nci.Guarantees.Capability.Witnesses
+public import Proofs.Nci.Capability.Items
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
+public import Mathlib.Probability.Distributions.Uniform
+public import Mathlib.Tactic.Linarith
 
 /-!
 # Local bounds: proofs of their witnesses
@@ -11,6 +13,8 @@ Each witness of `Definitions.Nci.Guarantees.Capability.Witnesses`, at the toy in
 facts about the toy they share come first: its `(2, 1)`-partition, a block program's bits, what the block recomputes,
 the decoder's description lengths, and the budgets of items priced one bit each.
 -/
+
+@[expose] public section
 
 namespace Nci.Capability.Toy
 
@@ -90,12 +94,15 @@ theorem sourceHard : Assumptions.SourceHard R1 M () 0 z 2 1 := fun _ _ =>
   calc ENNReal.ofReal (2 - 1) ≤ ((1 : ℕ∞) : ℝ≥0∞) := by norm_num
     _ ≤ _ := ENat.toENNReal_le.2 (ldl_pos _ _)
 
-/-- No description is shorter than two bits at deficit `0` once it is one bit: `11`'s refutes a price of two. -/
-theorem not_two_le_ldl_eleven (t : ℕ) : ¬ ENNReal.ofReal 2 ≤ (LDL M t () [true, true] : ℝ≥0∞) := by
+/-- `11`'s one-bit description refutes every price above one bit for it. -/
+theorem not_le_ldl_eleven (t : ℕ) {p : ℝ} (hp : 1 < p) : ¬ ENNReal.ofReal p ≤ (LDL M t () [true, true] : ℝ≥0∞) := by
   intro h
   have h1 : (LDL M t () [true, true] : ℝ≥0∞) ≤ 1 := by exact_mod_cast ENat.toENNReal_le.2 (ldl_eleven t)
-  have := h.trans h1
-  norm_num at this
+  exact absurd (ENNReal.ofReal_le_one.1 (h.trans h1)) (not_le.2 hp)
+
+/-- No description is shorter than two bits at deficit `0` once it is one bit: `11`'s refutes a price of two. -/
+theorem not_two_le_ldl_eleven (t : ℕ) : ¬ ENNReal.ofReal 2 ≤ (LDL M t () [true, true] : ℝ≥0∞) :=
+  not_le_ldl_eleven t one_lt_two
 
 theorem sum_price_le {ι : Type} [Fintype ι] (X : Items C ι) (hp : ∀ i, X.price i = 1) (U : Finset ι) :
     ∑ i ∈ U, X.price i ≤ Fintype.card ι := by
@@ -221,10 +228,14 @@ theorem HeldBudgetHonest : Guarantees.HeldBudgetHonest := by
     exact not_two_le_ldl_eleven 0 (by simpa [Y2] using this)
 
 theorem HeldBudgetNontrivial : Guarantees.HeldBudgetNontrivial := by
-  intro h
-  have := h 0 {0} (fun _ => {2, 3}) (fun _ _ => mem_singleton_self _)
-    (fun _ _ => show ({2, 3} : Finset (Fin 4)) ⊆ holds C (P1.gates 0) by decide)
-  norm_num [Y2] at this
+  refine ⟨isCK, fun U σ hU => ?_, fun h => ?_, fun h => ?_⟩
+  · exact HeldBudgetHonest.2.1 U σ fun u => ⟨fun i hi => by simpa [Y2] using (hU u).1 i hi, (hU u).2⟩
+  · have := h _ honest_ones {0} (fun _ => {2, 3}) (fun _ _ => mem_singleton_self _)
+    rw [selection_two _ _ rfl, eval_ones] at this
+    exact not_le_ldl_eleven 0 (by norm_num [Y2]) this
+  · have := h 0 {0} (fun _ => {2, 3}) (fun _ _ => mem_singleton_self _)
+      (fun _ _ => show ({2, 3} : Finset (Fin 4)) ⊆ holds C (P1.gates 0) by decide)
+    norm_num [Y2] at this
 
 theorem StatHeldBudgetHonest : Guarantees.StatHeldBudgetHonest := by
   refine ⟨isCK, fun a ha g hg => ?_, fun U σ v hsel => ?_⟩
@@ -260,10 +271,29 @@ theorem StatHeldBudgetHonest : Guarantees.StatHeldBudgetHonest := by
             simp
 
 theorem StatHeldBudgetNontrivial : Guarantees.StatHeldBudgetNontrivial := by
-  intro h
-  have := h 0 {0} (fun _ => {2}) (fun _ _ => mem_singleton_self _)
-    (fun _ _ => show ({2} : Finset (Fin 4)) ⊆ holds C (P1.gates 0) by decide)
-  norm_num [Y] at this
+  refine ⟨isCK, StatHeldBudgetHonest.2.1, fun h => ?_, fun h => ?_⟩
+  · have hle := h {0} (fun _ => {2}) [true] (fun _ _ => mem_singleton_self _)
+    have hbound : ENNReal.ofReal ((2 : ℝ) ^ ((0 : ℝ) - ∑ i ∈ ({0} : Finset (Fin 1)), (Y 3).price i)) ≤ 4⁻¹ := by
+      rw [show (0 : ℝ) - ∑ i ∈ ({0} : Finset (Fin 1)), (Y 3).price i = -((3 : ℕ) : ℝ) by simp [Y],
+        Real.rpow_neg (by norm_num), Real.rpow_natCast]
+      exact ENNReal.ofReal_le_of_le_toReal (by norm_num)
+    have hhalf : (2⁻¹ : ℝ≥0∞) ≤ μ.toOuterMeasure
+        {a | selectionBits (R1.d.D.eval a) {0} (fun _ => ({2} : Finset (Fin 4))) = [true]} := by
+      rw [μ, PMF.toOuterMeasure_map_apply]
+      calc (2⁻¹ : ℝ≥0∞) = (PMF.uniformOfFintype Bool).toOuterMeasure {true} := by
+            rw [PMF.toOuterMeasure_apply_singleton, PMF.uniformOfFintype_apply]
+            simp
+        _ ≤ _ := by
+            refine PMF.toOuterMeasure_mono _ fun b ⟨hb, _⟩ => ?_
+            rw [Set.mem_singleton_iff.1 hb]
+            simp only [Set.mem_preimage, Set.mem_ofPred_eq, selectionBits, singleton_biUnion, sort_singleton,
+              Circuit.bits, List.flatMap_cons, List.flatMap_nil, List.append_nil]
+            simpa [tok] using eval_two (tok true)
+    have := (hhalf.trans hle).trans hbound
+    norm_num [ENNReal.inv_le_inv] at this
+  · have := h 0 {0} (fun _ => {2}) (fun _ _ => mem_singleton_self _)
+      (fun _ _ => show ({2} : Finset (Fin 4)) ⊆ holds C (P1.gates 0) by decide)
+    norm_num [Y] at this
 
 theorem RecoveredBudgetHonest : Guarantees.RecoveredBudgetHonest := by
   refine ⟨isCK, le_rfl, sourceHard, fun a ha u => ⟨[true], by norm_num, ?_⟩, fun h => ?_, fun h => ?_⟩

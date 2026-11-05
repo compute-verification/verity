@@ -1,5 +1,7 @@
-import Definitions.Claims.Sampling
-import Proofs.Flock.Claims.Sampling.Extract
+module
+
+public import Definitions.Claims.Sampling
+public import Proofs.Flock.Claims.Sampling.Extract
 
 /-!
 # The sampling extractor's rerun programs: reruns, own calls, and what they return
@@ -13,6 +15,8 @@ The claims block's extractor `E` (`Definitions.Claims.Sampling`) is built of `of
   commitment's check under its roots, and that check's calls are among its own.
 * `waitAccC_sum`, `accExp_le`: the weights of a wait's accepted draws, `ε · G(K, a) ≤ (k − a) · 𝔼[1[acc] · g]`.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

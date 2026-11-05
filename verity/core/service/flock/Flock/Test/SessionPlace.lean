@@ -2,9 +2,15 @@
 `Session.State.request`, the session loop's decision on each request after the prover's `Register` and `Hello`, at a
 session of two rep streams: along the honest prover's order (the first rep stream's `Open`, `Commit`, `Link`, its rounds,
 the second's `Open` and rounds, `Finish`) each leaves once, at its place; a second `Register`, `Hello`, `Link` or `Open`,
-and each of them out of its place, is refused; and after a refusal every request is refused for its reason.
+and each of them out of its place, is refused; after a refusal every request is refused for its reason; and a `Commit`
+or `Round` the auditor answers without coins stops the session (`Session.State.answer`), so it never leaves again.
 -/
-import Flock.Firewall.Session
+module
+
+public import Flock.Firewall.Session
+meta import Flock.Firewall.Session
+
+@[expose] public section
 
 namespace Flock.Test.SessionPlace
 
@@ -92,5 +98,24 @@ def after : List Flock.Firewall.Session.Kind :=
       List.replicate (after.length + 1) why
 #guard decisions {} {} (Flock.Firewall.Session.Kind.round A 2 :: after) ==
   List.replicate (after.length + 1) (stop "coins before the step-0 coin commitment")
+
+/-- What the prover receives for the auditor's answer `a` to `k` at its place (`A` opened, `S₀`'s first opening), and
+what the loop then decides of `k` sent again. -/
+def answerThen (k : Flock.Firewall.Session.Kind) (a : ByteArray) : String × String :=
+  let (S', out) := S₀.answer k a
+  (reasonOf out, ((S'.request (P₀.after (.openStream A)) k).map (reasonOf ·.2)).getD "ok")
+
+/- A `Commit` or `Round` the auditor answers with anything but coins stops the session, refused, the auditor's reason
+kept where it gave one: sent again, it is refused for that reason without asking the auditor, so it leaves once. -/
+#guard answerThen .commit (ByteArray.mk #[1]) ==
+  (stop "the auditor answered the step-0 coin commitment without coins",
+   stop "the auditor answered the step-0 coin commitment without coins")
+#guard answerThen .commit (refused "no") ==
+  (stop "the auditor answered the step-0 coin commitment without coins: no",
+   stop "the auditor answered the step-0 coin commitment without coins: no")
+#guard answerThen (.round A 2) (ByteArray.mk #[1]) ==
+  (stop s!"the auditor answered a round of {A} without coins",
+   stop s!"the auditor answered a round of {A} without coins")
+#guard (S₀.request (P₀.after (.openStream A)) .commit).isNone
 
 end Flock.Test.SessionPlace

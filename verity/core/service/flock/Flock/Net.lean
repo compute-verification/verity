@@ -1,10 +1,16 @@
 /-
-PROTOCOL.md §16.5: an expanded circuit in `flock-ir-unit/v2` form (a unit, a tail stage, or a lookup slot built from its
+`Flock.Circuit`: an expanded circuit in `flock-ir-unit/v2` form (a unit, a tail stage, or a lookup slot built from its
 table), and the text helpers its parser uses.
 -/
-import Lean.Data.Json
-import Flock.Comp
-import Flock.JsonParse
+module
+
+public import Lean.Data.Json
+public import Flock.Comp
+public import Flock.JsonParse
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 

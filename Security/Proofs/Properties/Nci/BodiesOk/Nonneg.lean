@@ -1,4 +1,6 @@
-import Proofs.Properties.Nci.BodiesOk.Basic
+module
+
+public import Proofs.Properties.Nci.BodiesOk.Basic
 
 /-!
 # Parsed strided parts name no negative leaf
@@ -7,6 +9,8 @@ import Proofs.Properties.Nci.BodiesOk.Basic
 below leaf 0 (`parsePartsIn_nonneg`), given none of an argument an alias may name does. `ReadsExact.PartNonneg` is the
 same predicate (`partNonneg_iff`).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program

@@ -1,3 +1,5 @@
+module
+
 /-!
 # The certifier program: advice v1's charge
 
@@ -6,6 +8,8 @@ same names in `NetworkCertifier.AdviceV1`. Lean core only: `bitlen` is Lean core
 reads Mathlib's `Nat.size`, and `charges` takes the windows' decision streams as a list where the reference takes them as
 a function on `Fin W`. `Proofs.NetworkCertifier.Code` (`CodeChargesV1`) proves `charges` equal to the reference's.
 -/
+
+@[expose] public section
 
 namespace NetworkCertifier.AdviceV1
 

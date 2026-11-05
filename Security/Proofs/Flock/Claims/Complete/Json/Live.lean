@@ -1,6 +1,11 @@
-import Proofs.Flock.Claims.Complete.Json.Session
-import Proofs.Flock.Soundness.Discharge.Exec.Event
-import Proofs.Flock.Claims.JsonNorm
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Session
+public import Proofs.Flock.Soundness.Discharge.Exec.Event
+public import Proofs.Flock.Claims.JsonNorm
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import all Init.Data.Array.Basic
 
 /-!
 # The honest record's live session and draw
@@ -11,6 +16,8 @@ With no premise on the JSON library, at one table:
   rep stream's rounds with no digest (`liveRound`).
 * `recordDraw_recordObj`: the record's draw is the statement's, up to key order (`none` when the statement has none).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 
