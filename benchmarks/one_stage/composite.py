@@ -28,16 +28,18 @@ query, digests, profile and reason are private too (a partition's digest is the 
 params) and commitment, what is missing, and each piece's and Lean's outcome (`outcome`: the id, the verdict and the
 refusal's name) and its stated exceptions (`EXCEPTIONS`: the policy's v0, composed in the clear for one run of record
 only), and ``"circuit_files": "by path"`` where the check reads circuit files by path (the cases list any), whose
-verdict is the verifier of record's where `Verity.CircuitFilesByPathAgree` holds; and ``verdicts.txt``, its ``PIECE ID VERDICT [NAME]``, ``NOT_ESTABLISHED``, ``VERDICT
-ID VERDICT [NAME]`` and ``EXCEPTION LINE`` lines, which it also prints. Before writing them it refuses (exit 65) public bytes that share 64 bytes or more
-with any case's evidence, raw or hex, the cases' commitments and digests aside. The public directory may not be or
-contain the private one.
+verdict is the verifier of record's where `Verity.CircuitFilesByPathAgree` holds; and ``verdicts.txt``, its
+``PIECE ID VERDICT [NAME]``, ``NOT_ESTABLISHED``, ``VERDICT ID VERDICT [NAME]`` and ``EXCEPTION LINE`` lines, which it
+also prints. Before writing them it refuses (exit 65) public bytes that share 64 bytes or more with any case's
+evidence, raw or hex, the cases' commitments and digests aside. The public directory may not be or contain the
+private one.
 
 With ``--exe``, it runs ``EXE check params.json commitment.bin evidence.json BLOB... [--circuits CIRCUIT...]``, the
 circuit files after ``--circuits`` where the cases list any (`Core.PeriodFiles.main`, which reads them by path), and
-exits with its code: 0 accept, 1 reject, 2 undecided. It decides nothing itself: a subprotocol with no case, or whose directory lacks its case
-or its answer, is left out of the product's case, and Lean's verdict on that case is the composite's (a rejection
-naming the missing case). Such a run is labelled ``NOT_ESTABLISHED``, naming what is missing. 64 is a usage error.
+exits with its code: 0 accept, 1 reject, 2 undecided. It decides nothing itself: a subprotocol with no case, or whose
+directory lacks its case or its answer, is left out of the product's case, and Lean's verdict on that case is the
+composite's (a rejection naming the missing case). Such a run is labelled ``NOT_ESTABLISHED``, naming what is
+missing. 64 is a usage error.
 """
 from __future__ import annotations
 
