@@ -177,8 +177,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "novel communication intensity" (NCI); "baseline" for θ; `Nci*`, `nci-*`, `ius` and the `nci` directories, until renamed | the inference-only policy; the registered information θ |
 | "replay unit" (RU), `ReplayUnit`, `n_v`; "audit block"; "coarse unit" and "chain" in the Lean's older two-stage audit | replay block (n_ρ, its count of proof blocks) |
 | "replay domain"; the planner's `ReplayDomain`, `Candidate.replay` and `per_replay`, until renamed | replay grain; n_ρ |
-| "clustered" sampling, "commit-after-draw", "deferred interior"; "inner sampling" or "the second draw"; "the first draw"; "stage 1/2" | a two-stage design; the interior commitment; the second stage; the replay sample; the first/second stage |
-| "whole-content charge" of an incorrect replay block | charged at its footprint |
+| "clustered" sampling, "commit-after-draw"; "deferred interior"; "inner rule", "inner sample", "the second draw", "stage 2"; "the first draw", "stage 1" | a two-stage design; the interior commitment; the second stage; the first stage |
 | "leg"; "integrity", "work", "space" and "communication" naming subprotocols; the all-protocols runner's legs, the verdict keys `integrity` and `communication`, the Lean's `Core.Protocol` | subprotocol |
 | "stage", outside a sampling design's stages (one-stage, two-stage, the first and second stage) and a pipeline stage; names and record keys that keep it, such as `research run --stage` | phase, or run |
 | "row" for a server's window (s, w), "per-row bound" | server block, server-block yield |
@@ -295,7 +294,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   - **Stage**: to stage a statement is to fix and write it before any coin draws (the firewall's staged statements).
     A sampling design's stages are its rounds of sampling (`ARCHITECTURE.md`'s Glossary, "Sampling design"). A step of a
     run is a phase (Older names); a stage of a Boolean lowering is a level; a pipeline stage keeps its sense (above).
-  - **Footprint**: a replay block's is what sampled proofs charge it (`ARCHITECTURE.md`'s Glossary). An HBM footprint
+  - **Footprint**: a replay block's is where sampled proofs read harm (`ARCHITECTURE.md`'s Glossary). An HBM footprint
     (`Accounting.BoundReceipt.footprint`) and a theorem's (its hypotheses, in Flock's `ASSUMPTIONS.md`) keep the word.
   - **Window**: the code's windows (`verity.ml.windows`, a served window circuit and its window record, PoUW's window and
     its salt) are one period's served steps, and keep the word until renamed. A span of time is a period, a
@@ -333,8 +332,9 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   values read across replay-block boundaries (the *boundary commitment*, in the registration); the *first stage* samples
   replay blocks (the *replay sample*); the prover replays each sampled one from its boundary values and the registered
   information and commits its *interior*, the other values its proof blocks read and write (the *interior commitment*, in
-  the *interior registration*); the *second stage* samples k of its proof blocks on fresh coins, and misses every
-  incorrect one with probability at most C(n_ρ − w(ρ), k)/C(n_ρ, k).
+  the *interior registration*); the *second stage* samples k of its proof blocks (or k per template stratum) on fresh
+  coins, and misses every incorrect one with probability at most C(n_ρ − w(ρ), k)/C(n_ρ, k) (stratified, the product
+  over strata).
 - **Pinned**, as an instruction's status (`verity.ml.circuits.silicon.instructions`): its silicon model matched every
   hardware probe, at the level `benchmarks/tc_probe/trust.py` computed and a trust dossier records (else hypothesis or
   unprobed). A pinned value or root is one fixed before the run, which a check compares to.
