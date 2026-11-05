@@ -305,7 +305,8 @@ def test_check_s_lean_audit_takes_a_slot_only_when_it_will_audit_a_package(tmp_p
     check = _check()
     keys = {"p": "kp", "q": "kq"}
     monkeypatch.setattr(check, "_lean_audit", lambda: SimpleNamespace(packages=lambda files: sorted(keys), FLAGS=["--build"],
-                                                                      key=lambda p, files, flags: keys[p]))
+                                                                      key=lambda p, files, flags: keys[p],
+                                                                      reusable=lambda cache, p, k: (cache / f"{k}.json").is_file()))
     monkeypatch.setattr(check, "tracked_files", lambda root: ["p/lean-audit.json", "q/lean-audit.json"])
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path))
     (tmp_path / "lean-audit").mkdir()
