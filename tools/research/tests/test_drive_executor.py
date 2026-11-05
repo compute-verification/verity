@@ -16,9 +16,9 @@ import pytest
 
 from research import merge
 from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, FIX_WINDOW_S, SLIM_STEPS, task_files
-from research.executor import (AFTER_LANDING_PRIORITY, BLOCKED, ERROR, GRAPH_V2, SHADOW_WAIT_S, TASKS_GRAPH_KIND, Executor,
-                               FileTransport, QueueTransport, Shadowed, agrees, compare, keyed, old_verdicts, shadow_records,
-                               shadow_report, task_key, task_target)
+from research.executor import (AFTER_LANDING_PRIORITY, BLOCKED, GRAPH_V2, SHADOW_WAIT_S, TASKS_GRAPH_KIND, Executor, FileTransport,
+                               QueueTransport, Shadowed, agrees, compare, keyed, old_verdicts, shadow_records, shadow_report,
+                               task_key, task_target)
 from research.store.local import LocalStore
 from research.store import vocab
 from test_drive_policy import EXPIRED, LIVE, _policy
@@ -112,6 +112,8 @@ def test_the_executor_enqueues_a_graph_with_a_key_for_each_task_and_folds_each_k
 def test_a_keys_verdict_is_its_newest_label_and_error_is_not_run(tmp_path):
     """A false fail (a run that gave no result, labelled fail) written over as error reads as not run, and the key's rerun
     that passes is its verdict; error never reads as pass or fail."""
+    from research.executor import ERROR
+
     fake = FileTransport(tmp_path)
     ex = Executor(fake)
     for v in ("fail", ERROR):
@@ -129,7 +131,7 @@ def test_the_queue_transport_pulls_every_key_not_passed_here(monkeypatch):
     executor never reruns) is read from the local store alone."""
     from types import SimpleNamespace
 
-    from research.executor import QueueTransport
+    from research.executor import ERROR, QueueTransport
     from research.store import labels_sync
 
     new = "c" * 128
