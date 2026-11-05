@@ -75,8 +75,11 @@ bits a covert sender in the server can move through the network certifier in the
   `VERITY_NETWORK_RECORDS_EXE` names a built executable; without it, the first request runs `lake build
   network-records` here.
 - The onsite composite protocol (`verity/core/protocols/onsite`) composes `verity/certifier/v0` as its communication
-  component (`Core.Onsite.components`). The composition's difftest takes the period's mirror and cases from
-  `tests/period_case.py`.
+  component (`Core.Onsite.components`), and so do both remotes with the network certifier, as
+  `NetworkCheck.Period.blobProtocol` (`NetworkCheck.PeriodBlobs`): the period's check with the circuit files it lists
+  among the composite's blobs. Their executables also read those files by path (`check … --circuits CIRCUIT …`,
+  `Core.PeriodFiles.main`) with `network-period`'s reader (`NetworkCheck.PeriodFiles.read`) at the composite's budget.
+  The composition's difftest takes the period's mirror and cases from `tests/period_case.py`.
 
 ## Tests
 
