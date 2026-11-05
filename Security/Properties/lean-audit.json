@@ -668,6 +668,10 @@
   "Verity.remote_network_no_pouw_soundness_of_subprotocols": {
    "honest": ["Verity.remote_network_no_pouw_soundness_of_subprotocols_honest"],
    "nontrivial": "Verity.remote_network_no_pouw_soundness_of_subprotocols_nontrivial"
+  },
+  "Verity.circuit_files_by_path_agree": {
+   "honest": ["Verity.circuit_files_by_path_agree_honest"],
+   "nontrivial": "Verity.circuit_files_by_path_agree_nontrivial"
   }
  },
  "unwitnessed": {
@@ -4715,6 +4719,15 @@
    "assumptions": [],
    "type_hash": "18aa0be157689c21712bf3aeb5199fb4b9b22378baf5efaf9efb9df44d38cb47"
   },
+  "Verity.circuit_files_by_path_agree": {
+   "owner": "@network-accounting"
+  },
+  "Verity.circuit_files_by_path_agree_honest": {
+   "owner": "@network-accounting"
+  },
+  "Verity.circuit_files_by_path_agree_nontrivial": {
+   "owner": "@network-accounting"
+  },
   "Verity.remote_network_no_pouw_soundness_of_subprotocols": {
    "owner": "@soundness",
    "signature": ["Verity.remote_network_no_pouw_soundness_of_subprotocols : Verity.RemoteNetworkNoPouwSoundness"],
@@ -6288,7 +6301,8 @@
    "Properties.NetworkPeriod.rowsStateHeld_nontrivial": "lemma: RowsStateHeld's nontrivial lemma: RowsStateHeldAt fails at a rows-form period of one phase whose tied audit's SCAN_STATE is at another root than its scan's state, under a public charging that audit its stateFree, 4 of its 9 free inputs, which a verifier that accepts everything could publish",
    "Verity.remote_network_no_pouw_soundness_of_subprotocols": "frozen (premise): Verity.soundness_of_subprotocols's statement restricted to remote-network without PoUW's subprotocols, a subset of onsite's: the union bound at its compiled verifier (Core.RemoteNetworkNoPouw.protocol, tiedSameB over the blobs sent: the committed files, then the evidence's blobs) in the same causal game, from Verity.soundness_at_of_targets at Verity.Registration.Composite.remoteNetworkNoPouw; its three subprotocols are sampled proofs v2 (VStar.Recursive.Sampled), the inference-only policy and the network certifier over the period, the policy and sampled proofs committed to one record and every compute audit of the network certifier's period on it (Properties.Composition.AcceptSame's and AcceptTied's conclusions), with the same claims, errors and Vocab; PoUW is none of its subprotocols, so it credits no verified compute; it takes the three targets (Verity.Vocab.SampledProofsSound, InferenceOnlySound, NetworkCertifierSound at remoteNetworkNoPouw) as hypotheses until each is proved",
    "Verity.remote_network_no_pouw_soundness_of_subprotocols_honest": "completeness: RemoteNetworkNoPouwSoundness's honest lemma: its three targets hold at remote-network without PoUW's compiled composite at the idle deployment Verity.Idle.unbounded",
-   "Verity.remote_network_no_pouw_soundness_of_subprotocols_nontrivial": "lemma: RemoteNetworkNoPouwSoundness's nontrivial lemma: SoundnessFor fails at remote-network without PoUW for a verifier that accepts everything at the idle deployment Verity.Idle.exactLeaky (Verity.Idle.exact with the network certifiers' bound failing on every play), since it has no PoUW subprotocol, whose claim is the one Verity.Idle.exact fails"
+   "Verity.remote_network_no_pouw_soundness_of_subprotocols_nontrivial": "lemma: RemoteNetworkNoPouwSoundness's nontrivial lemma: SoundnessFor fails at remote-network without PoUW for a verifier that accepts everything at the idle deployment Verity.Idle.exactLeaky (Verity.Idle.exact with the network certifiers' bound failing on every play), since it has no PoUW subprotocol, whose claim is the one Verity.Idle.exact fails",
+   "Verity.circuit_files_by_path_agree": "restatable: its one hypothesis, k ≠ remote, is no acceptance, and the acceptance it is a property of, Verity.byPath's at composite k (the executable that reads the network certifier's period's circuit files by path), is under CircuitFilesByPathAgreeAt and FilesByPathAgreeWith; stated at each of onsite, remote-network and remote-network without PoUW with those unfolded, it is a property of Verity.byPath accepting, and its conclusion is the verifier of record's answer on the blobs with the files among them, or a SHA-512 collision among them"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
