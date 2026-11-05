@@ -4,6 +4,7 @@ import Proofs.Properties.NetworkScan.Check
 import Proofs.Properties.NetworkScan.Lowered
 import Proofs.Properties.NetworkScan.Query
 import Proofs.Properties.NetworkScan.OfProg
+import Proofs.Properties.NetworkScan.Passes
 import Proofs.Properties.NetworkScan.Reads
 import Proofs.Properties.NetworkPeriod.Keys
 import Proofs.Flock.SamplingScope
@@ -51,6 +52,8 @@ The layout's egress and ingress gates (its first two parts), where no two of the
 
 The facts both statements' witnesses read:
 
+* `keysUnique_of_nodup`, `orderViolation_none` (`Passes`): `scanProg`'s two checks over hash sets pass a Program
+  whose keys are distinct and whose composites' nodes read only parameters and earlier nodes.
 * `not_fits_of_no_outs`: a circuit that returns nothing fits no layout over a horizon of at least one step.
 * `jointOf_nil`, `not_fits_of_no_members`: an audit of no members has the empty joint program, so no layout fits it.
 * `bareProg`, `scanFits_nontrivial`: a Program of no templates, which the template query over no templates accepts
