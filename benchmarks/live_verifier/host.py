@@ -140,7 +140,7 @@ STORE_INT = re.compile(r"[1-9][0-9]{0,7}")
 MODEL_PINS = Path("verity/core/protocols/pouw/lean/check/models.json")
 """Core's pin of each model role, in the pinned tree: a bound run's `verifier.py --pin`."""
 PARTIES = {"wipe_party": ("wipe", "verity.core.protocols.pous.wipe_party", 47611),
-           "challenger_party": ("pous", "verity.core.protocols.pous.challenger_party", 47610),
+           "challenger_party": ("pous", "verity.core.devices.memory_challenger.challenger_party", 47610),
            "bw_party": ("bw", "verity.core.protocols.remote_bandwidth.p2_party", 47612)}
 PARTY_FIXED = {"bw_party": ["--registration", "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json"]}
 """Arguments the host adds to a party's command, never a caller's: the fixture store's registration in the pinned tree,
