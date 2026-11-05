@@ -191,21 +191,21 @@ theorem treeMisses_le {block : ℕ} (ν key : ByteArray) (s r n : ℕ) {Q : Type
     _ ≤ 2 * δ₁ := fiberMisses_le (treeMy key) (treeC ν) hT1 (treeH ν key) (treeX ν s r)
           (fun ω => TreeDraw.opened (ω, fun _ => false) n) bits hlaw
 
-/-- **A uniform block's first `m` entries are uniform**: an average over `Fin block → X` of what reads only the first
-`m ≤ block` entries is its average over `Fin m → X`. -/
-theorem avg_take {X : Type} [Fintype X] [Nonempty X] {m block : ℕ} (hm : m ≤ block) (f : (Fin m → X) → ℝ≥0∞) :
-    avg (fun ω : Fin block → X => f (Fin.take m hm ω)) = avg f := by
+/-- **A uniform block's first `m` entries are uniform**: an average over `Fin block → C` of what reads only the first
+`m ≤ block` entries is its average over `Fin m → C`. -/
+theorem avg_take {C : Type} [Fintype C] [Nonempty C] {m block : ℕ} (hm : m ≤ block) (f : (Fin m → C) → ℝ≥0∞) :
+    avg (fun ω : Fin block → C => f (Fin.take m hm ω)) = avg f := by
   obtain ⟨k, rfl⟩ := Nat.exists_eq_add_of_le hm
-  let e : (Fin m → X) × (Fin k → X) ≃ (Fin (m + k) → X) :=
-    (Equiv.sumArrowEquivProdArrow (Fin m) (Fin k) X).symm.trans (Equiv.arrowCongr finSumFinEquiv (Equiv.refl X))
+  let e : (Fin m → C) × (Fin k → C) ≃ (Fin (m + k) → C) :=
+    (Equiv.sumArrowEquivProdArrow (Fin m) (Fin k) C).symm.trans (Equiv.arrowCongr finSumFinEquiv (Equiv.refl C))
   have he : ∀ p, Fin.take m hm (e p) = p.1 := fun p => funext fun i => by
     show Sum.elim p.1 p.2 (finSumFinEquiv.symm (Fin.castAdd k i)) = p.1 i
     rw [finSumFinEquiv_symm_apply_castAdd]
     rfl
-  calc avg (fun ω : Fin (m + k) → X => f (Fin.take m hm ω))
-      = avg (fun p : (Fin m → X) × (Fin k → X) => f (Fin.take m hm (e p))) :=
+  calc avg (fun ω : Fin (m + k) → C => f (Fin.take m hm ω))
+      = avg (fun p : (Fin m → C) × (Fin k → C) => f (Fin.take m hm (e p))) :=
         (avg_equiv e fun ω => f (Fin.take m hm ω)).symm
-    _ = avg (fun p : (Fin m → X) × (Fin k → X) => f p.1) := congrArg avg (funext fun p => congrArg f (he p))
+    _ = avg (fun p : (Fin m → C) × (Fin k → C) => f p.1) := congrArg avg (funext fun p => congrArg f (he p))
     _ = avg f := (avg_prod _).trans (congrArg avg (funext fun a => avg_const (f a)))
 
 end Verity.Game
