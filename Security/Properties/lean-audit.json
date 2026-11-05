@@ -14225,18 +14225,23 @@
    ]
   },
   "Flock.RecBudget": {
-   "digest": "1d74409d5ea51747401e96ef7262fd0c188829c8ecd0fd73e532ae1c98e95388",
+   "digest": "4c3d4e730d38c8f67372757253b36f96abbd89f933dab8fead2cd7ded4a8e4e1",
    "definitions": {
     "Flock.RecBudget.MAX_DEPTH": "f959294d54f7cc019e5cfe1eb1afa671fc401095b2782618bebc491816f9dcef",
     "Flock.RecBudget.MAX_INNER_ROWS": "21b6371029b701384a7f0b924760ca8ad2d086fc1dd59080a1924c1f64fc559d",
     "Flock.RecBudget.MAX_INSTANCES": "afbfc72e1a18bc8fc32b38848807c5a43430f216aa189d9c63d9ddd293d32d50",
     "Flock.RecBudget.MAX_PORTS": "e5bbbb3d0d4cf2306ecb22769d1014ad652b09a854a5abf418f65d8f8a2d9e1f",
+    "Flock.RecBudget.MAX_RECORDED": "6ceafce6a1aca74596646843ff9a6a812a046b34a8494a25a166558200ef0d8f",
     "Flock.RecBudget.MAX_STATEMENTS": "d31f477d79ac8cf50b2f29c92c27d9bcd156acc74c4abb6b01febddddf89cd07",
     "Flock.RecBudget.count": "2e5156dff654c07a93d4ee2442e8c97a057409039f50dfbc1fb721c408ad4807",
     "Flock.RecBudget.innerRows": "d306e4f34c06216032d47993667cd833440e14bcd5b49557ed69b2672f4bdd24",
+    "Flock.RecBudget.recorded": "f9b560dac17ea83adef1666c128b051f435152aac8a30aa71cdb3a8b583e95ae",
+    "Flock.RecBudget.recordedAt": "b88927110838d76cc89b8de190e37a369ebfc91d4f5761c714dc5a0915f8971c",
+    "Flock.RecBudget.recordedAt._sparseCasesOn_1": "c42eea3056db9fa639bb0d892e59da777ae62a591040985efb0c1d315cbe3f22",
+    "Flock.RecBudget.recordedCalls": "81edfa451d9006aafa962d30f0a21d244ed532e0692ee36a81d0ab67f250afd4",
     "Flock.RecBudget.regs": "e2e57a05791e570482d196c57b98de7fc84a493eac6a8d612c10f9bd796e3686",
     "Flock.RecBudget.regs._sparseCasesOn_1": "e266830cbc64ba2fbfcd23a611083371905da5f845bb0ab00a08272a6f3f1575",
-    "Flock.RecBudget.statements": "0da21dcfac7e3bf8dcf42d6da3e906d12e3e3d08cf1c3b19f76148fa601bc72f",
+    "Flock.RecBudget.statements": "aae940f6370a28dd6b54ceb24c7bae2a85cda10eb03cd7255dd8e0b0a8d4b999",
     "Flock.RecBudget.table": "7e982e5edefc7b8e30aa3743c24d0c711891161cd2a0a2fe80cbff4ad5e77712",
     "Flock.RecBudget.tail": "52ef3a6e0c9b8b1c0fff1462830a1d57e5fbc052af7fedcc6620ab25ba1e5a2e"
    },
