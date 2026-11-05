@@ -58,8 +58,7 @@ The facts both statements' witnesses read:
 * `jointOf_nil`, `not_fits_of_no_members`: an audit of no members has the empty joint program, so no layout fits it.
 * `bareProg`, `scanFits_nontrivial`: a Program of no templates, which the template query over no templates accepts
   with no ranges, so at a scan check that accepts every Program, `ScanFitsOf` fails.
-* `oneSlot`, `canon_null`, `bytes_of_data_toList`: a schedule of one slot and one step, C-Flock's canonical `null`, and
-  a byte array through its list of bytes.
+* `oneSlot`: a schedule of one slot and one step.
 * `nullStmt`, `acceptAllDeploy`: the statement whose descriptor is `null`'s bytes and whose circuit is empty, and a
   deployment whose scope check takes everything and which parses every message to it.
 -/
@@ -507,12 +506,6 @@ theorem scanFits_nontrivial : ¬ ScanFitsOf acceptAllScan := fun h =>
       ⟨by simp only [bareProg_templateNodes, List.length_nil], fun _ h => absurd h (Nat.not_lt_zero _)⟩
       (fun _ h => absurd h (Nat.not_lt_zero _)) bareProg_evaluate
       ⟨List.Perm.refl _, fun _ h => absurd h (Nat.not_lt_zero _)⟩)
-
-theorem canon_null : Flock.canon .null = .ok "null" := by
-  simp only [Flock.canon]
-  rfl
-
-theorem bytes_of_data_toList (b : ByteArray) : (⟨b.data.toList.toArray⟩ : ByteArray) = b := rfl
 
 /-- The statement whose descriptor is the bytes of `null` and whose circuit is empty. -/
 def nullStmt : Claims.Sampling.AuditStatement :=
