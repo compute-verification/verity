@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Nci.Info
 public import Definitions.Nci.Threads
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Data.NNRat.Floor

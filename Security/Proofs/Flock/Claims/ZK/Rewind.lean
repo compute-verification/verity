@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Prob
 public import Proofs.Flock.Claims.ZK.GK
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -37,7 +38,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Prob
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

@@ -1,5 +1,6 @@
 module
 
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 public import Mathlib.Data.Finset.Card
 public import Mathlib.Data.Fintype.Basic

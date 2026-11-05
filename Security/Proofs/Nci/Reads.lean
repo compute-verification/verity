@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Nci.Guarantees
 public import Definitions.Nci.Guarantees.Reads
+public import Proofs.Nci.Throttling
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -39,7 +39,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Core.Circuit
 import Proofs.Nci.Chain
 import Proofs.Nci.Inequalities
-import Proofs.Nci.Throttling
 
 /-!
 # Updated matrix multiplications are throttled, in reads form

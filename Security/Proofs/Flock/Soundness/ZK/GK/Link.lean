@@ -1,14 +1,14 @@
 module
 
-public import Proofs.Flock.Soundness.ZK.GK.Theorem
 public import Definitions.Flock.ZK.Cut
 public import Definitions.Flock.ZK.RealView
+public import Proofs.Flock.Soundness.ZK.AdaptivePrefinal
 public import Proofs.Flock.Soundness.ZK.Adaptivity
+public import Proofs.Flock.Soundness.ZK.GK.Theorem
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.CategoryTheory.Category.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Mathlib.Tactic.Positivity.Finset
-import Proofs.Flock.Soundness.ZK.AdaptivePrefinal
 import Proofs.Flock.Soundness.ZK.RealLeaves
 import Proofs.Flock.Soundness.ZK.Session
 import VCVio.Prelude.Core

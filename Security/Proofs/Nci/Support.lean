@@ -1,16 +1,15 @@
 module
 
 public import Definitions.Core.Circuit
-public import Definitions.Core.Declaration
 public import Definitions.Nci
 public import Definitions.Nci.Assumptions
-public import Definitions.Nci.Guarantees
 public import Definitions.Nci.Support
 public import Mathlib.Basic.Real.Basic
 public import Mathlib.Data.Finset.Defs
 public import Mathlib.Data.Fintype.Card
 public import Mathlib.Data.Fintype.Defs
 public import Mathlib.Tactic.SetNotationForOrder
+public import Proofs.Nci.Chain
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -47,7 +46,6 @@ import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Core.Circuit
-import Proofs.Nci.Chain
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

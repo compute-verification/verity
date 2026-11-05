@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Claims
+public import Proofs.Flock.Claims.Prob
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

@@ -3,8 +3,8 @@ module
 public import Definitions.Core.Formalism
 public import Definitions.Core.Partition
 public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.Order.AbsoluteValue.Basic
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import Mathlib.Algebra.Order.Field.Basic
 
 /-!

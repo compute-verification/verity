@@ -1,15 +1,14 @@
 module
 
-public import Definitions.Claims.Hm96
 public import Definitions.Core.Game
 public import Definitions.Flock.ZK.RealView
 public import Definitions.Flock.ZK.SHVZK
 public import Proofs.Flock.Soundness.ZK.Dist
+public import Proofs.Flock.Soundness.ZK.RealLeaves
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.Game.Basic
 import Proofs.Flock.Soundness.ZK.Hiding
-import Proofs.Flock.Soundness.ZK.RealLeaves
 import Proofs.Flock.Soundness.ZK.SHVZK
 
 /-!
