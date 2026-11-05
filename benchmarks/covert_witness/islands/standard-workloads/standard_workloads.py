@@ -61,14 +61,16 @@ which the builder relays as they are, are te_core's to word.
 A `rounds` row is the run's generation rounds alone (`rounds`), its setup and training steps dropped: a round is one
 counted step that codes the served weights, prefills its prompts and decodes, and the run's traces of its rounds (a
 run's rounds share one structure) give its quantities as a training run's traces give its, a row with no traced round
-refused. The trace's token axis is the prompts' positions alone, its decode loop's positions on none, so a round's
-tokens are its prompts' (the counter's, which the trace's per-token rows scale by) and its decode work is in no token
-op. The record is read with these substitutions (`ROUNDS`, each in the row's `input_status`): every GEMM on the served
-codes (W4A4, emulated in bf16 on their decoded values) priced as NVFP4 (gemm/fp4); Δ the served update's bits from the
-run's notes (every served matrix's codes and scales with the gains in bf16, or the LoRA in bf16); and Δ_grad, the
-partial gradient and the gradient cut 0, a round having no backward (the trace's cut holds its decode loop's values).
-Its token dials are checked against its forward positions, each prompt token and every generated token but the last
-(the run's notes'), which they count.
+refused. A round's forward positions are each prompt token and every generated token but the last (the run's notes',
+`positions`), which its token dials count, and which its trace's tokens count where the capture puts the decode loop's
+positions on the token axis the prompts' are on (`axis`, in the row's details). Where a traced round's trace counts
+fewer, its products and token share are the prompts' alone, so the row is published null (`NO_AXIS`): every ρ column,
+its inputs and their sources null, its binding kind unmeasured, and `NO_AXIS` its rests_on and its kinds' why; a trace
+counting more is refused. A priced record is read with these substitutions (`ROUNDS`, each in the row's
+`input_status`): every GEMM on the served codes (W4A4, emulated in bf16 on their decoded values) priced as NVFP4
+(gemm/fp4); Δ the served update's bits from the run's notes (every served matrix's codes and scales with the gains in
+bf16, or the LoRA in bf16); and Δ_grad, the partial gradient and the gradient cut 0, a round having no backward (the
+trace's cut holds its decode loop's values).
 
 DIR gets the uncut table, each row with its labels, parts, its own session (`own_session`) and a distillation row's
 student's (`student_session`), and formalism.at, formalism.published and the one bound (reading A's, formalism.bound)
@@ -143,13 +145,14 @@ IDLE = ("its structure updates nothing, and the slowdown code takes such a step'
         "the step and a traced step of the run updates something")
 _PRICED = "assumed: the rounds' counted work, each GEMM on the served codes (W4A4, emulated in bf16 on decoded values) " \
           "priced as an NVFP4 GEMM"
-_AXIS = "; the trace's token axis is the prompts' positions alone, its decode loop's on none, so a round's decode work " \
-        "is in no token op"
-_PER_TOKEN = _PRICED + ", times the trace's token share, per prompt position" + _AXIS
+_PER_TOKEN = _PRICED + ", times the trace's token share, per forward position"
 _NO_BACKWARD = "assumed: 0, a round having no backward (the trace's gradient cut holds its decode loop's values)"
 _DEFAULT = "at the console's default"
-ROUNDS = {"C_gates": _PRICED, "w_gates": _PER_TOKEN, "sigma": "assumed: the trace's share of a round's gates in token ops"
-          + _AXIS, "w_fit_gates": _PER_TOKEN, "delta_grad_bits": _NO_BACKWARD}
+ROUNDS = {"C_gates": _PRICED, "w_gates": _PER_TOKEN, "sigma": "assumed: the trace's share of a round's gates in token ops",
+          "w_fit_gates": _PER_TOKEN, "delta_grad_bits": _NO_BACKWARD}
+#: a rounds row's rests_on and its kinds' why where a traced round's trace counts fewer tokens than its forward
+#: positions (`axis`): every ρ column, its inputs and their sources null
+NO_AXIS = "unmeasured: the capture puts decode positions on no token axis"
 #: a code name, which none of the builder's own words in a published string holds: they name the code only as
 #: training's slowdown code
 CODE = re.compile(r"te_core|io_bound|formalism|algorithm_policy|annotate|rows_of|capture_\w|gemm/|\w\.py\b|`|"
@@ -229,11 +232,10 @@ def rounds(record: dict, notes: dict, served: set[tuple[int, int]]) -> dict:
     the setup and the tail without work and the run's last checkpoint its one, each round's tokens its prompts' (the
     counter's, which counts data-stream positions, so no sampled id) and every GEMM on served codes (`coded`) marked
     NVFP4."""
-    after = [r["after_step"] for r in notes["rounds"]]
-    if len(record["steps"]) != notes["args"]["steps"] + len(after):
+    at = round_at(notes)
+    if len(record["steps"]) != notes["args"]["steps"] + len(at):
         raise ValueError(f"{len(record['steps'])} steps, not {notes['args']['steps']} training steps and "
-                         f"{len(after)} rounds: not generate.py's layout")
-    at = {t + i: r for i, (t, r) in enumerate(zip(after, notes["rounds"]))}
+                         f"{len(at)} rounds: not generate.py's layout")
     steps = [dict(s) for s in record["steps"] if s["step"] in at]
     for s in steps:
         r = at[s["step"]]
@@ -262,10 +264,42 @@ def round_formalism(notes: dict, tensors: dict) -> dict:
     return {"delta_bits": float(delta), "labels": ROUND_LABELS}
 
 
+def round_at(notes: dict) -> dict[int, dict]:
+    """Each round's step in the run's record (generate.py's: a round after each of `notes`' rounds' training step) and
+    its notes."""
+    return {r["after_step"] + i: r for i, r in enumerate(notes["rounds"])}
+
+
+def positions(r: dict) -> int:
+    """A round's forward positions (its notes'): each prompt token and every generated token but the last, which no
+    forward reads."""
+    return r["sequences"] * (r["prompt"] + r["generated"] - 1)
+
+
 def forward_positions(notes: dict) -> int:
-    """The rounds' forward positions (generate.py's notes): each prompt token and every generated token but the last,
-    which no forward reads."""
-    return sum(r["sequences"] * (r["prompt"] + r["generated"] - 1) for r in notes["rounds"])
+    """The rounds' forward positions (generate.py's notes), `positions` summed."""
+    return sum(positions(r) for r in notes["rounds"])
+
+
+def axis(notes: dict, traced: dict[int, dict]) -> list[dict]:
+    """Each traced round's tokens (its trace's consumed positions) beside its forward positions (`positions`), which a
+    trace counts where the capture puts the decode loop's positions on the token axis the prompts' are on."""
+    at = round_at(notes)
+    return [{"step": s, "traced": t["measured"]["tokens"], "forward": positions(at[s])}
+            for s, t in sorted(traced.items()) if s in at]
+
+
+def off_axis(what: str, rounds: list[dict]) -> bool:
+    """Whether a rounds row's trace lacks its decode loop's positions: a traced round's tokens fewer than its forward
+    positions (`axis`'s `rounds`); refused where none is a round or one counts more, which no forward reads."""
+    if not rounds:
+        raise SystemExit(f"{PANEL}: {what}: no traced step is a round: trace its rounds (islands/{NAME}/job.sh) and "
+                         f"name the traces in the rows")
+    if over := [a for a in rounds if a["traced"] > a["forward"]]:
+        raise SystemExit(f"{PANEL}: {what}: the capture counts more tokens than a round's forward positions ("
+                         + "; ".join(f"step {a['step']}: {a['traced']:,} traced, {a['forward']:,} forward" for a in over)
+                         + "), positions no forward reads: fix the capture and trace the rounds again")
+    return any(a["traced"] < a["forward"] for a in rounds)
 
 
 def start(name: str) -> tuple[dict, dict]:
@@ -314,7 +348,8 @@ def past_last(structures: dict[str, dict], last: int) -> tuple[dict[str, dict], 
 def measured(row: dict, traced: dict[int, dict]) -> tuple[formalism.Measured, dict, dict]:
     """A row's quantities: its run's last checkpoint, or its rounds (`rounds`), ingested with the run's `traced` steps'
     structures, each structure's its latest traced step's (`structures` in what the row read); the start's shape and
-    what the row read, a distillation run's student's shape among it (`student`, from the run's notes)."""
+    what the row read, a distillation run's student's shape among it (`student`, from the run's notes) and a rounds
+    row's traced rounds' tokens beside their forward positions (`axis`)."""
     root = fetch(row["art"], "run/run.json", "meta.json")
     record = json.loads((root / "run" / "run.json").read_text())
     meta = json.loads((root / "meta.json").read_text())
@@ -342,7 +377,7 @@ def measured(row: dict, traced: dict[int, dict]) -> tuple[formalism.Measured, di
         record = rounds(record, notes, {(tensors[n][1][1], tensors[n][1][0]) for n in names})
         record["formalism"] = round_formalism(notes, tensors)
         read |= {"rounds": notes["rounds"], "round_steps": [s["step"] for s in record["steps"]],
-                 "forward_positions": forward_positions(notes),
+                 "forward_positions": forward_positions(notes), "axis": axis(notes, traced),
                  "fp4_macs": sum(r[5] * sum(s["struct"] == sid for s in record["steps"])
                                  for sid, st in record["structures"].items() for r in st["log"] if r[3].endswith(FP4))}
     else:
@@ -549,6 +584,18 @@ def build(spec: dict, revs: tuple[str, str, str], stamp: str | None = None) -> t
             ms, w_fwd, dials = dict.fromkeys(pts, m), policy.w_fwd(shape), r["dials"]
             said = "; ".join(r[x] for x in ("about", "note") if r.get(x))
             run = f"{r['run']} {r['art']}" + (f" ({said})" if said else "")
+            if r.get("rounds") and off_axis(what, read["axis"]):
+                cells = {"workload": r["workload"], "model": r["model"], "dials": compact(dials), "run": run,
+                         "own_c_gates": float(algorithm_policy.num(session["gates"])), "own_k_bits": session["k_bits"],
+                         "reading": READING, "te_core": VERSION, "capture_code": (m.products or {}).get("capture_code"),
+                         "binding_kind": algorithm_policy.UNMEASURED, "rests_on": NO_AXIS,
+                         "kinds": algorithm_policy.kinds({"terms": dict.fromkeys(formalism.KINDS),
+                                                          "sensitivities": dict.fromkeys(SENSITIVITIES), "why": NO_AXIS})}
+                rows.append([cells.get(c) for c in COLUMNS])
+                details.append(finite({"workload": r["workload"], "run": r["run"], "art": r["art"], "modelled": None,
+                                       "read": read, "w_fwd_gates": w_fwd, "own_session": session,
+                                       "unmeasured": NO_AXIS}))
+                continue
         at = {name: formalism.at(ms[name], c, k) for name, (c, k) in pts.items()}
         one = {name: formalism.published(ms[name], c, k, READING) for name, (c, k) in pts.items()}
         bound = {name: formalism.bound(ms[name], c, k) for name, (c, k) in pts.items()}
