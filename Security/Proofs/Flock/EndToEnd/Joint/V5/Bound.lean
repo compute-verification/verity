@@ -1,6 +1,8 @@
-import Proofs.Flock.EndToEnd.Joint.V5.Member
-import Proofs.Flock.EndToEnd.Joint.Prod
-import Proofs.Flock.Soundness.Game.Union
+module
+
+public import Proofs.Flock.EndToEnd.Joint.V5.Member
+public import Proofs.Flock.EndToEnd.Joint.Prod
+public import Proofs.Flock.Soundness.Game.Union
 
 /-!
 # Proof of the bound over a window's members, per window and pooled
@@ -23,6 +25,8 @@ The proofs of `JointSampledV5`, `JointShareV5` and `JointHorizonV5` (`Joint/V5/S
   `Σ_t Σ_m (ε_ks,t,m + ε_bind,t,m)` by `period_union`, or every sample misses with the product of the `P_a`s below
   `δ`, at most `δ` by `period_prod`.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

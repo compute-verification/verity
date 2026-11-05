@@ -19,9 +19,13 @@ line and then its body up to the end of what the client sends (it shuts its side
 Anything else is answered `err WHY`. `answer` is the whole of it but the socket. The epoch lives only in the process:
 one started again opens a new epoch, in which no earlier session registers.
 -/
-import Flock.Firewall.Salts
-import Flock.Witness
-import Std.Async.TCP
+module
+
+public import Flock.Firewall.Salts
+public import Flock.Witness
+public import Std.Async.TCP
+
+@[expose] public section
 
 namespace Flock.Firewall.Values
 

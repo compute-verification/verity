@@ -1,4 +1,6 @@
-import Definitions.Core.ValueSalts
+module
+
+public import Definitions.Core.ValueSalts
 
 /-!
 # The ZK server's key is its own
@@ -7,6 +9,8 @@ import Definitions.Core.ValueSalts
 (`Definitions.Core.ValueSalts`). The value service and the session loop hold the server's salt key, and the tags, the
 record tags and the record's session count mean what they say only while nothing the serving stack runs reads the key.
 -/
+
+@[expose] public section
 
 namespace Verity.Assumptions
 

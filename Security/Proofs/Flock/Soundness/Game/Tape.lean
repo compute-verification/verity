@@ -1,6 +1,8 @@
-import Definitions.Flock.Game.Tape
-import Definitions.Flock.Game.Seq
-import Proofs.Flock.Soundness.Game.Prob
+module
+
+public import Definitions.Flock.Game.Tape
+public import Definitions.Flock.Game.Seq
+public import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Drawing a strategy's coins ahead
@@ -15,6 +17,8 @@ reaches that game played after others.
 The averages this needs: over pairs (`avg_prod_iter`, and `avg_fst` of a function of the first), over independent
 coordinates at one of them (`avg_pi_eval`), and over a coin with, for every value of it, the rest (`avg_prod_pi`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

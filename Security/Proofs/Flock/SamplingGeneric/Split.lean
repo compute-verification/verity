@@ -1,5 +1,7 @@
-import Definitions.Claims.SamplingGeneric
-import Proofs.Flock.SamplingGeneric.Fails
+module
+
+public import Definitions.Claims.SamplingGeneric
+public import Proofs.Flock.SamplingGeneric.Fails
 
 /-!
 # The sampled compiler's knowledge soundness, in two steps
@@ -18,6 +20,8 @@ import Proofs.Flock.SamplingGeneric.Fails
 
 `compilerKS_of` composes them.
 -/
+
+@[expose] public section
 
 namespace Claims.SamplingGeneric
 

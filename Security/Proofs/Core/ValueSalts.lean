@@ -1,6 +1,8 @@
-import Definitions.Core.Guarantees.ValueSalts
-import Proofs.Core.Game.Basic
-import Proofs.Core.Challenger
+module
+
+public import Definitions.Core.Guarantees.ValueSalts
+public import Proofs.Core.Game.Basic
+public import Proofs.Core.Challenger
 
 /-!
 # What a registration leaks: proof
@@ -15,6 +17,8 @@ Its witnesses: `RegisteredLeakage_honest`, a stack that registers its one sessio
 the bound hold; and `RegisteredLeakage_nontrivial`, where the bound fails at a stack that makes its record tag from the
 key (`RegisteredLeakage_nontrivial_stack`: it reads the key).
 -/
+
+@[expose] public section
 
 namespace Verity
 

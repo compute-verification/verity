@@ -35,11 +35,17 @@ computable from what the verifier sees (`Verity.ValueSalts`, `Verity.Guarantees.
 the session loop run under the ZK server's own OS user, which no worker and no serving stack shares, so nothing the stack
 runs reads the key or the epoch. The tags, the record tags and the count `m` mean what they say only under it.
 -/
-import Flock.Hm96
-import Flock.FV3
-import Flock.Registered
-import Flock.Comp
-import Flock.JsonParse
+module
+
+public import Flock.Hm96
+public import Flock.FV3
+public import Flock.Registered
+public import Flock.Comp
+public import Flock.JsonParse
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock.Firewall.Salts
 

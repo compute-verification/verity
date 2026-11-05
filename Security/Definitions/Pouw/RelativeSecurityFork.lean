@@ -1,4 +1,6 @@
-import Definitions.Pouw.RelativeSecurity
+module
+
+public import Definitions.Pouw.RelativeSecurity
 
 /-!
 # Relative security's collision finder, built from the adversary (trusted)
@@ -24,6 +26,8 @@ The finder's cost is the verifier's SHA-512 calls in its runs plus each run of t
 the analysis sets. A finder the analysis picks freely (`Finders`) can declare any cost and output a fixed collision,
 which is why the floors no longer take one.
 -/
+
+@[expose] public section
 
 namespace Pouw.RelativeSecurity
 

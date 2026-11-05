@@ -1,5 +1,7 @@
-import Definitions.Core.ValueSalts
-import Definitions.Core.Assumptions.ZkServer
+module
+
+public import Definitions.Core.ValueSalts
+public import Definitions.Core.Assumptions.ZkServer
 
 /-!
 # What a registration leaks: at most `log₂ m` bits, `m` the sessions its epoch opened
@@ -12,6 +14,8 @@ choice, a term of the guarantee, as PoUW's noise seeds' grinding is. The record 
 a genuine record is from an ideal one (`prfAdvantage`) and a forged record tag (`forgeAdvantage`), each an explicit term,
 under the key-separation premise (`Verity.Assumptions.ZkServerOwnUser`).
 -/
+
+@[expose] public section
 
 namespace Verity.Guarantees
 

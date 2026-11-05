@@ -1,4 +1,6 @@
-import Definitions.Core.Game
+module
+
+public import Definitions.Core.Game
 
 /-!
 # The value commitments' salts, the ZK server's: what a registration shows
@@ -21,6 +23,8 @@ it is the same function under every key.
   the gap that SHA-512 keyed by `k` as a PRF bounds;
 * `forgeAdvantage`: how often a stack hands an admitted record that none of its sessions has.
 -/
+
+@[expose] public section
 
 namespace Verity
 
