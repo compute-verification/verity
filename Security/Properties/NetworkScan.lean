@@ -1,12 +1,13 @@
 import Properties.NetworkScan.Flattens
 
 /-!
-# The rows form's scan fits its layout: what `NetworkCheck.Period.scanOf`'s acceptance gives the sampled audit's scope
+# The rows form's scan fits its layout: what `NetworkCheck.Period.scanProg`'s acceptance gives the sampled audit's scope
 
 The sampled audit's scope at a link-window's statement (`NetTiming.ScopeAcc`) has two halves: the sampling scope
 (`Claims.Sampling.Scope`, the sampled verifier's own, which `Claims.Sampling.ScopeMatches` equates with its scope
 check), and the statement's layout fitting its program over its horizon (`NetTiming.BoundaryGates.Fits`). The network
-check reads the second off the scan's Program (`scanOf`, the generator form); the first it doesn't read.
+check reads the second off the scan's Program (`scanProg`, the generator form, which `scanOf` runs on the Program the
+scan's descriptor decodes to); the first it doesn't read.
 
 **The program** is the scan's audit's members' Boolean programs side by side (`jointOf`, in
 `Properties.NetworkScan.Flattens`): at the templates' circuit files `fs`, one a template, each laid out by Bits as its
@@ -22,15 +23,16 @@ the Program, `Desc.ofProg`), its ranges `rs`, a unit an instance (`MembersOf`).
 later-template instance `t − 1`, each bit its input bit (`SampledProofs.Bits.inBit`). A field's bits are packed 16 a
 port word (`wordBit`), an instance is the unit the code locates at its node and member, at its member's place for it
 and its unit's copy 0 (`instPos`), and the templates are the root's nodes that call a composite
-(`NetworkCheck.Period.templateNodes`, as `scanOf` reads them). The layout has no wires: a statement's wires are its
+(`NetworkCheck.Period.templateNodes`, as `scanProg` reads them). The layout has no wires: a statement's wires are its
 circuit record's, the scan's record states none, and its state chain and its links to its tied audits are its phase's
 ties (`NetTiming.Ties`). A statement's layout is its descriptor's (`layOf`), at horizon `T`. A gate nothing
 places is past the joint program (`instPos`, and `layOf` where the descriptor doesn't decode), so the layout fails
 closed: no such gate is an input or an output.
 
-* `ScanFits`: an accepted scan's layout fits its audit's joint program over `T` steps.
+* `ScanFits`: an accepted scan's layout fits its audit's joint program over `T` steps (`ScanFitsOf` at `scanProg`;
+  `acceptAllScan` is the scan check it must fail at to say something).
 * `ScanScopeAcc`: given an accepted scan, at every deployment whose scope check is its scope, a statement the scope
-  check takes, each parse of which has the scan's canonical bytes as its descriptor and the audit's joint program as
+  check takes, each parse of which has a descriptor that decodes to the scan's Program and the audit's joint program as
   its circuit, is in the sampled audit's scope at `layOf` and `T` (`ScopeAcc`).
 -/
 
@@ -69,38 +71,49 @@ def layOf (s : Schedule) (rs : Array Flock.TemplateQuery.TRange) (ms : Members) 
   | .ok P => scanLayout P s rs ms
   | .error _ => { egress := fun _ _ _ => ((jointOf ms).gates.length, []), ingress := fun _ => [] }
 
-/-- **An accepted scan's layout fits its audit's joint program.** If `scanOf` accepts the scan `j` as the registered
-Program `program` at the schedule `s`, its canonical text is `c` and decodes to `P`, `fs` are `P`'s templates' circuit
-files, each laid out by Bits as its template (`FilesOf`) and reading every bit of its `row` parameter (`RowsRead`), the
-template query over the templates `tids` accepts `P` with the ranges `rs` (`Flock.TemplateQuery.evaluate`, on the
-sampled verifier's reading of `P`), and `ms` are its audit's members over them (`MembersOf`), then `P`'s scan layout
-fits the members' joint program (`jointOf`) over the window's `T` steps: every egress gate is returned and not an
-input, every ingress gate is an input, and no egress gate of a step depends on an ingress gate of a later step through
-its reads (the layout has no wires, so its wiring fits). -/
+/-- `ScanFits` of the scan check `scan`: of every Program `scan` accepts, at its templates' circuit files reading their
+`row` parameters and its audit's members, the scan layout fits the members' joint program over the window's steps. -/
+def ScanFitsOf (scan : Flock.Program.Prog → String → Schedule → Except String Scan) : Prop :=
+  ∀ (P : Flock.Program.Prog) (program : String) (s : Schedule) (sc : Scan) (fs : List Flock.Circuit)
+    (tids : Array String) (rs : Array Flock.TemplateQuery.TRange) (ms : Members),
+    scan P program s = .ok sc → FilesOf P fs → RowsRead P fs → Flock.TemplateQuery.evaluate (.ofProg P) tids = .ok rs →
+      MembersOf P fs rs ms → (scanLayout P s rs ms).Fits (jointOf ms) s.window
+
+/-- **An accepted scan's layout fits its audit's joint program.** If `scanProg` accepts the Program `P` as the
+registered Program `program` at the schedule `s` (`scanOf` runs it on the Program a scan's descriptor decodes to), `fs`
+are `P`'s templates' circuit files, each laid out by Bits as its template (`FilesOf`) and reading every bit of its `row`
+parameter (`RowsRead`), the template query over the templates `tids` accepts `P` with the ranges `rs`
+(`Flock.TemplateQuery.evaluate`, on the sampled verifier's reading of `P`), and `ms` are its audit's members over them
+(`MembersOf`), then `P`'s scan layout fits the members' joint program (`jointOf`) over the window's `T` steps: every
+egress gate is returned and not an input, every ingress gate is an input, and no egress gate of a step depends on an
+ingress gate of a later step through its reads (the layout has no wires, so its wiring fits). -/
 def ScanFits : Prop :=
-  ∀ (j : Lean.Json) (program : String) (s : Schedule) (sc : Scan) (c : String) (P : Flock.Program.Prog)
-    (fs : List Flock.Circuit) (tids : Array String) (rs : Array Flock.TemplateQuery.TRange) (ms : Members),
-    scanOf j program s = .ok sc → Flock.canon j = .ok c → Flock.Program.decode c.toUTF8 = .ok P → FilesOf P fs →
-      RowsRead P fs → Flock.TemplateQuery.evaluate (.ofProg P) tids = .ok rs → MembersOf P fs rs ms →
+  ∀ (P : Flock.Program.Prog) (program : String) (s : Schedule) (sc : Scan) (fs : List Flock.Circuit)
+    (tids : Array String) (rs : Array Flock.TemplateQuery.TRange) (ms : Members),
+    scanProg P program s = .ok sc → FilesOf P fs → RowsRead P fs →
+      Flock.TemplateQuery.evaluate (.ofProg P) tids = .ok rs → MembersOf P fs rs ms →
       (scanLayout P s rs ms).Fits (jointOf ms) s.window
 
-/-- **An accepted scan's statements are in the sampled audit's scope.** If `scanOf` accepts the scan `j` at the
-schedule `s`, its canonical text is `c` and decodes to `P`, `fs` are `P`'s templates' circuit files (`FilesOf`) reading
-their `row` parameters (`RowsRead`), the template query over `tids` accepts `P` with the ranges `rs`
-(`Flock.TemplateQuery.evaluate`) and `ms` are its audit's members over them (`MembersOf`), then at every deployment `D`
-whose scope check is its sampling scope
+/-- A scan check that accepts every Program: what `ScanFitsOf` must fail at for `ScanFits` (`ScanFitsOf` at
+`scanProg`) to say something. -/
+def acceptAllScan (_ : Flock.Program.Prog) (_ : String) (_ : Schedule) : Except String Scan := .ok ⟨0, 0, 0, 0, 0⟩
+
+/-- **An accepted scan's statements are in the sampled audit's scope.** If `scanProg` accepts the Program `P` at the
+schedule `s`, `fs` are `P`'s templates' circuit files (`FilesOf`) reading their `row` parameters (`RowsRead`), the
+template query over `tids` accepts `P` with the ranges `rs` (`Flock.TemplateQuery.evaluate`) and `ms` are its audit's
+members over them (`MembersOf`), then at every deployment `D` whose scope check is its sampling scope
 (`Claims.Sampling.ScopeMatches`, what the sampled leg gives of the deployed sampled verifier), a statement `x` the
-scope check takes, every parse of which has `c`'s bytes as its descriptor and the members' joint program as its
+scope check takes, every parse of which has a descriptor that decodes to `P` and the members' joint program as its
 circuit (`Flattens`), is in `ScopeAcc` at the layout `layOf s rs ms` and the horizon `T`. -/
 def ScanScopeAcc : Prop :=
-  ∀ (j : Lean.Json) (program : String) (s : Schedule) (sc : Scan) (c : String) (P : Flock.Program.Prog)
-    (fs : List Flock.Circuit) (tids : Array String) (rs : Array Flock.TemplateQuery.TRange) (ms : Members),
-    scanOf j program s = .ok sc → Flock.canon j = .ok c → Flock.Program.decode c.toUTF8 = .ok P → FilesOf P fs →
-    RowsRead P fs → Flock.TemplateQuery.evaluate (.ofProg P) tids = .ok rs → MembersOf P fs rs ms →
+  ∀ (P : Flock.Program.Prog) (program : String) (s : Schedule) (sc : Scan) (fs : List Flock.Circuit)
+    (tids : Array String) (rs : Array Flock.TemplateQuery.TRange) (ms : Members),
+    scanProg P program s = .ok sc → FilesOf P fs → RowsRead P fs →
+    Flock.TemplateQuery.evaluate (.ofProg P) tids = .ok rs → MembersOf P fs rs ms →
     ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
       (D : Claims.Sampling.Deploy Coin Col T) (x : Claims.Msg),
       Claims.Sampling.ScopeMatches D → D.scopeCheck x = true →
-      (∀ st, D.parse x = some st → (⟨st.desc.toArray⟩ : ByteArray) = c.toUTF8 ∧ Flattens ms st.prog) →
+      (∀ st, D.parse x = some st → Flock.Program.decode ⟨st.desc.toArray⟩ = .ok P ∧ Flattens ms st.prog) →
       NetTiming.ScopeAcc D (layOf s rs ms) (fun _ => s.window) x
 
 end Properties.NetworkScan

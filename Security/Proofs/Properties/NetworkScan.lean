@@ -51,6 +51,8 @@ The facts both statements' witnesses read:
 
 * `not_fits_of_no_outs`: a circuit that returns nothing fits no layout over a horizon of at least one step.
 * `jointOf_nil`, `not_fits_of_no_members`: an audit of no members has the empty joint program, so no layout fits it.
+* `bareProg`, `scanFits_nontrivial`: a Program of no templates, which the template query over no templates accepts
+  with no ranges, so at a scan check that accepts every Program, `ScanFitsOf` fails.
 * `oneSlot`, `canon_null`, `bytes_of_data_toList`: a schedule of one slot and one step, C-Flock's canonical `null`, and
   a byte array through its list of bytes.
 * `nullStmt`, `acceptAllDeploy`: the statement whose descriptor is `null`'s bytes and whose circuit is empty, and a
@@ -475,6 +477,32 @@ theorem not_fits_of_no_members {L S : ℕ} (lay : NetTiming.BoundaryGates L S) {
     (σ : Fin S) : ¬ lay.Fits (jointOf []) k := by
   rw [jointOf_nil]
   exact not_fits_of_no_outs lay [] hk ℓ σ
+
+/-- A Program of one Definition, its root, which has no nodes. -/
+def bareProg : Flock.Program.Prog := { defs := #[default], index := {}, root := 0, programFn := "", sha512 := .empty }
+
+theorem bareProg_templateNodes : templateNodes bareProg = [] := by
+  first
+    | rfl
+    | simp [templateNodes, bareProg]
+
+/-- The template query over no templates accepts `bareProg` with no ranges: its root has no nodes. -/
+theorem bareProg_evaluate : Flock.TemplateQuery.evaluate (.ofProg bareProg) #[] = .ok #[] := by
+  first
+    | rfl
+    | (unfold Flock.TemplateQuery.evaluate; rfl)
+    | simp [Flock.TemplateQuery.evaluate, Flock.TemplateQuery.Desc.ofProg, Flock.TemplateQuery.Desc.def?, bareProg]
+
+/-- **`ScanFits`' nontrivial lemma**: a scan check that accepts every Program accepts `bareProg`, which has no
+templates, so no circuit files and no members: their joint program is empty, and no layout fits it over a window of
+one step. -/
+theorem scanFits_nontrivial : ¬ ScanFitsOf acceptAllScan := fun h =>
+  not_fits_of_no_members (scanLayout bareProg oneSlot #[] []) (k := oneSlot.window) (by decide) ⟨0, by decide⟩
+    ⟨0, by decide⟩
+    (h bareProg "" oneSlot ⟨0, 0, 0, 0, 0⟩ [] #[] #[] [] rfl
+      ⟨by simp only [bareProg_templateNodes, List.length_nil], fun _ h => absurd h (Nat.not_lt_zero _)⟩
+      (fun _ h => absurd h (Nat.not_lt_zero _)) bareProg_evaluate
+      ⟨List.Perm.refl _, fun _ h => absurd h (Nat.not_lt_zero _)⟩)
 
 theorem canon_null : Flock.canon .null = .ok "null" := by
   simp only [Flock.canon]
