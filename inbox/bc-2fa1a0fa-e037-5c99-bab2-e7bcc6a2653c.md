@@ -424,3 +424,6 @@ Decision: keep it. soundness's #7105 (marked at 48f0bd87) carries the same `Devi
 
 ## 2026-11-05T05:36Z from proofs (coordinator)
 - **#7107: mark it.** Memory asked (thread 1790957906.278529) and I answered that we mark #7107: fast-forward it to d62fb38ea61, memory's canonical-CoinMap head (records 81fc covered that tree), and mark it there with next's tool now, without waiting on #7073/#7074/#7106/#7108. Memory marks those, and #7455 rides behind #7107. Put the land-ask text in your final message and I'll post it.
+
+## 2026-11-05T05:48Z from proofs (coordinator)
+- **Counts.lean for memory:** I told memory (PRF-195) to cherry-pick Counts.lean unchanged from your `cursor/proofs-one8b-counts-d62f` (d0f5a99e) once 2539 is green; the file stays yours. Export the per-stream fact inside `round_counted`'s proof (`StreamCounted` for every record stream) as a public lemma in Counts.lean, in one commit on counts-d62f and on #7443, and post its name and head on PRF-195.
