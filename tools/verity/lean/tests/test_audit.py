@@ -146,9 +146,21 @@ def test_a_four_names_exception_goes_once_it_holds_nothing():
                                                                  "P.w": "waits", "P.gone": "waits"}}, f)
     assert [(x.code, x.entry) for x in stale] == [("four-names.stale", n) for n in ("P.SecurityProofs.G", "P.w", "P.gone")]
     assert [str(x).split(", which is ")[1] for x in stale] == ["in the four-name form: remove the entry",
-                                                              "a witness or frozen: remove the entry",
+                                                              "a witness, frozen or a generic claim: remove the entry",
                                                               "no guarantee of this lock: remove the entry"]
     assert [x.entry for x in A.four_name_failures(policy | {"four_names_except": {}}, f)] == ["P.t"]
+
+
+def test_four_names_leaves_a_generic_claims_guarantee_to_the_claims_rule():
+    """A guarantee `claims.generic` lists is stated as its claim (`theorem g : C`, `generic_failures`), which the four-name
+    form can't be, so the four-name rule holds it to nothing, and an exception for it is stale."""
+    f = four_named_pins(**{"P.g": "P.g : P.C"})
+    policy = {"four_names": ["P"], "guarantees": dict.fromkeys(f["pins"], {"owner": "@lean"}),
+              "claims": {"generic": {"P.C": "P.g"}}}
+    assert A.four_name_failures(policy, f) == []
+    assert [x.entry for x in A.four_name_failures(policy | {"claims": {}}, f)] == ["P.g"]
+    stale = A.four_name_failures(policy | {"four_names_except": {"P.g": "waits for its lift"}}, f)
+    assert [(x.code, x.entry) for x in stale] == [("four-names.stale", "P.g")]
 
 
 def test_each_four_names_exception_gives_its_reason():

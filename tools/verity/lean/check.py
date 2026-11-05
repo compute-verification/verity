@@ -2961,9 +2961,10 @@ OWNED = "who answers for it, not what it says"
 
 def four_name_failures(policy: dict, facts: dict) -> list[Failure]:
     """The four-name rule, for a lock that lists `four_names`: it lists the namespace root of every guarantee, and each
-    guarantee is `X.SecurityProofs.G : X.Guarantees.G` (`four_named`) but a witness (`claim_witnesses`), one under
-    `shape.frozen`, and one `four_names_except` holds ({guarantee: why it isn't yet}). That map only shrinks: an entry for
-    a guarantee in the form, frozen or a witness, or for no guarantee of the lock, fails until it goes."""
+    guarantee is `X.SecurityProofs.G : X.Guarantees.G` (`four_named`) but a witness (`claim_witnesses`), a generic claim's
+    (`generic_claims`, which the claims rule holds to `theorem g : C`), one under `shape.frozen`, and one
+    `four_names_except` holds ({guarantee: why it isn't yet}). That map only shrinks: an entry for a guarantee in the
+    form, frozen, a witness or a generic claim's, or for no guarantee of the lock, fails until it goes."""
     roots = policy.get("four_names") or []
     if not roots:
         return []
@@ -2972,7 +2973,8 @@ def four_name_failures(policy: dict, facts: dict) -> list[Failure]:
         return [Failure("four-names.except-form", None, "four names: `four_names_except` is {guarantee: why it is not yet "
                         "in the four-name form}, each reason one sentence")]
     guarantees = policy.get("guarantees") or {}
-    exempt = claim_witnesses(policy) | set((policy.get("shape") or {}).get("frozen") or {})
+    exempt = (claim_witnesses(policy) | set(generic_claims(policy).values())
+              | set((policy.get("shape") or {}).get("frozen") or {}))
     fails = []
     for root in sorted({n.split(".")[0] for n in guarantees} - set(roots)):
         some = sorted(n for n in guarantees if n.split(".")[0] == root)
@@ -2987,7 +2989,8 @@ def four_name_failures(policy: dict, facts: dict) -> list[Failure]:
         form = four_named(name, f)
         if name in waiting and (form or name in exempt):
             fails.append(Failure("four-names.stale", name, f"four names: `four_names_except` lists {name}, which is "
-                                 f"{'in the four-name form' if form else 'a witness or frozen'}: remove the entry"))
+                                 f"{'in the four-name form' if form else 'a witness, frozen or a generic claim'}: "
+                                 "remove the entry"))
         elif not form and name not in exempt and name not in waiting:
             fails.append(Failure("four-names", name, f"four names: {name} is a guarantee of {name.split('.')[0]}, which "
                                  f"`four_names` lists, so it is stated as `X.SecurityProofs.G : X.Guarantees.G` with `G` a "
