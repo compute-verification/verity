@@ -821,7 +821,7 @@ theorem zk_run_mono (hB : BlobSup B1 B2) (p : SampledProofs.OneStageZk.Own) (pub
     | ((with_reducible apply zk_fold_bind hB) <;> exact fun a b hab hb => by
         (repeat' split at hab) <;> (cases hab <;> exact hb))
     | split | apply ExtP.arrayMapM | apply ExtP.listMapM | apply ExtP.optionMapM | apply ExtP.arrayForIn
-    | apply ExtP.mapError | apply ExtP.map | apply ExtP.bind | intro _ | dsimp only)
+    | apply ExtP.mapError | apply ExtP.map | apply ExtP.bind | intro _)
 
 theorem treesHeld_ext (hB : BlobSup B1 B2) (ts : Array SampledProofs.Challenger.LoggedTree)
     (e : SampledProofs.OneStageZk.Evidence) :
@@ -830,7 +830,7 @@ theorem treesHeld_ext (hB : BlobSup B1 B2) (ts : Array SampledProofs.Challenger.
   repeat' (first
     | with_reducible exact ExtP.refl _ _ | with_reducible exact ExtP.of_ext (get_ext hB _ _) | split
     | apply ExtP.arrayMapM | apply ExtP.listMapM | apply ExtP.optionMapM | apply ExtP.arrayForIn | apply ExtP.mapError
-    | apply ExtP.map | apply ExtP.bind | intro _ | dsimp only)
+    | apply ExtP.map | apply ExtP.bind | intro _)
 
 /-- `checkBlobsAt`'s trees, sessions and run, on the blobs `bs`. -/
 def zkPre (p : SampledProofs.OneStageZk.Params) (e : SampledProofs.OneStageZk.Evidence) (bs : Core.Blobs) : V Run :=
@@ -897,7 +897,7 @@ theorem innerHeld_ext (hB : BlobSup B1 B2) (o : VStar.Recursive.Own) (pr : VStar
   repeat' (first
     | with_reducible exact ExtP.refl _ _ | with_reducible exact ExtP.of_ext (get_ext hB _ _) | split
     | apply ExtP.arrayMapM | apply ExtP.listMapM | apply ExtP.optionMapM | apply ExtP.arrayForIn | apply ExtP.mapError
-    | apply ExtP.map | apply ExtP.bind | intro _ | dsimp only)
+    | apply ExtP.map | apply ExtP.bind | intro _)
 
 theorem partSize_ext (hB : BlobSup B1 B2) (j : Nat) (p : VStar.Recursive.PartOwn) (s : VStar.Recursive.PartProof) :
     ExtT (VStar.Recursive.partSize j p s B1) (VStar.Recursive.partSize j p s B2) := by
@@ -905,7 +905,7 @@ theorem partSize_ext (hB : BlobSup B1 B2) (j : Nat) (p : VStar.Recursive.PartOwn
   repeat' (first
     | with_reducible exact ExtP.refl _ _ | with_reducible exact ExtP.of_ext (get_ext hB _ _) | split
     | apply ExtP.arrayMapM | apply ExtP.listMapM | apply ExtP.optionMapM | apply ExtP.arrayForIn | apply ExtP.mapError
-    | apply ExtP.map | apply ExtP.bind | intro _ | dsimp only)
+    | apply ExtP.map | apply ExtP.bind | intro _)
 
 theorem unitsOf_ext (hB : BlobSup B1 B2) (ok : Bool) (o : VStar.Recursive.Own) (pr : VStar.Recursive.Proofs) :
     ExtT (VStar.Recursive.unitsOf ok o pr B1) (VStar.Recursive.unitsOf ok o pr B2) := by
@@ -913,7 +913,7 @@ theorem unitsOf_ext (hB : BlobSup B1 B2) (ok : Bool) (o : VStar.Recursive.Own) (
   repeat' (first
     | with_reducible exact ExtP.refl _ _ | with_reducible exact ExtP.of_ext (get_ext hB _ _) | split
     | apply ExtP.arrayMapM | apply ExtP.listMapM | apply ExtP.optionMapM | apply ExtP.arrayForIn | apply ExtP.mapError
-    | apply ExtP.map | apply ExtP.bind | intro _ | dsimp only)
+    | apply ExtP.map | apply ExtP.bind | intro _)
 
 theorem partVerdict_ext (hB : BlobSup B1 B2) (h : VStar.Recursive.InnerHeld) (j : Nat)
     (p : VStar.Recursive.PartOwn) (s : VStar.Recursive.PartProof) :
@@ -942,7 +942,7 @@ theorem statementSize_ext (hB : BlobSup B1 B2) (h : VStar.Recursive.InnerHeld) (
   repeat' (first
     | with_reducible exact ExtP.refl _ _ | with_reducible exact ExtP.of_ext (get_ext hB _ _)
     | exact partsSize_ext hB _ _ _ | split | apply ExtP.arrayMapM | apply ExtP.listMapM | apply ExtP.optionMapM
-    | apply ExtP.arrayForIn | apply ExtP.mapError | apply ExtP.map | apply ExtP.bind | intro _ | dsimp only)
+    | apply ExtP.arrayForIn | apply ExtP.mapError | apply ExtP.map | apply ExtP.bind | intro _)
 
 theorem statementFits_ext (hB : BlobSup B1 B2) (limit : Nat) (h : VStar.Recursive.InnerHeld)
     (o : VStar.Recursive.Own) (pr : VStar.Recursive.Proofs) :
@@ -1019,7 +1019,7 @@ theorem verdicts_ext (hB : BlobSup B1 B2) (o : VStar.Recursive.Own) (session : S
   · repeat' (first
       | with_reducible exact ExtP.refl _ _ | with_reducible exact ExtP.of_ext (unitsOf_ext hB _ _ _)
       | split | apply ExtP.arrayMapM | apply ExtP.listMapM | apply ExtP.optionMapM | apply ExtP.arrayForIn
-      | apply ExtP.mapError | apply ExtP.map | apply ExtP.bind | intro _ | dsimp only)
+      | apply ExtP.mapError | apply ExtP.map | apply ExtP.bind | intro _)
   · (try dsimp only at hab)
     obtain ⟨u1, -, hab⟩ := bindOk_split hab
     cases u1
