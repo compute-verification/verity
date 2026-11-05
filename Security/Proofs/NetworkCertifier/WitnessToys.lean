@@ -562,10 +562,11 @@ theorem fxRows_wf : fxRows.Wf := by
 theorem fxQueue_bucket (c : Fin 3) (j : ℕ) (hj : j < fxQueueSched.cells c) : fxQueueSched.bucket c j < 10 := by
   fin_cases c <;> simp [fxQueueSched, WardenSchedule.bucket] at hj ⊢ <;> omega
 
-/-- **`fxQueue`'s schedule fits the format** over one window of four slots: its cells fall in buckets `4 … 9`, and no
-bucket holds more than four frames. -/
+/-- **`fxQueue`'s schedule fits the format** over one window of four slots: its cells fall in buckets `4 … 9`, its
+admission padding in buckets `1 … 8`, and no bucket holds more than four frames. -/
 theorem fxQueue_fits : (RowsFormat.tapRecord fxRows fxRows_wf 4 1).fits fxQueueSched := by
-  refine ⟨fun c j hj => by simpa [fxRows] using fxQueue_bucket c j hj, fun b => ?_⟩
+  refine ⟨⟨fun c j hj => by simpa [fxRows] using fxQueue_bucket c j hj,
+    fun c i hi => by fin_cases c <;> simp [fxRows, fxQueueSched] at hi ⊢ <;> omega⟩, fun b => ?_⟩
   rcases Nat.lt_or_ge b 10 with hb | hb
   · interval_cases b <;> decide
   · have h0 : ∀ c, laneLoad fxQueueSched c b = 0 := by
