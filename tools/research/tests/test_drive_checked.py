@@ -282,6 +282,108 @@ def test_a_sharded_run_that_passes_moves_main_and_the_verified_record_together_a
     assert not any("passed without passing" in p for p in h.posts), h.posts
 
 
+def _shard(tmp_path, rid: str, steps: dict[str, str], live: dict[str, str] | None = None, preflight: bool = False,
+           state: str = "running"):
+    """A shard's run dir: ``steps`` ended in its steps.jsonl, and its live record (`LIVE`, the check's ``state``) naming the
+    preflight's steps, those and ``live``'s, still to end (pending, running); with ``preflight``, the preflight's alone, its
+    groups not yet planned."""
+    from research.drive import LIVE, PREFLIGHT
+
+    d = _steps_run(tmp_path, rid, steps)
+    planned = {s: "running" if preflight else "passed" for s in PREFLIGHT} | ({} if preflight else {**steps, **(live or {})})
+    (d / LIVE).write_text(json.dumps({"schema": "check-live/v1", "state": state,
+                                      "steps": [{"step": s, "state": v} for s, v in planned.items()]}))
+    return d
+
+
+def _part(suite: str, k: int, status: str = "passed") -> dict:
+    """``suite``'s row of its part K of 3 by test id, as suites.py reports it."""
+    return {"name": suite, "suite": suite, "status": status, "failed_tests": ["tests/test_x.py::test_y"] * (status == "failed"),
+            "part": {"ks": [k], "m": 3, "digest": "d", "by": "id"}}
+
+
+def test_a_step_more_than_one_shard_holds_passed_only_once_every_shard_that_holds_it_passed_it(tmp_path):
+    """A sharded after-landing run's shards hold parts of one step (lean-audit's packages, lean-suites' suites, lean-build beside
+    them): it passed once every shard that holds it passed it (or skipped it, or failed it only on what an allowance covers),
+    none having it still to run by its live record, so another shard's pass doesn't pass a part that runs on, failed or was
+    stopped; a twin's pass passes it for its shard, and twins' other words rank whatever their order (`RANK`); a step an ended
+    check never started was stopped; and nothing passed while a shard's plan isn't known.  A suite in parts passed once every
+    part of one partition did."""
+    from research.drive import PREFLIGHT, shard_ended, shard_passed, shard_steps, suite_passed
+
+    one = _shard(tmp_path, "r1", {"lean-build": "passed", "lean-suites": "passed", "pytest": "passed"})
+    two = _shard(tmp_path, "r2", {"lean-build": "passed"}, {"lean-suites": "running", "lean-agreement": "pending"})
+    view = shard_steps([[one], [two]], [True, False])
+    assert view[1] == {**dict.fromkeys(PREFLIGHT, "passed"), "lean-build": "passed", "lean-suites": None, "lean-agreement": None}
+    assert shard_passed(view) == shard_ended(view) == {*PREFLIGHT, "lean-build", "pytest"}
+
+    failed, stopped, skipped = (shard_steps([[one], [_shard(tmp_path / s, "r2", {"lean-suites": s})]], [True, False])
+                                for s in ("failed", "stopped", "skipped"))
+    assert "lean-suites" not in shard_passed(failed) and "lean-suites" in shard_passed(failed, {"lean-suites"})
+    assert "lean-suites" not in shard_passed(stopped, {"lean-suites"}) and "lean-suites" in shard_ended(stopped)
+    assert "lean-suites" in shard_passed(skipped)
+    twins = [_shard(tmp_path / "t", "r2", {"lean-suites": "stopped"}), _shard(tmp_path / "t", "r2b", {"lean-suites": "passed"})]
+    assert "lean-suites" in shard_passed(shard_steps([[one], twins], [True, False])), "a twin's pass passes its shard"
+    twins[1] = _shard(tmp_path / "u", "r2b", {}, {"lean-suites": "running"})
+    assert shard_steps([[one], twins], [True, False])[1]["lean-suites"] is None, "one twin still runs it"
+    for a, b in (("stopped", "failed"), ("failed", "stopped"), ("skipped", "stopped"), ("stopped", "skipped")):
+        pair = [_shard(tmp_path / f"{a}-{b}", "r2", {"lean-suites": a}), _shard(tmp_path / f"{a}-{b}", "r2b", {"lean-suites": b})]
+        assert shard_steps([[one], pair], [True, False])[1]["lean-suites"] == ("failed" if "failed" in (a, b) else "skipped")
+    closed = shard_steps([[one], [_shard(tmp_path / "c", "r2", {"lean-build": "failed"}, {"lean-suites": "pending"}, state="failed")]],
+                         [True, False])
+    assert closed[1]["lean-suites"] == "stopped", "its group stopped on lean-build's failure: it never starts"
+    assert "lean-suites" in shard_ended(closed) and "lean-suites" not in shard_passed(closed, {"lean-suites"})
+
+    early, bare = _shard(tmp_path / "e", "r2", {}, preflight=True), _steps_run(tmp_path / "b", "r2", {"lean-build": "passed"})
+    assert shard_steps([[one], [early]], [True, False]) is None and shard_steps([[one], [bare]], [True, False]) is None
+    assert shard_steps([[one], [bare]], [True, True])[1] == {"lean-build": "passed"}, "a twin exited 0: its steps.jsonl"
+    assert shard_steps([[bare]], [False]) == [{"lean-build": "passed"}], "an unsharded run: its steps.jsonl"
+
+    assert suite_passed([{"name": "s", "status": "passed"}]) and suite_passed([_part("s", 3), _part("s", 1), _part("s", 2)])
+    assert not suite_passed([_part("s", 1), _part("s", 3)]) and not suite_passed([_part("s", 1), _part("s", 2, "failed"), _part("s", 3)])
+    assert not suite_passed([_part("s", 1), {**_part("s", 2), "part": {"ks": [2], "m": 3, "digest": "e"}}, _part("s", 3)])
+
+
+def test_a_sharded_run_moves_main_only_once_every_shard_that_holds_a_step_passed_it(world, monkeypatch):
+    """ci.toml's 3-shard plan runs lean-suites in each shard (the composition suite's three parts, lean-build again beside two
+    of them): while it still runs in one shard, by that shard's live record, the others' passes move nothing on `main`; once it
+    fails there the run is red, and neither the suite nor the step is green at its tip, so the red's culprit is sought among the
+    landings since each last passed whole."""
+    _move_main(world, GATED_TREE)
+    h = Review(world, monkeypatch, land_into="checked")
+    h.d.after_landing_shards = 3
+    h.d.records_artifact = lambda rid: f"art:{'a' * 64}@{'b' * 64}" if rid == "r-post-0" else None
+    h.d.evidence = lambda repo, ids: [d for d in h.evidence if d.name in ids]
+    main = _main(world)
+    tip = _landed(h, {"a.txt": "1\n"})
+    h.run_state["r-post-0"] = ("done", 0, None)
+    h.tick()
+    assert [kw["shard"] for _, _, kw in h.posted[1:]] == ["1/3", "2/3", "3/3"]
+    comp = "verity-core-composition"
+    shards = ({s: "passed" for s in ("lean-audit", "pytest", "lean-build", "lean-suites")},
+              {s: "passed" for s in ("lean-build", "lean-unit-cut", "lean-audit", "lean-agreement", "lean-changed")},
+              {s: "passed" for s in ("flock-circuit-build", "circuit-check", "flock-rust-tests", "lean-build", "lean-suites",
+                                     "ratchet-gate")})
+    assert {s for x in shards for s in x} == set(AFTER_LANDING)
+    h.run_state.update({"r-post-1": ("done", 0, None), "r-post-2": ("running", None, None), "r-post-3": ("done", 0, None)})
+    h.evidence = [_shard(world.tmp, "r-post-1", shards[0]), _shard(world.tmp, "r-post-2", shards[1], {"lean-suites": "running"}),
+                  _shard(world.tmp, "r-post-3", shards[2])]
+    for d, k in ((h.evidence[0], 3), (h.evidence[2], 2)):
+        (d / "suites-lean.json").write_text(json.dumps([_part(comp, k)]))
+    h.tick()
+    assert _main(world) == main and "gated" not in h.postland(), "lean-suites runs on in shard 2"
+
+    h.run_state["r-post-2"] = ("done", 1, None)
+    h.evidence[1] = _shard(world.tmp / "ended", "r-post-2", {**shards[1], "lean-suites": "failed"})
+    (h.evidence[1] / "suites-lean.json").write_text(json.dumps([_part(comp, 1, "failed")]))
+    h.tick()
+    pl = h.postland()
+    assert _main(world) == main and "gated" not in pl and pl["run"] is None and pl["failed"] == tip, world.logs
+    green = pl.get("green") or {}
+    assert green.get("step lean-build") == tip and green.get("step lean-suites") != tip and green.get(f"suite {comp}") != tip
+    assert pl["red"][f"suite {comp}"]["base"] != tip, pl["red"]
+
+
 def test_main_follows_a_baseline_of_every_step_on_the_gate(world, monkeypatch):
     """ci's `--steps` baseline counts once it names every step on the merge gate: circuit-check, off it, needn't be among them."""
     from research import queue as Q
