@@ -62,7 +62,11 @@ and assumptions its modules declare: the tree has no other map from Lean to lane
 (`unread-caps.json`, `CAPS`), and a count may only come down: ``--caps FILE`` exits 1 when an area's count rose above its
 cap (an area the file doesn't list has a cap of nothing), and ``--update-caps`` lowers each cap to its count, never
 raising one. The Lean check runs it (`check`, from `lean_audit.py`) on the facts its audits wrote, with no build; there
-the report is the short one (`analyse` without ``full``: no chains or `kept_only_by`). Stdlib only.
+the report is the short one (`analyse` without ``full``: no chains or `kept_only_by`). Neither this file nor the caps is
+in an audit's key (`lean_audit.NOT_READ`), so changing them reruns no audit. Those facts come from the builds of
+`Security` and `Security/Proofs` alone: a module of `Security/Properties` that `Security/Proofs` doesn't import has no
+`.olean` there and is reported `unbuilt`, so a spec definition that only such a module reads counts as unread. None does
+today (``--build`` builds all three trees). Stdlib only.
 """
 from __future__ import annotations
 
