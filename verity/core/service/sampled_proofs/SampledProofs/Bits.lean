@@ -25,7 +25,7 @@ describes, where each of its gates sits, and each unit's gates and inputs. The s
 * `Members`, `base`, `wiresOf`: an audit's members, each a statement on a circuit file over some of the partition's VUs,
   side by side, and each source bit's wire to the first claims position at its commitment position, compared at the
   partition's VUs: the writer's output bit, else the first copy.
-* `width P g`: the width of the leaf a Program's layout gate `g` produces.
+* `defWidth d`: the width of a primitive's leaf.
 * `check c P tmpl`: why Bits doesn't lay `c` out as template `tmpl` of `P`, or none.
 
 The circuit file holds each unit's Boolean circuit as a whole, not each primitive's: no row is a primitive's own, so a
@@ -372,14 +372,12 @@ def wiresOf (ms : Members) (x : Nat) : Option Nat :=
 
 /-! ## A Program's leaf widths -/
 
-/-- **The width of the leaf a Program's layout gate `g` produces**: its primitive's `Value<w>`, and 0 where the layout has
-no gate `g`. -/
-def width (P : Flock.Program.Prog) (g : Nat) : Nat :=
-  match P.gate g with
-  | .ok (p, _, _) => match (P.defs[p]!).ret with
-    | .value w => w
-    | _ => 0
-  | .error _ => 0
+/-- **The width of a primitive's leaf**: its `Value<w>` return's `w`, and 0 for any other return. An input primitive's
+id names the same width, which `Flock.Program.decode` holds it to. -/
+def defWidth (d : Flock.Program.Defn) : Nat :=
+  match d.ret with
+  | .value w => w
+  | _ => 0
 
 /-! ## The file against its Program -/
 
@@ -427,7 +425,8 @@ private def mixed : String :=
   "{\"annotations\":{},\"callees\":[\"Input16_v1\",\"Input1_v1\",\"TMix_v1\"],\"definitions\":{\"Input16_v1\":{\"form\":\"primitive\",\"id\":\"Input16_v1\",\"params\":[],\"ret\":[\"Value\",16]},\"Input1_v1\":{\"form\":\"primitive\",\"id\":\"Input1_v1\",\"params\":[],\"ret\":[\"Value\",1]},\"Root[TMix_v1]_v1\":{\"bindings\":{},\"body\":{\"nodes\":[{\"args\":[],\"axes\":[],\"fn\":0,\"form\":\"batch\",\"n\":2,\"out\":0},{\"args\":[],\"axes\":[],\"fn\":1,\"form\":\"batch\",\"n\":3,\"out\":1},{\"args\":[{\"refs\":{\"affine\":[\"n\",0,0,2]},\"type\":0},{\"refs\":{\"affine\":[\"n\",1,0,3]},\"type\":1}],\"fn\":2,\"form\":\"primitive\",\"out\":2}],\"params\":[],\"ret\":{\"affine\":[\"n\",2,0,1]},\"ret_type\":[\"Value\",32]},\"form\":\"composite\",\"id\":\"Root[TMix_v1]_v1\"},\"TMix_v1\":{\"form\":\"primitive\",\"id\":\"TMix_v1\",\"params\":[[\"a\",[\"Array\",2,[\"Value\",16]]],[\"b\",[\"Array\",3,[\"Value\",1]]]],\"ret\":[\"Value\",32]}},\"program_fn\":\"TMix_v1\",\"root\":\"Root[TMix_v1]_v1\",\"schema\":\"verity-ir/descriptor/v1\",\"types\":[[\"Array\",2,[\"Value\",16]],[\"Array\",3,[\"Value\",1]],[\"Value\",32]]}"
 
 #guard match Flock.Program.decode mixed.toUTF8 with
-  | .ok P => (List.range 7).map (width P) == [16, 16, 1, 1, 1, 32, 0]
+  | .ok P => P.defs.all fun d => !d.prim ||
+      defWidth d == (if d.key == "Input16_v1" then 16 else if d.key == "Input1_v1" then 1 else 32)
   | .error _ => false
 
 #guard match Flock.Program.decode mixed.toUTF8 with
