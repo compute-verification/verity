@@ -49,9 +49,9 @@ model's release being the loop's own frames':
 * `LeanRelease.CrossPasses`: the named hypothesis on the Rust release that its checks (`cross`) fail no frame round
   below the `Finish` that the Lean frame passes. It becomes provable once the Rust crossing check is mirrored into the
   Lean firewall code, which would fix `cross`. `LoopModel.Takes`: the release takes the coins after each of the run's
-  histories, which `LiveRoundEq` and `FillRoundEq` take at the history they ask about (`LoopModel.takes_of_last`), so
-  the model answers each (`LoopModel.answered_of_takes`). `OwnSched`: the inner proof's own place at a round of a
-  stream seen is the model's scheduled round, at each slot.
+  histories, which follows from its taking them after the last (`LoopModel.takes_of_last`), so the model answers each
+  (`LoopModel.answered_of_takes`). `OwnSched`: the inner proof's own place at a round of a stream seen is the model's
+  scheduled round, at each slot.
 * **`roundFacts_deployed`**: `RoundFacts` at each frame round's slot of the deployed loop (`loopKept_round`'s `hA`),
   given `CrossPasses`, `Takes` and `OwnSched`.
 -/
@@ -65,8 +65,11 @@ namespace Claims.ZKServer.LeanRelease
 (`cross`: the worker failing, the device's level-0 root, the constraints on the pads, the end check on the returned
 proof and Rust's masking cross-checks) fail the value, the Lean frame's pass decision (`pass`) fails it too. A named
 hypothesis on the Rust release: at the deployed loop's release (`ofLoop`) `cross` is the release's own, which no Lean
-code fixes, and `cross`'s contract (each check can only fail a round more) does not give it. It becomes provable once
-the Rust crossing check is mirrored into the Lean firewall code, which would fix `cross`. -/
+code fixes, and `cross`'s contract (each check can only fail a round more) does not give it. It is stated at every
+history, with no guard on the rounds before it: Rust stops a session at its first failing round, so a history with an
+earlier failing round is never run, and the Lean model of the release is free there. The unguarded form constrains the
+real Rust release no more than a guarded one. It becomes provable once the Rust crossing check is mirrored into the
+Lean firewall code, which would fix `cross`. -/
 def CrossPasses {W R : Type} (L : LeanRelease W R) : Prop :=
   ∀ (x : Msg) (w : W) (ρ : R) (h : List (Msg × Msg)) (v : Msg), L.kindAt x h.length = .masked →
     h.length < L.last x → L.cross x h.length w ρ h v = false → L.pass x w ρ h v = false
@@ -99,8 +102,9 @@ structure LoopModel.Deployed {T : ZKMal.CoinLayer.TableData}
   sizes : spec.repStreams.size = 2 * sts.size
   next : M.L.last M.x < M.nN M.x
 
-/-- **The release takes the coins after each of the run's histories** (`refusesCoins`): what `LiveRoundEq` and
-`FillRoundEq` take at the history they ask about, so at each of its prefixes (`LoopModel.takes_of_last`). -/
+/-- **The release takes the coins after each of the run's histories** (`refusesCoins` is `false`). Refusing is kept
+by every extension (`LeanRelease.refusesCoins_of_take`), so taking them after the run's last history gives it
+(`LoopModel.takes_of_last`). -/
 def LoopModel.Takes {W Rr : Type} (M : LoopModel W Rr) : Prop :=
   ∀ j, j < M.τ.length → M.L.refusesCoins M.x M.ρ (M.hist j) = false
 
@@ -156,8 +160,7 @@ theorem roundPlace_prior_size {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.
     unfold _root_.Flock.Firewall.Frames.roundPlace at h
     simp only [hf, bind, Except.bind, pure, Except.pure] at h
     repeat' (first
-      | simp only [hs, hn, hl0, hfst, hw, h11, h0, hlt, bind, Except.bind, pure, Except.pure, Bool.false_eq_true,
-          ↓reduceIte] at h
+      | simp only [hs, hn, hl0, hfst, hw, h11, h0, hlt, ↓reduceIte] at h
       | split at h)
     all_goals first
       | (cases h; done)
