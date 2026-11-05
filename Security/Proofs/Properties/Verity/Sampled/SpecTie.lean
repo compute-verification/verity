@@ -130,7 +130,8 @@ theorem getD_of_fld {j c : Json} {k : String} (h : Flock.Record.fld j k = .ok c)
 
 /-- **The record's coin tree is one the release log shows sampled under its root**, and its `coin_tree` prints as that
 tree's record (`jeq`), where `sessionTreeReason` accepts it. -/
-theorem Trees.coinTree_held {trees : Array LoggedTree} {record : Json} (h : sessionTreeReason trees record = none) :
+theorem Trees.coinTree_held {trees : Array LoggedTree} {tables : Array (String × Option ℕ)} {record : Json}
+    (h : sessionTreeReason trees tables record = none) :
     ∃ t ∈ trees, recordTree record = t.root ∧ jeq (getD record "coin_tree") t.record = true := by
   unfold sessionTreeReason at h
   dsimp only [Id.run] at h
@@ -251,7 +252,8 @@ theorem helloSpec_of_record {label : String} {after : ByteArray} {records : List
     {lines : List String} {log : List Verity.Release} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
     (hR : readLog label after records ξ lines = some log) {Lg : List Verity.Release}
     (hl : List.Forall₂ (fun x y => x.frame = y.frame ∧ x.answers = y.answers) log Lg) {record : Json}
-    (h : sessionTreeReason trees record = none) (hrs : sortedKeys record = true) {sp : Flock.CoinTree.Spec}
+    {tables : Array (String × Option ℕ)} (h : sessionTreeReason trees tables record = none)
+    (hrs : sortedKeys record = true) {sp : Flock.CoinTree.Spec}
     {nonce key : String} (hC : Flock.CoinTree.checkRecord sp nonce (getD record "coin_tree") = .ok key) {i si : ℕ}
     {name : String} (hk : KeyAt (heldTrees trees) i si (recordTree record) name) : (helloSpecs Lg)[i]? = some sp := by
   obtain ⟨t, ht, hroot, hj⟩ := Trees.coinTree_held h
@@ -287,8 +289,8 @@ theorem helloSpec_of_decode {spec : Flock.SessionSpec} {text : String} {sess : F
     {records : List Json} {ξ : ByteArray} {lines : List String} {log : List Verity.Release}
     {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees) (hR : readLog label after records ξ lines = some log)
     {Lg : List Verity.Release} (hl : List.Forall₂ (fun x y => x.frame = y.frame ∧ x.answers = y.answers) log Lg)
-    (h : sessionTreeReason trees record = none) {i si : ℕ} {name : String}
-    (hk : KeyAt (heldTrees trees) i si (recordTree record) name) : (helloSpecs Lg)[i]? = some sp := by
+    {tables : Array (String × Option ℕ)} (h : sessionTreeReason trees tables record = none) {i si : ℕ}
+    {name : String} (hk : KeyAt (heldTrees trees) i si (recordTree record) name) : (helloSpecs Lg)[i]? = some sp := by
   obtain ⟨j, c, nonce, key, hp, hcj, hC⟩ := decode_coinTree hd hc
   have hjr : j = record := Except.ok.inj (hp.symm.trans hJ)
   rw [hjr] at hcj
@@ -305,7 +307,8 @@ theorem SetsUp.helloSpec_session {V : Vocab d α} {θ : ByteArray} {F : Array By
     {log : List Verity.Release} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
     (hR : readLog label after records ξ lines = some log) {Lg : List Verity.Release}
     (hl : List.Forall₂ (fun x y => x.frame = y.frame ∧ x.answers = y.answers) log Lg)
-    (h : sessionTreeReason trees record = none) {i si : ℕ} {name : String}
+    {tables : Array (String × Option ℕ)} (h : sessionTreeReason trees tables record = none) {i si : ℕ}
+    {name : String}
     (hk : KeyAt (heldTrees trees) i si (recordTree record) name) : (helloSpecs Lg)[i]? = some A.coinSpec :=
   helloSpec_of_decode hd (hA.spec_coinTree hs) hJ hT hR hl h hk
 
@@ -356,8 +359,8 @@ theorem SetsUp.covers_logged {V : Vocab d α} {θ : ByteArray} {F : Array ByteAr
     {log : List Verity.Release} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
     (hR : readLog label after records ξ lines = some log) {Lg : List Verity.Release}
     (hl : List.Forall₂ (fun x y => x.frame = y.frame ∧ x.answers = y.answers) log Lg) (hS : LogServed Lg)
-    (h : sessionTreeReason trees record = none) {i si : ℕ} {name : String}
-    (hk : KeyAt (heldTrees trees) i si (recordTree record) name) {S : Finset (Fin A.n)} {R : A.Reg}
+    {tables : Array (String × Option ℕ)} (h : sessionTreeReason trees tables record = none) {i si : ℕ}
+    {name : String} (hk : KeyAt (heldTrees trees) i si (recordTree record) name) {S : Finset (Fin A.n)} {R : A.Reg}
     (t : Fin (A.J S R)) (r : Fin 2) (s : ℕ) : ∀ k < openedOf Lg i s, ∃ j, A.layout j = .rep t.val r k :=
   hA.covers_openings hS (hA.helloSpec_session hs hd hJ hT hR hl h hk) t r s
 
