@@ -127,6 +127,7 @@ structure RunsFixed (H : Msg → Msg) (L : Compiled Coin A) : Prop where
         L.session x u (run H P L.V x ω r').seen = some (xS, (run H P' A.V xS () (L.coinsOf x u xS r')).seen) ∧
           ∀ q ∈ (run H P' A.V xS () (L.coinsOf x u xS r')).vLog, q ∈ (run H P L.V x ω r').vLog
 
+omit [Nonempty Coin] in
 theorem Sessions.toRunsFixed {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) : L.RunsFixed H :=
   ⟨hS.fixed, hS.runs⟩
 
@@ -399,7 +400,7 @@ theorem mem_of_selSlot {L : Compiled Coin A} {x : Msg} {sel : List ℕ → Optio
     u.val ∈ L.checked x R :=
   List.mem_of_getElem? (selSlot_eq_some.1 h).2
 
-omit [Nonempty Coin] in
+omit [Fintype Coin] [Nonempty Coin] in
 theorem selSlot_forkOn {H : Msg → Msg} {L : Compiled Coin A} (hS : L.RunsFixed H) {x : Msg}
     {sel : List ℕ → Option (Fin (L.nPU x))} {R : Fin (L.V.k x) → Coin} {i u : Fin (L.nPU x)}
     (h : L.selSlot x sel R = some (i, u)) (σ : Fin (L.V.k x) → Coin) :

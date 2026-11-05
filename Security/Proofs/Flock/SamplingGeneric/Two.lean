@@ -56,7 +56,7 @@ theorem Design.Two.esc_nonneg (d : Design.Two) (Pt : Partition) (fp : ℕ → �
   prod_nonneg fun _ _ => escCell_nonneg _ _ _
 
 theorem Design.Two.esc_le_one (d : Design.Two) (Pt : Partition) (fp : ℕ → ℕ → ℕ) (ρ : ℕ) : d.esc Pt fp ρ ≤ 1 :=
-  prod_le_one (fun _ _ => escCell_nonneg _ _ _) fun _ _ => escCell_le_one _ _ _
+  prod_le_one₀ (fun _ _ => escCell_nonneg _ _ _) fun _ _ => escCell_le_one _ _ _
 
 /-- `P̄_a` reads a footprint only on the grid of replay blocks and strata. -/
 theorem Design.Two.Pa_congr (d : Design.Two) (Pt : Partition) {f g : ℕ → ℕ → ℕ}
@@ -138,6 +138,7 @@ theorem footprint_le (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditSt
     (ρ t : ℕ) (ι : ℕ → Bool) : footprint H Cm s Pt Pρ w ρ t ≤ (wrongIn H Cm s Pt Pρ w ρ t ι).card :=
   ciInf_le (OrderBot.bddBelow _) ι
 
+open Classical in
 theorem footprint_le_cell (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)
     (w : Wit) (ρ t : ℕ) : footprint H Cm s Pt Pρ w ρ t ≤ (cell Pt Pρ ρ t).card :=
   (footprint_le H Cm s Pt Pρ w ρ t fun _ => false).trans (card_le_card (filter_subset _ _))
@@ -235,7 +236,7 @@ theorem inner_badTwo_le (L : CompiledTwo Coin A) (x : Msg) (run' : (Fin (L.V.k x
         (List.find?_some (p := fun i : Fin (L.nPU x) => decide (∃ v ∈ X, l[i.val]? = some v)) hi)⟩
     have hmiss := (Pr_fst (β := L.SlotEC x) (fun d : Fin (L.V.k x) → Coin =>
       ∀ u ∈ L.checked x (forkOn (L.stage2 x) r d), u ∉ X)).trans_le (hesc X hX)
-    refine Pr_or_le (fun p hp => ?_) hmiss (hsess sel)
+    refine Claims.Sampling.Pr_or_le (fun p hp => ?_) hmiss (hsess sel)
     by_cases hm : ∃ v ∈ L.checked x (forkOn (L.stage2 x) r p.1), v ∈ X
     · obtain ⟨v, hvl, hvX⟩ := hm
       obtain ⟨i, hi, v', hv'X, hv'⟩ := hsel _ (hslots _) v hvl hvX
@@ -297,8 +298,8 @@ theorem outer_badTwo_le (L : CompiledTwo Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x 
         Pr (fun e : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.stage2 x) r e), u ∉ X) ≤ esc r := by
       intro r X hX
       have hXY := (mem_filter.1 hX).2
-      refine (hsecond r X).trans (prod_le_prod (fun ρ _ => prod_nonneg fun t _ => Claims.Sampling.escCell_nonneg _ _ _)
-        fun ρ hρ => prod_le_prod (fun t _ => Claims.Sampling.escCell_nonneg _ _ _) fun t ht => ?_)
+      refine (hsecond r X).trans (prod_le_prod₀ (fun ρ _ => prod_nonneg fun t _ => Claims.Sampling.escCell_nonneg _ _ _)
+        fun ρ hρ => prod_le_prod₀ (fun t _ => Claims.Sampling.escCell_nonneg _ _ _) fun t ht => ?_)
       exact escCell_anti _ _ (hXY ρ (mem_range.1 (mem_filter.1 hρ).1) t (mem_range.1 ht))
     have hXs : ∀ X ∈ above Pt d Y, ∀ v ∈ X, v < L.nPU x := fun X hX v hv => by
       rw [hPU]
@@ -531,7 +532,9 @@ theorem splitTwo {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Bi
   obtain ⟨hvcell, hvwrong⟩ := mem_filter.1 hvp
   obtain ⟨i, hvlt, hvi, xS, vS, hsess, hsh, wS, hwS, hRw⟩ := hgood
   have hvc := List.mem_of_getElem? hvi
-  have hacc' : (run' (forkOn (L.stage2 x) r e)).out = .acc := acc_of_accList hl
+  have hacc' : (run' (forkOn (L.stage2 x) r e)).out = .acc := by
+    have h := acc_of_accList hl
+    exact h
   obtain ⟨b, ρ, rb, hb, hρ, hrb, hcor⟩ :=
     hS.opens x s Pt d Ω P ω (forkOn (L.stage2 x) r e) v xS vS wS hs hPt hd hin hacc' hvc hsess hRw
   have hρp : ρ = ρ' := Option.some.inj (hρ.symm.trans (replayOf_of_mem_cell hvcell))
