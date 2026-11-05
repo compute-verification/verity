@@ -668,16 +668,17 @@ def test_one_program_a_day_is_never_claimed_but_open_by_name_beside_the_day_each
 
 
 def test_a_discharge_the_properties_lock_lists_counts_as_one_the_guarantees_lock_does(tmp_path, lock, monkeypatch):
-    """The Properties' lock holds the theorems that discharge premises at the deployed code, the guarantees' lock the
-    guarantee the tight K rests on: the record reads both, and with the Properties' lock left out each premise is open."""
-    discharges = [t for p in OR.PREMISES.values() for t in p["discharged_by"]]
-    write_lock(lock, dict.fromkeys(discharges))
+    """The Properties' lock holds the theorems that discharge premises at the deployed code and PeriodLeakRegistered,
+    which states certifier-key, the guarantees' lock the other guarantees the tight K rests on: the record reads both,
+    and with the Properties' lock left out each premise is open, and so is PeriodLeakRegistered."""
+    props_lists = [t for p in OR.PREMISES.values() for t in p["discharged_by"]] + [OR.PERIOD_REGISTERED]
+    write_lock(lock, dict.fromkeys(props_lists))
     props = tmp_path / "properties-lean-audit.json"
-    props.write_text(json.dumps(lock_doc({t: [] for t in discharges})))
+    props.write_text(json.dumps(lock_doc({t: [] for t in props_lists})))
     monkeypatch.setattr(OR, "LOCKS", (lock, props))
     assert held_both(tmp_path / "both")["bound"]["of_record"]["open"] == []
     monkeypatch.setattr(OR, "LOCKS", (lock,))
-    assert held_both(tmp_path / "one")["bound"]["of_record"]["open"] == list(OR.PREMISES)
+    assert held_both(tmp_path / "one")["bound"]["of_record"]["open"] == [*OR.PREMISES, OR.PERIOD_REGISTERED]
 
 
 @pytest.mark.parametrize("text, error", [(None, "FileNotFoundError"), ("{", "JSONDecodeError"), ("{}", "KeyError")])

@@ -412,11 +412,12 @@ CHECKED = {
     AUDITOR_LISTING: ("each circuit file the period lists, an audit's (circuits) or the scan's (scan_circuits), is by "
                       "SHA-512 the file its audit's sessions were verified against: a5's per-template pin, which "
                       "records_audit.py period publishes in V3c's period.json (`PERIOD`) for the audit whose "
-                      "registration it is. It holds where the period lists none, and not where the run has no case "
-                      "of the period to say what it lists. No published record states the files "
-                      "the scan's sessions were verified against, so it doesn't hold where the period lists the "
-                      "scan's. Where it doesn't hold the network verdict is not established and there is no bound "
-                      "(`LISTING_UNMET`)"),
+                      "registration it is. It compares SHA-512s and doesn't re-hash the files: the period's listing "
+                      "and that period.json are both the auditor's own outputs in OUT. It holds where the period lists "
+                      "none, and not where the run has no case of the period to say what it lists. No published record "
+                      "states the files the scan's sessions were verified against, so it doesn't hold where the period "
+                      "lists the scan's. Where it doesn't hold the network verdict is not established and there is no "
+                      "bound (`LISTING_UNMET`)"),
 }
 #: the guarantees the tight K rests on, by their names in `LOCKS`: PeriodLeakRegistered's count, at the values the
 #: registration opens at its registered inputs, is K's; PeriodLeakAccepted's is the same count at the trace's values
