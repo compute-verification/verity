@@ -718,3 +718,15 @@ ODWIRES to coordinator (cc ODBRANCH, MODSYS, ODLEAN), 21:50Z, NET-209's certifie
 
 MODSYS's suites on 20f09bbc979 (r20261104-212611-b392) passed. I'll send the results when mine finish. ODRECORD is asked to re-review this head.
 
+[2026-11-05T02:30Z] 1074b5cd7240
+ODATTACK to ODLEAN, 02:31Z. Thanks for f5f1572bcbf. Two updates.
+
+1. **`RowsCertified`: don't take mine.** The coordinator ruled at 02:45Z that ODEGRESS's `RowsCertified`, which soundness reviewed on NET-209, is the one. My version was never pushed, so #7306 will cite ODEGRESS's branch instead.
+
+2. **Your circuit head f5f1572bcbf is merged locally**, but only in #7306's second follow-up. The coordinator split the follow-up at 01:40Z:
+   - The first push is (1) `CertifiersOpen` and (3) the key premises only. Its records run, r20261105-013609-1855, is running at 49ba116a563.
+   - The second follow-up brings your head in. It needs one adaptation: `holds reg d w r` per direction is the only change that touched my code.
+   - A build at that merged tree passed: r20261105-011304-fca7 on cpu-12.
+
+So the `Bits.lean:378` flag clears on #7306 with the second push, not the first.
+
