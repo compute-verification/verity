@@ -280,7 +280,7 @@ def test_every_result_and_the_record_are_the_whole_records(tmp_path):
         kinds = {c[0] if isinstance(c, tuple) else "digest" for c in got}
         raised = {c[2] for c in got if isinstance(c, tuple) and c[0] == "raise"}
         damaged = {c[1] for c in got if isinstance(c, tuple) and c[0] == "damage"}
-        assert kinds == {"result", "raise", "damage", "digest"} and {"Refused", "JSONDecodeError", "KeyError"} <= raised
+        assert kinds == {"result", "raise", "damage", "digest"} and {"Refused", "JSONDecodeError", "ValueError"} <= raised
         assert damaged == {"blank", "torn", "unterminated", "foreign", "replace", "swap", "rewrite", "cut", "edit",
                            "halve", "index-gone", "index-head", "index-entries", "repair"}, seed
         assert long or fast * 2 > reads, (seed, fast, reads)
