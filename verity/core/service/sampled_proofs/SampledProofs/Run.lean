@@ -129,31 +129,56 @@ private def audit (i : Input) (record receipt draw law : Json) (proved : Array I
     ("instances", Lean.toJson instances), ("statement", i.statement), ("verdicts", Json.mkObj i.verdicts.toList),
     ("delta", i.delta), ("sessions", Json.arr i.sessions), ("served", served), ("session_roots", sessionRoots)]))
 
+/-- Under a two-stage rule, the check's query is the rule's `grain`. -/
+private def grainHolds (rule : Select.Rule) (query : Json) : Bool :=
+  match rule with
+  | .twoStage grain _ _ => jeq query grain
+  | _ => true
+
 /-- The interior registration and the second stage over the first stage's replay sample `sample`, `k` proof blocks in
-each: its receipt, the second stage's sample and law, and the bytes it read; or the refusal. -/
+each: the interior, its receipt, the second stage's sample and law, and the bytes it read; or the refusal's step and
+codes. -/
 private def interiorSteps (i : Input) (it : Interior) (k : Nat) (sample : Array Nat) :
-    V (Except Json (Json × Json × Json × Nat)) := do
+    V (Except (String × Array String) (Interior × Json × Json × Json × Nat)) := do
   let v := it.params.verifier
   let pub ← Service.checkPublic it.record (Json.str v.scheme) (← Registration.queryDigest v.query) it.values i.declared
-  if !pub.codes.isEmpty then return .error (refused "interiors" pub.codes)
+  if !pub.codes.isEmpty then return .error ("interiors", pub.codes)
   let n ← Partition.units it.replay v.query
   let m := sample.size * n
-  if nat? (getD it.record "population") != some m then return .error (refused "interiors" #["interior-population"])
+  if nat? (getD it.record "population") != some m then return .error ("interiors", #["interior-population"])
   let v := { v with law := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)] }
   let codes := Registration.check it.record v
-  if !codes.isEmpty then return .error (refused "interiors" codes)
-  if !Slots.popOk v.program v.query m then return .error (refused "interiors" #["population-order"])
+  if !codes.isEmpty then return .error ("interiors", codes)
+  if !Slots.popOk v.program v.query m then return .error ("interiors", #["population-order"])
   let receipt ← receipt it.record i.challenger it.received
   let (draw, read) ← Select.selectSecond sample n k it.source
-  if !coinsHold it.coins it.record v.windowRoot (it.source.extract 0 read) then
-    return .error (refused "second" #["coins"])
-  return .ok (receipt, draw, Select.secondLaw sample n k, read)
+  if !coinsHold it.coins it.record v.windowRoot (it.source.extract 0 read) then return .error ("second", #["coins"])
+  return .ok (it, receipt, draw, Select.secondLaw sample n k, read)
+
+/-- The second stage, under a two-stage rule, over the first stage's replay sample `sample`; none under a one-stage
+rule. -/
+private def secondStage (i : Input) (sample : Array Nat) :
+    V (Except (String × Array String) (Option (Interior × Json × Json × Json × Nat))) :=
+  match i.rule, i.interior with
+  | .twoStage _ _ k, some it => return (← interiorSteps i it k sample).map some
+  | .twoStage _ _ _, none => return .error ("interiors", #["interior"])
+  | _, some _ => throw "a one-stage run has no interior registration"
+  | _, none => return .ok none
+
+/-- The interior registration's audit record over the second stage's proved units: whether it accepts, and the run's
+`interior` entry; nothing under a one-stage rule. -/
+private def interiorAudit (i : Input) : Option (Interior × Json × Json × Json × Nat) → V (Bool × List (String × Json))
+  | none => return (true, [])
+  | some (it, receipt, draw, law, read) => do
+    let proved := it.provedUnits.getD (Draw.proved draw)
+    let rec_ ← audit i it.record receipt draw law proved (it.instances.getD proved.size) it.served it.sessionRoots
+    return (jeq (getD rec_ "accepted") (.bool true), [("interior", Json.mkObj [("receipt", receipt), ("draw", draw),
+      ("read", Lean.toJson read), ("audit", Json.str (← PyJson.canonical rec_))])])
 
 /-- The run, step by step; an error where the Python raises. -/
 def run (i : Input) : V Json := do
   let v := i.params.verifier
-  if let .twoStage grain _ _ := i.rule then
-    if !jeq v.query grain then return refused "register" #["grain"]
+  if !grainHolds i.rule v.query then return refused "register" #["grain"]
   let qd ← Registration.queryDigest v.query
   let pub ← Service.checkPublic i.record (Json.str v.scheme) qd i.values i.declared
   if !pub.codes.isEmpty then return refused "register" pub.codes
@@ -176,33 +201,21 @@ def run (i : Input) : V Json := do
   let codes := Draw.checkDraw draw (getD i.record "population") derived
   if !codes.isEmpty then return refused "select" codes
   let drawn := Draw.proved draw
-  let mut inner : Option (Interior × Json × Json × Json × Nat) := none
-  match i.rule, i.interior with
-  | .twoStage _ _ k, some it =>
-    match ← interiorSteps i it k (drawn.map Int.toNat) with
-    | .error r => return r
-    | .ok (receipt₂, draw₂, law₂, read₂) => inner := some (it, receipt₂, draw₂, law₂, read₂)
-  | .twoStage _ _ _, none => return refused "interiors" #["interior"]
-  | _, some _ => throw "a one-stage run has no interior registration"
-  | _, none => pure ()
-  if i.sessions.isEmpty || !i.sessions.all digest? then return refused "deliver" #["sessions"]
-  let held ← Service.checkVerdicts i.verdicts i.sessions i.outputs
-  if !held.codes.isEmpty then return refused "outcome" held.codes
-  let ofRecord := (i.verdicts.qsort (·.1 < ·.1)).filter (truthy <| getD ·.2 "of_record")
-  let shown := if i.outputs.isEmpty then Json.mkObj [] else getD ((ofRecord[0]?.map (·.2)).getD Json.null) "public"
-  let proved := i.provedUnits.getD drawn
-  let instances := i.instances.getD proved.size
-  let rec_ ← audit i i.record receipt draw derived proved instances i.served i.sessionRoots
-  let mut accepted := jeq (getD rec_ "accepted") (.bool true)
-  let mut staged : List (String × Json) := []
-  if let some (it, receipt₂, draw₂, law₂, read₂) := inner then
-    let proved₂ := it.provedUnits.getD (Draw.proved draw₂)
-    let rec₂ ← audit i it.record receipt₂ draw₂ law₂ proved₂ (it.instances.getD proved₂.size) it.served it.sessionRoots
-    accepted := accepted && jeq (getD rec₂ "accepted") (.bool true)
-    staged := [("interior", Json.mkObj [("receipt", receipt₂), ("draw", draw₂), ("read", Lean.toJson read₂),
-      ("audit", Json.str (← PyJson.canonical rec₂))])]
-  return Json.mkObj ([("receipt", receipt), ("draw", draw), ("read", Lean.toJson read),
-    ("symbol", Json.str (if accepted then "accept" else "reject")), ("public", if accepted then shown else Json.mkObj []),
-    ("audit", Json.str (← PyJson.canonical rec_))] ++ staged)
+  match ← secondStage i (drawn.map Int.toNat) with
+  | .error (step, codes) => return refused step codes
+  | .ok inner =>
+    if i.sessions.isEmpty || !i.sessions.all digest? then return refused "deliver" #["sessions"]
+    let held ← Service.checkVerdicts i.verdicts i.sessions i.outputs
+    if !held.codes.isEmpty then return refused "outcome" held.codes
+    let ofRecord := (i.verdicts.qsort (·.1 < ·.1)).filter (truthy <| getD ·.2 "of_record")
+    let shown := if i.outputs.isEmpty then Json.mkObj [] else getD ((ofRecord[0]?.map (·.2)).getD Json.null) "public"
+    let proved := i.provedUnits.getD drawn
+    let instances := i.instances.getD proved.size
+    let rec_ ← audit i i.record receipt draw derived proved instances i.served i.sessionRoots
+    let (accepted₂, staged) ← interiorAudit i inner
+    let accepted := jeq (getD rec_ "accepted") (.bool true) && accepted₂
+    return Json.mkObj ([("receipt", receipt), ("draw", draw), ("read", Lean.toJson read),
+      ("symbol", Json.str (if accepted then "accept" else "reject")),
+      ("public", if accepted then shown else Json.mkObj []), ("audit", Json.str (← PyJson.canonical rec_))] ++ staged)
 
 end SampledProofs.Run
