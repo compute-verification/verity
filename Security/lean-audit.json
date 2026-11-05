@@ -72500,10 +72500,10 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "SampledProofs.ChallengerDraw": {
-   "digest": "c6d7fceb4f96e10991e66bea274359cfa58625f563bfc3eb0ddbb55d767369d3",
+   "digest": "7fabb6853c42ec589565f9b2fdfc42dc69967e811130369cf99e67c7edf11b2e",
    "definitions": {
     "SampledProofs.Challenger.DRAW_FORM": "a80cdf39d88315792d7a71eb3e997c2aa8782423ae3e1f5d25fc96e9e4382f8e",
-    "SampledProofs.Challenger.drawCoins": "3601f44679204d508d8fbeeee3d7c6233ddf4aabf2fbe046b6d289d32a985862"
+    "SampledProofs.Challenger.drawCoins": "eef07d71fcc04b56896423c1aabfc0f8fa1fa037a6fe78fd27f144890ae181d3"
    },
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
@@ -72565,7 +72565,7 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "SampledProofs.ChallengerSession": {
-   "digest": "188169b3a875c363fb2dab20e77bcc6795f761413cf32f428bd073edb10d2475",
+   "digest": "7c0ddfca8deb267b3cba9f13a0ffe0a4c889ee6f1e835cd5999b1a807e51d90f",
    "definitions": {
     "SampledProofs.Challenger.Audited": "159b77cf065dee90e23af320bf78c6c962956fb8dafae7711c47bf9b416a91e0",
     "SampledProofs.Challenger.Audited.circuit": "322482c0ce5792be8e392fd5470dd756d5e44c3af242df1d9f634e383c868c95",
@@ -72686,7 +72686,7 @@
     "SampledProofs.Challenger.sessionNamed": "41e3292ca5cbf2ea6250a4961c009341cf55ce7057527246fa6bc138ab7edb92",
     "SampledProofs.Challenger.sessionOf": "acd39d299f1ad17840ce1d6a63786ee3257a663a708702f2135a6014ac64246a",
     "SampledProofs.Challenger.sessionOf._sparseCasesOn_7": "08acc862549ea1df070ea969d8be299ba1ce6ddbfae9b8d95f5014e54e50eff4",
-    "SampledProofs.Challenger.treeLine": "7e2164957ca8a89918bf6d29cb122fcd4be58be4e4062c3cb96f74be491fee50",
+    "SampledProofs.Challenger.treeLine": "01201a2e6e7f4a02ea261b767dc1432bc7d70ec6bfb8be74e8d7c67a7e4e5264",
     "SampledProofs.Challenger.trustedSessionOf": "061ca5db8347e0b12d4a8260ee07f5c8d4ce78e16f8e3d55e115366be9d86b9f",
     "SampledProofs.Challenger.verifyLedger": "a6667e0f01d83da911c7cbf9b6b5b0ab50130f70f942e51e613d7aeb4b0ee43f",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.daysIn": "f0bcae0f0bbe94665da1d282ba3c726220f54de0907083f1ead3417b065f7ad1",
@@ -72803,7 +72803,7 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3", "Flock.SecurityProofs.SampledKSLiveV5"]
   },
   "SampledProofs.Json": {
-   "digest": "44583f82a4bb5af0fa875d7b7d007d030a2850ef6bda1c2d7fcba2b0496c3db8",
+   "digest": "5e923ddb087d3dafa707cfec12fd5a0edd9b1060be86e2bf08abf3539c6782b1",
    "definitions": {
     "SampledProofs.Check": "c36d7266f9e5d5eabed9940b4e1bee672817580f28bd272281d8bc152f0a219a",
     "SampledProofs.Check.codes": "e97b326cd99a3b7fd4464f75bcda497be198ef4903395062e0b65629f9269147",
@@ -72820,6 +72820,8 @@
     "SampledProofs.isHex": "7af045f62eb5db1e2da1093369f5d8037f127c9148d40ac6921a5968ae08bfb5",
     "SampledProofs.jeq": "caa6fe2fc0d7aa47cb120ab9a5ce40fcf8bf2e88ae32e0ed7a96d42205120ff8",
     "SampledProofs.jeq._sparseCasesOn_1": "85bce44fa0f2416ffd0c4db80592f6c889b3dc84062d4fbfa638eea12deaffa0",
+    "SampledProofs.jsonStrIs": "9c7caa252f0792f4dcdfc52c8490eadef0b3472392ea7d6ea0d26b713de5f1d0",
+    "SampledProofs.jsonStrIs._sparseCasesOn_1": "e6c0f61d16a0ad343b83721259b4dc181b8050ab0c7b370e4fb071997f43f36f",
     "SampledProofs.keys?": "37a2652f9459bf97591b2a36a044d6e2207e92884bab9efd2d2599a0c97a7299",
     "SampledProofs.keys?._sparseCasesOn_1": "ef41f3087eb4a309d964c51e1129b1eaee1c4b9a40c4d188e57d34354728a018",
     "SampledProofs.nat?": "9ec60004020227f25f1827bd5002d740f81ded9156d6f123ae99d13eef8d50fc",
@@ -72839,7 +72841,7 @@
    ]
   },
   "SampledProofs.OneStage": {
-   "digest": "c16daef454c50d82953199b07cb40fa19017f07604ae81dbba83d3f141672544",
+   "digest": "46838d7acd282fa44f0388a56c33301324db925d3ff706b5125198a9e9dfe14c",
    "definitions": {
     "SampledProofs.OneStage.Commitment": "d744e6fb2fdff36157845bc9fb3224434ff1f62fc26396f87b4393a0af67c01b",
     "SampledProofs.OneStage.Commitment.digest": "8f1997edbf41ef170699331a03a0ea01ec0eeefb3a34a36d521c4eb1673c6f01",
@@ -72879,6 +72881,7 @@
     "SampledProofs.OneStage.paramsOfJson": "eb0d1903ac9d06f34b776012524afbf4238ba55660dce074e9318674830827f9",
     "SampledProofs.OneStage.paramsParsed": "48a1e760319c505d63aec4135cafce202fe56c28d5ab81ae188b91f4e7621248",
     "SampledProofs.OneStage.paramsParsed._sparseCasesOn_1": "35d30f7cdf24bb21dceda1d2e3aa98dfa7fbbf4d1a4157284ce4925cd5ef7b21",
+    "SampledProofs.OneStage.paramsParsed._sparseCasesOn_19": "75a26beceecd70c2e23225c814da95d5fe0f4edfb794e0f7e11e0403356c4266",
     "SampledProofs.OneStage.paramsParsed._sparseCasesOn_24": "dfbc574d1eaf9a6d550667e112926e45c7754c005914b557181ed6693f8970c2",
     "SampledProofs.OneStage.paramsParsed._sparseCasesOn_29": "5b0442e927fa7bed43478c219512ace3bde1d3df8a864368f48b32490dd0f177",
     "SampledProofs.OneStage.paramsParsed._sparseCasesOn_6": "af926ec68b471d34eb9bd0aba804a60a51c576ba5ec83f06f5702aa363b350e3",

@@ -24137,10 +24137,10 @@
    ]
   },
   "SampledProofs.ChallengerDraw": {
-   "digest": "c6d7fceb4f96e10991e66bea274359cfa58625f563bfc3eb0ddbb55d767369d3",
+   "digest": "7fabb6853c42ec589565f9b2fdfc42dc69967e811130369cf99e67c7edf11b2e",
    "definitions": {
     "SampledProofs.Challenger.DRAW_FORM": "a80cdf39d88315792d7a71eb3e997c2aa8782423ae3e1f5d25fc96e9e4382f8e",
-    "SampledProofs.Challenger.drawCoins": "3601f44679204d508d8fbeeee3d7c6233ddf4aabf2fbe046b6d289d32a985862"
+    "SampledProofs.Challenger.drawCoins": "eef07d71fcc04b56896423c1aabfc0f8fa1fa037a6fe78fd27f144890ae181d3"
    },
    "guarantees": [
     "Properties.Remote.SecurityProofs.acceptComplies",
@@ -24265,7 +24265,7 @@
    ]
   },
   "SampledProofs.ChallengerSession": {
-   "digest": "188169b3a875c363fb2dab20e77bcc6795f761413cf32f428bd073edb10d2475",
+   "digest": "7c0ddfca8deb267b3cba9f13a0ffe0a4c889ee6f1e835cd5999b1a807e51d90f",
    "definitions": {
     "SampledProofs.Challenger.Audited": "159b77cf065dee90e23af320bf78c6c962956fb8dafae7711c47bf9b416a91e0",
     "SampledProofs.Challenger.Audited.circuit": "322482c0ce5792be8e392fd5470dd756d5e44c3af242df1d9f634e383c868c95",
@@ -24386,7 +24386,7 @@
     "SampledProofs.Challenger.sessionNamed": "41e3292ca5cbf2ea6250a4961c009341cf55ce7057527246fa6bc138ab7edb92",
     "SampledProofs.Challenger.sessionOf": "acd39d299f1ad17840ce1d6a63786ee3257a663a708702f2135a6014ac64246a",
     "SampledProofs.Challenger.sessionOf._sparseCasesOn_7": "08acc862549ea1df070ea969d8be299ba1ce6ddbfae9b8d95f5014e54e50eff4",
-    "SampledProofs.Challenger.treeLine": "7e2164957ca8a89918bf6d29cb122fcd4be58be4e4062c3cb96f74be491fee50",
+    "SampledProofs.Challenger.treeLine": "01201a2e6e7f4a02ea261b767dc1432bc7d70ec6bfb8be74e8d7c67a7e4e5264",
     "SampledProofs.Challenger.trustedSessionOf": "061ca5db8347e0b12d4a8260ee07f5c8d4ce78e16f8e3d55e115366be9d86b9f",
     "SampledProofs.Challenger.verifyLedger": "a6667e0f01d83da911c7cbf9b6b5b0ab50130f70f942e51e613d7aeb4b0ee43f",
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.daysIn": "f0bcae0f0bbe94665da1d282ba3c726220f54de0907083f1ead3417b065f7ad1",
