@@ -3,6 +3,7 @@ module
 public import Proofs.Properties.Verity.SampledRead
 public import Proofs.Properties.Verity.Sampled.Walk
 public import Proofs.Properties.Verity.Sampled.Lines
+public import Proofs.Properties.Verity.Sampled.Stops
 
 /-!
 # Each opening v2's read shows opens the round its stream's openings before it count
@@ -25,6 +26,15 @@ per-round bridge between the two:
   in the log before it (`Verity.openedOf`), as `Verity.Frame.opening` numbers a stream's rounds. And each round a tree
   shows opened (`LoggedTree.opening`) is below the read's openings of that stream (`opening_lt_openedOf`), which with a
   record's last round opened bounds the record's rounds by the read's.
+* **The trees' specs in the read** (`readTail_specs`, `readLog_specs`, `readLog_named`, `specStreams_getElem`,
+  `KeyAt.of_named`): the read's `Hello`s are the specs of the trees read, so a stream of a tree read (`KeyAt`) is named
+  so in them, and where they name each tree's streams distinctly, any stream they name of that tree is its stream so
+  named.
+* **The record's rounds, opened** (`recordRounds_le_openedOf`, `openedOf_congr`, `openedOf_eq_recordRounds`): where
+  `sessionTreeReason` accepts a record each round of whose stream gives coins, the read opens that stream of the
+  record's tree at least the rounds the record gives it (`recordRounds`): the record's last round is opened
+  (`Trees.round_held`), below the read's openings. So where the device's log has the read's frames, opens only the
+  record's rounds (`OpenedRecorded`) and serves each opening (`LogServed`), it opens that stream exactly that often.
 -/
 
 @[expose] public section
@@ -783,5 +793,222 @@ theorem opening_lt_openedOf {label : String} {after : ByteArray} {records : List
   have hc := (coinTreesOf_counted hT).held j t hj (findIdx?_root hTr.nodup hj) name
   rw [readLog_openedOf hR (coinTreesOf_fold records hT) hk, ← hc, ← hs]
   exact hTr.rounds t ht o hmem
+
+/-! ## The trees' specs in the read -/
+
+/-- **The read's `Hello`s give the trees' specs**: where `readTail` reads the lines `lines` after the trees `ts`, whose
+specs parse (`specOf`) as those of the `Hello`s of the releases `P`, and the trees read by the end are `tsF`, theirs
+parse as those of the `Hello`s of `P` and the read. -/
+theorem readTail_specs {label : String} {after : ByteArray} {records : List Json} {tsF : List (String × Json)} :
+    ∀ (lines : List String) (ts : List (String × Json)) (pending : Option String) (ξ : ByteArray)
+      (P : List Verity.Release) {log : List Verity.Release},
+      readTail label after records lines ts pending ξ = some log → treeFold records ts lines = some tsF →
+      List.Forall₂ (fun t sp => specOf t.2 = some sp) ts (helloSpecs P) →
+      List.Forall₂ (fun t sp => specOf t.2 = some sp) tsF (helloSpecs (P ++ log))
+  | [], ts, none, _, _, log, hR, hF, hS => by
+    simp only [readTail, Option.some.injEq] at hR
+    simp only [treeFold, Option.some.injEq] at hF
+    subst hR
+    rw [← hF, List.append_nil]
+    exact hS
+  | [], _, some _, _, _, _, hR, _, _ => by simp [readTail] at hR
+  | l :: ls, ts, pending, ξ, P, log, hR, hF, hS => by
+    unfold readTail at hR
+    by_cases ht : treeLine l = true
+    · rw [ite_eq_left ht] at hR
+      simp only [Option.bind_eq_bind] at hR
+      obtain ⟨⟨r₀, ts'⟩, hX, hR⟩ := Option.bind_eq_some_iff.1 hR
+      obtain ⟨j, hj, hX⟩ := Option.bind_eq_some_iff.1 hX
+      simp only [Option.pure_def] at hR
+      obtain ⟨rest, hrest, hR⟩ := Option.bind_eq_some_iff.1 hR
+      cases hR
+      have hev : event l = .ok j := event_of_toOption hj
+      rw [treeFold_tree ht hev hX] at hF
+      have hS' : List.Forall₂ (fun t sp => specOf t.2 = some sp) ts' (helloSpecs (P ++ [r₀])) := by
+        rcases treeStep_some hX with ⟨root, sj, spec, hr', hts, hsp, -⟩ | ⟨_, _, _, hr', hts, -⟩
+        · have h1 : helloSpecs [r₀] = [spec] := by simp [helloSpecs, hr']
+          rw [helloSpecs_append, h1, hts]
+          exact forall₂_snoc hS hsp
+        · have h1 : helloSpecs [r₀] = [] := by simp [helloSpecs, hr']
+          rw [helloSpecs_append, h1, List.append_nil, hts]
+          exact hS
+      have ih := readTail_specs ls ts' pending ξ (P ++ [r₀]) hrest hF hS'
+      rwa [List.append_assoc, List.singleton_append] at ih
+    · rw [ite_eq_right ht] at hR
+      rw [treeFold_skip ht] at hF
+      cases pending with
+      | none => exact readTail_specs ls ts (some l) ξ P hR hF hS
+      | some a =>
+        simp only [Option.bind_eq_bind] at hR
+        obtain ⟨⟨lab, root⟩, -, hR⟩ := Option.bind_eq_some_iff.1 hR
+        simp only [Option.pure_def] at hR
+        have step : ∀ (q : Verity.Release) (lab' : String) (ξ' : ByteArray) (rest : List Verity.Release),
+            q.frame = .fresh lab' → readTail label after records ls ts none ξ' = some rest → log = q :: rest →
+            List.Forall₂ (fun t sp => specOf t.2 = some sp) tsF (helloSpecs (P ++ log)) := by
+          intro q lab' ξ' rest hq hrest hlog
+          subst hlog
+          have ih := readTail_specs ls ts none ξ' (P ++ [q]) hrest hF (by rw [helloSpecs_fresh P hq]; exact hS)
+          rwa [List.append_assoc, List.singleton_append] at ih
+        by_cases hm : lab = label ∧ root = after
+        · rw [ite_eq_left hm] at hR
+          obtain ⟨rest, hrest, hR⟩ := Option.bind_eq_some_iff.1 hR
+          exact step _ label _ rest rfl hrest (Option.some.inj hR).symm
+        · rw [ite_eq_right hm] at hR
+          obtain ⟨rest, hrest, hR⟩ := Option.bind_eq_some_iff.1 hR
+          exact step _ lab _ rest rfl hrest (Option.some.inj hR).symm
+
+/-- **`readLog`'s `Hello`s give the trees' specs** (`readTail_specs`), the head's line read first. -/
+theorem readLog_specs {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
+    {lines : List String} {log : List Verity.Release} {tsF : List (String × Json)}
+    (hR : readLog label after records ξ lines = some log) (hF : treeFold records [] lines = some tsF) :
+    List.Forall₂ (fun t sp => specOf t.2 = some sp) tsF (helloSpecs log) := by
+  cases lines with
+  | nil =>
+    simp only [readLog, Option.some.injEq] at hR
+    simp only [treeFold, Option.some.injEq] at hF
+    subst hR
+    rw [← hF]
+    exact .nil
+  | cons l ls =>
+    simp only [readLog] at hR
+    by_cases ht : treeLine l = true
+    · rw [ite_eq_left ht] at hR
+      simp only [Option.bind_eq_bind] at hR
+      obtain ⟨⟨r₀, ts⟩, hX, hR⟩ := Option.bind_eq_some_iff.1 hR
+      obtain ⟨j, hj, hX⟩ := Option.bind_eq_some_iff.1 hX
+      simp only [Option.pure_def] at hR
+      obtain ⟨rest, hrest, hR⟩ := Option.bind_eq_some_iff.1 hR
+      cases hR
+      have hev : event l = .ok j := event_of_toOption hj
+      rw [treeFold_tree ht hev hX] at hF
+      have hS : List.Forall₂ (fun t sp => specOf t.2 = some sp) ts (helloSpecs [r₀]) := by
+        rcases treeStep_some hX with ⟨root, sj, spec, hr₀, hts, hsp, -⟩ | ⟨_, _, _, hr₀, hts, -⟩
+        · have h1 : helloSpecs [r₀] = [spec] := by simp [helloSpecs, hr₀]
+          rw [h1, hts, List.nil_append]
+          exact .cons hsp .nil
+        · have h1 : helloSpecs [r₀] = [] := by simp [helloSpecs, hr₀]
+          rw [h1, hts]
+          exact .nil
+      exact readTail_specs ls ts none ξ [r₀] hrest hF hS
+    · rw [ite_eq_right ht] at hR
+      rw [treeFold_skip ht] at hF
+      exact readTail_specs ls [] none ξ [] hR hF .nil
+
+/-- **A stream of a tree read is named so in the read's `Hello`s**: where `readLog` reads the release log and
+`treeFold` reads its trees as `tsF`, tree `i`'s stream `si` among them, stream `name` (`KeyAt`), is the stream the
+`i`-th `Hello`'s spec has at `si`. -/
+theorem readLog_named {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
+    {lines : List String} {log : List Verity.Release} {tsF : List (String × Json)}
+    (hR : readLog label after records ξ lines = some log) (hF : treeFold records [] lines = some tsF) {i si : ℕ}
+    {ρ name : String} (hk : KeyAt tsF i si ρ name) :
+    ((helloSpecs log)[i]?.bind fun sp => sp.streams[si]?) = some name := by
+  obtain ⟨-, sp, hg, hs⟩ := hk
+  obtain ⟨spec, hspec, hsp⟩ := forall₂_getElem? (readLog_specs hR hF) hg
+  rw [hspec, Option.bind_some]
+  obtain ⟨hlt, heq, -⟩ := Array.findIdx?_eq_some_iff_getElem.1 hs
+  exact specOf_streams hsp (by rw [Array.getElem?_eq_getElem hlt, Trees.strIs heq])
+
+/-- **A stream of a coin tree's parsed spec is its line's** (`specOf_streams`, the other way): where the line's spec
+parses (`specOf`), the parsed spec's stream at a place is the one the list the line names (`specStreams`) has there. -/
+theorem specStreams_getElem {j : Json} {sp : Flock.CoinTree.Spec} (h : specOf j = some sp) {s : ℕ} {x : String}
+    (hx : sp.streams[s]? = some x) : (specStreams j)[s]? = some (.str x) := by
+  unfold specOf at h
+  unfold specStreams
+  cases hss : getD j "streams" with
+  | arr ss =>
+    simp only [hss, Option.bind_eq_bind, Option.pure_def] at h
+    obtain ⟨streams, hst, h⟩ := Option.bind_eq_some_iff.1 h
+    obtain ⟨a, -, h⟩ := Option.bind_eq_some_iff.1 h
+    obtain ⟨b, -, h⟩ := Option.bind_eq_some_iff.1 h
+    obtain rfl := Option.some.inj h
+    have hx' : streams[s]? = some x := hx
+    rw [mapM_getElem?_arr hst] at hx'
+    show ss[s]? = some (.str x)
+    cases hy : ss[s]? with
+    | none =>
+      rw [hy] at hx'
+      cases hx'
+    | some y =>
+      rw [hy, Option.bind_some] at hx'
+      cases y with
+      | str z =>
+        obtain rfl : z = x := Option.some.inj hx'
+        rfl
+      | _ => cases hx'
+  | _ => simp [hss] at h
+
+/-- **Another stream the read's `Hello`s name of a tree read is that tree's stream so named**: where `readLog` reads
+the release log and `treeFold` reads its trees as `tsF`, the `i`-th of them of root `ρ` (`KeyAt`, at any of its
+streams), the read's `Hello`s name each tree's streams distinctly and the `i`-th names its stream `s` `name`, tree
+`i`'s stream `s` is stream `name` of the tree of root `ρ`. -/
+theorem KeyAt.of_named {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
+    {lines : List String} {log : List Verity.Release} {tsF : List (String × Json)}
+    (hR : readLog label after records ξ lines = some log) (hF : treeFold records [] lines = some tsF) {i s₀ s : ℕ}
+    {ρ n₀ name : String} (hk : KeyAt tsF i s₀ ρ n₀) (hn : ∀ sp ∈ helloSpecs log, sp.streams.toList.Nodup)
+    (hname : ((helloSpecs log)[i]?.bind fun sp => sp.streams[s]?) = some name) : KeyAt tsF i s ρ name := by
+  obtain ⟨hf, sj, hg, -⟩ := hk
+  refine ⟨hf, sj, hg, ?_⟩
+  obtain ⟨sp, hsp, hspec⟩ := forall₂_getElem? (readLog_specs hR hF) hg
+  rw [hsp, Option.bind_some] at hname
+  obtain ⟨hlt, hxs⟩ := Array.getElem?_eq_some_iff.1 (specStreams_getElem hspec hname)
+  refine Array.findIdx?_eq_some_iff_getElem.2 ⟨hlt, by rw [hxs]; simp [jsonStrIs], fun j hjs hj => ?_⟩
+  have h1 : sp.streams.toList[j]? = some name := by
+    rw [Array.getElem?_toList]
+    exact specOf_streams hspec ((Array.getElem?_eq_getElem (Nat.lt_trans hjs hlt)).trans
+      (congrArg some (Trees.strIs hj)))
+  have h2 : sp.streams.toList[s]? = some name := by
+    rw [Array.getElem?_toList]
+    exact hname
+  have e := ((hn sp (List.mem_of_getElem? hsp)).getElem?_inj (List.getElem?_eq_some_iff.1 h1).1).1
+    (h1.trans h2.symm)
+  omega
+
+/-! ## The record's rounds, opened -/
+
+/-- **The read opens each of a record's streams at least its rounds**: where `coinTreesOf` accepts the release log
+`lines`, `readLog` reads it, `sessionTreeReason` accepts `record` against its trees and each round `record` gives
+stream `name` gives coins (`recordRound`), the read opens tree `i`'s stream `si`, that stream of the record's tree
+(`KeyAt`), at least the rounds `record` gives it (`recordRounds`): its last round is one the tree shows opened
+(`Trees.round_held`), below the read's openings of it (`opening_lt_openedOf`). -/
+theorem recordRounds_le_openedOf {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
+    {lines : List String} {log : List Verity.Release} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
+    (hR : readLog label after records ξ lines = some log) {record : Json} (h : sessionTreeReason trees record = none)
+    {name : String} (hr : ∀ k < recordRounds record name, (recordRound record name k).isSome) {i si : ℕ}
+    (hk : KeyAt (heldTrees trees) i si (recordTree record) name) : recordRounds record name ≤ openedOf log i si := by
+  rcases Nat.eq_zero_or_pos (recordRounds record name) with h0 | hpos
+  · rw [h0]
+    exact Nat.zero_le _
+  obtain ⟨cs, hcs⟩ := Option.isSome_iff_exists.1 (hr _ (Nat.sub_lt hpos Nat.one_pos))
+  obtain ⟨t, ht, hroot, o, ho, -⟩ := Trees.round_held h hcs
+  rw [hroot] at hk
+  have := opening_lt_openedOf hT hR ht ho hk
+  omega
+
+/-- **Logs of the same frames open each stream equally often** (`streamOpenings_congr`). -/
+theorem openedOf_congr {i s : ℕ} {l l' : List Verity.Release}
+    (hl : List.Forall₂ (fun x y => x.frame = y.frame ∧ x.answers = y.answers) l l') :
+    openedOf l i s = openedOf l' i s := by
+  rw [← streamOpenings_eq_openedOf, ← streamOpenings_eq_openedOf]
+  exact streamOpenings_congr hl
+
+/-- **The device's log opens each of a record's streams exactly its rounds**: where `coinTreesOf` accepts the release
+log `lines` and `readLog` reads it as releases of the frames and answers of the device's log `Lg`,
+`sessionTreeReason` accepts `record` against its trees, each round `record` gives stream `name` gives coins, and `Lg`
+opens only the record's rounds (`OpenedRecorded`) and serves each opening (`LogServed`), `Lg` opens tree `i`'s stream
+`si`, that stream of the record's tree (`KeyAt`), exactly the rounds `record` gives it (`recordRounds`): at most by
+`openedOf_le_recordRounds`, at least by `recordRounds_le_openedOf`. -/
+theorem openedOf_eq_recordRounds {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
+    {lines : List String} {log : List Verity.Release} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
+    (hR : readLog label after records ξ lines = some log) {Lg : List Verity.Release}
+    (hl : List.Forall₂ (fun x y => x.frame = y.frame ∧ x.answers = y.answers) log Lg) {record : Json}
+    (h : sessionTreeReason trees record = none) {name : String}
+    (hr : ∀ k < recordRounds record name, (recordRound record name k).isSome) (hO : OpenedRecorded record Lg)
+    (hS : LogServed Lg) {i si : ℕ} (hk : KeyAt (heldTrees trees) i si (recordTree record) name) :
+    openedOf Lg i si = recordRounds record name := by
+  have hname := readLog_named hR (coinTreesOf_fold records hT) hk
+  rw [helloSpecs_congr hl] at hname
+  refine le_antisymm (openedOf_le_recordRounds hO hS hname) ?_
+  rw [← openedOf_congr hl]
+  exact recordRounds_le_openedOf hT hR h hr hk
 
 end Verity.Sampled
