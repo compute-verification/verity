@@ -14,14 +14,15 @@ invariant's start and its step from one round to the session's next request, ove
   after updates that keep its stop (`SessKept`: its `Hello`'s `Sessions.begin`, its `Commit`'s link, the frames port's
   starts, the other sessions' requests). `liveBefore_two`: and at its first frame round every earlier round passed,
   where the worker's link is the firewall's own; **`stopped_two`**: so there the session's stop is the model's.
-* `roundPlace_nd`: a stopped session's round takes no device round, at every place.
+* `roundPlace_nd`: a stopped session's round takes no device round, at every place; `roundPlace_nd_eq`: and a round
+  of a session that has not stopped takes the device's.
 * `stopped_put_kept`: a put after updates that keep the rep's frame and the session's stop stops the session as on the
   frames before them, where a stopped session's put frame is stopped; `roundStep_put_stopped`: a round's put frame
   is. `stopped_round_coins`: so from a round's read to the session's next request, through the round's put on the
   frames it lands on, its coins and the updates in between, the session's stop is the round's put's on the frames the
   round read.
 * **`stopped_next`**: at a round that releases, the session's stop at its next request is the round's put's on the
-  frames the round read, which `roundStep_nextD` and `roundStep_nextD_nd` give as the model's one round on.
+  frames the round read, which `roundStep_nextD` gives as the model's one round on.
 -/
 
 @[expose] public section
@@ -101,7 +102,33 @@ theorem roundPlace_nd {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {
     | (cases h; done)
     | exact absurd (by assumption) throw_ne_ok
     | (cases h; rfl)
-    | (cases h; split <;> rfl)
+
+set_option maxHeartbeats 1000000 in
+/-- **A round takes no device round exactly where its session stopped**, at every place `roundPlace` readies: in a
+session that has not stopped it takes the device's round wherever it has a place, the inner proof's rounds included,
+since the loop refuses one its finish has not computed. -/
+theorem roundPlace_nd_eq {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r : Nat}
+    {dom content : ByteArray} {n : Nat} {q : Rep} {pl : _root_.Flock.Firewall.Frame.Place} {f : Bool}
+    {nd : Option String}
+    (h : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd)) :
+    nd.isSome = R.stopped sid := by
+  cases hR : R.stopped sid
+  · unfold _root_.Flock.Firewall.Frames.roundPlace at h
+    rcases hf : R.find sid i r with _ | ⟨j, p⟩
+    · simp only [hf] at h
+      cases h
+    simp only [hf, hR, bind, Except.bind, pure, Except.pure, Bool.false_eq_true, ↓reduceIte] at h
+    by_cases hfst : (p.coins.isEmpty && !p.st.begun) = true
+    all_goals repeat' (first
+      | split at h
+      | simp only [eq_true hfst, ↓reduceIte] at h
+      | simp only [eq_false hfst, ↓reduceIte] at h
+      | simp only at h)
+    all_goals first
+      | (cases h; done)
+      | exact absurd (by assumption) throw_ne_ok
+      | (cases h; rfl)
+  · exact roundPlace_nd h hR
 
 /-- **A put after updates that keep the rep's frame and the session's stop stops the session as on the frames before
 them**, where the frame put at the rep's key is stopped wherever the session had stopped. -/

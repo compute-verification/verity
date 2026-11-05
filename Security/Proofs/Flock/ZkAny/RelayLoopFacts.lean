@@ -276,7 +276,7 @@ theorem roundPlace_scheduled_first (T : ZKMal.CoinLayer.TableData)
 no-device reason `nd` `roundPlace` returns, the worker's value `v` at the model's history so far, the loop at `σ`: the
 place is the model's scheduled round there, `q`'s masking state the model's but for `stopped`, where the round takes a
 device round exactly where the frames haven't stopped session `sid`, `v` fails the crossing only where it fails to
-pass, and where it takes none in a session the frames haven't stopped, `v` fails the crossing. -/
+pass. -/
 structure PlaceFacts {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (v : Claims.Msg) (σ : LoopAt) (q : Rep)
     (pc : Place) (nd : Option String) : Prop where
   sched : pc = .sched ⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c)
@@ -284,8 +284,6 @@ structure PlaceFacts {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (v : Claims.
   st : ∀ m, M.L.answered M.x M.ρ (M.hist σ.c) = .ok m → unstop q.st.m = unstop m
   cross : nd.isSome = σ.R.stopped sid → M.L.cross M.x (M.hist σ.c).length M.w M.ρ (M.hist σ.c) v = false →
     M.L.pass M.x M.w M.ρ (M.hist σ.c) v = false
-  inner : nd.isSome = true → σ.R.stopped sid = false →
-    M.L.cross M.x (M.hist σ.c).length M.w M.ρ (M.hist σ.c) v = false
 
 /-- **`RoundFacts` at a frame round's slot of the deployed loop**: at the slot of a round of `n` coins of `stream`,
 where `LoopFacts` and `LoopJ` hold, the session's slots took fewer than the run's messages, and the loop ran the round
@@ -348,23 +346,12 @@ theorem roundFacts_loop {T : ZKMal.CoinLayer.TableData}
     rfl
   have hP := hpl q pc f nd hrp
   obtain ⟨m, hm⟩ := hans
-  refine ⟨hcoins, hkind, by have := hD.next; omega, hlt', Option.isSome_iff_exists.mpr ⟨p, hfa⟩,
-    ⟨m, q, f, nd, hm, ?_, ?_, (roundPlace_cfg hfd hrp).trans (hpc p hfa), hP.st m hm, ?_⟩, ?_,
+  have hnd := roundPlace_nd_eq hrp
+  refine ⟨hcoins, hkind, by have := hD.next; omega, hlt', hP.cross hnd, Option.isSome_iff_exists.mpr ⟨p, hfa⟩,
+    ⟨m, q, f, nd, hm, ?_, hnd, (roundPlace_cfg hfd hrp).trans (hpc p hfa), hP.st m hm, ?_⟩, ?_,
     streamRep_other hF.setup hsent (slot_round_open hsl) hr.rep_eq⟩
   · rw [← hP.sched]
     exact hrp
-  · by_cases hns : nd.isSome = σ.R.stopped sid
-    · exact .inl ⟨hns, hP.cross hns⟩
-    · have hst : σ.R.stopped sid = false := by
-        cases hs : σ.R.stopped sid
-        · rfl
-        · exact absurd ((roundPlace_nd hrp hs).trans hs.symm) hns
-      have hnd : nd.isSome = true := by
-        cases h : nd.isSome
-        · rw [h, hst] at hns
-          exact absurd rfl hns
-        · rfl
-      exact .inr ⟨hnd, hP.inner hnd hst⟩
   · cases hsn : seen.contains stream
     · have hpF := fresh_found (hF.fresh i r stream hmem hsn) hfd
       rw [roundPlace_first hfd hrp, hpF.coins, hpF.st]

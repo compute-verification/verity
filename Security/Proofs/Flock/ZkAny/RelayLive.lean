@@ -15,14 +15,10 @@ earlier round failed (`ZkServer.liveBefore`), a frame round is one message in bo
   takes, where Rust's checks fail only device rounds the frame fails, what the loop's round releases is the deferred
   release's message after `h`, after the stream's domain frame at its first round, and after its put the session's
   stop is again the model's, one round on.
-* `roundStep_release_nd`: a round at which `roundPlace` takes no device round (the session stopped, or an inner round
-  the loop's finish has not computed) releases the scheduled round as a stopped rep's and stops the session;
-  **`roundStep_nextD_nd`**: so where the session has not stopped but Rust's checks fail the round, it is again the
-  deferred release's message, and after it a round has failed in both.
 * `roundStep_put_some`: a round at a place `roundPlace` readies puts a frame back. **`envOk_roundStep`**: so where what
   the relay read for a round is the loop's round on its frames, whose release is a message's after the stream's domain
-  frame at its first round (as the two above give the deferred model's), and the loop's first round of the stream and
-  its domain frame are the schedule's and the setup's, what the relay read there is that message's (`EnvOk`).
+  frame at its first round (as `roundStep_nextD` gives the deferred model's), and the loop's first round of the stream
+  and its domain frame are the schedule's and the setup's, what the relay read there is that message's (`EnvOk`).
 -/
 
 @[expose] public section
@@ -62,67 +58,6 @@ theorem roundStep_nextD {W Rr : Type} (L : LeanRelease W Rr) (n : Msg → ℕ) (
   · rw [hst']
     exact L.stop_frame_snoc wk x w ρ κ h hk hlt hv hcr hst e
 
-/-- **A round of the session that takes no device round releases the scheduled round as a stopped rep's, and stops
-the session**: at a round of the session's rep `(i, r)` whose place is the model's scheduled round and coin count,
-where `roundPlace` takes no device round (`nd`: the session stopped, or an inner round the loop's finish has not
-computed), a frame of a live session is not stopped, and the frame's configuration and masking state are the model's
-but for `stopped`, after the stream's domain frame at its first round. -/
-theorem roundStep_release_nd {W Rr : Type} (L : LeanRelease W Rr) (x : Msg) (w : W) (ρ : Rr) (h : List (Msg × Msg))
-    {m : Masker} (hm : L.answered x ρ h = .ok m) {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots}
-    {sid i r : Nat} {dom : ByteArray} (v : Msg) {q p₁ : Rep} {f : Bool} {nd : Option String} {o : ByteArray}
-    (hfr : (frameAt R sid i r).isSome)
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length) =
-      .ok (q, .sched ⟨(L.scheduled x w ρ h (computedOf (L.computed x w ρ h))).toArray⟩, f, nd))
-    (hnd : nd.isSome = true) (hq : R.stopped sid = false → q.st.m.stopped = false)
-    (hcfg : q.cfg = L.cfg x ρ h) (hu : unstop q.st.m = unstop m)
-    (ho : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length)).out = .ok o)
-    (hput : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length)).put =
-      some p₁) :
-    ∃ out, o = (if f then dom ++ out else out) ∧
-      0 :: out.data.toList = L.release x ρ h true (L.scheduled x w ρ h (computedOf (L.computed x w ρ h))) ∧
-      (R.put p₁).stopped sid = true := by
-  obtain ⟨out, why, hc, hst⟩ := roundStep_stopped hfr hrp (fun _ => hnd) hq ho hput
-  have hoo : o = if f then dom ++ out else out := by
-    obtain ⟨out', s', why', hc', ho'⟩ := roundStep_check hrp ho
-    rw [hc] at hc'
-    simp only [Except.ok.injEq, Prod.mk.injEq] at hc'
-    rw [ho', hc'.1]
-  rw [hnd, hcfg] at hc
-  have hrel := release_of_check L x w ρ h hm hu (b := true) (by intro e; cases e) hc
-  refine ⟨out, hoo, hrel.trans (ite_eq_right (by intro e; cases e)), ?_⟩
-  · rw [hst]
-    cases hR : R.stopped sid
-    · rw [ite_eq_left rfl] at hc
-      have e1 := Ranked.check_stopped hc
-      rw [hq hR, Ranked.check_empty hc, Bool.false_or] at e1
-      exact e1.symm
-    · rfl
-
-/-- **A frame round of a live session that Rust's checks fail is the deferred model's message, and a round has failed
-after it in both**: at a frame round below the `Finish` whose worker value is the device round `v`, where Rust's checks
-fail `v` and `roundPlace` takes no device round (an inner round the loop's finish has not computed), at
-`roundStep_release_nd`'s premises. -/
-theorem roundStep_nextD_nd {W Rr : Type} (L : LeanRelease W Rr) (n : Msg → ℕ) (wk : L.toSrv.Worker) (x : Msg)
-    (w : W) (ρ : Rr) (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hk : L.kindAt x h.length = .masked)
-    (hn : h.length + 1 < n x) (hlt : h.length < L.last x) {v : Msg} (hv : wk x w ρ h 0 = some (v, false))
-    (hc : L.cross x h.length w ρ h v = false)
-    {m : Masker} (hm : L.answered x ρ h = .ok m) {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots}
-    {sid i r : Nat} {dom : ByteArray} {q p₁ : Rep} {f : Bool} {nd : Option String} {o : ByteArray}
-    (hfr : (frameAt R sid i r).isSome)
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length) =
-      .ok (q, .sched ⟨(L.scheduled x w ρ h (computedOf (L.computed x w ρ h))).toArray⟩, f, nd))
-    (hnd : nd.isSome = true) (hq : R.stopped sid = false → q.st.m.stopped = false)
-    (hcfg : q.cfg = L.cfg x ρ h) (hu : unstop q.st.m = unstop m)
-    (ho : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length)).out = .ok o)
-    (hput : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length)).put =
-      some p₁) :
-    ∃ out, o = (if f then dom ++ out else out) ∧ 0 :: out.data.toList = L.toSrv.nextD L.fillOf n wk x w ρ κ h ∧
-      ∀ e, (R.put p₁).stopped sid = !L.toSrv.liveBefore wk x w ρ κ (h ++ [e]) := by
-  obtain ⟨out, hoo, hrel, hst⟩ := roundStep_release_nd L x w ρ h hm v hfr hrp hnd hq hcfg hu ho hput
-  refine ⟨out, hoo, ?_, fun e => ?_⟩
-  · rw [hrel, L.nextD_frame_cross n wk x w ρ κ h hk hn hlt hv hc]
-  · rw [hst, L.liveBefore_snoc_cross wk x w ρ κ h hk hlt hv hc e, Bool.not_false]
-
 /-- **A round at a place `roundPlace` readies puts a frame back.** -/
 theorem roundStep_put_some {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q : Rep} {pl : Place} {f : Bool} {nd : Option String}
@@ -135,8 +70,8 @@ theorem roundStep_put_some {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slo
 
 /-- **What the relay read for a round is the message the loop's round releases**: where the relay's read of the round
 (`Env.round`) is the loop's round on its frames at a place `roundPlace` readies, whose release, wherever it puts a frame
-back, is the message `M`'s after the stream's domain frame at its first round (`roundStep_nextD`,
-`roundStep_nextD_nd`), and the loop's first round of the stream is the schedule's and its domain frame the setup's. -/
+back, is the message `M`'s after the stream's domain frame at its first round (`roundStep_nextD`), and the loop's
+first round of the stream is the schedule's and its domain frame the setup's. -/
 theorem envOk_roundStep {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     {spec : SessionSpec} {seen : List String} {stream : String} {k : Nat} {e : Env} {M : Msg}
