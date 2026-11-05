@@ -2,7 +2,7 @@
 ``m0/compose.log`` (``fixtures/served-window-m0``, a served H200 run's) records, the case names the auditor's challenger
 by its key record and carries the window's kept release of the draw's coins, a release naming another key is refused,
 the public file is named by a5's pin of it at staging, before the draw, a public file changed after the draw and a
-window with no pin refused, and the case is written private as `composite.py` reads it, or, when a blob has no file or
+window with no pin refused, the case reads the drawn member's files whichever member it is, and the case is written private as `composite.py` reads it, or, when a blob has no file or
 the case is refused, only ``missing.json``, which `composite.py` leaves out."""
 
 from __future__ import annotations
@@ -10,6 +10,8 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
+import shutil
 import stat
 import sys
 import types
@@ -65,18 +67,33 @@ def test_a_case_with_its_blobs_is_written_private(tmp_path):
 PUBLIC = b"header\npublic"
 
 
-def kept_window(root: Path, RP) -> Path:
-    """A served window's kept files as `prove_path/run.sh` keeps them: one member, m0, its one session, and a5's pin of
-    its public file at staging (`a5.public_pin`)."""
+def public_of(k: int) -> bytes:
+    """Member `k`'s public file: `PUBLIC` for m0."""
+    return PUBLIC + (f" m{k}".encode() if k else b"")
+
+
+def kept_window(root: Path, RP, k: int = 0) -> Path:
+    """A served window's kept files as `prove_path/run.sh` keeps them: members m0 to m<k> of one template, its circuit
+    composed once at m0 (``compose.log``, `a5.audit`) and linked at the drawn member m<k>, each member's public file
+    and a5's pin of them at staging (`a5.public_pin`), the members in ``summary.json``, and m<k>'s one session."""
     w = root / "window"
     (w / "m0").mkdir(parents=True)
     (w / "m0" / "compose.log").write_text(LOG.read_text())
     (w / "m0" / "circuit.txt").write_text("gates")
-    (w / "m0" / "pub-4.bin").write_bytes(PUBLIC)
-    member = types.SimpleNamespace(key="m0-key")
-    (w / a5.PIN).write_text(json.dumps(a5.public_pin([{"k": 0, "m": member, "st": {"public": hashlib.sha512(
-        PUBLIC).hexdigest()}}], {"m0-key": a5.body(w / "m0" / "pub-4.bin")})))
-    s = w / "session-m0" / "sessions" / "a"
+    staged, publics = [], {}
+    for i in range(k + 1):
+        pub = w / f"m{i}" / "pub-4.bin"
+        pub.parent.mkdir(exist_ok=True)
+        pub.write_bytes(public_of(i))
+        staged.append({"k": i, "m": types.SimpleNamespace(key=f"m{i}-key"),
+                       "st": {"public": hashlib.sha512(public_of(i)).hexdigest()}})
+        publics[f"m{i}-key"] = a5.body(pub)
+    if k:
+        os.link(w / "m0" / "circuit.txt", w / f"m{k}" / "circuit.txt")
+    (w / a5.PIN).write_text(json.dumps(a5.public_pin(staged, publics)))
+    (w / "summary.json").write_text(json.dumps({"members": [{"k": i, "template": "A", "n": 4, "base": 4 * i}
+                                                            for i in range(k + 1)]}))
+    s = w / f"session-m{k}" / "sessions" / "a"
     s.mkdir(parents=True)
     (s / "session.json").write_bytes(b"{}")
     (s / "x.bin").write_bytes(b"rep")
@@ -179,6 +196,37 @@ def test_a_public_file_not_the_one_pinned_at_staging_is_refused(tmp_path, RP, ca
     assert V.main(argv) == 2
     assert why in V2CASE(capsys.readouterr().out)["refused"]
     assert [f.name for f in out.iterdir()] == ["missing.json"] and C.case_dirs([out]) == []
+
+
+def test_the_case_reads_the_drawn_members_files_whichever_member_it_is(tmp_path, RP):
+    """A kept window whose one drawn member is m2: the case reads m2's session, public file, held to m2's pin, and
+    circuit file, or its template's first member's where m2 kept no link, and the compose.log of that first member,
+    where a5 composed the template's circuit once (`summary.json`'s members). A window that kept sessions of two
+    members or of none, or no compose.log a member of the drawn one's template kept, is refused."""
+    w, scratch = kept_window(tmp_path, RP, k=2), tmp_path / "scratch"
+    got, how, n, _ = V.case(w, scratch)
+    assert (how, n, got["params"]["proofs"]["circuit"]) == ("kept", 1, V.compose_command(LOG.read_text())["pin"])
+    assert got["params"]["proofs"]["public"] == hashlib.sha512(public_of(2)).hexdigest()
+    assert got["blobs"][:2] == [str(w / "m2" / "circuit.txt"), str(w / "m2" / "pub-4.bin")]
+    (w / "m2" / "circuit.txt").unlink()
+    assert V.case(w, scratch)[0]["blobs"][0] == str(w / "m0" / "circuit.txt")
+    (w / "m2" / "pub-4.bin").write_bytes(public_of(1))
+    with pytest.raises(V.Refused, match=f"isn't, by SHA-512, the one {a5.PIN} pinned at staging"):
+        V.case(w, scratch)
+    (w / "m2" / "pub-4.bin").write_bytes(public_of(2))
+    summary = (w / "summary.json").read_text()
+    (w / "summary.json").unlink()
+    with pytest.raises(V.Refused, match="m2 kept no compose.log"):
+        V.case(w, scratch)
+    (w / "summary.json").write_text(summary)
+    (w / "session-m1" / "sessions" / "b").mkdir(parents=True)
+    (w / "session-m1" / "sessions" / "b" / "session.json").write_bytes(b"{}")
+    with pytest.raises(V.Refused, match="sessions of 2 members"):
+        V.case(w, scratch)
+    for d in ("session-m1", "session-m2"):
+        shutil.rmtree(w / d)
+    with pytest.raises(V.Refused, match="sessions of 0 members"):
+        V.case(w, scratch)
 
 
 def test_the_onsite_record_reads_a5s_pin_against_the_registration_the_coins_committed_to(tmp_path, RP):

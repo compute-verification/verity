@@ -135,8 +135,10 @@ negatives.
   naming the challenger v2 requires by the auditor's own key record (`--challenger-key`), never by the key the release
   names: a release naming another key is refused. Its params name the public file by the SHA-512 a5 pinned at staging,
   before the draw (`public-pin.json`), never one read after it: a window with no pin, or whose kept public file isn't
-  the pinned one, is refused. With its own Lean answer with `--exe`. A circuit file the run didn't
-  keep is rebuilt by the command its `m0/compose.log` records and used only at the log's pin.
+  the pinned one, is refused. It reads the drawn member's files, the one member whose sessions the window kept (none
+  or several refused), its `compose.log` its own or its template's first member's. With its own Lean answer with
+  `--exe`. A circuit file the run didn't keep is rebuilt by the command its `compose.log` records and used only at the
+  log's pin.
 - `kept_composite.sh SRC [K]`: remote's and onsite's Lean verdicts on a served run's kept records (`served_verdicts.sh`'s
   `out/`, or a tarball of it) on a CPU node: it builds the products and the pieces' checks, writes PoUW's pieces
   (`pouw_piece.py`; the period from the kept `pieces/pouw/`, `main.txt`, `H1_KEY_SHA512` and the drawn and live legs'
