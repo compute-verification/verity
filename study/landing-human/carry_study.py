@@ -1,11 +1,12 @@
 """Replay `research.carry` over every re-verdict of a window: each land verdict at a PR's new head when an older head of that PR
 already had one.  For each, the verdict `carry` would have given with no reviewer, judged as of the verdict's time: a merged
 parent is trusted when it is an ancestor of `main`'s or `checked`'s tip then (GitHub's push activity) or of another PR's head
-that had a land verdict by then.
+whose verdicts then landed it (each reviewer's newest; a hold by anyone keeps it).
 
-    uv run --no-sync python study/landing-human/carry_study.py LABELS.json ACT_DIR OUT.json [--jobs N] [--marks]
+    uv run --no-sync python study/landing-human/carry_study.py LABELS.json ACT_DIR OUT.json [--jobs N] [--marks | --holds]
 
---marks judges every re-head instead (each PR's consecutive marked heads, as of the newer one's mark).
+--marks judges every re-head instead (each PR's consecutive marked heads, as of the newer one's mark); --holds each head whose
+first verdict was a hold, over the PR's last land-verdict head (the false-positive test).
 
 LABELS.json: every `pr:*` label (`labels.py`); ACT_DIR: `act_main.tsv` and `act_checked.tsv` (`gh api .../activity`).  The
 clone needs every head (`git fetch origin '+refs/pull/*/head:refs/pr/*'`), a ref `refs/rv/PR/HEAD` per reviewed head, and a
@@ -15,9 +16,11 @@ from __future__ import annotations
 
 import bisect
 import collections
+import functools
 import json
 import subprocess
 import sys
+import tomllib
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
@@ -85,26 +88,69 @@ def mark_pairs(labels: list[dict]) -> list[dict]:
     return out
 
 
+def hold_pairs(labels: list[dict]) -> list[dict]:
+    """The false-positive test: each head whose first verdict was a hold, of a PR with a land verdict at an older head, judged
+    as of the hold.  One that carries is a head `carry` would have landed that a reviewer held."""
+    verdicts = collections.defaultdict(list)
+    for r in labels:
+        if r["key"] == "reviewed" and r["value"] in ("land", "hold"):
+            verdicts[r["pr"]].append(r)
+    out = []
+    for pr, vs in verdicts.items():
+        vs.sort(key=lambda r: r["ts"])
+        landed: list[str] = []
+        seen: set[str] = set()
+        for r in vs:
+            if r["head"] in seen:
+                continue
+            seen.add(r["head"])
+            if r["value"] == "hold" and landed and r["ts"] >= W0:
+                out.append({"pr": pr, "old": landed[-1], "new": r["head"], "ts": r["ts"], "by": r["by"], "ref": r["ref"],
+                            "mark": None})
+            if r["value"] == "land":
+                landed.append(r["head"])
+    return out
+
+
 _T: dict = {}
-_FIRST: dict = {}
+_VERDICTS: dict = {}
 _EXCLUDES: list = []
 
 
-def _init(t: dict, first: dict, excludes: list) -> None:
+def _init(t: dict, verdicts: dict, excludes: list) -> None:
     _T.update(t)
-    _FIRST.update(first)
+    _VERDICTS.update(verdicts)
     _EXCLUDES.extend(excludes)
+
+
+@functools.lru_cache(maxsize=None)
+def _contains(c: str) -> tuple[str, ...]:
+    return tuple(git("for-each-ref", "--contains", c, "refs/rv/", "--format=%(refname)").stdout.split())
+
+
+@functools.lru_cache(maxsize=None)
+def _ancestor(c: str, x: str) -> bool:
+    return c == x or git("merge-base", "--is-ancestor", c, x).returncode == 0
+
+
+def landable_at(key: str, ts: str) -> bool:
+    """Whether a head's verdicts as of ``ts`` land it: each reviewer's newest counts, a hold by anyone keeps it."""
+    newest: dict[str, str] = {}
+    for vts, by, value in _VERDICTS.get(key, ()):
+        if vts <= ts:
+            newest[by] = value
+    return "land" in newest.values() and "hold" not in newest.values()
 
 
 def trusted_at(ts: str, pr: int):
     landed = [x for x in (tip_at(_T, "main", ts), tip_at(_T, "checked", ts)) if x]
 
     def trusted(c: str) -> bool:
-        if any(c == x or git("merge-base", "--is-ancestor", c, x).returncode == 0 for x in landed):
+        if any(_ancestor(c, x) for x in landed):
             return True
-        for ref in git("for-each-ref", "--contains", c, "refs/rv/", "--format=%(refname)").stdout.split():
+        for ref in _contains(c):
             _, _, n, h = ref.split("/")
-            if int(n) != pr and _FIRST.get(f"{n}@{h}", "~") <= ts:
+            if int(n) != pr and landable_at(f"{n}@{h}", ts):
                 return True
         return False
 
@@ -129,15 +175,13 @@ def main() -> None:
     labels_path, act_dir, out_path = sys.argv[1:4]
     jobs = int(sys.argv[sys.argv.index("--jobs") + 1]) if "--jobs" in sys.argv else 4
     labels = json.load(open(labels_path))
-    first: dict[str, str] = {}
-    for r in labels:
-        if r["key"] == "reviewed" and r["value"] == "land":
-            k = f"{r['pr']}@{r['head']}"
-            first[k] = min(first.get(k, "~"), r["ts"])
-    ps = mark_pairs(labels) if "--marks" in sys.argv else pairs(labels)
-    import tomllib
+    verdicts: dict[str, list] = collections.defaultdict(list)
+    for r in sorted(labels, key=lambda r: r["ts"]):
+        if r["key"] == "reviewed" and r["value"] in ("land", "hold"):
+            verdicts[f"{r['pr']}@{r['head']}"].append((r["ts"], r["by"], r["value"]))
+    ps = mark_pairs(labels) if "--marks" in sys.argv else hold_pairs(labels) if "--holds" in sys.argv else pairs(labels)
     excludes = tomllib.loads(git("show", "origin/main:tools/verity/check/drive.toml").stdout)["lowrisk_excludes"]
-    with ProcessPoolExecutor(jobs, initializer=_init, initargs=(tips(Path(act_dir)), first, excludes)) as ex:
+    with ProcessPoolExecutor(jobs, initializer=_init, initargs=(tips(Path(act_dir)), dict(verdicts), excludes)) as ex:
         res = list(ex.map(judge, ps, chunksize=8))
     json.dump(res, open(out_path, "w"), indent=0)
     c = collections.Counter(r["kind"] for r in res)
