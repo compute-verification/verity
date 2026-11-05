@@ -10,8 +10,10 @@ public import Proofs.Flock.ZkAny.RelaySame
 
 * `StreamAt`: what the loop holds of a rep stream's frame at the model's history, on the session's entry and the
   table's level 0. Where the next round is the stream's, past its first, the frame keeps `SameInv` there, on the
-  session's link, the table's statement and the table its level 0 gives. Where the next round is the next stream's
-  first, the frame holds the history's words for each of the stream's rounds (`roundPlace_switch1`'s `hco`).
+  session's link, the table's statement and the table its level 0 gives, at the rep's salts in the loop's frames once
+  its opening has begun. Where the next round is the next stream's first, the frame holds the history's words for
+  each of the stream's rounds (`roundPlace_switch1`'s `hco`). `streamAt_stay`: it is kept where the rep's salts stay.
+  `find?_of_saltsAt`, `saltsAt_of_find?`: the rep's salts are the loop's salts' entry for it.
 * `RepJ`: a rep's frame, the session's entry and the rep's table's level 0 bound for the session, with `StreamAt` on
   them at the model's history so far.
 * `nextAt`: the model's next round's rep stream and its index there. `SeenAt`: the rep streams seen are those with a
@@ -33,14 +35,16 @@ open _root_.Flock.Firewall.Session (State Placed)
 open _root_.Flock (SessionSpec Stmt F128)
 
 /-- **What the loop holds of rep stream `k`'s frame** `p` (table `k / 2`'s rep `k % 2`) at the model `M`'s history
-`h`, on the session's entry `rel`, the table's name `name` and its level 0 `l0`, the next round being at
-`h.length - 2` of the setup's rounds (`roundsOf`). Where that round is stream `k`'s, past its first, the frame keeps
-`SameInv` there, on the session's link `c`, the table's statement and the table its level 0 gives, whose commitment's
-cap is the level-0 root. Where it is stream `k + 1`'s first, the frame holds the history's words for each of stream
-`k`'s rounds. -/
+`h`, on the session's entry `rel`, the table's name `name` and its level 0 `l0`, in the loop's frames `R`, the next
+round being at `h.length - 2` of the setup's rounds (`roundsOf`). Where that round is stream `k`'s, past its first,
+the frame keeps `SameInv` there, on the session's link `c`, the table's statement and the table its level 0 gives,
+whose commitment's cap is the level-0 root, at salts `hi` that are the rep's in `R` once its opening has begun
+(`saltsAt`), which it has not where its coins are as many as its algebraic phase's rounds. Where it is stream
+`k + 1`'s first, the frame holds the history's words for each of stream `k`'s rounds. -/
 def StreamAt {W Rr : Type} (M : LoopModel W Rr) (spec : SessionSpec) (sts : Array Stmt) (k : Nat)
     (h : List (Claims.Msg × Claims.Msg)) (rel : _root_.Flock.Firewall.Frames.Release) (name : String)
-    (l0 : _root_.Flock.Firewall.Level0.Level0) (p : _root_.Flock.Firewall.Frames.Rep) : Prop :=
+    (l0 : _root_.Flock.Firewall.Level0.Level0) (p : _root_.Flock.Firewall.Frames.Rep)
+    (R : _root_.Flock.Firewall.Frames.Sessions) : Prop :=
   ((ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 (h.length - 2)).1 = k →
     ∃ (j : Nat) (c : Array F128) (stm : Stmt) (t : _root_.Flock.Firewall.Finish.Tab) (xs : Array (Array F128))
       (hi : Array ByteArray) (pre : List _root_.Flock.Firewall.Frame.Req)
@@ -51,23 +55,58 @@ def StreamAt {W Rr : Type} (M : LoopModel W Rr) (spec : SessionSpec) (sts : Arra
         _root_.Flock.Firewall.Finish.flat t.cm0.cap = l0.root ∧
         xs = _root_.Flock.Firewall.Drive.extras stm (_root_.Flock.Firewall.Drive.linkPoints stm c) ∧
         SameInv M.L M.x M.ρ h (h.tail.map fun e => ZKMal.CoinLayer.rd e.2) (h.length - 2) j t
-          (rel.spec.domain name (k % 2)).toUTF8 xs hi pre ev p) ∧
+          (rel.spec.domain name (k % 2)).toUTF8 xs hi pre ev p ∧
+        (p.alg.size < p.coins.size → saltsAt R l0.root (k % 2) = some hi) ∧
+        (p.alg.size = p.coins.size → p.opening = none ∧ p.opened = false)) ∧
   ((ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 (h.length - 2)).1 = k + 1 →
     (ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 (h.length - 2)).2 = 0 →
     p.coins = (Array.range ((Loop.roundsOf spec sts).getD k 0)).map fun j =>
       Loop.wordsAt M.x (h.tail.map fun e => ZKMal.CoinLayer.rd e.2)
         (h.length - 2 - (Loop.roundsOf spec sts).getD k 0 + j + 1))
 
+/-- **The rep's salts are an entry of the loop's salts.** -/
+theorem find?_of_saltsAt {R : _root_.Flock.Firewall.Frames.Sessions} {root : ByteArray} {r : Nat}
+    {hi : Array ByteArray} (h : saltsAt R root r = some hi) :
+    ∃ r0 q0, R.salts.find? (fun x => x.1 == root && x.2.1 == r) = some (r0, q0, hi) := by
+  unfold saltsAt at h
+  rcases hf : R.salts.find? (fun x => x.1 == root && x.2.1 == r) with _ | ⟨r0, q0, hi'⟩
+  · rw [hf] at h
+    simp at h
+  · rw [hf] at h
+    have h' : hi' = hi := by simpa using h
+    subst h'
+    first | exact ⟨r0, q0, rfl⟩ | exact ⟨r0, q0, hf⟩
+
+/-- **An entry of the loop's salts is the rep's salts.** -/
+theorem saltsAt_of_find? {R : _root_.Flock.Firewall.Frames.Sessions} {root : ByteArray} {r : Nat}
+    {r0 : ByteArray} {q0 : Nat} {hi : Array ByteArray}
+    (h : R.salts.find? (fun x => x.1 == root && x.2.1 == r) = some (r0, q0, hi)) : saltsAt R root r = some hi := by
+  unfold saltsAt
+  rw [h]
+  rfl
+
+/-- **`StreamAt` is kept where the rep's salts stay**: of the loop's frames it reads only them. -/
+theorem streamAt_stay {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {sts : Array Stmt} {k : Nat}
+    {h : List (Claims.Msg × Claims.Msg)} {rel : _root_.Flock.Firewall.Frames.Release} {name : String}
+    {l0 : _root_.Flock.Firewall.Level0.Level0} {p : _root_.Flock.Firewall.Frames.Rep} {sid : Nat}
+    {R R' : _root_.Flock.Firewall.Frames.Sessions} (hs : Stay sid l0.root R R')
+    (hA : StreamAt M spec sts k h rel name l0 p R) : StreamAt M spec sts k h rel name l0 p R' := by
+  refine ⟨fun hk => ?_, hA.2⟩
+  obtain ⟨j, c, stm, t, xs, hi, pre, ev, hj, hlink, hstm, htab, hcap, hxs, hI, hsa, hord⟩ := hA.1 hk
+  refine ⟨j, c, stm, t, xs, hi, pre, ev, hj, hlink, hstm, htab, hcap, hxs, hI, fun hlt => ?_, hord⟩
+  rw [saltsAt_stay hs (k % 2) (by rw [hsa hlt]; rfl)]
+  exact hsa hlt
+
 /-- **Table `i`'s rep `r` in the loop at `σ`**, against the model's run `M`: its frame, the session's entry, the table's
 name and its level 0 bound for the session, with `StreamAt` at rep stream `2 * i + r` on them at the model's history
-so far. -/
+so far, in the loop's frames. -/
 def RepJ {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (sts : Array Stmt) (i r : Nat)
     (σ : LoopAt) : Prop :=
   ∃ (p : _root_.Flock.Firewall.Frames.Rep) (rel : _root_.Flock.Firewall.Frames.Release) (name : String)
     (l0 : _root_.Flock.Firewall.Level0.Level0),
     frameAt σ.R sid i r = some p ∧ sessAt σ.R sid = some rel ∧ rel.spec.tables[i]? = some name ∧
       _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 ∧
-      StreamAt M spec sts (2 * i + r) (M.hist σ.c) rel name l0 p
+      StreamAt M spec sts (2 * i + r) (M.hist σ.c) rel name l0 p σ.R
 
 /-- **The model's next round** at its history `h`: its rep stream and its index in the stream, among the setup's
 rounds (`roundsOf`). -/
@@ -119,7 +158,7 @@ theorem repJ_stays {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Sessio
   · rw [hs.1 name]
     exact hl0
   · rw [hc]
-    exact hA
+    exact streamAt_stay (hs.2 name l0 hl0) hA
 
 /-- **`LoopJ` is kept at a slot that reads no model message**: where the loop's reading of it brings only updates that
 keep every rep's frame, the session's stop and what its rounds read of it, and takes no model message. -/
