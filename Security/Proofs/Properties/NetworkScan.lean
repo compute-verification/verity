@@ -4,6 +4,7 @@ import Proofs.Properties.NetworkScan.Check
 import Proofs.Properties.NetworkScan.Lowered
 import Proofs.Properties.NetworkScan.Query
 import Proofs.Properties.NetworkScan.OfProg
+import Proofs.Properties.NetworkScan.Reads
 import Proofs.Flock.SamplingScope
 
 /-!
@@ -11,8 +12,9 @@ import Proofs.Flock.SamplingScope
 
 `ScanFits` and `ScanScopeAcc` are stated at Bits' positions (`Properties.NetworkScan`): the statement's circuit is the
 scan's audit's members' joint program (`jointOf`), its layout read through `SampledProofs.Bits.inBit` and `outBit`,
-with no wires. What `scanOf`'s acceptance gives of the Program is `Fits.scanOf_accepted` (`Accept`), and what the joint
-program holds at each position, its inputs, outputs and reads, is `Lowered`'s.
+with no wires. What `scanProg`'s acceptance gives of the Program is `Fits.scanProg_accepted` (`Accept`), what Bits'
+check gives of a circuit file is `Check.facts`, what it gives of a unit's reads of its template's first parameter is
+`Reads`', and what the joint program holds at each position, its inputs, outputs and reads, is `Lowered`'s.
 
 The layout's causality and wiring (`NetTiming.BoundaryGates.Fits`'s last two parts):
 
@@ -24,15 +26,26 @@ The layout's causality and wiring (`NetTiming.BoundaryGates.Fits`'s last two par
   step exists only with three templates, and its ingress is the middle one's.
 * `depends_of_dependsWired`, `wiresFit_none`: with no wires, dependence is through reads and the wiring fits.
 
-The layout's egress gates (its first part), where no two of the Program's Definitions share a key and its egress
-template is no input's key (scan facts the period check is to give):
+The layout's egress and ingress gates (its first two parts), where no two of the Program's Definitions share a key
+(what `keysUnique` checks, as the keys' `Nodup`):
 
+* `member_instPos`: a template's batch member, the template no input's key (`Fits.Accepted.inputs`), is a unit of a
+  member over the template's circuit file (`MembersOf`, the template nodes having no repeats), and its position is that
+  unit's.
 * `egress_returned`: an egress instance's bit of a word of its return is a returned gate of the joint program, and not
-  an input: the instance is a unit of a member over the last template's circuit file (`MembersOf`, the template nodes
-  having no repeats), which Bits' check passed (`FilesOf`, `Check.facts`), so the bit's leaf is a computed row's copy
-  (`Lowered.outGate_isSome`, `Lowered.outBit_returned`).
+  an input: the member's circuit file passed Bits' check (`FilesOf`, `Check.facts`), so the bit's leaf is a computed
+  row's copy (`Lowered.outGate_isSome`, `Lowered.outBit_returned`).
 * `scan_egress`: so is every egress gate: the presence gate is bit 0 of the verdict's word, and each frame bit a bit of
   a word of the row (`wordBit_zero_fst`, `wordBit_one_fst`), both inside the return's words.
+* `ingress_input`: an ingress instance's bit of its `row` parameter is an input of the joint program: Bits' check makes
+  the bit's port bit a message bit (`Reads.paramsWhy_first`) and keeps the unit's input ports in column order
+  (`Check.Facts.ordered`, `Reads.srcKey_port`), so the bit has a key and a gate (`Lowered.inGate_isSome`), and the unit
+  reads it (`RowsRead`, `Reads.readsWhy_first`, `Reads.unitReads_true`), so no constant fixes it
+  (`Lowered.inBit_input`).
+* `scan_ingress`: so is every ingress gate: step `t`'s are the bits of field 0 of its bucket's instance's parameters
+  (`wordBit_zero_fst`, `wordBit_zero_snd`).
+* `scan_fits`: an accepted scan's layout fits its audit's joint program: its egress and ingress gates as above, causal
+  (`scan_causal`), and with no wires (`wiresFit_none`).
 
 The facts both statements' witnesses read:
 
@@ -182,7 +195,49 @@ theorem locate_node_of_map {rs : Array Flock.TemplateQuery.TRange} {v k k' t : �
     simp only [Option.map_some, Option.some.injEq] at h'
     exact h.1.symm.trans h'
 
+/-- **A template's batch member is a member's unit**: of a Program whose Definitions' keys are distinct, at its
+templates' circuit files and its audit's members, batch member `t` of template `i`, no input's key, is unit `u` of a
+member `m` over template `i`'s circuit file, and its position at `pos` is the member's at that unit. -/
+theorem member_instPos {P : Flock.Program.Prog} {fs : List Flock.Circuit} {tids : Array String}
+    {rs : Array Flock.TemplateQuery.TRange} {ms : Members} (hroot : P.root < P.defs.size)
+    (hkeys : (P.defs.toList.map (·.key)).Nodup) (hfs : FilesOf P fs)
+    (hev : Flock.TemplateQuery.evaluate (.ofProg P) tids = .ok rs) (hms : MembersOf P fs rs ms) {i t : ℕ}
+    (hi : i < (templateNodes P).length)
+    (hin : Flock.Program.isInputId (Fits.callee P ((templateNodes P).getD i 0)).key = false)
+    (hb : (Fits.node P ((templateNodes P).getD i 0)).form = .batch)
+    (ht : t < (Fits.node P ((templateNodes P).getD i 0)).n) (pos : Flock.Circuit → ℕ → ℕ → Option ℕ) :
+    ∃ m < ms.length, ∃ u < (ms.getD m default).2.size, (ms.getD m default).1 = fs.getD i default ∧
+      instPos P rs ms i t pos =
+        ((pos (ms.getD m default).1 (ms.getD m default).2.size u).map (base ms m + ·)).getD (jointOf ms).gates.length := by
+  have hkm : (templateNodes P).getD i 0 ∈ templateNodes P := by
+    rw [Query.list_getD_of_lt _ hi]
+    exact List.getElem_mem hi
+  have hklt : (templateNodes P).getD i 0 < (Query.ddefOf (P.defs[P.root]!)).nodes.size := by
+    simp only [Query.ddefOf, Array.size_map]
+    exact Query.templateNode_lt hkm
+  have hinp := Query.isInput_ofProg hkm hin
+  obtain ⟨r, -, -, -, hcount, hpop, hloc⟩ :=
+    Query.evaluate_range hev (Query.def?_ofProg_root hkeys hroot) hklt hinp
+  have hcnt : r.count = (Fits.node P ((templateNodes P).getD i 0)).n := by
+    rw [hcount]; exact Query.countAt_ofProg (Query.templateNode_lt hkm) hb
+  have ht' : t < r.count := by rw [hcnt]; exact ht
+  obtain ⟨m, hm, u, hu, huv, hpos⟩ := Query.instPos_eq (P := P) (i := i) (t := t) (pos := pos) hms.1 (by omega)
+    fun w => hloc w t ht'
+  obtain ⟨i', hi', hci, hloci⟩ := hms.2 m hm
+  have hvmem : (ms.getD m default).2.getD u 0 ∈ (ms.getD m default).2.toList := by
+    rw [Query.array_getD_of_lt _ hu]
+    exact Array.getElem_mem_toList hu
+  have hnode := locate_node_of_map ((hloc _ t ht').2 huv) (hloci _ hvmem)
+  have hie : i = i' := getD_inj (templateNodes_nodup P) hi (by rw [← hfs.1]; exact hi') hnode
+  subst hie
+  exact ⟨m, hm, u, hu, hci, hpos⟩
+
+theorem headD_getD (l : List ℕ) : l.headD 0 = l.getD 0 0 := by cases l <;> rfl
+
 theorem wordBit_zero_fst (ts : List Flock.Program.Ty) (β : ℕ) : (wordBit ts 0 β).1 = β / 16 := by
+  simp only [wordBit, List.take_zero, List.map_nil, List.sum_nil, Nat.mul_zero, Nat.zero_add]
+
+theorem wordBit_zero_snd (ts : List Flock.Program.Ty) (β : ℕ) : (wordBit ts 0 β).2 = β % 16 := by
   simp only [wordBit, List.take_zero, List.map_nil, List.sum_nil, Nat.mul_zero, Nat.zero_add]
 
 theorem wordBit_snd (ts : List Flock.Program.Ty) (π β : ℕ) : (wordBit ts π β).2 < 16 := by
@@ -195,14 +250,12 @@ theorem wordBit_one_fst (a : Flock.Program.Ty) (ts : List Flock.Program.Ty) (β 
   simp only [wordBit, h1, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
 
 /-- **An egress instance's bit of a word of its return is returned, and not an input,** in the members' program: of an
-accepted scan whose Definitions' keys are distinct and whose egress template is no input's key, at its templates'
-circuit files and its audit's members, bit `τ` of word `j` of the egress template's instance `t`'s return. The instance
-is a unit of a member over the last template's circuit file, which Bits' check passed, so the bit is a computed row's
-copy. -/
+accepted scan whose Definitions' keys are distinct, at its templates' circuit files and its audit's members, bit `τ`
+of word `j` of the egress template's instance `t`'s return. The instance is a unit of a member over the last
+template's circuit file (`member_instPos`), which Bits' check passed, so the bit is a computed row's copy. -/
 theorem egress_returned {P : Flock.Program.Prog} {s : Schedule} {fs : List Flock.Circuit} {tids : Array String}
     {rs : Array Flock.TemplateQuery.TRange} {ms : Members} (hacc : Fits.Accepted P s)
-    (hkeys : (P.defs.toList.map (·.key)).Nodup)
-    (hin : Flock.Program.isInputId (Fits.callee P (Fits.egressNode P)).key = false) (hfs : FilesOf P fs)
+    (hkeys : (P.defs.toList.map (·.key)).Nodup) (hfs : FilesOf P fs)
     (hev : Flock.TemplateQuery.evaluate (.ofProg P) tids = .ok rs) (hms : MembersOf P fs rs ms) {t j τ : ℕ}
     (ht : t < s.window) (hj : j < SampledProofs.Bits.retWords (Fits.callee P (Fits.egressNode P)).ret)
     (hτ : τ < 16) :
@@ -216,29 +269,10 @@ theorem egress_returned {P : Flock.Program.Prog} {s : Schedule} {fs : List Flock
   have hlen : (templateNodes P).length - 1 < (templateNodes P).length := by
     have := List.length_pos_of_mem hkm
     omega
-  have hklt : (templateNodes P).getD ((templateNodes P).length - 1) 0 <
-      (Query.ddefOf (P.defs[P.root]!)).nodes.size := by
-    simp only [Query.ddefOf, Array.size_map]
-    exact Query.templateNode_lt hkm
-  have hinp := Query.isInput_ofProg hkm (by rewrite [← he]; exact hin)
-  obtain ⟨r, -, -, -, hcount, hpop, hloc⟩ :=
-    Query.evaluate_range hev (Query.def?_ofProg_root hkeys hacc.root_lt) hklt hinp
-  have hcnt : r.count = s.window := by
-    rewrite [hcount, Query.countAt_ofProg (Query.templateNode_lt hkm) (by rewrite [← he]; exact hacc.egress_batch.1),
-      ← he]
-    exact hacc.egress_batch.2
-  have ht' : t < r.count := by omega
-  obtain ⟨m, hm, u, hu, huv, hpos⟩ := Query.instPos_eq (P := P) (i := (templateNodes P).length - 1) (t := t)
-    (pos := fun c n u => outBit c n u 0 j τ) hms.1 (by omega) fun w => hloc w t ht'
-  obtain ⟨i, hi, hci, hloci⟩ := hms.2 m hm
-  have hvmem : (ms.getD m default).2.getD u 0 ∈ (ms.getD m default).2.toList := by
-    rewrite [Query.array_getD_of_lt _ hu]
-    exact Array.getElem_mem_toList hu
-  have hnode := locate_node_of_map ((hloc _ t ht').2 huv) (hloci _ hvmem)
-  have hie : (templateNodes P).length - 1 = i :=
-    getD_inj (templateNodes_nodup P) hlen (by rewrite [← hfs.1]; exact hi) hnode
-  subst hie
-  have hF := Check.facts (hfs.2 _ hi)
+  obtain ⟨m, hm, u, hu, hci, hpos⟩ := member_instPos (t := t) hacc.root_lt hkeys hfs hev hms hlen
+    (by rewrite [← he]; exact hacc.inputs _ hacc.egress_mem) (by rewrite [← he]; exact hacc.egress_batch.1)
+    (by rewrite [← he, hacc.egress_batch.2]; exact ht) (fun c n u => outBit c n u 0 j τ)
+  have hF := Check.facts (hfs.2 _ (by rewrite [hfs.1]; exact hlen))
   rewrite [← hci] at hF
   have hupv := hF.upv
   have hleaves := hF.leaves
@@ -261,13 +295,12 @@ theorem egress_returned {P : Flock.Program.Prog} {s : Schedule} {fs : List Flock
   exact Lowered.outBit_returned ms hm hx
 
 /-- **The scan's egress gates are returned, and not inputs** (`NetTiming.BoundaryGates.Fits`'s first part): of an
-accepted scan whose Definitions' keys are distinct and whose egress template is no input's key, at its templates'
-circuit files and its audit's members. A slot's presence gate is bit 0 of word 0 of the egress instance's return, the
-verdict's, and each of its frame bits a bit of a word of the row's, both inside the return's `1 + ⌈8SB/16⌉` words. -/
+accepted scan whose Definitions' keys are distinct, at its templates' circuit files and its audit's members. A slot's
+presence gate is bit 0 of word 0 of the egress instance's return, the verdict's, and each of its frame bits a bit of a
+word of the row's, both inside the return's `1 + ⌈8SB/16⌉` words. -/
 theorem scan_egress {P : Flock.Program.Prog} {s : Schedule} {fs : List Flock.Circuit} {tids : Array String}
     {rs : Array Flock.TemplateQuery.TRange} {ms : Members} (hacc : Fits.Accepted P s)
-    (hkeys : (P.defs.toList.map (·.key)).Nodup)
-    (hin : Flock.Program.isInputId (Fits.callee P (Fits.egressNode P)).key = false) (hfs : FilesOf P fs)
+    (hkeys : (P.defs.toList.map (·.key)).Nodup) (hfs : FilesOf P fs)
     (hev : Flock.TemplateQuery.evaluate (.ofProg P) tids = .ok rs) (hms : MembersOf P fs rs ms) :
     ∀ t < s.window, ∀ ℓ σ, ∀ g ∈ NetTiming.slotGates ((scanLayout P s rs ms).egress t ℓ σ),
       g ∈ (jointOf ms).outs ∧ (jointOf ms).gates[g]? ≠ some .input := by
@@ -289,15 +322,139 @@ theorem scan_egress {P : Flock.Program.Prog} {s : Schedule} {fs : List Flock.Cir
   intro t ht _ σ g hg
   simp only [scanLayout, NetTiming.slotGates, List.mem_cons, List.mem_map, List.mem_range] at hg
   rcases hg with rfl | ⟨b, hb, rfl⟩
-  · refine egress_returned hacc hkeys hin hfs hev hms ht ?_ (wordBit_snd _ 0 0)
+  · refine egress_returned hacc hkeys hfs hev hms ht ?_ (wordBit_snd _ 0 0)
     rewrite [wordBit_zero_fst, hw]
     omega
   · have hσ := Lowered.mul_add_le (B := 8 * s.cellBytes) (i := b + 1) σ.isLt (Nat.succ_le_of_lt hb)
     have hC : s.allocation * (8 * s.cellBytes) = s.allocation * s.cellBytes * 8 := by
       rw [Nat.mul_assoc, Nat.mul_comm s.cellBytes 8]
-    refine egress_returned hacc hkeys hin hfs hev hms ht ?_ (wordBit_snd _ 1 _)
+    refine egress_returned hacc hkeys hfs hev hms ht ?_ (wordBit_snd _ 1 _)
     rewrite [hrets, wordBit_one_fst, hA, hw]
     omega
+
+/-! ## The ingress gates and the fit -/
+
+open SampledProofs.Bits in
+/-- **An ingress instance's row bit is an input** of the members' program: of a Program whose Definitions' keys are
+distinct, at its templates' circuit files, which read their `row` parameters (`RowsRead`), and its audit's members,
+bit `ℓ` of the `row` parameter of an ingress bucket's instance (`Fits.Ingress`), the template no input's key. The
+instance is a unit of a member over the template's circuit file (`member_instPos`). Bits' check makes the bit's port bit
+a message bit (`Reads.paramsWhy_first`), at its port's column, the ports being in column order (`Check.Facts.ordered`,
+`Reads.srcKey_port`), so it has a key and a gate (`Lowered.inGate_isSome`), and the unit reads it
+(`Reads.readsWhy_first`, `Reads.unitReads_true`), so no constant fixes it (`Lowered.inBit_input`). -/
+theorem ingress_input {P : Flock.Program.Prog} {s : Schedule} {fs : List Flock.Circuit} {tids : Array String}
+    {rs : Array Flock.TemplateQuery.TRange} {ms : Members} (hroot : P.root < P.defs.size)
+    (hkeys : (P.defs.toList.map (·.key)).Nodup) (hfs : FilesOf P fs) (hrr : RowsRead P fs)
+    (hev : Flock.TemplateQuery.evaluate (.ofProg P) tids = .ok rs) (hms : MembersOf P fs rs ms) {i t ℓ : ℕ}
+    (hi : i < (templateNodes P).length)
+    (hin : Flock.Program.isInputId (Fits.callee P ((templateNodes P).getD i 0)).key = false)
+    (hing : Fits.Ingress P s ((templateNodes P).getD i 0, t))
+    (hℓ : ℓ < SampledProofs.Bits.bitsOf (Fits.rowTy s)) :
+    (jointOf ms).gates[instPos P rs ms i t fun c n u => inBit c n u 0 (ℓ / 16) (ℓ % 16)]? = some .input := by
+  have hkm : (templateNodes P).getD i 0 ∈ templateNodes P := hing.1
+  have hb : (Fits.node P ((templateNodes P).getD i 0)).form = .batch := hing.2.1
+  have ht : t < (Fits.node P ((templateNodes P).getD i 0)).n := hing.2.2.1
+  have hsz : 0 < (Fits.callee P ((templateNodes P).getD i 0)).params.size := hing.2.2.2.1
+  have hname : ((Fits.callee P ((templateNodes P).getD i 0)).params[0]!).1 = "row" := hing.2.2.2.2.1
+  have hty : ((Fits.callee P ((templateNodes P).getD i 0)).params[0]!).2 = Fits.rowTy s := hing.2.2.2.2.2.1
+  obtain ⟨m, hm, u, hu, hci, hpos⟩ := member_instPos (t := t) hroot hkeys hfs hev hms hi hin hb ht
+    (fun c n u => inBit c n u 0 (ℓ / 16) (ℓ % 16))
+  have hi' : i < fs.length := by rw [hfs.1]; exact hi
+  have hF := Check.facts (hfs.2 i hi')
+  have hR := hrr i hi'
+  rw [← hci] at hF hR
+  have hp0 : (Fits.callee P ((templateNodes P).getD i 0)).params[0]! = ("row", Fits.rowTy s) := Prod.ext hname hty
+  have hd : (templateDef P ((templateNodes P).getD i 0)).params.toList =
+      ("row", Fits.rowTy s) :: (templateDef P ((templateNodes P).getD i 0)).params.toList.tail := by
+    rw [← hp0]; exact Reads.toList_cons hsz
+  have hfind := find?_key hkeys (templateDef_mem hkm)
+  have hports := hF.ports _ hfind
+  have hread := (Reads.readsWhy_first hd hR).2 ℓ hℓ
+  obtain ⟨r, hrlt, hrmem, hrx⟩ := Reads.unitReads_true hread
+  obtain ⟨q, byte, bit, hsrc⟩ := Reads.paramsWhy_first hd (by have := hF.upv; omega) hports.2 hℓ
+  have hp : ℓ / 16 < (Flock.portCols (ms.getD m default).1.unit.inGroups).size := by
+    have hpcs := hports.1
+    rw [hd] at hpcs
+    simp only [List.map_cons, List.sum_cons, SampledProofs.Bits.wordsOf] at hpcs
+    omega
+  have hτ : ℓ % 16 < ((Flock.portCols (ms.getD m default).1.unit.inGroups).getD (ℓ / 16) (0, 0)).2 := by
+    have := hF.widths _ hp; omega
+  have hW : ((Flock.portCols (ms.getD m default).1.unit.inGroups).getD (ℓ / 16) (0, 0)).1 + ℓ % 16 <
+      (ms.getD m default).1.unit.inWords * Flock.WORD := by
+    rw [← hF.inWords]; exact hrx
+  have hsk := Reads.srcKey_port (ix := Index.of (ms.getD m default).1) hF.ordered hp hτ hW
+  have hcol : inCol (ms.getD m default).1 0 (ℓ / 16) (ℓ % 16) =
+      ((Flock.portCols (ms.getD m default).1.unit.inGroups).getD (ℓ / 16) (0, 0)).1 + ℓ % 16 := by
+    unfold inCol; rw [Nat.zero_mul, Nat.zero_add]; try rfl
+  have hxB : inCol (ms.getD m default).1 0 (ℓ / 16) (ℓ % 16) <
+      ((Rows.ofNet (ms.getD m default).1.unit).stack (ms.getD m default).1.upv).nIn := by
+    show _ < (ms.getD m default).1.upv * (Rows.ofNet (ms.getD m default).1.unit).nIn
+    rw [hcol, hF.upv, Nat.one_mul]; exact hrx
+  obtain ⟨b, hbk⟩ := Reads.keyIdx_isSome (c := (ms.getD m default).1) hxB (by rw [hcol, hsk, hsrc]; simp)
+  have hgate := Lowered.inGate_isSome (n := (ms.getD m default).2.size) hu (by have := hF.upv; omega) hp
+    (show ℓ % 16 < ((Flock.portCols (ms.getD m default).1.unit.inGroups).getD (ℓ / 16) default).2 from hτ) hbk
+  have hx' : inBit (ms.getD m default).1 (ms.getD m default).2.size u 0 (ℓ / 16) (ℓ % 16) =
+      some (posOf (keyProg (ms.getD m default).1 (ms.getD m default).2.size)
+        (2 + u * ((Rows.ofNet (ms.getD m default).1.unit).stack (ms.getD m default).1.upv).nIn + b)) := by
+    simp only [inBit, hgate, Option.map_some]
+  have hpos' : instPos P rs ms i t (fun c n u => inBit c n u 0 (ℓ / 16) (ℓ % 16)) =
+      base ms m + posOf (keyProg (ms.getD m default).1 (ms.getD m default).2.size)
+        (2 + u * ((Rows.ofNet (ms.getD m default).1.unit).stack (ms.getD m default).1.upv).nIn + b) := by
+    rw [hpos]
+    simp only [hx', Option.map_some, Option.getD_some]
+  rw [hpos']
+  exact Lowered.inBit_input ms hm hx' hrlt hrmem hrx
+
+/-- **The scan's ingress gates are inputs** (`NetTiming.BoundaryGates.Fits`'s second part): of an accepted scan whose
+Definitions' keys are distinct, at its templates' circuit files reading their `row` parameters and its audit's
+members. Step `t`'s ingress gates are the bits of its bucket's instance's `row`, parameter 0: bucket 0's of the first
+template, a later bucket's of the second. -/
+theorem scan_ingress {P : Flock.Program.Prog} {s : Schedule} {fs : List Flock.Circuit} {tids : Array String}
+    {rs : Array Flock.TemplateQuery.TRange} {ms : Members} (hacc : Fits.Accepted P s)
+    (hkeys : (P.defs.toList.map (·.key)).Nodup) (hfs : FilesOf P fs) (hrr : RowsRead P fs)
+    (hev : Flock.TemplateQuery.evaluate (.ofProg P) tids = .ok rs) (hms : MembersOf P fs rs ms) :
+    ∀ t < s.window, ∀ g ∈ (scanLayout P s rs ms).ingress t, (jointOf ms).gates[g]? = some .input := by
+  have hR : SampledProofs.Bits.bitsOf (Fits.rowTy s) = s.allocation * s.cellBytes * 8 := by
+    simp only [Check.bits_bitsOf, Fits.rowTy, Check.bits_array, Check.bits_value, Nat.mul_one]
+  have hC : s.allocation * (8 * s.cellBytes) = s.allocation * s.cellBytes * 8 := by
+    rw [Nat.mul_assoc, Nat.mul_comm s.cellBytes 8]
+  have hlen : 2 ≤ (templateNodes P).length := by
+    rcases hacc.shape with ⟨a, e, hts, -⟩ | ⟨a, b, e, hts⟩ <;> simp [hts]
+  intro t ht g hg
+  have hing := hacc.ingress t ht
+  by_cases ht0 : t = 0
+  · subst ht0
+    have hb0 : Fits.bucket P 0 = ((templateNodes P).getD 0 0, 0) := by
+      simp only [Fits.bucket, ↓reduceIte, headD_getD]
+    rw [hb0] at hing
+    simp only [scanLayout, ↓reduceIte, List.mem_map, List.mem_range] at hg
+    obtain ⟨ℓ, hℓ, rfl⟩ := hg
+    have hℓ' : ℓ < SampledProofs.Bits.bitsOf (Fits.rowTy s) := by rw [hR, ← hC]; exact hℓ
+    simp only [wordBit_zero_fst, wordBit_zero_snd]
+    exact ingress_input hacc.root_lt hkeys hfs hrr hev hms (by omega) (hacc.inputs _ hing.1) hing hℓ'
+  · have hbt : Fits.bucket P t = ((templateNodes P).getD 1 0, t - 1) := by
+      simp only [Fits.bucket, ht0, ↓reduceIte]
+    rw [hbt] at hing
+    simp only [scanLayout, ht0, ↓reduceIte, List.mem_map, List.mem_range] at hg
+    obtain ⟨ℓ, hℓ, rfl⟩ := hg
+    have hℓ' : ℓ < SampledProofs.Bits.bitsOf (Fits.rowTy s) := by rw [hR, ← hC]; exact hℓ
+    simp only [wordBit_zero_fst, wordBit_zero_snd]
+    exact ingress_input hacc.root_lt hkeys hfs hrr hev hms (by omega) (hacc.inputs _ hing.1) hing hℓ'
+
+/-- **An accepted scan's layout fits its audit's joint program**: of a Program `scanProg` accepts whose Definitions'
+keys are distinct, at its templates' circuit files reading their `row` parameters and its audit's members, the scan
+layout's egress gates are returned and not inputs (`scan_egress`), its ingress gates inputs (`scan_ingress`), no egress
+gate depends on a later step's ingress (`scan_causal`), and with no wires the wiring fits (`wiresFit_none`). -/
+theorem scan_fits {program : String} {s : Schedule} {sc : NetworkCheck.Period.Scan} {P : Flock.Program.Prog}
+    {fs : List Flock.Circuit} {tids : Array String} {rs : Array Flock.TemplateQuery.TRange} {ms : Members}
+    (hscan : NetworkCheck.Period.scanProg P program s = .ok sc) (hkeys : (P.defs.toList.map (·.key)).Nodup)
+    (hfs : FilesOf P fs) (hrr : RowsRead P fs) (hev : Flock.TemplateQuery.evaluate (.ofProg P) tids = .ok rs)
+    (hms : MembersOf P fs rs ms) :
+    (scanLayout P s rs ms).Fits (jointOf ms) s.window := by
+  have hacc := Fits.scanProg_accepted hscan
+  have hE := scan_egress hacc hkeys hfs hev hms
+  exact ⟨hE, scan_ingress hacc hkeys hfs hrr hev hms, scan_causal hacc fun t ht ℓ σ g hg => (hE t ht ℓ σ g hg).1,
+    wiresFit_none rfl⟩
 
 /-- One slot of one lane and a window of one step. -/
 def oneSlot : NetworkCheck.Period.Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1⟩

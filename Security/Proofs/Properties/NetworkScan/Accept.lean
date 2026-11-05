@@ -2,7 +2,7 @@ import Properties.NetworkScan
 import Proofs.Properties.Nci.BodiesOk
 
 /-!
-# What `NetworkCheck.Period.scanOf`'s acceptance gives of the scan's Program
+# What `NetworkCheck.Period.scanProg`'s acceptance gives of the scan's Program
 
 `scanProg_accepted` reads `scanProg`'s steps one by one (each check a `need`, so each step a bind), and keeps what
 `NetTiming.BoundaryGates.Fits`'s first two parts rest on (`Accepted`): the description's layout and walk checks, the
@@ -11,7 +11,7 @@ returned by the root in one run), each step's ingress bucket (`Ingress`: a batch
 the schedule's row type, its first argument one input node's leaves), and the Program topological
 (`Prog.orderViolation`) with two templates, or three where the window has a later step, which part (3) reads, its root
 one of its Definitions, its Definitions' keys distinct (`keysUnique`) and no template keyed as an input
-(`Flock.Program.isInputId`). `scanOf_accepted` is it at the Program `scanOf` decodes (`scanOf_scanProg`).
+(`Flock.Program.isInputId`). `scanOf` accepts a scan as `scanProg` accepts the Program it decodes (`scanOf_scanProg`).
 -/
 
 namespace Properties.NetworkScan.Fits
@@ -281,12 +281,5 @@ theorem scanProg_accepted {P : Prog} {program : String} {s : Schedule} {sc : Sca
         exact ⟨by simp [hts], form_batch hcond.1, by omega, by omega,
           name_of_map (beq_iff_eq.1 hnl) (ingressParams_row _), BodiesOk.ty_beq hrl, kr, hkr⟩
     · cases hln
-
-/-- **What `scanOf`'s acceptance gives**: an accepted scan's canonical text decodes to a Program of the generator
-form, as `Accepted` states it. -/
-theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : Scan} {c : String} {P : Prog}
-    (h : scanOf j program s = .ok sc) (hc : Flock.canon j = .ok c) (hd : Flock.Program.decode c.toUTF8 = .ok P) :
-    Accepted P s :=
-  scanProg_accepted (scanOf_scanProg h hc hd)
 
 end Properties.NetworkScan.Fits
