@@ -1,6 +1,7 @@
 """Critical-path planner over the declaration graph.
 
-Inputs: deps.tsv(.gz) from Extract.lean (every in-tree constant and the in-tree constants it uses), module times (measured
+Inputs: deps.tsv(.gz) from Extract.lean (every in-tree constant and the in-tree constants it uses) and refs.py (the
+constants each declaration names in its source), module times (measured
 wall seconds per module), per-declaration times (parse_trace.py's JSON), and the import graph (graph.py).
 
 It evaluates, as the critical path of the module DAG with each module weighing its measured time:
@@ -48,8 +49,10 @@ def owner_name(n: str) -> str:
 
 
 def load_deps(path: Path):
+    """Extract.lean's modules and constants, each constant's uses extended by refs.py's `R` lines: the constants its
+    declaration names in its module's source."""
     op = gzip.open if path.suffix == ".gz" else open
-    mods, consts = {}, []
+    mods, consts, refs = {}, [], []
     with op(path, "rt") as f:
         for line in f:
             p = line.rstrip("\n").split("\t")
@@ -57,6 +60,15 @@ def load_deps(path: Path):
                 mods[int(p[1])] = p[2]
             elif p[0] == "C":
                 consts.append((int(p[1]), int(p[2]), p[3], p[4], [int(x) for x in p[5].split(",") if x]))
+            elif p[0] == "R":
+                refs.append((p[1], p[2], p[3]))
+    if refs:
+        at = {(mods[c[1]], c[3]): c for c in consts}
+        by_name = {name: cid for cid, _, _, name, _ in consts}
+        for mod, decl, name in refs:
+            c, d = at.get((mod, decl)), by_name.get(name)
+            if c is not None and d is not None and d != c[0] and d not in c[4]:
+                c[4].append(d)
     return mods, consts
 
 

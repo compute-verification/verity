@@ -7,7 +7,8 @@ Imports are by use (the constant graph), the shaken graph the plan assumed.
     python3 splitmap.py --repo R --deps deps.tsv.gz --refresh MAP.toml --out MAP.toml
 
 From `--plan` (plan.py's operations) it names each new module; with `--refresh` it takes an existing map's operations and
-names. Either way each split's declarations are rederived from R's constant graph (`--deps`, Extract.lean on R): what
+names. Either way each split's declarations are rederived from R's constant graph (`--deps`, Extract.lean and refs.py
+on R): what
 `for_importer` uses of `source`, closed under uses inside `source`, as plan.py chose them. An operation whose module isn't in
 R, or whose importer now needs none or all of its source, is left out and said so, with every later operation on what it
 would have made. The model's path (`--times`, `--decls`) goes to stdout, never into the map."""

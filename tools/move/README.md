@@ -9,7 +9,7 @@ root, and refuses a dirty worktree; a second run changes nothing.
 | `layout.py` | Moves the paths a layout map names and rewrites every path, module name, import, pyproject and anchor that pointed at them (`--dry-run`, `--modules`, `--resolve M`). |
 | `rename.py` | Renames the words a word map names, in paths, modules, Lean names and prose, leaving the Lean locks' records for `tools/verity/lean/check.py --update --moved` (`--map MAP`, `--dry-run`, `--moves`). |
 | `restack.py` | Carries an open branch across a move by rerunning the move's script on it, then merging the moved `main`. |
-| `leansplit.py` | Applies a split map's ordered operations (`[[op]]`): moves Lean declarations, with their docstrings, attributes and scopes, out of a module into a new one, or merges a module into another, and repoints the importers (`--dry-run`, `--first N`, `--ops`, `--check-roundtrip`). `split_plan/` writes the map from a build's module times and the constant graph, and `split_plan/refresh.sh MAP OUT` rederives it on a tree and builds the result. |
+| `leansplit.py` | Applies a split map's ordered operations (`[[op]]`): moves Lean declarations, with their docstrings, attributes and scopes, out of a module into a new one, or merges a module into another, and repoints the importers (`--dry-run`, `--first N`, `--ops`, `--check-roundtrip`). `split_plan/` writes the map from a build's module times and the constant graph (`Extract.lean`, with the references each module's `.ilean` records: `refs.py`), and `split_plan/refresh.sh MAP OUT` rederives it on a tree and builds the result. |
 
 A layout map (`layout.py --map`) maps old paths to new ones; a word map (`rename.py --map`) maps old words to new ones:
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # `bash tools/move/split_plan/refresh.sh MAP OUT`, at the root of a tree that may be written (a research run's `--cwd clone`):
-# builds Proofs.Flock from the Lean cache, extracts its constant graph (Extract.lean), rederives MAP's operations on it
+# builds Proofs.Flock from the Lean cache, extracts its constant graph (Extract.lean, with refs.py's references from each
+# module's .ilean), rederives MAP's operations on it
 # (`splitmap.py --refresh`), applies them (`leansplit.py`) and builds the result, Proofs.Flock first and then all of
 # Proofs, whose modules outside Proofs.Flock's closure the graph doesn't cover. OUT gets the graph (deps.tsv.gz), the
 # rederived map (map.toml), what leansplit did (leansplit.log), the split's diff (split.patch) and each step's log;
@@ -27,6 +28,7 @@ step build-tree bash -c 'cd Security/Proofs && lake build Proofs.Flock' || exit
 python3 "$here/graph.py" . Proofs.Flock mods > "$out/mods.txt" || exit
 step extract bash -c "cd Security/Proofs && lake env lean --run '$here/Extract.lean' Proofs.Flock '$out/mods.txt' '$out/deps.tsv'" \
     || exit
+step refs python3 "$here/refs.py" . "$out/mods.txt" "$out/deps.tsv" || exit
 gzip -f "$out/deps.tsv"
 step refresh python3 "$here/splitmap.py" --repo . --deps "$out/deps.tsv.gz" --refresh "$map" --out "$out/map.toml" || exit
 git status --porcelain > "$out/status-before-split.txt"
