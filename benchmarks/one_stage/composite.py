@@ -6,8 +6,9 @@ and the Lean verdict on it (`onsite check`, `remote check`, `remote-network chec
 
 Each ``--cases`` is a private directory (0700, its files 0600, as the pieces write it) holding one subprotocol's case,
 or a directory whose subdirectories each hold one. A case is the subprotocol's case as its own `serve` reads it,
-``case.json``: ``{"params", "commitment", "evidence"}`` with the commitment and evidence hex, and ``blobs``, the paths
-of the files it reads; beside its own Lean answer on that case,
+``case.json``: ``{"params", "commitment", "evidence"}`` with the commitment and evidence hex, ``blobs``, the paths
+of the files it reads, and, for the network certifier's period, ``circuits``, the paths of the circuit files its period
+lists, in the listing's order; beside its own Lean answer on that case,
 ``answer.json``, whose ``protocol`` is its id and ``commitment`` its digest (null when its commitment didn't decode, and
 then the case's own commitment stands in, which a rejection never binds). The inference-only policy's case
 (`verity/inference-only/v0`) is one subprotocol's like any other; its record's digest must be the one sampled proofs'
@@ -17,20 +18,28 @@ A case's evidence is witness, and so are its params' bodies, so the output is sp
 its files 0600) gets the product's params (``params.json``), commitment (``commitment.bin``: `bind` of the digests in
 the order of the ids) and evidence (``evidence.json``), all canonical, as `Core.Composition.sameB` reads them (the
 composition README's formats), the blobs' paths
-(``blobs.txt``), each piece's answer (``pieces/N.answer.json``) and the product's (``answer.json``). An answer's
+(``blobs.txt``), the circuit files' (``circuits.txt``), each piece's answer (``pieces/N.answer.json``) and the
+product's (``answer.json``). Where the product accepts and has the network certifier's period, every subprotocol
+accepted, so the period's own answer is read off the product's, its public outputs and profile under its id and the
+digest its case's answer binds, which the product's commitment binds too; it is written as `Core.Answer.toJson` writes
+it (``network-answer.json``), as `network-period check` would answer the period with those files. An answer's
 query, digests, profile and reason are private too (a partition's digest is the query), so ``--public-out`` gets only
 ``composite.json``: the product, the composite's commitment, each case's id, params digest (SHA-512 of its canonical
 params) and commitment, what is missing, and each piece's and Lean's outcome (`outcome`: the id, the verdict and the
 refusal's name) and its stated exceptions (`EXCEPTIONS`: the policy's v0, composed in the clear for one run of record
-only); and ``verdicts.txt``, its ``PIECE ID VERDICT [NAME]``, ``NOT_ESTABLISHED``, ``VERDICT
-ID VERDICT [NAME]`` and ``EXCEPTION LINE`` lines, which it also prints. Before writing them it refuses (exit 65) public bytes that share 64 bytes or more
-with any case's evidence, raw or hex, the cases' commitments and digests aside. The public directory may not be or
-contain the private one.
+only), and ``"circuit_files": "by path"`` where the check reads circuit files by path (the cases list any), whose
+verdict is the verifier of record's where `Verity.CircuitFilesByPathAgree` holds; and ``verdicts.txt``, its
+``PIECE ID VERDICT [NAME]``, ``NOT_ESTABLISHED``, ``VERDICT ID VERDICT [NAME]`` and ``EXCEPTION LINE`` lines, which it
+also prints. Before writing them it refuses (exit 65) public bytes that share 64 bytes or more with any case's
+evidence, raw or hex, the cases' commitments and digests aside. The public directory may not be or contain the
+private one.
 
-With ``--exe``, it runs ``EXE check params.json commitment.bin evidence.json BLOB...`` and exits with its code: 0
-accept, 1 reject, 2 undecided. It decides nothing itself: a subprotocol with no case, or whose directory lacks its case
-or its answer, is left out of the product's case, and Lean's verdict on that case is the composite's (a rejection
-naming the missing case). Such a run is labelled ``NOT_ESTABLISHED``, naming what is missing. 64 is a usage error.
+With ``--exe``, it runs ``EXE check params.json commitment.bin evidence.json BLOB... [--circuits CIRCUIT...]``, the
+circuit files after ``--circuits`` where the cases list any (`Core.PeriodFiles.main`, which reads them by path), and
+exits with its code: 0 accept, 1 reject, 2 undecided. It decides nothing itself: a subprotocol with no case, or whose
+directory lacks its case or its answer, is left out of the product's case, and Lean's verdict on that case is the
+composite's (a rejection naming the missing case). Such a run is labelled ``NOT_ESTABLISHED``, naming what is
+missing. 64 is a usage error.
 """
 from __future__ import annotations
 
@@ -45,6 +54,7 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
+NETWORK = "verity/certifier/v0"
 PRODUCTS = {"onsite": "verity/onsite/v0", "remote": "verity/remote/v0", "remote-network": "verity/remote-network/v0",
             "remote-network-no-pouw": "verity/remote-network-no-pouw/v0"}
 #: Each composite's subprotocols, as `Core.Onsite.components`, `Core.Remote.components`, `Core.RemoteNetwork.components`
@@ -116,7 +126,7 @@ def case_dirs(roots: Iterable[Path]) -> list[Path]:
 
 def piece(d: Path) -> dict[str, Any]:
     """A subprotocol's case, digest and own answer line from its directory: ``{"id", "params", "commitment", "evidence",
-    "digest", "blobs", "answer"}``, the commitment, evidence and digest bytes."""
+    "digest", "blobs", "circuits", "answer"}``, the commitment, evidence and digest bytes."""
     case = json.loads((d / "case.json").read_text())
     line = (d / "answer.json").read_text().strip()
     answer = json.loads(line)
@@ -124,7 +134,8 @@ def piece(d: Path) -> dict[str, Any]:
     digest = answer.get("commitment")
     return {"id": answer["protocol"], "params": case["params"], "commitment": commitment,
             "evidence": bytes.fromhex(case["evidence"]), "digest": bytes.fromhex(digest) if digest else commitment,
-            "blobs": [str(b) for b in case.get("blobs") or []], "answer": line}
+            "blobs": [str(b) for b in case.get("blobs") or []],
+            "circuits": [str(c) for c in case.get("circuits") or []], "answer": line}
 
 
 def compose(product: str, pieces: Sequence[dict[str, Any]]) -> tuple[dict, bytes, bytes, list[str]]:
@@ -136,6 +147,17 @@ def compose(product: str, pieces: Sequence[dict[str, Any]]) -> tuple[dict, bytes
     commitment = bind(PRODUCTS[product], [(p["id"], p["digest"]) for p in xs])
     blobs = list(dict.fromkeys(b for p in xs for b in p["blobs"]))
     return params, commitment, canonical(evidence), blobs
+
+
+def network_answer(answer: str, pieces: Sequence[dict[str, Any]]) -> bytes | None:
+    """The network certifier's period's own answer, read off the product's answer line ``answer``, which `outcome` read
+    as accepted; none where the product has no network certifier's case."""
+    cert = [p for p in pieces if p["id"] == NETWORK]
+    if not cert:
+        return None
+    a = json.loads(answer)
+    return canonical({"commitment": cert[0]["digest"].hex(), "profile": a["profile"][NETWORK], "protocol": NETWORK,
+                      "public": a["public"][NETWORK], "reason": None, "verdict": "accept"})
 
 
 def missing(product: str, pieces: Sequence[dict[str, Any]]) -> list[str]:
@@ -171,10 +193,11 @@ def exceptions(product: str) -> list[str]:
 
 
 def public_record(product: str, commitment: bytes, cases: Sequence[dict[str, Any]], gone: Sequence[str],
-                  verdict: dict[str, str] | None) -> dict[str, Any]:
-    """What ``--public-out`` may hold: no evidence, no params bodies and no answer bodies."""
+                  verdict: dict[str, str] | None, by_path: bool = False) -> dict[str, Any]:
+    """What ``--public-out`` may hold: no evidence, no params bodies and no answer bodies; ``circuit_files`` only where
+    the check reads circuit files by path (``by_path``), naming no path and no digest."""
     return {"product": PRODUCTS[product], "commitment": commitment.hex(), "missing": list(gone), "verdict": verdict,
-            "exceptions": exceptions(product),
+            "exceptions": exceptions(product), **({"circuit_files": "by path"} if by_path else {}),
             "cases": [{"params_sha512": hashlib.sha512(canonical(p["params"])).hexdigest(),
                        "commitment": p["commitment"].hex()} | outcome(p["id"], p["answer"]) for p in cases]}
 
@@ -214,8 +237,10 @@ def run(a: argparse.Namespace) -> int:
         return USAGE
     found = [piece(d) for d in case_dirs(a.cases)]
     params, commitment, evidence, blobs = compose(a.product, found)
+    circuits = [c for p in sorted(found, key=lambda p: p["id"]) for c in p["circuits"]]
     files = {"params.json": canonical(params), "commitment.bin": commitment, "evidence.json": evidence,
-             "blobs.txt": "".join(f"{b}\n" for b in blobs).encode()}
+             "blobs.txt": "".join(f"{b}\n" for b in blobs).encode(),
+             "circuits.txt": "".join(f"{c}\n" for c in circuits).encode()}
     files |= {f"pieces/{n}.answer.json": (p["answer"] + "\n").encode() for n, p in enumerate(found)}
     write_private(priv, files)
     cases = sorted(found, key=lambda p: p["id"])
@@ -223,17 +248,19 @@ def run(a: argparse.Namespace) -> int:
     lines = [line("PIECE", outcome(p["id"], p["answer"])) for p in cases]
     lines += [f"NOT_ESTABLISHED missing {', '.join(gone)}"] if gone else []
     cmd = [a.exe or a.product, "check", *(str(priv / n) for n in ("params.json", "commitment.bin", "evidence.json")),
-           *blobs]
+           *blobs, *(["--circuits", *circuits] if circuits else [])]
     rc, verdict = 0, None
     if a.exe:
         p = subprocess.run(cmd, capture_output=True, text=True, check=False)
         answer = p.stdout.strip().splitlines()[-1] if p.stdout.strip() else None
         write_private(priv, {"answer.json": f"{answer or ''}\n".encode(), "check.err": p.stderr.encode()})
         verdict = outcome(PRODUCTS[a.product], answer)
+        if answer and verdict["verdict"] == "accept" and (net := network_answer(answer, found)) is not None:
+            write_private(priv, {"network-answer.json": net + b"\n"})
         lines.append(line("VERDICT", verdict) + ("" if answer else f" (exit {p.returncode}; its stderr is in --private-out)"))
         rc = p.returncode
     lines += [f"EXCEPTION {x}" for x in exceptions(a.product)]
-    record = canonical(public_record(a.product, commitment, cases, gone, verdict))
+    record = canonical(public_record(a.product, commitment, cases, gone, verdict, by_path=bool(circuits)))
     text = "".join(f"{ln}\n" for ln in lines).encode()
     try:
         check_public(record + b"\n" + text, found)
