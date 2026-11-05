@@ -252,8 +252,8 @@ _PEARLPLUS_UNTIED = ("development run, credits nothing: Pearl+ (pearl-c-h100-v1-
                      "after the window's serve, the BF16 checkpoint's linears as its FP8 product, so its passes are not the "
                      "window sampled proofs audited and nothing ties them to that window's Commit")
 #: ... under PEARLPLUS_TIE, where serve-openai's Pearl+ arm served the window itself (`pearlplus`'s ``tie``)
-_PEARLPLUS_TIED = ("development piece, which the record takes as PoUW's verdict of record only where pearlplus_of_record "
-                   "holds it: Pearl+ (pearl-c-h100-v1-h3) served the window itself, one epoch the window and its passes the "
+_PEARLPLUS_TIED = ("development piece, which the record takes as PoUW's verdict of record, the prover side's, only where "
+                   "pearlplus_of_record holds it: Pearl+ (pearl-c-h100-v1-h3) served the window itself, one epoch the window and its passes the "
                    "window's Commit steps, its verdict holding them to the window record W that the window's registration R "
                    "is chained right after (served_passes.py verify --tie W)")
 _IN_PROCESS_WHY = ("its epoch's coins are an in-process challenger's, which the serving process holds, so it claims no "
@@ -331,6 +331,8 @@ LEAN_HERE = ("recomputed on this host by the Lean verifier (vstar-recursive samp
 PEARLPLUS_FROM = (f"{AS_WRITTEN} (its piece files in pouw/): Pearl+'s Lean verdict of record (PouwCheck.PearlPlus), "
                   "the prover side's, run on the served node over the retained passes; no auditor host re-checks it, since "
                   "its case (the passes' manifests with their salt key, and the opened tiles' rows) is witness")
+#: what the composed verdict's reason (`said`) says of that row's accept
+PEARLPLUS_SAID = "Pearl+'s Lean verdict of record, the prover side's, which no auditor host re-checks"
 #: ... the files the served node wrote that a row's answer is otherwise read from, by runner name (a piece's: its dir)
 WRITTEN = {"integrity": "the records audit's summary.json and window/audit.json"}
 #: A served run's witness, by a path's part (`witness`): what a compose hand-off never carries, each with why
@@ -1889,6 +1891,8 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
         elif v == "accept":
             t = terms(r, (legs or {}).get(k))
             s = ("accept" if server is not None else "accept, naming no server: not carried") + (f" ({'; '.join(t)})" if t else "")
+            if r.get("answer_from") == PEARLPLUS_FROM:
+                s += f", {PEARLPLUS_SAID}"
         else:
             s = f"{v}: {r.get('reason')}"
         out.append(f"{NAMES[k]}: {s}")

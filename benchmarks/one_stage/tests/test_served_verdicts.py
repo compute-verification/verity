@@ -1454,7 +1454,8 @@ def test_a_tied_pearlplus_piece_on_a_live_salt_session_names_the_period_it_joine
     doc = S.pearlplus(tmp_path / "a", window, verified, tie=w, **args)
     assert (doc["verdict"], doc["reasons"], doc["coins"]["epoch"]) == ("accept", [], S.PEARLPLUS_EPOCH_TIED)
     assert doc["why"] == S.pearlplus_why_tied(reserved) and doc["why"].endswith(f"on vy-challenger-1, {joined}")
-    assert doc["why"].startswith("development piece, which the record takes as PoUW's verdict of record only where")
+    assert doc["why"].startswith("development piece, which the record takes as PoUW's verdict of record, the prover "
+                                 "side's, only where")
 
 
 PEARL_W = "d7" * 64
@@ -1565,6 +1566,9 @@ def test_pearlpluss_accepted_piece_under_every_condition_of_record_is_pouws_verd
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
     assert (line["composed"], line["verdicts"]["PoUW"], line["check"]) == ("accept", "accept", {})
     assert line["answers"]["PoUW"] == S.PEARLPLUS_FROM
+    reason = line["reason"]
+    assert reason.count(S.PEARLPLUS_SAID) == 1 and reason.index(S.PEARLPLUS_SAID) > reason.index("PoUW: accept"), reason
+    assert rec["composed"]["onsite"]["reason"] == reason
     assert rec["legs"]["pouw"]["protocol"] == S.PEARLPLUS_PROTOCOL
     assert rec["legs"]["pouw"]["quantity"] == {"symbol": "W_cert", "value": 5400, "unit": "work", "tiles": 40}
 
@@ -2876,7 +2880,8 @@ def test_under_pouw_pearlplus_the_coins_line_says_whether_pearlpluss_epoch_coins
         run, credit = PEARLPLUS_RUN, "it credits nothing"
         if tie:
             run = "PoUW: Pearl+ on the window's own engine, its passes the window's linears (POUW=pearlplus, PEARLPLUS_TIE)"
-            credit = "which the record takes as PoUW's verdict of record only where pearlplus_of_record holds it"
+            credit = ("which the record takes as PoUW's verdict of record, the prover side's, only where "
+                      "pearlplus_of_record holds it")
         assert lines[0] == (f"GATE ready: lane vllm's open period None; the ledger's 1 entries; pinned {'ef' * 6} (main "
                             f"{'ef' * 6}, 2026-10-26T21:35:00Z), on the verifier's first-parent line of main"), lines
         assert lines[1] == (f"COINS sampled proofs: {LOCAL_COINS}; {run}, its epoch's salt coin a live session's "
