@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Audit.OneStage
+module
+
+public import Proofs.Flock.Soundness.Audit.OneStage
 
 /-!
 # Two-stage audits, and their relation to one-stage
@@ -28,6 +30,8 @@ interior and independent across coarse units.
 * `effEscape_full`: **(b1) is one-stage over the coarse partition**: when the second stage proves
   every fine unit of each drawn coarse unit, `effEscape = L₁.escape`, with no dilution.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

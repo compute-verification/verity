@@ -1,5 +1,7 @@
-import Definitions.Accounting.Joint
-import Definitions.Pouw.Game.Defs
+module
+
+public import Definitions.Accounting.Joint
+public import Definitions.Pouw.Game.Defs
 
 /-!
 # PoUW's compute audit as the compute audit of a joint run (trusted)
@@ -15,6 +17,8 @@ so every op the PoUW transcript needs is charged to the compute account. An op c
 decode's, say) is not credited to PoUW's work, and the device's limits (`Step.Fits`) bound the two accounts' ops
 together.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

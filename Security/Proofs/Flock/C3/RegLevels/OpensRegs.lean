@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.RegLevels.SrcOpened
-import Proofs.Flock.C3.RegLevels.StackedReg
+module
+
+public import Proofs.Flock.C3.RegLevels.SrcOpened
+public import Proofs.Flock.C3.RegLevels.StackedReg
 
 /-!
 # n11: `OpensTopAt`'s registered ports, from the unit's registered columns and the verifier's check
@@ -24,6 +26,8 @@ import Proofs.Flock.C3.RegLevels.StackedReg
   VBridge's `RowsRegistered` at the unit, which acceptance does not give): the reads file names `acc` (`checkAcc`,
   `acc_of_checkStmt`) and `coef` and `dirs` (`checkStackedLevel`'s `checkValue`s, `own_of_checkValue`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

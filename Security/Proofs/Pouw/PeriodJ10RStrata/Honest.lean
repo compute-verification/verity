@@ -1,5 +1,7 @@
-import Proofs.Pouw.PeriodJ10RStrata
-import Proofs.Pouw.PeriodJ10R.Honest
+module
+
+public import Proofs.Pouw.PeriodJ10RStrata
+public import Proofs.Pouw.PeriodJ10R.Honest
 
 /-!
 # An honest J10-R period over several tile strata meets `H1J10RCheckedCreditPeriodStrata`'s premises, and the
@@ -30,6 +32,8 @@ scheme, periods and rates, the provers that fix no word (`idlePlay`, accepted on
 `Λ_s·ln(1/δ_s(s)) < n` at each `s ∈ S` and `S` is non-empty, the summed credit is positive on every path, so the event's
 probability is `1`, above any `∑_{s ∈ S} (δ_s(s) + n·(δ_bind(s) + δ_ks(s))) < 1`.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.PeriodJ10RStrata.SecurityProofs.HonestStrata
 

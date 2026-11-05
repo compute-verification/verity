@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Bridge.Live
-import Proofs.Flock.Claims.Bridge.Hm96Tree
+module
+
+public import Proofs.Flock.Claims.Bridge.Live
+public import Proofs.Flock.Claims.Bridge.Hm96Tree
 
 /-!
 # A mixture of live strategies bounds the runs of a verifier that reveals more
@@ -21,6 +23,8 @@ coins the round draws, so a prover that plays the live session keeps the rest of
   `liveMix_le_Pr`: where `pL` implies `E ∘ Φ` instead, the average is at most `Pr[E]`.
 * `liveStrat_fst`: `liveStrat`'s roots are the wire's roots of the prover's first message (`fst_eqRec`).
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.Live
 

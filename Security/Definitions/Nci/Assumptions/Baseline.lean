@@ -1,4 +1,6 @@
-import Definitions.Nci.Dark
+module
+
+public import Definitions.Nci.Dark
 
 /-!
 # NCI's θ rule: the named premise
@@ -6,6 +8,8 @@ import Definitions.Nci.Dark
 What the protocol lets a declaration's `θ` hold, a premise about the protocol rather than about any circuit. Every bound
 through a containment, total or partial (`PartialContainment`), rests on it.
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 

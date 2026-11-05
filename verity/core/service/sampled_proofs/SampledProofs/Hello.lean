@@ -5,8 +5,14 @@ draw's stream (or streams) first, then each session slot's streams in session or
 run's record with C-Flock's own checks (`Flock.CoinTree`) at run scope: R7 with the prover's nonce, the record's
 `coin_tree`, the run's stream layout, and that no earlier run used the key.
 -/
-import Flock.CoinTree
-import SampledProofs.Json
+module
+
+public import Flock.CoinTree
+public import SampledProofs.Json
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Hello
 

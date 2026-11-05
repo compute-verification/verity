@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
-import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
 
 /-!
 # The `--zk` session's record custody at a law's draws
@@ -10,6 +12,8 @@ file at every draw of the live law proves the drawn units and sets the statement
 and `RecordCustodyZKHJLaw` at `J`. `RecordCustodyZK` and `RecordCustodyZKJ` (`Assumptions.Zk`) state the draw fact as
 the draw file being `flock-verify draw`'s instead.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Assumptions.Zk
 

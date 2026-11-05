@@ -26,6 +26,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.ops.boolean import gf2k as G
 from verity.ml.circuits.ops.boolean.gf2k import mul
 from verity.ml.circuits.types import Value
+from verity.ml.commitments import coin_tree as CT
 from verity_flock import circuit as FC
 from verity_flock import inner_registered as IR
 from verity_flock import rec_algebra as A
@@ -156,9 +157,9 @@ def test_h_is_the_dense_fold_of_the_hidden_slots(tmp_path):
         RS.hidden_circuits(tmp_path / "wide.txt", ("unit", "aux"))
 
 
-def _client(addr: str, rec: dict) -> list:
+def _client(addr: str, rec: dict, tree: dict | None = None) -> list:
     """The fake prover: the fixture's honest session as Flock's live prover sends it (its Hello without the coin scheme:
-    the session ran on seeded coins), each answer kept."""
+    the session ran on seeded coins; ``tree``: naming the coin tree, as under ``FC_COINS=tree``), each answer kept."""
     host, port = addr.rsplit(":", 1)
     coins = lambda hexes: b"".join(RL.f128_bytes(int(c, 16)) for c in hexes)
     got = []
@@ -170,6 +171,8 @@ def _client(addr: str, rec: dict) -> list:
 
         hello = json.loads(rec["hello"])
         del hello["coins"]
+        if tree is not None:
+            hello["coins"] = tree
         lk = rec["link"]
         send(RL.REQ_HELLO, json.dumps(hello))
         send(RL.REQ_COMMIT, bytes.fromhex(lk["root_f"]), [(t, bytes.fromhex(v)) for t, v in lk["root_b"].items()], [])
@@ -256,6 +259,48 @@ def test_the_prover_sees_its_own_session_and_the_verifier_h_in_its_own_round(ser
         f = A.fold_points(A.Shape(M, K_LOG, 2), A.rep_rounds(rec, stream))
         assert hs[r] == RS.hidden_fold(nets, ranges, f["alpha"], f["lw"], f["rho_in"], f["ts"]) and any(hs[r])
         assert prv[k + 1]["rows"] == RL.message_rows(hs[r])
+
+
+def test_on_the_coin_tree_the_relay_opens_each_of_its_rounds_in_order(tmp_path):
+    """Under the challenger's coin tree (``--coin-tree``) every coin of the relayed session is the tree's: ``Hello`` is
+    answered with its root and key, z_partial's coinless round and h's round each open their own round of the rep's
+    stream, in order, and the prover gets h's round's coins (r′) as z_partial's answer. The session record names the tree
+    the challenger drew."""
+    from test_rec_live import _Logged
+
+    rec = json.loads((SET / "records-cpu" / "honest.json").read_text())["record"]
+    src, q = _Logged(random.Random(5).randbytes), queue.Queue()
+
+    def run():
+        try:
+            q.put(("done", RS.serve("127.0.0.1:0", tmp_path, STATEMENT, SET / "stage" / "circuit.txt",
+                                    ready=lambda addr: q.put(("ready", addr)), tree=RL.INNER_COIN_SPEC, source=src)))
+        except BaseException as e:  # noqa: BLE001 - handed to the test, which raises it
+            q.put(("error", e))
+
+    th = threading.Thread(target=run)
+    th.start()
+    kind, addr = q.get()
+    if kind == "error":
+        raise addr
+    got = _client(addr, rec, {**RL.INNER_COIN_SPEC.to_json(), "nonce": "77" * CT.NONCE_BYTES})
+    kind, summary = q.get()
+    th.join()
+    if kind == "error":
+        raise summary
+    assert summary["session"], summary
+    [(root, tree)] = src.trees.items()
+    assert got[0] == ((RL.REQ_HELLO,), (RL.RESP_COINS, CT.words(root) + CT.words(tree.key)))
+    k = RL.zp_round(M, K_LOG)
+    for r in (0, 1):
+        stream = f"circuit/rep{r}"
+        asked = [(rnd, n) for s, rnd, n, _ in src.asked if s == stream]
+        assert [rnd for rnd, _ in asked] == list(range(len(_rep(rec, stream)) + 1))
+        assert asked[k:k + 2] == [(k, 0), (k + 1, 1)]
+        mine = [resp for (req, resp) in got if req == (RL.REQ_ROUND, stream)]
+        assert mine[k] == (RL.RESP_COINS, tree.open(RL.INNER_COIN_SPEC.streams.index(stream), k + 1, 1)[0])
+    session = json.loads((tmp_path / "session" / "session.json").read_text())
+    assert session["coin_tree"] == tree.record() and session["coin_seed"] is None
 
 
 def _holo_fold(hs: list[list[int]]) -> dict:

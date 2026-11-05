@@ -1,5 +1,7 @@
-import Proofs.Accounting.TS.Session.Lanes.PortBits
-import Proofs.Flock.VBridge.Decode
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.PortBits
+public import Proofs.Flock.VBridge.Decode
 
 /-!
 # A lane's read row bits from its circuit, and its known rows' bits
@@ -17,6 +19,8 @@ import Proofs.Flock.VBridge.Decode
   that known row's `sha512/row/v2` bytes; a one-row known value is read at row 0;
 * `portBit_known`, `holds_known`: so `portBit` at the port's name reads the known row's bits.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Lanes
 

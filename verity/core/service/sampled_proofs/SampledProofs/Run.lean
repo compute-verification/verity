@@ -1,5 +1,5 @@
 /-
-The proof service's run of one registration, from its public check through its verdict, as `service.Stream` makes it on a Spec
+The proof system's run of one registration, from its public check through its verdict, as `service.Stream` makes it on a Spec
 whose selection rule `Select.Rule` reads: what the challenger holds once a delivered proof's outcome is decided, and every
 check the stream ran on it, in the stream's order.
 
@@ -26,11 +26,17 @@ audit record as the text of Python's `canonical_json`.
 `Stream.outcome` holds its own outcome to this run (`verifier.run`). A run whose proof came after the proof deadline is
 the clock's (`late`).
 -/
-import SampledProofs.OneStage
-import SampledProofs.Select
-import SampledProofs.Slots
-import SampledProofs.Service
-import SampledProofs.ChallengerCoins
+module
+
+public import SampledProofs.OneStage
+public import SampledProofs.Select
+public import SampledProofs.Slots
+public import SampledProofs.Service
+public import SampledProofs.ChallengerCoins
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Run
 

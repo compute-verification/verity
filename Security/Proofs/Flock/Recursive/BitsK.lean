@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.KSProved
-import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
+module
+
+public import Proofs.Flock.Recursive.KSProved
+public import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
 
 /-!
 # `Pr[acc ∧ ¬R] ≤ κ + t·ε` at the deployed reader
@@ -14,6 +16,8 @@ Both are stated at the brings `b` (`RecursiveBitsKAt`, `RecursiveBitsKBoundAt`),
 is, and hold at `deployedB b`. A statement that writes `{ deployedB b with … }` itself carries a `let`, which the
 elaborator's `let`-to-`have` pass type-checks through the deployed records past the heartbeat limit.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

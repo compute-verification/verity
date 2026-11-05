@@ -1,5 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegChain
-import Proofs.Flock.Soundness.Binding.RowSeg
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegChain
+public import Proofs.Flock.Soundness.Binding.RowSeg
+import all Init.Data.String.Defs
 
 /-!
 # A segmented row's commit string from its chains
@@ -11,6 +14,8 @@ bytes reach its last block (`SegFits`). `seg_commit` is the outer chain: under `
 string of `RowSeg.enc l row`, the bytes `ExplicitLeaf.rowSeg l` binds. The outer message's digests always reach its last
 block, so it needs no such condition.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

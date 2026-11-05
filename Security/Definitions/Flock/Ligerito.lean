@@ -1,5 +1,7 @@
-import Definitions.Flock.Piop
-import Definitions.Flock.Accounting.Bound
+module
+
+public import Definitions.Flock.Piop
+public import Definitions.Flock.Accounting.Bound
 
 /-!
 # Ligerito (PROTOCOL.md §13), as an interactive oracle proof
@@ -12,6 +14,8 @@ oracle by a cap and authentication paths; `Merkle` relates the two.
 Sumcheck messages are `(u₀, u₂) ∈ K²`; with running claim `s` a message defines
 `q(X) = u₀ + (s + u₂)·X + u₂·X²`, so `q(0) + q(1) = s` holds by construction (§13.2).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Model
 

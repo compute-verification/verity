@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.PlainCapPrefix
-import Proofs.Flock.Claims.Recursion.PlainK
-import Proofs.Flock.Claims.Recursion.CallsBridgeE
+module
+
+public import Proofs.Flock.Claims.KS.PlainCapPrefix
+public import Proofs.Flock.Claims.Recursion.PlainK
+public import Proofs.Flock.Claims.Recursion.CallsBridgeE
 
 /-!
 # Which positions an accepted plain rep opens at a later level
@@ -16,6 +18,8 @@ function of the run's coins alone, which is what a cap position's `opens` reads 
   as many as the positions (`merkleCheck_rows`), the positions `q` of the level (`positions_size`), and the stream
   round's coins the deployed coin's first `n` (`custody_ok`, `streams_ns_plain`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
