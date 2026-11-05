@@ -487,11 +487,11 @@ realized (at least `S` bits of device memory held on average, at least `Q` bits 
 network certifiers), whose window and capacity account are the parameters' (`world_window`, `world_capacity`), so PoUS's
 own coins choose neither. The inference-only policy's: the declaration complies with `Nci.Complies` at the published `Γ` and
 `α`. The wipe's: the play, read at the wipe's boundary as the wipe's game, doesn't keep foreign content past the
-published survivor threshold (`Verity.Wipe.OfRun.Kept`). PoUW's at remote is Pearl+'s, in MACs, not a period claim: the
-tolerant audit's event (`Pouw.GγSampledTol`) at the credit Pearl+'s check published (`PearlPlusCredits`), the play
-computing at least `(1 − γ)(1 − u(X_O)) · W` MACs on the run's tiles (`macs`), where `W` is the run's claimed MACs (its
-`macs`), `γ` the cap's share `ρ` and `u(X_O)` the miss table's value at the draws on tiles credited nothing, which is `0`
-since Pearl+'s check rejects a drawn tile that fails, so `u(0)`, its `epsilon`. -/
+published survivor threshold (`Verity.Wipe.OfRun.Kept`). PoUW's at remote is Pearl+'s, in MACs, not a period claim: a
+credit `w` Pearl+'s check published on the blobs sent (`PearlPlusCredits`), with the play computing at least
+`(1 − ρ)(1 − ε) · W` MACs on the run's tiles (`macs`), where `W` is the credit's `macs` (the MACs of the cells its passes
+credit), `ρ` its cap share `rho` and `ε` its `epsilon`, the miss table's value at `X_O`, the draws that landed on tiles over
+their inert-work bound (credited nothing under `over_cap` `uncredited`; `X_O = 0` in a run `reject` accepts). -/
 def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) :
     Subprotocol → Exchange → Prop
   | .sampled, o => (V.live k θ F c).Holds (V.certOf θ) σ .sampled o
