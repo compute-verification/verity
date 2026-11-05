@@ -1667,6 +1667,93 @@ def test_an_after_landing_failure_rings_its_culprits_lane_and_the_suites_owner_a
     assert h.postland()["verified"] == main and not h.postland()["red"] and h.postland()["green"]["suite pkg"] == main
 
 
+def _two_shards(world, monkeypatch, tmp_path) -> tuple[Review, str, list[str], Path]:
+    """#1, #2 (touching suite pkg, owned by @pkg-owner) and #3 land, and once circuit-check's records step passed the
+    after-landing run's two shards launch on m1,m3 and m2,m4 of `on`: (drive, its tip, the machines each launch was given,
+    shard 1's records, every step passed but lean-suites, shard 2's)."""
+    _owning(world, {"lane-2": [], "pkg-owner": ["pkg/"]})
+    h = Review(world, monkeypatch)
+    h.d.on, h.d.after_landing_shards, machines, launch = "m1,m2,m3,m4", 2, [], h.d.launch_postland
+    h.d.launch_postland = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
+                                                                                                         steps, **kw)
+    h.d.records_artifact = lambda rid: f"art:{'a' * 64}@{'b' * 64}" if rid == "r-post-0" else None
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"pkg/tests/test_x.py": "def test_y():\n    assert False\n"}))
+    world.gh.put(3, world.change({"b.txt": "3\n"}))
+    for n in (1, 2, 3):
+        h.review(n)
+    assert h.tick().startswith("landed #3"), world.logs
+    h.run_state["r-post-0"] = ("done", 0, None)
+    h.tick()
+    assert machines[1:] == ["m1,m3", "m2,m4"] and [kw.get("shard") for _, _, kw in h.posted[1:]] == ["1/2", "2/2"], h.posted
+    h.run_state["r-post-1"] = ("done", 0, None, None, "m1")
+    return h, _main(world), machines, _steps_run(tmp_path, "r-post-1", {s: "passed" for s in AFTER_LANDING if s != "lean-suites"})
+
+
+def _suite_failed(tmp_path: Path, rid: str, test: str | None = None, running: bool = False) -> Path:
+    """Run ``rid``'s records, suite pkg failed in its lean-suites: naming ``test``, with an error line in its log, or none, its
+    log saying only that it was killed; while ``running``, as what failed so far."""
+    d = tmp_path / rid
+    (d / "suites").mkdir(parents=True)
+    if not running:
+        (d / "steps.jsonl").write_text('{"step": "lean-suites", "status": "failed", "rc": 1}\n')
+    row = {"name": "pkg", "suite": "pkg", "status": "failed", "failed_tests": [test] if test else [],
+           "log": f"/workspace/research/runs/{rid}/suites/pkg.log"}
+    (d / ("suites-lean.failed.json" if running else "suites-lean.json")).write_text(json.dumps([row]))
+    (d / "suites" / "pkg.log").write_text("E       assert False\n" if test else "Killed\n")
+    return d
+
+
+@pytest.mark.parametrize("again", ["passed", "nameless"])
+@pytest.mark.parametrize("first", ["ended", "running"])
+def test_a_shard_whose_failure_names_nothing_runs_again_once_elsewhere_ringing_infra_then_is_red(world, monkeypatch, tmp_path,
+                                                                                                 first, again):
+    """A failure naming no failing test and no error line (a kill, a crash with no output) may be its machine's, and its
+    culprit, named by the suite's declared inputs alone, would be reverted at once.  Its shard runs again once instead, stopped
+    if it still runs, on the machines of `on` it didn't run on, as it was launched, and @infra is rung with the run, its
+    machine and what failed: nothing is red or reverted.  The rerun's pass passes the shard; failing so again, it is red and
+    its culprit is reverted, and the shard runs no third time."""
+    h, tip, machines, shard1 = _two_shards(world, monkeypatch, tmp_path)
+    h.run_state["r-post-2"] = ("running", None, None, "suite pkg", "m2") if first == "running" else ("done", 1, None, None, "m2")
+    h.evidence = [shard1, _suite_failed(tmp_path, "r-post-2", running=first == "running")]
+    h.tick()
+    assert h.posted[3] == h.posted[2] and machines[3] == "m1,m3,m4", (h.posted, machines)
+    assert h.cancelled == (["r-post-2"] if first == "running" else [])
+    (infra,) = [p for p in h.posts if p.startswith("@infra queue: ")]
+    assert infra.startswith(f"@infra queue: suite pkg failed in shard 2/2 of the after-landing run of `main` {tip[:12]} (run "
+                            "r-post-2 on m2) naming nothing: no failing test, no error line"), infra
+    assert infra.endswith("It runs again, once, on m1,m3,m4: r-post-3; failing so again, it is red"), infra
+    assert not _rings(h) and _main(world) == tip and h.postland()["run"]["reran"] == {"2": ["r-post-2"]}
+    h.tick()
+    assert h.postland()["run"]["groups"] == [["r-post-1"], ["r-post-3"]] and len(h.posted) == 4, "the rerun runs"
+    h.run_state["r-post-3"] = ("done", 0 if again == "passed" else 1, None, None, "m3")
+    h.evidence = [shard1, _steps_run(tmp_path, "r-post-3", {"lean-suites": "passed"}) if again == "passed"
+                  else _suite_failed(tmp_path, "r-post-3")]
+    h.tick()
+    assert [kw.get("shard") for c, _, kw in h.posted if c == tip] == [None, "1/2", "2/2", "2/2"], h.posted
+    assert len([p for p in h.posts if p.startswith("@infra queue: ")]) == 1
+    if again == "passed":
+        assert h.postland()["verified"] == tip and not _rings(h) and _main(world) == tip, world.logs
+        return
+    (ring,) = _rings(h)
+    assert f"suite pkg is red on `main` {tip[:12]} (run r-post-1 r-post-3): its log has no error line" in ring, ring
+    assert "Culprit: #2 (its change touches suite pkg's declared inputs)" in ring, ring
+    assert _git(world.origin, "rev-parse", "main^") == tip and _subject(world, "main").startswith('Revert "Queue: #2'), world.logs
+
+
+def test_a_shard_failure_naming_a_failing_test_is_red_at_once_and_runs_its_shard_no_more(world, monkeypatch, tmp_path):
+    """Only a failure that names nothing runs its shard again: one naming its failing test is red in the tick that reads it,
+    its culprit reverted, and @infra hears nothing."""
+    h, tip, _, shard1 = _two_shards(world, monkeypatch, tmp_path)
+    h.run_state["r-post-2"] = ("done", 1, None, None, "m2")
+    h.evidence = [shard1, _suite_failed(tmp_path, "r-post-2", test="tests/test_x.py::test_y")]
+    h.tick()
+    (ring,) = _rings(h)
+    assert "suite pkg is red on" in ring and "failed tests/test_x.py::test_y" in ring and "Culprit: #2" in ring, ring
+    assert _subject(world, "main").startswith('Revert "Queue: #2') and not [p for p in h.posts if p.startswith("@infra")]
+    assert [kw.get("shard") for c, _, kw in h.posted if c == tip] == [None, "1/2", "2/2"], h.posted
+
+
 def test_a_red_ratchet_gate_names_the_merge_it_fails_as_the_culprit(world, monkeypatch, tmp_path):
     """The after-landing run's ratchet-gate step runs the vLLM integration's ratchet gate on each landing's merge, and its log
     names no file of the change, only the PR whose merge grows an allowlist: drive takes that PR as the culprit.  The log

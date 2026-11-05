@@ -113,7 +113,10 @@ by hand).  The tick that reads a run's end launches the next before its sync, on
 launched none then launches it after its landings (`start_postland`); what lands in a tick after its run launched waits for
 the run after.  While a red on `checked` has a low-risk fix marked under `FIX_WAIT_S` ago and not landed, the run waits for it
 (`_fix_wait`), as one without it would go red again.  A red run runs on, so every red suite is named, and is cancelled only once its `TAIL` is all it has left (a cancel
-earlier in a ~4 h run leaves the rest unknown).  Each failed suite or step (`_red`, `postland["red"]`) gets a culprit
+earlier in a ~4 h run leaves the rest unknown).  A shard that passed nowhere and whose every failure names nothing (no
+failing test, no read outside its inputs, no error line: a kill, a hang, a crash with no output) is not red yet: it is
+stopped and runs again once on the machines of `on` it didn't run on, `INFRA` rung with its run and what failed
+(`_rerun_nameless`), and failing so again it is red.  Each failed suite or step (`_red`, `postland["red"]`) gets a culprit
 among the landings since it last passed (`postland["green"]`, per suite or step, so a `checked` never verified whole still names
 one): for ratchet-gate, the merge the gate's log says it fails; else the landing whose own diff touches what the failure
 names (`suite_paths`: failing tests, its log's failures, the read guard's `outside`), else its declared inputs
@@ -998,9 +1001,9 @@ def not_run(st: dict) -> bool:
     return st.get("status") == "stopped" or (st.get("status") == "failed" and st.get("rc") in (-15, SIGTERM_RC))
 
 
-def first_error(run_dir: Path, rec: dict) -> str:
-    """What a ring quotes of a failed suite or step: its failed test ids, or the paths the read guard caught it reading outside
-    its inputs, and its log's first error line."""
+def named_failure(run_dir: Path, rec: dict) -> str:
+    """What a failed suite or step names of its failure: its failed test ids, or the paths the read guard caught it reading
+    outside its inputs, and its log's first error line; "" when it names none of them."""
     tests = rec.get("failed_tests") or []
     reads = sorted({*(rec.get("outside") or {}), *(f for fs in (rec.get("child_outside") or {}).values() for f in fs)})
     what = (f"failed {', '.join(tests[:3])}" + (f" and {len(tests) - 3} more" if len(tests) > 3 else "") if tests else
@@ -1008,7 +1011,12 @@ def first_error(run_dir: Path, rec: dict) -> str:
             if reads else "")
     log = _suite_log(run_dir, rec) if "suite" in rec or "name" in rec else _step_log(run_dir, rec)
     line = m[0].strip()[:240] if (m := ERROR_LINE_RE.search(log)) else ""
-    return "; ".join(x for x in (what, f"`{line}`" if line else "") if x) or rec.get("detail") or "its log has no error line"
+    return "; ".join(x for x in (what, f"`{line}`" if line else "") if x)
+
+
+def first_error(run_dir: Path, rec: dict) -> str:
+    """What a ring quotes of a failed suite or step: what it names of its failure (`named_failure`), else its record's detail."""
+    return named_failure(run_dir, rec) or rec.get("detail") or "its log has no error line"
 
 
 def touches(files: set[str], paths: set[str]) -> set[str]:
@@ -1303,9 +1311,10 @@ class Driver:
     def follow_postland(self, drive: dict) -> None:
         """The post-landing run, once it ends: passed, its tip is verified; failed, `_postland_failed`; never started (every twin
         exited 75, or was stopped), the next `start_postland` launches it again.  One already failing under `--keep-going` is
-        named red at once (`_red`), and cancelled once only its `TAIL` is left.  A pass verifies its tip only when every step it
-        ran passed in it (`_unrun`).  One still launching (`_resolve`) runs; one whose train.sh registered no run rings `CI` and
-        `TOP` (`_launch_failed`), and is launched again."""
+        named red at once (`_red`), and cancelled once only its `TAIL` is left; a shard of it whose failures name nothing runs
+        again once first (`_rerun_nameless`).  A pass verifies its tip only when every step it ran passed in it (`_unrun`).  One
+        still launching (`_resolve`) runs; one whose train.sh registered no run rings `CI` and `TOP` (`_launch_failed`), and is
+        launched again."""
         if not (pl := drive.get("postland")) or not (run := pl.get("run")):
             return
         if "tasks" in run:
@@ -1332,6 +1341,8 @@ class Driver:
                            f"state read {LOST_AFTER_S // 3600} h after its launch): it launches again once")
                 return
             states = {r: ("lost", -1) for r in states}
+        elif self._rerun_nameless(drive, pl, run, states):
+            return
         early = next((s[3] for s in states.values() if len(s) > 3 and s[0] in ACTIVE and s[3]), None)
         if early and self._only_allowed(run):
             early = None
@@ -1910,6 +1921,65 @@ class Driver:
         groups = run.get("groups") or [run["ids"]]
         missed = [g for g in groups if all(states[r][1] in never for r in g if r in states)]
         return bool(missed) and all(g in missed or any(states[r][1] == 0 for r in g if r in states) for g in groups)
+
+    def _rerun_nameless(self, drive: dict, pl: dict, run: dict, states: dict) -> bool:
+        """Run a shard of a sharded after-landing run again once, on the machines of `on` it didn't run on (`_elsewhere`), as
+        `_follow_lean` does a Lean check its machine failed, when no twin of it passed and each of its failures no allowance
+        covers names nothing (`_nameless`: a kill, a hang or a crash with no output, which its machine may have caused): its
+        twins still running are stopped, and the new run's take their place (``shards`` while it launches, `_shards_launched`),
+        launched with the keywords the shards were (``kw``), the old ones kept in ``reran``, which makes it once; `INFRA` is
+        rung with them, their machines and what failed.  Failing so again, the shard is red (`_red`).  Whether a shard was
+        found so: the run is judged on a later tick."""
+        if not (groups := run.get("groups")) or "kw" not in run:
+            return False
+        tip, steps, again, found = run["tip"], ",".join(pl.get("steps") or AFTER_LANDING), {}, False
+        for k, g in enumerate(groups, 1):
+            sts = {r: states[r] for r in g if r in states}
+            if str(k) in run.get("reran", {}) or any(s[1] == 0 for s in sts.values()) or not any(
+                    (len(s) > 3 and s[3]) if s[0] in ACTIVE else s[1] not in (NOT_STARTED, SIGTERM_RC) for s in sts.values()):
+                continue
+            if not (keys := self._nameless(tip, [d for d in self._evidence(Verdict("failed", " ".join(run["ids"])))
+                                                 if d.name in g])):
+                continue
+            found, spec, where, ran = True, shard_spec(run, k), self._elsewhere(sts), self._ran_on(sts)
+            what = (f"{', '.join(keys)} failed in shard {spec} of the after-landing run of `{self.q.into}` {tip[:12]} (run "
+                    f"{' '.join(g)}{' on ' + ', '.join(ran) if ran else ''}) naming nothing: no failing test, no error line")
+            if self.dry_run or self.q.shadow:
+                self.q.log(f"research queue drive: {what}: it would run again, once, on {where}")
+                continue
+            got, tail = self._started(self.launch_postland(self.repo, tip, where, steps, **run["kw"], shard=spec))
+            if got is None:
+                self._launch_failed(drive, "postland", tip, f"train.sh {tip[:12]} {where} --deferred {steps} --shard {spec}", tail)
+                continue
+            if live := [r for r, s in sts.items() if s[0] in ACTIVE]:
+                self.cancel(self.repo, live, f"drive: shard {spec} of the post-landing run of {tip[:12]} failed naming nothing: "
+                                             f"it runs again on {where}")
+            again[k] = got
+            run.setdefault("reran", {})[str(k)] = g
+            self.tell(drive, [f"rerun:{' '.join(g)}"], f"{what}, so its machine may have failed it. It runs again, once, on "
+                                                       f"{where}: {_ids(got)}; failing so again, it is red", INFRA.lstrip("@"))
+        if again:
+            run["shards"] = [again.get(k) or {"ids": g} for k, g in enumerate(run.pop("groups"), 1)]
+            run["ids"], run["at"] = [r for x in run["shards"] for r in x["ids"]], self.now()
+            self.q.save_state({**self.q.load_state(), "drive": drive})
+        return found
+
+    def _nameless(self, tip: str, dirs: list[Path]) -> list[str]:
+        """The failed suites and steps in ``dirs``, one shard's records, keyed as `_red` keys them, that no allowance of ``tip``'s
+        policy covers (`_allowed`), when each names nothing of its failure (`named_failure`, nor for ratchet-gate a merge it
+        fails); [] when one names what failed, or none failed."""
+        keys: list[str] = []
+        for d in dirs:
+            rows = {f"suite {n}": s for n, s in suite_rows(d).items() if s["status"] == "failed"}
+            steps = {f"step {st.get('step')}": st for st in step_records(d) if st.get("status") == "failed" and not not_run(st)
+                     and not any(s["step"] == st.get("step") for s in rows.values())}
+            for key, rec in {**rows, **steps}.items():
+                if self._allowed(tip, key, d, rec).covered:
+                    continue
+                if named_failure(d, rec) or (rec.get("step") == RATCHET_STEP and ratchet_failures(d, rec)):
+                    return []
+                keys.append(key)
+        return sorted(set(keys))
 
     def _unrun(self, ids: list[str], steps: list[str], tip: str | None = None) -> list[str]:
         """The ``steps`` no run among ``ids`` records as passed in its steps.jsonl, nor (with ``tip``, the commit it checked)
@@ -2526,16 +2596,16 @@ class Driver:
         cc = {"cc_records_from": art} if records and art else {}
         if auto:
             n = plan["n"] if plan else 1
-        shard = (lambda k: {"shard": f"auto:{k}/{n}", "shard_plan": plan["file"]}) if plan else (lambda k: {"shard": f"{k}/{n}"})
         if n == 1 and not plan:
             rec, tail = self._started(self.launch_postland(self.repo, main, self.on, steps, **kw))
         else:
             if len(self.on.split(",")) < n:
                 q.log(f"research queue drive: {n} shards of the post-landing run of {main[:12]} on {self.on}, fewer machines than "
                       "shards: they share them")
-            got = [self._started(self.launch_postland(self.repo, main, on, steps, **kw, **cc, **shard(k)))
+            each = {**kw, **cc, **({"shard_plan": plan["file"]} if plan else {})}
+            got = [self._started(self.launch_postland(self.repo, main, on, steps, **each, shard=f"{'auto:' * bool(plan)}{k}/{n}"))
                    for k, on in enumerate(shard_machines(self.on, n), 1)]
-            rec, tail = {"ids": [], "shards": [r for r, _ in got]}, next((t for r, t in got if r is None), "")
+            rec, tail = {"ids": [], "shards": [r for r, _ in got], "kw": each}, next((t for r, t in got if r is None), "")
             if any(r is None for r, _ in got):
                 if ids := [i for r, _ in got if r for i in r.get("ids") or ()]:
                     self.cancel(self.repo, ids, f"drive: a shard of the post-landing run of {main[:12]} registered no run")
@@ -4452,10 +4522,15 @@ class Driver:
                     return f"failed in {st.get('step')} by its machine ({m[0]})"
         return None
 
+    @staticmethod
+    def _ran_on(states: dict) -> list[str]:
+        """The machines the runs of ``states`` ran on: none for a twin that never started or was stopped for a sibling."""
+        return sorted({s[4] for s in states.values() if len(s) > 4 and s[4] and s[1] not in (NOT_STARTED, SIGTERM_RC)})
+
     def _elsewhere(self, states: dict) -> str:
-        """`on` without the machines the runs of ``states`` ran on, for a check run again after a machine's fault; all of `on`
-        when that leaves none (`auto`, or one machine)."""
-        ran = {s[4] for s in states.values() if len(s) > 4 and s[4] and s[1] not in (NOT_STARTED, SIGTERM_RC)}
+        """`on` without the machines the runs of ``states`` ran on (`_ran_on`), for a check run again after a machine's fault;
+        all of `on` when that leaves none (`auto`, or one machine)."""
+        ran = self._ran_on(states)
         return ",".join(m for m in self.on.split(",") if m not in ran) or self.on
 
     def _compiles(self, drive: dict, chain: list[Member], base: str, t: int) -> int:

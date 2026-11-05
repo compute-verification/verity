@@ -70,7 +70,8 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   `lowrisk_excludes` names (Lean, locks, Lake files, `verity/core/`, the soundness-path Python) lands on its ready mark alone,
   with no verdict (the low-risk lane: up to `lowrisk_per_tick` a tick, the Lean checks of `next` moved to its rebuild).
 - One run checks `checked`'s tip after each landing; when it passes every step on the merge gate (not circuit-check), drive fast-forwards `main` there. A red
-  suite's or step's culprit is rung and reverted on `checked` at once, a marked fix or not, and `main` doesn't move. A marked
+  suite's or step's culprit is rung and reverted on `checked` at once, a marked fix or not, and `main` doesn't move; a shard
+  whose failures name no failing test and no error line first runs again once on other machines, ringing @infra. A marked
   low-risk fix of a red with no culprit lands even while a Lean check of `next` runs, and the next run waits for it up to 45 min
   after its mark. Until circuit-check passes on `checked` no PR touching its inputs lands (a PR whose body says
   `fixes step circuit-check` does).
