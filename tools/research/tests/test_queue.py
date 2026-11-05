@@ -3320,18 +3320,19 @@ def _key(repo: Path, commit: str, pkg: str = "pkg") -> str:
 
 def _published(world: World, commit: str, *, pkg: str = "pkg", passed: bool = True, passes: dict[str, str] | None = None,
                records: dict | None = None, steps: list | None = None, kind: str | None = None, at: float | None = None,
-               argv: list[str] | None = None, state: str | None = None, rc: int | None = None) -> str:
+               argv: list[str] | None = None, state: str | None = None, rc: int | None = None, rid: str | None = None) -> str:
     """A run of ``commit`` that another machine published to the store's remote, as `research run` does: a records run
     (`lean_changed.py --records PKG`, result `lean-fast/v1` whose `records` are ``records``, else ``pkg``'s outcome) or, with
     ``steps``, a check (`check.py`, result ``kind``, else `check/v1`), its result listing ``passes`` ({Lean inputs key:
-    package}); ``at`` its start (its id's time), else now; ``argv`` its command; ``state`` and ``rc`` its attempt's end, else
-    done and 0 when it ``passed``, failed and 1 when not."""
+    package}); ``rid`` its id, else a new one started ``at``, else now; ``argv`` its command; ``state`` and ``rc`` its
+    attempt's end, else done and 0 when it ``passed``, failed and 1 when not."""
     from research.runs import new_run_id
 
     node = LocalStore(world.tmp / "node", config_path=world.tmp / "store.toml")
-    rid = new_run_id(at)
-    while node.attempt_path(rid).exists():      # an id is a second and 16 random bits: runs published in one second can share one
+    if rid is None:
         rid = new_run_id(at)
+        while node.attempt_path(rid).exists():  # an id is a second and 16 random bits: runs published in one second can share one
+            rid = new_run_id(at)
     check = steps is not None
     kind = kind or ("check/v1" if check else "lean-fast/v1")
     meta = {"schema": "research/result/v0.1", "kind": kind, "run_id": rid, "validation": {"status": "passed" if passed else "failed"},

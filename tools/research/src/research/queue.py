@@ -204,7 +204,9 @@ every marked PR left out for it in one post, with the fix (`Driver.tell_out`); b
 that comes new goes above it.  What a sync adds on top goes non-Lean first
 (drive.toml's `nonlean_first`, on by default: `Queue._nonlean_order`): each PR whose own change is no Lean change (`lean_change`
 on its diff against `main`, or against the PR it's stacked on) and contains none of those merged with it goes below every Lean
-change, `--first`'s order and then admission's within each part, so it doesn't wait above a Lean change for its Lean check.
+change, `--first`'s order and then admission's within each part, so it doesn't wait above a Lean change for its Lean check; a
+Lean change's passed Lean check still covers it there while what goes below changes none of its packages' Lean inputs (drive's
+cover by key, `Driver._keyed`).
 Members on `next` never move for it, merged again or not: those above a moved or dropped member are merged again in their order,
 and only a `--first` PR placed again, or a `next` rebuilt on a `main` that moved off it, sorts what is above it.  Nor do they
 move but for drive's lift (`Queue.lift`, `Driver._lift`): each sync, the members with a land verdict go below those waiting
