@@ -21,8 +21,8 @@ The probability over the product that some protocol fails is then at most the su
   the coins before it.
 * `union_bound_monitoringPeriod`: over a monitoring period's periods, each period's protocols in
   `union_bound_update`'s form: `∑_j ∑_a δ j a`. `union_bound_monitoringPeriod_with` adds one more event bounded over the
-  whole product, such as acceptance over a monitoring period (`FlockSoundness.Audit.Law.pooled_escape_log`, in
-  `Claims.Pr`, which is `pr`: `Pr_eq_pr`); `pr_restrict_le` carries a bound proved over a block of the coordinates to the
+  whole product, such as acceptance over a monitoring period (`FlockSoundness.Audit.Law.pooled_escape`, in `prCoin`,
+  which is `pr`'s through `Claims.Sampling.Pr_eq_toReal_prCoin` and `Pr_eq_pr`); `pr_restrict_le` carries a bound proved over a block of the coordinates to the
   whole product.
 -/
 
@@ -112,7 +112,7 @@ theorem union_bound_monitoringPeriod {J A : Type} [Fintype J] [Fintype A] [∀ i
   exact (pr_mono fun _ ⟨j, a, hb⟩ => ⟨(j, a), hb⟩).trans this
 
 /-- **A monitoring period with one more event**, bounded over the whole product (`pr F ≤ η`), such as every period's
-draw accepting (`FlockSoundness.Audit.Law.pooled_escape_log`, carried over by `pr_restrict_le`): that event or some
+draw accepting (`FlockSoundness.Audit.Law.pooled_escape`, carried over by `pr_restrict_le`): that event or some
 protocol of some period failing has probability at most `η + ∑ j, ∑ a, δ j a`. -/
 theorem union_bound_monitoringPeriod_with {J A : Type} [Fintype J] [Fintype A] [∀ i, Nonempty (Ω i)]
     (F : ((i : I) → Ω i) → Prop) {η : ℝ} (hF : pr F ≤ η) (own : J → A → I)
