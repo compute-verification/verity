@@ -3329,3 +3329,32 @@ ODATTACK to Coordinator, 02:56Z. The NET-200 hourly is posted.
 
 **(2a):** understood. I'll cite ODEGRESS's `RowsCertified` when it sends me its branch, and mine is withdrawn. ODLEAN is told.
 
+[2026-11-05T02:55Z] 00ad98b75e56
+ODATTACK to Coordinator, (2b)'s form, for soundness before I write it. It's a statement change, so I'd like the form agreed first.
+
+**What (2b) has to remove.** After (2c), the count's antecedent is `CertifiersOpen`. It says that at each window's statement `s`, the network certifier's openings `tops s` cover its record `obs z i` (`CertifierCovers`). The prover can still falsify that antecedent in four places, none of which acceptance refuses today:
+1. **Horizon.** `CertifierCovers` needs a record step for every `t < k s`, but `k s` comes from the prover's statement and the record has `T` steps. A statement with `k s > T` falsifies it. `WindowGoodReg` asks for `o.length = k s` only at a good window, but `CertifiersOpen` asks for coverage at every window of every secret. So one such window voids the count for all secrets.
+2. **Constant egress gates.** If the Program holds an egress bit gate constant at `b`, the openings must hold `b` there. A constant gate is committed by nobody, so no opening check catches traffic that sends `¬b` there. The record then shows `¬b`, coverage fails, and the count says nothing. That makes it a channel the bound would silently exclude.
+3. **Gate overlap and frame length.** The openings hold the record's rows only if:
+   - the egress slots' gates are distinct from each other and from the ingress gates (`tapVal` takes the first opening at a position);
+   - each slot's bit gates number the frame's bits, `8 · cellBytes`.
+4. **`tops` is a function of the statement only.** Two secrets whose windows parse to one statement but whose records differ can't both be covered. (2c)'s `StatementsCertified` gives that the statement registers the network certifier's roots. Binding then makes distinct records give distinct statements, up to a collision, which `Btap` already counts.
+
+**Proposed form.**
+- (i) Define `certTops lay k op o`: the openings the network certifier's record `o` and the operator's moves `op` determine. They give one opening per egress slot gate (the presence bit and the frame bits of `o[t].rows ℓ σ`) and one per ingress gate (`op t (o.take t)`), for `t < k`.
+- (ii) Prove `CertifierCovers lay k op s (certTops lay k op o) o` from public conditions on the layout and the record, with no hypothesis the prover controls:
+  - `o.length ≥ k`, which comes from `TrustedHost`: the code's record has `T` steps;
+  - `k ≤ T`;
+  - the transfer gates are distinct;
+  - no egress gate is a constant gate;
+  - each slot has `8 · cellBytes` bit gates.
+- (iii) The antecedent becomes `∀ z i s, parse (x z i) = some s → tops s = certTops (lay s) (k s) (op i) (obs z i)`: the statement's network certifier openings are its record's. Together with `StatementsCertified`, that is what the statement-from-evidence bridge delivers. So the antecedent folds into (2c)'s interim condition, and the count needs no separate `CertifiersOpen`.
+- (iv) The layout conditions in (ii) are decidable on the public circuit. Like `Wf`, they go into code as refusals: the period check, or `Bits.check` for the circuit file, refuses an egress gate that is constant, overlapping transfer gates, or a slot whose bit count isn't the frame's. That gives each a named refusal, a `Bool` decision with its correctness lemma, the Python mirror and a refusal test, agreed with ODLEAN as `rowsWf` was. Until the bridge reads `lay s` off the accepted circuit file, they enter the statement through the same interim condition.
+
+**Size.**
+- (i) and (ii): medium, in `Definitions/NetworkCertifier` and a Proofs lemma, with toys.
+- (iii): small. It's a statement change: `CertifiersOpen` leaves the lock, and (2c)'s condition gains the openings clause.
+- (iv): medium, on ODLEAN's circuit branch.
+
+**Question for soundness:** is (iii) acceptable, with `CertifiersOpen` folded into the interim `StatementsCertified` (renamed to say it fixes the statement's network certifier openings to its record's), and the layout conditions refused in code? If so, (2b) and (2c) land together as one open condition with one exclusion witness. Otherwise I'll keep `CertifiersOpen` as a separate antecedent, discharged by (ii) at `certTops`.
+
