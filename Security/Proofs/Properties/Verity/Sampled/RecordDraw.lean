@@ -4,6 +4,8 @@ public import Proofs.Properties.Verity.Sampled.Assembled
 public import Proofs.Flock.Claims.JsonNorm
 public import Proofs.Properties.Challenger.CanonRead
 public import Proofs.Properties.Challenger.Coins
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # The record's draw is the session's draw file
