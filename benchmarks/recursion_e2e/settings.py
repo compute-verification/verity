@@ -57,6 +57,14 @@ REGISTRY = Registry(__file__, ("REPEAT_", "OPROVE_"),
     S("OPROVE_MEM_GB", int, None, VALUE, "the estimated peak GB the statements 85 proves at once may sum to; unset, 85's 48"),
     S("GPU_MAX_MIN", int, 75, WHERE, "each prove's GPU lease in minutes: a bound on how long it may hold the GPU"),
     S("GPU_PREEMPTIBLE", str, "", WHERE, "85's leases are preemptible unless empty (the job's default): how a lease is held"),
+    S("TREE_FROM", str, None, VALUE, "where the inner sessions' coin trees come from: the challenger's device, HOST:PORT (85's "
+      "TREE_FROM); local, the challenger started beside the inner step, its release log audited against the session; unset, "
+      "this host's OS draws them (rec_live --tree-test-os), a test's coins"),
+    S("RELEASE", int, 0, VALUE, "1: the recursive session through the ZK server's release side (85's RELEASE): the inner "
+      "session opens it, oprove proves its parts in order through the Lean session loop, each held to its release window"),
+    S("RELEASE_WINDOWS_S", str, None, VALUE, "each part's release window by class, seconds (85's RELEASE_WINDOWS_S); unset, 85's"),
+    S("RELEASE_BUDGET", int, None, VALUE, "the recursive session's stream's failure budget (85's RELEASE_BUDGET); unset, none"),
+    S("TREE_SECRET_FILE", str, None, WHERE, "TREE_FROM's session secret, a file of hex (85's TREE_SECRET_FILE)"),
     S("TAG", str, None, WHERE, "85's data/TAG directory; unset, rb-<run id>"),
     S("FLOCK_WORK", str, "/workspace/jobs/rec-bench", WHERE, "85's work tree: its caches and data"),
     S("CUDA_TK", str, None, WHERE, "the CUDA toolkit 85 builds the prover with, a path; the build records the binary's sha256"),

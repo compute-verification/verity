@@ -15,10 +15,9 @@ The tie is by the record alone: nothing here holds PoUW's committed weights to t
 remote doesn't establish that PoUW's credited work and the audited inference read the same weights.
 
 A stated exception: the policy's v0 publishes the declared division and each inference block's profile (its gates and
-fresh-input bits) in the clear. Remote composes it for the run of record of 28 Oct only, as an exception to
-everything-zero-knowledge, by Daniel's ruling: "Let's run it in the clear tonight as a stated exception." v1's
-private form (the division committed under hiding leaves, compliance proved, a padded profile) replaces it after
-15:00Z on 28 Oct.
+fresh-input bits) in the clear. Remote composes it for one run of record only, as an exception to
+everything-zero-knowledge, and v1's private form (the division committed under hiding leaves, compliance proved, a
+padded profile) replaces it.
 -/
 module
 
