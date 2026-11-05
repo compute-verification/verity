@@ -2649,12 +2649,16 @@ def forces_cold(files: Iterable[str]) -> bool:
 
 
 def merged_tree(repo: Path, base: str, head: str, *, plain: bool = True,
-                config: tuple[str, ...] = ()) -> tuple[str | None, list[str], subprocess.CompletedProcess]:
-    """``head`` merged onto ``base`` by `git merge-tree` (no worktree touched), with ``base``'s merge drivers (`--attr-source`;
-    ``config``, git's `-c` options, from `base_drivers` to run them from ``base``'s tools): (the merged tree, the conflicted
-    files, `git merge-tree`'s result).  A merge whose every conflict is in a pin gives the tree with each pin rebuilt
+                config: tuple[str, ...] | None = None) -> tuple[str | None, list[str], subprocess.CompletedProcess]:
+    """``head`` merged onto ``base`` by `git merge-tree` (no worktree touched), with ``base``'s merge drivers (`--attr-source`)
+    run from ``base``'s tools (`base_drivers`, unless ``config`` gives git's `-c` options): (the merged tree, the conflicted
+    files, `git merge-tree`'s result).  Drive's clone sits at `checked`'s tip, so its own `merge.py` predates any `next` merges
+    onto above a PR that changes it.  A merge whose every conflict is in a pin gives the tree with each pin rebuilt
     (`repinned`) and those pins; one that doesn't merge gives None.  A git without `--attr-source` (before 2.40) merges
     without the drivers, or with ``plain`` False gives None and its refusal (exit 129)."""
+    if config is None:
+        with base_drivers(repo, base) as config:
+            return merged_tree(repo, base, head, plain=plain, config=config)
     r = _git(repo, *config, f"--attr-source={base}", "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head,
              check=False)
     if r.returncode == 129 and "attr-source" in r.stderr:
@@ -4008,8 +4012,7 @@ class Preflight:
         found = self._contained(pr, prs) + self._gates(pr, notes)
         tree, files, r = None, [], None
         if not pr.move:
-            with base_drivers(self.repo, base) as config:
-                tree, files, r = merged_tree(self.repo, base, pr.head, config=config)
+            tree, files, r = merged_tree(self.repo, base, pr.head)
         if pr.move:
             notes.append(f"the merged tree's checks: a move ({pr.move}), which drive's sync regenerates on the tip below it and "
                          f"refuses there unless {MOVE_CHECK} certifies it")
