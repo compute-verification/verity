@@ -73,6 +73,11 @@ reviewed_first = false
 # check keeps in place, so no check's prefix is rebuilt; one that gains its verdict goes after those already moved, so none
 # below it is merged again. On whatever reviewed_first says; false: only reviewed_first's rule
 verdict_first = true
+# who drive rings while `next`'s lowest member waits at its head for a land verdict, holding every landing above it, and the
+# minutes it waits before each ring (`Driver._bottom`; by default ["@ci", "@top"] after 30): ci's reviewer pool reviews `next`'s
+# bottom as it comes, so drive rings ci alone, and only when the pool falls behind
+bottom_ring = ["@ci"]
+bottom_wait_min = 30
 # the low-risk lane: each tick, after the reviewed prefix, land up to `lowrisk_per_tick` members of `next`, in its order, onto
 # `checked` on their ready mark alone (no land verdict, no Lean check), each whose merge onto `checked`'s tip changes nothing
 # `lowrisk_excludes` names, merges with no conflict, contains no unlanded PR and passes `landing_gates` and the compile gate;

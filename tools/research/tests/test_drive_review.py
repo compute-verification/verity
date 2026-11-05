@@ -555,11 +555,11 @@ def test_no_verdict_counts_by_the_owner_its_handle_or_its_ready_marks_author_wha
 
 
 def test_the_lowest_member_waiting_for_a_land_verdict_rings_the_reviewers_and_top_every_30_min_at_its_head(world, monkeypatch):
-    """`next`'s lowest member with no land verdict holds every landing above it, and its tick's log rang nobody: drive rings @ci
-    (who staffs the reviewers) and @top `BOTTOM_WAIT_S` after it became the lowest or its ready mark, whichever is later, once
-    per `BOTTOM_WAIT_S` at its head; a hold rings nothing, and a new head starts the wait again."""
-    from research.drive import BOTTOM_WAIT_S
-
+    """`next`'s lowest member with no land verdict holds every landing above it, and its tick's log rang nobody: by default (no
+    `bottom_ring` or `bottom_wait_min` in drive.toml) drive rings @ci (who staffs the reviewers) and @top 30 min after it
+    became the lowest or its ready mark, whichever is later, once per 30 min at its head; a hold rings nothing, and a new head
+    starts the wait again."""
+    half_hour = 30 * 60
     h = Review(world, monkeypatch)
     marks: dict[tuple[int, str], float] = {}
     h.q.marked_at = lambda n, hd: (time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(marks[(n, hd)]))
@@ -574,25 +574,53 @@ def test_the_lowest_member_waiting_for_a_land_verdict_rings_the_reviewers_and_to
 
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     assert h.tick().startswith("nothing reviewed lands: #1"), world.logs
-    assert wait(BOTTOM_WAIT_S - 60).startswith("nothing reviewed lands: #1") and rings() == []
+    assert wait(half_hour - 60).startswith("nothing reviewed lands: #1") and rings() == []
     wait(60)
     (ring,) = rings()
     assert ring.startswith("@ci @top queue: #1 (owner lane-1)") and "has waited 30 min with no land verdict" in ring, ring
-    wait(BOTTOM_WAIT_S - 60)
-    assert len(rings()) == 1, "at most once per head per BOTTOM_WAIT_S"
+    wait(half_hour - 60)
+    assert len(rings()) == 1, "at most once per head per 30 min"
     wait(60)
     assert len(rings()) == 2 and "has waited 60 min" in rings()[-1]
 
     world.gh.put(1, world.change({"a.txt": "2\n"}))            # a new head waits afresh, from its ready mark
     marks[(1, world.gh.prs[1].head)] = h.clock + 600
     assert wait(0).startswith("nothing reviewed lands: #1") and len(rings()) == 2
-    assert wait(BOTTOM_WAIT_S).startswith("nothing reviewed lands") and len(rings()) == 2, "30 min since it became the lowest, 20 since its mark"
+    assert wait(half_hour).startswith("nothing reviewed lands") and len(rings()) == 2, "30 min since it became the lowest, 20 since its mark"
     wait(600)
     assert len(rings()) == 3 and world.gh.prs[1].head[:8] in rings()[-1]
 
     h.review(1, "hold", by="other", ref="reads a stale fixture")
-    wait(BOTTOM_WAIT_S)
+    wait(half_hour)
     assert len(rings()) == 3, "a held member waits on its owner, not on a reviewer"
+
+
+def test_the_bottom_ring_goes_only_to_drive_tomls_bottom_ring_after_its_bottom_wait_min(world, monkeypatch):
+    """drive.toml's `bottom_ring` names every handle `_bottom` rings, and `bottom_wait_min` the minutes before each ring: with
+    ci's reviewer pool reviewing `next`'s bottom, drive.toml rings @ci alone, and @top hears nothing."""
+    h = Review(world, monkeypatch)
+    h.d.bottom_ring, h.d.bottom_wait_min = ("@ci",), 45
+    rung: list[tuple[str, tuple[str, ...]]] = []
+    h.d.post = lambda text, to=(): rung.append((text, to)) or True
+
+    def rings() -> list[tuple[str, tuple[str, ...]]]:
+        return [(text, to) for text, to in rung if "lowest member" in text]
+
+    def wait(s: float) -> str:
+        h.clock += s
+        return h.tick()
+
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    assert h.tick().startswith("nothing reviewed lands: #1"), world.logs
+    assert wait(45 * 60 - 60).startswith("nothing reviewed lands: #1") and rings() == [], "it waits 45 min, not the default's 30"
+    wait(60)
+    ((text, to),) = rings()
+    assert to == ("@ci",) and text.startswith("@ci queue: #1 (owner lane-1)") and "@top" not in text, text
+    assert "has waited 45 min with no land verdict" in text, text
+    wait(45 * 60 - 60)
+    assert len(rings()) == 1, "at most once per head per 45 min"
+    wait(60)
+    assert [to for _, to in rings()] == [("@ci",), ("@ci",)] and "has waited 90 min" in rings()[-1][0]
 
 
 def test_a_lean_change_without_a_lock_change_waits_for_a_lean_check_and_the_after_landing_lean_audit_takes_no_regenerated_record(
