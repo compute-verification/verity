@@ -15,8 +15,10 @@ Quality, before training (the post-training quantization at the same scales) and
 - zero-shot accuracy with lm-eval (--tasks), the model evaluated as served: codes and scales frozen.
 
 --serve is how activations reach the codes in training, the headline evals and zero-shot (`quant.Served`: bf16, int8
-per token, or design U's int8 plus live 2-bit noise, with projections optionally exact); perplexity is also measured
-under every --eval-modes spec, on the same noise draws for every arm.
+per token, design U's int8 plus live 2-bit noise, or its parts, chosen per matrix); perplexity is also measured under
+every --eval-modes spec, on the same noise draws for every arm. --probe N measures, per matrix, how much error each
+part of the service puts in its input and output (`quant.Probe`) over N WikiText-2 windows. With --device-map cpu the
+model is evaluated on the CPU, whose noise draws are not the GPU's.
 
 Outputs in --out: result.json (config, per-matrix c and overflow profile, evals, the loss curve, throughput) and, with
 --price, the route pricing of the codes (`price.py`, run on the CPU while zero-shot runs on the GPU). With --codes FILE
@@ -31,6 +33,7 @@ import hashlib
 import json
 import math
 import os
+import resource
 import subprocess
 import sys
 import time
@@ -99,7 +102,7 @@ def perplexity(model, ids: np.ndarray, seq: int, bs: int = 4, max_windows: int |
     dev = model.get_input_embeddings().weight.device
     for i in range(0, n, bs):
         x = torch.from_numpy(ids[i * seq:min(i + bs, n) * seq].astype(np.int64).reshape(-1, seq)).to(dev)
-        with torch.autocast("cuda", dtype=torch.bfloat16):
+        with torch.autocast(dev.type, dtype=torch.bfloat16):
             logits = model(x).logits
         nll += F.cross_entropy(logits[:, :-1].float().reshape(-1, logits.shape[-1]),
                                x[:, 1:].reshape(-1).to(logits.device), reduction="sum").item()
@@ -140,7 +143,7 @@ def ppls(model, wt_ids, val_ids, args, spec: str) -> dict:
     served(model, args, spec)
     out = {}
     if "wikitext2" in args.ppl_sets:
-        out["wikitext2"] = perplexity(model, wt_ids, args.seq)
+        out["wikitext2"] = perplexity(model, wt_ids, args.seq, max_windows=args.wt_windows)
     if "fineweb_val" in args.ppl_sets:
         out["fineweb_val"] = perplexity(model, val_ids[args.val_skip * args.seq:], args.seq,
                                         max_windows=args.val_tokens // args.seq)
@@ -151,8 +154,12 @@ def evaluate(model, tok, wt_ids, val_ids, args, zs: bool) -> dict:
     """Perplexities served as --serve and under every --eval-modes spec, then zero-shot served as --serve."""
     t0 = time.time()
     ev = ppls(model, wt_ids, val_ids, args, args.serve)
+    log("mode", args.serve, json.dumps(ev))
     if args.target != "bf16":
-        ev["modes"] = {m: ppls(model, wt_ids, val_ids, args, m) for m in args.eval_modes.split(",") if m}
+        ev["modes"] = {}
+        for m in filter(None, args.eval_modes.split(",")):
+            ev["modes"][m] = ppls(model, wt_ids, val_ids, args, m)
+            log("mode", m, json.dumps(ev["modes"][m]))
     log("eval", json.dumps({m: {k: round(v["ppl"], 4) for k, v in e.items() if k != "modes"}
                             for m, e in [(args.serve, ev)] + list(ev.get("modes", {}).items())}),
         f"{time.time() - t0:.0f}s")
@@ -166,10 +173,10 @@ def even_memory(model: str, slack_gib: float = 8) -> dict[int, str] | None:
     """Per visible GPU an even share of a local sharded checkpoint plus slack, so a device map spreads it instead of
     filling GPU 0 first, and every GPU keeps room for `quant.wrap`'s float64 temporaries; None for anything else."""
     idx = Path(model) / "model.safetensors.index.json"
-    if not idx.exists():
+    n = torch.cuda.device_count()
+    if not idx.exists() or n == 0:
         return None
     total = json.loads(idx.read_text())["metadata"]["total_size"]
-    n = torch.cuda.device_count()
     return {i: f"{math.ceil(total / n / 2**30 + slack_gib)}GiB" for i in range(n)}
 
 
@@ -179,6 +186,8 @@ def export(model, path: Path) -> dict:
     model.eval()
     tensors = {}
     for name, parent, attr in quant.block_linears(model):
+        if not isinstance(getattr(parent, attr), quant.QLinear):
+            continue
         q, s = getattr(parent, attr).frozen()
         tensors[name[: -len(".weight")] + ".q"] = q.to(torch.int8).cpu().contiguous()
         tensors[name[: -len(".weight")] + ".s"] = s.float().cpu().contiguous()
@@ -195,12 +204,15 @@ def main(argv=None) -> int:
     ap.add_argument("--target", required=True, help="bf16, absmax or a Strassen level-1 overflow rate (0.02 = 2%%)")
     ap.add_argument("--rotate", action="store_true", help="quantize W·R and feed x·R (`rotation.py`)")
     ap.add_argument("--targets", type=Path, default=None,
-                    help="a JSON map of tensor name to its own target (a rate, absmax, or deflR: W·R less its top-R SVD "
-                    "part, served apart, at --target; with --device-map), the rest at --target")
-    ap.add_argument("--device-map", default=None, help="auto: load in bf16 across the visible GPUs, codes frozen "
-                    "(`quant.FrozenQLinear`); evaluation only (--tokens 0)")
+                    help="a JSON map of tensor name to its own target (a rate, absmax, bf16: left unquantized, or deflR: "
+                    "W·R less its top-R SVD part, served apart, at --target; with --device-map), the rest at --target")
+    ap.add_argument("--calib", type=Path, default=None,
+                    help="an earlier arm's result.json on the same weights and targets (with --device-map): each "
+                    "matrix's c from its calibration_before instead of solved again (`quant.wrap`'s calib)")
+    ap.add_argument("--device-map", default=None, help="auto: load in bf16 across the visible GPUs (cpu: on the CPU), "
+                    "codes frozen (`quant.FrozenQLinear`); evaluation only (--tokens 0)")
     ap.add_argument("--serve", default="a16", help="how activations are served in training, the headline evals and "
-                    "zero-shot: MODE[/wF][:PROJ+...] (`quant.Served`, `quant.set_served`)")
+                    "zero-shot: MODE[/wF][:X+...][;MODE=X+...]... (`quant.Served`, `quant.set_served`)")
     ap.add_argument("--eval-modes", default=EVAL_MODES, help="more serving specs to measure perplexity under")
     ap.add_argument("--tokens", type=int, default=100_000_000, help="training tokens; 0 = no training")
     ap.add_argument("--seq", type=int, default=2048)
@@ -212,6 +224,9 @@ def main(argv=None) -> int:
     ap.add_argument("--eval-every", type=int, default=100)
     ap.add_argument("--val-tokens", type=int, default=1_048_576)
     ap.add_argument("--ppl-sets", default="wikitext2,fineweb_val", help="the perplexity sets to measure")
+    ap.add_argument("--wt-windows", type=int, default=None, help="WikiText-2's first this many windows (default all)")
+    ap.add_argument("--probe", type=int, default=0, help="WikiText-2 windows to run `quant.Probe` over, served as "
+                    "--serve, before training")
     ap.add_argument("--val-skip", type=int, default=0, help="FineWeb-Edu val windows to skip first (a model too slow "
                     "for one lease measures --val-tokens in parts and sums their nll)")
     ap.add_argument("--data", type=Path, default=Path(os.environ.get("HU_DATA", "data")))
@@ -240,8 +255,8 @@ def main(argv=None) -> int:
     val_ids = np.memmap(args.data / "val.bin", dtype=np.uint32, mode="r")
     wt_ids = wikitext_ids(tok)
     res = {"config": {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()}, "data": meta,
-           "gpu": torch.cuda.get_device_name(0), "torch": torch.__version__,
-           "wikitext2_tokens": int(len(wt_ids))}
+           "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None, "torch": torch.__version__,
+           "threads": torch.get_num_threads(), "wikitext2_tokens": int(len(wt_ids))}
     import transformers
 
     res["transformers"] = transformers.__version__
@@ -257,18 +272,33 @@ def main(argv=None) -> int:
     target = None if args.target in ("absmax", "bf16") else float(args.target)
     targets = None
     if args.targets:
-        targets = {k: None if v == "absmax" else v if str(v).startswith("defl") else float(v)
+        targets = {k: None if v == "absmax" else v if str(v).startswith("defl") or v == "bf16" else float(v)
                    for k, v in json.loads(args.targets.read_text()).items()}
         res["targets"] = targets
+    calib = None
+    if args.calib:
+        assert args.device_map, "--calib reuses a frozen wrap's c"
+        calib = json.loads(args.calib.read_text())["calibration_before"]
+        res["calib"] = {"file": str(args.calib), "sha256": hashlib.sha256(args.calib.read_bytes()).hexdigest()}
     total = 0 if args.target == "bf16" else args.tokens // (args.batch * args.seq)
     steps = total if args.max_steps is None else min(total, args.max_steps)
     res["steps"], res["schedule_steps"] = steps, total
     assert steps * args.batch * args.seq <= len(train_ids), \
         f"{steps} steps need {steps * args.batch * args.seq} tokens, {args.data} has {len(train_ids)}: prep more shards"
     if args.target != "bf16":
-        res["calibration_before"] = quant.wrap(model, target, args.rotate, log, targets, frozen=bool(args.device_map))
+        res["calibration_before"] = quant.wrap(model, target, args.rotate, log, targets, frozen=bool(args.device_map),
+                                               calib=calib)
         res["matrices_before"] = quant.stats(model)
     res["eval_before"] = evaluate(model, tok, wt_ids, val_ids, args, zs=steps == 0 or not args.no_zs_before)
+    if args.probe and args.target != "bf16":
+        served(model, args, args.serve)
+        quant.PROBE = quant.Probe(model)
+        t0 = time.time()
+        perplexity(model, wt_ids, args.seq, max_windows=args.probe)
+        res["probe"] = {"spec": args.serve, "windows": args.probe, "seconds": time.time() - t0,
+                        "matrices": quant.PROBE.summary()}
+        quant.PROBE = None
+        log("probe", f"{res['probe']['seconds']:.0f}s")
     (args.out / "result.json").write_text(json.dumps(res, indent=1))
 
     if steps > 0:
@@ -342,6 +372,7 @@ def main(argv=None) -> int:
         res["price_rc"] = pricer.wait()
         log("price rc", res["price_rc"])
     res["seconds"] = time.time() - t_start
+    res["peak_rss_gib"] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20
     (args.out / "result.json").write_text(json.dumps(res, indent=1))
     log("done", json.dumps({k: res["eval_after"][k]["ppl"] for k in ("wikitext2", "fineweb_val") if k in res["eval_after"]}))
     return 0 if res.get("price_rc", 0) == 0 else 1

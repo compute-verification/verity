@@ -14,7 +14,8 @@ latent weight on every training forward (no gradient), and frozen with the codes
 With rotate, each linear's latent weight is W·R and its input x·R (`rotation.py`: a random-sign Hadamard rotation, exact
 in real arithmetic), so the codes quantize a near-Gaussian row and the clip a target needs spares the outliers.
 
-`Served` is how the activations reach the codes: bf16, int8 per token, or design U's int8 plus live 2-bit noise.
+`Served` is how the activations reach the codes: bf16, int8 per token, or design U's int8 plus live 2-bit noise, each
+matrix in its own mode (`set_served`).
 """
 
 from __future__ import annotations
@@ -26,9 +27,13 @@ import torch.nn.functional as F
 import rotation
 
 PROJ = ("q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj")
+# mode: (the E it reads, whether its activations are rounded to int8, E's mean folded out per output)
+MODES = {"a16": (None, False, 0.0), "a8": (None, True, 0.0), "e2": ("e4", True, 0.5), "e2f": ("e4", False, 0.5),
+         "e1": ("e4", True, 0.5), "e3": ("e3", True, 0.0)}
 S_V = [[1, 0, 0, 1], [1, 0, 0, 0], [0, 1, 0, -1], [-1, 0, 1, 0], [0, 0, 0, 1], [1, 1, 0, 0], [0, 0, 1, 1]]
 W_V = [[1, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1], [-1, 1, 1, -1], [-1, 1, 0, 0], [1, -1, 0, 1], [0, -1, 0, 1]]
 SCHEMES = {"strassen": S_V, "winograd": W_V}
+CALIB_TOL = 1e-6
 
 
 def row_scale(w: torch.Tensor, c: float | None) -> torch.Tensor:
@@ -116,39 +121,46 @@ class Rotation(nn.Module):
 
 
 class _ActQ(torch.autograd.Function):
-    """v = round(x / s_x) + e on live rows and x / s_x on the sink row, straight through: dv/dx = 1 / s_x."""
+    """v = round(x / s_x) + e (or x / s_x + e unrounded) on live rows and x / s_x on the sink row, straight through:
+    dv/dx = 1 / s_x."""
 
     @staticmethod
-    def forward(ctx, x, sx, e, live):
+    def forward(ctx, x, sx, e, live, rnd=True):
         u = x.float() / sx
         ctx.save_for_backward(sx)
-        return torch.where(live, torch.round(u) + e, u).to(torch.bfloat16)
+        return torch.where(live, (torch.round(u) if rnd else u) + e, u).to(torch.bfloat16)
 
     @staticmethod
     def backward(ctx, g):
         (sx,) = ctx.saved_tensors
-        return (g.float() / sx).to(g.dtype), None, None, None
+        return (g.float() / sx).to(g.dtype), None, None, None, None
 
 
 class Served:
-    """How a linear call's input is served.
+    """How a linear call's input is served, per matrix (`MODES`, `set_served`).
 
     - a16: bf16 (W8A16).
     - a8: int8 per token, symmetric at ±126.
     - e2: HT-PROTO-U's design U. int8 per token at ±126 plus raw E uniform on {−2, −1, 0, 1}, one E per call, served
       as (x + E)·qᵀ + ½·Σq, which folds E's mean in per output.
+    - e2f: e2's E on the unrounded x / s_x (in bf16, as a16's activations): E without int8 activations.
+    - e1: int8 plus ⌊E/2⌋, uniform on {−1, 0} (b_E = 1), from e2's own draw; its mean is e2's, folded in the same way.
+    - e3: int8 plus E uniform on {−1, 0, 1} (a = 3), mean 0, from a stream of its own.
 
-    In a8 and e2 the sink row (position 0) is served exact. Linears that read the same input tensor (q, k and v; gate and
-    up) are one call and share its codes and E. E is drawn from one generator per GPU, seeded seed + 1000·index, which
-    `reseed` restarts; a model on one GPU draws from seed itself.
+    In every mode but a16 the sink row (position 0) is served exact. Linears that read the same input tensor (q, k and
+    v; gate and up) are one call and share its codes and E. Whenever any matrix reads an E, every call draws it,
+    whatever its own matrices' modes, so a matrix's E doesn't depend on how the others are served. E is drawn from one
+    generator per GPU, seeded seed + 1000·index (e3's offset by 2,000,000), which `reseed` restarts; a model on one GPU
+    draws from seed itself.
 
     With wnoise f (HT-DEFENCE's candidate 3), q, k and v are served as q + F, F live integer weight noise uniform on
     [−f, f] drawn on every call, clipped to ±127 (`hardness_public/rotated.py --live-noise`), from generators of their
     own, so E's draws are the same as without it."""
 
     def __init__(self, mode: str = "a16", wnoise: int = 0):
-        assert mode in ("a16", "a8", "e2"), mode
+        assert mode in MODES, mode
         self.mode, self.wnoise, self.seed, self.gens, self._last = mode, wnoise, 0, {}, None
+        self.draws = {MODES[mode][0]} - {None}
 
     def reseed(self, seed: int, device=None):
         self.seed, self.gens, self._last = seed, {}, None
@@ -165,9 +177,10 @@ class Served:
         n = torch.randint(-f, f + 1, q.shape, device=q.device, dtype=q.dtype, generator=self.gen(q.device, 1))
         return (q + n).clamp(-127, 127)
 
-    def act(self, x, rot):
+    def base(self, x, rot):
+        """One call's rotated input, its per-token scale, the live rows and every E the matrices read, drawn once."""
         if self._last is not None and self._last[0] is x and self._last[1] is rot:
-            return self._last[2:]
+            return self._last[2]
         assert x.dim() == 3, x.shape
         xr = x.to(torch.bfloat16)
         if rot is not None:
@@ -175,14 +188,78 @@ class Served:
         sx = (xr.detach().abs().amax(-1, keepdim=True).float() / 126).clamp_min(1e-12)
         live = torch.ones(*x.shape[:-1], 1, dtype=torch.bool, device=x.device)
         live[:, 0] = False
-        if self.mode == "e2":
-            e = torch.randint(-2, 2, xr.shape, device=x.device, generator=self.gen(x.device)).float()
-            off = 0.5 * live.float()
-        else:
-            e, off = torch.zeros((), device=x.device), None
-        v = _ActQ.apply(xr, sx, e, live)
-        self._last = (x, rot, v, sx, off)
-        return v, sx, off
+        es = {}
+        if "e4" in self.draws:
+            es["e4"] = torch.randint(-2, 2, xr.shape, device=x.device, generator=self.gen(x.device)).to(torch.int8)
+        if "e3" in self.draws:
+            es["e3"] = torch.randint(-1, 2, xr.shape, device=x.device, generator=self.gen(x.device, 2)).to(torch.int8)
+        b = {"xr": xr, "sx": sx, "live": live, "e": es, "v": {}}
+        self._last = (x, rot, b)
+        return b
+
+    def act(self, x, rot, mode: str | None = None):
+        """(v, s_x, the offset that folds E's mean in, or None) for x served as mode (default the base mode)."""
+        mode = mode or self.mode
+        b = self.base(x, rot)
+        if mode not in b["v"]:
+            kind, rnd, mean = MODES[mode]
+            e = torch.zeros((), device=x.device) if kind is None else b["e"][kind].float()
+            if mode == "e1":
+                e = torch.floor(e / 2)
+            v = _ActQ.apply(b["xr"], b["sx"], e, b["live"], rnd)
+            b["v"][mode] = (v, b["sx"], mean * b["live"].float() if mean else None)
+        return b["v"][mode]
+
+
+class Probe:
+    """Where served noise lands, per matrix, over the live rows (every position but the sink) of its eval calls: the
+    signal Σ‖y‖² of its a16 output (low-rank part included) and, per mode, the output error Σ‖y_m − y_a16‖²; the input
+    Σ‖x·R‖² and, per mode, its error Σ‖(v_m + mean − x·R/s_x)·s_x‖²; and the rotated input's crest factor per row
+    (absmax over RMS: sum, sum of squares, max). `quant.PROBE = Probe(model)` turns it on. It draws nothing, so what is
+    served is what would be served without it; a mode whose E the spec doesn't draw is skipped, and weight noise left out."""
+
+    def __init__(self, model, modes=("a8", "e2f", "e2")):
+        self.names = {id(getattr(p, a)): n for n, p, a in block_linears(model)}
+        self.modes, self.acc = modes, {}
+
+    @torch.no_grad()
+    def see(self, m, x, q, s, y, lr):
+        rec = self.acc.setdefault(self.names[id(m)], {"rows": 0, "signal": 0.0, "input": 0.0, "crest": [0.0, 0.0, 0.0],
+                                                      "out": {}, "in": {}})
+        ref = y if m.mode == "a16" else m.product(x, q, s, "a16")
+        rec["signal"] += float((ref if lr is None else ref + lr)[:, 1:].double().pow(2).sum())
+        sv = m.served
+        if sv is None:
+            return
+        b = sv.base(x, m.rot)
+        xr, sx = b["xr"][:, 1:].float(), b["sx"][:, 1:]
+        cr = xr.abs().amax(-1) / xr.pow(2).mean(-1).sqrt().clamp_min(1e-30)
+        rec["rows"] += cr.numel()
+        rec["input"] += float(xr.double().pow(2).sum())
+        rec["crest"] = [rec["crest"][0] + float(cr.sum()), rec["crest"][1] + float(cr.double().pow(2).sum()),
+                        max(rec["crest"][2], float(cr.max()))]
+        for md in self.modes:
+            kind, _rnd, mean = MODES[md]
+            if kind is not None and kind not in sv.draws:
+                continue
+            ym = y if md == m.mode and not (sv.wnoise and m.noised) else m.product(x, q, s, md, wnoise=False)
+            rec["out"][md] = rec["out"].get(md, 0.0) + float((ym - ref)[:, 1:].double().pow(2).sum())
+            v = sv.act(x, m.rot, md)[0][:, 1:].float()
+            rec["in"][md] = rec["in"].get(md, 0.0) + float(((v + mean - xr / sx) * sx).double().pow(2).sum())
+
+    def summary(self) -> dict[str, dict]:
+        """Per matrix its sums, and per mode the output's and the input's error relative to their signal."""
+        out = {}
+        for name, r in self.acc.items():
+            n = max(r["rows"], 1)
+            out[name] = r | {"crest_mean": r["crest"][0] / n, "crest_rms": (r["crest"][1] / n) ** 0.5,
+                             "crest_max": r["crest"][2],
+                             "out_rel": {md: e / r["signal"] for md, e in r["out"].items()},
+                             "in_rel": {md: e / r["input"] for md, e in r["in"].items()}}
+        return out
+
+
+PROBE: Probe | None = None
 
 
 class QLinear(nn.Module):
@@ -192,7 +269,7 @@ class QLinear(nn.Module):
         self.weight = lin.weight
         self.c = c
         self.rot = rot
-        self.served, self.exact, self.noised = None, False, False
+        self.served, self.mode, self.noised = None, "a16", False
         self._frozen = None
 
     def train(self, mode: bool = True):
@@ -206,26 +283,39 @@ class QLinear(nn.Module):
             self._frozen = (codes(self.weight, s).to(torch.bfloat16), s)
         return self._frozen
 
+    def product(self, x, q, s, mode: str, wnoise: bool = True):
+        """x·(q·s)ᵀ with x served as mode (`Served.act`), in fp32."""
+        sv = self.served
+        if sv is None or mode == "a16":
+            x = x.to(torch.bfloat16)
+            if self.rot is not None:
+                x = self.rot(x)
+            return F.linear(x, q).float() * s
+        v, sx, off = sv.act(x, self.rot, mode)
+        if wnoise and sv.wnoise and self.noised:
+            q = sv.noised(q)
+        y = F.linear(v, q).float()
+        if off is not None:
+            y = y + off * q.float().sum(1)
+        return y * sx * s
+
+    def lowrank(self, x) -> torch.Tensor | None:
+        return None
+
     def forward(self, x):
         if self.training:
             s = row_scale(self.weight, self.c)
             q = _FQ.apply(self.weight.float(), s)
         else:
             q, s = self.frozen()
-        if self.served is None or self.served.mode == "a16" or self.exact:
-            if self.exact and self.served is not None and self.served.mode == "e2":
-                self.served.act(x, self.rot)  # draw E anyway, so every other call's noise is the same as with none exact
-            x = x.to(torch.bfloat16)
-            if self.rot is not None:
-                x = self.rot(x)
-            return F.linear(x, q).float() * s
-        v, sx, off = self.served.act(x, self.rot)
-        if self.served.wnoise and self.noised:
-            q = self.served.noised(q)
-        y = F.linear(v, q).float()
-        if off is not None:
-            y = y + off * q.float().sum(1)
-        return y * sx * s
+        sv = self.served
+        if sv is not None and sv.draws:
+            sv.base(x, self.rot)  # draw E whatever this matrix's mode, so every other call's noise is the same
+        y = self.product(x, q, s, self.mode)
+        lr = self.lowrank(x)
+        if PROBE is not None and not self.training:
+            PROBE.see(self, x, q, s, y, lr)
+        return y if lr is None else y + lr
 
 
 class FrozenQLinear(QLinear):
@@ -236,7 +326,7 @@ class FrozenQLinear(QLinear):
         nn.Module.__init__(self)
         self.register_buffer("q", q)
         self.register_buffer("s", s)
-        self.c, self.rot, self.served, self.exact, self.noised = c, rot, None, False, False
+        self.c, self.rot, self.served, self.mode, self.noised = c, rot, None, "a16", False
 
     def train(self, mode: bool = True):
         assert not mode, "a FrozenQLinear has no latent weight to train"
@@ -255,12 +345,11 @@ class DeflatedQLinear(FrozenQLinear):
         self.register_buffer("a", a)
         self.register_buffer("b", b)
 
-    def forward(self, x):
-        y = super().forward(x)
+    def lowrank(self, x):
         xr = x.to(torch.bfloat16)
         if self.rot is not None:
             xr = self.rot(xr)
-        return y + (xr.float() @ self.b) @ self.a.T
+        return (xr.float() @ self.b) @ self.a.T
 
 
 def top_part(w: torch.Tensor, r: int) -> tuple[torch.Tensor, torch.Tensor]:
@@ -293,18 +382,27 @@ def block_linears(model) -> list[tuple[str, nn.Module, str]]:
 
 
 def wrap(model, target: float | None, rotate: bool = False, log=print, targets: dict | None = None,
-         frozen: bool = False) -> dict[str, dict]:
+         frozen: bool = False, calib: dict | None = None) -> dict[str, dict]:
     """Replace every block linear by a QLinear calibrated to its target, targets[name] where listed (None is absmax) and
-    target elsewhere, its weight rotated first with rotate; returns per matrix its c and overflow.
+    target elsewhere, its weight rotated first with rotate; returns per matrix its c and overflow. A targets value bf16
+    leaves the matrix unquantized, the model's own bf16 linear.
 
     With frozen, each is a FrozenQLinear whose codes come from W·R formed in float64 on the weight's device and then
     rounded to fp32, as the latent path holds it, and overwrite the bf16 weight in place (codes within ±127 are exact in
-    bf16): a bf16 model too large for fp32, wrapped in the memory it was loaded in plus one matrix's temporaries. A
-    targets value deflR (frozen only) is a DeflatedQLinear at target: the codes of W·R less its top-R SVD part."""
-    info, rots, targets = {}, {}, targets or {}
+    bf16; on the CPU, a new tensor in its place): a bf16 model too large for fp32, wrapped in the memory it was loaded
+    in plus one matrix's temporaries. A
+    targets value deflR (frozen only) is a DeflatedQLinear at target: the codes of W·R less its top-R SVD part. With
+    calib (frozen only; an earlier wrap's return on the same weights and targets), each matrix takes its recorded c
+    instead of solving for it, and its overflow at that c must be within CALIB_TOL of the one recorded (another
+    device's float64 rounds a few residuals to the other side of a half step)."""
+    info, rots, targets, drift = {}, {}, targets or {}, 0.0
+    assert calib is None or frozen, "calib reuses a frozen wrap's c"
     for name, parent, attr in block_linears(model):
         lin = getattr(parent, attr)
         tgt = targets.get(name, target)
+        if tgt == "bf16":
+            info[name] = {"target": "bf16"}
+            continue
         deflate = 0
         if isinstance(tgt, str):
             assert tgt.startswith("defl") and frozen, f"{name}: {tgt} isn't deflR, or the model isn't frozen"
@@ -323,11 +421,21 @@ def wrap(model, target: float | None, rotate: bool = False, log=print, targets: 
                     a, b = top_part(w, deflate)
                     w = w - a @ b.T
                 w = w.float()
-                c, ov = calibrate(w, tgt)
+                if calib is None:
+                    c, ov = calibrate(w, tgt)
+                else:
+                    rec = calib[name]
+                    assert (rec["target"], rec.get("deflate", 0)) == (tgt, deflate), f"{name}: calib {rec}, now {tgt}"
+                    c, ov = rec["c"], strassen1(w, rec["c"])
+                    drift = max(drift, abs(ov - rec["strassen1"]))
+                    assert drift <= CALIB_TOL, f"{name}: overflow {ov} at the recorded c, recorded {rec}"
                 s = row_scale(w, c)
                 q = lin.weight.detach()
                 assert q.dtype == torch.bfloat16, q.dtype
-                q.copy_(codes(w, s))
+                if q.device.type == "cpu":
+                    q = codes(w, s).to(torch.bfloat16)  # a CPU model's weights can be views of the checkpoint's mmap
+                else:
+                    q.copy_(codes(w, s))
             del w
             setattr(parent, attr, DeflatedQLinear(q, s, c, rot, a.float(), b.float()) if deflate
                     else FrozenQLinear(q, s, c, rot))
@@ -338,24 +446,54 @@ def wrap(model, target: float | None, rotate: bool = False, log=print, targets: 
             c, ov = calibrate(lin.weight, tgt)
             setattr(parent, attr, QLinear(lin, c, rot))
         info[name] = {"c": c, "strassen1": ov, "target": tgt} | ({"deflate": deflate} if deflate else {})
-    log(f"wrap: {len(info)} linears, target {target} ({len(targets)} set apart), rotate {rotate}, strassen1 median "
-        f"{sorted(v['strassen1'] for v in info.values())[len(info) // 2]:.4%}")
+    ovs = sorted(v["strassen1"] for v in info.values() if "strassen1" in v)
+    log(f"wrap: {len(info)} linears ({len(ovs)} quantized), target {target} ({len(targets)} set apart), rotate {rotate}"
+        f"{f', calibration reused (overflow within {drift:.2e} of its record)' if calib else ''}, strassen1 median "
+        f"{ovs[len(ovs) // 2]:.4%}")
     return info
 
 
+def selects(sel: str, name: str) -> bool:
+    """Whether sel names the matrix: a projection (q_proj), one matrix (layers.0.self_attn.q_proj), every matrix of
+    layers A to B (layers.A-B), or one projection of each (layers.A-B.q_proj)."""
+    short = name.removeprefix("model.").removesuffix(".weight")
+    if sel in (short, short.rsplit(".", 1)[-1]):
+        return True
+    head, _, proj = sel.removeprefix("layers.").partition(".")
+    lo, dash, hi = head.partition("-")
+    if not (sel.startswith("layers.") and dash and lo.isdigit() and hi.isdigit()):
+        return False
+    return int(lo) <= int(short.split(".")[1]) <= int(hi) and proj in ("", short.rsplit(".", 1)[-1])
+
+
 def set_served(model, spec: str) -> Served:
-    """Serve every QLinear as spec, MODE[/wF][:X+X...] (`Served`): /wF adds live weight noise uniform on [−F, F] to q,
-    k and v, and each X is a projection (q_proj) or one matrix (layers.0.self_attn.q_proj), served exact: its
-    activations in bf16, no noise."""
-    head, _, exact = spec.partition(":")
+    """Serve every QLinear as spec, MODE[/wF][:X+X...][;MODE=X+X...]... (`Served`, `MODES`): /wF adds live weight noise
+    uniform on [−F, F] to q, k and v; each X selects matrices (`selects`). Each ;MODE=X+... serves its matrices as
+    MODE, later ones over earlier ones, and the X after the colon are served exact (a16: activations in bf16, no
+    noise) over all of them."""
+    head, *over = spec.split(";")
+    head, _, exact = head.partition(":")
     mode, _, w = head.partition("/")
     assert not w or w.startswith("w"), spec
-    ex = set(exact.split("+")) - {""}
+    rules = [(m, sels.split("+")) for m, _, sels in (o.partition("=") for o in over)]
+    assert all(m in MODES and all(sels) for m, sels in rules), spec
+    rules.append(("a16", [x for x in exact.split("+") if x]))
+    names = [n for n, _p, _a in block_linears(model)]
+    unmatched = [x for _m, sels in rules for x in sels if not any(selects(x, n) for n in names)]
+    assert not unmatched, f"{spec}: {unmatched} select no matrix"
     sv = Served(mode, int(w[1:]) if w else 0)
+    sv.draws = set()
     for name, parent, attr in block_linears(model):
         m = getattr(parent, attr)
-        m.served, m.exact = sv, attr in ex or name.removeprefix("model.").removesuffix(".weight") in ex
+        if not isinstance(m, QLinear):
+            continue
+        md = mode
+        for rm, sels in rules:
+            if any(selects(x, name) for x in sels):
+                md = rm
+        m.served, m.mode = sv, md
         m.noised = attr in ("q_proj", "k_proj", "v_proj")
+        sv.draws |= {MODES[md][0]} - {None}
     return sv
 
 
@@ -363,6 +501,8 @@ def recalibrate(model, target: float | None) -> dict[str, dict]:
     info = {}
     for name, parent, attr in block_linears(model):
         m = getattr(parent, attr)
+        if not isinstance(m, QLinear):
+            continue
         if target is not None:
             m.c, ov = calibrate(m.weight, target)
         else:
@@ -378,6 +518,8 @@ def stats(model) -> dict[str, dict]:
     with torch.no_grad():
         for name, parent, attr in block_linears(model):
             m = getattr(parent, attr)
+            if not isinstance(m, QLinear):
+                continue
             q, _s = m.frozen()
             prof = overflow(q, 2)
             out[name] = {"shape": list(q.shape), "c": m.c, "sigma_q": float(q.float().std()),

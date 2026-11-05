@@ -1,0 +1,2813 @@
+{
+"source": "r20261104-140933-edd7 out/70b-defl-wt/result.json",
+"calibration_before": {
+"model.layers.0.self_attn.q_proj.weight": {
+"c": null,
+"strassen1": 0.04372951814106533,
+"target": null
+},
+"model.layers.0.self_attn.k_proj.weight": {
+"c": null,
+"strassen1": 0.03787681034633091,
+"target": null
+},
+"model.layers.0.self_attn.v_proj.weight": {
+"c": null,
+"strassen1": 0.04041916983468192,
+"target": null
+},
+"model.layers.0.self_attn.o_proj.weight": {
+"c": 2.976764320303749,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.0.mlp.gate_proj.weight": {
+"c": 3.064299222332833,
+"strassen1": 0.020000002822097466,
+"target": 0.02,
+"deflate": 32
+},
+"model.layers.0.mlp.up_proj.weight": {
+"c": 3.0658181901549715,
+"strassen1": 0.020000002822097466,
+"target": 0.02,
+"deflate": 32
+},
+"model.layers.0.mlp.down_proj.weight": {
+"c": 3.075034734825329,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.1.self_attn.q_proj.weight": {
+"c": 3.195837612764176,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.1.self_attn.k_proj.weight": {
+"c": 3.0957647560985686,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.1.self_attn.v_proj.weight": {
+"c": null,
+"strassen1": 0.03307873862130301,
+"target": null
+},
+"model.layers.1.self_attn.o_proj.weight": {
+"c": 3.06576191888111,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.1.mlp.gate_proj.weight": {
+"c": 3.0502647145806883,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.1.mlp.up_proj.weight": {
+"c": 3.052538275250834,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.1.mlp.down_proj.weight": {
+"c": 3.074638719091924,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.2.self_attn.q_proj.weight": {
+"c": 3.130874752801021,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.2.self_attn.k_proj.weight": {
+"c": 3.103662845569121,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.2.self_attn.v_proj.weight": {
+"c": 3.2108374807570996,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.2.self_attn.o_proj.weight": {
+"c": 3.070531485864782,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.2.mlp.gate_proj.weight": {
+"c": 3.019102452568177,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.2.mlp.up_proj.weight": {
+"c": 3.0147665720181,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.2.mlp.down_proj.weight": {
+"c": 3.0750185249273603,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.3.self_attn.q_proj.weight": {
+"c": 3.385697240902598,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.3.self_attn.k_proj.weight": {
+"c": 3.2912670335475656,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.3.self_attn.v_proj.weight": {
+"c": null,
+"strassen1": 0.03725154059273856,
+"target": 0.02
+},
+"model.layers.3.self_attn.o_proj.weight": {
+"c": 3.060719609203985,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.3.mlp.gate_proj.weight": {
+"c": 3.0525761823502413,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.3.mlp.up_proj.weight": {
+"c": 3.0531150097977413,
+"strassen1": 0.020000012553468043,
+"target": 0.02
+},
+"model.layers.3.mlp.down_proj.weight": {
+"c": 3.0749973046779866,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.4.self_attn.q_proj.weight": {
+"c": 3.073576807270396,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.4.self_attn.k_proj.weight": {
+"c": 3.0792990910649443,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.4.self_attn.v_proj.weight": {
+"c": 3.0748440019832843,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.4.self_attn.o_proj.weight": {
+"c": 3.063405870994843,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.4.mlp.gate_proj.weight": {
+"c": 3.017392991734503,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.4.mlp.up_proj.weight": {
+"c": 3.016184448992721,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.4.mlp.down_proj.weight": {
+"c": 3.074975609546981,
+"strassen1": 0.020000010120625397,
+"target": 0.02
+},
+"model.layers.5.self_attn.q_proj.weight": {
+"c": 3.080082055559145,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.5.self_attn.k_proj.weight": {
+"c": 3.128621932843039,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.5.self_attn.v_proj.weight": {
+"c": 3.118354437986291,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.5.self_attn.o_proj.weight": {
+"c": 3.080819487550149,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.5.mlp.gate_proj.weight": {
+"c": 3.0736318806631444,
+"strassen1": 0.020000010120625397,
+"target": 0.02,
+"deflate": 32
+},
+"model.layers.5.mlp.up_proj.weight": {
+"c": 3.074364304395255,
+"strassen1": 0.020000002822097466,
+"target": 0.02,
+"deflate": 32
+},
+"model.layers.5.mlp.down_proj.weight": {
+"c": 3.0745969964644537,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.6.self_attn.q_proj.weight": {
+"c": 3.0753968950088293,
+"strassen1": 0.02000002350125994,
+"target": 0.02
+},
+"model.layers.6.self_attn.k_proj.weight": {
+"c": 3.076399918947839,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.6.self_attn.v_proj.weight": {
+"c": 3.07490885068761,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.6.self_attn.o_proj.weight": {
+"c": 3.055340408972577,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.6.mlp.gate_proj.weight": {
+"c": 3.063091154620623,
+"strassen1": 0.020000010120625397,
+"target": 0.02
+},
+"model.layers.6.mlp.up_proj.weight": {
+"c": 3.061186909394675,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.6.mlp.down_proj.weight": {
+"c": 3.074742194006199,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.7.self_attn.q_proj.weight": {
+"c": 3.0750125632028045,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.7.self_attn.k_proj.weight": {
+"c": 3.075815794084945,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.7.self_attn.v_proj.weight": {
+"c": 3.074346182825512,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.7.self_attn.o_proj.weight": {
+"c": 3.0925358529000775,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.7.mlp.gate_proj.weight": {
+"c": 3.073400137159874,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.7.mlp.up_proj.weight": {
+"c": 3.0716229673852675,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.7.mlp.down_proj.weight": {
+"c": 3.0749276869622464,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.8.self_attn.q_proj.weight": {
+"c": 3.075889704353459,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.8.self_attn.k_proj.weight": {
+"c": 3.0877395845544493,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.8.self_attn.v_proj.weight": {
+"c": 3.075426696935413,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.8.self_attn.o_proj.weight": {
+"c": 3.0787559706357257,
+"strassen1": 0.02000002350125994,
+"target": 0.02
+},
+"model.layers.8.mlp.gate_proj.weight": {
+"c": 2.995515223311824,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.8.mlp.up_proj.weight": {
+"c": 3.000120279611714,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.8.mlp.down_proj.weight": {
+"c": 3.0744260503696954,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.9.self_attn.q_proj.weight": {
+"c": 3.0746499262272557,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.9.self_attn.k_proj.weight": {
+"c": 3.0691193299679895,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.9.self_attn.v_proj.weight": {
+"c": 3.0728422396392694,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.9.self_attn.o_proj.weight": {
+"c": 3.1225358215741505,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.9.mlp.gate_proj.weight": {
+"c": 3.0739122611047742,
+"strassen1": 0.020000005254940112,
+"target": 0.02,
+"deflate": 32
+},
+"model.layers.9.mlp.up_proj.weight": {
+"c": 3.0737935267687284,
+"strassen1": 0.020000002822097466,
+"target": 0.02,
+"deflate": 32
+},
+"model.layers.9.mlp.down_proj.weight": {
+"c": 3.074762938168792,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.10.self_attn.q_proj.weight": {
+"c": 3.0758656229920476,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.10.self_attn.k_proj.weight": {
+"c": 3.0742729869091265,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.10.self_attn.v_proj.weight": {
+"c": 3.0756281612489254,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.10.self_attn.o_proj.weight": {
+"c": 3.0878278009395315,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.10.mlp.gate_proj.weight": {
+"c": 3.0722378473556162,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.10.mlp.up_proj.weight": {
+"c": 3.0706559404345057,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.10.mlp.down_proj.weight": {
+"c": 3.074894542271343,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.11.self_attn.q_proj.weight": {
+"c": 3.077434896922135,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.11.self_attn.k_proj.weight": {
+"c": 3.0929595223397364,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.11.self_attn.v_proj.weight": {
+"c": 3.081097721076995,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.11.self_attn.o_proj.weight": {
+"c": 3.0634139753208665,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.11.mlp.gate_proj.weight": {
+"c": 3.0448383052616115,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.11.mlp.up_proj.weight": {
+"c": 3.0469461663183903,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.11.mlp.down_proj.weight": {
+"c": 3.074743147548009,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.12.self_attn.q_proj.weight": {
+"c": 3.0751029217306214,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.12.self_attn.k_proj.weight": {
+"c": 3.0771115999485605,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.12.self_attn.v_proj.weight": {
+"c": 3.0737961521739963,
+"strassen1": 0.02000011716570173,
+"target": 0.02
+},
+"model.layers.12.self_attn.o_proj.weight": {
+"c": 3.060364601945821,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.12.mlp.gate_proj.weight": {
+"c": 3.075433610437497,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.12.mlp.up_proj.weight": {
+"c": 3.0737229562270283,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.12.mlp.down_proj.weight": {
+"c": 3.074401020297974,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.13.self_attn.q_proj.weight": {
+"c": 3.0771206591474685,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.13.self_attn.k_proj.weight": {
+"c": 3.08018314572578,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.13.self_attn.v_proj.weight": {
+"c": 3.073583955955252,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.13.self_attn.o_proj.weight": {
+"c": 3.0720568860339084,
+"strassen1": 0.02000002350125994,
+"target": 0.02
+},
+"model.layers.13.mlp.gate_proj.weight": {
+"c": 3.0749486677607427,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.13.mlp.up_proj.weight": {
+"c": 3.0741099108620062,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.13.mlp.down_proj.weight": {
+"c": 3.0747650860506495,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.14.self_attn.q_proj.weight": {
+"c": 3.077268715760771,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.14.self_attn.k_proj.weight": {
+"c": 3.080470441321893,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.14.self_attn.v_proj.weight": {
+"c": 3.0748940660887243,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.14.self_attn.o_proj.weight": {
+"c": 3.07765877240716,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.14.mlp.gate_proj.weight": {
+"c": 3.075552103143064,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.14.mlp.up_proj.weight": {
+"c": 3.0745059218220785,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.14.mlp.down_proj.weight": {
+"c": 3.0749272070911937,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.15.self_attn.q_proj.weight": {
+"c": 3.0752009138782768,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.15.self_attn.k_proj.weight": {
+"c": 3.0769292083172775,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.15.self_attn.v_proj.weight": {
+"c": 3.0744985335748876,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.15.self_attn.o_proj.weight": {
+"c": 3.086268540499999,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.15.mlp.gate_proj.weight": {
+"c": 3.0762888170732303,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.15.mlp.up_proj.weight": {
+"c": 3.0742310278821283,
+"strassen1": 0.020000012553468043,
+"target": 0.02
+},
+"model.layers.15.mlp.down_proj.weight": {
+"c": 3.074862356907019,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.16.self_attn.q_proj.weight": {
+"c": 3.0763088442733957,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.16.self_attn.k_proj.weight": {
+"c": 3.0779501194428125,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.16.self_attn.v_proj.weight": {
+"c": 3.073948978789436,
+"strassen1": 0.02000011716570173,
+"target": 0.02
+},
+"model.layers.16.self_attn.o_proj.weight": {
+"c": 3.0645755518735,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.16.mlp.gate_proj.weight": {
+"c": 3.075931426074855,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.16.mlp.up_proj.weight": {
+"c": 3.074319241402261,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.16.mlp.down_proj.weight": {
+"c": 3.074748869106911,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.17.self_attn.q_proj.weight": {
+"c": 3.0738996233918363,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.17.self_attn.k_proj.weight": {
+"c": 3.0694302312026265,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.17.self_attn.v_proj.weight": {
+"c": 3.0735696551732943,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.17.self_attn.o_proj.weight": {
+"c": 3.067152376462957,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.17.mlp.gate_proj.weight": {
+"c": 3.0765317628176545,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.17.mlp.up_proj.weight": {
+"c": 3.0749124278833335,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.17.mlp.down_proj.weight": {
+"c": 3.0749036039554665,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.18.self_attn.q_proj.weight": {
+"c": 3.075760005616086,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.18.self_attn.k_proj.weight": {
+"c": 3.0739470691337862,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.18.self_attn.v_proj.weight": {
+"c": 3.0755494827902305,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.18.self_attn.o_proj.weight": {
+"c": 3.078020213799011,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.18.mlp.gate_proj.weight": {
+"c": 3.076914904424608,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.18.mlp.up_proj.weight": {
+"c": 3.0742922973672187,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.18.mlp.down_proj.weight": {
+"c": 3.0748649823386085,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.19.self_attn.q_proj.weight": {
+"c": 3.075469609017781,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.19.self_attn.k_proj.weight": {
+"c": 3.0779372450992897,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.19.self_attn.v_proj.weight": {
+"c": 3.073299048895036,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.19.self_attn.o_proj.weight": {
+"c": 3.1208900157748145,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.19.mlp.gate_proj.weight": {
+"c": 3.0780411912345644,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.19.mlp.up_proj.weight": {
+"c": 3.0746906976199826,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.19.mlp.down_proj.weight": {
+"c": 3.0749090857274117,
+"strassen1": 0.020000012553468043,
+"target": 0.02
+},
+"model.layers.20.self_attn.q_proj.weight": {
+"c": 3.074736233460712,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.20.self_attn.k_proj.weight": {
+"c": 3.0792018158555114,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.20.self_attn.v_proj.weight": {
+"c": 3.07263886515421,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.20.self_attn.o_proj.weight": {
+"c": 3.071983932016934,
+"strassen1": 0.02000002350125994,
+"target": 0.02
+},
+"model.layers.20.mlp.gate_proj.weight": {
+"c": 3.0769201484666446,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.20.mlp.up_proj.weight": {
+"c": 3.0744777881558427,
+"strassen1": 0.020000010120625397,
+"target": 0.02
+},
+"model.layers.20.mlp.down_proj.weight": {
+"c": 3.0747259818422465,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.21.self_attn.q_proj.weight": {
+"c": 3.0744842242691917,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.21.self_attn.k_proj.weight": {
+"c": 3.073945162209383,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.21.self_attn.v_proj.weight": {
+"c": 3.075224755721242,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.21.self_attn.o_proj.weight": {
+"c": 3.0253616526210045,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.21.mlp.gate_proj.weight": {
+"c": 3.0776070329872582,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.21.mlp.up_proj.weight": {
+"c": 3.074650881041869,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.21.mlp.down_proj.weight": {
+"c": 3.0748106210465407,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.22.self_attn.q_proj.weight": {
+"c": 3.074958917631733,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.22.self_attn.k_proj.weight": {
+"c": 3.074476360048782,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.22.self_attn.v_proj.weight": {
+"c": 3.0741702294235527,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.22.self_attn.o_proj.weight": {
+"c": 3.082164643025188,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.22.mlp.gate_proj.weight": {
+"c": 3.0777784584334835,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.22.mlp.up_proj.weight": {
+"c": 3.07410609471093,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.22.mlp.down_proj.weight": {
+"c": 3.074752447913852,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.23.self_attn.q_proj.weight": {
+"c": 3.0763448449079878,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.23.self_attn.k_proj.weight": {
+"c": 3.075395699234397,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.23.self_attn.v_proj.weight": {
+"c": 3.074153304059243,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.23.self_attn.o_proj.weight": {
+"c": 3.0672169922780155,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.23.mlp.gate_proj.weight": {
+"c": 3.0776334950910176,
+"strassen1": 0.020000010120625397,
+"target": 0.02
+},
+"model.layers.23.mlp.up_proj.weight": {
+"c": 3.0745433522261436,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.23.mlp.down_proj.weight": {
+"c": 3.0748087155178965,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.24.self_attn.q_proj.weight": {
+"c": 3.0752893653048234,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.24.self_attn.k_proj.weight": {
+"c": 3.0778313841949485,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.24.self_attn.v_proj.weight": {
+"c": 3.0735045648007286,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.24.self_attn.o_proj.weight": {
+"c": 3.053207988742905,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.24.mlp.gate_proj.weight": {
+"c": 3.076465246350402,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.24.mlp.up_proj.weight": {
+"c": 3.074577925514252,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.24.mlp.down_proj.weight": {
+"c": 3.0745800699405743,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.25.self_attn.q_proj.weight": {
+"c": 3.0722178181855107,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.25.self_attn.k_proj.weight": {
+"c": 3.0703121381433096,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.25.self_attn.v_proj.weight": {
+"c": 3.075086234354881,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.25.self_attn.o_proj.weight": {
+"c": 3.0558696977597517,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.25.mlp.gate_proj.weight": {
+"c": 3.0772072069658805,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.25.mlp.up_proj.weight": {
+"c": 3.074481127302146,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.25.mlp.down_proj.weight": {
+"c": 3.074544787077473,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.26.self_attn.q_proj.weight": {
+"c": 3.074657555851668,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.26.self_attn.k_proj.weight": {
+"c": 3.076909183214177,
+"strassen1": 0.02000011716570173,
+"target": 0.02
+},
+"model.layers.26.self_attn.v_proj.weight": {
+"c": 3.075474618320311,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.26.self_attn.o_proj.weight": {
+"c": 3.052812218272999,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.26.mlp.gate_proj.weight": {
+"c": 3.076973080050959,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.26.mlp.up_proj.weight": {
+"c": 3.074453230030173,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.26.mlp.down_proj.weight": {
+"c": 3.074640389169147,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.27.self_attn.q_proj.weight": {
+"c": 3.0757817020956217,
+"strassen1": 0.02000002350125994,
+"target": 0.02
+},
+"model.layers.27.self_attn.k_proj.weight": {
+"c": 3.0769125189816036,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.27.self_attn.v_proj.weight": {
+"c": 3.073148126766788,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.27.self_attn.o_proj.weight": {
+"c": 3.0846079564267246,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.27.mlp.gate_proj.weight": {
+"c": 3.0770598620296763,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.27.mlp.up_proj.weight": {
+"c": 3.074761982767484,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.27.mlp.down_proj.weight": {
+"c": 3.074684738410521,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.28.self_attn.q_proj.weight": {
+"c": 3.0709353676626847,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.28.self_attn.k_proj.weight": {
+"c": 3.074322101246249,
+"strassen1": 0.02000011716570173,
+"target": 0.02
+},
+"model.layers.28.self_attn.v_proj.weight": {
+"c": 3.0742017028208655,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.28.self_attn.o_proj.weight": {
+"c": 3.0980747892990905,
+"strassen1": 0.020000040531158447,
+"target": 0.02
+},
+"model.layers.28.mlp.gate_proj.weight": {
+"c": 3.0770734515247495,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.28.mlp.up_proj.weight": {
+"c": 3.0742849082140538,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.28.mlp.down_proj.weight": {
+"c": 3.074970125015028,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.29.self_attn.q_proj.weight": {
+"c": 3.075307725205829,
+"strassen1": 0.02000002350125994,
+"target": 0.02
+},
+"model.layers.29.self_attn.k_proj.weight": {
+"c": 3.0757843216965757,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.29.self_attn.v_proj.weight": {
+"c": 3.07431518748135,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.29.self_attn.o_proj.weight": {
+"c": 3.069638848286381,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.29.mlp.gate_proj.weight": {
+"c": 3.0776017872890886,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.29.mlp.up_proj.weight": {
+"c": 3.074250336515779,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.29.mlp.down_proj.weight": {
+"c": 3.0747238395219245,
+"strassen1": 0.020000010120625397,
+"target": 0.02
+},
+"model.layers.30.self_attn.q_proj.weight": {
+"c": 3.074915525830873,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.30.self_attn.k_proj.weight": {
+"c": 3.0745853144348954,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.30.self_attn.v_proj.weight": {
+"c": 3.0731338262412287,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.30.self_attn.o_proj.weight": {
+"c": 3.0740970339500535,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.30.mlp.gate_proj.weight": {
+"c": 3.077531455235418,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.30.mlp.up_proj.weight": {
+"c": 3.0741563997303984,
+"strassen1": 0.020000010120625397,
+"target": 0.02
+},
+"model.layers.30.mlp.down_proj.weight": {
+"c": 3.0748165844010757,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.31.self_attn.q_proj.weight": {
+"c": 3.0743952941915325,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.31.self_attn.k_proj.weight": {
+"c": 3.0756443698575113,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.31.self_attn.v_proj.weight": {
+"c": 3.074497102733177,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.31.self_attn.o_proj.weight": {
+"c": 3.0818718658982527,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.31.mlp.gate_proj.weight": {
+"c": 3.0779491620905794,
+"strassen1": 0.020000010120625397,
+"target": 0.02
+},
+"model.layers.31.mlp.up_proj.weight": {
+"c": 3.07476842252078,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.31.mlp.down_proj.weight": {
+"c": 3.074789640282565,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.32.self_attn.q_proj.weight": {
+"c": 3.07654249620588,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.32.self_attn.k_proj.weight": {
+"c": 3.0741606926031873,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.32.self_attn.v_proj.weight": {
+"c": 3.0737963907191563,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.32.self_attn.o_proj.weight": {
+"c": 3.0706537933869846,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.32.mlp.gate_proj.weight": {
+"c": 3.0768934438795856,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.32.mlp.up_proj.weight": {
+"c": 3.0740131125370516,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.32.mlp.down_proj.weight": {
+"c": 3.074619887490371,
+"strassen1": 0.020000012553468043,
+"target": 0.02
+},
+"model.layers.33.self_attn.q_proj.weight": {
+"c": 3.077180264853439,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.33.self_attn.k_proj.weight": {
+"c": 3.076650023105802,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.33.self_attn.v_proj.weight": {
+"c": 3.075835820496448,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.33.self_attn.o_proj.weight": {
+"c": 3.0786119668199206,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.33.mlp.gate_proj.weight": {
+"c": 3.0745662446969506,
+"strassen1": 0.020000002822097466,
+"target": 0.02,
+"deflate": 32
+},
+"model.layers.33.mlp.up_proj.weight": {
+"c": 3.0744053109490306,
+"strassen1": 0.020000007687782755,
+"target": 0.02,
+"deflate": 32
+},
+"model.layers.33.mlp.down_proj.weight": {
+"c": 3.074725980738867,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.34.self_attn.q_proj.weight": {
+"c": 3.073639749225123,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.34.self_attn.k_proj.weight": {
+"c": 3.076616163730873,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.34.self_attn.v_proj.weight": {
+"c": 3.0751844629035396,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.34.self_attn.o_proj.weight": {
+"c": 3.0626252876684106,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.34.mlp.gate_proj.weight": {
+"c": 3.079381820543233,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.34.mlp.up_proj.weight": {
+"c": 3.074889298175678,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.34.mlp.down_proj.weight": {
+"c": 3.0747631785139458,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.35.self_attn.q_proj.weight": {
+"c": 3.075106021593676,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.35.self_attn.k_proj.weight": {
+"c": 3.0719577047880455,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.35.self_attn.v_proj.weight": {
+"c": 3.074848529156825,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.35.self_attn.o_proj.weight": {
+"c": 3.0755094277932713,
+"strassen1": 0.02000002350125994,
+"target": 0.02
+},
+"model.layers.35.mlp.gate_proj.weight": {
+"c": 3.0790728321474923,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.35.mlp.up_proj.weight": {
+"c": 3.074666142026615,
+"strassen1": 0.020000010120625397,
+"target": 0.02
+},
+"model.layers.35.mlp.down_proj.weight": {
+"c": 3.074581739316109,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.36.self_attn.q_proj.weight": {
+"c": 3.0764886117187977,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.36.self_attn.k_proj.weight": {
+"c": 3.0812865465880943,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.36.self_attn.v_proj.weight": {
+"c": 3.0751045924814058,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.36.self_attn.o_proj.weight": {
+"c": 3.0860303602065144,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.36.mlp.gate_proj.weight": {
+"c": 3.0774010416721795,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.36.mlp.up_proj.weight": {
+"c": 3.0745474051447963,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.36.mlp.down_proj.weight": {
+"c": 3.074699758925131,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.37.self_attn.q_proj.weight": {
+"c": 3.0752557495483606,
+"strassen1": 0.02000002350125994,
+"target": 0.02
+},
+"model.layers.37.self_attn.k_proj.weight": {
+"c": 3.074337835524782,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.37.self_attn.v_proj.weight": {
+"c": 3.0740991784175664,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.37.self_attn.o_proj.weight": {
+"c": 3.0847510094905224,
+"strassen1": 0.02000002350125994,
+"target": 0.02
+},
+"model.layers.37.mlp.gate_proj.weight": {
+"c": 3.0776301595354503,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.37.mlp.up_proj.weight": {
+"c": 3.0744515601521636,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.37.mlp.down_proj.weight": {
+"c": 3.07471382324076,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.38.self_attn.q_proj.weight": {
+"c": 3.0766700463693772,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.38.self_attn.k_proj.weight": {
+"c": 3.079236622473472,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.38.self_attn.v_proj.weight": {
+"c": 3.0734931209496215,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.38.self_attn.o_proj.weight": {
+"c": 3.065507052904163,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.38.mlp.gate_proj.weight": {
+"c": 3.0779978010271427,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.38.mlp.up_proj.weight": {
+"c": 3.0739778250931873,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.38.mlp.down_proj.weight": {
+"c": 3.0747274128288424,
+"strassen1": 0.020000010120625397,
+"target": 0.02
+},
+"model.layers.39.self_attn.q_proj.weight": {
+"c": 3.0738536117427717,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.39.self_attn.k_proj.weight": {
+"c": 3.0818914151987524,
+"strassen1": 0.02000011716570173,
+"target": 0.02
+},
+"model.layers.39.self_attn.v_proj.weight": {
+"c": 3.073900102960807,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.39.self_attn.o_proj.weight": {
+"c": 3.074429868987324,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.39.mlp.gate_proj.weight": {
+"c": 3.07759224878318,
+"strassen1": 0.020000017419153332,
+"target": 0.02
+},
+"model.layers.39.mlp.up_proj.weight": {
+"c": 3.0745435941054162,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.39.mlp.down_proj.weight": {
+"c": 3.0745033002997433,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.40.self_attn.q_proj.weight": {
+"c": 3.0776663992026885,
+"strassen1": 0.02000002350125994,
+"target": 0.02
+},
+"model.layers.40.self_attn.k_proj.weight": {
+"c": 3.081072448649003,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.40.self_attn.v_proj.weight": {
+"c": 3.074687359752751,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.40.self_attn.o_proj.weight": {
+"c": 3.0665239043799204,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.40.mlp.gate_proj.weight": {
+"c": 3.07724463722886,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.40.mlp.up_proj.weight": {
+"c": 3.0745531284885184,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.40.mlp.down_proj.weight": {
+"c": 3.0746523101998395,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.41.self_attn.q_proj.weight": {
+"c": 3.075520392073292,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.41.self_attn.k_proj.weight": {
+"c": 3.0766824443479113,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.41.self_attn.v_proj.weight": {
+"c": 3.0719896526248256,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.41.self_attn.o_proj.weight": {
+"c": 3.0764158924574296,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.41.mlp.gate_proj.weight": {
+"c": 3.076947088337768,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.41.mlp.up_proj.weight": {
+"c": 3.0743185261831023,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.41.mlp.down_proj.weight": {
+"c": 3.0748156259507633,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.42.self_attn.q_proj.weight": {
+"c": 3.0806595049760546,
+"strassen1": 0.02000002350125994,
+"target": 0.02
+},
+"model.layers.42.self_attn.k_proj.weight": {
+"c": 3.077308535392514,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.42.self_attn.v_proj.weight": {
+"c": 3.074216720479816,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.42.self_attn.o_proj.weight": {
+"c": 3.0736631151110636,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.42.mlp.gate_proj.weight": {
+"c": 3.076956863085548,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.42.mlp.up_proj.weight": {
+"c": 3.0744806488806184,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.42.mlp.down_proj.weight": {
+"c": 3.0743612037077352,
+"strassen1": 0.020000010120625397,
+"target": 0.02
+},
+"model.layers.43.self_attn.q_proj.weight": {
+"c": 3.0768815246952634,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.43.self_attn.k_proj.weight": {
+"c": 3.078855393514859,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.43.self_attn.v_proj.weight": {
+"c": 3.0755182475162384,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.43.self_attn.o_proj.weight": {
+"c": 3.0768750884739706,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.43.mlp.gate_proj.weight": {
+"c": 3.0766712423180413,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.43.mlp.up_proj.weight": {
+"c": 3.074589847276007,
+"strassen1": 0.020000012553468043,
+"target": 0.02
+},
+"model.layers.43.mlp.down_proj.weight": {
+"c": 3.074530955312221,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.44.self_attn.q_proj.weight": {
+"c": 3.074616309405023,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.44.self_attn.k_proj.weight": {
+"c": 3.0734149200167153,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.44.self_attn.v_proj.weight": {
+"c": 3.074215527104286,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.44.self_attn.o_proj.weight": {
+"c": 3.054868812614089,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.44.mlp.gate_proj.weight": {
+"c": 3.0763467545447423,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.44.mlp.up_proj.weight": {
+"c": 3.0742610667109047,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.44.mlp.down_proj.weight": {
+"c": 3.074472065974695,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.45.self_attn.q_proj.weight": {
+"c": 3.078154443760522,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.45.self_attn.k_proj.weight": {
+"c": 3.0787354659168837,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.45.self_attn.v_proj.weight": {
+"c": 3.073664544788484,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.45.self_attn.o_proj.weight": {
+"c": 3.084051008257832,
+"strassen1": 0.020000032016209195,
+"target": 0.02
+},
+"model.layers.45.mlp.gate_proj.weight": {
+"c": 3.0764855134919875,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.45.mlp.up_proj.weight": {
+"c": 3.074102755665294,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.45.mlp.down_proj.weight": {
+"c": 3.0746689986574722,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.46.self_attn.q_proj.weight": {
+"c": 3.0871185021962217,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.46.self_attn.k_proj.weight": {
+"c": 3.1236683085800223,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.46.self_attn.v_proj.weight": {
+"c": 3.074065562812176,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.46.self_attn.o_proj.weight": {
+"c": 3.076221106711211,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.46.mlp.gate_proj.weight": {
+"c": 3.0766261771870687,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.46.mlp.up_proj.weight": {
+"c": 3.0742520070473365,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.46.mlp.down_proj.weight": {
+"c": 3.074690935077583,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.47.self_attn.q_proj.weight": {
+"c": 3.079806683734566,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.47.self_attn.k_proj.weight": {
+"c": 3.0817221385681663,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.47.self_attn.v_proj.weight": {
+"c": 3.0733283730111225,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.47.self_attn.o_proj.weight": {
+"c": 3.0777801249607073,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.47.mlp.gate_proj.weight": {
+"c": 3.0762253970297144,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.47.mlp.up_proj.weight": {
+"c": 3.074137565766484,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.47.mlp.down_proj.weight": {
+"c": 3.0746151204860825,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.48.self_attn.q_proj.weight": {
+"c": 3.0762876259422525,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.48.self_attn.k_proj.weight": {
+"c": 3.0787340358658746,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.48.self_attn.v_proj.weight": {
+"c": 3.073147653443492,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.48.self_attn.o_proj.weight": {
+"c": 3.088959095410991,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.48.mlp.gate_proj.weight": {
+"c": 3.076360102841562,
+"strassen1": 0.020000012553468043,
+"target": 0.02
+},
+"model.layers.48.mlp.up_proj.weight": {
+"c": 3.0744837476824465,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.48.mlp.down_proj.weight": {
+"c": 3.0744131761394735,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.49.self_attn.q_proj.weight": {
+"c": 3.079186077611929,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.49.self_attn.k_proj.weight": {
+"c": 3.0835067019428224,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.49.self_attn.v_proj.weight": {
+"c": 3.0731788841449017,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.49.self_attn.o_proj.weight": {
+"c": 3.0777453180626333,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.49.mlp.gate_proj.weight": {
+"c": 3.0760616026419427,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.49.mlp.up_proj.weight": {
+"c": 3.0743957739149947,
+"strassen1": 0.020000019851995975,
+"target": 0.02
+},
+"model.layers.49.mlp.down_proj.weight": {
+"c": 3.0746539816592096,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.50.self_attn.q_proj.weight": {
+"c": 3.077508564066143,
+"strassen1": 0.02000002350125994,
+"target": 0.02
+},
+"model.layers.50.self_attn.k_proj.weight": {
+"c": 3.0867611169497065,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.50.self_attn.v_proj.weight": {
+"c": 3.074453709279482,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.50.self_attn.o_proj.weight": {
+"c": 3.087031957183406,
+"strassen1": 0.02000002350125994,
+"target": 0.02
+},
+"model.layers.50.mlp.gate_proj.weight": {
+"c": 3.076153631134247,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.50.mlp.up_proj.weight": {
+"c": 3.0742944449997576,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.50.mlp.down_proj.weight": {
+"c": 3.074859972454138,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.51.self_attn.q_proj.weight": {
+"c": 3.075643892727216,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.51.self_attn.k_proj.weight": {
+"c": 3.073219894512261,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.51.self_attn.v_proj.weight": {
+"c": 3.0750995862257096,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.51.self_attn.o_proj.weight": {
+"c": 3.091880679104989,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.51.mlp.gate_proj.weight": {
+"c": 3.0760563581759985,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.51.mlp.up_proj.weight": {
+"c": 3.074464914250493,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.51.mlp.down_proj.weight": {
+"c": 3.0745860319630958,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.52.self_attn.q_proj.weight": {
+"c": 3.0772172179236374,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.52.self_attn.k_proj.weight": {
+"c": 3.0791002484282615,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.52.self_attn.v_proj.weight": {
+"c": 3.0739415870945987,
+"strassen1": 0.02000011716570173,
+"target": 0.02
+},
+"model.layers.52.self_attn.o_proj.weight": {
+"c": 3.0674902170326286,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.52.mlp.gate_proj.weight": {
+"c": 3.0762950164398237,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.52.mlp.up_proj.weight": {
+"c": 3.0743137587392386,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.52.mlp.down_proj.weight": {
+"c": 3.0746670939668714,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.53.self_attn.q_proj.weight": {
+"c": 3.0766545523989426,
+"strassen1": 0.020000032016209195,
+"target": 0.02
+},
+"model.layers.53.self_attn.k_proj.weight": {
+"c": 3.0786551206431536,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.53.self_attn.v_proj.weight": {
+"c": 3.075248360477172,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.53.self_attn.o_proj.weight": {
+"c": 3.0653821219302637,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.53.mlp.gate_proj.weight": {
+"c": 3.076067328323501,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.53.mlp.up_proj.weight": {
+"c": 3.074271558726778,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.53.mlp.down_proj.weight": {
+"c": 3.074745057244895,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.54.self_attn.q_proj.weight": {
+"c": 3.0782400323394183,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.54.self_attn.k_proj.weight": {
+"c": 3.082331538165477,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.54.self_attn.v_proj.weight": {
+"c": 3.0737558563878604,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.54.self_attn.o_proj.weight": {
+"c": 3.066628097168079,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.54.mlp.gate_proj.weight": {
+"c": 3.076004860602713,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.54.mlp.up_proj.weight": {
+"c": 3.0741158718211867,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.54.mlp.down_proj.weight": {
+"c": 3.0747019003163385,
+"strassen1": 0.020000012553468043,
+"target": 0.02
+},
+"model.layers.55.self_attn.q_proj.weight": {
+"c": 3.0759209379782497,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.55.self_attn.k_proj.weight": {
+"c": 3.0784617651289383,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.55.self_attn.v_proj.weight": {
+"c": 3.0751901838364906,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.55.self_attn.o_proj.weight": {
+"c": 3.0470727641953115,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.55.mlp.gate_proj.weight": {
+"c": 3.075899240535843,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.55.mlp.up_proj.weight": {
+"c": 3.074229357101886,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.55.mlp.down_proj.weight": {
+"c": 3.0744980534390915,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.56.self_attn.q_proj.weight": {
+"c": 3.075576183318974,
+"strassen1": 0.02000002350125994,
+"target": 0.02
+},
+"model.layers.56.self_attn.k_proj.weight": {
+"c": 3.0768271651770775,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.56.self_attn.v_proj.weight": {
+"c": 3.074259876155166,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.56.self_attn.o_proj.weight": {
+"c": 3.075486535965329,
+"strassen1": 0.020000032016209195,
+"target": 0.02
+},
+"model.layers.56.mlp.gate_proj.weight": {
+"c": 3.0759581301309233,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.56.mlp.up_proj.weight": {
+"c": 3.0740810589052634,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.56.mlp.down_proj.weight": {
+"c": 3.07487308841017,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.57.self_attn.q_proj.weight": {
+"c": 3.0763801303901936,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.57.self_attn.k_proj.weight": {
+"c": 3.0809813692992822,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.57.self_attn.v_proj.weight": {
+"c": 3.0729571543021326,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.57.self_attn.o_proj.weight": {
+"c": 3.055979368498803,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.57.mlp.gate_proj.weight": {
+"c": 3.0759600389119406,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.57.mlp.up_proj.weight": {
+"c": 3.0745712514077503,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.57.mlp.down_proj.weight": {
+"c": 3.074677347543849,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.58.self_attn.q_proj.weight": {
+"c": 3.077829236945618,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.58.self_attn.k_proj.weight": {
+"c": 3.0855287303270402,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.58.self_attn.v_proj.weight": {
+"c": 3.0745874618796574,
+"strassen1": 0.02000011716570173,
+"target": 0.02
+},
+"model.layers.58.self_attn.o_proj.weight": {
+"c": 3.0480958196988017,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.58.mlp.gate_proj.weight": {
+"c": 3.07559072759694,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.58.mlp.up_proj.weight": {
+"c": 3.074703811983273,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.58.mlp.down_proj.weight": {
+"c": 3.074761271036279,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.59.self_attn.q_proj.weight": {
+"c": 3.079758520155101,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.59.self_attn.k_proj.weight": {
+"c": 3.084309933266592,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.59.self_attn.v_proj.weight": {
+"c": 3.071961041031571,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.59.self_attn.o_proj.weight": {
+"c": 3.081811070344199,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.59.mlp.gate_proj.weight": {
+"c": 3.075822945203127,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.59.mlp.up_proj.weight": {
+"c": 3.074553131347881,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.59.mlp.down_proj.weight": {
+"c": 3.074354288099989,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.60.self_attn.q_proj.weight": {
+"c": 3.0763138510036265,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.60.self_attn.k_proj.weight": {
+"c": 3.078158971826923,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.60.self_attn.v_proj.weight": {
+"c": 3.072615502568659,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.60.self_attn.o_proj.weight": {
+"c": 3.072868943099979,
+"strassen1": 0.020000032016209195,
+"target": 0.02
+},
+"model.layers.60.mlp.gate_proj.weight": {
+"c": 3.075217599508467,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.60.mlp.up_proj.weight": {
+"c": 3.074543830302133,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.60.mlp.down_proj.weight": {
+"c": 3.07475054044452,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.61.self_attn.q_proj.weight": {
+"c": 3.0788787576606786,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.61.self_attn.k_proj.weight": {
+"c": 3.0955706828064287,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.61.self_attn.v_proj.weight": {
+"c": 3.074717639796088,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.61.self_attn.o_proj.weight": {
+"c": 3.055835361144325,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.61.mlp.gate_proj.weight": {
+"c": 3.075780270675243,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.61.mlp.up_proj.weight": {
+"c": 3.0742584430318347,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.61.mlp.down_proj.weight": {
+"c": 3.074590560149569,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.62.self_attn.q_proj.weight": {
+"c": 3.080816862277607,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.62.self_attn.k_proj.weight": {
+"c": 3.1083553991600326,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.62.self_attn.v_proj.weight": {
+"c": 3.0747333752752617,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.62.self_attn.o_proj.weight": {
+"c": 3.077517147273604,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.62.mlp.gate_proj.weight": {
+"c": 3.0757619103118747,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.62.mlp.up_proj.weight": {
+"c": 3.0745412070402836,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.62.mlp.down_proj.weight": {
+"c": 3.0747679449613132,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.63.self_attn.q_proj.weight": {
+"c": 3.0754009455523317,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.63.self_attn.k_proj.weight": {
+"c": 3.0832527858982304,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.63.self_attn.v_proj.weight": {
+"c": 3.0727142079836582,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.63.self_attn.o_proj.weight": {
+"c": 3.0865269869832,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.63.mlp.gate_proj.weight": {
+"c": 3.0757070724732016,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.63.mlp.up_proj.weight": {
+"c": 3.074367162510713,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.63.mlp.down_proj.weight": {
+"c": 3.074957248840576,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.64.self_attn.q_proj.weight": {
+"c": 3.0753065334151115,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.64.self_attn.k_proj.weight": {
+"c": 3.080982799678538,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.64.self_attn.v_proj.weight": {
+"c": 3.0733455417332776,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.64.self_attn.o_proj.weight": {
+"c": 3.079465745824402,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.64.mlp.gate_proj.weight": {
+"c": 3.075361607738155,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.64.mlp.up_proj.weight": {
+"c": 3.0744048305397813,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.64.mlp.down_proj.weight": {
+"c": 3.0748270709810086,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.65.self_attn.q_proj.weight": {
+"c": 3.0748909690898283,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.65.self_attn.k_proj.weight": {
+"c": 3.1012057022874124,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.65.self_attn.v_proj.weight": {
+"c": 3.075550909441313,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.65.self_attn.o_proj.weight": {
+"c": 3.114393587033376,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.65.mlp.gate_proj.weight": {
+"c": 3.0756841872734624,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.65.mlp.up_proj.weight": {
+"c": 3.074376220539334,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.65.mlp.down_proj.weight": {
+"c": 3.0745047324160044,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.66.self_attn.q_proj.weight": {
+"c": 3.0764595259638248,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.66.self_attn.k_proj.weight": {
+"c": 3.091004726545648,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.66.self_attn.v_proj.weight": {
+"c": 3.0762470941425875,
+"strassen1": 0.02000011716570173,
+"target": 0.02
+},
+"model.layers.66.self_attn.o_proj.weight": {
+"c": 3.077991125124154,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.66.mlp.gate_proj.weight": {
+"c": 3.075757859511045,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.66.mlp.up_proj.weight": {
+"c": 3.0744575214473633,
+"strassen1": 0.020000012553468043,
+"target": 0.02
+},
+"model.layers.66.mlp.down_proj.weight": {
+"c": 3.0746918886371652,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.67.self_attn.q_proj.weight": {
+"c": 3.074562905251982,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.67.self_attn.k_proj.weight": {
+"c": 3.073453781940744,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.67.self_attn.v_proj.weight": {
+"c": 3.0752116435718126,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.67.self_attn.o_proj.weight": {
+"c": 3.0879994581186323,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.67.mlp.gate_proj.weight": {
+"c": 3.0756403161567163,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.67.mlp.up_proj.weight": {
+"c": 3.074584360848832,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.67.mlp.down_proj.weight": {
+"c": 3.0746871192156497,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.68.self_attn.q_proj.weight": {
+"c": 3.07421696049877,
+"strassen1": 0.02000002350125994,
+"target": 0.02
+},
+"model.layers.68.self_attn.k_proj.weight": {
+"c": 3.076417799812022,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.68.self_attn.v_proj.weight": {
+"c": 3.0767828181382484,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.68.self_attn.o_proj.weight": {
+"c": 3.068942185696855,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.68.mlp.gate_proj.weight": {
+"c": 3.075539943614941,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.68.mlp.up_proj.weight": {
+"c": 3.0743924370522144,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.68.mlp.down_proj.weight": {
+"c": 3.074773902994224,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.69.self_attn.q_proj.weight": {
+"c": 3.072099085848788,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.69.self_attn.k_proj.weight": {
+"c": 3.068242904462931,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.69.self_attn.v_proj.weight": {
+"c": 3.074919102167985,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.69.self_attn.o_proj.weight": {
+"c": 3.1008018215195583,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.69.mlp.gate_proj.weight": {
+"c": 3.0757137512972994,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.69.mlp.up_proj.weight": {
+"c": 3.0747119187901855,
+"strassen1": 0.020000010120625397,
+"target": 0.02
+},
+"model.layers.69.mlp.down_proj.weight": {
+"c": 3.0746999949347558,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.70.self_attn.q_proj.weight": {
+"c": 3.0746680458960793,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.70.self_attn.k_proj.weight": {
+"c": 3.0732148839427373,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.70.self_attn.v_proj.weight": {
+"c": 3.0748594967783447,
+"strassen1": 0.02000011716570173,
+"target": 0.02
+},
+"model.layers.70.self_attn.o_proj.weight": {
+"c": 3.0533016885662376,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.70.mlp.gate_proj.weight": {
+"c": 3.0755714158884055,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.70.mlp.up_proj.weight": {
+"c": 3.074510215019589,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.70.mlp.down_proj.weight": {
+"c": 3.074804661433044,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.71.self_attn.q_proj.weight": {
+"c": 3.075014470914242,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.71.self_attn.k_proj.weight": {
+"c": 3.078673954491191,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.71.self_attn.v_proj.weight": {
+"c": 3.0746256110567725,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.71.self_attn.o_proj.weight": {
+"c": 3.066909192170111,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.71.mlp.gate_proj.weight": {
+"c": 3.075806021121189,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.71.mlp.up_proj.weight": {
+"c": 3.0742305484036274,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.71.mlp.down_proj.weight": {
+"c": 3.074779866058085,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.72.self_attn.q_proj.weight": {
+"c": 3.074528572607468,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.72.self_attn.k_proj.weight": {
+"c": 3.074418659681414,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.72.self_attn.v_proj.weight": {
+"c": 3.074703812530778,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.72.self_attn.o_proj.weight": {
+"c": 3.1004282179902276,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.72.mlp.gate_proj.weight": {
+"c": 3.0760966538529004,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.72.mlp.up_proj.weight": {
+"c": 3.074724315943314,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.72.mlp.down_proj.weight": {
+"c": 3.074762937423944,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.73.self_attn.q_proj.weight": {
+"c": 3.0745884157098113,
+"strassen1": 0.02000002350125994,
+"target": 0.02
+},
+"model.layers.73.self_attn.k_proj.weight": {
+"c": 3.0763786999474556,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.73.self_attn.v_proj.weight": {
+"c": 3.074057695469124,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.73.self_attn.o_proj.weight": {
+"c": 3.0795999749323504,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.73.mlp.gate_proj.weight": {
+"c": 3.0761376602798696,
+"strassen1": 0.020000010120625397,
+"target": 0.02
+},
+"model.layers.73.mlp.up_proj.weight": {
+"c": 3.0744830355161454,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.73.mlp.down_proj.weight": {
+"c": 3.0745798303940157,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.74.self_attn.q_proj.weight": {
+"c": 3.0750674007878183,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.74.self_attn.k_proj.weight": {
+"c": 3.0765382023211583,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.74.self_attn.v_proj.weight": {
+"c": 3.0749791856458177,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.74.self_attn.o_proj.weight": {
+"c": 3.0777710634806605,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.74.mlp.gate_proj.weight": {
+"c": 3.076669571846577,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.74.mlp.up_proj.weight": {
+"c": 3.0743957754710047,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.74.mlp.down_proj.weight": {
+"c": 3.0747746183643945,
+"strassen1": 0.020000005254940112,
+"target": 0.02
+},
+"model.layers.75.self_attn.q_proj.weight": {
+"c": 3.0748664105968864,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.75.self_attn.k_proj.weight": {
+"c": 3.077174304207552,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.75.self_attn.v_proj.weight": {
+"c": 3.074897645023537,
+"strassen1": 0.02000011716570173,
+"target": 0.02
+},
+"model.layers.75.self_attn.o_proj.weight": {
+"c": 3.0661660426272634,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.75.mlp.gate_proj.weight": {
+"c": 3.0769788000046665,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.75.mlp.up_proj.weight": {
+"c": 3.074540969598832,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.75.mlp.down_proj.weight": {
+"c": 3.0747812971956816,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.76.self_attn.q_proj.weight": {
+"c": 3.0768166733296054,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.76.self_attn.k_proj.weight": {
+"c": 3.074455614930117,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.76.self_attn.v_proj.weight": {
+"c": 3.0739554131823015,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.76.self_attn.o_proj.weight": {
+"c": 3.090002651308412,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.76.mlp.gate_proj.weight": {
+"c": 3.0774942623760557,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.76.mlp.up_proj.weight": {
+"c": 3.074384328565899,
+"strassen1": 0.020000012553468043,
+"target": 0.02
+},
+"model.layers.76.mlp.down_proj.weight": {
+"c": 3.0752805442774758,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.77.self_attn.q_proj.weight": {
+"c": 3.074253914995319,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.77.self_attn.k_proj.weight": {
+"c": 3.076491709372636,
+"strassen1": 0.02000011716570173,
+"target": 0.02
+},
+"model.layers.77.self_attn.v_proj.weight": {
+"c": 3.0744005429035814,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.77.self_attn.o_proj.weight": {
+"c": 3.0906795219347813,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.77.mlp.gate_proj.weight": {
+"c": 3.07726203971297,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.77.mlp.up_proj.weight": {
+"c": 3.0746706705262103,
+"strassen1": 0.020000000389254823,
+"target": 0.02
+},
+"model.layers.77.mlp.down_proj.weight": {
+"c": 3.0746418205971286,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.78.self_attn.q_proj.weight": {
+"c": 3.072776193778852,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.78.self_attn.k_proj.weight": {
+"c": 3.0716313090782563,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.78.self_attn.v_proj.weight": {
+"c": 3.073651908280291,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.78.self_attn.o_proj.weight": {
+"c": 3.0589357607492023,
+"strassen1": 0.02000002350125994,
+"target": 0.02
+},
+"model.layers.78.mlp.gate_proj.weight": {
+"c": 3.076786875581022,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+},
+"model.layers.78.mlp.up_proj.weight": {
+"c": 3.074755782393132,
+"strassen1": 0.020000012553468043,
+"target": 0.02
+},
+"model.layers.78.mlp.down_proj.weight": {
+"c": 3.074762458670044,
+"strassen1": 0.020000012553468043,
+"target": 0.02
+},
+"model.layers.79.self_attn.q_proj.weight": {
+"c": 3.0710478990553085,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.79.self_attn.k_proj.weight": {
+"c": 3.0766867394950754,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.79.self_attn.v_proj.weight": {
+"c": 3.076573251621639,
+"strassen1": 0.0200000490461077,
+"target": 0.02
+},
+"model.layers.79.self_attn.o_proj.weight": {
+"c": 3.124183296749053,
+"strassen1": 0.020000006471361433,
+"target": 0.02
+},
+"model.layers.79.mlp.gate_proj.weight": {
+"c": 3.0778979053196776,
+"strassen1": 0.020000007687782755,
+"target": 0.02
+},
+"model.layers.79.mlp.up_proj.weight": {
+"c": 3.075108405335766,
+"strassen1": 0.020000014986310686,
+"target": 0.02
+},
+"model.layers.79.mlp.down_proj.weight": {
+"c": 3.0745519376622816,
+"strassen1": 0.020000002822097466,
+"target": 0.02
+}
+}
+}
