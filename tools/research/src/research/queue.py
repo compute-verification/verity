@@ -627,7 +627,8 @@ class DriveFlags:
     #: none, the lane lands nothing
     lowrisk_excludes: tuple[str, ...] = ()
     #: the task executor after landing (`research.executor`, `drive.Driver`): "off"; "shadow", each tip's task graph enqueued beside
-    #: the after-landing run and their verdicts compared (`research queue shadow-report`); "on", its verdicts alone decide
+    #: the after-landing run and their verdicts compared (`research queue shadow-report`); "on", its verdicts decide, with a run
+    #: of `drive.SLIM_STEPS` alone beside it
     executor: str = "off"
     #: infra's enqueue command, the words of one argv run with no shell (`research.executor.QueueTransport`): it puts
     #: `--priority N --check after-landing:SHA` on the executor's queue; none, each tip "shadow" or "on" enqueues fails, told
