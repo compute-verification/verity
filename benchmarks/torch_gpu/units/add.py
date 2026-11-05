@@ -6,16 +6,21 @@ every pair of bf16 words.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 import words as W
+
+if TYPE_CHECKING:
+    import torch
 
 
 def twin(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return W.bf16(W.fadd(W.widen(a), W.widen(b)))
 
 
-def gpu(a, b, *, out=None):
+def gpu(a: torch.Tensor, b: torch.Tensor, *, out: torch.Tensor | None = None) -> torch.Tensor:
     """units_add on two bf16 CUDA tensors of one shape -> bf16 of that shape."""
     import torch
 

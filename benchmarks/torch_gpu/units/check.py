@@ -33,9 +33,11 @@ from __future__ import annotations
 import json
 import os
 import sys
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
+from verity_config.settings import of
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -48,7 +50,9 @@ import relu as RL  # noqa: E402
 import rmsnorm as RN  # noqa: E402
 import softmax as SM  # noqa: E402
 import sweep as SW  # noqa: E402
-from verity_config.settings import of  # noqa: E402
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 settings = of(__file__)
 HEADS = BE.HEADS
@@ -90,14 +94,14 @@ def identity() -> dict:
     return doc
 
 
-def dev_words(a: np.ndarray, dev) -> torch.Tensor:
+def dev_words(a: np.ndarray, dev: torch.device) -> torch.Tensor:
     """Unsigned words onto the device as the signed integer type of their width."""
     a = np.ascontiguousarray(a)
     signed = {1: np.int8, 2: np.int16, 4: np.int32}[a.dtype.itemsize]
     return torch.from_numpy(a.view(signed)).to(dev)
 
 
-def poisoned(shape: tuple, dtype, dev) -> torch.Tensor:
+def poisoned(shape: tuple, dtype: torch.dtype, dev: torch.device) -> torch.Tensor:
     return torch.full(shape, POISON[dtype], dtype=dtype, device=dev)
 
 
@@ -109,7 +113,7 @@ def bad(got: torch.Tensor, want: torch.Tensor) -> int:
     return int((got != want).sum())
 
 
-def pick(P: int, B: int, seed: int, dev) -> torch.Tensor:
+def pick(P: int, B: int, seed: int, dev: torch.device) -> torch.Tensor:
     g = torch.Generator().manual_seed(seed)
     return torch.randint(0, P, (B,), generator=g).to(dev)
 
@@ -129,7 +133,7 @@ def failed(row: dict) -> bool:
 
 # ---- the units ------------------------------------------------------------------------------------------------------------
 
-def rmsnorm_case(z, N: int, B: int | None, dev, seed: int) -> list[dict]:
+def rmsnorm_case(z: Mapping[str, np.ndarray], N: int, B: int | None, dev: torch.device, seed: int) -> list[dict]:
     X, Wg, OUT = (dev_words(z[f"{N}.{k}"], dev) for k in ("x", "w", "out"))
     CH, GR, RS = (dev_words(z[f"{N}.{k}"], dev) for k in ("chunks", "groups", "rs"))
     P = X.shape[0]
@@ -152,7 +156,7 @@ def rmsnorm_case(z, N: int, B: int | None, dev, seed: int) -> list[dict]:
     return rows
 
 
-def quant_case(z, N: int, relu: bool, B: int | None, dev, seed: int) -> dict:
+def quant_case(z: Mapping[str, np.ndarray], N: int, relu: bool, B: int | None, dev: torch.device, seed: int) -> dict:
     key = f"{N},{int(relu)}"
     X, CODES, SCALE, TREE = (dev_words(z[f"{key}.{k}"], dev) for k in ("x", "codes", "scale", "tree"))
     P = X.shape[0]
@@ -177,7 +181,8 @@ def junk_tails(x: torch.Tensor, n: torch.Tensor) -> torch.Tensor:
     return torch.where(j[None, :] >= n[:, None], junk[j % len(JUNK)][None, :], x)
 
 
-def softmax_run(x, lens, Pp, Mm, Rr, sid, nrow) -> dict:
+def softmax_run(x: torch.Tensor, lens: torch.Tensor, Pp: torch.Tensor, Mm: torch.Tensor, Rr: torch.Tensor,
+                sid: torch.Tensor, nrow: torch.Tensor) -> dict:
     R, Lw = x.shape
     before = x.clone()
     p = poisoned((R, Lw), torch.int16, x.device)
@@ -190,7 +195,7 @@ def softmax_run(x, lens, Pp, Mm, Rr, sid, nrow) -> dict:
     return row
 
 
-def softmax_case(z, B: int, dev, seed: int) -> list[dict]:
+def softmax_case(z: Mapping[str, np.ndarray], B: int, dev: torch.device, seed: int) -> list[dict]:
     X, Pp, Mm, Rr = (dev_words(z[k], dev) for k in ("x", "p", "m", "r"))
     P, Lw = X.shape
     R = B * HEADS
@@ -214,7 +219,7 @@ def softmax_case(z, B: int, dev, seed: int) -> list[dict]:
     return rows
 
 
-def argmax_case(z, V: int, B: int | None, dev, seed: int) -> dict:
+def argmax_case(z: Mapping[str, np.ndarray], V: int, B: int | None, dev: torch.device, seed: int) -> dict:
     X, TOK, BEST, IDX = (dev_words(z[f"{V}.{k}"], dev) for k in ("x", "token", "best", "idx"))
     P = X.shape[0]
     sid = torch.arange(P, device=dev) if B is None else pick(P, B, seed, dev)
@@ -232,7 +237,7 @@ def argmax_case(z, V: int, B: int | None, dev, seed: int) -> dict:
     return row
 
 
-def relu_case(z, B: int, dev) -> dict:
+def relu_case(z: Mapping[str, np.ndarray], B: int, dev: torch.device) -> dict:
     X, Y = dev_words(z["x"], dev), dev_words(z["y"], dev)
     x = X.repeat(B, 1)
     before = x.clone()
@@ -245,7 +250,7 @@ def relu_case(z, B: int, dev) -> dict:
     return row
 
 
-def add_case(z, B: int | None, dev, seed: int) -> dict:
+def add_case(z: Mapping[str, np.ndarray], B: int | None, dev: torch.device, seed: int) -> dict:
     A, Bw, Y = (dev_words(z[k], dev) for k in ("a", "b", "y"))
     P = A.shape[0]
     sid = torch.arange(P, device=dev) if B is None else pick(P, B, seed, dev)
@@ -307,7 +312,7 @@ def main(argv: list[str]) -> int:
     z = {k: np.load(os.path.join(check, f"{k}.npz")) for k in ("rmsnorm", "quant", "softmax", "argmax", "relu", "add")}
     batches = list(settings.BATCHES)
 
-    def run(rows, label: str) -> None:
+    def run(rows: dict | list[dict], label: str) -> None:
         for row in rows if isinstance(rows, list) else [rows]:
             emit(row)
             if failed(row):

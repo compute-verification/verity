@@ -19,9 +19,14 @@ div.rn for the words outside its window; the sweep (op 5) holds it to RN(v / sca
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 import words as W
+
+if TYPE_CHECKING:
+    import torch
 
 CHUNK = 128
 
@@ -64,7 +69,8 @@ def twin(x: np.ndarray, relu: bool) -> dict:
 CTA_WORDS, CLUSTER_WORDS = 16384, 65536
 
 
-def gpu(x, relu: bool, *, codes=None, scale_out=None, tree=None, units: bool = False):
+def gpu(x: torch.Tensor, relu: bool, *, codes: torch.Tensor | None = None, scale_out: torch.Tensor | None = None,
+        tree: torch.Tensor | None = None, units: bool = False) -> tuple[torch.Tensor, ...]:
     """units_quant (N <= 16384) or units_quant4 (N = 65536) on x (R, N) bf16 -> (codes (R, N) int8, scale (R,) int32 f32
     words); with ``units`` (or ``tree``) also tree (R, T) int16 bf16 words.  ``codes``, ``scale_out`` and ``tree`` take the
     caller's tensors."""

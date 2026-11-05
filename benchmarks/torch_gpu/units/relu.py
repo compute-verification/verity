@@ -6,16 +6,21 @@ themselves.  Integers only.
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 
 import words as W
+
+if TYPE_CHECKING:
+    import torch
 
 
 def twin(x: np.ndarray) -> np.ndarray:
     return W.relu16(x, True)
 
 
-def gpu(x, *, out=None):
+def gpu(x: torch.Tensor, *, out: torch.Tensor | None = None) -> torch.Tensor:
     """units_relu on any contiguous bf16 CUDA tensor -> bf16 of its shape."""
     import torch
 

@@ -9,8 +9,12 @@ import ctypes as C
 import functools
 import hashlib
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from verity_config.settings import of
+
+if TYPE_CHECKING:
+    import torch
 
 settings = of(__file__)
 HERE = Path(__file__).resolve().parent
@@ -50,7 +54,7 @@ def cubin_path(arch: str = "sm_90a") -> Path:
 class Lib:
     """The cubin's kernels in torch's context on the current device."""
 
-    def __init__(self, path: Path, arch: str = "sm_90a"):
+    def __init__(self, path: Path, arch: str = "sm_90a") -> None:
         import torch
         self.torch = torch
         self.path, self.arch = Path(path), arch
@@ -69,7 +73,7 @@ class Lib:
         self.ck("cuModuleLoadData", C.byref(self.mod), self.cubin)
         self.fns = {name: self.fn(name) for name in KERNELS + ARCH_KERNELS.get(arch, ())}
 
-    def ck(self, f: str, *a) -> None:
+    def ck(self, f: str, *a: object) -> None:
         r = getattr(self.cu, f)(*a)
         if r:
             s = C.c_char_p()
@@ -94,7 +98,7 @@ def lib() -> Lib:
     return Lib(cubin_path(a), a)
 
 
-def ptr(t) -> vp:
+def ptr(t: torch.Tensor | None) -> vp:
     """A tensor's device pointer, or NULL for None."""
     return vp(0 if t is None else t.data_ptr())
 
@@ -104,14 +108,14 @@ def threads(n: int) -> int:
     return max(32, -(-n // 32) * 32)
 
 
-def words(t, dtype, shape: tuple, name: str):
+def words(t: torch.Tensor, dtype: torch.dtype, shape: tuple, name: str) -> torch.Tensor:
     """``t`` as a contiguous CUDA tensor of ``dtype`` and ``shape``, refused otherwise."""
     if t.dtype != dtype or tuple(t.shape) != tuple(shape) or not t.is_cuda:
         raise ValueError(f"{name}: want {dtype} {tuple(shape)} on CUDA, got {t.dtype} {tuple(t.shape)} on {t.device}")
     return t.contiguous()
 
 
-def aligned(name: str, *ts) -> None:
+def aligned(name: str, *ts: torch.Tensor | None) -> None:
     """Refuses a tensor whose data isn't 16-byte aligned: the kernels move rows as uint4s, and a misaligned one is a sticky
     CUDA error that ends the context."""
     for t in ts:
@@ -119,7 +123,8 @@ def aligned(name: str, *ts) -> None:
             raise ValueError(f"{name}: a tensor at {t.data_ptr():#x} is not 16-byte aligned")
 
 
-def out_or_new(out, dtype, shape: tuple, like, name: str):
+def out_or_new(out: torch.Tensor | None, dtype: torch.dtype, shape: tuple, like: torch.Tensor,
+               name: str) -> torch.Tensor:
     """``out`` if it is a contiguous ``dtype`` tensor of ``shape`` on ``like``'s device (refused otherwise), else a new one."""
     import torch
     if out is None:
@@ -130,7 +135,7 @@ def out_or_new(out, dtype, shape: tuple, like, name: str):
     return out
 
 
-def unit_outputs(parts: dict | None, want: dict, like, name: str) -> dict:
+def unit_outputs(parts: dict | None, want: dict, like: torch.Tensor, name: str) -> dict:
     """The unit outputs ``want`` ({key: (dtype, shape)}): the caller's tensors in ``parts`` (each checked), new ones for the
     rest."""
     parts = parts or {}
