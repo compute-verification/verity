@@ -26,20 +26,11 @@ def _module(name: str, path: Path):
 
 CHECK = _module("repo_check_for_shard_plan", ROOT / "tools" / "verity" / "check" / "check.py")
 S = CHECK.SHARDS
-LA = CHECK._lean_audit()
-#: the packages' `proved_in` as their policies name them: reading every package's lean-audit.json would make each one an input
-PROVERS = {"Security": ["Security/Proofs"], "Security/Properties": ["Security/Proofs"]}
 
 
 @pytest.fixture(autouse=True)
-def _provers(monkeypatch):
-    class Audit:
-        provers = staticmethod(lambda p: PROVERS.get(p, []))
-
-        def __getattr__(self, name):
-            return getattr(LA, name)
-
-    monkeypatch.setattr(CHECK, "_lean_audit", Audit)
+def _provers(provers):
+    return provers(CHECK)
 
 
 def _ts(costs: dict[str, float]) -> list:

@@ -29,24 +29,14 @@ LA = _module("repo_lean_audit_for_shards", ROOT / "tools" / "verity" / "lean" / 
 PACKAGES = LA.packages(CHECK.tracked_files(ROOT))
 #: the packages that build Security/Proofs: it, and the specs whose `proved_in` names it
 SECURITY = ("lean-audit:Security", "lean-audit:Security/Proofs", "lean-audit:Security/Properties")
-#: the packages' `proved_in` as their policies name them: reading every package's lean-audit.json would make each one an input
-PROVERS = {"Security": ["Security/Proofs"], "Security/Properties": ["Security/Proofs"]}
 #: lean-suites' parts: its suites, the composition suite in the three parts by test id its pyproject declares
 SUITES = CHECK._parts_of()["lean-suites"]
 COMPOSITION = tuple(f"lean-suites:verity-core-composition:{k}/3" for k in (1, 2, 3))
 
 
 @pytest.fixture(autouse=True)
-def _provers(monkeypatch):
-    la = CHECK._lean_audit()
-
-    class Audit:
-        provers = staticmethod(lambda p: PROVERS.get(p, []))
-
-        def __getattr__(self, name):
-            return getattr(la, name)
-
-    monkeypatch.setattr(CHECK, "_lean_audit", Audit)
+def _provers(provers):
+    return provers(CHECK)
 
 
 def _parts(packages=PACKAGES) -> dict[str, list[str]]:
@@ -84,11 +74,11 @@ def test_every_plan_runs_the_composition_suites_three_parts_on_three_shards(n):
 
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
-def test_every_plan_builds_the_security_proofs_once_a_run(n):
+def test_every_plan_builds_the_security_proofs_once_a_run(n, _provers):
     """Security and Security/Properties audit Security/Proofs beside them, from one build of it: apart, each shard holding one
     builds the proofs again, cold after any change to them. The static plan's shards (gated, and an after-landing run's) put
     all three on one."""
-    assert CHECK.audit_provers(PACKAGES) == {f"lean-audit:{p}": [f"lean-audit:{q}" for q in qs] for p, qs in PROVERS.items()}
+    assert CHECK.audit_provers(PACKAGES) == {f"lean-audit:{p}": [f"lean-audit:{q}" for q in qs] for p, qs in _provers.items()}
     for gated in (True, False):
         shards = [CHECK.shard(f"{k}/{n}", gated)["parts"] for k in range(1, n + 1)]
         [holder] = [s for s in shards if set(SECURITY) & set(s)]
