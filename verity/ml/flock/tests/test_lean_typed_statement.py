@@ -19,7 +19,7 @@ pytest.importorskip("verity.ml.definitions.registry.prims")
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import typed_statement as TS  # noqa: E402
 from verity_numerical.bench import lowerings  # noqa: E402
-from verity_numerical.bench import templates as TM  # noqa: E402
+from verity_flock import subcircuit_templates as TM  # noqa: E402
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"

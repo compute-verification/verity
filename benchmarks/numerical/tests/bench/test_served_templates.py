@@ -12,8 +12,8 @@ import pytest
 
 from verity_numerical.bench import census
 from verity_numerical.bench import generate as G
-from verity_numerical.bench import input_sets as IS
-from verity_numerical.bench import templates as TM
+from verity_flock import input_sets as IS
+from verity_flock import subcircuit_templates as TM
 
 pytest.importorskip("verity_vllm", reason="these templates evaluate through the vLLM integration's Definitions")
 

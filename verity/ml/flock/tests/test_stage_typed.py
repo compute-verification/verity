@@ -13,9 +13,9 @@ from verity_flock import typed_statement as TS
 
 pytest.importorskip("verity_numerical")
 pytest.importorskip("verity.ml.definitions.registry.prims")
-from verity_numerical.bench import templates as TM  # noqa: E402
+from verity_flock import subcircuit_templates as TM  # noqa: E402
 from verity_numerical.bench.generate import generate  # noqa: E402
-from verity_numerical.bench.input_sets import InputSet  # noqa: E402
+from verity_flock.input_sets import InputSet  # noqa: E402
 from test_circuit import assert_public_only  # noqa: E402
 
 KEY = bytes(range(32))

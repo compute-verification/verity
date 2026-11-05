@@ -16,11 +16,11 @@ from verity_flock import ir_lower as IL
 
 P = pytest.importorskip("verity.ml.definitions.registry.prims")
 from verity_numerical.bench import lowerings  # noqa: E402
-from verity_numerical.bench import templates as TM  # noqa: E402
+from verity_flock import subcircuit_templates as TM  # noqa: E402
 from verity_numerical.bench.generate import generate  # noqa: E402
-from verity_numerical.bench.input_sets import InputSet  # noqa: E402
+from verity_flock.input_sets import InputSet  # noqa: E402
 
-SLICES = Path(__file__).resolve().parents[4] / "benchmarks" / "numerical" / "tests" / "bench" / "data" / "captured-101" / "slices"
+SLICES = Path(__file__).resolve().parents[0] / "data" / "captured-101" / "slices"
 REG = lowerings.registry("C-Flock")
 LOWERED = {"rope-head": {"D": 64}, "silu-mul": {"I": 8192}, "silu-mul-v2": {"I": 256}}
 

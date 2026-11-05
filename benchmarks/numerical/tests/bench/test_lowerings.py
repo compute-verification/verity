@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from verity_numerical.bench import lowerings as L
-from verity_numerical.bench import templates as TM
+from verity_flock import subcircuit_templates as TM
 
 FAMILIES = sorted(L.DIRECTORIES)
 EXAMPLES = [TM.subcircuit(t.id, **t.example) for t in TM.TEMPLATES.values()]
@@ -96,7 +96,8 @@ def test_flock_stage_writes_an_input_set_range(tmp_path):
 
     import numpy as np
 
-    from verity_numerical.bench import generate as G, input_sets as IS
+    from verity_numerical.bench import generate as G
+    from verity_flock import input_sets as IS
 
     sub = TM.parse_subcircuit_id("gemm-coordinate/k2048/sm80-mma-bf16")
     stage = L.registry("C-Flock").stage(sub)

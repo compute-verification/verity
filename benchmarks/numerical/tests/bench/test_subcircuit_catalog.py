@@ -17,7 +17,7 @@ import pytest
 
 from verity_numerical.bench import census
 from verity_numerical.bench import subcircuit_catalog as SC
-from verity_numerical.bench import templates as TM
+from verity_flock import subcircuit_templates as TM
 
 DATA = Path(__file__).parent / "data" / "subcircuit_catalog"
 RECORDS = DATA / "circuit-check.json"

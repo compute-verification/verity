@@ -25,7 +25,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
-from . import templates as TM
+from verity_flock import subcircuit_templates as TM
 
 REPO = Path(__file__).resolve().parents[5]
 DIRECTORIES = {

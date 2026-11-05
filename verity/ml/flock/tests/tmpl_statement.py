@@ -27,9 +27,9 @@ STATEMENT = "verity/flock-circuit/tmpl"
 
 
 def _set(out: Path):
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
     from verity_numerical.bench.generate import generate
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock.input_sets import InputSet
 
     if not (out / "set.json").exists():
         (out / "set.json").write_text(json.dumps({"path": str(generate(TM.rope_head(64), N, SEED, out / "set")["path"])}))

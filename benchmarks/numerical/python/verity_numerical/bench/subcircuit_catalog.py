@@ -120,7 +120,7 @@ def build(out: Path, report: dict, report_art: str, ids: Iterable[str] | None = 
     from verity.ml.circuits.codec import descriptor_id
     from verity_flock import circuit as FC
 
-    from . import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     ids = census_ids() if ids is None else list(ids)
     if unknown := [i for i in ids if i not in census.SUBCIRCUITS]:
