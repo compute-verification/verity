@@ -1,5 +1,6 @@
 module
 
+public import Mathlib.Data.Fin.Tuple.Take
 public import Mathlib.Data.Int.CardIntervalMod
 public import Mathlib.Data.Nat.Dist
 public import Proofs.Flock.Soundness.ZK.RealLeaves
@@ -26,6 +27,9 @@ real leaf's distance from an ideal one, so one hiding swap per opened leaf pays 
   the leaf and the rest of the draw (for hm96's leaves, `Claims.Hm96Hiding` through `ideal_leaf_swap`).
 * **At an opening's node** (`openGap_add_openEmpty_le`): the node's gap plus its empty class is at most its class
   error, wherever every round of the fiber releases some `bits u`.
+* **At the deployed releases** (`injective_roundBits`, `injective_linkBits`, `opened_eq_roundBits`,
+  `openGap_add_openEmpty_le_round`): a round's bits determine its `m` challenges and a link's bits its two rounds', at
+  every `m`, and a draw's first `m` coins are a round's release, so a round's opening is within its class error.
 -/
 
 @[expose] public section
@@ -652,5 +656,58 @@ theorem openGap_add_openEmpty_le {β Q : Type} [Fintype Q] [Nonempty Q] {E : Lis
     · exact fun hne => ⟨o, ho, hne⟩
   rw [hG, hE]
   exact shortfall_pickIn_add_le (fun u => o.classOf (bits u)) cls hS
+
+/-! ## At the deployed releases -/
+
+local notation "𝔽" => FlockLevel3.GF128
+
+variable (e : 𝔽 ≃ (Fin 128 → Bool))
+
+/-- Each of a round's challenges is released as its 128 bits. -/
+theorem map_length_roundBits {m : ℕ} (c : Fin m → 𝔽) :
+    (List.ofFn fun i => List.ofFn (e (c i))).map List.length = List.ofFn fun _ : Fin m => 128 := by
+  rw [List.map_ofFn]
+  exact congrArg List.ofFn (funext fun i => List.length_ofFn)
+
+/-- **A round's bits determine its challenges**, at every count `m`: each challenge is released as its 128 bits, in
+order. -/
+theorem injective_roundBits {m : ℕ} : Function.Injective (roundBits e : (Fin m → 𝔽) → List Bool) := by
+  intro c c' h
+  have h' := List.eq_iff_flatten_eq.2 ⟨h, (map_length_roundBits e c).trans (map_length_roundBits e c').symm⟩
+  funext i
+  exact e.injective (List.ofFn_injective (congrFun (List.ofFn_injective h') i))
+
+/-- A round's bits have the same length at every release. -/
+theorem length_roundBits {m : ℕ} (c : Fin m → 𝔽) :
+    (roundBits e c).length = (List.ofFn fun _ : Fin m => 128).sum := by
+  rw [roundBits, List.length_flatten, map_length_roundBits]
+
+/-- **A link's bits determine its two rounds' challenges**, at every count `m`: its first round's bits have the same
+length at every release (`length_roundBits`). -/
+theorem injective_linkBits {m : ℕ} : Function.Injective (linkBits e : (Fin 2 → Fin m → 𝔽) → List Bool) := by
+  intro p p' h
+  obtain ⟨h0, h1⟩ := List.append_inj h ((length_roundBits e (p 0)).trans (length_roundBits e (p' 0)).symm)
+  exact funext (Fin.forall_fin_two.2 ⟨injective_roundBits e h0, injective_roundBits e h1⟩)
+
+/-- **A draw's first `m` coins are a round's release**: in a block of at least `m` coins, the device releases them as
+the bits of the `m` challenges they encode. -/
+theorem opened_eq_roundBits {block m : ℕ} (hm : m ≤ block) (d : TreeDraw block) :
+    TreeDraw.opened d m = roundBits e fun i => e.symm (Fin.take m hm d.1 i) := by
+  have hr : roundBits e (fun i => e.symm (Fin.take m hm d.1 i)) =
+      (List.ofFn fun i => List.ofFn (Fin.take m hm d.1 i)).flatten :=
+    congrArg List.flatten (congrArg List.ofFn (funext fun i => congrArg List.ofFn (e.apply_symm_apply _)))
+  rw [hr, TreeDraw.opened, ← Fin.ofFn_take_eq_take_ofFn hm]
+  rfl
+
+/-- **At a round's opening**: where the opening releases `m` coins of a block of at least `m`, its gap plus its empty
+class at a round's release is at most its class error (`openGap_add_openEmpty_le`, with `injective_roundBits` and
+`opened_eq_roundBits`). -/
+theorem openGap_add_openEmpty_le_round {β : Type} {m : ℕ} {E : List Release → Game β} {g' : Game β}
+    (o : OpeningAt E g') (ho : openingOf E g' = some o) (hn : o.n = m) (hm : m ≤ o.T.spec.block) :
+    openGap E g' (roundBits e : (Fin m → 𝔽) → List Bool) + openEmpty E g' (roundBits e : (Fin m → 𝔽) → List Bool) ≤
+      classErr (Fintype.card o.Openable) fun c : Fin m → 𝔽 => (o.classOf (roundBits e c)).card := by
+  subst hn
+  exact openGap_add_openEmpty_le o ho (roundBits e) (injective_roundBits e) fun d =>
+    ⟨_, opened_eq_roundBits e hm d.1⟩
 
 end Verity.Sampled
