@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Tables.Steps
+module
+
+public import Proofs.Flock.Soundness.Discharge.Tables.Steps
 
 /-!
 # The simulation of a session of `J` tables (the transfer, R11c, at `--session-tables J`)
@@ -20,6 +22,8 @@ after its bytes, and every proof file after the last coin of every stream (the b
   every table's decoder is right.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Discharge.Tables
 
 open Flock FlockLevel3 Game Refine
@@ -32,7 +36,7 @@ local notation "𝔽" => FlockLevel3.GF128
 def upd {ζ : Sort*} {J : ℕ} (f : Fin J → Fin 2 → ζ) (j : Fin J) (r : Fin 2) (z : ζ) : Fin J → Fin 2 → ζ :=
   fun j' r' => if j' = j ∧ r' = r then z else f j' r'
 
-/-- A round the prover submits in a session of `J` tables (PROTOCOL.md §7.1): its stream (table `tab`, rep `rep`), the
+/-- A round the prover submits in a session of `J` tables (`Tags.coinScheme`): its stream (table `tab`, rep `rep`), the
 framed bytes, and the coin count. -/
 structure SubmitJ (J : ℕ) where
   tab : Fin J
@@ -60,7 +64,7 @@ theorem addRoundJ_ne {J : ℕ} (rs : Fin J → Fin 2 → List Round) {j j' : Fin
     (h : ¬ (j' = j ∧ r' = r)) : addRoundJ rs j r rd j' r' = rs j' r' :=
   upd_ne _ _ h
 
-/-- **The challenger's rounds over `2J` streams** (PROTOCOL.md §7.1): the prover submits a round on any table's either
+/-- **The challenger's rounds over `2J` streams** (`Tags.coinScheme`): the prover submits a round on any table's either
 rep, or stops, at most `N` times; the server draws the round's `n` coins uniformly once its bytes are fixed and appends
 the round to that stream. -/
 def liveRoundsJ (dg : ByteArray → ByteArray) (J : ℕ) :
@@ -82,7 +86,7 @@ def KLJ {J mPts : ℕ} (rootB : Array ByteArray) (pts : Fin 2 → Fin mPts → �
     Game (LiveOutJ J mPts) :=
   .send (Array ByteArray) fun proofs => .ret ⟨rootB, pts, rs, proofs⟩
 
-/-- **A live session of `J` tables** (PROTOCOL.md §5, §7, §16.12): `Commit` sends every table's root, the server
+/-- **A live session of `J` tables** (`Flock.Record`, `Flock.Draw`, `Stmt.setupTables`): `Commit` sends every table's root, the server
 draws the two link points every table reads, the prover runs its rounds on the `2J` rep streams, then sends the proof
 files, after the last coin. -/
 def liveSession (dg : ByteArray → ByteArray) (J mPts N : ℕ) : Game (LiveOutJ J mPts) :=

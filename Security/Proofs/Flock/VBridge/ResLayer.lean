@@ -1,4 +1,6 @@
-import Proofs.Flock.VBridge.AlgHolds
+module
+
+public import Proofs.Flock.VBridge.AlgHolds
 
 /-!
 # A part's residuals at the columns its rows read, its outputs in the layer
@@ -19,6 +21,8 @@ the row ports are asked for `w` only at the columns some computed row reads, and
 * `decode_checkR_holo`, `decode_partR_holo`, `ResZeroAtLH`, `partCols_of_resZeroAtLH`, `algebraHolds_of_decodeLH`: the
   same on a holo statement (META `holo: true`), at the holo form of the shape the verifier accepts.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.OfVStar
 

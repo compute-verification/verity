@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Witnesses.Flock
-import Proofs.Flock.Claims.ZK.SamplingNonVacuous
+module
+
+public import Proofs.Flock.Claims.Witnesses.Flock
+public import Proofs.Flock.Claims.ZK.SamplingNonVacuous
 
 /-!
 # Refutation witnesses: the sampling compiler's claims
@@ -28,6 +30,8 @@ scoped `KSLinOn` are refuted through `Bits_fails`, `KS_fails` and `KSCount_fails
 (`Sampling.Deploy.P`), so it is not met at every masked deployment (`ZK_vacuous_refuted`, at `zkSD`, `compSD` with a
 masked inner Flock).
 -/
+
+@[expose] public section
 
 namespace Claims.Witness.Sampling
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Compose.LastRead
-import Proofs.Flock.C3.Opening.SrcLayer
+module
+
+public import Proofs.Flock.C3.Compose.LastRead
+public import Proofs.Flock.C3.Opening.SrcLayer
 
 /-!
 # n9: the parts' committed rounds from their stages
@@ -12,6 +14,8 @@ past the sparse phases' (`partEnds_open`). R's opening holds the ring switches V
 its first two rounds and nothing at its third, so `OpenMsgsRead` is that the ring switches are read at their rounds
 (`RsRead`, `openMsgsRead_of_layer`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

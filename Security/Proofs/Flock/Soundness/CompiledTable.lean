@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.CompiledSound
-import Proofs.Flock.Soundness.CompiledAlign
+module
+
+public import Proofs.Flock.Soundness.CompiledSound
+public import Proofs.Flock.Soundness.CompiledAlign
 
 /-!
 # The compiled bound for any level-0 table
@@ -16,6 +18,8 @@ a run opens a level-0 position off `T`. The reps' cap terms do not depend on the
 with `ε_c⁻ = tableError + Σ √(N_ℓ·Q_ℓ·Adv_{r,ℓ}) + Pr[self-clash]` (`epsCminus`), one number for
 every `T`. This is the form the knowledge extractor uses (`Knowledge.lean`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

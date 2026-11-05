@@ -1,4 +1,6 @@
-import Definitions.Flock.Circuit
+module
+
+public import Definitions.Flock.Circuit
 
 /-!
 # Circuits, partitions, and the correctness of a unit: the lemmas
@@ -14,6 +16,8 @@ About the circuits and partitions of `Definitions.Flock.Circuit`:
 * `Refines.exists_wrong_fine`: when a fine partition refines a coarse one, a coarse unit that is
   wrong has a wrong fine unit inside it, whatever the values on the coarse unit's interior.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Prob
+module
+
+public import Proofs.Flock.Claims.Prob
 
 /-!
 # `E^rep`: its reruns and its amplification
@@ -16,6 +18,8 @@ accepted reruns; it returns the first assembled candidate that `check` accepts.
   knowledge bound), then `Pr[acc ∧ ¬R(x, E^rep)] ≤ 𝔼[a]/rate + (2·rate)^m`: a tape with `a_ω ≤ rate·ε_ω` has
   `f_ω ≤ 2·rate`, and any other has `ε_ω < a_ω/rate`.
 -/
+
+@[expose] public section
 
 namespace Claims
 

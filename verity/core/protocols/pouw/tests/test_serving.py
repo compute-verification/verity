@@ -1,11 +1,18 @@
 """`verity.core.protocols.pouw.serving`: every Pearl-C name in use parses and prints back unchanged, the hashing format is a switch whose
-tree hash is the scheme's, and a schedule is refused where its format needs A's tree on the critical path."""
+tree hash is the scheme's, a schedule is refused where its format needs A's tree on the critical path, and a kernel variant
+serves only on a gate of its own, the lead's held exact within its fold's bound."""
 from __future__ import annotations
+
+from dataclasses import replace
 
 import pytest
 from verity.core.protocols.pouw.serving import (
     DEFERRED,
     HASH_FORMATS,
+    LEAD_CONFIG,
+    LEAD_FOLD_BOUND,
+    LEAD_SHAPES,
+    POUW_V2,
     SCHEDULES,
     SERIAL,
     GateRecord,
@@ -16,6 +23,7 @@ from verity.core.protocols.pouw.serving import (
     ShapeRule,
     StepIO,
     hash_format,
+    lead_variant,
     schedule_refusals,
     variant_refusals,
 )
@@ -172,6 +180,48 @@ def test_a_gate_admits_only_its_own_variant_at_its_own_shapes_and_prices():
                    f"{v.id}: its gate (gate-run-1) failed controls_rejected",
                    f"{v.id}: its gate didn't cover [(8192, 8192)]",
                    f"{v.id}: gated on priced path cast-32.06, declares cast-8.72"]
+
+
+#: Llama-3.2-1B's fused linears, (n, k): qkv, o, gate_up, down
+LLAMA_1B = ((3072, 2048), (2048, 2048), (16384, 2048), (2048, 8192))
+
+
+def lead(**kw):
+    return replace(lead_variant("5e1d0c7a9b42" + "0" * 52, "cd" * 32, "np-kernel"), **kw)
+
+
+def test_the_lead_is_a_variant_of_its_own_scheme_named_by_its_sources():
+    v = lead()
+    assert v.id == "pouw-lead-h200/5e1d0c7a9b42" and v.schemes == {POUW_V2} == {"verity/pouw/v2"}
+    assert v.schedules == {SERIAL.name} == {"serial"} and v.fold_bound == LEAD_FOLD_BOUND == 4194304
+    assert LEAD_CONFIG == {"BLC": "2", "ROT": "1", "FOLD": "1"}
+    assert variant_refusals(v, POUW_V2, "serial", LLAMA_1B, gate(v, shapes=LLAMA_1B, prices=None,
+                                                                   fold_bound=LEAD_FOLD_BOUND)) == []
+
+
+def test_the_lead_takes_whole_256_column_linears():
+    v = lead()
+    got = variant_refusals(v, POUW_V2, "serial", [(2048 + 128, 2048), (13, 100)], None)
+    assert got[:2] == [f"{v.id}: (n, k) = (2176, 2048): the kernel takes k a multiple of 1 in [1, 16777216] and n a multiple "
+                       "of 256", f"{v.id}: (n, k) = (13, 100): the kernel takes k a multiple of 1 in [1, 16777216] and n a "
+                       "multiple of 256"]
+    assert LEAD_SHAPES.m_align == 16
+
+
+@pytest.mark.parametrize(("bound", "why"), [(None, "every output"), (1 << 21, "|p| <= 2097152"),
+                                            (1 << 23, "|p| <= 8388608")])
+def test_a_lead_gate_holds_outputs_exact_within_the_folds_bound_exactly(bound, why):
+    """A gate that held every output (none past the bound, so it never tried one), a narrower window (the bound's edge
+    untried) or a wider one (outputs the fold serves wrong, so not this fold's gate) doesn't admit the lead."""
+    v = lead()
+    got = variant_refusals(v, POUW_V2, "serial", LLAMA_1B, gate(v, shapes=LLAMA_1B, prices=None, fold_bound=bound))
+    assert got == [f"{v.id}: its gate held outputs exact within {why}, its fold serves |p| <= 4194304"]
+
+
+def test_a_gate_held_within_a_bound_doesnt_admit_a_variant_exact_everywhere():
+    v = variant()
+    got = variant_refusals(v, "pearl-c-sm120-v1-h3", "serial", LLAMA_8B, gate(v, fold_bound=LEAD_FOLD_BOUND))
+    assert got == [f"{v.id}: its gate held outputs exact within |p| <= 4194304, its fold serves every output"]
 
 
 def test_a_pass_commitment_is_json_with_hex_bytes():

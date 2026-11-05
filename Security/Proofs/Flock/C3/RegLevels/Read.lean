@@ -1,12 +1,14 @@
-import Proofs.Flock.C3.RegLevels.Chain
-import Proofs.Flock.C3.Compose.Honest
-import Proofs.Flock.C3.Compose.Plays
-import Proofs.Flock.VBridge.InnerAccepts
-import Proofs.Flock.Soundness.Refine.Basis
-import Proofs.Flock.Soundness.Refine.Paths
-import Proofs.Flock.Soundness.Refine.Seam
-import Proofs.Flock.Soundness.Discharge.Exec.Shape
-import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
+module
+
+public import Proofs.Flock.C3.RegLevels.Chain
+public import Proofs.Flock.C3.Compose.Honest
+public import Proofs.Flock.C3.Compose.Plays
+public import Proofs.Flock.VBridge.InnerAccepts
+public import Proofs.Flock.Soundness.Refine.Basis
+public import Proofs.Flock.Soundness.Refine.Paths
+public import Proofs.Flock.Soundness.Refine.Seam
+public import Proofs.Flock.Soundness.Discharge.Exec.Shape
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
 
 /-!
 # n5's read fact: R's Ligerito and the openings from the tape
@@ -25,6 +27,8 @@ acceptance is the model's compiled Ligerito's run to a pending result that accep
 whose openings pass the plain leaf's path checks against the proof's cap (`opensOK_of`); and a game plays on at most one
 prefix of a tape (`stageOf_of_playsT`), so the stage the run decodes is that play.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

@@ -1,13 +1,17 @@
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
-import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+public import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
 
 /-!
 # The session's record custody without `--zk`
 
-`live-verifier` (the custody of the verifier's `PROTOCOL.md` §17.2) as `flock-verify verify` without `--zk` takes it:
+`live-verifier` (the custody of `Security/Proofs/Flock/Soundness/ASSUMPTIONS.md`) as `flock-verify verify` without `--zk` takes it:
 `RecordCustodyExec` at public outputs, `RecordCustodyExecH` at hidden ones. `--zk`'s are `Assumptions.Zk.RecordCustodyZK`
 and `RecordCustodyZKJ`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Assumptions
 

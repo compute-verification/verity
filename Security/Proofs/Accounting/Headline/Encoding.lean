@@ -1,4 +1,6 @@
-import Definitions.Accounting.Headline.Encoding
+module
+
+public import Definitions.Accounting.Headline.Encoding
 
 /-!
 # Reading the headline encoding
@@ -13,6 +15,8 @@ the model's reals:
 * `labelled_n`: a labelled program's counts are the counts of its four lists' concatenation.
 * `demandPrice_onFacet`, `isCert_onFacet`: the certificate on one facet prices a demand at that facet's.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS.Headline
 

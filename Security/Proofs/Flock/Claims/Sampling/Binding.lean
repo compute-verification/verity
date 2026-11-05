@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Finder
-import Proofs.Flock.Claims.Sampling.Cost
+module
+
+public import Proofs.Flock.Claims.Finder
+public import Proofs.Flock.Claims.Sampling.Cost
 
 /-!
 # Binding of the trace's commitment, at the openings the extractor checks
@@ -14,6 +16,8 @@ collision among those calls, and `findColl` finds one.
   that collide in any log holding both checks' calls.
 * `Pr_union_le`: the union bound.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

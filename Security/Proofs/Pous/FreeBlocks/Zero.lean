@@ -1,4 +1,6 @@
-import Definitions.Pous.Model.FreeBlocks
+module
+
+public import Definitions.Pous.Model.FreeBlocks
 
 /-!
 # The free-blocks audit with no free blocks is the sequential audit
@@ -6,6 +8,8 @@ import Definitions.Pous.Model.FreeBlocks
 `seqAcceptsFree` with `F = 0` is `seqAccepts`, so `AuditSecureFree sch 0` is `AuditSecure sch .sequential`: the game
 `P2SlackFamilyFreeBlocks` reads changes only what a free block lets through.
 -/
+
+@[expose] public section
 
 namespace Pous.FreeBlocks
 

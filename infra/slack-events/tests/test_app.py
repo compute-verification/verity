@@ -126,7 +126,7 @@ def test_health_reports_what_the_cache_holds_with_its_bearer_and_refuses_without
     cache.set(LAST_SUCCESS, T0 - 2)
     cache.set(LAST_DONE, T0 - 600)
     cache.set(LAST_ENQUEUED, T0 - 60)
-    assert health(c) == {"oldest_unprocessed_age_s": 30.0, "dead_letter_count": 1, "dead_letter_since": T0 - 86400,
+    assert health(c) == {"notes_token_source": "env", "notes_token_why": "no OIDC identity", "oldest_unprocessed_age_s": 30.0, "dead_letter_count": 1, "dead_letter_since": T0 - 86400,
                          "last_success_at": T0 - 2, "last_done_at": T0 - 600, "last_enqueued_at": T0 - 60,
                          "canary_sent_at": None, "canary_done_at": None,
                          "queue": "slack-events", "dead_letter": "slack-events-dead"}
@@ -138,8 +138,49 @@ def test_health_reports_what_the_cache_holds_with_its_bearer_and_refuses_without
     assert c.get("/api/slack/health", headers={"Authorization": "Bearer dummy-health"}).status_code == 503
 
 
+
+def test_health_says_the_notes_token_comes_from_the_broker_once_it_mints_one(world, monkeypatch):
+    rs = world.deps.rs
+    monkeypatch.setattr(rs, "_notes_token", {})
+    monkeypatch.setenv("VERCEL_OIDC_TOKEN", "dummy-oidc")
+    answers = [OSError("down"), {"token": "dummy-minted", "expires_at": "2099-01-01T00:00:00Z"}]
+
+    def http_json(method, url, data, headers):
+        a = answers.pop(0)
+        if isinstance(a, Exception):
+            raise a
+        return a
+    monkeypatch.setattr(rs, "http_json", http_json)
+    c = client(world)
+    h = health(c)                                                          # the broker refused: the old token still serves
+    assert h["notes_token_source"] == "env" and h["notes_token_why"] == "the broker refused (down)"
+    monkeypatch.setattr(rs, "_notes_token", {})
+    h = health(c)
+    assert h["notes_token_source"] == "broker" and h["notes_token_why"] is None and rs.notes_token() == "dummy-minted"
+
+
+def test_the_identity_the_service_passes_in_reaches_the_broker_without_the_environment_variable(world, monkeypatch):
+    rs, seen = world.deps.rs, []
+    monkeypatch.setattr(rs, "_notes_token", {})
+    monkeypatch.delenv("VERCEL_OIDC_TOKEN", raising=False)
+
+    def http_json(method, url, data, headers):
+        seen.append(headers["Authorization"])
+        return {"token": "dummy-minted", "expires_at": "2099-01-01T00:00:00Z"}
+    monkeypatch.setattr(rs, "http_json", http_json)
+    monkeypatch.setattr(rs, "OIDC_TOKEN", lambda: "dummy-request-oidc")
+    h = health(client(world))
+    assert h["notes_token_source"] == "broker" and seen == ["Bearer dummy-request-oidc"]
+
+    def no_identity():
+        raise RuntimeError("no x-vercel-oidc-token header")
+    monkeypatch.setattr(rs, "_notes_token", {})
+    monkeypatch.setattr(rs, "OIDC_TOKEN", no_identity)
+    h = health(client(world))
+    assert h["notes_token_source"] == "env" and h["notes_token_why"] == "no OIDC identity (RuntimeError)" and len(seen) == 1
+
 def test_a_cold_or_unreachable_cache_reads_as_unknown_not_as_down(world):
-    unknown = {"oldest_unprocessed_age_s": None, "dead_letter_count": None, "dead_letter_since": None,
+    unknown = {"notes_token_source": "env", "notes_token_why": "no OIDC identity", "oldest_unprocessed_age_s": None, "dead_letter_count": None, "dead_letter_since": None,
                "last_success_at": None, "last_done_at": None, "last_enqueued_at": None, "canary_sent_at": None,
                "canary_done_at": None, "queue": "slack-events", "dead_letter": "slack-events-dead"}
     assert health(client(world)) == unknown

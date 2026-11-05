@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.SeqCap
-import Proofs.Flock.Claims.Recursion.SeqPrefix
-import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
+module
+
+public import Proofs.Flock.Claims.Recursion.SeqCap
+public import Proofs.Flock.Claims.Recursion.SeqPrefix
+public import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
 
 /-!
 # The deployed key's hiding is the session analysis's, at SHA-512
@@ -21,6 +23,8 @@ At another `H` the two assumptions are about different functions, so `hkey` stay
 `zkBoundM_of_commit_sha512` is `zkBoundM_of_commits_sha512` at the reference prover whose inner prover commits
 (`Brings.commit`), on each statement's first-part tape (`preTape`), where `hpre` holds too (`preCommits_commit`).
 -/
+
+@[expose] public section
 
 open scoped ENNReal NNReal
 

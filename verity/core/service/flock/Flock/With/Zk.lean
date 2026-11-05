@@ -3,9 +3,13 @@ The `--zk` verifier (`Flock.Zk`) over the hash oracle (`Flock.With.Hashes`): `Zk
 every hash call the oracle's, the inner proof's `τ` commitment and its pads' Merkle paths included, and `Zk.verifyWith h`
 runs it in `V` with SHA-512 replaced by `h`. The copies keep the originals' text.
 -/
-import Flock.With.Verify
-import Flock.Zk
-import Flock.JsonParse
+module
+
+public import Flock.With.Verify
+public import Flock.Zk
+public import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock.Zk
 
@@ -245,7 +249,7 @@ def ligeritoWith (hs : Hashes M) (ms : MerkleScheme) (sch : Schedule) (T : F128)
         liftLM (claimPow p)
         let bb ← liftW (sampleWith hs)
         modify fun st => { st with s := st.s + e.smul bb, conss := st.conss.push ⟨ext, pos, al, bb, R⟩ }
-    -- §13.6 final check
+    -- `Flock.Ligerito` final check
     let st ← get
     let orig := levels.foldl (fun acc l => acc ++ l.extract 1 l.size) initCh
     if orig.size + ext != n then throw "ligerito: |orig| + ext ≠ n"

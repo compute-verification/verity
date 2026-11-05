@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.SlotLead
-import Proofs.Flock.Claims.KS.RepDistDeploy
-import Proofs.Flock.Claims.KS.PlainAlign
+module
+
+public import Proofs.Flock.Claims.KS.SlotLead
+public import Proofs.Flock.Claims.KS.RepDistDeploy
+public import Proofs.Flock.Claims.KS.PlainAlign
 
 /-!
 # The simulated fork's alignment, from the reps' schedule
@@ -17,6 +19,8 @@ opens only empty rows, meets rep 0's slots after that count and rep 1's after `r
 * `PlainSchedAlign`, `plainSlotAlign_of_sched`: so `PlainSlotAlign` holds where the simulated strategy leads with
   rep 0 for `repRounds` coins.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

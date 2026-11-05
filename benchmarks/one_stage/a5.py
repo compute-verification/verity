@@ -84,16 +84,20 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
 * **One sample per window** by the registered law (the partition file's `subset:k`) over the window's whole population, made by the
   verifier's Lean `flock-verify draw`; a TP Commit draws each rank's window on its own. Each member's server serves its share (`serve
   --draw-file`). The sessions are `--zk` (the masked protocol; without it Lean accepts a subset sample only at hidden outputs and one
-  table, verifier PROTOCOL §16.15). Each prover runs behind the ZK server's send check (`--firewall`, Lean's `flock-firewall`: `FC_FIREWALL=1`, live
+  table, `Flock.ProvedScope`). Each prover runs behind the ZK server's send check (`--firewall`, Lean's `flock-firewall`: `FC_FIREWALL=1`, live
   PROTOCOL.md §10.4), its `Hello` set up on the statement's partition and program. Lean `verify --zk` holds each session with
   `--partition` and `--program` (units derived).
 * **Plain sessions** (``--plain``; `--zk` is the default): Flock's unmasked protocol, which Lean's soundness covers at one
   table under a stratified sample, hidden outputs included (`SoundExecH`), until proofs' multi-table coverage (`PLAIN_SCOPE`).
   So a plain audit takes only a stream's sample (``--challenger``) by a ``stratified:K`` law, over a
   window of one member with no registered reads or shared rows, and refuses any other before the sample (`plain_refusal`).
-  The member's one session is served the stream's sample itself and runs on per-round OS coins (``FC_COINS=os``), and Lean
-  `verify --coins os --stratified K` holds it to the stratified law it derives from its own `--program` and `--partition`.
-  Flock's ZK server checks only a `--zk` statement's sends, so a plain prover isn't behind it (the summary's ``plain``).
+  The member's one session is served the stream's sample itself and runs on the keyed coin tree (``FC_COINS=tree``), and
+  Lean `verify --coins tree --stratified K` holds it to the stratified law it derives from its own `--program` and
+  `--partition`. Flock's ZK server checks only a `--zk` statement's sends, so a plain prover isn't behind it (the
+  summary's ``plain``).
+* **The sessions' coin trees** (FLOCK_CHALLENGER=1, a5.sh's default): every member's server takes its session's tree from
+  a challenger of its own (`a0.session`, `serve --tree-from`), and the audit passes only if each exited 0 and its audit
+  held the session's record to its release log (the summary's ``challengers``).
 * **The sample from the auditor's challenger** (`--challenger local|gate:USER@HOST`, a TP Commit; `a5_coins`), on the proof
   system's path of record: the step's one challenger session, opened on the TP run root once every rank has passed its
   checks before the sample and planned the coins its sample reads (`a5_coins.need`), and only under a reserve that covers
@@ -130,7 +134,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   when they are one. Negatives on one drawn chunk: no registered reads, another root, its units reading another row
   (`registered_negatives`), and a verdict reporting another root. No TP window of record has row tables yet (`tp.serving_rows.window_of_record` names no serve-time
   context); `a5_row_tables.py` is their stand-in.
-* **Wiring across statements** (`commit.wiring`, verifier PROTOCOL §16.13 ``Wiring``): a w13 coordinate's K-chunks
+* **Wiring across statements** (`commit.wiring`, `HmOut` ``Wiring``): a w13 coordinate's K-chunks
   (`pipeline.kchunk_rows`) are three templates, each chunk's ``acc`` row the output row of the chunk before it, committed under
   that row's salt. Lean's links hold only inside a statement, so after the sample each sampled proof block's wires are held on the public
   bodies the leaf layer binds (`wiring.check_drawn`, Lean's `Wires.Summary.drawnOk`: the two rows' strings are one), and a
@@ -144,6 +148,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import inspect
 import json
 import multiprocessing
 import os
@@ -177,7 +182,7 @@ from verity.ml.windows import flock_inputs as FI, rows as CS, tables as TB  # no
 from verity.ml.windows import wiring as WI  # noqa: E402
 
 RANK_PORTS = 16
-#: what a plain audit covers until proofs' multi-table coverage lands (verifier PROTOCOL §16.15, `ProvedScope.drawLaw`)
+#: what a plain audit covers until proofs' multi-table coverage lands (`Flock.ProvedScope`, `ProvedScope.drawLaw`)
 PLAIN_SCOPE = ("plain covers one table (a window of one member, its one session) under a stratified draw, hidden outputs "
                "included (SoundExecH); J tables and the subset draw, hidden outputs past one table, and registered reads and "
                "shared rows wait for proofs' PRs A, B and C")
@@ -397,7 +402,7 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
 
 
 def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) -> dict[str, dict]:
-    """The verifier's wiring check (§16.13, `wiring.check_drawn`) on altered wires, each with the units it alters drawn: the first
+    """The verifier's wiring check (`HmLinks`, `wiring.check_drawn`) on altered wires, each with the units it alters drawn: the first
     wire's unit 0 reading another unit's row, neither its writer's nor its own, of its words where one is (``words``: same,
     else other; rotating the writers is the honest wire at one unit a member or on a fan-out), two wires of one output swapped (a split's partial read into another combine slot), and a wired row's string
     flipped in its reader's public body (a partial that is not the one its writer committed), its unit 0 drawn."""
@@ -467,9 +472,92 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[st
     return out
 
 
+def compose_key(compose: Callable, defn: object, template: str) -> str | None:
+    """The cache entry (`compose_circuit.cache_key`) of a caller's composer ``compose``'s circuit for ``template``, None for one
+    that doesn't say what it composes from besides its binding (``compose.inputs``, JSON: its stager's label, the template's
+    statement): keyed by those inputs, the template, its Definition's program digest, the composer's own file and
+    compose_circuit's, and the composing packages' code and data (`compose_circuit.tree_digest`)."""
+    inputs = getattr(compose, "inputs", None)
+    if inputs is None:
+        return None
+    import compose_circuit as CM
+
+    return CM.cache_key(["a5/own", template, P.program_digest(Program(defn)), inputs],
+                        files=(Path(CM.__file__), Path(inspect.getsourcefile(compose))))
+
+
+def own_composed(a: argparse.Namespace, compose: Callable, defn: object, template: str, out: Path | None, pd: str,
+                 program: str) -> tuple[dict, bool | None]:
+    """A caller's composer ``compose`` (``(out, partition digest, program digest) -> line``) for ``template``'s circuit at
+    ``out``, bound to ``pd`` and ``program``: through ``a.compose_cache`` (`compose_circuit.cached`, keyed by `compose_key`)
+    when given and the composer says what it composes from, else composed at ``out``. -> (compose's line with the circuit's
+    META, whether the cache held it already: None off the cache)."""
+    import compose_circuit as CM
+
+    cache = getattr(a, "compose_cache", None)
+    key = compose_key(compose, defn, template) if cache else None
+    if key is None:
+        out.unlink(missing_ok=True)
+        made = compose(out, pd, program)
+        return {**made, "meta": made.get("meta") or CM.head(out)}, None
+    kept = (Path(cache) / key / "made.json").exists()
+    return CM.cached(Path(cache), key, out, {"partition": pd, "program": program}, lambda p: compose(p, pd, program)), kept
+
+
+def circuit_of(path: Path, made: dict, read: set[Path]) -> FI.FlockCircuit:
+    """The circuit at ``path`` as staging reads it: its META, pin and class from compose's line ``made`` where the line carries
+    its META, never reading a circuit that can be past 100 GB (`held` holds a sampled proof block's to them before its prover
+    reads it); else read off the file, ``path`` then put in ``read``."""
+    if "meta" in made and made.get("class_sha512"):
+        return FI.FlockCircuit(made["meta"], made["pin"], made["class_sha512"])
+    read.add(path)
+    return FI.flock_circuit(path.read_bytes())
+
+
+def held(path: Path, circ: FI.FlockCircuit, read: set[Path]) -> None:
+    """The circuit at ``path`` is the one staging took off compose's line (``circ``: its META, pin and class), read whole once:
+    ``read`` holds the circuits already read."""
+    if path in read:
+        return
+    got = FI.flock_circuit(path.read_bytes())
+    if (got.meta, got.pin, got.cls) != (circ.meta, circ.pin, circ.cls):
+        raise RuntimeError(f"{path}: not the circuit its compose's line names (its META, SHA-512 or class differ)")
+    read.add(path)
+
+
+_WARM: dict = {}
+
+
+def _warm_one(t: str) -> dict:
+    w, t0 = _WARM, time.time()
+    compose, defn = w["sets"][t]
+    made, kept = own_composed(w["a"], compose, defn, t, None, w["pd"], w["program"])
+    return {"template": t, "seconds": round(time.time() - t0, 1), "kept": kept, "pin": made["pin"], "k_log": made.get("k_log")}
+
+
+def warm(a: argparse.Namespace, sets: dict, mine: CS.Window, jobs: int = 1) -> list[dict]:
+    """Every template of window ``mine`` that a caller's composer in ``sets`` makes, and says what it makes it from
+    (`compose_key`), composed into ``a.compose_cache`` bound to the window's partition and program, ``jobs`` at a time, each in
+    a process forked for it: a window's templates and binding are public, so this runs before its timed audit, whose staging
+    then links each kept circuit and reads none (`own_composed`). A 4,32,4 window's Int8RowQuant_v3 holds its text, past 100 GB,
+    while it composes, so ``jobs`` is what the machine's memory takes. -> each template's seconds, pin and whether the cache
+    held it already."""
+    if not getattr(a, "compose_cache", None):
+        raise ValueError("warm makes a5's compose cache: give --compose-cache")
+    todo = [t for t in dict.fromkeys(m.template for m in mine.members)
+            if callable(sets.get(t, (None,))[0]) and getattr(sets[t][0], "inputs", None) is not None]
+    _WARM.update(a=a, sets=sets, pd=mine.partition_digest, program=mine.partition["program"])
+    if jobs <= 1:
+        return [_warm_one(t) for t in todo]
+    with ProcessPoolExecutor(jobs, mp_context=multiprocessing.get_context("fork")) as ex:
+        return [f.result() for f in [ex.submit(_warm_one, t) for t in todo]]
+
+
 def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
-    """A drawn member's prover's file and its circuit, under the header its public file was held to before the sample."""
+    """A drawn member's prover's file and its circuit, under the header its public file was held to before the sample, the
+    circuit held to its compose's line first (`held`)."""
     m, st_dir = mm["m"], mm["st"]["dir"]
+    held(mm["circuit"], mm["circ"], mm["read"])
     if mm["circuit"] != st_dir / "circuit.txt":
         link(mm["circuit"], st_dir / "circuit.txt")
         for f in sorted((mm["circuit"].parent / "tables").glob("*.u32")):    # a circuit with lookups reads the MUFU tables
@@ -516,7 +604,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     summary.update({"run_root": mine.run, "population": n_all, "partition": pd, "law": law, "delta": a.delta, "firewall": a.firewall,
                     "members": [{"k": k, "template": m.template, "n": m.n, "base": m.base} for k, m in enumerate(mine.members)]})
     if plain(a):
-        summary.update(firewall=None, plain={"scope": PLAIN_SCOPE, "coins": "os", "firewall": PLAIN_FIREWALL})
+        summary.update(firewall=None, plain={"scope": PLAIN_SCOPE, "coins": "tree", "firewall": PLAIN_FIREWALL})
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
 
@@ -527,7 +615,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     # file and the circuit's link only for a drawn member, after the sample (`stage`)
     files = (json.loads((served / "window.json").read_text()), rec)
     roots = {r["port"]: r for r in rec["roots"]}
-    members, publics, checks, composed, programs_ok = [], {}, {}, {}, {}
+    members, publics, checks, composed, programs_ok, kept, read = [], {}, {}, {}, {}, {}, set()
     t_stage = time.time()
     for k, m in enumerate(mine.members):
         own = callable(sets.get(m.template, (None,))[0])  # the caller's composer, chunked or not
@@ -545,8 +633,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             circuit, made, circ = composed[m.template]
         elif own:
             circuit = st_dir / "circuit.txt"
-            made = sets[m.template][0](circuit, pd, part["program"])
-            circ = FI.flock_circuit(circuit.read_bytes())
+            made, kept[m.template] = own_composed(a, sets[m.template][0], defn, m.template, circuit, pd, part["program"])
+            circ = circuit_of(circuit, made, read)
             composed[m.template] = (circuit, made, circ)
         else:
             src = ["--template", m.template, *(["--cache", a.compose_cache] if a.compose_cache else [])] if chunked else \
@@ -557,7 +645,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             if p.returncode != 0:
                 raise RuntimeError(f"composing member {k}'s circuit failed: {p.stderr[-2000:]}")
             circuit, made = st_dir / "circuit.txt", json.loads(p.stdout.strip().splitlines()[-1])
-            circ = FI.flock_circuit(circuit.read_bytes())
+            circ = circuit_of(circuit, made, read)
             composed[m.template] = (circuit, made, circ)
         compose_s = round(time.time() - t, 1)
         got = FI.flock_input_files(served, k, circ, st_dir / "prover", write=("pub",), files=files)
@@ -582,7 +670,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                     and reg["domain"] == fv["domain_ids"][p_name] == want[name]["domain"])
         checks[f"m{k}"] = {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v], "detail": {}}
         publics[m.key] = body(st_dir / f"pub-{m.n}.bin")
-        members.append({"k": k, "m": m, "defn": defn, "header": header, "circuit": circuit, "circ": circ,
+        members.append({"k": k, "m": m, "defn": defn, "header": header, "circuit": circuit, "circ": circ, "read": read,
                         "st": {"dir": st_dir, "meta": meta, "pin": made["pin"], "partition_file": out / "partition.json",
                                "program_file": out / "program.json",
                                "public": a0.sha512_file(st_dir / f"pub-{m.n}.bin")},
@@ -603,7 +691,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     summary.update(registration=R.digest(rec), leaf_layer=leaf_layer, checks_before_draw={c: v["ok"] for c, v in checks.items()},
                    circuits={mm["m"].template: {"pin": mm["pin"], "class": mm["class"], "compose_s": mm["compose_s"],
-                                                "k_log": mm["st"]["meta"].get("k_log"), "unit_log": mm["st"]["meta"].get("unit_log")}
+                                                "k_log": mm["st"]["meta"].get("k_log"), "unit_log": mm["st"]["meta"].get("unit_log"),
+                                                **({"cached": kept[mm["m"].template]} if mm["m"].template in kept else {})}
                              for mm in members if mm["circuit"].parent == mm["st"]["dir"]})
     if not all(v["ok"] for v in checks.values()):
         summary["checks"] = checks
@@ -678,7 +767,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         stage(served, mm, files)
         staged_s = time.time() - t
         t = time.time()
-        env = {"FC_COINS": "os"} if plain(a) else {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": a.firewall, **a0.firewall_env(mm["st"])}
+        env = {"FC_COINS": "tree"} if plain(a) else {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": a.firewall, **a0.firewall_env(mm["st"])}
         record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + i, sdir, draw_file=sdir / "draw.json",
                                   zk=not plain(a), env=env, prove_timeout=a.session_timeout)
         session_s = round(time.time() - t, 1)
@@ -699,7 +788,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                      "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()},
                f"lean-draw/m{k}": {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}}
         if plain(a):
-            flags = ("--coins", "os", "--stratified", str(drawn_law["k"]))
+            flags = ("--coins", "tree", "--stratified", str(drawn_law["k"]))
             got[f"lean-verify/m{k}"] = {**a0.lean_verify(a.lean, mm["st"], m.n, sdir, flags=flags),
                                         "tool": f"flock-verify verify {' '.join(flags)} --archive"}
         else:
@@ -713,7 +802,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                               "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
                               "verify_s": ((record or {}).get("verdict") or {}).get("verify_s"),
                               "lean_verify_s": lean_v.get("verify_s"), "lean_partition": lean_v.get("partition")},
-                "sessions": [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]}
+                "sessions": [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))],
+                "challenger": (live or {}).get("challenger")}
 
     # outer proofs go through the ZK server one at a time (`ONE_AT_A_TIME`): the sessions run here in the members' order, and
     # only Lean's checks of one member, outside the ZK server, overlap the next member's session
@@ -734,6 +824,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             linked = linked or (mm, got["sdir"])
         statement[mm["m"].key] = got["statement"]
         sessions += got["sessions"]
+        if got["challenger"] is not None:
+            summary.setdefault("challengers", {})[f"m{mm['k']}"] = got["challenger"]
     coin_neg: dict[str, dict] = {}
     if not streamed(a):
         result = V.audit_record(rec, receipt, union_draw, drawn_law, sorted(proved), instances, statement, verdicts, a.delta,
@@ -817,8 +909,11 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                    timing=statement, negatives={x: y["refused"] for x, y in neg.items()})
     summary["verifier_checks"] = AM.counts()
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-    ok = bool(result.get("accepted")) and result.get("registered_reads", {"ok": True})["ok"] and all(summary["negatives"].values())
+    ok = bool(result.get("accepted")) and result.get("registered_reads", {"ok": True})["ok"] and all(summary["negatives"].values()) \
+        and all(c["ok"] for c in summary.get("challengers", {}).values())
     shown = {x: summary.get(x) for x in ("source", "commitment", "audit", "draw", "draw_counts", "negatives")}
+    if "challengers" in summary:
+        shown["challengers"] = {x: c["ok"] for x, c in summary["challengers"].items()}
     if "coins" in summary:
         shown["coins"] = {x: summary["coins"].get(x) for x in ("source", "coins_reason", "outcome", "run")}
     print("A5 " + json.dumps(shown, sort_keys=True, default=str))

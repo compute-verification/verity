@@ -1,10 +1,14 @@
-import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
+module
+
+public import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
 
 /-!
 # Two-stage detection risk: the proofs
 
 The proofs of the two-stage statements of `Partitioning.Guarantees`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs
 

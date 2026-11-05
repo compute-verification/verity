@@ -1,12 +1,17 @@
 /-
-A proof file is the one encoding of what it decodes to (§8.1, D17 and D18 of §17.1): `decodeProof` and `Zk.decode` accept a
+A proof file is the one encoding of what it decodes to (`Flock.Proof`, D17 and D18 of `verity/ml/flock/verifier/README.md`): `decodeProof` and `Zk.decode` accept a
 file written field by field at a small shape (two levels, one query each, one-byte digests, no salts). `decodeProof`
 accepts the plain file in the deployed form, with the zk patch's `zk_level0 = None` after the pair; `verify` reads a file
 through its statement's pin (`plainBytes`), so upstream's form, without the tag, passes under `--upstream-plain` alone.
 Each form is refused where the other is pinned, and so is every other byte after the end, a plain file whose
 `matrix_evals` holds one pair, and a query, claim or consistency grinding nonce other than 0 (R4), each with its reason.
 -/
-import Flock.ZkProof
+module
+
+public import Flock.ZkProof
+meta import Flock.ZkProof
+
+@[expose] public section
 
 namespace Flock.Test.ProofCanon
 
@@ -25,7 +30,7 @@ def cat (bs : List ByteArray) : ByteArray := bs.foldl (· ++ ·) ByteArray.empty
 def level (sh : Shape) (lv : Level) (lanes : Nat) : ByteArray :=
   u64 lv.q ++ cat (List.replicate lv.q (vec lanes 16)) ++ vec (lv.q * (lv.d - lv.cap)) sh.hashLen
 
-/-- §8.2's pair at `sh`, every value zero: level 0's rows `l0Lanes` wide, `matrix_evals` holding `me` pairs. -/
+/-- `Flock.Proof`'s pair at `sh`, every value zero: level 0's rows `l0Lanes` wide, `matrix_evals` holding `me` pairs. -/
 def pair (sh : Shape) (l0Lanes me : Nat) : ByteArray :=
   let s := sh.sched
   let R := s.levels.size - 1

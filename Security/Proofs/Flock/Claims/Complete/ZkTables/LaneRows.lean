@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Level0
-import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
-import Proofs.Flock.Claims.Complete.Replay.LigeritoSync
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLane
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Level0
+public import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoSync
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLane
 
 /-!
 # Level 0's lane rows vanish at the honest pads
@@ -17,6 +19,8 @@ twice a value (`lane_close`).
   coin is multiplication by it).
 * `ev2_claim0`: the first claim `T + β·y₀` is `Σ t·(b + β·eq(z))` where `T = ⟨t, b⟩`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 
