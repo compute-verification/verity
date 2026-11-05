@@ -21,6 +21,8 @@ namespace Fwd
 
 open Lean Meta Elab Tactic
 
+universe u v
+
 /-- The step a bind of a computation that returned takes, stated once, so that no proof asks the kernel to unfold
 `bind (.ok a) f` against `f a`, which can send it into evaluating `f a`'s own first computation. -/
 theorem bind_ok {ε : Type u} {α β : Type v} (a : α) (f : α → Except ε β) : (Except.ok a >>= f) = f a := rfl
