@@ -76,7 +76,7 @@ environment extension loaded, so none of the package's code runs), and replays t
                  verifier that accepts everything) under `witnesses`; or an exclusion theorem (a bound over a partition
                  or covering, reading no acceptance) names no `honest` lemma at the deployed partition and parameters
                  and `nontrivial` one at an explicit circuit where its other premises hold, a named premise fails and
-                 the bound fails; or a
+                 the bound fails (with no premise, where a tighter bound fails); or a
                  witness doesn't have that form, ranges over its instance instead of building it, takes a hypothesis
                  that is no named assumption the lock lists, or is an honest one at an accept-all verifier
                  (`witness_failures`), unless `unwitnessed`, which only shrinks, lists the guarantee with its
@@ -1069,7 +1069,8 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     texts = [t for es in inline.values() if isinstance(es, dict) for t in es] if isinstance(inline, dict) else []
     asked = sorted({".".join(p[:i]) for t in texts for n in NAMES.findall(t) for p in [n.split(".")] for i in range(1, len(p) + 1)})
     config.write_text(json.dumps({"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
-                                  "recorded": record_scope(policy), "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
+                                  "recorded": record_scope(policy), "bounds": list(BOUND_HEADS),
+                                  "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
                                   "spec": spec_of(policy),
                                   "premises": [p for p in premises if isinstance(p, str)] if isinstance(premises, list) else [],
                                   "assumptions": sorted(a for a in listed_premises(policy) if isinstance(a, str)),
@@ -1810,7 +1811,8 @@ def vacuous_meets(body: dict, claim: str) -> str | None:
 #: starts with one of `VERIFIER_PREFIXES`, in any case (a verifier's acceptance: `PeriodRun.accepts`, `Audits.Accepts`,
 #: `Flock.Zk.verify`), the
 #: `acceptance` kind; with none, a read of a module whose last component is one of `EXCLUSION_MODULES` and a conclusion
-#: headed by one of `BOUND_HEADS` (a partition's or a covering's bound, which no verifier accepts), the `exclusion` kind
+#: headed by one of `BOUND_HEADS` (a partition's or a covering's bound, which no verifier accepts), as written or at the end
+#: of the definitions it unfolds through (`Facts.lean`'s `chain`, which `facts_of` hands `BOUND_HEADS`), the `exclusion` kind
 SCOPE_COMPONENT = "Claims"
 SCOPE_MODULES = ("Properties.Verity",)
 VERIFIER_PREFIXES = ("accept", "verify")
@@ -1835,8 +1837,9 @@ def witness_scope(name: str, policy: dict, pin: dict) -> tuple[str, str] | None:
     `acceptance` when it states what an acceptance means (a property of a function's acceptance, `accepted`, or a
     statement reading a claim, a `SCOPE_COMPONENT` module, the one theorem's vocabulary, `SCOPE_MODULES`, or a verifier's
     acceptance, `VERIFIER_PREFIXES`); `exclusion` when it reads none of those but a partition or a covering
-    (`EXCLUSION_MODULES`) and concludes a bound (`BOUND_HEADS`). A guarantee with no such read is about something else
-    (a bound on a hash, a count, a device), where neither form means anything."""
+    (`EXCLUSION_MODULES`) and concludes a bound (`BOUND_HEADS`, or a definition that unfolds to one, `concluded`). A
+    guarantee with no such read is about something else (a bound on a hash, a count, a device), where neither form means
+    anything."""
     if fns := accepted(policy, name):
         return "acceptance", f"a property of {' or '.join(fns)} accepting"
     reads = sorted(pin.get("reads") or [], key=lambda r: r.get("name", ""))
@@ -1866,8 +1869,8 @@ def statement_read(pin: dict) -> dict:
 
 def concluded(pin: dict) -> tuple[list[str], int]:
     """The constants a guarantee's conclusion is headed by (`Facts.lean`'s `body` as written and `lifted`: the head past
-    its binders, its own definition among them, each conjunct's, and each definition the head unfolds through, `chain`),
-    and how many `∃` stand before its conclusion (`binders`, as `statement_read` reads it)."""
+    its binders, its own definition among them, each conjunct's, and each definition the head unfolds through with the
+    bound it ends at, `chain`), and how many `∃` stand before its conclusion (`binders`, as `statement_read` reads it)."""
     body, heads = pin.get("body") or {}, []
     for b in (body, body.get("lifted") or {}):
         for h in [b.get("head"), *(k.get("head") for k in b.get("conclusion") or []), *(b.get("chain") or [])]:
@@ -2016,6 +2019,14 @@ def premise_names(pin: dict) -> set[str]:
         {p["head"] for p in stated_premises(pin) if p.get("head")}
 
 
+def premise_free(pin: dict) -> bool:
+    """Whether a statement takes no premise: no `premise_names`, and no `→` binder as written or lifted (a hypothesis
+    whose type no constant heads names no premise, but is one)."""
+    body = pin.get("body") or {}
+    return not premise_names(pin) and "→" not in [*(body.get("binders") or []),
+                                                  *((body.get("lifted") or {}).get("binders") or [])]
+
+
 def witness_shapes(name: str, pin: dict, policy: dict, own: set[str]) -> str:
     """The two witnesses the guarantee ``name`` (its facts ``pin``) needs, with the shape of each statement, and the entry
     that names them: what a failure of the witnesses rule says to do."""
@@ -2035,10 +2046,13 @@ def witness_shapes(name: str, pin: dict, policy: dict, own: set[str]) -> str:
     if kind == "exclusion":
         premises = " or ".join(sorted(premise_names(pin))) or "its named premise"
         entry[name]["kind"] = "exclusion"
+        nontrivial = (f"¬ {shown} c₀ …` (it takes no premise to drop, so a tighter bound fails at an explicit "
+                      f"circuit c₀)" if premise_free(pin) else
+                      f"(each other premise at c₀) ∧ ¬ ({premises}) c₀ … ∧ ¬ {shown} c₀ …` (an explicit circuit c₀ "
+                      f"beats the bound once one named premise is dropped)")
         return (f"prove `{name}_honest : {honest}` (its hypotheses hold at the deployed partition and parameters d) and "
-                f"`{name}_nontrivial : (each other premise at c₀) ∧ ¬ ({premises}) c₀ … ∧ ¬ {shown} c₀ …` (an explicit "
-                f"circuit c₀ beats the bound once one named premise is dropped).{construct} List both under "
-                f"`guarantees`, and write {json.dumps(entry, ensure_ascii=False)[1:-1]} under `witnesses` (LEAN-66)")
+                f"`{name}_nontrivial : {nontrivial}.{construct} List both under `guarantees`, and write "
+                f"{json.dumps(entry, ensure_ascii=False)[1:-1]} under `witnesses` (LEAN-66)")
     nontrivial = f"{'∀ X…, ' if exists else ''}¬ {shown} at acceptAll …"
     why = (", the break included, so a break that always holds can't make the bound say nothing" if head == "Or" else "") + (
         f", each of the {exists} `∃` of its conclusion a `∀` before the `¬`, since a value the prover picks fits anything "
@@ -2066,7 +2080,8 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
       (`concluded`). For the `acceptance` kind, at the verifier that accepts everything, with a `∀` before the `¬` for each
       `∃` of the conclusion: a conclusion with an `∃` the prover picks, and a bound whose break (`C ∨ Break`) always
       holds, fail here. For the `exclusion` kind, a conjunction at an explicit circuit: (each other premise holds) ∧
-      ¬ (a named premise) ∧ ¬ (the bound) (`exclusion_failures`), so a bare `¬ bound` fails.
+      ¬ (a named premise) ∧ ¬ (the bound) (`exclusion_failures`), so a bare `¬ bound` fails; of a guarantee that takes
+      no premise (`premise_free`), the bare `¬ bound` at an explicit circuit, where a tighter bound fails.
 
     A guarantee in scope without witnesses fails unless `unwitnessed` ({guarantee: its record's type hash}, the
     guarantees in scope when the rule came) lists it with the hash of its statement as built, or, under `--moved`, with that
@@ -2207,18 +2222,19 @@ def exclusion_failures(n: str, g: str, read: dict, np_: dict, pin: dict, heads: 
     at an explicit circuit, (each other premise of ``g`` holds) ∧ ¬ (a named premise of ``g``) ∧ ¬ (``g``'s bound). Among
     the conjuncts of its conclusion (`Facts.lean`'s `conclusion`, in any order), one is `¬ C …` with C a head of ``g``'s
     conclusion, one is `¬ P …` with P one of ``g``'s premises (under its own `∀` binders if it has them), and the others,
-    with the named assumptions ``n`` takes, conclude each other premise of ``g``. A bare `¬ bound` reads no premise."""
+    with the named assumptions ``n`` takes, conclude each other premise of ``g``. A bare `¬ bound` reads no premise, and
+    is the form only where ``g`` takes none (`premise_free`): there it states that a tighter bound fails at an explicit
+    circuit, and no premise is dropped or concluded."""
     cs, out = read.get("conclusion") or [], []
     negs = {k.get("inner") for k in cs if k.get("negated") and k.get("inner")}
-    premises = {p["head"] for p in stated_premises(pin) if p.get("head")} | \
-        {h["named"] for h in pin.get("hypotheses") or [] if h.get("named")}
+    premises = premise_names(pin)
     if not negs & set(heads):
         out.append(Failure("witnesses.nontrivial-form", n, f"witnesses: {n} does not state that {g}'s bound fails at an "
                            f"explicit circuit: one conjunct of its conclusion is `¬ C …` with C one of "
                            f"{', '.join(heads) or 'its heads (none reported)'}, and it negates "
                            f"{', '.join(sorted(negs)) or 'nothing'}"))
     dropped = negs & premises
-    if not dropped:
+    if not dropped and not premise_free(pin):
         out.append(Failure("witnesses.nontrivial-drops", n, f"witnesses: {n} drops no premise of {g}: an exclusion's "
                            f"nontrivial lemma states, at an explicit circuit, (each other premise holds) ∧ ¬ (the dropped "
                            f"premise) ∧ ¬ (the bound), one conjunct `¬ P …` with P one of "
