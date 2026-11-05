@@ -11,9 +11,11 @@ A composite's acceptance is its acceptance as a `same` composition and every com
 (`accepts_same`, `accepts_components`, from `Properties.Composition`'s `answerAccepts` at the composite, `acceptTied` at
 its ties and `acceptSame`). So the event `Verity.SoundnessOf` bounds at a composite lies inside the union of its
 subprotocols' events, each at most its target's error at the strategy: the union bound over the composite's
-subprotocols in one game (`soundness_at_of_targets`). `soundness_of_subprotocols` is it at onsite's seven, and
-`remote_soundness_of_subprotocols` at remote's three, which are a subset of onsite's; at remote with the network
-certifier it is `soundness_at_of_targets` itself, over remote's three and the network certifier.
+subprotocols in one game (`soundness_at_of_targets`). `soundness_of_subprotocols` is it at onsite's seven,
+`remote_soundness_of_subprotocols` at remote's three, which are a subset of onsite's, and
+`remote_network_no_pouw_soundness_of_subprotocols` at remote-network without PoUW's three (sampled proofs, the
+inference-only policy and the network certifier); at remote with the network certifier it is
+`soundness_at_of_targets` itself, over remote's three and the network certifier.
 
 Beside it, the two checks every guarantee carries, for any names `V`: `soundness_honest_of`, at the honest deployment
 (the deployment's honest prover at registered files, each subprotocol's honest lemma `Vocab.HonestHolds`) every target's
@@ -27,11 +29,14 @@ evidence's blobs with the evidence, and the composite reads both, so every input
 files is what some strategy sends (`sent_reachable`), and every acceptance of the compiled verifier on such an input
 at files that pass the commit phase's check lies in the event with probability one (`Vocab.accepts_reachable`).
 
-The witnesses of each of the three theorems are at the idle deployment (`Properties.Verity.Idle`), at the compiled
+The witnesses of each of the four theorems are at the idle deployment (`Properties.Verity.Idle`), at the compiled
 composites: its hypotheses hold at `Idle.unbounded` (`soundness_at_of_targets_honest`, `soundness_of_subprotocols_honest`,
-`remote_soundness_of_subprotocols_honest`), and its conclusion fails at `Idle.exact` for a verifier that accepts everything
-(`soundness_at_of_targets_nontrivial`, `soundness_of_subprotocols_nontrivial`, `remote_soundness_of_subprotocols_nontrivial`): there
-every error is `0` and PoUW's claim fails on every play of the files that pass the commit phase's check.
+`remote_soundness_of_subprotocols_honest`, `remote_network_no_pouw_soundness_of_subprotocols_honest`), and its conclusion
+fails for a verifier that accepts everything (`soundness_at_of_targets_nontrivial`, `soundness_of_subprotocols_nontrivial`,
+`remote_soundness_of_subprotocols_nontrivial` at `Idle.exact`, where every error is `0` and PoUW's claim fails on every
+play of the files that pass the commit phase's check; `remote_network_no_pouw_soundness_of_subprotocols_nontrivial` at
+`Idle.exactLeaky`, where every error is `0` and the network certifier's claim fails on every play, since that composite
+has no PoUW subprotocol).
 -/
 
 namespace Verity
@@ -42,7 +47,7 @@ open scoped ENNReal
 theorem component_mem {k : Verity.Registration.Composite} {a : Subprotocol} {P : BlobProtocol}
     (h : component k a = some P) : P ∈ componentsOf k := by
   cases k <;> cases a <;> simp [component] at h <;> subst h <;>
-    simp [componentsOf, Onsite.components, Remote.components, RemoteNetwork.components]
+    simp [componentsOf, Onsite.components, Remote.components, RemoteNetwork.components, RemoteNetworkNoPouw.components]
 
 /-- **Each composite's verifier of record is the one the composites' table lists for it**, with its subprotocols'
 ids. -/
@@ -52,11 +57,12 @@ theorem verifier_mem (k : Verity.Registration.Composite) :
   · exact List.mem_cons.2 (Or.inl rfl)
   · exact List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inl rfl)))
   · exact List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inl rfl)))))
+  · exact List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inl rfl)))))))
 
 /-- **What a composite's verifier of record accepts, it accepted as a `same` composition**: an accepted composition of
 its components whose record subprotocols committed to one record, at onsite PoUS and PoUB-P2 on one store, at
 remote and remote with the network certifier every window of PoUW's period on the policy's record, and at remote with
-the network certifier every compute audit of the network certifier's period on it too. -/
+the network certifier, with PoUW or without, every compute audit of the network certifier's period on it. -/
 theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts k s) : SameAccepts k s := by
   cases k
   · obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
@@ -75,6 +81,13 @@ theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts
       Properties.Composition.answerAccepts (RemoteNetwork.protocol.on s.blobs) s.params s.commitment s.evidence h
     obtain ⟨hh, hties⟩ := Properties.Composition.acceptTied RemoteNetwork.ties ev
       (Composition.checkSame "verity/remote-network/v0" Remote.tied (s.components .remoteNetwork) ps c ev) pub prof hch
+    exact ⟨ps, c, ev, ⟨hp, hc, he⟩, pub, prof,
+      Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hh, hties⟩
+  · obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
+      Properties.Composition.answerAccepts (RemoteNetworkNoPouw.protocol.on s.blobs) s.params s.commitment s.evidence h
+    obtain ⟨hh, hties⟩ := Properties.Composition.acceptTied RemoteNetworkNoPouw.ties ev
+      (Composition.checkSame "verity/remote-network-no-pouw/v0" Remote.tied (s.components .remoteNetworkNoPouw) ps c ev)
+        pub prof hch
     exact ⟨ps, c, ev, ⟨hp, hc, he⟩, pub, prof,
       Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hh, hties⟩
 
@@ -135,6 +148,18 @@ theorem remote_soundness_of_subprotocols : RemoteSoundness := by
   · exact hW
   · exact hI
   all_goals exact absurd (Finset.mem_filter.1 ha).2 Bool.false_ne_true
+
+theorem remote_network_no_pouw_soundness_of_subprotocols : RemoteNetworkNoPouwSoundness := by
+  intro ι α _ d V hS hI hN
+  refine soundness_at_of_targets ι α d V .remoteNetworkNoPouw fun a ha => ?_
+  cases a
+  · exact hS
+  · exact absurd (Finset.mem_filter.1 ha).2 Bool.false_ne_true
+  · exact hI
+  · exact absurd (Finset.mem_filter.1 ha).2 Bool.false_ne_true
+  · exact absurd (Finset.mem_filter.1 ha).2 Bool.false_ne_true
+  · exact hN
+  · exact absurd (Finset.mem_filter.1 ha).2 Bool.false_ne_true
 
 /-- An event every play after `θ`, `F` and `c` meets has probability one. -/
 theorem prob_play_eq_one (ns : List ℕ) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (p : Exchange → Prop)
@@ -377,10 +402,34 @@ theorem nontrivial_at (k : Verity.Registration.Composite) (hk : Subprotocol.pouw
   exact soundness_nontrivial_of exact k .empty #[.empty] .empty (exact.honest .empty #[.empty] .empty)
     ⟨.empty, by simp, rfl⟩ .pouw hk (pouw_fails k _ _ _ _) (lt_of_eq_of_lt h0 zero_lt_one)
 
+/-- At `exactLeaky`, every subprotocol's error is `0`, as at `exact`. -/
+theorem error_exactLeaky (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Game.Strategy (exactLeaky.game θ F c)) : exactLeaky.error a θ F c σ = 0 := by
+  unfold Vocab.error Accounting.condError
+  rw [if_pos ⟨le_of_eq (finder_pr _), fun _ _ => le_of_eq (forger_pr _)⟩]
+  simp [exactLeaky, exact, vocab]
+
+/-- At `exactLeaky`, the network certifier's claim fails on every play: no bound on what it saw is met. -/
+theorem network_fails (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Game.Strategy (exactLeaky.game θ F c)) (o : Exchange) : ¬ exactLeaky.Holds k θ F c σ .network o := by
+  intro h
+  change False at h
+  exact h
+
+/-- At `exactLeaky`, the conclusion at composite `k` fails for a verifier that accepts everything, at the files that
+are the parameters, for the honest prover, wherever `k` has the network certifier among its subprotocols. -/
+theorem nontrivial_network (k : Verity.Registration.Composite) (hk : Subprotocol.network ∈ subprotocols k) :
+    ¬ exactLeaky.SoundnessFor k fun _ => True := by
+  have h0 : ∑ a ∈ subprotocols k,
+      exactLeaky.error a .empty #[.empty] .empty (exactLeaky.honest .empty #[.empty] .empty) = 0 :=
+    Finset.sum_eq_zero fun a _ => error_exactLeaky a _ _ _ _
+  exact soundness_nontrivial_of exactLeaky k .empty #[.empty] .empty (exactLeaky.honest .empty #[.empty] .empty)
+    ⟨.empty, by simp, rfl⟩ .network hk (network_fails k _ _ _ _) (lt_of_eq_of_lt h0 zero_lt_one)
+
 end Idle
 
 /-- **`SoundnessOf`'s honest lemma**: its hypotheses hold at the idle deployment's compiled composites, every
-subprotocol meeting its target at onsite, at remote and at remote with the network certifier. -/
+subprotocol meeting its target at onsite, at remote and at remote with the network certifier, with PoUW or without. -/
 theorem soundness_at_of_targets_honest :
     Idle.unbounded.Target .onsite .sampled ∧ Idle.unbounded.Target .onsite .pouw ∧
       Idle.unbounded.Target .onsite .inferenceOnly ∧ Idle.unbounded.Target .onsite .pous ∧
@@ -388,11 +437,14 @@ theorem soundness_at_of_targets_honest :
       Idle.unbounded.Target .onsite .wipe ∧ Idle.unbounded.Target .remote .sampled ∧
       Idle.unbounded.Target .remote .pouw ∧ Idle.unbounded.Target .remote .inferenceOnly ∧
       Idle.unbounded.Target .remoteNetwork .sampled ∧ Idle.unbounded.Target .remoteNetwork .pouw ∧
-      Idle.unbounded.Target .remoteNetwork .inferenceOnly ∧ Idle.unbounded.Target .remoteNetwork .network :=
+      Idle.unbounded.Target .remoteNetwork .inferenceOnly ∧ Idle.unbounded.Target .remoteNetwork .network ∧
+      Idle.unbounded.Target .remoteNetworkNoPouw .sampled ∧ Idle.unbounded.Target .remoteNetworkNoPouw .inferenceOnly ∧
+      Idle.unbounded.Target .remoteNetworkNoPouw .network :=
   ⟨Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _,
     Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _,
     Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _,
-    Idle.target_unbounded _ _, Idle.target_unbounded _ _⟩
+    Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _,
+    Idle.target_unbounded _ _⟩
 
 /-- **`SoundnessOf`'s nontrivial lemma**: its conclusion fails at onsite for a verifier that accepts everything, at the
 idle deployment whose errors are all `0`. -/
@@ -424,5 +476,20 @@ theorem remote_soundness_of_subprotocols_honest :
 the idle deployment whose errors are all `0`. -/
 theorem remote_soundness_of_subprotocols_nontrivial : ¬ Idle.exact.SoundnessFor .remote fun _ => True :=
   Idle.nontrivial_at .remote (Finset.mem_filter.2 ⟨Finset.mem_univ _, rfl⟩)
+
+/-- **`RemoteNetworkNoPouwSoundness`'s honest lemma**: its three hypotheses hold at the idle deployment's compiled
+remote-network without PoUW. -/
+theorem remote_network_no_pouw_soundness_of_subprotocols_honest :
+    Idle.unbounded.SampledProofsSound .remoteNetworkNoPouw ∧ Idle.unbounded.InferenceOnlySound .remoteNetworkNoPouw ∧
+      Idle.unbounded.NetworkCertifierSound .remoteNetworkNoPouw :=
+  ⟨Idle.target_unbounded _ _, Idle.target_unbounded _ _, Idle.target_unbounded _ _⟩
+
+/-- **`RemoteNetworkNoPouwSoundness`'s nontrivial lemma**: its conclusion fails at remote-network without PoUW for a
+verifier that accepts everything, at the idle deployment whose errors are all `0` and whose network
+certifiers' bound fails on every play (`Idle.exactLeaky`): with no PoUW subprotocol, the failing claim is the network
+certifier's. -/
+theorem remote_network_no_pouw_soundness_of_subprotocols_nontrivial :
+    ¬ Idle.exactLeaky.SoundnessFor .remoteNetworkNoPouw fun _ => True :=
+  Idle.nontrivial_network .remoteNetworkNoPouw (Finset.mem_filter.2 ⟨Finset.mem_univ _, rfl⟩)
 
 end Verity

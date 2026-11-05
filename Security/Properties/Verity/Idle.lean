@@ -3,7 +3,8 @@ import Properties.Verity.Game
 /-!
 # An idle deployment: two instances of the names the subprotocols define, built by hand
 
-The witnesses of `Verity.Soundness`, `Verity.RemoteSoundness` and `Verity.SoundnessOf` read these: a small hand-built
+The witnesses of `Verity.Soundness`, `Verity.RemoteSoundness`, `Verity.RemoteNetworkNoPouwSoundness` and
+`Verity.SoundnessOf` read these: a small hand-built
 descriptor, not a parsed file. The device has no on-chip state, no memory, no ops and no bandwidth (`device`); the
 circuit file is read as empty files under the netlist tags (`fileRead`); there are no device rounds, no releases, no
 commitment openings and no gates computed; the world charges nothing over an empty window (`world`); the schedule is one
@@ -13,7 +14,9 @@ the commit phase's check exactly when one of them is the parameters.
 
 `vocab δ W` publishes the error `δ` for every subprotocol, the work certificate `W`, and no collision, forgery or loss
 term. At `unbounded` (`δ = ⊤`) every subprotocol's error is `⊤`, so every target holds. At `exact` (`δ = 0`, `W = 1`)
-every error is `0` while PoUW's claim, a gate computed, fails on every play.
+every error is `0` while PoUW's claim, a gate computed, fails on every play. `exactLeaky` is `exact` in a world where
+no bound on what the network certifiers saw is met (`leaky`), so the network certifier's claim fails on every play: the
+witness at a composite with no PoUW subprotocol.
 -/
 
 namespace Verity.Idle
@@ -127,6 +130,18 @@ noncomputable def unbounded : Vocab device Unit := vocab ⊤ 1
 
 /-- **The deployment whose errors are all `0`**, publishing a work certificate of one gate, which no play computes. -/
 noncomputable def exact : Vocab device Unit := vocab 0 1
+
+/-- **The world in which the network certifiers' bound fails**: `world`, but no bound on what the network certifiers
+saw is met. -/
+def leaky : World device Unit := { world with commWithin _ := False }
+
+/-- **The deployment whose errors are all `0` and whose network certifiers' bound fails on every play**: `exact`, in the
+world `leaky`. -/
+noncomputable def exactLeaky : Vocab device Unit :=
+  { exact with
+    world _ _ _ _ _ := leaky
+    world_window _ _ _ _ _ := rfl
+    world_capacity _ _ _ _ _ := rfl }
 
 end
 
