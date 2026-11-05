@@ -27,7 +27,7 @@ hypothesis carries what the statement doesn't say yet: that the acceptance is th
 Soundness rests on five. Three are `Prop`s in `Assumptions.lean`, taken as hypotheses: SHA-512's
 collision resistance in two forms, and the Lean verifier's randomness for the unit sample. The fourth, A6,
 is the coin server's randomness for the round coins, which the model embodies (A6, below). The fifth, `live-verifier`, is
-the record's custody (`PROTOCOL.md` §17.2): `--zk`'s soundness (`zk_session_sound_custody`) takes it as
+the record's custody (nothing in the record authenticates its writer): `--zk`'s soundness (`zk_session_sound_custody`) takes it as
 `Assumptions.Zk.RecordCustodyZK`, in `Assumptions/Zk.lean`. The table's last row is zero
 knowledge's, not soundness's: a model claim about the honest prover. The development declares no
 `axiom`. So a mis-stated assumption can make a theorem vacuous, but it can never make Lean prove something false.
@@ -61,7 +61,7 @@ hash, nor false of every hash.
   at most `q²/2^513`: the generic birthday bound `q(q − 1)/(2·2^512)` for a budget fixed in advance (`DESIGN.md` §1).
 - **The budgets are not checked.** `StrictCR.Finder.CR H F q` takes `SHA512CRStrict` with the cost `q` on every outcome,
   so nothing in Lean ties `q` to the evaluations the finder makes. Each budget must bound its finder's real SHA-512
-  evaluations, for `t′` one session run's (as in `LinkCR`) and `v` one opening's verification:
+  evaluations, for `t′` the prover's in one session run and `v` one opening's verification:
   - `qF ≥ 2t′ + 2v`, for the rewinding finders (two runs after a cap, and the two conflicting openings verified);
   - `qS ≥ t′ + v`, for the self-clash finder (one run, one further verification);
   - `qT ≥ 2t′ + 2v`, for `tr`'s finder (`TreeRewind.finder`: two runs after the registration);
@@ -69,11 +69,13 @@ hash, nor false of every hash.
   - `qG ≥ (1 + 5M)·t′ + 2k·v`, for zero knowledge's simulator finder (`ZK.GK.Model.finder`: the GK simulator with cap
     `M`, at most `1 + 5M` runs of `V*` on every outcome by `sim_runs_le`, then T6's extraction, which re-verifies the
     two views' `k` coin openings each and hashes at most `2(|path| + 3 + n)` aligned inputs, `coinPairs_length_le`);
-  - `t′` itself, for the link finders stopped at `q` (`CROnly.LinkCRStrict`, `hCRs`). `q` is checked in Lean: the stopped
-    finder's cost, `truncCost`, is at most `q` on every outcome. But that is the modeled cost, `t′` per run played
-    (`cT`), so under the strict form `t′` must bound every run on every outcome, not on average: the prover's
-    evaluations, and the acceptance check `accω` the finder runs on each. The openings' verification and the extraction
-    (`rdT`, `cand`) are charged nowhere, and must fit in `t′` or in `q`'s slack.
+  - a per-run cost `≥ t′ + v`, for the link finders stopped at `q` (the `t'` of `CROnly.LinkCRStrict` and `hCRs`).
+    `q` is checked in Lean: the stopped finder's cost, `truncCost`, is at most `q` on every outcome. But that is the
+    modeled cost, the per-run cost times the runs played (`cT`), so under the strict form the per-run cost must bound
+    every run on every outcome, not on average: the prover's evaluations and the verifier's, whose verdict `accω` reads
+    (as `SampledKSLiveV2` charges its link finders). The extraction (`rdT`) reads only openings that verification
+    checked, and its decoding (`cand`) evaluates no SHA-512 but is charged nowhere, so it must fit in the per-run cost
+    or in `q`'s slack.
 
   A smaller budget makes the hypothesis a claim about SHA-512 that `cr/sha-512` doesn't make, and a bound cited with it
   is unsupported. Tying the five to one per-run count in the signatures would check this in Lean; it is a follow-up.
@@ -131,8 +133,8 @@ coins.
   salts' and the ZK server's tape), so it doesn't cover these bytes, which the model's coin nodes sample.
 - **Seed coins are outside it.** By default M0's non-ZK session derives every coin from one OS seed (`cfg.coin_seed`;
   `live/src/coin_seed.rs`, through `verity.ml.randomness.derive`). Those sessions also rest on `prf/sha-512` (A4's claim)
-  and on the seed commitment's hiding, and no headline covers them. Under `FC_COINS=os` the server samples every round's
-  coins as above (The headline, its coins).
+  and on the seed commitment's hiding, and no headline covers them: the Lean verifier refuses such a session once every
+  check has passed (`ProvedScope.SEED_COINS`).
 - **Tree coins (`--zk`, `--coins tree`).** Under either, the coins are committed, not flipped round by round
   (`coin-tree/hm96-sha512/v2`, `live/src/coin_tree.rs`; the live `PROTOCOL.md` §9). A6 for these sessions is the following.
   - *The coins.* At `Hello`, after the prover's nonce and before its first message (`Commit`), the coin server reads
@@ -202,7 +204,7 @@ the executable's openings to the model's (R11), still open, so `tr` is a named h
 executable accept is the model's) gives one with no positions, at `δ_tree = 0` (`TreeRewind.ofNever`, `ofNever_bound`).
 
 `flock_e2e_drawn_hm96_reads` and `flock_e2e_count_hm96_reads` (`Registered/E2E.lean`) are the sampled-proof-block
-and count forms with registered reads (PROTOCOL.md §16.10): they add `δ_reg`, the event that a registered read's leaf
+and count forms with registered reads (`Flock.HmRow`): they add `δ_reg`, the event that a registered read's leaf
 under the prover's registration is not the registrant's, so that off it the binding's commitment at every registered read
 is the registrant's leaf. They take the layout's registered reads (`rd : Reads`: the held roots, the positions the
 verifier's program reads, and the registrant's openings, intended to prove), `hchk` (on every outcome the executable
@@ -249,18 +251,17 @@ needs `RowsCert` per template and the Definition's Boolean semantics in Lean (Th
 Once every Definition lowers to a Boolean circuit over AND, XOR and NOT, a generic
 Boolean-semantics lemma replaces the per-template `RowsCert`.
 
-**Its coins.** The statement is for live uniform OS coins flipped each round: the model's proof coins are uniform and
-sampled after the prover's message, as the coin server's `os` coins are under A6. M0's non-ZK session samples them under
-`FC_COINS=os` on both sides (`live/src/bin/flock-circuit.rs`, `seed_coins()`), with no seed and no PRF. Its identity
-then names the mode, and `flock-verify verify --coins os` binds that identity (`Tags.withCoins`; the verifier's
-`PROTOCOL.md` §7.1). The benches run M0 so by default (`verity/ml/flock/pod/70-class-sweep.sh`, `60-circuit.sh`,
-`61-circuit-cell.sh`), and their records name the coins (`coins: live-os`). The binary's default still derives every coin
-from one OS seed through a SHA-512 PRF (`config_with` sets `cfg.coin_seed` from `seed_coins()`; `live/src/coin_seed.rs`).
-That rests on `prf/sha-512` and the seed commitment's hiding, and the headline takes neither. So the headline is cited
-only for runs on per-round OS coins (a session whose identity names `live-os`, or a bench point with `coins: live-os`)
-or under `--coins tree`, with A6's tree term.
+**Its coins.** The statement is for live uniform coins: the model's proof coins are uniform and sampled after the
+prover's message. M0's non-ZK session has them on the challenger's keyed coin tree under `FC_COINS=tree` on both sides
+(`serve --tree-from`), which `flock-verify verify --coins tree` reads (the verifier reads coins only from a challenger's
+log). The benches run M0 so by default (`verity/ml/flock/pod/70-class-sweep.sh`, `60-circuit.sh`, `61-circuit-cell.sh`),
+and their records name the coins (`coins: coin-tree`). The binary's default still derives every coin from one OS seed
+through a SHA-512 PRF (`config_with` sets `cfg.coin_seed` from `seed_coins()`; `live/src/coin_seed.rs`). That rests on
+`prf/sha-512` and the seed commitment's hiding, and the headline takes neither, so the Lean verifier refuses such a
+session once every check has passed (`ProvedScope.SEED_COINS`). So the headline is cited only for runs under
+`--coins tree` or `--zk`, with A6's tree term.
 The identity and a bench point's `coins` say which mode ran. The Lean verifier replays the recorded coins, so that they were
-the verifier's own OS samples, each sampled after the prover's message, is the record's custody (`PROTOCOL.md` §17.2) and
+the verifier's own OS samples, each sampled after the prover's message, is the record's custody and
 A6, which no check of the record establishes. The custody is `live-verifier`, named in every mode (the table above).
 
 ## Premises the lock lists by name
@@ -274,10 +275,10 @@ which guarantees take it.
 Not soundness's: the PoUW window's keyed draw takes A4 and A5, and `HmRowComputes` is a fact about the circuit, still to
 prove. Completeness takes none on the record's JSON: that the verifier's total parser (`Flock.JsonParse.parse`) reads
 back what the honest prover's printer (`printJ`) and `canon` print is proved
-(`Proofs/Flock/Claims/Complete/Json/RoundTrip.lean`). Zero knowledge's two are `Hm96Hiding`, stated in the spec (`Claims.Hm96Hiding`, `Definitions/Claims/Hm96.lean`,
+(`Proofs/Flock/Claims/Complete/Json/RoundTrip.lean`). Zero knowledge's two are `Hm96Hiding`, stated in the spec (`Claims.Hm96Hiding`, `Definitions/Core/Hm96.lean`,
 where the claims list it as a named assumption) and read in `Assumptions.lean` (`hm96Hiding_apply`), and
 `PadNonvanishing`, in `Assumptions.lean`; both are in `docs/zk-proof-public.md`. `Hm96Hiding` is now proved for hm96 at a bound on its gap (`CROnly.hm96Hiding_gap`; for
-hm96-sha512 over a uniform key, `CROnly.hm96_sha512_bad_keys`, What is pinned, below), and `PadNonvanishing` is proved at
+hm96-sha512 over a uniform key, `CROnly.hm96_sha512_bad_keys`, What the lock records, below), and `PadNonvanishing` is proved at
 M1's padding constant (`ZK.padNonvanishing40`: `Ŵ_cols(ω_q)` is 0 or 1, and `PAD_C = x` is neither). So zero knowledge's guarantees
 take no premise on the key: they are stated at `hidingGap My saltHash`, the hiding gap of hm96-sha512's pinned key `K*`,
 which nothing proves small. The detail, and what still takes `hash-derived-key` (`Assumptions.HashDerivedKey`):
@@ -385,14 +386,14 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
   that rows satisfied with the constant 1 carry the gate circuit's outputs, checked in the kernel. Once every Definition
   lowers to a Boolean circuit over AND, XOR and NOT, a generic Boolean-semantics lemma replaces the
   per-template `RowsCert`.
-- **The statement's form** is no hypothesis: `verify` refuses forms the proof omits (PROTOCOL.md §16.15).
+- **The statement's form** is no hypothesis: `verify` refuses forms the proof omits (`Flock.ProvedScope`).
 - **The link points' layout** is a hypothesis (`Statement.LinkLayout`). Each region's free bits must be distinct and
   read link coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …` must fit inside the point. The
-  statements of PROTOCOL.md §16 satisfy it.
+  statements of `Flock.Statement` satisfy it.
 - **The placement** (`Placement`; `lowering_sound`, `README.md` §1.5):
   - Placed (`Placement`) means two things:
     - the block matrices' rows at the unit's computed columns read exactly its rows' columns;
-    - the rows at its constant read the pin, as every slot's constant is wired to it (spec §16.1).
+    - the rows at its constant read the pin, as every slot's constant is wired to it (`Flock.Statement`).
   - A unit's input columns on one gate also carry one value in every satisfying witness (`UnitPlace.aliased`): they
     copy one source's position, or forced-zero rows.
   - **Proved from the executable's accept step** for `hm96-sha512/row/v1` and `/row/v2` statements
@@ -425,7 +426,7 @@ before the session's first coin, not bounds state by state.
 
 ## Cryptographic assumptions and coins
 
-- **SHA-512 for the Merkle openings** (spec §14, with SHA-512 leaves and nodes), under the two forms above: the
+- **SHA-512 for the Merkle openings** (`Flock.Merkle`, with SHA-512 leaves and nodes), under the two forms above: the
   compiled theorem needs only `SHA512CRStrict`, for every classical prover, and the audit's value layer adds
   `SHA512CRExpected`. DESIGN.md §1 explains why SHA-512 rather than SHA-256, and how the bound depends on the hash's
   width.
@@ -435,12 +436,13 @@ before the session's first coin, not bounds state by state.
 - **Statement binding** (the statement digest, Σ and `link_sha256`). These are in round 0's kept bytes, fixed before any
   coin. Their own collision resistance matters to what the statement refers to (registered data, linked proofs), not to
   this theorem.
-- **`os` coins** (the default). Each round's coins are uniform and unknown to the prover before it sent the round. They
-  come from the verifier's `/dev/urandom` (spec §7.1). The randomness is trusted, not proved. For the unit sample it is
-  A3. The theorems, the headline among them, are for these coins.
+- **Live coins.** The theorems, the headline among them, are for coins that are uniform and unknown to the prover
+  before it sent the round, as the model's coin nodes sample them. A session reads them from the challenger's keyed coin
+  tree (`tree` coins, below). The randomness is trusted, not proved: A6, and for the unit sample A3.
 - **`seed` coins** (`coin-commit/sha256/v1`; M0's non-ZK session's default, `cfg.coin_seed`, `coin-commit/sha512`)
   add two assumptions: the seed commitment hides the seed, and SHA-256 in counter mode is a PRF. No theorem takes them,
-  so a run on seed coins is outside the headline (The headline, its coins).
+  so a run on seed coins is outside the headline (The headline, its coins), and the Lean verifier refuses it once every
+  check has passed (`ProvedScope.SEED_COINS`).
 - **`tree` coins** (`--zk`, `--coins tree`; `coin-tree/hm96-sha512/v2`): the `--zk` headlines' coins, and a plain
   one's under `--coins tree`. Soundness pays `N·2^-256` for the commitment's statistical hiding (A6, tree coins); zero
   knowledge uses its binding (`cr/sha-512`).
@@ -453,24 +455,24 @@ before the session's first coin, not bounds state by state.
   (`cr/sha-512` in the Flock SHA-512 row); A1's proof took `rs-proximity-johnson` off. An audit's integrity profile
   would add `SHA512CRExpected` as `ecr/sha-512`, a `verity.core.claims` id that no row cites yet.
 
-## What is pinned
+## What the lock records
 
-`lean-audit.json` records each pinned theorem's statement (`pins`) and the definitions it reads (`reads`). The audit
+`lean-audit.json` records each guarantee's statement (`guarantees`) and the definitions it reads (`reads`). The audit
 fails when either changes until the record is rewritten. A rewritten record is shown when it lands on `main`; nobody
 signs off and nothing waits on it. The
-pins include the table theorems (`README.md` §1.1 and §1.2, with their `_exec` forms), `execArith_correct` and
+guarantees include the table theorems (`README.md` §1.1 and §1.2, with their `_exec` forms), `execArith_correct` and
 `Merkle.opening_binding`; none takes a named assumption. So do the knowledge-soundness theorems of `README.md` §1.3
 (`table_knowledge_sound`, `table_knowledge_sound_joint`, `table_knowledge_sound_joint_tight`, `session_knowledge_sound`,
 and the batched session's `flock_batched_knowledgeSoundE`), and the link theorem, `flock_batched_linkSoundE`, whose bound is
 `linkBoundCR`: finite exactly at the provers whose link finders satisfy `SHA512CRExpected`. The end-to-end skeleton's `flock_e2e_count` and
-`flock_e2e_drawn` are pinned too; they take `SHA512CRExpected` for `σ`'s link finders as `hCR`. So are the four
+`flock_e2e_drawn` are guarantees too; they take `SHA512CRExpected` for `σ`'s link finders as `hCR`. So are the four
 `flock_e2e_*_hm96`, which also take `SHA512CRStrict` for the knowledge term's finders (`hKS`) and `δ_tree`'s (`hT`).
 So are the headline, `Prog.flock_headline` (its footprint is The headline, above), and the theorems the footprints cite
 as proved: the `StrictCR` terms (`table_sound_compiled_strict`, `ksBoundAccB_le_strict`, `ksAvgBE_le_strict`,
 `tree_le_strict`, `TreeRewind.le`, `TreeRewind.ofNever_bound`), `Teeth`'s four (`strict_of_injective`,
 `expected_of_injective`, `not_strict_const`, `not_expected_const`), `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn`,
 and the certificate's `IsRowsUnit.computes_of_cert`.
-The `cr/sha-512` restatements are pinned beside them (`FlockSoundness.CROnly`: `expected_of_strict`, `linkCR_of_strict`,
+The `cr/sha-512` restatements are guarantees beside them (`FlockSoundness.CROnly`: `expected_of_strict`, `linkCR_of_strict`,
 `linkBoundE_at_cube`, each `flock_e2e_*`, `uprog_e2e_*`, `prog_e2e_*` and `flock_headline`), and so is zero knowledge's
 `Hm96Hiding`, proved: `hm96Hiding_gap` (no hypothesis, at `δ₁` the hiding gap), the leftover hash lemma
 (`sum_hidingGap_le`, `hankel_universal`), hm96-sha512's values (`hm96_sha512_sum`: mean `2^-257` over a uniform key;
@@ -479,13 +481,13 @@ discharged (`session_shvzk_gap`, `session_shvzk_le`, `adaptive_prefinal_gap`, `a
 `adaptive_prefinal_key`, `adaptive_prefinal_hm96_sha512`). What zero knowledge's guarantees leave open about the key is
 that the pinned key's gap is small: they are stated at it, and `hash-derived-key` (`hm96/PROTOCOL.md` §2a) bounds it by
 `2^-193` only where a lemma or `RecursiveAudit` states that bound.
-Zero knowledge's Theorem GK is pinned (`ZK/GK/`): `Model.gk_simulate` with its coin-tree forms
+Zero knowledge's Theorem GK is a guarantee (`ZK/GK/`): `Model.gk_simulate` with its coin-tree forms
 `Model.gk_simulate_coins` and `Model.gk_simulate_coins_keyed`, `gk_simulate_hm96` and `gk_simulate_avg`, the run bounds
 `Model.sim_runs_le`, `Model.sim_runs_ev` and `Model.sim_runs_tail`, the two distances `prefinalClose_hm96` and
 `rewindClose_hm96`, and T6's extraction (`coinColl_isColl`, `coinCollKeyed_isColl`, `bindColl_isColl`,
 `bindCollKeyed_isColl`, and its cost `coinPairs_length_le`).
 `flock_inputs_sound`, `flock_session_sound`, `lowering_sound` and `mcaError_le_bchks25` are not
-pinned. A theorem that is not in `pins` is still audited (standard axioms, kernel replay), but a change to its statement
+guarantees. A theorem that is not in `guarantees` is still audited (standard axioms, kernel replay), but a change to its statement
 would not fail the audit.
 
 ## Upstream status

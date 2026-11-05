@@ -176,14 +176,14 @@ theorem finRepErased_at (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.F
   have hxe : (_root_.Flock.Firewall.Finish.claimsOf q.xs).map (·.x) = extras.map (·.x) := by
     rw [_root_.Flock.Firewall.Finish.claimsOf_map_x, hxs]
   rw [_root_.Flock.Firewall.Finish.repFwC_claims_x _ _ _ _ _ _ _ _ _ hxe] at hrun'
-  rw [hk2, hkr, hsch, htp, hex, hlp] at hrun'
+  rw [hk2, hkr, hsch, htp] at hrun'
   have he : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.extra (Masked.ptsE (finCoins x ops) spec) = .ok extras := by
     rw [← hk2]
     exact hext
   obtain ⟨p', hcut, hpe⟩ := Masked.swSrcE_repCut_v (LeanRelease.ofLoopLink L₀ src (realOf src)) (ν, t)
     (Masked.UE.tapeZk t) Loop.frepOf x hx w hR t (finCoins x ops) hA (refK x) s0 spec hsx j r extras he
     (vs x w ν (finCoins x ops) (finS.seenOf x t)) q hq' hlay hz hpads (hrows j)
-    (fun i hi => hmk i (by rw [hLy]; exact hi)) tb.st hst _ tb.g hg tb.cm0.toC ic'.toC
+    (fun i hi => hmk i (by rw [hLy]; exact hi)) tb.st hst _ tb.g hg tb.cm0.toC ic'.toC tb.extra tb.lanePad hex hlp
     (fun l => _root_.Flock.Firewall.Finish.saltAt (q.hiSalts.getD (l - 1) ByteArray.empty)) hsalt rfl hl hl0 hrun'
   -- the view run is that cut but for level 0's commitment, the pads commitment and the final-only data
   obtain ⟨hcap, hlays⟩ := cms_cm0 vs src x w hsc hR hS0 hsx hschs hcms hk hRep

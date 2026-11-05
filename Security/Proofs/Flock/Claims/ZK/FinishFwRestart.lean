@@ -120,7 +120,8 @@ theorem wS_foldKs (coin : ℕ → ℕ → _root_.Flock.F128) (p0 : ℕ) (b : Arr
 
 set_option maxHeartbeats 4000000 in
 /-- **A deployed rep's level-0 restart is `Σ y₁'·bFold`**: where `repFwC` on table `j`'s rep `r`, answered by the opened
-coins from the rep's base at the packed table of the witness's trace (`hg`) and the tape's extra lanes (`hext`),
+coins from the rep's base at the packed table of the witness's trace (`hg`) and extra lanes that are the tape's below
+`2^cols` (`hext`),
 returns with extra claims at the region points of the link (`Drive.extras`, `hxsz`, `hxs`), its proof's level-0
 restart `t'` is `Σ_col y₁'(col)·bFold(col)` at the tape's mask slot and extra lanes. -/
 theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)
@@ -132,7 +133,8 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
     (st : _root_.Flock.Setup) (hst : st = _root_.Flock.Setup.ofCircuit (stAt x j)) (tPad : ℕ) (dom : ByteArray)
     (g : Array _root_.Flock.F128) (hg : g = ligTab x w τ j) (cm0 : FlockComplete.Commit)
     (pads : FlockComplete.PadsZk) (ic : FlockComplete.InnerCommit) (vals : Array _root_.Flock.F128)
-    (extra lanePad : ℕ → ℕ → _root_.Flock.F128) (hext : extra = (exeTape τ).extra j.val)
+    (extra lanePad : ℕ → ℕ → _root_.Flock.F128)
+    (hext : ∀ e i, i < 2 ^ (lv0 x j).cols → extra e i = (exeTape τ).extra j.val e i)
     (salt : ℕ → ℕ → ByteArray) {t₀ : _root_.Flock.Transcript} {l : Array Msg}
     (hl : l.size = repBase x (2 * j.val + r.val)) {p : _root_.Flock.Zk.ZkProof} {t : _root_.Flock.Transcript}
     {l' : Array Msg}
@@ -143,7 +145,7 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1 r col *
         Composed.bFold (zkTab x j).table (stAt x j) (czExe PE x c j) r col.val := by
-  subst hg hext
+  subst hg
   -- the run's steps
   dsimp only [_root_.Flock.Firewall.Finish.repFwC] at h
   obtain ⟨⟨zp, zc⟩, t₁, l₁, h₁, h⟩ := _root_.Flock.Firewall.Finish.run_bind_ok h
@@ -315,9 +317,9 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
         FlockComplete.Replay.Lg.gv (FlockComplete.ZkTables.Level0.blinded
           (FlockComplete.LigLock.tabS (ligCoin c) (ligP0 x j r) (ligTab x w τ j) (zkTab x j).sch.k0)
           (FlockComplete.LigLock.rhoS (ligCoin c) (ligP0 x j r) (zkTab x j).sch.k0)
-          (FlockComplete.ZkTables.Level0.pairLane ((exeTape τ).extra j.val) (2 * r.val)
+          (FlockComplete.ZkTables.Level0.pairLane extra (2 * r.val)
             (FlockComplete.LigLock.tabS (ligCoin c) (ligP0 x j r) (ligTab x w τ j) (zkTab x j).sch.k0).size)
-          (FlockComplete.ZkTables.Level0.pairLane ((exeTape τ).extra j.val) (2 * r.val + 1)
+          (FlockComplete.ZkTables.Level0.pairLane extra (2 * r.val + 1)
             (FlockComplete.LigLock.tabS (ligCoin c) (ligP0 x j r) (ligTab x w τ j) (zkTab x j).sch.k0).size)) col := by
     obtain ⟨hnL, hL, -, -, -, hm⟩ := tabC_z PE x j
     obtain ⟨-, -, hl0, -, -, -⟩ := zkLevel0 (zkTab x j).hz
@@ -394,7 +396,8 @@ theorem fwRestart_at (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tap
       have e1 := (agrees0_exe PE).ext x τ j r 1 ⟨col, hcol⟩
       simp only [Fin.val_zero, Fin.val_one, Nat.add_zero] at e0 e1
       unfold FlockComplete.ZkTables.Level0.pairLane
-      rw [hρ, FlockSoundness.Refine.getElem!_range_map _ hit, FlockSoundness.Refine.getElem!_range_map _ hit]
+      rw [hρ, FlockSoundness.Refine.getElem!_range_map _ hit, FlockSoundness.Refine.getElem!_range_map _ hit,
+        hext _ _ h2, hext _ _ h2]
       exact congrArg₂ (· + ·) (congrArg₂ (· * ·) rfl (congrArg FlockLevel3.embed e0))
         (congrArg₂ (· * ·) rfl (congrArg FlockLevel3.embed e1))
   -- the restart, column by column

@@ -1,4 +1,5 @@
-"""A served H1 window's drawn J10-R units staged as C-Flock statements, and the statements file core's credit verifies
+"""A served H1 window's drawn units staged as C-Flock statements (a J10-R K's a statement a call, a lanes-form K's each
+unit's lanes and combine), and the statements file core's credit verifies
 (``--statements``, `credit.STATEMENT_KEYS`), from the serve dir and the prover's own state. ``benchmarks/pouw/h1_prove/drawn.py``
 is its CLI, which reads ``--checkpoint`` with the live challenger's model registry (``checkpoint_weights``) and binds
 ``check`` to credit's own verification (``verified``), running `run` on its arguments.
@@ -33,12 +34,29 @@ records), or ``--prover``. DIR is `pouw_h1_circuits`' output, whose manifest bin
    ``--recompose`` builds K's flat statement (`stager`, bound to the manifest's bind) instead, its lowered outputs held to
    the word reference's. W/c<call>/ gets inst.bin, pub.bin, pin.txt and circuit.txt; W/plan.json lists them.
 
-``statements``: after each W/c<call>/ is proved (`hidden_zk/job.sh`'s ``session``: exactly one session, all its
-instances drawn), the statements file: each call's `challenger.statement` (circuit, pub.bin, its session).
+**The lanes form** (`credit`'s, `leaf_lanes`): at a K --circuits' manifest commits as ``lane<K>`` and ``combine<K>``
+(`credit.form_of`; `pouw_h1_circuits --lanes K`), each drawn unit is a leaf proved as its (R/4)(C/8) lanes and the combine
+(`leaf_lanes.statements`, their rows `drawn_rows`'), each a statement of one instance on its committed file, so a K
+whose tile statement is past C-Flock's block (K 2048 on the 32 × 32 tile) is proved in pieces each within it. The leaf is
+v1's (`credit.lanes_shape` refuses any other, J10-R's among them). Its partials (`h1zy.lane_partial` of each lane's
+rows) are committed after the draw, ``<prefix>partials@<u>`` under the window's draw root (`produced.commit`), all of them one produced record
+(`produced.record`, the draw coin's); its call's receipts ``receipt@<c>`` are rebuilt as the word reference computes them
+(`receipt_value`, `h1zy.reference` of each of the call's units) and held to the root the window registered; each
+statement's ``--registered`` file is credit's own (`credit.leaf_registered_file`), its known rows (``pub``, ``admit`` and
+``o0``) committed under `leaf_lanes.known_salt`, and its ok the word reference's (`h1zy.lane_reference`,
+`h1zy.combine_reference`), refused unless 1. W/u<unit>-<statement>/ gets each statement's files; W/plan.json lists them
+under ``leaves`` beside the record (``produced``) and each leaf Program's descriptor (``leaf_programs``, the manifest's
+``<file>.program.json``).
 
-``check``: credit's own verification of those statements over the window's drawn units (``verified``: the
-CLI's is `credit._verified` with the Lean ``flock-verify`` at FLOCK_VERIFY, then `credit._proved`), the prover's look
-before it hands them over: ``PROVED`` or ``REFUSED``.
+``statements``: after each W/c<call>/ and W/u<unit>-<statement>/ is proved (`hidden_zk/job.sh`'s ``session``: exactly
+one session, all its instances drawn), the statements file: each call's `challenger.statement` (circuit, pub.bin, its
+session), and with leaves the lanes evidence (`credit.LANES_KEYS`: ``leaf_programs``, ``produced`` and those statements
+with each leaf statement's ``unit`` and ``statement``).
+
+``check``: credit's own verification of those statements over the window's drawn units under its draw (``verified``:
+the CLI's is `credit._verified` with the Lean ``flock-verify`` at FLOCK_VERIFY, then `credit._proved`), the prover's look
+before it hands them over: ``PROVED`` or ``REFUSED``. Credit's verdict of record (`verifier.RECORD_VERDICT` ``lean``,
+`PouwCheck.Verified`) refuses the lanes form until its Lean mirror; this is the Python reference's.
 """
 from __future__ import annotations
 
@@ -58,11 +76,17 @@ import numpy as np
 
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as CR
+from verity.core.protocols.pouw import leaf_lanes as LL
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.circuit import h1window as HW
+from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.sampled_proofs.one_stage import produced as PR
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity_vllm.errors import Refused
+from verity_vllm.protocols.pouw.h1.drawn_rows import (LEAF_NAMES, LEAF_OUT_ROWS, LEAF_PROGRAM, held, leaf_rows,
+                                                     leaf_statement, operands, partials, receipt_value,
+                                                     receipt_words, split_record, split_row)
 
 NAME = "unit/pouw-h1-tile"
 RECORD = "h1/w{w}/pouw-h1-calls.json"
@@ -73,14 +97,14 @@ MANIFEST = "circuit-files.json"
 PLAN = "plan.json"
 SALT_BYTES = CC.SALT_BYTES
 OK = np.array(CC.OK_ROW, np.uint16)
-M32 = (1 << 32) - 1
 _random = os.urandom
 
 #: ``--checkpoint``'s reader: (checkpoint dir, the window's linears ``(name, K, n)``, K) -> each of K's linears' int8 codes
 #: (n, K) and f32 s_w (n,), in the window's order
 CheckpointWeights = Callable[[Path, Sequence[tuple[str, int, int]], int], list[tuple[np.ndarray, np.ndarray]]]
-#: ``check``'s verifier: (the statements, ``{k<K>: SHA-512}`` of --circuits' manifest, the window (`window_of`), its drawn
-#: units, the Lean ``flock-verify``) -> each drawn unit's proof outcomes and None, or None and credit's refusal
+#: ``check``'s verifier: (the statements, --circuits' manifest's ``files`` (``k<K>``, or ``lane<K>``, ``combine<K>`` and
+#: ``leaf_programs``), the window (`window_of`, its ``draw`` among it), its drawn units, the Lean ``flock-verify``) -> each
+#: drawn unit's proof outcomes and None, or None and credit's refusal
 Verified = Callable[[Any, dict, dict, list[int], Path], tuple[Any, tuple[str, str] | None]]
 
 
@@ -101,23 +125,6 @@ def stager(k: int, tile: Sequence[int], m: int, circuit: Path, bind: dict) -> An
     from verity_flock import class_statement as CS
     t = template(k, tile, m)
     return CS.UnitStager(t, NAME, HW.statement_rows(t), HW.STATEMENT_OUT_ROWS, circuit=circuit, bind=bind)
-
-
-def split_row(words: np.ndarray) -> tuple[list[int], int]:
-    """An A or B row's u16 words (`h1zy.ROW`: its codes' bytes, then the f32 scale) back to its codes (u8 encodings) and
-    its scale (the f32 encoding)."""
-    b = np.asarray(words, np.uint16).astype("<u2").tobytes()
-    return list(b[:-4]), int.from_bytes(b[-4:], "little")
-
-
-def split_record(words: np.ndarray, cells: int) -> tuple[list[int], list[int]]:
-    """A unit's record words (`h1zy.RECORD`) back to its cells' z (s32 words) and y (bf16 encodings)."""
-    w = np.asarray(words, np.uint16)
-    return [int(v) for v in np.ascontiguousarray(w[:2 * cells].astype("<u2")).view("<u4")], [int(v) for v in w[2 * cells:]]
-
-
-def receipt_words(rc: Sequence[int]) -> np.ndarray:
-    return np.array([int(v) & M32 for v in rc], dtype="<u4").view("<u2").astype(np.uint16)
 
 
 def _table(positions: Sequence[int]) -> tuple[list[int], list[int], list[int]]:
@@ -192,7 +199,8 @@ def window_of(serve_dir: Path, window: int) -> dict[str, Any]:
         roots.setdefault(e.get("value"), []).append(e.get("root"))
     return {"record": record, "raw": raw, "program": hashlib.sha512(raw).hexdigest(), "layout": layout,
             "shape": CR.shape_of(raw), "root": c["session"]["root"], "steps": len(c["rounds"]),
-            "salt": PHC.program_salt_of(c).hex(), "entries": list(served["entries"]), "roots": roots}
+            "salt": PHC.program_salt_of(c).hex(), "entries": list(served["entries"]), "roots": roots,
+            "draw": c.get("draw")}
 
 
 def draw_k(serve_dir: Path, k: int | None) -> int:
@@ -324,15 +332,6 @@ def weights_key(a: Any, win: dict) -> tuple[bytes, str]:
                   "committed b/<K> under, its --h1-model); a server with neither salted b/<K> under a key it never kept")
 
 
-def held(reg: G.Registered, entry: dict, what: str) -> G.Registered:
-    """`reg` when it has the root and domain credit's ``--registered`` port `entry` reads; else Refused."""
-    if (reg.root.hex(), reg.domain.domain_id.hex()) != (entry["root"], entry["domain"]):
-        raise Refused(f"{entry['value']}, rebuilt from {what}, is not the tree the window registered (root "
-                      f"{reg.root.hex()[:16]}... domain {reg.domain.domain_id.hex()[:16]}..., registered "
-                      f"{entry['root'][:16]}... domain {entry['domain'][:16]}...)")
-    return reg
-
-
 # -- staging --------------------------------------------------------------------------------------------------------------
 
 def call_rows(win: dict, call: int, units: list[int], reg: dict, values: dict[str, G.Registered], pub: G.Registered,
@@ -393,19 +392,18 @@ def reference_check(z: dict, outs: dict, win: dict, k: int, roots: tuple[bytes, 
 
 
 class FileStager:
-    """`UnitStager`'s ``stage`` on the circuit file `path` the period committed for J10-R's statement at K (`template`
-    at slot `m`),
-    read and never composed (the K 2048 J10-R composition takes some hundreds of GB): its META (its second line), its pin
-    and class digest (`circuit.digest`, `circuit.class_digest`) streamed from the file, the statement's rows `UnitStager`'s
-    for the template (`h1window.statement_rows`), and each unit's outputs the word reference's (`unit_outputs`), which
-    ``outs`` gives. `circuit.write` reads only these of a circuit; the files it writes are the recomposed stager's byte for
-    byte."""
+    """`UnitStager`'s ``stage`` on the committed circuit file `path` of the statement of Definition id `definition` over
+    the rows `in_rows` and `out_rows` (`UnitStager`'s), read and never composed (the K 2048 J10-R composition takes some
+    hundreds of GB): its META (its second line), its pin and class digest (`circuit.digest`, `circuit.class_digest`)
+    streamed from the file, and each instance's outputs the word reference's, which ``outs`` gives. `circuit.write` reads
+    only these of a circuit; the files it writes are the recomposed stager's byte for byte. J10-R's statement's rows are
+    `h1window.statement_rows` of its `template`; a lanes-form leaf's are `leaf_rows`' over its file's template (the
+    manifest's ``templates``)."""
 
-    def __init__(self, k: int, tile: Sequence[int], m: int, path: Path, name: str = NAME) -> None:
+    def __init__(self, path: Path, definition: str, in_rows: Sequence[tuple], out_rows: Sequence[tuple],
+                 name: str = NAME) -> None:
         from types import SimpleNamespace
         from verity_flock import circuit as FC
-        t = template(k, tile, m)
-        in_rows, out_rows = HW.statement_rows(t), HW.STATEMENT_OUT_ROWS
         with open(path, "rb") as f:
             first, second = f.readline(), f.readline()
             meta = json.loads(second[5:])
@@ -420,7 +418,7 @@ class FileStager:
         self.row_ports = [r for r, *_ in in_rows]
         def port(nm: str) -> SimpleNamespace:
             return SimpleNamespace(name=nm, dtype="u16")
-        content = json.dumps([t.id, [list(r[:3]) + [list(r[3])] for r in in_rows],
+        content = json.dumps([definition, [list(r[:3]) + [list(r[3])] for r in in_rows],
                               [[s, list(ps)] for s, ps in out_rows]]).encode()
         outs = sorted({p for _s, ps in out_rows for p in ps})
         self.sub = SimpleNamespace(id=name, template=SimpleNamespace(id="unit-class"), inputs=[port(r) for r in self.row_ports],
@@ -448,6 +446,81 @@ class FileStager:
         return {"meta": self.meta, "outs": self.outs, "salts": salts, "circuit_sha512": self.pin}
 
 
+# -- the lanes form ---------------------------------------------------------------------------------------------------------
+
+def leaf_stagers(k: int, tile: Sequence[int], circuits: Path, manifest: dict) -> dict[str, tuple[FileStager, Path, str]]:
+    """Each of K's leaf statements' `FileStager` on --circuits' committed ``<kind><K>`` file, its path and its leaf
+    Program's descriptor (hex): each file's SHA-512 the manifest's ``files`` and each descriptor's its ``leaf_programs``
+    (what the period-open committed), its Definition id the manifest's ``templates``."""
+    files, out = manifest.get("files", {}), {}
+    for kind in (LL.LANE, LL.COMBINE):
+        name = f"{kind}{k}"
+        path = (circuits / f"{name}.circuit.txt").resolve()
+        desc = circuits / LEAF_PROGRAM.format(name=name)
+        tid = manifest.get("templates", {}).get(name)
+        if name not in files or not path.is_file() or not desc.is_file() or tid is None:
+            raise Refused(f"--circuits has no {name} file, leaf Program and template id: build them "
+                          f"(pouw_h1_circuits --lanes {k})")
+        raw = desc.read_bytes()
+        if hashlib.sha512(raw).hexdigest() != files.get(CR.LEAF_PROGRAMS, {}).get(name):
+            raise Refused(f"--circuits' {desc.name} is not the leaf Program the manifest commits ({CR.LEAF_PROGRAMS} {name})")
+        st = FileStager(path, tid, leaf_rows(kind, k, tile), LEAF_OUT_ROWS, LEAF_NAMES[kind])
+        if st.pin != files[name]:
+            raise Refused(f"{name}'s circuit (SHA-512 {st.pin[:16]}...) is not --circuits' {name} file "
+                          f"({files[name][:16]}...), the one the period-open committed")
+        st.outs = {LL.OK: np.array([LL.OK_ROW], np.uint16)}
+        out[kind] = (st, path, raw.hex())
+    return out
+
+
+def stage_leaves(a: Any, win: dict, k: int, units: list[int], values: dict[str, G.Registered], rebuild: Callable,
+                 work: Path, circuits: Path, manifest: dict, plan: dict) -> list[G.Registered]:
+    """K's drawn lanes-form leaves `units`, each staged as its lanes and the combine on K's committed files
+    (`leaf_stagers`), into ``plan``'s ``leaves`` and ``leaf_programs``; their partials' trees, which the plan's produced
+    record holds (`stage`). ``values``: the window's rebuilt values so far, which `rebuild` (value, call) adds to."""
+    lay = win["layout"]
+    why = CR.lanes_shape(lay, win["shape"], k)
+    if why is not None:
+        raise Refused(f"K = {k}'s drawn leaves: {why}")
+    draw = win["draw"] if isinstance(win.get("draw"), dict) else {}
+    draw_root = draw.get("root")
+    if not isinstance(draw_root, str):
+        raise Refused("the window's record names no draw root, under which a leaf's partials are committed")
+    stagers = leaf_stagers(k, lay["tile"], circuits, manifest)
+    plan["leaf_programs"].update({f"{kind}{k}": desc for kind, (_s, _p, desc) in stagers.items()})
+    trees = []
+    for u in units:
+        call = CR.leaf_call(lay, u)[0]
+        at = CR.leaf_place(lay, win["shape"], u, win["steps"])
+        if len(win["roots"].get(at[LL.RECEIPT][0], ())) != 1:
+            raise Refused(f"drawn leaf {u}: the window registers its call's {at[LL.RECEIPT][0]} "
+                          f"{'twice' if win['roots'].get(at[LL.RECEIPT][0]) else 'not'}, which its combine reads: serve "
+                          "the window with its zy receipts (served.Served.receipts) to prove it as lanes")
+        for v in (LL.A, LL.B, LL.ZY, LL.RECEIPT):
+            if at[v][0] not in values:
+                values[at[v][0]] = rebuild(v, call)
+        x = operands(win, u, values)
+        name = LL.served(win["shape"]["prefix"], LL.PARTIALS, u)
+        tree = PR.commit(win["program"], name, partials(x).tolist(), draw_root, schema=G.SCHEMA_V2)
+        trees.append(tree)
+        for st in LL.statements(*lay["tile"]):
+            kind, ln = st
+            rows, salts, registered, reg = leaf_statement(win, u, st, x, values, tree, {name: tree.root.hex()}, draw_root)
+            stager, circuit, _desc = stagers[kind]
+            tag = f"u{u}-{kind}" + ("" if ln is None else str(ln))
+            d = work / tag
+            got = stager.stage(rows, d, _random(32), salts=salts, indices=[0], set_name=f"pouw-h1-w{a.window}-{tag}",
+                               tables=rows, refs={p: [0] for p in rows}, registered=registered)
+            (d / "pin.txt").write_text(stager.pin)
+            (d / "circuit.txt").unlink(missing_ok=True)
+            (d / "circuit.txt").symlink_to(circuit)
+            (d / "registered.json").write_text(json.dumps(reg))
+            plan["leaves"].append({"unit": u, "statement": [kind, ln], "k": k, "dir": str(d.resolve()), "instances": 1,
+                                   "circuit": str(circuit), "pin": got["circuit_sha512"]})
+        print(f"STAGED leaf {u}: its {LL.lanes(*lay['tile'])} lanes and combine", flush=True)
+    return trees
+
+
 def stage(a: Any) -> int:
     serve_dir, work = Path(a.serve_dir), Path(a.work)
     prover = Path(a.prover) if a.prover else serve_dir / PROVER.format(w=a.window)
@@ -469,14 +542,30 @@ def stage(a: Any) -> int:
     print(f"DRAWN at K = {k_draw}: {sum(map(len, drawn.values()))} units in calls {sorted(drawn)}", flush=True)
     population = sum(size for size, _w in CR.call_work(lay))
     _rows, _salts, ok = CR.ok_table(win["program"], f"{win['shape']['prefix']}{CR.OK_VALUE}", win["root"], population)
-    plan = {"window": a.window, "draw_k": k_draw, "program": win["program"], "calls": []}
+    plan = {"window": a.window, "draw_k": k_draw, "program": win["program"], "calls": [], "leaves": [],
+            "leaf_programs": {}}
+    produced: list[G.Registered] = []
     for k, calls in sorted(by_k.items()):
-        if not win["shape"]["tiles"][k]["j10r"]:
-            raise Refused(f"K = {k}'s template is not J10-R's: drawn stages J10-R units")
-        if f"k{k}" not in manifest.get("files", {}):
-            raise Refused(f"--circuits has no k{k} file: build it (pouw_h1_circuits --strata {k})")
         b = None
         values: dict[str, G.Registered] = {}
+        if CR.form_of(manifest.get("files", {}), k) == "lanes":
+            def rebuild(v: str, call: int, k: int = k, values: dict = values) -> G.Registered:
+                if v == LL.A:
+                    return a_value(win, prover, pkey, call)
+                if v == LL.B:
+                    return b_value(win, k, bkey, a.checkpoint and Path(a.checkpoint), a.weights and Path(a.weights),
+                                   a.checkpoint_weights)
+                if v == LL.ZY:
+                    return zy_value(win, prover, pkey, call)
+                return receipt_value(win, pkey, call, values)
+            produced += stage_leaves(a, win, k, sorted(u for c in calls for u in drawn[c]), values, rebuild, work,
+                                     Path(a.circuits), manifest, plan)
+            continue
+        if not win["shape"]["tiles"][k]["j10r"]:
+            raise Refused(f"K = {k}'s template is not J10-R's: drawn stages J10-R units on a k<K> file, and a v1 unit as "
+                          f"its lanes (pouw_h1_circuits --lanes {k})")
+        if f"k{k}" not in manifest.get("files", {}):
+            raise Refused(f"--circuits has no k{k} file: build it (pouw_h1_circuits --strata {k})")
         regs = {}
         for c in calls:
             reg, why = CR.registered_file(win["program"], lay, win["shape"], c, win["roots"], win["root"], win["steps"],
@@ -508,7 +597,8 @@ def stage(a: Any) -> int:
             got = PF.file_sha512(built)
             built.unlink()
         else:
-            st = FileStager(k, lay["tile"], lay["m"], circuit)
+            t = template(k, lay["tile"], lay["m"])
+            st = FileStager(circuit, t.id, HW.statement_rows(t), HW.STATEMENT_OUT_ROWS)
             got = st.pin
         if got != manifest["files"][f"k{k}"]:
             raise Refused(f"K = {k}'s statement circuit (SHA-512 {got[:16]}...) is not --circuits' k{k} file "
@@ -539,8 +629,13 @@ def stage(a: Any) -> int:
             plan["calls"].append({"call": c, "k": k, "dir": str(d.resolve()), "units": units, "instances": len(units),
                                   "circuit": str(circuit), "pin": got["circuit_sha512"]})
             print(f"STAGED call {c}: units {units}", flush=True)
+    if produced:
+        coin = Ch.LiveOpening.from_json(win["draw"]["coin"]).coin.hex()
+        plan["produced"] = PR.record(win["draw"]["root"], coin, [t.entry() for t in produced],
+                                     {t.value: PR.rows_of(t) for t in produced})
     (work / PLAN).write_text(json.dumps(plan, indent=1))
-    print("PLAN " + json.dumps({"calls": [(x["call"], x["instances"]) for x in plan["calls"]]}), flush=True)
+    print("PLAN " + json.dumps({"calls": [(x["call"], x["instances"]) for x in plan["calls"]],
+                                "leaves": sorted({x["unit"] for x in plan["leaves"]})}), flush=True)
     return 0
 
 
@@ -549,16 +644,26 @@ def stage(a: Any) -> int:
 def statements(a: Any) -> int:
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
     plan = json.loads((Path(a.work) / PLAN).read_text())
-    out = []
-    for x in plan["calls"]:
+
+    def session(x: dict, what: str) -> list[Path]:
         d = Path(x["dir"])
         sessions = sorted(p for p in (d / "sessions").glob("*/") if (p / "session.json").is_file())
         if len(sessions) != 1:
-            raise Refused(f"call {x['call']}: {len(sessions)} sessions in {d}/sessions, not one: a drawn call is proved "
-                          "once, every instance drawn (session's subset:N)")
-        out.append(PHC.statement(x["call"], x["circuit"], d / "pub.bin", sessions))
+            raise Refused(f"{what}: {len(sessions)} sessions in {d}/sessions, not one: a drawn statement is proved once, "
+                          "every instance drawn (session's subset:N)")
+        return sessions
+
+    out: Any = [PHC.statement(x["call"], x["circuit"], Path(x["dir"]) / "pub.bin", session(x, f"call {x['call']}"))
+                for x in plan["calls"]]
+    leaves = plan.get("leaves", [])
+    for x in leaves:
+        sessions = session(x, f"drawn leaf {x['unit']}'s statement {x['statement']}")
+        out.append({"unit": int(x["unit"]), "statement": list(x["statement"]), "circuit": str(x["circuit"]),
+                    "public": str(Path(x["dir"]) / "pub.bin"), "sessions": [str(s) for s in sessions]})
+    if leaves:
+        out = {"leaf_programs": plan["leaf_programs"], "produced": plan["produced"], "statements": out}
     Path(a.out).write_text(json.dumps(out, indent=1))
-    print(f"STATEMENTS {len(out)} calls -> {a.out}", flush=True)
+    print(f"STATEMENTS {len(plan['calls'])} calls, {len(leaves)} leaf statements -> {a.out}", flush=True)
     return 0
 
 

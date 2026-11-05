@@ -899,6 +899,12 @@ def test_oidc_token_asks_the_cursor_socket_for_the_brokers_audience(identity_soc
             slack.oidc_token(slack.BROKER)
 
 
+def test_oidc_token_asks_for_the_nonce_it_is_given(identity_socket):
+    """A label's authentication binds the token to the label through its `nonce` claim (`research.labelauth`)."""
+    assert slack.oidc_token("urn:verity:label-auth", nonce="ab" * 64) == OIDC
+    assert identity_socket["seen"] == [("/v1/tokens/oidc", {"aud": "urn:verity:label-auth", "nonce": "ab" * 64})]
+
+
 def test_oidc_token_asks_again_when_the_socket_drops_the_connection(identity_socket, monkeypatch, tmp_path):
     waits: list[float] = []
     identity_socket["drop"] = 2

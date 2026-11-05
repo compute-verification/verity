@@ -224,7 +224,7 @@ theorem finRepErased_step (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_
       have e' := hicC l
       rw [hsj] at e'
       exact e') hl hpiopC hlo hhi
-  rw [hg, hexT] at e
+  rw [hg, Masked.l0Clear_ligTab _ _ x w t j _ _ hexT] at e
   exact e
 
 set_option maxHeartbeats 1000000 in

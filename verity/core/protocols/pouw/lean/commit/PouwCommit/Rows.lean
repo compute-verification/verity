@@ -9,8 +9,8 @@ public import Identity.Domains
 /-!
 # The protocol's row and tile trees (`audit.rows_domain`, `Hm96Domain`, `commit_rows`, `transcript_domain`)
 
-A scheme's trees are frame-v3 trees under its `commitment_hash`: `sha256` (the default), `sha512`, or `hm96-sha512`, which is
-`frame-v3-sha512` with hm96-sha512 leaves. Under `hm96-sha512` a committed value is its preimage followed by a 192-byte salt
+A scheme's trees are frame-v3 trees under its `commitment_hash`: `hm96-sha512` (h3's, `audit`'s default), which is
+`frame-v3-sha512` with hm96-sha512 leaves, `sha512`, or `sha256` (h0's, and NCP's). Under `hm96-sha512` a committed value is its preimage followed by a 192-byte salt
 `y`; `x` is the preimage's `sha512/row-seg/v1` digest (a row) or, in a tile tree (`digests`), the 64-byte preimage itself;
 and the frame leaf is the one over `hm96.SHA512.tree_leaf(b ‖ c)` under the schema `hm96-sha512/row-seg/v1`. Elsewhere a
 leaf is the frame's plain leaf over the value under the tree's schema (`verity/pouw/row/v1`, `verity/pouw/tile/v1`).
@@ -69,7 +69,8 @@ structure RowsDomain where
   hm96 : Bool
   digests : Bool
 
-/-- `rows_domain(binding, owner, count, hash, digests)`, `hash` one of `sha256`, `sha512`, `hm96-sha512`. -/
+/-- `rows_domain(binding, owner, count, hash, digests)`, `hash` one of `hm96-sha512`, `sha512`, `sha256`; the Lean takes it
+named, with no default. -/
 def rowsDomain (binding : ByteArray) (owner : Int) (count : Nat) (hash : String) (digests : Bool) :
     Except String RowsDomain := do
   match hash with

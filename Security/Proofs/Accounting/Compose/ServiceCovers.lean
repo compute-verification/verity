@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.Guarantees.Compose
 public import Proofs.Accounting.TS.Drawn
+public import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # `ServiceCovers`: the service's share covers every tile that isn't good
