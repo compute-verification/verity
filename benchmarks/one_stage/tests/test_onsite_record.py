@@ -707,7 +707,7 @@ def test_period_tied_count_is_open_to_be_restated_at_any_statement_and_the_figur
     nothing: pinned at the very statement the lock lists, it stays open with why it is to be restated, and the figure
     of record is the conservative one, ℓ_a + 1 charged for the tied audit, as with it unlisted."""
     (g,) = UNPINNED
-    assert OR.RESTS_ON[g]["restate"] == OR.RESTATE_TIED and "scope premise" in OR.RESTATE_TIED
+    assert RESTS_ON[g]["restate"] == OR.RESTATE_TIED and "scope premise" in OR.RESTATE_TIED
     assert g not in {t for p in OR.PREMISES.values() for t in p["discharged_by"]}
     monkeypatch.setitem(OR.RESTS_ON, g, dict(RESTS_ON[g], statement="toy"))
     write_lock(lock, stated={g: "toy"})
