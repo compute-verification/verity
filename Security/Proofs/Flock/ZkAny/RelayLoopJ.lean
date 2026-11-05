@@ -256,8 +256,9 @@ an earlier round of the model's run failed (`liveBefore`); no stream seen before
 stream seen; the session's plan the setup's once its `Hello` left; the streams seen those with a round before the
 model's next (`SeenAt`); none seen while the session's slots took at most the model's `Hello`; past the `Commit`
 every level 0 bound to the session the one the loop drew for its table (`BuiltAt`); once its `Hello` left the
-session's entry the setup's (`SessOn`); the session's `Hello` and coins at the setup's link points (`LinksOk`); and past
-the `Commit`, where a level 0 is bound to the session, its entry linked to the history's link coins (`LinkOn`). -/
+session's entry the setup's (`SessOn`); the session's `Hello` and coins at the setup's link points (`LinksOk`); past
+the `Commit`, where a level 0 is bound to the session, its entry linked to the history's link coins (`LinkOn`); and
+once its `Hello` left the setup's sizes within its frames' (`Session.sizesOk`). -/
 structure LoopJ {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (sts : Array Stmt)
     (seen : List String) (st : State) (σ : LoopAt) : Prop where
   stop : σ.R.stopped sid = (st.sent && !M.L.toSrv.liveBefore M.wk M.x M.w M.ρ M.κ (M.hist σ.c))
@@ -270,6 +271,7 @@ structure LoopJ {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSp
   sess : st.sent = true → SessOn spec sts σ.R sid
   links : LinksOk spec st
   link : 2 ≤ σ.c → ∀ name l0, _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 → LinkOn M sid σ
+  sizes : st.sent = true → _root_.Flock.Firewall.Session.sizesOk spec sts = true
 
 /-- **`RepJ` is kept from one of the session's requests to the next** where the updates between keep the rep's frame
 (`Kept`) and what the session's rounds read of it (`Stays`), and the slot took no model message. -/
@@ -308,7 +310,7 @@ theorem loopKept_ctl {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Sess
     fun h => hJ.early (by rwa [hcc] at h), fun h => builtAt_stays hst (hJ.built (by rwa [hcc] at h)),
     fun h => sessOn_sessKept hbt.2 (hJ.sess (by rw [hsent] at h; exact h)), stepK_links he hJ.links,
     fun h => linkOn_stays (hJ.sess (sent_of_two hF (by rwa [hcc] at h))) hst (by rwa [hcc] at h) (by omega)
-      (hJ.link (by rwa [hcc] at h))⟩
+      (hJ.link (by rwa [hcc] at h)), fun h => hJ.sizes (by rw [hsent] at h; exact h)⟩
   · rw [hsent, hcc, stopped_sessKept hbt.2]
     exact hJ.stop
   · rw [hcc]
@@ -331,6 +333,46 @@ theorem loopKept_ctl_all {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : 
   | round _ _ => cases hm
   | finish => cases hm
 
+/-- **Where the session goes on past its `Hello`, the setup's sizes are within its frames'**: the `Hello` left, which
+`State.sendHello` lets only at a setup passing `Session.sizesOk` (`Loop.sizesOk_of_sendHello`). -/
+theorem stepK_hello_sizes {st : State} {pl : Placed} {e : Env} {spec : SessionSpec} {sts : Array Stmt}
+    (he : e.setup = .ok (spec, sts))
+    (hgo : ((stepK true st pl (some (tagOf .hello)) (.ok .hello) e).go &&
+      (stepK true st pl (some (tagOf .hello)) (.ok .hello) e).st.stop.isNone) = true) :
+    _root_.Flock.Firewall.Session.sizesOk spec sts = true := by
+  rcases hr : st.request pl .hello with _ | ⟨st', o⟩
+  · have hs : st.stop = none := by
+      revert hr
+      unfold State.request
+      split
+      · intro h
+        cases h
+      · intro _
+        assumption
+    rw [stepK_hello hr] at hgo
+    rcases hh : st.sendHello e.setup e.nonce with ⟨st', o⟩ | ⟨st', o⟩
+    · rw [hh] at hgo
+      have hst := sendHello_error hs hh
+      simp only [Bool.true_and] at hgo
+      rw [Option.isSome_iff_ne_none] at hst
+      exact absurd (Option.isNone_iff_eq_none.mp hgo) hst
+    · rw [he] at hh
+      exact Loop.sizesOk_of_sendHello hh
+  · rw [stepK_refused (by decide) (by decide) (by decide) hr] at hgo
+    have hst : st'.stop.isSome := by
+      rcases hs : st.stop with _ | why
+      · exact request_stop hs hr
+      · revert hr
+        unfold State.request
+        rw [hs]
+        intro h
+        cases h
+        rw [hs]
+        rfl
+    simp only [Bool.true_and] at hgo
+    rw [Option.isSome_iff_ne_none] at hst
+    exact absurd (Option.isNone_iff_eq_none.mp hgo) hst
+
 /-- **`LoopJ` is kept at the `Hello`**: before it no stream was seen and the session had not stopped; past it the
 session has sent its `Hello`, the model's `Hello` round passed, and the updates between keep the session's stop. -/
 theorem loopKept_hello {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
@@ -342,7 +384,7 @@ theorem loopKept_hello {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
   have hsent := stepK_hello_sent hgo
   refine ⟨?_, fun h => ?_, fun i r s _ hc => ?_, stepK_plan he hJ.plan, ?_, fun _ => hseen,
     fun h => absurd h (by rw [hcc, hF.start hs0]; omega), fun _ => hso he, stepK_links he hJ.links,
-    fun h => absurd h (by rw [hcc, hF.start hs0]; omega)⟩
+    fun h => absurd h (by rw [hcc, hF.start hs0]; omega), fun _ => stepK_hello_sizes he hgo⟩
   · rw [hsent, hlb, stopped_sessKept hbt.2, hJ.stop, hs0]
     rfl
   · rw [hsent] at h
@@ -403,7 +445,8 @@ theorem loopKept_commit {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : S
   have hlb1 := liveBefore_one M.L M.wk M.x M.w M.ρ M.κ _ hl1 (by omega)
   have hlb2 := liveBefore_two M.L M.wk M.x M.w M.ρ M.κ _ hl2 hlast (by rw [ht]; exact hwk)
   refine ⟨?_, fun _ => hseen, fun i r s _ hc => ?_, stepK_plan he hJ.plan, ?_, fun _ => hseen, fun _ => hbuilt,
-    fun _ => sessOn_sessKept hbt.2 (hJ.sess hs1), stepK_links he hJ.links, fun _ _ _ _ => hlk⟩
+    fun _ => sessOn_sessKept hbt.2 (hJ.sess hs1), stepK_links he hJ.links, fun _ _ _ _ => hlk,
+    fun _ => hJ.sizes hs1⟩
   · rw [hsent, stopped_sessKept hbt.2, hJ.stop, hlb1, hlb2]
   · simp [seenAfter, hseen] at hc
   · show SeenAt spec sts (M.hist σ'.c) seen
