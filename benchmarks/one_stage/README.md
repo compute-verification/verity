@@ -217,13 +217,21 @@ negatives.
 - `served_composite.sh`: `served_verdicts.sh`'s step after its record. It writes PoUS's and the wipe's composite cases
   (PoUS's `served_case.sh`), then gets remote's, remote-network's and onsite's Lean verdicts on the run's cases (soundness's composite
   reader), all on the node. Only the verdict lines reach the run's `verdicts.txt`, and a tree without those two scripts skips the step.
-- `onsite_record.py OUT [--advice-charge FILE]`: the onsite demo's record of a served run (`record/onsite.json`), which
+- `onsite_record.py OUT [--advice-charge FILE] [--certifier-key RECORD --site-registration FILE]`: the onsite demo's
+  record of a served run (`record/onsite.json`), which
   `served_verdicts.sh` writes after its composite step when the network certifier is in the run: its piece
   (`CERTIFIER_CMD`, or the split's `CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`) or its front (`CERTIFIER_FRONT`). It holds every verdict
   the run of record needs (sampled proofs, PoUW, inference-only, remote, the network certifier, onsite), each missing
-  with its why where the run has no answer. While `certifier-key` is open (no Property yet states that the key and
-  session the period's guarantee reads are the auditor's record of the network certifier), an accepted network verdict
-  is not established, its Lean answer's accept beside it, and its bound conditional on `certifier-key` by name.
+  with its why where the run has no answer. It checks two obligations on the auditor's configuration on each run
+  (``checked``), reading only the auditor's inputs: `auditor-record`, that the period's key, LMS parameters and
+  session are the auditor's record of its network certifier (`CERTIFIER_KEY`, `certifier-key/v1`) and that the
+  auditor's registration of the deployment (`SITE_REGISTRATION`: the registration log's params and the log, which
+  checks) holds that key for a network certifier its log places; and `auditor-listing`, that each circuit file the
+  period lists is, by SHA-512, the one its audit's sessions were verified against. `certifier-key` closes only where the
+  lock holds PeriodLeakRegistered at its pinned statement taking hA, hr and hkey as `auditor-record` and that check
+  holds; while it is open, an accepted network verdict is not established, its Lean answer's accept beside it, and its
+  bound conditional on `certifier-key` by name. Where `auditor-listing` doesn't hold, the verdict is not established
+  and there is no bound.
   Sampled proofs credits only the drawn members whose `--registered` file its audit completed at the window's
   committed roots and whose Lean verdict of record reported exactly that file's reads, and lists every other drawn
   member as not credited, by name; PoUW's freed compute is credited nowhere and not claimed, by name, beside the PoUW
