@@ -23,8 +23,8 @@ blobs. A composite whose every component accepts as much on the larger blobs ans
 `tiedSameB_covers`), so at onsite, and at remote with the network certifier with PoUW or without, the verifier of
 record answers on `bs ++ cs` as the executable that reads `cs` by path answers on `bs` (`agree_onsite`, `agree_rn`,
 `agree_rnn`, `Verity.circuit_files_by_path_agree`). An executable that accepts everything is not one the verifier of
-record agrees with (`Verity.circuit_files_by_path_agree_nontrivial`), and at a period of no link-window and no audit the period read by path
-and the period among the blobs both accept (`Verity.circuit_files_by_path_agree_honest`).
+record agrees with (`Verity.circuit_files_by_path_agree_nontrivial`), and at a period of no link-window and no audit
+the period read by path and the period among the blobs both accept (`Verity.circuit_files_by_path_agree_honest`).
 -/
 
 namespace Verity.PeriodFiles
@@ -146,21 +146,6 @@ theorem ExtP.pure_ok {v v' : V Unit} (h : ExtT v v') :
   have hv' : v' = .ok () := h.run () hv trivial
   show Except.ok v' = Except.ok a
   rw [hv', ← hva, hv]
-
-/-- Takes apart two do blocks that differ only in their leaves, closing each leaf by `t`. -/
-local macro "blob_ext " t:tacticSeq : tactic => `(tactic| repeat' (first
-  | with_reducible exact ExtP.refl _ _
-  | $t
-  | split
-  | apply ExtP.arrayMapM
-  | apply ExtP.listMapM
-  | apply ExtP.optionMapM
-  | apply ExtP.arrayForIn
-  | apply ExtP.mapError
-  | apply ExtP.map
-  | apply ExtP.bind
-  | intro _
-  | dsimp only))
 
 /-! ## Blobs -/
 
@@ -760,7 +745,9 @@ theorem verdictOf_ext {I scope ksFiles coinKeys record draw st} {f1 f2 : V (Arra
 theorem zk_filesOf_ext (hB : BlobSup B1 B2) (s : RunFiles) (st : SampledProofs.OneStageZk.SetUp) :
     ExtT (SampledProofs.OneStageZk.filesOf B1 s st) (SampledProofs.OneStageZk.filesOf B2 s st) := by
   unfold SampledProofs.OneStageZk.filesOf
-  blob_ext (with_reducible exact ExtP.of_ext (get_ext hB _ _))
+  repeat' (first | with_reducible exact ExtP.refl _ _ | with_reducible exact ExtP.of_ext (get_ext hB _ _) | split
+    | apply ExtP.arrayMapM | apply ExtP.listMapM | apply ExtP.optionMapM | apply ExtP.arrayForIn | apply ExtP.mapError
+    | apply ExtP.map | apply ExtP.bind | intro _ | dsimp only)
 
 theorem step_mono (hB : BlobSup B1 B2) {I rd scope ksFiles programSha want} {r : Run} {s : RunFiles} {r' : Run}
     (h : SampledProofs.OneStageZk.step I rd B1 scope ksFiles programSha want r s = .ok r') (hr' : r'.all = true) :
@@ -828,16 +815,19 @@ theorem zk_run_mono (hB : BlobSup B1 B2) (p : SampledProofs.OneStageZk.Own) (pub
       (SampledProofs.OneStageZk.run p pub sessions pu B2) := by
   unfold SampledProofs.OneStageZk.run
   simp only [inputsOf_tab hB.tables]
-  blob_ext (first
-    | with_reducible exact ExtP.of_ext (get_ext hB _ _)
+  repeat' (first | with_reducible exact ExtP.refl _ _ | with_reducible exact ExtP.of_ext (get_ext hB _ _)
     | ((with_reducible apply zk_fold_bind hB) <;> exact fun a b hab hb => by
-        (repeat' split at hab) <;> (cases hab <;> exact hb)))
+        (repeat' split at hab) <;> (cases hab <;> exact hb))
+    | split | apply ExtP.arrayMapM | apply ExtP.listMapM | apply ExtP.optionMapM | apply ExtP.arrayForIn
+    | apply ExtP.mapError | apply ExtP.map | apply ExtP.bind | intro _ | dsimp only)
 
 theorem treesHeld_ext (hB : BlobSup B1 B2) (ts : Array SampledProofs.Challenger.LoggedTree)
     (e : SampledProofs.OneStageZk.Evidence) :
     ExtT (SampledProofs.OneStageZk.treesHeld ts e B1) (SampledProofs.OneStageZk.treesHeld ts e B2) := by
   unfold SampledProofs.OneStageZk.treesHeld
-  blob_ext (with_reducible exact ExtP.of_ext (get_ext hB _ _))
+  repeat' (first | with_reducible exact ExtP.refl _ _ | with_reducible exact ExtP.of_ext (get_ext hB _ _) | split
+    | apply ExtP.arrayMapM | apply ExtP.listMapM | apply ExtP.optionMapM | apply ExtP.arrayForIn | apply ExtP.mapError
+    | apply ExtP.map | apply ExtP.bind | intro _ | dsimp only)
 
 /-- `checkBlobsAt`'s trees, sessions and run, on the blobs `bs`. -/
 def zkPre (p : SampledProofs.OneStageZk.Params) (e : SampledProofs.OneStageZk.Evidence) (bs : Core.Blobs) : V Run :=
@@ -901,26 +891,32 @@ variable {B1 B2 : Core.Blobs}
 theorem innerHeld_ext (hB : BlobSup B1 B2) (o : VStar.Recursive.Own) (pr : VStar.Recursive.Proofs) :
     ExtT (VStar.Recursive.innerHeld o pr B1) (VStar.Recursive.innerHeld o pr B2) := by
   unfold VStar.Recursive.innerHeld
-  blob_ext (with_reducible exact ExtP.of_ext (get_ext hB _ _))
+  repeat' (first | with_reducible exact ExtP.refl _ _ | with_reducible exact ExtP.of_ext (get_ext hB _ _) | split
+    | apply ExtP.arrayMapM | apply ExtP.listMapM | apply ExtP.optionMapM | apply ExtP.arrayForIn | apply ExtP.mapError
+    | apply ExtP.map | apply ExtP.bind | intro _ | dsimp only)
 
 theorem partSize_ext (hB : BlobSup B1 B2) (j : Nat) (p : VStar.Recursive.PartOwn) (s : VStar.Recursive.PartProof) :
     ExtT (VStar.Recursive.partSize j p s B1) (VStar.Recursive.partSize j p s B2) := by
   unfold VStar.Recursive.partSize
-  blob_ext (with_reducible exact ExtP.of_ext (get_ext hB _ _))
+  repeat' (first | with_reducible exact ExtP.refl _ _ | with_reducible exact ExtP.of_ext (get_ext hB _ _) | split
+    | apply ExtP.arrayMapM | apply ExtP.listMapM | apply ExtP.optionMapM | apply ExtP.arrayForIn | apply ExtP.mapError
+    | apply ExtP.map | apply ExtP.bind | intro _ | dsimp only)
 
 theorem unitsOf_ext (hB : BlobSup B1 B2) (ok : Bool) (o : VStar.Recursive.Own) (pr : VStar.Recursive.Proofs) :
     ExtT (VStar.Recursive.unitsOf ok o pr B1) (VStar.Recursive.unitsOf ok o pr B2) := by
   unfold VStar.Recursive.unitsOf
-  blob_ext (with_reducible exact ExtP.of_ext (get_ext hB _ _))
+  repeat' (first | with_reducible exact ExtP.refl _ _ | with_reducible exact ExtP.of_ext (get_ext hB _ _) | split
+    | apply ExtP.arrayMapM | apply ExtP.listMapM | apply ExtP.optionMapM | apply ExtP.arrayForIn | apply ExtP.mapError
+    | apply ExtP.map | apply ExtP.bind | intro _ | dsimp only)
 
 theorem partVerdict_ext (hB : BlobSup B1 B2) (h : VStar.Recursive.InnerHeld) (j : Nat)
     (p : VStar.Recursive.PartOwn) (s : VStar.Recursive.PartProof) :
     ExtP (fun v : V Unit => v = .ok ()) (VStar.Recursive.partVerdict h j p s B1)
       (VStar.Recursive.partVerdict h j p s B2) := by
   unfold VStar.Recursive.partVerdict
-  blob_ext (first
-    | with_reducible exact ExtP.of_ext (get_ext hB _ _)
-    | with_reducible apply ExtP.pure_ok)
+  repeat' (first | with_reducible exact ExtP.refl _ _ | with_reducible exact ExtP.of_ext (get_ext hB _ _)
+    | with_reducible apply ExtP.pure_ok | split | apply ExtP.arrayMapM | apply ExtP.listMapM | apply ExtP.optionMapM
+    | apply ExtP.arrayForIn | apply ExtP.mapError | apply ExtP.map | apply ExtP.bind | intro _ | dsimp only)
 
 theorem partsSize_ext (hB : BlobSup B1 B2) :
     ∀ (j : Nat) (ps : List VStar.Recursive.PartOwn) (ss : List VStar.Recursive.PartProof),
@@ -936,9 +932,9 @@ theorem statementSize_ext (hB : BlobSup B1 B2) (h : VStar.Recursive.InnerHeld) (
     (pr : VStar.Recursive.Proofs) :
     ExtT (VStar.Recursive.statementSize h o pr B1) (VStar.Recursive.statementSize h o pr B2) := by
   unfold VStar.Recursive.statementSize
-  blob_ext (first
-    | with_reducible exact ExtP.of_ext (get_ext hB _ _)
-    | exact partsSize_ext hB _ _ _)
+  repeat' (first | with_reducible exact ExtP.refl _ _ | with_reducible exact ExtP.of_ext (get_ext hB _ _)
+    | exact partsSize_ext hB _ _ _ | split | apply ExtP.arrayMapM | apply ExtP.listMapM | apply ExtP.optionMapM
+    | apply ExtP.arrayForIn | apply ExtP.mapError | apply ExtP.map | apply ExtP.bind | intro _ | dsimp only)
 
 theorem statementFits_ext (hB : BlobSup B1 B2) (limit : Nat) (h : VStar.Recursive.InnerHeld)
     (o : VStar.Recursive.Own) (pr : VStar.Recursive.Proofs) :
@@ -1012,7 +1008,9 @@ theorem verdicts_ext (hB : BlobSup B1 B2) (o : VStar.Recursive.Own) (session : S
       (VStar.Recursive.verdicts o session pr pu B2) := by
   unfold VStar.Recursive.verdicts
   refine ExtP.bind_back (partVerdicts_ext hB o pr) (fun x => ?_) (fun x b hab hb => ?_)
-  · blob_ext (with_reducible exact ExtP.of_ext (unitsOf_ext hB _ _ _))
+  · repeat' (first | with_reducible exact ExtP.refl _ _ | with_reducible exact ExtP.of_ext (unitsOf_ext hB _ _ _)
+      | split | apply ExtP.arrayMapM | apply ExtP.listMapM | apply ExtP.optionMapM | apply ExtP.arrayForIn
+      | apply ExtP.mapError | apply ExtP.map | apply ExtP.bind | intro _ | dsimp only)
   · (try dsimp only at hab)
     obtain ⟨u1, -, hab⟩ := bindOk_split hab
     cases u1
