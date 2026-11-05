@@ -6,9 +6,9 @@ import Definitions.Pous.Model.BandChain
 
 The counts `Pous.Guarantees.BackgroundRebuildExcluded` reads, all in sequential `Π₂` calls of at least `call_ns` each:
 what re-encoding one band segment from its data costs, how long a row of the graded audit's rounds may last, and the cap
-on a graded audit's whole duration that the guarantee requires the memory challenger to enforce (`PROTOCOL.md`,
-"Isolation over the whole graded window"). A call of at least `call_ns` is the ideal-permutation model's unit; at the
-reference Feistel-SHAKE256 `Π₂` a prover answers from 1.53% of `C` in 481 Keccak-f without completing a call.
+on a graded audit's whole duration that the guarantee requires the memory challenger to enforce. A call of at least
+`call_ns` is the ideal-permutation model's unit; at the reference Feistel-SHAKE256 `Π₂` a prover answers from 1.53% of
+`C` in 481 Keccak-f without completing a call.
 -/
 
 namespace Pous.Rebuild
