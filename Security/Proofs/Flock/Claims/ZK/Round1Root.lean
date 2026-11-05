@@ -6,8 +6,8 @@ public import Proofs.Flock.Claims.ZK.ExeLayout
 /-!
 # Round `1` of the masked session: the pads root at the executable's layout
 
-The masked session's second body binds table `0`'s rep `0` pads root (`Masked.liveRun_round1`), `innerCommitP`'s root
-of the tape's pads. Here that root is the model's:
+The masked session's second body absorbs table `0`'s rep `0` pads root (`FlockComplete.sessionPZk_go_round1`),
+`innerCommitP`'s root of the tape's pads. Here that root is the model's:
 
 * `FlockComplete.innerCommitP_root_layerOf`: `innerCommitP`'s root is `layerOf`'s, of the leaves
   `H(H(c_h(p) ‖ c_μ(p)), salt p)`, where `c_h`, `c_μ` are the codes of `h ‖ pad_h` and `μ ‖ pad_μ` at `X = p + 1`
