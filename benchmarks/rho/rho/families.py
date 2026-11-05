@@ -19,7 +19,7 @@ The kinds:
 * `nci`: any algorithm of the `benchmarks/nci` library (`benchmarks/nci/algorithms.json`) from its traits; `nci:<id>` names one with no
   table.
 
-A family may name a **precision** (`precision.<name>`, FP8 or NVFP4): the format sets `β_x`, caps every per-activation
+A family may name a **precision** (`precision.<name>`, such as NVFP4): the format sets `β_x`, caps every per-activation
 bit count and the tile's weight width at its width, and multiplies the compute a target needs. A family's
 `premises = "<family>"` takes the premise numbers it doesn't give from that family (`family`).
 
