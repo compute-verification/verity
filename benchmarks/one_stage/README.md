@@ -79,7 +79,8 @@ negatives.
   `WC_RECORD_TIMEOUT` (default 20m), after the record: a timeout or refusal there is reported and never fails the run. Then
   comes V3c, sampled proofs' audit of record, within `V3C_TIMEOUT` and `V3C_AUDIT_TIMEOUT`: the window committed as the
   class circuit's units (`prove_path.py window-commit`), then its records audit (`records_audit.py audit --circuit`, on a
-  challenger's coins), which is C-Flock `--zk` on the drawn proof blocks and the Lean verifier. The class circuit is the
+  local development challenger session's coins unless `PP_CHALLENGER` names the live challenger, as the run's COINS line
+  says, a deferral's follow-on its own), which is C-Flock `--zk` on the drawn proof blocks and the Lean verifier. The class circuit is the
   class's, whatever the window's requests, and reads no advice, so no advice opening reaches the verifier. V3c writes its audit as the network
   certifier's period reads it (`period.json`). Then come PoUW, PoUS, the bandwidth audit and the network certifier. Each runs its piece where
   `POUW_CMD`, `POUS_CMD`, `BANDWIDTH_CMD` or `CERTIFIER_CMD` names one, within its own limit; otherwise its `MISSING` line
@@ -220,12 +221,31 @@ negatives.
   `served_verdicts.sh` writes after its composite step when the network certifier is in the run: its piece
   (`CERTIFIER_CMD`, or the split's `CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`) or its front (`CERTIFIER_FRONT`). It holds every verdict
   the run of record needs (sampled proofs, PoUW, inference-only, remote, the network certifier, onsite), each missing
-  with its why where the run has no answer. Beside them are the network certifier's bound term by term in the notation
-  table's symbols, with its overcount, the seconds it covers, the connections it counts and δ_net term by term with
-  each term's source (the check's `eps`, only its δ part, and each phase's knowledge, binding and collision errors,
-  which no check computes), `eps` split into the scans' δ and the charged tied audits' with what sets each and what a
-  smaller one costs, k_{skip,j}'s slot entries (every one of a tied audit sampled in part; sampled whole, it adds none
-  and proves each of its proof blocks), the onsite composite's error as the sum of its four subprotocols' errors, each δ with where the
+  with its why where the run has no answer. While `certifier-key` is open (no Property yet states that the key and
+  session the period's guarantee reads are the auditor's record of the network certifier), an accepted network verdict
+  is not established, its Lean answer's accept beside it, and its bound conditional on `certifier-key` by name.
+  Sampled proofs credits only the drawn members whose `--registered` file its audit completed at the window's
+  committed roots and whose Lean verdict of record reported exactly that file's reads, and lists every other drawn
+  member as not credited, by name; PoUW's freed compute is credited nowhere and not claimed, by name, beside the PoUW
+  piece the run's COINS line says it served, and whether the run is of record reads every verdict but PoUW's, which
+  stays listed as its row states it (missing and development for a development piece). Its composite of record, named
+  by its id, is the network certifier's composite without PoUW where the run has one (registered under its own id in
+  `Core.Composites`), and then whether the run is of record reads that composite and its subprotocols, and not remote's
+  composite, which composes PoUW's case; else it is remote-network's. Either way the record credits no verified compute,
+  and its `ONSITE` line, like each run's in `--beside`'s `ONSITE-BESIDE` line, names the composite by its id and says so
+  in words: "no verified compute is credited: <id>'s verdict is no compute claim".
+  Sampled proofs' guarantee is what its draw establishes, ε at δ, per window (its answer's bound over the window's n
+  proof blocks) and pooled, never the window's alone: at most ⌊ln(1/δ)/q⌋ incorrect proof blocks over any number of
+  windows each drawing k of n (q = k/n, `Flock.Guarantees.IntegrityHorizon`), stated for each monitoring period for the
+  node, a datacenter's and the world's links (each link's at δ / links, summed), with its share of their proof blocks at
+  a window an execution phase; a law other than a k-subset has no pooled figure, and a draw of several members
+  (stratified:1, H1_TIE's default) is named refused, since it writes no sampled-proofs case. Beside them are the network
+  certifier's bound term by term in the notation table's symbols, with its overcount, the seconds it covers, the
+  connections it counts and δ_net term by term with each term's source (the check's `eps`, only its δ part, and each
+  phase's knowledge, binding and collision errors, which no check computes), `eps` split into the scans' δ and the
+  charged tied audits' with what sets each and what a smaller one costs, k_{skip,j}'s slot entries (every one of a tied
+  audit sampled in part; sampled whole, it adds none and proves each of its proof blocks), the composite of record's
+  error as the sum of its subprotocols' errors (four, or three without PoUW's), each δ with where the
   run states it and the terms no check computes named, and that bound over the
   run's own certification period (proved) and each monitoring period for the node (proved where the run's period
   covers it, else scaled), the census's reference datacenter and the world (scaled), each scaled cell naming its rule,
@@ -238,15 +258,25 @@ negatives.
   `Security/Properties/lean-audit.json` lists, taking no named assumption but a standing one (trusted-host and
   certifier-coverage), and no premise about our own Python stands; and each guarantee the tight K rests on is in the lock
   at the statement whose hypotheses and antecedents the record names by hand, each by the premise that covers it, since
-  the lock records a guarantee's named assumptions and never its antecedents. While
-  one of those is open, it is K plus ℓ_a + 1 bits for each tied audit of each phase, with the tight K's cells beside
-  them, conditional on what is open, by name. The realized advice charge is private: the record states ℓ_{a,j} with its source,
+  the lock records a guarantee's named assumptions and never its antecedents; and the run's COINS line names the live
+  challenger (PP_CHALLENGER gate:USER@HOST at a named peer). While one of those is open, it is K plus ℓ_a + 1 bits for
+  each tied audit of each phase, added to its ℓ_{a,j}, what is open named, and no tighter figure goes beside it. It
+  tightens in place: to ℓ_a + 1 in place of each tied audit's ℓ_{a,j} once a general cut lemma bounding a tied audit's
+  leak by ℓ_a + 1 is in the lock and a check verifying that cut has run on the period's case (the record written again
+  from the same OUT, with no re-serving), and to K alone once `padding-out-of-free` (the period check refusing a tied
+  audit's padding reads, and the lemma that a column no unit reads adds no free input) is in the lock and nothing else
+  is open. While the coins are a local
+  development session's, or no line names them, or the network certifier's period draw or its scan's draw takes K of
+  what it draws from (or the run published no chain report), the condition live-coins is named, with each such draw,
+  on every figure that rests on the draw (the sampled-proofs verdict where its draw is the one open, the figure of
+  record and its cells), never as a live draw's.
+  The realized advice charge is private: the record states ℓ_{a,j} with its source,
   the tied compute audits' free inputs (no advice length and no cap is in them), beside it ℓ_a, the cap of the advice
   the run registered (its published `registration.json`'s compiler `cap_bits`), as a cap, in no term of K, and
   `--advice-charge` states a test
   run's measurement beside the bound as that run's. It lists the re-proof inputs, what a later re-proof of the sampled
   units with each wire read inside its session needs (the committed values and openings of every sampled unit and of
-  the units that write what it reads, the registration, the live draw and its receipt, and the public files), by
+  the units that write what it reads, the registration, the draw and its receipt, and the public files), by
   where each is and whether the run wrote each public one, and how each must be kept: past the week after the run,
   never only on the served node, the public ones in custody and the serve dir's, witness, in a private copy off the
   node, never in `$OUT` or custody. `--reproof-copy NODE:/PATH` with `--reproof-listing` (the copy's listing, kept
