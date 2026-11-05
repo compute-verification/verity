@@ -1,11 +1,13 @@
-import Proofs.Flock.Soundness.Discharge.Layout.Scope
-import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
-import Proofs.Flock.Soundness.Discharge.Aliased.Rows
-import Proofs.Flock.Soundness.SparseRows
-import Proofs.Flock.Soundness.ExecParse
-import Proofs.Flock.Soundness.ExecCircuit
-import Flock.TmplOrder
-import Flock.ProvedScope
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.Scope
+public import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
+public import Proofs.Flock.Soundness.Discharge.Aliased.Rows
+public import Proofs.Flock.Soundness.SparseRows
+public import Proofs.Flock.Soundness.ExecParse
+public import Proofs.Flock.Soundness.ExecCircuit
+public import Flock.TmplOrder
+public import Flock.ProvedScope
 
 /-!
 # A templated statement the check passes
@@ -17,6 +19,8 @@ template, its unit is `Built`, it is in `Layout.scopeOkI`, and the wires feed ne
 reads only port bits among its inputs because the template is ordered (`portReadsB_unroll`); the public file loads at it
 as at the committed circuit (`publicOf_unrolled`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.FailClosed
 

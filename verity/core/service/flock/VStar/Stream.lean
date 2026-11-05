@@ -1,5 +1,7 @@
-import Flock.Hash
-import Flock.Bytes
+module
+
+public import Flock.Hash
+public import Flock.Bytes
 
 /-!
 # Streaming digests
@@ -8,6 +10,8 @@ A circuit file runs to hundreds of megabytes, so it is written line by line, nev
 it in pieces (`Flock.Sha512.compress` and `Flock.Sha256.compress` on each whole block) and give the digest of their
 concatenation, as `Flock.Sha512.hash` and `Flock.Sha256.hash` of it would.
 -/
+
+@[expose] public section
 
 namespace VStar
 

@@ -1,4 +1,6 @@
-import Grader.Registry
+module
+
+public import Grader.Registry
 
 /-!
 # The grader
@@ -20,6 +22,8 @@ the kernel checks during the replay.
    environment with no environment extensions loaded, so nothing the submission's own compilation recorded is
    trusted.
 -/
+
+@[expose] public section
 
 open Lean
 

@@ -4,7 +4,12 @@ position at or above `2^16` keeps bits 16 and up in word 1, so the row commits d
 word 0 the row digest would cut to 16 bits. At `H ≤ 16` the row is the one-word form. Two words reach `H ≤ 32`, which
 every `fast100` level is below.
 -/
-import Flock.RecCoins
+module
+
+public import Flock.RecCoins
+meta import Flock.RecCoins
+
+@[expose] public section
 
 namespace Flock.Test.RecCoins
 

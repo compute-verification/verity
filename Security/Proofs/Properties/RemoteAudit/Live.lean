@@ -1,7 +1,9 @@
-import Batteries.Tactic.OpenPrivate
-import Properties.RemoteAudit.Live
-import Proofs.Properties.RemoteAudit.Order
-import Proofs.Properties.RemoteAudit.SharedLink
+module
+
+public import Batteries.Tactic.OpenPrivate
+public import Properties.RemoteAudit.Live
+public import Proofs.Properties.RemoteAudit.Order
+public import Proofs.Properties.RemoteAudit.SharedLink
 
 /-!
 # The verifier's process accepts what `Shared.run g` accepts (`liveIsRun`)
@@ -22,6 +24,10 @@ The recorded run is taken at `W c a s`, the process's session `s` with the coins
 
 `run_sim` puts them together by induction on the requests, from the end (`snoc_induction`), over `Shared.srunL g`.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 open RemoteAudit RemoteAudit.Session
 

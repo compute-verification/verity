@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FrameState
+module
+
+public import Proofs.Flock.Claims.ZK.FrameState
 
 /-!
 # The frame's fold over its requests
@@ -13,6 +15,8 @@ the step's equations that the loop's release reads:
 * `step_sched`, `step_coins`: a round with its scheduled round in its place is the frame's `check` (`check_l0`'s), and
   coins are `Masker.answer`.
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Frame
 

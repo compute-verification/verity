@@ -1,6 +1,8 @@
-import Flock.JsonParse
-import Std.Data.TreeMap.Raw.WF
-import Proofs.Flock.Claims.Complete.Json.Spec
+module
+
+public import Flock.JsonParse
+public import Std.Data.TreeMap.Raw.WF
+public import Proofs.Flock.Claims.Complete.Json.Spec
 
 /-!
 # The verifier's parser builds well-formed trees
@@ -9,6 +11,8 @@ import Proofs.Flock.Claims.Complete.Json.Spec
 `∅` with its members inserted one by one (`Std.TreeMap.Raw.WF.insert`), by induction on the parser's fuel through its
 three mutual readers (`wf_all`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

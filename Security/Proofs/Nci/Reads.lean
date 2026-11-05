@@ -1,5 +1,7 @@
-import Proofs.Nci.Throttling
-import Definitions.Nci.Guarantees.Reads
+module
+
+public import Proofs.Nci.Throttling
+public import Definitions.Nci.Guarantees.Reads
 
 /-!
 # Updated matrix multiplications are throttled, in reads form
@@ -10,6 +12,8 @@ with the IUs' total reads in place of `α size(D)`. A compliant division at `(Γ
 and each of its IUs at most `K = αΓ`, which gives back `F · 2G ≤ size(D)` through `F = f(K) / (2α)` (`F_eq_readFactor`,
 `updatedMatMul_of_reads`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Merkle
+module
+
+public import Proofs.Flock.Soundness.Merkle
 
 /-!
 # Zero knowledge: the verifier's coin commitment is binding (T6)
@@ -19,6 +21,8 @@ The proof's simulator also needs the collision computed from the two openings, i
 The model is `FlockSoundness.Merkle`'s: one hash on byte strings, injective fixed-length encodings. `mix` stands for
 `x ⊕ M(key)·y`, of which the proof needs only that it is injective in `x` for each salt.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 

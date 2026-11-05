@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.ZK.FinishSwFw
-import Proofs.Flock.VBridge.Algebra.ToVStar
-import Proofs.Flock.VBridge.Residuals
-import Proofs.Flock.Soundness.Refine.Final
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwFw
+public import Proofs.Flock.VBridge.Algebra.ToVStar
+public import Proofs.Flock.VBridge.Residuals
+public import Proofs.Flock.Soundness.Refine.Final
 
 /-!
 # The firewall's switched vectors at the packed table
@@ -12,6 +14,8 @@ trace's bits. At the packed table they agree, wherever the claim's point has the
 have (`switchVec_packed`): `eqTable` of its tail has `2^(m−7)` entries, each a word of `packed`, whose bit `v` is the
 trace's bit `128 y + v` (`packed_bit`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

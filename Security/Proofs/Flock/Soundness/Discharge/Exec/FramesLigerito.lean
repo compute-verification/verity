@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Exec.Emit
-import Proofs.Flock.Soundness.Refine.Final
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.Emit
+public import Proofs.Flock.Soundness.Refine.Final
 
 /-!
 # Ligerito's rounds, as frames (R11b; PROTOCOL.md §13.3)
@@ -12,6 +14,8 @@ keeps: sumcheck messages (`kFr`), out-of-domain values, and claim, query and con
 * The Ligerito state's steps, with the frames they emit: `nextMsg_emit`, `claimPow_emit`, `challenge_emit`,
   `oodIntro_emit`, `queryLevel_emit`; loops: `challenges_emitted`, `forIn_absorbF_emitted`, `lforIn_emitted`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

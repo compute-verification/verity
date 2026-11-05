@@ -1,6 +1,8 @@
-import Proofs.Flock.Recursive.HoloExec
-import Proofs.Flock.C3.Fork.CouplingProb
-import Proofs.Flock.C3.Fork.CouplingInh
+module
+
+public import Proofs.Flock.Recursive.HoloExec
+public import Proofs.Flock.C3.Fork.CouplingProb
+public import Proofs.Flock.C3.Fork.CouplingInh
 
 /-!
 # Piece (a), the coupling: candidate 3's compiled table against its oracle table
@@ -13,6 +15,8 @@ run of `W` opens it off `w` (`RegClash`). It needs `CompiledL`'s lockstep (`lock
 `bad_zero_of_fixed`) with R's stream as a third table, whose level 0 is fixed rather than sent, and `regPhase` between
 the reps and the openings.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 
