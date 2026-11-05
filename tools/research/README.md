@@ -106,6 +106,7 @@ research merge --mirror [SHA]                                           # main o
 research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
 research queue status|sync|land|eject|drive|ready|open [--dry-run]  # the merge queue on `next` (queue.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
+research queue preflight N --head SHA --onto COMMIT  # a pool run drive's sync launches: one merge's preflight verdict, in result.json
 research queue stats --log FILE [--hours 24] [--until T] [--json]  # where landed PRs' time went (queue_stats.py)
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 research msg send|close|read|list|names|traffic|owners|handles|subscriptions|ask-daniel|groups sync [--dry-run]   # Slack (slack.py, below)
@@ -162,7 +163,9 @@ owner (`research queue ready PR --mark --by LANE`, or `--on auto` to run the qui
 merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and one post per
 root cause names each PR it leaves out. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
 
-The mark and sync refuse a lock merge dropping an entry `next` needs (`lock_drops`).
+The mark and sync refuse a lock merge dropping an entry `next` needs (`lock_drops`). The sync runs no preflight: a merge it
+makes enters `next` on a verdict that stands for it (the mark's, or an earlier pool run's), and otherwise waits off `next`
+while a `research run --on auto` of `research queue preflight` judges it, at most drive.toml's `preflight_pool` at once.
 
 The workload receives `RESEARCH_RUN_ID`, `RESEARCH_RUN_DIR` and `OUT` (its `out/`, uploaded in full) and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local

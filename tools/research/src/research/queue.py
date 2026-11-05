@@ -132,6 +132,11 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    agreement and every disagreement (parts missing in the executor and tasks
                                                    only it ran among them), and whether the newest 3 agree fully, none
                                                    incomplete: the gate for `executor = "on"` (`research.executor`)
+    research queue preflight N --head SHA --onto COMMIT [--bundle FILE]
+                                                   a pool run drive's sync launches (`PreflightPool`), in a clone of `next` at
+                                                   COMMIT: PR N's head SHA as the sync merged it onto COMMIT, fetched from FILE
+                                                   (default the run's input pr-N.bundle), judged by `Preflight.onto`; the verdict
+                                                   goes to the run's result.json, which the next sync reads (`pool_preflight`)
     common flags: [--shadow] [--workdir DIR] [--rules FILE] [--repo OWNER/NAME] [--remote URL]
 
 Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, and is marked ready at its head;
@@ -168,8 +173,10 @@ failure `next` has too refuses nothing, and what keeps a check from running is s
 as the sync merges it (`merged_tree`), the merged tree's
 Lean is ported as the sync ports it (`ported`), and the checks run on that tree.  The merge runs the merge drivers of the commit it
 merges onto, as the sync's clone defines them (`base_drivers`): a branch's older checkout would run its own `tools/verity/lean/merge.py`, and one from before `--caps` reports a conflict in
-`tests/test_lean_packages.py` the sync never sees.  `--no-preflight` skips it, for the lander.  `next` moves after the mark, so drive's sync runs the merged tree's
-cheap checks again on each merge it makes (`Preflight.onto`, `Queue._preflighted`): see `next`.
+`tests/test_lean_packages.py` the sync never sees.  `--no-preflight` skips it, for the lander.  `next` moves after the mark, so the merged tree's
+cheap checks run again on each merge drive's sync makes, as pool runs (`Preflight.onto`, `Queue._preflighted`): see `next`.  A
+mark's pass that ran them all records its verdict for that sync (`Preflight._record`), so a sync that merges the head onto the
+same tree admits it with no pool run.
 
 Records gate.  A head whose own records run printed `AUDIT: FAIL` fails a train's Lean check, about 50 minutes later.
 So `ready` (and `judge`) first refuse a head whose change against the landing branch (drive.toml's `land_into` at `main`:
@@ -219,22 +226,22 @@ one hold holds only itself and what contains it and the members that were above 
 member it moves, so it cancels no check below a held member.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
 which files conflict and which queued PRs touched them; while its head stays, later syncs try it, and the PRs that contain it,
 above everything else, whatever `--first` or non-Lean first would say, so a sync with nothing new keeps `next`.  So is a PR whose preflight
-onto `next` refuses it: drive's sync (`Queue.preflight`, `Preflight.onto`) runs `ready`'s merged-tree checks that need no
-environment of the merged tree's (`pins.py --stale`, `PREFLIGHT_TEST_PATHS`; `lock_drops` is the sync's own) on each merge it
-makes, onto the member below the PR's place, never on the prefix it keeps (so never under a running Lean check),
-and one PR's failure stays that PR's.  It runs `PREFLIGHT_PARALLEL` of them at once, in its order: above a PR whose preflight
-still runs it merges on as if that one passes, and a refusal takes it back to where it stood before that PR and on from the PR
-above it, so each PR enters on its own preflight onto the member below its place (`Queue._preflighted`, `_Back`).  Each
-verdict is kept per (head, base tree) (the state's `preflights`), so a merge onto an unchanged tree is never preflighted
-twice, and a pass stands onto a rebuilt base that changed nothing its change touches or the checks run and deleted no path,
-while its change deletes none (`Queue._standing`); a verdict read back takes neither a preflight's place nor its time.  A
-sync's preflights start only within `PREFLIGHT_BUDGET_S` of wall time together (four at once for a minute spend a minute of
-it), and a PR whose preflight hasn't run waits off `next`, untold, for a later sync, with the PRs that contain it; those the
-last sync left waiting take the budget first (the state's `preflight_waited`), so every PR is reached in turn.  One whose
-preflight can't start and has no verdict recorded at its head waits before the sync merges it (`Queue._unflown`), unless the
-last sync left it out.  The PRs of
-drive's priority list (`Queue.priority`), with those they contain, go first of what a sync merges anew, and their preflights
-start whatever the budget and the PRs left waiting.  So is a PR a landing gate refuses (drive.toml's `landing_gates` at
+onto `next` refuses it: `ready`'s merged-tree checks that need no environment of the merged tree's (`Preflight.onto`: `pins.py
+--stale`, `PREFLIGHT_TEST_PATHS`; `lock_drops` is the sync's own) judge each merge the sync makes, onto the member below the
+PR's place, never the prefix it keeps (so never under a running Lean check), and one PR's failure stays that PR's.  The sync
+runs no preflight itself; it reads verdicts, each kept per (head, base tree): the state's `preflights`, with the store's
+`preflight` labels on `pr:N@HEAD` (a mark's pass, the pool runs' verdicts), so a merge onto an unchanged tree is judged once,
+and a pass stands onto a rebuilt base that changed nothing its change touches or the checks run and deleted no path, while its
+change deletes none (`Queue._preflighted`, `_standing`).  A merge no verdict stands for waits off `next`, untold
+(`Driver.tell_out`), with the PRs that contain it: once the sync has pushed `next`, it launches a pool run (`research run --on
+auto`, `PreflightPool`) of `research queue preflight` on the PR merged onto that tip, which the next sync merges it onto
+while nothing below changes, and the PR's reason names the run; a later sync reads its verdict (`Queue._read_runs`), records it
+in the store and admits or refuses by it.  A PR whose run is out isn't merged until a verdict may stand for it.  At most
+drive.toml's `preflight_pool` runs are out at once: the PRs of drive's priority list (`Queue.priority`) and those they contain
+launch first, then those the last sync left waiting (the state's `preflight_waited`), so every PR is reached in turn
+(`Queue._launch_runs`).  A run that ends without a verdict is launched again at the PR's next merge, and after
+`PREFLIGHT_TRIES` the PR enters unpreflighted, as one whose preflight failed to run always did (`Queue._lost`).  The PRs of
+drive's priority list, with those they contain, also go first of what a sync merges anew.  So is a PR a landing gate refuses (drive.toml's `landing_gates` at
 `main`, `gate_refusal`) on its merge onto `next` (`tools/verity/check/gates/markdown_caps.py`: one it puts over a cap),
 with the gate's fix, and a PR whose lock merge drops an entry `next`'s statements still need (`lock_drops`), naming each:
 each PR the sync merges is judged, a new one or one merged again above a
@@ -314,7 +321,6 @@ import signal
 import subprocess
 import sys
 import tempfile
-import threading
 import time
 import tomllib
 from dataclasses import dataclass, field
@@ -637,7 +643,7 @@ class DriveFlags:
     #: infra's enqueue command, the words of one argv run with no shell (`research.executor.QueueTransport`): it puts
     #: `--priority N --check after-landing:SHA` on the executor's queue; none, each tip "shadow" or "on" enqueues fails, told
     executor_enqueue: tuple[str, ...] = ()
-    #: the most preflight runs outstanding on the research pool at once (`Queue.preflights`): a sync launches one for each PR
+    #: the most preflight runs outstanding on the research pool at once (`Queue._launch_runs`): a sync launches one for each PR
     #: whose merge onto `next` has no verdict, up to this many, and the PR waits off `next` until a later sync reads its verdict
     preflight_pool: int = 16
 
@@ -1146,6 +1152,14 @@ class StoreLabels:
         """The `reviewed` labels on `pr:{n}@{head}` (`research queue review`), pulled as `ready`'s are."""
         return self._labels(pr, head, vocab.REVIEWED)
 
+    def preflights(self, pr: int, head: str) -> list:
+        """The `preflight` labels on `pr:{n}@{head}` (`Queue._stored`), pulled as `ready`'s are; none when they can't be: drive's
+        state keeps the verdicts it read, and a verdict missing costs a pool run, never an admission."""
+        try:
+            return self._labels(pr, head, vocab.PREFLIGHT)
+        except QueueError:
+            return []
+
     def ready_by(self, pr: int, head: str) -> str | None:
         """Who wrote the newest `ready = true` label on `pr:{n}@{head}`, whenever it was written."""
         labs = [lab for lab in sorted(self._labels(pr, head, vocab.READY), key=lambda lab: lab.ts) if str(lab.value).lower() == "true"]
@@ -1236,42 +1250,6 @@ class Entry:
         """How a notice names ``n``, one of `after`, with the head of ``n``'s it holds (`held`), never a merge base: one of two
         branches that both merged `main` can be a commit of `main`."""
         return f"#{n}'s commits at its older head {self.held[n][:12]}" if n in self.older else f"#{n}'s head {self.held[n][:12]}"
-
-
-@dataclass
-class _Back:
-    """Where `Queue.sync`'s walk stood before a PR whose preflight it merges on above (`_Flight.back`): the index of the PR
-    above it, `next`'s tip and members below it, the PRs it had left out (of them ``unrun``, for a preflight not yet run) and
-    what it tells their owners, the moves below the tip, the waiting PRs still to come (`Queue._preflight_ahead`), the entries
-    above it as they stood ({PR: (state, why)}), how many lines it had logged, and how many verdicts it had read back
-    (`Queue._preflights_reused`)."""
-    i: int
-    tip: str
-    members: list[Member]
-    dropped: set[int]
-    unrun: set[int]
-    conflicts: dict[str, dict]
-    waits: dict[str, dict]
-    moves: list[Move]
-    ahead: set[int]
-    states: dict[int, tuple[str, str]]
-    said: int
-    reused: int
-
-
-@dataclass
-class _Flight:
-    """A preflight a sync started (`Queue._preflighted`): of ``pr``'s merge onto a base, recorded under ``key`` (its head and
-    the base's tree) with the merged tree ``tree``, running in the sync's pool (``future``) from ``start`` to ``end`` by the
-    queue's `clock`.  ``back``: where the walk stood before that merge, while it merges on above it as if it passes; None once
-    a refusal below took the walk back past it, when its verdict is only recorded."""
-    pr: PR
-    key: str
-    tree: str
-    start: float
-    end: float | None = None
-    future: concurrent.futures.Future | None = None
-    back: _Back | None = None
 
 
 def contained(repo: Path, base: str, head: str, heads: dict[str, int]) -> list[int]:
@@ -1396,29 +1374,21 @@ class Queue:
         self._parked: list[int] = []
         #: the bottom members `order` keeps where they are under `hold`, each at the head `next` holds
         self._held: dict[int, str] = {}
+        #: the wall clock: a stale PR's age, and when a pool run launched and how long it has gone without a verdict
         self.now: Callable[[], float] = time.time
-        #: the most preflight runs outstanding at once (drive.toml's `preflight_pool`)
+        #: what judges a merge the sync makes onto `next` before it enters (`PreflightPool`: a pool run of `Preflight.onto` on
+        #: it), or None: no such check (a sync off drive's, a test); `preflight_pool` of its runs outstanding at once
+        self.pool: PreflightPool | None = None
         self.preflight_pool = DriveFlags.preflight_pool
-        #: what a PR the sync merges onto `next` passes to enter it (`Preflight.onto`: its merge onto the member below its place,
-        #: with the members below), or None: no such check (a sync off drive's, a test); `_preflighted` runs
-        #: `preflight_parallel` at once and starts them within `PREFLIGHT_BUDGET_S` of wall time a sync, measured by `clock`
-        self.preflight: Callable[[PR, str, str, list[Member]], str | None] | None = None
-        self.preflight_parallel = PREFLIGHT_PARALLEL
-        self.clock: Callable[[], float] = time.monotonic
-        #: the sync's preflights: every one it started (`_preflight_spent`), and those whose verdict it hasn't read, oldest first
-        self._flown: list[_Flight] = []
-        self._running: list[_Flight] = []
-        #: the PRs the last sync left waiting for their preflight (the state's `preflight_waited`) with those they contain, whose
-        #: preflights take this sync's budget first, and those of the waiting still to come in this sync (`_preflighted`)
-        self._preflight_first: set[int] = set()
-        self._preflight_ahead: set[int] = set()
-        #: the merges this sync took a recorded preflight verdict for instead of running one (`_preflighted`)
+        #: the `preflight` labels on a PR's head (`StoreLabels.preflights`; None: this store's own), which `_stored` reads
+        self.verdicts: Callable[[int, str], list] | None = None
+        #: the merges this sync admitted or refused on a recorded verdict (`_preflighted`)
         self._preflights_reused = 0
         #: each member's base on `next` as this sync found it, by head (`_next_base`), read once a sync
         self._next_bases: dict[str, str] | None = None
         #: drive's priority list (`--priority-file`: `priority_file`, read again at each sync, `priority_list`): these PRs and
-        #: those they contain (`_prioritized`) go first of what a sync merges anew (`order`), and their preflights start
-        #: whatever `PREFLIGHT_BUDGET_S` and the PRs the last sync left waiting (`_preflighted`)
+        #: those they contain (`_prioritized`) go first of what a sync merges anew (`order`), and their pool runs launch first
+        #: (`_launch_runs`)
         self.priority: frozenset[int] = frozenset()
         self.priority_file: Path | None = None
         self._prioritized: set[int] = set()
@@ -2173,21 +2143,13 @@ class Queue:
             verdicts[key] = refused
         return refused, unjudged
 
-    def _preflighted(self, pr: PR, tip: str, commit: str, members: list[Member], flights: dict,
-                     pool: concurrent.futures.Executor) -> tuple[bool | _Flight, str | None]:
-        """(whether ``pr``'s preflight onto ``tip`` is known, its refusal or None, or why it waits), or (the preflight it
-        started, None): `preflight` of ``commit``, its merge onto ``tip`` above ``members``, recorded per (head, base) in
-        ``flights`` (the state's `preflights`): a pair whose verdict is recorded, for the same merged tree, isn't run again, and
-        a pass onto another base tree stands where `_standing` says it does; either verdict is read back at once, taking no
-        place in ``pool`` and none of the budget.  The base is taken by its tree: the queue's merges carry the time they're
-        made, so a rebuilt `next` names the same members' merges anew.  A preflight starts in ``pool``, beside the others of
-        this sync still running (`_running`; `_landed` reads its verdict), only while they have run under `PREFLIGHT_BUDGET_S`
-        of wall time (`_preflight_spent`); past it the PR waits off `next` for a later sync.  The PRs the last sync left
-        waiting (the state's `preflight_waited`), and those they contain, take the budget first: while one of them is still to
-        come in this sync, any other PR waits too instead of spending it, so the PRs before one the budget skipped can't skip
-        it again sync after sync, and every PR is reached in turn.  A PR of drive's priority list, or one it contains
-        (`_prioritized`), waits for neither: its preflight starts whatever the budget, and its time is spent of it as any
-        other's."""
+    def _preflighted(self, pr: PR, tip: str, commit: str, flights: dict) -> tuple[bool, str | None]:
+        """(whether a verdict in ``flights`` stands for ``commit``, ``pr``'s merge onto ``tip``, and its refusal or None).
+        ``flights`` holds them per (head, base): the state's `preflights`, the pool runs' (`_read_runs`) and the store's
+        (`_stored`).  A pair whose verdict is recorded for the same merged tree takes it, and a pass onto another base tree
+        stands where `_standing` says it does.  The base is taken by its tree: the queue's merges carry the time they're made, so
+        a rebuilt `next` names the same members' merges anew.  The sync runs no preflight itself: a merge no verdict stands for
+        waits off `next` for a pool run's (`_launch_runs`)."""
         base_tree, tree = _out(self.workdir, "rev-parse", f"{tip}^{{tree}}", f"{commit}^{{tree}}").split()
         key = f"{pr.head}:{base_tree}"
         for got in (flights["now"].get(key), flights["before"].get(key)):
@@ -2199,65 +2161,172 @@ class Queue:
             flights["now"][key] = {"pr": pr.number, "head": pr.head, "tree": tree, "why": None}
             self._preflights_reused += 1
             return True, None
-        if why := self._waits(pr):
-            return False, why
-        f = _Flight(pr, key, tree, self.clock())
-        f.future = pool.submit(self._fly, f, tip, commit, list(members))
-        self._flown.append(f)
-        self._running.append(f)
-        return f, None
+        return False, None
 
-    def _waits(self, pr: PR) -> str | None:
-        """Why ``pr``'s preflight can't start in this sync (`_preflighted`'s budget and order), or None: one of drive's priority
-        list, or one it contains (`_prioritized`), never waits."""
-        if pr.number in self._prioritized:
-            return None
-        if self._preflight_ahead and pr.number not in self._preflight_first:
-            return (f"its preflight onto `{self.branch}` hasn't run: the PRs the last sync left waiting for theirs go "
-                    f"first ({' '.join(f'#{n}' for n in sorted(self._preflight_ahead))}), so a later sync runs it")
-        if self._preflight_spent() >= PREFLIGHT_BUDGET_S:
-            return (f"its preflight onto `{self.branch}` hasn't run: this sync's preflights took their "
-                    f"{PREFLIGHT_BUDGET_S:g} s, so a later sync runs it")
-        return None
+    @staticmethod
+    def _judged(head: str, flights: dict) -> bool:
+        """Whether ``flights`` holds a verdict of ``head``'s onto any base: the only thing that could admit or refuse it while its
+        pool run is out (`_preflighted`); without one its merge, the gates and the port's codemod on it would be thrown away."""
+        prefix = f"{head}:"
+        return any(key.startswith(prefix) for got in (flights["now"], flights["before"]) for key in got)
 
-    def _unflown(self, pr: PR, flights: dict) -> str | None:
-        """Why ``pr`` waits off `next` before the sync merges it, or None: its preflight can't start in this sync (`_waits`)
-        and no verdict is recorded for its head in ``flights``, the only thing that could admit or refuse it without one
-        (`_preflighted`), so its merge, the gates and the port's codemod on it would be thrown away."""
-        prefix = f"{pr.head}:"
-        if any(key.startswith(prefix) for got in (flights["now"], flights["before"]) for key in got):
-            return None
-        return self._waits(pr)
+    def _run_wait(self, rec: dict) -> str:
+        """The reason of a PR whose pool run ``rec`` (`_launch_runs`) is out."""
+        return (f"{PREFLIGHT_WAIT}: run {rec['run']} judges its merge onto `{self.branch}` at {rec['onto'][:12]} "
+                f"(`research status {rec['run']}`)")
 
-    def _fly(self, f: _Flight, tip: str, commit: str, members: list[Member]) -> str | None:
-        """`preflight` of ``f``'s merge ``commit`` onto ``tip``, in a thread of the sync's pool; ``f`` gets when it ended."""
+    def _read_runs(self, state: dict, entries: dict[int, Entry], flights: dict, dry_run: bool) -> dict[str, dict]:
+        """The state's `preflight_runs` ({PR: its pool run's record, `_launch_runs`}) of the PRs of ``entries`` still at the head
+        each was launched for, with each run that ended read (`PreflightPool.read`): one with its verdict is taken into
+        ``flights`` (`_take`) and its record dropped, and one without counts as lost (`_lost`).  A run whose PR closed, landed or
+        moved to another head is cancelled, and so is one with nothing to read `PREFLIGHT_LOST_S` after its launch, which counts
+        as lost."""
+        runs: dict[str, dict] = {}
+        gone = []
+        for k, rec in (state.get("preflight_runs") or {}).items():
+            if (e := entries.get(int(k))) is not None and e.pr.head == rec.get("head"):
+                runs[k] = rec
+            elif rec.get("run"):
+                gone.append(rec["run"])
+        self._cancel_runs(gone, "its PR closed, landed or moved to another head", dry_run)
+        out = {int(k): rec for k, rec in runs.items() if rec.get("run")}
+        late = []
+        for n, v in (self.pool.read(out) if out else {}).items():
+            rec = out[n]
+            if v is None and self.now() - rec["at"] <= PREFLIGHT_LOST_S:
+                continue
+            if v is None:
+                v = f"run {rec['run']} gave no verdict in {PREFLIGHT_LOST_S // 60} min"
+                late.append(rec["run"])
+            elif isinstance(v, dict):
+                if (v.get("pr") == n and all(v.get(f) == rec[f] for f in ("head", "onto", "base", "commit", "tree"))
+                        and ((why := v.get("why")) is None or isinstance(why, str))):
+                    self._take(n, rec, v, flights, dry_run)
+                    del runs[str(n)]
+                    continue
+                v = f"run {rec['run']}'s verdict isn't of the merge it was sent"
+            self._lost(runs, n, rec["head"], int(rec.get("tries") or 1), v)
+        self._cancel_runs(late, f"it gave no verdict in {PREFLIGHT_LOST_S // 60} min", dry_run)
+        return runs
+
+    def _take(self, n: int, rec: dict, v: dict, flights: dict, dry_run: bool) -> None:
+        """PR ``n``'s pool run ``rec``'s verdict ``v`` (`pool_preflight`'s) into ``flights``, what its preflight said into the log,
+        and, but on a dry run or a shadow, into the store: a `preflight` label by drive on `pr:{n}@{head}` ({base, tree, why,
+        onto, of: pool}, the run's id its ref), which `_stored` reads."""
+        head, rid, why = rec["head"], rec["run"], v.get("why")
+        flights["now"][f"{head}:{rec['base']}"] = {"pr": n, "head": head, "tree": rec["tree"], "why": why, "of": "pool", "run": rid}
+        for line in v.get("log") or ():
+            self.log(str(line))
+        if why:
+            self.log(f"research queue: preflight: #{n} at {head[:12]}: run {rid} refused it: {why.splitlines()[0]}")
+        if dry_run or self.shadow or self.store is None:
+            return
+        from .store.cli import _label_write_through
+
+        target = label_target(n, head)
+        value = {"base": rec["base"], "tree": rec["tree"], "why": why, "onto": rec["onto"], "of": "pool"}
         try:
-            return self.preflight(f.pr, tip, commit, members)
+            self.store.add_label(target, vocab.PREFLIGHT, value, "drive", ref=rid,
+                                 ts=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(self.now())))
+            said, lost = _label_write_through(self.store, target)
+        except Exception as e:  # noqa: BLE001  (the state keeps the verdict; the store's copy is for other syncs)
+            said, lost = f"{type(e).__name__}: {e}", True
+        if lost:
+            self.log(f"research queue: #{n}'s preflight verdict at {head[:12]} isn't on the store's remote: {said}")
+
+    def _lost(self, runs: dict[str, dict], n: int, head: str, tries: int, why: str) -> None:
+        """PR ``n``'s ``tries``th pool run at ``head`` gave no verdict (``why``): its next merge launches another, and after
+        `PREFLIGHT_TRIES` it enters `next` unpreflighted, as one whose preflight failed to run always did (the preflight saves a
+        revert; the after-landing run still tests the head)."""
+        runs[str(n)] = {"head": head, "tries": tries, "lost": why}
+        if tries < PREFLIGHT_TRIES:
+            self.log(f"research queue: #{n}'s preflight run at {head[:12]} gave no verdict ({why}); its next merge launches "
+                     "another")
+            return
+        runs[str(n)]["unjudged"] = True
+        self.log(f"research queue: #{n} at {head[:12]} enters `{self.branch}` unpreflighted: its {tries} preflight runs gave no "
+                 f"verdict (the last: {why})")
+
+    def _cancel_runs(self, ids: list[str], reason: str, dry_run: bool) -> None:
+        """`PreflightPool.cancel` of the pool runs ``ids``, each that failed logged: a run left going holds a pool's slot."""
+        if not ids or dry_run:
+            return
+        for rid, why in (self.pool.cancel(ids, reason) or {}).items():
+            self.log(f"research queue: preflight run {rid} isn't cancelled ({reason}): {why}")
+
+    def _stored(self, ns: list[int], entries: dict[int, Entry], flights: dict) -> None:
+        """The store's verdicts of the heads of ``ns`` (`preflight` labels on `pr:{n}@{head}`: `verdicts`, else this store's
+        own), the newest of each pair, into ``flights``' `before` where it doesn't hold that pair yet: a mark's pass
+        (`Preflight._record`) and the pool runs' verdicts another clone's sync took (`_take`).  A label of another shape is no
+        verdict."""
+        for n in ns:
+            head = entries[n].pr.head
+            labels = (self.verdicts(n, head) if self.verdicts is not None
+                      else self.store.labels(label_target(n, head), key=vocab.PREFLIGHT) if self.store is not None else [])
+            for lab in reversed(labels):
+                v = lab.value
+                if not (isinstance(v, dict) and isinstance(v.get("base"), str) and isinstance(v.get("tree"), str)):
+                    continue
+                why = v.get("why")
+                if not (v.get("of") == "pool" and (why is None or isinstance(why, str)) or v.get("of") == "ready" and why is None):
+                    continue
+                key = f"{head}:{v['base']}"
+                if key not in flights["now"] and key not in flights["before"]:
+                    flights["before"][key] = {"pr": n, "head": head, "tree": v["tree"], "why": why, "of": v["of"]}
+
+    def _launch_runs(self, wanted: dict[int, tuple[str, str]], runs: dict[str, dict], tip: str, main: str,
+                     members: list[Member], order: list[int], waited: set[int], entries: dict[int, Entry],
+                     waits: dict[str, dict], dry_run: bool) -> dict | None:
+        """One launch (`PreflightPool.launch`) of a pool run for each PR of ``wanted`` ({PR: (the tip its merge went onto, the
+        merge)}), those this sync merged that no verdict stands for, while fewer than `preflight_pool` of ``runs`` are out:
+        drive's priority list and those it contains first (`_prioritized`), then those the last sync left waiting
+        (``waited``), then in ``order``.  Each run judges its PR merged onto ``tip``, the `next` this sync pushed, which the next
+        sync merges it onto while nothing below changes: a merge onto a tip below it is made again onto it.  Each PR's reason
+        (``entries``, ``waits``) names its run, or why it has none; ``runs`` gets each run's record.  The launch's record, or
+        None."""
+        rank = {n: i for i, n in enumerate(order)}
+        slots = self.preflight_pool - sum(1 for rec in runs.values() if rec.get("run"))
+        why: dict[int, str] = {}
+        chosen: list[tuple[int, str, str, str]] = []
+        log, self.log = self.log, lambda line: None         # the walk told what each merge says
+        try:
+            for n in sorted(wanted, key=lambda n: (n not in self._prioritized, n not in waited, rank[n])):
+                pr, (at, commit) = entries[n].pr, wanted[n]
+                if len(chosen) >= slots:
+                    why[n] = (f"{PREFLIGHT_WAIT}: {self.preflight_pool} preflight runs are out (drive.toml's `preflight_pool`), "
+                              "so a later sync launches its own")
+                    continue
+                if at != tip:
+                    commit = (self._regenerate(tip, pr, main) if pr.move else self._merge_through(tip, pr, members))[0]
+                if commit in (None, tip):
+                    why[n] = f"{PREFLIGHT_WAIT}: it doesn't merge onto `{self.branch}` at {tip[:12]}, so the next sync merges it again"
+                    continue
+                chosen.append((n, pr.head, commit, self.pool.new_id()))
         finally:
-            f.end = self.clock()
-
-    def _landed(self, f: _Flight, flights: dict, log: Callable[[str], None]) -> str | None:
-        """``f``'s refusal or None, once it has ended, recorded in ``flights`` as `_preflighted` reads it.  One that raised admits
-        its PR, logged by ``log``, and is run again only if its pair comes again."""
-        self._running.remove(f)
-        try:
-            why = f.future.result()
-        except Exception as e:  # noqa: BLE001  (the preflight saves a revert; the after-landing run still checks the head)
-            if f.back is not None:
-                log(f"research queue: #{f.pr.number}'s preflight onto `{self.branch}` failed to run ({type(e).__name__}: {e}); "
-                    "it enters unpreflighted")
-            return None
-        flights["now"][f.key] = {"pr": f.pr.number, "head": f.pr.head, "tree": f.tree, "why": why}
-        return why
-
-    def _preflight_spent(self) -> float:
-        """The wall time, by `clock`, in which any of this sync's preflights ran (`_flown`): four at once for a minute spend a
-        minute."""
-        now, spent, reach = self.clock(), 0.0, -math.inf
-        for start, end in sorted((f.start, now if f.end is None else f.end) for f in self._flown):
-            spent += max(0.0, end - max(start, reach))
-            reach = max(reach, end)
-        return spent
+            self.log = log
+        launch = None
+        if chosen and dry_run:
+            why.update((n, f"{PREFLIGHT_WAIT} (dry run: no pool run launched)") for n, *_ in chosen)
+        elif chosen:
+            try:
+                launch = {**self.pool.launch(tip, chosen), "at": self.now()}
+            except (QueueError, OSError) as e:
+                for n, head, _, _ in chosen:
+                    why[n] = f"{PREFLIGHT_WAIT}: its pool run couldn't launch ({e})"
+                    self._lost(runs, n, head, int((runs.get(str(n)) or {}).get("tries") or 0) + 1, f"it couldn't launch ({e})")
+            else:
+                base = _tree(self.workdir, tip)
+                for n, head, commit, rid in chosen:
+                    tries = int((runs.get(str(n)) or {}).get("tries") or 0) + 1
+                    runs[str(n)] = {"head": head, "run": rid, "onto": tip, "base": base, "commit": commit,
+                                    "tree": _tree(self.workdir, commit), "at": self.now(), "tries": tries,
+                                    "launch": launch["dir"], "pid": launch["pid"]}
+                    why[n] = self._run_wait(runs[str(n)])
+                self.log(f"research queue: launched {len(chosen)} preflight run(s) of merges onto `{self.branch}` at {tip[:12]}: "
+                         + " ".join(f"#{n} ({rid})" for n, _, _, rid in chosen))
+        for n, w in why.items():
+            entries[n].why = waits[str(n)]["why"] = w
+        return launch
 
     def _next_base(self, head: str) -> str | None:
         """The tree ``head`` was merged onto on `next` as this sync found it (its merge's first parent there), or None."""
@@ -2277,7 +2346,7 @@ class Queue:
         first the one onto the base it had on `next` as this sync found it (`_next_base`), then its newest by position (the state
         is saved with its keys sorted, so position orders a head's records by their bases' hashes, not by time).  A rebuild of
         `next` (a landing's lock commit, a lift, an ejection, a `main` that moved) gives every member above the change a new base
-        tree, and each preflight takes a place in the sync's pool and wall time of its budget.  It stands when (a) the head's
+        tree, and each merge no verdict stands for waits a sync or more for a pool run's.  It stands when (a) the head's
         change is the same onto both bases: `git diff-tree -r` from base to merge, each path with its modes and blobs on both
         sides, so no path it touches differs between the bases and the merge (a rebuilt pin, a restack) wrote the same files;
         (b) the change deletes no path; (c) no path deleted between the bases is named by a file the change writes
@@ -2289,9 +2358,9 @@ class Queue:
         makes (tools/research/src/ and tools/verity/check/ change most), while a PR entering `next` is preflighted under the
         checks as they are.  What still carries is a reference to a name the other side drops from a file it keeps (a
         `module:attr` whose attribute a change below removed), and a member a changed check would refuse: the after-landing
-        run's suites run these checks on `checked`'s tip and revert the culprit, as for a preflight that fails to run.  The
-        record may be of a preflight run above one that then refused (`_Back`): it judged the trees it names all the same.  A
-        record whose trees this clone lacks stands for nothing."""
+        run's suites run these checks on `checked`'s tip and revert the culprit, as for a preflight that fails to run.  A record
+        is the same whoever made it, a pool run (`_take`) or a mark's preflight (`_stored`), and one whose trees this clone lacks
+        stands for nothing."""
         records = []
         member = None
         if (on_next := self._next_base(head)) is not None:
@@ -2505,10 +2574,13 @@ class Queue:
         before = (cache.get("of") or {}) if (cache.get("main"), cache.get("gates")) == (main, list(gates)) else {}
         verdicts: dict[str, list[str]] = {}
         flights = {"before": state.get("preflights") or {}, "now": {}}
-        self._flown, self._running, self._preflights_reused, self._next_bases = [], [], 0, None
+        self._preflights_reused, self._next_bases = 0, None
+        runs: dict[str, dict] = {}
+        if self.pool is not None:
+            runs = self._read_runs(state, entries, flights, dry_run)
+            self._stored(order[k:], entries, flights)
         waited = {n for n in state.get("preflight_waited") or () if n in entries}
-        self._preflight_first = waited.union(*(entries[n].after for n in waited))
-        self._preflight_ahead = waited & set(order[k:])
+        wanted: dict[int, tuple[str, str]] = {}
         unrun: set[int] = set()
         merged = False
         if tip != main:                                         # the moves among the members `next` keeps
@@ -2521,97 +2593,60 @@ class Queue:
             dropped.add(n)
             conflicts[str(n)] = {"head": e.pr.head, "why": why, "handle": self.handle(e.pr)}
 
-        # the walk merges on above a PR whose preflight still runs as if it passes (`aloft`, oldest first, each with where the
-        # walk stood before it), and a refusal takes it back there; what it logs above a preflight still running is told once
-        # that one passes, and dropped if it refuses
-        aloft: list[_Flight] = []
-        log, said, told, i = self.log, [], 0, k
-        self.log = said.append
-        pool = concurrent.futures.ThreadPoolExecutor(self.preflight_parallel, thread_name_prefix="preflight")
-        try:
-            while i < len(order) or self._running:
-                upto = aloft[0].back.said if aloft else len(said)
-                for line in said[told:upto]:
-                    log(line)
-                told = upto
-                if self._running and (i == len(order) or len(self._running) >= self.preflight_parallel):
-                    f = self._running[0]               # the oldest: those a refusal left running, then `aloft`'s
-                    why = self._landed(f, flights, log)
-                    if f.back is not None:
-                        b = aloft.pop(0).back
-                        if why:
-                            i, tip, members, dropped, unrun = b.i, b.tip, b.members, b.dropped, b.unrun
-                            conflicts, waits, self._moves, self._preflight_ahead = b.conflicts, b.waits, b.moves, b.ahead
-                            self._preflights_reused = b.reused
-                            for m, (s, w) in b.states.items():
-                                entries[m].state, entries[m].why = s, w
-                            del said[b.said:]
-                            for g in aloft:
-                                g.back = None
-                            aloft.clear()
-                            refuse(f.pr.number, why)
-                    continue
-                n = order[i]
-                i += 1
-                e = entries[n]
-                self._preflight_ahead.discard(n)
-                if blocked := [a for a in e.after if a in dropped]:
-                    e.state, e.why = "waiting", f"contains {e.contains(blocked[0])}, which " + (
-                        "waits for its preflight" if blocked[0] in unrun else "didn't merge")
-                    dropped.add(n)
-                    if blocked[0] in unrun:
-                        unrun.add(n)
-                        continue
-                    waits[str(n)] = {"head": e.pr.head, "why": e.why, "handle": self.handle(e.pr)}
-                    if state.get("waiting", {}).get(str(n), {}).get("head") != e.pr.head:
-                        self.log(f"research queue: #{n} at {e.pr.head[:8]} waits off `{self.branch}`: {e.why}")
-                    continue
-                # what the last sync left out is merged again whatever the budget, so its refusal stands, told once
-                if self.preflight is not None and not e.pr.move and n not in out and (why := self._unflown(e.pr, flights)):
-                    e.state, e.why = "waiting", why
-                    dropped.add(n)
+        def wait(n: int, why: str) -> None:
+            e = entries[n]
+            e.state, e.why = "waiting", why
+            dropped.add(n)
+            unrun.add(n)
+            waits[str(n)] = {"head": e.pr.head, "why": why, "handle": self.handle(e.pr)}
+
+        for n in order[k:]:
+            e = entries[n]
+            if blocked := [a for a in e.after if a in dropped]:
+                e.state, e.why = "waiting", f"contains {e.contains(blocked[0])}, which " + (
+                    "waits for its preflight" if blocked[0] in unrun else "didn't merge")
+                dropped.add(n)
+                if blocked[0] in unrun:
                     unrun.add(n)
                     continue
-                if e.pr.move:
-                    commit, why = self._regenerate(tip, e.pr, main)
-                else:
-                    commit, why = self._merge_through(tip, e.pr, members)
-                merged = True
-                # a regenerated move is `rename.py`'s output that `move_check.py` certified, lock texts included: what its map
-                # rewrites in a premise or a frozen entry's reason is no drop
-                if not e.pr.move and commit not in (None, tip) and (drops := self._lock_drops(tip, e.pr.head, commit)):
-                    commit, why = None, lock_drop_refusal(drops, self.branch)
-                if commit is not None and gates:
-                    refused, unjudged = self._gated(main, gates, tip, commit, e.pr, before, verdicts)
-                    if refused or unjudged:
-                        commit, why = None, " | ".join(refused + unjudged)
-                if commit is not None and commit != tip and self.preflight is not None:
-                    ran, why = self._preflighted(e.pr, tip, commit, members, flights, pool)
-                    if isinstance(ran, _Flight):
-                        ran.back = _Back(i, tip, list(members), set(dropped), set(unrun), dict(conflicts), dict(waits),
-                                         list(self._moves), set(self._preflight_ahead),
-                                         {m: (entries[m].state, entries[m].why) for m in order[i:]}, len(said),
-                                         self._preflights_reused)
-                        aloft.append(ran)
-                    elif not ran:
-                        e.state, e.why = "waiting", why
-                        dropped.add(n)
-                        unrun.add(n)
-                        continue
-                    elif why:
-                        commit = None
-                if commit is None:
-                    refuse(n, why)
+                waits[str(n)] = {"head": e.pr.head, "why": e.why, "handle": self.handle(e.pr)}
+                if state.get("waiting", {}).get(str(n), {}).get("head") != e.pr.head:
+                    self.log(f"research queue: #{n} at {e.pr.head[:8]} waits off `{self.branch}`: {e.why}")
+                continue
+            # what the last sync left out is merged again, so its refusal stands, told once
+            run = runs.get(str(n)) or {}
+            if self.pool is not None and n not in out and run.get("run") and not self._judged(e.pr.head, flights):
+                wait(n, self._run_wait(run))
+                continue
+            if e.pr.move:
+                commit, why = self._regenerate(tip, e.pr, main)
+            else:
+                commit, why = self._merge_through(tip, e.pr, members)
+            merged = True
+            # a regenerated move is `rename.py`'s output that `move_check.py` certified, lock texts included: what its map
+            # rewrites in a premise or a frozen entry's reason is no drop
+            if not e.pr.move and commit not in (None, tip) and (drops := self._lock_drops(tip, e.pr.head, commit)):
+                commit, why = None, lock_drop_refusal(drops, self.branch)
+            if commit is not None and gates:
+                refused, unjudged = self._gated(main, gates, tip, commit, e.pr, before, verdicts)
+                if refused or unjudged:
+                    commit, why = None, " | ".join(refused + unjudged)
+            if commit not in (None, tip) and self.pool is not None:
+                known, refusal = self._preflighted(e.pr, tip, commit, flights)
+                if not known and not run.get("unjudged"):
+                    wait(n, self._run_wait(run) if run.get("run") else f"{PREFLIGHT_WAIT} onto `{self.branch}`")
+                    if not run.get("run"):
+                        wanted[n] = (tip, commit)
                     continue
-                tip = commit
-                members.append(Member(n, e.pr.head, e.pr.owner or "", commit))
-                if e.pr.move:
-                    self._moves.append(Move(commit, e.pr.move))
-        finally:
-            pool.shutdown()
-            self.log = log
-            for line in said[told:]:
-                log(line)
+                if refusal:
+                    commit, why = None, refusal
+            if commit is None:
+                refuse(n, why)
+                continue
+            tip = commit
+            members.append(Member(n, e.pr.head, e.pr.owner or "", commit))
+            if e.pr.move:
+                self._moves.append(Move(commit, e.pr.move))
         if merged:                  # drive runs train.sh and check.py from the worktree: `next`'s tip after a sync
             _git(self.workdir, "checkout", "-q", "--detach", tip)
         for i, m in enumerate(members, 1):
@@ -2620,6 +2655,7 @@ class Queue:
         if tip != old and not dry_run:
             self._remote(self.workdir, "push", "-q", f"--force-with-lease=refs/heads/{self.branch}:{old}", "origin",
                          f"{tip}:refs/heads/{self.branch}")
+        launch = self._launch_runs(wanted, runs, tip, main, members, order, waited, entries, waits, dry_run) if wanted else None
         self.log(f"research queue: `{self.branch}` at {tip[:12]}: {len(members)} PR(s) above `{self.into}`"
                  + (f", kept {k}, merged {len(members) - k}" if members else "")
                  + (f", merges reused for {self._merges_reused}" if self._merges_reused else "")
@@ -2632,12 +2668,16 @@ class Queue:
             state["moves_made"] = {k: v for k, v in self._made.items() if k in self._used}
             moves = {mv.commit for mv in self._moves}
             state["restacks"] = {k: v for k, v in self._restacks.items() if k in self._used or k.rpartition(":")[2] in moves}
-            if self.preflight is not None:
+            if self.pool is not None:
                 heads = {p.head for p in prs}
                 newest = {**{k: v for k, v in flights["before"].items() if k not in flights["now"]}, **flights["now"]}
                 kept = {key: rec for key, rec in newest.items() if rec.get("head") in heads}
                 state["preflights"] = dict(list(kept.items())[-GATE_VERDICTS:])
                 state["preflight_waited"] = sorted(unrun)
+                state["preflight_runs"] = runs
+                launches = [*(state.get("preflight_launches") or ()), *([launch] if launch else [])]
+                state["preflight_launches"] = self.pool.sweep(launches, {r["launch"] for r in runs.values() if r.get("launch")},
+                                                              self.now() - PREFLIGHT_LOST_S)
             if gates:
                 newest = {**{h: v for h, v in before.items() if h not in verdicts}, **verdicts}
                 state["gate_verdicts"] = {"main": main, "gates": list(gates), "of": dict(list(newest.items())[-GATE_VERDICTS:])}
@@ -3603,10 +3643,8 @@ def _tree(repo: Path, commit: str) -> str:
 #: of the control pod, less `PREFLIGHT_DESELECT`
 PREFLIGHT_TEST_PATHS = ("tests/test_module_strings.py", "tests/test_pins.py", "tests/test_doc_paths.py",
                         "tests/test_repository.py", "tools/research/tests/test_pythonpath.py")
-#: tests of `PREFLIGHT_TEST_PATHS` the sync's preflight (`Preflight.onto`) leaves to the after-landing check: no merge makes
-#: what they find that neither side has, and they take long enough to run the rest out of its budget.  The secret-like literal
-#: scan takes about 14 s of the other tests' 16 s, so four preflights at once on the control pod's 4 vCPUs reached the 45 s
-#: budget before `tests/test_doc_paths.py` reported, and doc paths a merge broke entered `next`
+#: tests of `PREFLIGHT_TEST_PATHS` the sync's preflight run (`Preflight.onto`) leaves to the after-landing check: no merge makes
+#: what they find that neither side has, and the secret-like literal scan alone takes about 14 s of the other tests' 16 s
 PREFLIGHT_DESELECT = ("tests/test_repository.py::test_no_secret_like_literals",)
 #: what the sync's preflight runs rather than judges: `PREFLIGHT_TEST_PATHS` and what they load from the tree (pytest's settings
 #: for the two directories they run in, the conftest of `tools/research/tests` (one added beside the root's tests belongs here
@@ -3664,19 +3702,33 @@ ONTO_SKIPS = ("the merged tree's environment and Lean build (`uv sync --locked`,
               + " among it")
 #: what the merged tree's checks may take together; what hasn't finished by then is named and refuses nothing.  Every suite's
 #: collection but circuit-check's takes about 18 s on 4 workers of a 4-core VM; `PREFLIGHT_LINTS` add up to a minute
-PREFLIGHT_BUDGET_S = 120.0
-#: the sync's preflights (`Preflight.onto`) at once, which start within `PREFLIGHT_BUDGET_S` of wall time a sync
-#: (`Queue._preflighted`).  Each is a worktree of drive's clone (the tree's ~190 MB of files, added and removed under train.sh's
-#: lock: `merged_worktree`) and one process at a time in it (`pins.py --stale`, then pytest on `PREFLIGHT_TESTS` with no synced
-#: environment: one core and under 200 MB each), and they share no other file: four fit the control pod's 4 vCPUs and 16 GB
-PREFLIGHT_PARALLEL = 4
+PREFLIGHT_CHECKS_S = 120.0
 #: collections at once: four torch-importing `--collect-only` runs reach about 8 GB, half of a marker's 16 GB VM
 PREFLIGHT_JOBS = 2
 #: below this share of memory available, no suite is collected, so a mark never OOMs the VM's other agents (the shell hook's `AGENT_GUARD_MIN_AVAIL`)
 PREFLIGHT_MIN_FREE = 0.25
+#: a pool run's shape (`PreflightPool`): `research queue preflight` runs one process at a time, one core and under 200 MB each,
+#: within `PREFLIGHT_CHECKS_S`; past `--pool-wait` in its pool's line it exits 75 unrun, a run with no verdict
+PREFLIGHT_RUN = ("--cpus", "2", "--mem-gb", "4", "--max-min", "15", "--pool-wait", "1800")
+#: the pool runs one launch starts at once: each `research run --on auto` first reads every pool's machine over ssh
+PREFLIGHT_LAUNCH_JOBS = 4
+#: a pool run's result.json kind (`pool_preflight`), whose `preflight` holds its verdict
+PREFLIGHT_KIND = "queue-preflight/v1"
+#: how the reason of a PR waiting for its preflight's verdict starts (`Queue.sync`): drive tells no one of it (`Driver.tell_out`)
+PREFLIGHT_WAIT = "waits for its preflight"
+#: the pool runs a PR's head gets: one that ends without a verdict is launched again once, and after the second the PR enters
+#: unpreflighted, as one whose preflight failed to run always did (the after-landing run still tests it)
+PREFLIGHT_TRIES = 2
+#: how long a pool run may go without a verdict before the sync cancels it and counts it as ended without one: its wait for a
+#: slot (`PREFLIGHT_RUN`'s --pool-wait) and its run (--max-min), with room
+PREFLIGHT_LOST_S = 3600
+#: the ref a pool run's bundle carries the merge under (`git bundle` takes refs, not commits), `POOL_REF/<PR>`
+POOL_REF = "refs/queue/pool"
+#: a pool launch's worktree of drive's clone at the `next` it pushed (`PreflightPool.launch`), `<root>/research-pool-*`
+POOL_PREFIX = "research-pool-"
 #: the Lean step's bounds (`Preflight._lean`): the most modules it builds (those the change touches and every module importing one,
 #: transitively, each rebuilt since an import changed), and the seconds its builds may take, on the merged tree and, for what fails
-#: there, on `next`; past either it notes why and refuses nothing (`LeanTimedOut`).  With `PREFLIGHT_BUDGET_S` the whole
+#: there, on `next`; past either it notes why and refuses nothing (`LeanTimedOut`).  With `PREFLIGHT_CHECKS_S` the whole
 #: preflight stays within 5 minutes, and a warm tree rebuilds a few changed modules and their importers in a minute or two
 PREFLIGHT_LEAN_MODULES = 40
 PREFLIGHT_LEAN_S = 180.0
@@ -3708,7 +3760,7 @@ _TOUCHED = ("import json, sys; sys.path.insert(0, 'tools/verity/check'); import 
             "fx = S.fetched_fixtures(sys.argv[2], {p for ps in own.values() for p in ps}); "
             "print(json.dumps({'suites': [s.path for s in chosen], 'fixtures': {s.path: sorted(p for p in fx "
             "if S.covered(p, own[s], S.dropped(s, ins[s]))) for s in chosen}}))")
-#: what the preflight's fetch of its suites' fixtures (`research data fetch-fixtures`) may take of `PREFLIGHT_BUDGET_S`: the
+#: what the preflight's fetch of its suites' fixtures (`research data fetch-fixtures`) may take of `PREFLIGHT_CHECKS_S`: the
 #: machine's store keeps every blob it fetches, so a later preflight here copies them from it in seconds
 PREFLIGHT_FETCH_S = 45.0
 #: a line of pytest's short summary: `FAILED tests/x.py::test_y - why`, `ERROR tests/x.py - why` (a collection error)
@@ -3761,17 +3813,6 @@ def pytest_failures(run: Callable[[list[str], Path], tuple[subprocess.CompletedP
         return {}
     found = {m.group(1): m.group(0) for m in _SUMMARY_RE.finditer(r.stdout)}
     return found or {f"exit {r.returncode}": f"pytest exited {r.returncode}: {(r.stdout + r.stderr).strip()[-300:]}"}
-
-
-def one_line_at_a_time(log: Callable[[str], None]) -> Callable[[str], None]:
-    """``log`` under a lock, for lines logged from several threads at once (a sync's preflights, `PREFLIGHT_PARALLEL`, beside
-    its walk): `print` writes a line and its newline apart, so two unlocked could splice."""
-    lock = threading.Lock()
-
-    def said(line: str) -> None:
-        with lock:
-            log(line)
-    return said
 
 
 @contextlib.contextmanager
@@ -4306,20 +4347,25 @@ class Preflight:
     modules it reaches are few enough to build, and an unbuilt one is how a head that breaks `next`'s Lean gets marked.
 
     Drive's sync runs the part of (b) that needs no environment of the merged tree's again (`onto`) on each merge it makes onto
-    `next`, onto the member below the PR's place, and a PR enters `next` only once it passes there (`Queue._preflighted`)."""
+    `next` that no recorded verdict stands for, as a pool run (`PreflightPool`, `pool_preflight`), and a PR enters `next` only
+    once it passes there (`Queue._preflighted`).  Given ``by`` (`ready`'s --by), a pass whose checks ran all that `onto` runs is
+    recorded for that sync: a `preflight` label on `pr:{n}@{head}` ({base: the base's tree, tree: the merged tree, why: null,
+    onto: the base, of: ready}), which the mark's write-through takes to the store's remote, so a sync that merges the head onto
+    the same tree admits it with no pool run."""
 
     def __init__(self, repo: Path, remote: str, store, *, sync: tuple[str, ...] | None = PREFLIGHT_SYNC, python: str | None = None,
-                 budget_s: float = PREFLIGHT_BUDGET_S, jobs: int = PREFLIGHT_JOBS, clock: Callable[[], float] = time.monotonic,
+                 budget_s: float = PREFLIGHT_CHECKS_S, jobs: int = PREFLIGHT_JOBS, clock: Callable[[], float] = time.monotonic,
                  root: Path | None = None, log: Callable[[str], None] = print,
                  free: Callable[[], float | None] = free_memory,
                  fetch: Callable[[Path, list[str], float], tuple[set[str], str]] | None = None,
                  lean: Callable[[Path, list[str], float], LeanBuilt | str] | None = None,
-                 lean_s: float = PREFLIGHT_LEAN_S, lean_modules: int = PREFLIGHT_LEAN_MODULES):
+                 lean_s: float = PREFLIGHT_LEAN_S, lean_modules: int = PREFLIGHT_LEAN_MODULES, by: str | None = None):
         self.repo, self.remote, self.store, self.sync, self.python = Path(repo), remote, store, sync, python
         self.budget_s, self.jobs, self.clock, self.log, self.free = budget_s, jobs, clock, log, free
         self.fetch = fetch or self._fetch_fixtures
         self.lean, self.lean_s, self.lean_modules = lean, lean_s, lean_modules
         self.root = Path(root or tempfile.gettempdir())
+        self.by = by
 
     def __call__(self, pr: PR, prs: list[PR]) -> str | None:
         """None when the head may be marked; else the refusal."""
@@ -4332,7 +4378,7 @@ class Preflight:
             return None
         notes: list[str] = []
         found = self._contained(pr, prs) + self._gates(pr, notes)
-        tree, files, r = None, [], None
+        tree, files, r, covered = None, [], None, False
         if not pr.move:
             tree, files, r = merged_tree(self.repo, base, pr.head)
         if pr.move:
@@ -4371,8 +4417,10 @@ class Preflight:
                                      + (f", and the pins {', '.join(pins)} rebuilt" if pins else "")))
                 if drops := lock_drops(self.repo, base, pr.head, tree):
                     found.append(lock_drop_refusal(drops, onto.split("`")[1]))
+                unjudged: set[str] = set()
                 try:
-                    found += self._merged(pr, base, tree, onto, notes, members)
+                    found += self._merged(pr, base, tree, onto, notes, members, unjudged=unjudged)
+                    covered = not unjudged
                 except QueueError as e:
                     notes.append(f"the merged tree's checks ({e})")
         skipped = [n for n in notes if not isinstance(n, Ran)]
@@ -4381,9 +4429,22 @@ class Preflight:
             return (f"the preflight of its head merged onto {onto} refused it ({took}"
                     + (f"; checks skipped: {'; '.join(skipped)}" if skipped else "") + "):\n  - " + "\n  - ".join(found)
                     + "\n  (`--no-preflight` skips the preflight: the lander's)")
+        if covered:
+            self._record(pr, base, tree)
         said = f"checks skipped: {'; '.join(skipped)}; the checks that ran passed" if skipped else "nothing refused"
         self.log(f"research queue: preflight: #{pr.number} at {pr.head[:12]} merged onto {onto}: {said} ({took})")
         return None
+
+    def _record(self, pr: PR, base: str, tree: str) -> None:
+        """The pass of ``pr``'s head merged onto ``base``, ``tree``, for drive's sync (`Queue._stored`): a `preflight` label by
+        ``by`` on its `pr:{n}@{head}`, which `_mark`'s write-through takes to the store's remote with the mark."""
+        if self.by is None or self.store is None:
+            return
+        value = {"base": _tree(self.repo, base), "tree": tree, "why": None, "onto": base, "of": "ready"}
+        try:
+            self.store.add_label(label_target(pr.number, pr.head), vocab.PREFLIGHT, value, self.by)
+        except Exception as e:  # noqa: BLE001  (a pass unrecorded costs drive's sync a pool run, never the mark)
+            self.log(f"research queue: preflight: its pass isn't recorded for drive's sync ({type(e).__name__}: {e})")
 
     def _only_moved(self, base: str, files: list[str]) -> list[str]:
         """The moves drive regenerated below ``base`` (`queue_log`) that ``files``, a merge's conflicts, are all files of, when
@@ -4470,12 +4531,12 @@ class Preflight:
         return refused
 
     def onto(self, pr: PR, base: str, commit: str, members: list[Member]) -> str | None:
-        """The sync's preflight (`Queue.sync`): of ``commit``, the sync's merge of ``pr``'s head onto ``base``, the member of
-        `next` below its place (`next`'s base when none) with ``members`` up to it, the part of (b) that needs no environment of
-        the merged tree's: `pins.py --stale` and `PREFLIGHT_TESTS` (run by `PREFLIGHT_PYTEST`), in seconds, so a sync reaches
-        many PRs within its budget.  The rest (`ONTO_SKIPS`) is said under "checks skipped".  None when it may enter `next`;
-        else the refusal.  (a), (c), (d) and (f) are the sync's own: a conflict, a PR it contains that isn't admitted, a landing
-        gate, a lock merge's drops."""
+        """The sync's preflight (`Queue.sync`), which a pool run makes (`pool_preflight`): of ``commit``, the sync's merge of
+        ``pr``'s head onto ``base``, the tip of `next` it pushed (`next`'s base when none), with ``members`` below, the part of
+        (b) that needs no environment of the merged tree's: `pins.py --stale` and `PREFLIGHT_TESTS` (run by `PREFLIGHT_PYTEST`),
+        in seconds.  The rest (`ONTO_SKIPS`) is said under "checks skipped".  None when it may enter `next`; else the refusal.
+        (a), (c), (d) and (f) are the sync's own: a conflict, a PR it contains that isn't admitted, a landing gate, a lock
+        merge's drops."""
         start, notes = self.clock(), []
         try:
             tree = _out(self.repo, "rev-parse", f"{commit}^{{tree}}")
@@ -4493,9 +4554,11 @@ class Preflight:
         return None
 
     def _merged(self, pr: PR, base: str, tree: str, onto: str, notes: list[str], members: list[Member] | None = None,
-                commit: str | None = None, quick: bool = False) -> list[str]:
+                commit: str | None = None, quick: bool = False, unjudged: set[str] | None = None) -> list[str]:
         """(b) and (e), in a temporary worktree at the merge of the head onto ``base``, ``tree`` (`merged_tree`): ``commit``,
-        the sync's merge, or one made here.  ``quick``: only what of (b) needs no environment of the merged tree's (`onto`)."""
+        the sync's merge, or one made here.  ``quick``: only what of (b) needs no environment of the merged tree's (`onto`).
+        ``unjudged`` gets the checks `onto` runs (`_quick_checks`) that this didn't judge: not run on the merged tree, or failed
+        there and not run on ``base`` to compare."""
         commit = commit or _out(self.repo, "commit-tree", tree, "-p", base, "-p", pr.head, "-m",
                                 f"preflight: #{pr.number} onto {base[:12]}")
         fixtures: dict[str, list[str]] = {}
@@ -4504,6 +4567,9 @@ class Preflight:
             graph, lean_failed, lean_deadline = (LeanGraph(), {}, 0.0) if quick else self._lean(wt, base, tree, notes, out)
             deadline = self.clock() + self.budget_s
             failed = self._checks(wt, base, tree, None, notes, deadline, fixtures, quick)
+            quick_checks = self._quick_checks(wt)
+            if unjudged is not None:
+                unjudged.update(quick_checks - failed.keys())
             if not any(failed.values()) and not lean_failed:
                 return out
             _git(wt, "checkout", "-q", "--detach", "--force", base)
@@ -4514,6 +4580,8 @@ class Preflight:
         for name, fails in failed.items():
             if fails and name not in again:
                 notes.append(f"{name} failed on the merged tree and couldn't run on {onto} to compare: {'; '.join(fails.values())}")
+                if unjudged is not None and name in quick_checks:
+                    unjudged.add(name)
             elif new := [line for k, line in sorted(fails.items()) if k not in again[name]]:
                 out.append(self._finding(name, new))
         if isinstance(lean_again, str):
@@ -4637,6 +4705,13 @@ class Preflight:
         return missing, ("no source here: no reachable private remote, no public URL" if not rep.get("sources")
                          else f"not on {', '.join(rep['sources'])}")
 
+    @staticmethod
+    def _quick_checks(wt: Path) -> set[str]:
+        """What `onto` runs on the tree in ``wt``, by `_checks`' names: `pins.py --stale` and each directory of `PREFLIGHT_TESTS`
+        that holds one of its tests."""
+        names = {"pins"} if (wt / "tools/verity/check/pins.py").is_file() else set()
+        return names | {f"tests:{d}" for d, files in PREFLIGHT_TESTS if any((wt / d / f).is_file() for f in files)}
+
     def _checks(self, wt: Path, base: str, tree: str, only: set[str] | None, notes: list[str],
                 deadline: float, fixtures: dict[str, list[str]], quick: bool = False) -> dict[str, dict[str, str]]:
         """{check: {what failed: its line}} for the checks of (b) on the tree checked out in ``wt`` (``only`` those named), each
@@ -4698,6 +4773,211 @@ class Preflight:
         for s in res.suites:
             out[f"collect:{s}"] = failed.get(s, {})
         return out
+
+
+def _alive(pid) -> bool:
+    """Whether process ``pid`` may still run: one this user can't signal, or a record without a pid, is taken as running."""
+    try:
+        os.kill(int(pid), 0)
+    except ProcessLookupError:
+        return False
+    except (PermissionError, ValueError, TypeError):
+        pass
+    return True
+
+
+class PreflightPool:
+    """The sync's preflights as pool runs (`Queue.sync`).  A launch is one sync's: for the merges it made onto ``onto``, the tip of
+    `next` it pushed, it adds a worktree of drive's clone at ``onto`` (`POOL_PREFIX`) and, in the background (drive's
+    `DETACH_JOB` under its `LAUNCHES`, `PREFLIGHT_LAUNCH_JOBS` at once), launches for each merge a `research run --on auto`
+    (`PREFLIGHT_RUN`) of that worktree as a private clone, sent the merge as a bundle of `POOL_REF/<PR>` above ``onto``, of
+    `research queue preflight` (`pool_preflight`), whose result.json holds the verdict.  `read` reads each run's verdict once it
+    ended, `sweep` removes a launch's worktree once its launches ended and its directory once no run reads it, and `cancel`
+    cancels runs."""
+
+    def __init__(self, repo: Path, root: Path | None = None, *, start: Callable[[list[str], Path], int] | None = None,
+                 status: Callable[[str], tuple[str, int | None, str | None] | None] | None = None,
+                 cancel: Callable[[list[str], str], dict[str, str] | None] | None = None):
+        self.repo, self.root = Path(repo), root
+        self.start = start or self._start
+        self.status = status or self._status
+        self.cancel = cancel or self._cancel
+
+    @staticmethod
+    def new_id() -> str:
+        from . import runs as R
+
+        return R.new_run_id()
+
+    def launch(self, onto: str, runs: list[tuple[int, str, str, str]]) -> dict:
+        """A pool run for each of ``runs`` (PR, head, its merge onto ``onto``, the run's id), launched in the background: the
+        launch's record ({dir, pid, tree}) that `read` and `sweep` take.  Raises (QueueError, OSError) when it can't start."""
+        from .drive import DETACH_JOB, LAUNCHES
+
+        top = Path(tempfile.gettempdir()) / LAUNCHES
+        top.mkdir(parents=True, exist_ok=True)
+        d = Path(tempfile.mkdtemp(prefix="preflight-", dir=top))
+        root = Path(self.root or MERGED_ROOT or tempfile.gettempdir())
+        root.mkdir(parents=True, exist_ok=True)
+        wt = Path(tempfile.mkdtemp(prefix=POOL_PREFIX, dir=root)) / "tree"
+        try:
+            with worktrees_locked(self.repo):
+                _git(self.repo, "worktree", "prune", check=False)
+                _git(self.repo, "worktree", "add", "-q", "--detach", str(wt), onto)
+            scripts = []
+            for n, head, commit, rid in runs:
+                ref, bundle = f"{POOL_REF}/{n}", d / f"pr-{n}.bundle"
+                _git(self.repo, "update-ref", ref, commit)
+                try:
+                    _git(self.repo, "bundle", "create", "-q", str(bundle), ref, f"^{onto}")
+                finally:
+                    _git(self.repo, "update-ref", "-d", ref, check=False)
+                argv = [sys.executable, "-m", "research", "run", "--id", rid, "--on", "auto", *PREFLIGHT_RUN, "--source", str(wt),
+                        "--cwd", "clone", "--send", str(bundle), "--require-result", "--",
+                        "research", "queue", "preflight", str(n), "--head", head, "--onto", onto]
+                out = shlex.quote(str(d / rid))
+                (script := d / f"{rid}.sh").write_text(f"{shlex.join(argv)} > {out}.log 2>&1\n"
+                                                       f"echo $? > {out}.rc.tmp && mv {out}.rc.tmp {out}.rc\n")
+                scripts.append(shlex.quote(str(script)))
+            (d / "launch.sh").write_text(f"printf '%s\\n' {' '.join(scripts)} | xargs -n 1 -P {PREFLIGHT_LAUNCH_JOBS} sh\n")
+            pid = self.start(["sh", "-c", DETACH_JOB, "sh", str(d), "sh", str(d / "launch.sh")], wt)
+        except BaseException:
+            self._remove(wt)
+            shutil.rmtree(d, ignore_errors=True)
+            raise
+        return {"dir": str(d), "pid": pid, "tree": str(wt)}
+
+    def read(self, runs: dict[int, dict]) -> dict[int, dict | str | None]:
+        """Each of ``runs``' ({PR: its record, with the run's id, its launch's directory and pid}) verdict: its result.json's
+        `preflight` once it ended with one; why, once it ended without one; None while it launches, waits or runs."""
+        from .drive import _each
+
+        items = sorted(runs.items())
+        return dict(zip((n for n, _ in items), _each(self._read_one, [rec for _, rec in items]), strict=True))
+
+    def _read_one(self, rec: dict) -> dict | str | None:
+        from . import result
+        from .runs import TERMINAL
+
+        rid, d = rec["run"], Path(rec["launch"])
+        try:
+            rc = (d / f"{rid}.rc").read_text().strip()
+        except OSError:
+            if (d / "rc").is_file() or not d.is_dir():
+                return "its launch ended without starting it"
+            return None if _alive(rec.get("pid")) else "its launch's process is gone with no exit written (a restart of the pod)"
+        if rc != "0":
+            try:
+                tail = (d / f"{rid}.log").read_text(errors="replace").strip()[-300:]
+            except OSError:
+                tail = ""
+            return f"its `research run` exited {rc}: {tail}"
+        if (got := self.status(rid)) is None:
+            return f"run {rid} isn't in this machine's run registry"
+        state, code, run_dir = got
+        if state not in TERMINAL:
+            return None
+        res = result.check(run_dir, rid) if run_dir else None
+        doc = res.doc if res is not None and res.valid else None
+        if isinstance(doc, dict) and doc.get("kind") == PREFLIGHT_KIND and isinstance(doc.get("preflight"), dict):
+            return doc["preflight"]
+        return f"run {rid} ended {state} (exit {code}) without a verdict (`research inspect {rid}`)"
+
+    def sweep(self, launches: list[dict], live: set[str], before: float) -> list[dict]:
+        """``launches`` less those done with: one whose launches ended (its exit written, its process gone, or launched before
+        ``before``: a restart of the pod can leave its pid to another process) has its worktree removed, and its directory too
+        once none of ``live`` (the launch directories of the runs still read) is it.  A pool worktree of the clone that no launch
+        kept names is removed too (a state lost leaves them)."""
+        kept = []
+        for rec in launches:
+            d = Path(rec["dir"])
+            if not ((d / "rc").is_file() or not d.is_dir() or not _alive(rec.get("pid")) or rec.get("at", before) < before):
+                kept.append(rec)
+                continue
+            if rec.get("tree"):
+                self._remove(Path(rec["tree"]))
+            if rec["dir"] in live:
+                kept.append({**rec, "tree": None})
+            else:
+                shutil.rmtree(d, ignore_errors=True)
+        trees = {os.path.realpath(rec["tree"]) for rec in kept if rec.get("tree")}
+        r = _git(self.repo, "worktree", "list", "--porcelain", check=False)
+        for wt in (line.removeprefix("worktree ") for line in r.stdout.splitlines() if line.startswith("worktree ")):
+            if Path(wt).parent.name.startswith(POOL_PREFIX) and os.path.realpath(wt) not in trees:
+                self._remove(Path(wt))
+        return kept
+
+    def _remove(self, wt: Path) -> None:
+        with worktrees_locked(self.repo):
+            _git(self.repo, "worktree", "remove", "--force", str(wt), check=False)
+            shutil.rmtree(wt.parent, ignore_errors=True)
+            _git(self.repo, "worktree", "prune", check=False)
+
+    @staticmethod
+    def _start(argv: list[str], cwd: Path) -> int:
+        # drive's own environment: `research` is importable only through the PYTHONPATH drive.sh gives it
+        env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0"}
+        return subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL, start_new_session=True).pid
+
+    def _status(self, rid: str) -> tuple[str, int | None, str | None] | None:
+        """(state, exit, run directory) of run ``rid`` by `research status RID --json`, which fetches its result.json; None when
+        this machine's run registry has no such run (`research status` would then search every machine for it)."""
+        from . import runs as R
+
+        if not (R.runs_root() / rid).is_dir():
+            return None
+        r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json"], cwd=self.repo, capture_output=True,
+                           text=True)
+        try:
+            run = json.loads(r.stdout)["runs"][0]
+            return run.get("state") or "unknown", run.get("rc"), run.get("dir")
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError):
+            return "unknown", None, None
+
+    def _cancel(self, ids: list[str], reason: str) -> dict[str, str]:
+        from .drive import cancel_runs
+
+        return cancel_runs(self.repo, ids, reason)
+
+
+def pool_preflight(n: int, head: str, onto: str, bundle: Path | None = None, repo: Path | None = None,
+                   log: Callable[[str], None] = print) -> int:
+    """`research queue preflight N --head H --onto P [--bundle F]`, a pool run of drive's sync (`PreflightPool`): in ``repo`` (this
+    clone of `next` at ``onto``), the sync's merge of PR ``n``'s head ``head`` onto ``onto``, fetched from ``bundle`` (default the
+    run's input `pr-N.bundle`), judged by `Preflight.onto`.  Its verdict ({pr, head, onto, base: its tree, commit, tree: the
+    merge's, why: the refusal or null, log: what the preflight said}) goes to the run's result.json (`PREFLIGHT_KIND`) and to
+    ``log``.  0 once judged, whatever the verdict; 1 when it couldn't judge."""
+    from . import result
+
+    try:
+        repo = Path(repo or _out(Path.cwd(), "rev-parse", "--show-toplevel"))
+        run_id, run_dir = os.environ.get(result.ENV_RUN_ID), os.environ.get(result.ENV_RUN_DIR)
+        if bundle is None:
+            if not run_dir:
+                raise QueueError(f"no --bundle, and no run directory (${result.ENV_RUN_DIR}) to find pr-{n}.bundle in")
+            bundle = Path(run_dir) / "inputs" / f"pr-{n}.bundle"
+        _git(repo, "fetch", "-q", str(bundle), f"{POOL_REF}/{n}")
+        onto = _out(repo, "rev-parse", f"{onto}^{{commit}}")
+        commit = _out(repo, "rev-parse", "FETCH_HEAD^{commit}")
+        if _out(repo, "rev-parse", f"{commit}^1") != onto:
+            raise QueueError(f"the bundle's merge {commit[:12]} isn't onto {onto[:12]}")
+        base, tree = _out(repo, "rev-parse", f"{onto}^{{tree}}", f"{commit}^{{tree}}").split()
+        said: list[str] = []
+        with tempfile.TemporaryDirectory(prefix="queue-preflight-", ignore_cleanup_errors=True) as tmp:
+            why = Preflight(repo, "", None, root=Path(tmp), log=said.append).onto(PR(n, head), onto, commit, [])
+    except (QueueError, OSError) as e:
+        print(f"research queue preflight: #{n} at {head[:12]} not judged: {e}", file=sys.stderr)
+        return 1
+    doc = {"pr": n, "head": head, "onto": onto, "base": base, "commit": commit, "tree": tree, "why": why, "log": said}
+    for line in said:
+        log(line)
+    log(f"research queue preflight: #{n} at {head[:12]} merged onto {onto[:12]}: " + (f"refused: {why}" if why else "passed"))
+    if run_id and run_dir:
+        result.write(run_dir, {"schema": result.RESULT_SCHEMA, "run_id": run_id, "kind": PREFLIGHT_KIND, "preflight": doc,
+                               "validation": {"status": "failed" if why else "passed", "checker": "research queue preflight",
+                                              "detail": (why or "the checks that ran passed").splitlines()[0], "evidence": []}})
+    return 0
 
 
 class MarkOnly:
@@ -5879,8 +6159,8 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
     ap.add_argument("command", choices=["status", "sync", "eject", "ready", "judge", "drive", "open", "edit", "link", "stats",
                                             "checked-heads", "review", "baseline", "accept-checked", "lean-check", "drive-shard-add",
-                                            "shadow-report"])
-    ap.add_argument("pr", nargs="?", help="eject, ready, review, edit, link: the PR number; judge: the quick tier's run id; baseline: the "
+                                            "shadow-report", "preflight"])
+    ap.add_argument("pr", nargs="?", help="eject, ready, review, edit, link, preflight: the PR number; judge: the quick tier's run id; baseline: the "
                     "commit of the landing branch (`checked`, or `main` until `checked` exists) ci knows is green; lean-check: the commit of `next` to Lean-check; "
                     "accept-checked: `checked`'s tip, which drive didn't write; drive-shard-add: the after-landing run's tip")
     ap.add_argument("shard_run", nargs="*", metavar="K RUN_ID", help="drive-shard-add: the shard and the run to count in it")
@@ -5912,14 +6192,14 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--again", action="store_true", help="ready: mark a head that was ejected (only when the ejection was wrong); "
                                                           "lean-check: rerun a commit whose recorded Lean check passed")
     ap.add_argument("--preflight-root", type=Path, default=None, metavar="DIR",
-                    help="ready, drive: where merged trees go, the preflight's and every other (default: the temporary "
+                    help="ready, drive: where merged trees go, the preflight's, the pool runs' launches' and every other (default: the temporary "
                          "directory); a tree must share a filesystem with uv's cache for its sync to hardlink (drive on the "
                          "control pod, whose TMPDIR is a network volume, passes the container disk)")
     ap.add_argument("--no-preflight", action="store_true",
                     help="ready: skip the preflight (the lander's): the head merged onto a fresh `next` must merge cleanly, contain "
                          "no open PR that isn't admitted, and pass `pins.py --stale`, the invariant tests (module strings, pins, "
                          "doc paths, pythonpath) and `pytest --collect-only` of the suites its change touches, in a temporary "
-                         f"worktree, in about {PREFLIGHT_BUDGET_S:g} s, and build the Lean modules that are or import what it "
+                         f"worktree, in about {PREFLIGHT_CHECKS_S:g} s, and build the Lean modules that are or import what it "
                          f"changes (at most {PREFLIGHT_LEAN_MODULES}, in {PREFLIGHT_LEAN_S:g} s, on a warm Lean tree: here on a "
                          f"node, else on the first of {', '.join(PREFLIGHT_LEAN_ON)} that starts the build, whatever the tier; "
                          "one no node can build refuses the mark, one not "
@@ -5937,8 +6217,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--priority-file", type=Path, metavar="PATH",
                     help="sync/drive: drive's priority list, a file of PR numbers separated by spaces or commas, read again at "
                          "each sync (none: an empty list; one it can't read: an error logged once, and an empty list); these PRs "
-                         "and those they contain go first of what the sync merges anew, and their preflights start whatever the "
-                         "budget and the PRs the last sync left waiting")
+                         "and those they contain go first of what the sync merges anew, and their preflights' pool runs launch "
+                         "first")
     ap.add_argument("--after-landing-no-cache", action=argparse.BooleanOptionalAction,
                     help="drive: run the after-landing check reusing no pass but circuit-check's per-target ones "
                          "(check.py --no-cache --circuit-cache)")
@@ -5952,7 +6232,11 @@ def main(argv: list[str]) -> int:
                          f"sets has the value of {DRIVE_FLAGS} at `main`, drive's one source of flags; else the tick refuses, "
                          "naming each key")
     ap.add_argument("--config-from-tree", action="store_true", help="drive: read --config's PATH from this file system instead")
-    ap.add_argument("--head", help="open: the pushed branch to open a PR for")
+    ap.add_argument("--head", help="open: the pushed branch to open a PR for; preflight: the PR's head")
+    ap.add_argument("--onto", metavar="COMMIT", help="preflight: the tip of `next` drive's sync merged the head onto, which this "
+                                                     "clone holds")
+    ap.add_argument("--bundle", type=Path, metavar="FILE", help=f"preflight: the git bundle of the merge, as `{POOL_REF}/N` "
+                                                                "(default: the run's input pr-N.bundle)")
     ap.add_argument("--sha", help="open: refuse unless origin's branch is at this commit (the owner's pinned head); ready: mark only "
                                   "this head, refusing when GitHub still shows another after a few reads (push && ready, safely); "
                                   "eject: only while this is the PR's head, so an eject that waits for drive's tick never hits a "
@@ -5992,6 +6276,10 @@ def main(argv: list[str]) -> int:
         text, _ = shadow_report(shadow_records(LocalStore(a.store), log=lambda s: print(s, file=sys.stderr)), max(a.tips, 1))
         print(text)
         return 0
+    if a.command == "preflight":
+        if not (a.pr or "").isdigit() or not a.head or not a.onto:
+            ap.error("preflight needs the PR number, --head SHA and --onto COMMIT")
+        return pool_preflight(int(a.pr), a.head, a.onto, a.bundle)
     if a.issue is not None and a.command not in ("open", "link"):
         ap.error("--issue is for open and link only")
     if a.command == "link":
@@ -6113,7 +6401,7 @@ def main(argv: list[str]) -> int:
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
             tier = MarkOnly() if a.mark else RemoteQuickTier(top, remote, a.on, by=a.by) if a.on else QuickTier(top, remote)
             pre = None if a.no_preflight else Preflight(top, remote, store, lean=LakeBuild(on=PREFLIGHT_LEAN_ON, by=a.by),
-                                                             root=a.preflight_root)
+                                                             root=a.preflight_root, by=a.by)
             return ready(GitHub(repo), store, a.pr, a.by, tier, again=a.again, preflight=pre, sha=a.sha, as_json=a.json,
                          records=RecordsGate(top, remote, store))
         labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr), since=a.marked_after)
@@ -6212,9 +6500,7 @@ def main(argv: list[str]) -> int:
         if a.command == "drive":
             q._drive_only("main", "once", a.dry_run)          # its landings push `main`, its syncs `next`
         if a.command in ("sync", "drive"):
-            q.log = one_line_at_a_time(q.log)
-            q.preflight = Preflight(q.workdir, remote, store, lean=LakeBuild(on=PREFLIGHT_LEAN_ON, by=a.by), log=q.log,
-                                    root=a.preflight_root).onto
+            q.pool, q.verdicts = PreflightPool(q.workdir, root=a.preflight_root), labels.preflights
             q.priority_file = a.priority_file
         if a.command == "sync":
             q.hand_sync(dry_run=a.dry_run)

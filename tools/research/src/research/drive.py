@@ -167,7 +167,7 @@ from typing import Callable, Iterable
 from . import policy
 from .executor import (AFTER_LANDING_PRIORITY, FAIL, PASS, PENDING, SHADOW_WAIT_S, Executor, QueueTransport, compare,
                        old_verdicts)
-from .queue import (IDENTITY, PR, Entry, Member, Queue, QueueError, StoreLabels,
+from .queue import (IDENTITY, PR, PREFLIGHT_WAIT, Entry, Member, Queue, QueueError, StoreLabels,
                     _git, _out, built_on, changed, forces_cold, hold, lean_change, lean_hold, move_of, unreviewed)
 from .queue_stats import ts
 from .store import vocab
@@ -3188,7 +3188,8 @@ class Driver:
         because it contains the root, directly or through another such PR: `Queue.entries`, `Queue.sync`), and the fix.  A
         root is a PR that didn't merge (the sync's `conflicts`: told with dependants or without), one that isn't admitted
         (unmarked, held, ejected, ownerless, or waiting itself) that a marked PR contains, or a PR that waits on a contained
-        PR none of which is such a root.  An unmarked root is asked for its mark (or to withdraw it, and its dependants carry
+        PR none of which is such a root; one waiting for its preflight's verdict (`PREFLIGHT_WAIT`) is told nothing, as a later
+        sync admits or refuses it by that verdict.  An unmarked root is asked for its mark (or to withdraw it, and its dependants carry
         it); another is named with what admits it, or its commits dropped from them, or it closed.  A root is told again only
         when its head, its set of dependants or its reason changes (`drive["out"]`: {PR: [head, dependants, reason]}, a closed
         PR's record dropped), so one PR that many contain is one post a change, not one per PR and head; `research queue
@@ -3220,6 +3221,8 @@ class Driver:
         hold = q.rules().hold_label
         for m, deps in sorted(out.items()):
             b = entries[m]
+            if b.state == "waiting" and b.why.startswith(PREFLIGHT_WAIT):
+                continue
             h, why = b.pr.head, conflicts.get(m, b.why)
             own = m in conflicts or waits(b)
             said = [h, sorted(deps), why]
