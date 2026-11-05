@@ -74,6 +74,7 @@ and a net's row the product of its XORs (`netRow_holds`).
 open Flock FlockLevel3 FlockSoundness FlockSoundness.Discharge.Hm
 open Flock.HmNets hiding and
 
+set_option maxHeartbeats 0 -- `deltaL_cW` and the slot facts evaluate the concrete circuit's Δ and ranges in the kernel
 set_option maxRecDepth 200000
 
 namespace FlockDeploy.Concrete.Trace
@@ -128,7 +129,7 @@ def run (b n : ℕ) (f : ℕ → ℕ) : List (ℕ × ℕ) := (List.range n).flat
 
 theorem count_pair (a b c x j : ℕ) :
     [(a, b), (a, c)].count (x, j) = (if a = x ∧ b = j then 1 else 0) + (if a = x ∧ c = j then 1 else 0) := by
-  by_cases h1 : a = x <;> by_cases h2 : b = j <;> by_cases h3 : c = j <;> simp [h1, h2, h3] <;> omega
+  by_cases h1 : a = x <;> by_cases h2 : b = j <;> by_cases h3 : c = j <;> simp [h1, h2, h3]
 
 /-- **The pairs of a run at column `x`**: the self pair and the copy's, when `x` is in the run. -/
 theorem count_run (b n : ℕ) (f : ℕ → ℕ) (x j : ℕ) :
