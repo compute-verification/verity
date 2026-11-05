@@ -11,55 +11,19 @@ declared variable; `environ` is a copy of the whole environment, for code that p
 ``"$NAME"`` values name variables the arms read).  A variable the vLLM integration declares (``verity_vllm/settings.py``) is
 never declared here too: the harness writes one through the integration's writer, ``verity_vllm.engine.env.apply_target``.
 
-`validate` (`check` of this registry) refuses a ``VERITY_BENCH_*`` variable that nothing reads (the registry's ``elsewhere``
-names the ones other parts of the tree read), a declared value that doesn't parse, and on a run of record a debug setting that
-is set, each by name: ``verity-bench`` runs it at startup, so a misspelt or retired setting fails the run instead of being
-ignored.  ``benchmarks/recursion_e2e/settings.py`` checks its own registry with `check`.
+`validate` (the registry's `Registry.check`) refuses a ``VERITY_BENCH_*`` variable that nothing reads (the registry's
+``elsewhere`` names the ones other parts of the tree read), a declared value that doesn't parse, and on a run of record a
+debug setting that is set, each by name: ``verity-bench`` runs it at startup, so a misspelt or retired setting fails the run
+instead of being ignored.
 
 The harness reads and writes ``os.environ`` here and nowhere else, but for the uses ``tests/test_settings.py``'s shrink-only
-``BASELINE`` holds (`direct_uses` counts them).
+``BASELINE`` holds (`verity_config.settings.direct_uses` counts them).
 """
 from __future__ import annotations
 
-import ast
-import functools
-from collections.abc import Mapping
 from typing import Any
 
 from verity_config.settings import VALUE, WHERE, Registry, Setting
-
-def check(registry: Registry, environ: Mapping[str, str] | None = None, *, of_record: bool) -> None:
-    """Refuse a variable under ``registry``'s prefixes that nothing reads, a declared value that doesn't parse, and, on a run
-    of record, a debug setting that is set; each by name."""
-    registry.validate_environ(environ)
-    for name in registry.settings:
-        registry.get(name, environ)
-    if of_record:
-        registry.of_record(environ)
-
-
-ENV_NAMES = frozenset({"os.environ", "os.environb", "os.getenv", "os.getenvb", "os.putenv", "os.unsetenv"})
-
-
-def direct_uses(src: str) -> list[tuple[int, str]]:
-    """Each use of the process environment in a Python source, through ``os`` or a name imported from it, as (line, name):
-    reads and writes alike, which only a registry makes."""
-    tree = ast.parse(src)
-    alias: dict[str, str] = {}
-    for n in ast.walk(tree):
-        if isinstance(n, ast.Import):
-            alias |= {a.asname or "os": "os" for a in n.names if a.name == "os"}
-        elif isinstance(n, ast.ImportFrom) and n.module == "os":
-            alias |= {a.asname or a.name: f"os.{a.name}" for a in n.names}
-    out = []
-    for n in ast.walk(tree):
-        if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name) and alias.get(n.value.id) == "os" \
-                and f"os.{n.attr}" in ENV_NAMES:
-            out.append((n.lineno, f"os.{n.attr}"))
-        elif isinstance(n, ast.Name) and alias.get(n.id) in ENV_NAMES:
-            out.append((n.lineno, alias[n.id]))
-    return sorted(out)
-
 
 S = Setting
 REGISTRY = Registry(__file__, ("VERITY_BENCH_",),
@@ -85,10 +49,7 @@ del S
 SETTINGS = REGISTRY.settings
 setting, raw, is_set, get, put, unset, setdefault = (REGISTRY.setting, REGISTRY.raw, REGISTRY.is_set, REGISTRY.get,
                                                      REGISTRY.put, REGISTRY.unset, REGISTRY.setdefault)
-environ, record, unknown = REGISTRY.environ, REGISTRY.record, REGISTRY.unknown
-
-
-validate = functools.partial(check, REGISTRY)
+environ, record, unknown, validate = REGISTRY.environ, REGISTRY.record, REGISTRY.unknown, REGISTRY.check
 
 
 def __getattr__(name: str) -> Any:
