@@ -100,16 +100,20 @@ the Lean's session, which holds only the append coins released, otherwise.
 
 Openings are checked in the clear: zero-knowledge proof blocks are not in this harness (PROTOCOL.md §8).
 
-    python verifier.py --port 7781 --out OUT [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
-                       [--registry REGISTRY.json] [--lean-exe PATH]
-                       [--paced K:T_MS:DRAWS:WINDOWS[:F] ...] [--transcript DIR]
-                       [--challenger local|serve --challenger-key DIR [--challenger-params W,H]] [--appends A]
-                       [--groups-per-coin G]
-                       [--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
-                        --challenger-period P --challenger-main FILE [--challenger-minutes M]]
-                       [--model ROLE --checkpoint DIR --pin FILE --arena-blocks A [--engines E]]
-    python verifier.py --registry REGISTRY.json --close NODE_HEX
-    python verifier.py --memory-of VERIFIER_JSON [--host-bytes N]
+Its process is `benchmarks/remote_session/verifier_process.py`, which hands `main` what a verifier imports none of:
+the LMS verify a served or gate session's signatures are checked with, and the challenger's process `--challenger
+serve` starts.
+
+    python verifier_process.py --port 7781 --out OUT [--windows 7 --window-ms 1000 --samples 2773 --sessions 1]
+                               [--registry REGISTRY.json] [--lean-exe PATH]
+                               [--paced K:T_MS:DRAWS:WINDOWS[:F] ...] [--transcript DIR]
+                               [--challenger local|serve --challenger-key DIR [--challenger-params W,H]] [--appends A]
+                               [--groups-per-coin G]
+                               [--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
+                                --challenger-period P --challenger-main FILE [--challenger-minutes M]]
+                               [--model ROLE --checkpoint DIR --pin FILE --arena-blocks A [--engines E]]
+    python verifier_process.py --registry REGISTRY.json --close NODE_HEX
+    python verifier_process.py --memory-of VERIFIER_JSON [--host-bytes N]
 """
 from __future__ import annotations
 
@@ -125,13 +129,12 @@ import secrets
 import sys
 import threading
 import time
+from collections.abc import Sequence
 from pathlib import Path
-
-# live_verifier's host runs this file under `python3 -I`, which puts neither the repository nor a venv on the path
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line, timing
 from verity.core.protocols.remote_bandwidth import store as rstore
+from verity.core.protocols.sampled_proofs.challenger import Verify
 
 from benchmarks.remote_session import challengers
 from benchmarks.remote_session import lean_verifier as lv
@@ -1517,7 +1520,10 @@ def save_registry(path: Path | None, registry: audit.Registry | dict) -> None:
         tmp.replace(path)
 
 
-def main() -> int:
+def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, serve: Sequence[str] | None = None) -> int:
+    """The verifier's process on `argv` (the command line's by default). A served or gate session's signatures are
+    checked with `verify`, and `--challenger serve` starts the challenger's process `serve`, which the process's entry
+    hands in (`verifier_process.py`): without them, those two refuse the run."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=7781)
@@ -1626,7 +1632,7 @@ def main() -> int:
     ap.add_argument("--layout-workers", type=int, default=len(os.sched_getaffinity(0)),
                     help="processes hashing the pinned files and recomputing the expected payload root, and the Lean "
                          "verifier's threads recomputing it at the same time")
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
     if a.memory_of is not None:
         v = json.loads(a.memory_of.read_text())
         print(json.dumps([{"k": s["k"], "memory": recorded_memory(s, host_bytes=a.host_bytes)} | (
@@ -1663,8 +1669,9 @@ def main() -> int:
                  f"{challengers.GATE_PORTS.stop - 1}), which this machine's certifier coin link binds")
     try:
         challenger = challengers.of(a.challenger, a.out / "challenger", a.challenger_key, a.challenger_params,
-                                    ssh=a.challenger_ssh, peer=a.challenger_peer, pin=a.challenger_pin,
-                                    period=a.challenger_period, main=a.challenger_main, minutes=a.challenger_minutes)
+                                    verify=verify, serve=serve, ssh=a.challenger_ssh, peer=a.challenger_peer,
+                                    pin=a.challenger_pin, period=a.challenger_period, main=a.challenger_main,
+                                    minutes=a.challenger_minutes)
     except ValueError as e:
         ap.error(str(e))
     binding = None
@@ -1776,7 +1783,3 @@ def main() -> int:
     (a.out / "verifier.json").write_text(json.dumps(out, indent=1))
     print(f"verifier: cpu {json.dumps(out['cpu'])}", flush=True)
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
