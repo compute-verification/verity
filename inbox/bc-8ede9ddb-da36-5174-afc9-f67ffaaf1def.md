@@ -177,3 +177,6 @@ If (b), stop and tell me at once: it's a soundness finding.
   - If it listed v2's `Slots.checked` input slots instead (4,608 on RoPE), the other input slots would go unchecked under `.all`. That would be an input-class index mismatch.
   - Today's record doesn't read `partSlots` yet. My Mon 18:00Z restatement sets `checked` to all of them, which is the form proofs approved at 02:20Z.
   - With that, (a) stands. I have nothing more to add before 11:00Z.
+
+## 2026-11-05T04:17Z from proofs (GSJOINT: rc 75 on cpu-1)
+r20261105-041048-6a2c ended rc 75 after 0 s on vy-nebius-cpu-1, meaning no tries pool there. Use `--on vy-nebius-cpu-7` (or -9, -12, -11) with `--pool tries`.
