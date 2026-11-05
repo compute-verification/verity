@@ -116,7 +116,7 @@ from verity.core.protocols.pouw.credit import passes_distinct
 from verity.core.protocols.pouw.protocol import Matmul, Shape, Tile, tagged
 from verity.core.protocols.pouw.schemes import pearl_c_u as PCU
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
-from verity.core.protocols.pouw.schemes.pearl_c import TILE
+from verity.core.protocols.pouw.schemes.pearl_c import K_MIN, TILE
 from verity.core.protocols.pouw.window import LIVE_SCHEME
 from verity.core.protocols.sampled_proofs.challenger import LiveCommitment
 from verity.core.protocols.sampled_proofs.one_stage import registered as G, registration as REG
@@ -609,11 +609,12 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     ``over_cap`` is the rule on an opened tile that passes every check but its inert-work bound (`clear_work.cap_failure`):
     ``uncredited`` (CMP-311 option A, the default) accepts it with its bound's reason and credits it nothing, the credit
     taking X_O, the draws that landed on such tiles; ``reject`` rejects the run.  The verdict records the rule it ran under
-    (``over_cap``, and the profile's).
+    (``over_cap``, and the profile's).  The run of record is ``uncredited`` over passes with no voluntary row, since one
+    uncredits its whole band or block (`pearl_c_work.UnitRecord.credited`; ``served_passes.py verify``).
 
-    The passes are all of one salt, and each one's tile is the served `TILE` × `TILE`: a pass of another tile is a test
-    instance's, read only with ``test_instance``, whose verdict credits nothing (``credited`` 0), as ``--recorded``'s
-    salt claims nothing.
+    The passes are all of one salt, and each one's instance is the served one, ``k_min`` `K_MIN` at `TILE` × `TILE` tiles:
+    a pass of another is a test instance's, read only with ``test_instance``, whose verdict credits nothing (``credited``
+    0), as ``--recorded``'s salt claims nothing.
 
     ``paths`` are the passes the prover retained, pass i the served run's round ``rounds[i]`` (default i), the rounds
     ``dropped`` left out before the coin: they credit nothing, and W may register them (`tie`).  ``record`` is the
@@ -646,10 +647,11 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
             raise ValueError("the passes are not all of one scheme")
         if len({p.epoch.salt for p in passes}) != 1:
             raise ValueError("the passes are not all of one salt")
-        if not test_instance and (odd := next(((i, p.scheme.tile) for i, p in enumerate(passes)
-                                               if tuple(p.scheme.tile) != (TILE, TILE)), None)):
-            raise ValueError(f"pass {odd[0]}'s tile is {odd[1][0]} x {odd[1][1]}, not {TILE} x {TILE}: "
-                             "a test instance is read only as one, crediting nothing")
+        if not test_instance and (odd := next(((i, p.scheme) for i, p in enumerate(passes)
+                                               if (p.scheme.k_min, tuple(p.scheme.tile)) != (K_MIN, (TILE, TILE))), None)):
+            i, s = odd
+            raise ValueError(f"pass {i}'s instance is k_min {s.k_min} at {s.tile[0]} x {s.tile[1]} tiles, not the served "
+                             f"{K_MIN} at {TILE} x {TILE}: a test instance is read only as one, crediting nothing")
         tied = None if window is None else tie(window, passes, rounds, dropped)
     except Exception as ex:  # noqa: BLE001 - a run that can't be checked is rejected, with the reason
         return reject(f"{type(ex).__name__}: {ex}")
