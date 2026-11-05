@@ -2,12 +2,13 @@
 (`coins.SessionCoins`, `sampled_proofs.challenger`):
 
 - `Local`: a `LiveChallenger` in the verifier's process, sampling from `secrets.token_bytes`.
-- `Serve`: the challenger's own process, the command its caller hands in (`verifier_process.py`'s is
-  `benchmarks/live_challenger/serve.py`), started for the session on the verifier's machine with its LMS key
-  (`--challenger-key`), reached over its 127.0.0.1 by `sampled_proofs.remote`'s client. It flips its coins in the Lean
-  (`one_stage.verifier.coins`), signs its record before it listens and its release log when the client closes the
-  session. Not the auditor host: the verifier's machine is the audit's (never the prover's), but no ledger opens the
-  session for its window, so the read is `challenger.session_of`'s, under the key the run wrote.
+- `Serve`: the challenger's own process, the command its caller hands in
+  (`benchmarks/remote_session/verifier_process.py`'s is `benchmarks/live_challenger/serve.py`), started for the session
+  on the verifier's machine with its LMS key (`--challenger-key`), reached over its 127.0.0.1 by
+  `sampled_proofs.remote`'s client. It flips its coins in the Lean (`one_stage.verifier.coins`), signs its record before
+  it listens and its release log when the client closes the session. Not the auditor host: the verifier's machine is
+  the audit's (never the prover's), but no ledger opens the session for its window, so the read is
+  `challenger.session_of`'s, under the key the run wrote.
 - `ChallengerGate`: the auditor's challenger host, through its gate (`benchmarks/live_challenger/auditor.py`)
   under the lane's own gate key, over ssh (`ssh_gate`). Each session is reserved for this machine (`--peer`), inside
   the audit's period, and opened at its window root R (`coins.window`; the ledger opens one session a root, ever); the
@@ -26,7 +27,7 @@ window root R, each window's openings coin after its last root. Its `reason` is 
 session's `complete` (the gate's end's, and `Serve`'s read of the same signed log) is whether the challenger released
 every coin it committed to: a session reserves only the families it uses (`coins.families`), so an honest session
 that ran to its end is complete and one cut short is not. A gate session's record names the `peer` it reserved for
-(`--challenger-peer`), which `auditor_line.py` holds the ledger's reserve and open to.
+(`--challenger-peer`), which `benchmarks/remote_session/auditor_line.py` holds the ledger's reserve and open to.
 
 A served or gate session's signatures are checked with the `verify` its caller hands in (`challenger.Verify`, LMS at
 the key's parameters: `verifier_process.lms_verify`), as `challenger.session_of` takes it: a verifier reads no
@@ -259,19 +260,20 @@ def of(kind: str, out: Path, key: Path | None, params: str | None, *, verify: Ch
     command), `gate` the host's ssh, this machine's peer name there, the challenger key's pin, the audit's period and
     the auditor's first-parent list of main, read here so a missing or unreadable one refuses the run before its first
     session. Both check the challenger's signatures with `verify`, which the process's entry hands in
-    (`verifier_process.py`)."""
+    (`benchmarks/remote_session/verifier_process.py`)."""
     if kind == "local":
         return Local()
     if kind in ("serve", "gate") and verify is None:
         raise ValueError(f"--challenger {kind} checks the challenger's signatures with the LMS verify its process's "
-                         "entry hands in, and this process was handed none: run verifier_process.py")
+                         "entry hands in, and this process was handed none: run "
+                         "benchmarks/remote_session/verifier_process.py")
     if kind == "serve":
         if key is None:
             raise ValueError("--challenger serve needs --challenger-key DIR, the challenger's LMS key directory, "
                              "outside the run's out/")
         if serve is None:
             raise ValueError("--challenger serve starts the challenger's process its entry hands in, and this process "
-                             "was handed none: run verifier_process.py")
+                             "was handed none: run benchmarks/remote_session/verifier_process.py")
         out.mkdir(parents=True, exist_ok=True)
         return Serve(out, key, params, command=serve, verify=verify)
     if kind == "gate":

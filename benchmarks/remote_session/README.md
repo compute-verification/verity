@@ -5,7 +5,7 @@ protocol's demo, which is `verity example vllm`. It runs PoUB end to end: a veri
 and the memory line a gate run publishes.
 
 **Status: active.** The vLLM integration imports it (`integrations/vllm/verity_vllm/protocols/remote_bandwidth/remote.py`
-and `in_place.py`, which `tests/test_boundaries.py` lists), the audit's Lean verifier names `verifier.py` as its driver and
+and `in_place.py`, which `tests/test_boundaries.py` lists), the audit's Lean verifier names
 `auditor_line.py` as its line of record, and its suite runs in `check`. Decided by `rg remote_session` over `verity/`,
 `benchmarks/`, `examples/`, `tests/` and `integrations/`.
 
@@ -14,10 +14,11 @@ reference (`CpuBackend`) as the prover's backend, and the Lean line test where `
 side a machine: `ROLE=verifier` on a machine the prover doesn't control and `ROLE=prover` on the prover's, with no
 default (`ROLE=both` runs the two on one machine, a test of the scripts that audits nothing).
 
-- `verifier_process.py`: the verifier's process, which these scripts and live_verifier's host run: `verifier.py`'s
-  `main`, handed what a verifier imports none of, the LMS verify a served or gate session's signatures are checked with
-  and the live challenger's `serve.py`. `verifier.py` runs the Lean verifier of record, `remote-audit-verifier`
-  (`lean_verifier.py`), beside `audit.AuditRun`, and refuses a run where the two differ.
+- `verifier_process.py`: the verifier's process, which these scripts and live_verifier's host run:
+  `verity/core/protocols/remote_bandwidth/session/verifier.py`'s `main`, handed what a verifier imports none of, the LMS
+  verify a served or gate session's signatures are checked with and the live challenger's `serve.py`. That verifier
+  runs the Lean verifier of record, `remote-audit-verifier` (`lean_verifier.py` beside it), beside `audit.AuditRun`,
+  and refuses a run where the two differ; `wire.py` beside it frames the messages between the two processes.
 - `prover.py`: the prover's process; its GPU backend is `device.py` with `session.cu` (which includes
   `benchmarks/codec_tensor/reader.cu`), `inplace.py` reads vLLM's tensors in place, and `serve.py` serves vLLM as the prover.
 - `auditor_line.py`: the memory line on the auditor's clock, computed by the Lean (`line_record`) and held equal to `line.py`'s.
