@@ -3,6 +3,7 @@ module
 public import Definitions.Nci.Guarantees.Packed
 public import Definitions.Nci.Guarantees.Training
 public import Proofs.Nci.Contained
+public import Proofs.Nci.Lemmas
 
 /-!
 # The fan-out bound on a chain with several products to a gate
@@ -183,7 +184,7 @@ end Lemmas
 open Classical in
 /-- **What an IU reads**, on a packed chain: `R` reads at least `b_w p_R + b_a (d τ_R + Q_R)` bits under
 `Assumptions.PackedActivationsIncompressible`. -/
-theorem iu_reads_packed {k : ℕ} (D : Declaration) (c : PackedChain D.D k) (Γ : ℕ) (K b_w b_a : ℝ) (d : ℕ)
+theorem iu_reads_packed {k : ℕ} (D : RegisteredCircuit) (c : PackedChain D.D k) (Γ : ℕ) (K b_w b_a : ℝ) (d : ℕ)
     (hd : ∀ ℓ, d ≤ c.d ℓ) (hb_a : 0 ≤ b_a) (h : Assumptions.PackedActivationsIncompressible D c Γ K b_w b_a)
     (R : Finset (Fin D.D.N)) (hR : R ⊆ D.D.computed) (hΓ : D.D.size R ≤ Γ) (hK : (novelReads D R : ℝ) ≤ K) :
     b_w * (c.weightsUsed R).card +
@@ -210,7 +211,7 @@ theorem iu_reads_packed {k : ℕ} (D : Declaration) (c : PackedChain D.D k) (Γ 
 open Classical in
 /-- **The partial-sum law over the pieces, with a budget for the dark gates**, on a packed chain:
 `max (min c₁ c₂) (μ b_a / Λ) · G_S ≤ α size(d) + (1 − μ) B`, with `G_S` counting products, whatever `k`. -/
-theorem matMulOn_of_counts_packed {k Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : Declaration} {ch : PackedChain c.D k}
+theorem matMulOn_of_counts_packed {k Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : RegisteredCircuit} {ch : PackedChain c.D k}
     {dd emax : ℕ} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n} (hα : 0 ≤ α) (hK : 0 < K)
     (hw : 0 < b_w) (ha : 0 < b_a) (hdd : 0 < dd) (hαK : α * Γ ≤ K) (hμ₀ : 0 ≤ μ) (hμ₁ : μ ≤ 1)
     (hd : ∀ ℓ, dd ≤ ch.d ℓ) (he : ∀ ℓ, ch.e ℓ ≤ emax)
@@ -259,7 +260,16 @@ theorem matMulOn_of_counts_packed {k Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : 
 open Classical in
 /-- **Products done in the declaration are bounded by their fan-out, at most `k` products to a gate**: at `μ = 1` the
 dark gates' budget has weight `1 − μ = 0`, so any budget does. -/
-theorem PackedContainedFanOutOn : Guarantees.PackedContainedFanOutOn := by
+theorem PackedContainedFanOutOn_rate :
+    ∀ (k Γ : ℕ) (α K b_w b_a : ℝ) (c d : RegisteredCircuit) (ch : PackedChain c.D k) (dd emax : ℕ)
+      (M : PartialContainment c d),
+      0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → α * Γ ≤ K →
+      (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → CompliesRate Γ α d → Assumptions.ThetaRegistered c d M →
+      Assumptions.PackedActivationsIncompressible c ch Γ K b_w b_a →
+        b_a / max (emax : ℝ) (K / (4 * b_w * dd)) *
+          (Finset.univ.filter fun p : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ) × Fin (ch.d ℓ) =>
+            ch.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ M.S).card ≤
+        α * d.D.size d.D.computed := by
   intro k Γ α K b_w b_a c d ch dd emax M hα hK hw ha hdd hαK hd he ⟨n, P, hP⟩ hB hA
   have h₂ : ∑ u, (b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) +
         b_a / 2 * (outputsOtherPacked ch (piece M P u)).card) ≤
@@ -279,13 +289,16 @@ theorem PackedContainedFanOutOn : Guarantees.PackedContainedFanOutOn := by
     _ ≤ _ := h
     _ = α * d.D.size d.D.computed := by ring
 
+theorem PackedContainedFanOutOn : Guarantees.PackedContainedFanOutOn :=
+  PackedContainedFanOutOn_rate
+
 /-- Under `Chain.toPacked` an input entry is linked to an entry whole in `R` exactly when it is in the chain. -/
 theorem toPacked_linkedWhole {D : Circuit} (c : Chain D) (R : Finset (Fin D.N)) (ℓ : Fin c.L) (t : Fin c.N)
     (j : Fin (c.d ℓ)) : c.toPacked.LinkedWhole R ℓ t j ↔ c.LinkedWhole R ℓ t j := by
   obtain ⟨_ | m, hm⟩ := ℓ <;> first | exact Iff.rfl | simp [PackedChain.LinkedWhole, Chain.LinkedWhole]
 
 /-- At `k = 1` the packed assumption is the per-product one. -/
-theorem packedActivationsIncompressible_toPacked {D : Declaration} {c : Chain D.D} {Γ : ℕ} {K b_w b_a : ℝ} :
+theorem packedActivationsIncompressible_toPacked {D : RegisteredCircuit} {c : Chain D.D} {Γ : ℕ} {K b_w b_a : ℝ} :
     Assumptions.PackedActivationsIncompressible D c.toPacked Γ K b_w b_a ↔
       Assumptions.ActivationsIncompressible D c Γ K b_w b_a := by
   first
@@ -303,8 +316,8 @@ theorem packedActivationsIncompressible_toPacked {D : Declaration} {c : Chain D.
 /-- **The per-product fan-out bound is the case `k = 1`**: a chain is a packed chain with one product to a gate, and
 the assumption, the products in `S` and the bound are the same under `Chain.toPacked`. -/
 theorem containedFanOutOn_of_packed (h : Guarantees.PackedContainedFanOutOn) : Guarantees.ContainedFanOutOn :=
-  fun Γ α K b_w b_a c d ch dd emax M hα hK hw ha hdd hαK hd he hP hB hA =>
-    h 1 Γ α K b_w b_a c d ch.toPacked dd emax M hα hK hw ha hdd hαK hd he hP hB
+  fun Γ α K b_w b_a r d ch dd emax M hα hK hw ha hdd hαK hd he hP hB hA =>
+    h 1 Γ α K b_w b_a r d ch.toPacked dd emax M hα hK hw ha hdd hαK hd he hP hB
       (packedActivationsIncompressible_toPacked.2 hA)
 
 end Nci.SecurityProofs

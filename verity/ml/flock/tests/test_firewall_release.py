@@ -312,17 +312,26 @@ def _vector_op(fw: FW.Firewall, op: list):
     if k == "slot":
         with fw.slot(op[1], op[2]):
             return None
+    if k == "register":
+        return fw.register(lambda n: n.to_bytes(8, "big") + bytes.fromhex(op[1]))[0]
+    if k == "registrations":
+        try:
+            return fw.admit_reads(op[1], op[2], op[3])
+        except FW.Refused as e:
+            return why(e)
     return getattr(fw, k)(*op[1:])
 
 
 def test_the_record_is_the_shared_vectors_byte_for_byte(tmp_path):
     """Each case of ``firewall_record_vectors.json``, run on an empty state directory, gives its results and its
     ``record.jsonl`` exactly: rules 1 and 2 (with a slot holder that died), the statements' order (a skip, a repeat, a
-    recursive session released whole, statements that can't be one's), the budget, the schedule, and strings Python
-    escapes. ``core_firewall``'s ``test_the_lean_replays_the_shared_vectors`` runs the same file, so the two ZK servers
+    recursive session released whole, statements that can't be one's), the budget, the schedule, strings Python
+    escapes, and rule 5 (registrations admitted in order, one reread admitting nothing, one skipped counted as a failure
+    and read later, one not on the record, commitments none of the server's, and a skip that brings the stream to its
+    budget). ``core_firewall``'s ``test_the_lean_replays_the_shared_vectors`` runs the same file, so the two ZK servers
     read and write one record."""
     v = json.loads(VECTORS.read_text())
-    assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "order", "budget", "schedule", "escapes"}
+    assert v["kind"] == "firewall/v0/vectors" and {c["name"] for c in v["cases"]} == {"rules-1-2", "order", "budget", "schedule", "escapes", "registrations"}
     for c in v["cases"]:
         fw = FW.Firewall(tmp_path / c["name"])
         assert [_vector_op(fw, op) for op in c["ops"]] == c["results"], c["name"]

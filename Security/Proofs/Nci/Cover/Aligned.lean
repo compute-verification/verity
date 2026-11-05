@@ -75,7 +75,7 @@ theorem finished_le_of_charge_base {C : Circuit} {J L : Type} [DecidableEq J] [D
 
 /-- **A block of whole words is charged `f` bits per use** of its whole products, when each use's activation region is
 the bits of whole words at least `f` bits wide. -/
-theorem aligned_charge (c : Verity.Declaration) {J L : Type} [DecidableEq J] [DecidableEq L]
+theorem aligned_charge (c : Verity.RegisteredCircuit) {J L : Type} [DecidableEq J] [DecidableEq L]
     (Mb : MulBlocks (Circuit.ofDecl c) J L) (Aw : J → Finset (Fin c.D.N)) {s k D f : ℕ} {b : ℝ} (hb : 0 < b)
     (hH : Assumptions.UpdateHardness Mb s b) (hU : Mb.Upstream (fun j => wordBits c (Aw j)) D)
     (hk : (k : ℝ) < b * D) (hf : ∀ j ∈ Mb.uses, ∀ a ∈ Aw j, f ≤ c.D.w a) (R : Finset (Fin c.D.N))
@@ -89,7 +89,7 @@ theorem aligned_charge (c : Verity.Declaration) {J L : Type} [DecidableEq J] [De
 
 /-- **The intensity of a block of whole words on whole-word activations**, under `UpdateHardness` alone: a block of at
 most `s` bits handed `k < b D` bits outside the free bits finishes at most `k² / (b f) + k` counted products. -/
-theorem alignedIntensity (c : Verity.Declaration) {J L : Type} [DecidableEq J] [DecidableEq L]
+theorem alignedIntensity (c : Verity.RegisteredCircuit) {J L : Type} [DecidableEq J] [DecidableEq L]
     (Mb : MulBlocks (Circuit.ofDecl c) J L) (Aw : J → Finset (Fin c.D.N)) {s k D f : ℕ} {b : ℝ} (hb : 0 < b)
     (hH : Assumptions.UpdateHardness Mb s b) (hU : Mb.Upstream (fun j => wordBits c (Aw j)) D)
     (hk : (k : ℝ) < b * D) (hf : ∀ j ∈ Mb.uses, ∀ a ∈ Aw j, f ≤ c.D.w a) (R : Finset (Fin c.D.N))
@@ -98,11 +98,26 @@ theorem alignedIntensity (c : Verity.Declaration) {J L : Type} [DecidableEq J] [
   finished_le_of_charge_base Mb _ hb (Nat.cast_nonneg f) hH hU hs hR
     (aligned_charge c Mb Aw hb hH hU hk hf R hs hR)
 
-theorem CoverTrainingAligned : Guarantees.CoverTrainingAligned := by
+theorem CoverTrainingAligned_rate :
+    ∀ (Γ : ℕ) (α b α₀ : ℝ) (c d : Verity.RegisteredCircuit) (M : Verity.Containment c.D d.D)
+      {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl c) J L)
+      (Aw : J → Finset (Fin c.D.N)) (s D w₀ f : ℕ),
+      0 < b → 0 ≤ α → Nci.CompliesRate Γ α d →
+      Nci.Assumptions.ThetaRegistered c d (Nci.PartialContainment.ofContainment M) →
+      Assumptions.UpdateHardness Mb s b → Mb.Upstream (fun j => wordBits c (Aw j)) D → α * Γ < b * D →
+      (∀ j ∈ Mb.uses, ∀ a ∈ Aw j, f ≤ c.D.w a) →
+      (∀ g, c.D.w g ≤ w₀) → w₀ * Γ + α * Γ + c.D.width c.θ ≤ s →
+      α₀ * c.D.size c.D.computed ≤ Mb.P.card →
+        α₀ * b * f * c.D.size c.D.computed ≤ (α * α * Γ + b * f * α) * d.D.size d.D.computed := by
   intro Γ α b α₀ c d M J L _ _ Mb Aw s D w₀ f hb hα hC hB hH hU hk hf hw hs hα₀
   have h := training_of_block_bound (e := b * f) M Mb (by positivity) hα hC hB hk hw hs hα₀ fun R hR hkR =>
     alignedIntensity c Mb Aw hb hH hU hkR hf R hR le_rfl
   calc α₀ * b * f * c.D.size c.D.computed = α₀ * (b * f) * c.D.size c.D.computed := by ring
     _ ≤ (α * α * Γ + b * f * α) * d.D.size d.D.computed := h
+
+/-- **On whole-word activations, training through a compliant declaration pays the width factor**. -/
+theorem CoverTrainingAligned : Guarantees.CoverTrainingAligned := by
+  intro Γ α b α₀ r d M J L _ _ Mb Aw s D w₀ f hb hα hC hB hH hU hk hf hw hα₀
+  exact CoverTrainingAligned_rate Γ α b α₀ r d M Mb Aw s D w₀ f hb hα hC hB hH hU hk hf hw.1 hw.2 hα₀
 
 end Nci.Cover.SecurityProofs

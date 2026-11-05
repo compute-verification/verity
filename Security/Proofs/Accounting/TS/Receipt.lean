@@ -1,10 +1,10 @@
 module
 
-public import Definitions.Accounting.Guarantees.TS.Receipt
 public import Proofs.Accounting.TS.Rounds
 public import Proofs.Accounting.TS.ReceiptLi
 public import Proofs.Accounting.TS.ReceiptDuoCP
 public import Proofs.Pouw.Receipt.Fx1
+public import Proofs.Accounting.Lemmas.TS.Receipt
 
 /-!
 # (I7) from the receipt: proofs
