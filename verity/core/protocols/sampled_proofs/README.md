@@ -89,7 +89,7 @@ has at most `2^-40`. The proof system adds, per proof block, its knowledge-sound
 
 **Two-stage designs** (`TwoStage`). Those above are one-stage. A two-stage design commits only replay-block boundaries
 while serving and samples `k` proof blocks in each sampled replay block once its interior is committed
-(`Stream.register_interiors`; `ARCHITECTURE.md`'s Glossary, "Replay block"): one of `n` proof blocks and footprint `w` is
+(`Stream.register_interiors`; `GLOSSARY.md`, "Two-stage design"): one of `n` proof blocks and footprint `w` is
 missed with probability at most `C(n − w, k) / C(n, k)`, `1 ≤ k < n`. Its code, the Lean pieces it reads (the
 difftest's executable) and its tests run under the test hook `verifier.UNCERTIFIED_RULES`, off in every deployment.
 
