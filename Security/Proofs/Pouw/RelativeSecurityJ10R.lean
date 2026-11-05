@@ -1,8 +1,10 @@
-import Mathlib
-import Definitions.Pouw.RelativeSecurityJ10R
-import Definitions.Pouw.Guarantees.RelativeSecurity
-import Proofs.Pouw.RelativeSecurity
-import Proofs.Pouw.RelativeSecurityFork
+module
+
+public import Mathlib
+public import Definitions.Pouw.RelativeSecurityJ10R
+public import Definitions.Pouw.Guarantees.RelativeSecurity
+public import Proofs.Pouw.RelativeSecurity
+public import Proofs.Pouw.RelativeSecurityFork
 
 /-!
 # Relative security at call scope under J10-R: the floors of record, proved on the call design
@@ -23,6 +25,8 @@ The floors per prover take the same chain one adversary and one value of its coi
 (`roundsSlice_of_stagedPJ`, `roundsSlice_of_overlapPJ`) into `serviceFloorPerProver_breakPr_of_slices`, at the
 adversary's fork finders.
 -/
+
+@[expose] public section
 
 namespace Pouw.RelativeSecurity
 

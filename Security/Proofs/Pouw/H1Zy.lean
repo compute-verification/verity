@@ -1,12 +1,14 @@
-import Proofs.Pouw.H1Zy.ChainVectors
-import Proofs.Pouw.H1Zy.Combine
-import Proofs.Pouw.H1Zy.CombineBits
-import Proofs.Pouw.H1Zy.DequantVectors
-import Proofs.Pouw.H1Zy.Lane
-import Proofs.Pouw.H1Zy.LaneBits
-import Proofs.Pouw.H1Zy.Stream
-import Proofs.Pouw.H1Zy.Tile
-import Proofs.Pouw.H1Zy.LaneChunk
+module
+
+public import Proofs.Pouw.H1Zy.ChainVectors
+public import Proofs.Pouw.H1Zy.Combine
+public import Proofs.Pouw.H1Zy.CombineBits
+public import Proofs.Pouw.H1Zy.DequantVectors
+public import Proofs.Pouw.H1Zy.Lane
+public import Proofs.Pouw.H1Zy.LaneBits
+public import Proofs.Pouw.H1Zy.Stream
+public import Proofs.Pouw.H1Zy.Tile
+public import Proofs.Pouw.H1Zy.LaneChunk
 
 /-!
 # H1's drawn-leaf statements: their Definitions on words mean what `LeafChecks` reads
@@ -43,3 +45,5 @@ word view (the multiply's, `Pouw.H1Zy.immaS8Bits_bv`, from Baugh–Wooley and th
 whole lane's `ok = true` at the chain machine's words on the rows they read joined (`Pouw.H1Zy.laneOk_of_chunks`), and so
 `laneOk_spec`'s exact z, dequant and partials over the whole `K` (`Pouw.H1Zy.chunks_spec`). No guarantee reads it yet.
 -/
+
+@[expose] public section

@@ -1,5 +1,10 @@
-import Proofs.Properties.NetworkCertifier.Outcomes
-import Proofs.Properties.CertifierNetwork.Certify
+module
+
+public import Proofs.Properties.NetworkCertifier.Outcomes
+public import Proofs.Properties.CertifierNetwork.Certify
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.String.Defs
 
 /-!
 # The completeness theorems' honest cases, instantiated
@@ -14,6 +19,8 @@ Two hypotheses stay hypotheses, each of a function no proof can evaluate: the pa
 since `parametersDigest` reads `Flock.canonUtf8`, well-founded recursion the kernel does not evaluate; and, for `answer`,
 that the bytes decode to the unit, since the parameters' and evidence's decoders read canonical JSON through it too.
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check

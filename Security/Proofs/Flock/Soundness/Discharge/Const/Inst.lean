@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Lowering
-import Properties.Flock.Circuit.Outs
+module
+
+public import Proofs.Flock.Soundness.Lowering
+public import Properties.Flock.Circuit.Outs
 
 /-!
 # A program's own instance of each unit's rows
@@ -16,6 +18,8 @@ about the instance a `ProgPlaces` carries, and holds for the program's own wirin
 * `Prog.oneAt p u`: the gate `p` wires unit `u`'s constant to, which `instC` puts it on (`instC_wire_one`).
 * `Prog.insAt p u i`: the gate `p` wires unit `u`'s input `i` to, which `instC` puts it on (`instC_wire_input`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Const.Prog
 

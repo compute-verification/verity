@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowG
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowG
 
 /-!
 # At a decision of `nextR`, the record is the reader's (`recJ`)
@@ -12,6 +14,8 @@ and the checks after it (`VerdictR.At .verdict`, `.after`) read `jAt` at it. Thi
 * **The round messages** (`readPs_frames`, `decR_frames`): `ms` are the decided proofs' framed bytes, rep by rep, each
   at the `T` its opened rounds fit.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Reps.ReadRow
-import Proofs.Flock.VBridge.Net
+module
+
+public import Proofs.Flock.C3.Reps.ReadRow
+public import Proofs.Flock.VBridge.Net
 
 /-!
 # The opening unit reads its sibling columns (`openSibRead`, `openReadCol`)
@@ -17,6 +19,8 @@ import Proofs.Flock.VBridge.Net
 * The unit (`rowReads_all`, `laid_reads_of`, `readCol_of_laid`): with `ReadRow`'s row bits, a builder row reads each of
   the first `128 · LANES + 512 · H` input bits, and its laid-out row is a computed row of the net reading that column.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps.RowRead
 

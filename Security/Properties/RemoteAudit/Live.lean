@@ -1,5 +1,7 @@
-import Properties.RemoteAudit
-import RemoteAudit.Verifier
+module
+
+public import Properties.RemoteAudit
+public import RemoteAudit.Verifier
 
 /-!
 # The verifier's process accepts what `Shared.run g` accepts (`LiveIsRun`)
@@ -31,6 +33,8 @@ The registry's other sessions, and `abort`, which ends a session with the driver
 process keeps each session's state apart (`Registry.running`, `Registry.update`) and an aborted session is not
 accepted. The process's IO (reading requests and frames, threads, writing answers) is `handle`'s and `serve`'s.
 -/
+
+@[expose] public section
 
 open RemoteAudit
 

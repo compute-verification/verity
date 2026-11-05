@@ -37,7 +37,7 @@ def test_every_tensor_core_step_has_its_products():
 
 def test_a_boolean_step_performs_its_word_steps_products():
     pairs = {d.id: word_of(d).id for d in (getattr(BG, n) for n in BG.__all__) if DOT.search(getattr(d, "id", ""))}
-    assert len(pairs) == 9
+    assert len(pairs) == 10
     assert all(PRODUCTS[b] == PRODUCTS[w] and PRECISION[b] == PRECISION[w] for b, w in pairs.items()), pairs
 
 
@@ -116,7 +116,7 @@ def test_every_tensor_core_step_is_bound_to_its_silicon_model():
     assert {fid: SILICON.get(fid) for fid in steps} == {fid: "f16" if fid in f16 else PRECISION[fid] for fid in steps}
     assert f16 <= set(steps) and {PRECISION[fid] for fid in f16} == {"fp8"}
     boolean = {fid: d for fid, d in steps.items() if getattr(d, "word", None) is not None}
-    assert len(boolean) == 10 and all(d.silicon is word_of(d).silicon for d in boolean.values()), sorted(boolean)
+    assert len(boolean) == 11 and all(d.silicon is word_of(d).silicon for d in boolean.values()), sorted(boolean)
     assert {d.silicon.dtype for d in steps.values()} == {"bf16", "e4m3", "e5m2", "e2m1", "s8", "u8"}
 
 

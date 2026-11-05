@@ -1,4 +1,6 @@
-import Definitions.Nci.Assumptions.Info
+module
+
+public import Definitions.Nci.Assumptions.Info
 
 /-!
 # NCI over threads, reads counted by information: the guarantees
@@ -9,6 +11,8 @@ are a state that is a function of `k` bits and an ingress counted by width reads
 information (`InfoOfState`), so it holds at most `K · Λ(K) / b_a` counted multiplications at
 `K = k + width(ingress)` (`ThreadedOfState`).
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 
