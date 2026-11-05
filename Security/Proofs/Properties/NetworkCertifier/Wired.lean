@@ -236,13 +236,15 @@ theorem auditOf_ok {a : Json} {ctx : String} {au : Audit} (h : auditOf a ctx = .
   obtain ⟨entries, -, h⟩ := bind_ok h
   cases hc : a.getObjVal? "circuit" with
   | error e =>
-    simp only [hc, pure_bind] at h
-    obtain ⟨listed, -, h⟩ := bind_ok h
-    obtain ⟨steps, -, h⟩ := bind_ok h
-    cases h
-    exact ⟨pj, s, prog, get_ok hpj, hs, hdec, rfl, by simp [FreeOf]⟩
+    simp only [hc] at h
+    generalize a.getObjVal? "circuits" = cf at h
+    cases cf
+    all_goals
+      repeat (obtain ⟨_, -, h⟩ := bind_ok h)
+      cases h
+      exact ⟨pj, s, prog, get_ok hpj, hs, hdec, rfl, by simp [FreeOf]⟩
   | ok record =>
-    simp only [hc, bind_assoc] at h
+    simp only [hc] at h
     obtain ⟨pinsJ, hpinsJ, h⟩ := bind_ok h
     obtain ⟨held, hheld, h⟩ := bind_ok h
     by_cases hany : held.any (·.1 == stateValue) = true
@@ -253,14 +255,16 @@ theorem auditOf_ok {a : Json} {ctx : String} {au : Audit} (h : auditOf a ctx = .
     obtain ⟨order, horder, h⟩ := bind_ok h
     obtain ⟨⟨r, sm⟩, hrs, h⟩ := bind_ok h
     obtain ⟨d, hd, h⟩ := bind_ok h
-    try simp only [pure_bind] at h
-    obtain ⟨listed, -, h⟩ := bind_ok h
-    obtain ⟨steps, -, h⟩ := bind_ok h
-    cases h
-    refine ⟨pj, s, prog, get_ok hpj, hs, hdec, rfl, ?_⟩
-    simp only [FreeOf]
-    exact ⟨record, order, pinsJ, r, sm, hc, get_ok horder, get_ok hpinsJ, mapError_ok hrs, mapError_ok hheld, rfl,
-      rfl, rfl, mapError_ok hd, fun q hq hq1 => hany (List.any_eq_true.2 ⟨q, hq, by simp [hq1]⟩)⟩
+    try simp only at h
+    generalize a.getObjVal? "circuits" = cf at h
+    cases cf
+    all_goals
+      repeat (obtain ⟨_, -, h⟩ := bind_ok h)
+      cases h
+      refine ⟨pj, s, prog, get_ok hpj, hs, hdec, rfl, ?_⟩
+      simp only [FreeOf]
+      exact ⟨record, order, pinsJ, r, sm, hc, get_ok horder, get_ok hpinsJ, mapError_ok hrs, mapError_ok hheld, rfl,
+        rfl, rfl, mapError_ok hd, fun q hq hq1 => hany (List.any_eq_true.2 ⟨q, hq, by simp [hq1]⟩)⟩
 
 /-- **The parameters' audits are their `audits` entries**, each read by `auditWith`. `paramsOf` takes `paramsWith`'s
 parameters where they list no circuit file, and `paramsWith`'s steps in order are its keys, `audits`, `cells`,
