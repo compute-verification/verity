@@ -110,7 +110,7 @@ def scheme_of(name: str, params: Any) -> Any:
 
     if name in schemes.REGISTRY:
         return schemes.get(name, params=params)
-    for cls in (schemes.Band, schemes.P2, schemes.P2ChaCha):
+    for cls in (schemes.Band, schemes.P2):
         try:
             scheme = cls(params)
         except (TypeError, ValueError):

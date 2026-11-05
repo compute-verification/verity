@@ -8,7 +8,7 @@ A spec-level reference for POUS, proof of useful space for model weights, with t
 - **the dense scheme** (`verity.core.protocols.pous.dense`, selectable): the same on the complete DAG (Lean's `chainDense`);
 - **P2** (`verity.core.protocols.pous.schemes.p2`, **experimental**): the squaring-based scheme, proved in abstract M1 under the
   pinned `P2SlackFamilyUncond` (k = 105), with its instantiation assumption not accepted; never the default.
-  `p2-16448/v4` has P2 v4's counter-mode SHA-512 keys, `p2-16448/v2` ChaCha8 keys, which v4 does not allow ("P2" below);
+  `p2-16448/v4`, with P2 v4's counter-mode SHA-512 keys ("P2" below);
 - **P3** (`verity.core.protocols.pous.scheme`, the fast research codec): two layers over the band graph `B(220, 12)` with a transpose
   connector and a tweakable `P` (Lean's `p3Scheme`).
 
@@ -201,9 +201,8 @@ instantiation assumption, P2–M1-SGI (`P2RingReducesToM1p`), is not accepted.
   assumptions (`Assumptions/P2.lean`): `PrimeP16448`, `P2RingAuditSecure`, `P2RingReducesToM1p`, `P2RingRoundSecure`,
   `P2RingRoundSecureWide` and `CoinCommitHides`. `schemes.p2.P2_CLAIMS` and `WIDE_CLAIMS` are the claims a certificate
   rests on.
-- **Python.** `schemes.p2`: `P2Params`, the schemes `P2` (`p2-16448/v4`) and `P2ChaCha` (`p2-16448/v2`),
-  `family_certificate`, `wide_certificate`, `expand_prefix`, `stream`, `below`, `sha512_keys`, `encode_segment`,
-  `decode_segment`, and `CERT_K`, `DELTA_NS`, `RTT_ALLOWANCE_CAP_NS` and `ROOT_CALL_NS` (half the fastest cooperating
+- **Python.** `schemes.p2`: `P2Params`, the scheme `P2` (`p2-16448/v4`), `family_certificate`, `wide_certificate`,
+  `expand_prefix`, `stream`, `below`, `sha512_keys`, `encode_segment`, `decode_segment`, and `CERT_K`, `DELTA_NS`, `RTT_ALLOWANCE_CAP_NS` and `ROOT_CALL_NS` (half the fastest cooperating
   16,448-bit root; the cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`). `benchmarks/pous/p2_v1/reference.py`
   is the reference (the maps, keys, salt, tree and derivations), and `wire.py` beside it is `p2-audit-wire/v4`
   (`envelope`, `setup_messages`, `open_message`, `challenge_message`, `response_message`, `record`, `final_message`,

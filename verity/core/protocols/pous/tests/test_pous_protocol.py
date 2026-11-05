@@ -19,7 +19,7 @@ from verity.core.protocols.pous import band, dense, primitives, protocol, scheme
 from verity.core.protocols.pous.codec import Geometry
 from verity.core.protocols.pous.layout import Layout
 from verity.core.protocols.pous.params import Params
-from verity.core.protocols.pous.schemes.p2 import CHACHA8, CHACHA8_NONCONFORMING, EXPERIMENTAL, P2Params
+from verity.core.protocols.pous.schemes.p2 import EXPERIMENTAL, P2Params
 from verity.core.protocols.pous.schemes.p2 import ROOT_CALL_NS, RTT_ALLOWANCE_CAP_NS
 from verity.core.protocols.pous.verifier import VerifierKey
 
@@ -29,7 +29,6 @@ SMALL = {
     "dense": lambda segments=3: schemes.Dense(dense.DenseParams(8, 64, segments)),
     "p3": lambda segments=2: schemes.P3(Params(8, 64, 3, segments)),
     "p2": lambda segments=2: schemes.P2(P2Params(128, 173, 8, segments)),   # 2^128 − 173 is prime, ≡ 3 mod 4
-    "p2v2": lambda segments=2: schemes.P2ChaCha(P2Params(128, 173, 8, segments, CHACHA8)),
 }
 
 
@@ -110,7 +109,7 @@ def test_audit_through_the_interface(name):
         wrong.profile()
 
 
-@pytest.mark.parametrize("name", ["band", "dense", "p3", "p2", "p2v2"])
+@pytest.mark.parametrize("name", ["band", "dense", "p3", "p2"])
 def test_decode_tensor(name):
     base = SMALL[name]()
     layout = Layout.of(base.params.with_segments(1), [("embed", 150), ("norm", 3), ("proj", 170)])
@@ -133,9 +132,9 @@ def test_band_through_the_interface_is_the_pinned_band_codec():
 
 
 def test_registry():
-    assert set(schemes.REGISTRY) == {"band-chain/d12/v1", "dense-chain/v1", "p3/v1", "p2-16448/v4", "p2-16448/v2"}
+    assert set(schemes.REGISTRY) == {"band-chain/d12/v1", "dense-chain/v1", "p3/v1", "p2-16448/v4"}
     assert schemes.DEFAULT == band.BAND12.name
-    assert schemes.EXPERIMENTAL == {"p2-16448/v4", "p2-16448/v2"} and schemes.DEFAULT not in schemes.EXPERIMENTAL
+    assert schemes.EXPERIMENTAL == {"p2-16448/v4"} and schemes.DEFAULT not in schemes.EXPERIMENTAL
     assert schemes.get().experimental is None
     b = schemes.get()
     assert isinstance(b, schemes.Band) and b.params == band.SECURE_FIRST and b.name == "band-chain/d12/v1"
@@ -303,7 +302,7 @@ def test_certificates_name_proved_guarantees():
             assert cert.theorem == f"Pous.SecurityProofs.{x}" and x in statements, name
             assert cert.theorem in guarantees, name
             checked += 1
-    assert checked == 7
+    assert checked == 6
 
 
 def test_p3_has_no_certificate_because_its_chain_does_not_start_from_leans():
@@ -504,49 +503,46 @@ def test_claims_resolve_and_local_ones_are_not_in_core():
 
 
 def test_p2_is_experimental_and_says_so():
-    """P2 (`p2-16448/v4`, and `p2-16448/v2` with ChaCha8 keys) is registered but experimental: the memory challenger
-    refuses it unless asked, never makes it the default, and its profile states why.  The certificate is the pinned
-    `P2SlackFamilyUncond` at the spec's k = 105, and the manifest names the payload profile.  Its call is
+    """P2 (`p2-16448/v4`) is registered but experimental: the memory challenger refuses it unless asked, never makes it
+    the default, and its profile states why.  The certificate is the pinned `P2SlackFamilyUncond` at the spec's
+    k = 105, and the manifest names the payload profile and the expander.  Its call is
     `ROOT_CALL_NS`, half the fastest cooperating root: the memory challenger accepts the cap,
     `Δ + RTT = 854 µs`, and refuses a µs more, and v1's 1 ms."""
-    for name in ("p2-16448/v4", "p2-16448/v2"):
-        sch = schemes.get(name, segments=8)
-        v2 = name.endswith("v2")
-        assert sch.experimental == (f"{EXPERIMENTAL}; {CHACHA8_NONCONFORMING}" if v2 else EXPERIMENTAL)
-        assert sch.params.profile == sch.params.manifest()["profile"] == "p2-2054B"
-        assert ("expander" in sch.params.manifest()) is not v2
-        cert = sch.certificate
-        assert (cert.theorem, cert.k, cert.rounds, cert.work, cert.call_ns, cert.segments, cert.hypotheses) == (
-            "Pous.SecurityProofs.P2SlackFamilyUncond", 105, 0, 1 << 20, ROOT_CALL_NS, 8, ())
-        assert {"m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "cr/sha-512", "trusted-host"} <= set(
-            cert.claims) and not any("sha-256" in c for c in cert.claims)
-        one = schemes.get(name)
-        vk = VerifierKey.from_leaves(one.params, SALT, [bytes(64)] * one.params.blocks)
-        key = protocol.challenge_key(b"\x00" * 32, vk)
-        with pytest.raises(ValueError, match="experimental"):
-            protocol.TimedAudit(one, vk, key)
-        v = protocol.TimedAudit(one, vk, key, experimental=True, rtt_allowance_ns=36_800)
-        assert v.k == 105 and v.gaps == ("W has 1 segments; Pous.SecurityProofs.P2SlackFamilyUncond is about 8",)
-        capped = protocol.TimedAudit(one, vk, key, experimental=True, rtt_allowance_ns=RTT_ALLOWANCE_CAP_NS)
-        assert capped.limit_ns == 854_000 and capped.k == 105 and capped.certificate == cert
-        for rtt in (RTT_ALLOWANCE_CAP_NS + 1_000, 1_000_000):
-            with pytest.raises(ValueError, match="covers 0, so Δ \\+ RTT must stay under 854029 ns"):
-                protocol.TimedAudit(one, vk, key, experimental=True, rtt_allowance_ns=rtt)
-        p = protocol.StorageProfile(sch.name, sch.params.manifest(), sch.params.blocks, sch.params.m, 105, 536_800, cert,
-                                    experimental=sch.experimental)
-        assert p.certified and p.statement().startswith(f"EXPERIMENTAL ({sch.experimental}). ")
-        assert "P2SlackFamilyUncond" in p.statement() and p.to_json()["experimental"] == sch.experimental
-        assert p.state_bound_bits == (1 << 19) * 16448 * 18 // 19
-    with pytest.raises(ValueError, match="chacha8"):
-        schemes.get("p2-16448/v4", params=P2Params(16448, 21065, 1 << 16, 1, CHACHA8))
-    with pytest.raises(ValueError, match="expander"):
-        P2Params(128, 173, 8, 1, "chacha20")
+    sch = schemes.get("p2-16448/v4", segments=8)
+    assert sch.experimental == EXPERIMENTAL
+    assert sch.params.profile == sch.params.manifest()["profile"] == "p2-2054B"
+    assert sch.params.manifest()["expander"] == "sha512-ctr-v4"
+    cert = sch.certificate
+    assert (cert.theorem, cert.k, cert.rounds, cert.work, cert.call_ns, cert.segments, cert.hypotheses) == (
+        "Pous.SecurityProofs.P2SlackFamilyUncond", 105, 0, 1 << 20, ROOT_CALL_NS, 8, ())
+    assert {"m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "cr/sha-512", "trusted-host"} <= set(
+        cert.claims) and not any("sha-256" in c for c in cert.claims)
+    one = schemes.get("p2-16448/v4")
+    vk = VerifierKey.from_leaves(one.params, SALT, [bytes(64)] * one.params.blocks)
+    key = protocol.challenge_key(b"\x00" * 32, vk)
+    with pytest.raises(ValueError, match="experimental"):
+        protocol.TimedAudit(one, vk, key)
+    v = protocol.TimedAudit(one, vk, key, experimental=True, rtt_allowance_ns=36_800)
+    assert v.k == 105 and v.gaps == ("W has 1 segments; Pous.SecurityProofs.P2SlackFamilyUncond is about 8",)
+    capped = protocol.TimedAudit(one, vk, key, experimental=True, rtt_allowance_ns=RTT_ALLOWANCE_CAP_NS)
+    assert capped.limit_ns == 854_000 and capped.k == 105 and capped.certificate == cert
+    for rtt in (RTT_ALLOWANCE_CAP_NS + 1_000, 1_000_000):
+        with pytest.raises(ValueError, match="covers 0, so Δ \\+ RTT must stay under 854029 ns"):
+            protocol.TimedAudit(one, vk, key, experimental=True, rtt_allowance_ns=rtt)
+    p = protocol.StorageProfile(sch.name, sch.params.manifest(), sch.params.blocks, sch.params.m, 105, 536_800, cert,
+                                experimental=sch.experimental)
+    assert p.certified and p.statement().startswith(f"EXPERIMENTAL ({sch.experimental}). ")
+    assert "P2SlackFamilyUncond" in p.statement() and p.to_json()["experimental"] == sch.experimental
+    assert p.state_bound_bits == (1 << 19) * 16448 * 18 // 19
+    for expander in ("chacha8", "chacha20"):
+        with pytest.raises(ValueError, match="expander"):
+            P2Params(128, 173, 8, 1, expander)
 
 
 def test_p2_family_certificate_is_the_proved_block_range():
     """`p2.family_certificate` is `P2SlackFamilyUncond`'s `λ = 128` row at k = 105, the registered certificate's every
     field but its segment pin, for a v4 store of 2^8 to 2^23 blocks at the registered width and prime in any number of
-    segments; there is none off that range, at another width, or for v2's ChaCha8 keys."""
+    segments; there is none off that range or at another width."""
     from verity.core.protocols.pous.schemes.p2 import CERT_FAMILY_BLOCKS, family_certificate
 
     reg = schemes.get("p2-16448/v4", segments=8).certificate
@@ -555,8 +551,7 @@ def test_p2_family_certificate_is_the_proved_block_range():
         cert = family_certificate(P2Params(16448, 21065, bps, segments))
         assert cert.to_json() == reg.to_json() | {"segments": None}, (bps, segments)
         assert cert.theorem == "Pous.SecurityProofs.P2SlackFamilyUncond" and cert.claims == reg.claims
-    for q in (P2Params(16448, 21065, 255, 1), P2Params(16448, 21065, 1 << 16, 129), P2Params(128, 173, 256, 1),
-              P2Params(16448, 21065, 256, 1, CHACHA8)):
+    for q in (P2Params(16448, 21065, 255, 1), P2Params(16448, 21065, 1 << 16, 129), P2Params(128, 173, 256, 1)):
         assert family_certificate(q) is None, q
     assert schemes.P2(P2Params(16448, 21065, 256, 1)).certificate is None
 
@@ -565,7 +560,7 @@ def test_p2_wide_certificate_is_period_held_at():
     """`p2.wide_certificate` is `Pous.Period.SecurityProofs.periodHeldAt`, the family's audit (k = 105, no root within
     `Δ + RTT`, `2^20` queries, `⌊ρ·|C|⌋` at `1% + 2^-128`) for a v4 store of 2^19 to 2^27 blocks at the registered width
     and prime in any number of segments, Demo B's 1038 segments among them, resting on `P2_CLAIMS` and a claim for each
-    of `periodHeldAt`'s premises at `N`; there is none off that range, at another width, or for v2's ChaCha8 keys."""
+    of `periodHeldAt`'s premises at `N`; there is none off that range or at another width."""
     from verity.core.protocols.pous.schemes.p2 import CERT_WIDE_BLOCKS, P2_CLAIMS, WIDE_CLAIMS, family_certificate
     from verity.core.protocols.pous.schemes.p2 import wide_certificate
 
@@ -578,7 +573,7 @@ def test_p2_wide_certificate_is_period_held_at():
                                         "claims": list(WIDE_CLAIMS)}, (bps, segments)
         assert all(protocol.claim(c).id == c for c in cert.claims)
     for q in (P2Params(16448, 21065, (1 << 16) - 1, 8), P2Params(16448, 21065, 1 << 16, (1 << 11) + 1),
-              P2Params(1024, 105, 1 << 16, 1038), P2Params(16448, 21065, 1 << 16, 1038, CHACHA8)):
+              P2Params(1024, 105, 1 << 16, 1038)):
         assert wide_certificate(q) is None, q
 
 
@@ -598,7 +593,7 @@ def test_p2_wide320_certificate_is_the_320_read_window():
         assert cert.delta + Fraction(1, 2 ** -cert.eps_log2) == Fraction(1, 1 << 20)
         assert cert.claims == WIDE_CLAIMS and cert.refusals(319, 0) == ("k = 319 is below the certificate's 320",)
     for q in (P2Params(16448, 21065, (1 << 16) - 1, 8), P2Params(16448, 21065, 1 << 16, (1 << 11) + 1),
-              P2Params(1024, 105, 1 << 16, 1038), P2Params(16448, 21065, 1 << 16, 1038, CHACHA8)):
+              P2Params(1024, 105, 1 << 16, 1038)):
         assert wide320_certificate(q) is None, q
 
 
@@ -617,8 +612,7 @@ def test_p2_encode_blocks_are_slices_of_the_segment():
             encode_blocks(params, SALT, 1, j0, payloads)
 
 
-@pytest.mark.parametrize("expander", ["sha512-ctr-v4", CHACHA8])
-def test_p2_arithmetic(expander):
+def test_p2_arithmetic():
     """sq inverts the parity-canonical root, σ is an involution on [0, p), blocks and payloads are big-endian integers
     (the spec's wire format), and a block that is not a codeword is refused."""
     from verity.core.protocols.pous.schemes.p2 import _Field, block_keys
@@ -627,9 +621,9 @@ def test_p2_arithmetic(expander):
     for _ in range(300):
         y, k = rng.randrange(f.p), rng.getrandbits(128)
         assert f.sq(f.rho(y)) == y and f.sigma(f.sigma(y, k), k) == y < f.p
-    params = P2Params(128, 173, 8, 2, expander)
+    params = P2Params(128, 173, 8, 2)
     assert block_keys(params, SALT, 0, 1) != block_keys(params, SALT, 1, 1) != block_keys(params, SALT, 0, 2)
-    sch = (schemes.P2ChaCha if expander == CHACHA8 else schemes.P2)(params)
+    sch = schemes.P2(params)
     w_seg = bytes(range(112))
     c = sch.encode_segment(SALT, 1, w_seg)
     for j in (0, 5):
@@ -728,45 +722,14 @@ def test_p2_v4_keys_are_the_specs():
         expand_prefix(params, bytes(32))
 
 
-def test_p2_v2_keys_are_chacha8_from_a_segment_seed():
-    """v2's per-block keys expand where they are used, on the device, from one 32-byte seed per segment (ChaCha8 with
-    the block index as nonce), so no key-sized state is stored and the 1.05× space bound holds."""
-    from verity.core.protocols.pous.schemes.p2 import chacha_block, chacha_keys, segment_seed
-
-    # the ChaCha block function against RFC 8439 §2.3.2 (20 rounds, the same word layout), ChaCha8 against the published
-    # zero-key, zero-nonce vector
-    assert chacha_block(bytes(range(32)), 1 | 0x09000000 << 32, 0x4A000000, 20)[:16].hex() == "10f1e7e4d13b5915500fdd1fa32071c4"
-    assert chacha_block(bytes(32), 0, 0)[:32].hex() == "3e00ef2f895f40d67f5bb8e81f09a5a12c840ec3ce9a7f3b181be188ef711a1e"
-    params = P2Params(16448, 21065, 4, 1, CHACHA8)
-    seed = segment_seed(SALT, 3)
-    assert len(seed) == 32 and seed != segment_seed(SALT, 2)
-    k, t = chacha_keys(params, seed, 5)
-    z = b"".join(chacha_block(seed, i, 5) for i in range(65))
-    assert k == int.from_bytes(z[:2056], "big") and t == int.from_bytes(z[2056:4112], "big") < params.p
-    assert chacha_keys(params, seed, 6) != (k, t)
-
-
 def test_p2_tweak_is_rejection_sampled():
     """A tweak candidate at or above p is skipped for the next one, as the spec requires; it is never reduced by one
-    subtraction of p, which would give the values below c0 twice the weight of the rest.  Both expanders."""
+    subtraction of p, which would give the values below c0 twice the weight of the rest."""
     from verity.core.protocols.pous.schemes import p2
 
-    params = P2Params(128, 173, 4, 1, CHACHA8)
-    assert p2.below(params.p, iter([params.p, params.p + 5, (1 << 128) - 1, 7])) == 7
-    assert p2.below(params.p, iter([params.p - 1])) == params.p - 1
-    real = p2.chacha_block
-
-    def first_candidate_high(key: bytes, counter: int, nonce: int, rounds: int = 8) -> bytes:
-        out = real(key, counter, nonce, rounds)
-        return b"\xff" * 32 + out[32:] if counter == 0 else out     # K and the first t candidate are 2^128 − 1 ≥ p
-
-    try:
-        p2.chacha_block = first_candidate_high
-        k, t = p2.chacha_keys(params, bytes(32), 0)
-    finally:
-        p2.chacha_block = real
-    assert k == (1 << 128) - 1 and t == int.from_bytes(real(bytes(32), 0, 0)[32:48], "big") < params.p
-    assert t != (1 << 128) - 1 - params.p
+    p = P2Params(128, 173, 4, 1).p
+    assert p2.below(p, iter([p, p + 5, (1 << 128) - 1, 7])) == 7
+    assert p2.below(p, iter([p - 1])) == p - 1
 
     # v4 at w = 24, c0 = 65,533, where a candidate is ≥ p about once in 256: the first block whose first one is
     small = P2Params(24, 65533, 4)
