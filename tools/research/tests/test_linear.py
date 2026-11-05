@@ -38,10 +38,9 @@ class FakeLinear:
         self.projects, self.open, self.updated, self.refuse_project = PROJECTS, [], [], False
         self.visible, self.team_key = None, "INF"
         self.parent = {"id": "P1", "project": {"id": "PJ1"}, "projectMilestone": {"id": "MS3"}}
-        self.relations, self.wrote = [], []
+        self.relations, self.wrote, self.reviewed = [], [], None
         self.users = [{"id": "U1", "name": "Daniel Reuter"}, {"id": "U2", "name": "Verity Asks"}]
         self.asked, self.ask_filter, self.tags = [], None, {}
-        self.reviewed = None
 
     @staticmethod
     def _issue(x: str) -> dict:
