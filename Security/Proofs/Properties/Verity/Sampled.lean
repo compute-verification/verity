@@ -43,7 +43,8 @@ files and at the strategy a strategy of the period's game projects to. This modu
   recursive form (`VStar.Recursive`) is not this leg's (`Covers`).
 * **The session v2 sets up on the parameters and the committed files** (`SetsUp`): v2's parameters in the composite's
   (`ParamsAt`), the session's inputs as v2 hands them to flock-verify (the statement, one table, the verifier's
-  partition object and program, no recomputation of public input words), the committed circuit and public files and
+  partition object and program, no recomputation of public input words), the statement's descriptor and query as the
+  parameters' program and query, the committed circuit and public files and
   the vocabulary's reading of them, the law the draw reads over the population (`lawAt`), and the claim's share.
 * **The device's log as v2's check reads it** (`coinsRead`): the releases the signed log in v2's evidence shows after
   its head, in order, a coin tree's line its own release and the other lines in pairs, a root's line and its coin's
@@ -526,15 +527,16 @@ def lawAt (v : _root_.SampledProofs.Registration.Verifier) (n : ℕ) : Flock.V F
   pure (derived.getD (← _root_.SampledProofs.Draw.flockLaw lawJ n))
 
 /-- **`A` is the session v2 sets up on the parameters `θ` and the committed files `F`**: v2's parameters in the
-composite's (`ParamsAt`), with the verifier's partition object and program as flock-verify's inputs and the law the draw
-reads over the population (`lawAt`); the statement's tags, one table, no work, stratified or closure input and no
+composite's (`ParamsAt`), with the verifier's partition object and program as flock-verify's inputs, the statement's
+descriptor as the parameters' program bytes and the registration's query as its verifier's, and the law the draw reads
+over the population (`lawAt`); the statement's tags, one table, no work, stratified or closure input and no
 recomputation of public input words, as `SampledProofs.OneStageZk.inputsOf` hands them; the committed circuit and public
 files, and the vocabulary's reading of the files (`Vocab.read`) as the session's, its lookup tables included; and the
 claim's share, the published certificate's. The writer, the device's bytes and the bound's parameters are the
 deployment's session's (`Deployed`). -/
 structure SetsUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (A : Live) : Prop where
   params : ∃ p, ParamsAt θ p ∧ A.I.partition = some p.own.partition ∧ A.I.program = some p.own.program ∧
-    lawAt p.base.verifier A.n = .ok A.law
+    lawAt p.base.verifier A.n = .ok A.law ∧ p.own.program = ⟨A.desc.toArray⟩ ∧ p.base.verifier.query = A.qr
   tags : Flock.Tags.find? _root_.SampledProofs.OneStageZk.STATEMENT = some A.I.tags
   count : A.I.count = 1
   work : A.I.work = none
