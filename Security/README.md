@@ -68,8 +68,8 @@ The numbers come from the slowdown calculator (`benchmarks/rho`), not from this 
   - E_j, the execution block: a Boolean circuit whose inputs are θ, earlier blocks' outputs and fresh input;
   - 𝒫_j, a partition of E_j's gates into proof blocks, each block's outputs within its public size class and their
     number within a public cap;
-  - 𝓘_j, a partition of E_j's gates into inference blocks, each of exactly c gates (padded) reading at most k bits of
-    fresh input, which is anything outside θ;
+  - 𝓘_j, a partition of E_j's gates into inference blocks, each of at most c gates reading at most k bits of fresh
+    input, which is anything outside θ;
   - loc_j : gates(E_j) → registered devices × ticks, the placement.
 
   a_j, E_j, 𝒫_j, 𝓘_j and loc_j are private, their padded counts public. The registered circuit is D = E_1 ‖ … ‖ E_n.
