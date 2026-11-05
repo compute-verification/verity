@@ -1593,9 +1593,9 @@ def shard(spec: str, gated: bool = True, jobs: set[str] | None = None, plan_file
     """`--shard K/N`: {"k", "n", "parts": shard K's parts under ci.toml's plan with N shards, but those of a job off the merge
     gate unless ``gated`` is False (an after-landing `--deferred` shard runs them, and its last shard also the parts no shard
     of the plan holds, ratchet-gate's, so the N shards together run every part drive's after-landing run passes), "all":
-    every part a recorded unsharded check covers (`gated_parts`)}, on this tree's Lake packages (`declaration.resolve`).
-    DeclarationError when there is no such plan or shard, or the tree can't be listed.  `auto:K/N`: shard K of the auto plan
-    (`auto_shard`)."""
+    every part a recorded unsharded check covers (`gated_parts`)}, on this tree's Lake packages, each spec's audit on its
+    provers' shard (`declaration.resolve`, `audit_provers`).  DeclarationError when there is no such plan or shard, or the tree
+    can't be listed.  `auto:K/N`: shard K of the auto plan (`auto_shard`)."""
     if spec.startswith("auto:"):
         return auto_shard(spec, gated, plan_file, jobs)
     m = re.fullmatch(r"(\d+)/(\d+)", spec)
@@ -1604,7 +1604,7 @@ def shard(spec: str, gated: bool = True, jobs: set[str] | None = None, plan_file
         raise DECLARATION.DeclarationError(f"--shard {spec}: ci.toml's plans are {', '.join(f'K/{n}' for n in sorted(plans))}")
     k, n = int(m.group(1)), int(m.group(2))
     parts_of = _parts_of()
-    shards = DECLARATION.resolve(plans[n], JOBS, parts_of)
+    shards = DECLARATION.resolve(plans[n], JOBS, parts_of, audit_provers(parts_of["lean-audit"]))
     held = {p for s in shards for p in s}
     mine = set(shards[k - 1]) | ({p for p in DECLARATION.all_parts(JOBS, parts_of) if p not in held} if k == n and not gated else set())
     return {"k": k, "n": n,
@@ -1658,12 +1658,17 @@ def split_shares(splits: dict[str, dict]) -> dict[str, float]:
             for job in SHARDS.SUITE_JOBS}
 
 
+def audit_provers(packages: list[str]) -> dict[str, list[str]]:
+    """{`lean-audit:PKG`: its provers' audits} for each of ``packages`` whose `proved_in` names some (`lean_audit.provers`): its
+    audit audits them beside it, from one build of theirs, so a plan puts them on one shard."""
+    la = _lean_audit()
+    return {f"lean-audit:{p}": [f"lean-audit:{q}" for q in qs] for p in packages if (qs := la.provers(p))}
+
+
 def shard_needs() -> dict[str, list[str]]:
     """What a shard runs beside a part (`shards.builds`): each job's `needs` and `after`, and each audited package's provers
-    (`lean_audit.provers`, the packages its `proved_in` names, which its audit audits beside it)."""
-    la = _lean_audit()
-    return {**{j.name: [*j.needs, *([j.after] if j.after else [])] for j in JOBS},
-            **{f"lean-audit:{p}": [f"lean-audit:{q}" for q in qs] for p in _parts_of()["lean-audit"] if (qs := la.provers(p))}}
+    (`audit_provers`), which `shards.units` holds on its shard."""
+    return {**{j.name: [*j.needs, *([j.after] if j.after else [])] for j in JOBS}, **audit_provers(_parts_of()["lean-audit"])}
 
 
 def given_suites(suites: dict[str, float], given: dict[str, float] | None) -> dict[str, float]:

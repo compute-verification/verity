@@ -29,7 +29,9 @@ selector of the plan names). Every job on the gate is in exactly one shard, whol
 exactly one `*`, and a job off it in at most one (a shard skips it either way: a plan that keeps it puts it back on the gate
 in one line); a shard holds what each of its jobs `needs` or runs `after`; no two plans have the same N (`plans`). `resolve`
 turns a plan into each shard's parts for a tree's parts (`parts_of`), and refuses a named part the tree lacks, so a stale plan
-stops the shard instead of leaving something out.
+stops the shard instead of leaving something out. A spec package's audit and its provers' (the packages its `proved_in` names,
+which it audits beside it from one build of theirs) resolve onto one shard, the one the plan names any of them in, so the
+provers build once a run; a plan naming them in two shards is refused.
 """
 from __future__ import annotations
 
@@ -248,21 +250,46 @@ def all_parts(jobs: list[Job], parts_of: dict[str, list[str]]) -> list[str]:
     return out
 
 
-def resolve(plan: Plan, jobs: list[Job], parts_of: dict[str, list[str]]) -> list[list[str]]:
-    """Each shard's parts (`all_parts`' names, in its order) under ``plan`` for a tree whose split jobs have ``parts_of``."""
+def resolve(plan: Plan, jobs: list[Job], parts_of: dict[str, list[str]],
+            together: dict[str, list[str]] | None = None) -> list[list[str]]:
+    """Each shard's parts (`all_parts`' names, in its order) under ``plan`` for a tree whose split jobs have ``parts_of``. The
+    parts ``together`` ties (a part to those it runs beside: a spec package's audit to its provers', which it audits from one
+    build of theirs) are on one shard, the one the plan names any of them in, else `JOB:*`'s; DeclarationError when the plan
+    names them in two."""
     named = {s for shard in plan for s in shard if ":" in s and not s.endswith(":*")}
     by = {j.name: j for j in jobs}
     if missing := sorted(s for s in named if s.partition(":")[2] not in (job_parts(by[s.partition(":")[0]], parts_of) or ())):
         raise DeclarationError(f"the plan names {', '.join(missing)}, which this tree doesn't have")
-    out = []
-    for shard in plan:
-        mine = set()
-        for p in all_parts(jobs, parts_of):
+    every = all_parts(jobs, parts_of)
+    where: dict[str, int] = {}
+    for k, shard in enumerate(plan):
+        for p in every:
             job = p.partition(":")[0]
             if job in shard or p in shard or (f"{job}:*" in shard and p not in named):
-                mine.add(p)
-        out.append([p for p in all_parts(jobs, parts_of) if p in mine])
-    return out
+                where[p] = k
+    root = {p: p for p in every}
+
+    def find(p: str) -> str:
+        while root[p] != p:
+            p = root[p]
+        return p
+
+    for p, qs in (together or {}).items():
+        for q in qs:
+            if p in root and q in root:
+                root[find(p)] = find(q)
+    ties: dict[str, list[str]] = {}
+    for p in every:
+        ties.setdefault(find(p), []).append(p)
+    for tie in (t for t in ties.values() if len(t) > 1):
+        if len(at := {where[p] for p in tie if p in named and p in where}) > 1:
+            raise DeclarationError(f"the plan names {', '.join(p for p in tie if p in named)} in shards "
+                                   f"{', '.join(str(k + 1) for k in sorted(at))}, and they run beside one another (a spec "
+                                   f"package's audit audits the packages its `proved_in` names, from one build of theirs): "
+                                   f"name them in one shard")
+        if (k := next(iter(at), where.get(tie[0]))) is not None:
+            where.update(dict.fromkeys(tie, k))
+    return [[p for p in every if where.get(p) == k] for k in range(len(plan))]
 
 
 def plans(path: Path = PATH, registry: Path = REGISTRY) -> dict[int, Plan]:

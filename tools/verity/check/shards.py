@@ -10,11 +10,12 @@ Each costs its measured seconds (`priced`, from recorded verdicts and runs); one
 measured tasks, else of every measured task, else `DEFAULT_S`.
 
 A part whose job `needs` or runs `after` another (lean-unit-cut, lean-agreement and lean-suites read lean-build's binaries,
-flock-rust-tests flock-circuit-build's crates) runs on a shard that runs that build, and so does a spec package's audit, which
-audits the packages its `proved_in` names beside it (`lean-audit:Security` and `lean-audit:Security/Properties` audit
-`Security/Proofs`).  A cheap build (at most `CHEAP_S`) may run again, beside its parts, on each shard that holds a part reading
-it and not the build's own part (`builds`), until a shared artifact cache exists; the plan says so and charges it.  A costlier
-one holds its readers on its own shard (`units`).  The build's part is in exactly one shard, so a combine takes each part once.
+flock-rust-tests flock-circuit-build's crates) runs on a shard that runs that build.  A cheap build (at most `CHEAP_S`) may run
+again, beside its parts, on each shard that holds a part reading it and not the build's own part (`builds`), until a shared
+artifact cache exists; the plan says so and charges it.  A costlier one holds its readers on its own shard (`units`).  A spec
+package's audit, which audits the packages its `proved_in` names beside it from one build of theirs (`lean-audit:Security`
+and `lean-audit:Security/Properties` audit `Security/Proofs`), is held on their shard whatever they cost, so they build once
+a run.  The build's part is in exactly one shard, so a combine takes each part once.
 
 Units are packed longest first (own cost and builds) onto the shard where they end soonest, the builds a shard lacks counted
 (LPT); a shard's predicted time is the sum of its parts' and builds' costs (a shard runs its groups at once, so this is an upper
@@ -159,8 +160,9 @@ def builds(names: list[str], needs: dict[str, list[str]]) -> dict[str, list[str]
 
 
 def units(ts: list[Task], needs: dict[str, list[str]]) -> list[tuple[list[str], list[str]]]:
-    """The tasks as the units LPT places: each part with the builds it needs that cost more than `CHEAP_S`, and their readers,
-    held on one shard (in ``ts``'s order); beside each unit, the cheap builds its parts need from outside it."""
+    """The tasks as the units LPT places: each part with the builds it needs that cost more than `CHEAP_S` and those its own
+    ``needs`` name (by part, not by job: a spec's audit's provers), and their readers, held on one shard (in ``ts``'s order);
+    beside each unit, the cheap builds its parts need from outside it."""
     cost = {t.part: t.seconds for t in ts}
     need = builds(list(cost), needs)
     root = {p: p for p in cost}
@@ -171,8 +173,9 @@ def units(ts: list[Task], needs: dict[str, list[str]]) -> list[tuple[list[str], 
         return p
 
     for p, bs in need.items():
+        own = needs.get(p, []) if ":" in p else []
         for b in bs:
-            if cost[b] > CHEAP_S:
+            if cost[b] > CHEAP_S or b in own:
                 root[find(p)] = find(b)
     held: dict[str, list[str]] = {}
     for p in cost:

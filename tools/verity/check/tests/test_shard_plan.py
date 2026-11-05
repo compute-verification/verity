@@ -107,6 +107,18 @@ def test_a_shard_plan_holds_the_readers_of_a_costly_build_on_its_shard_rather_th
     assert (doc["floor_s"], doc["floor"]) == (costly * 1.5 + 10, ["proofs", "spec", "small"])
 
 
+def test_a_specs_audit_is_held_with_its_provers_however_cheap_they_are_and_a_cheap_jobs_build_runs_beside():
+    """A part's own needs (a spec's audit's provers, which it audits from one build of theirs) hold it on their shard at any
+    cost, where a cheap build its job needs runs again beside a reader on another shard."""
+    ts = _ts({"lean-audit:p": 10, "lean-audit:s": 100, "lean-audit:t": 100, "lean-build": 10, "lean-suites:a": 100,
+              "lean-suites:b": 100})
+    needs = {"lean-audit:s": ["lean-audit:p"], "lean-audit:t": ["lean-audit:p"], "lean-suites": ["lean-build"]}
+    shards = S.plan(ts, needs, max_shards=4, n=4)["shards"]
+    [holder] = [s for s in shards if "lean-audit:p" in s["parts"]]
+    assert holder["parts"] == ["lean-audit:p", "lean-audit:s", "lean-audit:t"] and holder["builds"] == []
+    assert any(s["builds"] == ["lean-build"] for s in shards), "the cheap build runs again beside a reader"
+
+
 def _write(tmp_path: Path, doc: dict) -> Path:
     f = tmp_path / CHECK.AUTO_PLAN
     f.write_text(json.dumps(doc))
@@ -122,9 +134,11 @@ def test_an_auto_plan_of_this_tree_runs_each_gated_part_in_one_shard_and_a_stale
     needs = CHECK.shard_needs()
     for spec in ("lean-audit:Security", "lean-audit:Security/Properties"):
         assert needs[spec] == ["lean-audit:Security/Proofs"], "a spec's audit audits its provers beside it"
-    costly = CHECK.auto_plan(({}, {"Security/Proofs": S.CHEAP_S * 2}, {}), 4, n=3)
-    [s] = [s for s in costly["shards"] if "lean-audit:Security/Proofs" in s["parts"]]
-    assert {"lean-audit:Security", "lean-audit:Security/Properties"} <= set(s["parts"]), "held on its shard, not audited again"
+    for proofs in (S.CHEAP_S * 2, S.CHEAP_S / 2):
+        got = CHECK.auto_plan(({}, {"Security/Proofs": proofs, "Security": 1.0, "Security/Properties": 1.0}, {}), 4, n=3)
+        [s] = [s for s in got["shards"] if "lean-audit:Security/Proofs" in s["parts"]]
+        assert {"lean-audit:Security", "lean-audit:Security/Properties"} <= set(s["parts"]), "held on its shard, not built again"
+        assert not any(b.startswith("lean-audit:") for s in got["shards"] for b in s["builds"])
     f = _write(tmp_path, doc)
     got = [CHECK.shard(f"auto:{k}/3", plan_file=f) for k in (1, 2, 3)]
     assert sorted(p for g in got for p in g["parts"]) == sorted(want)

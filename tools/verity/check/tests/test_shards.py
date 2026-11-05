@@ -27,11 +27,27 @@ CHECK = _module("repo_check_for_shards", ROOT / "tools" / "verity" / "check" / "
 D = CHECK.DECLARATION
 LA = _module("repo_lean_audit_for_shards", ROOT / "tools" / "verity" / "lean" / "lean_audit.py")
 PACKAGES = LA.packages(CHECK.tracked_files(ROOT))
-SECURITY = ("lean-audit:Security", "lean-audit:Security/Proofs")
+#: the packages that build Security/Proofs: it, and the specs whose `proved_in` names it
+SECURITY = ("lean-audit:Security", "lean-audit:Security/Proofs", "lean-audit:Security/Properties")
+#: the packages' `proved_in` as their policies name them: reading every package's lean-audit.json would make each one an input
+PROVERS = {"Security": ["Security/Proofs"], "Security/Properties": ["Security/Proofs"]}
+
+
+@pytest.fixture(autouse=True)
+def _provers(monkeypatch):
+    la = CHECK._lean_audit()
+
+    class Audit:
+        provers = staticmethod(lambda p: PROVERS.get(p, []))
+
+        def __getattr__(self, name):
+            return getattr(la, name)
+
+    monkeypatch.setattr(CHECK, "_lean_audit", Audit)
 
 
 def _resolved(n: int, packages=PACKAGES) -> list[list[str]]:
-    return D.resolve(D.plans()[n], CHECK.JOBS, {"lean-audit": packages})
+    return D.resolve(D.plans()[n], CHECK.JOBS, {"lean-audit": packages}, CHECK.audit_provers(packages))
 
 
 def test_the_plans_are_the_documented_ones():
@@ -44,6 +60,34 @@ def test_the_plans_are_the_documented_ones():
             ("pytest", "circuit-check:3/4"), ("flock-circuit-build", "flock-rust-tests", "circuit-check:*")),
         5: (SECURITY, ("lean-audit:*", "lean-changed"), ("lean-build", "lean-unit-cut", "lean-suites", "lean-agreement"),
             ("pytest",), ("flock-circuit-build", "circuit-check", "flock-rust-tests"))}
+
+
+@pytest.mark.parametrize("n", sorted(D.plans()))
+def test_every_plan_builds_the_security_proofs_once_a_run(n):
+    """Security and Security/Properties audit Security/Proofs beside them, from one build of it: apart, each shard holding one
+    builds the proofs again, cold after any change to them. The static plan's shards (gated, and an after-landing run's) put
+    all three on one."""
+    assert CHECK.audit_provers(PACKAGES) == {f"lean-audit:{p}": [f"lean-audit:{q}" for q in qs] for p, qs in PROVERS.items()}
+    for gated in (True, False):
+        shards = [CHECK.shard(f"{k}/{n}", gated)["parts"] for k in range(1, n + 1)]
+        [holder] = [s for s in shards if set(SECURITY) & set(s)]
+        assert set(SECURITY) <= set(holder)
+
+
+def test_a_spec_the_plan_doesnt_name_goes_with_its_provers_and_a_plan_naming_them_apart_is_refused():
+    together = {"lean-audit:s": ["lean-audit:p"], "lean-audit:t": ["lean-audit:p"]}
+    parts = {"lean-audit": ["p", "s", "t", "x"]}
+    plan = _plans('[["a", "b", "lean-audit:p"], ["lean-audit:*", "c"]]')[2]
+    assert D.resolve(plan, JOBS, parts) == [["a", "b", "lean-audit:p"], ["lean-audit:s", "lean-audit:t", "lean-audit:x", "c"]]
+    assert D.resolve(plan, JOBS, parts, together) == [["a", "b", "lean-audit:p", "lean-audit:s", "lean-audit:t"], ["lean-audit:x", "c"]]
+    spec = _plans('[["a", "b", "lean-audit:s"], ["lean-audit:*", "c"]]')[2]
+    assert D.resolve(spec, JOBS, parts, together)[0] == ["a", "b", "lean-audit:p", "lean-audit:s", "lean-audit:t"], \
+        "a named spec brings its provers, and their other specs"
+    assert D.resolve(_plans('[["a", "b", "lean-audit:*"], ["c"]]')[2], JOBS, parts, together)[0][2:] == [
+        "lean-audit:p", "lean-audit:s", "lean-audit:t", "lean-audit:x"]
+    apart = _plans('[["a", "b", "lean-audit:s"], ["lean-audit:p", "lean-audit:*", "c"]]')[2]
+    with pytest.raises(D.DeclarationError, match="names lean-audit:p, lean-audit:s in shards 1, 2, .*name them in one shard"):
+        D.resolve(apart, JOBS, parts, together)
 
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
