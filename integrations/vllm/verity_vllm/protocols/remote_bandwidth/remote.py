@@ -60,6 +60,7 @@ from typing import Any
 import numpy as np
 
 from verity.core.protocols.remote_bandwidth import audit, codec as rcodec, receipts as rb
+from verity.core.protocols.remote_bandwidth.session import wire
 from verity_vllm import config
 from verity_vllm.protocols.remote_bandwidth import memory_map as store_map
 from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory
@@ -74,7 +75,7 @@ def address(value: str) -> tuple[str, int]:
 
 
 def session_module(name: str, directory: str | Path = config.REMOTE_SESSION) -> ModuleType:
-    """``benchmarks/remote_session``'s module ``name`` (``prover``, ``verifier``, ``wire``), loaded once from its file,
+    """``benchmarks/remote_session``'s module ``name`` (``prover``, ``device``, ``inplace``), loaded once from its file,
     as its own scripts import it."""
     if name in sys.modules:
         return sys.modules[name]
@@ -514,7 +515,6 @@ def prove(backend: StoreBackend, verifier: str, plan: str = "serve", *, node: by
     the session end there."""
     host, port = address(verifier)
     prover = session_module("prover")
-    wire = prover.wire
     conn = wire.connect(host, port)
     try:
         p = prover.ProverSide(conn, backend, node, prover.parse_plan(plan), log=log, **kw)

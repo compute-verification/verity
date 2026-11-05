@@ -26,7 +26,7 @@ root R, each window's openings coin after its last root. Its `reason` is None wh
 session's `complete` (the gate's end's, and `Serve`'s read of the same signed log) is whether the challenger released
 every coin it committed to: a session reserves only the families it uses (`coins.families`), so an honest session
 that ran to its end is complete and one cut short is not. A gate session's record names the `peer` it reserved for
-(`--challenger-peer`), which `auditor_line.py` holds the ledger's reserve and open to."""
+(`--challenger-peer`), which `benchmarks/remote_session/auditor_line.py` holds the ledger's reserve and open to."""
 from __future__ import annotations
 
 import hashlib
@@ -86,8 +86,8 @@ class Local:
 
 
 class Serve:
-    """Session coins from `serve.py`, one process a session, its `out/` under `out`/SESSION, its key in `key`
-    (made there on first use at `params`, `W,H`, or `lms.DEPLOYED`'s)."""
+    """Session coins from `benchmarks/live_challenger/serve.py`, one process a session, its `out/` under `out`/SESSION,
+    its key in `key` (made there on first use at `params`, `W,H`, or `lms.DEPLOYED`'s)."""
 
     kind = "serve"
 
