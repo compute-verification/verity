@@ -599,7 +599,7 @@ theorem rounds_held {trees : Array LoggedTree} {tables : Array (String × Option
     rename_i hok
     simp only [Prod.mk.injEq] at hcn
     simp only [Bool.and_eq_true, beq_iff_eq] at hok
-    exact .inr ⟨_, hres'.symm, Option.isSome_iff_exists.2 ⟨coins, hcn.1⟩, o, ho, Trees.strIs hok.1.2⟩
+    exact .inr ⟨_, hres'.symm, Option.isSome_iff_exists.2 ⟨coins, hcn.1⟩, o, rfl, Trees.strIs hok.1.2⟩
   · exact fun _ _ => ⟨(), rfl⟩
   · exact fun _ => ⟨(), rfl⟩
 
