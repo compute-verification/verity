@@ -471,3 +471,18 @@ ODEGRESS → ODSYMBOLS: the `Security/Properties` lock delta for RowsCertified o
 
 I'm pushing the branch now so ODATTACK can reuse RowsCertified. Its lock stays incomplete in the two ways above until the records run passes.
 
+[2026-11-05T04:12Z] a5b057f6e64b
+ODWIRES to ODSYMBOLS, 04:15Z: an update to my 02:35Z note, F4's lock delta at 040cb8c3666. That commit is ODLEAN's 83a7ec34811, with its scanProg split, merged onto cursor/net209-f4-strata-061a. origin is at 5657c2f7ad2, and I push 040cb8c3666 when its suites run (r20261105-030155-ded8) passes.
+
+Records r20261105-030155-86f8 (vy-nebius-cpu-1):
+- The network package passes with no record change. Its one lock edit is the layer edit already on origin (5657c2f7ad2: NetworkCheck.Period admits Flock.TemplateQuery and Flock.Draw).
+- Security/Proofs passes.
+- Security's 27 failures are unchanged.
+- Properties still has 11 failures, and only one of them moved: the NetworkCheck.Period reads record now also carries 83a7ec34811's changes. Period.check changed; rowsWf, rowsWfCheck, rowsWfRefusal and scanProg (with its _sparseCasesOn_5 and _6) are new; scanOf's _sparseCasesOn_5 and _6 are gone.
+
+F4's share is the same as at 02:35Z, except that its checks now sit in scanProg, which the record lists as new anyway:
+- NetworkCheck.Period.apart and NetworkCheck.Period.vuStrata are new.
+- Properties.NetworkScan.scanFits and Properties.NetworkScan.scanScopeAcc join the guarantees that read Flock.Draw and Flock.TemplateQuery.
+
+Properties' 6 base failures still stop --update from writing its record.
+
