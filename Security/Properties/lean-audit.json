@@ -759,20 +759,20 @@
   "Properties.SampledProofs.bernoulliBounds": "e3a8add316d4cc582418009f5a507de3cf4393c4712c5ca61ea1fbefa554eb1b",
   "Properties.SampledProofs.digestIsRecord's": "abc4bf9e307d0d767e4b2403ff93ed0054962649127800445a602b2468868d70",
   "Properties.SampledProofs.fleetHaltIsFinal": "a17a42db87754384c41caa410b493a44f749f71b39aabe166aeb090ccfcb22fc",
+  "Properties.SampledProofs.gatesHeld": {
+   "type_hash": "c27976a18efe6506637bb51ab4939d5fa5499a6e53a5199ac16d7d547399661c",
+   "missing": "honest",
+   "why": "an honest instance is an accepted one-stage v2 run: the verifier's registered file and each session's statements, proofs and verdicts, which checkBlobsAt recomputes, under a record v1's check accepts; no proof builds one yet (v1's Properties.SampledProofs.acceptMeans, whose acceptance these read, is unwitnessed), and Covered.heldRoot_pinned proves the premise they add, HeldRoot, holds at a verifier that pins its one value"
+  },
   "Properties.SampledProofs.haltCoversOperator": "3f9891aa1693628f5b2c28e35e55a258c71bb962d4e30f5b07407e917973ef86",
   "Properties.SampledProofs.haltEndsOpen": "ded0fc0d7fd329c2e1585319b811ad69f9e24c9fcceed2ab5560f109a9fb9735",
   "Properties.SampledProofs.haltIsFinal": "83d93d8c3f74940f0d7ec870cfb360e861b9fe0b6d842080dc0b57523ad67903",
-  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162",
   "Properties.SampledProofs.heldCovered": {
    "type_hash": "55f3981ae71cf7ec2bddb4dd6ae2cf0c1aca41b4fc7b3c023cc779c27f0b2ea2",
    "missing": "honest",
    "why": "an honest instance is an accepted one-stage v2 run: the verifier's registered file and each session's statements, proofs and verdicts, which checkBlobsAt recomputes, under a record v1's check accepts; no proof builds one yet (v1's Properties.SampledProofs.acceptMeans, whose acceptance these read, is unwitnessed), and Covered.heldRoot_pinned proves the premise they add, HeldRoot, holds at a verifier that pins its one value"
   },
-  "Properties.SampledProofs.gatesHeld": {
-   "type_hash": "c27976a18efe6506637bb51ab4939d5fa5499a6e53a5199ac16d7d547399661c",
-   "missing": "honest",
-   "why": "an honest instance is an accepted one-stage v2 run: the verifier's registered file and each session's statements, proofs and verdicts, which checkBlobsAt recomputes, under a record v1's check accepts; no proof builds one yet (v1's Properties.SampledProofs.acceptMeans, whose acceptance these read, is unwitnessed), and Covered.heldRoot_pinned proves the premise they add, HeldRoot, holds at a verifier that pins its one value"
-  }
+  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
  },
  "layers": {
   "Properties.Pouw": {
