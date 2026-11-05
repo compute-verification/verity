@@ -47,6 +47,7 @@ public import Proofs.Flock.ZkAny.RelayLoopFinish
 public import Proofs.Flock.ZkAny.RelayLoopRound
 public import Proofs.Flock.ZkAny.RelayReps
 public import Proofs.Flock.ZkAny.RelayRoundFirst
+public import Proofs.Flock.ZkAny.RelayLoopSalts
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release
@@ -89,6 +90,7 @@ lets through, and the step at it, given what the loop's frames and the model hol
 the session's reps and labels the setup's rep streams' once its `Hello` left, so a round's rep its stream's own and no
 other rep stream's; and after a stream's first round the rep's frame its run, holding the history's words for its one
 round and keeping its schedule so far, which a stream of one round hands to the next stream's first, and at the model's
-state where the next round is the same rep's. -/
+state where the next round is the same rep's; and the rep's salts for levels ≥ 1 in the frames a round read wherever
+`placeOf` reads them, so a frame keeping `SameInv` keeps it at those salts. -/
 
 @[expose] public section
