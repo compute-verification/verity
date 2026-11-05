@@ -2061,11 +2061,12 @@ each VU. A unit whose input rows were not read counts every column no port holds
 def padCols (cf : Flock.Circuit) : Nat :=
   ((unheldCols cf).filter fun c => !forcedZero cf c).length
 
-/-- **Root templates `ts`' VUs' input padding**, `fs` their circuit files in order: `Σ members / upv · padCols` over
-the templates, each at its file's `units_per_vu` and padding. An audit's is `padFree (chargesOf P) fs` at its Program
-`P`, which its record's count (`NetworkCheck.Circuit.countsOf`) doesn't see. -/
+/-- **Root templates `ts`' VUs' input padding**, `fs` their circuit files in order: `Σ members · padCols` over the
+templates, each at its file's padding. Each template instance is its own copy of its file's unit net, with that net's
+padding, at any `units_per_vu`. An audit's is `padFree (chargesOf P) fs` at its Program `P`, which its record's count
+(`NetworkCheck.Circuit.countsOf`) doesn't see. -/
 def padFree (ts : Array Charged) (fs : List Flock.Circuit) : Nat :=
-  ts.zipIdx.foldl (fun n (t, k) => let f := fs.getD k default; n + t.members / f.upv * padCols f) 0
+  ts.zipIdx.foldl (fun n (t, k) => n + t.members * padCols (fs.getD k default)) 0
 
 /-- **Audit `a` as its listed files `fs` charge it**, one a template in order: its units its VUs, `Σ members / upv`
 over its templates; its bits the most a wrong VU commits, `vuBits upv words`; and its free inputs, with the scan's
@@ -2096,7 +2097,7 @@ def toyListed : Listed where
   partition := none
 
 /- `T`'s file at 2 instances a VU, `U`'s at 1, each unit one input word: `T`'s three ports of 16 leave 80 columns of
-padding, `U`'s one 112. -/
+padding in each of its 6 instances, `U`'s one 112 in each of its 4. -/
 #guard
   let file (upv : Nat) (bs : Array Nat) : Flock.Circuit :=
     let n : Flock.Net :=
@@ -2106,8 +2107,8 @@ padding, `U`'s one 112. -/
   let a := toyListed.charge
     { free := 7, steps := 0, program := "", units := 10, bits := vuBits 1 5, entries := #[], record := none,
       stateFree := 5 } fs
-  padFree toyListed.templates fs == 3 * 80 + 4 * 112 && a.units == 3 + 4 && a.bits == 2 * 16 * 5 + 2 &&
-    a.free == 7 + 3 * 80 + 4 * 112 && a.stateFree == 5 + 3 * 80 + 4 * 112
+  padFree toyListed.templates fs == 6 * 80 + 4 * 112 && a.units == 3 + 4 && a.bits == 2 * 16 * 5 + 2 &&
+    a.free == 7 + 6 * 80 + 4 * 112 && a.stateFree == 5 + 6 * 80 + 4 * 112
 
 /- A unit of two input words, ports of 16 at word 0 and two of 16 at word 1: 256 input columns, 208 of them padding. -/
 #guard

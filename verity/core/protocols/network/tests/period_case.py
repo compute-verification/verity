@@ -1961,7 +1961,7 @@ def charged(p: Params, listing: Listing, files: list[CircuitHeader]) -> Params:
             continue
         heads = [(c.upv, pad_cols(c)) for c in files[at:at + len(x.files)]]
         at += len(x.files)
-        pad = sum(n // u * q for (_, n, _), (u, q) in zip(x.templates, heads))
+        pad = sum(n * q for (_, n, _), (_, q) in zip(x.templates, heads))
         audits.append(dataclasses.replace(a, units=sum(n // u for (_, n, _), (u, _) in zip(x.templates, heads)),
                                           bits=max(vu_bits(u, w) for (_, _, w), (u, _) in zip(x.templates, heads)),
                                           free=a.free + pad,
