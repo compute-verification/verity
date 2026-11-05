@@ -496,7 +496,7 @@ Pinned by `tests/test_consumers.py` and `tests/fixtures/exfiltration_lean.json`,
   one-stage's R1 to R7.
 - **The draw.** `register` logs the record and its receipt, and `select` draws once from the challenger's coins as the
   Lean verifier's `Flock.Draw.drawWith` does, with no derivation, held to `draw.check_draw`.
-- **Sessions over several rounds** (`Stream(rounds=R)`, `Stream.session`), which Flock's verifier refuses
+- **Sessions over several rounds** (`Stream(rounds=R)`, `Stream.session`), which C-Flock's verifier refuses
   (`verity/ml/flock/verifier/PROTOCOL.md` §16.12).
 - **The salt and the registration deadline**: one salt an epoch, and a late registration ends the epoch. This is PoUW's
   `Pouw.AcceptsBy` (`Security/Definitions/Pouw/Game/Deadline.lean`).

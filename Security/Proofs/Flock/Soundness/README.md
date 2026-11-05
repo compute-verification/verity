@@ -13,7 +13,7 @@ is specified in `../../../../verity/ml/flock/verifier/PROTOCOL.md`. The work is 
 
 ### 1.1 Soundness at the oracle layer (`table_sound`, `table_sound_fast100`, `table_sound_fast100_34_35`)
 
-Consider one table of a session, run as the verifier runs it: the `fast100` profile, run twice on one committed
+Consider one table of a session, run as the verifier of record runs it: the `fast100` profile, run twice on one committed
 root, with live coins, for any statement of PROTOCOL.md §16. For every prover strategy, the probability of this event is
 at most `tableError(fast100 m, shape)`:
 

@@ -108,6 +108,10 @@ ALLOWED: dict[str, str] = {
                                                         "(`certifier.service`): `Spec.digest` hashes it",
     "T proof units per registration, unit t the link-window's bucket row t": "a public item's reason in the ingress tie's "
                                                                              "Spec (`certifier.tie_service`): `Spec.digest` hashes it",
+    "M0's non-ZK session": "Flock's ASSUMPTIONS.md: queued PRs on next rewrite its lines; renamed after they land",
+    "The benches run M0 so by default": "Flock's ASSUMPTIONS.md: queued PRs on next rewrite its lines; renamed after they land",
+    "the verifier of record runs it": "Flock's Soundness README: a queued PR on next rewrites the line beside it; renamed after "
+                                      "it lands",
     '"proof-unit"': "the kind circuit-check's Boolean export records for a unit circuit (`boolean_export.Registry.type_of`)",
     "verity/proof-service/": "the stream's and outcome's record formats (`sampled_proofs.service.STREAM`, `OUTCOME`), "
                              "which their digests hash",

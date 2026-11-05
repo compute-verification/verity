@@ -1,13 +1,13 @@
-# Flock verifier
+# Flock verifier of record
 
-The verifier is the Lean verifier in `../../../core/service/flock/` (`flock-verify`, Lean 4, toolchain pinned
+The verifier of record is the Lean verifier in `../../../core/service/flock/` (`flock-verify`, Lean 4, toolchain pinned
 in its `lean-toolchain`, no dependencies). `PROTOCOL.md` here is its outline, section by section. It replays recorded
 sessions offline: interactive coins only, CPU only. Upstream's Rust verifier is a cross-check, not a verifier (below).
 This directory holds the outline, the agreement scripts and the vectors.
 
 ## What it verifies
 
-The default statement, `verity/flock-circuit`, is the format of Flock's circuit prover (`verity_flock.circuit`):
+The default statement, `verity/flock-circuit`, is the format of C-Flock's circuit prover (M0, `verity_flock.circuit`):
 serving rows are `hm96-sha512/row/v1` leaves proved in the circuit, every output is a hidden row, every identity and
 binding digest is SHA-512, the proof's Merkle leaves are `hm96-sha512/v1`, and the unit draw is live. Its variants:
 
@@ -49,7 +49,7 @@ It also holds the parts to one run, C10 `OneRun`, through `--rec-run`: the chall
 `rec_shared` before any session, logs every session the challenger opened for the run's parts (a retry's too) and is
 closed after the last; it holds no coin, since each part's coins are drawn fresh at its own Hello and never committed
 before the run. The live challenger writes it: its operator stages it before any session and closes it after the last,
-and Flock's `flock-circuit serve --zk --rec-run FILE --rec-part J` appends one `open` for every Hello it answers with
+and C-Flock's `flock-circuit serve --zk --rec-run FILE --rec-part J` appends one `open` for every Hello it answers with
 coins, in one write, before the answer carrying the session's fresh coin key leaves; a Hello it can't log is refused
 (`flock_live::run_record`). `rec-compose` refuses a part with two sessions or none, a session opened and not composed, a composed
 session the record didn't open, a staging after the first Hello, a second staging or one of other inputs, and a record
@@ -120,10 +120,10 @@ The Lean verifier is deliberately stricter than upstream in the places `PROTOCOL
 `lean_refuses`, `lean_refuses_drawn` or `lean_refuses_drawless` compares a session refused for its form, draw or missing
 draw alone as accepted.
 
-Each version's vectors patch (`netlist-vectors.patch`, `circuit-vectors*.patch`) applies to the circuit prover's commit it names and
+Each version's vectors patch (`netlist-vectors.patch`, `circuit-vectors*.patch`) applies to the M0 commit it names and
 adds three subcommands to upstream's binary: `vectors` (record honest and negative sessions through a loopback
 transport), `export-comp` and `replay --sessions DIR...` (upstream's offline verdict: `Server::from_record`, then
-`finish`). Build inside upstream `b684b12` with `verity/ml/flock`'s patches applied (`cargo build --release -p flock-live --bin <binary>`).
+`finish`). Build inside upstream `b684b12` with M0's patches applied (`cargo build --release -p flock-live --bin <binary>`).
 
 The statements no pinned upstream build has (hidden outputs, `--zk`) agree with this repository's Rust prover instead:
 `ci.py --live` holds Lean's verdicts on `vectors.json`'s `live.sets` to the live server's, and `agree.py --zk` compares Lean's verdicts with the live build's
