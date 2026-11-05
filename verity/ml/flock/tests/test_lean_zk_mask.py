@@ -1,7 +1,7 @@
-"""D12 (PROTOCOL.md §16.14): under `--zk`, `Zk.shapeOk` refuses a statement whose Δ or regions meet the mask slot
+"""D12 (`Flock.Zk`): under `--zk`, `Zk.shapeOk` refuses a statement whose Δ or regions meet the mask slot
 (`Zk.maskFree`), the condition the zero-knowledge views take from the setup (`FailClosed.avoidsMask_of_shapeOk`). Upstream
 checks neither; honest `--zk` statements avoid the slot, so no vector exercises it and this runs it on the Lean verifier's
-check, at a mask range of words `[512, 1024)` in a block of `2^20` bits. And the slot's floor (§16.14): `slot_log ≥ 13`,
+check, at a mask range of words `[512, 1024)` in a block of `2^20` bits. And the slot's floor (`Flock.Zk`): `slot_log ≥ 13`,
 which both sides check and no honest statement is below (the deployed `mask_log` is 14)."""
 from __future__ import annotations
 

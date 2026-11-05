@@ -74,7 +74,7 @@ there.
   after the logs before each of its openings, in order.
 * **The rounds of one stream** (`map_fst_filter_zip`, `rounds_of_logs`, `stream_rounds`): so the rounds a trace appends
   to a stream are one per opening of it, the `k`-th after the log that has opened it `k` times.
-* **No more openings than the record's rounds** (`streamOpenings_eq_openedOf`, `openedOf_le_recordRounds`): where
+* **No more openings than the record's rounds** (`openedOf_le_recordRounds`): where
   the device's log opens only the record's rounds (`OpenedRecorded`) and serves each opening, it opens each named
   stream at most the rounds the record gives it.
 -/
@@ -1950,11 +1950,6 @@ end StreamRounds
 
 /-! ## No more openings than the record's rounds -/
 
-theorem streamOpenings_eq_openedOf (i s : ℕ) (l : List Release) : streamOpenings i s l = openedOf l i s := by
-  unfold streamOpenings openedOf
-  refine List.countP_congr fun q _ => ?_
-  cases q.frame <;> simp [Frame.opensAt]
-
 /-- **A log that opens only the record's rounds opens each named stream at most the rounds the record gives it**:
 where the device serves each opening of the log `Lg` and, before each, `Lg` has opened that stream fewer times than
 the rounds `record` gives it (`OpenedRecorded`), stream `s` of the `i`-th tree, named `name`, is opened at most
@@ -1981,7 +1976,6 @@ theorem openedOf_le_recordRounds {record : Lean.Json} {Lg : List Release} (hR : 
       have h2 := helloSpecs_bind_append h1 (r :: post)
       rw [← he, hname] at h2
       have hlt := hR pre r post he i s n hn name (h1.trans h2.symm)
-      rw [streamOpenings_eq_openedOf] at hlt
       omega
     · rw [if_neg hr]
       exact ih (r :: post) he
