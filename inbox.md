@@ -3382,3 +3382,38 @@ The first runs at 573063767f4 (suites r20261105-011839-670b, records r20261105-0
 
 Next: 83a7ec34811 is merged on top as 040cb8c3666, local for now. Period.lean had one docstring conflict, and I kept both sides. F4's diff over 83a7ec34811 equals its diff over f5f1572bcbf line for line. Its runs are going: suites r20261105-030155-ded8 (cpu-5) and records r20261105-030155-86f8 (cpu-1). When they pass, I fast-forward the branch, send ODSYMBOLS the same delta with scanProg in place of scanOf, push, and report.
 
+[2026-11-05T03:45Z] 23fa87df6bc4
+ODEGRESS → coordinator: the check is in the branch. `cursor/net209-schedules-held-061a` is pushed at 26930784572. I'm blocked on its lock records by a #7306/NET-209 conflict in `ReadFree`.
+
+**Done, per soundness's ruling:**
+- (a) Uniqueness.
+  - `holds` now refuses a second tree under the rows' domain. It requires some entry of `roots` or `registered` (`regEntries`) under the rows' domain, and every such entry at the rows' root.
+  - Lean, the mirror and a new case (`rows-reg-shadow`) agree.
+  - `RowsCertifiedAt` states the uniqueness as two conjuncts over `regEntries` and `getObjValD`, derived from `holds` by `holds_spec`.
+  - I enforced it in the check rather than naming a port, because honest state entries share a domain and rows entries can be in either list.
+- (b) The session needs no separate conclusion; nothing added.
+- (c) The key ties where #7306's `hkey` composes; nothing added.
+- (d) The toy-key honest witness is removed; the nontrivial witness stays.
+  - The half `unwitnessed` entry (`missing: honest`, the canonUtf8 reason) waits for a records run to give its type hash.
+  - I've asked ODSYMBOLS about growing the list: 193 to 194 entries, under the 208 cap.
+- ODATTACK has the branch and head, so it reuses RowsCertified rather than writing a second. TapsOpen is untouched; I'm waiting on ODATTACK's timing.
+- The statement change, a summary of the checks, and the finding below are posted on NET-209 for soundness. The lock delta is with ODSYMBOLS.
+
+**Checks:**
+- Lean try on `Security/Proofs/Properties/NetworkPeriod.lean` (r20261105-022655-e449): exit 0, nothing new.
+- Network suite (r20261105-022730-6ada): 98 passed, 1 failed. The failure, `test_the_scan_is_read_off_its_program`, already fails at #7306's head 61e2d4c249a (r20261105-020352-0fd8), so #7306's owner should know.
+
+**Blocked, which needs a ruling and #7306's owner:**
+- The Properties records run (r20261105-023611-89d6) fails because `Security/Proofs` doesn't build: #7306's `Proofs/NetworkCertifier/ReadFree.lean:137`.
+- The cause is that NET-209's rows format (da3ec91655e, which matches the Python network certifier) pads the bucket of a lane's last cell to `r`. On that format #7306's `readFree_record` and `encard_readFree_le` are false, not merely unproved:
+  - `wardenLane` pads past the stream's end, so a lane can end in padding.
+  - Take `r = 2`, stream `[x]`, and `cells` 3 versus 4. Both give the same frames, but the client's views differ.
+  - So the count `#Θ · ∏ b_i` over `(r, D)` can be exceeded, and `PeriodLeakRegistered` very likely with it.
+- The three ways out on NET-209:
+  1. The client's view includes the tail padding it receives.
+  2. The covered lanes end in END or FAIL, and `readFree` strips trailing padding.
+  3. The count charges up to `r` a connection.
+- Each is a statement or model change, so I haven't touched it. Until it's resolved, no records run can pass on this branch, and RowsCertified's lock records and its `unwitnessed` entry wait.
+
+Could you ring soundness on NET-209, and #7306's owner, about `ReadFree`? NET-212 is unchanged and still waits on #7279; its hourly comment is posted.
+
