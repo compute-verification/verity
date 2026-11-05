@@ -162,6 +162,7 @@ def test_its_result_is_of_its_own_kind_which_check_and_research_merge_refuse(rep
     assert json.loads((run / "lean-audit" / "audit-x" / "report.json").read_text())["kind"] == LC.FAST_KIND
     res = result.check(run, "r1")
     assert res.valid and res.doc["kind"] == LC.FAST_KIND and res.validation_status == "passed"
+    assert res.doc["outcome"] == LC.PASS and res.doc["records"]["p"]["outcome"] == LC.PASS
     assert res.doc["artifacts"] == ["lean-audit"] and res.doc["workload_fingerprint"]["replay"] is False
     assert LC.FAST_KIND in REFUSED_KINDS
     assert CHECK.lean_fast(run).startswith(f"refused: {tree / 'p'}: a lean-fast/v1 result")
@@ -170,6 +171,7 @@ def test_its_result_is_of_its_own_kind_which_check_and_research_merge_refuse(rep
     assert LC.audit_records("p", tmp_path / "deps", tree) == 1
     res = result.check(run, "r1")
     assert res.valid and res.doc["kind"] == LC.FAST_KIND and res.validation_status == "failed", "a failure has the kind too"
+    assert res.doc["outcome"] == LC.FAILED, "a failure that isn't a record difference"
 
 
 def test_the_copy_is_taken_from_hard_links_after_the_dependencies_lock_is_released(repo, tmp_path, monkeypatch):
