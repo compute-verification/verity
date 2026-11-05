@@ -168,7 +168,7 @@ from . import policy
 from .executor import (AFTER_LANDING_PRIORITY, FAIL, PASS, PENDING, SHADOW_WAIT_S, Executor, QueueTransport, compare,
                        old_verdicts)
 from .queue import (IDENTITY, PR, Entry, Member, Queue, QueueError, StoreLabels,
-                    _git, _out, built_on, changed, forces_cold, hold, lean_change, lean_hold, move_of, unreviewed)
+                    _git, _out, built_on, changed, forces_cold, hold, lean_change, lean_hold, move_of, queue_commit, unreviewed)
 from .queue_stats import ts
 from .store import vocab
 
@@ -1284,21 +1284,16 @@ class Driver:
         return not _git(self.repo, "merge-base", "--is-ancestor", a, b, check=False).returncode
 
     def landed_since(self, base: str, tip: str) -> list[Member]:
-        """The PRs the queue landed in ``base``..``tip``, oldest first: each merge of a PR onto `next` (`Queue: #N`, with its
-        `PR`, `Head` and `Owner` trailers), and each move drive regenerated (one commit, with a `Move:` trailer too:
-        `queue.Queue._regenerate`), that `main` reached, but those a revert in that range undid.  Nothing else: never a lander's
-        commit."""
-        from .queue import MOVE_TRAILER_RE, TRAILER_RE
-
+        """The PRs the queue landed in ``base``..``tip``, oldest first: each of its merges onto `next` and each move drive
+        regenerated (`queue.queue_commit`; never a lander's commit), that `main` reached, but those a revert in that range
+        undid."""
         out, undone = [], set()
         for rec in filter(None, (x.strip() for x in _out(self.repo, "log", "--reverse", "--topo-order", "--format=%H%x00%P%x00%B%x1e",
                                                           f"{base}..{tip}").split("\x1e"))):
             commit, parents, body = rec.split("\x00", 2)
             undone |= set(REVERTS_RE.findall(body))
-            t = dict(TRAILER_RE.findall(body))
-            if ((len(parents.split()) > 1 or MOVE_TRAILER_RE.search(body)) and body.startswith("Queue: #")
-                    and {"PR", "Head", "Owner"} <= set(t)):
-                out.append(Member(int(t["PR"].lstrip("#")), t["Head"], t["Owner"], commit))
+            if m := queue_commit(commit, parents, body):
+                out.append(m)
         return [x for x in out if x.commit not in undone]
 
     def follow_postland(self, drive: dict) -> None:
