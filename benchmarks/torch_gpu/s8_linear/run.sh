@@ -12,16 +12,15 @@
 # still run). S8_LOCK_MHZ locks the leased GPU's SM clock there for each step (`nvidia-smi -lgc`, where sudo allows it,
 # lock.txt), reset before the lease ends.
 # Outside any lease: the ship unpacked and held to its MANIFEST.sha256 (s8_wgmma.cubin, its sass.json; row_table/ seeds
-# ~/.cache/verity/row_table), the card and Python recorded. VERITY_BENCH_VENV names the Python with torch and vLLM.
+# ~/.cache/verity/row_table), the card and Python recorded. The Python with torch and vLLM is benchmarks/harness/env.sh's
+# $VENV (VERITY_BENCH_VENV, else the node's).
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:?set OUT}/out}; mkdir -p "$OUT"
 SHIP=${S8_SHIP:-${RESEARCH_RUN_DIR:?set S8_SHIP}/inputs/s8-ship.tar}
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 ROOT=$PWD
 git rev-parse HEAD > "$OUT/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}" > "$OUT/commit.txt"
-PY=${VERITY_BENCH_VENV:+$VERITY_BENCH_VENV/bin/python3}
-for v in /workspace/cp/venv312 /workspace/jobs/venv312; do [ -z "${PY:-}" ] && [ -x "$v/bin/python3" ] && PY=$v/bin/python3; done
-[ -x "${PY:-}" ] || { echo "s8_linear: no Python with torch (VERITY_BENCH_VENV)" >&2; exit 2; }
+PY=$(. benchmarks/harness/env.sh && echo "$VENV/bin/python3") || exit 2
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 export PATH=$(dirname "$PY"):$CUDA/bin:$PATH
 export PYTHONPATH=$ROOT/integrations/vllm:$ROOT:$ROOT/tools/config

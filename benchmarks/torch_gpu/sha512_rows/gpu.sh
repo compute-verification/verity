@@ -7,12 +7,11 @@
 #
 # Needs a CUDA GPU (an H200 for the H200 layer), CUDA torch, CUDA's nvcc and `gpu-lease` on PATH.
 # STEPS (default "tests check bench"; the bench times steps only on a variant check.json found bit-exact), BENCH_ARGS,
-# SHA512_ROWS_V (the default variant), LEASE_MIN (default 25), PY.
+# SHA512_ROWS_V (the default variant), LEASE_MIN (default 25), PY (default benchmarks/harness/env.sh's).
 set -uo pipefail
 O=${OUT:?}
 ROOT=$PWD D=benchmarks/torch_gpu/sha512_rows
-for v in /workspace/jobs/venv312 /workspace/cp/venv312; do [ -z "${PY:-}" ] && [ -x "$v/bin/python3" ] && PY=$v/bin/python3; done
-PY=${PY:-python3}
+PY=${PY:-$(. benchmarks/harness/env.sh && echo "$VENV/bin/python3")} || exit 2
 TV=$($PY -c 'import torch; print(torch.version.cuda or "")' 2>/dev/null)
 for c in "/usr/local/cuda-$TV" /usr/local/cuda /usr/local/cuda-13.0; do [ -x "$c/bin/nvcc" ] && { CUDA=$c; break; }; done
 export PATH=${CUDA:-/usr/local/cuda}/bin:$PATH PYTHONPATH=$ROOT:$ROOT/$D:$ROOT/tools/config PYTHONDONTWRITEBYTECODE=1
