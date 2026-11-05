@@ -115,9 +115,10 @@ def sessionProofs (p : _root_.SampledProofs.OneStageZk.Params) (e : _root_.Sampl
   let circuitB ← (bs.get p.own.circuit "circuit").toOption
   let pubB ← (bs.get p.own.pub "public file").toOption
   let rd ← (_root_.SampledProofs.OneStageZk.readsOf p.own.registered).toOption
+  let dcl ← (_root_.SampledProofs.OneStageZk.declaredOf p.own bs).toOption
   let record ← sessionRecord e bs
   (_root_.SampledProofs.OneStageZk.filesOf bs s
-    (_root_.SampledProofs.OneStageZk.setupAt (_root_.SampledProofs.OneStageZk.inputsOf tags0 p.own circuitB pubB bs) rd
+    (_root_.SampledProofs.OneStageZk.setupAt (_root_.SampledProofs.OneStageZk.inputsOf tags0 p.own circuitB pubB bs) { rd with declared := dcl }
       (Flock.Witness.recordDraw record))).toOption
 
 /-- The session's record v2 reads in what the prover sent, on the blobs sent. -/
@@ -321,7 +322,8 @@ theorem run_verified {p : _root_.SampledProofs.OneStageZk.Own} {s : _root_.Sampl
     (h : _root_.SampledProofs.OneStageZk.run p #[s] pu bs = .ok r) :
     ∃ tags0 circuitB pubB rd, Flock.Tags.find? _root_.SampledProofs.OneStageZk.STATEMENT = some tags0 ∧
       bs.get p.circuit "circuit" = .ok circuitB ∧ bs.get p.pub "public file" = .ok pubB ∧
-      _root_.SampledProofs.OneStageZk.readsOf p.registered = .ok rd ∧
+      (∃ r d, _root_.SampledProofs.OneStageZk.readsOf p.registered = .ok r ∧ _root_.SampledProofs.OneStageZk.declaredOf p bs = .ok d ∧
+        rd = { r with declared := d }) ∧
       ∃ scope ksFiles population programSha want,
         _root_.SampledProofs.OneStageZk.step (_root_.SampledProofs.OneStageZk.inputsOf tags0 p circuitB pubB bs) rd bs
           scope ksFiles population programSha want ⟨#[], #[], #[], true⟩ s = .ok r := by
@@ -333,13 +335,14 @@ theorem run_verified {p : _root_.SampledProofs.OneStageZk.Own} {s : _root_.Sampl
     obtain ⟨_, -, h⟩ := ebind_ok h
     obtain ⟨circuitB, hc, h⟩ := ebind_ok h
     obtain ⟨pubB, hp, h⟩ := ebind_ok h
-    obtain ⟨rd, hrd, h⟩ := ebind_ok h
+    obtain ⟨r0, hr0, h⟩ := ebind_ok h
+    obtain ⟨d0, hd0, h⟩ := ebind_ok h
     obtain ⟨r', hr', h⟩ := ebind_ok h
     have e : r' = r := by
       repeat' (first | (obtain ⟨_, _, h⟩ := ebind_ok h) | (split at h))
       all_goals simpa only [pure, Except.pure, Except.ok.injEq] using h
     subst e
-    exact ⟨tags0, circuitB, pubB, rd, htags, hc, hp, hrd, _, _, _, _, _, foldlM_single hr'⟩
+    exact ⟨tags0, circuitB, pubB, _, htags, hc, hp, ⟨r0, d0, hr0, hd0, rfl⟩, _, _, _, _, _, foldlM_single hr'⟩
   · cases h
 
 /-- **v2's check at the coins `ξ` accepts only where its run on the evidence's one session accepted it**. -/
@@ -387,7 +390,9 @@ def V2Verified (p : _root_.SampledProofs.OneStageZk.Params) (e : _root_.SampledP
   ∃ rs tags0 circuitB pubB rd, e.sessions = #[rs] ∧
     Flock.Tags.find? _root_.SampledProofs.OneStageZk.STATEMENT = some tags0 ∧
     bs.get p.own.circuit "circuit" = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
-    _root_.SampledProofs.OneStageZk.readsOf p.own.registered = .ok rd ∧ sessionRecord e bs = some record ∧
+    (∃ r d, _root_.SampledProofs.OneStageZk.readsOf p.own.registered = .ok r ∧
+      _root_.SampledProofs.OneStageZk.declaredOf p.own bs = .ok d ∧ rd = { r with declared := d }) ∧
+    sessionRecord e bs = some record ∧
     _root_.SampledProofs.OneStageZk.setupAt (_root_.SampledProofs.OneStageZk.inputsOf tags0 p.own circuitB pubB bs) rd
       (Flock.Witness.recordDraw record) = .ok (spec, tabs, rest) ∧
     _root_.SampledProofs.OneStageZk.filesOf bs rs (.ok (spec, tabs, rest)) = .ok proofs ∧
@@ -408,9 +413,9 @@ theorem sessionProofs_of {p : _root_.SampledProofs.OneStageZk.Params} {e : _root
     {bs : _root_.Core.Blobs} {record : String} {spec : SessionSpec} {tabs : Array Flock.Setup} {rest : Json × Json}
     {proofs : Array ByteArray} (h : V2Verified p e bs record spec tabs rest proofs) :
     sessionProofs p e bs = some proofs := by
-  obtain ⟨rs, tags0, circuitB, pubB, rd, hs, ht, hc, hp, hrd, hrec, hst, hf, -⟩ := h
+  obtain ⟨rs, tags0, circuitB, pubB, _, hs, ht, hc, hp, ⟨r0, d0, hr0, hd0, rfl⟩, hrec, hst, hf, -⟩ := h
   have h0 : (#[rs] : Array _root_.SampledProofs.OneStageZk.RunFiles)[0]? = some rs := rfl
-  simp only [sessionProofs, hs, h0, ht, hc, hp, hrd, hrec, hst, hf, ok_toOption, Option.bind_eq_bind,
+  simp only [sessionProofs, hs, h0, ht, hc, hp, hr0, hd0, hrec, hst, hf, ok_toOption, Option.bind_eq_bind,
     Option.bind_some]
 
 /-- **Where v2's check accepts, it verified the session's record and proof files** (`V2Verified`). -/
