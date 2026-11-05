@@ -21,8 +21,8 @@ public import Std.Data.String.ToNat
   of the parameters' `"program"` value, and `SampledProofs.OneStage.paramsParsed` parses the verifier's program from the
   canonical form of the same value, so `Program.parse own.program` is the verifier's program.
 * **v2's slots are two classes** (`partSlots_classes`): the population, in the registration's strata, and the input
-  class, at most one stratum. The population's strata have the sizes of the layout's first class, and the slots have
-  the layout's shape (`partSlots_shape`) where the descriptor has as many input gates as the lowered program.
+  class, at most one stratum. The population's strata have the sizes of the layout's first class. The input class is
+  the lowered program's, read on its own: nothing ties its size to the layout's, the descriptor's input gates.
 * **The registration is v2's parameters'** (`regIs_of_setsUp`): at a session v2 sets up, the statement's descriptor and
   query are the parameters' program bytes and verifier query (`RegIs`, from `SetsUp.params`), so the descriptor parses
   as the parameters' verifier's program.
@@ -40,6 +40,9 @@ public import Std.Data.String.ToNat
   parameters' verifier under the rule `law (lawText A.law)` (`lawReg`) parses as the statement's descriptor, lays out
   under its query, has v2's two classes over its layout's population and has the design `designSlots A`, at a subset
   law of at least one unit.
+* **`RegMatches` at the record** (`regMatches_record`): the record's code (`code`) names that registration at its one
+  statement (`regOf`), and `RegMatches`' clauses hold there with the partition clause read as v2's two classes: the
+  population at the layout's strata sizes, then the input class on its own.
 -/
 
 @[expose] public section
@@ -54,7 +57,7 @@ open FlockSoundness.Refine (Ret throw_ne_ok)
 open Verity.Sampled.Trees (bind_ok)
 open Properties.SampledProofs.SecurityProofs (layout_ok units_eq popUnits strataOf_perm partition_evaluate_tiles
   laysOut_units length_popUnits lawObj kindOf flockLaw_cases deriveLaw_cases slotDesign_law bind_eq_ok throw_ne
-  throw_bind_ne nat_toJson derive_bounds derive_ok deriveWork_ok inputClass)
+  throw_bind_ne nat_toJson derive_bounds derive_ok deriveWork_ok)
 open private split1 digits from SampledProofs.Select
 
 /-- `OneStage.paramsParsed` parses its verifier's program from the canonical form of the parameters' `"program"`. -/
@@ -146,47 +149,6 @@ theorem partSlots_classes (A : Live) {p : _root_.SampledProofs.Program} {l : _ro
     unfold strataSizes
     apply List.map_splitLengths_length
     exact (Flock.Bridge.nsOf_sum A.hpop).le.trans (by simp)
-
-/-- **v2's slots have the layout's shape where the inputs agree** (`Partition.shape`): where the descriptor parses as
-`p` and lays out as `l` under the query, `partSlots A` and `slotPartition l` have one shape when the descriptor has as
-many input gates as the lowered program. -/
-theorem partSlots_shape (A : Live) {p : _root_.SampledProofs.Program} {l : _root_.SampledProofs.Slots.Layout}
-    (hp : _root_.SampledProofs.Program.parse ⟨A.desc.toArray⟩ = .ok p)
-    (hl : _root_.SampledProofs.Slots.layout p A.qr = .ok l)
-    (hin : (_root_.SampledProofs.Slots.inputGates p.desc).size =
-      (InputSlot.inputsAt (Flock.Bridge.progOf A.Cc A.κ)).length) :
-    (partSlots A).shape = (_root_.Properties.SampledProofs.slotPartition l).shape := by
-  obtain ⟨pop, ins, hc, -, hs⟩ := partSlots_classes A hp hl
-  have h : [pop, ins] = [(Flock.Bridge.nsOf A.desc A.qr).splitLengths
-      ((List.finRange A.n).map (Flock.Bridge.unitGates A.P)), InputSlot.inputClass (Flock.Bridge.progOf A.Cc A.κ)] :=
-    hc.symm
-  obtain rfl := (List.cons.inj (List.cons.inj h).2).1
-  obtain ⟨-, -, pop', rfl, -⟩ := layout_ok p A.qr l hl
-  have hr : (_root_.Properties.SampledProofs.slotPartition { classes := #[pop', inputClass p] }).classes =
-      [pop'.toList.map fun s => s.toList.map _root_.Properties.SampledProofs.puGates,
-        (inputClass p).toList.map fun s => s.toList.map _root_.Properties.SampledProofs.puGates] := by
-    simp [_root_.Properties.SampledProofs.slotPartition]
-  rw [hr, List.headD_cons] at hs
-  unfold Partition.shape
-  rw [hc, hr]
-  simp only [List.map_cons, List.map_nil, hs, List.cons.injEq, eq_self_iff_true, true_and, and_true]
-  unfold InputSlot.inputClass inputClass
-  try dsimp only
-  by_cases h0 : InputSlot.inputsAt (Flock.Bridge.progOf A.Cc A.κ) = []
-  · have he : ((_root_.SampledProofs.Slots.inputGates p.desc).map fun g =>
-        ({ unit := none, gates := (g, g + 1) } : _root_.SampledProofs.Slots.ProofBlock)).isEmpty = true :=
-      Array.isEmpty_iff_size_eq_zero.2 (by rw [Array.size_map, hin, h0, List.length_nil])
-    rw [if_pos h0, if_pos he]
-    simp [strataSizes]
-  · have he : ((_root_.SampledProofs.Slots.inputGates p.desc).map fun g =>
-        ({ unit := none, gates := (g, g + 1) } : _root_.SampledProofs.Slots.ProofBlock)).isEmpty = false := by
-      rw [Bool.eq_false_iff]
-      intro h
-      have h' := Array.isEmpty_iff_size_eq_zero.1 h
-      rw [Array.size_map, hin] at h'
-      exact h0 (List.length_eq_zero_iff.1 h')
-    rw [if_neg h0, if_neg (by rw [he]; exact Bool.false_ne_true)]
-    simp [strataSizes, hin]
 
 /-- **The statement's registration is v2's parameters'**: the statement's descriptor is the parameters' program bytes
 and its query their verifier's. -/
@@ -560,5 +522,40 @@ theorem regMatches_of_setsUp (A : Live) {ι : Type} {dv : Accounting.Device ι} 
     exact hl
   · exact slotDesign_designSlots A (v := p.base.verifier) (by rw [hq]; exact units_of_popMatches A.hpop hparse hl)
       hlaw hk
+
+open Classical in
+/-- **The registration the record's statement names**: `lawReg` at the verifier `v` at the record's one statement,
+none elsewhere. -/
+noncomputable def regOf (A : Live) (o : Own) (v : _root_.SampledProofs.Registration.Verifier)
+    (cl : Option (Array (Int × Array Int))) (x : Claims.Msg) : Option _root_.SamplingDeploy.Reg :=
+  if x = xOf A o then some (lawReg A v cl) else none
+
+/-- **`RegMatches` at the record, the input class on its own**: at a session v2 sets up, at the parameters
+`SetsUp.params` names, a statement the record's code parses and partitions names `regOf` at their verifier, which parses
+as the statement's descriptor, lays out under its query as `l`, and has the statement's design. The partition is v2's two
+classes: the population, whose strata have `slotPartition l`'s first class's sizes, and the input class, at most one
+stratum, which is the lowered program's and not the layout's. -/
+theorem regMatches_record (A : Live) (o : Own) (e : Ext) {ι : Type} {dv : Accounting.Device ι} {α : Type}
+    [Fintype α] {V : Vocab dv α} {θ : ByteArray} {F : Array ByteArray} (hsu : SetsUp V θ F A)
+    (hk : ∀ k, A.law = .subset k → 1 ≤ k) (cl : Option (Array (Int × Array Int))) :
+    ∃ p, ParamsAt θ p ∧ ∀ x s Pt, (code A o e).parse x = some s → (code A o e).partition s = some Pt →
+      ∃ g l, regOf A o p.base.verifier cl x = some g ∧
+        _root_.SampledProofs.Program.parse ⟨s.desc.toArray⟩ = .ok g.program ∧
+        _root_.SampledProofs.Slots.layout g.program g.query = .ok l ∧
+        (∃ pop ins, Pt.classes = [pop, ins] ∧ ins.length ≤ 1 ∧
+          strataSizes pop = strataSizes ((_root_.Properties.SampledProofs.slotPartition l).classes.headD [])) ∧
+        _root_.Properties.SampledProofs.slotDesign g.rule g.program g.query g.table = .ok s.design := by
+  obtain ⟨p, l, hp, -, hparse, hl, hcl, hds⟩ := regMatches_of_setsUp A hsu hk cl
+  refine ⟨p, hp, fun x s Pt hx hP => ?_⟩
+  by_cases hxo : x = xOf A o
+  · subst hxo
+    have hs : stmtSlots A = s := Option.some.inj ((show (code A o e).parse (xOf A o) = some (stmtSlots A) from
+      if_pos rfl).symm.trans hx)
+    subst hs
+    have hPt : partSlots A = Pt := Option.some.inj hP
+    subst hPt
+    exact ⟨lawReg A p.base.verifier cl, l, if_pos rfl, hparse, hl, hcl, hds⟩
+  · have h0 : (code A o e).parse x = none := if_neg hxo
+    cases h0.symm.trans hx
 
 end Verity.Sampled.Record
