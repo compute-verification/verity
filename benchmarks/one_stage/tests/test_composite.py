@@ -116,6 +116,29 @@ def test_remote_network_is_remotes_subprotocols_and_the_network_certifiers(tmp_p
     assert "VERDICT verity/remote-network/v0 reject params" in lines
 
 
+def test_remote_network_no_pouw_is_remote_networks_subprotocols_but_pouws_period(tmp_path):
+    """Its three cases make its whole case, bound under its own id, with nothing missing: PoUW's period is none of its
+    subprotocols, so without a period case it is established, and the record it composes credits no verified compute."""
+    assert C.COMPONENTS["remote-network-no-pouw"] == tuple(i for i in C.COMPONENTS["remote-network"] if i != POUW)
+    assert C.PRODUCTS["remote-network-no-pouw"] == "verity/remote-network-no-pouw/v0"
+    cert = put(tmp_path / "cert", "verity/certifier/v0", {"w": 1}, b"\x04", b"{}", b"\xdd" * 64, verdict="accept")
+    v1 = put(tmp_path / "v1", SAMPLED, {}, b"\x01", b"{}", b"\xaa" * 64)
+    exe = lean(tmp_path, {"protocol": "verity/remote-network-no-pouw/v0", "verdict": "undecided", "reason": "proofs"}, 2)
+    assert C.main(["remote-network-no-pouw", "--cases", str(v1), "--cases", str(cert), "--cases", str(policy(tmp_path)),
+                   *outs(tmp_path), "--exe", exe]) == 2
+    params = json.loads((tmp_path / "private" / "params.json").read_bytes())
+    assert [c["id"] for c in params["components"]] == ["verity/certifier/v0", POLICY, SAMPLED]
+    body = ('{"components":[{"commitment":"' + "dd" * 64 + '","id":"verity/certifier/v0"},{"commitment":"' + "cc" * 64 +
+            '","id":"verity/inference-only/v0"},{"commitment":"' + "aa" * 64 + '","id":"verity/sampled-proofs/v1"}]}')
+    assert (tmp_path / "private" / "commitment.bin").read_bytes() == \
+        hashlib.sha512(b"verity/remote-network-no-pouw/v0\0" + body.encode()).digest()
+    lines = (tmp_path / "public" / "verdicts.txt").read_text().splitlines()
+    assert not any(ln.startswith("NOT_ESTABLISHED") for ln in lines), lines
+    assert "VERDICT verity/remote-network-no-pouw/v0 undecided proofs" in lines
+    assert json.loads((tmp_path / "public" / "composite.json").read_text())["product"] == \
+        "verity/remote-network-no-pouw/v0"
+
+
 def test_a_case_whose_commitment_did_not_decode_stands_in_its_own_commitment(tmp_path):
     pw = put(tmp_path / "pouw", POUW, {}, b"\x05\x06", b"{}", None)
     assert C.piece(pw)["digest"] == b"\x05\x06"

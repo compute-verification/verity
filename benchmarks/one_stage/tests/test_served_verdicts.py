@@ -2259,12 +2259,12 @@ TIES = {"H1_TIE": "1", "H1_GATE": GATE, "H1_CIRCUITS": "circuits"}
      "90m, not 1h"),
     ({**TIES, "NODE_MEM_GB": "196"}, FAKE_V3C_PROVE_PATH, "PREFLIGHT: under H1_TIE, where this node has 196 GB, under the "
      "290 GB V3c's audit needs (V3C_AUDIT_MEM_GB), its audit and the composite are deferred to a follow-on, and onsite's "
-     "composite reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote or "
-     "remote-network, COMPOSITE set empty, or a node with the memory"),
+     "composite reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote, "
+     "remote-network or remote-network-no-pouw, COMPOSITE set empty, or a node with the memory"),
     ({**TIES, "V3C_AUDIT_MEM_GB": "600"}, FAKE_V3C_PROVE_PATH, "PREFLIGHT: under H1_TIE, where this node has 512 GB, under "
      "the 600 GB V3c's audit needs (V3C_AUDIT_MEM_GB), its audit and the composite are deferred to a follow-on, and onsite's "
-     "composite reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote or "
-     "remote-network, COMPOSITE set empty, or a node with the memory"),
+     "composite reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote, "
+     "remote-network or remote-network-no-pouw, COMPOSITE set empty, or a node with the memory"),
 ])
 def test_the_preflight_refuses_h1_tie_without_h1s_prover_or_v3c_or_window_commits_tie_or_past_the_sessions_time(
         tmp_path, extra, prove_path, line):
@@ -2714,9 +2714,18 @@ SPLIT_NO_FRONT = ("PREFLIGHT: PRODUCT=remote runs the split certifier's CERTIFIE
      "PREFLIGHT: PRODUCT=remote-network holds every compute audit of the network certifier's period to the run's "
      "registration, which only the split certifier's (V3c's) is: set CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD in "
      "place of CERTIFIER_CMD"),
+    ("remote-network-no-pouw", {}, None),
+    ("remote-network-no-pouw", {"CERTIFIER_CHAIN_CMD": "true", "CERTIFIER_PERIOD_CMD": "true"}, None),
+    ("remote-network-no-pouw", {"WIPE_CMD": "true"},
+     "PREFLIGHT: PRODUCT=remote-network-no-pouw runs no onsite piece but the network certifier's, and WIPE_CMD is set: "
+     "unset it"),
+    ("remote-network-no-pouw", {"CERTIFIER_CMD": "true"},
+     "PREFLIGHT: PRODUCT=remote-network-no-pouw holds every compute audit of the network certifier's period to the run's "
+     "registration, which only the split certifier's (V3c's) is: set CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD in "
+     "place of CERTIFIER_CMD"),
     ("onsite", {"CERTIFIER_CMD": "true"}, None),
     ("onsite", {}, None),
-    ("offsite", {}, "PREFLIGHT: PRODUCT is onsite, remote or remote-network, not offsite"),
+    ("offsite", {}, "PREFLIGHT: PRODUCT is onsite, remote, remote-network or remote-network-no-pouw, not offsite"),
 ])
 def test_remote_sets_no_onsite_default_and_its_preflight_refuses_an_onsite_command(tmp_path, product, extra, line):
     """PRODUCT=remote drops the onsite pieces: in a tree that has the wipe's piece its default WIPE_CMD isn't set, and
@@ -2725,7 +2734,7 @@ def test_remote_sets_no_onsite_default_and_its_preflight_refuses_an_onsite_comma
     write the period case the onsite record reads; without the front, remote refuses them. PRODUCT=remote-network takes
     the split certifier's commands and refuses the other onsite pieces' as remote does, and the whole certifier piece's
     too: its egress tie holds every compute audit of the certifier's period to the run's registration, and the whole
-    piece's are its scan's own."""
+    piece's are its scan's own. PRODUCT=remote-network-no-pouw holds the same."""
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     _script(tree / "benchmarks" / "pous" / "streamed_wipe" / "served_wipe.sh", "exit 0")
     (tree / "benchmarks" / "network_traces").mkdir(parents=True)
@@ -2778,7 +2787,8 @@ FAKE_COMPOSITE = '''import json, os, sys
 from pathlib import Path
 COMPONENTS = {"onsite": ("verity/pous/p2/v4/run", "verity/wipe/v0"),
               "remote": ("verity/pouw/v1", "verity/sampled-proofs/one-stage/v2"),
-              "remote-network": ("verity/certifier/v9", "verity/pouw/v1", "verity/sampled-proofs/one-stage/v2")}
+              "remote-network": ("verity/certifier/v9", "verity/pouw/v1", "verity/sampled-proofs/one-stage/v2"),
+              "remote-network-no-pouw": ("verity/certifier/v9", "verity/sampled-proofs/one-stage/v2")}
 if __name__ == "__main__":
     a = sys.argv[1:]
     if "ORDER" in os.environ:
@@ -2809,8 +2819,10 @@ def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_
     ``SERVE_DIR/h1/log.jsonl``), whose cases are on the record H1 named; and no product is handed a case under
     ``SERVE_DIR/private/pouw``, whose period case reaches a product only as served_cases.py writes it, tied to that
     record. PRODUCT=remote-network runs remote's Lean and remote-network's, the latter built in onsite's package and
-    given the network certifier's case where its piece released it, OUT/pieces/certifier. Where SERVED_NODE names another
-    host (a deferral's follow-on), it says it composed there, from a prover-side copy of the serve dir's audit inputs."""
+    given the network certifier's case where its piece released it, OUT/pieces/certifier. PRODUCT=remote-network-no-pouw
+    runs its own Lean alone, built in onsite's package, given the network certifier's case and sampled proofs' and never
+    PoUW's period case, even one served_cases.py wrote on R. Where SERVED_NODE names another host (a deferral's
+    follow-on), it says it composed there, from a prover-side copy of the serve dir's audit inputs."""
     tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
     out.mkdir()
     _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
@@ -2930,6 +2942,27 @@ sys.exit(1)
     (out / "verdicts.txt").unlink()
     for x in (out / "composite", p, v2):
         shutil.rmtree(x)
+    period = d / "private" / "period-on-r"
+    period.mkdir()
+    (period / "case.json").write_text(json.dumps({"evidence": "beef"}))
+    (period / "answer.json").write_text(json.dumps({"protocol": "verity/pouw/v1", "verdict": "accept"}))
+    env["PRODUCT"] = "remote-network-no-pouw"
+    r = run()
+    assert r.returncode == 0, r.stderr
+    assert (out / "verdicts.txt").read_text().splitlines() == [
+        "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept", "COMPOSITE CASE verity/registration/v0 accept",
+        "COMPOSITE NOT_WRITTEN verity/inference-only/v0", "COMPOSITE CASES: served_cases.py exit 1, its log on the node",
+        "COMPOSITE remote-network-no-pouw: NOT_ESTABLISHED missing verity/wipe/v0",
+        "COMPOSITE remote-network-no-pouw: VERDICT verity/remote-network-no-pouw/v0 reject components",
+        on]
+    assert sorted(x.name for x in (out / "composite").iterdir()) == ["remote-network-no-pouw"]
+    assert sorted(x.name for x in p.iterdir() if x.is_dir()) == ["remote-network-no-pouw"]
+    assert json.loads((p / "remote-network-no-pouw" / "private" / "argv.json").read_text()) == [str(v2), str(cert)]
+    assert (tree / "verity" / "core" / "protocols" / "onsite" / ".lake" / "build" / "bin" / "remote-network-no-pouw").is_file()
+    (out / "verdicts.txt").unlink()
+    for x in (out / "composite", p, v2, period):
+        shutil.rmtree(x)
+    env["PRODUCT"] = "remote-network"
     env["SERVED_NODE"] = "the-served-node"
     assert run().returncode == 0
     assert (out / "verdicts.txt").read_text().splitlines()[-1] == (
