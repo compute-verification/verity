@@ -1,6 +1,10 @@
-import Proofs.Flock.Claims.Sampling.Select.Take
-import Proofs.Flock.Bridge.Draw
-import Proofs.Properties.SampledProofs
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.Take
+public import Proofs.Flock.Bridge.Draw
+public import Proofs.Properties.SampledProofs
+
+@[expose] public section
 
 open SampledProofs
 

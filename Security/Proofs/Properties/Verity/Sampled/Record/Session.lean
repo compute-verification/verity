@@ -1,5 +1,7 @@
-import Proofs.Properties.Verity.Recursive.BaseSetup
-import Proofs.Flock.Claims.Deploy
+module
+
+public import Proofs.Properties.Verity.Recursive.BaseSetup
+public import Proofs.Flock.Claims.Deploy
 
 /-!
 # v2's verdict on its one session is the record's decision at that session
@@ -21,6 +23,8 @@ setup accepts the last message's record and proof files and `FlockDeploy.checks`
   the session's record and its proof files the session's rep files (`Shows`), and the record's live session is the
   session's messages and coins (`LiveCoins`).
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled.Record
 

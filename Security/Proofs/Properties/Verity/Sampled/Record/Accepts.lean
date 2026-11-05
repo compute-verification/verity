@@ -1,7 +1,10 @@
-import Proofs.Properties.Verity.Sampled.Record
-import Proofs.Properties.Verity.Sampled.Record.Session
-import Proofs.Properties.Verity.Recursive.ScheduleInner
-import Proofs.Properties.Verity.Recursive.PartStatement
+module
+
+public import Proofs.Properties.Verity.Sampled.Record
+public import Proofs.Properties.Verity.Sampled.Record.Session
+public import Proofs.Properties.Verity.Recursive.ScheduleInner
+public import Proofs.Properties.Verity.Recursive.PartStatement
+import all Init.Data.String.Defs
 
 /-!
 # v2's acceptance is the record's, past the draw file round
@@ -28,6 +31,8 @@ What the record takes beside v2's acceptance:
   `drawFitsWhy`), which bounds every length but three (`lengths_of_accepts`, `fits_of_accepts`): the run's draw file
   and `o`'s partition object and registered file, which v2 reads only as the JSON they parse to.
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled.Record
 

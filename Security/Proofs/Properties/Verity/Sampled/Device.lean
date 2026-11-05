@@ -1,7 +1,12 @@
-import Proofs.Properties.Verity.Sampled.Lines
-import Proofs.Properties.Verity.Sampled.Binding
-import Proofs.Properties.NetworkCertifier.LinkWindow
-import Proofs.Core.Game.Tape
+module
+
+public import Proofs.Properties.Verity.Sampled.Lines
+public import Proofs.Properties.Verity.Sampled.Binding
+public import Proofs.Properties.NetworkCertifier.LinkWindow
+public import Proofs.Core.Game.Tape
+import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
+import all Init.Data.String.Defs
 
 /-!
 # The device's history at a play: the run that printed the play's log
@@ -47,6 +52,10 @@ What a run holds beside its releases (its id and host, its layout, the coins and
 ended, its lines' times and the ledger lines it signed) is the history's parameter (`RunSetup`), which a deployment
 fixes from what the play fixed (`Deployment.setupOf`).
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 open private pairs from SampledProofs.ChallengerSession
 

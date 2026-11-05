@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.Walk
+module
+
+public import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # Walking every return, reading the values bound before it
@@ -16,6 +18,10 @@ parser does that returns a structure of the fields it read. It differs from `ret
 A bind forgets what its first half returned, and a `pure a` whose `Q a` is not closed by `rfl` is left as a goal.
 -/
 
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
+
 namespace FlockSoundness.Refine
 
 open Flock
@@ -28,12 +34,12 @@ theorem ret_jp {α γ : Type} (Q : γ → Prop) (v : α → V γ) (body : (α �
 
 open Lean Elab Tactic Meta
 
-private def applyIntros (g : MVarId) (e : Expr) : MetaM (List MVarId) := do
+private meta def applyIntros (g : MVarId) (e : Expr) : MetaM (List MVarId) := do
   (← g.apply e).mapM fun g => return (← g.intros).2
 
 /-- One step of `ret_walk_zeta` on the goal `Ret m Q`, by `m`'s head; `none` when the goal is not a `Ret` or no step
 applies. -/
-def retZetaStep (g : MVarId) : MetaM (Option (List MVarId)) := g.withContext do
+meta def retZetaStep (g : MVarId) : MetaM (Option (List MVarId)) := g.withContext do
   let ty ← instantiateMVars (← g.getType)
   unless ty.isAppOfArity ``Ret 3 do return none
   let at_ (m : Expr) : MetaM MVarId := g.replaceTargetDefEq (mkApp3 ty.getAppFn (ty.getArg! 0) m (ty.getArg! 2))
@@ -70,7 +76,7 @@ def retZetaStep (g : MVarId) : MetaM (Option (List MVarId)) := g.withContext do
   return none
 
 /-- Every goal `ret_walk_zeta` leaves from `g`. -/
-partial def retZetaAll (g : MVarId) : MetaM (List MVarId) := do
+meta partial def retZetaAll (g : MVarId) : MetaM (List MVarId) := do
   match ← retZetaStep g with
   | none => return [g]
   | some gs => gs.flatMapM retZetaAll

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FinishFwRows
-import Proofs.Flock.Claims.ZK.FinishSwRep
+module
+
+public import Proofs.Flock.Claims.ZK.FinishFwRows
+public import Proofs.Flock.Claims.ZK.FinishSwRep
 
 /-!
 # A deployed rep's rows from the firewall's run
@@ -21,6 +23,8 @@ The rest is the deployed rep's own: the coins from the rep's base are `czExe`'s 
 fold is the model's (`folded_unique`), the ring switch's `ŝ`s are the view's (`ringSwitchCut_ss`, `src_sv_abc`,
 `swSrcE_sv_rank`: they read claims `0` and `1` alone, not the extra claims' values), and level 0's record holds the rep's coins (`ligeritoPZk_lanes`' `record`).
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

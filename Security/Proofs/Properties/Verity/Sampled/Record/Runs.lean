@@ -1,5 +1,7 @@
-import Proofs.Properties.Verity.Sampled.Record.Facts
-import Proofs.Flock.Claims.Sampling.Prefix
+module
+
+public import Proofs.Properties.Verity.Sampled.Record.Facts
+public import Proofs.Flock.Claims.Sampling.Prefix
 
 /-!
 # Every checked unit's session is the record's one Flock session (`SessionRuns`)
@@ -11,6 +13,8 @@ round's check `okAt`); there is no unit anywhere else (`eq_xOf_of_nPU`). Every u
 draw file round refused as `refused`, so `SessionRuns` is `SamplingDeploy.sessionRuns_prefix` at flock-verify `--zk`
 against SHA-512 (`flockAt_sha512`).
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled.Record
 

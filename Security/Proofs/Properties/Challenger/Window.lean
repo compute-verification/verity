@@ -1,5 +1,10 @@
-import Proofs.Properties.Challenger.Session
-import Proofs.Properties.Challenger.CanonRead
+module
+
+public import Proofs.Properties.Challenger.Session
+public import Proofs.Properties.Challenger.CanonRead
+import all Init.Data.String.Defs
+import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
 
 /-!
 # A draw's window is one the device's own ledger opens, or a break
@@ -18,6 +23,10 @@ entries whose unsigned canonical texts agree have equivalent fields other than `
 `CanonRead.canon_inj`). The device's line is then an open of the same session, under v2, of the window's root, withheld
 (`window_opens`), and `drawCoins_opens` adds it to `Session.sessionOf_bound`'s run.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 set_option mvcgen.warning false
 

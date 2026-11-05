@@ -3,6 +3,10 @@ The coefficients of the MUFU tables' interpolants, copied from `verity/ml/circui
 `mufu_tanh_quadratic.json` (`verity.ml.circuits.ops.boolean.mufu`: `Fit`, `TanhFit`). `Evaluate.Mufu` reads them; that its
 tables are the library's is checked by their SHA-512 (`Evaluate.Mufu.tableSha512`).
 -/
+module
+
+@[expose] public section
+
 namespace Evaluate.Mufu
 
 /-- One table's interpolator (`boolean.mufu.Fit`): the word at index `i` is `base + ((C0[g] + C1[g] u + (C2[g] Q(u)) <<<

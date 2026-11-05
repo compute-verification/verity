@@ -1,5 +1,11 @@
-import Proofs.Flock.VBridge.Family.Structure
-import Proofs.Flock.Soundness.ExecCircuit
+module
+
+public import Proofs.Flock.VBridge.Family.Structure
+public import Proofs.Flock.Soundness.ExecCircuit
+import all Init.Data.String.Legacy
+import all Init.Data.String.Defs
+import all Init.Data.Repr
+import all Init.Data.Int.Repr
 
 /-!
 # The circuit file's unit name, emitted and parsed
@@ -13,6 +19,8 @@ the characters (`splitOn_nl`, as at any one-byte separator: `splitOn_sep`), `Flo
 `residuals_name`), so the parse names the circuit's unit as the statement's (`file_unitName`): `HUnitName` and
 `HOpenName` at any history and registration.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Names
 
@@ -157,8 +165,8 @@ theorem splitOnAux_sep (sep : String) (ch : Char) (hg : String.Pos.Raw.get sep 0
       rw [hnext, hun, extract_at s pre mid _ hs]
       have := ih (pre ++ mid ++ [c]) [] (by rw [hs]; simp) (by simp) (String.ofList mid :: r)
       rw [List.append_nil] at this
-      rw [this, List.nil_append, show (mid ++ c :: post).splitOn c = mid :: post.splitOn c from
-        List.splitOnP_append_cons_of_forall_mem hmid' c (by simp) post]
+      rw [this, List.nil_append, show (mid ++ c :: post).splitOn c = mid :: post.splitOn c by
+        simp only [List.splitOn_eq_splitOnP]; exact List.splitOnP_append_cons_of_forall_mem hmid' c (by simp) post]
       simp
     · rw [if_neg (by rw [hget, hg, beq_iff_eq]; exact hc)]
       have hnext : (String.Pos.Raw.unoffsetBy ⟨ulen (pre ++ mid)⟩ 0).next s = ⟨ulen (pre ++ (mid ++ [c]))⟩ := by

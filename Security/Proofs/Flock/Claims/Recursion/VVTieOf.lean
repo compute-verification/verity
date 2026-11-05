@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Recursion.InnerExtras
-import Proofs.Flock.Claims.Recursion.VerdictRowRDep
-import Proofs.Flock.Claims.Recursion.ResLowerDeployed
-import Proofs.Flock.Claims.Recursion.VerdictRowDTie
-import Proofs.Flock.C3.RegLevels.VRows
-import Proofs.Flock.VBridge.Family.Join
+module
+
+public import Proofs.Flock.Claims.Recursion.InnerExtras
+public import Proofs.Flock.Claims.Recursion.VerdictRowRDep
+public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+public import Proofs.Flock.Claims.Recursion.VerdictRowDTie
+public import Proofs.Flock.C3.RegLevels.VRows
+public import Proofs.Flock.VBridge.Family.Join
 
 /-!
 # `VVTie` at `Rows.resVRead`'s verifier values
@@ -26,6 +28,8 @@ agree:
 statement over the dense form's plain inner shape (`staged_plain`, by `checkCircuit_plain`). `vvTie_dense` is
 `vvTie_of` with `hplain` so discharged.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 

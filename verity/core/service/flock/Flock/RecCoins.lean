@@ -34,15 +34,19 @@ reads the level's tops `rec-top-L<l>` at row `i` in instance `i`, every node of 
 `rec-cap-zero` (`checkCap`); its rows are held to the coin server's `root_B`, or to both reps' level-`l` tops
 (`checkLink`, `RecVStar.checkTopRows`).
 -/
-import Flock.Registered
-import Flock.Firewall
-import Flock.RecOpening
-import Flock.RecSparse
-import Flock.RecVStar
-import Flock.Verify
-import Flock.Zk
-import Flock.Norm
-import Flock.JsonParse
+module
+
+public import Flock.Registered
+public import Flock.Firewall
+public import Flock.RecOpening
+public import Flock.RecSparse
+public import Flock.RecVStar
+public import Flock.Verify
+public import Flock.Zk
+public import Flock.Norm
+public import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock
 namespace RecCoins

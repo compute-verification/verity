@@ -1,8 +1,10 @@
-import Proofs.Flock.Recursive.Target
-import Proofs.Flock.Soundness.Assumptions.Recursive
-import Proofs.Flock.VBridge.Algebra.Ligerito
-import Proofs.Flock.VBridge.Algebra.Zerocheck
-import Proofs.Flock.VBridge.Algebra.Lincheck
+module
+
+public import Proofs.Flock.Recursive.Target
+public import Proofs.Flock.Soundness.Assumptions.Recursive
+public import Proofs.Flock.VBridge.Algebra.Ligerito
+public import Proofs.Flock.VBridge.Algebra.Zerocheck
+public import Proofs.Flock.VBridge.Algebra.Lincheck
 
 /-!
 # VBridge G: `Flock.Assumptions.VBridge` at the compiled inner protocol
@@ -31,6 +33,8 @@ statement about V* or the verifier, so that each can be proved on its own agains
 
 The composition itself is proved here; nothing in it is assumed beyond the hypotheses.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Compiled
 

@@ -1,10 +1,17 @@
-import Proofs.Properties.Verity.Sampled.Binding
-import Proofs.Properties.Verity.Sampled.Record
-import Proofs.Flock.Soundness.Refine.WalkZeta
-import Proofs.Flock.VBridge.Family.Names
-import Proofs.Flock.Claims.Sampling.Select.Design
-import Proofs.Pouw.Period.Sort
-import Std.Data.String.ToNat
+module
+
+public import Proofs.Properties.Verity.Sampled.Binding
+public import Proofs.Properties.Verity.Sampled.Record
+public import Proofs.Flock.Soundness.Refine.WalkZeta
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
+import all Init.Data.Array.Basic
+import all Init.Data.String.Search
+import all Init.Data.String.Slice
+public import Proofs.Flock.VBridge.Family.Names
+public import Proofs.Flock.Claims.Sampling.Select.Design
+public import Proofs.Pouw.Period.Sort
+public import Std.Data.String.ToNat
 
 /-!
 # The registration v2's parameters name, at the record
@@ -29,6 +36,10 @@ import Std.Data.String.ToNat
   law that `deriveLaw` and `flockLaw` read as they read the verifier's (`deriveLaw_congr`, `deriveLaw_none`,
   `deriveLaw_some`, `flockLaw_subset_text`, `flockLaw_bernoulli_text`).
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Verity.Sampled.Record
 
@@ -260,10 +271,10 @@ theorem keys_bernoulli (p : String) :
   with_unfolding_all rfl
 
 theorem kindOf_count (s : String) (K : ℕ) : kindOf (Json.mkObj [("law", Json.str s), ("k", Lean.toJson K)]) = s :=
-  rfl
+  (rfl)
 
 theorem kindOf_bernoulli (p : String) : kindOf (Json.mkObj [("law", "bernoulli"), ("p", Json.str p)]) = "bernoulli" :=
-  rfl
+  (rfl)
 
 theorem getD_law_of_kindOf {law : Json} {s : String} (h : kindOf law = s) (hs : s ≠ "") :
     _root_.SampledProofs.getD law "law" = .str s := by

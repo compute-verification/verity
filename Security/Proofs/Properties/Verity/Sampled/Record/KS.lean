@@ -1,8 +1,10 @@
-import Proofs.Properties.Verity.Sampled.Record.Inner
-import Proofs.Properties.Verity.Sampled.Record.Law
-import Proofs.Flock.Claims.Sampling.KS
-import Proofs.Flock.Claims.KS.ZkExtend
-import Proofs.Flock.Bridge.LeafMap
+module
+
+public import Proofs.Properties.Verity.Sampled.Record.Inner
+public import Proofs.Properties.Verity.Sampled.Record.Law
+public import Proofs.Flock.Claims.Sampling.KS
+public import Proofs.Flock.Claims.KS.ZkExtend
+public import Proofs.Flock.Bridge.LeafMap
 
 /-!
 # Knowledge soundness at one-stage v2's sampling record (`ks_record`)
@@ -20,6 +22,8 @@ import Proofs.Flock.Bridge.LeafMap
 Every premise is a fact about the statement and the owner's files, never about a prover: the reference draw file
 exists wherever v2 accepts a session (`refOk_of_accepts`).
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled.Record
 

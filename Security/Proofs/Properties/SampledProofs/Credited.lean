@@ -1,11 +1,13 @@
-import Proofs.Properties.SampledProofs
-import Proofs.Properties.SampledProofs.Units
-import Proofs.Properties.Nci.ReadsExact
-import Proofs.Properties.Pous.MemoryChallenger.Sort
-import Proofs.Properties.Pous.MemoryChallenger.Header
-import Proofs.Properties.RemoteAudit.Sort
-import Proofs.Flock.Bridge.V5.Accepted
-import Proofs.Flock.Claims.Complete.Json.Stmt
+module
+
+public import Proofs.Properties.SampledProofs
+public import Proofs.Properties.SampledProofs.Units
+public import Proofs.Properties.Nci.ReadsExact
+public import Proofs.Properties.Pous.MemoryChallenger.Sort
+public import Proofs.Properties.Pous.MemoryChallenger.Header
+public import Proofs.Properties.RemoteAudit.Sort
+public import Proofs.Flock.Bridge.V5.Accepted
+public import Proofs.Flock.Claims.Complete.Json.Stmt
 
 /-!
 # v2 credits its one session with the coins' draw
@@ -29,6 +31,8 @@ The population `n` is the public file's (`population_of_checkBlobsAt`): v2 holds
 Its units are that population's in order (`units_of_checkBlobsAt`): v2 holds the `units.indices` of the header the load
 keeps to `0, …, n − 1`, ascending (`unitsHeld`).
 -/
+
+@[expose] public section
 
 open Lean (Json)
 open SampledProofs

@@ -1,4 +1,6 @@
-import Definitions.Pous.Model.ColumnGame
+module
+
+public import Definitions.Pous.Model.ColumnGame
 
 /-!
 # The band graph of the column game (trusted)
@@ -6,6 +8,8 @@ import Definitions.Pous.Model.ColumnGame
 `bandGraph n k`, a `basePath` whose node `v` has the `k` nodes before it as parents. The band certificates for the
 two-directional column game (`PousP3Column.band_twoWay_*`) are stated over it.
 -/
+
+@[expose] public section
 
 namespace PousP3Column
 

@@ -1,4 +1,6 @@
-import Definitions.Pouw.RelativeSecurity
+module
+
+public import Definitions.Pouw.RelativeSecurity
 
 /-!
 # Relative security at call scope under J10-R: the call design its floors read (trusted)
@@ -27,6 +29,8 @@ computes it:
 The digit words `O'` and `D_d` (`U · A_d`, over the digit coins `z`) are not in the design, as no digit word is in
 Theorem K's.
 -/
+
+@[expose] public section
 
 namespace Pouw.RelativeSecurity
 

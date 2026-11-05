@@ -1,4 +1,6 @@
-import Proofs.Accounting.PerRunPouw
+module
+
+public import Proofs.Accounting.PerRunPouw
 
 /-!
 # PoUW's per-run guarantee needs the cost model to truncate
@@ -11,6 +13,8 @@ on every coin, so the probability of acceptance with realized cost below `(1 −
 `(1 − ε_s)^t + ε = 1/4` at `ε_s = 1/2` and `t = 2` (`tt_not_perRun`). The cost reads the salt, which the program
 cannot branch on, so the class has no aborted program and `BudgetAbort` fails (`not_budgetAbort`).
 -/
+
+@[expose] public section
 
 namespace Accounting.PerRunNecessity
 

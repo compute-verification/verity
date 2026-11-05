@@ -340,7 +340,8 @@ def lean(s: Sheet, data: Path) -> str:
     peak = {ty: f"peak{_camel(ty)}" for ty in types}
     width = {q: f"width{_camel(q)}" for q in pipes}
     clock = {c: f"{c}MHz" for c in s.clocks}
-    out = ["import Definitions.Accounting.TS.Sheet", "", "/-!", f"# The {s.name}'s data sheet (generated)", ""]
+    out = ["module", "", "public import Definitions.Accounting.TS.Sheet", "", "/-!",
+           f"# The {s.name}'s data sheet (generated)", ""]
     out += _wrap(f"The data-sheet machine (`Accounting.TS.Sheet.machine`) at the {s.gpu}'s vendor values: each constant "
                  "with the axiom that reads it, its value, its grade and its source, and the census of the machine "
                  f"model's `{s.vector}` vector, which `machine_eq_census` proves the machine is, line for line. Each "
@@ -353,7 +354,8 @@ def lean(s: Sheet, data: Path) -> str:
                         "channels don't list NVLink peer offload.", "")
     out += [""] + _wrap(f"`uv run machine-model --device {device} sheet --lean` prints this file from `{_rel(s)}`, and "
                         "the machine model's tests hold it to that output.", "")
-    out += ["-/", "", f"namespace Accounting.TS.Sheets.{s.name}", "", "noncomputable section", ""]
+    out += ["-/", "", "@[expose] public section", "", f"namespace Accounting.TS.Sheets.{s.name}", "",
+            "noncomputable section", ""]
     # Not `deriving Fintype`: Mathlib's handler for an enumeration fails its own `rw [Finset.mem_mk, …]` under this
     # toolchain, so each instance lists the constructors.
     out += [*_doc(f"The classes of the `{epoch}` census (its kinds)."), "inductive Kind", *(f"  | {k}" for k in kinds),

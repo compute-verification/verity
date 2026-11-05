@@ -1,4 +1,6 @@
-import Proofs.Properties.Verity.Sampled.Record
+module
+
+public import Proofs.Properties.Verity.Sampled.Record
 
 /-!
 # The sampling record's facts at one-stage v2's session
@@ -10,6 +12,8 @@ import Proofs.Properties.Verity.Sampled.Record
 * `refuses_of_inScope`: the verifier refuses every statement but the record's at once, so it refuses what is out of
   scope (`Refuses`) exactly where the record's statement is in scope (`InScope (partA A) (stmtA A)`).
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled.Record
 

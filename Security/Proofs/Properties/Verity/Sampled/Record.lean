@@ -1,10 +1,12 @@
-import Proofs.Properties.Verity.Sampled
-import Proofs.Flock.Claims.Sampling.Session
-import Proofs.Flock.Claims.Sampling.Deployed
-import Proofs.Flock.Claims.Sampling.InputSlot
-import Proofs.Flock.Bridge.LeafMap
-import Proofs.Properties.SampledProofs.Units
-import Proofs.Properties.Verity.Recursive.PartStatement
+module
+
+public import Proofs.Properties.Verity.Sampled
+public import Proofs.Flock.Claims.Sampling.Session
+public import Proofs.Flock.Claims.Sampling.Deployed
+public import Proofs.Flock.Claims.Sampling.InputSlot
+public import Proofs.Flock.Bridge.LeafMap
+public import Proofs.Properties.SampledProofs.Units
+public import Proofs.Properties.Verity.Recursive.PartStatement
 
 /-!
 # One-stage v2's audit at a session, as a sampling record
@@ -37,6 +39,8 @@ public-coin form (`V`), with what the sampling claims read of it (`code`, `recor
   unit's lowered gates. `PartSlotsTarget` states that `partSlots` partitions the lowered program where each unit has a
   gate and commits at most `unitClassMax` bits; `ScopeSlotsOk` is `ScopeOk` at these slots.
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled.Record
 
