@@ -5,6 +5,7 @@ import Proofs.Properties.NetworkScan.Lowered
 import Proofs.Properties.NetworkScan.Query
 import Proofs.Properties.NetworkScan.OfProg
 import Proofs.Properties.NetworkScan.Reads
+import Proofs.Properties.NetworkPeriod.Keys
 import Proofs.Flock.SamplingScope
 
 /-!
@@ -46,6 +47,7 @@ The layout's egress and ingress gates (its first two parts), where no two of the
   (`wordBit_zero_fst`, `wordBit_zero_snd`).
 * `scan_fits`: an accepted scan's layout fits its audit's joint program: its egress and ingress gates as above, causal
   (`scan_causal`), and with no wires (`wiresFit_none`).
+* `scanFits`: `ScanFits`, the keys distinct by `scanProg`'s own check (`Properties.NetworkPeriod.keysUnique_nodup`).
 
 The facts both statements' witnesses read:
 
@@ -458,6 +460,10 @@ theorem scan_fits {program : String} {s : Schedule} {sc : NetworkCheck.Period.Sc
   exact ⟨hE, scan_ingress hacc hkeys hfs hrr hev hms, scan_causal hacc fun t ht ℓ σ g hg => (hE t ht ℓ σ g hg).1,
     wiresFit_none rfl⟩
 
+/-- **`ScanFits`**: `scan_fits`, whose distinct keys are `scanProg`'s own `keysUnique` check (`Fits.Accepted.keys`). -/
+theorem scanFits : ScanFits := fun _ _ _ _ _ _ _ _ hscan hfs hrr hev hms =>
+  scan_fits hscan (Properties.NetworkPeriod.keysUnique_nodup (Fits.scanProg_accepted hscan).keys) hfs hrr hev hms
+
 /-- One slot of one lane and a window of one step. -/
 def oneSlot : NetworkCheck.Period.Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1⟩
 
@@ -485,7 +491,8 @@ theorem bareProg_templateNodes : templateNodes bareProg = [] := rfl
 
 /-- The template query over no templates accepts `bareProg` with no ranges: its root has no nodes. -/
 theorem bareProg_evaluate : Flock.TemplateQuery.evaluate (.ofProg bareProg) #[] = .ok #[] := by
-  simp [Flock.TemplateQuery.evaluate, Flock.TemplateQuery.Desc.ofProg, Flock.TemplateQuery.Desc.def?, bareProg] <;> rfl
+  simp [Flock.TemplateQuery.evaluate, Flock.TemplateQuery.Desc.ofProg, Flock.TemplateQuery.Desc.def?, bareProg]
+  rfl
 
 /-- **`ScanFits`' nontrivial lemma**: a scan check that accepts every Program accepts `bareProg`, which has no
 templates, so no circuit files and no members: their joint program is empty, and no layout fits it over a window of

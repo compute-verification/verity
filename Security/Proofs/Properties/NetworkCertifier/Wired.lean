@@ -40,8 +40,8 @@ theorem mapError_ok {ε ε' α : Type} {f : ε → ε'} {x : Except ε α} {a : 
 theorem map_ok {ε α β : Type} {f : α → β} {x : Except ε α} {b : β} (h : f <$> x = .ok b) :
     ∃ a, x = .ok a ∧ f a = b := by
   cases x with
-  | error e => first | cases h | simp [Functor.map, Except.map] at h
-  | ok a => exact ⟨a, rfl, by first | injection h | simpa [Functor.map, Except.map] using h⟩
+  | error e => cases h
+  | ok a => exact ⟨a, rfl, by injection h⟩
 
 theorem ite_ok {ε α : Type} {c : Prop} [Decidable c] {x y : Except ε α} {v : α}
     (h : (if c then x else y) = .ok v) : (c ∧ x = .ok v) ∨ (¬ c ∧ y = .ok v) := by
@@ -93,7 +93,8 @@ theorem publicJson_held {x : Public} (h : x.rows = true) :
   have hv : (publicJson x).getObjVal? "held" = .ok (Lean.toJson heldNames) := by
     rw [publicJson, if_pos h, if_pos h]
     exact getObjVal?_mkObj (by simp) (by simp)
-  rw [Json.getObjValD, hv] <;> rfl
+  rw [Json.getObjValD, hv]
+  rfl
 
 /-- An accepted rows-form period publishes the rows form's terms. -/
 theorem check_rows {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {prof : Profile} {s : Schedule}
@@ -280,7 +281,8 @@ theorem paramsOf_audits {j : Json} {p : Params} (h : paramsOf j = .ok p) :
     try dsimp only at h
     rcases ite_ok h with ⟨-, h⟩ | ⟨-, h⟩
     · exact absurd h (by intro h'; injection h')
-    · first | (cases h; rfl) | exact Except.ok.inj h | simpa using h
+    · cases h
+      rfl
   subst hp
   unfold paramsWith at hw
   cases j
@@ -402,9 +404,7 @@ theorem rowsHeld : RowsHeld := by
 theorem slotPeriod_unnamed (j : Json) : ¬ RowsWiresCheckedAt j slotPeriod ⟨#[.null], #[], .empty⟩ := by
   intro h
   obtain ⟨_, _, _, _, _, _, _, _, _, _, hreg, -⟩ := h 0 slotAudit .null rfl rfl
-  first
-    | cases hreg
-    | injection hreg
+  cases hreg
 
 /-- **`RowsWiresChecked`'s honest lemma**: the check accepts a rows-form period of no audit, and a circuit-record
 audit's registration that names its Program, binds its record and registers its pin's root passes each registration
