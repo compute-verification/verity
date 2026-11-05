@@ -12,6 +12,7 @@ public import Proofs.Flock.Claims.Complete.Json.Parse
 public import Proofs.Properties.SampledProofs
 public import Proofs.Core.QSort
 public import Std.Data.String.ToInt
+public import Mathlib.Data.List.Find
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 
@@ -329,12 +330,6 @@ theorem forIn_first {β : Type} (p : ℕ → Bool) (f : ℕ → β) : ∀ l : Li
     · simp only [ha, Bool.false_eq_true, ↓reduceIte, List.find?_cons]
       exact forIn_first p f l
 
-theorem find?_congr {p q : ℕ → Bool} : ∀ {l : List ℕ}, (∀ i ∈ l, p i = q i) → l.find? p = l.find? q
-  | [], _ => rfl
-  | a :: l, h => by
-    rw [List.find?_cons, List.find?_cons, h a List.mem_cons_self,
-      find?_congr fun i hi => h i (List.mem_cons_of_mem _ hi)]
-
 /-- **The header line ends at the first newline**, as `Flock.findByte` finds it. -/
 theorem headerLine_of_findByte {b : ByteArray} {nl : ℕ} (h : Flock.findByte b 10 = some nl) :
     _root_.SampledProofs.FilePart.headerLine b = b.extract 0 nl := by
@@ -345,7 +340,7 @@ theorem headerLine_of_findByte {b : ByteArray} {nl : ℕ} (h : Flock.findByte b 
   rw [forIn_first]
   have hc : (List.range' 0 (Std.Legacy.Range.size [:b.size])).find? (fun i => b[i]! == 10) =
       (List.range' 0 (Std.Legacy.Range.size [:b.size])).find? (fun i => b.get! i == 10) := by
-    refine find?_congr fun i hi => ?_
+    refine List.find?_congr fun i hi => ?_
     have hi' : i < b.size := by simpa [List.mem_range', Std.Legacy.Range.size] using hi
     rw [getElem!_pos b i hi']
     simp only [ByteArray.get!]
