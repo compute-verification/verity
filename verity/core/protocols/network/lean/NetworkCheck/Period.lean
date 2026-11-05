@@ -1062,8 +1062,9 @@ def rowsCheck (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (d : Direct
 /-- The scan's registration holds the rows: an entry of its `roots` or `registered` names their root and domain. -/
 def holds (reg : Json) (r : Rows) : Bool :=
   let entries := fun (k : String) => match reg.getObjValD k with | .arr xs => xs | _ => #[]
-  (entries "roots" ++ entries "registered").any fun e =>
-    e.getObjValD "root" == .str (Flock.hexOf r.root) && e.getObjValD "domain" == .str r.domain
+  (entries "roots" ++ entries "registered").any fun e => match e.getObjValD "root", e.getObjValD "domain" with
+    | .str root, .str dom => root == Flock.hexOf r.root && dom == r.domain
+    | _, _ => false
 
 /-- The scan's Programs' rows in its registration, one tree a lane: lane `j`'s is the entry of its `roots` whose port,
 or of its `registered` whose value, is `scan/prog<j>`. -/
