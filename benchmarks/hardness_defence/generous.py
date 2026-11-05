@@ -229,6 +229,16 @@ def main():
                   f"{len(un_all)} | {wn['nat'] / wn['credit'] if wn else math.nan:.4f} / {w['least'] / w['credit']:.4f} | "
                   f"{T.short(w['t'])} ({w['route']}, {w['key']}) | {len(tops)} {tops[:6]} | {len(under_nat)} |")
     print()
+    print("With isvd@lr1 (the exact split's residual, its factors at lr1) taken as a generous route too:")
+    print()
+    for model in T.MODELS:
+        for kd in QK:
+            R = [r for r in rows if r["model"] == model and T.kind(r["t"]) == kd]
+            free = [(min(r["least"], r["isvd_lr1"] or math.inf) / r["credit"], T.short(r["t"])) for r in R]
+            print(f"- {model} {kd.removesuffix('_proj')}: under 1.05 {sum(v < T.LINE for v, _t in free)}, least "
+                  f"{min(free)[0]:.4f} ({min(free)[1]}); isvd@lr1 below the generous least on "
+                  f"{sum((r['isvd_lr1'] or math.inf) < r['least'] for r in R)}")
+    print()
     print("Least generous over credit among credited q and k, per chip@price, at the recommended credits and at the "
           "revised ones (each at min(its credit, its generous least / 1.05)):")
     print()

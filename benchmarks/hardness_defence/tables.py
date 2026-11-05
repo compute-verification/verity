@@ -114,6 +114,8 @@ SOURCES = [
     ("r20261105-194955-3c0d", "70b-q-gen-hi", "70b", {"orders": True}),
     ("r20261105-194501-d467", "70b-k-gen", "70b", {"orders": True}),
     ("r20261105-194501-d467", "8b-*-gen", "8b", {"orders": True}),
+    ("r20261105-203857-5e10", "70b-k-refine", "70b", {"orders": True}),
+    ("r20261105-203857-5e10", "8b-*-refine", "8b", {"orders": True}),
 ]
 
 
