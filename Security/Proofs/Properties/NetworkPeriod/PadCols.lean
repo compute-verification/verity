@@ -1,12 +1,14 @@
 import Properties.NetworkPeriod
 
 /-!
-# `padCols` counts the input columns no port covers that are not forced zeros
+# `padCols` and `forcedCols` split the input columns no port covers by `forcedZero`
 
-`padCols` marks each port's columns in one pass (`padMark_getD`, `padMarks_getD`); `padCols_eq` states its count as the
-filter over the unit's input columns with `SampledProofs.Bits.srcKey`'s search for a port, beside `forcedZero`, so a
-bound on the columns no port covers that are not forced zeros reads `padCols`. It needs nothing of the
-ports: a mark past the input columns marks none of them, and a column marked twice counts once.
+`unheldCols` marks each port's columns in one pass (`padMark_getD`, `padMarks_getD`); `unheldCols_eq` states it as the
+filter over the unit's input columns with `SampledProofs.Bits.srcKey`'s search for a port. `padCols_eq` states
+`padCols`'s count as that filter beside `forcedZero` not holding, and `forcedCols_eq` states `forcedCols` as it beside
+`forcedZero` holding, so a bound on the columns no port covers reads `padCols` for the free ones and `forcedCols` for
+the forced zeros. It needs nothing of the ports: a mark past the input columns marks none of them, and a column marked
+twice counts once.
 -/
 
 namespace Properties.NetworkPeriod
@@ -64,22 +66,19 @@ theorem padMarks_getD (ps : List (ℕ × ℕ)) (h : Array Bool) (c : ℕ) :
 theorem pad_not_eq {x y : Bool} {p : Prop} (hx : x = true ↔ p) (hy : y = true ↔ ¬ p) : (!x) = y := by
   cases x <;> cases y <;> simp_all
 
-/-- **`padCols` is the count of the unit's input columns no port covers that are not forced zeros**: the columns below
-`min (inWords · WORD) constPos` for which `srcKey`'s search over `Flock.portCols` finds no port and `forcedZero` does not
-hold. -/
-theorem padCols_eq (cf : Flock.Circuit) :
-    padCols cf = ((List.range (min (cf.unit.inWords * Flock.WORD) cf.unit.constPos)).filter fun c =>
+/-- **`unheldCols` is the unit's input columns no port covers**: the columns below `min (inWords · WORD) constPos` for
+which `srcKey`'s search over `Flock.portCols` finds no port. -/
+theorem unheldCols_eq (cf : Flock.Circuit) :
+    unheldCols cf = (List.range (min (cf.unit.inWords * Flock.WORD) cf.unit.constPos)).filter fun c =>
       ((List.range (Flock.portCols cf.unit.inGroups).size).find? fun p =>
         decide (((Flock.portCols cf.unit.inGroups).getD p (0, 0)).1 ≤ c ∧
           c < ((Flock.portCols cf.unit.inGroups).getD p (0, 0)).1 +
-            ((Flock.portCols cf.unit.inGroups).getD p (0, 0)).2)).isNone && !forcedZero cf c).length := by
-  unfold padCols
+            ((Flock.portCols cf.unit.inGroups).getD p (0, 0)).2)).isNone := by
+  unfold unheldCols
   dsimp only
-  congr 1
   apply List.filter_congr
   intro c hc
   try dsimp only
-  congr 1
   rw [List.mem_range] at hc
   generalize Flock.portCols cf.unit.inGroups = pc
   apply pad_not_eq (p := ∃ q ∈ pc.toList, q.1 ≤ c ∧ c < q.1 + q.2)
@@ -93,5 +92,36 @@ theorem padCols_eq (cf : Flock.Circuit) :
     · intro h p hp hP
       rw [List.mem_range] at hp
       exact h ⟨pc[p], Array.getElem_mem_toList hp, by simpa [hp] using hP⟩
+
+/-- **`padCols` is the count of the unit's input columns no port covers that are not forced zeros**: the columns below
+`min (inWords · WORD) constPos` for which `srcKey`'s search over `Flock.portCols` finds no port and `forcedZero` does not
+hold. -/
+theorem padCols_eq (cf : Flock.Circuit) :
+    padCols cf = ((List.range (min (cf.unit.inWords * Flock.WORD) cf.unit.constPos)).filter fun c =>
+      ((List.range (Flock.portCols cf.unit.inGroups).size).find? fun p =>
+        decide (((Flock.portCols cf.unit.inGroups).getD p (0, 0)).1 ≤ c ∧
+          c < ((Flock.portCols cf.unit.inGroups).getD p (0, 0)).1 +
+            ((Flock.portCols cf.unit.inGroups).getD p (0, 0)).2)).isNone && !forcedZero cf c).length := by
+  unfold padCols
+  rw [unheldCols_eq, List.filter_filter]
+  congr 1
+  apply List.filter_congr
+  intro c _
+  exact Bool.and_comm _ _
+
+/-- **`forcedCols` is the unit's input columns no port covers that are forced zeros**: the columns below
+`min (inWords · WORD) constPos` for which `srcKey`'s search over `Flock.portCols` finds no port and `forcedZero`
+holds, so they and `padCols`'s columns split the columns no port covers. -/
+theorem forcedCols_eq (cf : Flock.Circuit) :
+    forcedCols cf = (List.range (min (cf.unit.inWords * Flock.WORD) cf.unit.constPos)).filter fun c =>
+      ((List.range (Flock.portCols cf.unit.inGroups).size).find? fun p =>
+        decide (((Flock.portCols cf.unit.inGroups).getD p (0, 0)).1 ≤ c ∧
+          c < ((Flock.portCols cf.unit.inGroups).getD p (0, 0)).1 +
+            ((Flock.portCols cf.unit.inGroups).getD p (0, 0)).2)).isNone && forcedZero cf c := by
+  unfold forcedCols
+  rw [unheldCols_eq, List.filter_filter]
+  apply List.filter_congr
+  intro c _
+  exact Bool.and_comm _ _
 
 end Properties.NetworkPeriod
