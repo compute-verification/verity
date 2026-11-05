@@ -4548,7 +4548,7 @@ class Preflight:
         if found:
             return (f"the preflight of its merge onto `{BRANCH}` at {base[:12]} refused it ({took}"
                     + (f"; checks skipped: {'; '.join(skipped)}" if skipped else "") + "):\n  - " + "\n  - ".join(found)
-                    + "\n  Push the fix: drive preflights the new head at its next sync")
+                    + "\n  Push the fix and mark it: its mark's preflight, or a pool run drive's sync launches, judges the new head")
         self.log(f"research queue: preflight: #{pr.number} at {pr.head[:12]} merged onto `{BRANCH}` at {base[:12]}: checks "
                  f"skipped: {'; '.join([ONTO_SKIPS, *skipped])}; the checks that ran passed ({took})")
         return None
