@@ -1522,10 +1522,6 @@
    "owner": "@network-accounting",
    "digest": "9c3804d342282e4cb7c0e4657540d573ee43c40e686709ff8e0fc22c9bfc5b10"
   },
-  "NetTiming.CircuitCounts": {
-   "owner": "@network-accounting",
-   "digest": "88788989874d3548d8021922b9cdf09051950297489be201787e7c26009fbc14"
-  },
   "NetTiming.Guarantees.SampledAuditAccepted": {
    "owner": "@proofs",
    "digest": "75aee8595216e6cd88fd4918ffa84c82b1a79ab2a2f6d0ea263393a4d27b2fdd"
@@ -1542,17 +1538,9 @@
    "owner": "@network-accounting",
    "digest": "0d433e5271a1ae85c0d7fde2eacabd9de68f97a6760809219bdf1ab0ba5234ec"
   },
-  "NetTiming.SharedRootsParsed": {
-   "owner": "@network-accounting",
-   "digest": "044c8c063ea976bdb1ba56784a8c81dd12f7fbe9f8d9006130cab0a2f97e0774"
-  },
   "NetTiming.StatusComplete": {
    "owner": "@network-accounting",
    "digest": "e76c46b0a2f8b619b953aeb4331cd813ba0128cec464f244821bd9c6d4ea7f06"
-  },
-  "NetTiming.TiedExposed": {
-   "owner": "@network-accounting",
-   "digest": "8bff9ff335c1a03cd63d43f287f4d6deb78f6b029b11f64b851f06f23392569b"
   },
   "Pous.AuditSecure": {
    "owner": "@memory-accounting",
@@ -29660,10 +29648,9 @@
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.Period": {
-   "digest": "b286ffc4d5ea5957e9ff12b20e06653adf41bbfe4fe993818fd65fc192b65f80",
+   "digest": "c3cc5024012cf4a73ddc9907de44682a92f7a3bd189c541b3e8a5e8fb2440b7c",
    "definitions": {
-    "NetTiming.Guarantees.PeriodLeakAccepted": "a0a9c23666273efec9d2ddef896331f0d5a3699e707f317fe3de4e7189f29a17",
-    "NetTiming.Guarantees.PeriodLeakRegistered": "4727157fa6eb884917bf23fefd25116cf1d4c7fb84be4a3d3777ba729fce02be"
+    "NetTiming.Guarantees.PeriodLeakAccepted": "a0a9c23666273efec9d2ddef896331f0d5a3699e707f317fe3de4e7189f29a17"
    },
    "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
   },
