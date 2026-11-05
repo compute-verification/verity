@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.DeployRoundsZk
-import Proofs.Flock.Claims.KS.ConflictMerkle
-import Proofs.Flock.Claims.KS.ConflictWithin
+module
+
+public import Proofs.Flock.Claims.DeployRoundsZk
+public import Proofs.Flock.Claims.KS.ConflictMerkle
+public import Proofs.Flock.Claims.KS.ConflictWithin
 
 /-!
 # The pads openings an accepted masked rep logs
@@ -18,6 +20,8 @@ position `w.lo mod innerN`, `w` the query's coin.
   in `L`.
 * `zkVerifyRepWith_inner`: an accepted masked rep ran its inner proof on its stream's rounds, ending at the last one.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -193,7 +197,7 @@ theorem tiedColl_of_verifyInner {L : List (Claims.Msg × Claims.Msg)} {lay : Zk.
 `Zk.verifyInnerWith hs` at the pads layout `layZ`, from a transcript on the stream's rounds four rounds before their
 end. -/
 theorem zkVerifyRepWith_inner (hs : Hashes Flock.V) {spec : SessionSpec} {st : Setup} {sch : Schedule} {tPad : ℕ}
-    {sess : Session} {i r : ℕ} {bytes c : ByteArray} (hsch : Zk.schedule st.m = .ok (sch, tPad))
+    {sess : RunRecord} {i r : ℕ} {bytes c : ByteArray} (hsch : Zk.schedule st.m = .ok (sch, tPad))
     (h : Zk.verifyRepWith hs spec st sch tPad sess i r bytes = .ok c) :
     ∃ (stream : StreamRec) (extras : Array Claim) (zp : Zk.ZkProof) (finalC : F128)
       (cons : Array (String × Zk.Lin)) (t t' : Transcript),

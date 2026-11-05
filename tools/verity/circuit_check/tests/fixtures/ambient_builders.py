@@ -28,7 +28,7 @@ def _counted(C, a, b, c):
 def _set_order(C, a, b, c):
     """The operands in the order a set of their names iterates, which the strings' hashes decide."""
     bit = {"a": a[0], "b": b[0], "c": c[0]}
-    return [maj(C, *[bit[k] for k in {"a", "b", "c"}])]  # noqa: PLC0208  (the set's order is what this builder reads)
+    return [maj(C, *[bit[k] for k in {"a", "b", "c"}])]  # the set's order is what this builder reads
 
 
 def _environ(C, a, b, c):

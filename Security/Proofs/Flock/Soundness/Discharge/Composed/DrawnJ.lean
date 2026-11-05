@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
 
 /-!
 # The drawn units of one `--zk` session of `J` tables, at flock-verify's acceptance
@@ -14,6 +16,8 @@ file carries an event of the draw too, and bounds the drawn units' correctness:
 * `zk_session_soundJ_custody_drawn_reg`: the same at flock-verify's acceptance, at the coin server's custody, with
   `ksAvgStrictZ` for `ε_ks`. Its bound has no miss term, so it needs no A3.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 
@@ -98,6 +102,24 @@ theorem zk_flock_drawnC_reg (hlow : LoweringSoundZK A P planZ tab decode) (hown 
       (fun S R j => (hr S R j).trans_lt hρ) hlow hown a hj)
     (zc_knowledgeSound_reg A Hs P planZ tab vb _ _ hlow hown hj)
     (zk_linkSoundC_reg A Hs P planZ tab vb hlow hown hRw hM hρ hr hj ht) σ
+
+/-- **The drawn units of the compiled `--zk` audit, against the registration, at the value layer of any values `Xv`**:
+it accepts with a drawn unit in `wrongRegZ` at `XlayerZC (Xv R τ)` with probability at most `ε_ks` plus the link bound
+from the binding errors against `Xv` (`errBoundZC`). -/
+theorem zk_flock_drawnC_reg_at (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k Rw : ℕ}
+    (hRw : 1 ≤ Rw) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
+    {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
+    (hj : JointZC A Hs planZ k a)
+    (Xv : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → vb.Pos → vb.Val)
+    (σ : Strategy (audit L Reg (batchedSessionZC A Hs planZ))) :
+    prob (fun o => o.1 = true ∧
+        ¬ Disjoint (wrongRegZ A P planZ tab vb (reg σ) (XlayerZC A P planZ tab vb (Xv (reg σ) (cont σ)))) o.2)
+        (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
+      ksAvgZC A Hs planZ k a (reg σ) (cont σ) + errBoundZC A Hs P planZ tab vb Xv k Rw ρ (reg σ) (cont σ) :=
+  extraction_audit_drawn (analysisZCReg A Hs P planZ tab vb (fun R τ => XlayerZC A P planZ tab vb (Xv R τ)) k
+      (fun S R j => (hr S R j).trans_lt hρ) hlow hown a hj)
+    (zc_knowledgeSound_reg A Hs P planZ tab vb _ _ hlow hown hj)
+    (zk_linkSoundC_reg_at A Hs P planZ tab vb hlow hown hRw hρ hr hj Xv) σ
 
 end FlockSoundness.Discharge.ZkLink
 

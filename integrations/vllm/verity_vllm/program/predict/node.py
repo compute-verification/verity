@@ -32,7 +32,7 @@ from verity.ml.circuits.codec import canonical_json, encode_program, program_dig
 from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, concat
-from verity.ml.circuits.types import Array, Record, Type, Value
+from verity.ml.circuits.types import Array, RecordType, Type, Value
 
 from .build import I32, I64, WRAPPERS, BUILDER_ID, BuildResult, _Model, decoder, drive
 from .common import Unexpressible, _arr_shape, _Launch, _Peers, _Stochastic, launch_batch, launch_rows
@@ -220,7 +220,7 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
     n = M if wrapper == "step" else int(LP)
     events = 1 if wrapper == "step" else int(T) + 1
     inputs = [list(_arr_shape(t)) for _, t in params[:P.weights_at[0]]]
-    W = [Coll(Record(*ls), concat([Affine("p", at + i, 0, t.leaves) for i, (_, t) in enumerate(ls)]))
+    W = [Coll(RecordType(*ls), concat([Affine("p", at + i, 0, t.leaves) for i, (_, t) in enumerate(ls)]))
          for at, ls in zip(P.weights_at, P.leaves)]
     B = Builder(params, Value(1))
     ids = Coll(params[0][1], Affine("p", 0, 0, n))
@@ -279,13 +279,13 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),
                                doc=f"a tensor-parallel node's ranks joined at their collectives, predicted ahead of time by "
                                    f"verity_vllm.program.predict.node ({BUILDER_ID})",
-                               conformance="predicted: each rank's forward is its rank Program's (predict.build)", register=False)
+                               conformance="derived: predicted, each rank's forward is its rank Program's (predict.build)", register=False)
     sd = bind(defn, SRC=src_static)
     sd.set_body(body)
     node = CompositeDefinition("Node", 1, ("body",), lambda S: S.body.signature(),
                                lambda B, S, *args: B.call(S.body, *args, name="node"),
                                doc="a tensor-parallel node's Program function: its body, the ranks' forwards joined, called once",
-                               conformance="predicted: its body's", register=False)
+                               conformance="derived: predicted, its body's", register=False)
     program = Program(bind(node, body=sd), registered=theta, theta=theta)
     timings = {"body_s": round(t_body - t0, 3), "program_s": round(time.time() - t_body, 3)}
     desc = digest = None

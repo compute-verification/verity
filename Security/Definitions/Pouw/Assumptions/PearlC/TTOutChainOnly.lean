@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOut
-import Definitions.Pouw.PearlC.DeviceChainOnly
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOut
+public import Definitions.Pouw.PearlC.DeviceChainOnly
 
 /-!
 # TT_OUT under the chain-only reading at a device record (staged, nothing pinned)
@@ -9,6 +11,8 @@ The four chain-only forms of the record's TT_OUT: `TTOut` and `TTOutTile` at the
 (`ChainOnlyGamma`'s `…ChainOnly_of_ttOut`), so none is a new assumption; they sit in an assumptions module as the
 bundle's named `Prop`s do.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Assumptions
 

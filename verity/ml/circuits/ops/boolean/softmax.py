@@ -1,6 +1,6 @@
-"""Attention's softmax arithmetic as circuits over `forms` (formerly C-Flock's `tail_pieces`): the FTZ f32 operations, the
+"""Attention's softmax arithmetic as circuits over `forms` (formerly Flock's `tail_pieces`): the FTZ f32 operations, the
 strict compare, ``F32Max`` and ``GuardNegInfZero``. Each is its word primitive (`verity.ml.circuits.ops.fp32`) bit for bit. The MUFU
-operations around them read tables and stay in C-Flock's `tail_pieces`.
+operations around them read tables and stay in Flock's `tail_pieces`.
 """
 from __future__ import annotations
 

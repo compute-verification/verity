@@ -1,9 +1,10 @@
-"""The one-stage audit's verifier of record (`one_stage.verifier`): the Lean and the Python run on every check, both
+"""The one-stage audit's verifier (`one_stage.verifier`): the Lean and the Python run on every check, both
 outcomes are recorded beside the one of record, a disagreement is refused naming both, Lean that can't run fails closed,
 and `RECORD_VERDICT` switches the record back to Python in one line."""
 
 from __future__ import annotations
 
+import itertools
 import json
 import re
 from pathlib import Path
@@ -13,7 +14,7 @@ import pytest
 import verity_difftest
 from test_service import DELTA, PAIR, QUERY, SESSION, _lean, _ports, _record, _spec, _stream
 from verity.ml.circuits.codec import canonical_json
-from verity.core.protocols.sampled_proofs import service as S
+from verity.core.protocols.sampled_proofs import challenger as C, coins as T, service as S
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as D, hello as H, partition as P, registration as R,
                                                             verifier as V)
 from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict
@@ -41,14 +42,14 @@ def _public(rec: dict) -> tuple:
 
 
 def _rule(spec: S.Spec, rec) -> tuple[Verdict, Verdict]:
-    """The public-items rule by the verifier of record, and the service's Python."""
+    """The public-items rule by the verifier, and the service's Python."""
     py = S.check_public(spec, rec)
     return V.check_public(py, rec, S.SCHEME, spec.check.query, [(v.name, v.registered) for v in spec.values],
                           [p.item for p in spec.public]), py
 
 
 def _held(verdicts: dict, outputs: tuple = ()) -> tuple[Verdict, Verdict]:
-    """The outcome's hold on the verdicts by the verifier of record, and the service's Python."""
+    """The outcome's hold on the verdicts by the verifier, and the service's Python."""
     py = S.check_verdicts(verdicts, [SESSION], outputs)
     return V.check_verdicts(py, verdicts, [SESSION], outputs), py
 
@@ -80,6 +81,31 @@ def test_every_check_runs_both_and_records_them():
     assert canonical_json({k: x for k, x in rec.items() if k != "verifiers"}) == canonical_json(_python_record(_args(reg, draw)))
     bad = V.audit_record(**_args(reg, draw, session_roots={"x": "00" * 64}))
     assert not bad["accepted"] and bad["verifiers"]["agree"] and bad["verifiers"]["lean"]["failed"] == ["roots"]
+
+
+def test_the_record_reads_each_ports_last_root_and_its_own_values_as_the_python_does():
+    """`audit_record`'s sessions' roots (`Record.checks`) and the registered reads it keeps (`Record.ownRegistered`), which
+    the Lean compiles on a hash map of the registration's roots, against the Python's whole: the sessions' roots all
+    right, one wrong, one at a port the registration doesn't name, and a port registered twice, read at its last root;
+    and verdicts reporting reads of the registration's own port and of a value it doesn't name, of which only its own is
+    kept."""
+    _, reg, draw = _drawn()
+    rec = reg.record
+    roots = {r["port"]: r["root"] for r in rec["roots"]}
+    x = rec["roots"][0]["port"]
+    twice = {**rec, "roots": [*rec["roots"], {**rec["roots"][0], "root": "77" * 64}]}
+    reads = _lean(registered={"0": {"value": x, "root": roots[x]}, "1": {"value": "elsewhere", "root": "00" * 64}})
+    for registration, given, verdicts, failed in (
+            (rec, roots, _lean(), []), (rec, {**roots, x: "77" * 64}, _lean(), ["roots"]),
+            (rec, {**roots, "elsewhere": "00" * 64}, _lean(), ["roots"]),
+            (twice, {**roots, x: "77" * 64}, _lean(), ["receipt"]), (twice, roots, _lean(), ["receipt", "roots"]),
+            (rec, roots, reads, ["registered"])):
+        a = {**_args(reg, draw, registration=registration, verdicts=verdicts), "session_roots": given}
+        got = V.audit_record(**a)
+        assert got["verifiers"]["agree"] and got["verifiers"]["lean"]["failed"] == failed, got["verifiers"]
+        py = audit.audit_record(**a, session_registered=audit.session_registered(verdicts, registration))
+        assert canonical_json({k: v for k, v in got.items() if k != "verifiers"}) == canonical_json(py)
+    assert got["checks"]["registered"]["detail"]["opened"] == [x]
 
 
 def _lean_answering(monkeypatch, fn: str, answer):
@@ -128,7 +154,7 @@ def test_the_draw_of_record_is_the_leans_on_the_bytes_the_python_read(monkeypatc
     assert draw.draw == got["draw"] and got["read"] == len(bytes.fromhex(asked["source"])) > 0
     for rule, law in ((S.All(), {"law": "subset", "k": 6}), (S.Law("subset:3"), {"law": "subset", "k": 3})):
         seen.clear()
-        s = _stream(_spec(rule), coins=b"\x5a")
+        s = _stream(_spec(rule))
         d = s.select(s.register(_record(law=law), _ports(6)))
         (asked,) = seen
         got = real("select", asked)
@@ -187,26 +213,32 @@ def test_the_runs_hello_is_checked_by_both(monkeypatch):
     assert V.hello(*run, [key], ["selection"], 2, ["session"]).codes == (V.DISAGREE,)
 
 
-def test_a_streams_coins_are_the_leans(monkeypatch):
-    """A stream's default coins are the Lean verifier of record's `IO.getRandomBytes` (A3): every byte its salt and its
-    draw read is a `coins` answer, and the draw of record is the Lean's on exactly those bytes."""
+def test_the_leans_coins_are_a_challengers_entropy_and_never_a_streams(monkeypatch):
+    """The Lean verifier's `IO.getRandomBytes` (A3, `verifier.coins`) is a challenger's entropy, never a stream's own
+    coins: a stream given it, or no coins, refuses (`NO_OWN_COINS`). A challenger on it commits to its coins, and a
+    stream drawing from that challenger has the Lean's draw of record on coins it released after the registration."""
     a, b = V.coins(64), V.coins(64)
     assert len(a) == len(b) == 64 and a != b and V.coins(0) == b""
-    answered, selected = [], []
+    for coins in (None, V.coins):
+        with pytest.raises(ValueError) as e:
+            S.Stream(_spec(), PAIR, budget=1, delta=DELTA, challenger="c", coins=coins)
+        assert str(e.value) == S.NO_OWN_COINS
+    selected = []
     real = V._server.call
 
     def spy(fn, value):
-        kind, body = real(fn, value)
-        if fn == "coins":
-            answered.append(bytes.fromhex(body))
         if fn == "select":
             selected.append(bytes.fromhex(value["source"]))
-        return kind, body
+        return real(fn, value)
     monkeypatch.setattr(V._server, "call", spy)
-    stream = S.Stream(_spec(), PAIR, budget=1, delta=DELTA, challenger="c")
-    assert stream.salt() == answered[0] and len(answered[0]) == 64
-    draw = stream.select(stream.register(_record(), _ports(6)))
-    assert len(draw.units) == 2 and selected == [b"".join(answered[1:])] and len(selected[0]) > 0
+    challenger = C.LiveChallenger("verity/test/coins/v1", 0, [("positions", 8)], V.coins)
+    coins = T.ChallengerCoins(C.LiveRecord(challenger, "positions", itertools.count().__next__))
+    stream = S.Stream(_spec(), PAIR, budget=1, delta=DELTA, challenger="c", coins=coins)
+    reg = stream.register(_record(), _ports(6))
+    segment = coins.commit(bytes.fromhex(reg.digest))
+    draw = stream.select(reg)
+    released = b"".join(o.coin for o in segment.openings)
+    assert len(draw.units) == 2 and len(selected) == 1 and 0 < len(selected[0]) and released.startswith(selected[0])
 
 
 def test_coins_the_lean_cannot_give_are_no_coins(monkeypatch):
@@ -242,8 +274,8 @@ def test_lean_that_cannot_run_fails_closed(monkeypatch):
 
 
 def test_floats_reach_the_lean_as_python_wrote_them():
-    """A float of 10^16 or more is sent with its digits (`Json.parse` would read Python's `1e+22` as an integer), so the
-    Lean writes back what Python does; one it can't read back (-0.0) makes the two disagree."""
+    """A float of 10^16 or more is sent with its digits (`Flock.JsonParse.parse` would read Python's `1e+22` as an
+    integer), so the Lean writes back what Python does; one it can't read back (-0.0) makes the two disagree."""
     assert V._dumps({"a": 1e22, "b": [2.5, 1e16, 3]}) == '{"a":10000000000000000000000.0,"b":[2.5,10000000000000000.0,3]}'
     _, reg, draw = _drawn()
     floats = {"big": 1e22, "small": 1e-7, "third": 1 / 3, "huge": 1.7976931348623157e308, "tiny": 5e-324}

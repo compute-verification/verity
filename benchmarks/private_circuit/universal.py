@@ -1,5 +1,5 @@
 """Protocol 2's universal unit end to end: a random hidden netlist, padded to its size class, run by the public
-`UniversalUnit_v1{G, N_IN, N_OUT}` under C-Flock's circuit prover (M0) with `--zk`, and verified by the Lean verifier.
+`UniversalUnit_v1{G, N_IN, N_OUT}` under Flock's circuit prover (M0) with `--zk`, and verified by the Lean verifier.
 
     python benchmarks/private_circuit/universal.py --cls 16,16,8 --n 64 --bin flock-circuit --lean flock-verify --out DIR
 
@@ -15,7 +15,7 @@
   checks against the lowered circuit). The live `serve --zk` / `prove --zk` session must be accepted, then each recorded session
   is replayed by Lean's `flock-verify verify --zk`, which must accept it, and must refuse it without `--zk` and with a proof byte
   flipped.
-* **The row.** `rows.jsonl`: the class, the unit's ANDs (traced, closed form and C-Flock's lowering), ANDs per hidden gate,
+* **The row.** `rows.jsonl`: the class, the unit's ANDs (traced, closed form and Flock's lowering), ANDs per hidden gate,
   the direct netlist's ANDs, the statement's size (k_log, instances per block), prover time, proof bytes, the live and the Lean
   verifier's times.
 * **`--wired`: several units, public topology.** A circuit of four units (`wired_topology`: layer 1 reads layer 0's outputs,
@@ -23,7 +23,7 @@
   instances: a Program of one `batch` of the unit per layer (`wired_program`), whose wiring is the public layout's. Checked
   against `interpret` composed along the topology and `verity.ml.circuits.evaluation` of the Program; `Q_template_instance` makes every
   member one unit, and the topology the partition derives (`derived_topology`) must be the one built. One class statement of
-  `4 n` instances staged with `class_statement.Wiring` (PROTOCOL.md §16.13, Linking: each cut source a link row under its
+  `4 n` instances staged with `class_statement.Wiring` (the Lean verifier's `HmOut`, Linking: each cut source a link row under its
   writer's salt, META `links` and `definition`), proved live with the verifier's own `--links` file (`class_statement.links_file`)
   and Lean-verified with `--program`, which derives the units and checks every cut wire (`without_program` records the
   refusal without it). Then two cheating provers on the same circuit: one whose layer 1 reads a made-up input in place of

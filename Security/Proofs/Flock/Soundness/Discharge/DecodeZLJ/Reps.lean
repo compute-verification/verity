@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Statements
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Statements
 
 /-!
 # flock-verify's acceptance at table `j`, rep by rep
@@ -10,6 +12,8 @@ import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Statements
 `planJ_get`, `tableJ_of`: table `j` of `planJ` is `tableJ` at part `j`, and wherever a `SetupJ` exists it is the
 `SetupJ.spec` of one with the same statement.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.DecodeZLJ
 
@@ -25,7 +29,7 @@ its run on the stream's coins with the proof's messages, its stream's rounds ret
 salted verdict on the two runs at `capOfRoot` of `root_B[j]` and `opnOf` of proof files `2j`, `2j + 1`. -/
 theorem accepts_reps_at {I : Inputs} {t : Exec.Transcript} (hh : I.tags.hiddenOutputs = false)
     (hrr : I.tags.retainRounds = true) (hl : I.tags.merkleLeaf = "hm96-sha512/v1") (h : Accepts I t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session),
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord),
       setupOf I t.record = .ok (spec, sts) ∧ Record.decode spec t.record = .ok sess ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (_hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m), ∃ pend : Fin 2 → PendL 𝔽 Dig,

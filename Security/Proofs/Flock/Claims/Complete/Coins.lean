@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.Run
-import Proofs.Flock.Claims.Prob
-import Proofs.Flock.Claims.NumbersDeploy
-import Proofs.Flock.Level3.ArithFacts
+module
+
+public import Proofs.Flock.Claims.Complete.Run
+public import Proofs.Flock.Claims.Prob
+public import Proofs.Flock.Claims.NumbersDeploy
+public import Proofs.Flock.Level3.ArithFacts
 
 /-!
 # δc: where the honest prover can fail
@@ -19,6 +21,8 @@ zerocheck outer coin is `1` (`Bad`), at most `2^-128` per coin element (`pr_slot
   `ZkIn`: at most `200` tables at `m ≤ 35`): at most `44` outer coins per table (`Claims.Flock.Complete_meets_plain`),
   and `190` coins at the masked verifier's one table (`Claims.Flock.Complete_meets_zk`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

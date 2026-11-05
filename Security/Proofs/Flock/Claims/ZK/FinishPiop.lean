@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FinishCommit
-import Proofs.Flock.Claims.ZK.CutSession
+module
+
+public import Proofs.Flock.Claims.ZK.FinishCommit
+public import Proofs.Flock.Claims.ZK.CutSession
 
 /-!
 # The firewall's PIOP is the masked session's from its source
@@ -14,6 +16,8 @@ by unfolding:
 * **`ringSwitchP_eq`**: the ring switch sending claim `k`'s vector `sv k` is `FlockComplete.ringSwitchCut`'s.
 * `basisVals_eq`: the batched basis is `FlockComplete.basisVals`.
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 

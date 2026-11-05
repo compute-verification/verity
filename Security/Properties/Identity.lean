@@ -1,4 +1,6 @@
-import Identity.Tagged
+module
+
+public import Identity.Tagged
 
 /-!
 # Core's identity hash is C-Flock's SHA-512
@@ -14,6 +16,8 @@ run hashes, reads `Flock.Sha512.hash` whichever of the two the code calls:
 
 `Proofs.Properties.Identity` proves both.
 -/
+
+@[expose] public section
 
 namespace Properties.Identity
 

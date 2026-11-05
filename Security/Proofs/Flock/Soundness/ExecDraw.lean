@@ -1,5 +1,8 @@
-import Proofs.Flock.Soundness.Audit.Law
-import Flock.Draw
+module
+
+public import Proofs.Flock.Soundness.Audit.Law
+public import Flock.Draw
+import all Init.Data.Array.QSort.Basic
 
 /-!
 # The executable draw escapes no more often than the model's
@@ -18,6 +21,8 @@ bytes, it returns a draw that misses `B` with probability at most `(Law.subset n
   it, so the loop escapes `B` with probability at most `C(n − i − |B|, c)/C(n − i, c)`.
 -/
 
+@[expose] public section
+
 open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic
 
 namespace FlockSoundness.Audit.Law
@@ -30,7 +35,7 @@ end FlockSoundness.Audit.Law
 
 namespace FlockSoundness.Audit.DrawExec
 
-theorem loop_perm {α : Type} {n : ℕ} (lt : α → α → Bool) (lo hi : ℕ) (hhi : hi < n) (pivot : α) :
+private theorem loop_perm {α : Type} {n : ℕ} (lt : α → α → Bool) (lo hi : ℕ) (hhi : hi < n) (pivot : α) :
     ∀ (d : ℕ) (as : Vector α n) (i k : ℕ) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
       (Array.qpartition.loop lt lo hi hhi pivot as i k ilo ik w).2.toArray.Perm as.toArray := by
   intro d
@@ -63,7 +68,7 @@ theorem qpartition_perm {α : Type} {n : ℕ} (as : Vector α n) (lt : α → α
     · exact Array.Perm.refl _
   exact (h1 _ _ _ _ _ _).trans ((h1 _ _ _ _ _ _).trans (h1 _ _ _ _ _ _))
 
-theorem sort_perm {α : Type} (lt : α → α → Bool) {n : ℕ} :
+private theorem sort_perm {α : Type} (lt : α → α → Bool) {n : ℕ} :
     ∀ (d : ℕ) (as : Vector α n) (lo hi : ℕ) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n), hi - lo = d →
       (Array.qsort.sort lt as lo hi w hlo hhi).toArray.Perm as.toArray := by
   intro d
@@ -86,6 +91,12 @@ theorem sort_perm {α : Type} (lt : α → α → Bool) {n : ℕ} :
         refine ((ih (hi - (mid + 1)) (by omega) _ _ _ _ _ _ rfl).trans
           ((ih (mid - lo) (by omega) _ _ _ _ _ _ rfl))).trans hp
     · exact Array.Perm.refl _
+
+theorem qsort_perm {α : Type} (as : Array α) (lt : α → α → Bool) : (as.qsort lt).Perm as := by
+  unfold Array.qsort
+  split
+  · exact ⟨List.Perm.refl _⟩
+  · exact sort_perm lt _ _ _ _ _ _ _ rfl
 
 theorem mem_qsort {α : Type} (as : Array α) (lt : α → α → Bool) (x : α) : x ∈ as.qsort lt ↔ x ∈ as := by
   unfold Array.qsort

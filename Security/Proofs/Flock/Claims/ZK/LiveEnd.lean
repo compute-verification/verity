@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.PrefixLive
-import Proofs.Flock.Claims.ZK.FinExe
+module
+
+public import Proofs.Flock.Claims.ZK.PrefixLive
+public import Proofs.Flock.Claims.ZK.FinExe
 
 /-!
 # The live session ends where the session stopped after the last round does (`Masked.liveEnd`)
@@ -14,6 +16,8 @@ openings and stopped after round `refK x` returns.
   most its `repRounds true` (`repPZk_sends`, which is that count at a `--zk` schedule, with `k0 ≥ 1` and at least two
   levels). So the second case can't happen, and `LiveEnd`'s `Admits` hypothesis isn't used.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.PrefixAgree
 

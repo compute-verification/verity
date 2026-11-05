@@ -1,5 +1,7 @@
-import Definitions.Nci.Guarantees.CoverChained
-import Proofs.Nci.CoveringTwoCostsWitness
+module
+
+public import Definitions.Nci.Guarantees.CoverChained
+public import Proofs.Nci.CoveringTwoCostsWitness
 
 /-!
 # `CoverTrainingChained` is not vacuous
@@ -13,6 +15,8 @@ wide, so its bits (`bitDecl tcDecl`) are its gates (`bt`) with nothing registere
 (`onePerGate`): each has one gate and reads two bits, so it complies at `Γ = 1`, `α = 2`, and `α Γ = 2 < c_w D = 5/2`.
 The block size is `s = w₀ Γ + α Γ + width(θ) = 3`.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs.ChainedWitness
 
@@ -128,7 +132,7 @@ gate, meets every hypothesis of `Nci.Cover.Guarantees.CoverTrainingChained` at `
 theorem coverTrainingChained_nonvacuous :
     ∃ (Γ : ℕ) (α : ℝ) (c d : Declaration) (M : Containment c.D d.D) (B : Nci.Covering.MulBlocks (bitDecl c)) (s D w₀ : ℕ)
       (cw ca : ℝ),
-      0 ≤ α ∧ Complies Γ α d ∧ Assumptions.BaselineRegistered c d (PartialContainment.ofContainment M) ∧
+      0 ≤ α ∧ Complies Γ α d ∧ Assumptions.ThetaRegistered c d (PartialContainment.ofContainment M) ∧
       Assumptions.ParameterHardAt (bitDecl c) B s cw ∧ α * Γ < cw * D ∧ 0 < ca ∧ (∀ g, c.D.w g ≤ w₀) ∧
       w₀ * Γ + α * Γ + c.D.width c.θ ≤ s ∧ cw ≠ ca ∧ (Assumptions.chainedBlocksAt (bitDecl c) B D ca).Nonempty :=
   ⟨1, 2, tcDecl, tcDecl, selfContainment, bBlocks, 3, 5, 1, 1 / 2, 1, by norm_num, complies,

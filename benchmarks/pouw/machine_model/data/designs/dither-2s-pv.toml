@@ -1,5 +1,5 @@
-# Dither-2S with Dither-C's committed-digit P·V (SKIP's Ap, Result 3): both operands dithered, no U, the last checked
-# word served, and P·V's strip digits committed, so no product is unchecked. Perplexity +1.38% (8B WT-2 2K) on SKIP's
+# Dither-2S with Dither-C's committed-digit P·V: both operands dithered, no U, the last checked
+# word served, and P·V's strip digits committed, so no product is unchecked. Perplexity +1.38% (8B WT-2 2K) on the
 # `adopted-bd-lm-pv` arm (P in one block; `adopted-bd-lm-pv256` and up for blocks of keys).
 base = "dither-2s"
 name = "dither-2s-pv"
@@ -16,4 +16,4 @@ pv = "pv"
 
 [skip.served]
 eps = 0.00248
-source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 17.221 SMSP-cycles a 4096-MAC MMA on VF3r-16; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: P·V's pv digits, epilogue and scaling 0.248%. With P·V's served output checked it is 0.248% (8B) / 0.108% (70B) there. Skip terms: the checked leaves' vector work only the served output needs at the TS model's gap (TS_EPS of TS_CHEAT, pv_ts) (note:20261017T0320Z-draft-eps1-calc Round 9)"
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭, ♭ 17.221 SMSP-cycles a 4096-MAC MMA on VF3r-16; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: P·V's pv digits, epilogue and scaling 0.248%. With P·V's served output checked it is 0.248% (8B) / 0.108% (70B) there. Skip terms: the checked leaves' vector work only the served output needs at the TS model's gap (TS_EPS of TS_CHEAT, pv_ts)"

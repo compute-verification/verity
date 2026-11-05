@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.ResLowerDD
-import Proofs.Flock.Claims.Recursion.RestLowR
-import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
+module
+
+public import Proofs.Flock.Claims.Recursion.ResLowerDD
+public import Proofs.Flock.Claims.Recursion.RestLowR
+public import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
 
 /-!
 # KS's route with each part's decision (`showsDec`)
@@ -16,6 +18,8 @@ decision: at an accepted run each part's staged statement shows `showsPart` (`st
 * `RestLow.recKSDecompLV_of_leavesJD`, `RestLow.recKSDecompDV_of_leavesJD`: the leaves' assembly with `hres` at
   `ResLowJPD`, landing on `RecKSDecompLVD`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.OpenLower
 

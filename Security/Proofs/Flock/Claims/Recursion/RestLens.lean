@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.RestRead
-import Proofs.Flock.Claims.Recursion.TopsOpens
-import Proofs.Flock.Claims.Recursion.RowsCover
-import Proofs.Flock.Claims.Recursion.CapPorts
+module
+
+public import Proofs.Flock.Claims.Recursion.RestRead
+public import Proofs.Flock.Claims.Recursion.TopsOpens
+public import Proofs.Flock.Claims.Recursion.RowsCover
+public import Proofs.Flock.Claims.Recursion.CapPorts
 
 /-!
 # Each round before the last has its length at every witnesses (`RoundLens`)
@@ -20,6 +22,8 @@ every round before the last is fixed, held or assembled at lengths the statement
 Each count is the schedule's (`nAtSched`): the deployed plain verifier sets the inner statement up as the one table
 whose rep schedule is the layout's (`schedBridge`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.RestRead
 
@@ -74,6 +78,7 @@ theorem statements_cap {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVSta
   obtain ⟨t, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨A, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨C, -, h⟩ := FlockC3.VStarList.eok_bind h
+  obtain ⟨L, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨K0, hK0, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨u, -, h⟩ := FlockC3.VStarList.eok_bind h
   obtain ⟨u', -, h⟩ := FlockC3.VStarList.eok_bind h

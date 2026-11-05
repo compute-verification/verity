@@ -1,6 +1,8 @@
-import Mathlib
-import Proofs.Accounting.Bandwidth.Causal
-import Proofs.Accounting.Bandwidth.TickedJoint
+module
+
+public import Mathlib
+public import Proofs.Accounting.Bandwidth.Causal
+public import Proofs.Accounting.Bandwidth.TickedJoint
 
 /-!
 # Bandwidth adds, by counting (Mbw), on a strategy causal from every tick
@@ -22,6 +24,8 @@ location over the pair `(store, z)`; `audit_links_joint` is `audit_joint` from t
 its capacity form (`n ≤ βm T − cert_bw`): the guarantees `Bandwidth.Guarantees.Mbw` and `MbwCapacity`
 (`Security/Definitions/Accounting/Guarantees/Bandwidth/Causal.lean`).
 -/
+
+@[expose] public section
 
 namespace Bandwidth
 

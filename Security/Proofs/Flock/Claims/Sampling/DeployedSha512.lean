@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Sampling.Tables
-import Proofs.Flock.Claims.KS.ZkExtend
-import Proofs.Flock.Claims.KS.PlainLeafKS
+module
+
+public import Proofs.Flock.Claims.Sampling.Tables
+public import Proofs.Flock.Claims.KS.ZkExtend
+public import Proofs.Flock.Claims.KS.PlainLeafKS
 
 /-!
 # The sampling claims at the deployed record, at SHA-512 at the deployed relation
@@ -21,6 +23,8 @@ At the deployed plain record, Flock's plain KS at the trimmed instance holds the
 
 Each is its form at that hash and relation, with `hKS` discharged; none is a guarantee of its own.
 -/
+
+@[expose] public section
 
 namespace SamplingDeploy
 
