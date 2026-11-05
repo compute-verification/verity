@@ -1920,6 +1920,50 @@ def test_a_bound_hidden_in_an_excepted_module_holds_its_guarantee_to_exclusion_w
     assert witnessing(False) == [] and witnessing(True) == [] and lock()["unwitnessed"] == entry
 
 
+CAPPED = ("theorem capped : Guarantees.Capped := by\n  unfold Guarantees.Capped Bound\n  intro n\n  omega\n"
+          "theorem capped_honest : Bound (min 2 3) 5 ∧ double 1 = 2 := ⟨by unfold Bound; omega, rfl⟩\n"
+          "theorem capped_nontrivial : ¬ Bound (min 4 3) 2 := by unfold Bound; omega\n"
+          "theorem bounded_honest : Fits 3 ∧ double 1 = 2 := ⟨by unfold Fits; omega, rfl⟩\n"
+          "theorem bounded_nontrivial : ¬ Bound 6 5 := by unfold Bound; omega\n")
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_premise_free_exclusion_bound_is_witnessed_by_a_tighter_bound_failing_at_an_explicit_circuit(tmp_path):
+    """On a real build: `Control.capped : Guarantees.Capped`, `∀ n, Bound (min n 3) 5`, takes no premise (as training's
+    `ServingBlocks.UncertifiedElementary` takes none), so its nontrivial witness is the bare `¬ Bound (min 4 3) 2`: a
+    tighter bound fails at an explicit circuit. `Control.bounded`, which takes `Fits n`, still fails with a bare
+    `¬ Bound 6 5`, which drops no premise. A rule that asked every exclusion theorem to drop a premise failed `capped`'s
+    witness too, whatever it stated."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control" / "Partition.lean").write_text(PARTITION.replace(
+        "end Guarantees", "def Capped : Prop := ∀ n : Nat, Bound (min n 3) 5\nend Guarantees"))
+    thms = pkg / "Control" / "Thms.lean"
+    thms.write_text("import Control.Partition\n" + thms.read_text().replace("end Control", f"{BOUNDED}{CAPPED}\nend Control"))
+    pol = A.load(pkg)
+    names = [f"Control.{g}{s}" for g in ("capped", "bounded") for s in ("", "_honest", "_nontrivial")]
+    A.dump(pkg, pol | {"trees": pol["trees"] | {"definitions": [*pol["trees"]["definitions"], "Control.Partition"]},
+                       "layers": pol["layers"] | {"Control.Partition": {"imports": [], "why": "the bound imports nothing"}},
+                       "guarantees": pol["guarantees"] | {n: {"owner": "@lean"} for n in names},
+                       "witnesses": {f"Control.{g}": {"honest": [f"Control.{g}_honest"], "nontrivial": f"Control.{g}_nontrivial",
+                                                      "kind": "exclusion"} for g in ("capped", "bounded")}})
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+
+    def witnessing(update):
+        return [f for f in A.audit(pkg, tmp_path / "out", update=update, replay=False, runs=False, log=lambda *_: None)[
+            "failures"] if f.code.startswith("witnesses")]
+    fails = witnessing(True)
+    assert [(f.code, f.entry) for f in fails] == [("witnesses.nontrivial-drops", "Control.bounded_nontrivial")], fails
+    assert "with P one of Control.Fits; a bare `¬ bound` reads none" in fails[0], fails[0]
+    rec = json.loads((pkg / A.POLICY).read_text())
+    A.dump(pkg, rec | {"witnesses": {}})
+    missing = {f.entry: str(f) for f in witnessing(False) if f.code == "witnesses.missing"}
+    assert {"Control.capped", "Control.bounded"} <= set(missing), missing
+    assert "`Control.capped_nontrivial : ¬ Control.Bound c₀ …` (it takes no premise to drop" in missing["Control.capped"]
+    assert "once one named premise is dropped" in missing["Control.bounded"]
+
+
 def test_a_statement_whose_premises_could_not_be_read_fails():
     """`Facts.lean` writes `premises: null` when `premisesOf` throws on a statement; read as no premises, every premise of it
     would go unlisted, so it fails instead. Facts without the field (older documents) are not held to it."""
@@ -2748,6 +2792,37 @@ def test_an_exclusion_theorem_has_an_honest_witness_and_an_explicit_circuit_beat
         "acceptance", "it reads P.Run.accepts, a verifier's acceptance")
     device = witnessed(g | {"reads": [cover, run | {"name": "P.Device.Accepts"}]})
     assert A.witness_scope("P.sound", device[0], device[1]["pins"]["P.sound"])[0] == "acceptance"
+
+
+def test_a_premise_free_exclusion_theorem_is_witnessed_by_its_bound_failing_at_an_explicit_circuit():
+    """An exclusion theorem that takes no premise (`premise_free`: training's `ServingBlocks.UncertifiedElementary`, a
+    cap at every unit of every refinement) has none to drop: its nontrivial witness is the bare `¬ bound` at an explicit
+    circuit, where a tighter bound fails, and a missing witness is asked for in that form. It still negates the bound,
+    constructs its circuit and takes only listed assumptions. A hypothesis no constant heads is a premise all the same,
+    and a guarantee with a premise still drops one."""
+    cover = {"name": "P.Covering.load", "module": "P.Covering", "kind": "def", "hash": "6" * 32}
+    g = {"reads": [cover], "premises": [], "hypotheses": [],
+         "body": wbody("LE.le", binders=["∀", "∀"], conclusion=[wk("LE.le", ["P.Covering.load"])])}
+    bare = {"body": wbody("LE.le", negated=True, conclusion=[{"head": "Not", "defs": [], "refl": False,
+                                                              "assumed": False, "negated": True, "inner": "LE.le"}])}
+    pol, f = witnessed(g, nontrivial=bare)
+    assert A.premise_free(f["pins"]["P.sound"]) and A.witness_scope("P.sound", pol, f["pins"]["P.sound"])[0] == "exclusion"
+    assert A.witness_failures(pol, f, WOWN) == []
+    missing = A.witness_failures({**pol, "witnesses": {}}, f, WOWN)[0]
+    assert "`P.sound_nontrivial : ¬ LE.le c₀ …` (it takes no premise to drop, so a tighter bound fails at an explicit " \
+           "circuit c₀)" in missing and '"kind": "exclusion"' in missing, missing
+    assert witness_codes(*witnessed(g, nontrivial={"body": wbody("P.Compiled")})) == ["witnesses.nontrivial-form"]
+    assert witness_codes(*witnessed(g, nontrivial={"body": bare["body"] | {"binders": ["∀"]}})) == \
+        ["witnesses.instance-binders"]
+    other = [{"binder": "h", "type": "P.Other", "closed": True, "named": "P.Other", "module": "P.Defs"}]
+    assert witness_codes(*witnessed(g, nontrivial={"body": bare["body"] | {"binders": ["→"]}, "hypotheses": other})) == \
+        ["witnesses.nontrivial-assumes"]
+    unheaded = g | {"hypotheses": [{"binder": "h", "type": "p n", "closed": False}],
+                    "body": g["body"] | {"binders": ["∀", "∀", "→"]}}
+    assert not A.premise_free(unheaded)
+    assert witness_codes(*witnessed(unheaded, nontrivial=bare)) == ["witnesses.nontrivial-drops"]
+    premised = g | {"premises": [COMPILED], "body": g["body"] | {"binders": ["∀", "∀", "→"]}}
+    assert witness_codes(*witnessed(premised, nontrivial=bare)) == ["witnesses.nontrivial-drops"]
 
 
 def test_a_nontrivial_witness_may_negate_what_the_guarantee_unfolds_to():
