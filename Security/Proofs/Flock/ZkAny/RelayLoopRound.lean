@@ -150,9 +150,9 @@ round of `n` coins of `stream` the loop ran on table `i`'s rep `r` at the domain
 value `v` at the model's history so far: the model's coin count there is `n`, its round there masked, not its last,
 with a next message; the rep has a frame, which `roundPlace` readies at the model's schedule, configuration and
 masking state but for `stopped`, as the stream's first round where `seen` has no round of it, taking no device round
-exactly where the frames have stopped the session, `v` there failing the crossing only where it fails to pass, or else
-taking none at a round Rust's checks fail; the frames have stopped the session exactly where the model's run has; and
-every other rep stream of the setup is on another rep. -/
+either exactly where the frames have stopped the session, `v` then crossing where it fails to pass, or at a round
+Rust's checks fail; the frames have stopped the session exactly where the model's run has; and every other rep
+stream of the setup is on another rep. -/
 structure RoundFacts {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (seen : List String)
     (stream : String) (n i r : Nat) (dom : ByteArray) (v : Claims.Msg) (σ : LoopAt) : Prop where
   coins : M.L.coins M.x (M.hist σ.c).length = n
@@ -172,15 +172,16 @@ structure RoundFacts {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : Sess
   other : ∀ i' r' s', (i', r', s') ∈ spec.repStreams.toList → s' ≠ stream → (i', r') ≠ (i, r)
 
 /-- **The frame round's slot case**: where each of the run's messages is the deferred release's (`LoopModel.Own`),
-`RoundFacts` holds at each request at the slot as the loop answers it, the rep's frame at the model's configuration
-and the round out, and `J` is kept there, what the relay read for the round is the model's next message, and `LoopP`
+`RoundFacts` holds at each request at the slot as the loop answers it, the run having a message there, the rep's frame
+at the model's configuration and the round out, and `J` is kept there, what the relay read for the round is the
+model's next message, and `LoopP`
 holds at the session's next request, one model message on: the round's rep frame's puts touch no other rep's frame,
 so each rep of a stream with no round yet stays fresh. -/
 theorem slotCase_round {W Rr : Type} {M : LoopModel W Rr} {J : List String → State → LoopAt → Prop} {sid : Nat}
     {spec : SessionSpec} {sts : Array Stmt} {nonce : ByteArray} {stream : String} {n : Nat} (hOwn : M.Own)
     (hA : ∀ (seen : List String) (st : State) (pl : Placed) (e : Env) (σ σ' : LoopAt) (i r : Nat) (dom : ByteArray)
       (v : Claims.Msg), slot st pl = some (.round stream n) → LoopFacts sid spec seen st pl σ → J seen st σ →
-      M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) →
+      σ.c < M.τ.length → M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) →
       RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R →
       (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) → (∃ o, e.round = .ok o) →
       RoundFacts M sid spec seen stream n i r dom v σ)
@@ -197,7 +198,7 @@ theorem slotCase_round {W Rr : Type} {M : LoopModel W Rr} {J : List String → S
     obtain rfl : Session.Kind.round stream n = k' := Option.some.inj (hsl.symm.trans hk')
     have hJ' := hJ seen st pl e σ _ hsl (hset e List.mem_cons_self) hF hj hra
     obtain ⟨⟨hlt, -⟩, ⟨i, r, dom, v, hv, hr, hpc⟩, hcc, -⟩ := hra
-    have hRA := fun o (ho : e.round = .ok o) => hA seen st pl e σ _ i r dom v hsl hF hj hv hr hpc ⟨o, ho⟩
+    have hRA := fun o (ho : e.round = .ok o) => hA seen st pl e σ _ i r dom v hsl hF hj hlt hv hr hpc ⟨o, ho⟩
     have hreq := request_round_slot hF.reach hF.live hsl
     refine ⟨fun _ => ?_, fun hgo => ?_⟩
     · intro c hc

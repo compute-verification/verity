@@ -122,12 +122,12 @@ theorem roundFacts_loop {T : ZKMal.CoinLayer.TableData}
     unfold Loop.loopNr
     rw [Loop.reqOf_eq hD.setup, ← hJ.plan hsent]
     unfold reqAt
-    rw [if_neg hop, Array.getD_eq_getD_getElem?, hq, Option.getD_some]
+    rw [ite_eq_right hop, Array.getD_eq_getD_getElem?, hq, Option.getD_some]
   have hkind : M.L.kindAt M.x (M.hist σ.c).length = .masked := by
     have h0 : (M.hist σ.c).length ≠ 0 := by omega
     have h1 : ¬((M.hist σ.c).length = 1 ∨ (M.hist σ.c).length = M.L.last M.x) := by omega
     unfold LeanRelease.kindAt
-    rw [if_neg h0, if_neg h1]
+    rw [ite_eq_right h0, ite_eq_right h1]
   obtain ⟨hk, hmem⟩ := round_rep hsl hF hJ hr.rep_eq hlt hD.names
   obtain ⟨o, hro⟩ := ho
   obtain ⟨q, pc, f, nd, hrp⟩ := roundPlace_of_out
@@ -157,7 +157,8 @@ theorem roundFacts_loop {T : ZKMal.CoinLayer.TableData}
       exact .inr ⟨hnd, hP.inner hnd hst⟩
   · cases hsn : seen.contains stream
     · have hpF := fresh_found (hF.fresh i r stream hmem hsn) hfd
-      rw [roundPlace_first hfd hrp, hpF.coins, hpF.st] <;> rfl
+      rw [roundPlace_first hfd hrp, hpF.coins, hpF.st]
+      rfl
     · obtain ⟨p', _, _, _, hf', -, -, -, hS1, -⟩ := hJ.reps i r stream hmem hsn
       obtain ⟨_, _, _, _, _, _, _, _, -, -, -, -, -, -, hI⟩ := hS1 hk.symm
       exact (sameInv_place hI hf' hrp).1

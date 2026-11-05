@@ -13,11 +13,16 @@ frame is kept; so `LoopJ` is kept there given `RoundFacts` and `RepJ` of the rou
 * `rep_at`, `rep_index`: rep stream `2 * i + r` is table `i`'s rep `r`. `rep_eq`: two rep streams at one index are
   one. `rep_of_name`: where the rep streams' names are distinct, two of one name are at one index.
 * `locate_fst_succ`: the next round's stream is at or after this round's.
-* **`round_rep`**: a frame round's rep is the model's next round's rep stream, among the setup's.
+* **`round_rep`**: a frame round's rep is the model's next round's rep stream, among the setup's. `repJ_cur`: past
+  its stream's first round the rep has `RepJ`; `freshAt_cur`: at it, the rep's frame is fresh.
 * `seenAt_round`: a round of the model's next round's stream keeps `SeenAt` one round on.
 * `streamAt_old`, `repJ_old`: a rep stream before the next round's has `StreamAt` vacuously one round on, so its
   `RepJ` is kept by updates that keep its frame and what the session's rounds read.
-* `LoopModel.hist_succ`: the history one message on. `stopped_roundRun`: the session's stop one frame round on.
+* `LoopModel.hist_succ`: the history one message on.
+* `opens_snd`, `frameAnswer_snd`, `tookEarlier_snd`, **`answered_snd`**: the coins' answer reads the history only
+  through its answers, where the frame's states and the transport's coins do; so at the loop's own frames
+  (`ofLoop_answered_snd`), and `SameInv` with it (`sameInv_hist`, `sameInv_snd`).
+* `stopped_roundRun`: the session's stop one frame round on.
 * **`loopKept_round`**: `LoopJ` is kept at a frame round, given `RoundFacts` there and the round's rep's `RepJ` at the
   session's next request.
 -/
@@ -134,6 +139,30 @@ theorem round_rep {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Session
     rw [← rep_at hek]
     exact rep_of_name hnd hmem hmk
 
+/-- **Past its stream's first round, a frame round's rep has `RepJ`**: its stream is seen (`SeenAt`). -/
+theorem repJ_cur {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
+    {seen : List String} {st : State} {pl : Placed} {σ : LoopAt} {stream : String} {n i r : Nat}
+    (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
+    (hJ : LoopJ M sid spec sts seen st σ) (hrep : streamRep st stream = (i, r)) (hlt : σ.c < M.τ.length)
+    (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup) (hpos : 0 < (nextAt spec sts (M.hist σ.c)).2) :
+    RepJ M sid spec sts i r σ := by
+  obtain ⟨hk, hmem⟩ := round_rep hsl hF hJ hrep hlt hnd
+  exact hJ.reps i r stream hmem ((hJ.seenAt i r stream hmem).2 hk hpos)
+
+/-- **At its stream's first round, a frame round's rep's frame is fresh**: its stream is not seen (`SeenAt`). -/
+theorem freshAt_cur {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
+    {seen : List String} {st : State} {pl : Placed} {σ : LoopAt} {stream : String} {n i r : Nat}
+    (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
+    (hJ : LoopJ M sid spec sts seen st σ) (hrep : streamRep st stream = (i, r)) (hlt : σ.c < M.τ.length)
+    (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup) (h0 : (nextAt spec sts (M.hist σ.c)).2 = 0) :
+    FreshAt σ.R sid i r := by
+  obtain ⟨hk, hmem⟩ := round_rep hsl hF hJ hrep hlt hnd
+  refine hF.fresh i r stream hmem ?_
+  cases hc : seen.contains stream
+  · rfl
+  · exfalso
+    rcases (hJ.seenAt i r stream hmem).1 hc with h | ⟨-, h⟩ <;> omega
+
 /-- **A round of the model's next round's stream keeps `SeenAt` one round on**: where that stream is table `i`'s rep
 `r`'s, `s`, the rep streams' names are distinct, and the history `h'` is one message past `h`, past the `Commit`, the
 streams seen and `s` are those with a round before the model's next at `h'`. -/
@@ -217,6 +246,143 @@ theorem LoopModel.hist_succ {W Rr : Type} (M : LoopModel W Rr) {j : Nat} (hj : j
     List.map_nil]
   exact ⟨_, rfl⟩
 
+/-- The history's later answers, decoded alike, where its answers are alike. -/
+theorem tail_snd {β : Type} {h h' : List (Msg × Msg)} (hs : h.map Prod.snd = h'.map Prod.snd) (g : Msg → β) :
+    h.tail.map (fun p => g p.2) = h'.tail.map (fun p => g p.2) := by
+  have e : ∀ l : List (Msg × Msg), l.map (fun p => g p.2) = (l.map Prod.snd).map g := by
+    intro l
+    induction l with
+    | nil => rfl
+    | cons b l ih => exact congrArg (g b.2 :: ·) ih
+  have e' : ∀ l : List (Msg × Msg), l.tail.map (fun p => g p.2) = (l.map Prod.snd).tail.map g := by
+    intro l
+    cases l with
+    | nil => rfl
+    | cons b l => exact e l
+  rw [e', e', hs]
+
+/-- The configuration reads the history only through its length. -/
+theorem cfg_length {W Rr : Type} (L : LeanRelease W Rr) (x : Msg) (ρ : Rr) {h h' : List (Msg × Msg)}
+    (hl : h.length = h'.length) : L.cfg x ρ h = L.cfg x ρ h' := by
+  unfold LeanRelease.cfg
+  rw [hl]
+
+/-- **The transport's coin check reads the history only through its answers.** -/
+theorem opens_snd {W Rr : Type} (L : LeanRelease W Rr) (x : Msg) (ρ : Rr) {h h' : List (Msg × Msg)}
+    (hs : h.map Prod.snd = h'.map Prod.snd) : L.opens x ρ h = L.opens x ρ h' := by
+  match h, h', hs with
+  | [], [], _ => rfl
+  | [(_, _)], [(_, _)], _ => rfl
+  | (_, a) :: o :: ops, (_, a') :: o' :: ops', hs =>
+    simp only [List.map_cons, List.cons.injEq] at hs
+    obtain ⟨rfl, ho, hops⟩ := hs
+    simp only [LeanRelease.opens, List.map_cons, ho, hops]
+  | [], _ :: _, hs => simp at hs
+  | _ :: _, [], hs => simp at hs
+  | [_], _ :: _ :: _, hs => simp at hs
+  | _ :: _ :: _, [_], hs => simp at hs
+
+/-- **The frame's taking of the coins reads the history only through its answers**, where the frame's states and the
+transport's coins do. -/
+theorem frameAnswer_snd {W Rr : Type} (L : LeanRelease W Rr) {x : Msg} {ρ : Rr}
+    (hp : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.prog x h = L.prog x h')
+    (hf : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.fresh x h = L.fresh x h')
+    (hc : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.coinsOf x h = L.coinsOf x h')
+    {h h' : List (Msg × Msg)} (hs : h.map Prod.snd = h'.map Prod.snd) :
+    L.frameAnswer x ρ h = L.frameAnswer x ρ h' := by
+  have k : ∀ (e : Msg × Msg) (t : List (Msg × Msg)), L.frameAnswer x ρ (e :: t) =
+      LeanRelease.takeAt (e :: t).length (decide (L.rep x (e :: t).length = L.rep x ((e :: t).length - 1)))
+        (L.cfg x ρ (e :: t)) (L.cfgAt x ρ ((e :: t).length - 1)) (L.prog x (e :: t)) (L.fresh x (e :: t))
+        (L.coinsOf x (e :: t)) := by
+    intro e t
+    unfold LeanRelease.frameAnswer
+    cases hg : (e :: t).getLast? with
+    | none => simp at hg
+    | some _ => rfl
+  have hl : h.length = h'.length := by simpa using congrArg List.length hs
+  match h, h', hs, hl with
+  | [], [], _, _ => rfl
+  | [], _ :: _, hs, _ => simp at hs
+  | _ :: _, [], hs, _ => simp at hs
+  | e :: t, e' :: t', hs, hl =>
+    rw [k, k, hp _ _ hs, hf _ _ hs, hc _ _ hs, cfg_length L x ρ hl, hl]
+
+/-- **Whether the frame took every earlier round's coins reads the history only through its answers**, where the
+frame's states and the transport's coins do. -/
+theorem tookEarlier_snd {W Rr : Type} (L : LeanRelease W Rr) {x : Msg} {ρ : Rr}
+    (hp : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.prog x h = L.prog x h')
+    (hf : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.fresh x h = L.fresh x h')
+    (hc : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.coinsOf x h = L.coinsOf x h')
+    {h h' : List (Msg × Msg)} (hs : h.map Prod.snd = h'.map Prod.snd) :
+    L.tookEarlier x ρ h = L.tookEarlier x ρ h' := by
+  have hl : h.length = h'.length := by simpa using congrArg List.length hs
+  unfold LeanRelease.tookEarlier
+  rw [hl]
+  congr 1
+  funext j
+  rw [frameAnswer_snd L hp hf hc (h := h.take j) (h' := h'.take j) (by rw [List.map_take, List.map_take, hs])]
+
+/-- **The coins' answer reads the history only through its answers**, where the frame's states and the transport's
+coins do: the transport's coin check (`opens_snd`), the earlier rounds' coins (`tookEarlier_snd`) and the last's
+(`frameAnswer_snd`). -/
+theorem answered_snd {W Rr : Type} (L : LeanRelease W Rr) {x : Msg} {ρ : Rr}
+    (hp : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.prog x h = L.prog x h')
+    (hf : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.fresh x h = L.fresh x h')
+    (hc : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.coinsOf x h = L.coinsOf x h')
+    {h h' : List (Msg × Msg)} (hs : h.map Prod.snd = h'.map Prod.snd) :
+    L.answered x ρ h = L.answered x ρ h' := by
+  unfold LeanRelease.answered
+  rw [opens_snd L x ρ hs, tookEarlier_snd L hp hf hc hs, frameAnswer_snd L hp hf hc hs]
+
+/-- **At the loop's own frames the coins' answer reads the history only through its answers**: the frame's states
+are of the decoded coins (`ofLoop_progReads`), and so are the transport's coins (`loop_coinsRead`). -/
+theorem ofLoop_answered_snd (T : ZKMal.CoinLayer.TableData)
+    (L₀ : LeanRelease Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
+    (real : Msg → Claims.Flock.Wit →
+      (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
+      Nat → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (x : Msg)
+    (ρ : (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)
+    {h h' : List (Msg × Msg)} (hs : h.map Prod.snd = h'.map Prod.snd) :
+    (LeanRelease.ofLoop T L₀ real).answered x ρ h = (LeanRelease.ofLoop T L₀ real).answered x ρ h' := by
+  refine answered_snd _ (fun h h' hs => ?_) (fun h h' hs => ?_) (fun h h' hs => ?_) hs
+  · exact congrArg (Loop.progOf x) (tail_snd hs ZKMal.CoinLayer.rd)
+  · exact congrArg (Loop.freshOf x) (tail_snd hs ZKMal.CoinLayer.rd)
+  · rcases h with _ | ⟨⟨m, a⟩, t⟩ <;> rcases h' with _ | ⟨⟨m', a'⟩, t'⟩
+    · rfl
+    · simp at hs
+    · simp at hs
+    · exact (LeanRelease.loop_coinsRead Loop.loopNr T (LeanRelease.withFrames T L₀ real) x m a t).trans
+        ((congrArg (Loop.readCoins x) (tail_snd hs ZKMal.CoinLayer.rd)).trans
+          (LeanRelease.loop_coinsRead Loop.loopNr T (LeanRelease.withFrames T L₀ real) x m' a' t').symm)
+
+/-- **`SameInv` reads the history only through the configuration and the coins' answer there.** -/
+theorem sameInv_hist {W Rr : Type} {L : LeanRelease W Rr} {x : Msg} {ρ : Rr} {h h' : List (Msg × Msg)}
+    {cs : List FlockDeploy.Coin} {q j : Nat} {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray}
+    {xs : Array (Array _root_.Flock.F128)} {hi : Array ByteArray} {pre : List _root_.Flock.Firewall.Frame.Req}
+    {ev : List (Nat × ByteArray × _root_.Flock.Firewall.Frame.Place × Array _root_.Flock.F128)} {p : Rep}
+    (hc : L.cfg x ρ h' = L.cfg x ρ h) (ha : L.answered x ρ h' = L.answered x ρ h)
+    (hI : SameInv L x ρ h cs q j t dom xs hi pre ev p) : SameInv L x ρ h' cs q j t dom xs hi pre ev p :=
+  ⟨hI.run, hI.cfg.trans hc.symm, fun m hm => hI.st m (ha.symm.trans hm), hI.coins, hI.inv⟩
+
+/-- **At the loop's own frames `SameInv` reads the history only through its answers.** -/
+theorem sameInv_snd {T : ZKMal.CoinLayer.TableData}
+    {L₀ : LeanRelease Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
+    {real : Msg → Claims.Flock.Wit →
+      (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
+      Nat → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)} {x : Msg}
+    {ρ : (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand}
+    {h h' : List (Msg × Msg)} (hs : h.map Prod.snd = h'.map Prod.snd) {cs : List FlockDeploy.Coin} {q j : Nat}
+    {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray} {xs : Array (Array _root_.Flock.F128)}
+    {hi : Array ByteArray} {pre : List _root_.Flock.Firewall.Frame.Req}
+    {ev : List (Nat × ByteArray × _root_.Flock.Firewall.Frame.Place × Array _root_.Flock.F128)} {p : Rep}
+    (hI : SameInv (LeanRelease.ofLoop T L₀ real) x ρ h cs q j t dom xs hi pre ev p) :
+    SameInv (LeanRelease.ofLoop T L₀ real) x ρ h' cs q j t dom xs hi pre ev p :=
+  sameInv_hist (cfg_length _ x ρ (h := h') (h' := h) (by simpa using (congrArg List.length hs).symm))
+    (ofLoop_answered_snd T L₀ real x ρ hs).symm hI
+
 /-- **The session's stop one frame round on**: at a frame round with `RoundFacts` that releases, whose coins the
 auditor answered and the session and the rep's frame took, the loop's frames at the session's next request have
 stopped the session exactly where a round up to this one failed. -/
@@ -254,7 +420,7 @@ theorem loopKept_round {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
     {nonce : ByteArray} {stream : String} {n : Nat} (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup)
     (hA : ∀ (seen : List String) (st : State) (pl : Placed) (e : Env) (σ σ' : LoopAt) (i r : Nat) (dom : ByteArray)
       (v : Claims.Msg), slot st pl = some (.round stream n) → LoopFacts sid spec seen st pl σ →
-      LoopJ M sid spec sts seen st σ → M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) →
+      LoopJ M sid spec sts seen st σ → σ.c < M.τ.length → M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) →
       RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R →
       (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) → (∃ o, e.round = .ok o) →
       RoundFacts M sid spec seen stream n i r dom v σ)
@@ -271,7 +437,7 @@ theorem loopKept_round {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
   obtain ⟨hsent, hop, -, -⟩ := slot_round hsl
   have hreq := request_round_slot hF.reach hF.live hsl
   obtain ⟨⟨o, hro⟩, a, hae, hb, hsa, hco⟩ := stepK_round_go hF.reach hF.live hsl hgo
-  have hRA := hA seen st pl e σ σ' i r dom v hsl hF hJ hv hr hpc ⟨o, hro⟩
+  have hRA := hA seen st pl e σ σ' i r dom v hsl hF hJ hlt hv hr hpc ⟨o, hro⟩
   have hk : (Except.ok (.round stream n) : Except String _root_.Flock.Firewall.Session.Kind) ≠ .ok .hello := by
     intro h
     cases h
