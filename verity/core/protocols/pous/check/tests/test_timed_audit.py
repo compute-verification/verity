@@ -1,4 +1,4 @@
-"""`timed_audit.py`: `pous-timed-audit` gives `memory_challenger.verdict`'s verdict on every generated record and its
+"""`timed_audit.py`: `pous-timed-audit` gives the memory challenger's `timed_audit.verdict`'s verdict on every generated record and its
 negative controls, a difference is reported, on the deployment's record (eight segments, twenty audits) and on the strict
 memory challenger's own documents; and a replay names what a run's record lacks."""
 
@@ -71,7 +71,7 @@ def test_the_deployments_record_agrees_from_its_files():
 
 
 def _live(tmp_path, limit_ns: int, wrong=lambda i: False):
-    """`memory_challenger.py --strict`'s document of `p2-16448/v4` at its registered point (one segment) against a responder
+    """The memory challenger's `timed_audit.py --strict`'s document of `p2-16448/v4` at its registered point (one segment) against a responder
     whose labels match the leaves (but for the indices `wrong` picks, answered with zeros), with its ready file and leaves."""
     import hashlib
 
