@@ -5,7 +5,8 @@
 # the served y's openings and unscale (`PearlCUnscale_v1`), and an accepted run's credit at Pearl's assumption; and the
 # verdict as a core protocol on the caller's blobs (`PouwCheck.PearlPlus.Protocol`, remote's work component). It is code,
 # so it requires nothing of `Security/`: PoUW's commitments (`pouw_commit`), the evaluator's FP32, FP8 and tensor-core
-# steps (`verity_evaluate`) and the core interface (`core_protocol`). `pouw-pearlplus` reads a run's pass files and its
+# steps (`verity_evaluate`), the core interface (`core_protocol`), and a live session's coins as PoUW's window reads them
+# (`pouw_window`, with the proof system's challenger). `pouw-pearlplus` reads a run's pass files and its
 # coins and prints the verdict; `benchmarks/pouw/pearlplus_lean` holds it to the Python.
 name = "pouw_pearlplus"
 defaultTargets = ["PouwPearlPlus", "pouw-pearlplus"]
@@ -25,6 +26,10 @@ path = "../../../../primitives/evaluate"
 [[require]]
 name = "core_protocol"
 path = "../../../interface"
+
+[[require]]
+name = "pouw_window"
+path = "../window"
 
 [[lean_lib]]
 name = "PouwPearlPlus"

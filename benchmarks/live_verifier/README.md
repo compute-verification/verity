@@ -60,11 +60,12 @@ pin, not because of where they came from. A run binds to a role once the pinned 
 The same `host.py`, pinned under `/opt/vy-compose/<commit>` (its `pins.jsonl`, `/var/lib/vy-compose`), is
 `vy-compose-gate`, which serves one verb: `compose`, a served run's final record and composite composed off the served
 node from its compose hand-off. The lane's own gate key is forced to `vy-compose-gate --ssh "$SSH_ORIGINAL_COMMAND"
---key LANE` for `auditor` (`restrict`, and `from=` the hosts that send hand-offs), and the sender is
+--key LANE` for `research` on the auditor host's public address (`restrict`, and `from=` the hosts that send
+hand-offs), and the compose itself runs as `auditor`, and the sender is
 `served_verdicts.sh gate-compose`, which runs:
 
 ~~~sh
-tar --create --files-from=private/compose/inputs.txt --file=- | ssh -i ~/.ssh/vllm_gate_ed25519 auditor@vy-auditor-2 compose
+tar --create --files-from=private/compose/inputs.txt --file=- | ssh -i ~/.ssh/vllm_gate_ed25519 research@204.12.191.199 compose
 ~~~
 
 At pin time, as `auditor`, infra builds the tree's venv (`uv sync --all-packages --extra torch-cpu`) and the Lean

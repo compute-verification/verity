@@ -63,7 +63,9 @@ Pearl+'s by the value's own name. R7 takes its domain and root from W's entry, s
 roots (each pinned at W's entry, `interface.registered_reads`) and nothing of them is registered afresh. Their readers are
 sampled like any other proof block (under ``stratified:K``, a stratum a table), never proved whole as an output class. The
 summary's ``tie`` names W, and for Pearl+'s W what holds its roots to the ones its passes credited: Pearl+'s verdict, the
-prover's development verifier (`PEARL_CREDIT`).
+prover's development verifier (`PEARL_CREDIT`). Once the records are read and before any proof, a ``TIE`` line and
+``OUT/tie.json`` name W too, with the registration's ``previous`` and whether it is W's digest (``chained``), so an
+audit stopped before its proofs end still says what it was tied to.
 
 The negatives (`negatives` before the sample, a5's after it) cost Lean verifies of their own; ``--skip-negatives`` leaves
 them out of an audit (its summary says so), for a run of several audits of one circuit, which runs them in its first.
@@ -849,6 +851,10 @@ def audit(a: argparse.Namespace) -> int:
     a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else (),
                              own=set(ties) | set(untied) | set(tie_pins))
     a.tie = tied
+    if tied:
+        named = {**tie_row(tied), "previous": rec.get("previous"), "chained": rec.get("previous") == R.digest(tied["log"][0])}
+        (out / "tie.json").write_text(json.dumps(named, indent=1, sort_keys=True))
+        print("TIE " + json.dumps(named, sort_keys=True), flush=True)
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
     manager, a.coins, finisher = AC.start(a.challenger, mine.run, [0], out / "challenger", a.main, ssh_key=a.gate_key,

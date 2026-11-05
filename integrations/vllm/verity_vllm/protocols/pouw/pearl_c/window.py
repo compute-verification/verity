@@ -11,7 +11,8 @@ committed rows of K FP32 words, at its ``root_a``, under `audit.activation_bindi
 rows of 32-bit words, the entries `verify_run.tie` holds to each call's root and recomputed domain.
 
 ``served_passes.py retain --window-record W`` writes it: it drops the warm-up's rounds, writes the retention, then W over
-the rounds it retains.
+the rounds it retains. It reads the served run's ``served.json`` (`SERVED_SCHEMA`: its passes as `served_passes` records
+them, and its coins, `coins_of`), which ``served_passes.py serve`` and serve-openai's Pearl+ arm (`serve_pearl`) write.
 
 The audited window's registration, chained right after W, registers each value as W's (`reuse`): the rows the audited
 circuit's proof blocks make of it, committed as Pearl+ committed them, so its entry is W's, and one-stage's R7 takes it
@@ -35,6 +36,44 @@ from verity_vllm.protocols.pouw.pearl_c import served_y as SY
 
 #: the width of a word of A's and y's committed rows: each BF16 word widened to FP32
 WORD_BITS = 32
+#: a served run's document: its passes (`served_passes`) and its coins (`coins_of`)
+SERVED_SCHEMA = "verity-pouw/pearl-c-served-passes/v1"
+#: what a served pass's record keeps of its device run's pass (`PearlCDeviceRun.details` ``passes``)
+KEEP = ("units", "base", "tiles", "screened_rows", "failing_rows", "unsure_rows", "excluded_rows", "transcript_root",
+        "activation_roots", "schedule", "manifest")
+
+
+def macs(manifest: str | None) -> int | None:
+    """A retained pass's linear MACs, its calls' real rows × n × k from its manifest; None without one."""
+    if not manifest:
+        return None
+    return sum(u["real_rows"] * u["n"] * u["k"] for u in json.loads(Path(manifest).read_text())["matmuls"])
+
+
+def served_passes(passes: Sequence[Mapping[str, Any]], warm: int = 0) -> list[dict[str, Any]]:
+    """A served run's passes (its device run's ``details["passes"]``, in order) as ``served.json`` records them: each one's
+    number (its ``pass-NNNNN``), whether the timed call made it (all but the first ``warm``, a warm-up's), what `KEEP`
+    keeps of it and its `macs`."""
+    return [{"pass": i, "timed": i >= warm, **{k: p[k] for k in KEEP if k in p}, "macs": macs(p.get("manifest"))}
+            for i, p in enumerate(passes)]
+
+
+def coins_of(option: Any, reserved: Any = None) -> dict[str, Any]:
+    """Where the PoUW option ``option`` took its salt coin: its ``coin_source``, the gate's answer it carries (``session``,
+    no secret), its salt epoch's number (``pass_index``) and the root its salt coin follows (that epoch's root over the
+    weights' root, `salt.epoch_open_root`; the weights' root for a coin held in-process), its salt, how its session closed
+    (``details.challenger``, once the engine has closed) and the session head a retained pass's manifest names
+    (``manifest_head``, `pearl_c.manifest.session_head`); ``reserved`` the gate's reserve answer, when one was taken."""
+    from verity.core.protocols.pouw import salt as PS
+
+    from verity_vllm.protocols.pouw.pearl_c.manifest import session_head
+
+    c = option.commitment()
+    k, w = c.get("pass_index"), c.get("weights_root")
+    after = w if k is None or w is None else PS.epoch_open_root(bytes.fromhex(w), k).hex()
+    return {"source": c.get("coin_source", "in-process"), "reserved": reserved, "session": c.get("session"),
+            "pass_index": k, "weights_root": w, "salt_after": after, "salt": c.get("salt"),
+            "closed": option.info().get("challenger"), "manifest_head": session_head(c)}
 
 
 def a_value(s: int, c: int) -> str:
@@ -158,4 +197,5 @@ def reuse(w: Mapping[str, Any], manifests: Sequence[Mapping[str, Any]],
     return out
 
 
-__all__ = ["WORD_BITS", "Committed", "a_value", "entries", "record", "reuse", "write", "y_value"]
+__all__ = ["KEEP", "SERVED_SCHEMA", "WORD_BITS", "Committed", "a_value", "coins_of", "entries", "macs", "record", "reuse",
+           "served_passes", "write", "y_value"]
