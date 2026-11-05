@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.PiopSrcVals
-import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
+module
+
+public import Proofs.Flock.Claims.ZK.PiopSrcVals
+public import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
 
 /-!
 # The deployed source's lincheck values at the opened coins
@@ -15,6 +17,8 @@ session's pads.
   `lcCoins` round coins, so the cut's honest lincheck message is `lcMsg` at the executable's coins.
 * `Masked.src_lc0`, `src_lc1`, `src_zp`: `PiopSrc`'s lincheck fields at the deployed source.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay.Lc
 

@@ -3,8 +3,14 @@
 outputs and `hm96-sha512/v1` leaves whose verifier holds its own registered reads. Without them, at public outputs and on
 plain SHA-512 leaves (a recursive session's inner statement) it is refused.
 -/
-import Flock.ProvedScope
-import Flock.Zk
+module
+
+public import Flock.ProvedScope
+public import Flock.Zk
+meta import Flock.ProvedScope
+meta import Flock.Zk
+
+@[expose] public section
 
 namespace Flock.Test.PlainShared
 

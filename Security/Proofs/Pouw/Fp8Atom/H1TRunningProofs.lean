@@ -1,6 +1,8 @@
-import Proofs.Pouw.Fp8Atom.H1TFlipProofs
-import Proofs.Pouw.Fp8Atom.H1TGammaProofs
-import Definitions.Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions
+module
+
+public import Proofs.Pouw.Fp8Atom.H1TFlipProofs
+public import Proofs.Pouw.Fp8Atom.H1TGammaProofs
+public import Definitions.Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions
 
 /-!
 # `DistinctLiveH1T` from the one-flip clauses and `H1TRunningWords`
@@ -11,6 +13,8 @@ and within a row the pairs split into those `H1TOneFlip` separates on half of th
 not a raw XOF word by `h1tNotRawWord`. Conversely `DistinctLiveH1T` gives `H1TRunningWords` at once, so the two are
 equivalent, and `h1tGamma` holds under `H1TRunningWords`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T.Proofs
 

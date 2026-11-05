@@ -1,4 +1,6 @@
-import Definitions.Accounting.TS.Play
+module
+
+public import Definitions.Accounting.TS.Play
 
 /-!
 # A window's proofs: what (I8) reads of the proof system (trusted)
@@ -36,6 +38,8 @@ for every prover. The relation and rightness read the path instead (`ProofLayer.
 relation reads σ_w (the salt its unit takes) and the keyed words its proofs give on the path, which it fixes from the
 round's leaves and σ_w, so they need no binding of their own.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS
 

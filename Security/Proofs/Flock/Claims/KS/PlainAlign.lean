@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ForkAlign
-import Proofs.Flock.Claims.KS.PlainForkClash
+module
+
+public import Proofs.Flock.Claims.KS.ForkAlign
+public import Proofs.Flock.Claims.KS.PlainForkClash
 
 /-!
 # The simulated fork's alignment, from the slot's coin count
@@ -22,6 +24,8 @@ comparison is the alignment alone, since the session's leaves record the cap of 
 * `PlainSlotQK`, `plainAlignQ_of_slotK`, `PlainSlotAlignK`, `plainForkAlign_of_slotK`: the same at `VK keep`
   (`plainSimAtK keep`, `plain_hdecAtK keep`, `plain_hdecHAtK keep`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

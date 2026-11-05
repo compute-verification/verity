@@ -1,5 +1,7 @@
-import Definitions.Accounting.Guarantees.FillerLuck
-import Proofs.Accounting.TS.Rounds
+module
+
+public import Definitions.Accounting.Guarantees.FillerLuck
+public import Proofs.Accounting.TS.Rounds
 
 /-!
 # The filler's per-check luck
@@ -12,6 +14,8 @@ equality is read mod 2 through `φ`. A tile's cell is the cell lemma at each set
 A pinned receipt's draw passes with probability at most one less its wrong share at every setting of the live coins
 (`prob_le_one_sub_not`, `sum_pinned_le`), so its windows are the same inductions at `p = 0`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.FillerLuck
 
@@ -287,7 +291,7 @@ theorem sum_exp_le {Ω : Type} [Fintype Ω] (q : Ω → Prop) (v : ℝ) (h : pro
 
 theorem sum_ite_mono {Ω : Type} [Fintype Ω] (p q : Ω → Prop) (h : ∀ a, p a → q a) (f : Ω → ℝ)
     (hf : ∀ a, 0 ≤ f a) :
-    (∑ a, (by classical exact if p a then f a else 0)) ≤ ∑ a, (by classical exact if q a then f a else 0) := by
+    (∑ a, (by classical exact if p a then f a else 0 : ℝ)) ≤ ∑ a, (by classical exact if q a then f a else 0 : ℝ) := by
   classical
   refine sum_le_sum fun a _ => ?_
   by_cases hp : p a

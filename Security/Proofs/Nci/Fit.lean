@@ -1,4 +1,6 @@
-import Definitions.Nci.Guarantees.Fit
+module
+
+public import Definitions.Nci.Guarantees.Fit
 
 /-!
 # Proof of the fit bound
@@ -16,6 +18,8 @@ multiplications in a window number at most `reuse` per slot it uses there (`card
 `FitBound` is the case of one slot per weight gate (`idSlots`): for a slot map one-to-one on the weight gates,
 `FitsSlots` is `Fits` and `ReachSlots` is `Reach` (`fitsSlots_iff`, `reachSlots_iff`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs.Fit
 

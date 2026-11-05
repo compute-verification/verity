@@ -1,5 +1,7 @@
-import Definitions.Nci.Guarantees.Layered
-import Proofs.Nci.Threads
+module
+
+public import Definitions.Nci.Guarantees.Layered
+public import Proofs.Nci.Threads
 
 /-!
 # Proofs that keyed circuits are threaded
@@ -12,6 +14,8 @@ them when it reads less than `(E + 1) · b` bits (`lookupsIn_bits`). A subcircui
 `t` thus holds no root of `t`, and each of `t`'s counted multiplications in `R` is charged to a read (at most `e` each)
 or to a lookup (at most `eLk` each), with a lookup costing a read of its token (`threaded_of_layered`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

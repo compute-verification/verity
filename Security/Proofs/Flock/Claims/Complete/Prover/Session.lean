@@ -1,11 +1,13 @@
-import Proofs.Flock.Claims.Complete.Prover.Ligerito
-import Proofs.Flock.Claims.Complete.Prover.Print
-import Proofs.Flock.VBridge.Family.Encode
+module
+
+public import Proofs.Flock.Claims.Complete.Prover.Ligerito
+public import Proofs.Flock.Claims.Complete.Prover.Print
+public import Proofs.Flock.VBridge.Family.Encode
 
 /-!
 # The honest prover's session: the reps, the proof files and the record
 
-PROTOCOL.md §4–§8 and §16 from the prover's side, for the plain verifier (`verifyWithM`).
+`Flock.Tags`, `Flock.Record`, `Flock.Transcript`, `Flock.Draw`, `Flock.Proof`, `Flock.Statement` from the prover's side, for the plain verifier (`verifyWithM`).
 
 * **A rep** (`repP`): zerocheck, lincheck, the ring switch on `abcClaims ++ extras`, then Ligerito on the table's
   level-0 commitment for the batched claim `T`, from the rep's own transcript (`Transcript.init #[] domain`). The proof
@@ -24,6 +26,8 @@ PROTOCOL.md §4–§8 and §16 from the prover's side, for the plain verifier (`
 In deployment the coin server writes the record and draws the coin tree's key; here the prover writes what the server
 would, so the record is the honest server's.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

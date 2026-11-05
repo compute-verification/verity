@@ -1,5 +1,7 @@
-import Definitions.Pouw.PearlC.RowSem
-import Proofs.Pouw.PearlC.TileCircuit
+module
+
+public import Definitions.Pouw.PearlC.RowSem
+public import Proofs.Pouw.PearlC.TileCircuit
 
 /-!
 # The row tables compute a row's statistics, scales and forming (proofs)
@@ -31,6 +33,8 @@ are `RowSem`'s formulas on the row's inputs:
   RowA and RowB is `e4m3` of `pc8Form` at its row's values and codes (`codes8_sem`, `row8A_code_sem`, `row8B_code_sem`), and
   `pc8Sem`'s `α`, `β` and floor at a row of step words are the table's words read as values (`pc8Sem_scales`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.RowCircuit
 

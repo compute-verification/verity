@@ -1,4 +1,6 @@
-import Proofs.Hash.Bytes
+module
+
+public import Proofs.Hash.Bytes
 
 /-!
 # `Hash.SecurityProofs.TreeBinding : Hash.Guarantees.TreeBinding`
@@ -9,6 +11,8 @@ and index, with the climbing digest on the same side. The next digests are equal
 collided. Equal next digests come from one node message, whose children are then equal (`nodeMsg_inj`), or from two
 different node messages, which collide.
 -/
+
+@[expose] public section
 
 namespace Hash.BindingProofs
 

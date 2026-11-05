@@ -1,6 +1,8 @@
-import Proofs.Flock.SessionLoop.FinishParts
-import Proofs.Flock.SessionLoop.TakenVals
-import Proofs.Flock.Claims.ZK.FrameLive
+module
+
+public import Proofs.Flock.SessionLoop.FinishParts
+public import Proofs.Flock.SessionLoop.TakenVals
+public import Proofs.Flock.Claims.ZK.FrameLive
 
 /-!
 # `FillRoundEq` at the honest worker
@@ -24,6 +26,8 @@ The worker that sends the scheduled rounds with `vs'`'s values (`Loop.valsWk vs'
 of the round and `valsDev`'s round) reads the history only through its decoded coins at the loop's frames; the
 release's `cross` is Rust's own checks.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

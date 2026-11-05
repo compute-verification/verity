@@ -1,10 +1,12 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Defs
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Tail
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.V2
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Checked
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Upv
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Block
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Defs
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Tail
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.V2
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Checked
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Upv
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Block
 
 /-!
 # The widened hidden-output statements, one theorem each
@@ -14,6 +16,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Block
 * `outputs_committed_wide`, `outputs_binding_wide`: a population file with or without shared rows;
 * `…_checked`: each of them without `0 < st.c.upv`, which acceptance gives (`setupHidden_upv_pos`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hidden
 

@@ -1,4 +1,6 @@
-import Proofs.Properties.Nci.ReadsExact
+module
+
+public import Proofs.Properties.Nci.ReadsExact
 
 /-!
 # `ReadsExact.RootOneNode`, proved: a root read's gates are one root node's
@@ -19,6 +21,8 @@ gate is one of its gates (`locW_lt`), so shifted to a member's first gate it is 
 `rootN` reads it at the root, through `carriesRead_of`, and `rootOneNode_of` turns its nodes into the root's
 (`nodeGates_of_inNode`): with the decoder's facts, `RootOneNode` holds (`BodiesOk.rootOneNode`).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.ReadsExact
 open NciCheck.Desc (Piece Seg PS Tgt)
