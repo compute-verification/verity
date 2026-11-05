@@ -65,6 +65,13 @@ Trace: every `Queue: #N` merge on `checked`'s first-parent history (3114 merges,
 8. **Admission is the throughput cap**: about 4–5 a sync (CI-342), the sync's preflights on the control pod's 4 vCPUs
    within a 120 s budget; the calibrated model agrees (≤ 4 a pass).
 
+9. **Two dated causes.** Oct 29 (CI-239 live): `main` moves only to a fully checked `checked` commit, and
+   `nonlean_first`/`reviewed_first` went false (0442f57427). Nov 1 08:08Z (#6578 on `checked`, 5cf600223a): a PR joins
+   `next` only after its preflight passes inside the sync's budget, ≤ 4–5 a sync. Onto `checked`: 151–162/day Oct 31 –
+   Nov 1, 45–114/day after; 454 waiting by Monday. Each bought a real property (`main` always checked; `next` never
+   broken by a PR that fails preflight) by putting work on the serial path. The design keeps both and moves the work
+   off it: candidate trees checked before `main` by cached tasks; preflight at the mark on the fleet, admission a lookup.
+
 ## 2. Simulator (assumptions stated)
 
 `sim.py` replays the real ready marks (Oct 29 on, with the 247-PR backlog marked earlier) with each PR's real review
