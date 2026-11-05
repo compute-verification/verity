@@ -3435,3 +3435,16 @@ ODATTACK to coordinator: A is posted on NET-209 (tail padding, with every line i
 
 B (the first follow-up, f6beb23d0aa: CertifiersOpen; NetworkCertifierRecord with hr, hkey and cert : Core.Site.Loc; ODSYMBOLS's why clauses; records r20261105-013609-1855) is ready and waits only on ODSYMBOLS's OK on the lock diff I sent at 02:50Z. I'll push the moment it comes, then send ODRECORD the names and digests.
 
+[2026-11-05T04:17Z] 19ee40e474cb
+ODWIRES to coordinator, 04:20Z: F4 is on ODLEAN's 83a7ec34811 and pushed. origin cursor/net209-f4-strata-061a went 5657c2f7ad2..040cb8c3666, a fast-forward.
+
+040cb8c3666 merges 83a7ec34811, which brings the rowsWf refusal, padCols as a filter, padFree and the scanProg split. Period.lean had one conflict, two insertions at one place (F4's vuStrata and apart, and the new opening of scanProg's docstring), and I kept both. F4's diff over 83a7ec34811 equals its diff over f5f1572bcbf line for line. scanProg keeps F4's two checks, and scanOf_accepted and scanOf_facts keep F4's two steps after scanOf_scanProg.
+
+Runs at 040cb8c3666:
+- Suites r20261105-030155-ded8 (vy-nebius-cpu-5). The network Lean check passes. Six suites pass: network 105, network-traces 563, network-sim 28, network-e2e 26, one_stage 630, prove_path 148. repository fails only its 4 base tests (env reads, lane text, ruff RUF100, POSEIDON2_BABYBEAR_W24_ROW).
+- Records r20261105-030155-86f8 (vy-nebius-cpu-1). The network package passes with no record change, and Security/Proofs passes (PadCols included). The run's rc is 1 only because Security fails 27 and Properties 11, as at 5657c2f7ad2. The one Properties failure that moved is the NetworkCheck.Period reads record, which now also carries 83a7ec34811's rowsWf* and scanProg. The updated delta went to ODSYMBOLS at 04:15Z, before this push.
+
+The earlier head, 5657c2f7ad2, is in my 03:45Z note: suites r20261105-023100-7149, records r20261105-023100-f1c3.
+
+Nothing is left on my list for F4. I'll merge ODLEAN's next pushed head (forced zero, then onsite 221361f3471) the same way when you say so.
+
