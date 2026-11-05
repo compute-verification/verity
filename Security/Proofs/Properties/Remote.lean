@@ -283,6 +283,7 @@ theorem stage_zk_at {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.One
     ∃ r : SampledProofs.OneStageZk.Run,
       SampledProofs.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = .accept pub prof := by
   unfold SampledProofs.OneStageZk.checkBlobsAt at h
+  dsimp only at h
   split at h
   · cases h
   · rename_i r _

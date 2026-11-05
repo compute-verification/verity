@@ -3392,9 +3392,15 @@ def _tree(repo: Path, commit: str) -> str:
 
 #: the invariant tests the preflight runs on the merged tree, from the root, each a common way a train breaks: a module string
 #: naming a module only an unlanded PR adds, stale Lake pins, a doc path, a workspace member without its REAL_ROOTS entry, and
-#: `check`'s preflight-lints on test_repository.py (a skill over the Markdown cap, a report-genre name); about 5 s
+#: `check`'s preflight-lints on test_repository.py (a skill over the Markdown cap, a report-genre name); about 16 s on one core
+#: of the control pod, less `PREFLIGHT_DESELECT`
 PREFLIGHT_TEST_PATHS = ("tests/test_module_strings.py", "tests/test_pins.py", "tests/test_doc_paths.py",
                         "tests/test_repository.py", "tools/research/tests/test_pythonpath.py")
+#: tests of `PREFLIGHT_TEST_PATHS` the sync's preflight (`Preflight.onto`) leaves to the after-landing check: no merge makes
+#: what they find that neither side has, and they take long enough to run the rest out of its budget.  The secret-like literal
+#: scan takes about 14 s of the other tests' 16 s, so four preflights at once on the control pod's 4 vCPUs reached the 45 s
+#: budget before `tests/test_doc_paths.py` reported, and doc paths a merge broke entered `next`
+PREFLIGHT_DESELECT = ("tests/test_repository.py::test_no_secret_like_literals",)
 #: what the sync's preflight runs rather than judges: `PREFLIGHT_TEST_PATHS` and what they load from the tree (pytest's settings
 #: for the two directories they run in, the conftest of `tools/research/tests` (one added beside the root's tests belongs here
 #: too), `waits.py`, `pins.py` and the `suites.py` the module strings take the members' packages from, under
@@ -3415,6 +3421,8 @@ def _by_suite(paths: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]
 
 #: `PREFLIGHT_TEST_PATHS` by the directory pytest runs in
 PREFLIGHT_TESTS = _by_suite(PREFLIGHT_TEST_PATHS)
+#: `PREFLIGHT_DESELECT` by the directory pytest runs in
+PREFLIGHT_DESELECTS = dict(_by_suite(PREFLIGHT_DESELECT))
 #: lints the preflight runs on the merged tree only when the change reaches what they judge (a path starting with, or holding
 #: a directory, of the prefix): they take about 20 s and 40 s, and a train that fails one of them loses its hour-long check
 PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("integrations/vllm/tests/lint", ("integrations/vllm/",)))
@@ -3428,7 +3436,8 @@ PREFLIGHT_PYTEST = ("uv", "run", "-q", "--no-project", "--with", "pytest", "pyth
 #: what the sync's preflight leaves to others, said under "checks skipped" for each PR
 ONTO_SKIPS = ("the merged tree's environment and Lean build (`uv sync --locked`, the touched suites' `pytest --collect-only`, "
               "the lints, the Lean modules it reaches): the mark's preflight ran them at the head, the Lean checks of `next` "
-              "build its Lean, and the after-landing run tests it all")
+              "build its Lean, and the after-landing run tests it all, " + ", ".join(f"`{n}`" for n in PREFLIGHT_DESELECT)
+              + " among it")
 #: what the merged tree's checks may take together; what hasn't finished by then is named and refuses nothing.  Every suite's
 #: collection but circuit-check's takes about 18 s on 4 workers of a 4-core VM; `PREFLIGHT_LINTS` add up to a minute
 PREFLIGHT_BUDGET_S = 120.0
@@ -4396,7 +4405,8 @@ class Preflight:
         """{check: {what failed: its line}} for the checks of (b) on the tree checked out in ``wt`` (``only`` those named), each
         that ran by ``deadline``; why each other didn't run goes to ``notes``.  ``fixtures`` gets each collected suite's fetched
         fixtures on the first pass (``only`` None), and a later pass fetches them again.  ``quick``: `pins.py --stale` and
-        `PREFLIGHT_TESTS` alone, the tests run by ``python`` or `PREFLIGHT_PYTEST` with the tree's `research` on PYTHONPATH."""
+        `PREFLIGHT_TESTS` less `PREFLIGHT_DESELECT` alone, the tests run by ``python`` or `PREFLIGHT_PYTEST` with the tree's
+        `research` on PYTHONPATH."""
         want = (lambda name: True) if only is None else (lambda name: name in only)
         out: dict[str, dict[str, str]] = {}
 
@@ -4417,7 +4427,9 @@ class Preflight:
             bare = lambda argv, cwd: self._run(argv, cwd, deadline, path)             # noqa: E731
             for d, files in PREFLIGHT_TESTS:
                 if want(f"tests:{d}") and (present := [f for f in files if (wt / d / f).is_file()]):
-                    got(f"tests:{d}", pytest_failures(bare, self.python or PREFLIGHT_PYTEST, wt / d, present))
+                    off = [a for n in PREFLIGHT_DESELECTS.get(d, ()) if n.partition("::")[0] in present
+                           for a in ("--deselect", n)]
+                    got(f"tests:{d}", pytest_failures(bare, self.python or PREFLIGHT_PYTEST, wt / d, [*present, *off]))
             return out
         if self.sync is not None:
             r, why = self._run(list(self.sync), wt, deadline)
@@ -5277,14 +5289,19 @@ def review_owners(q: Queue, labels: StoreLabels, pr: int, head: str, owner: str 
     return {owner, q.handle(p), labels.ready_by(pr, head)}
 
 
+#: the after-landing steps whose tasks run test suites, so a `suite NAME` red record may be either's (`Driver._unit_states`)
+SUITE_STEPS = ("lean-suites", "pytest")
+
+
 def baseline(q: Queue, sha: str, by: str, steps: str | None = None) -> int:
     """`research queue baseline SHA --by ci [--steps STEP,...]`: record the landed branch (`checked`, `Queue.into`) at SHA as verified by the after-landing run
     (`drive["postland"]`), on the steps ci knows are green there (every after-landing step by default; with --steps, only those,
     as a red baseline run records: a later failure of another step reverts nothing), so the review landing lands without first running the after-landing run on that branch itself
     (`Driver._unbaselined`), and a later failure reverts only a landing above SHA.  When those steps cover every step on the merge
     gate there (not circuit-check: `Driver._gating`), drive moves `main` to SHA (`Driver._promote`).  It drops a bisection still open (it reverted
-    nothing), and is refused while a post-landing run runs, for a SHA the branch doesn't hold, and off drive (`/data/infra/drive.sh
-    queue baseline SHA --by ci` on the control pod)."""
+    nothing), ends each red record at or below SHA of a step it records (a `suite` record once it records every one of
+    `SUITE_STEPS`), as a run that passes it does (`Driver._green`), and is refused while a post-landing run runs, for a SHA the
+    branch doesn't hold, and off drive (`/data/infra/drive.sh queue baseline SHA --by ci` on the control pod)."""
     from .drive import AFTER_LANDING
 
     if _who(by) != "ci":
@@ -5312,9 +5329,20 @@ def baseline(q: Queue, sha: str, by: str, steps: str | None = None) -> int:
     pl["pending"] = [p for p in pl.get("pending", []) if not on(p, full)]
     if pl.get("failed") and on(pl["failed"], full):
         del pl["failed"]
+    ended = []
+    for key, r in list((pl.get("red") or {}).items()):
+        kind, _, name = key.partition(" ")
+        if not (all(s in green for s in SUITE_STEPS) if kind == "suite" else name in green) or not on(r["tip"], full):
+            continue
+        kept = pl.setdefault("green", {})
+        if kept.get(key) != full and (key not in kept or on(kept[key], full)):
+            kept[key] = full
+        del pl["red"][key]
+        ended.append(f"{key} (red at {r['tip'][:12]})")
     q.save_state(state)
     print(f"research queue: `{q.into}` {full[:12]} recorded as verified by the after-landing run, by {by}: the review landing lands "
-          f"on it; {len(pl['pending'])} landing(s) above it wait for their run")
+          f"on it; {len(pl['pending'])} landing(s) above it wait for their run"
+          + (f"; their red records end: {', '.join(ended)}" if ended else ""))
     return 0
 
 

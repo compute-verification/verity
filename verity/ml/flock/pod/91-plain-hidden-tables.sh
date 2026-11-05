@@ -3,7 +3,7 @@
 # (tests/plain_hidden.py: RoPE d64 instances with hidden outputs, hm96-sha512 leaves, its program and partition), proved
 # without --zk on OS coins in loopback sessions of two tables under a subset sample (`serve/prove --session-tables 2 --draw
 # subset:K`), then Lean's `flock-verify verify --plain-tables --session-tables 2 --coins os` on them with the verifier's
-# own program and partition (PROTOCOL.md §16.15, FailClosed.SoundExecHJ), and once without the flag. The staged files and
+# own program and partition (`Flock.ProvedScope`, FailClosed.SoundExecHJ), and once without the flag. The staged files and
 # the sessions go into the evidence store as a fixture (`research data put --kind fixture/v1 --preserve`), whose id
 # `out/fixture.txt` names (else they are out/fixture). Run from the verity tree (research run --cwd source or clone); CPU
 # only. Outputs under out/: host.txt, stage.json, serve.log, prove.txt, prove.err, lean-plain.log and lean-unflagged.log

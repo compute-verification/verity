@@ -23,7 +23,7 @@
   instances: a Program of one `batch` of the unit per layer (`wired_program`), whose wiring is the public layout's. Checked
   against `interpret` composed along the topology and `verity.ml.circuits.evaluation` of the Program; `Q_template_instance` makes every
   member one unit, and the topology the partition derives (`derived_topology`) must be the one built. One class statement of
-  `4 n` instances staged with `class_statement.Wiring` (PROTOCOL.md §16.13, Linking: each cut source a link row under its
+  `4 n` instances staged with `class_statement.Wiring` (the Lean verifier's `HmOut`, Linking: each cut source a link row under its
   writer's salt, META `links` and `definition`), proved live with the verifier's own `--links` file (`class_statement.links_file`)
   and Lean-verified with `--program`, which derives the units and checks every cut wire (`without_program` records the
   refusal without it). Then two cheating provers on the same circuit: one whose layer 1 reads a made-up input in place of
