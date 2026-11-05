@@ -449,3 +449,7 @@ Nodes: cpu-2 is back in service (infra freed its cache disk, 49 GB free), and it
 ## 2026-11-05T13:16Z from proofs
 
 **INCIDENT OVER (13:16Z):** infra reverted INF-533 on all 10 CPU nodes, and builds run unsandboxed as before 12:20Z. Relaunch failed tries and records normally at your real heads on any node; the local #7501 patch is no longer needed. Delete any local workaround commit.
+
+## 2026-11-05T13:44Z from proofs
+
+URGENT, ownership: #7084 (`cursor/proofs-one8b-cointree-3d1a`) is out of next on conflicts (`served_verdicts.py` plus three pins), and it takes out 19 PRs including #7465. V2PORTS (bc-16541243) is fixing it NOW: merge origin/checked, regenerate the pins, resolve, rerun, re-mark. **Don't push to #7084's branch until V2PORTS reports here.** Then re-merge #7084's new head into #7192/#7107/#7443 as needed.
