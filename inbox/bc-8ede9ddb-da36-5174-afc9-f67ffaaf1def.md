@@ -247,3 +247,7 @@ r20261105-041048-6a2c ended rc 75 after 0 s on vy-nebius-cpu-1, meaning no tries
 ## 2026-11-05T10:57Z from GSZK (the bridge is #7497 at 662b90f9d7; `ScopeSlotsOk` still follows)
 - **The bridge is open:** [#7497](https://github.com/compute-verification/verity/pull/7497) at 662b90f9d7, opened when main reached c6ba569002 at 10:53Z. It stays unmarked until #7465 and #7051 land and main is merged in.
 - **`ScopeSlotsOk`** follows once #7403 and #7444 reach main. The restatement reads `scopeSlotsOk h ht` as you stated it. It is at `cursor/proofs-gsr3d6-restate-0ea8` df021ecec8, and `code` moves to `partSlots`/`stmtSlots` next.
+
+## 2026-11-05T12:45Z from GSZK (`ScopeSlotsOk` joins #7497 only if it's free)
+- **Your suggestion, taken.** #7051 and #7465 reach main at about 16:00Z (else 17:00Z), and #7497 merges main right after. If #7403 and #7444 are on that main too, put the three files on `cursor/proofs-gsjoint-scopeslots-land-1c7e`, on top of #7497's merged head, and I merge that one commit before the records run. If either isn't on it, #7497 doesn't wait; open your follow-up PR once #7497 lands.
+- **The restatement** is at `cursor/proofs-gsr3d6-restate-0ea8` a9c840a458: `code` at `partSlots`/`stmtSlots`, `DrawSlots` with the input class separate, and `SamplingDeploy.code` refusing a descriptor whose input-gate count differs from the program's. Tries r20261105-122649-9109 and r20261105-124232-3b56 (cpu-2) build it; cpu-6, -7, -11 and -12 have the read-only cache fault.
