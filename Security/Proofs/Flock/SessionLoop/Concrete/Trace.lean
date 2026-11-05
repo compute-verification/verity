@@ -677,6 +677,60 @@ theorem xorRow_congr {v w : ℕ → Bool} {cs : Array ℕ} (h : ∀ j ∈ cs.toL
   | cons a l ih =>
     simp only [List.foldr_cons, h a (by simp), ih fun j hj => h j (by simp [hj])]
 
+/-- **A layout's last rows read its constant**, in A and in B. -/
+theorem layout_last (st : HmNets.St) (inBits outBits : Array ℕ) (outs : Array HmNets.Lin) :
+    (∃ P, (layout st inBits outBits outs).ra = P ++ #[#[(layout st inBits outBits outs).constPos]]) ∧
+      ∃ P, (layout st inBits outBits outs).rb = P ++ #[#[(layout st inBits outBits outs).constPos]] :=
+  ⟨⟨_, rfl⟩, ⟨_, rfl⟩⟩
+
+theorem getD_last {P : Array (Array ℕ)} {x : Array ℕ} {i : ℕ} (h : (P ++ #[x]).size = i + 1) :
+    (P ++ #[x]).getD i #[] = x := by
+  have hp : P.size = i := by simpa using h
+  rw [Flock.HmNets.getD_append_right (le_of_eq hp), hp, Nat.sub_self]
+  rfl
+
+/-- **The `sha512x3` net's constant row reads itself**, in A and in B. -/
+theorem shaLaid_const (hn : Properties.Flock.Nets.FixedNetsBuild) :
+    (HmNets.shaLaid ()).ra.getD 256000 #[] = #[256000] ∧ (HmNets.shaLaid ()).rb.getD 256000 #[] = #[256000] := by
+  obtain ⟨⟨P, hP⟩, ⟨Q, hQ⟩⟩ := layout_last (compression3.run HmNets.St.empty).2 SHA_IN SHA_OUT
+    (compression3.run HmNets.St.empty).1.2.flatten.toArray
+  rw [← HmNets.shaLaid_eq, shaLaid_constPos hn] at hP hQ
+  have ha := hn.1.1
+  have hb := hn.1.2.1
+  rw [hP] at ha
+  rw [hQ] at hb
+  rw [hP, hQ]
+  exact ⟨getD_last (i := 256000) ha, getD_last (i := 256000) hb⟩
+
+/-- At the `sha512x3` slot's constant row, its laid row's self entry and the slot constant's self pair cancel, leaving
+the pin. -/
+theorem constRow_count (j : ℕ) :
+    ((((#[256000] : Array ℕ).toList.map (262144 + ·)).count j +
+      [(518144, 518144), (518144, PIN), (524544, 524544), (524544, PIN)].count (518144, j) : ℕ) : ZMod 2) =
+        if j = PIN then 1 else 0 := by
+  by_cases h1 : j = 518144
+  · subst h1; decide +kernel
+  · by_cases h2 : j = PIN
+    · subst h2; decide +kernel
+    · rw [ite_eq_right h2]
+      have e1 : ((#[256000] : Array ℕ).toList.map (262144 + ·)).count j = 0 :=
+        List.count_eq_zero.2 fun hm => by simp at hm; omega
+      have e2 : [(518144, 518144), (518144, PIN), (524544, 524544), (524544, PIN)].count (518144, j) = 0 :=
+        List.count_eq_zero.2 fun hm => by
+          simp only [List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false] at hm
+          omega
+      rw [e1, e2, Nat.add_zero, Nat.cast_zero]
+
+theorem zIn_shaConst (hn : Properties.Flock.Nets.FixedNetsBuild) : zIn 518144 = true := by
+  unfold zIn
+  rw [ite_eq_right (show ¬ 518144 < 262144 by decide), ite_eq_left (show 518144 < 524288 by decide)]
+  show vS 256000 = true
+  rw [← shaLaid_constPos hn]
+  exact (Total.sha_total xS).1
+
+/-- The unit's rows past its constant are empty. -/
+theorem UN_past : ∀ c < 255, UN.a.row (257 + c) = #[] ∧ UN.b.row (257 + c) = #[] := by decide +kernel
+
 theorem ite_flip (x j : ℕ) : (if x = j then 1 else 0 : ℕ) = if j = x then 1 else 0 := if_congr eq_comm rfl rfl
 
 /-- **Δ at a `cv0` row**, at a statement whose Δ is `E`: its self pair and its copy of the midstate's bit. -/
@@ -1209,6 +1263,136 @@ theorem holds_hmPast (hn : Properties.Flock.Nets.FixedNetsBuild) (hk : st.c.kLog
     exact laidVal_past hm_outs (by rw [hm_end hn]; show 246784 < r.val; omega)
   rw [block_zC (S := L.model regs) hk, hz]
   rfl
+
+omit hda hrs in
+/-- **The `sha512x3` slot's constant row copies the pin**: its laid row reads itself, and the slot constant's pairs
+cancel that and read the pin. -/
+theorem copyRow_shaConst {tags : Tags} (F : Discharge.Aliased.UnitFacts tags st)
+    (hn : Properties.Flock.Nets.FixedNetsBuild)
+    (hR : (st.c.rangeOf st.c.shaNet).count = 1 ∧ (st.c.rangeOf st.c.shaNet).slotLog = 18 ∧
+      (st.c.rangeOf st.c.shaNet).slot 0 = 262144)
+    (hiw : (st.c.nets.getD st.c.shaNet default).2.inWords = 64) (hpin : st.pin = PIN)
+    (hcp : constPairs st.c st.pin = [(518144, 518144), (518144, PIN), (524544, 524544), (524544, PIN)])
+    {r : Fin (2 ^ (L.model regs).kLog)} (hr : r.val = 518144) :
+    CopyRow (L.model regs) r (L.model regs).pin := by
+  have R := RowRanges.ofL L F.parse F.check
+  have hat : AtSlot st.c st.c.shaNet 0 256000 r.val :=
+    ⟨lt_of_lt_of_eq Nat.one_pos hR.1.symm,
+      by rw [hR.2.1]; exact lt_of_lt_of_le (show 256000 < 262144 by omega) (by norm_num),
+      by rw [hR.2.2]; omega⟩
+  have hlo : (st.c.nets.getD st.c.shaNet default).2.inWords * Flock.WORD ≤ 256000 := by
+    rw [hiw]; show 64 * 128 ≤ 256000; omega
+  have e := fun j => rowNet_entryL L F (Or.inl rfl) hat hlo (shaNet_ofRows R.rowNets) j
+  have hc := shaLaid_const hn
+  refine ⟨fun j => ?_, fun j => ?_⟩
+  · show rangesEntry st (slotEntryA st) r.val j.val + deltaEntry st.da r.val j.val = _
+    rw [(e j.val).1, hc.1, hR.2.2, hcp, hr, constRow_count, ← hpin]
+    exact if_congr Fin.ext_iff.symm rfl rfl
+  · show rangesEntry st (slotEntryB st) r.val j.val + deltaEntry st.db r.val j.val = _
+    rw [(e j.val).2, hc.2, hR.2.2, hcp, hr, constRow_count, ← hpin]
+    exact if_congr Fin.ext_iff.symm rfl rfl
+
+omit hda hrs in
+/-- **The `sha512x3` slot's constant row holds** at the trace: it copies the pin, and the trace is 1 at both. -/
+theorem holds_shaConst {tags : Tags} (F : Discharge.Aliased.UnitFacts tags st)
+    (hn : Properties.Flock.Nets.FixedNetsBuild) (hk : st.c.kLog = 22)
+    (hR : (st.c.rangeOf st.c.shaNet).count = 1 ∧ (st.c.rangeOf st.c.shaNet).slotLog = 18 ∧
+      (st.c.rangeOf st.c.shaNet).slot 0 = 262144)
+    (hiw : (st.c.nets.getD st.c.shaNet default).2.inWords = 64) (hpin : st.pin = PIN)
+    (hcp : constPairs st.c st.pin = [(518144, 518144), (518144, PIN), (524544, 524544), (524544, PIN)])
+    (o : Fin (2 ^ (L.model regs).nbl)) {r : Fin (2 ^ (L.model regs).kLog)} (hr : r.val = 518144) :
+    ((L.model regs).A₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r *
+        ((L.model regs).B₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r =
+      (L.model regs).block (zC (L.model regs).m) o r := by
+  refine copyRow_holds (copyRow_shaConst L regs F hn hR hiw hpin hcp hr) ?_
+  rw [block_pin L regs hn hk hpin o, block_zC (S := L.model regs) hk, hr, zIn_shaConst hn]
+  rfl
+
+omit hrs in
+/-- **The unit's rows past its constant hold** at the trace: they are zero, and so is the trace there. -/
+theorem holds_unitPast (hk : st.c.kLog = 22) (htm : st.c.tmpl = none) (hU : st.c.unit = UN)
+    (hs1 : st.c.unitRange.count = 1) (hsl : st.c.unitRange.slot 0 = 524288) (o : Fin (2 ^ (L.model regs).nbl))
+    {r : Fin (2 ^ (L.model regs).kLog)} (hr : 524544 < r.val ∧ r.val < 524800) :
+    ((L.model regs).A₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r *
+        ((L.model regs).B₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r =
+      (L.model regs).block (zC (L.model regs).m) o r := by
+  have he := UN_past (r.val - 524545) (by omega)
+  rw [show 257 + (r.val - 524545) = r.val - 524288 by omega, ← hU] at he
+  refine zeroRow_holds (zeroRow_unitEmpty L regs (L.built_flat htm) (s₀ := 0) (by omega) ?_ he.1 he.2 ?_
+    (delta_free hda (x := r.val) (by omega))) ?_
+  · rw [hU]; show _ < 512; omega
+  · rw [hsl]; omega
+  · rw [block_zC (S := L.model regs) hk, zIn_unit (i := r.val) (by omega) (by omega)]
+    rfl
+
+/-- **Every row of the block holds** at the trace, by its place: the `hm96` slot's input, padding, computed and past
+rows and its constant, the pin; the `sha512x3` slot's likewise; the unit's leaf, padding, computed and past rows and
+its constant; and the gaps' and the mask's rows. -/
+theorem holds_all {tags : Tags} (F : Discharge.Aliased.UnitFacts tags st) (hn : Properties.Flock.Nets.FixedNetsBuild)
+    (hk : st.c.kLog = 22) (hpin : st.pin = PIN) (htm : st.c.tmpl = none) (hU : st.c.unit = UN)
+    (hs1 : st.c.unitRange.count = 1) (hsl : st.c.unitRange.slot 0 = 524288)
+    (hRs : (st.c.rangeOf st.c.shaNet).count = 1 ∧ (st.c.rangeOf st.c.shaNet).slotLog = 18 ∧
+      (st.c.rangeOf st.c.shaNet).slot 0 = 262144)
+    (hRh : (st.c.rangeOf st.c.hmNet).count = 1 ∧ (st.c.rangeOf st.c.hmNet).slotLog = 18 ∧
+      (st.c.rangeOf st.c.hmNet).slot 0 = 0)
+    (hiws : (st.c.nets.getD st.c.shaNet default).2.inWords = 64)
+    (hiwh : (st.c.nets.getD st.c.hmNet default).2.inWords = 32)
+    (hcp : constPairs st.c st.pin = [(518144, 518144), (518144, PIN), (524544, 524544), (524544, PIN)])
+    (o : Fin (2 ^ (L.model regs).nbl)) (r : Fin (2 ^ (L.model regs).kLog)) :
+    ((L.model regs).A₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r *
+        ((L.model regs).B₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r =
+      (L.model regs).block (zC (L.model regs).m) o r := by
+  have R := RowRanges.ofL L F.parse F.check
+  have hu : st.c.unitRange.slot 0 + st.c.unit.constPos = 524544 := by
+    rw [hsl, hU]; show 524288 + 256 = 524544; rfl
+  by_cases h1 : r.val < 3072
+  · exact holds_hmIn L regs hda hn hk R hRh o h1
+  by_cases h2 : r.val < 4096
+  · exact holds_hmGap L regs hda hk R hRh o ⟨by omega, h2⟩
+  by_cases h3 : r.val < 246784
+  · exact holds_hmNet L regs F hn hk hRh hiwh hcp o ⟨by omega, h3⟩
+  by_cases h4 : r.val = 246784
+  · exact holds_pins L regs hn hk hpin (by omega) hu o (Or.inl h4)
+  by_cases h5 : r.val < 262144
+  · exact holds_hmPast L regs hda hn hk R hRh o ⟨by omega, h5⟩
+  by_cases h6 : r.val < 266752
+  · exact holds_shaIn L regs hda hn hk R hRs o ⟨by omega, h6⟩
+  by_cases h7 : r.val < 270336
+  · exact holds_shaGap L regs hda hk R hRs o ⟨by omega, h7⟩
+  by_cases h8 : r.val < 518144
+  · exact holds_shaNet L regs F hn hk hRs hiws hcp o ⟨by omega, h8⟩
+  by_cases h9 : r.val = 518144
+  · exact holds_shaConst L regs F hn hk hRs hiws hpin hcp o h9
+  by_cases h10 : r.val < 524288
+  · exact holds_shaPast L regs hda hn hk R hRs o ⟨by omega, h10⟩
+  by_cases h11 : r.val < 524304
+  · exact holds_unitLeaf L regs hda hk htm hU hs1 hsl o ⟨by omega, h11⟩
+  by_cases h12 : r.val < 524416
+  · exact holds_unitPad L regs hda hk htm hU hs1 hsl o ⟨by omega, h12⟩
+  by_cases h13 : r.val < 524544
+  · exact holds_unitComp_cW L regs hk htm hU hs1 hsl o ⟨by omega, h13⟩
+  by_cases h14 : r.val = 524544
+  · exact holds_pins L regs hn hk hpin (by omega) hu o (Or.inr h14)
+  by_cases h15 : r.val < 524800
+  · exact holds_unitPast L regs hda hk htm hU hs1 hsl o ⟨by omega, h15⟩
+  exact holds_gapMask L regs hda hrs hk o (by omega)
+
+/-- **The trace satisfies the concrete table's statement** at no public region: every row holds in every block, and
+the trace is 1 at the pin. -/
+theorem satisfies_zC {tags : Tags} (F : Discharge.Aliased.UnitFacts tags st)
+    (hn : Properties.Flock.Nets.FixedNetsBuild) (hk : st.c.kLog = 22) (hpin : st.pin = PIN) (htm : st.c.tmpl = none)
+    (hU : st.c.unit = UN) (hs1 : st.c.unitRange.count = 1) (hsl : st.c.unitRange.slot 0 = 524288)
+    (hRs : (st.c.rangeOf st.c.shaNet).count = 1 ∧ (st.c.rangeOf st.c.shaNet).slotLog = 18 ∧
+      (st.c.rangeOf st.c.shaNet).slot 0 = 262144)
+    (hRh : (st.c.rangeOf st.c.hmNet).count = 1 ∧ (st.c.rangeOf st.c.hmNet).slotLog = 18 ∧
+      (st.c.rangeOf st.c.hmNet).slot 0 = 0)
+    (hiws : (st.c.nets.getD st.c.shaNet default).2.inWords = 64)
+    (hiwh : (st.c.nets.getD st.c.hmNet default).2.inWords = 32)
+    (hcp : constPairs st.c st.pin = [(518144, 518144), (518144, PIN), (524544, 524544), (524544, PIN)]) :
+    (L.model []).Satisfies (zC (L.model []).m) := by
+  refine ⟨fun o r => holds_all L [] hda hrs F hn hk hpin htm hU hs1 hsl hRs hRh hiws hiwh hcp o r,
+    fun o => block_pin L [] hn hk hpin o, fun R hR => ?_⟩
+  exact absurd (show R ∈ ([] : List (Model.Region st.c.kLog (st.m - st.c.kLog))) from hR) (by simp)
 
 end place
 
