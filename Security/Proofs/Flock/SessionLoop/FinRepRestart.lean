@@ -1,5 +1,7 @@
-import Proofs.Flock.SessionLoop.FinRepRows
-import Proofs.Flock.Claims.ZK.FinishFwRestart
+module
+
+public import Proofs.Flock.SessionLoop.FinRepRows
+public import Proofs.Flock.Claims.ZK.FinishFwRestart
 
 /-!
 # `FinRepRestart`: level 0's restart is `Σ y₁'·bFold`
@@ -13,6 +15,8 @@ reads the proof's level-0 restart `t'` as `Σ_col y₁'(col)·bFold(col)`.
 draws from the tape, `FinRepRestart` holds. It reads the firewall's run, its coins, the tape and the witness, never the
 workers' clear values or the rows: `y₁'` reads the witness lanes, the mask slot and the extra lanes.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -93,8 +97,8 @@ theorem finRepRestart (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flo
     simp only [viewPoints, Array.size_map, Array.size_range]
     exact Nat.mul_comm _ _
   rw [hkr, hk2, hsch] at hgo
-  exact Masked.fwRestart_at x hx w t (finCoins x ops) (refK x) s0 spec hsx j r (vs x w ν (finCoins x ops))
-    (_root_.Flock.Firewall.Finish.claimsOf q.xs) hxsz hxs tb.st hst tb.tPad _ tb.g hg tb.cm0.toC
+  exact Masked.fwRestart_at x hx w t (finCoins x ops) (refK x) s0 spec hsx j r
+    (vs x w ν (finCoins x ops) (finS.seenOf x t)) (_root_.Flock.Firewall.Finish.claimsOf q.xs) hxsz hxs tb.st hst tb.tPad _ tb.g hg tb.cm0.toC
     (_root_.Flock.Firewall.Finish.padsOf q.draws).toC ic'.toC q.vals tb.extra tb.lanePad hext _ hl hgo
 
 end Loop

@@ -1,5 +1,7 @@
-import Definitions.Pouw.PearlC.Accum
-import Definitions.Pouw.PearlC.Skip
+module
+
+public import Definitions.Pouw.PearlC.Accum
+public import Definitions.Pouw.PearlC.Skip
 
 /-!
 # Pearl-C's skip debit over any accumulator model (definitions only)
@@ -16,6 +18,8 @@ Without promotion (`G = 0`, `pearl-c-sm120-v2`) the debit is the pure chain's lo
 `G = 0`, `wordFlagsP p G` otherwise; `flagsAt hopperE4m3K32 4` is `Skip.wordFlags` by `rfl`
 (`FreezePPure.flagsAt_hopper`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.SkipP
 

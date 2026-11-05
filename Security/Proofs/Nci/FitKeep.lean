@@ -1,4 +1,6 @@
-import Proofs.Nci.Fit
+module
+
+public import Proofs.Nci.Fit
 
 /-!
 # The fit bound with counted multiplications left out
@@ -17,6 +19,8 @@ the bound: a citation that leaves work out charges it.
 * `fitBoundSlots_threads` cuts by thread: `s` is the counted multiplications of the threads in `K`, under `ReachSlots`
   and `FitsSlots` at `keep T s`.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs.Fit
 

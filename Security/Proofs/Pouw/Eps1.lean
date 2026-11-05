@@ -1,6 +1,8 @@
-import Proofs.Pouw.Eps1.Basics
-import Proofs.Pouw.Eps1.WordLocal
-import Proofs.Pouw.Eps1.ClassP
+module
+
+public import Proofs.Pouw.Eps1.Basics
+public import Proofs.Pouw.Eps1.WordLocal
+public import Proofs.Pouw.Eps1.ClassP
 
 /-!
 # Dither's CUDA-core lower bounds in M3: proofs
@@ -10,6 +12,8 @@ Theorem B's two instances of `Definitions.Pouw.Guarantees.Eps1`, each as `Pouw.S
 proved in `Eps1/ClassP.lean`. Theorem C's packed form is retired: its paper proof caps a writer's creations at 4, and
 a writer can create 8.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Eps1
 

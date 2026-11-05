@@ -1,6 +1,8 @@
-import Mathlib
-import Proofs.Accounting.Device
-import Proofs.Accounting.RateAudit.Relay
+module
+
+public import Mathlib
+public import Proofs.Accounting.Device
+public import Proofs.Accounting.RateAudit.Relay
 
 /-!
 # The rate audit with interactive side sources: the proof
@@ -22,6 +24,8 @@ tags, ingress, footprint and compute, so every run that realizes `RateAudit`'s g
 (`RealizesRate.toInteractive`), with side sources that ignore the oracle; `Proofs/Accounting/Sanity.lean` applies it to
 its honest rate run.
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.ResStepsWD
-import Proofs.Flock.Claims.Recursion.ResEndsW
-import Proofs.Flock.Claims.Recursion.AccFits
+module
+
+public import Proofs.Flock.Claims.Recursion.ResStepsWD
+public import Proofs.Flock.Claims.Recursion.ResEndsW
+public import Proofs.Flock.Claims.Recursion.AccFits
 
 /-!
 # The next rows' owners (`NextHeldW`)
@@ -18,6 +20,8 @@ Where a level part's unit holds `acc` at row `p` of the chain (`RecVStar.accRead
 consistency sum in both of its residuals (level 0's `queryFold` always adds one, and `Lin`'s operations keep every key),
 so `RecAlgebra.accTerms` adds `acc1` to them and `RecResiduals.groups` puts `acc1`'s port in a part's `P`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 
@@ -57,7 +61,7 @@ theorem next_open (f : ℕ → ℕ) (a : ℕ) : ∀ d : ℕ,
         omega
 
 /-- A dense statement's read shape has no holo flag and no sparse phase. -/
-theorem dense_shape {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st)
+theorem dense_shape {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) {r : XR} (hr : readX x = some r) :
     r.shape.holo = false ∧ r.shape.sparse = none := by
   obtain ⟨r', hr', -, rfl⟩ := parse_read hst
@@ -75,28 +79,29 @@ theorem recOpen_at_dense {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVS
     (hl : l < sch.levels.size) :
     ss[l]? = some (.recOpen l (2 ^ (sch.levels[l]!).lanes) ((sch.levels[l]!).d - (sch.levels[l]!).cap)
       (2 * (sch.levels[l]!).q)) := by
-  obtain ⟨A, K, n0, hA, hK, rfl⟩ := OpenLower.statements_dense h hsp
+  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, hA, hC, K, Lk, n0, hK, -, hLk, rfl⟩ := FlockC3.Reps.list_ok h
+  obtain rfl := (FlockC3.VStarList.candidate3_ok hC).1 hsp
   rw [hh] at hA
   obtain ⟨sch', sp, ps, hsch, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
   obtain rfl : sch' = sch := Option.some.inj ((FlockVBridge.Family.sched_fast100 hsch).symm.trans hf)
-  rw [Array.append_assoc, Array.getElem?_append_left (by simpa using hl)]
+  rw [Array.append_empty, Array.append_assoc, Array.getElem?_append_left (by simpa using hl)]
   simp only [List.getElem?_toArray, List.getElem?_map, List.getElem?_range hl, Option.map_some]
 
 /-- A level's statement sits below the levels' count. -/
 theorem recOpen_lt {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss)
     (hsp : i.sparse = none) (hh : i.holo = false) {s lv LANES HH n : ℕ} (hsv : ss[s]? = some (.recOpen lv LANES HH n))
     {sch : Schedule} (hf : fast100 i.m = some sch) : s < sch.levels.size := by
-  obtain ⟨A, K, n0, hA, hK, rfl⟩ := OpenLower.statements_dense h hsp
+  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, hA, hC, K, Lk, n0, hK, -, hLk, rfl⟩ := FlockC3.Reps.list_ok h
+  obtain rfl := (FlockC3.VStarList.candidate3_ok hC).1 hsp
   rw [hh] at hA
   obtain ⟨sch', sp, ps, hsch, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
   obtain rfl : sch' = sch := Option.some.inj ((FlockVBridge.Family.sched_fast100 hsch).symm.trans hf)
   apply Classical.byContradiction
   intro h1
-  rw [Array.append_assoc, Array.getElem?_append_right (by simp; omega)] at hsv
+  rw [Array.append_empty, Array.append_assoc, Array.getElem?_append_right (by simp; omega)] at hsv
   rcases Array.mem_append.1 (Array.mem_of_getElem? hsv) with hm | hm
   · simp at hm
-  · obtain ⟨l, N, hlN⟩ := FlockC3.VStarList.caps_cap hK n0 _ hm
-    cases hlN
+  · rcases FlockC3.VStarList.tail_cases hK hLk n0 _ hm with ⟨_, _, hlN⟩ | ⟨_, _, _, hlN⟩ <;> cases hlN
 
 /-- **A level unit's `acc` row** (`accReads`): where unit `u` of level `lv`'s statement holds `acc` at row `p`,
 `u < 2q` and `p = u / q · n + opensBelow lv + u % q`. -/

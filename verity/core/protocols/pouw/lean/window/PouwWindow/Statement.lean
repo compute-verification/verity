@@ -1,4 +1,6 @@
-import PouwWindow.Record
+module
+
+public import PouwWindow.Record
 
 /-!
 # The window statement (`window.py`, `window_problem`)
@@ -10,6 +12,10 @@ every call's -h3 root is the pass's; the calls' pass tiles are in order and disj
 rows' indices it holds a call's to its record's keep and the filler's to zero. A problem is a value (`some why`); a
 refusal (`.error`) is where Python raises `ValueError`, or would raise another error on input off its types.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PouwWindow
 

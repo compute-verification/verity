@@ -1,5 +1,8 @@
-import Proofs.Flock.Claims.Recursion.NextSha
-import Proofs.Flock.Soundness.Refine.Rep
+module
+
+public import Proofs.Flock.Claims.Recursion.NextSha
+public import Proofs.Flock.Soundness.Refine.Rep
+import all Lean.Data.Json.Basic
 
 /-!
 # S17 at the substituted value (`decodeJWith_shaSubJ`, `s17_shaSubJ`)
@@ -11,6 +14,8 @@ replaces that key's value in place (`arr_mapKey_const`), each entry an object of
 distinct (`NamesDistinct`), S17's two checks pass (`s17_canonical`): the digests list exactly the rep streams, and each
 file's digest is the one its stream's entry names. `s17_shaSubJ` is the two together, at a decoded session.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 
@@ -72,7 +77,7 @@ theorem proofSha_read {spec : SessionSpec} {ds : Array ByteArray} {j : Json} {a 
 
 /-- **The decoder reads `shaArr`'s digests at the substituted value**, whatever the rest of the value. -/
 theorem decodeJWith_shaSubJ (hs : Flock.Hashes Flock.V) {spec : SessionSpec} {ds : Array ByteArray} {j : Json}
-    {sess : Session} (h : Record.decodeJWith hs spec (shaSubJ spec ds j) = .ok sess) :
+    {sess : RunRecord} (h : Record.decodeJWith hs spec (shaSubJ spec ds j) = .ok sess) :
     sess.proofSha = (spec.repStreams.zip ds).map fun q => (q.1.2.2, hexOf q.2) := by
   unfold Record.decodeJWith at h
   dsimp only at h
@@ -136,7 +141,7 @@ theorem s17_canonical (spec : SessionSpec) (h : ByteArray → ByteArray) {bs : A
 /-- **S17 passes at the substituted value**: a session decoded at the record's value with its proof digests the
 files' through `h` passes S17's two checks, at as many files as rep streams with distinct names. -/
 theorem s17_shaSubJ (h : ByteArray → ByteArray) {spec : SessionSpec} {bs : Array ByteArray} {j : Json}
-    {sess : Session}
+    {sess : RunRecord}
     (hd : Record.decodeJWith (Flock.Hashes.ofSha512 h : Flock.Hashes Flock.V) spec
       (shaSubJ spec (bs.map (FlockComplete.dgOf spec h)) j) = .ok sess)
     (hsz : bs.size = spec.repStreams.size) (hnd : NamesDistinct spec) :

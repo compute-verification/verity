@@ -8,7 +8,7 @@ dataflow; 588 s of a Qwen3-4B B32 Commit's 949 s).  The Commit (`--plan PLAN`) t
 equals its own (`key`: the Program digest, the sha256 of the required manifest and of the workload, the Programs it reads, the code
 identity over the integration and core, the vLLM version); a plan it cannot read or whose key differs, and it derives the facts
 itself and records `plan_recomputed` with the reason (`use`).  The facts are the same either way: the plan stores them in the
-order they were derived.  Nothing drawn from the run root is planned: the replay sample and the slim bundle's reads come after
+order they were derived.  Nothing sampled from the run root is planned: the replay sample and the slim bundle's reads come after
 the Commit, from the root it fixed.
 """
 from __future__ import annotations

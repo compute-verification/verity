@@ -42,7 +42,7 @@ def test_the_root_is_the_advice_commitments_reference_on_run_a(run_a):
     assert I1.encode(I1.decode(data)) == data and I1.total_bits(I1.decode(data)) == RUN_A_BITS
     assert run_a["opening"]["advice"] == data.hex() and len(salts) == run_a["registration"]["rows"] == len(AW.advice_rows(data))
     assert root == AW.commit_advice(C, data, salts).root.hex()
-    ref = AC.register(AW.advice_rows(data), AW.ROW_BITS, AW.commitment_binding(C), salts)
+    ref = AC.commit(AW.advice_rows(data), AW.ROW_BITS, AW.commitment_binding(C), salts)
     assert root == ref.root.hex()
     for i in (0, len(salts) - 1):
         assert AC.verify(bytes.fromhex(root), len(salts), AW.ROW_BITS, AW.commitment_binding(C), ref.open(i))

@@ -1,6 +1,8 @@
-import Definitions.Accounting.RateAuditInteractive
-import Definitions.Accounting.RateAuditRemote
-import Definitions.Accounting.RateAuditHorizon
+module
+
+public import Definitions.Accounting.RateAuditInteractive
+public import Definitions.Accounting.RateAuditRemote
+public import Definitions.Accounting.RateAuditHorizon
 
 /-!
 # The remote rate audit as deployed: one game (trusted)
@@ -28,6 +30,8 @@ which this game does not model (the PR's gap list). What the guarantee charges f
 reading it is a named term of `γ` (`muChip`, `muLink`, `muRebuild`, `muLambda`), each a fraction of a pass's `N·b`
 bits; the draw's shortfall is `d̄` over the horizon and `d_w` in a window.
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 

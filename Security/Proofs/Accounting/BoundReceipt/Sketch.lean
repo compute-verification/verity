@@ -1,5 +1,7 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.BoundSketch
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.BoundSketch
 
 /-!
 # The deployed bound receipt's sketch: the proofs
@@ -11,6 +13,8 @@ where the block side outputs `o(x)`, Cauchy–Schwarz over `x` bounds the advant
 `√(‖f‖²‖g‖²p^n)` (`leafX`; the tile side's leaf by symmetry, `leafY`). Each bit sent splits one side's weight in two,
 and the advantages add (`adv_le`): `2^bits` leaves.
 -/
+
+@[expose] public section
 
 namespace Accounting.BoundSketch
 

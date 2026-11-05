@@ -1,6 +1,11 @@
-import CoreProtocol.Cli
-import CoreProtocol.Ratio
-import RemoteAudit.Difftest
+module
+
+public import CoreProtocol.Cli
+public import CoreProtocol.Ratio
+public import RemoteAudit.Difftest
+meta import CoreProtocol.Cli
+meta import CoreProtocol.Ratio
+meta import RemoteAudit.Difftest
 
 /-!
 # A remote bandwidth session as a core protocol
@@ -27,11 +32,15 @@ the difftest's `session` reads (`Difftest.sessionFn`):
 On acceptance it publishes the reads it certifies and the error that holds at, `{"eps", "q_bytes"}` (`certify`): the
 session's receipts U less the wrong ones its openings leave, W rounded up (`Pooled.pooled` of each draw's receipts and
 draws at `DELTA`), each a read of one `BLOCK_BYTES` block, at ε = δ + S/2^64 for S the draws (the per-draw term of
-`Accounting.Guarantees.Remote.PooledDraw`; its PRF and coin-commitment hiding terms are named assumptions, not
-numbers). The ledger's γ terms, which need the node's measured rates, are not taken off: `q_bytes` is the reads the
+`Accounting.Guarantees.Remote.PooledDraw`; its PRF advantages are a named assumption, not a number, and it has no
+hiding term, since the prover is sent the coin commitment only at the session's end). The ledger's γ terms, which need the node's measured rates, are not taken off: `q_bytes` is the reads the
 session's openings certify. When the pooled bound refuses the windows, `q_bytes` and `eps` are 0 and the profile says
 why.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit.Protocol
 

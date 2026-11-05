@@ -1,3 +1,5 @@
+module
+
 /-!
 # The certifier program: rows, grids, fill and the FIFO certifier
 
@@ -5,6 +7,8 @@ The executable forms of `Security/Definitions/NetworkCertifier/Grid.lean` that t
 `NetworkCertifier`. Lean core only: `offset` sums over `List.finRange` where the reference sums over a `Finset`.
 `Proofs.NetworkCertifier.Code` proves what the difftest computes from them equal to the reference's.
 -/
+
+@[expose] public section
 
 namespace NetworkCertifier
 

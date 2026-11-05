@@ -1,4 +1,6 @@
-import Definitions.Hash
+module
+
+public import Definitions.Hash
 
 /-!
 # The hash area's guarantee statements
@@ -21,6 +23,8 @@ prover's link finders under `ecr/sha-512` (`FlockSoundness.Assumptions.SHA512CRE
 prover, which is false at SHA-512 (a prover that hard-codes one collision opens one leaf two ways). In particular
 none of them discharges a constant over all provers such as `Pouw.Assumptions.ServiceSoundStaged`'s `δb`.
 -/
+
+@[expose] public section
 
 namespace Hash.Guarantees
 

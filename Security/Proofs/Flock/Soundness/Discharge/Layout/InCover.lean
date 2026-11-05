@@ -1,5 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Layout.InRegion
-import Batteries.Tactic.OpenPrivate
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.InRegion
+public import Batteries.Tactic.OpenPrivate
+import all Init.Data.Array.QSort.Basic
 
 /-!
 # Every public leaf is inside an in region
@@ -13,6 +16,8 @@ in a run of consecutive words, and each run cut into blocks that cover it), and 
 (`public_pinned`).
 -/
 
+@[expose] public section
+
 set_option Elab.async false
 
 open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic
@@ -23,7 +28,7 @@ open Flock Model
 
 /-! ### `Array.qsort` keeps its elements -/
 
-theorem inLoop_perm {α : Type} {n : ℕ} (lt : α → α → Bool) (lo hi : ℕ) (hhi : hi < n) (pivot : α) :
+private theorem inLoop_perm {α : Type} {n : ℕ} (lt : α → α → Bool) (lo hi : ℕ) (hhi : hi < n) (pivot : α) :
     ∀ (d : ℕ) (as : Vector α n) (i k : ℕ) (ilo : lo ≤ i) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
       (Array.qpartition.loop lt lo hi hhi pivot as i k ilo ik w).2.toArray.Perm as.toArray := by
   intro d
@@ -56,7 +61,7 @@ theorem inQpartition_perm {α : Type} {n : ℕ} (as : Vector α n) (lt : α → 
     · exact Array.Perm.refl _
   exact (h1 _ _ _ _ _ _).trans ((h1 _ _ _ _ _ _).trans (h1 _ _ _ _ _ _))
 
-theorem inSort_perm {α : Type} (lt : α → α → Bool) {n : ℕ} :
+private theorem inSort_perm {α : Type} (lt : α → α → Bool) {n : ℕ} :
     ∀ (d : ℕ) (as : Vector α n) (lo hi : ℕ) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n), hi - lo = d →
       (Array.qsort.sort lt as lo hi w hlo hhi).toArray.Perm as.toArray := by
   intro d

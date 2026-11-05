@@ -8,13 +8,14 @@
 # executable, cached by its sources): each rep's public comb and Lean's full fold; rec_session --check-fold (comb + the
 # session's h is the full fold, h nonzero); rec_vstage stage --levels none (the holo algebra's InnerRepCheck parts, h read from
 # the session's rows, each holding); and Lean's flock-verify on the prover's session (verity/flock-circuit+plain-leaves,
-# without --zk, holding the session's draw to its own law: --stratified N --program --partition). The coin server answers
+# without --zk, holding the session's sample to its own law: --stratified N --program --partition). The coin server answers
 # Register with the verifier's full draw (stage/draw.json, rec_live.full_draw: every unit), which both records keep. Then
 # three controls on copies of the prover's record, each of which Lean must refuse: rep 0's first challenge flipped, the
-# draw removed, and the draw's last unit dropped (rec_inner.py forge --record prover). Run from the verity tree (research run
+# draw removed, and the sample's last unit dropped (rec_inner.py forge --record prover). Run from the verity tree (research run
 # --cwd source). Outputs under out/: host.txt, stage.json, statement.txt, schedule.json, session.log, time-prove.txt,
 # prove.txt/.err, inner/ (schedule.json, public.json, private.json, session/, prover/), replay.txt, vstar.json, points.json,
-# fold.json, check-fold.json, vstage.json, lean.log, forged-*-lean.txt, summary.json. Exits 1 unless the session, replay,
+# fold.json, check-fold.json, vstage.json, lean.log, forged-*-lean.txt, summary.json, and with STACKED
+# circuit-registration.json and circuit-meta.txt (the staged circuit.txt's first two lines, its META). Exits 1 unless the session, replay,
 # rec_vstar, the fold check, the staging and Lean's verdicts (the honest session accepted, every control refused) all pass.
 # Launch it through a check slot, which pins it to the slot's cores and holds the slot:
 #   research run --on vy-cpu-1 --source . --cwd source -- python3 tools/verity/check/slot.py --by NAME -- bash $0 [N=16]
@@ -29,7 +30,7 @@
 #   salts are the prover's (stage/circuit-registration-private.json)
 #   FORGE=cell|point (with STACKED): R committed (and registered) with a flipped cell, or a claim point off; the algebra is not
 #   staged, and the run passes when the session runs and rec_vstage refuses R's opening (summary.json's refused). FORGE=late:
-#   R's cell flipped after its registration, which the firewall refuses at R's binding round (the session stops)
+#   R's cell flipped after its registration, which the ZK server refuses at R's binding round (the session stops)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 export RI_PINNED=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sched_getaffinity(0)))))')
@@ -58,7 +59,7 @@ FP=$!
 python3 verity/ml/flock/pod/rec_inner.py stage --n $N --sets $S/sets --out $D --plain-leaves $REG > $O/stage.json 2> $O/stage.err \
   || { tail -20 $O/stage.err; exit 1; }
 cat $O/stage.json
-[ -n "${STACKED:-}" ] && cp $D/circuit-registration.json $O/
+[ -n "${STACKED:-}" ] && cp $D/circuit-registration.json $O/ && head -2 $D/circuit.txt > $O/circuit-meta.txt
 
 $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt > $O/statement.txt 2>&1 || { tail -5 $O/statement.txt; exit 1; }
 python3 -m verity_flock.rec_live --schedule-for $O/statement.txt --holo $SPA ${MR:+--stacked $MR} > $O/schedule.json || exit 1

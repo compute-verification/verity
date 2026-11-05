@@ -1,5 +1,7 @@
-import Proofs.Flock.Bridge.Canon
-import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
+module
+
+public import Proofs.Flock.Bridge.Canon
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
 
 /-!
 # The deployed commitment at a leaf map (shared rows)
@@ -27,6 +29,8 @@ digests are the tables' rows), so the leaf map is the verifier's, at every accep
 
 No unit's ref is pinned to `⌊u / G⌋` here: these hold at every ref the verifier accepts.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 
@@ -116,7 +120,7 @@ theorem pathOfL_ident (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Opt
 /-- **The deployed trace commitment at a leaf map**: `commitDep` at `L`'s ports, each position's path at its port's
 levels, the row's bits after `L.d` levels, and each row in its port's format (`rowDep`). -/
 noncomputable def commitDepL (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
-    (L : LeafMap) (roots : List Msg) : Commitment Bool :=
+    (L : LeafMap) (roots : List Msg) : CommitmentScheme Bool :=
   pathCommit (atOf C rows) (hm96Leaf (rowDep C rows c (placeOf C rows) (bitsOf L.d)) saltOf)
     (pathOfL C rows L) (regPath (portsOfL c L roots)) fun _ _ _ => []
 

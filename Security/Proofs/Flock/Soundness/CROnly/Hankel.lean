@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.CROnly.Hiding
+module
+
+public import Proofs.Flock.Soundness.CROnly.Hiding
 
 /-!
 # hm96's Hankel family is universal
@@ -9,6 +11,8 @@ For a nonzero `d`, the map `κ ↦ M(κ)·d` is onto (`hankel_surjective`): on t
 holds, and two distinct salts `y ≠ y'` collide (`M·(y − y') = 0`) under a `1/|B|` fraction of the keys
 (`hankel_universal`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.CROnly
 
