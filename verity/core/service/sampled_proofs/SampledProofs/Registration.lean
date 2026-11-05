@@ -555,9 +555,9 @@ theorem portIndex_find (roots : Array Json) (p : String) :
     rw [(inv_portIndex roots).2.2 k, ← Array.find?_toList, Array.toList_reverse]
     congr 1; funext r; rw [jeq_of_canon hp]; rfl
 
-/-- **R3 at `O(n)` hash-map operations is R3 as first written**: everything a guarantee reads of `check` is `checkRef`'s. -/
 -- `simp` unfolds both whole bodies, R2's declared day and the link-points step included, and matches them step by step
 set_option maxHeartbeats 800000 in
+/-- **R3 at `O(n)` hash-map operations is R3 as first written**: everything a guarantee reads of `check` is `checkRef`'s. -/
 theorem check_eq_checkRef (rec : Json) (v : Verifier) : check rec v = checkRef rec v := by
   simp only [check, checkRef, portIndex_count, portIndex_has, portIndex_find]
 
