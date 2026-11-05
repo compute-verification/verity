@@ -302,7 +302,7 @@ theorem bindFinder_calls : ∀ (A : Live) (θ : ByteArray) (F : Array ByteArray)
 /-- **The leg's constructions with the bound digests' finder at `k`** (`bindFinder`): `K`'s otherwise. -/
 noncomputable def Constructions.withBind {V : Vocab d α} (K : Constructions V) (k : Verity.Registration.Composite) :
     Constructions V :=
-  { K with bindFinder := bindFinder V k, bind_calls := bindFinder_calls V k }
+  { K with bindFinder := Verity.Sampled.bindFinder V k, bind_calls := Verity.Sampled.bindFinder_calls V k }
 
 /-- **(a') at the clause**: at constructions whose bound digests' finder is `bindFinder`, the coupling's digest bound
 holds at the session `A` and the clause that v2 draws at `afterAt` (`DigestBound`). -/
