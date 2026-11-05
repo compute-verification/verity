@@ -32,7 +32,6 @@ PARAMS = frozenset({"b_w.pretrained", "b_w.lossless", "b_w.capacity", "b_w.delta
 PICKS = ("low", "central", "high")
 CONFIDENCE = frozenset({"low", "medium", "high"})
 KEBAB = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
-FINDING_ID = re.compile(r"^([a-z0-9]+(?:-[a-z0-9]+)*)/([1-9][0-9]*)$")
 
 
 def load(name: str, root: Path = HERE) -> list[dict]:
