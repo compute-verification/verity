@@ -1,5 +1,7 @@
-import Proofs.Properties.Verity.Sampled.Binding
-import Proofs.Properties.Verity.SampledRead
+module
+
+public import Proofs.Properties.Verity.Sampled.Binding
+public import Proofs.Properties.Verity.SampledRead
 
 /-!
 # Every round a session's coin tree opens is a round of its record
@@ -24,6 +26,8 @@ a Prop over the device's log:
   Binding.readsV2`, `MovesReach`'s premise). On a play v2 accepts the log shows one coin tree, the record's: v2 takes
   one session (`SampledProofs.OneStageZk.oneSession`) and every tree a session's (`sessionsTreeReason`).
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled
 
