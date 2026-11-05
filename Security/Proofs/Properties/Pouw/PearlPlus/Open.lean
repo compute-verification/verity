@@ -2,6 +2,7 @@ module
 
 public import Properties.Pouw.PearlPlus
 public import Proofs.Properties.Pouw.Commit
+import all Init.Data.String.Defs
 
 /-!
 # An accepted opening binds its position's value (`Properties.Pouw.PearlPlus.OpeningBinds`)

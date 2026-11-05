@@ -3,6 +3,8 @@ module
 public import Proofs.Accounting.RemoteHeld.Component
 public import Proofs.Accounting.RemoteHeld.Draw
 public import Proofs.Pouw.Prob
+import all Init.Data.Array.Basic
+import all Init.Data.String.Defs
 
 /-!
 # The bandwidth component's properties hold at the honest node and fail at a verifier that accepts everything

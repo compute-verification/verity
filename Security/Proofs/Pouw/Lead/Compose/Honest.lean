@@ -3,6 +3,7 @@ module
 public import Definitions.Pouw.Guarantees.Lead
 public import Proofs.Pouw.Dimension.H100Proofs
 public import Proofs.Hash.Bytes
+import all Init.Data.String.Defs
 
 /-!
 # The lead's honest lemma
