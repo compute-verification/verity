@@ -886,6 +886,25 @@ def test_a_marks_recorded_pass_admits_its_merge_onto_the_same_base_with_no_pool_
     assert [m.pr for m in q.sync()[0]] == [2] and len(pool.launched) == 1, world.logs
 
 
+def test_heads_whose_recorded_verdicts_cant_be_pulled_wait_for_pool_runs_and_the_sync_says_so_once(world):
+    """A sync that can't pull the store's verdicts (`StoreLabels.preflights` raises `STALE`) admits nothing on them: each head
+    waits for a pool run, and the sync logs one line for them all, not one a PR."""
+    for n in (1, 2):
+        world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
+    q = world.queue()
+    main = _git(world.origin, "rev-parse", "main")
+
+    def stale(n: int, head: str) -> list:
+        raise QueueError(f"STALE: the labels of pr:{n}@{head} weren't pulled (injected)")
+
+    q.verdicts, pool = stale, _pool(q)
+    members, _ = q.sync()
+    assert members == [] and pool.judged() == [(1, main), (2, main)], world.logs
+    assert [s for s in world.logs if "recorded preflight verdicts" in s] == [
+        "research queue: 2 PR(s)' recorded preflight verdicts can't be read, so each is judged by those drive's state holds, "
+        f"else by a pool run (#1: STALE: the labels of pr:1@{world.gh.prs[1].head} weren't pulled (injected))"], world.logs
+
+
 def test_at_most_preflight_pool_runs_are_out_at_once_and_a_merge_past_them_waits_for_a_later_syncs_launch(world):
     """Drive.toml's `preflight_pool` caps the pool runs out at once: a PR past the cap waits off `next`, saying so, unmerged
     (its merge would only be thrown away), and a later sync launches its run once one ends."""

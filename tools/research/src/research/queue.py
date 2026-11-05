@@ -306,6 +306,7 @@ import concurrent.futures
 import contextlib
 import dataclasses
 import difflib
+import errno
 import fcntl
 import fnmatch
 import functools
@@ -1154,12 +1155,8 @@ class StoreLabels:
         return self._labels(pr, head, vocab.REVIEWED)
 
     def preflights(self, pr: int, head: str) -> list:
-        """The `preflight` labels on `pr:{n}@{head}` (`Queue._stored`), pulled as `ready`'s are; none when they can't be: drive's
-        state keeps the verdicts it read, and a verdict missing costs a pool run, never an admission."""
-        try:
-            return self._labels(pr, head, vocab.PREFLIGHT)
-        except QueueError:
-            return []
+        """The `preflight` labels on `pr:{n}@{head}` (`Queue._stored`), pulled as `ready`'s are."""
+        return self._labels(pr, head, vocab.PREFLIGHT)
 
     def ready_by(self, pr: int, head: str) -> str | None:
         """Who wrote the newest `ready = true` label on `pr:{n}@{head}`, whenever it was written."""
@@ -2281,11 +2278,16 @@ class Queue:
         """The store's verdicts of the heads of ``ns`` (`preflight` labels on `pr:{n}@{head}`: `verdicts`, else this store's
         own), the newest of each pair, into ``flights``' `before` where it doesn't hold that pair yet: a mark's pass
         (`Preflight._record`) and the pool runs' verdicts another clone's sync took (`_take`).  A label of another shape is no
-        verdict."""
+        verdict, and a head whose labels can't be pulled is judged without them, the sync logging how many."""
+        unread: list[tuple[int, QueueError]] = []
         for n in ns:
             head = entries[n].pr.head
-            labels = (self.verdicts(n, head) if self.verdicts is not None
-                      else self.store.labels(label_target(n, head), key=vocab.PREFLIGHT) if self.store is not None else [])
+            try:
+                labels = (self.verdicts(n, head) if self.verdicts is not None
+                          else self.store.labels(label_target(n, head), key=vocab.PREFLIGHT) if self.store is not None else [])
+            except QueueError as e:
+                unread.append((n, e))
+                continue
             for lab in reversed(labels):
                 v = lab.value
                 if not (isinstance(v, dict) and isinstance(v.get("base"), str) and isinstance(v.get("tree"), str)):
@@ -2296,6 +2298,9 @@ class Queue:
                 key = f"{head}:{v['base']}"
                 if key not in flights["now"] and key not in flights["before"]:
                     flights["before"][key] = {"pr": n, "head": head, "tree": v["tree"], "why": why, "of": v["of"]}
+        if unread:
+            self.log(f"research queue: {len(unread)} PR(s)' recorded preflight verdicts can't be read, so each is judged by those "
+                     f"drive's state holds, else by a pool run (#{unread[0][0]}: {unread[0][1]})")
 
     def _launch_runs(self, wanted: dict[int, tuple[str, str]], runs: dict[str, dict], tip: str, main: str,
                      members: list[Member], order: list[int], waited: set[int], entries: dict[int, Entry],
@@ -4804,12 +4809,12 @@ class Preflight:
 
 def _alive(pid) -> bool:
     """Whether process ``pid`` may still run: one this user can't signal, or a record without a pid, is taken as running."""
+    if not isinstance(pid, int):
+        return True
     try:
-        os.kill(int(pid), 0)
-    except ProcessLookupError:
-        return False
-    except (PermissionError, ValueError, TypeError):
-        pass
+        os.kill(pid, 0)
+    except OSError as e:
+        return e.errno != errno.ESRCH
     return True
 
 
