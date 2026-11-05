@@ -32,7 +32,7 @@
   "K": 91000000.0,
   "Gamma": 2.9e+17,
   "b_tok": 20,
-  "description": "The Oct 17 write-up's K (about 11 MB), with Gamma rescaled so that Kimi K2 inference at 20 bits per token complies as declared: Gamma = K x 2 N_active / b_tok = 2.9e17. The write-up's own Gamma, 9.5e17, is calibrated to Kimi-K3, whose shapes are unconfirmed. Assumes a public cap on the committed parameters' size, a few times the largest permitted model, proved inside the zero-knowledge proof, so no noise tables or corpora of that size can be committed.",
+  "description": "The write-up's K (about 11 MB), with Gamma rescaled so that Kimi K2 inference at 20 bits per token complies as declared: Gamma = K x 2 N_active / b_tok = 2.9e17. The write-up's own Gamma, 9.5e17, is calibrated to Kimi-K3, whose shapes are unconfirmed. Assumes a public cap on the committed parameters' size, a few times the largest permitted model, proved inside the zero-knowledge proof, so no noise tables or corpora of that size can be committed.",
   "theta_cap": true
  },
  {

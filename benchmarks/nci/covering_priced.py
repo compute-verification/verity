@@ -626,17 +626,6 @@ def sensitivity(pts: dict, cheapest: dict) -> dict:
     return out
 
 
-def check_daniel() -> dict:
-    """The covering bound write-up's marginal-slowdown table: Kimi K2 at k = 2e7, w = 2.5, raw: the base tier
-    k^2/w + k gives 41, the additive charge 166, a-bit activations (a = 4) 660."""
-    m = k2()
-    gates = K.schedule(m)[1]
-    a0 = K.active_weights(m) / gates
-    k, w = 2e7, 2.5
-    return {"base": a0 * S / (k * k / w + k), "additive": a0 * S / (k * k / (4 * w) + k),
-            "a=4": a0 * S / (k * k / (4 * w * 4) + k)}
-
-
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--prices", action="append", help="a price file (load_prices) in place of Pythia's; with "
@@ -667,9 +656,6 @@ def main(argv: list[str] | None = None) -> int:
         pts, cheapest, label = PYTHIA, CHEAPEST, "Pythia prices"
     res = report(pts, cheapest, label, dgrad=args.dgrad)
     res["sensitivity"] = sensitivity(pts, cheapest)
-    res["daniel_check"] = check_daniel()
-    print("Daniel's table at k = 2e7, w = 2.5 (41 / 166 / 660): "
-          + ", ".join(f"{n} {v:.0f}" for n, v in res["daniel_check"].items()))
     if args.json:
         Path(args.json).write_text(json.dumps(res, indent=1, default=str))
     return 0
