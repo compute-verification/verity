@@ -1218,6 +1218,10 @@
    "owner": "@proofs",
    "digest": "b37e44f0312955e52492256533b24acdc935490aeddd9708281231159bd4adce"
   },
+  "FlockSoundness.Model.Statement.Satisfies": {
+   "owner": "@network-accounting",
+   "digest": "afd6169d8f84abe4a2835cf4a83800b231865b7f19c333043f3e6b6fffe18069"
+  },
   "FlockSoundness.StrictCR.Finder.CR": {
    "owner": "@proofs",
    "digest": "4234584c8c100c10bc25e561da0e248d6b2c394ea401c2310eac1fcb610131e6"
@@ -2302,9 +2306,9 @@
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
   },
-  "FlockSoundness.Model.Statement.Satisfies": {
+  "FlockSoundness.Model.Statement.ZeroRowA₀": {
    "owner": "@network-accounting",
-   "digest": "afd6169d8f84abe4a2835cf4a83800b231865b7f19c333043f3e6b6fffe18069"
+   "digest": "66be533ab471e411b677b64ea76ccbcc02bd9d683a158aac676022da2cbbe73e"
   }
  },
  "meaning": [
@@ -7283,14 +7287,12 @@
     "    ({ m := 6, kLog := 6, hk := ⋯, hk6 := ⋯, pin := 0, A₀ := Matrix.single 0 0 1, B₀ := Matrix.single 0 0 1,",
     "          regions := List.nil }.Satisfies",
     "      fun a => ite (Eq a.val 0) 1 0)",
-    "    (Eq",
-    "      ({ m := 6, kLog := 6, hk := ⋯, hk6 := ⋯, pin := 0, A₀ := Matrix.single 0 0 1, B₀ := Matrix.single 0 0 1,",
-    "            regions := List.nil }.A₀",
-    "        1)",
-    "      0)"
+    "    ({ m := 6, kLog := 6, hk := ⋯, hk6 := ⋯, pin := 0, A₀ := Matrix.single 0 0 1, B₀ := Matrix.single 0 0 1,",
+    "          regions := List.nil }.ZeroRowA₀",
+    "      1)"
    ],
    "assumptions": [],
-   "type_hash": "a94c4ec46e921094d2e7da3f0236ba1dd1527973e227a844b751d30443ccd4f6"
+   "type_hash": "a86b72c50b01f71ef48c6001d518d69461fb2aa2433545f2bb3fab571560ed30"
   },
   "Flock.SecurityProofs.ZeroRowForced_nontrivial": {
    "owner": "@network-accounting",
@@ -27044,9 +27046,9 @@
    "guarantees": ["Flock.SecurityProofs.SamplingClaimsStated"]
   },
   "Definitions.Flock.Guarantees.Statement": {
-   "digest": "717a69e42486d3e743bc41185d4565d27f0873e6734b09a4853f7359226ae02e",
+   "digest": "fc756da8f2934153ba00f88d692dcb02763388258ad0939cfd686ca875ad04d1",
    "definitions": {
-    "Flock.Guarantees.ZeroRowForced": "1fb13ac485e7d7d36ffbdb853da127857ce2bf8e8f78ab3e72268e866417af86"
+    "Flock.Guarantees.ZeroRowForced": "cdf2580e9289fdc0956dc55bb6007729a2f9e37f22a1e61ebe11fdadcca299ff"
    },
    "guarantees": ["Flock.SecurityProofs.ZeroRowForced"]
   },
@@ -27562,7 +27564,7 @@
    "guarantees": ["Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Definitions.Flock.Statement": {
-   "digest": "0effe086280c361ccdeb973354736cc7ae694daee5ace718e081a85c0200a57f",
+   "digest": "03c9c5aaea3a155677fc66de47301116b6bff51210b70b1e23f8451819e00a98",
    "definitions": {
     "FlockSoundness.Model.Claim": "4332c90e789ac87dfc0f99396ee4fbf6551849f0aadc24318ebaae54b71770b8",
     "FlockSoundness.Model.Claim.skip": "a5d3f26d0fda0ec16f21008da41d2f7f6e7dcf903448cd046c9590166c782827",
@@ -27580,6 +27582,7 @@
     "FlockSoundness.Model.Statement.A₀": "63277231bcc44c140607e979ffe7c751b4c2c2907486d384bd07855d7807cb57",
     "FlockSoundness.Model.Statement.B₀": "f4ca5d2e54c230df353a51700215e15bd5c7437b6dbce18f7f66420fc1e13442",
     "FlockSoundness.Model.Statement.Satisfies": "afd6169d8f84abe4a2835cf4a83800b231865b7f19c333043f3e6b6fffe18069",
+    "FlockSoundness.Model.Statement.ZeroRowA₀": "66be533ab471e411b677b64ea76ccbcc02bd9d683a158aac676022da2cbbe73e",
     "FlockSoundness.Model.Statement.addr": "82957ed079308e1afd6c078e194b79ba29954dae1834ee4bb1f68e49fb1f5c9d",
     "FlockSoundness.Model.Statement.block": "af371893c38446edeee1e8db7841b2d7ebf89cb68a42e09b7f3ec7e952a4984e",
     "FlockSoundness.Model.Statement.kLog": "07eb32b5aa01ef73e33fceecfa84e9a4e555fb22ae4cd4d15e63e4cd93780a51",
