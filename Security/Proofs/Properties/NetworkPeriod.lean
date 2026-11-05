@@ -636,21 +636,18 @@ theorem oneInput_faulty : ({0} : Finset ℕ) ∈ NetTiming.faultySets oneInputSt
   · rw [hall]
     exact Finset.disjoint_empty_right _
 
-/-- **`ScanWindowsPlaced`'s conclusion is not trivial** (the two-lemma rule's `_nontrivial`): at a scan C-Flock
-canonicalizes as `null` and a deployment that parses every message to `oneInputStmt`, whose descriptor is that text,
-partitioned as `oneInputPart`, with at most one incorrect proof block at `δ = 1/2` (`WrongBounds`), one window is not
-placed at `β = 0`: its one block, possibly incorrect since the design draws nothing, commits its input gate. So the
-conclusion fails where the deployment doesn't lay its statements out as Bits does (`StmtBits`) and the charge is below
-a block's committed bits. -/
+/-- **`ScanWindowsPlaced`'s conclusion is not trivial** (the two-lemma rule's `_nontrivial`): at a deployment that
+partitions `oneInputStmt` as `oneInputPart`, with at most one incorrect proof block at `δ = 1/2` (`WrongBounds`), one
+window is not placed at `β = 0`, the charge at the terms of the scan check that accepts everything
+(`Properties.NetworkScan.acceptAllScan`): its one block, possibly incorrect since the design draws nothing, commits its
+input gate. So the conclusion fails where no accepted scan's files (`FilesOf`, `PaddingUnread`) lay the statement out
+(`StmtBits`) and the charge is below a block's committed bits. -/
 theorem scanWindowsPlaced_nontrivial :
-    ∃ (j : Lean.Json) (c : String) (_ : Flock.canon j = .ok c) (D : Claims.Sampling.Deploy Bool ℕ Unit)
-      (sw : Fin 1 → Claims.Sampling.AuditStatement) (Pw : Fin 1 → Claims.Sampling.Partition)
-      (_ : ∀ i, ∃ x, D.parse x = some (sw i)) (_ : ∀ i, (⟨(sw i).desc.toArray⟩ : ByteArray) = c.toUTF8)
-      (_ : ∀ i, D.partition (sw i) = some (Pw i)) (_ : ∀ i, WrongBounds (sw i) (Pw i) (1 / 2) 1),
+    ∃ (D : Claims.Sampling.Deploy Bool ℕ Unit) (sw : Fin 1 → Claims.Sampling.AuditStatement)
+      (Pw : Fin 1 → Claims.Sampling.Partition) (_ : ∀ i, D.partition (sw i) = some (Pw i))
+      (_ : ∀ i, WrongBounds (sw i) (Pw i) (1 / 2) 1),
       ¬ NetTiming.WindowsPlaced D (1 / 2) sw Pw fun _ => 0 := by
-  refine ⟨.null, "null", Properties.NetworkScan.canon_null, oneInputDeploy, fun _ => oneInputStmt,
-    fun _ => oneInputPart, fun _ => ⟨[], rfl⟩, fun _ => Properties.NetworkScan.bytes_of_data_toList "null".toUTF8,
-    fun _ => rfl, fun _ => ?_, fun h => ?_⟩
+  refine ⟨oneInputDeploy, fun _ => oneInputStmt, fun _ => oneInputPart, fun _ => rfl, fun _ => ?_, fun h => ?_⟩
   · unfold WrongBounds
     intro F hF
     classical
