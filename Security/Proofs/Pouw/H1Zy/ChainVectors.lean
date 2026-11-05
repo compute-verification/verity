@@ -1,4 +1,6 @@
-import Definitions.Pouw.H1Zy.Chain
+module
+
+public import Definitions.Pouw.H1Zy.Chain
 
 /-!
 # `Pouw.H1Zy.h1Chain` against the Python evaluators (vectors)
@@ -15,6 +17,8 @@ Each `example` is a value the Python computes (`segment`'s `KA`, `KK`, `ROT`, `f
 
 There is no vector of `h1Chain` from the seeds in one piece: the kernel recomputes SHA-512 for every noise bit it reads.
 -/
+
+@[expose] public section
 
 namespace Pouw.H1Zy.ChainVectors
 

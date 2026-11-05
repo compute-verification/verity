@@ -1,9 +1,11 @@
-import Proofs.Flock.Soundness.Refine.Regions
-import Proofs.Flock.Soundness.Refine.Walk
-import Flock.HmRow
+module
+
+public import Proofs.Flock.Soundness.Refine.Regions
+public import Proofs.Flock.Soundness.Refine.Walk
+public import Flock.HmRow
 
 /-!
-# The statement decoding, part 3: the setup's statements are well formed (PROTOCOL.md §16.1, §16.2)
+# The statement decoding, part 3: the setup's statements are well formed (`Flock.Statement`)
 
 `StmtWF` and `RegionsWF` are the facts `ofCircuit_fold` and `ofCircuit_extra` take. `setupH_wf` establishes them for
 `Stmt.setupH`.
@@ -15,6 +17,8 @@ import Flock.HmRow
 
 `stmtOf_linkLayout` gives `stmtOf st`'s `LinkLayout`, which the table-soundness theorems take.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -226,7 +230,7 @@ theorem wf_of_facts {st : Stmt} (hslots : ∀ r ∈ st.c.ranges.toList, 7 ≤ r.
   exact ⟨by omega, by omega, hp, fun r hr => ⟨by have := hslots r hr; omega, (hslots r hr).2⟩⟩
 
 set_option maxHeartbeats 2000000 in
-/-- **The hm96 path's statements are well formed** (§16.1, §16.2). `Stmt.setupH` returns only statements whose layout and
+/-- **The hm96 path's statements are well formed** (`Flock.Statement`). `Stmt.setupH` returns only statements whose layout and
 regions are the ones `stmtOf` and `regionsOf` read. -/
 theorem setupH_wf {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}

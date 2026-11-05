@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.PlainDraw
-import Proofs.Flock.Claims.Recursion.RepErase
-import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
+module
+
+public import Proofs.Flock.Claims.KS.PlainDraw
+public import Proofs.Flock.Claims.Recursion.RepErase
+public import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
 
 /-!
 # The plain verdict at the statement's draw, at `VK keep`: the definitions
@@ -14,6 +16,8 @@ round's bytes with its recorded digest. At `keep := id` each is `PlainDraw`'s.
   through `keep`.
 * `plainVerdictAtK`: `plainVerdictAt` at `wrPDK`.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.PlainDraw
 
@@ -47,7 +51,7 @@ def RecordsLiveAtDK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) {J mPts 
 /-- **`TxNoOffAt` through `keep`**: no column off `C` at the session the record decodes to through `keep`. -/
 def TxNoOffAtK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) {N : ℕ} (C : Fin N → List 𝔽) (t : Exec.Transcript) :
     Prop :=
-  ∀ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : Session) (sch : _root_.Flock.Schedule) (s₀ s₁ : StreamRec),
+  ∀ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : RunRecord) (sch : _root_.Flock.Schedule) (s₀ s₁ : StreamRec),
     setupAtD I (some d) = .ok (spec, #[st]) → Record.decodeWithK keep With.std spec t.record = .ok sess →
     _root_.Flock.fast100 st.m = some sch →
     sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString 0) = some s₀ →

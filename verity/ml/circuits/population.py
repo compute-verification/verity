@@ -97,9 +97,14 @@ def _instance_ports(template: SpecializedDefinition) -> Callable[[Any], Ports] |
 
 
 def population_program(template: SpecializedDefinition, n: int, *, version: int = 1) -> Program:
-    """`TemplateInstances_v1{template, N=n}`: `n` independent instances of `template` as one batch, every parameter an array
-    over instances; `template` is its descriptor id. Instance i of the batch is instance i of the input set it is built for.
-    A unit's population declares its coins, positions and sinks per instance (`_instance_ports`). `version=0` builds
+    """The Program of `population`: `TemplateInstances_v1{template, N=n}`."""
+    return Program(population(template, n, version=version))
+
+
+def population(template: SpecializedDefinition, n: int, *, version: int = 1) -> SpecializedDefinition:
+    """`TemplateInstances_v1{template, N=n}`, unbuilt: `n` independent instances of `template` as one batch, every parameter an
+    array over instances; `template` is its descriptor id. Instance i of the batch is instance i of the input set it is built
+    for. A unit's population declares its coins, positions and sinks per instance (`_instance_ports`). `version=0` builds
     `TemplateInstances_v0{N=n}` (`POPULATION_VERSIONS`)."""
     if n < 1:
         raise ValueError("a population has at least one instance")
@@ -116,7 +121,7 @@ def population_program(template: SpecializedDefinition, n: int, *, version: int 
     defn = CompositeDefinition("TemplateInstances", version, (*named, "N"), signature, body,
                                doc=f"{n} independent instances of {template.id}", register=False,
                                ports=_instance_ports(template))
-    return Program(bind(defn, **named, N=n))
+    return bind(defn, **named, N=n)
 
 
-__all__ = ["POPULATION_VERSIONS", "mixed_population_program", "population_program"]
+__all__ = ["POPULATION_VERSIONS", "mixed_population_program", "population", "population_program"]

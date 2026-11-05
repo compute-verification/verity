@@ -7,7 +7,12 @@ two link points of two coins: `rec-top-L0`'s row `x` is node `x` of `root_B`, `r
 A row other than the coin server's `b ‖ c` at `root_B` or at a later top is refused, and so is an inner session record
 whose link points are not the coin server's.
 -/
-import Flock.RecSetup
+module
+
+public import Flock.RecSetup
+meta import Flock.RecSetup
+
+@[expose] public section
 
 namespace Flock.Test.InnerLink
 

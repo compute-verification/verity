@@ -46,7 +46,7 @@ def test_a_dumped_store_reads_every_member_the_committer_reads(tmp_path, cs):
     com, rc = commit_steps(steps(cs), commit_scheme=cs)
     SD.dump(com, rc, tmp_path)
     store, run = SD.load(tmp_path)
-    assert run.run_root == rc.run_root and [s.root for s in run.steps] == [s.root for s in rc.steps]
+    assert run == rc.roots()
     want, got = _reads(OC.OpenedReader(com, rc)), _reads(OC.OpenedReader(store, run))
     assert got == want and all(v for v in got.values())
     assert OC.OpenedReader(store, run)(0, "model.layers.0.self_attn.qkv_proj", 10, 20) == b"\x07" * 10
@@ -140,6 +140,7 @@ def test_a_dumped_store_dumps_again_slim(tmp_path, cs):
     with SD.touched(store) as t:
         want = OC.OpenedReader(store, run)(1, "runner.sampler", 0, 4)
     SD.dump(store, run, tmp_path / "slim", touched=t)
+    assert SD.load(tmp_path / "slim")[1] == run == rc.roots()
     assert OC.OpenedReader(*SD.load(tmp_path / "slim"))(1, "runner.sampler", 0, 4) == want == b"\x01\x02\x03\x04"
 
 

@@ -8,7 +8,7 @@ import json
 import os
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, UTC
 from pathlib import Path
 
 import pytest
@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[4]
 spec = importlib.util.spec_from_file_location("repo_check_placement", ROOT / "tools" / "verity" / "check" / "check.py")
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
-NOW = datetime(2026, 10, 3, 17, 50, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 3, 17, 50, tzinfo=UTC)
 #: placement among two machines, whatever AUTO lists today (this module's own copy of check.py)
 N1, N2 = CHECK.AUTO = ("vy-nebius-1", "vy-nebius-2")
 HOLDER = {"pid": 11, "since": "2026-10-03T17:00Z", "minutes": 50, "cmd": "uv run python tools/verity/check/check.py", "run": "r-held",
@@ -284,7 +284,10 @@ def test_the_payload_reads_both_files_from_stdin_where_neither_script_is_on_disk
     (locks / "lean-slots").write_text("check 2\naudit 2\n")
     held = [_hold(locks / "check-c.lock"), _hold(locks / "lean-check-0.lock")]
     env = {"PATH": os.environ["PATH"], "CHECK_SLOTS": str(locks / "slots"), "LEAN_SLOTS": str(locks / "lean-slots")}
-    r = subprocess.run([sys.executable, "-"], input=CHECK.slots_payload(), cwd=tmp_path, env=env, capture_output=True, check=True)
+    floors = b"DISK_MIN_INODES, DISK_MIN_GB = 400_000, 50"      # the payload reads the machine's own disks, which this test can't set
+    assert floors in (payload := CHECK.slots_payload())
+    payload = payload.replace(floors, b"DISK_MIN_INODES, DISK_MIN_GB = 0, 0")
+    r = subprocess.run([sys.executable, "-"], input=payload, cwd=tmp_path, env=env, capture_output=True, check=True)
     doc = json.loads(r.stdout)
     doc["deadline_in_s"] = None             # the payload reads the machine's own /etc/research/deadline, which this test can't set
     assert [(s["name"], s["holder"]["pid"] if s["holder"] else None, s["blocked"]) for s in doc["check"]["slots"]] == [
@@ -293,7 +296,7 @@ def test_the_payload_reads_both_files_from_stdin_where_neither_script_is_on_disk
     assert [s["holder"]["pid"] if s["holder"] else None for s in pools["check"]["slots"]] == [os.getpid(), None]
     assert CHECK.placement(doc) == (True, 0, "check slots: c held, a free; 0 waiting ahead; Lean check: 1 of 2 free")
     (locks / "lean-slots").write_text("check two\n")
-    doc = json.loads(subprocess.run([sys.executable, "-"], input=CHECK.slots_payload(), cwd=tmp_path, env=env,
+    doc = json.loads(subprocess.run([sys.executable, "-"], input=payload, cwd=tmp_path, env=env,
                                     capture_output=True, check=True).stdout)
     assert doc["lean"]["error"].startswith("Refused: ") and doc["check"]["slots"][0]["name"] == "c"
     for fd in held:
@@ -331,7 +334,8 @@ def test_checks_placed_at_once_go_to_different_machines_until_each_shows_in_its_
     """Parallel launches must not all read one machine's one free slot as theirs and queue there while another machine's
     slot stands free."""
     docs = {N1: machine([slot("a")]), N2: machine([slot("b")])}
-    read = lambda names: json.loads(json.dumps({n: docs[n] for n in names}))
+    def read(names):
+        return json.loads(json.dumps({n: docs[n] for n in names}))
     path, t = tmp_path / "placed.json", [1000.0]
     first = CHECK.place([N1, N2], "a" * 40, True, read=read, path=path, now=lambda: t[0])[1]
     second = CHECK.place([N1, N2], "b" * 40, True, read=read, path=path, now=lambda: t[0])[1]

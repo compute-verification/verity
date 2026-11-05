@@ -1,5 +1,7 @@
-import Proofs.Pouw.PeriodJ10RStrata
-import Proofs.Pouw.PeriodJ10R.Honest
+module
+
+public import Proofs.Pouw.PeriodJ10RStrata
+public import Proofs.Pouw.PeriodJ10R.Honest
 
 /-!
 # An honest J10-R period over several tile strata meets `H1J10RCheckedCreditPeriodStrata`'s premises, and the
@@ -30,6 +32,8 @@ scheme, periods and rates, the provers that fix no word (`idlePlay`, accepted on
 `Λ_s·ln(1/δ_s(s)) < n` at each `s ∈ S` and `S` is non-empty, the summed credit is positive on every path, so the event's
 probability is `1`, above any `∑_{s ∈ S} (δ_s(s) + n·(δ_bind(s) + δ_ks(s))) < 1`.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.PeriodJ10RStrata.SecurityProofs.HonestStrata
 
@@ -231,7 +235,7 @@ open Classical in
 /-- **Stratum `s`'s live words at verdict `acc`**: `stratumLive` with `acc` for `Credit.window`'s verdict. -/
 noncomputable def stratumLiveBy {ι K C : Type} (Sc : Scheme K) (Cd : Declared ι) {m nB mB n : ℕ} (hM : Cd.rounds = m)
     (σ : Fin nB → Fin mB) (s : Fin mB)
-    (Wp : Period C (Coin C (Rest σ s) Cd.rounds σ s) (Fin (tileCount σ s)) Cd.rounds n)
+    (Wp : WindowPlay C (Coin C (Rest σ s) Cd.rounds σ s) (Fin (tileCount σ s)) Cd.rounds n)
     (acc : Paths (StrataCoin C m σ) n → Fin n → Prop) (x : Paths (StrataCoin C m σ) n) : ℝ :=
   ∑ w : Fin n, if UpToBy acc x w then
     ∑ t : Fin (tileCount σ s), (liveWords Sc Cd (tileCount σ s) (Wp.liveAt (pathsAt C hM σ s n x) w) t : ℝ) else 0
@@ -241,7 +245,7 @@ period's fixed words, summed over `S`, are at least the sum over `S` of each str
 prefix. -/
 def StrataBoundBy {ι K T L U C : Type} [Fintype C] {nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (S : Finset (Fin mB)) (Sc : Scheme K) (Cd : Fin mB → Declared ι) (hM : ∀ s, (Cd s).rounds = 1)
-    (Wp : (s : Fin mB) → Period C (Coin C (Rest σ s) (Cd s).rounds σ s) (Fin (tileCount σ s)) (Cd s).rounds n)
+    (Wp : (s : Fin mB) → WindowPlay C (Coin C (Rest σ s) (Cd s).rounds σ s) (Fin (tileCount σ s)) (Cd s).rounds n)
     (Pl : (s : Fin mB) → Play (Coin C (Rest σ s) (Cd s).rounds σ s) n K T L U)
     (acc : Paths (StrataCoin C 1 σ) n → Fin n → Prop) (ρ δs : Fin mB → ℝ) (δ : ℝ) : Prop :=
   prob (fun x : Paths (StrataCoin C 1 σ) n => (∀ s ∈ S, (Pl s).accepts (pathsAt C (hM s) σ s n x)) ∧
@@ -254,7 +258,7 @@ verdict that credits every window, is the conclusion with that verdict in place 
 theorem strataBound_window {ι K T L U C : Type} [Fintype C] {nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (S : Finset (Fin mB)) (Sc : Scheme K) (Cd : Fin mB → Declared ι) (hM : ∀ s, (Cd s).rounds = 1)
     (ws : CreditWindows (StrataCoin C 1 σ) n)
-    (Wp : (s : Fin mB) → Period C (Coin C (Rest σ s) (Cd s).rounds σ s) (Fin (tileCount σ s)) (Cd s).rounds n)
+    (Wp : (s : Fin mB) → WindowPlay C (Coin C (Rest σ s) (Cd s).rounds σ s) (Fin (tileCount σ s)) (Cd s).rounds n)
     (Pl : (s : Fin mB) → Play (Coin C (Rest σ s) (Cd s).rounds σ s) n K T L U) (ρ δs : Fin mB → ℝ) (δ : ℝ) :
     prob (fun x : Paths (StrataCoin C 1 σ) n => (∀ s ∈ S, (Pl s).accepts (pathsAt C (hM s) σ s n x)) ∧
       n * ∑ s ∈ S, ((Pl s).run (pathsAt C (hM s) σ s n x)).fixed <

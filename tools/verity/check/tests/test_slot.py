@@ -8,7 +8,7 @@ import os
 import stat
 import subprocess
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 
 import pytest
@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[4]
 spec = importlib.util.spec_from_file_location("check_slot", ROOT / "tools" / "verity" / "check" / "slot.py")
 SLOT = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(SLOT)
-NOW = datetime(2026, 10, 1, 9, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 1, 9, 0, tzinfo=UTC)
 
 
 class Exec(Exception):
@@ -33,14 +33,17 @@ def any_core(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def roomy_disk(monkeypatch, tmp_path):
-    """The machine's own /workspace never blocks a slot in these tests."""
+    """The machine's own /workspace and check cache never block a slot in these tests."""
     monkeypatch.setattr(SLOT, "DISK", tmp_path / "no-disk")
+    monkeypatch.setattr(SLOT, "cache_disk", lambda: tmp_path / "no-disk")
 
 
 def test_a_disk_short_of_inodes_or_bytes_blocks_every_slot(monkeypatch, tmp_path):
     """A check that starts on a disk at 97-99% of its inodes dies mid-build with ENOSPC, so no slot starts one there."""
     slot = SLOT.parse("a 0-1")[0]
     monkeypatch.setattr(SLOT, "DISK", tmp_path)
+    monkeypatch.setattr(SLOT, "DISK_MIN_INODES", 0)
+    monkeypatch.setattr(SLOT, "DISK_MIN_GB", 0)
     assert SLOT.blocked(slot, NOW) is None
     monkeypatch.setattr(SLOT, "DISK_MIN_INODES", 2**62)
     assert SLOT.blocked(slot, NOW).startswith(f"{tmp_path} has ") and "inodes free" in SLOT.blocked(slot, NOW)
@@ -440,6 +443,29 @@ def test_run_max_counts_from_the_slot_taken_through_the_runs_timeout_control(tmp
             SLOT.main([*bad, "--", "true"])
 
 
+def test_a_wait_with_no_limit_moves_the_run_s_timeout_from_where_it_stands(tmp_path):
+    """`defer_run` adds the wait to the run's timeout as it stands: the control file's (a slot's --run-max, a bare number too) over
+    status.json's launch value; nothing to move outside a run, without a wait or without a timeout; a control file the job can't
+    write (a --job-user run) leaves the timeout as it was and says so."""
+    run = tmp_path / "run"
+    run.mkdir()
+    assert SLOT.defer_run(60, "line", None) is None and SLOT.defer_run(0, "line", str(run)) is None
+    assert SLOT.defer_run(60, "line", str(run)) is None
+    (run / "status.json").write_text(json.dumps({"timeout_s": None}))
+    assert SLOT.defer_run(60, "line", str(run)) is None and not (run / SLOT.RUN_TIMEOUT).exists()
+    (run / "status.json").write_text(json.dumps({"timeout_s": 3600}))
+    assert SLOT.defer_run(60, "line", str(run)).startswith("line: the run's timeout is now 3660 s from its start")
+    assert json.loads((run / SLOT.RUN_TIMEOUT).read_text())["timeout_s"] == 3660
+    (run / SLOT.RUN_TIMEOUT).write_text("9000")
+    SLOT.defer_run(1000, "line", str(run))
+    assert json.loads((run / SLOT.RUN_TIMEOUT).read_text())["timeout_s"] == 10000
+    (run / SLOT.RUN_TIMEOUT).unlink()
+    (run / SLOT.RUN_TIMEOUT).parent.rmdir()
+    (run / SLOT.RUN_TIMEOUT.parent).write_text("not a directory")
+    said = SLOT.defer_run(60, "line", str(run))
+    assert said.startswith("line: the run's timeout stays 3600 s from its start, counting this 60 s wait")
+
+
 def test_a_run_s_slot_record_says_it_waits_until_it_takes_a_slot_or_leaves_the_line(tmp_path, monkeypatch):
     """A check waiting in the line is not reported running since its launch: its run's slot.json says waiting,
     and why, until the slot is taken, then which slot and when; a waiter that gives up says it left, and why."""
@@ -718,7 +744,7 @@ def test_ranked_priority_waiters_go_by_rank_then_arrival_and_ahead_of_unranked_o
     assert SLOT.ahead(low) == 0 and SLOT.ahead(high) == 1 and SLOT.ahead(unranked) == 2 and SLOT.ahead(lane) == 3
     post, p = SLOT.join(tmp_path, priority=True, rank=0)                    # the post-landing run of `main`
     assert SLOT.ahead(post) == 0 and SLOT.ahead(low) == 1
-    waits = SLOT.waiting(tmp_path / SLOT.LINE, datetime(2026, 10, 19, tzinfo=timezone.utc))
+    waits = SLOT.waiting(tmp_path / SLOT.LINE, datetime(2026, 10, 19, tzinfo=UTC))
     assert [w["priority"] for w in waits] == [True, True, True, True, False]
     assert all(w["since"][:4].isdigit() for w in waits)                  # a ranked ticket's arrival still parses
     for fd in (u, h, lo, la, p):
@@ -776,7 +802,7 @@ def test_a_trains_slot_is_taken_only_by_a_priority_waiter(tmp_path, monkeypatch,
     assert ran["slot"] == "d"
     assert SLOT.status(SLOT.parse("d 0 only=trains\n"), tmp_path, NOW)[0].startswith("d  cores 0  trains only  ")
     (tmp_path / "slots").write_text("d 0 only=trains\n")
-    with pytest.raises(SystemExit, match="every slot in .* is for train checks.* drive's full check decides what reaches `main`.*research run --on vy-nebius-cpu-K"):
+    with pytest.raises(SystemExit, match="every slot in .* is for train checks.* drive's full check decides what reaches `main`.*research run --on auto"):
         SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=free)
 
 
@@ -823,7 +849,7 @@ def test_an_all_trains_pool_names_the_lane_pools_beside_it_and_another_machine_o
     monkeypatch.setattr(SLOT.os, "sched_getaffinity", lambda pid: {0, 1, 2})
     with pytest.raises(SystemExit) as e:
         SLOT.main(["--", "check.py"], now=lambda: NOW)
-    assert "a lane check runs on another machine" in str(e.value) and "research run --on vy-nebius-cpu-K" in str(e.value)
+    assert "a lane check runs on another machine" in str(e.value) and "research run --on auto" in str(e.value)
     for name, text in (("gpu", "g 1\n"), ("trains", "t 2 only=trains\n"), ("gpu.bak-20261024", "b 2\n")):
         (tmp_path / name).mkdir()
         (tmp_path / name / "slots").write_text(text)
@@ -832,7 +858,7 @@ def test_an_all_trains_pool_names_the_lane_pools_beside_it_and_another_machine_o
     msg = str(e.value)
     assert f"CHECK_SLOTS={tmp_path / 'gpu' / 'slots'} python3 tools/verity/check/slot.py" in msg
     assert "another machine" not in msg and "trains/slots" not in msg and ".bak-" not in msg
-    assert "research run --on vy-nebius-cpu-K" in msg
+    assert "research run --on auto" in msg
 
 
 def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(monkeypatch):
@@ -858,7 +884,8 @@ def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(mo
 
 def test_record_asks_for_a_train_slot_only_for_a_trains_tests_or_circuit_check_and_through_the_runs_environment(monkeypatch):
     """`research merge` reads a check's command, so the slot memory a train needs travels as `research run --env`, never as a
-    slot.py option; a lane's check, a pooled one, a combine and a train's shard of Lean steps alone need no train slot."""
+    slot.py option; a lane's check, a pooled one, a combine and a train's shard of Lean steps without lean-suites need no train
+    slot."""
     spec2 = importlib.util.spec_from_file_location("repo_check_min_mem", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
@@ -878,6 +905,8 @@ def test_record_asks_for_a_train_slot_only_for_a_trains_tests_or_circuit_check_a
     assert check.train_gb(True, "research", None, False) is None
     assert check.train_gb(True, None, ["lean-build", "lean-audit:Security"], False) is None
     assert check.train_gb(True, None, ["pytest"], False) == check.TRAIN_GB                  # a post-landing run of the suites
+    assert check.train_gb(True, None, ["lean-build", "lean-audit", "lean-suites"], False) == check.TRAIN_GB   # its Lean shard
+    assert check.train_gb(True, None, ["lean-suites:verity-flock"], False) == check.TRAIN_GB
     assert check.train_gb(True, None, ["flock-circuit-build", "circuit-check"], False) == check.TRAIN_GB
     assert check.train_gb(True, None, None, True) is None
     assert check.TRAIN_GB == 300 and SLOT.MIN_MEM_ENV not in " ".join(calls[-1][calls[-1].index("--") + 1:])

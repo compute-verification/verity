@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.BoundBridge
-import Proofs.Flock.Claims.Recursion.BoundForks
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundBridge
+public import Proofs.Flock.Claims.Recursion.BoundForks
 
 /-!
 # The recursion's inner stage from (P1) at `DE`, through one plurality (route 2B)
@@ -27,6 +29,8 @@ import Proofs.Flock.Claims.Recursion.BoundForks
 no `WeightCovers`: `γ` at the bound record need only be at least `DE`'s (`Bd.DE.weight ≤ Bd.weight`).
 `Bound.KS_of_plainKSAbort_binds` is the recursion's KS from it.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

@@ -1,8 +1,10 @@
-import Definitions.NetworkCertifier.Grid
-import Definitions.NetworkCertifier.Run
-import Definitions.NetworkCertifier.Ingress
-import Definitions.NetworkCertifier.Schedule
-import Definitions.NetworkCertifier.Premises
+module
+
+public import Definitions.NetworkCertifier.Grid
+public import Definitions.NetworkCertifier.Run
+public import Definitions.NetworkCertifier.Ingress
+public import Definitions.NetworkCertifier.Schedule
+public import Definitions.NetworkCertifier.Premises
 
 /-!
 # The network certifier's protocol: grids, the interaction, the Program and acceptance
@@ -22,3 +24,5 @@ This module, `Assumptions` and `Guarantees` are the trusted text: they import on
 (`Definitions.Claims`) and Mathlib, so their diff is everything a statement reviewer reads. `SecurityProofs` holds the proofs and every lemma, which nobody reviews
 for meaning.
 -/
+
+@[expose] public section

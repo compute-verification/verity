@@ -1,8 +1,8 @@
-"""The ingress-ids tie on a fake upstream Commit and the warden's own ingress (`io_ids`): each prompt id the warden
-certified on ingress held to every computation of its position in the Commit's `c00.input/ids` rows, and every
-prefix-cache read in place of one, a bucket row at a time, by the reference and by the Boolean Definitions. The first
-negative is a prompt substitution: IoTieRequest alone leaves the prompt ids' values bound to nothing, so the model
-could compute on another prompt of the same length."""
+"""The ingress-ids tie on a fake upstream Commit and the network certifier's own ingress (`io_ids`): each prompt id the
+network certifier certified on ingress held to every computation of its position in the Commit's `c00.input/ids` rows,
+and every prefix-cache read in place of one, a bucket row at a time, by the reference and by the Boolean Definitions.
+The first negative is a prompt substitution: IoTieRequest alone leaves the prompt ids' values bound to nothing, so the
+model could compute on another prompt of the same length."""
 from __future__ import annotations
 
 import hashlib
@@ -69,8 +69,8 @@ def _tokens(ps):
 
 
 def _link(sources, ps=None, tokens=None, shape=SHAPE):
-    """Each bucket's instance: the warden's cells of the requests with prompts `ps` (the sources' by default), the
-    Commit of `tokens` (the prompts' by default) on the schedule, and the verifier's lanes and map."""
+    """Each bucket's instance: the network certifier's cells of the requests with prompts `ps` (the sources' by
+    default), the Commit of `tokens` (the prompts' by default) on the schedule, and the verifier's lanes and map."""
     ps = _prompts(sources) if ps is None else ps
     reqs = [id_request(model="glm", user=f"u{i}", prompt=p, max_tokens=16, temperature=0.7, top_p=0.95, seed=i,
                        frame_bytes=B, offset=0) for i, p in enumerate(ps)]
@@ -147,14 +147,14 @@ def test_a_commit_that_differs_at_a_source_is_refused_in_both_buckets():
 
 def test_the_read_rows_are_the_commits_at_the_maps_steps():
     """Each bucket's read rows are the Commit's registered rows (`verity.ml.commitments.advice`'s registration) at its
-    map's steps: the verifier's own ports (`port_reads`, `INPUT_IDS`) have unit u read bucket u's steps, and the Lean
-    verifier's registered reads (`warden_rows.refusal`) accept every bucket's rows and refuse a row, a salt or a step
-    other than the Commit's, as `reads_open` does in the clear."""
+    map's steps: the verifier's own ports (`port_reads`, `INPUT_IDS`) have proof block u read bucket u's steps, and the
+    Lean verifier's registered reads (`warden_rows.refusal`) accept every bucket's rows and refuse a row, a salt or a
+    step other than the Commit's, as `reads_open` does in the clear."""
     insts, count = _link(ACROSS), len(_steps(ACROSS))
     seed = hashlib.sha512(b"commit").digest()
     rows = I.commit_rows(_steps(ACROSS), _tokens(_prompts(ACROSS)), P)
     salts = [IT.fake_salt(b"commit", s) for s in range(count)]
-    root = ADV.register(rows, 32 * P, seed, salts).root
+    root = ADV.commit(rows, 32 * P, seed, salts).root
     assert root == insts[0].port_root
     dom = IT.domain(seed, count)
     ports = I.port_reads([i.map for i in insts], root, dom.domain_id, count, P)
@@ -182,13 +182,13 @@ def test_the_read_rows_are_the_commits_at_the_maps_steps():
 def test_a_second_tree_of_the_users_ids_is_refused_under_the_commits_registration():
     """The forward computes request 2's position 5 on another id, and the Commit registers that
     tree. The prover hands the verifier instances opened from a second tree of the user's ids under the same public
-    domain, so every unit is 1. The verifier's own ports name the registration's root and its own maps' steps, never
-    an instance's, so the second tree's rows open none of them."""
+    domain, so every proof block is 1. The verifier's own ports name the registration's root and its own maps' steps,
+    never an instance's, so the second tree's rows open none of them."""
     tokens = _tokens(_prompts(ACROSS))
     tokens[2][5] ^= 1
     rows = I.commit_rows(_steps(ACROSS), tokens, P)
     salts, levels, dom_id = I.commit(rows)
-    registered = ADV.register(rows, 32 * P, hashlib.sha512(b"commit").digest(), salts)
+    registered = ADV.commit(rows, 32 * P, hashlib.sha512(b"commit").digest(), salts)
     forged = _link(ACROSS)
     assert registered.root == levels[-1][0] != forged[0].port_root and forged[0].port_domain == dom_id
     assert [I.unit_reference(SHAPE, i) for i in forged] == [1] * BUCKETS
@@ -428,7 +428,7 @@ def test_the_unit_is_its_reference():
     fields, the classes' routing to the fields, the members (slots, the read rows' entries, the sink) into the sort,
     and IoTieRequest's checks beside them. No gate of it hashes: the read rows are the registered reads'.
 
-    Slow (the unit's ANDs traced and evaluated on 19 cases, about 18 s)."""
+    Slow (the proof block's ANDs traced and evaluated on 19 cases, about 18 s)."""
     sh = SHAPE
     ps = _prompts(ACROSS)
     sub, src = _tokens(ps), _tokens(ps)

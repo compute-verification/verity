@@ -1,12 +1,13 @@
-"""The sample: the verifier's own coins pick the proof blocks to prove, sent in the clear after registration and before the session.
+"""The sample: the challenger's coins pick the proof blocks to prove, sent in the clear after registration and before the session.
 
     {"law": "subset", "population": N, "k": K, "units": [<ascending proof block indices>]}
     {"law": "bernoulli", "population": N, "p": "NUM/DEN", "units": [...]}
     {"law": "stratified", "population": N, "k": K, "strata": [<stratum>, ...], "units": [...]}
     {"law": "work", "population": N, "k": K, "strata": [<work stratum>, ...], "units": [...], ["closure": [...]]}
 
-This is the Lean verifier's `Flock.Draw` object and `flock-circuit`'s `unit_draw`. The verifier samples it from the operating system's
-randomness (Lean `flock-verify draw`, or `flock-circuit serve --draw`, live); nothing here samples, and no sample is derived from a
+This is the Lean verifier's `Flock.Draw` object and `flock-circuit`'s `unit_draw`. A stream samples it from the auditor's
+challenger's coins (`service.Stream.select`, Lean `Select.select`); `flock-verify draw` without `--stream` still samples the
+operating system's randomness (`Flock.Draw`'s OS draw); nothing here samples, and no sample is derived from a
 commitment. `check_draw` holds a sample to the registration and to the verifier's own sampling design, and `check_proved` holds the
 proved statement's proof blocks to the sample.
 

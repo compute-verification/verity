@@ -1,5 +1,5 @@
 /-
-§16.10–§16.13's setup over the hash oracle (`Flock.With.Hashes`): `Stmt.setupTablesWith` is `Stmt.setupTables` with every
+`Flock.HmRow`, `HmOut`'s setup over the hash oracle (`Flock.With.Hashes`): `Stmt.setupTablesWith` is `Stmt.setupTables` with every
 digest of what the session brings taken from the oracle, in a verdict monad `M`. Run in `V` with `Hashes.ofSha512 Sha512.hash`
 it is `Stmt.setupTables` (`Flock.With.SetupEq`). The copies keep the originals' text; what hashes nothing is the compiled
 verifier's own, lifted.
@@ -19,8 +19,15 @@ table pins (`Pinned.tableSha`), `row_key_sha512` (`Pinned.rowKey`), the zero row
 a registered scheme through the oracle, `MerkleScheme.opsWith`). No digest of these depends on the session: the flock lock's
 `verifier.stop` names each.
 -/
-import Flock.With.Hashes
-import Flock.HmRow
+module
+
+public import Flock.With.Hashes
+public import Flock.HmRow
+public import Flock.JsonParse
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 
@@ -46,23 +53,14 @@ def Hm96.Default512.treeLeafWith (hs : Hashes M) (bc : ByteArray) : M ByteArray 
 namespace FV3
 
 /-- `FV3.hash` with the oracle's SHA-512. -/
-def hashWith (hs : Hashes M) (tag : String) (parts : List ByteArray) : M ByteArray :=
-  let t := tag.toUTF8
-  hs.sha512 (parts.foldl (fun acc p => acc ++ be64 p.size.toUInt64 ++ p) (FRAME ++ be32 t.size.toUInt32 ++ t))
+def hashWith (hs : Hashes M) (tag : String) (parts : List ByteArray) : M ByteArray := hashM hs.sha512 tag parts
 
 /-- `FV3.leaf` with the oracle's SHA-512. -/
 def leafWith (hs : Hashes M) (dom : ByteArray) (i : Nat) (schema : String) (payload : ByteArray) : M ByteArray :=
-  hashWith hs "leaf" [dom, uint i, uint i, schema.toUTF8, payload]
+  leafM (hashWith hs) dom i schema payload
 
 /-- `FV3.root` with the oracle's SHA-512. -/
-def rootWith (hs : Hashes M) (dom : ByteArray) (leaves : Array ByteArray) : M ByteArray := do
-  let n := leaves.size
-  let width := nextPow2 n
-  let mut level := leaves ++ (← (Array.range (width - n)).mapM fun k => hashWith hs "pad" [dom, uint (n + k)])
-  for depth in [0:log2ceil width] do
-    level ← (Array.range (level.size / 2)).mapM fun i =>
-      hashWith hs "node" [dom, uint depth, uint i, level[2 * i]!, level[2 * i + 1]!]
-  return level.getD 0 ByteArray.empty
+def rootWith (hs : Hashes M) (dom : ByteArray) (leaves : Array ByteArray) : M ByteArray := rootM (hashWith hs) dom leaves
 
 end FV3
 
@@ -321,7 +319,7 @@ def parseWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (
   let name := (head.drop (tags.fileFormat.length + 1)).toString
   let metaLine := (lines.getD 1 "").trimAsciiEnd.toString
   if !metaLine.startsWith "META " then throw "circuit: no META line"
-  let mj ← match Json.parse (metaLine.drop 5).toString with
+  let mj ← match JsonParse.parse (metaLine.drop 5).toString with
     | .ok j => pure j
     | .error e => throw s!"META: {e}"
   if (← J.str mj "format" ctx) != tags.fileFormat || (← J.str mj "statement" ctx) != tags.statement then
@@ -469,7 +467,7 @@ def loadPublicWith (hs : Hashes M) (tags : Tags) (c : Circuit) (file : ByteArray
   let text ← match String.fromUTF8? (file.extract 0 nl) with
     | some s => pure s
     | none => throw "public file: header is not UTF-8"
-  let header ← match Json.parse text with
+  let header ← match JsonParse.parse text with
     | .ok j => pure (Flock.norm j)
     | .error e => throw s!"public file: header: {e}"
   let pctx := "public file"
@@ -564,7 +562,7 @@ def workLawWith (hs : Hashes M) (obj : Json) (program : ByteArray) (k : Nat) (ta
 
 /-- `checkPublic` through the oracle. -/
 def checkPublicWith (hs : Hashes M) (c : Circuit) (pub : Public) : M Unit := do
-  if J.has c.metaJ "links" then throw "META links: a statement with public outputs has no output row to link (links are §16.13's)"
+  if J.has c.metaJ "links" then throw "META links: a statement with public outputs has no output row to link (links are a hidden-output statement's: `HmOut`)"
   let fv ← pub.frameV3
   if (← J.str fv "frame" "public file") != "frame-v3-sha512"
       || (← J.str fv "row_key_sha512" "public file") != Pinned.rowKey then

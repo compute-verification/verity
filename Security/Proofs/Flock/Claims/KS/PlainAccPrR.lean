@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.KS.PlainDrawRColsE
-import Proofs.Flock.Claims.KS.PlainRdRunK
-import Proofs.Flock.Claims.KS.PlainRConflict
-import Proofs.Flock.Claims.KS.PlainKSLinR
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawRColsE
+public import Proofs.Flock.Claims.KS.PlainRdRunK
+public import Proofs.Flock.Claims.KS.PlainRConflict
+public import Proofs.Flock.Claims.KS.PlainKSLinR
 
 /-!
 # The acceptance bound at `VR rd` against the reader's read sets
@@ -19,6 +21,8 @@ import Proofs.Flock.Claims.KS.PlainKSLinR
 * `plain_accPr_le_rdAllR_of rd hno hIn : PlainAccPrRdR rd x`, from what the simulation and the decoders still owe
   (`PlainRdInR rd x`), and `rdAllAt_R`: `PlainKSLinR`'s `RdAllAt` at `deployPlainR Readable.relation rd`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

@@ -1,6 +1,9 @@
-import PouwWindow.Entry
-import Identity.Tagged
-import PouwCommit.Py
+module
+
+public import PouwWindow.Entry
+public import Identity.Tagged
+public import PouwCommit.Py
+public import Identity.Domains
 
 /-!
 # The side trees (`window.py`, "The side trees")
@@ -12,12 +15,14 @@ in one 128-bit word (`sideRow?`, `sideIndex?`). `sideLevels?` builds a tree's le
 reads a leaf's siblings from them, each node past them a node over pad leaves only (`padNode`).
 -/
 
+@[expose] public section
+
 namespace PouwWindow
 
 open Lean (Json)
 open PouwCommit (Domain)
 
-def SIDE_DOMAIN : String := "verity/pouw/window/side-domain/v1"
+def SIDE_DOMAIN : String := Domains.POUW_PERIOD_SIDE_DOMAIN
 /-- `OWNER`: the frame's owner, as C-Flock's statement domains have it. -/
 def owner : Int := -1
 /-- `SIDE_INDEX_WORDS`: a side row's index field, one 128-bit word. -/

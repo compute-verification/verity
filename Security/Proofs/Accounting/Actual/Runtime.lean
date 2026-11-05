@@ -1,5 +1,7 @@
-import Proofs.Accounting.Actual.Windows
-import Proofs.Nci.Reads
+module
+
+public import Proofs.Accounting.Actual.Windows
+public import Proofs.Nci.Reads
 
 /-!
 # The runtime corollary
@@ -8,6 +10,8 @@ At a `t'` at or before `t` by which the developer holds `P`'s outputs at fixed p
 divide its region over `[0, t')` into `n ⌈t'/ω⌉` isolation blocks of at most `Γ` gates, each reading at most `K`
 (`Windows`), so B5 (`Nci.SecurityProofs.UpdatedMatMulReads`) gives `G f(K) ≤ n ⌈t'/ω⌉ K`, and `⌈t'/ω⌉ ω ≤ t' + ω`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Actual
 

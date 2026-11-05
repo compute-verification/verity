@@ -1,8 +1,10 @@
-import Definitions.Accounting.Responder
-import Definitions.Accounting.Window
-import Definitions.Pous.P2.Cost
-import Definitions.Pous.Model.SampledAudit
-import Definitions.Pous.Assumptions.P2
+module
+
+public import Definitions.Accounting.Responder
+public import Definitions.Accounting.Window
+public import Definitions.Pous.P2.Cost
+public import Definitions.Pous.Model.SampledAudit
+public import Definitions.Pous.Assumptions.P2
 
 /-!
 # B2: a location as PoUS's responder (trusted)
@@ -46,7 +48,7 @@ a function of its state at the previous one and of what reached it in between.
   `q`-bit `z` passes while `q + N ≥ M + 1 + τ + H + k` with probability at most `δ + ε + c·2^-k`; `B2AddsP2Ring`, the
   same at P2's deployed point under `P2RingAuditSecure 0 0 0`, with `δ + 2^-129 + 2^-130 + 105·2^-k`.
 * `B2Window`, the core of the oracle-location form (B2's row): where the location does use the ring, at oracle locations
-  of its own (`RingWindow`), a window whose multiplications take at least `ℓ > 0` ticks to answer and which spans at
+  of its own (`RingResponder`), a window whose multiplications take at least `ℓ > 0` ticks to answer and which spans at
   most `D·ℓ` ticks is a step of an `(N, D, Q, L)` sequential responder, which asks the additions, `one` and the keys at
   once and holds each multiplication until the earliest held one could be due. With `ℓ = ⌈(Δ + RTT)/D_p⌉` (the latency
   form of sequential speed) and one challenge every `Δ + RTT` ticks, `D = D_p`. `B2WindowAudit`: so under
@@ -65,6 +67,8 @@ their ticks (the model's `e = 0` across the audit), what the rest sends `X` duri
 the number of values it takes. The proofs are in `Security/Proofs/Accounting/Responder.lean`, `B2Window`'s in
 `Security/Proofs/Accounting/Responder/Latency.lean`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 
@@ -209,7 +213,7 @@ locations answer, wherever the window asks at most `Q` key queries and `L` ring 
 def B2Window : Prop :=
   ∀ {B w p : ℕ} [NeZero p] (sch : Pous.Scheme (Pous.ringRO B w p)) (N D Q L ℓ : ℕ)
     (Wd : Pous.Bits sch.n → Pous.Bits sch.t → ℕ → Pous.Bits N → Fin sch.B →
-      RingWindow B w (Pous.Bits sch.ℓ × Pous.Bits N)),
+      RingResponder B w (Pous.Bits sch.ℓ × Pous.Bits N)),
     0 < ℓ → (∀ W pp j σ i (q : Pous.RingQry B w), q.isMul = true → ℓ ≤ (Wd W pp j σ i).lat q) →
     (∀ W pp j σ i, (Wd W pp j σ i).span ≤ D * ℓ) →
     ∃ A₂ : Pous.SeqResponderOn sch N D Q L, ∀ W pp j σ i (f : Pous.RingQry B w → Pous.Bits w),
@@ -227,7 +231,7 @@ def B2WindowAudit : Prop :=
     Pous.AuditSecureOn sch .sequential N D Q L k δ ε →
     ∀ (W : Pous.Bits sch.n) (A₁ : Pous.Preprocessor sch N)
       (Wd : Pous.Bits sch.n → Pous.Bits sch.t → ℕ → Pous.Bits N → Fin sch.B →
-        RingWindow B w (Pous.Bits sch.ℓ × Pous.Bits N)),
+        RingResponder B w (Pous.Bits sch.ℓ × Pous.Bits N)),
       0 < ℓ → (∀ W pp j σ i (q : Pous.RingQry B w), q.isMul = true → ℓ ≤ (Wd W pp j σ i).lat q) →
       (∀ W pp j σ i, (Wd W pp j σ i).span ≤ D * ℓ) →
       (∀ (ω : (Pous.ringRO B w p).Ω) W pp j σ i, (Wd W pp j σ i).keys ((Pous.ringRO B w p).answer ω) ≤ Q ∧
@@ -253,7 +257,7 @@ def B2WindowP2Ring : Prop :=
         Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).t → ℕ →
         Pous.Bits ((Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Pous.Params.ρ) →
         Fin (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).B →
-        RingWindow (2 ^ 19) 16448 (Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).ℓ ×
+        RingResponder (2 ^ 19) 16448 (Pous.Bits (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).ℓ ×
           Pous.Bits ((Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Pous.Params.ρ))),
       0 < ℓ → T ≤ D * ℓ →
       (∀ W pp j σ i (q : Pous.RingQry (2 ^ 19) 16448), q.isMul = true → ℓ ≤ (Wd W pp j σ i).lat q) →
