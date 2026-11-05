@@ -538,6 +538,8 @@ theorem scanOf_facts {j : Lean.Json} {program : String} {s : Schedule} {sc : Sca
   obtain ⟨⟨xe, de⟩, hback, h⟩ := Fits.bind_ok h
   replace hback := Fits.needSome_ok hback
   obtain ⟨_, -, h⟩ := Fits.bind_ok h
+  obtain ⟨_, -, h⟩ := Fits.bind_ok h
+  obtain ⟨_, -, h⟩ := Fits.bind_ok h
   obtain ⟨⟨⟨xf, df⟩, later⟩, hm, h⟩ := Fits.bind_ok h
   obtain ⟨_, hnames, h⟩ := Fits.bind_ok h
   obtain ⟨_, hcount, h⟩ := Fits.bind_ok h

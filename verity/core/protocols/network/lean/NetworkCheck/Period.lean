@@ -2,9 +2,11 @@ import NetworkCheck.Check
 import NetworkCheck.Circuit
 import CoreProtocol.Profile
 import Flock.HmRow
+import Flock.Draw
 import Flock.Program
 import Flock.Public
 import Flock.RegKnown
+import Flock.TemplateQuery
 import Flock.WindowRecord
 import NciCheck.Desc
 import SampledProofs.Bits
@@ -961,6 +963,24 @@ def readsEntriesFn (j : Json) : Except String Json := do
   return .bool (readsEntries x (← Flock.J.nat j "o" ctx) (← Flock.J.nat j "t0" ctx) (← Flock.J.nat j "every" ctx)
     (← Flock.J.nat j "E" ctx) ks)
 
+/-- The Program `P`'s VUs a template at a time, as the sampled verifier's draw reads them: the template query
+(`Flock.TemplateQuery.evaluate`, on its reading of `P`, `Desc.ofProg`) over every template `P`'s root instantiates, its
+non-input root nodes' Definitions, so it accepts `P` exactly when a template query does and then with that query's
+ranges; grouped by `Flock.Draw.strataOf`, one stratum a template, its units as ascending, disjoint ranges `[lo, hi)`. -/
+def vuStrata (P : Flock.Program.Prog) : V (Array (String × Array (Nat × Nat))) := do
+  let tids := (P.defs.getD P.root default).body.nodes.filterMap fun x =>
+    let k := (P.defs.getD x.fn default).key
+    if Flock.TemplateQuery.isInput k then none else some k
+  let rs ← Flock.TemplateQuery.evaluate (.ofProg P) tids
+  pure (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)))
+
+/-- Whether ranges `a` and `b`, each `[lo, hi)`, share no unit. -/
+def apart (a b : Array (Nat × Nat)) : Bool :=
+  a.all fun (lo, hi) => b.all fun (lo', hi') => min hi hi' ≤ max lo lo'
+
+#guard apart #[(0, 1), (4, 8)] #[(1, 4)] && apart #[(2, 2)] #[(0, 4)] && apart #[] #[(0, 4)] &&
+  !apart #[(0, 2)] #[(1, 3)] && !apart #[(0, 1), (4, 8)] #[(7, 9)] && !apart #[(1, 3)] #[(0, 4)]
+
 /-- The scan's terms from its Program, which must be the registered Program (`program`, its SHA-512), with no two
 definitions of one key (`keysUnique`) and no template keyed
 as an input (`Flock.Program.isInputId`), so the template query (`Flock.TemplateQuery.evaluate`, which finds a
@@ -969,9 +989,11 @@ the generator form of the schedule's execution phase: its root batches
 one instance of bucket 0's template, `T - 1` of the later ingress buckets' (no such template when `T = 1`), both
 returning the same and each one's `row` the schedule's row (`S · B` bytes), then `T` of the egress template, which
 returns a u16 and the schedule's row, and every input gate is a template's parameter. The types are the Boolean profile's, as the
-scan's Definitions have them: a byte 8 bits, a u16 16. An egress template with a row among its parameters, the checker
-form, is refused first, by name: there the egress row is an input gate, which `NetTiming.BoundaryGates.Fits` refuses, and `K`
-would count the free inputs of a Program that only compares its egress rows.
+scan's Definitions have them: a byte 8 bits, a u16 16. First the egress template's VUs are apart from every other
+template's, in the strata the sampled verifier's draw reads (`vuStrata`, `apart`), so no stratum holds both egress and
+ingress units. Then an egress template with a row among its parameters, the checker form, is refused by name: there
+the egress row is an input gate, which `NetTiming.BoundaryGates.Fits` refuses, and `K` would count the free inputs of a
+Program that only compares its egress rows.
 
 Then what `NetTiming.BoundaryGates.Fits` asks of the layout the templates give (`Properties.NetworkScan.scanLayout`), read off
 the description, at the cost of its nodes and returns: the Program is laid out as C-Flock's decoder lays one out and
@@ -999,6 +1021,10 @@ def scanProg (prog : Flock.Program.Prog) (program : String) (s : Schedule) : V S
   let T := s.window
   let row : Flock.Program.Ty := .array (s.allocation * s.cellBytes) (.array 8 (.value 1))
   let (xe, de) ← needSome templates.back? "scan: no template"
+  let strata ← (vuStrata prog).mapError (s!"scan: " ++ ·)
+  let vus := fun (k : String) => ((strata.find? (·.1 == k)).map (·.2)).getD #[]
+  need (templates.pop.all fun (_, d) => apart (vus d.key) (vus de.key)) "scan: the egress template's VUs are not \
+    apart from the ingress templates' (vuStrata): a stratum of the draw would hold both egress and ingress units"
   need (!de.params.any (fun p => p.1 == "row" || p.2 == row)) "scan: the egress template takes its row as an input \
     (the checker form): no egress gate is an input (NetTiming.BoundaryGates.Fits)"
   let ((xf, df), later) ← ingressTemplates templates.pop.toList

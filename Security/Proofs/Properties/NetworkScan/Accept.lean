@@ -129,6 +129,8 @@ theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : 
   obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨⟨xe, de⟩, hback, h⟩ := bind_ok h
   replace hback := needSome_ok hback
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨_, h2, h⟩ := bind_ok h
   obtain ⟨⟨⟨xf, df⟩, later⟩, hm, h⟩ := bind_ok h
   obtain ⟨_, h3, h⟩ := bind_ok h
