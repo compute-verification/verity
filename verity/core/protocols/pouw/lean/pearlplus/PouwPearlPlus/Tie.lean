@@ -6,13 +6,16 @@ import Flock.WindowRecord
 # The window record's tie (`verify_run.tie`, `verify_run.tie_entries`)
 
 `tieOf w passes rounds dropped` holds the run's loaded passes to the window record W (`--tie W`, a
-`verity/registration/v2` record that `served_passes.py retain --window-record` writes): among W's ``pearl-a/`` and
-``pearl-y/`` values, W registers exactly each call's A rows and y, pass i as round ``rounds[i]`` (default i), beside any of
-the ``dropped`` rounds' (passes left out of the retention before the coin). For pass s's call c:
+`verity/registration/v2` record that `served_passes.py retain --window-record` writes): among W's ``pearl-a/``,
+``pearl-y/`` and ``pearl-b/`` values, W registers exactly each call's A rows and y and each weight's B rows, pass i as round
+``rounds[i]`` (default i), beside any of the ``dropped`` rounds' calls' (passes left out of the retention before the coin).
+For pass s's call c, and each weight w the passes read:
 
 * ``pearl-a/{s}/{c}``: the manifest's ``root_a``, its m committed rows of K 32-bit words, under `activationBinding`'s
   `hm96-sha512` domain;
-* ``pearl-y/{s}/{c}``: the manifest's y root, its real rows of N 32-bit words, under `served_y.y_domain`'s.
+* ``pearl-y/{s}/{c}``: the manifest's y root, its real rows of N 32-bit words, under `served_y.y_domain`'s;
+* ``pearl-b/{w}``: the pass's weight root (`Pass.weightRoots`, which the weights' root folds and `checkTile` opens B
+  against), its n rows of K 32-bit words, under `weightBinding`'s, one entry however many passes read it.
 
 An entry that names no ``word_bits`` is at `registered.WORD_BITS` (16). The answer is `{record: digest(W), tables}`; the
 first mismatch is Python's `ValueError`, in its words. Every JSON comparison is by a match (`Want.holds`).
@@ -22,7 +25,12 @@ namespace PouwCheck.PearlPlus
 
 open Lean PouwCommit
 
-def TIE_PREFIXES : List String := ["pearl-a/", "pearl-y/"]
+def TIE_PREFIXES : List String := ["pearl-a/", "pearl-y/", "pearl-b/"]
+/-- `verify_run.TIE_CALLS`: a call's values, a round's. -/
+def TIE_CALLS : List String := ["pearl-a/", "pearl-y/"]
+
+/-- `verify_run._owner`: what a value is of, in a mismatch's words. -/
+def tieOwner (v : String) : String := if v.startsWith "pearl-b/" then "weight" else "call"
 /-- `registered.WORD_BITS`: the word width of an entry that names none. -/
 def REGISTERED_WORD_BITS : Nat := 16
 
@@ -30,6 +38,7 @@ def REGISTERED_WORD_BITS : Nat := 16
 inductive Want where
   | str (s : String)
   | nat (n : Nat)
+  deriving BEq
 
 def Want.holds : Want → Json → Bool
   | .str s, j => fieldIs (some j) s
@@ -44,10 +53,32 @@ private def rawStr (j : Option Json) : String := match j with | some (.str s) =>
 private def domainHex (d : Except String RowsDomain) : Except String String := do
   pure (hex (← d).frame.id)
 
-/-- `tie_entries(passes, rounds)`: what W must register for each call of the run, in Python's order. `passes` are the
-manifests with their loaded passes. -/
-def tieEntries (passes : List (Json × Pass)) (rounds : Option (List Nat)) : Except String (List (String × TieEntry)) :=
-  go (rounds.getD (List.range passes.length)) passes
+/-- `tie_entries`' B rows: pass by pass (each with its round s), each weight its records read, by ascending id, as
+``pearl-b/{w}``: its n rows of K 32-bit words at the pass's weight root, under `weightBinding`'s domain. A weight is one
+entry, the first pass's; a later pass that commits it under another root or shape is Python's `ValueError`. -/
+def tieWeights (passes : List (Nat × Pass)) : Except String (List (String × TieEntry)) := do
+  let mut out : List (String × TieEntry) := []
+  for (s, p) in passes do
+    let us := p.records.map (·.matmul)
+    for w in ((us.map (·.weight)).eraseDups.toArray.qsort (· < ·)).toList do
+      let some u := us.find? (·.weight == w) | continue
+      let d ← domainHex (rowsDomain (weightBinding w) (-2) u.n HM96 false)
+      let x : TieEntry := [("root", .str (hex ((p.weightRoots.lookup w).getD ByteArray.empty))), ("leaves", .nat u.n),
+        ("words", .nat u.k), ("word_bits", .nat 32), ("domain", .str d)]
+      let v := s!"pearl-b/{w}"
+      match out.lookup v with
+      | none => out := out ++ [(v, x)]
+      | some y =>
+        if y != x then
+          throw s!"pass {s} commits weight {w}'s B rows under another root or shape than an earlier pass, and W registers one"
+  pure out
+
+/-- `tie_entries(passes, rounds)`: what W must register for each call of the run, then for each weight the passes read,
+in Python's order. `passes` are the manifests with their loaded passes. -/
+def tieEntries (passes : List (Json × Pass)) (rounds : Option (List Nat)) : Except String (List (String × TieEntry)) := do
+  let ss := rounds.getD (List.range passes.length)
+  let calls ← go ss passes
+  pure (calls ++ (← tieWeights (ss.zip (passes.map (·.2)))))
 where
   go : List Nat → List (Json × Pass) → Except String (List (String × TieEntry))
     | [], [] => pure []
@@ -85,15 +116,17 @@ def tieOf (w : Json) (passes : List (Json × Pass)) (rounds : Option (List Nat))
   let want ← tieEntries passes rounds
   let skip := dropped.map toString
   let extra := got.map (·.1) |>.filter fun v =>
-    (want.lookup v).isNone && !skip.contains ((v.splitOn "/")[1]?.getD "")
+    (want.lookup v).isNone &&
+      !(TIE_CALLS.any (fun t => v.startsWith t) && skip.contains ((v.splitOn "/")[1]?.getD ""))
   if let x :: xs := extra then
-    throw s!"W registers {xs.foldl (fun m y => if y < m then y else m) x}, no call of the run's"
+    let first := xs.foldl (fun m y => if y < m then y else m) x
+    throw s!"W registers {first}, no {tieOwner first} of the run's"
   for (v, x) in want do
     let some e := got.lookup v | throw s!"W registers no {v}"
     let held (k : String) : Json :=
       if k == "word_bits" then (get? e k).getD (.num ⟨REGISTERED_WORD_BITS, 0⟩) else (get? e k).getD .null
     let bad := x.filterMap fun (k, want) => if want.holds (held k) then none else some k
-    if !bad.isEmpty then throw s!"W's {v}: its {", ".intercalate bad} not the call's"
+    if !bad.isEmpty then throw s!"W's {v}: its {", ".intercalate bad} not the {tieOwner v}'s"
   pure { record := ← Flock.WindowRecord.digestHex w, tables := want.length }
 
 end PouwCheck.PearlPlus

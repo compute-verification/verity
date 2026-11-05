@@ -35,8 +35,10 @@ With a window record W (`tie`, Pearl+'s ``verity/registration/v2`` record of the
 retention, whose values the one-stage registration takes as outputs), W is held to the passes before the coin: round s's call c (the served run's
 s-th pass with calls, its manifest's c-th call) is W's ``pearl-a/<s>/<c>`` and ``pearl-y/<s>/<c>``
 (`window_class.PearlTables`), each with its call's root, the domain recomputed from the pass's salt and the call's index,
-and its rows, words and word bits, and W names no other Pearl+ value but a dropped round's; any mismatch rejects the run,
-since a tie to roots the verdict didn't credit is vacuous.
+and its rows, words and word bits; each weight w the passes read is W's ``pearl-b/<w>``, at the root the epoch's weights'
+root folds and the tiles' B rows open against, under `audit.weight_binding`'s domain, its n rows of K 32-bit words; and W
+names no other Pearl+ value but a dropped round's calls'. Any mismatch rejects the run, since a tie to roots the verdict
+didn't credit is vacuous.
 
 The prover may drop passes from its retention before the coin (`served_passes.py retain`: a pass its CPU replay didn't
 finish, or one left over a cap): the verdict is over the retained passes alone, each at its round, and the dropped ones
@@ -109,6 +111,7 @@ from verity.core.protocols.pouw.audit import (
     hm96_salt,
     opened_value,
     rows_domain,
+    weight_binding,
 )
 from verity.core.protocols.pouw import verifier as PV
 from verity.core.protocols.pouw.coins import CoinCommitment
@@ -463,8 +466,10 @@ def run_commitment(passes: list[Pass]) -> bytes:
                                                          p.epoch.salt, *(bytes.fromhex(r or "") for r in y_roots(p)))))
 
 
-TIE_A, TIE_Y = "pearl-a/{s}/{c}", "pearl-y/{s}/{c}"
-TIE_PREFIXES = ("pearl-a/", "pearl-y/")
+TIE_A, TIE_Y, TIE_B = "pearl-a/{s}/{c}", "pearl-y/{s}/{c}", "pearl-b/{w}"
+#: W's Pearl+ values: a call's (a round's, `TIE_CALLS`) and a weight's
+TIE_PREFIXES = ("pearl-a/", "pearl-y/", "pearl-b/")
+TIE_CALLS = TIE_PREFIXES[:2]
 #: the coin record's schema (module docstring, "The coin record")
 COIN_SCHEMA = "verity-pouw/pearl-plus-coin/v2"
 #: the coin record's ``draw.from``: a draw session's coin on the auditor host's challenger, or this node's coins
@@ -490,10 +495,12 @@ def node_draw(root: bytes, asking: Any) -> tuple[bytes, dict]:
 
 def tie_entries(passes: list[Pass], rounds: list[int] | None = None) -> dict[str, dict]:
     """What a window record must register for each call of the run (`tie`): A, its m16 committed rows of K FP32 words under
-    `activation_binding`'s domain, and y, its real rows of N FP32 words under `served_y.y_domain`'s, each at its root.
-    Pass i is round ``rounds[i]`` (default i): its place among the served run's passes with calls."""
-    want = {}
-    for s, p in zip(range(len(passes)) if rounds is None else rounds, passes, strict=True):
+    `activation_binding`'s domain, and y, its real rows of N FP32 words under `served_y.y_domain`'s, each at its root; then
+    for each weight the passes read (pass by pass, by ascending id), B, its n rows of K FP32 words under `weight_binding`'s
+    domain, at the root the pass's epoch commits it under. Pass i is round ``rounds[i]`` (default i): its place among the
+    served run's passes with calls. ValueError for a weight two passes commit under another root or shape."""
+    want, ss = {}, list(range(len(passes)) if rounds is None else rounds)
+    for s, p in zip(ss, passes, strict=True):
         if p.scheme.commitment_hash != HM96:
             raise ValueError(f"a tie is to {HM96} rows, not pass {s}'s {p.scheme.commitment_hash}")
         for c, (r, rec) in enumerate(zip(p.records, p.man["matmuls"], strict=True)):
@@ -506,14 +513,26 @@ def tie_entries(passes: list[Pass], rounds: list[int] | None = None) -> dict[str
             want[TIE_Y.format(s=s, c=c)] = {"root": rec["y"]["root"], "leaves": rec["real_rows"], "words": u.shape.n,
                                             "word_bits": 32,
                                             "domain": SY.y_domain(p.epoch.salt, u.index, rec["real_rows"]).domain_id.hex()}
-    return want
+    weights: dict[str, dict] = {}
+    for s, p in zip(ss, passes):
+        for w, (n, k) in sorted(p.epoch.workload.weights().items()):
+            x = {"root": p.epoch.weight_roots[w].hex(), "leaves": n, "words": k, "word_bits": 32,
+                 "domain": rows_domain(weight_binding(w), -2, n, HM96).domain_id.hex()}
+            if weights.setdefault(TIE_B.format(w=w), x) != x:
+                raise ValueError(f"pass {s} commits weight {w}'s B rows under another root or shape than an earlier pass, "
+                                 "and W registers one")
+    return {**want, **weights}
+
+
+def _owner(v: str) -> str:
+    return "weight" if v.startswith(TIE_PREFIXES[2]) else "call"
 
 
 def tie(w: dict, passes: list[Pass], rounds: list[int] | None = None, dropped: tuple[int, ...] = ()) -> dict:
     """``{"record": digest(W), "tables": n}`` for a window record W that registers exactly the run's calls' A rows and y
-    (`tie_entries`, pass i as round ``rounds[i]``) among its ``pearl-a/`` and ``pearl-y/`` values, beside any of the
-    ``dropped`` rounds' (passes left out of the retention before the coin, which credit nothing); ValueError naming the
-    first mismatch otherwise."""
+    and its weights' B rows (`tie_entries`, pass i as round ``rounds[i]``) among its ``pearl-a/``, ``pearl-y/`` and
+    ``pearl-b/`` values, beside any of the ``dropped`` rounds' calls' (passes left out of the retention before the coin,
+    which credit nothing); ValueError naming the first mismatch otherwise."""
     if not isinstance(w, dict) or w.get("format") != REG.FORMAT_V2 or not isinstance(w.get("registered"), list):
         raise ValueError(f"W is no {REG.FORMAT_V2} record with registered values")
     got: dict[str, dict] = {}
@@ -524,14 +543,14 @@ def tie(w: dict, passes: list[Pass], rounds: list[int] | None = None, dropped: t
                 raise ValueError(f"W registers {v} twice")
             got[v] = e
     want, skip = tie_entries(passes, rounds), {str(s) for s in dropped}
-    if extra := sorted(v for v in set(got) - set(want) if v.split("/")[1] not in skip):
-        raise ValueError(f"W registers {extra[0]}, no call of the run's")
+    if extra := sorted(v for v in set(got) - set(want) if not (v.startswith(TIE_CALLS) and v.split("/")[1] in skip)):
+        raise ValueError(f"W registers {extra[0]}, no {_owner(extra[0])} of the run's")
     for v, x in want.items():
         if (e := got.get(v)) is None:
             raise ValueError(f"W registers no {v}")
         have = {**e, "word_bits": e.get(G.WIDTH_KEY, G.WORD_BITS)}
         if bad := [k for k in x if type(have.get(k)) is not type(x[k]) or have[k] != x[k]]:
-            raise ValueError(f"W's {v}: its {', '.join(bad)} not the call's")
+            raise ValueError(f"W's {v}: its {', '.join(bad)} not the {_owner(v)}'s")
     return {"record": REG.digest(w), "tables": len(want)}
 
 
