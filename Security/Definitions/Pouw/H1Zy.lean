@@ -40,7 +40,7 @@ dequant's and the chain's words as parameters. Proved in `Proofs.Pouw.H1Zy` to c
 to compute `Lane`'s.
 
 `Stream`: `PouwH1LaneZy_v1{PouwH1Tile_v3}`'s `ok`, `Lane`'s with each cell's z `Tile`'s `streamZ` at the lane's noise
-(`laneOkZ` at `laneZ3`). Proved in `Proofs.Pouw.H1Zy` to be `Lane`'s `ok`.
+(`laneOkZ` at `laneZ3`). No theorem relates it to `Lane`'s `ok`.
 
 `LaneChunk`: `PouwH1LaneZyChunk_v1{TILE, CHUNKS, CHUNK}`'s body, one of a lane's chunk statements along `K` past
 `K = 4096`, on its primitives' word views: the carry (`h1zy.CARRY`) as a record, the chain as a step machine
