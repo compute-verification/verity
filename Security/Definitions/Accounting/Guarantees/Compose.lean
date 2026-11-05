@@ -1,6 +1,8 @@
-import Definitions.Claims
-import Definitions.Accounting.Guarantees.Sheet
-import Definitions.Accounting.Assumptions.Compose
+module
+
+public import Definitions.Claims
+public import Definitions.Accounting.Guarantees.Sheet
+public import Definitions.Accounting.Assumptions.Compose
 
 /-!
 # PoUW's credit on an arbitrary declared circuit (trusted)
@@ -77,6 +79,8 @@ circuit's layer.
 `Pouw.Guarantees.EndToEnd` is not subsumed and stays: it is the TT cost model with Fiat–Shamir in the random-oracle
 model, concluding `(1 − ε_s)^t + ε(q, N)`, where `CircuitCredit` is the TS model under live coins.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.Compose
 

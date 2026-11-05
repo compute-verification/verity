@@ -1,7 +1,9 @@
-import Definitions.Pouw.PearlC.Tile
-import Definitions.Pouw.PearlC.Fp4Chain
-import Definitions.Pouw.PearlC.Fp4Skip
-import Definitions.Pouw.PearlC.PeelExact
+module
+
+public import Definitions.Pouw.PearlC.Tile
+public import Definitions.Pouw.PearlC.Fp4Chain
+public import Definitions.Pouw.PearlC.Fp4Skip
+public import Definitions.Pouw.PearlC.PeelExact
 
 /-!
 # Pearl-C4's device record: NVFP4 on sm_120 (trusted; definitions only; staged, nothing pinned)
@@ -88,6 +90,8 @@ same fields and no promotion (`G = 0`):
 `Fp4Sem` holds what is not pinned yet, as `PearlCSem` does for FP8: the noise lines from the oracle and the rows'
 scales `α` and `β`. `devFp4Sm120` is the record at `Fp4.sm120Nvf4` with the §3/§4 prices (`Fp4Prices.sm120`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Fp4Dev
 

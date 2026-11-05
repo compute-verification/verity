@@ -1,7 +1,9 @@
-import Proofs.Flock.SessionLoop.FinRepRows
-import Proofs.Flock.SessionLoop.FinHmkLive
-import Proofs.Flock.Claims.ZK.FinishSwFw
-import Proofs.Flock.Claims.ZK.FinTau
+module
+
+public import Proofs.Flock.SessionLoop.FinRepRows
+public import Proofs.Flock.SessionLoop.FinHmkLive
+public import Proofs.Flock.Claims.ZK.FinishSwFw
+public import Proofs.Flock.Claims.ZK.FinTau
 
 /-!
 # (c.3)'s `FinRepTau`: `τ` from the views is the session's
@@ -22,6 +24,8 @@ return proofs equal up to `eraseZ`, their `τ` agree. `eraseZ` forgets `τ`, so 
 source draws from the tape (`Loop.Level0Src`, `Loop.RepSrc`), `FinRepTau` holds wherever every table's rows hold at its
 base (`Loop.FinRepRows`).
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

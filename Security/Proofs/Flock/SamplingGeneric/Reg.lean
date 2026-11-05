@@ -1,6 +1,8 @@
-import Proofs.Flock.SamplingGeneric.Fails
-import Proofs.Flock.SamplingGeneric.Assemble
-import Proofs.Flock.Soundness.Rewinding
+module
+
+public import Proofs.Flock.SamplingGeneric.Fails
+public import Proofs.Flock.SamplingGeneric.Assemble
+public import Proofs.Flock.Soundness.Rewinding
 
 /-!
 # The sampled compiler's committed form
@@ -27,6 +29,8 @@ registration.
 * `ksReg_of_sessionKS`, `compilerKSReg_of`: **`KSReg`**: the union of the three, and on the draw, a set refused at `δ`
   missed with probability at most `P_a ≤ δ` (`Sessions.draws`).
 -/
+
+@[expose] public section
 
 namespace Claims.SamplingGeneric
 

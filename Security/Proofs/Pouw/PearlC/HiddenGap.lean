@@ -1,7 +1,9 @@
-import Definitions.Pouw.Assumptions.PearlC.HiddenTile
-import Proofs.Pouw.PearlC.DeviceCapRev1Gap
-import Proofs.Pouw.PearlC.TTOutW1
-import Proofs.Core.Game.Prob
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.HiddenTile
+public import Proofs.Pouw.PearlC.DeviceCapRev1Gap
+public import Proofs.Pouw.PearlC.TTOutW1
+public import Proofs.Core.Game.Prob
 
 /-!
 # The hidden audit keeps the sampled audit's gap (compute accounting's file)
@@ -15,6 +17,8 @@ import Proofs.Core.Game.Prob
   8192³, 0.36949% under the hidden audit at W1, for a free hidden audit and `δzk`; nothing about C-Flock until its
   instance lands.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

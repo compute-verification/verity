@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Json
+module
+
+public import Proofs.Flock.Claims.Complete.Json
 
 /-!
 # Custody's round count at the honest run
@@ -7,6 +9,8 @@ import Proofs.Flock.Claims.Complete.Json
 `ProverOk`). The round messages are the sends after the link, each with its coin (`Run.mids_eq`), and those sends are
 the live session's rounds, one each (`Run.json`, `Recs.length_eq`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

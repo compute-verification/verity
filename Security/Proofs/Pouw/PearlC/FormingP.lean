@@ -1,6 +1,8 @@
-import Definitions.Pouw.PearlC.FormingPDefs
-import Proofs.Pouw.PearlC.AtomErr
-import Definitions.Pouw.PearlC.Sm120
+module
+
+public import Definitions.Pouw.PearlC.FormingPDefs
+public import Proofs.Pouw.PearlC.AtomErr
+public import Definitions.Pouw.PearlC.Sm120
 
 /-!
 # P3 over a `Pipeline`: the step's error at any width, and sm_120's atom-mix
@@ -26,6 +28,8 @@ statement) and at sm_120's `w = 26`, and carries the flat-pair instances to `ato
 The width-generic alignment and normalization (`alignedW_value`, `normalizeW_spec`) are proved here rather than taken
 from `PeelExactProofs`' width-26 lemmas, since the step lemma is parametric in `w`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.FormingP
 

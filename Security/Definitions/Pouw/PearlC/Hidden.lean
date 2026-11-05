@@ -1,5 +1,7 @@
-import Definitions.Pouw.PearlC.Tile
-import Definitions.Core.Game
+module
+
+public import Definitions.Pouw.PearlC.Tile
+public import Definitions.Core.Game
 
 /-!
 # The hidden audit (trusted)
@@ -11,6 +13,8 @@ proof of the tile-check Program. `GGapHidden` is `GGapSampled`'s bound for that 
 (its salts, the prover's like the transcripts) and every prover of the proof phase in the class its proof system's
 soundness speaks of (`HiddenAudit.Bounded`), at `t·δzk(q)` more error.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

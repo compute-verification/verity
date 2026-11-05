@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Audit.FlockBatchedAcc
-import Proofs.Flock.Soundness.LinkFinder
+module
+
+public import Proofs.Flock.Soundness.Audit.FlockBatchedAcc
+public import Proofs.Flock.Soundness.LinkFinder
 
 /-!
 # The link theorem: `δ_link` under expected-time collision resistance (DESIGN.md §3)
@@ -18,7 +20,8 @@ named).
 * **The trial** (`trialG`) for a commit string `c`: a draw that reads `c`, uniform among such draws;
   a fresh session; if the session accepts, `k` waits of at most `Rw` reruns each for a rerun in which
   the session accepts. It reads what the extraction from the runs found reads at `c` (`rdT`), and
-  costs `t'` per run it plays (`cT`), `t'·(1 + k)` in expectation.
+  costs `t'` per run it plays (`cT`), `t'·(1 + k)` in expectation, `t'` one run's SHA-512 evaluations: the
+  prover's and the verifier's, whose verdict the trial reads.
 * **The value layer** (`Xplur`) is the plurality of the trial's single readings at each commit
   string. It is a function of the registration state.
 * **The finder** for `c` is `LinkFinder.finderG` on the trial. Its successes output collisions
@@ -38,6 +41,8 @@ with `ρ ≥ N₀/(ek)` for every table. `Q_s` is the expected number of commit 
 read, at most the `N_s` leaves under the serving roots. At `k = ⌈2N₀/e⌉`, `ρ = 1/2`, this is the
 record's `t·N_s(8N₀/e)/2^256` with `Q_s` in place of `N_s`, up to lower-order terms.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 
@@ -177,7 +182,9 @@ noncomputable def rdT (c : vb.Pos) (e : TrialOut L D) : Finset vb.Val :=
   else ∅
 
 open Classical in
-/-- **A trial's cost**: `t'` per run it plays, the fresh one and, if it accepts, each wait's. -/
+/-- **A trial's cost**: `t'` per run it plays, the fresh one and, if it accepts, each wait's. `t'` is one run's SHA-512
+evaluations, the prover's and the verifier's: the trial reads each run's verdict, and its extraction (`extractTableS`)
+reads only openings the accepted runs' verification checked. -/
 noncomputable def cT (t' : ℝ) (e : TrialOut L D) : ℝ :=
   t' * (1 + if accω plan R e.1 e.2.1 then (e.2.2.map (waitCost (accω plan R e.1))).sum else 0)
 
@@ -187,17 +194,11 @@ noncomputable def opOf (c : vb.Pos) (e : TrialOut L D) (v : vb.Val) : vb.Opening
   Classical.epsilon fun o => accω plan R e.1 e.2.1 ∧
     ∃ bs, firsts (accω plan R e.1) e.2.2 = some bs ∧ P.OpensAt H E plan tab vb R τ e.1 bs c v o
 
-open Classical in
-/-- **The finder's output**: a collision from two openings of `c` with different values, the first
-from its first trial, the second from that trial or from the first further trial that reads `c`. -/
+/-- **The finder's output**: a collision from two openings of `c` with different values (`LinkFinder.outOf`), from
+the trials its cost charges. -/
 noncomputable def outC (c : vb.Pos) (x : TrialOut L D × List (TrialOut L D)) :
     Option (List UInt8 × List UInt8) :=
-  if h : ∃ p : TrialOut L D × vb.Val × vb.Val, p.2.1 ≠ p.2.2 ∧
-      p.2.1 ∈ P.rdT H E plan tab vb R τ c x.1 ∧ p.2.2 ∈ P.rdT H E plan tab vb R τ c p.1 ∧
-      (p.1 = x.1 ∨ nextRead (P.rdT H E plan tab vb R τ c) x.2 = some p.1) then
-    some (vb.collide (P.opOf H E plan tab vb R τ c x.1 (Classical.choose h).2.1)
-      (P.opOf H E plan tab vb R τ c (Classical.choose h).1 (Classical.choose h).2.2))
-  else none
+  outOf (P.rdT H E plan tab vb R τ c) (P.opOf H E plan tab vb R τ c) vb.collide x
 
 open Classical in
 /-- **The plurality value at `c`**: the value the trial reads alone most often. -/
@@ -649,8 +650,8 @@ with the expected-time extractor (`analysisBE`) and the plurality value layer (`
 commit strings (`ValueBinding`): at every prover whose explicit finder of each commit string satisfies A2 (`LinkCR`),
 $$\delta_{\rm link}\le\frac{Q_s}{1-\rho}\Big(\frac{2t'(1+k)}{2^{256}}+\frac{1}{eM}+\frac{k}{eR_w}\Big),$$
 with `Q_s = Σ_c π_c` the expected number of commit strings the drawn units read, `ρ` a bound on every table's `N₀/(ek)`,
-`t'` the SHA-512 evaluations of one session run, `M` the finder's further trials and `Rw` the waits' length. At any other
-prover the bound is `⊤` (`linkBoundCR`). -/
+`t'` the SHA-512 evaluations of one session run, the prover's and the verifier's (`cT`), `M` the finder's further
+trials and `Rw` the waits' length. At any other prover the bound is `⊤` (`linkBoundCR`). -/
 theorem flock_batched_linkSoundE
     (hlow : P.LoweringSoundB plan tab decode) {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw)
     (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ}

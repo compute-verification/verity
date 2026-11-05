@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutW1
-import Definitions.Pouw.PearlC.DeviceChainOnly
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+public import Definitions.Pouw.PearlC.DeviceChainOnly
 
 /-!
 # TT_OUT under the chain-only reading at W1 (trusted; named assumptions, `Prop`s taken as hypotheses, never `axiom`s)
@@ -10,6 +12,8 @@ The chain-only forms of `TTOutChainOnly` (`Definitions.Pouw.Assumptions.PearlC.T
 `sha`, `fetch` and the noise are `TTOutW1`'s. `ttOutPearlCDev{,Rev1}ChainOnly_of_w1`
 (`Proofs.Pouw.PearlC.TTOutW1Variants`) gives the abstract form at `CM := W1.w1Priced dv salt`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Assumptions
 

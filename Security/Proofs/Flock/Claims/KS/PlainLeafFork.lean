@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.PlainLeafClash
-import Proofs.Flock.Claims.KS.PlainLeafClashRunK
-import Proofs.Flock.Claims.KS.PlainLiveK
+module
+
+public import Proofs.Flock.Claims.KS.PlainLeafClash
+public import Proofs.Flock.Claims.KS.PlainLeafClashRunK
+public import Proofs.Flock.Claims.KS.PlainLiveK
 
 /-!
 # The concrete simulator's fork bound at plain SHA-512 leaves
@@ -18,6 +20,8 @@ the live opening (`plain_liveOpening`) read no leaf.
 * `plainAdv_leU`: so the fork bound holds at every plain-leaf statement.
 * `PlainHDecUK` … `plainAdv_leUK`: each of these at `VK keep` (`plainSimK keep`, `plainVerdictAtK keep`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

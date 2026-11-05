@@ -1,10 +1,14 @@
-import Proofs.Flock.Claims.Recursion.HonestRepR
-import Proofs.Flock.Claims.Recursion.HonestIVStarR
-import Proofs.Flock.Claims.Recursion.HonestVerdictR
-import Proofs.Flock.Claims.Recursion.HonestVerdictFinal
-import Proofs.Flock.Claims.Recursion.RestVerdictDraw
-import Proofs.Flock.Claims.Recursion.RestLive
-import Proofs.Flock.Soundness.Refine.Seam
+module
+
+public import Proofs.Flock.Claims.Recursion.HonestRepR
+public import Proofs.Flock.Claims.Recursion.HonestIVStarR
+public import Proofs.Flock.Claims.Recursion.HonestVerdictR
+public import Proofs.Flock.Claims.Recursion.HonestVerdictFinal
+public import Proofs.Flock.Claims.Recursion.RestVerdictDraw
+public import Proofs.Flock.Claims.Recursion.RestLive
+public import Proofs.Flock.Soundness.Refine.Seam
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The deployed verifier accepts the honest recursive prover (non-vacuity, the honest half)
@@ -34,6 +38,8 @@ What the run must fix and where it is fixed here:
 * **The record's draw is the statement's** (`honest_drawTied`): the session's `unitDraw` is the statement's draw
   (`stmtOk`), not `null` (`DrawOk`), and rebuilt (`Raw.ins_read`), so rebuilding it again changes nothing (`norm_norm`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Run
 

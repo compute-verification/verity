@@ -1,4 +1,6 @@
-import Definitions.Accounting.Joint
+module
+
+public import Definitions.Accounting.Joint
 
 /-!
 # The joint guarantee (trusted)
@@ -19,6 +21,8 @@ of covert work on a few of the compute coins. A per-run reading, at the coins dr
 
 Each `def G : Prop` is proved by `Accounting.SecurityProofs.G : Accounting.Guarantees.G` (`Proofs.Accounting.Joint`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

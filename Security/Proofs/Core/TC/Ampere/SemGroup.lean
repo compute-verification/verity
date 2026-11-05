@@ -1,11 +1,15 @@
-import Proofs.Core.TC.Ampere.Group
-import Proofs.Core.TC.Proofs.SemGroup
+module
+
+public import Proofs.Core.TC.Ampere.Group
+public import Proofs.Core.TC.Proofs.SemGroup
 
 /-!
 # One Ampere group, the semantics' side
 
 `group_sum` on the Ampere adder in terms of the relation's total and maximum exponent (`groupSum_eq`).
 -/
+
+@[expose] public section
 
 namespace Verity.TC.Proofs.Ampere
 

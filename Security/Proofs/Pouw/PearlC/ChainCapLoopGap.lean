@@ -1,5 +1,7 @@
-import Proofs.Pouw.PearlC.DeviceChainCapGap
-import Definitions.Pouw.PearlC.DevicePricesLoop
+module
+
+public import Proofs.Pouw.PearlC.DeviceChainCapGap
+public import Definitions.Pouw.PearlC.DevicePricesLoop
 
 /-!
 # v2 at the chain cap 1/1,000 at sm_120's in-loop prices (staged)
@@ -14,6 +16,8 @@ Every g here is an upper bound on the in-loop g: `Prices.sm120Loop` rounds the A
 exact 1.047 the chain cap's per-unit values are 0.35980% and 0.35484%, which no pin states; the per-tile rows' exact
 values are `DeviceSm120KernelGap`'s `pearlCSampledSm120v2LoopCast8Cap1000_…`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

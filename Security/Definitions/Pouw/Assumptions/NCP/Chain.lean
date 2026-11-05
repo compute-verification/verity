@@ -1,5 +1,7 @@
-import Definitions.Pouw.NCP.Relation
-import Definitions.Pouw.Assumptions.NCP.GamePinned
+module
+
+public import Definitions.Pouw.NCP.Relation
+public import Definitions.Pouw.Assumptions.NCP.GamePinned
 
 /-!
 # The chain end to end: the wrap link and the lead with independence (trusted)
@@ -16,6 +18,8 @@ running sum is at most `3k·64²`) and for int7 inputs for `k ≤ 2^16` (`Int7In
 `IsLeadInd` is the lead's parameters with every `R` of a default-domain shape having independent checkpoints;
 `LeadIndWitness` is `LeadWitness` with `IsLeadInd` in place of `IsLead`.
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP.Chain
 

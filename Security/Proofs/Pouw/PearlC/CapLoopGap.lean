@@ -1,5 +1,7 @@
-import Proofs.Pouw.PearlC.DeviceCapGap
-import Definitions.Pouw.PearlC.DevicePricesLoop
+module
+
+public import Proofs.Pouw.PearlC.DeviceCapGap
+public import Definitions.Pouw.PearlC.DevicePricesLoop
 
 /-!
 # v2 at the cap 1/1,000 and v1 under rev1 at sm_120's in-loop prices (staged)
@@ -17,6 +19,8 @@ Each is above its issue-bound twin (0.36162%, 0.35576%, 0.51056%, 0.50503%).
 Every g here is an upper bound on the in-loop g: `Prices.sm120Loop` rounds the A-only forming (1.047) up to 2. The
 exact in-loop values for v1 under rev1 and v2 at the cap are `DeviceSm120KernelGap`'s `…LoopCast8…` pins.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

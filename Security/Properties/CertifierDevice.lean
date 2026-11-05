@@ -1,5 +1,7 @@
-import CertifierDevice.Device
-import CertifierDevice.Issuer
+module
+
+public import CertifierDevice.Device
+public import CertifierDevice.Issuer
 
 /-!
 # The certifier device's properties, stated against `step` over traces
@@ -51,6 +53,8 @@ signature `signAt` returns verifies, are completeness, not guarantees: `Proofs.C
 `Proofs.CertifierDevice.Lms.lmsCorrect` and `Proofs.CertifierDevice.Issuer.issuerSigns`, each with a toy-LMS instance in
 `Proofs.CertifierNetwork.Instance`.
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierDevice
 

@@ -1,4 +1,6 @@
-import Definitions.Accounting.TS.Machine
+module
+
+public import Definitions.Accounting.TS.Machine
 
 /-!
 # The data-sheet machine (trusted)
@@ -18,6 +20,8 @@ is SM-clocked, and each row is in SMSP-cycles a warp instruction (four SMSPs an 
 
 The machine model's `DS-NN` vectors are these rows at each device's vendor values (status `datasheet`).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS
 

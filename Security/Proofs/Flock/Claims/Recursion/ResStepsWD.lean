@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.ResStepsWV
-import Proofs.Flock.Claims.Recursion.OpenCoefTie
+module
+
+public import Proofs.Flock.Claims.Recursion.ResStepsWV
+public import Proofs.Flock.Claims.Recursion.OpenCoefTie
 
 /-!
 # `StepsW` at the deployed readers and brings
@@ -8,6 +10,8 @@ import Proofs.Flock.Claims.Recursion.OpenCoefTie
 (`OpenCoef.copyCoefTieRP_deployed`) and the registered setup (`regSetup_deployedB`) closed. What is left is the next
 rows' owners (`NextHeldW`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 

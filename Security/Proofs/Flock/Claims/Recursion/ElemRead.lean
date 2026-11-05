@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowRDep
-import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
-import Proofs.Flock.Claims.Recursion.VerdictRowDSide
-import Proofs.Flock.Claims.Recursion.VerdictFramed
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowRDep
+public import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
+public import Proofs.Flock.Claims.Recursion.VerdictRowDSide
+public import Proofs.Flock.Claims.Recursion.VerdictFramed
 
 /-!
 # Row R's `elemAt`: the rep's `w` read off the messages
@@ -27,6 +29,8 @@ final-check residuals read (`accTerms`). There `w` holds `Top.accRC rd key x ms 
 no coin (`jAt` refills the record's), so two coin lists admitted at one `(x, ms)` give different accumulators for
 one `elemAt`. `elemReadC` is the reader once `elemAt` takes the coins (`resHolds` already has them).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 

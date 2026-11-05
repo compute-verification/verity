@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
 
 /-!
 # The rows link at the compiled `--zk` value layer
@@ -16,6 +18,8 @@ some of the commit strings (`isRead`, `wo`):
 * `RowsCRZC`: `ecr/sha-512` (`Assumptions.SHA512CRExpected`) for the rows finder at each registered read, at the trial's
   cost (`cTZC`), as `LinkCRZC` asks it of the link finders.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

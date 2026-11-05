@@ -12,8 +12,12 @@ Definition's layout, what `posOk`, `outsOk`, the placed rows' widths and D11 rea
   input rows keep their columns;
 - `Tmpl.outsAt`: each output group inside the root's columns, and inside the committed slot at its committed word (D11).
 -/
-import Flock.NetAt
-import Flock.TmplUnroll
+module
+
+public import Flock.NetAt
+public import Flock.TmplUnroll
+
+@[expose] public section
 
 namespace Flock.Tmpl
 
