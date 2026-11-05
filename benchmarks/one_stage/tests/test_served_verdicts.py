@@ -2650,6 +2650,22 @@ def test_the_follow_on_runs_reproof_cmd_after_the_audit_then_the_onsite_record_w
         "--reproof-listing", str(listing), "--certifier-key", str(key), "--site-registration", str(site), "--h1-tie"]
 
 
+def test_the_onsite_record_is_handed_the_inference_only_cases_policy_where_the_composite_wrote_the_case(tmp_path):
+    """Where the composite step wrote the inference-only case under the serve dir's private/, the onsite record is
+    handed the case's private policy.json, where served_cases.py --from-division says α and Γ came from, whether or not
+    it exists (with ALPHA and GAMMA set it doesn't); without the case it is handed none (above)."""
+    assert _deferred(tmp_path, CERTIFIER_FRONT="front", WINDOW_STEPS="1", MAX_TOKENS="1").returncode == 0
+    d, out = tmp_path / "serve", tmp_path / "out"
+    (tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "tree" / "benchmarks" / "one_stage" / "onsite_record.py").write_text(FAKE_ONSITE_RECORD)
+    case = 'mkdir -p "$1/private/inference-only" && echo {} > "$1/private/inference-only/case.json"'
+    rc, lines, order, _limits = _follow(tmp_path, f"{FAKE_SERVED_COMPOSITE}\n{case}")
+    assert rc == 0 and order == ["audit", "period", "record", "composite", "onsite"], (lines, order)
+    assert json.loads((tmp_path / "order.onsite").read_text()) == [
+        str(out), "--window-steps", "1", "--max-tokens", "1",
+        "--inference-only-case-policy", str(d / "private" / "inference-only" / "policy.json"), "--h1-tie"]
+
+
 #: V3c's audit of `FAKE_RECORDS_AUDIT` with its circuits composed: template A's in the warm's cache, linked at its first
 #: member m0 and at m2, a drawn member of it; template B's at m1, which V2_CASE makes the file a v2 case names; and m0's
 #: opening, which isn't a circuit

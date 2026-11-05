@@ -129,7 +129,8 @@ USAGE = 64
 #: α and Γ past any block's (its gates and its fresh-input bits are each under 2^64), at which the policy's check reports
 #: the case's own division.
 UNBOUNDED = (2**64, 2**64)
-#: Where ``--from-division``'s α and Γ come from, in the inference-only case's private ``policy.json``.
+#: Where ``--from-division``'s α and Γ come from, in the inference-only case's private ``policy.json``, its ``read``,
+#: the one field of it the onsite record reads (`onsite_record.alpha_gamma`).
 FROM_DIVISION = "read off the honest division, so the check confirms it complies; not a security setting"
 
 
