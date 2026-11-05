@@ -6,7 +6,6 @@ module
 
 public import Flock.With.Returns
 
-
 @[expose] public section
 
 namespace Flock.With

@@ -1,7 +1,7 @@
 module
 
 public import PouwWindow.Entry
-import PouwCommit.Py
+public import PouwCommit.Py
 
 /-!
 # A call's record (`window.py`, `record_digest` and `record_problem`)

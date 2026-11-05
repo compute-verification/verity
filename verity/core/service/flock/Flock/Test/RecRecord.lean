@@ -10,7 +10,6 @@ module
 public import Flock.RecRecord
 meta import Flock.RecRecord
 
-
 @[expose] public section
 
 namespace Flock.Test.RecRecord
