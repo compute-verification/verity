@@ -112,8 +112,8 @@ The finders and their costs, path by path:
   the table: its cost is about the draws times `T`.
 - **Zero knowledge: extraction first.** The openings a zero-knowledge break equivocates are witness, inside C-Flock's
   proofs, so the finder must extract them before it can compare: its cost is the knowledge extractor's, C-Flock's link
-  finders' `2t'(1 + k)` calls at `t'` one run's (`linkBoundZC`), not `2T`. So `cz` is about `2(1 + k)` times the
-  calls one unit of `Mc`'s time can buy, and `dz` counts the extractor's own calls. Where both the link finder and `Claims.KS`'s
+  finders' `2t'(1 + k)` calls at `t'` one run's, the prover's and the verifier's (`linkBoundZC`), not `2T`. So `cz`
+  is about `2(1 + k)` times the calls one unit of `Mc`'s time can buy, and `dz` counts the extractor's own calls. Where both the link finder and `Claims.KS`'s
   `B` are needed, `fz` runs both and outputs the first collision either finds, at their costs summed.
 
 It assumes nothing of SHA-512. `ecr/sha-512` enters only the floors' bound, adversary by adversary (`breakBound`), at a
