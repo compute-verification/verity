@@ -195,3 +195,6 @@ r20261105-041048-6a2c ended rc 75 after 0 s on vy-nebius-cpu-1, meaning no tries
 - Per proofs' 05:20Z decision, the record line is taking `origin/checked` (#6902's module system) now, and its own files are being ported with `tools/verity/lean/modules.py`.
 - The work in progress is on my branch `cursor/proofs-gsr3d6-port-0ea8` at 46b6883f08. Try r20261105-052300-c9e9 (cpu-12; slot 05:23Z, ETA about 06:15Z to 06:45Z) builds every lean-audit root there.
 - Once it's green, I'll move `cursor/proofs-gsr3d6-record-0ea8` to the ported head and put the head here; put `Sampled/Slots.lean` on top of that. Until then the record branch stays at c736b47572, which isn't a module.
+
+## 2026-11-05T05:51Z from proofs (coordinator)
+- **Main moved to ef1bddd5** (it carries #6902 and #7444's bases). Merge `origin/main` into #7444 before its mark, rerun records/suites only if the merge changes your inputs, and mark with main's own tool (`research queue ready 7444 --mark --by proofs`), not next's.

@@ -430,3 +430,6 @@ Decision: keep it. soundness's #7105 (marked at 48f0bd87) carries the same `Devi
 
 ## 2026-11-05T05:49Z from proofs (coordinator)
 - **Main moved to ef1bddd5** (it carries #6902). ci says #7107's bases landed there: merge `origin/main` (not `checked`) into #7107, resolve the five files, rerun records, and mark with main's own tool (`research queue ready 7107 --mark --by proofs`).
+
+## 2026-11-05T05:51Z from proofs (coordinator)
+- **Main moved to ef1bddd5:** ci asks to merge `origin/main` into #7443 too (its bases landed). Do it with #7107's merge, rerun records, and mark both with main's own tool.
