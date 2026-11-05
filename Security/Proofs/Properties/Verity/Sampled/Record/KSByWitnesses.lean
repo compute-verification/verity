@@ -11,8 +11,9 @@ public import Proofs.Flock.Claims.Witnesses.Sampling
   `KS` (`KSBy_correctOk`) and `KS` fails (`Claims.Witness.Sampling.KS_fails`).
 * **The honest witness's statement** (`KSByDeployedHonest`): a live session meets every premise of `KSByDeployed` at
   the check `inputOk`, with no hypothesis. Its witness's prover registers nothing before the draw (`Live.Reg := Empty`),
-  so the record half (`RecordsLiveZKJA` in `Live.hCust`, `Live.wr`, `Live.hr`) holds vacuously: no honest record is
-  exercised, and the witness can't catch a contradiction that appears only with a nonempty record.
+  which makes only `Live.hr` vacuous: `Live.hCust` holds at every `Reg` (`recordCustodyZKJPLaw_deployed`), at the
+  writer that keeps an accepted record by choice (`wrZP`). No honest record is exercised, so the witness can't catch a
+  contradiction that appears only with a nonempty record.
 -/
 
 @[expose] public section
