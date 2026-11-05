@@ -17,8 +17,8 @@ Clause (i) of `MovesOf`: the record v2 reads in an accepted play decodes (`Exec.
   (`Verity.SameAccepts`) and v2 drew `units` over `n` units there (`Drew`), the units are ascending below `n`
   (`unitsAscending`) and the record's `unit_draw` is the subset draw of those units,
   `UnitDraw.toJson ⟨.subset units.size, n, units, #[]⟩` (`recordDrawn`): v2 accepts only a subset record draw
-  (`recordDraw_subset`), whatever law it drew by. `Sampled/Held.lean` reduces it to the record draw's population and
-  units (`drawHeld_of`).
+  (`recordDraw_subset`), whatever law it drew by. `Sampled/Held.lean` proves it for every composite (`drawHeld`), from
+  the record draw's population and units (`drawHeld_of`).
 * **The record half** (`recordDraw_of_drew`): where `DrawHeld` holds, `k` accepted, v2 drew `units`, and the session's
   law and population are v2's, the record decodes to the session's draw file, the subset print of `kd` units
   (`Live.dj`), at the proof blocks `units` names: v2 drew `kd` units (`Flock.Bridge.drawUnits_size`), and the draw file
