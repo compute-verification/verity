@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.Stopped
+module
+
+public import Proofs.Flock.Claims.ZK.Stopped
 
 /-!
 # The masked session's rounds where no refusal is seen
@@ -18,6 +20,8 @@ session sends, it sends the session's body at their count, tagged `0` (`FlockCom
   tagged `0`, or it stops within them and the encoding is `[]` (`hstep`). The session can stop with no refusal the
   coins show: table `0`'s extra claims throw at a statement whose regions do not fit, right after the link message.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

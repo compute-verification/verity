@@ -1,6 +1,8 @@
-import Proofs.Flock.Recursive.ValueChecked
-import Proofs.Flock.C3.RegLevels.VRows
-import Proofs.Flock.C3.RegLevels.OutRegs
+module
+
+public import Proofs.Flock.Recursive.ValueChecked
+public import Proofs.Flock.C3.RegLevels.VRows
+public import Proofs.Flock.C3.RegLevels.OutRegs
 
 /-!
 # The value tie at a part's `v` and `out`: `VRowsAre`, `ZeroReads` and `OwnNamesV` at one read
@@ -23,6 +25,8 @@ The family's obligations hold these at every accepted outer proof; there they ne
 guarantee's disjunct, `VBridgeCOff`), the rep's rounds and comb as the family's (`Family.InnerIsRep`), and `hone`,
 `hpos` from the family's reads (`Family.readOne_of`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

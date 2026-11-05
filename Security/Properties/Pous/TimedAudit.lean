@@ -1,5 +1,7 @@
-import PousCheck.TimedAudit
-import Properties.Pous
+module
+
+public import PousCheck.TimedAudit
+public import Properties.Pous
 
 /-!
 # The timed audit's property, stated against the Lean code
@@ -21,6 +23,8 @@ It takes the binding form: the conclusion holds, or the run hashed two distinct 
 (`runStrings`: the inner nodes of the tree over `LEAVES.bin` the audit computes, and of the tree over `C*`'s leaves setup
 computes). Proved (`Proofs.Properties.Pous.TimedAudit`).
 -/
+
+@[expose] public section
 
 namespace PousCheck.Properties
 

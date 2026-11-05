@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Exec.FlockBatchedAccL
-import Proofs.Flock.Soundness.Discharge.Exec.CompiledTableL
-import Proofs.Flock.Soundness.StrictCR
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.FlockBatchedAccL
+public import Proofs.Flock.Soundness.Discharge.Exec.CompiledTableL
+public import Proofs.Flock.Soundness.StrictCR
 
 /-!
 # The salted compiled and knowledge terms under strict-time collision resistance
@@ -16,6 +18,8 @@ different rows, a collision of `H` (`op₀L_conflict_collision`, `opRL_conflict_
 
 The budgets are the hypotheses' to state: the prover is a strategy, and Lean counts no evaluations.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.Zk.Json.Session
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Json.Session
 
 /-!
 # What the honest masked session returns and sends, at any number of tables
@@ -10,6 +12,8 @@ well-formed stream per rep stream; and its sends are the link of those `root_B`s
 streams' rounds in order (`SessionFactsJ`). Each table's masked commitment and reps are asked for what `ProverOkZk`
 asks of one table's.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

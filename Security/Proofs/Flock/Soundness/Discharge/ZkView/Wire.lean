@@ -1,4 +1,6 @@
-import Flock.ZkProof
+module
+
+public import Flock.ZkProof
 
 /-!
 # A `--zk` proof file's bytes
@@ -12,6 +14,8 @@ consistency nonces, `sumcheck_transcript`) empty, each ring switch's grinding no
 digest `hashLen` bytes, every opened salt `saltLen` bytes, the inner proof's salts 192 bytes and its path entries 64; and
 every query, claim and consistency nonce `0` (`NoncesZero`, R4).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkView
 

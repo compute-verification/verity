@@ -1,10 +1,12 @@
-import Mathlib.Tactic.LinearCombination
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Ring
-import Definitions.Pouw.Fp8Atom.Pinned
-import Proofs.Pouw.Fp8Atom.Checks.Add
+module
+
+public import Mathlib.Tactic.LinearCombination
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.NormNum
+public import Mathlib.Tactic.Ring
+public import Definitions.Pouw.Fp8Atom.Pinned
+public import Proofs.Pouw.Fp8Atom.Checks.Add
 
 /-!
 # Proofs of the FP32 add statements
@@ -15,6 +17,8 @@ magnitude; `rp` is monotone within a binade (`roundEven_mono`) and across binade
 `[2^k, 2^(k+1)]`). Exactness is `roundEven` of an integer; absorption and movement follow from `roundEven_near`,
 monotonicity and exactness at the neighbours `r ± ulp r`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.Proofs
 

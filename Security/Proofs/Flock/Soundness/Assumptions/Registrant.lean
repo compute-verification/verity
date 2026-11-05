@@ -1,4 +1,6 @@
-import Proofs.Flock.Recursive.Raw
+module
+
+public import Proofs.Flock.Recursive.Raw
 
 /-!
 # The registrant's openings: the recursive audit's premise on the provers it covers
@@ -12,6 +14,8 @@ outside it. `FlockC3.Compose.registrantCovers_attained` (`Proofs.Flock.C3.Compos
 of V*'s sessions whose registrant opens the rows the verifier reads, together with the guarantee's other hypotheses on
 them.
 -/
+
+@[expose] public section
 
 namespace Flock.Assumptions
 

@@ -1288,6 +1288,37 @@ end Pouw
         ("Coins", "Pouw.Coins", 11), ("Gate", "Pouw.Gate", 16), ("Prog", "Pouw.Prog", 17)]
 
 
+def test_a_ported_file_reads_as_its_plain_form():
+    """The codemod's layout (`tools/verity/lean/modules.py`): an `@[expose] public section` opened after the header and
+    never closed, around namespaces and sections of the file's own, changes no declaration's name."""
+    src = """module
+
+public import Definitions.Core
+meta import Definitions.Tactic
+import Definitions.Private
+
+/-! A module. -/
+
+@[expose] public section
+
+namespace Pouw
+
+@[expose] public section
+def Prog (n : Nat) : Type := Fin n
+end
+
+public section
+structure Coins where
+  bits : Nat
+end
+
+meta def Witness : Nat → Type := fun _ => Unit
+
+end Pouw
+"""
+    assert [h.key for _, h in lean_definitions(src)[0]] == ["Pouw.Prog", "Pouw.Coins", "Pouw.Witness"]
+
+
 def test_the_scan_reads_python_classes():
     src = """class Coins:
     class Draw(Base):

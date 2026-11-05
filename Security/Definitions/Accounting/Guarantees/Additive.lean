@@ -1,11 +1,14 @@
-import Definitions.Accounting.Additive
+module
+
+public import Definitions.Accounting.Additive
 
 /-!
 # Compute additivity's capacity from the machine model 𝓜 (trusted)
 
-Compute additivity (W: `Accounting.Assumptions.RateComputeAdditive` for a joint run,
-`Accounting.Remote.Assumptions.ComputeAdditive` for the remote audit) says the works the subprotocols certify on one
-node add under its capacity. 𝓜 (`Verity.Accel.Machine`) gives the capacity part, counted once per resource:
+Compute additivity (W: the compute field of a joint run's realization, `Accounting.RealizesRate`'s and
+`Accounting.RealizesRatePartial`'s, and `Accounting.Remote.Assumptions.ComputeAdditive` for the remote audit) says the
+works the subprotocols certify on one node add under its capacity. 𝓜 (`Verity.Accel.Machine`) gives the capacity part,
+counted once per resource:
 
 * **Rates add over runs back to back** (`AccelRate`). A device's period is runs of 𝓜 back to back
   (`Accounting.AccelRun`), and its instructions are one stream. Runs that each use at most `ρ_r` units of each resource
@@ -20,6 +23,8 @@ a period itself: a block of the runs `es` meets `AccelRate`'s hypothesis when `e
 
 The proofs are in `Security/Proofs/Accounting/Additive.lean`.
 -/
+
+@[expose] public section
 
 open scoped NNRat
 

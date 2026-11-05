@@ -1,6 +1,8 @@
-import Definitions.Hash.Keyed
-import Definitions.Hash.Hm96
-import Definitions.Pouw.Basic.Prob
+module
+
+public import Definitions.Hash.Keyed
+public import Definitions.Hash.Hm96
+public import Definitions.Pouw.Basic.Prob
 
 /-!
 # The keyed leaf's hiding game (trusted)
@@ -26,6 +28,8 @@ tops is an explicit distinguisher's advantage, built from `A`, in a game of its 
 uniform bytes independent of `ks`, and once the digests are, a view of distinct top messages is a uniform tuple
 whatever they are.
 -/
+
+@[expose] public section
 
 namespace Pouw.KeyedLeaf
 

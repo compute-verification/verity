@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.HpEarlyTrace
-import Proofs.Flock.Claims.Recursion.VStarTraceOk
+module
+
+public import Proofs.Flock.Claims.Recursion.HpEarlyTrace
+public import Proofs.Flock.Claims.Recursion.VStarTraceOk
 
 /-!
 # `CircOkAt` at the staged parts (`circOkAt_staged`)
@@ -14,6 +16,8 @@ part (`StagedPart`), from the verifier's own checks of the staged table, which i
 * every port v1: V\*'s parse check refuses a `sha512/row/v2` port (`checkParsed_v1`). V\*'s META writes `row_schema` and
   never `row_schemas` (`VStar/Compose.lean`, `metaHead`), so every deployed V\* port is v1 and the honest table passes.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.SlotsDeployed
 

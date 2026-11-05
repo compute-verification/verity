@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.MaskTape
+module
+
+public import Proofs.Flock.Claims.ZK.MaskTape
 
 /-!
 # The deployed masked session on a class of statements, and per statement
@@ -26,6 +28,8 @@ import Proofs.Flock.Claims.ZK.MaskTape
   no tape premise, under the round plan's `Causal` and the three rounds at each statement.
   `Flock.zk_deployZk_masked_atMask_stop_rx` is it at a stopping round plan, its third round `ZkTables.honestPR`'s alone.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 
