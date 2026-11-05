@@ -396,10 +396,11 @@ def Memo.switchVecs (memo : Option Memo) (g : Array F128) (claims : Array Claim)
     {sv : Array (Array F128) // sv = (Array.range claims.size).map fun k => switchVec g claims[k]!} :=
   match memo with
   | some M =>
-    if hg : withPtrEq M.g g (fun _ => decide (M.g = g)) (fun h => decide_eq_true h) = true then
-      if hx : claims.map (·.x) = M.xs then ⟨M.sv, by rw [M.sv_eq claims hx, of_decide_eq_true hg]⟩
+    match withPtrEqDecEq M.g g (fun _ => inferInstance) with
+    | .isTrue hg =>
+      if hx : claims.map (·.x) = M.xs then ⟨M.sv, by rw [M.sv_eq claims hx, hg]⟩
       else ⟨Fast.parTab 1 (fun k => switchVec g claims[k]!) claims.size, Fast.parTab_eq _ _ _⟩
-    else ⟨Fast.parTab 1 (fun k => switchVec g claims[k]!) claims.size, Fast.parTab_eq _ _ _⟩
+    | .isFalse _ => ⟨Fast.parTab 1 (fun k => switchVec g claims[k]!) claims.size, Fast.parTab_eq _ _ _⟩
   | none => ⟨Fast.parTab 1 (fun k => switchVec g claims[k]!) claims.size, Fast.parTab_eq _ _ _⟩
 
 /-- The batched basis on `2^l` points at `sws`: `memo`'s where it holds it at `sws` and `l`, else computed. -/
