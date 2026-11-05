@@ -832,22 +832,27 @@ def keep(q: str, pkg: str, src: Path, out: Path, log=print) -> bytes:
     return kept.read_bytes()
 
 
-def settled(p: str, pkg: str, got: int, mine_out: Path, base: Path, out: Path, new: dict[str, bytes], log=print) -> str:
-    """``p``'s outcome once check.py on it exited ``got``, its reports under ``mine_out`` and its packages under ``base``:
-    `PASS`; `REGENERATED` when this run kept its record (``new``), or when every failure in its reports is a record difference
-    (`differences`), each record check.py wrote for one then kept (`keep`) and put in ``new``; `FAILED` otherwise."""
-    if not got:
-        return REGENERATED if f"{p}/{LOCK}" in new else PASS
-    if not AUDIT.killed(got) and (diff := differences(mine_out, base)):
-        for q, src in diff.items():
-            new[f"{q}/{LOCK}"] = keep(q, pkg, src, out, log)
+def settled(p: str, pkg: str, got: int, mine_out: Path, base: Path, out: Path, new: dict[str, bytes],
+            own: Path | None = None, log=print) -> str:
+    """``p``'s outcome once check.py on it exited ``got``, its reports under ``mine_out``, its packages under ``base`` and
+    ``own`` the record its `--update` wrote that differs from the committed one (`checked`): `PASS`; `REGENERATED` when
+    ``own`` is set or every failure in its reports is a record difference (`differences`), each such record then kept
+    (`keep`) and put in ``new``; `FAILED` otherwise, keeping nothing, since `record/` holds only records the gate may take."""
+    diff = {} if not got else None if AUDIT.killed(got) else differences(mine_out, base) or None
+    if diff is None:
+        if p != pkg:
+            log(f"lean-records: {p} requires {pkg}, and its records fail on this build, not only on record differences, "
+                f"which take a person (reports in {mine_out})")
+        elif own:
+            log(f"lean-records: {p}: its records fail on this build, not only on record differences, so the record check.py "
+                f"--update wrote ({own}) is not kept")
+        return FAILED
+    for q, src in {**({p: own} if own else {}), **diff}.items():
+        new[f"{q}/{LOCK}"] = keep(q, pkg, src, out, log)
+    if diff:
         log(f"lean-records: {p}: every failure of its records is a record difference, which the kept record"
             f"{'s settle' if len(diff) > 1 else ' settles'}: not a failure of the run")
-        return REGENERATED
-    if p != pkg:
-        log(f"lean-records: {p} requires {pkg}, and its records fail on this build, not only on record differences, which "
-            f"take a person (reports in {mine_out})")
-    return FAILED
+    return REGENERATED if own or diff else PASS
 
 
 def verdicts(todo: dict[str, str], new: dict[str, bytes], out: Path | None, base: Path, files: list[str],
@@ -856,8 +861,10 @@ def verdicts(todo: dict[str, str], new: dict[str, bytes], out: Path | None, base
     `record` (its path in the run's files, else under ``out``) and `record_sha256`; `reused` (why) for one that needed no
     run}}, for each package of ``todo`` ({package: its outcome}), each of ``reused_`` (`PASS`), and each package check.py
     audited beside one, its outcome read from its report under ``out`` (`PASS` when it failed nothing, `REGENERATED` when
-    this run kept its record, `FAILED` otherwise), the worse when it was audited twice; with no ``out`` (nothing ran),
-    none of those."""
+    it failed only on record differences, which check.py's `regenerated` says, and this run kept its record, `FAILED`
+    otherwise), the worse when it was audited twice; with no ``out`` (nothing ran),
+    none of those. A record kept of a package that ends `FAILED` (audited beside one that settled it, and failing
+    otherwise beside another) is removed: `record/` holds only `REGENERATED` packages'."""
     got = {**{p: PASS for p in reused_ or {}}, **todo}
     for a in [out / "audit.json", *sorted(out.glob("requirer-*/audit.json"))] if out else []:
         try:
@@ -868,7 +875,7 @@ def verdicts(todo: dict[str, str], new: dict[str, bytes], out: Path | None, base
             q = os.path.relpath(Path(str(r.get("package"))).resolve(), base.resolve()) if isinstance(r, dict) else ".."
             if q in todo or q.startswith(".."):
                 continue
-            o = PASS if not r.get("failures") else REGENERATED if f"{q}/{LOCK}" in new else FAILED
+            o = PASS if not r.get("failures") else REGENERATED if r.get("regenerated") and f"{q}/{LOCK}" in new else FAILED
             got[q] = max(got.get(q, PASS), o, key=OUTCOMES.index)
     run_dir = os.environ.get("RESEARCH_RUN_DIR")
     recs: dict[str, dict] = {}
@@ -881,8 +888,13 @@ def verdicts(todo: dict[str, str], new: dict[str, bytes], out: Path | None, base
         rec: dict = {"outcome": o, "inputs_key": key}
         if out and f"{q}/{LOCK}" in new:
             kept = out / "record" / q / LOCK
-            rec |= {"record": os.path.relpath(kept, run_dir) if run_dir else str(kept),
-                    "record_sha256": hashlib.sha256(new[f"{q}/{LOCK}"]).hexdigest()}
+            if o == FAILED:
+                kept.unlink(missing_ok=True)
+                log(f"lean-records: {q}: its records fail beside another package, not only on record differences, so its "
+                    f"record is not kept")
+            else:
+                rec |= {"record": os.path.relpath(kept, run_dir) if run_dir else str(kept),
+                        "record_sha256": hashlib.sha256(new[f"{q}/{LOCK}"]).hexdigest()}
         if q in (reused_ or {}):
             rec["reused"] = reused_[q]
         recs[q] = rec
@@ -991,9 +1003,10 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 # Keep the regenerated record now: the next requirer iteration's `sync` restores the committed one over
                 # it, and a recorded run never writes ROOT (the commit's shared source tree), so without this copy the
                 # record a lane must commit survives nowhere the run keeps (LEAN-10).
-                if (b := checked(p, pkg, tree / p / LOCK, committed[f"{p}/{LOCK}"], up, out, log)) is not None:
-                    new[f"{p}/{LOCK}"] = b
-                outcomes[p] = settled(p, pkg, got, mine_out, tree, out, new, log)
+                own = checked(tree / p / LOCK, committed[f"{p}/{LOCK}"], up)
+                outcomes[p] = settled(p, pkg, got, mine_out, tree, out, new, own, log)
+                if own and outcomes[p] != FAILED:
+                    write_back(p, own, log)
                 if got == 0:
                     try:
                         log(f"lean-records: {p}: {artifacts.put({tree / p: report(mine_out, tree / p)}, since, log)} "
@@ -1049,9 +1062,8 @@ def dev_records(pkg: str, todo: list[str], update: bool, moved: Path | None, out
         log(f"lean-records: {p}: check.py --dev-cache{' --update' if again else ''} exit {got} in {time.monotonic() - t0:.0f} s "
             f"on {ROOT}, without the kernel replay or the tests: a {FAST_KIND} result, which check and research merge refuse; "
             f"reports in {mine_out}")
-        if (b := checked(p, pkg, ROOT / p / LOCK, committed[f"{p}/{LOCK}"], up, out, log)) is not None:
-            new[f"{p}/{LOCK}"] = b
-        outcomes[p] = settled(p, pkg, got, mine_out, ROOT, out, new, log)
+        outcomes[p] = settled(p, pkg, got, mine_out, ROOT, out, new, checked(ROOT / p / LOCK, committed[f"{p}/{LOCK}"], up),
+                              log)
         if outcomes[p] == FAILED:
             rc = rc or got
         else:
@@ -1302,17 +1314,19 @@ def regenerates(p: str, pkg: str, got: int, update: bool, out: Path, at: Path, l
     return True
 
 
-def checked(p: str, pkg: str, record: Path, committed: bytes | None, up: bool, out: Path, log=print) -> bytes | None:
-    """After check.py on ``p``: when it ran with `--update` (``up``) and the record it wrote (``record``) differs from the
-    ``committed`` bytes, that record, kept (`keep`) and, outside a recorded run, written into this checkout, and returned."""
-    if not up or record.read_bytes() == committed:
-        return None
-    b = keep(p, pkg, record, out, log)
+def checked(record: Path, committed: bytes | None, up: bool) -> Path | None:
+    """After check.py on a package: ``record`` when it ran with `--update` (``up``) and the record it wrote there differs from
+    the ``committed`` bytes, else None."""
+    return record if up and record.read_bytes() != committed else None
+
+
+def write_back(p: str, record: Path, log=print) -> None:
+    """Outside a recorded run, which never writes ROOT (the commit's shared source tree), write ``p``'s kept ``record`` into
+    this checkout."""
     mine = ROOT / p / LOCK
     if not os.environ.get("RESEARCH_RUN_DIR") and record != mine:
         shutil.copyfile(record, mine)
         log(f"lean-records: wrote {mine}")
-    return b
 
 
 def run(cache: Path, deps: Path, tree: Path, log=print) -> int:
