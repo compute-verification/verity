@@ -41,7 +41,8 @@ The network certifier's LMS parameters, key and session, against which the check
 period's `p.lms`, `p.key` and `p.session`. The statement says where they come from: the auditor's record of its
 network certifier's deployment (`NetTiming.NetworkCertifierRecord`, `certifier-key/v1`), whose key the auditor's
 registration `A` holds for the device `cert` (`Core.Site`'s `Owners`: `A.key x.id = some x.key`), the device whose
-run `trusted-host` covers.
+run `trusted-host` covers. `A` is read from the auditor's record `aj` as the checks read it
+(`Core.Site.Registration.Auditor.ofJson`, the registration's `auditor`), never supplied beside it.
 
 Its other conditions are named: the windows' registrations (`WindowsPlaced`), the sender's schedules among those at
 `Θ` that fit the format (`SchedulesCovered`, a property of the compiled Lean audit over the network certifier's signed
@@ -83,9 +84,9 @@ of the sampled verifier where sampling at the incorrect set holds at the layout'
 and the trace's commitment binds (`CommitmentScheme.Binds`), with a decoder that lists every trace within Flock's
 radius, the windows registered as `sw i` (`WindowsPlaced`: partition `Pw i`, and `β i` bounding the committed bits of
 each of its possible incorrect sets), the network certifier's openings `tops s` at each statement, and a network
-certifier `cert` that runs its code by `trusted-host`, its one run giving the cells the client receives and its record of
-them, whose LMS parameters, key and session are the auditor's record `r` of it, the key the auditor's registration `A`
-holds for `cert`:
+certifier `cert` that runs its code by `trusted-host`, its one run giving the cells the client receives and its record
+of them, whose LMS parameters, key and session are the auditor's record `r` of it, the key the auditor's registration
+`A` (read from its record `aj`) holds for `cert`:
 
 * each window's audit, at a statement in its scope whose registration opens its registered inputs (`RegOpensAt`), has
   `Pr[acc ∧ ¬RLeakTap δ] ≤ δ + ε_ks + ε_bind + Pr[B_tap] + Pr[B_reg]` with the registered inputs at the registration's
@@ -103,7 +104,8 @@ def PeriodLeakRegistered : Prop :=
     NetworkCheck.Period.check p c e = .accept pub prof →
     ∀ (s : NetworkCheck.Period.Schedule) (sd : ByteArray) (scan : NetworkCheck.Period.Scan),
     p.form = .rows s sd scan →
-    ∀ (A : Core.Site.Registration.Auditor) (r : NetTiming.NetworkCertifierRecord),
+    ∀ (aj : Lean.Json) (A : Core.Site.Registration.Auditor) (r : NetTiming.NetworkCertifierRecord),
+    Core.Site.Registration.Auditor.ofJson aj = .ok A →
     p.lms = r.lms ∧ p.key = r.key ∧ p.session = r.session →
     ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
       (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (L K S : ℕ)

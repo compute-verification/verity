@@ -31,9 +31,9 @@ open NetTiming Claims.Sampling Finset
 acceptance gives `rowsWf` (`rowsWf_of_accept`), so the network certifier's frames read back
 (`cellRows_wf_of_rowsWf`), and `NetTiming.periodLeak_registered` bounds the leak at that format. -/
 theorem periodLeakRegistered : PeriodLeakRegistered := by
-  intro p c e pub prof h s sd scan hform A r hr Coin Col T _ _ _ _ _ H D L K S lay hks k δ decode hδ hdec reg ops Dj sw
-    Pw ρ op β hplaced N hN Srv Sec arr link jitter status cert hkey run htrust Θ Zs schedOf srvOf hcov dec hdz x wit tops
-    hb
+  intro p c e pub prof h s sd scan hform aj A r hA hr Coin Col T _ _ _ _ _ H D L K S lay hks k δ decode hδ hdec reg ops
+    Dj sw Pw ρ op β hplaced N hN Srv Sec arr link jitter status cert hkey run htrust Θ Zs schedOf srvOf hcov dec hdz x
+    wit tops hb
   subst hN
   exact NetTiming.periodLeak_registered H D L K S lay hks k δ decode hδ hdec reg ops Dj sw Pw ρ op β hplaced arr _
     (Properties.NetworkPeriod.cellRows_wf_of_rowsWf (Properties.NetworkPeriod.rowsWf_of_accept h hform) link s.window
@@ -47,8 +47,10 @@ holds at each. -/
 theorem periodLeakRegistered_strategy (p : NetworkCheck.Period.Params) (c : NetworkCheck.Period.Commitment)
     (e : NetworkCheck.Period.Evidence) (pub : NetworkCheck.Period.Public) (prof : NetworkCheck.Period.Profile)
     (h : NetworkCheck.Period.check p c e = .accept pub prof) (s : NetworkCheck.Period.Schedule) (sd : ByteArray)
-    (scan : NetworkCheck.Period.Scan) (hform : p.form = .rows s sd scan) (A : Core.Site.Registration.Auditor)
-    (r : NetTiming.NetworkCertifierRecord) (hr : p.lms = r.lms ∧ p.key = r.key ∧ p.session = r.session)
+    (scan : NetworkCheck.Period.Scan) (hform : p.form = .rows s sd scan) (aj : Lean.Json)
+    (A : Core.Site.Registration.Auditor) (r : NetTiming.NetworkCertifierRecord)
+    (hA : Core.Site.Registration.Auditor.ofJson aj = .ok A)
+    (hr : p.lms = r.lms ∧ p.key = r.key ∧ p.session = r.session)
     {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S) (hks : KSBy H D (wiredOk fun s => (lay s).wires))
@@ -91,9 +93,9 @@ theorem periodLeakRegistered_strategy (p : NetworkCheck.Period.Params) (c : Netw
             ((run cert (strategy (view z), srvOf z)).2 i)}.encard ≤
           Θ.encard * ((∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \
             reg (sw i)).card * (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞)) :=
-  periodLeakRegistered p c e pub prof h s sd scan hform A r hr H D L K S lay hks k δ decode hδ hdec reg ops Dj sw Pw ρ
-    op β hplaced hN arr link jitter status cert hkey run htrust Θ Zs (fun z => strategy (view z)) srvOf hcov dec hdz x
-    wit tops hb
+  periodLeakRegistered p c e pub prof h s sd scan hform aj A r hA hr H D L K S lay hks k δ decode hδ hdec reg ops Dj sw
+    Pw ρ op β hplaced hN arr link jitter status cert hkey run htrust Θ Zs (fun z => strategy (view z)) srvOf hcov dec
+    hdz x wit tops hb
 
 /-- **The served schedule passes `rowsWf`**: `w63`'s, 4 lanes of 32-bucket link-windows and 512-byte cells, over any
 period of fewer than 2^25 link-windows, so the period check doesn't refuse it there (`rowsWfCheck`) and the network
