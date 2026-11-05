@@ -7,10 +7,11 @@
 (``case.json``), the verifier's partition (``partition.json``), ``m0/`` with the public file, ``compose.log`` and the
 circuit file, ``session-m0/sessions/*/`` with each session's ``session.json`` and ``*.bin``, and the challenger's release
 of the draw's coins (``release.json``, `a5.RELEASE`) where the audit drew on a challenger's session. The case is a5.py's
-`case_v2` of those: v1's params with the partition, ``proofs: {circuit, registered: null}``, the challenger and the
-release's window root, v1's commitment, the evidence with the sessions' proofs and the release's coins, and the blobs'
-paths. The challenger's key is the auditor's own record's (``--challenger-key``, challenger-key/v1, `Ch.key_of_record`),
-never the one the release names (`drawn_of`): a release naming another key is refused, and leaves only ``missing.json``.
+`case_v2` of those: v1's params with the partition, ``proofs: {circuit, public, registered: null}`` (``public`` the kept
+public file's SHA-512, read from the window after the draw), the challenger and the release's window root, v1's
+commitment, the evidence with the sessions' proofs and the release's coins, and the blobs' paths. The challenger's key
+is the auditor's own record's (``--challenger-key``, challenger-key/v1, `Ch.key_of_record`), never the one the release
+names (`drawn_of`): a release naming another key is refused, and leaves only ``missing.json``.
 A window with no release, or no record given, names no challenger, which v2 refuses (`OneStageZk.NO_CHALLENGER`).
 
 A run that didn't keep the circuit file gets it rebuilt in ``--scratch`` by the command its ``m0/compose.log`` records
@@ -114,8 +115,8 @@ def case(window: Path, scratch: Path, key: Ch.ChallengerKey | None = None) -> tu
     if not circuit.is_file():
         got, how = rebuild(c, scratch)
         circuit = got or circuit
-    v2 = a5.case_v2(v1, names, proof=PF.Proof(circuit, pub, sessions), circuit=c["pin"], registered=None, tables=[],
-                    drawn=drawn)
+    v2 = a5.case_v2(v1, names, proof=PF.Proof(circuit, pub, sessions), circuit=c["pin"], public=PF.file_sha512(pub),
+                    registered=None, tables=[], drawn=drawn)
     return v2, how, len(sessions), challenger
 
 
