@@ -38,6 +38,7 @@ import json
 import os
 import subprocess
 import sys
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -63,6 +64,8 @@ INDEX = 0
 EPOCH = 1
 #: the price unit of `work`'s W_ref and credit: one dense FP8 MAC on the device (`pearl_c_device.Prices`)
 UNIT = "fp8-mac"
+#: the δ `epsilon` states ε at unless given one: compute-accounting's for the record (BENCH-38). γ doesn't depend on it.
+DELTA = Fraction(1, 100)
 
 
 def verifier() -> dict:
@@ -74,11 +77,11 @@ def verifier() -> dict:
             "commands": [["{python}", VERIFY_RUN, "{transcript}", "--coins", "{dir}/coins.json", "--commit", "{commit}"]]}
 
 
-def epsilon(m: int, n: int, k: int, card: str) -> dict:
+def epsilon(m: int, n: int, k: int, card: str, delta: Fraction = DELTA) -> dict:
     """Pearl+'s soundness error beside γ at one linear (m, n, k) on `card`, as the door records it: ``{"epsilon", "delta",
     "basis"}``. PoUW's ε is a window's sample's, not a linear's, so it is the window of record's at every linear:
     `PINNED`'s ``window`` states the window (``basis``), the card it ran on, its sample's K and its credited and whole work
-    (C, W), and ε is `window.eps_at(K, δ, C, W, 1)` at the protocol's δ, as `credit.established` gives a window's. Refused
+    (C, W), and ε is `window.eps_at(K, δ, C, W, 1)` at `delta`, as `credit.established` gives a window's. Refused
     while no window is stated, and on another card than the window's."""
     w = json.loads(PINNED.read_text()).get("window")
     if w is None:
@@ -87,11 +90,10 @@ def epsilon(m: int, n: int, k: int, card: str) -> dict:
     if w["card"] != card:
         raise ValueError(f"the window of record ({w['basis']}) ran on the {w['card']}, not the {card}")
     from verity.core.protocols.pouw import window as Wd
-    from verity.core.protocols.profile import WINDOW_DELTA
 
-    eps = Wd.eps_at(w["k"], WINDOW_DELTA, w["credited"], w["work"], 1)
-    return {"epsilon": float(eps), "delta": float(WINDOW_DELTA),
-            "basis": f"{w['basis']}: window.eps_at(K={w['k']}, δ, C={w['credited']}, W={w['work']}, 1) = {eps}"}
+    eps = Wd.eps_at(w["k"], Fraction(delta), w["credited"], w["work"], 1)
+    return {"epsilon": float(eps), "delta": float(delta),
+            "basis": f"{w['basis']}: window.eps_at(K={w['k']}, δ={delta}, C={w['credited']}, W={w['work']}, 1) = {eps}"}
 
 
 def pinned() -> dict:

@@ -190,12 +190,17 @@ def test_epsilon_is_the_window_of_record_s_at_its_sample_at_every_linear(tmp_pat
     pinned = tmp_path / "overhead_arm.json"
     pinned.write_text(json.dumps(json.loads(OA.PINNED.read_text()) | {"window": window}))
     monkeypatch.setattr(OA, "PINNED", pinned)
-    eps = Wd.eps_at(window["k"], WINDOW_DELTA, window["credited"], window["work"], 1)
+    eps = Wd.eps_at(window["k"], OA.DELTA, window["credited"], window["work"], 1)
     for m in (16, 8192):
         for n, k in LINEARS.values():
             got = OA.epsilon(m, n, k, "h200")
-            assert (got["epsilon"], got["delta"]) == (float(eps), float(WINDOW_DELTA)) and 0 < eps < 1
-            assert got["basis"].startswith("a stated window's sample: window.eps_at(K=27713, δ, C=8589934592, W=9663676416")
+            assert (got["epsilon"], got["delta"]) == (float(eps), 0.01) and 0 < eps < 1
+            assert got["basis"].startswith("a stated window's sample: window.eps_at(K=27713, δ=1/100, C=8589934592, "
+                                           "W=9663676416")
+    tight = OA.epsilon(8192, *LINEARS["o"], "h200", delta=WINDOW_DELTA)
+    assert (tight["epsilon"], tight["delta"]) == (float(Wd.eps_at(window["k"], WINDOW_DELTA, window["credited"],
+                                                                  window["work"], 1)), float(WINDOW_DELTA))
+    assert tight["epsilon"] > got["epsilon"] and "δ=1/1099511627776" in tight["basis"]
     with pytest.raises(ValueError, match="ran on the h200, not the rtx-pro-6000"):
         OA.epsilon(8192, *LINEARS["o"], "rtx-pro-6000")
 
