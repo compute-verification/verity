@@ -35,9 +35,9 @@ adapter (`verity.core.deploy.stream`) on the clock and coins it is given: it rea
 sends and once after each block it takes, those readings alone, so on the same coins and readings it signs the same
 bytes wherever it runs.
 
-`python -m verity.core.devices.memory_challenger.challenger_party --device DIR [--listen HOST:PORT]` is the challenger's side
-(`main`): it reads one JSON line on stdin, a salt request or the session's `{"binding", "block_bytes", "blocks", "k",
-"limit_ns", "node"}` (with `audit` and `published` when it names its audit, and P2's parameters, which
+`python -m verity.core.devices.memory_challenger.challenger_party --device DIR [--listen HOST:PORT]` is the challenger's
+side (`main`): it reads one JSON line on stdin, a salt request or the session's `{"binding", "block_bytes", "blocks",
+"k", "limit_ns", "node"}` (with `audit` and `published` when it names its audit, and P2's parameters, which
 `challenger_session.setup_of` checks against them), and answers the salt request with its source, or prints
 `{"listening": PORT}`, serves one prover (`serve`) and prints its report. Its key, session log (`sessions`) and salt log
 (`salts`) are in `DIR`. Each session it completes is kept on its own host, `DIR/setups/<session id>.json` (0700, the
@@ -63,14 +63,14 @@ from typing import Any, BinaryIO
 from verity.core.deploy import stream
 from verity.core.deploy.party import Finish, Identity, Received, Send
 from verity.core.deploy.runtime import ProtocolDef
-from verity.core.wire import Message, Phase, Refused
-
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period
 from verity.core.protocols.pous import run as R
 from verity.core.protocols.pous import setup as pous_setup
-from verity.core.protocols.pous.challenger_session import (CHALLENGER, MANIFEST, MODULE, PROVER, SETUPS, WARMUP_INDEX, WARMUPS, Frames, Polled,
-                                 Prover, coin_session_id, session_id, setup_of)
+from verity.core.protocols.pous.challenger_session import (CHALLENGER, MANIFEST, MODULE, PROVER, SETUPS, WARMUP_INDEX,
+                                                           WARMUPS, Frames, Polled, Prover, coin_session_id, session_id,
+                                                           setup_of)
+from verity.core.wire import Message, Phase, Refused
 
 COIN_BYTES = 64
 """The session's coins, which the challenger draws first (`main`'s `secrets.token_bytes(64)`), before its coin tree's

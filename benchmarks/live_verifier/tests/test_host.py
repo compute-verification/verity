@@ -701,7 +701,8 @@ def test_party_key_prints_only_the_public_half_made_on_the_host(svc):
 def test_the_wipe_party_and_its_key_import_on_a_python_with_no_site_packages():
     """The parties run on the host's python3 (`-s -E`), where no package is installed: the modules resolve in the tree."""
     code = ("import verity.core.protocols.pous.wipe_party, verity.core.protocols.pous.period, "
-            "verity.core.devices.memory_challenger.challenger_party, verity.core.protocols.remote_bandwidth.p2_party; print('ok')")
+            "verity.core.devices.memory_challenger.challenger_party, verity.core.protocols.remote_bandwidth.p2_party; "
+            "print('ok')")
     p = subprocess.run([sys.executable, "-S", "-s", "-E", "-c", code], capture_output=True, text=True, cwd=ROOT)
     assert p.returncode == 0 and p.stdout.strip() == "ok", p.stderr[-2000:]
 
