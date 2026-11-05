@@ -109,7 +109,7 @@ theorem LoopModel.ans_auditorV {W Rr Ω Θ : Type} {M : LoopModel W Rr} {H : Cla
     (hpre : ∀ i < j, (A θ (audView spec sts (M.msgs.take (i + 1)))).isSome) {e : Env}
     (he : e.ans = none ∨ e.ans = A θ (audView spec sts (M.msgs.take (j + 1)))) : M.Ans j e := by
   obtain ⟨h1, h2⟩ := runStar_auditorV hτ
-  have ht : ∀ i, (M.τ.take i).map (·.1) = M.msgs.take i := fun i => by rw [List.map_take] <;> rfl
+  have ht : ∀ i, (M.τ.take i).map (·.1) = M.msgs.take i := fun i => by rw [List.map_take]; rfl
   have hl : j < M.τ.length := h2 j hj fun i hi => by rw [ht]; exact hpre i hi
   refine ⟨hl, fun a ha _ => ?_⟩
   rw [h1 j hl, ht]
@@ -226,7 +226,7 @@ theorem prefix_eq_of_le_one {α : Type} {l l' : List α} (h : l <+: l') (hne : l
 
 theorem take_succ_headD {α : Type} {l : List α} {n : Nat} {d : α} (h : n < l.length) :
     l.take (n + 1) = l.take n ++ [(l.drop n).headD d] := by
-  rw [List.take_succ_eq_append_getElem h, List.drop_eq_getElem_cons h] <;> rfl
+  rw [List.take_succ_eq_append_getElem h, List.drop_eq_getElem_cons h]; rfl
 
 theorem schedTrace_cons {st : State} {pl : Placed} {k : Session.Kind} {e : Env} {tail : List Env}
     (hsl : slot st pl = some k) :
@@ -254,8 +254,8 @@ theorem ans_of_go {st : State} {pl : Placed} {k : Session.Kind} {e : Env} (h : s
     (hgo : ((stepK true st pl (some (tagOf k)) (.ok k) e).go &&
       (stepK true st pl (some (tagOf k)) (.ok k) e).st.stop.isNone) = true) : e.ans.isSome := by
   obtain ⟨hg, hn⟩ := go_live hgo
-  have hk : k ≠ .ping ∧ k ≠ .proof :=
-    ⟨fun h' => by subst h'; cases hm, fun h' => by subst h'; cases hm⟩
+  have hk : k ≠ .ping ∧ k ≠ .proof := by
+    constructor <;> rintro rfl <;> cases hm
   rcases hr : st.request pl k with _ | ⟨st', o⟩
   · by_cases hh : k = .hello
     · subst hh
@@ -334,8 +334,8 @@ theorem loopReads_aud {W Rr Ω Θ : Type} {M : LoopModel W Rr} {H : Claims.Msg �
               (stepK true st pl (some (tagOf kk)) (.ok kk) e).pl tail) := by
       intro hgo tail hts
       obtain ⟨g1, g2⟩ := hKT (e :: tail) (hcons tail hts)
-      rw [schedTrace_cons hsl, if_pos hgo, List.map_cons] at g1
-      rw [schedTrace_cons hsl, if_pos hgo] at g2
+      rw [schedTrace_cons hsl, ite_eq_left hgo, List.map_cons] at g1
+      rw [schedTrace_cons hsl, ite_eq_left hgo] at g2
       exact ⟨(List.cons_prefix_cons.mp g1).2, g2.2⟩
     cases hmk : isModel kk with
     | false =>
@@ -357,7 +357,7 @@ theorem loopReads_aud {W Rr Ω Θ : Type} {M : LoopModel W Rr} {H : Claims.Msg �
         rw [hcc, hview, audT_ctl hmk, hsent, List.append_assoc, List.singleton_append]
       · intro tail hts hLt
         have hE := hKE (e :: tail) (hcons tail hts) (LoopReads.step kk hsl hLR fun _ => hLt)
-        rw [schedSteps_cons hsl, if_pos hgo] at hE
+        rw [schedSteps_cons hsl, ite_eq_left hgo] at hE
         simp only [EnvPre, hmk, Bool.false_eq_true, ↓reduceIte] at hE
         rw [hcc]
         exact hE
@@ -391,9 +391,9 @@ theorem loopReads_aud {W Rr Ω Θ : Type} {M : LoopModel W Rr} {H : Claims.Msg �
         · refine ansPart_of hmk hfin (LoopModel.ans_auditorV hτ hj hpre ?_)
           rw [haA hmk hfin]
           by_cases hse : (stepK true st pl (some (tagOf kk)) (.ok kk) e).sent.isEmpty = true
-          · rw [if_pos hse]
+          · rw [ite_eq_left hse]
             exact .inl rfl
-          · rw [if_neg hse]
+          · rw [ite_eq_right hse]
             refine .inr ?_
             have hne : (stepK true st pl (some (tagOf kk)) (.ok kk) e).sent ≠ [] :=
               fun h => hse (List.isEmpty_iff.mpr h)
@@ -420,13 +420,13 @@ theorem loopReads_aud {W Rr Ω Θ : Type} {M : LoopModel W Rr} {H : Claims.Msg �
           have hsome := ans_of_go hst hmk hfin hgo
           rw [haA hmk hfin] at hsome
           by_cases hse : (stepK true st pl (some (tagOf kk)) (.ok kk) e).sent.isEmpty = true
-          · rw [if_pos hse] at hsome
+          · rw [ite_eq_left hse] at hsome
             simp at hsome
-          · rw [if_neg hse, hsent, ← hview1] at hsome
+          · rw [ite_eq_right hse, hsent, ← hview1] at hsome
             exact hsome
       · intro tail hts hLt
         have hE := hKE (e :: tail) (hcons tail hts) (LoopReads.step kk hsl hLR fun _ => hLt)
-        rw [schedSteps_cons hsl, if_pos hgo] at hE
+        rw [schedSteps_cons hsl, ite_eq_left hgo] at hE
         simp only [EnvPre, hmk, ↓reduceIte] at hE
         rw [hcc, ← List.tail_drop]
         exact hE.2
@@ -454,7 +454,7 @@ theorem loopReads_auditorV {W Rr Ω Θ : Type} {M : LoopModel W Rr} {H : Claims.
     (haud : AudReads (A θ) [] {} {} es) (hR : ReadsBy Rd σ₀ {} {} es) :
     LoopReads M sid spec sts nonce σ₀ {} {} es :=
   loopReads_aud hτ hRd hnone hR [] [] (tmplOf (.ok (spec, sts))) rfl (fun h => by cases h)
-    (fun m ms => by rw [hc] <;> rfl) (by rw [hc]; omega)
+    (fun m ms => by rw [hc]; rfl) (by rw [hc]; omega)
     (fun i hi => absurd hi (by rw [hc]; omega))
     (fun tail hts hLt => by rw [hc, List.drop_zero]; exact hF tail hts hLt)
     (fun tail hts => relay_prefix true _ tail hts) hs hb haud
