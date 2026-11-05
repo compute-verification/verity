@@ -657,11 +657,33 @@ open FlockSoundness.Discharge
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- **Flock's zero knowledge at the session with stops, at values causal where it computes**: `Flock.zk_deployZk_sw` at
-`S.withStops Rf stop` with `refP`'s simulator there, its switched round encoding causal only on `Ok`
-(`RefSession.SwCausalOn`), which holds wherever the session with stops computes a round (`RefSession.StopsOk`). Before
-the last coin its prover is the cut model's (`RefSession.swPreCut_link`); at each coin vector, where its tables admit it,
-`swCoinModel`'s own, else the off-model at the cut coins (`RefSession.swCoinModel_link_stops`). -/
+/-- **Flock's zero knowledge at the session with stops, at values causal where it computes, at any masked record whose
+rounds on its relation are the session's** (`refK x + 1`): `Flock.zkAt_sw` at `S.withStops Rf stop` with `refP`'s
+simulator there, its switched round encoding causal only on `Ok` (`RefSession.SwCausalOn`), which holds wherever the
+session with stops computes a round (`RefSession.StopsOk`). Before the last coin its prover is the cut model's
+(`RefSession.swPreCut_link`); at each coin vector, where its tables admit it, `swCoinModel`'s own, else the off-model at
+the cut coins (`RefSession.swCoinModel_link_stops`); at the record with those rounds at every statement, carried back
+by `Flock.zkAt_withK`. -/
+theorem Flock.zkAt_sw_stops {Coin Col T : Type} (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (hzk : D.zk = true)
+    (hkD : ∀ x w, Flock.R D.parse x w → D.V.k x = refK x + 1) (S : RefSession)
+    (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg) (vs : S.SwVals)
+    (Ok : (x : Msg) → (Fin (refK x) → S.Coin) → Prop) (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal}
+    (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hS : S.Tables)
+    (hV : S.Complete (Flock.R D.parse)) (hD : S.DummyReg) (hc : S.Causal)
+    (hRf : S.StopsCausal Rf) (hsc : S.SwCausalOn Ok vs) (hOk : S.StopsOk Rf Ok) (hT : S.TapeOK) :
+    Claims.Flock.ZKAt H D ((S.withStops Rf stop).swP vs).prover
+      (((S.withStops Rf stop).refP.withSim fun x _ c => (S.withStops Rf stop).coinModel x c).simulatorE t (t * 3 ^ t))
+      (fun x => 8 * (S.withStops Rf stop).nLeaves x * δ₁.toReal +
+        8 * t * (S.withStops Rf stop).nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t)
+      fun _ => 4 * t * 3 ^ t :=
+  Flock.zkAt_withK (fun x w hR => (hkD x w hR).symm)
+    (Flock.zkAt_sw_of_links H (D.withK fun x => refK x + 1) hzk (S.withStops Rf stop) vs (fun _ => rfl) t ht hT1 hδ₁
+      (S.withStops_tables Rf stop hS) (fun x ν => S.swPreCut Rf stop vs H x ν) (fun _ _ => le_rfl) (fun x _ => hS x)
+      (fun x w hR ν => S.swPreCut_link Rf stop vs Ok H _ hV hD hc hRf hsc hOk hT x w hR ν)
+      fun x w hR ν c => S.swCoinModel_link_stops Rf stop vs Ok H _ hV hD hc hRf hsc hOk hT x w hR ν c)
+
+/-- **Flock's zero knowledge at the session with stops, at values causal where it computes**: `Flock.zkAt_sw_stops` at
+`deployZk`, whose rounds on its relation are the session's (`V_k_of_R`). -/
 theorem Flock.zk_deployZk_sw_stops (H : Msg → Msg)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (S : RefSession)
     (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg) (vs : S.SwVals)
@@ -674,11 +696,7 @@ theorem Flock.zk_deployZk_sw_stops (H : Msg → Msg)
       (fun x => 8 * (S.withStops Rf stop).nLeaves x * δ₁.toReal +
         8 * t * (S.withStops Rf stop).nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t)
       fun _ => 4 * t * 3 ^ t :=
-  Flock.zkAt_sw_of_links H _ rfl (S.withStops Rf stop) vs
-    (fun x => (deployZk_proto_k rel ((S.withStops Rf stop).swPS vs) (fun _ => rfl) x).symm) t ht hT1 hδ₁
-    (S.withStops_tables Rf stop hS) (fun x ν => S.swPreCut Rf stop vs H x ν) (fun _ _ => le_rfl) (fun x _ => hS x)
-    (fun x w hR ν => S.swPreCut_link Rf stop vs Ok H _ hV hD hc hRf hsc hOk hT x w hR ν)
-    fun x w hR ν c => S.swCoinModel_link_stops Rf stop vs Ok H _ hV hD hc hRf hsc hOk hT x w hR ν c
+  Flock.zkAt_sw_stops H _ rfl (fun _ _ hR => V_k_of_R hR) S Rf stop vs Ok t ht hT1 hδ₁ hS hV hD hc hRf hsc hOk hT
 
 end Claims.ZKMal
 
