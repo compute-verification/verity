@@ -4,14 +4,23 @@
 # root, and each function below reads or sets CUDA, OUT and FLAGS.
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 
-# cicc, nvcc's front end, can emit different PTX for one source from run to run by its own heap addresses, so a build that
-# sources this runs with address randomization off: it re-executes itself once under `setarch -R`, which its compilers
-# inherit, and refuses where the kernel won't turn randomization off
-if [ $(( 0x$(cat /proc/self/personality) & 0x40000 )) -eq 0 ]; then
+# cicc, nvcc's front end, can emit different PTX for one source from run to run: some of its decisions follow its own heap
+# addresses, whose layout also moves with the lengths of the paths it reads (the source's, the toolkit's, TMPDIR's), and
+# some follow elapsed time, which a busy machine stretches. So a build that sources this runs itself once more, as a child
+# of this shell, with address randomization off (setarch -R), TMPDIR a fresh directory whose path has one length, and
+# ship_clock.c's clock inside cicc (LD_PRELOAD), all inherited by its compilers; it refuses where the kernel won't turn
+# randomization off. A rebuild at the same commit, source path and toolkit path then reproduces every cubin
+if [ -z "${SHIP_FRAME:-}" ] || [ ! -e "$SHIP_FRAME/ship_clock.so" ] \
+    || [ $(( 0x$(cat /proc/self/personality) & 0x40000 )) -eq 0 ]; then
   setarch "$(uname -m)" -R true 2> /dev/null || {
     echo "setarch -R is refused here, and nvcc's PTX can depend on address layout: build where a process may turn address" \
       "randomization off" >&2; exit 1; }
-  exec setarch "$(uname -m)" -R "$BASH" "$0" "$@"
+  SHIP_FRAME=$(mktemp -d /tmp/ship.XXXXXXXX); trap 'rm -rf "$SHIP_FRAME"' EXIT; mkdir "$SHIP_FRAME/tmp"
+  gcc -shared -fPIC -O2 -o "$SHIP_FRAME/ship_clock.so" "$ROOT/benchmarks/torch_gpu/ship_clock.c" -ldl \
+    || { echo "ship_clock.c doesn't build with gcc" >&2; exit 1; }
+  SHIP_FRAME=$SHIP_FRAME TMPDIR=$SHIP_FRAME/tmp LD_PRELOAD="$SHIP_FRAME/ship_clock.so${LD_PRELOAD:+:$LD_PRELOAD}" \
+    setarch "$(uname -m)" -R "$BASH" "$0" "$@" || exit $?
+  exit 0
 fi
 
 # whether the toolkit $1 has nvcc 12.8 or later
