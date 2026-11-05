@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Pouw.Guarantees.RelativeSecurity
-import Proofs.Pouw.RelativeSecurity
+module
+
+public import Mathlib
+public import Definitions.Pouw.Guarantees.RelativeSecurity
+public import Proofs.Pouw.RelativeSecurity
 
 /-!
 # Relative security's fork finder: the floors per prover's error, and their honest and nontrivial lemmas
@@ -17,6 +19,8 @@ verifier that accepts everything. Each is proved in general (`StagedFloorPerProv
 `sha` and `kz`, `floorPerProver_acceptAll` at every such verifier) and stated at one instance it builds, the form the
 lock's `witnesses` read.
 -/
+
+@[expose] public section
 
 namespace Pouw.RelativeSecurity
 
