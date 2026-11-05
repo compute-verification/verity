@@ -36,6 +36,8 @@ GEMM = 'Gemm_v2{K=64,N=8,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
 ROPE = "RoPEHead_v1{D=16}"
 FEED = "TokenFeed_v1{NP=4,FIRST=false}"
 MODEL = "verity-int8/Llama-3.2-1B-INT8"
+#: `MODEL`'s pinned revision (`served_verdicts.sh`'s REV), whose config of record the package ships
+REV = "15b0976d400d796ee589e7737d03a919526bf800"
 #: the toy serve's start (its serve.json's clocks' time), and a policy written before and after it
 STARTED = 1_762_000_000.0
 BEFORE, AFTER = "2025-11-01T12:26:39+00:00", "2025-11-01T12:26:41+00:00"
@@ -47,14 +49,17 @@ def _fn(tid: str):
     return IF.resolve(tid)
 
 
-@pytest.fixture(scope="module")
-def small() -> dict:
-    """`test_block_counts`' record: two slots and three steps, four `GEMM` units (a slot's two in one entry) and six
+def _small_circuit() -> IF.Circuit:
+    """`test_block_counts`' circuit: two slots and three steps, four `GEMM` units (a slot's two in one entry) and six
     `ROPE` units (a slot's three across the steps)."""
     entries = (IF.InferenceEntry(GEMM, 0, (2, 2), ("slot", "-"), 0), IF.InferenceEntry(ROPE, 0, (3, 2), ("step", "slot"), 0))
-    circuit = IF.Circuit("test/blocks", ((_fn(GEMM), 4), (_fn(ROPE), 6)),
-                         blocks=IF.Blocks(slots=2, steps=3, inference=entries))
-    return IF.descriptor_record(circuit, 1)
+    return IF.Circuit("test/blocks", ((_fn(GEMM), 4), (_fn(ROPE), 6)), blocks=IF.Blocks(slots=2, steps=3, inference=entries))
+
+
+@pytest.fixture(scope="module")
+def small() -> dict:
+    """`_small_circuit`'s record."""
+    return IF.descriptor_record(_small_circuit(), 1)
 
 
 @pytest.fixture(scope="module")
@@ -148,6 +153,36 @@ def test_the_policy_is_the_sessions_gates_and_fresh_bits_with_the_weights_held_a
     i = pol["n_inputs"]
     assert i["utilization"] == [1, 4] and i["utilization_source"] == "the declared share" and i["work"]["theta_macs"] == work["theta_macs"]
     assert i["span_source"] and i["rate"]["source"] and i["work"]["source"]
+
+
+def test_the_policy_lowers_its_class_under_the_registered_phi_of_its_serve_facts(small, monkeypatch):
+    """`policy` lowers its class's circuit under the registered φ the served compiler builds from its serve facts
+    (`served_compiler.registered_of_serve`, as `class_doc` calls it): the pinned int8 checkpoint's config of record, the
+    H200's int8 target, the public default seed and ℓ. Only the lowering is replaced, by `_small_circuit`, since the class
+    at Llama-3.2-1B's grain is too large for this suite; its session and c are read from that circuit's description. So a
+    φ `class_doc` reaches through a name that doesn't define it, or can't build from the serve facts, fails here."""
+    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
+    from verity_vllm.engine.served_seed import DEFAULT_SEED
+    from verity_vllm.pipeline.advice_windows import CAP_BITS
+    from verity_vllm.program.predict import window_circuit as WC
+
+    lowered = []
+
+    def lower(registered, cls):
+        lowered.append((registered, cls))
+        return _small_circuit()
+
+    monkeypatch.setattr(WC, "class_circuit", lower)
+    pol = IO.policy("2,2,2", MODEL, REV, 60, Fraction(1, 4), "the declared share", BEFORE, "abc")
+    [(reg, cls)] = lowered
+    assert cls == IO.window_class("2,2,2") and pol["serve"] == IO.serve_facts(MODEL, REV)
+    assert (reg.phi.model["repo"], reg.phi.model["revision"], reg.phi.execution) == (MODEL, REV, "bi-eager")
+    assert reg.phi.model["hf_config"] == json.loads(pinned_hf_config(MODEL, REV).read_text())
+    assert reg.phi.model["hf_config"]["quantization_config"]["quant_method"] == "verity_int8"
+    assert (reg.phi.target["int8_exact"], reg.phi.target["num_sms"]) == ("linears", 132)
+    assert (reg.default_seed, reg.cap_bits) == (DEFAULT_SEED, CAP_BITS)
+    row = IO.session_row(small, {}, {})
+    assert (pol["session"]["definition"], pol["c"]) == (row["definition"], row["gates"])
 
 
 def _serve(d: Path, windows: dict[int, list[dict]], unsealed: tuple[int, ...] = ()) -> Path:
