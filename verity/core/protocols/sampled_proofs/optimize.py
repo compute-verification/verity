@@ -19,7 +19,9 @@ committed at serve time whatever the draw: every proof block's outputs (`commit_
 and the fixed serve-time commitments of every scale (`Commitment`: the Commit's taps, PoUW's work blocks, the remote audit's
 receipts, the bits a work block pins), so a plan's cost is the whole serve-time and proving total.  One tensor committed
 at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A drawn proof block's
-witness is built by re-executing its replay block from the last committed state (`ReplayDomain`), which commits nothing.
+witness is built by re-executing its replay block (`ReplayDomain`) from the values the prover keeps, which commits nothing: a
+commitment is a hash, so unless serving retained intermediates a replay block starts at the external inputs and the
+registration's constants.
 A subcircuit's costs are measured (`TemplateCost`) or derived from the model's rates and its features: ANDs, and the hm96
 rows a proved proof block opens (`row_ands`).
 
@@ -136,9 +138,9 @@ class TemplateCost:
 
 @dataclass(frozen=True)
 class ReplayDomain:
-    """`units` replay blocks (one layer of one step each, say), each re-executed from the last committed state at `cost`
-    to build the witnesses of the drawn proof blocks in it, when the draw meets any.  Replay commits nothing: every value it
-    recomputes was committed at serve time."""
+    """`units` replay blocks (served requests, say, each re-run whole from its tokens and the weights), each re-executed at
+    `cost` from the values the prover keeps to build the witnesses of the drawn proof blocks in it, when the draw meets
+    any.  Replay commits nothing: every value it recomputes was committed at serve time."""
 
     units: int
     cost: float
