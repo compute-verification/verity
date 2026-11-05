@@ -166,12 +166,18 @@ ACCEPTED = "NetTiming.SecurityProofs.PeriodLeakAccepted"
 (COVERED,) = OR.PREMISES["schedules-covered"]["discharged_by"]
 
 
+def applying(by_path: bool = False) -> dict:
+    """`PREMISES` that apply to a run whose composite of record read circuit files by path where ``by_path``, else to
+    one that read none."""
+    return {n: p for n, p in OR.PREMISES.items() if by_path or not p.get("by_path")}
+
+
 def discharged() -> dict:
     """``premises`` of a lock listing every discharge and each guarantee the tight K rests on at the statement it
     names, none with an assumption."""
     found = {n: {"is": p["is"], "discharged_by": list(p["discharged_by"]), "missing": [], "unpinned": {}, "assumes": [],
                  "takes": []} | ({"stated_by": p["stated_by"], "checked": p["checked"]} if "stated_by" in p else {})
-             for n, p in OR.PREMISES.items()}
+             for n, p in applying().items()}
     return {"is": OR.DISCHARGE,
             "from": "Security/lean-audit.json and Security/Properties/lean-audit.json guarantees and reads",
             "premises": found, "standing": OR.STANDING, "counts": OR.COUNTS, "open": [], "unread": [],
@@ -528,10 +534,10 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
     of = rec["bound"]["of_record"]
     assert UNPINNED == ["NetTiming.SecurityProofs.PeriodTiedCount"] and OR.CERTIFIER_KEY not in UNNAMED
     assert (of["held"], of["open"], of["K"]) == (
-        ["free", "circuit"], [*(n for n in OR.PREMISES if n != OR.CERTIFIER_KEY), *UNPINNED], K + 2 ** 23 + 1)
-    assert {"sampled-leg-bridge", "reg-opens-at"} <= set(of["open"])
+        ["free", "circuit"], [*(n for n in applying() if n != OR.CERTIFIER_KEY), *UNPINNED], K + 2 ** 23 + 1)
+    assert {"sampled-leg-bridge", "reg-opens-at"} <= set(of["open"]) and OR.CONGRUENCE not in of["open"]
     assert [p["missing"] for p in of["premises"]["premises"].values()] == [
-        list(p["discharged_by"]) for p in OR.PREMISES.values()]
+        list(p["discharged_by"]) for p in applying().values()]
     assert [of["premises"]["premises"][n]["discharged_by"] for n in UNNAMED] == [[]] * len(UNNAMED)
     assert of["premises"]["rests_on"][UNPINNED[0]] == {"missing": "not in the lock",
                                                        "takes": RESTS_ON[UNPINNED[0]]["takes"],
@@ -703,7 +709,43 @@ def test_a_discharge_the_properties_lock_lists_counts_as_one_the_guarantees_lock
     monkeypatch.setattr(OR, "LOCKS", (lock, props))
     assert held_both(tmp_path / "both")["bound"]["of_record"]["open"] == []
     monkeypatch.setattr(OR, "LOCKS", (lock,))
-    assert held_both(tmp_path / "one")["bound"]["of_record"]["open"] == [*OR.PREMISES, OR.PERIOD_REGISTERED]
+    assert held_both(tmp_path / "one")["bound"]["of_record"]["open"] == [*applying(), OR.PERIOD_REGISTERED]
+
+
+#: the theorem that discharges composite-congruence
+(AGREE,) = OR.PREMISES[OR.CONGRUENCE]["discharged_by"]
+
+
+def by_path(out: Path) -> Path:
+    """``out`` with its composite of record, onsite's, having read the period's circuit files by path (`OR.BY_PATH`)."""
+    f = out / "composite" / "remote-network" / "composite.json"
+    f.write_text(json.dumps(json.loads(f.read_text()) | {"circuit_files": OR.BY_PATH}))
+    return out
+
+
+@pytest.mark.parametrize("listed", [False, True])
+def test_a_composite_that_read_circuit_files_by_path_accepts_conditional_on_congruence_until_the_lock_holds_it(
+        tmp_path, lock, listed):
+    """Where the composite of record read the period's circuit files by path, the network verdict is the composed
+    executable's, which CircuitFilesByPathAgree ties to the Lean verifier's answer. With that theorem not in the lock,
+    composite-congruence is open by name: the accept and the figure of record are conditional on it, and the figure
+    charges ℓ_a + 1 with the tight K beside it. With the theorem in the lock at the statement `DISCHARGES` pins, it
+    closes and nothing is conditional. Where the composite read none, the premise doesn't apply (`applying`)."""
+    if not listed:
+        write_lock(lock, {AGREE: None})
+    assert applying(by_path=True).keys() - applying().keys() == {OR.CONGRUENCE}
+    rec = record(by_path(accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"]))))
+    nv, of = rec["verdicts"]["the network certifier"], rec["bound"]["of_record"]
+    assert (nv["verdict"], rec["of_record"]["holds"]) == ("accept", True)
+    assert list(of["premises"]["premises"]) == list(applying(by_path=True))
+    assert of["premises"]["premises"][OR.CONGRUENCE]["missing"] == ([] if listed else [AGREE])
+    if listed:
+        assert ("conditional_on" in nv, of["open"], of["K"], "conditional_on" in of) == (False, [], K, False)
+        assert "conditional_on" not in rec["of_record"]
+    else:
+        assert (nv["conditional_on"], of["open"], of["K"], of["conditional_on"]) == (
+            [OR.CONGRUENCE], [OR.CONGRUENCE], KR, [OR.CONGRUENCE])
+        assert rec["of_record"]["conditional_on"] == [OR.CONGRUENCE]
 
 
 @pytest.mark.parametrize("text, error", [(None, "FileNotFoundError"), ("{", "JSONDecodeError"), ("{}", "KeyError")])
@@ -1516,6 +1558,8 @@ def test_auditor_record_doesnt_hold_where_the_periods_params_arent_by_sha512_tho
 
 #: the circuit files the period's one audit lists, as `records_audit` pins them
 FILES = [{"sha512": "e1" * 64, "template": "toy-a"}, {"sha512": "e2" * 64, "template": "toy-b"}]
+#: the scan's circuit files the period lists, as `scan_period.scan_circuits` pins them
+SCAN_FILES = [{"sha512": "f1" * 64, "template": "scan-a"}]
 
 
 @pytest.mark.parametrize("how, why", [
@@ -1527,19 +1571,29 @@ FILES = [{"sha512": "e1" * 64, "template": "toy-a"}, {"sha512": "e2" * 64, "temp
     ("another audit's period", f"audit 0 lists circuit files, and the run's {OR.PERIOD} is another audit's"),
     ("no period", f"the period lists circuit files, and {OR.PERIOD} or its case's commitment can't be read: "
                   "FileNotFoundError"),
-    ("the scan's files", "the period lists the scan's circuit files (scan_circuits), and the run publishes no record "
-                         "of the files the scan's sessions were verified against"),
+    ("scan: the files verified", None),
+    ("scan: no record", f"the period lists the scan's circuit files (scan_circuits), and {OR.SCAN} or its case's "
+                        "commitment can't be read: FileNotFoundError"),
+    ("scan: another scan's record", f"the period lists the scan's circuit files, and the run's {OR.SCAN} is another "
+                                    "scan's"),
+    ("scan: another format", f"the period lists the scan's circuit files, and the run's {OR.SCAN} is no "
+                             "verity/scan-circuits/v1 record"),
+    ("scan: another file", "the scan's listed circuit files aren't, by SHA-512, those its sessions were verified "
+                           f"against ({OR.SCAN}'s circuits)"),
 ])
 def test_an_accepted_network_verdict_is_established_only_where_each_listed_circuit_file_is_the_one_verified(
         tmp_path, capsys, how, why):
-    """auditor-listing on the run: each circuit file the period's audit lists is, by SHA-512, the one its audit's
-    sessions were verified against, V3c's published period (`OR.PERIOD`), whose registration is the one the case's
-    commitment holds for that audit. Where it holds, the network certifier's accepted verdict stands, the run of
-    record. Where it doesn't, whatever else holds, the verdict is not established, its Lean answer's accept beside it,
-    with no bound and nothing conditional on the listing: another file, a file fewer, the period of another audit, no
-    published period, or the scan's files listed, of which the run publishes no record."""
+    """auditor-listing on the run: each circuit file the period lists is, by SHA-512, the one its sessions were
+    verified against: an audit's as V3c's published period (`OR.PERIOD`) states it, whose registration is the one the
+    case's commitment holds for that audit, and the scan's as the certifier piece's record (`OR.SCAN`) does, whose
+    registration is the one the commitment holds for the scan. Where it holds, the network certifier's accepted verdict
+    stands, the run of record. Where it doesn't, whatever else holds, the verdict is not established, its Lean answer's
+    accept beside it, with no bound and nothing conditional on the listing: another file, a file fewer, the period of
+    another audit, no published period, or for the scan's files no record, a record of another format or scan, or
+    another file."""
+    scan = how.startswith("scan: ")
     files = FILES if how != "one file fewer" else FILES[:1]
-    listed = {"audits": [{"circuits": files}]} | ({"scan_circuits": FILES} if how == "the scan's files" else {})
+    listed = {"audits": [{"circuits": files}]} | ({"scan_circuits": SCAN_FILES} if scan else {})
     out = accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"]), params=listed)
     verified = [FILES[0], dict(FILES[1], sha512="e3" * 64)] if how == "another file" else FILES
     registration = NO_ADVICE if how != "another audit's period" else {"format": NO_ADVICE["format"],
@@ -1547,6 +1601,12 @@ def test_an_accepted_network_verdict_is_established_only_where_each_listed_circu
     if how != "no period":
         (out / OR.PERIOD).parent.mkdir(parents=True, exist_ok=True)
         (out / OR.PERIOD).write_text(json.dumps({"registration": registration, "circuits": verified}))
+    if scan and how != "scan: no record":
+        held = [dict(SCAN_FILES[0], sha512="f3" * 64)] if how == "scan: another file" else SCAN_FILES
+        window = {} if how != "scan: another scan's record" else {"format": NO_ADVICE["format"],
+                                                                  "window": {"circuit": "ef" * 64}}
+        form = "verity/scan-circuits/v2" if how == "scan: another format" else "verity/scan-circuits/v1"
+        (out / OR.SCAN).write_text(json.dumps({"format": form, "registration": window, "circuits": held}))
     assert main([str(out)]) == 0
     rec = json.loads((out / "record" / "onsite.json").read_text())
     got, nv = rec["checked"][OR.AUDITOR_LISTING], rec["verdicts"]["the network certifier"]
@@ -1555,7 +1615,7 @@ def test_an_accepted_network_verdict_is_established_only_where_each_listed_circu
     line = json.loads(capsys.readouterr().out.strip()[7:])
     if why is None:
         assert (got["listed"], nv["verdict"], rec["of_record"]["holds"], "conditional_on" in rec["of_record"]) == (
-            2, "accept", True, False)
+            len(FILES) + (len(SCAN_FILES) if scan else 0), "accept", True, False)
         assert rec["bound"]["of_record"]["K"] == K and line["verdicts"]["the network certifier"] == "accept"
         return
     assert {k: nv[k] for k in ("protocol", "verdict", "answer", "open", "why")} == {
