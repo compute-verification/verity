@@ -1,11 +1,13 @@
-import Flock.Witness
-import Proofs.Flock.Recursive.ExecClass
-import Proofs.Flock.Recursive.Description
-import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Rate
-import Proofs.Flock.Recursive.PublicAudit
+module
+
+public import Flock.Witness
+public import Proofs.Flock.Recursive.ExecClass
+public import Proofs.Flock.Recursive.Description
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Rate
+public import Proofs.Flock.Recursive.PublicAudit
 
 /-!
 # `flock-witness`'s checks are the recursive audit's predicates
@@ -29,10 +31,12 @@ state. Each check passing is the model's predicate holding, at `toExec I`, the m
 * `hr_inv_exp`, `inv_exp_lt_one`: `PublicAudit`'s rate premise `_hr` at `k = 2^23` and `ρ = 1/e < 1`, for every `zr`
   (`_hr := hr_inv_exp zr`).
 
-On the F1 gate (`test_lean_witness.py`) the checks pass with V*'s sessions verified as `verity/flock-circuit`, the
+On `test_lean_witness.py`'s run the checks pass with V*'s sessions verified as `verity/flock-circuit`, the
 verifier of record's `--zk` identity with the OS's masks in it, which the gate's sessions were proved with. So
 the gate is witnessed under today's identity.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.Witness
 

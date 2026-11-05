@@ -1,4 +1,6 @@
-import Definitions.Core.Formalism
+module
+
+public import Definitions.Core.Formalism
 
 /-!
 # Local bounds: items, what a block holds, and budgets
@@ -8,6 +10,8 @@ of its value) and a **price** in bits. A **selection** picks some items and one 
 when its cells lie among the block's gates and what they read. Every information premise reaches the counting as a
 **budget**: what each block holds costs at most `h` (`HeldPriceAtMost`).
 -/
+
+@[expose] public section
 
 namespace Nci.Capability
 
@@ -50,7 +54,7 @@ def selectionBits {C : Circuit} {ι : Type} (T : C.Transcript) (U : Finset ι) (
 /-- **Each proof block holds `X`-state priced at most `h`**: every selection whose cells lie among what a proof block of
 the committed declaration `R` holds costs at most `h`. Every information bound reaches the counting in this form. -/
 def HeldPriceAtMost (R : Committed) {ι : Type} (X : Items R.d.D ι) (h : ℝ) : Prop :=
-  ∀ (u : Fin R.B) (U : Finset ι) (σ : ι → Finset (Fin R.d.D.N)), Selects X U σ →
-    (∀ i ∈ U, σ i ⊆ holds R.d.D (R.P.gates u)) → ∑ i ∈ U, X.price i ≤ h
+  ∀ (u : Fin R.d.n) (U : Finset ι) (σ : ι → Finset (Fin R.d.D.N)), Selects X U σ →
+    (∀ i ∈ U, σ i ⊆ holds R.d.D (R.d.𝓘.gates u)) → ∑ i ∈ U, X.price i ≤ h
 
 end Nci.Capability

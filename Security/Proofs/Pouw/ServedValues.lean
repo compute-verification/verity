@@ -1,5 +1,7 @@
-import Properties.Pouw.ServedValues
-import Proofs.Pouw.PeriodJ10R
+module
+
+public import Properties.Pouw.ServedValues
+public import Proofs.Pouw.PeriodJ10R
 
 /-!
 # Proof of `RightValues`
@@ -12,6 +14,8 @@ live in a credited window (`good_live`, through `credited_iff`), so the size the
 `(1 − ε_skip)₊·S` right size (`creditFloor_le`).
 -/
 
+@[expose] public section
+
 namespace Properties.Pouw.ServedValues.SecurityProofs
 
 open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs Properties.Pouw.ServedValues
@@ -19,8 +23,8 @@ open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assum
 
 /-- **The blocks' sizes sum to at most the credit** of the registered declaration under its pinned lowering: the
 blocks are disjoint, so their AND gates outside the ledger are among `lower D`'s AND gates. -/
-theorem sum_size_le_creditSize {ι : Type} {Cd : Declared ι} {Np : ℕ} {lower : Verity.Declaration → Verity.Circuit}
-    {D : Verity.Declaration} (M : BlockMap Cd Np lower D) (ledger : Finset (Fin (lower D).N)) :
+theorem sum_size_le_creditSize {ι : Type} {Cd : Declared ι} {Np : ℕ} {lower : Verity.RegisteredCircuit → Verity.Circuit}
+    {D : Verity.RegisteredCircuit} (M : BlockMap Cd Np lower D) (ledger : Finset (Fin (lower D).N)) :
     ∑ t, M.size ledger t ≤ Verity.creditSize lower D := by
   classical
   unfold BlockMap.size Verity.creditSize Verity.Circuit.andSize

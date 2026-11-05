@@ -1,6 +1,8 @@
-import Mathlib.Data.List.SplitLengths
-import Definitions.Claims.Sampling
-import Definitions.Flock.Circuit
+module
+
+public import Mathlib.Data.List.SplitLengths
+public import Definitions.Claims.Sampling
+public import Definitions.Flock.Circuit
 
 /-!
 # C-Flock's session as a sampling statement
@@ -25,6 +27,8 @@ The C-Flock session's units, read as the sampling claims' statement, partition, 
   registration's commitments. It reads neither the roots nor `H`.
 * `witOf C X`: an opening of every wire at its position, of its value in `C`'s evaluation on `X`'s inputs.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

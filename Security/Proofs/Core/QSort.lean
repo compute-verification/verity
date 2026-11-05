@@ -1,4 +1,7 @@
-import Batteries.Tactic.OpenPrivate
+module
+
+public import Batteries.Tactic.OpenPrivate
+import all Init.Data.Array.QSort.Basic
 
 /-!
 # `Array.qsort` leaves a sorted array as it is
@@ -6,6 +9,8 @@ import Batteries.Tactic.OpenPrivate
 `qsort_sorted`: an array strictly sorted by `lt` is `qsort lt`'s own output. Each partition's pivot is the middle element,
 which splits a sorted range in place (`qpartition_sorted`), and both halves stay sorted (`sort_sorted`).
 -/
+
+@[expose] public section
 
 open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic
 
@@ -24,7 +29,7 @@ section Loop
 
 variable (lt : α → α → Bool) {lo hi : Nat} (hhi : hi < n) (pivot : α) (as : Vector α n)
 
-theorem loop_skip (i : Nat) (ilo : lo ≤ i) :
+private theorem loop_skip (i : Nat) (ilo : lo ≤ i) :
     ∀ (d k : Nat) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
       (∀ j (hj : j < n), k ≤ j → j < hi → lt as[j] pivot = false) →
       Array.qpartition.loop lt lo hi hhi pivot as i k ilo ik w =
@@ -43,7 +48,7 @@ theorem loop_skip (i : Nat) (ilo : lo ≤ i) :
     simp only [hk, dite_true, hb k (by omega) (Nat.le_refl _) hk, Bool.false_eq_true, ite_false]
     exact ih (k + 1) (by omega) (by omega) (by omega) (fun j hj h1 h2 => hb j hj (by omega) h2)
 
-theorem loop_take (m : Nat) (hm : m ≤ hi) :
+private theorem loop_take (m : Nat) (hm : m ≤ hi) :
     ∀ (d k : Nat) (ilo : lo ≤ k) (w : k ≤ m), m - k = d →
       (∀ j (hj : j < n), k ≤ j → j < m → lt as[j] pivot = true) →
       (∀ j (hj : j < n), m ≤ j → j < hi → lt as[j] pivot = false) →
@@ -95,7 +100,7 @@ theorem qpartition_sorted (lt : α → α → Bool) (as : Vector α n) {lo hi : 
       · omega
       · rw [hs j ((lo + hi) / 2) _ _ (by omega) (by omega) hm1 (by omega)]; simp; omega
 
-theorem sort_sorted (lt : α → α → Bool) :
+private theorem sort_sorted (lt : α → α → Bool) :
     ∀ (d : Nat) (as : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n), hi - lo < d →
       SortedOn lt lo hi as → Array.qsort.sort lt as lo hi w hlo hhi = as := by
   intro d

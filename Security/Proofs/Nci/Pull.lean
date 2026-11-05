@@ -1,5 +1,7 @@
-import Definitions.Nci.Assumptions.Baseline
-import Proofs.Core.Circuit
+module
+
+public import Definitions.Nci.Assumptions.Baseline
+public import Proofs.Core.Circuit
 
 /-!
 # Pulling a division back through a containment
@@ -15,6 +17,8 @@ an input gate, which lies in no IU, so the IU reads it too, and it is outside `d
 total containment is a partial one with no dark gates (`PartialContainment.ofContainment`), and `ThetaRegistered` for
 it keeps the novel inputs of `c` that a piece reads out of `d`'s θ (`novelReads_pull`).
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 
@@ -83,7 +87,7 @@ theorem into_pull_into_computed (u : Fin n) {a : Fin C.N} (ha : a ∈ C.into ((p
 
 end Pull
 
-theorem novelReads_pull {c d : Declaration} (M : Containment c.D d.D)
+theorem novelReads_pull {c d : RegisteredCircuit} (M : Containment c.D d.D)
     (hB : Assumptions.ThetaRegistered c d (PartialContainment.ofContainment M)) {n : ℕ} (P : Partition d.D n)
     (u : Fin n) : novelReads c ((pull M P).gates u) ≤ novelReads d (P.gates u) := by
   unfold novelReads
@@ -100,10 +104,10 @@ section Piece
 
 open Finset
 
-theorem ofContainment_S {c d : Declaration} (M : Containment c.D d.D) :
+theorem ofContainment_S {c d : RegisteredCircuit} (M : Containment c.D d.D) :
     (PartialContainment.ofContainment M).S = c.D.computed := rfl
 
-variable {c d : Declaration} (M : PartialContainment c d) {n : ℕ} (P : Partition d.D n)
+variable {c d : RegisteredCircuit} (M : PartialContainment c d) {n : ℕ} (P : Partition d.D n)
 
 /-- The piece of `c` that IU `u` of `d` computes: the gates of `S` whose images lie in `u`. -/
 def piece (u : Fin n) : Finset (Fin c.D.N) := M.S.filter fun g => P.unit (M.emb g) = some u

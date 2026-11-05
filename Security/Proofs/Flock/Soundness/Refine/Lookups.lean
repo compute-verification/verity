@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.OkLe
+module
+
+public import Proofs.Flock.Soundness.Refine.OkLe
 
 /-!
 # The setup reads the lookup tables only by name
@@ -12,6 +14,8 @@ names are distinct (`mufu_nodup`), extend those found where more are found alike
 
 The proofs walk both runs at once with `ok_le_walk` (`Refine/OkLe.lean`), which leaves the table reads.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

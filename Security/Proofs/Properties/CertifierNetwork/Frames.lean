@@ -1,6 +1,10 @@
-import Proofs.Properties.CertifierNetwork.Defs
-import Proofs.Properties.CertifierDevice.Fifo
-import Proofs.Properties.NetworkCertifier.Bytes
+module
+
+public import Proofs.Properties.CertifierNetwork.Defs
+public import Proofs.Properties.CertifierDevice.Fifo
+public import Proofs.Properties.NetworkCertifier.Bytes
+
+@[expose] public section
 
 set_option maxRecDepth 20000
 

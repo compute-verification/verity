@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.DeployK
-import Proofs.Flock.Claims.Bridge.Custody
+module
+
+public import Proofs.Flock.Claims.DeployK
+public import Proofs.Flock.Claims.Bridge.Custody
 
 /-!
 # The coins each recorded round issues
@@ -12,6 +14,8 @@ that order (`repNs`, `verifyRepWith_readsN`). So each rep stream of an accepted 
 `plainRepNs` (`streams_ns_plain`), its rounds in `spec.repStreams` order the session's `plainNs`
 (`rounds_ns_plain`), and custody reads each round message's coin at that count (`custody_vals_plain`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

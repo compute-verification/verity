@@ -1,6 +1,8 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
-import Proofs.Pouw.PearlC.DeviceRev1Gamma
-import Proofs.Pouw.PearlC.DeviceSm120Gamma
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
+public import Proofs.Pouw.PearlC.DeviceRev1Gamma
+public import Proofs.Pouw.PearlC.DeviceSm120Gamma
 
 /-!
 # Row additivity: rev1's TT_OUT gives the row-seeded one (staging, nothing pinned)
@@ -25,6 +27,8 @@ gives `TTOutRowSeed`, and the γ theorems carry over with the error at the row c
   - v2 (`devSm120v2 Prices.sm120`), cap 1/1,000: `216793/59950000` at 8192³ and `2950127/829250000` at 16384³;
   per unit and per audit tile, the rev1 values at both records.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

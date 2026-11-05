@@ -1,5 +1,7 @@
-import NetworkCheck.Certificate
-import Lean.Data.Json
+module
+
+public import NetworkCheck.Certificate
+public import Lean.Data.Json
 
 /-!
 # The difftest: the network certificate's encodings against `certificate.py`, on generated instances
@@ -22,6 +24,8 @@ to open, `verify_frame` queries, record heads given field by field, signed diges
 * `messages`, each `certificate_message`, sessions of 31 and 33 bytes among them, which both refuse; `nodes`, each
   `node`.
 -/
+
+@[expose] public section
 
 namespace NetworkCheck.Difftest
 

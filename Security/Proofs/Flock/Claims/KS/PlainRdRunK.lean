@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainRdRun
-import Proofs.Flock.Claims.KS.PlainLeafKSK
+module
+
+public import Proofs.Flock.Claims.KS.PlainRdRun
+public import Proofs.Flock.Claims.KS.PlainLeafKSK
 
 /-!
 # The plain table bound at one tape at `VK keep`, each slot at the run's own level columns
@@ -8,6 +10,8 @@ import Proofs.Flock.Claims.KS.PlainLeafKSK
 `PlainRdRun`'s `plainRel_of`, `plain_accPr_le_rdRun` and `plain_accPr_le_rdAll`, over the verifier `VK keep`: the
 simulator at `plainSimK keep` and the verdict at the draw `plainVerdictAtK keep`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -30,7 +34,7 @@ theorem plain_liveRowK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock
     (hacc : (Claims.run sha512 P (VK keep) x ω (plainΦ x spec st (u, r'))).out = .acc)
     (hA : AcceptsAtDK keep ins.read.I (some d) (wrPDK keep ins.read.I d (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN
       (plainDg spec) (plainW spec (plain_mPts hs hin hset).1) sha512 (plainSimK keep P x spec st) x (ω, u) r')))
-    {sch : Accounting.Schedule} {out : Model.OutCL 𝔽 Dig (List UInt8)} {k : ℕ} (hk : k < 2)
+    {sch : FlockSoundness.Accounting.Schedule} {out : Model.OutCL 𝔽 Dig (List UInt8)} {k : ℕ} (hk : k < 2)
     (hL : LaterEntriesAtK keep sch ins.read.I d (wrPDK keep ins.read.I d (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN
       (plainDg spec) (plainW spec (plain_mPts hs hin hset).1) sha512 (plainSimK keep P x spec st) x (ω, u) r')) out k) :
     ∀ ℓ, 1 ≤ ℓ → ∀ q v, (q, v) ∈ (slotOpensL out k ℓ (lvOf sch ℓ).queries).map (fun x => (x.1, x.2.1)) →
@@ -294,7 +298,7 @@ theorem plainRel_ofK (keep : Bool → Bool) {x : Claims.Msg} {s : Claims.Flock.S
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
     (hd : ins.read.draw = some d) (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512) (T : TabSpec spec.mPts)
-    (sch : Accounting.Schedule) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8))
+    (sch : FlockSoundness.Accounting.Schedule) (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8))
     (hE : ∀ o : LiveOutJ 1 spec.mPts, AcceptsAtDK keep ins.read.I (some d) (wrPDK keep ins.read.I d o) →
       ∀ pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig,
         (∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith T o.pts r)

@@ -94,7 +94,7 @@ class Run:
     def honest(self, w: int):
         return self.lw.commit(w, self.egress(egress_records()[w]), self.ingress(ingress_records()[w]), SALTS[w])
 
-    def register(self, opening) -> S.Registration:
+    def register(self, opening) -> S.WindowCommitmentRecord:
         reg = self.lw.register(self.stream, self.lw.registration(opening, self.previous))
         self.previous = reg.digest
         return reg

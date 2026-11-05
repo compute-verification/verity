@@ -1,5 +1,7 @@
-import Proofs.Properties.Verity.Sampled.Project
-import Proofs.Properties.Verity.SampledCoins
+module
+
+public import Proofs.Properties.Verity.Sampled.Project
+public import Proofs.Properties.Verity.SampledCoins
 
 /-!
 # Sampled proofs' coupling: the coin map
@@ -36,13 +38,17 @@ frame's coins are 512 uniform bits, one for one with 64 of the bytes the sample 
   premises hold within the openings' gaps and empty classes (`openMap_roundClose`, `openMap_linkClose`,
   `openMap_couples`), at any widening and start that leave the tape from the first stop fresh (`FirstStopFresh`) and
   are within `ε₀` of the uniform tape (`StartWithin`).
-* **The sample-coupled coin map** (`FreshAt`, `freshSel`, `srcCoins`, `sampleStart`, `sampleMap`, `sampleMaps`):
-  widened by a tape of the period's game, its start fills the fresh frames of the sample's family with the bytes the
-  sample reads, as coins (`srcCoins`, whose bytes are the sample's: `bytesOf_srcCoins`). It leaves the tape from the
+* **The sample-coupled coin map** (`FreshAt`, `freshSel`, `sampleSel`, `srcCoins`, `sampleStart`, `sampleMap`,
+  `sampleMaps`): widened by a tape of the period's game, its start fills the fresh frames of the sample's family in the
+  strategy's play, after its request, with the bytes the sample reads, as coins (`srcCoins`, whose bytes are the
+  sample's: `bytesOf_srcCoins`). A fresh frame is pinned to its place in the play: its log ends in the close after the
+  strategy's request, with the frame's release after the releases before it. It leaves the tape from the
   first stop fresh (`sampleMap_fresh`, by `avg_prod_walk_fill`) and is the uniform tape wherever the sample's coins are
   uniform (`sampleMap_start`, `avg_srcCoins`), so its premise holds within the openings' gaps and empty classes alone
   (`sampleMap_couples`, `couplingTarget_withProject_of_sample`).
 -/
+
+@[expose] public section
 
 namespace Verity.Game
 
@@ -872,29 +878,33 @@ theorem openMap_couples (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.gam
 /-! ## The sample's coins in the fresh frames of the sample's family -/
 
 /-- **A fresh frame's coin node, described**: `g'` is the device's flip of the coins of a fresh frame of the family
-`label` answering `after`, with the releases' continuation after it (`relK`'s fresh branch). -/
-structure FreshAt {β : Type} (label : String) (after : ByteArray) (g' : Game β) where
+`label` answering `after`, with the releases' continuation after it (`relK`'s fresh branch), ending in `E` at the
+device's log: the releases `pre` before the frame, the frame's, then the rest. -/
+structure FreshAt {β : Type} (E : List Release → Game β) (label : String) (after : ByteArray) (g' : Game β) where
   k : ℕ
   fs : List (String × ℕ)
   ts : List OpenTree
-  f : List Release → Game β
+  pre : List Release
   iF : Fintype (Fin 512 → Bool)
   iN : Nonempty (Fin 512 → Bool)
   eq : g' = @Game.coin β (Fin 512 → Bool) iF iN fun x =>
-    relK k fs ts fun log => f (⟨.fresh label, after, List.ofFn x⟩ :: log)
+    relK k fs ts fun log => E (pre ++ ⟨.fresh label, after, List.ofFn x⟩ :: log)
 
 /-- A fresh frame's node flips 512 bits. -/
-theorem FreshAt.coin_eq {β C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β} {label : String}
-    {after : ByteArray} (o : FreshAt label after (@Game.coin β C iF iN k)) : C = (Fin 512 → Bool) := by
+theorem FreshAt.coin_eq {β C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game β}
+    {E : List Release → Game β} {label : String} {after : ByteArray}
+    (o : FreshAt E label after (@Game.coin β C iF iN k)) : C = (Fin 512 → Bool) := by
   have h := o.eq
   injection h
 
 open Classical in
 /-- **The fresh frames of the family `label`, as a fill writes them** (`fill`): the coin nodes described as fresh
-frames of the family `label` answering `after`, each taking a written coin as its 512 bits. -/
-noncomputable def freshSel (label : String) (after : ByteArray) : FillSel Exchange (Fin 512 → Bool) :=
+frames of the family `label` answering `after` in a play that ends in `E`, each taking a written coin as its 512
+bits. -/
+noncomputable def freshSel (E : List Release → Game Exchange) (label : String) (after : ByteArray) :
+    FillSel Exchange (Fin 512 → Bool) :=
   fun {C : Type} [iF : Fintype C] [iN : Nonempty C] (k : C → Game Exchange) =>
-    if h : Nonempty (FreshAt label after (@Game.coin _ C iF iN k)) then
+    if h : Nonempty (FreshAt E label after (@Game.coin _ C iF iN k)) then
       some (Equiv.cast (FreshAt.coin_eq (Classical.choice h)).symm)
     else none
 
@@ -929,13 +939,19 @@ theorem bytesOf_srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (ω : A.Ω)
   rw [h]
   exact key hL (A.src ω 0)
 
+/-- **The fresh frames of the family `label` answering `after` in `σ`'s play**: those whose log ends in the close
+after `σ`'s request (`freshSel`). -/
+noncomputable def sampleSel (σ : Strategy (V.game θ F c)) (label : String) (after : ByteArray) :
+    FillSel Exchange (Fin 512 → Bool) :=
+  freshSel (finish (V.signer θ) θ F c σ.1) label after
+
 /-- **The start that writes the sample's coins into the fresh frames of the sample's family**: on the device's coins and
 a tape of the period's game, the tape filled with the coins `κ` at the fresh frames of the family `label` answering
-`after`, up to the first node a round's cut fixes (`fill`). -/
+`after` in `σ`'s play, up to the first node a round's cut fixes (`fill`). -/
 noncomputable def sampleStart {R : ℕ} (rd : Reading R) (σ : Strategy (V.game θ F c)) (label : String)
     (after : ByteArray) {Ω : Type} {m : ℕ} (κ : Ω → Fin m → Fin 512 → Bool) (ω : Ω × CoinTape (V.game θ F c) σ) :
     CoinTape (V.game θ F c) σ :=
-  fill (freshSel label after) (V.game θ F c) σ (roundCuts V θ F c rd) m (κ ω.1) ω.2
+  fill (sampleSel V θ F c σ label after) (V.game θ F c) σ (roundCuts V θ F c rd) m (κ ω.1) ω.2
 
 /-- **The sample-coupled coin map**: widened by a tape of the period's game, its start writes the sample's coins `κ`
 into the fresh frames of the sample's family (`sampleStart`), and at each stop it writes the live coins into the stop's
@@ -960,7 +976,7 @@ theorem sampleMap_start_eq (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.
     (after : ByteArray) {m : ℕ} (κ : A.Ω → Fin m → Fin 512 → Bool)
     (ω : (A.extend (sampleMap e V θ F c A rd σ label after κ).widening).L.Ω) :
     (sampleMap e V θ F c A rd σ label after κ).start ω =
-      fill (freshSel label after) (V.game θ F c) σ (roundCuts V θ F c rd) m (κ ω.1) ω.2 :=
+      fill (sampleSel V θ F c σ label after) (V.game θ F c) σ (roundCuts V θ F c rd) m (κ ω.1) ω.2 :=
   rfl
 
 /-- The sample-coupled map's first stop is the walk to it from the filled tape. -/
@@ -969,7 +985,7 @@ theorem firstStop_sampleMap (A : Live) (rd : Reading A.rounds) (σ : Strategy (V
     (ω : (A.extend (sampleMap e V θ F c A rd σ label after κ).widening).L.Ω) :
     firstStop V θ F c A rd σ (sampleMap e V θ F c A rd σ label after κ) ω =
       Pos.walk (V.game θ F c) σ (roundCuts V θ F c rd)
-        (fill (freshSel label after) (V.game θ F c) σ (roundCuts V θ F c rd) m (κ ω.1) ω.2) id :=
+        (fill (sampleSel V θ F c σ label after) (V.game θ F c) σ (roundCuts V θ F c rd) m (κ ω.1) ω.2) id :=
   (firstStop_eq V θ F c A rd σ (sampleMap e V θ F c A rd σ label after κ) ω).trans
     (congrArg (fun t => Pos.walk (V.game θ F c) σ (roundCuts V θ F c rd) t id)
       (sampleMap_start_eq e V θ F c A rd σ label after κ ω))
@@ -986,7 +1002,8 @@ theorem sampleMap_fresh (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.gam
       (firstStop_sampleMap e V θ F c A rd σ label after κ ω))
   refine h₁.trans (Eq.trans ?_ h₂.symm)
   generalize A.L.draw = dr
-  exact avg_prod_walk_fill (C := A.Ω) (freshSel label after) (fun ω₁ : A.Ω => G (dr ω₁)) (roundCuts V θ F c rd) m κ
+  exact avg_prod_walk_fill (C := A.Ω) (sampleSel V θ F c σ label after) (fun ω₁ : A.Ω => G (dr ω₁))
+    (roundCuts V θ F c rd) m κ
 
 /-- **The sample-coupled start is the uniform tape** wherever the sample's coins are uniform (`avg_srcCoins`). -/
 theorem sampleMap_start (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.game θ F c)) (label : String)
@@ -995,8 +1012,9 @@ theorem sampleMap_start (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.gam
     StartWithin V θ F c A σ (sampleMap e V θ F c A rd σ label after κ) 0 := fun H _ => by
   rw [add_zero]
   refine le_of_eq (Eq.trans ?_ (avg_prod (C := A.Ω) (D := CoinTape (V.game θ F c) σ) _).symm)
-  exact (avg_fill (freshSel label after) (V.game θ F c) σ (roundCuts V θ F c rd) m H).symm.trans
-    (hκ fun κ' => avg fun t => H (fill (freshSel label after) (V.game θ F c) σ (roundCuts V θ F c rd) m κ' t)).symm
+  exact (avg_fill (sampleSel V θ F c σ label after) (V.game θ F c) σ (roundCuts V θ F c rd) m H).symm.trans
+    (hκ fun κ' => avg fun t =>
+      H (fill (sampleSel V θ F c σ label after) (V.game θ F c) σ (roundCuts V θ F c rd) m κ' t)).symm
 
 /-- **The sample-coupled coin map's premise within the openings' gaps and empty classes**: the joint law's tape off the
 empty classes is within the openings' gaps and empty classes over the stops of the uniform tape, wherever the sample's

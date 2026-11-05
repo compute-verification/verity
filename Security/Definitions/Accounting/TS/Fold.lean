@@ -1,4 +1,6 @@
-import Mathlib.Data.Fin.Tuple.Basic
+module
+
+public import Mathlib.Data.Fin.Tuple.Basic
 
 /-!
 # A fold of words (trusted)
@@ -7,6 +9,8 @@ The receipt folds' common form: a run of `N` words absorbed one at a time into a
 its own step. A step binds when it is injective in the word at every state and in the state at every word; duo's and
 fx1's steps with odd multipliers do (`Pouw.Guarantees.Receipt.DuoStepBijective`, `Fx1StepBijective`).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS
 

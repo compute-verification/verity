@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.RegSetup
-import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+module
+
+public import Proofs.Flock.Claims.Recursion.RegSetup
+public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
 
 /-!
 # The deployed brings' setup (`deployedB`)
@@ -20,6 +22,8 @@ decision is these evaluations. With the staging round the shared rows are in eac
 `setupO xO` reads them there, and the definition is unchanged. `resSetup_deployedB` is `recursiveKSAt_of_leaves`' `hset`
 and `regSetup_deployedB` is `RegSetup`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

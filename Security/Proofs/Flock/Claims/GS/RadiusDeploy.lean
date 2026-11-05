@@ -1,5 +1,9 @@
-import Proofs.Flock.Claims.GS.RadiusFamily
-import Proofs.Flock.Claims.DeployPlainCode
+module
+
+public import Proofs.Flock.Claims.GS.RadiusFamily
+public import Proofs.Flock.Claims.DeployPlainCode
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
 # The radius decoders the deployed instances name
@@ -29,6 +33,8 @@ bounds the steps at (`FlockDeploy.efficient_plain`, `FlockDeploy.efficient_zk`).
 its words, `2^d` lookups at each `m`, so it counts at least one step there (`plainCountedRD_nil_pos`,
 `zkCountedRD_nil_pos`).
 -/
+
+@[expose] public section
 
 namespace Claims.GS
 

@@ -1,7 +1,11 @@
-import Definitions.Core.Partition
-import Definitions.Core.Declaration
+module
+
+public import Definitions.Core.Partition
+public import Definitions.Core.RegisteredCircuit
 
 /-! # What correct units establish about a circuit, for gates of any width -/
+
+@[expose] public section
 
 namespace Verity.Guarantees
 
@@ -31,7 +35,7 @@ def RefineWrong : Prop :=
 /-- A declaration that contains another, through a containment that sends no novel input gate of `t` into `d`'s
 baseline, implements it. -/
 def ContainsImplements : Prop :=
-  ∀ (t d : Declaration) (M : Containment t.D d.D), (∀ g, t.D.isInput g = true → M.emb g ∈ d.θ → g ∈ t.θ) →
+  ∀ (t d : RegisteredCircuit) (M : Containment t.D d.D), (∀ g, t.D.isInput g = true → M.emb g ∈ d.θ → g ∈ t.θ) →
     t.Implements d
 
 end Verity.Guarantees

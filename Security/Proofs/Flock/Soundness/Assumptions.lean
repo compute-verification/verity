@@ -1,8 +1,10 @@
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Proofs.Flock.Soundness.Game.Expect
-import Randomness
-import Definitions.Flock.Arith
-import Definitions.Claims.Hm96
+module
+
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
+public import Proofs.Flock.Soundness.Game.Expect
+public import Randomness
+public import Definitions.Flock.Arith
+public import Definitions.Core.Hm96
 
 /-!
 # Named assumptions
@@ -34,6 +36,8 @@ Assumption 1, BCHKS25's mutual correlated agreement up to the Johnson bound, is 
 Merkle binding is proved too (VCVio's binding theorem, `Merkle`): a conflict of two verifying openings is a collision, which
 is what lets each finder's success be read as a collision of SHA-512.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Assumptions
 
@@ -86,7 +90,7 @@ def SHA512CRExpected {D β : Type} (H : List UInt8 → D) (g : Game β) (s : Str
     expect cost g s / 2 ^ (256 : ℝ)
 
 /-- **Assumption 3 (`uniform/io-getrandombytes`): the operating system's randomness is independent uniform bytes**, for
-the verifier's unit draw and the proof service's epoch salt (`Stream.salt`). Its per-test form,
+the verifier's unit draw and the proof system's epoch salt (`Stream.salt`). Its per-test form,
 `UniformRandomBytesTest`, is the one the zero-knowledge theorems take.
 
 The verifier draws the units it audits from `IO.getRandomBytes`: `Flock.Draw.drawOS` is `Flock.Draw.drawWith` with every
@@ -220,7 +224,7 @@ def HmRowComputes {W : Type} (H : List UInt8 → List UInt8) (saltPrefix : List 
 theorem prENNReal_eq_prCoin {α : Type} [Fintype α] (p : α → Prop) : Claims.PrENNReal p = prCoin p := rfl
 
 /-- **Zero knowledge's T1 (`hash-derived-key`), read in `prCoin`'s terms**: the spec's `Claims.Hm96Hiding`
-(`Definitions/Claims/Hm96.lean`; `docs/zk-proof-public.md` §1.2, §1.5 HDK, §4.1 T1), applied to one test.
+(`Definitions/Core/Hm96.lean`; `docs/zk-proof-public.md` §1.2, §1.5 HDK, §4.1 T1), applied to one test.
 
 `My y` is `M(K*)·y` for the pinned key `K*`, and `c y` the salt's own hash `H(sp ‖ y)`. An ideal leaf replaces `b` by a
 fresh uniform `U`. It is a statement about uniform salts, and it needs no computational property of SHA-512. At
@@ -243,7 +247,7 @@ theorem hm96Hiding_of {Y B C : Type} [Fintype Y] [Fintype B] {My : Y → B} {c :
     Claims.Hm96Hiding My c δ₁ :=
   h
 
-/-- **`hash-derived-key`: the pinned hm96 key hides at `2^-193`** (ruling F). `Claims.Hm96Hiding My c (2^-193)` for the keyed
+/-- **`hash-derived-key`: the pinned hm96 key hides at `2^-193`**. `Claims.Hm96Hiding My c (2^-193)` for the keyed
 hash `My` of the pinned key `K*` and the salt hash `c`: hm96 §3 shows it fails for at most `2^-64` of the keys
 (`hm96_sha512_bad_keys`), and that the pinned key is not among them is the assumption. It is instantiated at
 hm96-sha512's `ZkView.My` and `ZkView.saltHash`.
@@ -260,10 +264,10 @@ committed coins' bound at a fresh uniform key already is (`ZkCoins.CommittedLeHm
 def HashDerivedKey {Y B C : Type} [Fintype Y] [Fintype B] (My : Y → B) (c : Y → C) : Prop :=
   Claims.Hm96Hiding My c ((2 : ℝ≥0∞) ^ (-193 : ℤ))
 
-/-- **Zero knowledge's `X_L + κ ≠ 0` on the level-0 domain** (`docs/zk-proof-public.md` §1.2, gap 12).
+/-- **Zero knowledge's `X_L + κ ≠ 0` on the level-0 domain** (`docs/zk-proof-public.md` §1.2).
 
 M1 pads a level-0 lane with `(X_L + κ)·μ`, where `X_L = Ŵ_cols` and `κ` is the element `PAD_C`. On the domain `X_L(ω_q)` is
-bit `cols` of `q`, so it is 0 or 1, and `κ` lies outside GF(2); so `X_L + κ` is `κ` or `1 + κ`, never 0. M1's lane checked it
+bit `cols` of `q`, so it is 0 or 1, and `κ` lies outside GF(2); so `X_L + κ` is `κ` or `1 + κ`, never 0. It was checked
 on upstream's NTT. It is a fact about the concrete arithmetic that `Arith.Correct` doesn't list, stated here for the
 `2^(cols+1)` positions of a level-0 codeword; `ZK.padOnto_M1` takes it for Lemma B's row (ii). -/
 def PadNonvanishing {F K : Type} [Field F] [Field K] (A : Model.Arith F K) (cols : ℕ) (κ : F) : Prop :=

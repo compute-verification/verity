@@ -18,7 +18,8 @@ FILES = {
     "Definitions/B.lean": "/- a /- nested -/ comment -/\nabbrev b : Nat := 1\n",
     "Proofs/A.lean": "theorem p : True := trivial\n",
 }
-FACTS = {"pins": {}, "spec_definitions": [
+FACTS = {"pins": {"A.g": {"kind": "theorem", "reads": [{"name": "A.read", "module": "Definitions.A.Basic"},
+                                                      {"name": "B.b", "module": "Definitions.B"}]}}, "spec_definitions": [
     {"module": "Definitions.A.Basic", "name": "A.read", "kind": "def"},
     {"module": "Definitions.A.Basic", "name": "A.S", "kind": "inductive"},
     {"module": "Definitions.A.Basic", "name": "A.read.eq_1", "kind": "def"},
@@ -26,8 +27,8 @@ FACTS = {"pins": {}, "spec_definitions": [
     {"module": "Definitions.B", "name": "B.b", "kind": "def"},
 ]}
 LOCK = {"roots": ["Definitions"], "guarantees": {"A.g": {"owner": "@lane"}}, "reads": {
-    "Definitions.A.Basic": {"definitions": {"A.read": "h1", "A.S.x": "h2", "A.S": "h3"}, "guarantees": ["A.g"]},
-    "Definitions.B": {"definitions": {"B.b": "h4"}, "guarantees": ["A.g"]},
+    "Definitions.A.Basic": {"definitions": {"A.read": "h1", "A.S.x": "h2", "A.S": "h3"}},
+    "Definitions.B": {"definitions": {"B.b": "h4"}},
 }}
 
 
@@ -53,10 +54,12 @@ def test_areas_and_unread_from_facts(tmp_path):
     assert (b["definitions"], b["read"], b["unread"]) == (1, 1, 0)
     assert m["unread"] == {"Definitions.A.Old": ["A.old"]}
     assert "| total | 3 |" in T.table(m)
+    by = T.measure(package(tmp_path), "Definitions", FACTS, read_by={"Definitions.B": ["A.g", "B.h"]})
+    assert (by["areas"]["A"]["guarantees"], by["areas"]["B"]["guarantees"]) == (0, 2), "a run's report.json `readers`"
 
 
 def test_without_facts_counts_the_sources(tmp_path):
     m = T.measure(package(tmp_path), "Definitions")
     a = m["areas"]["A"]
-    assert not m["exact"] and (a["definitions"], a["read"], a["unread"]) == (3, 3, None)
-    assert "~3" in T.table(m)
+    assert not m["exact"] and (a["definitions"], a["read"], a["unread"], a["guarantees"]) == (3, 3, None, None)
+    assert "~3" in T.table(m) and T.table(m).splitlines()[-1].endswith("| - | - |"), "readers unknown without facts"

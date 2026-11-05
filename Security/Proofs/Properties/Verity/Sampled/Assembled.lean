@@ -1,7 +1,9 @@
-import Proofs.Properties.Verity.Sampled.CoinMap
-import Proofs.Properties.Verity.Sampled.Accepts
-import Proofs.Properties.Verity.Sampled.Binding
-import Proofs.Properties.Verity.SampledRead
+module
+
+public import Proofs.Properties.Verity.Sampled.CoinMap
+public import Proofs.Properties.Verity.Sampled.Accepts
+public import Proofs.Properties.Verity.Sampled.Binding
+public import Proofs.Properties.Verity.SampledRead
 
 /-!
 # Sampled proofs' coupling, assembled from its pieces
@@ -34,6 +36,8 @@ What the pieces leave is this module's hypotheses, each named in `couplingTarget
 joint law's support off the empty classes (`hM`), with the readings `rd`, the decoders `D`, the sample's family `label`
 and digest `after` and the field's encoding `e` as parameters.
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled
 
@@ -225,14 +229,25 @@ noncomputable def Constructions.assembled (e : 𝔽 ≃ (Fin 128 → Bool)) {V :
     (κ : (A : Live) → A.Ω → Fin m → Fin 512 → Bool) : Constructions V :=
   ((Binding.withBinding K dev).withProject V rd D (sampleMaps e V rd label after κ)).withMessages rd
 
+/-- **The stops' gaps within the hiding term**: at `2^-257` a gap, four gaps at the first stop and at each of the at
+most `A.N` stops after it (`couplesErr`: twice the opened coins' gap, `openGap`, and twice the empty class's,
+`openEmpty`) are at most the coin trees' hiding term wherever `2(1 + A.N) ≤ maxLeaves`. -/
+theorem Live.stops_le_hidingTerm {A : Live} (h : 2 * (1 + A.N) ≤ maxLeaves) :
+    4 * ((1 + A.N : ℕ) : ℝ≥0∞) / 2 ^ 257 ≤ A.hidingTerm := by
+  unfold Live.hidingTerm
+  refine ENNReal.div_le_div_right ?_ _
+  exact_mod_cast (by omega : 4 * (1 + A.N) ≤ 2 * maxLeaves)
+
 variable (e : 𝔽 ≃ (Fin 128 → Bool)) (V : Vocab d α) (k : Verity.Registration.Composite)
 
 /-- **The coupling, assembled from its pieces**: at the assembled constructions, `CouplingTarget` holds at the session
-`A`, the parameters `θ` and the committed files `F` wherever the device printed each play's log after `θ` (`hP`), the
-sample's coins are uniform (`hκ`), the openings' gaps and empty classes over the stops are at most the hiding term
-(`hε`), `A` is the session v2 sets up (`hA`), v2's parameters name the vocabulary's digests (`hDg`), the session's
-writer keeps an accepted transcript's view (`hW`), and on the joint law's support off the empty classes the outcomes
-beside accepted plays whose log v2 read is the device's are the writer's at the moves v2's files decode to (`hM`). -/
+`A`, the parameters `θ` and the committed files `F` wherever the device printed each play's log after `θ` (`hP`), its
+history at each play signed what the play's signatures are on (`hS`, `Binding.SignsPlay`; `Device.signsPlay_dev` at
+the deployed device), the sample's coins are uniform (`hκ`), the openings' gaps and empty classes over the stops are at
+most the hiding term (`hε`, which four gaps a stop meet wherever `2(1 + A.N) ≤ maxLeaves`, `Live.stops_le_hidingTerm`),
+`A` is the session v2 sets up (`hA`), v2's parameters name the vocabulary's digests (`hDg`), the session's writer keeps
+an accepted transcript's view (`hW`), and on the joint law's support off the empty classes the outcomes beside accepted
+plays whose log v2 read is the device's are the writer's at the moves v2's files decode to (`hM`). -/
 theorem couplingTarget_assembled (K : Constructions V) (dev : Exchange → Properties.Challenger.History)
     (rd : Readings)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
@@ -241,6 +256,7 @@ theorem couplingTarget_assembled (K : Constructions V) (dev : Exchange → Prope
     (after : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → ByteArray) {m : ℕ}
     (κ : (A : Live) → A.Ω → Fin m → Fin 512 → Bool) (A : Live) (θ : ByteArray) (F : Array ByteArray)
     (hP : ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
+    (hS : ∀ c, Binding.SignsPlay V dev θ F c)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ A ω)) = avg H)
     (hε : ∀ c σ, couplesErr V θ F c A (rd A θ F c) σ (D A θ F c σ) (sampleMaps e V rd label after κ A θ F c σ)
       (fun q _ s => openGap q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
@@ -253,7 +269,7 @@ theorem couplingTarget_assembled (K : Constructions V) (dev : Exchange → Prope
     CouplingTarget V k (K.assembled e dev rd D label after κ) A θ F :=
   couplingTarget_withProject_of_sample e V k rd (Binding.withBinding K dev) D label after κ A
     (Binding.Logged Binding.readsV2) θ F hκ
-    (fun c σ => Binding.logged_le V k Binding.readsV2 dev θ F c σ (Binding.binds_of_prints V k dev θ hP)) hε
+    (fun c σ => Binding.logged_le V k Binding.readsV2 dev θ F c σ (Binding.binds_of_prints V k dev θ hP) (hS c)) hε
     (fun c σ => decodes_of_digests hA hDg hW (hM c σ))
 
 /-- **The coupling, assembled, at the session's own coins**: `couplingTarget_assembled` with the sample's coins the
@@ -266,7 +282,7 @@ theorem couplingTarget_assembled_src (K : Constructions V) (dev : Exchange → P
     (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String)
     (after : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → ByteArray) (m : ℕ)
     (A : Live) (θ : ByteArray) (F : Array ByteArray) (hP : ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
-    (hL : A.Lb 0 = m * 64)
+    (hS : ∀ c, Binding.SignsPlay V dev θ F c) (hL : A.Lb 0 = m * 64)
     (hε : ∀ c σ, couplesErr V θ F c A (rd A θ F c) σ (D A θ F c σ)
       (sampleMaps e V rd label after (srcCoinsAt m) A θ F c σ)
       (fun q _ s => openGap q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
@@ -277,6 +293,7 @@ theorem couplingTarget_assembled_src (K : Constructions V) (dev : Exchange → P
     (hM : ∀ c σ, MovesReach V θ F c k (Binding.Logged Binding.readsV2) A (rd A θ F c) σ (D A θ F c σ)
       (sampleMaps e V rd label after (srcCoinsAt m) A θ F c σ) (linkEmpty e) (roundEmpty e)) :
     CouplingTarget V k (K.assembled e dev rd D label after (srcCoinsAt m)) A θ F :=
-  couplingTarget_assembled e V k K dev rd D label after (srcCoinsAt m) A θ F hP (avg_srcCoinsAt hL) hε hA hDg hW hM
+  couplingTarget_assembled e V k K dev rd D label after (srcCoinsAt m) A θ F hP hS (avg_srcCoinsAt hL) hε hA hDg hW
+    hM
 
 end Verity.Sampled

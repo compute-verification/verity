@@ -138,6 +138,55 @@ def test_a_build_slot_takes_the_slot_path(fast, tmp_path, monkeypatch):
     assert any("taking the slot path" in s for s in said)
 
 
+def test_the_slot_path_reads_the_node_s_artifact_cache_and_fills_it_only_from_a_package_that_passed(fast, tmp_path,
+                                                                                                   monkeypatch):
+    _, tree, calls = fast
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    put = []
+
+    def run(argv, **kw):
+        calls.append((argv, kw.get("cwd")))
+        _reported(argv, True)
+        return type("P", (), {"returncode": 1 if argv[-1].endswith("Req") else 0})()
+
+    def fake_put(self, reports, since=None, log=print):
+        put.append((self.store, reports, since))
+        return 3
+
+    monkeypatch.setattr(LC.subprocess, "run", run)
+    monkeypatch.setattr(LC.LA.LakeArtifacts, "put", fake_put)
+    said = []
+    assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 1
+    store = (tmp_path / "lean-artifacts").resolve()
+    assert [a[a.index("--artifacts") + 1] for a, _ in calls] == [str(store)] * 2
+    assert [(s, p) for s, p, _ in put] == [(store, {tree / "pkg": {"package": str(tree / "pkg"), "sandbox": True}})], \
+        "the package that passed, with check.py's report on it; a requirer that failed puts nothing"
+    assert isinstance(put[0][2], float) and any("3 module version(s) new in the artifact cache" in s for s in said)
+
+
+def _reported(argv: list[str], sandbox: bool) -> None:
+    """check.py's report on the package ``argv`` names, under its `--out`, built in the sandbox or not."""
+    out = Path(argv[argv.index("--out") + 1])
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "audit.json").write_text(json.dumps({"packages": [{"package": argv[-1], "sandbox": sandbox}]}))
+
+
+def test_a_records_build_outside_the_sandbox_puts_nothing_in_the_artifact_cache(fast, tmp_path, monkeypatch):
+    """Records runs fill the store check's audit stages from, and check.py builds without the sandbox where `unshare` is
+    missing, where compile-time code could leave in the build what it chose: such a package puts nothing there, though it
+    passed."""
+    _, tree, _ = fast
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    fake = LC.subprocess.run
+    monkeypatch.setattr(LC.subprocess, "run", lambda argv, **kw: _reported(argv, False) or fake(argv, **kw))
+    said = []
+    assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 0
+    assert [s for s in said if "artifact cache" in s] == [s for q in ("pkg", "pkg/Req") for s in (
+        f"lean-audit: {tree / q}: its report doesn't say it was built in the sandbox, so none of its modules go into the "
+        "artifact cache", f"lean-records: {q}: 0 module version(s) new in the artifact cache")]
+    assert not (tmp_path / "lean-artifacts" / "keys").exists()
+
+
 def test_dev_cache_takes_that_path_even_where_a_build_slot_is_granted(fast, tmp_path, monkeypatch):
     root, tree, calls = fast
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", lambda *a, **k: pytest.fail("--dev-cache takes no build slot"))
@@ -297,6 +346,37 @@ def test_damaged_finds_each_module_an_interrupted_build_left_half_written(tmp_pa
     assert LC.damaged(tmp_path / "none") == []
 
 
+def test_damaged_reads_each_output_a_module_system_trace_names_beside_it(tmp_path):
+    """A `module` file's trace names three oleans (`o`), `.ir` (`r`) and `.ir.sig` (`rs`) beside its `.ilean`, as Lean 4.34's
+    Lake writes them, all but the `.ilean` in the olean format; each is checked as the `.olean` is."""
+    lib = tmp_path / "lib"
+    outs = {"o": ["a1.olean", "a2.olean.server", "a3.olean.private"], "i": "b1.ilean", "r": "c1.ir", "rs": "c2.ir.sig",
+            "c": "d1.c", "m": True}
+
+    def ported(name: str) -> Path:
+        base = lib / name
+        base.parent.mkdir(parents=True, exist_ok=True)
+        for n in [*outs["o"], outs["i"], outs["r"], outs["rs"]]:
+            digest, _, ext = n.partition(".")
+            f = base.with_name(f"{base.name}.{ext}")
+            f.write_bytes(b"x" if ext == "ilean" else b"olean\x02rest")
+            f.with_name(f"{f.name}.hash").write_text(digest)
+            os.utime(f, ns=(10**18, 10**18))
+        t = base.with_suffix(".trace")
+        t.write_text(json.dumps({"outputs": outs}))
+        return t
+
+    ported("P/Good")
+    bad = [ported("P/NoPrivate"), ported("P/NotServer"), ported("P/NotIr"), ported("P/StaleIr"), ported("P/NoSig")]
+    (lib / "P" / "NoPrivate.olean.private").unlink()
+    for f in (lib / "P" / "NotServer.olean.server", lib / "P" / "NotIr.ir"):
+        f.write_bytes(b"\0\0\0")
+        os.utime(f, ns=(10**18, 10**18))
+    (lib / "P" / "StaleIr.ir.hash").write_text("zz")
+    (lib / "P" / "NoSig.ir.sig").unlink()
+    assert LC.damaged(lib) == sorted(bad)
+
+
 def torn(lib: Path, name: str) -> Path:
     """A module whose `.olean` was written after its `.hash`, the trace and the `.hash` still agreeing: what a build killed
     after `lean` wrote its outputs leaves, and a `.ltar` restore from Lake's cache over a stale `.hash`."""
@@ -450,13 +530,39 @@ def test_try_builds_the_files_imports_then_runs_lean_on_it_in_its_owning_package
     said = []
     assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 1, "lean's exit status"
     assert calls["build"] == [("Sec/Proofs", tree, ["+Proofs.Flock.X:deps"], False, None),
-                              ("Sec/Proofs", tree, None, False, ["env", "lean", "Flock/X.lean"])]
+                              ("Sec/Proofs", tree, None, False, ["env", "lean", ".lake/axiom-probe/Flock/X.lean"])]
     assert calls["link"] == [("Sec/Proofs", True)], "the owning package's dependencies, a copy as --records takes"
     assert calls["run"] == [], "no check.py, audit or --update"
     assert not (tree / LC.DIRTY).exists() and any("lean exit 1" in s for s in said)
     assert LC.main(["--try", "Sec/Proofs/Flock/X.lean", "--tree", str(tree)]) == 1
     with pytest.raises(SystemExit):
         LC.main(["--try", "Sec/Proofs/Flock/X.lean", "--records", "Sec"])
+
+
+def test_try_elaborates_the_files_probed_copy_and_ends_with_the_theorems_beyond_the_standard_axioms(trying, tmp_path,
+                                                                                                     monkeypatch):
+    """Lean's exit 0 isn't proved: the last line names the theorem resting on `sorry`, and an error on an appended
+    `#print axioms` line leaves the file's status 0."""
+    tree, calls = trying
+    x = LC.ROOT / "Sec" / "Proofs" / "Flock" / "X.lean"
+    x.write_text("namespace F\ntheorem holey : 1 = 2 := sorry\ntheorem clean : True := trivial\nend F\n")
+    seen = []
+
+    def build(pkg, t, lake_, targets=None, sandbox=True, cmd=None):
+        if cmd is None:
+            return 0, ""
+        seen.append((t / pkg / cmd[2]).read_text())
+        return 1, (".lake/axiom-probe/Flock/X.lean:8:14: error: Unknown constant `F.clean`\n"
+                   "'F.holey' depends on axioms: [sorryAx]\n")
+
+    monkeypatch.setattr(LC, "build", build)
+    said = []
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 0
+    assert seen[0].endswith("end F\n\n#print axioms F.holey\n#print axioms F.clean\n")
+    assert not (tree / "Sec" / "Proofs" / ".lake" / "axiom-probe" / "Flock" / "X.lean").exists()
+    assert "lean exit 0" in said[-2] and said[-1] == (
+        "lean-try: Sec/Proofs/Flock/X.lean: axiom probe: 1 of the 1 it read use axioms beyond propext, Classical.choice "
+        "and Quot.sound: F.holey (sorryAx); no answer for 1 (an error on its `#print axioms` line above): F.clean")
 
 
 def test_try_forgets_both_modules_an_import_clash_names_so_the_next_try_rebuilds_them(trying, tmp_path):
@@ -478,6 +584,38 @@ def test_try_forgets_both_modules_an_import_clash_names_so_the_next_try_rebuilds
     said.clear()
     assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 1
     assert other.exists() and not any("clash" in s for s in said), "any other error forgets nothing"
+
+
+def test_try_with_siblings_compiles_the_file_then_imports_it_beside_its_built_siblings(trying, tmp_path, monkeypatch):
+    tree, calls = trying
+    (tree / "Sec" / "Proofs" / "Flock").mkdir(parents=True)
+    (tree / "Sec" / "Proofs" / "lakefile.toml").write_text('name = "p"\nsrcDir = ".."\n\n[[lean_lib]]\nname = "Proofs"\n')
+    (tree / "Sec" / "Proofs" / "Flock" / "X.lean").write_text("module\n")
+    (tree / "Sec" / "Proofs" / "Y.lean").write_text("module\n")
+    olean = tree / "Sec" / "Proofs" / LC.SIBLINGS.LIB / "Proofs" / "Y.olean"
+    olean.parent.mkdir(parents=True)
+    olean.write_bytes(b"olean")
+    os.utime(olean, (2_000_000_000.0,) * 2)
+    ran = []
+
+    def run(argv, cwd):
+        ran.append(argv)
+        return 1, "error: import Proofs.Y failed, environment already contains 'f' from Proofs.Flock.X\n", 2.0, 700
+
+    monkeypatch.setattr(LC.SIBLINGS, "run", run)
+    said = []
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append, siblings=True) == 1
+    lean = calls["build"][1][4]
+    assert lean[:3] == ["env", "lean", "-R"] and lean[3].startswith(".lake/axiom-probe/siblings-") and lean[4] == "-o"
+    assert lean[5].endswith("/Proofs/Flock/X.olean") and lean[6] == f"{lean[3]}/Proofs/Flock/X.lean", \
+        "the probed copy, at its module's path under -R"
+    assert ran[0][1:4] == ["env", "lean", "--setup"]
+    assert any("siblings: Proofs.Flock.X and Proofs.Y both declare 'f'" in s for s in said), said
+    assert not list((tree / "Sec" / "Proofs" / LC.SIBLINGS.COPIES).iterdir()), "the scratch build is removed"
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=lambda _: None) == 0 and len(ran) == 1, \
+        "no check without --siblings"
+    with pytest.raises(SystemExit):
+        LC.main(["--records", "Sec", "--siblings"])
 
 
 def test_try_runs_no_lean_when_the_imports_fail_to_build(trying, tmp_path):

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Prover.Session
-import Proofs.Flock.Claims.Deploy
-import Proofs.Flock.Level3.Placed
+module
+
+public import Proofs.Flock.Claims.Complete.Prover.Session
+public import Proofs.Flock.Claims.Deploy
+public import Proofs.Flock.Level3.Placed
 
 /-!
 # Flock's honest prover at the deployed plain verifier (`honestP`)
@@ -20,6 +22,8 @@ The plain record's reference prover (`(deployPlain rel).P`), the prover of `Clai
 The witness is the trace (`Claims.Flock.Wit.hid`, table `i`'s address `a` at `i·2^m + a`); `A·z` and `B·z` are the level-0
 matrices the verifier folds (`FlockLevel3.placedA`, `placedB`) applied block by block (`mulBlocks`), entry by entry.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

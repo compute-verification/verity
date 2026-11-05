@@ -1,5 +1,7 @@
-import Definitions.Nci
-import Mathlib.Data.FinEnum
+module
+
+public import Definitions.Nci
+public import Mathlib.Data.FinEnum
 
 /-!
 # NCI's incompressibility in support form: the vocabulary
@@ -20,6 +22,8 @@ assignments, which wiring cannot change.
   input entry of which `T` holds a product, other than an input entry linked to an entry whole in `R`.
 -/
 
+@[expose] public section
+
 namespace Nci
 
 open Verity Finset
@@ -27,7 +31,7 @@ open Verity Finset
 open Classical in
 /-- The assignments to `d`'s gates that give each baseline gate its committed value in `θv`; the novel inputs range
 freely. Evaluation reads only the input gates, so these are the runs `d` can have once `θ` is committed. -/
-noncomputable def admissible (d : Declaration) (θv : d.D.Transcript) : Finset d.D.Transcript :=
+noncomputable def admissible (d : RegisteredCircuit) (θv : d.D.Transcript) : Finset d.D.Transcript :=
   univ.filter fun a => ∀ g ∈ d.θ, a g = θv g
 
 /-- The values of the gates in `T` on the evaluation of `a`. -/
@@ -37,7 +41,7 @@ def values {D : Circuit} (T : Finset (Fin D.N)) (a : D.Transcript) : (g : T) →
 open Classical in
 /-- **The support of `T`**: the number of distinct values the gates in `T` take over the runs of `d` with the baseline
 at `θv`. -/
-noncomputable def support (d : Declaration) (θv : d.D.Transcript) (T : Finset (Fin d.D.N)) : ℕ :=
+noncomputable def support (d : RegisteredCircuit) (θv : d.D.Transcript) (T : Finset (Fin d.D.N)) : ℕ :=
   ((admissible d θv).image (values T)).card
 
 namespace Chain

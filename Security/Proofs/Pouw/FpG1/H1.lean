@@ -1,5 +1,7 @@
-import Definitions.Pouw.FpG1.H1
-import Proofs.Pouw.FpG1
+module
+
+public import Definitions.Pouw.FpG1.H1
+public import Proofs.Pouw.FpG1
 
 /-!
 # FP8-g1 and W4A8-g1 on H1: g1's leaves are H1's
@@ -16,6 +18,8 @@ The arithmetic behind `Definitions.Pouw.FpG1.H1`, which `Proofs.Accounting.Headl
 * `offGrid`'s leaves are in H1's ranges but not FP8-g1's: `103` is in `[−104, 104]` and no E4M3 integer
   (`offGrid_inH1`, `offGrid_not_fp8`).
 -/
+
+@[expose] public section
 
 namespace Pouw.FpG1
 

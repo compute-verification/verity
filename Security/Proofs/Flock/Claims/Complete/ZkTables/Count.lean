@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Scope
-import Proofs.Flock.Claims.Complete.Zk.Count
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Scope
+public import Proofs.Flock.Claims.Complete.Zk.Count
 
 /-!
 # The honest masked session's sends fit the masked verifier's rounds, at several tables
@@ -13,6 +15,8 @@ import Proofs.Flock.Claims.Complete.Zk.Count
   (`repPZk_sends`, `zkSchedule_shape`), so the session after the link sends at most `rounds true spec sts`.
 * `sends_goal` (`SendCountZk`) at any number of tables.
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainKSLin
-import Proofs.Flock.Claims.KS.PlainDrawRColsE
+module
+
+public import Proofs.Flock.Claims.KS.PlainKSLin
+public import Proofs.Flock.Claims.KS.PlainDrawRColsE
 
 /-!
 # `TableBoundAbortLin` at the deployed reader's plain record
@@ -24,6 +26,8 @@ At the deployed reader `VR rd` (`nextR rd` at `V false`'s rounds):
 * `tableBoundAbortLin_VR`: the table bound at any plain record whose verifier is `VR rd`, from the reader's three
   facts there and `AccLast` and `DecideFree` at `VR rd`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -175,9 +179,9 @@ theorem tableBoundAbortLin_of_rdAll {T : Type} (D : Claims.Flock.Deploy Coin (Li
   have hVk : 0 < D.V.k x := (hk x).symm ▸ V_k_pos false x
   obtain ⟨m₀, hm₀⟩ := hrf x
   have hrun := Claims.Recursion.refuser_run sha512 P D.V x decCoin hcs hal hdf keep m₀ hm₀
-  have hk0' : sch.k0 = k0 := congrArg Accounting.Schedule.k0 hF'
+  have hk0' : sch.k0 = k0 := congrArg FlockSoundness.Accounting.Schedule.k0 hF'
   have hlen : (l₀ :: l₁ :: rest).length = depL x + 1 := by
-    have h1 := congrArg (fun S : Accounting.Schedule => S.levels.length) hF'
+    have h1 := congrArg (fun S : FlockSoundness.Accounting.Schedule => S.levels.length) hF'
     simp only [schedOf, List.length_map, Array.length_toList] at h1
     rw [depL_eq hset hst hF]
     simp only [List.length_cons] at h1 ⊢

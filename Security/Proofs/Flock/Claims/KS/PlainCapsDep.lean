@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.KS.PlainQueried
-import Proofs.Flock.Claims.KS.PlainForkClash
-import Proofs.Flock.Claims.Recursion.CapLinkRd
-import Proofs.Flock.Claims.Recursion.AbortFork
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.PlainQueried
+public import Proofs.Flock.Claims.KS.PlainForkClash
+public import Proofs.Flock.Claims.Recursion.CapLinkRd
+public import Proofs.Flock.Claims.Recursion.AbortFork
+public import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The deployed plain record's caps, and what its runs read at them
@@ -21,6 +23,8 @@ query it. Here is that record at the deployed plain verifier, and the read sets 
   position (`plain_levelCols_queried`), and two runs sharing the coins before the round reading two rows there tie a
   collision (`plain_levelTie`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -44,7 +48,7 @@ theorem plain_liveRow {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false
     (hacc : (Claims.run sha512 P (V false) x ω (plainΦ x spec st (u, r'))).out = .acc)
     (hA : AcceptsAtD ins.read.I (some d) (wrPD ins.read.I d (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN
       (plainDg spec) (plainW spec (plain_mPts hs hin hset).1) sha512 (plainSim P x spec st) x (ω, u) r')))
-    {sch : Accounting.Schedule} {out : Model.OutCL 𝔽 Dig (List UInt8)} {k : ℕ} (hk : k < 2)
+    {sch : FlockSoundness.Accounting.Schedule} {out : Model.OutCL 𝔽 Dig (List UInt8)} {k : ℕ} (hk : k < 2)
     (hL : LaterEntriesAt sch ins.read.I d (wrPD ins.read.I d (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN
       (plainDg spec) (plainW spec (plain_mPts hs hin hset).1) sha512 (plainSim P x spec st) x (ω, u) r')) out k) :
     ∀ ℓ, 1 ≤ ℓ → ∀ q v, (q, v) ∈ (slotOpensL out k ℓ (lvOf sch ℓ).queries).map (fun x => (x.1, x.2.1)) →

@@ -9,8 +9,12 @@ one position under one registered root, with different leaves, give an explicit 
 when `Registered.checkDescription` accepts an inner statement, each of its registered rows opens the registered root at
 its own index, every instance reads one of them, and every one of them is read.
 -/
-import Flock.Registered
-import Proofs.Flock.Verifier.Hash
+module
+
+public import Flock.Registered
+public import Proofs.Flock.Verifier.Hash
+
+@[expose] public section
 
 namespace Flock.Registered
 

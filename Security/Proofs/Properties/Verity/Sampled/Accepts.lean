@@ -1,10 +1,12 @@
-import Proofs.Properties.Verity.Sampled.Moves
-import Proofs.Properties.Verity.Sampled.Project
-import Proofs.Flock.Recursive.Witness
-import Proofs.Flock.Soundness.Refine.Walk
-import Proofs.Flock.Soundness.Refine.Lookups
-import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
-import Proofs.Properties.NetworkCertifier.Bytes
+module
+
+public import Proofs.Properties.Verity.Sampled.Moves
+public import Proofs.Properties.Verity.Sampled.Project
+public import Proofs.Flock.Recursive.Witness
+public import Proofs.Flock.Soundness.Refine.Walk
+public import Proofs.Flock.Soundness.Refine.Lookups
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+public import Proofs.Properties.NetworkCertifier.Bytes
 
 /-!
 # Sampled proofs' acceptance: v2's verdict is flock-verify `--zk`'s on the session's files
@@ -42,6 +44,8 @@ are one check on one pair of byte strings, and the writer carries the acceptance
   files on the accepted plays (at the vocabulary's digests and tables) and the outcomes on the joint law's support off
   the held-off events are the writer's at moves v2's files decode to (`MovesReach`, the decoders' and the coin map's).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -218,17 +222,6 @@ structure FilesOn (A : Live) (s : Verity.Sent) : Prop where
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## v2's files are the vocabulary's -/
-
-/-- **v2's parameters name the vocabulary's digests, and the vocabulary reads the lookup tables as v2 does**: under
-v2's parameters in `θ`, the bytes v2's hex digests of the circuit file and the public file decode to are the
-vocabulary's `programDigest θ` and `publicDigest θ`, and the vocabulary reads the pinned MUFU tables off the committed
-files as v2 reads them off the blobs (`SampledProofs.OneStageZk.tablesOf`). -/
-structure DigestsAt (V : Vocab d α) (θ : ByteArray) : Prop where
-  circuit : ∀ p, ParamsAt θ p → ∀ dg, Flock.unhex p.own.circuit = .ok dg →
-    V.programDigest θ = some fun i => dg.data.getD i.val 0
-  publicFile : ∀ p, ParamsAt θ p → ∀ dg, Flock.unhex p.own.pub = .ok dg →
-    V.publicDigest θ = some fun i => dg.data.getD i.val 0
-  tables : ∀ F, (V.read θ F).tables = _root_.SampledProofs.OneStageZk.tablesOf (_root_.Core.Blobs.ofArray F)
 
 theorem getD_inj {a b : ByteArray} (ha : a.size = 64) (hb : b.size = 64)
     (h : (fun i : Fin 64 => a.data.getD i.val 0) = fun i => b.data.getD i.val 0) : a = b := by
@@ -408,10 +401,11 @@ theorem play_ends (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : B
     (σ : Verity.Game.Strategy (V.game θ F c)) (x : Verity.Game.CoinTape (V.game θ F c) σ) :
     (Verity.Game.CoinTape.run (V.game θ F c) σ x).params = θ ∧
       (Verity.Game.CoinTape.run (V.game θ F c) σ x).files = F := by
-  obtain ⟨log, s, h⟩ := playReaches_bind (f := fun log => Verity.Game.send (ByteArray × Array ByteArray) fun e =>
-      Verity.Game.ret (⟨θ, F, c, log, e.1, e.2⟩ : Verity.Exchange))
-    (releases (frames (V.families θ)) (V.families θ) []) σ (run_reaches (V.game θ F c) σ x)
-  have ho : Verity.Game.CoinTape.run (V.game θ F c) σ x = ⟨θ, F, c, log, s.1.1, s.1.2⟩ := h
+  obtain ⟨log, s, h⟩ := playReaches_bind (f := finish (V.signer θ) θ F c σ.1)
+    (releases (frames (V.families θ)) (V.families θ) []) σ.2 (run_reaches (V.game θ F c) σ x)
+  obtain ⟨ρ, ho⟩ : ∃ ρ : Fin (V.signer θ).draws → Bool, Verity.Game.CoinTape.run (V.game θ F c) σ x =
+      ⟨θ, F, c, σ.1, log, s.1, List.ofFn ρ, (V.signer θ).signatures σ.1 log s.1 (List.ofFn ρ), (s.2 ρ).1.1,
+        (s.2 ρ).1.2⟩ := h
   rw [ho]
   exact ⟨rfl, rfl⟩
 

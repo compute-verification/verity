@@ -1,6 +1,8 @@
-import Proofs.Flock.SessionLoop.FinRep
-import Proofs.Flock.SessionLoop.FinRounds
-import Proofs.Flock.Claims.ZK.FinHmkLive
+module
+
+public import Proofs.Flock.SessionLoop.FinRep
+public import Proofs.Flock.SessionLoop.FinRounds
+public import Proofs.Flock.Claims.ZK.FinHmkLive
 
 /-!
 # `hmk` at the loop's `Finish`: the views' masked values below `zp 64`
@@ -16,6 +18,8 @@ proofs: they are the request's values plus its pads, `tauFw_at`'s `hmk`, with no
 * **`Loop.swSrcE_hmk_live`**: so does the switched cut's (`Masked.swSrcE` at the opened coins and the workers' values
   `vs`), where every table admits the opened coins (`Loop.admits_of_finCtx`, from `Serves`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
