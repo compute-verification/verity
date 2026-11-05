@@ -12,9 +12,11 @@ Here its case, given what the loop's frames and the model hold there:
   lets a round at its slot through, the coin check (`coinsOf`) and the place (`State.place`) both passing.
 * `afterAnswer_coins`, `stepK_round_go`: a frame round the session goes on past released, the auditor answered it
   coins the session took, and the rep's frame took them.
-* `RoundFacts`: what the loop's frames and the model hold at a frame round's slot, `envOk_round_run`'s premises and
-  every other rep stream's rep another. **`slotCase_round`**: the frame round's slot case, given `RoundFacts` there and
-  `J` kept.
+* `envOk_round_nd`: where the round takes no device round (`nd`) and Rust's checks fail the worker's value, what the
+  relay read for it is again the deferred release's message.
+* `RoundFacts`: what the loop's frames and the model hold at a frame round's slot, `envOk_round_run`'s premises (or
+  `envOk_round_nd`'s) and every other rep stream's rep another. **`slotCase_round`**: the frame round's slot case,
+  given `RoundFacts` there and `J` kept.
 -/
 
 @[expose] public section
@@ -119,13 +121,38 @@ theorem key_ne {sid i r i' r' : Nat} {p : Rep} (hk : keyOf p = (sid, i, r)) (hne
   cases heq
   rfl
 
+/-- **A frame round that takes no device round and that Rust's checks fail**: what the relay read for it, where it is
+the loop's round on its frames, is the deferred release's message (`roundStep_nextD_nd`, `envOk_roundStep`), the
+session stopped or not. -/
+theorem envOk_round_nd {W Rr : Type} (M : LoopModel W Rr) (h : List (Claims.Msg × Claims.Msg))
+    (hk : M.L.kindAt M.x h.length = .masked) (hn : h.length + 1 < M.nN M.x) (hlt : h.length < M.L.last M.x)
+    {v : Claims.Msg} (hv : M.wk M.x M.w M.ρ h 0 = some (v, false))
+    (hc : M.L.cross M.x h.length M.w M.ρ h v = false) {m : Masker} (hm : M.L.answered M.x M.ρ h = .ok m)
+    {sid : Nat} {st : State} {pl : Placed} {stream : String} {i r : Nat} {dom : ByteArray} {e : Env}
+    {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {R₃ : Sessions}
+    (hr : RoundRun sid st pl stream (M.L.coins M.x h.length) i r dom ⟨v.toArray⟩ e R L0 R₃)
+    (hreq : st.request pl (.round stream (M.L.coins M.x h.length)) = none) {q : Rep} {f : Bool}
+    {nd : Option String} (hfr : (frameAt R sid i r).isSome)
+    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom ⟨v.toArray⟩ (M.L.coins M.x h.length) =
+      .ok (q, .sched ⟨(M.L.scheduled M.x M.w M.ρ h (computedOf (M.L.computed M.x M.w M.ρ h))).toArray⟩, f, nd))
+    (hnd : nd.isSome = true) (hcfg : q.cfg = M.L.cfg M.x M.ρ h) (hu : unstop q.st.m = unstop m)
+    {spec : SessionSpec} {seen : List String} {k : Nat} (hσ : SetupOk spec st) (hsent : st.sent = true)
+    (hf : f = !seen.contains stream) :
+    EnvOk spec seen (.round stream k) e (M.L.toSrv.nextD M.L.fillOf M.nN M.wk M.x M.w M.ρ M.κ h) := by
+  refine envOk_roundStep hrp (hr.round hreq) (fun o p₁ ho hput => ?_) hf
+    (hr.dom_eq.symm.trans (dom_setupOk hσ hsent stream))
+  obtain ⟨out, hoo, hmsg, -⟩ := roundStep_nextD_nd M.L M.nN M.wk M.x M.w M.ρ M.κ h hk hn hlt hv hc hm hfr hrp hnd
+    (roundPlace_live hrp) hcfg hu ho hput
+  exact ⟨out, hoo, hmsg⟩
+
 /-- **What the loop's frames and the model hold at a frame round's slot** of session `sid`, the loop at `σ`, for the
 round of `n` coins of `stream` the loop ran on table `i`'s rep `r` at the domain frame `dom`, its content the worker's
 value `v` at the model's history so far: the model's coin count there is `n`, its round there masked, not its last,
 with a next message, and `v` crosses where it fails to pass; the rep has a frame, which `roundPlace` readies at the
 model's schedule, configuration and masking state but for `stopped`, as the stream's first round where `seen` has no
-round of it, with a stop exactly where the frames have one; the frames have stopped the session exactly where the
-model's run has; and every other rep stream of the setup is on another rep. -/
+round of it, taking no device round where the frames have stopped the session and, where they haven't, only at a
+round Rust's checks fail; the frames have stopped the session exactly where the model's run has; and every other rep
+stream of the setup is on another rep. -/
 structure RoundFacts {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (seen : List String)
     (stream : String) (n i r : Nat) (dom : ByteArray) (v : Claims.Msg) (σ : LoopAt) : Prop where
   coins : M.L.coins M.x (M.hist σ.c).length = n
@@ -139,21 +166,25 @@ structure RoundFacts {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : Sess
     _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i r dom ⟨v.toArray⟩ n =
       .ok (q, .sched ⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c)
         (computedOf (M.L.computed M.x M.w M.ρ (M.hist σ.c)))).toArray⟩, f, nd) ∧
-    nd.isSome = σ.R.stopped sid ∧ q.cfg = M.L.cfg M.x M.ρ (M.hist σ.c) ∧ unstop q.st.m = unstop m ∧
-    f = !seen.contains stream
+    (nd.isSome = σ.R.stopped sid ∨
+      nd.isSome = true ∧ M.L.cross M.x (M.hist σ.c).length M.w M.ρ (M.hist σ.c) v = false) ∧
+    q.cfg = M.L.cfg M.x M.ρ (M.hist σ.c) ∧ unstop q.st.m = unstop m ∧ f = !seen.contains stream
   stopped : σ.R.stopped sid = !M.L.toSrv.liveBefore M.wk M.x M.w M.ρ M.κ (M.hist σ.c)
   other : ∀ i' r' s', (i', r', s') ∈ spec.repStreams.toList → s' ≠ stream → (i', r') ≠ (i, r)
 
 /-- **The frame round's slot case**: where each of the run's messages is the deferred release's (`LoopModel.Own`),
-`RoundFacts` holds at each request at the slot as the loop answers it, and `J` is kept there, what the relay read for
-the round is the model's next message, and `LoopP` holds at the session's next request, one model message on: the
-round's rep frame's puts touch no other rep's frame, so each rep of a stream with no round yet stays fresh. -/
+`RoundFacts` holds at each request at the slot as the loop answers it, the rep's frame at the model's configuration
+and the round out, and `J` is kept there, what the relay read for the round is the model's next message, and `LoopP`
+holds at the session's next request, one model message on: the round's rep frame's puts touch no other rep's frame,
+so each rep of a stream with no round yet stays fresh. -/
 theorem slotCase_round {W Rr : Type} {M : LoopModel W Rr} {J : List String → State → LoopAt → Prop} {sid : Nat}
     {spec : SessionSpec} {sts : Array Stmt} {nonce : ByteArray} {stream : String} {n : Nat} (hOwn : M.Own)
     (hA : ∀ (seen : List String) (st : State) (pl : Placed) (e : Env) (σ σ' : LoopAt) (i r : Nat) (dom : ByteArray)
       (v : Claims.Msg), slot st pl = some (.round stream n) → LoopFacts sid spec seen st pl σ → J seen st σ →
       M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) →
-      RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R → RoundFacts M sid spec seen stream n i r dom v σ)
+      RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R →
+      (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) → (∃ o, e.round = .ok o) →
+      RoundFacts M sid spec seen stream n i r dom v σ)
     (hJ : LoopKept M sid spec sts nonce J (.round stream n)) :
     SlotCase spec (LoopP M J sid spec sts nonce) (.round stream n) := by
   intro seen st pl e rest ms hsl hP
@@ -166,21 +197,28 @@ theorem slotCase_round {W Rr : Type} {M : LoopModel W Rr} {J : List String → S
   | step k' hk' hra hrest =>
     obtain rfl : Session.Kind.round stream n = k' := Option.some.inj (hsl.symm.trans hk')
     have hJ' := hJ seen st pl e σ _ hsl (hset e List.mem_cons_self) hF hj hra
-    obtain ⟨⟨hlt, -⟩, ⟨i, r, dom, v, hv, hr, -⟩, hcc, -⟩ := hra
-    have hRA := hA seen st pl e σ _ i r dom v hsl hF hj hv hr
+    obtain ⟨⟨hlt, -⟩, ⟨i, r, dom, v, hv, hr, hpc⟩, hcc, -⟩ := hra
+    have hRA := fun o (ho : e.round = .ok o) => hA seen st pl e σ _ i r dom v hsl hF hj hv hr hpc ⟨o, ho⟩
     have hreq := request_round_slot hF.reach hF.live hsl
-    obtain ⟨m, q, f, nd, hm, hrp, hnd, hcfg, hu, hf⟩ := hRA.place
     refine ⟨fun _ => ?_, fun hgo => ?_⟩
-    · have hlt' : σ.c < M.msgs.length := by simpa [LoopModel.msgs] using hlt
+    · intro c hc
+      have hRA := hRA c hc
+      obtain ⟨m, q, f, nd, hm, hrp, hnd, hcfg, hu, hf⟩ := hRA.place
+      have hlt' : σ.c < M.msgs.length := by simpa [LoopModel.msgs] using hlt
       have hhead : ms.headD [] = M.L.toSrv.nextD M.L.fillOf M.nN M.wk M.x M.w M.ρ M.κ (M.hist σ.c) := by
         rw [hms, List.drop_eq_getElem_cons hlt', List.headD_cons]
         simp only [LoopModel.msgs, List.getElem_map]
         exact hOwn σ.c hlt
       rw [hhead]
       rw [← hRA.coins] at hr hreq hrp
-      exact envOk_round_run M.L M.nN M.wk M.x M.w M.ρ M.κ (M.hist σ.c) hRA.kind hRA.next hRA.last hv hRA.cross hm
-        hr hreq hRA.frame hrp hnd hcfg hu hRA.stopped hF.setup hsent hf
+      rcases hnd with hnd | ⟨hnd, hcr⟩
+      · exact envOk_round_run M.L M.nN M.wk M.x M.w M.ρ M.κ (M.hist σ.c) hRA.kind hRA.next hRA.last hv hRA.cross hm
+          hr hreq hRA.frame hrp hnd hcfg hu hRA.stopped hF.setup hsent hf (k := n) c hc
+      · exact envOk_round_nd M (M.hist σ.c) hRA.kind hRA.next hRA.last hv hcr hm hr hreq hRA.frame hrp hnd hcfg hu
+          hF.setup hsent hf (k := n) c hc
     · obtain ⟨⟨o, hro⟩, a, hae, hb, hsa, hco⟩ := stepK_round_go hF.reach hF.live hsl hgo
+      have hRA := hRA o hro
+      obtain ⟨_, _, _, _, -, hrp, -⟩ := hRA.place
       obtain ⟨p₁, hput⟩ := roundStep_put_some hrp
       obtain ⟨R₁, R₂, R₂', p', h01, h12, hcs, h22, h23⟩ := hr.coins hreq hro hput hae hb hsa hco
       have hk : (Except.ok (Session.Kind.round stream n) : Except String Session.Kind) ≠ .ok .hello := by

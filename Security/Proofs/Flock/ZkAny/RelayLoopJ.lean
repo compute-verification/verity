@@ -171,7 +171,8 @@ theorem loopKept_hello {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
   have hseen : seen = [] := hJ.unsent hs0
   have hsent := stepK_hello_sent hgo
   refine ⟨?_, fun h => ?_, fun i r s _ hc => ?_, stepK_plan he hJ.plan, ?_⟩
-  · rw [hsent, hlb, stopped_sessKept hbt.2, hJ.stop, hs0] <;> rfl
+  · rw [hsent, hlb, stopped_sessKept hbt.2, hJ.stop, hs0]
+    rfl
   · rw [hsent] at h
     cases h
   · simp [seenAfter, hseen] at hc

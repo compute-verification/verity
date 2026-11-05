@@ -85,7 +85,7 @@ theorem locate_fst_succ : ∀ (rs : List Nat) (k i : Nat),
   | [], _, _ => Nat.le_refl _
   | c :: cs, k, i => by
     by_cases h1 : i + 1 < c
-    · rw [Loop.locate_cons_lt h1, Loop.locate_cons_lt (Nat.lt_of_succ_lt h1)] <;> exact Nat.le_refl _
+    · rw [Loop.locate_cons_lt h1, Loop.locate_cons_lt (Nat.lt_of_succ_lt h1)]
     · rw [Loop.locate_cons_ge h1]
       by_cases h0 : i < c
       · rw [Loop.locate_cons_lt h0]
@@ -213,7 +213,7 @@ theorem repJ_old {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionS
 theorem LoopModel.hist_succ {W Rr : Type} (M : LoopModel W Rr) {j : Nat} (hj : j < M.τ.length) :
     ∃ e', M.hist (j + 1) = M.hist j ++ [e'] := by
   unfold LoopModel.hist ZKMal.histOf
-  rw [List.take_succ, List.getElem?_eq_getElem hj, Option.toList_some, List.map_append, List.map_cons,
+  rw [List.take_add_one, List.getElem?_eq_getElem hj, Option.toList_some, List.map_append, List.map_cons,
     List.map_nil]
   exact ⟨_, rfl⟩
 
@@ -238,8 +238,13 @@ theorem stopped_roundRun {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : 
   have hfa : frameAt R₂ sid i r = some p₁ := frameAt_own hA.frame (roundStep_key hput) (h01.1 i r) (h12.1 i r)
   obtain ⟨j, hj⟩ := find_of_frameAt hfa
   obtain ⟨st₂, hst, rfl⟩ := coinsStep_inv hj hcs
-  exact stopped_round_next M.L M.wk M.x M.w M.ρ M.κ (M.hist σ.c) hA.kind hA.last hv hA.cross hm hA.frame hrp hnd
-    hcfg hu hA.stopped ho' hput (h01.1 i r) h01.2 ((h12.1 i r).trans (h22.1 i r)) (h12.2.trans h22.2) hst h23.2 e'
+  rcases hnd with hnd | ⟨hnd, hcr⟩
+  · exact stopped_round_next M.L M.wk M.x M.w M.ρ M.κ (M.hist σ.c) hA.kind hA.last hv hA.cross hm hA.frame hrp hnd
+      hcfg hu hA.stopped ho' hput (h01.1 i r) h01.2 ((h12.1 i r).trans (h22.1 i r)) (h12.2.trans h22.2) hst h23.2 e'
+  · obtain ⟨-, -, -, hst'⟩ := roundStep_nextD_nd M.L M.nN M.wk M.x M.w M.ρ M.κ (M.hist σ.c) hA.kind hA.next hA.last
+      hv hcr hm hA.frame hrp hnd (roundPlace_live hrp) hcfg hu ho' hput
+    rw [stopped_step hA.frame hrp ho' hput (h01.1 i r) h01.2 ((h12.1 i r).trans (h22.1 i r)) (h12.2.trans h22.2) hst
+      h23.2, hst' e']
 
 /-- **`LoopJ` is kept at a frame round**, where the rep streams' names are distinct, `RoundFacts` holds at each
 request at the slot as the loop answers it (`slotCase_round`'s premise), and the round's rep has `RepJ` at the
@@ -250,7 +255,9 @@ theorem loopKept_round {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
     (hA : ∀ (seen : List String) (st : State) (pl : Placed) (e : Env) (σ σ' : LoopAt) (i r : Nat) (dom : ByteArray)
       (v : Claims.Msg), slot st pl = some (.round stream n) → LoopFacts sid spec seen st pl σ →
       LoopJ M sid spec sts seen st σ → M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) →
-      RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R → RoundFacts M sid spec seen stream n i r dom v σ)
+      RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R →
+      (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) → (∃ o, e.round = .ok o) →
+      RoundFacts M sid spec seen stream n i r dom v σ)
     (hcur : ∀ (seen : List String) (st : State) (pl : Placed) (e : Env) (σ σ' : LoopAt),
       slot st pl = some (.round stream n) → e.setup = .ok (spec, sts) → LoopFacts sid spec seen st pl σ →
       LoopJ M sid spec sts seen st σ → LoopRead M sid spec sts nonce (.round stream n) st pl e σ σ' →
@@ -260,11 +267,11 @@ theorem loopKept_round {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
     LoopKept M sid spec sts nonce (LoopJ M sid spec sts) (.round stream n) := by
   intro seen st pl e σ σ' hsl he hF hJ hra hgo
   have hra' := hra
-  obtain ⟨⟨hlt, -⟩, ⟨i, r, dom, v, hv, hr, -⟩, hcc, hst⟩ := hra'
-  have hRA := hA seen st pl e σ σ' i r dom v hsl hF hJ hv hr
+  obtain ⟨⟨hlt, -⟩, ⟨i, r, dom, v, hv, hr, hpc⟩, hcc, hst⟩ := hra'
   obtain ⟨hsent, hop, -, -⟩ := slot_round hsl
   have hreq := request_round_slot hF.reach hF.live hsl
   obtain ⟨⟨o, hro⟩, a, hae, hb, hsa, hco⟩ := stepK_round_go hF.reach hF.live hsl hgo
+  have hRA := hA seen st pl e σ σ' i r dom v hsl hF hJ hv hr hpc ⟨o, hro⟩
   have hk : (Except.ok (.round stream n) : Except String _root_.Flock.Firewall.Session.Kind) ≠ .ok .hello := by
     intro h
     cases h
@@ -298,7 +305,7 @@ theorem loopKept_round {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
         hne (congrArg (fun x => (x.1, x.2.1)) (rep_eq hmem' hmem h2))
       have hold : 2 * i' + r' < (nextAt spec sts (M.hist σ.c)).1 := by
         rcases (hJ.seenAt i' r' s' hmem').1 hseen' with h1 | ⟨h1, -⟩ <;> omega
-      obtain ⟨m, q, f, nd, -, hrp, -⟩ := hRA.place
+      obtain ⟨_, _, _, _, -, hrp, -⟩ := hRA.place
       obtain ⟨p₁, hput⟩ := roundStep_put_some hrp
       obtain ⟨R₁, R₂, R₂', p', h01, h12, hcs, h22, h23⟩ := hr.coins hreq hro hput hae hb hsa hco
       have hK : Kept sid i' r' σ.R σ'.R :=
