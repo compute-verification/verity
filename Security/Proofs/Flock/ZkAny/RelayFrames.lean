@@ -22,7 +22,7 @@ read at each model slot is the model's message there (`EnvPre`).
   it returned one, is the round message's as it leaves (`leaveOf`); where the hold's barrier passes, the loop's own
   proofs are the last message's. `EnvPre`: `EnvOk` at each model slot of the relay's session (`relaySteps`), in order.
 * `stepK_setup`: the session's Σ and its rep streams' domain frames, reps and labels are the setup's once its `Hello`
-  left.
+  left. `stepK_plan`: and so is its plan (`PlanOk`).
 * `step_model`: at a model slot, what leaves is a prefix of the message's frames, and all of them where the session goes
   on.
 * `relayPre_of_env`: `EnvPre` gives `RelayPre` at `encOf`.
@@ -152,17 +152,18 @@ def EnvPre (spec : SessionSpec) : List String → List (Kind × State × Placed 
 
 /-! ## The session's Σ and domains -/
 
-/-- What a request keeps of the session: its Σ, its rep streams' domain frames, whether its `Hello` left, and its rep
-streams' reps and labels. -/
+/-- What a request keeps of the session: its Σ, its rep streams' domain frames, whether its `Hello` left, its rep
+streams' reps and labels, and its plan. -/
 abbrev Keeps (S S' : State) : Prop :=
-  S'.sigma = S.sigma ∧ S'.domains = S.domains ∧ S'.sent = S.sent ∧ S'.reps = S.reps ∧ S'.labels = S.labels
+  S'.sigma = S.sigma ∧ S'.domains = S.domains ∧ S'.sent = S.sent ∧ S'.reps = S.reps ∧ S'.labels = S.labels ∧
+    S'.plan = S.plan
 
 theorem finish_keeps {S S' : State} {o : ByteArray} (hf : S.finish = some (S', o)) : Keeps S S' := by
   revert hf
   unfold State.finish State.refuse
   repeat' split
   all_goals intro hf; first
-    | (simp only [Option.some.injEq, Prod.mk.injEq] at hf; rw [← hf.1]; exact ⟨rfl, rfl, rfl, rfl, rfl⟩)
+    | (simp only [Option.some.injEq, Prod.mk.injEq] at hf; rw [← hf.1]; exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩)
     | simp at hf
 
 theorem request_keeps {S S' : State} {P : Placed} {k : Kind} {o : ByteArray} (hr : S.request P k = some (S', o)) :
@@ -173,7 +174,7 @@ theorem request_keeps {S S' : State} {P : Placed} {k : Kind} {o : ByteArray} (hr
   · intro hr
     simp only [Option.some.injEq, Prod.mk.injEq] at hr
     rw [← hr.1]
-    exact ⟨rfl, rfl, rfl, rfl, rfl⟩
+    exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
   · dsimp only
     split
     · rename_i r hc
@@ -186,24 +187,24 @@ theorem request_keeps {S S' : State} {P : Placed} {k : Kind} {o : ByteArray} (hr
       · unfold State.refuse
         repeat' split
         all_goals intro hc; first
-          | (simp only [Option.some.injEq, Prod.mk.injEq] at hc; rw [← hc.1]; exact ⟨rfl, rfl, rfl, rfl, rfl⟩)
+          | (simp only [Option.some.injEq, Prod.mk.injEq] at hc; rw [← hc.1]; exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩)
           | simp at hc
     · rcases hp : S.place P k with _ | why
       · simp
       · simp only [Option.map_some, Option.some.injEq]
         intro hr
         cases hr
-        exact ⟨rfl, rfl, rfl, rfl, rfl⟩
+        exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 theorem coins_keeps (S : State) (a : ByteArray) : Keeps S (S.coins a).1 := by
   unfold State.coins State.refuse
   repeat' split
-  all_goals exact ⟨rfl, rfl, rfl, rfl, rfl⟩
+  all_goals exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 theorem noCoins_keeps (S : State) (what : String) (a : ByteArray) : Keeps S (S.noCoins what a).1 := by
   unfold State.noCoins State.refuse
   split
-  all_goals exact ⟨rfl, rfl, rfl, rfl, rfl⟩
+  all_goals exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 theorem answer_keeps (S : State) (k : Kind) (a id : ByteArray) : Keeps S (S.answer k a id).1 := by
   unfold State.answer
@@ -211,15 +212,15 @@ theorem answer_keeps (S : State) (k : Kind) (a id : ByteArray) : Keeps S (S.answ
   all_goals first
     | exact coins_keeps S a
     | exact noCoins_keeps S _ a
-    | exact ⟨rfl, rfl, rfl, rfl, rfl⟩
-    | ((unfold State.refuse; repeat' split) <;> exact ⟨rfl, rfl, rfl, rfl, rfl⟩)
+    | exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
+    | ((unfold State.refuse; repeat' split) <;> exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩)
 
 theorem sendHello_keeps {S S' : State} {s : V (SessionSpec × Array Stmt)} {n o : ByteArray}
     (he : S.sendHello s n = .error (S', o)) : Keeps S S' := by
   revert he
   unfold State.sendHello State.refuse
   repeat' split
-  all_goals intro he; first | (cases he; exact ⟨rfl, rfl, rfl, rfl, rfl⟩) | cases he
+  all_goals intro he; first | (cases he; exact ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩) | cases he
 
 theorem afterAnswer_keeps (st : State) (k : Kind) (r : ByteArray) (e : Env) : Keeps st (afterAnswer st k r e) := by
   cases k
@@ -239,7 +240,7 @@ def SetupOk (spec : SessionSpec) (S : State) : Prop :=
 theorem setupOk_keeps {spec : SessionSpec} {S S' : State} (h : SetupOk spec S) (hk : Keeps S S') : SetupOk spec S' := by
   intro hs
   obtain ⟨h1, h2, h3, h4⟩ := h (hk.2.2.1.symm.trans hs)
-  exact ⟨hk.1.trans h1, hk.2.1.trans h2, hk.2.2.2.1.trans h3, hk.2.2.2.2.trans h4⟩
+  exact ⟨hk.1.trans h1, hk.2.1.trans h2, hk.2.2.2.1.trans h3, hk.2.2.2.2.1.trans h4⟩
 
 /-- **Each request keeps the session's Σ, domain frames, reps and labels the setup's**, where the relay reads the
 setup. -/
@@ -272,10 +273,52 @@ theorem stepK_setup {hold : Bool} {spec : SessionSpec} {sts : Array Stmt} {st : 
   · split
     · exact setupOk_keeps h (request_keeps ‹_›)
     · split
-      · exact setupOk_keeps h ⟨rfl, rfl, rfl, rfl, rfl⟩
+      · exact setupOk_keeps h ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
       · split
         · exact h
         · exact setupOk_keeps h (afterAnswer_keeps _ _ _ _)
+
+/-- **The session's plan is the setup's** once its `Hello` left. -/
+def PlanOk (spec : SessionSpec) (sts : Array Stmt) (S : State) : Prop :=
+  S.sent = true → S.plan = _root_.Flock.Firewall.Session.planOf spec sts
+
+theorem planOk_keeps {spec : SessionSpec} {sts : Array Stmt} {S S' : State} (h : PlanOk spec sts S) (hk : Keeps S S') :
+    PlanOk spec sts S' := fun hs => hk.2.2.2.2.2.trans (h (hk.2.2.1.symm.trans hs))
+
+/-- **Each request keeps the session's plan the setup's**, where the relay reads the setup. -/
+theorem stepK_plan {hold : Bool} {spec : SessionSpec} {sts : Array Stmt} {st : State} {pl : Placed}
+    {b : Option UInt8} {k : Except String Kind} {e : Env} (he : e.setup = .ok (spec, sts)) (h : PlanOk spec sts st) :
+    PlanOk spec sts (stepK hold st pl b k e).st := by
+  have hello : ∀ {S' : State} {o : ByteArray}, st.sendHello e.setup e.nonce = .ok (S', o) → PlanOk spec sts S' := by
+    intro S' o hh _
+    obtain ⟨spec', sts', hsp, rfl, -⟩ := sendHello_eq hh
+    rw [he] at hsp
+    cases hsp
+    rfl
+  unfold stepK
+  split
+  · exact h
+  split
+  · exact h
+  split
+  · exact h
+  split
+  · exact h
+  · split
+    · exact planOk_keeps h (request_keeps ‹_›)
+    · split
+      · exact planOk_keeps h (sendHello_keeps ‹_›)
+      · rename_i hh
+        split
+        · exact hello hh
+        · exact planOk_keeps (hello hh) (answer_keeps _ _ _ _)
+  · split
+    · exact planOk_keeps h (request_keeps ‹_›)
+    · split
+      · exact planOk_keeps h ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
+      · split
+        · exact h
+        · exact planOk_keeps h (afterAnswer_keeps _ _ _ _)
 
 /-! ## At a model slot -/
 

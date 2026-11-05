@@ -14,8 +14,11 @@ public import Proofs.Flock.ZkAny.RelaySame
   first, the frame holds the history's words for each of the stream's rounds (`roundPlace_switch1`'s `hco`).
 * `RepJ`: a rep's frame, the session's entry and the rep's table's level 0 bound for the session, with `StreamAt` on
   them at the model's history so far.
+* `nextAt`: the model's next round's rep stream and its index there. `SeenAt`: the rep streams seen are those with a
+  round before the model's next. `seenAt_nil`: none before the model's first round.
 * `LoopJ`: the session stopped in the loop's frames exactly where its `Hello` left and an earlier round of the model's
-  run failed; no stream seen before the `Hello` left; and `RepJ` at each rep stream seen.
+  run failed; no stream seen before the `Hello` left; `RepJ` at each rep stream seen; the session's plan the setup's
+  (`PlanOk`); and `SeenAt` at the model's history so far.
 * `repJ_stays`: updates that keep the rep's frame and what the session's rounds read of it (`Stays`) keep `RepJ`, the
   model's history as it was.
 * **`loopKept_ctl`**, `loopKept_ctl_all`: `LoopJ` is kept at every slot that reads no model message.
@@ -66,15 +69,41 @@ def RepJ {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (st
       _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 ∧
       StreamAt M spec sts (2 * i + r) (M.hist σ.c) rel name l0 p
 
+/-- **The model's next round** at its history `h`: its rep stream and its index in the stream, among the setup's
+rounds (`roundsOf`). -/
+def nextAt (spec : SessionSpec) (sts : Array Stmt) (h : List (Claims.Msg × Claims.Msg)) : Nat × Nat :=
+  ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 (h.length - 2)
+
+/-- **The rep streams `seen` are those with a round before the model's next**, at its history `h`: a rep stream seen
+is before the next round's stream or is that stream past its first round, and that stream past its first round is
+seen. -/
+def SeenAt (spec : SessionSpec) (sts : Array Stmt) (h : List (Claims.Msg × Claims.Msg)) (seen : List String) : Prop :=
+  ∀ i r s, (i, r, s) ∈ spec.repStreams.toList →
+    (seen.contains s = true → 2 * i + r < (nextAt spec sts h).1 ∨
+      (2 * i + r = (nextAt spec sts h).1 ∧ 0 < (nextAt spec sts h).2)) ∧
+    (2 * i + r = (nextAt spec sts h).1 → 0 < (nextAt spec sts h).2 → seen.contains s = true)
+
+/-- Before the model's first round no rep stream is seen. -/
+theorem seenAt_nil {spec : SessionSpec} {sts : Array Stmt} {h : List (Claims.Msg × Claims.Msg)}
+    (hl : h.length ≤ 2) : SeenAt spec sts h [] := by
+  intro i r s _
+  refine ⟨fun hc => by simp at hc, fun _ h0 => ?_⟩
+  unfold nextAt at h0
+  rw [show h.length - 2 = 0 by omega, Loop.locate_zero] at h0
+  exact absurd h0 (Nat.lt_irrefl 0)
+
 /-- **The relay's invariant at the deployed loop**, against the model's run `M`, at the session `st`, the streams whose
 rounds came being `seen`, the loop at `σ`: the session stopped in the loop's frames exactly where its `Hello` left and
-an earlier round of the model's run failed (`liveBefore`); no stream seen before the `Hello` left; and `RepJ` at each
-rep stream seen. -/
+an earlier round of the model's run failed (`liveBefore`); no stream seen before the `Hello` left; `RepJ` at each rep
+stream seen; the session's plan the setup's once its `Hello` left; and the streams seen those with a round before the
+model's next (`SeenAt`). -/
 structure LoopJ {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (sts : Array Stmt)
     (seen : List String) (st : State) (σ : LoopAt) : Prop where
   stop : σ.R.stopped sid = (st.sent && !M.L.toSrv.liveBefore M.wk M.x M.w M.ρ M.κ (M.hist σ.c))
   unsent : st.sent = false → seen = []
   reps : ∀ i r s, (i, r, s) ∈ spec.repStreams.toList → seen.contains s = true → RepJ M sid spec sts i r σ
+  plan : PlanOk spec sts st
+  seenAt : SeenAt spec sts (M.hist σ.c) seen
 
 /-- **`RepJ` is kept from one of the session's requests to the next** where the updates between keep the rep's frame
 (`Kept`) and what the session's rounds read of it (`Stays`), and the slot took no model message. -/
@@ -100,7 +129,7 @@ theorem loopKept_ctl {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Sess
     (hr : ∀ st pl e σ σ', LoopRead M sid spec sts nonce k st pl e σ σ' →
       Between sid σ.R σ'.R ∧ σ'.c = σ.c ∧ Stays sid σ σ') :
     LoopKept M sid spec sts nonce (LoopJ M sid spec sts) k := by
-  intro seen st pl e σ σ' _ _ hJ hra _
+  intro seen st pl e σ σ' _ he _ hJ hra _
   obtain ⟨hbt, hcc, hst⟩ := hr _ _ _ _ _ hra
   have hk : (Except.ok k : Except String _root_.Flock.Firewall.Session.Kind) ≠ .ok .hello := by
     intro h
@@ -109,9 +138,11 @@ theorem loopKept_ctl {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Sess
   have hsent := stepK_sent (hold := true) (st := st) (pl := pl) (b := some (tagOf k)) (e := e) hk
   rw [hs seen]
   refine ⟨?_, fun h => hJ.unsent (by rw [hsent] at h; exact h),
-    fun i r s hmem hseen => repJ_stays (hbt.1 i r) hst hcc (hJ.reps i r s hmem hseen)⟩
-  rw [hsent, hcc, stopped_sessKept hbt.2]
-  exact hJ.stop
+    fun i r s hmem hseen => repJ_stays (hbt.1 i r) hst hcc (hJ.reps i r s hmem hseen), stepK_plan he hJ.plan, ?_⟩
+  · rw [hsent, hcc, stopped_sessKept hbt.2]
+    exact hJ.stop
+  · rw [hcc]
+    exact hJ.seenAt
 
 /-- **`LoopJ` is kept at every slot that reads no model message**: each such slot's reading is only the updates between
 the session's requests, keeping what its rounds read of it. -/
@@ -134,15 +165,18 @@ theorem loopKept_ctl_all {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : 
 session has sent its `Hello`, the model's `Hello` round passed, and the updates between keep the session's stop. -/
 theorem loopKept_hello {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {nonce : ByteArray} : LoopKept M sid spec sts nonce (LoopJ M sid spec sts) .hello := by
-  intro seen st pl e σ σ' hsl _ hJ hra hgo
-  obtain ⟨-, hbt, -, hlb⟩ := hra
+  intro seen st pl e σ σ' hsl he hF hJ hra hgo
+  obtain ⟨-, hbt, hcc, hlb⟩ := hra
   have hs0 : st.sent = false := (slot_hello hsl).2
   have hseen : seen = [] := hJ.unsent hs0
   have hsent := stepK_hello_sent hgo
-  refine ⟨?_, fun h => ?_, fun i r s _ hc => ?_⟩
+  refine ⟨?_, fun h => ?_, fun i r s _ hc => ?_, stepK_plan he hJ.plan, ?_⟩
   · rw [hsent, hlb, stopped_sessKept hbt.2, hJ.stop, hs0] <;> rfl
   · rw [hsent] at h
     cases h
   · simp [seenAfter, hseen] at hc
+  · show SeenAt spec sts (M.hist σ'.c) seen
+    rw [hseen]
+    exact seenAt_nil (by rw [hcc, hF.start hs0, LoopModel.hist, length_histOf_take]; omega)
 
 end Claims.ZKServer.Relay

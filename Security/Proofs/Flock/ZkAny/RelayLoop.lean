@@ -32,7 +32,8 @@ the `Hello`'s proved:
 * `LoopFacts`: the session going on (`Reach`, no stop), its Σ, domain frames, reps and labels the setup's, each rep
   whose stream had no round yet with its frame absent or fresh (`FreshAt`), and the model's messages the slots took:
   none before the `Hello` left, and from there one more than the openings the auditor answered.
-* `LoopKept`: an invariant of the loop's frames and the session kept at the slots of a kind.
+* `LoopKept`: an invariant of the loop's frames and the session kept at the slots of a kind, at each request that
+  reads the session's setup.
 * `LoopP`: the model's messages to come those past the ones the slots took, `LoopFacts`, an invariant `J`, `LoopReads`
   from there, and every request reading the session's setup.
 * `stepK_sent`: each request but a `Hello` keeps whether the `Hello` left. `stepK_hello_sent`: the session goes on past
@@ -176,12 +177,12 @@ structure LoopFacts (sid : Nat) (spec : SessionSpec) (seen : List String) (st : 
   count : st.sent = true → σ.c = opened st + 1
 
 /-- **An invariant `J` of the loop and the session kept at the slots of kind `k`**: at each request at such a slot
-where `LoopFacts` and `J` hold and the loop answers it as `LoopRead` reads it, `J` holds at the session's next request
-where the session goes on, after the slot's stream. -/
+that reads the session's setup, where `LoopFacts` and `J` hold and the loop answers it as `LoopRead` reads it, `J`
+holds at the session's next request where the session goes on, after the slot's stream. -/
 def LoopKept {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (sts : Array Stmt)
     (nonce : ByteArray) (J : List String → State → LoopAt → Prop) (k : Session.Kind) : Prop :=
-  ∀ seen st pl e σ σ', slot st pl = some k → LoopFacts sid spec seen st pl σ → J seen st σ →
-    LoopRead M sid spec sts nonce k st pl e σ σ' →
+  ∀ seen st pl e σ σ', slot st pl = some k → e.setup = .ok (spec, sts) → LoopFacts sid spec seen st pl σ →
+    J seen st σ → LoopRead M sid spec sts nonce k st pl e σ σ' →
     ((stepK true st pl (some (tagOf k)) (.ok k) e).go &&
         (stepK true st pl (some (tagOf k)) (.ok k) e).st.stop.isNone) = true →
       J (seenAfter seen k) (stepK true st pl (some (tagOf k)) (.ok k) e).st σ'
@@ -456,7 +457,7 @@ theorem slotCase_carried {W Rr : Type} {M : LoopModel W Rr} {J : List String →
     cases h
   | step k' hk' hra hrest =>
     obtain rfl : k = k' := Option.some.inj (hsl.symm.trans hk')
-    have hJ' := hJ seen st pl e σ _ hsl hF hj hra hgo
+    have hJ' := hJ seen st pl e σ _ hsl (hset e List.mem_cons_self) hF hj hra hgo
     obtain ⟨hbt, hcc⟩ := hr _ _ _ _ _ hra
     have hk : (Except.ok k : Except String Session.Kind) ≠ .ok .hello := by
       intro h
@@ -500,7 +501,7 @@ theorem slotCase_hello {W Rr : Type} {M : LoopModel W Rr} {J : List String → S
     cases h
   | step k' hk' hra hrest =>
     obtain rfl : Session.Kind.hello = k' := Option.some.inj (hsl.symm.trans hk')
-    have hJ' := hJ seen st pl e σ _ hsl hF hj hra
+    have hJ' := hJ seen st pl e σ _ hsl (hset e List.mem_cons_self) hF hj hra
     obtain ⟨hn, hbt, hcc, -⟩ := hra
     refine ⟨fun _ => ?_, fun hgo => ?_⟩
     · show _root_.Flock.Firewall.Hello.msg spec e.nonce = ms.headD []
