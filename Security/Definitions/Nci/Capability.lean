@@ -1,6 +1,8 @@
-import Definitions.Nci.Capability.Items
-import Definitions.Nci.Capability.Products
-import Definitions.Nci.Capability.Consumers
+module
+
+public import Definitions.Nci.Capability.Items
+public import Definitions.Nci.Capability.Products
+public import Definitions.Nci.Capability.Consumers
 
 /-!
 # Local bounds: the vocabulary
@@ -18,3 +20,5 @@ The premises (`Definitions.Nci.Assumptions.Capability`) are stated over items; t
 (`Definitions.Nci.Guarantees.Capability`) consume a budget over items and a structure over products or consumers. The
 survey of both is `Security/Definitions/Nci/Capability/README.md`.
 -/
+
+@[expose] public section

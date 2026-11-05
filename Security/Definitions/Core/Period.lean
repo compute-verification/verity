@@ -1,4 +1,6 @@
-import Mathlib.Order.Interval.Finset.Nat
+module
+
+public import Mathlib.Order.Interval.Finset.Nat
 
 /-!
 # Ticks, spans of ticks and the monitoring period (trusted)
@@ -20,6 +22,8 @@ block's, a server block's.
 A bound over a monitoring period has two readings: per sampling block, every sampling block's bound holds at once, at
 their errors summed; pooled, the monitoring period's total holds at one error.
 -/
+
+@[expose] public section
 
 namespace Verity
 

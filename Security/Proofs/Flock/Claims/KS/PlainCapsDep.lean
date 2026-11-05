@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.KS.PlainQueried
-import Proofs.Flock.Claims.KS.PlainForkClash
-import Proofs.Flock.Claims.Recursion.CapLinkRd
-import Proofs.Flock.Claims.Recursion.AbortFork
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.PlainQueried
+public import Proofs.Flock.Claims.KS.PlainForkClash
+public import Proofs.Flock.Claims.Recursion.CapLinkRd
+public import Proofs.Flock.Claims.Recursion.AbortFork
+public import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The deployed plain record's caps, and what its runs read at them
@@ -21,6 +23,8 @@ query it. Here is that record at the deployed plain verifier, and the read sets 
   position (`plain_levelCols_queried`), and two runs sharing the coins before the round reading two rows there tie a
   collision (`plain_levelTie`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

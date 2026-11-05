@@ -1,4 +1,6 @@
-import Definitions.Pous.Model.Dense
+module
+
+public import Definitions.Pous.Model.Dense
 
 /-!
 # A segment's parents at their global positions (trusted)
@@ -8,6 +10,8 @@ the tagged one (`PousDenseReCert.segTag_auditSecure`) is stated over it. `instNe
 14 GB statements (`seg_meets_14`, `segTag_meets_14`) take, scoped to `PousDenseReCert`: `Pous.BandMulti` declares its
 own, which the band's statements take.
 -/
+
+@[expose] public section
 
 namespace PousDenseReCert
 

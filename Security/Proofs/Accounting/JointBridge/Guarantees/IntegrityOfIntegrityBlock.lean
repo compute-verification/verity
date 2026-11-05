@@ -1,5 +1,7 @@
-import Definitions.Accounting.JointBlocks
-import Proofs.Flock.EndToEnd.Carry.Statement
+module
+
+public import Definitions.Accounting.JointBlocks
+public import Proofs.Flock.EndToEnd.Carry.Statement
 
 /-!
 # The integrity audit of a server-time block is C-Flock's integrity audit of that block (trusted)
@@ -26,6 +28,8 @@ statement reads as it did over `ServerBlocks`.
 C-Flock's definitions are still in its proofs package, so, like `Flock.Guarantees.IntegrityBlockCarried`, this module
 imports them.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

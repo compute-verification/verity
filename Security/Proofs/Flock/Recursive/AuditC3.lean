@@ -1,10 +1,12 @@
-import Proofs.Flock.Recursive.PublicAudit
-import Proofs.Flock.Recursive.HoloExec
-import Proofs.Flock.Recursive.HoloCoins
-import Proofs.Flock.Recursive.HoloMap
-import Proofs.Flock.Recursive.TopFinder
-import Proofs.Flock.Recursive.ValueSrc
-import Proofs.Flock.Recursive.LeafFinder
+module
+
+public import Proofs.Flock.Recursive.PublicAudit
+public import Proofs.Flock.Recursive.HoloExec
+public import Proofs.Flock.Recursive.HoloCoins
+public import Proofs.Flock.Recursive.HoloMap
+public import Proofs.Flock.Recursive.TopFinder
+public import Proofs.Flock.Recursive.ValueSrc
+public import Proofs.Flock.Recursive.LeafFinder
 
 /-!
 # The recursive audit at candidate 3 (trusted)
@@ -86,6 +88,8 @@ non-vacuity needs VBridgeCOff at candidate 3 (piece (b), `FlockC3.Compose`) and
 V*'s statements over the verifier's list (piece (h)), which at candidate 3's inner shape is circuits' gap 2's eleven:
 `rec-open`, `rec-residuals`, `rec-sparse`, R's levels (`rec-open-stacked`) and `rec-opening` at META's `stacked`.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 
@@ -760,7 +764,7 @@ bound λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records (`Re
 and `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved
 (`Flock.SecurityProofs.RecursiveKS`) but does not reach the Holo statements (i) is about, and `BitsLin2` at the dense
 statements follows from it (`bitsLin2On_of_ksLin2On`). The dense form, which `verity/sampled-proofs/recursive/v1`
-accepts, is `RecursiveAuditC3`, at `λ₂ = 100`.
+accepts, is `RecursiveAuditC3`, at `λ₂ = 135.7` and, at the deployment's tables, at `κ + t'·ε`.
 -/
 def RecursiveAuditHolo : Prop :=
   RecursiveAuditC3At holoCTs holoMap ∧ RecursiveFirewallPrivate

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.FlockKSAbort
-import Proofs.Flock.Soundness.ExtractAccLin
-import Definitions.Claims.RecursionLin
+module
+
+public import Proofs.Flock.Claims.Recursion.FlockKSAbort
+public import Proofs.Flock.Soundness.ExtractAccLin
+public import Definitions.Claims.RecursionLin
 
 /-!
 # Flock meets `KSFlockLin` from the table bound at the abort law, linearly
@@ -26,6 +28,8 @@ conflict is `F0`'s:
   `Pr[BAbort]` (`Ex_oneRun_le`), and the caps' per-position hits of `FC`'s loop sum to `W(x)·Pr[FC]` over the tape
   (`Ex_capHits`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.PlainRawL
-import Proofs.Flock.Claims.KS.PlainCapsDep
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.PlainRawL
+public import Proofs.Flock.Claims.KS.PlainCapsDep
+public import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The plain table bound at one tape, each slot at the run's own level columns
@@ -20,6 +22,8 @@ read sets need only hold what the run itself opens:
   (`plain_laterEntriesAt`, `plain_laterEntriesHAt`, `plain_laterEntriesHUAt`), each slot's term at the run's own
   level columns.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

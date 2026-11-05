@@ -13,8 +13,14 @@ each session's record and proofs), which are too large for canonical JSON.
 
 A protocol without blobs needs none of this: `Protocol` and `Protocol.answer` are unchanged.
 -/
-import CoreProtocol.Cli
-import Flock.Hash
+module
+
+public import CoreProtocol.Cli
+public import Flock.Hash
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core
 

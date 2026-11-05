@@ -1,7 +1,9 @@
-import Proofs.Flock.C3.Reps.ResRead
-import Proofs.Flock.C3.Reps.IoCols
-import Proofs.Flock.C3.Sparse.SrcLayer
-import Proofs.Flock.Recursive.HPortTie
+module
+
+public import Proofs.Flock.C3.Reps.ResRead
+public import Proofs.Flock.C3.Reps.IoCols
+public import Proofs.Flock.C3.Sparse.SrcLayer
+public import Proofs.Flock.Recursive.HPortTie
 
 /-!
 # The RecSparse unit reads `h`'s columns (`hCols_of_check`)
@@ -16,6 +18,8 @@ import Proofs.Flock.Recursive.HPortTie
 * The layout and the net (`laidSparse_reads`, `hCols_of_check`): the builder's `k`-th row is the laid-out row
   `inRows + k`, a computed row of the net at `unitLog ≤ 32` (`readCol_of_laid`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Sparse
 

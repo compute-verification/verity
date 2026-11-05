@@ -1,4 +1,6 @@
-import Definitions.Accounting.Confidence
+module
+
+public import Definitions.Accounting.Confidence
 
 /-!
 # Localization (trusted)
@@ -16,6 +18,8 @@ tick (`CausalFrom`), the one assumption it uses.
 at most `mem X t` bits, its state's content at `t`. The proofs are in
 `Security/Proofs/Accounting/Actual/Localization.lean`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

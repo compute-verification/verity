@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.CapPorts
-import Proofs.Flock.Claims.Recursion.KSLin2Staged
-import Proofs.Flock.Claims.Recursion.BitsLin2
+module
+
+public import Proofs.Flock.Claims.Recursion.CapPorts
+public import Proofs.Flock.Claims.Recursion.KSLin2Staged
+public import Proofs.Flock.Claims.Recursion.BitsLin2
 
 /-!
 # `KSLin2` at `layoutBTops` with V\*'s staging read off the run
@@ -22,6 +24,8 @@ that transcript back at an accepted run's inner rounds (`ReadsBackB`).
 `FinPieces` holds (`finPieces_finOpen`), and `ksLin2_deployed_open` and `bitsLin2_deployed_open` (`FinOpen.lean`)
 drop it.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

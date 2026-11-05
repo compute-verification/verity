@@ -3,9 +3,13 @@ The firewall's contract, inner phase (live PROTOCOL.md §10.3): what the firewal
 program. `rec_live` relays a live session through it (`flock-firewall live`, `liveCmd`), and its Python mirror is held to
 it (`flock-firewall`, `verity/ml/flock/tests/test_firewall_agreement.py`).
 -/
-import Lean.Data.Json
-import Flock.Hm96
-import Flock.JsonParse
+module
+
+public import Lean.Data.Json
+public import Flock.Hm96
+public import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock.Firewall
 
