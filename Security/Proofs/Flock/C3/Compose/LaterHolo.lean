@@ -232,8 +232,8 @@ at R's run from `MapsAt`'s session (`run_of_sessionAt`) at the `C3` of the verif
 total from their ties (`coins_total_holo`), the history's length from `hleaf` (`(ℐ).r` is the table's coin kinds'
 `1 + length` and one more, by `schedInner`), and `hlt` from `MapsAt` (`srcLevelTie_of_maps`). The reps' rounds are
 encoded and drawn at the map's one-round draws (`coinsEncoded_holoMap`; `hdr` at `holoSelOne`, as
-`repsDrawn_holoMapAt` gives it). The link points are the record's (`recordPoints_of`): it decodes (`hrec`, as
-`FlockC3.Sparse.record_decodes_of_accepted` gives it at a family) and the run's points are the history's first coin
+`repsDrawn_holoMapAt` gives it). The link points are the record's (`recordPoints_of`): it decodes (`hrec`, a
+hypothesis) and the run's points are the history's first coin
 (`hpts`, `PointsFromHistory`). -/
 theorem stageCoins_holo_held {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}
