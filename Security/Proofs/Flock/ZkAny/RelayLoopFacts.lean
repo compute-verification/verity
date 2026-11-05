@@ -21,8 +21,8 @@ model's release being the loop's own frames':
 * `LoopModel.Deployed`: the model's release is `LeanRelease.ofLoop` on the statement's setup, whose rep streams' names
   are distinct and two a table statement (`helloOf_some`), with a message past its last round.
 * `RealAt`: the model's tables and salts (`real`) are the loop's. **`realAt_of`**: at the loop's own tables
-  (`Loop.realOf src`) it holds where the table each of the session's level 0s gives is `src`'s and the salts the loop
-  keeps are `src`'s (`SaltsSrc`).
+  (`Loop.realOf src`), the loop handed `src`'s bytes (`M.src`), it holds where the table each of the session's level 0s
+  gives is `src`'s and the salts the loop keeps are the ones it was handed (`SaltsSrc`, `LoopRead`'s round clause).
 * `roundPlace_find`: the frame `roundPlace` readies a round on is one the loop's frames hold.
 * `PlaceFacts`: what the model holds at the place `roundPlace` readies a round at: its scheduled round, its masking
   state but for `stopped`, and where `v` fails the crossing. `placeSt_seen`: its masking state at a round of a stream
@@ -90,23 +90,6 @@ def RealAt {T : ZKMal.CoinLayer.TableData}
     ∃ hi, real M.x M.w M.ρ (2 * i + r) = .ok (t, hi) ∧ ∀ r0 q0 hi',
       σ.R.salts.find? (fun x => x.1 == l0.root && x.2.1 == r) = some (r0, q0, hi') → hi' = hi
 
-/-- **The salts the loop keeps are the source's**, at the loop `σ` for session `sid`: at each rep `r` of each table `i`
-of the session's entry, the salts for levels ≥ 1 the loop holds for the rep at the table's level-0 root, wherever it
-holds some, are the ones the level-0 source `src` gives rep stream `2 * i + r` at the model's statement, witness and
-tape: the bytes `Finish.serve`'s `salts` request reads (`hiSaltsOf`) and keeps, which `Loop.RepSrc` reads as `src`'s. -/
-def SaltsSrc {T : ZKMal.CoinLayer.TableData}
-    (M : LoopModel Claims.Flock.Wit
-      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
-    (src : Msg → Claims.Flock.Wit →
-      (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)) (sid : Nat) (σ : LoopAt) : Prop :=
-  ∀ (i r : Nat) (rel : _root_.Flock.Firewall.Frames.Release) (name : String)
-    (l0 : _root_.Flock.Firewall.Level0.Level0) (r0 : ByteArray) (q0 : Nat) (hi' : Array ByteArray), r < 2 →
-    sessAt σ.R sid = some rel → rel.spec.tables[i]? = some name →
-    _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 →
-    σ.R.salts.find? (fun x => x.1 == l0.root && x.2.1 == r) = some (r0, q0, hi') →
-    ∃ g d, src M.x M.w M.ρ (2 * i + r) = .ok (g, d, hi')
-
 /-- **The loop's own tables' salts are the source's**: where `Loop.realOf src` gives a rep stream a table and salts,
 the salts are the ones `src` gives it. -/
 theorem realOf_hi {R : Type}
@@ -129,27 +112,30 @@ theorem realOf_hi {R : Type}
           rw [h.2]
   · cases h
 
-/-- **`RealAt` at the loop's own tables** (`Loop.realOf src`): where each table of the session's entry that its level 0
-gives is the one `Loop.realOf src` gives the table's reps (the level-0 half), and the salts the loop keeps are `src`'s
-(`SaltsSrc`), the model's tables and salts are the loop's (`realOf_hi`). -/
+/-- **`RealAt` at the loop's own tables** (`Loop.realOf src`), where the loop's host and operating system hand it
+`src`'s bytes at the model's statement, witness and tapes (`M.src`): where each table of the session's entry that its
+level 0 gives is the one `Loop.realOf src` gives the table's reps (the level-0 half), and the salts the loop keeps are
+the ones it was handed (`SaltsSrc`), the model's tables and salts are the loop's (`realOf_hi`). -/
 theorem realAt_of {T : ZKMal.CoinLayer.TableData}
     {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
     {src : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
       Nat → V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)} {sid : Nat} {σ : LoopAt}
+    (hsrc : M.src = src M.x M.w M.ρ)
     (h0 : ∀ (i r : Nat) (rel : _root_.Flock.Firewall.Frames.Release) (name : String)
       (l0 : _root_.Flock.Firewall.Level0.Level0) (stm : Stmt) (t : _root_.Flock.Firewall.Finish.Tab), r < 2 →
       sessAt σ.R sid = some rel → rel.spec.tables[i]? = some name →
       _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 → rel.sts[i]? = some stm →
       _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t →
       ∃ hi, Loop.realOf src M.x M.w M.ρ (2 * i + r) = .ok (t, hi))
-    (hS : SaltsSrc M src sid σ) : RealAt M (Loop.realOf src) sid σ := by
+    (hS : SaltsSrc M sid σ) : RealAt M (Loop.realOf src) sid σ := by
   intro i r rel name l0 stm t hr hss hn hl0 hst ht
   obtain ⟨hi, hre⟩ := h0 i r rel name l0 stm t hr hss hn hl0 hst ht
   refine ⟨hi, hre, fun r0 q0 hi' hf => ?_⟩
   obtain ⟨g, d, hs⟩ := hS i r rel name l0 r0 q0 hi' hr hss hn hl0 hf
   obtain ⟨g', d', hs'⟩ := realOf_hi hre
+  rw [hsrc] at hs
   rw [hs] at hs'
   simp only [Except.ok.injEq, Prod.mk.injEq] at hs'
   exact hs'.2.2
@@ -366,7 +352,7 @@ theorem placeSt_seen {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Sess
     ∀ m, M.L.answered M.x M.ρ (M.hist σ.c) = .ok m → unstop q.st.m = unstop m := by
   obtain ⟨hk, hmem⟩ := round_rep hsl hF hJ hrep hlt hnd
   obtain ⟨p, rel, name, l0, hfa, -, -, -, hA⟩ := hJ.reps i r stream hmem hseen
-  obtain ⟨j, c, stm, t, xs, hi, pre, ev, -, -, -, -, -, -, hI⟩ := hA.1 hk.symm
+  obtain ⟨j, c, stm, t, xs, hi, pre, ev, -, -, -, -, -, -, hI, -⟩ := hA.1 hk.symm
   exact (sameInv_place hI hfa hrp).2.2.2.1
 
 /-- **`RoundFacts` at a frame round's slot of the deployed loop**: at the slot of a round of `n` coins of `stream`,
@@ -441,7 +427,7 @@ theorem roundFacts_loop {T : ZKMal.CoinLayer.TableData}
       rw [roundPlace_first hfd hrp, hpF.coins, hpF.st]
       rfl
     · obtain ⟨p', _, _, _, hf', -, -, -, hS1, -⟩ := hJ.reps i r stream hmem hsn
-      obtain ⟨_, _, _, _, _, _, _, _, -, -, -, -, -, -, hI⟩ := hS1 hk.symm
+      obtain ⟨_, _, _, _, _, _, _, _, -, -, -, -, -, -, hI, -⟩ := hS1 hk.symm
       exact (sameInv_place hI hf' hrp).1
   · rw [hJ.stop, hsent, Bool.true_and]
 

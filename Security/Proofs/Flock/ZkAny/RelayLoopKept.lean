@@ -206,8 +206,9 @@ theorem seenAt_round {spec : SessionSpec} {sts : Array Stmt} {h h' : List (Claim
 `h'` one message past `h`, the next round is neither the stream's nor the next stream's first. -/
 theorem streamAt_old {W Rr : Type} {M : LoopModel W Rr} {spec : SessionSpec} {sts : Array Stmt} {k : Nat}
     {h h' : List (Claims.Msg × Claims.Msg)} {rel : _root_.Flock.Firewall.Frames.Release} {name : String}
-    {l0 : _root_.Flock.Firewall.Level0.Level0} {p : Rep} (hk : k < (nextAt spec sts h).1) (hl : 2 ≤ h.length)
-    (hl' : h'.length = h.length + 1) : StreamAt M spec sts k h' rel name l0 p := by
+    {l0 : _root_.Flock.Firewall.Level0.Level0} {p : Rep} {R : _root_.Flock.Firewall.Frames.Sessions}
+    (hk : k < (nextAt spec sts h).1) (hl : 2 ≤ h.length) (hl' : h'.length = h.length + 1) :
+    StreamAt M spec sts k h' rel name l0 p R := by
   have hq : h'.length - 2 = h.length - 2 + 1 := by omega
   unfold nextAt at hk
   have hmono := locate_fst_succ (Loop.roundsOf spec sts) 0 (h.length - 2)
@@ -417,22 +418,25 @@ theorem loopKept_round {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
       (v : Claims.Msg), slot st pl = some (.round stream n) → LoopFacts sid spec seen st pl σ →
       LoopJ M sid spec sts seen st σ → σ.c < M.τ.length → M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) →
       RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R →
-      (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) → (∃ o, e.round = .ok o) →
-      RoundFacts M sid spec seen stream n i r dom v σ)
-    (hcur : ∀ (seen : List String) (st : State) (pl : Placed) (e : Env) (σ σ' : LoopAt),
-      slot st pl = some (.round stream n) → e.setup = .ok (spec, sts) → LoopFacts sid spec seen st pl σ →
-      LoopJ M sid spec sts seen st σ → LoopRead M sid spec sts nonce (.round stream n) st pl e σ σ' →
-      ((stepK true st pl (some (tagOf (.round stream n))) (.ok (.round stream n)) e).go &&
-        (stepK true st pl (some (tagOf (.round stream n))) (.ok (.round stream n)) e).st.stop.isNone) = true →
-      ∀ i r, streamRep st stream = (i, r) → RepJ M sid spec sts i r σ') :
+      (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) → SaltsSrc M sid σ →
+      (∃ o, e.round = .ok o) → RoundFacts M sid spec seen stream n i r dom v σ)
+    (hcur : ∀ (seen : List String) (st : State) (pl : Placed) (e : Env) (σ σ' : LoopAt) (i r : Nat)
+      (dom : ByteArray) (v : Claims.Msg), slot st pl = some (.round stream n) → e.setup = .ok (spec, sts) →
+      LoopFacts sid spec seen st pl σ → LoopJ M sid spec sts seen st σ → M.Ans σ.c e →
+      M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) →
+      RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R →
+      (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) → σ'.c = σ.c + 1 →
+      Stays sid σ σ' → RoundFacts M sid spec seen stream n i r dom v σ → ∀ o a, e.round = .ok o →
+      e.ans = some a → byte? a 0 = some 2 → (st.answer (.round stream n) a).1.stop = none → e.coins = .ok () →
+      RepJ M sid spec sts i r σ') :
     LoopKept M sid spec sts nonce (LoopJ M sid spec sts) (.round stream n) := by
   intro seen st pl e σ σ' hsl he hF hJ hra hgo
-  have hra' := hra
-  obtain ⟨⟨hlt, -⟩, ⟨i, r, dom, v, hv, hr, hpc⟩, hcc, hst⟩ := hra'
+  obtain ⟨hans, ⟨i, r, dom, v, hv, hr, hpc⟩, hcc, hst, hsal⟩ := hra
+  have hlt := hans.1
   obtain ⟨hsent, hop, -, -⟩ := slot_round hsl
   have hreq := request_round_slot hF.reach hF.live hsl
   obtain ⟨⟨o, hro⟩, a, hae, hb, hsa, hco⟩ := stepK_round_go hF.reach hF.live hsl hgo
-  have hRA := hA seen st pl e σ σ' i r dom v hsl hF hJ hlt hv hr hpc ⟨o, hro⟩
+  have hRA := hA seen st pl e σ σ' i r dom v hsl hF hJ hlt hv hr hpc hsal ⟨o, hro⟩
   have hk : (Except.ok (.round stream n) : Except String _root_.Flock.Firewall.Session.Kind) ≠ .ok .hello := by
     intro h
     cases h
@@ -446,7 +450,8 @@ theorem loopKept_round {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
     omega
   obtain ⟨e', he'⟩ := LoopModel.hist_succ M hlt
   refine ⟨?_, fun h => ?_, fun i' r' s' hmem' hseen => ?_, stepK_plan he hJ.plan,
-    seenAt_round hnd hmem hkr hl hl' hJ.seenAt⟩
+    seenAt_round hnd hmem hkr hl hl' hJ.seenAt, fun h => absurd h (by rw [hcc, hF.count hsent]; omega),
+    fun _ => built_stays hst (hJ.built (by rw [hF.count hsent]; omega))⟩
   · rw [hsent', hsent, hcc, he', Bool.true_and]
     exact stopped_roundRun hRA hv hr hreq hro hae hb hsa hco e'
   · rw [hsent', hsent] at h
@@ -458,7 +463,7 @@ theorem loopKept_round {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
           exact hmem
         have h3 := rep_eq hmem' hm2 (rep_of_name hnd hmem' hm2)
         exact ⟨congrArg Prod.fst h3, congrArg (fun x => x.2.1) h3⟩
-      exact hcur seen st pl e σ σ' hsl he hF hJ hra hgo _ _ hr.rep_eq
+      exact hcur seen st pl e σ σ' _ _ dom v hsl he hF hJ hans hv hr hpc hcc hst hRA o a hro hae hb hsa hco
     · have hseen' : seen.contains s' = true := by
         simpa [seenAfter, hs'] using hseen
       have hne := hRA.other i' r' s' hmem' hs'
