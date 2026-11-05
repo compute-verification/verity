@@ -101,6 +101,7 @@
   "Proofs.Properties.Verity.Sampled.Stops",
   "Proofs.Properties.Verity.Sampled.OpenEmpty",
   "Proofs.Properties.Verity.Sampled.Counts",
+  "Proofs.Properties.Verity.Sampled.Instance",
   "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledLog",
   "Proofs.Properties.Verity.SampledRead",
