@@ -63,9 +63,7 @@ DOC_TERMS = {
     "sampled unit, unit class": "sampled proof block; a size class, or Flock's proof-block class",
     "audit coin": "the challenger's coins (the step that reads them is the verification phase)",
     "declaration block, declaration period": "execution block, execution phase",
-    "remote audit, proof of useful bandwidth": "PoUB",
-    "warden, network warden, uplink tap, the auditor's tap": "the network certifier, and its records network certificates (an "
-                                                             "active or passive warden stays steganography's)",
+    "uplink tap, the auditor's tap": "the network certifier, and its records network certificates",
     "timed verifier": "the memory challenger",
     "network transparency": "network accounting",
     "prover gateway, verifier gateway": "the ZK server; the challenger",
@@ -104,8 +102,7 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|faulty{_SPACE}(?:proof{_SPACE})?blocks?|faulty{_SPACE}sets?"
                        rf"|declaration{_SPACE}(?:blocks?|periods?)|sampling{_SPACE}(?:periods?|blocks?)|hm96{_SPACE}rows?"
                        rf"|period's{_SPACE}(?:audit{_SPACE})?coins|reject(?:ion)?{_SPACE}domina\w*|dampeners?"
-                       rf"|remote{_SPACE}audits?|proof{_SPACE}of{_SPACE}useful{_SPACE}bandwidth"
-                       rf"|(?<!active\s)(?<!passive\s)(?:network{_SPACE})?wardens?|uplink{_SPACE}taps?|auditor's{_SPACE}taps?"
+                       rf"|uplink{_SPACE}taps?|auditor's{_SPACE}taps?"
                        rf"|timed{_SPACE}verifiers?|network{_SPACE}transparency|(?:prover|verifier){_SPACE}gateways?"
                        rf"|batch{_SPACE}verifiers?|GPU{_SPACE}workers?|escape{_SPACE}probabilit(?:y|ies)"
                        rf"|post{_SPACE}landing(?:{_SPACE}runs?)?|postland\w*|commit{_SPACE}windows?|accounting{_SPACE}periods?"
@@ -403,18 +400,16 @@ def test_the_doc_scan_reads_the_protocol_terms():
 
 
 def test_the_doc_scan_reads_the_network_and_process_terms():
-    """The network certifier's, PoUB's, the lock's and the landing's older names, on toy files: an active or passive
-    warden, a `warden_rows` key, the `remote_bandwidth` package, a Commit period, a pinned key and a trusted host stay."""
+    """The network certifier's, the lock's and the landing's older names, on toy files: a Commit period, a pinned key and
+    a trusted host stay."""
     docs = {
-        "a.md": "The warden, a network\nwarden and the auditor's tap; a remote audit, the proof of useful bandwidth.\n"
+        "a.md": "The uplink\ntap and the auditor's tap.\n"
                 "A Commit window, the isolation blocks, a transformer block; each pinned theorem in the trusted text.\n"
                 "The timed verifier, the prover gateway, GPU workers, the escape probability, the post-landing run.\n"
-                "An active warden, a passive warden, `warden_rows`, `remote_bandwidth`, a Commit period, a pinned key and a "
-                "trusted host stay.\n",
+                "A Commit period, a pinned key and a trusted host stay.\n",
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
-        ("a.md", 1, "warden"), ("a.md", 1, "network warden"), ("a.md", 2, "auditor's tap"),
-        ("a.md", 2, "remote audit"), ("a.md", 2, "proof of useful bandwidth"), ("a.md", 3, "Commit window"),
+        ("a.md", 1, "uplink tap"), ("a.md", 2, "auditor's tap"), ("a.md", 3, "Commit window"),
         ("a.md", 3, "isolation blocks"), ("a.md", 3, "transformer block"), ("a.md", 3, "pinned theorem"),
         ("a.md", 3, "trusted text"), ("a.md", 4, "timed verifier"), ("a.md", 4, "prover gateway"), ("a.md", 4, "GPU workers"),
         ("a.md", 4, "escape probability"), ("a.md", 4, "post-landing run")]
