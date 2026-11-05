@@ -162,7 +162,7 @@ def HashOf (H : Hash.Msg → Hash.Digest) : Prop := ∀ x : ByteArray, H (bs x) 
 
 /-- **A registered port's frame-v3 domain as the spec holds it**: its domain as the id, its leaves as the count, and
 rank `r` at position `r`, as the code frames a leaf (`FV3.leaf`'s `uint i, uint i`). -/
-def domainOf (reg : Port) : Hash.Tree.Domain := ⟨dig reg.domain, reg.leaves, id⟩
+def domainOf (reg : Registered.Port) : Hash.Tree.Domain := ⟨dig reg.domain, reg.leaves, id⟩
 
 theorem leafInAs_bs {dom : ByteArray} (hd : dom.size = 64) (D : Hash.Tree.Domain) (hD : D.id = dig dom)
     (hp : ∀ r, D.position r = r) (schema : String) (pos : ℕ) (payload : ByteArray) :
@@ -203,7 +203,8 @@ theorem log2ceil_eq_depth (n : ℕ) : log2ceil n = Hash.Tree.depth n := rfl
 /-- **The registered path check is `Hash.Tree`'s**: a leaf payload `opensLeaf` accepts at a port whose domain is 64
 bytes, the spec accepts at the port's domain (`domainOf`) and root, with the leaf the digest of the spec's leaf message
 over the payload, and the siblings the path's. -/
-theorem opensLeaf_accepts {H : Hash.Msg → Hash.Digest} (hH : HashOf H) {reg : Port} (hd : reg.domain.size = 64)
+theorem opensLeaf_accepts {H : Hash.Msg → Hash.Digest} (hH : HashOf H) {reg : Registered.Port}
+    (hd : reg.domain.size = 64)
     {payload path : ByteArray} {pos : ℕ} (h : opensLeaf reg payload pos path = true) :
     Hash.Tree.accepts H (domainOf reg) (dig reg.root) pos
       (H (Hash.Tree.leafMsg (domainOf reg) pos reg.schema (bs payload)))
