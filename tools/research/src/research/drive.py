@@ -3756,10 +3756,14 @@ class Driver:
         `--attr-source` merges without the drivers, which conflicts more."""
         from .queue import ported, repinned
 
+        from .queue import base_drivers
+
         args = ("merge-tree", "--write-tree", "--name-only", "--no-messages", tip, head)
-        r = _git(self.repo, f"--attr-source={tip}", *args, check=False)
-        if r.returncode == 129 and "attr-source" in r.stderr:
-            r = _git(self.repo, *args, check=False)
+        # the drivers from ``tip``'s tools, as the sync's merges run them: the clone's checkout can hold another `merge.py`
+        with base_drivers(self.repo, tip) as config:
+            r = _git(self.repo, *config, f"--attr-source={tip}", *args, check=False)
+            if r.returncode == 129 and "attr-source" in r.stderr:
+                r = _git(self.repo, *config, *args, check=False)
         if r.returncode == 1:
             files = list(dict.fromkeys(r.stdout.splitlines()[1:]))
             if not (tree := repinned(self.repo, r.stdout.split()[0], tip, head, files)):
