@@ -12,7 +12,10 @@ What the scan's and the wired rows' proofs read about Bits' key program lowered 
   (`joint_unique`);
 * lengths: the program's is its gates' lowered sizes' sum (`length_prog`), the members' the programs' sum
   (`length_jointOf`, `base_succ`);
-* inputs: a lowered gate is `.input` exactly at an input gate the constants don't fix (`prog_input_iff`);
+* inputs: a lowered gate is `.input` exactly at an input gate the constants don't fix (`prog_input_iff`); an input bit
+  in range whose column has a key has a gate (`inGate_isSome`, `inGate_some`), and where a computed row of its unit net
+  reads its column, an input column, unit `u`'s copy of that row reads the gate, which the constants leave free
+  (`consts_inGate`), so its position is an input of the members' program (`inBit_input`);
 * outputs: the key program returns every instance's output copy bits (`mem_outs_keyProg`), each a row
   (`row?_outGate`) whose position holds its AND (`prog_and`), and the members return theirs from `base`
   (`mem_outs_jointOf_iff`); an output copy bit in range on a computed row has a gate (`outGate_isSome`), and its
@@ -815,6 +818,176 @@ theorem inBit_unitPos {c : Flock.Circuit} {n u k p t x : ℕ} (h : inBit c n u k
   simp only [inBit, Option.map_eq_some_iff] at h
   obtain ⟨g, hg, rfl⟩ := h
   exact unitPos_posOf (inGate_unit hg)
+
+theorem inGate_some {c : Flock.Circuit} {n u k p t g : ℕ} (h : inGate c n u k p t = some g) :
+    u < n ∧ k < c.upv ∧ ∃ b, keyIdx c ((Rows.ofNet c.unit).stack c.upv).nIn (inCol c k p t) = some b ∧
+      g = 2 + u * ((Rows.ofNet c.unit).stack c.upv).nIn + b := by
+  unfold inGate at h
+  dsimp only at h
+  split at h
+  · rename_i hc
+    simp only [Bool.and_eq_true, decide_eq_true_eq, and_assoc] at hc
+    obtain ⟨b, hb, rfl⟩ := Option.map_eq_some_iff.1 h
+    exact ⟨hc.1, hc.2.1, b, hb, rfl⟩
+  · cases h
+
+/-- **An input bit has a gate** where its unit, instance, port and bit are in range and its column has a key
+(`inGate_some`'s converse). -/
+theorem inGate_isSome {c : Flock.Circuit} {n u k p t b : ℕ} (hu : u < n) (hk : k < c.upv)
+    (hp : p < (Flock.portCols c.unit.inGroups).size) (ht : t < ((Flock.portCols c.unit.inGroups).getD p default).2)
+    (hb : keyIdx c ((Rows.ofNet c.unit).stack c.upv).nIn (inCol c k p t) = some b) :
+    inGate c n u k p t = some (2 + u * ((Rows.ofNet c.unit).stack c.upv).nIn + b) := by
+  have ht' : t < (Flock.portCols c.unit.inGroups)[p].2 := by
+    rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hp, Option.getD_some] at ht
+    exact ht
+  unfold inGate
+  simp [hu, hk, hp, ht', hb]
+
+theorem div_mul_add {P u i : ℕ} (hi : i < P) : (u * P + i) / P = u := by
+  rw [Nat.add_comm, Nat.add_mul_div_right _ _ (by omega : 0 < P), Nat.div_eq_of_lt hi, Nat.zero_add]
+
+theorem uniform_units (k : ℕ) (R : Rows) (ins : ℕ → ℕ → ℕ) (one : ℕ) : ∀ n, (uniform k R ins one n).units = n
+  | 0 => rfl
+  | n + 1 => by simp only [uniform, KeyProg.snoc]; rw [uniform_units k R ins one n]
+
+theorem keyProg_units (c : Flock.Circuit) (n : ℕ) : (keyProg c n).units = n := by
+  simp only [keyProg, uniform_units]
+
+/-- **Unit `u`'s row `i` is unit `u`'s** (`unitOf`). -/
+theorem unitOf_row (c : Flock.Circuit) {n u i : ℕ} (hu : u < n) (hi : i < (keyProg c n).perUnit) :
+    unitOf (keyProg c n) ((keyProg c n).inputs + (u * (keyProg c n).perUnit + i)) = some u := by
+  have hs := keyProg_size_rows c n
+  have h1 := mul_add_le (B := (keyProg c n).perUnit) (i := (keyProg c n).perUnit) hu (Nat.le_refl _)
+  have hc : (decide ((keyProg c n).inputs + (u * (keyProg c n).perUnit + i) < (keyProg c n).inputs) ||
+      decide ((keyProg c n).size ≤ (keyProg c n).inputs + (u * (keyProg c n).perUnit + i)) ||
+      (keyProg c n).perUnit == 0) = false := by
+    unfold KeyProg.size
+    simp only [Bool.or_eq_false_iff, decide_eq_false_iff_not, beq_eq_false_iff_ne]
+    omega
+  unfold unitOf
+  rw [hc]
+  simp only [Bool.false_eq_true, ↓reduceIte, Nat.add_sub_cancel_left, div_mul_add hi]
+
+/-- **A gate a unit's row reads has an owner**, the first unit that reads it. -/
+theorem owner_ne_none {kp : KeyProg} {u h g : ℕ} (hu : u < kp.units) (hh : h < kp.size)
+    (hun : unitOf kp h = some u) (hg : g ∈ args kp h) : owner kp g ≠ none := by
+  have hp : ((List.range kp.size).any fun h => unitOf kp h == some u && (args kp h).contains g) = true :=
+    List.any_eq_true.2 ⟨h, List.mem_range.2 hh, by simpa [hun] using hg⟩
+  unfold owner
+  intro hn
+  exact List.find?_eq_none.1 hn u (List.mem_range.2 hu) hp
+
+/-- **An input gate a unit reads is free**: the constants (`consts`) fix only the constant, the zero and the input gates
+no unit reads. -/
+theorem consts_eq_none {c : Flock.Circuit} {n g : ℕ} (h2 : 2 ≤ g) (hown : owner (keyProg c n) g ≠ none) :
+    consts c n g = none := by
+  have h0 : g ≠ 0 := by omega
+  have h1 : g ≠ 1 := by omega
+  simp [consts, h0, h1, hown]
+
+/-- **Copy `k`'s row `i` among `K` stacked copies** (`Rows.stackRow`) is row `i` on the copy's columns. -/
+theorem stackRow_copy (R : Rows) (f : Array (List ℕ)) {K k i : ℕ} (hi : i < R.nComp) :
+    R.stackRow K f (k * (R.nComp + 1) + (1 + i)) = (f.getD i []).map (R.stackCol K k) := by
+  have hmod : (k * (R.nComp + 1) + (1 + i)) % (R.nComp + 1) = 1 + i := by
+    rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt (by omega)]
+  have hdiv : (k * (R.nComp + 1) + (1 + i)) / (R.nComp + 1) = k := by
+    rw [Nat.add_comm, Nat.add_mul_div_right _ _ (by omega), Nat.div_eq_of_lt (by omega), Nat.zero_add]
+  unfold Rows.stackRow
+  rw [hmod, hdiv, ite_eq_right (show ¬ 1 + i = 0 by omega), Nat.add_sub_cancel_left]
+
+theorem stackRows_getD (R : Rows) (f : Array (List ℕ)) {K k i : ℕ} (hk : k < K) (hi : i < R.nComp) :
+    ((Array.range (K * (R.nComp + 1))).map (R.stackRow K f)).getD (k * (R.nComp + 1) + (1 + i)) [] =
+      (f.getD i []).map (R.stackCol K k) := by
+  have hlt : k * (R.nComp + 1) + (1 + i) < K * (R.nComp + 1) := by
+    have := mul_add_le (B := R.nComp + 1) (i := R.nComp + 1) hk (Nat.le_refl _)
+    omega
+  simp only [Array.getD_eq_getD_getElem?, Array.getElem?_map, Array.getElem?_range, hlt, ↓reduceIte,
+    Option.map_some, Option.getD_some]
+  have := stackRow_copy R f (K := K) (k := k) hi
+  rw [Array.getD_eq_getD_getElem?] at this
+  exact this
+
+theorem stackCol_input (R : Rows) {K k x : ℕ} (hx : x < R.nIn) : R.stackCol K k x = k * R.nIn + x := by
+  simp only [Rows.stackCol, hx, ↓reduceIte]
+
+/-- **An input bit a row of its unit net reads is free**: where instance `k`'s input port `p`'s bit `t` has the gate
+`g` and computed row `i` of the unit net reads the bit's column, an input column, unit `u`'s copy of row `i` reads `g`,
+an input gate the constants (`consts`) leave free. -/
+theorem consts_inGate {c : Flock.Circuit} {n u k p t g i : ℕ} (h : inGate c n u k p t = some g)
+    (hi : i < (Rows.ofNet c.unit).nComp)
+    (hr : ((Flock.portCols c.unit.inGroups).getD p default).1 + t ∈
+      (Rows.ofNet c.unit).a.getD i [] ++ (Rows.ofNet c.unit).b.getD i [])
+    (hx : ((Flock.portCols c.unit.inGroups).getD p default).1 + t < (Rows.ofNet c.unit).nIn) :
+    g < (keyProg c n).inputs ∧ consts c n g = none := by
+  obtain ⟨hu, hk, b, hb, rfl⟩ := inGate_some h
+  have hbB := keyIdx_lt hb
+  have hI := keyProg_inputs c n
+  have hB := mul_add_le (B := ((Rows.ofNet c.unit).stack c.upv).nIn) (i := ((Rows.ofNet c.unit).stack c.upv).nIn) hu
+    (Nat.le_refl _)
+  have hlt : 2 + u * ((Rows.ofNet c.unit).stack c.upv).nIn + b < (keyProg c n).inputs := by
+    unfold srcs at hI; omega
+  refine ⟨hlt, consts_eq_none (by omega) ?_⟩
+  have hP := keyProg_perUnit c n
+  have hK := mul_add_le (B := (Rows.ofNet c.unit).nComp + 1) (i := (Rows.ofNet c.unit).nComp + 1) hk (Nat.le_refl _)
+  have hiP : k * ((Rows.ofNet c.unit).nComp + 1) + (1 + i) < (keyProg c n).perUnit := by
+    rw [hP]
+    show _ < c.upv * ((Rows.ofNet c.unit).nComp + 1)
+    omega
+  have hX := mul_add_le (B := (Rows.ofNet c.unit).nIn) (i := (Rows.ofNet c.unit).nIn) hk (Nat.le_refl _)
+  have hcol : inCol c k p t < ((Rows.ofNet c.unit).stack c.upv).nIn := by
+    show k * (Rows.ofNet c.unit).nIn + _ < c.upv * (Rows.ofNet c.unit).nIn
+    omega
+  have hkeys : ((Array.range ((Rows.ofNet c.unit).stack c.upv).nIn).map
+      (keyIdx c ((Rows.ofNet c.unit).stack c.upv).nIn)).getD (inCol c k p t) none = some b := by
+    simp only [Array.getD_eq_getD_getElem?, Array.getElem?_map, Array.getElem?_range, hcol, ↓reduceIte,
+      Option.map_some, Option.getD_some]
+    exact hb
+  have hw : wireOf c n u (inCol c k p t) = 2 + u * ((Rows.ofNet c.unit).stack c.upv).nIn + b := by
+    simp only [wireOf, hcol, ↓reduceIte, hkeys]
+  have hin : inCol c k p t = (Rows.ofNet c.unit).stackCol c.upv k
+      (((Flock.portCols c.unit.inGroups).getD p default).1 + t) := by
+    rw [stackCol_input _ hx]
+    rfl
+  have hs := keyProg_size_rows c n
+  have hU := mul_add_le (B := (keyProg c n).perUnit) (i := (keyProg c n).perUnit) hu (Nat.le_refl _)
+  refine owner_ne_none (u := u) (h := (keyProg c n).inputs + (u * (keyProg c n).perUnit +
+    (k * ((Rows.ofNet c.unit).nComp + 1) + (1 + i)))) (by rw [keyProg_units]; exact hu)
+    (by unfold KeyProg.size; omega) (unitOf_row c hu hiP) ?_
+  unfold args
+  rw [keyProg_row? c hu hiP]
+  dsimp only
+  rw [← hw]
+  rcases List.mem_append.1 hr with ha | hb'
+  · apply List.mem_append_left
+    apply List.mem_map_of_mem
+    show inCol c k p t ∈ ((Array.range (c.upv * ((Rows.ofNet c.unit).nComp + 1))).map
+      ((Rows.ofNet c.unit).stackRow c.upv (Rows.ofNet c.unit).a)).getD _ []
+    rw [stackRows_getD _ _ hk hi, hin]
+    exact List.mem_map_of_mem ha
+  · apply List.mem_append_right
+    apply List.mem_map_of_mem
+    show inCol c k p t ∈ ((Array.range (c.upv * ((Rows.ofNet c.unit).nComp + 1))).map
+      ((Rows.ofNet c.unit).stackRow c.upv (Rows.ofNet c.unit).b)).getD _ []
+    rw [stackRows_getD _ _ hk hi, hin]
+    exact List.mem_map_of_mem hb'
+
+/-- **A member's input bit a row of its unit net reads is an input** of the members' program. -/
+theorem inBit_input (ms : Members) {m u k p t x i : ℕ} (hm : m < ms.length)
+    (h : inBit (ms.getD m default).1 (ms.getD m default).2.size u k p t = some x)
+    (hi : i < (Rows.ofNet (ms.getD m default).1.unit).nComp)
+    (hr : ((Flock.portCols (ms.getD m default).1.unit.inGroups).getD p default).1 + t ∈
+      (Rows.ofNet (ms.getD m default).1.unit).a.getD i [] ++ (Rows.ofNet (ms.getD m default).1.unit).b.getD i [])
+    (hx : ((Flock.portCols (ms.getD m default).1.unit.inGroups).getD p default).1 + t <
+      (Rows.ofNet (ms.getD m default).1.unit).nIn) :
+    (jointOf ms).gates[base ms m + x]? = some .input := by
+  simp only [inBit, Option.map_eq_some_iff] at h
+  obtain ⟨g, hg, rfl⟩ := h
+  obtain ⟨hgi, hκ⟩ := consts_inGate hg hi hr hx
+  have hin := (prog_input_iff (keyProg _ _) (consts (ms.getD m default).1 (ms.getD m default).2.size) g).2 ⟨hgi, hκ⟩
+  rw [posOf_input _ hgi, getElem?_jointOf ms hm (lt_length_of_getElem? _ _ hin)]
+  unfold memberProg
+  rw [hin]
+  rfl
 
 /-- **An output copy bit is its unit's**: one of its rows. -/
 theorem outGate_unit {c : Flock.Circuit} {n u k j t g : ℕ} (h : outGate c n u k j t = some g) :
