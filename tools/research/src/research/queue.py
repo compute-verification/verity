@@ -25,8 +25,9 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    once it ends); or, with
                                                    --mark, on the owner's word alone (`MarkOnly`).  First it refuses a PR
                                                    whose head is on another repository or whose author isn't the
-                                                   organization's or one of `AUTHORS` (`PR.outside`), as admission does; then
-                                                   the records gate
+                                                   organization's or one of `AUTHORS` (`PR.outside`), and one based on `main`
+                                                   whose head carries merges of an old `next` (`old_next`), as admission
+                                                   does, naming the fix; then the records gate
                                                    (`RecordsGate`, which --no-preflight keeps) refuses a head that changes a Lean
                                                    lock against the landing branch unless a records run or Lean check passed
                                                    that package, of the head or of a commit whose files of the package and the
@@ -138,7 +139,10 @@ Admission.  A PR is admitted while it is open against `main`, has an owner, carr
 no change waits on a per-head grant.  A PR whose head is on another repository than the queue's (GitHub's `head.repo.full_name`:
 a fork's, or a deleted one's) or whose author is neither an owner or member of the organization (`author_association`; a
 collaborator's isn't enough) nor one of `AUTHORS` (the team's Apps, the repository's admin) is refused, at its mark and at
-admission, naming why and the fix: a maintainer opens it from a branch of this repository (`PR.outside`).  A PR based on another branch is never admitted: `ready` marks it and says so,
+admission, naming why and the fix: a maintainer opens it from a branch of this repository (`PR.outside`).  So is a PR whose head
+carries merges of an old `next`, rebuilt since (`old_next`: `Queue: #N` merges the landing branch doesn't hold, of PRs neither open
+nor landed, which would land with it; a demo branch that merged `next` carries hundreds), naming the fix: retarget it to the demo
+branch it builds on, or restack its own commits onto `main` (`old_next_refusal`).  A PR based on another branch is never admitted: `ready` marks it and says so,
 and `status` lists it, once marked, as waiting to be retargeted to `main` (a PR containing another waits for it there).  Ready is a store label `ready = true` on `pr:{number}@{head sha}` that
 `research queue ready PR` writes, so a new push needs a new one (a restack too: the tier ran on the old tree; not a head whose tree is a marked head's,
 as a merge of `main` that changes no file leaves it: `ready` marks that one without a tier), and only after the quick tier passes at that
@@ -319,7 +323,7 @@ import time
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import Callable, Iterable
+from typing import Callable, Collection, Iterable
 
 from . import linear, quick_tier, waitcap
 from .gates import git_env
@@ -1618,8 +1622,10 @@ class Queue:
         return when is not None and when > at
 
     def entries(self, prs: list[PR], state: dict, base: str | None = None, landed: str | None = None,
-                queued: str | None = None) -> dict[int, Entry]:
-        """Each open PR's standing.  A PR P goes after, and waits while it isn't admitted, each other open PR Q whose current
+                queued: str | None = None, open_numbers: Collection[int] | None = None) -> dict[int, Entry]:
+        """Each open PR's standing.  One whose head carries merges of an old `next` (`old_next`: of PRs neither open, among
+        ``open_numbers``, those of ``prs`` unless given, nor landed) is refused, with the fix (`old_next_refusal`), as `ready`
+        refuses its mark.  A PR P goes after, and waits while it isn't admitted, each other open PR Q whose current
         head P's head contains, or an older head of Q's, by ancestry alone (never by PR number).  P holds an older head of Q
         when one of P's own commits (those in ``base``.. its head less those below the heads of open PRs it contains, and
         less those `next` already carries without P, below) is
@@ -1651,11 +1657,15 @@ class Queue:
         if self.prefetch is not None:
             self.prefetch([(p.number, p.head) for p in prs if rules.hold_label not in p.labels and p.owner is not None])
         reach = above(self.workdir, base, (p.head for p in prs))
+        old = old_next(self.workdir, (p.head for p in prs if reach[p.head][0]), landed,
+                       {p.number for p in prs} if open_numbers is None else open_numbers)
         for p in prs:
             e = out[p.number] = Entry(p)
             ejected = state["ejected"].get(str(p.number))
             if why := p.outside(self.slug):
                 e.state, e.why = "refused", why
+            elif carried := [old[c] for c in reach[p.head][0] if c in old]:
+                e.state, e.why = "refused", old_next_refusal(carried, self.into)
             elif rules.hold_label in p.labels:
                 e.state, e.why = "waiting", f"held (`{rules.hold_label}` label)"
             elif p.owner is None:
@@ -2442,7 +2452,7 @@ class Queue:
         self._merge_keys, self._context, self._merged_from = {}, None, {}
         self._seen(state, prs, {p.number for p in open_prs})
         chain = self.chain()
-        entries = self.entries(prs, state)
+        entries = self.entries(prs, state, open_numbers={p.number for p in open_prs})
         entries.update(waiting)
         listed = [n for n in self.priority if n in entries]
         self._prioritized = set(listed).union(*(entries[n].after for n in listed))
@@ -2743,7 +2753,7 @@ class Queue:
             prefetch([(p.number, p.head) for p in open_prs])
             self.prefetch = None
         try:
-            entries = self.entries(prs, state)
+            entries = self.entries(prs, state, open_numbers={p.number for p in open_prs})
             entries.update(waiting)
             entries.update(self.off_main(open_prs))
             idle = stale(open_prs) if stale else {}
@@ -3204,6 +3214,74 @@ def queue_log(repo: Path, ref: str, n: int = LANDED_WINDOW) -> tuple[set[str], l
             if m := MOVE_TRAILER_RE.search(body):
                 moves.append(Move(commit, m.group(1)))
     return heads, moves[::-1]
+
+
+#: how many of the merges it found a refusal for an old `next` names (`old_next_refusal`)
+OLD_NEXT_SHOWN = 3
+
+
+def old_next(repo: Path, heads: Iterable[str], landed: str, open_prs: Collection[int]) -> dict[str, Member]:
+    """{commit: the PR it brings} of each queue commit (`queue_commit`) one of ``heads`` reaches that ``landed``, the landing
+    branch's tip, doesn't, whose PR is none of ``open_prs`` (numbers) and never landed: its head is neither on ``landed`` nor
+    one the queue landed there at another commit (`queue_log`: a move's, a restacked one's).  Each is a merge of an old
+    `next`, one rebuilt since (a demo branch that merged it carries hundreds), and brings the change of a PR closed
+    unlanded, which a head carrying it would land with its own.  A head stacked on an open PR, or one that merged `next`,
+    carries only merges of PRs that are open or landed."""
+    heads = list(dict.fromkeys(heads))
+    if not heads:
+        return {}
+    env = git_env(GIT_TERMINAL_PROMPT="0")
+    r = subprocess.run(["git", "log", "--stdin", "--grep=^Queue: #", "--format=%H%x00%P%x00%B%x1e"], cwd=repo,
+                       input="".join(f"{h}\n" for h in [*heads, f"^{landed}"]), capture_output=True, text=True,
+                       errors="surrogateescape", env=env)
+    if r.returncode:
+        raise QueueError(f"git log {landed}.. ({len(heads)} heads): {(r.stderr or r.stdout).strip()[-400:]}")
+    found = {m.commit: m for rec in r.stdout.split("\x1e") if rec.strip()
+             if (m := queue_commit(*rec.strip().split("\x00", 2))) and m.pr not in open_prs}
+    if not found:
+        return {}
+    done = queue_log(repo, landed)[0]
+    if not (maybe := sorted({m.head for m in found.values()} - done)):
+        return {}
+    have = subprocess.run(["git", "cat-file", "--batch-check=%(objectname)"], cwd=repo, input="".join(f"{h}\n" for h in maybe),
+                          capture_output=True, text=True, env=env).stdout.splitlines()
+    off = subprocess.run(["git", "rev-list", "--ignore-missing", "--stdin"], cwd=repo,
+                         input="".join(f"{h}\n" for h in [*maybe, f"^{landed}"]), capture_output=True, text=True, env=env)
+    if off.returncode:
+        raise QueueError(f"git rev-list {landed}.. ({len(maybe)} heads): {(off.stderr or off.stdout).strip()[-400:]}")
+    on = {h for h in have if not h.endswith(" missing")}.difference(off.stdout.split())
+    return {c: m for c, m in found.items() if m.head not in done and m.head not in on}
+
+
+def old_next_refusal(old: list[Member], into: str) -> str:
+    """Why a head carrying ``old``, merges of an old `next` (`old_next`), is neither marked nor admitted, with the fix."""
+    shown = ", ".join(f"{m.commit[:12]} (#{m.pr})" for m in old[:OLD_NEXT_SHOWN])
+    more = f" and {len(old) - OLD_NEXT_SHOWN} more" if len(old) > OLD_NEXT_SHOWN else ""
+    return (f"its head carries {len(old)} merge{'s' if len(old) > 1 else ''} of an old `{BRANCH}` that `{into}` doesn't hold, "
+            f"of PRs closed unlanded ({shown}{more}), which would land with it: retarget the PR to the demo branch it builds on, "
+            f"or restack its own commits onto `main` (a branch from `origin/main` with each cherry-picked, and the branch of each "
+            f"open PR it needs merged, never `{BRANCH}`) and mark that head")
+
+
+def old_next_at(repo: Path, remote: str, pr: PR, prs: Iterable[PR]) -> str | None:
+    """`ready`'s `old_next_refusal` of ``pr``'s head, or None: judged in ``repo`` (the caller's checkout) on `main`, the
+    landing branch and the head as fetched from ``remote`` under `refs/queue/old-next/`, ``prs`` the open PRs.  What can't be
+    fetched or read refuses nothing, said on stderr: the sync's `Queue.entries` refuses such a head all the same."""
+    ns = "refs/queue/old-next"
+    try:
+        _git(repo, *STALL, "fetch", "-q", remote, f"+refs/heads/main:{ns}/main", f"+refs/pull/{pr.number}/head:{ns}/pr")
+        if _git(repo, "cat-file", "-e", f"{pr.head}^{{commit}}", check=False).returncode and pr.branch:
+            _git(repo, *STALL, "fetch", "-q", remote, f"+refs/heads/{pr.branch}:{ns}/branch", check=False)
+        landed = f"{ns}/main"
+        if (into := into_at(repo, landed)) != "main":
+            _git(repo, *STALL, "fetch", "-q", remote, f"+refs/heads/{into}:{ns}/{into}")
+            landed = f"{ns}/{into}"
+        old = old_next(repo, [pr.head], landed, {p.number for p in prs})
+    except QueueError as e:
+        print(f"research queue: whether #{pr.number}'s head carries an old `{BRANCH}` isn't known ({e}); the sync judges it",
+              file=sys.stderr)
+        return None
+    return old_next_refusal(list(old.values()), into) if old else None
 
 
 def move_of(repo: Path, commit: str) -> str | None:
@@ -4441,7 +4519,7 @@ class Preflight:
         landed = land if not _git(self.repo, "rev-parse", "-q", "--verify", f"{land}^{{commit}}", check=False).returncode else main
         try:
             entries = q.entries([pr, *(p for p in prs if p.number in inside)], {"ejected": {}}, base=main, landed=landed,
-                                queued=f"refs/queue/preflight/{BRANCH}")
+                                queued=f"refs/queue/preflight/{BRANCH}", open_numbers={p.number for p in prs})
         except QueueError as e:
             self.log(f"research queue: preflight: can't tell whether the open PRs this head contains are admitted ({e})")
             return []
@@ -5299,10 +5377,13 @@ def ejection(store, pr: PR) -> str | None:
 SHA_READS, SHA_WAIT_S = 6, 5.0
 
 
-def off_main_note(pr: PR, prs: list[PR]) -> str | None:
-    """What `ready` tells the owner of ``pr`` when it isn't based on `main` (drive admits only PRs that are), or None."""
+def off_main_note(pr: PR, prs: list[PR], old_next: str | None = None) -> str | None:
+    """What `ready` tells the owner of ``pr`` when it isn't based on `main` (drive admits only PRs that are), or None; with
+    ``old_next``, the refusal `main` would give its head (`old_next_refusal`) in place of the advice to retarget it there."""
     if pr.base == "main":
         return None
+    if old_next:
+        return f"#{pr.number} is based on {based_on(pr, prs)}, not main, and drive would refuse it on main: {old_next}"
     parent = next((p for p in prs if p.branch == pr.base and p.number != pr.number), None)
     until = f"until #{parent.number} lands, one stack level per landing" if parent else "until it is"
     return (f"#{pr.number} is based on {based_on(pr, prs)}, not main: drive won't see it {until}. Retarget it to main (drive orders "
@@ -5313,22 +5394,27 @@ def off_main_note(pr: PR, prs: list[PR]) -> str | None:
 def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str | None], again: bool = False,
           preflight: Callable[[PR, list[PR]], str | None] | None = None, sha: str | None = None,
           sleep: Callable[[float], None] = time.sleep, as_json: bool = False,
-          records: Callable[[PR], str | None] | None = None) -> int:
+          records: Callable[[PR], str | None] | None = None,
+          old_next: Callable[[PR, list[PR]], str | None] | None = None) -> int:
     """`research queue ready PR`: run the quick tier at the PR's current head (`tier`, a `RemoteQuickTier` or a `QuickTier`), and once
     it passes write `ready = true` on `pr:{n}@{that head}` and push it to the store's remote.  A head whose tree is that of another
     head marked ready (`same_tree_mark`) is marked without running the tier again.  A head drive or the lander ejected is refused
     unless ``again`` (a re-mark at an ejected head would fail a second train on the same line).  Before any of it, a PR
     `PR.outside` refuses (its head on another repository than ``github``'s, or an author the organization doesn't have) is
-    refused, then ``records`` (`RecordsGate`, which `--no-preflight` keeps) refuses a head that changes a Lean lock no records run passed, of
-    it or of a commit with the same inputs for that package,
+    refused, and so is one based on `main` whose head ``old_next`` (`old_next_at`, which `--no-preflight` keeps) finds carrying
+    merges of an old `next`, with the fix (`old_next_refusal`), as the sync refuses both; then ``records`` (`RecordsGate`,
+    which `--no-preflight` keeps) refuses a head that changes a Lean lock no records run passed, of it or of a commit with the
+    same inputs for that package,
     then ``preflight`` (`Preflight`; None with `--no-preflight`) refuses a head that would break `next`, with the fix.  With ``sha``
     (`--sha`) it marks only that head: GitHub's head lags a push by seconds (`git push && research queue ready N --mark` can mark
     the old head), so it reads again, up to `SHA_READS` times, and refuses when GitHub still has another head.  A PR based
-    on another branch is marked all the same, and told that drive won't see it until it is based on `main` (`off_main_note`).
+    on another branch is marked all the same, and told that drive won't see it until it is based on `main` (`off_main_note`),
+    or, when its head carries an old `next`, what `main` would refuse it for.
     With ``as_json`` (`--json`) the rest goes to stderr, and stdout gets one object: pr, head, base, exit and warning (that note)."""
     with contextlib.redirect_stdout(sys.stderr) if as_json else contextlib.nullcontext():
-        rc, pr, prs = _ready(github, store, number, by, tier, again, preflight, sha, sleep, records)
-        note = off_main_note(pr, prs) if pr is not None else None
+        rc, pr, prs = _ready(github, store, number, by, tier, again, preflight, sha, sleep, records, old_next)
+        carried = old_next(pr, prs) if old_next is not None and pr is not None and pr.base != "main" else None
+        note = off_main_note(pr, prs, carried) if pr is not None else None
         if note:
             print(f"research queue ready: {note}", file=sys.stderr)
     if as_json:
@@ -5338,7 +5424,8 @@ def ready(github, store, number: int | None, by: str, tier: Callable[[PR], str |
 
 def _ready(github, store, number: int | None, by: str, tier: Callable[[PR], str | None], again: bool,
            preflight: Callable[[PR, list[PR]], str | None] | None, sha: str | None,
-           sleep: Callable[[float], None], records: Callable[[PR], str | None] | None = None) -> tuple[int, PR | None, list[PR]]:
+           sleep: Callable[[float], None], records: Callable[[PR], str | None] | None = None,
+           old_next: Callable[[PR, list[PR]], str | None] | None = None) -> tuple[int, PR | None, list[PR]]:
     if not sha and number is not None and (p := next((x for x in github.open_prs() if x.number == number), None)) and p.branch \
             and (tip := getattr(github, "branch_tip", lambda _b: None)(p.branch)):
         sha = tip                                           # a mark seconds after a push would preflight GitHub's old head
@@ -5359,6 +5446,9 @@ def _ready(github, store, number: int | None, by: str, tier: Callable[[PR], str 
         print(f"research queue ready: #{pr.number} is not marked: GitHub has its head at {pr.head[:12]}, not {sha[:12]}, after "
               f"{SHA_READS} reads {SHA_WAIT_S:g} s apart. Push {sha[:12]} to the PR's branch (or pass the head GitHub shows), then "
               "run this again", file=sys.stderr)
+        return 1, pr, prs
+    if pr.base == "main" and old_next is not None and (why := old_next(pr, prs)):
+        print(f"research queue ready: #{pr.number} is not marked ready at {pr.head[:12]}: {why}", file=sys.stderr)
         return 1, pr, prs
     if not again and (why := ejection(store, pr)):
         print(f"research queue ready: #{pr.number} is not marked ready at {pr.head[:12]}: that head was ejected: {why}. Push the fix "
@@ -6116,7 +6206,7 @@ def main(argv: list[str]) -> int:
             pre = None if a.no_preflight else Preflight(top, remote, store, lean=LakeBuild(on=PREFLIGHT_LEAN_ON, by=a.by),
                                                              root=a.preflight_root)
             return ready(GitHub(repo), store, a.pr, a.by, tier, again=a.again, preflight=pre, sha=a.sha, as_json=a.json,
-                         records=RecordsGate(top, remote, store))
+                         records=RecordsGate(top, remote, store), old_next=lambda pr, prs: old_next_at(top, remote, pr, prs))
         labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr), since=a.marked_after)
         q = Queue(a.workdir, remote=remote, github=GitHub(repo), ready=labels.ready, store=store, shadow=a.shadow,
                   rules=Rules.parse(a.rules.read_text(), str(a.rules)) if a.rules else None,
