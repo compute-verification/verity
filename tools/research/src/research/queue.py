@@ -161,8 +161,8 @@ that's unusable, a failed pull) the command fails with `STALE`, never answering 
 Preflight.  What breaks or cancels a train is cheap to catch at mark time: a conflict with a PR already on `next`, a stale Lake
 pin, a module string naming a module only an unlanded PR adds, a workspace member without its REAL_ROOTS entry, a test that reads
 a row another queued PR refits away (an error at collection), one lane's unlanded branch carried in two PRs, a merge of `next`
-that carries a PR's head the PR no longer lands (closed, rebuilt without it, or withdrawn: `stale_carried`; the sync leaves such
-a head off `next` too), and a failure of
+that carries a PR's head the PR no longer lands (closed, rebuilt without it, or withdrawn: `stale_carried`, after `old_next` for
+one closed unlanded; the sync leaves such a head off `next` too), and a failure of
 `tests/test_repository.py` (a Markdown cap, a report-genre name), which the preflight runs too, as it runs the landing gates the
 sync would (on the head; the sync, on its merge onto `next`).  A Lean change can pass its own Lean check and break a module
 another PR on `next` owns (a changed signature, dropped premises, a dropped import), which drive's Lean check of the stack finds
@@ -1291,16 +1291,13 @@ def contained(repo: Path, base: str, head: str, heads: dict[str, int]) -> list[i
 
 
 def carried_heads(repo: Path, landed: str, head: str) -> list[tuple[int, str, str]]:
-    """(N, H, C) for each commit C drive made on `next` for #N at head H (`Queue: #N`, its `PR:` and `Head:` lines) that
-    ``head`` holds above ``landed``, the landing branch's tip, newest first, but those whose H ``landed`` holds (a `next`
-    rebuilt since landed #N at a merge of its own): what a branch that merged `next` carries of the PRs on it."""
-    log = _out(repo, "log", "--format=%H%x1f%B%x1e", "--grep=^Queue: #", f"{landed}..{head}")
-    out = []
-    for c, _, body in (r.strip("\n").partition("\x1f") for r in log.split("\x1e") if r.strip()):
-        n, h = re.search(r"^PR: #(\d+)$", body, re.M), re.search(r"^Head: ([0-9a-f]{40})$", body, re.M)
-        if n and h and _git(repo, "merge-base", "--is-ancestor", h[1], landed, check=False).returncode:
-            out.append((int(n[1]), h[1], c))
-    return out
+    """(N, H, C) for each commit C drive made on `next` for #N at head H (`queue_commit`) that ``head`` holds above
+    ``landed``, the landing branch's tip, newest first, but those whose H ``landed`` holds (a `next` rebuilt since landed #N
+    at a merge of its own): what a branch that merged `next` carries of the PRs on it."""
+    log = _out(repo, "log", "--format=%H%x00%P%x00%B%x1e", "--grep=^Queue: #", f"{landed}..{head}")
+    made = (queue_commit(*r.strip().split("\x00", 2)) for r in log.split("\x1e") if r.strip())
+    return [(m.pr, m.head, m.commit) for m in made
+            if m and _git(repo, "merge-base", "--is-ancestor", m.head, landed, check=False).returncode]
 
 
 def stale_carried(repo: Path, carried: Iterable[tuple[int, str, str]], heads: dict[int, str],
@@ -1308,7 +1305,9 @@ def stale_carried(repo: Path, carried: Iterable[tuple[int, str, str]], heads: di
     """{N: the refusal} for each PR of ``carried`` (`carried_heads`) whose commits the head would land without it: #N is
     closed (not in ``heads``, each open PR's head), its current head doesn't hold the carried one (rebuilt without it), or it
     isn't admitted at its current head (``admitted``: why not, or None), as when its owner withdrew it after the branch
-    merged `next`: a branch that merged `next` doesn't carry a PR's change the way a rebuild does (`Queue._carried`)."""
+    merged `next`: a branch that merged `next` doesn't carry a PR's change the way a rebuild does (`Queue._carried`).  A
+    head based on `main` that carries the merge of a PR closed unlanded is refused before this, as one of an old `next`
+    (`old_next`), so for it a closed #N here landed at another commit (`queue_log`)."""
     out: dict[int, str] = {}
     for n, h, c in carried:
         if n in out:
@@ -1399,10 +1398,12 @@ def _move_message(pr: PR, tip: str, into: str, main: str) -> str:
 def queue_commit(commit: str, parents: str, body: str) -> Member | None:
     """The PR ``commit`` (its ``parents`` as `%P` gives them, its message ``body``) brings when the queue made it, else None:
     a merge of a PR onto `next` (`Queue: #N`, with its `PR`, `Head` and `Owner` trailers: `_message`), or a move drive
-    regenerated, one commit with a `Move:` trailer too (`_move_message`).  Never a lander's commit."""
-    t = dict(TRAILER_RE.findall(body))
-    if (len(parents.split()) > 1 or MOVE_TRAILER_RE.search(body)) and body.startswith("Queue: #") and {"PR", "Head", "Owner"} <= set(t):
-        return Member(int(t["PR"].lstrip("#")), t["Head"].strip(), t["Owner"].strip(), commit)
+    regenerated, one commit with a `Move:` trailer too (`_move_message`).  Never a lander's commit, nor one whose `PR` isn't
+    `#N` or whose `Head` isn't a full commit id, as no commit the queue made has."""
+    t = {k: v.strip() for k, v in TRAILER_RE.findall(body)}
+    if (len(parents.split()) > 1 or MOVE_TRAILER_RE.search(body)) and body.startswith("Queue: #") and {"PR", "Head", "Owner"} <= set(t) \
+            and re.fullmatch(r"#\d+", t["PR"]) and re.fullmatch(r"[0-9a-f]{40}", t["Head"]):
+        return Member(int(t["PR"][1:]), t["Head"], t["Owner"], commit)
     return None
 
 
