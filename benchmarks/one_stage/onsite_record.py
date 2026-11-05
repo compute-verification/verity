@@ -316,8 +316,9 @@ AUDIT = Path("v3c-audit") / "window" / "audit.json"
 PERIOD = Path("v3c-audit") / "period.json"
 #: the scan's counterpart of `PERIOD`, as the certifier piece publishes it beside the scan's circuit files: the scan's
 #: registration, as the case's commitment holds it (``windows[0]``), and each root template's circuit file by the
-#: SHA-512 every session of its members was held to (`scan_period.scan_circuits`)
+#: SHA-512 every session of its members was held to (`scan_period.scan_circuits`), in the format `SCAN_FORMAT`
 SCAN = CASE.parent / "scan-circuits.json"
+SCAN_FORMAT = "verity/scan-circuits/v1"
 CREDIT = ("sampled proofs credits only the drawn members whose --registered file named every port of their circuit at "
           "the window's committed roots: the audit completed it from the auditor's record before any session "
           "(`a5.complete_drawn`, its record's checks_after_draw.registered_complete), and the member's Lean verdict of "
@@ -427,7 +428,8 @@ CHECKED = {
                       "SHA-512 the file its sessions were verified against: an audit's, a5's per-template pin, which "
                       "records_audit.py period publishes in V3c's period.json (`PERIOD`) for the audit whose "
                       "registration it is; the scan's, its stagers' pins, which the certifier piece publishes in "
-                      "scan-circuits.json (`SCAN`) for the scan whose registration it is. It compares SHA-512s and "
+                      "scan-circuits.json (`SCAN`, a verity/scan-circuits/v1 record) for the scan whose registration "
+                      "it is. It compares SHA-512s and "
                       "doesn't re-hash the files: the period's listing and those records are the auditor's own outputs "
                       "in OUT. It holds where the period lists none, and not where the run has no case of the period "
                       "to say what it lists, or no record of the files it lists. Where it doesn't hold the network "
@@ -1427,8 +1429,10 @@ def auditor_listing(out: Path, case: Any) -> dict[str, Any]:
         except (OSError, KeyError, TypeError, ValueError) as e:
             return res | {"why": f"the period lists the scan's circuit files (scan_circuits), and {SCAN} or its case's "
                                  f"commitment can't be read: {type(e).__name__}"}
-        if not (isinstance(record, Mapping) and isinstance(windows, list) and windows
-                and record.get("registration") == windows[0]):
+        if not isinstance(record, Mapping) or record.get("format") != SCAN_FORMAT:
+            return res | {"why": f"the period lists the scan's circuit files, and the run's {SCAN} is no {SCAN_FORMAT} "
+                                 "record"}
+        if not (isinstance(windows, list) and windows and record.get("registration") == windows[0]):
             return res | {"why": f"the period lists the scan's circuit files, and the run's {SCAN} is another scan's"}
         if scan != record.get("circuits"):
             return res | {"why": f"the scan's listed circuit files aren't, by SHA-512, those its sessions were "

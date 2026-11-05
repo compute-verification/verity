@@ -1576,6 +1576,8 @@ SCAN_FILES = [{"sha512": "f1" * 64, "template": "scan-a"}]
                         "commitment can't be read: FileNotFoundError"),
     ("scan: another scan's record", f"the period lists the scan's circuit files, and the run's {OR.SCAN} is another "
                                     "scan's"),
+    ("scan: another format", f"the period lists the scan's circuit files, and the run's {OR.SCAN} is no "
+                             "verity/scan-circuits/v1 record"),
     ("scan: another file", "the scan's listed circuit files aren't, by SHA-512, those its sessions were verified "
                            f"against ({OR.SCAN}'s circuits)"),
 ])
@@ -1587,7 +1589,8 @@ def test_an_accepted_network_verdict_is_established_only_where_each_listed_circu
     registration is the one the commitment holds for the scan. Where it holds, the network certifier's accepted verdict
     stands, the run of record. Where it doesn't, whatever else holds, the verdict is not established, its Lean answer's
     accept beside it, with no bound and nothing conditional on the listing: another file, a file fewer, the period of
-    another audit, no published period, or for the scan's files no record, another scan's record or another file."""
+    another audit, no published period, or for the scan's files no record, a record of another format or scan, or
+    another file."""
     scan = how.startswith("scan: ")
     files = FILES if how != "one file fewer" else FILES[:1]
     listed = {"audits": [{"circuits": files}]} | ({"scan_circuits": SCAN_FILES} if scan else {})
@@ -1602,8 +1605,8 @@ def test_an_accepted_network_verdict_is_established_only_where_each_listed_circu
         held = [dict(SCAN_FILES[0], sha512="f3" * 64)] if how == "scan: another file" else SCAN_FILES
         window = {} if how != "scan: another scan's record" else {"format": NO_ADVICE["format"],
                                                                   "window": {"circuit": "ef" * 64}}
-        (out / OR.SCAN).write_text(json.dumps({"format": "verity/scan-circuits/v1", "registration": window,
-                                               "circuits": held}))
+        form = "verity/scan-circuits/v2" if how == "scan: another format" else "verity/scan-circuits/v1"
+        (out / OR.SCAN).write_text(json.dumps({"format": form, "registration": window, "circuits": held}))
     assert main([str(out)]) == 0
     rec = json.loads((out / "record" / "onsite.json").read_text())
     got, nv = rec["checked"][OR.AUDITOR_LISTING], rec["verdicts"]["the network certifier"]
