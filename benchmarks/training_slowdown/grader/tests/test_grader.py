@@ -20,13 +20,12 @@ from types import SimpleNamespace
 
 import pytest
 import torch
-from conftest import CC, LF, STEP, STRUCTURE, dot_alone
+from conftest import CC, LF, STEP, STRUCTURE, dot_alone, k16_steps, route_factor
 
 import grader as G
 from verity.ml.circuits.census import census
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.program import is_input
-from verity.ml.definitions.registry import cublas_bf16 as CB
 from verity_vllm.program.frontend.train_step import primitives
 
 aten = torch.ops.aten
@@ -170,20 +169,6 @@ def test_the_products_are_the_steps_matrix_products(step, steps, unit_prices) ->
     assert t["gates"] == sum(t["gates_by_op"].values()) == sum(t["gates_by_phase"].values()) == sum(r["gates"] for r in rows)
 
 
-def _k16_steps(h) -> collections.Counter:
-    """Each occurrence's k16 steps, the calls of its route cells' tensor-core dot: N for each 16 words of K, a grid.z slice's
-    words with its residue tile padded whole (`cublas_bf16.residue_first`)."""
-    nodes, calls = h.step.root.body.nodes, h.step.annotations["correspondence"]["calls"]
-    got: collections.Counter = collections.Counter()
-    for nd, c in zip(nodes[len(nodes) - len(calls):], calls):
-        if getattr(nd.fn, "base_id", G.CELL) in set(G.ROWS) - {G.CELL}:
-            b = nd.fn.bindings
-            k = (sum(hi - lo + CB.residue_first(lo, hi, b["TILE_K"])[1] for lo, hi in CB.aligned_bounds(b["K"], b["SPLIT_K"], b["ALIGN"]))
-                 if "ALIGN" in b else b["K"])
-            got[c["occ"]] += (nd.n if nd.form in ("batch", "scan") else 1) * b["N"] * k // 16
-    return got
-
-
 def test_the_gpu_steps_linears_are_its_tensor_cores_dots(steps, monkeypatch) -> None:
     """On sm_120 each linear's GEMM is its route's row cells (conftest's `ROUTES`: unsplit, split-K over a bf16 workspace,
     serial split-K and the three over grid.z), each k16 step a call of the tensor-core dot whose Boolean Definition the
@@ -195,7 +180,7 @@ def test_the_gpu_steps_linears_are_its_tensor_cores_dots(steps, monkeypatch) -> 
     price = dot_alone(monkeypatch, s.program)
     assert price["boolean"] == "HopperBF16WgmmaDot16_v2"
     h = G.load_handover(s.path)
-    out, k16 = G.read(h, CODE), _k16_steps(h)
+    out, k16 = G.read(h, CODE), k16_steps(h)
     mm, bmm = ([r for r in out["products"] if r["op"] == op] for op in G.PRODUCTS)
     assert {c.split("{")[0] for r in mm for c in r["cells"]} == set(G.ROWS) - {G.CELL}
     assert all(r["gates"] == k16[r["occ"]] * price["gates"] for r in mm)
@@ -204,7 +189,7 @@ def test_the_gpu_steps_linears_are_its_tensor_cores_dots(steps, monkeypatch) -> 
     assert padded and all(16 * k16[r["occ"]] > r["macs"] and "Aligned" in r["cells"][0] for r in padded)
     C = G.against(out, _trace(out["products"], 1.0, price["gates"] / 16), CODE)["C"]
     assert C["mm"]["circuit"] == out["totals"]["gates_by_op"]["mm"]
-    assert C["mm"]["ratio"] == pytest.approx(sum(16 * k16[r["occ"]] for r in mm) / sum(r["macs"] for r in mm))
+    assert C["mm"]["ratio"] == pytest.approx(route_factor(k16, out["products"])) and C["mm"]["ratio"] > 1
 
 
 def test_a_structure_of_another_step_is_refused(steps) -> None:
