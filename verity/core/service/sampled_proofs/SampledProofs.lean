@@ -1,5 +1,6 @@
 import SampledProofs.Json
 import SampledProofs.Program
+import SampledProofs.Bits
 import SampledProofs.Partition
 import SampledProofs.PartitionRef
 import SampledProofs.Draw

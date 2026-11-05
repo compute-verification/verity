@@ -106,19 +106,21 @@ def test_the_pieces_period_and_answer_are_of_the_public_kinds_in_either_layout(t
 
 
 def test_a_field_no_declaration_names_is_a_finding_wherever_it_lies(tmp_path, period):
-    """The window's own number in V3c's provenance (which counts the run's windows), a count of requests in the
-    period's answer and in an execution phase's one-stage answer, and an advice length beside the parameters."""
+    """The window's own number in each audit's V3c provenance (which counts the run's windows), a count of requests in
+    the period's answer and in an execution phase's one-stage answer, and an advice length beside the parameters."""
     case, answer = _case(period, V3C_WINDOW | {"window_circuit": {"class": [4, 32, 4, 4, 16], "window": 3}})
+    n = len(case["params"]["audits"])
     ev = json.loads(bytes.fromhex(case["evidence"]))
     ev["windows"][0]["answer"]["public"]["requests"] = 7
     case = {**case, "evidence": canonical_json(ev).hex(), "params": {**case["params"], "advice_bits": REALIZED}}
     answer = answer | {"public": answer["public"] | {"requests": 7}}
-    want = [("answer.json", "public.requests"), ("case.json", "commitment.audits[].window.window_circuit.window"),
+    want = [("answer.json", "public.requests"),
+            *[("case.json", "commitment.audits[].window.window_circuit.window")] * n,
             ("case.json", "evidence.windows[].answer.public.requests"), ("case.json", "params.advice_bits")]
     assert sorted(_paths(KS.scan(_dir(tmp_path / "dir", case, answer))[0])) == want
     held = KS.scan(_dir(tmp_path / "hold", case, answer, hold=True))[0]
     assert sorted(_paths(held)) == [("answer.json", "public.requests"),
-                                    ("period/commitment.bin", "audits[].window.window_circuit.window"),
+                                    *[("period/commitment.bin", "audits[].window.window_circuit.window")] * n,
                                     ("period/evidence.json", "windows[].answer.public.requests"),
                                     ("period/params.json", "advice_bits")]
     assert KS.main([str(tmp_path / "dir")]) == 1
@@ -126,16 +128,18 @@ def test_a_field_no_declaration_names_is_a_finding_wherever_it_lies(tmp_path, pe
 
 def test_an_audit_that_opened_the_advice_is_a_finding_naming_the_check_at_any_length(tmp_path, period):
     """An advice binding (`interface.advice_binding`: the compiler and the advice's root and length) in an audit's
-    registration is what `records_audit.py audit --opening` opens, so it is `OPENING`'s finding at the padded width ℓ_a
-    as at the realized length, in either layout, the finding's text holding neither length."""
+    registration is what `records_audit.py audit --opening` opens, so it is `OPENING`'s finding (each audit's) at the
+    padded width ℓ_a as at the realized length, in either layout, the finding's text holding neither length."""
     for bits in (L_A, REALIZED):
         v3c = V3C_WINDOW | {"compiler": {"name": "i2", "digest": "04" * 64, "commit": "05" * 20},
                             "advice": {"root": "06" * 64, "bits": bits}}
         case, answer = _case(period, v3c)
+        n = len(case["params"]["audits"])
         for hold, at in ((False, "case.json"), (True, "period/commitment.bin")):
             found = KS.scan(_dir(tmp_path / f"{bits}-{hold}", case, answer, hold))[0]
             pre = "commitment." if not hold else ""
-            assert sorted(_paths(found)) == [(at, f"{pre}audits[].window.advice"), (at, f"{pre}audits[].window.compiler")]
+            assert sorted(_paths(found)) == sorted(
+                [(at, f"{pre}audits[].window.advice"), (at, f"{pre}audits[].window.compiler")] * n)
             assert all(f.why == KS.OPENING.why and str(bits) not in str(f) for f in found)
     assert KS.main([str(tmp_path / f"{L_A}-False")]) == 1
 

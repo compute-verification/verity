@@ -29,11 +29,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.ml.circuits.codec import canonical_json, encode_program
+from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.types import Array, Value as Bits
 from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.ml.windows import interface as IF
 
 HERE = Path(__file__).resolve().parents[1]
 PERIOD_CASE = HERE.parents[1] / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
@@ -669,13 +670,23 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
                                                                for r in reg["roots"]] for d in x["registrations"])
     ports = sz.ports_of(sz.TEST.cls)
     bits = {tp: dict(ins + outs) for tp, (ins, outs) in ports.items()}
-    assert PC.params(p).scan == PC.Scan(T, 0, 16 + bits["first"]["o1"] + bits["first"]["o2"], 16 + bits["egress"]["o1"],
-                                        E * bits["first"]["prog0"])
+    def w(b: int) -> int:
+        return -(-b // 16)
+
+    ins = {tp: sum(w(b) for _, b in ports[tp][0]) for tp in ports}
+    # each parameter and each return field on whole 16-bit words of its own, o0 one
+    assert PC.params(p).scan == PC.Scan(
+        T, 0, PC.vu_bits(1, max(ins["first"], ins["ingress"] if T > 1 else 0) + 1 + w(bits["first"]["o1"])
+                         + w(bits["first"]["o2"])),
+        PC.vu_bits(1, ins["egress"] + 1 + w(bits["egress"]["o1"])), E * bits["first"]["prog0"])
     out = PC.reference(case)
     assert (out["verdict"], out["reason"]) == ("reject", f"window 0: {PC.UNWIRED}"), out
     monkeypatch.setattr(PC, "SLOT_ENTRY_PINS", (*PC.SLOT_ENTRY_PINS, digest))
     out = PC.reference(case)
     assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, 2 * T), out
+    assert p["circuit"] == audit["registration"]["program"]
+    window_record = tmp_path / "window-circuit.json"
+    window_record.write_text(json.dumps({"format": IF.CIRCUIT, "program": program_digest(encode_program(block))}))
     resigned = published(tmp_path / "resigned", sz.TEST, seed=b"another network certifier", windows=1)
     with pytest.raises(SystemExit, match="deployment.json names another key than the auditor's record's$"):
         SP.rows_case(resigned, scan, record=auditors)
@@ -688,9 +699,15 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
         (v3c := tmp_path / f"period-subset-{k}.json").write_text(json.dumps(sampled := block_audit(progs, sampled=k)))
         (scan / "summary.json").write_text(json.dumps({**summary, "v3c": {
             "registration": R.digest(sampled["registration"])}}))
-        got = PC.reference(SP.rows_case(run, scan, v3c=v3c, record=auditors))
+        got = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit=SP.circuit_of_record(window_record),
+                                         record=auditors))
         assert (got["verdict"], got["public"]["audits"][0]["drawn"], got["public"]["audits"][0]["units"]) == (
             "accept", k, E), got
+        assert got["public"]["held"] == ["circuit", "free"], got
+        got = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit="ab" * 64, record=auditors))
+        assert (got["verdict"], got["reason"]) == ("reject", f"window 0: {PC.UNHELD}"), got
+    with pytest.raises(SystemExit, match="held to the verifier's own window-circuit record"):
+        SP.rows_case(run, scan, v3c=v3c, record=auditors)
     refused = {r: PC.reference(SP.rows_case(run, scan, r, record=auditors)) for r in ("forged", "tampered", "chain")}
     assert {r: (a["verdict"], a["reason"]) for r, a in refused.items()} == {
         "forged": ("reject", "window 0: certificates (none of a window in which the network certifier refused a "

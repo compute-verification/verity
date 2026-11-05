@@ -725,15 +725,18 @@ def test_the_piece_publishes_no_count_of_the_window_and_the_guard_moves_out_what
     assert not any(p.is_file() for p in hold.rglob("*"))
 
 
-def _v3c(serve: Path, period: dict | None = None, committed: bool = True) -> Path:
+def _v3c(serve: Path, period: dict | None = None, committed: bool = True, circuit: bool = True) -> Path:
     """V3c's directory beside the window (`served_verdicts.sh`'s ``$D/v3c-w<K>-<class>``): its committed window (only
-    its registration, which the chain step looks for) and, given, its period.json."""
+    its registration, which the chain step looks for), given, its period.json, and beside it the verifier's own
+    window-circuit record at its class (``$D/window-circuit-w<K>-<class>.json``, `CIRCUIT`)."""
     v3c = serve / "v3c-w3-8-32-4-4-16"
     (v3c / "window").mkdir(parents=True)
     if committed:
         (v3c / "window" / "registration.json").write_text("{}")
     if period is not None:
         (v3c / "period.json").write_text(json.dumps(period))
+    if circuit:
+        (serve / "window-circuit-w3-8-32-4-4-16.json").write_text(json.dumps(CIRCUIT))
     return v3c
 
 
@@ -769,15 +772,17 @@ def _lean(tmp_path: Path, answer: dict) -> list[str]:
 #: period check here is a stub)
 PERIOD = {"answer": {"verdict": "accept"}, "free": 5, "program": {"v3c": 1}, "registration": {"program": "cd" * 64},
           "steps": 0}
+#: the verifier's own window-circuit record at V3c's class, the fields `scan_period.circuit_of_record` reads
+CIRCUIT = {"format": "verity/window-circuit/v1", "program": "c3" * 64}
 
 
 def test_the_split_piece_chains_on_v3cs_window_and_checks_its_period_json(tmp_path, warden, period, capsys,
                                                                             monkeypatch):
     """The chain step runs the chain with its scan on V3c's window (``--class w63k4 --v3c V3C/window`` first in
     CR_SCAN_ARGS) and marks DIR/chain.json; the period step reads that chain's report again, without running it, and
-    checks the rows case whose one compute audit is V3c's period.json, its answer the one `pieces` reads (with
-    CERTIFIER_CMD ``true``, as `served_verdicts.sh` sets it) into the block record, its case written and both steps'
-    logs kept."""
+    checks the rows case whose one compute audit is V3c's period.json, held to the class circuit of the verifier's own
+    window-circuit record beside V3c, its answer the one `pieces` reads (with CERTIFIER_CMD ``true``, as
+    `served_verdicts.sh` sets it) into the block record, its case written and both steps' logs kept."""
     accept = period.reference(period.case("accept", 1, "clock"))
     d = _serve_dir(tmp_path / "serve", warden)
     v3c, piece = _v3c(d), tmp_path / "pieces" / "certifier"
@@ -791,6 +796,7 @@ def test_the_split_piece_chains_on_v3cs_window_and_checks_its_period_json(tmp_pa
     assert _hook("period", d, piece, v3c, *_lean(tmp_path, accept)) == 0, (piece / "period.log").read_text()
     params = json.loads((tmp_path / "seen" / "params.json").read_text())
     assert params["audits"] == [{k: PERIOD[k] for k in ("program", "steps")}]
+    assert params["circuit"] == CIRCUIT["program"]
     assert json.loads(bytes.fromhex(json.loads((piece / CP.CASE).read_text())["commitment"]))["audits"] == [
         PERIOD["registration"]]
     got = S.pieces(d, K, tmp_path / "pieces", env=dict(os.environ, CERTIFIER_CMD="true"))
@@ -812,16 +818,17 @@ def test_a_chain_the_split_rejects_stands_and_its_period_step_checks_nothing(tmp
 
 
 @pytest.mark.parametrize("case", ["no v3c window", "time limit", "no chain step", "a scan of no v3c", "no period.json",
-                                  "no record", "re-signed fetch"])
+                                  "no window-circuit record", "no record", "re-signed fetch"])
 def test_a_split_step_that_cant_run_refuses_keeping_both_logs(case, tmp_path, warden, monkeypatch):
     """The chain step refuses without V3c's committed window, which its scan reads, when its limit (CERTIFIER_TIMEOUT)
     ends it, without the auditor's record of the run's deployment (``CERTIFIER_KEY``) and when the kept fetch was
     re-signed under another key than the record's; the period step then refuses too, naming the chain's refusal. The
-    period step refuses where no chain step accepted in DIR, where the chain's scan read no V3c window, and where V3c
-    wrote no period.json: DIR keeps its logs and refused.txt, and the certifier is missing."""
+    period step refuses where no chain step accepted in DIR, where the chain's scan read no V3c window, where V3c wrote
+    no period.json, and where the verifier kept no window-circuit record beside V3c, whose class circuit V3c's audit is
+    held to: DIR keeps its logs and refused.txt, and the certifier is missing."""
     d = _serve_dir(tmp_path / "serve", warden, fetch="resigned" if case == "re-signed fetch" else "fetch")
-    v3c, piece = _v3c(d, None if case == "no period.json" else PERIOD, committed=case != "no v3c window"), \
-        tmp_path / "pieces" / "certifier"
+    v3c, piece = _v3c(d, None if case == "no period.json" else PERIOD, committed=case != "no v3c window",
+                      circuit=case != "no window-circuit record"), tmp_path / "pieces" / "certifier"
     args = _chained(tmp_path, None if case == "a scan of no v3c" else v3c, w=warden["w"])
     if case == "time limit":
         args = ["--rows", str(_stub_rows(tmp_path)), "--chain-cmd", 'kill -TERM "$PPID"; while :; do :; done']
@@ -836,6 +843,7 @@ def test_a_split_step_that_cant_run_refuses_keeping_both_logs(case, tmp_path, wa
             "no chain step": "no chain.json in DIR: the chain step (CERTIFIER_CHAIN_CMD) didn't run",
             "a scan of no v3c": f"the chain's scan read no V3c window, not {v3c / 'window'}",
             "no period.json": "the period's rows case: FileNotFoundError",
+            "no window-circuit record": "the verifier's window-circuit record: FileNotFoundError",
             "no record": "no auditor's record of the network certifier's deployment (--certifier-key, CERTIFIER_KEY)",
             "re-signed fetch": "witness/deployment.json names another key than the auditor's record's"}[case] in why, why
     logs = {"chain.log", "period.log"} - ({"chain.log"} if case == "no chain step" else set())
