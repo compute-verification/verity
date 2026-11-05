@@ -1,0 +1,37 @@
+# The memory challenger's code out of PoUS's verifier: what `tools/move/layout.py --map tools/move/pous_devices_map.toml`
+# moves and rewrites. `verity/core/protocols/pous` holds PoUS's verifier, and the memory challenger is an auditor-trusted
+# device, so its code goes beside its Lean in `verity/core/devices/memory_challenger`.
+#
+# - `memory_challenger.py` (the device's rounds, verdicts and signed session log) and `challenger_party.py` (its party of
+#   the deployment layer) move to `verity/core/devices/memory_challenger/` under their own names, so
+#   `verity.core.protocols.pous.memory_challenger` becomes `verity.core.devices.memory_challenger.memory_challenger`.
+# - The package's `__init__.py` files, and `tests/test_boundaries.py`'s unit `core.devices.memory_challenger`, land before
+#   the move: `layout.py` would otherwise create the files, which a pure move can't add.
+# Nothing is split, edited or deleted, and no file is added. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+
+[paths]
+"verity/core/protocols/pous/memory_challenger.py" = "verity/core/devices/memory_challenger/memory_challenger.py"
+"verity/core/protocols/pous/challenger_party.py" = "verity/core/devices/memory_challenger/challenger_party.py"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), and files
+# whose bytes a digest pins.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`)
+"verity.core.protocols.pous.challenger_party" = "verity.core.devices.memory_challenger.challenger_party"
+"verity.core.protocols.pous.memory_challenger" = "verity.core.devices.memory_challenger.memory_challenger"
