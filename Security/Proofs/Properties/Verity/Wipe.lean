@@ -14,7 +14,7 @@ as the wipe's game (`Vocab.wipeRun`), keeps foreign content past the survivor th
 (`Vocab.ComponentBound k .wipe`, `Vocab.sound_of`), and that bound, at each `θ F c σ`, from four things
 (`Vocab.wipe_bound`):
 
-* **The survivor bound.** The wipe that opens the period (`Vocab.wipe θ (Vocab.circuitFile θ F)`) meets
+* **The survivor bound.** The wipe that opens the period (`Vocab.wipe θ F`) meets
   `Verity.Wipe.SurvivorBound` at the published threshold and an `ε` of the adversary's moves. For `verity/wipe/v0` that
   is `MemoryChallenger.Properties.WipeSurvivorBound` at the device's strategy (`eps` plus the labels' PRF advantage plus
   `δ_net`, on the event the auditor's devices observe), at the `foreign_bits` the accepted case publishes, and at any
@@ -85,9 +85,9 @@ theorem wipe_bound [Fintype V.Seed] [Nonempty V.Seed] [Fintype V.Spots] [Nonempt
     (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Game.Strategy (V.game θ F c)) (brk : Exchange → Prop)
     {ε : (S_φ : ℕ) → ((Fin S_φ → Bool) → Device.State d) →
-      (Device.State d → (Fin (V.wipe θ (V.circuitFile θ F)).egress → Bool) → V.Spots → Fin S_φ → Bool) →
+      (Device.State d → (Fin (V.wipe θ F).egress → Bool) → V.Spots → Fin S_φ → Bool) →
       ℝ≥0∞}
-    (hw : (V.wipe θ (V.circuitFile θ F)).SurvivorBound (V.foreignBits θ) ε)
+    (hw : (V.wipe θ F).SurvivorBound (V.foreignBits θ) ε)
     (hR : (V.wipeRun θ F c σ).Preserves σ)
     (hA : V.WipeRefines k θ F c σ brk)
     (hε : ε (V.wipeRun θ F c σ).S_φ (V.wipeRun θ F c σ).hold (V.wipeRun θ F c σ).keep ≤
@@ -131,9 +131,9 @@ theorem componentBound_wipe [Fintype V.Seed] [Nonempty V.Seed] [Fintype V.Spots]
     (brk : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Game.Strategy (V.game θ F c) →
       Exchange → Prop)
     (ε : (θ : ByteArray) → (F : Array ByteArray) → (S_φ : ℕ) → ((Fin S_φ → Bool) → Device.State d) →
-      (Device.State d → (Fin (V.wipe θ (V.circuitFile θ F)).egress → Bool) → V.Spots → Fin S_φ → Bool) →
+      (Device.State d → (Fin (V.wipe θ F).egress → Bool) → V.Spots → Fin S_φ → Bool) →
       ℝ≥0∞)
-    (hw : ∀ θ F, (V.wipe θ (V.circuitFile θ F)).SurvivorBound (V.foreignBits θ) (ε θ F))
+    (hw : ∀ θ F, (V.wipe θ F).SurvivorBound (V.foreignBits θ) (ε θ F))
     (hR : ∀ θ F c σ, (V.wipeRun θ F c σ).Preserves σ)
     (hA : ∀ θ F c σ, V.WipeRefines k θ F c σ (brk θ F c σ))
     (hε : ∀ θ F c σ, ε θ F (V.wipeRun θ F c σ).S_φ (V.wipeRun θ F c σ).hold (V.wipeRun θ F c σ).keep ≤
@@ -147,9 +147,9 @@ theorem wipeSound_of_survivor [Fintype V.Seed] [Nonempty V.Seed] [Fintype V.Spot
     (brk : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Game.Strategy (V.game θ F c) →
       Exchange → Prop)
     (ε : (θ : ByteArray) → (F : Array ByteArray) → (S_φ : ℕ) → ((Fin S_φ → Bool) → Device.State d) →
-      (Device.State d → (Fin (V.wipe θ (V.circuitFile θ F)).egress → Bool) → V.Spots → Fin S_φ → Bool) →
+      (Device.State d → (Fin (V.wipe θ F).egress → Bool) → V.Spots → Fin S_φ → Bool) →
       ℝ≥0∞)
-    (hw : ∀ θ F, (V.wipe θ (V.circuitFile θ F)).SurvivorBound (V.foreignBits θ) (ε θ F))
+    (hw : ∀ θ F, (V.wipe θ F).SurvivorBound (V.foreignBits θ) (ε θ F))
     (hR : ∀ θ F c σ, (V.wipeRun θ F c σ).Preserves σ)
     (hA : ∀ θ F c σ, V.WipeRefines k θ F c σ (brk θ F c σ))
     (hε : ∀ θ F c σ, ε θ F (V.wipeRun θ F c σ).S_φ (V.wipeRun θ F c σ).hold (V.wipeRun θ F c σ).keep ≤
