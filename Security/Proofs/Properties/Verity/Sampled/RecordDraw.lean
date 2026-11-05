@@ -710,9 +710,10 @@ def recordDrawn (L : Flock.Draw.Law) (n : ℕ) (units : Array ℕ) (record : Str
     Flock.Witness.recordDraw record = some (Flock.Draw.UnitDraw.toJson ⟨L, n, units, #[]⟩)
 
 /-- **v2 holds the record's draw to its own** in what composite `k` accepts: wherever `k` accepted what the prover sent
-as a `same` composition and v2 drew `units` over `n` units there (`Drew`, under any law), the record v2 reads there is
-their subset draw (`recordDrawn` at `.subset units.size`). Without the acceptance, the record `sentRecord` finds by id
-can be another entry's than the case `Drew` reads in order. -/
+as a `same` composition and v2 drew `units` over `n` units there (`Drew`, under the verifier's law), the record v2
+reads there is the `.subset` print of those units (`recordDrawn` at `.subset units.size`), the member's share of the
+window's draw; the bound is the verifier's law's, from v1's window check. Without the acceptance, the record
+`sentRecord` finds by id can be another entry's than the case `Drew` reads in order. -/
 def DrawHeld (k : Verity.Registration.Composite) : Prop :=
   ∀ s dr L n ξ units record, Verity.SameAccepts k s → Drew k s dr L n ξ units → sentRecord s = some record →
     recordDrawn (.subset units.size) n units record

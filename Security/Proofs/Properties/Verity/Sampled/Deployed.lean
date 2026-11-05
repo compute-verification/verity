@@ -14,10 +14,10 @@ to cite:
 
 * **The draw file** (`printedDraw law`): at each draw `S`, the one `flock-verify draw` prints for the verifier's own draw
   of `S` under `law` over the `n` proof blocks (`UnitDraw.toJson` of `ZkLink.drawOf`); at a subset law it is
-  `Claims.Bridge.CustodyZkP.djPrinted` (`printedDraw_subset`). The session v2 sets up has no `--stratified` input, so
-  its draw file is the subset law's of the draw's `kd` units whatever law the verifier draws by (`Live.dj`), which
-  decodes to the draw it printed (`drawFileZK_printedDraw`, the subset law's round trip
-  `ZkLink.drawFileZK_of_toJson_subset`).
+  `Claims.Bridge.CustodyZkP.djPrinted` (`printedDraw_subset`). The session's draw file is the `.subset` print of the
+  member's share of the window's draw under the verifier's law `L`, its `kd` units (`Live.dj`), and the bound comes
+  from v1's window check (`SampledProofs.OneStage.checkAt`); the print decodes to the draw it printed
+  (`drawFileZK_printedDraw`, the subset law's round trip `ZkLink.drawFileZK_of_toJson_subset`).
 * **`live-verifier` at the writer** (`recordCustodyZKJPLaw_deployed`): `RecordCustodyZKJPLaw` at the writer that keeps an
   accepted record (`Claims.Bridge.CustodyZkP.wrZP`), the printed subset draw file and its law, at any inputs and public
   inputs (`SetsUp`'s `own = none` among them).

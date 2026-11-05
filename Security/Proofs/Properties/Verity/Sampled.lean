@@ -24,13 +24,14 @@ files and at the strategy a strategy of the period's game projects to. This modu
   `flock-verify` no recomputation of public input words, so `HmIn.checkOwn` refuses any circuit that names one, and the
   session's ports are `HmIn.parse`'s empty ones. What the period's registration fixes is the session's, not a field:
   the registration the prover sends before the draw is the registration record's digest, which the composite's
-  commitment binds and the draw's coins are released after (`Live.Reg`); the record's draw file is the one
-  `flock-verify draw` prints for the verifier's own draw of `kd` units under the subset law, whatever law the draw is
-  by, since the session has no `--stratified` input (`printedDraw`, `Live.dj`), so V5's `hsz` holds at it (`Live.hsz`), each round's digest SHA-512 (`Live.dg`), and the writer one that writes, at a draw's live
-  outcome, a transcript `verify --zk` accepts recording it (`Live.wr`, `wrZP`), so what it writes at the outcome an
-  accepted transcript's files decode to is accepted, and V5's `RecordCustodyZKJPLaw` holds at it under the draw file's
-  law with no premise (`Live.hCust`). At the device's bytes as deployed, its one-stage rounds' bytes in order, A3 holds with no
-  premise (`Live.deployed`).
+  commitment binds and the draw's coins are released after (`Live.Reg`); the record's draw file is the `.subset` print
+  of the member's share of the window's draw under the verifier's law `L`, its `kd` units (`printedDraw`, `Live.dj`),
+  so V5's `hsz` holds at it (`Live.hsz`), and the bound comes from v1's window check (`SampledProofs.OneStage.checkAt`,
+  which v2 runs at the window and which derives the draw under the verifier's own law); each round's digest is SHA-512
+  (`Live.dg`); and the writer is one that writes, at a draw's live outcome, a transcript `verify --zk` accepts recording
+  it (`Live.wr`, `wrZP`), so what it writes at the outcome an accepted transcript's files decode to is accepted, and
+  V5's `RecordCustodyZKJPLaw` holds at it under the draw file's law with no premise (`Live.hCust`). At the device's
+  bytes as deployed, its one-stage rounds' bytes in order, A3 holds with no premise (`Live.deployed`).
 * **The draw** (`Live.L`): the law the parameters' selection rule derives over the population (`law`), drawn as
   `SampledProofs.Select.select` draws it, by `SampledProofs.Draw.drawUnits` on the device's one byte stream (`src`); a
   draw that fails draws every unit. It is V5's draw at the session's bytes and law (`Live.L_eq`, `Flock.Bridge.execSel`).
@@ -264,9 +265,11 @@ opens; the device refuses every tree past its caps (`Verity.releases`), so every
 at every session. -/
 noncomputable def hidingTerm (_ : Live) : ℝ≥0∞ := 2 * (maxLeaves : ℝ≥0∞) / 2 ^ 257
 
-/-- **The session's draw file**: at each draw, the one `flock-verify draw` prints for the verifier's own draw of the
-session's `kd` units under the subset law (`printedDraw`). The session v2 sets up has no `--stratified` input, so
-`verify --zk` admits only a subset draw (`recordDraw_subset`): whatever law v2 draws by, its draw file is a subset print. -/
+/-- **The session's draw file**: at each draw, the `.subset` print `flock-verify draw` gives of the session's `kd` units
+(`printedDraw`), the member's share of the window's draw under the verifier's law `L`; `verify --zk` at the session
+admits only a subset draw (`recordDraw_subset`). The bound comes from v1's window check
+(`SampledProofs.OneStage.checkAt`), which v2 runs at the window and which derives the draw under the verifier's own
+law. -/
 abbrev dj : Finset (Fin A.n) → Lean.Json := printedDraw (.subset A.kd)
 
 /-- **V5's `hsz` at the session**: the draw file decodes only to `kd` units (`drawSize_deployed`). -/
@@ -288,7 +291,7 @@ noncomputable abbrev wr : (S : Finset (Fin A.n)) → (R : A.Reg) →
   Claims.Bridge.CustodyZkP.wrZP A.I A.own A.dj fun S R => (planZHJP (Reg := A.Reg) A.dj A.y₀ S R).length
 
 /-- **`live-verifier` at the writer under the draw file's law**, as V5 reads it, holds with no premise: the record's draw
-is the printed subset draw of `kd` units (`recordCustodyZKJPLaw_deployed`). -/
+is the `.subset` print of the session's `kd` units (`recordCustodyZKJPLaw_deployed`). -/
 theorem hCust : FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw (mPts := mPtsOf A.D.unroll.g (A.kd / nTab A.I))
     A.I A.own A.dj (fun S R => (planZHJP (Reg := A.Reg) A.dj A.y₀ S R).length) A.wr (.subset A.kd) :=
   recordCustodyZKJPLaw_deployed A.I A.own A.kd _

@@ -18,8 +18,10 @@ v2's hold on the record's `unit_draw` (`DrawHeld`). This module gives what v2's 
 * **v2 accepts only a subset draw** (`recordDraw_subset`): where v2's case accepts, the record v2 reads holds a draw,
   since `verify --zk` refuses a session without one (`verdictOf_drawn`); its law is one a soundness claim draws by at
   `--zk` (`ProvedScope.drawLaw`, `lawWhy_zk`), the subset or the stratified law; and the session v2 sets up has no
-  `--stratified` input, so `Stmt.setupTables` refuses a stratified draw (`setupTables_stratified`). So `DrawHeld` reads
-  the record's draw at the subset law of the units v2 drew, whatever law v2 drew them by.
+  `--stratified` input, so `Stmt.setupTables` refuses a stratified draw (`setupTables_stratified`). So the record's draw
+  is the `.subset` print of the member's share of the window's draw under the verifier's law, which `DrawHeld` reads at
+  the units v2 drew; the bound is that law's, from v1's window check (`SampledProofs.OneStage.checkAt`), not the
+  print's.
 * **A subset draw that decodes is its own print** (`ofJson_subset_eq`): a value `norm` fixes that `UnitDraw.ofJson`
   decodes to a subset draw is an object of exactly `law`, `population`, `k` and `units` (`obj_eq_mkObj4`), so it is the
   draw's print at no closure, its units ascending below its population. The record's draw is rebuilt

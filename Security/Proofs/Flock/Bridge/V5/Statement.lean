@@ -22,8 +22,8 @@ holds at every `own`:
   miss of a set `B` of proof blocks (`P_a(B)` of `designOf (oneStageOf law)` on `partOf P κ ns`), not a parameter;
 * `live-verifier` at `own` and the draw file's law `lawF` (`Assumptions.Zk.RecordCustodyZKJPLaw`), a law over strata of
   sizes `nsF` drawing `kd` proof blocks (`Bridge.LawOn`), so its draw files decode to `kd` units (`Bridge.lawOn_size`).
-  The session's draw file may print the verifier's draw under a law other than the one it draws by: a session without a
-  `--stratified` input prints it as a subset draw;
+  The draw file's law need not be the one the verifier draws by: a member's session prints its share of the window's
+  draw under `law` as a `.subset` draw, and `δ` stays `law`'s;
 * the constants `Bridge.constsOfP`: `constsOf`'s constant and zero, and each proof block's public gates at its public input
   words' bits in the population's public file (`HiddenExec.pubBitOf`). The verifier derives the public inputs, so the
   statement fixes them, and a public gate is read with no opening;
