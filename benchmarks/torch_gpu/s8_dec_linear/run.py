@@ -6,7 +6,7 @@ RN_bf16((f32(acc) * s_a) * s_w)), then timed.
 Parts, in order; each writes JSON lines to OUT/run.jsonl and a failed gate stops the run before anything is timed:
 
   device     the card, its SMs and each staging variant's registers, shared memory and resident CTAs an SM
-  encode     memory-accounting's encode (`p2_v1.gpu.Kernels.encode`, v4 keys) of a real INT8 tensor's blocks, timed: the encode
+  encode     PoUS's encode (`p2_v1.gpu.Kernels.encode`, v4 keys) of a real INT8 tensor's blocks, timed: the encode
              rate, and that its own decode gives the rows back
   codewords  those codewords decoded by every staging variant into the tensor's staging buffer: equal to the tensor, no flag;
              sampled blocks against the CPU reference
@@ -333,7 +333,7 @@ def part_time(kern: Kernels, st: dict[str, Stage], sv0: Stage, pfx: bytes, tenso
         sv.decode(mt["c"], mt["j0"], pfx, mt["base"], mt["length"], nxt[mt["name"]], grid=grid, stream=stream)
 
     def decode_p2v1(mt: dict, grid: int = 0, stream=None) -> None:
-        # memory-accounting's two kernels (keys, then decode) on the tensor's blocks, then their payload bytes into staging
+        # PoUS's two kernels (keys, then decode) on the tensor's blocks, then their payload bytes into staging
         with torch.cuda.stream(stream or torch.cuda.current_stream(dev)):
             m = kern.decode(mt["c"], mt["j0"])
             nxt[mt["name"]].copy_(m[:, 2:].reshape(-1)[mt["off"]:mt["off"] + mt["length"]])

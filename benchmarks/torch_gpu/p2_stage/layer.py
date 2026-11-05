@@ -9,7 +9,7 @@
   each tensor's SHA-256, which every staged tensor is held to) and `W` a file holding the stream's bytes at their stream
   offsets (`weights write`), at least the layer's; without `W`, the few stream bytes a run reads (the scales, a
   matrix's last label) come from the seeded generator (`--generator`, `--shape`, `--weights-seed`).
-- `ENC` is an encoded store (`p2_v1/store.py encode`'s directory, memory-accounting's, read only): the layer's rows from
+- `ENC` is an encoded store (`p2_v1/store.py encode`'s directory, PoUS's, read only): the layer's rows from
   its `seg/<s>.c` files, each held to its `seg/<s>.json`'s SHA-512, under the salt `setup.draw_salt` of the coin and
   commitment its `setup.json` is held to (`layout.store_salt`). `DIR` is a development store instead: `c.bin`, the
   encoded rows of the layer's blocks, and `c.json` (the first block, the count, how many are encoded so far, and the
@@ -127,7 +127,7 @@ class DevStore:
 
 
 class EncodedStore:
-    """An encoded store's blocks (`p2_v1/store.py encode`'s directory, memory-accounting's, read only): the layer's rows
+    """An encoded store's blocks (`p2_v1/store.py encode`'s directory, PoUS's, read only): the layer's rows
     from its `seg/<s>.c` files, each file held to the SHA-512 its `seg/<s>.json` records."""
 
     def __init__(self, root: Path, lay: L.StoreLayout, blocks: range, setup: dict) -> None:
@@ -202,7 +202,7 @@ def against_stream(lay, src: L.Weights, read: L.Read, layer: int, name: str, buf
 
 def against_manifest(src: L.Weights, layer: int, name: str, host: np.ndarray, scales: bool = False) -> dict | None:
     """Whether each of the matrix's tensors (or their scales) in `host`, one after another, has the SHA-256 the weights
-    manifest gives it (`manifest --digests`, the digests memory-accounting held W to); None when it gives none."""
+    manifest gives it (`manifest --digests`, the digests the store was encoded against); None when it gives none."""
     rows = [src.rows[f"l{layer}.{p}{'.scale' if scales else ''}"] for p in L.PARTS[name]]
     if any("sha256" not in r for r in rows):
         return None

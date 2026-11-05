@@ -1,15 +1,15 @@
 # p2_stage: the staging decode
 
 The simplest exact path from the P2-encoded weights store to the W8A8 GEMM on one H200: decode a
-layer's matrix with memory-accounting's P2 decode, unchanged, into a plaintext staging buffer, then run the exact GEMM
-on that buffer.
+layer's matrix with PoUS's P2 decode (`benchmarks/pous/p2_v1`), unchanged, into a plaintext staging buffer, then run
+the exact GEMM on that buffer.
 
 - `layout.py`: where a layer's matrices lie in the store (`StoreLayout`), read by `store_layout` from the store's
-  layout JSON (memory-accounting's `p2_v1/store.py layout`, or its toy's `toy.json`): each tensor from a label boundary,
+  layout JSON (`p2_v1/store.py layout`, or its toy's `toy.json`): each tensor from a label boundary,
   zero past its end, and at its `staging_offset` in its layer's staging buffer. `Weights` is the plaintext, the seeded
   weights stream (`e2e_h200.served_weights`), and `payloads` lays it out as the store's W. `check_blocks` holds
   rows to it by P2's reference decode of one label (`p2_v1/store.py`'s `decode_block`), the check's ground truth.
-  `open_store` takes the store: memory-accounting's encoded store (`p2_v1/store.py encode`'s segment files, read by
+  `open_store` takes the store: PoUS's encoded store (`p2_v1/store.py encode`'s segment files, read by
   `segment_rows`), under `store_salt`, `setup.draw_salt` of the coin and commitment its `setup.json` is held to; or a
   development store under a public test salt.
 - `stage.py`: `decode_matrix(store, layer, tensor, out_buf)` and the fixture's `decode_layer(store, layer, staging)`,
@@ -21,7 +21,7 @@ on that buffer.
   evaluates `ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}` on samples.
 - `layer.py`: the GPU driver for one layer (the fixture's toy, encode a development store across leases, stage, gemm at
   each batch M). Every staged tensor is held to the stream's bytes and to the weights manifest's SHA-256 (the digests
-  memory-accounting held W to). `check.py` runs on the CPU afterwards: every label of the layer against the reference,
+  the store was encoded against). `check.py` runs on the CPU afterwards: every label of the layer against the reference,
   and the samples against the Definition.
 - `full.py`: the whole store a step: every tensor of the 52 layers and the head staged one at a
   time from the store's segment files (each held to its SHA-512), the last timed decode of each held to the weights
@@ -41,8 +41,8 @@ on that buffer.
   from the pass's σ, and sampled units' σ from C*); `bw_check.py` holds the GPU to the fixture and times the receipts
   at the store's size (`bw.sh`).
 - `build.sh` builds `libp2v1.so` for sm_90a on a CPU node by P2's own Makefile. `session.sh` is one run on
-  vy-dc-h200 under an untimed `gpu-lease`, from memory-accounting's store (`ENCODED=1`, the layer's segment files sent
-  with the run) or a development store. `full.sh` runs `full.py` on the demo card over memory-accounting's finished
+  vy-dc-h200 under an untimed `gpu-lease`, from PoUS's encoded store (`ENCODED=1`, the layer's segment files sent
+  with the run) or a development store. `full.sh` runs `full.py` on the demo card over PoUS's finished
   store in place, read only. Each script's header gives its command line.
 
 The decode is libp2v1's, unchanged. Both GEMMs are `int_mm.linear` (`benchmarks/torch_gpu/s8_linear/int_mm.py`, the
