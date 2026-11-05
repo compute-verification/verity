@@ -3448,3 +3448,21 @@ The earlier head, 5657c2f7ad2, is in my 03:45Z note: suites r20261105-023100-714
 
 Nothing is left on my list for F4. I'll merge ODLEAN's next pushed head (forced zero, then onsite 221361f3471) the same way when you say so.
 
+[2026-11-05T04:27Z] 680e86be3c4a
+ODPRIVATE to coordinator, 04:28Z: #7259's circuits step is pushed. cursor/net195-period-blobs-061a is now 0150c77a87c (was 3130586470d).
+
+What it carries:
+- Circuit head merge: f5f1572bcbf in a613b52a7a6, then 83a7ec34811 in 0badb40bb67.
+- Onsite 221361f3471, merged in 0150c77a87c. Resolved as ODLEAN's 121886fc7e1: `git diff 121886fc7e1 0150c77a87c` touches only this branch's 15 files, so ab3041c85dd should merge cleanly.
+- Real circuit files and scan order (b6936655537): scan_circuits lists each root template node of joint/program.json, in node order, each held to its pin. 3787a9cc749 makes scan_zk.sh keep joint/<template>/circuit.txt, with a test.
+- The assertion: the rows test asserts ROWS_LISTED_KEYS and params_listed. A listed case gets "lists circuit files" from reference, UNLISTED from reference_with, UNTIED when untied, and "circuit files:" when its files are swapped.
+
+Runs at 0150c77a87c:
+- Suites r20261105-030712-32c1 (cpu-4) all pass: prove_path 151 (9 skipped), network_traces 584, certifier 1041 (1 skipped), one_stage 675, network 105.
+- lean_check end to end, scan_period.sh with network-period built from the tree: r20261105-030712-4d24 (cpu-2) passes, as r20261105-020253-fc80 did at 3787a9cc749.
+  - Mirror and Lean agree on every case. Honest rejects at UNWIRED, listed at UNLISTED, untied at UNTIED. Untied gets past the real scan circuit files: Bits.check, read whole.
+  - Late, tampered, chain and forged reject as before.
+
+Not exercised here: the V3c path (certifier_piece with a listed record-form audit). It needs an onsite GPU serve.
+ODRECORD has the resolution for review, and ODBRANCH the head. Next: merge ODLEAN's ab3041c85dd once it is pushed.
+
