@@ -1,0 +1,6 @@
+# The generous bound in all orders (HT-GENEROUS), fourth pass: 70B L53 q, whose least (svd/384, 1.05002 over credit)
+# is within the parabola's 2e-5 of the line, at the quarter-steps either side of 384; one rank per job, so they run at once
+70b-q-l53-r368 --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 53 --match q_proj --ranks 368 --orders none,fold,sort --no-isvd --no-rpca --workers 1
+70b-q-l53-r376 --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 53 --match q_proj --ranks 376 --orders none,fold,sort --no-isvd --no-rpca --workers 1
+70b-q-l53-r392 --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 53 --match q_proj --ranks 392 --orders none,fold,sort --no-isvd --no-rpca --workers 1
+70b-q-l53-r400 --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 53 --match q_proj --ranks 400 --orders none,fold,sort --no-isvd --no-rpca --workers 1
