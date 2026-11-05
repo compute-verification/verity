@@ -13,9 +13,9 @@ circuit and values, 1 on the constants and 0 on the zero, which are public:
 "Wrong" is measured on the audit's circuit `C`, at the committed values: the circuit the statement's rows make, each unit
 its template's rows (`Prog.circuit`: the circuit is chosen on the untrusted side, and the lowering does
 no optimizing). `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn` state it there, with each drawn unit's place from its
-table's statement (`ProgPlaces`). What a correct unit computes is the certificate's: rows that are `GateRows.rows` of a
-gate circuit `G` compute `G`, so a correct unit's committed values compute `G` (`IsRowsUnit.computes_of_cert`,
-`Certificate.lean`). The only cryptographic assumption is `SHA512CRExpected`, for the link finders built from the prover
+table's statement (`ProgPlaces`). Rows that are `GateRows.rows` of a gate circuit `G`, satisfied with the constant 1,
+carry `G`'s outputs (`GateRows.rows_sound`); no theorem carries that to a correct unit's committed values
+(`ASSUMPTIONS.md`). The only cryptographic assumption is `SHA512CRExpected`, for the link finders built from the prover
 the theorem bounds (`hCR : LinkCR … (reg σ) (cont σ) …`), not from every prover at once. `ε_ks(σ)` is the prover's
 collision advantages; under `SHA512CRStrict` it is at most `StrictCR.ksAvgStrict` (`StrictCR.ksAvgBE_le_strict`), which
 the `_hm96` forms state (`Binding/E2E.lean`).

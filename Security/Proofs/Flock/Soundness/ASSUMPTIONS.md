@@ -247,9 +247,9 @@ design, and the `_exec` forms at uniform byte tapes (`Binding/E2E.lean`). `flock
 and `hS`; the other three don't.
 
 **What it bounds.** The headline bounds incorrect proof blocks of the pinned rows circuit; "computes the Definition" also
-needs `RowsCert` per template and the Definition's Boolean semantics in Lean (The circuit and the certificate, below).
-Once every Definition lowers to a Boolean circuit over AND, XOR and NOT, a generic
-Boolean-semantics lemma replaces the per-template `RowsCert`.
+needs each template's rows to be its gate circuit's and the Definition's Boolean semantics in Lean, which no theorem
+states (The circuit and the certificate, below). Once every Definition lowers to a Boolean circuit over AND, XOR and
+NOT, one generic Boolean-semantics lemma can state it for every template.
 
 **Its coins.** The statement is for live uniform OS coins flipped each round: the model's proof coins are uniform and
 sampled after the prover's message, as the coin server's `os` coins are under A6. M0's non-ZK session samples them under
@@ -376,17 +376,15 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
 
 - **The circuit and the certificate** (no hypothesis). The end-to-end theorems are about `C = Prog.circuit`, the circuit
   the statement's rows make, each unit its template's rows; "incorrect" is measured there. The headline bounds incorrect proof blocks
-  of the pinned rows circuit; "computes the Definition" additionally needs `RowsCert` per template and the Definition's
-  Boolean semantics in Lean. That is a separate theorem, `IsRowsUnit.computes_of_cert`
-  (`Certificate.lean`): when the unit's rows are the rows `GateRows.rows G L` derives from a gate circuit
-  `G` (`RowsCert`) and `G` computes a definition `D` (`∀ x, G.eval x = D x`, `G` being `D`'s lowering, which is in
-  Python, not Lean), a unit that is correct, with its constant 1, carries on each committed output wire `D`'s output
-  on its input wires. `RowsCert` is a fact about finite data; `∀ x, G.eval x = D x` is not, and nothing in Lean ties `D`
-  to a Definition until its Boolean semantics is stated there. `Types.Dag.layout_sound` (its type's outputs, for every
-  checked typed layout) and `GateRows.rows_sound` (for rows derived from any gate circuit and layout) prove
-  that rows satisfied with the constant 1 carry the gate circuit's outputs, checked in the kernel. Once every Definition
-  lowers to a Boolean circuit over AND, XOR and NOT, a generic Boolean-semantics lemma replaces the
-  per-template `RowsCert`.
+  of the pinned rows circuit; "computes the Definition" additionally needs each template's rows to be the rows
+  `GateRows.rows G L` derives from a gate circuit `G` at a layout `L`, `G` to compute a definition `D`
+  (`∀ x, G.eval x = D x`, `G` being `D`'s lowering, which is in Python, not Lean), and the Definition's Boolean
+  semantics in Lean, and no theorem carries them to a unit's committed output wires. The first is a fact about finite
+  data; `∀ x, G.eval x = D x` is not, and nothing in Lean ties `D` to a Definition until its Boolean semantics is
+  stated there. `Types.Dag.layout_sound` (its type's outputs, for every checked typed layout) and `GateRows.rows_sound`
+  (for rows derived from any gate circuit and layout) prove that rows satisfied with the constant 1 carry the gate
+  circuit's outputs, checked in the kernel. Once every Definition lowers to a Boolean circuit over AND, XOR and NOT,
+  one generic Boolean-semantics lemma can state it for every template.
 - **The statement's form** is no hypothesis: `verify` refuses forms the proof omits (PROTOCOL.md §16.15).
 - **The link points' layout** is a hypothesis (`Statement.LinkLayout`). Each region's free bits must be distinct and
   read link coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …` must fit inside the point. The
@@ -470,8 +468,7 @@ and the batched session's `flock_batched_knowledgeSoundE`), and the link theorem
 So are the headline, `Prog.flock_headline` (its footprint is The headline, above), and the theorems the footprints cite
 as proved: the `StrictCR` terms (`table_sound_compiled_strict`, `ksBoundAccB_le_strict`, `ksAvgBE_le_strict`,
 `tree_le_strict`, `TreeRewind.le`, `TreeRewind.ofNever_bound`), `Teeth`'s four (`strict_of_injective`,
-`expected_of_injective`, `not_strict_const`, `not_expected_const`), `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn`,
-and the certificate's `IsRowsUnit.computes_of_cert`.
+`expected_of_injective`, `not_strict_const`, `not_expected_const`), `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn`.
 The `cr/sha-512` restatements are pinned beside them (`FlockSoundness.CROnly`: `expected_of_strict`, `linkCR_of_strict`,
 `linkBoundE_at_cube`, each `flock_e2e_*`, `uprog_e2e_*`, `prog_e2e_*` and `flock_headline`), and so is zero knowledge's
 `Hm96Hiding`, proved: `hm96Hiding_gap` (no hypothesis, at `δ₁` the hiding gap), the leftover hash lemma
