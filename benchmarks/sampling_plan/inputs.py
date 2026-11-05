@@ -27,11 +27,9 @@ I = {
     "rounds": Input(48_000, 48_000, 48_000, "a week of rounds (the budget model's S)", "A"),
     "tokens_per_s": Input(20_000, 8_000, 40_000, "int8 Llama-3.1-8B on one RTX PRO 6000: 7.2G MACs a token at 2K context "
                           "against 5e14 MAC/s dense int8 at 30-40% (prefill) down to decode's weight-bandwidth bound", "A"),
-    "context": Input(2048, 2048, 2048, "prefill at 2K, positions uniform (the budget model's binding cell)", "A"),
-    "step_tokens": Input(256, 64, 2048, "tokens a forward step (a replay unit is one layer of one step)", "A"),
-    "replay_layer_step": Input(5.2e-4, 1.0e-4, 2.0e-3, "one layer of one step re-executed from its committed input: its "
-                               "weights' read (218 MB at 1.8 TB/s) plus 256 tokens at the plain rate; Qwen3-8B on H200 "
-                               "is 0.18 ms a layer-step at B32", "A"),
+    "context": Input(2048, 2048, 2048, "prefill at 2K, positions uniform (the budget model's binding cell): a request is "
+                     "one prompt of it, re-run whole from its committed tokens and the weights to rebuild a drawn proof "
+                     "block's witness, at `tokens_per_s`", "A"),
     "commit_per_byte": Input(4.34e-12, 2.2e-12, 1.3e-11, "SHA-512 rows on H200: 3.62 ps a byte plus 2.94 ns a 4 KiB leaf; "
                              "sm_120 taken at 0.5-3x", "M"),
     "commit_floor": Input(0.060, 0.045, 0.101, "the one serve-time term of the 'floor' scheme: the measured "
