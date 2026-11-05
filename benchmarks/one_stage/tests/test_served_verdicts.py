@@ -2787,6 +2787,7 @@ COMPOSED_AUDIT = FAKE_RECORDS_AUDIT.replace('    (out / "summary.json").write_te
     if os.environ.get("V2_CASE"):
         blobs = [str(w / "m1" / "circuit.txt"), str(w / "m0-private.bin")]
         (w / "case-v2.json").write_text(json.dumps({"blobs": blobs}))
+        (w / "public-pin.json").write_text("{}")
 ''')
 #: a step that notes the circuit files left under V3c's dir when it runs
 LEFT = '(cd "{at}" && find . -name circuit.txt | sort) > "$ORDER.left-{step}"'
@@ -2823,7 +2824,8 @@ def test_the_follow_on_removes_the_windows_circuit_files_after_its_period_check_
 def test_the_follow_on_hands_the_onsite_record_remotes_sampled_proofs_case_before_removing_the_files_it_registers(
         tmp_path):
     """Where the composite step wrote remote's sampled proofs case under the serve dir's private/, the onsite record is
-    handed it (--sampled-proofs-case), whose registered files it hashes, so it runs before the follow-on removes the
+    handed it (--sampled-proofs-case), whose registered files it hashes, and the audit's pin of its public files at
+    staging, before the draw (--public-pin, its window/public-pin.json), so it runs before the follow-on removes the
     circuit file the audit's v2 case names: it finds that file there, and the file goes after it."""
     assert _deferred(tmp_path, CERTIFIER_FRONT="front", WINDOW_STEPS="1", MAX_TOKENS="1").returncode == 0
     d, out, vw = tmp_path / "serve", tmp_path / "out", tmp_path / "serve" / f"v3c-w7-{VTAG}"
@@ -2837,7 +2839,8 @@ def test_the_follow_on_hands_the_onsite_record_remotes_sampled_proofs_case_befor
     assert rc == 0 and order == ["audit", "period", "record", "composite", "onsite"], (lines, order)
     assert json.loads((tmp_path / "order.onsite").read_text()) == [
         str(out), "--window-steps", "1", "--max-tokens", "1",
-        "--sampled-proofs-case", str(d / "private" / "sampled-proofs" / "case.json"), "--h1-tie"]
+        "--sampled-proofs-case", str(d / "private" / "sampled-proofs" / "case.json"),
+        "--public-pin", str(vw / "audit" / "window" / "public-pin.json"), "--h1-tie"]
     assert (tmp_path / "order.left-onsite").read_text().split() == ["./audit/window/m1/circuit.txt"]
     assert [x.split(" ")[0] for x in lines[-2:]] == ["ONSITE", "V3C-CIRCUITS"] and not list(vw.rglob("circuit.txt"))
 

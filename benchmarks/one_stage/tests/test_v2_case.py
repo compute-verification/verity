@@ -1,8 +1,9 @@
 """v2_case.py: sampled proofs v2's case of a served window from its kept files. The rebuild reads what a served run's
 ``m0/compose.log`` (``fixtures/served-window-m0``, a served H200 run's) records, the case names the auditor's challenger
 by its key record and carries the window's kept release of the draw's coins, a release naming another key is refused,
-and the case is written private as `composite.py` reads it, or, when a blob has no file or the release is refused, only
-``missing.json``, which `composite.py` leaves out."""
+the public file is named by a5's pin of it at staging, before the draw, a public file changed after the draw and a
+window with no pin refused, and the case is written private as `composite.py` reads it, or, when a blob has no file or
+the case is refused, only ``missing.json``, which `composite.py` leaves out."""
 
 from __future__ import annotations
 
@@ -11,6 +12,7 @@ import importlib.util
 import json
 import stat
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -60,13 +62,20 @@ def test_a_case_with_its_blobs_is_written_private(tmp_path):
     assert json.loads((out / "case.json").read_text())["blobs"] == [str(blob)]
 
 
+PUBLIC = b"header\npublic"
+
+
 def kept_window(root: Path, RP) -> Path:
-    """A served window's kept files as `prove_path/run.sh` keeps them: one member, m0, its one session."""
+    """A served window's kept files as `prove_path/run.sh` keeps them: one member, m0, its one session, and a5's pin of
+    its public file at staging (`a5.public_pin`)."""
     w = root / "window"
     (w / "m0").mkdir(parents=True)
     (w / "m0" / "compose.log").write_text(LOG.read_text())
     (w / "m0" / "circuit.txt").write_text("gates")
-    (w / "m0" / "pub-4.bin").write_bytes(b"public")
+    (w / "m0" / "pub-4.bin").write_bytes(PUBLIC)
+    member = types.SimpleNamespace(key="m0-key")
+    (w / a5.PIN).write_text(json.dumps(a5.public_pin([{"k": 0, "m": member, "st": {"public": hashlib.sha512(
+        PUBLIC).hexdigest()}}], {"m0-key": a5.body(w / "m0" / "pub-4.bin")})))
     s = w / "session-m0" / "sessions" / "a"
     s.mkdir(parents=True)
     (s / "session.json").write_bytes(b"{}")
@@ -146,6 +155,52 @@ def test_a_release_naming_another_key_than_the_auditors_record_is_refused(tmp_pa
     with pytest.raises(SystemExit):
         V.main(["--window", str(w), "--out", str(out), "--scratch", str(tmp_path / "scratch"),
                 "--challenger-key", str(tmp_path / "no-record.json")])
+
+
+@pytest.mark.parametrize("how, why", [
+    ("changed after the draw", f"the kept public file isn't, by SHA-512, the one {a5.PIN} pinned at staging"),
+    ("no pin", f"the window kept no {a5.PIN} naming m0"),
+])
+def test_a_public_file_not_the_one_pinned_at_staging_is_refused(tmp_path, RP, capsys, how, why):
+    """θ names the public file by a5's pin of it at staging, before the draw (`a5.PIN`), never by the kept file's
+    SHA-512 read after it, which the prover could choose: a public file changed after the draw, or a window that kept no
+    pin, is refused, and the case directory keeps only ``missing.json``."""
+    w, out = kept_window(tmp_path, RP), tmp_path / "v2"
+    argv = ["--window", str(w), "--out", str(out), "--scratch", str(tmp_path / "scratch")]
+    assert V.main(argv) == 0
+    assert json.loads((out / "params.json").read_text())["proofs"]["public"] == hashlib.sha512(PUBLIC).hexdigest()
+    if how == "no pin":
+        (w / a5.PIN).unlink()
+    else:
+        (w / "m0" / "pub-4.bin").write_bytes(b"header\nanother public")
+    with pytest.raises(V.Refused, match=why):
+        V.case(w, tmp_path / "scratch")
+    capsys.readouterr()
+    assert V.main(argv) == 2
+    assert why in V2CASE(capsys.readouterr().out)["refused"]
+    assert [f.name for f in out.iterdir()] == ["missing.json"] and C.case_dirs([out]) == []
+
+
+def test_the_onsite_record_reads_a5s_pin_against_the_registration_the_coins_committed_to(tmp_path, RP):
+    """The pin a5 writes (`a5.public_pin`) is the one the onsite record reads (`onsite_record.pinned`): its leaf layer
+    is the window's over the public bodies (`rows.leaf_layer`), so the registration that holds it (R4) holds the pin,
+    and the kept public file is its member's; a registration holding another leaf layer doesn't."""
+    import onsite_record as OR
+
+    from verity.ml.circuits.codec import canonical_json
+    from verity.ml.windows import rows
+
+    w = kept_window(tmp_path, RP)
+    pub, pin = w / "m0" / "pub-4.bin", w / a5.PIN
+    layer = rows.leaf_layer({"m0-key": a5.body(pub)})
+    assert json.loads(pin.read_text())["leaf_layer"] == layer
+
+    def registration(leaf_layer: str) -> str:
+        return canonical_json({"format": "verity/registration/v1", "leaf_layer": leaf_layer}).hex()
+
+    assert OR.pinned(pin, registration(layer), {registration(layer)}, pub) is None
+    other = registration("00" * 64)
+    assert "leaf layer" in OR.pinned(pin, other, {other}, pub)
 
 
 def test_a_blob_with_no_file_leaves_only_missing(tmp_path):

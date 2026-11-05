@@ -25,8 +25,8 @@ its certifier-key record's key, LMS parameters and session are the period's, and
 holds that key for a network certifier its log places. Where a circuit file the period lists isn't the one V3c's
 published period names, or the scan's files are listed, an accepted network verdict is not established and there is
 no bound; so it is, and the composite of record's verdict too, where a file remote's sampled proofs case registers
-isn't, by SHA-512, the one its params name, and where those params name no public file, sampled proofs' verdict is not
-established. Sampled proofs credits only the drawn members whose
+isn't, by SHA-512, the one its params name, or its public file the one V3c's audit pinned at staging, before the draw,
+and where those params name no public file, sampled proofs' verdict is not established. Sampled proofs credits only the drawn members whose
 --registered files its audit completed and whose Lean verdicts reported exactly their reads, naming each other member
 as not credited. PoUW's freed compute is never credited or claimed, whatever its row states, and neither is one
 program a day, each open by name beside what the run's lines say. The run's `publish` leaves the record as written.
@@ -67,6 +67,7 @@ import warden_chain as WC  # noqa: E402
 from verity.core import site as S  # noqa: E402
 from verity.core.protocols import registration as REG  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import audit as A  # noqa: E402
+from verity.ml.circuits.codec import canonical_json  # noqa: E402
 
 NODE = "computeinstance-toy"
 SCAN = {"delta": "1/1048576", "drawn": 126, "units": 126, "wrong_units": 0, "free": 9088, "faulty_sets": 0,
@@ -129,32 +130,50 @@ def site_registration(held: str = CERT_KEY["public"], placed: str | None = None,
 
 def auditor_args(out: Path) -> dict[str, Path]:
     """The auditor's inputs `served_out` writes beside ``out``, and remote's sampled proofs case under the serve dir
-    beside it, as `OR.record` takes them."""
+    beside it with V3c's audit's pin of its public files, as `OR.record` takes them."""
     return {"certifier_key": out.parent / "auditor" / "certifier-key.json",
             "site_registration": out.parent / "auditor" / "site-registration.json",
-            "sampled_case": out.parent / "serve" / "private" / "sampled-proofs" / "case.json"}
+            "sampled_case": out.parent / "serve" / "private" / "sampled-proofs" / "case.json",
+            "public_pin": out.parent / "serve" / "v3c" / "audit" / "window" / "public-pin.json"}
 
 
-#: the circuit and public files remote's sampled proofs case registers, its first two blobs (`proofs.evidence_v2`)
-FILES_REGISTERED = (b"toy circuit\n", b"toy public file")
+#: the circuit and public files remote's sampled proofs case registers, its first two blobs (`proofs.evidence_v2`), the
+#: public file a header line and its body
+FILES_REGISTERED = (b"toy circuit\n", b"toy public header\ntoy public body")
 
 
 def sha512_hex(b: bytes) -> str:
     return hashlib.sha512(b).hexdigest()
 
 
+def pin_of(public: bytes) -> dict:
+    """a5's pin at staging (`a5.public_pin`) of a window whose one member's public file is ``public``."""
+    body = sha512_hex(public.partition(b"\n")[2])
+    return {"format": "verity/public-pin/v1", "leaf_layer": sha512_hex(canonical_json({"m0": body})),
+            "members": {"m0": {"k": 0, "file": sha512_hex(public), "body": body}}}
+
+
+def registration_of(pin: dict) -> str:
+    """The case's commitment: a registration record, as canonical JSON in hex, holding ``pin``'s leaf layer."""
+    return canonical_json({"format": "verity/registration/v1", "leaf_layer": pin["leaf_layer"]}).hex()
+
+
 def sampled_case(out: Path, proofs: dict | None = None, evidence: dict | None = None) -> Path:
     """Remote's sampled proofs case beside ``out`` (`auditor_args`), as `served_cases.sampled_case` writes one: its blobs
-    `FILES_REGISTERED` and a session's file, its params θ naming ``proofs`` (both files' SHA-512s unless given) and its
-    ``evidence``."""
-    f = auditor_args(out)["sampled_case"]
+    `FILES_REGISTERED` and a session's file, its params θ naming ``proofs`` (both files' SHA-512s unless given), its
+    commitment the registration holding the leaf layer of a5's pin of the public file at staging, written beside it
+    (`pin_of`), and its ``evidence``."""
+    f, pin = auditor_args(out)["sampled_case"], auditor_args(out)["public_pin"]
     f.parent.mkdir(parents=True, exist_ok=True)
+    pin.parent.mkdir(parents=True, exist_ok=True)
     blobs = [f.parent.parent.parent / n for n in ("circuit.txt", "pub-1.bin", "session.json")]
     for b, data in zip(blobs, (*FILES_REGISTERED, b"{}")):
         b.write_bytes(data)
+    pin.write_text(json.dumps(pin_of(FILES_REGISTERED[1])))
     proofs = {"circuit": sha512_hex(FILES_REGISTERED[0]), "public": sha512_hex(FILES_REGISTERED[1]),
               "registered": None} if proofs is None else proofs
-    f.write_text(json.dumps({"params": {"form": "one-stage", "proofs": proofs}, "commitment": "00",
+    f.write_text(json.dumps({"params": {"form": "one-stage", "proofs": proofs},
+                             "commitment": registration_of(pin_of(FILES_REGISTERED[1])),
                              "evidence": json.dumps((evidence or {}) | {"form": "one-stage"}).encode().hex(),
                              "blobs": [str(b) for b in blobs]}))
     return f
@@ -181,7 +200,7 @@ def main(argv: list[str]) -> int:
     if argv and not argv[0].startswith("--"):
         a = auditor_args(Path(argv[0]))
         argv = [*argv, "--certifier-key", str(a["certifier_key"]), "--site-registration", str(a["site_registration"]),
-                "--sampled-proofs-case", str(a["sampled_case"])]
+                "--sampled-proofs-case", str(a["sampled_case"]), "--public-pin", str(a["public_pin"])]
     return OR.main(argv)
 
 
@@ -374,11 +393,13 @@ def with_composite(out: Path, name: str, product: str, ids: tuple[str, ...], ver
                    missing: tuple[str, ...] = (), inference_only: str = "accept") -> Path:
     """``out`` with ``product``'s composite.json in composite/NAME: a case of each of ``ids`` but those ``missing``,
     which it names, inference-only's answering ``inference_only`` and each other accepting, the network certifier's
-    with the params of OUT's case and remote's sampled proofs' with those of its case beside OUT (`composed`,
-    `sampled_case`), and Lean's ``verdict``."""
-    stated = {OR.NETWORK: composed(out), SAMPLED_V1: composed(out, auditor_args(out)["sampled_case"])}
+    with the params of OUT's case and remote's sampled proofs' with the params and commitment of its case beside OUT
+    (`composed`, `sampled_case`), and Lean's ``verdict``."""
+    sampled = auditor_args(out)["sampled_case"]
+    stated = {OR.NETWORK: composed(out), SAMPLED_V1: composed(out, sampled)}
+    commits = {SAMPLED_V1: json.loads(sampled.read_text())["commitment"]} if sampled.is_file() else {}
     cases = [{"id": i, "verdict": inference_only if i == OR.INFERENCE_ONLY else "accept",
-              "params_sha512": stated.get(i, "00"), "commitment": "00"}
+              "params_sha512": stated.get(i, "00"), "commitment": commits.get(i, "00")}
              for i in ids if i not in missing]
     (out / "composite" / name).mkdir(parents=True, exist_ok=True)
     (out / "composite" / name / "composite.json").write_text(json.dumps(
@@ -1710,6 +1731,8 @@ def test_a_period_listing_no_circuit_files_holds_auditor_listing_and_one_with_no
 
 
 NOT_THETAS = "the {} file the case registers (its blob {}) isn't, by SHA-512, θ's proofs.{}"
+#: the public file changed after the draw, its header kept
+CHANGED = b"toy public header\nanother public body"
 
 
 @pytest.mark.parametrize("how, why", [
@@ -1722,6 +1745,12 @@ NOT_THETAS = "the {} file the case registers (its blob {}) isn't, by SHA-512, θ
                   "case states (its params_sha512)"),
     ("no case", f"the run's composites read {SAMPLED_V1}'s case, and the run gave no --sampled-proofs-case"),
     ("a file gone", "the case's circuit file (its blob 0) can't be read: FileNotFoundError"),
+    ("a public file changed after the draw",
+     "the public file the case registers isn't, by SHA-512, one --public-pin pinned at staging before the draw"),
+    ("a public file changed after the draw, the pin with it",
+     "--public-pin's bodies aren't, by their leaf layer, those the registration the case commits to holds (R4)"),
+    ("no pin", "the run gave no --public-pin, the public file's SHA-512 pinned at staging before the draw"),
+    ("another commitment", "the case's commitment isn't the one each composite that reads the case states"),
 ])
 def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_only_where_each_file_is_the_one_theta_names(
         tmp_path, how, why):
@@ -1730,17 +1759,25 @@ def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_onl
     Where θ names both files and both are its, every verdict stands and the run is of record. Where θ names no public
     file, the public file isn't bound: sampled proofs' verdict is not established, its accept beside it, so the run
     isn't of record, the circuit file still compared, and the evidence's digest of the public file never stands in for
-    θ's. Where a file isn't θ's (the circuit file or the public file), θ isn't the one the composite states, the run
-    gave no case or a file it registers is gone, auditor-listing doesn't hold: the network certifier's verdict and the
-    composite of record's are not established, each its Lean accept beside it, with no bound, and the run isn't of
-    record."""
+    θ's. Where θ names the public file, it is also the one V3c's audit pinned at staging, before the draw
+    (``--public-pin``): a public file changed after the draw, θ naming the changed one, isn't the pin's, and a pin
+    rewritten to it isn't, by its bodies' leaf layer, the registration's the case commits to, which the coins committed
+    to. Where a file isn't θ's (the circuit file or the public file), θ isn't the one the composite states, the run
+    gave no case or a file it registers is gone, the public file isn't the pinned one, or the run gave no pin or its
+    case commits to a registration the composite doesn't state, auditor-listing doesn't hold: the network certifier's
+    verdict and the composite of record's are not established, each its Lean accept beside it, with no bound, and the
+    run isn't of record."""
     out = accepted(tmp_path)
     circuit, public = (sha512_hex(b) for b in FILES_REGISTERED)
     unbound = how.startswith("public unbound")
+    changed = how.startswith("a public file changed after the draw")
     if unbound:
         sampled_case(out, {"circuit": circuit, "registered": None}, evidence={"proofs": {"public": public}})
+    elif changed:
+        sampled_case(out, {"circuit": circuit, "public": sha512_hex(CHANGED), "registered": None})
     with_composite(out, "remote-network-no-pouw", WITHOUT, WITHOUT_IDS)
-    blobs = json.loads(auditor_args(out)["sampled_case"].read_text())["blobs"]
+    case = auditor_args(out)["sampled_case"]
+    blobs = json.loads(case.read_text())["blobs"]
     if how.endswith("another circuit file"):
         Path(blobs[0]).write_bytes(b"another circuit\n")
     elif how == "another public file":
@@ -1749,13 +1786,20 @@ def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_onl
         sampled_case(out, {"circuit": circuit, "public": public, "registered": {"reads": []}})
     elif how == "a file gone":
         Path(blobs[0]).unlink()
-    rec = record(out, **({"sampled_case": None} if how == "no case" else {}))
+    elif changed:
+        Path(blobs[1]).write_bytes(CHANGED)
+        if how.endswith("the pin with it"):
+            auditor_args(out)["public_pin"].write_text(json.dumps(pin_of(CHANGED)))
+    elif how == "another commitment":
+        case.write_text(json.dumps(json.loads(case.read_text()) | {"commitment": registration_of(pin_of(CHANGED))}))
+    rec = record(out, **({"sampled_case": None} if how == "no case" else {"public_pin": None} if how == "no pin"
+                         else {}))
     v, listing = rec["verdicts"], rec["checked"][OR.AUDITOR_LISTING]
     files, line = listing["registered_files"], OR.summary(rec)
     assert (files["holds"], files["read_by"], files.get("why"), files.get("unbound")) == (
         why is None, [WITHOUT], why, OR.PUBLIC_UNBOUND if unbound else None)
     assert (listing["holds"], listing.get("why"), listing["listed"]) == (why is None, why, 0)
-    if why is None or how in ("another public file", "a file gone"):
+    if why is None or how in ("another public file", "a file gone", "no pin", "another commitment") or changed:
         assert files["compared"] == (["circuit"] if unbound else ["circuit", "public"])
     withheld = (["sampled proofs"] if unbound else []) + ([] if why is None else ["the network certifier", "onsite"])
     assert rec["of_record"]["not_established"] == withheld and rec["of_record"]["holds"] is (not withheld)

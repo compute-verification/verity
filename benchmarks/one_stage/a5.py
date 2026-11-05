@@ -59,7 +59,9 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   (`compose_circuit.py --template`, once per template, every chunk on that circuit, read and hashed once,
   `flock_inputs.flock_circuit`), bound to its partition and program. It holds every public file to that circuit, its unit indices and classes, and
   the registered roots and served domains. Then R1-R7 run over the registration with the leaf layer over the public bodies it holds
-  (`serving_rows.leaf_layer`), and the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`:
+  (`serving_rows.leaf_layer`), read from ``out/public-pin.json`` (`PIN`, `public_pin`): each public file's SHA-512 and its
+  body's as staged, written before any check and the sample, which v2's case names (`case_v2`) and onsite's record holds
+  the kept file to. And the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`:
   either kind names the record's commitment, and it is a stand-in whose run, `of` and `link` are `deferred_rows.stand_in` over the
   run root of record, the digest of the bundle's manifest it opened and that commitment, or a served window whose run is the run
   root of record, a SHA-512 root, with no stand-in link. A TP rank's is `tp.serving_rows.source`: `served`, or a stand-in whose
@@ -178,7 +180,7 @@ import shutil
 import sys
 import threading
 import time
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
 from dataclasses import replace
@@ -234,6 +236,21 @@ def body(path: Path) -> bytes:
     with open(path, "rb") as f:
         f.readline()
         return f.read()
+
+
+#: the public files as staged, before the sample (`public_pin`), in the audit's ``out``
+PIN = "public-pin.json"
+PIN_FORMAT = "verity/public-pin/v1"
+
+
+def public_pin(members: Sequence[dict], publics: Mapping[str, bytes]) -> dict:
+    """``members``' public files as staged (``publics``, their bodies by member key), before any check and the sample:
+    by member key, its index ``k``, the whole file's SHA-512 (``file``, v2's ``proofs.public``) and its body's
+    (``body``), and ``leaf_layer``, the leaf layer over the bodies, which R4 holds to the registration the coins commit
+    to, so a body changed after the sample isn't the pin's."""
+    return {"format": PIN_FORMAT, "leaf_layer": CS.leaf_layer(publics),
+            "members": {mm["m"].key: {"k": mm["k"], "file": mm["st"]["public"],
+                                      "body": hashlib.sha512(publics[mm["m"].key]).hexdigest()} for mm in members}}
 
 
 def link(src: Path, dst: Path) -> None:
@@ -851,7 +868,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                "public": a0.sha512_file(st_dir / f"pub-{m.n}.bin")},
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
     summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members)}
-    leaf_layer = CS.leaf_layer(publics)
+    pin = public_pin(members, publics)
+    (out / PIN).write_text(json.dumps(pin, indent=1, sort_keys=True))
+    leaf_layer = pin["leaf_layer"]
     checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
                                      **tie(a)).to_json()
     if mine.row_tables:
@@ -1169,7 +1188,7 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
 def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public: str, registered: dict | None,
             tables: Sequence[Path], drawn: dict | None = None) -> dict:
     """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest, the
-    public file's, taken when it was staged before the draw, and the verifier's registered file), the evidence with its
+    public file's as `public_pin` pinned it at staging, before the draw, and the verifier's registered file), the evidence with its
     ``verdicts`` replaced by the proofs' files (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``,
     the paths of the files those name and of the pinned lookup tables, which onsite reads after the evidence
     (`compose.onsite_check`). v2 holds the public file's header to the registration (`registration.matches_public`), so

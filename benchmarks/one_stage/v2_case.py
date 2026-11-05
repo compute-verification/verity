@@ -7,9 +7,11 @@
 (``case.json``), the verifier's partition (``partition.json``), ``m0/`` with the public file, ``compose.log`` and the
 circuit file, ``session-m0/sessions/*/`` with each session's ``session.json`` and ``*.bin``, and the challenger's release
 of the draw's coins (``release.json``, `a5.RELEASE`) where the audit drew on a challenger's session. The case is a5.py's
-`case_v2` of those: v1's params with the partition, ``proofs: {circuit, public, registered: null}`` (``public`` the kept
-public file's SHA-512, read from the window after the draw), the challenger and the release's window root, v1's
-commitment, the evidence with the sessions' proofs and the release's coins, and the blobs' paths. The challenger's key
+`case_v2` of those: v1's params with the partition, ``proofs: {circuit, public, registered: null}`` (``public`` m0's
+public file's SHA-512 as a5 pinned it at staging, before the draw, ``public-pin.json``, `a5.PIN`: never the kept file's
+read after the draw, which is refused where it isn't the pinned one, as a window with no pin is), the challenger and the
+release's window root, v1's commitment, the evidence with the sessions' proofs and the release's coins, and the blobs'
+paths. The challenger's key
 is the auditor's own record's (``--challenger-key``, challenger-key/v1, `Ch.key_of_record`), never the one the release
 names (`drawn_of`): a release naming another key is refused, and leaves only ``missing.json``.
 A window with no release, or no record given, names no challenger, which v2 refuses (`OneStageZk.NO_CHALLENGER`).
@@ -101,9 +103,25 @@ def drawn_of(window: Path, key: Ch.ChallengerKey | None) -> tuple[dict | None, s
     return a5.drawn_by({**coins, "key": key.to_json()}, root), "the auditor's record's key"
 
 
+def pinned(window: Path, pub: Path) -> str:
+    """m0's public file's SHA-512 as a5 pinned it at staging, before the draw (`a5.PIN`, `a5.public_pin`), which the
+    kept file `pub` must be: a window with no pin naming m0, or whose kept public file isn't the pinned one, is refused
+    (`Refused`)."""
+    try:
+        pin = json.loads((window / a5.PIN).read_text())
+        file = next(m["file"] for m in pin["members"].values() if m["k"] == 0)
+    except (OSError, AttributeError, KeyError, StopIteration, TypeError, ValueError):
+        raise Refused(f"the window kept no {a5.PIN} naming m0, its public file's SHA-512 pinned at staging before "
+                      "the draw") from None
+    if PF.file_sha512(pub) != file:
+        raise Refused(f"the kept public file isn't, by SHA-512, the one {a5.PIN} pinned at staging before the draw")
+    return file
+
+
 def case(window: Path, scratch: Path, key: Ch.ChallengerKey | None = None) -> tuple[dict, str, int, str]:
-    """`case_v2` of `window`'s kept files under the auditor's challenger key `key` (`drawn_of`): the case, where its
-    circuit file came from, its sessions' count and which challenger it names."""
+    """`case_v2` of `window`'s kept files under the auditor's challenger key `key` (`drawn_of`), its public file the
+    pinned one (`pinned`): the case, where its circuit file came from, its sessions' count and which challenger it
+    names."""
     drawn, challenger = drawn_of(window, key)
     c = compose_command((window / "m0/compose.log").read_text())
     v1 = json.loads((window / "case.json").read_text())
@@ -111,11 +129,12 @@ def case(window: Path, scratch: Path, key: Ch.ChallengerKey | None = None) -> tu
     names = json.loads(bytes.fromhex(v1["evidence"]))["sessions"]
     sessions = tuple(sorted(f.parent for f in (window / "session-m0/sessions").glob("*/session.json")))
     pub = next(iter(sorted((window / "m0").glob("pub-*.bin"))))
+    public = pinned(window, pub)
     circuit, how = window / "m0/circuit.txt", "kept"
     if not circuit.is_file():
         got, how = rebuild(c, scratch)
         circuit = got or circuit
-    v2 = a5.case_v2(v1, names, proof=PF.Proof(circuit, pub, sessions), circuit=c["pin"], public=PF.file_sha512(pub),
+    v2 = a5.case_v2(v1, names, proof=PF.Proof(circuit, pub, sessions), circuit=c["pin"], public=public,
                     registered=None, tables=[], drawn=drawn)
     return v2, how, len(sessions), challenger
 
