@@ -74,6 +74,7 @@ theorem ks_record (A : Live) (o : Own) (e : Ext) {ι : Type} {dv : Accounting.De
     (he : e.reveal = revealRec A) (hv2 : Flock.Bridge.RowsV2 A.D.unroll) (hscope : ScopeOk A)
     (href : ∃ d, RefOk A o d) : Claims.Sampling.KS sha512Msg (record A o e) :=
   ksBy_record A o e hv2 hscope href Claims.Sampling.correctOk
-    (sessionOpens A o e hsu hn hpl hrd hpart his hex (record_commit A o e hv2) he _)
+    ((Claims.Sampling.sessionOpensBy_correctOk sha512Msg (record A o e) (fun _ _ _ => A.roots)).2
+      (sessionOpens A o e hsu hn hpl hrd hpart his hex (record_commit A o e hv2) he (fun _ _ _ => A.roots)))
 
 end Verity.Sampled.Record
