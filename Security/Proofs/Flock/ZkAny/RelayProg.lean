@@ -6,7 +6,7 @@ public import Proofs.Flock.ZkAny.RelayCarry
 # A rep's masking state from one session round of it to the next, the model's
 
 At a rep's round past its first, the model checks the round at the state the rep's last coins left
-(`ofLoop_frameAnswer_same`), the loop's taking of the opening's words (`Loop.progOf`'s answer), so the frame's round in
+(`ofLoop_frameAnswerR_same`), the loop's taking of the opening's words (`Loop.progOf`'s answer), so the frame's round in
 the place of the rep's next scheduled round leaves the loop's state after it (`round_progOf`):
 
 * `round_unstop`: a round the frame releases at a state alike the model's for it, at the model's configuration, in the
@@ -30,9 +30,10 @@ open _root_.Flock.Firewall.Frame (Cfg Masker Req Place)
 
 open Loop LeanRelease in
 /-- **A round past the rep's first, at the model's state for it, leaves the loop's state after it**: where the model
-checks the round after `e0 :: h1` at `m`, a rep's round past its first, and the frame releases a device round at a
-state alike `m`, at the model's configuration, in the place of the rep's next scheduled round with its coin count, its
-state after the round is the loop's after the coins with any next coin, but for `stopped`. -/
+checks the round after `e0 :: h1` at `m` before the rank stop (`answeredR`), a rep's round past its first, and the
+frame releases a device round at a state alike `m`, at the model's configuration, in the place of the rep's next
+scheduled round with its coin count, its state after the round is the loop's after the coins with any next coin, but
+for `stopped`. -/
 theorem round_unstop (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -51,19 +52,14 @@ theorem round_unstop (T : ZKMal.CoinLayer.TableData)
     (hs' : schedSoFar t ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q).1 % 2) dom xs hi
       ((Array.range (j + 1)).map fun i =>
         wordsAt x (h1.map fun p => ZKMal.CoinLayer.rd p.2) (q - (j + 1) + i + 1)) = .ok sched')
-    (hlt : j + 1 < rsched.size) {m : Masker} (hA : (ofLoop T L₀ real).answered x ρ (e0 :: h1) = .ok m)
+    (hlt : j + 1 < rsched.size) {m : Masker} (hA : (ofLoop T L₀ real).answeredR x ρ (e0 :: h1) = .ok m)
     {st st' : _root_.Flock.Firewall.Frame.State} (hu : unstop st.m = unstop m) {v out : ByteArray} {vd : String}
     (h : _root_.Flock.Firewall.Frame.step ((ofLoop T L₀ real).cfg x ρ (e0 :: h1)) st
       (.round (rsched.getD (j + 1) (.empty, 0)).2 v (.sched (rsched.getD (j + 1) (.empty, 0)).1)) =
         (.round out vd, st')) :
     unstop st'.m = unstop (progOf x ((h1.map fun p => ZKMal.CoinLayer.rd p.2) ++ [d])) := by
-  have hF : (ofLoop T L₀ real).frameAnswer x ρ (e0 :: h1) = .ok m := by
-    unfold LeanRelease.answered at hA
-    split at hA
-    · exact hA
-    · cases hA
-  rw [ofLoop_frameAnswer_same T L₀ real x ρ e0 h1 hx hq hj] at hF
-  obtain ⟨ha, -⟩ := bind_rankStop_ok hF
+  obtain ⟨-, -, ha⟩ := answeredR_ok hA
+  rw [ofLoop_frameAnswerR_same T L₀ real x ρ e0 h1 hx hq hj] at ha
   have hlen : (h1.map fun p => ZKMal.CoinLayer.rd p.2).length = q + 1 := by rw [List.length_map, hq]
   have hw : coinsAt x (e0 :: h1) = wordsAt x (h1.map fun p => ZKMal.CoinLayer.rd p.2) q := by
     obtain ⟨m0, r0⟩ := e0
@@ -137,7 +133,7 @@ theorem roundRun_step (T : ZKMal.CoinLayer.TableData)
     (hs' : schedSoFar t ((ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q₀).1 % 2) dom xs hi
       ((Array.range (j₀ + 1)).map fun i =>
         wordsAt x (h1.map fun p => ZKMal.CoinLayer.rd p.2) (q₀ - (j₀ + 1) + i + 1)) = .ok sched')
-    (hlt : j₀ + 1 < rsched.size) {m₀ : Masker} (hA₀ : (ofLoop T L₀ real).answered x ρ (e0 :: h1) = .ok m₀)
+    (hlt : j₀ + 1 < rsched.size) {m₀ : Masker} (hA₀ : (ofLoop T L₀ real).answeredR x ρ (e0 :: h1) = .ok m₀)
     {sid : Nat} {st : State} {pl : Placed} {stream : String} {i r : Nat} {dm : ByteArray} {v : Msg} {e : Env}
     {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {R₃ : Sessions}
     (hr : RoundRun sid st pl stream (loopNr x h1.length) i r dm ⟨v.toArray⟩ e R L0 R₃)
@@ -153,7 +149,7 @@ theorem roundRun_step (T : ZKMal.CoinLayer.TableData)
     (hcq : q.cfg = (ofLoop T L₀ real).cfg x ρ (e0 :: h1)) (hu₀ : unstop q.st.m = unstop m₀)
     (hpl : pl' = .sched (rsched.getD (j₀ + 1) (.empty, 0)).1)
     (hn : loopNr x h1.length = (rsched.getD (j₀ + 1) (.empty, 0)).2)
-    {m : Masker} (hA : (ofLoop T L₀ real).answered x ρ (e0 :: (h1 ++ [(v, a.data.toList)])) = .ok m) :
+    {m : Masker} (hA : (ofLoop T L₀ real).answeredR x ρ (e0 :: (h1 ++ [(v, a.data.toList)])) = .ok m) :
     ∃ p, frameAt R₃ sid i r = some p ∧
       RepRun pre (ev ++ [(loopNr x h1.length, if nd.isSome then ByteArray.empty else (⟨v.toArray⟩ : ByteArray), pl',
         _root_.Flock.Firewall.Frames.feedOf (loopNr x h1.length) a.data.toList)]) p ∧

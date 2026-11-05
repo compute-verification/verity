@@ -32,16 +32,16 @@ open _root_.Flock.Firewall.Frame (Cfg Masker Req Place)
 
 /-- **A rep's frame at the model's state for the rep's next round**: after the history `h`, whose decoded coins are
 `cs`, the rep's next round being its `j + 1`-th, after coin `q`, the frame is its run on the loop's requests (`RepRun`),
-at the model's configuration and its masking state but for `stopped`, holding the words of the rep's `j + 1` rounds
-so far as its coins, and keeping its schedule so far on its table `t`, its stream's domain `dom`, its extra claims `xs`
-and its salts `hi` (`Loop.RepInv`). -/
+at the model's configuration and its masking state before the rank stop (`answeredR`) but for `stopped`, holding the
+words of the rep's `j + 1` rounds so far as its coins, and keeping its schedule so far on its table `t`, its stream's
+domain `dom`, its extra claims `xs` and its salts `hi` (`Loop.RepInv`). -/
 structure SameInv {W Rr : Type} (L : LeanRelease W Rr) (x : Msg) (ρ : Rr) (h : List (Msg × Msg))
     (cs : List FlockDeploy.Coin) (q j : Nat) (t : _root_.Flock.Firewall.Finish.Tab) (dom : ByteArray)
     (xs : Array (Array F128)) (hi : Array ByteArray) (pre : List Req)
     (ev : List (Nat × ByteArray × Place × Array F128)) (p : Rep) : Prop where
   run : RepRun pre ev p
   cfg : p.cfg = L.cfg x ρ h
-  st : ∀ m, L.answered x ρ h = .ok m → unstop p.st.m = unstop m
+  st : ∀ m, L.answeredR x ρ h = .ok m → unstop p.st.m = unstop m
   coins : p.coins = (Array.range (j + 1)).map fun k => Loop.wordsAt x cs (q - (j + 1) + k + 1)
   inv : Loop.RepInv t dom xs hi p
 
@@ -63,7 +63,7 @@ theorem sameInv_place {W Rr : Type} {L : LeanRelease W Rr} {x : Msg} {ρ : Rr} {
     {dom content : ByteArray} {n : Nat} {q' : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q', pl, f, nd)) :
     f = false ∧ RepRun pre ev q' ∧ q'.cfg = L.cfg x ρ h ∧
-      (∀ m, L.answered x ρ h = .ok m → unstop q'.st.m = unstop m) ∧
+      (∀ m, L.answeredR x ρ h = .ok m → unstop q'.st.m = unstop m) ∧
       q'.coins = (Array.range (j + 1)).map fun k => Loop.wordsAt x cs (q - (j + 1) + k + 1) := by
   have hsz : p.coins.size = j + 1 := by rw [hI.coins, Array.size_map, Array.size_range]
   have hne : p.coins.isEmpty = false := by simp [Array.isEmpty, hsz]
@@ -162,8 +162,9 @@ theorem roundRun_same (T : ZKMal.CoinLayer.TableData)
   obtain rfl := Option.some.inj (hat4.symm.trans hat)
   refine ⟨hpl, _, hat, hrun, ?_, fun m hA => ?_, hcw2, hinv⟩
   · rw [hcf3, hI.cfg, cfg_same T L₀ real x ρ e0 h1 hx hq hj (v, a.data.toList)]
-  · obtain ⟨P5, hat5, -, hu5⟩ := roundRun_step T L₀ real x ρ e0 h1 hx hq hj₀ hj hph hc hrs hs' hlt hA₀ hr hreq hfr
-      hrp ho hput ha hb hs hco hRq hcq (huq m₀ hA₀) hpl hn2 hA
+  · have hA₀' := answeredR_of_answered hA₀
+    obtain ⟨P5, hat5, -, hu5⟩ := roundRun_step T L₀ real x ρ e0 h1 hx hq hj₀ hj hph hc hrs hs' hlt hA₀' hr hreq hfr
+      hrp ho hput ha hb hs hco hRq hcq (huq m₀ hA₀') hpl hn2 hA
     obtain rfl := Option.some.inj (hat5.symm.trans hat)
     exact hu5
 

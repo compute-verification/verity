@@ -223,7 +223,7 @@ theorem roundRun_step_own (T : ZKMal.CoinLayer.TableData)
     (hpl : pl' = .sched rr)
     (hr0 : sched'.size = j₀ + 1 → ∃ w : ByteArray, w.size = 16 ∧ rr.data.toList =
       (labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ header 3 1 1 ++ w ++ header 4 1 1).data.toList)
-    {m : Masker} (hA : (ofLoop T L₀ real).answered x ρ (e0 :: (h1 ++ [(v, a.data.toList)])) = .ok m) :
+    {m : Masker} (hA : (ofLoop T L₀ real).answeredR x ρ (e0 :: (h1 ++ [(v, a.data.toList)])) = .ok m) :
     ∃ p, frameAt R₃ sid i r = some p ∧
       RepRun pre (ev ++ [(loopNr x h1.length, if nd.isSome then ByteArray.empty else (⟨v.toArray⟩ : ByteArray), pl',
         _root_.Flock.Firewall.Frames.feedOf (loopNr x h1.length) a.data.toList)]) p ∧
@@ -328,7 +328,7 @@ theorem roundRun_own (T : ZKMal.CoinLayer.TableData)
       (labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ header 3 1 1 ++ w ++ header 4 1 1).data.toList := by
     intro hS
     have h0 := answered_own0 T L₀ real x ρ e0 h1 hx hq hj₀ hph hc hs' hS hF hA₀
-    have hin : q.st.m.inner = none := (congrArg Masker.inner (huq m₀ hA₀)).trans h0
+    have hin : q.st.m.inner = none := (congrArg Masker.inner (huq m₀ (answeredR_of_answered hA₀))).trans h0
     rw [hin, Option.getD_none]
     exact innerSched_zero _ _ _ _
   have hjq : j₀ + 1 ≤ q₀ := by
@@ -344,7 +344,8 @@ theorem roundRun_own (T : ZKMal.CoinLayer.TableData)
   refine ⟨_, hat, hrun, ?_, fun m hA => ?_, hcw2, hinv⟩
   · rw [hcf3, hI.cfg, cfg_same T L₀ real x ρ e0 h1 hx hq hj (v, a.data.toList)]
   · obtain ⟨P5, hat5, -, hu5⟩ := roundRun_step_own T L₀ real x ρ e0 h1 hx hq hj₀ hj hph hc hz hH hM hrow hs'
-      (by rw [← hsz']; exact hle) hF hA₀ hr hreq hfr hrp ho hput ha hb hs hco hRq hcq (huq m₀ hA₀) hpl hr0 hA
+      (by rw [← hsz']; exact hle) hF hA₀ hr hreq hfr hrp ho hput ha hb hs hco hRq hcq
+      (huq m₀ (answeredR_of_answered hA₀)) hpl hr0 hA
     obtain rfl := Option.some.inj (hat5.symm.trans hat)
     exact hu5
 

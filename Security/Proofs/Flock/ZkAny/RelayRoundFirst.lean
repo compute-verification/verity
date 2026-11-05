@@ -182,7 +182,7 @@ theorem roundRun_step_first (T : ZKMal.CoinLayer.TableData)
     {pre : List Req} {ev : List (Nat × ByteArray × Place × Array F128)} (hR : RepRun pre ev q)
     (hcq : q.cfg = (ofLoop T L₀ real).cfg x ρ (e0 :: h1)) (hu₀ : unstop q.st.m = unstop m₀)
     (hpl : pl' = .sched (rsched.getD 0 (.empty, 0)).1) (hn : loopNr x h1.length = (rsched.getD 0 (.empty, 0)).2)
-    {m : Masker} (hA : (ofLoop T L₀ real).answered x ρ (e0 :: (h1 ++ [(v, a.data.toList)])) = .ok m) :
+    {m : Masker} (hA : (ofLoop T L₀ real).answeredR x ρ (e0 :: (h1 ++ [(v, a.data.toList)])) = .ok m) :
     ∃ p, frameAt R₃ sid i r = some p ∧
       RepRun pre (ev ++ [(loopNr x h1.length, if nd.isSome then ByteArray.empty else (⟨v.toArray⟩ : ByteArray), pl',
         _root_.Flock.Firewall.Frames.feedOf (loopNr x h1.length) a.data.toList)]) p ∧

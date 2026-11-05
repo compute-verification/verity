@@ -62,6 +62,10 @@ public import Proofs.Flock.ZkAny.RelayLoopDeployed
 public import Proofs.Flock.ZkAny.RelayLoopPre
 public import Proofs.Flock.ZkAny.RelayLoopInner
 public import Proofs.Flock.ZkAny.RelayLoopOwnAt
+public import Proofs.Flock.ZkAny.RelayTook
+public import Proofs.Flock.ZkAny.RelayRank
+public import Proofs.Flock.ZkAny.RelayTaken
+public import Proofs.Flock.ZkAny.RelayRoundTook
 public import Proofs.Flock.ZkAny.RelayLoopStart
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
@@ -125,8 +129,12 @@ deployed model with the session loop's own rounds of the inner proof, where `pla
 at the inner proof's own, the round's place the model's scheduled round, given each round of the inner proof the
 loop's finish computed so far the model's finish's; and so `EnvPre` from that invariant at the deployed loop with the
 session loop's own rounds of the inner proof, where the release takes the run's coins and the crossing passes below
-the `Finish`; and so, from the session's first request, at the model's run of the deferred server against `V*` whose
-worker answers the link with the firewall's own message, `EnvPre` at the relay's requests, and the relay's model
+the `Finish`; and what the loop took of the coins so far against the model's release: the transport's verdict, the
+frame's taking of each earlier round's coins and its coin step on the last; and the model's taking of the coins
+before its rank stop, which a frame releasing an opening round passes; and so the model's taking of the coins after a
+frame round's history, from what the loop took, a rep's first-round state and the rank stop at the opening round the
+frame releases; and so, from the session's first request, at the model's run of the deferred server against `V*`
+whose worker answers the link with the firewall's own message, `EnvPre` at the relay's requests, and the relay's model
 frames the model's messages, encoded. -/
 
 @[expose] public section

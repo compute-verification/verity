@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.ZkAny.RelayFold
+public import Proofs.Flock.ZkAny.RelayTaken
 public import Proofs.Flock.Claims.ZK.FrameProg
 public import Proofs.Flock.Claims.ZK.FrameRun
 
@@ -17,7 +18,7 @@ state the loop's own frames leave (`Loop.progOf`, at placeholder draws on the sc
   the rep's schedule on its own table in its place, leaves a state alike the loop's after it (`Loop.progOf_check_step`,
   `Loop.progOf_check_first`), whatever the device round and whether the rep is stopped.
 * `coins_answered`: and the coins the model hands the frame after it, taken there, leave a state alike the model's
-  for the rep's next round (`LeanRelease.answered`, past the rank stop).
+  for the rep's next round before the rank stop (`LeanRelease.answeredR`).
 * `step_prior_alike`, `repRun_start_fresh`, `repRun_prior_fresh`: at a rep's first round its frame (`RepRun` on no
   rounds) is the loop's start of it (`Loop.freshOf`): rep 0's the frame's start, rep 1's after rep 0's
   algebraic-phase coins, which the frame takes reading only the layout.
@@ -116,7 +117,7 @@ open Loop LeanRelease in
 /-- **The coins after a round, taken at a state alike the loop's**: where the frame's state `st` after a round is the
 loop's after it (`progOf`) but for `stopped`, the round after it is the same rep's, and the frame takes the coins the
 model hands it there (`coinsAt`) at a configuration alike the model's, its state is the model's state for that next
-round (`answered`), but for `stopped`. -/
+round before the rank stop (`answeredR`), but for `stopped`. -/
 theorem coins_answered (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -130,15 +131,10 @@ theorem coins_answered (T : ZKMal.CoinLayer.TableData)
     (hc : CfgAlike c ((ofLoop T L₀ real).cfg x ρ (e0 :: h1))) {st st' : _root_.Flock.Firewall.Frame.State}
     (hu : unstop st.m = unstop (progOf x (h1.map fun p => ZKMal.CoinLayer.rd p.2)))
     (hco : _root_.Flock.Firewall.Frame.step c st (.coins (.ok (coinsAt x (e0 :: h1)))) = (.ok, st'))
-    {m : Masker} (hA : (ofLoop T L₀ real).answered x ρ (e0 :: h1) = .ok m) :
+    {m : Masker} (hA : (ofLoop T L₀ real).answeredR x ρ (e0 :: h1) = .ok m) :
     unstop st'.m = unstop m := by
-  have hF : (ofLoop T L₀ real).frameAnswer x ρ (e0 :: h1) = .ok m := by
-    unfold LeanRelease.answered at hA
-    split at hA
-    · exact hA
-    · cases hA
-  rw [ofLoop_frameAnswer_same T L₀ real x ρ e0 h1 hx hq hj] at hF
-  obtain ⟨hF, _⟩ := bind_rankStop_ok hF
+  obtain ⟨-, -, hF⟩ := answeredR_ok hA
+  rw [ofLoop_frameAnswerR_same T L₀ real x ρ e0 h1 hx hq hj] at hF
   obtain ⟨a', ha', hua⟩ := answer_unstop hc hu (_root_.Flock.Firewall.Frame.answer_of_step hco)
   rw [hF] at ha'
   cases ha'

@@ -9,7 +9,8 @@ At the session's first frame round, and at a round after another rep's round, th
 rep's start (`Loop.freshOf`), which at rep 0 is the frame's start, and the loop's frame of rep 0 starts there:
 
 * `ofLoop_answered_switch`: where the round after a history is the session's first frame round or another rep's than
-  the round before it, the model's state for it is `freshOf`'s (`takeAt`'s first or third case).
+  the round before it, the model's state for it is `freshOf`'s (`takeAt`'s first or third case);
+  `ofLoop_answeredR_switch`: so is its state before the rank stop.
 * `freshOf_rep0`: at a rep 0 stream's first round, `freshOf`'s state is the frame's start.
 * `roundPlace_st`: at any rep but rep 1, the frame `roundPlace` readies is at the found frame's state: `withAlg` and
   `placeOf` keep it, and only rep 1's first round adds rep 0's algebraic-phase coins.
@@ -52,6 +53,24 @@ theorem ofLoop_answered_switch (T : ZKMal.CoinLayer.TableData)
     simp only [List.length_cons] at hn
     exact absurd hb (hs (by omega))
   · exact hf
+
+open Loop LeanRelease in
+/-- **At a rep switch the model's state before the rank stop is the next rep's start**, as `ofLoop_answered_switch`:
+there is no rank stop at a rep's first round. -/
+theorem ofLoop_answeredR_switch (T : ZKMal.CoinLayer.TableData)
+    (L₀ : LeanRelease Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
+    (real : Msg → Claims.Flock.Wit →
+      (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
+      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (x : Msg) (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
+    (e0 : Msg × Msg) (h1 : List (Msg × Msg))
+    (hs : 2 ≤ h1.length → repOf x (h1.length + 1) ≠ repOf x h1.length) {m : Masker}
+    (hA : (ofLoop T L₀ real).answeredR x ρ (e0 :: h1) = .ok m) :
+    freshOf x (h1.map fun p => ZKMal.CoinLayer.rd p.2) = .ok m :=
+  ofLoop_answered_switch T L₀ real x ρ e0 h1 hs (answered_of_answeredR hA fun hn he => by
+    simp only [List.length_cons, Nat.add_sub_cancel] at hn he
+    exact absurd he (hs (by omega)))
 
 open Loop in
 /-- **At a rep 0 stream's first round the loop starts the frame at its start.** -/

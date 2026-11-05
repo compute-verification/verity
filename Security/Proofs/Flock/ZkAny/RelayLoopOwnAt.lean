@@ -541,7 +541,7 @@ theorem placeSched_own
   have hAm1 : M.L.answered M.x M.ρ (e0 :: h1) = .ok m := by
     rw [← hh]
     exact hAm
-  have huq := (sameInv_place hI hfa hrp).2.2.2.1 m hAm1
+  have huq := (sameInv_place hI hfa hrp).2.2.2.1 m (LeanRelease.answeredR_of_answered hAm1)
   have hcq := (sameInv_place hI hfa hrp).2.2.1
   rw [hD.rel] at hcq hAm1
   have hnr : n = Loop.loopNr M.x (q₀ + 1) := by
