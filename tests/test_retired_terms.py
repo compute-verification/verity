@@ -22,9 +22,10 @@ keeps the old words until its owners rename it, so this scan skips code spans an
 record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too.
 
 PoUB, the protocol over a node's registered store, goes by that name alone (``POUB_TERMS``, GLOSSARY) in every
-scanned file, PENDING's too, but the archive's (``POUB_ELSEWHERE``). Its wire constants, domain tags, Lake targets
-and package path (`verity/remote-bandwidth/v0`, `remote-audit-difftest`, `remote_bandwidth`) are hyphenated or
-underscored, so this scan never reads them; they stay until PoUB's next version and its package's move.
+scanned file, PENDING's too, but the bandwidth audit's over PoUS's store and the archive's (``POUB_ELSEWHERE``). Its
+wire constants, domain tags, Lake targets and package path (`verity/remote-bandwidth/v0`, `remote-audit-difftest`,
+`remote_bandwidth`) are hyphenated or underscored, so this scan never reads them; they stay until PoUB's next version
+and its package's move.
 """
 from __future__ import annotations
 
