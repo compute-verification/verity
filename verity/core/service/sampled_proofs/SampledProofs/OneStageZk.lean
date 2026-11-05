@@ -174,8 +174,8 @@ def paramsOfJson (j : Json) : V Params := do
   let some partition := base.verifier.partition
     | throw "partition is null: the sessions are verified against the verifier's own partition object"
   let programJ := getD rest "program"
-  pure { base, own := { programJ, program := (← Flock.canon programJ).toUTF8, partition, circuit, pub, registered,
-    interface } }
+  let program := (← Flock.canon programJ).toUTF8
+  pure { base, own := { programJ, program, partition, circuit, pub, registered, interface } }
 
 /-- The `verdicts` command's own inputs: exactly `{"circuit", "partition", "program", "public", "registered"}`, and
 `interface` when named, the program and partition objects. -/
