@@ -159,6 +159,7 @@ integrations/vllm/tests/regression/test_attempt_resolution.py -> tools/research/
 integrations/vllm/tests/regression/test_attempt_resolution.py -> tools/research/src/research/store/local.py
 integrations/vllm/tools/migrate/superseded_quarantine.py -> tools/verity/circuit_check/src/circuit_check/__init__.py
 integrations/vllm/tools/topp_pin_gpu.sh -> tools/research/pyproject.toml
+integrations/vllm/verity_vllm/acquire/served_device.py -> verity/hardware/__init__.py
 integrations/vllm/verity_vllm/commit/memory_map.py -> verity/core/protocols/remote_bandwidth/__init__.py
 integrations/vllm/verity_vllm/commit/memory_map.py -> verity/core/protocols/remote_bandwidth/memory_map.py
 integrations/vllm/verity_vllm/ops/epoch_row.sh -> tools/research/src
