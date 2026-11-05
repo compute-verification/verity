@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.ResLowerDD
+public import Proofs.Flock.Recursive.KS
 public import Proofs.Flock.Recursive.KSStatement
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -35,7 +36,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.RestFinal
 import Proofs.Flock.Claims.Recursion.RestOpenedSized
-import Proofs.Flock.Recursive.KS
 
 /-!
 # `RecursiveKSAt` from chain B's leaves at the deployed brings

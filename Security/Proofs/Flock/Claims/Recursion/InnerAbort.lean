@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.Abort
 public import Proofs.Flock.Claims.Recursion.Inner
 public import Proofs.Flock.Claims.Recursion.OuterKS
 import Mathlib.Algebra.Order.Floor.Extended
@@ -41,7 +42,6 @@ import Mathlib.Topology.Sheaves.Presheaf
 import Proofs.Flock.Claims.Aggregate
 import Proofs.Flock.Claims.Finder
 import Proofs.Flock.Claims.Prob
-import Proofs.Flock.Claims.Recursion.Abort
 import Std.Tactic.BVDecide.Normalize.BitVec
 import Std.Tactic.BVDecide.Normalize.Prop
 

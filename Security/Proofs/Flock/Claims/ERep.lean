@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Core.Interaction
+public import Proofs.Flock.Claims.Prob
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -34,7 +35,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Prob
 
 /-!
 # `E^rep`: its reruns and its amplification

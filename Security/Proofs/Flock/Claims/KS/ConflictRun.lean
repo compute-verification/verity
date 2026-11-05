@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.KS.ConflictWithin
 public import Proofs.Flock.Claims.DeployCode
+public import Proofs.Flock.Claims.KS.ConflictWithin
+public import Proofs.Flock.Claims.KS.Width
 import Flock.With.SimVerify
 import Flock.With.SimZk
 import Mathlib.Algebra.Order.Floor.Extended
@@ -35,7 +36,6 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.KS.Width
 import Proofs.Flock.Claims.Scope.Check
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 

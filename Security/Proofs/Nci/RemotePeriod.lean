@@ -1,7 +1,8 @@
 module
 
-public import Definitions.Nci.Guarantees.RemotePeriod
 public import Definitions.Core.Game
+public import Definitions.Nci.Guarantees.RemotePeriod
+public import Proofs.Nci.Remote
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -40,7 +41,6 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Presheaf
 import Proofs.Flock.Soundness.Audit.Periods
 import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Nci.Remote
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

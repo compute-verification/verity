@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Flock.Accounting.Fast100
+public import Proofs.Flock.Level3
 public import Proofs.Flock.Level3.Nodes
 public import Proofs.Flock.Level3.NovelBasis
 public import Proofs.Flock.Level3.Pinned

@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Nci.Assumptions.Remote
+public import Definitions.Nci.Guarantees.Remote
 public import Definitions.Nci.Threads
 public import Mathlib.Probability.Distributions.Uniform
 import Mathlib.Algebra.Order.Floor.Extended

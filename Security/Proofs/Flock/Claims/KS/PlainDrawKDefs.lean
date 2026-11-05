@@ -2,6 +2,9 @@ module
 
 public import Flock.With.Eq
 public import Flock.With.VerifyE
+public import Proofs.Flock.Claims.Bridge.DecodePlain
+public import Proofs.Flock.Claims.KS.DecodeHidden
+public import Proofs.Flock.Claims.KS.DecodeSC
 public import Proofs.Flock.Claims.KS.PlainDraw
 public import Proofs.Flock.Claims.Recursion.RepErase
 public import Proofs.Flock.Soundness.Discharge.Exec.VerifyK

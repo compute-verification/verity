@@ -1,11 +1,11 @@
 module
 
 public import Definitions.Flock.Game
+public import Proofs.Flock.Soundness.Game.Interleave
 import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Interleave
 
 /-!
 # Union bounds and loops

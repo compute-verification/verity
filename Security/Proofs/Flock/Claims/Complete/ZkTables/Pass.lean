@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.Complete.Zk.Exact
 public import Proofs.Flock.Claims.Complete.Json.Session
+public import Proofs.Flock.Claims.Complete.Zk.Exact
+public import Proofs.Flock.Claims.Complete.ZkTables.Files
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

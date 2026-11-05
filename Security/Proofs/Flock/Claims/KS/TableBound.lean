@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.KS.ConflictTied
 public import Proofs.Flock.Claims.KS.Trace
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
@@ -36,7 +37,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.DeployTables
-import Proofs.Flock.Claims.KS.ConflictTied
 import Proofs.Flock.Claims.KS.Deploy
 import Proofs.Flock.Claims.KS.Range
 import Proofs.Flock.Claims.KS.Width

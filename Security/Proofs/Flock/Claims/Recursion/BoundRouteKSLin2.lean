@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.KSLin2
 public import Proofs.Flock.Claims.Recursion.BoundRouteCols
+public import Proofs.Flock.Claims.Recursion.KSLin2
+public import Proofs.Flock.Claims.Recursion.SetupCalls
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -41,7 +42,6 @@ import Proofs.Flock.Claims.Recursion.DeployFacts
 import Proofs.Flock.Claims.Recursion.DeployMargin
 import Proofs.Flock.Claims.Recursion.DeploySessions
 import Proofs.Flock.Claims.Recursion.FlockKSRecord
-import Proofs.Flock.Claims.Recursion.SetupCalls
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

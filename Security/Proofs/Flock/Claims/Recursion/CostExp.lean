@@ -2,6 +2,7 @@ module
 
 public import Definitions.Claims.Recursion
 public import Proofs.Flock.Claims.ERepCost
+public import Proofs.Flock.Claims.Recursion.Cost
 public import Proofs.Flock.Claims.Recursion.Serve
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -39,7 +40,6 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.Fork
 import Proofs.Flock.Claims.Prob
-import Proofs.Flock.Claims.Recursion.Cost
 import Proofs.Flock.Claims.Recursion.Hybrid
 
 /-!

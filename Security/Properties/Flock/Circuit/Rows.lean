@@ -2,6 +2,7 @@ module
 
 public import Definitions.Flock.Lowering
 public import Flock.Net
+public import Mathlib.Tactic.Ring
 import Mathlib.Tactic.Ring.RingNF
 
 /-!

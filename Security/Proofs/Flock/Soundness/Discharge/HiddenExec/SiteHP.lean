@@ -1,7 +1,8 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.PlacedP
+public import Proofs.Flock.Soundness.Discharge.Hidden.Rows
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.PlacedP
 import Mathlib.Tactic.ENatToNat
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational

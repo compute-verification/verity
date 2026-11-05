@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Core.Interaction
+public import Proofs.Flock.Claims.Finder
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Star.Real
@@ -37,7 +38,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.Finder
 import Proofs.Flock.Claims.Prob
 
 /-!

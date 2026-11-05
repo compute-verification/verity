@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Nci.Remote
+public import Mathlib.Probability.Distributions.Uniform
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

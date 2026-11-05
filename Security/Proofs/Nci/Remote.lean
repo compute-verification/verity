@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Nci.Guarantees.Remote
+public import Proofs.Nci.Dampener
+public import Proofs.Nci.Escape
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -35,8 +37,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Nci.Dampener
-import Proofs.Nci.Escape
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!

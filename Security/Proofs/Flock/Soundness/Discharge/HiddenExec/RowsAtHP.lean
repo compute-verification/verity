@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.SitesP
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyHP
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyHP
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.SitesP
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime

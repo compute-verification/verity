@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
 public import Proofs.Flock.Claims.Recursion.VerdictRowDCover
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -35,7 +36,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.VStarList.Shape
 import Proofs.Flock.Claims.Recursion.InnerForm
 import Proofs.Flock.Claims.Recursion.SchedDense
-import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Claims.Scope.Fit
 import Proofs.Flock.Recursive.VStarCheck
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts

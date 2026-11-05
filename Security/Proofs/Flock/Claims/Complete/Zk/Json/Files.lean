@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Flock.Claims.Complete.Files
 public import Proofs.Flock.Claims.Complete.Zk.Json.Goals
 import all Init.Data.Nat.Power2.Basic
 import Mathlib.Algebra.Order.Floor.Extended

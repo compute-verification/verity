@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Core.Boolean
+public import Mathlib.Data.Fintype.Card
 
 /-!
 # Partitions of a circuit, and the correctness of a unit

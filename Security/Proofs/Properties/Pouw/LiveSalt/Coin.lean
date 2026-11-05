@@ -1,10 +1,11 @@
 module
 
-public import Proofs.Properties.Pouw.LiveSalt.Canon
-import all Init.Data.String.Defs
 public import Proofs.Properties.NetworkCertifier.Bytes
+public import Proofs.Properties.Pouw.LiveSalt
+public import Proofs.Properties.Pouw.LiveSalt.Canon
 public import Properties.Pouw.LiveSalt
 import Batteries.Lean.Except
+import all Init.Data.String.Defs
 import Mathlib.Algebra.GroupWithZero.Nat
 import Mathlib.Algebra.NeZero
 import Mathlib.Data.Finset.Attr
@@ -13,7 +14,6 @@ import Mathlib.Tactic.Finiteness.Attr
 import Mathlib.Tactic.Push
 import Mathlib.Tactic.SetLike
 import Proofs.Properties.Pouw.Commit
-import Proofs.Properties.Pouw.LiveSalt
 
 /-!
 # A live root binds its commitment and its coins (`liveCoinBinding`)

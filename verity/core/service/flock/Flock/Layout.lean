@@ -23,6 +23,7 @@ own-region size, the count `derive`'s v2 rule makes; `check_ok` says acceptance 
 -/
 module
 
+public import Flock.Canon
 public import Flock.CircuitType
 
 @[expose] public section

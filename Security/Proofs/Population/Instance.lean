@@ -1,7 +1,9 @@
 module
 
 public import Definitions.Population.Partition
-import Proofs.Core.Circuit
+public import Mathlib.Algebra.CharZero.Defs
+public import Mathlib.Algebra.Order.Sub.Basic
+public import Proofs.Core.Circuit
 
 /-!
 # Sampled proofs' partitions as populations

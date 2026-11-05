@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.KSLin2
+public import Proofs.Flock.Claims.Sampling.Bext
 public import Proofs.Flock.Claims.Sampling.Extract
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -40,7 +41,6 @@ import Proofs.Flock.Claims.Finder
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Recursion.BadLin
 import Proofs.Flock.Claims.Recursion.Gap
-import Proofs.Flock.Claims.Sampling.Bext
 
 /-!
 # Route 2C's bits from its KS

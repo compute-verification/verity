@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.DeployedBrings
+public import Proofs.Flock.Claims.Recursion.DeployedCounts
 public import Proofs.Flock.Claims.Recursion.LamDeployed
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -36,7 +37,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.DeployMargin
 import Proofs.Flock.Claims.Recursion.DeployScope
 import Proofs.Flock.Claims.Recursion.DeployScopeRuns
-import Proofs.Flock.Claims.Recursion.DeployedCounts
 import Proofs.Flock.Claims.Recursion.InnerForm
 import Proofs.Flock.Claims.Recursion.NextRRows
 import Proofs.Flock.Claims.Scope.Setup

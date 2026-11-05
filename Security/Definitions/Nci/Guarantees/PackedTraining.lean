@@ -1,7 +1,9 @@
 module
 
-public import Definitions.Nci.Assumptions.PackedTraining
+public import Definitions.Nci.Assumptions
 public import Definitions.Nci.Assumptions.Baseline
+public import Definitions.Nci.Assumptions.PackedTraining
+public import Definitions.Nci.Dark
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Data.NNRat.Floor
 

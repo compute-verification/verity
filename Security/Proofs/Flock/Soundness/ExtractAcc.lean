@@ -4,7 +4,6 @@ public import Definitions.Flock.Extract
 public import Definitions.Flock.Rewinding
 public import Mathlib.Analysis.Complex.Exponential
 public import Proofs.Flock.Soundness.Game.Runs
-meta import Lean.Meta.Tactic.NormCast
 import Mathlib.Algebra.Order.BigOperators.Expect
 import Mathlib.Algebra.Order.Field.Power
 import Mathlib.Analysis.Complex.Order
@@ -15,6 +14,7 @@ import Mathlib.Logic.Equiv.PartialEquiv
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.Extract
 import Proofs.Flock.Soundness.Game.Expect
+meta import Lean.Meta.Tactic.NormCast
 
 /-!
 # Extraction from accepted reruns: the expected-time extractor's law

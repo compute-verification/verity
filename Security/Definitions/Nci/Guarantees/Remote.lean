@@ -1,8 +1,9 @@
 module
 
-public import Definitions.Nci.Assumptions.Remote
 public import Definitions.Nci.Assumptions.Baseline
+public import Definitions.Nci.Assumptions.Remote
 public import Definitions.Nci.Assumptions.Threads
+public import Definitions.Nci.Guarantees.Dampener
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

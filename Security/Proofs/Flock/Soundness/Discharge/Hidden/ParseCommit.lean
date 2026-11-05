@@ -2,6 +2,7 @@ module
 
 public import Flock.HmRow
 public import Proofs.Flock.Soundness.ExecPlacement
+public import Proofs.Flock.Soundness.ParseStmt
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -17,7 +18,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 import Proofs.Flock.Soundness.ExecCircuit
-import Proofs.Flock.Soundness.ParseStmt
 
 /-!
 # The committed circuit and the statement circuit

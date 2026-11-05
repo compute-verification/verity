@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.ResLowerDD
+public import Proofs.Flock.Claims.Recursion.RestOpenedSized
+public import Proofs.Flock.Claims.Recursion.RestVerdictBasesHold
+public import Proofs.Flock.Recursive.KSDeployed
 public import Proofs.Flock.Recursive.KSStatement
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -35,9 +38,6 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.ResAccEnd
 import Proofs.Flock.Claims.Recursion.ResFramePorts
-import Proofs.Flock.Claims.Recursion.RestOpenedSized
-import Proofs.Flock.Claims.Recursion.RestVerdictBasesHold
-import Proofs.Flock.Recursive.KSDeployed
 
 /-!
 # KS's residual leaf at the deployed readers (`hres_deployed`)
