@@ -240,8 +240,9 @@ private def run (manifests : String) : ByteArray := runIn manifests (windowOf wi
 #guard (do
     let p ← paramsOf (← Core.canonicalJson (params record))
     let i := inputOf p (← commitmentOf (run "[{}]"))
-    pure (i.ofRecord && i.held.map (·.schema) == some COIN_SCHEMA && i.held.map (fun h => fieldIs (get? h.draw "from") DRAW_NODE) == some true &&
-      (ofRecordReason i.coins i.source i.held).any (·.startsWith "the epoch's coins are an in-process"))).toOption ==
+    let some h := i.held | throw "no coin record"
+    pure (i.ofRecord && h.schema == COIN_SCHEMA && fieldIs (get? h.draw "from") DRAW_NODE &&
+      ((ofRecordReason i.coins i.source i.held).getD "").startsWith "the epoch's coins are an in-process")).toOption ==
   some true
 -- well-formed inputs reach the run's verdict, whose refusal is the run's
 #guard (reasonOf (params record) (run "[{}]") "{\"files\":[{}]}".toUTF8).isSome
