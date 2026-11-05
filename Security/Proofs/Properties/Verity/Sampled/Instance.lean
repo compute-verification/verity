@@ -675,7 +675,7 @@ theorem couplingTarget_at (K₀ : Constructions I.base) (k : Verity.Registration
         (I.liftStage (I.constructionsAt K₀ k reg record recordDigest)) A θ F := fun θ F A h =>
   couplingTargetAt (V := I.stage (I.constructionsAt K₀ k reg record recordDigest))
     (I.stageOf (I.constructionsAt K₀ k reg record recordDigest) K₀) I.deployment reg record recordDigest
-    (I.signer θ) (hε θ F A h) (setsUp_congr rfl rfl rfl rfl rfl (I.sessions_some h).2)
+    (I.signer θ) (hε θ F A h) (setsUp_congr (V := I.base) rfl rfl rfl rfl rfl (I.sessions_some h).2)
     (digestsAt_of _ I.programDigest I.publicDigest I.read θ) (hL θ F A h) hH (hord θ F) (hO θ F)
 
 end Instance
