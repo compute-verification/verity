@@ -2722,19 +2722,23 @@ def test_the_follow_on_removes_the_windows_circuit_files_after_its_period_check_
             (tmp_path / "serve" / f).parent.mkdir(parents=True, exist_ok=True)
             (tmp_path / "serve" / f).write_text(f)
         split = {"CERTIFIER_FRONT": "front", "CERTIFIER_CHAIN_CMD": CHAIN, "CERTIFIER_PERIOD_CMD": CASE_ONLY}
+        # the front makes the deferral's follow-on write the onsite record (ONSITE) after the composite
+        (tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True, exist_ok=True)
+        (tmp_path / "tree" / "benchmarks" / "one_stage" / "onsite_record.py").write_text(FAKE_ONSITE_RECORD)
     assert _deferred(tmp_path, **split).returncode == 0
     vw = tmp_path / "serve" / f"v3c-w7-{VTAG}"
     composite = f"{FAKE_SERVED_COMPOSITE}\n{LEFT.format(at=vw, step='composite')}"
     reproof = f'echo reproof >> "$ORDER"; {LEFT.format(at=vw, step="reproof")}; echo "REPROOF COPY: PASS"'
     rc, lines, order, _limits = _follow(tmp_path, composite, records_audit=COMPOSED_AUDIT,
                                         V2_CASE="1" if keeps == "v2" else None, REPROOF_CMD=reproof)
-    steps = ["chain", "period-check"] if split else []
-    assert rc == 0 and order == ["audit", "period", *steps, "reproof", "record", "composite"], (lines, order)
+    steps, onsite = (["chain", "period-check"], ["onsite"]) if split else ([], [])
+    assert rc == 0 and order == ["audit", "period", *steps, "reproof", "record", "composite", *onsite], (lines, order)
     said = "V3C-CIRCUITS removed, the window's circuit files, recomposable and named by their pins: "
     heads = [x.split(" ")[0] for x in lines[5:]]
     assert heads == ["V3C-AUDIT", "V3C-PERIOD", *(["CERTIFIER-CHAIN", "CERTIFIER-PERIOD"] if split else []),
-                     "V3C-CIRCUITS", "REPROOF", "RECORD", "COMPOSITE:", *["V3C-CIRCUITS"] * bool(last)], lines
-    assert lines[5 + heads.index("V3C-CIRCUITS")] == said + first and (not last or lines[-1] == said + last), lines
+                     "V3C-CIRCUITS", "REPROOF", "RECORD", "COMPOSITE:", *["V3C-CIRCUITS"] * bool(last),
+                     *[x.upper() for x in onsite]], lines
+    assert [x for x in lines if x.startswith("V3C-CIRCUITS")] == [said + first, *([said + last] if last else [])], lines
     (copy,) = [f"./circuits/{p['sha512']}.txt" for p in json.loads((vw / "period.json").read_text())["circuits"]]
     kept = {None: [], "v2": ["./audit/window/m1/circuit.txt"], "certifier": [copy]}[keeps]
     left = [(tmp_path / f"order.left-{s}").read_text().split() for s in ("reproof", "composite")]
