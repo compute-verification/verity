@@ -76,7 +76,8 @@ its record's digest, `SampledProofs.Bits.check` lays it out as its template, and
 VUs of its `upv`, the scan's one instance a VU whose rows read no input padding and every bit of its `row` parameter
 (`circuitsWhy`). An audit with
 files counts its VUs as its units, each template's instances over its file's `upv`, charges a VU's bits, and counts
-each VU's input padding, the unit's input columns no port holds, among its free inputs (`charged`, `padCols`).
+each VU's input padding, the unit's input columns no port holds, among its free inputs (`charged`, `padFree`,
+`padCols`).
 The rows form has, in place of `sync_set`,
 
     "circuit": hex,
@@ -1966,7 +1967,7 @@ Program, in order; it reads an audit's file's SHA-512 and header (`NetworkCheck.
 rows, and reads a scan's file whole, as the scan's sessions' verifier parses it (`NetworkCheck.CircuitFile.whole`). A
 proof block is a VU, a file's `units_per_vu` template instances, so a listed audit's units are its VUs and a wrong one
 commits at most `vuBits upv words`; and each VU's input padding, the unit's input columns no port holds (`padCols`),
-counts among its free inputs (`charged`). -/
+counts among its free inputs (`charged`, `padFree`). -/
 
 /-- The owners of listed files, in the order their files are given: each audit that lists files, by index, then the
 scan; each with whether it is the scan and what its files are held to. -/
@@ -2035,15 +2036,20 @@ def padCols (cf : Flock.Circuit) : Nat :=
     (fun h q => (List.range q.2).foldl (fun h t => h.set! (q.1 + t) true) h) (Array.replicate nIn false)
   ((List.range nIn).filter fun c => !held.getD c false).length
 
-/-- **Audit `a` as its listed files charge it**, `heads` its templates' files' `units_per_vu` and input padding
-(`padCols`) in order: its units its VUs, `Σ members / upv` over its templates; its bits the most a wrong VU commits,
-`vuBits upv words`; and its free inputs, with the scan's state held or not (`free`, `stateFree`), each VU's padding
-more, `Σ members / upv · pad`, which its record's count (`NetworkCheck.Circuit.countsOf`) doesn't see. -/
-def Listed.charge (x : Listed) (a : Audit) (heads : Array (Nat × Nat)) : Audit :=
-  let ts := x.templates.zipIdx.map fun (t, k) => (t, heads.getD k (1, 0))
-  let pad := ts.foldl (fun n (t, u, p) => n + t.members / u * p) 0
-  { a with units := ts.foldl (fun n (t, u, _) => n + t.members / u) 0,
-           bits := ts.foldl (fun b (t, u, _) => max b (vuBits u t.words)) 0,
+/-- **Root templates `ts`' VUs' input padding**, `fs` their circuit files in order: `Σ members / upv · padCols` over
+the templates, each at its file's `units_per_vu` and padding. An audit's is `padFree (chargesOf P) fs` at its Program
+`P`, which its record's count (`NetworkCheck.Circuit.countsOf`) doesn't see. -/
+def padFree (ts : Array Charged) (fs : List Flock.Circuit) : Nat :=
+  ts.zipIdx.foldl (fun n (t, k) => let f := fs.getD k default; n + t.members / f.upv * padCols f) 0
+
+/-- **Audit `a` as its listed files `fs` charge it**, one a template in order: its units its VUs, `Σ members / upv`
+over its templates; its bits the most a wrong VU commits, `vuBits upv words`; and its free inputs, with the scan's
+state held or not (`free`, `stateFree`), its VUs' padding more (`padFree`). -/
+def Listed.charge (x : Listed) (a : Audit) (fs : List Flock.Circuit) : Audit :=
+  let ts := x.templates.zipIdx.map fun (t, k) => (t, (fs.getD k default).upv)
+  let pad := padFree x.templates fs
+  { a with units := ts.foldl (fun n (t, u) => n + t.members / u) 0,
+           bits := ts.foldl (fun b (t, u) => max b (vuBits u t.words)) 0,
            free := a.free + pad, stateFree := a.stateFree + pad }
 
 /-- **The parameters as the files `fs` charge them**: each listed audit charged by its files' headers
@@ -2054,8 +2060,7 @@ def charged (p : Params) (l : Listing) (fs : Array (ByteArray × Flock.Circuit))
   let starts := (l.audits.foldl (fun (acc, n) o => (acc.push n, n + (o.map (·.files.size)).getD 0))
     ((#[] : Array Nat), 0)).1
   { p with audits := (p.audits.zip l.audits).zipIdx.map fun ((a, o), i) => match o with
-      | some x => x.charge a ((Array.range x.files.size).map fun k =>
-          ((fs[starts[i]! + k]?).map fun (_, cf) => (cf.upv, padCols cf)).getD (1, 0))
+      | some x => x.charge a ((fs.extract starts[i]! (starts[i]! + x.files.size)).toList.map (·.2))
       | none => a }
 
 /-- A listing of two root templates: `T`, 6 instances of 5 words, and `U`, 4 of 3, their files `f` and `g`. -/
@@ -2065,11 +2070,19 @@ def toyListed : Listed where
   files := #["f", "g"]
   partition := none
 
-#guard (fun (a : Audit) => a.units == 3 + 4 && a.bits == 2 * 16 * 5 + 2 && a.free == 7 + 3 * 80 + 4 * 112 &&
-    a.stateFree == 5 + 3 * 80 + 4 * 112)
-  (toyListed.charge
+/- `T`'s file at 2 instances a VU, `U`'s at 1, each unit one input word: `T`'s three ports of 16 leave 80 columns of
+padding, `U`'s one 112. -/
+#guard
+  let file (upv : Nat) (bs : Array Nat) : Flock.Circuit :=
+    let n : Flock.Net :=
+      { (default : Flock.Net) with inWords := 1, constPos := Flock.WORD + 1, inGroups := #[⟨0, 1, bs⟩] }
+    { (default : Flock.Circuit) with upv := upv, nets := #[("unit", n)], unitNet := 0 }
+  let fs := [file 2 #[16, 16, 16], file 1 #[16]]
+  let a := toyListed.charge
     { free := 7, steps := 0, program := "", units := 10, bits := vuBits 1 5, entries := #[], record := none,
-      stateFree := 5 } #[(2, 80), (1, 112)])
+      stateFree := 5 } fs
+  padFree toyListed.templates fs == 3 * 80 + 4 * 112 && a.units == 3 + 4 && a.bits == 2 * 16 * 5 + 2 &&
+    a.free == 7 + 3 * 80 + 4 * 112 && a.stateFree == 5 + 3 * 80 + 4 * 112
 
 /- A unit of two input words, ports of 16 at word 0 and two of 16 at word 1: 256 input columns, 208 of them padding. -/
 #guard
