@@ -1,4 +1,6 @@
-import Definitions.Pouw.Receipt.Duo
+module
+
+public import Definitions.Pouw.Receipt.Duo
 
 /-!
 # li, a receipt fold (trusted)
@@ -12,6 +14,8 @@ An MMA's four words are two such half steps, `(d0, d1)` with `(k0, a0)` and then
 of MMA steps is a chain of half steps. A thread runs several chains side by side; a checkpoint is the XOR of their states
 at the end of a segment, each chain having absorbed that segment's words from the state it started the segment in.
 -/
+
+@[expose] public section
 
 namespace Pouw.Receipt
 

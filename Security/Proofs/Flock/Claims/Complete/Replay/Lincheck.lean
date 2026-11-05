@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Replay.ZerocheckGoal
-import Proofs.Flock.VBridge.Algebra.Lincheck
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.ZerocheckGoal
+public import Proofs.Flock.VBridge.Algebra.Lincheck
 
 /-!
 # Lincheck replays the honest prover's rounds
@@ -12,6 +14,8 @@ rounds' claim from `α·v_A + v_B + β` ends at `dot comb z_partial` (the linche
 * **The prover in closed form** (`lincheckP_go`): its rounds and `z_partial` (`Lc.proof`), its output (`Lc.out`) and
   transcript (`Lc.tEnd`), at the coins of the replies to its sends, where the circuit fold returns `full`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

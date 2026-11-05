@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.KSLin
-import Proofs.Flock.Claims.Recursion.VStarBound
+module
+
+public import Proofs.Flock.Claims.Recursion.KSLin
+public import Proofs.Flock.Claims.Recursion.VStarBound
 
 /-!
 # Route 2C's escapes with the compiled verifier's own evaluations
@@ -20,6 +22,8 @@ records those evaluations, so the facts route 2C reads of V*'s parts escape to a
 * `Pr_innerRejects_le_PrBinnerV_at`: a rejecting judged draw costs at most `Pr[B_I]` over the draws' evaluations
   (`PrBinnerV`), which is at least `Pr[B_I]` (`PrBI_le_PrBinnerV`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

@@ -4,7 +4,11 @@ so the `k`-th row in creation order outputs bit `nIn + k` (`Good`), the column `
 (`col_and`). `Fresh m`: running `m` keeps that. Both nets keep it from the end of their inputs (`good_compression3`,
 `good_hm96Row`).
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Top
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Top
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Hm
 

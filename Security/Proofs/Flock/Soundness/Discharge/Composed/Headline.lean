@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Coined
-import Proofs.Flock.Soundness.Discharge.Composed.Setup
-import Proofs.Flock.Soundness.Discharge.Composed.RegWords
-import Proofs.Flock.Soundness.Assumptions.Zk
-import Proofs.Flock.Soundness.ZK.PadNonvanishing40
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Coined
+public import Proofs.Flock.Soundness.Discharge.Composed.Setup
+public import Proofs.Flock.Soundness.Discharge.Composed.RegWords
+public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Proofs.Flock.Soundness.ZK.PadNonvanishing40
 
 /-!
 # The composed headline of one `--zk` sampled session
@@ -28,6 +30,8 @@ The zero knowledge holds at every coin the prover doesn't refuse (`CoinedSetup.A
 the refused), with the coins committed at `Hello` under `keyed-cr` (not modelled; `ASSUMPTIONS.md`, zero knowledge's
 coverage).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

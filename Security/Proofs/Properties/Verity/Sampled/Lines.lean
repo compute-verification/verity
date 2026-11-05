@@ -1,7 +1,9 @@
-import Properties.Challenger
-import Proofs.Properties.Verity.Sampled.Trees
-import Proofs.Properties.Challenger.CanonLine
-import Proofs.Flock.Claims.Complete.Json.Hex
+module
+
+public import Properties.Challenger
+public import Proofs.Properties.Verity.Sampled.Trees
+public import Proofs.Properties.Challenger.CanonLine
+public import Proofs.Flock.Claims.Complete.Json.Hex
 
 /-!
 # The log v2 reads is the one the device printed, but for openings' coins of one SHA-512
@@ -33,6 +35,8 @@ coins the device opened, so they are the device's or bytes of one SHA-512 with t
   opening whose coins it reads other than the device's (`openCollision`) is a SHA-512 collision wherever v2's read of
   the device's log isn't the device's (`open_collision`).
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled.Lines
 

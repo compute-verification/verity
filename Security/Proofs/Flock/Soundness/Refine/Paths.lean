@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Refine.Rep
+module
+
+public import Proofs.Flock.Soundness.Refine.Rep
 
 /-!
 # The Merkle checks are the model's path checks (PROTOCOL.md §14)
@@ -7,6 +9,8 @@ For the unsalted SHA-512 scheme (`MerkleScheme.sha512`), a passed `merkleCheck` 
 every query, with the model's hash `H512` (SHA-512 on byte lists, into 64-byte digests) and encodings `enc512` (a row is
 its words' 16-byte encodings, a digest its bytes).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

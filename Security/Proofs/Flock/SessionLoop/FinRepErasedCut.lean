@@ -1,5 +1,7 @@
-import Proofs.Flock.SessionLoop.FinRepErasedOf
-import Proofs.Flock.SessionLoop.FinHmkCut
+module
+
+public import Proofs.Flock.SessionLoop.FinRepErasedOf
+public import Proofs.Flock.SessionLoop.FinHmkCut
 
 /-!
 # `FinRepErased` with the views' masked values read off the history
@@ -15,6 +17,8 @@ two premises in the step's own form, each over `swSrcE_hmk_cut`'s premises:
 
 **`Loop.finRepErased_of_cut`**: `finRepErased_of` with `hMk` replaced by those two.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

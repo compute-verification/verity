@@ -1,5 +1,7 @@
-import NetworkCertifier.Schedule
-import Std.Data.HashMap
+module
+
+public import NetworkCertifier.Schedule
+public import Std.Data.HashMap
 
 /-!
 # The online prover: each window's sync chosen `lag` buckets before its first bucket
@@ -12,6 +14,8 @@ frames ready by w·T − lag and the earlier declarations, and declares nothing;
 each window's summary and the hand time before it; both are functions of the frames seen and the declarations made by
 then, so this computes them afresh. Eligibility is `NetworkCertifier.eligible`.
 -/
+
+@[expose] public section
 
 namespace CertifierDevice
 

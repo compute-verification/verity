@@ -1,12 +1,14 @@
-import Proofs.Flock.Claims.Recursion.ResFrameElems
-import Proofs.Flock.Claims.Recursion.ResCopyRows
-import Proofs.Flock.Claims.Recursion.ResLowerDD
-import Proofs.Flock.Claims.Recursion.ResHeldRows
-import Proofs.Flock.Claims.Recursion.ResOpenedRow
-import Proofs.Flock.Claims.Recursion.VVTieOf
-import Proofs.Flock.Claims.Recursion.VerdictLoop
-import Proofs.Flock.Claims.Recursion.VerdictRowDTie
-import Proofs.Flock.VBridge.Family.PartKeys
+module
+
+public import Proofs.Flock.Claims.Recursion.ResFrameElems
+public import Proofs.Flock.Claims.Recursion.ResCopyRows
+public import Proofs.Flock.Claims.Recursion.ResLowerDD
+public import Proofs.Flock.Claims.Recursion.ResHeldRows
+public import Proofs.Flock.Claims.Recursion.ResOpenedRow
+public import Proofs.Flock.Claims.Recursion.VVTieOf
+public import Proofs.Flock.Claims.Recursion.VerdictLoop
+public import Proofs.Flock.Claims.Recursion.VerdictRowDTie
+public import Proofs.Flock.VBridge.Family.PartKeys
 
 /-!
 # P2 at the deployed constants (`framePorts_D`)
@@ -23,6 +25,8 @@ The element is group `p`'s port `i` at offset `o` (`sum_decomp`), port `i` being
   `framesRead` reads at `j` (`DecAt.frame_elem`), and `elemReadC` reads `framesRead` below the accumulators
   (`Rows.elemReadC_frame`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 

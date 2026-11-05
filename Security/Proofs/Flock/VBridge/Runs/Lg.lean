@@ -1,8 +1,10 @@
-import Proofs.Flock.VBridge.Algebra.LigeritoConverse
-import Proofs.Flock.VBridge.Compiled
-import Proofs.Flock.Soundness.Refine.RepConverse
-import Proofs.Flock.Soundness.Refine.Seam
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+module
+
+public import Proofs.Flock.VBridge.Algebra.LigeritoConverse
+public import Proofs.Flock.VBridge.Compiled
+public import Proofs.Flock.Soundness.Refine.RepConverse
+public import Proofs.Flock.Soundness.Refine.Seam
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 
 /-!
 # `prog_of_checks`' Ligerito hypothesis from E
@@ -18,6 +20,8 @@ on every record whose rounds from there retain the bytes it frames.
 * `levelsLoop_count`, `ligeritoRun_conss`: V*'s Ligerito records one consistency context per level, so the proof's
   query and consistency nonces (`decodeProof_sizes`) are as many as the verifier consumes.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Runs
 

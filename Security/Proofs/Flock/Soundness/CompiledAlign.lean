@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.CompiledLock
+module
+
+public import Proofs.Flock.Soundness.CompiledLock
 
 /-!
 # The locksteps for two level-0 tables are aligned
@@ -8,6 +10,8 @@ the leaf relations, never the compiled side or the slots. So the locksteps for t
 `Lock.Aligned`, builder by builder (`aligned_lockTable`), and the reps' fork probabilities do not
 depend on the level-0 table (`Lock.forkE_congr`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

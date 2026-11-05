@@ -1,4 +1,6 @@
-import Proofs.Flock.Recursive.LinksRows
+module
+
+public import Proofs.Flock.Recursive.LinksRows
 
 /-!
 # A link part's unit at each instance: its reference's output is the verifier's roots' rows
@@ -9,6 +11,8 @@ witness's input columns as u16 words (`inWordsAt`), give the reference link chec
 SHA-512 collides on two of the slots' messages and salts (`refMsgs`, `linkOut_bind`'s). `LinkRefStaged` is that
 statement; the link clause's binding (`LinksBindDeployed`) reads it with `inner_link`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Links
 
