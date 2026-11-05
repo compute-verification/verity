@@ -13,8 +13,8 @@ from the run that staged it); their ``STATEMENTS`` hold two instance counts for 
   rule, checked against each record's k_log) holding the rows' SHA-512 compressions (``sha512x3`` slots, three a 2^18 slot,
   each row's L padded bytes L / 128 of them after its constant prefix block), one ``hm96`` slot of 2^18 a row (its last
   compression, the salt's two and ``b || c``), the units' slots (2^ceil(log2 useful rows) each) and a 2^14 mask. The
-  commitment's share is its slots' share of the used cells. One rate, seconds per block cell, is fitted over every shape,
-  and each shape's residual against it is reported.
+  commitment's share is its slots' share of the used cells. One rate, seconds per block cell, is fitted over every shape in
+  relative error, and each shape's residual against it is reported.
 - **The floor.** The units' own slots at the fitted rate, the commitment opened for free: what any commitment scheme can at
   best reach with this prover. ``served_pcs`` measures what a linear-claim commitment's opening and serving actually cost.
 - **Exfiltration.** The 3-pager's model (`exfil_bound`) at each shape: proof units of 2·MACs FLOP and the block's output bits
@@ -220,9 +220,8 @@ def main(argv: list[str] | None = None) -> int:
     if len(bs) < 2:
         print("overhead: fewer than two shapes with two instance counts each", file=sys.stderr)
         return 1
-    x = np.array([b["cells_block"] for b in bs])
-    y = np.array([b["block_s"] for b in bs])
-    per_cell = float(x @ y / (x @ x))
+    v = np.array([b["cells_block"] / b["block_s"] for b in bs])
+    per_cell = float(v.sum() / (v @ v))  # least squares in relative error, so a small block counts as much as a large one
     for b in bs:
         used = b["cells_sha"] + b["cells_hm96"] + b["cells_unit"]
         b["residual"] = b["block_s"] / (per_cell * b["cells_block"]) - 1
