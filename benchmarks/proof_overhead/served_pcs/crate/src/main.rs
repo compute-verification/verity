@@ -6,13 +6,12 @@
 //! opening, default "1 16"), ROW_BYTES (hm96 row size, default 4096), HASH (the PCS's Merkle leaves: `hm96-sha512`, the
 //! default, or `sha512`), ROWS_BASELINE (0 skips the hm96 rows' timing).
 
-use std::{env, time::Instant};
+use std::{env, sync::Arc, time::Instant};
 
 use flock_core::{
     challenger::FsChallenger,
     pcs::{
         LOG_PACKING, OpeningGrinding, PcsParams, commit,
-        ligerito::{LigeritoProfile, prover_config_for, verifier_config_for},
         open_batch_mixed_ligerito_with_precomputed_s_hat_v_and_grinding,
         verify_opening_batch_ligerito_mixed_with_grinding,
     },
@@ -20,6 +19,7 @@ use flock_core::{
 };
 use flock_field::{F128, test_rng::Rng};
 use flock_hash::HashKind;
+use flock_merkle::hm96::{self, SALT_BYTES};
 use rayon::prelude::*;
 use sha2::{Digest, Sha512};
 
@@ -86,6 +86,12 @@ fn pcs_point(m: usize, log_inv_rate: usize, claims: usize, hash: &str) {
         num_lanes: None,
         merkle_hash,
     };
+    if matches!(merkle_hash, HashKind::Hm96Sha512) {
+        let mut s = 0x5a17 ^ m as u64;
+        let mut salts = move |n: usize| -> Vec<u8> { (0..n * SALT_BYTES).map(|_| splitmix(&mut s) as u8).collect() };
+        let level0 = Arc::new(salts(params.n_leaves()));
+        hm96::begin(level0, Box::new(salts));
+    }
     let t = Instant::now();
     let (commitment, prover_data) = commit(&packed, &params);
     let commit_s = t.elapsed().as_secs_f64();
@@ -94,10 +100,8 @@ fn pcs_point(m: usize, log_inv_rate: usize, claims: usize, hash: &str) {
     let points: Vec<(F128, Vec<F128>)> =
         (0..claims).map(|_| (rng.f128(), (0..m - K_SKIP).map(|_| rng.f128()).collect())).collect();
     let x_outers: Vec<&[F128]> = points.iter().map(|(_, x)| x.as_slice()).collect();
-    let log_n = m - LOG_PACKING;
-    let profile = LigeritoProfile::Fast;
-    let p_cfg = prover_config_for(log_n, INITIAL_K, profile).expect("prover config");
-    let v_cfg = verifier_config_for(log_n, INITIAL_K, profile).expect("verifier config");
+    let p_cfg = params.ligerito_prover_config().expect("prover config");
+    let v_cfg = params.ligerito_verifier_config().expect("verifier config");
 
     let t = Instant::now();
     let mut ch = FsChallenger::new(b"verity/served-pcs/v0");
@@ -133,6 +137,7 @@ fn pcs_point(m: usize, log_inv_rate: usize, claims: usize, hash: &str) {
     )
     .unwrap_or_else(|e| panic!("the verifier refused an honest opening: {e:?}"));
     let verify_s = t.elapsed().as_secs_f64();
+    hm96::end();
     let proof_bytes = bincode::serialize(&proof).expect("proof bytes").len();
     println!(
         "{{\"kind\":\"pcs\",\"hash\":\"{hash}\",\"m\":{m},\"log_inv_rate\":{log_inv_rate},\"claims\":{claims},\"bytes\":{},\"commit_s\":{commit_s:.4},\
