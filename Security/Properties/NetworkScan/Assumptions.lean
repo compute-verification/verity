@@ -1,4 +1,6 @@
-import Properties.NetworkScan.Flattens
+module
+
+public import Properties.NetworkScan.Flattens
 
 /-!
 # The deployment's premises under an accepted scan's scope
@@ -9,6 +11,8 @@ check is its sampling scope (`ScopeMatches`). Both are the deployed sampled veri
 (`SamplingDeploy.Code.parse`) and its scope check, which the network check doesn't read, so the scan's guarantee takes
 them as they stand.
 -/
+
+@[expose] public section
 
 namespace Properties.NetworkScan
 

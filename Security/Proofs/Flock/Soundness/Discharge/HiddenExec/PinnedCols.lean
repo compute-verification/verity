@@ -1,5 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteH
-import Proofs.Flock.Soundness.Discharge.HiddenExec.PinnedLinear
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteH
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.PinnedLinear
+
+@[expose] public section
 
 set_option Elab.async false
 

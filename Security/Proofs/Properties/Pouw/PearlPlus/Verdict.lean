@@ -1,6 +1,8 @@
-import Properties.Pouw.PearlPlus
-import Proofs.Properties.Evaluate
-import Proofs.Properties.Pouw.Commit
+module
+
+public import Properties.Pouw.PearlPlus
+public import Proofs.Properties.Evaluate
+public import Proofs.Properties.Pouw.Commit
 
 /-!
 # What Pearl+'s run verdict establishes (`Properties.Pouw.PearlPlus`)
@@ -12,6 +14,8 @@ model (a task's `get` is its function's value). The unscale is the Definition's 
 equalities. A tile over its inert-work bound gets `checkOpened`'s refusal as its verdict, so a tile that passes keeps the
 inert-work bound (`TileKeepsTheCap`).
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.PearlPlus
 

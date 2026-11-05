@@ -1,4 +1,6 @@
-import Proofs.Pouw.Lead.PStar.AlphabetProofs
+module
+
+public import Proofs.Pouw.Lead.PStar.AlphabetProofs
 
 /-!
 # The exact `p*` of `blc4a-t64-e7`'s three coin lanes under `-rot`'s weights (proofs)
@@ -20,6 +22,10 @@ the largest share of the draws `(b, s)` on which the increment equals a value fi
   (`rotLane_pstar`).
 * **The range** (`rotSum_abs_le`): the 127 weight lets a row's coin sum reach `16,383` in magnitude.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Pouw.SecurityProofs.Lead.PStar
 

@@ -1,5 +1,7 @@
-import PouwCommit.Rows
-import PouwWindow.Rounds
+module
+
+public import PouwCommit.Rows
+public import PouwWindow.Rounds
 
 /-!
 # The lead's commitment premises that PoUW's code computes
@@ -24,6 +26,8 @@ stated here against its functions, for every input.
   derived from that coin and that root. That the coin is uniform and hidden from the prover until it is opened is the
   live coins' trust (`trusted-host`), which no property states.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Lead.Commit
 

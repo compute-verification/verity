@@ -1,5 +1,7 @@
-import Proofs.Properties.NetworkScan.Walk
-import Proofs.Properties.NetworkScan.Accept
+module
+
+public import Proofs.Properties.NetworkScan.Walk
+public import Proofs.Properties.NetworkScan.Accept
 
 /-!
 # The scan is causal, proved
@@ -23,6 +25,8 @@ reads the Program topological, which `ScanCausal`
 takes as `P.orderViolation = none`; `scanOf` checks it (`Fits.Accepted.topo`), and `Properties.NetworkScan.scanFits`
 reads it from there.
 -/
+
+@[expose] public section
 
 namespace Properties.NetworkScan
 

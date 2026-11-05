@@ -1,5 +1,7 @@
-import Proofs.Pouw.Lead.Tail.Blocks
-import Proofs.Pouw.Lead.Tags.Repeats
+module
+
+public import Proofs.Pouw.Lead.Tail.Blocks
+public import Proofs.Pouw.Lead.Tags.Repeats
 
 /-!
 # What the three fiber counts share
@@ -15,6 +17,8 @@ coin terms at its step and before, and a coin term reads its row's tag bits at i
 column's `G` at step 0, and its coin tile's lanes at its step and column. Blocks and slots are numbered in mixed
 radix (`mul_add_lt`, `mul_add_inj`).
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Tail
 

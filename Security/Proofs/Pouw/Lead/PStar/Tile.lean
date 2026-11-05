@@ -1,4 +1,6 @@
-import Proofs.Pouw.Lead.PStar.Walks
+module
+
+public import Proofs.Pouw.Lead.PStar.Walks
 
 /-!
 # The exact `p*` of an MMA tile under `-rot` (proofs)
@@ -15,6 +17,8 @@ by the tile's rows: `2^16 · (2^21)^8 = 2^184` draws, the tile's word at row `r`
   of its draws, and on exactly one when it is a step's value: `p* = 2^−184` on a 16 × 8 tile, whatever the data
   and the earlier steps.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.PStar
 

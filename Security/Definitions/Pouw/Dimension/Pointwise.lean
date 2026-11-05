@@ -1,5 +1,7 @@
-import Mathlib.InformationTheory.Hamming
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+module
+
+public import Mathlib.InformationTheory.Hamming
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
 /-!
 # The chunk model: what one run at fixed coins writes (trusted definitions)
@@ -14,6 +16,8 @@ program at every coin value, so this model prices one run at a time.
   `d` whole, free at any address. A run that branches or computes addresses is just another list.
 * `run m₀ P` is the memory after `P`, `writes P` its word writes, and `pairs x` a chunk's (position, value) pairs.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.Pointwise
 

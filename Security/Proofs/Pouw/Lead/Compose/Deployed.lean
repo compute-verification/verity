@@ -1,5 +1,7 @@
-import Definitions.Pouw.Lead.Deployed
-import Proofs.Pouw.Lead.Compose.Honest
+module
+
+public import Definitions.Pouw.Lead.Deployed
+public import Proofs.Pouw.Lead.Compose.Honest
 
 /-!
 # The lead's honest lemma at the deployed instance
@@ -18,6 +20,8 @@ empty root and hm96 messages differ from a leaf in a header byte. The stream's t
 stream `certStream`, at every admitted call whose A is at most `2^64` bytes, in every forward whose words leaves number
 at most `2^64`. `honest` is the guarantee, `honestL1w` beside `certifierCoins`.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Compose
 

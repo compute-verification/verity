@@ -1,13 +1,15 @@
-import Proofs.Pouw.Lead.PStar.AlphabetProofs
-import Proofs.Pouw.Lead.PStar.Call
-import Proofs.Pouw.Lead.PStar.ExpansionProofs
-import Proofs.Pouw.Lead.PStar.Lanes
-import Proofs.Pouw.Lead.PStar.Marginal
-import Proofs.Pouw.Lead.PStar.MassFloorProofs
-import Proofs.Pouw.Lead.PStar.Stream
-import Proofs.Pouw.Lead.PStar.Table
-import Proofs.Pouw.Lead.PStar.Tile
-import Proofs.Pouw.Lead.PStar.Walks
+module
+
+public import Proofs.Pouw.Lead.PStar.AlphabetProofs
+public import Proofs.Pouw.Lead.PStar.Call
+public import Proofs.Pouw.Lead.PStar.ExpansionProofs
+public import Proofs.Pouw.Lead.PStar.Lanes
+public import Proofs.Pouw.Lead.PStar.Marginal
+public import Proofs.Pouw.Lead.PStar.MassFloorProofs
+public import Proofs.Pouw.Lead.PStar.Stream
+public import Proofs.Pouw.Lead.PStar.Table
+public import Proofs.Pouw.Lead.PStar.Tile
+public import Proofs.Pouw.Lead.PStar.Walks
 
 /-!
 # The lead's p*: how often a coin lane leaves an entry unchanged
@@ -42,3 +44,5 @@ Its proofs are in `Lead/PStar/`, its new declarations in `Pouw.SecurityProofs.Le
   the draws, and `k` of their words coincide together on at most `(1/2)·(1/128)^k`, the bits being shared by the
   row's columns; and over the tile, `p*` of the entries on average.
 -/
+
+@[expose] public section

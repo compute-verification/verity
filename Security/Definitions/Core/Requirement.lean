@@ -1,4 +1,6 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
 /-!
 # A requirement's execution, placement and store (trusted)
@@ -25,6 +27,8 @@ A step is always an **engine step**: the engine's `s`-th step, never a device ti
 `verity/ml/circuits/requirement.py` (`Placement`, `Store`) and its code-Lean port
 `verity/core/primitives/requirement/CircuitRequirement.lean` are their executable forms.
 -/
+
+@[expose] public section
 
 namespace Accounting.Requirement
 

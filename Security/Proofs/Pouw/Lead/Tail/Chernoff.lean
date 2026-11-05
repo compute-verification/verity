@@ -1,7 +1,9 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Data.Nat.Factorial.Basic
-import Definitions.Pouw.Basic.Prob
-import Proofs.Pouw.Prob
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Data.Nat.Factorial.Basic
+public import Definitions.Pouw.Basic.Prob
+public import Proofs.Pouw.Prob
 
 /-!
 # Sequentially dominated events are rarely many
@@ -21,6 +23,8 @@ The lead's coin-branch tail (`Tail.Repeats`) reads it. An additive Hoeffding bou
 serve: its deviation grows as the square root of the number of blocks, which at T 512 × 64 exceeds the coin-branch
 slack, and it needs independent blocks, which the lead's coins don't give (`Tail.Repeats`).
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Tail
 

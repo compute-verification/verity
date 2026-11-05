@@ -1,11 +1,13 @@
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Basic.Real.Basic
-import Mathlib.Data.Finset.Max
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.Ring
+module
+
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Basic.Real.Basic
+public import Mathlib.Data.Finset.Max
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.Ring
 
 /-!
 # The mass floor: an integer value with no likely point has a wide spread
@@ -22,6 +24,8 @@ The proof needs no integral. `cubic L u` is the antiderivative of `(L² − u²)
 Per step, the floor reads `1 ≤ p²(12V + 1)`. Its mean over the steps holds at the means (`mass_floor_mean`):
 `1/x²` is convex, and summing its tangent line at the mean mass gives `1 ≤ p̄²(12V̄ + 1)`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.MassFloor
 

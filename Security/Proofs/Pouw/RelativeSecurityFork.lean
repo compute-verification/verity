@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Pouw.Guarantees.RelativeSecurity
-import Proofs.Pouw.RelativeSecurity
+module
+
+public import Mathlib
+public import Definitions.Pouw.Guarantees.RelativeSecurity
+public import Proofs.Pouw.RelativeSecurity
 
 /-!
 # Relative security's fork finder: the floors per prover's error, and their honest and nontrivial lemmas
@@ -15,6 +17,8 @@ functions at no cost: the honest run's one product slot computes the cell-block'
 zero, the game accepts every play and no round breaks; and their nontrivial lemma, a constant adversary against a
 verifier that accepts everything.
 -/
+
+@[expose] public section
 
 namespace Pouw.RelativeSecurity
 

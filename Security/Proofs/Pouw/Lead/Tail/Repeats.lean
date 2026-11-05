@@ -1,8 +1,10 @@
-import Proofs.Pouw.Prob
-import Proofs.Pouw.Lead.Tail.Across
-import Proofs.Pouw.Lead.Tail.Columns
-import Proofs.Pouw.Lead.Tail.Slots
-import Proofs.Pouw.Lead.Tail.Route
+module
+
+public import Proofs.Pouw.Prob
+public import Proofs.Pouw.Lead.Tail.Across
+public import Proofs.Pouw.Lead.Tail.Columns
+public import Proofs.Pouw.Lead.Tail.Slots
+public import Proofs.Pouw.Lead.Tail.Route
 
 /-!
 # The coin-branch tail at the three points and decode
@@ -26,6 +28,8 @@ column block's hit slots fewer than `x`, the repeats are at most `ρ (a − 1) +
 repeats. `pr_split_le` bounds its event by the three counts' tails, and `pr_tail_le` is both at a call. A route
 (`Tail.route_le`) picks the four counts.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Tail
 

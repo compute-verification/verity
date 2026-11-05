@@ -1,10 +1,12 @@
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Basic.Real.Basic
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.NormNum
+module
+
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Basic.Real.Basic
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.NormNum
 
 /-!
 # What one exchanged bit carries under `-rot`'s weights
@@ -30,6 +32,8 @@ lanes.
   token, at `n_max ≤ 256 / 3` and Llama-3.2-1B's MACs a token, is at most 0.0361% at 32 bits a token and 0.361%
   at 320 while `W_mac ≤ 128.59`; `netShare_le_of_stock_le` bounds the same term over any `W_reg` of at least the stock.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Network
 

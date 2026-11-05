@@ -1,6 +1,8 @@
-import Properties.Pous.PeriodAt
-import Definitions.Hash.Assumptions.Prf
-import Definitions.Pous.Guarantees.Obligation
+module
+
+public import Properties.Pous.PeriodAt
+public import Definitions.Hash.Assumptions.Prf
+public import Definitions.Pous.Guarantees.Obligation
 
 /-!
 # PoUS over one period in the shared coin game
@@ -24,6 +26,8 @@ The session id is fixed for the period (`Audits.sid`, the one the auditor design
 auditor derives it from the same coins (`pous.period`, `challenger_party`): reading that would make the coin key's input
 depend on an earlier answer, an adaptive query, which `Sha512Prf` (non-adaptive) doesn't cover.
 -/
+
+@[expose] public section
 
 namespace Pous.Period
 

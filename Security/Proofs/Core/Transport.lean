@@ -1,8 +1,12 @@
-import Mathlib.Data.Fintype.Prod
-import Mathlib.Algebra.BigOperators.Fin
-import Definitions.Core.Guarantees.Transport
+module
+
+public import Mathlib.Data.Fintype.Prod
+public import Mathlib.Algebra.BigOperators.Fin
+public import Definitions.Core.Guarantees.Transport
 
 /-! # Proofs of the transport's guarantees, each with an honest instance and one that fails without its premise -/
+
+@[expose] public section
 
 namespace Verity.Transport
 

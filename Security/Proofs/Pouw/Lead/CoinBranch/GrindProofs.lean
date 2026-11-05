@@ -1,5 +1,7 @@
-import Proofs.Pouw.Lead.Tags.SsnProofs
-import Mathlib.Combinatorics.Enumerative.DoubleCounting
+module
+
+public import Proofs.Pouw.Lead.Tags.SsnProofs
+public import Mathlib.Combinatorics.Enumerative.DoubleCounting
 
 /-!
 # Target words lost on a set of coins: grinding and reading (proofs)
@@ -25,6 +27,8 @@ runs each of its straight-line programs on a cell of the coins
   block is triangular, so at most `g` blocks occur. A word whose only partners are coin words with no such pivot is
   lost at most once a coin word.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.Grind
 

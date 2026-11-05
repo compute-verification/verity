@@ -1,5 +1,7 @@
-import PouwPearlPlus.Check
-import Flock.Bytes
+module
+
+public import PouwPearlPlus.Check
+public import Flock.Bytes
 
 /-!
 # The prover's openings from a pass's files (`verify_run.Opened`), and the verdict as JSON
@@ -11,6 +13,8 @@ index for A, 2^62 + the weight for B, 2^63 for the transcript, 2^61 + the call's
 tree file laid out as the device writes it (level 0 padded to a power of two, then each level above it, 64 bytes a node).
 A y file that fails is the y opening's failure (`Opened.open_y`), met only once the tile has passed.
 -/
+
+@[expose] public section
 
 namespace PouwCheck.PearlPlus
 

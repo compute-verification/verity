@@ -1,5 +1,7 @@
-import Proofs.NetworkCertifier.Accepted
-import Proofs.Properties.CertifierNetwork.Instance
+module
+
+public import Proofs.NetworkCertifier.Accepted
+public import Proofs.Properties.CertifierNetwork.Instance
 
 /-!
 # A later window's sync never changes an earlier window's rows (5c)
@@ -29,6 +31,8 @@ Program's own row of one frame anchored at bucket 0. The nontrivial lemma takes 
 the advice, which accepts every sequence with complete statuses: there two sequences of the one bucket differ in the
 payload of its one slot, against the bound's one at `Instance.config`'s parameters.
 -/
+
+@[expose] public section
 
 open NetworkCheck.Check (expectedGrid noSync)
 open NetworkCertifier (ClockSync LogicalFrame expectedRow)

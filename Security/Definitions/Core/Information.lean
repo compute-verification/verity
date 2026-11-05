@@ -1,4 +1,6 @@
-import Mathlib.Analysis.SpecialFunctions.Log.NegMulLog
+module
+
+public import Mathlib.Analysis.SpecialFunctions.Log.NegMulLog
 
 /-!
 # Entropy and mutual information over a uniform finite space
@@ -8,6 +10,8 @@ probabilities counted as `Pous.pr` counts them. A random quantity is a function 
 probability equal to the fraction of `Ω` on which it holds. Entropies are in bits. Mathlib has `Real.negMulLog` and
 the binary entropy, but no Shannon entropy of a finite distribution.
 -/
+
+@[expose] public section
 
 namespace Verity.Information
 

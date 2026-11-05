@@ -11,8 +11,12 @@ file that binds ports needs that record (`flock-verify --interface`), and each s
 be a registered port of the file, never bound and never left out, whatever the file's builder omitted. Without `bound`,
 `check` is `Registered.checkComplete`.
 -/
-import Flock.Registered
-import Flock.JsonKeys
+module
+
+public import Flock.Registered
+public import Flock.JsonKeys
+
+@[expose] public section
 
 namespace Flock
 namespace RegBound

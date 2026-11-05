@@ -1,5 +1,7 @@
-import PouwPearlPlus.Rule
-import PouwPearlPlus.Run
+module
+
+public import PouwPearlPlus.Rule
+public import PouwPearlPlus.Run
 
 /-!
 # The run's credit at Pearl's assumption (`verify_run.credit_at_assumption`)
@@ -18,6 +20,8 @@ Every quantity is exact (`Rat`), as the Python's `Fraction`s are. ε is the one 
 Python's unless the true (1 − δ^(1/t)) · 10⁹ lies within the float's rounding of an integer (none does for t < 400 or
 t ∈ {1,000, 2,000, 4,096, 10,000} at δ = 1/100, 1/1000, 1/20, 10⁻⁶ or 2⁻⁴⁰).
 -/
+
+@[expose] public section
 
 namespace PouwCheck.PearlPlus
 

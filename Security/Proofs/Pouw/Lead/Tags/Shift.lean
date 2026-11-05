@@ -1,11 +1,13 @@
-import Definitions.Pouw.Lead.Layout
-import Definitions.Pouw.Dimension.Ssn
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Tactic.FinCases
-import Mathlib.Tactic.Ring
-import Mathlib.Tactic.Linarith
+module
+
+public import Definitions.Pouw.Lead.Layout
+public import Definitions.Pouw.Dimension.Ssn
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Tactic.FinCases
+public import Mathlib.Tactic.Ring
+public import Mathlib.Tactic.Linarith
 
 /-!
 # The lead's words are shift-separated on its coins
@@ -24,6 +26,8 @@ column, two rows' step-0 words are separated by the row tag against `G`, whose d
 28,560 rows (`rowTag_inj`, `rowTag_ne_zero`), and their later words by the rows' tag bits. Every word reads a coin lane
 and a second coin, `G` at step 0 and the tag bit later, so none is a function of one coin plus a constant.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Tags
 

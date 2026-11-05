@@ -1,5 +1,7 @@
-import NetworkCheck.Period
-import Definitions.NetworkCertifier.SampledAudit
+module
+
+public import NetworkCheck.Period
+public import Definitions.NetworkCertifier.SampledAudit
 
 /-!
 # A sampling statement's gates are its descriptor's Program flattened
@@ -10,6 +12,8 @@ reading exactly the gates its operands name, returning the gates its root's retu
 states the scan's fit over every flattening, and `Properties.NetworkScan.Assumptions` the deployment's premise that each
 statement it parses is its descriptor flattened.
 -/
+
+@[expose] public section
 
 namespace Properties.NetworkScan
 

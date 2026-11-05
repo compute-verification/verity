@@ -1,4 +1,6 @@
-import Definitions.Pous.Model.StreamedWipe
+module
+
+public import Definitions.Pous.Model.StreamedWipe
 
 /-!
 # The streamed-label wipe: what an accepted run holds, and guessing lists (experimental)
@@ -11,6 +13,8 @@ mutual information.
 - `listAdvantage` is the PRF's advantage against every distinguisher that guesses the prior content `z` as a list of
   one fixed size, read from `held` and the challenges.
 -/
+
+@[expose] public section
 
 namespace Pous.StreamedWipe
 

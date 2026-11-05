@@ -2,7 +2,11 @@
 A gate of the canonical layout (PROTOCOL.md §6), as `Flock.Program.Prog.gate` locates it: `layout.Gate`, which
 `verity-evaluate`'s `gate` function holds to it.
 -/
-import Flock.Program
+module
+
+public import Flock.Program
+
+@[expose] public section
 
 namespace Flock.Program
 

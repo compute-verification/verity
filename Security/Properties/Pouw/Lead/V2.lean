@@ -1,5 +1,7 @@
-import CoreProtocol.Protocol
-import Definitions.Pouw.Lead.Model
+module
+
+public import CoreProtocol.Protocol
+public import Definitions.Pouw.Lead.Model
 
 /-!
 # The lead's acceptance at PoUW's `verity/pouw/v2` case (draft, over a stub of the case's readers)
@@ -31,6 +33,8 @@ refuses a forward whose counted and release bits pass its credited calls' bits (
 call, a strategy that registered the call's `A` root and words root, both the honest ones, is `Accepted` at the case's
 coins.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Lead.V2
 

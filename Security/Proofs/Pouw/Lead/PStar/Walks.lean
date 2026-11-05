@@ -1,4 +1,6 @@
-import Proofs.Pouw.Lead.PStar.Lanes
+module
+
+public import Proofs.Pouw.Lead.PStar.Lanes
 
 /-!
 # The coin-lane walks under `-rot`: what the 127 weight opens (proofs)
@@ -27,6 +29,8 @@ coincidence with another row's word of the same tile, whose lanes read the same 
 * **Over the tile** (`rot_sum_hits_le`): with row bits drawn per row and coins per column, every row reading its own
   class by parity, targets fixed before the draw are hit on at most a `65/2,097,152` share of the entries on average.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.PStar
 

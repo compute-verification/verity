@@ -1,6 +1,8 @@
-import Mathlib.Algebra.Order.Floor.Semiring
-import Mathlib.Data.Fintype.Prod
-import Definitions.Pouw.Lead.Gap
+module
+
+public import Mathlib.Algebra.Order.Floor.Semiring
+public import Mathlib.Data.Fintype.Prod
+public import Definitions.Pouw.Lead.Gap
 
 /-!
 # The coin-branch tail's blocks
@@ -21,6 +23,8 @@ agree, so `repeats ≤ ρ · across + (ρ − 1) · within`; and `within` is at 
 the most slots one of them has (`within_le`). `lamX`, `lamG` and `lamB` are the three counts' Poisson parameters, and
 `cut` a count's bound with the counts it can't reach at 0.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Tail
 

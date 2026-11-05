@@ -1,7 +1,9 @@
-import Definitions.Pouw.Guarantees.Writes
-import Proofs.Pouw.Dimension.H100WProofs
-import Proofs.Pouw.Lead.CoinBranch.PointwiseProofs
-import Proofs.Pouw.Lead.Tags.SsnProofs
+module
+
+public import Definitions.Pouw.Guarantees.Writes
+public import Proofs.Pouw.Dimension.H100WProofs
+public import Proofs.Pouw.Lead.CoinBranch.PointwiseProofs
+public import Proofs.Pouw.Lead.Tags.SsnProofs
 
 /-!
 # Proofs of what writing distinct words costs (draft semantics, pending review, except `DistinctWritesMH100Floor`)
@@ -10,6 +12,8 @@ One theorem per guarantee, named as the guarantee (`Pouw.SecurityProofs.Writes.D
 Pouw.Guarantees.Writes.DistinctWritesMH100Floor`, and so on), each the theorem of `H100WProofs`, `SsnProofs` or
 `PointwiseProofs` that proves it.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Writes
 

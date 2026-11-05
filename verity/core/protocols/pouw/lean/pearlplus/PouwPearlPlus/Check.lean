@@ -1,6 +1,8 @@
-import PouwPearlPlus.Load
-import PouwPearlPlus.Tile
-import PouwPearlPlus.Credit
+module
+
+public import PouwPearlPlus.Load
+public import PouwPearlPlus.Tile
+public import PouwPearlPlus.Credit
 
 /-!
 # Pearl+'s run verdict (`verify_run.verify_passes`)
@@ -20,6 +22,8 @@ import PouwPearlPlus.Credit
 
 Out of scope, refused by name in `load`: sm_120's schemes, live coins, the window record's tie (`tie`, `rounds`, `dropped`).
 -/
+
+@[expose] public section
 
 namespace PouwCheck.PearlPlus
 

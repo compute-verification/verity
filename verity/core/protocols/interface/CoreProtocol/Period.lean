@@ -14,8 +14,16 @@ copy is the spec's, and `verity.core.periods` is its Python mirror, which `core-
 The JSON: a span is `{"len": n, "start": n}`; a monitoring period is `{"execution": [τ, …], "sampling": [[τ, …], …],
 "span": SPAN}`. Each reader accepts exactly the keys its writer writes.
 -/
-import Lean.Data.Json
-import Flock.Canon
+module
+
+public import Lean.Data.Json
+public import Flock.Canon
+meta import Lean.Data.Json
+meta import Flock.Canon
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core
 

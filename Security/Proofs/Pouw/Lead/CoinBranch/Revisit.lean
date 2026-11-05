@@ -1,6 +1,8 @@
-import Proofs.Pouw.Lead.PStar.AlphabetProofs
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Tactic.FinCases
+module
+
+public import Proofs.Pouw.Lead.PStar.AlphabetProofs
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Tactic.FinCases
 
 /-!
 # Coin branch: revisits at tile grain (proofs)
@@ -22,6 +24,8 @@ coins alone (`fresh_card_le`).
   16 × 8 tile holding both row classes returns to any value on at most `2^21` of its `2^184` fresh coins: `2^−163`,
   whatever the data and the other coins.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.CoinBranch
 

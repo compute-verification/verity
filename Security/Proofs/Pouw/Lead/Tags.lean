@@ -1,11 +1,13 @@
-import Proofs.Pouw.Lead.Tags.Exact
-import Proofs.Pouw.Lead.Tags.Distinct
-import Proofs.Pouw.Lead.Tags.Fold
-import Proofs.Pouw.Lead.Tags.Repeats
-import Proofs.Pouw.Lead.Tags.Shift
-import Proofs.Pouw.Lead.Tags.SsnProofs
-import Proofs.Pouw.Lead.Tags.TagProofs
-import Proofs.Pouw.Lead.Tags.Tile
+module
+
+public import Proofs.Pouw.Lead.Tags.Exact
+public import Proofs.Pouw.Lead.Tags.Distinct
+public import Proofs.Pouw.Lead.Tags.Fold
+public import Proofs.Pouw.Lead.Tags.Repeats
+public import Proofs.Pouw.Lead.Tags.Shift
+public import Proofs.Pouw.Lead.Tags.SsnProofs
+public import Proofs.Pouw.Lead.Tags.TagProofs
+public import Proofs.Pouw.Lead.Tags.Tile
 
 /-!
 # The lead's tags, coin lanes and epilogue fold
@@ -32,3 +34,5 @@ Its proofs are in `Lead/Tags/`, its new declarations in `Pouw.SecurityProofs.Lea
 * `TagProofs`: row tags against drawn weights. Two rows' tiles agree for at most a `q^−|J|` share of the draws, and
   the success set over a family fixed before the draw is bounded.
 -/
+
+@[expose] public section

@@ -1,7 +1,9 @@
-import Proofs.Pouw.Prob
-import Proofs.Pouw.Lead.Compose.G
-import Proofs.Pouw.Lead.Tail.Table
-import Proofs.Pouw.Lead.Tail.Repeats
+module
+
+public import Proofs.Pouw.Prob
+public import Proofs.Pouw.Lead.Compose.G
+public import Proofs.Pouw.Lead.Tail.Table
+public import Proofs.Pouw.Lead.Tail.Repeats
 
 /-!
 # The lead's tail form from its pieces
@@ -18,6 +20,8 @@ at the coins the certifier releases, which `CertifierCoins` makes `coinsOf` of t
 `tailAt`: `tableTail` at `2^30` tiles and the node's `2^40` stored tiles is `2^−35` and a term under `2^−97`, and
 `coinTail` at most `2^−42` (`Tail.coinTail_le`).
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Tail
 

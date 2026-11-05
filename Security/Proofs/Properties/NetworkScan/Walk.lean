@@ -1,8 +1,10 @@
-import Properties.NetworkScan
-import NciCheck.Desc
-import Proofs.Properties.Nci.BodiesOk
-import Proofs.Properties.Nci.OperandsResolve
-import Proofs.Properties.Nci.ReadsExact
+module
+
+public import Properties.NetworkScan
+public import NciCheck.Desc
+public import Proofs.Properties.Nci.BodiesOk
+public import Proofs.Properties.Nci.OperandsResolve
+public import Proofs.Properties.Nci.ReadsExact
 
 /-!
 # The walk lemma
@@ -23,6 +25,8 @@ resolution from below `A` (`run_below`) ends in `A`'s gates or at what a referen
 from the root. `Prog.gate`'s walk to a gate of `A` goes through `A` (`gateStep_root`) and stays below it, and each
 operand it returns is such a resolution (`gate_below`): `memberReads`.
 -/
+
+@[expose] public section
 
 namespace Properties.NetworkScan
 

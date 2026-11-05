@@ -1,7 +1,9 @@
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Definitions.Pouw.Lead.Model
-import Proofs.Pouw.Lead.Tags.Shift
-import Proofs.Pouw.Lead.Tags.TagProofs
+module
+
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Definitions.Pouw.Lead.Model
+public import Proofs.Pouw.Lead.Tags.Shift
+public import Proofs.Pouw.Lead.Tags.TagProofs
 
 /-!
 # Two of the lead's MMA tiles agree on at most a `7^−8` share of the coins
@@ -22,6 +24,8 @@ the first tile's columns (`colsOf`, 8 for a whole column block by `colsOf_card`)
 Each is a count through a block of coins (`TileBlock.card_le`): rewriting the block leaves every other coin, so over each
 value of the others the block's values meeting every column's condition are counted column by column.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Tags
 

@@ -1,4 +1,6 @@
-import Definitions.Pouw.Lead.Gap
+module
+
+public import Definitions.Pouw.Lead.Gap
 
 /-!
 # A forward of the lead, as the network certifier counts it (trusted definitions)
@@ -15,6 +17,8 @@ the words root it releases the links, and the release carries `⌈log₂(r + 1)�
 * **Its network term** (`Forward.networkRegs`): each call's `betaLead` a bit its execution exchanged, in registers.
   That the calls' bits are the forward's counted ones is a premise (`Pouw.Assumptions.Lead.SerialForwards`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Lead
 

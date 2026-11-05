@@ -1,6 +1,8 @@
-import Proofs.Pouw.Lead.CoinBranch.PointwiseProofs
-import Proofs.Pouw.Lead.CoinBranch.Revisit
-import Mathlib.Tactic.LinearCombination
+module
+
+public import Proofs.Pouw.Lead.CoinBranch.PointwiseProofs
+public import Proofs.Pouw.Lead.CoinBranch.Revisit
+public import Mathlib.Tactic.LinearCombination
 
 /-!
 # Coin branch: what a run keeps (proofs)
@@ -17,6 +19,8 @@ the coins of each pair bounds the sum (`sum_card_filter_le`).
 * **Step 0** (`two_rows_fiber_le`): a step-0 tile reads a column's four tag weights `G[:, j] ∈ [−3, 3]^4` only through
   its rows' tags. Two rows whose tags have a nonzero 2 × 2 minor leave at most 49 of the 2,401 weights.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.CoinBranch
 

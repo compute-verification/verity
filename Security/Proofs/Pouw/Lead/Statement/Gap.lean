@@ -1,4 +1,6 @@
-import Definitions.Pouw.Guarantees.Lead
+module
+
+public import Definitions.Pouw.Guarantees.Lead
 
 /-!
 # The gap at every admitted call and at the three points, and the nontrivial lemma
@@ -18,6 +20,8 @@ The proof writes a call of the lead in its variables (`leadVars`): `16 q` rows, 
 stock `R · u · K / 32` from `28 p S ≤ p K + 34 p`, `2,048 p ≤ p K`, `64 K ≤ p K` and `2^17 ≤ p K` (`products`, at
 `p ≥ 64`) and `(8 p − 7) K ≤ u K`.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Statement
 

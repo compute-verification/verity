@@ -1,10 +1,12 @@
-import Definitions.Pouw.Lead.Layout
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Algebra.Order.Ring.Abs
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.NormNum
+module
+
+public import Definitions.Pouw.Lead.Layout
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Algebra.Order.Ring.Abs
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.NormNum
 
 /-!
 # The lead's committed words fit a 32-bit register
@@ -17,6 +19,8 @@ The column bias adds at most `2S + 14` (`bias_abs`). So every word is within `46
 inside `[−2^31, 2^31)` for at most 4,587 steps (`word_int32`): at the lead, for an inner dimension of at most 128,429
 (`lead_word_int32`).
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Tags
 

@@ -1,4 +1,6 @@
-import Definitions.Core.Game
+module
+
+public import Definitions.Core.Game
 
 /-!
 # The transport's vocabulary: roles, channels, and what a coalition sees of them
@@ -10,6 +12,8 @@ transit. `ViewIsRecord` is what zero knowledge needs of the transport, for one t
 over uniform draws (`Game.draw`). The premises on a channel are in `Assumptions/Transport`: `WitnessPathPrivate c` (the
 per-channel premise), `ImprintPathPrivate c`, `ChannelHides` and `ChannelAuthentic`.
 -/
+
+@[expose] public section
 
 namespace Verity.Transport
 

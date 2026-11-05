@@ -1,4 +1,6 @@
-import Proofs.Pouw.PearlC.TileGamma
+module
+
+public import Proofs.Pouw.PearlC.TileGamma
 
 /-!
 # γ under the tolerant sampled audit, from TT_OUT per tile
@@ -16,6 +18,8 @@ good tile is within its cap (`TileGood`), so no premise is added.
 * `missBound_strict` and `gammaSampled_of_tol`: the audit that accepts only good and blank tiles is the table `u 0 = ε_s`,
   `u x = 1` otherwise, at `δ = (1 − ε_s)^t` (`workWeightedSampling`), so `GγSampledTol` gives `GγSampled`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

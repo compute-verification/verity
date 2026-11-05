@@ -1,5 +1,7 @@
-import Proofs.Pouw.PearlC.TileCheckWords
-import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
+module
+
+public import Proofs.Pouw.PearlC.TileCheckWords
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
 
 /-!
 # The plain `pc8` tile check's words under rev1 and its row caps
@@ -11,6 +13,8 @@ row rule. It never reads credit, cap or `W_ref`, so it moves between protocols a
 theorem holds at them as it is: `tileCheck8_computesWords_h100Rev1` at the protocol and tiles `TTOutTilePearlCH100Rev1`
 reads, and `tileCheck8_computesWords_h100Rev1RowCapAt` at those of the `-h3` sampled γ.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

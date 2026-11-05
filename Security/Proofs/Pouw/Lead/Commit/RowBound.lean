@@ -1,6 +1,8 @@
-import Properties.Pouw.Lead.Commit
-import Proofs.Properties.Pouw.Commit
-import Proofs.Flock.Soundness.KeyedDraw
+module
+
+public import Properties.Pouw.Lead.Commit
+public import Proofs.Properties.Pouw.Commit
+public import Proofs.Flock.Soundness.KeyedDraw
 
 /-!
 # row-bound: a SHA-512 frame-v3 leaf's first block binds its domain and position
@@ -11,6 +13,8 @@ by byte 128 when `rank` takes at most 7 bytes (`natLen_le_seven`), so the first 
 back (`be8_inj`, `natBytes_inj`). `rowBound` proves `RowBound`: equal messages give the first case, and different ones
 with one digest are the collision.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Commit
 

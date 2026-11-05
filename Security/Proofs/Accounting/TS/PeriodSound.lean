@@ -1,7 +1,9 @@
-import Properties.Accounting.JointBridge.ServiceSoundOfSessions
-import Proofs.Accounting.TS.SessionSound
-import Proofs.Accounting.FillerLuck
-import Proofs.Pouw.Period.Honest
+module
+
+public import Properties.Accounting.JointBridge.ServiceSoundOfSessions
+public import Proofs.Accounting.TS.SessionSound
+public import Proofs.Accounting.FillerLuck
+public import Proofs.Pouw.Period.Honest
 
 /-!
 # PoUW's proof system soundness from its proof layer (the proof)
@@ -20,6 +22,8 @@ since the check accepts and draws a unit on every path.
 This module imports `Proofs.Accounting.TS.SessionSound`, whose imports make `X` a token, so `Proofs/Accounting.lean`
 imports it and no theorem here binds `X`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Bridge
 

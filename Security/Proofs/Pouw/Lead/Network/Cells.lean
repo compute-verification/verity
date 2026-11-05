@@ -1,7 +1,9 @@
-import Definitions.Pouw.Lead.Layout
-import Proofs.Pouw.Lead.Network.Rot
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Tactic.Ring
+module
+
+public import Definitions.Pouw.Lead.Layout
+public import Proofs.Pouw.Lead.Network.Rot
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Tactic.Ring
 
 /-!
 # The lead's cells carry `-rot`'s reads (`lead_cells_macs_le`)
@@ -20,6 +22,8 @@ of `J` through `-rot`'s weights.
   `lead_cells_macs_le`: it does at most `256 / 3` MACs a bit of its message, and `rot_cells_macs_le` sums that over
   any set of cells.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Network
 

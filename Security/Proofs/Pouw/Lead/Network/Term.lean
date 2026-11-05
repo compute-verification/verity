@@ -1,10 +1,12 @@
-import Definitions.Pouw.Guarantees.Lead
-import Mathlib.Algebra.Order.BigOperators.Group.List
-import Mathlib.Data.Nat.Cast.Order.Field
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.Ring
+module
+
+public import Definitions.Pouw.Guarantees.Lead
+public import Mathlib.Algebra.Order.BigOperators.Group.List
+public import Mathlib.Data.Nat.Cast.Order.Field
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.Ring
 
 /-!
 # The lead's network term against the statement
@@ -26,6 +28,8 @@ What `Rot`'s theorems prove of the statement's definitions:
 With words chunks of 65,536 words (`l1w`), `wMac` is at most the words' work a MAC, their compressions' and A's
 (`betaLead_le_of_row`), the padded call's rows bounding A's; a call of no rows has `wMac = 0`.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Network
 

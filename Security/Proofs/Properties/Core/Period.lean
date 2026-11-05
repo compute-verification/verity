@@ -1,4 +1,6 @@
-import Properties.Core.Period
+module
+
+public import Properties.Core.Period
 
 /-!
 # Proofs that the code's periods are the spec's (`Properties.Core.Period`)
@@ -8,6 +10,8 @@ that is `isCut` of a span is `Array.ofFn` of exactly one cut of it (`isCut_iff`)
 span's start and stop, and `ordered` is monotone (`ordered_ofFn`). The parts of `Array.ofFn f` are the spans between
 consecutive values of `f` (`parts_ofFn`), which is `Cut.part`. A monitoring period then reads cut by cut.
 -/
+
+@[expose] public section
 
 namespace Properties.Period
 

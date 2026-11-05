@@ -1,4 +1,6 @@
-import Proofs.Pouw.Lead.CoinBranch.PointwiseProofs
+module
+
+public import Proofs.Pouw.Lead.CoinBranch.PointwiseProofs
 
 /-!
 # Coin branch: the chunk model against a program that branches on the coins (proofs; draft model, pending review)
@@ -32,6 +34,8 @@ point, as in `adaptive_pairs_le`. Each bound reads only the targets an outcome r
   outcomes in classes of fewer than `c` number at most `c` a path, so a premise stated on every path's share of the
   coins of at least `c` outcomes holds at all others.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.CoinBranch
 

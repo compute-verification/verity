@@ -2,7 +2,11 @@
 A Program's `Q_word` evaluation, as `Flock.Extract.evaluate` returns it: `partition_object.Partition`, which
 `verity-evaluate`'s `partition` function holds to it.
 -/
-import Flock.Extract
+module
+
+public import Flock.Extract
+
+@[expose] public section
 
 namespace Flock.Extract
 

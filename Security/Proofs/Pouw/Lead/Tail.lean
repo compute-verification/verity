@@ -1,16 +1,18 @@
-import Proofs.Pouw.Lead.Tail.Chernoff
-import Proofs.Pouw.Lead.Tail.Fiber
-import Proofs.Pouw.Lead.Tail.Blocks
-import Proofs.Pouw.Lead.Tail.Words
-import Proofs.Pouw.Lead.Tail.Across
-import Proofs.Pouw.Lead.Tail.Columns
-import Proofs.Pouw.Lead.Tail.Slots
-import Proofs.Pouw.Lead.Tail.Route
-import Proofs.Pouw.Lead.Tail.Table
-import Proofs.Pouw.Lead.Tail.Repeats
-import Proofs.Pouw.Lead.Tail.G
-import Proofs.Pouw.Lead.Tail.Gap
-import Proofs.Pouw.Lead.Tail.Nontrivial
+module
+
+public import Proofs.Pouw.Lead.Tail.Chernoff
+public import Proofs.Pouw.Lead.Tail.Fiber
+public import Proofs.Pouw.Lead.Tail.Blocks
+public import Proofs.Pouw.Lead.Tail.Words
+public import Proofs.Pouw.Lead.Tail.Across
+public import Proofs.Pouw.Lead.Tail.Columns
+public import Proofs.Pouw.Lead.Tail.Slots
+public import Proofs.Pouw.Lead.Tail.Route
+public import Proofs.Pouw.Lead.Tail.Table
+public import Proofs.Pouw.Lead.Tail.Repeats
+public import Proofs.Pouw.Lead.Tail.G
+public import Proofs.Pouw.Lead.Tail.Gap
+public import Proofs.Pouw.Lead.Tail.Nontrivial
 
 /-!
 # The lead's tail form
@@ -32,3 +34,5 @@ import Proofs.Pouw.Lead.Tail.Nontrivial
 
 Its proofs go in `Lead/Tail/`, its declarations in `Pouw.SecurityProofs.Lead.Tail`, and each file is imported here.
 -/
+
+@[expose] public section

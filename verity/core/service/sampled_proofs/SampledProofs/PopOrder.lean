@@ -6,7 +6,11 @@ strata's segments (`Draw.strataOf`, as `layout` reads them) chain `0, 1, …, n 
 has gates. `popOk_eq_popOkRanges` is the equality, so `popOk` runs as `popOkRanges` in every module compiled after this
 one (`Run.run` among them), and `popOk` itself is unchanged.
 -/
-import SampledProofs.Slots
+module
+
+public import SampledProofs.Slots
+
+@[expose] public section
 
 namespace SampledProofs.Slots
 

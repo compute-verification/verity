@@ -1,5 +1,7 @@
-import Definitions.Pouw.PearlC.HiddenTileGame
-import Definitions.Pouw.PearlC.FlockTile.Bridge
+module
+
+public import Definitions.Pouw.PearlC.HiddenTileGame
+public import Definitions.Pouw.PearlC.FlockTile.Bridge
 
 /-!
 # C-Flock's hidden audit: the TileRead session per drawn tile
@@ -17,6 +19,8 @@ soundness speaks of, and the event that soundness bounds. From it:
   `Proofs.Pouw.PearlC.FlockTile.Audit` builds a `TileGame` for every tile of every in-domain workload
   (`TileReadSession.tileGame`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.FlockTile
 

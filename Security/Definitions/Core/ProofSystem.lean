@@ -1,5 +1,7 @@
-import Mathlib
-import Definitions.Core.Interaction
+module
+
+public import Mathlib
+public import Definitions.Core.Interaction
 
 /-!
 # Proof systems: what a protocol brings to a recursion
@@ -24,6 +26,8 @@ interaction model (`Definitions/Core/Interaction.lean`, namespace `Claims`):
 
 Mathlib and Core only, as Core's layer is.
 -/
+
+@[expose] public section
 
 namespace Verity
 

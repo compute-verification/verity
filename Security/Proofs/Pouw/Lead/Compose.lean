@@ -1,6 +1,8 @@
-import Proofs.Pouw.Lead.Compose.G
-import Proofs.Pouw.Lead.Compose.Honest
-import Proofs.Pouw.Lead.Compose.Deployed
+module
+
+public import Proofs.Pouw.Lead.Compose.G
+public import Proofs.Pouw.Lead.Compose.Honest
+public import Proofs.Pouw.Lead.Compose.Deployed
 
 /-!
 # The lead's guarantee, composed from its pieces
@@ -13,3 +15,5 @@ messages include frame-v3 leaves over the words and A's bytes (`commitL1w_of_lea
 `certCode` (`certifierCoins`); `Deployed`, `CommitL1w` at the deployed commitment (`commitL1w_l1w`), the honest lemma at
 the deployed commitment and the certifier's stream (`honestL1w`), and the guarantee (`honest`).
 -/
+
+@[expose] public section

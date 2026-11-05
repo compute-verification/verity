@@ -1,6 +1,8 @@
-import Mathlib.Analysis.SpecialFunctions.Log.Base
-import Definitions.Core.Information
-import Definitions.Pous.Model.StreamedWipeInfo
+module
+
+public import Mathlib.Analysis.SpecialFunctions.Log.Base
+public import Definitions.Core.Information
+public import Definitions.Pous.Model.StreamedWipeInfo
 
 /-!
 # The streamed-label wipe as conditional mutual information (experimental)
@@ -19,6 +21,8 @@ The statement is not proved yet. `StreamedWipeMeetsInfoStated` holds its text fo
 proof: the honest one (a prover whose fill ignores `z` has `I = 0 ≤ 1`) and the nontrivial one (a prover that keeps `z`
 whole, against a challenger that accepts everything, has `I = q` above the bound).
 -/
+
+@[expose] public section
 
 namespace Pous.Guarantees
 

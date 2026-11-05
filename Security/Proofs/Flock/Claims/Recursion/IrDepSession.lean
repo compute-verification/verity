@@ -1,5 +1,9 @@
-import Proofs.Flock.Claims.Recursion.IrDep
-import Proofs.Flock.Claims.Recursion.HonestHalfFixture
+module
+
+public import Proofs.Flock.Claims.Recursion.IrDep
+public import Proofs.Flock.Claims.Recursion.HonestHalfFixture
+meta import Proofs.Flock.Claims.Recursion.IrDep
+meta import Proofs.Flock.Claims.Recursion.HonestHalfFixture
 
 /-!
 # `IrDep` at a deployed inner session: the difftest's Lean side
@@ -30,6 +34,8 @@ or on a node's warm slot tree, `VERITY_IRDEP_ARGS='TREE K' python3 tools/verity/
 `partition.json`, `program.json`; `inner/s0/session/`: `session.json` and `circuit.rep<r>.bin`; `v/acc-salts.bin`).
 It imports `HonestHalfFixture`, the fixture whose `IrDep x` this run witnesses, so that one `--try` elaborates both.
 -/
+
+@[expose] public section
 
 namespace IrDepSession
 

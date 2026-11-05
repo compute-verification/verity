@@ -1,6 +1,8 @@
-import Proofs.Pouw.Lead.Tail.Words
-import Proofs.Pouw.Lead.Tail.Fiber
-import Mathlib.Algebra.BigOperators.Field
+module
+
+public import Proofs.Pouw.Lead.Tail.Words
+public import Proofs.Pouw.Lead.Tail.Fiber
+public import Mathlib.Algebra.BigOperators.Field
 
 /-!
 # Blocks that repeat an earlier tile
@@ -21,6 +23,8 @@ rest (`b`, `a₁`, `G`), drawn first, and a product over the blocks in block ord
   tiles, and at most `ρ · blkIdx β` tiles come before it.
 * **The sum**: `Σ_β ρ² · blkIdx β / 2^56 = ρ² · B (B − 1) / 2^57 ≤ lamX`, `B` the blocks.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.Lead.Tail
 

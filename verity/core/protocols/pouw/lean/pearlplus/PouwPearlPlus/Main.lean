@@ -1,4 +1,6 @@
-import PouwPearlPlus.Open
+module
+
+public import PouwPearlPlus.Open
 
 /-!
 # `pouw-pearlplus`: the run verdict from a served run's retained passes
@@ -12,6 +14,8 @@ ok and reason, in the verdict's order).
 The prover's side is `Open.opening` over the pass's files. A record that exists pins the source (`after-coin`); one that
 doesn't is written with the run's commitment and the given source.
 -/
+
+@[expose] public section
 
 open Lean PouwCommit PouwCheck.PearlPlus
 

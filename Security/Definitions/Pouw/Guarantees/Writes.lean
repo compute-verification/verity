@@ -1,6 +1,8 @@
-import Definitions.Pouw.Assumptions.Dimension.H100Floor
-import Definitions.Pouw.Dimension.Pointwise
-import Definitions.Pouw.Dimension.Ssn
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100Floor
+public import Definitions.Pouw.Dimension.Pointwise
+public import Definitions.Pouw.Dimension.Ssn
 
 /-!
 # What writing distinct words costs: the guarantees (trusted; draft semantics, pending review)
@@ -22,6 +24,8 @@ Pouw.Guarantees.Writes.DistinctWritesMH100Floor`; there is no single `Writes.G`.
   on the full coin grid, for the 4-lane layout to 28,559 columns and the 5-lane layout to 371,292.
 * `RunPairs` and `RunBall`: what one run must write to hold its target chunks at some point.
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.Writes
 

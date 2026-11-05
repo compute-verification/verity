@@ -1,7 +1,9 @@
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Ring
+module
+
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Ring
 
 /-!
 # Row tags against drawn weights: how often two rows' words agree (proofs)
@@ -22,6 +24,8 @@ equals their coin difference there.
 Exact tile equality is what these bound. A run that patches a tile from another word by word (the chunk model's
 `pathRun_attained`) saves the agreeing columns instead, `|J|/q` of them on average for a one-digit difference.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.Tag
 
