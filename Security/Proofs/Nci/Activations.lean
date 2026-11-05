@@ -2,6 +2,7 @@ module
 
 public import Definitions.Nci.Guarantees.Activations
 public import Proofs.Nci.Threads
+public import Proofs.Nci.Lemmas.Activations
 
 /-!
 # Proofs of NCI's activations bound over all of training

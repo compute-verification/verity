@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Nci.Guarantees
 public import Proofs.Core
+public import Proofs.Nci.Lemmas
 
 /-!
 # Lemmas 1 and 2: what an IU reads at full and other positions

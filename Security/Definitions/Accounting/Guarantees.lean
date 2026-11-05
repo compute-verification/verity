@@ -20,7 +20,6 @@ public import Definitions.Accounting.Guarantees.FpG1
 public import Definitions.Accounting.Guarantees.HMu
 public import Definitions.Accounting.Guarantees.DeclaredCircuit
 public import Definitions.Accounting.Guarantees.Gates
-public import Definitions.Accounting.Guarantees.GatesBitwise
 public import Definitions.Accounting.Guarantees.Headline
 public import Definitions.Accounting.Guarantees.HeadlineDc
 public import Definitions.Accounting.Guarantees.Joint
@@ -49,20 +48,14 @@ public import Definitions.Accounting.Guarantees.RemoteSketch
 public import Definitions.Accounting.Guarantees.RemoteSketchLine
 public import Definitions.Accounting.Guarantees.RemoteSketchP2
 public import Definitions.Accounting.Guarantees.Requirement
-public import Definitions.Accounting.Guarantees.RequirementPouw
 public import Definitions.Accounting.Guarantees.Sketch
 public import Definitions.Accounting.Guarantees.Stacking
 public import Definitions.Accounting.Guarantees.Tag
 public import Definitions.Accounting.Guarantees.TS
 public import Definitions.Accounting.Guarantees.Sheet
-public import Definitions.Accounting.Guarantees.TS.Receipt
-public import Definitions.Accounting.Guarantees.TS.Grind
-public import Definitions.Accounting.Guarantees.TS.SharedNoise
 public import Definitions.Accounting.Guarantees.TS.Stages
-public import Definitions.Accounting.Guarantees.TS.Steer
 public import Definitions.Accounting.Guarantees.TS.FoldFanIn
 public import Definitions.Accounting.Guarantees.TS.LowBit
-public import Definitions.Accounting.Guarantees.TS.Fixed
 
 /-! Resource accounting's guarantee statements: the joint guarantee and its covert residual, the joint guarantee over
 a period audited by every protocol, over a horizon of periods and over a horizon of server-time blocks and the

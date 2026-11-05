@@ -10,8 +10,7 @@ The guarantees on a reference training circuit `r` (`Nci.Guarantees.ThreadedThro
 compute itself: the weights it uses, the activations it uses, and the partial sums it receives. `TrainingIncompressible`
 states all three as one law over every division of `r`, in reads: each small inference block reads at least what it is
 charged. It is equivalent to the conjunction of `WeightsIncompressible`, `ActivationsIncompressible` and
-`PartialSumsIncompressible` on `r` (`Nci.SecurityProofs.trainingIncompressible_iff`), and the support-form
-assumptions imply it (`Nci.SecurityProofs.trainingIncompressible_of_support`).
+`PartialSumsIncompressible` on `r` (`Nci.SecurityProofs.trainingIncompressible_iff`).
 
 It is the inference-only policy's one incompressibility premise; the older assumptions stay beside it until the
 guarantees that read them move to it. It is about the reference circuit, not a declared one: `ActivationsIncompressible`
