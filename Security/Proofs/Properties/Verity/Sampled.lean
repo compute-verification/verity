@@ -265,7 +265,7 @@ noncomputable def hidingTerm (_ : Live) : ℝ≥0∞ := 2 * (maxLeaves : ℝ≥0
 
 /-- **The session's draw file**: at each draw, the one `flock-verify draw` prints for the verifier's own draw of the
 session's `kd` units under the subset law (`printedDraw`). The session v2 sets up has no `--stratified` input, so
-`verify --zk` admits only a subset draw (`recordDraw_subset`), and v2 prints the draw so whatever law it draws by. -/
+`verify --zk` admits only a subset draw (`recordDraw_subset`): whatever law v2 draws by, its draw file is a subset print. -/
 abbrev dj : Finset (Fin A.n) → Lean.Json := printedDraw (.subset A.kd)
 
 /-- **V5's `hsz` at the session**: the draw file decodes only to `kd` units (`drawSize_deployed`). -/
