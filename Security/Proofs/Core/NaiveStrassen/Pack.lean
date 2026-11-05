@@ -1,3 +1,5 @@
+module
+
 /-!
 # Packed rows (NaiveStrassen's kernel tables)
 
@@ -9,6 +11,8 @@ a handful of kernel steps rather than one a field.
 (`fld`, `row`, `packF`, `packRows`) are shifts and masks, each proved equal to its `getW` or `packW` form; the lemmas
 here say what a field of a sum, a multiple, a mask or a packing is, and that `leRow` compares every field.
 -/
+
+@[expose] public section
 
 namespace Verity.Accel.NaiveStrassen.Packed
 

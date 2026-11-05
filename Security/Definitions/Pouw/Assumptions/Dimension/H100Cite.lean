@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.Dimension.H100Frag
-import Definitions.Pouw.Assumptions.Dimension.H100Measured
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100Frag
+public import Definitions.Pouw.Assumptions.Dimension.H100Measured
 
 /-!
 # How the H100 pins are cited (trusted statements; draft semantics)
@@ -32,6 +34,8 @@ The 25 FP8 and H100 pins are statements. What a citation may claim is limited in
 14-bit truncation, which set `β`), so a witness on it is not stated. A finite checker can supply it per slice, as
 `DenseCert`'s certificate: more than `m + r` lanes, each contributing more than `2β`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

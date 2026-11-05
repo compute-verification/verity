@@ -4,6 +4,10 @@ as hardware semantics, public in both tracks. A table is `library` exactly when 
 words, the archive key) is listed here, and `program` otherwise. `verity/ml/flock/tests/test_table_library.py` checks this
 list against core's.
 -/
+module
+
+@[expose] public section
+
 namespace Flock
 
 structure LibraryTable where

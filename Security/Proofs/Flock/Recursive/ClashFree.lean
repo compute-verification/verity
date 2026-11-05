@@ -1,4 +1,6 @@
-import Proofs.Flock.Recursive.Target
+module
+
+public import Proofs.Flock.Recursive.Target
 
 /-!
 # Recursion: the compiled table on a clash-free set of outcomes
@@ -17,6 +19,8 @@ them, so the coupling leaves no bad run and no rewinding term.
   in `W`.
 * `compiled_le_bad_on`: `compiled_le_badL` for any chooser, restricted to `W`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

@@ -1,4 +1,6 @@
-import Definitions.Pouw.Assumptions.Dimension.Embed
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.Embed
 
 /-!
 # The RTX 4090's tensor-core shapes in `M4090`, FP8 included (trusted statements; draft semantics)
@@ -34,6 +36,8 @@ programs that use them.
   `int`), and 8 on the FP32 pipe. A dimension bound in `M4090` therefore gives at most 16 per independent target
   word: on FP8 atom words, whose honest cost is 64, at most 16/64 = 25%.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.Fp8Mma
 

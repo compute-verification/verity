@@ -15,8 +15,16 @@ The `#guard`s at the end hold each to the function it stands in for on texts at 
 `CoreProtocol.Cli`'s hold `parseUpTo` and `parse` to `canonicalJson`. This imports only what `Core.Protocol` does, so
 anything that may import that (a composition's decoder) may import this.
 -/
-import Lean.Data.Json
-import Flock.Canon
+module
+
+public import Lean.Data.Json
+public import Flock.Canon
+meta import Lean.Data.Json
+meta import Flock.Canon
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core.Canonical
 

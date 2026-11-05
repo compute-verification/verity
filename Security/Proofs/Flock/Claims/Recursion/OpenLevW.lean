@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Recursion.ResLowerD
-import Proofs.Flock.Claims.Recursion.CapLowerPin
-import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
-import Proofs.Flock.Claims.Recursion.RowDAccept
-import Proofs.Flock.Claims.Recursion.VerdictRowDCover
-import Proofs.Flock.Claims.Recursion.NonVacuous
+module
+
+public import Proofs.Flock.Claims.Recursion.ResLowerD
+public import Proofs.Flock.Claims.Recursion.CapLowerPin
+public import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
+public import Proofs.Flock.Claims.Recursion.RowDAccept
+public import Proofs.Flock.Claims.Recursion.VerdictRowDCover
+public import Proofs.Flock.Claims.Recursion.NonVacuous
 
 /-!
 # A row D piece's copy at the outer witnesses: its outputs (`LevelOutsW`) and openings (`OpenCopyW`)
@@ -23,6 +25,8 @@ decision, at the copy `copyR` of the piece's owner's witness `ws[s]` (`AtPiecesP
 * `openCopyW_deployed`: the copy's openings at the deployed readers (`DeployedR.rdR`, `OpenRows.elemR`,
   `DeployedR.finalR`), from `openCopyR_of` at `sideAtR` (`copyOpensR_layR`, `copyFitsR_rowD`) and `openCopy_sideAt`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 

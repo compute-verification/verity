@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.Karatsuba
-import Proofs.Flock.Soundness.Discharge.Hm.Word
+module
+
+public import Proofs.Flock.VBridge.Karatsuba
+public import Proofs.Flock.Soundness.Discharge.Hm.Word
 
 /-!
 # V*'s residuals: sums of GF(2^128) products, summed leaf by leaf
@@ -22,6 +24,8 @@ The Python cited is `backends/flock/python/verity_flock/rec_residuals.py` (blob 
 (`Flock.HmNets.and`) and `commit` is
 `sha512.commit` (`Flock.HmNets.commitW`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 

@@ -23,7 +23,13 @@ the verifier's window (`trustedSessionOf`), the session the sample's coins come 
 The difftest's pieces: `challenger_coin_trees` (`coin_trees_of`) and `challenger_session_trees`
 (`sessions_tree_reason` over the log's trees), each `{"refused": why}` where Python refuses.
 -/
-import SampledProofs.ChallengerDraw
+module
+
+public import SampledProofs.ChallengerDraw
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Challenger
 
@@ -137,7 +143,7 @@ def linkAfter (rootF : ByteArray) (rootB : Array (String × ByteArray)) : ByteAr
   Flock.Sha512.hash ((rootB.qsort (·.1 < ·.1)).foldl (fun acc (_, b) => acc ++ b) rootF)
 
 /-- `_record_coins`: a record's coins, each 32 lowercase hex digits, as their bytes in order. -/
-private def recordCoins? (cs : Json) : Option ByteArray :=
+def recordCoins? (cs : Json) : Option ByteArray :=
   match cs with
   | .arr xs => xs.foldlM (init := ByteArray.empty) fun acc c => match c with
     | .str s => if s.length == 32 then (Flock.unhex s).toOption.map (acc ++ ·) else none

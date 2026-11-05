@@ -1,5 +1,7 @@
-import Definitions.Accounting.TS.Sheet
-import Definitions.Accounting.Assumptions.TS
+module
+
+public import Definitions.Accounting.TS.Sheet
+public import Definitions.Accounting.Assumptions.TS
 
 /-!
 # The data-sheet axioms A1–A7 (trusted)
@@ -17,6 +19,8 @@ gives (I2)/(I4) `WordsWritten` and, with the labelling's split, (I3) `ScalarRout
 
 Data independence needs no axiom: a peak is a maximum over every operand value, so A3–A5 hold for any data.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions.TS
 

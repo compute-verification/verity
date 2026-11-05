@@ -1,4 +1,6 @@
-import Definitions.Pous.P2.Cost
+module
+
+public import Definitions.Pous.P2.Cost
 
 /-!
 # A program cut to the ring budget, a state packed into a fixed width, and a sequential strategy's rounds
@@ -12,6 +14,8 @@ What the fixed extractor of a period's PoUS audit (`Pous.Period.extract`, `Prope
   `false`s), and back.
 * `seqRounds`: the state each round of a sequential strategy starts from and the program it runs, round after round.
 -/
+
+@[expose] public section
 
 namespace Pous
 

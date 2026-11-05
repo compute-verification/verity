@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FinishStop
+module
+
+public import Proofs.Flock.Claims.ZK.FinishStop
 
 /-!
 # The firewall's stop at a table's own draw
@@ -14,6 +16,8 @@ rows hold at `ω₀`'s mask slot and level 0's hiding (`Table.RowsAt`), so the s
 * **`rowsAt_of_cons`**: where, at each rep, the firewall's constraints are the first seven rows on the view's masked
   values, each on the layout's length, and none fails on the drawn pads, `RowsAt p ω₀.1 ω₀.2.1`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

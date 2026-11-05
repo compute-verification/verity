@@ -1541,6 +1541,34 @@ def test_ci_records_a_baseline_only_on_the_control_pod_and_it_clears_an_open_bis
     assert h.tick().startswith("landed #1")
 
 
+def test_a_baseline_ends_the_red_records_at_or_below_it_of_the_steps_it_records(world, monkeypatch, capsys):
+    """A baseline that left the red records of the runs below it kept them in drive's status line, culprits and all, after ci
+    recorded the run that passed them.  It ends each at or below the commit whose step it records green, as a passing run
+    does (`Driver._green`): a `suite` record once it records every suite step, never one it doesn't record."""
+    from research.merge import DRIVE_ENV
+
+    h = Review(world, monkeypatch, baseline=False)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    main = _main(world)
+    h.q._clone()
+    state = h.q.load_state()
+    red = lambda key: {"tip": main, "base": main, "step": key.split(" ")[1], "culprit": None, "first": "x"}  # noqa: E731
+    state["drive"] = {"launched": {}, "told": [], "postland": {"verified": main, "pending": [], "run": None, "red": {
+        k: red(k) for k in ("step ratchet-gate", "step lean-audit", "suite repository", "suite pkg::test_y")}}}
+    h.q.save_state(state)
+    monkeypatch.setenv(DRIVE_ENV, "1")
+    assert Q.baseline(h.q, main, "ci", "lean-audit,pytest") == 0
+    pl = h.postland()
+    assert sorted(pl["red"]) == ["step ratchet-gate", "suite pkg::test_y", "suite repository"]
+    assert pl["green"] == {"step lean-audit": main}
+    assert "their red records end: step lean-audit" in capsys.readouterr().out
+    assert Q.baseline(h.q, main, "ci") == 0
+    pl = h.postland()
+    assert pl["red"] == {} and set(pl["green"]) == {"step lean-audit", "step ratchet-gate", "suite repository",
+                                                     "suite pkg::test_y"}
+
+
 def _owning(world: World, owns: dict[str, list[str]]) -> None:
     """`main`'s registry, each handle owning its paths (`research msg owners`)."""
     reg = {"handles": [{"handle": h, "holder": f"the {h} lane", "owns": paths} for h, paths in owns.items()]}
@@ -3123,3 +3151,27 @@ def test_lean_check_again_replaces_a_passed_record_with_a_pending_hand_check(wor
     (again,) = [r for r in h.lean_ids() if r != rid]
     assert h.d.q.load_state()["drive"]["lean"][top] == rec and "run" not in rec
     assert (rec["ids"], rec["state"], rec["hand"], rec["by"]) == ([again], None, True, "ci")
+
+
+def test_the_low_risk_lanes_rebuild_merges_with_each_tips_drivers_not_its_checkouts(world):
+    """The low-risk lane rebuilds `next` on the landing branch with `Driver._clean_merge`, which ran `git merge-tree` with the
+    drivers of the clone's checkout: once that checkout held another `merge.py` than the tip it merged onto, every lock it
+    merged came out in that driver's format.  It is the sync's merge (`Queue._recorded`), which runs the tip's own drivers;
+    any record the sync made of it is dropped, so the merge is made again under the checkout's broken `merge.py`."""
+    import types
+
+    caps = "tests/test_lean_packages.py"
+
+    def counts(sec: int, props: int) -> str:
+        return f'UNWITNESSED = {{"Security": {sec}, "Security/Properties": {props}}}\n'
+
+    lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
+    _move_main(world, {caps: counts(354, 184), ".gitattributes": f"{caps} merge=lean-caps\n",
+                       **{f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")}})
+    two, three = world.change({caps: counts(355, 184)}), world.change({caps: counts(354, 185)})
+    q = world.queue()
+    q.sync()
+    (q.workdir / "tools/verity/lean/merge.py").write_text("import sys\nsys.exit('merge.py: error: unrecognized arguments: --caps')\n")
+    q._merge_records = {}
+    tree, why = D.Driver._clean_merge(types.SimpleNamespace(repo=q.workdir, q=q), two, three)
+    assert tree is not None and _git(q.workdir, "show", f"{tree}:{caps}") == counts(355, 185).strip(), why

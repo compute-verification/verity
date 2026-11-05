@@ -1,16 +1,22 @@
 /-
-PROTOCOL.md §16.5: the circuit file: line 1 is `<format> <name>`, line 2 is `META <json>` (the layout), then
+The circuit file: line 1 is `<format> <name>`, line 2 is `META <json>` (the layout), then
 `<keyword> <name> <lines>` blocks, each an expanded circuit in `flock-ir-unit/v2` form (format and keyword are the
 statement's `Tags`). The parser refuses every part the verifier would have to evaluate (a `CUT` line; the META keys `tail`,
 `cut`, `cut_words`, `public_ports`, `public`, `native`, `outputs_by_tail`), and checks the layout's generic shape; the row
 leaf checks its own ranges (`RowLeaf.checkLayout`). Lookup slots are built from their pinned tables (`Flock.Lookup`).
 -/
-import Lean.Data.Json
-import Flock.Lookup
-import Flock.TmplAt
-import Flock.Tags
-import Flock.Typed
-import Flock.JsonParse
+module
+
+public import Lean.Data.Json
+public import Flock.Lookup
+public import Flock.TmplAt
+public import Flock.Tags
+public import Flock.Typed
+public import Flock.JsonParse
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 
