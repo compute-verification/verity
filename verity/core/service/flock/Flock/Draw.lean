@@ -6,8 +6,9 @@ verifier checks that the two agree, that the draw is well formed, and that the s
 -/
 module
 
+public import Lean.Data.Json
+public import Std.Data.HashMap
 public import Flock.Canon
-public import Lean.Data.Json.FromToJson.Basic
 
 @[expose] public section
 set_option backward.privateInPublic true
