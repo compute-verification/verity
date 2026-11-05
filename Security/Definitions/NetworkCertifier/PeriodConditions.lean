@@ -59,13 +59,13 @@ def SchedulesCovered {Conn Z : Type} (Ss : Set (WardenSchedule Conn)) (Zs : Set 
   ∀ z ∈ Zs, schedOf z ∈ Ss
 
 /-- **A covert sender's secrets, recovered from the client's view**: the decoder `dec` recovers each secret `z` of `Zs`,
-run on the schedule `schedOf z` and the server behavior `srvOf z`, from the cells the network certifier's run `run tap`
+run on the schedule `schedOf z` and the server behavior `srvOf z`, from the cells the network certifier's run `run cert`
 gives the client. These are the count's own terms, a quantified hypothesis on the adversary's strategy (its secrets,
 schedules, server behaviors and decoder), with `run` the network certifier's by `trusted-host`: nothing about the
 verifier's or the prover's code. -/
 def SenderDecodes {Conn Cell Srv Dev Z Ob : Type}
-    (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × Ob) (tap : Dev) (Zs : Set Z)
+    (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × Ob) (cert : Dev) (Zs : Set Z)
     (schedOf : Z → WardenSchedule Conn) (srvOf : Z → Srv) (dec : (Conn → List (ℕ × CellView Cell)) → Z) : Prop :=
-  ∀ z ∈ Zs, dec (run tap (schedOf z, srvOf z)).1 = z
+  ∀ z ∈ Zs, dec (run cert (schedOf z, srvOf z)).1 = z
 
 end NetTiming

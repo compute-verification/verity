@@ -1271,13 +1271,14 @@
   "Properties.NetworkPeriodLeak": {
    "imports": [
     "NetworkCheck.Period",
+    "CoreProtocol.Site",
     "Definitions.NetworkCertifier",
     "Definitions.Core.Assumptions",
     "Mathlib.Data.Set.Card",
     "Mathlib.Algebra.BigOperators.Fin"
    ],
    "except": [],
-   "why": "the leak through the network certifier over a monitoring period is stated against the period check's acceptance (`NetworkCheck.Period.check`), the sampled audit's and the network certifier's definitions (`Definitions.NetworkCertifier`), trusted-host (`Definitions.Core.Assumptions`) and Mathlib's cardinalities and finite products, never a proof"
+   "why": "the leak through the network certifier over a monitoring period is stated against the period check's acceptance (`NetworkCheck.Period.check`), the auditor's registration and its devices' locations (`CoreProtocol.Site`), the sampled audit's and the network certifier's definitions (`Definitions.NetworkCertifier`), trusted-host (`Definitions.Core.Assumptions`) and Mathlib's cardinalities and finite products, never a proof"
   }
  },
  "reads_exempt": {

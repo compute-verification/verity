@@ -1,4 +1,5 @@
 import NetworkCheck.Period
+import CoreProtocol.Site
 import Definitions.NetworkCertifier.Period
 import Definitions.NetworkCertifier.RecordRows
 import Definitions.Core.Assumptions
@@ -36,6 +37,12 @@ steers, never a list of arrivals fixed across secrets. The client's randomness i
 of `z`: a strategy under randomness drawn before `z` is one function of the client's view, and the bound holds at
 every one (`Proofs.Properties.NetworkPeriodLeak`'s `periodLeakRegistered_strategy`).
 
+The network certifier's LMS parameters, key and session, against which the check verifies its certificates, are the
+period's `p.lms`, `p.key` and `p.session`. The statement says where they come from: the auditor's record of its
+network certifier's deployment (`NetTiming.NetworkCertifierRecord`, `certifier-key/v1`), whose key the auditor's
+registration `A` holds for the device `cert` (`Core.Site`'s `Owners`: `A.key x.id = some x.key`), the device whose
+run `trusted-host` covers.
+
 Its other conditions are named: the windows' registrations (`WindowsPlaced`), the sender's schedules among those at
 `Θ` that fit the format (`SchedulesCovered`, a property of the compiled Lean audit over the network certifier's signed
 records) and the sender's secrets recovered from the client's view (`SenderDecodes`, the count's own terms).
@@ -48,6 +55,18 @@ each incorrect proof block is charged in full, at all its committed gates (`faul
 `PeriodLeakRegisteredNontrivial` says the per-window bound is not true of every deployment: some deployment, layout,
 statement and prover break it.
 -/
+
+namespace NetTiming
+
+/-- **The auditor's record of its network certifier's deployment** (`certifier-key/v1`): the LMS parameters, public key
+and session it read off its own device, never a field of the evidence or the prover's copy of the run. The period
+check's `Params` carry them (`NetworkCheck.Period.Params`: its key, LMS parameters and session are this record's). -/
+structure NetworkCertifierRecord where
+  lms : Lms.Params
+  key : ByteArray
+  session : ByteArray
+
+end NetTiming
 
 namespace Properties.NetworkPeriodLeak
 
@@ -64,8 +83,9 @@ of the sampled verifier where sampling at the incorrect set holds at the layout'
 and the trace's commitment binds (`CommitmentScheme.Binds`), with a decoder that lists every trace within Flock's
 radius, the windows registered as `sw i` (`WindowsPlaced`: partition `Pw i`, and `β i` bounding the committed bits of
 each of its possible incorrect sets), the network certifier's openings `tops s` at each statement, and a network
-certifier that runs its code by `trusted-host`, its one run giving the cells the client receives and its record of
-them:
+certifier `cert` that runs its code by `trusted-host`, its one run giving the cells the client receives and its record of
+them, whose LMS parameters, key and session are the auditor's record `r` of it, the key the auditor's registration `A`
+holds for `cert`:
 
 * each window's audit, at a statement in its scope whose registration opens its registered inputs (`RegOpensAt`), has
   `Pr[acc ∧ ¬RLeakTap δ] ≤ δ + ε_ks + ε_bind + Pr[B_tap] + Pr[B_reg]` with the registered inputs at the registration's
@@ -83,6 +103,8 @@ def PeriodLeakRegistered : Prop :=
     NetworkCheck.Period.check p c e = .accept pub prof →
     ∀ (s : NetworkCheck.Period.Schedule) (sd : ByteArray) (scan : NetworkCheck.Period.Scan),
     p.form = .rows s sd scan →
+    ∀ (A : Core.Site.Registration.Auditor) (r : NetTiming.NetworkCertifierRecord),
+    p.lms = r.lms ∧ p.key = r.key ∧ p.session = r.session →
     ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
       (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (L K S : ℕ)
       (lay : AuditStatement → BoundaryGates L S) (hks : KSBy H D (wiredOk fun s => (lay s).wires))
@@ -92,12 +114,12 @@ def PeriodLeakRegistered : Prop :=
       (sw : Fin p.windows → AuditStatement) (Pw : Fin p.windows → Partition)
       (ρ : Fin p.windows → ℕ → Bool) (op : Fin p.windows → ℕ → List (Obs L K S) → List Bool) (β : Fin p.windows → ℕ)
       (hplaced : WindowsPlaced D δ sw Pw β)
-      {N : ℕ} (hN : N = s.lanes * (p.windows * s.window)) {Srv Dev Z : Type}
+      {N : ℕ} (hN : N = s.lanes * (p.windows * s.window)) {Srv Z : Type}
       (arr : Srv → Fin N → Arrivals (FrameCell (s.cellBytes - 9))) (link : Fin L)
       (jitter : WardenSchedule (Fin N) → (Fin N → Arrivals (FrameCell (s.cellBytes - 9))) → ℕ → ℕ)
       (status : WardenSchedule (Fin N) → (Fin N → Arrivals (FrameCell (s.cellBytes - 9))) → ℕ → Fin K → Status)
-      (cert : Dev)
-      (run : Dev → WardenSchedule (Fin N) × Srv →
+      (cert : Core.Site.Loc) (hkey : A.key cert.id = some (Flock.hexOf r.key))
+      (run : Core.Site.Loc → WardenSchedule (Fin N) × Srv →
         (Fin N → List (ℕ × CellView (FrameCell (s.cellBytes - 9)))) × (Fin p.windows → List (Obs L K S)))
       (htrust : Verity.Assumptions.TrustedHost cert run fun q =>
         (wardenCode q.1 (arr q.2), (cellRows s.cellBytes N link s.window jitter status).record S p.windows q.1 (arr q.2)

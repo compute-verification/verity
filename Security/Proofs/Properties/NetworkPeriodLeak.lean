@@ -31,8 +31,9 @@ open NetTiming Claims.Sampling Finset
 acceptance gives `rowsWf` (`rowsWf_of_accept`), so the network certifier's frames read back
 (`cellRows_wf_of_rowsWf`), and `NetTiming.periodLeak_registered` bounds the leak at that format. -/
 theorem periodLeakRegistered : PeriodLeakRegistered := by
-  intro p c e pub prof h s sd scan hform Coin Col T _ _ _ _ _ H D L K S lay hks k δ decode hδ hdec reg ops Dj sw Pw ρ
-    op β hplaced N hN Srv Dev Sec arr link jitter status cert run htrust Θ Zs schedOf srvOf hcov dec hdz x wit tops hb
+  intro p c e pub prof h s sd scan hform A r hr Coin Col T _ _ _ _ _ H D L K S lay hks k δ decode hδ hdec reg ops Dj sw
+    Pw ρ op β hplaced N hN Srv Sec arr link jitter status cert hkey run htrust Θ Zs schedOf srvOf hcov dec hdz x wit tops
+    hb
   subst hN
   exact NetTiming.periodLeak_registered H D L K S lay hks k δ decode hδ hdec reg ops Dj sw Pw ρ op β hplaced arr _
     (Properties.NetworkPeriod.cellRows_wf_of_rowsWf (Properties.NetworkPeriod.rowsWf_of_accept h hform) link s.window
@@ -46,7 +47,8 @@ holds at each. -/
 theorem periodLeakRegistered_strategy (p : NetworkCheck.Period.Params) (c : NetworkCheck.Period.Commitment)
     (e : NetworkCheck.Period.Evidence) (pub : NetworkCheck.Period.Public) (prof : NetworkCheck.Period.Profile)
     (h : NetworkCheck.Period.check p c e = .accept pub prof) (s : NetworkCheck.Period.Schedule) (sd : ByteArray)
-    (scan : NetworkCheck.Period.Scan) (hform : p.form = .rows s sd scan)
+    (scan : NetworkCheck.Period.Scan) (hform : p.form = .rows s sd scan) (A : Core.Site.Registration.Auditor)
+    (r : NetTiming.NetworkCertifierRecord) (hr : p.lms = r.lms ∧ p.key = r.key ∧ p.session = r.session)
     {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S) (hks : KSBy H D (wiredOk fun s => (lay s).wires))
@@ -56,12 +58,12 @@ theorem periodLeakRegistered_strategy (p : NetworkCheck.Period.Params) (c : Netw
     (sw : Fin p.windows → AuditStatement) (Pw : Fin p.windows → Partition)
     (ρ : Fin p.windows → ℕ → Bool) (op : Fin p.windows → ℕ → List (Obs L K S) → List Bool) (β : Fin p.windows → ℕ)
     (hplaced : WindowsPlaced D δ sw Pw β)
-    {N : ℕ} (hN : N = s.lanes * (p.windows * s.window)) {Srv Dev Sec V : Type}
+    {N : ℕ} (hN : N = s.lanes * (p.windows * s.window)) {Srv Sec V : Type}
     (arr : Srv → Fin N → Arrivals (FrameCell (s.cellBytes - 9))) (link : Fin L)
     (jitter : WardenSchedule (Fin N) → (Fin N → Arrivals (FrameCell (s.cellBytes - 9))) → ℕ → ℕ)
     (status : WardenSchedule (Fin N) → (Fin N → Arrivals (FrameCell (s.cellBytes - 9))) → ℕ → Fin K → Status)
-    (cert : Dev)
-    (run : Dev → WardenSchedule (Fin N) × Srv →
+    (cert : Core.Site.Loc) (hkey : A.key cert.id = some (Flock.hexOf r.key))
+    (run : Core.Site.Loc → WardenSchedule (Fin N) × Srv →
       (Fin N → List (ℕ × CellView (FrameCell (s.cellBytes - 9)))) × (Fin p.windows → List (Obs L K S)))
     (htrust : Verity.Assumptions.TrustedHost cert run fun q =>
       (wardenCode q.1 (arr q.2), (cellRows s.cellBytes N link s.window jitter status).record S p.windows q.1 (arr q.2)
@@ -89,8 +91,9 @@ theorem periodLeakRegistered_strategy (p : NetworkCheck.Period.Params) (c : Netw
             ((run cert (strategy (view z), srvOf z)).2 i)}.encard ≤
           Θ.encard * ((∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \
             reg (sw i)).card * (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞)) :=
-  periodLeakRegistered p c e pub prof h s sd scan hform H D L K S lay hks k δ decode hδ hdec reg ops Dj sw Pw ρ op β
-    hplaced hN arr link jitter status cert run htrust Θ Zs (fun z => strategy (view z)) srvOf hcov dec hdz x wit tops hb
+  periodLeakRegistered p c e pub prof h s sd scan hform A r hr H D L K S lay hks k δ decode hδ hdec reg ops Dj sw Pw ρ
+    op β hplaced hN arr link jitter status cert hkey run htrust Θ Zs (fun z => strategy (view z)) srvOf hcov dec hdz x
+    wit tops hb
 
 /-- **The served schedule passes `rowsWf`**: `w63`'s, 4 lanes of 32-bucket link-windows and 512-byte cells, over any
 period of fewer than 2^25 link-windows, so the period check doesn't refuse it there (`rowsWfCheck`) and the network
