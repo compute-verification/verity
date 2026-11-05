@@ -1298,7 +1298,7 @@ def test_sampled_proofs_guarantee_is_its_windows_epsilon_at_delta_beside_its_poo
     g = json.loads((out / "record" / "onsite.json").read_text())["sampled_proofs"]
     assert (g["is"], g["refused"], g["from"], "conditional_on" in g) == (
         OR.SAMPLED, OR.MULTI, "record/verdicts.json protocols.integrity.answer", False)
-    assert g["window"] == {"units": N, "law": {"subset": 1}, "delta": str(DELTA), "bound": N - 1, "epsilon": "15/16",
+    assert g["per_window"] == {"units": N, "law": {"subset": 1}, "delta": str(DELTA), "bound": N - 1, "epsilon": "15/16",
                            "statement": "Flock.Guarantees.EndToEndHidden"}
     p, phase = g["pooled"], Fraction(63 * 20, 1000)
     assert (p["statement"], p["is"], p["q"], p["incorrect_at_most"]) == (
@@ -1308,10 +1308,10 @@ def test_sampled_proofs_guarantee_is_its_windows_epsilon_at_delta_beside_its_poo
     links = {"node": 1, "datacenter": LB.datacenter_links(), "world": LB.world_links()}
     for name, seconds in LB.PERIODS.items():
         w = math.ceil(Fraction(seconds) / phase)
-        assert (p[name]["seconds"], p[name]["windows"]) == (seconds, w)
+        assert (p[name]["seconds"], p[name]["sampling_blocks"]) == (seconds, w)
         for where, n in links.items():
             f = n * math.floor(N * math.log(n * 2 ** 40))
-            assert p[name][where] == {"links": n, "windows": w * n, "proof_blocks": N * w * n, "incorrect_at_most": f,
+            assert p[name][where] == {"links": n, "sampling_blocks": w * n, "proof_blocks": N * w * n, "incorrect_at_most": f,
                                       "share": f / (N * w * n), "how": "scaled",
                                       "rule": "window-to-period" if where == "node" else where}
     assert {k: r["sources"] for k, r in p["rules"].items()} == {
@@ -1319,8 +1319,10 @@ def test_sampled_proofs_guarantee_is_its_windows_epsilon_at_delta_beside_its_poo
         "datacenter": [census_line("deployments.json", "machines")],
         "world": [census_line("adversary.json", "total_flop", "flop_per_s_per_h100", "monitoring_period_s"),
                   census_line("deployments.json", "gpus_per_machine")]}
-    line = json.loads(capsys.readouterr().out.strip()[7:])["sampled_proofs"]
-    assert line["window"] == {"epsilon": "15/16", "delta": str(DELTA), "units": N, "law": {"subset": 1}}
+    text, line = (out / "record" / "onsite.json").read_text(), capsys.readouterr().out.strip()
+    assert SV.public_doc(text) == text and SV.public_line(line) == line
+    line = json.loads(line[7:])["sampled_proofs"]
+    assert line["per_window"] == {"epsilon": "15/16", "delta": str(DELTA), "units": N, "law": {"subset": 1}}
     assert line["pooled"] == {"incorrect_at_most": 443, **{
         name: {where: {k: p[name][where][k] for k in ("incorrect_at_most", "share")} for where in links}
         for name in LB.PERIODS}}
@@ -1341,7 +1343,7 @@ def test_the_pooled_count_is_the_floor_of_ln_links_over_delta_over_q_past_a_floa
 
 def test_a_run_with_no_certifier_case_states_the_pooled_count_and_no_period_cells(tmp_path):
     g = OR.record(served_out(tmp_path))["sampled_proofs"]
-    assert (g["window"]["epsilon"], g["pooled"]["incorrect_at_most"]) == ("15/16", 443)
+    assert (g["per_window"]["epsilon"], g["pooled"]["incorrect_at_most"]) == ("15/16", 443)
     assert g["pooled"]["periods"] == {"missing": f"no {OR.CASE}: a window's length is an execution phase's, its params' "
                                                  "schedule (`WINDOW_S`)"}
     assert not set(LB.PERIODS) & set(g["pooled"])
@@ -1353,9 +1355,9 @@ def test_a_draw_of_a_member_of_each_stratum_has_no_pooled_figure_and_is_named_re
     IntegrityHorizon pools only a uniform k-subset, so it has no pooled figure, and the record names such a draw as one
     a run of record doesn't make, which writes no sampled-proofs case and which Lean's per-member form refuses."""
     g = OR.record(served_out(tmp_path, draw=STRATIFIED1, bound=14))["sampled_proofs"]
-    assert g["window"]["law"] == {"law": "stratified", "strata": [{"name": "A", "size": 8, "k": 1},
+    assert g["per_window"]["law"] == {"law": "stratified", "strata": [{"name": "A", "size": 8, "k": 1},
                                                                   {"name": "B", "size": 8, "k": 1}]}
-    assert (g["window"]["epsilon"], g["pooled"]) == ("7/8", {"missing": OR.NOT_POOLED})
+    assert (g["per_window"]["epsilon"], g["pooled"]) == ("7/8", {"missing": OR.NOT_POOLED})
     assert all(s in OR.MULTI for s in ("stratified:1", "`a5.v2_proof`", "MULTI_REFUSED", "subset:1 under --zk"))
     assert OR.guarantee(g)["pooled"] == {"missing": OR.NOT_POOLED}
 
@@ -1364,7 +1366,7 @@ def test_a_draw_of_a_member_of_each_stratum_has_no_pooled_figure_and_is_named_re
 def test_sampled_proofs_guarantee_rests_on_its_coins_and_is_missing_but_for_an_accepted_answer(tmp_path, coins):
     out = served_out(tmp_path, coins=coins)
     g = OR.record(out)["sampled_proofs"]
-    assert (g["conditional_on"], g["window"]["epsilon"]) == ([OR.COINS_OPEN], "15/16")
+    assert (g["conditional_on"], g["per_window"]["epsilon"]) == ([OR.COINS_OPEN], "15/16")
     f = out / "record" / "verdicts.json"
     report = json.loads(f.read_text())
     report["protocols"]["integrity"]["answer"] = {}
@@ -1375,7 +1377,7 @@ def test_sampled_proofs_guarantee_rests_on_its_coins_and_is_missing_but_for_an_a
     f.write_text(json.dumps(report))
     g = OR.record(out)["sampled_proofs"]
     assert g["missing"] == "sampled proofs' verdict is reject: only its accepted answer states a bound"
-    assert "window" not in g and OR.guarantee(g) == {"missing": g["missing"]}
+    assert "per_window" not in g and OR.guarantee(g) == {"missing": g["missing"]}
 
 
 @pytest.mark.parametrize("n2, scan, named", [("subset:8", "all", ["the period draw"]),
