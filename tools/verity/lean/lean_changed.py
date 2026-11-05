@@ -808,16 +808,18 @@ def finish(pkg: str, outcome: str, rc: int, out: Path, update: bool, path: str, 
     return rc
 
 
-def differences(out: Path, base: Path) -> dict[str, Path] | None:
+def differences(out: Path, base: Path, log=print) -> dict[str, Path] | None:
     """{each package check.py failed in its reports under ``out``, by its path from ``base``: the record it wrote that settles
     it}, when each such failure is a record difference only (check.py's report then names that record, `regenerated`, which
-    is what `--update` writes); None when one is of another kind, or the reports can't be read."""
+    is what `--update` writes); None when one is of another kind, or the reports can't be read (said)."""
     try:
         bad = [r for r in json.loads((out / "audit.json").read_text())["packages"] if r.get("failures")]
         if not all(isinstance(r.get("regenerated"), str) and Path(r["regenerated"]).is_file() for r in bad):
             return None
         return {os.path.relpath(Path(str(r["package"])).resolve(), base.resolve()): Path(r["regenerated"]) for r in bad}
-    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+        log(f"lean-records: check.py's reports under {out} can't be read ({e!r}), so its failures count as failures of "
+            "another kind")
         return None
 
 
@@ -838,7 +840,7 @@ def settled(p: str, pkg: str, got: int, mine_out: Path, base: Path, out: Path, n
     ``own`` the record its `--update` wrote that differs from the committed one (`checked`): `PASS`; `REGENERATED` when
     ``own`` is set or every failure in its reports is a record difference (`differences`), each such record then kept
     (`keep`) and put in ``new``; `FAILED` otherwise, keeping nothing, since `record/` holds only records the gate may take."""
-    diff = {} if not got else None if AUDIT.killed(got) else differences(mine_out, base) or None
+    diff = {} if not got else None if AUDIT.killed(got) else differences(mine_out, base, log) or None
     if diff is None:
         if p != pkg:
             log(f"lean-records: {p} requires {pkg}, and its records fail on this build, not only on record differences, "
@@ -869,7 +871,9 @@ def verdicts(todo: dict[str, str], new: dict[str, bytes], out: Path | None, base
     for a in [out / "audit.json", *sorted(out.glob("requirer-*/audit.json"))] if out else []:
         try:
             reps = json.loads(a.read_text()).get("packages") or []
-        except (OSError, ValueError, AttributeError):
+        except (OSError, ValueError, AttributeError) as e:
+            log(f"lean-records: {a} can't be read ({e!r}); the packages it reports beside this run's are left out of its "
+                "records")
             continue
         for r in reps if isinstance(reps, list) else []:
             q = os.path.relpath(Path(str(r.get("package"))).resolve(), base.resolve()) if isinstance(r, dict) else ".."
