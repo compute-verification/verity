@@ -5,6 +5,7 @@ public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 import all Init.Data.Array.Basic
+import all Init.Data.Repr
 
 /-!
 # Each form's `K` bounds `PeriodLeakAccepted`'s count: the proofs of `ClockKBoundsCount` and `RowsKBoundsCount`
