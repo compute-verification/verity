@@ -9,23 +9,20 @@
 #   2. h1_prove/drawn.sh stages and proves the window's drawn units (H1_DRAWN_ONLY=1, and H1_DRAWN_CHECK=0 since steps 3
 #      and 4 verify the statements), its scratch kept in drawn-work/ (H1_DRAWN_WORK): it holds the proof files
 #      drawn/statements.json names, and the staged witness;
-#   3. `drawn.py fill` runs the verifier of record on every drawn statement J at a time, one line a verdict, then
-#      `served_verdicts.py pouw` writes the piece in PIECE_DIR with those --statements and --live-evidence (the window's
+#   3. `served_verdicts.py pouw` writes the piece in PIECE_DIR with those --statements and --live-evidence (the window's
 #      gate sessions, ledger and pins among it);
 #   4. `pouw_piece.py period` writes the period's case and its Lean answer (pouw-period, built here) in period/, from the
 #      records step 3 fetched, where served_composite.sh finds it for remote's Lean.
 # Steps 3 and 4 share one set of the verifier of record's answers (`answers.Answers`, --lean-answers): each run's answer
-# is kept under the SHA-512 of all its inputs in the verifier's own scratch (a 0700 directory under VERIFIER_TMP, never
-# the serve dir, removed on exit), so each statement is verified once, step 4 takes step 3's answers by key (its line:
-# "it took the piece's Lean answers by key"), and each step judges every answer itself. J is floor((available memory - 16 GiB) / 47.5 GiB), a K 2048 lane statement's
-# verifier at its peak (3 on a 196 GB H200 node), unless H1_LEAN_JOBS sets it (fill's --jobs; H1_LEAN_HEADROOM_GB the 16,
-# its --headroom-gb).
+# is kept, as credit asks for it, under the SHA-512 of all its inputs in the verifier's own scratch (a 0700 directory
+# under VERIFIER_TMP, never the serve dir, removed on exit), so each statement is verified once, step 4 takes step 3's
+# answers by key (its line: "it took the piece's Lean answers by key"), and each step judges every answer itself.
 # H1_POUW_REUSE=1 skips steps 1 and 2 when their statements and live evidence are already there (a rerun of 3 and 4 on
 # the kept proofs).
 # env: served_verdicts.sh's (H1_GATE, H1_KEY_SHA512, MAIN_FILE, PY), drawn.sh's and live.sh's (H1_CIRCUITS, H1_MODEL,
 #      H1_CHECKPOINT or H1_WEIGHTS, H1_DRAWN_MEM_GB, H1_ZK_SERVER_GB, H1_MEM_GB, H1_DRAW_K, ...)  HZ_CACHE (both jobs'
 #      builds, default /workspace/research/cache/pouw-hidden-zk)  FLOCK_VERIFY (default the tree's, which
-#      served_verdicts.sh builds)  H1_LEAN_JOBS, H1_LEAN_HEADROOM_GB  VERIFIER_TMP (default /tmp)
+#      served_verdicts.sh builds)  VERIFIER_TMP (default /tmp)
 # Its lines name no window. Exit 0 once step 3 wrote the piece; a failed step 1, 2 or 4 leaves its evidence or the
 # period's case out, which step 3's piece and served_composite.sh then name.
 set -uo pipefail
@@ -63,19 +60,6 @@ VS=$(umask 077 && mktemp -d "${VERIFIER_TMP:-/tmp}/pouw-verifier.XXXXXX") || exi
 trap 'rm -rf "$VS"' EXIT
 LA=$VS/answers
 taken() { local a; a=$(grep -h '^LEAN-ANSWERS ' "$1" 2>/dev/null | tail -1); [ -z "$a" ] || echo "; $2${a#LEAN-ANSWERS }"; }
-
-t=$(date +%s)
-if [ -s "$ST" ] && [ -n "${H1_CIRCUITS:-}" ]; then
-  # no --lean: steps 3 and 4 run proofs.executable()'s flock-verify, whose SHA-512 is in each answer's key
-  "$TPY" benchmarks/pouw/h1_prove/drawn.py fill "$SD" "$WIN" --circuits "$H1_CIRCUITS" --statements "$ST" --answers "$LA" \
-    ${H1_DRAW_K:+--k "$H1_DRAW_K"} ${H1_LEAN_JOBS:+--jobs "$H1_LEAN_JOBS"} \
-    ${H1_LEAN_HEADROOM_GB:+--headroom-gb "$H1_LEAN_HEADROOM_GB"} 2>&1 | tee "$Q/fill.log" | grep --line-buffered '^LEAN ' \
-    | sed -u -E 's/^LEAN (.{0,300}).*/POUW lean: \1/'
-  frc=${PIPESTATUS[0]}
-  say "lean: drawn.py fill exit $frc after $(took "$t"), its answers in the verifier's scratch"
-else
-  say "lean: no fill ($([ -s "$ST" ] && echo "no H1_CIRCUITS" || echo "no drawn statements")), so the piece and the period run each verifier themselves"
-fi
 
 t=$(date +%s)
 "$TPY" benchmarks/one_stage/served_verdicts.py pouw "$SD" "$WIN" "$P" "${ev[@]}" --lean-answers "$LA" > "$Q/pouw.log" 2>&1
