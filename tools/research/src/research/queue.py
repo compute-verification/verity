@@ -2196,7 +2196,7 @@ class Queue:
             if v is None and self.now() - rec["at"] <= PREFLIGHT_LOST_S:
                 continue
             if v is None:
-                v = f"run {rec['run']} gave no verdict in {PREFLIGHT_LOST_S // 60} min"
+                v = f"run {rec['run']} had nothing to read {PREFLIGHT_LOST_S // 60} min after its launch"
                 late.append(rec["run"])
             elif isinstance(v, dict):
                 if (v.get("pr") == n and all(v.get(f) == rec[f] for f in ("head", "onto", "base", "commit", "tree"))
@@ -2244,8 +2244,8 @@ class Queue:
                      "another")
             return
         runs[str(n)]["unjudged"] = True
-        self.log(f"research queue: #{n} at {head[:12]} enters `{self.branch}` unpreflighted: its {tries} preflight runs gave no "
-                 f"verdict (the last: {why})")
+        self.log(f"research queue: #{n} at {head[:12]} enters `{self.branch}` unpreflighted at its next merge: its {tries} "
+                 f"preflight runs gave no verdict (the last: {why})")
 
     def _cancel_runs(self, ids: list[str], reason: str, dry_run: bool) -> None:
         """`PreflightPool.cancel` of the pool runs ``ids``, each that failed logged: a run left going holds a pool's slot."""
@@ -2313,7 +2313,7 @@ class Queue:
             except (QueueError, OSError) as e:
                 for n, head, _, _ in chosen:
                     why[n] = f"{PREFLIGHT_WAIT}: its pool run couldn't launch ({e})"
-                    self._lost(runs, n, head, int((runs.get(str(n)) or {}).get("tries") or 0) + 1, f"it couldn't launch ({e})")
+                    self._lost(runs, n, head, int((runs.get(str(n)) or {}).get("tries") or 0) + 1, f"its launch failed: {e}")
             else:
                 base = _tree(self.workdir, tip)
                 for n, head, commit, rid in chosen:
