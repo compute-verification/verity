@@ -280,4 +280,133 @@ theorem blockBit_zC {S : Model.Statement} (hk : S.kLog = 22) (o : Fin (2 ^ S.nbl
   show FlockSoundness.bit (if zIn y then 1 else 0) = zIn y
   cases zIn y <;> rfl
 
+/-! ## Rows by place
+
+Each row of the block by where it sits: in no range, in the mask's slot, or in a slot of a net. The lemmas take the
+statement's layout facts (`Layout`), Δ as `E` and the ranges as the concrete circuit's, so they read nothing else of
+the concrete statement. -/
+
+section place
+
+/-- **No range's entry at a row no range covers**: a covered column in the row's slot would cover the row. -/
+theorem rangesEntry_outside {st : Stmt} {x : ℕ} (hx : ∀ R ∈ st.c.ranges.toList, ¬ FlockLevel3.covers R x)
+    (e : Kind → ℕ → ℕ → ZMod 2) (j : ℕ) : rangesEntry st e x j = 0 := by
+  unfold rangesEntry
+  split
+  next rg hrg =>
+    obtain ⟨hm, hc⟩ := lastCover_mem hrg
+    by_cases hd : x / 2 ^ rg.slotLog = j / 2 ^ rg.slotLog
+    · exact absurd (show FlockLevel3.covers rg x by unfold FlockLevel3.covers; rw [hd]; exact hc) (hx rg hm)
+    · rw [ite_eq_right hd]
+  next => rfl
+
+/-- **A row no range covers and Δ skips is zero.** -/
+theorem zeroRow_outside {st : Stmt} (L : FlockSoundness.Layout st)
+    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {r : Fin (2 ^ (L.model regs).kLog)}
+    (hc : ∀ R ∈ st.c.ranges.toList, ¬ FlockLevel3.covers R r.val) (hd : ∀ j, deltaEntry st.da r.val j = 0) :
+    ZeroRow (L.model regs) r := by
+  refine ⟨fun j => ?_, fun j => ?_⟩
+  · show rangesEntry st (slotEntryA st) r.val j.val + deltaEntry st.da r.val j.val = 0
+    rw [rangesEntry_outside hc, hd, add_zero]
+  · show rangesEntry st (slotEntryB st) r.val j.val + deltaEntry st.db r.val j.val = 0
+    rw [rangesEntry_outside hc, L.delta_b, hd, add_zero]
+
+theorem count_E (x j : ℕ) : E.count (x, j) =
+    [(518144, 518144), (518144, PIN), (524544, 524544), (524544, PIN)].count (x, j) +
+      (run 262144 512 (constSrcW msW)).count (x, j) + (run 512 1024 (constSrcW padW)).count (x, j) +
+      (run 524288 16 leafSrc).count (x, j) + (run 0 512 (516096 + ·)).count (x, j) := by
+  simp only [E, List.count_append]
+
+/-- **Δ adds nothing at a column outside its runs and the slot constants**, at a statement whose Δ is `E`. -/
+theorem delta_free {da : Array (ℕ × ℕ)} (hda : da.toList = E) {x : ℕ}
+    (hx : 1536 ≤ x ∧ (x < 262144 ∨ 262656 ≤ x) ∧ x ≠ 518144 ∧ x ≠ 524544 ∧ (x < 524288 ∨ 524304 ≤ x)) (j : ℕ) :
+    deltaEntry da x j = 0 := by
+  rw [deltaEntry_eq_count, hda, count_E, count_run, count_run, count_run, count_run,
+    ite_eq_right (show ¬ (262144 ≤ x ∧ x < 262144 + 512) by omega),
+    ite_eq_right (show ¬ (512 ≤ x ∧ x < 512 + 1024) by omega),
+    ite_eq_right (show ¬ (524288 ≤ x ∧ x < 524288 + 16) by omega),
+    ite_eq_right (show ¬ (0 ≤ x ∧ x < 0 + 512) by omega)]
+  have h4 : [(518144, 518144), (518144, PIN), (524544, 524544), (524544, PIN)].count (x, j) = 0 :=
+    List.count_eq_zero.2 fun hm => by
+      simp only [List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false] at hm
+      omega
+  rw [h4]
+  simp
+
+/-- The concrete circuit's ranges, as `ranges_cW` lists them. -/
+abbrev RS : List (Kind × ℕ × ℕ × ℕ) :=
+  [(Kind.net 2, 18, 0, 1), (Kind.net 1, 18, 1, 1), (Kind.net 0, 9, 1024, 1), (Kind.mask, 14, 64, 1)]
+
+/-- **The concrete circuit's ranges cover no column of the gaps**: past the unit's slot and before the mask's, and past
+the mask's. -/
+theorem not_covers_of {rs : List Range} (hrs : rs.map (fun r => (r.kind, r.slotLog, r.pos0, r.count)) = RS) {x : ℕ}
+    (hx : (524800 ≤ x ∧ x < 1048576) ∨ 1064960 ≤ x) : ∀ R ∈ rs, ¬ FlockLevel3.covers R x := by
+  intro R hR hc
+  have hm := List.mem_map_of_mem (f := fun r : Range => (r.kind, r.slotLog, r.pos0, r.count)) hR
+  rw [hrs] at hm
+  unfold FlockLevel3.covers at hc
+  simp only [RS, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false] at hm
+  rcases hm with ⟨-, h1, h2, h3⟩ | ⟨-, h1, h2, h3⟩ | ⟨-, h1, h2, h3⟩ | ⟨-, h1, h2, h3⟩ <;>
+    rw [h1, h2, h3] at hc <;> norm_num at hc <;> omega
+
+theorem zIn_gap {i : ℕ} (h : 524800 ≤ i) : zIn i = false := by
+  unfold zIn
+  rw [ite_eq_right (show ¬ i < 262144 by omega), ite_eq_right (show ¬ i < 524288 by omega)]
+  exact decide_eq_false (by omega)
+
+variable {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
+  (hda : st.da.toList = E) (hrs : st.c.ranges.toList.map (fun r => (r.kind, r.slotLog, r.pos0, r.count)) = RS)
+include hda hrs
+
+/-- **A row of the gaps is zero.** -/
+theorem zeroRow_gap {r : Fin (2 ^ (L.model regs).kLog)} (hr : (524800 ≤ r.val ∧ r.val < 1048576) ∨ 1064960 ≤ r.val) :
+    ZeroRow (L.model regs) r :=
+  zeroRow_outside L regs (not_covers_of hrs hr) (delta_free hda (x := r.val) (by omega))
+
+/-- **A mask row reads itself**: the mask's slot entry is the identity, and Δ skips it. -/
+theorem copyRow_mask {r : Fin (2 ^ (L.model regs).kLog)} (hr : 1048576 ≤ r.val ∧ r.val < 1064960) :
+    CopyRow (L.model regs) r r := by
+  have hm : (Kind.mask, 14, 64, 1) ∈ st.c.ranges.toList.map (fun r => (r.kind, r.slotLog, r.pos0, r.count)) := by
+    rw [hrs]; simp [RS]
+  obtain ⟨R, hR, hf⟩ := List.mem_map.1 hm
+  simp only [Prod.mk.injEq] at hf
+  obtain ⟨hk, hs, hp, hc⟩ := hf
+  have hcov : FlockLevel3.covers R r.val := by
+    unfold FlockLevel3.covers
+    rw [hs, hp, hc]
+    norm_num <;> omega
+  have hd := delta_free hda (x := r.val) (by omega)
+  have key : ∀ e : Kind → ℕ → ℕ → ZMod 2, (∀ i i', e .mask i i' = if i = i' then 1 else 0) →
+      ∀ j : Fin (2 ^ (L.model regs).kLog), rangesEntry st e r.val j.val = if j = r then 1 else 0 := by
+    intro e he j
+    rw [rangesEntry_of_covers L.disj hR hcov e j.val, hk, he, hs]
+    by_cases hj : j = r
+    · subst hj; simp
+    · have hv : j.val ≠ r.val := fun h => hj (Fin.ext h)
+      rw [ite_eq_right hj]
+      by_cases hq : j.val / 2 ^ 14 = r.val / 2 ^ 14
+      · rw [ite_eq_left hq, ite_eq_right]
+        intro hm'
+        exact hv (by rw [← Nat.div_add_mod j.val (2 ^ 14), ← Nat.div_add_mod r.val (2 ^ 14), hq, hm'])
+      · rw [ite_eq_right hq]
+  refine ⟨fun j => ?_, fun j => ?_⟩
+  · show rangesEntry st (slotEntryA st) r.val j.val + deltaEntry st.da r.val j.val = _
+    rw [hd, add_zero]
+    exact key _ (fun _ _ => rfl) j
+  · show rangesEntry st (slotEntryB st) r.val j.val + deltaEntry st.db r.val j.val = _
+    rw [L.delta_b, hd, add_zero]
+    exact key _ (fun _ _ => rfl) j
+
+/-- **The gaps' and the mask's rows hold** at the trace. -/
+theorem holds_gapMask (hk : st.c.kLog = 22) (o : Fin (2 ^ (L.model regs).nbl)) {r : Fin (2 ^ (L.model regs).kLog)}
+    (hr : 524800 ≤ r.val) :
+    ((L.model regs).A₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r *
+        ((L.model regs).B₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r =
+      (L.model regs).block (zC (L.model regs).m) o r := by
+  by_cases hm : 1048576 ≤ r.val ∧ r.val < 1064960
+  · exact copyRow_holds (copyRow_mask L regs hda hrs hm) rfl
+  · exact zeroRow_holds (zeroRow_gap L regs hda hrs (by omega)) (by rw [block_zC (S := L.model regs) hk, zIn_gap hr]; rfl)
+
+end place
+
 end FlockDeploy.Concrete.Trace
