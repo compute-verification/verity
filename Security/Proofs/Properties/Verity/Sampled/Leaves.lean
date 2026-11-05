@@ -1,5 +1,7 @@
-import Properties.Verity.Game
-import Proofs.Core.Game.Tape
+module
+
+public import Properties.Verity.Game
+public import Proofs.Core.Game.Tape
 
 /-!
 # A play's coin trees hold at most `maxLeaves` leaves
@@ -11,6 +13,8 @@ run of a play writes at most `maxTreeLines` coin-tree lines (`play_lines_le`), a
 `maxLeaves = maxTreeLines · maxTreeCoins` leaves in all (`releases_leaves_le`, `play_leaves_le`), with no premise: the
 leaves `Live.hidingTerm` counts, twice at `2^-257` a leaf.
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled.Leaves
 

@@ -1,10 +1,12 @@
-import Properties.Verity.Game
-import Properties.SampledProofs.Draw
-import Proofs.Flock.Bridge.V5.Statement
-import Proofs.Flock.Bridge.CircuitOf
-import Proofs.Flock.Soundness.ZK.RealLeaves
-import Proofs.Properties.Verity.Sampled.Deployed
-import Proofs.Properties.Verity.Sampled.Leaves
+module
+
+public import Properties.Verity.Game
+public import Properties.SampledProofs.Draw
+public import Proofs.Flock.Bridge.V5.Statement
+public import Proofs.Flock.Bridge.CircuitOf
+public import Proofs.Flock.Soundness.ZK.RealLeaves
+public import Proofs.Properties.Verity.Sampled.Deployed
+public import Proofs.Properties.Verity.Sampled.Leaves
 
 /-!
 # Sampled proofs' leg of `Verity.Soundness`: the session v2 sets up
@@ -82,6 +84,8 @@ files and at the strategy a strategy of the period's game projects to. This modu
   * the circuit file's and the public file's finders (`Vocab.fileFinder`, `Vocab.publicFinder`), `2²/2^513` each;
   * the read finder's published bound at `t` (`cr`, `Vocab.crBound`).
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled
 
