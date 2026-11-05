@@ -1033,6 +1033,48 @@ def test_w63k4s_tied_audit_drawn_in_part_charges_its_slot_entries_and_drawn_whol
         8_390_305 if drawn < 16 else 8_389_409)
 
 
+@pytest.mark.parametrize("drawn", [1, 16])
+def test_eps_is_pooled_over_each_monitoring_period_at_its_windows_with_the_tied_audits_the_period_reads(
+        tmp_path, capsys, drawn):
+    """w63k4 over three execution phases, each phase's scan drawn whole at 2^-64 and its tied audit drawn subset:1, read
+    at δ_i = 2^-64: three tied audits read, so eps a window is the scan's δ and one δ_i, and over each monitoring
+    period's cell its windows (its phases times its links) times that, the cell's own eps, with the tied audits read
+    over those windows. Drawn whole, none is read and eps is the scans' δ alone. The ONSITE line states the count and
+    each period's pooled eps beside the per-window term, and the record and its line leave the node as written."""
+    sys.path.insert(0, str(HERE.parent.parent / "network_traces"))
+    import scan_zk as SZ
+    schedule = dataclasses.asdict(SZ.W63K4.params) | {"bucket_ms": 4000}
+    entries = 896 if drawn < 16 else 0
+    scan = dict(SCAN, delta=f"1/{2 ** 64}", free=0, faulty_entries=entries, jitter=32)
+    audit = {"delta": "1/2", "drawn": drawn, "units": 16, "wrong_units": 8 if drawn < 16 else 0}
+    charged = [dict(audit, delta=f"1/{2 ** 64}", wrong_units=15)] * 3 if drawn < 16 else []
+    public = dict(PUBLIC, K=3 * (800 + entries), cells=3 * 384, schedules=3 * 384, windows=3, scans=[scan] * 3,
+                  audits=[audit] * 3, charged=charged, eps=str(Fraction(3 + len(charged), 2 ** 64)),
+                  held=["free", "circuit"])
+    out = accepted(tmp_path, public, windows=3, schedule=schedule)
+    assert main([str(out)]) == 0
+    text, said = (out / "record" / "onsite.json").read_text(), capsys.readouterr().out.strip()
+    assert SV.public_doc(text) == text and SV.public_line(said) == said
+    p, line = json.loads(text)["periods"], json.loads(said[len("ONSITE "):])["eps_pooled"]
+    read, d = len(charged), Fraction(1, 2 ** 64)
+
+    def at(w: int) -> dict:
+        return {"phases": w, "eps": str(w * d * (3 + read) / 3), "scan": str(w * d),
+                "charged": str(w * d * read / 3), "tied_audits_read": str(Fraction(read * w, 3))}
+
+    e = p["eps"]
+    assert e["tied_audits"] == {"read": read, "delta_i": [f"1/{2 ** 64}"] * bool(read), "is": OR.TIED_READ}
+    assert (e["is"], e["per_window"], e["run"]) == (OR.POOLED_EPS, at(1), at(3))
+    assert e["run"]["eps"] == public["eps"] == p["run"]["delta_net"][0]["value"]
+    assert (line["tied_audits_read"], line["per_window"]) == (read, at(1)["eps"])
+    for name in LB.PERIODS:
+        for where in ("node", "datacenter", "world"):
+            c = p[name][where]
+            w = c["parameters"]["phases"] * c["parameters"]["links"]
+            assert e[name][where] == at(w) and e[name][where]["eps"] == c["delta_net"][0]["value"] == line[name][where]
+    assert e["week"]["node"]["tied_audits_read"] == str(read * math.ceil(7 * 86400 / 128) // 3)
+
+
 @pytest.mark.parametrize("caps", [[], [4, 4], [5] * (4 * 63)])
 def test_a_case_whose_caps_arent_its_schedules_is_the_connections_error(tmp_path, caps):
     """The period's check refuses caps that aren't the schedule's (`Schedule.caps`), an empty list included, so a
@@ -1102,6 +1144,8 @@ def test_eps_is_split_into_the_scans_and_the_charged_audits_delta_beside_each_ce
     rec = record(accepted(tmp_path, public))
     assert rec["bound"]["delta"] == {"scan": "1/1048576", "charged": "1/2", "eps_per_phase": "524289/1048576",
                                      "is": OR.DELTA, "charged_audits": {"missing": OR.NO_READINGS}}
+    assert (rec["periods"]["eps"]["tied_audits"], rec["periods"]["eps"]["per_window"]) == (
+        {"missing": OR.NO_READINGS}, {"phases": 1, "eps": "524289/1048576", "scan": "1/1048576", "charged": "1/2"})
     run, year = rec["periods"]["run"], rec["periods"]["year"]["datacenter"]
     assert (run["vacuous"], run["eps_per_phase_below"]) == (False, "1")
     assert year["vacuous"] and Fraction(year["eps_per_phase_below"]) < Fraction(public["eps"])

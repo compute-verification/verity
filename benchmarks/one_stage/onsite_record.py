@@ -147,7 +147,10 @@ capacity in ``egress``, `EGRESS`; the served egress is missing, `SERVED_EGRESS`)
 phases it counts (``delta_net``), whether eps alone is
 already vacuous (at least 1), the eps a phase under which it wouldn't be (``eps_per_phase_below``, beside the bound's
 ``delta``) and the statement it rests on; beside that pooled total, ``per_phase`` is the same over
-one execution phase, proved only where m is 1.
+one execution phase, proved only where m is 1. ``eps`` (`pooled_eps`, `POOLED_EPS`) is eps per window (an execution
+phase), over the run's period and pooled over each monitoring period's cell at its windows, each split into the scans'
+δ and the charged part, with the number of tied audits the period reads at δ_i (``tied_audits``, `TIED_READ`), a
+count over the period's windows too.
 
 **Re-proof inputs** (``reproof``, `REPROOF`): what a later re-proof of the run's sampled units needs, each wire a sampled
 unit reads then proved inside its session: the committed values and their openings for every sampled unit and the units
@@ -262,6 +265,16 @@ DELTA = ("what sets eps: m · δ_scan, every phase's scan at one δ, its one-sta
          "whole, it leaves eps and its entries leave K, at the cost of proving each of its proof blocks")
 NO_READINGS = ("the period's public lists no reading at δ_i (`charged`): its check reads each charged audit at its "
                "answer's δ, and the charged part is eps − m · δ_scan")
+TIED_READ = ("the tied audits the period's check reads at δ_i (NetworkCheck.Period's chargedOf: each tied to an "
+             "execution phase's scan and drawn in part), each once, at the check's own constant δ_i (tiedDelta, "
+             "2^-64), fixed before any coin and set by no params, evidence or answer; each adds its δ_i to eps, Σ_i δ_i "
+             "by the union bound. A tied audit drawn whole is read at no δ_i, and adds nothing to eps")
+POOLED_EPS = ("eps, δ_net's δ part (`EPS`), over each monitoring period at the deployment's window count, a window an "
+              "execution phase (`WINDOW_S`): each cell's windows (``phases``: its phases times its links, never a "
+              "Commit window's count, which `publish` holds) times the per-window "
+              "term (``per_window``: eps / m, the scans' δ_scan and the charged part, Σ_i δ_i / m), as its cell's rule "
+              "scales the run's (`RULES`) and its delta_net states; the run's own period (``run``) is proved. Each "
+              "window's δ_net adds ε_ks, ε_bind and ε_tap to it (`ERRORS`), which no check computes")
 #: the run's published line of the network certifier's verdict (`served_verdicts.pieces`)
 LINE = "THE NETWORK CERTIFIER "
 #: the run's published line naming each protocol's coins (served_verdicts.sh's first), and the form of its sampled
@@ -1152,6 +1165,26 @@ def periods(K: int, eps: Fraction, m: int, phase_s: Fraction, connections: int, 
     return out
 
 
+def pooled_eps(delta: Mapping[str, Any], m: int, p: Mapping[str, Any]) -> dict[str, Any]:
+    """eps over the run's period and each monitoring period's cells of ``p`` (`periods`) at their windows, split as the
+    bound's ``delta`` splits it into the scans' δ and the charged part, beside the per-window term, with the tied audits
+    the period reads (`POOLED_EPS`, `TIED_READ`); the count missing where the public lists no reading at δ_i."""
+    readings = delta["charged_audits"]
+    read = None if isinstance(readings, Mapping) else len(readings)
+    scan, charged = Fraction(delta["scan"]), Fraction(delta["charged"]) / m
+
+    def at(phases: int) -> dict[str, Any]:
+        return {"phases": phases, "eps": str(phases * (scan + charged)), "scan": str(phases * scan),
+                "charged": str(phases * charged)} | (
+            {} if read is None else {"tied_audits_read": str(Fraction(read * phases, m))})
+
+    tied = {"missing": NO_READINGS} if read is None else {
+        "read": read, "delta_i": sorted({r["delta"] for r in readings}), "is": TIED_READ}
+    return {"is": POOLED_EPS, "tied_audits": tied, "per_window": at(1), "run": at(m),
+            **{name: {where: at(p[name][where]["parameters"]["phases"] * p[name][where]["parameters"]["links"])
+                      for where in ("node", "datacenter", "world")} for name in LB.PERIODS}}
+
+
 def measured(path: Path | None) -> dict[str, Any]:
     """Honest serving's advice charge from a test run's `advice_charge.py` record, labelled as that run's."""
     if path is None:
@@ -1658,6 +1691,7 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
         return rec | {"periods": {"missing": f"no figure of record: {why}"}}
     eps, m, K = eps_of(b), b["phases"], b["of_record"]["K"]
     rec["periods"] = ({"conditional_on": cond} if cond else {}) | periods(K, eps, m, phase_s, connections, capacity)
+    rec["periods"]["eps"] = pooled_eps(b["delta"], m, rec["periods"])
     return rec
 
 
@@ -1668,7 +1702,8 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
     `NO_COMPUTE_CLAIM`), and what every figure is conditional on
     (`COINS`; open for a record that read no coins), what the record doesn't claim (`DAY`, `POUW`), the drawn members it
     doesn't credit (`CREDIT`), K of record and what is open under it, its δ_net's terms, eps's split and connections,
-    the composite's stated error, the year's datacenter cell, sampled proofs' guarantee per window and pooled
+    the tied audits the period reads and eps per window and pooled over each monitoring period (`pooled_eps`), the
+    composite's stated error, the year's datacenter cell, sampled proofs' guarantee per window and pooled
     (`guarantee`), and the measured advice charge's test run."""
     b, p, s = rec.get("bound") or {}, rec.get("periods") or {}, rec.get("serving") or {}
     year = (p.get("year") or {}).get("datacenter")
@@ -1685,6 +1720,10 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
             "K": fig.get("K"), "open": fig.get("open"),
             "delta_net": None if "delta_net" not in b else delta_net(eps_of(b), b["phases"]),
             "delta": None if "delta" not in b else {k: b["delta"][k] for k in ("scan", "charged")},
+            "eps_pooled": None if "eps" not in p else {
+                "tied_audits_read": p["eps"]["tied_audits"].get("read"), "per_window": p["eps"]["per_window"]["eps"],
+                **{name: {where: p["eps"][name][where]["eps"] for where in ("node", "datacenter", "world")}
+                   for name in LB.PERIODS}},
             "composite_error": {k: rec["composite_error"][k] for k in ("stated", "vacuous")},
             "connections": (b.get("connections") or {}).get("count"),
             "year_datacenter": None if year is None else {
