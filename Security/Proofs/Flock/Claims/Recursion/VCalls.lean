@@ -1,7 +1,6 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.BoundMerged
-public import Proofs.Flock.Claims.Recursion.KSLin
+public import Proofs.Flock.Claims.Recursion.BoundMergedLin
 public import Proofs.Flock.Claims.Recursion.VCallsAt
 
 /-!

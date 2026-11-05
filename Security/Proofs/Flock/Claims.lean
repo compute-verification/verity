@@ -62,7 +62,8 @@ public import Proofs.Flock.Claims.Recursion.LastBindsEC
 public import Proofs.Flock.Claims.Recursion.BoundRouteCols
 public import Proofs.Flock.Claims.Recursion.BoundWeight
 public import Proofs.Flock.Claims.Recursion.BoundMerged
-public import Proofs.Flock.Claims.Recursion.KSLin
+public import Proofs.Flock.Claims.Recursion.BoundRouteMerged
+public import Proofs.Flock.Claims.Recursion.BoundMergedLin
 public import Proofs.Flock.Claims.Recursion.BoundRouteMergedLin
 public import Proofs.Flock.Claims.Recursion.KSLin2
 public import Proofs.Flock.Claims.Recursion.KSLinks
@@ -208,7 +209,8 @@ public import Proofs.Flock.Claims.Recursion.LastCallsR
 public import Proofs.Flock.Claims.Recursion.CallsLe
 public import Proofs.Flock.Claims.Recursion.CallsRep
 public import Proofs.Flock.Claims.Recursion.CallsTop
-public import Proofs.Flock.Claims.Recursion.IVStarCalls
+public import Proofs.Flock.Claims.Recursion.CallsDecision
+public import Proofs.Flock.Claims.Recursion.CallsR
 public import Proofs.Flock.Claims.Recursion.CallsClosed
 public import Proofs.Flock.Claims.Recursion.VerdictRowDTie
 public import Proofs.Flock.Claims.Recursion.InnerAtCoins

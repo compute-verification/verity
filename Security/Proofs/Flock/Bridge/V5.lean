@@ -7,8 +7,7 @@ public import Proofs.Flock.Bridge.V5.OpeningsCanon
 public import Proofs.Flock.Bridge.V5.Transports
 public import Proofs.Flock.Bridge.V5.KSLive
 public import Proofs.Flock.Bridge.V5.Honest
-public import Proofs.Flock.Bridge.LeafMap
-public import Flock.KsScope
+public import Proofs.Flock.Bridge.V5.Refused
 public import Proofs.Flock.Bridge.V5.Accepted
 
 /-! `Statement`: `Flock.Guarantees.SampledKSLiveV5`, V2 at the verifier's public inputs with or without shared rows, and
