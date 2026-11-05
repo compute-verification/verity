@@ -12403,7 +12403,7 @@
    ]
   },
   "Flock.HmRow": {
-   "digest": "0e137155a920796290ce0d41adfbd19a6307ce9ea930bc900e0a42b3eed46eda",
+   "digest": "27634b61a2cbc3b0592ffb3a3bca58b958a87d49062c4d8528d0b96b09e605d1",
    "definitions": {
     "Flock.HmIn.FORMAT": "d170c17911f12935b7c639f768d2a51f2df2f502c139d50dafcd92acca7de79a",
     "Flock.HmIn.Ports": "215bbcb52a5c9b82ffa0c34ab9a1e63f466d28f12cb80b3227186587ecca5d72",
@@ -12498,7 +12498,7 @@
     "Flock.HmRow.checkPartition": "df09b33368fa7760a795f9aabedc8df8f3ebea34e8ac1466e9475f2c5cf4aabb",
     "Flock.HmRow.checkPartitionObject": "5a3b1e0e0c68d9009597658a8f7e705e1484ce2ba66c99af39097e4357ebf6be",
     "Flock.HmRow.checkPartitionObject._sparseCasesOn_1": "0b53c545fc0b971d4ad038fb49f4527c1399c2bb782239f646b6b0984bfaecc5",
-    "Flock.HmRow.checkPublic": "8adb085df2af998fba6d7821526ac511cac276087ce7060dabb81952d27d6536",
+    "Flock.HmRow.checkPublic": "8706cb97a45aacaf17cd0b1a52332c978d599d212ed4d22fec12eff73feb0b87",
     "Flock.HmRow.checkRegionWords": "34b73220f6a00f2937433ae74b3677ef5f33a71801defe6d99332b7863197ed9",
     "Flock.HmRow.checkTyped": "0388dc52b5d45b621bea39a0158e6f461c162d9e29f176dc462ed87a4067f50d",
     "Flock.HmRow.circuitTemplate": "d7c502e15b4c91a1d2ff3ba1e8dcb830cdca1d9ee643da8bb415c4ef11dff1cd",
@@ -14255,7 +14255,7 @@
    ]
   },
   "Flock.RecCoins": {
-   "digest": "90b80638fe85f921090f0e6b856bfe71b604e07e9efee92c1351257320028f2a",
+   "digest": "30fd9c1c51c8cd0724c819c00a759facb7495fe338b127acb15438424f4804a7",
    "definitions": {
     "Flock.RecCoins.C3": "ad22be988630c4ef35240abbc128d3f3b94009c8858477ff6dbfe4a2d71a68cf",
     "Flock.RecCoins.C3.coins": "fb0c0b18cbe96a25e62783a0293d3bcb904854eaddf13076a480f92d1489c427",
@@ -14269,14 +14269,14 @@
     "Flock.RecCoins.DIRS_WORDS": "19a333c42469f80f155f94115fff18fe185911d4775d9e5922c2db4e0de6fb64",
     "Flock.RecCoins.Files": "cef66507ace18823acf1f9253856d28898ef2b16ae49b5e2ab157340ea7bc309",
     "Flock.RecCoins.Files.circuit": "5ede6f36d3bfdca317e4cfcd49b3f0d2c8a5393814ef0e04c676f48d5357d636",
-    "Flock.RecCoins.Files.drawnSpec": "ed2492ae98a68fab3991b8ee067677b5d20a5b205f18853b7d9955f4aa20f319",
+    "Flock.RecCoins.Files.drawnSpec": "e35bd572cfe2bbda552223a57b5a6104eaa709be8e6447a3d766903656c5456f",
     "Flock.RecCoins.Files.form": "2e73cc7cb32796569500e332123ad9460ba53de4bd7b59cc25894c0afc3a8c7c",
     "Flock.RecCoins.Files.inner": "d7600bc8435fc7885f55a2fb568ae17266bc2768fcd4d6b665395230ff50eb01",
     "Flock.RecCoins.Files.partition": "4476fe837bc53787366463c4f8198e4746745fee9386c309766d63c4ca5079bd",
     "Flock.RecCoins.Files.program": "0582741d2420c350bc0f7705d4050d802ff0ea1d2c3f6675819277e6a9167954",
     "Flock.RecCoins.Files.pub": "cc1c82d7268cc1a2da060aebbc36c12cc3b645731ef016b32c4ae1f8c8ad12fb",
     "Flock.RecCoins.Files.record": "8ca1fa00a976cf40c68751e53624c6ab309ff0acc27810908029c21591885e38",
-    "Flock.RecCoins.Files.stmt": "8ddcf1e1121814f4a4ebc0c529df3db9a87ace57d76d47bbc458b43d87f74b6b",
+    "Flock.RecCoins.Files.stmt": "774ddb04b01d2f42ea8b38ccf38bd54bc046628dfecb33beb26e5e008a083749",
     "Flock.RecCoins.Files.stmt._sparseCasesOn_3": "aa39e4e2af867549ede8226b036bc4ed05cc2839b623f79f3c456de075e566a6",
     "Flock.RecCoins.Inner": "afb5006806dcb2a746cc0b9b571ae12f4bf8b6f243c7320ebe0964f7fde0aa5b",
     "Flock.RecCoins.Inner.algebra": "a57e3da533ced079f135eccc4178360b49b0b08141bee89364ed7404ce917070",
@@ -14359,7 +14359,7 @@
     "Flock.RecCoins.exceptOf": "3a26d9a356870ca580930b6ec66829aae0abe7635763b57c58e020c28272b55c",
     "Flock.RecCoins.f128Of": "ba2c3f95884de49f1af80f924f1d937a745a377726dd85c9613b4e5b83d3b083",
     "Flock.RecCoins.f128sOf": "d07931e7a75114af8c2a906beaf52e25edb3341c88db35aed500f61e66d14073",
-    "Flock.RecCoins.innerTags": "73cf87921f0fd70363209e2d1bfe06fb6ee145ce665fcf21e4dcbe81100d91c5",
+    "Flock.RecCoins.innerTags": "ff84ef3ed4932f828e1fa8eb24730a7cde6c4a926c7654846e9235d3a1fa5e71",
     "Flock.RecCoins.layoutFactors": "c365b62146cbdb55e11f1e522f279f387556eb9aa7dde9fa3d4e9db4c9e0eed8",
     "Flock.RecCoins.opening": "47eb3e209e39f809ef3f5d31a875833c662375fd1bdf57b873420c4aba870c10",
     "Flock.RecCoins.padTo": "5acce2e6dbd07c534fe76d7d853a89f80288f6d6d909a1e8bcaea00633b55a21",
@@ -14769,11 +14769,11 @@
    ]
   },
   "Flock.RecSetup": {
-   "digest": "3c107fedb5e19f3e380b76fae862634478591ca2d6a31fd03e436bb4684fb69c",
+   "digest": "420113e01a7dbfd81925f5aab3700be61ed874e9a33870bc6fd923ad2f300d0d",
    "definitions": {
     "Flock.RecSetup.boundKey": "bb19420e84d8bd1bd6b4ad739912dde9d4f1e5f0cc6f9a196bce04dbe9939a2f",
     "Flock.RecSetup.c3": "9a2b0905ace053620940ce65ba89fede01f5fcc9a6d84679811cbd6df0be5aa1",
-    "Flock.RecSetup.checkForm": "06abb1f0f94ae2ed5fb9ef1ee24ebe7f7eeb23f24878c9e04b208ad46b9fe8b1",
+    "Flock.RecSetup.checkForm": "7e990f57909e3652f0e9c5b7ddfb470db02425945a2b5b7af92c6ab77e5edbaa",
     "Flock.RecSetup.checkInner": "3b2d29f4171f9e74d13c14e3233532c1097e55b9a2da85f57fccef4a173fc505",
     "Flock.RecSetup.checkMeta": "e42215ae5a412d9717535f58a7e0173ae4232bd3cba8370f836248d6c456a2e6",
     "Flock.RecSetup.checkReads": "8f97d5cdba7ebec867ca45eac842527aefde246857f0641a56c6875f7b760d44",
@@ -14881,7 +14881,7 @@
    ]
   },
   "Flock.RecVStar": {
-   "digest": "0748fb1bcef5d2391e1054381f83c5a92676b96c04cb4db5ce3beb0905e1afd2",
+   "digest": "66b280f94a2b4d6bca738edc460217684325db850fd59170530a91b4e749ce90",
    "definitions": {
     "Flock.RecVStar.ACC_VALUE": "d296633d397b8e10ccccb733a9b2e1b21acfa7e9700302160ffa4a4dac396c09",
     "Flock.RecVStar.CLAIM_VALUE": "14791ba5dbace24801878ebd6c2418a152a92342a8c3c5872a822d765fda9def",
@@ -15003,13 +15003,15 @@
     "Flock.RecVStar.hRound": "1bffb21737f73986457342254c3c901061baf88ae03f7f8aae80cff39103ec9c",
     "Flock.RecVStar.hexList": "389c79861a54f30000c68b49ea79465b5488f422919ee28a0bb314f193574e84",
     "Flock.RecVStar.holoRepRounds": "0d32afb304054645b8160169b3f95d05cc86698696ac0fd0626660b04bccd126",
+    "Flock.RecVStar.innerCoinSpec": "612153b4b04e1c9fe8f4f46af5b2ec724a12f19ea7f7e1b4ce47638eb7e61e96",
     "Flock.RecVStar.innerCommits": "40c11ea536c0dae16a057fb1f18b1e81c23ccc47986184f8949edd22fa5f5894",
     "Flock.RecVStar.innerCommits._sparseCasesOn_9": "571a2d3ba9ffb6ee1d68711c6c9464947802f7f838760cb826d5494742861ee9",
     "Flock.RecVStar.innerLink": "478d08519a68a6b5a3b828654ee5191e451c1c0d14942e64eca2b1b22bda40a8",
     "Flock.RecVStar.innerMsgRounds": "5fc07845f794a812dc02a198534c09d87615995878f11a4f2dfd7dfb1e51218b",
-    "Flock.RecVStar.innerOf": "a0794ec61658758fa9fc27b90d710138c2ae202bf01e5b62c1b9d19c5293e04c",
+    "Flock.RecVStar.innerOf": "9158d939ce7c2285f649f6ea94c745de4c419ad669800c1fb8ab11cf83fe77b6",
     "Flock.RecVStar.innerOf._sparseCasesOn_1": "7ec78f8b9517ef96505c012a78e448a8a77680ac7a59c46e4f0ad7a69065cbde",
-    "Flock.RecVStar.innerTags": "794a96bd1180dcecf01ebc17f15d7bedf7901a3e0d0499eef9d26010a18b9eff",
+    "Flock.RecVStar.innerTags": "06337b0f0d3de11bb10e1a9c8215375ea52b49baa1d7c886a3cd36877b227736",
+    "Flock.RecVStar.innerTree": "04d005fe707104f26361dbfacde18f97fb77e3e5ac574269e670aa5d2c14b411",
     "Flock.RecVStar.instBEqShape": "c43ac214cf3bb9bd9e941ed631e33c0b075afd2e8d3ab6fdd1989aa6ac152236",
     "Flock.RecVStar.instBEqStackedShape": "414a7c508bfb5b7a87c7ec7c2a47019318f9561268fa11fdb546864173f4fba4",
     "Flock.RecVStar.instBEqStackedShape.beq": "89ab27762f2a0a0d68755bc67cd9bb144e57ecb21b2f97263bacee999246ff51",
@@ -15146,7 +15148,7 @@
    ]
   },
   "Flock.RecordText": {
-   "digest": "94d9d063f7b7b31d03376e6a51df3b235d7f9755ae5efe4aa1c522d907fdaa74",
+   "digest": "307b6c2a53ba585d6ea874e819865aa5c881147ce07a6960d5936d3b3103f43b",
    "definitions": {
     "Flock.RecordText.check": "bddcb9caa7c89f910768ec97d14e11e7f7b74baa4fc0e2527527ec9704d68e10",
     "Flock.RecordText.escC": "a37af9b3ecb1056a915c90f12a2fc392799ef26e479cbc1dac1779e7da28aadb",
@@ -15155,7 +15157,7 @@
     "Flock.RecordText.itemsT._f": "412061f3e134b5a9f67c837dcf5f778148dcad467fa68d1e366ccf0e98ccd831",
     "Flock.RecordText.itemsT.match_1": "4342b9bcf11e5e2a98bb48ff768f301b7526c80c678e9f5bf3829262a6c55dce",
     "Flock.RecordText.printT": "63e2da704aad2ff6b86bfa3538b3926cae88c27c435410aa1b4a8d39b2e03ecf",
-    "Flock.RecordText.refusal": "dfde9d61387b12b8779b64762b93fdabba3bfa12977b84b8a71a816cf8fedf55",
+    "Flock.RecordText.refusal": "3eab21253174dd7dc1349ed087d50bbc70538c7f27a2ab4f7355ec4007e12dfc",
     "Flock.RecordText.strT": "a52eda602f54cc6df963f9db9f7313c6f10442d6974d349b11b82726a051e2be"
    },
    "guarantees": [

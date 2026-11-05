@@ -58,7 +58,7 @@ typedef struct {
     const uint8_t* hm96_prefixes;
     const uint64_t* hm96_tables;
     long long hm96_level0_leaves;   // the level-0 tree's leaves: tree 0 (level 0's salts) is refused at any other size
-    // M1 (lane flock-zk, verity/ml/flock/live/PROTOCOL.md §8), zk_on: Ligerito level 0's hiding. The level-0 codeword has the
+    // M1 (verity/ml/flock/live/PROTOCOL.md §8), zk_on: Ligerito level 0's hiding. The level-0 codeword has the
     // witness's 2^initial_k lanes and 4 uniform ones (zk_extra: 4 lanes of L words), every lane's message padded by
     // (X_L + c)·μ (zk_pads: t_pad words per lane, lane-major, the witness's lanes first); the lane phase folds rep zk_rep's pair
     // (ligerito_zk.cuh); the proof stream ends in the zk section (fc_write_zk). zk_tamper: the negatives (LigZk::tamper).
@@ -791,7 +791,7 @@ static int fc_fold(const FlockCudaProveParams* P, const FlockCircuitParams* N, c
     return 0;
 }
 
-// ---- M1 (lane flock-zk): level 0's commitment with its hiding, and the zk section of the proof stream -------------------
+// ---- M1: level 0's commitment with its hiding, and the zk section of the proof stream ----------------------------------
 
 // One batch of level-0 lanes before the transform: lane `lane`'s message (src at pos·s_pos + lane·s_lane, zero past l) plus its
 // padding, c·μ at [0, t_pad) and μ at [l, l + t_pad) (verity's flock-zk patch, zk::lane_codeword; c = x).
