@@ -1,7 +1,7 @@
 """The Boolean profile (`verity/ml/circuits/PROTOCOL.md` §9): the three gates and the constant bits, the word view, and a small Boolean
 program pinned byte for byte with its gate table and truth table (`boolean_vectors.json`).
 
-`python verity/ml/circuits/tests/test_boolean.py --write` rewrites the vectors from the reference implementation."""
+Its `--write` rewrites the vectors from the reference implementation; `REWRITE` names the command that runs it."""
 from __future__ import annotations
 
 import itertools
@@ -21,6 +21,8 @@ from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.types import Array, RecordType, Tuple, Value, type_from_json
 
 PATH = Path(__file__).parent / "boolean_vectors.json"
+REWRITE = ("the vectors differ from the reference implementation's; a change meant to move them rewrites them with "
+           "`uv run python tools/verity/check/pins.py --write verity/ml/circuits/tests/boolean_vectors.json`")
 BIT = BL.BIT
 
 
@@ -131,7 +133,7 @@ def pinned() -> dict:
 
 
 def test_vectors_are_current(pinned):
-    assert build() == pinned
+    assert build() == pinned, REWRITE
 
 
 def test_gates_are_registered_and_reserved():
