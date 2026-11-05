@@ -206,9 +206,10 @@ theorem auditOf_ok {a : Json} {ctx : String} {au : Audit} (h : auditOf a ctx = .
     ∃ (pj : Json) (s : String) (prog : Flock.Program.Prog),
       a.getObjVal? "program" = .ok pj ∧ Flock.canon pj = .ok s ∧ Flock.Program.decode s.toUTF8 = .ok prog ∧
       au.program = Flock.hexOf prog.sha512 ∧ FreeOf a prog au := by
-  obtain ⟨⟨au', l⟩, h, hau⟩ := map_ok h
-  try dsimp only at hau
-  subst hau
+  replace h : ∃ l, auditWith a ctx = .ok (au, l) := by
+    obtain ⟨⟨au', l⟩, h', rfl⟩ := map_ok h
+    exact ⟨l, h'⟩
+  obtain ⟨l, h⟩ := h
   unfold auditWith at h
   try simp only [] at h
   rcases ite_ok h with ⟨-, h⟩ | ⟨-, h⟩
@@ -319,9 +320,21 @@ theorem paramsOf_audits {j : Json} {p : Params} (h : paramsOf j = .ok p) :
       cases hform
       obtain ⟨_, -, hw⟩ := bind_ok hw
       replace hw := jp_ok hw (by intro h'; injection h')
-      obtain ⟨_, -, hw⟩ := bind_ok hw
-      cases hw
-      rfl
+      first
+        | (generalize (Json.obj kv).getObjVal? "scan_circuits" = sc at hw
+           cases sc
+           all_goals
+             repeat (obtain ⟨_, -, hw⟩ := bind_ok hw)
+             cases hw
+             rfl
+           done)
+        | (dsimp only at hw
+           split at hw
+           all_goals
+             repeat (obtain ⟨_, -, hw⟩ := bind_ok hw)
+             cases hw
+             rfl
+           done)
     · obtain ⟨_, -, hw⟩ := bind_ok hw
       obtain ⟨_, -, hw⟩ := bind_ok hw
       obtain ⟨_, -, hw⟩ := bind_ok hw
@@ -333,9 +346,21 @@ theorem paramsOf_audits {j : Json} {p : Params} (h : paramsOf j = .ok p) :
       replace hw := jp_ok hw (by intro h'; injection h')
       replace hw := jp_ok hw (by intro h'; injection h')
       replace hw := jp_ok hw (by intro h'; injection h')
-      obtain ⟨_, -, hw⟩ := bind_ok hw
-      cases hw
-      rfl
+      first
+        | (generalize (Json.obj kv).getObjVal? "scan_circuits" = sc at hw
+           cases sc
+           all_goals
+             repeat (obtain ⟨_, -, hw⟩ := bind_ok hw)
+             cases hw
+             rfl
+           done)
+        | (dsimp only at hw
+           split at hw
+           all_goals
+             repeat (obtain ⟨_, -, hw⟩ := bind_ok hw)
+             cases hw
+             rfl
+           done)
   all_goals exact absurd hw (by intro h'; injection h')
 
 theorem rowsWiresChecked : RowsWiresChecked := by
