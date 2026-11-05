@@ -65,7 +65,8 @@
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded",
   "Proofs.Properties.Composition",
   "Proofs.Properties.Pous.WipeSigned",
-  "Proofs.Properties.Challenger"
+  "Proofs.Properties.Challenger",
+  "Proofs.Properties.Flock.Nets"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
@@ -87,6 +88,21 @@
     "{out}"
    ]
   }
+ },
+ "escapes": {
+  "Fwd.closeSide": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.constTainted": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.ctorVal?": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.decideCond": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.discharge": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.evalVal": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.exprTainted": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.rewriteIn": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.ruleAt": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.step": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.summarize": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.taintReason": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.walk": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds"
  },
  "compile_time": {
   "Proofs.Flock.Claims.Complete.CostWalk": {
