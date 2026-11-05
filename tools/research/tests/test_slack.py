@@ -552,7 +552,7 @@ def test_a_long_thread_is_paged_by_oldest_so_no_reply_at_a_page_boundary_is_lost
 
 
 def test_a_rate_limited_call_waits_as_asked_then_succeeds(broker, monkeypatch):
-    """A burst of doorbells draws a 429 from Slack; giving up there would leave the last handles unrung."""
+    """A burst of doorbells gets a 429 from Slack; giving up there would leave the last handles unrung."""
     waits: list[float] = []
     monkeypatch.setattr(slack, "_sleep", waits.append)
     broker.fails = [http_error(429, {"error": "rate_limited"}, Retry_After="2"), http_error(429, {"error": "rate_limited"}, Retry_After="99")]

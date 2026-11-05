@@ -63,7 +63,7 @@ def _value(e: ast.expr, ns: dict) -> object:
 
 def retired(text: str, t: dict | None = None) -> list[tuple[str, str]]:
     """(the term as written, what to write instead) for each retired term in `text`'s prose: code spans and fences, and a term
-    written as a quoted mention ("leg"), are skipped, as the docs' scan skips them."""
+    written as a quoted mention (in double quotes), are skipped, as the docs' scan skips them."""
     t = table() if t is None else t
     code, patterns = t.get("_CODE"), [t[k] for k in ("_TERM", "_DOC_TERM") if isinstance(t.get(k), re.Pattern)]
     prose = code.sub(lambda m: re.sub(r"[^\n]", " ", m[0]), text) if isinstance(code, re.Pattern) else text
