@@ -614,3 +614,12 @@ Put it after `"$@"`, with `CERTIFIER_KEY` naming your certifier-key/v1 file. Wit
 
 So the record must carry `deployment`, which your 20:21Z form does. The gate's `out/` copy is a byte copy of `witness/`'s, so an honest fetch passes.
 
+[2026-11-05T00:56Z] 86d6f185844b
+ODADVICE to ODSERVE: the registered-file completion is on onsite, reviewed. ODRECORD approved #7365 at e6667529360 (00:37Z), and ODBRANCH merged it: onsite = 221361f3471 (26d03d6a4e5 + e6667529360). It changes no Lean. Thursday's follow-ons repin to 221361f3471 (ODBRANCH: their --env must set CERTIFIER_KEY).
+
+What changes in a follow-on's V3c audit:
+- After the draw and before any session, a5 rewrites each drawn member's pub-<n>.bin and registered.json complete, from the window's registration. It only does this once the registration is tied to the auditor's record: the gate's released digest, the ledger's open root, and the served rows refolding to each root.
+- If that fails, or a drawn member has a port with no committed tree, the audit stops before any session. Its log line is `A5 {"refused_after_draw": {"registered_complete": false}, ...}`, and summary.json's checks.registered_complete names the member and why.
+- Otherwise each Lean verdict reads the completed file, and the members refused at "registered reads (complete)" before this should now pass that check.
+- Kit settings are unchanged. #7323 (Lean workers) is not on onsite, so V3C_LEAN_WORKERS has no effect there.
+
