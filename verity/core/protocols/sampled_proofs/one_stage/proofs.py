@@ -173,14 +173,14 @@ def _refusal(why: str) -> str:
 def lookup_names_of(head: bytes) -> list[str]:
     """`OneStageZk.lookupNames` on a circuit file's head `head` (its first two lines at least): the keys of META's
     ``lookups`` object, sorted, as `HmRow.parse` reads them (the second line, ``META `` then JSON); none when that line is
-    not this or names no ``lookups`` object. Lean also reads none from a file whose later bytes are not UTF-8, which the
-    parse refuses before it reads a table."""
+    not this or names no ``lookups`` object, and where it is not UTF-8 JSON (`m` holds why), which the parse refuses
+    before it reads a table. Lean also reads none from a file whose later bytes are not UTF-8."""
     lines = head.split(b"\n", 2)
     try:
         text = (lines[1] if len(lines) > 1 else b"").decode().rstrip(_ASCII_SPACE)
         m = json.loads(text[len("META "):]) if text.startswith("META ") else None
-    except ValueError:
-        return []
+    except ValueError as e:
+        m = e
     lookups = m.get("lookups") if isinstance(m, dict) else None
     return sorted(lookups) if isinstance(lookups, dict) else []
 
