@@ -58,6 +58,11 @@ root = "NetworkCheck.RecordsMain"
 name = "network-period"
 root = "NetworkCheck.PeriodMain"
 
+# Test-only: the network suite's tests of the period's check on small circuit files build it; it is no default target.
+[[lean_exe]]
+name = "network-period-chunked"
+root = "NetworkCheck.PeriodChunkedMain"
+
 [[lean_exe]]
 name = "network-rows"
 root = "NetworkCheck.RowsMain"
