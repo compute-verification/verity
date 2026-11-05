@@ -74,12 +74,7 @@
  ],
  "proved_in": ["../Proofs"],
  "assumptions_module": "Definitions.Assumptions",
- "assumptions": {
-  "Verity.Vocab.ComponentBound": {
-   "owner": "@soundness",
-   "digest": "6f08422ff25bd88205b76fb28cc64d58c5a1d3cfb9be719b2ad8a2e1793896d5"
-  }
- },
+ "assumptions": {},
  "domain": {
   "Core.Protocol.Accepts": {
    "owner": "@lean",
@@ -711,6 +706,12 @@
    "digest": "c95bfe02effacf053a9585f0acb0ab353f98eeb5651de3b9d85cf6ce7995aedc",
    "issue": "LEAN-186",
    "due": "2026-11-30"
+  },
+  "Verity.Vocab.ComponentBound": {
+   "owner": "@soundness",
+   "digest": "6f08422ff25bd88205b76fb28cc64d58c5a1d3cfb9be719b2ad8a2e1793896d5",
+   "issue": "LEAN-62",
+   "due": "2026-11-06"
   },
   "Verity.Vocab.InferenceOnlySound": {
    "owner": "@lean",
