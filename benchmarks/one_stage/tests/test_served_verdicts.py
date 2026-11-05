@@ -1822,11 +1822,14 @@ def _default_cap(requests: int = 4, steps: int = 256, max_model_len: int = 512, 
 
 
 def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = FAKE_V3C_PROVE_PATH,
-         records_audit: str = FAKE_RECORDS_AUDIT, **extra: str | None) -> tuple[int, list[str], list[str], list[str]]:
+         records_audit: str = FAKE_RECORDS_AUDIT, fresh: bool = False, **extra: str | None
+         ) -> tuple[int, list[str], list[str], list[str]]:
     """`served_verdicts.sh v3c` (or ``args``) on window 7 of a toy serve dir at the certifier's class, in a toy tree whose
-    prove_path.py (``prove_path``) and records_audit.py (``records_audit``) note each step they run, its builds stubbed,
-    main's first-parent line a toy MAIN_FILE and the split certifier's two commands set (``extra`` adds to the
-    environment, None unsetting): the exit status, the verdict lines, the steps in order and the limits."""
+    prove_path.py (``prove_path``) and records_audit.py (``records_audit``) note each step they run, its builds stubbed
+    (``fresh``: the tree a fresh clone, with no venv until its `uv sync` makes one, which notes each call in ``uv`` and
+    fails under FAIL_SYNC), main's first-parent line a toy MAIN_FILE and the split certifier's two commands set
+    (``extra`` adds to the environment, None unsetting): the exit status, the verdict lines, the steps in order and the
+    limits."""
     tree, bin_, venv, d = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
     for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "core" / "service" / "flock",
               tree / "verity" / "core" / "service" / "sampled_proofs", tree / "verity" / "ml" / "flock" / "pod", bin_, venv,
@@ -1849,6 +1852,11 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
                        (bin_ / "timeout", f'[ "$1" = -k ] && shift 2\necho "$1" >> {tmp_path}/limits; shift; exec "$@"'),
                        (bin_ / "gpu-lease", "exit 99"), (bin_ / "uv", "exit 0"), (bin_ / "lake", "exit 0")):
         _script(path, body)
+    if fresh:
+        shutil.rmtree(tree / ".venv")
+        _script(bin_ / "uv", f'echo "$*" >> {tmp_path}/uv\n[ -z "${{FAIL_SYNC:-}}" ] || exit 1\n'
+                             f'[ -e {tree}/.venv/bin/python ] || {{ mkdir -p {tree}/.venv/bin '
+                             f'&& cp -p {venv}/python {tree}/.venv/bin/python; }}')
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "K": "7",
            "OUT": str(tmp_path / "out"), "SERVE_ROOT": str(tmp_path / "root"), "FLOCK_WORK": str(tmp_path / "fw"),
            "ROW": str(tmp_path / "row"), "HIDDEN_SO": str(tmp_path / "h.so"), "NORM_TAP_SO": str(tmp_path / "n.so"),
@@ -2492,18 +2500,18 @@ def test_a_node_short_of_v3cs_audits_memory_defers_it_and_the_composite_listing_
     assert not _window_data(out, 7) and oct(dd.stat().st_mode & 0o777) == "0o700"
 
 
-def _follow(tmp_path: Path, composite: str = FAKE_SERVED_COMPOSITE, **extra: str | None
+def _follow(tmp_path: Path, composite: str = FAKE_SERVED_COMPOSITE, fresh: bool = False, **extra: str | None
             ) -> tuple[int, list[str], list[str], list[str]]:
     """The follow-on of `_deferred`'s deferral: `served_verdicts.sh v3c` with D alone (no K, class or certifier) on
-    cpu-6, a node with V3c's audit's memory, at the served node's tree, in `_v3c`'s toy tree with a record and a
-    composite step (``composite``'s body) that note their arguments (``extra`` adds to the environment, None unsetting):
-    `_v3c`'s outcome."""
+    cpu-6, a node with V3c's audit's memory, at the served node's tree, in `_v3c`'s toy tree (``fresh``: a fresh
+    clone's) with a record and a composite step (``composite``'s body) that note their arguments (``extra`` adds to the
+    environment, None unsetting): `_v3c`'s outcome."""
     _script(tmp_path / "tree" / "benchmarks" / "one_stage" / "served_composite.sh", composite)
     (tmp_path / "tree" / "benchmarks" / "one_stage" / "served_verdicts.py").write_text(FAKE_RECORD)
     env = {"K": None, "V3C_CLASS": None, "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None,
            "PATH": f"{_hosts(tmp_path)}:{tmp_path / 'bin'}:{os.defpath}", "HOST": "cpu-6", "NODE_MEM_GB": "755",
            "RESEARCH_SOURCE_SHA": SHA, "GIT_CEILING_DIRECTORIES": str(tmp_path)}
-    return _v3c(tmp_path, **{**env, **extra})
+    return _v3c(tmp_path, fresh=fresh, **{**env, **extra})
 
 
 @pytest.mark.parametrize("extra, tree", [
@@ -2648,11 +2656,34 @@ def test_preflight_only_says_what_the_run_would_do_and_stops_before_anything_is_
 
 def test_preflight_only_on_a_follow_on_names_the_deferral_it_would_finish(tmp_path):
     """A follow-on under PREFLIGHT_ONLY passes its own preflight (the deferral's settings, the audit's memory, the served
-    node's tree) and stops before its copy's check or V3c's audit."""
+    node's tree, its venv synced for the checks that run it) and stops before its copy's check or V3c's audit."""
     assert _deferred(tmp_path).returncode == 0
     rc, lines, order, _limits = _follow(tmp_path, PREFLIGHT_ONLY="1")
-    assert (rc, lines, order) == (0, [f"PREFLIGHT passed on cpu-6, 755 GB: the follow-on of vy-dc-h200's deferral. {ONLY}"],
-                                  [])
+    assert (rc, lines, order) == (0, [f"PREFLIGHT passed on cpu-6, 755 GB: the follow-on of vy-dc-h200's deferral, its "
+                                      f"venv synced for the checks. {ONLY}"], [])
+
+
+SYNC = "sync --all-packages --extra torch-cpu"
+SYNC_FAIL = (f"PREFLIGHT: the follow-on's venv, whose python its checks run, didn't sync (uv {SYNC}): its log is "
+             "sync.log")
+
+
+@pytest.mark.parametrize("synced", [True, False])
+def test_a_follow_on_in_a_fresh_clone_syncs_its_venv_before_its_preflight_runs_its_python(tmp_path, synced):
+    """A follow-on runs in a fresh clone of the served node's tree, whose venv (VENV unset: the tree's) doesn't exist
+    until it syncs, and its preflight runs that venv's python (ℓ_a, `advice_cap`): it syncs the venv first, then
+    audits and composes as any follow-on does, the background build's sync after the preflight's. A sync that fails
+    stops it in its preflight, exit 3, its first line naming the sync, before anything else runs."""
+    assert _deferred(tmp_path).returncode == 0
+    rc, lines, order, _limits = _follow(tmp_path, fresh=True, VENV=None, FAIL_SYNC=None if synced else "1")
+    syncs = (tmp_path / "uv").read_text().splitlines() if (tmp_path / "uv").exists() else []
+    if not synced:
+        assert (rc, lines[:1], order, syncs) == (3, [SYNC_FAIL], [], [SYNC]), lines
+        assert not [x for x in lines if x.startswith(("FOLLOW-ON", "PREFLIGHT: no"))], lines
+        return
+    assert rc == 0 and order == ["audit", "period", "record", "composite"], (lines, order)
+    assert syncs == [SYNC, SYNC] and lines[0].startswith("FOLLOW-ON on cpu-6") and lines[-1] == (
+        "COMPOSITE: composed on cpu-6")
 
 
 def test_a_deferral_carries_the_served_nodes_inference_only_verdict_into_the_follow_ons_record(tmp_path):
