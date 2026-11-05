@@ -152,12 +152,14 @@ def secondLaw (sample : Array Nat) (n k : Nat) : Json :=
 /-- `service.select_second`: the second stage on the coins `src`, read after the interior registration's digest: the
 draw object of `secondLaw` over the `sample.size · n` proof blocks (`Draw.drawFirstRead`), held to `Draw.checkDraw`, and
 the number of bytes it read. An error where the Python raises: a replay sample with a block twice or out of order, a
-replay block of fewer than two proof blocks, `k` not in `[1, n]`, or a draw the coins don't end. -/
+replay block of fewer than two proof blocks, `k` not in `[1, n)` (`k = n` would prove whole replay blocks), or a draw
+the coins don't end. -/
 def selectSecond (sample : Array Nat) (n k : Nat) (src : ByteArray) : V (Json × Nat) := do
   if sample.isEmpty || !(sample.toList.zip sample.toList.tail).all (fun (a, b) => a < b) then
     throw "a replay sample is one or more replay blocks, ascending, each once"
   if n < 2 then throw s!"a replay block of {n} proof blocks is a proof block: its rule is {pyRepr "law"}"
-  if k == 0 || k > n then throw s!"the second stage samples 1 to {n} proof blocks of each replay block, not {k}"
+  if k == 0 || k ≥ n then
+    throw s!"the second stage samples 1 to {n - 1} of each replay block's {n} proof blocks, not {k}: {n} would prove whole replay blocks"
   let law := secondLaw sample n k
   let m := sample.size * n
   let (draw, read) ← Draw.drawFirstRead law m src
