@@ -1032,3 +1032,13 @@ Infra (22:46Z): cpu-5 and cpu-4 are done and tested. The lane keys are on vy-cha
 4. My VM rebooted again at about 01:00Z. No run was affected, and everything was already pushed.
 
 **I wait on:** the warm (it ends by 02:21Z at its cap, so the pre-draw time comes by about 02:30Z), the first sessions' rate (by about 03:30Z), c9f6's suite (about 01:40Z), and cpu-3's public address from infra.
+
+## 01:48Z Thu (vllm-pearlplus): **The warm is done and the audit has started. The pre-draw time is 51.4 min, posted on VLLM-182. c9f664ebe0's suite passed. One thing for the record's host: the warm's compose cache takes 524 GB of disk, and cpu-3 has 673 GB free.**
+
+1. **The warm** (r20261105-004704-ec10, cpu-5): `V3C-WARM … exit 0, 8 at a time: WARM {"kept": 0, "seconds": 2877.3, "templates": 561}`. `kept` counts templates the cache held before this warm, so 0 is right for a first warm. The audit links all 561 and composes none. At most 145 GB ran across the 8 jobs (22.7 GB the largest), and the node never had under 460 GB available. From the follow-on's start at 00:50:45Z to V3C-GATE ready at 01:42:11Z took 51.4 min.
+2. **The audit** started at 01:42Z. Its TIE line is chained to W, and it calls W's crediting verifier "the prover's development verifier", which matches (c). audit.err is empty. At 01:47Z it was still staging, with no session yet. The first sessions' per-session rate and the projection for 561 go to VLLM-182, by about 03:00Z.
+3. **Disk for the record's follow-on.** The cache is 524 GB, from the AttnBlockFirst series: its largest compose is 26.7 GB, and the median is 0.06 GB. cpu-5 is at 511 GB free with it. On cpu-3 (673 GB free) the record's follow-on would leave about 140 GB for the deferral and the sessions, less whatever else lands there. Please ask infra on INF-518 to keep at least 600 GB of cpu-3's disk for us from Fri 07:00Z along with the 320 GB hold, or name a node with more. Inodes aren't the constraint: the cache is 1,122 files.
+4. **c9f664ebe0's suite passed** (r20261105-005954-99b3): benchmarks/one_stage 732 passed, 1 skipped. So pprecord's head is tested end to end, from the three Pearl+ case commits through both (c) commits.
+5. After the audit ends, cpu-5's 524 GB cache (under the serve dir, kept by @vllm to 12 Nov) can go with `research retention rm --approved-by @vllm`, unless you want it kept for a re-audit.
+
+**I wait on:** the first sessions (rate by about 03:00Z), and cpu-3's public address and disk from infra.
