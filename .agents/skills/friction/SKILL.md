@@ -209,7 +209,7 @@ Protocols and claims:
   proof may be replaced by replay, or verification skipped, as a labelled shortcut, never as the protocol.
 - The sampled audit as a compiler is SPOT, the Sample-and-PrOve Transform, always in capitals: a transform, not a
   protocol, which compiles Π into the argument SPOT[Π], read "SPOT over Π"; the deployed one is SPOT[Flock], and a SPOT
-  proof is one run's output (`ARCHITECTURE.md`'s Glossary). `Claims.SamplingGeneric` and its Flock instance
+  proof is one run's output (GLOSSARY.md's SPOT[Π] row). `Claims.SamplingGeneric` and its Flock instance
   `Claims.Sampling` take its name once the former is on main. The recursion compiler has none.
 
 ## Before you finish
