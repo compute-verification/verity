@@ -148,25 +148,24 @@ theorem envOk_round_nd {W Rr : Type} (M : LoopModel W Rr) (h : List (Claims.Msg 
 /-- **What the loop's frames and the model hold at a frame round's slot** of session `sid`, the loop at `σ`, for the
 round of `n` coins of `stream` the loop ran on table `i`'s rep `r` at the domain frame `dom`, its content the worker's
 value `v` at the model's history so far: the model's coin count there is `n`, its round there masked, not its last,
-with a next message, and `v` crosses where it fails to pass; the rep has a frame, which `roundPlace` readies at the
-model's schedule, configuration and masking state but for `stopped`, as the stream's first round where `seen` has no
-round of it, taking no device round where the frames have stopped the session and, where they haven't, only at a
-round Rust's checks fail; the frames have stopped the session exactly where the model's run has; and every other rep
-stream of the setup is on another rep. -/
+with a next message; the rep has a frame, which `roundPlace` readies at the model's schedule, configuration and
+masking state but for `stopped`, as the stream's first round where `seen` has no round of it, taking no device round
+exactly where the frames have stopped the session, `v` there failing the crossing only where it fails to pass, or else
+taking none at a round Rust's checks fail; the frames have stopped the session exactly where the model's run has; and
+every other rep stream of the setup is on another rep. -/
 structure RoundFacts {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (seen : List String)
     (stream : String) (n i r : Nat) (dom : ByteArray) (v : Claims.Msg) (σ : LoopAt) : Prop where
   coins : M.L.coins M.x (M.hist σ.c).length = n
   kind : M.L.kindAt M.x (M.hist σ.c).length = .masked
   next : (M.hist σ.c).length + 1 < M.nN M.x
   last : (M.hist σ.c).length < M.L.last M.x
-  cross : M.L.cross M.x (M.hist σ.c).length M.w M.ρ (M.hist σ.c) v = false →
-    M.L.pass M.x M.w M.ρ (M.hist σ.c) v = false
   frame : (frameAt σ.R sid i r).isSome
   place : ∃ (m : Masker) (q : Rep) (f : Bool) (nd : Option String), M.L.answered M.x M.ρ (M.hist σ.c) = .ok m ∧
     _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i r dom ⟨v.toArray⟩ n =
       .ok (q, .sched ⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c)
         (computedOf (M.L.computed M.x M.w M.ρ (M.hist σ.c)))).toArray⟩, f, nd) ∧
-    (nd.isSome = σ.R.stopped sid ∨
+    ((nd.isSome = σ.R.stopped sid ∧ (M.L.cross M.x (M.hist σ.c).length M.w M.ρ (M.hist σ.c) v = false →
+        M.L.pass M.x M.w M.ρ (M.hist σ.c) v = false)) ∨
       nd.isSome = true ∧ M.L.cross M.x (M.hist σ.c).length M.w M.ρ (M.hist σ.c) v = false) ∧
     q.cfg = M.L.cfg M.x M.ρ (M.hist σ.c) ∧ unstop q.st.m = unstop m ∧ f = !seen.contains stream
   stopped : σ.R.stopped sid = !M.L.toSrv.liveBefore M.wk M.x M.w M.ρ M.κ (M.hist σ.c)
@@ -211,8 +210,8 @@ theorem slotCase_round {W Rr : Type} {M : LoopModel W Rr} {J : List String → S
         exact hOwn σ.c hlt
       rw [hhead]
       rw [← hRA.coins] at hr hreq hrp
-      rcases hnd with hnd | ⟨hnd, hcr⟩
-      · exact envOk_round_run M.L M.nN M.wk M.x M.w M.ρ M.κ (M.hist σ.c) hRA.kind hRA.next hRA.last hv hRA.cross hm
+      rcases hnd with ⟨hnd, hcr⟩ | ⟨hnd, hcr⟩
+      · exact envOk_round_run M.L M.nN M.wk M.x M.w M.ρ M.κ (M.hist σ.c) hRA.kind hRA.next hRA.last hv hcr hm
           hr hreq hRA.frame hrp hnd hcfg hu hRA.stopped hF.setup hsent hf (k := n) c hc
       · exact envOk_round_nd M (M.hist σ.c) hRA.kind hRA.next hRA.last hv hcr hm hr hreq hRA.frame hrp hnd hcfg hu
           hF.setup hsent hf (k := n) c hc

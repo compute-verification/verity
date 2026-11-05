@@ -50,6 +50,7 @@ public import Proofs.Flock.ZkAny.RelayLoopKept
 public import Proofs.Flock.ZkAny.RelayReps
 public import Proofs.Flock.ZkAny.RelayRoundFirst
 public import Proofs.Flock.ZkAny.RelayLoopSalts
+public import Proofs.Flock.ZkAny.RelayLoopFacts
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release
@@ -96,6 +97,8 @@ state where the next round is the same rep's; and the rep's salts for levels ≥
 `placeOf` reads them, so a frame keeping `SameInv` keeps it at those salts; and that invariant at the deployed loop, the
 session's stop and each seen rep's frame, entry and level 0 against the model's history, its plan the setup's and the
 streams seen those before the model's next round, kept at every slot that reads no model message and at the `Hello`,
-and at a frame round given what the loop's frames and the model hold there and the round's own rep one round on. -/
+and at a frame round given what the loop's frames and the model hold there and the round's own rep one round on; and
+what the loop's frames and the model hold at a frame round, from that invariant on the deployed loop's model, given
+the model's answer there and what it holds at the round's place. -/
 
 @[expose] public section
