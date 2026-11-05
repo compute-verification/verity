@@ -1,7 +1,7 @@
 """P2's arm of the POUS-only harness (`benchmarks/pous/p2_v1/`, `bench.py --impl p2-v1-gpu | p2-v3-gpu`) on CPU: the reference
 (`p2_v1/reference.py`) against the spec's pinned vectors, and every step of the arm with the reference standing in for the GPU
 library at the kit's 128-bit width, `test_pous_harness`'s Python responder for the native one, and the arm's memory challenger process
-(`p2_v1/memory_challenger.py` for the spec's framing, `band_gpu/memory_challenger.py`'s `protocol.TimedAudit` for `p2-16448/v4`) on its
+(`p2_v1/memory_challenger.py` for the spec's framing, `benchmarks/pous/band_gpu/memory_challenger.py`'s `protocol.TimedAudit` for `p2-16448/v4`) on its
 logical clock, so no outcome depends on a clock."""
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[3]
 BENCH = ROOT / "benchmarks" / "pous"
 WS = {"id": "toy/linears", "bytes": 2560, "tensors": [["q", 16, 32], ["k", 8, 32], ["down", 32, 16]]}
 SEED = "5eed" * 8
-"""`band_gpu/memory_challenger.py --seed` for the `V3` arm: its challenges, and so its controls' verdicts, are fixed."""
+"""`benchmarks/pous/band_gpu/memory_challenger.py --seed` for the `V3` arm: its challenges, and so its controls' verdicts, are fixed."""
 
 
 def _bench():
@@ -370,7 +370,7 @@ def test_the_v3_arm_serves_v3s_blocks_and_audits_them_through_protocol_memory_ch
     params = schemes.P2Params(128, 173, 64, 3)
     setup = body["setup"]
     assert setup["scheme"] == "p2-128/v4" and setup["manifest"] == params.manifest() and len(bytes.fromhex(setup["salt"])) == 24
-    assert body["implementation"] == {**body["implementation"], "name": "p2-v3-gpu", "memory_challenger": "band_gpu/memory_challenger.py",
+    assert body["implementation"] == {**body["implementation"], "name": "p2-v3-gpu", "memory_challenger": "benchmarks/pous/band_gpu/memory_challenger.py",
                                       "memory_challenger_args": []}
     w = b"".join(_bench()._w_segment(WS["id"], s, params.segment_bytes, WS["bytes"]) for s in range(3))
     commitment = protocol.commit(schemes.P2(params), w)
@@ -439,7 +439,7 @@ def test_the_v3_arm_is_strict_by_default_so_an_uncovered_audit_is_refused_and_fa
 
 
 def _live_at_the_p2_point(tmp_path, limit_ns: int, clock=None):
-    """`band_gpu/memory_challenger.py`'s audit, strict, of `p2-16448/v4` at its registered point (one segment), against a responder whose
+    """`benchmarks/pous/band_gpu/memory_challenger.py`'s audit, strict, of `p2-16448/v4` at its registered point (one segment), against a responder whose
     blocks match `vk`'s leaves, on the logical clock (or `clock`): the memory challenger checks leaves, not codewords."""
     import hashlib
 
@@ -568,7 +568,7 @@ def test_the_memory_challenger_arm_audits_v3s_blocks_and_fails_closed_under_its_
               "late_control", "recompute_control", "tampered_control", "signature_control", "fail_closed"):
         assert gates[g]["passed"], (g, gates[g])
     assert "certificate" not in gates and body["profile"] is None
-    assert body["implementation"] == {**body["implementation"], "name": "p2-v3-mc-gpu", "memory_challenger": "memory_challenger/live.py",
+    assert body["implementation"] == {**body["implementation"], "name": "p2-v3-mc-gpu", "memory_challenger": "benchmarks/pous/memory_challenger/live.py",
                                       "memory_challenger_args": ["--signer", "test"]}
     nb = _small().width_bytes
     raw = (tmp_path / "leaves-p2.bin").read_bytes()
