@@ -105,6 +105,10 @@ def test_a_lock_policy_change_or_a_lock_conflict_is_the_prs_own_change(repo: Pat
     d = carry.delta(repo, old, axioms, landed(repo))
     assert (d.kind, d.carries) == ("authored", False) and LOCK in d.why
     git(repo, "reset", "-q", "--hard", old)
+    broken = commit(repo, {LOCK: "{not json\n"}, "a lock that isn't JSON")
+    d = carry.delta(repo, old, broken, landed(repo))
+    assert (d.kind, d.carries) == ("authored", False) and LOCK in d.why
+    git(repo, "reset", "-q", "--hard", old)
     git(repo, "checkout", "-q", "main")
     commit(repo, {"b.py": "b2\n", LOCK: lock(digest="2")}, "landed")
     git(repo, "checkout", "-q", "pr")

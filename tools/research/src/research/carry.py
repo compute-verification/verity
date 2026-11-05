@@ -66,11 +66,8 @@ def lock_policy(text: bytes | None) -> dict | None:
     """What of a lock a person writes, which a Lean check keeps as written: all of it but its records, which `check.py
     --regenerate` rewrites from the build (`check.py`'s `regenerated`): `reads`, each guarantee's entry but its `owner`, and
     each assumption's `digest`.  The names of the guarantees and assumptions stay: they decide what is locked and which
-    hypotheses count as named.  None for no lock, or one that isn't a JSON object."""
-    try:
-        doc = json.loads(text) if text is not None else None
-    except ValueError:
-        return None
+    hypotheses count as named.  None for no lock, or one whose JSON isn't an object; a lock that isn't JSON raises ValueError."""
+    doc = json.loads(text) if text is not None else None
     if not isinstance(doc, dict):
         return None
 
@@ -103,14 +100,20 @@ def _some(files: Iterable[str]) -> str:
 
 def _judged(repo: Path, want: str, got: str, files: list[str], pins: set[str]) -> tuple[list[str], list[str]]:
     """(the PR's own changes, the generated ones) among ``files``, those commit ``got`` changes against ``want`` (a commit or
-    a tree): a pin is generated, and so is a lock with the same policy (`lock_policy`) on both sides."""
+    a tree): a pin is generated, and so is a lock with the same policy (`lock_policy`) on both sides, each JSON."""
     locks = [f for f in files if PurePosixPath(f).name == Q.LEAN_LOCK and f not in pins]
     blobs = Q._blobs(repo, [f"{t}:{f}" for t in (want, got) for f in locks]) if locks else {}
 
     def generated(f: str) -> bool:
         if f in pins:
             return True
-        return f in locks and (p := lock_policy(blobs.get(f"{want}:{f}"))) is not None and p == lock_policy(blobs.get(f"{got}:{f}"))
+        if f not in locks:
+            return False
+        try:
+            was, now = (lock_policy(blobs.get(f"{t}:{f}")) for t in (want, got))
+        except ValueError:
+            return False
+        return was is not None and was == now
 
     gen = [f for f in files if generated(f)]
     return [f for f in files if f not in gen], gen
