@@ -243,8 +243,8 @@ theorem obj_eq_subsetPrint {m : Std.TreeMap.Raw String Json compare} (hm : m.WF)
   subst hls hks
   exact obj_eq_mkObj4 hm hn hs hlaw hpop hk hus (norm_toJson_subset us.size pop us #[])
 
-theorem eq_true_of_not_not {X : Bool} (h : ¬ (!X) = true) : X = true := by
-  cases X <;> simp_all
+theorem eq_true_of_not_not {b : Bool} (h : ¬ (!b) = true) : b = true := by
+  cases b <;> simp_all
 
 set_option maxHeartbeats 4000000 in
 /-- **A subset draw that decodes is its own print**: a value `norm` fixes that decodes (`UnitDraw.ofJson`) to a draw
