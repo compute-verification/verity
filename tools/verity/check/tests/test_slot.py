@@ -802,7 +802,7 @@ def test_a_trains_slot_is_taken_only_by_a_priority_waiter(tmp_path, monkeypatch,
     assert ran["slot"] == "d"
     assert SLOT.status(SLOT.parse("d 0 only=trains\n"), tmp_path, NOW)[0].startswith("d  cores 0  trains only  ")
     (tmp_path / "slots").write_text("d 0 only=trains\n")
-    with pytest.raises(SystemExit, match="every slot in .* is for train checks.* drive's full check decides what reaches `main`.*research run --on vy-nebius-cpu-K"):
+    with pytest.raises(SystemExit, match="every slot in .* is for train checks.* drive's full check decides what reaches `main`.*research run --on auto"):
         SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=free)
 
 
@@ -849,7 +849,7 @@ def test_an_all_trains_pool_names_the_lane_pools_beside_it_and_another_machine_o
     monkeypatch.setattr(SLOT.os, "sched_getaffinity", lambda pid: {0, 1, 2})
     with pytest.raises(SystemExit) as e:
         SLOT.main(["--", "check.py"], now=lambda: NOW)
-    assert "a lane check runs on another machine" in str(e.value) and "research run --on vy-nebius-cpu-K" in str(e.value)
+    assert "a lane check runs on another machine" in str(e.value) and "research run --on auto" in str(e.value)
     for name, text in (("gpu", "g 1\n"), ("trains", "t 2 only=trains\n"), ("gpu.bak-20261024", "b 2\n")):
         (tmp_path / name).mkdir()
         (tmp_path / name / "slots").write_text(text)
@@ -858,7 +858,7 @@ def test_an_all_trains_pool_names_the_lane_pools_beside_it_and_another_machine_o
     msg = str(e.value)
     assert f"CHECK_SLOTS={tmp_path / 'gpu' / 'slots'} python3 tools/verity/check/slot.py" in msg
     assert "another machine" not in msg and "trains/slots" not in msg and ".bak-" not in msg
-    assert "research run --on vy-nebius-cpu-K" in msg
+    assert "research run --on auto" in msg
 
 
 def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(monkeypatch):
@@ -884,7 +884,8 @@ def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(mo
 
 def test_record_asks_for_a_train_slot_only_for_a_trains_tests_or_circuit_check_and_through_the_runs_environment(monkeypatch):
     """`research merge` reads a check's command, so the slot memory a train needs travels as `research run --env`, never as a
-    slot.py option; a lane's check, a pooled one, a combine and a train's shard of Lean steps alone need no train slot."""
+    slot.py option; a lane's check, a pooled one, a combine and a train's shard of Lean steps without lean-suites need no train
+    slot."""
     spec2 = importlib.util.spec_from_file_location("repo_check_min_mem", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
@@ -904,6 +905,8 @@ def test_record_asks_for_a_train_slot_only_for_a_trains_tests_or_circuit_check_a
     assert check.train_gb(True, "research", None, False) is None
     assert check.train_gb(True, None, ["lean-build", "lean-audit:Security"], False) is None
     assert check.train_gb(True, None, ["pytest"], False) == check.TRAIN_GB                  # a post-landing run of the suites
+    assert check.train_gb(True, None, ["lean-build", "lean-audit", "lean-suites"], False) == check.TRAIN_GB   # its Lean shard
+    assert check.train_gb(True, None, ["lean-suites:verity-flock"], False) == check.TRAIN_GB
     assert check.train_gb(True, None, ["flock-circuit-build", "circuit-check"], False) == check.TRAIN_GB
     assert check.train_gb(True, None, None, True) is None
     assert check.TRAIN_GB == 300 and SLOT.MIN_MEM_ENV not in " ".join(calls[-1][calls[-1].index("--") + 1:])

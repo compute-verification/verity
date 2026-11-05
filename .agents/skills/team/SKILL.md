@@ -82,8 +82,8 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   it back until that member lands. Members above it are restacked across it, and only a conflict of their own refuses them.
   Drive closes the PR once `main` reaches it. Only drive's App pushes `main`, `checked` and `next`: on a `checked` tip drive
   didn't write, drive holds and rings @ci and @top until it is reset or ci accepts it (`drive.sh queue accept-checked SHA`).
-- `check.py --record --on M --pool NAME`, from a checkout, records `check` as an Attempt of the clean commit in M's NAME
-  pool.
+- `check.py --record --on auto --pool research`, from a checkout, records `check` as an Attempt of the clean commit in the
+  research pool `research run --on auto` would spill to (`--on M --pool NAME`: M's NAME pool).
 - When a changed lock record lands on `main`, Daniel gets a DM showing it; that DM is the check, and nothing waits on it.
 - Anyone may do whatever it takes to cut check time: a change to how `check` runs lands without its file owner's review,
   and the owner is told. infra owns check time and its spend, and ci owns landing: no agent acts between a ready mark
@@ -91,9 +91,10 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 
 ## Outside the tree
 
-- **Work and its status** are Linear issues in the owner's team, each in a project and milestone; the projects, grouped
-  by Goal, are the campaign map. Slack carries rings and conversation, never the brief or status (the coordinating
-  skill).
+- **The plan is the Goals page**, Daniel's interface and the record of what is being done: every lead keeps its goals
+  there as current as the work (the writing-goals skill). Work is Linear issues in the owner's team, each labelled
+  with the goal it serves, and a PR names its issue. Slack carries rings and conversation, never the brief or status
+  (the coordinating skill).
 - **Notes** (lane reports, checkpoints, findings, drafts, friction notes) are Markdown under
   `~/.research/notes/lanes/<lane>/<YYYYMMDDTHHMMZ>-<kind>-<slug>.md` with YAML front-matter (`id`, `campaign`, `lane`,
   `kind`, `status`, `repo`, `origin`), cited as `note:<id>` and published with `research notes sync --path lanes/<lane>`.

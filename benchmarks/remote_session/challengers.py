@@ -21,8 +21,8 @@
   first-parent list of main (`--challenger-main FILE`). With no list, no gate verifier runs.
 
 `finish` reads back what the challenger signed and holds the session's coins to it (`audit.AuditRun.released_reason`):
-the same commitment, each coin opened after the root the session recorded and in order, σ_0 after the session's window
-root R, each window's openings coin after its last root. Its `reason` is None when they hold. A served or gate
+the same commitment, each coin opened after the root the session recorded and in order, chal_0 after the session's
+window root R, each window's openings coin after its last root. Its `reason` is None when they hold. A served or gate
 session's `complete` (the gate's end's, and `Serve`'s read of the same signed log) is whether the challenger released
 every coin it committed to: a session reserves only the families it uses (`coins.families`), so an honest session
 that ran to its end is complete and one cut short is not. A gate session's record names the `peer` it reserved for

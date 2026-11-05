@@ -355,6 +355,18 @@ def test_the_move_on_a_toy_tree(toy, capsys):
     assert git(toy, "status", "--porcelain") == "" and git(toy, "rev-parse", "HEAD:") == head
 
 
+def test_the_record_of_the_moves_keeps_their_old_paths_whatever_the_map_excludes(toy, tmp_path_factory):
+    """research's `moves.json` records each move's old paths: renamed in it, they'd be lost, and a second run would rename
+    the entry the first appended."""
+    bare = tmp_path_factory.mktemp("map") / "map.toml"
+    bare.write_text('[words]\n"warden" = "certifier"\n')
+    assert M.main(["--map", str(bare), "--root", str(toy)]) == 0
+    git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "move")
+    assert json.loads((toy / M.MOVES).read_text())["moves"][-1]["paths"]["w/warden/"] == "w/certifier/"
+    assert M.main(["--map", str(bare), "--root", str(toy)]) == 0
+    assert git(toy, "status", "--porcelain") == ""
+
+
 def test_the_moves_are_those_of_the_tree_re_recorded(toy, capsys):
     """A branch carried across the move keeps its records under the old names, so the map its `--update --moved` takes is
     `--moves` on its own tree: with a name only its lock records, and none once the lock is re-recorded under the new names."""

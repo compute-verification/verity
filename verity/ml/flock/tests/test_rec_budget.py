@@ -5,8 +5,8 @@ inner verifier's); and they sit far above every deployed session at every `fast1
 level's `2 q` openings, a later level's RecCap over both reps' `2 · 2^cap` tops, RecCap's `2^cap`), a part's ports (its row
 ports, at most `MAX_REGIONS`, with `v` and `out`), the deepest registered tree (`rec-acc`'s chain of every opening, both
 reps' and R's), the inner statement's instances; and V*'s list, the recursion's parts (each level's RecOpen, the algebra's
-parts, RecCap at each later level and over level 0's cap), at every deployed inner shape, while the cap is the 16 parts the
-recursion's soundness bound covers."""
+parts, RecCap at each later level and over level 0's cap), and the hm96 calls that list records (`recorded_calls`), at
+every deployed inner shape, while the cap is the 16 parts the recursion's soundness bound covers."""
 from __future__ import annotations
 
 import pytest
@@ -41,6 +41,9 @@ def test_the_mirror_refuses_what_the_lean_guards_refuse():
     assert RB.count(4096) == (
         "refused: V*'s list at the verifier's inner shape holds 4096 statements, more than 16: the recursion's soundness "
         "bound covers at most 16 V* parts")
+    assert RB.recorded(0) is None and RB.recorded(RB.MAX_RECORDED) is None
+    assert RB.recorded(RB.MAX_RECORDED + 1) == (
+        f"refused: V*'s list at the verifier's inner shape records 4294967297 hm96 calls, more than 4294967296: {TAIL}")
     assert RB.MAX_INNER_ROWS == 2 ** 17
     assert RB.inner(16) is None and RB.inner(RB.MAX_INNER_ROWS) is None
     assert RB.inner(RB.MAX_INNER_ROWS + 1) == (
@@ -50,6 +53,19 @@ def test_the_mirror_refuses_what_the_lean_guards_refuse():
         f"refused: the inner statement's public file has a shared-row table of more than 131072 rows: {TAIL}")
     with pytest.raises(ValueError, match="holds 131073 instances"):
         RB.check_inner(RB.MAX_INNER_ROWS + 1)
+
+
+def test_a_statements_recorded_calls_are_the_verifiers():
+    """`recorded_at` counts as the Lean guards' `recordedAt` does: a level at `m = 27`'s level 0 over its `2 · 218`
+    openings and `rec-acc` rows, R's level with and without R's shape, a RecCap of 128 nodes, RecSparse's two ports at
+    two rows, the link table's part, and a list of three."""
+    assert RB.recorded_at("rec-open", 436, acc_reads=436) == 4360
+    assert RB.recorded_at("rec-open-stacked", 218, acc_reads=218) == 1308
+    assert RB.recorded_at("rec-open-stacked", 218) == 436
+    assert RB.recorded_at("cap", 128) == 512
+    assert RB.recorded_at("sparse", 2, own_rows=4) == 8
+    assert RB.recorded_at("link", 18) == 0
+    assert RB.recorded_at("rec-open", 436, acc_reads=436) + 2 * RB.recorded_at("cap", 128) == 5384
 
 
 def test_the_caps_bound_the_recursions_calls_by_2_32():
@@ -105,3 +121,17 @@ def test_the_statement_cap_holds_every_deployed_v_star_list():
     assert [_listed(35, 24, 8), _listed(27, 24, 8), _listed(29, 26, 6), _candidate_3(25, 22, 8, 23)] == [16, 10, 12, 15]
     assert max(_listed(m, 22, c) for m in range(22, 36) for c in (4, 6, 8)) == RB.MAX_STATEMENTS
     assert RB.count(_listed(35, 24, 10)) is not None and RB.count(_candidate_3(28, 22, 8, 23)) is not None
+
+
+@pytest.mark.slow
+def test_the_recorded_cap_sits_far_above_every_deployed_v_star_list():
+    """The hm96 calls each deployed `fast100` list records (`recorded_calls`) sit at least `2^18` below `MAX_RECORDED`."""
+    calls = {}
+    for shape in [(m, 22, 8) for m in range(22, 36)] + [(22, 6, 16)]:
+        try:
+            calls[shape] = RB.recorded_calls(A.Shape(*shape))
+        except ValueError:
+            continue
+    assert len(calls) >= 10, calls
+    assert calls.get((27, 22, 8)) == 11128 and calls.get((35, 22, 8)) == 14232, calls
+    assert 2 ** 18 * max(calls.values()) <= RB.MAX_RECORDED, calls
