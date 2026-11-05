@@ -2,7 +2,7 @@ import Flock.Hm96
 import Flock.HmRow
 import PouwCommit.Frame
 import PouwCommit.Bindings
-import Identity.Domains
+import Randomness.Domains
 
 /-!
 # The protocol's row and tile trees (`audit.rows_domain`, `Hm96Domain`, `commit_rows`, `transcript_domain`)

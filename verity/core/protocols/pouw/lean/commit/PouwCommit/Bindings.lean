@@ -1,5 +1,5 @@
 import PouwCommit.Tagged
-import Identity.Domains
+import Randomness.Domains
 
 /-!
 # The protocol's bindings (`verity.core.protocols.pouw.audit`)

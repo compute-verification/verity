@@ -1,7 +1,7 @@
 import PouwWindow.Entry
 import Identity.Tagged
 import PouwCommit.Py
-import Identity.Domains
+import Randomness.Domains
 
 /-!
 # The side trees (`window.py`, "The side trees")

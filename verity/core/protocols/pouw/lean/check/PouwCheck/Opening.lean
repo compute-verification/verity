@@ -2,7 +2,7 @@ import PouwCheck.Inputs
 import PouwCheck.Pass
 import PouwWindow.Record
 import PouwWindow.Side
-import Identity.Domains
+import Randomness.Domains
 
 /-!
 # A unit's opening (`core_check.py`, "a unit's opening")
@@ -224,7 +224,7 @@ def opening (p : Params) (c : Registration) (units : Option (List Int)) (unit : 
   return Option.none
 
 /-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
-written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+written: tied here to its entry of the table (`Randomness.Domains`), it reads the entry at its next record change. -/
 example : PUBLIC_ROW_SALT_DOMAIN = Domains.POUW_PUBLIC_ROW_SALT.toUTF8.push 0 := rfl
 
 end PouwCheck

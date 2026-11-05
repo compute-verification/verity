@@ -1,6 +1,6 @@
 import PouwCommit.Draws
 import SampledProofs.Challenger
-import Identity.Domains
+import Randomness.Domains
 
 /-!
 # A live window's round coins (`window.py`, "Live windows")
