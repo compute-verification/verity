@@ -2,21 +2,22 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Fit
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegRowBc
-public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegV2
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegTgt
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegV2
 
 /-!
-# Output rows of any kind, beside input rows of any kind
+# Output rows unsegmented or `sha512/row-seg/v1`, beside input rows of any kind
 
-`Wide.Fit`'s output-row lemmas with each output row unsegmented (`Any.PadRow`, its padding perhaps starting in its last
-compression's block) or a `sha512/row-seg/v1` row (`Any.SegRow`), as each input row may be (`Any.OutRowsS`). The proofs
-are `Wide.Fit`'s, with the per-row facts of `Wide.SegCopies` (`Any.msgData_filterAll`, `Any.pad_filterAll`),
-`Wide.SegTgt` (`Any.segMsg_filter`) and `Wide.SegDelta` (`delta_flat_any`) in place of the all-rows-unsegmented ones: an
-output row's data bit is a self input bit of a compression's `sha512x3` slot or of its `hm96` slot's `pad` (`Any.msg_at`),
-where Δ writes no copy (`Any.msg_filterF`: at an unsegmented row its constants there are the padding's, past the data
-bits; at a row-seg row the bit is one `HmRow.msgBit` names a row bit, `Any.segRow_data`), so `outPairs` copies into it
-once (`Any.outPairs_countF`), and a satisfying witness of the hidden statement satisfies its flat twin (`Any.sat_flatF`)
-and holds each output row's message bit's copy (`Any.msg_copyF`).
+`Wide.Fit`'s output-row lemmas with each output row unsegmented, its padding perhaps starting in its last compression's
+block (`Any.PadRow`), or a `sha512/row-seg/v1` row as `HmRow.segShape` cuts it (`Any.SegRow`), and the input rows of any
+kind (`Any.OutRowsS`). The proofs are `Wide.Fit`'s, with the per-row facts of `Wide.SegCopies` (`Any.msgData_filterAll`,
+`Any.pad_filterAll`), `Wide.SegTgt` (`Any.segMsg_filter`) and `Wide.SegDelta` (`delta_flat_any`) in place of the
+all-rows-unsegmented ones: an output row's data bit is a self input bit of its compression's `sha512x3` slot or of its
+`hm96` slot's `pad` (`Any.msg_atK`; at a row-seg row, segment `b / 1024`'s compression `b % 1024 / 128`, `Any.seg_byte`),
+where Δ writes no copy (`Any.msg_filterK`: at an unsegmented row its constants there are the padding's, past the data
+bits; at a row-seg row the bit is a row bit, `Any.seg_msgBit`), so `outPairs` copies into it once (`Any.outPairs_countF`),
+and a satisfying witness of the hidden statement satisfies its flat twin (`Any.sat_flatF`) and holds each output row's
+message bit's copy (`Any.msg_copyF`).
 -/
 
 @[expose] public section
@@ -28,7 +29,6 @@ open Flock FlockLevel3
 namespace FlockSoundness.Discharge.Hidden
 
 open Hm Compose Flock.DeriveAll Types.Dag
-open SegShape
 
 namespace Any
 
@@ -46,10 +46,11 @@ bits, `16 · words` bits, its chunks its segments' compressions and then its out
 segment's bytes ending in its last compression's block (`SegFits`). -/
 def SegRow (p : Port) : Prop :=
   p.segs = some (HmRow.segShape p.bits).1 ∧ p.bits = 16 * p.words ∧
-    p.chunks = firstOf (HmRow.segShape p.bits).1 (Binding.RowSeg.count p.bits) + outerComps p.bits ∧ SegFits p.bits
+    p.chunks = SegShape.firstOf (HmRow.segShape p.bits).1 (Binding.RowSeg.count p.bits) + outerComps p.bits ∧
+      SegFits p.bits
 
 /-- **Output rows beside input rows of any kind**: one output row per output port, each after the input rows and
-unsegmented (`PadRow`) or a `sha512/row-seg/v1` row (`SegRow`). -/
+unsegmented (`PadRow`) or `sha512/row-seg/v1` (`SegRow`). -/
 def OutRowsS (c : Circuit) : Prop :=
   c.outRowPorts = Array.replicate c.outPorts.size 1 ∧
     ∀ j < c.outPorts.size, HmOut.nIn c + j < c.ports.size ∧
@@ -71,8 +72,8 @@ theorem bound {j k t : ℕ} (hj : j < c.outPorts.size) (hk : k < (c.ports.getD (
 end OutRowsS
 
 /-- **Output rows beside input rows of any kind, past them output ports without a row**: one output row per run of
-`out_row_ports`, each run one output port, each row after the input rows and unsegmented (`PadRow`) or a
-`sha512/row-seg/v1` row (`SegRow`). The output ports past the runs have no row: META `pinned_outputs`'
+`out_row_ports`, each run one output port, each row after the input rows and unsegmented (`PadRow`) or
+`sha512/row-seg/v1` (`SegRow`). The output ports past the runs have no row: META `pinned_outputs`'
 (`HmRow.pinnedCount`). With every output port in a run it is `OutRowsS` (`OutRowsS.toP`, `OutRowsP.toS`). -/
 def OutRowsP (c : Circuit) : Prop :=
   c.outRowPorts = Array.replicate c.outRowPorts.size 1 ∧
@@ -111,37 +112,6 @@ theorem outPairs_eqR (c : Circuit) : outPairs c = (outCopiesR c).flatMap pair2 :
 theorem OutRowsF.outRowsS {c : Circuit} (h : OutRowsF c) : OutRowsS c :=
   ⟨h.2.1, fun j hj => ⟨h.2.2 j hj, Or.inl (padRow_of_fit (h.fit (h.2.2 j hj)))⟩⟩
 
-/-- A row-seg row's compression holding byte `b`: segment `b / 1024`'s, its block `b mod 1024 / 128`. -/
-def segComp (p : Port) (b : ℕ) : ℕ := firstOf (HmRow.segShape p.bits).1 (b / 1024) + b % 1024 / 128
-
-/-- **A row-seg row's data bit is a row bit of its compression's message**: byte `b`'s bit `t` is in compression
-`segComp p b`, at its block's bit `wordBit (8 · (b mod 128) + t)`, which `HmRow.msgBit` names row bit `8 b + t`. -/
-theorem segRow_data {p : Port} (h : SegRow p) {b t : ℕ} (hb : b < 2 * p.words) (ht : t < 8) :
-    segComp p b < p.chunks ∧
-      HmRow.msgBit p (segComp p b) (HmNets.wordBit (8 * (b % 128) + t)) = .row (8 * b + t) := by
-  obtain ⟨hs, hbits, hn, -⟩ := h
-  have hj : b / 1024 < Binding.RowSeg.count p.bits := by
-    unfold Binding.RowSeg.count HmRow.ROW_SEG_BITS; omega
-  have hjS : b / 1024 < (HmRow.segShape p.bits).1.size := by rw [Binding.RowSeg.size_segShape]; exact hj
-  have hget := Binding.RowSeg.segShape_get hj
-  have hm : 8 * (b % 1024) + t < Binding.RowSeg.segBits p.bits (b / 1024) := by
-    unfold Binding.RowSeg.segBits HmRow.ROW_SEG_BITS
-    exact Nat.lt_min.2 ⟨by omega, by omega⟩
-  have hsucc := firstOf_succ hjS
-  rw [hget] at hsucc
-  dsimp only at hsucc
-  have hk2 : segComp p b < firstOf (HmRow.segShape p.bits).1 (b / 1024 + 1) := by
-    unfold segComp; rw [hsucc]; omega
-  have hle := firstOf_mono' (segs := (HmRow.segShape p.bits).1) (show b / 1024 + 1 ≤ _ from hj)
-  refine ⟨by rw [hn]; omega, ?_⟩
-  rw [msgBit_seg hs hjS (by unfold segComp; omega) hk2, Any.blockBit_wordBit (Nat.mod_lt _ (by omega)) ht, hget]
-  unfold segVal
-  dsimp only
-  rw [ite_eq_left (by unfold segComp; omega)]
-  congr 1
-  unfold segComp HmRow.ROW_SEG_BITS
-  omega
-
 section Pos
 
 variable {c : Circuit} (R : RowRanges c)
@@ -158,83 +128,42 @@ theorem deltaMsgCol_hm {g p b t : ℕ} (hp : p < c.ports.size) (hs : (c.ports.ge
   simp only [Typed.byteAt_none hs, padCol, msgOff]
   omega
 
-omit R in
-/-- **A row-seg row's data bit is at its compression's message column** (`segComp`, `segRow_data`). -/
-theorem deltaMsgCol_segAt {g p b t : ℕ} (hp : p < c.ports.size) (h : SegRow c.ports[p]!)
-    (hb : b < 2 * c.ports[p]!.words) (ht : t < 8) :
-    deltaMsgCol c g p b t = segMsgCol c g p (segComp c.ports[p]! b) + HmNets.wordBit (8 * (b % 128) + t) := by
-  rw [← msgCol_delta]
-  exact msgCol_seg hp h.1 (segRow_data h hb ht).1 ht
-
-omit R in
-theorem segData_lt {b t : ℕ} (ht : t < 8) : 512 + HmNets.wordBit (8 * (b % 128) + t) < 1536 := by
-  have := Any.wordBit_lt (Nat.mod_lt b (by omega : 0 < 128)) ht
-  omega
-
-/-- **An output row's data bit is a self input bit of one of its slots**: of a compression's `sha512x3` slot, past the
-`cv`, or of its `hm96` slot's `pad`, at an unsegmented row or a row-seg row. -/
-theorem msg_at {g p b t : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hk : PadRow c.ports[p]! ∨ SegRow c.ports[p]!)
-    (hb : b < 2 * c.ports[p]!.words) (ht : t < 8) :
+/-- **An unsegmented row's data bit is a self input bit of one of its slots**: of its compression's `sha512x3` slot,
+past the `cv`, or of its `hm96` slot's `pad`. -/
+theorem msg_at {g p b t : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hs : (c.ports.getD p default).segs = none)
+    (ht : t < 8) :
     ∃ n s off, (n = c.shaNet ∨ n = c.hmNet) ∧ AtSlot c n s off (deltaMsgCol c g p b t) ∧
       off < (c.nets.getD n default).2.inWords * Flock.WORD ∧
       ∃ (l : Flock.HmNets.Laid) (name : String),
         Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (c.nets.getD n default).2 ∧
           l.ra.getD off #[] = #[off] ∧ l.rb.getD off #[] = #[off] := by
-  rcases hk with hk | hk
-  · have hs : (c.ports.getD p default).segs = none := by rw [← getElem!_eq_getD']; exact hk.1
-    have hmo := msgOff_lt (b := b) ht
-    by_cases hk : b / 128 < c.ports[p]!.chunks
-    · obtain ⟨hat, hoff⟩ := Any.deltaMsgCol_at R hg hp hs (b := b) (t := t) (by omega) ht
-      exact ⟨_, _, _, Or.inl rfl, hat, by rw [shaNet_inRows R.rowNets]; omega, _, _, shaNet_ofRows R.rowNets,
-        shaLaid_self hoff⟩
-    · have hx : deltaMsgCol c g p b t = c.slotCol c.hmNet g p + (512 + msgOff b t) := by
-        rw [deltaMsgCol_hm hp hs (by omega), padCol_eq R.rowNets, Nat.add_assoc]
-      rw [hx]
-      exact ⟨_, _, _, Or.inr rfl, R.hmIn_at hg hp (by omega), by rw [hmNet_inRows R.rowNets]; omega, _, _,
-        hmNet_ofRows R.rowNets, hmLaid_self (by omega)⟩
-  · have hd := (segRow_data hk hb ht).1
-    have hw := segData_lt (b := b) ht
-    have hsub : shaSub c p (segComp c.ports[p]! b) < 3 := (rowSlot_lt hp hd).2
-    rw [deltaMsgCol_segAt hp hk hb ht, (segCols_sha R hp hd _).2]
-    exact ⟨_, _, _, Or.inl rfl, shaPos_at R hg hp hd hw, by rw [shaNet_inRows R.rowNets]; omega, _, _,
-      shaNet_ofRows R.rowNets, shaLaid_self (by omega)⟩
+  have hmo := msgOff_lt (b := b) ht
+  by_cases hk : b / 128 < c.ports[p]!.chunks
+  · obtain ⟨hat, hoff⟩ := Any.deltaMsgCol_at R hg hp hs (b := b) (t := t) (by omega) ht
+    exact ⟨_, _, _, Or.inl rfl, hat, by rw [shaNet_inRows R.rowNets]; omega, _, _, shaNet_ofRows R.rowNets,
+      shaLaid_self hoff⟩
+  · have hx : deltaMsgCol c g p b t = c.slotCol c.hmNet g p + (512 + msgOff b t) := by
+      rw [deltaMsgCol_hm hp hs (by omega), padCol_eq R.rowNets, Nat.add_assoc]
+    rw [hx]
+    exact ⟨_, _, _, Or.inr rfl, R.hmIn_at hg hp (by omega), by rw [hmNet_inRows R.rowNets]; omega, _, _,
+      hmNet_ofRows R.rowNets, hmLaid_self (by omega)⟩
 
 theorem deltaMsgCol_ltF {g p b t : ℕ} (hg : g < c.g) (hp : p < c.ports.size)
-    (hk : PadRow c.ports[p]! ∨ SegRow c.ports[p]!) (hb : b < 2 * c.ports[p]!.words) (ht : t < 8) :
-    deltaMsgCol c g p b t < 2 ^ c.kLog := by
-  obtain ⟨n, s, off, hn, hat, -⟩ := msg_at R hg hp hk hb ht
+    (hs : (c.ports.getD p default).segs = none) (ht : t < 8) : deltaMsgCol c g p b t < 2 ^ c.kLog := by
+  obtain ⟨n, s, off, hn, hat, -⟩ := msg_at R (b := b) hg hp hs ht
   exact hat.lt R.bound (R.range (R.rowNet_lt hn)).1
 
-/-- **An output row's data bit is one of its own columns** (`Dst`): of a compression's inputs or its `hm96` slot's. -/
-theorem deltaMsgCol_dst {g p b t : ℕ} (hp : p < c.ports.size) (hk : PadRow c.ports[p]! ∨ SegRow c.ports[p]!)
-    (hb : b < 2 * c.ports[p]!.words) (ht : t < 8) : Dst c g p (deltaMsgCol c g p b t) := by
-  rcases hk with hk | hk
-  · have hs : (c.ports.getD p default).segs = none := by rw [← getElem!_eq_getD']; exact hk.1
-    have hmo := msgOff_lt (b := b) ht
-    by_cases hc : b / 128 < c.ports[p]!.chunks
-    · exact Or.inl ⟨_, _, hc, by omega, Any.deltaMsgCol_pos R hp hs hc⟩
-    · exact Or.inr ⟨512 + msgOff b t, by omega,
-        by rw [deltaMsgCol_hm hp hs (by omega), padCol_eq R.rowNets, Nat.add_assoc]⟩
-  · rw [deltaMsgCol_segAt hp hk hb ht, segMsg_pos R hp]
-    exact segPos_dst (segData_lt ht)
-
-/-- **No copy of `HmRow.delta`'s rows, of any kind, or of the rows' wires is at an output row's data bit**: at an
-unsegmented row the padding's constants are past it, and at a row-seg row `HmRow.msgBit` names it a row bit. -/
-theorem msg_filterF {pin g p b t : ℕ} (hg : g < c.g) (hp : p < c.ports.size)
-    (hk : PadRow c.ports[p]! ∨ SegRow c.ports[p]!) (hb : b < 2 * c.ports[p]!.words) (ht : t < 8) :
+/-- **No copy of `HmRow.delta`'s rows, of any kind, or of the rows' wires is at an unsegmented row's data bit.** -/
+theorem msg_filterF {pin g p b t : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hfit : PadRow c.ports[p]!)
+    (hb : b < 2 * c.ports[p]!.words) (ht : t < 8) :
     (rowCopiesAny c pin ++ wireCopiesOf c (HmRow.rowWires c.ports c.shaNet c.hmNet).toList).filter
       (fun e => e.1 = deltaMsgCol c g p b t) = [] := by
-  rcases hk with hfit | hseg
-  · obtain ⟨hup, hbits, h1, h2⟩ := hfit
-    have hs : (c.ports.getD p default).segs = none := by rw [← getElem!_eq_getD']; exact hup
-    by_cases hk : b / 128 < c.ports[p]!.chunks
-    · exact Any.msgData_filterAll R hg hp hup hbits hb hk ht
-    · rw [deltaMsgCol_hm hp hs (by omega), Any.pad_filterAll R hg hp hup (msgOff_lt ht), rowSlots_size hp,
-        show c.ports[p]!.chunks = b / 128 by omega, constBit_msg hbits hb ht]
-      rfl
-  · have hd := segRow_data hseg hb ht
-    rw [deltaMsgCol_segAt hp hseg hb ht,
-      segMsg_filter R hseg.1 hg hp hd.1.le (Any.wordBit_lt (Nat.mod_lt b (by omega : 0 < 128)) ht), hd.2]
+  obtain ⟨hup, hbits, h1, h2⟩ := hfit
+  have hs : (c.ports.getD p default).segs = none := by rw [← getElem!_eq_getD']; exact hup
+  by_cases hk : b / 128 < c.ports[p]!.chunks
+  · exact Any.msgData_filterAll R hg hp hup hbits hb hk ht
+  · rw [deltaMsgCol_hm hp hs (by omega), Any.pad_filterAll R hg hp hup (msgOff_lt ht), rowSlots_size hp,
+      show c.ports[p]!.chunks = b / 128 by omega, constBit_msg hbits hb ht]
     rfl
 
 /-- An `hm96` slot's input bit is no unsegmented row's message bit. -/
@@ -249,7 +178,7 @@ theorem hm_ne_msg {g' p' off' g p b t : ℕ} (hg' : g' < c.g) (hp' : p' < c.port
     (by rw [← h]; exact R.hmIn_at hg' hp' ho')).1
 
 /-- **Distinct data bits of unsegmented rows are distinct columns**: template instance, row, byte and bit. -/
-theorem deltaMsgCol_injPad {g p b t g' p' b' t' : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hfit : PadRow c.ports[p]!)
+theorem deltaMsgCol_injF {g p b t g' p' b' t' : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hfit : PadRow c.ports[p]!)
     (hb : b < 2 * c.ports[p]!.words) (ht : t < 8) (hg' : g' < c.g) (hp' : p' < c.ports.size)
     (hfit' : PadRow c.ports[p']!) (hb' : b' < 2 * c.ports[p']!.words) (ht' : t' < 8)
     (h : deltaMsgCol c g p b t = deltaMsgCol c g' p' b' t') : g = g' ∧ p = p' ∧ b = b' ∧ t = t' := by
@@ -272,32 +201,184 @@ theorem deltaMsgCol_injPad {g p b t g' p' b' t' : ℕ} (hg : g < c.g) (hp : p < 
     unfold msgOff at ho
     refine ⟨rfl, rfl, by omega, by omega⟩
 
-/-- **Distinct data bits of output rows are distinct columns**: template instance, row, byte and bit. Both are one
-row's columns (`dst_inj`), so of one kind; at a row-seg row, one compression's message bit (`segPos_inj`), which
-`HmRow.msgBit` names one row bit (`segRow_data`). -/
-theorem deltaMsgCol_injF {g p b t g' p' b' t' : ℕ} (hg : g < c.g) (hp : p < c.ports.size)
+omit R in
+/-- **A row-seg row's data byte `b`** is in segment `b / 1024`, at its compression `b % 1024 / 128`, one of the row's,
+and the segment's bits reach past the byte. -/
+theorem seg_byte {p b : ℕ} (hs : SegRow c.ports[p]!) (hb : b < 2 * c.ports[p]!.words) :
+    b / 1024 < (HmRow.segShape c.ports[p]!.bits).1.size ∧
+      SegShape.firstOf (HmRow.segShape c.ports[p]!.bits).1 (b / 1024) + b % 1024 / 128 <
+        SegShape.firstOf (HmRow.segShape c.ports[p]!.bits).1 (b / 1024 + 1) ∧
+      SegShape.firstOf (HmRow.segShape c.ports[p]!.bits).1 (b / 1024 + 1) ≤ c.ports[p]!.chunks ∧
+      8 * (b % 1024) + 8 ≤ ((HmRow.segShape c.ports[p]!.bits).1[b / 1024]!).1 := by
+  obtain ⟨-, hbits, hn, -⟩ := hs
+  have hsz := Binding.RowSeg.size_segShape c.ports[p]!.bits
+  have hj : b / 1024 < Binding.RowSeg.count c.ports[p]!.bits := by
+    unfold Binding.RowSeg.count
+    simp only [HmRow.ROW_SEG_BITS]
+    omega
+  have hget := Binding.RowSeg.segShape_get hj
+  have hm : 8 * (b % 1024) + 8 ≤ Binding.RowSeg.segBits c.ports[p]!.bits (b / 1024) := by
+    unfold Binding.RowSeg.segBits
+    simp only [HmRow.ROW_SEG_BITS]
+    omega
+  have hsucc := SegShape.firstOf_succ (segs := (HmRow.segShape c.ports[p]!.bits).1) (j := b / 1024)
+    (by rw [hsz]; exact hj)
+  rw [hget] at hsucc
+  dsimp only at hsucc
+  have hmono := SegShape.firstOf_mono' (segs := (HmRow.segShape c.ports[p]!.bits).1)
+    (show b / 1024 + 1 ≤ Binding.RowSeg.count c.ports[p]!.bits by omega)
+  refine ⟨by rw [hsz]; exact hj, by omega, by omega, ?_⟩
+  rw [hget]
+  exact hm
+
+omit R in
+/-- A row-seg row's data byte's compression is one of the row's. -/
+theorem seg_chunk {p b : ℕ} (hs : SegRow c.ports[p]!) (hb : b < 2 * c.ports[p]!.words) :
+    SegShape.firstOf (HmRow.segShape c.ports[p]!.bits).1 (b / 1024) + b % 1024 / 128 < c.ports[p]!.chunks := by
+  obtain ⟨-, h1, h2, -⟩ := seg_byte hs hb
+  omega
+
+omit R in
+/-- **A row-seg row's data bit is a row bit** of its compression's message (`HmRow.msgBit`), at its block bit
+`wordBit (8 · (b % 128) + t)`. -/
+theorem seg_msgBit {p b t : ℕ} (hs : SegRow c.ports[p]!) (hb : b < 2 * c.ports[p]!.words) (ht : t < 8) :
+    ∃ i, HmRow.msgBit c.ports[p]! (SegShape.firstOf (HmRow.segShape c.ports[p]!.bits).1 (b / 1024) + b % 1024 / 128)
+      (HmNets.wordBit (8 * (b % 128) + t)) = .row i := by
+  obtain ⟨hj, h1, -, hm⟩ := seg_byte hs hb
+  rw [SegShape.msgBit_seg hs.1 hj (Nat.le_add_right _ _) h1,
+    blockBit_wordBit (Nat.mod_lt b (by norm_num : 0 < 128)) ht]
+  unfold SegShape.segVal
+  dsimp only
+  rw [if_pos (by omega)]
+  exact ⟨_, rfl⟩
+
+omit R in
+/-- **A row-seg row's data bit's column** is its compression's message column, at block bit
+`wordBit (8 · (b % 128) + t)`. -/
+theorem deltaMsgCol_segM {g p b t : ℕ} (hp : p < c.ports.size) (hs : SegRow c.ports[p]!)
+    (hkc : SegShape.firstOf (HmRow.segShape c.ports[p]!.bits).1 (b / 1024) + b % 1024 / 128 < c.ports[p]!.chunks)
+    (ht : t < 8) :
+    deltaMsgCol c g p b t =
+      segMsgCol c g p (SegShape.firstOf (HmRow.segShape c.ports[p]!.bits).1 (b / 1024) + b % 1024 / 128) +
+        HmNets.wordBit (8 * (b % 128) + t) := by
+  have e : deltaMsgCol c g p b t = Typed.msgCol c g p b t := by
+    simp only [Typed.msgCol, deltaMsgCol, getElem!_eq_getD']
+  rw [e, msgCol_seg hp hs.1 hkc ht]
+
+/-- A row-seg row's data bit's column is in its compression's `sha512x3` slot, past the `cv`. -/
+theorem deltaMsgCol_segP {g p b t : ℕ} (hp : p < c.ports.size) (hs : SegRow c.ports[p]!)
+    (hkc : SegShape.firstOf (HmRow.segShape c.ports[p]!.bits).1 (b / 1024) + b % 1024 / 128 < c.ports[p]!.chunks)
+    (ht : t < 8) :
+    deltaMsgCol c g p b t =
+      shaPos c g p (SegShape.firstOf (HmRow.segShape c.ports[p]!.bits).1 (b / 1024) + b % 1024 / 128)
+        (512 + HmNets.wordBit (8 * (b % 128) + t)) := by
+  rw [deltaMsgCol_segM hp hs hkc ht, segMsg_pos R hp]
+  unfold segPos
+  rw [if_pos hkc]
+
+/-- **An output row's data bit is a self input bit of one of its slots**, the row unsegmented (`msg_at`) or row-seg:
+of its compression's `sha512x3` slot, past the `cv`, or of its `hm96` slot's `pad`. -/
+theorem msg_atK {g p b t : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hk : PadRow c.ports[p]! ∨ SegRow c.ports[p]!)
+    (hb : b < 2 * c.ports[p]!.words) (ht : t < 8) :
+    ∃ n s off, (n = c.shaNet ∨ n = c.hmNet) ∧ AtSlot c n s off (deltaMsgCol c g p b t) ∧
+      off < (c.nets.getD n default).2.inWords * Flock.WORD ∧
+      ∃ (l : Flock.HmNets.Laid) (name : String),
+        Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (c.nets.getD n default).2 ∧
+          l.ra.getD off #[] = #[off] ∧ l.rb.getD off #[] = #[off] := by
+  rcases hk with hf | hs
+  · exact msg_at R hg hp (by rw [← getElem!_eq_getD']; exact hf.1) ht
+  · have hkc := seg_chunk hs hb
+    have hw := wordBit_lt (Nat.mod_lt b (by norm_num : 0 < 128)) ht
+    have hsub : shaSub c p (SegShape.firstOf (HmRow.segShape c.ports[p]!.bits).1 (b / 1024) + b % 1024 / 128) < 3 :=
+      (rowSlot_lt hp hkc).2
+    rw [deltaMsgCol_segP R hp hs hkc ht]
+    exact ⟨_, _, _, Or.inl rfl, shaPos_at R hg hp hkc (by omega), by rw [shaNet_inRows R.rowNets]; omega, _, _,
+      shaNet_ofRows R.rowNets, shaLaid_self (by omega)⟩
+
+theorem deltaMsgCol_ltK {g p b t : ℕ} (hg : g < c.g) (hp : p < c.ports.size)
+    (hk : PadRow c.ports[p]! ∨ SegRow c.ports[p]!) (hb : b < 2 * c.ports[p]!.words) (ht : t < 8) :
+    deltaMsgCol c g p b t < 2 ^ c.kLog := by
+  obtain ⟨n, s, off, hn, hat, -⟩ := msg_atK R hg hp hk hb ht
+  exact hat.lt R.bound (R.range (R.rowNet_lt hn)).1
+
+/-- **No copy of `HmRow.delta`'s rows, of any kind, or of the rows' wires is at an output row's data bit**, the row
+unsegmented (`msg_filterF`) or row-seg (a row bit, `segMsg_filter`). -/
+theorem msg_filterK {pin g p b t : ℕ} (hg : g < c.g) (hp : p < c.ports.size)
+    (hk : PadRow c.ports[p]! ∨ SegRow c.ports[p]!) (hb : b < 2 * c.ports[p]!.words) (ht : t < 8) :
+    (rowCopiesAny c pin ++ wireCopiesOf c (HmRow.rowWires c.ports c.shaNet c.hmNet).toList).filter
+      (fun e => e.1 = deltaMsgCol c g p b t) = [] := by
+  rcases hk with hf | hs
+  · exact msg_filterF R hg hp hf hb ht
+  · have hkc := seg_chunk hs hb
+    obtain ⟨i, hi⟩ := seg_msgBit hs hb ht
+    rw [deltaMsgCol_segM hp hs hkc ht,
+      segMsg_filter R hs.1 hg hp (Nat.le_of_lt hkc) (wordBit_lt (Nat.mod_lt b (by norm_num : 0 < 128)) ht), hi]
+    rfl
+
+omit R in
+/-- Distinct data bytes of a row-seg row are in distinct compressions or at distinct block bytes. -/
+theorem seg_k_inj {p b b' : ℕ} (hs : SegRow c.ports[p]!) (hb : b < 2 * c.ports[p]!.words)
+    (hb' : b' < 2 * c.ports[p]!.words)
+    (h : SegShape.firstOf (HmRow.segShape c.ports[p]!.bits).1 (b / 1024) + b % 1024 / 128 =
+      SegShape.firstOf (HmRow.segShape c.ports[p]!.bits).1 (b' / 1024) + b' % 1024 / 128) :
+    b / 1024 = b' / 1024 ∧ b % 1024 / 128 = b' % 1024 / 128 := by
+  obtain ⟨-, h1, -, -⟩ := seg_byte hs hb
+  obtain ⟨-, h1', -, -⟩ := seg_byte hs hb'
+  have hj : b / 1024 = b' / 1024 := by
+    rcases Nat.lt_trichotomy (b / 1024) (b' / 1024) with hlt | heq | hgt
+    · have := SegShape.firstOf_mono' (segs := (HmRow.segShape c.ports[p]!.bits).1)
+        (show b / 1024 + 1 ≤ b' / 1024 by omega)
+      omega
+    · exact heq
+    · have := SegShape.firstOf_mono' (segs := (HmRow.segShape c.ports[p]!.bits).1)
+        (show b' / 1024 + 1 ≤ b / 1024 by omega)
+      omega
+  refine ⟨hj, ?_⟩
+  rw [hj] at h
+  omega
+
+/-- An unsegmented row's data bit is no row-seg row's. -/
+theorem pad_ne_seg {g p b t g' p' b' t' : ℕ} (hg : g < c.g) (hp : p < c.ports.size) (hf : PadRow c.ports[p]!)
+    (ht : t < 8) (hg' : g' < c.g) (hp' : p' < c.ports.size) (hs : SegRow c.ports[p']!)
+    (hb' : b' < 2 * c.ports[p']!.words) (ht' : t' < 8) : deltaMsgCol c g p b t ≠ deltaMsgCol c g' p' b' t' := by
+  have hkc' := seg_chunk hs hb'
+  have hw' := wordBit_lt (Nat.mod_lt b' (by norm_num : 0 < 128)) ht'
+  have hup : (c.ports.getD p default).segs = none := by rw [← getElem!_eq_getD']; exact hf.1
+  have hmo := msgOff_lt (b := b) ht
+  rw [deltaMsgCol_segP R hp' hs hkc' ht']
+  intro h
+  by_cases hk : b / 128 < c.ports[p]!.chunks
+  · rw [deltaMsgCol_pos R hp hup hk] at h
+    obtain ⟨-, hpp, -, -⟩ := shaPos_inj R hg hp hk (by omega) hg' hp' hkc' (by omega) h
+    subst hpp
+    have := hs.1
+    rw [hf.1] at this
+    cases this
+  · rw [deltaMsgCol_hm hp hup (by omega), padCol_eq R.rowNets, Nat.add_assoc] at h
+    exact shaPos_ne_hm R hg' hp' hkc' (by omega) hg hp (by omega) h.symm
+
+/-- **Distinct data bits of output rows are distinct columns**, each row unsegmented or row-seg: template instance,
+row, byte and bit. -/
+theorem deltaMsgCol_injK {g p b t g' p' b' t' : ℕ} (hg : g < c.g) (hp : p < c.ports.size)
     (hk : PadRow c.ports[p]! ∨ SegRow c.ports[p]!) (hb : b < 2 * c.ports[p]!.words) (ht : t < 8) (hg' : g' < c.g)
     (hp' : p' < c.ports.size) (hk' : PadRow c.ports[p']! ∨ SegRow c.ports[p']!) (hb' : b' < 2 * c.ports[p']!.words)
     (ht' : t' < 8) (h : deltaMsgCol c g p b t = deltaMsgCol c g' p' b' t') : g = g' ∧ p = p' ∧ b = b' ∧ t = t' := by
-  have hd := deltaMsgCol_dst R (g := g) hp hk hb ht
-  have hd' := deltaMsgCol_dst R (g := g') hp' hk' hb' ht'
-  rw [← h] at hd'
-  rcases hk with hfit | hseg <;> rcases hk' with hfit' | hseg'
-  · exact deltaMsgCol_injPad R hg hp hfit hb ht hg' hp' hfit' hb' ht' h
-  · obtain ⟨rfl, rfl⟩ := dst_inj R hg hp hg' hp' hd hd'
-    exact absurd (hfit.1.symm.trans hseg'.1) (by simp)
-  · obtain ⟨rfl, rfl⟩ := dst_inj R hg hp hg' hp' hd hd'
-    exact absurd (hfit'.1.symm.trans hseg.1) (by simp)
-  · obtain ⟨rfl, rfl⟩ := dst_inj R hg hp hg' hp' hd hd'
-    have e1 := segRow_data hseg hb ht
-    have e2 := segRow_data hseg' hb' ht'
-    rw [deltaMsgCol_segAt hp hseg hb ht, deltaMsgCol_segAt hp hseg' hb' ht', segMsg_pos R hp, segMsg_pos R hp] at h
-    obtain ⟨hkk, hoo⟩ := segPos_inj R hg hp e1.1.le (segData_lt ht) e2.1.le (segData_lt ht') h
-    have hwb : HmNets.wordBit (8 * (b % 128) + t) = HmNets.wordBit (8 * (b' % 128) + t') := by omega
-    have e := e1.2
-    rw [hkk, hwb, e2.2] at e
-    have := HmRow.MsgBit.row.inj e
-    exact ⟨rfl, rfl, by omega, by omega⟩
+  rcases hk with hf | hs <;> rcases hk' with hf' | hs'
+  · exact deltaMsgCol_injF R hg hp hf hb ht hg' hp' hf' hb' ht' h
+  · exact absurd h (pad_ne_seg R hg hp hf ht hg' hp' hs' hb' ht')
+  · exact absurd h.symm (pad_ne_seg R hg' hp' hf' ht' hg hp hs hb ht)
+  · have hkc := seg_chunk hs hb
+    have hkc' := seg_chunk hs' hb'
+    have hw := wordBit_lt (Nat.mod_lt b (by norm_num : 0 < 128)) ht
+    have hw' := wordBit_lt (Nat.mod_lt b' (by norm_num : 0 < 128)) ht'
+    rw [deltaMsgCol_segP R hp hs hkc ht, deltaMsgCol_segP R hp' hs' hkc' ht'] at h
+    obtain ⟨rfl, rfl, hkk, ho⟩ := shaPos_inj R hg hp hkc (by omega) hg' hp' hkc' (by omega) h
+    have hbb := blockBit_wordBit (Nat.mod_lt b (by norm_num : 0 < 128)) ht
+    rw [show HmNets.wordBit (8 * (b % 128) + t) = HmNets.wordBit (8 * (b' % 128) + t') by omega,
+      blockBit_wordBit (Nat.mod_lt b' (by norm_num : 0 < 128)) ht'] at hbb
+    obtain ⟨hob, htt⟩ := Prod.mk.inj hbb
+    obtain ⟨hj, hi⟩ := seg_k_inj hs hb hb' hkk
+    exact ⟨rfl, rfl, by omega, htt.symm⟩
 
 end Pos
 
@@ -319,7 +400,7 @@ theorem outCopies_filterP {g j k t : ℕ} (hg : g < c.g) (hj : j < c.outRowPorts
     intro g' hg' j' hj' k' hk' t' ht' he
     obtain ⟨hp', hb', ht''⟩ := hrows.bound hj' hk' ht'
     obtain ⟨hp, hb, ht'''⟩ := hrows.bound hj hk ht
-    obtain ⟨h1, h2, h3, h4⟩ := deltaMsgCol_injF R hg' hp' (hrows.2 j' hj').2 hb' ht'' hg hp (hrows.2 j hj).2 hb
+    obtain ⟨h1, h2, h3, h4⟩ := deltaMsgCol_injK R hg' hp' (hrows.2 j' hj').2 hb' ht'' hg hp (hrows.2 j hj).2 hb
       ht''' he
     exact ⟨h1, by omega, by omega, by omega⟩
   unfold outCopiesR
@@ -377,16 +458,16 @@ section Twin
 variable {tags : Tags} {st : Stmt} (L : Layout st) (F : Aliased.UnitFacts tags st)
 include L F
 
-/-- **`flatPairsAny` at an output row's data bit**: none. -/
+/-- **`flatPairsAny` at an unsegmented or row-seg row's data bit**: none. -/
 theorem flat_count_msgF {g p b t : ℕ} (hg : g < st.c.g) (hp : p < st.c.ports.size)
     (hk : PadRow st.c.ports[p]! ∨ SegRow st.c.ports[p]!) (hb : b < 2 * st.c.ports[p]!.words) (ht : t < 8) (j : ℕ) :
     (flatPairsAny st.c st.pin).count (deltaMsgCol st.c g p b t, j) = 0 := by
   have R := RowRanges.ofL L F.parse F.check
-  obtain ⟨n, s, off, hn, hat, hoff, l, name, hl, -⟩ := msg_at R hg hp hk hb ht
-  rw [Any.flatAll_count L F F.parse.rowWires hn hat hl hoff j, msg_filterF R hg hp hk hb ht]
+  obtain ⟨n, s, off, hn, hat, hoff, l, name, hl, -⟩ := msg_atK R hg hp hk hb ht
+  rw [Any.flatAll_count L F F.parse.rowWires hn hat hl hoff j, msg_filterK R hg hp hk hb ht]
   rfl
 
-/-- **The flat Δ's row at an output row's data bit is a self row**, in `A` and in `B`. -/
+/-- **The flat Δ's row at an unsegmented or row-seg row's data bit is a self row**, in `A` and in `B`. -/
 theorem flat_selfF (hda : st.da = (HmRow.delta st.c st.pin).1) {g p b t : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) (hk : PadRow st.c.ports[p]! ∨ SegRow st.c.ports[p]!)
     (hb : b < 2 * st.c.ports[p]!.words) (ht : t < 8)
@@ -394,7 +475,7 @@ theorem flat_selfF (hda : st.da = (HmRow.delta st.c st.pin).1) {g p b t : ℕ} (
     placedA st ⟨deltaMsgCol st.c g p b t, hx⟩ j = (if j.val = deltaMsgCol st.c g p b t then 1 else 0) ∧
       placedB st ⟨deltaMsgCol st.c g p b t, hx⟩ j = (if j.val = deltaMsgCol st.c g p b t then 1 else 0) := by
   have R := RowRanges.ofL L F.parse F.check
-  obtain ⟨n, s, off, hn, hat, -, l, name, hl, hself⟩ := msg_at R hg hp hk hb ht
+  obtain ⟨n, s, off, hn, hat, -, l, name, hl, hself⟩ := msg_atK R hg hp hk hb ht
   have hfc := flat_count_msgF L F hg hp hk hb ht
   have hδ : ∀ j : ℕ, deltaEntry st.da (deltaMsgCol st.c g p b t) j =
         (((if j = deltaMsgCol st.c g p b t then 1 else 0) + (if j = deltaMsgCol st.c g p b t then 1 else 0) : ℕ) :
@@ -413,7 +494,7 @@ theorem flat_selfF (hda : st.da = (HmRow.delta st.c st.pin).1) {g p b t : ℕ} (
 
 end Twin
 
-/-! ## The hidden statement and its flat twin, with output rows of any kind -/
+/-! ## The hidden statement and its flat twin, with unsegmented or row-seg output rows -/
 
 section HiddenP
 
@@ -422,7 +503,8 @@ variable {tags : Tags} {st : Stmt} (L : Layout st) (L0 : Layout (flatTwin st)) (
 include L L0 F0 hda hrows
 
 /-- **An output row's message bit holds its copy** in every block of a satisfying witness of the hidden statement, with
-rows of any kind: at template instance `g`, output row `j`'s word `k`, bit `t`, what the witness holds at `outSrc`. -/
+unsegmented or row-seg output rows and input rows of any kind: at template instance `g`, output row `j`'s word `k`, bit
+`t`, what the witness holds at `outSrc`. -/
 theorem msg_copyP {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g j k t : ℕ} (hg : g < st.c.g)
     (hj : j < st.c.outRowPorts.size) (hk : k < (st.c.ports.getD (HmOut.nIn st.c + j) default).words) (ht : t < 16) :
@@ -430,8 +512,8 @@ theorem msg_copyP {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z :
       blockBit (L.model regs) z o (outSrc st.c g j k t) := by
   have R : RowRanges st.c := RowRanges.ofL (st := flatTwin st) L0 F0.parse F0.check
   obtain ⟨hp, hb, ht8⟩ := hrows.bound hj hk ht
-  obtain ⟨n, s, off, hn, hat, -, l, name, hl, hself⟩ := msg_at R hg hp (hrows.2 j hj).2 hb ht8
-  have hx := deltaMsgCol_ltF R hg hp (hrows.2 j hj).2 hb ht8
+  obtain ⟨n, s, off, hn, hat, -, l, name, hl, hself⟩ := msg_atK R hg hp (hrows.2 j hj).2 hb ht8
+  have hx := deltaMsgCol_ltK R hg hp (hrows.2 j hj).2 hb ht8
   have hfc := flat_count_msgF L0 F0 hg hp (hrows.2 j hj).2 hb ht8
   have hδ : ∀ i : ℕ, deltaEntry st.da (deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8)) i =
         (((if i = deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8) then 1 else 0) +
@@ -448,8 +530,9 @@ theorem msg_copyP {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z :
     exact ⟨e, by rw [L.delta_b]; exact e⟩
   exact block_of_rows hz o hx fun i => inBit_rows (st := st) R hn hat hl hself hx hδ i
 
-/-- **A satisfying witness of the hidden statement satisfies its flat twin**, with rows of any kind: the rows agree past
-`outPairs`' message bits (`deltaEntry_append_out`), and there the twin's row is a self row (`flat_selfF`). -/
+/-- **A satisfying witness of the hidden statement satisfies its flat twin**, with unsegmented or row-seg output rows and
+input rows of any kind: the rows agree past `outPairs`' message bits (`deltaEntry_append_out`), and there the twin's row
+is a self row (`flat_selfF`). -/
 theorem sat_flatP {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) : (L0.model regs).Satisfies z := by
   have R : RowRanges st.c := RowRanges.ofL (st := flatTwin st) L0 F0.parse F0.check
@@ -461,7 +544,7 @@ theorem sat_flatP {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z :
     have hq1 : q.1 = deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8) := by
       rcases hq with rfl | rfl <;> rfl
     obtain ⟨hp, hb, ht8⟩ := hrows.bound hj hk ht
-    have hx := deltaMsgCol_ltF R hg hp (hrows.2 j hj).2 hb ht8
+    have hx := deltaMsgCol_ltK R hg hp (hrows.2 j hj).2 hb ht8
     have hie : i = ⟨deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8), hx⟩ :=
       Fin.ext (hqi.symm.trans hq1)
     subst hie

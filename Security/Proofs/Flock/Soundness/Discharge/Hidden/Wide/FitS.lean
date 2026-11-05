@@ -8,10 +8,10 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegTgt
 
 `RowsFit` covers rows that fit (`FitRow`), all of one kind (`sha512/row/v1` or `/row/v2`), so one prefix (`rowPre`) at
 every row. `Any.RowsFitS` covers each row unsegmented, its padding perhaps starting in its last compression's block
-(`Any.PadRow`), or a `sha512/row-seg/v1` row as `HmRow.segShape` cuts it (`Any.SegRow`), of any mix, one output row per
-output port (`Any.OutRowsS`). A row's `hm96` slot hashes `Any.rowMsg` of its message bytes: its own prefix (`rowPre` at
-its own `v2`) and the bytes at an unsegmented row, `RowSeg.enc` of them at a row-seg row
-(`Any.row_bc_tgtS`, from `Any.row_bc_tgt` and `Any.seg_bc_tgt`).
+(`Any.PadRow`), or a `sha512/row-seg/v1` row as `HmRow.segShape` cuts it (`Any.SegRow`), of any mix, input rows and
+output rows alike, one output row per output port (`Any.OutRowsS`). A row's `hm96` slot hashes `Any.rowMsg` of its
+message bytes: its own prefix (`rowPre` at its own `v2`) and the bytes at an unsegmented row, `RowSeg.enc` of them at a
+row-seg row (`Any.row_bc_tgtS`, from `Any.row_bc_tgt` and `Any.seg_bc_tgt`).
 -/
 
 @[expose] public section
