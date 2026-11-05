@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Sampling.KS
+module
+
+public import Proofs.Flock.Claims.Sampling.KS
 
 /-!
 # The sampling extractor's run bounds
@@ -16,6 +18,8 @@ decoder, from the rerun programs' laws (`Sampling.Cost`):
   `openCalls` SHA-512 calls, at a statement that parses. It is the deployed opening check's count, the sampled-proofs
   verifier's.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

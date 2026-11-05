@@ -1,5 +1,7 @@
-import Flock.Hash
-import Flock.HmRow
+module
+
+public import Flock.Hash
+public import Flock.HmRow
 
 /-!
 # The verification tree
@@ -21,6 +23,8 @@ The tree has the shape of RFC 6962: over `n > 1` leaves it splits at the largest
 leaf order, and one leaf's root is the leaf. `path` is RFC 6962's `PATH(i, D)`, the siblings from the leaf up, and
 `verifyPath` RFC 9162 §2.1.3.2's inclusion check, which takes left and right from the index and the leaf count.
 -/
+
+@[expose] public section
 
 namespace PousCheck.Merkle
 

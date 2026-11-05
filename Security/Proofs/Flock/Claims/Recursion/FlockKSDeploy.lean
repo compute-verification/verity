@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.FlockKSAcc
-import Proofs.Flock.Claims.DeployK
+module
+
+public import Proofs.Flock.Claims.Recursion.FlockKSAcc
+public import Proofs.Flock.Claims.DeployK
 
 /-!
 # The deployed verifier's code facts for the abort-law table bound
@@ -11,6 +13,8 @@ only at its last round (`accLast_V_sha512`, from `next_acc_length_sha512`). So a
 inner deployment whose verifier is `V zk` rests on `TableBoundθOnAcc` in place of `Inner.KSAbort`, beside
 `KSFlock_of_flockKS`'s other hypotheses (`KSFlock_of_flockKS_V`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

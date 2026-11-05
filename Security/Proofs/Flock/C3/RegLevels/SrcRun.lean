@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.RegLevels.SrcTie
-import Proofs.Flock.VBridge.Runs.Lg
+module
+
+public import Proofs.Flock.C3.RegLevels.SrcTie
+public import Proofs.Flock.VBridge.Runs.Lg
 
 /-!
 # n7's levels: `LevelTie` from R's opening's algebra
@@ -14,6 +16,8 @@ one (`schedOf_holoAt`), so `levelTie_of_run` gives `LevelTie` from R's opening's
 the source hold: the openings (`Opened`), ring switching's output (`OpenRel`), the cap's digests, the proof's fields,
 and the source's Ligerito steps.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

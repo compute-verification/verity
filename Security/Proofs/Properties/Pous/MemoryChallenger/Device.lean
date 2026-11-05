@@ -1,5 +1,8 @@
-import Proofs.Properties.Pous.MemoryChallenger.Header
-import Proofs.Properties.Pous.MemoryChallenger.Inputs
+module
+
+public import Proofs.Properties.Pous.MemoryChallenger.Header
+public import Proofs.Properties.Pous.MemoryChallenger.Inputs
+import all Init.Data.String.Defs
 
 /-!
 # A verifying signature is the device's, or the run carries a break
@@ -10,6 +13,8 @@ of its sessions, then under no SHA-512 collision among the run's strings the two
 records, so the two headers and records roots, so the commitments, the ends and (through `Tree.tree_bind`) the rounds
 (`signedByDevice_of`). Otherwise the device never signed it: a forgery.
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger.Properties.SecurityProofs.Device
 

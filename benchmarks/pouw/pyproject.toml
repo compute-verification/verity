@@ -17,6 +17,25 @@ verity-difftest = { workspace = true }
 verity-exact-kit = { workspace = true }
 
 [tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = [
+    "tests/test_ffill.py",
+    "tests/test_lowbit_dc.py",
+    "tests/test_pearl_c_hash_decode.py",
+    "tests/test_pearl_c_hash_host.py",
+    "tests/test_pearl_c_sm120.py",
+    "tests/test_pearl_c_sm90.py",
+    "tests/test_pearl_c_sm90_prefill.py",
+    "tests/test_pearl_c_vllm.py",
+    "tests/test_receipts_adopters.py",
+    "tests/test_salt_bind.py",
+    "tests/test_served_zk.py",
+    "tests/test_theory_duo_kernel.py",
+    "tests/test_theory_fold_kernel.py",
+    "tests/test_theory_fold_root.py",
+    "tests/test_theory_fold_wide3.py",
+    "tests/test_theory_fold_wide32.py",
+]
 # test_lean_headline compares the headline instances' Lean data (Security/Definitions/Accounting/Headline) with what
 # lean_headline.py writes, and test_lean_headline_dc the data-centre ones' (Security/Definitions/Accounting/HeadlineDc)
 # with what lean_headline_dc.py writes, and each statement's ε literal in Models' HeadlineDc.lean against the export's
@@ -36,6 +55,7 @@ verity-exact-kit = { workspace = true }
 # CUDA sources, and dither's registry (settings.py), which they read their variables through. test_served_h1_producer's
 # H1 window commits its hiding tables through pouw_h1_requests.hiding_rows, whose ChaCha20 is verity.ml.windows.rows'
 # (the commit files named below: serving_rows and what it imports).
+# test_served_units_summarize runs served_units' summarize.py, which scores the hidden_zk controls its job.sh sources.
 # served_h1's producer loads dither's j10r_ws.py, which sizes a J10-R call's workspace from the loaded build.
 # test_dither_j10r_form imports dither's J10-R host units (j10r_units.py, over served_h1's receipts) and forms.py.
 # pouw_h1 imports its table commits' module and pouw_h1_served its word encodings' module, each named at its path
@@ -65,6 +85,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/challenger.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/commit.py",
+          "integrations/vllm/verity_vllm/protocols/pouw/h1/draw.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/handoff.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/hooks.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/model_key.py",
@@ -123,9 +144,12 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "benchmarks/pouw/machine_model", "benchmarks/pouw/README.md",
           "benchmarks/hash/dither/dither_a.py", "benchmarks/hash/dither/dither_fused.py",
           "benchmarks/hash/dither/j10r_ws.py",
+          # test_mma_gate runs torch_gpu's build gates, which read the build through harness/sass_gate.py's mma_gate
+          "benchmarks/torch_gpu/s8_linear/sass_gate.py", "benchmarks/torch_gpu/attn_bf16/sass_gate.py",
           "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/forms.py", "benchmarks/hash/dither/h1c.py",
           "benchmarks/hash/dither/h1r.py", "benchmarks/hash/dither/j10r_units.py",
           "benchmarks/hash/dither/hb_side.py", "benchmarks/hash/dither/settings.py", "benchmarks/hash/exactlin/exactlin.py",
+          "benchmarks/served_units/summarize.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/words.py"]
 # one process: 2,100 s beside a loaded check, too near suites.py's SUITE_TIMEOUT_S
@@ -138,3 +162,70 @@ artifacts = ["verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-check",
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
+# what a program it starts reads): the graph's test-file tasks are keyed on it.
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_dc.py"]
+paths = ["benchmarks/pouw/opcode_probe"]
+
+[[tool.verity.tests.reads]]
+tests = [
+    "tests/test_dither_j10r_form.py",
+    "tests/test_pearl_c4_real.py",
+    "tests/test_pearl_c_sm90_glm53.py",
+    "tests/test_served_h1.py",
+    "tests/test_served_h1_producer.py",
+]
+paths = ["benchmarks/pouw", "tools/config/verity_config", "verity"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_emu8.py"]
+paths = ["verity/ml/circuits/silicon"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_facet_break.py"]
+paths = ["benchmarks/pouw/machine_model/verity_machine_model", "benchmarks/pouw/opcode_probe"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_ffill.py"]
+paths = ["verity/ml/circuits/ops"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_h1_prove_live.py"]
+paths = [
+    "verity/core/protocols/pouw",
+    "verity/core/protocols/sampled_proofs/one_stage",
+    "verity/ml/circuits",
+    "verity/ml/commitments/frame_v3",
+    "verity/ml/flock/python/verity_flock",
+]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_hidden_zk_summarize_rows.py"]
+paths = ["benchmarks/pouw/hidden_zk"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_pearl_c_sm120.py", "tests/test_pearl_c_sm90.py"]
+paths = ["verity/core/protocols/pouw/tests", "verity/ml/kernels"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_pearl_c_sm90_grouped.py"]
+paths = ["verity/core/protocols/pouw/tests"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_pearl_c_sm90_prefill.py"]
+paths = ["benchmarks/pouw/pearl_c_sm120"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_receipts_adopters.py"]
+paths = ["benchmarks/pouw/filler"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_salt_bind.py"]
+paths = ["verity/core/protocols/pouw/lean/check/tests"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_theory_cpw.py"]
+paths = ["verity/core/protocols/pouw", "verity/ml/circuits", "verity/ml/kernels"]

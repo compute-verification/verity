@@ -34,14 +34,19 @@ reads the level's tops `rec-top-L<l>` at row `i` in instance `i`, every node of 
 `rec-cap-zero` (`checkCap`); its rows are held to the coin server's `root_B`, or to both reps' level-`l` tops
 (`checkLink`, `RecVStar.checkTopRows`).
 -/
-import Flock.Registered
-import Flock.Firewall
-import Flock.RecOpening
-import Flock.RecSparse
-import Flock.RecVStar
-import Flock.Verify
-import Flock.Zk
-import Flock.Norm
+module
+
+public import Flock.Registered
+public import Flock.Firewall
+public import Flock.RecOpening
+public import Flock.RecSparse
+public import Flock.RecVStar
+public import Flock.Verify
+public import Flock.Zk
+public import Flock.Norm
+public import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock
 namespace RecCoins
@@ -158,7 +163,7 @@ def Files.stmt (unit : String) (f : Files) : V (SessionSpec × Stmt) := do
 /-- A session record's `unit_draw`, when it is a draw (not absent, not null), rebuilt (`norm`), as `verify` reads it
 (`Main.recordDraw`). -/
 def recordDraw (record : String) : Option Json :=
-  match Json.parse record with
+  match JsonParse.parse record with
   | .ok j => match j.getObjVal? "unit_draw" with
     | .ok Json.null => none
     | .ok d => some (Flock.norm d)
@@ -812,7 +817,7 @@ def filesOnly (args : List String) : IO (Except String (Option Files)) := do
       | .ok f => pure f
       | .error e => return .error e
     try
-      let partition ← match Json.parse (← IO.FS.readFile q) with
+      let partition ← match JsonParse.parse (← IO.FS.readFile q) with
         | .ok j => pure j
         | .error e => return .error s!"--rec-inner-partition {q}: not JSON: {e}"
       let program ← (argOf args "--rec-inner-program").mapM IO.FS.readBinFile

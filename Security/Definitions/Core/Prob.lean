@@ -1,4 +1,6 @@
-import Mathlib.Probability.ProbabilityMassFunction.Basic
+module
+
+public import Mathlib.Probability.ProbabilityMassFunction.Basic
 
 /-!
 # The probability of an event under a distribution
@@ -9,6 +11,8 @@ their real-valued forms are `Claims.Ex` and `Claims.Pr` (`Definitions.Core.Inter
 `[0, ∞]`. `prPMFReal` is the same probability as a real number. A randomized adversary is an average of deterministic
 ones, so a statement over this probability quantifies over deterministic guesses only.
 -/
+
+@[expose] public section
 
 namespace Verity.Game
 

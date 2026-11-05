@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink
-import Proofs.Flock.Soundness.Discharge.ZkExec
-import Proofs.Flock.Soundness.Discharge.ZkView
-import Proofs.Flock.Soundness.Discharge.ZkBind
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink
+public import Proofs.Flock.Soundness.Discharge.ZkExec
+public import Proofs.Flock.Soundness.Discharge.ZkView
+public import Proofs.Flock.Soundness.Discharge.ZkBind
 
 /-!
 # A draw's `--zk` table: its coins and sizes
@@ -19,6 +21,8 @@ What `coinedOf` (`Composed/Coined.lean`) and `innerOf` (`Composed/Inner.lean`) b
 * `eqWord`, `maskWordsOf`: the rank check's weights and the mask slot's words.
 * `regionPtOf`, `pubRegOf`: the region claims' points and public ring-switch messages at the link points.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

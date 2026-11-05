@@ -1,5 +1,7 @@
-import Definitions.Flock.HoloCompiled
-import Proofs.Flock.C3.Fork.CouplingPull
+module
+
+public import Definitions.Flock.HoloCompiled
+public import Proofs.Flock.C3.Fork.CouplingPull
 
 /-!
 # a1l, step 3: the holographic table in lockstep
@@ -11,6 +13,8 @@ registered opening as the same games (`lockRegPhase`), and R's Ligerito on the r
 pulled from `2` (`lockLigR`). R's tables sit beside the reps' (`liftL`, `liftR`): the reps' at even slots, R's at
 odd ones. The leaf relation (`TopRelH`) is `TopRelL`'s with R's stream as a third rep.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

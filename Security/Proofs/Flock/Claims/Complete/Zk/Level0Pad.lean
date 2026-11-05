@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Zk.Ligerito
-import Proofs.Flock.Claims.Complete.Replay.LigeritoCons
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigPad
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Ligerito
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoCons
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigPad
 
 /-!
 # Level 0's masked query identity
@@ -17,6 +19,8 @@ consistency weight `V = consW` (`consE0_honestZk`), as `consE_fold` is for an un
 * `row_comb`: at one opened row, the three terms are `Enc(y₁')` there: each lane's padding is `Σ_i μ_l[i]·pe(p, i)`,
   and `ybar`'s is the same combination of them, so the two cancel in characteristic 2.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

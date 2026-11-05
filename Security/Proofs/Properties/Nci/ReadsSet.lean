@@ -1,5 +1,7 @@
-import Proofs.Properties.Nci.ReadsOneNode
-import Proofs.Properties.Nci.OperandsResolve
+module
+
+public import Proofs.Properties.Nci.ReadsOneNode
+public import Proofs.Properties.Nci.OperandsResolve
 
 /-!
 # `ReadsExact.RootSet` from the decoder's facts: gates located with their operands, and the statements it is proved through
@@ -48,6 +50,8 @@ parameter leaves in range (`used_lt`) and its return its gates (`locW_lt`). So `
 composite but the root (`usedExact_reached`), and `RootSet` wherever every reference of a node calling a primitive is
 read by a member and every node calling a composite is shaped as `CompShape` says (`rootSet_of`).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.ReadsExact
 open NciCheck.Desc (Piece Seg PS Tgt)

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Sampling.Path
-import Proofs.Flock.Soundness.Binding.Leaf
+module
+
+public import Proofs.Flock.Claims.Sampling.Path
+public import Proofs.Flock.Soundness.Binding.Leaf
 
 /-!
 # The hm96 leaf binds (hm96-sha512/row/v1)
@@ -18,6 +20,8 @@ salt's `c = H(salt_prefix ‖ y)`, and the leaf `H(leaf_prefix ‖ (x ⊕ M·y) 
 * `hm96Leaf_sha512`: at SHA-512 the program never refuses and its leaf is Flock's, `hm96Input`'s digest.
 * `Binding_of_hm96`: **the claims' `Binding`** for a commitment of hm96 leaves under the registered path check.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

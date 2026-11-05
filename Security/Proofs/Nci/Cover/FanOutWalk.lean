@@ -1,8 +1,10 @@
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
-import Proofs.Nci.Cover.FanOutPlan
-import Proofs.Nci.Cover.Paths
+module
+
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Positivity
+public import Proofs.Nci.Cover.FanOutPlan
+public import Proofs.Nci.Cover.Paths
 
 /-!
 # The fan-out proof: walks along keys, and what they charge
@@ -14,6 +16,8 @@ a block reads by its inputs outside `θ`, `lookupCost` the lookups of one token 
 and `charge` a token's whole products by its spent values when the block holds none of its roots: each is charged to
 the value its activation's walk ends at, which `reach` bounds.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover
 

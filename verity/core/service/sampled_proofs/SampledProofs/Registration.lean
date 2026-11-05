@@ -38,11 +38,17 @@ registered value (`Earlier.value`): its entry has the domain and root of that va
 log's record with that digest, whose leaves, words and word bits must be the value's own (`R7-output` otherwise), so
 nothing is registered afresh.
 -/
-import Flock.WindowRecord
-import SampledProofs.Draw
-import SampledProofs.Registered
-import SampledProofs.Supplied
-import Std.Data.HashMap
+module
+
+public import Flock.WindowRecord
+public import SampledProofs.Draw
+public import SampledProofs.Registered
+public import SampledProofs.Supplied
+public import Std.Data.HashMap
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Registration
 
