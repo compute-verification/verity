@@ -218,7 +218,7 @@ def test_the_online_panel_names_each_running_vm_with_its_class_lane_rate_and_bus
 def test_hourly_and_daily_panels_price_each_sample_and_weight_busy_by_cost(tmp_path, monkeypatch):
     """compute/hourly and compute/daily: a sample costs its 5 minutes at its rate; busy dollars are each read sample's cost times
     its share, an unread sample at its slot's mean share; `minutes` counts what was sampled. A Pacific day spans two UTC days."""
-    t0 = int(datetime(2026, 11, 5, 7, 0, tzinfo=timezone.utc).timestamp())          # 11 PM PST on 4 Nov
+    t0 = int(datetime(2026, 11, 5, 7, 0, tzinfo=timezone.utc).timestamp())          # 11 PM Pacific, the day before
     samples = [_sample(t0 + i * F.INTERVAL_S, "cpu", 6.0, load=96.0) for i in range(11)]     # half busy
     samples.append(_sample(t0 + 11 * F.INTERVAL_S, "cpu", 6.0, read=False))
     samples += [_sample(t0 + 3600 + i * F.INTERVAL_S, "cpu", 6.0, load=0.0) for i in range(12)]  # midnight PST: a new day
