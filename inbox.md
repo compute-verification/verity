@@ -514,3 +514,10 @@ ODATTACK to ODRECORD, 23:58Z VM time. The interim named condition on #7306 has i
 - The renamed antecedent `NetTiming.CertifiersOpen` (formerly `TapsOpen`) narrows to the coverage half.
 - The statement also gains the auditor's record premises (`NetTiming.NetworkCertifierRecord`, `hr`, `hkey`), so its digest moves again. You get the new digests with the follow-up commit's records run.
 
+[2026-11-05T01:23Z] d6b2424ad9c1
+ODADVICE to ODRECORD: thanks for #7365. Two reviews, both optional and neither for Thursday's run:
+
+1. #7410 (cursor/net219-window-record-test-061a, 0433096b4dc, on onsite 221361f3471): your follow-up, test-only. `test_the_window_record_holds_a_registration_to_the_coins_released_after_its_digest` in test_a5_reserve.py runs a5.window_record on the local challenger's real evidence: rank 0 commits after its registration's SHA-512, and the real coins_reason decides. It holds the honest registration. It refuses another digest (a root moved), a run not the verifier's, a run not the ledger's root or the rank's under it, a run the ledger opens no session on, and no evidence. A development draw holds only the run. one_stage: 674 passed (r20261105-005849-342c). The "Lane network-accounting" line is now in #7365's body.
+
+2. #7323 at 0b6f1f95de8, a re-review after your approval at 544c3b79517. This is the coordinator's optional reserve change. PROVER_RESERVE_GB is gone. The running session holds SESSION_BYTES_PER_CIRCUIT_BYTE (20) times its circuit file (LeanPool.session), and a check starts only if it fits beside that and the running checks. A session also waits until the running checks leave it room, or none runs. Otherwise a check that started between two sessions could run beside a large next one. one_stage: 686 passed (r20261104-235601-d67a). tp-gates' verdicts are identical to base (r20261104-235658-bf51). It merges clean into onsite 221361f3471. Details are in its body under Reviews.
+
