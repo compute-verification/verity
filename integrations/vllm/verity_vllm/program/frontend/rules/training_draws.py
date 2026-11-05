@@ -1,12 +1,13 @@
-"""A training step's random draws (`rules.training`): each is an input of the step, committed with its seed.
+"""A training step's random ops (`rules.training`): each one's values are an input of the step, committed with its generator's
+seed.
 
 torch's CUDA draws are curand's Philox4x32-10, keyed by the generator's seed and advanced by its offset, read in the launch's
 grid-stride order through torch's uniform, normal (Box-Muller) and integer transforms. No Definition computes that stream exactly,
-so a draw is not computed: what the run drew is a field of the Program's `run` input, and beside it the generator's state it
-claims to have drawn from, so the record commits each draw with its seed. Nothing checks the values against the seed until a
-Definition of the GPU's generator exists.
+so a random op is not computed: what the run drew is a field of the Program's `run` input, and beside it the generator's state
+it claims to have drawn from, so the record commits each op's values with its seed. Nothing checks the values against the seed
+until a Definition of the GPU's generator exists.
 
-    Draw    rand / randn / randint / randperm, their generator forms, rand_like / randn_like / randint_like, normal with
+    Random  rand / randn / randint / randperm, their generator forms, rand_like / randn_like / randint_like, normal with
             number arguments, and the functional normal_, uniform_, exponential_ and bernoulli_ (with a number p)
 """
 
@@ -19,21 +20,21 @@ from verity_vllm.program.frontend.rules.training_emit import _TrainRule, aten
 from verity_vllm.program.frontend.rules.training_views import _info
 from verity_vllm.program.frontend.value_types import type_of_tensor
 
-#: each draw reads of its tensor operand, if it has one, only the shape
+#: each random op reads of its tensor operand, if it has one, only the shape
 _DRAWS = {aten.rand.default, aten.rand.generator, aten.randn.default, aten.randn.generator, aten.randint.default,
           aten.randint.generator, aten.randint.low, aten.randint.low_generator, aten.randperm.default, aten.randperm.generator,
           aten.rand_like.default, aten.randn_like.default, aten.randint_like.default, aten.randint_like.low_dtype,
           aten.normal.float_float, aten.normal_functional.default, aten.uniform.default, aten.exponential.default,
           aten.bernoulli.p}
-#: the generator's state before a draw: its seed and its Philox offset
+#: the generator's state before a random op: its seed and its Philox offset
 SEED = Array(2, Value(64))
 
 
-class Draw(_TrainRule):
-    """A random draw as an input of the step: its values the field ``draw<k>:<node>`` of the `run` input and the generator's seed
-    and Philox offset before it the field ``draw<k>.seed:<node>``, k counting the step's draws in graph order. No gates."""
-    info = _info("Draw", "aten rand/randn/randint/randperm (and generator forms), rand_like/randn_like/randint_like, "
-                 "normal.float_float, normal_functional, uniform, exponential, bernoulli.p", "the draw reads no operand's values",
+class Random(_TrainRule):
+    """A random op's values as an input of the step: the field ``draw<k>:<node>`` of the `run` input, and the generator's seed
+    and Philox offset before it the field ``draw<k>.seed:<node>``, k counting the step's random ops in graph order. No gates."""
+    info = _info("Random", "aten rand/randn/randint/randperm (and generator forms), rand_like/randn_like/randint_like, "
+                 "normal.float_float, normal_functional, uniform, exponential, bernoulli.p", "the op reads no operand's values",
                  "values and the generator's (seed, offset): fields of the run input, no gates")
 
     def targets(self):
@@ -43,7 +44,7 @@ class Draw(_TrainRule):
         return any(n.op == "call_function" and n.target in _DRAWS for n in ep.graph.nodes)
 
     def applies(self, node, ctx):
-        return True if isinstance(node.meta.get("val"), torch.Tensor) else "the draw's result is not one tensor"
+        return True if isinstance(node.meta.get("val"), torch.Tensor) else "the op's result is not one tensor"
 
     def emit(self, node, ctx):
         k = ctx.state.get("draws", 0)
@@ -55,4 +56,4 @@ class Draw(_TrainRule):
         ctx.record(self, node, {"draw": k, "dtype": str(meta.dtype), "shape": list(meta.shape)}, emitted="run input")
 
 
-__all__ = ["Draw", "SEED"]
+__all__ = ["Random", "SEED"]

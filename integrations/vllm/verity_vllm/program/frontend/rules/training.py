@@ -13,8 +13,8 @@ do; where torch's bf16 kernel rounds otherwise, the rule refuses. At a compute c
 F.linear's GEMM as that GPU's cuBLAS computes it (`Matmul`): the route its capture fitted (`cublas_bf16.train_route`), each k16 step
 the tensor core's dot (`HopperBF16WgmmaDot16_v1`); `add`, `sub`, `mul` and `div` are the GPU's (`Binary`); a vector norm or a sum of a
 whole tensor is its `reduce_kernel`'s (`rules.training_reduce.FullReduce`); and the conversions to bf16 and to and from f16 and a
-`kthvalue` are its own (`rules.training_masks`). A random draw is an input of the step, committed with its seed
-(`rules.training_draws.Draw`). A training op with no Definition to lower it to is refused with the Definition it needs
+`kthvalue` are its own (`rules.training_masks`). A random op's values are an input of the step, committed with its
+generator's seed (`rules.training_draws.Random`). A training op with no Definition to lower it to is refused with the Definition it needs
 (`_log_softmax`: a correctly-rounded f32 log, `F32LogRn`).
 
     training_rules(min_view_leaves, cc, tf32) -> RuleSet     the training rule set
@@ -41,7 +41,7 @@ from verity_vllm.program.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.training_emit import (_DT, BIT, F32, _batch, _bits, _call, _const, _ew, _flat, _iota,
                                                               _operand, _operand_ok, _ones, _per_row, _ref, _rounded, _rows, _shape,
                                                               _tokens, _TrainRule, _widened, aten)
-from verity_vllm.program.frontend.rules.training_draws import Draw
+from verity_vllm.program.frontend.rules.training_draws import Random
 from verity_vllm.program.frontend.rules.training_masks import Cast, Clamp, Compare, Index, IntSum, KthValue, Logic, Where
 from verity_vllm.program.frontend.rules.training_matmul import Matmul
 from verity_vllm.program.frontend.rules.training_reduce import FullReduce
@@ -555,11 +555,11 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
     last = ([] if cc else [Binary()]) + [Unary(), Lerp(), Addcmul(), FullReduce(cc), Reduce(), IntSum(), SafeSoftmax(),
                                          SoftmaxBackward(), LogSoftmax(), LogSoftmaxBackward(), NllLossForward(),
                                          NllLossBackward(), EmbeddingDenseBackward(), Compare(), Logic(), Where(), Clamp(cc),
-                                         Index(), KthValue(cc), Draw()] + ([] if cc else [Cast()])
+                                         Index(), KthValue(cc), Random()] + ([] if cc else [Cast()])
     name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}" + ("-tf32" if tf32 else "")
     return RuleSet(name, first + list(DEFAULT_RULES.rules) + last, list(DEFAULT_RULES.families))
 
 
 __all__ = ["training_rules", "Matmul", "Binary", "Unary", "Lerp", "Addcmul", "FullReduce", "Reduce", "IntSum", "SafeSoftmax",
            "SoftmaxBackward", "LogSoftmax", "LogSoftmaxBackward", "NllLossForward", "NllLossBackward", "EmbeddingDenseBackward",
-           "Compare", "Logic", "Where", "Clamp", "Cast", "Index", "KthValue", "Draw"]
+           "Compare", "Logic", "Where", "Clamp", "Cast", "Index", "KthValue", "Random"]
