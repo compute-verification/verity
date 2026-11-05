@@ -145,7 +145,7 @@ theorem ExtP.pure_ok {v v' : V Unit} (h : ExtT v v') :
   rw [hv', ← hva, hv]
 
 /-- Takes apart two do blocks that differ only in their leaves, closing each leaf by `t`. -/
-local macro "blob_ext " t:tactic : tactic => `(tactic| repeat' (first
+local macro "blob_ext " t:tacticSeq : tactic => `(tactic| repeat' (first
   | with_reducible exact ExtP.refl _ _
   | $t
   | split
@@ -202,7 +202,7 @@ theorem get_of {B : Core.Blobs} {d w : String} {x y b : ByteArray} (hu : Flock.u
     (hh : Flock.hexOf x = d) (hf : B.entries.find? (·.1 == x) = some (y, b)) : B.get d w = .ok b := by
   have hc : (x.size != 64 || Flock.hexOf x != d) = false := by simp [hs, hh]
   unfold Core.Blobs.get
-  simp only [hu, ok_bind, hc, Bool.false_eq_true, ↓reduceIte, pure_bind, hf]
+  simp only [hu, ok_bind, hc, Bool.false_eq_true, ↓reduceIte, hf]
   all_goals rfl
 
 theorem get_ok_inv {B : Core.Blobs} {d w : String} {b : ByteArray} (h : B.get d w = .ok b) :
@@ -216,8 +216,6 @@ theorem get_ok_inv {B : Core.Blobs} {d w : String} {b : ByteArray} (h : B.get d 
     split at h
     · cases h
     next hc =>
-      (try simp only [pure_bind] at h)
-      (try dsimp only at h)
       split at h
       · rename_i y b' heq
         cases h
@@ -294,11 +292,11 @@ theorem circuitOf_sha {b : ByteArray} {c : Flock.Circuit}
     rcases (FlockSoundness.Discharge.Hidden.parse_cases h).2 with ⟨-, h1⟩ | ⟨k, b', tm, c₀, h1, rfl⟩ |
         ⟨k, u, c₀, h1, rfl⟩
     · exact FlockSoundness.Discharge.Exec.parse_sha_pre h1
-    · exact FlockSoundness.Discharge.Exec.parse_sha_tmpl h1
-    · exact FlockSoundness.Discharge.Exec.parse_sha_pre h1
+    · exact FlockSoundness.Discharge.Exec.parse_sha_tmpl (c := c₀) h1
+    · exact FlockSoundness.Discharge.Exec.parse_sha_pre (c := c₀) h1
   · rw [FlockSoundness.parseCommit_tmpl ht] at h
     obtain ⟨tu, c₀, h1, -, -, rfl⟩ := FlockSoundness.TmplValue.parseTmpl_cases h
-    exact FlockSoundness.Discharge.Exec.parse_sha_pre h1
+    exact FlockSoundness.Discharge.Exec.parse_sha_pre (c := c₀) h1
 
 theorem ofFile_sha {scan : Bool} {b : ByteArray} {x : ByteArray × Flock.Circuit}
     (h : NetworkCheck.Period.ofFile scan b = .ok x) : x.1 = Flock.Sha512.hash b := by
@@ -348,7 +346,6 @@ theorem circuitsWhy_none {l : NetworkCheck.Period.Listing} {fs : Array (ByteArra
     rcases hg : fs[i] with ⟨sha, cf⟩
     rw [hf] at this
     (try rw [hg] at this)
-    (try rw [hg])
     dsimp only at this
     exact (fileWhy_sha this).symm
 
@@ -378,7 +375,7 @@ theorem files_split (l : NetworkCheck.Period.Listing) :
       obtain ⟨k, -, rfl⟩ := Array.mem_map.1 hy
       rfl
   · unfold NetworkCheck.Period.Listing.scanFiles
-    cases h : l.scan <;> simp [Array.flatMap_singleton]
+    cases h : l.scan <;> simp
 
 theorem flag_at (l : NetworkCheck.Period.Listing) :
     ∀ i (hi : i < l.files.size), l.files[i].2.1 = decide (l.files.size - l.scanFiles ≤ i) := by
@@ -540,18 +537,18 @@ theorem noTable_of_read {n : Nat} {cs : Array ByteArray}
 
 /-! ## Compositions whose components accept as much -/
 
-/-- `X` is `Y` with a check that accepts whatever `Y`'s accepts. -/
-inductive BlobCovers (X Y : Core.Protocol) : Prop
-  | intro (g : Y.Params → Y.Commitment → Y.Evidence → Core.Outcome Y.Public Y.Profile)
-      (eq : X = { Y with check := g })
-      (acc : ∀ p c e pub prof, Y.check p c e = .accept pub prof → g p c e = .accept pub prof)
+/-- `Pa` is `Pb` with a check that accepts whatever `Pb`'s accepts. -/
+inductive BlobCovers (Pa Pb : Core.Protocol) : Prop
+  | intro (g : Pb.Params → Pb.Commitment → Pb.Evidence → Core.Outcome Pb.Public Pb.Profile)
+      (eq : Pa = { Pb with check := g })
+      (acc : ∀ p c e pub prof, Pb.check p c e = .accept pub prof → g p c e = .accept pub prof)
 
 theorem covers_onBlobs (P : Core.BlobProtocol) (B1 B2 : Core.Blobs)
     (hm : ∀ p c e pub prof, P.checkBlobs p c e B1 = .accept pub prof → P.checkBlobs p c e B2 = .accept pub prof) :
     BlobCovers (P.onBlobs B2) (P.onBlobs B1) :=
   ⟨fun p c e => P.checkBlobs p c e B2, rfl, hm⟩
 
-theorem covers_id {X Y : Core.Protocol} (h : BlobCovers X Y) : X.id = Y.id := by
+theorem covers_id {Pa Pb : Core.Protocol} (h : BlobCovers Pa Pb) : Pa.id = Pb.id := by
   obtain ⟨g, rfl, -⟩ := h
   rfl
 
@@ -563,18 +560,18 @@ theorem answer_eq_of (P : Core.Protocol) {a b e : ByteArray} {p : P.Params} {c :
   unfold Core.Protocol.answer
   simp only [hp, hc, he, hk] <;> rfl
 
-theorem answer_of_covers {X Y : Core.Protocol} (h : BlobCovers X Y) {a b e : ByteArray}
-    (hy : (Y.answer a b e).verdict = .accept) : X.answer a b e = Y.answer a b e := by
+theorem answer_of_covers {Pa Pb : Core.Protocol} (h : BlobCovers Pa Pb) {a b e : ByteArray}
+    (hy : (Pb.answer a b e).verdict = .accept) : Pa.answer a b e = Pb.answer a b e := by
   obtain ⟨g, rfl, hg⟩ := h
-  obtain ⟨p, c, ev, hp, hc, he, pub, prof, hk⟩ := Properties.Composition.answerAccepts Y a b e hy
-  rw [answer_eq_of Y hp hc he hk, answer_eq_of { Y with check := g } hp hc he (hg p c ev pub prof hk)]
+  obtain ⟨p, c, ev, hp, hc, he, pub, prof, hk⟩ := Properties.Composition.answerAccepts Pb a b e hy
+  rw [answer_eq_of Pb hp hc he hk, answer_eq_of { Pb with check := g } hp hc he (hg p c ev pub prof hk)]
   all_goals rfl
 
 /-- Each of `xs` covers its place in `ys`. -/
 inductive AllCover : List Core.Protocol → List Core.Protocol → Prop
   | nil : AllCover [] []
-  | cons {X Y : Core.Protocol} {xs ys : List Core.Protocol} : BlobCovers X Y → AllCover xs ys →
-      AllCover (X :: xs) (Y :: ys)
+  | cons {Pa Pb : Core.Protocol} {xs ys : List Core.Protocol} : BlobCovers Pa Pb → AllCover xs ys →
+      AllCover (Pa :: xs) (Pb :: ys)
 
 theorem AllCover.ids {xs ys : List Core.Protocol} (h : AllCover xs ys) : xs.map (·.id) = ys.map (·.id) := by
   induction h with
@@ -585,14 +582,14 @@ theorem AllCover.zip_snd {xs ys : List Core.Protocol} (h : AllCover xs ys) {γ :
     ∀ (zs : List γ) (x : Core.Protocol × γ), x ∈ xs.zip zs → ∃ y, (y, x.2) ∈ ys.zip zs := by
   induction h with
   | nil => intro zs x hx; simp at hx
-  | @cons X Y xs ys _ _ ih =>
+  | @cons Pa Pb xs ys _ _ ih =>
     intro zs x hx
     cases zs with
     | nil => simp at hx
     | cons z zs =>
       rw [List.zip_cons_cons, List.mem_cons] at hx
       rcases hx with rfl | hx
-      · exact ⟨Y, by simp⟩
+      · exact ⟨Pb, by simp⟩
       · obtain ⟨y, hy⟩ := ih zs x hx
         exact ⟨y, by simp [hy]⟩
 
@@ -600,7 +597,7 @@ theorem committedBy_covers {xs ys : List Core.Protocol} (h : AllCover xs ys) (s 
     ∀ ev, Core.Composition.committedBy s xs ev = Core.Composition.committedBy s ys ev := by
   induction h with
   | nil => intro ev; rfl
-  | @cons X Y xs ys hc _ ih =>
+  | @cons Pa Pb xs ys hc _ ih =>
     intro ev
     obtain ⟨g, rfl, -⟩ := hc
     cases ev with
@@ -609,7 +606,7 @@ theorem committedBy_covers {xs ys : List Core.Protocol} (h : AllCover xs ys) (s 
       have ih' := ih ev
       unfold Core.Composition.committedBy at ih' ⊢
       simp only [List.zip_cons_cons, List.find?_cons]
-      cases hb : (Y.id == s) <;> (try simp only [hb]) <;> first | rfl | exact ih'
+      cases hb : (Pb.id == s) <;> (try simp only [hb]) <;> first | rfl | exact ih'
 
 theorem strays_covers {xs ys : List Core.Protocol} (h : AllCover xs ys) (ss : List String)
     (ev : List Core.Composition.Case) : Core.Composition.strays ss xs ev = Core.Composition.strays ss ys ev := by
@@ -623,7 +620,7 @@ theorem answersOf_covers {xs ys : List Core.Protocol} (h : AllCover xs ys) :
       Core.Composition.answersOf xs ps ev = Core.Composition.answersOf ys ps ev := by
   induction h with
   | nil => intro ps ev _; rfl
-  | @cons X Y xs ys hc _ ih =>
+  | @cons Pa Pb xs ys hc _ ih =>
     intro ps ev hacc
     cases ps with
     | nil => rfl
@@ -631,20 +628,22 @@ theorem answersOf_covers {xs ys : List Core.Protocol} (h : AllCover xs ys) :
       cases ev with
       | nil => rfl
       | cons k ev =>
-        have hY := hacc (Y, n, k) (by simp [Properties.Composition.triples])
+        have hY := hacc (Pb, n, k) (by simp [Properties.Composition.triples])
         have hrest := ih ps ev fun x hx => hacc x (by
           simp only [Properties.Composition.triples, List.zip_cons_cons] at hx ⊢
           exact List.mem_cons_of_mem _ hx)
-        show (X.id, X.answer n.params.toUTF8 k.commitment k.evidence) :: Core.Composition.answersOf xs ps ev =
-          (Y.id, Y.answer n.params.toUTF8 k.commitment k.evidence) :: Core.Composition.answersOf ys ps ev
+        show (Pa.id, Pa.answer n.params.toUTF8 k.commitment k.evidence) :: Core.Composition.answersOf xs ps ev =
+          (Pb.id, Pb.answer n.params.toUTF8 k.commitment k.evidence) :: Core.Composition.answersOf ys ps ev
         rw [answer_of_covers hc hY, covers_id hc, hrest]
 
 theorem run_covers {xs ys : List Core.Protocol} (h : AllCover xs ys) {ps : List Core.Composition.Named}
     {ev : List Core.Composition.Case} {answers} (hr : Core.Composition.run ys ps ev = .ok answers) :
     Core.Composition.run xs ps ev = .ok (Core.Composition.answersOf xs ps ev) := by
   obtain ⟨h1, h2, h3, -⟩ := Properties.Composition.run_ok hr
+  have e1 : ps.map (·.id) = xs.map (·.id) := h1.trans h.ids.symm
+  have e2 : ev.map (·.id) = xs.map (·.id) := h2.trans h.ids.symm
   unfold Core.Composition.run
-  simp only [h.ids, h1, h2, ne_eq, not_true_eq_false, ↓reduceIte]
+  simp only [e1, e2, ne_eq, eq_self_iff_true, not_true_eq_false, ↓reduceIte]
   split
   · rename_i P n' k' heq
     obtain ⟨y, hy⟩ := h.zip_snd _ _ (List.mem_of_find?_eq_some heq)
@@ -729,7 +728,8 @@ theorem push_all {I rd programSha want} {r : Run} {s : RunFiles} {record st coin
       obtain ⟨units, -, h⟩ := bindOk_split h
       cases h
       exact hr'
-    · simp only [hc, ↓reduceIte] at h <;> cases h
+    · simp only [hc, ↓reduceIte] at h
+      cases h
 
 theorem push_mono {I rd programSha want} {r : Run} {s : RunFiles} {record st coinKey} {v1 v2 : V Unit} {r' : Run}
     (h : SampledProofs.OneStageZk.push I rd programSha want r s record st coinKey v1 = .ok r')
@@ -762,7 +762,9 @@ theorem step_mono (hB : BlobSup B1 B2) {I rd scope ksFiles programSha want} {r :
   obtain ⟨x, hx, h⟩ := bindOk_split h
   rw [hB.get _ _ _ hx, ok_bind]
   cases hrec : String.fromUTF8? x with
-  | none => simp only [hrec] at h <;> cases h
+  | none =>
+    simp only [hrec] at h
+    cases h
   | some record =>
     simp only [hrec] at h ⊢
     exact push_mono h hr' (verdictOf_ext (zk_filesOf_ext hB _ _))
@@ -773,7 +775,9 @@ theorem step_all {I rd scope ksFiles programSha want} {r : Run} {s : RunFiles} {
   unfold SampledProofs.OneStageZk.step at h
   obtain ⟨x, -, h⟩ := bindOk_split h
   cases hrec : String.fromUTF8? x with
-  | none => simp only [hrec] at h <;> cases h
+  | none =>
+    simp only [hrec] at h
+    cases h
   | some record =>
     simp only [hrec] at h
     exact push_all h hr'
@@ -877,10 +881,7 @@ theorem zk_mono (hB : BlobSup B1 B2) {p : SampledProofs.OneStageZk.Params} {c}
     SampledProofs.OneStageZk.checkBlobs p c e B2 = .accept pub prof := by
   unfold SampledProofs.OneStageZk.checkBlobs Core.atCoins at h ⊢
   split at h
-  · rename_i ξ hξ
-    rw [hξ]
-    dsimp only
-    exact zk_at_mono hB h
+  · exact zk_at_mono hB h
   · cases h
 
 end Zk
@@ -975,19 +976,15 @@ theorem partVerdicts_ext (hB : BlobSup B1 B2) (o : VStar.Recursive.Own) (pr : VS
   exact ok_of_toBool (Array.all_eq_true'.1 hb x (by simpa using hx))
 
 theorem canon_bool (b : Bool) : Flock.canon (.bool b) = .ok (if b then "true" else "false") := by
-  first
-    | (simp only [Flock.canon]; done)
-    | (simp only [Flock.canon]; rfl)
-    | (unfold Flock.canon; rfl)
+  simp only [Flock.canon]
+  rfl
 
 theorem jeq_bool {b : Bool} (h : SampledProofs.jeq (.bool b) (.bool true) = true) : b = true := by
   cases b with
   | false =>
     unfold SampledProofs.jeq at h
     rw [canon_bool, canon_bool] at h
-    first
-      | (simp at h)
-      | (revert h; decide)
+    simp at h
   | true => rfl
 
 theorem ok_of_verdictsAccept {name : String} {ok : Bool} {session why : String} {units : Array Nat}
@@ -1026,8 +1023,6 @@ theorem rec_mono (hB : BlobSup B1 B2) {p : VStar.Recursive.Params} {c} {e : VSta
   split at h
   · cases h
   rename_i session hs
-  rw [hs]
-  dsimp only
   split at h
   · cases h
   rename_i vs hv
@@ -1051,7 +1046,7 @@ theorem sampled_mono (hB : BlobSup B1 B2) {p : VStar.Recursive.Sampled.Params} {
 
 theorem sampled_covers (hB : BlobSup B1 B2) :
     BlobCovers (VStar.Recursive.Sampled.protocol.onBlobs B2) (VStar.Recursive.Sampled.protocol.onBlobs B1) :=
-  covers_onBlobs _ B1 B2 fun _ _ _ _ _ h => sampled_mono hB h
+  covers_onBlobs VStar.Recursive.Sampled.protocol B1 B2 fun _ _ _ _ _ h => sampled_mono hB h
 
 end Recursive
 
