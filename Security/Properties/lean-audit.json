@@ -749,6 +749,11 @@
   "Properties.NetworkCertifier.malformedEvidenceRejects": "610d10605450ee5a7692a41365797df1a88df14c95600e19330475dd2335d953",
   "Properties.NetworkCertifier.undecidedPending": "a05ea3c29485b57f1351694086727a7e589280465cbb3946d268bc09227a7edb",
   "Properties.NetworkCertifier.undigestedParamsReject": "3336933546d64f572ec7438b455edf45e362bad2977349e223b6eaa67961b9e5",
+  "Properties.NetworkPeriod.forcedZeroUnfilled": {
+   "type_hash": "de536d49537844984131dcad9bb3fe06ef4bca23051decd873d53fed873ff767",
+   "missing": "honest",
+   "why": "its honest instance is a session that Flock.ProvedScope.check and Flock.Stmt.setupTables both accept: a circuit file, its public file and coins, which a proof would evaluate in the kernel through the file's whole parse, its SHA-512 digests and the layout checks; no lemma evaluates either at a literal session yet, and flock-verify's runs at the deployed files are what show that honest serving passes"
+  },
   "Properties.NetworkPeriod.rowsProgWired": "0502e075152ebf47d211770a9e202de0d9cc08f5aecf8ed493fe98f5140d3bad",
   "Properties.NetworkPeriod.rowsProgWired_nontrivial": "4bddc27479aba4a1049243d85d661eb3081f1922e067d71e8783a5cdd77c6d1c",
   "Properties.NetworkPeriod.rowsStateTied": "9404e8c98194fe63381cfeae308acc528bb4f66d2e8536b3c02ef613431d4c4b",
