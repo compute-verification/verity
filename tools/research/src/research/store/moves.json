@@ -1516,6 +1516,12 @@
         "benchmarks/e2e_h200/": "examples/h200/",
         "benchmarks/e2e_demo/": "examples/h200/interfaces/"
       }
+    },
+    {
+      "paths": {
+        "Security/Definitions/Population/DrawPressure.lean": "Security/Definitions/Population/SamplePressure.lean",
+        "Security/Proofs/Population/DrawPressure.lean": "Security/Proofs/Population/SamplePressure.lean"
+      }
     }
   ]
 }
