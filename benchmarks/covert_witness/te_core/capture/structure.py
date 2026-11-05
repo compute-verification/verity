@@ -847,7 +847,7 @@ class StepGraph:
                 if flow.phase[p] == "forward" and flow.step[p] == flow.step[v]:
                     m |= anc[p] | own.get(p, 0)
             anc[v] = m
-        per_tok = [Fraction(_macs(recs[i][1].dims), tokens_of(recs[i][0])) for i in fwd]
+        upstream = _bit_sums([_macs(recs[i][1].dims) for i in fwd], [tokens_of(recs[i][0]) for i in fwd])
         gemm_mask = 0
         for bit, i in enumerate(fwd):
             if recs[i][1].part != "elementwise":
@@ -863,7 +863,7 @@ class StepGraph:
                         for x in flow.reads.get((n, a), ()):
                             if flow.phase[x] == "forward" and flow.step[x] == st:
                                 m |= anc[x] | own.get(x, 0)
-            up_macs = sum((per_tok[b] for b in _bits(m)), Fraction(0))
+            up_macs = upstream(m)
             dtypes = tuple(str(a.meta["val"].dtype).removeprefix("torch.") for a in g.operands
                            if isinstance(a, torch.fx.Node) and isinstance(a.meta.get("val"), torch.Tensor))
             matmuls.append(Matmul(n.name, str(n.target), g.part, phases.get(n, "forward"), _macs(g.dims), dict(g.dims), tdims,
@@ -1240,13 +1240,19 @@ def _step_circuit(flow: _Flow, nodes: list, region: int, dep: list[bool], carrie
 
 
 
-def _bits(m: int):
-    i = 0
-    while m:
-        if m & 1:
-            yield i
-        m >>= 1
-        i += 1
+def _bit_sums(macs: list[int], tokens: list[int]):
+    """The bitset m -> the sum of macs[b] / tokens[b] over its set bits b, exactly, in one pass over m's bytes: walking
+    m bit by bit is quadratic in its width, which a generation round's decode makes wide."""
+    width, k = (len(macs) + 7) // 8, len(macs)
+    vals = np.array(macs, dtype=np.int64 if sum(macs) < 2 ** 63 else object)
+    groups = [(t, np.array(tokens) == t) for t in sorted(set(tokens))]
+
+    def total(m: int) -> Fraction:
+        if not m:
+            return Fraction(0)
+        on = np.unpackbits(np.frombuffer(m.to_bytes(width, "little"), dtype=np.uint8), bitorder="little")[:k].astype(bool)
+        return sum((Fraction(int(vals[on & g].sum()), t) for t, g in groups), Fraction(0))
+    return total
 
 
 def _popcount(m: int) -> int:
