@@ -34,7 +34,7 @@ The plan is one graph of outcomes. Daniel reads it on the console's Goals page; 
 - **Today's step, as a goal of its own.** An open goal due within a week waits on a tier-3 goal due within a day: write
   the step (`research goals set SUB --tier 3 ...`), then list it among what the parent waits on (`--wait goal:SUB`,
   repeated for every link, since `--wait` replaces the list). A goal has no separate next-step field, and the site
-  refuses one (Daniel, 5 Nov).
+  refuses one.
 - **A status:** `on-track`, `off-track` or `done`, your forecast of whether it will be true by its date.
   - Off track says why: link what it waits on, or say what's wrong in `--blockers`. The site refuses an off-track goal
     with neither.
@@ -61,7 +61,7 @@ The plan is one graph of outcomes. Daniel reads it on the console's Goals page; 
     the state that finishes it.
   - Tier 2, a piece of a project: a dated state you can check. The soundness theorem and the H200 accounting are
     pieces of the remote demo; a full check's time is a piece of "Efficient automated tasks".
-  - Tier 3, a step toward a piece.
+  - Tier 3, a step toward a piece, due within a day.
 - **The tier is derived:** a project waits on its pieces (`--wait goal:ID`), so a goal nothing waits on is tier 1, and
   one is a tier deeper than the shallowest goal that needs it, down to 3. `--tier N` overrides it; `--no-tier` goes
   back to the derived one.
