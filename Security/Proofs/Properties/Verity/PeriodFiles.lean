@@ -1217,7 +1217,7 @@ def emptySync : NetworkCertifier.SyncSet where
     intro ρ h
     rw [List.mem_singleton] at h
     subst h
-    first | decide | norm_num
+    decide
   deltas_nodup := by simp
   rhos_nodup := by simp
 
@@ -1240,22 +1240,14 @@ def emptyCommitment : NetworkCheck.Period.Commitment := ⟨#[], #[], .empty⟩
 
 def emptyEvidence : NetworkCheck.Period.Evidence := ⟨#[], #[]⟩
 
-theorem zip_nil_l {α β : Type} (bs : Array β) : (#[] : Array α).zip bs = #[] :=
-  Array.eq_empty_of_size_eq_zero (by simp only [Array.size_zip, Array.size_empty, Nat.zero_min])
-
-theorem zipIdx_nil {α : Type} (k : Nat) : (#[] : Array α).zipIdx k = #[] :=
-  Array.eq_empty_of_size_eq_zero (by simp only [Array.size_zipIdx, Array.size_empty])
-
 theorem empty_check : NetworkCheck.Period.check emptyParams emptyCommitment emptyEvidence =
     .accept (NetworkCheck.Period.terms #[] #[] #[] 0 1 0) { link := "", windows := 0 } := by
   simp [NetworkCheck.Period.check, emptyParams, emptyCommitment, emptyEvidence, emptySync,
     NetworkCheck.Period.auditChecks, NetworkCheck.Period.wiredChecks, NetworkCheck.Period.stateChecks,
-    NetworkCheck.Period.heldChecks, NetworkCheck.Period.rowsWfCheck, NetworkCheck.Period.firstFinding,
-    zip_nil_l, zipIdx_nil, Array.map_empty]
+    NetworkCheck.Period.heldChecks, NetworkCheck.Period.rowsWfCheck, NetworkCheck.Period.firstFinding]
 
 theorem unlisted_files : ({} : NetworkCheck.Period.Listing).files = #[] :=
-  Array.eq_empty_of_size_eq_zero
-    (files_unlisted (by simp [NetworkCheck.Period.Listing.listed, Array.any_empty]))
+  Array.eq_empty_of_size_eq_zero (files_unlisted (by simp [NetworkCheck.Period.Listing.listed]))
 
 /-- **At an empty period, the network certifier's period read by path accepts, and the verifier of record's answers
 the same**: no link-windows, no audits and no circuit files, none read and no blobs. -/
@@ -1266,22 +1258,24 @@ theorem empty_leg :
         (Core.Blobs.ofArray #[]) =
           .accept (NetworkCheck.Period.terms #[] #[] #[] 0 1 0) { link := "", windows := 0 } := by
   have hl : ({} : NetworkCheck.Period.Listing).listed = false := by
-    simp [NetworkCheck.Period.Listing.listed, Array.any_empty]
+    simp [NetworkCheck.Period.Listing.listed]
   have hr : NetworkCheck.Period.ofRead 0 #[] = .ok #[] := by
-    simp [NetworkCheck.Period.ofRead, zipIdx_nil]
+    simp [NetworkCheck.Period.ofRead]
+    rfl
   have hb : NetworkCheck.Period.filesOf {} (Core.Blobs.ofArray #[]) = .ok #[] := by
-    simp [NetworkCheck.Period.filesOf, NetworkCheck.Period.blobsOf, NetworkCheck.Period.ofFiles, unlisted_files,
-      zipIdx_nil, zip_nil_l]
+    simp [NetworkCheck.Period.filesOf, NetworkCheck.Period.blobsOf, NetworkCheck.Period.ofFiles, unlisted_files]
+    rfl
   have hp : NetworkCheck.Period.pinnedTableOf #[] = none := by
-    simp [NetworkCheck.Period.pinnedTableOf, zipIdx_nil]
+    simp [NetworkCheck.Period.pinnedTableOf]
   have hf : NetworkCheck.Period.filesCheck (.ok #[]) (emptyParams, {}) emptyCommitment emptyEvidence =
       .accept (NetworkCheck.Period.terms #[] #[] #[] 0 1 0) { link := "", windows := 0 } := by
-    simp [NetworkCheck.Period.filesCheck, hp, hl, Array.isEmpty_empty, empty_check]
+    simp [NetworkCheck.Period.filesCheck, hp, hl, empty_check]
   refine ⟨?_, ?_⟩
   · simp [NetworkCheck.Period.readCheck, NetworkCheck.Period.Listing.scanFiles, hr, hf]
   · show NetworkCheck.Period.filesCheck (NetworkCheck.Period.filesOf {} (Core.Blobs.ofArray #[])) (emptyParams, {})
       emptyCommitment emptyEvidence = _
-    rw [hb, hf]
+    rw [hb]
+    exact hf
 
 end Verity.PeriodFiles
 
