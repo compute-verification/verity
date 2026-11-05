@@ -985,7 +985,7 @@ def test_the_record_lists_the_re_proof_inputs_and_which_of_outs_the_run_wrote(tm
     serve = {k for k, v in got["inputs"].items() if v["in"] == "serve dir"}
     assert {"values", "openings", "draw", "coins", "advice", "weights"} <= serve
     assert not any("present" in got["inputs"][k] for k in serve) and not SV.NAMED.search(json.dumps(got))
-    written = {OR.REGISTRATION, str(OR.CASE), "record/verdicts.json"}
+    written = {OR.REGISTRATION, str(OR.CASE), "record/verdicts.json", str(OR.AUDIT)}
     assert {v["path"]: v["present"] for v in got["inputs"].values() if v["in"] == "OUT"} == {
         v[1]: v[1] in written for v in OR.REPROOF.values() if v[0] == "OUT"}
     for at, path, _ in OR.REPROOF.values():
