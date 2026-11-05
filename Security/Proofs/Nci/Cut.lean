@@ -1,13 +1,15 @@
-import Definitions.Nci.Guarantees.Cut
-import Proofs.Core.Circuit
-import Proofs.Nci.Covering
-import Proofs.Nci.LoomisWhitneyBase
-import Mathlib.Algebra.BigOperators.Field
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Analysis.SpecificLimits.Basic
-import Mathlib.Combinatorics.Enumerative.DoubleCounting
-import Mathlib.Combinatorics.SimpleGraph.Extremal.Turan
-import Mathlib.Data.Fintype.BigOperators
+module
+
+public import Definitions.Nci.Guarantees.Cut
+public import Proofs.Core.Circuit
+public import Proofs.Nci.Covering
+public import Proofs.Nci.LoomisWhitneyBase
+public import Mathlib.Algebra.BigOperators.Field
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Analysis.SpecificLimits.Basic
+public import Mathlib.Combinatorics.Enumerative.DoubleCounting
+public import Mathlib.Combinatorics.SimpleGraph.Extremal.Turan
+public import Mathlib.Data.Fintype.BigOperators
 
 /-!
 # The min-cut bound, its slowdown, and its corollaries
@@ -45,6 +47,8 @@ share a pair of values) and applies AM–GM (`amgm_bound`). With shared arrays, 
 `HE` and `HEShared` put those bounds on `Π(k)`, and `b ≤ b_y` from (E) (`le_bY`, `alpha_le_of_exports`), into
 `Bound` (`bound_of_le`), and take the slowdown from the bound so obtained (`slowdown_of_bound`).
 -/
+
+@[expose] public section
 
 namespace Nci.Cut.SecurityProofs
 

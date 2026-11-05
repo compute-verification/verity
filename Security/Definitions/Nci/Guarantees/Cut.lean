@@ -1,5 +1,7 @@
-import Definitions.Nci.Assumptions.Cut
-import Definitions.Nci.Cut.Toy
+module
+
+public import Definitions.Nci.Assumptions.Cut
+public import Definitions.Nci.Cut.Toy
 
 /-!
 # The min-cut bound and its slowdown
@@ -14,6 +16,8 @@ partition into blocks of at most `c` gates, each priced at `c`.
 The witnesses that each says something are at the toy (`Nci.Cut.Toy`): `Cut_honest`, their premises holding together,
 and each statement's `_nontrivial`, the toy beating its bound once the block cap `ReadsAtMost` is dropped.
 -/
+
+@[expose] public section
 
 namespace Nci.Cut.Guarantees
 

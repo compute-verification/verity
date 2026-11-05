@@ -1,4 +1,6 @@
-import Definitions.Nci.Cut
+module
+
+public import Definitions.Nci.Cut
 
 /-!
 # The min-cut bound's cut conjectures, (H) and (E)
@@ -18,6 +20,8 @@ circuit: each is a cut conjecture, refuted by one set of gates that beats it.
 
 Both count gates of the circuit and its values, never a value's width.
 -/
+
+@[expose] public section
 
 namespace Nci.Cut.Assumptions
 

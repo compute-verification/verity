@@ -1,4 +1,6 @@
-import Proofs.Nci.Cut
+module
+
+public import Proofs.Nci.Cut
 
 /-!
 # The min-cut statements say something
@@ -11,6 +13,8 @@ MAC is its output's one wire, so no set of gates finishes an output it holds no 
 every `b`. One block holding both MACs reads the three inputs (`toy_reads_P1`); a block for each reads two
 (`toy_reads_P2`).
 -/
+
+@[expose] public section
 
 namespace Nci.Cut.SecurityProofs
 

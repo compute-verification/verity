@@ -1,4 +1,6 @@
-import Definitions.Nci.Cut
+module
+
+public import Definitions.Nci.Cut
 
 /-!
 # A toy for the min-cut statements
@@ -11,6 +13,8 @@ its own value (`val`), and the arrays are `W`'s `w`-words and its `x`-words (`ar
 edge `(0, 1)` (`edge`). `P1` puts both computed gates in one block, which reads the three inputs; `P2` gives each its
 own, which reads two.
 -/
+
+@[expose] public section
 
 namespace Nci.Cut.Toy
 

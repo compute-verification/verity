@@ -1,7 +1,9 @@
-import Definitions.Core.Formalism
-import Definitions.Nci.Covering
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Mathlib.Combinatorics.SimpleGraph.Clique
+module
+
+public import Definitions.Core.Formalism
+public import Definitions.Nci.Covering
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
+public import Mathlib.Combinatorics.SimpleGraph.Clique
 
 /-!
 # The min-cut statement of the training slowdown: its vocabulary
@@ -36,6 +38,8 @@ edge of a graph with no clique of `ω + 1` (`Arrays`), at least `q` a pair of va
 conjectures bound the work: (H) and (E) (`Definitions.Nci.Assumptions.Cut`). The guarantees are
 `Definitions.Nci.Guarantees.Cut`'s.
 -/
+
+@[expose] public section
 
 namespace Nci.Cut
 

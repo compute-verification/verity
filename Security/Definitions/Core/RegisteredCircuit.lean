@@ -1,4 +1,6 @@
-import Definitions.Core.Site
+module
+
+public import Definitions.Core.Site
 
 /-!
 # The registered circuit
@@ -23,6 +25,8 @@ an input gate of `d` outside `d.θ`. Containment carries over as it is between t
 that a containment keeps fresh input fresh is a premise about the protocol's rule for `θ`
 (`Nci.Assumptions.ThetaRegistered`), which each guarantee that needs it takes for its containment.
 -/
+
+@[expose] public section
 
 namespace Verity
 
