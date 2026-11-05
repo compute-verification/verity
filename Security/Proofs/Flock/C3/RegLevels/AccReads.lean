@@ -79,11 +79,8 @@ theorem names_of_checkAcc {s : VStar.Stmt} {own : Array Flock.Registered.Port}
   split at h
   · cases h
   · rename_i hd
-    simp only [Flock.RecVStar.dupName?, List.find?_eq_none] at hd
-    have hnd : (own.toList.map (·.name)).Nodup :=
-      List.nodup_iff_count_eq_one.2 fun nm hm => by simpa using hd nm hm
     intro p hp p' hp' he
-    exact List.inj_on_of_nodup_map hnd (Array.mem_toList_iff.2 hp) (Array.mem_toList_iff.2 hp') he
+    exact Flock.Registered.dupName?_none hd p' (Array.mem_toList_iff.2 hp') p (Array.mem_toList_iff.2 hp) he
 
 /-- **`checkAcc`'s first loop**: each of the statement's `accPorts` is `own`'s first entry of its name, reading
 `rec-acc`. -/
