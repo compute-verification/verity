@@ -30,7 +30,9 @@ msg owners PATH...` names each path's owner (longest prefix).
   with a doorbell (`from AUTHOR, thread T: ...`); the holder's own posts never ring it. The route names the holder:
   `names open --as HANDLE --succeeds` takes a handle over, `names open --as HANDLE` on a new branch adds its suffix, and
   `--poster BC_ID` lets another agent post as it, subscribed to the inbox itself: its post naming the handle rings the
-  holder (so a handover's outgoing generation reaches the incoming one), and that doorbell wakes the poster too. `--as
+  holder (so a handover's outgoing generation reaches the incoming one), and that doorbell wakes the poster too.
+  `names revoke --as HANDLE --poster BC_ID` takes one off again and leaves the inbox open; `names close` closes the whole
+  name, and refuses an option it doesn't read, `--poster` among them. `--as
   NAME` takes only a name your agent id holds or posts for (`$RESEARCH_AGENT_URL`, else your Cursor identity).
 - **User groups have no members**, so tagging a handle notifies no person; `groups sync` never sets members, and a
   handle's old group ids, its `retired_usergroups`, still route.

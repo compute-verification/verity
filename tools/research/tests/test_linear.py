@@ -25,7 +25,7 @@ PROJECTS = [{"id": "PJ1", "name": "E2E toy deployment on one H200", "projectMile
 
 
 class FakeLinear:
-    """Linear's token endpoint and GraphQL API: one team per name in `teams`, labels made on first use; the parent CMP-92 on
+    """Linear's token endpoint and GraphQL API: one team per name in `teams`, labels made on first use; the parent (id `P1`) on
     PJ1's M3, the active `projects`, the open issues the audit pages through (`open`), the team keys the credentials see
     (`visible`, default the teams'), the team of the issue a comment reads (`team_key`), the issues' `relations` (an
     issue's id is `I-` and its identifier), the workspace's `users`, the asked team's active projects (`team_projects`,
@@ -840,7 +840,7 @@ def test_edit_from_the_cli_replaces_the_description_with_the_file_and_a_dry_run_
 
 def test_a_lanes_worker_comments_as_lane_slash_name_through_the_app_and_rings_no_one(fake, registry, routes_dirs, capsys, lin,
                                                                                      monkeypatch, tmp_path):
-    """Workers hold no handle, so `--as` refuses them; the Linear MCP connector, their other way to comment, acts as Daniel."""
+    """Workers hold no handle, so `--as` refuses them; the Linear MCP connector, their other way to comment, acts as whoever connected it."""
     monkeypatch.setenv("LINEAR_CLIENT_ID", APP["LINEAR_CLIENT_ID"])
     monkeypatch.setenv("LINEAR_CLIENT_SECRET", APP["LINEAR_CLIENT_SECRET"])
     monkeypatch.setenv("RESEARCH_LINEAR_TOKEN_CACHE", str(tmp_path / "tok"))
