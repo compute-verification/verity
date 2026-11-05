@@ -84,7 +84,8 @@ def check_report(rep: dict) -> None:
     assert mods["Proofs.Flock.Main"]["kept_only_by"]["defeq"] == 1
     assert core["unread_cited_in_docs"] == ["Core.unusedHelper"]
     assert mods["Definitions.Checks"]["kept_only_by"]["cited"] == 1
-    assert rep["cited_by_code"]["Definitions.Checks"] == ["tools/reader.toml"]
+    assert rep["cited_by_code"]["Definitions.Checks"] == ["tools/checks.py"]
+    assert "Definitions.Dead" not in rep["cited_by_code"], "a module a record names (tools/reader.toml) keeps nothing"
     assert mods["Definitions.Attr"]["foreign_attributes"] == ["Core.unusedLemma"]
     dead = rep["areas"]["Definitions/Dead"]
     assert (dead["wholly_unread_modules"], dead["wholly_unread_lines"]) == (1, mods["Definitions.Dead"]["lines"])

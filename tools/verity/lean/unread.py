@@ -23,8 +23,9 @@ constant to the declaration it belongs to. The seeds:
   which `dsimp` and `simp only [t]` use with no trace in the proof term, and the instances of the coercion classes
   (`COERCION`), which elaboration unfolds where it inserts a coercion (`(w : Nat)` becomes `unwrap w`);
 - every declaration of the analysis trees that a file outside Lean names in full (`.py`, `.json`, `.toml`, `.rs`, `.sh`,
-  ...; `CITED_BY`), and every declaration of a module such a file names (its dotted name, or its file's path from the
-  root or from its package's source directory), so a test, a generator or a tool that reads one keeps it.
+  ...; `CITED_BY`), and every declaration of a module that code or a suite's `pyproject.toml` names (`MODULE_CITED_BY`:
+  its dotted name, or its file's path from the root or from its package's source directory), so a test, a generator or
+  a tool that reads one keeps it.
 
 The `@[defeq]` theorems, the coercion instances, the lock-listed modules and the cited names are seeds to be safe
 (`CAUTIOUS`): the report counts what each alone keeps (`kept_only_by`).
@@ -92,6 +93,9 @@ CAUTIOUS_TEXT = {"defeq": "`@[defeq]` theorems", "coercion": "coercion instances
                  "cited": "names in files outside Lean"}
 #: the files outside Lean whose full mention of a declaration keeps it (a test or tool reading it by name)
 CITED_BY = (".py", ".json", ".toml", ".rs", ".sh", ".yaml", ".yml", ".txt", ".ts", ".js", ".cfg")
+#: the files whose naming of a module keeps it: code, and a suite's declared inputs (`pyproject.toml`); data that only
+#: records a module's name (a map of moves, an allowlist, a lakefile's roots) keeps nothing
+MODULE_CITED_BY = (".py", ".sh", ".rs", ".ts", ".js")
 #: the files whose mention of a declaration is reported but keeps nothing
 DOCS = (".md",)
 #: a cited file larger than this is data, not code
@@ -297,9 +301,9 @@ def lock_seeds(tree: Tree) -> tuple[set[str], set[str]]:
 
 
 def citations(tree: Tree, candidates: set[str], modules: dict[str, str]) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
-    """The candidate names files outside Lean mention in full, and the modules they name (``modules``: a module's dotted
-    name and its file's paths, from the root and from its package's source directory, each to the module): by code
-    (`CITED_BY`), and by docs (`DOCS`), each with the files."""
+    """The candidate names files outside Lean mention in full, and the modules code names (`MODULE_CITED_BY`;
+    ``modules``: a module's dotted name and its file's paths, from the root and from its package's source directory, each
+    to the module): by code (`CITED_BY`), and by docs (`DOCS`), each with the files."""
     code: dict[str, list[str]] = defaultdict(list)
     docs: dict[str, list[str]] = defaultdict(list)
     for f in tree.files:
@@ -311,10 +315,12 @@ def citations(tree: Tree, candidates: set[str], modules: dict[str, str]) -> tupl
             continue
         text = p.read_text(errors="replace")
         dotted = {m.rstrip(".") for m in DOTTED.findall(text)}
-        hits = (dotted & candidates) | {modules[d] for d in dotted if d in modules}
-        for path in LEAN_PATH.findall(text):
-            parts = path.split("/")
-            hits |= {modules[s] for s in ("/".join(parts[k:]) for k in range(len(parts))) if s in modules}
+        hits = dotted & candidates
+        if suffix in MODULE_CITED_BY or Path(f).name == "pyproject.toml":
+            hits |= {modules[d] for d in dotted if d in modules}
+            for path in LEAN_PATH.findall(text):
+                parts = path.split("/")
+                hits |= {modules[s] for s in ("/".join(parts[k:]) for k in range(len(parts))) if s in modules}
         for h in hits:
             (docs if suffix in DOCS else code)[h].append(f)
     return code, docs
