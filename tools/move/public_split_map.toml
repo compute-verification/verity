@@ -6,7 +6,8 @@
 #   (`bench/generate.py`), the result contract and the census readers stay in `benchmarks/numerical`, which then imports
 #   them from `verity_flock`.
 # - The fixtures public tests read move beside those tests: the commit-slot layout (`verity/ml/commitments/tests`) and the
-#   captured row-101 input sets (`verity/ml/flock/tests`).
+#   captured row-101 input sets (`verity/ml/flock/tests`). The bench's `test_cell.py` spells its slice from `__file__`, so the
+#   move rewrites it, and its `DATA` anchor keeps reading the data that stays.
 # `Identity/Domains.lean`'s move into `core_randomness` renames a Lean module, which this script doesn't rewrite: it is the
 # window's word map's. Nothing is split, edited or deleted, and no file is added. The format is `layout_map.toml`'s.
 
