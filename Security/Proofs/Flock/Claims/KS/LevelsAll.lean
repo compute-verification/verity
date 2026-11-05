@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.LevelZero
-import Proofs.Flock.Claims.KS.PlainLevels
+module
+
+public import Proofs.Flock.Claims.KS.LevelZero
+public import Proofs.Flock.Claims.KS.PlainLevels
 
 /-!
 # Every level's request in an accepted Ligerito run
@@ -15,6 +17,8 @@ level `ℓ ≥ 1` is that one (`find?_later`).
 * `ligerito_refines_reqs`, `ligerito_accepts_reqs`, `ligerito_accepts_opening_reqs`, `rep_refines_reqs`: their
   `_req0` versions, with the later requests `LaterAt`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 

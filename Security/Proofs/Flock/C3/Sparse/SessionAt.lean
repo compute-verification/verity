@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.Sparse.SrcLayer
+module
+
+public import Proofs.Flock.C3.Sparse.SrcLayer
 
 /-!
 # The sparse tie from V*'s sessions
@@ -17,6 +19,8 @@ unit is one whole net (`RecSparse.check` against `unitNet`), so unlike R's openi
 * `sparseTieL_of_session`, `sparseTie_of_session`: the two give `SparseTieL` at that session's layer, its outputs from
   their registered zeros (`copyVal_regOut`), so `SparseTie` (`sparseTie_of_layer`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Sparse
 

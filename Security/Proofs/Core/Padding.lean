@@ -1,7 +1,9 @@
-import Definitions.Core.Guarantees.Formalism
-import Proofs.Core.Formalism
-import Proofs.Core.Expand
-import Mathlib.Tactic.Linarith
+module
+
+public import Definitions.Core.Guarantees.Formalism
+public import Proofs.Core.Formalism
+public import Proofs.Core.Expand
+public import Mathlib.Tactic.Linarith
 
 /-!
 # Proofs of padding and of Theorem 3 at the serving blocks
@@ -11,6 +13,8 @@ import Mathlib.Tactic.Linarith
   first, then one registered input gate `z` (the constant the padding reads), then the padding gates, each reading `z`
   and computing `0`. `Padding` pads the chosen proof blocks to `c` gates and the others by none.
 -/
+
+@[expose] public section
 
 namespace Verity
 

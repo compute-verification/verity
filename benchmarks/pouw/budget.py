@@ -48,7 +48,7 @@ P_PASS = 0.75                     # a deficient unit's pass probability at 1-bit
 DEFICIT = LN_INV_DELTA / ((1 - P_PASS) * ROUNDS)   # d̄: full checking's deficit; the machine model's luck = σ_w·d̄
 
 #: cost-model/v1 is GPU-seconds of an RTX PRO
-#: 6000 proving and CPU-seconds at 1/55 of one, so a family pays it at this price (vy-nebius-1/2, measured price; that
+#: 6000 proving and CPU-seconds at 1/55 of one, so a family pays it at this price (measured on RTX PRO 6000s; that
 #: the provers are RTX PRO 6000 workers is assumed)
 PROVER_USD_H = 1.80
 SAMPLING_DATA = Path(__file__).with_name("budget_sampling.json")

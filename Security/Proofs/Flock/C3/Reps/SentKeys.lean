@@ -1,6 +1,8 @@
-import Proofs.Flock.C3.Reps.IoCols
-import Proofs.Flock.C3.Reps.RepCoins
-import Proofs.Flock.C3.Sparse.MsgsRead
+module
+
+public import Proofs.Flock.C3.Reps.IoCols
+public import Proofs.Flock.C3.Reps.RepCoins
+public import Proofs.Flock.C3.Sparse.MsgsRead
 
 /-!
 # The reps' stage keys, `WCombRead` from the reads file, and `TsRead` from the weave
@@ -35,6 +37,8 @@ Stage `s`'s keys for rep `ρ` are the keys of the messages rep `ρ` sends at sta
   `CapRead` (`capRead_of_const`, reading no history) and the cap tie (`capTie_vals`); `RepsDrawn` at the identity `ix`
   is a statement on `b` alone (`DrawnOf`, `repsDrawn_valsSrc`), the rep's consumed rounds `repIdxB` starting at 0.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

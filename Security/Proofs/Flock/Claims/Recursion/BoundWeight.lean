@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.BoundBridge
-import Proofs.Flock.Claims.Recursion.DeployMargin
-import Proofs.Flock.Claims.NumbersDeploy
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundBridge
+public import Proofs.Flock.Claims.Recursion.DeployMargin
+public import Proofs.Flock.Claims.NumbersDeploy
 
 /-!
 # (P3) at the deployed parameters
@@ -26,6 +28,8 @@ At one table of `N₀ = 2^23` (`k = 12343986`, `N_I = 1 + 210·k ≈ 2^31.27`) a
 `C_DE = 2^33`, `coverW` is about `2^69.65` against `C_DE`'s `2^33`, and `γ` at `IVStar` at the floor about `2^86.75`
 against `γ_DE`'s `2^50.11`.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

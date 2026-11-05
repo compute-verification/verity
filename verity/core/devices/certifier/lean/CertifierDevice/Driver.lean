@@ -1,6 +1,8 @@
-import CertifierDevice.Device
-import World
-import Std.Sync.Channel
+module
+
+public import CertifierDevice.Device
+public import World
+public import Std.Sync.Channel
 
 /-!
 # The driver that runs the device in the world
@@ -19,6 +21,8 @@ which `connectSalt` opens with `connect`. It closes a stream's connection when i
 and the link, as `Proxy.run` does, and returns. With the salt on, it draws every PoUW window's salt from the world's
 coins before its first tick; the device reads one only once its frame is released.
 -/
+
+@[expose] public section
 
 namespace CertifierDevice
 

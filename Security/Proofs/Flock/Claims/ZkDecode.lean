@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Decode
-import Proofs.Flock.Soundness.PadCode
+module
+
+public import Proofs.Flock.Claims.Decode
+public import Proofs.Flock.Soundness.PadCode
 
 /-!
 # The masked (`--zk`) level-0 code as an `IRS`, its decoder, and the read step
@@ -25,6 +27,8 @@ reads the packed trace (`Model.witnessOf`) as the hidden values, bit `a` of the 
 (`readTrace`): the masked statement's commitments are `hm96` rows the circuit computes from trace bits, so their salts
 are trace bits too.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

@@ -1,5 +1,7 @@
-import Proofs.Core.TC.Sound
-import Proofs.Core.TC.Ampere.Complete
+module
+
+public import Proofs.Core.TC.Sound
+public import Proofs.Core.TC.Ampere.Complete
 
 /-!
 # The step relation is the step semantics, on the Ampere/Ada pipeline
@@ -8,6 +10,8 @@ The theorems of `Verity.SecurityProofs.TC.Sound` for `AMPERE_BF16_M16N8K16` (two
 adder, exponent floor `-132`), whose parameters `ADA_BF16_M16N8K16` shares (`ada_eq_ampere`). Each step's two groups
 chain inside the relation through the first group's output state, as they chain inside `tc_dot_total` through its value.
 -/
+
+@[expose] public section
 
 open Verity.TC.Relation Verity.TC.Spec Verity.Assumptions Verity.TC.Proofs Verity.TC.Proofs.Ampere
 

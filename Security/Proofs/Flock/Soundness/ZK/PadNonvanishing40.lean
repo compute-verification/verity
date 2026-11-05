@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Assumptions.Zk
+module
+
+public import Proofs.Flock.Soundness.Assumptions.Zk
 
 /-!
 # `PadNonvanishing40`, proved
@@ -9,6 +11,8 @@ import Proofs.Flock.Soundness.Assumptions.Zk
 * `What_omega`: `Ŵ_i(ω_q) ∈ {0, 1}` for `i < 64`, `q < 2^(i+1)`.
 * `padNonvanishing40`: the instance Lemma B's row (ii) reads (`Composed.zkViewAt_of_ok`), so no `--zk` headline takes it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 

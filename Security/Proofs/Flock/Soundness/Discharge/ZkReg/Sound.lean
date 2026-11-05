@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Sound
-import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Sound
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
 /-!
 # One `--zk` sampled session with registered reads
@@ -16,6 +18,8 @@ acceptance.
 What it rests on: `zk_session_sound`'s assumptions, and nothing more for the second conjunct, which reads only the
 executable's checks.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 

@@ -1,4 +1,6 @@
-import Flock.Hm96
+module
+
+public import Flock.Hm96
 
 /-!
 SHA-512 in counter mode and `Hm96.Default512.leaf` with their words unboxed, for the store binding's payload root
@@ -8,6 +10,8 @@ in an `Array UInt64`, which boxes each word a salt byte writes, and here they ar
 `lean/tests/test_binding.py` holds them to Python: `store_salt` to `store.store_salt` (`codec.xof`), and the expected
 root to `audit.payload_tree`.
 -/
+
+@[expose] public section
 
 namespace RemoteAudit.Unboxed
 

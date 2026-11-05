@@ -1,5 +1,7 @@
-import Proofs.Properties.NetworkCertifier.Bytes
-import Proofs.Properties.NetworkCertifier.Strings
+module
+
+public import Proofs.Properties.NetworkCertifier.Bytes
+public import Proofs.Properties.NetworkCertifier.Strings
 
 /-!
 # The frame tree binds its frames
@@ -8,6 +10,8 @@ Where SHA-512 has no collision on the strings a tree hashes (`FramesString`), it
 (`framesRoot_inj`): no level's node is its level's empty subtree, so a level determines the one below (`pairs_inj`), and
 the top of a tree of at most `2^D` leaves is one node or none.
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open Flock
