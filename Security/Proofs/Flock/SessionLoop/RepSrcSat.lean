@@ -252,7 +252,7 @@ theorem Loop.saltAt_saltBlocks (f : ℕ → ByteArray) {n p : ℕ} (hp : p < n) 
   have h192 : 192 * (p + 1) ≤ 192 * n := Nat.mul_le_mul (le_refl _) (Nat.succ_le_of_lt hp)
   have e := _root_.Flock.Firewall.Level0.extract_of_get
     (ByteArray.mk ((List.range (192 * n)).map fun b => (f (b / 192)).get! (b % 192)).toArray) (192 * p) (f p)
-    (by rw [size_list, List.length_map, List.length_range, hs]; omega) fun k hk => by
+    (by rw [hs, size_list, List.length_map, List.length_range]; omega) fun k hk => by
       rw [hs] at hk
       rw [get!_list, getElem!_pos _ (192 * p + k) (by simp only [List.length_map, List.length_range]; omega)]
       simp only [List.getElem_map, List.getElem_range]
