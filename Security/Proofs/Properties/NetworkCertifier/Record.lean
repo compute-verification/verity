@@ -69,7 +69,7 @@ theorem checked_ok {P : Prog} {record order : Json} {r : Stated} {s : SampledPro
       rw [hord] at h
       exact absurd h (by intro h'; injection h')
     | none =>
-      simp only [hord, pure_bind] at h
+      simp only [hord] at h
       injection h with h
       obtain ⟨rfl, rfl⟩ := Prod.mk.inj h
       exact ⟨hr', hpop, hw, hleaves, rects, hrects, hapart⟩
@@ -132,7 +132,7 @@ theorem recordOf_ok {P : Prog} {j : Json} {r : Stated} (h : recordOf P j = .ok r
     obtain ⟨wires, -, h⟩ := bind_ok h
     have hr : r.templates = named ∧ r.wiring.templates = templates := by
       rcases hc : j.getObjVal? "cuts" with ec | cj <;> rcases hg : j.getObjVal? "registered" with eg | rj <;>
-        simp only [hc, hg, pure_bind] at h <;> repeat (obtain ⟨_, -, h⟩ := bind_ok h)
+        simp only [hc, hg] at h <;> repeat (obtain ⟨_, -, h⟩ := bind_ok h)
       all_goals
         injection h with h
         subst h

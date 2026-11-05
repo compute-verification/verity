@@ -352,11 +352,13 @@ theorem rectBox_some {P : Prog} {r : Stated} {R : Rect} {i k π : ℕ} {ty : Ty}
     (h : resolve P r R.reader R.port = some (i, k, π, ty)) :
     rectBox P r R = box i R.lo R.hi (at0 P k π + R.r0 * (bitsOf ty / r.wiring.cutsOf R.reader R.port))
       (at0 P k π + R.r1 * (bitsOf ty / r.wiring.cutsOf R.reader R.port)) := by
-  rw [rectBox, h] <;> rfl
+  rw [rectBox, h]
+  rfl
 
 theorem rectBox_none {P : Prog} {r : Stated} {R : Rect} (h : resolve P r R.reader R.port = none) :
     rectBox P r R = ∅ := by
-  rw [rectBox, h] <;> rfl
+  rw [rectBox, h]
+  rfl
 
 /-- **A rectangle among its port's rows and its template's units**: its rows end at its port's cut, and its units at
 its template's. -/
