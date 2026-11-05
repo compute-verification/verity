@@ -1,4 +1,6 @@
-import Definitions.Accounting.Assumptions.TS
+module
+
+public import Definitions.Accounting.Assumptions.TS
 
 /-!
 # The tensor–scalar model's guarantee statements (trusted)
@@ -34,6 +36,8 @@ each `def G : Prop`, proved (or a `sorry` stub) as
 Probability statements put acceptance in the event: the probability that the window is accepted and the bound fails is
 at most `δ`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

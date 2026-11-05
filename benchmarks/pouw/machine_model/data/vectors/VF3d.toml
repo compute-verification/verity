@@ -1,8 +1,7 @@
-# VF3d: VF3c audited for how many merges one instruction does, and for copies (RS-W′ round 3).
+# VF3d: VF3c audited for how many merges one instruction does, and for copies.
 name = "VF3d"
 epoch = "VF3d"
-summary = "VF3c audited for how many merges one instruction does, and for copies (RS-W′ round 3)."
-note = "note:20261016T0715Z-draft-rs-merge-multiplicity"
+summary = "VF3c audited for how many merges one instruction does, and for copies."
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",
@@ -20,9 +19,8 @@ credits = [
     ["W2", 2048],
 ]
 
-[published]  # as the legacy scripts printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+[published]  # as the legacy scripts printed them: τ and U/F_low to 4 places, the margin to 3
 tau = 0.1208
-tau_600w = 0.0944
 uf_low = 1.1875
 margin = 2.0
 

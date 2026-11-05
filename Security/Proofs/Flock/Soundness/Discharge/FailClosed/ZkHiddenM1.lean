@@ -1,9 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Rate
-import Proofs.Flock.Soundness.Discharge.ZkLink.M1
-import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
-import Proofs.Flock.Soundness.Discharge.ZkLink.Link
-import Proofs.Flock.Soundness.Discharge.FailClosed.Numeric
-import Proofs.Flock.Soundness.Instance
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Rate
+public import Proofs.Flock.Soundness.Discharge.ZkLink.M1
+public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Link
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Numeric
+public import Proofs.Flock.Soundness.Instance
 
 /-!
 # The hidden-output `--zk` tables are at C-Flock ZK's parameters, and `ε_ks` in closed form
@@ -38,6 +40,8 @@ A refused hidden-output table carries the reference setup's regions and `contra`
 The file sits under `FailClosed/` because it reads `Stmt.InRangeWide` and `piopNumMaxWide` (`FailClosed/Numeric.lean`),
 which import the `ZkHidden` headlines.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Accounting
 

@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Bridge.Live
-import Proofs.Flock.Claims.DeployOC
-import Flock.With.Deployed
-import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
+module
+
+public import Proofs.Flock.Claims.Bridge.Live
+public import Proofs.Flock.Claims.DeployOC
+public import Flock.With.Deployed
+public import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
 
 /-!
 # The live `--zk` session decided by flock-verify, and the old transfer
@@ -25,6 +27,8 @@ of `x` only where that draw is. `Deploy.V`'s checks pin the record's draw to the
 `x` before the first message (`Custody.setupOf_record`). At an equivalent draw with its keys in another order the setup
 is another value (its `unitDraw` is the record's draw), and its digests agree only through `canon`.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.LiveZk
 

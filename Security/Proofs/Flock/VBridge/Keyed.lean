@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.Unit
-import Proofs.Flock.Soundness.Discharge.Placed.Keyed
+module
+
+public import Proofs.Flock.VBridge.Unit
+public import Proofs.Flock.Soundness.Discharge.Placed.Keyed
 
 /-!
 # V*'s opening in the circuit's program on Δ's keys
@@ -13,6 +15,8 @@ transcript's (`copyVal_committed`). `keyProg_recOpen`: when the verifier built `
 (`netOf`), copy `j` of unit `u` computes `laid_recOpen`'s outputs at any transcript carrying 1 on the unit's constant
 gate (`unit_recOpen`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 

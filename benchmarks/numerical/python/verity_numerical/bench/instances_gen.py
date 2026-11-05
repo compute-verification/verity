@@ -94,7 +94,7 @@ F32_INF = 0x7F800000
 class Rng:
     """A SHA-256 counter stream keyed by labels: ``key = sha256("bench-instances/v1|" + "|".join(labels))``, block ``n`` is
     ``sha256(key || n as u64 LE)``.  Stable across Python versions and trivially re-implementable in any language; every
-    draw below consumes the stream in a documented way (``bits`` takes ceil(n/8) bytes little-endian and masks; ``below``
+    sample below consumes the stream in a documented way (``bits`` takes ceil(n/8) bytes little-endian and masks; ``below``
     rejection-samples ``bits(bit_length(n-1))``)."""
 
     def __init__(self, *labels: object) -> None:
@@ -196,7 +196,7 @@ def is_inf_f32(u: int) -> bool:
 
 
 def _pair_pow2(rng: Rng, e: int, sign: int) -> tuple[int, int]:
-    """Two BF16 powers of two whose product is ``+-2^e`` (``-252 <= e <= 254``), the split drawn from ``rng``."""
+    """Two BF16 powers of two whose product is ``+-2^e`` (``-252 <= e <= 254``), the split sampled from ``rng``."""
 
     lo, hi = max(-126, e - 127), min(127, e + 126)
     e1 = rng.range(lo, hi + 1)
@@ -418,7 +418,7 @@ class RealSpec:
 def plan_real(seeds: Sequence[Seed]) -> tuple[list[RealSpec], dict[tuple[str, str], list[int]]]:
     """Round 0: the 24 seeds (x, W[j]); rounds 1..ROWS_PER_X: for every seed in order, (x, W[j'_r]) with ``j'`` the
     r-th row drawn for the seed's (family, layer) group -- seeds sharing a layer/op share the same drawn rows, so the
-    set also contains "same weight row, different activation" pairs.  Rows are drawn by ``Rng("rows", family, layer)``
+    set also contains "same weight row, different activation" pairs.  Rows are sampled by ``Rng("rows", family, layer)``
     from ``[0, N)`` excluding the group's seed rows.  Returns the specs in id order and the drawn rows per group."""
 
     groups: dict[tuple[str, str], list[int]] = {}

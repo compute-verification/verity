@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.Recursion.VerdictPieces
-import Proofs.Flock.Claims.Recursion.LayoutBTops
-import Proofs.Flock.Claims.Recursion.FinOpen
-import Proofs.Flock.Claims.Recursion.SchedDense
-import Proofs.Flock.Claims.Recursion.BindsDeployed
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictPieces
+public import Proofs.Flock.Claims.Recursion.LayoutBTops
+public import Proofs.Flock.Claims.Recursion.FinOpen
+public import Proofs.Flock.Claims.Recursion.SchedDense
+public import Proofs.Flock.Claims.Recursion.BindsDeployed
 
 /-!
 # The statement's share of `hrest` at `nextR`: the last message's reading, the rounds' lengths, and the reading
@@ -25,6 +27,8 @@ about the last message and the rounds:
 
 `hrest_shape`, `hrest_len` and `hrest_read` give one check each; `hrest_part` gives the three at `hrest`'s binders.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.RestRead
 
@@ -141,7 +145,7 @@ theorem hrest_read (hR : ReadsAt rd final fin) {x : Msg} (hx : DenseX x) (c : �
 message's reading, a round's length or the record's reading holds at the readers' messages of every witnesses whose
 calls are true, at every coin. -/
 theorem hrest_part (bB : Brings) (hF : FinalReads final fin) (hL : RoundLens fin) (hR : ReadsAt rd final fin) :
-    ∀ (x : Msg) (st : Claims.Recursion.Stmt),
+    ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement),
       (recBound _root_.Flock.Readable.relation bB (layAt fin) (bdAt rd wE final w).IVStar).parse x = some st →
       Claims.Recursion.Form.Dense st.form →
       ∀ q ∈ ivChecks (bdAt rd wE final w) (splitAt rd wE final w LS)

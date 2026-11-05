@@ -1,4 +1,6 @@
-import Proofs.Flock.C3.RegLevels.OpensRegs
+module
+
+public import Proofs.Flock.C3.RegLevels.OpensRegs
 
 /-!
 # Check 5's `v` rows: `rec-residuals`' rows as bits of `vOf`
@@ -12,10 +14,12 @@ as `HVCoins`' bits:
 * `rep_ok`: a rep's v is `verifierRows`' base then the zero comb, and `vOf` at any comb is that base then the comb
   (`verifierRows_comb`);
 * `full_vOf`, `row_vOf`, `rows_vOf`: the check's rows are bit for bit `wbit` of `sub vs (vOf …)` at the rep's coins,
-  extra claims and the checked comb, which `Recursion.vRows_tie` reads as `VRowsAre`'s bits (`Family/VCoins.lean`).
+  extra claims and the checked comb.
 
 The `mapM` the hypotheses state is `checkResiduals`' rows, definitionally `Recursion.residualRowsOf`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

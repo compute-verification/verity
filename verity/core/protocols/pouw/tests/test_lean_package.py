@@ -1,5 +1,5 @@
-"""PoUW's Lean (in `Security`) and what the rest of this directory says about it: every Lean theorem `PROTOCOL.md`
-cites is a guarantee in `Security/lean-audit.json`, and its FP8 conformance data is what `verity.ml.circuits.silicon`
+"""PoUW's Lean (in `Security`) and what the rest of this directory says about it: every Lean name the README cites is
+a guarantee in `Security/lean-audit.json` or a definition one reads, and its FP8 conformance data is what `verity.ml.circuits.silicon`
 computes. `lean/scripts/fp8atom_vectors.py`, run again, writes the kernel-pinned vectors in `Definitions/Pouw/Fp8Atom/` and
 their checks in `Proofs/Pouw/Fp8Atom/` byte for byte, and the bulk whose SHA-256 the proofs' record holds for
 `Proofs.Pouw.Bulk`. The
@@ -25,11 +25,11 @@ RUNS = json.loads((LEAN / "Proofs" / "lean-audit.json").read_text())["runs"]
 
 
 def test_cited_theorems_are_guarantees() -> None:
-    """A qualified `Pouw.…` name in `PROTOCOL.md` is a guarantee in the record or a definition a guarantee reads (a named
-    assumption, a game)."""
-    guarantees = set(POLICY["guarantees"])
+    """A qualified `Pouw.…` name in the README is a guarantee in the record (proved, or stated and frozen) or a definition a
+    guarantee reads (a named assumption, a game)."""
+    guarantees = set(POLICY["guarantees"]) | set(POLICY["shape"]["frozen"])
     read = {d for g in POLICY["reads"].values() for d in g["definitions"]}
-    doc = (HERE / "PROTOCOL.md").read_text()
+    doc = (HERE / "README.md").read_text()
     cited = set(re.findall(r"`(Pouw\.[A-Za-z0-9_.']+)`", doc))
     assert cited
     assert sorted(cited - guarantees - read) == []

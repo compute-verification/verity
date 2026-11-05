@@ -1,8 +1,7 @@
-# VF3: VF2 with the uniform datapath off the issue row, priced by a uniform-pipe row of its own (§14).
+# VF3: VF2 with the uniform datapath off the issue row, priced by a uniform-pipe row of its own.
 name = "VF3"
 epoch = "VF3"
-summary = "VF2 with the uniform datapath off the issue row, priced by a uniform-pipe row of its own (§14)."
-note = "note:20261016T0439Z-draft-issue-uniform"
+summary = "VF2 with the uniform datapath off the issue row, priced by a uniform-pipe row of its own."
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",
@@ -18,7 +17,7 @@ credits = [
     ["UNI", 32],
 ]
 
-[published]  # as the legacy scripts printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+[published]  # as the legacy scripts printed them: τ and U/F_low to 4 places, the margin to 3
 tau = 0.2398
 uf_low = 1.0938
 margin = 1.935

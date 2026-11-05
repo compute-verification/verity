@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.RemoteSketchP2
-import Proofs.Accounting.RemoteHeld.Sketch
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.RemoteSketchP2
+public import Proofs.Accounting.RemoteHeld.Sketch
 
 /-!
 # The receipts' sketch bound over PoUS's P2 store: the proof
@@ -9,6 +11,8 @@ import Proofs.Accounting.RemoteHeld.Sketch
 `r = 12`, at most `Q + P` candidate seeds and `Q` queries, at `ε_ro = (Q + P)²/2^257`, as `SketchBoundDeployed` is at
 `m = 128`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Remote
 

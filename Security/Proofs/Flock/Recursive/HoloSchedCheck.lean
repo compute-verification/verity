@@ -1,4 +1,7 @@
-import Proofs.Flock.Recursive.HoloSchedRead
+module
+
+public import Proofs.Flock.Recursive.HoloSchedRead
+import all Init.Data.Nat.ToString
 
 /-!
 # What the verifier's checks of the held `c_k` and the claim ports give
@@ -16,6 +19,8 @@ import Proofs.Flock.Recursive.HoloSchedRead
 * `stackedAt_of_check`: it holds `stacked/rep0`'s `c_k` at the message rounds of `stackedRounds` of the verifier's R
   shape and its tops' node counts at the ones those rounds commit (`topCounts`, `topCounts_eq`): `StackedAt`.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees.HoloSchedCheck
 
@@ -352,6 +357,10 @@ theorem claimReadsAt_of_checkOwn {s : VStar.Stmt} {own : Array Registered.Port} 
     | cases hq
     | simp [ownPorts] at hq
   | cap =>
+    first
+    | cases hq
+    | simp [ownPorts] at hq
+  | link =>
     first
     | cases hq
     | simp [ownPorts] at hq

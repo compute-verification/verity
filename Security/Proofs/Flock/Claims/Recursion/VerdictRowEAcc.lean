@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowECoin
-import Proofs.Flock.Claims.Recursion.LayoutBAcc
-import Proofs.Flock.Claims.Recursion.RowSlots
-import Proofs.Flock.Claims.Recursion.OpenPieces
-import Proofs.Flock.VBridge.AccUnits
-import Proofs.Flock.Soundness.Discharge.Hm.Row
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowECoin
+public import Proofs.Flock.Claims.Recursion.LayoutBAcc
+public import Proofs.Flock.Claims.Recursion.RowSlots
+public import Proofs.Flock.Claims.Recursion.OpenPieces
+public import Proofs.Flock.VBridge.AccUnits
+public import Proofs.Flock.Soundness.Discharge.Hm.Row
 
 /-!
 # Row E's running sums at a level copy, through the chain's commits
@@ -42,6 +44,8 @@ off its calls:
 What stays open is the climbs: each digest's climb to its row's registered root, its inputs among the evaluations, and
 the climbs' steps apart (`VStar.StepsApart`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion.VStarB
 

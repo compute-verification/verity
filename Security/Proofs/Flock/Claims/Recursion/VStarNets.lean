@@ -1,6 +1,11 @@
-import Proofs.Flock.Claims.Recursion.VStarTraceOk
-import Proofs.Flock.VBridge.Family.Names
-import Std.Data.String.ToNat
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarTraceOk
+public import Proofs.Flock.VBridge.Family.Names
+public import Std.Data.String.ToNat
+import all Init.Data.String.Defs
+import all Init.Data.String.Basic
+import all Init.Data.List.SplitOn.Basic
 
 /-!
 # A staged part's circuit has three nets (`nets_three`)
@@ -19,6 +24,8 @@ a newline: the unit's name is the parsed unit's name, a token (`unit_name`, `tok
 line (`pyDumps_noNl`). No proof reads through `Lean.Json.parse`.
 -/
 
+@[expose] public section
+
 namespace RecDeploy.VStarNets
 
 open _root_.Flock
@@ -34,7 +41,7 @@ open RecDeploy.VStarTraceOk (RowsOk)
 /-- Lines, each with its newline. -/
 def joinNl (L : List String) : String := String.join (L.map (· ++ "\n"))
 
-theorem joinNl_nil : joinNl [] = "" := rfl
+theorem joinNl_nil : joinNl [] = "" := (rfl)
 
 theorem joinNl_cons (a : String) (L : List String) : joinNl (a :: L) = a ++ "\n" ++ joinNl L := by
   simp [joinNl, String.join_cons, String.append_assoc]
@@ -156,6 +163,16 @@ theorem unit_name {s : VStar.Stmt} {u : VStar.UnitC} (h : s.unit = .ok u) : u.na
   cases s with
   | recOpen _ L H _ => exact recOpenUnit_name h
   | inner _ nm pt => exact innerUnit_name h
+  | link UB PB _ =>
+    simp only [VStar.Stmt.unit] at h
+    unfold VStar.linkUnit at h
+    generalize VStar.linkSteps UB PB = S at h
+    cases hc : _root_.Flock.RecLinkTree.checkShape UB PB with
+    | error e => simp [hc, bind, Except.bind] at h
+    | ok _ =>
+      simp only [hc, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
+      subst h
+      rfl
   | _ =>
     simp only [VStar.Stmt.unit, VStar.sparseUnit] at h
     simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
@@ -639,11 +656,12 @@ part's circuit file to V\*'s (`checkFile_ok`) and refuses tables (`checkStmt_tab
 theorem nets_three {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {sv : VStar.Stmt} {c : Circuit}
     (hp : partAt x s = some (sv, c)) : c.nets.size = 3 := by
   obtain ⟨r, hr, -, hc⟩ := VStarTraceOk.partAt_some hp
-  obtain ⟨p, r', _, hx, ht, hpi, hr', _, h0, _⟩ := stagedTables hS
+  obtain ⟨p, r', _, hx, ht, hpi, hr', _, h0, hchk⟩ := stagedTables hS
   rw [hr] at hr'
   cases hr'
   have hpc := partCircuit_staged hS hx ht hpi hr hc h0
-  obtain ⟨tags', P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0
+  have hflat := FlockSoundness.Discharge.Recursion.checkParsed_flat (hchk 0 h0).2.2
+  obtain ⟨tags', P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0 hflat
   rw [← hpc]
   obtain ⟨ms, i, spec, sts, rfl, hsu, hck⟩ := hS
   have hpx := parse_of_setupO hsu
@@ -676,7 +694,13 @@ theorem nets_three {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x x
     rw [← htb]
     unfold ProvedScope.circuitOf at hc0
     split at hc0
-    · exact (FlockSoundness.Discharge.HiddenExec.parse_untyped hty hc0).1
+    · obtain ⟨_, _, -, -, -, -, hor⟩ := FlockSoundness.Discharge.Hidden.parseCommit_untyped hty hc0
+      have hi : i.base.read.tags.isTmpl = false := by
+        rcases hor with ⟨hi, -⟩ | ⟨tu, -, -, htu⟩
+        · exact hi
+        · exact absurd (htu.symm.trans hflat) (by simp)
+      rw [FlockSoundness.parseCommit_flat hi] at hc0
+      exact (FlockSoundness.Discharge.HiddenExec.parse_untyped hty hc0).1
     · exact hc0
   exact nets_of_file hcf hparse hname P.unitNet
 

@@ -96,7 +96,7 @@ def derived_seed(seed: int, *labels: Any) -> int:
 # -- capture (GPU host) -------------------------------------------------------------------------------------------------------
 
 def _bf16_bits(torch, shape, elo: int, ehi: int):
-    """bf16 tensors of uniformly drawn sign, exponent field in [elo, ehi] and mantissa (the torch generator, already seeded)."""
+    """bf16 tensors of uniformly sampled sign, exponent field in [elo, ehi] and mantissa (the torch generator, already seeded)."""
     s = torch.randint(0, 2, shape, device="cuda", dtype=torch.int32)
     e = torch.randint(elo, ehi + 1, shape, device="cuda", dtype=torch.int32)
     m = torch.randint(0, 128, shape, device="cuda", dtype=torch.int32)

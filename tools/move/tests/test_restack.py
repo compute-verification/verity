@@ -193,8 +193,8 @@ def test_a_lock_conflict_beside_a_content_conflict_is_still_a_conflict(repo):
 
 
 def test_a_branch_based_after_the_moves_base_is_refused_with_the_plain_merge(repo, monkeypatch, capsys):
-    """TOP-90 row 18 (25 Oct): a branch based on a main past the move's base restacked `clean` with duplicate imports and lock
-    entries, because the last merge, based on the move, brought main's commits since the base in from both sides. Here main
+    """A branch based on a main past the move's base would restack `clean` with duplicate imports and lock entries, because
+    the last merge, based on the move, brings main's commits since the base in from both sides. Here main
     adds an import after the base, and the moved main has it at the top of the file."""
     git(repo, "checkout", "-q", "-b", "later", "base")
     later = commit(repo, "main after the move's base", {"app/main.py": MAIN + "from app.util import f3\n"})
@@ -286,6 +286,34 @@ def test_a_script_that_fails_is_reported_and_nothing_else_happens(repo):
     r = RS.restack("pr", "move", cwd=str(repo))
     assert r["status"] == "script-failed" and "exit 1" in r["error"] and "LAYOUT_FAIL" in r["error"]
     assert git(repo, "worktree", "list", "--porcelain") == before
+
+
+def test_the_moves_main_has_and_the_branch_lacks_are_found_by_their_move_lines_oldest_first(repo):
+    """`Move:` runs rename.py and `Layout-move:` layout.py, each with its map (and `--no-lock` as the move ran); a merge, a
+    restack's own commit and a commit the branch has are no moves to cross."""
+    words = commit(repo, "words", {"a.txt": "a\n"})
+    git(repo, "commit", "-q", "--allow-empty", "-m", "words\n\nMove: tools/move/words_map.toml")
+    words = git(repo, "rev-parse", "HEAD")
+    git(repo, "branch", "later", words)
+    git(repo, "commit", "-q", "--allow-empty", "-m", "paths\n\nLayout-move: tools/move/paths_map.toml --no-lock")
+    paths = git(repo, "rev-parse", "HEAD")
+    git(repo, "commit", "-q", "--allow-empty", "-m", f"carried\n\n{RS.TRAILER_MOVE}: {paths}\nMove: tools/move/x.toml.bak")
+    git(repo, "checkout", "-q", "-b", "side", "HEAD~1")
+    git(repo, "commit", "-q", "--allow-empty", "-m", "side")
+    git(repo, "checkout", "-q", "main")
+    git(repo, "merge", "-q", "--no-ff", "-m", "land side\n\nMove: tools/move/merged_map.toml", "side")
+    assert RS.moves_on("main", "pr", str(repo)) == [
+        (words, "tools/move/rename.py", ("--map", "tools/move/words_map.toml")),
+        (paths, "tools/move/layout.py", ("--map", "tools/move/paths_map.toml", "--no-lock"))]
+    assert RS.moves_on("main", "later", str(repo)) == RS.moves_on("main", "pr", str(repo))[1:]
+    assert RS.move_line(paths, str(repo)) == ("tools/move/layout.py", ("--map", "tools/move/paths_map.toml", "--no-lock"))
+    assert RS.move_line("move", str(repo)) is None
+
+
+def test_a_branch_with_no_move_to_cross_is_told_to_merge(repo, monkeypatch, capsys):
+    monkeypatch.chdir(repo)
+    assert RS.main(["pr", "--main", "base"]) == 0
+    assert "pr: no-moves" in capsys.readouterr().out
 
 
 def test_the_source_branch_and_checkout_are_untouched(repo):

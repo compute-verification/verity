@@ -1,6 +1,6 @@
-// Beside-IMMA joint points: ISSUE's round-6 probes (issue_wide.cu on cursor/issue-ceiling-ea24,
-// note:20261016T0759Z-draft-issue-r6-joint) on probe.cuh. Each is a joint point, not one class's own rate: its rows.jsonl
-// line has every expected class's rate, and it writes no census line.
+// Beside-IMMA joint points: the issue ceiling's round-6 probes (issue_ceiling/issue_wide.cu) on probe.cuh. Each is a
+// joint point, not one class's own rate: its rows.jsonl line has every expected class's rate, and it writes no census
+// line.
 //   imma_alone    k_specmma: 16 warps, 8 independent IMMA an iteration (the reference)
 //   spec_<x>_r<R> k_spec: the first 8 warps IMMA, the other 8 R ops of x an iteration (warp-specialized)
 //   mixu_<x>_<M>  k_mixu: every warp interleaves M ops of x after each of its 8 IMMA (one instruction stream)

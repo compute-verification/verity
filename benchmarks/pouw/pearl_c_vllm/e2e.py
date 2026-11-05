@@ -105,7 +105,18 @@ CONTROL_OMITS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "hash_l
 #: the verify's no-write controls, each a retained pass the reference replay must reject: every commitment write omitted, and (under
 #: ``--graphs``, whose leaves reach the pass through a copy) the tile leaves alone
 CONTROLS = {"control": CONTROL_OMITS, "control-leaves": frozenset({"hash_leaf"})}
-#: ``--smoke --retain``'s served requests, each one chat prompt (vllm_bench's PROMPTS, by index) as a retained pass: the
+#: the smoke's chat prompts
+PROMPTS = [
+    "Explain why the sky is blue in two sentences.", "Write a haiku about matrix multiplication.",
+    "What is the capital of Australia, and why is it not Sydney?", "List three uses of a hash function.",
+    "Translate 'good morning, how are you?' into French and German.", "Summarize the plot of Hamlet in one paragraph.",
+    "Give a Python function that reverses a linked list.", "What are the main causes of inflation?",
+    "Describe the water cycle to a ten-year-old.", "Why do GPUs run neural networks faster than CPUs?",
+    "Write a limerick about a cat who loves tensors.", "What is the difference between TCP and UDP?",
+    "Explain proof of work in simple terms.", "Name the planets of the solar system in order.",
+    "How does a refrigerator keep food cold?", "What is a prime number? Give five examples.",
+]
+#: ``--smoke --retain``'s served requests, each one chat prompt (PROMPTS, by index) as a retained pass: the
 #: request whose calls a ZK proof opens (served_zk), and another request, whose commitment is that proof's foreign control.
 #: Each is served at the fixed length SERVED_TOKENS under ignore_eos, and how it was served goes
 #: beside its pass as SERVED_RECORD (``{"ignore_eos", "max_tokens", "served"}``), which served_zk's committer registers
@@ -113,7 +124,7 @@ SERVED, SERVED_TOKENS = {"request": 0, "other": 1}, 4
 SERVED_RECORD = "served.json"
 #: the quality run's schemes: Pearl-C v1 (G = 4) and v2 (no promotion), each in an arm engine of its own
 QUALITY = {"pearlc-v1": "pearl-c-sm120-v1-h3", "pearlc-v2": "pearl-c-sm120-unpromoted-v1-h3"}
-#: WikiText-2 (raw), its test split, at the revision cached on node 2
+#: WikiText-2 (raw), its test split, at the revision cached on the RTX PRO 6000 node
 WIKITEXT = ("Salesforce/wikitext", "b08601e04326c79dfdd32d625aee71d232d685c3", "wikitext-2-raw-v1/test-00000-of-00001.parquet")
 #: the quality run's windows: BOS and 2,047 tokens each, non-overlapping; its batch budget, one window a step
 WINDOW, PPL_BATCH, PPL_WINDOWS_A_PASS = 2048, 2048, 8
@@ -189,6 +200,17 @@ def engine(args, group: str):
         return LLM(**kw, compilation_config={"mode": 0})
     except TypeError:
         return LLM(**kw)
+
+
+def find_model(llm):
+    holder = {}
+
+    def grab(model):
+        holder["model"] = model
+        return None
+
+    llm.apply_model(grab)
+    return holder["model"]
 
 
 def install(model, args, coins):
@@ -516,7 +538,6 @@ def serve(conn, args, group: str, coins: dict) -> None:
         configure(args)
         import torch
         from vllm import SamplingParams
-        from vllm_bench import PROMPTS, find_model
 
         llm = engine(args, group)
         run = stack = whole = None
@@ -661,10 +682,10 @@ def prompt_logprobs(llm, sampling_params, timed, windows: list[list[int]]) -> di
 
 class Coins:
     """The challenger's side of one epoch in the controller: its coins (`coins.Challenger`), committed before any engine
-    starts, drawn from `entropy` (by default the Lean verifier of record's, `pouw.verifier.coins`, `IO.getRandomBytes`),
+    starts, drawn from `entropy` (by default the Lean verifier's, `pouw.verifier.coins`, `IO.getRandomBytes`),
     which a claim instance must name (`challenger.served_claim`). A coin opens once; an engine started again in the same
     epoch (the ABAB blocks) asking for it after the same record gets the one opening again, and after any other record a
-    refusal, so nothing redraws."""
+    refusal, so nothing resamples."""
 
     def __init__(self, epoch: int, entropy=None):
         from verity.core.protocols.pouw import verifier
@@ -841,7 +862,7 @@ def split(results: dict) -> dict:
 
 def state_entropy(path: str):
     """The challenger's entropy held in the file `path` (readable only by its owner; when absent, created from the Lean
-    verifier of record's coins, `pouw.verifier.coins`, before any engine starts): the same coins for the controller here
+    verifier's coins, `pouw.verifier.coins`, before any engine starts): the same coins for the controller here
     and for the challenger process that later draws the window's units (`served_commit.py challenger --state`), so named
     by the Lean's claim instance (`verifier.CLAIM`)."""
     from verity.core.protocols.pouw import verifier

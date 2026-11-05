@@ -1,7 +1,9 @@
-import Proofs.Flock.C3.Reps.RepsRead
-import Proofs.Flock.C3.Reps.Maps
-import Proofs.Flock.VBridge.AccUnits
-import Proofs.Flock.VBridge.Net
+module
+
+public import Proofs.Flock.C3.Reps.RepsRead
+public import Proofs.Flock.C3.Reps.Maps
+public import Proofs.Flock.VBridge.AccUnits
+public import Proofs.Flock.VBridge.Net
 
 /-!
 # The values the reps' forms read at a stage, at L's decoder
@@ -18,6 +20,8 @@ values at two accepted outer proofs whose layers agree under stage `s`'s mask, f
 * Every other key reads `rep₀`'s `w` and `comb` only (`valOf_cons`), which stage `s` reads (`WCombRead`).
 * The history's `rounds` and `extras` enter no form.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

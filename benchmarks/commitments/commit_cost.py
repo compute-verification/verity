@@ -10,11 +10,8 @@ Schemes (``--scheme``, repeatable, or ``all``):
                         tree = domain-, level- and index-bound nodes, padded to a power of two
     frame-v3-sha256-row the same tree over ``sha256/row/v1`` row leaves (the value is one row of 16-bit words)
     frame-v3-blake3-row the same tree over ``blake3-keyed/row/v2`` row leaves (plain-Python BLAKE3: slow by design)
-    vllm-v1             ``verity.ml.commitments.vllm_v1``: leaf = ``pos_leaf(value)`` (the host path), tree = node/lift,
-                        no padding, root bound by the step root
     frame-v3-sha512     frame-v3 word leaves through SHA-512 (64-byte domain id, leaves, pads, nodes and root)
     frame-v3-sha512-row the SHA-512 frame over ``sha512/row/v1`` row leaves
-    vllm-v1-sha512      vllm-v1 through SHA-512: the SHA-512 position leaf, node/lift and step root
 
 Every scheme runs through ``CommitmentScheme``: the leaf phase is ``leaf_layout(...).digest(value)`` then
 ``tree_leaf`` (what a prover's digest plus the verifier's native step cost together), the tree phase is ``root``.
@@ -36,19 +33,17 @@ import os
 import statistics
 import sys
 import time
-from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
-from verity.ml.commitments import vllm_v1
 from verity.ml.commitments.frame_v3 import FrameV3, Port, RowLeaf, WordLeaf
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.commitments.rowleaf import ROLE_X
 from verity.ml.commitments.scheme import CommitmentScheme
 
-SCHEMES = ("frame-v3", "frame-v3-sha256-row", "frame-v3-blake3-row", "vllm-v1", "frame-v3-sha512", "frame-v3-sha512-row", "vllm-v1-sha512")
-DEFAULT_SCHEMES = ("frame-v3", "frame-v3-sha256-row", "vllm-v1")
+SCHEMES = ("frame-v3", "frame-v3-sha256-row", "frame-v3-blake3-row", "frame-v3-sha512", "frame-v3-sha512-row")
+DEFAULT_SCHEMES = ("frame-v3", "frame-v3-sha256-row")
 RESULT_SCHEMA = "research/result/v0.1"
 
 
@@ -71,8 +66,6 @@ def setup(scheme: str, n: int, nbytes: int) -> CommitmentScheme:
         if nbytes % 2 or not nbytes:
             raise ValueError("row leaves need a positive even --leaf-bytes (16-bit words)")
         return FrameV3({"v": Port(domain, RowLeaf(scheme.split("-")[2], ROLE_X, 16, nbytes // 2))})
-    if scheme in ("vllm-v1", "vllm-v1-sha512"):
-        return vllm_v1.VllmV1({"v": vllm_v1.StepDomain(digest, digest, digest, digest, n, hash=frame)}, value_nbytes={"v": lambda _i: nbytes})
     raise ValueError(f"unknown scheme {scheme!r}; known: {', '.join(SCHEMES)}")
 
 

@@ -1,4 +1,6 @@
-import Definitions.Nci.Assumptions.CoveringTwoCosts
+module
+
+public import Definitions.Nci.Assumptions.CoveringTwoCosts
 
 /-!
 # The covering bound at two costs: `c_w` a weight, `c_a` an activation
@@ -7,6 +9,8 @@ import Definitions.Nci.Assumptions.CoveringTwoCosts
 parameter-hardness `c_w` bounds the weights a block completes, the activation-chaining `c_a` bounds its tokens. It is a
 statement beside `CoveringBound`, which is it at `c_w = c_a = r · b`.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

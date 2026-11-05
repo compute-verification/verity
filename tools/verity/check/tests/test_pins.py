@@ -72,6 +72,27 @@ def test_a_command_that_fails_leaves_its_pin_stale_and_regen_says_so(repo, monke
     assert "vec.json: its command exited 3" in err and "vec.json is stale (pkg/A.lean): run `exit 3`" in err
 
 
+WRITE = """import pathlib, sys
+assert sys.argv[1:] == ["--write"]
+pathlib.Path("t/fx.json").write_text(pathlib.Path("t/src.txt").read_text())
+"""
+
+
+def test_write_runs_the_named_fixtures_test_module_and_refuses_a_path_no_writer_lists(repo, monkeypatch, capsys):
+    (repo / "t").mkdir()
+    (repo / "t" / "test_fx.py").write_text(WRITE)
+    (repo / "t" / "src.txt").write_text("1\n")
+    monkeypatch.setattr(P, "WRITERS", (P.Writer("t/fx.json", "t/test_fx.py"), P.Writer("t/other.json", "t/test_other.py")))
+    assert P.main(["--write", "./t/fx.json", "--root", str(repo)]) == 0
+    assert (repo / "t" / "fx.json").read_text() == "1\n" and not (repo / "t" / "other.json").exists()
+    assert P.Writer("t/fx.json", "t/test_fx.py").command == "uv run python tools/verity/check/pins.py --write t/fx.json"
+    (repo / "t" / "src.txt").write_text("2\n")
+    assert P.main(["--write", "t/fx.json", "t/nope.json", "--root", str(repo)]) == 2
+    assert (repo / "t" / "fx.json").read_text() == "1\n" and "t/nope.json: no test's fixture" in capsys.readouterr().err
+    assert P.main(["--write", "t/other.json", "--root", str(repo)]) == 1
+    assert "t/other.json: t/test_other.py --write exited 2" in capsys.readouterr().err
+
+
 def test_a_recorded_file_that_is_gone_is_stale_unless_git_ignores_it(repo, monkeypatch):
     doc = {"inputs": {"pkg/A.lean": sha((repo / "pkg/A.lean").read_bytes()), "fetched/big.bin": "0" * 64, "gone.txt": "0" * 64}}
     (repo / "vec.json").write_text(json.dumps(doc))
@@ -90,6 +111,41 @@ def test_a_tracked_file_recording_a_lean_sources_digest_must_be_listed(repo, mon
     monkeypatch.setattr(P, "PINS", ())
     assert P.unlisted(repo) == {"notes.json": ["pkg/lean-toolchain"], "pkg/TRUSTED.sha256": ["pkg/A.lean", "pkg/lean-toolchain"],
                                 "vec.json": ["pkg/A.lean"]}
+
+
+FOUND = "Regenerate:\n\nsha256sum lean-toolchain A.lean \\\n  $(find Defs -name '*.lean' | LC_ALL=C sort -u) > TRUSTED.sha256\n"
+
+
+def test_a_file_in_a_pins_scope_that_it_doesnt_list_makes_it_stale_and_its_command_lists_it(repo):
+    """The pin's command finds the `.lean` files of a tree: one added there after the pin was written (in a new directory)
+    makes the pin stale while every file it lists is unchanged, `--stale` names it with the command, and `--regen` writes
+    the pin that lists it and passes."""
+    (repo / "pkg" / "README.md").write_text(FOUND)
+    (repo / "pkg" / "Defs").mkdir()
+    (repo / "pkg" / "Defs" / "B.lean").write_text("def b := 1\n")
+    assert P.main(["--regen", "--root", str(repo)]) == 0 and P.stale(repo) == []
+    (repo / "pkg" / "Defs" / "Claims").mkdir()
+    (repo / "pkg" / "Defs" / "Claims" / "C.lean").write_text("def c := 1\n")
+    assert P.PINS[0].gap(repo) == (["pkg/Defs/Claims/C.lean"], [])
+    assert [(pin.path, s) for pin, s in P.stale(repo)] == [("pkg/TRUSTED.sha256", ["pkg/Defs/Claims/C.lean"])]
+    assert P.main(["--stale", "--root", str(repo)]) == 1
+    assert P.report(P.stale(repo), repo) == (
+        "pkg/TRUSTED.sha256 is stale (its command hashes 1 file it doesn't list: pkg/Defs/Claims/C.lean): run `cd pkg && "
+        "sha256sum lean-toolchain A.lean $(find Defs -name '*.lean' | LC_ALL=C sort -u) > TRUSTED.sha256`")
+    assert P.main(["--regen", "--root", str(repo)]) == 0
+    assert P.stale(repo) == [] and P.main(["--stale", "--root", str(repo)]) == 0
+    assert (repo / "pkg" / "TRUSTED.sha256").read_text().splitlines()[2:] == [
+        f"{sha(b'def b := 1' + bytes([10]))}  Defs/B.lean", f"{sha(b'def c := 1' + bytes([10]))}  Defs/Claims/C.lean"]
+
+
+def test_a_file_the_pin_lists_that_its_command_no_longer_hashes_makes_it_stale(repo):
+    (repo / "pkg" / "README.md").write_text(FOUND)
+    (repo / "pkg" / "Defs").mkdir()
+    (repo / "pkg" / "Defs" / "B.lean").write_text("def b := 1\n")
+    assert P.main(["--regen", "--root", str(repo)]) == 0
+    (repo / "pkg" / "README.md").write_text(FOUND.replace("Defs", "Other"))
+    assert [s for _, s in P.stale(repo)] == [["pkg/Defs/B.lean"]]
+    assert "(it lists 1 file its command doesn't hash: pkg/Defs/B.lean)" in P.report(P.stale(repo), repo)
 
 
 def test_a_readme_without_the_command_is_refused(repo):
@@ -159,7 +215,8 @@ def lake_repo(tmp_path, monkeypatch):
 
 def _side(root: Path, base: str, name: str, before: bool, top: bool = True) -> str:
     """A branch off ``base`` whose `base` package requires a new package ``name`` by path (first in its lakefile, or last), with
-    base's manifest regenerated there, and top's and the pin unless not ``top`` (as #1524 and #1497 left Security/Proofs')."""
+    base's manifest regenerated there, and top's and the pin unless not ``top`` (a side that regenerates only its own
+    package's manifest, which leaves Security/Proofs' stale)."""
     subprocess.run(["git", "checkout", "-q", "-b", name, base], cwd=root, check=True, env=ENV)
     (root / name).mkdir()
     (root / name / "lakefile.toml").write_text(f'name = "{name}"\n')

@@ -1,9 +1,11 @@
-import Proofs.Flock.SessionLoop.FinRepFinal
-import Proofs.Flock.SessionLoop.FinRepXs
-import Proofs.Flock.SessionLoop.Tables
-import Proofs.Flock.Claims.ZK.FinishRank
-import Proofs.Flock.Claims.ZK.FinishSwPts
-import Proofs.Flock.Claims.ZK.LinkFft
+module
+
+public import Proofs.Flock.SessionLoop.FinRepFinal
+public import Proofs.Flock.SessionLoop.FinRepXs
+public import Proofs.Flock.SessionLoop.Tables
+public import Proofs.Flock.Claims.ZK.FinishRank
+public import Proofs.Flock.Claims.ZK.FinishSwPts
+public import Proofs.Flock.Claims.ZK.LinkFft
 
 /-!
 # (c.3)'s `FinRepL0`: level 0's opened rows and salts
@@ -25,6 +27,8 @@ names: at `q0At`'s positions. Each of those is opened (`FinRep.q0At_opened`), an
 **`Loop.finRepL0`**: at a statement in the masked scope with a witness, where the loop draws the tape's level 0
 (`Loop.Level0Src`), `FinRepL0` holds. It reads no worker's values.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.RankAt
 
@@ -474,7 +478,7 @@ theorem finSrc_l0 (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Nonce)
     (finSrc vs x w ν t ops i).row0 = (Masked.srcV x (finCoins x ops) w t i).row0 ∧
       (finSrc vs x w ν t ops i).salt0 = (Masked.srcV x (finCoins x ops) w t i).salt0 := by
   obtain ⟨h1, h2, h3⟩ := ZkView.Coined.swExe_l0 ((finS.C x ⟨i, hi⟩).T (finS.cz x (finCoins x ops) ⟨i, hi⟩))
-    (finS.wt x w ⟨i, hi⟩) (vs x w ν (finCoins x ops) ⟨i, hi⟩) (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1
+    (finS.wt x w ⟨i, hi⟩) (vs x w ν (finCoins x ops) (finS.seenOf x t) ⟨i, hi⟩) (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).1
     (finS.randAt x (finCoins x ops) t ⟨i, hi⟩).2
   exact Masked.tabSrcView_l0 Masked.PE x (Masked.czExe Masked.PE x (finCoins x ops))
     (finS.swViewsAt x (finCoins x ops) (finS.wt x w) (vs x w ν (finCoins x ops)) t)

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.NonVacuousRows
-import Proofs.Flock.Claims.Recursion.RowDLevels
+module
+
+public import Proofs.Flock.Claims.Recursion.NonVacuousRows
+public import Proofs.Flock.Claims.Recursion.RowDLevels
 
 /-!
 # `TargetDMerkle` from the honest rep's equations
@@ -7,7 +9,7 @@ import Proofs.Flock.Claims.Recursion.RowDLevels
 `TargetDMerkle` (`NonVacuousRows`, the `DecompB` assembly's row D leaf) asks, at every decision and rep, for query coins
 `cf` from a round `k` at which the rep's decided proof passes `MerkleOk` at the standard hashes, and from which every
 run of its verifier rows draws its positions. `targetDMerkle_of_repP` gives it at `cf` the rep's recorded rounds
-(`cfOf`) and `k` Ligerito's first round (`lgStart`), from the honest rep's three equations alone (HONESTIV's):
+(`cfOf`) and `k` Ligerito's first round (`lgStart`), from the honest rep's three equations alone:
 
 * `h0`: the level-0 commitment is a `commitP` of the rep's table,
 * `hrun`: the decided proof is the output of the honest rep `repP`, run from a transcript at round `0`,
@@ -16,6 +18,8 @@ run of its verifier rows draws its positions. `targetDMerkle_of_repP` gives it a
 `MerkleOk` is `merkleOk_of_repP` at `Sha512.hash`, with the plain scheme's 64-byte widths (`Rows.plain_widths_std`,
 row G's `merkle`), carried to the recorded coins by `merkleOk_congr`; the positions are `DecAt.htie`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

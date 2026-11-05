@@ -1,6 +1,6 @@
-"""`gate.sh probe`: before a gate run writes anything to either auditor host, it reads vy-challenger-1's key, pins and
-ledger and vy-auditor-1's status, and refuses (exit 3, the reason in probe.json) a key that isn't PIN, a used period, a
-period of the lane still open, a host pinned elsewhere or busy, and, before any request, a CIRCUIT that isn't COMMIT's
+"""`gate.sh probe`: before a gate run writes anything to either auditor host, it reads the challenger host's key, pins
+and ledger and the verifier host's status, and refuses (exit 3, the reason in probe.json) a key that isn't PIN, a used
+period, a period of the lane still open, a host pinned elsewhere or busy, and, before any request, a CIRCUIT that isn't COMMIT's
 and a COMMIT off origin/main's first-parent line (or no line to check it on). A host pinned elsewhere on that line is
 told to rerun at its pin; one pinned off it, to repin. Under DRY=1 nothing reaches ssh. The gates are a stub ssh on
 PATH; COMMIT is the head of a throwaway repository whose bare origin's main holds it and its parent."""
@@ -74,11 +74,12 @@ def probe(tmp_path: Path, repo: tuple[Path, str], *, ledger=CLOSED_7, pinned=Non
     (g / "ledger").write_text("".join(json.dumps(e) + "\n" for e in ledger))
     (g / "status").write_text(json.dumps({"pinned": pinned or head, "busy": list(busy), "pins": [], "runs": []}))
     (bin_ / "ssh").write_text(f'#!/bin/sh\nfor a; do last=$a; done\necho "$*" >> {g}/calls\ncat "{g}/$last"\n')
-    (bin_ / "ssh-keygen").write_text(f'#!/bin/sh\necho "# Host 81.85.1.145 found: line 1"\necho "81.85.1.145 ED25519 {FP}"\n')
+    (bin_ / "ssh-keygen").write_text(f'#!/bin/sh\necho "# Host 192.0.2.7 found: line 1"\necho "192.0.2.7 ED25519 {FP}"\n')
     for f in bin_.iterdir():
         f.chmod(0o755)
     env = {**os.environ, "PATH": f"{bin_}{os.pathsep}{os.environ['PATH']}", "OUT": str(out), "COMMIT": head,
-           "PERIOD": period, "PIN": PIN, "GATE_KEY": str(tmp_path / "key"), "AUDITOR_FP": FP}
+           "PERIOD": period, "PIN": PIN, "GATE_KEY": str(tmp_path / "key"), "AUDITOR_FP": FP,
+           "AUDITOR": "research@192.0.2.7", "CHALLENGER": "research@192.0.2.8"}
     if circuit:
         env["CIRCUIT"] = circuit
     if dry:
@@ -105,11 +106,11 @@ def test_the_probe_passes_reading_only(tmp_path, repo):
      "lane memory-accounting has period ma-remote-coins-x open: close it first (gate.sh close, PERIOD=ma-remote-coins-x)"),
     ({"public": bytes(80)}, f"the challenger's public key is {hashlib.sha512(bytes(80)).hexdigest()[:16]}..., "
                             f"not PIN {PIN[:16]}..."),
-    ({"pinned": "{parent}"}, "vy-auditor-1 is pinned at {parent}, not COMMIT {head}: rerun with COMMIT={parent}"),
+    ({"pinned": "{parent}"}, "the verifier host is pinned at {parent}, not COMMIT {head}: rerun with COMMIT={parent}"),
     ({"pinned": "9b062d027f612c9f39faae87da61fcc554c84b81"},
-     "vy-auditor-1 is pinned at 9b062d027f612c9f39faae87da61fcc554c84b81, off main's first-parent line, where no "
+     "the verifier host is pinned at 9b062d027f612c9f39faae87da61fcc554c84b81, off main's first-parent line, where no "
      "session credits: repin it at COMMIT {head} (vy-verifier-pin) and rerun"),
-    ({"busy": ["v20261024T000000Z-0000"]}, "vy-auditor-1 runs ['v20261024T000000Z-0000']: one unit at a time"),
+    ({"busy": ["v20261024T000000Z-0000"]}, "the verifier host runs ['v20261024T000000Z-0000']: one unit at a time"),
 ], ids=["used-period", "lane-open", "wrong-key", "host-elsewhere-on-main", "host-off-main", "host-busy"])
 def test_the_probe_refuses_before_any_write(tmp_path, repo, kw, why):
     at = {"head": repo[1], "parent": git(repo[0], "rev-parse", "HEAD~1")}

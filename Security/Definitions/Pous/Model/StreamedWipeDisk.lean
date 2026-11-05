@@ -1,4 +1,6 @@
-import Definitions.Pous.Model.StreamedWipeServer
+module
+
+public import Definitions.Pous.Model.StreamedWipeServer
 
 /-!
 # The streamed-label wipe with a server's disks in the fill
@@ -22,6 +24,8 @@ in full, whatever it holds:
 So `Disks.bytes` is every byte the disks can hold, their raw media and caches included, not the capacity they expose.
 -/
 
+@[expose] public section
+
 namespace Pous.StreamedWipe
 
 /-- A server's disks as the wipe fills them: `bytes`, every byte they can hold (each drive's raw media, its spare area
@@ -30,9 +34,9 @@ structure Disks where
   bytes : ℕ
   labels : ℕ
 
-/-- vy-dc-h200-2's disks as a whole-node session filled them: its two virtual disks whole (`vda` 274,877,906,944 B
-and `vdc` 499,289,948,160 B), and the labels of the fill written on them, each filesystem's free space less 10 GiB
-(325,243,109,376 B). -/
+/-- The deployed H200 node's disks as a whole-node session filled them: its two virtual disks whole (`vda`
+274,877,906,944 B and `vdc` 499,289,948,160 B), and the labels of the fill written on them, each filesystem's free space
+less 10 GiB (325,243,109,376 B). -/
 def h200Disks : Disks where
   bytes := 774167855104
   labels := 5081923584
