@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.DeploySessions
-import Proofs.Flock.Claims.Recursion.VStarCross
-import Proofs.Flock.Claims.Sampling.Session
+module
+
+public import Proofs.Flock.Claims.Recursion.DeploySessions
+public import Proofs.Flock.Claims.Recursion.VStarCross
+public import Proofs.Flock.Claims.Sampling.Session
 
 /-!
 # A sampled verifier that runs its own rounds, then one Flock session (`SessionRuns`)
@@ -19,6 +21,8 @@ on (`run_session`). Where `ok` refused, the sampled run ends refused at round `p
 prover that sends `[2]`, which the Flock verifier refuses at once (`twoP`). The Flock verifier's facts this reads
 (`FlockAt`) hold at flock-verify `--zk` against SHA-512 (`flockAt_sha512`).
 -/
+
+@[expose] public section
 
 namespace SamplingDeploy
 

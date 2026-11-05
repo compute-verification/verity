@@ -5,7 +5,14 @@ a file of the registration's units `0, …, N − 1` in order, which v2 holds th
 (`OneStageZk.unitsHeld`), so the units its session proves are the registration's. O(the ranges + the file's units),
 which the setup reads already.
 -/
-import SampledProofs.Json
+module
+
+public import SampledProofs.Json
+meta import SampledProofs.Json
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.PublicUnits
 

@@ -1,4 +1,6 @@
-import Batteries.Tactic.OpenPrivate
+module
+
+public import Batteries.Tactic.OpenPrivate
 
 /-!
 # `Array.qsort` leaves a sorted array as it is
@@ -6,6 +8,8 @@ import Batteries.Tactic.OpenPrivate
 `qsort_sorted`: an array strictly sorted by `lt` is `qsort lt`'s own output. Each partition's pivot is the middle element,
 which splits a sorted range in place (`qpartition_sorted`), and both halves stay sorted (`sort_sorted`).
 -/
+
+@[expose] public section
 
 open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic
 

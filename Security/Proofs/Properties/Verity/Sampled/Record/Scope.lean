@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.NumbersDeploy
+module
+
+public import Proofs.Flock.Claims.NumbersDeploy
 
 /-!
 # A session's setup in Flock's masked scope
@@ -9,6 +11,8 @@ soundness bound covers (`Flock.checkInRange_ok`'s three bounds, `FlockDeploy.acc
 points. It reads only Flock's own fields. With the setup's equation it is `FlockDeploy.ZkIn` at one table
 (`zkIn_of_inScope`), the scope `SessionsIn` reads; every record session that sets up is in it (`Record.Inner`).
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled.Record
 

@@ -1,9 +1,11 @@
-import Proofs.Properties.Verity.Sampled.Record.Opens
-import Proofs.Properties.Verity.Sampled.Record.Scope
-import Proofs.Flock.Claims.Recursion.AcceptedScope
-import Proofs.Flock.Claims.Bridge.Custody
-import Proofs.Flock.Claims.Scope.Setup
-import Proofs.Flock.Claims.KS.Range
+module
+
+public import Proofs.Properties.Verity.Sampled.Record.Opens
+public import Proofs.Properties.Verity.Sampled.Record.Scope
+public import Proofs.Flock.Claims.Recursion.AcceptedScope
+public import Proofs.Flock.Claims.Bridge.Custody
+public import Proofs.Flock.Claims.Scope.Setup
+public import Proofs.Flock.Claims.KS.Range
 
 /-!
 # The sessions are in Flock's masked scope (`SessionsIn`, `InnerNumbers`)
@@ -21,6 +23,8 @@ statement, and `SessionsIn` holds wherever a reference draw file exists (`∃ d,
 
 Then `InnerNumbers` at the record is `innerNumbers_deploy` (`innerNumbers`).
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled.Record
 

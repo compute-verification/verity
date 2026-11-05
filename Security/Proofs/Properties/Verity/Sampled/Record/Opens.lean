@@ -1,10 +1,12 @@
-import Proofs.Properties.Verity.Sampled.Record.Runs
-import Proofs.Properties.Verity.Sampled.Record.Accepts
-import Proofs.Properties.Verity.Sampled.Record.Nums
-import Proofs.Flock.Bridge.V5.Session
-import Proofs.Flock.Claims.ZK.MaskedTables
-import Proofs.Flock.Claims.Recursion.VStarParts
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+module
+
+public import Proofs.Properties.Verity.Sampled.Record.Runs
+public import Proofs.Properties.Verity.Sampled.Record.Accepts
+public import Proofs.Properties.Verity.Sampled.Record.Nums
+public import Proofs.Flock.Bridge.V5.Session
+public import Proofs.Flock.Claims.ZK.MaskedTables
+public import Proofs.Flock.Claims.Recursion.VStarParts
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
 
 /-!
 # A checked unit's Flock witness opens its proof block correct (`SessionOpens`)
@@ -35,6 +37,8 @@ make the unit's proof block correct wherever the values carry those that open (`
   up at each drawn unit (`session_table`). The statement stays a variable equal to `xOf A o` throughout (`parse_at`,
   `checked_at`, `session_at`).
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled.Record
 

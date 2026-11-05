@@ -1,4 +1,6 @@
-import Proofs.Flock.Bridge.Lowers
+module
+
+public import Proofs.Flock.Bridge.Lowers
 
 /-!
 # The lowered program is in the readable scope's order
@@ -7,6 +9,8 @@ import Proofs.Flock.Bridge.Lowers
 * `topological_progOf`: `progOf C κ` reads only earlier gates (`reads_lt`) and returns only its own gates, so it is
   topologically ordered (`Prog.Topological`), for every circuit and constants.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

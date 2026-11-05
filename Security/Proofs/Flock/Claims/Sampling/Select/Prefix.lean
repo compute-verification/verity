@@ -1,9 +1,13 @@
-import Proofs.Flock.Claims.Sampling.Select.Take
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.Take
 
 /-! # A draw from bytes draws the same from any extension of them
 
 `Draw.drawUnits` reads its source in order (`Draw.take`) and stops when its law's draw ends, so a draw that ends on
 `ξ`'s bytes reads only `ξ` and ends the same on `ξ ++ t` (`drawUnits_append`). -/
+
+@[expose] public section
 
 open SampledProofs
 

@@ -1,15 +1,17 @@
-import Proofs.Properties.Verity.Sampled.Record.Facts
-import Proofs.Flock.Claims.Sampling.Select.Size
-import Proofs.Flock.Claims.Sampling.Session
-import Proofs.Flock.Bridge.Draw
-import Proofs.Flock.Bridge.Count
-import Proofs.Flock.Bridge.Scope
-import Proofs.Flock.Bridge.PopMatches
-import Proofs.Flock.Claims.ZK.Prefix
-import Proofs.Flock.Claims.ERepCost
-import Proofs.Flock.Level3.ArithFacts
-import Proofs.Flock.Soundness.Refine.Paths
-import Proofs.Flock.Soundness.Discharge.ZkView.Decode
+module
+
+public import Proofs.Properties.Verity.Sampled.Record.Facts
+public import Proofs.Flock.Claims.Sampling.Select.Size
+public import Proofs.Flock.Claims.Sampling.Session
+public import Proofs.Flock.Bridge.Draw
+public import Proofs.Flock.Bridge.Count
+public import Proofs.Flock.Bridge.Scope
+public import Proofs.Flock.Bridge.PopMatches
+public import Proofs.Flock.Claims.ZK.Prefix
+public import Proofs.Flock.Claims.ERepCost
+public import Proofs.Flock.Level3.ArithFacts
+public import Proofs.Flock.Soundness.Refine.Paths
+public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 
 /-!
 # The draw law at one-stage v2's session
@@ -27,6 +29,8 @@ import Proofs.Flock.Soundness.Discharge.ZkView.Decode
   rounds' coins (`srcOf`: every coin's elements' 16 bytes, in order), so an event of them has its probability on uniform
   bytes.
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled.Record
 

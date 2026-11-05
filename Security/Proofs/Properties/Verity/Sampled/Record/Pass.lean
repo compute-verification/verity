@@ -1,7 +1,9 @@
-import Proofs.Properties.Verity.Sampled.Record.Accepts
-import Proofs.Properties.Verity.Sampled.Record.Nums
-import Proofs.Properties.SampledProofs.Credited
-import Proofs.Flock.Claims.Sampling.Select.Prefix
+module
+
+public import Proofs.Properties.Verity.Sampled.Record.Accepts
+public import Proofs.Properties.Verity.Sampled.Record.Nums
+public import Proofs.Properties.SampledProofs.Credited
+public import Proofs.Flock.Claims.Sampling.Select.Prefix
 
 /-!
 # v2's acceptance keeps the run's draw file
@@ -30,6 +32,8 @@ What it takes beside v2's acceptance: `ξ` is the first bytes of the draw rounds
 the run's draw file and `o`'s partition object and registered file are each under `2^64` bytes, the lengths of the
 session's statement v2 reads only as the JSON they parse to (`fits_of_accepts`).
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled.Record
 

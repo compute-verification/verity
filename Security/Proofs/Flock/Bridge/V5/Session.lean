@@ -1,7 +1,9 @@
-import Proofs.Flock.Bridge.V5.Transports
-import Proofs.Flock.Bridge.V5.OpeningsCanon
-import Proofs.Flock.Bridge.V5.Assembly
-import Proofs.Flock.Bridge.FaultyRightC
+module
+
+public import Proofs.Flock.Bridge.V5.Transports
+public import Proofs.Flock.Bridge.V5.OpeningsCanon
+public import Proofs.Flock.Bridge.V5.Assembly
+public import Proofs.Flock.Bridge.FaultyRightC
 
 /-!
 # A session's satisfying message opens its proof block correct at public inputs
@@ -24,6 +26,8 @@ its interior values.
 * `tabOfZHJP_one`: at one table and a constant draw, a drawn proof block's table is any set-up table's at that draw
   (`DrawSetupZHJP.table_congr`).
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

@@ -1,8 +1,10 @@
-import Proofs.Properties.Verity.Sampled.Record
-import Proofs.Properties.Verity.Recursive.BaseSetup
-import Proofs.Properties.Verity.Recursive.Numbers
-import Proofs.Flock.Claims.Sampling.Select.Size
-import Proofs.Flock.Claims.Complete.ZkTables.Stmt
+module
+
+public import Proofs.Properties.Verity.Sampled.Record
+public import Proofs.Properties.Verity.Recursive.BaseSetup
+public import Proofs.Properties.Verity.Recursive.Numbers
+public import Proofs.Flock.Claims.Sampling.Select.Size
+public import Proofs.Flock.Claims.Complete.ZkTables.Stmt
 
 /-!
 # The session's numbers at a draw file
@@ -20,6 +22,8 @@ And what `RefOk`'s unit count reads at a draw v2 accepts: a draw file's units ar
 (`unitsAt_size`), a draw by a law `LawOn` holds draws `A.kd` units (`drawn_length`), and a session's draw that
 `ProvedScope.drawLaw` keeps proves its drawn units alone (`proved_of_drawLaw`).
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled.Record
 

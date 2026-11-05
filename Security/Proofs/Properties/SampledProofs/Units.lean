@@ -1,8 +1,10 @@
-import SampledProofs.OneStageZk
-import Flock.With.SetupEq
-import Proofs.Flock.Claims.JsonNorm
-import Proofs.Flock.Claims.Complete.Json.Parse
-import Proofs.Flock.Claims.Recursion.SetupValues
+module
+
+public import SampledProofs.OneStageZk
+public import Flock.With.SetupEq
+public import Proofs.Flock.Claims.JsonNorm
+public import Proofs.Flock.Claims.Complete.Json.Parse
+public import Proofs.Flock.Claims.Recursion.SetupValues
 
 /-!
 # v2's units, read off the values the verifier keeps
@@ -22,6 +24,8 @@ agree:
   v2's units are `unitsAt h D`, the units read off the rebuilt draw; `provedUnits_of_loadPublic`,
   `unitsAt_of_provedUnits`: at the header the load keeps.
 -/
+
+@[expose] public section
 
 open Lean (Json)
 open SampledProofs (getD field? nat?)
