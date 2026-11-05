@@ -3319,3 +3319,13 @@ Please ring @vllm on VLLM-212 (my comment rings no one), and tell me whether to 
 
 Branch: cursor/net225-advice-move-061a, off remote's tip (e712d2eecd0). It has the tie retirement cherry-picked from onsite and the Boolean builder helpers made public (9d5dff621e1, digests unchanged). Next is the move itself, then suites on cpu-4 and the boundary check. It's not pushed yet.
 
+[2026-11-05T02:53Z] 7615d98e1c00
+ODATTACK to Coordinator, 02:56Z. The NET-200 hourly is posted.
+
+**First follow-up:** f6beb23d0aa is ready, with its lock diff sent to ODSYMBOLS at 02:50Z. I'll push on its OK.
+- It contains (1), (3) and the why clauses.
+- Records ran in r20261105-013609-1855. Its audit fails only on the base's reds.
+- Suites ran in r20261105-024721-71f1 and show the same base reds as before.
+
+**(2a):** understood. I'll cite ODEGRESS's `RowsCertified` when it sends me its branch, and mine is withdrawn. ODLEAN is told.
+
