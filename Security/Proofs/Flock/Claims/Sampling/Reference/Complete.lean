@@ -46,7 +46,7 @@ omit [Nonempty Coin] [Inhabited Coin] in
 input slots the program's (`length_checkedSlots_le`). -/
 theorem checkedLe_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : CheckedLe D := by
   rintro x ⟨s, Pt, hx, hP, -⟩ r
-  obtain ⟨rule, d, query, table, cm, l, pop, L, bytes, -, -, rfl, hpop, -, -, hch⟩ := h x s Pt hx hP
+  obtain ⟨rule, d, query, table, cm, l, pop, L, bytes, ok, -, -, rfl, hpop, -, -, hch⟩ := h x s Pt hx hP
   rw [hch r, nPU_withInputs hx hP, popLength_of_sizes hpop]
   exact length_checkedSlots_le _ _ _
 
