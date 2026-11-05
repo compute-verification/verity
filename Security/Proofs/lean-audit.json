@@ -159,7 +159,7 @@
   },
   "Proofs.Flock.Soundness.Refine.WalkZeta": {
    "why": "ret_walk_zeta, the tactic (an elab) that walks a Ret goal to every return by the computation's head, substituting each let of a value and applying the module's ret_jp at each join point (Sampled/Record/Reg.lean's paramsParsed_program). It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
-   "digest": "c20f52d735d40768ae04bb6bba20041184fd5306760c999587d1559fd9afa984"
+   "digest": "3696004342cbfcc60117678689ca88e8a06dfbdb5fad2c2eacf3a9d5e9263c7a"
   }
  },
  "layers": {

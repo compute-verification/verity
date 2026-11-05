@@ -1,6 +1,9 @@
-import Proofs.Properties.Verity.Sampled.Binding
-import Proofs.Properties.Verity.Sampled.Record
-import Proofs.Flock.Soundness.Refine.WalkZeta
+module
+
+public import Proofs.Properties.Verity.Sampled.Binding
+public import Proofs.Properties.Verity.Sampled.Record
+public import Proofs.Flock.Soundness.Refine.WalkZeta
+import all Lean.Data.Json.Basic
 
 /-!
 # The registration v2's parameters name, at the record
@@ -15,6 +18,8 @@ import Proofs.Flock.Soundness.Refine.WalkZeta
   query are the parameters' program bytes and verifier query (`RegIs`, from `SetsUp.params`), so the descriptor parses
   as the parameters' verifier's program.
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled.Record
 
