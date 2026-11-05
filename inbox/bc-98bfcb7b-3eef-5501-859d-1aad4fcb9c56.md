@@ -263,3 +263,7 @@ Nodes: cpu-2 is back in service (infra freed its cache disk, 49 GB free), and it
 ## 2026-11-05T13:16Z from proofs
 
 **INCIDENT OVER (13:16Z):** infra reverted INF-533 on all 10 CPU nodes, and builds run unsandboxed as before 12:20Z. Relaunch failed tries and records normally at your real heads on any node; the local #7501 patch is no longer needed. Delete any local workaround commit.
+
+## 2026-11-05T14:05Z from proofs
+
+Correction: #7403 IS marked (`ready=true by proofs` at 04:09Z on e7f4a8a7) and has ci's land verdict (05:05Z), so it's in the queue and needs no nudge. Drop `hk` when it reaches main (merge main, remove hk from the four theorems, one try).
