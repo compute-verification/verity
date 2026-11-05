@@ -36,8 +36,10 @@ theorem unitClass_of_le {Cp : Prog} {u : List ℕ} (h : committed Cp u ≤ unitC
   have hmem : unitClassMax ∈ unitClasses := by
     rw [unitClasses, hlog]
     exact List.mem_map.2 ⟨14, by simp, rfl⟩
-  obtain ⟨w, hw⟩ := Option.isSome_iff_exists.1 (List.find?_isSome.2 ⟨unitClassMax, hmem, by simpa using h⟩)
-  exact ⟨w, hw, by simpa using List.find?_some hw⟩
+  have hs : (unitClasses.find? fun w => decide (committed Cp u ≤ w)).isSome :=
+    List.find?_isSome.2 ⟨unitClassMax, hmem, decide_eq_true h⟩
+  obtain ⟨w, hw⟩ := Option.isSome_iff_exists.1 hs
+  exact ⟨w, hw, of_decide_eq_true (List.find?_some hw)⟩
 
 theorem lower_ne_input {g : Fin C.N} (hni : (C.op g).isInput = false) : ∀ x ∈ lower C κ g, x ≠ .input := by
   unfold lower
@@ -54,8 +56,9 @@ theorem progOf_ne_input_of_unit {n : ℕ} {P : Partition C n} {u : Fin n} {p : �
 theorem lt_length_of_unit {n : ℕ} {P : Partition C n} {u : Fin n} {p : ℕ} (hp : p ∈ unitGates P u) :
     p < (progOf C κ).gates.length := by
   obtain ⟨g, -, j, hj, rfl⟩ := mem_unitGates.1 hp
-  rw [← List.isSome_getElem?, gates_off g hj, List.isSome_getElem?, length_lower]
-  exact hj
+  have h := gates_off (κ := κ) g hj
+  rw [List.getElem?_eq_getElem (by rw [length_lower]; exact hj)] at h
+  exact (List.getElem?_eq_some_iff.1 h).1
 
 theorem nodup_unitGates {n : ℕ} (P : Partition C n) (u : Fin n) : (unitGates P u).Nodup := by
   unfold unitGates
@@ -64,17 +67,21 @@ theorem nodup_unitGates {n : ℕ} (P : Partition C n) (u : Fin n) : (unitGates P
     · exact List.nodup_range.map (add_right_injective _)
     · exact List.nodup_nil
   · intro i hg hh
-    split at hg <;> split at hh <;> simp only [List.not_mem_nil, List.mem_map, List.mem_range] at hg hh
-    obtain ⟨j, hj, rfl⟩ := hg
-    obtain ⟨k, hk, he⟩ := hh
-    exact hgh (block_inj hj hk he.symm).1
+    beta_reduce at hg hh
+    split at hg
+    · split at hh
+      · obtain ⟨j, hj, rfl⟩ := List.mem_map.1 hg
+        obtain ⟨k, hk, he⟩ := List.mem_map.1 hh
+        exact hgh (block_inj (List.mem_range.1 hj) (List.mem_range.1 hk) he.symm).1
+      · simp at hh
+    · simp at hg
 
 theorem disjoint_unitGates {n : ℕ} (P : Partition C n) {u v : Fin n} (huv : u ≠ v) :
     (unitGates P u).Disjoint (unitGates P v) := by
   intro i hu hv
   obtain ⟨g, hg, j, hj, rfl⟩ := mem_unitGates.1 hu
   obtain ⟨h, hh, k, hk, he⟩ := mem_unitGates.1 hv
-  obtain ⟨rfl, -⟩ := block_inj hj hk he.symm
+  obtain ⟨rfl, -⟩ := block_inj hj hk he
   exact huv (Option.some.inj (hg.symm.trans hh))
 
 /-- **Every gate of the lowered program but a constant or an input is some unit's.** -/
@@ -111,7 +118,8 @@ theorem partitions_slots {n : ℕ} (P : Partition C n) (κ : Fin C.N → Option 
   have hb := blocks_slots P κ hns
   have hg : (InputSlot.withInputs ⟨[ns.splitLengths ((List.finRange n).map (unitGates P))]⟩ (progOf C κ)).gates =
       (List.finRange n).flatMap (unitGates P) ++ InputSlot.inputsAt (progOf C κ) := by
-    simp [Partition.gates, hb, List.flatMap]
+    have hs : ∀ l : List ℕ, (l.map fun g => [g]).flatten = l := fun l => by induction l <;> simp_all
+    simp [Partition.gates, hb, List.flatMap, hs]
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
   · rw [hg]
     refine List.nodup_append.2 ⟨?_, List.nodup_range.filter _, ?_⟩
