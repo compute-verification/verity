@@ -23,9 +23,9 @@ the `Hello`'s proved:
   `Proof` frames; at the `Commit` and each frame round the auditor answering as `V*` did, and at the `Finish` the run
   having a message there; at every other slot only the updates between the session's requests (`Between`).
 * `LoopReads`: the requests to come, each read so, up to the session's stop or end.
-* `LoopFacts`: the session going on (`Reach`, no stop), its Σ and domain frames the setup's, each rep whose stream had
-  no round yet with its frame absent or fresh (`FreshAt`), and the model's messages the slots took: none before the
-  `Hello` left, and from there one more than the openings the auditor answered.
+* `LoopFacts`: the session going on (`Reach`, no stop), its Σ, domain frames, reps and labels the setup's, each rep
+  whose stream had no round yet with its frame absent or fresh (`FreshAt`), and the model's messages the slots took:
+  none before the `Hello` left, and from there one more than the openings the auditor answered.
 * `LoopKept`: an invariant of the loop's frames and the session kept at the slots of a kind.
 * `LoopP`: the model's messages to come those past the ones the slots took, `LoopFacts`, an invariant `J`, `LoopReads`
   from there, and every request reading the session's setup.
@@ -128,9 +128,9 @@ inductive LoopReads {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : Sessi
       LoopReads M sid spec sts nonce σ st pl (e :: rest)
 
 /-- **What holds of the session and the loop between its requests**, the streams whose rounds came being `seen`: the
-session goes on (`Reach`, no stop), its Σ and domain frames are the setup's once its `Hello` left, each rep whose
-stream had no round yet has its frame absent or fresh, and the slots took none of the model's messages before the
-`Hello` left, and from there one more than the openings the auditor answered. -/
+session goes on (`Reach`, no stop), its Σ, domain frames, reps and labels are the setup's once its `Hello` left, each
+rep whose stream had no round yet has its frame absent or fresh, and the slots took none of the model's messages before
+the `Hello` left, and from there one more than the openings the auditor answered. -/
 structure LoopFacts (sid : Nat) (spec : SessionSpec) (seen : List String) (st : State) (pl : Placed) (σ : LoopAt) :
     Prop where
   setup : SetupOk spec st
@@ -191,12 +191,12 @@ theorem stepK_sent {hold : Bool} {st : State} {pl : Placed} {b : Option UInt8} {
   · rfl
   · exact absurd rfl hk
   · split
-    · exact (request_keeps ‹_›).2.2
+    · exact (request_keeps ‹_›).2.2.1
     · split
       · rfl
       · split
         · rfl
-        · exact (afterAnswer_keeps _ _ _ _).2.2
+        · exact (afterAnswer_keeps _ _ _ _).2.2.1
 
 /-- **The session goes on past its `Hello` only with the `Hello` sent**: a refused `Hello` stops it, and one with no
 answer ends the relay. -/
@@ -225,7 +225,7 @@ theorem stepK_hello_sent {st : State} {pl : Placed} {e : Env}
       · rw [hh, ha] at hgo
         simp only [Bool.false_and] at hgo
         cases hgo
-      · exact (answer_keeps st' .hello r e.id).2.2.trans hsent
+      · exact (answer_keeps st' .hello r e.id).2.2.1.trans hsent
   · rw [stepK_refused (by decide) (by decide) (by decide) hr] at hgo
     have hst : st'.stop.isSome := by
       rcases hs : st.stop with _ | why
