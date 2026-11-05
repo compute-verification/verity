@@ -630,6 +630,7 @@ def test_every_record_difference_code_is_one_update_settles():
                             facts()),
         "domain.uncited": (cpol | {"domain": {"P.Guarantees.U": {k: v for k, v in cites.items() if k != "cites"}}}, cfacts),
         "domain.unlisted": ({k: v for k, v in cpol.items() if k != "domain"}, cfacts),
+        "shape.inline-unlisted": (pol | {"shape": {"inline": {"P.gone": {"x = y": "why"}}}}, facts()),
     }
     assert set(cases) == A.RECORD_DIFFERENCE
     for code, (policy, now) in cases.items():
@@ -2824,36 +2825,33 @@ def test_an_unnamed_inline_hypothesis_fails_with_the_fix():
 def test_a_grandfathered_inline_hypothesis_passes_and_the_list_only_shrinks():
     """`shape.inline` lists the offenders when the rule came, keyed by their text with its whitespace as one space: they
     pass, a new one fails, and `--update` drops each entry whose premise no longer offends (all of a guarantee's, its key
-    with them, and the map once empty), keeps those of a guarantee the lock doesn't list yet, and adds none; `--moved`
+    with them, and the map once empty) and adds none; `--moved`
     carries an entry to its guarantee's new name. A property `shape.properties` holds is the shape rule's; a frozen one
     is judged here. A witness `witnesses` or `claims.witnesses` names is that rule's, and `--update` drops its entries.
     An entry with no reason fails."""
     why = "inline when the rule came"
     pol, f = inlined(premise("P.f n\n    = 3", "Eq"), premise("P.g n = 4", "Eq"))
-    allow = {"P.t": {"P.f n = 3": why, "P.g n = 4": why, "P.h n = 5": why}, "P.ahead": {"x = y": why}}
+    allow = {"P.t": {"P.f n = 3": why, "P.g n = 4": why, "P.h n = 5": why}}
     held = pol | {"shape": {"premises": ["P.Assumptions"], "inline": allow}}
     assert inline_codes(held, f) == []
     fails, out = A.judge(held, f, FILES, update=True)
     assert [x for x in fails if "inline" in x.code] == []
-    assert out["shape"] == {"premises": ["P.Assumptions"], "inline": {"P.ahead": {"x = y": why},
-                                                                      "P.t": {"P.f n = 3": why, "P.g n = 4": why}}}
+    assert out["shape"] == {"premises": ["P.Assumptions"], "inline": {"P.t": {"P.f n = 3": why, "P.g n = 4": why}}}
     grown = inlined(premise("P.f n = 3", "Eq"), premise("P.k n = 6", "Eq"))[1]
     fails = [x for x in A.judge(held, grown, FILES)[0] if "inline" in x.code]
     assert [x.code for x in fails] == ["guarantees.inline-hypothesis"] and fails[0].startswith(
         "guarantees: P.t takes (P.k n = 6): an inline hypothesis")
     assert A.judge(held, grown, FILES, update=True)[1]["shape"]["inline"]["P.t"] == {"P.f n = 3": why}
     fixed = inlined(premise("P.Fits n", "P.Fits"))[1]
-    assert A.judge(held, fixed, FILES, update=True)[1]["shape"] == {"premises": ["P.Assumptions"],
-                                                                    "inline": {"P.ahead": {"x = y": why}}}
+    assert A.judge(held, fixed, FILES, update=True)[1]["shape"] == {"premises": ["P.Assumptions"]}
     alone = pol | {"shape": {"inline": {"P.t": {"P.f n = 3": why}}}}
     assert A.judge(alone, fixed, FILES, update=True)[1]["shape"] == {}
-    assert A.inline_failures(held, grown)[1:] == ({"P.ahead": {"x = y": why}, "P.t": {"P.f n = 3": why}},
-                                                  {"P.t": ["P.f n = 3", "P.k n = 6"]})
+    assert A.inline_failures(held, grown)[1:] == ({"P.t": {"P.f n = 3": why}}, {"P.t": ["P.f n = 3", "P.k n = 6"]})
     assert A.renamed_witnesses({"shape": held["shape"]}, {"P.t": "P.SecurityProofs.T"}) == {"shape": {
-        "premises": ["P.Assumptions"], "inline": {"P.SecurityProofs.T": allow["P.t"], "P.ahead": allow["P.ahead"]}}}
+        "premises": ["P.Assumptions"], "inline": {"P.SecurityProofs.T": allow["P.t"]}}}
     for named in ({"witnesses": {"P.SecurityProofs.u": {"honest": ["P.t"], "nontrivial": "P.n"}}},
                   {"claims": {"modules": ["P.Claims"], "witnesses": {"P.C": {"fails": "P.n", "meets": ["P.t"]}}}}):
-        assert A.inline_failures(held | named, grown) == ([], {"P.ahead": {"x = y": why}}, {})
+        assert A.inline_failures(held | named, grown) == ([], {}, {})
     prop = {"function": "P.f", "outcome": "none"}
     assert inline_codes(pol | {"shape": {"properties": {"P.t": prop}}}, grown) == []
     assert inline_codes(pol | {"shape": {"properties": {"P.t": prop}, "frozen": {"P.t": "frozen: open"}}}, grown) == \
@@ -2871,6 +2869,22 @@ def renamed_inline(was, now, consts, constants, moves=None):
     pol, f = inlined(premise(now, "Eq") | {"consts": consts})
     table = {n: {"kind": k} if isinstance(k, str) else {"kind": k[0], "sha256": sha(k[1])} for n, k in constants.items()}
     return pol | {"shape": {"inline": {"P.t": {was: WHY}}}}, f | {"constants": table, "moves": moves or {}}
+
+
+def test_an_inline_entry_of_a_guarantee_the_lock_does_not_list_fails_until_update_drops_it():
+    """A `shape.inline` entry whose guarantee the lock doesn't list (one removed or renamed without `--moved`) would
+    otherwise stay forever: it fails as a record difference, and `--update` drops it and keeps the rest."""
+    why = "inline when the rule came"
+    pol, f = inlined(premise("P.f n = 3", "Eq"))
+    held = pol | {"shape": {"inline": {"P.t": {"P.f n = 3": why}, "P.gone": {"x = y": why}}}}
+    fails = [x for x in A.judge(held, f, FILES)[0] if "inline" in x.code]
+    assert [(x.code, x.entry) for x in fails] == [("shape.inline-unlisted", "P.gone")]
+    assert fails[0].endswith("run `check.py --update`, which drops the entry") and A.RECORD_DIFFERENCE.match(fails[0])
+    fails, out = A.judge(held, f, FILES, update=True)
+    assert [x for x in fails if "inline" in x.code] == []
+    assert out["shape"] == {"inline": {"P.t": {"P.f n = 3": why}}}
+    assert A.regenerated(held, f, FILES, [fails[0] for fails in [[x for x in A.judge(held, f, FILES)[0]
+                                                                   if "inline" in x.code]]])["shape"] == out["shape"]
 
 
 def test_a_grandfathered_inline_premise_pairs_with_no_other_premise_than_itself_renamed():

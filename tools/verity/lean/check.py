@@ -1509,7 +1509,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
             fails.append(Failure("guarantees.premises-changed", name, f"guarantees: {name}'s premises changed ({change}); "
                                  f"run `check.py --update` and commit the record"))
     ifails, inline, _ = inline_failures(policy, facts)
-    fails += ifails
+    fails += [x for x in ifails if not (update and x.code == "shape.inline-unlisted")]
     out = dict(policy)
     if kept:
         out["guarantees"], out["reads"] = kept, now_reads
@@ -2336,8 +2336,8 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
     facts, not what a guarantee rests on, and `--update` drops its entries. So is a guarantee `claims.generic` lists
     (`generic_claims`), whose antecedents are what the theorem is about, held to `claim_failures`' eligibility. A closed
     hypothesis of the statement as written is the hypotheses rule's. `--update` keeps an entry only while its premise
-    still offends, and that of a guarantee the lock doesn't list yet (one a PR ahead on `next` brings), and adds none, so
-    the map only shrinks; its size is the formalization debt the AUDIT line prints. `--moved` carries an entry to its
+    still offends and adds none, so the map only shrinks; an entry whose guarantee the lock doesn't list fails
+    (`shape.inline-unlisted`) until `--update` drops it; its size is the formalization debt the AUDIT line prints. `--moved` carries an entry to its
     guarantee's new name (`renamed_witnesses`, which renames `shape.inline` with the witnesses). A premise no entry lists
     takes the place and reason of one of its guarantee's entries that no longer offends when the two are one premise under
     renames (`paired`), and `--update` keys the entry by the premise as printed."""
@@ -2353,7 +2353,9 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
     own = set(facts["own_modules"]) if "own_modules" in facts else own_modules(facts)
     lifts = {g: (facts["pins"].get(g) or {}).get("lift") or {} for g in guarantees}
     statements = {v["head"]: g for g, v in lifts.items() if v.get("head") and spec_module(v.get("module") or "")}
-    fails, kept, offenders = [], {g: v for g, v in allow.items() if g not in guarantees}, {}
+    fails, kept, offenders = [Failure("shape.inline-unlisted", g, f"shape: shape.inline lists {g}, which is no guarantee "
+                                      f"the lock lists; run `check.py --update`, which drops the entry")
+                              for g in sorted(allow) if g not in guarantees], {}, {}
     known = {d for r in (policy.get("reads") or {}).values() if isinstance(r, dict) for d in definitions(r)}
     for g in sorted(guarantees):
         pin, old = facts["pins"].get(g) or {}, allow.get(g) or {}
@@ -2687,10 +2689,10 @@ class Codes(frozenset):
 #: premise whose record differs from the build (two records, each right on its own side of a merge), an owned guarantee or
 #: assumption with no record yet, a premise of `assumptions_module` the lock doesn't list (the premise rule adds it with its
 #: guarantees' owner), an open or domain premise now declared there (it moves to `assumptions`), another listed
-#: guarantee's statement taken as a premise (a domain hypothesis citing it), and an entry no guarantee takes (an update
-#: drops it; `merge.py` keeps one entry a side removed while the other changed it).  A missing name, an owner, an open
-#: premise the lock doesn't list (its issue), a domain entry's `why`, one no honest witness concludes, and every other
-#: failure take a person
+#: guarantee's statement taken as a premise (a domain hypothesis citing it), a `shape.inline` entry of a guarantee the lock
+#: doesn't list, and an entry no guarantee takes (an update drops either; `merge.py` keeps one entry a side removed while
+#: the other changed it).  A missing name, an owner, an open premise the lock doesn't list (its issue), a domain entry's
+#: `why`, one no honest witness concludes, and every other failure take a person
 RECORD_DIFFERENCE = Codes({
     "guarantees.signature", "guarantees.assumptions", "guarantees.type-hash",       # its record's statement differs
     "guarantees.premises-changed",                                                  # or what it rests on
@@ -2703,6 +2705,7 @@ RECORD_DIFFERENCE = Codes({
     "open.declared", "open.cited",                                                  # or it is another kind
     "domain.digest", "domain.unrecorded", "domain.unread", "domain.read-only",      # a domain hypothesis's record differs
     "domain.declared", "domain.uncited", "domain.unlisted",                         # or its kind or citation
+    "shape.inline-unlisted",                                                        # an inline entry of no guarantee
 })
 
 
@@ -2712,7 +2715,7 @@ def regenerated(policy: dict, facts: dict, files: dict[str, str], fails: list[st
     if not fails or not all(RECORD_DIFFERENCE.match(f) for f in fails):
         return None
     new = judge(policy, facts, files, update=True)[1]
-    return policy | {k: new[k] for k in ("guarantees", "reads", "assumptions", "domain", "open") if k in new}
+    return policy | {k: new[k] for k in ("guarantees", "reads", "assumptions", "domain", "open", "shape") if k in new}
 
 
 #: what a property's one hypothesis that is not a premise says its function returned (`shape`): `none` for a function that
