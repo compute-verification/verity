@@ -7,6 +7,9 @@ module
 public import Lean.Data.Json
 public import Flock.Canon
 public import Flock.Hash
+meta import Lean.Data.Json
+meta import Flock.Canon
+meta import Flock.Hash
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 

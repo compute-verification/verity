@@ -490,8 +490,11 @@ so drawing the salts and the unreleased coins at the close gives them, jointly w
 deployed device's draw before the session gives them. The prover here sees the whole draw, where the deployed one sees
 the salts and no unreleased coin, and chooses the bytes its close leaves to the device, where the deployed device's
 times and ending follow the prover's frames: a deployed prover is a mixture of strategies here. Each signature is the
-device's on its message at its place among the play's, so the signatures on what the request fixes are fixed before
-any coin, as the deployed ledger's reserve and open are. A forger built from a strategy has the device sign the play's
+device's on its message at its place among the play's, so the signatures on what the request fixes (`Signer.first`)
+are fixed before any coin. The deployed device signs the ledger's reserve and open before any coin and releases those
+signatures then, where the play here releases them at the close: they are functions of the request alone, so a
+deployed prover that reads them before its first frame is a strategy here that hard-codes them after its request, and
+the mixture covers it. A forger built from a strategy has the device sign the play's
 messages on its coin (`Hash.Assumptions.LmsForger.signed`), each chosen by the strategy's moves before it: the
 adaptive queries of the EUF-CMA game. -/
 def finish (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray) (log : List Release) : Game Exchange :=
