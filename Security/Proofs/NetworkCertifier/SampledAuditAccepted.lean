@@ -1,12 +1,14 @@
 import Definitions.NetworkCertifier.Guarantees.SampledAudit
 import Proofs.Flock.Claims.Prob
 import Proofs.NetworkCertifier.Wires
+import Proofs.NetworkCertifier.KSWired
 
 /-!
 # The sampled audit implies `Accepted`
 
-`NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted`. `KSAccepted` is
-`KSWired`'s bound with a stronger relation on a smaller scope, so it is `KSWired` once `RWired δ x w` gives `RAcc δ x w`
+`NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted`. `KSAccepted` is the bound
+of `KSBy` at the wired check (at `RWired`, `ksBy_wiredOk`) with a stronger relation on a smaller scope, so it is that
+bound once `RWired δ x w` gives `RAcc δ x w`
 at every statement in the audit's scope (`rAcc_of_rWired`), `PrBad` monotone in the relation (`Claims.Pr_mono`). On
 that scope:
 
@@ -298,9 +300,9 @@ end Run
 
 /-- **A wired gate outside the incorrect proof blocks reads the trace's value** once the wires are resolved in more
 rounds than the wired gates ranked below it, at inputs that read the trace at every unwired input that is `Good`, where
-a wired gate's writer depends only on gates `Good` as the wired gate is: its wire is right, so the trace holds there the
-value its writer is read at, and the writer, a returned gate (a constant, an input or a computed gate) or an input, has
-the trace's value (`valOver_out`) on inputs that do, the wired ones among them ranked lower. -/
+a wired gate's writer depends only on gates `Good` as the wired gate is: its wire is right, so the trace holds there its
+writer's committed value, and the writer, a returned gate that is no constant or an input, has the trace's value
+(`valOver_out`) on inputs that do, the wired ones among them ranked lower. -/
 theorem resolveWires_eq {L S : ℕ} {C : Prog} {P : Partition} {lay : BoundaryGates L S} {k : ℕ}
     {ref : ℕ → Option Bool} {F : Finset ℕ} (hT : C.Topological) (hP : P.Partitions C) (ι : ℕ → ℕ → Bool)
     (hι : ∀ v u, P.blocks[v]? = some u → v ∉ F → C.Correct (C.refIn u ref (ι v)) u) (hwf : lay.WiresFit C k)
@@ -318,11 +320,11 @@ theorem resolveWires_eq {L S : ℕ} {C : Prog} {P : Partition} {lay : BoundaryGa
   intro g w hw hg hc hnf
   rw [resolveWires_succ hw]
   obtain ⟨hgi, -, hwo⟩ := hwf.1 g w hw
-  obtain ⟨b, hgb, hwb⟩ := hright g hgi hnf w hw
+  obtain ⟨hwc, b, hgb, hwb⟩ := hright g hgi hnf w hw
   have htg : traceVal C ref g = b := by
     rw [traceVal, read_of_not_const (fun b' h => by rw [hgi] at h; cases h), hgb, Option.getD_some]
   have htw : traceVal C ref w = b := by
-    rw [traceVal, hwb, Option.getD_some]
+    rw [traceVal, read_of_not_const hwc, hwb, Option.getD_some]
   refine (valOver_out hT hP ι hι (fun g' => Depends C g' w) ?_ ?_ hwo Relation.ReflTransGen.refl).trans
     (htw.trans htg.symm)
   · intro g' x hx hg' i hi
@@ -529,11 +531,11 @@ end NetTiming.SampledAuditProof
 
 open NetTiming.SampledAuditProof in
 /-- **The sampled audit implies `Accepted`, at `ε` at `δ` over the selection**
-(`NetTiming.Guarantees.SampledAuditAccepted`): `KSWired`'s bound at the stronger relation on the smaller scope,
-`RWired δ` giving `RAcc δ` there (`rAcc_of_rWired`). -/
+(`NetTiming.Guarantees.SampledAuditAccepted`): `KSBy`'s bound at the wired check, at `RWired` (`ksBy_wiredOk`), at the
+stronger relation on the smaller scope, `RWired δ` giving `RAcc δ` there (`rAcc_of_rWired`). -/
 theorem NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted := by
   intro Coin Col T _ _ _ _ _ H D L K S lay k hKS δ decode hδ hdec x hx Ω _ _ P
-  have h := hKS δ decode hδ hdec x hx.1 Ω P
+  have h := NetTiming.ksBy_wiredOk.1 hKS δ decode hδ hdec x hx.1 Ω P
   unfold Claims.PrBad at h ⊢
   refine le_trans (Claims.Pr_mono fun s hs => ⟨hs.1, fun hR => hs.2 ?_⟩) h
   revert hR

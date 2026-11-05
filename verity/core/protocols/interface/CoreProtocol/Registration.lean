@@ -449,9 +449,18 @@ private def bare : List (String → Entry) :=
 #guard refusal .remoteNetwork entries == none
 #guard head .remoteNetwork (chain .remoteNetwork entries) != head .onsite (chain .onsite entries)
 #guard head .remoteNetwork (chain .remoteNetwork entries) != head .remote (chain .remote entries)
--- onsite: memory no challenger reaches; remote with the network certifier takes it
+-- and so does it without PoUW, on a log of its own
+#guard refusal .remoteNetworkNoPouw bare == some (0, .site .uncertified)
+#guard refusal .remoteNetworkNoPouw entries == none
+#guard head .remoteNetworkNoPouw (chain .remoteNetworkNoPouw entries) != head .remoteNetwork (chain .remoteNetwork entries)
+#guard head .remoteNetworkNoPouw (chain .remoteNetworkNoPouw entries) != head .remote (chain .remote entries)
+#guard head .remoteNetworkNoPouw (chain .remoteNetworkNoPouw entries) != head .onsite (chain .onsite entries)
+#guard (match check auditor .remoteNetworkNoPouw (chain .remoteNetwork entries) with
+  | .error r => some r | .ok _ => none) == some (0, .site .previous)
+-- onsite: memory no challenger reaches; remote with the network certifier, with PoUW or without, takes it
 #guard refusal .onsite [site ⟨[sheet], locs.take 5, links.take 2⟩] == some (0, .site .challengerReach)
 #guard refusal .remoteNetwork [site ⟨[sheet], locs.take 5, links.take 2⟩] == none
+#guard refusal .remoteNetworkNoPouw [site ⟨[sheet], locs.take 5, links.take 2⟩] == none
 -- a sheet with no data sheet, a device's memory over its sheet's, a certifier without its key
 #guard refusal .remote (stating { sheet with figures := { sheet.figures with sku := "sim-b" } }) ==
   some (0, .site .sheetDigest)

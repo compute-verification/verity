@@ -23,6 +23,7 @@ import Proofs.NetworkCertifier.PeriodSum
 import Proofs.NetworkCertifier.Pooled
 import Proofs.NetworkCertifier.TapRows
 import Proofs.NetworkCertifier.Period
+import Proofs.NetworkCertifier.ReadFree
 import Proofs.NetworkCertifier.PeriodReg
 import Proofs.NetworkCertifier.PooledLeak
 import Proofs.NetworkCertifier.Schedule
@@ -35,6 +36,7 @@ import Proofs.NetworkCertifier.Tap
 import Proofs.NetworkCertifier.RecordRows
 import Proofs.NetworkCertifier.Witnesses
 import Proofs.NetworkCertifier.WitnessToys
+import Proofs.NetworkCertifier.KsToy
 import Proofs.NetworkCertifier.CountWitnesses
 import Proofs.NetworkCertifier.PeriodWitnesses
 import Proofs.NetworkCertifier.WiredToys
@@ -52,7 +54,9 @@ registration's values
 (`NetTiming.sampledLeak_registered`);
 `SampledLeakRegPlain` states it at the deployed plain record (`NetTiming.sampledLeak_registered_plain_sha512`). `Sanity` shows every named assumption satisfiable, and `Witnesses` gives each acceptance guarantee its honest and
 nontrivial lemmas; `CountWitnesses` and `PeriodWitnesses` give the counts' and the monitoring period's, at the instances
-`WitnessToys` builds. `Code` proves the certifier's program
+`WitnessToys` builds. `KsToy` builds a deployment where `Claims.Sampling.KS` holds and shows, there, that the
+registered period bound's per-window part fails without `RegOpensAt`, and `PeriodWitnesses` that its count fails
+without `TrustedHost` or `RowsFormat.Wf`. `Code` proves the certifier's program
 (`certifier_program`, `NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions.
 `Accepted` proves `security_properties`' `AcceptedRunsAreProgramRuns` through `Code`: a run the network certificate
 check accepts is a run of the constant-rate Program under the declared advice, so the guarantees here count it.
@@ -62,7 +66,10 @@ from it, `EncardProgramRunsLeWindows`: the program's runs over their first `m` w
 `TapRows` bounds the leak at the network certifier's rows (`TapProof.sampledLeak_tap`): an accepted audit's extracted
 trace carries the network certifier's registered rows outside the faulty units, unless its openings collide with the
 network certifier's; `Period` counts with it. `PeriodReg` pins the registered inputs at the registration's values,
-a disagreement with the registration being a collision `B_reg` finds (`NetTiming.periodLeak_registered`).
+a disagreement with the registration being a collision `B_reg` finds, and counts through `ReadFree`'s read-back from
+the record and the schedule's `(r, D)` (`NetTiming.periodLeak_registered`), at every rows format that reads back;
+`Proofs.Properties.NetworkPeriodLeak` states it at the network certifier's own format on the period check's acceptance,
+the listed `Properties.NetworkPeriodLeak.PeriodLeakRegistered`.
 -/
 
 namespace NetTiming.SecurityProofs
@@ -128,7 +135,6 @@ theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered := by
       (NetTiming.sampledLeak_reg hSA H D L K S lay hks k δ decode hδ hdec reg β Dj hβ).2 x hx s P hs hP op _⟩
 
 theorem PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted := NetTiming.periodLeak
-theorem PeriodLeakRegistered : NetTiming.Guarantees.PeriodLeakRegistered := NetTiming.periodLeak_registered
 theorem PeriodTiedCount : NetTiming.Guarantees.PeriodTiedCount := by
   sorry
 theorem PooledIncorrectBlocksLe : NetTiming.Guarantees.PooledIncorrectBlocksLe := NetTiming.horizonIncorrectBlocks

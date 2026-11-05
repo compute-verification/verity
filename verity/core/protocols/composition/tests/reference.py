@@ -580,13 +580,16 @@ class TiedSame(Same):
                 and (got := t.values(ev)) is not None]
 
 
-#: `Core.Remote.protocol`, `Core.RemoteNetwork.protocol` and `Core.Onsite.protocol`, over their subprotocols in the order
-#: of their ids: each one's policy and integrity committing to one registration record, every window of remote's PoUW
-#: period naming the policy's record (at remote with the network certifier too, where every compute audit of the
-#: network certifier's period names it as well), and onsite's PoUS and PoUB-P2 on one store.
+#: `Core.Remote.protocol`, `Core.RemoteNetwork.protocol`, `Core.RemoteNetworkNoPouw.protocol` and `Core.Onsite.protocol`,
+#: over their subprotocols in the order of their ids: each one's policy and sampled proofs committing to one registration
+#: record, every window of remote's PoUW period naming the policy's record (at remote with the network certifier too,
+#: where every compute audit of the network certifier's period names it as well, and without PoUW only the compute
+#: audits, with no window to tie), and onsite's PoUS and PoUB-P2 on one store.
 REMOTE = TiedSame("verity/remote/v0", (INFERENCE_ONLY, POUW_PERIOD, SAMPLED_PROOFS), (INFERENCE_ONLY.id, SAMPLED_PROOFS.id),
                   (WINDOWS,))
 REMOTE_NETWORK = TiedSame("verity/remote-network/v0", (CERTIFIER, *REMOTE.components), REMOTE.same,
                           (*REMOTE.ties, EGRESS))
+REMOTE_NETWORK_NO_POUW = TiedSame("verity/remote-network-no-pouw/v0", (CERTIFIER, INFERENCE_ONLY, SAMPLED_PROOFS),
+                                  REMOTE.same, (EGRESS,))
 ONSITE = TiedSame("verity/onsite/v0", (CERTIFIER, INFERENCE_ONLY, POUS, POUW_PERIOD, BANDWIDTH, ONE_STAGE_V1, WIPE),
                   (INFERENCE_ONLY.id, ONE_STAGE_V1.id), (STORE,))

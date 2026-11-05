@@ -280,6 +280,7 @@ inductive Composite
   | onsite
   | remote
   | remoteNetwork
+  | remoteNetworkNoPouw
   deriving DecidableEq, Repr
 
 /-- The digests the log names things by: a sheet's, an entry's, and the head of a composite's empty log. -/
@@ -363,9 +364,11 @@ def Owners : Prop :=
   ∀ x ∈ e.locs, (x.kind.auditor = true → x.owner = .auditor ∧ A.key x.id = some x.key) ∧
     (x.kind.auditor = false → x.owner = .prover)
 
-/-- `uncertified`, onsite and remote with the network certifier: every boundary link is certified. -/
+/-- `uncertified`, onsite and remote with the network certifier, with PoUW or without: every boundary link is
+certified. -/
 def Covered : Prop :=
-  c = .onsite ∨ c = .remoteNetwork → ∀ k ∈ (S.add e).links, (S.add e).Boundary k → (S.add e).Certified k
+  c = .onsite ∨ c = .remoteNetwork ∨ c = .remoteNetworkNoPouw →
+    ∀ k ∈ (S.add e).links, (S.add e).Boundary k → (S.add e).Certified k
 
 /-- `challengerReach`, onsite: the host of every memory leaf is at an end of a memory challenger's link. -/
 def Reached : Prop :=
@@ -542,6 +545,7 @@ def Owner.name : Owner → String
 
 def Registration.Composite.name : Registration.Composite → String
   | .onsite => "onsite" | .remote => "remote" | .remoteNetwork => "remote-network"
+  | .remoteNetworkNoPouw => "remote-network-no-pouw"
 
 /-- A refusal's name in `verity.core.site` (`REFUSALS`): the constructor's, in kebab case. -/
 def Registration.Refusal.name : Registration.Refusal → String
@@ -665,7 +669,7 @@ def Registration.Entry.ofJson (j : Json) : V Registration.Entry := do
   pure (.site (← Flock.J.str j "previous" "an entry") ⟨sheets, locs, links⟩)
 
 def Registration.Composite.ofJson (j : Json) : V Registration.Composite :=
-  byName [.onsite, .remote, .remoteNetwork] Registration.Composite.name j "the log's composite"
+  byName [.onsite, .remote, .remoteNetwork, .remoteNetworkNoPouw] Registration.Composite.name j "the log's composite"
 
 /-- A log as `Registration.to_json` writes it: its composite and its entries. -/
 def Registration.ofJson (j : Json) : V (Registration.Composite × Registration) := do

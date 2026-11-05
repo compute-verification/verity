@@ -4,8 +4,9 @@ import Proofs.NetworkCertifier.KSWired
 /-!
 # The guarantees restated over the wiring, at a layout with no wires
 
-Each guarantee restated over the layout's wiring (`BoundaryGates.wires`) takes `KSWired` where its statement before the
-wiring took `Claims.Sampling.KS`. At a layout with no wires, `Claims.Sampling.KS` gives `KSWired` (`ksWired_none`), and
+Each guarantee restated over the layout's wiring (`BoundaryGates.wires`) takes `Claims.Sampling.KSBy` at the wired check
+(`wiredOk`) where its statement before the wiring took `Claims.Sampling.KS`. At a layout with no wires,
+`Claims.Sampling.KS` gives it (`ksWired_none`), and
 the definitions the conclusions read say what they said before the wiring: the incorrect set is the faulty set
 (`incorrect_none`), the sampling relation at the incorrect set is `Claims.Sampling.R` (`RWired_none`), and the circuit's
 Program reads its inputs as given (`resolveWires_nil`). So each guarantee gives, at a layout with no wires, its statement

@@ -195,19 +195,24 @@ TEXT = {"refused.txt": O}
 SUMMARY_DOC = {
     "refused.**": O, "checks_before_draw": O, "checks_before_draw.*": O,
     "fixed_before_draw": O, "fixed_before_draw.ok": O, "fixed_before_draw.codes[]": O,
+    "checks.*": O, "checks.*.ok": O, "checks.*.codes[]": O, "checks.registered_complete.members[]": O,
     "audit": O, "audit.accepted": O, "audit.outcome.**": O, "audit.why.**": O,
     "compile.**": OPENING,
 }
 #: what it reads of the audit record ``window/audit.json`` (`served_integrity.RECORD`): its verdict and each check's
 #: outcome, the units sampled and those the proved statement covers, the sample and the units proved (the verifier's
 #: samples),
-#: the registration it audited, and the bound on incorrect proof blocks over the population at δ
+#: the registration it audited, and the bound on incorrect proof blocks over the population at δ; each check after the
+#: draw's outcome with the drawn members whose files were completed, and each drawn member's registered reads' outcome
 AUDIT_RECORD = {
     "accepted": O, "checks.*": O, "checks.*.ok": O, "checks.*.codes[]": O,
     "checks.proved.detail.units.drawn[]": C, "checks.proved.detail.units.statement[]": C,
     "draw.**": C, "proved_units[]": C, **under("registration", REGISTRATION),
     "wrong_units": O, "wrong_units.delta": S, "wrong_units.of": S, "wrong_units.rule": S, "wrong_units.bound": O,
     "wrong_units.per_template.*": O,
+    "checks_after_draw.*": O, "checks_after_draw.*.ok": O, "checks_after_draw.*.codes[]": O,
+    "checks_after_draw.registered_complete.members[]": O,
+    "registered_reads.ok": O, "registered_reads.chunks.*.ok": O,
 }
 #: V3c's audit as one compute audit of the network certifier's period (`records_audit.period`): its answer, its free
 #: input bits and steps, the Program and the registration

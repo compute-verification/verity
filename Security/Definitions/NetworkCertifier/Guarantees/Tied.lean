@@ -18,14 +18,14 @@ period check's count bounds (`CircuitCounts`). The registered inputs are pinned 
 
 * **The tie.** At a phase registered as `pw i` whose ties are placed together (`RowsStateHeld`, `RowsProgWired`) and
   whose statements' registrations open their registered inputs (`RegOpensAt`), the sampling relation at each
-  statement's own incorrect set (`RWired`, at its own wires and its `δ`) gives the phase's leak relation at the network
-  certifier's rows with the registered inputs at the registration's values (`RLeakTied`, at `AsReg`), or two of the
-  traces' openings, or one of them and one of the registration's or the network certifier's, collide. The tie holds at
-  whatever values the registration opens, so it needs no empty state. A tie is right by binding: its two ends are
-  committed as one bit of one leaf under one root (`SharedRootsParsed`, at the deployed parse), and a trace's transfer
-  gate is the network certifier's (`CommitmentScheme.Binds`). So a wrong tie is no new error: each statement fails
-  `RWired` with probability at most `δ + ε_ks + ε_bind` at its session (`KSWired`), and a collision is found on the
-  openings the extractions and the registration check.
+  statement's own incorrect set (`RBy` at the wired check `wiredOk`, at its own wires and its `δ`) gives the phase's
+  leak relation at the network certifier's rows with the registered inputs at the registration's values (`RLeakTied`,
+  at `AsReg`), or two of the traces' openings, or one of them and one of the registration's or the network
+  certifier's, collide. The tie holds at whatever values the registration opens, so it needs no empty state. A tie is
+  right by binding: its two ends are committed as one bit of one leaf under one root (`SharedRootsParsed`, at the
+  deployed parse), and a trace's transfer gate is the network certifier's (`CommitmentScheme.Binds`). So a wrong tie is
+  no new error: each statement fails that relation with probability at most `δ + ε_ks + ε_bind` at its session
+  (`KSBy` at the wired check), and a collision is found on the openings the extractions and the registration check.
 * **The count.** Where the network certifier registers its observations at every phase's scan, the secrets of a covert
   sender whose every phase meets its good event (`PhaseGood`) number at most
   `#Ss · ∏_c (cap_c + 1) · ∏_i 2^free_i · #faultySets_i(δ_0) · 2^(β_i + Σ_j βt_ij) · Dj^k_i`, `free_i` the period
@@ -60,14 +60,13 @@ by `trusted-host` on schedules in `Ss` its record format holds (`SchedulesHeld`)
 
 * at every phase whose statements' bytes and traces parse to a phase registered as `pw i` (`PhaseParsed`), with its ties
   placed together (`RowsStateHeld`, `RowsProgWired`) and its statements' registrations opening their registered inputs
-  (`RegOpensAt`), traces at which
-  each statement meets the sampling relation at its own incorrect set (`RWired`) meet the phase's leak relation at the
-  network certifier's rows with the registered inputs at the registration's values (`RLeakTied`, at `AsReg` of
-  `Phase.regVal`), or the `H` calls that check their openings, the registration's and the network certifier's collide
-  (`LogColl`);
+  (`RegOpensAt`), traces at which each statement meets the sampling relation at its own incorrect set (`RBy` at the
+  wired check) meet the phase's leak relation at the network certifier's rows with the registered inputs at the
+  registration's values (`RLeakTied`, at `AsReg` of `Phase.regVal`), or the `H` calls that check their openings, the
+  registration's and the network certifier's collide (`LogColl`);
 * where at every phase's scan statement `x z i` the network certifier registers its observations at that phase's
-  operator (`TapsOpen`), a covert sender in the server, whose secrets a decoder recovers from the client's view of the
-  server side (`SenderDecodes`): its secrets whose every phase meets `PhaseGood`, at that phase's statements, the scan's
+  operator (`CertifiersOpen`), a covert sender in the server, whose secrets a decoder recovers from the client's view of
+  the server side (`SenderDecodes`): its secrets whose every phase meets `PhaseGood`, at that phase's statements, the scan's
   `x z i` and the tied audits' `xt z i`, and extracted witnesses `wit z i`, number at most
   `#Ss · ∏_c (cap c + 1) · ∏_i 2^free_i · #faultySets_i · 2^(β_i + Σ_j βt_ij) · Dj^k_i`. -/
 def PeriodTiedCount : Prop :=
@@ -95,13 +94,13 @@ def PeriodTiedCount : Prop :=
     (∀ i (ph : Phase) (xs : List Claims.Msg) (ws : List Wit), SamePhase D lay k reg (pw i) ph → PhaseParsed D ph xs ws →
       RowsStateHeld ph place (t i) → RowsProgWired ph place (t i) → (∀ x ∈ xs, RegOpensAt H D reg ops x) →
       (∀ j x w, xs[j]? = some x → ws[j]? = some w →
-        RWired H D.commit D.parse D.partition (fun s => (lay s).wires) (δ j) x w) →
+        RBy (wiredOk fun s => (lay s).wires) H D.commit D.parse D.partition (δ j) x w) →
       RLeakTied H D.commit D.parse D.partition L K S lay (k ph.scan) ph (t i) δ
           (fun _ => AsReg ph.prog (ph.layout lay (t i)) (k ph.scan) (ph.reg reg) (ph.regVal ops)) Dj (tops ph.scan)
           xs ws ∨
         Claims.Sampling.LogColl (phaseLog H D.commit ph ws ++ phaseRegLog H D.commit ph ops ++
           tapLog H D.commit ph.scan.roots (tops ph.scan))) ∧
-    (TapsOpen H D lay k op tops Zs x (fun z => (run tap (schedOf z, srvOf z)).2) →
+    (CertifiersOpen H D lay k op tops Zs x (fun z => (run tap (schedOf z, srvOf z)).2) →
       {z | z ∈ Zs ∧ ∀ i, PhaseGood H D L K S lay k δ reg ops Dj (pw i) (t i) (ρ i) tops (x z i :: xt z i) (wit z i)
           ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
         Ss.encard * (((∏ c, (cap c + 1)) * ∏ i, (2 ^ free i * (faultySets (pw i).scan.design (Pw i) (δ 0)).card *

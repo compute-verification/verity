@@ -18,10 +18,10 @@ among its wires (`Phase.layout`), so a tied gate is no free input (`freeInputs`)
   the empty state, a value fixed before the run;
 * `prog`: the scan's `prog` read at lane `l`, leaf `b` to its tied audit's slot entry of chunk `l`, leaf `b`.
 
-Beside them each statement keeps its own wires (`Phase.ownWires`), which its sampled proofs show right (`KSWired`). A
-tie is right by binding instead: its reader and its writer are committed as one bit of one leaf under one root
-(`Placed`, at the registrations' placement `place`, bit by bit), so two openings of them that differ make a collision
-(`SharedRootsParsed`, the deployed parse's premise, which the sampled leg's bridge discharges).
+Beside them each statement keeps its own wires (`Phase.ownWires`), which its sampled proofs show right (`KSBy` at the
+wired check `wiredOk`). A tie is right by binding instead: its reader and its writer are committed as one bit of one
+leaf under one root (`Placed`, at the registrations' placement `place`, bit by bit), so two openings of them that differ
+make a collision (`SharedRootsParsed`, the deployed parse's premise, which the sampled leg's bridge discharges).
 
 **What an accepted period gives**, each a named `Prop` that a property of the period check discharges:
 
