@@ -1278,17 +1278,27 @@ def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
             "seconds": {"circuit": round(lowered, 1), "record": round(time.time() - t0 - lowered, 1)}}
 
 
+def device_target(async_scheduling: bool = False) -> dict[str, Any]:
+    """This device's target profile (`verity_vllm.TargetProfile.from_device`, declaring ``async_scheduling`` only under
+    it) and execution, bi-eager where vLLM runs batch-invariant (``VLLM_BATCH_INVARIANT``), with no int8 scope: what
+    serve-openai's ``serve.json`` records of them for a model it reads none of (serve_seal's ``target_of``)."""
+    import vllm.envs as envs
+    from verity_vllm import TargetProfile
+
+    target = TargetProfile.from_device().with_overrides(**({"async_scheduling": True} if async_scheduling else {}))
+    return {"target": target.to_json(), "execution": "bi-eager" if envs.VLLM_BATCH_INVARIANT else "eager"}
+
+
 def serve_phi(a: argparse.Namespace) -> dict[str, Any]:
     """What a serve-openai run's ``serve.json`` will record of φ, read before it serves: ``--model`` and ``--revision``,
     the default seed it fills in (`engine.served_seed.DEFAULT_SEED`), and this device's target profile and execution
-    (`serve_seal.target_of`, under this process's environment, which must be the serve's: ``VLLM_BATCH_INVARIANT`` names
-    the execution; ``--async-scheduling`` as the serve's), with no int8 scope, which a checkpoint served in BF16 runs none
+    (`device_target`, under this process's environment, which must be the serve's: ``VLLM_BATCH_INVARIANT`` names the
+    execution; ``--async-scheduling`` as the serve's), with no int8 scope, which a checkpoint served in BF16 runs none
     of. Written to ``--out``: `class_circuit_of_serve`'s ``--serve``, its circuit the one the run's windows are committed
     as once ``serve.json`` says the same (`registered_of_serve` reads only these fields)."""
     from verity_vllm.engine.served_seed import DEFAULT_SEED
-    from verity_vllm.pipeline.serve_seal import target_of
 
-    doc = {"model": a.model, "revision": a.revision, "default_seed": DEFAULT_SEED, **target_of(None, a.async_scheduling)}
+    doc = {"model": a.model, "revision": a.revision, "default_seed": DEFAULT_SEED, **device_target(a.async_scheduling)}
     Path(a.out).write_text(json.dumps(doc, indent=1) + "\n")
     return {"out": a.out, "execution": doc["execution"], "device": doc["target"].get("device_name")}
 

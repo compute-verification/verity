@@ -437,11 +437,10 @@ def test_class_circuit_from_phi_alone_is_window_circuits_record_and_serve_phi_na
     """``prove_path.py class-circuit --serve F`` builds the class's circuit from φ alone, no advice, row dir or window, and
     writes ``window-circuit``'s record of the run's window byte for byte, at the class of record and cut at Pearl+'s
     linears under ``--pearl-tables`` alike (I2's class circuit stubbed, `window_circuit.window_circuit` left to call it).
-    ``serve-phi`` states what serve.json will record of φ from this device (`serve_seal.target_of` stubbed with the run's),
-    and ``compiler --serve`` over it names the compiler ``compiler --serve-run`` names once the run has served."""
+    ``serve-phi`` states what serve.json will record of φ from this device (`prove_path.device_target` stubbed with the
+    run's), and ``compiler --serve`` over it names the compiler ``compiler --serve-run`` names once the run has served."""
     import prove_path as PP
     from test_prove_path import _served
-    from verity_vllm.pipeline import serve_seal
     from verity_vllm.program.predict import window_circuit as WC
 
     s, circuit, seen = _served(tmp_path, monkeypatch), _registered_circuit(), []
@@ -454,7 +453,7 @@ def test_class_circuit_from_phi_alone_is_window_circuits_record_and_serve_phi_na
     monkeypatch.setattr(WC, "takes", lambda *a: None)
     (tmp_path / "advice.bin").write_bytes(s.data)
     serve = json.loads((s.run / "serve.json").read_text())
-    monkeypatch.setattr(serve_seal, "target_of", lambda model=None, async_scheduling=False: {
+    monkeypatch.setattr(PP, "device_target", lambda async_scheduling=False: {
         "target": serve["target"], "execution": serve.get("execution") or serve["engine"]["execution"]})
     phi = tmp_path / "phi.json"
     assert PP.main(["serve-phi", "--model", serve["model"], "--revision", serve["revision"], "--out", str(phi)]) == 0
