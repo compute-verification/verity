@@ -20164,9 +20164,24 @@
    }
   },
   "Proofs.Flock.Claims.ZK.CoinLayer": {
-   "digest": "79f98ab0837f29118798a0e99348877504034c423de9e9c46922f52710027e29",
+   "digest": "ec4cecf8fd433d1aaeda662ac81c1e6bc12c5485b1c26974554ceed6594e8363",
    "definitions": {
-    "Claims.ZKMal.CoinLayer.helloJson": "b7e4e04a3a48ae4a750fd7e1cd30c3012847d143e716b42ab1aff690e9096dff"
+    "Claims.ZKMal.CoinLayer.helloD": "f138d553a32270b19f531a96e40ff98c729df8f2989283f5c6e304aaba6a1f5f",
+    "Claims.ZKMal.CoinLayer.helloJson": "b7e4e04a3a48ae4a750fd7e1cd30c3012847d143e716b42ab1aff690e9096dff",
+    "Claims.ZKMal.CoinLayer.slot": "55d2a368492dd99026f7c85eb1baa75644629b7d375a74d086df90ee5ee4cc47"
+   }
+  },
+  "Proofs.Flock.Claims.ZK.HelloLean": {
+   "digest": "e6715d1f064cf1ad0ed31580dce1abf2d9c2e6a437f3eb62325ecb0b364bb6ef",
+   "definitions": {
+    "Claims.ZKMal.CoinLayer.helloMsg": "b9fcb577caf64ca123406e3b8db53df697981be39ade62394117ec812d8d6d92"
+   }
+  },
+  "Proofs.Flock.Claims.ZK.Reference": {
+   "digest": "08e1af1c56a74d5f63dc68a7f0340e41ac2eac56dd06ae9f420d92758a2c107b",
+   "definitions": {
+    "Claims.ZKMal.refK": "b005f954ef58e18b9f56d61dd7e398b864e2752a26d739064d991bf55879d36f",
+    "Claims.ZKMal.sessOf": "9286f6fdf54cb64f6fc59e6f69b1bc1d882e93833460d554ca411d8a7e6ace85"
    }
   },
   "Proofs.Flock.Claims.ZK.Refine": {
@@ -20179,6 +20194,14 @@
    "digest": "6b22ea1a5a64dd67b81362f100b5e43daea79d961cf72ae30df26d378d926d0a",
    "definitions": {
     "Claims.ZKServer.LeanRelease.rankFails": "126e086123f2f6f0680188d092e41a921118c21c29beb94b5d2ff3037999ed2a"
+   }
+  },
+  "Proofs.Flock.Claims.ZK.SessionLean": {
+   "digest": "1883654ffebaa00eafd2c2a6b8ebfbbb6755f4eaaef056ab701bb711d0db90fe",
+   "definitions": {
+    "Claims.ZKServer.Loop.helloChkAt": "b57030de875feceb3cefaaa01d8602a18fc0ef184f3d9ce9e43eea73adf99d7e",
+    "Claims.ZKServer.Loop.lastOf": "1957529e923539564dce49d4197460b0d7267012dea5371fa4d3cd3470fa5590",
+    "Claims.ZKServer.Loop.reqOf": "434c92983c59ee6d14f7e9ed9d02314ee462c597cfb99cf7a2c00a664d4c187e"
    }
   },
   "Proofs.Flock.Claims.ZK.Switched": {
