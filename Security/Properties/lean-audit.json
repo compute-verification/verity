@@ -209,6 +209,10 @@
    "owner": "@training",
    "digest": "656c7fb44cd7fe0985554a6c03f7c811decbe713a0ce8ea165e84be30040357c"
   },
+  "NetTiming.CertifiersOpen": {
+   "owner": "@network-accounting",
+   "digest": "ad412ebfdf03e7a0fdc82fab3fa136ab9ed079e97d80b1bda82c0a25b015e1a4"
+  },
   "NetTiming.DeviceIntact": {
    "owner": "@network-accounting",
    "digest": "35b47a0bae4d98550943cb5e4a66ecb4ecddeb3d6093fd79cd1feac4e18e0060"
@@ -388,10 +392,6 @@
   "Verity.Vocab.WipeSound": {
    "owner": "@memory-accounting",
    "digest": "8f521d01c94735a34b39b53e869845d8e29035ef05968ef7b0e56349a19d1937"
-  },
-  "NetTiming.CertifiersOpen": {
-   "owner": "@network-accounting",
-   "digest": "ad412ebfdf03e7a0fdc82fab3fa136ab9ed079e97d80b1bda82c0a25b015e1a4"
   }
  },
  "meaning": [
@@ -781,7 +781,7 @@
   "Properties.NetworkPeriodLeak.periodLeakRegistered": {
    "type_hash": "44cdb5237c228e784efc929c72eef7cc3d6073213057570e63f333529806d1c0",
    "missing": "honest",
-   "why": "its premises at the network certifier's rows are the sampled leg's (KSBy at the wired check at the layout's wires, until Claims.Sampling.KSByDeployed discharges it, and CommitmentScheme.Binds at each deployment), whose honest lemmas at the deployed record (NetTiming.Witness.SampledAuditAccepted_honest at layouts with no wiring, NetTiming.ksWired_of_record at a wired one) take the assembled record's hypotheses, which are no named assumptions; both are conditional on the sampled leg's bridge, which is to discharge those hypotheses at the record. Of the period's named conditions, its honest half is to conclude WindowsPlaced and SchedulesCovered at the deployed record, not take them; it takes SenderDecodes and TrustedHost, and owes no CertifiersOpen, the antecedent of the statement's count. The network certifier's key, session and LMS parameters are the auditor's record of it (NetTiming.NetworkCertifierRecord), the key the auditor's registration holds for the device. Its rows format's Wf is no premise: the period check refuses a schedule whose frames don't read back (NetworkCheck.Period.rowsWf), so its acceptance gives rowsWf (Properties.NetworkPeriod.rowsWf_of_accept) and with it Wf at the network certifier's frames (Properties.NetworkPeriod.cellRows_wf_of_rowsWf), and the served schedule w63 passes rowsWf over every period of fewer than 2^25 link-windows (Properties.NetworkPeriodLeak.rowsWf_served)"
+   "why": "its premises at the network certifier's rows are the sampled leg's (KSBy at the wired check at the layout's wires, until Claims.Sampling.KSByDeployed discharges it, and CommitmentScheme.Binds at each deployment), whose honest lemmas at the deployed record (NetTiming.Witness.SampledAuditAccepted_honest at layouts with no wiring, NetTiming.ksWired_of_record at a wired one) take the assembled record's hypotheses, which are no named assumptions; both are conditional on the sampled leg's bridge, which is to discharge those hypotheses at the record. Of the period's named conditions, its honest half is to conclude WindowsPlaced and SchedulesCovered at the deployed record, not take them; it takes SenderDecodes and TrustedHost, and owes no CertifiersOpen, the antecedent of the statement's count. The network certifier's key, session and LMS parameters are the auditor's record of it (NetTiming.NetworkCertifierRecord), the key the auditor's registration holds for the device, that registration read from the auditor's record (Core.Site.Registration.Auditor.ofJson). Its rows format's Wf is no premise: the period check refuses a schedule whose frames don't read back (NetworkCheck.Period.rowsWf), so its acceptance gives rowsWf (Properties.NetworkPeriod.rowsWf_of_accept) and with it Wf at the network certifier's frames (Properties.NetworkPeriod.cellRows_wf_of_rowsWf), and the served schedule w63 passes rowsWf over every period of fewer than 2^25 link-windows (Properties.NetworkPeriodLeak.rowsWf_served)"
   },
   "Properties.NetworkRecords.acceptMeans": "4ee7e6626901cee51276b7be734ca7c3b2daeea3810674d3e4b0983856b300cf",
   "Properties.NetworkRecords.answerAcceptMeans": "c5c91cdf640198af01ce5e2e90ba3ba4e42c21fc97c0610eb0ad09a01671615c",
@@ -7889,7 +7889,7 @@
    ]
   },
   "CoreProtocol.Site": {
-   "digest": "eb6e8a30552f12ae8a61243a84083f224e7f584472937ad9f2a61791584c99a4",
+   "digest": "9eb185c958154b5b49079f70456beaa23483f5f79da63e5c7aadfe92bd3fb9a5",
    "definitions": {
     "Core.Site": "2a3c07003f1e6c7bd6fe76f03f4d6653cbc9d1e2ebcb824862bc03b22c4e61e9",
     "Core.Site.Boundary": "469c58ecf7869a988ee7461c486b8bba89fc9d20e455e84c47b9165cdde685f5",
@@ -7901,6 +7901,7 @@
     "Core.Site.DeviceFigures.Accepted": "1b0ed2f7f8710f757c95d5d8de37c99823cd33680370a6d54a2eb3d70c8e6f39",
     "Core.Site.DeviceFigures.clock": "89cf36a8cfafe744d0beb7805d2a6b49da1e131a743ac96f420d2568c017ac52",
     "Core.Site.DeviceFigures.instDecidableAccepted": "d82ab405eece2bc84cc94f569654a5e8161df14838b986288643060fc57b2036",
+    "Core.Site.DeviceFigures.ofJson": "33b9cff828a68667e457100d9084159bc1d91406310a037b3e6d3d751197860b",
     "Core.Site.DeviceFigures.peakRate": "0140a67566472485bdf721c7005057b70dcefcfea9746002fd19e1841832fa92",
     "Core.Site.DeviceFigures.sku": "3d65eac9783e88c7c746f71f1fdd35de64e8c3639372d3a5db5a983b372ff697",
     "Core.Site.Entry": "4e97b5176e20ee062afe5ea3202b8f59f37d9de5633665d886e2eed44474339a",
@@ -7927,6 +7928,7 @@
     "Core.Site.Entry.refusal": "a1b86c227203fb2fe6b66c01c77eaa84bb1f0d0f6b0352eb3c902f183e2c6ad6",
     "Core.Site.Entry.sheets": "ef76fa2eb513b46590640bfbd4ef6e1377ab2cd882c9160ce32d19212c77be00",
     "Core.Site.Figure": "6a3f0eb2f71a62d1deb80c627804598e3c029f1e81e9fc76519f46eae0143b4b",
+    "Core.Site.Figure.ofJson": "100944d64512765b427dac6cd0578b5ddc6e031ca6453ee4e357dbefc2aef02e",
     "Core.Site.Joins": "9861181c44f080a4ba9b8ee912f2f610102c3122abe9b992acd7057731a26d71",
     "Core.Site.Kind": "e5204e6064f27a1ff2f751666e07cccf8e703a26a3763df15d8de4270615b9d0",
     "Core.Site.Kind.auditor": "e5f4ee8d7e42b2f06087d8ec4edeed8978f39e3acd4216e3879b940c5f2f6a36",
@@ -7961,6 +7963,7 @@
     "Core.Site.OperandClass": "57c86e0c8e04eea7460bf69b23cec0ebbf5768da34b406cd6fd3d1f44c5ab205",
     "Core.Site.OperandClass.all": "fcc22e56f90f33836fd11ae15928c9a35b4a359919f6bf7adb3d6d311ec0f2ae",
     "Core.Site.OperandClass.casesOn": "c44aad1f96098ce9335e22d20a65d121d280a2bde6b6f074051744ae5850ddc2",
+    "Core.Site.OperandClass.name": "a42dba89730df35f9771713fd9f49102e350e4c63de5becfcefe67aa41aa3360",
     "Core.Site.OperandClass.rec": "25265bc98243da6771e56909f0eee97bdb8ab4117d5e618fc1d14bceb1f0e737",
     "Core.Site.OperandClass.uniformS2": "b6616241adf973e07e752961949df671f64d16e0071549ae6f22d3b2084b93c0",
     "Core.Site.OperandClass.uniformS8": "046a984728500d37f93cb0d82384c8fa40d33333d3b54ccb8e27e5b69ed6a3a6",
@@ -7977,6 +7980,7 @@
     "Core.Site.Registration.Auditor": "d49013a157b4db4bb056c3cc57075c7d3990fee66a90b99aed3e253358b68942",
     "Core.Site.Registration.Auditor.estimate": "bbef2a98ed2e527bc0a9270668fc24562c9da9078eae33533a69b30b44591e99",
     "Core.Site.Registration.Auditor.key": "5a2a248a0274dc2a7851af85b94c921aaf93f9cbac5cb93266ca81772590e2ae",
+    "Core.Site.Registration.Auditor.ofJson": "fc3ed261f42dcc511b01f844481e7258d58ef32e50d60537563840c4c5e424eb",
     "Core.Site.Registration.Auditor.sheet": "5ecf85392272c98e7cd2b3e64d82625a8ea02aa6786108a332ff9172338026bc",
     "Core.Site.Registration.Auditor.tolerance": "912f8c3c39c023cdc58b823e80ade3e95050ce49ce78e226f7d1b9786cfa253d",
     "Core.Site.Registration.Composite": "2e1b980aa1cd8d9ea32c8bf9e11bf6ddfa895b2afe722ea1d337f56f97699c7b",
@@ -8019,6 +8023,7 @@
     "Core.Site.Sheet.chip": "ddded7c77056855baa24060a0261a6f28f20eb3177410bd7735ea1f2f7515359",
     "Core.Site.Sheet.figures": "f8d55fd2f21d9e37b1f0e5a7a4dbdc373e26e56a73118c036ac0cdae59b6a056",
     "Core.Site.Sheet.mem": "287ff844e0ff147decd1b9f5e923d9f61e1a50a589b8319f8a629fafb0ba5221",
+    "Core.Site.Sheet.ofJson": "53fe5ee91cadcb07530965568825a225637d2368c512f9d1a04f3e42a745b342",
     "Core.Site.Sheet.sku": "8c1a12341316010bd5aecdf7d5e280e5c7e0ef06c5c93b2e3a6be68d3693c296",
     "Core.Site.Tier": "cd9f6d8bfda3e96fc3784ff320478bf7c9753523d2aa47708748eef972d567e7",
     "Core.Site.Tier.casesOn": "f95c9f1aded1e037168112ae46be4e8aefbfeed0756c1e06c6f48d1a32ada01d",
@@ -8028,6 +8033,7 @@
     "Core.Site.Tier.rec": "58e3d5cbad31aacad330fac27b9e7876f2f98f50f30ccd04a3c2fa1ac340587a",
     "Core.Site.WithinTolerance": "3525f4bd5f39b946be24ecb65ed73a8b94ce04eefb8e2cd7f325e27eb738d323",
     "Core.Site.add": "377cd3e4679f0f12e3562c0b003c369497f1b6920821ad042b0c628103ae5f9f",
+    "Core.Site.exactly": "89427a14b4ba0735a86b19696a55db6b5fcbeee48a080372d7621532f91dde01",
     "Core.Site.far": "8d2438b29b64b4fe777d14fec15a51bfdadbee3220fb2bf699b2ade319a0c4ec",
     "Core.Site.held": "5211786554e2928b776855221c49063c31da35b349c495f6d7214e72efe57de7",
     "Core.Site.host?": "494bc1f555bd5cf278fb9cd2912f1a88995d8d7af1cf8294d091647d8d1243f1",
@@ -8040,6 +8046,7 @@
     "Core.Site.instDecidablePredStringKnown": "736f65487c51c48c75b9fe25d4d3ecb3212cc3f398b3750abac3324ef5ffd61b",
     "Core.Site.instDecidableWithinTolerance": "dee3aa29a20636b7034efc326363c32713357fa38659cc068bc052e46e18e8c7",
     "Core.Site.instReprKind.repr.match_1": "c07d3fe2571964660f53f136423e5d9a2979fe1710aa9518090b3461638e441f",
+    "Core.Site.instReprOperandClass.repr.match_1": "5077df096f600947624fd4861ddbb589a8c4c2d450cb6b915ae275711687ade8",
     "Core.Site.kind?": "51ff982d03b772ea0d584ee9a2c998d1472d201d255bc8b44a28a415979e2e2c",
     "Core.Site.links": "92a8324bb39183e50d1f4ca630c90231904071326c3237e5ae738a135ce1c38a",
     "Core.Site.loc?": "f8fdfdcc8cd0c5d7bda96b119046c342a401040cca6ad0bc8d5f2a35d04729cb",
@@ -8048,7 +8055,9 @@
     "Core.Site.outside": "03acc86b31808ec5595250c20c4c51890e8ba8fc2035f9b745f44a92c59ca9b6",
     "Core.Site.reached": "41de08b6fac4b2a4202377c9cbed4bd057f4c6f58dfcc09288712bf512bb241b",
     "Core.Site.sheet?": "bcb332733317635e34b2c58b20a6f186944cb94f8dbe5861c3b796e06119c9f7",
-    "Core.Site.sheets": "bb0652019e0ed170c021de7e2007e7ce420422460a60b5c99119ffcebb7817f1"
+    "Core.Site.sheets": "bb0652019e0ed170c021de7e2007e7ce420422460a60b5c99119ffcebb7817f1",
+    "_private.CoreProtocol.Site.0.Core.Site.keysOf": "27ac65234352ae8a3abee4da9d7d3b575a53159da6723579c3cf381a64631373",
+    "_private.CoreProtocol.Site.0.Core.Site.keysOf._sparseCasesOn_1": "a621f0ade3a6053717c03d89cd9ee1dccaceba49f26c4053f429a042ea52542b"
    },
    "guarantees": [
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
@@ -23793,13 +23802,13 @@
    ]
   },
   "Properties.NetworkPeriodLeak": {
-   "digest": "4e58fe6a45d74824c6002f449a26a6429fb66516381653169cd04991b5e11e6c",
+   "digest": "0a22a16c95dc2637760adf21a2801e06f1cd7409407432a6df685304f28bd5be",
    "definitions": {
     "NetTiming.NetworkCertifierRecord": "8f893fb143733d57ee6e3f0205fa3ff56b86165971c1644700718af0b6191087",
     "NetTiming.NetworkCertifierRecord.key": "695c1529cdd6c288b6636c18b19309b137ccf86e359c9bf8a26aad887de79b47",
     "NetTiming.NetworkCertifierRecord.lms": "cb56d02ace08650a81c26e691594365cad684f8d872740a92ed096b90168b5ff",
     "NetTiming.NetworkCertifierRecord.session": "16e0091df6855b6455b2434284e44a1439202a7a39e89ac7c8ee1317d1fc135f",
-    "Properties.NetworkPeriodLeak.PeriodLeakRegistered": "058a7d9f0d75ec5602df292d819d4ab8af483d27d8c16605ad19fe6797316b39",
+    "Properties.NetworkPeriodLeak.PeriodLeakRegistered": "bbdbdb84ac069b92e1c1a14f4f35f0ba23ec003b0eca2d36baa106da6df71a66",
     "Properties.NetworkPeriodLeak.PeriodLeakRegisteredNontrivial": "bc602f1084474deef790898eb5a809155c3d79dbb5a52fd9bb8332864090322b"
    },
    "guarantees": [
