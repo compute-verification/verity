@@ -591,6 +591,8 @@ KNOWN: dict[str, str] = {
         "homonym, proof-internal layout: rename (proofs)",
     "Security/Proofs/Flock/Soundness/Binding/Layout.lean::FlockSoundness.Binding.Layout.Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (proofs)",
+    "Security/Proofs/Flock/SampledGeneric/Defs.lean::FlockSoundness.SampledGeneric.Binding.Trace":
+        "homonym, the value a binding commits at each of its positions (`Pos → Val`): rename (proofs)",
     "Security/Proofs/Flock/Soundness/Discharge/Exec/Event.lean::FlockSoundness.Discharge.Exec.Transcript":
         "homonym, a session directory's files: rename (proofs)",
     "Security/Proofs/Flock/Soundness/ExecPlacement.lean::FlockSoundness.Layout":
