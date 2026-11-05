@@ -16,8 +16,8 @@ public import NciCheck.CountDifftest
 # The NCI policy's check
 
 `NciCheck.Baseline.check` (the `nci-check` exe) is the verifier's check that a declared division of a declaration into
-isolation units meets `Nci.Complies Γ α` (`Security/Definitions/Nci.lean`), for IUs aligned to the root's Calls, at the
-cost of the descriptor: `NciCheck.Desc.check`, one summary per Definition, never a walk over the unrolled circuit
+isolation units meets `Nci.CompliesRate Γ α` (`Security/Definitions/Nci.lean`), for IUs aligned to the root's Calls, at
+the cost of the descriptor: `NciCheck.Desc.check`, one summary per Definition, never a walk over the unrolled circuit
 (AGENTS.md "Design rules"), then each θ entry's provenance, registered public data that the first record of the
 deployment's registration log registers and never an earlier run's output, against the service's log
 (`NciCheck.Baseline`, CMP-66; `NciCheck.BaselineDifftest` holds it to the Python reference).

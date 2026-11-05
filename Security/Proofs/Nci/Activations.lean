@@ -198,14 +198,8 @@ theorem activationsIncompressible_of_all {c : RegisteredCircuit} {ch : Chain c.D
 theorem ActivationsChain : Guarantees.ActivationsChain :=
   fun _ _ _ _ _ _ _ _ h hw ha hA => activationsIncompressible_of_all h hw ha hA
 
-theorem ActivationsBoundOn : Guarantees.ActivationsBoundOn := by
-  intro c k K b_w b_a r d T L dd e M hc hkK hbw hba hdd hP hB he hd hA
-  exact ActivationsBoundOn_rate c (k / c) K b_w b_a r d T L dd e M (by positivity) (by rwa [rate_mul _ hc]) hbw hba
-    hdd (compliesRate_of_complies hP) hB he hd hA
+theorem ActivationsBoundOn : Guarantees.ActivationsBoundOn := ActivationsBoundOn_rate
 
-theorem ActivationsTrainingOn : Guarantees.ActivationsTrainingOn := by
-  intro c k K b_w b_a κ r d T L dd e M hc hkK hbw hba hdd hP hB he hd hA hκ
-  exact ActivationsTrainingOn_rate c (k / c) K b_w b_a κ r d T L dd e M (by positivity) (by rwa [rate_mul _ hc]) hbw
-    hba hdd (compliesRate_of_complies hP) hB he hd hA hκ
+theorem ActivationsTrainingOn : Guarantees.ActivationsTrainingOn := ActivationsTrainingOn_rate
 
 end Nci.SecurityProofs

@@ -6,7 +6,7 @@ public import Definitions.Nci.Threads
 # The inference-only policy's one assumption about training
 
 The guarantees on a reference training circuit `r` (`Nci.Guarantees.ThreadedThrottled`,
-`Nci.Guarantees.ContainedTraining`) charge an inference block of `r` for three kinds of values it does not
+`Nci.Guarantees.IncompressibleContainedTraining`) charge an inference block of `r` for three kinds of values it does not
 compute itself: the weights it uses, the activations it uses, and the partial sums it receives. `TrainingIncompressible`
 states all three as one law over every division of `r`, in reads: each small inference block reads at least what it is
 charged. It is equivalent to the conjunction of `WeightsIncompressible`, `ActivationsIncompressible` and

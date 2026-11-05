@@ -25,8 +25,8 @@ The statements here join the two, so that the check's verdict carries the bound:
 * `ThrottlesSlots`, `ThrottlesDarkSlots`: the same with the weights charged per parameter slot
   (`WeightsIncompressibleSlots`).
 
-`k` need not be a natural here, since the check's rate is any `num / den`, so the bounds are read at the rate
-(`Nci.SecurityProofs.ThreadedThrottled_rate` and its forms), and their `0 ≤ α` is no premise: `num / den` of
+`k` need not be a natural here, since the check's rate is any `num / den`: the bounds are stated at the rate
+(proved as `Nci.SecurityProofs.ThreadedThrottled_rate` and its forms), and their `0 ≤ α` is no premise: `num / den` of
 naturals is nonnegative. Each statement is proved as `NciCheck.Properties.SecurityProofs.X : NciCheck.Properties.X` in
 `Proofs.Nci.Verdict` (package `security_proofs`), from `Witnesses` and the bound's proof: a property whose
 proof needs `security_proofs` is stated here and proved there.

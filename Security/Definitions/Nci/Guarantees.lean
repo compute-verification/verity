@@ -21,14 +21,14 @@ namespace Nci.Guarantees
 open Verity
 open scoped ENNReal
 
-/-- **The read bound**: a declaration that contains the reference circuit `r` (`M`) and complies at `(c, k)`, with its
-registered information free of the reference circuit's fresh input (`ThetaRegistered`), has at least `Reads_c(r) / α`
-gates, at the rate `α = k / c`. Lower bounds on the fresh input a computation reads become lower bounds on size when the
+/-- **The read bound**: a declaration that contains the reference circuit `r` (`M`) and complies at `(Γ, α)`
+(`CompliesRate`), with its registered information free of the reference circuit's fresh input (`ThetaRegistered`), has
+at least `Reads_Γ(r) / α` gates. Lower bounds on the fresh input a computation reads become lower bounds on size when the
 declared circuit computes `r` the way `r` does. -/
 def ReadBound : Prop :=
-  ∀ (c k : ℕ) (r d : RegisteredCircuit) (M : Containment r.D d.D), Complies c k d →
+  ∀ (Γ : ℕ) (α : ℝ) (r d : RegisteredCircuit) (M : Containment r.D d.D), CompliesRate Γ α d →
     Assumptions.ThetaRegistered r d (PartialContainment.ofContainment M) →
-    (Reads c r : ℝ) ≤ (k / c : ℝ) * d.D.size d.D.computed
+    (Reads Γ r : ℝ) ≤ α * d.D.size d.D.computed
 
 /-- **Inference complies as declared**: a Boolean declaration divided into sessions of exactly `c` gates, padding
 included, each reading from outside itself only registered information and its own prompt `prompt u` of at most `k`
@@ -36,28 +36,6 @@ bits, complies at `(c, k)`, and its slowdown factor is at most 1. -/
 def Inference : Prop :=
   ∀ (c k : ℕ) (d : RegisteredCircuit) (B : ℕ) (P : Partition d.D B) (prompt : Fin B → Finset (Fin d.D.N)),
     d.D.Boolean → Assumptions.Sessions d P prompt c k → Complies c k d ∧ slowdown (Complies c k) d ≤ 1
-
-/-- **Updated matrix multiplications are throttled** (the draft's theorem, "Throttling updated matrix
-multiplications"): under compute-bounded incompressibility, every declared circuit `D ⊨ 𝒫` that runs updated matrix
-multiplications is larger than those multiplications by a factor of at least `F`. The multiplications have about `2G`
-gates: `G` products, and about as many additions. The policy is at `(c, k)`, `k` is the most an inference block reads,
-`F` is taken at the rate `k / c`, `b_w` and `b_a` are the widths of a weight entry and an activation entry, and `d` is
-the smallest inner dimension (a smaller `d` gives a smaller `F`). -/
-def UpdatedMatMul : Prop :=
-  ∀ (c k : ℕ) (b_w b_a : ℝ) (D : RegisteredCircuit) (ch : Chain D.D) (d : ℕ),
-    0 < c → 0 < k → 0 < b_w → 0 < b_a → Assumptions.InnerAtLeast ch d → Complies c k D →
-    Assumptions.ActivationsIncompressible D ch c k b_w b_a →
-    Assumptions.PartialSumsIncompressible D ch c k b_w b_a →
-      F (k / c) k b_w b_a d * (2 * ch.G) ≤ D.D.size D.D.computed
-
-/-- **Frontier training is throttled** (the draft, "From updated matrix multiplications to training"): let `T` be a
-training circuit in the class `𝒯`, so that every declared circuit that implements `T` and complies runs updated matrix
-multiplications, which take up a fraction `κ` of `size(T)` (the coverage `κ(T)`). If compute-bounded incompressibility
-holds for the multiplications each of them runs, then `ρ_𝒫(T) ≥ κ F`. -/
-def Training : Prop :=
-  ∀ (c k : ℕ) (b_w b_a κ : ℝ) (T : RegisteredCircuit) (d : ℕ),
-    0 < c → 0 < k → 0 < b_w → 0 < b_a → 0 < T.D.size T.D.computed → Assumptions.InClass T c k b_w b_a κ d →
-    ENNReal.ofReal (κ * F (k / c) k b_w b_a d) ≤ slowdown (Complies c k) T
 
 end Nci.Guarantees
 
