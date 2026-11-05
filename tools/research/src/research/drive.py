@@ -112,7 +112,7 @@ cancel the twin after);
 `--no-regenerate` (a lock record difference fails it).  Nothing lands before one such run of `checked`
 itself ended (its baseline, verifying the steps it passed; `/data/infra/drive.sh queue baseline SHA --by ci` records a green one
 by hand).  While a red on `checked` has a low-risk fix marked under `FIX_WAIT_S` ago and not landed, the run waits for it
-(`_fix_wait`), as one without it would go red again.  A red run runs on, so every red suite is named, and is cancelled only once its `TAIL` is all any shard has left (a cancel
+(`_fix_wait`), as one without it would go red again.  A red run runs on, so every red suite is named, and is cancelled only once its `TAIL` is all it has left (a cancel
 earlier in a ~4 h run leaves the rest unknown).  Each failed suite or step (`_red`, `postland["red"]`) gets a culprit
 among the landings since it last passed (`postland["green"]`, per suite or step, so a `checked` never verified whole still names
 one): for ratchet-gate, the merge the gate's log says it fails; else the landing whose own diff touches what the failure
@@ -998,12 +998,6 @@ def step_records(run_dir: Path) -> list[dict]:
     return out
 
 
-def not_run(st: dict) -> bool:
-    """A step that found nothing: stopped (check.py's `stopped`, a cancel's), or killed by a SIGTERM before check.py marked it
-    so (it reads `failed` with an empty log)."""
-    return st.get("status") == "stopped" or (st.get("status") == "failed" and st.get("rc") in (-15, SIGTERM_RC))
-
-
 def live_steps(run_dir: Path) -> list[dict]:
     """The steps a check's live record (`LIVE`) names, each with its `state`: `stopped` for one still pending or running in the
     record of a check that ended (a group that stopped on a failure never starts the rest); none without one."""
@@ -1067,6 +1061,12 @@ def suite_passed(rows: list[dict]) -> bool:
     of = {(r["part"].get("m"), r["part"].get("digest")) for r in ok}
     m = next(iter(of))[0] if len(of) == 1 else None
     return isinstance(m, int) and {k for r in ok for k in r["part"].get("ks") or ()} == set(range(1, m + 1))
+
+
+def not_run(st: dict) -> bool:
+    """A step that found nothing: stopped (check.py's `stopped`, a cancel's), or killed by a SIGTERM before check.py marked it
+    so (it reads `failed` with an empty log)."""
+    return st.get("status") == "stopped" or (st.get("status") == "failed" and st.get("rc") in (-15, SIGTERM_RC))
 
 
 def first_error(run_dir: Path, rec: dict) -> str:

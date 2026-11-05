@@ -8,7 +8,7 @@ import json
 
 import pytest
 
-from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, FIX_WINDOW_S, LIVE, PREFLIGHT, TAIL
+from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, FIX_WINDOW_S, TAIL
 from research.queue import DriveFlags, QueueError
 from test_drive_review import GATED_TREE, Review, _main, _move_main, _owning, _subject
 from test_queue import World, _git
@@ -289,6 +289,8 @@ def _shard(tmp_path, rid: str, steps: dict[str, str], live: dict[str, str] | Non
     """A shard's run dir: ``steps`` ended in its steps.jsonl, and its live record (`LIVE`, the check's ``state``) naming the
     preflight's steps, those and ``live``'s, still to end (pending, running); with ``preflight``, the preflight's alone, its
     groups not yet planned."""
+    from research.drive import LIVE, PREFLIGHT
+
     d = _steps_run(tmp_path, rid, steps)
     planned = {s: "running" if preflight else "passed" for s in PREFLIGHT} | ({} if preflight else {**steps, **(live or {})})
     (d / LIVE).write_text(json.dumps({"schema": "check-live/v1", "state": state,
@@ -309,7 +311,7 @@ def test_a_step_more_than_one_shard_holds_passed_only_once_every_shard_that_hold
     stopped; a twin's pass passes it for its shard, and twins' other words rank whatever their order (`RANK`); a step an ended
     check never started was stopped; and nothing passed while a shard's plan isn't known.  A suite in parts passed once every
     part of one partition did."""
-    from research.drive import shard_ended, shard_passed, shard_steps, suite_passed
+    from research.drive import PREFLIGHT, shard_ended, shard_passed, shard_steps, suite_passed
 
     one = _shard(tmp_path, "r1", {"lean-build": "passed", "lean-suites": "passed", "pytest": "passed"})
     two = _shard(tmp_path, "r2", {"lean-build": "passed"}, {"lean-suites": "running", "lean-agreement": "pending"})
