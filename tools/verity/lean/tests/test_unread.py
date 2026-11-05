@@ -61,6 +61,20 @@ def test_the_longest_chain_and_the_imports_once_modules_go():
     assert U.contract(sorted(deep), deep, {"A", "B", "C"}) == {"K": ["X"], "X": []}
 
 
+def test_a_cited_path_names_the_modules_it_ends_written_out_or_built_from_literals():
+    files = {"Proofs.Core.Prims.Vectors": "Security/Proofs/Core/Prims/Vectors.lean",
+             "Proofs.Core.TC.Vectors": "Security/Proofs/Core/TC/Vectors.lean", "Root": "Root.lean"}
+    modules = {k: m for m, f in files.items() for k in (m, f, m.replace(".", "/") + ".lean")}
+    named = U.path_namer(modules)
+    text = ('FILES = (LEAN / "Prims" / "Vectors.lean", Path(ROOT, "Security", "Proofs/Core/TC", "Vectors.lean"))\n'
+            'ANY = here / "Vectors.lean"\nTOP = "../Root.lean"\n')
+    paths = U.lean_paths(text)
+    assert {"Prims/Vectors.lean", "Security/Proofs/Core/TC/Vectors.lean"} <= set(paths)
+    assert set().union(*map(named, paths)) == {"Proofs.Core.Prims.Vectors", "Proofs.Core.TC.Vectors", "Root"}
+    assert named("Vectors.lean") == set() and named("/abs/x/Security/Proofs/Core/TC/Vectors.lean") == {"Proofs.Core.TC.Vectors"}
+    assert all((U.ROOT / f).is_file() for f in U.NOT_READERS), "NOT_READERS names this tool's files where they are"
+
+
 def test_a_wholly_unread_module_is_deletable_alone_only_when_nothing_outside_those_mentions_it(tmp_path):
     mods = ["K", "A", "B", "C", "D", "E", "F", "G"]
     names = ["K.k", "A.a", "B.b", "C.c", "D.d", "E.e", "E.e.match_1", "F.Ns.x", "G.y", "G.z"]

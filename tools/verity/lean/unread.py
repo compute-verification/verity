@@ -24,8 +24,9 @@ constant to the declaration it belongs to. The seeds:
   (`COERCION`), which elaboration unfolds where it inserts a coercion (`(w : Nat)` becomes `unwrap w`);
 - every declaration of the analysis trees that a file outside Lean names in full (`.py`, `.json`, `.toml`, `.rs`, `.sh`,
   ...; `CITED_BY`), and every declaration of a module that code or a suite's `pyproject.toml` names (`MODULE_CITED_BY`:
-  its dotted name, or its file's path from the root or from its package's source directory), so a test, a generator or
-  a tool that reads one keeps it.
+  its dotted name, or its file's path from the root or from its package's source directory, or two or more of its
+  path's last components, written out or built from string literals), so a test, a generator or a tool that reads one
+  keeps it. This tool, its test and the Lean tools' fixtures read none (`NOT_READERS`).
 
 The `@[defeq]` theorems, the coercion instances, the lock-listed modules and the cited names are seeds to be safe
 (`CAUTIOUS`): the report counts what each alone keeps (`kept_only_by`).
@@ -102,12 +103,18 @@ CITED_BY = (".py", ".json", ".toml", ".rs", ".sh", ".yaml", ".yml", ".txt", ".ts
 MODULE_CITED_BY = (".py", ".sh", ".rs", ".ts", ".js")
 #: the files whose mention of a declaration is reported but keeps nothing
 DOCS = (".md",)
+#: the files that name modules and declarations without reading them: this tool and its test (the Lean tools'
+#: fixtures, `modules.FIXTURES`, neither)
+NOT_READERS = ("tools/verity/lean/unread.py", "tools/verity/lean/Unread.lean", "tools/verity/lean/tests/test_unread.py")
 #: a cited file larger than this is data, not code
 CITE_MAX_BYTES = 4 << 20
 #: a dotted identifier, as a file outside Lean would name a declaration
 DOTTED = re.compile(r"[A-Za-z_][A-Za-z0-9_'!?]*(?:\.[A-Za-z0-9_'!?]+)+")
 #: a path to a Lean file, as a file outside Lean would name a module
 LEAN_PATH = re.compile(r"[A-Za-z0-9_'!?./-]+\.lean\b")
+#: string literals joined by `/` or `,`, the last a Lean file: a path code builds in pieces (`LEAN / "Prims" / "V.lean"`)
+PIECES = re.compile(r"""(?:["'][^"'\n]*["']\s*[/,]\s*)+["'][^"'\n]*\.lean["']""")
+LITERAL = re.compile(r"""["']([^"'\n]*)["']""")
 #: what follows an `open` command's keyword, to the end of its line or a parenthesis
 OPEN = re.compile(r"^[ \t]*open[ \t]+(?:scoped[ \t]+)?([^\n(]*)", re.M)
 #: a private name's prefix, `_private.<module>.0.`, before the name it was declared with
@@ -308,15 +315,42 @@ def lock_seeds(tree: Tree) -> tuple[set[str], set[str]]:
     return names, mods
 
 
+def lean_paths(text: str) -> list[str]:
+    """The paths to Lean files a text names: written out, or built in pieces from string literals (`PIECES`)."""
+    return LEAN_PATH.findall(text) + ["/".join(LITERAL.findall(m.group(0))) for m in PIECES.finditer(text)]
+
+
+def path_namer(modules: dict[str, str]):
+    """What a cited path names, given ``modules`` (each key a module's dotted name or one of its file's paths, to the
+    module): the modules a tail of the path is a path of, and, for a path of two or more components, every module whose
+    path ends with it (`"Prims/Vectors.lean"` names `Proofs.Core.Prims.Vectors`); a bare file name names no other."""
+    by_file: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for k, m in modules.items():
+        if k.endswith(".lean"):
+            by_file[k.rsplit("/", 1)[-1]].append((k, m))
+
+    def named(path: str) -> set[str]:
+        parts = [p for p in path.split("/") if p not in ("", ".", "..")]
+        out = {modules[s] for s in ("/".join(parts[k:]) for k in range(len(parts))) if s in modules}
+        if len(parts) > 1:
+            tail = "/" + "/".join(parts)
+            out |= {m for k, m in by_file.get(parts[-1], ()) if ("/" + k).endswith(tail)}
+        return out
+
+    return named
+
+
 def citations(tree: Tree, candidates: set[str], modules: dict[str, str]) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     """The candidate names files outside Lean mention in full, and the modules code names (`MODULE_CITED_BY`;
     ``modules``: a module's dotted name and its file's paths, from the root and from its package's source directory, each
-    to the module): by code (`CITED_BY`), and by docs (`DOCS`), each with the files."""
+    to the module; a path as `path_namer` reads it): by code (`CITED_BY`), and by docs (`DOCS`), each with the files."""
     code: dict[str, list[str]] = defaultdict(list)
     docs: dict[str, list[str]] = defaultdict(list)
+    named = path_namer(modules)
     for f in tree.files:
         suffix = Path(f).suffix
-        if f.endswith(("lean-audit.json", "lake-manifest.json")) or suffix not in CITED_BY + DOCS:
+        if (f.endswith(("lean-audit.json", "lake-manifest.json")) or suffix not in CITED_BY + DOCS or f in NOT_READERS
+                or f.startswith(MODULES.FIXTURES)):
             continue
         p = tree.root / f
         if not p.is_file() or p.stat().st_size > CITE_MAX_BYTES:
@@ -326,9 +360,8 @@ def citations(tree: Tree, candidates: set[str], modules: dict[str, str]) -> tupl
         hits = dotted & candidates
         if suffix in MODULE_CITED_BY or Path(f).name == "pyproject.toml":
             hits |= {modules[d] for d in dotted if d in modules}
-            for path in LEAN_PATH.findall(text):
-                parts = path.split("/")
-                hits |= {modules[s] for s in ("/".join(parts[k:]) for k in range(len(parts))) if s in modules}
+            for path in lean_paths(text):
+                hits |= named(path)
         for h in hits:
             (docs if suffix in DOCS else code)[h].append(f)
     return code, docs
@@ -732,8 +765,9 @@ def markdown(rep: dict, rev: str | None) -> str:
             "- An `example`, `#guard` or `#eval` leaves nothing in the environment: a declaration only they use is "
             "reported unread, and a module only they use deletable alone; deleting it means deleting them.",
             "- A module of checks (theorems over concrete values or vectors, which the build checks) is read by nothing "
-            "by design: it is kept only when a file outside Lean names it, and a file that builds its path in pieces "
-            "(`LEAN / \"Prims\" / \"Vectors.lean\"`) does not name it.",
+            "by design: it is kept only when a file outside Lean names it. A path code builds from string literals "
+            "(`LEAN / \"Prims\" / \"Vectors.lean\"`) names it; one it computes otherwise (a glob, a bare file name "
+            "under a variable) does not.",
             "- A module with no read declaration that gives an instance or `simp` attribute to another module's constant is "
             "kept (`attributes`), and a module no package root imports is `unbuilt`, reported but not read.",
             "- Deleting a wholly unread module that a kept module imports means that importer imports what it imported, "
