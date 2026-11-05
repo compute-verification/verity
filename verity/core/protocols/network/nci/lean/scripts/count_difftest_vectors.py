@@ -3,11 +3,12 @@
 
     python scripts/count_difftest_vectors.py <verity checkout> --out DIR [--count N]
 
-Writes two files under `DIR/count_difftest/`, one line per instance: `instances.jsonl`, as `NciCheck.Count.check` reads
-it (`NciCheck.Count`'s docstring: the Program, θ by root node, the block Definitions by key, the gate table and
-`(c, k, n)`), and `python.jsonl`, `nci_reference.check_count`'s results. The Lean audit runs
-`NciCheck/CountDifftestMain.lean` on the two (`runs` in `lean-audit.json`), which fails unless `NciCheck.Count.check`
-gives Python's result on every line: one summary per Definition against the count activation by activation.
+Writes three files under `DIR/count_difftest/`, one line per instance: `instances.jsonl`, as `NciCheck.Count.check`
+reads it (`NciCheck.Count`'s docstring: the Program, θ by root node, the block Definitions by key, the gate table and
+`(c, k, n)`); `detail.jsonl`, `nci_reference.check_count_detail`'s results, the whole verdict; and `public.jsonl`,
+`nci_reference.check_count`'s, what the count publishes. The Lean audit runs `NciCheck/CountDifftestMain.lean` on the
+three (`runs` in `lean-audit.json`), which fails unless `NciCheck.Count.checkDetail` and `NciCheck.Count.check` give
+Python's results on every line: one summary per Definition against the count activation by activation.
 
 Instance `seed`'s program, for the first `COUNT`, is one of `difftest_vectors.program`'s or (a quarter of them) one read
 across its arrays' rows (`desc_difftest_vectors.transposed`), then each distinct descriptor the circuits fixtures hold
@@ -136,7 +137,7 @@ def instance(seed: int) -> dict:
     if rng.random() < 0.1:
         table["NciUnused_v1"] = rng.randint(0, 9)
     inst = {"program": text, "theta": theta, "blocks": blocks, "table": table, "c": 0, "k": 0, "n": 0}
-    probe = reference.check_count(inst | {"c": BIG, "k": BIG, "n": BIG})
+    probe = reference.check_count_detail(inst | {"c": BIG, "k": BIG, "n": BIG})
     rows = probe.get("blocks", [])
     active = [r for r in rows if r[3] > 0]
 
@@ -220,7 +221,7 @@ def line(obj) -> str:
     return json.dumps(obj, separators=(",", ":"), sort_keys=True) + "\n"
 
 
-NAMES = ("instances", "python")
+NAMES = ("instances", "detail", "public")
 
 
 def total() -> int:
@@ -229,7 +230,7 @@ def total() -> int:
 
 
 def write(out: Path, count: int | None = None) -> dict[str, Path]:
-    """The two files for instances 0 … count − 1 (all of them, `total()`, by default) under ``out/count_difftest``."""
+    """The three files for instances 0 … count − 1 (all of them, `total()`, by default) under ``out/count_difftest``."""
     count = total() if count is None else count
     d = out / "count_difftest"
     d.mkdir(parents=True, exist_ok=True)
@@ -238,7 +239,8 @@ def write(out: Path, count: int | None = None) -> dict[str, Path]:
     try:
         for seed in range(count):
             inst = instance(seed)["instance"]
-            for f, obj in zip(files, (inst, reference.check_count(inst)), strict=True):
+            for f, obj in zip(files, (inst, reference.check_count_detail(inst), reference.check_count(inst)),
+                              strict=True):
                 f.write(line(obj))
     finally:
         for f in files:
