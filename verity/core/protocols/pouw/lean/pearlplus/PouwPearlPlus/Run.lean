@@ -8,9 +8,10 @@ import PouwPearlPlus.Records
   each call's y).
 * **The run's commitment** (`runCommitment`) binds the retained passes and their records, before the coin:
   `tagged("verity/pouw/pearl-plus/run/v1", per pass: transcript root, records root, salt, each call's y root or empty)`.
-* **The coin record** (`CoinRecord`, `verity-pouw/pearl-plus-coin/v1`) is the verifier's record of its coin against that
-  commitment. A verdict over passes whose commitment is another, or with another source, is refused (`after-coin`): neither
-  a retention nor a give-up can follow the coin, and a retry never redraws.
+* **The coin record** (`CoinRecord`, `verity-pouw/pearl-plus-coin/v2`; v1, which names no draw, read for development) is
+  the verifier's record of its coin against that commitment, and of where the coin came from (its `draw`, `Coins`). A
+  verdict over passes whose commitment is another, or with another source, is refused (`after-coin`): neither a retention
+  nor a give-up can follow the coin, and a retry never redraws.
 * **The draw** keys `t` work-weighted draws over every pass's tickets together on the coin
   (`derive(source, "verity/pouw/pearl-plus-run-draw/v1", {run})`, `clear_work.draw`). A tile's ticket is its credited
   cells' share of `wref` at |K| (`clear_work.ticket_cell`, the scheme's own `wref` on the H100), scaled to integers by the
@@ -26,7 +27,8 @@ open PouwCommit
 def PROTOCOL : String := "verity/pouw/pearl-plus/v1"
 def RUN_TAG : String := "verity/pouw/pearl-plus/run/v1"
 def RUN_DRAW_DOMAIN : String := "verity/pouw/pearl-plus-run-draw/v1"
-def COIN_SCHEMA : String := "verity-pouw/pearl-plus-coin/v1"
+def COIN_SCHEMA : String := "verity-pouw/pearl-plus-coin/v2"
+def COIN_SCHEMA_V1 : String := "verity-pouw/pearl-plus-coin/v1"
 def ASSUMPTION : String := "Pearl's Assumption 1 (pearl_kw)"
 
 /-- One retained pass as the verifier holds it once its manifest is read and checked (`Load.load`). -/
@@ -92,10 +94,13 @@ def runCommitment (passes : List Pass) : ByteArray :=
   tagged RUN_TAG (passes.flatMap fun p =>
     [.bytes p.transcriptRoot, .bytes p.recordsRoot, .bytes p.salt] ++ p.yRoots.map fun y => .bytes (y.getD ByteArray.empty))
 
-/-- The verifier's record of its coin: the run commitment it was drawn on and the 32-byte source. -/
+/-- The verifier's record of its coin: the run commitment it was drawn on, the source (a challenger draw coin's 64 bytes,
+or the node's 32), the record's schema and its `draw` as the record carries it (`Coins.drawReason` reads it). -/
 structure CoinRecord where
   commitment : ByteArray
   source : ByteArray
+  schema : String := COIN_SCHEMA
+  draw : Lean.Json := .null
 
 def AFTER_COIN : String × String :=
   ("after-coin", "the retained passes or their records are not those the verifier's coin was drawn on: a retention change " ++
