@@ -19,8 +19,10 @@ uv run tools/verity/check/suites.py benchmarks/torch_gpu/DIR
 
 Each GPU script's header gives its command and the hardware it needs: CUDA's nvcc (12.8 or later), a GPU taken through
 `gpu-lease`, and an `OUT` directory for what it writes. Some build on a CPU node first, into a ship the GPU run unpacks:
-those builds (`attn_bf16`, `s8_linear`, `units` and `s8_dec_linear`) source `ship.sh`, the one statement of a ship's
-toolkit, cubin flags and layout (`toolchain.txt`, `source.txt`, `MANIFEST.sha256`).
+those builds (`attn_bf16`, `s8_linear`, `units`, `s8_dec_linear` and `p2_stage`) source `ship.sh`, the one statement of a
+ship's toolkit, cubin flags and layout (`toolchain.txt`, `source.txt`, `MANIFEST.sha256`). They build with address
+randomization off, since nvcc's PTX can depend on its address layout, and the manifest names each shared library's cubins,
+so a rebuild at the same commit and toolkit reproduces every cubin byte for byte.
 
 - `commit_slots/`: the serve-time commit call, a step's proof-block outputs as hm96-sha512 rows under hiding leaves in
   frame-v3-sha512 trees, one subtree per sequence slot. `gpu.sh` holds the GPU's roots to the CPU reference's.

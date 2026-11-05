@@ -1,8 +1,18 @@
 # shellcheck shell=bash
-# The ship preamble the builds here source (attn_bf16's, s8_linear's, units' and s8_dec_linear's build.sh): the toolkit,
-# the cubin flags and the ship's layout. Sourced under `set -euo pipefail`; sets ROOT, the source tree's root, and each
-# function below reads or sets CUDA, OUT and FLAGS.
+# The ship preamble the builds here source (attn_bf16's, s8_linear's, units', s8_dec_linear's and p2_stage's build.sh): the
+# toolkit, the cubin flags and the ship's layout. Sourced first, under `set -euo pipefail`; sets ROOT, the source tree's
+# root, and each function below reads or sets CUDA, OUT and FLAGS.
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+
+# cicc, nvcc's front end, can emit different PTX for one source from run to run by its own heap addresses, so a build that
+# sources this runs with address randomization off: it re-executes itself once under `setarch -R`, which its compilers
+# inherit, and refuses where the kernel won't turn randomization off
+if [ $(( 0x$(cat /proc/self/personality) & 0x40000 )) -eq 0 ]; then
+  setarch "$(uname -m)" -R true 2> /dev/null || {
+    echo "setarch -R is refused here, and nvcc's PTX can depend on address layout: build where a process may turn address" \
+      "randomization off" >&2; exit 1; }
+  exec setarch "$(uname -m)" -R "$BASH" "$0" "$@"
+fi
 
 # whether the toolkit $1 has nvcc 12.8 or later
 ship_nvcc_ok() { [ -x "$1/bin/nvcc" ] && "$1/bin/nvcc" --version | grep -Eq "release 12\.(8|9)|release 1[3-9]\."; }
@@ -42,8 +52,22 @@ ship_source() {
     git -C "$ROOT" status --porcelain -- "$@" 2>/dev/null || true; } > "$OUT/source.txt"
 }
 
-# OUT/MANIFEST.sha256 over every other file in OUT, and OUT's size
+# each shared library named, its cubins (cuobjdump -xelf) beside it in <library>.cubins/: a library's own bytes differ from
+# build to build (nvcc's host-side registration names), its cubins don't
+ship_cubins() {
+  local so d
+  for so in "$@"; do
+    so=$(readlink -f "$so"); d=$so.cubins
+    [ -n "$("$CUDA/bin/cuobjdump" --list-elf "$so" 2> /dev/null)" ] || continue
+    rm -rf "$d"; mkdir -p "$d"
+    (cd "$d" && "$CUDA/bin/cuobjdump" -xelf all "$so" > /dev/null)
+  done
+}
+
+# OUT/MANIFEST.sha256 over every other file in OUT, every shared library's cubins among them (ship_cubins), and OUT's size
 ship_manifest() {
+  local so
+  while IFS= read -r so; do ship_cubins "$so"; done < <(find "$OUT" -type f -name '*.so' | LC_ALL=C sort)
   (cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)
   du -sh "$OUT" | cut -f1 | xargs echo "ship:"
 }
