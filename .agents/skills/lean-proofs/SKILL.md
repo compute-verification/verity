@@ -62,14 +62,11 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   the landing DM carries, without a build of your own (`lean_changed.py`'s docstring).
 
   ~~~text
-  research run --on vy-nebius-cpu-1 --pool research --project verity --source . --cwd clone --declared-output 'lean-audit/*' -- \
-    python3 tools/verity/lean/lean_changed.py --records PKG --update
+  research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone --declared-output 'lean-audit/*' \
+    -- python3 tools/verity/lean/lean_changed.py --records PKG --update
   ~~~
 
-  In cpu-1's research pool the runner takes the check slot: don't wrap it in `slot.py`. On vy-nebius-1 a bare run is
-  refused: wrap it in n1's Lean-record pool, `env CHECK_SLOTS=/workspace/research/locks/leanrec/slots python3
-  tools/verity/check/slot.py --by LANE -- python3 tools/verity/lean/lean_changed.py --records PKG --update`. It also
-  audits every package whose guarantees read PKG's build (`lean-audit/requirer-<path>/`), and with `--update` updates one
+  It also audits every package whose guarantees read PKG's build (`lean-audit/requirer-<path>/`), and with `--update` updates one
   that fails only on record differences. Commit each record it kept, `lean-audit/record/<path>/lean-audit.json` over
   `<path>/lean-audit.json` (its log names each; each package's `audit-*/review.txt` says what changed); a requirer
   failing otherwise fails the run.
@@ -88,7 +85,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
   [Loogle](https://loogle.lean-lang.org). A lemma another package proves is imported or moved, not proved again.
 - **A slow declaration**: measure (`set_option profiler true in`; `#count_heartbeats in` in a Mathlib package), then fix
   the proof: `simp only [...]` outside terminal calls, a split-out lemma, a smaller `decide`. An override that stays has
-  its reason in a `--` comment on or above it. Keep modules under 2000 lines (Standards).
+  its reason in a `--` comment on or above it.
 - **`X.congr_simp is declared by a replayed module and by one it imports`**: `simp` realized a structure constructor's
   congruence lemma Mathlib had already. Don't unfold a `→+` or `→*` in `simp`; prove its `_apply` lemma by `rfl` and simp
   with that.
@@ -127,21 +124,9 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 
 ## Standards
 
-Each check prints its fix. What was off when it came is a cap in `tests/test_lean_packages.py` equal to its count: lower
-the cap with the count.
-
-- **Guarantees in four names**: `X.SecurityProofs.G : X.Guarantees.G` under the area's root, which `four_names` lists;
-  witnesses and frozen guarantees aside, `four_names_except` holds the rest, and only shrinks.
-- **Other names as Mathlib's**: snake_case theorems, UpperCamel Props and types, lowerCamel functions. Witnesses are
-  `G_honest` and `G_nontrivial`, a claim's `C_fails` and `C_meets_<record>`.
-- **No older name** (GLOSSARY.md) in a new declaration's name: sample, not "draw" (`RETIRED_NAMES`).
-- **No lemma in the spec** but one a definition's proof field needs (`SPEC_THEOREMS`), and no statement reads `Proofs/`
-  (`TREES_EXCEPT`).
-- **A docstring on each spec definition a guarantee reads**, saying what it means: the landing DM shows it
-  (`UNDOCUMENTED`).
-- **Modules under 2000 lines**, Lean's unit of rebuild: put new declarations beside a long one (`OVERLONG`).
-- **No `import all` of an in-tree module**: move the proof into it, or `@[expose]` what it reads (`IMPORT_ALL`).
-- **No binder named `X`** where ArkLib is imported: its `notation3 "X"` makes `X` a token.
+The checks in `tests/test_lean_packages.py` and `tests/test_retired_terms.py` print their fixes, and their caps only
+fall. Two they don't hold: names as Mathlib's (snake_case theorems, UpperCamel Props and types, lowerCamel functions),
+and no binder named `X` where ArkLib is imported (its `notation3 "X"` makes `X` a token).
 
 ## Before the PR
 
