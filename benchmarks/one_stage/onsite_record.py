@@ -37,8 +37,8 @@ completion. ``of_record`` holds when every verdict it reads accepted and every d
 for the demo's run of record, naming its composite of record by id (``composite``), the verdicts not established, the
 members not credited and the verdicts it doesn't read (``not_claimed``: PoUW's, `NOT_CLAIMED`, listed as it is, missing
 and development where its row is, and under a composite without PoUW remote's too, `NOT_CLAIMED_WITHOUT_POUW`), and
-the work it credits, none (``work_credited``, `POUW`); ``placement`` is the network certifier's answer's, which host ran
-each party.
+the verified compute it credits, none (``verified_compute``, `POUW`); ``placement`` is the network certifier's
+answer's, which host ran each party.
 
 **Sampled proofs' guarantee** (``sampled_proofs``, `SAMPLED`), from its accepted row's answer, else ``missing``: what
 its draw establishes, ε at δ, per window (``per_window``: its bound at its profile's δ over the window's n proof blocks) and
@@ -281,8 +281,8 @@ WITHOUT_POUW = (f"the composite of record where the run has one: the network cer
                 "the id its composite.json states. Whether the run is of record then reads its verdict and its "
                 "subprotocols', inference-only's from its case there, and neither PoUW's nor remote's "
                 f"(`NOT_CLAIMED_WITHOUT_POUW`); its error sums no PoUW term. Where the run has none, it is {ONSITE}")
-#: ``of_record.work_credited``: the record credits no work under any composite (`POUW`)
-NO_WORK = "none"
+#: ``of_record.verified_compute``: the record credits no verified compute under any composite (`POUW`)
+NO_VERIFIED_COMPUTE = "none"
 #: the PoUW clause of the run's COINS line (served_verdicts.sh's H1_COINS), which runs up to the bandwidth audit's
 POUW_SAID = re.compile(r"; (PoUW.*?); the bandwidth audit's")
 #: where sampled proofs' audit publishes its record (`served_integrity.public_copy`)
@@ -1327,7 +1327,7 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
                                         if x["verdict"] not in ("accept", "missing", NOT_ESTABLISHED)],
                       "not_established": [k for k, x in v.items() if x["verdict"] == NOT_ESTABLISHED],
                       "not_credited": list(paid.get("not_credited") or ()), "not_claimed": list(unread),
-                      "work_credited": NO_WORK}
+                      "verified_compute": NO_VERIFIED_COMPUTE}
                      | ({"uncredited": paid["missing"]} if "missing" in paid else {})
                      | ({"conditional_on": held} if held else {}),
         "sampled_proofs": sampled(rows.get(ROWS["sampled proofs"]), v["sampled proofs"], *phase_seconds(out), cond),
@@ -1376,18 +1376,18 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
 
 
 def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
-    """The ``ONSITE`` line: the run's serving settings, each verdict, whether the run is of record, its composite of record
-    by id (`WITHOUT_POUW`) and the work it credits, none, and what every figure is conditional on (`COINS`; open for a
-    record that read no coins), what the record doesn't claim (`DAY`, `POUW`),
-    the drawn members it doesn't credit (`CREDIT`), K of record and what is open under it, its δ_net's terms, eps's
-    split and connections, the composite's stated error, the year's datacenter cell, sampled proofs' guarantee per window
-    and pooled (`guarantee`), and the measured advice charge's test run."""
+    """The ``ONSITE`` line: the run's serving settings, each verdict, whether the run is of record, its composite of
+    record by id (`WITHOUT_POUW`) and the verified compute it credits, none, and what every figure is conditional on
+    (`COINS`; open for a record that read no coins), what the record doesn't claim (`DAY`, `POUW`), the drawn members it
+    doesn't credit (`CREDIT`), K of record and what is open under it, its δ_net's terms, eps's split and connections,
+    the composite's stated error, the year's datacenter cell, sampled proofs' guarantee per window and pooled
+    (`guarantee`), and the measured advice charge's test run."""
     b, p, s = rec.get("bound") or {}, rec.get("periods") or {}, rec.get("serving") or {}
     year = (p.get("year") or {}).get("datacenter")
     m, fig = rec["advice_charge"]["measured"], b.get("of_record") or {}
     return {"serving": {k: s[k] for k in ("window_steps", "max_tokens")} if "window_steps" in s else None,
             "verdicts": {k: x["verdict"] for k, x in rec["verdicts"].items()}, "of_record": rec["of_record"]["holds"],
-            **{k: rec["of_record"].get(k) for k in ("composite", "work_credited")},
+            **{k: rec["of_record"].get(k) for k in ("composite", "verified_compute")},
             "conditional_on": rec["of_record"].get("conditional_on", []) if "coins" in rec else [COINS_OPEN],
             "not_claimed": [DAY_OPEN] * (rec.get("one_program_a_day") or {"open": True})["open"] + [POUW_OPEN],
             "not_credited": rec["of_record"].get("not_credited", []),
