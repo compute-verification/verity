@@ -51,6 +51,7 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## The session's coin tree -/
 
+-- `walk_step` splits `setupHidden`, at each draw, into one goal per path through its checks
 set_option maxHeartbeats 4000000 in
 /-- **`Stmt.setupHidden`'s statement keeps the coins' tree** at the verifier's public inputs `own`, any value. -/
 theorem setupHidden_coinTreeP {tags : Flock.Tags} {cf pf : ByteArray} {coins : Flock.Coins}
@@ -91,6 +92,7 @@ theorem checkRecord_spec {sp : Flock.CoinTree.Spec} {nonce key : String} {c : Js
     subst hc
     exact ⟨_, ‹Flock.canon ((c.getObjVal? "spec").toOption.getD Json.null) = _›, ‹Flock.canon sp.toJson = _›⟩
 
+-- the walk splits `Record.decode` into one goal per path through its checks of the record
 set_option maxHeartbeats 1000000 in
 /-- **`Record.decode` ran `checkRecord` on the record's `coin_tree`** at a session on a coin tree (S2). -/
 theorem decode_coinTree {spec : Flock.SessionSpec} {text : String} {sess : Flock.RunRecord}
