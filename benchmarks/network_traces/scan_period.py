@@ -3,10 +3,13 @@ and the scan's answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), 
 and its Lean.
 
     python benchmarks/network_traces/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
-        [--v3c PERIOD_JSON] NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
+        [--v3c PERIOD_JSON] NAME=WARDEN_RUN,SCAN_OUT,RECORD[,tampered|chain|forged] ...
 
-* **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
-  and one schedule, whose caps over the one link-window are the cells, `WardenParams.caps`: `egress_cells` for each of
+* **The case** (`rows_case`) of link-window W: the parameters the deployment RECORD names, the auditor's record of the
+  warden run (`warden_chain.RECORD`, ``CERTIFIER_KEY``'s form: the gate's own ``out/deployment.json`` of the run as the
+  auditor read it off the gate, which every ``deployment.json`` the run holds must be, `warden_chain.deployment_of`;
+  ``own`` for a run the job made itself, scan_period.sh's, the job being its own auditor): its key, session
+  and one schedule (whose caps over the one link-window are the cells, `WardenParams.caps`: `egress_cells` for each of
   the `lanes · window` connections it can carry), the link `warden_serve.LINK`, the Program the scan's registration's,
   the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor and steps, off which
@@ -54,6 +57,7 @@ sys.path.insert(0, str(HERE))
 
 import leak_bounds as LB  # noqa: E402
 import scan_zk as SZ  # noqa: E402
+import warden_chain as WC  # noqa: E402
 import warden_serve as WS  # noqa: E402
 from verity.core.protocols.certifier.warden import WardenParams  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registration as RG  # noqa: E402
@@ -77,21 +81,23 @@ def certificates(run: Path, w: int) -> list[dict]:
     return out
 
 
-def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = None) -> dict:
+def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = None, *, record: dict) -> dict:
     """The rows form's case (module docstring) of the warden run ``run``'s link-window, as scan_zk.py proved it into
     ``scan``: honest, ``answers.json``'s; forged, the honest one with a certificate's signature changed; a refused round
     (tampered, chain), that round's registration and its refusal. With ``v3c`` (V3c's ``period.json``,
     ``records_audit.py period``'s, for a scan proved on its trees, ``scan_zk.py --v3c``) the one compute audit is V3c's,
     in place of ``answers.json``'s, and its registration must be the one whose trees the scan read (``summary.json``'s
     ``v3c``): the period's audit, its scan's trees and the run's record are one registration, and an audit of another
-    is refused by name, never put in its place."""
+    is refused by name, never put in its place. The network certifier's key, session and schedule are ``record``'s,
+    the auditor's record of the run's deployment (`warden_chain.RECORD`), and a run whose deployment.json isn't the
+    record's is refused by name (`warden_chain.deployment_of`)."""
     if v3c is not None:
         audit = json.loads(v3c.read_text())
         read = (json.loads((scan / "summary.json").read_text()).get("v3c") or {}).get("registration")
         if read != (got := RG.digest(audit["registration"])):
             raise SystemExit(f"{v3c}: a foreign audit: it registers {got[:16]}…, and the scan read the trees of "
                              f"{f'{read[:16]}…' if read else 'no V3c registration'}")
-    dep = json.loads(SZ._found(run, "deployment.json").read_text())
+    dep, _ = WC.deployment_of(run, record)
     doc = json.loads((scan / "answers.json").read_text())
     if v3c is not None:
         doc["audits"] = [audit]
@@ -125,8 +131,9 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
 
 def lean_check(exe: str, case: dict, d: Path,
                run: Callable[[list[str]], subprocess.CompletedProcess] | None = None) -> dict:
-    """``network-period check`` on the case's three files in ``d``: its answer (its last line). ``run`` runs it with its
-    output captured as text (`subprocess.run`'s ``capture_output=True, text=True`` by default)."""
+    """``EXE check`` (``network-period``'s, or ``network-rows``') on the case's three files in ``d``: its answer (its
+    last line). ``run`` runs it with its output captured as text (`subprocess.run`'s ``capture_output=True, text=True``
+    by default)."""
     d.mkdir(parents=True, exist_ok=True)
     files = [d / "params.json", d / "commitment.bin", d / "evidence.json"]
     files[0].write_bytes(canonical_json(case["params"]))
@@ -135,7 +142,7 @@ def lean_check(exe: str, case: dict, d: Path,
     argv = [exe, "check", *map(str, files)]
     p = run(argv) if run else subprocess.run(argv, capture_output=True, text=True)
     if p.returncode not in (0, 1, 2) or not p.stdout.strip():
-        raise SystemExit(f"network-period check exited {p.returncode}: {p.stderr[-2000:]}")
+        raise SystemExit(f"{Path(exe).name} check exited {p.returncode}: {p.stderr[-2000:]}")
     return json.loads(p.stdout.strip().splitlines()[-1])
 
 
@@ -146,6 +153,23 @@ def mirror(path: Path):
     return mod
 
 
+def _case(ap: argparse.ArgumentParser, spec: str) -> tuple[str, Path, Path, dict, list[str]]:
+    """The command line's case ``spec`` (NAME=WARDEN_RUN,SCAN_OUT,RECORD[,ROUND]) with its record read (``own``: the
+    run's own, `warden_chain.own_record`), else a usage error naming the case and what it lacks or why its record is
+    unread."""
+    name, _, rest = spec.partition("=")
+    fields = rest.split(",")
+    if not name or not 3 <= len(fields) <= 4 or not all(fields[:3]):
+        ap.error(f"case {spec!r}: give NAME=WARDEN_RUN,SCAN_OUT,RECORD[,tampered|chain|forged], RECORD a {WC.RECORD} "
+                 "file or own")
+    run, scan, record, *round_ = fields
+    try:
+        read = WC.own_record(Path(run)) if record == "own" else json.loads(Path(record).read_text())
+    except (OSError, ValueError, KeyError) as e:
+        ap.error(f"case {name}: its RECORD {record}: {type(e).__name__}: {e}")
+    return name, Path(run), Path(scan), read, round_
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="scan_period.py", description=__doc__.splitlines()[0])
     ap.add_argument("--mirror", type=Path, required=True, help="the period's mirror (period_case.py, its tests')")
@@ -154,19 +178,19 @@ def main(argv=None) -> int:
     ap.add_argument("--v3c", type=Path, metavar="PERIOD",
                     help="V3c's period.json (records_audit.py period): the one compute audit, for scans proved on its "
                          "trees (scan_zk.py --v3c)")
-    ap.add_argument("cases", nargs="+", help="NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged]")
+    ap.add_argument("cases", nargs="+", help="NAME=WARDEN_RUN,SCAN_OUT,RECORD[,tampered|chain|forged], RECORD a "
+                                             f"{WC.RECORD} file, or own for a run the job made itself")
     a = ap.parse_args(argv)
+    cases = [_case(ap, spec) for spec in a.cases]
     m = mirror(a.mirror)
     a.out.mkdir(parents=True, exist_ok=True)
     got, ok = {}, True
-    for spec in a.cases:
-        name, _, rest = spec.partition("=")
-        run, scan, *round_ = rest.split(",")
-        case = rows_case(Path(run), Path(scan), *round_, v3c=a.v3c)
+    for name, run, scan, record, round_ in cases:
+        case = rows_case(run, scan, *round_, v3c=a.v3c, record=record)
         (a.out / name).mkdir(exist_ok=True)
         (a.out / name / "case.json").write_text(json.dumps(case, indent=1, sort_keys=True))
         py, lean = m.reference(case), lean_check(a.lean, case, a.out / name)
-        scan_said = {x["answer"]["verdict"] for x in json.loads((Path(scan) / "answers.json").read_text())["windows"]}
+        scan_said = {x["answer"]["verdict"] for x in json.loads((scan / "answers.json").read_text())["windows"]}
         honest = not round_ and scan_said == {"accept"}
         if honest and a.v3c:
             want = "accept"
