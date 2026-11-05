@@ -437,7 +437,7 @@ theorem treeStep_some {records : List Json} {ts ts' : List (String × Json)} {j 
 
 /-- `mapM` into `Option` keeps each place: where it maps `l` to `l'`, the element of `l'` at a place is `f` of `l`'s. -/
 theorem mapM_getElem? {α β : Type} {f : α → Option β} :
-    ∀ {l : List α} {l' : List β}, l.mapM f = some l' → ∀ s, l'[s]? = l[s]?.bind f
+    ∀ {l : List α} {l' : List β}, l.mapM f = some l' → ∀ s : ℕ, l'[s]? = l[s]?.bind f
   | [], l', h, s => by
     simp only [List.mapM_nil, Option.pure_def, Option.some.injEq] at h
     subst h
@@ -693,7 +693,7 @@ theorem sampleLinkFirst_readLog {label : String} {after : ByteArray} {records : 
     subst hR
     exact h0
   | cons l ls =>
-    unfold readLog at hR
+    simp only [readLog] at hR
     by_cases ht : treeLine l = true
     · rw [ite_eq_left ht] at hR
       simp only [Option.bind_eq_bind] at hR
