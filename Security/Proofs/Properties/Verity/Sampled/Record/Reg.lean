@@ -11,6 +11,9 @@ import Proofs.Flock.Soundness.Refine.WalkZeta
   canonical form of the same value, so `Program.parse own.program` is the verifier's program.
 * **v2's slots are two classes** (`partSlots_classes`): the population, in the registration's strata, and the input
   class, at most one stratum. The population's strata have the sizes of the layout's first class.
+* **The registration is v2's parameters'** (`regIs_of_setsUp`): at a session v2 sets up, the statement's descriptor and
+  query are the parameters' program bytes and verifier query (`RegIs`, from `SetsUp.params`), so the descriptor parses
+  as the parameters' verifier's program.
 -/
 
 namespace Verity.Sampled.Record
@@ -108,5 +111,21 @@ theorem partSlots_classes (A : Live) {p : _root_.SampledProofs.Program} {l : _ro
     unfold strataSizes
     apply List.map_splitLengths_length
     exact (Flock.Bridge.nsOf_sum A.hpop).le.trans (by simp)
+
+/-- **The statement's registration is v2's parameters'**: the statement's descriptor is the parameters' program bytes and
+its query their verifier's. -/
+def RegIs (A : Live) (p : _root_.SampledProofs.OneStageZk.Params) : Prop :=
+  p.own.program = ⟨A.desc.toArray⟩ ∧ p.base.verifier.query = A.qr
+
+/-- **At a session v2 sets up, the registration is v2's parameters'** (`RegIs`), and the statement's descriptor parses
+as their verifier's program, at the parameters whose verifier's law the draw reads over the population. -/
+theorem regIs_of_setsUp (A : Live) {ι : Type} {dv : Accounting.Device ι} {α : Type} [Fintype α]
+    {V : Vocab dv α} {θ : ByteArray} {F : Array ByteArray} (hsu : SetsUp V θ F A) :
+    ∃ p, ParamsAt θ p ∧ RegIs A p ∧ lawAt p.base.verifier A.n = .ok A.law ∧
+      _root_.SampledProofs.Program.parse ⟨A.desc.toArray⟩ = .ok p.base.verifier.program := by
+  obtain ⟨p, hp, -, -, hl, hd, hq⟩ := hsu.params
+  refine ⟨p, hp, ⟨hd, hq⟩, hl, ?_⟩
+  rw [← hd]
+  exact program_parse_of_paramsAt hp
 
 end Verity.Sampled.Record
