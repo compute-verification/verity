@@ -167,16 +167,18 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
     """(package, kind, text) of every change from the records ``olds`` to ``news`` ({record path: record}), matched by name
     and type hash across all of them, so a guarantee or definition that moved from one record to another is no change.
     The kinds are `changed`, `removed`, `premises` (the premises a guarantee's record says it rests on changed;
-    `premised`, text "", for a record that lists them for the first time), `definition`, `assumption` (a listed premise's
-    digest changed under its name), `recorded` (a premise listed before, with a digest now), `assumed` (a named assumption
-    added, or another premise now one), `unassumed` (a named assumption no longer listed), `domain` (a domain hypothesis
+    `premised`, text "", for a record that lists them for the first time), `assumed` (a named assumption
+    added, or another premise now one), `unassumed` (a named assumption no longer listed, saying so when statements still read
+    it), `domain` (a domain hypothesis
     listed, or another premise now one, with its `why`), `undomained` (a domain hypothesis no longer listed), `scope` (a
     domain hypothesis's `why` or `cites` changed), `open` (an open premise listed, or a domain hypothesis now one),
     `opened` (text "": a named assumption now open), `discharged` (an open premise no longer listed), `ticket` (an open
-    premise's issue or due date changed), `frozen` (an entry added to `shape.frozen`, the guarantees and
+    premise's issue or due date changed), `definition`, `assumption` (a listed premise's digest changed under its name),
+    `recorded` (a premise listed before, with a digest now), `frozen` (an entry added to `shape.frozen`, the guarantees and
     statements exempt from the shape rule, matched by name across records like a guarantee), `conjecture` (an entry of
-    `shape.conjectures` added or with a new status), `compiled` (an entry added to `verifier.allow`) and `new`, in that order (what an existing guarantee says comes first,
-    so a DM cut at `LIMIT` loses new guarantees' signatures before anything else), and `moved` (text ""): a guarantee now in
+    `shape.conjectures` added or with a new status), `compiled` (an entry added to `verifier.allow`) and `new`, in that order (what an existing guarantee says comes first, and
+    the premises it rests on before the hashes of what it reads, which a rehash moves by the thousand; so a DM cut at
+    `LIMIT` loses new guarantees' signatures before anything else), and `moved` (text ""): a guarantee now in
     another package's record under its name, counted in that package's tally. A guarantee under another name with its type
     hash is a rename, and no change. Without ``sources`` (the push changed no Lean input), a definition's or an
     assumption's changed hash is `rehashed` (text ""), counted in its package's tally; a digest an assumption gains is
@@ -199,6 +201,7 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
         more, less = [f"`{x}`" for x in now if x not in was], [f"`{x}`" for x in was if x not in now]
         said = ([f"now also on {', '.join(more)}"] if more else []) + ([f"no longer on {', '.join(less)}"] if less else [])
         out.append((b[n][0], "premises", f"• guarantee `{n}` rests {'; '.join(said)}"))
+    hashed: list[tuple[str, str, str]] = []
     da: dict[str, set[str]] = {}
     for d in olds.values():
         for name, (h, _) in _definitions(d).items():
@@ -208,9 +211,9 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
             before = {h for h in da.get(name, ()) if h is not None}
             if h1 is not None and before and h1 not in before and all(len(h) == len(h1) for h in before):
                 if not sources:
-                    out.append((_package(p), "rehashed", ""))
+                    hashed.append((_package(p), "rehashed", ""))
                     continue
-                out.append((_package(p), "definition", f"• definition `{name}` (`{module}`) changed"))
+                hashed.append((_package(p), "definition", f"• definition `{name}` (`{module}`) changed"))
     aa: dict[str, set] = {}
     for d in olds.values():
         for name, h in _assumptions(d).items():
@@ -223,12 +226,12 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
                 continue
             what = {"open": "open premise", "domain": "domain hypothesis"}.get(sections[name][0], "assumption")
             if not before:
-                out.append((_package(p), "recorded", f"• {what} `{name}` recorded: its statement and the definitions it "
-                                                     f"reads are now digested in its record"))
+                hashed.append((_package(p), "recorded", f"• {what} `{name}` recorded: its statement and the definitions it "
+                                                        f"reads are now digested in its record"))
             elif not sources:
-                out.append((_package(p), "rehashed", ""))
+                hashed.append((_package(p), "rehashed", ""))
             else:
-                out.append((_package(p), "assumption", f"• {what} `{name}` changed: its statement or a definition it reads"))
+                hashed.append((_package(p), "assumption", f"• {what} `{name}` changed: its statement or a definition it reads"))
     la = {n: (_package(p), e) for p, d in olds.items() for n, e in _listed(d).items()}
     lb = {n: (_package(p), e) for p, d in news.items() for n, e in _listed(d).items()}
     for n, (p, (kind, r)) in sorted(lb.items()):
@@ -247,11 +250,15 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
             out.append((p, "opened", ""))
         elif kind == "open" and _ticket(r) != _ticket(was[1]):
             out.append((p, "ticket", f"• open premise `{n}`: {_ticket(r)} (was {_ticket(was[1])})"))
+    read = {name for d in news.values() for name in _definitions(d)}
     for n, (p, (kind, r)) in sorted(la.items()):
         if n not in lb:
-            out.append((p, "unassumed", f"• named assumption `{n}` no longer listed") if kind == "assumptions" else
+            out.append((p, "unassumed", f"• named assumption `{n}` no longer listed"
+                        + (": statements only read it, and its `reads` record holds it" if n in read else ""))
+                       if kind == "assumptions" else
                        (p, "undomained", f"• domain hypothesis `{n}` no longer listed ({_scope(r)})") if kind == "domain"
                        else (p, "discharged", f"• open premise `{n}` discharged: no longer listed ({_ticket(r)})"))
+    out += hashed
     fa = {n for d in olds.values() for n in _frozen(d)}
     out += [(_package(p), "frozen", f"• frozen `{n}` (doesn't have the shape yet): {why}")
             for p, d in news.items() for n, why in sorted(_frozen(d).items()) if n not in fa]

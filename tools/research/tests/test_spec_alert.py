@@ -117,13 +117,13 @@ def test_an_assumption_no_reads_record_holds_is_shown_when_its_digest_changes_or
     new = doc({"P.Leaves": {"owner": "@proofs", "digest": H2}, "P.Bare": {"owner": "@proofs", "digest": H3},
                "P.Hyp": {"digest": H2}, "P.New": {"digest": H3}}, {"P.Hyp": H2})
     assert spec.changes(old, new) == [
+        "• named assumption `P.New` listed",
         "• definition `P.Hyp` (`P.Defs`) changed",
         "• assumption `P.Bare` recorded: its statement and the definitions it reads are now digested in its record",
-        "• assumption `P.Leaves` changed: its statement or a definition it reads",
-        "• named assumption `P.New` listed"]
+        "• assumption `P.Leaves` changed: its statement or a definition it reads"]
     assert spec.changes(new, new) == []
     entries = spec._across({"lean-audit.json": old}, {"lean-audit.json": new}, sources=False)
-    assert [k for _, k, _ in entries] == ["rehashed", "recorded", "rehashed", "assumed"]
+    assert [k for _, k, _ in entries] == ["assumed", "rehashed", "recorded", "rehashed"]
     assert spec._tally([k for _, k, _ in spec._across({"a": old}, {"a": new})]) == \
         "definitions: 1 changed; premises: 1 changed, 1 recorded, 1 named"
 
@@ -149,6 +149,9 @@ def test_the_named_assumptions_and_the_open_premises_are_shown_as_they_change():
     assert spec._tally([k for _, k, _ in spec._across({"a": old}, {"a": new})]) == \
         "premises: 2 named, 1 no longer named, 1 open listed, 1 now open, 1 discharged, 1 re-ticketed"
     assert spec.changes(new, new) == []
+    read = _doc({"P.t": _g("P.t : A", H1)}, {"P.Gone": H2}) | {"assumptions": {}, "open": new["open"]}
+    assert spec.changes(new | {"assumptions": {"P.Gone": {"owner": "@lean"}}}, read) == [
+        "• named assumption `P.Gone` no longer listed: statements only read it, and its `reads` record holds it"]
 
 
 def test_a_domain_hypothesis_is_shown_with_what_it_restricts_as_it_is_listed_moved_or_restated():
