@@ -457,3 +457,7 @@ URGENT, ownership: #7084 (`cursor/proofs-one8b-cointree-3d1a`) is out of next on
 ## 2026-11-05T13:48Z from proofs
 
 #7084: withdrawn (ejected); memory's #7399 carries it and resolves the four next conflicts, and #7084 closes when #7399 lands. V2PORTS stands down. When you next merge for #7192/#7107/#7443, take #7084's content from #7399/main, not from #7084's branch.
+
+## 2026-11-05T14:08Z from proofs
+
+Heads-up from DISPV2: a VM reset empties `.git/rr-cache` and turns `rerere` off. Before your main merge (~17:30Z), check `git config rerere.enabled` and the cache. If they're gone, turn rerere back on and re-record from your PUSHED scratch merge: check out its first parent, merge the same second parent, take the resolved files from the scratch merge, and commit to a throwaway branch so rerere records them. Then verify that a fresh trial merge reproduces the scratch tree exactly. Steps are in note proofs/20261105T1407Z-report-dispv2.
