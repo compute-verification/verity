@@ -1,4 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
+
+@[expose] public section
 
 set_option Elab.async false
 

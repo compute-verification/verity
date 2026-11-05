@@ -1,9 +1,11 @@
-import Properties.Pous.Period
-import Proofs.Pous.EndToEnd
-import Proofs.Properties.Pous.Run
-import Proofs.Accounting.Prob
-import Proofs.Accounting.Capacity
-import Proofs.Accounting.PerRunJoint
+module
+
+public import Properties.Pous.Period
+public import Proofs.Pous.EndToEnd
+public import Proofs.Properties.Pous.Run
+public import Proofs.Accounting.Prob
+public import Proofs.Accounting.Capacity
+public import Proofs.Accounting.PerRunJoint
 
 /-!
 # Proof of PoUS's per-period guarantee, and that it is the joint's capacity guarantee
@@ -23,6 +25,8 @@ held fewer than `S · len`, so at most `B`, bits at every tick of the window (`A
 pass by `δ + ε_max`. With `S · len ≤ 0` the event is empty. A run whose capacity verdict is that acceptance outside a
 break then has `CapacitySoundPerRun`, and with it `CapacitySound` (`Accounting.Run.capacitySound_of_perRun`).
 -/
+
+@[expose] public section
 
 namespace Pous.Period.SecurityProofs
 

@@ -1,4 +1,6 @@
-import Mathlib.Logic.Embedding.Basic
+module
+
+public import Mathlib.Logic.Embedding.Basic
 
 /-!
 # A deterministic schedule: the vocabulary (trusted)
@@ -21,6 +23,8 @@ schedule's bits.
 (`Security/Proofs/Properties/RemoteAudit/Schedule.lean`, which also holds a layout that is `SteeredLayout` at one bit
 and not `ScheduleDeterministic` at any `a`).
 -/
+
+@[expose] public section
 
 namespace Accounting
 

@@ -1,4 +1,6 @@
-import Proofs.Properties.Verity.Sampled.Readings
+module
+
+public import Proofs.Properties.Verity.Sampled.Readings
 
 /-!
 # Sampled proofs' coupling: a stop's written coins in the play's log
@@ -71,6 +73,8 @@ there.
 * **The rounds of one stream** (`map_fst_filter_zip`, `rounds_of_logs`): so the rounds a trace appends to a stream are
   one per opening of it, the `k`-th after the log that has opened it `k` times.
 -/
+
+@[expose] public section
 
 namespace Verity.Game
 

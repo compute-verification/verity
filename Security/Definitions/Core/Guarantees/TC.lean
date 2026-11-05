@@ -1,5 +1,7 @@
-import Definitions.Core.TC
-import Definitions.Core.Assumptions
+module
+
+public import Definitions.Core.TC
+public import Definitions.Core.Assumptions
 
 /-!
 # The tensor-core guarantees
@@ -11,6 +13,8 @@ parameters `HOPPER_BF16_M16N8K16` shares) and the Ampere/Ada pipeline (`AMPERE_B
 word it commits, and the range and is-zero gadgets. Under `gemm-hopper-step` and `gemm-ampere-step`
 (`Verity.Assumptions`), the semantics is the device's.
 -/
+
+@[expose] public section
 
 namespace Verity.Guarantees
 

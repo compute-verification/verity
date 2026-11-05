@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.RepFramesLig
-import Proofs.Flock.Claims.Recursion.RepOpenings
-import Proofs.Flock.Claims.KS.PlainLevels
+module
+
+public import Proofs.Flock.Claims.Recursion.RepFramesLig
+public import Proofs.Flock.Claims.Recursion.RepOpenings
+public import Proofs.Flock.Claims.KS.PlainLevels
 
 /-!
 # Two reps accepted on one stream are one proof, or their openings collide
@@ -16,6 +18,8 @@ import Proofs.Flock.Claims.KS.PlainLevels
   (`merkleCheck_coll`);
 * a decoded proof has `R − 1` recursive proofs (`decodeProof_rproofs`), so one opening per level is the whole of them.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.DecodeZL
 

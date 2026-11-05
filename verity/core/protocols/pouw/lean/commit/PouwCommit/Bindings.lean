@@ -1,5 +1,7 @@
-import PouwCommit.Tagged
-import Identity.Domains
+module
+
+public import PouwCommit.Tagged
+public import Identity.Domains
 
 /-!
 # The protocol's bindings (`verity.core.protocols.pouw.audit`)
@@ -11,6 +13,8 @@ What each of the protocol's trees is bound to, and the one root over the weights
     weights_root(roots)          = tagged("verity/pouw/weights/v1", w₀, root₀, w₁, root₁, …)   in increasing w
     transcript_binding(epoch)    = tagged("verity/pouw/transcript/v1", epoch.salt, epoch.weights_root)
 -/
+
+@[expose] public section
 
 namespace PouwCommit
 

@@ -2,9 +2,21 @@
 JSON as the Python reference reads it, over canonical JSON (integers only): Python's `==`, `bool(x)`, `x.get(k)` and its
 integer tests. The one difference is deliberate: `jeq` tells `true` from `1`, which Python's `==` doesn't.
 -/
-import Lean.Data.Json
-import Flock.Canon
-import Flock.Hash
+module
+
+public import Lean.Data.Json
+public import Flock.Canon
+public import Flock.Hash
+meta import Lean.Data.Json
+meta import Flock.Canon
+meta import Flock.Hash
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
+import all Init.Data.Array.Basic
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs
 
@@ -81,8 +93,7 @@ decreasing_by
     omega
   · exact Flock.sizeOf_lt_of_mem_toArray p.2
 
-example : sortedKeys (Json.mkObj [("b", .arr #[Json.mkObj [("y", 1), ("x", 2)]]), ("a", .null)]) = true := by
-  decide +kernel
+#guard sortedKeys (Json.mkObj [("b", .arr #[Json.mkObj [("y", 1), ("x", 2)]]), ("a", .null)])
 
 /-- A failure code, kept once, in the order first found (`verdict._Collect`). -/
 def addCode (cs : Array String) (code : String) : Array String := if cs.contains code then cs else cs.push code

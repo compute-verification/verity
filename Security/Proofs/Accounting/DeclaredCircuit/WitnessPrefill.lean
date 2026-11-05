@@ -1,5 +1,7 @@
-import Mathlib
-import Proofs.Accounting.DeclaredCircuit.Witness
+module
+
+public import Mathlib
+public import Proofs.Accounting.DeclaredCircuit.Witness
 
 /-!
 # An honest run with a prefill meets every hypothesis of `DeclaredCircuitRequirement`
@@ -33,6 +35,8 @@ It meets every hypothesis of `G` but the world's (`meets`), so `G` bounds it (`a
   residency at windows of 15 to 60 s) both of `G`'s thresholds are positive for 8B and for 70B TP8 (`life30_8b`,
   `life30_70b`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.DeclaredCircuitWitnessPrefill
 
@@ -141,7 +145,7 @@ theorem lag_ge {N k : ℕ} (hk : N ≤ k) : 3 ≤ lag N k := by
 /-- Deferred residency: page `k` of request `r` is first read encoded at step `4r + lag N k`. -/
 def encoded (N b : ℕ) : ℕ := b / (N + 4) * 4 + lag N (b % (N + 4))
 
-def kvLayout (n P N : ℕ) : Requirement.Layout Val := ⟨block n P N, offset, encoded N⟩
+def kvLayout (n P N : ℕ) : Requirement.Store.Placement Val := ⟨block n P N, offset, encoded N⟩
 
 /-- A value's group: its request, layer `0`, plane `0` and page. -/
 def kvGrp : Val → ℕ × ℕ × ℕ × ℕ

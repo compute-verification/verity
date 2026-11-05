@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.DecodeDeploy
-import Proofs.Flock.Soundness.Discharge.HiddenDec
+module
+
+public import Proofs.Flock.Claims.KS.DecodeDeploy
+public import Proofs.Flock.Soundness.Discharge.HiddenDec
 
 /-!
 # The deployed plain decoders at hidden outputs
@@ -20,6 +22,8 @@ the decoders read only the table's committed rows.
 * `plain_hdecH`: so at the draw `d` and no drawn unit, `decodesTable_wrP_scH` is the decoders' fact `PlainLiveAccAt`
   asks, at `plainTab`.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.DecodePlain
 
@@ -258,7 +262,7 @@ theorem tableAtH_plainTab {I : Exec.Inputs} (ht : I.tags.typed = false) (hi : I.
   dsimp only at hy
   subst hy
   have hs := Option.some.inj (yhsch.symm.trans hsch)
-  simp only [Accounting.Schedule.mk.injEq, List.cons.injEq] at hs
+  simp only [FlockSoundness.Accounting.Schedule.mk.injEq, List.cons.injEq] at hs
   obtain ⟨rfl, rfl, ⟨rfl, rfl, rfl⟩, rfl⟩ := hs
   have hS' : L.model (Refine.regionsOf yst) = Refine.stmtOf yst ywf.1 (Refine.regionsOf yst) :=
     Integrate.model_eq (parse_facts (Hidden.parse_untyped ht (HiddenExec.setupHidden_parseC hi yh)).1) L

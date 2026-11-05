@@ -1,4 +1,6 @@
-import Proofs.Core.Game.TwoRun
+module
+
+public import Proofs.Core.Game.TwoRun
 
 /-!
 # A play advanced between stops, on coins supplied from outside
@@ -31,6 +33,8 @@ any family of cuts and any rewriting of the tape:
   tape marginal is within `h` of the uniform tape's, and on whose support an event of the tape implies one of the
   outcome, bounds the event's probability over the uniform tape by the outcome's plus `h`.
 -/
+
+@[expose] public section
 
 namespace Verity.Game
 

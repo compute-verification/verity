@@ -1,5 +1,7 @@
-import Proofs.Properties.Verity.Sampled.Decoders
-import Proofs.Properties.Verity.Sampled.Walk
+module
+
+public import Proofs.Properties.Verity.Sampled.Decoders
+public import Proofs.Properties.Verity.Sampled.Walk
 
 /-!
 # Sampled proofs' coupling: the readings at a layout
@@ -16,6 +18,8 @@ the period's game, and what the play's output reveals for it.
 * **The readings at a layout** (`readingAt`): each picks only openings (`readingAt_picks`), and where the layout is
   injective and the tables distinct, no two rounds pick one frame (`readingAt_unique`).
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled
 

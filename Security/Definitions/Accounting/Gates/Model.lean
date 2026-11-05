@@ -1,8 +1,10 @@
-import Mathlib.Algebra.BigOperators.Group.List.Basic
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Order.Field.Rat
-import Mathlib.Data.Nat.Log
-import Mathlib.Data.Finset.Card
+module
+
+public import Mathlib.Algebra.BigOperators.Group.List.Basic
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Algebra.Order.Field.Rat
+public import Mathlib.Data.Nat.Log
+public import Mathlib.Data.Finset.Card
 
 /-!
 # The circuit model: a declared circuit's gates, their classes, its window and its census (trusted)
@@ -94,6 +96,8 @@ fan-in floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate
 * **Fan-in.** MULT-LB's lane programs (`ofLane`: inputs, then instructions that each apply an arbitrary function to at
   most `f` earlier values, and `c` outputs) are this model's circuits of neutral gates of fan-in at most `f` (`FanIn`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Gates
 

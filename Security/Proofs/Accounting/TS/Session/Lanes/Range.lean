@@ -1,6 +1,8 @@
-import Proofs.Accounting.TS.Session.Lanes.Decode
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.Zify
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.Decode
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.Zify
 
 /-!
 # The decodes' range lemmas: decoding an encoded in-range word gives it back
@@ -18,6 +20,8 @@ So the decodes give a leaf back from rows that hold its words' encodings; that t
 content is flock-verify's known-read check (`Lanes.KnownRead`). The leaf `LeafLanesSound` opens is the one the data
 ports' rows decode to (`Lanes.Committed`), so nothing is asked of those rows.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Lanes
 

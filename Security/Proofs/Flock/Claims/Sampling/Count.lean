@@ -1,6 +1,8 @@
-import Batteries.Tactic.OpenPrivate
-import SampledProofs.Bound
-import Proofs.Flock.Claims.Sampling.Escape
+module
+
+public import Batteries.Tactic.OpenPrivate
+public import SampledProofs.Bound
+public import Proofs.Flock.Claims.Sampling.Escape
 
 /-!
 # The deployed count bound, at the claims' strata draws
@@ -23,6 +25,10 @@ claims' `Design.miss` (`Definitions.Claims.Sampling`):
   none has room; `countBound_good`: the loop keeps the greedy invariant, so whichever way it returns, every `K + 1`
   wrong units escape with probability at most a number below `δ`.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Claims.Sampling.Count
 

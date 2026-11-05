@@ -1,5 +1,7 @@
-import Proofs.Properties.Verity.Sampled.Messages
-import Proofs.Core.Game.InterleaveBridge
+module
+
+public import Proofs.Properties.Verity.Sampled.Messages
+public import Proofs.Core.Game.InterleaveBridge
 
 /-!
 # Sampled proofs' coupling: where the walk stops
@@ -25,6 +27,8 @@ frame a live round picks, when each reading picks only openings (`walk_relK`):
   rounds that pick it (`isHere_openCuts`). Consuming that stop leaves live the rounds that didn't pick it
   (`liveCuts_consume`), and the walk from there stops the same way (`stopOf_next`).
 -/
+
+@[expose] public section
 
 namespace Verity.Game
 
