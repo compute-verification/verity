@@ -27,6 +27,8 @@ KINDS: dict[str, str] = {
     "evidence/v1": "a lane's evidence behind a note, which never goes in the notes (scripts, logs, JSON, plots): payload file or tree; "
                    "meta {lane, what, run?}; the note cites the art: id",
     "fixture/v1": "a repo-replicated input (golden records, instances); payload file/tree",
+    "fleet-samples/v1": "one UTC day of the fleet's 5-minute usage samples (pods/nebius/fleet.py, samples-YYYYMMDD.jsonl), put "
+                        "once the day is over: the usage record's second copy, off the control pod; payload file",
     "notes-evidence-index/v1": "where the bytes of files removed from the notes tree live: payload index.jsonl, one {path, sha256, "
                                "bytes, art, member, kind} per file (`research data fetch <art> --path <member>` restores it); meta "
                                "{notes_commit, files, bytes, note}",

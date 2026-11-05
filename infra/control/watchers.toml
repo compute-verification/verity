@@ -27,12 +27,13 @@ name = "vm-stop"
 argv = ["python3.12", "-s", "{src}/infra/control/vm_stop.py", "loop", "--config", "{dir}/vm_stop.toml", "--state", "{dir}/vm_stop.json"]
 env_files = ["/root/.config/verity/monitor.env"]
 
-# every Nebius VM sampled every 5 min, the quota watch, and the 24-h compute report at 15:00Z (fleet.py; tmux `fleet`)
+# every Nebius VM sampled every 5 min, the quota watch, the 24-h compute report at 15:00Z, the console's compute panels and
+# each day's samples put in the store (fleet.py; tmux `fleet`)
 [[loop]]
 name = "fleet"
 argv = ["python3.12", "-s", "{src}/tools/research/src/research/pods/nebius/fleet.py", "loop"]
-env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/monitor.env"]
-env = { FLEET_DIR = "{dir}/fleet", FLEET_MACHINES_D = "/data/steward/research-notes/machines.d", FLEET_SSH_KEY = "/root/.runpod/ssh/runpodctl-ssh-key", FLEET_RESEARCH = "{src}/infra/control/bin/research" }
+env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/monitor.env", "/root/.config/verity/r2.env"]
+env = { FLEET_DIR = "{dir}/fleet", FLEET_MACHINES_D = "/data/steward/research-notes/machines.d", FLEET_SSH_KEY = "/root/.runpod/ssh/runpodctl-ssh-key", FLEET_RESEARCH = "{src}/infra/control/bin/research", FLEET_PANELS_KEY = "/root/.config/verity/panels.key", RESEARCH_STORE = "/root/fleet-store" }
 
 # node 2's monitors, the machine watchdogs' alerts and the relay-side monitors, posted to #agent-alerts (tmux `watchdog-relay`)
 [[loop]]

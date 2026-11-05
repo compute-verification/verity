@@ -10,7 +10,8 @@
     fleet.py quota               each tenant quota at >= 80% of its limit, and the card's day so far against $FLEET_CARD_DAILY_USD
     fleet.py panels [--dry-run]  the usage record as the console's compute tabs read it: compute/online (the last pass's VMs),
                                  compute/hourly (each VM's $ and busy $ per UTC hour, 7 days) and compute/daily (per Pacific day,
-                                 30 days), PUT to the site with $FLEET_PANELS_KEY; the loop sends them after each sample
+                                 30 days), PUT to the site with $FLEET_PANELS_KEY; the loop sends them after each sample, and
+                                 puts each UTC day's samples file in the store once the day is over (archive)
     fleet.py report --lanes      what the daily post rings each owning lane with: its own machines' idle hours and idle $
     fleet.py loop                sample every 5 min, quota every 30 (an alert in #agent-alerts once per quota and UTC day, kept in
                                  $FLEET_DIR/quota-told-YYYY-MM-DD.json across restarts), and at 15:00Z (08:00 PDT) the last
@@ -314,28 +315,60 @@ def idle_by_lane(rep: list[dict], reg: dict[str, dict]) -> dict[str, list[dict]]
     return out
 
 
+#: the most machines a post names; `research msg` refuses a post in #agent-coordination past twice POST_WORDS (60) words
+POST_NAMES = 4
+
+
+def _named(rows: list[dict], each: Callable[[dict], str]) -> str:
+    shown = [each(r) for r in rows[:POST_NAMES]]
+    return ", ".join(shown) + (f" and {len(rows) - POST_NAMES} more" if len(rows) > POST_NAMES else "")
+
+
+def _idle_usd(r: dict) -> str:
+    return f"${r['rate_usd_per_hour'] * r['idle_hours']:,.0f}" if r["rate_usd_per_hour"] is not None else "$?"
+
+
+def _idle_entry(r: dict) -> str:
+    return f"{r['name']} {r['idle_hours']} h ({_idle_usd(r)})"
+
+
+def brief(rep: list[dict], hours: float, end: float) -> str:
+    """The daily post: the window's spend, its idle part and the idlest machines, short enough for `research msg` (the whole report
+    is `fleet.py report`, and each machine by hour the console's Usage tab)."""
+    total = sum(r["usd"] or 0 for r in rep)
+    idle_usd = sum((r["rate_usd_per_hour"] or 0) * r["idle_hours"] for r in rep)
+    idlest = sorted((r for r in rep if r["idle_hours"] > 0), key=lambda r: -(r["rate_usd_per_hour"] or 0) * r["idle_hours"])
+    return (f"Compute, the {hours:g} h to {utc(end)}: ${total:,.0f} across {len(rep)} VMs, ${idle_usd:,.0f} of it idle."
+            + (f" Idlest: {_named(idlest, _idle_entry)}." if idlest else "")
+            + " Each machine by hour: the console's Usage tab.")
+
+
 def render_lane(rows: list[dict], hours: float, end: float) -> str:
+    """A lane's doorbell: its own machines' idle hours and idle $, short enough for `research msg`."""
     known = [r for r in rows if r["rate_usd_per_hour"] is not None]
     usd = sum(r["rate_usd_per_hour"] * r["idle_hours"] for r in known)
-    lines = [f"Your machines sat idle {sum(r['idle_hours'] for r in rows):.1f} h (${usd:,.0f}"
-             + ("" if len(known) == len(rows) else ", plus machines with no rate registered")
-             + f") in the {hours:g} h to {utc(end)}. The lane whose budget line pays for a node stops it when its work there ends; "
-             "infra's idle stop is only a backstop (lane contract v2.19 §3c)."]
-    for r in rows:
-        usd_r = f"${r['rate_usd_per_hour'] * r['idle_hours']:,.0f}" if r["rate_usd_per_hour"] is not None else "$? (no rate registered)"
-        lines.append(f"- {r['name']}: idle {r['idle_hours']} h of {r['hours']} h running, {usd_r}")
-    return "\n".join(lines)
+    return (f"Your machines sat idle {sum(r['idle_hours'] for r in rows):.1f} h (${usd:,.0f}"
+            + ("" if len(known) == len(rows) else ", plus machines with no rate registered")
+            + f") in the {hours:g} h to {utc(end)}: "
+            + _named(rows, lambda r: f"{r['name']} {r['idle_hours']} h of {r['hours']} h ({_idle_usd(r)})")
+            + ". Stop a node when its work there ends (lane contract §3c).")
 
 
-def daily(now: float, send: Callable[[list[str], str], None] | None = None) -> None:
-    """The 24 h report to infra's status thread and @top, and each owning lane's idle machines to its inbox."""
+def daily(now: float, send: Callable[[list[str], str], str | None] | None = None) -> list[str]:
+    """The 24 h brief to infra's status thread and @top, and each owning lane's idle machines to its inbox; a post that fails is
+    alerted on in #agent-alerts (once, naming every failure) and logged. What failed."""
     send = send or post
     rep = report(load_samples(now - 86400, now), 24)
-    text = render(rep, 24, now)
-    send(["--thread", STATUS_THREAD, "--kind", "fyi"], text)
-    send(["--to", "@top", "--kind", "fyi"], text)
-    for lane, rows in sorted(idle_by_lane(rep, registry()).items()):
-        send(["--to", f"@{lane}", "--kind", "fyi"], render_lane(rows, 24, now))
+    text = brief(rep, 24, now)
+    posts = [(["--thread", STATUS_THREAD, "--kind", "fyi"], text), (["--to", "@top", "--kind", "fyi"], text)]
+    posts += [(["--to", f"@{lane}", "--kind", "fyi"], render_lane(rows, 24, now))
+              for lane, rows in sorted(idle_by_lane(rep, registry()).items())]
+    failed = [f"{' '.join(args[:2])}: {err}" for args, body in posts if (err := send(args, body))]
+    if failed:
+        print(f"{utc(now)} daily post failed: {'; '.join(failed)}", file=sys.stderr, flush=True)
+        send(["--channel", "agent-alerts", "--kind", "alert"],
+             f"fleet.py's daily compute post failed {len(failed)} of {len(posts)} times: {'; '.join(failed)}"[:1500])
+    return failed
 
 
 def quota_findings() -> list[dict]:
@@ -482,10 +515,52 @@ def publish(rows: list[dict], now: float, put: Callable[[dict, str], str | None]
     return [e for p in (online_panel(rows, reg, now), hourly, daily) if (e := put(fitted(p), key))]
 
 
-def post(args: list[str], text: str) -> None:
+def store_put(path: Path) -> tuple[str | None, str]:
+    """``path`` into the store (`research data put --kind fleet-samples/v1 --preserve`, $RESEARCH_STORE): its art id, or None and why."""
     research = Path(os.environ.get("FLEET_RESEARCH", "/workspace/.venv/bin/research"))
-    subprocess.run([str(research), "msg", "send", "--as", "infra", *args, "--text", text], cwd="/workspace", timeout=120,
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        p = subprocess.run([str(research), "data", "put", "--kind", "fleet-samples/v1", "--file", str(path), "--preserve", "--json"],
+                           capture_output=True, text=True, timeout=1800)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return None, f"{type(e).__name__}: {e}"
+    if p.returncode != 0:
+        return None, f"exit {p.returncode}: {p.stderr.strip()[-300:]}"
+    try:
+        return json.loads(p.stdout)["id"], ""
+    except (ValueError, KeyError, TypeError):
+        return None, f"no art id in its output: {p.stdout.strip()[-200:]}"
+
+
+def archive(now: float, put: Callable[[Path], tuple[str | None, str]] = store_put) -> str | None:
+    """The second copy of the usage record: the last UTC day's samples file put into the store once, its art id kept in
+    $FLEET_DIR/archived.json so a restarted loop doesn't put it again. None when it is stored (or there is no file), else why not."""
+    day = utc(now - 86400)[:10].replace("-", "")
+    f, state_path = FLEET_DIR / f"samples-{day}.jsonl", FLEET_DIR / "archived.json"
+    try:
+        state = json.loads(state_path.read_text()) if state_path.exists() else {}
+    except (OSError, ValueError):
+        state = {}
+    if day in state or not f.exists():
+        return None
+    art, why = put(f)
+    if art is None:
+        return f"{f.name}: {why}"
+    state[day] = art
+    tmp = state_path.with_name(f".{state_path.name}.{os.getpid()}")
+    tmp.write_text(json.dumps(state, indent=1, sort_keys=True) + "\n")
+    os.replace(tmp, state_path)
+    return None
+
+
+def post(args: list[str], text: str) -> str | None:
+    """Send one post with `research msg send`; None when it went out, else why not (its exit and the end of its stderr)."""
+    research = Path(os.environ.get("FLEET_RESEARCH", "/workspace/.venv/bin/research"))
+    try:
+        p = subprocess.run([str(research), "msg", "send", "--as", "infra", *args, "--text", text], cwd="/workspace", timeout=120,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return f"{type(e).__name__}: {e}"
+    return None if p.returncode == 0 else f"exit {p.returncode}: {p.stderr.strip()[-300:]}"
 
 
 TOLD_KEEP_DAYS = 2
@@ -518,7 +593,7 @@ def save_told(told: set[tuple[str, str]], day: str) -> None:
 def loop(clock: Callable[[], float] = time.time, sleep: Callable[[float], None] = time.sleep,
          send: Callable[[list[str], str], None] | None = None, passes: int | None = None) -> int:
     send = send or post
-    last_quota, told, reported = 0.0, load_told(clock()), ""
+    last_quota, told, reported, archive_told = 0.0, load_told(clock()), "", ""
     while passes is None or passes > 0:
         passes = None if passes is None else passes - 1
         now, rows = clock(), None
@@ -554,6 +629,14 @@ def loop(clock: Callable[[], float] = time.time, sleep: Callable[[float], None] 
         if datetime.fromtimestamp(now, timezone.utc).hour == REPORT_HOUR_UTC and reported != day:
             reported = day
             daily(now, send)
+        try:
+            if (why := archive(now)) and archive_told != day:
+                archive_told = day
+                print(f"{utc(now)} archive failed: {why}", file=sys.stderr, flush=True)
+                send(["--channel", "agent-alerts", "--kind", "alert"],
+                     f"fleet.py couldn't put yesterday's usage samples in the store (it retries each pass): {why}"[:1500])
+        except Exception as e:  # noqa: BLE001
+            print(f"{utc(now)} archive failed: {e}", file=sys.stderr, flush=True)
         sleep(max(1.0, INTERVAL_S - (clock() - now)))
     return 0
 
