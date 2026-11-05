@@ -238,10 +238,10 @@ def test_a_route_that_cannot_be_read_is_a_failure_the_retry_rings_and_a_lane_wit
     assert consume(world.deps, payload, 2) == "unaddressed: @top"
     assert world.rung("top") == [private(post["ts"])] and router_lines(world, CHAT, post["ts"]) == [NO_MODEL]
 
-    nobody = world.slack.add(CHAT, text="@soundness is the bound tight?", user=LUKE)
+    nobody = world.slack.add(CHAT, text="@console is the bound tight?", user=LUKE)
     assert consume(world.deps, world.event(CHAT, nobody, "EvV"), 1) == "rule"
-    assert {"event": "deliver", "event_id": "EvV", "line": "route @soundness: no inbox; its holder opens one with "
-            "`research msg names open --as soundness`"} in world.logs()
+    assert {"event": "deliver", "event_id": "EvV", "line": "route @console: no inbox; its holder opens one with "
+            "`research msg names open --as console`"} in world.logs()
 
 
 def published(world) -> Path:
