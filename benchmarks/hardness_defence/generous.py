@@ -348,6 +348,10 @@ def live_report(book, gen, rec, rows, matrices):
 
     def held(_b, model, t):
         return rec(book, model, t)
+    grev = revised(rows, rec)
+
+    def held_g(_b, model, t):
+        return grev(book, model, t)
     print()
     print("Exact routes with the split at its live digits (the matrices trange.py measured), every matrix:")
     print()
@@ -355,7 +359,8 @@ def live_report(book, gen, rec, rows, matrices):
           "MACs credited |")
     print("|---|---|---|---|---|---|---|")
     for model in T.MODELS:
-        for name, ch in (("recommended, as priced", held), ("the recommended rule at live digits", rec),
+        for name, ch in (("recommended, as priced", held), ("each q, k at its generous least / 1.05, as priced", held_g),
+                         ("the recommended rule at live digits", rec),
                          ("and each q, k at its generous least / 1.05", lchoose)):
             worst, share, _u, _n, _s = T.evaluate(live, model, ch)
             cells = [" / ".join(f"{worst[f'{c}@{p}'][0]:.3f}" for p in T.PRICES) for c in ("sm120", "h200")]
