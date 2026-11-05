@@ -14,7 +14,7 @@ and its Lean.
   ``period.json`` carries them, on which it counts them instead, `AUDIT_KEYS`),
   the jitter bound `leak_bounds.JITTER_BOUND` (K's jitter term T bits a link-window, `leak_bounds.JITTER`), the
   scan that Program's descriptor (``joint/program.json``), off which the period check reads the scan's terms, and its
-  class circuit files by SHA-512 (``scan_circuits``, `scan_circuits`: each template's, in its units' order); the
+  class circuit files by SHA-512 (``scan_circuits``, `scan_circuits`: each root template node's, in node order); the
   commitment the audits' registrations and the scan's; the evidence the audits' answers, then the scan's answer, the
   certificates of W's three records (``certified.jsonl``: requests, responses, fails) and W's two row registrations
   (``cells.jsonl``, as ``answers.json`` carries them). The rows form reads a registration of one link-window's 2T
@@ -26,11 +26,15 @@ and its Lean.
   for another statement than the link's Program; chain's the link's Program's, refused.
 * **forged**: the honest case with the responses record's certificate's signature changed: a certificate the network
   certifier didn't sign.
-* **The check**: each case through the mirror (``--mirror``, `period_case.py` loaded by path: `reference`) and
-  ``network-period check`` (``--lean``) on its three files and its circuit files (`circuit_files`: V3c's, beside
-  ``--v3c``'s ``period.json`` in ``circuits/``, then the scan's, shipped into ``DIR/NAME/circuits``, `ship`), whose
-  verdicts must agree and be the case's: reject, and where the scan's
-  answer accepts, at the wiring (the mirror's ``UNWIRED`` in its reason and in Lean's). The block round's o0 is a
+* **The check**: each case through the mirror (``--mirror``, `period_case.py` loaded by path) and ``network-period
+  check`` (``--lean``), whose verdicts and outputs must agree and be the case's. With ``--v3c``, on its three files and
+  its circuit files (`circuit_files`: V3c's, beside ``--v3c``'s ``period.json`` in ``circuits/``, then the scan's,
+  shipped into ``DIR/NAME/circuits``, `ship`; the mirror's `reference_with`). Without, the block audit lists no files
+  and the scan ties it, so given files the check refuses it (`unlistedTied`, `UNLISTED`): each case is checked as
+  the check that reads none (`unlisted`, the mirror's `reference`), rejected and, where the scan's answer accepts, at
+  the wiring (the mirror's ``UNWIRED`` in its reason and in Lean's); and the honest case, given the scan's files, is
+  refused at `UNLISTED`, and with no compute audit (`untied`) at `UNTIED`, after the scan's files are held to
+  `SampledProofs.Bits.check`, each read whole. The block round's o0 is a
   `SlotEntry_v1` stand-in's entries, whose closure digest is none the period check pins (`entryPins`: the scan's
   `prog` is a ``scan/prog<j>`` a lane, and lane j's must be chunk j, ``<descriptor id>/c<j>/o0``, of a pinned
   `SlotEntry_v1`'s or `SelectEntry_v1`'s own entries, as the block round's lane-j o0 is of the stand-in's), so the
@@ -158,18 +162,19 @@ def circuit_of_record(path: Path) -> str:
 
 
 def scan_circuits(scan: Path) -> list[tuple[str, str, Path]]:
-    """Each template of the scan's Program (the parameters' ``scan``, its joint round's) with the C-Flock circuit file the
-    auditor composed for it from its public Definition (``joint/<tp>/circuit.txt``) and that file's SHA-512, the pin every
-    session of the template's members was held to (``summary.json``'s ``stagers``): ``(template, sha512, file)`` in the
-    order the population's units take the templates. SystemExit where the summary stages no template of the Program,
-    names no template or pin for one, or its file is missing or hashes to another than its pin."""
+    """Each root template node of the scan's Program (the parameters' ``scan``, its joint round's ``program.json``), in
+    node order, with the C-Flock circuit file the auditor composed for its template from its public Definition
+    (``joint/<tp>/circuit.txt``) and that file's SHA-512, the pin every session of the template's members was held to
+    (``summary.json``'s ``stagers``): ``(template, sha512, file)``, the order `NetworkCheck.Period` holds
+    ``scan_circuits`` to (a file each of the Program's root templates, in order). SystemExit where the summary stages
+    no template of the Program, names no template or pin for one, its file is missing or hashes to another than its
+    pin, or a root template node's template is none it staged."""
     joint = SZ.PROGRAMS[SZ.TEMPLATES]
     stagers = json.loads((scan / "summary.json").read_text()).get("stagers") or {}
-    staged = sorted(((k.removeprefix(f"{joint}/"), s) for k, s in stagers.items() if k.startswith(f"{joint}/")),
-                    key=lambda x: x[1]["base"])
+    staged = [(k.removeprefix(f"{joint}/"), s) for k, s in stagers.items() if k.startswith(f"{joint}/")]
     if not staged:
         raise SystemExit(f"{scan}: the scan staged no template of its Program, so no circuit of it")
-    out = []
+    files = {}
     for tp, s in staged:
         f, t, pin = scan / joint / tp / "circuit.txt", s.get("template"), s.get("pin")
         if t is None or pin is None or not f.is_file():
@@ -178,8 +183,13 @@ def scan_circuits(scan: Path) -> list[tuple[str, str, Path]]:
             if hashlib.file_digest(h, "sha512").hexdigest() != pin:
                 raise SystemExit(f"{f} isn't the circuit template {tp}'s sessions were held to: it hashes to another "
                                  "than its pin")
-        out.append((t, pin, f))
-    return out
+        files[t] = (pin, f)
+    prog = json.loads((scan / joint / "program.json").read_text())
+    defs, callees = prog["definitions"], prog["callees"]
+    nodes = [k for x in defs[prog["root"]]["body"]["nodes"] if defs[k := callees[x["fn"]]]["form"] != "primitive"]
+    if (k := next((k for k in nodes if k not in files), None)) is not None:
+        raise SystemExit(f"{scan}: the scan composed no circuit for its Program's root template {k}")
+    return [(k, *files[k]) for k in nodes]
 
 
 def ship(scan: Path, to: Path) -> list[Path]:
@@ -226,6 +236,39 @@ def lean_check(exe: str, case: dict, d: Path, circuits: Sequence[Path] = (),
     return json.loads(p.stdout.strip().splitlines()[-1])
 
 
+#: the period check's reason, Lean's and the mirror's, for given circuit files and a tied audit that lists none
+#: (`unlistedTied`)
+UNLISTED = "is tied to the scan but lists no circuit files"
+#: its reason for a link-window whose scan's prog no compute audit outputs
+UNTIED = "the scan's prog is no compute audit's output"
+
+
+def unlisted(case: dict) -> dict:
+    """``case`` listing no circuit files, no ``scan_circuits`` and no audit's ``circuits``: the check that reads none."""
+    p = {k: v for k, v in case["params"].items() if k != "scan_circuits"}
+    return {**case, "params": {**p, "audits": [{k: v for k, v in a.items() if k != "circuits"} for a in p["audits"]]}}
+
+
+def untied(case: dict) -> dict:
+    """``case`` with no compute audit in its parameters, commitment or evidence: no audit for the scan to tie, so given
+    the scan's files the check holds them to the listing and refuses the link-window at `UNTIED`."""
+    bare = {k: canonical_json({**json.loads(bytes.fromhex(case[k])), "audits": []}).hex()
+            for k in ("commitment", "evidence")}
+    return {**bare, "params": {**case["params"], "audits": []}}
+
+
+def answers(m, exe: str, case: dict, d: Path, files: Sequence[Path] = ()) -> tuple[dict, dict]:
+    """The mirror's answer (`reference_with`) and ``network-period check``'s (`lean_check`, in ``d``) on ``case`` and
+    its circuit files ``files``."""
+    return m.reference_with(case, [f.read_text() for f in files]), lean_check(exe, case, d, files)
+
+
+def agrees(py: dict, lean: dict, verdict: str, why: str | None = None) -> bool:
+    """Both answers ``verdict`` with one public output, and with ``why`` each one's reason names it."""
+    return (py.get("verdict") == lean.get("verdict") == verdict and py.get("public") == lean.get("public")
+            and (why is None or why in py.get("reason", "") and why in lean.get("reason", "")))
+
+
 def mirror(path: Path):
     spec = importlib.util.spec_from_file_location("period_case", path)
     mod = sys.modules["period_case"] = importlib.util.module_from_spec(spec)
@@ -260,24 +303,24 @@ def main(argv=None) -> int:
         (a.out / name / "case.json").write_text(json.dumps(case, indent=1, sort_keys=True))
         ship(Path(scan), a.out / name / "circuits")
         files = circuit_files(case, a.v3c.parent / "circuits" if a.v3c else None, a.out / name / "circuits")
-        py, lean = m.reference(case), lean_check(a.lean, case, a.out / name, files)
         scan_said = {x["answer"]["verdict"] for x in json.loads((Path(scan) / "answers.json").read_text())["windows"]}
         honest = not round_ and scan_said == {"accept"}
-        if honest and a.v3c:
-            want = "accept"
-            good = (py.get("verdict") == lean.get("verdict") == "accept"
-                    and py.get("public") == lean.get("public"))
+        if a.v3c:
+            checks = {"": (case, files, "accept" if honest else "reject", None)}
         else:
-            why = m.UNWIRED if honest else None
-            want = "reject" + (" at the wiring" if why else "")
-            good = (py.get("verdict") == lean.get("verdict") == "reject" and py.get("public") == lean.get("public")
-                    and (why is None or why in py.get("reason", "") and why in lean.get("reason", "")))
-        ok &= good
+            checks = {"": (unlisted(case), (), "reject", m.UNWIRED if honest else None)}
+            if honest:
+                checks |= {"listed": (case, files, "reject", UNLISTED), "untied": (untied(case), files, "reject", UNTIED)}
         reg = json.loads(bytes.fromhex(case["commitment"]))["windows"][0]
-        got[name] = {"want": want, "mirror": py, "lean": lean, "as_expected": good, "registration": RG.digest(reg)}
-        print(f"SCPD {name}: want {want}; mirror {py.get('verdict')} {py.get('reason') or py.get('public')}; Lean "
-              f"{lean.get('verdict')} {lean.get('reason') or lean.get('public')}; "
-              f"{'as expected' if good else 'UNEXPECTED'}", flush=True)
+        for k, (c, fs, verdict, why) in checks.items():
+            py, lean = answers(m, a.lean, c, a.out / name / k, fs)
+            good = agrees(py, lean, verdict, why)
+            ok &= good
+            want, label = verdict + (f" naming {why!r}" if why else ""), f"{name}-{k}" if k else name
+            got[label] = {"want": want, "mirror": py, "lean": lean, "as_expected": good, "registration": RG.digest(reg)}
+            print(f"SCPD {label}: want {want}; mirror {py.get('verdict')} {py.get('reason') or py.get('public')}; "
+                  f"Lean {lean.get('verdict')} {lean.get('reason') or lean.get('public')}; "
+                  f"{'as expected' if good else 'UNEXPECTED'}", flush=True)
     (a.out / "period.json").write_text(json.dumps({"cases": got, "ok": ok}, indent=1, sort_keys=True, default=str))
     print(f"SCPD done: {'ok' if ok else 'FAILED'}", flush=True)
     return 0 if ok else 1

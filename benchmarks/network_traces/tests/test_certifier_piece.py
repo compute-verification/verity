@@ -73,6 +73,9 @@ PRIVATE = {REQUESTS, OUTPUTS}
 SCAN_CIRCUIT = b"flock-ir-unit/v2 scan stand-in\n"
 SCAN_PIN = hashlib.sha512(SCAN_CIRCUIT).hexdigest()
 STAGERS = {"joint/first": {"template": "t:first", "pin": SCAN_PIN, "base": 0}}
+#: the scan's Program as the chain keeps it (``joint/program.json``): a root of one template node, the stager's
+SCAN_PROGRAM = json.dumps({"root": "r", "callees": ["t:first"], "definitions": {
+    "r": {"form": "composite", "body": {"nodes": [{"fn": 0}]}}, "t:first": {"form": "composite"}}})
 
 
 @pytest.fixture(scope="module")
@@ -147,7 +150,7 @@ def _chain_out(d: Path, verdict: str, w: int) -> Path:
                                                             else {"n2": "a window refused"}}))
     (out / "scan" / "answers.json").write_text(json.dumps({"registration": {"program": "ab" * 64}, "windows": [
         {"window": w, "answer": {"verdict": "accept"}, "registrations": []}]}))
-    (out / "scan" / "joint" / "program.json").write_text("{}")
+    (out / "scan" / "joint" / "program.json").write_text(SCAN_PROGRAM)
     return d
 
 
