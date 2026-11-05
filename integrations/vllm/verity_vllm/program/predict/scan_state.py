@@ -15,42 +15,51 @@ network certifier's ingress rows, with the request each slot's Program starts.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from verity.core.protocols.certifier import ingress_scan as IS
 from verity.ml.circuits.defs import bind
 from verity.ml.definitions.registry import boolean_io_shell as BIO
+from verity_vllm import ports
 
-#: the registered value whose rows are the scan's states, one a bucket of the window (`ingress_scan.window_state`'s)
-SCAN_STATE = IS.SCAN_STATE
 #: the network certifier's cells at the class of record (w63, `benchmarks/network_traces/scan_zk.W63`): B-byte cells, r a
 #: connection a bucket, C cells a request, ids of IDB bits, a request's ingress within WITHIN buckets
 B, R, C, IDB, WITHIN = 512, 4, 47, 17, 12
 
+if TYPE_CHECKING:
+    SCAN_STATE: str
 
-def scan_class(lanes: int, outputs: int, every: int, prompt: int = 1024) -> IS.Class:
+
+def __getattr__(name: str) -> Any:
+    """``SCAN_STATE``: the registered value whose rows are the scan's states, one a bucket of the window
+    (`ingress_scan.window_state`'s), read from the certifier when first asked for."""
+    if name == "SCAN_STATE":
+        return ports.ingress_scan().SCAN_STATE
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def scan_class(lanes: int, outputs: int, every: int, prompt: int = 1024) -> Any:
     """The scan's class at a window class's lanes, outputs (KO), timestep and prompt ids (KI), on the class of record's
     cells; its delay the least it takes, WITHIN + EVERY − 1 (27 at EVERY 16, w63's)."""
-    return IS.Class(B=B, r=R, lanes=lanes, C=C, IDB=IDB, EVERY=every, WITHIN=WITHIN, D=WITHIN + every - 1, KO=outputs,
-                    KI=prompt)
+    return ports.ingress_scan().Class(B=B, r=R, lanes=lanes, C=C, IDB=IDB, EVERY=every, WITHIN=WITHIN,
+                                      D=WITHIN + every - 1, KO=outputs, KI=prompt)
 
 
-def words(cls: IS.Class) -> int:
+def words(cls: Any) -> int:
     """The state row's u16 words."""
-    return IS.state_bits(cls) // 16
+    return ports.ingress_scan().state_bits(cls) // 16
 
 
-def bridge(cls: IS.Class, prompt: int) -> Any:
+def bridge(cls: Any, prompt: int) -> Any:
     """`boolean_io_shell.ScanSlots_v2` at ``cls``'s state row for prompts of at most ``prompt`` ids: each lane's occupancy
     word, prompt length, ``max_tokens`` and ids where `ingress_scan.layout` puts them."""
-    lay = IS.layout(cls)
+    lay = ports.ingress_scan().layout(cls)
     at = {f: tuple(lay[f"{j}.{f}"][0] for j in range(cls.NR)) for f in ("occ", "fields", "max_tokens", "ids")}
     return bind(BIO.ScanSlotsV2, NS=words(cls), NP=prompt, IDB=cls.IDB, K0=cls.K0, K=cls.K, OCC=at["occ"], LP=at["fields"],
                 MAX=at["max_tokens"], IDS=at["ids"])
 
 
-def _scan(scan: IS.Class, ingress: Sequence[bytes], outputs: Mapping[int, Sequence[int]]) -> list[IS.State]:
-    got = IS.scan(scan, list(ingress), {int(q): tuple(v) for q, v in outputs.items()})
+def _scan(scan: Any, ingress: Sequence[bytes], outputs: Mapping[int, Sequence[int]]) -> list[Any]:
+    got = ports.ingress_scan().scan(scan, list(ingress), {int(q): tuple(v) for q, v in outputs.items()})
     if got is None:
         raise ValueError(f"the scan at {scan} refuses the network certifier's ingress rows to bucket {len(ingress) - 1}: "
                          f"a request it can't hold (more than {scan.KI} prompt ids or {scan.KO} outputs) or rows that "
@@ -84,6 +93,7 @@ def scan_state(cls: Any, ingress: Sequence[bytes], outputs: Mapping[int, Sequenc
     if len(ingress) < n:
         raise ValueError(f"the window from scan bucket {t0} reads the scan's states to bucket {n - 1}: give the ingress "
                          f"rows to it, {n}, not {len(ingress)}")
+    IS = ports.ingress_scan()
     states = _scan(scan, ingress[:n], outputs)
     rows = IS.window_state(scan, [IS.encode(scan, s) for s in states], t0, cls.buckets)
     at = {a: states[t0 + a - 1] if t0 + a else IS.empty(scan) for a in {cls.anchor(k) for k in range(cls.slots)}}
