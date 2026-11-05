@@ -556,9 +556,9 @@ def test_no_verdict_counts_by_the_owner_its_handle_or_its_ready_marks_author_wha
 
 def test_the_lowest_member_waiting_for_a_land_verdict_rings_the_reviewers_and_top_every_30_min_at_its_head(world, monkeypatch):
     """`next`'s lowest member with no land verdict holds every landing above it, and its tick's log rang nobody: by default (no
-    `bottom_ring` or `bottom_wait_min` in drive.toml) drive rings @ci (who staffs the reviewers) and @top 30 min after it
-    became the lowest or its ready mark, whichever is later, once per 30 min at its head; a hold rings nothing, and a new head
-    starts the wait again."""
+    `bottom_ring` or `bottom_wait_min` in drive.toml) drive rings ci (who staffs the reviewers) and top 30 min after it became
+    the lowest or its ready mark, whichever is later, once per 30 min at its head; a hold rings nothing, and a new head starts
+    the wait again."""
     half_hour = 30 * 60
     h = Review(world, monkeypatch)
     marks: dict[tuple[int, str], float] = {}
@@ -597,7 +597,7 @@ def test_the_lowest_member_waiting_for_a_land_verdict_rings_the_reviewers_and_to
 
 def test_the_bottom_ring_goes_only_to_drive_tomls_bottom_ring_after_its_bottom_wait_min(world, monkeypatch):
     """drive.toml's `bottom_ring` names every handle `_bottom` rings, and `bottom_wait_min` the minutes before each ring: with
-    ci's reviewer pool reviewing `next`'s bottom, drive.toml rings @ci alone, and @top hears nothing."""
+    ci's reviewer pool reviewing `next`'s bottom, drive.toml rings ci alone, and top hears nothing."""
     h = Review(world, monkeypatch)
     h.d.bottom_ring, h.d.bottom_wait_min = ("@ci",), 45
     rung: list[tuple[str, tuple[str, ...]]] = []
