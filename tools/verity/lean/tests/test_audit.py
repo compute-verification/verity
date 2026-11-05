@@ -3285,6 +3285,9 @@ REALIZED = {
     "H": "public theorem hk : 3 = 3 := rfl\n",
     "I": "public import R.A\nimport R.H\ntheorem i_priv : 3 = 3 := hk\npublic theorem i : k 0 = 1 := by simp [k]\n",
     "J": "public import R.I\npublic theorem j : k 0 = 1 := i\n",
+    "K": "@[expose] public def kb : Nat := 3\n",
+    "L": "public import R.K\n@[expose] public def la : Nat := kb\n",
+    "M": "public import R.L\npublic theorem m : la = 3 := rfl\n",
 }
 
 
@@ -3297,7 +3300,7 @@ def realized(tmp_path_factory) -> Path:
     (pkg / "lakefile.toml").write_text('name = "realized"\n\n[[lean_lib]]\nname = "R"\n')
     for m, text in REALIZED.items():
         (pkg / "R" / f"{m}.lean").write_text("module\n" + text)
-    tops = ("D", "D2", "V", "P", "Q", "G1", "G2", "O1", "O2", "X", "Y", "J")
+    tops = ("D", "D2", "V", "P", "Q", "G1", "G2", "O1", "O2", "X", "Y", "J", "M")
     subprocess.run(["lake", "build", *(f"R.{m}" for m in tops)], cwd=pkg, check=True, capture_output=True,
                    env=A.lake_env())
     return pkg
@@ -3402,6 +3405,37 @@ def test_a_public_part_brings_in_none_of_its_modules_private_imports(realized, t
     assert rc != 0 and "R.H does not exist" in log, log
     rc, log, got = records_replay(realized, tmp_path, "R.J", "--closure-reused", "R.I", "R.A", public=("I", "A"))
     assert rc == 0 and got["replayed"] == 1, log
+
+
+#: `Forge FILE MODULE` rewrites the `.olean` FILE with its imports made private
+FORGE = """import Lean
+open Lean
+
+unsafe def main : List String → IO UInt32
+  | [file, mod] => do
+    let (data, _) ← readModuleData file
+    saveModuleData (file ++ ".forged") mod.toName { data with imports := data.imports.map ({ · with isExported := false }) }
+    IO.FS.rename (file ++ ".forged") file
+    return 0
+  | _ => return 2
+"""
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_constant_only_a_private_import_declares_is_unknown_to_the_kernel(realized, tmp_path):
+    """The replay fails closed on a public part that mentions what a private import declares, which no `lean` build
+    writes: `L`'s import of `K` made private, its `la` still unfolds to `K`'s `kb`, which `M`'s `m : la = 3 := rfl`
+    needs. The replay leaves `K` out, and the kernel rejects `m`."""
+    pkg = tmp_path / "pkg"
+    shutil.copytree(realized, pkg, symlinks=True)
+    lib = pkg / ".lake" / "build" / "lib" / "lean" / "R"
+    for f in lib.glob("K.*"):
+        f.unlink()
+    (tmp_path / "Forge.lean").write_text(FORGE)
+    subprocess.run(["lake", "env", "lean", "--run", str(tmp_path / "Forge.lean"), str(lib / "L.olean"), "R.L"], cwd=pkg,
+                   check=True, capture_output=True, env=A.lake_env())
+    rc, log, got = records_replay(realized, tmp_path, "R.M", "--closure-reused", "R.L", public=("L",))
+    assert rc == 1 and got["rejected"] == ["R.M"] and "unknown constant 'kb'" in log, log
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
