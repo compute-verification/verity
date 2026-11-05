@@ -88,6 +88,8 @@ COUNT += 3  # `torch_train`'s RmsNormTorch_v1 with its In and Out parts
 COUNT += 5  # `torch_step`'s TrainStep_v1 with its TrainStepConstants_v1, and F.linear's three GEMMs, LinearTorch_v1,
 # LinearTorchDx_v1 and LinearTorchDw_v1
 
+COUNT += 20  # `torch_words`' 10 word primitives and `boolean_torch_words`' 10 Boolean versions, a line of its own
+
 
 def test_the_catalog_loads_every_definition_and_no_other():
     got = fresh()
