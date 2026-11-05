@@ -38,9 +38,9 @@ from verity.core.protocols.remote_bandwidth import receipts as rb  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
 
 import prover  # noqa: E402
-from benchmarks.remote_session import wire  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import wire  # noqa: E402
 
-VERIFIER = HERE.parents[1] / "benchmarks" / "remote_session" / "verifier.py"
+VERIFIER = HERE.parents[1] / "verity" / "core" / "protocols" / "remote_bandwidth" / "session" / "verifier.py"
 
 
 def engine_step(ms: float, busy: float) -> None:

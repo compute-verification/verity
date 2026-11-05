@@ -128,15 +128,15 @@ import time
 from pathlib import Path
 
 # live_verifier's host runs this file under `python3 -I`, which puts neither the repository nor a venv on the path
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[5]))
 
 from verity.core.protocols.remote_bandwidth import audit, coins, ledger, line, timing
 from verity.core.protocols.remote_bandwidth import store as rstore
 
-from benchmarks.remote_session import challengers
-from benchmarks.remote_session import lean_verifier as lv
-from benchmarks.remote_session import wire
-from benchmarks.remote_session.checks import Checks
+from verity.core.protocols.remote_bandwidth.session import challengers
+from verity.core.protocols.remote_bandwidth.session import lean_verifier as lv
+from verity.core.protocols.remote_bandwidth.session import wire
+from verity.core.protocols.remote_bandwidth.session.checks import Checks
 
 CHECK_BATCH = 1024
 """Openings a Lean thread checks at once (`checkWindowChunked`)."""

@@ -9,7 +9,7 @@ the expected root from the weights chunks' digests, held also to `audit.payload_
 layout, a malformed node, the root under another key, of another checkpoint, of another size, or not a root), with
 the expected root its record keeps; and `binding`, the binding as the verifier's Lean process starts it (`bind`: the
 pin from its file's bytes, then the store's shape) and holds each hello to it (`hold`), on the honest binding and each
-refusal. The verifier decides `bound` with the Lean's `bind` and `hold` (`benchmarks/remote_session/verifier.py`), so
+refusal. The verifier decides `bound` with the Lean's `bind` and `hold` (`verity/core/protocols/remote_bandwidth/session/verifier.py`), so
 the Lean is of record for the binding, the hello's decision and the expected root; the pin's other readers
 (`read_pin`) are Python's."""
 
