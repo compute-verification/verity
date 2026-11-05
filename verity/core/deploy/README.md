@@ -18,8 +18,9 @@ Nothing is retried: every failure the runtime sees finishes the party refused by
 - `config.check`, `config.digest` and `config.new` (`config.py`): the configuration, `verity/config/v0`, checked against
   what each listed subprotocol and the workload declare, each refusal by name, and its hash, SHA-512 of its canonical JSON
   without the transport-only fields.
-- `runtime.run` (`runtime.py`): the parties placed here, run in one of the modes `simulated`, `live`, `mixed` or `replay`;
-  `verity run CONFIG` calls it.
+- `runtime.run` (`runtime.py`): the parties placed here, run in one of the modes `simulated`, `live`, `mixed` or `replay`.
+  `process.spawn`'s child, `examples/lifecycle` and the toy table of `verity run`'s step-0 test call it; the served
+  table of `verity run` runs `served_verdicts.sh` instead.
 - `transcript.PartyLog` and `transcript.record` (`transcript.py`): a party's append-only log of a run, each entry a wire
   frame, and the run's record, the logs' entries of the public kinds.
 - `channels` (`channels.py`): the pipes, untrusted by both ends: in memory, over TCP, `Playback` (a recorded side),
