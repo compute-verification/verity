@@ -1,5 +1,5 @@
 /-
-# The proof service's stream: its own rules (`service._Control`)
+# The proof system's stream: its own rules (`service._Control`)
 
 What `service.Stream` decides of each op on its own, around the checks whose verifiers of record are their own pieces
 (`Service.checkPublic`, `Registration.check`, `Select.select`, `Draw.checkDraw`, `Service.checkVerdicts`, `Record.record`,
@@ -45,7 +45,13 @@ A halt is final. It ends every registration without a final outcome at once, as 
 nothing accepts it after that, and outcomes already final stay. A halted stream refuses every op (`halted`) and changes
 nothing, so it receives no registration again.
 -/
-import SampledProofs.Run
+module
+
+public import SampledProofs.Run
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Stream
 

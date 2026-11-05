@@ -1,13 +1,14 @@
-"""The network chain on an active warden's run (`warden_chain`, `chain_record`'s warden path), here the synthetic run
-published as `warden_serve.Publisher` publishes a served one, in the gate's layout (its witness under ``witness/``, its
-public files under ``out/``, ``certificates.jsonl`` as `auditor.warden_outcome` writes it): the certificates step
-reruns the warden's own check and holds the public certificates to the certified lines, refusing a changed one and a
-changed cell; the certified I/O read off the cells is the requests and responses served; N2's link is the warden's
-(both heads at its digest, no sync, charge 0) and its references expect honest accepted and tampered refused on its
-signed digest alone. A certifier rehearsal's run (its records through active.Proxy) is refused by name
-(`warden_chain.PROXY`) by every reader: its files, or a certifier's deployment.json in a warden's run. The report on
-the warden path requires the certificates, the endpoint, the tie, N2 and the scan, names its stubs, and refuses a step
-whose input is a certifier rehearsal's or another warden run's."""
+"""The network chain on an active network certifier's run (`warden_chain`, `chain_record`'s network certifier path),
+here the synthetic run published as `warden_serve.Publisher` publishes a served one, in the gate's layout (its witness
+under ``witness/``, its public files under ``out/``, ``certificates.jsonl`` as `auditor.warden_outcome` writes it): the
+certificates step reruns the network certifier's own check and holds the public certificates to the certified lines,
+refusing a changed one and a changed cell; the certified I/O read off the cells is the requests and responses served;
+N2's link is the network certifier's (both heads at its digest, no sync, charge 0) and its references expect honest
+accepted and tampered refused on its signed digest alone. A certifier rehearsal's run (its records through active.Proxy)
+is refused by name (`warden_chain.PROXY`) by every reader: its files, or a certifier's deployment.json in an active
+network certifier's run. The report on the network certifier path requires the certificates, the endpoint, the tie, N2
+and the scan, names its stubs, and refuses a step whose input is a certifier rehearsal's or another network certifier
+run's."""
 
 from __future__ import annotations
 
@@ -42,8 +43,8 @@ PUBLIC = ("deployment.json", "cells.jsonl")
 
 
 def gate_run(d: Path) -> Path:
-    """The synthetic warden run in the gate's layout: its files under ``witness/``, its public ones copied to ``out/``
-    with ``certificates.jsonl``, each certified line's certificate or refusal (`auditor.warden_outcome`)."""
+    """The synthetic network certifier run in the gate's layout: its files under ``witness/``, its public ones copied to
+    ``out/`` with ``certificates.jsonl``, each certified line's certificate or refusal (`auditor.warden_outcome`)."""
     run = published(d / "flat")
     (d / "gate" / "out").mkdir(parents=True)
     shutil.copytree(run, d / "gate" / "witness")
@@ -134,7 +135,7 @@ def test_n2_on_a_warden_run_expects_honest_accepted_and_tampered_refused_on_its_
 
 
 def test_n2_on_a_sampled_warden_period_tampers_every_window_and_proves_another_subset(tmp_path):
-    """With ``--draw K``, K < n, the tampered member changes every window, so whichever K windows the draw holds refuse
+    """With ``--draw K``, K < n, the tampered member changes every window, so whichever K windows the sample holds refuse
     it, and other_subset (the honest records, proved on another K-subset) is a member; K outside 1 … n is refused."""
     run = gate_run(tmp_path)
     assert n2.main(["prove", "--warden-run", str(run), "--draw", "1", "--dry", "--out", str(tmp_path / "n2")]) == 0
@@ -149,8 +150,8 @@ def test_n2_on_a_sampled_warden_period_tampers_every_window_and_proves_another_s
 
 
 def _steps(tmp_path, run: Path) -> SimpleNamespace:
-    """The warden path's step outputs on `run`: its real certificates, and the endpoint, the tie, N2 and the scan as
-    their drivers write them."""
+    """The network certifier path's step outputs on `run`: its real certificates, and the endpoint, the tie, N2 and the
+    scan as their drivers write them."""
     def put(name, doc):
         (tmp_path / name).write_text(json.dumps(doc))
         return str(tmp_path / name)
@@ -183,6 +184,12 @@ def test_the_warden_path_requires_every_step_on_one_warden_run_and_refuses_a_cer
     assert got["steps"]["n2"]["clocks"]["source"] == "none"
     md = cr.markdown(got)
     assert "on the warden path" in md and "| tie | accepted |" in md and "certified I/O" in md
+    ep = json.loads(Path(steps.endpoint).read_text())
+    Path(steps.endpoint).write_text(json.dumps(ep | {"at": cr.SERVED_NODE}))
+    served = cr.report(steps)
+    assert served["verdict"] == "accepted" and served["stubbed"] == list(cr.WARDEN_SERVED_STUBBED)
+    assert served["steps"]["endpoint"]["in_the_clear"] == cr.CLEAR["warden_endpoint_served"]
+    Path(steps.endpoint).write_text(json.dumps(ep))
 
     def refused(name: str, edit, why: str) -> None:
         doc = json.loads(Path(getattr(steps, name)).read_text())

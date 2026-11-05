@@ -1,7 +1,9 @@
-import Proofs.Flock.Recursive.Firewall
-import Proofs.Flock.Recursive.OuterZK
-import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
-import Proofs.Flock.Soundness.ZK.HidingAdaptive
+module
+
+public import Proofs.Flock.Recursive.Firewall
+public import Proofs.Flock.Recursive.OuterZK
+public import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
+public import Proofs.Flock.Soundness.ZK.HidingAdaptive
 
 /-!
 # Proof of (ii) at the firewall and V*'s code
@@ -25,6 +27,8 @@ with the inner coins live: message `i` reads the commit strings before it, so T1
   registration's hiding (`regLeaves_hides`), each at the pinned key's hiding gap (`CROnly.hm96Hiding_gap`). The
   simulated view is `private_enc`'s by definition.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkView
 

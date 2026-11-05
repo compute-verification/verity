@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
 
 /-!
 # flock-verify's tables at `count > 1`
@@ -10,6 +12,8 @@ units (without one, the population's every unit); they split into `count` nonemp
 `setupH`'s statement under `Tags.tableIdentity count j` at the subset draw of part `j`, the consecutive units
 `j·k … j·k + k − 1` with `k = units/count`.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -70,7 +74,7 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {spec : SessionSpec} {sts : Array Stmt}
 
 set_option maxHeartbeats 4000000 in
-/-- **`setupTables`'s tables at `count > 1`** (§16.12) under a tag without hidden outputs (`hh`). -/
+/-- **`setupTables`'s tables at `count > 1`** (`Stmt.setupTables`) under a tag without hidden outputs (`hh`). -/
 theorem setupTables_parts (hh : tags.hiddenOutputs = false) (hc1 : 1 < count)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =
       .ok (spec, sts)) :

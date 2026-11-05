@@ -61,11 +61,11 @@ def test_pipeline_runs_layer_l_on_block_l_at_step_1_plus_r_plus_l(model):
 def test_the_rows_round_trip_and_the_commitment_binds_them(model):
     hw, p = placed(model, "pipeline", 3, 2)
     rows = p.rows()
-    assert P.Placement.from_rows(rows) == p
+    assert P.StepPlacement.from_rows(rows) == p
     reg = p.commit()
     assert p.commit(reg.salts).root == reg.root
     assert advice.verify(reg.root, len(rows), P.ROW_BITS, P.BINDING, reg.open(1))
-    moved = P.Placement(p.step, (p.leaf[0] + 1,) + p.leaf[1:], p.ticks)
+    moved = P.StepPlacement(p.step, (p.leaf[0] + 1,) + p.leaf[1:], p.ticks)
     assert moved.commit(reg.salts).root != reg.root
 
 
@@ -75,7 +75,7 @@ def test_a_read_in_the_tick_its_value_is_made_in_another_block_breaks_causality(
     step = list(p.step)
     for g in range(c.lo, c.hi):
         step[g] -= 1
-    bad = P.causal(model, P.Placement(tuple(step), p.leaf, p.ticks), hw)
+    bad = P.causal(model, P.StepPlacement(tuple(step), p.leaf, p.ticks), hw)
     assert bad and all(c.lo <= g < c.hi for g, _ in bad)
 
 
@@ -108,7 +108,7 @@ def test_constants_never_cross_and_a_value_crosses_once_to_each_unit():
                             width=[1, 1, 1, 1], outputs=(2, 3))
     hw = mock(2, 2)
     b0, b1, b1_ = hw.leaf("b0.gpu0"), hw.leaf("b1.gpu0"), hw.leaf("b1.gpu1")
-    p = P.Placement((1, 1, 3, 2), (b0, b0, b1, b1_), tuple(tuple(range(5)) for _ in hw.leaves))
+    p = P.StepPlacement((1, 1, 3, 2), (b0, b0, b1, b1_), tuple(tuple(range(5)) for _ in hw.leaves))
     edges = P.crossings(table, p, hw)
     assert [(e.value, e.src, e.dst, e.read_tick, e.dst_leaf) for e in edges] == [
         (1, "b0", "b1", 2, b1_), (3, "b1", OUTSIDE, 3, hw.client), (2, "b1", OUTSIDE, 4, hw.client)]

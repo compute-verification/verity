@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Complete.Shaped.Hoare
-import Proofs.Flock.Soundness.Refine.Ligerito
-import Proofs.Flock.Soundness.LigeritoMid
-import Proofs.Flock.Soundness.CompiledLock
-import Proofs.Flock.Soundness.Refine.Seam
-import Proofs.Flock.Verifier.Hash
+module
+
+public import Proofs.Flock.Claims.Complete.Shaped.Hoare
+public import Proofs.Flock.Soundness.Refine.Ligerito
+public import Proofs.Flock.Soundness.LigeritoMid
+public import Proofs.Flock.Soundness.CompiledLock
+public import Proofs.Flock.Soundness.Refine.Seam
+public import Proofs.Flock.Verifier.Hash
 
 /-!
 # A level's commitment and opening, by their shapes
@@ -17,6 +19,8 @@ import Proofs.Flock.Verifier.Hash
 * `openP_ok`: an opening at such positions of a commitment of that shape has the shape the decoder reads
   (`ZkView.LevelOk`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

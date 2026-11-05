@@ -1,6 +1,8 @@
-import Proofs.Flock.SessionLoop.FinHmkFc
-import Proofs.Flock.SessionLoop.FinRepErasedAt
-import Proofs.Flock.Claims.ZK.FinishSwFc
+module
+
+public import Proofs.Flock.SessionLoop.FinHmkFc
+public import Proofs.Flock.SessionLoop.FinRepErasedAt
+public import Proofs.Flock.Claims.ZK.FinishSwFc
 
 /-!
 # The views' masked values below `zp 64`, `final_c`'s included, from the history and the firewall's rep
@@ -15,6 +17,8 @@ switched cut's commitments sends the same (`repCut_eraseZ`, `go_err_of_eraseZ`),
 * `go_err_of_eraseZ`: runs equal up to `eraseZ` stop the same.
 * **`Loop.swSrcE_hmk_fw`**: every masked value of the views' source below `zp 64` is the request's plus its pad.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
@@ -70,7 +74,7 @@ theorem swSrcE_hmk_fw (vs : finS.SwVals)
     (hcms : ∀ l, ((Array.range (FlockDeploy.tabsOf (Masked.stsOf x)).size).mapM fun i =>
       FlockComplete.commit0Cut Masked.hsE (FlockDeploy.tabsOf (Masked.stsOf x))[i]!.merkle
         (schs[i]!.1.levels.getD 0 default)
-        (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t i)).go l = (.ok cms, l))
+        (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t i)).go l = (.ok cms, l))
     (j : Fin (Masked.jOf x)) (r : Fin 2)
     (hexts : ∀ k < 2 * j.val + r.val, ∃ extras,
       (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2]!.extra (viewPoints x ops spec) = .ok extras)
@@ -80,13 +84,13 @@ theorem swSrcE_hmk_fw (vs : finS.SwVals)
         (((_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2]!.m
           (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2]!.kLog schs[k / 2]!.1.k0).len +
           _root_.Flock.Zk.K_PAD).nextPowerOfTwo * 2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE)
-        ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t (k / 2)).rep (k % 2))).go l =
+        ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t (k / 2)).rep (k % 2))).go l =
           (.ok ic, l)) →
       ∀ l : Array Msg, l.size = Masked.repBase x k →
       ∃ p tr l', ((FlockComplete.repCut (FlockComplete.asksCut (Masked.ligCoin (finCoins x ops)) (refK x)) Masked.hsE
           (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2]! schs[k / 2]!.1 (k % 2)
           (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8 cms[k / 2]! extras ic
-          ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t (k / 2)).rep (k % 2))
+          ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t (k / 2)).rep (k % 2))
           (Masked.priorE (finCoins x ops) (k / 2) (k % 2)) (FlockComplete.MaskRank.masksOf (Masked.stsOf x))[k / 2]!).run
           (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8)).go l =
           (.ok (p, tr), l') ∧ l'.size = Masked.repBase x (k + 1))
@@ -99,14 +103,14 @@ theorem swSrcE_hmk_fw (vs : finS.SwVals)
       (((_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.m
         (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.kLog (Masked.zkTab x j).sch.k0).len +
         _root_.Flock.Zk.K_PAD).nextPowerOfTwo * 2 ^ _root_.Flock.Zk.INNER_LOG_INV_RATE)
-      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j.val).rep r.val)).go l = (.ok ic, l))
+      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val)).go l = (.ok ic, l))
     {l : Array Msg} (hl : l.size = Masked.repBase x (2 * j.val + r.val))
     {res} {tr₁ : _root_.Flock.Transcript} {l₁ : Array Msg}
     (hpiop : ((FlockComplete.piopCut (FlockComplete.asksCut (Masked.ligCoin (finCoins x ops)) (refK x))
       (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!
       (_root_.Flock.Zk.PadLayout.new (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.m
         (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.kLog (Masked.zkTab x j).sch.k0)
-      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j.val).rep r.val)
+      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val)
       (FlockComplete.flat cms[j.val]!.cap) ic.root extras (Masked.priorE (finCoins x ops) j.val r.val)
       (FlockComplete.MaskRank.masksOf (Masked.stsOf x))[j.val]!).run
       (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[j.val]! r.val).toUTF8)).go l =
@@ -116,13 +120,13 @@ theorem swSrcE_hmk_fw (vs : finS.SwVals)
     (hxs : extras.map (·.x) = q.xs)
     (hl0 : ∀ res t₃ l₃, ((FlockComplete.piopCut (FlockComplete.asksCut (Masked.ligCoin (finCoins x ops)) (refK x))
         tb.st (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog (Masked.zkTab x j).sch.k0)
-        ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j.val).rep r.val)
+        ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val)
         (FlockComplete.flat tb.cm0.toC.cap) ic'.toC.root extras (Masked.priorE (finCoins x ops) j.val r.val)
         (FlockSoundness.Discharge.Composed.maskWordsOf (Masked.stsOf x)[j.val]!)).run
         (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[j.val]! r.val).toUTF8)).go l =
         (.ok (res, t₃), l₃) →
       ∀ i, (Masked.layE x j).zp 64 ≤ i → i < (Masked.layE x j).hab →
-        ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j.val).rep r.val).masked i =
+        ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val).masked i =
           FlockComplete.LigLock.l0Clear (Masked.ligCoin (finCoins x ops)) (Masked.ligP0 x j r) (Masked.zkTab x j).sch
             (Masked.ligTab x w t j) (Masked.ligBasis x (finCoins x ops) w t j r extras) (Masked.layE x j)
             ((Masked.UE.tapeZk t).extra j.val) r.val i + (_root_.Flock.Firewall.Finish.padsOf q.draws).h[i]!)
@@ -140,7 +144,7 @@ theorem swSrcE_hmk_fw (vs : finS.SwVals)
           (spec.domain spec.tables[(2 * j.val + r.val) / 2]! ((2 * j.val + r.val) % 2)).toUTF8)).go l).1 =
       .ok (p, tr)) :
     ∀ i < (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).zp 64,
-      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j.val).rep r.val).masked i =
+      ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val).masked i =
         q.vals[i]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h[i]! := by
   have bok : ∀ {α β : Type} {y : V α} {f : α → V β} {b : β}, y >>= f = .ok b → ∃ a, y = .ok a ∧ f a = .ok b := by
     intro α β y f b hb
@@ -203,7 +207,7 @@ theorem swSrcE_hmk_fw (vs : finS.SwVals)
     hpiop hcap hroot
   -- the firewall's rep places the switched source's cut at its inner proof's first round
   obtain ⟨t₄, L, hp4, hLs, hcut⟩ := Masked.swSrcE_repCut_fc_v x hx w hR t (finCoins x ops) hA (refK x) s0 spec hsx
-    j r extras he (vs x w ν (finCoins x ops)) q
+    j r extras he (vs x w ν (finCoins x ops) (finS.seenOf x t)) q
     (fun k hk' hne => hmkV k (by rw [hLy]; exact hk') (by rw [hLy]; exact hne)) tb.st hst _ tb.g hg tb.cm0.toC
     ic'.toC (fun l => _root_.Flock.Firewall.Finish.saltAt (q.hiSalts.getD (l - 1) ByteArray.empty)) hsalt rfl hl hl0
     hrun'
@@ -212,8 +216,8 @@ theorem swSrcE_hmk_fw (vs : finS.SwVals)
     (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) tb.st (Masked.zkTab x j).sch r.val
     (spec.domain spec.tables[j.val]! r.val).toUTF8
     (cm := FlockComplete.eraseC tb.cm0.toC) (cm' := cms[j.val]!) hcm0.1 hcm0.2 extras hicE.1 hicE.2.1 hicE.2.2
-    (src := (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j.val).rep r.val)
-    (src' := (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops)) t j.val).rep r.val) rfl
+    (src := (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val)
+    (src' := (Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val) rfl
     (Masked.priorE (finCoins x ops) j.val r.val)
     (FlockSoundness.Discharge.Composed.maskWordsOf (Masked.stsOf x)[j.val]!)
   have hcut' := go_err_of_eraseZ hE' hcut

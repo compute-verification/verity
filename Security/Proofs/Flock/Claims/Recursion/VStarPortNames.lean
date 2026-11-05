@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Recursion.VStarBuild
-import Proofs.Flock.Claims.Recursion.NextRCounts
-import Proofs.Flock.Recursive.HoloSchedCheck
-import Proofs.Flock.C3.Reps.RoundOfHolo
-import Proofs.Flock.C3.Reps.RoundLinks
-import Proofs.Flock.C3.Reps.AtList
-import Proofs.Flock.VBridge.Family.Structure
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarBuild
+public import Proofs.Flock.Claims.Recursion.NextRCounts
+public import Proofs.Flock.Recursive.HoloSchedCheck
+public import Proofs.Flock.C3.Reps.RoundOfHolo
+public import Proofs.Flock.C3.Reps.RoundLinks
+public import Proofs.Flock.C3.Reps.AtList
+public import Proofs.Flock.VBridge.Family.Structure
 
 /-!
 # V\*'s inner parts' port names (`innerPorts_named`)
@@ -22,6 +24,8 @@ Every port of an inner part at the compiled statement (`partAt x s = some (.inne
 * **The count** (`vrounds_size`, `repRounds_countP`, `holoRepRounds_countP`): `repRounds` absorbs at `N` of its rounds
   (`m ≥ 22`), and `holoRepRounds` at one more.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 
@@ -400,19 +404,21 @@ theorem innerUnit_sizes {S : _root_.VStar.RepS} {name : String} {u} (h : _root_.
 
 theorem checkParsed_unit {s : _root_.VStar.Stmt} {c : Circuit} (h : (RecVStar.checkParsed s c).isOk = true) :
     ∃ u, s.unit = .ok u := by
-  cases hu : s.unit with
-  | ok u => exact ⟨u, rfl⟩
+  cases hcp : RecVStar.checkParsed s c with
   | error e =>
-    unfold RecVStar.checkParsed at h
-    rw [hu] at h
-    cases h
+    rw [hcp] at h
+    first | cases h | simp [Except.isOk, Except.toBool] at h
+  | ok r =>
+    cases r
+    obtain ⟨u, hu, -⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok hcp
+    exact ⟨u, hu⟩
 
 /-- **A statement of the list tagged `.inner` holds one of V\*'s parts**: one of `parts (specOf vsh holo)`. -/
 theorem inner_mem {i : RecVStar.Inner} {vs : Array _root_.VStar.Stmt} (h : RecVStar.statements i = .ok vs) {s j : ℕ}
     {nm : String} {pt : _root_.VStar.Part} (hs : vs[s]? = some (.inner j nm pt)) :
     ∃ sp ps, _root_.VStar.Algebra.specOf (FlockC3.Reps.vshOf i) i.holo = .ok sp ∧ _root_.VStar.parts sp = .ok ps ∧
       pt ∈ ps := by
-  obtain ⟨-, -, -, -, -, -, A, C, -, -, -, -, -, hA, hC, K, n, hK, -, rfl⟩ := FlockC3.Reps.list_ok h
+  obtain ⟨-, -, -, -, -, -, A, C, -, -, -, -, -, hA, hC, K, L, n, hK, -, hL, rfl⟩ := FlockC3.Reps.list_ok h
   obtain ⟨sch, sp, ps, -, hsp, hps, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
   refine ⟨sp, ps, hsp, hps, ?_⟩
   have hm := Array.mem_of_getElem? hs
@@ -427,8 +433,7 @@ theorem inner_mem {i : RecVStar.Inner} {vs : Array _root_.VStar.Stmt} (h : RecVS
         exact Array.getElem_mem hj'
     · rcases FlockC3.Reps.candidate3_kinds hC _ hm with ⟨_, _, he⟩ | ⟨_, _, _, _, he⟩ |
         ⟨_, _, _, _, _, _, he⟩ <;> cases he
-  · obtain ⟨_, _, he⟩ := FlockC3.VStarList.caps_cap hK n _ hm
-    cases he
+  · rcases FlockC3.VStarList.tail_cases hK hL n _ hm with ⟨_, _, he⟩ | ⟨_, _, _, he⟩ <;> cases he
 
 /-! ## The names -/
 

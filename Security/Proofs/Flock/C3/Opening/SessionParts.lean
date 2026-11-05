@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.AlgHolds
-import Proofs.Flock.VBridge.OpeningUnit
+module
+
+public import Proofs.Flock.VBridge.AlgHolds
+public import Proofs.Flock.VBridge.OpeningUnit
 
 /-!
 # n4's session (a): the opening's parts' zero columns are its residuals'
@@ -16,6 +18,8 @@ The verifier cuts R's opening's S (`RecOpening.structureOf`) into parts as it cu
 * `residuals_zero_of_cols`: when every part's outputs hold its residuals and are zero, every residual of S is
   (`residuals_zero_of_parts`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.OfVStar
 

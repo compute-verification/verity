@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.KSFlockLinR
-import Proofs.Flock.Claims.Recursion.LastCallsR
+module
+
+public import Proofs.Flock.Claims.Recursion.KSFlockLinR
+public import Proofs.Flock.Claims.Recursion.LastCallsR
 
 /-!
 # `KSLin2` and `BitsLin2` at the deployed reader's steps (`FlockDeploy.nextR`)
@@ -22,6 +24,8 @@ The inner verifier's calls need nothing of the steps: the finders search them at
 `bitsLin2_deployedR_partAccepts` are the B corollaries at the deployed reader, reopened on `PlainRdInR` and `DecompB`
 at `PartAccepts`. This bounds no number by itself: those premises are open.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -162,8 +166,9 @@ theorem stepsBase_R (rd : Msg → Option FinalP) (wE : Msg → ℝ) (join : List
 /-! ## The B corollaries at the deployed reader -/
 
 /-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`, the coin server's record
-(`recTr`) and the deployed reader's steps and trimmed columns**: `ksLin2_stepsC_partAccepts` at `stepsBase_R`. What
-stays open: `DecompB` at `PartAccepts` and `PlainRdInR`. -/
+(`recTr`) and the deployed reader's steps and trimmed columns**: `ksLin2_stepsC_partAccepts` at `stepsBase_R`. Its
+premises are `DecompB` at `PartAccepts` and `PlainRdInR`; `Flock.SecurityProofs.RecursiveKS` proves `KSLin2` at the
+deployed reader with none. -/
 theorem ksLin2_deployedR_partAccepts (rd : Msg → Option FinalP) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)

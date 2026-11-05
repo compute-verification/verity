@@ -1,6 +1,9 @@
-import Proofs.Flock.VBridge.Family.Rounds
-import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
-import Proofs.Flock.Verifier.Registered
+module
+
+public import Proofs.Flock.VBridge.Family.Rounds
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+public import Proofs.Flock.Verifier.Registered
+import all Init.Data.Array.Basic
 
 /-!
 # The family's public files at accepting sessions: `PubCommits` up to a SHA-512 collision
@@ -24,6 +27,8 @@ the `c_k`'s, or the verifier's opening and the honest one collide:
 * `HPubRows`, `pubCommits_of_pubRows`: where the verifier compares the public file's `rec-c<k>` rows with the `c_k`
   itself, `PubCommits` holds exactly, at every history.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 
@@ -110,7 +115,7 @@ theorem opens_of_acceptsZKR {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} 
   have hjs : (partOf zo.I d u.val).val < sts.size := by rw [hsz]; exact (partOf zo.I d u.val).isLt
   have s := Hidden.setupHidden_spec' (hstJ _ hjs)
   have hcst : sts[(partOf zo.I d u.val).val].c = c := by
-    have h1 := s.parse
+    have h1 := s.parseF ((FlockSoundness.Discharge.Exec.tagsAt_isTmpl _ _ _).trans (HmOut.parse_isTmpl zo.hcH))
     rw [ZkHidden.parseH_tagsAt ((zkTags_typed zo.I).trans zo.ht), zo.hcH] at h1
     exact (Except.ok.inj h1).symm
   obtain ⟨pop', hpop', -, hdr⟩ := s.pub

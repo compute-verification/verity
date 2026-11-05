@@ -1,6 +1,7 @@
-"""The demo's stand-in (`demo_stub.py`): a warden's id request of the demo's class, as the warden forwards it, is
-answered id-form with exactly the class's generated ids below its vocabulary, then the trailer; a request off the
-class, or one that isn't a warden's id request, is answered 400; its prompts are the class's and the gate takes them."""
+"""The demo's stand-in (`demo_stub.py`): a network certifier's id request of the demo's class, as the network certifier
+forwards it, is answered id-form with exactly the class's generated ids below its vocabulary, then the trailer; a
+request off the class, or one that isn't a network certifier's id request, is answered 400; its prompts are the class's
+and the gate takes them."""
 
 from __future__ import annotations
 
@@ -76,9 +77,10 @@ def test_the_class_is_eight_byte_ids_in_and_twenty_four_out_and_its_model_says_s
 
 
 def test_a_wardens_id_request_of_the_class_is_answered_id_form_its_ids_below_the_vocabulary_then_the_trailer():
-    """With or without the release headers the warden puts on the server's copy, the answer is the prompt's 24 ids
-    (`outputs`, fixed by the prompt alone), each an id event of P bytes, then the trailer: whole id-form, as the warden's
-    rehearsal reads it (`warden_serve.parse_id_response`), and the scan's cells' payloads cut from it."""
+    """With or without the release headers the network certifier puts on the server's copy, the answer is the prompt's
+    24 ids (`outputs`, fixed by the prompt alone), each an id event of P bytes, then the trailer: whole id-form, as the
+    network certifier's rehearsal reads it (`warden_serve.parse_id_response`), and the scan's cells' payloads cut from
+    it."""
     ids = S.outputs(PROMPT)
     want = b"".join(IT.id_event(t, P) for t in ids) + IT.TRAILER
     assert len(ids) == 24 and all(0 <= t < 256 for t in ids) and len(set(ids)) > 1
@@ -110,8 +112,8 @@ def test_an_id_request_off_the_class_is_refused_over_http(kw, why):
 
 def test_what_isnt_a_wardens_id_request_is_refused_and_the_models_list_is_the_one_model():
     """An id request built for smaller cells (a class request is one scan cell, so a larger cell's is the same bytes), a
-    forwarded copy whose release header isn't where the warden puts it, a vLLM-shaped body and another path are none of
-    the warden's id requests."""
+    forwarded copy whose release header isn't where the network certifier puts it, a vLLM-shaped body and another path
+    are none of the network certifier's id requests."""
     fields = {"model": NAME, "user": "user-0", "prompt": PROMPT, "max_tokens": 24, "seed": 12345}
     assert len(ids_request()) < P and A.id_request(**fields, frame_bytes=4096, offset=0) == ids_request()
     moved = ids_request().replace(b"\r\n\r\n", b"\r\nx-verity-release: 3\r\n\r\n", 1)
@@ -138,7 +140,8 @@ def test_its_prompts_are_the_class_and_the_gate_takes_them_as_its_scan_rehearsal
 
 
 def test_serve_prints_where_it_listens_and_answers_over_loopback(capsys):
-    """`serve` on a free loopback port, reached as the warden reaches its upstream: one request a connection."""
+    """`serve` on a free loopback port, reached as the network certifier reaches its upstream: one request a
+    connection."""
     async def main() -> tuple[bytes, bytes]:
         server = await asyncio.start_server(S.Endpoint(), "127.0.0.1", 0)
         host, port = server.sockets[0].getsockname()[:2]
@@ -166,10 +169,10 @@ RUN = b"\x5a" * A.RUN_ID_BYTES
 
 
 def _served_with_records(out: Path, window_steps: int) -> tuple[dict[int, bytes], S.Endpoint]:
-    """`PLAN`'s class requests, user-j with prompt j and the warden's release N = j, through ``serve --out``'s
-    scheduler and HTTP side, stepped here (`Endpoint.step`) on a clock of one second a reading once the connections'
-    handlers have added them (the scheduler's arrivals, which each handler signals on `Endpoint.wake`), in the order
-    their connections opened; each one's answer."""
+    """`PLAN`'s class requests, user-j with prompt j and the network certifier's release N = j, through
+    ``serve --out``'s scheduler and HTTP side, stepped here (`Endpoint.step`) on a clock of one second a reading once
+    the connections' handlers have added them (the scheduler's arrivals, which each handler signals on `Endpoint.wake`),
+    in the order their connections opened; each one's answer."""
     import demo_endpoint as DE
     a = argparse.Namespace(out=out, host="127.0.0.1", port=0, vocab=S.VOCAB, window_steps=window_steps, run_id="t")
     ticks = itertools.count()
@@ -207,12 +210,13 @@ def _served_with_records(out: Path, window_steps: int) -> tuple[dict[int, bytes]
 @pytest.mark.parametrize("window_steps", [16, 64])
 def test_with_out_its_records_are_the_endpoints_that_the_endpoint_step_binds_and_rebuilds(tmp_path, window_steps):
     """``serve --out``: each class request is answered the same bytes as without it, while the scheduler keeps
-    serve-openai's records; requests.jsonl holds each one's user, the warden's release headers, its ids and clock. Then
-    what chain_record's warden endpoint step runs on them: `verity-vllm advice` at the warden's bucket (its own
-    `main`, a fixed compiler digest in place of the tree's code identity), and network-e2e's `served_advice` with the
-    certified I/O (each user's prompt, max_tokens and the ids it was answered) in ingress order and the toy's EOS id:
-    every Commit window's advice, those joined across a carry too, is bound to the certified requests, each once, and
-    rebuilt from them. At --window-steps 16 the plan's windows are cut with requests running, at 64 only at idle."""
+    serve-openai's records; requests.jsonl holds each one's user, the network certifier's release headers, its ids and
+    clock. Then what chain_record's network certifier endpoint step runs on them: `verity-vllm advice` at the network
+    certifier's bucket (its own `main`, a fixed compiler digest in place of the tree's code identity), and network-e2e's
+    `served_advice` with the certified I/O (each user's prompt, max_tokens and the ids it was answered) in ingress order
+    and the toy's EOS id: every Commit window's advice, those joined across a carry too, is bound to the certified
+    requests, each once, and rebuilt from them. At --window-steps 16 the plan's windows are cut with requests running,
+    at 64 only at idle."""
     sys.path.insert(0, str(HERE.parent / "network_e2e"))
     import chain
     from verity_vllm.pipeline import advice as ADV
@@ -243,40 +247,53 @@ def test_with_out_its_records_are_the_endpoints_that_the_endpoint_step_binds_and
 
 
 @pytest.mark.parametrize("window_steps", [16, 64])
-def test_on_vllms_records_art_the_endpoint_step_binds_a_requests_jsonl_rebuilt_from_its_users_map(tmp_path,
-                                                                                                  monkeypatch,
-                                                                                                  window_steps):
-    """The served run's records artifact: advice_trace.jsonl, windows.jsonl, serve.json and request_users.jsonl,
-    requests.jsonl left on the served node. served_session's chain rebuilds requests.jsonl from the map and the
-    certified I/O, and the endpoint step's advice on it is bound to the certified requests and rebuilt from them, across
-    a carry too; a map naming a user the I/O doesn't certify is refused."""
-    sys.path.insert(0, str(HERE.parent / "network_e2e"))
-    import chain
+def test_on_the_served_node_the_endpoint_step_binds_its_records_to_the_certified_io_and_publishes_none(tmp_path,
+                                                                                                       monkeypatch,
+                                                                                                       window_steps):
+    """served_session's endpoint step on a serve dir whose requests.jsonl and advice_trace.jsonl stay there: its copy's
+    requests.jsonl, rebuilt from the users map and the certified I/O, is the endpoint's own record, and the advice on it
+    (`verity-vllm advice` at a fixed compiler digest in place of the tree's code identity) is bound to the certified
+    requests and rebuilt from them, across a carry too; the art is the report, windows.jsonl
+    and serve.json, with no prompt's ids or request-valued field, and the chain's report reads it as the served
+    node's. The stand-in's windows.jsonl and serve.json take serve-openai's form: its row count as ``served_rows`` and
+    the session's flags."""
+    import chain_record as CR
     import served_session as SS
     from verity_vllm.pipeline import advice as ADV
 
-    (tmp_path / "ep").mkdir()
-    _served_with_records(tmp_path / "ep", window_steps)
-    art, prompts = tmp_path / "art", S.prompts(7)
-    art.mkdir()
-    for f in ("advice_trace.jsonl", "windows.jsonl", "serve.json"):
-        (art / f).write_bytes((tmp_path / "ep" / f).read_bytes())
-    own = [json.loads(x) for x in (tmp_path / "ep" / "requests.jsonl").read_text().splitlines()]
-    (art / SS.USERS).write_text("".join(json.dumps({"engine_id": r["engine_id"], "user": r["user"]}) + "\n" for r in own))
+    ep, out = tmp_path / "ep", tmp_path / "run" / "out"
+    ep.mkdir()
+    _served_with_records(ep, window_steps)
+    prompts = S.prompts(7)
+    own = [json.loads(x) for x in (ep / "requests.jsonl").read_text().splitlines()]
+    (ep / SS.USERS).write_text("".join(json.dumps({"engine_id": r["engine_id"], "user": r["user"]}) + "\n" for r in own))
+    windows = [json.loads(x) for x in (ep / "windows.jsonl").read_text().splitlines()]
+    (ep / "windows.jsonl").write_text("".join(json.dumps({k: v for k, v in w.items() if k != "rows"} | {
+        "served_rows": {"count": w["rows"]}}) + "\n" for w in windows))
+    serve = json.loads((ep / "serve.json").read_text())
+    (ep / "serve.json").write_text(json.dumps(serve | {"address": ["127.0.0.1", SS.PORT], "protocol": "ids",
+                                                       "id_payload": 503, "admit": "release-order",
+                                                       "scheme": "rows-sha512", "sealed": "windows/w<k>/",
+                                                       "retain_exclude": "hidden_m1"}))
     io = [{"user": f"user-{j}", "prompt": prompts[j], "max_tokens": 24, "output": S.outputs(prompts[j])}
           for j in range(7)]
-    monkeypatch.setattr(SS, "certified_io", lambda fetch: {"accepted": True, "violations": [], "records": io})
-    keep = tmp_path / "keep"
-    ep = Path(SS.endpoint_records(str(art), keep / "rebuilt", keep / "fetch.tar.gz", [S.VOCAB]))
-    assert ep == keep / "rebuilt" and ep.stat().st_mode & 0o777 == 0o700 and not (art / "requests.jsonl").exists()
-    assert ADV.io_record(ep / "requests.jsonl") == ADV.io_record(tmp_path / "ep" / "requests.jsonl")
-
-    window, T = {"origin_unix": 0.0, "windows": 4, "window_s": 100.0}, 10
-    assert ADV.main(ADV.Options(run=str(ep), tau=window["window_s"] / T, compiler_digest="ab" * 64)) == 0
-    _, bits = chain.served_advice(ep, ep / "advice", window, io, T, [S.VOCAB])
-    assert (bits["bound"], bits["rebuilt"], bits["bound_why"], bits["why"]) == (True, True, None, None), bits
+    (tmp_path / SS.CERTIFIED).write_text(json.dumps({
+        "deployment": {"run_id": "w-run", "origin_unix": 0.0, "windows": 4, "params": {"window": 10, "bucket_ms": 10000}},
+        "io": {"accepted": True, "requests": 7, "tokens": sum(len(r["output"]) for r in io), "violations": [],
+               "records": io}}))
+    monkeypatch.setenv("PYTHONPATH", "")  # endpoint sets it; this restores it after the test
+    monkeypatch.setattr(CR, "ADVICE_CLI", [*CR.ADVICE_CLI, "--compiler-digest", "ab" * 64])
+    assert SS.main(["endpoint", "--from", str(ep), "--io", str(tmp_path / SS.CERTIFIED), "--out", str(out),
+                    "--eos-ids", str(S.VOCAB)]) == 0
+    kept = tmp_path / "ep.endpoint" / "records"
+    assert ADV.io_record(kept / "requests.jsonl") == ADV.io_record(ep / "requests.jsonl")
+    assert not (ep / "advice").exists() and (kept / "advice" / "windows.json").is_file()
+    rep = json.loads((out / "report.json").read_text())
+    bits = rep["chain"]["bits"]
+    assert (rep["verdict"], rep["at"], bits["bound"], bits["rebuilt"], bits["bound_why"], bits["why"]) == (
+        "accepted", CR.SERVED_NODE, True, True, None, None), bits
     assert bool(bits["chains"]) == (window_steps == 16) and sum(w["requests"] for w in bits["commit_windows"]) == 7
-
-    (art / SS.USERS).write_text(json.dumps({"engine_id": "cmpl-x-0", "user": "user-9"}) + "\n")
-    with pytest.raises(SS.Refused, match="user 'user-9' is no certified request"):
-        SS.endpoint_records(str(art), keep / "again", keep / "fetch.tar.gz", [S.VOCAB])
+    assert sorted(p.name for p in out.iterdir()) == ["report.json", "serve.json", "windows.jsonl"]
+    published = b"".join(p.read_bytes() for p in out.iterdir())
+    assert not any(n in published for n in [*SS.needles(prompts), b'"prompt_len"', b'"sampling"', b'"emitted"'])
+    assert CR.warden_endpoint_step(rep)["in_the_clear"] == CR.CLEAR["warden_endpoint_served"]

@@ -1,4 +1,0 @@
-order = 93
-path = "`rt2_fp/`"
-runs_on = "CPU (`shift_price.py`: the machine model's environment); `mma_joint_run.sh`: one RTX PRO 6000 through the queue"
-what = "RT2-FP's red-team witnesses for the FP designs (note:20261019T1100Z-draft-rt2-fp): `g1_check.py`, FP8-g1's and W4A8-g1's committed values against the int8 records' operand ranges and the served identity; `shift_price.py`, the routes outside design A's ring-program scope priced on the FP machine; `slot_pack.py`, S14's packed slots against ε_machine's lanes route and premise (M) against F1; and `mma_joint_run.sh`, sm_120's DMMA.8x8x4 and QMMA.16832 E4M3 timed beside a saturated IMMA.16832 (`mma_joint120.cu`), with (M)'s sum read off the joint runs (`mma_joint.py`)"

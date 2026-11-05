@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.Refine
+module
+
+public import Proofs.Flock.Claims.ZK.Refine
 
 /-!
 # The `Finish` round where neither the frame nor the firewall's own `Finish` stops
@@ -21,6 +23,8 @@ of the cut where one does not (`RefSession.swMsgAt`). Here it is split at that b
 * **`LeanRelease.finalRoundEq_of_finishIs`**: `FinalRoundEq` from the two, at a `Finish` one past the last coin: a live
   run's `Finish` is one the firewall's own `Finish` takes (`finStops_of_live`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

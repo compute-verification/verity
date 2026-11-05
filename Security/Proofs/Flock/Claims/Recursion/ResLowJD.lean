@@ -1,16 +1,20 @@
-import Proofs.Flock.Claims.Recursion.ResPiecesD
-import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+module
+
+public import Proofs.Flock.Claims.Recursion.ResPiecesD
+public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
 
 /-!
 # `ResLowJ` at the concrete `rec-residuals` pieces, from `ResLowered`
 
 `ResLowJ` (the residual groups' share of `hlowP`, at the parts' own messages) at `resPD` and `ownRD` follows from
-LOWRES' per-part share `ResLower.ResLowered` at the deployed layout: `ownRD` gives a piece only to a statement V\* lists
+the per-part share `ResLower.ResLowered` at the deployed layout: `ownRD` gives a piece only to a statement V\* lists
 as an algebra part (`.inner`), which is `resLowered_parts`' `hin`, and a `Joint` acceptance is every part's.
 
 * `ownRD_inner`: the part `ownRD` names is an algebra part of V\*'s list at the inner shape `readX` read.
 * `resLowJ_of_resLowered`: `ResLowJ` at `DeployedR.layR elem`, `resPD` and `ownRD`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.DecompBR
 
@@ -36,7 +40,7 @@ theorem ownRD_inner {x : Msg} {q : ResPiece} {s : ℕ} (h : ownRD x q = some s) 
       | inner j nm pt => exact ⟨j, nm, pt, rfl, hss, by rw [Array.getElem?_eq_getElem hsz, he]⟩
       | _ => rw [he] at hp; simp [isResOf] at hp
 
-/-- **`ResLowJ` from LOWRES' per-part share**: at the deployed layout `DeployedR.layR elem`, wherever each algebra
+/-- **`ResLowJ` from the per-part share**: at the deployed layout `DeployedR.layR elem`, wherever each algebra
 part's accepting circuit computes its pieces (`ResLowered`), every part's does at a `Joint` acceptance. -/
 theorem resLowJ_of_resLowered (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round)
     (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record) (rest : Msg → List (Msg × Out) → List UInt8)

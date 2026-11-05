@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.NextR
-import Proofs.Flock.Claims.Recursion.CoinPos
+module
+
+public import Proofs.Flock.Claims.Recursion.NextR
+public import Proofs.Flock.Claims.Recursion.CoinPos
 
 /-!
 # `lastSplitR`'s verdict, split into the parts' pieces
@@ -19,6 +21,8 @@ the pieces their owners, and `decompB_lastSplitP` is `decompB_nextR` at it: the 
 the rep that check 5 builds (`RecCoins.Inner.rep`, whose `verifierRows` give the `v` it pins) has, at each round `m`,
 the values the coin drew at the one inner round `g + 1` of its stream at round `sp m` (`staged_coinTie_drawn_unique`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -85,10 +89,10 @@ theorem decompB_lastSplitP (H : Msg → Msg) (rd : Msg → Option FinalP) {Q : T
     (rel' : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings) (L : LayoutB)
     (IV : Claims.Verifier Coin) (shape : Claims.Recursion.Form → Prop) {Col' T' : Type}
     (DO : Claims.Flock.Deploy Coin Col' T') (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
-    (hR : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hR : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ r ∈ (lastSplitP H rd pieces pholds hpieces).checks (Claims.Recursion.xI (recBound rel' b L IV) x), ∀ s,
         ownP ownB ownQ x r = some s → s < (recBound rel' b L IV).nS x)
-    (hrest : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hrest : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ q ∈ ivChecks (bdDeployed rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w)
           (deploySplit H rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w (nextR_coin rd H)
             (lastSplitP H rd pieces pholds hpieces).toLast)

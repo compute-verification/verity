@@ -1,4 +1,4 @@
-"""SHA-512's compression function as a GF(2) circuit over `forms` (formerly C-Flock's `sha512_circuit`, which keeps its row
+"""SHA-512's compression function as a GF(2) circuit over `forms` (formerly Flock's `sha512_circuit`, which keeps its row
 circuits and imports this), with its plain-integer reference.
 
 * `compress_ref`: one compression on word values (FIPS 180-4 §6.4.2), with the feed-forward.

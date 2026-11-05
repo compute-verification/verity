@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.ZkDrawJ
-import Proofs.Flock.Claims.KS.ConflictRun
-import Proofs.Flock.Claims.KS.PlainWrP
+module
+
+public import Proofs.Flock.Claims.KS.ZkDrawJ
+public import Proofs.Flock.Claims.KS.ConflictRun
+public import Proofs.Flock.Claims.KS.PlainWrP
 
 /-!
 # An accepted run of the deployed `--zk` verifier is flock-verify `--zk`'s acceptance
@@ -11,6 +13,8 @@ import Proofs.Flock.Claims.KS.PlainWrP
 record's draw and the statement's (`Flock.norm`), so the record's draw is the statement's as a value
 (`Custody.recordDraw_of_decide`, inside `Custody.accepts_of_decide`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

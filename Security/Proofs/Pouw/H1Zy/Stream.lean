@@ -1,5 +1,7 @@
-import Definitions.Pouw.H1Zy.Stream
-import Proofs.Pouw.H1Zy.Tile
+module
+
+public import Definitions.Pouw.H1Zy.Stream
+public import Proofs.Pouw.H1Zy.Tile
 
 /-!
 # A lane's `ok` over `PouwH1Tile_v3` is its `ok` over `PouwH1Tile_v1`
@@ -7,6 +9,8 @@ import Proofs.Pouw.H1Zy.Tile
 At a `K` the tile binds at (`32 ∣ K`, `K < 2^17`), v3's z of a lane's cell is EXACT's for every seed (`laneZ3_eq`, from
 `streamZ_eq`), so `laneOkZ` at `laneZ3` is `laneOk` (`laneOkZ_eq_laneOk`).
 -/
+
+@[expose] public section
 
 namespace Pouw.H1Zy
 

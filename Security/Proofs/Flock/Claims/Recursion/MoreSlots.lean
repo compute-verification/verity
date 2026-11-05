@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.ResLowerDeployed
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.LayoutBAcc
+module
+
+public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+public import Proofs.Flock.Claims.Recursion.LayoutBAcc
 
 /-!
 # The extra calls' slots at any staged part (`MoreSlotsTrue`'s parts)
@@ -13,6 +15,8 @@ an output row's does wherever its unit's output group lies in the unit's slot (`
 every unit the parser built (`hin_of_check`: D11 in `Net.ofRows`, its group's bits within its words, and
 `HmRow.check`'s 16-bit returned outputs), so at every staged part (`slotOut_stagedG`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.MoreSlots
 
@@ -210,6 +214,7 @@ theorem slotOut_stagedG {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wi
     rw [← e]
     exact hz
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0).2.2)
   obtain ⟨-, hts⟩ := tablesOf_of_parse hx
   obtain ⟨spec0, hset⟩ := Flock.Readable.setup_of_tablesOf hts
   unfold Flock.Readable.Read.setup at hset
@@ -233,7 +238,7 @@ theorem slotOut_stagedG {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wi
     hn.elim (fun h => div_lt_blocks hg0 (show n < p.sts[0].n by omega) hnbl) fun h => div_lt_blocks_two h hnbl
   subst hc0
   obtain ⟨ls, hls⟩ := P.check
-  exact slotOut_table ht' hh hd hv1 ho (hin_of_check L.unit_built P.typed hls ho) L regs hz1 hqs hq hb
+  exact slotOut_table ht' hh hd P.tmpl hv1 ho (hin_of_check (L.built_flat P.tmpl) P.typed hls ho) L regs hz1 hqs hq hb
 
 /-- **A staged part's input slot commits its row**, at any port its statement doesn't output (`in_block`) and any of
 its statement's instances, or either rep (`hmSlotsCommit_of_full` at any port). -/
@@ -364,11 +369,13 @@ end Calls
 
 /-! ## Which ports the extra calls read -/
 
-theorem outputs_out_accOut (sv : VStar.Stmt) : ∀ nm ∈ sv.sub.outputs, nm = "out" ∨ nm = "acc_out" := by
-  cases sv <;> simp [VStar.Stmt.sub, VStar.recOpenSub, VStar.innerSub, VStar.sparseSub, VStar.capSub]
+theorem outputs_named (sv : VStar.Stmt) :
+    ∀ nm ∈ sv.sub.outputs, nm = "out" ∨ nm = "acc_out" ∨ nm = "rin" ∨ nm = "rout" := by
+  cases sv <;> simp [VStar.Stmt.sub, VStar.recOpenSub, VStar.innerSub, VStar.sparseSub, VStar.capSub, VStar.linkSub]
 
-theorem not_output {sv : VStar.Stmt} {nm : String} (h1 : nm ≠ "out") (h2 : nm ≠ "acc_out") : nm ∉ sv.sub.outputs :=
-  fun hm => (outputs_out_accOut sv nm hm).elim h1 h2
+theorem not_output {sv : VStar.Stmt} {nm : String} (h1 : nm ≠ "out") (h2 : nm ≠ "acc_out") (h3 : nm ≠ "rin")
+    (h4 : nm ≠ "rout") : nm ∉ sv.sub.outputs :=
+  fun hm => (outputs_named sv nm hm).elim h1 fun h => h.elim h2 fun h => h.elim h3 h4
 
 /-- A read of the chain at a port other than `acc` is an algebra part's `acc0` or `acc1`, at rep `u < 2`. -/
 theorem accRead_other {r : XR} {sv : VStar.Stmt} {nm : String} {u : ℕ} (ha : nm ≠ "acc")
@@ -484,7 +491,7 @@ theorem moreSlotsTrue {st : Stage} (hP : PastIn st) (hA : AccFits) :
           simp only [hq] at hp
           by_cases ha : nm = "acc"
           · subst ha
-            exact hmCallsG_true hS hck hr hss hsv hpc hq (not_output (by decide) (by decide))
+            exact hmCallsG_true hS hck hr hss hsv hpc hq (not_output (by decide) (by decide) (by decide) (by decide))
               (Or.inl (hA r ss s sv hss hsv u hrd)) p hp
           · obtain ⟨hu, hnm⟩ := accRead_other ha hrd
             exact hmCallsG_true hS hck hr hss hsv hpc hq hnm (Or.inr hu) p hp

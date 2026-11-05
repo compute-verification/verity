@@ -1,4 +1,4 @@
-//! `verity/flock-circuit` (lane flock-circuit): any lowered IR template, its serving rows committed in the circuit, and
+//! `verity/flock-circuit`: any lowered IR template, its serving rows committed in the circuit, and
 //! nothing public but the frame-v3-sha512 roots, each row's hm96 commit string `b || c` and the pinned layout. The rows are
 //! the input rows, then one output row per output port (its words zero-padded to whole SHA-512 blocks): an output is a
 //! hidden value like an input. `verity_flock.circuit` composes the pinned circuit (`flock-circuit`) and stages the instance
@@ -20,7 +20,7 @@
 //! - every output row's message bits copies of the returned output bits, and its padding words copies of a forced-zero row;
 //! - every other wire of the template's slots, and every slot's constant a copy of the pinned column.
 //!
-//! Public regions, each opened at the verifier's points (drawn after the commitment, both reps), values all the verifier's:
+//! Public regions, each opened at the verifier's points (sampled after the commitment, both reps), values all the verifier's:
 //! every row's `b || c` (its hm96 slot's output). The rows (outputs too), their salts, the chaining values and every word
 //! between slots stay private. A padding instance is the all-zero instance with zero salts, whose rows' `b || c` are pinned and
 //! checked here natively (a zero salt's mask is zero): its input rows are zero, its output rows its outputs (forced by its
@@ -60,7 +60,7 @@ pub const FORMAT: &str = "flock-circuit";
 pub const INST_FORMAT: &str = "flock-circuit-inputs";
 pub const STATEMENT: &str = "verity/flock-circuit";
 
-/// The strings a circuit statement hashes byte for byte, by its id (PROTOCOL.md §16.5's table, the Lean `Flock.Tags`): the
+/// The strings a circuit statement hashes byte for byte, by its id (the Lean `Flock.Tags`): the
 /// id is also the statement digest's tag, and each id has its own Σ tag and stream domain.
 pub struct Tags {
     pub statement: &'static str,
@@ -72,7 +72,7 @@ pub struct Tags {
 pub const TAGS: Tags = Tags { statement: STATEMENT, sigma: "verity/flock-circuit/sigma", domain: "flock-circuit/fast100x2/rep" };
 pub const TYPED_TAGS: Tags =
     Tags { statement: crate::typed::STATEMENT, sigma: "verity/flock-circuit/types/sigma", domain: "flock-circuit-types/fast100x2/rep" };
-/// A templated statement (PRF-133, the Lean `Tags.circuitTmpl`): META `template` and `layout` in place of the unit's rows,
+/// A templated statement (the Lean `Tags.circuitTmpl`): META `template` and `layout` in place of the unit's rows,
 /// which the prover reads from `flock-tmpl-unit`'s file, the unit committed at the layout's positions.
 pub const TMPL_FORMAT: &str = "flock-circuit/tmpl";
 pub const TMPL_STATEMENT: &str = "verity/flock-circuit/tmpl";
@@ -93,7 +93,7 @@ pub const PER_SLOT: usize = 3;
 /// META's bindings (what the statement binds about the circuit): a class leaves them out.
 pub const BINDING_KEYS: [&str; 3] = ["partition", "program_sha512", "program_digests"];
 /// `Stmt.InRange` as the pinned table-soundness theorems prove it (`FlockSoundness/Accounting/Fast100.lean`): `k_log <= 27`,
-/// at most 1,024 public regions, at most 64 link-point coordinates; with PROTOCOL.md §16.5's `m <= 35`. A statement outside it
+/// at most 1,024 public regions, at most 64 link-point coordinates; with the Lean `Flock.Schedule`'s `m <= 35`. A statement outside it
 /// is refused, so an accepted statement is one the pins cover.
 pub const IN_RANGE_K_LOG: usize = 27;
 pub const IN_RANGE_REGIONS: usize = 1024;
@@ -145,7 +145,7 @@ pub fn regions_in_range(regions: &[RegionShape]) -> Result<(), String> {
     Ok(())
 }
 
-/// The instance count's part: the dense size `m = k_log + nbl` (PROTOCOL.md §16.5) and the link points' coordinates.
+/// The instance count's part: the dense size `m = k_log + nbl` (the Lean `Flock.Circuit`) and the link points' coordinates.
 pub fn shape_in_range(m: usize, m_pts: usize) -> Result<(), String> {
     if m > M_MAX {
         return Err(format!("m = {m}: outside the spec's shape (m <= {M_MAX})"));
@@ -205,7 +205,7 @@ pub fn aligned_blocks(words: &BTreeSet<usize>) -> Vec<(usize, usize)> {
 }
 
 /// The leaf-commitment scheme this prover and verifier implement for the proof's own Merkle trees, as the composite circuit
-/// pins it (`verity_flock.circuit.LEAF_SCHEME`: today's id and the `hm96-sha256/v1` room it reserves). `salt_source` names
+/// pins it (`verity_flock.circuit.LEAF_SCHEME`: the current id and the `hm96-sha256/v1` room it reserves). `salt_source` names
 /// `zk_hooks::LeafSalts`'s OS reads, as the Lean verifier pins the object (`Flock/Tags.lean`'s `leafSchemeHm96Os`).
 pub fn leaf_scheme() -> Value {
     let (id, salt) = if cfg!(feature = "sha512") { ("hm96-sha512/v1", 192) } else { ("flock-leaf/sha256-unsalted", 0) };
@@ -216,7 +216,7 @@ pub fn leaf_scheme() -> Value {
 }
 
 /// The leaves of a statement whose trees need no hiding, a recursive session's inner statement (`verity_flock.rec_live`): its
-/// firewall commits every tree top under a salt of its own and the openings stay in V*'s witness, so a leaf is the column's
+/// ZK server commits every tree top under a salt of its own and the openings stay in V*'s witness, so a leaf is the column's
 /// SHA-512 digest (`HashKind::Sha512`) and an opening carries no salt. ZK off only (`verity_flock.circuit.LEAF_SCHEME_PLAIN`).
 pub fn leaf_scheme_plain() -> Value {
     json!({"id": "flock-leaf/sha512-unsalted", "inner": "sha512 column digest", "salt_bytes": 0,
@@ -441,7 +441,7 @@ pub struct Composite {
     pub unit_net: usize,
     pub leaves_in: Vec<Vec<i64>>,
     pub leaves_out: Vec<Vec<usize>>,
-    /// the public input ports (META `public_inputs`, PROTOCOL.md §16.10), `(port, words)`: unit inputs that are no row but
+    /// the public input ports (META `public_inputs`, the Lean `Flock.HmRow`), `(port, words)`: unit inputs that are no row but
     /// public words the verifier recomputes from public data, each naming its recomputation (seed and derivation)
     pub public_inputs: Vec<(String, usize)>,
     /// each unit's leaf ports' public words (META `leaves_public`): the word's index among the public ports' words, or -1
@@ -1174,7 +1174,7 @@ impl Composite {
         self.check_public_inputs()
     }
 
-    /// The public input ports (§16.10): each named once, and no row's name; one public leaf map per unit, each public leaf a
+    /// The public input ports (`Flock.HmRow`): each named once, and no row's name; one public leaf map per unit, each public leaf a
     /// zero leaf of `leaves_in`; the unit range unpacked, since the `in` regions read it; their words
     /// ([`Self::public_leaf_words`]) inside the leaf group, each leaf in them a public or a zero leaf in every unit.
     fn check_public_inputs(&self) -> Result<(), String> {
@@ -1239,7 +1239,7 @@ impl Composite {
         self.leaves_public.iter().flat_map(|l| l.iter().enumerate().filter(|x| *x.1 >= 0).map(move |(j, _)| col + j / 8)).collect()
     }
 
-    /// The `in` regions (§16.10), as `(w, s)`: `2^s` words of every unit slot from word `w`. The public leaves' words
+    /// The `in` regions (`Flock.HmRow`), as `(w, s)`: `2^s` words of every unit slot from word `w`. The public leaves' words
     /// ([`Self::public_leaf_words`]) in aligned blocks of `2^e` words ([`aligned_blocks`]), each split into `2^(e - s)`
     /// regions, `s = min(e, PT_LOCAL - 7 - log2ceil(units))` (`7 + s` free bits beside the slot bits).
     pub fn in_regions(&self) -> Vec<(usize, usize)> {
@@ -1677,7 +1677,7 @@ pub struct Instances {
     /// every row's `b || c`, instance-major, ports in order (a shared-row file: its tables' rows, port-major)
     pub bcs: Vec<[u8; BC_BYTES]>,
     /// SHA-512 of the header's compact key-sorted JSON (no newline) and every public byte after the rows and salts
-    /// (`b || c`, refs): what Σ binds. A drawn statement's header is its draw's, which no file holds, so this is no file's hash.
+    /// (`b || c`, refs): what Σ binds. A drawn statement's header is its sample's, which no file holds, so this is no file's hash.
     pub public_sha512: [u8; 64],
     /// SHA-512 of the verifier's own public file of the registered population (`public_file`'s bytes, which is the staged
     /// `pub-<n>.bin` when its writer writes the header as serde does: `verity_flock.circuit.public_file`). A drawn statement
@@ -1829,8 +1829,8 @@ impl Instances {
         h.finalize().into()
     }
 
-    /// The statement of the drawn units (`unit_draw` over this registered population's positions `[0, n)`): instance `i` is the
-    /// population's `units[i]`; its header is the population's with the draw, `instances = K` and the drawn units' indices; its
+    /// The statement of the sampled proof blocks (`unit_draw` over this registered population's positions `[0, n)`): instance `i` is the
+    /// population's `units[i]`; its header is the population's with the sample, `instances = K` and the sampled proof blocks' indices; its
     /// public digest covers that header and the population's public bytes (the frame-v3 roots stay the population's).
     pub fn drawn(&self, c: &Composite, draw: &Value) -> Result<Instances, String> {
         let units = crate::unit_draw::check(draw)?;
@@ -1840,7 +1840,7 @@ impl Instances {
         let np = c.ports.len();
         let rb = c.row_bytes();
         let indices: Vec<usize> = units.iter().map(|&u| self.header["units"]["indices"][u].as_u64().unwrap_or(0) as usize).collect();
-        // the population's header but its units (millions of entries), which the draw's replace
+        // the population's header but its units (millions of entries), which the sample's replace
         let mut header: Value = self.header.as_object().map(|m| m.iter().filter(|(k, _)| k.as_str() != "units").map(|(k, v)| (k.clone(), v.clone()))
             .collect::<serde_json::Map<_, _>>().into()).unwrap_or_default();
         header["unit_draw"] = draw.clone();
@@ -1928,6 +1928,58 @@ impl Instances {
         }
         out.extend(public);
         Some(out)
+    }
+
+    /// The rows whose salts the file holds: every instance's per port, or a shared-row file's table rows.
+    pub fn salt_count(&self, np: usize) -> usize {
+        match &self.tables {
+            Some(t) => t.counts.iter().sum(),
+            None => self.n * np,
+        }
+    }
+
+    /// Puts `salts` in place of the file's row salts, in the file's order ([`Instances::salt_count`] of them): a registered
+    /// population's prover file only.
+    pub fn set_salts(&mut self, np: usize, salts: Vec<u8>) -> Result<(), String> {
+        if !self.has_rows() || self.population.is_some() {
+            return Err("salts are set on a registered population's prover file".into());
+        }
+        if salts.len() != SALT_BYTES * self.salt_count(np) {
+            return Err(format!("{} bytes of salts, where the file's {} rows take {}", salts.len(), self.salt_count(np), SALT_BYTES * self.salt_count(np)));
+        }
+        match &mut self.tables {
+            Some(t) => t.salts = Some(std::sync::Arc::new(salts)),
+            None => self.salts = Some(salts),
+        }
+        Ok(())
+    }
+
+    /// The prover's file of this registered population, as [`Instances::load`] reads it: the header (`rows` true), the rows,
+    /// their salts and the public bytes.
+    pub fn prover_file(&self) -> Result<Vec<u8>, String> {
+        if self.population.is_some() || !self.has_rows() {
+            return Err("a prover's file is a registered population's, with its rows".into());
+        }
+        let mut header = self.header.clone();
+        header["rows"] = Value::Bool(true);
+        let mut b = serde_json::to_vec(&header).map_err(|e| format!("header: {e}"))?;
+        b.push(b'\n');
+        match &self.tables {
+            Some(t) => {
+                b.extend(t.rows.as_deref().into_iter().flatten());
+                b.extend(t.salts.as_deref().into_iter().flatten());
+            }
+            None => {
+                b.extend(self.rows.iter().flatten());
+                b.extend(self.salts.iter().flatten());
+            }
+        }
+        b.extend(self.bcs.iter().flatten());
+        if let Some(t) = &self.tables {
+            b.extend(t.refs.iter().flat_map(|r| r.to_le_bytes()));
+        }
+        b.extend(self.public.iter().flat_map(|w| w.to_le_bytes()));
+        Ok(b)
     }
 
     /// Every instance's row salts, instance-major, ports in order (a shared-row file's gathered by its refs); `None`: the
@@ -2060,7 +2112,7 @@ pub fn check_public(c: &Composite, inst: &Instances) -> Result<(), String> {
 
 pub const LINKS_FORMAT: &str = "verity/flock-links/v1";
 
-/// Linking (PROTOCOL.md §16.13) on the registered population's public file: the verifier's own links file (`--links`,
+/// Linking (the Lean `HmOut`) on the registered population's public file: the verifier's own links file (`--links`,
 /// `verity/flock-links/v1`, derived from its program and query: `verity_flock.class_statement.links_file`) is for this
 /// circuit, its partition and META `links`' ports, and every `(reader, port, writer)` it lists has the reader's link row's
 /// `b || c` equal to the writer's output row's. A circuit with META `links` needs the file; one without takes none. The links
@@ -3294,7 +3346,7 @@ mod tests {
 
     use super::*;
 
-    /// PROTOCOL.md §16.5: the statement digest's tag is the statement id. The flat statement keeps its tags; the typed id
+    /// The Lean `Flock.Tags`: the statement digest's tag is the statement id. The flat statement keeps its tags; the typed id
     /// has its own.
     #[test]
     fn tags_follow_the_statement_id() {
@@ -3360,7 +3412,7 @@ mod tests {
         assert!(regions_in_range(&[region((0..14).collect()), overlap]).unwrap_err().contains("LinkLayout"));
     }
 
-    /// §16.10: the in regions' words, run by run, in the largest aligned blocks (the vectors `test_circuit.py` gives Python's).
+    /// `Flock.HmRow`: the in regions' words, run by run, in the largest aligned blocks (the vectors `test_circuit.py` gives Python's).
     #[test]
     fn public_words_are_cut_into_aligned_blocks() {
         let blocks = |w: &[usize]| aligned_blocks(&w.iter().copied().collect());
@@ -3408,6 +3460,38 @@ mod tests {
         let d = inst.drawn(&c, &json!({"law": "subset", "population": n, "k": 1, "units": [1]})).unwrap();
         assert_eq!(d.public_file_sha512, file);
         assert_ne!(d.public_sha512, inst.public_sha512);
+    }
+
+    /// A prover's file with its salts set elsewhere (the ZK server's: `flock-circuit --salt-refs`) is written as `load` reads
+    /// it: the same rows, the new salts and the same public part. Salts of another count, a verifier's file and a drawn
+    /// statement are refused.
+    #[test]
+    fn salts_set_on_a_prover_file_round_trip() {
+        let c = Composite::parse(&typed_statement(), None).unwrap();
+        let (n, np) = (2, c.ports.len());
+        let header = json!({"format": INST_FORMAT, "statement": c.statement(), "circuit_sha512": crate::hex(&c.sha512),
+                            "instances": n, "rows": true, "units": units_entry(&c, &[0, 1])});
+        let mut b = serde_json::to_vec(&header).unwrap();
+        b.push(b'\n');
+        let body = n * c.row_bytes() + n * np * SALT_BYTES + BC_BYTES * n * np + 2 * n * c.public_words();
+        b.extend((0..body).map(|i| i as u8));
+        let p = std::env::temp_dir().join(format!("flock-prover-file-{}.bin", std::process::id()));
+        std::fs::write(&p, &b).unwrap();
+        let inst = Instances::load(p.to_str().unwrap(), &c);
+        let mut inst = inst.unwrap();
+        assert_eq!(inst.prover_file().unwrap(), b, "unchanged, the file as it was read");
+        assert_eq!(inst.salt_count(np), n * np);
+        assert!(inst.set_salts(np, vec![7; SALT_BYTES * n * np - 1]).unwrap_err().contains("bytes of salts"));
+        let salts: Vec<u8> = (0..SALT_BYTES * n * np).map(|i| (i % 251) as u8).collect();
+        inst.set_salts(np, salts.clone()).unwrap();
+        std::fs::write(&p, inst.prover_file().unwrap()).unwrap();
+        let again = Instances::load(p.to_str().unwrap(), &c);
+        std::fs::remove_file(&p).unwrap();
+        let again = again.unwrap();
+        assert_eq!((again.rows.as_ref(), again.salts.as_ref(), &again.bcs, &again.public), (inst.rows.as_ref(), Some(&salts), &inst.bcs, &inst.public));
+        assert_eq!(again.public_file().unwrap(), inst.public_file().unwrap());
+        let mut d = inst.drawn(&c, &json!({"law": "subset", "population": n, "k": 1, "units": [1]})).unwrap();
+        assert!(d.prover_file().is_err() && d.set_salts(np, vec![0; SALT_BYTES * np]).is_err());
     }
 
     #[test]
@@ -3776,7 +3860,7 @@ mod tests {
         assert!(flat.contains("one 16-bit port per output word"), "{flat}");
     }
 
-    /// No unit in a VU is refused (PROTOCOL.md §16.10, D8), with the tail that returns the outputs, whose unit count need not
+    /// No unit in a VU is refused (the Lean `Flock.HmRow`, D8), with the tail that returns the outputs, whose unit count need not
     /// be a power of two, kept consistent: no unit or stage slot, no leaf map and no wire but the rows'.
     #[test]
     fn a_tail_with_no_unit_is_refused() {
@@ -3796,7 +3880,7 @@ mod tests {
         assert!(err.contains("units_per_vu is 0"), "{err}");
     }
 
-    /// No VU in a block is refused (PROTOCOL.md §16.10, D9), with the tail that returns the outputs, whose unit count need not
+    /// No VU in a block is refused (the Lean `Flock.HmRow`, D9), with the tail that returns the outputs, whose unit count need not
     /// be a power of two, kept consistent: every circuit's range has no slot.
     #[test]
     fn a_block_with_no_vu_is_refused() {
@@ -3812,7 +3896,7 @@ mod tests {
         assert!(err.contains("vus_per_block is 0"), "{err}");
     }
 
-    /// Three VUs in a block are refused (PROTOCOL.md §16.10, D9), with the tail that returns the outputs, whose unit count
+    /// Three VUs in a block are refused (the Lean `Flock.HmRow`, D9), with the tail that returns the outputs, whose unit count
     /// need not be a power of two, laid out for them (aligned, disjoint) in the same block: the Digest region's VU bits pin
     /// every VU only at a power of two.
     #[test]
@@ -3830,7 +3914,7 @@ mod tests {
         assert!(err.contains("vus_per_block is not a power of two"), "{err}");
     }
 
-    /// A writer with no output row (CMP-149's form B): one 1024-bit `sha512/row/v2` input row `x`, read as one 16-bit leaf,
+    /// A writer with no output row (pinned outputs' form B): one 1024-bit `sha512/row/v2` input row `x`, read as one 16-bit leaf,
     /// and one pinned output word `d = x XOR (x rotated by one)`, each bit a linear row (B the constant alone).
     fn pinned_statement(edit: &dyn Fn(&mut Value)) -> String {
         let x = Port { name: "x".into(), words: 64, comps: 1, bits: 1024, v2: true, segs: None };
@@ -3900,7 +3984,7 @@ mod tests {
 
     #[test]
     fn hm96_sha512_default_key_is_core_s() {
-        // hashlib.sha512(verity.ml.commitments.hm96.SHA512.default_key).hexdigest() (PR #93)
+        // hashlib.sha512(verity.ml.commitments.hm96.SHA512.default_key).hexdigest()
         assert_eq!(super::leaf_scheme()["key_sha512"],
                    "afc5a60c85d8aa75cb4c7f726588d299a1712e1c6a621f09ca64809a5fedd744a0f6b0201d05e82b29cd5b274e6c29670cd4e4ab10831911fb1f9e0c7019df22");
     }

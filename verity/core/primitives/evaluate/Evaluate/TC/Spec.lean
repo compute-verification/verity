@@ -1,3 +1,5 @@
+module
+
 /-!
 # The BF16 tensor-core steps: `verity.ml.circuits.silicon.total.tc_dot_total`
 
@@ -10,6 +12,8 @@ never requires `Security/`. `groupSum` is the generic adder (a width below 24 tr
 Words are natural numbers below `2^32` (FP32) and `2^16` (BF16), as the walk gives them to a gate whose operands are
 `Value<32>` and `Array<16, Value<16>>` words.
 -/
+
+@[expose] public section
 
 namespace Evaluate.TC.Spec
 

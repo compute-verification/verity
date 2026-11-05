@@ -26,7 +26,7 @@ def _load(name):
 
 F = _load("fused_arm")
 FS = _load("fused_score")
-A = F.A  # the arms module fused_arm imported (the one test_filler_score loaded, when it ran first): one Placement class
+A = F.A  # the arms module fused_arm imported (the one test_filler_score loaded, when it ran first): one Colocation class
 ARMS = [F.Fused(), F.FusedV2(), F.FusedPump(), F.FusedPumpK(), F.FusedWarpK(), F.FusedPumpBU(), F.FusedPumpBUXin13(),
         F.FusedPumpBULi()]
 V1 = [a for a in ARMS if a.nvcc_flags == "-DDFILL_V1"]
@@ -56,7 +56,7 @@ def test_contract_and_record(arm):
         assert arm.filler.noise == kind
         assert arm.filler.W == 8 and arm.filler.S % 32 == 0  # pfill's 8-warp blocks; S a multiple of 32
         # the fold filler-scorer/v5 reads, declared as the NC and build make it (pf_absorb): duo at NC 2; at NC 4 ram,
-        # or P2-FF r9's XOR-in (13, 19) or LOP3+IMAD
+        # or the r9 XOR-in (13, 19) or LOP3+IMAD
         flags = arm.nvcc_flags.split()
         r9 = [f for f in ("-DPFILL_XIN13", "-DPFILL_LI") if f in flags]
         assert len(r9) <= 1 and "-DPFILL_XIN" not in flags  # pfill.cuh refuses both pairs (#error)
@@ -67,12 +67,12 @@ def test_contract_and_record(arm):
 
 @pytest.mark.parametrize("arm", ARMS, ids=lambda a: a.name)
 def test_placements(arm):
-    pre = A.Placement("co") if arm in V1 else A.Placement("split", 4)
+    pre = A.Colocation("co") if arm in V1 else A.Colocation("split", 4)
     assert A.placed(arm, "prefill", 8192, 0) == pre
     assert arm.fused("prefill", 8192, 0) is None
     assert arm.filler_at("prefill", 8192, 0) == (F.CO_PREFILL if arm in V1 else arm.filler)
     for (b, l), (sms, q) in arm.table.items():
-        assert A.placed(arm, "decode", b, l) == A.Placement("split", sms)
+        assert A.placed(arm, "decode", b, l) == A.Colocation("split", sms)
         assert arm.fused("decode", b, l) == q and arm.filler_at("decode", b, l) == arm.filler
 
 

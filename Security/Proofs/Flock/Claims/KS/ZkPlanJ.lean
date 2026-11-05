@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.ZkLiveJ
-import Proofs.Flock.Claims.Bridge.Custody
+module
+
+public import Proofs.Flock.Claims.KS.ZkLiveJ
+public import Proofs.Flock.Claims.Bridge.Custody
 
 /-!
 # The old `--zk` plan at the deployed masked statement is `zkTabs`
@@ -22,6 +24,8 @@ sets its session up, the two are one list, so the old decoders are right at `zkT
 * `opnD`, `decD`, `opnAtZJ_eq_opnD`: the deployed `--zk` openings and decoder at the session's statements and tables,
   which the old ones at the plan are where `verify --zk` sets the session up.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

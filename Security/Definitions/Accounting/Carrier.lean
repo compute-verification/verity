@@ -1,8 +1,10 @@
-import Definitions.Accounting.RateAuditSketchDeployed
-import Definitions.Accounting.RateAuditDeployed
-import Definitions.Accounting.Gates.Codec
-import Definitions.Accounting.Requirement
-import Mathlib.Data.ENat.Lattice
+module
+
+public import Definitions.Accounting.RateAuditSketchDeployed
+public import Definitions.Accounting.RateAuditDeployed
+public import Definitions.Accounting.Gates.Codec
+public import Definitions.Accounting.Requirement
+public import Mathlib.Data.ENat.Lattice
 
 /-!
 # Carriers: device memory whose post-seed contents are a circuit's values (trusted)
@@ -88,6 +90,8 @@ prefix: a block appended after a pass's seed is in no plan of that pass, so a pa
 coins.
 -/
 
+@[expose] public section
+
 namespace Accounting
 
 /-- **The blocks a pass reads under the append-coin rule** (remote_bandwidth's PROTOCOL.md §3–§4). The store is made by
@@ -150,7 +154,7 @@ def gates (cost : ℕ → ℕ∞) (E : SketchStore N m) : Provenance N m α → 
 /-- **A provenance that is `W`'s over the windows `I`** of the audit `A`: at every store its inputs are at most the
 bits of `W`'s run inputs in those windows, and its encodes, at `cost x` for `x` bits, cost at most `W`'s nonlinear
 units there: its budgeted units (`Gates.census`, property/v1's units) and its data products (`Gates.productsAt`). -/
-def OfCircuit {ι : Type} (K : Provenance N m α) (cost : ℕ → ℕ∞) (W : Gates.Dag ι) (A : Gates.Audit)
+def OfCircuit {ι : Type} (K : Provenance N m α) (cost : ℕ → ℕ∞) (W : Gates.IntDag ι) (A : Gates.Audit)
     (I : Finset ℕ) : Prop :=
   ∀ E, K.inputs E ≤ ∑ v ∈ I, (Gates.census W fun t => A.win t = v).runBits ∧
     K.gates cost E ≤

@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.DeclaredCircuit
-import Proofs.Accounting.Stacking
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.DeclaredCircuit
+public import Proofs.Accounting.Stacking
 
 /-! The first pieces of the proof of `Accounting.Guarantees.DeclaredCircuitRequirement`, whose theorem is in
 `DeclaredCircuit/Requirement.lean`: a carrier of a declared circuit's is within its census over its life, its inputs
@@ -10,13 +12,15 @@ steered after the coins to
 uniform blocks at `2^a` times their likeliest summary's event, `δ` once, against an event that reads the summary as a
 device told it does (`KeyBinding.pr_steered_le`). -/
 
+@[expose] public section
+
 namespace Accounting.RateSketch.Provenance
 
 /-- **A carrier of a declared circuit's is within its census over its life**: over at most `life` of the audit's
 windows, its inputs are at most the run-input bits the stacking property's caps allow in any `life` of them
 (`8·R_life`), and its encodes at most `life` times the most nonlinear units (budgeted units and data products) the
 circuit has in a window. -/
-theorem OfCircuit.budget {N m : ℕ} {α ι : Type} {K : Provenance N m α} {cost : ℕ → ℕ∞} {W : Gates.Dag ι}
+theorem OfCircuit.budget {N m : ℕ} {α ι : Type} {K : Provenance N m α} {cost : ℕ → ℕ∞} {W : Gates.IntDag ι}
     {caps : Gates.Caps} {A : Gates.Audit} {I : Finset ℕ} {life : ℕ} (hK : K.OfCircuit cost W A I)
     (hP : Gates.Property caps A W) (hI : I ⊆ Finset.range A.windows) (hcard : I.card ≤ life)
     (E : SketchStore N m) :

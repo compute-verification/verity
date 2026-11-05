@@ -3,20 +3,23 @@ R7, the verifier's read map from its own program, the read check, and the audit 
 from __future__ import annotations
 
 import hashlib
+import random
 import re
 import tracemalloc
 
 import pytest
 
 import verity.ml.circuits.ops.scalar  # noqa: F401
-from verity.ml.commitments import hm96
-from verity.ml.commitments.merkle import merkle_depth
+from verity.ml.commitments import CommitmentDomain, RangeIndexedDomain, hm96
+from verity.ml.commitments.merkle import merkle_depth, tree_levels
 from verity.ml.commitments.rowleaf import ROLE_X, sha512_row_digest
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Concat, Explicit, Strided, coll_concat
 from verity.ml.circuits.types import Array, Value
+from verity.core.protocols.pouw import audit as PA
+from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registered as G, registration as R
 
 XOR8 = PrimitiveDefinition("RegisteredTestXor8", 1, (("a", Value(8)), ("b", Value(8))), Value(8), lambda a, b: a ^ b,
@@ -29,12 +32,12 @@ TABLE = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]]
 SCHEME = "frame-v3-sha512/hm96-sha512"
 LAW = {"law": "subset", "k": 2}
 SERVED = {"kind": "served", "row": 7, "run": "r-registered"}
-#: a 16-bit registration's root as `registered.py` computed it before `word_bits`: three 64-word rows, salts 01.., 02.., 03..
-ROOT_16 = ("17b12eea66ca473baf95f834bcdef8bbb94001549fa85061f3b0166d795d2812"
-           "7d5db86a105ab3ceb1821cf9f57a66323a873f55355370fdeff6bd7e2cfd8a07")
+#: a 16-bit registration's root: three 64-word rows, salts 01.., 02.., 03..
+ROOT_16 = ("511a71aa555f05f2b992997f7d6fe2af8e225c2a378ace51d54c18642f73193e"
+           "5f4a2e5773666a0fc342aa1911db7806cdbcb3d144a6fd8ffd0d9c6b0426d557")
 #: a 32-bit registration's root: one row of eps and the softmax scale at D = 64, salt 09..
-ROOT_32 = ("111850c621f50137b50e36ee9e22fe8cefd28761e8b7ad98b175eaf0e8c7413d"
-           "27364f184783f7680bf638c9b039154a53ef8908faba261a4eb208c22552c40f")
+ROOT_32 = ("c0263747d89040d789185af524ea46e535071948299eb60851799b78fd3a9168"
+           "c5e79be456e606dd9eaa5516e6d5b6013536c24f1fe17ba13dd09a37150a62b0")
 
 
 #: each proof block's seed group: the row of `pouw.roots` it reads
@@ -46,7 +49,7 @@ SEEDED = bind(CompositeDefinition(
 #: the verifier's sources of each seed group's roots: the served port x's root and W's registered root
 SUPPLIED = {"pouw.roots": [[{"port": "x"}, {"value": "W"}], [{"value": "W"}, {"port": "x"}]]}
 #: `supplied_salts("ab" * 64, "pouw.roots", 2)`' row 1, its first 32 bytes
-SUPPLIED_SALT_1 = "09c18346b8d4a7e4a3f0cf7eb02a7460033e89c2e5733eaa24b2b2b53f036839"
+SUPPLIED_SALT_1 = "95efb95ff108c49d1fac7d5f65d112446bf004701d688364ab226995805a68dc"
 
 
 def _digest(bits: int) -> Array:
@@ -97,15 +100,16 @@ def test_the_registered_root_is_the_hm96_rows_tree_under_its_own_domain():
     assert again.root != reg.root and set(again.bcs).isdisjoint(reg.bcs)
 
 
-def test_a_16_bit_value_keeps_the_bytes_it_had_before_word_bits():
-    """16 is the default width: its domain binds the five keys it always did, and a whole-block row is the port's row
-    as it stands, so a 16-bit value's domain, leaves and root are the ones registered before `word_bits` (`ROOT_16`)."""
-    from verity.ml.commitments.identity import identity_digest
+def test_a_16_bit_value_binds_only_the_five_keys():
+    """16 is the default width: its domain binds the five keys alone, under the SHA-512 identity frame (64 bytes), and a
+    whole-block row is the port's row as it stands (`ROOT_16`)."""
+    from verity.ml.commitments.identity import identity_digest_sha512
 
     prog = P.program_digest(_program())
-    binding = identity_digest(G.REGISTERED_DOMAIN, {"program": prog, "value": "W", "schema": G.SCHEMA, "words": 2, "leaves": 5})
+    binding = identity_digest_sha512(G.REGISTERED_DOMAIN, {"program": prog, "value": "W", "schema": G.SCHEMA, "words": 2,
+                                                           "leaves": 5})
     assert G.domain(prog, "W", 2, 5).domain_id == G.domain(prog, "W", 2, 5, 16).domain_id
-    assert G.domain(prog, "W", 2, 5).binding == bytes.fromhex(binding)
+    assert G.domain(prog, "W", 2, 5).binding == binding and len(binding) == 64
     row = list(range(1, 65))
     assert G.row_words(row) == row and G.row_digest(row) == sha512_row_digest(row, 16, ROLE_X)
     rows = [[(r * 64 + j) * 1009 % 65536 for j in range(64)] for r in range(3)]
@@ -115,7 +119,7 @@ def test_a_16_bit_value_keeps_the_bytes_it_had_before_word_bits():
 
 
 def test_a_32_bit_value_is_its_u16_words_low_first_under_its_own_domain():
-    """A 32-bit leaf is two u16 words, low first (the statement's layout of a port row, and C-Flock's `values` row): its
+    """A 32-bit leaf is two u16 words, low first (the statement's layout of a port row, and Flock's `values` row): its
     domain names `word_bits`, so a 32-bit registration is never a 16-bit one's, and the entry carries it."""
     prog = P.program_digest(_program(w=32))
     assert G.row_words([0x3727C5AC, 0x3E38AA3B], 32) == [0xC5AC, 0x3727, 0xAA3B, 0x3E38, *[0] * 60]
@@ -698,7 +702,7 @@ def test_the_audit_record_holds_the_roots_the_reads_were_opened_against():
 
 def test_the_opened_roots_come_from_the_verifier_of_records_accepted_verdicts():
     """`session_registered` reads the Lean verdict's `registered` finding, only on an accepted verdict of record: a v2 audit
-    passes on what the verifier of record opened, and fails closed on anything else."""
+    passes on what the verifier opened, and fails closed on anything else."""
     prog = _program()
     reg = _registered(prog)
     rec, _ = _record(prog, reg)
@@ -771,8 +775,8 @@ def test_a_supplied_value_is_the_records_roots_as_its_leaves():
             G.bytes_leaves(*bad)
     salts = G.supplied_salts("ab" * 64, "pouw.roots", 2)
     assert salts[1][:32].hex() == SUPPLIED_SALT_1
-    assert salts[1] == hashlib.shake_256(b"verity/one-stage/supplied-salt/v0\0" + b"ab" * 64 + b"\0pouw.roots\0"
-                                         + (1).to_bytes(4, "little")).digest(192)
+    head = b"verity/one-stage/supplied-salt/v1\0" + b"ab" * 64 + b"\0pouw.roots\0" + (1).to_bytes(4, "little")
+    assert salts[1] == b"".join(hashlib.sha512(head + c.to_bytes(4, "big")).digest() for c in range(3))
     for bits in (32, 1):
         rec, check, w, roots = _seeded_case(bits)
         x, wr = bytes.fromhex("ab" * 64), w.root
@@ -984,7 +988,7 @@ def test_r7_holds_a_pinned_value_to_its_pin():
 
 
 def test_r7_reuses_an_earlier_outputs_commitment():
-    """A value that is an output of an earlier run (`outputs`; never NCI's baseline θ) takes that run's port: its entry
+    """A value that is an output of an earlier run (`outputs`; never the inference-only check's θ) takes that run's port: its entry
     has the port's domain and root, and the port's leaf count is the value's rows, so its rows stay under the earlier
     run's hiding leaves. The output overrides what the log or nothing would hold it to; a record or port the log doesn't
     hold, or a port of other leaves, is `R7-output`, and a malformed `outputs` is refused before the record is read."""
@@ -1059,6 +1063,90 @@ def test_r7_reuses_an_earlier_records_registered_value():
                 {"W": {**out["W"], "record": "EE" * 64}}):
         with pytest.raises(ValueError):
             R.check(rec, prog, Q, **kw, outputs=bad)
+
+
+#: Pearl+'s y trees' binding tag: PoUW's rows domain over a call's served y, at salt nonce 2^61 + the call's index
+PEARL_Y_ROWS = "verity/pouw/pearl-plus/y-rows/v1"
+PEARL_SALT, PEARL_KEY, PEARL_CALL = bytes(range(64)), bytes(range(32)), 7
+
+
+def _pearl_plus(rows, y: bool = False):
+    """A Pearl+ call's tree of `rows` (each a row of FP32 words) as PoUW commits it, `audit.commit_rows` under
+    hm96-sha512: A's under `activation_binding` at salt nonce u, y's under `PEARL_Y_ROWS` at 2^61 + u. With the domain
+    as a verifier rebuilds it from that binding, owner and rows, and `bc(i, row)`: one-stage's `b || c` of `row` as a
+    `row-seg/v1` row of 32-bit words under row i's salt."""
+    u = PEARL_CALL
+    binding = tagged(PEARL_Y_ROWS, PEARL_SALT, u) if y else PA.activation_binding(PEARL_SALT, u)
+    nonce = (1 << 61) + u if y else u
+    tree = PA.commit_rows(binding, u, [b"".join(w.to_bytes(4, "little") for w in r) for r in rows], PA.HM96,
+                          salt_key=PEARL_KEY, nonce=nonce)
+    dom = CommitmentDomain(binding, u, RangeIndexedDomain(0, len(rows)), hash="sha512")
+    assert dom.domain_id == tree.domain.domain_id
+
+    def bc(i: int, row) -> bytes:
+        return hm96.SHA512.commit_string(hm96.SHA512.default_key, G.row_digest(row, 32, G.SCHEMA_SEG),
+                                         PA.hm96_salt(PEARL_KEY, nonce, i))
+    return tree, dom, bc
+
+
+def test_one_stage_reads_open_a_pearl_plus_tree_under_its_own_domain():
+    """A value committed outside one-stage, under PoUW's rows domain: Pearl+'s A (a call's x widened to FP32, K words a
+    row, zero rows up to 16) and y (its served y widened to FP32, N words a row). One-stage's `row-seg/v1` leaves of
+    32-bit words under that domain are Pearl+'s leaves, so its reads open Pearl+'s root at every row. A row with one
+    word flipped opens nothing, nor does a row read as `row/v2`, nor any row under one-stage's own domain for the value
+    (`registered.domain`, whichever binding it takes)."""
+    rnd = random.Random(7)
+
+    def rows(n: int, words: int, real: int) -> list[list[int]]:
+        return [[rnd.getrandbits(16) << 16 for _ in range(words)] if i < real else [0] * words for i in range(n)]
+
+    for y, value, rs in ((False, "pearl-a/0/0", rows(16, 2048, 5)), (True, "pearl-y/0/0", rows(5, 3072, 5))):
+        tree, dom, bc = _pearl_plus(rs, y)
+        root, bcs = tree.commitment.root, [bc(i, r) for i, r in enumerate(rs)]
+        paths = [b"".join(tree.open(i).path) for i in range(len(rs))]
+        assert tree_levels(dom, [G.leaf(dom, i, b, G.SCHEMA_SEG) for i, b in enumerate(bcs)])[-1][0] == root, value
+        assert all(G.verify_read(dom, root, i, b, paths[i], G.SCHEMA_SEG) for i, b in enumerate(bcs)), value
+        flipped = [rs[0][0] ^ 1 << 16, *rs[0][1:]]
+        assert not G.verify_read(dom, root, 0, bc(0, flipped), paths[0], G.SCHEMA_SEG), value
+        assert not G.verify_read(dom, root, 0, bcs[0], paths[0], G.SCHEMA_V2), value
+        own = G.domain("ab" * 64, value, len(rs[0]), len(rs), 32)
+        assert own.domain_id != dom.domain_id
+        assert not any(G.verify_read(own, root, i, b, paths[i], G.SCHEMA_SEG) for i, b in enumerate(bcs)), value
+
+
+def test_r7_reuses_a_pearl_plus_entry_under_its_own_domain():
+    """Pearl+'s window record W registers each call's A rows and y under PoUW's rows domain, not one-stage's. A value
+    reusing W's entry (`outputs`) as `row-seg/v1` rows of 32-bit words is held to that domain and root verbatim, A's and
+    y's alike. The record's entry under one-stage's own domain for the value is `R7-domain` (`registered.domain`,
+    whichever binding it takes), under another root `R7-held`; W's entry of 16-bit words, or of the call's real rows
+    rather than its 16, is `R7-output`. R7 counts the value's rows alike under `row/v2`, so the row format binds where a
+    row is read (`test_one_stage_reads_open_a_pearl_plus_tree_under_its_own_domain`)."""
+    prog = _program(rows=16, w=32)
+    first, ports = _record(prog, _registered(prog))
+    own = G.domain(P.program_digest(prog), "W", 2, 16, 32).domain_id.hex()
+    kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "schemas": {"W": G.SCHEMA_SEG}}
+    for y, name in ((False, "pearl-a/0/0"), (True, "pearl-y/0/0")):
+        rows = [[(2 * r + j + 1) << 16 for j in range(2)] if r < 5 else [0, 0] for r in range(16)]
+        tree, dom, _ = _pearl_plus(rows, y)
+        theirs = {"value": name, "root": tree.commitment.root.hex(), "leaves": 16, "words": 2, G.WIDTH_KEY: 32,
+                  "domain": dom.domain_id.hex()}
+        assert theirs["domain"] != own
+
+        def earlier(e):
+            return R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 6}, registered=[e])
+
+        def codes(entry, w=theirs, **change):
+            rec = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=R.digest(earlier(w)),
+                           registered=[{**theirs, "value": "W", **entry}])
+            return R.check(rec, prog, Q, **{**kw, "log": [earlier(w)], **change},
+                           outputs={"W": {"record": R.digest(earlier(w)), "value": name}}).codes
+
+        assert codes({}) == ()
+        assert codes({}, schemas={"W": G.SCHEMA_V2}) == ()
+        assert codes({"domain": own}) == ("R7-domain",)
+        assert codes({"root": "ef" * 64}) == ("R7-held",)
+        for w in ({k: v for k, v in theirs.items() if k != G.WIDTH_KEY}, {**theirs, "leaves": 5}):
+            assert codes({}, w)[0] == "R7-output", (name, w)
 
 
 #: an AROW row table's port (`verity.ml.windows.rows.RowTable.port`: `row-table/<engine step>/<op_path>`)
