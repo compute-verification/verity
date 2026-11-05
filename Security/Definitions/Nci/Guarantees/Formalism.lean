@@ -40,8 +40,8 @@ of work, its factors explicit, and it reads the upper bounds A1 gives, never bes
   Slowdown's bound for it and `p` A2's floor: reaching `ℓ*` covertly costs at least `ρ̲ p H(ℓ*)`, with at most `n c`
   available per period.
 
-The counting lemma, Slowdown, Fit's bounds and Security each have an honest and a nontrivial lemma
-(`Definitions.Nci.Guarantees.Formalism.Witnesses`).
+The counting lemma, the token kind's cap, Slowdown, Fit's bounds and Security each have an honest and a nontrivial
+lemma (`Definitions.Nci.Guarantees.Formalism.Witnesses`).
 -/
 
 namespace Nci.Formalism.Guarantees

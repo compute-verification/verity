@@ -331,6 +331,13 @@ theorem Counting_honest : Guarantees.Counting_honest :=
 theorem Counting_nontrivial : Guarantees.Counting_nontrivial :=
   ⟨Chain.caps_token, Chain.partitionBound_one, Chain.not_whole_isCK, Chain.not_counting⟩
 
+theorem TokenCap_honest : Guarantees.TokenCap_honest := ⟨Chain.cutCost, Chain.tokenWork_one, Chain.ib_three⟩
+
+theorem TokenCap_nontrivial : Guarantees.TokenCap_nontrivial := by
+  refine ⟨Chain.not_cutCost_skipping, Chain.tokenWork_zero, Chain.ib_three, ?_⟩
+  rw [(by decide : (({3} : Finset (Fin Chain.d.D.N)) ∩ {3, 4}).card = 1), Nat.cast_one]
+  exact not_le.2 one_pos
+
 theorem Slowdown_honest : Guarantees.Slowdown_honest :=
   ⟨Chain.valid, Chain.cutCost, Chain.tokenWork_one, Chain.caps_weight, Chain.partitionBound_one, Chain.blocks_isCK⟩
 
@@ -372,6 +379,14 @@ example (h3 : Chain.whole.IsCK Chain.d 1 1) : False := by
   obtain ⟨h1, h2, -, hlt⟩ := Counting_nontrivial
   exact hlt (Counting Chain.d 1 1 Unit (fun _ => {3, 4}) (fun _ => 1) Unit (fun _ => 1) 1 Chain.whole h1 (fun _ => h2)
     h3)
+
+example : ((({3} : Finset (Fin Chain.d.D.N)) ∩ {3, 4}).card : ℝ≥0) ≤ 1 := by
+  obtain ⟨h1, h2, h3⟩ := TokenCap_honest
+  exact TokenCap Chain.d (Fin 1) Chain.A 1 1 Unit Chain.entry Chain.witnesses {3, 4} 1 h1 h2 {3} h3
+
+example (h1 : CutCost Chain.A 1 1 Chain.entry Chain.skipping) : False := by
+  obtain ⟨-, h2, h3, hlt⟩ := TokenCap_nontrivial
+  exact hlt (TokenCap Chain.d (Fin 1) Chain.A 1 1 Unit Chain.entry Chain.skipping {3, 4} 0 h1 h2 {3} h3)
 
 example : max (kindBound Chain.d 1 {3, 4} 1) (max (⨆ _K : Unit, kindBound Chain.d 1 {1} 1) (⨆ _J : Unit, (1 : ℝ≥0∞))) ≤
     partitionSlowdown Chain.d 4 1 := by
