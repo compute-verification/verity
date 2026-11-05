@@ -3119,6 +3119,11 @@
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1": "62a501bc4842f040a02106fe3def5bb875618490e8e0f114594c719095f1547d",
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted": "4c1965a5e2a5e713ecff8b0684b90ccb00b7f75cab2d0552c2fb38625f4bfb8e",
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole": "98c1037729d6fbf9d9c120ea1fb9b3799f98cfba802df100bb262266102f1cb4",
+  "NetTiming.SecurityProofs.PeriodLeakAccepted": {
+   "type_hash": "eb1ecf1c9fd8c032de54cd8f6a7cfd92a6a3e04c65b54f8d8dfbe15a1e586b9b",
+   "missing": "honest",
+   "why": "its premises at the network certifier's rows are the sampled leg's (KSBy at the wired check at the layout's wires and CommitmentScheme.Binds at each deployment), whose honest lemmas at the deployed record (NetTiming.Witness.SampledAuditAccepted_honest at layouts with no wiring, NetTiming.ksWired_of_record at a wired one) take the assembled record's hypotheses, which are no named assumptions; both are conditional on the sampled leg's bridge, which is to discharge those hypotheses at the record"
+  },
   "NetTiming.SecurityProofs.PeriodLeakRegistered": {
    "type_hash": "f2fad87144bd190ccbf629bb799807d80047ddb2dbc70aff1d4a6bb40c0fd1c6",
    "missing": "honest",
@@ -3207,12 +3212,7 @@
   "Verity.SecurityProofs.InferenceCap": "0035c5e37498f2d808d066ae0a6d0bd50791b4ad147383f0feba37bf8362c9fc",
   "Verity.SecurityProofs.PrivateOutBitsLe": "a595e2305f68fd4b90134f54bc1e597de991458da482ef92bfbc67d7d7a782f3",
   "Verity.SecurityProofs.RefineWrong": "52a2253ccd78c6339acebc6fe4e9ea3afaaff0120bb36457ff76a2a605ce5ad6",
-  "Verity.SecurityProofs.ServingBlockSum": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
-  "NetTiming.SecurityProofs.PeriodLeakAccepted": {
-   "type_hash": "eb1ecf1c9fd8c032de54cd8f6a7cfd92a6a3e04c65b54f8d8dfbe15a1e586b9b",
-   "missing": "honest",
-   "why": "its premises at the network certifier's rows are the sampled leg's (KSBy at the wired check at the layout's wires and CommitmentScheme.Binds at each deployment), whose honest lemmas at the deployed record (NetTiming.Witness.SampledAuditAccepted_honest at layouts with no wiring, NetTiming.ksWired_of_record at a wired one) take the assembled record's hypotheses, which are no named assumptions; both are conditional on the sampled leg's bridge, which is to discharge those hypotheses at the record"
-  }
+  "Verity.SecurityProofs.ServingBlockSum": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8"
  },
  "layers": {
   "Definitions.Core": {
@@ -29669,10 +29669,10 @@
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.Period": {
-   "digest": "426462a1fff3bae20e3140b8ff33e508999a526401edcf72bb5938d3e77cc1fc",
+   "digest": "2f6c648c8132ff1e9bb85b5baea6a0638f02721bcd71c898d6408561a59e557e",
    "definitions": {
     "NetTiming.Guarantees.PeriodLeakAccepted": "a0a9c23666273efec9d2ddef896331f0d5a3699e707f317fe3de4e7189f29a17",
-    "NetTiming.Guarantees.PeriodLeakRegistered": "a950c611a388e2a0afa380e293fdc65946330ba10ed90b6f8f567883d6f1af09"
+    "NetTiming.Guarantees.PeriodLeakRegistered": "2865cabaa8bda7278b8ef4a4811e4c8bf858af621fffa21481551790b29a7a45"
    },
    "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted", "NetTiming.SecurityProofs.PeriodLeakRegistered"]
   },
