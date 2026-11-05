@@ -50,9 +50,9 @@ namespace Properties.NetworkCertifier
 
 open Lean (Json)
 open Flock.Program (Prog Ty)
-open NetworkCheck.Period (templateNodes bitsOf)
-open NetworkCheck.Circuit (Stated Counts nodeOf templateDef recordOf heldOf fieldOf fieldsOf)
-open SampledProofs.Bits (Members inBit outBit)
+open NetworkCheck.Period (templateNodes)
+open NetworkCheck.Circuit (Stated Counts nodeOf templateDef recordOf heldOf fieldOf)
+open SampledProofs.Bits (Members inBit outBit bitsOf fieldsOf)
 open Properties.NetworkScan (jointOf FilesOf PaddingUnread MembersOf instPos wordBit)
 
 /-- Template node `k`'s parameter `port`: its index and type. -/

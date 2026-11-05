@@ -9,6 +9,7 @@
     verity-vllm predict emit --row ROW --rank R --config CONFIG_JSON --trace DIR --out DIR --wrapper ...   (`aot`)
     verity-vllm predict row --row ROW --out DIR [--config CONFIG_JSON] [--jobs N]                (`aot`: a row's Build of record)
     verity-vllm predict compiled --role ROLE --device DEVICE --workload WL --out build.json      (`compiled`: the served Build)
+    verity-vllm predict compiler --serve-json SERVE_JSON|- --cap-bits BITS        (`served_compiler`: B of a served run, on stdout)
 
 `node-registration` registers a node Program's θ from its TP Commit of record (`node_registration`, the inference-only policy's full check).
 `emit` writes into a traced Build row: a switched row's AOT Build (`aot`, `row_tp.TpRow.build`) runs it for each derive.
@@ -71,8 +72,18 @@ class InventoryOptions:
     cmd: str = field(default="inventory", init=False)
 
 
+@dataclass(frozen=True, kw_only=True)
+class CompilerOptions:
+    """B of a served run, the verifier's formula (`served_compiler.compiler_doc`), as serve-openai registers it: its document on
+    stdout."""
+    serve_json: str = option("--serve-json", help="the run's serve.json, or - to read it on stdin")
+    cap_bits: int = option("--cap-bits", type=int, help="ℓ_a, the registered width B caps the advice at")
+    cmd: str = field(default="compiler", init=False)
+
+
 COMMANDS = {"build": BuildOptions, "node": NodeOptions, "node-registration": NR.Options, "inventory": InventoryOptions,
-            "score": S.Options, "compare": A.CompareOptions, "emit": A.EmitOptions, "row": A.RowOptions, **PC.COMMANDS}
+            "score": S.Options, "compare": A.CompareOptions, "emit": A.EmitOptions, "row": A.RowOptions,
+            "compiler": CompilerOptions, **PC.COMMANDS}
 
 
 def node_main(a: NodeOptions) -> int:
@@ -112,6 +123,15 @@ def main(a) -> int:
         return node_main(a)
     if isinstance(a, NR.Options):
         return NR.main(a)
+    if isinstance(a, CompilerOptions):
+        from . import served_compiler as SC
+        if a.serve_json == "-":
+            serve = json.load(sys.stdin)
+        else:
+            with open(a.serve_json) as fh:
+                serve = json.load(fh)
+        print(json.dumps(SC.compiler_doc(serve, cap_bits=a.cap_bits), sort_keys=True))
+        return 0
     if a.cmd == "inventory":
         S._refuse_inside(a.out, [a.rows])
         inv = INV.inventory(a.rows)

@@ -1,4 +1,6 @@
 import Properties.NetworkPeriod
+import Proofs.Properties.NetworkPeriod.PadCols
+import Proofs.NetworkCertifier.RecordRows
 import Properties.NetworkPeriod.Placed
 import Proofs.Properties.NetworkScan
 import Proofs.Flock.Claims.Sampling.Count
@@ -23,6 +25,12 @@ and each link-window's term is its scan's free inputs and those charges (`tiedFr
 `ScanWindowsPlaced`'s `WrongBounds` holds at the bound the audit publishes, at strata that are the design's strata draw
 (`wrongBoundsDrawn`, at `StrataDrawn`): a set of more blocks is accepted with probability at most
 `miss(countBound + 1) < δ`.
+
+On acceptance a rows-form period has no `rowsWfCheck` finding (`rowsWf_of_accept`), so its frames, the network
+certifier's of `B` bytes for its `lanes · windows · window` connections, read back (`cellRows_wf_of_rowsWf`,
+`NetTiming.RowsFormat.Wf` at `NetTiming.cellRows`).
+
+`padCols` counts the input columns no port covers (`padCols_eq`, in `PadCols`).
 -/
 
 namespace Properties.NetworkPeriod
@@ -339,7 +347,10 @@ theorem rowsCircuitHeld_honest :
         ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ =
       .accept (rowsTerms #[] ⟨0, 0, 0, 0, 0⟩ #[] #[] 1 0 #[]) { link := "", windows := 0 } ∧
     held (some "c") #[heldReg "c"] tiedWindow = true :=
-  ⟨by simp [check, auditChecks, wiredChecks, stateChecks, heldChecks, firstFinding, rowsPublic]; rfl, tiedWindow_held⟩
+  ⟨by
+    simp [check, auditChecks, wiredChecks, stateChecks, heldChecks, firstFinding, rowsPublic, rowsWfCheck, rowsWf]
+    rfl,
+    tiedWindow_held⟩
 
 /-- **`RowsCircuitHeld`'s nontrivial lemma**: `RowsCircuitHeldAt` fails at a rows-form period of one phase whose tied
 audit is registered under another Program than the class circuit `c`, which a check that accepts everything
@@ -693,5 +704,46 @@ theorem wrongBoundsDrawn_nontrivial :
   have hδ : (((⟨1, 2⟩ : Core.Ratio).num : ℝ) / (⟨1, 2⟩ : Core.Ratio).den) = 1 / 2 := by norm_num
   rw [h0, hδ] at h
   simpa using h {0} oneInput_faulty
+
+/-! ## The rows form's frames read back -/
+
+/-- **`rowsWf` gives the deployed rows format's `Wf`**: at a schedule it passes over `windows` link-windows, the
+network certifier's frames of `B` bytes for the `lanes · windows · window` connections (`NetTiming.cellRows`) read
+back. -/
+theorem cellRows_wf_of_rowsWf {s : Schedule} {windows : ℕ} (h : rowsWf s windows = true) {L K : ℕ} (link : Fin L)
+    (T : ℕ)
+    (jitter : NetTiming.WardenSchedule (Fin (s.lanes * (windows * s.window))) →
+      (Fin (s.lanes * (windows * s.window)) → NetTiming.Arrivals (NetTiming.FrameCell (s.cellBytes - 9))) → ℕ → ℕ)
+    (status : NetTiming.WardenSchedule (Fin (s.lanes * (windows * s.window))) →
+      (Fin (s.lanes * (windows * s.window)) → NetTiming.Arrivals (NetTiming.FrameCell (s.cellBytes - 9))) → ℕ →
+        Fin K → NetTiming.Status) :
+    (NetTiming.cellRows s.cellBytes (s.lanes * (windows * s.window)) link T jitter status).Wf := by
+  simp only [rowsWf, Bool.and_eq_true, decide_eq_true_eq] at h
+  exact NetTiming.cellRows_wf h.1 h.2 link T jitter status
+
+/-- **The check's acceptance gives `rowsWf`**: a rows-form period it accepts has no `rowsWfCheck` finding. -/
+theorem rowsWf_of_accept {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {prof : Profile}
+    (h : check p c e = .accept pub prof) {s : Schedule} {sd : ByteArray} {scan : Scan}
+    (hform : p.form = .rows s sd scan) : rowsWf s p.windows = true := by
+  unfold check at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  simp only [hform] at h
+  split at h
+  · cases h
+  · cases h
+  · rename_i hF
+    have h0 := firstFinding_none hF (rowsWfCheck p) (List.mem_append_left _ (List.mem_append_left _
+      (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _ (by simp))))))
+    simp only [rowsWfCheck, hform] at h0
+    split at h0
+    · assumption
+    · cases h0
 
 end Properties.NetworkPeriod

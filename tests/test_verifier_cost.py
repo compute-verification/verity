@@ -4,7 +4,8 @@ A scan over the Lean under `verity/core/` (the verifiers of record and the code 
 walk takes there: locating gates one by one through the canonical layout (`P.gate g`, `Flock.Program.Prog.gate`), a
 range or loop bounded by a Definition's gate count (`List.range (P.defs[P.root]!).gates`, `[0:defn.gates]`), and an
 array or loop bounded by a name bound to one (`let n := defn.gates` … `Array.mkEmpty n`, `for j in [0:n]`), a range or
-loop over a node's members (`for m in [0:node.members]`, `List.range node.members`: every batch member or scan iteration),
+loop over a node's members (`for m in [0:node.members]`, `List.range node.members`, or a node's `.n`: `List.range x.n`,
+`[0:node.n]`; every batch member or scan iteration),
 and outside the tests a templated unit unrolled (`Tmpl.unroll`, `Tmpl.unrollAt`, `Tmpl.unitFull`, `Tmpl.posMap`, `Tmpl.foldRef`):
 a templated unit is read from its description (`Tmpl.unrollOk`, `Tmpl.unitNet`, `Tmpl.foldUnit`). Outside the tests it
 also refuses the recursive inner's two: the comb (`.folded`) in a file that sets the inner statement up from its flat
@@ -90,8 +91,11 @@ _ARG = r"(?:\((?:[^()\n]|\([^()\n]*\))*\.gates\)|(?:\([^()\n]*\))?[\w.\[\]!]*\.g
 RANGE = re.compile(rf"\b(?:List|Array)\.range\s*{_ARG}|\[\s*\w*\s*:\s*[^\]\n]*\.gates\s*\]")
 #: `let n := … .gates` at the end of a line: a name bound to a gate count
 BOUND = re.compile(r"\blet\s+(?:mut\s+)?(\w+)\s*(?::\s*\w+\s*)?:=[^\n]*\.gates\s*$", re.M)
+#: a node's member count: its `.members`, or the `.n` of a node (`x`, `node`, `nodes[k]!`)
+_COUNT = r"(?:{}\.members\b|(?:[\w.!()]*\bnodes\[[^\]\n]*\]!?\)?|(?<![\w.])(?:x|node))\.n\b)"
 #: a range or loop over a node's members: every batch member or scan iteration
-MEMBERS = re.compile(r"\b(?:List|Array)\.range\s*\(?[\w.!\[\]()]*\.members\b|\[\s*\w*\s*:\s*[\w.!\[\]]*\.members\s*\]")
+MEMBERS = re.compile(r"\b(?:List|Array)\.range\s*\(?" + _COUNT.format(r"[\w.!\[\]()]*") +
+                     r"|\[\s*\w*\s*:\s*" + _COUNT.format(r"[\w.!\[\]]*") + r"\s*\]")
 #: a templated unit unrolled: its rows, every column's position, or the fold over its rows
 UNROLLED = re.compile(r"(?<![\w'])(?:unrollAt|unitFull|posMap|foldRef)\b(?!')|(?<![\w'])Tmpl\.unroll\b(?![\w'])")
 #: the recursive inner statement set up from its flat file, which carries no template
@@ -155,9 +159,12 @@ def test_the_scan_sees_each_form():
       (Setup.ofCircuit sts[0]!).fold.folded a b lw rho ts
     def o (s : VStar.Stmt) := VStar.emitCircuitOf holo put u l s.sub b
     def p (t : Tmpl) := Tmpl.foldUnit t lays sl a lw rho rr
+    def q (x : Node) := (List.range x.n).all fun m => m < x.n
+    def r (node : Node) (b : Body) := for m in [0:node.n] do pure (); (List.range (b.nodes[k]!).n).map id
+    def s (pub : Pub) := Array.range pub.n ++ List.range x.nodes.size ++ [0:g.n] ++ List.range st.pub.n
     """
-    assert [line for line, _ in offenses(src)] == [3, 4, 7, 8, 12, 13, 15, 16, 19, 20]
-    assert [line for line, _ in offenses(src, test=True)] == [3, 4, 7, 8, 15, 16]
+    assert [line for line, _ in offenses(src)] == [3, 4, 7, 8, 12, 13, 15, 16, 19, 20, 22, 23]
+    assert [line for line, _ in offenses(src, test=True)] == [3, 4, 7, 8, 15, 16, 22, 23]
     plain = """
     def lincheck (c : CircuitFold) := c.folded alpha beta lw rho ts
     def stage := emitCircuitOf holo put u l sub b

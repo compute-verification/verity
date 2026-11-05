@@ -29,8 +29,8 @@ returns every unit's output copy bits, the key program's outputs.
 
 namespace Properties.NetworkScan
 
-open SampledProofs.Bits (LGate Members keyProg prog consts base)
-open NetworkCheck.Period (templateNodes bitsOf)
+open SampledProofs.Bits (LGate Members keyProg prog consts base bitsOf)
+open NetworkCheck.Period (templateNodes)
 open NetworkCheck.Circuit (templateDef)
 open Flock.TemplateQuery (TRange locate population)
 

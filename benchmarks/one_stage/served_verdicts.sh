@@ -15,7 +15,12 @@
 #     the checkpoint CKPT, REPO's snapshot at REV under HF_HOME, and the rotary table at the words the engine serves,
 #     $D/private/cos_sin_cache.npy, once within the analytic table's bound, committed under salts sampled from the committer's
 #     key $D/private/weights.key, 0600, neither of which a record copies); WEIGHTS says how many it roots and which it leaves unrooted, and
-#     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free.
+#     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free. Under `--advice --advice-cap CAP`
+#     (`serve_advice`) the server registers the served compiler B, capped at CAP bits (ℓ_a; by default the least that pads
+#     every Commit period within the run's limits, `advice_cap`), before its engine loop runs
+#     ($D/advice_registration.json), with the day's declaration of B as its one program (SERVE_ARGS' `--advice-day`, default
+#     0; `--advice-log` extends an earlier day's log), and commits each closed window's advice as it serves under the weights registration
+#     (`--advice-weights`), each window's line ($D/advice.jsonl: its root and ℓ_a) out before any coin of the window.
 #  2. requests: REQUESTS greedy requests (default SLOTS) from the certifier's traffic generator (`examples/vllm/serve_load.py --varied`:
 #     prompts of PROMPTS tokens, at most MAX_TOKENS outputs), numbered under one release run and sent together (RATE a second),
 #     so the engine's idle closes them into one window. With LOAD=fixed (default varied) they are one full window of fixed
@@ -37,22 +42,28 @@
 #     count of the windows closed, sealed or refused, no engine step, request count or user of one. Each line goes out
 #     through `served_verdicts.py public-lines`, in full to the serve dir's private/verdicts.txt, and once the run is
 #     done, however it ends, `served_verdicts.py publish` holds in full in the serve dir's private/out each file of $OUT
-#     that names or counts a window, its public form in its place. The advice registration's published copy
-#     ($OUT/registration.json) carries the advice's length padded to its compiler's cap (`served_verdicts.py
-#     public-registration`).
+#     that names or counts a window, its public form in its place. Each window's advice is padded to its compiler's cap
+#     ℓ_a before it is committed and compiled (`advice_windows.pad`), so its registration and its rows say ℓ_a, never the
+#     advice's length; the registration's published copy ($OUT/registration.json) is refused unless it is so
+#     (`served_verdicts.py public-registration`).
 #  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows; the
 #     pick stays in the serve dir's private/window.json, the WINDOW line saying only the class's SLOTS slots, and CLASSES
-#     the window circuit's classes beside the certifier's scan class, CERTIFIER_SCAN, default W63, the one the gate serves): every
-#     closed window's advice under the prove path's registered compiler and the weights registration (`--weights-of-record`),
-#     then this window's request Programs (`tools/advice_compile.py`); V3b's window circuit (`prove_path.py window-circuit
-#     --pins` the registration, and PIN's NAME=ROOT if set), its registered and free input bits at those
+#     the window circuit's classes beside the certifier's scan class, CERTIFIER_SCAN, default W63, the one the gate serves):
+#     ADVICE-LINE holds the server's B to the compiler `prove_path.py compiler` recomputes from serve.json (published as
+#     $OUT/compiler.json) and every closed window's advice line to the time before the run's first coin
+#     (`served_verdicts.py advice-line`), then the prover's check that this window's request Programs compile
+#     (`tools/advice_compile.py`, honest serving's completeness, which nothing on the verifier's side reads); V3b's window
+#     circuit (`prove_path.py window-circuit --pins` the weights registration's published copy, and PIN's NAME=ROOT if
+#     set), the verifier's record of the class circuit, built from the class and $OUT's registered compiler (held to the
+#     advice registration's binding) alone, never the serve dir or the advice, and its registered and free
+#     input bits at those
 #     pins: at each class of CLASSES (default 4,32,4, V2's), each within WC_TIMEOUT (default 30m), all of which the run needs;
 #     and at the class of record, a measurement within WC_RECORD_TIMEOUT (default 45m), run after the record (step 5),
 #     since nothing reads it, whose timeout or refusal is said and never fails the run (unless CLASSES names `record`, which
 #     then gates here instead); then the window audited from its records alone, by V3c (step 6, run here): C-Flock `--zk`
 #     on the class circuit's sampled proof blocks behind the Lean firewall, and the Lean verifier's verdict. That circuit
-#     reads the advice only inside the window commit's proofs, under its hiding root, so no advice opening reaches the
-#     verifier.
+#     is the class's, whatever the window's requests, and reads no advice: neither its proofs nor the verifier read one,
+#     so no advice opening reaches the verifier.
 #  4. PoUW (H1 credit, or with POUW=pearlplus Pearl+'s own served run, below), PoUS, the bandwidth audit and the network
 #     certifier: `served_verdicts.py pieces` runs each one's piece
 #     where POUW_CMD, POUS_CMD, BANDWIDTH_CMD or CERTIFIER_CMD names it, one at a time (the certifier's alone, the longest,
@@ -79,14 +90,17 @@
 #  5. the record: `served_verdicts.py record`: the all-protocols window report ($OUT/record/verdicts.json) and the block
 #     record ($OUT/record/block-record.json), composed `pending` while any subprotocol is missing, `accept` only when every
 #     one accepted on this node; any other server's answer is carried as elsewhere. The certifier's chain files that list
-#     or count the window's requests (CERTIFIER_PRIVATE) then move to the serve dir's private/pieces/certifier. Then,
+#     or count the window's requests (CERTIFIER_PRIVATE) then move to the serve dir's private/pieces/certifier (and, where
+#     the run ends before the record, as it exits). Then,
 #     unless COMPOSITE is set empty,
 #     the product's composites' Lean verdicts on the run's cases (`served_composite.sh`'s docstring). Their verdicts gate
 #     nothing, but a composite that didn't run (a tree without composite.py) or whose Lean didn't answer fails the run.
 #     With the network certifier in the run, its piece (CERTIFIER_CMD) or its front (CERTIFIER_FRONT), `onsite_record.py`
 #     then writes the onsite demo's record
 #     ($OUT/record/onsite.json: every verdict its run of record needs, the network bound term by term and over each
-#     monitoring period, and beside it ADVICE_CHARGE's measured advice charge, a test run's advice-charge.json, below);
+#     monitoring period, beside it ADVICE_CHARGE's measured advice charge, a test run's advice-charge.json, below, and
+#     the re-proof inputs, the serve dir's and $OUT's files a later re-proof of the sampled units needs, with
+#     REPROOF_COPY's copy of the serve dir's, NODE:/PATH, checked against REPROOF_LISTING, its listing kept off $OUT);
 #     its ONSITE line gates nothing.
 #     PRODUCT (default onsite) is the product the run composes: onsite every subprotocol; remote sampled proofs and PoUW
 #     alone, its other pieces dropped (not run, no default command, the wipe's and the certifier's included; the
@@ -113,11 +127,13 @@
 #     proves them, its composes made before it with V3C_WARM_JOBS (at `v3c_audit`); then
 #     `records_audit.py period` writes the audit as the network certifier's period reads it ($D/v3c-w<K>-<class>/period.json,
 #     and a copy in $OUT/v3c-audit: the registration, the Program, its answer and its free inputs), and V3c fails where it
-#     writes none. The record reads that audit ($D/v3c-w<K>-<class>/audit, on the window commit's registration). Under
-#     H1_TIE (below and at `v3c_audit`) the window commit is the one made at H1's close, its registration held to the
-#     record H1 bound, none is made here, and the audit is tied to H1's W, unless this node has less memory than the audit
-#     needs (below: the audit and the composite are then deferred to a follow-on, and the record here has sampled proofs
-#     missing).
+#     writes none. The record reads that audit ($D/v3c-w<K>-<class>/audit, on the window commit's registration);
+#     $OUT/v3c-audit holds what it reads of it (`served_integrity.py public-copy`), the registration it audited and that
+#     period.json, nothing else (`kind_scan.V3C_DOCS`): the audit's logs and main's first-parent line stay in the serve
+#     dir's private/v3c-audit. Under H1_TIE (below and at `v3c_audit`) the window commit is the one made at H1's close,
+#     its registration held to the record H1 bound, none is made here, and the audit is tied to H1's W, unless this node
+#     has less memory than the audit needs (below: the audit and the composite are then deferred to a follow-on, and the
+#     record here has sampled proofs missing).
 #     `served_verdicts.sh v3c` runs only that step on an
 #     existing serve dir (D and its window K set), the build first, its limits 120m and 180m.
 #     With the network certifier's piece split in two, CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD (CERTIFIER_CMD then
@@ -127,13 +143,16 @@
 #     CERTIFIER_PERIOD_TIMEOUT (default 60m), each as `bash -c CMD _ D K DIR V3C` in TREE with DIR $OUT/pieces/certifier
 #     and V3C V3c's $D/v3c-w<K>-<class>. V3c then takes the window commit, the longer of the chain and V3c's audit,
 #     and the period check, which the run's --timeout holds beside the other steps. The period check writes the
-#     certifier's answer.json in DIR, which step 4's certifier piece reads; `served_verdicts.sh v3c`, which writes no
-#     record, moves the steps' logs (CERTIFIER_PRIVATE) to the serve dir's private/pieces/certifier before it exits.
+#     certifier's answer.json in DIR, which step 4's certifier piece reads; the steps' logs (CERTIFIER_PRIVATE) move to the
+#     serve dir's private/pieces/certifier before the run exits, `served_verdicts.sh v3c`, which writes no record, included.
+#     The chain's scan proves at CR_SCAN_DELTA (chain_record.sh's), 2^-64 by default, written as the double that is
+#     2^-64 exactly, which scan_zk.py keeps exact: every scan block is drawn, so no δ costs proving or leaves a wrong unit.
+#     The tied V3c audit's δ stays sampled proofs' own; the network period reads that draw at its own δ_i.
 # Coins: sampled proofs' sample, V3c's audit's, is on a local development challenger session's coins where the audit runs
 # (`--challenger local`: the served node, or a deferral's follow-on) unless PP_CHALLENGER names the live challenger
 # (gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY); the verifier draws none of its own. Its session is
 # pinned on the verifier's copy of main's first-parent line: PP_MAIN's, else MAIN_FILE's, else MAIN_SHA's in the tree,
-# kept as $OUT/v3c-audit/main.txt. With H1_GATE (the
+# kept as the serve dir's private/v3c-audit/main.txt. With H1_GATE (the
 # lane's gate command, by default "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84"; empty, no
 # H1) the endpoint serves PoUW H1 (--protocols pouw:eps1-sm120-h1fx1 --challenger-gate H1_GATE --challenger-peer H1_PEER,
 # default vy-dc-h200, at the engine's T and S WINDOW_STEPS 16, the Program build H1 affords), each window's coins from a
@@ -164,7 +183,8 @@
 # With H1_TIE set too (and H1_CIRCUITS, V3C_CLASS not empty), V3c's window commit moves into the serve's close: at each H1
 # window's close, once it is sealed and before its sample coin, serve-openai's `--h1-window-commit` runs
 # `served_verdicts.sh tie` on the served node, under the serve's lease (LEASE_MIN then defaults to 150 and LEASE_MEM_GB to
-# 160, the serve's 128 and window-commit's peak): the window's advice, the one step 3 then reads, and `prove_path.py window-commit --window-registration W --h1-key
+# 160, the serve's 128 and window-commit's peak): on the window's advice as the server committed it (serve-openai commits
+# every whole window before the tie runs, and the tie commits none: a window it finds none for is refused), `prove_path.py window-commit --window-registration W --h1-key
 # PROVER/key --law V3C_LAW` within V3C_TIMEOUT (then default 60m, at most 90m), whose registration R, chained right after
 # H1's W, H1 names as the window's Commit record (`serve_tie`). Its output stays in the serve dir's h1/w<k>/. H1's sessions
 # are reserved for the gate's default 120 minutes, the window's sample session at the serve's start, and the sample coin
@@ -215,7 +235,7 @@
 # inputs and counts are public, never on a served run: steps 0 to 2 at the run of record's serving (T, WINDOW_STEPS, the
 # front's tick), H1_GATE empty and so no H1 option in SERVE_ARGS (serve-openai refuses one without H1's --protocols),
 # then every closed window's advice: the server's own where it committed each as it served (`--advice`, whose
-# `--advice-tau` must be ADVICE_TAU), else `verity-vllm advice`'s under the prove path's registered compiler at ADVICE_T
+# `--advice-tau` must be ADVICE_TAU, a PREFLIGHT refusal otherwise), else `verity-vllm advice`'s under the prove path's registered compiler at ADVICE_T
 # buckets of ADVICE_TAU seconds (default 600 and 0.1; an execution phase is ADVICE_T buckets of the network certifier's
 # tick) in the serve dir; and `advice_charge.py`'s record of it, each window's unpadded length and their sum over each
 # execution phase, $OUT/advice-charge.json,
@@ -231,7 +251,10 @@
 # Defaults are vy-dc-h200's: the int8 B4 row's traced Build (r20261030-210701-a20f's, traced after the required manifest stopped
 # naming the FlashAttention M1 stream, as `predict row` doesn't) and taps under $H, vLLM's venv /workspace/cp/venv312, CUDA 13.0.
 # The serve dir D (row dirs, advice, the window circuits' records) stays on the node under `research keep`; $OUT keeps the
-# public records and every log, each in its public form.
+# public records and the run's other logs, each in its public form. What a verifier reads of $OUT (`served_verdicts.RECEIVED`:
+# the certifier's piece, V3c's audit, the registered compiler, the advice and weights registrations and the window circuit's
+# counts) holds no log, and leaves the node, every field as written, only where `kind_scan.py --received` finds each one
+# of the public kinds: else it stays whole in the serve dir's private/out and the run fails (RECEIVED-SCAN).
 set -uo pipefail
 if [ -n "${SETTINGS:-}" ]; then
   [ -f "$SETTINGS" ] && [ -r "$SETTINGS" ] || { echo "PREFLIGHT: SETTINGS=$SETTINGS is not a readable file" >&2; exit 3; }
@@ -246,7 +269,7 @@ ROOT=${SERVE_ROOT:-/workspace/research/vllm-served-verdicts}
 D=${D:-$ROOT/${RESEARCH_RUN_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}}
 # step 6's deferral (`defer`): the settings the follow-on runs at, its inputs' list and sums, and the pieces the record read
 DEFER_DIR=$D/private/deferred
-FOLLOWS="K PRODUCT V3C_CLASS V3C_LAW H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE DEFERRED_TREE" FOLLOW= CLASH=
+FOLLOWS="K PRODUCT V3C_CLASS V3C_LAW H1_TIE COMPOSITE ALPHA GAMMA SERVED_NODE DEFERRED_TREE CR_SCAN_DELTA" FOLLOW= CLASH=
 if [ "${1:-}" = v3c ] && [ -f "$DEFER_DIR/deferred.env" ]; then  # the follow-on of a deferral, at the settings it recorded
   FOLLOW=1
   declare -A given=()
@@ -264,7 +287,7 @@ HIDDEN_SO=${HIDDEN_SO:-$H/fa2/build/fa3_matReqG/verity_fa3_matReqG.so} NORM_TAP_
 VENV=${VENV:-/workspace/cp/venv312}
 REPO=${REPO:-verity-int8/Llama-3.2-1B-INT8} REV=${REV:-15b0976d400d796ee589e7737d03a919526bf800} PRECISION=${PRECISION:-verity_int8}
 PORT=${PORT:-18190} SLOTS=${SLOTS:-4} PROMPTS=${PROMPTS:-16:24} MAX_TOKENS=${MAX_TOKENS:-4} RATE=${RATE:-1000} SEED=${SEED:-1}
-REQUESTS=${REQUESTS:-$SLOTS} CLASSES=${CLASSES:-4,32,4} CAP=${CAP:-8388608} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512}
+REQUESTS=${REQUESTS:-$SLOTS} CLASSES=${CLASSES:-4,32,4} MAX_MODEL_LEN=${MAX_MODEL_LEN:-512} ID_BYTES=${ID_BYTES:-24}
 T=${T:-${H1_T:-512}}
 DISK_FLOOR_GB=${DISK_FLOOR_GB:-100}
 H1_KEY_SHA512=${H1_KEY_SHA512:-27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc}
@@ -299,6 +322,7 @@ if [ "$PRODUCT" = onsite ]; then
   fi
 fi
 export H1_KEY_SHA512 H1_GATE H1_PEER WINDOW_STEPS MAIN_SHA WIPE_CMD POUS_CMD BANDWIDTH_CMD PRODUCT
+export CR_SCAN_DELTA=${CR_SCAN_DELTA:-5.421010862427522e-20}
 PRED=${PRED:-$D/predicted}
 FW=${FLOCK_WORK:-$ROOT/flock-work}
 export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
@@ -330,6 +354,20 @@ case $PRODUCT in
     done ;;
   *) say "PREFLIGHT: PRODUCT is onsite, remote or remote-network, not $PRODUCT"; exit 3 ;;
 esac
+# ℓ_a, unless CAP gives it: the least width that pads every Commit period's advice this server commits (advice_windows.least_cap
+# of window_advice.max_bits), at most SLOTS requests (--window-requests) and WINDOW_STEPS engine steps a period, positions
+# within MAX_MODEL_LEN, no prefix cache, and ids of at most ID_BYTES bytes, the loads' longest (varied's varied.<j:05d>, the
+# front's user-<i>, a warm-up's warmup-<8 hex>-<i>). A period past it is refused by name (advice.within_cap).
+advice_cap() {
+  [ -n "${CAP:-}" ] && return 0
+  case " ${SERVE_ARGS:-} " in
+    *" --prefix-caching "*) say "PREFLIGHT: SERVE_ARGS serves with the prefix cache, whose KV sources ℓ_a's default leaves out: set CAP"; return 3 ;;
+  esac
+  CAP=$("$PY" -c 'import sys; from verity_vllm.pipeline import advice_windows as AW, window_advice as WA; print(AW.least_cap(WA.max_bits(*map(int, sys.argv[1:]))))' \
+    "$SLOTS" "$WINDOW_STEPS" "$MAX_MODEL_LEN" "$ID_BYTES") && [ -n "$CAP" ] \
+    || { CAP=; say "PREFLIGHT: no ℓ_a from SLOTS $SLOTS, WINDOW_STEPS $WINDOW_STEPS, MAX_MODEL_LEN $MAX_MODEL_LEN and ID_BYTES $ID_BYTES (window_advice.max_bits): set CAP"; return 3; }
+  export CAP
+}
 CKPT=${CKPT:-$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV} WREG=$D/weights_registration.json
 NO_WEIGHTS="NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free"
 weights() {  # under the lease (its commit hashes on the leased GPU), before the first request: the committer's registration
@@ -351,7 +389,7 @@ print(f"registered before the first request: {len(v)} weight parameters rooted (
 EOF
 )"
 }
-V3C=${V3C_CLASS-4,32,4} v3c_ok=0
+V3C=${V3C_CLASS-4,32,4} v3c_ok=0 VLOG=$D/private/v3c-audit
 [ "${1:-}" = v3c ] && V3C=${V3C:-4,32,4}
 [ -z "${H1_TIE:-}" ] || V3C_LAW=${V3C_LAW:-stratified:1}
 vtag=${V3C//,/-}
@@ -427,7 +465,7 @@ EOF
   [ "${PIPESTATUS[0]}" = 0 ] && v3c_ok=1
 }
 v3c_coins() {  # V3C_CH: the challenger the audit draws on (Coins, above), its session pinned on main's first-parent line
-  local main=$OUT/v3c-audit/main.txt given=${PP_MAIN:-${MAIN_FILE:-}} name=MAIN_FILE
+  local main=$VLOG/main.txt given=${PP_MAIN:-${MAIN_FILE:-}} name=MAIN_FILE
   [ -z "${PP_MAIN:-}" ] || name=PP_MAIN
   if [ -n "$given" ]; then
     [ -s "$given" ] || { say "V3C-AUDIT: $name $given, main's first-parent line its challenger session pins on, is missing or empty"; return 1; }
@@ -458,21 +496,23 @@ v3c_coins() {  # V3C_CH: the challenger the audit draws on (Coins, above), its s
 v3c_warm() {  # every template of the committed window composed into $VW/compose-cache, V3C_WARM_JOBS at a time
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_WARM_TIMEOUT" \
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py warm --window "$VW/window" --law "${V3C_LAW:-subset:1}" \
-    --compose-cache "$VW/compose-cache" --jobs "$V3C_WARM_JOBS") > "$OUT/v3c-audit/warm.log" 2> "$OUT/v3c-audit/warm.err"
+    --compose-cache "$VW/compose-cache" --jobs "$V3C_WARM_JOBS") > "$VLOG/warm.log" 2> "$VLOG/warm.err"
   local rc=$? why
-  if [ "$rc" = 0 ]; then why=$(grep -m1 '^WARM' "$OUT/v3c-audit/warm.log" | cut -c1-600)
+  if [ "$rc" = 0 ]; then why=$(grep -m1 '^WARM' "$VLOG/warm.log" | cut -c1-600)
   else
     if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then why="timed out after V3C_WARM_TIMEOUT=$V3C_WARM_TIMEOUT"
-    else why=$(tail -3 "$OUT/v3c-audit/warm.err" | tr '\n' ' ' | cut -c1-800); why=${why% }; fi
+    else why=$(tail -3 "$VLOG/warm.err" | tr '\n' ' ' | cut -c1-800); why=${why% }; fi
     why+="; the audit composes the templates it didn't keep"
   fi
   say "V3C-WARM class $V3C (records_audit.py warm exit $rc, $V3C_WARM_JOBS at a time): $why"
 }
 v3c_audit() {  # the committed window audited from its records alone: its circuit and run root the verifier's, the weights
-               # pinned, and no advice opening: the window commit's proofs read the advice under its hiding root
+               # pinned, and no advice opening: the class window's circuit is the class's and reads no advice
   local run leanb m0 rc V3C_CH=() tie=() cache=() ports=${V3C_PORTS:-16}
   run=$("$PY" -c 'import json, sys; print(next(json.loads(l)["run_root"] for l in open(sys.argv[1]) if l.strip() and json.loads(l)["window"] == int(sys.argv[2])))' \
     "$D/windows.jsonl" "$K") || { say "V3C-AUDIT: no run root for the window in windows.jsonl"; return 1; }
+  # its logs and main's line stay on the node: $OUT/v3c-audit holds only what the record reads (`kind_scan.V3C_DOCS`)
+  (umask 077; mkdir -p "$VLOG")
   mkdir -p "$OUT/v3c-audit"
   v3c_coins || return 1
   if [ -n "${H1_TIE:-}" ]; then
@@ -490,25 +530,24 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$VW/window" --law "${V3C_LAW:-subset:1}" \
     --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" "${tie[@]}" "${cache[@]}" \
     "${V3C_CH[@]}" --m0-pythonpath "$m0" --bin "$FW/flock-gpu-link/flock/target/release/flock-circuit" --lean "$leanb/flock-verify" \
-    --firewall "$leanb/flock-firewall" --ports "$ports" --out "$VW/audit") > "$OUT/v3c-audit/audit.log" 2> "$OUT/v3c-audit/audit.err"
+    --firewall "$leanb/flock-firewall" --ports "$ports" --out "$VW/audit") > "$VLOG/audit.log" 2> "$VLOG/audit.err"
   rc=$?
-  # what the record's row reads, which the onsite check reads from the public record: the summary, the audit record and
-  # the registration it audited
-  mkdir -p "$OUT/v3c-audit/window"
-  cp "$VW/audit/summary.json" "$OUT/v3c-audit/" 2>/dev/null
-  cp "$VW/audit/window/audit.json" "$OUT/v3c-audit/window/" 2>/dev/null
+  # what the record's row reads, which the onsite check reads from the public record: what `served_integrity.answer`
+  # reads of the audit (`served_integrity.public_copy`) and the registration it audited
+  "$PY" "$(dirname "$SV")/served_integrity.py" public-copy "$VW/audit" "$OUT/v3c-audit" \
+    || say "V3C-AUDIT: no public copy of the audit (served_integrity.py public-copy exit $?)"
   cp "$VW/window/registration.json" "$OUT/v3c-audit/" 2>/dev/null
-  say "V3C-AUDIT class $V3C (records_audit.py exit $rc): $(grep -m1 '^RECORDS' "$OUT/v3c-audit/audit.log" | cut -c1-3000)"
-  [ -n "$(grep -m1 '^RECORDS' "$OUT/v3c-audit/audit.log")" ] \
-    || say "V3C-AUDIT: no RECORDS line; $(tail -3 "$OUT/v3c-audit/audit.err" | tr '\n' ' ' | cut -c1-800)"
+  say "V3C-AUDIT class $V3C (records_audit.py exit $rc): $(grep -m1 '^RECORDS' "$VLOG/audit.log" | cut -c1-3000)"
+  [ -n "$(grep -m1 '^RECORDS' "$VLOG/audit.log")" ] \
+    || say "V3C-AUDIT: no RECORDS line; $(tail -3 "$VLOG/audit.err" | tr '\n' ' ' | cut -c1-800)"
   return $rc
 }
 v3c_period() {  # V3c's audit as one compute audit of the network certifier's period: $VW/period.json
   (cd "$TREE" && env -u PYTHONPATH "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py period --window "$VW/window" \
-    --audit "$VW/audit" --pins "$WREG" --out "$VW/period.json") > "$OUT/v3c-audit/period.log" 2>&1
+    --audit "$VW/audit" --pins "$WREG" --out "$VW/period.json") > "$VLOG/period.log" 2>&1
   local rc=$?
   [ "$rc" = 0 ] && cp "$VW/period.json" "$OUT/v3c-audit/"
-  say "V3C-PERIOD (records_audit.py period exit $rc): $(tail -1 "$OUT/v3c-audit/period.log" | cut -c1-800)"
+  say "V3C-PERIOD (records_audit.py period exit $rc): $(tail -1 "$VLOG/period.log" | cut -c1-800)"
   return $rc
 }
 certifier_step() {  # $1 chain|period: the split network certifier's step on V3c's window (step 6), if its command is set
@@ -532,36 +571,25 @@ v3c_proved() {  # V3c's window committed, the build done: the certifier's chain 
   elif [ -n "${CERTIFIER_PERIOD_CMD:-}" ]; then say "CERTIFIER-PERIOD: not run: V3c wrote no period.json"; fi
   return $((rc ? rc : prc))
 }
-compiler_args() {  # the prove path's registered compiler, as verity-vllm advice takes it
-  (cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$D" --cap-bits "$CAP") \
-    | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])"
+compiler() {  # the prove path's registered compiler (`prove_path.py compiler`), the one $OUT/compiler.json publishes, at ℓ_a
+  advice_cap || return 3
+  (cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$D" --cap-bits "$CAP")
 }
-advice_of() {  # window $1's advice under the compiler $2 in $D/advice/w$1, unless it is there already (the tie wrote it):
-  # verity-vllm advice's exit, 3 while the window waits on a Commit record the running server hasn't written
-  [ -f "$D/advice/w$1/registration.json" ] && return 0
-  local wa=() rc
-  [ -f "$WREG" ] && wa=(--weights-of-record "$WREG")
-  # shellcheck disable=SC2086
-  (cd "$TREE/integrations/vllm" && vv advice "$D" --window "$1" --cap "$CAP" $2 "${wa[@]}" --out "$D/advice/.w$1") \
-    >> "$D/advice.log" 2>&1
-  rc=$?
-  [ -d "$D/advice/.w$1/w$1" ] && mv "$D/advice/.w$1/w$1" "$D/advice/w$1"
-  return "$rc"
+compiler_args() {  # the registered compiler on stdin, as verity-vllm advice takes it
+  "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])"
 }
 tie() {  # serve-openai's --h1-window-commit (`serve_tie`) at window $2's close, before its sample coin: $1 the serve dir, $3
   # the window's registration W, $4 where its record R goes, $5 its H1 prover dir. It says nothing in $OUT, whose lines
   # name no window: what it says goes to the serve dir's h1/w<k>/window-commit.log, and step 6 says the picked window's
   K=$2 VW=$D/v3c-w$2-$vtag
-  local ca rc why
+  local why
   [ "$1" -ef "$D" ] || { echo "TIE: serve-openai's serve dir $1 isn't D, $D"; return 3; }
   [ -n "$V3C" ] && [ -n "$5" ] || { echo "TIE: V3C_CLASS is empty or the window has no H1 prover dir"; return 3; }
   [ -f "$WREG" ] || { echo "TIE: $NO_WEIGHTS"; return 13; }
-  ca=$(compiler_args) && [ -n "$ca" ] || { echo "TIE: no registered compiler (prove_path.py compiler)"; return 13; }
-  advice_of "$K" "$ca"; rc=$?
-  if [ "$rc" = 3 ]; then
-    echo "TIE: the window's advice is pending: a request of it runs on past its close, with no Commit record yet"; return 14
-  fi
-  [ -f "$D/advice/w$K/private/advice.bin" ] || { echo "TIE: no advice (verity-vllm advice exit $rc; the serve dir's advice.log)"; return 14; }
+  # the server's committer is the window's one: serve_tie's flush committed every whole window before this ran
+  [ -f "$D/advice/w$K/registration.json" ] && [ -f "$D/advice/w$K/private/advice.bin" ] || {
+    echo "TIE: the server committed no advice for the window (advice.jsonl): it refused it, or a request of it runs on past its close"
+    return 14; }
   why=$(window_commit "$D/h1/w$K/window-commit.json" "$D/h1/w$K/window-commit.err" --window-registration "$3" \
     --h1-key "$5/key" --law "${V3C_LAW:-subset:1}") || { echo "TIE: window-commit class $V3C $why"; return 16; }
   cp "$VW/window/registration.json" "$4" || { echo "TIE: window-commit class $V3C wrote no registration"; return 16; }
@@ -572,6 +600,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
   mkdir -p "$D" "$OUT/serve"
   cd "$TREE/integrations/vllm" || return 9
+  advice_cap || return 3
   local h1=() pc=()
   [ -n "${H1_PROTOCOLS_CONFIG:-}" ] && pc=(--protocols-config "$H1_PROTOCOLS_CONFIG")
   [ -n "$H1_GATE" ] && h1=(--protocols pouw:eps1-sm120-h1fx1 --challenger-gate "$H1_GATE"
@@ -609,7 +638,8 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     --max-num-batched-tokens "$T" --window-steps "$WINDOW_STEPS" "${h1[@]}" \
     --required-manifest "$PRED/manifest.json" --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 \
     --admit release-order --window-requests "$SLOTS" --max-model-len "$MAX_MODEL_LEN" --window-gb 32 \
-    --disk-floor-gb "$DISK_FLOOR_GB" --seal-hold-gb 32 --seal-warm-gb 0 ${SERVE_ARGS:-} \
+    --disk-floor-gb "$DISK_FLOOR_GB" --seal-hold-gb 32 --seal-warm-gb 0 \
+    --advice --advice-cap "$CAP" --advice-composite "$PRODUCT" --advice-weights "$WREG" ${SERVE_ARGS:-} \
     > "$D/serve.log" 2>&1 &
   local srv=$! up=0 c=0 s=0 rc=0 release
   trap 'kill -TERM "$srv" 2>/dev/null; wait "$srv"; exit 143' TERM INT
@@ -675,15 +705,22 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
 circuit() {  # window K's circuit at class $1 within $2 (NAME=LIMIT), its line headed $3: 0 iff it counted
   local c=$1 head=$3 cls=() tag=record pins=() wp=$NO_WEIGHTS f rc
   [ "$c" = record ] || { cls=(--class "$c"); tag=${c//,/-}; }
-  [ -f "$WREG" ] && pins=(--pins "$WREG") wp="at the weights registration's pins"
   f=$D/window-circuit-w$K-$tag.json
-  timeout "${2#*=}" "$PY" benchmarks/prove_path/prove_path.py window-circuit --serve-run "$D" --window "$K" \
-    --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --out "$f" "${pins[@]}" ${PIN:+--pin "$PIN"} \
-    "${cls[@]}" > "$D/window-circuit-$tag.count.json" 2> "$D/window-circuit-$tag.err"
+  # the verifier reads what the run publishes alone (`kind_scan.RECEIVED`): the registered compiler, the window's advice
+  # registration (the advice's length at the cap) and the weights registration, never the serve dir
+  [ -s "$OUT/compiler.json" ] || compiler > "$OUT/compiler.json" 2> "$D/compiler.err" \
+    || { rm -f "$OUT/compiler.json"; say "$head: no registered compiler (prove_path.py compiler)"; return 1; }
+  [ -s "$OUT/registration.json" ] || "$PY" "$SV" public-registration "$D/advice/w$K/registration.json" \
+    > "$OUT/registration.json" \
+    || { rm -f "$OUT/registration.json"; say "$head: the advice registration has no public form"; return 1; }
+  [ -f "$WREG" ] && [ ! -s "$OUT/weights_registration.json" ] && cp "$WREG" "$OUT/"
+  [ -f "$WREG" ] && pins=(--pins "$OUT/weights_registration.json") wp="at the weights registration's pins"
+  timeout "${2#*=}" "$PY" benchmarks/prove_path/prove_path.py window-circuit --compiler "$OUT/compiler.json" \
+    --registration "$OUT/registration.json" --out "$f" "${pins[@]}" ${PIN:+--pin "$PIN"} "${cls[@]}" \
+    > "$D/window-circuit-$tag.count.json" 2> "$D/window-circuit-$tag.err"
   rc=$?
-  if [ "$rc" = 0 ]; then  # the count's `bits` is the advice's length, which stays on the node
-    "$PY" -c 'import json, sys; c = json.load(open(sys.argv[1])); c.pop("bits", None); print(json.dumps(c, sort_keys=True))' \
-      "$D/window-circuit-$tag.count.json" > "$OUT/window-circuit-$tag.json"
+  if [ "$rc" = 0 ]; then
+    cp "$D/window-circuit-$tag.count.json" "$OUT/window-circuit-$tag.json"
     say "$head: $("$PY" -c 'import json, sys; c = json.load(open(sys.argv[1]))["count"]; print("registered", c["registered"], "bits, free", c["free"], "bits of", c["inputs"], "input bits")' \
       "$OUT/window-circuit-$tag.json" 2>&1 | cut -c1-200) $wp; $(cat "$OUT/window-circuit-$tag.json"); record $(sha256sum "$f" | cut -c1-16)… $(stat -c %s "$f") bytes"
   elif [ "$rc" = 124 ]; then
@@ -772,8 +809,8 @@ front_ok() {  # preflight: LOAD=front has a front, and each flag CERTIFIER_FRONT
   done
 }
 # the certifier's chain files list and count the window's requests (its certs, its N2 warden's counts, its report and the
-# piece's log, or the split's two logs); once the record has read them, or `served_verdicts.sh v3c` is done, they move to
-# the serve dir's private/
+# piece's log, or the split's two logs); once the record has read them, and however the run ends, they move to the serve
+# dir's private/
 CERTIFIER_PRIVATE="chain/certs.json chain/report chain/n2/summary.json piece.log chain.log period.log"
 private_pieces() {
   local f
@@ -810,7 +847,7 @@ defer() {  # step 6 on a node short of V3c's audit's memory ($1, why), left to a
   [ ! -f "$OUT/record/inference-only.json" ] || cp "$OUT/record/inference-only.json" "$DEFER_DIR/inference-only.json" || return 1
   printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" V3C_CLASS "$V3C" V3C_LAW "${V3C_LAW:-subset:1}" H1_TIE "${H1_TIE:-}" \
     COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" SERVED_NODE "$(hostname)" DEFERRED_TREE "$(tree_sha)" \
-    > "$DEFER_DIR/deferred.env" || return 1
+    CR_SCAN_DELTA "$CR_SCAN_DELTA" > "$DEFER_DIR/deferred.env" || return 1
   deferred_inputs > "$DEFER_DIR/inputs.txt"
   (cd "$D" && tr '\n' '\0' < "$DEFER_DIR/inputs.txt" | xargs -0 -r sha256sum) > "$DEFER_DIR/inputs.sha256" || return 1
   echo private/deferred/inputs.sha256 >> "$DEFER_DIR/inputs.txt"
@@ -854,8 +891,8 @@ advice_charge() {  # the test run's every closed window's advice and advice_char
     adv="$D/advice"
     say "ADVICE: the server's own, each window's committed as it served"
   else
-    ca=$(cd "$TREE" && "$PY" benchmarks/prove_path/prove_path.py compiler --serve-run "$D" --cap-bits "$CAP" \
-      | "$PY" -c "import json, sys; c = json.load(sys.stdin)['inner']; print('--compiler-name', c['name'], '--compiler-digest', c['digest'])")
+    advice_cap || return 3
+    ca=$(compiler | compiler_args)
     [ -n "$ca" ] || { say "ADVICE-CHARGE: no registered compiler (prove_path.py compiler)"; return 13; }
     # shellcheck disable=SC2086
     (cd "$TREE/integrations/vllm" && vv advice "$D" --cap "$CAP" $ca --T "${ADVICE_T:-600}" --tau "${ADVICE_TAU:-0.1}" \
@@ -885,13 +922,40 @@ if [ "${1:-}" = advice-charge ]; then
     say "PREFLIGHT: advice-charge serves with H1_GATE empty, and serve-openai refuses SERVE_ARGS' --h1-receipts or" \
       "--h1-prover without H1's --protocols: drop them"; exit 3 ;;
   esac
+  tau=0.1 next=  # serve-openai's --advice-tau, the buckets the server commits each window's advice in (its default 0.1)
+  for w in ${SERVE_ARGS:-}; do
+    [ -n "$next" ] && tau=$w next=
+    case $w in --advice-tau) next=1 ;; --advice-tau=*) tau=${w#*=} ;; esac
+  done
+  awk -v a="$tau" -v b="${ADVICE_TAU:-0.1}" 'BEGIN { exit a != b }' \
+    || { say "PREFLIGHT: the server commits the advice in buckets of SERVE_ARGS' --advice-tau ($tau s), and advice_charge.py" \
+      "charges it in buckets of ADVICE_TAU (${ADVICE_TAU:-0.1} s): make them equal"; exit 3; }
 fi
 
-# $OUT leaves the node: once the run is done, however it ends, each of its files that names a window or counts its own is
-# held in full in the serve dir's private/out, its public form in its place (`served_verdicts.py publish`); an
+KS=$(dirname "$SV")/../network_traces/kind_scan.py
+received_scan() {  # what a verifier reads of $OUT (`served_verdicts.RECEIVED`) held to its kinds (`kind_scan.py --received`):
+                   # 0 iff every field of it is one of the public kinds, its findings in the serve dir's private/
+  local log=$D/private/received-scan.txt rc
+  (umask 077; mkdir -p "$D/private") && "$PY" "$KS" --received "$OUT" > "$log" 2>&1
+  rc=$?
+  if [ "$rc" = 0 ]; then
+    echo "RECEIVED-SCAN $(tail -1 "$log" | cut -c1-400)"
+  else
+    say "RECEIVED-SCAN failed (exit $rc, $(grep -c '^KIND-SCAN finding' "$log") findings, in the serve dir's" \
+        "private/received-scan.txt): what a verifier reads of \$OUT stays whole in its private/out, and the run fails"
+  fi
+  return "$rc"
+}
+# $OUT leaves the node: once the run is done, however it ends, the certifier's chain files that count the window's
+# requests move to the serve dir's private/ (CERTIFIER_PRIVATE), what a verifier reads of $OUT is held to its kinds
+# (`received_scan`, which fails the run on a finding), and each of its files that names a window or counts its own is
+# held in full in the serve dir's private/out, its public form in its place (`served_verdicts.py publish`; what a
+# verifier reads keeps every field once the scan is clean, only its text in public form, else held whole); an
 # advice-charge run's inputs are public, and its $OUT leaves as it is
 [ "${1:-}" = advice-charge ] \
-  || trap 'rc=$?; "$SAY_PY" "$SV" publish "$OUT" --private "$D/private/out" || echo "PUBLISH failed (exit $?): $OUT may name a window"; exit $rc' EXIT
+  || trap 'rc=$?; private_pieces; scanned=--received-scanned; received_scan || { scanned=; [ "$rc" = 0 ] && rc=1; }
+           "$SAY_PY" "$SV" publish "$OUT" --private "$D/private/out" $scanned \
+             || echo "PUBLISH failed (exit $?): $OUT may name a window"; exit $rc' EXIT
 trap 'exit 143' TERM
 trap 'exit 130' INT
 stop() { say "STOP at $1 (exit $2)"; exit "$2"; }
@@ -908,6 +972,7 @@ else
   command -v gpu-lease >/dev/null || { say "PREFLIGHT: no gpu-lease on this node"; exit 3; }
 fi
 front_ok || exit 3
+advice_cap || exit 3
 [ -n "$V3C" ] \
   || { say "PREFLIGHT: sampled proofs' audit of record is V3c's (and the split certifier reads its period.json), and V3C_CLASS is empty"; exit 3; }
 SPLIT= DEFER=
@@ -1135,6 +1200,7 @@ PICK=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS
 K=$(echo "$PICK" | "$PY" -c 'import json, sys; print(json.load(sys.stdin)["window"])')
 say "WINDOW: $([ -n "${WINDOW:-}" ] && echo "the one WINDOW names" || echo "the sealed one with the most requests"), none carried across windows, at the class's $SLOTS slots (the pick in the serve dir's private/window.json)"
 say "CLASSES: the window circuit's ${CLASSES}; the certifier's scan ${CERTIFIER_SCAN:-W63}, the one class the gate serves"
+COINS_AFTER=$(date +%s.%N)  # sampled proofs' and the network certifier's coins are all drawn after this
 CERT=
 if [ -n "${CERTIFIER_CMD:-}" ]; then  # the certifier's chain is the longest piece, so it starts once the window is picked
   # kept off CPUs 0 and 1 (CERT_CPUS), which PoUS's answers need idle: the chain's load stretches a round past Δ + RTT
@@ -1144,26 +1210,20 @@ if [ -n "${CERTIFIER_CMD:-}" ]; then  # the certifier's chain is the longest pie
     --product "$PRODUCT" --only certifier > "$OUT/pieces-certifier.txt" 2>&1 &
   CERT=$!
 fi
+compiler > "$OUT/compiler.json" || { rm -f "$OUT/compiler.json"; stop compiler 13; }
+(cd "$TREE" && "$PY" benchmarks/one_stage/served_verdicts.py advice-line "$D" --window "$K" --compiler "$OUT/compiler.json" \
+  --coins-after "$COINS_AFTER") 2>&1 | publish_lines
+[ "${PIPESTATUS[0]}" = 0 ] || stop advice 14
 cd "$TREE/integrations/vllm" || exit 9
-CA=$(compiler_args)
-[ -n "$CA" ] || stop compiler 13
-echo "registered compiler: $CA" > "$OUT/compiler.txt"
-WA=()
-[ -f "$WREG" ] && WA=(--weights-of-record "$WREG")
-for k in $("$PY" -c "import json,sys; [print(json.loads(l)['window']) for l in open(sys.argv[1]) if l.strip()]" "$D/windows.jsonl"); do
-  advice_of "$k" "$CA"
-  [ "$k" = "$K" ] && break
-done
-# the advice and compile logs name the request Programs by their prompt lengths and count the window's requests, which
-# are values: they stay in the serve dir
-[ -f "$D/advice/w$K/registration.json" ] || { say "ADVICE: none written (the serve dir's advice.log, on the node)"; stop advice 14; }
+# the compile log names the request Programs by their prompt lengths and counts the window's requests, which are values:
+# it stays in the serve dir
 "$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" public-registration "$D/advice/w$K/registration.json" > "$OUT/registration.json" \
   || { say "ADVICE: its registration has no public form"; stop advice 14; }
 "$PY" tools/advice_compile.py "$D" --window "$K" > "$D/compile_w$K.log" 2>&1
 rc=$?
 say "ADVICE: $("$PY" -c 'import json, sys; w = json.load(open(sys.argv[1]))["windows"][sys.argv[2]]; print("root", w["root"][:16] + "…", "bits padded to the cap")' \
-  "$D/advice/.w$K/windows.json" "$K" 2>&1 | cut -c1-200); $("$PY" -c 'import json, sys; print(len(json.load(open(sys.argv[1])).get("registered_roots") or {}))' \
-  "$D/advice/w$K/registration.json" 2>&1 | cut -c1-200) weight roots recorded (${WA[*]:-$NO_WEIGHTS}); compile (advice_compile.py) exit $rc$([ "$rc" = 0 ] || echo ", its log in the serve dir, on the node")"
+  "$D/advice/windows.json" "$K" 2>&1 | cut -c1-200); $("$PY" -c 'import json, sys; print(len(json.load(open(sys.argv[1])).get("registered_roots") or {}))' \
+  "$D/advice/w$K/registration.json" 2>&1 | cut -c1-200) weight roots recorded ($([ -f "$WREG" ] && echo "--advice-weights $WREG" || echo "$NO_WEIGHTS")); compile (advice_compile.py) exit $rc$([ "$rc" = 0 ] || echo ", its log in the serve dir, on the node")"
 [ "$rc" = 0 ] || stop compile 15
 cd "$TREE" || exit 9
 wc_ok=0
@@ -1201,7 +1261,9 @@ left=0
 comp=0
 [ -n "$DEFER" ] || [ -z "${COMPOSITE-1}" ] || TPY=$TPY bash benchmarks/one_stage/served_composite.sh "$D" "$OUT" || comp=1
 [ -z "${CERTIFIER_CMD:-}${CERTIFIER_FRONT:-}" ] \
-  || "$TPY" benchmarks/one_stage/onsite_record.py "$OUT" ${ADVICE_CHARGE:+--advice-charge "$ADVICE_CHARGE"} 2>&1 | publish_lines
+  || "$TPY" benchmarks/one_stage/onsite_record.py "$OUT" ${ADVICE_CHARGE:+--advice-charge "$ADVICE_CHARGE"} \
+       ${REPROOF_COPY:+--reproof-copy "$REPROOF_COPY"} ${REPROOF_LISTING:+--reproof-listing "$REPROOF_LISTING"} \
+       2>&1 | publish_lines
 measure
 echo "---- verdicts"; cat "$OUT/verdicts.txt"
 [ "$wc_ok" = 1 ] && [ "$rec" = 0 ] && [ "$comp" = 0 ] && [ "$left" = 0 ] \

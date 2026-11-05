@@ -190,7 +190,7 @@ theorem wordBit_snd (ts : List Flock.Program.Ty) (π β : ℕ) : (wordBit ts π 
   omega
 
 theorem wordBit_one_fst (a : Flock.Program.Ty) (ts : List Flock.Program.Ty) (β : ℕ) :
-    (wordBit (a :: ts) 1 β).1 = (16 * ((NetworkCheck.Period.bitsOf a + 15) / 16) + β) / 16 := by
+    (wordBit (a :: ts) 1 β).1 = (16 * ((SampledProofs.Bits.bitsOf a + 15) / 16) + β) / 16 := by
   have h1 : (a :: ts).take 1 = [a] := rfl
   simp only [wordBit, h1, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
 
@@ -271,15 +271,13 @@ theorem scan_egress {P : Flock.Program.Prog} {s : Schedule} {fs : List Flock.Cir
     (hev : Flock.TemplateQuery.evaluate (.ofProg P) tids = .ok rs) (hms : MembersOf P fs rs ms) :
     ∀ t < s.window, ∀ ℓ σ, ∀ g ∈ NetTiming.slotGates ((scanLayout P s rs ms).egress t ℓ σ),
       g ∈ (jointOf ms).outs ∧ (jointOf ms).gates[g]? ≠ some .input := by
-  have hrets : NetworkCheck.Circuit.fieldsOf
+  have hrets : SampledProofs.Bits.fieldsOf
       (templateDef P ((templateNodes P).getD ((templateNodes P).length - 1) 0)).ret =
       [.array NetworkCheck.Period.outBits (.value 1), Fits.rowTy s] := by
     rewrite [← egressNode_eq P]
-    exact (congrArg NetworkCheck.Circuit.fieldsOf hacc.egress_ret).trans rfl
+    exact (congrArg SampledProofs.Bits.fieldsOf hacc.egress_ret).trans rfl
   have hA : SampledProofs.Bits.bitsOf (.array NetworkCheck.Period.outBits (.value 1)) = 16 := by
     simp only [Check.bits_bitsOf, Check.bits_array, Check.bits_value, NetworkCheck.Period.outBits, Nat.mul_one]
-  have hA' : NetworkCheck.Period.bitsOf (.array NetworkCheck.Period.outBits (.value 1)) = 16 := by
-    simp only [Check.period_bitsOf, Check.bits_array, Check.bits_value, NetworkCheck.Period.outBits, Nat.mul_one]
   have hR : SampledProofs.Bits.bitsOf (Fits.rowTy s) = s.allocation * s.cellBytes * 8 := by
     simp only [Check.bits_bitsOf, Fits.rowTy, Check.bits_array, Check.bits_value, Nat.mul_one]
   have hw : SampledProofs.Bits.retWords (Fits.callee P (Fits.egressNode P)).ret =
@@ -298,7 +296,7 @@ theorem scan_egress {P : Flock.Program.Prog} {s : Schedule} {fs : List Flock.Cir
     have hC : s.allocation * (8 * s.cellBytes) = s.allocation * s.cellBytes * 8 := by
       rw [Nat.mul_assoc, Nat.mul_comm s.cellBytes 8]
     refine egress_returned hacc hkeys hin hfs hev hms ht ?_ (wordBit_snd _ 1 _)
-    rewrite [hrets, wordBit_one_fst, hA', hw]
+    rewrite [hrets, wordBit_one_fst, hA, hw]
     omega
 
 /-- One slot of one lane and a window of one step. -/

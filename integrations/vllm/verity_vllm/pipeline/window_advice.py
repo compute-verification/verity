@@ -512,6 +512,38 @@ def total_bits(advice: Advice) -> int:
     return lay.header + sum(lay.requests) + sum(lay.steps) + lay.release * len(advice.release)
 
 
+def max_bits(requests: int, steps: int, max_model_len: int, id_bytes: int, *, rows: int | None = None,
+             release_bits: int | None = None, sources: int = 0, runs: int = 1) -> int:
+    """The most bits a window's encoding takes (`total_bits`) within public serving limits, so a cap ℓ that pads this many
+    (`advice_windows.least_cap`) pads every window served within them: at most ``requests`` distinct requests, carried in or
+    admitted, and ``steps`` engine steps, ``rows`` rows a step (default ``requests``), every length and position at most
+    ``max_model_len``, ids of at most ``id_bytes`` UTF-8 bytes, at most ``sources`` KV sources a cache hit names (0: no
+    prefix cache, so no hit) and ``runs`` runs of made positions a carried request holds (1 without the prefix cache, whose
+    every row extends the one run from position 0), and release buckets below 2^``release_bits``: by default 0 at one step
+    a window, whose outputs are all in its first step's bucket, else 63, the most a u6 width says. Every field is counted at
+    its widest and in version 2's layout, so the bound holds for every version."""
+    for name, value in (("requests", requests), ("steps", steps), ("max_model_len", max_model_len), ("id_bytes", id_bytes)):
+        _int(name, value, 1)
+    rows = requests if rows is None else rows
+    w_rel = ((1 << WIDTH_BITS) - 1 if steps > 1 else 0) if release_bits is None else release_bits
+    _int("rows", rows, 1)
+    _int("sources", sources)
+    _int("runs", runs)
+    if type(w_rel) is not int or not 0 <= w_rel < 1 << WIDTH_BITS:
+        raise MalformedAdvice(f"release_bits is a width, an int in [0, {1 << WIDTH_BITS}), not {w_rel!r}")
+    rows = min(rows, requests)
+    w_req, w_len, w_src = (requests - 1).bit_length(), max_model_len.bit_length(), max(sources - 1, 0).bit_length()
+
+    def uvar(most: int) -> int:
+        return WIDTH_BITS + most.bit_length()
+
+    header = 8 + 2 * uvar(requests) + uvar(steps) + 3 * WIDTH_BITS
+    carried = 3 * w_len + uvar(runs) + 2 * runs * w_len
+    request = uvar(id_bytes) + 8 * id_bytes + 2 * w_len + 2
+    row = w_req + 1 + 3 * w_len + 1 + (w_src + sources * (w_req + w_len) if sources else 0)
+    return header + requests * (carried + request) + steps * (w_req + rows * (row + w_rel))
+
+
 def bits_by_window(advice: Advice, T: int) -> dict[int, int]:
     """The window's bits in each egress window of T buckets that holds any, by the earliest one each record can show in (I1's
     rule, `advice.bits_by_window`; the carried state goes with the header). The values sum to `total_bits`."""

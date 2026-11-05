@@ -37,8 +37,8 @@ closed: no such gate is an input or an output.
 namespace Properties.NetworkScan
 
 open NetworkCheck.Period
-open SampledProofs.Bits (Members inBit outBit)
-open NetworkCheck.Circuit (templateDef fieldsOf)
+open SampledProofs.Bits (Members inBit outBit fieldsOf)
+open NetworkCheck.Circuit (templateDef)
 
 /-- **The scan's layout** in its Program `P` at the schedule `s`, the ranges `rs` of the template query over `P` and its
 audit's members `ms`, over one egress link: step `t`'s slot `σ` is bit 0 of egress instance `t`'s verdict and the `8B`

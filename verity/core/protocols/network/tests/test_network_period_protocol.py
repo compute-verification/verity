@@ -11,8 +11,11 @@ what the composition's difftest reads of it (`reference`, `build`, `EXPECT`): it
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
+import random
 import shutil
+import subprocess
 import types
 from collections import Counter
 from fractions import Fraction
@@ -22,6 +25,7 @@ import pytest
 from hypothesis import strategies as st
 
 import period_case as PC
+import test_network_records_protocol as NR
 import verity_difftest as D
 from period_case import (ACCEPT, EXPECT, FORMS, INGRESS, KINDS, MUTATIONS, REJECT, UNDECIDED, Facts, Params, at_most,
                          build, clog2, public, reference, verdict_of)
@@ -119,7 +123,7 @@ ROWS_REFUSALS = {
     "rows-cert-missing": ("certificates: the requests', responses' and fails' records'", "certificates"),
     "rows-past-slots": ("certifies none of a window in which it refused a connection", "refused a connection"),
     "rows-reg-key": ("not under the deployment key in the session", "doesn't verify under"),
-    "rows-answer-window": ("another window's answer", "another window's answer"),
+    "rows-answer-window": (PC.ROWS_UNHELD,) * 2,
     "rows-schedule": ("another schedule's digest than the bound one", "the registration's parameters is"),
     "rows-delta": ("is not the period's", "is not the period's"),
     "rows-units": ("not the scan's 2T", "not the scan's 2T"),
@@ -147,6 +151,33 @@ def test_the_rows_form_refuses_what_it_must(server):
             assert mirror in reference(case)["reason"], (m, n, reference(case))
             verdict, out = D.replay(PORT, case, server)
             assert verdict == REJECT and lean in json.loads(out)["reason"], (m, n, out)
+
+
+def test_a_scan_whose_rows_port_is_at_another_root_is_refused(server, monkeypatch):
+    """The scan's units read the network certifier's rows through their port, `rows/<end>/<w>` (`PC.rows_name`), so
+    the rows form refuses, in Lean and in the mirror and by name, each way the scan's registration can name the rows'
+    root and domain without holding them there (`PC.UNPORTS`): the egress rows' root and domain at `scan/view` and
+    `rows/egress/<w>` at another root, the two ends' names swapped, one end's at another window's, a `roots` entry of
+    other than T leaves, and a second entry of one end's name at another root; and a mirror that takes any entry naming
+    the rows' root and domain, as the check did before it read the port, accepts what Lean refuses."""
+    unport = PC.UNPORTS
+    for u in unport:
+        monkeypatch.setattr(PC, "UNPORTS", (u,))
+        for n in range(3):
+            case = build("rows-port", n, small=n % 2 == 0)
+            why = f"{PC.ROWS_UNHELD} rows/egress/" if u == "view" else PC.ROWS_UNHELD
+            assert why in reference(case)["reason"], (u, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and why in json.loads(out)["reason"], (u, n, out)
+    monkeypatch.setattr(PC, "UNPORTS", unport)
+
+    def anywhere(reg, d, w, doc):
+        return any(e.get("root") == doc["root"] and e.get("domain") == doc["domain"]
+                   for k in ("roots", "registered") for e in PC._entries(reg, k))
+
+    monkeypatch.setattr(PC, "_holds", anywhere)
+    for n in range(4):
+        refused_by_lean_alone(build("rows-port", n, small=n % 2 == 0), server, PC.ROWS_UNHELD)
 
 
 def test_the_rows_form_accepts_a_wired_state_tied_period(server):
@@ -569,19 +600,27 @@ def test_each_lanes_prog_is_its_own_chunk():
 
 def test_the_scan_is_read_off_its_program(server):
     """The rows form's scan terms are its registered Program's, in the generator form: T, no free input (its `prog` a
-    compute audit's output), an ingress and an egress instance's committed bits (their returns: a u16 with the state
-    and view, or with the row), and its slot entries' bits (lanes · T / every entries of its `prog` ports' width); and
+    compute audit's output), what an ingress and an egress instance is charged (`vu_bits` at one instance a VU of their
+    parameters' words, the more of bucket 0's and a later bucket's for ingress, and their returns': a u16 with the
+    state and view, or with the row, each parameter and each return field packed on whole 16-bit words of its own),
+    and its slot entries' bits (lanes · T / every entries of its `prog` ports' width); and
     Lean and the mirror refuse, as parameters, a scan that isn't a descriptor, another Program's, one in the checker
     form (its egress row an input), one whose templates have other parameters or other than 1, T − 1 and T instances,
     or rows other than the schedule's, one whose lane reads another row of its input than its bucket's or another
     lane's input, one with an input gate no template's, and each negative of a check of what
     `NetTiming.BoundaryGates.Fits` asks."""
+    def w(bits: int) -> int:
+        return -(-bits // 16)
+
     for n in range(3):
         case = build("rows-honest", n, small=n % 2 == 0)
         p, desc = PC.params(case["params"]), case["params"]["scan"]
-        state, prog, view, _words = PC._scan_widths(desc)
+        state, prog, view, words = PC._scan_widths(desc)
         s, T, row = p.schedule, p.schedule.window, WR.row_bytes(p.schedule)
-        assert p.scan == PC.Scan(T, 0, 16 + state + view, 16 + 8 * row, s.lanes * (T // s.every) * prog), (n, p.scan)
+        ins = w(8 * row) + (w(state) if T > 1 else 0) + s.lanes * w(prog)
+        assert p.scan == PC.Scan(T, 0, PC.vu_bits(1, ins + 1 + w(state) + w(view)),
+                                 PC.vu_bits(1, w(16 * words) + 1 + w(8 * row)),
+                                 s.lanes * (T // s.every) * prog), (n, p.scan)
         for bad in PC.bad_scans(case["params"]):
             broken = case | {"params": bad}
             assert reference(broken)["reason"].startswith("params: scan:"), (n, reference(broken))
@@ -604,6 +643,257 @@ def test_each_fits_check_refuses_its_negative(server):
             assert verdict == REJECT and fragment in json.loads(out)["reason"], (name, n, out)
 
 
+def _reads(v: dict, form) -> bool:
+    """`form`, `readsEntries` or the walk, on a `reads-entries` input."""
+    j = v["program"]
+    x = j["definitions"][j["root"]]["body"]["nodes"][v["node"]]
+    return form(x, v["o"], v["t0"], v["every"], v["E"], v["ks"], j)
+
+
+#: `network-records verdicts`' `reads-entries` against the mirror's `readsEntries`
+READS = NR.VerdictsPort("network-records", "reads-entries", lambda v: _reads(v, PC._reads_entries), st.nothing(),
+                        package=LEAN, need_rejects=False)
+reads_server = D.server_fixture(READS)
+
+
+def _ty(j: dict, t):
+    return j["types"][t] if isinstance(t, int) else t
+
+
+def _reads_calls(desc, every: int) -> list[dict]:
+    """The `reads-entries` inputs `scanOf` asks of a descriptor: its first template's batch from argument 1 at bucket 0
+    and each later ingress template's from argument 2 at bucket 1, at the input nodes bucket 0's ports read, `E` the
+    first port's width; none where a port of the call is of another width, which `scanOf` refuses before it reads."""
+    if not isinstance(desc, dict) or desc.get("schema") != PC.SCHEMA:
+        return []
+    defs, callees = desc["definitions"], desc["callees"]
+    nodes = defs[desc["root"]]["body"]["nodes"]
+    ts = [k for k, x in enumerate(nodes) if defs[callees[x["fn"]]]["form"] != "primitive"]
+    if len(ts) < 2 or len(nodes[ts[0]]["args"]) < 2:
+        return []
+    xf = nodes[ts[0]]
+    r0 = [PC._member_refs(xf, o, desc)(0, 0) for o in range(1, len(xf["args"]))]
+    if None in r0:
+        return []
+    ks, E = [r[1] for r in r0], PC.leaves_of(defs[callees[xf["fn"]]]["body"]["params"][1][1])
+    out = []
+    for k, o, t0 in ((ts[0], 1, 0), *((k, 2, 1) for k in ts[1:-1])):
+        params = defs[callees[nodes[k]["fn"]]]["body"]["params"]
+        if all(o + i >= len(params) or PC.leaves_of(params[o + i][1]) == E for i in range(len(ks))):
+            out.append({"E": E, "every": every, "ks": ks, "node": k, "o": o, "program": desc, "t0": t0})
+    return out
+
+
+def _inner(v: dict) -> bool:
+    """Whether a lane's argument is mapped over an inner axis (`dims` `(n, L)`, `L < E`), which `readsEntries` refuses
+    and the walk read through."""
+    j = v["program"]
+    x = j["definitions"][j["root"]]["body"]["nodes"][v["node"]]
+    axes = x.get("axes") or [None] * len(x["args"])
+    return any(v["o"] + i < len(x["args"]) and axes[v["o"] + i] is not None
+               and PC._axis_dims(_ty(j, x["args"][v["o"] + i]["type"]), axes[v["o"] + i])[1] != v["E"]
+               for i in range(len(v["ks"])))
+
+
+def _walked(v: dict) -> bool:
+    """The old form of `readsEntries`: the walk, an inner-axis mapping refused."""
+    return _reads(v, PC._reads_entries_walk) and not _inner(v)
+
+
+def _scan_grid() -> list[tuple[str, int]]:
+    """Generator-form scans (`PC.scan_descriptor`) over T, every, lanes, the entries' width, and a lane reading a row
+    on (`skew`) or lane 0's input (`shared`), each with its `every`."""
+    out = []
+    for T in (1, 2, 3, 4, 6):
+        for every in (e for e in range(1, T + 1) if T % e == 0):
+            for L in (1, 2):
+                for P in (1, 3):
+                    for skew, shared in ((0, False), *([(1, False)] * (T // every > 1)), *([(0, True)] * (L > 1))):
+                        out.append((PC.scan_descriptor(T, 2, (2, P, 2, 2), lanes=L, every=every, skew=skew,
+                                                       shared=shared), every))
+    return out
+
+
+def _expand(q: dict) -> list[tuple]:
+    if "affine" in q:
+        s, i, b, c = q["affine"]
+        return [(s, i, b + k) for k in range(c)]
+    if "strided" in q:
+        s, i, b, inner, os, step, c = q["strided"]
+        return [(s, i, b + k // inner * os + k % inner * step) for k in range(c)]
+    return [tuple(e) for e in q["explicit"]]
+
+
+def _runs(refs: list[tuple]) -> list[tuple]:
+    """Maximal runs `(space, node, base, count)` of consecutive leaves of one node."""
+    out = []
+    for s, i, ell in refs:
+        if out and out[-1][:2] == (s, i) and out[-1][2] + out[-1][3] == ell:
+            out[-1] = (s, i, out[-1][2], out[-1][3] + 1)
+        else:
+            out.append((s, i, ell, 1))
+    return out
+
+
+def _piece(r: random.Random, s: str, i: int, b: int, c: int) -> dict:
+    """A run as one part of a drawn kind: affine, one strided block, strided blocks of one, strided blocks of a drawn
+    length stepping on by it, or explicit."""
+    kind, inner = r.randrange(5), r.randint(1, c)
+    return [{"affine": [s, i, b, c]}, {"strided": [s, i, b, c, r.randint(-3, 3), 1, c]},
+            {"strided": [s, i, b, 1, 1, r.randint(-3, 3), c]}, {"strided": [s, i, b, inner, inner, 1, c]},
+            {"explicit": [[s, i, b + k] for k in range(c)]}][kind]
+
+
+def _encoded(refs: list[tuple], E: int, how: str, r: random.Random) -> list[dict]:
+    """`refs` as parts: one explicit part; its runs each cut in up to three and each piece of a drawn kind (`_piece`);
+    or member by member, consecutive members reading one row one strided part of outer stride 0 and consecutive rows
+    one of outer stride `E`."""
+    if how == "explicit":
+        return [{"explicit": [list(x) for x in refs]}]
+    if how == "runs":
+        parts = []
+        for s, i, b, c in _runs(refs):
+            cuts = sorted(r.sample(range(1, c), min(c - 1, r.randrange(3))))
+            parts += [_piece(r, s, i, b + lo, hi - lo) for lo, hi in zip([0, *cuts], [*cuts, c])]
+        return parts
+    parts = []
+    for q in range(0, len(refs), E):
+        block = refs[q:q + E]
+        s, i, b = block[0]
+        if block != [(s, i, b + ell) for ell in range(E)]:
+            parts.append({"explicit": [list(x) for x in block]})
+            continue
+        last = parts[-1].get("strided") if parts else None
+        if last and last[:2] == [s, i] and last[3] == E:
+            members = last[6] // E
+            step = b - (last[2] + (members - 1) * last[4])
+            if (members == 1 and step in (0, E)) or (members > 1 and step == last[4]):
+                last[4], last[6] = step, last[6] + E
+                continue
+        parts.append({"strided": [s, i, b, E, 0, 1, E]})
+    return parts
+
+
+def _perturbed(parts: list[dict], E: int, ks: list[int], r: random.Random) -> list[dict]:
+    """`parts` with one drawn change that keeps their count: a part's base moved by one or by `E`, a stride by one, an
+    explicit reference's leaf by one, a part reversed or naming another lane's node, or two parts swapped."""
+    parts = json.loads(json.dumps(parts))
+    q = parts[r.randrange(len(parts))]
+    kind = r.randrange(6)
+    if kind == 0 and "explicit" not in q:
+        (q.get("affine") or q["strided"])[2] += r.choice((-E, -1, 1, E))
+    elif kind == 1 and "strided" in q:
+        q["strided"][r.choice((4, 5))] += r.choice((-1, 1))
+    elif kind == 2 and "explicit" in q:
+        q["explicit"][r.randrange(len(q["explicit"]))][2] += r.choice((-1, 1))
+    elif kind == 3:
+        refs = _expand(q)[::-1]
+        s, i, b = refs[0]
+        q.clear()
+        if all(x == (s, i, b - k) for k, x in enumerate(refs)):
+            q["strided"] = [s, i, b, len(refs), 0, -1, len(refs)]
+        else:
+            q["explicit"] = [list(x) for x in refs]
+    elif kind == 4 and len(ks) > 1:
+        for x in (q["explicit"] if "explicit" in q else [q.get("affine") or q["strided"]]):
+            x[1] = r.choice([k for k in ks if k != x[1]] or [x[1]])
+    elif kind == 5 and len(parts) > 1:
+        a = r.randrange(len(parts) - 1)
+        parts[a], parts[a + 1] = parts[a + 1], parts[a]
+    return parts
+
+
+def _with_arg(v: dict, lane: int, refs, axis="keep", ty=None) -> dict:
+    """`v` with lane `lane`'s argument's references `refs`, and its axis and type replaced where given."""
+    j = json.loads(json.dumps(v["program"]))
+    x = j["definitions"][j["root"]]["body"]["nodes"][v["node"]]
+    a = x["args"][v["o"] + lane]
+    a["refs"] = refs
+    if ty is not None:
+        j["types"].append(ty)
+        a["type"] = len(j["types"]) - 1
+    if axis != "keep":
+        x["axes"] = [*(x.get("axes") or [None] * len(x["args"]))]
+        x["axes"][v["o"] + lane] = axis
+    return v | {"program": j}
+
+
+def _in_range(v: dict, parts: list[dict]) -> bool:
+    """Whether every reference of `parts` names a leaf of an earlier root node, so the decoder reads them."""
+    j = v["program"]
+    nodes = j["definitions"][j["root"]]["body"]["nodes"]
+    return all(s == "n" and i < v["node"] and 0 <= ell < PC.leaves_of(_ty(j, nodes[i]["out"]))
+               for q in parts for s, i, ell in _expand(q))
+
+
+def _redrawn(v: dict, r: random.Random) -> list[tuple[str, dict]]:
+    """Inputs drawn from `v`, each named by how: a lane's argument re-encoded (`_encoded`), with a drawn change
+    (`_perturbed`) or at other `t0` and `every`; the argument mapped over its inner axis, the same references in its
+    order, where the entries are wider than a leaf; and the argument unmapped, its first member's row."""
+    j = v["program"]
+    x = j["definitions"][j["root"]]["body"]["nodes"][v["node"]]
+    lane = r.randrange(len(v["ks"]))
+    a = x["args"][v["o"] + lane]
+    nodes = j["definitions"][j["root"]]["body"]["nodes"]
+    refs, E, n = PC._refs(a, nodes), v["E"], x["n"]
+    out = []
+    for how in ("explicit", "runs", "blocks"):
+        parts = _encoded(refs, E, how, r)
+        assert [y for q in parts for y in _expand(q)] == refs, (how, parts)
+        out.append((how, _with_arg(v, lane, {"concat": parts})))
+        changed = _perturbed(parts, E, v["ks"], r)
+        if _in_range(v, changed):
+            out.append((f"{how}+change", _with_arg(v, lane, {"concat": changed})))
+        out.append((f"{how}+params", _with_arg(v, lane, {"concat": parts}) | {
+            "t0": r.randrange(4), "every": r.randint(1, 4)}))
+    axes = x.get("axes") or [None] * len(x["args"])
+    t = _ty(j, a["type"])
+    if axes[v["o"] + lane] == 0 and E > 1 and t[2][0] == "Array" and PC.leaves_of(t[2][2]) == 1:
+        moved = [list(refs[m * E + ell]) for ell in range(E) for m in range(n)]
+        out.append(("inner", _with_arg(v, lane, {"explicit": moved}, axis=1,
+                                       ty=["Array", t[2][1], ["Array", t[1], t[2][2]]])))
+        out.append(("unmapped", _with_arg(v, lane, {"explicit": [list(y) for y in refs[:E]]}, axis=None,
+                                          ty=t[2])))
+    return out
+
+
+def test_reads_entries_is_the_walk(reads_server):
+    """`readsEntries`, which reads a `prog<j>` argument part by part, is the walk it replaced, member by member and leaf
+    by leaf (`PC._reads_entries_walk`), with one difference, a mapping over an inner axis, which it refuses: Lean's
+    (`network-records verdicts`' `reads-entries`), the mirror's and the walk's answers are one on every `readsEntries`
+    call `scanOf` makes of the rows-form cases' scans, their bad scans and each `NetTiming.BoundaryGates.Fits` negative,
+    and a grid of generator-form scans over T, every, lanes, the entries' width, skew and a shared input; and on
+    arguments drawn from those calls: re-encoded explicitly, as cut runs of affine, strided and explicit parts, and as
+    strided rows, each also changed and at other `t0` and `every`, mapped over an inner axis (where the walk accepts
+    some that `readsEntries` refuses), and unmapped. A rewrite that loses a part kind, a stride or a row boundary
+    differs from the walk here, which the `#guard`s' handful of nodes can't show."""
+    calls, pool = [], []
+    for n in range(3):
+        case = build("rows-honest", n, small=n % 2 == 0)
+        every = case["params"]["schedule"]["every"]
+        pool += _reads_calls(case["params"]["scan"], every)
+        for p in (case["params"], *PC.bad_scans(case["params"]),
+                  *(q for q, _ in PC.scan_negatives(case["params"]).values())):
+            calls += [("case", c) for c in _reads_calls(p["scan"], every)]
+    grid = [c for text, every in _scan_grid() for c in _reads_calls(json.loads(text), every)]
+    calls += [("grid", c) for c in grid]
+    r = random.Random(0)
+    drawn = [y for c in pool + grid for y in _redrawn(c, r)]
+    seen, inner = Counter(), 0
+    for how, v in calls + drawn:
+        want = _walked(v)
+        assert _reads(v, PC._reads_entries) == want, (how, v)
+        assert D.replay(READS, v, reads_server) == ("output", D.canonical(want)), (how, v)
+        seen[(how, want)] += 1
+        inner += how == "inner" and _reads(v, PC._reads_entries_walk)
+    print(sorted(seen.items()))
+    for how in ("case", "grid", "explicit", "runs", "blocks", "unmapped"):
+        assert seen[(how, True)], (how, seen)
+    for how in ("grid", "explicit+change", "runs+change", "blocks+change", "explicit+params", "inner"):
+        assert seen[(how, False)], (how, seen)
+    assert inner, seen
+
+
 def test_a_scan_in_the_checker_form_is_refused_by_name(server):
     """A scan in the checker form, whose egress template takes the row its units compare as an input, is refused at the
     parameters by Lean and the mirror, by name, though its terms would read: no egress gate is an input
@@ -620,11 +910,11 @@ def test_a_scan_in_the_checker_form_is_refused_by_name(server):
 
 
 def test_a_wide_unit_is_charged_its_committed_bits(server):
-    """A compute audit's incorrect proof blocks' bits (`faulty_bits`) are its bound times the most bits one of its
-    Program's units commits, its parameters and its return, read off the Program, not a proof block's 16-bit public
-    output: over honest clock-form periods whose audits' stand-in units take a 16-bit parameter and return 8 to 320
-    bits, each audit is charged `b · bits`, some audit of wide units more than `16 · b`, and Lean's public is the
-    mirror's."""
+    """A compute audit's incorrect proof blocks' bits (`faulty_bits`) are its bound times the most one of its Program's
+    units is charged, `vu_bits` at one instance a VU of its parameters' and its return's 16-bit words, read off the
+    Program, not a proof block's 16-bit public output: over honest clock-form periods whose audits' stand-in units take
+    a 16-bit parameter and return 8 to 320 bits, each audit is charged `b · bits`, some audit of wide units more than
+    `16 · b`, and Lean's public is the mirror's."""
     wide = 0
     for n in range(12):
         case = build("honest", n)
@@ -636,6 +926,135 @@ def test_a_wide_unit_is_charged_its_committed_bits(server):
         verdict, got = D.replay(PORT, case, server)
         assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (n, got)
     assert wide
+
+
+def _check_files(exe: Path, d: Path, case: dict, texts: list[str]) -> dict:
+    """`network-period check PARAMS COMMITMENT EVIDENCE CIRCUIT…` on the case's files and the circuit files `texts`:
+    its answer, its exit status its verdict's."""
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "params.json").write_text(D.canonical(case["params"]))
+    (d / "commitment").write_bytes(bytes.fromhex(case["commitment"]))
+    (d / "evidence").write_bytes(bytes.fromhex(case["evidence"]))
+    for i, t in enumerate(texts):
+        (d / f"circuit-{i}").write_text(t)
+    p = subprocess.run([str(exe), "check", *(str(d / n) for n in ("params.json", "commitment", "evidence")),
+                        *(str(d / f"circuit-{i}") for i in range(len(texts)))], capture_output=True, text=True)
+    out = json.loads(p.stdout)
+    assert p.returncode == {ACCEPT: 0, REJECT: 1, UNDECIDED: 2}[out["verdict"]], (p.returncode, p.stderr)
+    return out
+
+
+def _relisted(case: dict, texts: list[str]) -> dict:
+    """The case with its audits' listings naming the files `texts`, in order, by their SHA-512."""
+    params, it = json.loads(json.dumps(case["params"])), iter(texts)
+    for a in params["audits"]:
+        for f in a.get("circuits", []):
+            f["sha512"] = hashlib.sha512(next(it).encode()).hexdigest()
+    return case | {"params": params}
+
+
+def test_a_listed_audit_counts_its_vus_off_its_circuit_files(server, tmp_path):
+    """A record-form audit that lists its circuit file (`audit-listed`: its `Gemm_v2{K=16,N=16}` template's 8
+    instances, its parameters `x` and `w` 16 and 256 packed words, its return 16, at one instance a VU) is accepted by
+    `network-period check … CIRCUIT` with the mirror's public, its units its VUs, each wrong one charged
+    `vu_bits(1, words)`, and each VU's input padding (`padCols`, its unit's input columns no port holds) counted free;
+    so is the file with its last input port a cut input that one leaf cut wires. With no files, or
+    through `serve`, Lean and the mirror refuse its parameters, as only the check given its files reads a listing. Each
+    set of files that is not the listing's is refused by both, at the same reason: a file of another SHA-512, a file too
+    many, META naming another Program or another partition, a unit input group running past the last one's end (the
+    header `headerNet` reads); and, as `SampledProofs.Bits.check` refuses them, a unit returning one output word twice,
+    a leaf map past the input rows, a cut input wired by no leaf cut or by two, a wire into the unit, a leaf cut past
+    the input rows, a cut input's group over the first group's ports, two row ports of one name, input rows out of the
+    parameters' order, output rows that are not the return's words, an input port reading another word than its
+    parameter's (`fieldBit`), a parameter bit past its row's bits, and two instances a VU."""
+    exe = D.build(LEAN, "network-period")
+    for n in range(4):
+        case = build("audit-listed", n, small=n % 2 == 0)
+        texts = PC.listed_files(case)
+        out = PC.reference_with(case, texts)
+        assert out["verdict"] == ACCEPT, (n, out)
+        p, listing = PC.params_listed(case["params"])
+        i, x = next((i, x) for i, x in enumerate(listing.audits) if x is not None)
+        ((_, members, words),) = x.templates
+        charged = PC.charged(p, listing, [PC.read_circuit(t) for t in texts]).audits[i]
+        units = PC.RECORD_UNITS[False]
+        assert (members, words, charged.units, charged.bits) == (units, 288, units, 16 * words + 2), (n, charged)
+        pad = PC.pad_cols(PC.read_circuit(texts[0]))
+        assert pad > 0 and charged.free == p.audits[i].free + units * pad, (n, pad, charged)
+        term = out["public"]["audits"][i]
+        assert (term["units"], term["faulty_bits"]) == (units, term["wrong_units"] * charged.bits), (n, term)
+        got = _check_files(exe, tmp_path / f"{n}-accept", case, texts)
+        assert (got["verdict"], got.get("public")) == (ACCEPT, out["public"]), (n, got)
+        verdict, served = D.replay(PORT, case, server)
+        assert verdict == REJECT and "lists circuit files" in json.loads(served)["reason"], (n, served)
+        assert reference(case)["reason"].startswith("params:"), (n, reference(case))
+        assert "lists circuit files" in _check_files(exe, tmp_path / f"{n}-none", case, [])["reason"]
+        cut = PC.listed_files(case, cut=True)
+        cut_case = _relisted(case, cut)
+        mirror = PC.reference_with(cut_case, cut)
+        got = _check_files(exe, tmp_path / f"{n}-cut", cut_case, cut)
+        assert (mirror["verdict"], got["verdict"], got.get("public")) == (ACCEPT, ACCEPT, mirror["public"]), (n, got)
+        program = PC.program_sha512(case["params"]["audits"][i]["program"])
+        ports = lambda *ps: [[nm, w, 0] for nm, w in ps]  # noqa: E731
+        refusals = [
+            (case, PC.listed_files(case, note="another file"), "is not its listing's"),
+            (case, texts * 2, "circuit files"),
+            (None, PC.listed_files(case, program_sha512=hashlib.sha512(b"another").hexdigest()), "program_sha512"),
+            (None, PC.listed_files(case, partition={"rule": PC.PARTITION_V1, "digest": program}), "META partition"),
+            (None, PC.listed_files(case, leaves_out=[[0] * 16]), "returns an output word twice"),
+            (None, PC.listed_files(case, leaves_in=[[288, *range(1, 272)]]),
+             "a leaf map names a word past the circuit file's input rows"),
+            (None, PC.listed_files(case, cut=True, leaf_cuts=[]), "input port 271 of the circuit file's unit, template "
+             "instance 0, is not wired exactly once"),
+            (None, PC.listed_files(case, cut=True, leaf_cuts=[["unit", 0, 271, 271]] * 2), "is not wired exactly once"),
+            (None, PC.listed_files(case, cut=True, wires=[["unit", 0, 1, "unit", 0, 0]]),
+             "a wire into the circuit file's unit"),
+            (None, PC.listed_files(case, cut=True, leaf_cuts=[["unit", 0, 271, 288]]),
+             "a leaf cut outside the unit's cut inputs or the input rows"),
+            (None, PC.listed_files(case, cut=True, cut_group=(0, 1)),
+             "flock-ir-unit/v2: a port group's ports overrun its words, or an input group the input rows"),
+            (None, PC.listed_files(case, cut=True, cut_group=(0, 64)),
+             "the circuit file's unit's input ports overlap or are out of column order"),
+            (None, PC.listed_files(case, ports=ports(("x", 16), ("x", 256), ("o", 16))),
+             "two row ports of the circuit file have one name"),
+            (None, PC.listed_files(case, ports=ports(("w", 256), ("x", 16), ("o", 16))),
+             "the circuit file's input rows are not its template's parameters in order, each 1 times its packed words"),
+            (None, PC.listed_files(case, ports=ports(("x", 16), ("w", 256), ("o", 32)), out_ports=[["o", 32]]),
+             "the circuit file's output rows are not 1 times its template's return's packed words"),
+            (None, PC.listed_files(case, leaves_in=[[1, 0, *range(2, 272)]]),
+             "template instance 0's input port 0 reads row word 1, not word 0 of its parameter x's rows"),
+            (None, PC.listed_files(case, row_schemas=[["hm96-sha512/row/v2", b] for b in (8, 4096, 256)]),
+             "bit 8 of parameter x of template instance 0 is no message bit of its rows"),
+            (None, PC.listed_files(case, 2), "the circuit file has 2 template instances a VU, not one")]
+        for k, (c, files, fragment) in enumerate(refusals):
+            c = c or _relisted(case, files)
+            mirror = PC.reference_with(c, files)
+            assert mirror["verdict"] == REJECT and fragment in mirror["reason"], (n, k, mirror)
+            got = _check_files(exe, tmp_path / f"{n}-{k}", c, files)
+            assert got["verdict"] == REJECT and fragment in got["reason"], (n, k, got)
+        dropped = json.loads(json.dumps(case["params"]))
+        dropped["audits"][i]["circuits"] = []
+        dropped = case | {"params": dropped}
+        for got in (PC.reference_with(dropped, []), _check_files(exe, tmp_path / f"{n}-dropped", dropped, [])):
+            assert got["reason"].startswith("params:") and "a file each" in got["reason"], (n, got)
+
+
+def test_a_tied_audit_lists_its_circuit_files(server, tmp_path):
+    """Given circuit files, the period check refuses a rows-form period whose audit the scan ties lists none
+    (`unlistedTied`), before it holds the files to the listing, so no tied audit escapes `SampledProofs.Bits.check`:
+    a small `rows-honest` period, whose scan ties its one audit, given an audit's valid circuit file, is refused by
+    Lean and the mirror at the same reason; with no files it is the check that reads none, and both accept it."""
+    exe = D.build(LEAN, "network-period")
+    text = PC.listed_files(build("audit-listed", 0, small=True))[0]
+    for n in range(2):
+        case = build("rows-honest", n, small=True)
+        p, listing = PC.params_listed(case["params"])
+        assert PC.unlisted_tied(p, listing, PC.commitment(bytes.fromhex(case["commitment"]))) == 0, n
+        for got in (PC.reference_with(case, [text]), _check_files(exe, tmp_path / f"{n}", case, [text])):
+            assert got["verdict"] == REJECT and got["reason"].startswith(
+                "circuit files: audit 0 is tied to the scan but lists no circuit files"), (n, got)
+        got = _check_files(exe, tmp_path / f"{n}-none", case, [])
+        assert (got["verdict"], got.get("public")) == (ACCEPT, reference(case)["public"]), (n, got)
 
 
 #: The refusals that hold a compute audit to its Program, in either form, each with what Lean's reason and the
@@ -742,6 +1161,32 @@ def test_the_rows_forms_caps_are_the_schedules(server):
     w63k4 = WardenParams(cell_bytes=512, slots=4, bucket_ms=100, delay=27, lanes=4, queue=4, window=32,
                          ingress_cells=47, ingress_buckets=12, egress_cells=5, every=16)
     assert len(w63k4.caps(1)) == 128 and sum(clog2(c + 1) for c in w63k4.caps(1)) == 384
+
+
+def test_a_period_whose_frames_overrun_a_u32_is_refused(server):
+    """The rows form refuses a period whose `lanes · windows · window` connections, the k-th at ordinal k + 1, aren't
+    distinct u32s, or whose cell's B bytes aren't under 2^32 (`rowsWf`): its frames could not name every connection or
+    every payload's length, so its record would not read back (`NetTiming.RowsFormat.Wf`). As parameters it is refused
+    before its caps, which a period that long could never list, by Lean and the mirror alike, and the honest period's
+    schedule passes `rowsWf` up to the last whole period under 2^32. The check refuses it too (`rowsWfCheck`), which the
+    mirror's check shows at an empty period whose B is 2^32: no parameters `params` reads reach it."""
+    fragment = "rows format: a frame's ordinal and payload length are u32s"
+    for n in range(2):
+        case = build("rows-honest", n, small=True)
+        p = PC.params(case["params"])
+        per = p.schedule.lanes * p.schedule.window
+        over = -(-PC.U32 // per)
+        assert PC.rows_wf(p.schedule, p.windows) and PC.rows_wf(p.schedule, (PC.U32 - 1) // per), (n, per)
+        assert not PC.rows_wf(p.schedule, over), (n, per)
+        broken = case | {"params": case["params"] | {"windows": over}}
+        assert reference(broken)["reason"].startswith(f"params: {fragment}"), (n, reference(broken))
+        verdict, out = D.replay(PORT, broken, server)
+        assert verdict == REJECT and json.loads(out)["reason"].startswith(f"params: {fragment}"), (n, out)
+        empty = dataclasses.replace(p, audits=(), windows=0)
+        for b, refused in ((PC.U32 - 1, False), (PC.U32, True)):
+            q = dataclasses.replace(empty, schedule=dataclasses.replace(p.schedule, cell_bytes=b))
+            got = PC.check(q, PC.Commitment([], [], b""), ([], []))
+            assert (got[0] == REJECT and got[1].startswith(fragment)) == refused, (n, b, got)
 
 
 def test_the_mirror_reads_a_registration_as_the_network_certifier_writes_it():

@@ -5,16 +5,16 @@ import Proofs.Properties.NetworkScan.Accept
 /-!
 # What the period check holds of an audit's free inputs: the proofs of `RowsWiresChecked` and `RowsHeld`
 
-`auditOf_ok` reads `auditOf`'s steps: an audit's `program` decodes through its canonical text to a Program `prog`,
-whose SHA-512 it records, and its free inputs are what `FreeOf` states: `prog`'s input gates (`inputGates`), or with a
-circuit record `NetworkCheck.Circuit.countsOf` of the record `NetworkCheck.Circuit.checked` read off its `circuit` and
-`order` against `prog`, at its `pins`' parameters (`free`) and at those and the scan's state (`stateFree`), the record
-the audit keeps, its digest and pins the ones the audit records, no pin the scan's state. `paramsOf_audits` walks
-`paramsOf`'s steps (`jp_ok` past each refusal, `paramsCircuit_ok` past the circuit's two forms): the parameters' audits
-are their `audits` entries, each through `auditOf`. On acceptance no audit has a finding (`check_audits`), so each
-audit's check passed (`auditCheck_ok`): its registration names that SHA-512, binds the record by its digest and records
-each pin as its parameter's registered root. `rowsHeld` adds the rows form's `held` (`publicJson_held`) and
-`rowsCircuitHeld`.
+`auditOf_ok` reads `auditWith`'s steps, whose audit `auditOf` keeps: an audit's `program` decodes through its canonical
+text to a Program `prog`, whose SHA-512 it records, and its free inputs are what `FreeOf` states: `prog`'s input gates
+(`inputGates`), or with a circuit record `NetworkCheck.Circuit.countsOf` of the record `NetworkCheck.Circuit.checked`
+read off its `circuit` and `order` against `prog`, at its `pins`' parameters (`free`) and at those and the scan's state
+(`stateFree`), the record the audit keeps, its digest and pins the ones the audit records, no pin the scan's state.
+`paramsOf_audits` walks `paramsWith`'s steps, whose parameters `paramsOf` keeps (`jp_ok` past each refusal,
+`paramsCircuit_ok` past the circuit's two forms): the parameters' audits are their `audits` entries, each through
+`auditWith`. On acceptance no audit has a finding (`check_audits`), so each audit's check passed (`auditCheck_ok`):
+its registration names that SHA-512, binds the record by its digest and records each pin as its parameter's registered
+root. `rowsHeld` adds the rows form's `held` (`publicJson_held`) and `rowsCircuitHeld`.
 
 The honest lemmas show the check accepting a rows-form period and an audit's registration passing each registration
 step; no audit `paramsOf` accepts is exhibited, since `Flock.Program.decode` reads `Lean.Json.parse`, a `partial def`
@@ -36,6 +36,12 @@ theorem get_ok {a : Json} {k ctx : String} {v : Json} (h : Flock.J.get a k ctx =
 theorem mapError_ok {ε ε' α : Type} {f : ε → ε'} {x : Except ε α} {a : α} (h : x.mapError f = .ok a) :
     x = .ok a := by
   cases x <;> simp_all [Except.mapError]
+
+theorem map_ok {ε α β : Type} {f : α → β} {x : Except ε α} {b : β} (h : f <$> x = .ok b) :
+    ∃ a, x = .ok a ∧ f a = b := by
+  cases x with
+  | error e => first | cases h | simp [Functor.map, Except.map] at h
+  | ok a => exact ⟨a, rfl, by first | injection h | simpa [Functor.map, Except.map] using h⟩
 
 theorem ite_ok {ε α : Type} {c : Prop} [Decidable c] {x y : Except ε α} {v : α}
     (h : (if c then x else y) = .ok v) : (c ∧ x = .ok v) ∨ (¬ c ∧ y = .ok v) := by
@@ -200,7 +206,10 @@ theorem auditOf_ok {a : Json} {ctx : String} {au : Audit} (h : auditOf a ctx = .
     ∃ (pj : Json) (s : String) (prog : Flock.Program.Prog),
       a.getObjVal? "program" = .ok pj ∧ Flock.canon pj = .ok s ∧ Flock.Program.decode s.toUTF8 = .ok prog ∧
       au.program = Flock.hexOf prog.sha512 ∧ FreeOf a prog au := by
-  unfold auditOf at h
+  obtain ⟨⟨au', l⟩, h, hau⟩ := map_ok h
+  try dsimp only at hau
+  subst hau
+  unfold auditWith at h
   try simp only [] at h
   rcases ite_ok h with ⟨-, h⟩ | ⟨-, h⟩
   swap
@@ -227,6 +236,7 @@ theorem auditOf_ok {a : Json} {ctx : String} {au : Audit} (h : auditOf a ctx = .
   cases hc : a.getObjVal? "circuit" with
   | error e =>
     simp only [hc, pure_bind] at h
+    obtain ⟨listed, -, h⟩ := bind_ok h
     obtain ⟨steps, -, h⟩ := bind_ok h
     cases h
     exact ⟨pj, s, prog, get_ok hpj, hs, hdec, rfl, by simp [FreeOf]⟩
@@ -243,6 +253,7 @@ theorem auditOf_ok {a : Json} {ctx : String} {au : Audit} (h : auditOf a ctx = .
     obtain ⟨⟨r, sm⟩, hrs, h⟩ := bind_ok h
     obtain ⟨d, hd, h⟩ := bind_ok h
     try simp only [pure_bind] at h
+    obtain ⟨listed, -, h⟩ := bind_ok h
     obtain ⟨steps, -, h⟩ := bind_ok h
     cases h
     refine ⟨pj, s, prog, get_ok hpj, hs, hdec, rfl, ?_⟩
@@ -250,86 +261,109 @@ theorem auditOf_ok {a : Json} {ctx : String} {au : Audit} (h : auditOf a ctx = .
     exact ⟨record, order, pinsJ, r, sm, hc, get_ok horder, get_ok hpinsJ, mapError_ok hrs, mapError_ok hheld, rfl,
       rfl, rfl, mapError_ok hd, fun q hq hq1 => hany (List.any_eq_true.2 ⟨q, hq, by simp [hq1]⟩)⟩
 
-/-- **The parameters' audits are their `audits` entries**, each decoded by `auditOf`. `paramsOf`'s steps in order:
-its keys, `audits`, `cells`, `first`, `jitter`, `link`, `lms`, `key`, `session`, `program`, `circuit`, the form
-(`sync_set`, or `schedule` and `scan`) and `windows`, each a bind or a refusal it passes, its join points left unfolded
-so no step copies the rest. -/
+/-- **The parameters' audits are their `audits` entries**, each read by `auditWith`. `paramsOf` takes `paramsWith`'s
+parameters where they list no circuit file, and `paramsWith`'s steps in order are its keys, `audits`, `cells`,
+`first`, `jitter`, `link`, `lms`, `key`, `session`, `program`, `circuit`, the form (`sync_set`, or `schedule` and
+`scan`), `windows`, the rows form's refusals and `scan_circuits`, each a bind or a refusal it passes, its join points
+left unfolded so no step copies the rest. -/
 theorem paramsOf_audits {j : Json} {p : Params} (h : paramsOf j = .ok p) :
-    ∃ xs, Flock.J.arr j "audits" "the object" = .ok xs ∧ xs.mapM (auditOf · "an audit") = .ok p.audits := by
+    ∃ xs read, Flock.J.arr j "audits" "the object" = .ok xs ∧ xs.mapM (auditWith · "an audit") = .ok read ∧
+      p.audits = read.map (·.1) := by
   unfold paramsOf at h
+  obtain ⟨⟨p', l⟩, hw, h⟩ := bind_ok h
+  have hp : p' = p := by
+    try dsimp only at h
+    rcases ite_ok h with ⟨-, h⟩ | ⟨-, h⟩
+    · exact absurd h (by intro h'; injection h')
+    · first | (cases h; rfl) | exact Except.ok.inj h | simpa using h
+  subst hp
+  unfold paramsWith at hw
   cases j
   case obj kv =>
-    replace h := jp_ok h (by intro h'; injection h')
-    obtain ⟨xs, hxs, h⟩ := bind_ok h
-    obtain ⟨audits, haud, h⟩ := bind_ok h
-    suffices hp : p.audits = audits by exact ⟨xs, hxs, by rw [hp]; exact haud⟩
-    clear hxs haud
-    obtain ⟨_, -, h⟩ := bind_ok h
-    obtain ⟨_, -, h⟩ := bind_ok h
-    obtain ⟨_, -, h⟩ := bind_ok h
-    obtain ⟨_, -, h⟩ := bind_ok h
-    replace h := jp_ok h (by intro h'; injection h')
-    obtain ⟨_, -, h⟩ := bind_ok h
-    replace h := jp_ok h (by intro h'; injection h')
-    obtain ⟨_, -, h⟩ := bind_ok h
-    obtain ⟨_, -, h⟩ := bind_ok h
-    obtain ⟨_, -, h⟩ := bind_ok h
-    obtain ⟨_, -, h⟩ := bind_ok h
-    obtain ⟨_, -, h⟩ := bind_ok h
-    obtain ⟨_, -, h⟩ := bind_ok h
-    obtain ⟨_, -, h⟩ := bind_ok h
-    obtain ⟨_, -, h⟩ := bind_ok h
-    obtain ⟨_, -, h⟩ := bind_ok h
-    replace h := jp_ok h (by intro h'; injection h')
-    obtain ⟨_, -, h⟩ := bind_ok h
-    obtain ⟨_, -, h⟩ := bind_ok h
-    replace h := jp_ok h (by intro h'; injection h')
-    obtain ⟨_, -, h⟩ := bind_ok h
-    replace h := jp_ok h (by intro h'; injection h')
-    obtain ⟨_, h⟩ := paramsCircuit_ok h (fun hd => by
+    replace hw := jp_ok hw (by intro h'; injection h')
+    obtain ⟨xs, hxs, hw⟩ := bind_ok hw
+    obtain ⟨read, hread, hw⟩ := bind_ok hw
+    refine ⟨xs, read, hxs, hread, ?_⟩
+    clear hxs hread
+    obtain ⟨_, -, hw⟩ := bind_ok hw
+    obtain ⟨_, -, hw⟩ := bind_ok hw
+    obtain ⟨_, -, hw⟩ := bind_ok hw
+    obtain ⟨_, -, hw⟩ := bind_ok hw
+    replace hw := jp_ok hw (by intro h'; injection h')
+    obtain ⟨_, -, hw⟩ := bind_ok hw
+    replace hw := jp_ok hw (by intro h'; injection h')
+    obtain ⟨_, -, hw⟩ := bind_ok hw
+    obtain ⟨_, -, hw⟩ := bind_ok hw
+    obtain ⟨_, -, hw⟩ := bind_ok hw
+    obtain ⟨_, -, hw⟩ := bind_ok hw
+    obtain ⟨_, -, hw⟩ := bind_ok hw
+    obtain ⟨_, -, hw⟩ := bind_ok hw
+    obtain ⟨_, -, hw⟩ := bind_ok hw
+    obtain ⟨_, -, hw⟩ := bind_ok hw
+    obtain ⟨_, -, hw⟩ := bind_ok hw
+    replace hw := jp_ok hw (by intro h'; injection h')
+    obtain ⟨_, -, hw⟩ := bind_ok hw
+    obtain ⟨_, -, hw⟩ := bind_ok hw
+    replace hw := jp_ok hw (by intro h'; injection h')
+    obtain ⟨_, -, hw⟩ := bind_ok hw
+    replace hw := jp_ok hw (by intro h'; injection h')
+    obtain ⟨_, hw⟩ := paramsCircuit_ok hw (fun hd => by
       obtain ⟨_, -, hd⟩ := bind_ok hd
       replace hd := jp_ok hd (by intro h'; injection h')
       obtain ⟨o, -, hd⟩ := bind_ok hd
       exact ⟨o, hd⟩)
-    rcases ite_ok h with ⟨-, h⟩ | ⟨-, h⟩
-    · obtain ⟨_, -, h⟩ := bind_ok h
-      obtain ⟨_, -, h⟩ := bind_ok h
-      obtain ⟨_, hform, h⟩ := bind_ok h
+    rcases ite_ok hw with ⟨-, hw⟩ | ⟨-, hw⟩
+    · obtain ⟨_, -, hw⟩ := bind_ok hw
+      obtain ⟨_, -, hw⟩ := bind_ok hw
+      obtain ⟨_, hform, hw⟩ := bind_ok hw
       cases hform
-      obtain ⟨_, -, h⟩ := bind_ok h
-      replace h := jp_ok h (by intro h'; injection h')
-      cases h
+      obtain ⟨_, -, hw⟩ := bind_ok hw
+      replace hw := jp_ok hw (by intro h'; injection h')
+      obtain ⟨_, -, hw⟩ := bind_ok hw
+      cases hw
       rfl
-    · obtain ⟨_, -, h⟩ := bind_ok h
-      obtain ⟨_, -, h⟩ := bind_ok h
-      obtain ⟨_, -, h⟩ := bind_ok h
-      obtain ⟨_, -, h⟩ := bind_ok h
-      obtain ⟨_, -, h⟩ := bind_ok h
-      obtain ⟨_, hform, h⟩ := bind_ok h
+    · obtain ⟨_, -, hw⟩ := bind_ok hw
+      obtain ⟨_, -, hw⟩ := bind_ok hw
+      obtain ⟨_, -, hw⟩ := bind_ok hw
+      obtain ⟨_, -, hw⟩ := bind_ok hw
+      obtain ⟨_, -, hw⟩ := bind_ok hw
+      obtain ⟨_, hform, hw⟩ := bind_ok hw
       cases hform
-      obtain ⟨_, -, h⟩ := bind_ok h
-      replace h := jp_ok h (by intro h'; injection h')
-      replace h := jp_ok h (by intro h'; injection h')
-      cases h
+      obtain ⟨_, -, hw⟩ := bind_ok hw
+      replace hw := jp_ok hw (by intro h'; injection h')
+      replace hw := jp_ok hw (by intro h'; injection h')
+      replace hw := jp_ok hw (by intro h'; injection h')
+      obtain ⟨_, -, hw⟩ := bind_ok hw
+      cases hw
       rfl
-  all_goals exact absurd h (by intro h'; injection h')
+  all_goals exact absurd hw (by intro h'; injection h')
 
 theorem rowsWiresChecked : RowsWiresChecked := by
   intro j p c e pub prof hp h i au reg hau hreg
   obtain ⟨hca, hea, hfind⟩ := check_audits h
-  obtain ⟨xs, hxs, hmap⟩ := paramsOf_audits hp
+  obtain ⟨xs, read, hxs, hmap, haud⟩ := paramsOf_audits hp
   obtain ⟨hic, -⟩ := Array.getElem?_eq_some_iff.1 hreg
-  obtain ⟨hia, hau'⟩ := Array.getElem?_eq_some_iff.1 hau
+  obtain ⟨hia, -⟩ := Array.getElem?_eq_some_iff.1 hau
   have hie : i < e.audits.size := by omega
   have hx : e.audits[i]? = some e.audits[i] := Array.getElem?_eq_some_iff.2 ⟨hie, rfl⟩
   obtain ⟨f, hf⟩ := ok_of_findingOf (hfind _ (Array.mem_of_getElem? (auditChecks_getElem? hau hreg hx)))
   obtain ⟨hprog, hrec⟩ := auditCheck_ok hf
-  have hsize := NciCheck.Properties.SecurityProofs.BodiesOk.array_mapM_size _ xs p.audits hmap
+  have hsize := NciCheck.Properties.SecurityProofs.BodiesOk.array_mapM_size _ xs read hmap
+  have hir : i < read.size := by
+    have h1 := hia
+    rw [haud, Array.size_map] at h1
+    exact h1
   have hix : i < xs.size := by omega
   have hget : auditOf xs[i] "an audit" = .ok au := by
-    have := NciCheck.Properties.SecurityProofs.BodiesOk.array_mapM_get _ xs p.audits hmap i hix hia
-    rw [hau'] at this
-    exact this
+    have hr : auditWith xs[i] "an audit" = .ok read[i] :=
+      NciCheck.Properties.SecurityProofs.BodiesOk.array_mapM_get _ xs read hmap i hix hir
+    have hau2 : read[i].1 = au := by
+      have h2 := hau
+      rw [haud, Array.getElem?_map, Array.getElem?_eq_getElem hir, Option.map_some] at h2
+      exact Option.some.inj h2
+    unfold auditOf
+    rw [hr, ← hau2]
+    try rfl
   obtain ⟨pj, s, prog, hpj, hs, hd, hpr, hfree⟩ := auditOf_ok hget
   refine ⟨xs, xs[i], pj, s, prog, hxs, Array.getElem?_eq_some_iff.2 ⟨hix, rfl⟩, hpj, hs, hd, ?_, ?_⟩
   · rw [← hpr]

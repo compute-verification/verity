@@ -11,10 +11,9 @@ nothing wrong (`facts`), the file has one template instance a VU (`Facts.upv`) a
 (`Facts.outRows`), as `SampledProofs.Bits.outGate` reads the rows (`Rows.ofNet`, whose split of the columns is the
 check's: `ofNet_nIn`, `ofNet_nComp`).
 
-A type's bits (`NetworkCheck.Period.bitsOf`, and Bits' own, the same sum) are its leaves' widths summed,
-`Flock.Sigma.bits` (`period_bitsOf`, `bits_bitsOf`): an array's its length times its element's, a value's its width
-(`bits_array`, `bits_value`). A pair's return words are its two fields' (`retWords_pair`), and the network check reads a
-return's fields as Bits does (`fieldsOf_eq`).
+A type's bits (`SampledProofs.Bits.bitsOf`) are its leaves' widths summed, `Flock.Sigma.bits` (`bits_bitsOf`): an
+array's its length times its element's, a value's its width (`bits_array`, `bits_value`). A pair's return words are its
+two fields' (`retWords_pair`).
 -/
 
 open SampledProofs.Bits
@@ -27,21 +26,15 @@ theorem foldl_add_eq : ∀ (l : List ℕ) (a : ℕ), l.foldl (· + ·) a = a + l
   | [], a => by simp
   | x :: l, a => by rw [List.foldl_cons, foldl_add_eq l, List.sum_cons]; omega
 
-theorem period_bitsOf (t : Flock.Program.Ty) : NetworkCheck.Period.bitsOf t = Flock.Sigma.bits t := by
-  unfold NetworkCheck.Period.bitsOf
+theorem bits_bitsOf (t : Flock.Program.Ty) : bitsOf t = Flock.Sigma.bits t := by
+  unfold bitsOf
   rw [← Array.foldl_toList, foldl_add_eq, Flock.Sigma.widths_sum, Nat.zero_add]
-
-theorem bits_bitsOf (t : Flock.Program.Ty) : bitsOf t = Flock.Sigma.bits t :=
-  period_bitsOf t
 
 theorem bits_value (w : ℕ) : Flock.Sigma.bits (.value w) = w := by
   simp [Flock.Sigma.bits]
 
 theorem bits_array (n : ℕ) (e : Flock.Program.Ty) : Flock.Sigma.bits (.array n e) = n * Flock.Sigma.bits e := by
   simp [Flock.Sigma.bits]
-
-theorem fieldsOf_eq (t : Flock.Program.Ty) : NetworkCheck.Circuit.fieldsOf t = fieldsOf t := by
-  cases t <;> rfl
 
 theorem retWords_pair (a b : Flock.Program.Ty) : retWords (.tuple #[a, b]) = wordsOf a + wordsOf b := rfl
 
@@ -89,6 +82,7 @@ theorem facts {c : Flock.Circuit} {P : Flock.Program.Prog} {tmpl : String} (h : 
   obtain ⟨-, h⟩ := ite_none h
   obtain ⟨-, h⟩ := ite_none h
   obtain ⟨hleaves, h⟩ := ite_none h
+  obtain ⟨-, h⟩ := ite_none h
   obtain ⟨-, h⟩ := ite_none h
   obtain ⟨-, h⟩ := ite_none h
   obtain ⟨-, h⟩ := ite_none h

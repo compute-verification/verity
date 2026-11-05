@@ -519,7 +519,8 @@ the unit's first input or output group is not one 16-bit word (`srcAt` and `outC
 leaf maps are not one per template instance over the unit's ports (a typed template's block, whose wiring is derived,
 has none), a leaf map names a word past the input rows (`HmOut.inWords`, so no unit reads a row it writes), a wire
 runs into the unit (a `.wire` source, which `wiresOf` doesn't place), a leaf cut is outside the unit's cut inputs or the
-input rows, an instance's input port past its leaf ports is not wired exactly once by a leaf cut (the three are
+input rows, two of the unit's input ports overlap or are out of column order (`srcKey` reads a column off the first
+port holding it, so each port's columns must be its own), an instance's input port past its leaf ports is not wired exactly once by a leaf cut (the three are
 `HmRow.check`'s wiring rule with no wire into the unit, so `srcAt` reaches neither `.wire` nor `.lit 0`), two
 instances return one output word (`writers` would hold two claims positions at one commitment position), the unit net's
 constant sits among its input words (`Rows.ofNet` and `srcKey` split the inputs at different columns), a net other than
@@ -557,6 +558,9 @@ def check (c : Flock.Circuit) (P : Flock.Program.Prog) (tmpl : String) : Option 
   else if c.leafCuts.any fun (k, p, w) =>
       c.upv ≤ k || p < cut || pc.size ≤ p || (pc.getD p (0, 0)).2 < 16 || Flock.HmOut.inWords c ≤ w then
     some "a leaf cut outside the unit's cut inputs or the input rows"
+  else if (List.range (pc.size - 1)).any fun p =>
+      (pc.getD (p + 1) (0, 0)).1 < (pc.getD p (0, 0)).1 + (pc.getD p (0, 0)).2 then
+    some "the circuit file's unit's input ports overlap or are out of column order"
   else if let some (k, p) := unwired then
     some s!"input port {p} of the circuit file's unit, template instance {k}, is not wired exactly once by a leaf cut"
   else if !decide outs.Nodup then
@@ -792,6 +796,9 @@ private def toyA2 : Flock.Circuit :=
   refuses "a leaf cut outside the unit's cut inputs or the input rows"
     (check { toyCut with nets := #[("unit", { cutNet with inGroups := #[⟨0, 1, #[16, 16]⟩, ⟨1, 1, #[8]⟩] })] }
       toyP "TTri_v1") &&
+  [#[⟨0, 1, #[16, 16]⟩, ⟨0, 1, #[16]⟩], #[⟨1, 1, #[16, 16]⟩, ⟨0, 1, #[16]⟩]].all (fun gs =>
+    refuses "the circuit file's unit's input ports overlap or are out of column order"
+      (check { toyCut with nets := #[("unit", { cutNet with inGroups := gs })] } toyP "TTri_v1")) &&
   refuses "a leaf map names a word past the circuit file's input rows"
     (check { toyA with leavesIn := #[#[0, 2]] } toyP "TPair_v1")
 

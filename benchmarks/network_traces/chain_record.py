@@ -54,8 +54,9 @@
   --warden-run`'s, on the network certifier link; the scan is `scan_zk.py prove --warden-run`'s, whose ingress units
   read each request's prompt off the network certifier's ingress cells. Each is held to the network certifier run the
   certificates step read (`on_warden`), every one is required, and the report names what the path stands on
-  (`WARDEN_STUBBED`). No step opens the endpoint's records or its advice: the window's compute audit is V3c's class
-  window, whose proofs read the advice under its hiding root, so d1's K has no advice term here (`WARDEN_K`).
+  (`WARDEN_STUBBED`). No step opens the endpoint's records or its advice, and the window's compute audit is V3c's class
+  window, whose circuit is the class's and reads no advice. d1's K has no advice term here (`WARDEN_K`): ℓ_a,j carries
+  no advice because no audit of record reads one, and hiding never reduces K.
 * **leak**: K per monitoring period (week, month, year; one machine and 1,000) on the warden gate run, pooled at
   δ = 1% and 10⁻⁶ and in the per-period form, each beside its share of Llama-3.2-1B's BF16 weights (`leak`), computed
   by `leak_bounds`: one machine is one link, and 1,000 machines are the sum over as many links.
@@ -118,10 +119,10 @@ WARDEN = "warden"
 WARDEN_STUBBED = (
     "the output tie to the Commit's port isn't proved",
     "the weights' load isn't certified: nothing here shows the endpoint served the registered weights")
-#: d1's K on the network certifier path, which opens no advice: what the period's K is instead
-WARDEN_K = ("the network certifier path opens no advice, so this report has no advice term: the period's K is "
-            "network-period check's (NetworkCheck.Period's rows form, which charges each request's schedule at its "
-            "lane's cap; --period-answer), and per monitoring period leak's")
+#: d1's K on the network certifier path, where no audit of record reads an advice: what the period's K is instead
+WARDEN_K = ("no audit of record reads an advice, so l_a,j carries none and this report has no advice term: the "
+            "period's K is network-period check's (NetworkCheck.Period's rows form, which charges each request's "
+            "schedule at its lane's cap; --period-answer), and per monitoring period leak's")
 #: the rehearsal's strategies its own check accepts (certifier_serve.ACCEPTED): token's changed bytes only the egress
 #: tie refuses
 REHEARSAL_ACCEPTS = ("honest", "token")

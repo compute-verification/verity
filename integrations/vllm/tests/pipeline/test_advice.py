@@ -53,7 +53,7 @@ def _run(tmp_path, arrivals: dict[int, list[FakeRequest]], *, abort_at=None, clo
 
 
 def _advice(tmp_path) -> I1.Advice:
-    return I1.decode((tmp_path / "advice" / "private" / "advice.bin").read_bytes())
+    return I1.decode(C.unpad((tmp_path / "advice" / "private" / "advice.bin").read_bytes()))
 
 
 def test_a_varied_run_gives_i1_advice_that_round_trips_with_its_bits_charged_to_windows(tmp_path):
@@ -70,7 +70,9 @@ def test_a_varied_run_gives_i1_advice_that_round_trips_with_its_bits_charged_to_
     c = rep["counts"]
     assert c["chunked_prefill_rows"] > 0 and c["mixed_steps"] > 0 and c["arrivals_during_decode"] > 0
     assert c["outputs"] == len(a.release) == sum(len(r.emitted) for r in reqs)
-    assert rep["release"] == {"rule": "engine clock", "tau_s": 0.1}
+    first = next(r for r in ST.load(tmp_path / "step_trace.jsonl") if r["kind"] == "step" and r["step"] == 0)
+    assert rep["release"] == {"rule": "engine clock", "tau_s": 0.1, "t0": first["t"]}
+    assert repr(first["t"]) not in (tmp_path / "advice" / "registration.json").read_text()
     assert len(rep["windows"]) > 1 and sum(w["bits"] for w in rep["windows"]) == rep["advice"]["bits"] == I1.total_bits(a)
     assert sum(w["outputs"] for w in rep["windows"]) == len(a.release)
     # every scheduled token is in exactly one row, and each request's rows tile [0, prompt + output - 1)
@@ -243,7 +245,7 @@ def test_the_command_writes_the_advice_and_exits_zero(tmp_path, capsys):
     assert rep["registration"]["binding"]["compiler"] == {"name": capped.name, "digest": capped.digest}
     assert rep["registration"]["compiler"]["inner"] == {"name": ADV.COMPILER, "digest": "ab" * 64}
     private = out / "private"
-    assert I1.from_json(json.loads((private / "advice.json").read_text())) == I1.decode((private / "advice.bin").read_bytes())
+    assert I1.from_json(json.loads((private / "advice.json").read_text())) == I1.decode(capped.unpad((private / "advice.bin").read_bytes()))
 
 
 def test_the_registration_records_the_committers_weights_roots_and_refuses_anything_else(tmp_path):
