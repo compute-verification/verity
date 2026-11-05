@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.ZK.RealLeaves
+public import Proofs.Properties.Verity.Sampled.CoinMap
 
 /-!
 # An opening's empty class at one hm96 leaf
@@ -13,6 +14,12 @@ the release's law. `fiberMisses_le` bounds by `2·δ₁` the probability that no
 release `bits u`. That is T1's bound twice. T1 makes the leaf ideal, so the event no longer reads the coins, and
 `bits u` may be swapped for the release `P ω`. T1 on the complement then makes the leaf real again, where the leaf's
 own coins and salt release `P ω`.
+
+* **The empty class below the block** (`OpeningAt.oneMore`, `OpeningAt.classOf_eq_empty`, `emptyAt_of_lt_block`,
+  `openEmpty_eq_one`): `classOf` holds the draws released as the bits at every description of the node, and a node's
+  descriptions are not one. A description that opens fewer coins than a block has a twin that opens one coin more,
+  whose continuation is the releases' at no frame (`relK` at `0`) reading only the release's first coins. The two
+  release bits of two lengths, so the class is empty at every release, and the empty class has probability one.
 -/
 
 @[expose] public section
@@ -82,5 +89,101 @@ theorem fiberMisses_le {Ω Q Y B C D R : Type} [Fintype Ω] [Nonempty Ω] [Finty
         rw [hswap]
     _ ≤ δ₁ + δ₁ := add_le_add hideal le_rfl
     _ = 2 * δ₁ := (two_mul δ₁).symm
+
+/-! ## The empty class below the block -/
+
+/-- Lists of `w` bits each: the first `n + 1` lists' bits, cut to `w · n`, are the first `n` lists' bits. -/
+theorem flatten_take_succ {w : ℕ} : ∀ (L : List (List Bool)) (n : ℕ), (∀ x ∈ L, x.length = w) →
+    ((L.take (n + 1)).flatten).take (w * n) = (L.take n).flatten
+  | [], _, _ => by simp
+  | x :: L, 0, _ => by simp
+  | x :: L, n + 1, h => by
+    have hx : x.length = w := h x List.mem_cons_self
+    rw [List.take_succ_cons, List.take_succ_cons, List.flatten_cons, List.flatten_cons, List.take_append,
+      List.take_of_length_le (by rw [hx, Nat.mul_add_one]; exact Nat.le_add_left w (w * n)), hx,
+      show w * (n + 1) - w = w * n by rw [Nat.mul_add_one, Nat.add_sub_cancel],
+      flatten_take_succ L n fun y hy => h y (List.mem_cons_of_mem _ hy)]
+
+/-- Lists of `w` bits each: the first `n` lists hold `w` bits for each list taken. -/
+theorem flatten_take_length {w : ℕ} : ∀ (L : List (List Bool)) (n : ℕ), (∀ x ∈ L, x.length = w) →
+    ((L.take n).flatten).length = w * min n L.length
+  | [], _, _ => by simp
+  | x :: L, 0, _ => by simp
+  | x :: L, n + 1, h => by
+    rw [List.take_succ_cons, List.flatten_cons, List.length_append, h x List.mem_cons_self,
+      flatten_take_length L n fun y hy => h y (List.mem_cons_of_mem _ hy), List.length_cons, min_add_add_right]
+    ring
+
+/-- A draw's coins are 128 bits each. -/
+theorem ofFn_lengths {block : ℕ} (d : TreeDraw block) :
+    ∀ x ∈ List.ofFn (fun i => List.ofFn (d.1 i)), x.length = 128 := by
+  intro x hx
+  obtain ⟨j, hj, rfl⟩ := List.mem_iff_getElem.1 hx
+  simp
+
+/-- A draw's first `n + 1` coins' bits, cut to `128 · n`, are its first `n` coins' bits. -/
+theorem opened_take_succ {block : ℕ} (d : TreeDraw block) (n : ℕ) :
+    (TreeDraw.opened d (n + 1)).take (128 * n) = TreeDraw.opened d n :=
+  flatten_take_succ _ n (ofFn_lengths d)
+
+/-- A draw's first `n` coins of a block are `128 · n` bits. -/
+theorem opened_length_eq {block : ℕ} (d : TreeDraw block) {n : ℕ} (h : n ≤ block) :
+    (TreeDraw.opened d n).length = 128 * n := by
+  unfold TreeDraw.opened
+  rw [flatten_take_length _ n (ofFn_lengths d), List.length_ofFn, min_eq_left h]
+
+/-- **The node's description that opens one coin more**: `o`'s node, as the releases' continuation at no frame (`relK`
+at `0`) that reads the release's first `o.n` coins as `o`'s continuation does. It describes the node wherever `o`
+does, since a draw's first `o.n + 1` coins hold its first `o.n` (`opened_take_succ`). -/
+noncomputable def OpeningAt.oneMore {β : Type} {g' : Game β} (o : OpeningAt g') : OpeningAt g' where
+  T := o.T
+  p := o.p
+  i := o.i
+  s := o.s
+  n := o.n + 1
+  b := o.b
+  k := 0
+  fs := o.fs
+  ts := o.ts
+  f log := relK o.k o.fs (o.ts.set o.i (o.T.bump o.p.1)) fun log' =>
+    o.f (⟨.opening o.i o.s o.n, o.b, (log.headD ⟨.opening o.i o.s o.n, o.b, []⟩).coins.take (128 * o.n)⟩ :: log')
+  iF := o.iF
+  iN := o.iN
+  eq := o.eq.trans (congrArg (@Game.coin β _ o.iF o.iN) (funext fun d => by
+    show _ = relK o.k o.fs (o.ts.set o.i (o.T.bump o.p.1)) fun log' =>
+      o.f (⟨.opening o.i o.s o.n, o.b, (TreeDraw.opened d.1 (o.n + 1)).take (128 * o.n)⟩ :: log')
+    rw [opened_take_succ]))
+
+/-- **An opening's class is empty below the block**: where a description `o'` of the node opens fewer coins than a
+block, no round is released as `bits` both at `o'` and at the description that opens one coin more
+(`OpeningAt.oneMore`), whose releases are 128 bits longer. -/
+theorem OpeningAt.classOf_eq_empty {β : Type} {g' : Game β} (o o' : OpeningAt g') (h : o'.n < o'.T.spec.block)
+    (bits : List Bool) : o.classOf bits = ∅ := by
+  refine Finset.eq_empty_of_forall_notMem fun d hd => ?_
+  have h1 := congrArg List.length ((Finset.mem_filter.1 hd).2 o')
+  have h2 := congrArg List.length ((Finset.mem_filter.1 hd).2 o'.oneMore)
+  have e1 : 128 * o'.n = bits.length := (opened_length_eq _ h.le).symm.trans h1
+  have e2 : 128 * (o'.n + 1) = bits.length :=
+    (opened_length_eq (n := o'.n + 1) _ (Nat.succ_le_of_lt h)).symm.trans h2
+  omega
+
+/-- **Below the block, every release is in the empty class**: where a description of an opening's node opens fewer
+coins than a block, `EmptyAt` holds at every release (`OpeningAt.classOf_eq_empty`). -/
+theorem emptyAt_of_lt_block {β : Type} {g' : Game β} (o' : OpeningAt g') (h : o'.n < o'.T.spec.block)
+    (bits : List Bool) : EmptyAt g' bits := by
+  have hn : Nonempty (OpeningAt g') := ⟨o'⟩
+  refine ⟨Classical.choice hn, by unfold openingOf; rw [dif_pos hn], ?_⟩
+  rw [OpeningAt.classOf_eq_empty _ o' h bits]
+  exact Finset.not_nonempty_empty
+
+/-- **Below the block, the opening's empty class has probability one** (`emptyAt_of_lt_block`). -/
+theorem openEmpty_eq_one {β P : Type} [Fintype P] [Nonempty P] {g' : Game β} (o' : OpeningAt g')
+    (h : o'.n < o'.T.spec.block) (bits : P → List Bool) : openEmpty g' bits = 1 := by
+  unfold openEmpty prCoin
+  calc avg _ = avg (fun _ : P => (1 : ℝ≥0∞)) := by
+        congr 1
+        funext c
+        simp [emptyAt_of_lt_block o' h (bits c)]
+    _ = 1 := FlockSoundness.Game.avg_const _
 
 end Verity.Game
