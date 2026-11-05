@@ -1,4 +1,6 @@
-import Definitions.Pouw.Fp8Atom.H1TLemmas
+module
+
+public import Definitions.Pouw.Fp8Atom.H1TLemmas
 
 /-!
 # H-1T: the cross-column late pairs in the exact-512 regime (statements)
@@ -9,6 +11,8 @@ The definitions the five `H1TCrossLateStaging` theorems read, in a module that i
 `H1TCrossLate512` the unit statement, and `absorbUnit` the unit of `H1TGapStaging`'s last section. The regime is empty
 for `k ≤ 19,430`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T.CrossLate
 

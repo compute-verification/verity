@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.Instance
+module
+
+public import Definitions.Pouw.PearlC.Instance
 
 /-!
 # Pearl-C's named protocol (proofs)
@@ -6,6 +8,8 @@ import Definitions.Pouw.PearlC.Instance
 `pearlCProtocol sem c ρ`'s costs are Pearl-C's accounting at `(Params.pi, c)` with cap `ρ`
 (`pearlCProtocol_accounting`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

@@ -1,21 +1,23 @@
-import Proofs.Flock.Recursive.KSStatement
-import Proofs.Flock.Claims.Recursion.DeployedBrings
-import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
-import Proofs.Flock.Claims.Recursion.RecRecord
-import Proofs.Flock.Bridge.CircuitOf
-import VStarRecursive
-import Properties.Verity.Game
-import Proofs.Properties.Verity.Soundness
-import Proofs.Properties.Verity.Recursive.BaseSetup
-import Proofs.Properties.Verity.Recursive.Compiled
-import Proofs.Properties.Verity.Recursive.Numbers
-import Proofs.Properties.Verity.Recursive.Names
-import Proofs.Properties.Verity.Recursive.PartStatement
-import Proofs.Properties.Verity.Recursive.PartVerdict
-import Proofs.Properties.Verity.Recursive.SetupChecks
-import Proofs.Properties.Verity.Recursive.ScheduleRun
-import Proofs.Properties.Verity.Recursive.Refusals
-import Proofs.Properties.Verity.Recursive.Assumptions
+module
+
+public import Proofs.Flock.Recursive.KSStatement
+public import Proofs.Flock.Claims.Recursion.DeployedBrings
+public import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
+public import Proofs.Flock.Claims.Recursion.RecRecord
+public import Proofs.Flock.Bridge.CircuitOf
+public import VStarRecursive
+public import Properties.Verity.Game
+public import Proofs.Properties.Verity.Soundness
+public import Proofs.Properties.Verity.Recursive.BaseSetup
+public import Proofs.Properties.Verity.Recursive.Compiled
+public import Proofs.Properties.Verity.Recursive.Numbers
+public import Proofs.Properties.Verity.Recursive.Names
+public import Proofs.Properties.Verity.Recursive.PartStatement
+public import Proofs.Properties.Verity.Recursive.PartVerdict
+public import Proofs.Properties.Verity.Recursive.SetupChecks
+public import Proofs.Properties.Verity.Recursive.ScheduleRun
+public import Proofs.Properties.Verity.Recursive.Refusals
+public import Proofs.Properties.Verity.Recursive.Assumptions
 
 /-!
 # Sampled proofs' recursive configuration: the component's property and its target
@@ -59,6 +61,8 @@ the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. Thi
 The model this reads (`RecDeploy`, `Flock.Guarantees.RecursiveKSAt`) is still in the proofs tree, so the property sits
 here rather than in `Properties` until C-Flock's spec is extracted.
 -/
+
+@[expose] public section
 
 namespace Verity.Recursive
 
@@ -743,14 +747,14 @@ theorem sampledProofsRecursive_nontrivial (q : Dep) (V : Vocab d α) (k : Verity
     (σ : Game.Strategy (V.game θ F c)) (S : SessionIn V q k θ F c σ)
     (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
     (nI vS : Msg → ℕ) (δs lam : ℝ)
-    (hbad : ¬ V.Holds k θ F c σ .sampled ⟨θ, F, c, [], ByteArray.empty, #[]⟩)
+    (hbad : ¬ V.Holds k θ F c σ .sampled ⟨θ, F, c, .empty, [], .empty, [], [], .empty, #[]⟩)
     (hcr : q.FinderCR V S collOf dColl nI vS) (hlt : q.delta V S dColl δs lam < 1) :
     ¬ Game.prob (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ ≤
       q.errAt V S collOf dColl nI vS δs lam := by
   intro h
   have h1 : Game.prob (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ = 1 :=
-    prob_play_eq_one (V.families θ) θ F c (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o)
-      (fun _ _ => ⟨trivial, hbad⟩) σ
+    prob_play_eq_one (V.families θ) (V.signer θ) θ F c (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o)
+      (fun _ _ _ _ => ⟨trivial, hbad⟩) σ
   rw [Dep.errAt, if_pos hcr] at h
   exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le h).trans_lt hlt)
 

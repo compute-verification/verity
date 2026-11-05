@@ -1,0 +1,123 @@
+"""circuit-check's catalog as tasks: one ``circuit-catalog`` task building every catalog binding's record (check.py's records
+step, `circuit-check --all --records-only`), one ``circuit-binding`` task per catalog binding checking that binding's targets
+from those records (`circuit-check --binding NAME`, `circuit_check.shard.binding`'s names), and one ``circuit-coverage`` task
+holding the bindings circuit-check makes to the ones listed here.
+
+Bindings are read from the binding files' syntax alone (`ast`), as circuit-check names them: each sidecar's (`*.circuit-check.py`
+under a regular package of `sidecars.PACKAGES`, named for its module as `sidecars.discover` names it) root functions
+``_X_roots``, its ``_model_roots`` (every model one binding) and each ``TEMPLATE_PARAMS`` entry; `targets.py`'s own root
+functions, the templates checked at their example (``TEMPLATE_PARAMS``) and the registered roots (``<registered>``).  Each task's
+inputs are what any run of the catalog reads (`base`): every run loads every registry and binding file, so a binding's own
+share of them narrows inside circuit-check, by its read-set cache, not here."""
+from __future__ import annotations
+
+import ast
+import json
+import tomllib
+from pathlib import Path
+
+from ..graph import RUNNERS, GraphError
+
+CHECKER = "tools/verity/circuit_check"
+SOURCE = f"{CHECKER}/src/circuit_check"
+TARGETS = f"{SOURCE}/targets.py"
+SIDECARS = f"{SOURCE}/sidecars.py"
+SUFFIX = ".circuit-check"
+CATALOG = "circuit-catalog:records"
+RECORDS = {"name": "records", "path": "out/circuit-records.tar.gz"}
+#: the binding circuit-check gives the registered roots, and its task's entry name
+REGISTERED = ("<registered>", "_registered")
+#: the binding of the templates `targets.py` checks at their example, those no sidecar's ``TEMPLATE_PARAMS`` names
+EXAMPLES = "TEMPLATE_PARAMS"
+
+
+def base(root: Path, files: list[str]) -> list[str]:
+    """The files any circuit-check run of the catalog may read: the checker's package but its tests, and what its suite declares
+    it reads of the tree (``[tool.verity.tests] inputs``, which the suite's guard holds it to), prose aside."""
+    try:
+        declared = tomllib.loads((root / CHECKER / "pyproject.toml").read_text())["tool"]["verity"]["tests"]["inputs"]
+    except (OSError, KeyError, tomllib.TOMLDecodeError) as e:
+        raise GraphError(f"{CHECKER}/pyproject.toml: no [tool.verity.tests] inputs ({e})") from e
+    dirs = tuple(p.rstrip("/") + "/" for p in (CHECKER, *declared))
+    exact = set(declared)
+    return [f for f in files if (f in exact or f.startswith(dirs)) and not f.startswith(f"{CHECKER}/tests/")
+            and not f.endswith(".md")]
+
+
+def _packages(root: Path) -> set[str]:
+    """The top-level names of `sidecars.PACKAGES`, read from its source."""
+    for node in ast.parse((root / SIDECARS).read_text()).body:
+        if isinstance(node, ast.Assign) and [getattr(t, "id", None) for t in node.targets] == ["PACKAGES"]:
+            return {p.partition(".")[0] for p in ast.literal_eval(node.value)}
+    raise GraphError(f"{SIDECARS}: no PACKAGES tuple to find the sidecars' packages by")
+
+
+def module(path: str, have: set[str], tops: set[str]) -> str | None:
+    """The module sidecar ``path`` binds, named from the top of the regular packages it is in (``__init__.py`` all the way
+    down), as `sidecars.discover` names it; None outside one of ``tops``."""
+    parts = path.split("/")
+    i = len(parts) - 1
+    while i > 0 and "/".join(parts[:i]) + "/__init__.py" in have:
+        i -= 1
+    pkg, stem = parts[i:-1], parts[-1][:-len(f"{SUFFIX}.py")]
+    if not pkg or pkg[0] not in tops:
+        return None
+    return ".".join(pkg if stem == "__init__" else [*pkg, stem])
+
+
+def _names(tree: ast.Module) -> dict[str, ast.stmt]:
+    """The names a module binds at its top level, each with the statement that binds it."""
+    out: dict[str, ast.stmt] = {}
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+            out[node.name] = node
+        elif isinstance(node, ast.Assign | ast.AnnAssign):
+            for t in node.targets if isinstance(node, ast.Assign) else [node.target]:
+                out.update({n.id: node for n in ast.walk(t) if isinstance(n, ast.Name)})
+        elif isinstance(node, ast.Import | ast.ImportFrom):
+            out.update({(a.asname or a.name).partition(".")[0]: node for a in node.names})
+    return out
+
+
+def entries(path: str, source: str) -> list[str]:
+    """The bindings binding file ``path`` (``source``) defines, by entry: each root function ``_X_roots`` (`targets._root_names`),
+    ``_model_roots``, and ``TEMPLATE_PARAMS:<template>`` for each key of its ``TEMPLATE_PARAMS``."""
+    names = _names(ast.parse(source, path))
+    out = sorted(n for n in names if n.startswith("_") and n.endswith("_roots") and n != "_model_roots")
+    out += ["_model_roots"] if "_model_roots" in names else []
+    if (node := names.get("TEMPLATE_PARAMS")) is not None:
+        value = node.value if isinstance(node, ast.Assign | ast.AnnAssign) else None
+        if not isinstance(value, ast.Dict) or not all(isinstance(k, ast.Constant) and isinstance(k.value, str) for k in value.keys):
+            raise GraphError(f"{path}: TEMPLATE_PARAMS is a dict literal with a string key per template, so that each entry "
+                             "is a task of its own")
+        out += [f"TEMPLATE_PARAMS:{k.value}" for k in value.keys]
+    return out
+
+
+def bindings(root: Path, files: list[str]) -> dict[str, tuple[str, str]]:
+    """{binding name, as `circuit-check --binding` takes it: (its binding file, its entry)} for the tree at ``root``."""
+    have, tops = set(files), _packages(root)
+    out = {name: (TARGETS, entry) for name, entry in (REGISTERED, (EXAMPLES, EXAMPLES))}
+    out.update({e: (TARGETS, e) for e in entries(TARGETS, (root / TARGETS).read_text()) if not e.startswith(f"{EXAMPLES}:")})
+    for f in files:
+        if f.endswith(f"{SUFFIX}.py") and (mod := module(f, have, tops)) is not None:
+            out.update({f"{mod}{SUFFIX}#{e}": (f, e) for e in entries(f, (root / f).read_text())})
+    return dict(sorted(out.items()))
+
+
+def tasks(root: Path, files: list[str]) -> list[dict]:
+    ins = base(root, files)
+    found = bindings(root, files)
+    if missing := sorted({f for f, _ in found.values()} - set(ins)):
+        raise GraphError(f"binding files outside what circuit-check's suite declares it reads: {', '.join(missing[:5])} (add "
+                         f"them to {CHECKER}/pyproject.toml's [tool.verity.tests] inputs)")
+    reads = [{"task": CATALOG, "output": RECORDS["name"]}]
+    shared = [*ins, f"{RUNNERS}/circuit_binding.py"]          # the catalog's and coverage's runners import the binding runner
+    return [{"id": CATALOG, "kind": "circuit-catalog", "about": "build every circuit-check catalog binding's record",
+             "inputs": shared, "outputs": [RECORDS], "resources": {"cores": 16, "mem_gb": 64, "disk_gb": 8}},
+            {"id": "circuit-coverage:catalog", "kind": "circuit-coverage", "inputs": shared, "reads": reads,
+             "resources": {"cores": 1, "mem_gb": 16, "disk_gb": 2},
+             "about": "the circuit-check catalog's bindings are the circuit-binding tasks'",
+             "vars": {"bindings": json.dumps(sorted(found), separators=(",", ":")), "records": RECORDS["path"]}},
+            *({"id": f"circuit-binding:{f}:{e}", "inputs": ins, "reads": reads,
+               "vars": {"binding": name, "records": RECORDS["path"]}} for name, (f, e) in found.items())]

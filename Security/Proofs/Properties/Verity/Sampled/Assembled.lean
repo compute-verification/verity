@@ -1,7 +1,9 @@
-import Proofs.Properties.Verity.Sampled.CoinMap
-import Proofs.Properties.Verity.Sampled.Accepts
-import Proofs.Properties.Verity.Sampled.Binding
-import Proofs.Properties.Verity.SampledRead
+module
+
+public import Proofs.Properties.Verity.Sampled.CoinMap
+public import Proofs.Properties.Verity.Sampled.Accepts
+public import Proofs.Properties.Verity.Sampled.Binding
+public import Proofs.Properties.Verity.SampledRead
 
 /-!
 # Sampled proofs' coupling, assembled from its pieces
@@ -34,6 +36,8 @@ What the pieces leave is this module's hypotheses, each named in `couplingTarget
 joint law's support off the empty classes (`hM`), with the readings `rd`, the decoders `D`, the sample's family `label`
 and digest `after` and the field's encoding `e` as parameters.
 -/
+
+@[expose] public section
 
 namespace Verity.Sampled
 
@@ -225,14 +229,24 @@ noncomputable def Constructions.assembled (e : 𝔽 ≃ (Fin 128 → Bool)) {V :
     (κ : (A : Live) → A.Ω → Fin m → Fin 512 → Bool) : Constructions V :=
   ((Binding.withBinding K dev).withProject V rd D (sampleMaps e V rd label after κ)).withMessages rd
 
+/-- **The stops' gaps within the hiding term**: at `2^-257` a gap, four gaps at the first stop and at each of the at
+most `A.N` stops after it (`couplesErr`: twice the opened coins' gap, `openGap`, and twice the empty class's,
+`openEmpty`) are at most the coin trees' hiding term wherever `2(1 + A.N) ≤ maxLeaves`. -/
+theorem Live.stops_le_hidingTerm {A : Live} (h : 2 * (1 + A.N) ≤ maxLeaves) :
+    4 * ((1 + A.N : ℕ) : ℝ≥0∞) / 2 ^ 257 ≤ A.hidingTerm := by
+  unfold Live.hidingTerm
+  refine ENNReal.div_le_div_right ?_ _
+  exact_mod_cast (by omega : 4 * (1 + A.N) ≤ 2 * maxLeaves)
+
 variable (e : 𝔽 ≃ (Fin 128 → Bool)) (V : Vocab d α) (k : Verity.Registration.Composite)
 
 /-- **The coupling, assembled from its pieces**: at the assembled constructions, `CouplingTarget` holds at the session
 `A`, the parameters `θ` and the committed files `F` wherever the device printed each play's log after `θ` (`hP`), the
 sample's coins are uniform (`hκ`), the openings' gaps and empty classes over the stops are at most the hiding term
-(`hε`), `A` is the session v2 sets up (`hA`), v2's parameters name the vocabulary's digests (`hDg`), the session's
-writer keeps an accepted transcript's view (`hW`), and on the joint law's support off the empty classes the outcomes
-beside accepted plays whose log v2 read is the device's are the writer's at the moves v2's files decode to (`hM`). -/
+(`hε`, which four gaps a stop meet wherever `2(1 + A.N) ≤ maxLeaves`, `Live.stops_le_hidingTerm`), `A` is the session
+v2 sets up (`hA`), v2's parameters name the vocabulary's digests (`hDg`), the session's writer keeps an accepted
+transcript's view (`hW`), and on the joint law's support off the empty classes the outcomes beside accepted plays whose
+log v2 read is the device's are the writer's at the moves v2's files decode to (`hM`). -/
 theorem couplingTarget_assembled (K : Constructions V) (dev : Exchange → Properties.Challenger.History)
     (rd : Readings)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →

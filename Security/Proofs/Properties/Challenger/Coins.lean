@@ -1,6 +1,8 @@
-import Properties.Challenger
-import Proofs.Properties.Pouw.LiveSalt.Coin
-import Proofs.Properties.Pous.MemoryChallenger.Attest
+module
+
+public import Properties.Challenger
+public import Proofs.Properties.Pouw.LiveSalt.Coin
+public import Proofs.Properties.Pous.MemoryChallenger.Attest
 
 /-!
 # The coins a draw reads are the ones the run released
@@ -25,6 +27,8 @@ makes the opening's leaf digest the run's leaf at its position, and `Coin.coin_e
 `collisionIn_valid`, `collisionIn_ne_none` and `findBreak_valid` are the finder's two outputs, read over
 `Properties.Challenger`'s definitions.
 -/
+
+@[expose] public section
 
 namespace Properties.Challenger.Coins
 

@@ -1,7 +1,9 @@
-import Mathlib.Combinatorics.Enumerative.DoubleCounting
-import Definitions.Nci.Guarantees.CoverPartialSum
-import Proofs.Nci.Cover.FanOutRootCost
-import Proofs.Nci.Cover.FanOutValue
+module
+
+public import Mathlib.Combinatorics.Enumerative.DoubleCounting
+public import Definitions.Nci.Guarantees.CoverPartialSum
+public import Proofs.Nci.Cover.FanOutRootCost
+public import Proofs.Nci.Cover.FanOutValue
 
 /-!
 # The partial-sum bounds: activation reads from the keyed structure
@@ -18,6 +20,8 @@ import Proofs.Nci.Cover.FanOutValue
 * An entry of `t` all of whose products `I` computes whole has `n ≥ a` products with distinct activations (`Wide`,
   `cell_inj`, `stack`), more than `I` reads.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 

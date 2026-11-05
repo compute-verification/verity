@@ -326,9 +326,9 @@ def test_spec_lock_proved_in_that_names_no_package_is_refused(tmp_path):
 
 #: the numerical bench's lowerings, which name a directory in a pathlib chain
 LOWERINGS = "benchmarks/numerical/python/verity_numerical/bench/lowerings.py"
-REGISTRY = 'REGISTRY = {\n    "flock_pure": "backends.flock.tool:FLOCK_PURE",\n    "pouw_vllm": "benchmarks.pouw.tool:POUW_VLLM",\n}\n'
+REGISTRY = 'REGISTRY = {\n    "flock_pure": "backends.flock.tool:FLOCK_PURE",\n    "commit_cost": "benchmarks.commitments.tool:COMMIT_COST",\n}\n'
 REGISTRY_FILES = {"backends/flock/tool.py": "FLOCK_PURE = 1\n", "backends/flock/prove.py": "",
-                  "benchmarks/pouw/tool.py": "POUW_VLLM = 1\n",
+                  "benchmarks/commitments/tool.py": "COMMIT_COST = 1\n",
                   "tools/research/src/research/store/tools_registry.py": REGISTRY,
                   LOWERINGS:
                       'DIRECTORIES = {\n    "C-Flock": REPO / "backends" / "flock" / "templates",\n}\n',

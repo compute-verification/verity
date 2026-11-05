@@ -1,4 +1,4 @@
-// H1 + fx1's unit (pouw.circuit.h1tile) fused on sm_90a / sm_100a, bit for bit served_h1/receipts.py's
+// H1 + fx1's unit (pouw.circuit.h1tile) fused on sm_90a / sm_100a, bit for bit pouw_h1_receipts'
 // `call_receipts`: a served call's A [M, K] and B [N, K] s8, its units the full 32 x 32 tiles in
 // row-block-major order, unit u at position base + u.
 //

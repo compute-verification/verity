@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.SplitInner
+module
+
+public import Proofs.Flock.Claims.ZK.SplitInner
 
 /-!
 # The triple's openings and `τ`'s leaf on the cut
@@ -10,6 +12,8 @@ Two of `SplitInner`'s statements, each read off the tape at the executable's lay
 * `innerTauLeaf`: the cut's `τ` commitment is the real view's (`cutV_viewsAt`), `leafT` of its `τ` and `y_τ`, and
   `y_τ`'s bytes are the honest pads' `τ` salt (`ytau_saltBytes`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

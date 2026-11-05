@@ -1,6 +1,10 @@
-import Proofs.Core.QSort
-import Proofs.Properties.Pouw.LiveSalt.Canon
-import Proofs.Properties.NetworkRecords.Bytes
+module
+
+public import Proofs.Core.QSort
+public import Proofs.Properties.Pouw.LiveSalt.Canon
+public import Proofs.Properties.NetworkRecords.Bytes
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # A coin commitment's identity bytes name it
@@ -10,6 +14,8 @@ import Proofs.Properties.NetworkRecords.Bytes
 string parses back uniquely (`commStr_inj`), by `Canon`'s splits and the root's hex (`hexOf_inj`), so two commitments
 with one form are one (`canon_inj`).
 -/
+
+@[expose] public section
 
 namespace Properties.Challenger.Commitment
 

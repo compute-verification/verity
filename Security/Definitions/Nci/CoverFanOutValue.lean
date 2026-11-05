@@ -1,5 +1,7 @@
-import Definitions.Nci.CoverFanOut
-import Mathlib.Data.Finset.Union
+module
+
+public import Definitions.Nci.CoverFanOut
+public import Mathlib.Data.Finset.Union
 
 /-!
 # The cover theorem's fan-out tightening: values read whole, from wiring
@@ -12,6 +14,8 @@ are the wiring properties that let the circuit set the price instead (`Definitio
   (`Keyed.keyDisjoint`), so it is not a premise.
 * `Keyed.PerValueCut`: the set-cut form of a per-value width, a max-flow property of the named circuit.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.Keyed
 

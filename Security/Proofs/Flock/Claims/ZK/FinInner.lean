@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FinPads
-import Proofs.Flock.Claims.ZK.FinTau
+module
+
+public import Proofs.Flock.Claims.ZK.FinPads
+public import Proofs.Flock.Claims.ZK.FinTau
 
 /-!
 # `FinExe` from the hybrids, the live end and `InnerTauVal`
@@ -8,6 +10,8 @@ import Proofs.Flock.Claims.ZK.FinTau
 pads' opened columns and salts (`repOpenRest_pads`). With `RepTau` from `InnerTauVal` (`repTau_of`), `finExe_of_rest`
 gives `finExe_of_inner`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

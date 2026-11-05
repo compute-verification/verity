@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Complete.Zk.Exact
-import Proofs.Flock.Claims.Complete.Zk.Count
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Exact
+public import Proofs.Flock.Claims.Complete.Zk.Count
 
 /-!
 # A masked rep's sends where a refusal fires
@@ -17,6 +19,8 @@ masked rep's refusals fires, the rep stops right after the send whose reply it r
   within `piopZk + (k_0 + 7 + 11 R) + 3`, or after passing its `β` too. `repPZk_rho_stop`, `repPZk_beta_stop`: at a
   dependent pair or `β = 0`, the rep stops within those sends (a rep that returns passed both, `repPZk_exact`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.VerdictRows
-import Proofs.Flock.VBridge.AlgResZero
-import Proofs.Flock.VBridge.Family.Join
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRows
+public import Proofs.Flock.VBridge.AlgResZero
+public import Proofs.Flock.VBridge.Family.Join
 
 /-!
 # Row R: the residuals at a rep of the decision
@@ -16,6 +18,8 @@ The rest of `AlgebraHolds` is the shape's: S and its groups (`structureOf`, `gro
 the shape's by definition (`shapeOf`), the comb has 64 elements (`combOf_size`), so `v` has S's `nv`
 (`verifierRows_v_size`) and the wire bits are in range (`structureOf_bitsOk`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 

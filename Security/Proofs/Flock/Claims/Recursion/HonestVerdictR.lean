@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.NextRTables
-import Proofs.Flock.Claims.Complete.Replay.ProverOk
-import Proofs.Flock.Claims.Recursion.DeployedR
+module
+
+public import Proofs.Flock.Claims.Recursion.NextRTables
+public import Proofs.Flock.Claims.Complete.Replay.ProverOk
+public import Proofs.Flock.Claims.Recursion.DeployedR
 
 /-!
 # The honest run passes `nextR`'s checks
@@ -24,6 +26,8 @@ its ring switch's batched value (`Run.recTs`), and a last message the reader rea
   openings only (`opensOf`). `readRep` takes from the last message's proof exactly the fields no frame absorbs, which
   are its openings (`absorbedFrom_opensOf`), so `decR` decides the same at the proofs or their openings.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Run
 

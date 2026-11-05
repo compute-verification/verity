@@ -1,13 +1,15 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowEInner
-import Proofs.Flock.Claims.Recursion.VerdictRowEAccR
-import Proofs.Flock.Claims.Recursion.ResPiecesD
-import Proofs.Flock.Claims.Recursion.ResLowerDA
-import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
-import Proofs.Flock.Claims.Recursion.ResLowerDD
-import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
-import Proofs.Flock.Claims.Recursion.DeployedBrings
-import Proofs.Flock.Claims.Recursion.SchedDense
-import Proofs.Flock.Claims.Recursion.AccFits
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowEInner
+public import Proofs.Flock.Claims.Recursion.VerdictRowEAccR
+public import Proofs.Flock.Claims.Recursion.ResPiecesD
+public import Proofs.Flock.Claims.Recursion.ResLowerDA
+public import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
+public import Proofs.Flock.Claims.Recursion.ResLowerDD
+public import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
+public import Proofs.Flock.Claims.Recursion.DeployedBrings
+public import Proofs.Flock.Claims.Recursion.SchedDense
+public import Proofs.Flock.Claims.Recursion.AccFits
 
 /-!
 # The chain's commit ties at a joint acceptance
@@ -25,6 +27,8 @@ levels are absent, `stacked_none`), at the positions `accRead` names, so any two
 (`slotCommit_eq`): `AccCommitW` and `InnerAccTie` with `xs`, `hxs` and `hcol` after `JointP`
 (`accCommitV`, `innerAccTieV`), wherever the brings list the registered reads (`RegSetup`, which `deployedB` gives).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 
