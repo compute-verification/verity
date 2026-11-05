@@ -31,11 +31,11 @@ theorem Below.mono {n n' : Nat} {f : Lin} (h : n ≤ n') (hf : Below n f) : Belo
 theorem BelowL.mono {n n' : Nat} {l : List Lin} (h : n ≤ n') (hl : BelowL n l) : BelowL n' l :=
   fun f hf => (hl f hf).mono h
 
-theorem mem_symm : ∀ (a b : List Var) (v : Var), v ∈ symm a b → v ∈ a ∨ v ∈ b
-  | [], ys, v, h => by simp only [symm] at h; exact Or.inr h
-  | x :: xs, [], v, h => by simp only [symm] at h; exact Or.inl h
+theorem mem_symm : ∀ (a b : List Var) (v : Var), v ∈ HmNets.symm a b → v ∈ a ∨ v ∈ b
+  | [], ys, v, h => by simp only [HmNets.symm] at h; exact Or.inr h
+  | x :: xs, [], v, h => by simp only [HmNets.symm] at h; exact Or.inl h
   | x :: xs, y :: ys, v, h => by
-    unfold symm at h
+    unfold HmNets.symm at h
     split at h
     · rcases List.mem_cons.1 h with rfl | h
       · exact Or.inl List.mem_cons_self
@@ -657,15 +657,15 @@ theorem laid_total (st : St) (inBits outBits : Array Nat) (outs : Array Lin) (x 
   have hvc : ∀ u, u < st.next → v (col nIn R u) = z u := fun u hu => by
     rw [← hv]
     by_cases h : u < nIn
-    · simp only [ite_true, ite_false, and_self, col, h, ite_true, show u < R by omega]
+    · simp only [ite_true, col, h, show u < R by omega]
       exact (hzl u h).symm
-    · simp only [ite_true, ite_false, and_self, col, h, ite_false, show ¬ R + (u - nIn) < R by omega, show R + (u - nIn) < R + st.rows.length by omega]
+    · simp only [ite_true, ite_false, col, h, show ¬ R + (u - nIn) < R by omega, show R + (u - nIn) < R + st.rows.length by omega]
       rw [Nat.add_sub_cancel_left, Nat.add_sub_of_le (Nat.le_of_not_lt h)]
   have hev : ∀ f, Below st.next f → ev (fun u => v (col nIn R u)) f = ev z f := fun f hf =>
     ev_congr f fun u hu => hvc u (hf u hu)
   have hcv : v (layout st inBits outBits outs).constPos = true := by
     rw [hc, ← hv]
-    simp only [ite_true, ite_false, and_self, show ¬ S + groupWords (outBits.foldl (· + ·) 0) * WORD < R by omega,
+    simp only [ite_false, show ¬ S + groupWords (outBits.foldl (· + ·) 0) * WORD < R by omega,
       show ¬ S + groupWords (outBits.foldl (· + ·) 0) * WORD < R + st.rows.length by omega,
       show ¬ (S ≤ S + groupWords (outBits.foldl (· + ·) 0) * WORD ∧
         S + groupWords (outBits.foldl (· + ·) 0) * WORD < S + outs.size) by omega, ite_false, decide_true]
@@ -684,12 +684,12 @@ theorem laid_total (st : St) (inBits outBits : Array Nat) (outs : Array Lin) (x 
     have hrow := hz ▸ fwd_holds x hi.1 _ hr
     unfold rowHolds at hrow
     rw [← hrow, hout, ← hv]
-    simp only [ite_true, ite_false, and_self, show ¬ R + k < R by omega, ha]
+    simp only [ite_true, ite_false, show ¬ R + k < R by omega, ha]
     rw [Nat.add_sub_cancel_left]
   · by_cases hb : i < S
     · rw [g1 i (by omega) hb]
       rw [← hv]
-      simp only [ite_true, ite_false, and_self, xorRow, Array.toList_empty, List.foldr_nil, Bool.false_and, show ¬ i < R by omega, ha,
+      simp only [ite_false, xorRow, List.foldr_nil, Bool.false_and, show ¬ i < R by omega, ha,
         show ¬ (S ≤ i ∧ i < S + outs.size) by omega, ite_false]
       exact (decide_eq_false (by omega)).symm
     · by_cases hc' : i < S + outs.size
@@ -704,7 +704,7 @@ theorem laid_total (st : St) (inBits outBits : Array Nat) (outs : Array Lin) (x 
         rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hj, Option.getD_some]
       · rw [g2 i (by omega) h2]
         rw [← hv]
-        simp only [ite_true, ite_false, and_self, xorRow, Array.toList_empty, List.foldr_nil, Bool.false_and, show ¬ i < R by omega, ha,
+        simp only [ite_false, xorRow, List.foldr_nil, Bool.false_and, show ¬ i < R by omega, ha,
           show ¬ (S ≤ i ∧ i < S + outs.size) by omega, ite_false]
         exact (decide_eq_false (by omega)).symm
 
