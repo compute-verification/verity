@@ -21,13 +21,13 @@ open Flock FlockSoundness RecDeploy.VStarNets FlockVBridge.Names
 open Properties.Flock.Nets (sparseOf FixedNetsBuild)
 
 /-- The concrete statement's one table. -/
-def stC : Stmt :=
+noncomputable def stC : Stmt :=
   Concrete.stW (HmNets.shaLaid ()) (HmNets.hmLaid ()) concreteHash (sparseOf (HmNets.shaLaid ()).ra)
     (sparseOf (HmNets.shaLaid ()).rb) (sparseOf (HmNets.hmLaid ()).ra) (sparseOf (HmNets.hmLaid ()).rb) Concrete.s1C
     Concrete.s3C (Concrete.s4Of concreteHash) Concrete.s6C Concrete.helloC
 
 /-- The concrete statement, parsed: its inputs' readable fields and its one table. -/
-def pC : _root_.Flock.Readable.Parsed :=
+noncomputable def pC : _root_.Flock.Readable.Parsed :=
   { Concrete.rC (HmNets.shaLaid ()) (HmNets.hmLaid ()) concreteHash with sts := #[stC] }
 
 /-- **The concrete witness**: the trace `Trace.zC`, one hidden value per bit. -/
@@ -94,7 +94,7 @@ theorem live_concreteStmt (hn : FixedNetsBuild) (hreg : RegionsC) : _root_.Claim
 /-- **The concrete statement's masked session has one table.** -/
 theorem jOf_concreteStmt (hn : FixedNetsBuild) (hreg : RegionsC) : _root_.Claims.ZKMal.Masked.jOf concreteStmt = 1 := by
   unfold _root_.Claims.ZKMal.Masked.jOf
-  rw [if_pos (live_concreteStmt hn hreg)]
+  rw [ite_eq_left (live_concreteStmt hn hreg)]
   unfold _root_.Claims.ZKMal.Masked.stsOf
   rw [concreteStmt_setupOf hn]
   exact concreteSetup_tables
