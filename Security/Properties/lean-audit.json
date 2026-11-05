@@ -660,6 +660,11 @@
   "Properties.Pouw.Commit.leafRefusals": "3128c3c5eb612819cd9903270c2c719b0d83ef4286a43ce01d1a099d0b569c33",
   "Properties.Pouw.Commit.saltRefusals": "ee7608241f9a4df39f8212af4d4e3bad019968fd21691f19ffce06fa67b2f6ac",
   "Properties.Pouw.Commit.saltSize": "30fd4da534ba9d9d1ac4d9f139c2caddb9c8062ac8d56b30d9bd1695fec59b6a",
+  "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
+   "type_hash": "6152a3b687292021ad36f2f033cc7bde1de4f226b727c5a7c6db429a576518d4",
+   "missing": "honest",
+   "why": "an honest instance is a whole credited window: an auditor ledger whose LMS-signed open trustedSessionOf accepts, the challenger session's files, a canonical Commit record and a live draw coin opened under that session's commitment; no proof builds those yet (Pouw.Check.acceptedDraw, Pouw.Commit.drawCoinAccepts and Pouw.LiveSalt's guarantees, which read the same session, are unwitnessed), and drawSession_honest proves the one step DrawWithheld adds accepts every trusted session the ledger opens withheld"
+  },
   "Properties.Pouw.Credit.SecurityProofs.epsAtSound": "9cdd4feb03ed39b17cc2290c38f6aa3b4bde712d77a7e4f22a57da8a746332a6",
   "Properties.Pouw.Credit.SecurityProofs.establishedSound": "c03e3c77fda8ce7a3f84f025ba5617b90e2db2dfdab66fcbb3f209aadeaa67ab",
   "Properties.Pouw.Credit.SecurityProofs.workDrawMisses": "85dfc451b2cc6aabc2843616ef9c53e6a6b25c1575a984df7ad9302704ee591c",
@@ -750,12 +755,7 @@
   "Properties.SampledProofs.haltCoversOperator": "3f9891aa1693628f5b2c28e35e55a258c71bb962d4e30f5b07407e917973ef86",
   "Properties.SampledProofs.haltEndsOpen": "ded0fc0d7fd329c2e1585319b811ad69f9e24c9fcceed2ab5560f109a9fb9735",
   "Properties.SampledProofs.haltIsFinal": "83d93d8c3f74940f0d7ec870cfb360e861b9fe0b6d842080dc0b57523ad67903",
-  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162",
-  "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
-   "type_hash": "6152a3b687292021ad36f2f033cc7bde1de4f226b727c5a7c6db429a576518d4",
-   "missing": "honest",
-   "why": "an honest instance is a whole credited window: an auditor ledger whose LMS-signed open trustedSessionOf accepts, the challenger session's files, a canonical Commit record and a live draw coin opened under that session's commitment; no proof builds those yet (Pouw.Check.acceptedDraw, Pouw.Commit.drawCoinAccepts and Pouw.LiveSalt's guarantees, which read the same session, are unwitnessed), and drawSession_honest proves the one step DrawWithheld adds accepts every trusted session the ledger opens withheld"
-  }
+  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
  },
  "layers": {
   "Properties.Pouw": {
@@ -24136,7 +24136,7 @@
    ]
   },
   "SampledProofs.ChallengerInnerTrees": {
-   "digest": "98db4493b96d5846861b6f04761ad3cd169f377eda3eb48818f14d335b05a51e",
+   "digest": "00bab3b1920ae72a13e5e9bac10d89bc504adc85a803fd1c3370a6ad3302f22f",
    "definitions": {
     "SampledProofs.Challenger.INNER_RECORD_FORM": "93ccc2a30def4f3bb23b5f4d9bed17108a54d78731af7aa8e6253fda08a99013",
     "SampledProofs.Challenger.InnerRead": "7e46ee41bf349a605fdaf5d3195be9b8eec5ea77f32dda2a5f048c5fe77c28b2",
@@ -24146,11 +24146,12 @@
     "SampledProofs.Challenger.InnerRead.round": "23a4fcb9016eaf7f955d5052001fb7c47895375c19108b52adc6e564a2d50a53",
     "SampledProofs.Challenger.InnerRead.stream": "1defcf1fcbf6afead0bfe95f86d4a8053ec7ddcd2c7f6792d0180a96c9f8d005",
     "SampledProofs.Challenger.coinsRead": "5162fc78e81f193b3d711894d5b49199422102e8115a012a99f64170671d8145",
-    "SampledProofs.Challenger.innerReads": "3d5eee385798db7134ff67d355b455499e251e8eb19bb115437df9e5e85eccad",
-    "SampledProofs.Challenger.innerReads._sparseCasesOn_3": "c67c63d9701c401810f4178be9957593cfafac10633f76e2545fd7e0e9a341f2",
-    "SampledProofs.Challenger.innerTreeReason": "3024c34a1c11b97a5b693467de66d68ca7e4a7fa7f0448d5051f962e073556c8",
+    "SampledProofs.Challenger.innerReads": "293461827aa739dc426daa2e8581174d2e769e2cb7d468357f172d4c45c95a40",
+    "SampledProofs.Challenger.innerReads._sparseCasesOn_3": "f4e3672e64108faacef7157ad968fdcaac7f22117a398d9710bb814327e4e4e3",
+    "SampledProofs.Challenger.innerReads._sparseCasesOn_4": "2371c1d4c383965950a1b8d11d10fc8686fd5cbf618405df73b516e516d20ce1",
+    "SampledProofs.Challenger.innerTreeReason": "6771d44ac6e4945b353e502c61612e4bf1015b814924ac6e82c0abba2383661d",
     "SampledProofs.Challenger.innerTreeReason._sparseCasesOn_1": "cf776a9871acd771b733d5f71c12866237973106b86dfb02fe3a2f928b4847fc",
-    "SampledProofs.Challenger.innerTreesReason": "19c15c8b51ba5cb1865be9b818dc066f3c043634828d951892eb880347b87591",
+    "SampledProofs.Challenger.innerTreesReason": "5715612844c56213ca0306d2895d5b745fd9727eec61f8d388f77f3d0ada56b3",
     "SampledProofs.Challenger.linkAfterRoots": "2ba1633df9fd10083c67374e28346d2996e2bb0f0775be30291e7521da2d4d9c",
     "SampledProofs.Challenger.linkAfterRoots._sparseCasesOn_1": "bb44771f0074926f8d2236bc3e06a1299bb412d1836a3fbe02459c00120202f1",
     "SampledProofs.Challenger.linkAfterRoots._sparseCasesOn_6": "7360f7462d901cc8eeb6c5c08eacb20fba2e7509647dd83aa45f8d4237ed0af7",
@@ -24434,7 +24435,7 @@
    ]
   },
   "SampledProofs.ChallengerTrees": {
-   "digest": "6f688a7d17ec128001a2bff2fd63b935d85a15142afb154ff296ff4092d0f021",
+   "digest": "e975e6d9f5a9f6e40f0c35471aeeaeb42f4d3cfd7c6ccb84d956b22991e234b4",
    "definitions": {
     "SampledProofs.Challenger.LoggedTree": "885ea6f8fcb5591d9bbb4b603865b76ffdf652083bbbff692a634efdf096f032",
     "SampledProofs.Challenger.LoggedTree.key": "e940f525be182c1d1571a352e1cd449dd4a86123311c0c57cbc48538b843ae17",
@@ -24458,16 +24459,17 @@
     "SampledProofs.Challenger.TreeOpening.round": "b2c2210773668b2c3362b225648daeec22f3c27d556b731a2d2e76203bacd05c",
     "SampledProofs.Challenger.TreeOpening.stream": "0f3022aa9c1dc98c799c52ea8719005f23b6dfce83ba8804030d46b3c52769bf",
     "SampledProofs.Challenger.UNUSED_TREE": "4e32086f72701ca1a4dba3a02400a2a00a4685b53511d71187dacb954b469993",
-    "SampledProofs.Challenger.coinTreesOf": "53a8952203390f77e57a0a8d0f7bad57dc46ce6215cfaad97d79448b08ffbfd8",
+    "SampledProofs.Challenger.coinTreesOf": "07120c3d4f9eb2ae40406e004f444bdf57269b2fda82c5ecf694b8d0943c8832",
     "SampledProofs.Challenger.coinTreesOf._sparseCasesOn_1": "e7a52db7911b92370948c2ec8a212a5494245aaacd8a5f3e505270cdfa9103fa",
+    "SampledProofs.Challenger.coinTreesOf._sparseCasesOn_4": "6e1451e282564ed3f188408421b7665ebf98e116584ab4f63ff7185f4a61bfdb",
     "SampledProofs.Challenger.isTreeSpec": "5bbb98cd952d1a78bf0da2880458954c4e6c049e6983bc3bdc4bd7975dad75c4",
     "SampledProofs.Challenger.isTreeSpec._sparseCasesOn_3": "7d0325932917a222b8be7ad4567c468f277ae569c585c2d8951014a95253d226",
     "SampledProofs.Challenger.linkAfter": "9134ba7b2df795021b258df443b0136b91f379a4a42d4abdc290347744a91e68",
-    "SampledProofs.Challenger.recordCoins?": "ad53d7ff5d64c593532deb0dcc78c37ea5b0caf48161325381f19a55b9443b84",
-    "SampledProofs.Challenger.sessionTreeReason": "6943a0564486d83884d8fa709ecf51a98bae978d19d3761f122f37a315482804",
+    "SampledProofs.Challenger.recordCoins?": "9e25ef40a13224e105a702a70426d76d4d2ee7010468b380c9ea96dbd55274ac",
+    "SampledProofs.Challenger.sessionTreeReason": "dfbd0e29c1f0512cfabc64431cc1442bea21a79d44baf5e265b105476bf2c7c9",
     "SampledProofs.Challenger.sessionTreeReason._sparseCasesOn_9": "1b56b3602811edd94be432523815f320a65d4ac7971bf21cd6ef958a2015f89c",
     "SampledProofs.Challenger.sessionsTreeReason": "d2871461274c408e1676fd0697eccb2f8671f3d132cc29d5a5471de98a54f421",
-    "SampledProofs.Challenger.trustedTreesOf": "e507e753c0512ac0044ede65c1eba48434605e6d8b997f2150cf24720f09aa8b",
+    "SampledProofs.Challenger.trustedTreesOf": "cda6c6ec42e826e6d176688efd233466e3678a1180cf5913fe6db6a7409d558e",
     "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.isHexN": "e24fdbe1fd04f2fc70bb3951f9785216d01f275f14546a088bf15cd3ddb8451f",
     "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.isHexN._sparseCasesOn_1": "9e591fab54932b0c102c0b1e0cf9b09dc6a2177e28c3de3afc214557e19e1dfa",
     "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.isStream": "15df1311b604d9cadeaf4d2d41f6d1a1047f75c26a03a33fea7284a1628a3d9b",
@@ -24721,7 +24723,7 @@
    ]
   },
   "SampledProofs.OneStageZk": {
-   "digest": "d7efcd3007f5ad82554c5093134b5e1e9d58e471d28d70166a6302cad653b687",
+   "digest": "3fc79364a9eab9b726a385a466951433503388b769ebd3877ac3b900a5c744e9",
    "definitions": {
     "SampledProofs.OneStageZk.Evidence": "c6225844065026f039f99bb073a172ebd1caf057aa99df9629dc83c3b72b4444",
     "SampledProofs.OneStageZk.Evidence.base": "f88a295c9c15075955eadf77c4082a0174b7338e8a580fe01d770c8929000895",
@@ -24761,7 +24763,7 @@
     "SampledProofs.OneStageZk.checkIdentifier": "78b13a39766df5c85e16b73a23cc39534d62a5849549b05e88740a018d87484a",
     "SampledProofs.OneStageZk.coinKeyOf": "3a46fbb369121b81536201663de8abbb07fa453669c61b217aaa461ff693f9b9",
     "SampledProofs.OneStageZk.coinsOf": "0219b3963f355c027e5417359e1e78f4dc6d271c366d8a6a681c5114e639d30f",
-    "SampledProofs.OneStageZk.evidenceOf": "2d7f4f33322d51822779bf270639ba8963babf0759ed9607912ba766d769aad0",
+    "SampledProofs.OneStageZk.evidenceOf": "d28534744e5a6e16051a9b2ef21b50350a4b5d31cd32530d1fcd207feae0c6c9",
     "SampledProofs.OneStageZk.filesOf": "9964b8a2d69fc1cc706fc02bc281476bd4f664af7427905207a52098ea4c7d5a",
     "SampledProofs.OneStageZk.inputsOf": "22eb8d33feabded8c4c565d308dba7999f462aef3a3eab5a6fc81f3b03fac46f",
     "SampledProofs.OneStageZk.oneSession": "67a2157b27c555e6e20cd120bc386e9a8c9c16d834c6f4b527fe348736da4ca4",
@@ -24776,9 +24778,8 @@
     "SampledProofs.OneStageZk.publicHeld": "247fc0b3a6716af1c4d25068c44ca70046e0665d97fe15905a83aabee16dcacd",
     "SampledProofs.OneStageZk.push": "2bbedcb66c45c71295d75ddce19e6e201b06707e2ccd1a12dcebd2ca2e2d4e7f",
     "SampledProofs.OneStageZk.readsOf": "0394025a495af3f7a2553e1f29763c3fe119f7891a84ff8b370b4161dac6fe0c",
-    "SampledProofs.OneStageZk.readsRegistered": "f6dda6f6e2fe0f3d375d105d0ee45767401e09c3169353651f5c1b4904eb0b9c",
+    "SampledProofs.OneStageZk.readsRegistered": "e4e01fc8cf10369fdc4447e1c1a8d11d1aecda7a528c8829131734c25c424d96",
     "SampledProofs.OneStageZk.readsRegistered._sparseCasesOn_3": "3d4b5ccb0a05a149e7ade2284309b8979875d987ea7030f6c14d3a90a348a397",
-    "SampledProofs.OneStageZk.readsRegistered.match_3": "be0ca05076256ffc96083c6d11695de0c3331df42a41bffc238b47ff53f6b0ef",
     "SampledProofs.OneStageZk.recChecks": "e717c54529959ebb2c25d02731bd85b27e36d4f0731bf8c20dd830b4194d03b3",
     "SampledProofs.OneStageZk.registeredInputName": "9d7ef1902f1120819613e48f470c253338219b6d62def31ed3c89fa4b4faab19",
     "SampledProofs.OneStageZk.run": "702608c9eb69dd4504bb801607d99e754a4761beca4f4e7aa0dd96d224d57656",
@@ -24798,9 +24799,11 @@
     "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.digestOf._sparseCasesOn_1": "1869c9a98cfabc7833da61d299294957449adc774ec95227e45c1f2c6a138b8f",
     "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.exactly": "a70860b0bb00e91804830d9149b9014c83a0e52ec40fdf8e3f97c438c380ab6f",
     "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.headerLine": "c84461330c47b95a2714c63e7a2fd55876e700755fa81e0164a702d631302628",
-    "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.headerOf": "fadafc97022552dc137ff4b2d481d284206a105c990d52adba96e52284eee8f3",
+    "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.headerOf": "892f01c7cc6d471efcc788e08bc41d04f2980d404eef148d08c551ae08b1e8f2",
+    "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.headerOf._sparseCasesOn_1": "208363f83d320bfa456f7dfe114ebad2a4553fe5c6b2bf893a4d58acfe2c5e7e",
     "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.sessionOf": "ff116ca0765fbcdd5ddd7c7805398ca1fd6b71cbba55f43f2bec09e596d5346e",
-    "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.without": "dd9af0a744060b8e504e8a3571f4ad2e7c4519091b42a2aa42eecc8a8dc5161d"
+    "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.without": "dd9af0a744060b8e504e8a3571f4ad2e7c4519091b42a2aa42eecc8a8dc5161d",
+    "_private.SampledProofs.OneStageZk.0.SampledProofs.OneStageZk.without._sparseCasesOn_1": "94a9af26bee219e677ec80e87f18cd568e5ab3731ef4ed83ba2323f16e35c957"
    },
    "guarantees": [
     "Properties.Remote.SecurityProofs.acceptComplies",
@@ -25998,7 +26001,7 @@
    ]
   },
   "VStarRecursive.Protocol": {
-   "digest": "9f633a5320fd7f545e0dda4827b54a70f677e95c084e4b931c5cbb8da066765a",
+   "digest": "bf6a043373c8f80a99225d9e2ed7a76e4baccfd0ca9a4e75d16e6420df068461",
    "definitions": {
     "VStar.Recursive.Evidence": "a17492dffbdb429d61649d16045eb6fdd665be45ec350cfce4d689ea194aed47",
     "VStar.Recursive.Evidence.base": "ba0fe67895d453c2a8624e80ec2f8cce8a0a5d278e76f5e1abd614b4d334daf5",
@@ -26080,7 +26083,8 @@
     "_private.VStarRecursive.Protocol.0.VStar.Recursive.digestOf": "dbfd20b98818d1c2d8f3125b19b117e111b5c2b78ec97d11268a02e28a93bc8c",
     "_private.VStarRecursive.Protocol.0.VStar.Recursive.digestOf._sparseCasesOn_1": "a2c27ac3b268caf9e817f7aa2cbaa2e601a42067516e5adfa8bedb08256aab6f",
     "_private.VStarRecursive.Protocol.0.VStar.Recursive.exactly": "e08bfee7bc64d3f15f227341e36a8d587f03604c5f07411fa29b7db8e4757b67",
-    "_private.VStarRecursive.Protocol.0.VStar.Recursive.jsonBlob": "6129cc104af5c909dd61b62eb8a20630e999a4362b6eb66c21f3058ab3a5ce6b",
+    "_private.VStarRecursive.Protocol.0.VStar.Recursive.jsonBlob": "76b10790bb48caac22515c064ca84999eb55cc2cf9be892196612b37db25e231",
+    "_private.VStarRecursive.Protocol.0.VStar.Recursive.jsonBlob._sparseCasesOn_1": "e5dbda14d8643874264a215a2c4cc1c346fa1456c03d3e3611d493ed407f3435",
     "_private.VStarRecursive.Protocol.0.VStar.Recursive.objOrNull": "944fcaa17839eb5862ec8dfe1ea663aa2a450c391206998b2d1c23bbf219774d",
     "_private.VStarRecursive.Protocol.0.VStar.Recursive.objOrNull._sparseCasesOn_1": "f2da08a1658a030a0453eaed3ad43a4c730c5f2750063f9be8c6cdf46897774f",
     "_private.VStarRecursive.Protocol.0.VStar.Recursive.partOwnOf": "4e3f6ad9033375994922a342b0a91fdf64db49a7b1f589e255060bf5ae5ed15f",
