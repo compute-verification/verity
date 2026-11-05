@@ -14,12 +14,12 @@
    "lines": 124
   },
   "Proofs/Core": {
-   "modules": 3,
-   "lines": 252
+   "modules": 4,
+   "lines": 547
   },
   "Proofs/Flock": {
-   "modules": 166,
-   "lines": 29057
+   "modules": 192,
+   "lines": 34804
   },
   "Proofs/NetworkCertifier": {
    "modules": 3,
