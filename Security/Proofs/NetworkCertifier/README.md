@@ -162,12 +162,12 @@ CountWitnesses.lean  the thirteen counts' pairs: seven egress (four over `AccSeq
                                          everything (`acceptAll`); the per-execution-block forms at `e₀ = 0`, from
                                          the empty prefix. In the lock's `witnesses`
 PeriodWitnesses.lean  the monitoring period's lemmas in the lock's `witnesses`, none with a binder over the
-                                         instance: PooledLeakAccepted's pair and the nontrivial halves of
-                                         PeriodLeakAccepted and PeriodTiedCount, whose honest halves `unwitnessed`
-                                         exempts, and, unlisted, the general registered form's (PeriodReg's
-                                         PeriodLeakRegisteredWf) exclusion of trusted-host
-                                         (not_periodLeakRegisteredUntrusted) and why it reads RowsFormat.Wf, which the
-                                         period check refuses without (not_periodLeakRegisteredAnyFormat, at blindRows)
+                                         instance: PooledLeakAccepted's pair and PeriodLeakAccepted's nontrivial,
+                                         whose honest half `unwitnessed` exempts, and, unlisted, the general
+                                         registered form's (PeriodReg's PeriodLeakRegisteredWf) exclusion of
+                                         trusted-host (not_periodLeakRegisteredUntrusted) and why it reads
+                                         RowsFormat.Wf, which the period check refuses without
+                                         (not_periodLeakRegisteredAnyFormat, at blindRows)
 WiredToys.lean  three toys for the wired sampled audit: dropping the wire-wrong blocks from the incorrect set
                                          (the wire flip, flip_excludes), the wires' acyclicity (the two-cycle,
                                          cycle_excludes) or a wire-writing free input from freeInputs (the

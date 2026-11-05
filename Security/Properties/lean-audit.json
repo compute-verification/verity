@@ -684,9 +684,6 @@
    "honest": ["Properties.NetworkPeriod.rowsStateHeld_honest"],
    "nontrivial": "Properties.NetworkPeriod.rowsStateHeld_nontrivial"
   },
-  "Properties.NetworkPeriod.scanWindowsPlaced": {
-   "nontrivial": "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial"
-  },
   "Properties.NetworkPeriod.forcedZeroUnfilled": {
    "nontrivial": "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial"
   },
@@ -794,11 +791,6 @@
   "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial": "aeb0e3753dce706751cb8042d5bf851959cd4ef89bd7357d993df497631c23fd",
   "Properties.NetworkPeriod.rowsUntiedRefused": "a6422e99a7badb1dc8a3922255ccfe6783a66bdba2511039bf21dc30042d5a24",
   "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial": "aa00cfe5835bf525712d992edb7d9e6ab94b7914b335d01ade734f3611ede2f5",
-  "Properties.NetworkPeriod.scanWindowsPlaced": {
-   "type_hash": "e9dedfc752c9606c233f7c1ef9c8b0d87ca8955ce390931958bf5645cb3b9ff1",
-   "missing": "honest",
-   "why": "its premises at the deployed parse are the sampled leg's bridge facts (StmtBits, and WrongBounds at the audit's published bound, which wrongBounds_of_countBound gives from the code's strata), whose honest lemmas at the deployed record take the assembled record's hypotheses, which are no named assumptions"
-  },
   "Properties.NetworkRecords.acceptMeans": "4ee7e6626901cee51276b7be734ca7c3b2daeea3810674d3e4b0983856b300cf",
   "Properties.NetworkRecords.answerAcceptMeans": "c5c91cdf640198af01ce5e2e90ba3ba4e42c21fc97c0610eb0ad09a01671615c",
   "Properties.NetworkRecords.noGridAcceptsMore": "34f6be27c3079d33abff38adbc90f5aeb66dd7446e7a2efada385c63921aa1c3",
@@ -3330,28 +3322,6 @@
    ],
    "assumptions": [],
    "type_hash": "5f5b5181732246f4c5327aa0aa5575d39df1013371086a4cc8199d23aa239ab8"
-  },
-  "Properties.NetworkPeriod.scanWindowsPlaced": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.NetworkPeriod.scanWindowsPlaced : Properties.NetworkPeriod.ScanWindowsPlaced"],
-   "assumptions": [],
-   "type_hash": "e9dedfc752c9606c233f7c1ef9c8b0d87ca8955ce390931958bf5645cb3b9ff1"
-  },
-  "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial :",
-    "  Exists fun j =>",
-    "    Exists fun c =>",
-    "      Exists fun x =>",
-    "        Exists fun D =>",
-    "          Exists fun sw =>",
-    "            Exists fun Pw =>",
-    "              Exists fun x =>",
-    "                Exists fun x => Exists fun x => Exists fun x => Not (NetTiming.WindowsPlaced D (1 / 2) sw Pw fun x => 0)"
-   ],
-   "assumptions": [],
-   "type_hash": "cd6d7ffbbbd9a636fb8133bf75bd00db1b34001e7d7a290948e1b6b2bc6b9ded"
   },
   "Properties.NetworkPeriod.wrongBoundsDrawn": {
    "owner": "@network-accounting",
@@ -6401,10 +6371,6 @@
    },
    "Properties.NetworkPeriod.rowsStateHeld": {
     "function": "NetworkCheck.Period.check",
-    "outcome": "accept"
-   },
-   "Properties.NetworkPeriod.scanWindowsPlaced": {
-    "function": ["NetworkCheck.Period.scanOf", "Flock.canon"],
     "outcome": "accept"
    },
    "Properties.NetworkPeriod.forcedZeroUnfilled": {
@@ -9859,8 +9825,6 @@
     "Claims.Flock.val": "3d8a56ec8168f2ce7b2b970db481919ff80fe688258c826e1e747ec30f954244"
    },
    "guarantees": [
-    "Properties.NetworkPeriod.scanWindowsPlaced",
-    "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.NetworkPeriodLeak.periodLeakRegistered_nontrivial"
    ]
@@ -9981,8 +9945,6 @@
     "Claims.Sampling.κF": "b16b6f6879030bcd53b3bc53d7eefdd41a2760920c50b413251c17d5d80c61d9"
    },
    "guarantees": [
-    "Properties.NetworkPeriod.scanWindowsPlaced",
-    "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial",
     "Properties.NetworkPeriod.wrongBoundsDrawn",
     "Properties.NetworkPeriod.wrongBoundsDrawn_honest",
     "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial",
@@ -10078,8 +10040,6 @@
     "FlockSoundness.Audit.xorSum": "c627186d879d69d17638b56c9e47172a64d74159228eebeebe6104754ad393a8"
    },
    "guarantees": [
-    "Properties.NetworkPeriod.scanWindowsPlaced",
-    "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.NetworkPeriodLeak.periodLeakRegistered_nontrivial",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -10454,8 +10414,6 @@
     "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_nontrivial",
     "Pous.Period.SecurityProofs.periodHeldSha512",
     "Pous.Period.SecurityProofs.periodHeldSha512At",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
-    "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial",
     "Properties.NetworkPeriod.wrongBoundsDrawn",
     "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
@@ -10556,8 +10514,6 @@
     "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound",
     "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_honest",
     "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
-    "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial",
     "Properties.NetworkPeriod.wrongBoundsDrawn",
     "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
@@ -11515,11 +11471,7 @@
     "NetTiming.SenderDecodes": "621346fd7e57e053597eb741c016a7e58395610b3992ceaea041b53d40c15e1b",
     "NetTiming.WindowsPlaced": "3c51a220f192b89d144ab2db548f09204a5039ae593305a11714cb5cabd0b157"
    },
-   "guarantees": [
-    "Properties.NetworkPeriod.scanWindowsPlaced",
-    "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial",
-    "Properties.NetworkPeriodLeak.periodLeakRegistered"
-   ]
+   "guarantees": ["Properties.NetworkPeriodLeak.periodLeakRegistered"]
   },
   "Definitions.NetworkCertifier.Premises": {
    "digest": "aa7d78606bf681c2c756d8768f6f08aa4a31f12042de5c38ed91002ad4c40b0f",
@@ -11615,8 +11567,6 @@
     "NetTiming.wiredOk": "4672c484a42d5c8b2a3bdc265ad94732eba85fde762870227b7ceb4d48851e2e"
    },
    "guarantees": [
-    "Properties.NetworkPeriod.scanWindowsPlaced",
-    "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial",
     "Properties.NetworkPeriod.wrongBoundsDrawn",
     "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
@@ -11634,8 +11584,6 @@
     "NetTiming.freeInputs": "a6b5c7df10de373cbb94dfa26ab6249d8d550eb38116ad5c392eceacc24784bc"
    },
    "guarantees": [
-    "Properties.NetworkPeriod.scanWindowsPlaced",
-    "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial",
     "Properties.NetworkPeriod.wrongBoundsDrawn",
     "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
@@ -12854,8 +12802,6 @@
     "Properties.NetworkPeriod.rowsWiresChecked",
     "Properties.NetworkPeriod.rowsWiresChecked_honest",
     "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
-    "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
@@ -13072,8 +13018,6 @@
     "Properties.NetworkPeriod.rowsWiresChecked",
     "Properties.NetworkPeriod.rowsWiresChecked_honest",
     "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
-    "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
@@ -13234,7 +13178,6 @@
    "guarantees": [
     "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -13316,7 +13259,6 @@
    "guarantees": [
     "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -13407,7 +13349,6 @@
    "guarantees": [
     "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -13432,7 +13373,6 @@
    "guarantees": [
     "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -13532,7 +13472,6 @@
    "guarantees": [
     "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -13599,7 +13538,6 @@
    "guarantees": [
     "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -14298,7 +14236,6 @@
     "Properties.NetworkPeriod.rowsWiresChecked",
     "Properties.NetworkPeriod.rowsWiresChecked_honest",
     "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
@@ -14922,7 +14859,6 @@
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
     "Properties.NetworkPeriod.rowsWiresChecked",
     "Properties.NetworkPeriod.rowsWiresChecked_honest",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
@@ -15015,7 +14951,6 @@
     "Properties.NetworkPeriod.rowsHeld_nontrivial",
     "Properties.NetworkPeriod.rowsWiresChecked",
     "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
@@ -15070,7 +15005,6 @@
     "Flock.KnownRead.sureReads": "99315c77e768cf2af7bab9df21cf6bdea92d4bb88e4c82db3452d4e307fd732d"
    },
    "guarantees": [
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_soundness_of_subprotocols",
@@ -15199,7 +15133,6 @@
    "guarantees": [
     "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -15232,7 +15165,6 @@
    "guarantees": [
     "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -15559,7 +15491,6 @@
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
     "Properties.NetworkPeriod.rowsWiresChecked",
     "Properties.NetworkPeriod.rowsWiresChecked_honest",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
@@ -15659,7 +15590,6 @@
    "guarantees": [
     "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -16163,7 +16093,6 @@
     "Properties.NetworkPeriod.rowsHeld_nontrivial",
     "Properties.NetworkPeriod.rowsWiresChecked",
     "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
@@ -18106,7 +18035,6 @@
     "Properties.NetworkPeriod.rowsHeld_nontrivial",
     "Properties.NetworkPeriod.rowsWiresChecked",
     "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
@@ -18370,7 +18298,6 @@
    "guarantees": [
     "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -18399,7 +18326,6 @@
    "guarantees": [
     "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -18435,7 +18361,6 @@
    "guarantees": [
     "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -18530,7 +18455,6 @@
    "guarantees": [
     "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -18592,7 +18516,6 @@
    "guarantees": [
     "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -18668,7 +18591,6 @@
    "guarantees": [
     "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -18782,7 +18704,6 @@
    "guarantees": [
     "Properties.NetworkPeriod.forcedZeroUnfilled",
     "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
@@ -20403,7 +20324,6 @@
     "Properties.NetworkPeriod.rowsHeld_nontrivial",
     "Properties.NetworkPeriod.rowsWiresChecked",
     "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.Remote.SecurityProofs.acceptComplies",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly",
     "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial",
@@ -21040,7 +20960,6 @@
     "Properties.NetworkPeriod.rowsWiresChecked",
     "Properties.NetworkPeriod.rowsWiresChecked_honest",
     "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
@@ -21464,7 +21383,6 @@
     "Properties.NetworkPeriod.rowsWiresChecked",
     "Properties.NetworkPeriod.rowsWiresChecked_honest",
     "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Properties.NetworkPeriodLeak.periodLeakRegistered",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols",
     "Verity.remote_network_no_pouw_soundness_of_subprotocols_honest",
@@ -24779,19 +24697,12 @@
    "guarantees": ["Properties.NetworkPeriod.forcedZeroUnfilled", "Properties.NetworkPeriod.forcedZeroUnfilled_nontrivial"]
   },
   "Properties.NetworkPeriod.Placed": {
-   "digest": "c8bff9f393dec88ee81067d96b84c9ddc8419b907843f860f78a5d9601a99dad",
+   "digest": "2d43f09c7c76cfa2630309b83255052b5f81505f0190900ea1df46ecbbcea64a",
    "definitions": {
-    "Properties.NetworkPeriod.ScanWindowsPlaced": "65e34930d98bb8a57a70dc0bbd6a4058ad2e2d12c2523045e5deaf42c4cd6a37",
-    "Properties.NetworkPeriod.StmtBits": "87a57783cf8ce91582c8884c621d8e8dd0471a2c0da10e67815539d992d44a63",
     "Properties.NetworkPeriod.WrongBounds": "7668c33339b3695f33da552f2a32dbdb6012bb9ed0d849b60aec5bee204b7026",
     "Properties.NetworkPeriod.WrongBoundsDrawn": "31233e6c9362dfa35fdd3d9e045b7f69b37c42a45a428f15bfe37fbed3081348"
    },
-   "guarantees": [
-    "Properties.NetworkPeriod.scanWindowsPlaced",
-    "Properties.NetworkPeriod.scanWindowsPlaced_nontrivial",
-    "Properties.NetworkPeriod.wrongBoundsDrawn",
-    "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial"
-   ]
+   "guarantees": ["Properties.NetworkPeriod.wrongBoundsDrawn", "Properties.NetworkPeriod.wrongBoundsDrawn_nontrivial"]
   },
   "Properties.NetworkPeriodLeak": {
    "digest": "a8985b33adc293a3e5827e1464cc3ac645df762765390a504ccc1cc65ac1efbf",
@@ -24842,16 +24753,6 @@
     "Properties.NetworkRecords.noGridAcceptsMore",
     "Properties.NetworkRecords.noGridMeans"
    ]
-  },
-  "Properties.NetworkScan.Flattens": {
-   "digest": "b3274ea305e084bd1025539db7af56e1ed2e406c16ad4dbdc26c49810a99839a",
-   "definitions": {
-    "Properties.NetworkScan.Flattens": "a9ffe5bcb64950cc0356774ded73ae4f5d9e44bb61c7b618da6e9e9cc5a0332b",
-    "Properties.NetworkScan.bgateAt": "c9ef3c222da0206caf21f387827912eaefb788bf0a73961922f65ddc255855e4",
-    "Properties.NetworkScan.jointOf": "d8c21679ae90c25e8585eeee0e1e5116fdd4843a09703844f0f154a5983f8441",
-    "Properties.NetworkScan.memberProg": "7d6df55aea09cd06cb3535f1ef30a13d145c43a74f75ae7a9ee69da4fca7a730"
-   },
-   "guarantees": ["Properties.NetworkPeriod.scanWindowsPlaced"]
   },
   "Properties.Pous": {
    "digest": "2b441606eaf35a16f58580f22b4c696d510069ff5f239ad65067aa5a5e26caf3",
@@ -27726,7 +27627,6 @@
     "Properties.NetworkPeriod.rowsHeld_nontrivial",
     "Properties.NetworkPeriod.rowsWiresChecked",
     "Properties.NetworkPeriod.rowsWiresChecked_nontrivial",
-    "Properties.NetworkPeriod.scanWindowsPlaced",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",

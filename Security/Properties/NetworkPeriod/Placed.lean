@@ -6,16 +6,15 @@ import Definitions.NetworkCertifier.PeriodConditions
 import Properties.NetworkScan.Flattens
 
 /-!
-# An accepted scan's incorrect sets commit at most the check's `faulty_bits` (`NetTiming.WindowsPlaced`)
+# A scan statement's layout and its audit's bound (`StmtBits`, `WrongBounds`)
 
-`NetTiming.WindowsPlaced D δ sw Pw β` is a premise of `PeriodLeakRegistered` and `PeriodTiedCount`: each window's scan
-statement has its deployed partition, and each of its possible incorrect sets at `δ` commits at most `β i` bits
-(`faultyBits`, every committed gate of each incorrect proof block: its inputs, its returned gates and the gates another
-proof block reads). The rows form's check charges a window's scan `faulty_bits = b · max(b_ing, b_eg)`
-(`NetworkCheck.Period.Scan.terms`), `b` its audit's bound on wrong units and `b_ing`, `b_eg` the bits one ingress and
-one egress unit commits (`scanOf`). `ScanWindowsPlaced` says that this number is such a `β`, at a deployment whose
-statements are laid out as `SampledProofs.Bits` lays out a sampled statement's gates (`StmtBits`), wherever the audit's
-bound holds (`WrongBounds`).
+`NetTiming.WindowsPlaced D δ sw Pw β` is a premise of `PeriodLeakRegistered`: each window's scan statement has its
+deployed partition, and each of its possible incorrect sets at `δ` commits at most `β i` bits (`faultyBits`, every
+committed gate of each incorrect proof block: its inputs, its returned gates and the gates another proof block reads).
+The rows form's check charges a window's scan `faulty_bits = b · max(b_ing, b_eg)` (`NetworkCheck.Period.Scan.terms`),
+`b` its audit's bound on wrong units and `b_ing`, `b_eg` the bits one ingress and one egress unit commits (`scanOf`).
+Whether that number is such a `β` turns on two facts about the deployment: that its statements are laid out as
+`SampledProofs.Bits` lays out a sampled statement's gates (`StmtBits`), and that the audit's bound holds (`WrongBounds`).
 
 * `StmtBits D`: every statement `D` parses is its audit's members' joint program (`Properties.NetworkScan.Flattens`),
   each member a template of its descriptor's Program that Bits lays out (`Bits.check`, at a template node of the root,
@@ -23,18 +22,17 @@ bound holds (`WrongBounds`).
   constants, `Bits.consts`), at the member's first position (`Bits.base`).
 * `WrongBounds s P δ b`: each possible incorrect set of `s` at `δ` holds at most `b` proof blocks. It is the sampled
   leg's: the audit's answer publishes `b` (`SampledProofs.Bound.boundOf`), and `WrongBoundsDrawn` gives it at a strata
-  draw. The period check reads the answer's `bound` and not the draw, so `ScanWindowsPlaced` takes it as it stands.
+  draw. The period check reads the answer's `bound` and not the draw.
 * `WrongBoundsDrawn`: where a draw reads as strata (`SampledProofs.Bound.strataOf`) whose sizes and draws, then strata
   drawn whole (an input class), are the design's strata draw (`StrataDrawn`, beside `OneStage.strata`), the bound the
   audit publishes at `δ` (`SampledProofs.Bound.boundOf`) is a `WrongBounds` bound at `δ`.
 
-`Proofs.Properties.NetworkPeriod` proves `ScanWindowsPlaced` (`scanWindowsPlaced`) and `WrongBoundsDrawn`
-(`wrongBoundsDrawn`).
+`Proofs.Properties.NetworkPeriod` proves `WrongBoundsDrawn` (`wrongBoundsDrawn`).
 -/
 
 namespace Properties.NetworkPeriod
 
-open NetworkCheck.Period (Schedule Scan scanOf templateNodes)
+open NetworkCheck.Period (templateNodes)
 open NetworkCheck.Circuit (templateDef)
 open SampledProofs.Bits (Members keyProg blockOf consts base)
 open Properties.NetworkScan (Flattens)
@@ -73,21 +71,5 @@ def WrongBoundsDrawn : Prop :=
       StrataDrawn s.design P ((strata.toList.map fun x => (x.size, x.k)) ++ ns.map fun m => (m, m)) →
       0 < δ.num → 0 < δ.den →
         WrongBounds s P ((δ.num : ℝ) / δ.den) (SampledProofs.Bound.boundOf population draw δ)
-
-/-- **An accepted scan's incorrect sets commit at most the check's `faulty_bits`.** If `scanOf` accepts the scan `j` at
-the schedule `s` with terms `sc` and its canonical text is `c`, then at every deployment `D` that lays its statements out
-as Bits does (`StmtBits`), for `n` windows whose scan statements `sw i`, each one `D` parses with `c`'s bytes as its
-descriptor and `Pw i` as its partition, have at `δ` possible incorrect sets of at most `b i` proof blocks
-(`WrongBounds`), each such set commits at most `b i · max(b_ing, b_eg)` bits: `WindowsPlaced` at
-`β i = b i · max sc.ingress sc.egress`, the check's `faulty_bits` (`Scan.terms`). -/
-def ScanWindowsPlaced : Prop :=
-  ∀ (j : Lean.Json) (program : String) (s : Schedule) (sc : Scan) (c : String),
-    scanOf j program s = .ok sc → Flock.canon j = .ok c →
-    ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
-      (D : Deploy Coin Col T), StmtBits D →
-    ∀ {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition) (δ : ℝ) (b : Fin n → ℕ),
-      (∀ i, ∃ x, D.parse x = some (sw i)) → (∀ i, (⟨(sw i).desc.toArray⟩ : ByteArray) = c.toUTF8) →
-      (∀ i, D.partition (sw i) = some (Pw i)) → (∀ i, WrongBounds (sw i) (Pw i) δ (b i)) →
-        NetTiming.WindowsPlaced D δ sw Pw fun i => b i * max sc.ingress sc.egress
 
 end Properties.NetworkPeriod

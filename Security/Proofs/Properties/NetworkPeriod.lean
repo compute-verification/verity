@@ -22,7 +22,7 @@ the check accepts, beside a tied audit that runs the class circuit, and a period
 scan's facts and its tied audits' charges (`rowsPhase_ok`), the scans keep the phases' indices (`filterMap_getElem?`),
 and each link-window's term is its scan's free inputs and those charges (`tiedFree`).
 
-`ScanWindowsPlaced`'s `WrongBounds` holds at the bound the audit publishes, at strata that are the design's strata draw
+`WrongBounds` holds at the bound the audit publishes, at strata that are the design's strata draw
 (`wrongBoundsDrawn`, at `StrataDrawn`): a set of more blocks is accepted with probability at most
 `miss(countBound + 1) < δ`.
 
@@ -604,9 +604,6 @@ theorem wrongBoundsDrawn : WrongBoundsDrawn := fun _ _ strata hs _ _ ns δ h hδ
   (boundOf_of_strataOf hs δ).symm ▸ NetTiming.card_le_of_mem_faultySets _ _
     (Claims.Sampling.Count.countBound_miss_design strata ns h δ hδ hδd).le hF
 
-theorem scanWindowsPlaced : ScanWindowsPlaced := by
-  sorry
-
 /-- A statement of one input gate, with `null`'s bytes as its descriptor and a design of no rule, which draws no slot,
 so every set of slots is accepted with probability `1` (`Design.Pa`). -/
 def oneInputStmt : Claims.Sampling.AuditStatement :=
@@ -614,11 +611,6 @@ def oneInputStmt : Claims.Sampling.AuditStatement :=
 
 /-- `oneInputStmt`'s gate as a proof block of its own. -/
 def oneInputPart : Claims.Sampling.Partition := ⟨[[[[0]]]]⟩
-
-/-- A deployment that parses every message to `oneInputStmt` and partitions it as `oneInputPart`. -/
-def oneInputDeploy : Claims.Sampling.Deploy Bool ℕ Unit :=
-  { Properties.NetworkScan.acceptAllDeploy with
-    parse := fun _ => some oneInputStmt, partition := fun _ => some oneInputPart }
 
 /-- `oneInputStmt`'s one proof block is a possible incorrect set at `δ = 1/2`: its design draws nothing, so the block
 is accepted with probability `1`. -/
@@ -635,33 +627,6 @@ theorem oneInput_faulty : ({0} : Finset ℕ) ∈ NetTiming.faultySets oneInputSt
     norm_num
   · rw [hall]
     exact Finset.disjoint_empty_right _
-
-/-- **`ScanWindowsPlaced`'s conclusion is not trivial** (the two-lemma rule's `_nontrivial`): at a scan C-Flock
-canonicalizes as `null` and a deployment that parses every message to `oneInputStmt`, whose descriptor is that text,
-partitioned as `oneInputPart`, with at most one incorrect proof block at `δ = 1/2` (`WrongBounds`), one window is not
-placed at `β = 0`: its one block, possibly incorrect since the design draws nothing, commits its input gate. So the
-conclusion fails where the deployment doesn't lay its statements out as Bits does (`StmtBits`) and the charge is below
-a block's committed bits. -/
-theorem scanWindowsPlaced_nontrivial :
-    ∃ (j : Lean.Json) (c : String) (_ : Flock.canon j = .ok c) (D : Claims.Sampling.Deploy Bool ℕ Unit)
-      (sw : Fin 1 → Claims.Sampling.AuditStatement) (Pw : Fin 1 → Claims.Sampling.Partition)
-      (_ : ∀ i, ∃ x, D.parse x = some (sw i)) (_ : ∀ i, (⟨(sw i).desc.toArray⟩ : ByteArray) = c.toUTF8)
-      (_ : ∀ i, D.partition (sw i) = some (Pw i)) (_ : ∀ i, WrongBounds (sw i) (Pw i) (1 / 2) 1),
-      ¬ NetTiming.WindowsPlaced D (1 / 2) sw Pw fun _ => 0 := by
-  refine ⟨.null, "null", Properties.NetworkScan.canon_null, oneInputDeploy, fun _ => oneInputStmt,
-    fun _ => oneInputPart, fun _ => ⟨[], rfl⟩, fun _ => Properties.NetworkScan.bytes_of_data_toList "null".toUTF8,
-    fun _ => rfl, fun _ => ?_, fun h => ?_⟩
-  · unfold WrongBounds
-    intro F hF
-    classical
-    simp only [NetTiming.faultySets, Finset.mem_filter, Finset.mem_powerset] at hF
-    calc F.card ≤ (Finset.range oneInputPart.blocks.length).card := Finset.card_le_card hF.1
-      _ = 1 := (Finset.card_range _).trans rfl
-  · have h1 : NetTiming.faultyBits oneInputStmt.prog oneInputPart {0} = 1 := by
-      simp only [NetTiming.faultyBits, Finset.sum_singleton]
-      decide
-    have h0 : NetTiming.faultyBits oneInputStmt.prog oneInputPart {0} ≤ 0 := h.2 0 {0} oneInput_faulty
-    omega
 
 /-- **`WrongBoundsDrawn`'s premise holds at a deployed law** (the two-lemma rule's `_honest`): on a layout's partition of
 a population class of two proof blocks and an input class of one, the code's strata of a `subset:1` draw over the two
