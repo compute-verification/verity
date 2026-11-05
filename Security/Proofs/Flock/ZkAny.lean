@@ -122,6 +122,8 @@ loop's frames and the model hold at each frame round; and past a rep's schedule 
 the first words of the coins of the inner proof's rounds 0 and 2, all `Frame.innerSched` reads of it; and so, at the
 deployed model with the session loop's own rounds of the inner proof, where `placeOf` places a round of a stream seen
 at the inner proof's own, the round's place the model's scheduled round, given each round of the inner proof the
-loop's finish computed so far the model's finish's. -/
+loop's finish computed so far the model's finish's; and so `EnvPre` from that invariant at the deployed loop with the
+session loop's own rounds of the inner proof, where the release takes the run's coins and the crossing passes below
+the `Finish`. -/
 
 @[expose] public section
