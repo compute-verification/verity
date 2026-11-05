@@ -206,8 +206,8 @@ public import Proofs.Toy.Base
 public import Proofs.Toy.Other
 
 namespace Toy
-variable (F : Type) (Hs : Inner.Hashes F) [Inhabited F] (x : F) {k : Nat}
-variable (y : F)
+variable (F : Type) (Hs : Inner.Hashes F) [Inhabited F] (x : F) {k : Nat} {mPts : Nat}
+variable (y : Fin mPts)
 include y
 
 theorem a_le (n : Nat) : x = x ∧ n ≤ base n := ⟨rfl, Nat.le_succ n⟩
@@ -224,7 +224,7 @@ def test_a_new_module_keeps_only_the_variables_its_declarations_name(tree):
     tree = M.Tree(tree.root)
     M.split(tree, dict(SPLIT, importers=[], drop_source=[], uses={}), [])
     new = tree.read("Proofs.Toy.SrcA")
-    assert "variable (F : Type) [Inhabited F] (x : F)\nvariable (y : F)\ninclude y\n" in new
+    assert "variable (F : Type) [Inhabited F] (x : F) {mPts : Nat}\nvariable (y : Fin mPts)\ninclude y\n" in new
     assert "Hs" not in new and "{k" not in new
     assert "(Hs : Inner.Hashes F)" in tree.read("Proofs.Toy.Src")
 

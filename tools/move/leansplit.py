@@ -306,10 +306,11 @@ def binders(text: str) -> list[str] | None:
     return out
 
 
-def kept_binders(groups: list[str], used: set[str]) -> list[str]:
-    """The groups a declaration whose text holds the tokens `used` can read: an anonymous one (an instance), and a named one
-    whose name it or a kept group's type names. A named variable is included only where it is named, so the rest change
-    nothing but must still elaborate."""
+def kept_binders(groups: list[str], used: set[str]) -> list[bool]:
+    """Which of `groups` (every `variable` binder group of a file, in order) a declaration whose text holds the tokens
+    `used` can read: an anonymous one (an instance), and a named one whose name it or a kept group's type names, in any
+    `variable` command. A named variable is included only where it is named, so the rest change nothing but must still
+    elaborate."""
     def names(g):
         head = g[1:-1].split(":", 1)
         return TOKEN.findall(head[0]) if len(head) == 2 and g[0] != "[" else []
@@ -318,7 +319,7 @@ def kept_binders(groups: list[str], used: set[str]) -> list[str]:
         need = {t for g, k in zip(groups, keep) if k for t in TOKEN.findall(g.split(":", 1)[-1])}
         more = [k or bool(set(names(g)) & need) for g, k in zip(groups, keep)]
         if more == keep:
-            return [g for g, k in zip(groups, keep) if k]
+            return keep
         keep = more
 
 
@@ -329,10 +330,20 @@ def prune(text: str, known: set[str], avail: set[str], used: str | None = None) 
     declarations it holds), a `local` notation or macro whose atom `used` doesn't hold goes too, and so does each named
     `variable` binder neither `used`, an `include` or `omit` nor a kept binder names. Returns the text and what went."""
     header, body = split_header(text)
+    units = units_of(body)
     toks = set(TOKEN.findall(used)) if used is not None else set()
-    toks |= {t for u in units_of(body) if re.match(r"(include|omit)\s", u.head) for t in TOKEN.findall(u.own())}
+    toks |= {t for u in units if re.match(r"(include|omit)\s", u.head) for t in TOKEN.findall(u.own())}
+    var: dict[int, list[str]] = {}
+    for k, u in enumerate(units if used is not None else []):
+        if re.match(r"variable\s", u.head):
+            if (gs := binders(u.own().strip())) is None:
+                toks |= set(TOKEN.findall(u.own()))
+            else:
+                var[k] = gs
+    flags = iter(kept_binders([g for k in sorted(var) for g in var[k]], toks))
+    kept = {k: [g for g in var[k] if next(flags)] for k in sorted(var)}
     out, ns, gone = [header], [[]], []
-    for u in units_of(body):
+    for k, u in enumerate(units):
         o, e = OPENER.match(u.head), END.match(u.head)
         if o and not u.head.startswith("/-"):
             ns.append(o.group(2).split(".") if o.group(1) == "namespace" and o.group(2) else [])
@@ -358,14 +369,11 @@ def prune(text: str, known: set[str], avail: set[str], used: str | None = None) 
             if atom and atom.group(1).strip() and atom.group(1).strip() not in used:
                 gone.append(u.head)
                 continue
-        elif used is not None and re.match(r"variable\s", u.head) and (gs := binders(u.own().strip())) is not None:
-            keep = kept_binders(gs, toks)
-            if len(keep) < len(gs):
-                gone += [g for g in gs if g not in keep]
-                if not keep:
-                    continue
-                out.append("variable " + " ".join(keep) + "\n" + "".join(u.blank))
-                continue
+        elif k in var and len(kept[k]) < len(var[k]):
+            gone += [g for g in var[k] if g not in kept[k]]
+            if kept[k]:
+                out.append("variable " + " ".join(kept[k]) + "\n" + "".join(u.blank))
+            continue
         out.append(u.full())
     return "".join(out), gone
 
