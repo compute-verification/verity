@@ -156,10 +156,10 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
     f"{RA_PY}::Registration": (f"{RA}Window.lean::RemoteAudit.Registration", "remote-audit-difftest", "the remote audit's port"),
     f"{RA_PY}::Registry": (f"{RA}Registry.lean::RemoteAudit.Registry", "remote-audit-difftest", "the remote audit's port"),
     f"{RA_PY}::Verdict": (f"{RA}Window.lean::RemoteAudit.Verdict", "remote-audit-difftest", "the remote audit's port"),
-    f"{MC_PY}memory_challenger.py::CoinTree": (f"{MC}Records.lean::MemoryChallenger.CoinTree", "memory-challenger-difftest",
-                                               "the memory challenger's port"),
-    f"{MC_PY}memory_challenger.py::Verdict": (f"{MC}Verdict.lean::MemoryChallenger.Verdict", "memory-challenger-difftest",
-                                              "the memory challenger's port"),
+    "verity/core/protocols/pous/memory_challenger.py::CoinTree":
+        (f"{MC}Records.lean::MemoryChallenger.CoinTree", "memory-challenger-difftest", "the memory challenger's port"),
+    "verity/core/protocols/pous/memory_challenger.py::Verdict":
+        (f"{MC}Verdict.lean::MemoryChallenger.Verdict", "memory-challenger-difftest", "the memory challenger's port"),
     f"{MC_PY}streamed_wipe.py::Verdict": (f"{MC}StreamedWipe.lean::MemoryChallenger.StreamedWipe.Verdict",
                                           "memory-challenger-difftest", "the memory challenger's port, for the streamed wipe"),
     f"{MC_PY}run.py::Session": ("verity/core/protocols/pous/check/PousCheck/Run.lean::PousCheck.Run.Session", "pous-run",
