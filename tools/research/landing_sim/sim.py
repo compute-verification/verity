@@ -141,7 +141,13 @@ def sim_current(prs, a, rng):
         # admission
         k = len(pending) if a["admit"] is None else a["admit"]
         adm, pending = pending[:k], pending[k:]
-        nxt += adm
+        if a.get("nonlean_first"):
+            # what a sync adds goes non-Lean first: below the lowest Lean member no check holds in place yet
+            held = max((i + 1 for i, p in enumerate(nxt) if p.n in lean_runs), default=0)
+            low = next((i for i in range(held, len(nxt)) if nxt[i].lean), len(nxt))
+            nxt = nxt[:low] + [p for p in adm if not p.lean] + nxt[low:] + [p for p in adm if p.lean]
+        else:
+            nxt += adm
         # Lean checks: pin the prefix up to the highest running or passed check
         running = sum(1 for (s, e) in lean_runs.values() if e > t)
         for i, p in enumerate(nxt):
@@ -308,7 +314,8 @@ def report(name, prs, moves, lo_day=0, hi_day=6.5, extra="", diag=None):
 
 
 CURRENT = dict(admit=4, pass0=40, pass1=0.3, max_lean=10, lean_min=82, pin=True, lowrisk=True, set_landing=False,
-               run_min=150, flake=0.1, fix_min=360, revert=False, review_cap=None, land_is_main=False)
+               run_min=150, flake=0.1, fix_min=360, revert=False, review_cap=None, land_is_main=False,
+               nonlean_first=False)
 TREE = dict(review_cap=None, step=5, own_min=20, own_lean_min=82, lowrisk=True, spec=4, int_min=15, int_lean_min=45, name_p=0.9,
             fix_min=360, own_cores=8, lean_cores=32, int_cores=64)
 
@@ -357,6 +364,7 @@ if __name__ == "__main__":
         ("current, review p90 capped at 60 min", "current", {"review_cap": 60}),
         ("current (calibrated)", "current", {}),
         ("current + revert on red (no fix-forward wait)", "current", {"revert": True}),
+        ("current + nonlean_first", "current", {"nonlean_first": True}),
         ("current + no prefix pin (set landing)", "current", {"pin": False, "set_landing": True}),
         ("current + admission unbounded, 10-min pass", "current", {"admit": None, "pass0": 10, "pass1": 0.0}),
         ("current + run 60 min (fine-grained cached)", "current", {"run_min": 60}),
