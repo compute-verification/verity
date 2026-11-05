@@ -47,6 +47,14 @@ def OrderHeld (s : Verity.Sent) : Prop :=
     caseOf s = .ok (p, c, e) → p.base.challenger = some (key, label) → linesOf e = .ok lines →
       sampleLinkFirst label c.digest lines.tail = true
 
+/- Once v2's check makes this refusal, the sampled verdict gives it, and the `hord` the `_verdict` theorems below take
+is `orderHeld_verdict hA hθ hv`:
+
+    theorem orderHeld_verdict {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray}
+        {F : Array ByteArray} {A : Live} {x : Verity.Exchange} (hA : SetsUp V θ F A) (hθ : x.params = θ)
+        (hv : V.Verdict k .sampled x) : OrderHeld x.sent
+-/
+
 /-- **v2's read of releases has their frames and the bytes they answered.** -/
 theorem ofV2_frames :
     ∀ {l l' : List Verity.Release}, List.Forall₂ Binding.Read.Of (l.map Binding.Read.ofV2) l' →
