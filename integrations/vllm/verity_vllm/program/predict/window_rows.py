@@ -52,7 +52,6 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.certifier import ingress_scan as IS
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.evaluation import evaluate_batch
@@ -62,6 +61,7 @@ from verity.ml.definitions.numerics.rows import ROWS
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.b1 import NEG_INF_BF16
 from verity.ml.windows import interface as IF
+from verity_vllm.ports import ingress_scan
 from verity_vllm.protocols.pouw.h1 import registered as H1R
 from verity_vllm.query.manifest import format as RM
 
@@ -706,7 +706,7 @@ def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], k
     ports open their rows in it, by its root and domain."""
     if not 0 <= index < 1 << 32:
         raise ValueError(f"window {index}: a window's index is a u32")
-    bits = np.asarray(rows, dtype=np.uint16)
+    bits, IS = np.asarray(rows, dtype=np.uint16), ingress_scan()
     if bits.shape != (cls.buckets, IS.state_bits(cls.scan)) or bits.max(initial=0) > 1:
         raise ValueError(f"a window of {cls.buckets} buckets reads {cls.buckets} state rows of {IS.state_bits(cls.scan)} "
                          f"bits, not {bits.shape}")
@@ -718,7 +718,7 @@ def standin_state(program: str, cls: WindowClass, slots: Sequence[tuple[Sequence
                   window: str) -> G.Registered:
     """`state_value` where no scan ran: the rows that give slot k its row (occupancy, prompt length, ids) and
     ``max_tokens``, ``slots[k]``, at its anchor and lane (`scan_slots`), every other field zero."""
-    scan = cls.scan
+    scan, IS = cls.scan, ingress_scan()
     states = [IS.empty(scan) for _ in range(cls.buckets)]
     for k, (row, max_tokens) in enumerate(slots):
         s = states[cls.anchor(k)].slots[cls.lane(k)]

@@ -56,10 +56,9 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from verity.core.protocols.certifier import compile_slice as CS
-from verity.core.protocols.certifier import served_rows as SRW
 from verity_vllm.commit.served_record import BlockValues, base_id, served_rows, window_commit
 from verity_vllm.pipeline.seal_process import SealFailed
+from verity_vllm import ports
 from verity_vllm.pipeline.serve_seal import GB, committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
 
 #: The compile slice's size class beside the engine's statics; R and P (with the engine's L and T, and IW) shape the rows.
@@ -197,14 +196,14 @@ def served_statics(engine: Mapping[str, Any], size_class: Mapping[str, int]) -> 
     if missing := [k for k in SERVED_CLASS if k not in size_class]:
         raise ValueError(f"the served rows' size class needs {missing}")
     c = {k: int(size_class[k]) for k in SERVED_CLASS}
-    return CS.statics(c["R"], c["W"], c["A"], dict(engine), c["IW"], Q=c["Q"], D=c["D"], P=c["P"], K=c["K"])
+    return ports.compile_slice().statics(c["R"], c["W"], c["A"], dict(engine), c["IW"], Q=c["Q"], D=c["D"], P=c["P"], K=c["K"])
 
 
 def commit_served(statics: Mapping[str, int], by_step: Mapping[int, Sequence[tuple]], ids: Mapping[str, int], steps: int,
-                  run_root: bytes, salts: Sequence[bytes] | None = None) -> tuple[SRW.Served, list]:
+                  run_root: bytes, salts: Sequence[bytes] | None = None) -> tuple[Any, list]:
     """A window's served rows (`served_record.served_rows`' form, by step) committed under its run root
     (`served_rows.register`, fresh salts unless ``salts`` gives them), and the slice windows they make."""
-    S = SimpleNamespace(**statics)
+    S, SRW = SimpleNamespace(**statics), ports.served_rows()
     session = SRW.windows(S, by_step, ids, steps)
     return SRW.register(S, session, run_root, salts=salts), session
 
