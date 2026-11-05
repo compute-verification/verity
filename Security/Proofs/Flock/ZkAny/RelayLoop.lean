@@ -20,14 +20,17 @@ the `Hello`'s proved:
   messages the session's slots took.
 * `Stays`: from one of the session's requests to the next, its tables' level 0 as they were, and at each bound level
   0's root its entry and salts (`Stay`).
+* `SaltsSrc`: the salts for levels ≥ 1 the loop holds at the session's level-0 roots the ones the host and the operating
+  system handed the loop for the rep stream.
 * `LoopRead`: what the relay reads at a slot as the loop answers it, and the loop at the session's next request: the
   `Hello`'s nonce the relay drew, and the model's `Hello` round passing; the `Commit`'s roots `commitRead` reads off
   the slots, the level 0s it binds kept, the coin tree's streams the session's, and the firewall's own link at the
   level 0s the loop drew for the session, each `Level0.ofDraws` on the host's and the operating system's bytes; a
   frame round as the loop ran it (`RoundRun`) on the worker's value at the model's history, the rep's frame
-  at the model's configuration there; at the `Finish`, once the hold's barrier passes, the session not stopped, the
-  run at its last round, the firewall's own `Finish` not stopping, the worker's value the firewall's own, and that
-  message the `Final` of the loop's proof files as `Proof` frames; at the `Commit` and each frame round the auditor
+  at the model's configuration there and the loop's salts `SaltsSrc`; at the `Finish`, once the hold's barrier passes,
+  the session not stopped, the run at its last round, the firewall's own `Finish` not stopping, the worker's value the
+  firewall's own, and that message the `Final` of the loop's proof files as `Proof` frames; at the `Commit` and each
+  frame round the auditor
   answering as `V*` did, and at the `Finish` the run having a message there; at every other slot only the updates
   between the session's requests (`Between`); and at a frame round and every other slot `Stays`.
 * `LoopReads`: the requests to come, each read so, up to the session's stop or end.
@@ -110,6 +113,18 @@ def Stays (sid : Nat) (σ σ' : LoopAt) : Prop :=
       _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name) ∧
     ∀ name l0, _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 → Stay sid l0.root σ.R σ'.R
 
+/-- **The salts for levels ≥ 1 the loop holds at session `sid`'s level 0s are the ones the host and the operating system
+handed it for the rep stream**, at the loop at `σ`: where the loop's salts hold some at table `i`'s level-0 root and rep
+`r` (the first a finish kept there, `Finish.serve`'s `salts` handing them to `keep`), they are rep stream `2i + r`'s
+(`LoopModel.src`'s, the bytes `Finish.serve`'s `hiSaltsOf` reads). -/
+def SaltsSrc {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (σ : LoopAt) : Prop :=
+  ∀ (i r : Nat) (rel : _root_.Flock.Firewall.Frames.Release) (name : String)
+    (l0 : _root_.Flock.Firewall.Level0.Level0) (r0 : ByteArray) (q0 : Nat) (hi : Array ByteArray), r < 2 →
+    sessAt σ.R sid = some rel → rel.spec.tables[i]? = some name →
+    _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 →
+    σ.R.salts.find? (fun x => x.1 == l0.root && x.2.1 == r) = some (r0, q0, hi) →
+    ∃ g d, M.src (2 * i + r) = .ok (g, d, hi)
+
 /-- **What the relay reads at a slot of kind `k` of session `sid`**, from the session `st` and placement `pl`, as the
 loop at `σ` answers it serving the model's run `M`, the loop being at `σ'` at the session's next request: at the
 `Hello` the nonce `nonce` the relay drew, and the model's `Hello` round passing (every round before the history the
@@ -119,8 +134,9 @@ those `commitRead` left, the coin tree's streams the session's (`streamsOk`), an
 at the roots of the level 0s `ls` the loop drew for the session (`AfterDraw`), table `j`'s being `Level0.ofDraws` at
 its statement's `m` on what the host and the operating system handed the loop for rep stream `2j` (`LoopModel.src`,
 as `Session.level0` draws it); at a frame round a `RoundRun` from `σ`'s frames and level 0s to `σ'`'s frames, its
-content the worker's value at the model's history so far, and the rep's frame at the model's configuration there (as
-the loop started it, on the draws the model's tapes hold); at the `Finish`, once the hold's barrier passes, the
+content the worker's value at the model's history so far, the rep's frame at the model's configuration there (as
+the loop started it, on the draws the model's tapes hold), and the salts the loop holds at the session's level 0s
+those the host handed it for each rep stream (`SaltsSrc`); at the `Finish`, once the hold's barrier passes, the
 session not stopped, the run at its last round, the firewall's own `Finish` not stopping, the worker's value the
 firewall's own, and that message the `Final` of the loop's proof files as `Proof` frames. At the `Commit` and each
 frame round the auditor answers as `V*` did (`LoopModel.Ans`), and at the `Finish` the run has a message. Between the
@@ -146,7 +162,8 @@ def LoopRead {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec)
   | .round stream n, st, pl, e, σ, σ' =>
     M.Ans σ.c e ∧ (∃ i r dom, ∃ v : Claims.Msg, M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) ∧
       RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R ∧
-      ∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) ∧ σ'.c = σ.c + 1 ∧ Stays sid σ σ'
+      ∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) ∧ σ'.c = σ.c + 1 ∧
+      Stays sid σ σ' ∧ SaltsSrc M sid σ
   | .finish, _, _, e, σ, σ' =>
     σ.c < M.τ.length ∧
       (e.barrier none = none → σ.R.stopped sid = false ∧ σ.c = M.L.last M.x ∧
