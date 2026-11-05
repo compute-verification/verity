@@ -27,6 +27,11 @@ flips among (`shortfall`). This file bounds it at one leaf, averaged over the de
 * **At a round's release** (`roundBits_injective`, `prCoin_roundBits_eq`, `openGap_avg_le_round`): the bits of a
   round's `m` live challenges collide with probability `2^-(128·m)`, so `openGap` averaged over the draw is at most
   `2·δ₁ + 2^-(128·m)`.
+* **The release's bits at a stop** (`roundBits_append`, `linkBits_injective`, `opened_eq_roundBits`,
+  `exists_opened_eq_linkBits`, `avg_opened_linkBits`, `OpeningAt.exists_roundBits_eq`, `OpeningAt.exists_linkBits_eq`):
+  a round's live challenges, and the link's two points, are determined by their bits. Where a description opens as many
+  coins as the release has challenges (`m` at a round, `m + m` at the link), within the block, every round the node
+  flips among is released as some live coins' bits, and a uniform draw's first coins have the release's law.
 -/
 
 @[expose] public section
@@ -578,5 +583,67 @@ theorem openGap_avg_le_round {β : Type} {lg : β → List Release} {E : List Re
       2 * δ₁ + ((2 : ℝ≥0∞) ^ (128 * m))⁻¹ :=
   (openGap_avg_le hE ν key s r m g' ho (roundBits e) hT1 (avg_opened_roundBits e hm)).trans_eq
     (congrArg (2 * δ₁ + ·) (prCoin_roundBits_eq e))
+
+/-! ## The release's bits at a stop -/
+
+/-- **A round of `m + n` challenges is two rounds'**: its bits are its first `m` challenges' bits, then its last
+`n`'s. -/
+theorem roundBits_append {m n : ℕ} (a : Fin m → 𝔽) (b : Fin n → 𝔽) :
+    roundBits e (Fin.append a b) = roundBits e a ++ roundBits e b := by
+  simp only [roundBits, List.ofFn_add, Fin.append_left', Fin.append_right, List.flatten_append]
+
+/-- **The link points' bits determine them**: they are the bits of the round of the two points' challenges in turn
+(`roundBits_append`), which determine it (`roundBits_injective`). -/
+theorem linkBits_injective {m : ℕ} : Function.Injective (linkBits e : (Fin 2 → Fin m → 𝔽) → List Bool) := by
+  intro p p' h
+  refine ((finTwoArrowEquiv _).trans (Fin.appendEquiv m m)).injective (roundBits_injective e ?_)
+  exact (roundBits_append e (p 0) (p 1)).trans (h.trans (roundBits_append e (p' 0) (p' 1)).symm)
+
+/-- **A draw's first `m` coins are a round's bits**: those of the challenges its first `m` coins encode under `e`. -/
+theorem opened_eq_roundBits {block m : ℕ} (hm : m ≤ block) (d : TreeDraw block) :
+    TreeDraw.opened d m = roundBits e fun i => e.symm (Fin.take m hm d.1 i) := by
+  rw [TreeDraw.opened, ← Fin.ofFn_take_eq_take_ofFn hm]
+  exact congrArg List.flatten (congrArg List.ofFn (funext fun i => congrArg List.ofFn (e.apply_symm_apply _).symm))
+
+/-- **A draw's first `m + m` coins are two link points' bits**: those of its first `m` coins' challenges, then its next
+`m`'s (`opened_eq_roundBits`, `roundBits_append`). -/
+theorem exists_opened_eq_linkBits {block m : ℕ} (hm : m + m ≤ block) (d : TreeDraw block) :
+    ∃ pts : Fin 2 → Fin m → 𝔽, TreeDraw.opened d (m + m) = linkBits e pts := by
+  obtain ⟨pts, h⟩ := ((finTwoArrowEquiv _).trans (Fin.appendEquiv m m)).surjective
+    fun i => e.symm (Fin.take (m + m) hm d.1 i)
+  refine ⟨pts, (opened_eq_roundBits e hm d).trans ?_⟩
+  rw [← h]
+  exact roundBits_append e (pts 0) (pts 1)
+
+/-- **A draw's first `m + m` coins have the link's law**: in a block of at least `m + m` coins, a uniform draw's first
+`m + m` coins are released as the bits of two uniform live link points of `m` challenges each
+(`avg_opened_roundBits`, `roundBits_append`). -/
+theorem avg_opened_linkBits {block m : ℕ} (hm : m + m ≤ block) (G : List Bool → ℝ≥0∞) :
+    avg (fun ω : Fin block → Fin 128 → Bool => G (TreeDraw.opened (ω, fun _ => false) (m + m))) =
+      avg fun pts : Fin 2 → Fin m → 𝔽 => G (linkBits e pts) :=
+  (avg_opened_roundBits e hm G).trans
+    ((avg_equiv ((finTwoArrowEquiv _).trans (Fin.appendEquiv m m)) fun c => G (roundBits e c)).symm.trans
+      (congrArg avg (funext fun pts => congrArg G (roundBits_append e (pts 0) (pts 1)))))
+
+/-- **Every round a node flips among is released as a round's bits** where the play ends in a close that records its
+log and a description `o` at a draw's leaf opens `m` coins of a block of at least `m` (`opened_eq_roundBits`). -/
+theorem OpeningAt.exists_roundBits_eq {β : Type} {lg : β → List Release} {E : List Release → Game β}
+    (hE : RecordsLog lg E) {g' : Game β} (o₀ o : OpeningAt E g') {ν key : ByteArray} {s r m block : ℕ}
+    {d₀ : TreeDraw block} (h : o.AtLeaf ν key s r m d₀) (hm : m ≤ block) (d : o₀.Openable) :
+    ∃ c : Fin m → 𝔽, TreeDraw.opened d.1 o₀.n = roundBits e c := by
+  obtain ⟨-, -, -, -, rfl, rfl, -⟩ := h
+  rw [← OpeningAt.opened_eq hE o₀ o d]
+  exact ⟨_, opened_eq_roundBits e hm _⟩
+
+/-- **Every round a node flips among is released as two link points' bits** where the play ends in a close that
+records its log and a description `o` at a draw's leaf opens `m + m` coins of a block of at least `m + m`
+(`exists_opened_eq_linkBits`). -/
+theorem OpeningAt.exists_linkBits_eq {β : Type} {lg : β → List Release} {E : List Release → Game β}
+    (hE : RecordsLog lg E) {g' : Game β} (o₀ o : OpeningAt E g') {ν key : ByteArray} {s r m block : ℕ}
+    {d₀ : TreeDraw block} (h : o.AtLeaf ν key s r (m + m) d₀) (hm : m + m ≤ block) (d : o₀.Openable) :
+    ∃ pts : Fin 2 → Fin m → 𝔽, TreeDraw.opened d.1 o₀.n = linkBits e pts := by
+  obtain ⟨-, -, -, -, hn, rfl, -⟩ := h
+  rw [← OpeningAt.opened_eq hE o₀ o d, hn]
+  exact exists_opened_eq_linkBits e hm _
 
 end Verity.Sampled
