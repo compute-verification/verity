@@ -129,6 +129,7 @@ def _template(d: Path, const: int, meta: dict) -> Path:
 
 TEMPLATES = {"a computed row, 16 bits": (PF.WORD + 1, {"units_per_vu": 1, "leaves_out": [[0]]}, None),
              "no computed row": (PF.WORD, {"units_per_vu": 1, "leaves_out": [[0]]}, PF.NO_ROW_WHY),
+             "no unit": (PF.WORD + 1, {"units_per_vu": 0, "leaves_out": []}, PF.NO_ROW_WHY),
              "the widest class": (PF.WORD + 1, {"units_per_vu": 2, "leaves_out": [list(range(8192))] * 2}, None),
              "one leaf past it": (PF.WORD + 1, {"units_per_vu": 2,
                                                 "leaves_out": [list(range(8192)), list(range(8193))]}, PF.WIDE_WHY),
