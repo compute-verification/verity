@@ -228,7 +228,13 @@ negatives.
   committed roots and whose Lean verdict of record reported exactly that file's reads, and lists every other drawn
   member as not credited, by name; PoUW's freed compute is credited nowhere and not claimed, by name, beside the PoUW
   piece the run's COINS line says it served, and whether the run is of record reads every verdict but PoUW's, which
-  stays listed as its row states it (missing and development for a development piece). Beside them are the network certifier's bound term by term in the notation
+  stays listed as its row states it (missing and development for a development piece). Sampled proofs' guarantee is
+  what its draw establishes, ε at δ, per window (its answer's bound over the window's n proof blocks) and pooled, never
+  the window's alone: at most ⌊ln(1/δ)/q⌋ incorrect proof blocks over any number of windows each drawing k of n
+  (q = k/n, `Flock.Guarantees.IntegrityHorizon`), stated for each monitoring period for the node, a datacenter's and the
+  world's links (each link's at δ / links, summed), with its share of their proof blocks at a window an execution
+  phase; a law other than a k-subset has no pooled figure, and a draw of several members (stratified:1, H1_TIE's
+  default) is named refused, since it writes no sampled-proofs case. Beside them are the network certifier's bound term by term in the notation
   table's symbols, with its overcount, the seconds it covers, the connections it counts and δ_net term by term with
   each term's source (the check's `eps`, only its δ part, and each phase's knowledge, binding and collision errors,
   which no check computes), `eps` split into the scans' δ and the charged tied audits' with what sets each and what a

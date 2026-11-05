@@ -36,6 +36,15 @@ for the demo's run of record, naming the verdicts not established, the members n
 read (``not_claimed``: PoUW's, `NOT_CLAIMED`, listed as it is, missing and development where its row is); ``placement`` is the network
 certifier's answer's, which host ran each party.
 
+**Sampled proofs' guarantee** (``sampled_proofs``, `SAMPLED`), from its accepted row's answer, else ``missing``: what
+its draw establishes, ε at δ, per window (``window``: its bound at its profile's δ over the window's n proof blocks) and
+pooled (``pooled``, `POOLED`): at most ⌊ln(1/δ)/q⌋ incorrect proof blocks over any number of windows, each drawing k of
+its n proof blocks (q = k/n), by `Flock.Guarantees.IntegrityHorizon`, and for each monitoring period of
+`leak_bounds.PERIODS` that count for the serving node, a datacenter's and the world's links (each link's at δ / links,
+summed), each with its share of the period's proof blocks at a window an execution phase (`WINDOW_S`), scaled from the
+run's window by its rule (`POOLED_RULES`); a law other than a k-subset has no pooled figure (`NOT_POOLED`). ``refused``
+names the draws a run of record doesn't make (`MULTI`), and it is conditional on the coins while they are open.
+
 **Coins** (``coins``, `COINS`): sampled proofs' coins as the run's COINS lines in verdicts.txt name them (the served
 run's, or the follow-on's where it audits), and the network certifier's chain draws as its published report states
 each one's law (``draws``, `CHAIN_DRAWS`); ``open`` unless each COINS line names the live challenger (`LIVE_COINS`) and,
@@ -129,6 +138,7 @@ profile; it names no Commit window, whose count `publish` holds.
 from __future__ import annotations
 
 import argparse
+import decimal
 import hashlib
 import json
 import math
@@ -273,6 +283,40 @@ NO_COMPLETION = ("the audit's record states no registered-file completion (check
 UNCOMPLETED = "the audit couldn't complete its --registered file, and refused it"
 UNREPORTED = "its Lean verdict of record didn't accept its completed file reporting exactly that file's reads"
 UNLISTED = "the audit's record lists its Lean verdict but no completion of its --registered file"
+#: where the window report keeps sampled proofs' answer, whose profile and public its guarantee reads
+SAMPLED_FROM = f"record/verdicts.json protocols.{ROWS['sampled proofs']}.answer"
+SAMPLED = ("sampled proofs' guarantee, what its draw establishes, ε at δ, per window and pooled over each monitoring "
+           "period, never the window's alone. A window (``window``): its answer's bound at its integrity profile's δ "
+           "over the window's n proof blocks, ε = bound / n (Flock.Guarantees.EndToEndHidden: an accepted window holds "
+           "more incorrect proof blocks than its bound with probability at most δ + ε_ks + δ_link). A draw of k of n "
+           "proof blocks leaves most of them unchecked, so at k = 1 and δ at most 1/n its bound is n − 1: what a draw "
+           "establishes is the pooled count (``pooled``, `POOLED`)")
+POOLED = ("Flock.Guarantees.IntegrityHorizon: over T windows played by one adaptive prover, each a --zk session under "
+          "hidden outputs drawing a uniform k-subset of its n proof blocks on its own live coins, q = k / n, every "
+          "window accepts while their incorrect proof blocks total at least ln(1/δ)/q with probability at most "
+          "δ + Σ_t (ε_ks,t + δ_link,t), whatever T is. So a monitoring period's windows hold at most ⌊ln(1/δ)/q⌋ "
+          "incorrect proof blocks in all (``incorrect_at_most``) but with that probability, its named assumptions A3 "
+          "for each window's draw bytes, live-verifier, cr/sha-512 and ecr/sha-512. No check computes ε_ks,t or "
+          "δ_link,t, so the probability has no number here past δ (``error``)")
+#: the pooled cells' rules: the node's period from the run's window, and the datacenter's and the world's from the node's
+POOLED_RULES = {
+    "window-to-period": ("the run's window repeated: each window of the monitoring period drawn as the run's, k of its "
+                         "n proof blocks (its answer's profile), at least one an execution phase (`WINDOW_S`)"),
+    "links": ("each link's node cell at δ / links, summed over the links: IntegrityHorizon on each link's windows at "
+              "δ / links, joined by the union bound, our composition, which no Lean statement covers"),
+}
+WINDOW_S = ("a stated parameter: a window an execution phase, T buckets of τ (the certifier's case's params.schedule), "
+            "the fewest the period's check takes, as it ties a compute audit to each execution phase's scan. More "
+            "windows lower each share and leave the count, which no window count enters")
+NO_GATES = ("in AND gates: missing. A proof block's AND gates are its partition's, which is private, so each share is "
+            "of the monitoring period's proof blocks")
+NOT_POOLED = ("its draw isn't a uniform k-subset of the window's proof blocks, the law IntegrityHorizon pools, so no "
+              "pooled figure is stated for it")
+MULTI = ("a draw of more than one member of a window, such as one member of each template's stratum (stratified:1, "
+         "H1_TIE's default), writes no case of verity/sampled-proofs/v1 (`a5.v2_proof`: v2 verifies one table's "
+         "sessions), so remote's and onsite's composites have none and reject naming it, and Lean's per-member form "
+         "refuses it (MULTI_REFUSED) until a guarantee for a draw of several members is in the lock. A run of record "
+         "draws one member, subset:1 under --zk (V3C_LAW), and this is that draw's guarantee")
 #: the network certifier's chain report as its piece publishes it (`certifier_piece.PUBLIC`), and its draws by step
 CHAIN_REPORT = CASE.parent / "chain" / "report" / "report.json"
 DRAWS = {"n2": "the period draw", "scan": "the scan's draw"}
@@ -632,9 +676,9 @@ NO_SERVING = ("the run's caller stated no serving settings (--window-steps and -
 BESIDE = "verity/onsite-network-records-beside/v1"
 BESIDE_IS = ("each run's figures from its own record, beside the others', each labelled with its serving settings "
              "(`SERVING`), ℓ_a, what its figures are conditional on (`COINS`), what it doesn't claim (`DAY`, `POUW`) "
-             "and the drawn members it doesn't credit (`CREDIT`): its figure of record, what is open under it, and "
-             "each period's cells (bits and share of the weights). No figure is carried from one run's settings to "
-             "another's")
+             "and the drawn members it doesn't credit (`CREDIT`): its figure of record, what is open under it, "
+             "each period's cells (bits and share of the weights), and sampled proofs' guarantee per window and "
+             "pooled (`SAMPLED`). No figure is carried from one run's settings to another's")
 UNLABELLED = ("states no serving settings, which label its figures beside another run's: write it again from its OUT "
               "with --window-steps and --max-tokens")
 
@@ -800,7 +844,81 @@ def schedule(case: Mapping[str, Any], phases: int) -> tuple[Fraction, int, int]:
                          "check refuses")
     T = int(s["window"])
     cells = min(int(s["lanes"]) * int(s["slots"]) * T, n // phases * int(s["egress_cells"]))
-    return Fraction(T * int(s["bucket_ms"]), 1000), n, cells * 8 * int(s["cell_bytes"])
+    return phase_of(s), n, cells * 8 * int(s["cell_bytes"])
+
+
+def phase_of(s: Mapping[str, Any]) -> Fraction:
+    """An execution phase's seconds under the case's ``schedule`` ``s``: its T buckets of τ."""
+    return Fraction(int(s["window"]) * int(s["bucket_ms"]), 1000)
+
+
+def phase_seconds(out: Path) -> tuple[Fraction | None, str]:
+    """An execution phase's seconds from OUT's certifier case (`phase_of`), or None and why it can't be read."""
+    try:
+        return phase_of(json.loads((out / CASE).read_text())["params"]["schedule"]), ""
+    except FileNotFoundError:
+        return None, f"no {CASE}: a window's length is an execution phase's, its params' schedule (`WINDOW_S`)"
+    except (KeyError, TypeError, ValueError) as e:
+        return None, f"{CASE}: {type(e).__name__}: {e}"
+
+
+def horizon(q: Fraction, delta: Fraction, links: int = 1) -> int:
+    """⌊ln(links/δ)/q⌋, IntegrityHorizon's count at δ / links (`POOLED`), never below it: ln to 60 digits, raised by a
+    part in 10^40 before the floor."""
+    with decimal.localcontext() as c:
+        c.prec = 60
+        D = decimal.Decimal
+        x = ((D(links) * D(delta.denominator)).ln() - D(delta.numerator).ln()) * D(q.denominator) / D(q.numerator)
+        return math.floor(x * (1 + D(10) ** -40))
+
+
+def sampled(row: Any, verdict: Mapping[str, Any], phase_s: Fraction | None, why: str,
+            conditional: Sequence[str] = ()) -> dict[str, Any]:
+    """Sampled proofs' guarantee (`SAMPLED`) from its accepted row's answer: its window's, and pooled over each
+    monitoring period (`POOLED`) for the serving node and, by the links of each (`census`), a datacenter and the world,
+    at a window an execution phase of ``phase_s`` seconds (`WINDOW_S`; where it is None the periods are missing,
+    ``why``); a draw of another law has no pooled figure (`NOT_POOLED`). ``refused`` names the draws a run of record
+    doesn't make (`MULTI`), and ``conditional_on`` the coins' condition while it is open (`COINS`)."""
+    g = {"is": SAMPLED, "refused": MULTI, "from": SAMPLED_FROM} | (
+        {"conditional_on": list(conditional)} if conditional else {})
+    if verdict.get("verdict") != "accept":
+        return g | {"missing": f"sampled proofs' verdict is {verdict.get('verdict')}: only its accepted answer "
+                                 "states a bound"}
+    try:
+        a = row["answer"]
+        levels, b = a["profile"]["levels"], int(a["public"]["bound"])
+        n, law, delta = int(levels[-1]["size"]), levels[-1]["draw"], exact_delta(a["profile"]["delta"])
+    except (IndexError, KeyError, TypeError, ValueError) as e:
+        return g | {"error": f"its answer's profile or public lacks a field: {type(e).__name__}: {e}"}
+    if not (0 < n and 0 <= b <= n and 0 < delta < 1):
+        return g | {"error": f"its answer's bound {b} over {n} proof blocks at δ {delta} states no ε"}
+    g["window"] = {"units": n, "law": law, "delta": str(delta), "bound": b, "epsilon": str(Fraction(b, n)),
+                     "statement": "Flock.Guarantees.EndToEndHidden"}
+    k = law.get("subset") if isinstance(law, Mapping) and len(levels) == 1 else None
+    if not (isinstance(k, int) and 0 < k <= n):
+        return g | {"pooled": {"missing": NOT_POOLED}}
+    q = Fraction(k, n)
+    pooled: dict[str, Any] = {
+        "statement": "Flock.Guarantees.IntegrityHorizon", "is": POOLED, "q": str(q), "incorrect_at_most": horizon(q, delta),
+        "error": {"delta": str(delta), "unvalued": "Σ_t (ε_ks,t + δ_link,t) over the cell's windows"},
+        "gates": {"missing": NO_GATES}}
+    if phase_s is None:
+        return g | {"pooled": pooled | {"periods": {"missing": why}}}
+    refs = census()
+    links = {"node": 1, **{where: v["links"] for where, v in refs.items()}}
+    pooled |= {"window_s": {"seconds": str(phase_s), "is": WINDOW_S}, "rules": {
+        "window-to-period": {"rule": POOLED_RULES["window-to-period"], "sources": [SAMPLED_FROM, FROM_SCHEDULE]},
+        **{where: {"rule": POOLED_RULES["links"], "sources": v["sources"]} for where, v in refs.items()}}}
+    for name, seconds in LB.PERIODS.items():
+        w = math.ceil(Fraction(seconds) / phase_s)
+        pooled[name] = {"seconds": seconds, "windows": w}
+        for where, L in links.items():
+            blocks = w * L * n
+            f = min(L * horizon(q, delta, L), blocks)
+            pooled[name][where] = {"links": L, "windows": w * L, "proof_blocks": blocks, "incorrect_at_most": f,
+                                   "share": float(Fraction(f, blocks)), "how": "scaled",
+                                   "rule": "window-to-period" if where == "node" else where}
+    return g | {"pooled": pooled}
 
 
 def census_line(name: str, *fields: str) -> dict[str, Any]:
@@ -1176,6 +1294,7 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
                       "not_credited": list(paid.get("not_credited") or ()), "not_claimed": list(NOT_CLAIMED)}
                      | ({"uncredited": paid["missing"]} if "missing" in paid else {})
                      | ({"conditional_on": held} if held else {}),
+        "sampled_proofs": sampled(rows.get(ROWS["sampled proofs"]), v["sampled proofs"], *phase_seconds(out), cond),
         "placement": profile.get("placement"), "advice_charge": advice,
         "composite_error": composite_error(rows, None, conditional=cond),
         "reproof": reproof(out, copy, listing, tie)}
@@ -1224,8 +1343,8 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
     """The ``ONSITE`` line: the run's serving settings, each verdict, whether the run is of record and what every figure
     is conditional on (`COINS`; open for a record that read no coins), what the record doesn't claim (`DAY`, `POUW`),
     the drawn members it doesn't credit (`CREDIT`), K of record and what is open under it, its δ_net's terms, eps's
-    split and connections, the composite's stated error, the year's datacenter cell, and the measured advice charge's
-    test run."""
+    split and connections, the composite's stated error, the year's datacenter cell, sampled proofs' guarantee per window
+    and pooled (`guarantee`), and the measured advice charge's test run."""
     b, p, s = rec.get("bound") or {}, rec.get("periods") or {}, rec.get("serving") or {}
     year = (p.get("year") or {}).get("datacenter")
     m, fig = rec["advice_charge"]["measured"], b.get("of_record") or {}
@@ -1241,7 +1360,23 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
             "connections": (b.get("connections") or {}).get("count"),
             "year_datacenter": None if year is None else {
                 k: year[k] for k in ("bits", "share", "share_served", "share_of_capacity", "delta_net", "how")},
+            "sampled_proofs": guarantee(rec.get("sampled_proofs")),
             "advice_measured_on": m.get("run"), **{k: b[k] for k in ("missing", "error") if k in b}}
+
+
+def guarantee(g: Mapping[str, Any] | None) -> Any:
+    """Sampled proofs' guarantee (`sampled`) as its window's ε at δ beside each pooled cell's count and share, and its
+    ``missing`` or ``error`` where it states none; None for a record that has none."""
+    if not isinstance(g, Mapping):
+        return None
+    if "window" not in g:
+        return {k: g[k] for k in ("missing", "error") if k in g}
+    p = g["pooled"]
+    pooled = p if "q" not in p else {"incorrect_at_most": p["incorrect_at_most"]} | (
+        {"periods": p["periods"]} if "periods" in p else {
+            name: {where: {k: p[name][where][k] for k in ("incorrect_at_most", "share")}
+                   for where in ("node", "datacenter", "world")} for name in LB.PERIODS})
+    return {"window": {k: g["window"][k] for k in ("epsilon", "delta", "units", "law")}, "pooled": pooled}
 
 
 def cells(p: Mapping[str, Any] | None) -> Any:
@@ -1273,7 +1408,7 @@ def beside(paths: Sequence[Path]) -> dict[str, Any]:
                      "ell_a": (rec["advice_charge"].get("cap") or {}).get("ell_a"), "of_record": line["of_record"],
                      "conditional_on": line["conditional_on"], "not_claimed": line["not_claimed"],
                      "not_credited": line["not_credited"], "K": line["K"], "open": line["open"],
-                     "periods": cells(rec.get("periods"))})
+                     "periods": cells(rec.get("periods")), "sampled_proofs": line["sampled_proofs"]})
     return {"format": BESIDE, "is": BESIDE_IS, "runs": runs}
 
 
