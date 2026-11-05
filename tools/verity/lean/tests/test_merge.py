@@ -863,7 +863,7 @@ def _pyproject(tmp: Path, base: str, ours: str, theirs: str) -> tuple[str, int]:
 
 
 def test_a_pyproject_whose_sides_each_add_a_suite_input_merges_and_any_other_conflict_stays_gits(tmp_path):
-    """INF-539: two PRs that each add a file a suite reads, at the same place in `inputs`, conflicted in every train; they
+    """Two PRs that each add a file a suite reads, at the same place in `inputs`, conflict line by line; they
     merge as a list.  A value both sides changed, and a list outside `[tool.verity.tests]` both sides added to, stay git's."""
     import tomllib
     tail = '"verity/core/protocols/pous/circuit.py"]'
