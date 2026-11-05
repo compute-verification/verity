@@ -9,12 +9,11 @@ public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
 `zk_session_soundHJR`: `ZkHidden.zk_session_soundHJ` for `flock-verify verify --zk --registered F` sessions over hidden
 outputs at `--session-tables J` (`J = nTab I`), the production configuration, `own` F's ports, over a public file with
 or without shared-row tables (no `pub.tables = none`, which would make the event empty: `Registered.check` refuses a
-registered port outside a shared-row file's tables). It is to `zk_session_soundHJ` what `zk_session_soundHR` is to
-`zk_session_soundH`. Its first conjunct is `zk_session_soundHJ`'s bound at the event `LiveAcceptsZKR I own` (which
-checks every table's statement) and the rows `rsZHJS`; its second is the registered check's consequence at every
-accepted outcome: the shadow layout's registered reads that are the verifier's own at the draw of the table their unit is
-drawn into (`OwnReadsHJ`) are `Checked` at the outcome's registration, through the paths that table's drawn statement
-gives (`regPathsHJ`).
+registered port outside a shared-row file's tables). Its first conjunct is `zk_session_soundHJ`'s bound at the event
+`LiveAcceptsZKR I own` (which checks every table's statement) and the rows `rsZHJS`; its second is the registered
+check's consequence at every accepted outcome: the shadow layout's registered reads that are the verifier's own at the
+draw of the table their unit is drawn into (`OwnReadsHJ`) are `Checked` at the outcome's registration, through the paths
+that table's drawn statement gives (`regPathsHJ`).
 
 What it rests on: `zk_session_soundHJ`'s assumptions, and nothing more for the second conjunct, which reads only the
 executable's checks.

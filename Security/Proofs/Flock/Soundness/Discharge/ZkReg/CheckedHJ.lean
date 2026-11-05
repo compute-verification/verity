@@ -11,12 +11,12 @@ import all Init.Data.Array.Basic
 /-!
 # The registered check at an accepted hidden-output `--zk --registered` outcome of `J` tables
 
-`checked_of_acceptsHJ`: `checked_of_acceptsH` at `J` tables. `AcceptsZKR` runs `checkRegistered` on every table's
-statement, and table `j`'s is setupHidden's under its tags at its part of the record's draw, `drawJ I d j`
-(`ZkHidden.setupOf_tableJH`, from `setupTables_partsH`), over `HmOut.drawn c pub (drawJ I d j)`. A read `(u, q)` is at
-the table `u` is drawn into (`OwnReadsHJ`), so that table's check is `checked_of_acceptsH`'s at its draw: the drawn
-instance at `u`'s rank in the table's draw holds the population's row of `u` (`Hidden.drawn_digestW`), whose leaf is the
-hidden layout's registered leaf at `(u, q)`, which reads the population alone, whatever the table.
+`checked_of_acceptsHJ`. `AcceptsZKR` runs `checkRegistered` on every table's statement, and table `j`'s is setupHidden's
+under its tags at its part of the record's draw, `drawJ I d j` (`ZkHidden.setupOf_tableJH`, from `setupTables_partsH`),
+over `HmOut.drawn c pub (drawJ I d j)`. A read `(u, q)` is at the table `u` is drawn into (`OwnReadsHJ`), so it is that
+table's registered check at its draw (`checkRegistered_ok`, `checkPort_at`): the drawn instance at `u`'s rank in the
+table's draw holds the population's row of `u` (`Hidden.drawn_digestW`), whose leaf is the hidden layout's registered
+leaf at `(u, q)`, which reads the population alone, whatever the table.
 -/
 
 @[expose] public section

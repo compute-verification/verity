@@ -14,8 +14,7 @@ public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineInst
 
 `opens_of_acceptsR`: at an outcome `AcceptsR` accepts over hidden outputs at one table, each registered read that is the
 verifier's own at the record's draw (`ZkReg.OwnReadsH`) opens the root `own` holds at the position `own` gives, through
-`ZkReg.regPathsH`, at the leaf of the population's row. It is `ZkReg.checked_of_acceptsH`'s proof at `setupOf I` in
-place of `setupOf (zkInputs I)`: the one table's statement is setupHidden's at the record's draw
+`ZkReg.regPathsH`, at the leaf of the population's row: the one table's statement is setupHidden's at the record's draw
 (`HiddenExec.setupTables_okH`), `checkRegistered` is `Registered.check` (`ZkReg.checkRegistered_ok`), and the drawn
 instance at `u`'s rank holds the population's row of `u` (`Hidden.drawn_digestW`).
 
