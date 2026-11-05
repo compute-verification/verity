@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.Sampled.Messages
+public import Proofs.Properties.Verity.Sampled.Leaves
 public import Proofs.Core.Game.InterleaveBridge
 
 /-!
@@ -19,8 +20,8 @@ frame a live round picks, when each reading picks only openings (`walk_relK`):
   frame, it is fixed there where the round's reading picks the frame, and follows the opening's coin otherwise
   (`optOpenCut`).
 * **The device's trees, as its log shows them** (`TreesOf`): one tree of each `Hello`'s shape, in order, each stream
-  with as many rounds opened as the log shows openings of it; each release keeps it (`TreesOf.fresh`, `TreesOf.hello`,
-  `TreesOf.opening`).
+  with as many rounds opened as the log shows openings of it, and as many coin-tree lines as the log's releases wrote;
+  each release keeps it (`TreesOf.fresh`, `TreesOf.hello`, `TreesOf.opening`).
 * **Where the walk stops** (`StopOf`, `walk_relK`, `walk_cast`): after releases no live round picks (`NoPick`), the
   play's end, every cut past there; or the node after an opening frame a live round picks after the device's log before
   the walk and those releases, at the trees that log shows, with the live rounds' cuts there, fixed exactly at the
@@ -84,6 +85,14 @@ theorem atCoin {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game α}
   h.map (fun K => K.atCoin c) rfl
 
 end LiveCuts
+
+/-- **A decision's cut is fixed at its node where neither branch's is.** -/
+theorem AgreeCut.isHere_iteCut {D : Type} {H : V → D} {c : Prop} {dc : Decidable c} {t e : Game α}
+    {ct : AgreeCut H t} {ce : AgreeCut H e} (ht : ct.cut.isHere = false) (he : ce.cut.isHere = false) :
+    (AgreeCut.iteCut (dc := dc) ct ce).cut.isHere = false := by
+  cases dc
+  · exact he
+  · exact ht
 
 end DigestCut
 
@@ -151,11 +160,14 @@ def freshK (k : ℕ) (ts : List OpenTree) (f : List Release → Game β) (l : St
   optGame o (f []) fun fs' => .coin (Fin 512 → Bool) fun x =>
     relK k fs' ts fun log => f (⟨.fresh l, b, List.ofFn x⟩ :: log)
 
-/-- **The releases after a `Hello` of the shape `spec`** under the nonce `ν`. -/
+/-- **The releases after a `Hello` of the shape `spec`** under the nonce `ν`: none where the trees `ts` hold
+`maxTreeLines` coin-tree lines or the device doesn't sample the shape (`TreeSpecOk`). -/
 def helloK (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β)
     (spec : Flock.CoinTree.Spec) (ν : ByteArray) : Game β :=
-  .coin (TreeSample spec) fun t => relK k fs (ts ++ [⟨ν, spec, t, fun _ => 0⟩]) fun log =>
-    f (⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec t ++ treeKey t.1)⟩ :: log)
+  if treeLines ts < maxTreeLines ∧ TreeSpecOk spec then
+    .coin (TreeSample spec) fun t => relK k fs (ts ++ [⟨ν, spec, t, fun _ => 0⟩]) fun log =>
+      f (⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec t ++ treeKey t.1)⟩ :: log)
+  else f []
 
 /-- **The releases after an opening of the tree `T`'s stream `s`**, at the round it opens (`q`, `OpenTree.next`'s;
 `none` where the device refuses the opening). -/
@@ -166,10 +178,11 @@ def treeOpenK (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : Li
     .coin (TreeOpenable T.nonce T.spec T.sample p.1 p.2) fun d =>
       relK k fs (ts.set i (T.bump p.1)) fun log => f (⟨.opening i s n, b, TreeDraw.opened d.1 n⟩ :: log)
 
-/-- **The releases after an opening of the `i`-th tree's stream `s`**, at the tree (`o`, `ts[i]?`). -/
+/-- **The releases after an opening of the `i`-th tree's stream `s`**, at the tree (`o`, `ts[i]?`): none where the
+trees `ts` hold `maxTreeLines` coin-tree lines. -/
 def optOpenK (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β) (i s n : ℕ)
     (b : ByteArray) (o : Option OpenTree) : Game β :=
-  optGame o (f []) fun T => treeOpenK k fs ts f i s n b T (T.next s n)
+  if treeLines ts < maxTreeLines then optGame o (f []) fun T => treeOpenK k fs ts f i s n b T (T.next s n) else f []
 
 section Cuts
 
@@ -185,9 +198,9 @@ noncomputable def freshCut (k : ℕ) (ts : List OpenTree) (f : List Release → 
 noncomputable def helloCut (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β)
     (pre : List Release) (spec : Flock.CoinTree.Spec) (ν : ByteArray) :
     DigestCut.AgreeCut sha512Msg (helloK k fs ts f spec ν) :=
-  .coin fun t => frameCut P rv k fs (ts ++ [⟨ν, spec, t, fun _ => 0⟩])
+  .iteCut (.coin fun t => frameCut P rv k fs (ts ++ [⟨ν, spec, t, fun _ => 0⟩])
     (fun log => f (⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec t ++ treeKey t.1)⟩ :: log))
-    (pre ++ [⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec t ++ treeKey t.1)⟩])
+    (pre ++ [⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec t ++ treeKey t.1)⟩])) .skip
 
 /-- A round's cut after an opening of the tree `T` it doesn't pick, at the round the opening opens. -/
 noncomputable def treeOpenCut (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β)
@@ -202,7 +215,7 @@ noncomputable def treeOpenCut (k : ℕ) (fs : List (String × ℕ)) (ts : List O
 noncomputable def optOpenCut (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β)
     (pre : List Release) (i s n : ℕ) (b : ByteArray) (o : Option OpenTree) :
     DigestCut.AgreeCut sha512Msg (optOpenK k fs ts f i s n b o) :=
-  optCut o .skip fun T => treeOpenCut P rv k fs ts f pre i s n b T (T.next s n)
+  .iteCut (optCut o .skip fun T => treeOpenCut P rv k fs ts f pre i s n b T (T.next s n)) .skip
 
 open Classical in
 /-- **A round's cut after an opening frame**: fixed there, at the bytes the frame answers, where the round's reading
@@ -254,9 +267,11 @@ theorem openCut_neg (h : ¬ P pre (.opening i s n)) (o : Option OpenTree) :
   unfold openCut
   rw [ite_eq_right h]
 
-theorem isHere_optOpenCut : ∀ o : Option OpenTree, (optOpenCut P rv k fs ts f pre i s n b o).cut.isHere = false
+theorem isHere_optOpenCut (o : Option OpenTree) : (optOpenCut P rv k fs ts f pre i s n b o).cut.isHere = false := by
+  refine DigestCut.AgreeCut.isHere_iteCut ?_ rfl
+  cases o with
   | none => rfl
-  | some T => by
+  | some T =>
     show (treeOpenCut P rv k fs ts f pre i s n b T (T.next s n)).cut.isHere = false
     cases T.next s n <;> rfl
 
@@ -282,10 +297,16 @@ def openedIn (ts : List OpenTree) (i s : ℕ) : ℕ :=
   | none => 0
 
 /-- **The device's trees are the ones its log shows**: one of each `Hello`'s shape, in order, with as many rounds of
-each stream opened as the log shows openings of it. -/
+each stream opened as the log shows openings of it, and as many coin-tree lines as the log's releases wrote. -/
 structure TreesOf (log : List Release) (ts : List OpenTree) : Prop where
   specs : ts.map (·.spec) = Sampled.helloSpecs log
   opened : ∀ i s, openedIn ts i s = openedOf log i s
+  lines : treeLines ts = Sampled.Leaves.logTreeLines log
+
+theorem logTreeLines_snoc (l : List Release) (r : Release) :
+    Sampled.Leaves.logTreeLines (l ++ [r]) = Sampled.Leaves.logTreeLines l + Sampled.Leaves.frameLines r.frame := by
+  simp only [Sampled.Leaves.logTreeLines, List.map_append, List.map_cons, List.map_nil, List.sum_append,
+    List.sum_cons, List.sum_nil, Nat.add_zero]
 
 theorem helloSpecs_append (l₁ l₂ : List Release) :
     Sampled.helloSpecs (l₁ ++ l₂) = Sampled.helloSpecs l₁ ++ Sampled.helloSpecs l₂ :=
@@ -363,23 +384,27 @@ theorem openedIn_set_bump {ts : List OpenTree} {i : ℕ} {T : OpenTree} (hT : ts
 
 namespace TreesOf
 
-theorem nil : TreesOf [] [] := ⟨rfl, fun _ _ => rfl⟩
+theorem nil : TreesOf [] [] := ⟨rfl, fun _ _ => rfl, rfl⟩
 
 theorem fresh {log : List Release} {ts : List OpenTree} (h : TreesOf log ts) (l : String) (b : ByteArray)
     (c : List Bool) : TreesOf (log ++ [⟨.fresh l, b, c⟩]) ts := by
-  refine ⟨?_, fun i s => ?_⟩
+  refine ⟨?_, fun i s => ?_, ?_⟩
   · rw [helloSpecs_append, ← h.specs]
     exact (List.append_nil _).symm
   · rw [h.opened i s, openedOf_append]
+    rfl
+  · rw [logTreeLines_snoc, ← h.lines]
     rfl
 
 theorem hello {log : List Release} {ts : List OpenTree} (h : TreesOf log ts) (ν : ByteArray)
     (spec : Flock.CoinTree.Spec) (t : TreeSample spec) (c : List Bool) :
     TreesOf (log ++ [⟨.hello spec, ν, c⟩]) (ts ++ [⟨ν, spec, t, fun _ => 0⟩]) := by
-  refine ⟨?_, fun i s => ?_⟩
+  refine ⟨?_, fun i s => ?_, ?_⟩
   · rw [List.map_append, helloSpecs_append, h.specs]
     rfl
   · rw [openedIn_append_hello, h.opened i s, openedOf_append]
+    rfl
+  · rw [Sampled.Leaves.treeLines_append_hello, logTreeLines_snoc, ← h.lines]
     rfl
 
 theorem opening {log : List Release} {ts : List OpenTree} (h : TreesOf log ts) {i s n : ℕ} {T : OpenTree}
@@ -388,7 +413,7 @@ theorem opening {log : List Release} {ts : List OpenTree} (h : TreesOf log ts) {
     TreesOf (log ++ [⟨.opening i s n, b, c⟩]) (ts.set i (T.bump p.1)) := by
   obtain ⟨hi, -⟩ := List.getElem?_eq_some_iff.1 hT
   have hps := (OpenTree.next_some hp).1
-  refine ⟨?_, fun i' s' => ?_⟩
+  refine ⟨?_, fun i' s' => ?_, ?_⟩
   · rw [helloSpecs_append, ← h.specs, show Sampled.helloSpecs [⟨.opening i s n, b, c⟩] = [] from rfl,
       List.append_nil, List.map_set]
     refine List.ext_getElem? fun j => ?_
@@ -400,6 +425,8 @@ theorem opening {log : List Release} {ts : List OpenTree} (h : TreesOf log ts) {
   · rw [openedOf_append, ← h.opened i' s', openedIn_set_bump hT]
     congr 1
     simp [Frame.opensAt, hps]
+  · rw [Sampled.Leaves.treeLines_set_bump hT, logTreeLines_snoc, ← h.lines]
+    rfl
 
 end TreesOf
 
@@ -476,6 +503,22 @@ theorem stopOf_end {pre : List Release} {f : List Release → Game β} {a : ι �
   obtain ⟨hK, hg⟩ := Pos.walk_skip (f []) s' Ks x back h
   exact ⟨[], noPick_nil P a pre, Or.inl ⟨hK, _, hg, s', x, rfl⟩⟩
 
+/-- **The walk from a decision's node stops as the walk from the branch it takes does**, at that branch's cuts. -/
+theorem stopOf_ite {pre : List Release} {f : List Release → Game β} {a : ι → Prop} {c : Prop} {t e : Game β}
+    {Ct : ι → DigestCut.AgreeCut sha512Msg t} {Ce : ι → DigestCut.AgreeCut sha512Msg e} :
+    ∀ (dc : Decidable c) (s' : Strategy (@ite _ c dc t e)) (Ks : ι → DigestCut Claims.Msg (@ite _ c dc t e))
+      (x : CoinTape (@ite _ c dc t e) s') (back : CoinTape (@ite _ c dc t e) s' → CoinTape g σ),
+      (c → ∀ (s' : Strategy t) (Ks : ι → DigestCut Claims.Msg t) (x : CoinTape t s')
+        (back : CoinTape t s' → CoinTape g σ), DigestCut.LiveCuts a (fun j => (Ct j).cut) Ks →
+          StopOf P rv pre f a (Pos.walk t s' Ks x back)) →
+      (¬ c → ∀ (s' : Strategy e) (Ks : ι → DigestCut Claims.Msg e) (x : CoinTape e s')
+        (back : CoinTape e s' → CoinTape g σ), DigestCut.LiveCuts a (fun j => (Ce j).cut) Ks →
+          StopOf P rv pre f a (Pos.walk e s' Ks x back)) →
+      DigestCut.LiveCuts a (fun j => (DigestCut.AgreeCut.iteCut (dc := dc) (Ct j) (Ce j)).cut) Ks →
+        StopOf P rv pre f a (Pos.walk (@ite _ c dc t e) s' Ks x back)
+  | isTrue h, s', Ks, x, back, ht, _, hKs => ht h s' Ks x back hKs
+  | isFalse h, s', Ks, x, back, _, he, hKs => he h s' Ks x back hKs
+
 theorem stopOf_open {k : ℕ} {fs : List (String × ℕ)} {ts : List OpenTree} {f : List Release → Game β}
     {pre : List Release} {i s n : ℕ} {b : ByteArray} {a : ι → Prop}
     (s' : Strategy (optOpenK k fs ts f i s n b ts[i]?)) (Ks : ι → DigestCut Claims.Msg (optOpenK k fs ts f i s n b ts[i]?))
@@ -522,13 +565,16 @@ theorem walk_helloK {fs : List (String × ℕ)} {ts : List OpenTree} {f : List R
     (back : CoinTape (helloK k fs ts f spec ν) s' → CoinTape g σ)
     (hKs : DigestCut.LiveCuts a (fun j => (helloCut (P j) (rv j) k fs ts f pre spec ν).cut) Ks) :
     StopOf P rv pre f a (Pos.walk (helloK k fs ts f spec ν) s' Ks x back) := by
-  rw [show Pos.walk (helloK k fs ts f spec ν) s' Ks x back = _ from
-    Pos.walk_coin s' Ks x back (hKs.isHere fun _ _ => rfl)]
-  exact stopOf_cons ⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec x.1 ++ treeKey x.1.1)⟩ hn
-    (IH fs (ts ++ [(⟨ν, spec, x.1, fun _ => 0⟩ : OpenTree)])
-      (fun log => f (⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec x.1 ++ treeKey x.1.1)⟩ :: log))
-      (pre ++ [(⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec x.1 ++ treeKey x.1.1)⟩ : Release)]) a (s' x.1) _
-      (x.2 x.1) _ (hT.hello ν spec x.1 _) (hKs.atCoin x.1))
+  refine stopOf_ite (c := treeLines ts < maxTreeLines ∧ TreeSpecOk spec) _ s' Ks x back ?_ ?_ hKs
+  · intro _ s' Ks x back hKs
+    rw [show Pos.walk _ s' Ks x back = _ from Pos.walk_coin s' Ks x back (hKs.isHere fun _ _ => rfl)]
+    exact stopOf_cons ⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec x.1 ++ treeKey x.1.1)⟩ hn
+      (IH fs (ts ++ [(⟨ν, spec, x.1, fun _ => 0⟩ : OpenTree)])
+        (fun log => f (⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec x.1 ++ treeKey x.1.1)⟩ :: log))
+        (pre ++ [(⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec x.1 ++ treeKey x.1.1)⟩ : Release)]) a (s' x.1) _
+        (x.2 x.1) _ (hT.hello ν spec x.1 _) (hKs.atCoin x.1))
+  · intro _ s' Ks x back hKs
+    exact stopOf_end s' Ks x back (hKs.eq_skip fun _ _ => rfl)
 
 theorem walk_treeOpenK {fs : List (String × ℕ)} {ts : List OpenTree} {f : List Release → Game β}
     {pre : List Release} {i s n : ℕ} {b : ByteArray} {a : ι → Prop} (hn : ∀ j, a j → ¬ P j pre (.opening i s n))
@@ -556,9 +602,15 @@ theorem walk_optOpenK {fs : List (String × ℕ)} {ts : List OpenTree} {f : List
       (Ks : ι → DigestCut Claims.Msg (optOpenK k fs ts f i s n b o)) (x : CoinTape (optOpenK k fs ts f i s n b o) s')
       (back : CoinTape (optOpenK k fs ts f i s n b o) s' → CoinTape g σ),
       DigestCut.LiveCuts a (fun j => (optOpenCut (P j) (rv j) k fs ts f pre i s n b o).cut) Ks →
-        StopOf P rv pre f a (Pos.walk (optOpenK k fs ts f i s n b o) s' Ks x back)
-  | none, _, s', Ks, x, back, hKs => stopOf_end s' Ks x back (hKs.eq_skip fun _ _ => rfl)
-  | some T, ho, s', Ks, x, back, hKs => walk_treeOpenK IH hn hT T ho (T.next s n) rfl s' Ks x back hKs
+        StopOf P rv pre f a (Pos.walk (optOpenK k fs ts f i s n b o) s' Ks x back) := by
+  intro o ho s' Ks x back hKs
+  refine stopOf_ite (c := treeLines ts < maxTreeLines) _ s' Ks x back ?_ ?_ hKs
+  · intro _ s' Ks x back hKs
+    cases o with
+    | none => exact stopOf_end s' Ks x back (hKs.eq_skip fun _ _ => rfl)
+    | some T => exact walk_treeOpenK IH hn hT T ho (T.next s n) rfl s' Ks x back hKs
+  · intro _ s' Ks x back hKs
+    exact stopOf_end s' Ks x back (hKs.eq_skip fun _ _ => rfl)
 
 end Steps
 

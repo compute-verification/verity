@@ -11,8 +11,8 @@ the period's game, and what the play's output reveals for it.
 
 * **Which opening a round's reading picks** (`slotRound`): the link's is the first opening, round `k` of table `t`'s rep
   `r` stream an opening of that stream of the first tree opened after `k` openings of it, each one the device serves
-  (`Served`). The device's trees, as its log shows them, answer a served opening with a round's coins (`Served.next`), so
-  the walk stops there at an opening's coin.
+  (`Served`). The device's trees, as its log shows them, have room for a served opening (`Served.cap`) and answer it
+  with a round's coins (`Served.next`), so the walk stops there at an opening's coin.
 * **What the play reveals** (`slotReveal`): the link's message (`linkIn`) and round `k`'s message on the rep stream
   (`roundIn`), in the record v2 reads.
 * **The readings at a layout** (`readingAt`): each picks only openings (`readingAt_picks`), and where the layout is
@@ -30,9 +30,11 @@ def firstOpened (log : List Release) : Option ℕ :=
     | _ => none
 
 /-- **The device serves an opening of tree `i`'s stream `s` for `n` coins after the log `log`**: the log's `i`-th
-`Hello` has a stream `s` with a round left after the log's openings of it, and `n` is at most a block. -/
+`Hello` has a stream `s` with a round left after the log's openings of it, `n` is at most a block, and the log's
+releases wrote fewer than `maxTreeLines` coin-tree lines. -/
 def Served (log : List Release) (i s n : ℕ) : Prop :=
-  ∃ sp, (helloSpecs log)[i]? = some sp ∧ s < sp.streams.size ∧ openedOf log i s < 2 ^ sp.roundsLog ∧ n ≤ sp.block
+  ∃ sp, (helloSpecs log)[i]? = some sp ∧ s < sp.streams.size ∧ openedOf log i s < 2 ^ sp.roundsLog ∧ n ≤ sp.block ∧
+    Leaves.logTreeLines log < maxTreeLines
 
 /-- **Whether a frame after the log `pre` is the round at the slot**: the link's, an opening the device serves before
 any other opening; round `k` of table `t`'s rep `r` stream, an opening the device serves of the first tree opened, of
@@ -127,7 +129,7 @@ theorem Served.next {pre : List Release} {ts : List OpenTree} (hT : TreesOf pre 
     (h : Served pre i s n) :
     ∃ T, ts[i]? = some T ∧ ∃ (hs : s < T.spec.streams.size) (hr : T.opened ⟨s, hs⟩ < 2 ^ T.spec.roundsLog),
       T.next s n = some (⟨s, hs⟩, ⟨T.opened ⟨s, hs⟩, hr⟩) ∧ T.opened ⟨s, hs⟩ = openedOf pre i s := by
-  obtain ⟨sp, hsp, hs, hr, hn⟩ := h
+  obtain ⟨sp, hsp, hs, hr, hn, -⟩ := h
   rw [← hT.specs, List.getElem?_map] at hsp
   obtain ⟨T, hTi, hTs⟩ := Option.map_eq_some_iff.1 hsp
   subst hTs
@@ -136,5 +138,13 @@ theorem Served.next {pre : List Release} {ts : List OpenTree} (hT : TreesOf pre 
     rw [ho]
     exact hr
   exact ⟨T, hTi, hs, hr', OpenTree.next_eq hs hr' hn, ho⟩
+
+/-- **The device's trees have room for an opening it serves**: they hold fewer than `maxTreeLines` coin-tree lines,
+where they are the ones the log shows. -/
+theorem Served.cap {pre : List Release} {ts : List OpenTree} (hT : TreesOf pre ts) {i s n : ℕ}
+    (h : Served pre i s n) : treeLines ts < maxTreeLines := by
+  obtain ⟨-, -, -, -, -, hc⟩ := h
+  rw [hT.lines]
+  exact hc
 
 end Verity.Sampled

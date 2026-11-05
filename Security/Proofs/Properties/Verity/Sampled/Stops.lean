@@ -191,22 +191,24 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-! ## An opening the device serves, at its coin -/
 
-/-- **The node after an opening frame the device answers is the opening's coin node.** -/
+/-- **The node after an opening frame the device answers is the opening's coin node**, where its trees have room for
+it. -/
 theorem optOpenK_next {β : Type} {k : ℕ} {fs : List (String × ℕ)} {ts : List OpenTree} {f : List Release → Game β}
-    {i s n : ℕ} {b : ByteArray} {T : OpenTree} (hT : ts[i]? = some T)
+    {i s n : ℕ} {b : ByteArray} (hc : treeLines ts < maxTreeLines) {T : OpenTree} (hT : ts[i]? = some T)
     {p : Fin T.spec.streams.size × Fin (2 ^ T.spec.roundsLog)} (hp : T.next s n = some p) :
     optOpenK k fs ts f i s n b ts[i]? = treeOpenK k fs ts f i s n b T (some p) := by
-  rw [hT]
+  unfold optOpenK
+  rw [ite_eq_left hc, hT]
   show treeOpenK k fs ts f i s n b T (T.next s n) = _
   rw [hp]
 
 /-- **The node after an opening frame the device answers, described**: the tree `T` it holds and the round `p` it
 opens. -/
 def OpeningAt.ofNext {β : Type} {k : ℕ} {fs : List (String × ℕ)} {ts : List OpenTree} {f : List Release → Game β}
-    {i s n : ℕ} {b : ByteArray} {T : OpenTree} (hT : ts[i]? = some T)
+    {i s n : ℕ} {b : ByteArray} (hc : treeLines ts < maxTreeLines) {T : OpenTree} (hT : ts[i]? = some T)
     {p : Fin T.spec.streams.size × Fin (2 ^ T.spec.roundsLog)} (hp : T.next s n = some p) :
     OpeningAt (optOpenK k fs ts f i s n b ts[i]?) :=
-  ⟨T, p, i, s, n, b, k, fs, ts, f, _, _, (optOpenK_next hT hp).trans rfl⟩
+  ⟨T, p, i, s, n, b, k, fs, ts, f, _, _, (optOpenK_next hc hT hp).trans rfl⟩
 
 /-- **A node with a description is one `openingOf` describes.** -/
 theorem openingOf_some {β : Type} {g' : Game β} (o' : OpeningAt g') : ∃ o, openingOf g' = some o :=
@@ -235,12 +237,12 @@ that the device answers, where the releases continue to the evidence after the l
 `pre`, then the opening answering `b` with the release of the coin the tape holds there, then the rest. -/
 theorem log_of_opening {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {k : ℕ} {fs : List (String × ℕ)}
     {ts : List OpenTree} {f : List Release → Game Exchange} {pre : List Release} {i s n : ℕ} {b : ByteArray}
-    (hf : ∀ log, f log = evidenceG θ F c (pre ++ log)) {T : OpenTree} (hT : ts[i]? = some T)
-    {p : Fin T.spec.streams.size × Fin (2 ^ T.spec.roundsLog)} (hp : T.next s n = some p)
+    (hf : ∀ log, f log = evidenceG θ F c (pre ++ log)) (hc : treeLines ts < maxTreeLines) {T : OpenTree}
+    (hT : ts[i]? = some T) {p : Fin T.spec.streams.size × Fin (2 ^ T.spec.roundsLog)} (hp : T.next s n = some p)
     (s' : Strategy (optOpenK k fs ts f i s n b ts[i]?)) (z : CoinTape (optOpenK k fs ts f i s n b ts[i]?) s') :
     ∃ L, (CoinTape.run _ s' z).log = pre ++ ⟨.opening i s n, b,
-      TreeDraw.opened (headCoin (OpeningAt.ofNext (k := k) (fs := fs) (f := f) (b := b) hT hp).eq s' z).1 n⟩ :: L := by
-  obtain ⟨s₀, y, hrun⟩ := run_headCoin (OpeningAt.ofNext (k := k) (fs := fs) (f := f) (b := b) hT hp).eq s' z
+      TreeDraw.opened (headCoin (OpeningAt.ofNext (k := k) (fs := fs) (f := f) (b := b) hc hT hp).eq s' z).1 n⟩ :: L := by
+  obtain ⟨s₀, y, hrun⟩ := run_headCoin (OpeningAt.ofNext (k := k) (fs := fs) (f := f) (b := b) hc hT hp).eq s' z
   have h₀ : PlayReaches _ s₀ (CoinTape.run (optOpenK k fs ts f i s n b ts[i]?) s' z) := by
     rw [hrun]
     exact run_reaches _ s₀ y
@@ -252,16 +254,16 @@ theorem log_of_opening {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {k
 the device answers, off the opening's empty class at `bits`, where a tape holds the coin the tape with `bits` written
 in holds, its coin there is released as `bits`. -/
 theorem opened_of_head {β : Type} {k : ℕ} {fs : List (String × ℕ)} {ts : List OpenTree} {f : List Release → Game β}
-    {i s n : ℕ} {b : ByteArray} {T : OpenTree} (hT : ts[i]? = some T)
+    {i s n : ℕ} {b : ByteArray} (hc : treeLines ts < maxTreeLines) {T : OpenTree} (hT : ts[i]? = some T)
     {p : Fin T.spec.streams.size × Fin (2 ^ T.spec.roundsLog)} (hp : T.next s n = some p)
     {s'' : Strategy (optOpenK k fs ts f i s n b ts[i]?)} {bits : List Bool}
     (hE : ¬ EmptyAt (optOpenK k fs ts f i s n b ts[i]?) bits) (x'' z : CoinTape (optOpenK k fs ts f i s n b ts[i]?) s'')
-    (hh : headCoin (OpeningAt.ofNext (k := k) (fs := fs) (f := f) (b := b) hT hp).eq s'' z =
-      headCoin (OpeningAt.ofNext (k := k) (fs := fs) (f := f) (b := b) hT hp).eq s'' (writeOpening s'' bits x'')) :
-    TreeDraw.opened (headCoin (OpeningAt.ofNext (k := k) (fs := fs) (f := f) (b := b) hT hp).eq s'' z).1 n = bits := by
-  obtain ⟨oa, hoa⟩ := openingOf_some (OpeningAt.ofNext (k := k) (fs := fs) (f := f) (b := b) hT hp)
+    (hh : headCoin (OpeningAt.ofNext (k := k) (fs := fs) (f := f) (b := b) hc hT hp).eq s'' z =
+      headCoin (OpeningAt.ofNext (k := k) (fs := fs) (f := f) (b := b) hc hT hp).eq s'' (writeOpening s'' bits x'')) :
+    TreeDraw.opened (headCoin (OpeningAt.ofNext (k := k) (fs := fs) (f := f) (b := b) hc hT hp).eq s'' z).1 n = bits := by
+  obtain ⟨oa, hoa⟩ := openingOf_some (OpeningAt.ofNext (k := k) (fs := fs) (f := f) (b := b) hc hT hp)
   rw [hh]
-  exact opened_writeOpening_off s'' bits x'' hE oa hoa (OpeningAt.ofNext (k := k) (fs := fs) (f := f) (b := b) hT hp)
+  exact opened_writeOpening_off s'' bits x'' hE oa hoa (OpeningAt.ofNext (k := k) (fs := fs) (f := f) (b := b) hc hT hp)
 
 /-! ## A trace keeps the coins written at its stops -/
 
@@ -319,13 +321,14 @@ theorem RoundsReach.release {θ : ByteArray} {F : Array ByteArray} {c : ByteArra
     ∃ L, (CoinTape.run g σ o.2).log = pre ++ ⟨.opening i s n, b, bits⟩ :: L := by
   subst hq
   obtain ⟨T, hTi, _, _, hp, -⟩ := Served.next hT hS
-  obtain ⟨z, hz, hh⟩ := hr.head (OpeningAt.ofNext (k := k) (fs := fs) (f := f) (b := b) hTi hp).eq
+  have hc := Served.cap hT hS
+  obtain ⟨z, hz, hh⟩ := hr.head (OpeningAt.ofNext (k := k) (fs := fs) (f := f) (b := b) hc hTi hp).eq
     (Pos.isHere_consume _)
-  have hw := opened_of_head hTi hp hE x'' z hh
+  have hw := opened_of_head hc hTi hp hE x'' z hh
   have hX : CoinTape.run g σ o.2 = CoinTape.run (optOpenK k fs ts f i s n b ts[i]?) s'' z := by
     rw [hz]
     exact hi.run z
-  obtain ⟨L, hL⟩ := log_of_opening hf hTi hp s'' z
+  obtain ⟨L, hL⟩ := log_of_opening hf hc hTi hp s'' z
   refine ⟨L, ?_⟩
   rw [hX, hL, hw]
 
@@ -794,7 +797,7 @@ theorem opening_log {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {k : 
       (CoinTape.run g σ q.tape).log = pre ++ ⟨.opening i s n, b, bits⟩ :: L := by
   subst hq
   obtain ⟨T, hTi, _, _, hp, -⟩ := Served.next hT hS
-  obtain ⟨L, hL⟩ := log_of_opening hf hTi hp s'' x''
+  obtain ⟨L, hL⟩ := log_of_opening hf (Served.cap hT hS) hTi hp s'' x''
   have hX : CoinTape.run g σ (back'' x'') = CoinTape.run (optOpenK k fs ts f i s n b ts[i]?) s'' x'' := hi.run x''
   exact ⟨_, L, (congrArg Exchange.log hX).trans hL⟩
 
@@ -1232,22 +1235,24 @@ theorem LogServed.snoc {log : List Release} {r : Release} (h : LogServed log)
       obtain ⟨rfl, -⟩ := List.cons.inj hc'
       exact h L₁ r' c'' i s n rfl hf
 
-/-- **An opening the device's trees answer is one it serves**, where the trees are the ones the log shows
-(`Served.next`'s converse). -/
-theorem Served.of_next {pre : List Release} {ts : List OpenTree} (hT : TreesOf pre ts) {i s n : ℕ} {T : OpenTree}
-    (hTi : ts[i]? = some T) {p : Fin T.spec.streams.size × Fin (2 ^ T.spec.roundsLog)} (hp : T.next s n = some p) :
-    Served pre i s n := by
+/-- **An opening the device's trees have room for and answer is one it serves**, where the trees are the ones the log
+shows (`Served.next`'s and `Served.cap`'s converse). -/
+theorem Served.of_next {pre : List Release} {ts : List OpenTree} (hT : TreesOf pre ts) {i s n : ℕ}
+    (hc : treeLines ts < maxTreeLines) {T : OpenTree} (hTi : ts[i]? = some T)
+    {p : Fin T.spec.streams.size × Fin (2 ^ T.spec.roundsLog)} (hp : T.next s n = some p) : Served pre i s n := by
   obtain ⟨hs, ho, hn⟩ := OpenTree.next_some hp
   have hs' : s < T.spec.streams.size := by
     rw [← hs]
     exact p.1.isLt
-  refine ⟨T.spec, ?_, hs', ?_, hn⟩
+  refine ⟨T.spec, ?_, hs', ?_, hn, ?_⟩
   · rw [← hT.specs, List.getElem?_map, hTi]
     rfl
   · rw [← hT.opened i s, openedIn_some hTi hs']
     have e : (⟨s, hs'⟩ : Fin T.spec.streams.size) = p.1 := Fin.ext hs.symm
     rw [e, ← ho]
     exact p.2.isLt
+  · rw [← hT.lines]
+    exact hc
 
 theorem logServed_end {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {f : List Release → Game Exchange}
     {pre : List Release} (hf : ∀ log, f log = evidenceG θ F c (pre ++ log)) (hS : LogServed pre)
@@ -1263,6 +1268,14 @@ theorem reaches_optGame {β γ : Type} {g₀ : Game β} {K : γ → Game β} {Q 
   cases o with
   | none => exact h0 s e h
   | some x => exact h1 x rfl s e h
+
+/-- **An output a play of a decision's node reaches**, by the branch it takes. -/
+theorem reaches_ite {β : Type} {c : Prop} {dc : Decidable c} {t e : Game β} {Q : β → Prop}
+    (ht : c → ∀ s x, PlayReaches t s x → Q x) (he : ¬ c → ∀ s x, PlayReaches e s x → Q x)
+    (s : Strategy (@ite _ c dc t e)) (x : β) (h : PlayReaches (@ite _ c dc t e) s x) : Q x := by
+  cases dc with
+  | isFalse hc => exact he hc s x h
+  | isTrue hc => exact ht hc s x h
 
 /-- **Each opening a play of the device's releases logs is one it serves**: from a log each of whose openings the
 device serves, at the trees that log shows, every play of the releases continuing to the evidence after the log and
@@ -1284,14 +1297,18 @@ theorem logServed_relK {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} (k
       exact ih fs' ts (fun log => f (⟨.fresh l, b, List.ofFn x⟩ :: log)) (pre ++ [⟨.fresh l, b, List.ofFn x⟩])
         (fun log => by simp only [hf, List.append_assoc, List.singleton_append]) (hT.fresh l b _)
         (hS.snoc fun _ _ _ he => by cases he) (s₂ x) e₂ hx
-    · obtain ⟨t, ht⟩ := h
+    · refine reaches_ite (Q := fun e => LogServed e.log) (fun _ s₄ e₄ h₄ => ?_)
+        (fun _ s₀ _ h₀ => logServed_end hf hS s₀ h₀) s₁ ex h
+      obtain ⟨t, ht⟩ := h₄
       exact ih fs (ts ++ [⟨b, spec, t, fun _ => 0⟩])
         (fun log => f (⟨.hello spec, b, bitsOfBytes (treeRoot b spec t ++ treeKey t.1)⟩ :: log))
         (pre ++ [⟨.hello spec, b, bitsOfBytes (treeRoot b spec t ++ treeKey t.1)⟩])
         (fun log => by simp only [hf, List.append_assoc, List.singleton_append]) (hT.hello b spec t _)
-        (hS.snoc fun _ _ _ he => by cases he) (s₁ t) ex ht
-    · refine reaches_optGame (Q := fun e => LogServed e.log) ts[i]?
-        (fun s₀ _ h₀ => logServed_end hf hS s₀ h₀) (fun T hTi s₂ e₂ h₂ => ?_) s₁ ex h
+        (hS.snoc fun _ _ _ he => by cases he) (s₄ t) e₄ ht
+    · refine reaches_ite (Q := fun e => LogServed e.log) (fun hc s₄ e₄ h₄ => ?_)
+        (fun _ s₀ _ h₀ => logServed_end hf hS s₀ h₀) s₁ ex h
+      refine reaches_optGame (Q := fun e => LogServed e.log) ts[i]?
+        (fun s₀ _ h₀ => logServed_end hf hS s₀ h₀) (fun T hTi s₂ e₂ h₂ => ?_) s₄ e₄ h₄
       refine reaches_optGame (Q := fun e => LogServed e.log) (T.next s n)
         (fun s₀ _ h₀ => logServed_end hf hS s₀ h₀) (fun p hp s₃ e₃ h₃ => ?_) s₂ e₂ h₂
       obtain ⟨d, hd⟩ := h₃
@@ -1300,7 +1317,7 @@ theorem logServed_relK {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} (k
         (fun log => by simp only [hf, List.append_assoc, List.singleton_append]) (hT.opening hTi hp b _)
         (hS.snoc fun _ _ _ he => by
           obtain ⟨rfl, rfl, rfl⟩ := Frame.opening.inj he
-          exact Served.of_next hT hTi hp) (s₃ d) e₃ hd
+          exact Served.of_next hT hc hTi hp) (s₃ d) e₃ hd
 
 /-- **A log with an opening has a first one, which the link's slot picks**, where each opening of the log is one the
 device serves. -/
