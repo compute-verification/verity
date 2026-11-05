@@ -2275,6 +2275,7 @@
   "Evaluate.Prims",
   "Identity.Sha512",
   "Identity.Tagged",
+  "Identity.Domains",
   "Lms",
   "PousCheck",
   "MemoryChallenger",
