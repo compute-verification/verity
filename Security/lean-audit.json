@@ -23243,16 +23243,11 @@
    ]
   },
   "Definitions.Claims.RecursionGeneric.Plans": {
-   "digest": "d06735d1817b337316fac8f63c75c41210bf2bd2271a6f6a3936ec27d716c8d9",
+   "digest": "518581b3a923d29b65e40f4ebbdaacf8cfff410d174da512af496ef326ce4f2b",
    "definitions": {
-    "Claims.RecGeneric.capLoop": "f6cd53583a1d271f5d29702db1c49a68d1cbe4ec3146644f6bcccb01073b7255",
-    "Claims.RecGeneric.capPlan": "708a3e11927d1bad711825be880aa7f05dd8729bd2092dc473251925bf4dcecd",
-    "Claims.RecGeneric.conflictPlan": "61b2e2b8d91d2b91c455f2264bf5f5c4b363d6628f58c8251b21345befc82508",
     "Claims.RecGeneric.forkPlan": "dcccb6c728d55f73f4bf0cfd0b4f85d53451a53fa73e7b5af9436a813440ebd4",
     "Claims.RecGeneric.linkLoop": "9d1529bd11f5bd429f6e0c9282dac5a2ac90fd9a658099f28c8677db5f8192de",
-    "Claims.RecGeneric.linkPlan": "4584cee023f82871ed23f5b9196a67c06d8d8eab6298f3d0657d60b04ce63bf7",
-    "Claims.RecGeneric.waitLoop": "9b25b9e976bb3f7e8b94106925339467f97a5c836bd2087b904352b34316af05",
-    "Claims.RecGeneric.waitsPlan": "bbf716bf0131f933bf0d9283e06a09fb5d0901814f555f19dfb8f60b8757074b"
+    "Claims.RecGeneric.linkPlan": "4584cee023f82871ed23f5b9196a67c06d8d8eab6298f3d0657d60b04ce63bf7"
    },
    "guarantees": [
     "Claims.RecGeneric.compilerKS",
@@ -61695,6 +61690,22 @@
     "Flock.Guarantees.RecursiveKSCompiledEvery": "d504cbe6636286048cab20366c697c806e10eaa5b3f09c606a45d5b595eba0b3"
    },
    "guarantees": ["Flock.Guarantees.recursiveKSCompiledEvery_nontrivial", "Flock.SecurityProofs.RecursiveKSCompiledEvery"]
+  },
+  "Proofs.Flock.RecGeneric.Plans": {
+   "digest": "942d4fec5635ebf3155b80257fa605f92843d6d281b474d4aaa241dfb9e12df6",
+   "definitions": {
+    "Claims.RecGeneric.capLoop": "ef10877bea00e8f426171369c8f64ffa947ae6a5aa0bf2ac50c39ecb42dfdf3a",
+    "Claims.RecGeneric.capPlan": "708a3e11927d1bad711825be880aa7f05dd8729bd2092dc473251925bf4dcecd",
+    "Claims.RecGeneric.conflictPlan": "61b2e2b8d91d2b91c455f2264bf5f5c4b363d6628f58c8251b21345befc82508",
+    "Claims.RecGeneric.waitLoop": "242db1f9ae498b07ea6c62fe03408002e62586011a030b034d8f1579f90db5c9",
+    "Claims.RecGeneric.waitsPlan": "bbf716bf0131f933bf0d9283e06a09fb5d0901814f555f19dfb8f60b8757074b"
+   },
+   "guarantees": [
+    "Flock.Guarantees.recursiveKSCompiledEvery_nontrivial",
+    "Flock.Guarantees.recursiveKSEvery_nontrivial",
+    "Flock.SecurityProofs.RecursiveKSCompiledEvery",
+    "Flock.SecurityProofs.RecursiveKSEvery"
+   ]
   },
   "Proofs.Flock.RecGeneric.Toy": {
    "digest": "de796b2e473ad870ddef01589b53e692bdedbff91de951ea71bca5d184ed9891",
