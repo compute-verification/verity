@@ -58,7 +58,7 @@ theorem lookupNames_eq {bytes : ByteArray} {text ml : String} {mj : Json}
   unfold lookupNames
   rw [hs]
   dsimp only
-  rw [ite_cond_eq_false _ _ (eq_false hm), hj]
+  rw [ite_eq_right hm, hj]
 
 set_option maxHeartbeats 4000000 in
 /-- **The parse finds each lookup's table**: every name in the lookups of a circuit file `HmRow.parse` accepts with the
@@ -123,7 +123,7 @@ theorem lookups_given {tags : Tags} {bytes : ByteArray} {tables : List (String �
     -- a template's derived keys are checked before the join point (`TEMPLATE_DERIVED`)
     obtain ⟨uT, h⟩ : ∃ uT, jpT uT = .ok c := by
       first
-      | exact ⟨_, h⟩
+      | exact ⟨⟨⟩, h⟩
       | (obtain ⟨u, -, h⟩ := FlockSoundness.except_bind_ok h; exact ⟨u, h⟩)
     simp (config := { zeta := false }) only [jpT] at h
     ((try beta_reduce at h); extract_lets (config := { underBinder := false, onlyGivenNames := true }) jpL at h)
@@ -192,7 +192,7 @@ theorem lookups_given {tags : Tags} {bytes : ByteArray} {tables : List (String �
 theorem lookups_given_hmOut {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
     (h : HmOut.parse tags bytes tables = .ok c) :
     ∀ l ∈ lookupNames bytes, (∃ t ∈ MUFU_TABLES, t.name = l) ∧ ∃ w, (l, w) ∈ tables := by
-  obtain ⟨-, ⟨-, hc⟩ | ⟨-, -, -, -, hc, -⟩ | ⟨-, -, -, hc, -⟩⟩ := FlockSoundness.Discharge.Hidden.parse_cases h
+  obtain ⟨-, ⟨-, hc⟩ | ⟨_, _, _, _, hc, -⟩ | ⟨_, _, _, hc, -⟩⟩ := FlockSoundness.Discharge.Hidden.parse_cases h
   all_goals exact lookups_given hc
 
 /-- **`Desc.parse` finds each lookup's table**, as the session's descriptor reads the circuit file (`Desc.parse_flat`). -/
