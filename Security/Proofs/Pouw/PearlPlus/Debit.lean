@@ -764,15 +764,44 @@ theorem flag_iff (hK : KeyIsTheValue) (gs : List (List AtomIn)) (g : ℕ) (hg : 
     refine ⟨encMask m, (hkeeps _).2 ⟨_, o, hmem, hne, ho, (keep_iff hK gs g hg hT hband m rfl ho).2 hm.2⟩, ?_⟩
     rw [beq_iff_eq, encMask_bit, hm.1, Bool.toNat_true]
 
+theorem flags_push (c : Array Bool) (b : Bool) (N : ℕ) (q : ℕ → Bool) (hs : c.size = N)
+    (hg : ∀ t < N, c[t]! = q t) (hb : b = q N) : (c.push b).size = N + 1 ∧ ∀ t < N + 1, (c.push b)[t]! = q t := by
+  refine ⟨by rw [Array.size_push, hs], fun t ht => ?_⟩
+  rw [push_get c b t (by omega)]
+  by_cases htp : t = c.size
+  · rw [ite_eq_left htp, htp, hs, hb]
+  · rw [ite_eq_right htp]
+    exact hg t (by omega)
+
+theorem count_push (c : Array Bool) (b : Bool) (N : ℕ) (q : ℕ → Bool)
+    (hn : (c.filter id).size = ((Finset.range N).filter fun t => q t = true).card) (hb : b = q N) :
+    ((c.push b).filter id).size = ((Finset.range (N + 1)).filter fun t => q t = true).card := by
+  subst hb
+  have hp : ((c.push (q N)).filter id).size = (c.filter id).size + (if q N = true then 1 else 0) := by
+    first
+    | (cases h : q N <;> simp [Array.filter_push, h])
+    | (cases h : q N <;> simp [← Array.length_toList, Array.toList_filter, List.filter_append, h])
+    | (cases h : q N <;> grind)
+  rw [hp, hn, Finset.range_add_one, Finset.filter_insert]
+  cases h : q N
+  · rw [ite_eq_right (by simp), ite_eq_right (by simp), Nat.add_zero]
+  · rw [ite_eq_left rfl, ite_eq_left rfl, Finset.card_insert_of_notMem]
+    simp
+
 end DebitSim
 
 open DebitSim in
-/-- **The inert-work replay is the game's**, from the keys' three statements. -/
-theorem debitIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (hC : CarriedIsTheAdd) :
-    DebitIsTheReplay := by
-  intro m n k A B i j f z h
+/-- **The atom flags the check replays are the game's**, from the keys' three statements: where `word_flags` is a value
+on a word's two rows of codes, its flags are `Skip.unitFlags`' at each of the row's `k/32` atom blocks, so many of them
+are set as the game flags, and its later promotions into a +0 total are `laterZeroPromos`' at the H100 record. -/
+theorem wordFlagsIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (hC : CarriedIsTheAdd) {m n k : ℕ}
+    (A : Matrix (Fin m) (Fin k) Code) (B : Matrix (Fin n) (Fin k) Code) (i : Fin m) (j : Fin n) {fl : Array Bool}
+    {z : ℕ} (h : Rule.wordFlags (Array.ofFn fun l => (A i l).val) (Array.ofFn fun l => (B j l).val) = .ok (fl, z)) :
+    fl.size = k / 32 ∧ (∀ t < k / 32, fl[t]! = Skip.unitFlags A B i j t) ∧
+      (fl.filter id).size = ((Finset.range (k / 32)).filter fun t => Skip.unitFlags A B i j t = true).card ∧
+      z = laterZeroPromos devH100 A B i j := by
   have hG : PouwCheck.PearlPlus.G = 4 := rfl
-  unfold Rule.wordDebit at h
+  unfold Rule.wordFlags at h
   simp only [Std.Legacy.Range.forIn_eq_forIn_range', range_size, Array.size_ofFn, hG, Nat.reduceMul] at h
   split at h
   · obtain ⟨_, ha, -⟩ := WordsSim.bind_ok h
@@ -861,13 +890,16 @@ theorem debitIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (hC :
     have := hB.2.1 (k / 128 - 1 + 1 - 1 - g) (by omega)
     rwa [show k / 128 - (k / 128 - 1 + 1 - 1 - g) = g + 1 by omega] at this
   -- the flagged atoms
-  obtain ⟨fl, hfl, h⟩ := WordsSim.bind_ok h
+  obtain ⟨fl0, hfl, h⟩ := WordsSim.bind_ok h
   have hfz := WordsSim.pure_ok h
   simp only [Prod.mk.injEq] at hfz
   obtain ⟨hf, hz⟩ := hfz
-  have hF : fl = ((Finset.range (4 * (k / 128))).filter fun t => Skip.unitFlags A B i j t = true).card := by
-    refine forIn_range_inv (P := fun p (c : ℕ) =>
-      c = ((Finset.range (4 * p)).filter fun t => Skip.unitFlags A B i j t = true).card) hfl (by simp) ?_
+  have hF : fl0.size = 4 * (k / 128) ∧ (∀ t < 4 * (k / 128), fl0[t]! = Skip.unitFlags A B i j t) ∧
+      (fl0.filter id).size = ((Finset.range (4 * (k / 128))).filter fun t => Skip.unitFlags A B i j t = true).card := by
+    refine forIn_range_inv (P := fun p (c : Array Bool) => c.size = 4 * p ∧
+      (∀ t < 4 * p, c[t]! = Skip.unitFlags A B i j t) ∧
+      (c.filter id).size = ((Finset.range (4 * p)).filter fun t => Skip.unitFlags A B i j t = true).card) hfl
+      ⟨rfl, fun t ht => by omega, by simp⟩ ?_
     rintro p c r hp hc hr
     obtain ⟨keeps, hkeeps, hr⟩ := WordsSim.bind_ok hr
     have hgp : p < gs.length := by omega
@@ -889,29 +921,29 @@ theorem debitIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (hC :
           exact Or.inl ⟨by simpa using hx, (WordsSim.pure_ok hr).symm⟩)
     obtain ⟨c', hc', hr⟩ := WordsSim.bind_ok hr
     obtain rfl := WordsSim.pure_ok hr
-    have hinner := forIn_range_inv (P := fun jj (c2 : ℕ) =>
-      c2 = ((Finset.range (4 * p + jj)).filter fun t => Skip.unitFlags A B i j t = true).card) hc'
+    have hinner := forIn_range_inv (P := fun jj (c2 : Array Bool) => c2.size = 4 * p + jj ∧
+      (∀ t < 4 * p + jj, c2[t]! = Skip.unitFlags A B i j t) ∧
+      (c2.filter id).size = ((Finset.range (4 * p + jj)).filter fun t => Skip.unitFlags A B i j t = true).card) hc'
       (by rw [Nat.add_zero]; exact hc) (fun jj c2 r2 hjj hc2 hr2 => by
         have hu : Skip.unitFlags A B i j (4 * p + jj) = true ↔
             (keeps.any fun mask => mask >>> jj &&& 1 == 1) = true := by
           rw [unitFlags_eq A B i j p jj hjj, ← hgs]
           exact (flag_iff hK gs p hgp (hlen4 p hp) hMS hTp (hrev p hp) hkeep hok jj hjj).symm
-        split at hr2
-        · rename_i hb
-          obtain rfl := WordsSim.pure_ok hr2
-          refine ⟨_, rfl, ?_⟩
-          rw [hc2, show 4 * p + (jj + 1) = 4 * p + jj + 1 by omega, Finset.range_add_one, Finset.filter_insert,
-            ite_eq_left (hu.2 hb), Finset.card_insert_of_notMem]
-          simp
-        · rename_i hb
-          obtain rfl := WordsSim.pure_ok hr2
-          refine ⟨_, rfl, ?_⟩
-          rw [hc2, show 4 * p + (jj + 1) = 4 * p + jj + 1 by omega, Finset.range_add_one, Finset.filter_insert,
-            ite_eq_right (fun h' => hb (hu.1 h'))])
+        have hb : (keeps.any fun mask => mask >>> jj &&& 1 == 1) = Skip.unitFlags A B i j (4 * p + jj) :=
+          Bool.eq_iff_iff.2 hu.symm
+        obtain ⟨hs2, hg2, hn2⟩ := hc2
+        first
+        | (obtain rfl := WordsSim.pure_ok hr2)
+        | (simp only [bind, pure, Except.bind, Except.pure, Except.ok.injEq] at hr2; subst hr2)
+        refine ⟨_, rfl, ?_⟩
+        rw [show 4 * p + (jj + 1) = 4 * p + jj + 1 by omega]
+        exact ⟨(flags_push c2 _ _ _ hs2 hg2 hb).1, (flags_push c2 _ _ _ hs2 hg2 hb).2,
+          count_push c2 _ _ _ hn2 hb⟩)
     refine ⟨_, rfl, ?_⟩
     rwa [show 4 * p + 4 = 4 * (p + 1) by ring] at hinner
-  refine ⟨?_, ?_⟩
-  · rw [← hf, hF, show k / 32 = 4 * (k / 128) by omega]
+  obtain ⟨hFs, hFg, hFn⟩ := hF
+  have hk32 : k / 32 = 4 * (k / 128) := by omega
+  refine ⟨by rw [← hf, hFs, hk32], fun t ht => by rw [← hf]; exact hFg t (by omega), by rw [← hf, hFn, hk32], ?_⟩
   -- the later promotions into a +0 total
   · rw [← hz]
     unfold laterZeroPromos
@@ -930,6 +962,27 @@ theorem debitIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (hC :
       rw [ticket_prefix A B i j (g + 1) h', ← hgs, ← hq.2] at h0
       exact AccumProofs.wordQ_zero_word hq.1 h0
 
+/-- **The inert-work replay is the game's**, from the keys' three statements: `word_debit` counts `word_flags`' flags. -/
+theorem debitIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (hC : CarriedIsTheAdd) :
+    DebitIsTheReplay := by
+  intro m n k A B i j f z h
+  unfold Rule.wordDebit at h
+  obtain ⟨⟨fl, z'⟩, hw, h⟩ := WordsSim.bind_ok h
+  have hfz := WordsSim.pure_ok h
+  simp only [Prod.mk.injEq] at hfz
+  obtain ⟨hf, hz⟩ := hfz
+  obtain ⟨-, -, hn, hzz⟩ := wordFlagsIsTheReplayOf hK hL hC A B i j hw
+  exact ⟨by rw [← hf, hn], by rw [← hz]; exact hzz⟩
+
+/-- **(c) The atom flags the check replays are the game's.** -/
+theorem wordFlagsIsTheReplay {m n k : ℕ} (A : Matrix (Fin m) (Fin k) Code) (B : Matrix (Fin n) (Fin k) Code)
+    (i : Fin m) (j : Fin n) {fl : Array Bool} {z : ℕ}
+    (h : Rule.wordFlags (Array.ofFn fun l => (A i l).val) (Array.ofFn fun l => (B j l).val) = .ok (fl, z)) :
+    fl.size = k / 32 ∧ (∀ t < k / 32, fl[t]! = Skip.unitFlags A B i j t) ∧
+      (fl.filter id).size = ((Finset.range (k / 32)).filter fun t => Skip.unitFlags A B i j t = true).card ∧
+      z = laterZeroPromos devH100 A B i j :=
+  wordFlagsIsTheReplayOf keyIsTheValue leastIsTheThreshold carriedIsTheAdd A B i j h
+
 /-- **(c) The inert-work replay is the game's.** -/
 theorem debitIsTheReplay : DebitIsTheReplay :=
   debitIsTheReplayOf keyIsTheValue leastIsTheThreshold carriedIsTheAdd
@@ -938,16 +991,23 @@ namespace DebitSim
 
 /-! ## The check's codes -/
 
-/-- `word_debit` refuses a word whose first row is not whole promotion groups. -/
-theorem wordDebit_ungrouped {a b : Array ℕ} (h : a.size % 128 ≠ 0) :
-    Rule.wordDebit a b = .error "a word's rows are whole promotion groups" := by
+/-- `word_flags` refuses a word whose first row is not whole promotion groups. -/
+theorem wordFlags_ungrouped {a b : Array ℕ} (h : a.size % 128 ≠ 0) :
+    Rule.wordFlags a b = .error "a word's rows are whole promotion groups" := by
   have hG : PouwCheck.PearlPlus.G = 4 := rfl
-  unfold Rule.wordDebit
+  unfold Rule.wordFlags
   simp only [Std.Legacy.Range.forIn_eq_forIn_range', range_size, hG, Nat.reduceMul]
   split
   · rfl
   · rename_i hcond
     exact (hcond (by simp [h])).elim
+
+/-- `word_debit` refuses a word whose first row is not whole promotion groups. -/
+theorem wordDebit_ungrouped {a b : Array ℕ} (h : a.size % 128 ≠ 0) :
+    Rule.wordDebit a b = .error "a word's rows are whole promotion groups" := by
+  unfold Rule.wordDebit
+  rw [wordFlags_ungrouped h]
+  rfl
 
 /-- `semH3`'s noisy codes are `pc8Sem`'s `quant8A` and `quant8B` at its noise. -/
 theorem unitChain_h3 {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (H : Q → R) (s : S)
