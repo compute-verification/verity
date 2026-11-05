@@ -884,7 +884,8 @@ def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(mo
 
 def test_record_asks_for_a_train_slot_only_for_a_trains_tests_or_circuit_check_and_through_the_runs_environment(monkeypatch):
     """`research merge` reads a check's command, so the slot memory a train needs travels as `research run --env`, never as a
-    slot.py option; a lane's check, a pooled one, a combine and a train's shard of Lean steps alone need no train slot."""
+    slot.py option; a lane's check, a pooled one, a combine and a train's shard of Lean steps without lean-suites need no train
+    slot."""
     spec2 = importlib.util.spec_from_file_location("repo_check_min_mem", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
@@ -904,6 +905,8 @@ def test_record_asks_for_a_train_slot_only_for_a_trains_tests_or_circuit_check_a
     assert check.train_gb(True, "research", None, False) is None
     assert check.train_gb(True, None, ["lean-build", "lean-audit:Security"], False) is None
     assert check.train_gb(True, None, ["pytest"], False) == check.TRAIN_GB                  # a post-landing run of the suites
+    assert check.train_gb(True, None, ["lean-build", "lean-audit", "lean-suites"], False) == check.TRAIN_GB   # its Lean shard
+    assert check.train_gb(True, None, ["lean-suites:verity-flock"], False) == check.TRAIN_GB
     assert check.train_gb(True, None, ["flock-circuit-build", "circuit-check"], False) == check.TRAIN_GB
     assert check.train_gb(True, None, None, True) is None
     assert check.TRAIN_GB == 300 and SLOT.MIN_MEM_ENV not in " ".join(calls[-1][calls[-1].index("--") + 1:])
