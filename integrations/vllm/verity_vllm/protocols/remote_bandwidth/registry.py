@@ -68,8 +68,8 @@ def frame(b: bytes) -> bytes:
 
 
 def chain(challenge: bytes, previous: bytes, index: int) -> bytes:
-    """Pass ``index``'s seed in a window: the driver's chained `rb.seed`, ``SHA512(D ‖ σ ‖ u32be index ‖ root before
-    it)``."""
+    """Pass ``index``'s seed in a window: the driver's chained `rb.seed`, ``SHA512(D ‖ chal_t ‖ u32be index ‖ root
+    before it)``."""
     return rb.seed(challenge, index, previous)
 
 

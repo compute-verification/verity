@@ -15,8 +15,9 @@ Boolean version made on demand too (`_families`, by id: `made_on_demand`), since
 vocabulary size ahead.
 
 `sigma_lift(word, version)` is a word composite as a registered Boolean Definition: at each binding, its word body with each Call
-the Boolean version of its Definition, over the bits each word operand occupies (`lift`'s replay); `boolean_version` serves it
-only where every Definition that body Calls has one (`registry.boolean_sigma`).
+the Boolean version of its Definition, over the bits each word operand occupies (`lift_body`); `boolean_version` serves it
+only where every Definition that body Calls has one (`registry.boolean_sigma`).  `lift_body(fn, override)` is that replay of
+one bound composite's body, where ``override`` may name the Definition a Call lifts to in place of its Boolean version.
 
 `lift(fn)` is a derived Program's function (`frontend.derive`'s flat `Derived[...]`) on bits: the same Calls in the same order,
 each of the Boolean version of its Definition, over parameters and values whose every w-bit word is an element
@@ -334,12 +335,18 @@ def _bit_replayer(body: Body, ptypes: list[Type], callee: dict[int, FunctionDefi
     return replay
 
 
-def _sigma_callees(fn: FunctionDefinition) -> tuple[dict[int, FunctionDefinition], dict[str, str]]:
-    """σ on ``fn``'s body: each Definition it Calls -> its Boolean version (by id of the callee object), and the gaps."""
+def _sigma_callees(fn: FunctionDefinition, override: Callable[[FunctionDefinition], FunctionDefinition | None] | None = None
+                   ) -> tuple[dict[int, FunctionDefinition], dict[str, str]]:
+    """σ on ``fn``'s body: each Definition it Calls -> ``override``'s Definition for it where that is not None, else its
+    Boolean version (by id of the callee object), and the gaps."""
     callee: dict[int, FunctionDefinition] = {}
     missing: dict[str, str] = {}
     for n in fn.body.nodes:
         if id(n.fn) in callee:
+            continue
+        sub = override(n.fn) if override is not None else None
+        if sub is not None:
+            callee[id(n.fn)] = sub
             continue
         try:
             callee[id(n.fn)] = boolean_version(n.fn)
@@ -349,16 +356,25 @@ def _sigma_callees(fn: FunctionDefinition) -> tuple[dict[int, FunctionDefinition
     return callee, missing
 
 
+def lift_body(fn: SpecializedDefinition, override: Callable[[FunctionDefinition], FunctionDefinition | None] | None = None
+              ) -> Callable[..., Coll]:
+    """``fn``'s body on bits, as a composite's body ``(B, S, *args)``: the same Calls in the same order, over the bits each
+    word operand occupies, each of ``override(its Definition)`` where that is not None and of the Boolean version of its
+    Definition (`boolean_version`) otherwise.  `NoBooleanVersion` names every Definition the body Calls that has neither."""
+    callee, missing = _sigma_callees(fn, override)
+    if missing:
+        raise NoBooleanVersion(missing)
+    params, _ = fn.signature()
+    return _bit_replayer(fn.body, [t for _, t in params], callee)
+
+
 def lift(fn: SpecializedDefinition) -> SpecializedDefinition:
     """``fn`` (a derived function: an unregistered composite whose body Calls registered Definitions) on bits, with the static
     ``IR="boolean"`` beside its own.  `NoBooleanVersion` names every Definition its body Calls that has no Boolean version."""
-    callee, missing = _sigma_callees(fn)
-    if missing:
-        raise NoBooleanVersion(missing)
+    body = lift_body(fn)
     params, ret = fn.signature()
     bparams, bret = tuple((n, BL.bit_type(t)) for n, t in params), BL.bit_type(ret)
-    defn = CompositeDefinition(fn.name, fn.version, (*fn.defn.statics, "IR"), lambda S: (bparams, bret),
-                               _bit_replayer(fn.body, [t for _, t in params], callee),
+    defn = CompositeDefinition(fn.name, fn.version, (*fn.defn.statics, "IR"), lambda S: (bparams, bret), body,
                                doc=f"{fn.defn.doc}; on bits (each Call the Boolean version of its Definition)",
                                conformance=fn.defn.conformance, register=False)
     return bind(defn, **fn.bindings, IR="boolean")
@@ -381,7 +397,7 @@ def _word_static(v: Any) -> Any:
 def sigma_lift(word: CompositeDefinition, version: int, register: bool = True) -> CompositeDefinition:
     """The Boolean Definition ``{word.name}_v{version}``, σ of the word composite ``word``: at each binding, ``word``'s body at
     that binding with each Call the Boolean version of its Definition (`boolean_version`, so the newest registered one at the
-    time the body is built), over the bits each word operand occupies (`lift`'s replay).  A function-valued static binds a
+    time the body is built), over the bits each word operand occupies (`lift_body`).  A function-valued static binds a
     Boolean Definition (`_statics_on_bits`) and is read as its word (`trace.word_of`); the word view is ``word`` at the bindings
     so read.  `boolean_version` serves it only where every Definition the word body Calls has a Boolean version, and names
     those that have none otherwise."""
@@ -395,12 +411,7 @@ def sigma_lift(word: CompositeDefinition, version: int, register: bool = True) -
         return tuple((n, BL.bit_type(t)) for n, t in params), BL.bit_type(ret)
 
     def body(B: Builder, S, *args: Coll) -> Coll:
-        w = at(S)
-        callee, missing = _sigma_callees(w)
-        if missing:
-            raise NoBooleanVersion(missing)
-        params, _ = w.signature()
-        return _bit_replayer(w.body, [t for _, t in params], callee)(B, S, *args)
+        return lift_body(at(S))(B, S, *args)
 
     refuse = (lambda b: word.refuse({k: _word_static(x) for k, x in b.items()})) if word.refuse is not None else None
     d = CompositeDefinition(word.name, version, statics, signature, body,
@@ -569,5 +580,5 @@ def load_program(path: Path):
     return decode_program(desc, registry), program_digest(desc)
 
 
-__all__ = ["NoBooleanVersion", "boolean_version", "made_on_demand", "bit_offsets", "lift", "sigma_lift", "sigma_check",
+__all__ = ["NoBooleanVersion", "boolean_version", "made_on_demand", "bit_offsets", "lift", "lift_body", "sigma_lift", "sigma_check",
            "boolean_function", "purity", "dry_run", "derived_calls", "load_program", "word_descriptor", "write_word"]

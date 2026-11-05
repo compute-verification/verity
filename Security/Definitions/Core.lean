@@ -20,6 +20,7 @@ public import Definitions.Core.Formalism
 public import Definitions.Core.Expand
 public import Definitions.Core.NaiveStrassen
 public import Definitions.Core.Site
+public import Definitions.Core.ValueSalts
 
 /-!
 # Core: the model every area states its guarantees in
