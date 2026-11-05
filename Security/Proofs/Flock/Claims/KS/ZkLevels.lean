@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.KS.PlainLevels
-import Proofs.Flock.Claims.KS.ZkEvent
-import Proofs.Flock.Claims.KS.ZkTables
-import Proofs.Flock.Claims.DeployRoundsZk
-import Proofs.Flock.Claims.KS.ConflictRun
+module
+
+public import Proofs.Flock.Claims.KS.PlainLevels
+public import Proofs.Flock.Claims.KS.ZkEvent
+public import Proofs.Flock.Claims.KS.ZkTables
+public import Proofs.Flock.Claims.DeployRoundsZk
+public import Proofs.Flock.Claims.KS.ConflictRun
 
 /-!
 # Every level's queries in the masked verifier over the hash oracle
@@ -23,6 +25,8 @@ that position against one root in the run's own log, a collision there (`zk_leve
 * `zkRawLevelRowsJ`, `zk_levelRowJ_raw`, `zk_levelClash_tiedJ`: the level-`ℓ` rows table `j`'s rep `k` opens in a masked
   record, each an `Opening` in an accepted run's log, and two of them at one position that differ collide there.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

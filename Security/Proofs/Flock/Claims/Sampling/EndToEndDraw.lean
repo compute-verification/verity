@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.ExecDrawOS
-import Definitions.Claims.Sampling
+module
+
+public import Proofs.Flock.Soundness.ExecDrawOS
+public import Definitions.Claims.Sampling
 
 /-!
 # `Flock.Guarantees.EndToEnd`'s draw against the claims' design
@@ -11,6 +13,8 @@ proof blocks, the live draw escapes a set `B` no more often than the design's `P
 `C(n − K₀, kd)/C(n, kd)`, are at most the design's miss at `K₀` (`execOS_miss_le_miss`, `choose_le_miss`) and the
 deployment's `missAt` (`choose_le_missAt`).
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling.EndToEndDraw
 

@@ -1,4 +1,6 @@
-import Proofs.Nci.Cover.FanOutWalk
+module
+
+public import Proofs.Nci.Cover.FanOutWalk
 
 /-!
 # The fan-out structure: one spent value per key chain
@@ -9,6 +11,8 @@ a held root's leg, so a key path from one such value passes into no other. Toget
 ancestor of another it spends (`Keyed.spent_eq_of_follows`). A block that cuts a spent value's word, reading it at one
 bit, computes the rest from bits that no other spent value's key path holds.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover
 

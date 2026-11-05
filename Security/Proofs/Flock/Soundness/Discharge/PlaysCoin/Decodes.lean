@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
-import Proofs.Flock.Soundness.Discharge.PlaysCoin.Tape
+module
+
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Tape
 
 /-!
 # `Decodes` from the reps' runs
@@ -11,6 +13,8 @@ decoded one (`tapeOfGroups`). So `decodesOfRuns`, `decodesAllOfRuns` and `decode
 `repShape` (`repC_spine`). `decodesOfRunsAt` reads the spine only along the runs that end where the `RepRun` ends
 (`playsT_of_repRunAt`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PlaysCoin
 

@@ -1,5 +1,7 @@
-import Proofs.Properties.Nci.BodiesOk.ForReads
-import Proofs.Properties.Nci.ReadsSet
+module
+
+public import Proofs.Properties.Nci.BodiesOk.ForReads
+public import Proofs.Properties.Nci.ReadsSet
 
 /-!
 # `ReadsExact.Decoded`, `ReadsExact.RetParts`, `ReadsExact.ScanOut` and `ReadsExact.RootFacts`, proved
@@ -16,6 +18,8 @@ and `Novel.ReadsExact` holds wherever `ReadsExact.RootSet` does (`readsExact_of_
 reference of a node calling a primitive is read by a member (`cover_reads`) and a node calling a composite has the
 shape `ReadsExact.compNodeSet` reads (`compShape_reads`), so `ReadsExact.RootSet` holds (`rootSet`).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program

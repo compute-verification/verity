@@ -33,7 +33,13 @@ The difftest's pieces (`Pieces.table`): `challenger_read` (`read_reason`) and `c
 (`coins_reason`), each `{"reason"}`, or `{"refused": why}` where Python raises; `challenger_within` (`coins_within`),
 `{"limits", "reason"}`.
 -/
-import SampledProofs.ChallengerSession
+module
+
+public import SampledProofs.ChallengerSession
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Challenger
 
@@ -84,13 +90,14 @@ def WITHHELD : String :=
 
 /-- `withheld_on`: the ledger opens `window` (its open root), and every open of it marks its session withheld
 (`withheld: true` in its body), a session whose challenger released only its coins' raw bytes while it ran, and its
-commitment, salts and paths once it closed. -/
+commitment, salts and paths once it closed. The root and `withheld` are compared by a match, not by `BEq Json`, a
+`partial def` proofs can't see through. -/
 def withheldOn (ledger : Json) (window : String) : Bool :=
   let opens : List LedgerEntry := match ledger with
     | .arr ls => ls.toList.filterMap fun l => (ledgerEntry? l).filter fun e =>
-        e.kind == "open" && getD (getD e.body "window") "root" == Json.str window
+        e.kind == "open" && (match getD (getD e.body "window") "root" with | .str r => r == window | _ => false)
     | _ => []
-  !opens.isEmpty && opens.all fun e => getD e.body "withheld" == Json.bool true
+  !opens.isEmpty && opens.all fun e => match getD e.body "withheld" with | .bool true => true | _ => false
 
 /-- `coins_reason` (module docstring): why `coins`, the evidence of a draw's coins, does not show `read` to be the coins
 the session the auditor's ledger opens for window `window` (its open root) released after `after`; `none` when it

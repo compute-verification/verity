@@ -1,3 +1,5 @@
+module
+
 /-!
 # FP32 arithmetic: `verity.ml.fp32`
 
@@ -18,6 +20,8 @@ or fused `a * b + c` of finite words is a rational `n / d` in those units, and `
 the nearest word. The Python computes add, sub, mul and div in numpy `float32` (the x86-64 host's IEEE arithmetic) and
 the FMA in exact rational arithmetic; `Verity.SecurityProofs.Fp32.Vectors` holds both to these definitions.
 -/
+
+@[expose] public section
 
 namespace Verity.Fp32
 

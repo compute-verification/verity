@@ -1,10 +1,12 @@
-import Proofs.Flock.Claims.Recursion.ResChainW
-import Proofs.Flock.Claims.Recursion.ResStepsW
-import Proofs.Flock.Claims.Recursion.AccTies
-import Proofs.Flock.Claims.Recursion.ResCopyRows
-import Proofs.Flock.Claims.Recursion.TopsOpens
-import Proofs.Flock.VBridge.AlgHolds
-import Proofs.Flock.VBridge.Family.PartKeys
+module
+
+public import Proofs.Flock.Claims.Recursion.ResChainW
+public import Proofs.Flock.Claims.Recursion.ResStepsW
+public import Proofs.Flock.Claims.Recursion.AccTies
+public import Proofs.Flock.Claims.Recursion.ResCopyRows
+public import Proofs.Flock.Claims.Recursion.TopsOpens
+public import Proofs.Flock.VBridge.AlgHolds
+public import Proofs.Flock.VBridge.Family.PartKeys
 
 /-!
 # P3's ends half: the copy's accumulator ports read the outer witnesses' chain at the rep's ends
@@ -22,6 +24,8 @@ import Proofs.Flock.VBridge.Family.PartKeys
   registered reads (`innerAccTieV`), so they hold one row (`held_rows_eq`).
 * `repOpens_eq`: the rep's run length `R` is `D.accE`'s `nOpen` at table 0's schedule.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 

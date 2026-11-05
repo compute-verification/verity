@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.KS.Wait
-import Proofs.Flock.Claims.KS.Fork
-import Proofs.Flock.Claims.Bits
-import Proofs.Flock.Claims.DeployCode
+module
+
+public import Proofs.Flock.Claims.KS.Wait
+public import Proofs.Flock.Claims.KS.Fork
+public import Proofs.Flock.Claims.Bits
+public import Proofs.Flock.Claims.DeployCode
 
 /-!
 # Flock's KS from one wait's bound
@@ -22,6 +24,8 @@ table (`Flock.Splits`) wherever the verifier accepts some run (`Flock.NoAcc`) (`
 * **Assembly**: `ERep_trunc` at `rate = N₀/(e·k) ≤ 1/4` (`Flock.rate_le`, from `k = ⌈4N₀/e⌉`) gives
   `4·(ε_table + 𝔼[escapes]) + 2^{−m′} + 2k/K + e^{−k/8}`, and `Escapes.le` puts `4·𝔼[escapes]` under `√(γ·Pr[B])`.
 -/
+
+@[expose] public section
 
 namespace Claims
 

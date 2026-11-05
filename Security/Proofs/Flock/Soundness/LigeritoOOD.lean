@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.LigeritoLevels
+module
+
+public import Proofs.Flock.Soundness.LigeritoLevels
 
 /-!
 # Out-of-domain binding (PROTOCOL.md §13.3 step 6)
@@ -11,6 +13,8 @@ out-of-domain samples: the table's multilinear extension at two uniform points o
 elements both match the answers with probability at most `pairs(L)·(μ/|F|)²`
 (`value_twoOod_collide_le`), and at most one list element survives the samples.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 
