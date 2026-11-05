@@ -1,7 +1,8 @@
 """Dither's served unit: the Definitions a sampled proof block's proof passes, the layout of a call's
 committed values, and the CPU reference a units kernel's values and hiding leaves are checked against on sampled cells.
 The protocol is Dither v3.2 (`verity/core/protocols/pouw/dither/PROTOCOL.md`), as the v31 prover implements it
-(`benchmarks/pouw/accel_v31/v31.py`); the guarantee it instantiates is `Pouw.Guarantees.Dither.WorkSoundNoFold`.
+(`benchmarks/pouw/accel_v31/v31.py`). No guarantee states its proof block yet: `Pouw.Guarantees.Dither.WorkSoundNoFold`
+is stated for the no-fold round, whose committed values are 32-bit prefix sums, not v3.2's 16-bit T_s and 32-bit O.
 
 **A call** is O = (A + d_A)(B + d_B)ᵀ over the integers: A (m × K int8) is the call's activations, committed in the call's
 operand root (`operand_tree`), and B (n × K int8) a published checkpoint's s8 weights, which registration pins by the
