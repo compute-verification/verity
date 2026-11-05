@@ -385,7 +385,7 @@ def test_no_token_and_no_cursor_identity_is_an_error_and_dry_run_sends_nothing(f
 
 
 DRY_RUNS = [
-    ["ask", "--as", "memory-accounting", "--to", "infra", "--text", "x"], ["announce", "--as", "infra", "--text", "x"],
+    ["ask", "--as", "memory-accounting", "--to", "infra", "--text", "x"], ["send", "--kind", "announce", "--as", "infra", "--text", "x"],
     ["reply", "--as", "memory-accounting", "--thread", "1.0", "--text", "x"], ["pickup", "--thread", "1.0"],
     ["close", "--as", "memory-accounting", "--thread", "1.0", "--declined", "no"],
     ["roster", "--thread", "1.0"], ["read", "--since", "1.0"],
@@ -918,17 +918,17 @@ def test_oidc_token_asks_again_when_the_socket_drops_the_connection(identity_soc
 
 def test_announce_to_all_or_some_with_verify_and_pins(fake, registry, capsys):
     sha = "a" * 64
-    rc, _, err = run(capsys, "announce", "--as", "infra", "--text", "curl the new helper and install it", "--verify", "helper --version")
+    rc, _, err = run(capsys, "send", "--kind", "announce", "--as", "infra", "--text", "curl the new helper and install it", "--verify", "helper --version")
     assert rc == 2 and "pin it" in err
-    rc, _, err = run(capsys, "announce", "--as", "infra", "--text", "x", "--ships", "https://x/y.py")
+    rc, _, err = run(capsys, "send", "--kind", "announce", "--as", "infra", "--text", "x", "--ships", "https://x/y.py")
     assert rc == 2 and "--ships" in err
     assert not fake.calls
-    assert run(capsys, "announce", "--as", "infra", "--text", "Install the broker helper.", "--verify", "git ls-remote origin HEAD",
+    assert run(capsys, "send", "--kind", "announce", "--as", "infra", "--text", "Install the broker helper.", "--verify", "git ls-remote origin HEAD",
                "--ships", f"https://x/verity-github.py#sha256={sha}")[0] == 0
     m = fake.messages[COORD][-1]
     assert m["text"].startswith(":mega: *Announcement* from @infra to every handle")
     assert slack.SAFE_POINT in m["text"] and "`git ls-remote origin HEAD`" in m["text"] and sha in m["text"]
-    assert run(capsys, "announce", "--as", "infra", "--to", "@compute-accounting", "circuits", "--text", "node 2 reboots at 22:00Z")[0] == 0
+    assert run(capsys, "send", "--kind", "announce", "--as", "infra", "--to", "@compute-accounting", "circuits", "--text", "node 2 reboots at 22:00Z")[0] == 0
     m = fake.messages[COORD][-1]
     assert m["text"].split("\n")[0].endswith("to @compute-accounting @circuits") and slack.SAFE_POINT not in m["text"]
     assert slack.audience(m["text"], slack.load_registry(registry)) == ["circuits", "compute-accounting"]
@@ -1015,7 +1015,7 @@ def test_the_ask_lifecycle_pickup_reply_done_and_decline(fake, registry, capsys)
 
 
 def test_an_announcements_status_lines_and_roster(fake, registry, capsys):
-    run(capsys, "announce", "--as", "infra", "--to", "@compute-accounting", "@circuits", "@proofs", "--text", "node 2 reboots at 22:00Z")
+    run(capsys, "send", "--kind", "announce", "--as", "infra", "--to", "@compute-accounting", "@circuits", "@proofs", "--text", "node 2 reboots at 22:00Z")
     t = fake.messages[COORD][-1]["ts"]
     assert run(capsys, "close", "--as", "compute-accounting", "--thread", t)[0] == 0
     assert run(capsys, "close", "--as", "circuits", "--thread", t, "--declined", "a job runs until 7 Oct 23:00Z")[0] == 0
@@ -1037,7 +1037,7 @@ def test_an_announcements_status_lines_and_roster(fake, registry, capsys):
 
 
 def test_roster_of_an_announcement_to_all_expects_every_other_handle(fake, registry, capsys):
-    run(capsys, "announce", "--as", "memory-accounting", "--text", "Friday: freeze main at 18:00Z")
+    run(capsys, "send", "--kind", "announce", "--as", "memory-accounting", "--text", "Friday: freeze main at 18:00Z")
     t = fake.messages[COORD][-1]["ts"]
     rc, out, _ = run(capsys, "roster", "--thread", t, "--json")
     assert rc == 1 and [r["handle"] for r in json.loads(out)] == [h for h in HANDLES if h != "memory-accounting"]
@@ -2324,7 +2324,7 @@ def test_send_names_each_addressee_once(fake, registry, routes_dirs, capsys):
     assert rc == 0 and posted(fake, out)["text"].startswith("@circuits @proofs see this")
     rc, out, _ = run(capsys, "send", "--as", "infra", "--to", "@circuits", "--to", "@proofs", "--text", "both")
     assert rc == 0 and posted(fake, out)["text"].startswith("@circuits @proofs both")
-    assert run(capsys, "announce", "--as", "infra", "--to", "@circuits", "--to", "@proofs", "--text", "x")[0] == 0
+    assert run(capsys, "send", "--kind", "announce", "--as", "infra", "--to", "@circuits", "--to", "@proofs", "--text", "x")[0] == 0
     assert fake.messages[COORD][-1]["text"].split("\n")[0].endswith("to @circuits @proofs")
 
 
@@ -2382,15 +2382,6 @@ def test_a_reply_under_an_announcement_rings_only_the_names_it_starts_with(fake,
     assert run(capsys, "close", "--as", "proofs", "--thread", root["ts"], "--declined", "past the budget line")[0] == 0
     assert len(bells(fake, boxes["infra"])) == 1                                      # a decline wants the announcer
 
-def test_a_successors_pr_finds_its_handle_through_the_inbox_route_with_no_registry_edit(fake, registry, routes_dirs):
-    """drive names a PR's owner from its branch: a successor's suffix, and its predecessor's, come from the route."""
-    root_box = fake.add(COORD, text=f"{slack.INBOX_HEAD}compute-accounting. pointers", username="compute-accounting", bot_id=BOT)
-    add_route(routes_dirs[0], "compute-accounting", root_box["ts"], holder="bc-abcdef12-0000-0000-0000-00000000c0de",
-              branch_suffixes=["zz99"])
-    reg = slack.with_routes(json.loads(registry.read_text()), slack.Routes())
-    assert slack.branch_owners("cursor/new-lead-zz99", reg) == ["compute-accounting"]
-    assert slack.branch_owners("cursor/other-c0de", reg) == ["compute-accounting"]
-
 def test_names_open_succeeds_records_the_working_branch_and_keeps_the_predecessors_suffix(fake, registry, routes_dirs, tmp_path, capsys, monkeypatch):
     notes_clone(tmp_path)
     monkeypatch.setenv("RESEARCH_NOTES_CITE_CHECK", "0")
@@ -2422,7 +2413,7 @@ def test_names_open_keeps_a_suffix_the_published_route_doesnt_show_yet(fake, reg
 
 def test_names_open_poster_lets_another_agent_post_as_it_and_a_successor_keeps_it(fake, registry, routes_dirs, tmp_path, capsys, monkeypatch):
     """Another agent (a lane of the holder's) posts as a handle when its route's `posters` name it, so it may post `--as`
-    it and its PRs find their owner by its id, and a successor keeps it."""
+    it, and a successor keeps it."""
     notes_clone(tmp_path)
     monkeypatch.setenv("RESEARCH_NOTES_CITE_CHECK", "0")
     monkeypatch.setattr(slack, "_branch_suffix", lambda: None)
@@ -2438,8 +2429,6 @@ def test_names_open_poster_lets_another_agent_post_as_it_and_a_successor_keeps_i
     monkeypatch.setenv("RESEARCH_AGENT_URL", f"https://cursor.com/agents/{lane}")
     assert run(capsys, "send", "--as", "compute-accounting", "--text", "the sweep is done")[0] == 0
     assert run(capsys, "send", "--as", "infra", "--text", "x")[0] == 2
-    reg = slack.with_routes(json.loads(registry.read_text()), slack.Routes())
-    assert slack.branch_owners("cursor/relative-security-e9ac", reg) == ["compute-accounting"]
     successor = "bc-99999999-2222-3333-4444-666666666666"
     assert run(capsys, "names", "open", "--as", "compute-accounting", "--holder", successor, "--succeeds")[0] == 0
     r = json.loads(path.read_text())
@@ -2613,11 +2602,10 @@ def test_a_machine_report_is_held_to_no_length(fake, registry, capsys):
 
 def test_an_announcement_of_200_words_posts_with_a_note_and_one_of_301_is_refused(fake, registry, capsys):
     head = len(slack.plain(slack.announcement({"handle": "infra"}, [], "", None, [])).split())   # its header's words count too
-    rc, _, err = run(capsys, "announce", "--as", "infra", "--text", words(200 - head))
+    rc, _, err = run(capsys, "send", "--kind", "announce", "--as", "infra", "--text", words(200 - head))
     assert rc == 0 and "200 words, past the 150" in err and len(posts(fake)) == 1
-    for argv in (["announce"], ["send", "--kind", "announce"]):
-        rc, _, err = run(capsys, *argv, "--as", "infra", "--text", words(301 - head))
-        assert rc == 2 and "301 words, past twice the 150" in err and "nothing was posted" in err
+    rc, _, err = run(capsys, "send", "--kind", "announce", "--as", "infra", "--text", words(301 - head))
+    assert rc == 2 and "301 words, past twice the 150" in err and "nothing was posted" in err
     assert len(posts(fake)) == 1
     rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@ci", "--kind", "fyi", "--text", words(150))
     assert rc == 2 and "past twice the 60" in err                                        # 150 is an announcement's alone
@@ -2692,7 +2680,6 @@ def test_an_announcement_to_every_handle_refuses_leading_names(registry, capsys)
     assert rc == 2 and "pass them as --to" in err
     assert run(capsys, "send", "--as", "infra", "--kind", "announce", "--dry-run", "--text", "Daily wasters. @lean, yours")[0] == 0
     assert run(capsys, "send", "--as", "infra", "--kind", "announce", "--to", "@lean", "@ci", "--dry-run", "--text", "daily")[0] == 0
-    assert run(capsys, "announce", "--as", "infra", "--dry-run", "--text", "@lean @ci daily wasters")[0] == 2
 
 
 def test_a_handle_named_past_the_start_posts_with_a_note_that_it_isnt_rung(registry, capsys):
@@ -3573,7 +3560,7 @@ def test_another_apps_bot_under_a_handles_name_is_not_laundered_into_a_router_do
 
 
 def test_roster_counts_no_status_line_from_another_apps_bot(fake, registry, capsys):
-    run(capsys, "announce", "--as", "infra", "--to", "@circuits", "--text", "node 2 reboots at 22:00Z")
+    run(capsys, "send", "--kind", "announce", "--as", "infra", "--to", "@circuits", "--text", "node 2 reboots at 22:00Z")
     t = fake.messages[COORD][-1]["ts"]
     fake.add(COORD, text=f"{slack.SHORTCODES[slack.DONE]} done", username="circuits", bot_id="BOTHERAPP", thread_ts=t)
     rc, out, _ = run(capsys, "roster", "--thread", t, "--json")

@@ -51,7 +51,7 @@ Notes are records, never messages.
 An ask lives in one record, by its target: a handle's ask is an issue in its Linear team, and an ask to @daniel is a page in the
 Asks for Daniel database; `traffic` reads that record's state for whether, and `--latency` for when, it was answered.
 
-`announce` and `reply` are the older spellings of `send`, kept while callers move.
+`reply` is an older spelling of `send --thread`, kept while callers move.
 
 #ask-daniel's cards go through the site's route (ASK_DANIEL, Cursor OIDC with the route as audience), not the Slack API. Each card
 links its ask's page in the registry's Notion database (the ask-daniel channel's `pages`), where it is read, discussed and
@@ -201,10 +201,6 @@ CAP_PER_HOUR = 20                                                # doorbells int
 DOORBELL_MAX = 600                                               # characters of the post a doorbell carries
 POST_MAX = 3000                                                  # bytes: Slack splits a longer post into separate top-level messages
 INBOX_HEAD = "Inbox for @"
-PR_RE = re.compile(r"(?<![\w&/#])#(\d{3,6})\b")
-BRANCH_RE = re.compile(r"\bcursor/([a-z0-9._-]*[a-z0-9])")
-TRAIN_PREP_RE = re.compile(r"^train-prep-((?:\d+-)+)")                  # `cursor/train-prep-1585-1586-on-041c30713-4292`
-RUN_ID_RE = re.compile(r"\br\d{8}-\d{6}-([0-9a-f]{4})\b|(?<![\w./#@-])([0-9a-f]{4})(?![\w/@-])")   # a run, or its last 4
 HISTORY_S = 86400                                                # how far back `traffic --volume` reads a thread before its window
 TAG_SEP = " \u00b7 "
 _TAG = r"(?:[a-z0-9][a-z0-9._-]*|\([a-z]+\))"
@@ -214,8 +210,6 @@ FLAGS = ("urgent", QUIET)
 SLACK_USER_RE = re.compile(r"^[UW][A-Z0-9]{2,}$")
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 COLLABORATOR_ROLE = "collaborator: may ask, never authorizes spend, access or destructive changes"
-COLLABORATOR_MAY = "ask a lane for something and request work within its budgets"
-COLLABORATOR_NEVER = "spend, access or keys, destructive changes or node changes"
 CHAT_PREFIX = "chat-"                                            # a collaborator's private channel, `chat open NAME`
 CHAT_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,74}$")          # Slack's channel names: 80 characters, lower case, no spaces
 CHAT_WATCHER = "top"                                             # rung for a chat post routed to no one
@@ -285,7 +279,7 @@ def origin_groups(path: Path) -> set[str]:
 
 
 FRESH_EVERY_S = 1800                                             # a routed post fetches origin/main at most this often
-ROUTED = ("send", "ask", "announce", "reply", "close", "deliver", "linear", "ring-run")   # the subcommands that ring doorbells
+ROUTED = ("send", "ask", "reply", "close", "deliver", "linear", "ring-run")   # the subcommands that ring doorbells
 
 
 def routing_registry(reg: dict, path: Path, now: float | None = None) -> dict:
@@ -1156,14 +1150,6 @@ def _branch_suffix() -> str | None:
         return None
     m = re.fullmatch(r"cursor/.+-([0-9a-z]{4})", b)
     return m[1] if m else None
-
-
-def branch_owners(branch: str, reg: dict) -> list[str]:
-    """The handles whose agent made `branch`, in `reg` as `with_routes` folds it: its last 4 characters are the last 4 of
-    a holder's agent id, or one of the handle's `branch_suffixes` (its earlier holders', and its holder's other branches)."""
-    suffix = branch.rsplit("-", 1)[-1]
-    return [h["handle"] for h in reg["handles"] if len(suffix) == 4 and
-            suffix in [a[-4:] for a in AGENT_ID_RE.findall(h.get("holder") or "") if len(a) > 11] + h.get("branch_suffixes", [])]
 
 
 def route_targets(msg: dict, root: dict | None, reg: dict, inboxes: set[str] | frozenset = frozenset(),
@@ -2156,16 +2142,6 @@ def _check_audience(to: list[dict], body: str, reg: dict) -> None:
                          f"{' '.join('@' + n for n in lead)}: pass them as --to, or move them off the start")
 
 
-def cmd_announce(ns: argparse.Namespace, reg: dict) -> int:
-    h = acting_as(ns, reg, ns.handle)
-    to = [name_entry(ns, reg, t, person_ok=True) for t in ns.to]
-    ch = channel_id(ns, reg, FRONT_DOOR)
-    _check_audience(to, body := _body(ns), reg)
-    check_length(reg, ch, text := announcement(h, to, body, ns.verify, ns.ships), ANNOUNCE_WORDS)
-    _post(client(ns), ch, h["handle"], text, route=_route(ns, reg, ch), urgent=ns.urgent)
-    return 0
-
-
 def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     """The one way to post: top-level (a new thread) or into `--thread`.  The `--to` names lead it, which is what routes it;
     `--kind` rides in the footer.  An announcement (`--kind announce`) gets its header,
@@ -2921,7 +2897,7 @@ LENGTH_FIX = ("put the body in its Linear issue (`research msg linear comment IS
 
 
 def check_length(reg: dict, ch: str, text: str, limit: int) -> None:
-    """A post `send`, `reply`, `announce` or `ask` makes in the front door, in words as `traffic --volume` counts them: past
+    """A post `send`, `reply` or `ask` makes in the front door, in words as `traffic --volume` counts them: past
     `limit` it goes out with a note on stderr, and past twice `limit` it is refused before anything is posted.  A retired term
     (`vocabulary.retired`) in its prose goes out with a note naming what to write instead."""
     if ch != channel_id_for(reg, FRONT_DOOR):
@@ -4171,11 +4147,6 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--milestone", default=None, metavar="M", help="place: the project's milestone, a prefix of its name (M3)")
     p.add_argument("--json", action="store_true", help="audit: the findings and counts (--asks: the asks) as JSON")
     p.add_argument("--now", default=None, metavar="EPOCH", help="audit: the time it audits at, in seconds since the epoch (default: now)")
-    p = cmd("announce", "1:some or 1:all in #agent-coordination", as_=True, body=True)
-    p.add_argument("--to", nargs="+", action="extend", default=[], metavar="@HANDLE", help="the handles or names it's for (default: every handle)")
-    p.add_argument("--verify", default=None, metavar="CMD", help="a required action: the command that shows it took")
-    p.add_argument("--ships", action="append", default=[], metavar="URL#sha256=HEX|git:SHA", help="code it runs, pinned")
-    p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT")
     p = cmd("reply", "a post in a thread; `@name` at its start also rings that name's doorbell", as_=True, thread=True, body=True)
     p.add_argument("--quiet", action="store_true", help="ring only the names it starts with: no reply needed")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT")
@@ -4303,7 +4274,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
             return cmd_chat(ns, reg)
         if ns.cmd in ROUTED or ns.cmd == "owners":                # who owns a path now is main's answer too
             reg = routing_registry(reg, path)
-        return {"handles": cmd_handles, "owners": cmd_owners, "subscriptions": cmd_subscriptions, "ask": cmd_ask, "announce": cmd_announce, "reply": cmd_reply,
+        return {"handles": cmd_handles, "owners": cmd_owners, "subscriptions": cmd_subscriptions, "ask": cmd_ask, "reply": cmd_reply,
                 "pickup": cmd_pickup, "roster": cmd_roster, "match": cmd_match,
                 "verify-author": cmd_verify_author, "deliver": cmd_deliver, "ring-run": cmd_ring_run, "read": cmd_read, "ask-daniel": cmd_ask_daniel, "names": cmd_inbox,
                 "traffic": cmd_traffic, "send": cmd_send, "close": cmd_close,
