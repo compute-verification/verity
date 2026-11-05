@@ -327,7 +327,7 @@ theorem deriveLaw_some {p : _root_.SampledProofs.Program} {q law : Json} {tbl : 
         · rename_i hs'
           obtain ⟨L', hd, h⟩ := bind_eq_ok.1 h
           cases h
-          refine ⟨k, hnat, (derive_bounds k S L' hd).1, Or.inl ⟨?_, _, derive_ok k S L' hd⟩⟩
+          refine ⟨k, hnat, (derive_bounds k S _ hd).1, Or.inl ⟨?_, _, derive_ok k S _ hd⟩⟩
           rw [hk]
           simpa using hs'
         · rename_i hs'
@@ -335,7 +335,7 @@ theorem deriveLaw_some {p : _root_.SampledProofs.Program} {q law : Json} {tbl : 
           · obtain ⟨tab, -, h⟩ := bind_eq_ok.1 h
             obtain ⟨L', hd, h⟩ := bind_eq_ok.1 h
             cases h
-            obtain ⟨-, -, hL⟩ := deriveWork_ok k S tab L' hd
+            obtain ⟨-, -, hL⟩ := deriveWork_ok k S tab _ hd
             refine ⟨k, hnat, deriveWork_k hd, Or.inr ⟨?_, _, hL⟩⟩
             rw [hk]
             by_cases hw : s = "work"
