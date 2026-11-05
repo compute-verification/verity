@@ -733,7 +733,8 @@ def test_each_request_leaves_once_at_its_place(zk):
     `Commit` before the first `Open` and a `Link` before `Commit`'s coins are refused without reaching the auditor, and so
     is every request after them, a `Ping` alone answered by the loop. The `Open` that leaves is the loop's own, at its
     stream's domain, whatever the prover's carried. The places past `Commit`, whose coins only a coin tree opens, are
-    `Flock.Test.SessionPlace`'s, and the honest session end to end `flock-circuit`'s firewalled selftests'."""
+    `Flock.Test.SessionPlace`'s, an inner round's before the loop's finish computed it `Flock.Test.FramesInner`'s, and
+    the honest session end to end `flock-circuit`'s firewalled selftests'."""
     args = _args(zk, "pub-16.bin")
     a, b = _streams(args)[:2]
     S = Sessions(args)
