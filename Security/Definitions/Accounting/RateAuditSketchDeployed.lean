@@ -1,4 +1,6 @@
-import Definitions.Accounting.RateAuditSketch
+module
+
+public import Definitions.Accounting.RateAuditSketch
 
 /-!
 # A deployed session of verbatim sketch receipts (trusted)
@@ -16,6 +18,8 @@ A session's devices may also be told an `a`-bit summary of what the prover chose
 session for each value of the summary, a pass told `s` running the devices and the pick of session `s`. A prover that
 steers its passes' layout knows the summary it steered by, and its devices may follow it.
 -/
+
+@[expose] public section
 
 namespace Accounting.RateSketch
 

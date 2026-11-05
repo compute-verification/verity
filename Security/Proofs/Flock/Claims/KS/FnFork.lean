@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Prob
+module
+
+public import Proofs.Flock.Claims.Prob
 
 /-!
 # The fork's coin coupling at coins that are uniform functions of the live history
@@ -24,6 +26,8 @@ bad event the simulated fork at round `t` is the simulated fork at `t + 1`.
 
 `mergeC`, `fnC` and `fnAt` are `Claims.Bridge.Live`'s, verbatim, here so that this file needs only `Prob`.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock.FnFork
 

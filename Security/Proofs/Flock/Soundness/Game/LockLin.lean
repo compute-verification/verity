@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Game.Lock
-import Proofs.Flock.Soundness.LinkFinder
+module
+
+public import Proofs.Flock.Soundness.Game.Lock
+public import Proofs.Flock.Soundness.LinkFinder
 
 /-!
 # The compiled table bound, linearly: a link finder at each slot
@@ -25,6 +27,8 @@ uniform position:
   is linear, so the average over the prefixes needs no Jensen. `Lock.nodeE_linkCost_le`: over the prefixes, the finder
   costs at most two compiled runs.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

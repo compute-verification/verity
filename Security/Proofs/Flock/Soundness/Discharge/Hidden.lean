@@ -1,37 +1,39 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Defs
-import Proofs.Flock.Soundness.Discharge.Hidden.Spec
-import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
-import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
-import Proofs.Flock.Soundness.Discharge.Hidden.DerivedP
-import Proofs.Flock.Soundness.Discharge.Hidden.Facts
-import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
-import Proofs.Flock.Soundness.Discharge.Hidden.Binding
-import Proofs.Flock.Soundness.Discharge.Hidden.Public
-import Proofs.Flock.Soundness.Discharge.Hidden.Delta
-import Proofs.Flock.Soundness.Discharge.Hidden.Rows
-import Proofs.Flock.Soundness.Discharge.Hidden.Layout
-import Proofs.Flock.Soundness.Discharge.Hidden.LayoutP
-import Proofs.Flock.Soundness.Discharge.Hidden.Flat
-import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
-import Proofs.Flock.Soundness.Discharge.Hidden.SpecOf
-import Proofs.Flock.Soundness.Discharge.Hidden.Commit
-import Proofs.Flock.Soundness.Discharge.Hidden.Committed
-import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Theorems
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Fit
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegChain
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegShape
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegCommit
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegDelta
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegCopies
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegRowBc
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegV2
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegPort
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegTgt
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegFit
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegFitP
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SharedP
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Defs
+public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+public import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
+public import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
+public import Proofs.Flock.Soundness.Discharge.Hidden.DerivedP
+public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+public import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
+public import Proofs.Flock.Soundness.Discharge.Hidden.Binding
+public import Proofs.Flock.Soundness.Discharge.Hidden.Public
+public import Proofs.Flock.Soundness.Discharge.Hidden.Delta
+public import Proofs.Flock.Soundness.Discharge.Hidden.Rows
+public import Proofs.Flock.Soundness.Discharge.Hidden.Layout
+public import Proofs.Flock.Soundness.Discharge.Hidden.LayoutP
+public import Proofs.Flock.Soundness.Discharge.Hidden.Flat
+public import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
+public import Proofs.Flock.Soundness.Discharge.Hidden.SpecOf
+public import Proofs.Flock.Soundness.Discharge.Hidden.Commit
+public import Proofs.Flock.Soundness.Discharge.Hidden.Committed
+public import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Theorems
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Fit
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegChain
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegShape
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegCommit
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegDelta
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegCopies
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegRowBc
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegV2
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegPort
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegTgt
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegFit
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegFitP
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SharedP
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 
 /-!
 # Hidden outputs: `Stmt.setupHidden`'s soundness at the protocol as Lean defines it
@@ -107,3 +109,5 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 * `Wide.Checked`: the six widened statements without `0 < st.c.upv` (`…Checked`), proved in `Wide.Theorems`
   (`…_checked`).
 -/
+
+@[expose] public section

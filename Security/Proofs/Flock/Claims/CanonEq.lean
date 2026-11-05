@@ -1,5 +1,7 @@
-import Flock.Canon
-import Proofs.Flock.Claims.JsonEq
+module
+
+public import Flock.Canon
+public import Proofs.Flock.Claims.JsonEq
 
 /-!
 # `canon` prints equivalent values alike
@@ -9,6 +11,8 @@ an object's values in the order of its tree before it sorts the pairs by key; `J
 elements' forms in order, and the tree's keys and values' forms in order (`jsonForm_obj`). So equivalent values print
 alike (`canon_jsonEquiv`), and two draws `drawEq` passes on print alike (`canon_drawEq`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

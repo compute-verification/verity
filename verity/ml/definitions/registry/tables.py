@@ -79,7 +79,7 @@ def table_read(index_bits: int, entry_words: int) -> PrimitiveDefinition:
         p = PrimitiveDefinition(f"TableRead{ib}x{ew}", 1, (("index", Value(16 if ib <= 16 else 32)),
                                                           ("table", Array(rows, Array(ROW_WORDS, Value(WORD_BITS))))),
                                 Value(16 * ew), ev, doc=table_read.__doc__ or "",
-                                conformance="exact by construction: an index into the operand")
+                                conformance="reference-defined: exact by construction, an index into the operand")
         p.evaluate_lazy = ev_lazy  # type: ignore[attr-defined]
         _READS[key] = p
         if ew << ib <= BT.MAX_WORDS:

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.SlotDist
+module
+
+public import Proofs.Flock.Claims.KS.SlotDist
 
 /-!
 # A slot's coin count through two interleaved locksteps, under a schedule that leads with the first
@@ -14,6 +16,8 @@ reached outcome is `Dead` (`Lead.dead`, `Reach`), a continuation with no table n
 * `SlotAt.lead_fst`: a slot of the first lockstep at distance `j` is met after `j` coins;
 * `SlotAt.lead_snd`: a slot of the second at distance `j` is met after `n + j` coins.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game.Lock
 

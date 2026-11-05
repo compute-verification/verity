@@ -1,5 +1,7 @@
-import Definitions.Pouw.NCP.ExtraIdentity
-import Proofs.Pouw.NCP.GameProofs
+module
+
+public import Definitions.Pouw.NCP.ExtraIdentity
+public import Proofs.Pouw.NCP.GameProofs
 
 /-!
 # The admissible R with an extra checkpoint identity
@@ -10,6 +12,8 @@ image straddles two steps of the block's other half. The signs are `−1` on `[3
 `c_{k+64} = c_{k+32} + c_{32}` at zero input. `R` maps every prefix `[0, 64t)` onto itself and `R² = diag(s)`, so
 `(I + R)·P_{64t}·(I − R) = P_{64t}·(I − R²) = 2·P_{64}`, and `c_{2k+64t} = 0` identically.
 -/
+
+@[expose] public section
 
 namespace Pouw.NCP.ExtraIdentityProofs
 

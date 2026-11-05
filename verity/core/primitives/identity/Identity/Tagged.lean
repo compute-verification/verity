@@ -1,5 +1,9 @@
-import Flock.Canon
-import Identity.Sha512
+module
+
+public import Flock.Canon
+public import Identity.Sha512
+meta import Flock.Canon
+meta import Identity.Sha512
 
 /-!
 The tagged SHA-512 identity hash (`verity/ml/commitments/identity.py`'s `tagged_sha512` and `identity_digest_sha512`):
@@ -15,6 +19,8 @@ on every value both accept (it refuses a non-integer number, as Python refuses a
 strings in UTF-8, where canonical JSON (`Flock.canon`) escapes every character past printable ASCII. `taggedState` is
 the hash after the header, which a long payload of known length is streamed into.
 -/
+
+@[expose] public section
 
 namespace Identity
 

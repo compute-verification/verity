@@ -4,8 +4,8 @@ recorded in `population_recorded.json` (written on main before a unit's populati
 `verity/ml/circuits` (the Gemm family's word and Boolean templates, the served rows' coordinates among them), and
 `TemplatePopulations` v1 and v0 over each consecutive pair of them.
 
-A change meant to change these programs rewrites the record (``python test_population_recorded.py --write``) and says so;
-any other change leaves it as it is. The programs are built in a child process: the sidecars import modules that register
+A change meant to change these programs rewrites the record (its ``--write``, run by `REWRITE`'s command) and says so; any
+other change leaves it as it is. The programs are built in a child process: the sidecars import modules that register
 kernels, which `test_evaluation`'s registry test would otherwise see in the same worker."""
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ PACKAGE = Path(__file__).resolve().parents[1]
 RECORD = Path(__file__).with_name("population_recorded.json")
 ABOUT = ("TemplateInstances / TemplatePopulations programs over verity/ml/circuits' circuit-check catalog: per program, the "
          "SHA-512 of its descriptor id and its program digest; checked and written by test_population_recorded.py")
+REWRITE = "`uv run python tools/verity/check/pins.py --write verity/ml/circuits/tests/population_recorded.json`"
 #: the population programs' own families, which the sidecars bind as roots too: not templates of a population here
 POPULATIONS = ("TemplateInstances", "TemplatePopulations")
 
@@ -74,7 +75,7 @@ def test_every_recorded_population_keeps_its_id_and_digest():
     assert not gone and not changed, (
         f"population programs changed ({len(changed)}) or no longer built ({len(gone)}): {(changed + gone)[:5]}. "
         "population.py must keep every existing population program byte for byte; a change meant to change them rewrites "
-        f"{RECORD.name} with `python {Path(__file__).name} --write` and says so in its PR")
+        f"{RECORD.name} with {REWRITE} and says so in its PR")
     assert len(recorded) >= 300
 
 

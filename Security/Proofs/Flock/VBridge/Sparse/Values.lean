@@ -1,5 +1,7 @@
-import Proofs.Flock.VBridge.Sparse.Gadgets
-import Proofs.Flock.Soundness.Refine.Arith
+module
+
+public import Proofs.Flock.VBridge.Sparse.Gadgets
+public import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # The gadgets' values
@@ -8,6 +10,8 @@ What the mirrors in `Gadgets.lean` compute: `treeVal` is the factors' product in
 many levels as factors; `sumVal` their sum (`fOf_sumVal`); and `demuxVal` at the bits `T_LOG − 1, …, 0` puts each slot's
 vector at the entry its type's low `T_LOG` bits name, zero at every other (`demuxVal_eq`, `splits_range`, `low_testBit`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Sparse
 

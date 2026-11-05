@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Commit
-import Proofs.Flock.Claims.Scope.InScope
-import Proofs.Flock.Claims.Scope.Tables
-import Proofs.Flock.Soundness.Refine.Setup
-import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Commit
+public import Proofs.Flock.Claims.Scope.InScope
+public import Proofs.Flock.Claims.Scope.Tables
+public import Proofs.Flock.Soundness.Refine.Setup
+public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 
 /-!
 # Every table the verifier parses fits the first table's blocks
@@ -14,6 +16,8 @@ blocks (`Tab.Fits`). `relS_layout`: at such a statement, `RelS` of the readable 
 `Layout.model` at `regionsOf`, the statement the soundness proof reads, satisfied by its share of the hidden values
 (`zOf`, the tables' bits interleaved).
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 
