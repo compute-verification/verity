@@ -141,11 +141,11 @@ def test_the_gate_table_prices_bit_at_by_its_boolean_version():
 
 
 def test_a_primitive_with_no_boolean_version_is_unpriced():
-    """`F32Sqrt_v1` has no Boolean version: the table leaves it out and a block lists its activations apart, its gates not
+    """`F32TanhRn_v1` has no Boolean version: the table leaves it out and a block lists its activations apart, its gates not
     guessed."""
-    sqrt = REGISTRY["F32Sqrt_v1"]
-    assert gate_table([sqrt]) == ({}, ["F32Sqrt_v1"])
-    assert BC.gates(sqrt, {}) == (0, {"F32Sqrt_v1": 1})
+    tanh = REGISTRY["F32TanhRn_v1"]
+    assert gate_table([tanh]) == ({}, ["F32TanhRn_v1"])
+    assert BC.gates(tanh, {}) == (0, {"F32TanhRn_v1": 1})
 
 
 def test_a_block_with_an_unpriced_primitive_leaves_the_gates_undecided():
