@@ -1,11 +1,13 @@
-import Proofs.Flock.Claims.DeployEfficient
-import Proofs.Flock.Claims.Sampling.Leaf
-import Proofs.Flock.Claims.Sampling.Select.Scope
-import Proofs.Flock.Claims.Sampling.Runs
-import Proofs.Flock.Claims.Sampling.RunsExp
-import Proofs.Flock.Claims.Sampling.Session
-import Proofs.Flock.Claims.Sampling.Universal
-import Proofs.Flock.SamplingBoundary
+module
+
+public import Proofs.Flock.Claims.DeployEfficient
+public import Proofs.Flock.Claims.Sampling.Leaf
+public import Proofs.Flock.Claims.Sampling.Select.Scope
+public import Proofs.Flock.Claims.Sampling.Runs
+public import Proofs.Flock.Claims.Sampling.RunsExp
+public import Proofs.Flock.Claims.Sampling.Session
+public import Proofs.Flock.Claims.Sampling.Universal
+public import Proofs.Flock.SamplingBoundary
 
 /-!
 # The sampling block's claims, with what remains as hypotheses
@@ -69,7 +71,7 @@ hash `H`, the conjunction of the sampling claims below but `ZK`, reading of `F` 
   are with `DrawFixed` (`E_runs_exp`).
 * `huniv : UniversalIs D`: the deployed universal unit computes what its Definition's gates do (`universalProg`, the
   port of `verity.ml.private_circuits.universal`'s `build`); the code side's binding of the compiled unit. That those
-  gates compute `Netlist.eval` is proved (`universal_correct`); the deployed record's unit is the Definition's
+  gates compute `PrivateCircuit.eval` is proved (`universal_correct`); the deployed record's unit is the Definition's
   (`SamplingDeploy.universalIs_deploy`).
 * `hComplete : Complete H D`: of the record's reference prover (`D.P`) at its error (`D.δc H`); at the deployed record,
   from Flock's masked completeness and the sampled verifier's and the code's facts (`SamplingDeploy.complete_deploy`).
@@ -78,6 +80,8 @@ hash `H`, the conjunction of the sampling claims below but `ZK`, reading of `F` 
   honest prover's calls in two real runs on one nonce; `Sampling.ZK` reduces it to a committed-coin protocol's
   models (`SamplingDeploy.zk_deploy_of_models_gap`).
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 
@@ -89,8 +93,8 @@ def Deploy.mask {Coin Col T : Type} (D : Deploy Coin Col T) (Nonce Rest : Type) 
 
 set_option synthInstance.maxSize 1024 in
 /-- **The sampling claims at a deployment whose sessions are any Flock record `F`**, at every hash: the readable scope
-is the verifier's; the trace commitment binds; the universal unit computes its netlist; the faulty set is the boundary
-form's; KS, its count form and bits on the statements in scope at every decoder meeting Flock's `ListWithin`;
+is the verifier's; the trace commitment binds; the universal unit runs its private circuit; the faulty set is the
+boundary form's; KS, its count form and bits on the statements in scope at every decoder meeting Flock's `ListWithin`;
 efficiency at the record's decoder; and completeness. Of `F` it reads Flock's KS there (`hKS`) and its decoder's facts:
 `ListWithin` at its code, length and radius (`hlist`) and its step count at most `p` (`hcount`). The other hypotheses
 are what remains (the module docstring says what discharges each). -/

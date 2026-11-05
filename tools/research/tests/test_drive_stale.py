@@ -81,6 +81,40 @@ def test_status_reads_stale_days_from_drive_toml_at_main(world, monkeypatch, cap
     assert not rows[2]["stale"] and rows[2]["idle_since"] is None
 
 
+def test_status_pulls_the_stores_labels_in_one_batch_however_many_prs_are_open(world, monkeypatch, capsys):
+    """`research queue status` pulled the store's labels once for admission, once for the PRs based off `main` and once for the
+    stale ones, and a PR none of those covered alone; one batch of every open PR's head, whatever their number, keeps the
+    command within seconds on an agent VM."""
+    from research.store import labels_sync
+
+    world.with_store_remote()
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(world.tmp / "store.toml"))
+    sha = world.change({DRIVE_FLAGS: 'on = ["m1"]\nstale_days = 3\n'})
+    _git(world.dev, "push", "-q", "origin", f"{sha}:refs/heads/main")
+    monkeypatch.setattr(Q, "GitHub", lambda repo: world.gh)
+    batches: list[int] = []
+    pull = labels_sync.pull_targets
+    monkeypatch.setattr(labels_sync, "pull_targets", lambda store, targets, jobs=1: batches.append(len(targets))
+                        or pull(store, targets, jobs=jobs))
+    monkeypatch.setattr(labels_sync, "pull_prefix", lambda *a, **k: pytest.fail("status lists no PR's other heads"))
+    argv = ["status", "--json", "--workdir", str(world.tmp / "q" / "verity"), "--remote", str(world.origin), "--repo", "o/r",
+            "--store", str(world.tmp / "store")]
+
+    def add(n: int) -> None:
+        world.gh.put(n, _at(world, monkeypatch, {f"{n}.txt": "x\n"}, 1_000_000_000), labels=("hold",) if n % 4 == 0 < n % 5 else ())
+        if n % 5 == 0:
+            world.gh.prs[n] = dataclasses.replace(world.gh.prs[n], base="feature", branch=f"cursor/w-{n}")
+
+    for count in (5, 20):
+        for n in range(len(world.gh.prs) + 1, count + 1):
+            add(n)
+        batches.clear()
+        assert Q.main(argv) == 0
+        rows = {r["pr"]: r for r in json.loads(capsys.readouterr().out)}
+        assert len(rows) == count and rows[1]["stale"] and rows[5]["why"].startswith("stale") and "held" in rows[4]["why"]
+        assert batches == [count], "one pull of every open PR's labels: none for admission, off-main or stale alone"
+
+
 def _driven(world, monkeypatch, **kw) -> Harness:
     h = Harness(world, monkeypatch)
     h.clock = T0
@@ -172,15 +206,20 @@ def test_a_pr_drive_toml_keeps_is_never_stale_rung_or_closed(world, monkeypatch)
 
 def test_after_a_landing_the_owner_of_each_unmarked_pr_stacked_on_it_hears_once_to_merge_main(world, monkeypatch):
     """A PR whose branch contains a landed PR's head, based on `main` or on that PR's branch, needs `main`
-    merged in; one marked ready lands from `next` as it is, and a merge would cost it its mark."""
+    merged in; one marked ready lands from `next` as it is, and a merge would cost it its mark.  One based on another branch
+    that carries the landed PR (a long-lived one) takes `main` through that branch, and isn't told."""
     gh = world.gh
     gh.put(1, h1 := world.change({"a.txt": "1\n"}))
+    gh.prs[1] = dataclasses.replace(gh.prs[1], branch="cursor/w-1")
     gh.put(2, world.change({"b.txt": "2\n"}, base=h1), ready=False)                                  # stacked, unmarked
     gh.put(3, world.change({"c.txt": "3\n"}, base=h1))                                                # stacked, marked
     gh.prs[4] = PR(4, world.change({"d.txt": "4\n"}, base=h1), "change 4", "Lane `lane-4`.", base="cursor/w-1",
                    branch="cursor/w-4")                                                               # on #1's branch
     _git(world.origin, "update-ref", "refs/pull/4/head", gh.prs[4].head)
     gh.put(5, world.change({"e.txt": "5\n"}), ready=False)                                           # not stacked
+    gh.prs[6] = PR(6, world.change({"f.txt": "6\n"}, base=h1), "change 6", "Lane `lane-6`.", base="remote",
+                   branch="cursor/w-6")                                                               # on a long-lived branch
+    _git(world.origin, "update-ref", "refs/pull/6/head", gh.prs[6].head)
     h = _driven(world, monkeypatch, stale_days=0)
     h.d.reviews = lambda n, head: world.store.labels(label_target(n, head), key=vocab.REVIEWED)
     h.d.ready_by = lambda n, head: None

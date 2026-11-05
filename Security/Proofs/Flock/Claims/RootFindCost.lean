@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.RootFindCorrect
+module
+
+public import Proofs.Flock.Claims.RootFindCorrect
 
 /-!
 # The root finder's operation count
@@ -14,6 +16,8 @@ Every bound holds for every input; only `split`'s uses the shape of the pieces a
 * `rootProduct` on `f` with `d` coefficients takes at most `(7n + 20)(d + 3)³` and returns at most `d + 2`
   coefficients (`rootProduct_bound`), so `rootsC` takes at most `costBound n |basis| d` (`rootsC_ops_le`).
 -/
+
+@[expose] public section
 
 namespace Claims.RootFind
 

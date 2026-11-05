@@ -1,6 +1,8 @@
-import Definitions.Core.NaiveStrassen
-import Definitions.Core.Guarantees.NaiveStrassen
-import Proofs.Core.NaiveStrassen.Eval
+module
+
+public import Definitions.Core.NaiveStrassen
+public import Definitions.Core.Guarantees.NaiveStrassen
+public import Proofs.Core.NaiveStrassen.Eval
 
 /-!
 # Naive tiled against Strassen: the statements and their non-vacuity witnesses
@@ -19,6 +21,8 @@ The witnesses are proved:
 * Theorem 1's bound is attained at `l = 1`;
 * without `fast` the bound fails (naive tiled itself).
 -/
+
+@[expose] public section
 
 namespace Verity.Accel.NaiveStrassen
 

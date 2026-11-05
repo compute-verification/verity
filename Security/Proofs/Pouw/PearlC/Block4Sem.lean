@@ -1,5 +1,7 @@
-import Proofs.Pouw.PearlC.Row4Words
-import Proofs.Pouw.PearlC.TileCheck8Words
+module
+
+public import Proofs.Pouw.PearlC.Row4Words
+public import Proofs.Pouw.PearlC.TileCheck8Words
 
 /-!
 # `pc4`'s blocks in DeviceFp4's terms (proofs)
@@ -35,6 +37,8 @@ outputs are its `P_B` row, `pbRow?` of the line's `eTilde`, the chain words agai
 (`row4B_pbWords`), wherever the peel's words exist. `PouwETilde_v1` is `eTilde` at a scale byte that is not NaN
 (`eTilde_prim`), and `e4m3` of a value never is (`e4m3_notNaN`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.RowCircuit
 

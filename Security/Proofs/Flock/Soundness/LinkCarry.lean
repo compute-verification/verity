@@ -1,5 +1,7 @@
-import Mathlib.Algebra.BigOperators.Field
-import Proofs.Flock.Soundness.LinkFinder
+module
+
+public import Mathlib.Algebra.BigOperators.Field
+public import Proofs.Flock.Soundness.LinkFinder
 
 /-!
 # Carried state: one hiding leaf read in several sampling blocks
@@ -15,6 +17,7 @@ pays more than `m` times the mixture's binding error for it, `m` the number of s
 
 * `errAt`: a trial's binding error at a value `X`, `s + Σ_{v ≠ X} p v`, with `p v` the probability that it reads `v`
   alone and `s` that it reads two values.
+* `errAt_eq_expect`: the binding error as one expectation over the trial.
 * `errAt_mixG`: the mixture's binding error is the average of the trials'; so each trial's is at most `m` times the
   mixture's (`errAt_le_mix`).
 * `carry_errAt`: the same with each sampling block's values embedded injectively in `V`, at `pull e_i Xm`; the pulled
@@ -24,6 +27,8 @@ pays more than `m` times the mixture's binding error for it, `m` the number of s
 * `errAt_le_coll`: at the plurality, a trial's binding error is at most the probability that its finder outputs a
   collision, plus `1/(eM)`: `link_mass_le` without its collision-resistance hypothesis, the break form.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 
@@ -41,6 +46,11 @@ noncomputable def errAt (X : Val) : ℝ := sRd T sT rd + ((∑ v, pRd T sT rd v)
 theorem errAt_eq (X : Val) : errAt T sT rd X = rRd T sT rd - pRd T sT rd X := by
   rw [errAt, rRd_eq]
   ring
+
+/-- The binding error as one expectation over the trial. -/
+theorem errAt_eq_expect (X : Val) :
+    errAt T sT rd X = expect (fun e => ind (fun e => (rd e).Nonempty) e - ind (fun e => rd e = {X}) e) T sT :=
+  (errAt_eq T sT rd X).trans (expect_sub _ _ T sT).symm
 
 omit [DecidableEq Val] in
 theorem errAt_nonneg (X : Val) : 0 ≤ errAt T sT rd X := by

@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Sampling.ZK
+module
+
+public import Proofs.Flock.Claims.Sampling.ZK
 
 /-!
 # The sampled masked protocol, every coin committed at `Hello`
@@ -26,6 +28,8 @@ sends `abort`. `Sampled c` is that protocol's data at the code `c`, and `Sampled
 masked at `tapeOf`, where the code's reference prover on the masked tape is that protocol's (`Honest`); and
 `sampling_deployed_sampled` is `sampling_deployed` with it.
 -/
+
+@[expose] public section
 
 namespace SamplingDeploy
 

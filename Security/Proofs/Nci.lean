@@ -1,44 +1,47 @@
-import Definitions.Nci.Guarantees
-import Proofs.Nci.Inequalities
-import Proofs.Nci.LoomisWhitney
-import Proofs.Core
-import Proofs.Nci.Chain
-import Proofs.Nci.Throttling
-import Proofs.Nci.Support
-import Proofs.Nci.Reads
-import Proofs.Nci.Pull
-import Proofs.Nci.Threads
-import Proofs.Nci.Layered
-import Proofs.Nci.Contained
-import Proofs.Nci.Fit
-import Proofs.Nci.FitKeep
-import Proofs.Nci.FitSlotsWitness
-import Proofs.Nci.WeightsSlotsWitness
-import Proofs.Nci.FitRate
-import Proofs.Nci.FitWitness
-import Proofs.Nci.Dampener
-import Proofs.Nci.Info
-import Proofs.Nci.Transfers
-import Proofs.Nci.Fmt
-import Proofs.Nci.Fmt2
-import Proofs.Nci.Training
-import Proofs.Nci.Packed
-import Proofs.Nci.PackedTraining
-import Proofs.Nci.Remote
-import Proofs.Nci.RemotePeriod
-import Proofs.Nci.Verdict
-import Proofs.Nci.DescVerdict
-import Proofs.Nci.Activations
-import Proofs.Nci.Covering
-import Proofs.Nci.CoveringWitness
-import Proofs.Nci.CoveringTwoCosts
-import Proofs.Nci.CoveringTwoCostsWitness
-import Proofs.Nci.CoveringPriced
-import Proofs.Nci.CoveringPricedWitness
-import Proofs.Nci.Cover
-import Proofs.Nci.PartitionCovers
-import Proofs.Nci.CompliesCK
-import Proofs.Nci.Ldl
+module
+
+public import Definitions.Nci.Guarantees
+public import Proofs.Nci.Inequalities
+public import Proofs.Nci.LoomisWhitney
+public import Proofs.Core
+public import Proofs.Nci.Chain
+public import Proofs.Nci.Throttling
+public import Proofs.Nci.Support
+public import Proofs.Nci.Reads
+public import Proofs.Nci.Pull
+public import Proofs.Nci.Threads
+public import Proofs.Nci.Layered
+public import Proofs.Nci.Contained
+public import Proofs.Nci.Fit
+public import Proofs.Nci.FitKeep
+public import Proofs.Nci.FitSlotsWitness
+public import Proofs.Nci.WeightsSlotsWitness
+public import Proofs.Nci.FitRate
+public import Proofs.Nci.FitWitness
+public import Proofs.Nci.Dampener
+public import Proofs.Nci.Info
+public import Proofs.Nci.Transfers
+public import Proofs.Nci.Fmt
+public import Proofs.Nci.Fmt2
+public import Proofs.Nci.Training
+public import Proofs.Nci.Packed
+public import Proofs.Nci.PackedTraining
+public import Proofs.Nci.Remote
+public import Proofs.Nci.RemotePeriod
+public import Proofs.Nci.Capability
+public import Proofs.Nci.Verdict
+public import Proofs.Nci.DescVerdict
+public import Proofs.Nci.Activations
+public import Proofs.Nci.Covering
+public import Proofs.Nci.CoveringWitness
+public import Proofs.Nci.CoveringTwoCosts
+public import Proofs.Nci.CoveringTwoCostsWitness
+public import Proofs.Nci.CoveringPriced
+public import Proofs.Nci.CoveringPricedWitness
+public import Proofs.Nci.Cover
+public import Proofs.Nci.PartitionCovers
+public import Proofs.Nci.CompliesCK
+public import Proofs.Nci.Ldl
 
 /-!
 # Proofs of NCI's guarantees
@@ -46,6 +49,8 @@ import Proofs.Nci.Ldl
 The read bound intersects each IU of the containing declaration with the contained circuit's gates (`pull`,
 `Proofs.Nci.Pull`), each piece reading no more novel information than its IU.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

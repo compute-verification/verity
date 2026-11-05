@@ -6,7 +6,7 @@ and the cap's boundary).  Codes are finite E4M3: the atom has no NaN operand (`v
 the replay.  A row's salt-dead counts are its elements whose code has one value over a sample of P3's support, by the
 scheme's own forming, and its other outputs `Pc8RowA`'s.  The split (`pc8.Shape.cap`) composes to the one-unit cap, its
 h0 is `PearlTileDigest`'s on honest and edge tiles, its units' rows are their ports' words, it computes every value in
-one unit, no unit of a deployed tile has more rows than C-Flock's block holds, a drawn tile's closure holds its strip,
+one unit, no unit of a deployed tile has more rows than Flock's block holds, a drawn tile's closure holds its strip,
 every word, its rows' digests and sums and its tally, and a short last tile row is refused.  The per-row cap (v2,
 ``row_rho``) is v1's verdict and each admitted row's own capOK at ρr, in one unit and split, and `cap.served` binds the
 scheme's ρr (`benchmarks/pouw/tests/test_pearlc_cap_agreement.py` holds it to the clear path's)."""
@@ -164,7 +164,7 @@ def test_the_row_is_pc8s_row_with_its_salt_dead_counts(dev):
 
 def test_the_certificates_are_each_templates_advice():
     """`ADVICE` (`pc8.PORTS`' class) names a parameter of the word, of the tile and of the split's word unit, and is the
-    word unit's advice in `PORTS`: the certificates are in the unit's io, which C-Flock proves as private inputs."""
+    word unit's advice in `PORTS`: the certificates are in the unit's io, which Flock proves as private inputs."""
     tp = cap.templates(256, "sm120", (2, 2))
     for t in (tp["word"], tp["tile"], cap.unit_templates(256, "sm120", (2, 2))["word"]):
         assert set(cap.ADVICE) <= {name for name, _t in t.signature()[0]}, t.id
@@ -630,7 +630,7 @@ def test_the_split_computes_every_value_in_exactly_one_unit(side, row_rho):
 
 
 def test_no_unit_of_a_deployed_tiles_closure_has_more_than_66_rows():
-    """C-Flock's composer gives each row a unit reads or writes an hm96 slot of 2^18 bits, a unit at most 2^27 bits
+    """Flock's composer gives each row a unit reads or writes an hm96 slot of 2^18 bits, a unit at most 2^27 bits
     (`circuit.K_MAX`, so at most 256 rows), and refuses a unit none of whose rows hashes a SHA-512 block before its last.
     At the deployed 64 × 64 tile and K = 8,192 a drawn tile's closure is 4,291 units (its 64 rows of A, its strip, 4,096
     word units, 64 row digests and 64 row tallies, the tile and the tally), none with more than 66 rows (the row tally's;
@@ -650,7 +650,7 @@ def test_no_unit_of_a_deployed_tiles_closure_has_more_than_66_rows():
 
 @pytest.mark.parametrize("k", [4096, 8192, 12288, 14336])
 def test_every_row_of_a_deployed_tile_is_whole_blocks_or_a_short_v2_row(k):
-    """At each served k, every row a split unit reads or writes at the deployed 64 × 64 tile is one C-Flock's widened
+    """At each served k, every row a split unit reads or writes at the deployed 64 × 64 tile is one Flock's widened
     proved scope takes: its bytes whole SHA-512 blocks (a row-seg row's segments then end on a block, and a v2 row hashes
     a block before its last), or a v2 row that ends in its first block with SHA-512's 17 bytes of padding.  The strip's
     and the chunk digests' rows are the ones padded to a block for it."""
@@ -716,7 +716,7 @@ def test_the_split_call_is_the_hiding_call_with_each_tiles_cap(dev):
 
 def test_a_drawn_tile_proves_its_strip_every_word_and_its_tally():
     """`plan.tile_layout` under ``cap``: a tile's closure is itself, its TM `RowA` units, its strip, its TM·TN word units
-    row by row, its TM rows' digests and sums and its tally, so a draw proves every cap word of each drawn tile
+    row by row, its TM rows' digests and sums and its tally, so a sample proves every cap word of each drawn tile
     (`Plan.proved`), never sampling one; the tile stratum alone carries W_ref.  With the cap off the layout is pc8's."""
     tm, tn = SPLIT.tile
     lay = plan.tile_layout(SPLIT, 1000)

@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Audit.Periods
-import Mathlib.Analysis.SpecialFunctions.Log.Basic
+module
+
+public import Proofs.Flock.Soundness.Audit.Law
+public import Proofs.Flock.Soundness.Audit.Periods
+public import Mathlib.Analysis.SpecialFunctions.Log.Basic
 
 /-!
 # The pooled escape: wrong units that escape every period's draw
@@ -30,9 +32,11 @@ weights `|W_t|` and `ρ = 1 − kd/N`.
 
 The network certifier's leak bound composes `pooled_escape_log` with the per-period D1 into
 `(ln(1/δ)/q)·(16 + log2 unit index) + Σ_windows (ε_ks + δ_link)`: each window's error adds once per window, so the
-second term grows with the number of windows in the monitoring period. That composition is `HorizonLeakAccepted`'s,
+second term grows with the number of windows in the monitoring period. That composition is `PooledLeakAccepted`'s,
 not this file's.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.KS.ZkDecJ
-import Proofs.Flock.Claims.Recursion.DeployPremises
-import Proofs.Flock.Claims.Scope.Tables
+module
+
+public import Proofs.Flock.Claims.KS.ZkDecJ
+public import Proofs.Flock.Claims.Recursion.DeployPremises
+public import Proofs.Flock.Claims.Scope.Tables
 
 /-!
 # Recursion completeness at `deployRec`: the honest outer witnesses are in the V\* relation
@@ -41,6 +43,8 @@ without `--zk` and with hidden outputs (`ProvedScope.leafOk`); where the scope c
 `InnerAccepts` is a hypothesis about the coins, not a consequence of the relation: at coins in the inner completeness
 error the honest inner proof is refused, and the V\* statements staged there need not have a witness.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -440,7 +444,7 @@ theorem honestPre_run (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings)
     simp only [List.getElem_map, List.getElem_take, histOf, Option.some.inj ha, Claims.Recursion.outMsg, hc]
 
 /-- A statement that parses reads. -/
-theorem readX_some_of_parse {x : Msg} {s : Claims.Recursion.Stmt} (h : parse x = some s) : ∃ xr, readX x = some xr := by
+theorem readX_some_of_parse {x : Msg} {s : Claims.Recursion.CompiledStatement} (h : parse x = some s) : ∃ xr, readX x = some xr := by
   cases hx : readX x with
   | some xr => exact ⟨xr, rfl⟩
   | none =>

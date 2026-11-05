@@ -1,5 +1,5 @@
 """match.cu and collective.cu's verdict from a run's rows: whether the card runs MATCH.ANY and REDUX on one unit of their
-own (the coverage table's `collective` pipe, machine_model/data/cover/rows.toml, CMP-166) and spends at most 16 alu
+own (the coverage table's `collective` pipe, machine_model/data/cover/rows.toml) and spends at most 16 alu
 lanes on a VOTE.
 
     python3 collective_verdict.py ROWS.jsonl...

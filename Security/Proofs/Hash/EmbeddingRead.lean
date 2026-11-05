@@ -1,4 +1,6 @@
-import Proofs.Hash.RowBinding
+module
+
+public import Proofs.Hash.RowBinding
 
 /-!
 # `Hash.SecurityProofs.EmbeddingReadBinding : Hash.Guarantees.EmbeddingReadBinding`
@@ -6,6 +8,8 @@ import Proofs.Hash.RowBinding
 For a token in the vocabulary the read's ok is the witness's acceptance at rank `tok` and its row is the witness's, so
 `RowBinding` at rank `tok` against the registered opening is the statement.
 -/
+
+@[expose] public section
 
 open Hash in
 /-- **The embedding's row read binds its row** (`Hash.Guarantees.EmbeddingReadBinding`). -/

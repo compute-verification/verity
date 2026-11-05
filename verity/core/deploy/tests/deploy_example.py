@@ -1,6 +1,6 @@
 """The worked example: a two-party protocol the deployment layer's tests run every way it runs a protocol.
 
-The challenger draws a 32-byte nonce from its coins, reads its clock and sends it (`Challenge`, coins); the responder
+The challenger samples a 32-byte nonce from its coins, reads its clock and sends it (`Challenge`, coins); the responder
 must answer SHA-512 of it (`Answer`) before the challenger's deadline (`deadline_ns`, a `Timer`). The challenger reads
 its clock again on the answer, sends its verdict (`Verdict`, output) and finishes: refused `late` when its timer fires
 first, `wrong` for another answer, and by the wire's name for a frame it refuses. The responder finishes on the verdict.
@@ -13,7 +13,7 @@ import hashlib
 from pathlib import Path
 
 from verity.core.deploy.manifest import Channel, Manifest, Role
-from verity.core.deploy.party import Finish, Received, Record, Send, Timer
+from verity.core.deploy.party import Finish, Received, LogEntry, Send, Timer
 from verity.core.deploy.runtime import ProtocolDef
 from verity.core.wire import Body, Bool, Int, Message, Schema
 from verity.ml.crypto import lms
@@ -48,7 +48,7 @@ class Challenger:
             return [Send("clock", Message("ClockRead"))]
         if m.type == "ClockReading" and self.sent is None:
             self.sent = m.fields["ns"]
-            out = [Record({"nonce": self.nonce.hex()}, "coins"),
+            out = [LogEntry({"nonce": self.nonce.hex()}, "coins"),
                    Send("responder", Message("Challenge", {"deadline_ns": self.deadline}, self.nonce))]
             return out + ([Timer(self.sent + self.deadline)] if self.timer else [])
         if m.type == "Answer":
@@ -119,7 +119,7 @@ class DyingResponder(Responder):
 
 
 class GreedyChallenger(Challenger):
-    """A challenger that draws 64 coins where the recorded one drew 32."""
+    """A challenger that samples 64 coins where the recorded one drew 32."""
 
     def start(self, params, identity):
         super().start(params, identity)

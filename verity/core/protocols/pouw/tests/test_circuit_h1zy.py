@@ -246,7 +246,7 @@ def _lane_rows(lay, ln, a, b, sa, sw):
 
 def test_a_lanes_cells_are_kernels_lane_and_the_lanes_cover_the_leaf_once():
     """At the served 32 × 32 leaf, lane l = 4 g + q holds rows g + 8 s and columns 2 q + 8 (s >> 1) + (s & 1) (kernels'
-    ``lane_partials``, #3095), its cells by row slot then column slot (`lane_cells`), and the lanes' cells are the leaf's once
+    ``lane_partials``), its cells by row slot then column slot (`lane_cells`), and the lanes' cells are the leaf's once
     each; its index is the low 5 bits of a 16-bit word."""
     lay = H.Layout(32, 32, 64)
     for ln in range(32):
@@ -303,7 +303,7 @@ def test_a_lane_on_words_checks_its_committed_partial_and_its_own_cells():
 @pytest.mark.parametrize("k,words", [(4096, 260), (14336, 902)])
 def test_a_lane_reads_its_rows_admit_bits_record_partial_and_index_and_returns_ok(k, words):
     """At the served 32 × 32 leaf: the lane's 4 A and 8 B rows, the leaf's 32 admit bits and 6,144-byte record, its
-    committed ``partials`` row of 2 (KS + m) words (#3095's 260 at K = 4096, 902 at K = 14336), the tile's salt, position
+    committed ``partials`` row of 2 (KS + m) words (260 at K = 4096, 902 at K = 14336), the tile's salt, position
     and roots and its index, one 16-bit word (a public row of whole 16-bit words), and its one output ``ok``, a sink, so
     the lane is no seed (`ports._coin_role`); the combine reads the 32 ``partials`` rows and the receipt and returns one
     ``ok``."""
@@ -340,7 +340,7 @@ def test_a_lane_or_combine_of_a_leaf_of_one_lane_or_no_whole_index_bits_is_refus
 def test_a_lane_is_staged_at_any_k_and_a_combine_from_the_k_whose_partials_compress_before_their_last_block():
     """A partial and the receipt are 8 (KS + m) bytes. The Lean verifier takes a v2 row of any length, so K = 384,
     416, 896 and 928, whose rows' padding spills into another block, are staged. The combine reads only those rows, and
-    C-Flock needs a row of the statement that compresses before its last block, ceil((bytes + 17) / 128) - 1 >= 1, so
+    Flock needs a row of the statement that compresses before its last block, ceil((bytes + 17) / 128) - 1 >= 1, so
     112 bytes or more: K = 384 is the least, and K = 352's 104-byte rows are refused. A lane has such rows at every K."""
     assert [8 * H.Layout(4, 8, k).sets for k in (352, 384, 416, 448, 896, 928)] == [104, 112, 120, 128, 240, 248]
     assert Z.LEAST_K == 384
@@ -354,7 +354,7 @@ def test_a_lane_is_staged_at_any_k_and_a_combine_from_the_k_whose_partials_compr
 
 
 def test_a_leaf_is_staged_only_at_a_positive_k_and_an_r_whose_admit_row_is_whole_16_bit_words():
-    """A lane reads the leaf's R admit bits as one row, and C-Flock lowers only a row of whole 16-bit words
+    """A lane reads the leaf's R admit bits as one row, and Flock lowers only a row of whole 16-bit words
     (`class_statement.unit_lowering`), so `lane` and `combine` refuse a leaf of R = 4 or 8, whose lanes the Definitions
     bind, and take R = 16 and the served 32. Both refuse K = 0, which `leaf_lanes` refuses too; the Definitions refuse
     K = 0 and K = 32 themselves (KS >= 2, as `h1tile`'s scheme asks and the leaf verifier's `Tile.check`)."""

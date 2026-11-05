@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.Device
+module
+
+public import Definitions.Pouw.PearlC.Device
 
 /-!
 # The RTX PRO 6000's W1 prices (trusted; definitions only)
@@ -17,6 +19,8 @@ cheapest bit-exact implementation (C3's charging rule), which is the issue-bound
 sm_120a has no packed FP32 add (no FADD2): `add.rn.f32x2` compiles to two scalar FADDs, so it
 does not halve the add, which is 8.376 per FADD in the measured loop and 8.00 issue-bound; `add` stays 8.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

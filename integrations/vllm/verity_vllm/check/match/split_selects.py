@@ -1,6 +1,6 @@
 """A top-p select's split count S in a compared pair of Programs.
 
-`program_compare.Prog._bind_splits` binds each select's `Const32[S]` operand and removes it from the sequence, so neither the
+`program_compare.RootView._bind_splits` binds each select's `Const32[S]` operand and removes it from the sequence, so neither the
 canonical hash nor a DAG hash carries S.  A Program at the registered S carries its own `Const32[S]`, bound the same way
 (`sampler_geometry.constant_splits_agree` holds the two sides' values equal per event), and may state its select specialised on S:
 `GumbelTopPTokenSelect_v2{V,S}` (`registry.topp_words`: the keep word as word gates at the constant split count, the same six

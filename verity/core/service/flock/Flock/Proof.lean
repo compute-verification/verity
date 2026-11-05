@@ -1,8 +1,12 @@
 /-
 PROTOCOL.md §8: the proof container, `bincode 1.3` of `(Commitment, R1csProofLigerito)`.
 -/
-import Flock.Bytes
-import Flock.Schedule
+module
+
+public import Flock.Bytes
+public import Flock.Schedule
+
+@[expose] public section
 
 namespace Flock
 
@@ -73,7 +77,7 @@ structure Shape where
   sched : Schedule
   /-- the Merkle digest width (§14): every cap entry and sibling -/
   hashLen : Nat := 32
-  /-- each level's openings carry `opened_salts` (PR #83's Flock patch from `2908d078`): this many bytes per opened row -/
+  /-- each level's openings carry `opened_salts` (the circuit prover's Flock patch from `2908d078`): this many bytes per opened row -/
   saltLen : Option Nat := none
   /-- hidden unit circuits (`rec_algebra.Shape.holo`): the prover absorbs `h`, the hidden part's fold, in a round of its
   own after `z_partial`, and V*'s lincheck reads the comb's operand as `comb[l] + h[l]` -/

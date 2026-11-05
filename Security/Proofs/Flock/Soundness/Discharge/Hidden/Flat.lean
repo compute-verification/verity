@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Layout
-import Proofs.Flock.Soundness.ParseUnitPre
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Layout
+public import Proofs.Flock.Soundness.ParseUnitPre
 
 /-!
 # A hidden-output statement's flat twin, and its output rows' message bits
@@ -11,6 +13,8 @@ so its flat Δ count is zero (`flat_count_msg`), and `outPairs` copies into it o
 statement's row there is a copy of `outSrc` (`msg_copy`), its flat twin's a self row (`flat_self`). So a satisfying
 witness of the hidden statement satisfies its flat twin (`sat_flat`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -225,7 +229,7 @@ theorem flat_count_msg (hrw : RowWires st.c) (hu : ∀ p ∈ st.c.ports.toList, 
   have hoff' : 1536 * shaSub st.c p (b / 128) + 512 + msgOff b t <
       (st.c.nets.getD st.c.shaNet default).2.inWords * Flock.WORD := by
     rw [shaNet_inRows R.rowNets]; omega
-  obtain ⟨hum, huk, huc⟩ := unit_range_facts P C
+  obtain ⟨hum, huk, huc⟩ := unit_range_facts_of P.unitNet C
   have hunit : ∀ s₀ b, s₀ < st.c.unitRange.count → b < 2 ^ st.c.unitRange.slotLog →
       st.c.unitRange.slot s₀ + b ≠ x := fun s₀ b hs₀ hb he =>
     atSlot_ne L F hnn P.unitNet F.sha hat (show AtSlot st.c st.c.unitNet s₀ b x from ⟨hs₀, hb, he.symm⟩)
@@ -283,7 +287,7 @@ theorem flat_count_msg (hrw : RowWires st.c) (hu : ∀ p ∈ st.c.ports.toList, 
     have hne : w.dst.1 ≠ st.c.shaNet := (hrest w hw).1
     obtain ⟨hm', hk', -⟩ := rangeOf_spec (C.one_range _ hd1)
     have hq := getD_mem_toList hd3 (d := default)
-    have hle := (nets_ok P w.dst.1).1.2.2 _ hq
+    have hle := (F.nets w.dst.1).1.2.2 _ hq
     have hfit := (L.fit w.dst.1).2
     intro he
     refine atSlot_ne L F hnn hd1 hne hat (s' := g * st.c.perVu.getD w.dst.1 0 + w.dst.2.1)
