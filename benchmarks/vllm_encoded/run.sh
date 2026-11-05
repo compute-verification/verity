@@ -147,6 +147,6 @@ if [ "${MODE:-}" = profile ]; then
   cat "$O/arms.rc" "$O/traffic.log"
   exit $rc
 fi
-"$PY" $VE/compare.py "$O" > "$O/compare.log" 2>&1; rc=$?
+"$PY" $VE/compare.py "$O" ${RESEARCH_LANE:+"$RESEARCH_LANE"} > "$O/compare.log" 2>&1; rc=$?
 cat "$O/arms.rc" "$O/compare.log"
 exit $rc

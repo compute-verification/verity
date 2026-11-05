@@ -38,10 +38,10 @@ the `U_t` (`RemoteAudit.draws`, `Session.close`): `Key.subset(s'_t, U_t, "openin
 * `Committed`: **a session read through a coin commitment.** The challenger commits every coin before the first is
   released, as hm96-sha512 leaves (192-byte salts) in a frame-v3-sha512 tree (`coins.py`). It sends the prover each
   coin as it releases it and the root only after the prover's last root, with the outcome (`audit.Session.disclose`;
-  soundness's ruling of 27 Oct, no hiding premise on the root), so the session the prover plays is a `Session` and the
-  guarantees take it plainly. A root is a function of every coin, so a prover holding it from the start could size a
-  window off window `t`'s openings coin, and that session is not `Live` (red team RD-12). `view c` is the session
-  played holding commitment `c`; `play com` holds `com ω` at coins `ω` (the salts among the other coins `x`).
+  no hiding premise on the root), so the session the prover plays is a `Session` and the guarantees take it plainly. A
+  root is a function of every coin, so a prover holding it from the start could size a window off window `t`'s
+  openings coin, and that session is not `Live` (red team RD-12). `view c` is the session played holding commitment
+  `c`; `play com` holds `com ω` at coins `ω` (the salts among the other coins `x`).
   `junk com t` is the commitment with openings coin `t`'s leaf committing zeros, the other coins and every salt as
   they are: it reads no bit of coin `t`. The memory line over the prover's records reads its records through it
   (`Properties.RemoteAudit.Line.recordCommitted`).

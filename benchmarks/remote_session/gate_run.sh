@@ -42,8 +42,10 @@
 # (with DRY=1: no request reaches a gate, and GATE_KEY need not exist), prints step 3, and runs step 4 with DRY=1
 # against PROVER_RUN, any run id (default none), whose lease it reads.
 #
+# LANE (else RESEARCH_LANE) is the lane running it: its gate key and periods, and the slots and leases it takes.
+#
 # Steps 1 and 3 take a slot of PROVER_NODE's SLOTS (default the GPU node's GPU slots; empty: none), the one way that node
-# takes a run (/etc/vy/runs-via-slot): `slot.py --by memory-accounting`, from the shipped tree. The slot pins the run to
+# takes a run (/etc/vy/runs-via-slot): `slot.py --by LANE`, from the shipped tree. The slot pins the run to
 # its cores, and run.sh and node.sh pin the engines and the prover with taskset as before. Step 1 waits at most
 # CHECKPOINT_WAIT_S for one; the prover until a minute before LEASE_BY (with LEASE_BY), so a prover that only gets a
 # slot after it runs nothing, else SLOT_WAIT_S. A slot is held until the run ends, so launch the prover before the slots
@@ -57,6 +59,7 @@ VERB=fire
 case ${1:-} in whatif | probe | prover) VERB=$1; shift ;; esac
 PERIOD=${1:?usage: gate_run.sh [--dry-run] PERIOD | gate_run.sh probe|prover|whatif PERIOD}
 PIN=${PIN:-27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc}
+LANE=${LANE:-${RESEARCH_LANE:?LANE (else RESEARCH_LANE) names the lane whose gate key, periods, slots and leases these are}}
 GATE_ON=${GATE_ON:-vy-nebius-cpu-5}
 PROVER_NODE=${PROVER_NODE:-vy-nebius-2}
 PROVER_SSH=${PROVER_SSH--o StrictHostKeyChecking=accept-new -i /home/research/.ssh/vy-cluster -o IdentitiesOnly=yes research@81.85.2.121}
@@ -100,7 +103,7 @@ on_node() {
   local wait=$1 run=$2
   shift 2
   NODE_CMD=("$@")
-  [ -z "$SLOTS" ] || NODE_CMD=(env "CHECK_SLOTS=$SLOTS" python3 tools/verity/check/slot.py --by memory-accounting
+  [ -z "$SLOTS" ] || NODE_CMD=(env "CHECK_SLOTS=$SLOTS" python3 tools/verity/check/slot.py --by "$LANE"
     --wait-max "$wait" --run-max "$run" -- "$@")
 }
 
@@ -118,7 +121,7 @@ launch() {
   return $rc
 }
 
-GATE_ENV=(--env "COMMIT=$COMMIT" --env "PERIOD=$PERIOD" --env "PIN=$PIN" ${GATE_KEY:+--env "GATE_KEY=$GATE_KEY"}
+GATE_ENV=(--env "COMMIT=$COMMIT" --env "PERIOD=$PERIOD" --env "PIN=$PIN" --env "LANE=$LANE" ${GATE_KEY:+--env "GATE_KEY=$GATE_KEY"}
   --env "MODEL=$ROLE" --env "ENGINES=$ENGINES" --env "PORT=$PORT" --env "PROVER_NODE=$PROVER_NODE"
   ${PROVER_SSH:+--env "PROVER_SSH=$PROVER_SSH"} ${DRY:+--env DRY=1} ${CIRCUIT:+--env "CIRCUIT=$CIRCUIT"}
   ${LEASE_BY:+--env "LEASE_BY=$LEASE_BY"})
@@ -149,7 +152,8 @@ if [ "$VERB" = whatif ]; then
   [ "$GATE_MEM" != 0 ] || WM=()
   launch whatif --on "$WHATIF_ON" --cwd clone "${WM[@]}" --timeout 30m --store-read --wait \
     --env "RUN_ART=$RUN_ART" --env "SUB=${SUB:?}" --env "AUDITOR_ART=$AUDITOR_ART" --env "PROVER_ART=$PROVER_ART" \
-    --env "PERIOD=$PERIOD" --env "PIN=$PIN" --env "COMMIT=$COMMIT" -- bash benchmarks/remote_session/gate_whatif.sh
+    --env "PERIOD=$PERIOD" --env "PIN=$PIN" --env "COMMIT=$COMMIT" --env "LANE=$LANE" \
+    -- bash benchmarks/remote_session/gate_whatif.sh
   exit $?
 fi
 if [ "$VERB" = probe ]; then
@@ -186,7 +190,7 @@ PROVER=(--on "$PROVER_NODE" --cwd source --custody-ttl 12h
   --env ROLE=prover --env "PORT=$PORT" --env SERVE=node --env "PLAN=$PLAN" --env "MODEL=$SNAP"
   --env ENGINE_CPUS=0-23 --env PROVER_CPUS=24-47 --env "ENGINE_ARGS=--step-hz 2 --align-steps --arena-gib 62 --util 0.8"
   --env "NODE_ARGS=--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir $SNAP"
-  --env "VERIFIER_SSH=$VERIFIER_SSH" --env TUNNEL_WAIT_S=1800 --env "GPU_LEASE_WHO=memory-accounting-$PERIOD"
+  --env "VERIFIER_SSH=$VERIFIER_SSH" --env TUNNEL_WAIT_S=1800 --env "GPU_LEASE_WHO=$LANE-$PERIOD"
   --env VLLM_NO_USAGE_STATS=1 --env DO_NOT_TRACK=1 --env GPU_LEASE_TIMED=1)
 LEASE_ARGS=(${LEASE_ON:+--on "$LEASE_ON"} --max-min "$MAXMIN" --mem-gb "$LEASE_MEM_GB")
 if [ -n "$LEASE_BY" ]; then

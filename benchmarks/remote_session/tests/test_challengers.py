@@ -48,7 +48,7 @@ from verity.ml.crypto import lms  # noqa: E402
 P = lms.Params(64, 4, 4)
 T0 = datetime(2026, 10, 21, 1, 0, 0, tzinfo=timezone.utc)
 PIN = "c" * 40
-LANE = "memory-accounting"
+LANE = "lane-a"
 SECRET = bytes(range(32))
 CIRCUIT = hashlib.sha512(b"verity/remote-bandwidth/v0").hexdigest()
 #: the host's pins log: an earlier pin, then the tree it runs (`PIN`), each a commit of main's
@@ -340,9 +340,9 @@ def analysed(out: Path, host: Host, sessions: list[dict], reg: dict, desc: bytes
                                                     "expected_root": reg["payload_root"], "bound": True, "lean": held}}
     (out / "verifier.json").write_text(json.dumps(
         {"registration": reg, "sessions": [{**s, "verdict": verdict} for s in sessions]} | binding))
-    return al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger], desc=desc,
-                      commit=commit, pins=pins, main=main, model=model, peer=peer, lean=line_by, boundary=boundary,
-                      lockdown=lockdown)
+    return al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", lane=LANE, heads=[host.host.ledger],
+                      desc=desc, commit=commit, pins=pins, main=main, model=model, peer=peer, lean=line_by,
+                      boundary=boundary, lockdown=lockdown)
 
 
 def test_the_line_reads_the_sketch_at_its_outside_factor() -> None:
