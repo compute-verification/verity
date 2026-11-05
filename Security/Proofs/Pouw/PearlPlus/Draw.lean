@@ -854,7 +854,7 @@ theorem tilePassGivesTheDecl (hT : Properties.Pouw.PearlPlus.TileAcceptMeans)
   have hrec : p.records[pos]! ∈ p.records := by rw [getElem!_pos p.records pos hp]; exact List.getElem_mem hp
   obtain ⟨-, -, hkept0, hkept⟩ := Draw.reason_none ((hL coins man p hload).1 _ hrec).1
   have hd : dec ((auditTiling 64 64 U.layout).unit g) = declOf p.records[pos]! := by rw [hunit]; exact hdec _ hrec
-  have hK := Assembly.record_domain hload pos
+  have hK := Assembly.record_domain htile hpass
   rw [← hk] at hK hkept
   refine ⟨?_, fun i hi hdi => ?_⟩
   · change (dec ((auditTiling 64 64 U.layout).unit g)).kept ≤ (U.layout.shape ((auditTiling 64 64 U.layout).unit g)).k

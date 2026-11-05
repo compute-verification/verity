@@ -778,10 +778,7 @@ theorem count_push (c : Array Bool) (b : Bool) (N : ℕ) (q : ℕ → Bool)
     ((c.push b).filter id).size = ((Finset.range (N + 1)).filter fun t => q t = true).card := by
   subst hb
   have hp : ((c.push (q N)).filter id).size = (c.filter id).size + (if q N = true then 1 else 0) := by
-    first
-    | (cases h : q N <;> simp [Array.filter_push, h])
-    | (cases h : q N <;> simp [← Array.length_toList, Array.toList_filter, List.filter_append, h])
-    | (cases h : q N <;> grind)
+    cases h : q N <;> simp [Array.filter_push, h]
   rw [hp, hn, Finset.range_add_one, Finset.filter_insert]
   cases h : q N
   · rw [ite_eq_right (by simp), ite_eq_right (by simp), Nat.add_zero]
@@ -932,9 +929,7 @@ theorem wordFlagsIsTheReplayOf (hK : KeyIsTheValue) (hL : LeastIsTheThreshold) (
         have hb : (keeps.any fun mask => mask >>> jj &&& 1 == 1) = Skip.unitFlags A B i j (4 * p + jj) :=
           Bool.eq_iff_iff.2 hu.symm
         obtain ⟨hs2, hg2, hn2⟩ := hc2
-        first
-        | (obtain rfl := WordsSim.pure_ok hr2)
-        | (simp only [bind, pure, Except.bind, Except.pure, Except.ok.injEq] at hr2; subst hr2)
+        obtain rfl := WordsSim.pure_ok hr2
         refine ⟨_, rfl, ?_⟩
         rw [show 4 * p + (jj + 1) = 4 * p + jj + 1 by omega]
         exact ⟨(flags_push c2 _ _ _ hs2 hg2 hb).1, (flags_push c2 _ _ _ hs2 hg2 hb).2,

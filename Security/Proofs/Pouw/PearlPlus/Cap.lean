@@ -540,7 +540,7 @@ theorem tile_bound (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) (hL : Proper
   obtain ⟨hp, -⟩ := Draw.tile?_some htile
   have hrec : p.records[pos]! ∈ p.records := by rw [getElem!_pos p.records pos hp]; exact List.getElem_mem hp
   obtain ⟨-, -, hkept0, hkept⟩ := Draw.reason_none ((hL coins man p hload).1 _ hrec).1
-  obtain ⟨hKmax, hK128⟩ := Assembly.record_domain hload pos
+  obtain ⟨hKmax, hK128⟩ := Assembly.record_domain htile (.inl hpass)
   obtain ⟨wn', hwn, henc, -⟩ := Assembly.formed_ok hform
   rw [Assembly.noiseOf_eq htile, ← hk, ← hwid] at hwn
   obtain ⟨hoa, hob, -, hact, hwt, -⟩ := hopen pos rows cols htile

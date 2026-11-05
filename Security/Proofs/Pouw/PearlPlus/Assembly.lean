@@ -10,8 +10,8 @@ import Proofs.Pouw.PearlPlus.Semantics
 the code's terms: its openings, the words its replay forms, its leaf and its rows' rules. This part reads it in the
 game's: a tile of a loaded pass that the check passes or finds only over the bound, whose openings are its unit's commitment, has `TileWordsGood` at the deployed semantics, or SHA-512 collides on
 two different messages, one hashed in digesting the words the check forms and one in digesting the commitment's words on
-the tile (the leaf binds the tile's words through `sha512/row-seg/v1`). The pass's `load` bounds the depth by `K_MAX`
-before any tile, which `WordsAreTheSemantics` reads. `TileGood` adds the cap and every weight row's rules, which wait on
+the tile (the leaf binds the tile's words through `sha512/row-seg/v1`). The check refuses a tile whose unit is outside its
+scheme's domain, `k ≤ K_MAX` among its bounds, which `WordsAreTheSemantics` reads. `TileGood` adds the cap and every weight row's rules, which wait on
 the restated credit set and acceptance event (`Rules.lean`).
 -/
 
@@ -79,7 +79,7 @@ reference values, or SHA-512 collides on two different messages, one hashed in d
 one in digesting `c`'s words on the tile. -/
 def TilePassGivesTheWords : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (H : Q → R) (s : S)
-    (coins : PouwCommit.CoinCommitment) (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening)
+    (coins : PouwCheck.PearlPlus.EpochCoins) (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening)
     (U : Pouw.PearlC.Workload) (g : ℕ) (c : Pouw.PearlC.Commit),
     PouwCheck.PearlPlus.load coins man = .ok p → TileOf p tid U g → bytesNat p.salt = saltOf s →
     bytesNat ((p.weightRoots.lookup (U.layout.wid ((auditTiling 64 64 U.layout).unit g))).getD ByteArray.empty) =
@@ -175,20 +175,7 @@ theorem mapM_ok_mem {ε α β : Type} {f : α → Except ε β} :
     · obtain ⟨a', ha', h'⟩ := mapM_ok_mem hbs b hb
       exact ⟨a', List.mem_cons_of_mem _ ha', h'⟩
 
-/-- A `for` loop with no state that went through every element keeps whatever each step's success says. -/
-theorem forIn_ok_all {ε α : Type} (Q : α → Prop) (f : α → Unit → Except ε (ForInStep Unit)) :
-    ∀ (l : List α) (u : Unit), forIn l () f = .ok u → (∀ a s, f a () = .ok s → Q a ∧ s = .yield ()) →
-      ∀ a ∈ l, Q a
-  | [], _, _, _, a, ha => by cases ha
-  | a :: l, u, h, hf, b, hb => by
-    rw [List.forIn_cons] at h
-    obtain ⟨s, hs, h⟩ := bind_ok h
-    obtain ⟨hq, rfl⟩ := hf a s hs
-    rcases List.mem_cons.1 hb with rfl | hb
-    · exact hq
-    · exact forIn_ok_all Q f l u h hf b hb
-
-/-! ## The domain a loaded pass keeps -/
+/-! ## The domain a passed tile keeps -/
 
 theorem domain_k {s : PouwCheck.PearlPlus.Scheme} {u : PouwCheck.PearlPlus.Matmul} (h : s.domainReason u = none) :
     u.k ≤ PouwCheck.PearlPlus.K_MAX ∧ u.k % PouwCheck.PearlPlus.WINDOW = 0 := by
@@ -200,161 +187,31 @@ theorem domain_k {s : PouwCheck.PearlPlus.Scheme} {u : PouwCheck.PearlPlus.Matmu
     exact ⟨hc.1.1.1.1.1.2, hc.1.1.1.1.2⟩
   · cases h
 
-/-- **`load` checks every unit's domain**: each record of a loaded pass is in its scheme's domain (`domainReason`). -/
-theorem load_domain {coins : PouwCommit.CoinCommitment} {man : Lean.Json} {p : Pass}
-    (h : PouwCheck.PearlPlus.load coins man = .ok p) : ∀ r ∈ p.records, p.scheme.domainReason r.matmul = none := by
-  unfold PouwCheck.PearlPlus.load at h
-  obtain ⟨u0, hman, h⟩ := bind_ok h
-  cases hd : passesDistinct [man] with
-  | some w => simp [throwRefusal, hd] at h
-  | none =>
-  rw [throwRefusal.eq_def, hd] at h
-  obtain ⟨scheme, hsch, h⟩ := bind_ok h
-  obtain ⟨mj, hmj, h⟩ := bind_ok h
-  extract_lets j1 at h
-  split at h
-  case h_2 => cases h
-  rename_i usA
-  obtain ⟨us, hus, h⟩ := bind_ok h
-  cases hus
-  dsimp (config := { zeta := false }) only [j1] at h
-  obtain ⟨matmuls, hmm, h⟩ := bind_ok h
-  obtain ⟨wj, hwj, h⟩ := bind_ok h
-  extract_lets ws j2 at h
-  split at h
-  case h_2 => cases h
-  rename_i kv
-  obtain ⟨weights, hweights, h⟩ := bind_ok h
-  cases hweights
-  dsimp (config := { zeta := false }) only [j2] at h
-  obtain ⟨roots, hroots, h⟩ := bind_ok h
-  split at h
-  case h_2 => cases h
-  rename_i opening0 _
-  obtain ⟨claimedJ, hcj, h⟩ := bind_ok h
-  extract_lets wtj jo ju at h
-  split at h
-  case isTrue => cases h
-  dsimp (config := { zeta := false }) only [ju] at h
-  split at h
-  case h_2 => cases h
-  rename_i opening hop
-  obtain ⟨opening', hop', h⟩ := bind_ok h
-  cases hop'
-  dsimp (config := { zeta := false }) only [jo] at h
-  extract_lets e1 e2 e3 e4 e5 at h
-  split at h
-  case h_2 => cases h
-  rename_i claimed hcl
-  obtain ⟨claimed', hc', h⟩ := bind_ok h
-  cases hc'
-  dsimp (config := { zeta := false }) only [e5] at h
-  split at h
-  case isTrue => cases h
-  rename_i hep
-  dsimp (config := { zeta := false }) only [e4] at h
-  split at h
-  case h_1 => cases h
-  rename_i wr hwr
-  dsimp (config := { zeta := false }) only [e3] at h
-  split at h
-  case isTrue => cases h
-  rename_i hcov
-  dsimp (config := { zeta := false }) only [e2] at h
-  split at h
-  case h_2 => cases h
-  rename_i weightsRoot hwroot
-  obtain ⟨weightsRoot', hw', h⟩ := bind_ok h
-  cases hw'
-  dsimp (config := { zeta := false }) only [e1] at h
-  extract_lets f1 at h
-  split at h
-  case h_2 => cases h
-  case h_3 => cases h
-  rename_i salt hsalt
-  obtain ⟨salt', hs', h⟩ := bind_ok h
-  cases hs'
-  dsimp (config := { zeta := false }) only [f1] at h
-  extract_lets g1 at h
-  split at h
-  case isTrue => cases h
-  rename_i hsaltj
-  dsimp (config := { zeta := false }) only [g1] at h
-  obtain ⟨records, hrecords, h⟩ := bind_ok h
-  obtain ⟨splits, hsplits, h⟩ := bind_ok h
-  extract_lets k1 at h
-  split at h
-  case h_1 => cases h
-  rename_i cr hcr
-  dsimp (config := { zeta := false }) only [k1] at h
-  obtain ⟨pubj, hpubj, h⟩ := bind_ok h
-  obtain ⟨published, hpub, h⟩ := bind_ok h
-  extract_lets l1 at h
-  split at h
-  case isTrue => cases h
-  rename_i hroot
-  dsimp (config := { zeta := false }) only [l1] at h
-  obtain ⟨rootsA, hrootsA, h⟩ := bind_ok h
-  obtain ⟨c, hc, h⟩ := bind_ok h
-  obtain ⟨rootj, hrootj, h⟩ := bind_ok h
-  obtain ⟨root, hroot', h⟩ := bind_ok h
-  obtain ⟨countj, hcountj, h⟩ := bind_ok h
-  split at h
-  case h_2 => cases h
-  rename_i count hcount
-  obtain ⟨yRoots, hyRoots, h⟩ := bind_ok h
-  obtain ⟨u1, hdomain, h⟩ := bind_ok h
-  extract_lets pp m1 at h
-  split at h
-  case isTrue => cases h
-  rename_i htiles
-  dsimp (config := { zeta := false }) only [m1] at h
-  have hp : pp = p := Except.ok.inj h
-  subst hp
-  have hall : ∀ mm ∈ matmuls, scheme.domainReason mm = none := by
-    refine forIn_ok_all _ _ matmuls u1 hdomain ?_
-    intro a s hs
-    try dsimp only at hs
-    split at hs
-    · cases hs
-    · rename_i hnone
-      refine ⟨?_, by cases hs; rfl⟩
-      cases hda : scheme.domainReason a with
-      | none => rfl
-      | some w => exact absurd hda (hnone w)
-  intro r hr
-  obtain ⟨x, hx, hfx⟩ := mapM_ok_mem hrecords r hr
-  extract_lets wt at hfx
-  obtain ⟨real, hreal, hfx⟩ := bind_ok hfx
-  obtain ⟨kk, hkk, hfx⟩ := bind_ok hfx
-  split at hfx
-  case h_2 => cases hfx
-  split at hfx
-  case h_2 => cases hfx
-  obtain ⟨eaj, heaj, hfx⟩ := bind_ok hfx
-  obtain ⟨ea, hea, hfx⟩ := bind_ok hfx
-  obtain ⟨ebj, hebj, hfx⟩ := bind_ok hfx
-  obtain ⟨eb, heb, hfx⟩ := bind_ok hfx
-  obtain ⟨va, hva, hfx⟩ := bind_ok hfx
-  obtain ⟨vb, hvb, hfx⟩ := bind_ok hfx
-  extract_lets rr jr at hfx
-  split at hfx
-  case h_1 => cases hfx
-  dsimp (config := { zeta := false }) only [jr] at hfx
-  have hp : rr = r := Except.ok.inj hfx
-  subst hp
-  exact hall _ (List.of_mem_zip hx).2
+/-- **A tile `checkTile` passes, or finds only over its inert-work bound, is in its scheme's domain**: the check refuses
+a unit outside it (`domainReason`) before it reads an opening. -/
+theorem tile_domain {p : Pass} {wn} {tid pos : ℕ} {rows cols : List ℕ} {o : TileOpening}
+    (ht : p.tile? tid = some (pos, rows, cols))
+    (hc : checkTile p wn tid o = .pass ∨ ∃ why, checkTile p wn tid o = .overCap why) :
+    p.scheme.domainReason p.records[pos]!.matmul = none := by
+  cases hd : p.scheme.domainReason p.records[pos]!.matmul with
+  | none => rfl
+  | some w =>
+    have hf : checkTile p wn tid o = .fail s!"DomainError: {w}" := by
+      unfold checkTile
+      first
+      | (simp only [ht, hd]; done)
+      | (simp only [ht, hd]; rfl)
+      | (rw [ht]; dsimp only; rw [hd]; rfl)
+      | simp [ht, hd, Id.run]
+    rcases hc with h | ⟨why, h⟩ <;> rw [hf] at h <;> cases h
 
-/-- A loaded pass's records have `k ≤ K_MAX` and whole promotion windows (`128 ∣ k`), at every position (`default`'s
-`k` is `0`). -/
-theorem record_domain {coins : PouwCommit.CoinCommitment} {man : Lean.Json} {p : Pass}
-    (h : PouwCheck.PearlPlus.load coins man = .ok p) (pos : ℕ) :
-    p.records[pos]!.matmul.k ≤ 2 ^ 16 ∧ p.records[pos]!.matmul.k % 128 = 0 := by
-  by_cases hp : pos < p.records.length
-  · rw [getElem!_pos p.records pos hp]
-    exact domain_k (load_domain h _ (List.getElem_mem hp))
-  · rw [getElem!_neg p.records pos hp]
-    exact ⟨Nat.zero_le _, rfl⟩
+/-- A tile `checkTile` passes, or finds only over its inert-work bound, has `k ≤ K_MAX` and whole promotion windows
+(`128 ∣ k`). -/
+theorem record_domain {p : Pass} {wn} {tid pos : ℕ} {rows cols : List ℕ} {o : TileOpening}
+    (ht : p.tile? tid = some (pos, rows, cols))
+    (hc : checkTile p wn tid o = .pass ∨ ∃ why, checkTile p wn tid o = .overCap why) :
+    p.records[pos]!.matmul.k ≤ 2 ^ 16 ∧ p.records[pos]!.matmul.k % 128 = 0 :=
+  domain_k (tile_domain ht hc)
 
 /-! ## The shape of the formed words -/
 
@@ -758,7 +615,7 @@ open Pouw.PearlC Pouw.Fp8Atom PouwCheck.PearlPlus
 /-- **(d)** from what a passed tile establishes (`TileAcceptMeans`) and what its words are (`wordsAreTheSemantics`):
 the leaf binds the check's words to the commitment's, or SHA-512 collides on the two digests' messages. -/
 theorem tilePassGivesTheWords (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) : TilePassGivesTheWords := by
-  intro Q R S saltOf rootOf ρ H s coins man p tid o U g c hload hof hsalt hroot hwOK hopen hpass
+  intro Q R S saltOf rootOf ρ H s coins man p tid o U g c _ hof hsalt hroot hwOK hopen hpass
   obtain ⟨pos, rows, cols, htile, -, hunit, -, hk, -, hwid, hrows, hcols⟩ := hof
   obtain ⟨bound, hb⟩ := Assembly.passOrOver_bound hpass
   obtain ⟨pos', rows', cols', ops, ch, htile', hrest⟩ :=
@@ -772,7 +629,7 @@ theorem tilePassGivesTheWords (hT : Properties.Pouw.PearlPlus.TileAcceptMeans) :
   obtain ⟨hoa, hob, hol, hact, hwt, hcw⟩ := hopen pos rows cols htile
   rw [← hunit, ← hk, ← hwid, hoa, hob] at henc
   have hK : (U.layout.shape ((auditTiling 64 64 U.layout).unit g)).k ≤ 2 ^ 16 := by
-    rw [hk]; exact (Assembly.record_domain hload pos).1
+    rw [hk]; exact (Assembly.record_domain htile hpass).1
   obtain ⟨hA, hB, hPB⟩ := Assembly.encode_shape (by simp) (by simp) henc
   obtain ⟨hcs, hus, hrow⟩ := Assembly.checked_shape hchk
   have h1c : ch.c.size = rows.length := by omega
