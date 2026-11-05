@@ -778,6 +778,11 @@
   "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial": "aeb0e3753dce706751cb8042d5bf851959cd4ef89bd7357d993df497631c23fd",
   "Properties.NetworkPeriod.rowsUntiedRefused": "a6422e99a7badb1dc8a3922255ccfe6783a66bdba2511039bf21dc30042d5a24",
   "Properties.NetworkPeriod.rowsUntiedRefused_nontrivial": "aa00cfe5835bf525712d992edb7d9e6ab94b7914b335d01ade734f3611ede2f5",
+  "Properties.NetworkPeriodLeak.periodLeakRegistered": {
+   "type_hash": "44cdb5237c228e784efc929c72eef7cc3d6073213057570e63f333529806d1c0",
+   "missing": "honest",
+   "why": "its premises at the network certifier's rows are the sampled leg's (KSBy at the wired check at the layout's wires, until Claims.Sampling.KSByDeployed discharges it, and CommitmentScheme.Binds at each deployment), whose honest lemmas at the deployed record (NetTiming.Witness.SampledAuditAccepted_honest at layouts with no wiring, NetTiming.ksWired_of_record at a wired one) take the assembled record's hypotheses, which are no named assumptions; both are conditional on the sampled leg's bridge, which is to discharge those hypotheses at the record. Of the period's named conditions, its honest half is to conclude WindowsPlaced and SchedulesCovered at the deployed record, not take them; it takes SenderDecodes and TrustedHost, and owes no CertifiersOpen, the antecedent of the statement's count. The network certifier's key, session and LMS parameters are the auditor's record of it (NetTiming.NetworkCertifierRecord), the key the auditor's registration holds for the device, that registration read from the auditor's record (Core.Site.Registration.Auditor.ofJson). Its rows format's Wf is no premise: the period check refuses a schedule whose frames don't read back (NetworkCheck.Period.rowsWf), so its acceptance gives rowsWf (Properties.NetworkPeriod.rowsWf_of_accept) and with it Wf at the network certifier's frames (Properties.NetworkPeriod.cellRows_wf_of_rowsWf), and the served schedule w63 passes rowsWf over every period of fewer than 2^25 link-windows (Properties.NetworkPeriodLeak.rowsWf_served)"
+  },
   "Properties.NetworkRecords.acceptMeans": "4ee7e6626901cee51276b7be734ca7c3b2daeea3810674d3e4b0983856b300cf",
   "Properties.NetworkRecords.answerAcceptMeans": "c5c91cdf640198af01ce5e2e90ba3ba4e42c21fc97c0610eb0ad09a01671615c",
   "Properties.NetworkRecords.noGridAcceptsMore": "34f6be27c3079d33abff38adbc90f5aeb66dd7446e7a2efada385c63921aa1c3",
@@ -899,12 +904,7 @@
   "Properties.SampledProofs.haltCoversOperator": "3f9891aa1693628f5b2c28e35e55a258c71bb962d4e30f5b07407e917973ef86",
   "Properties.SampledProofs.haltEndsOpen": "ded0fc0d7fd329c2e1585319b811ad69f9e24c9fcceed2ab5560f109a9fb9735",
   "Properties.SampledProofs.haltIsFinal": "83d93d8c3f74940f0d7ec870cfb360e861b9fe0b6d842080dc0b57523ad67903",
-  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162",
-  "Properties.NetworkPeriodLeak.periodLeakRegistered": {
-   "type_hash": "44cdb5237c228e784efc929c72eef7cc3d6073213057570e63f333529806d1c0",
-   "missing": "honest",
-   "why": "its premises at the network certifier's rows are the sampled leg's (KSBy at the wired check at the layout's wires, until Claims.Sampling.KSByDeployed discharges it, and CommitmentScheme.Binds at each deployment), whose honest lemmas at the deployed record (NetTiming.Witness.SampledAuditAccepted_honest at layouts with no wiring, NetTiming.ksWired_of_record at a wired one) take the assembled record's hypotheses, which are no named assumptions; both are conditional on the sampled leg's bridge, which is to discharge those hypotheses at the record. Of the period's named conditions, its honest half is to conclude WindowsPlaced and SchedulesCovered at the deployed record, not take them; it takes SenderDecodes and TrustedHost, and owes no CertifiersOpen, the antecedent of the statement's count. The network certifier's key, session and LMS parameters are the auditor's record of it (NetTiming.NetworkCertifierRecord), the key the auditor's registration holds for the device, that registration read from the auditor's record (Core.Site.Registration.Auditor.ofJson). Its rows format's Wf is no premise: the period check refuses a schedule whose frames don't read back (NetworkCheck.Period.rowsWf), so its acceptance gives rowsWf (Properties.NetworkPeriod.rowsWf_of_accept) and with it Wf at the network certifier's frames (Properties.NetworkPeriod.cellRows_wf_of_rowsWf), and the served schedule w63 passes rowsWf over every period of fewer than 2^25 link-windows (Properties.NetworkPeriodLeak.rowsWf_served)"
-  }
+  "Properties.SampledProofs.noAcceptAfterHalt": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
  },
  "layers": {
   "Properties.Pouw": {
@@ -23755,7 +23755,7 @@
    "guarantees": ["Properties.NetworkCertifier.linkWindowAcceptMeans"]
   },
   "Properties.NetworkPeriod": {
-   "digest": "4bd5749f02b3fcc4f5b7cf6791df882d5b49465984748ebe1045749b2b1c6407",
+   "digest": "ff818c04e3a6b8e41c8185c58f1426366b5624a59e8a3755fcef81c04371b0e9",
    "definitions": {
     "Properties.NetworkPeriod.AnchoredRead": "5afad0a85cdb5e0060b94d01588ee1a4f00a13a44fdc5d3611faea29d8fed3e6",
     "Properties.NetworkPeriod.AnchoredRecord": "9c8bd780a71a667ee213b3967ffa5c6ab8ffc54126019d9a87d41d15db070d60",
@@ -23777,10 +23777,17 @@
     "Properties.NetworkPeriod.anchorAudit": "40fd09381645b6ab9d02218a6f80d6fdad62a3645528bef66774fb87b4ccb26d",
     "Properties.NetworkPeriod.anchorRecord": "e294007dc05be66b441442b4495ce70dd6bce12f8fa1dbea8b87722fb20a7b06",
     "Properties.NetworkPeriod.anchorSchedule": "9c5315887bc7f3accdb0b2bac043bb6e6c2d6ab6c9b8127b2b38c19bac092024",
+    "Properties.NetworkPeriod.heldAudit": "7719d07aab89158b39d30a3f1fa708acff75e0432390b43ab30e8da21ca4869b",
+    "Properties.NetworkPeriod.heldParams": "c9f328de20d0994382099d0905d672a5fb0f77911f760bbc39e76aec51089a16",
+    "Properties.NetworkPeriod.heldPublic": "6118595b0766682fb8b2c288f4cf0443dcefbc52d9d55ac62823b22a934053b4",
     "Properties.NetworkPeriod.heldReg": "50d2f460a1f3f88a1dd7597faa7efa900fab4725145621a4bd23444addc25644",
     "Properties.NetworkPeriod.slotAudit": "e760eee56cdb608304fffc97932dcdbf8c9b3391752a8cbc7a28d98d9fbdd8fe",
     "Properties.NetworkPeriod.slotSchedule": "c6acd39e8dd9bdf89c24d4d94581ebea6048341eebcfff110fc675a29515897e",
     "Properties.NetworkPeriod.stateReadAt": "a55db5a97fe3d29c4860fb5ed1e5444e3f92d2c63ec9832a96ad45cc68f06787",
+    "Properties.NetworkPeriod.stateReg": "285c3261b990632b250b0de2cdcc501c60616f2b2fcde9f83fe7bde86f0f5555",
+    "Properties.NetworkPeriod.stateRun": "f9e1c4d742ddee7e4a0d96abc3a67c9f87d05cca4ecf5879b23a19cc85150547",
+    "Properties.NetworkPeriod.stateWindow": "075402b124b5af95233d9b0b8f96113aa0eb87f7a36eb42ae58a87e1af6e7e3e",
+    "Properties.NetworkPeriod.stateWindowOf": "02f87b8deac06c7dcfeec6419d0a384fa90d52076bc9602d7ab2f7015e9fd782",
     "Properties.NetworkPeriod.tiedWindow": "625dafa11d79f785894e57739f936a85ca271b99cbac59f8548e6ba9f9221c64"
    },
    "guarantees": [
