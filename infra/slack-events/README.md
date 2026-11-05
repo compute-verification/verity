@@ -1,40 +1,62 @@
 # Slack events service
 
-Slack's Events and Interactivity requests, onto a Vercel queue, routed by `research msg`'s own code. A person's
-post in a chat channel (`#chat-NAME`), `#ask-the-team` or `#resource-accounting` rings the lanes it names, as
-`research msg deliver --channel KEY --event -` does today on the admin's watcher. A post that names no one goes to the
-admin, with a routing line in its thread (`consumer.NO_MODEL`) saying that no lane was named and routing by model is
-off. Nothing is routed in `#agent-coordination`: there the sender rings its own doorbells. A newcomer whom
-`research msg chat expect` published gets their chat when they join the workspace.
+A Vercel function that takes Slack's Events and Interactivity requests, puts each onto a Vercel queue, and routes it
+with `research msg`'s own code (`tools/research/src/research/slack.py`, copied in at build time). A person's post in a
+chat channel (`#chat-NAME`), `#ask-the-team` or `#resource-accounting` rings the lanes it names. A post that names no
+one goes to the admin, with a routing line in its thread (`consumer.NO_MODEL`) saying no lane was named and routing by
+model is off. Nothing is routed in `#agent-coordination`, where the sender rings its own doorbells. A newcomer whom
+`research msg chat expect` published gets their chat when they join the workspace. The service keeps no database:
+Slack is the record (below).
 
-## Outline
+## Routes
 
-- `service/` is the Vercel project (its Root Directory): Python 3.13 on Fluid Compute, `framework: null`, installed from
-  `service/pyproject.toml` (which the uv workspace excludes, so Vercel installs it alone).
-  - `api/index.py`, the HTTP routes (`slack_events/app.py`):
-    - `POST /api/slack/events`: checks Slack's signature (HMAC SHA-256 of `v0:{ts}:{raw body}` with
-      `SLACK_SIGNING_SECRET`, at most 5 minutes old), answers `url_verification`, drops our own bot's posts, publishes
-      the event to the `slack-events` topic synchronously keyed on its `event_id`, and answers 200, or 503 when the
-      publish fails, so Slack retries. Nothing runs after the answer.
-    - `POST /api/slack/interactivity`: the same check, then the payload onto the same topic, keyed on its action.
-    - `GET /api/slack/health` (bearer `HEALTH_TOKEN`): see Health below.
-    - `GET /api/cron/drain`, `/api/cron/watchdog` and `/api/cron/reconcile` (Vercel's cron, bearer `CRON_SECRET`).
-  - `slack_events/subscriber.py`, the queue's consumer in poll mode: the `drain` cron, every minute, claims the topic's
-    messages as consumer group `slack-events-drain` and runs `slack_events/consumer.py` (below) on each, until the
-    topic is empty or 45 s have passed. A failure retries with backoff; after 5 deliveries the message goes to
-    `slack-events-dead`, a failure line goes in its thread and the admin is rung.
-  - `slack_events/crons.py`: the watchdog (every 5 minutes) rings again a chat post with no 👀 and no lane reply after
-    15 minutes, rings the admin and says so in the thread after 60, and once a day (16:00Z) posts the open chat threads to
-    the admin's inbox. Reconciliation (every 10 minutes) re-enqueues, keyed on channel and ts, a person's post of the last
-    hour that should ring someone and has neither a routing line nor a doorbell. Both keep no state but what they post.
-  - `slack_events/router.py`: `route_unaddressed`, the seam for routing by model. It returns None (no-model mode)
-    unless `ROUTER_MODEL_ENABLED=1`; its docstring is the plan for the AI Gateway call, which isn't built.
-  - `build.py`, the build step: copies `tools/research/src/research/slack.py` and the registry
-    (`.agents/skills/using-slack/registry.json`) into `_vendor/`, so the deployment runs `main`'s routing code byte for
-    byte. `_vendor/` is never committed; from a checkout the service reads the tree's own files.
-- `tests/`, this directory's suite (`pyproject.toml`, a workspace member with the same pins as `service/pyproject.toml`).
-  It runs against fakes: Slack through `Slack`'s transport, the cache, the queue, the notes repository's contents API and
-  the clock. No test calls Slack, Vercel, GitHub or a model.
+Every route is `api/index.py`, the FastAPI app `slack_events/app.py` builds; `service/vercel.json` rewrites
+`/api/slack/*` and `/api/cron/*` to it and schedules the crons.
+
+| Route | Caller | What it does |
+|---|---|---|
+| `POST /api/slack/events` | Slack's Events API | Checks Slack's signature (HMAC SHA-256 of `v0:{ts}:{raw body}` with `SLACK_SIGNING_SECRET`, at most 5 minutes old), answers `url_verification`, drops our own bot's posts, publishes the event to the `slack-events` topic keyed on its `event_id`, and answers 200, or 503 when the publish fails so Slack retries. Nothing runs after the answer. |
+| `POST /api/slack/interactivity` | Slack's Interactivity | The same check, then the payload onto the same topic, keyed on its action (not handled yet: Needs). |
+| `GET /api/slack/health` | whoever holds `HEALTH_TOKEN` | The numbers under Health. |
+| `GET /api/cron/drain` | Vercel cron, every minute, `CRON_SECRET` | Consumes the topic (`subscriber.drain`, below). |
+| `GET /api/cron/watchdog` | Vercel cron, every 5 minutes, `CRON_SECRET` | Rings again a chat post with no 👀 and no lane reply after 15 minutes; rings the admin and says so in the thread after 60; once a day (16:00Z) posts the open chat threads to the admin's inbox; rings `crons.STALL_TO` when the queue stalls, and publishes the hourly canary (Health). |
+| `GET /api/cron/reconcile` | Vercel cron, every 10 minutes, `CRON_SECRET` | Re-enqueues, keyed on channel and ts, a person's post of the last hour that should ring someone and has neither a routing line nor a doorbell. |
+
+## Modules
+
+All under `service/`, the Vercel project's Root Directory: Python 3.13 on Fluid Compute, `framework: null`, installed
+from `service/pyproject.toml` (which the uv workspace excludes, so Vercel installs it alone).
+
+| Module | What it is |
+|---|---|
+| `api/index.py` | Vercel's function: the app, for every route. |
+| `slack_events/app.py` | The HTTP side: signature and bearer checks, publishing to the topic, health, the cron routes. |
+| `slack_events/subscriber.py` | The queue's consumer in poll mode: `drain` claims messages as consumer group `slack-events-drain` until the topic is empty or 45 s have passed. |
+| `slack_events/consumer.py` | One message: route a person's post (`deliver`, routing lines), dead-letter after 5 deliveries, the canary, a newcomer's `team_join`. |
+| `slack_events/crons.py` | The watchdog (reminders, escalation, the daily list, `stall`, `canary`) and reconciliation. |
+| `slack_events/router.py` | `route_unaddressed`, the seam for routing by model: None (no-model mode) unless `ROUTER_MODEL_ENABLED=1`; its docstring is the plan for the AI Gateway call, which isn't built. |
+| `slack_events/deps.py` | What the service runs against (routing code, registry, queue, Slack, cache, clock): `production()` from the environment, fakes in the tests. |
+| `slack_events/vendor.py` | Loads the routing code and registry: `_vendor/` in a deployment, the repository's own files from a checkout. |
+| `build.py` | The build step: copies `slack.py` and `.agents/skills/using-slack/registry.json` into `_vendor/` (never committed), so a deployment runs `main`'s routing code byte for byte. |
+| `ignore.py` | Vercel's `ignoreCommand`: build only `main`, and only when the service's inputs changed. |
+
+`tests/` is this directory's suite (`pyproject.toml`, a workspace member with the same pins as `service/pyproject.toml`).
+It runs against fakes: Slack through `Slack`'s transport, the cache, the queue, the notes repository's contents API and
+the clock. No test calls Slack, Vercel, GitHub or a model.
+
+## Where to look
+
+| Concern | Where |
+|---|---|
+| Who a post rings | `research msg deliver` in `slack.py`; the service adds only the routing line (`consumer.route`, `consumer.pick`) |
+| Retries, redelivery, dead letters | `consumer.consume`, `consumer.dead_letter`; Slack is the record, below |
+| Reminders, escalation, the daily list | `crons.watchdog`, `crons.daily` |
+| A stalled queue | `crons.stall`, `crons.canary`; Health, below |
+| Posts that were never routed | `crons.reconcile` |
+| Routing by model | `router.py` |
+| Newcomers | `consumer.newcomer`; Newcomers, below |
+| Signatures, bearers | `app.signed`, `app.bearer` |
+| Building and deploying | `build.py`, `ignore.py`, `vercel.json`; Deploy, below |
 
 Logs are JSON lines of ids, decisions and errors. They never carry a post's text.
 
@@ -108,7 +130,7 @@ expected and runs `chat open` again, which reuses the channel and may post the w
 Production is `verity-slack-events` (https://verity-slack-events.vercel.app), behind the docs site's rewrite of
 `/api/slack/*`. A landing deploys it: Git deployments build only `main`, and only when `infra/slack-events/`, `slack.py` or
 the registry changed since the deployment before (`service/ignore.py`, vercel.json's `ignoreCommand`). Console's
-`vercel deploy --prod` from main always builds, as the fallback. The setup, as done:
+`vercel deploy --prod` from main always builds, as the fallback. The project's setup:
 
 1. A Vercel project on this repository with Root Directory `infra/slack-events/service`, and "Include files
    outside the root directory in the Build Step" on (`build.py` reads the repository around it, and fails without it).
@@ -123,9 +145,8 @@ the registry changed since the deployment before (`service/ignore.py`, vercel.js
 4. In the Slack app: Event Subscriptions on, Request URL `https://<deployment>/api/slack/events`, bot events
    `message.channels`, `message.groups` and `team_join`. Slack delivers message events only for channels the bot is in:
    invite it to `#ask-the-team` and `#resource-accounting` (it reads their threads for its routing lines, too). Leave
-   the Interactivity Request URL where it is (see below). `slack-app.json` gets these blocks in a separate PR.
+   the Interactivity Request URL where it is (Needs, below).
 5. For each person invited: `research msg chat expect NAME --email E` before they join.
-6. Then retire the admin's watcher hand-off of chat and `#ask-the-team` posts (the using-slack skill).
 
 ## Needs
 

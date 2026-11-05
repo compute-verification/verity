@@ -84,7 +84,7 @@ def consume(deps: Deps, payload: dict, delivery_count: int) -> str:
 
 def process(deps: Deps, payload: dict) -> str:
     if payload.get("kind") == "interactivity":
-        # TODO(comms): #ask-daniel's buttons. The decision is recorded by the website's /api/agent-approvals route, which
+        # TODO: #ask-daniel's buttons. The decision is recorded by the website's /api/agent-approvals route, which
         # only a card's asker can reach (Cursor OIDC); `ring_decision` needs that record. README "Needs".
         deps.log("interactivity-unhandled", event_id=payload.get("event_id"), type=(payload.get("payload") or {}).get("type"))
         return "interactivity-unhandled"
