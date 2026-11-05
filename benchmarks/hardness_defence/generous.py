@@ -11,12 +11,20 @@ generous scores of every record of tables.SOURCES (natural order or all orders) 
 restores it. `isvd@lr1` is the exact split's own residual with its low-rank part at lr1 (no extra digits or writes),
 over the ranks whose exact split is priced in all orders: the least any exact split could reach by pricing its factors
 alone down to lr1.
+
+The exact split's T = (E − 2)·B is priced for d int8 digits of its worst case 2·Σ|B_j| over every E (d = 3 on most of
+70B's splits); E is drawn live, so a server that holds it when it forms T needs only the digits T's drawn range needs
+(`trange.py`, the runs in TRANGE), with one more pass when a draw exceeds them. `live` re-prices every exact split of
+a matrix TRANGE measured at those digits, at the least rank TRANGE priced at or above its rank (T's range only grows with
+the rank, B at rank r being B's first r columns), and patches the exact book with it; the recommended point's rule
+then credits each matrix at its live-digit least.
 """
 
 from __future__ import annotations
 
 import argparse
 import collections
+import copy
 import json
 import math
 import sys
@@ -30,6 +38,8 @@ import tables as T  # noqa: E402
 
 QK = ("q_proj", "k_proj")
 WITHIN = 0.10
+# trange.py's runs: out/<model>-<kind>/trange.jsonl
+TRANGE = ("r20261105-195722-5423", "r20261105-200552-43b9")
 
 
 def records(runs: Path):
@@ -61,10 +71,26 @@ class Gen:
         self.rpca = {o: collections.defaultdict(dict) for o in (False, True)}
         self.isvd_lr1 = collections.defaultdict(dict)
         self.runs = collections.defaultdict(set)
+        self.trange = collections.defaultdict(dict)
+        for run in TRANGE:
+            for f in sorted((runs / run / "out").glob("*/trange.jsonl")):
+                model = f.parent.name.split("-")[0]
+                for line in f.read_text().splitlines():
+                    rec = json.loads(line)
+                    for r, v in rec["ranks"].items():
+                        self.trange[(model, rec["tensor"])][int(r)] = v | {"run": run}
+        self.live = collections.defaultdict(dict)
         for model, orders, run, rec in records(runs):
             key = (model, rec["tensor"])
             n, K = rec["shape"]
             leaf = rec["leaf"]
+            for r, v in rec.get("isvd", {}).items():
+                d = self.d_live(key, int(r), v["d"])
+                if d < v["d"]:
+                    for k in T.KEYS:
+                        c = (rotated.lrx(int(r), n, K, d) + v["routes"][k]["cost"]) / leaf
+                        if c < self.live[key].get(k, (math.inf,))[0]:
+                            self.live[key][k] = (c, f"isvd/{r}, {d} live digits", run)
             if rec.get("svd") or rec.get("rpca"):
                 for k in T.KEYS:
                     s = rotated.score(rec, k)
@@ -84,6 +110,21 @@ class Gen:
                         if c < self.isvd_lr1[key].get(k, (math.inf,))[0]:
                             self.isvd_lr1[key][k] = (c, f"isvd/{r}")
 
+    def d_live(self, key, r: int, d: int) -> int:
+        """The digits T's drawn range needs at rank r: TRANGE's at the least rank it priced at or above r, else d."""
+        above = [rr for rr in self.trange.get(key, {}) if rr >= r]
+        return min(d, self.trange[key][min(above)]["d_drawn"]) if above else d
+
+    def live_book(self, book):
+        """book with each design-U matrix's exact least per chip@price at its live-digit split where that is less."""
+        out = copy.deepcopy(book)
+        for (model, t), per in self.live.items():
+            s = out.v[model][t].get(T.U)
+            for k, (c, route, _run) in per.items():
+                if s is not None and c < s[k][0]:
+                    s[k] = (c, route)
+        return out
+
 
 def vertex(x, y):
     """The minimum of the parabola through three points (rotated knee fits, as the split-defence report's)."""
@@ -98,12 +139,11 @@ def vertex(x, y):
     return a * xv * xv + b * xv + c
 
 
-def analyse(book, gen):
-    """Per credited q and k at the recommended point: its credit, exact least, generous least (natural order only and
+def analyse(book, gen, choose):
+    """Per credited q and k at choose's credits: its credit, exact least, generous least (natural order only and
     in all), the line-restoring credit, the svd knee in all orders and its parabola minimum, isvd@lr1, the reorder
     gain on the generous bound (natural less all orders at the ranks priced both ways), and the natural-order-only
     ranks a reorder could still take under the all-orders least."""
-    choose = T.DEFENCES[T.RECOMMENDED]
     rows = []
     for model in T.MODELS:
         for t in T.all_tensors(model):
@@ -145,9 +185,8 @@ def analyse(book, gen):
     return rows
 
 
-def revised(rows):
-    """The recommended point with each credited q and k at min(its credit, its generous least / 1.05)."""
-    base = T.DEFENCES[T.RECOMMENDED]
+def revised(rows, base):
+    """base with each credited q and k at min(its credit, its generous least / 1.05)."""
     new = {(r["model"], r["t"]): r["new_credit"] for r in rows}
 
     def choose(book, model, t):
@@ -165,8 +204,9 @@ def main():
     args = ap.parse_args()
     book = T.load(args.runs)
     gen = Gen(args.runs)
-    rows = analyse(book, gen)
-    choose = revised(rows)
+    rec = T.DEFENCES[T.RECOMMENDED]
+    rows = analyse(book, gen, rec)
+    choose = revised(rows, rec)
     print("| model | kind | credited | in scope (natural generous within 0.10, or none) | all-orders generous priced | "
           "under the line, natural order | under the line, all orders | least over credit (natural / all) | "
           "set by | knee at the top rank | natural-only rank a reorder could undercut |")
@@ -200,7 +240,7 @@ def main():
             cells = [" / ".join(f"{min(r['per_key'][f'{c}@{p}'] / r[cred] for r in R):.3f}" for p in T.PRICES)
                      for c in ("sm120", "h200")]
             n_under = sum(r["least"] / r[cred] < T.LINE - 1e-12 for r in R)
-            ch = T.DEFENCES[T.RECOMMENDED] if cred == "credit" else choose
+            ch = rec if cred == "credit" else choose
             _w, share, _u, _n, _s = T.evaluate(book, model, ch)
             print(f"| {model} | {name} | {cells[0]} | {cells[1]} | {n_under} | {100 * share:.3f}% |")
     print()
@@ -235,6 +275,92 @@ def main():
                   f"{r['least']:.4f} | {r['route']}, {r['key']} | {r['least'] / r['credit']:.4f} | "
                   f"{r['new_credit']:.4f} | {r['knee_nb'] or ('top ' if r['knee_top'] else '') + str(r['knee'])} | "
                   f"{fit} | {il} | {rp} |")
+    live_report(book, gen, rec, args.matrices)
+
+
+def under(book, model, choose):
+    """(least over credit, matrix, route) of each credited matrix under the line at choose's credits."""
+    out = []
+    for t in T.all_tensors(model):
+        var, credit = choose(book, model, t)
+        if credit and var:
+            s = book.v[model][t][var]
+            k0 = min(T.KEYS, key=lambda k: s[k][0])
+            if s[k0][0] / credit < T.LINE - 1e-12:
+                out.append((s[k0][0] / credit, t, s[k0][1]))
+    return sorted(out)
+
+
+def live_report(book, gen, rec, matrices):
+    print()
+    print("T's drawn range (trange.py) against the worst case its digits are priced for:")
+    print()
+    print("| model | kind | matrices | ranks | splits priced at 3 digits | of them, 2 live digits | largest drawn \\|T\\| | "
+          "worst log10 P(an entry needs a third digit) |")
+    print("|---|---|---|---|---|---|---|---|")
+    groups = collections.defaultdict(list)
+    for (model, t), per in gen.trange.items():
+        groups[(model, T.kind(t))].append(per)
+    for (model, kd), pers in sorted(groups.items()):
+        vs = [v for per in pers for v in per.values()]
+        print(f"| {model} | {kd.removesuffix('_proj')} | {len(pers)} | {min(min(p) for p in pers)}–"
+              f"{max(max(p) for p in pers)} | {sum(v['d'] == 3 for v in vs)} | "
+              f"{sum(v['d'] == 3 and v['d_drawn'] == 2 for v in vs)} | {max(v['T_absmax'] for v in vs)} | "
+              f"{max(v['log10_tail'] for v in vs):.0f} |")
+    live = gen.live_book(book)
+    lrows = analyse(live, gen, rec)
+    lchoose = revised(lrows, rec)
+
+    def held(_b, model, t):
+        return rec(book, model, t)
+    print()
+    print("Exact routes with the split at its live digits (the matrices trange.py measured), every matrix:")
+    print()
+    print("| model | credits | sm_120 0.84 / 1.48 / 1.78 | H200 0.84 / 1.48 / 1.78 | under 1.05 | least set by | "
+          "MACs credited |")
+    print("|---|---|---|---|---|---|---|")
+    for model in T.MODELS:
+        for name, ch in (("recommended, as priced", held), ("the recommended rule at live digits", rec),
+                         ("and each q, k at its generous least / 1.05", lchoose)):
+            worst, share, _u, _n, _s = T.evaluate(live, model, ch)
+            cells = [" / ".join(f"{worst[f'{c}@{p}'][0]:.3f}" for p in T.PRICES) for c in ("sm120", "h200")]
+            k0 = min(T.KEYS, key=lambda k: worst[k][0])
+            un = under(live, model, ch)
+            kinds = collections.Counter(T.kind(t).removesuffix("_proj") for _v, t, _r in un)
+            print(f"| {model} | {name} | {cells[0]} | {cells[1]} | {len(un)} {dict(kinds) if un else ''} | "
+                  f"{T.short(worst[k0][1])} ({worst[k0][2]}, {k0}) | {100 * share:.3f}% |")
+    print()
+    print("The generous bound in all orders over the live-digit credits (q and k):")
+    print()
+    print("| model | credits | sm_120 0.84 / 1.48 / 1.78 | H200 0.84 / 1.48 / 1.78 | under 1.05 |")
+    print("|---|---|---|---|---|")
+    for model in T.MODELS:
+        R = [r for r in lrows if r["model"] == model]
+        for name, cred in (("the recommended rule at live digits", "credit"), ("revised", "new_credit")):
+            cells = [" / ".join(f"{min(r['per_key'][f'{c}@{p}'] / r[cred] for r in R):.3f}" for p in T.PRICES)
+                     for c in ("sm120", "h200")]
+            print(f"| {model} | {name} | {cells[0]} | {cells[1]} | "
+                  f"{sum(r['least'] / r[cred] < T.LINE - 1e-12 for r in R)} |")
+    if matrices:
+        print()
+        print("| model | matrix | credit as priced | exact least | at live digits | its route | over the credit | "
+              "credit at live digits | and at its generous least |")
+        print("|---|---|---|---|---|---|---|---|---|")
+        lr = {(r["model"], r["t"]): r for r in lrows}
+        out = []
+        for (model, t), per in gen.live.items():
+            var, credit = rec(book, model, t)
+            if not credit or var != T.U:
+                continue
+            ex, lv = T.least_of(book.v[model][t][var]), T.least_of(live.v[model][t][var])
+            if lv < ex and lv / credit < T.LINE + 0.02:
+                k0 = min(T.KEYS, key=lambda k: live.v[model][t][var][k][0])
+                g = lr[(model, t)]["new_credit"] if (model, t) in lr else rec(live, model, t)[1]
+                out.append((model, lv / credit, f"| {model} | {T.short(t)} | {credit:.4f} | {ex:.4f} | {lv:.4f} | "
+                            f"{live.v[model][t][var][k0][1]}, {k0} | {lv / credit:.4f} | "
+                            f"{rec(live, model, t)[1]:.4f} | {g:.4f} |"))
+        for _m, _v, line in sorted(out):
+            print(line)
 
 
 if __name__ == "__main__":
