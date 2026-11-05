@@ -124,7 +124,7 @@ change to the guarantee, or to a definition it reads, changes its record.
 * `TS.Sm90SheetHeadline`: `HeadlineDc/Sm90.lean`; `TS.Sm120SheetHeadline`: `Headline/Sm120.lean`.
 * `CapacityOfStateBound`: `Capacity.lean`; `Memory.Adds`: `Memory.lean`.
 * `BandwidthOfAudit`: `BandwidthAudit.lean`; `Bandwidth.SecurityProofs.AuditRO`: `Bandwidth/AuditRO.lean`.
-* `AccelAdditive`: `Additive.lean`; `Actual.Runtime`: `Actual/Runtime.lean`.
+* `AccelAdditive`: `Additive.lean`.
 * `ServingBlocks.ServingBlockBound`: `ServingBlocks.lean`.
 
 ## Where to look

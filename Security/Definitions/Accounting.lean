@@ -113,8 +113,6 @@ named.
   the random-oracle model.
 * `AccelAdditive` (`Additive.lean`): instructions that different subprotocols issue together use at most a period's
   `ρ_r·T` units of each resource `r`.
-* `Actual.Runtime` (`Actual.lean`, proved in `Actual/Runtime.lean`): a prohibited computation takes long on the actual
-  circuit.
 * `ServingBlocks.ServingBlockBound` (`ServingBlocks.lean`): a training class's counted weight is at most the overhead
   lower bound's sum over server blocks, plus the dark remainder's.
 
