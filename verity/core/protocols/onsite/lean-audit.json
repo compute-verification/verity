@@ -32,7 +32,7 @@
   "CoreRemoteNetworkNoPouw": {
    "imports": ["CoreComposition.Cases", "CoreComposition.Stubs", "CoreRemoteNetwork"],
    "except": [],
-   "why": "remote with the network certifier, without PoUW: code over remote with the network certifier's subprotocols but PoUW's period, and its egress tie, no Mathlib and nothing of Security"
+   "why": "remote with the network certifier, without PoUW: code over remote with the network certifier's subprotocols without PoUW's period, and its egress tie, no Mathlib and nothing of Security"
   },
   "CoreComposites": {
    "imports": ["CoreOnsite", "CoreProtocol.Cli", "CoreRemote", "CoreRemoteNetwork", "CoreRemoteNetworkNoPouw"],
