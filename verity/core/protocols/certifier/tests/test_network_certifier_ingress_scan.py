@@ -195,7 +195,9 @@ def test_the_scan_reads_each_prompt_off_its_cells_so_a_split_or_a_carried_count_
         assert ok == 0 or st != ch.outputs(t)[0], delta
 
 
-def test_a_window_circuit_reads_the_scan_s_state_rows_from_t0_minus_one(run):
+def test_a_window_circuit_reads_the_scan_s_state_tree_from_leaf_t0(run):
+    """`window_state` numbers the rows as the state tree's leaves: leaf 0 the empty state, leaf t + 1 bucket t's o1, so
+    the window from t0 reads leaves t0 … t0 + n − 1, which is the chain's own numbering (``states[t + 1]`` is S_t)."""
     ch, T = run.chain, PARAMS.window
     registered = ch.states[1:]
     assert len(registered) == T and IS.window_state(CLS, registered, 0, T) == ch.states[:T]

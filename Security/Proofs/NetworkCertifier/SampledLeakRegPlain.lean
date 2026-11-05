@@ -1,4 +1,5 @@
 import Proofs.NetworkCertifier.SampledLeakReg
+import Proofs.NetworkCertifier.KSWired
 import Proofs.Flock.Claims.Sampling.DeployedSha512
 
 /-!
@@ -8,7 +9,8 @@ import Proofs.Flock.Claims.Sampling.DeployedSha512
 (`SamplingDeploy.deployOf F c`) its trace commitment is `F`-free (`SamplingDeploy.deployOf_commit`), hm96 leaves under the
 verifier's own registered path check, and binds at every `H` with no hypothesis (`binds_deployOf`, from
 `Binding_of_regPath`). So the masked and plain records share one commitment (`deployPlain_commit`), and at the plain
-record (`SamplingDeploy.deployPlain`) the bound takes only the record's `KS` (`sampledLeak_registered_plain`), which
+record (`SamplingDeploy.deployPlain`) the bound takes only the record's sampling at the incorrect set (`KSBy` at the
+wired check, `sampledLeak_registered_plain`). At a layout with no wires that is the record's `KS` (`ksWired_none`), which
 `SamplingDeploy.sampling_deployed_plain_sha512` gives at SHA-512 at the deployed relation
 (`sampledLeak_registered_plain_sha512`). `SampledAuditAccepted` is discharged by its proof.
 -/
@@ -37,10 +39,9 @@ local notation "Dp" => SamplingDeploy.deployPlain rel c
 set_option synthInstance.maxSize 1024 in
 /-- **The leak bound at the registration's values, at the deployed plain record**: `sampledLeak_registered` at
 `SamplingDeploy.deployPlain rel c`, its binding `binds_deployOf` and `SampledAuditAccepted` its proof, given the record's
-`KS`. -/
-theorem sampledLeak_registered_plain (H : Msg → Msg) (hks : KS H Dp) (L K S : ℕ)
-    (lay : AuditStatement → BoundaryGates L S)
-    (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (hδ : 0 ≤ δ)
+sampling at the incorrect set at the layout's wiring (`KSBy` at the wired check). -/
+theorem sampledLeak_registered_plain (H : Msg → Msg) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
+    (hks : KSBy H Dp (wiredOk fun s => (lay s).wires)) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (hδ : 0 ≤ δ)
     (hdec : Claims.Flock.ListWithin (Dp).flock.len (Dp).flock.enc (Dp).flock.θ decode) (reg : AuditStatement → Finset ℕ)
     (ops : AuditStatement → List (Opening Bool)) (Dj : ℕ) (x : Msg) (hx : ScopeAcc Dp lay k x)
     (hreg : ∀ st, (Dp).parse x = some st → RegOpens H (Dp).commit st (reg st) (ops st)) (Ω : Type) [Fintype Ω]
@@ -50,7 +51,7 @@ theorem sampledLeak_registered_plain (H : Msg → Msg) (hks : KS H Dp) (L K S : 
           (fun st _ => AsReg st.prog (lay st) (k st) (reg st) (regVal (ops st))) Dj) (E Dp decode) x P ≤
       κ Dp δ x + Real.sqrt (γ Dp x * PrB H (Dp).V P x) + (Bext H (Dp).V (E Dp decode) Ω P x).Pr H +
         (Breg H (Dp).V (E Dp decode) (Dp).commit (Dp).parse ops Ω P x).Pr H :=
-  sampledLeak_registered SecurityProofs.SampledAuditAccepted H Dp hks (binds_deployOf _ c H) L K S lay k δ decode hδ
+  sampledLeak_registered SecurityProofs.SampledAuditAccepted H Dp (binds_deployOf _ c H) L K S lay hks k δ decode hδ
     hdec reg ops Dj x hx hreg Ω P
 
 end Plain
@@ -65,14 +66,15 @@ variable (c : SamplingDeploy.Code)
 local notation "Dp" => SamplingDeploy.deployPlain relD c
 
 set_option synthInstance.maxSize 1024 in
-/-- **The same at SHA-512 at the deployed relation**: the plain record's `KS` from
-`SamplingDeploy.sampling_deployed_plain_sha512`, on its hypotheses. -/
+/-- **The same at SHA-512 at the deployed relation**, at a layout with no wires: the plain record's `KS` from
+`SamplingDeploy.sampling_deployed_plain_sha512`, on its hypotheses, which is sampling at the incorrect set there
+(`ksWired_none`). -/
 theorem sampledLeak_registered_plain_sha512
     (hfixed : DrawFixed Dp) (hsessions : SessionRuns shaD Dp) (hnum : SamplingDeploy.SessionsInPlain c)
     (hslots : DrawSlots Dp) (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens shaD Dp iroots)
     (hfix : InteriorFixed shaD Dp iroots) (hprog : ProgramScope Dp) (hchecks : ChecksScope shaD Dp)
     (hreveals : SamplingDeploy.RevealsLe c) (hComplete : Complete shaD Dp) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
-    (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (hδ : 0 ≤ δ)
+    (hw : ∀ s, (lay s).wires = fun _ => none) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (hδ : 0 ≤ δ)
     (hdec : Claims.Flock.ListWithin (Dp).flock.len (Dp).flock.enc (Dp).flock.θ decode) (reg : AuditStatement → Finset ℕ)
     (ops : AuditStatement → List (Opening Bool)) (Dj : ℕ) (x : Msg) (hx : ScopeAcc Dp lay k x)
     (hreg : ∀ st, (Dp).parse x = some st → RegOpens shaD (Dp).commit st (reg st) (ops st)) (Ω : Type) [Fintype Ω]
@@ -82,9 +84,9 @@ theorem sampledLeak_registered_plain_sha512
           (fun st _ => AsReg st.prog (lay st) (k st) (reg st) (regVal (ops st))) Dj) (E Dp decode) x P ≤
       κ Dp δ x + Real.sqrt (γ Dp x * PrB shaD (Dp).V P x) + (Bext shaD (Dp).V (E Dp decode) Ω P x).Pr shaD +
         (Breg shaD (Dp).V (E Dp decode) (Dp).commit (Dp).parse ops Ω P x).Pr shaD :=
-  sampledLeak_registered_plain relD c shaD
-    (SamplingDeploy.sampling_deployed_plain_sha512 c hfixed hsessions hnum hslots iroots hopens hfix hprog hchecks
-      hreveals hComplete).2.2.2.2.1 L K S lay k δ decode hδ hdec reg ops Dj x hx hreg Ω P
+  sampledLeak_registered_plain relD c shaD L K S lay
+    (ksWired_none hw (SamplingDeploy.sampling_deployed_plain_sha512 c hfixed hsessions hnum hslots iroots hopens hfix
+      hprog hchecks hreveals hComplete).2.2.2.2.1) k δ decode hδ hdec reg ops Dj x hx hreg Ω P
 
 end Sha512
 
