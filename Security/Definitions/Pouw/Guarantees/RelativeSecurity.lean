@@ -212,17 +212,21 @@ def OverlapFloorKOneSidedPerProver : Prop :=
       (breakPr sha (forkFinders S e sha 1) (forkFinders S e sha kz) ((2 : ℝ) ^ 40)⁻¹ δb βb δz βz)
 
 /-- **The honest lemma of `StagedFloorKPerProver` and `StagedFloorKOneSidedPerProver`: their premises hold together.**
-At every `sha` and `kz`, on one round of one stage over one cell-block (`n = L = B = n' = 1`, 7 planes at `wRe`), in
-the machine of functions at no cost (`funMachine`), some service with its verifier's SHA-512 inputs, coin map and run
-map meet `ServiceSoundStagedPerProver` at the fork finders with `δb = βb = δz = βz = 0`, both scopes
+At the identity as `sha` and one zero-knowledge continuation (`kz = 1`), on one round of one stage over one cell-block
+(`n = L = B = n' = 1`, 7 planes at `wRe`), in the machine of functions at no cost (`funMachine`), some service with
+its verifier's SHA-512 inputs, coin map and run map meet `ServiceSoundStagedPerProver` at the fork finders with
+`δb = βb = δz = βz = 0`, both scopes
 (`KScopeAffine`, `KScopeOneSided`) and `ChargeVF3j16` at `κ = 1`, while its verifier accepts one answer to a commitment at every seed
 (the honest prover's) and refuses another at some seed. That machine charges nothing, so the noise reads carry the
-products and the floor there is negative: this shows the premises consistent at zero break terms, not the floor met. -/
+products and the floor there is negative: this shows the premises consistent at zero break terms, not the floor met.
+The honest verifier hashes nothing, so its fork finders find no collision at any `sha` and `kz`: the four honest
+lemmas hold at every one (`StagedFloorPerProverHonest_at` and its siblings in the proofs), and each is stated at one
+instance, which it builds. -/
 def StagedFloorPerProverHonest : Prop :=
-  ∀ (sha : Claims.Msg → Claims.Msg) (kz : ℕ), ∃ (S : HashedService)
+  ∃ (S : HashedService)
     (e : S.Seed ≃ Paths (DStage 1 1 1 7 1 1) 1)
     (run : RunMap funMachine S.toService 1 1 1 1 7 1 1 (ZMod (2 ^ 32))) (c : S.Com) (a a' : S.Ans),
-    ServiceSoundStagedPerProver funMachine S.toService run e sha (forkFinders S e sha 1) (forkFinders S e sha kz)
+    ServiceSoundStagedPerProver funMachine S.toService run e id (forkFinders S e id 1) (forkFinders S e id 1)
       0 0 0 0 ∧
     KScopeAffine funMachine S.toService run wRe ∧ KScopeOneSided funMachine S.toService run wRe toF2 0 ∧
     ChargeVF3j16 funMachine S.toService run e 1 1 ∧ (∀ σ, S.verify c σ a = true) ∧
@@ -234,11 +238,11 @@ run map meet `ServiceSoundOverlapPerProver` at the fork finders with zero break 
 (`KScopeOverlapAffine`, `KScopeOverlapOneSided`) and `ChargeVF3j16Overlap` at `κ = 1` in `funMachine`, while the
 verifier accepts the honest answer at every seed and refuses another at some seed. -/
 def OverlapFloorPerProverHonest : Prop :=
-  ∀ (sha : Claims.Msg → Claims.Msg) (kz : ℕ), ∃ (S : HashedService)
+  ∃ (S : HashedService)
     (e : S.Seed ≃ Paths (OSpot 1 (fun _ => 1) 1 7 (fun _ => 1) fun _ => 1) 1)
     (run : ORunMap funMachine S.toService 1 1 (fun _ => 1) 1 7 (fun _ => 1) (fun _ => 1) (ZMod (2 ^ 32)))
     (c : S.Com) (a a' : S.Ans),
-    ServiceSoundOverlapPerProver funMachine S.toService run e sha (forkFinders S e sha 1) (forkFinders S e sha kz)
+    ServiceSoundOverlapPerProver funMachine S.toService run e id (forkFinders S e id 1) (forkFinders S e id 1)
       0 0 0 0 ∧
     KScopeOverlapAffine funMachine S.toService run wRe ∧
     KScopeOverlapOneSided funMachine S.toService run wRe toF2 0 ∧
@@ -323,10 +327,10 @@ def OverlapFloorKOneSidedJ10RPerProver : Prop :=
 with zero break terms, `KScopeOneSidedJ10R` and `ChargeVF3j16J10R` at `κ = 1` in `funMachine`, while the verifier
 accepts the honest answer at every seed and refuses another at some seed. -/
 def StagedFloorJ10RPerProverHonest : Prop :=
-  ∀ (sha : Claims.Msg → Claims.Msg) (kz : ℕ), ∃ (S : HashedService) (e : S.Seed ≃ Paths (JStage 1 1 1 1 1) 1)
+  ∃ (S : HashedService) (e : S.Seed ≃ Paths (JStage 1 1 1 1 1) 1)
     (run : JRunMap funMachine S.toService 1 1 1 1 1 1 (ZMod (2 ^ 32))) (c : S.Com) (a a' : S.Ans),
-    ServiceSoundStagedJ10RPerProver funMachine S.toService run e sha (forkFinders S e sha 1)
-      (forkFinders S e sha kz) 0 0 0 0 ∧
+    ServiceSoundStagedJ10RPerProver funMachine S.toService run e id (forkFinders S e id 1)
+      (forkFinders S e id 1) 0 0 0 0 ∧
     KScopeOneSidedJ10R funMachine S.toService run ∧ ChargeVF3j16J10R funMachine S.toService run e 1 1 ∧
     (∀ σ, S.verify c σ a = true) ∧ ∃ σ, S.verify c σ a' = false
 
@@ -336,26 +340,26 @@ meet `ServiceSoundOverlapJ10RPerProver` at the fork finders with zero break term
 `ChargeVF3j16OverlapJ10R` at `κ = 1` in `funMachine`, while the verifier accepts the honest answer at every seed and
 refuses another at some seed. -/
 def OverlapFloorJ10RPerProverHonest : Prop :=
-  ∀ (sha : Claims.Msg → Claims.Msg) (kz : ℕ), ∃ (S : HashedService)
+  ∃ (S : HashedService)
     (e : S.Seed ≃ Paths (OJSpot 1 (fun _ => 1) 1 (fun _ => 1) fun _ => 1) 1)
     (run : JORunMap funMachine S.toService 1 1 (fun _ => 1) 1 (fun _ => 1) (fun _ => 1) (ZMod (2 ^ 32)))
     (c : S.Com) (a a' : S.Ans),
-    ServiceSoundOverlapJ10RPerProver funMachine S.toService run e sha (forkFinders S e sha 1)
-      (forkFinders S e sha kz) 0 0 0 0 ∧
+    ServiceSoundOverlapJ10RPerProver funMachine S.toService run e id (forkFinders S e id 1)
+      (forkFinders S e id 1) 0 0 0 0 ∧
     KScopeOverlapOneSidedJ10R funMachine S.toService run ∧
     ChargeVF3j16OverlapJ10R funMachine S.toService run e 1 1 ∧
     (∀ σ, S.verify c σ a = true) ∧ ∃ σ, S.verify c σ a' = false
 
 /-- **The nontrivial lemma of the six floors per prover: their conclusion fails at a verifier that accepts
-everything.** For every service with its verifier's SHA-512 inputs whose verifier accepts every commitment, seed and
-answer, every coin map onto `R` rounds, every `sha` and `kz`, and every positive floor `F`, the conclusion
-`ServiceFloorPerProver` at `breakPr` with the floors' luck `2^{−40}` and zero break terms fails in the machine of
-functions at no cost: a constant adversary is accepted at every seed and charged nothing, below `F`, while its error is
-`2^{−40}`. Each floor per prover concludes `ServiceFloorPerProver` at that `breakPr`, at its own `F`. -/
+everything.** At the service whose verifier accepts everything (`acceptAllService`, one round of a fair coin), the
+identity as `sha`, one continuation for each fork finder and the floor `F = 1`, the conclusion `ServiceFloorPerProver`
+at `breakPr` with the floors' luck `2^{−40}` and zero break terms fails in the machine of functions at no cost: a
+constant adversary is accepted at every seed and charged nothing, below `F`, while its error is `2^{−40}`. Each floor
+per prover concludes `ServiceFloorPerProver` at that `breakPr`, at its own `F`; the proofs show it fails so at every
+such service, coin map, `sha`, `kz` and positive `F` (`floorPerProver_acceptAll`). -/
 def FloorPerProverNontrivial : Prop :=
-  ∀ (S : HashedService) [Nonempty S.Com] [Nonempty S.Ans] (Ω : Type) (R : ℕ) (e : S.Seed ≃ Paths Ω R)
-    (sha : Claims.Msg → Claims.Msg) (kz : ℕ) (F : ℝ), (∀ c σ a, S.verify c σ a = true) → 0 < F →
-    ¬ ServiceFloorPerProver funMachine S.toService F
-      (breakPr sha (forkFinders (Mc := funMachine) S e sha 1) (forkFinders S e sha kz) ((2 : ℝ) ^ 40)⁻¹ 0 0 0 0)
+  ¬ ServiceFloorPerProver funMachine acceptAllService.toService 1
+      (breakPr id (forkFinders (Mc := funMachine) acceptAllService (Equiv.refl _) id 1)
+        (forkFinders acceptAllService (Equiv.refl _) id 1) ((2 : ℝ) ^ 40)⁻¹ 0 0 0 0)
 
 end Pouw.Guarantees.RelativeSecurity
