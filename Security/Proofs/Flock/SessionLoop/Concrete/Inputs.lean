@@ -378,7 +378,7 @@ theorem canonUtf8_eq {j : Json} (h : IntJ j = true) : canonUtf8 j = .ok ((canonU
 
 /-! ### `HmNets.check` at nets equal to the verifier's -/
 
-theorem checkNet_of {nets : Array (String × Net)} {n : Nat} {name what : String} {gen : Thunk (V Net)} {g : Net}
+theorem checkNet_of {nets : Array (String × Net)} {n : Nat} {name what : String} {gen : Thunk (Flock.V Net)} {g : Net}
     (hg : gen.get = .ok g) (h : (nets.getD n default).2 = g) : HmNets.checkNet nets n name what gen = .ok () := by
   unfold HmNets.checkNet
   rw [hg]
