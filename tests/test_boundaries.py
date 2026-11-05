@@ -239,10 +239,8 @@ BENCHMARKS_IMPORTERS = {
         "verity/ml/flock/tests/test_stage_typed.py", "verity/ml/flock/tests/test_typed_statement.py",
         "verity/ml/flock/tests/tmpl_statement.py",
     ), "proofs: `verity_numerical.bench` (`benchmarks/numerical`)'s templates, generator, input sets and lowerings"),
-    **dict.fromkeys((
-        "tools/verity/circuit_check/src/circuit_check/checks.py", "tools/verity/circuit_check/src/circuit_check/sidecars.py",
-        "tools/verity/circuit_check/src/circuit_check/targets.py", "tools/verity/circuit_check/tests/test_circuit_check.py",
-    ), "circuits: `verity_numerical.bench` (`benchmarks/numerical`)'s templates and lowerings, as circuit-check targets"),
+    "tools/verity/circuit_check/src/circuit_check/checks.py":
+        "circuits: `verity_numerical.bench` (`benchmarks/numerical`)'s lowerings, as circuit-check targets",
     # research's registry of measuring tools
     **dict.fromkeys(("tools/research/src/research/store/tools_registry.py", "tools/research/tests/test_store_prov.py"),
                     "infra: the store's tool registry names `benchmarks.<probe>.tool` modules (tc_probe, tc_probe_fp4, "
