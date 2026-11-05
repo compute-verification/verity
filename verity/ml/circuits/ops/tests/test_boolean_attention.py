@@ -4,7 +4,6 @@ digest."""
 from __future__ import annotations
 
 import itertools
-import json
 import zlib
 
 import numpy as np
@@ -12,13 +11,11 @@ import pytest
 
 from verity.ml.circuits import evaluation as E
 from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.reference import standalone_call
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits import codec
-from verity.ml.circuits.defs import REGISTRY, bind
+from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.boolean import attention as BA
 from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import Circuit
+
+from _boolean_checks import assert_live_ands, assert_pinned
 
 DEFS = [BA.F32AddFtz, BA.F32SubFtz, BA.F32MulFtz, BA.F32FmaFtz, BA.F32FmaSubFtz, BA.F32Max, BA.GuardNegInfZero, BA.Fa2InvSum]
 
@@ -52,25 +49,12 @@ def _inputs(n_params: int, rng) -> list[np.ndarray]:
 
 @pytest.mark.parametrize("d", DEFS, ids=lambda d: d.name)
 def test_pinned_counts_and_digests(d) -> None:
-    target = bind(d)
-    ands, xors, nots, digest = PINS[target.id]
-    assert BL.is_boolean(target)
-    assert BS.compile(target).counts == {"and": ands, "xor": xors, "not": nots}
-    prog, _ = standalone_call(target)
-    desc = codec.encode_program(prog)
-    assert codec.program_digest(desc) == digest
-    D = codec.decode_program(json.loads(codec.canonical_json(desc)), REGISTRY)
-    assert D.gates == prog.gates and codec.program_digest(codec.encode_program(D)) == digest
+    assert_pinned(bind(d), PINS)
 
 
 @pytest.mark.parametrize("d", DEFS, ids=lambda d: d.name)
 def test_the_ands_are_the_builders_live_ands(d) -> None:
-    T = d.traced()
-    params = [t for _, t in d.signature(None)[0]]
-    C = Circuit(cse=True)
-    ins = TR._elements_in(C, params)
-    C.output("out", TR._flat_out(d.build(C, *ins), d.signature(None)[1]))
-    assert T.counts["and"] == C.counts()["ands"] == PINS[f"{d.name}_v{d.version}"][0]
+    assert_live_ands(d, PINS)
 
 
 @pytest.mark.parametrize("d", DEFS, ids=lambda d: d.name)

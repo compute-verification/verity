@@ -24,6 +24,8 @@ from verity.ml.circuits.units import PartitionUnits
 from verity.ml.circuits.ops.prims import const
 from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, I32Add
 
+from test_partition_object import _fan
+
 F32 = I32 = Value(32)
 
 
@@ -41,12 +43,6 @@ Rows = _c("URows", (("x", Array(2, Array(3, F32))),), Array(2, F32), lambda B, S
 #: x0 + (1 + 2): the sum of constants is structure
 AddOne = _c("UAddOne", (("x", Array(1, I32)),), I32,
             lambda B, S, x: B.call(I32Add, x[0], B.call(I32Add, B.call(const(32, 1)), B.call(const(32, 2)))))
-
-
-def _fan(B, S, x):
-    a = B.call(I32Add, x[0], x[1])
-    B.call(I32Add, x[0], x[2])                                         # dead
-    return tuple_of(B.call(I32Add, a, x[2]), B.call(I32Add, a, x[3]))
 
 
 Fan = _c("UFan", (("x", Array(4, I32)),), Tuple(I32, I32), _fan)
