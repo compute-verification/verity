@@ -799,7 +799,7 @@ theorem tileKeepsTheCap_nontrivial :
 manifest, `plan` draws its one tile, and the replay derives the fixed operand's noise itself (`fixedNoise`), which is the
 test noise (`Witness.test_noise`), and passes the tile on it (`tileAcceptMeans_honest`). The noise is 2k = 256 noise lines
 and 32 × 32 FP32 chains of k = 128: each 16 lines and each 4 rows of G are one kernel computation, in modules of their
-own (`Proofs.Properties.Pouw.PearlPlus.Noise`), and the replay and the noise are proved over their steps as parameters
+own, one per kind (`Proofs.Properties.Pouw.PearlPlus.Noise`), and the replay and the noise are proved over their steps as parameters
 (`Witness.replayWith`, `Witness.fixedNoiseWith`), so the kernel never reduces a step of unknown arguments. -/
 
 namespace Witness
