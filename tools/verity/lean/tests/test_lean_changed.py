@@ -12,6 +12,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -689,3 +690,16 @@ def test_the_merge_queues_records_gate_counts_exactly_the_checker_files_a_record
         f"Lean's records key doesn't, and misses {sorted(want - got)}: a file of {tool} a records run never reads goes in both "
         "`lean_audit.NOT_READ` and `research.queue.RECORDS_TOOL_UNREAD`, and one it reads in neither (`merge.py` is in "
         "`NOT_READ` alone)")
+
+
+@pytest.mark.skipif(not LC.sandboxed(), reason="no `unshare` here")
+def test_the_sandbox_keeps_a_lake_reached_through_a_symlink_writable(tmp_path):
+    """A slot tree reached through a symlink (the check cache on another disk) keeps its `.lake` writable, and only it."""
+    (tmp_path / "real" / ".lake").mkdir(parents=True)
+    (tmp_path / "link").symlink_to(tmp_path / "real")
+    lake = tmp_path / "link" / ".lake"
+    script = f"touch {lake / 'x'} && ! touch {tmp_path / 'real' / 'y'} 2>/dev/null"
+    got = subprocess.run([*LC.UNSHARE, "--", "bash", str(LC.SANDBOX), str(lake), "--", "bash", "-c", script])
+    assert got.returncode == 0 and (tmp_path / "real" / ".lake" / "x").exists(), \
+        "sandbox.sh must keep each RW_DIR writable under its resolved path, the one /proc/self/mountinfo names"
+    assert not (tmp_path / "real" / "y").exists()
