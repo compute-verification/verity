@@ -464,9 +464,16 @@ theorem loopKept_round {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
     rw [hcc, LoopModel.hist, LoopModel.hist, length_histOf_take, length_histOf_take]
     omega
   obtain ⟨e', he'⟩ := LoopModel.hist_succ M hlt
+  have hsess : SessOn spec sts σ'.R sid := by
+    obtain ⟨_, _, _, _, -, hrp₀, -⟩ := hRA.place
+    obtain ⟨p₀, hput₀⟩ := roundStep_put_some hrp₀
+    obtain ⟨R₁, R₂, R₂', p', h01, h12, -, h22, h23⟩ := hr.coins hreq hro hput₀ hae hb hsa hco
+    have h1 := sessOn_sessKept h01.2 (hJ.sess hsent)
+    have h2 := sessOn_sessKept h22.2 (sessOn_sessKept h12.2 h1)
+    exact sessOn_sessKept h23.2 h2
   refine ⟨?_, fun h => ?_, fun i' r' s' hmem' hseen => ?_, stepK_plan he hJ.plan,
     seenAt_round hnd hmem hkr hl hl' hJ.seenAt, fun h => absurd h (by rw [hcc, hF.count hsent]; omega),
-    fun _ => builtAt_stays hst (hJ.built (by rw [hF.count hsent]; omega))⟩
+    fun _ => builtAt_stays hst (hJ.built (by rw [hF.count hsent]; omega)), fun _ => hsess⟩
   · rw [hsent', hsent, hcc, he', Bool.true_and]
     exact stopped_roundRun hRA hv hr hreq hro hae hb hsa hco e'
   · rw [hsent', hsent] at h

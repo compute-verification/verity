@@ -44,8 +44,8 @@ theorem tab_of_toIn {m : Nat} {g g' : Array F128} {d d' : ByteArray} {l l' : _ro
   rw [hm.trans hm'.symm, htp, show l.g = l'.g from congrArg _root_.Flock.Firewall.Link.In.g he, he, hc]
 
 /-- **The level-0 half of `RealAt` at the loop's own tables**, at the loop `σ` for session `sid`, where the model's
-draws are `src`'s at its statement, witness and tapes (`hsrc`), the session's entry is the setup's (`hK`), the rep
-streams' names are distinct (`hnd`), every level 0 bound to the session is the one the loop drew for its table from
+draws are `src`'s at its statement, witness and tapes (`hsrc`), the session's entry is the setup's (`SessOn`), the
+rep streams' names are distinct (`hnd`), every level 0 bound to the session is the one the loop drew for its table from
 rep stream `2j`'s draws (`BuiltAt`), and rep stream `2j + 1`'s draws give a level 0 with its inputs (`h1`): at each
 rep `r` of each table `i` of the session's entry, where the level 0 the loop holds for the table gives table `t`,
 `Loop.realOf src` gives `t` at rep stream `2i + r` (`tables_inj`, `tab_of_toIn`). -/
@@ -53,7 +53,7 @@ theorem real_of_builtAt {Rr : Type} {M : LoopModel Claims.Flock.Wit Rr}
     {src : Msg → Claims.Flock.Wit → Rr → Nat → V (Array F128 × ByteArray × Array ByteArray)} {sid : Nat}
     {σ : LoopAt} {s0 : _} {spec : SessionSpec} {sts : Array Stmt}
     (hsrc : M.src = src M.x M.w M.ρ) (hx : FlockDeploy.setupOf true M.x = some (s0, spec, sts))
-    (hK : ∀ rel : Release, sessAt σ.R sid = some rel → rel.spec = spec ∧ rel.sts = sts)
+    (hK : SessOn spec sts σ.R sid)
     (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup) (hB : BuiltAt M spec sts σ.L0 sid)
     (h1 : ∀ j g d hi l, j < sts.size → M.src (2 * j) = .ok (g, d, hi) →
       _root_.Flock.Firewall.Level0.ofDraws sts[j]!.m g d = .ok l →
@@ -66,7 +66,7 @@ theorem real_of_builtAt {Rr : Type} {M : LoopModel Claims.Flock.Wit Rr}
       _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t →
       ∃ hi, Loop.realOf src M.x M.w M.ρ (2 * i + r) = .ok (t, hi) := by
   intro i r rel name l0 stm t hr hss hn hl0 hst ht
-  obtain ⟨hsp, hsts⟩ := hK rel hss
+  obtain ⟨hsp, hsts⟩ := hK.eq hss
   obtain ⟨j, g, d, hi, hj, hsj, hdj⟩ := hB name l0 hl0
   have hji : j = i := tables_inj hnd hj (by rw [← hsp]; exact hn)
   rw [hji] at hsj hdj
@@ -142,7 +142,7 @@ theorem realAt_h0 {M : LoopModel Claims.Flock.Wit
       Nat → V (Array F128 × ByteArray × Array ByteArray)} {sid : Nat} {σ : LoopAt} {s0 : _}
     {spec : SessionSpec} {sts : Array Stmt}
     (hsrc : M.src = src M.x M.w M.ρ) (hx : FlockDeploy.setupOf true M.x = some (s0, spec, sts))
-    (hK : ∀ rel : Release, sessAt σ.R sid = some rel → rel.spec = spec ∧ rel.sts = sts)
+    (hK : SessOn spec sts σ.R sid)
     (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup) (hB : BuiltAt M spec sts σ.L0 sid)
     (hS : Loop.Level0Src src M.x M.w) (hlive : ZKMal.Masked.Live M.x) :
     ∀ (i r : Nat) (rel : Release) (name : String) (l0 : _root_.Flock.Firewall.Level0.Level0) (stm : Stmt)
