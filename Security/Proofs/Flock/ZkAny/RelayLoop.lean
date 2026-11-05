@@ -12,7 +12,8 @@ invariant at the deployed loop, against the model's run, with the cases of the s
 the `Hello`'s proved:
 
 * `LoopModel`: the model's run the loop serves: the deferred release, its worker, the statement, witness and tapes,
-  the run's messages, each with `V*`'s answer, and what the host and the operating system hand the loop.
+  the run's messages, each with `V*`'s answer, what the host and the operating system hand the loop, and the rounds of
+  the inner proof its finish computes.
   `LoopModel.msgs`, `LoopModel.hist`: the run's messages, and its history before the `j`-th. `LoopModel.Own`: each
   message the deferred release's at the history before it.
   `LoopModel.Ans`: the run has a `j`-th message, and where the auditor answered coins to it, `V*` answered their bytes.
@@ -22,6 +23,7 @@ the `Hello`'s proved:
   0's root its entry and salts (`Stay`).
 * `SaltsSrc`: the salts for levels ≥ 1 the loop holds at the session's level-0 roots the ones the host and the operating
   system handed the loop for the rep stream.
+* `InnerSrc`: the rounds of the inner proof the loop's finish computed so far for a rep the model's finish's.
 * `SessOn`: the session's entry set up on the setup. `sessOn_sessKept`: the updates that keep the session's stop keep
   it.
 * `LoopRead`: what the relay reads at a slot as the loop answers it, and the loop at the session's next request: the
@@ -31,12 +33,12 @@ the `Hello`'s proved:
   level 0s the loop drew for the session, each `Level0.ofDraws` on the host's and the operating system's bytes, and
   the session's entry linked to the words of the coins the prover receives (`Frame.words`); a
   frame round as the loop ran it (`RoundRun`) on the worker's value at the model's history, the rep's frame
-  at the model's configuration there and the loop's salts `SaltsSrc`; at the `Finish`, once the hold's barrier passes,
-  the session not stopped, the run at its last round, the firewall's own `Finish` not stopping, the worker's value the
-  firewall's own, and that message the `Final` of the loop's proof files as `Proof` frames; at the `Commit` and each
-  frame round the auditor
-  answering as `V*` did, and at the `Finish` the run having a message there; at every other slot only the updates
-  between the session's requests (`Between`); and at a frame round and every other slot `Stays`.
+  at the model's configuration there, its rounds of the inner proof `InnerSrc` and the loop's salts `SaltsSrc`; at the
+  `Finish`, once the hold's barrier passes, the session not stopped, the run at its last round, the firewall's own
+  `Finish` not stopping, the worker's value the firewall's own, and that message the `Final` of the loop's proof files
+  as `Proof` frames; at the `Hello`, the `Commit` and each frame round the auditor answering as `V*` did, and at the
+  `Finish` the run having a message there; at every other slot only the updates between the session's requests
+  (`Between`); and at a frame round and every other slot `Stays`.
 * `LoopReads`: the requests to come, each read so, up to the session's stop or end.
 * `LoopFacts`: the session going on (`Reach`, no stop), its Σ, domain frames, reps and labels the setup's, each rep
   whose stream had no round yet with its frame absent or fresh (`FreshAt`), and the model's messages the slots took:
@@ -68,7 +70,9 @@ open _root_.Flock.Firewall.Frames (Sessions)
 /-- **The model's run the loop serves**: the deferred release `L` at `nN` messages, with the worker `wk`, on the
 statement `x`, witness `w` and tapes `ρ`, `κ`, the run's messages, each with `V*`'s answer (`τ`), and what the loop's
 host and operating system hand it for each rep stream (`src`, in `Loop.Src`'s form): the packed witness and the bytes
-`Level0.draw` reads, and the salts for levels ≥ 1 `Finish.serve` reads. -/
+`Level0.draw` reads, and the salts for levels ≥ 1 `Finish.serve` reads; and at each history the rounds of the inner
+proof the loop's finish computes for the rep stream the history locates (`fin`, as `LeanRelease.withInner` reads
+them). -/
 structure LoopModel (W Rr : Type) where
   L : LeanRelease W Rr
   nN : Claims.Msg → Nat
@@ -79,6 +83,7 @@ structure LoopModel (W Rr : Type) where
   κ : L.toSrv.Chk
   τ : List (Claims.Msg × Claims.Out)
   src : Nat → _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)
+  fin : List (Claims.Msg × Claims.Msg) → Array ByteArray
 
 namespace LoopModel
 
@@ -128,6 +133,16 @@ def SaltsSrc {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (σ : LoopAt) : Prop
     _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 →
     σ.R.salts.find? (fun x => x.1 == l0.root && x.2.1 == r) = some (r0, q0, hi) →
     ∃ g d, M.src (2 * i + r) = .ok (g, d, hi)
+
+/-- **The rounds of the inner proof the loop holds for table `i`'s rep `r` of session `sid` are the model's finish's**,
+at the loop at `σ`: each round the loop's finish computed so far at the table's level-0 root and the rep
+(`Sessions.innerOf`, which `Sessions.innerRound` appends as the finish hands them to the frame) is the round at its
+index of the model's finish's rounds at the history so far (`LoopModel.fin`). -/
+def InnerSrc {W Rr : Type} (M : LoopModel W Rr) (sid i r : Nat) (σ : LoopAt) : Prop :=
+  ∀ (rel : _root_.Flock.Firewall.Frames.Release) (name : String) (l0 : _root_.Flock.Firewall.Level0.Level0),
+    sessAt σ.R sid = some rel → rel.spec.tables[i]? = some name →
+    _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 →
+    ∀ (k : Nat) (b : ByteArray), (σ.R.innerOf l0.root r)[k]? = some b → (M.fin (M.hist σ.c))[k]? = some b
 
 /-- **Session `sid`'s entry in the loop's frames `R` is set up on `spec` and `sts`**, as its `Hello` began it
 (`Sessions.begin`). -/
@@ -206,18 +221,19 @@ handed the loop for rep stream `2j` (`LoopModel.src`, as `Session.level0` draws 
 coins the session goes on past, the session's entry at its next request linked to the words of what the prover
 receives (`Frame.words` after its tag and count, as the loop links them); at a frame round a `RoundRun` from
 `σ`'s frames and level 0s to `σ'`'s frames, its content the worker's value at the model's history so far, the rep's
-frame at the model's configuration there (as the loop started it, on the draws the model's tapes hold), and the salts
-the loop holds at the session's level 0s those the host handed it for each rep stream (`SaltsSrc`); at the `Finish`,
+frame at the model's configuration there (as the loop started it, on the draws the model's tapes hold), the rounds of
+the inner proof the loop's finish computed so far for the rep the model's finish's (`InnerSrc`), and the salts the
+loop holds at the session's level 0s those the host handed it for each rep stream (`SaltsSrc`); at the `Finish`,
 once the hold's barrier passes, the session not stopped, the run at its last round, the firewall's own `Finish` not
 stopping, the worker's value the firewall's own, and that message the `Final` of the loop's proof files as `Proof`
-frames. At the `Commit` and each frame round the auditor answers as `V*` did (`LoopModel.Ans`), and at the `Finish` the
-run has a message. Between the session's requests only the updates of the loop's other requests come (`Between`), at a
-frame round and every other slot keeping what the session's rounds read of it (`Stays`), and each slot that reads a
-model message takes one. -/
+frames. At the `Hello`, the `Commit` and each frame round the auditor answers as `V*` did (`LoopModel.Ans`), and at
+the `Finish` the run has a message. Between the session's requests only the updates of the loop's other requests come
+(`Between`), at a frame round and every other slot keeping what the session's rounds read of it (`Stays`), and each
+slot that reads a model message takes one. -/
 def LoopRead {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec) (sts : Array Stmt)
     (nonce : ByteArray) : Session.Kind → State → Placed → Env → LoopAt → LoopAt → Prop
   | .hello, _, _, e, σ, σ' =>
-    e.nonce = nonce ∧ Between sid σ.R σ'.R ∧ σ'.c = σ.c + 1 ∧
+    M.Ans σ.c e ∧ e.nonce = nonce ∧ Between sid σ.R σ'.R ∧ σ'.c = σ.c + 1 ∧
       M.L.toSrv.liveBefore M.wk M.x M.w M.ρ M.κ (M.hist σ'.c) = true ∧
       (e.setup = .ok (spec, sts) → SessOn spec sts σ'.R sid)
   | .commit, st, _, e, σ, σ' =>
@@ -239,8 +255,8 @@ def LoopRead {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec)
   | .round stream n, st, pl, e, σ, σ' =>
     M.Ans σ.c e ∧ (∃ i r dom, ∃ v : Claims.Msg, M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) ∧
       RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R ∧
-      ∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) ∧ σ'.c = σ.c + 1 ∧
-      Stays sid σ σ' ∧ SaltsSrc M sid σ
+      (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) ∧ InnerSrc M sid i r σ) ∧
+      σ'.c = σ.c + 1 ∧ Stays sid σ σ' ∧ SaltsSrc M sid σ
   | .finish, _, _, e, σ, σ' =>
     σ.c < M.τ.length ∧
       (e.barrier none = none → σ.R.stopped sid = false ∧ σ.c = M.L.last M.x ∧
@@ -607,7 +623,7 @@ theorem slotCase_hello {W Rr : Type} {M : LoopModel W Rr} {J : List String → S
   | step k' hk' hra hrest =>
     obtain rfl : Session.Kind.hello = k' := Option.some.inj (hsl.symm.trans hk')
     have hJ' := hJ seen st pl e σ _ hsl (hset e List.mem_cons_self) hF hj hra
-    obtain ⟨hn, hbt, hcc, -⟩ := hra
+    obtain ⟨-, hn, hbt, hcc, -⟩ := hra
     refine ⟨fun _ => ?_, fun hgo => ?_⟩
     · show _root_.Flock.Firewall.Hello.msg spec e.nonce = ms.headD []
       rw [hn, hms, hc0, List.drop_zero, h0]

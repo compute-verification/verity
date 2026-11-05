@@ -1149,7 +1149,7 @@ def OwnSched {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec)
     LoopJ M sid spec sts seen st σ → σ.c < M.τ.length → M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) →
     RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R →
     (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) → SaltsSrc M sid σ →
-    (∃ o, e.round = .ok o) → seen.contains stream = true →
+    InnerSrc M sid i r σ → (∃ o, e.round = .ok o) → seen.contains stream = true →
     ∀ (q : Rep) (pc : Place) (f : Bool) (nd : Option String),
       _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i r dom ⟨v.toArray⟩ n = .ok (q, pc, f, nd) →
       ∀ (p : Rep) (rel : _root_.Flock.Firewall.Frames.Release) (name : String)
@@ -1183,13 +1183,13 @@ theorem roundFacts_deployed {M : LoopModel Claims.Flock.Wit
       LoopJ M sid spec sts seen st σ → σ.c < M.τ.length → M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) →
       RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R →
       (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) → SaltsSrc M sid σ →
-      (∃ o, e.round = .ok o) → RoundFacts M sid spec seen stream n i r dom v σ := by
-  intro seen st pl e σ σ' i r dom v hsl hF hJ hlt hv hr hpc hsal ho
+      InnerSrc M sid i r σ → (∃ o, e.round = .ok o) → RoundFacts M sid spec seen stream n i r dom v σ := by
+  intro seen st pl e σ σ' i r dom v hsl hF hJ hlt hv hr hpc hsal hin ho
   obtain ⟨hk, hl⟩ := slot_masked hD hsl hF hJ hlt
   have hans := LoopModel.answered_of_takes hT hlt
   exact roundFacts_loop hD hsl hF hJ hlt hr hpc ho hans fun q pc f nd hrp =>
     placeFacts_slot hD hsl hF hJ hr.rep_eq hlt (realAt_slot hD hsrc hS hlive hsl hF hJ hsal) hpc hans
       (hcp M.x M.w M.ρ (M.hist σ.c) v hk hl) hrp
-      (fun hsn => hown seen st pl e σ σ' i r dom v hsl hF hJ hlt hv hr hpc hsal ho hsn q pc f nd hrp)
+      (fun hsn => hown seen st pl e σ σ' i r dom v hsl hF hJ hlt hv hr hpc hsal hin ho hsn q pc f nd hrp)
 
 end Claims.ZKServer.Relay

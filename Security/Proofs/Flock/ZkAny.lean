@@ -54,7 +54,14 @@ public import Proofs.Flock.ZkAny.RelayLoopSalts
 public import Proofs.Flock.ZkAny.RelayLoopFacts
 public import Proofs.Flock.ZkAny.RelayLoopCur
 public import Proofs.Flock.ZkAny.RelayLoopFirst
+public import Proofs.Flock.ZkAny.RelayLoopOwn
+public import Proofs.Flock.ZkAny.RelayLoopNext
+public import Proofs.Flock.ZkAny.RelayLoopRep
 public import Proofs.Flock.ZkAny.RelayLoopL0
+public import Proofs.Flock.ZkAny.RelayLoopDeployed
+public import Proofs.Flock.ZkAny.RelayLoopPre
+public import Proofs.Flock.ZkAny.RelayLoopInner
+public import Proofs.Flock.ZkAny.RelayLoopOwnAt
 public import Proofs.Flock.ZkAny.RelayTook
 public import Proofs.Flock.ZkAny.RelayRank
 public import Proofs.Flock.ZkAny.RelayTaken
@@ -109,10 +116,22 @@ and at a frame round given what the loop's frames and the model hold there and t
 what the loop's frames and the model hold at a frame round, from that invariant on the deployed loop's model, given
 the model's answer there and what it holds at the round's place, past a stream's first round the model's scheduled
 round where the model's tables and salts are the loop's; and past the `Commit` the session's entry linked to the
-coins answering the model's link, at the setup's link points; and what the loop took of the coins so far against the
-model's release: the transport's verdict, the frame's taking of each earlier round's coins and its coin step on the
-last; and the model's taking of the coins before its rank stop, which a frame releasing an opening round passes; and
-so the model's taking of the coins after a frame round's history, from what the loop took, a rep's first-round state
-and the rank stop at the opening round the frame releases. -/
+coins answering the model's link, at the setup's link points; and past a rep's schedule so far, at the inner proof's
+rounds, the rep's frame at the session's next round keeping `SameInv` one round more of the rep; and at the first
+round of a stream of one round, the rep's frame at the session's next round holding the history's words for it; and so,
+the setup's sizes within its frames' from its `Hello` on, at every frame round of the deployed loop the round's own rep
+one round on; and the invariant kept at a frame round of the deployed loop at its own tables, given what the loop's
+frames and the model hold there; and so `EnvPre` from that invariant at the deployed loop's own tables, given what the
+loop's frames and the model hold at each frame round; and past a rep's schedule so far the masking state's `ε` and `β`
+the first words of the coins of the inner proof's rounds 0 and 2, all `Frame.innerSched` reads of it; and so, at the
+deployed model with the session loop's own rounds of the inner proof, where `placeOf` places a round of a stream seen
+at the inner proof's own, the round's place the model's scheduled round, given each round of the inner proof the
+loop's finish computed so far the model's finish's; and so `EnvPre` from that invariant at the deployed loop with the
+session loop's own rounds of the inner proof, where the release takes the run's coins and the crossing passes below
+the `Finish`; and what the loop took of the coins so far against the model's release: the transport's verdict, the
+frame's taking of each earlier round's coins and its coin step on the last; and the model's taking of the coins
+before its rank stop, which a frame releasing an opening round passes; and so the model's taking of the coins after a
+frame round's history, from what the loop took, a rep's first-round state and the rank stop at the opening round the
+frame releases. -/
 
 @[expose] public section
