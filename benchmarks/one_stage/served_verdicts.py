@@ -26,13 +26,14 @@ sealed or refused, and no engine step, request count or user of one. ``public-li
 published form (`public_line`), the line in full appended to ``--private`` (the serve dir's ``private/verdicts.txt``), and
 ``publish`` holds each file of OUT, once the run is done, in full under DIR where it names or counts a window (`publish`),
 its public form in its place; what a verifier reads of OUT (`RECEIVED`) it leaves with every key and value but its text's
-with ``--received-scanned`` (``kind_scan.py --received OUT`` found every field of it one of the public kinds), and holds
-whole without it. The class's padded counts, the period's declared T and S, the bench Build's requests and the
-verifier's coins and draws are public. ``public-registration`` prints what the run publishes of a window's advice
-registration (`public_registration`: refused unless the advice was committed padded to its compiler's cap), ``advice-line`` the ADVICE-LINE
-verdict on a serve-openai ``--advice`` run (`advice_line`: B registered before the first window, every window's advice
-line before sampled proofs' and the certifier's first coin, the audited window's registration under B), and ``front-line``
-the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
+with ``--received-scanned`` (``kind_scan.py --received OUT`` found every field of it one of the public kinds), the
+period's circuit files as written (`AS_WRITTEN`), and holds it whole without it. The class's padded counts, the period's
+declared T and S, the bench Build's requests and the verifier's coins and draws are public. ``public-registration`` prints
+what the run publishes of a window's advice registration (`public_registration`: refused unless the advice was committed
+padded to its compiler's cap), ``advice-line`` the ADVICE-LINE verdict on a serve-openai ``--advice`` run (`advice_line`:
+B registered before the first window, every window's advice line before sampled proofs' and the certifier's first coin,
+the audited window's registration under B), and ``front-line`` the CERTIFIER-FRONT line from the front's session
+(`front_line`: `FRONT_PUBLIC`).
 
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
 (`pick`): sealed without error, its Commit passed, each of its requests checked and in no other window (V3b's window
@@ -344,6 +345,10 @@ PUBLISH_MAX = 256 << 20
 #: dropping a field would break (their digests and the record's answer are over them as written)
 RECEIVED = ("pieces/certifier/*", "v3c-audit/*", "compiler.json", "registration.json", "weights_registration.json",
             "window-circuit-*.json")
+#: what of `RECEIVED` the verifier reads as written, which `publish` never reads: the period's circuit files, V3c's and
+#: the scan's, each the circuit the verifier composes itself from a template's public Definition, read by its SHA-512,
+#: which the kind scan holds to its name and V3c's period.json or the certifier's case to name (`kind_scan.CIRCUITS`)
+AS_WRITTEN = ("v3c-audit/circuits/*", "pieces/certifier/circuits/*")
 
 
 def _numbered(v: Any) -> bool:
@@ -450,12 +455,15 @@ def publish(out: Path, private: Path, received_scanned: bool = False) -> list[st
     stays in ``out``, and one whose text names or counts a window (`public_doc`) held in full, under ``private`` at its
     path under ``out``, its public form left in its place. What a verifier reads (`RECEIVED`) is held whole unless
     ``received_scanned`` (the kind scan found every field of it one of the public kinds), and then keeps every key and
-    value but its text's (`public_strings`), which a digest or the record reads as written. The paths held, in order."""
+    value but its text's (`public_strings`), which a digest or the record reads as written, and `AS_WRITTEN`'s files are
+    left as written, unread. The paths held, in order."""
     held: list[str] = []
     for p in sorted(out.rglob("*")):
         if p.is_symlink() or not p.is_file():
             continue
         rel = p.relative_to(out).as_posix()
+        if received_scanned and any(fnmatch.fnmatchcase(rel, g) for g in AS_WRITTEN):
+            continue
         received = any(fnmatch.fnmatchcase(rel, g) for g in RECEIVED)
         dst = private / rel
         private.mkdir(mode=0o700, parents=True, exist_ok=True)

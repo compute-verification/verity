@@ -125,3 +125,18 @@ def test_scan_zk_publishes_a_warden_rehearsals_public_files_and_not_its_traffic_
     got = run(block("scan_zk.sh", '  mkdir -p "$OUT/warden"', "  done"), W=w, OUT=out)
     assert got.returncode == 0, got.stderr
     assert published(out) == sorted(f"warden/{f}" for f in public)
+
+
+def test_scan_zk_keeps_the_joint_programs_class_circuits_and_no_members_circuit_or_provers_file(tmp_path):
+    """The period check reads the scan's class circuits (``joint/<template>/circuit.txt``) from $OUT/sczk; a member's
+    circuit, a prover's file, a session's archive and a signer's state stay behind."""
+    w, out = tmp_path / "W", tmp_path / "OUT"
+    public = {"summary.json": {"accepted": True}, "joint/program.json": {"root": "r"},
+              "joint/egress/circuit.txt": "circuit\n", "joint/egress/pin.json": {"sha512": "ab"}}
+    put(w / "sczk", {**public, "circuit.txt": "circuit\n", "joint/egress/m0/circuit.txt": "circuit\n",
+                     "joint/egress/inst-0.bin": "x", "instances.bin": "x", "s0/archive/a.json": {},
+                     "s0/signer-state.json": {}})
+    (out / "sczk").mkdir(parents=True)
+    got = run(block("scan_zk.sh", '(cd "$W/sczk" && find', "  ! -name '*signer-state.json*'"), W=w, OUT=out)
+    assert got.returncode == 0, got.stderr
+    assert published(out) == sorted(f"sczk/{f}" for f in public)
