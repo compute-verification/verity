@@ -198,11 +198,8 @@ theorem tile_domain {p : Pass} {wn} {tid pos : ℕ} {rows cols : List ℕ} {o : 
   | some w =>
     have hf : checkTile p wn tid o = .fail s!"DomainError: {w}" := by
       unfold checkTile
-      first
-      | (simp only [ht, hd]; done)
-      | (simp only [ht, hd]; rfl)
-      | (rw [ht]; dsimp only; rw [hd]; rfl)
-      | simp [ht, hd, Id.run]
+      simp only [ht, hd]
+      rfl
     rcases hc with h | ⟨why, h⟩ <;> rw [hf] at h <;> cases h
 
 /-- A tile `checkTile` passes, or finds only over its inert-work bound, has `k ≤ K_MAX` and whole promotion windows
