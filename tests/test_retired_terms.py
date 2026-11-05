@@ -101,6 +101,11 @@ HM96_HOME = "verity/ml/commitments/"
 _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\2(?!`)", re.M | re.S)
 
 ALLOWED: dict[str, str] = {
+    "N, the window's proof units": "a public item's reason in A5's Spec (`benchmarks/one_stage/a5.py`): `Spec.digest` hashes it",
+    "N, the round's proof units": "a public item's reason in scan_zk's Spec (`benchmarks/network_traces/scan_zk.py`): "
+                                  "`Spec.digest` hashes it",
+    "one proof unit per registration: the link-window": "a public item's reason in N2's Spec "
+                                                        "(`certifier.service`): `Spec.digest` hashes it",
     "the client's request commitment, the randomness source": "a line of GLOSSARY.md that a queued PR rewrites; renamed "
                                                               "after it lands",
     "production would publish every event": "infra's Vercel deployment, another sense",
@@ -109,11 +114,6 @@ ALLOWED: dict[str, str] = {
                                                 "rewrites; renamed after it lands",
     "block-scaled FP4, NVFP4 only": "a line of PoUW's README beside one a queued PR on next rewrites; renamed after it "
                                     "lands",
-    "N, the window's proof units": "a public item's reason in A5's Spec (`benchmarks/one_stage/a5.py`): `Spec.digest` hashes it",
-    "N, the round's proof units": "a public item's reason in scan_zk's Spec (`benchmarks/network_traces/scan_zk.py`): "
-                                  "`Spec.digest` hashes it",
-    "one proof unit per registration: the link-window": "a public item's reason in N2's Spec "
-                                                        "(`certifier.service`): `Spec.digest` hashes it",
     "T proof units per registration, unit t the link-window's bucket row t": "a public item's reason in the ingress tie's "
                                                                              "Spec (`certifier.tie_service`): `Spec.digest` hashes it",
     '"proof-unit"': "the kind circuit-check's Boolean export records for a unit circuit (`boolean_export.Registry.type_of`)",
@@ -186,8 +186,6 @@ PENDING: dict[str, str] = {
     "Security/Proofs/Flock/Soundness/Audit/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/bandwidth/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/network_e2e/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md": "a queued PR rewrites a line that names the coin server; the rename "
-                                                      "follows it",
     "benchmarks/network_traces/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/one_stage/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/pouw/fp_exact/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
@@ -195,6 +193,7 @@ PENDING: dict[str, str] = {
     "benchmarks/recursion_e2e/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/torch_gpu/sha512_rows/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "examples/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
+    "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "examples/lifecycle/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "examples/vllm/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/core/difftest/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
@@ -352,24 +351,6 @@ def test_the_scan_reads_the_network_terms():
         (net, 1, "faulty bits"), (net, 1, "faulty term"), (net, 2, "wrong units")]
 
 
-def test_the_doc_scan_reads_the_owners_terms():
-    """The owners' renames (`GLOSSARY.md`), on toy files: the challenger, hiding leaves, the acceptance probability,
-    transfer blocks, scale groups and serving; `link-window` in backticks, a quoted "production", a reproduction and a
-    scale group stay."""
-    docs = {
-        "a.md": "The coin server, a coin\nsource, the coin devices and a randomness source; salted leaves and a salted commitment.\n"
-                "A miss probability, the detection probabilities; the link window and a link-window.\n"
-                "Block-scaled FP8, blockwise scales, a scale block; in production, two productions.\n"
-                'The `link-window` key, a quoted "production", a reproduction and a scale group stay.\n',
-    }
-    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
-        ("a.md", 1, "coin server"), ("a.md", 1, "coin source"), ("a.md", 2, "coin devices"),
-        ("a.md", 2, "randomness source"), ("a.md", 2, "salted leaves"), ("a.md", 2, "salted commitment"),
-        ("a.md", 3, "miss probability"), ("a.md", 3, "detection probabilities"), ("a.md", 3, "link window"),
-        ("a.md", 3, "link-window"), ("a.md", 4, "Block-scaled"), ("a.md", 4, "blockwise"), ("a.md", 4, "scale block"),
-        ("a.md", 4, "production"), ("a.md", 4, "productions")]
-
-
 def test_the_scan_reads_the_incorrect_ands():
     """`sampling_plan`'s incorrect ANDs, on toy files, in every file: an AND gate in another sense stays."""
     docs = {"a.py": "# 9 faulty ANDs and faulty\n# ANDs; a faulty AND gate, faulty outputs outside rho\n"}
@@ -429,6 +410,24 @@ def test_the_doc_scan_reads_the_training_terms():
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
         ("a.md", 1, "dampener"), ("a.md", 1, "Dampeners"), ("a.md", 1, "NCI"), ("a.md", 1, "novel communication intensity")]
+
+
+def test_the_doc_scan_reads_the_owners_terms():
+    """The owners' renames (`GLOSSARY.md`), on toy files: the challenger, hiding leaves, the acceptance probability,
+    transfer blocks, scale groups and serving; `link-window` in backticks, a quoted "production", a reproduction and a
+    scale group stay."""
+    docs = {
+        "a.md": "The coin server, a coin\nsource, the coin devices and a randomness source; salted leaves and a salted commitment.\n"
+                "A miss probability, the detection probabilities; the link window and a link-window.\n"
+                "Block-scaled FP8, blockwise scales, a scale block; in production, two productions.\n"
+                'The `link-window` key, a quoted "production", a reproduction and a scale group stay.\n',
+    }
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.md", 1, "coin server"), ("a.md", 1, "coin source"), ("a.md", 2, "coin devices"),
+        ("a.md", 2, "randomness source"), ("a.md", 2, "salted leaves"), ("a.md", 2, "salted commitment"),
+        ("a.md", 3, "miss probability"), ("a.md", 3, "detection probabilities"), ("a.md", 3, "link window"),
+        ("a.md", 3, "link-window"), ("a.md", 4, "Block-scaled"), ("a.md", 4, "blockwise"), ("a.md", 4, "scale block"),
+        ("a.md", 4, "production"), ("a.md", 4, "productions")]
 
 
 def test_the_doc_scan_reads_the_incorrect_terms():
