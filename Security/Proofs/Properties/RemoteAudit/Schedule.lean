@@ -1,7 +1,12 @@
-import Properties.RemoteAudit.Schedule
-import Definitions.Accounting.Assumptions.Stacking
-import Mathlib.Tactic.Choose
-import Batteries.Lean.Except
+module
+
+public import Properties.RemoteAudit.Schedule
+public import Definitions.Accounting.Assumptions.Stacking
+public import Mathlib.Tactic.Choose
+public import Batteries.Lean.Except
+import all Init.Data.Array.Basic
+import all Init.Data.Array.DecidableEq
+import all Init.Data.Repr
 
 /-!
 # The schedule check fixes each credited pass's plan (`ScheduleChecked`, `ScheduleFixesLayout`)
@@ -33,6 +38,8 @@ from step 3, so a session whose third pass's plan drops it, as a coin might say,
 at 200 bits under a cap of 200 and is refused under 199 (the examples at the end; `test_schedule.py` plays the same
 session in Python).
 -/
+
+@[expose] public section
 
 open RemoteAudit
 

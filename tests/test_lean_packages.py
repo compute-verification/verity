@@ -30,6 +30,24 @@ def test_every_lake_package_is_audited():
     assert not missing, f"Lake packages without a lean-audit.json (tools/verity/lean/README.md): {missing}"
 
 
+def test_every_package_module_is_a_module():
+    """Every in-tree package's Lean is on Lean's module system (`tools/verity/lean/modules.py`), so an importer rebuilds
+    only when what a module exports changes, never for a proof's body."""
+    spec = importlib.util.spec_from_file_location("lean_modules", ROOT / "tools" / "verity" / "lean" / "modules.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    tracked = m.tracked()
+    files = m.modules([], tracked)
+    assert len(files) > 1000, len(files)
+    left = [f for f in files if not m.is_module((ROOT / f).read_text())]
+    assert not left, "not on Lean's module system; port each with `python3 tools/verity/lean/modules.py FILE`:\n  " + \
+        "\n  ".join(left)
+    lakefiles = m.lake_option_missing(tracked)
+    assert not lakefiles, f"without `{m.LAKE_OPTION}` under [leanOptions], so a public statement's proofs become auxiliary " \
+        "theorems and its lock records move; add it with `python3 tools/verity/lean/modules.py PACKAGE`:\n  " + \
+        "\n  ".join(lakefiles)
+
+
 def test_one_toolchain():
     """The jobs' base image installs the same one."""
     pins = {str(p.relative_to(ROOT)): (p / "lean-toolchain").read_text().strip() for p in lake_packages()}

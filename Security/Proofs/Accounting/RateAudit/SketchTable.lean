@@ -1,5 +1,7 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditSketch
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.RateAuditSketch
 
 /-!
 # The table: outside the verbatim class, a prover reads only the digest
@@ -11,6 +13,8 @@ decodes the digest and queries the oracle at it. Every tag it commits is right, 
 reads `N·d` bits and its memory is `|Sig|·N·d` bits (`table_run`, `table_mem`; the guarantees
 `Accounting.SecurityProofs.RateSketchTable` and `RateTensorSketchTable`).
 -/
+
+@[expose] public section
 
 namespace Accounting.RateSketch.Table
 

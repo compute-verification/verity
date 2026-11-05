@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainKSLin
-import Proofs.Flock.Claims.KS.PlainDrawRColsE
+module
+
+public import Proofs.Flock.Claims.KS.PlainKSLin
+public import Proofs.Flock.Claims.KS.PlainDrawRColsE
 
 /-!
 # `TableBoundAbortLin` at the deployed reader's plain record
@@ -24,6 +26,8 @@ At the deployed reader `VR rd` (`nextR rd` at `V false`'s rounds):
 * `tableBoundAbortLin_VR`: the table bound at any plain record whose verifier is `VR rd`, from the reader's three
   facts there and `AccLast` and `DecideFree` at `VR rd`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

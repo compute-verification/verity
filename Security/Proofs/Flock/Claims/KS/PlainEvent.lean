@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainWrP
-import Proofs.Flock.Claims.KS.ConflictTied
+module
+
+public import Proofs.Flock.Claims.KS.PlainWrP
+public import Proofs.Flock.Claims.KS.ConflictTied
 
 /-!
 # The deployed event at `wrP`'s verdict
@@ -14,6 +16,8 @@ is the transport of the run's coins to the live session's:
   record's draw then is, as a value: `recordDraw_of_decide`), a run whose reader looks up no column off `C` has
   `plainVerdict` at its live outcome and its link's root.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

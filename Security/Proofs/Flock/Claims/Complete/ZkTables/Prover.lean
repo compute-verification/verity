@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Complete
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Complete
 
 /-!
 # What the record needs of the masked prover's pieces, at every table
@@ -8,6 +10,8 @@ two points and each table has at most 1,024 regions (`Case.points_regions`), so 
 non-empty and under `2^64` bytes (`commitPZk_cap`) and each masked rep, on the table's extra claims at the link's
 points, records a round, each of at most `65536` coins (`repPZk_grows`): `proverOkJ`.
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy Transcript
 

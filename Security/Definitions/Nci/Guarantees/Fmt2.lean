@@ -1,5 +1,7 @@
-import Definitions.Nci.Assumptions.Fmt2
-import Definitions.Nci.Assumptions.Info
+module
+
+public import Definitions.Nci.Assumptions.Fmt2
+public import Definitions.Nci.Assumptions.Info
 
 /-!
 # The inference-only policy over threads, each value charged once over its copies: the guarantees
@@ -10,6 +12,8 @@ for a set read by a state of `k` bits and an ingress (`ThreadedOfStateFmt2`). Ea
 sources meet the fan-out bound at `(b_a, e, n)` and keep its counted multiplications `k₀` steps off the registered
 information.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

@@ -1,4 +1,6 @@
-import Flock.Bytes
+module
+
+public import Flock.Bytes
 
 /-!
 # The link's frames and the server's events
@@ -13,6 +15,8 @@ carries. Under `ordinals` a stream's server connection opens with `ordinalHeader
 are an HTTP response head, then (position, record) units (`CompactUnits.feed`), and a frame is the record zero-filled
 (`compactCell`), a record naming its request by ordinal (`compactOrdinal`).
 -/
+
+@[expose] public section
 
 namespace CertifierDevice
 

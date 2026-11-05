@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.Json.Live
-import Proofs.Flock.Claims.Complete.Json.Stmt
-import Proofs.Flock.Soundness.Discharge.ZkView.Decode
-import Proofs.Flock.Claims.Complete.Json.Text
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Live
+public import Proofs.Flock.Claims.Complete.Json.Stmt
+public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
+public import Proofs.Flock.Claims.Complete.Json.Text
 
 /-!
 # B's record checks at the honest run
@@ -23,6 +25,8 @@ first coin's (`coinOf_bytes`: a coin's bytes read back are the coin), the first 
 the rest are its streams' rounds (`Recs`). The goals follow: `Decodes`, `LiveReads`, `DrawMatches`, `CustodyRootB`,
 `CustodyPublics`, `CustodyPoints`, `Publics`, `ProofList`, `ProofDigests`, `RepStream`, `RepExtras` and `CustodyRounds`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

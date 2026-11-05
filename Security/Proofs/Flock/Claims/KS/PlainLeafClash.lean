@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.PlainLeafDec
+module
+
+public import Proofs.Flock.Claims.KS.PlainLeafDec
 
 /-!
 # The live self-clash at plain SHA-512 leaves
@@ -24,6 +26,8 @@ their `wrPD` forms are them at `keep := id`; `PlainLeafClashK` has them at `wrPD
   their hm96 counterparts at the statement's draw.
 * `plainSimClashHU`: so a live self-clash at `leafPlain` gives `P`'s accepting runs a raw clash.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.AtDraw
 

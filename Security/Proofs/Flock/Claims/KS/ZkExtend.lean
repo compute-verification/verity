@@ -1,6 +1,11 @@
-import Proofs.Flock.Claims.KS.ZkUntrim
-import Proofs.Flock.Claims.KS.Extend
-import Proofs.Flock.Claims.GS.ZkRadius
+module
+
+public import Proofs.Flock.Claims.KS.ZkUntrim
+public import Proofs.Flock.Claims.KS.Extend
+public import Proofs.Flock.Claims.GS.ZkRadius
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Init.Data.Nat.Power2.Basic
 
 /-!
 # `ExtendJ` at the untrimmed masked instance
@@ -23,6 +28,8 @@ rate is at least `1/2` (`zk_reg`, `Claims.GS.reg_of_rate`), and the indices' `n 
 * `FlockDeploy.KS.zk_KS_untrim`: so `Flock.KS` at the untrimmed masked instance at SHA-512 at the deployed relation
   holds with no premise (`zk_KS_untrim_of_extendJ`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

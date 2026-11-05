@@ -1,5 +1,7 @@
-import NciCheck.Desc
-import NciCheck.Difftest
+module
+
+public import NciCheck.Desc
+public import NciCheck.Difftest
 
 /-!
 # The difftest of the description-sized check: against the unrolled one, and against the Python reference
@@ -10,6 +12,8 @@ fails unless `NciCheck.Desc.check` gives Python's result on every instance and `
 IU its size and novel reads, the verdict and the first failing IU, or the first malformation's code. The Lean audit runs
 it (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof.
 -/
+
+@[expose] public section
 
 namespace NciCheck.DescDifftest
 

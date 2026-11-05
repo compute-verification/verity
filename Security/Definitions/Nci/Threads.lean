@@ -1,4 +1,6 @@
-import Definitions.Nci
+module
+
+public import Definitions.Nci
 
 /-!
 # The inference-only policy over threads: the vocabulary
@@ -18,6 +20,8 @@ thread's work. It states them over `C` itself, not over the declared circuit, wh
   input values of a thread computes at most `e` of that thread's counted multiplications per value it reads from the
   thread.
 -/
+
+@[expose] public section
 
 namespace Nci
 

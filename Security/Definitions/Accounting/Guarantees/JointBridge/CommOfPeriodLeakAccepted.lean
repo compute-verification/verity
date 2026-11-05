@@ -1,4 +1,6 @@
-import Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted
+module
+
+public import Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted
 
 /-!
 # The network certifier's per-period guarantee, on a run that realizes its period of sampled audits (trusted)
@@ -8,6 +10,8 @@ for a run whose communication audit is the network certifier's period of sampled
 (`Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted`), at the error of
 `NetTiming.Guarantees.PeriodLeakAccepted`: `n · (δ + ε_ks + ε_bind + ε_tap)` over the period's `n` windows.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.Bridge
 
