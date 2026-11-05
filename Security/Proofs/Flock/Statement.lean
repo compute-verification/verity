@@ -58,9 +58,9 @@ private theorem pinStmt_block (z : Witness (Statement.m pinStmt)) (o : Fin (2 ^ 
   exact Fin.ext (by simp [Statement.addr])
 
 /-- **`ZeroRowForced` holds at a statement with a zero row**: at `pinStmt`, the witness that is 1 at the pin only
-satisfies it, and row 1 of its `A₀` is zero. -/
+satisfies it, and row 1 of its `A₀` is zero (`Statement.ZeroRowA₀`). -/
 theorem _root_.Flock.SecurityProofs.ZeroRowForced_honest :
-    Statement.Satisfies pinStmt (fun a => if a.val = 0 then 1 else 0) ∧ Statement.A₀ pinStmt 1 = 0 := by
+    Statement.Satisfies pinStmt (fun a => if a.val = 0 then 1 else 0) ∧ Statement.ZeroRowA₀ pinStmt 1 := by
   refine ⟨satisfies_of_pinOnly rfl rfl rfl fun o i => ?_, ?_⟩
   · rw [pinStmt_block]
     show (if i.val = 0 then (1 : ZMod 2) else 0) = if i = 0 then 1 else 0
@@ -69,7 +69,8 @@ theorem _root_.Flock.SecurityProofs.ZeroRowForced_honest :
       rw [ite_eq_left h, ite_eq_left hi]
     · have hi : i ≠ 0 := fun e => h (congrArg Fin.val e)
       rw [ite_eq_right h, ite_eq_right hi]
-  · funext j
+  · show Statement.A₀ pinStmt 1 = 0
+    funext j
     show Matrix.single (0 : Fin (2 ^ 6)) (0 : Fin (2 ^ 6)) (1 : ZMod 2) 1 j = 0
     exact Matrix.single_apply_of_row_ne (by decide) _ _ _
 

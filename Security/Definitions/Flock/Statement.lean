@@ -81,6 +81,10 @@ def Satisfies (z : Witness S.m) : Prop :=
     ∧ ∀ R ∈ S.regions, ∀ (o : Fin (2 ^ S.nbl)) (i : ℕ) (_hi : i < 2 ^ R.free.length),
         ∀ h : R.inBlock i < 2 ^ S.kLog, S.block z o ⟨R.inBlock i, h⟩ = R.bits o i
 
+/-- **A zero row of `A₀`**: position `c`'s row of `A₀` is zero, so the left side `(A₀ z)_c` of every block's constraint
+at `c` is 0. -/
+def ZeroRowA₀ (c : Fin (2 ^ S.kLog)) : Prop := S.A₀ c = 0
+
 end Statement
 
 /-! ## Claims -/
