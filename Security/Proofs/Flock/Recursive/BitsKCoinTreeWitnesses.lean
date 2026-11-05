@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.BitsKCoinTreeStatement
-import Proofs.Flock.Recursive.KSCoinTreeWitnesses
+module
+
+public import Proofs.Flock.Recursive.BitsKCoinTreeStatement
+public import Proofs.Flock.Recursive.KSCoinTreeWitnesses
 
 /-!
 # `RecursiveBitsKDeployed`'s witnesses (the Lean check's `honest` and `nontrivial`)
@@ -19,6 +21,8 @@ accepting verifier and its record call SHA-512, so every finder finds nothing; a
   `RecursiveBitsKDeployed`'s values and `δ₁ = 0` is false at the verifier that accepts everything, at every brings: the
   fixture's statement is dense and at the deployment's sizes, has a V\* session, and `2^{−167.7} + 2^{−174.95} < 1`.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

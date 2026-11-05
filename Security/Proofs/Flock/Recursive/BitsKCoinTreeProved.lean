@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.BitsKCoinTreeStatement
-import Proofs.Flock.Claims.Recursion.DeployNil
+module
+
+public import Proofs.Flock.Recursive.BitsKCoinTreeStatement
+public import Proofs.Flock.Claims.Recursion.DeployNil
 
 /-!
 # `RecursiveBitsKDeployed`, proved
@@ -9,6 +11,8 @@ import Proofs.Flock.Claims.Recursion.DeployNil
 coin's bytes or with nothing (`RecDeploy.answersCoinOrNil_V`), and the bytes determine the coin
 (`Claims.Bridge.coin_bytes_injective`).
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

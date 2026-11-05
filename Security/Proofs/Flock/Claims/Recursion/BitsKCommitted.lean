@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.BitsLin2
-import Proofs.Flock.Claims.Recursion.KSLin2Committed
+module
+
+public import Proofs.Flock.Claims.Recursion.BitsLin2
+public import Proofs.Flock.Claims.Recursion.KSLin2Committed
 
 /-!
 # `BitsKAt` at Hello-committed coins
@@ -13,6 +15,8 @@ extractor, run on that simulating prover, recovers a witness, plus `a + t·e` an
 openings are functions of its tape, so the simulating prover's SHA-512 calls are the prover's own.
 `bitsKAtC_of_bitsKAt` derives it from `BitsKAt` (`Bridge.Pr_acc_runCM_le`).
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Recursive.BitsK
-import Proofs.Flock.Claims.Recursion.BitsKCommitted
+module
+
+public import Proofs.Flock.Recursive.BitsK
+public import Proofs.Flock.Claims.Recursion.BitsKCommitted
 
 /-!
 # `Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}` at Hello-committed coins (trusted)
@@ -17,6 +19,8 @@ root and openings makes at most `t` SHA-512 calls, under `StrictBirthday` at `B`
 `FCI` and `F0I` there, the committed run accepts at most as often as the extractor, run on that simulating prover,
 recovers a witness, plus `2^{−167.7} + t·2^{−174.95}` and `2 · k(x) · δ₁`.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 
