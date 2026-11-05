@@ -523,20 +523,27 @@ The local bounds (part 6):
 ## Results per monitoring period
 
 These figures come from a third route, neither part 6's displayed bound nor `DampenerRemote`: the slowdown
-calculator's partial-sum route. The calculator is `benchmarks/rho` (`verity bench rho`).
+calculator, `benchmarks/rho` (`verity bench rho`), whose lower bound meets every bound it holds at once.
 Its `periods.py` gives the slowdown bound for monitoring periods of a week, a month and a year, over one datacenter
 (`reference-h200`, 12,500 HGX nodes) and all compute (`world-h200`), at the remote scenario `reference-remote-h200`
 (`uv run python benchmarks/rho/periods.py --scenario reference-remote-h200`):
 
 | Over | Week | Month | Year | Range (week, month, year) | Worst corner |
 |---|---|---|---|---|---|
-| one datacenter | 2.99 | 3.03 | 3.04 | 1 to 41, 50.4, 53.9 | 1 |
-| the world | 2.99 | 3.03 | 3.04 | 1 to 41, 50.4, 53.9 | 1 |
+| one datacenter | 2.99 | 3.03 | 3.04 | 1 to 41, 50.4, 53.8 | 1 |
+| the world | 2.99 | 3.03 | 3.04 | 1 to 41, 50.4, 53.8 | 1 |
 
 - **What the figures mean.** Each figure is the hardware multiple over the reference training algorithm at its MFU,
   MFU₀ (`Nci.Dampener.hardwareMultiple`): at least 1, and 1 with no protocol.
-- **Their status.** They are draft and their premises contested. They come from the calculator's partial-sum route, not
-  from part 6's local bounds.
+- **Their status.** They are draft and their premises contested. The calculator's `output-premise` bound sets them:
+  E1's Proposition 6b (`draft:E1-Prop6b`, a paper statement, not in Lean), binding at inference blocks of 2·10⁷ fresh
+  bits. Its one premise, E1's output premise (`draft:E1-output-premise`), is assumed up to 7.2·10⁶ fresh bits a block
+  and contested above, so contested where it binds. It sets `reference-remote-h200-pouw` and
+  `reference-remote-h200-sampled` too, at the same standing. `reference-remote-h200-elementary`'s figure is 1, set by
+  `cover`, whose premises are assumed; its lower bound is contested because it holds `output-premise` at the same
+  blocks. Dropping the calculator's partial-sum bound, which set them before, left the figures unchanged at the
+  precision shown, but for the year's range, whose top moved from 53.9 to 53.8. None of them comes from part 6's local
+  bounds.
 - **What sets them.** The share of GPU time outside credited work (ε_undecl) sets nearly all of each figure (96% to
   98%).
 - **Their range.** The range takes each parameter to either end of its plausible range; the worst corner takes them all
