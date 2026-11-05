@@ -27,9 +27,9 @@ per-round bridge between the two:
   shows opened (`LoggedTree.opening`) is below the read's openings of that stream (`opening_lt_openedOf`), which with a
   record's last round opened bounds the record's rounds by the read's.
 * **The trees' specs in the read** (`readTail_specs`, `readLog_specs`, `readLog_named`, `specStreams_getElem`,
-  `KeyAt.of_named`): the read's `Hello`s are the specs of the trees read, so a stream of a tree read (`KeyAt`) is named
-  so in them, and where they name each tree's streams distinctly, any stream they name of that tree is its stream so
-  named.
+  `readLog_nodup`, `KeyAt.of_named`): the read's `Hello`s are the specs of the trees read, so a stream of a tree read
+  (`KeyAt`) is named so in them; they name each tree's streams distinctly, since `coinTreesOf` accepts only specs that
+  do, so any stream they name of that tree is its stream so named.
 * **The record's rounds, opened** (`recordRounds_le_openedOf`, `openedOf_eq_recordRounds`): where
   `sessionTreeReason` accepts a record each round of whose stream gives coins, the read opens that stream of the
   record's tree at least the rounds the record gives it (`recordRounds`): the record's last round is opened
@@ -936,6 +936,219 @@ theorem specStreams_getElem {j : Json} {sp : Flock.CoinTree.Spec} (h : specOf j 
         rfl
       | _ => cases hx'
   | _ => simp [hss] at h
+
+/-- **A coin tree's `Hello` line adds its line's spec to the trees read**: where `treeStep` reads a line whose `event`
+is `TREE_EVENT`, the trees read after it are those before it and one of the line's spec. -/
+theorem treeStep_tree {records : List Json} {ts ts' : List (String × Json)} {j : Json} {r : Verity.Release}
+    (h : treeStep records ts j = some (r, ts')) (hT : jsonStrIs (getD j "event") TREE_EVENT = true) :
+    ∃ root, ts' = ts ++ [(root, getD j "spec")] := by
+  unfold treeStep at h
+  rw [ite_eq_left hT] at h
+  simp only [Option.bind_eq_bind] at h
+  split at h
+  · split at h
+    · split at h
+      · rename_i root _
+        obtain ⟨spec, -, h⟩ := Option.bind_eq_some_iff.1 h
+        obtain ⟨ν, -, h⟩ := Option.bind_eq_some_iff.1 h
+        obtain ⟨r', -, h⟩ := Option.bind_eq_some_iff.1 h
+        obtain ⟨κ, -, h⟩ := Option.bind_eq_some_iff.1 h
+        simp only [Option.pure_def, Option.some.injEq, Prod.mk.injEq] at h
+        exact ⟨root, h.2.symm⟩
+      · simp at h
+    · simp at h
+  · simp at h
+
+/-- **Each tree `treeFold` reads has a spec `isTreeSpec` accepts**, where each tree before the lines has one and each
+`Hello` line's spec is one it accepts (as `Lines.TreesOf.spec` gives where `coinTreesOf` accepts the lines). -/
+theorem treeFold_isTreeSpec {records : List Json} :
+    ∀ {lines : List String} {ts tsF : List (String × Json)}, treeFold records ts lines = some tsF →
+      (∀ t ∈ ts, isTreeSpec t.2 = true) →
+      (∀ l ∈ lines, ∀ j, event l = .ok j → jsonStrIs (getD j "event") TREE_EVENT = true →
+        isTreeSpec (getD j "spec") = true) →
+      ∀ t ∈ tsF, isTreeSpec t.2 = true
+  | [], _, _, h, hts, _ => by
+    simp only [treeFold, Option.some.injEq] at h
+    subst h
+    exact hts
+  | l :: ls, ts, _, h, hts, hL => by
+    simp only [treeFold] at h
+    by_cases ht : treeLine l = true
+    · rw [ite_eq_left ht] at h
+      obtain ⟨⟨r, ts'⟩, hX, h⟩ := Option.bind_eq_some_iff.1 h
+      obtain ⟨j, hj, hX⟩ := Option.bind_eq_some_iff.1 hX
+      have h' : treeFold records ts' ls = some _ := h
+      refine treeFold_isTreeSpec h' (fun t htm => ?_) fun l' hl' => hL l' (List.mem_cons_of_mem _ hl')
+      rcases treeStep_some hX with ⟨_, _, _, -, -, -, hT⟩ | ⟨_, _, _, -, hts', -⟩
+      · obtain ⟨root, rfl⟩ := treeStep_tree hX hT
+        rcases List.mem_append.1 htm with htm | htm
+        · exact hts t htm
+        · rw [List.mem_singleton.1 htm]
+          exact hL l List.mem_cons_self j (event_of_toOption hj) hT
+      · rw [hts'] at htm
+        exact hts t htm
+    · rw [ite_eq_right ht] at h
+      exact treeFold_isTreeSpec h hts fun l' hl' => hL l' (List.mem_cons_of_mem _ hl')
+
+theorem mapM_some_str {f : Json → Option String} (hf : ∀ x y, f x = some y → x = .str y) :
+    ∀ {ss : List Json} {ys : List String}, ss.mapM f = some ys → ss = ys.map .str
+  | [], _, h => by
+    simp only [List.mapM_nil, Option.pure_def, Option.some.injEq] at h
+    subst h
+    rfl
+  | a :: l, _, h => by
+    simp only [List.mapM_cons, Option.bind_eq_bind, Option.pure_def] at h
+    obtain ⟨b, hb, h⟩ := Option.bind_eq_some_iff.1 h
+    obtain ⟨t, ht, h⟩ := Option.bind_eq_some_iff.1 h
+    obtain rfl := Option.some.inj h
+    rw [List.map_cons, ← hf a b hb, ← mapM_some_str hf ht]
+
+theorem mapM_some_str_arr {f : Json → Option String} (hf : ∀ x y, f x = some y → x = .str y) {ss : Array Json}
+    {ys : Array String} (h : ss.mapM f = some ys) : ss = ys.map .str := by
+  rw [Array.mapM_eq_mapM_toList] at h
+  obtain ⟨l', hl', rfl⟩ : ∃ l', ss.toList.mapM f = some l' ∧ l'.toArray = ys := by
+    cases hm : ss.toList.mapM f with
+    | none => simp [hm] at h
+    | some l' => exact ⟨l', rfl, by simpa [hm] using h⟩
+  apply Array.ext'
+  rw [mapM_some_str hf hl']
+  simp
+
+/-- **A coin tree's line spec names its parsed spec's streams**: where the line's spec parses (`specOf`), the list it
+names is the parsed spec's streams. -/
+theorem specOf_streams_arr {j : Json} {sp : Flock.CoinTree.Spec} (h : specOf j = some sp) :
+    getD j "streams" = .arr (sp.streams.map .str) := by
+  unfold specOf at h
+  cases hss : getD j "streams" with
+  | arr ss =>
+    simp only [hss, Option.bind_eq_bind, Option.pure_def] at h
+    obtain ⟨streams, hst, h⟩ := Option.bind_eq_some_iff.1 h
+    obtain ⟨a, -, h⟩ := Option.bind_eq_some_iff.1 h
+    obtain ⟨b, -, h⟩ := Option.bind_eq_some_iff.1 h
+    obtain rfl := Option.some.inj h
+    rw [mapM_some_str_arr (fun x y hx => by cases x <;> simp at hx <;> simp [hx]) hst]
+  | _ => simp [hss] at h
+
+/-- **The read's `Hello`s name each tree's streams distinctly**: where `coinTreesOf` accepts the release log `lines`
+and `readLog` reads it, each `Hello`'s spec is a tree's (`readLog_specs`), whose line's spec `isTreeSpec` accepts
+(`treeFold_isTreeSpec`, `Lines.TreesOf.spec`), so it names distinct streams (`Lines.streams_nodup`). -/
+theorem readLog_nodup {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
+    {lines : List String} {log : List Verity.Release} {trees : Array LoggedTree} (hT : coinTreesOf lines = .ok trees)
+    (hR : readLog label after records ξ lines = some log) : ∀ sp ∈ helloSpecs log, sp.streams.toList.Nodup := by
+  intro sp hsp
+  have hF := coinTreesOf_fold records hT
+  obtain ⟨t, ht, hspec⟩ := Properties.SampledProofs.SecurityProofs.forall₂_mem_right (readLog_specs hR hF) sp hsp
+  exact Lines.streams_nodup (specOf_streams_arr hspec)
+    (treeFold_isTreeSpec hF (fun _ h => absurd h List.not_mem_nil) (Lines.trees_log hT).spec t ht)
+
+/-- **A line opening a round is read as an opening**: where `readTail` reads the lines `lines`, a coin tree's line of
+them whose `event` isn't `TREE_EVENT` is read as a release opening a round (`treeStep_some`). -/
+theorem readTail_opens {label : String} {after : ByteArray} {records : List Json} :
+    ∀ (lines : List String) (ts : List (String × Json)) (pending : Option String) (ξ : ByteArray)
+      {log : List Verity.Release}, readTail label after records lines ts pending ξ = some log →
+      ∀ l ∈ lines, treeLine l = true → ∀ d, event l = .ok d → jsonStrIs (getD d "event") TREE_EVENT = false →
+        ∃ r ∈ log, ∃ i s n, r.frame = .opening i s n
+  | [], _, _, _, _, _, _, hl, _, _, _, _ => absurd hl List.not_mem_nil
+  | l₀ :: ls, ts, pending, ξ, log, hR, l, hl, ht, d, hev, hTE => by
+    unfold readTail at hR
+    by_cases ht₀ : treeLine l₀ = true
+    · rw [ite_eq_left ht₀] at hR
+      simp only [Option.bind_eq_bind] at hR
+      obtain ⟨⟨r₀, ts'⟩, hX₀, hR⟩ := Option.bind_eq_some_iff.1 hR
+      obtain ⟨j, hj, hX⟩ := Option.bind_eq_some_iff.1 hX₀
+      simp only [Option.pure_def] at hR
+      obtain ⟨rest, hrest, hR⟩ := Option.bind_eq_some_iff.1 hR
+      cases hR
+      rcases List.mem_cons.1 hl with rfl | hl
+      · obtain rfl : j = d := Except.ok.inj ((event_of_toOption hj).symm.trans hev)
+        rcases treeStep_some hX with ⟨_, _, _, -, -, -, hT⟩ | ⟨i, s, n, hr₀, -⟩
+        · rw [hT] at hTE
+          cases hTE
+        · exact ⟨r₀, List.mem_cons_self, i, s, n, hr₀⟩
+      · obtain ⟨r, hr, hro⟩ := readTail_opens ls ts' pending ξ hrest l hl ht d hev hTE
+        exact ⟨r, List.mem_cons_of_mem _ hr, hro⟩
+    · rw [ite_eq_right ht₀] at hR
+      have hl' : l ∈ ls := by
+        rcases List.mem_cons.1 hl with rfl | hl
+        · exact absurd ht ht₀
+        · exact hl
+      cases pending with
+      | none => exact readTail_opens ls ts (some l₀) ξ hR l hl' ht d hev hTE
+      | some a =>
+        simp only [Option.bind_eq_bind] at hR
+        obtain ⟨⟨lab, root⟩, -, hR⟩ := Option.bind_eq_some_iff.1 hR
+        simp only [Option.pure_def] at hR
+        have step : ∀ (q : Verity.Release) (ξ' : ByteArray) (rest : List Verity.Release),
+            readTail label after records ls ts none ξ' = some rest → log = q :: rest →
+            ∃ r ∈ log, ∃ i s n, r.frame = .opening i s n := by
+          intro q ξ' rest hrest hlog
+          subst hlog
+          obtain ⟨r, hr, hro⟩ := readTail_opens ls ts none ξ' hrest l hl' ht d hev hTE
+          exact ⟨r, List.mem_cons_of_mem _ hr, hro⟩
+        by_cases hm : lab = label ∧ root = after
+        · rw [ite_eq_left hm] at hR
+          obtain ⟨rest, hrest, hR⟩ := Option.bind_eq_some_iff.1 hR
+          exact step _ _ rest hrest (Option.some.inj hR).symm
+        · rw [ite_eq_right hm] at hR
+          obtain ⟨rest, hrest, hR⟩ := Option.bind_eq_some_iff.1 hR
+          exact step _ _ rest hrest (Option.some.inj hR).symm
+
+/-- **A line opening a round is read as an opening** (`readTail_opens`), the head's line read first. -/
+theorem readLog_opens {label : String} {after : ByteArray} {records : List Json} {ξ : ByteArray}
+    {lines : List String} {log : List Verity.Release} (hR : readLog label after records ξ lines = some log)
+    {l : String} (hl : l ∈ lines) (ht : treeLine l = true) {d : Json} (hev : event l = .ok d)
+    (hTE : jsonStrIs (getD d "event") TREE_EVENT = false) : ∃ r ∈ log, ∃ i s n, r.frame = .opening i s n := by
+  cases lines with
+  | nil => exact absurd hl List.not_mem_nil
+  | cons l₀ ls =>
+    simp only [readLog] at hR
+    by_cases ht₀ : treeLine l₀ = true
+    · rw [ite_eq_left ht₀] at hR
+      simp only [Option.bind_eq_bind] at hR
+      obtain ⟨⟨r₀, ts⟩, hX₀, hR⟩ := Option.bind_eq_some_iff.1 hR
+      obtain ⟨j, hj, hX⟩ := Option.bind_eq_some_iff.1 hX₀
+      simp only [Option.pure_def] at hR
+      obtain ⟨rest, hrest, hR⟩ := Option.bind_eq_some_iff.1 hR
+      cases hR
+      rcases List.mem_cons.1 hl with rfl | hl
+      · obtain rfl : j = d := Except.ok.inj ((event_of_toOption hj).symm.trans hev)
+        rcases treeStep_some hX with ⟨_, _, _, -, -, -, hT⟩ | ⟨i, s, n, hr₀, -⟩
+        · rw [hT] at hTE
+          cases hTE
+        · exact ⟨r₀, List.mem_cons_self, i, s, n, hr₀⟩
+      · obtain ⟨r, hr, hro⟩ := readTail_opens ls ts none ξ hrest l hl ht d hev hTE
+        exact ⟨r, List.mem_cons_of_mem _ hr, hro⟩
+    · rw [ite_eq_right ht₀] at hR
+      rcases List.mem_cons.1 hl with rfl | hl
+      · exact absurd ht ht₀
+      · exact readTail_opens ls [] none ξ hR l hl ht d hev hTE
+
+/-- **A line opening a round names a stream of a tree `treeFold` reads**: where `treeFold` reads the lines `lines`
+after the trees `ts` as `tsF`, a coin tree's line of them whose `event` isn't `TREE_EVENT`, naming tree `root`'s stream
+`stream`, names that stream of that tree among them (`opening_of_treeStep`, `KeyAt.append`). -/
+theorem treeFold_keyAt {records : List Json} {root stream : String} :
+    ∀ (lines : List String) (ts tsF : List (String × Json)), treeFold records ts lines = some tsF →
+      ∀ l ∈ lines, treeLine l = true → ∀ d, event l = .ok d → jsonStrIs (getD d "event") TREE_EVENT = false →
+        getD d "tree" = .str root → getD d "stream" = .str stream → ∃ i si, KeyAt tsF i si root stream
+  | [], _, _, _, _, hl, _, _, _, _, _, _ => absurd hl List.not_mem_nil
+  | l₀ :: ls, ts, tsF, h, l, hl, ht, d, hev, hTE, hr, hs => by
+    simp only [treeFold] at h
+    by_cases ht₀ : treeLine l₀ = true
+    · rw [ite_eq_left ht₀] at h
+      obtain ⟨⟨r, ts'⟩, hX₀, hF⟩ := Option.bind_eq_some_iff.1 h
+      obtain ⟨j, hj, hX⟩ := Option.bind_eq_some_iff.1 hX₀
+      rcases List.mem_cons.1 hl with rfl | hl
+      · obtain rfl : j = d := Except.ok.inj ((event_of_toOption hj).symm.trans hev)
+        obtain ⟨root', stream', _, _, i, si, _, hr', hs', -, -, -, -, rfl, -, hk, -⟩ := opening_of_treeStep hX hTE
+        cases hr.symm.trans hr'
+        cases hs.symm.trans hs'
+        obtain ⟨more, rfl⟩ := treeFold_prefix ls _ tsF hF
+        exact ⟨i, si, hk.append more⟩
+      · exact treeFold_keyAt ls ts' tsF hF l hl ht d hev hTE hr hs
+    · rw [ite_eq_right ht₀] at h
+      rcases List.mem_cons.1 hl with rfl | hl
+      · exact absurd ht ht₀
+      · exact treeFold_keyAt ls ts tsF h l hl ht d hev hTE hr hs
 
 /-- **Another stream the read's `Hello`s name of a tree read is that tree's stream so named**: where `readLog` reads
 the release log and `treeFold` reads its trees as `tsF`, the `i`-th of them of root `ρ` (`KeyAt`, at any of its
