@@ -4,8 +4,9 @@
 
 Verity lets an AI developer prove to an auditor what its datacenter's hardware computed, so that the auditor can bound
 how much the developer could have trained in secret. It is for developers who must show what their hardware ran without
-revealing their models or data, since every proof is zero-knowledge, and for the auditors who check those proofs. It has
-two composite protocols: onsite, for an auditor with devices at the datacenter, and remote, for an auditor with none.
+revealing their models or data, since every proof is zero-knowledge, and for the auditors who check those proofs. Its
+composite protocols are onsite, for an auditor with devices at the datacenter; remote, for an auditor with none; and
+remote with the network certifier, with PoUW or without, for one whose network certifiers split the site's links.
 Start with the remote protocol in `verity/core/protocols/remote/`, then [ARCHITECTURE.md](ARCHITECTURE.md).
 
 - [ARCHITECTURE.md](ARCHITECTURE.md): what Verity bounds and how, the design's layers and the Glossary.
@@ -30,19 +31,21 @@ verifier still decides, a difftest holds it to the Lean until the Lean replaces 
 | Memory wipes | A registered server's life is cut into server blocks, each opened by a certified memory wipe, so state crosses a boundary only as a committed value. | `verity/core/devices/memory_challenger/lean` |
 | The inference-only policy | Inference rather than training: the registered circuit divides into inference blocks of c gates, each reading at most k bits of fresh input. A protocol with no rounds, which the verifier checks from the registered circuit and the registered information alone. | [`verity/core/protocols/network/nci`](verity/core/protocols/network/nci/README.md) |
 
-## The two composite protocols
+## The composite protocols
 
 The subprotocols run composed, as one protocol with one verdict
 ([`verity/core/protocols/composition`](verity/core/protocols/composition/README.md)): a run is accepted only if
 every subprotocol accepts its own case, and the commitment binds all of theirs.
 
-- **Onsite** (`verity/core/protocols/onsite`), for an auditor with devices at the datacenter: sampled proofs, PoUW,
-  PoUS, PoUB and network certification.
+- **Onsite** (`verity/core/protocols/onsite`), for an auditor with devices at the datacenter: sampled proofs, the
+  inference-only policy, PoUW, PoUS, PoUB over PoUS's store, network certification and the memory wipe.
 - **Remote** ([`verity/core/protocols/remote/README.md`](verity/core/protocols/remote/README.md)), for an auditor with
-  no devices there: sampled proofs and PoUW. Start there for its lifecycle, guarantee, assumptions and demo.
-
-The memory wipe and the bandwidth audit over PoUS's store are not subprotocols of either yet, and the inference-only
-policy is not yet a subprotocol of the composites.
+  no devices there: sampled proofs, the inference-only policy and PoUW. Start there for its lifecycle, guarantee,
+  assumptions and demo.
+- **Remote with the network certifier** (`verity/remote-network/v0`, in `verity/core/protocols/onsite`), for an auditor
+  whose network certifiers split every link out of the site: remote's subprotocols and network certification.
+  **Remote-network without PoUW** (`verity/remote-network-no-pouw/v0`) is a composite of its own: those subprotocols but
+  PoUW, so it credits no verified compute.
 
 ## The vLLM integration
 
