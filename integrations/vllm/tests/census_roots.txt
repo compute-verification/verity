@@ -90,3 +90,4 @@ verity_vllm.protocols.sampled_proofs
 tests/regression/
 verity_vllm/protocols/remote_bandwidth/      # the node's store, imported by the protocol driver and the benchmarks (benchmarks/vllm_hooks)
 verity_vllm.program.predict.batch      # the compiler's batch-invariance templates and rule, imported by circuit-check --batch
+verity_vllm.scheduler.advice_check      # advice v0's validity check: its Definitions, imported by its circuit-check sidecar, which circuit-check loads by path
