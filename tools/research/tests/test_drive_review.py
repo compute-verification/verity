@@ -160,6 +160,39 @@ def test_a_reviewed_prefix_lands_and_awaits_the_after_landing_run_of_every_step(
     assert "lean-agreement" in pl["verified_as"]["steps"]         # ci's baseline passed it, and nothing it checks changed since
 
 
+@pytest.mark.parametrize("ended", ["passed", "red"])
+def test_the_next_after_landing_run_launches_before_the_sync_of_the_tick_its_predecessor_ended_in(world, monkeypatch, tmp_path,
+                                                                                                  ended):
+    """The sync takes most of a tick, and an after-landing run launched only after it left `main`'s tip unchecked that long
+    each time a run ended.  The tick that reads the end launches the next before the sync, once its reverts are pushed, so the
+    next run of a red one checks its culprit's revert; and launches it once: what lands in that tick waits for the run after."""
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"pkg/tests/test_x.py": "def test_y():\n    assert False\n"} if ended == "red" else
+                                 {"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.review(2)
+    assert h.tick().startswith("landed #2"), world.logs                 # while r-post-0 runs
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    h.review(3)
+    calls: list[str] = []
+    sync, launch = h.q.sync, h.d.launch_postland
+    monkeypatch.setattr(h.q, "sync", lambda dry_run: calls.append("sync") or sync(dry_run))
+    h.d.launch_postland = lambda repo, commit, *a, **kw: calls.append(commit) or launch(repo, commit, *a, **kw)
+    if ended == "red":
+        h.run_state["r-post-0"] = ("done", 1, None)
+        h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
+    else:
+        h.run_state["r-post-0"] = ("done", 0, None)
+        h.evidence = [_steps_run(tmp_path, "r-post-0", {s: "passed" for s in h.posted[0][1].split(",")})]
+    assert h.tick().startswith("landed #3"), world.logs
+    first = _git(world.origin, "rev-parse", "main^1")                  # below #3's landing: #2's, or #1's revert above it
+    assert _subject(world, first).startswith('Revert "Queue: #1' if ended == "red" else "Queue: #2"), _subject(world, first)
+    assert calls == [first, "sync"] and [c for c, *_ in h.posted[1:]] == [first], (calls, world.logs)
+    assert h.postland()["run"]["tip"] == first and h.postland()["pending"][-1] == _main(world) != first
+
+
 def test_a_pr_whose_preflight_onto_next_refuses_it_is_told_and_stays_out_while_the_members_above_it_land(world, monkeypatch):
     _registry(world, "lane-2")
     h = Review(world, monkeypatch)

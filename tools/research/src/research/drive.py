@@ -109,7 +109,9 @@ cancel the twin after);
 `--no-cache --circuit-cache` while `after_landing_no_cache` (no pass reused but circuit-check's per-target ones), and
 `--no-regenerate` (a lock record difference fails it).  Nothing lands before one such run of `checked`
 itself ended (its baseline, verifying the steps it passed; `/data/infra/drive.sh queue baseline SHA --by ci` records a green one
-by hand).  While a red on `checked` has a low-risk fix marked under `FIX_WAIT_S` ago and not landed, the run waits for it
+by hand).  The tick that reads a run's end launches the next before its sync, once its reverts are pushed, and a tick that
+launched none then launches it after its landings (`start_postland`); what lands in a tick after its run launched waits for
+the run after.  While a red on `checked` has a low-risk fix marked under `FIX_WAIT_S` ago and not landed, the run waits for it
 (`_fix_wait`), as one without it would go red again.  A red run runs on, so every red suite is named, and is cancelled only once its `TAIL` is all it has left (a cancel
 earlier in a ~4 h run leaves the rest unknown).  Each failed suite or step (`_red`, `postland["red"]`) gets a culprit
 among the landings since it last passed (`postland["green"]`, per suite or step, so a `checked` never verified whole still names
@@ -2483,7 +2485,10 @@ class Driver:
         """Launch the one post-landing run, on the landing branch's tip (`Queue.into`), when none runs, a landing awaits it, that
         tip is neither verified nor one whose run failed with nothing drive could revert, and no fresh low-risk fix of a red is
         about to land (`_fix_wait`).  With `executor = "on"`, the tip's check goes on the executor's queue (`_start_tasks`)
-        and the run is of `SLIM_STEPS` alone, beside it (`_start_slim`)."""
+        and the run is of `SLIM_STEPS` alone, beside it (`_start_slim`).  `_review` asks twice a tick, before the sync once
+        the reverts are pushed and again after the landings: a run launched, or launching (`detach`), is ``pl["run"]``, which
+        the second ask finds, and a records step or a plan still being made is followed, not launched again, so a tick
+        launches no two runs of a tip."""
         if not (pl := drive.get("postland")) or pl.get("run"):
             return
         q = self.q
@@ -3279,7 +3284,9 @@ class Driver:
         while a Lean check of it runs, drive's or a hand one: `_running_lean`, kept in place up to a passed one that lands: `_landable`, and kept up to any passed one:
         `lean_hold`), judge again the Lean checks that ended while it ran (`_reread_lean`), land its reviewed prefix (`land_reviewed`) once the landing branch has a baseline (`_unbaselined`),
         stacking a Lean check above a running one (`_stack_lean`), and launch the after-landing run, or the next run of a
-        bisection (`_bisect_step`); then ring what is past its bound (`_behind`, `_alarms`)."""
+        bisection (`_bisect_step`); then ring what is past its bound (`_behind`, `_alarms`).  The after-landing run is
+        launched before the sync, once the reverts are pushed, so the sync, most of a tick, doesn't delay it, and else after
+        the landings (`start_postland`)."""
         q = self.q
         what: list[str] = []
         self._regen: dict[str, set[str] | None] = {}
@@ -3290,6 +3297,7 @@ class Driver:
         self._revert_reds(drive)
         self._promote(drive)
         self._absorb(drive)
+        self.start_postland(drive)
         running = self._running_lean(drive)
         # an ejection from a Lean check's prefix (`queue.lean_running`) rebuilds `next` only the tick after that check ends, so
         # the landing uses the check before the rebuild takes its commit off `next`; a stacked one (`_stack_lean`) reaches up
