@@ -29,7 +29,7 @@ from verity.ml.crypto import lms
 KEY = lms.keygen(lms.Params(64, 4, 4), bytes([7]) * 64)
 """The challenger key: sixteen leaves, enough for a period's open and two sessions' opens, records, closes and ends."""
 HOST = "test-challenger"
-LANE = "memory-accounting"
+LANE = "lane-a"
 APPENDS = 8
 CIRCUIT = hashlib.sha512(b"verity/remote-bandwidth/v0").hexdigest()
 MAIN = R.main_lines(Path(__file__).resolve().parents[2] / "sampled_proofs" / "tests" / "fixtures" /

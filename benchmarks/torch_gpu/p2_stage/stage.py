@@ -1,5 +1,5 @@
 """The staging decode: a layer's matrices from the P2-encoded store into plaintext staging buffers on the GPU, by
-memory-accounting's decode unchanged (`libp2v1.so` from `benchmarks/pous/p2_v1/`, built for sm_90a by `build.sh`, through
+PoUS's decode unchanged (`libp2v1.so` from `benchmarks/pous/p2_v1/`, built for sm_90a by `build.sh`, through
 its own wrapper `p2_v1.gpu.Kernels`), with the refusals the store's reference decode (`p2_v1/store.py`'s `decode_range`)
 makes that the library's fast decode leaves to its caller.
 

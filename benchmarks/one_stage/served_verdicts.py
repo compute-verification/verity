@@ -37,8 +37,8 @@ refused}``, which the run keeps in the serve dir's ``private/window.json``.
 ``pieces``: each subprotocol after sampled proofs (`PIECES`: PoUW, PoUS, the bandwidth audit, the network certifier) runs
 its piece where one is named (``POUW_CMD``, ``POUS_CMD``, ``BANDWIDTH_CMD``, ``CERTIFIER_CMD``: a command run in the tree as
 ``bash -c CMD _ SERVE_DIR WINDOW DIR``, which writes its core answer to ``DIR/answer.json``), one at a time, each within
-``<COMPONENT>_TIMEOUT`` (else ``PIECE_TIMEOUT``, default `PIECE_TIMEOUT`), else prints a ``MISSING`` line naming it, the
-command it lacks and its owner. PoUS's piece runs before the bandwidth audit's: the bandwidth session is over
+``<COMPONENT>_TIMEOUT`` (else ``PIECE_TIMEOUT``, default `PIECE_TIMEOUT`), else prints a ``MISSING`` line naming it and the
+command it lacks. PoUS's piece runs before the bandwidth audit's: the bandwidth session is over
 the store PoUS's piece holds, and that piece writes its answer to the bandwidth piece's ``DIR``, which ``BANDWIDTH_CMD``
 collects. Each run leaves ``DIR/piece.json`` (`RAN`: the node it ran on, its exit, its limit). A piece
 that ran but wrote no answer is its error, unless it refused to run (``DIR/refused.txt``, `REFUSED`, naming why), which
@@ -126,26 +126,21 @@ for _p in (Path(__file__).resolve().parent, ROOT / "examples" / "h200" / "interf
 
 #: the window report's format, kept from the all-protocols runner whose report it was
 REPORT_FORMAT = "verity/all-protocols-window/v1"
-#: sampled proofs' owner, its row's
-INTEGRITY_OWNER = "compute-accounting"
-
-#: each subprotocol after sampled proofs, by its runner name: (its name, its component, its verifier's owner, what its piece
-#: does), in the chain's order
-PIECES: dict[str, tuple[str, str, str, str]] = {
-    "work": ("PoUW", "pouw", "compute-accounting",
-             "H1's credit on the served window, its coins from vy-challenger-1's gate (H1_GATE)"),
-    "space": ("PoUS", "pous", "memory-accounting",
+#: each subprotocol after sampled proofs, by its runner name: (its name, its component, what its piece does), in the
+#: chain's order
+PIECES: dict[str, tuple[str, str, str]] = {
+    "work": ("PoUW", "pouw", "H1's credit on the served window, its coins from vy-challenger-1's gate (H1_GATE)"),
+    "space": ("PoUS", "pous",
               ("PoUS over the served model's int8 weights on the serving card, against the memory challenger on "
                "vy-auditor-2; served_verdicts.sh sets it where the tree has benchmarks/pous/served_piece.sh and this node "
                "the challenger's key")),
-    "bandwidth": ("the bandwidth audit", "bandwidth", "memory-accounting",
+    "bandwidth": ("the bandwidth audit", "bandwidth",
                   ("PoUB-P2's session over the store the PoUS piece holds, which that piece runs (POUS_CMD, "
                    "benchmarks/pous/served_piece.py) and BANDWIDTH_CMD collects (served_bandwidth.py collect)")),
-    "communication": ("the network certifier", "certifier", "network-accounting",
-                      "the network certifier in front of the serving endpoint"),
+    "communication": ("the network certifier", "certifier", "the network certifier in front of the serving endpoint"),
 }
 #: the record's subprotocol outside this chain: serve() runs its piece (WIPE_CMD) on the card before its engine loads
-WIPE = ("the wipe", "wipe", "memory-accounting", "the wipe of the serving card before its engine loads")
+WIPE = ("the wipe", "wipe", "the wipe of the serving card before its engine loads")
 NAMES = {"integrity": "sampled proofs", **{k: v[0] for k, v in PIECES.items()}, "wipe": WIPE[0]}
 #: a piece's limit unless ``<COMPONENT>_TIMEOUT`` or ``PIECE_TIMEOUT`` sets one, as `timeout` reads it
 PIECE_TIMEOUT = "60m"
@@ -433,13 +428,13 @@ def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | Non
     env = dict(os.environ if env is None else env)
     node = node or socket.gethostname()
     got: dict[str, dict[str, Any]] = {}
-    for key, (name, comp, owner, what) in PIECES.items():
+    for key, (name, comp, what) in PIECES.items():
         if (only is not None and comp not in only) or comp in skip:
             continue
         cmd = env.get(f"{comp.upper()}_CMD")
         if not cmd:
             got[comp] = {"verdict": "missing", "why": _unset(comp, what)}
-            print(f"MISSING {name} ({comp.upper()}_CMD unset; {owner}): {what}", flush=True)
+            print(f"MISSING {name} ({comp.upper()}_CMD unset): {what}", flush=True)
             continue
         d = out / comp
         d.mkdir(parents=True, exist_ok=True)
@@ -760,12 +755,12 @@ def epsilon(a: Mapping[str, Any]) -> str | None:
     return str(Fraction(bound, size)) if isinstance(bound, int) and isinstance(size, int) and size > 0 else None
 
 
-def row_of(owner: str, a: Any, out: Path, run: str | None = None) -> dict[str, Any]:
+def row_of(a: Any, out: Path, run: str | None = None) -> dict[str, Any]:
     """A subprotocol's report row from its answer (checked to be a core answer first); ``run`` is the recording run."""
     a = check_answer(a)
     runs = json.loads((out / "runs.json").read_text()) if (out / "runs.json").exists() else []
     accepted = a["verdict"] == "accept"
-    return {"protocol": a["protocol"], "owner": owner, "verdict": a["verdict"], "reason": a["reason"],
+    return {"protocol": a["protocol"], "verdict": a["verdict"], "reason": a["reason"],
             "commitment": a["commitment"], "quantity": a["public"] if accepted else None,
             "delta": (a["profile"] or {}).get("delta") if isinstance(a["profile"], dict) else None,
             "epsilon": epsilon(a) if accepted else None, "runs": [*([run] if run else []), *runs], "answer": a}
@@ -778,9 +773,9 @@ def sampled_proofs_row(audit_dir: Path, run: str | None = None) -> dict[str, Any
     reg = audit_dir / "windows" / "rank0" / "registration.json"
     try:
         a = SI.answer(audit_dir, json.loads(reg.read_text()) if reg.exists() else None)
-        return row_of(INTEGRITY_OWNER, a, audit_dir, run)
+        return row_of(a, audit_dir, run)
     except (RuntimeError, ValueError) as e:
-        return {"verdict": "error", "owner": INTEGRITY_OWNER, "reason": f"{type(e).__name__}: {e}"[:2000]}
+        return {"verdict": "error", "reason": f"{type(e).__name__}: {e}"[:2000]}
 
 
 def _json(path: Path) -> Any:
@@ -794,45 +789,45 @@ def piece(key: str, pieces_dir: Path, run: str | None = None) -> tuple[dict[str,
     try:
         return piece_row(key, pieces_dir, run), piece_server(key, pieces_dir)
     except ValueError as e:
-        return ({"verdict": "error", "owner": PIECES.get(key, WIPE)[2],
-                 "reason": f"its piece left a file that isn't JSON: {type(e).__name__}: {e}"[:2000]}, (None, "real"))
+        return ({"verdict": "error", "reason": f"its piece left a file that isn't JSON: {type(e).__name__}: {e}"[:2000]},
+                (None, "real"))
 
 
 def piece_row(key: str, pieces_dir: Path, run: str | None = None) -> dict[str, Any]:
     """A subprotocol's runner row from its piece's answer; a development piece's is ``missing`` with its document when it
     accepts (it credits nothing), else ``reject``; a piece that ran (`RAN`) and wrote neither is its ``error``, unless it
     refused to run (`REFUSED`); otherwise ``missing``, naming why."""
-    _name, comp, owner, what = PIECES.get(key, WIPE)
+    _name, comp, what = PIECES.get(key, WIPE)
     d = pieces_dir / comp
     f, dev, ran = d / "answer.json", d / DEVELOPMENT, _json(d / RAN)
     if not f.exists() and dev.exists():
         doc = _json(dev)
         if not isinstance(doc, dict):
-            return {"verdict": "error", "owner": owner, "reason": f"its piece's {DEVELOPMENT} is not a JSON object"}
+            return {"verdict": "error", "reason": f"its piece's {DEVELOPMENT} is not a JSON object"}
         if doc.get("verdict") == "accept":
             refused = (doc.get("credit") or {}).get("window")
             if isinstance(refused, list) and len(refused) == 2:
                 refused = f"({refused[0]}) {refused[1]}"
             why = DEV_WHY if refused is None else (f"{DEV_WHY}; core's credit refuses the window "
                                                    f"{refused if isinstance(refused, str) else json.dumps(refused)}")
-            return {"verdict": "missing", "owner": owner, "why": why[:2000], "development": doc}
-        return {"verdict": "reject", "owner": owner, "reason": "; ".join(doc.get("reasons") or ())[:2000],
+            return {"verdict": "missing", "why": why[:2000], "development": doc}
+        return {"verdict": "reject", "reason": "; ".join(doc.get("reasons") or ())[:2000],
                 "development": doc}
     if not f.exists():
         if (d / REFUSED).exists():
             said = (d / REFUSED).read_text(errors="replace").strip()
-            return {"verdict": "missing", "owner": owner, "why": f"its piece refused to run: {said}"[:2000]}
+            return {"verdict": "missing", "why": f"its piece refused to run: {said}"[:2000]}
         if isinstance(ran, dict):
             late = f", out of time at {ran.get('limit')}" if ran.get("rc") in (124, 137) else ""
-            return {"verdict": "error", "owner": owner,
+            return {"verdict": "error",
                     "reason": f"its piece ran (exit {ran.get('rc')}{late}) and wrote no answer; its log is {comp}/piece.log"}
         if key == "wipe" and (d / "piece.log").exists():
-            return {"verdict": "missing", "owner": owner, "why": f"its piece wrote no answer; its log is {comp}/piece.log"}
-        return {"verdict": "missing", "owner": owner, "why": _unset(comp, what)}
+            return {"verdict": "missing", "why": f"its piece wrote no answer; its log is {comp}/piece.log"}
+        return {"verdict": "missing", "why": _unset(comp, what)}
     try:
-        return row_of(owner, json.loads(f.read_text()), f.parent, run)
+        return row_of(json.loads(f.read_text()), f.parent, run)
     except ValueError as e:
-        return {"verdict": "error", "owner": owner, "reason": f"{type(e).__name__}: {e}"[:2000]}
+        return {"verdict": "error", "reason": f"{type(e).__name__}: {e}"[:2000]}
 
 
 def piece_server(key: str, pieces_dir: Path) -> tuple[str | None, str]:

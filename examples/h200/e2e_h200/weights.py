@@ -1,7 +1,7 @@
 """The seeded weights the skeleton serves: the seeded generator and stream (`e2e_h200.served_weights`),
 with the reads the driver, the store and replay make.
 
-The weights stream (every tensor's little-endian bytes in `tensors(shape)` order, no padding) is what memory-accounting's
+The weights stream (every tensor's little-endian bytes in `tensors(shape)` order, no padding) is what PoUS's
 store P2-encodes and what the store's decode call stages from; `generate` gives any tensor without the store, which replay
 reads a sampled proof block's weight row from, so a wrong decode shows as a mismatch.
 """

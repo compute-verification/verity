@@ -19,15 +19,16 @@ GATE = Path(__file__).resolve().parents[1] / "gate.sh"
 FP = "SHA256:s8UdOpJZGMXJR1DjgmOyTsWpTqQX7GDJq/yQCYhSJhs"
 PUBLIC = bytes(range(80))
 PIN = hashlib.sha512(PUBLIC).hexdigest()
+LANE = "lane-a"
 
 
 def entry(seq: int, kind: str, period: str, lane: str) -> dict:
     return {"seq": seq, "kind": kind, "body": {"period": period, "lane": lane, "by": lane}}
 
 
-CLOSED_7 = [entry(1, "period-open", "ma-remote-coins-7", "memory-accounting"),
-            entry(2, "period-open", "kernels-dev-1", "kernels"),
-            entry(3, "period-close", "ma-remote-coins-7", "memory-accounting")]
+CLOSED_7 = [entry(1, "period-open", "a-7", LANE),
+            entry(2, "period-open", "b-1", "lane-b"),
+            entry(3, "period-close", "a-7", LANE)]
 
 
 GIT = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
@@ -63,7 +64,7 @@ def off_main(repo: tuple[Path, str]) -> tuple[Path, str]:
 
 
 def probe(tmp_path: Path, repo: tuple[Path, str], *, ledger=CLOSED_7, pinned=None, busy=(), public=PUBLIC,
-          period="ma-remote-coins-8", circuit=None, dry=False) -> tuple[subprocess.CompletedProcess, Path, list[str]]:
+          period="a-8", circuit=None, dry=False) -> tuple[subprocess.CompletedProcess, Path, list[str]]:
     """gate.sh probe against stub gates answering from these records; its result, $OUT and the calls ssh got."""
     r, head = repo
     g, out, bin_ = tmp_path / "gates", tmp_path / "out", tmp_path / "bin"
@@ -78,7 +79,7 @@ def probe(tmp_path: Path, repo: tuple[Path, str], *, ledger=CLOSED_7, pinned=Non
     for f in bin_.iterdir():
         f.chmod(0o755)
     env = {**os.environ, "PATH": f"{bin_}{os.pathsep}{os.environ['PATH']}", "OUT": str(out), "COMMIT": head,
-           "PERIOD": period, "PIN": PIN, "GATE_KEY": str(tmp_path / "key"), "AUDITOR_FP": FP,
+           "PERIOD": period, "PIN": PIN, "LANE": LANE, "GATE_KEY": str(tmp_path / "key"), "AUDITOR_FP": FP,
            "AUDITOR": "research@192.0.2.7", "CHALLENGER": "research@192.0.2.8"}
     if circuit:
         env["CIRCUIT"] = circuit
@@ -101,9 +102,9 @@ def test_the_probe_passes_reading_only(tmp_path, repo):
 
 
 @pytest.mark.parametrize("kw, why", [
-    ({"period": "ma-remote-coins-7"}, "period ma-remote-coins-7 is used (seq [1, 3]): name a new PERIOD"),
-    ({"ledger": CLOSED_7 + [entry(4, "period-open", "ma-remote-coins-x", "memory-accounting")]},
-     "lane memory-accounting has period ma-remote-coins-x open: close it first (gate.sh close, PERIOD=ma-remote-coins-x)"),
+    ({"period": "a-7"}, "period a-7 is used (seq [1, 3]): name a new PERIOD"),
+    ({"ledger": CLOSED_7 + [entry(4, "period-open", "a-x", LANE)]},
+     "lane lane-a has period a-x open: close it first (gate.sh close, PERIOD=a-x)"),
     ({"public": bytes(80)}, f"the challenger's public key is {hashlib.sha512(bytes(80)).hexdigest()[:16]}..., "
                             f"not PIN {PIN[:16]}..."),
     ({"pinned": "{parent}"}, "the verifier host is pinned at {parent}, not COMMIT {head}: rerun with COMMIT={parent}"),
@@ -165,7 +166,7 @@ def fire(tmp_path: Path, status: str, lease_by: str) -> tuple[subprocess.Complet
     (bin_ / "ssh").chmod(0o755)
     env = {**os.environ, "PATH": f"{bin_}{os.pathsep}{os.environ['PATH']}", "OUT": str(out), "PROVER_RUN": "r1",
            "PROVER_SSH": "research@n2", "ENGINES": "8", "LEASE_BY": lease_by, "GATE_KEY": str(tmp_path / "key"),
-           "COMMIT": "0" * 40, "PERIOD": "ma-remote-coins-9", "PIN": PIN}
+           "COMMIT": "0" * 40, "PERIOD": "a-9", "PIN": PIN, "LANE": LANE}
     p = subprocess.run(["bash", str(GATE), "fire"], cwd=tmp_path, env=env, capture_output=True, text=True)
     calls = (tmp_path / "calls").read_text().splitlines() if (tmp_path / "calls").exists() else []
     return p, calls

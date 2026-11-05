@@ -445,7 +445,7 @@ def test_a_varied_rehearsal_takes_its_prompts_off_stdin_into_its_witness_and_reh
         "--prompts-file", str(w / A.PROMPTS)]
     assert "--prompt-range" not in argv and argv[argv.index("--traffic"):] == [
         "--traffic", "varied", "--name", run, "--strategies", "honest"]
-    for key, witness in (("memory-accounting", False), ("network-accounting", True)):
+    for key, witness in (("lane-b", False), ("network-accounting", True)):
         rc, blob = A.gate(["--ssh", f"fetch {run}", "--key", key], host)
         with tarfile.open(fileobj=io.BytesIO(blob)) as tar:
             names = tar.getnames()

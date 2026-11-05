@@ -7,7 +7,7 @@
 #
 # Needs CUDA torch with Triton and `gpu-lease` on PATH; IN defaults to a run directory's inputs/ (RESEARCH_RUN_DIR).
 # Outside the lease: the ship unpacked and held to its MANIFEST.sha256, the card, the toolkit and the Python recorded. Under one
-# timed lease of at most LEASE_MIN minutes (default 25), the STEPS (default bench,scale,run) in order, memory-accounting's
+# timed lease of at most LEASE_MIN minutes (default 25), the STEPS (default bench,scale,run) in order, PoUS's
 # tools unchanged on the shipped libp2v1.so (v4 keys, sm_90) first:
 #   bench  benchmarks/pous/p2_v1/decode_bench.py: P2's decode rate, the keys alone, the kernel alone and the full pass, gated
 #          against reference.py (decode-bench.json)

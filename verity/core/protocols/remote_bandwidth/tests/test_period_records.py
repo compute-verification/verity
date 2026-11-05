@@ -17,7 +17,7 @@ from verity.core.protocols.remote_bandwidth import period as P
 from verity.core.protocols.sampled_proofs import challenger as C
 
 KEY = C.ChallengerKey(4, 10, hashlib.sha512(b"the challenger key").digest() + bytes(16))
-LANE = "compute-accounting"
+LANE = "lane-a"
 T = "2026-10-26T21:44:45Z"
 
 

@@ -402,10 +402,11 @@ def rates(lib: Lib, torch, ks, sms: int, reps: int, log) -> dict:
     return out
 
 
-def frontier_rates(res: dict, libs, run: str | None) -> list[dict]:
+def frontier_rates(res: dict, libs, run: str | None, lane: str | None = None) -> list[dict]:
     """Each field's compute-only rates at each k as `RATES_SCHEMA` records, for the frontier's pooled x: x is the encode
     of 70B's linears (`E_70B` bytes as words) at the measured rate, in `NATIVE_70B_S` steps, at the locked clock;
-    `x_max_clock` scales it by the clocks' ratio (not measured: the nodes' clocks are locked)."""
+    `x_max_clock` scales it by the clocks' ratio (not measured: the nodes' clocks are locked); ``lane`` is the lane that
+    ran it."""
     out = []
     hz = CLOCK_LOCKED_MHZ * 1e6
     for lib in libs:
@@ -416,7 +417,7 @@ def frontier_rates(res: dict, libs, run: str | None) -> list[dict]:
         for k, e in r["encode"].items():
             d = r["decode"][k]
             x = words / e["per_s"] / NATIVE_70B_S
-            out.append({"schema": RATES_SCHEMA, "lane": "ra-word-codec", "b": f.n, "field": f"2^{f.n}-{f.c}",
+            out.append({"schema": RATES_SCHEMA, "lane": lane, "b": f.n, "field": f"2^{f.n}-{f.c}",
                         "lib": lib.name, "k": int(k),
                         "arithmetic": "cuda-int32/thread-per-word/column"
                         + ("/karatsuba-1" if lib.karatsuba else "/streamed-fold" if f.limbs > 24 else "")
@@ -723,6 +724,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--lib", action="append", required=True, help="NAME=PATH, NAME a field of kv.FIELDS (or FIELD-TAG)")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--lane", help="the lane running it, its frontier rates' `lane` (default none)")
     ap.add_argument("--ks", default="1,2,4,6")
     ap.add_argument("--attn-ks", default="1", help="the rounds `attention` decodes inside attention at (empty: none)")
     ap.add_argument("--batches", default="1,8,32")
@@ -789,7 +791,7 @@ def main() -> int:
         if not a.no_native:
             res["native"] = native_70b(torch, batches, a.reps, log)
         res["model"] = model(res, libs, batches, contexts, props.total_memory)
-        res["frontier_rates"] = frontier_rates(res, libs, os.environ.get("RESEARCH_RUN_ID"))
+        res["frontier_rates"] = frontier_rates(res, libs, os.environ.get("RESEARCH_RUN_ID"), a.lane)
         (out_dir / "rates.json").write_text(json.dumps(res["frontier_rates"], indent=1) + "\n")
     (out_dir / "kv-codec.json").write_text(json.dumps(res, indent=1, default=str))
     write_result(res, libs, out_dir)

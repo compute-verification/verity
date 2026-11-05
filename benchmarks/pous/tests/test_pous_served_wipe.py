@@ -36,7 +36,7 @@ case "$*" in
 esac
 """
 LEASE = """#!/usr/bin/env bash
-echo "$GPU_LEASE_WHO $*" >> "$FAKE_LEASE_LOG"
+echo "${GPU_LEASE_WHO:-${RESEARCH_LANE:-$(id -un)}} $*" >> "$FAKE_LEASE_LOG"
 while [ "$1" != -- ]; do shift; done
 shift
 GPU_LEASE_UUID=GPU-own0 CUDA_VISIBLE_DEVICES=0 exec "$@"
@@ -153,16 +153,16 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
 
 
 def test_outside_a_lease_it_takes_a_card_of_its_own(node, tmp_path) -> None:
-    """Without the serve's lease it waits for a card of its own (`gpu-lease 1 --wait` as memory-accounting) and wipes
-    that one. A Lean judge built already (WIPE_PROTOCOL_EXE) goes to demo.sh as `--wipe-protocol`, nothing built here."""
+    """Without the serve's lease it waits for a card of its own (`gpu-lease 1 --wait`, held in the caller's lane's name)
+    and wipes that one. A Lean judge built already (WIPE_PROTOCOL_EXE) goes to demo.sh as `--wipe-protocol`, nothing built here."""
     d = tmp_path / "wipe"
     judge = _exe(tmp_path / "wipe-protocol", "#!/bin/sh\nexit 9\n")
-    r = _wipe(node | {"WIPE_PROTOCOL_EXE": str(judge)}, d)
+    r = _wipe(node | {"WIPE_PROTOCOL_EXE": str(judge), "RESEARCH_LANE": "lane-a"}, d)
     assert r.returncode == 0, r.stdout + r.stderr
     _is_core_answer(answer := json.loads((d / "answer.json").read_text()))
     assert answer["verdict"] == "accept"
     lease = (tmp_path / "lease.log").read_text().splitlines()
-    assert len(lease) == 1 and lease[0].startswith(f"memory-accounting 1 --wait --max-min 30 -- bash {WRAPPER} ")
+    assert len(lease) == 1 and lease[0].startswith(f"lane-a 1 --wait --max-min 30 -- bash {WRAPPER} ")
     served = json.loads((d / "served.json").read_text())
     assert served["card"] == "GPU-own0" and served["lease"].startswith("its own (gpu-lease 1 --wait)")
     demo = json.loads((d / "demo-argv.json").read_text())

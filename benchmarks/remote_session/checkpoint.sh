@@ -4,8 +4,8 @@
 # (HF_HOME, default /workspace/hf), any missing fetched from the Hub; then $HF_HOME/pinned/ROLE-REV8, a directory of hard
 # links to the cache's blobs (regular files, which `remote_bandwidth.store.check` takes and a snapshot's symlinks aren't:
 # `verifier.py --checkpoint`), every file of it held to the pin's SHA-512 (`store.check`, WORKERS processes); the
-# snapshot (`node.py --model-dir`) and the pinned directory each get a retention record (owner OWNER,
-# KEEP_EXPIRES). CHECK_ONLY=1 fetches and links nothing: it holds what is there to the pin. Writes $OUT/checkpoint.json.
+# snapshot (`node.py --model-dir`) and the pinned directory each get a retention record (owner OWNER, default
+# @RESEARCH_LANE; KEEP_EXPIRES). CHECK_ONLY=1 fetches and links nothing: it holds what is there to the pin. Writes $OUT/checkpoint.json.
 #
 #   OUT=DIR bash benchmarks/remote_session/checkpoint.sh      # on the GPU node
 set -uo pipefail
@@ -78,8 +78,9 @@ echo "store.check rc $rc in $(($(date +%s) - t0)) s"
 cat "$OUT/checkpoint.json"
 [ $rc = 0 ] || exit $rc
 if [ -z "${CHECK_ONLY:-}" ]; then
+  OWNER=${OWNER:-@${RESEARCH_LANE:?OWNER (else @RESEARCH_LANE) owns the retention records}}
   for p in "$(dirname "$(dirname "$SNAP")")" "$PINNED"; do
-    research keep "$p" --owner "${OWNER:-@memory-accounting}" --expires "${KEEP_EXPIRES:-14d}" --priority high \
+    research keep "$p" --owner "$OWNER" --expires "${KEEP_EXPIRES:-14d}" --priority high \
       --regenerate "ROLE=$ROLE bash benchmarks/remote_session/checkpoint.sh" \
       --why "$ROLE's pinned checkpoint ($REPO@$REV, core's models.json) for the remote memory audit's bound runs" \
       || { echo "research keep $p failed"; exit 6; }

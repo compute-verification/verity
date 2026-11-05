@@ -1,4 +1,4 @@
-# The staging decode: P2's decode (memory-accounting's libp2v1.so, unchanged) of a layer's matrices into plaintext staging
+# The staging decode: P2's decode (PoUS's libp2v1.so, unchanged) of a layer's matrices into plaintext staging
 # buffers, and the exact W8A8 GEMM on them. layer.py and session.sh run on a GPU node; the CPU parts they are checked
 # with (the store's layout, the scatter, the reference decode of a block, the toy store through the staging path, the
 # GEMM twin against the Definition) run here as a suite.

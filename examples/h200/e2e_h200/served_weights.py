@@ -2,7 +2,7 @@
 every tensor of a decoder of any `Shape` (the H200 demo's frozen shape `H200`, Phase 1's CPU model `PHASE1`), and the
 registration of those tensors as core's registered values (``one_stage.registered``), computed in parallel.
 
-No torch: memory-accounting's encoder and the H200 demo run it with `examples/h200` on their path
+No torch: PoUS's P2 encoder (`benchmarks/pous/p2_v1`) and the H200 demo run it with `examples/h200` on their path
 (``PYTHONPATH=examples/h200 python -m e2e_h200.served_weights ...``).
 
 * **The model** (`Shape`): a pre-norm decoder with learned absolute positions, ``heads`` query heads of ``head_dim`` and

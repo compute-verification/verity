@@ -12,13 +12,15 @@
 # remote-audit-verifier, so lake must be on the PATH, and refuses the line where line.py's differs). RUN may instead be
 # a host run's directory as the verifier host ships it (its gate's `fetch`, out/ beside request.json): the sessions'
 # challenger peer is the record's (verifier.json's, else request.json's --challenger-peer), and PEER overrides it.
-# LOCKDOWN, if set, is infra's record of the provider's lockdown of the gate node (auditor_line.py --lockdown).
+# LOCKDOWN, if set, is infra's record of the provider's lockdown of the gate node (auditor_line.py --lockdown). LANE
+# (else RESEARCH_LANE) is the lane whose period it is and whose gate key it uses.
 #
-#   OUT=OUT RUN=DIR PERIOD=P PIN=SHA512 COMMIT=SHA bash benchmarks/remote_session/auditor.sh      # from a clone's root
+#   OUT=OUT RUN=DIR PERIOD=P PIN=SHA512 COMMIT=SHA LANE=L bash benchmarks/remote_session/auditor.sh      # from a clone's root
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 GATE=${GATE:-research@204.12.178.84}
-KEY=${GATE_KEY:-$HOME/.ssh/vy-gate-memory-accounting}
+LANE=${LANE:-${RESEARCH_LANE:?LANE (else RESEARCH_LANE) names the lane whose period this is}}
+KEY=${GATE_KEY:-$HOME/.ssh/vy-gate-$LANE}
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 cp -a "${RUN:?}/out" "$S/" && chmod -R u+w "$S"
@@ -65,7 +67,7 @@ else
   echo "main: can't fetch origin/main's first-parent history, so no session is pinned" >> "$OUT/fetch.log"
 fi
 uv run python "$HERE/auditor_line.py" "$S/out" --host-bytes "${HOST_BYTES:-1843153879040}" --pin "${PIN:?}" \
-  --period "${PERIOD:?}" --commit "${COMMIT:?}" ${PEER:+--peer "$PEER"} --ledger "$OUT/ledger.jsonl" "${PINS[@]}" \
+  --period "${PERIOD:?}" --commit "${COMMIT:?}" --lane "$LANE" ${PEER:+--peer "$PEER"} --ledger "$OUT/ledger.jsonl" "${PINS[@]}" \
   "${MAIN[@]}" ${LOCKDOWN:+--lockdown "$LOCKDOWN"} \
   --table "$OUT/credit.md" > "$OUT/auditor_line.json" 2> "$OUT/auditor_line.err"
 W=$?

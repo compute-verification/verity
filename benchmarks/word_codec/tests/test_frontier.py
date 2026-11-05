@@ -88,9 +88,9 @@ def test_tensor_points_take_y_from_a_runs_layer_and_x_from_any_runs_analysis(cap
         "p768": {"layer": {"1": {"plain": 1.0, "fused_k1": 1.159}}}}}
     rates = {"libs": {"p512": {"analysis": {"k": {"1": {"x_cuda": 210.0, "x_both": 203.0, "x_tc": 900.0,
                                                         "x_cuda_measured_encode": 150.0, "delta_cuda": 0.48}}}}}}
-    pts = F.check(F.tensor_points([(gemm, "art:g"), (rates, "art:r")]))
+    pts = F.check(F.tensor_points([(gemm, "art:g"), (rates, "art:r")], "lane-a"))
     assert "p768 has no analysis" in capsys.readouterr().err
-    assert sorted(p["batch"] for p in pts) == [1, 32]
+    assert sorted(p["batch"] for p in pts) == [1, 32] and {p["lane"] for p in pts} == {"lane-a"}
     p1 = next(p for p in pts if p["batch"] == 1)
     assert (p1["b"], p1["k"], p1["model"], p1["x"], p1["delta"], p1["tau"], p1["art"]) == (
         512, 1, "llama-3.1-70b", 203.0, 0.48, 0.0, "art:g")

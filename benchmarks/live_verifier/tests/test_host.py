@@ -41,7 +41,7 @@ T0 = datetime(2026, 10, 21, 13, 0, 0, tzinfo=timezone.utc)
 T1 = datetime(2026, 10, 21, 13, 30, 0, tzinfo=timezone.utc)
 PIN = "c" * 40
 KEY = "ab" * 64
-LANE = "memory-accounting"
+LANE = "lane-a"
 RUN = "v20261021T130000Z-ab12"
 SSH = "-i /nonexistent/test-gate-key -o IdentitiesOnly=yes research@192.0.2.1"
 BASE = ["run", "--peer", "gpu-node", "--port", "7951", "--period", "memory-line-1", "--pin", KEY]
@@ -387,8 +387,8 @@ def test_a_read_only_key_starts_replays_stops_and_closes_nothing_but_reads(svc, 
 def test_a_run_is_stopped_only_by_its_own_lane_or_vy_admin_and_its_stop_is_recorded(svc):
     units = Units()
     assert call(svc, PACED, units)[0] == 0
-    assert refused(call(svc, ["stop", RUN], units, key="network-accounting")) == (
-        f"run {RUN} is {LANE}'s, not network-accounting's")
+    assert refused(call(svc, ["stop", RUN], units, key="lane-b")) == (
+        f"run {RUN} is {LANE}'s, not lane-b's")
     rc, out = call(svc, ["stop", RUN], units)
     assert rc == 0 and json.loads(out) == {"run": RUN, "stopping": [f"vy-verifier@{RUN}.service"], "by": LANE}
     assert json.loads((svc.runs / RUN / "stop.json").read_text()) == {"by": LANE, "utc": "2026-10-21T13:00:00Z"}

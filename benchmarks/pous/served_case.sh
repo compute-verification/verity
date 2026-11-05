@@ -37,7 +37,7 @@ if [ -f "$PIECES/pous/answer.json" ]; then
     "$PY" "${ARGS[@]}" || rc=$?
   else
     # shellcheck disable=SC2016
-    GPU_LEASE_WHO=${GPU_LEASE_WHO:-memory-accounting} gpu-lease 1 --wait --max-min "${LEASE_MIN:-40}" --mem-gb "${MEM_GB:-72}" -- \
+    gpu-lease 1 --wait --max-min "${LEASE_MIN:-40}" --mem-gb "${MEM_GB:-72}" -- \
       bash -c 'export CUDA_VISIBLE_DEVICES=$GPU_LEASE_UUID; exec "$@"' _ "$PY" "${ARGS[@]}" || rc=$?
   fi
 fi

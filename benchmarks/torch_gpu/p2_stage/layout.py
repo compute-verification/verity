@@ -19,7 +19,7 @@ shape), O, up and down; after the last layer the head (`HEAD`, 256 x 16,384) is 
 at its stream offset, QKV being wq, wk and wv one after another, each with its f32 scales, and the head the stream's
 `head` (`Tensor.stream_names`). `payloads` lays it out as the store's W.
 
-`check_blocks` holds rows to W's payloads by memory-accounting's reference decode of one block (`p2_v1/store.py`'s
+`check_blocks` holds rows to W's payloads by P2's reference decode of one block (`p2_v1/store.py`'s
 `decode_block`: `p2_v1.reference.decode` under `reference.keys_after`), which refuses a row not below p, or a decode
 wider than the payload.
 """

@@ -18,6 +18,7 @@ def test_rates_rows_take_the_fastest_encode_and_the_best_config():
     r1 = {"device": {"name": "gpu"}, "libs": {"p768": lib(768, 1.0, 0.5), "p512": {"constants": {"n": 512}}}}
     r2 = {"device": {"name": "gpu"}, "libs": {"p768": lib(768, 3.0, 0.7)}}
     r3 = {"device": {"name": "gpu"}, "libs": {"p768": lib(768, 2.0, 0.6)}}
-    rows = P.rates_rows(P.merge_rates([("r1", r1), ("r2", r2), ("r3", r3)]), 2092.0)
+    rows = P.rates_rows(P.merge_rates([("r1", r1), ("r2", r2), ("r3", r3)]), 2092.0, "lane-a")
     assert [(r["field"], r["run"], r["squarings_s_cuda"], r["squarings_s_tc"]) for r in rows] == [("p768", "r2", 6.0, None)]
     assert rows[0]["schema"] == P.RATES_SCHEMA and rows[0]["encode_words_s"] == {"1": 0.7, "2": 9.0}
+    assert rows[0]["lane"] == "lane-a" and P.rates_rows(P.merge_rates([("r1", r1)]), 2092.0)[0]["lane"] is None

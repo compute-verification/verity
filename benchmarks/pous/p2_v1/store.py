@@ -20,7 +20,7 @@ fixture (`store-toy/`): `toy.json`, `spot.json`, `spot-c.bin` and `c-star.bin`, 
 no encoding.
 
 `commit` is `setup.commit` of the real `W` under the layout's manifest, before any salt exists, into `setup.json` in
-`--store` and `--out` (p2_v1/p2-encode's `commit`, with `W` laid out here). `W` is regenerated from the seeded generator
+`--store` and `--out`, with `W` laid out here. `W` is regenerated from the seeded generator
 (`Generated`: `e2e_h200.served_weights`, a module name or its `.py` file) by `--workers` forked processes, and each of
 the generator's s8 tensors is held to `--manifest`'s SHA-256 (the generator's `manifest(digests=True)`) as the pass reads
 it.
@@ -753,7 +753,7 @@ def _worker(index: int, cfg: dict[str, Any], todo: Any, done: Any) -> None:
 # --- commands --------------------------------------------------------------------------------------------------------------
 
 def commit_cmd(a: argparse.Namespace) -> dict:
-    """`setup.json` with the commitment to `W` in this layout: p2-encode's `commit` fields for its stream, plus the
+    """`setup.json` with the commitment to `W` in this layout: the stream's scheme, generator, program and sizes, plus the
     layout's digest and the checked tensors; reused when `--store` already has it for the same `W`, and taken from
     `--commitment` (encode's) in place of the pass when it hasn't."""
     store_dir, out = Path(a.store), Path(a.out)

@@ -122,7 +122,7 @@ def test_collect_names_the_audit_missing_where_the_pous_piece_wrote_nothing(tmp_
     assert capsys.readouterr().out.startswith("MISSING the bandwidth audit: the PoUS piece wrote no bandwidth answer")
     assert not (out / "answer.json").exists()
     row = S.piece_row("bandwidth", tmp_path / "pieces")
-    assert row["verdict"] == "missing" and row["owner"] == S.PIECES["bandwidth"][2]
+    assert sorted(row) == ["verdict", "why"] and row["verdict"] == "missing"
 
 
 def test_collect_replaces_another_windows_answer_and_errs_on_another_protocols(tmp_path, capsys):

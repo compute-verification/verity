@@ -6,7 +6,7 @@
 #   WIPE_CMD='bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'   # bash -c "$WIPE_CMD" _ SERVE_DIR WINDOW DIR
 #
 # Inside the serve's gpu-lease (GPU_LEASE_UUID set) it wipes that card, the one the engine then loads on; outside one it
-# takes a card of its own (`gpu-lease 1 --wait`) and gives it back after. It refuses (exit 3, no answer, the reason in
+# takes a card of its own (`gpu-lease 1 --wait`, held in GPU_LEASE_WHO's name, else RESEARCH_LANE's) and gives it back after. It refuses (exit 3, no answer, the reason in
 # DIR/refused.txt) a card that isn't idle, any process on it or more than WIPE_IDLE_MIB (1024) of its memory in use, and
 # a challenger command whose ssh key (-i) isn't on this node; it kills nothing. The memory challenger is vy-auditor-2's,
 # through infra's wipe gate, as in Demo B (r20261027-052452-ff66, accepted on vy-dc-h200-2):
@@ -59,7 +59,7 @@ if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the key, the Le
   if [ -z "${GPU_LEASE_UUID:-}" ]; then
     command -v gpu-lease >/dev/null 2>&1 || refuse "no gpu-lease on $NODE to hold the card by"
     rc=0
-    WIPE_OWN_LEASE=1 GPU_LEASE_WHO=memory-accounting gpu-lease 1 --wait --max-min 30 -- \
+    WIPE_OWN_LEASE=1 gpu-lease 1 --wait --max-min 30 -- \
       bash "$SELF" "$SERVE_DIR" "$WINDOW" "$DIR" "$@" || rc=$?
     exit "$rc"
   fi

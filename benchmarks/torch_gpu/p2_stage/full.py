@@ -6,7 +6,7 @@ digests; then the exact W8A8 GEMM on one layer's staged matrices.
                    [--m 16384] [--reps 2] [--readers 6] [--hashers 4] [--n-chunk 16384]
 
 `LAYOUT`, `M`, `ENC`, the coin and the commitment are `layer.py`'s: the store's layout, the weights manifest with
-each stream tensor's SHA-256 (`manifest --digests`, the digests memory-accounting held W to), and memory-accounting's
+each stream tensor's SHA-256 (`manifest --digests`, the digests the store was encoded against), and PoUS's
 encoded store, read only, under the salt `setup.draw_salt` of the coin and commitment its `setup.json` is held to.
 
 - **stage**, each tensor of `--layers` in block order (a layer's QKV, O, up and down; the head is the last layer):

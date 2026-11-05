@@ -3,7 +3,7 @@
 #   lib/<variant>/libp2stage.so  p2stage.cu for ARCH (default sm_90a, the H200's), each refused unless ptxas reports no warning,
 #                                spill or stack frame and its SASS has no local memory (sass_gate.py, which records registers,
 #                                shared memory and the instruction mix into lib/<variant>/sass.json); VARIANTS names them
-#   p2v1/libp2v1.so              memory-accounting's benchmarks/pous/p2_v1 library by its own Makefile (FAST's default: v4 keys,
+#   p2v1/libp2v1.so              PoUS's benchmarks/pous/p2_v1 library by its own Makefile (FAST's default: v4 keys,
 #                                Karatsuba squaring), CGBN at p2_gpu/CGBN.commit: decode_bench.py's rates, the encode rate, the
 #                                codewords and the staging gate's second decoder
 #   toolchain.txt (nvcc --version and every command line), source.txt (the commit), MANIFEST.sha256
@@ -62,7 +62,7 @@ for v in $VARIANTS; do
   python3 "$HERE/sass_gate.py" "$ARCH" "$d/ptxas.txt" "$S/$name.sass" "$d/sass.json" | sed "s/^/$name: /"
 done
 
-# memory-accounting's library, unmodified: its Makefile's arch flag takes sm_90 (no wgmma), its host pass gmp.h
+# PoUS's library, unmodified: its Makefile's arch flag takes sm_90 (no wgmma), its host pass gmp.h
 GMPINC=
 if ! echo '#include <gmp.h>' | cpp >/dev/null 2>&1; then
   uv pip install -q --target "$S/py" gmpy2

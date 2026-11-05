@@ -54,7 +54,7 @@ if [ -x /workspace/verity-guest/bin/gpu-lease ] && [ -e /run/gpu-lease/pool.gpus
 else
   LEASE=(gpu-lease)
 fi
-export GPU_LEASE_WHO=${GPU_LEASE_WHO:-memory-accounting/a8/${RESEARCH_RUN_ID:-local}}
+export GPU_LEASE_WHO=${GPU_LEASE_WHO:-${RESEARCH_LANE:-$(id -un)}/a8/${RESEARCH_RUN_ID:-local}}
 # one session at a time on this node, as zk_cost.sh's: two would share its host CPUs and memory bandwidth
 PREFIX=(flock "$FLOCK_WORK/sessions.lock" "${LEASE[@]}" 1 --wait --max-min "${LEASE_MAX_MIN:-60}" --)
 log "a8-gpu: samples ${A8_SAMPLES:-64}, points ${A8_POINTS:-1,8,32,64}, arms ${A8_ARMS:-fw,nofw}, ${A8_COLD:-2} cold"

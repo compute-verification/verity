@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# memory-accounting's P2 decode library for the H200, built off the card (a CPU node):
+# PoUS's P2 decode library (benchmarks/pous/p2_v1) for the H200, built off the card (a CPU node):
 #
 #   research run --on auto --cwd source -- bash benchmarks/torch_gpu/p2_stage/build.sh
 #

@@ -2,7 +2,7 @@
 // verity/core/protocols/pous/schemes/p2.py) for the exact INT8 GEMM to read as its weight operand ([N, K] row-major, as
 // W holds it). Built as a shared library for ctypes (stage.py).
 //
-// Reused by include, unmodified (memory-accounting's, benchmarks/pous/p2_v1):
+// Reused by include, unmodified (PoUS's, benchmarks/pous/p2_v1):
 //   p2sq.cuh     p2sq::decode_one, m = sq(sigma_K(sq(c))) - t mod p of one block a warp on its Karatsuba squaring
 //                (P2SQ_KARA, the Makefile's default), K and t as big-endian rows; p2sq::prefetch_row
 //   p2keys4.cuh  p2keys4::midstate and p2keys4::chunk, v4's counter-mode SHA-512 key chunks after the prefix's midstate

@@ -305,9 +305,8 @@ def test_a_subprotocol_with_no_piece_is_named_missing_with_the_command_it_lacks(
     assert [g["verdict"] for g in got.values()] == ["missing"] * 4
     assert [line.split(" (")[0] for line in lines] == ["MISSING PoUW", "MISSING PoUS", "MISSING the bandwidth audit",
                                                        "MISSING the network certifier"]
-    for line, (cmd, owner) in zip(lines, (("POUW_CMD", "compute-accounting"), ("POUS_CMD", "memory-accounting"),
-                                          ("BANDWIDTH_CMD", "memory-accounting"), ("CERTIFIER_CMD", "network-accounting"))):
-        assert f"({cmd} unset; {owner}): " in line
+    for line, cmd in zip(lines, ("POUW_CMD", "POUS_CMD", "BANDWIDTH_CMD", "CERTIFIER_CMD")):
+        assert f"({cmd} unset): " in line
     assert not (tmp_path / "pieces").exists()
 
 
@@ -357,14 +356,14 @@ def test_a_piece_that_left_a_file_that_is_not_json_errs_about_no_server_and_the_
     assert got["bandwidth"]["reason"].startswith("its piece left a file that isn't JSON: JSONDecodeError")
     assert got["pous"] == {"verdict": "reject", "reason": "no", "rc": 0}
     row, at = S.piece("bandwidth", tmp_path / "pieces")
-    assert (row["verdict"], row["owner"], at) == ("error", "memory-accounting", (None, "real"))
+    assert (row["verdict"], at) == ("error", (None, "real"))
 
 
 def _accepted() -> dict:
     a = {"protocol": "verity/sampled-proofs/one-stage/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64,
          "public": {"bound": 2, "drawn": [0, 3], "per_template": None, "proved": [0, 3]},
          "profile": {"levels": [{"name": "unit", "size": 4}], "drawn": {"unit": 2}, "delta": "1/100"}}
-    return S.row_of(S.INTEGRITY_OWNER, a, Path("/nonexistent"))
+    return S.row_of(a, Path("/nonexistent"))
 
 
 def _rows(integrity: dict, pieces: Path) -> dict:
@@ -380,8 +379,7 @@ def test_sampled_proofs_alone_composes_to_a_pending_block_record(tmp_path):
     assert {name: why.split(" unset: ")[0] for name, why in line["missing"].items()} == {
         "PoUW": "POUW_CMD", "the bandwidth audit": "BANDWIDTH_CMD", "PoUS": "POUS_CMD", "the network certifier": "CERTIFIER_CMD",
         "the wipe": "WIPE_CMD"}
-    assert report["protocols"]["work"] == {"verdict": "missing", "owner": "compute-accounting",
-                                           "why": f"POUW_CMD unset: {S.PIECES['work'][3]}"}
+    assert report["protocols"]["work"] == {"verdict": "missing", "why": f"POUW_CMD unset: {S.PIECES['work'][2]}"}
     assert line["elsewhere"] == {} and "unserved" not in line
 
 
@@ -559,7 +557,7 @@ def test_the_record_accepts_only_when_every_subprotocol_accepts_on_its_node_and_
         return
     assert line["composed"] == "pending" and line["record_missing"] == [leg]
     if case == "missing":
-        what = S.WIPE[3] if piece == "wipe" else S.PIECES[runner[piece]][3]
+        what = S.WIPE[2] if piece == "wipe" else S.PIECES[runner[piece]][2]
         assert line["missing"] == {name: f"{piece.upper()}_CMD unset: {what}"}
         assert rec["legs"][leg] is None and line["elsewhere"] == {}
     else:

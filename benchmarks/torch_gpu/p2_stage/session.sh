@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One staging run on vy-dc-h200, from build.sh's lib, the weights module, the weights manifest with
-# digests memory-accounting held W to, and the store's fixture (its layout JSON, `p2_v1/store.py layout`,
+# digests the store was encoded against, and the store's fixture (its layout JSON, `p2_v1/store.py layout`,
 # and its toy, `p2_v1/store-toy/`); cwd = the source tree's root:
 #
 #   tar -C BUILD_RUN/out -cf /tmp/p2lib.tar .
@@ -14,7 +14,7 @@
 #
 # (served_weights.py writes the seeded stream; h200-manifest.json: its manifest with digests.)
 #
-# With ENCODED=1 the store is memory-accounting's encoded store, read only: the layer's segment files of it (each
+# With ENCODED=1 the store is PoUS's encoded store, read only: the layer's segment files of it (each
 # segment's `<s>.c` and `<s>.json`, and `setup.json`, copied off the node that holds it), put once into ENC/seg and kept
 # with `research keep`; its salt is `setup.draw_salt(SOURCE, COMMITMENT)`, the deployment's coin and commitment.
 # Otherwise the development store STORE under the public test salt SALT, which `encode` extends across runs.
@@ -23,7 +23,7 @@
 # manifest to MANIFEST_SHA256; layer LAYER's stream bytes generated once into SRC/w.bin (`weights write`, seed SEED) and
 # kept. SRC, STORE and ENC (by default under /workspace/tmp/p2-stage) are kept with `research keep` under keep.json's
 # owner, expiry and reasons. Under one untimed lease of at most LEASE_MIN minutes (default 15; LEASE_TIMED=1 asks for a timed one), in order:
-# `bench`, memory-accounting's decode_bench.py unchanged on the lib; then layer.py's `toy`, `encode` (development store
+# `bench`, PoUS's decode_bench.py unchanged on the lib; then layer.py's `toy`, `encode` (development store
 # only, ENCODE_BUDGET seconds), `stage` and `gemm` at each batch of M (default 4096,16384). After the lease, `check`:
 # check.py on every block of the layer and the GEMM samples, on half the host's cores. Each step's exit code is in
 # $OUT/rc.txt; exits non-zero if any failed.

@@ -156,7 +156,7 @@ def _integrity() -> dict:
     a = {"protocol": "verity/sampled-proofs/one-stage/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64,
          "public": {"bound": 2, "drawn": [0, 3], "per_template": None, "proved": [0, 3]},
          "profile": {"levels": [{"name": "unit", "size": 4}], "drawn": {"unit": 2}, "delta": "1/100"}}
-    return S.row_of(S.INTEGRITY_OWNER, a, Path("/nonexistent"))
+    return S.row_of(a, Path("/nonexistent"))
 
 
 def _record(monkeypatch, capsys, serve: Path, pieces: Path) -> tuple[dict | None, dict]:
@@ -209,7 +209,7 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
     assert (keep / "chain" / "out" / "endpoint" / "report.json").is_file()
     assert [(keep / "endpoint" / f).stat().st_mode & 0o777 for f in CP.ENDPOINT] == [0o600] * 4
     row = S.piece_row("communication", tmp_path / "pieces")
-    assert (row["verdict"], row["quantity"], row["owner"]) == ("accept", accept["public"], "network-accounting")
+    assert (row["verdict"], row["quantity"]) == ("accept", accept["public"])
     rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
     verdicts = json.loads((tmp_path / "record" / "verdicts.json").read_text())
     assert verdicts["protocols"]["communication"]["answer"]["profile"]["placement"] == where

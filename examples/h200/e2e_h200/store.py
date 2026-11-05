@@ -1,4 +1,4 @@
-"""The weights' store and its decode call: the stand-in for memory-accounting's layout and decode call, on
+"""The weights' store and its decode call: the stand-in for PoUS's P2 layout and decode call, on
 the conventions kernels' decode-to-staging kernel already reads (`benchmarks/torch_gpu/s8_dec_linear`).
 
 **Layout.** W is the seeded weights stream (`weights.Weights.stream`: every tensor's little-endian bytes, s8 codes, f32
@@ -14,7 +14,7 @@ payload): a refused block raises, never stages.
 
 Stores:
 * `P2Store`: the encoded rows C, in host memory or on a CUDA device; built by `encode` (the CPU reference, ~1 s a block with
-  gmpy2: tiny shapes only) or loaded from a file of raw rows (`load`), the form memory-accounting's store ships in.
+  gmpy2: tiny shapes only) or loaded from a file of raw rows (`load`), the form PoUS's P2 store ships in.
 * `GeneratorStore`: no store; ``stage`` regenerates the tensor from the seed. The FIXTURE for running the frozen shape's
   compute before C* is on the card; the record says so.
 * `FileStore`: W itself, the file network's load sink writes, read in place. Before it serves, every tensor's

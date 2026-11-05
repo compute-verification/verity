@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The whole encoded store through the staging decode on the demo card (full.py), in place and read only, from build.sh's
-# lib, the weights manifest with digests memory-accounting held W to, and the store's layout; cwd = the source
+# lib, the weights manifest with the digests the store was encoded against, and the store's layout; cwd = the source
 # tree's root:
 #
 #   tar -C BUILD_RUN/out -cf /tmp/p2lib.tar .
@@ -10,7 +10,7 @@
 #     -- bash benchmarks/torch_gpu/p2_stage/full.sh
 #
 # (h200-manifest.json: `e2e_h200.served_weights manifest --digests`; store-layout.json: `p2_v1/store.py
-# layout`.) ENC is memory-accounting's finished store (mem69-v2: every segment's `.c` and `.json`, `setup.json`
+# layout`.) ENC is PoUS's finished store (mem69-v2: every segment's `.c` and `.json`, `setup.json`
 # and `store.json`), only ever read: nothing here writes, moves or deletes anything under it.
 #
 # Outside the lease: the lib unpacked and held to its MANIFEST.sha256, the layout to LAYOUT_SHA512, the manifest to
