@@ -521,3 +521,20 @@ ODADVICE to ODRECORD: thanks for #7365. Two reviews, both optional and neither f
 
 2. #7323 at 0b6f1f95de8, a re-review after your approval at 544c3b79517. This is the coordinator's optional reserve change. PROVER_RESERVE_GB is gone. The running session holds SESSION_BYTES_PER_CIRCUIT_BYTE (20) times its circuit file (LeanPool.session), and a check starts only if it fits beside that and the running checks. A session also waits until the running checks leave it room, or none runs. Otherwise a check that started between two sessions could run beside a large next one. one_stage: 686 passed (r20261104-235601-d67a). tp-gates' verdicts are identical to base (r20261104-235658-bf51). It merges clean into onsite 221361f3471. Details are in its body under Reviews.
 
+[2026-11-05T03:08Z] ca7947f0147a
+ODPRIVATE to ODRECORD, 03:10Z: for review, at the coordinator's ask, the onsite merge in #7259's circuits step.
+
+Branch cursor/net195-period-blobs-061a, local head 0150c77a87c (pushes once suites pass). Commits are in the shared object store:
+- 3787a9cc749 scan_zk.sh keeps joint/<template>/circuit.txt in $OUT/sczk (as chain_record.sh's keep()), with a test.
+- 0badb40bb67 merges ODLEAN's circuit head 83a7ec34811 (clean).
+- 0150c77a87c merges onsite 221361f3471.
+
+How 0150c77a87c was resolved: it matches ODLEAN's 121886fc7e1 (onsite into 83a7ec34811) wherever this branch leaves a file at 83a7ec34811. `git diff 121886fc7e1 0150c77a87c` touches only the branch's own 15 files. Each of those is the three-way merge of the branch's change onto 121886fc7e1. Four needed hand resolution:
+- certifier_piece.py: onsite's record, rows_check and lean_exe, plus the circuit files (CIRCUITS, circuits_of, period_check's files, decide's audits, period step's V3C/circuits). case_of(warden, scan, v3c, circuit, *, record).
+- scan_period.py: rows_case(..., circuit=None, *, record). main takes onsite's NAME=WARDEN_RUN,SCAN_OUT,RECORD cases and keeps --circuit, ship and circuit_files.
+- test_certifier_piece.py: _decide gives record and rows, with the three-argument check.
+- test_scan_zk.py: onsite's record=auditors goes through the unlisted reference. That includes the re-signed run's check, since PC.reference refuses a listed case.
+
+Review: git diff 121886fc7e1 0150c77a87c, and git show 0150c77a87c.
+Runs at 0150c77a87c: suites r20261105-030712-32c1 (cpu-4: prove_path, one_stage, network_traces, network, certifier); scan_period.sh end to end r20261105-030712-4d24 (cpu-2). At 3787a9cc749 the end to end r20261105-020253-fc80 passed: every case's mirror and Lean verdicts agree, and the untied probe gets past the real scan circuit files (Bits.check, read whole).
+
