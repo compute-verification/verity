@@ -153,7 +153,7 @@ def _restated(a: dict, b: dict, sources: bool = True) -> bool:
 
 
 def _changed(n: str, a: dict, b: dict) -> str:
-    if a.get("signature") == b.get("signature"):
+    if a.get("type_hash") == b.get("type_hash"):
         return (f"• changed guarantee `{n}`: its definition, unfolded once, says something else (the `reads` record holds "
                 f"its new text's hash):\n{_signature(b)}")
     return f"• changed guarantee `{n}`, before:\n{_signature(a)}\nafter:\n{_signature(b)}"

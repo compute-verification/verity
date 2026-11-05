@@ -51,6 +51,8 @@ def test_a_restated_definition_a_guarantee_is_stated_as_shows_it_changed():
     assert sig in line
     assert spec.changes(_doc({"P.SecurityProofs.G": _g(sig, H1)}), now) == []
     assert [k for _, k, _ in spec._across({"a": was}, {"a": now}, sources=False)] == []
+    (rehashed,) = spec.changes(was, _doc({"P.SecurityProofs.G": _g(sig, H3) | {"unfolded_hash": H2}}))
+    assert rehashed.startswith("• changed guarantee `P.SecurityProofs.G`, before:")
 
 
 def test_new_and_removed_guarantees_are_listed_and_a_move_is_not():
