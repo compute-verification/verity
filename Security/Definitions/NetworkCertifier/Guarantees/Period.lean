@@ -140,8 +140,8 @@ which openings `ops` the first part speaks of, those that open the registered ro
 about the prover's honesty. Two different openings of one registered input are a collision `B_reg` covers. -/
 def PeriodLeakRegistered : Prop :=
   ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
-    (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (hks : KS H D) (L K S : ℕ)
-    (lay : AuditStatement → BoundaryGates L S)
+    (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (L K S : ℕ)
+    (lay : AuditStatement → BoundaryGates L S) (hks : KSBy H D (wiredOk fun s => (lay s).wires))
     (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
     (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ)
     (ops : AuditStatement → List (Opening Bool)) (Dj : ℕ)
