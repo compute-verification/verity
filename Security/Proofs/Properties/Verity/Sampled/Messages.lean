@@ -202,6 +202,13 @@ def coin {C : Type} {iF : Fintype C} {iN : Nonempty C} {k : C → Game α} (K : 
     AgreeCut H (@Game.coin _ C iF iN k) :=
   ⟨@DigestCut.coin _ _ C iF iN k fun c => (K c).cut, fun c => (K c).agrees⟩
 
+/-- A decision's two cuts, on `ite`'s two branches. -/
+def iteCut {c : Prop} {dc : Decidable c} {t e : Game α} (ct : AgreeCut H t) (ce : AgreeCut H e) :
+    AgreeCut H (@ite _ c dc t e) :=
+  match dc with
+  | isTrue _ => ct
+  | isFalse _ => ce
+
 /-- The cut on a game equal to its own. -/
 def cast {g g' : Game α} (h : g = g') (K : AgreeCut H g) : AgreeCut H g' := h ▸ K
 
@@ -234,13 +241,18 @@ def relK {β : Type} : ℕ → List (String × ℕ) → List OpenTree → (List 
     | none => f []
     | some (.fresh l, b) => optGame (takeCoin l fs) (f []) fun fs' =>
         .coin (Fin 512 → Bool) fun x => relK k fs' ts fun log => f (⟨.fresh l, b, List.ofFn x⟩ :: log)
-    | some (.hello spec, ν) => .coin (TreeSample spec) fun t =>
-        relK k fs (ts ++ [⟨ν, spec, t, fun _ => 0⟩]) fun log =>
+    | some (.hello spec, ν) =>
+      if treeLines ts < maxTreeLines ∧ TreeSpecOk spec then
+        .coin (TreeSample spec) fun t => relK k fs (ts ++ [⟨ν, spec, t, fun _ => 0⟩]) fun log =>
           f (⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec t ++ treeKey t.1)⟩ :: log)
-    | some (.opening i s n, b) => optGame ts[i]? (f []) fun T => optGame (T.next s n) (f []) fun p =>
-        haveI : Nonempty (TreeOpenable T.nonce T.spec T.sample p.1 p.2) := ⟨⟨T.sample.2 p.1 p.2, rfl⟩⟩
-        .coin (TreeOpenable T.nonce T.spec T.sample p.1 p.2) fun d =>
-          relK k fs (ts.set i (T.bump p.1)) fun log => f (⟨.opening i s n, b, TreeDraw.opened d.1 n⟩ :: log)
+      else f []
+    | some (.opening i s n, b) =>
+      if treeLines ts < maxTreeLines then
+        optGame ts[i]? (f []) fun T => optGame (T.next s n) (f []) fun p =>
+          haveI : Nonempty (TreeOpenable T.nonce T.spec T.sample p.1 p.2) := ⟨⟨T.sample.2 p.1 p.2, rfl⟩⟩
+          .coin (TreeOpenable T.nonce T.spec T.sample p.1 p.2) fun d =>
+            relK k fs (ts.set i (T.bump p.1)) fun log => f (⟨.opening i s n, b, TreeDraw.opened d.1 n⟩ :: log)
+      else f []
 
 theorem releases_bind {β : Type} :
     ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree) (f : List Release → Game β),
@@ -260,22 +272,27 @@ theorem releases_bind {β : Type} :
         congr 1
         funext x
         exact releases_bind k fs' ts _
-    · simp only [Game.bind_coin, Game.map, Game.bind_assoc, Game.bind_ret]
-      congr 1
-      funext t
-      exact releases_bind k _ _ _
     · dsimp only
-      cases ts[i]? with
-      | none => rfl
-      | some T =>
-        dsimp only [optGame]
-        cases T.next s n with
+      split_ifs
+      · simp only [Game.bind_coin, Game.map, Game.bind_assoc, Game.bind_ret]
+        congr 1
+        funext t
+        exact releases_bind k _ _ _
+      · rfl
+    · dsimp only
+      split_ifs
+      · cases ts[i]? with
         | none => rfl
-        | some p =>
-          simp only [Game.bind_coin, Game.map, Game.bind_assoc, Game.bind_ret]
-          congr 1
-          funext d
-          exact releases_bind k _ _ _
+        | some T =>
+          dsimp only [optGame]
+          cases T.next s n with
+          | none => rfl
+          | some p =>
+            simp only [Game.bind_coin, Game.map, Game.bind_assoc, Game.bind_ret]
+            congr 1
+            funext d
+            exact releases_bind k _ _ _
+      · rfl
 
 theorem play_eq (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
     play fs D θ F c = .send ByteArray fun a => relK (frames fs) fs [] (finish D θ F c a) := by
@@ -329,12 +346,12 @@ noncomputable def frameCut {β : Type} (P : List Release → Frame → Prop) (rv
           frameCut P rv k fs' ts _ (pre ++ [⟨.fresh l, b, List.ofFn x⟩])
     | some (.hello spec, ν) =>
       if P pre (.hello spec) then cutAt rv ν.data.toList else
-        .coin fun t => frameCut P rv k fs (ts ++ [⟨ν, spec, t, fun _ => 0⟩]) _
-          (pre ++ [⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec t ++ treeKey t.1)⟩])
+        .iteCut (.coin fun t => frameCut P rv k fs (ts ++ [⟨ν, spec, t, fun _ => 0⟩]) _
+          (pre ++ [⟨.hello spec, ν, bitsOfBytes (treeRoot ν spec t ++ treeKey t.1)⟩])) .skip
     | some (.opening i s n, b) =>
       if P pre (.opening i s n) then cutAt rv b.data.toList else
-        optCut ts[i]? .skip fun T => optCut (T.next s n) .skip fun p => .coin fun d =>
-          frameCut P rv k fs (ts.set i (T.bump p.1)) _ (pre ++ [⟨.opening i s n, b, TreeDraw.opened d.1 n⟩])
+        .iteCut (optCut ts[i]? .skip fun T => optCut (T.next s n) .skip fun p => .coin fun d =>
+          frameCut P rv k fs (ts.set i (T.bump p.1)) _ (pre ++ [⟨.opening i s n, b, TreeDraw.opened d.1 n⟩])) .skip
 
 end Verity
 
