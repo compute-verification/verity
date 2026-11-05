@@ -103,13 +103,13 @@ class World:
         (self.tmp / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{self.tmp / "vault"}"\n')
         self.store = LocalStore(self.tmp / "store", config_path=self.tmp / "store.toml")
 
-    def queue(self, priority: tuple[int, ...] | None = None, **kw) -> Queue:
-        """A queue on this world's origin; ``priority``: drive's priority list, as `prioritize` writes it."""
+    def queue(self, first: tuple[int, ...] | None = None, **kw) -> Queue:
+        """A queue on this world's origin; ``first``: the PRs drive's priority file lists, first to land first (`prioritize`)."""
         kw.setdefault("ready", lambda n, h: (n, h) in self.gh.ready)
         q = Queue(self.tmp / "q" / "verity", remote=str(self.origin), github=self.gh,
                   store=self.store, log=self.logs.append, **kw)
-        if priority is not None:
-            self.prioritize(q, *priority)
+        if first is not None:
+            self.prioritize(q, *first)
         return q
 
     def prioritize(self, q: Queue, *prs: int) -> None:
@@ -280,7 +280,7 @@ def test_the_priority_list_puts_a_ready_fix_at_the_bottom_of_next_ahead_of_membe
     world.queue().sync()
     world.gh.put(9, world.change({"fix.txt": "fix\n"}))
     world.gh.put(8, world.change({"other.txt": "x\n"}), ready=False)
-    members, _ = world.queue(priority=(8, 9)).sync()
+    members, _ = world.queue(first=(8, 9)).sync()
     assert [m.pr for m in members] == [9, 1, 2, 3]
     again, _ = world.queue().sync()
     assert [m.commit for m in again] == [m.commit for m in members]
@@ -335,7 +335,7 @@ def test_a_sync_merges_what_changes_no_lean_below_every_lean_change_above_the_pr
     world.gh.put(4, world.change({"b.txt": "4\n"}))
     world.gh.put(5, world.change({"c.txt": "5\n"}, base=h1))                 # changes no Lean, but contains #1
     world.gh.put(6, world.change({"d.txt": "6\n"}, base=h2))
-    members, _ = world.queue(priority=(3, 4)).sync()
+    members, _ = world.queue(first=(3, 4)).sync()
     assert [m.pr for m in members] == [3, 4, 2, 6, 1, 5]
     world.gh.put(9, world.change({"pkg/C.lean": "-- 9\n"}))
     world.gh.put(10, world.change({"e.txt": "10\n"}, base=h3))               # its own change, against #3's head, is no Lean
@@ -393,9 +393,9 @@ def test_a_pr_of_the_priority_list_goes_to_the_bottom_and_sorts_what_is_above_it
     _git(world.dev, "push", "-q", "origin", f"{world.change({DRIVE_FLAGS: 'nonlean_first = false'})}:refs/heads/main")
     assert [m.pr for m in world.queue().sync()[0]] == [1, 2, 3]
     world.gh.put(9, world.change({"fix.txt": "9\n"}))
-    members, _ = world.queue(priority=(9,), nonlean_first=True).sync()
+    members, _ = world.queue(first=(9,), nonlean_first=True).sync()
     assert [m.pr for m in members] == [9, 2, 1, 3] and world.logs[-1].endswith("kept 0, merged 4")
-    again, _ = world.queue(priority=(9,), nonlean_first=True).sync()
+    again, _ = world.queue(first=(9,), nonlean_first=True).sync()
     assert again == members and world.logs[-1].endswith("kept 4, merged 0")
 
 
@@ -406,7 +406,7 @@ def test_nonlean_first_off_at_main_keeps_the_priority_lists_then_admission_order
     world.gh.put(1, world.change({"pkg/A.lean": "-- 1\n"}))
     world.gh.put(2, world.change({"a.txt": "2\n"}))
     world.gh.put(3, world.change({"b.txt": "3\n"}))
-    members, _ = world.queue(priority=(3,)).sync()
+    members, _ = world.queue(first=(3,)).sync()
     assert [m.pr for m in members] == [3, 1, 2]
     assert [m.commit for m in world.queue(nonlean_first=True).sync()[0]] == [m.commit for m in members]
     _git(world.dev, "push", "-q", "origin", f"{world.change({'x.txt': 'x\n'})}:refs/heads/main")      # `next` is rebuilt
@@ -420,9 +420,9 @@ def test_the_priority_list_naming_a_lean_change_before_a_nonlean_one_keeps_its_o
     world.gh.put(2, world.change({"a.txt": "2\n"}))
     world.gh.put(3, world.change({"pkg/B.lean": "-- 3\n"}))
     world.gh.put(4, world.change({"b.txt": "4\n"}))
-    members, _ = world.queue(priority=(3, 4), nonlean_first=True).sync()
+    members, _ = world.queue(first=(3, 4), nonlean_first=True).sync()
     assert [m.pr for m in members] == [3, 4, 2, 1]
-    again, _ = world.queue(priority=(3, 4), nonlean_first=True).sync()
+    again, _ = world.queue(first=(3, 4), nonlean_first=True).sync()
     assert [m.commit for m in again] == [m.commit for m in members] and world.logs[-1].endswith("kept 4, merged 0")
 
 
@@ -436,17 +436,17 @@ def test_a_pr_the_last_sync_left_out_is_tried_above_the_rest_so_a_sync_with_noth
     world.gh.put(3, world.change({"c.txt": "3\n"}))
     world.gh.put(4, world.change({"d.txt": "4\n"}, base=world.gh.prs[3].head))
     _git(world.dev, "push", "-q", "origin", f"{world.change({'c.txt': 'main\n'})}:refs/heads/main")
-    first = (3, 1, 4)
-    members, entries = world.queue(priority=first).sync()
-    assert [m.pr for m in members] == [1, 2] and entries[3].state == "refused" and entries[4].state == "waiting"
+    first = (3, 2, 1, 4)
+    members, entries = world.queue(first=first).sync()
+    assert [m.pr for m in members] == [2, 1] and entries[3].state == "refused" and entries[4].state == "waiting"
     for _ in range(2):
-        again, entries = world.queue(priority=first).sync()
+        again, entries = world.queue(first=first).sync()
         assert [m.commit for m in again] == [m.commit for m in members] and world.logs[-1].endswith("kept 2, merged 0")
         assert entries[3].state == "refused" and entries[4].state == "waiting"
     world.gh.put(3, world.change({"c.txt": "3 on main\n"}))                                       # fixed: first again
-    members, entries = world.queue(priority=first).sync()
-    assert [m.pr for m in members] == [3, 1, 2] and entries[4].state == "refused"     # #4 holds the old #3, which conflicts
-    again, _ = world.queue(priority=first).sync()
+    members, entries = world.queue(first=first).sync()
+    assert [m.pr for m in members] == [3, 2, 1] and entries[4].state == "refused"     # #4 holds the old #3, which conflicts
+    again, _ = world.queue(first=first).sync()
     assert [m.commit for m in again] == [m.commit for m in members] and world.logs[-1].endswith("kept 3, merged 0")
 
 
@@ -810,7 +810,7 @@ def test_a_pass_read_back_takes_no_place_in_the_pool_and_none_of_the_budget(worl
     q.preflight, _ = _sync_preflight({})
     assert [m.pr for m in q.sync()[0]] == [2, 3]
     world.gh.put(1, world.change({"1.txt": "1\n"}))
-    q = world.queue(priority=(1,))
+    q = world.queue(first=(1,))
     q.preflight, now, calls = _slow_preflight()
     q.clock, q.preflight_parallel = lambda: now[0], 1
     members, _ = q.sync()
@@ -924,7 +924,7 @@ def test_a_pr_with_a_verdict_at_its_head_is_merged_past_the_budget_so_its_pass_c
     q.preflight, calls = _sync_preflight({})
     assert [m.pr for m in q.sync()[0]] == [1, 2] and sorted(n for n, _ in calls) == [1, 2]
     world.gh.put(3, world.change({"c.txt": "3\n"}))
-    q = world.queue(priority=(3,))
+    q = world.queue(first=(3,))
     q.preflight, now, slow = _slow_preflight()
     q.clock, q.preflight_parallel = lambda: now[0], 1
     merged = _merges(q)
@@ -1081,7 +1081,7 @@ def test_a_pr_of_drives_priority_list_and_those_it_contains_go_first_and_start_t
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     world.gh.put(2, two := world.change({"pkg/A.lean": "-- 2\n"}))
     world.gh.put(3, world.change({"c.txt": "3\n"}, base=two))
-    q = world.queue(priority=(3, 99))
+    q = world.queue(first=(3, 99))
     q.preflight, now, calls = _slow_preflight()
     q.clock, q.preflight_parallel = lambda: now[0], 1
     members, entries = q.sync()
