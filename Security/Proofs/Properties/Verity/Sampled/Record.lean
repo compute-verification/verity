@@ -1,6 +1,7 @@
 import Proofs.Properties.Verity.Sampled
 import Proofs.Flock.Claims.Sampling.Session
 import Proofs.Flock.Claims.Sampling.Deployed
+import Proofs.Flock.Claims.Sampling.InputSlot
 import Proofs.Flock.Bridge.LeafMap
 import Proofs.Properties.SampledProofs.Units
 import Proofs.Properties.Verity.Recursive.PartStatement
@@ -29,6 +30,12 @@ public-coin form (`V`), with what the sampling claims read of it (`code`, `recor
   refusing view where the draw file was refused); the commitment is `A`'s deployed one (`LayoutIsL`'s fields at `A`); one
   session of one table. What a session's witness reveals and the reference prover's framing are the record's
   parameters (`Ext`).
+* **v2's slots over the lowered program** (`partSlots`, `designSlots`, `stmtSlots`): v2's two classes and two rules
+  (`Slots.layout`, `slotDesign`) at the gates of the program the statement reads, the population in the registration's
+  strata, slot `u` unit `u`'s lowered gates, then one slot per input gate of the lowered program, drawn `all`.
+  `slotPartition` of the layout itself numbers the descriptor's gates, not the lowered program's, so it covers none of a
+  unit's lowered gates. `PartSlotsTarget` states that `partSlots` partitions the lowered program where each unit has a
+  gate and commits at most `unitClassMax` bits; `ScopeSlotsOk` is `ScopeOk` at these slots.
 -/
 
 namespace Verity.Sampled.Record
@@ -166,6 +173,36 @@ noncomputable def stmtA (A : Live) : AuditStatement :=
 /-- The statement's partition: V5's at the session's population. -/
 noncomputable def partA (A : Live) : Claims.Sampling.Partition :=
   Flock.Bridge.partOf A.P A.κ (Flock.Bridge.nsOf A.desc A.qr)
+
+/-- **The statement's partition in v2's slots**: the population in the registration's strata (`nsOf`), slot `u` unit
+`u`'s lowered gates (`unitGates`), then the input class of the lowered program (`InputSlot.withInputs`), each input
+gate a proof block of its own. -/
+noncomputable def partSlots (A : Live) : Claims.Sampling.Partition :=
+  InputSlot.withInputs
+    ⟨[(Flock.Bridge.nsOf A.desc A.qr).splitLengths ((List.finRange A.n).map (Flock.Bridge.unitGates A.P))]⟩
+    (Flock.Bridge.progOf A.Cc A.κ)
+
+/-- **v2's design** (`slotDesign`'s two rules): the law's one-stage rule over the population, then every input slot. -/
+def designSlots (A : Live) : Claims.Sampling.Design :=
+  ⟨[_root_.Properties.SampledProofs.oneStageOf A.law, .all]⟩
+
+/-- The statement's audit statement at v2's design. -/
+noncomputable def stmtSlots (A : Live) : AuditStatement := { stmtA A with design := designSlots A }
+
+/-- **`partSlots` partitions the lowered program** where every unit has a lowered gate and commits at most
+`unitClassMax` bits. No unit reads another's gates, so a unit commits only its returned bits, and an input slot commits
+its one input. -/
+def PartSlotsTarget : Prop :=
+  ∀ A : Live, (∀ u, Flock.Bridge.unitGates A.P u ≠ []) →
+    (∀ u, Claims.Sampling.committed (stmtSlots A).prog (Flock.Bridge.unitGates A.P u) ≤ Claims.Sampling.unitClassMax) →
+      (partSlots A).Partitions (stmtSlots A).prog
+
+/-- **The statement is in scope at v2's slots** (`ScopeOk` at `partSlots` and `designSlots`): `partSlots` partitions
+the lowered program, and the law's one-stage rule is well formed over the population's strata. The input class's rule,
+`all`, is well formed at every class. -/
+def ScopeSlotsOk (A : Live) : Prop :=
+  (partSlots A).Partitions (stmtSlots A).prog ∧
+    (_root_.Properties.SampledProofs.oneStageOf A.law).WellFormed (Flock.Bridge.nsOf A.desc A.qr)
 
 /-- **What the record takes as given**: what a session's Flock witness reveals and how many openings at most
 (`reveal`, `reveals`), and the reference prover's framing (`step`, `reads`, `wit`). -/
