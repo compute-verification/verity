@@ -51,6 +51,7 @@ theorem sksLTwo_scope {Coin : Type} (x : Msg) : (sksLTwo Coin).Scope x :=
 /-- The proof block is incorrect under any witness at any interior values: `rejCm` opens nothing. -/
 theorem toy_wrongIn (H : Msg → Msg) (w : Claims.Sampling.Wit) (ι : ℕ → Bool) :
     0 ∈ wrongIn H rejCm toyStmt toyPart toyPart w 0 0 ι := by
+  classical
   unfold wrongIn
   refine Finset.mem_filter.2 ⟨by decide, ?_⟩
   rintro ⟨u, r, hu, hr, hc⟩
