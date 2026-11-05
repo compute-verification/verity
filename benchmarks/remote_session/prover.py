@@ -65,9 +65,9 @@ takes the chain over its appends when the pass is launched (`audit.Store.head`).
 sent, never dropped at a boundary, since a coin no root follows rejects the session; one dropped before its appends
 went out sends nothing, and the next pass sends its appends and changes too.
 
-Every root's message names the step its pass covers (`AuditRun.receive(..., step=...)`, PROTOCOL.md §8 "The pass and
-its step"): with serving ahead, the step the pass took; otherwise the backend's `step_of(ticket)` if it has one, which
-a serving backend takes from its engine, and else the count of the session's passes launched before it. A serving
+Every root's message names the step its pass covers (`AuditRun.receive(..., step=...)`): with serving ahead, the step
+the pass took; otherwise the backend's `step_of(ticket)` if it has one, which a serving backend takes from its engine,
+and else the count of the session's passes launched before it. A serving
 trace's step before pass n is recorded as step n − 1, so pass n reads the store that step left.
 
     python prover.py --connect HOST:PORT --out OUT --plan honest,skip:3e-5 [device options, `device.py`]

@@ -83,8 +83,8 @@ Implementations:
     it decoded, sketches each block's bytes as it decodes them, and commits one root, which the next step's seed chains
     from; each window's openings are answered before the next step. `serve.py fixture` writes the decode kernel's
     sketch fixture: two chained passes' seeds, sign rows, every block's partial and every unit's sketch and receipt
-    (the interface is `remote_bandwidth`'s `PROTOCOL.md` §11). It isn't tracked: `FIXTURE_SHA512` pins its bytes, and
-    `tests/test_pous_p2_serve.py` regenerates it.
+    (the verifier's side is `verity/core/protocols/remote_bandwidth/lean/RemoteAudit/P2.lean`, the interface's notes
+    MEM-208). It isn't tracked: `FIXTURE_SHA512` pins its bytes, and `tests/test_pous_p2_serve.py` regenerates it.
   - `store.py`: the served model's encoded weights store. It lays the MQA16K INT8 weights out in W with every tensor
     starting on a block (`store.py layout` writes the layout JSON), and its `decode_layer` is the reference a
     decode-to-staging kernel matches byte for byte. `store-toy/` is a 2-layer store at the registered width: its salt,

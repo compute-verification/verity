@@ -8,7 +8,7 @@ against the audit's `receipts.py`. `sketch_receipt.py` is the reference for the 
 
 **Status: active.** `benchmarks/remote_session/session.cu` includes `reader.cu`; `benchmarks/vllm_encoded` and
 `benchmarks/harness` build `wt.cu` and `reader.cu`; `benchmarks/vllm_encoded/topup.cu` and `benchmarks/pouw/served_h1`
-include `sha512.cuh`; and the audit's `PROTOCOL.md` and vectors test name `sketch_receipt.py`. Decided by `rg codec_tensor` over
+include `sha512.cuh`. Decided by `rg codec_tensor` over
 `verity/`, `benchmarks/`, `examples/`, `tests/` and `integrations/`.
 
 **Run:** `uv run tools/verity/check/suites.py benchmarks/codec_tensor` checks `wide.py`, `sketch_receipt.py`

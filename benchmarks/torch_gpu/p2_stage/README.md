@@ -28,9 +28,10 @@ on that buffer.
   manifest's SHA-256, the step's decode summed tensor by tensor with the peak HBM, then one layer's exact GEMM by
   `int_mm.linear` against the twin. `check.py --sample N` checks N blocks of every tensor of the store
   against the reference afterwards.
-- `sketch.py`: PoUB's receipts beside the decode (Demo B's bandwidth leg; the interface is
-  `verity/core/protocols/remote_bandwidth/PROTOCOL.md` §11, the fixture `benchmarks/pous/p2_v1/serve.py fixture`). With
-  a pass attached (`store.sketch = sketch.Pass(seed, units, device)`, `units = sketch.plan_units(layout.tensors)`: the
+- `sketch.py`: PoUB's receipts beside the decode (Demo B's bandwidth leg; the interface is `remote_bandwidth.p2`, its
+  Lean `verity/core/protocols/remote_bandwidth/lean/RemoteAudit/P2.lean` and its notes MEM-208, the fixture
+  `benchmarks/pous/p2_v1/serve.py fixture`). With a pass attached
+  (`store.sketch = sketch.Pass(seed, units, device)`, `units = sketch.plan_units(layout.tensors)`: the
   units the store's tensors lie in, so the encoded padding past the head is in no receipt), `Store.decode_rows`
   sketches the units of each chunk before decoding it, from the same rows on the device: σ of each unit's 8,224 stored
   bytes against the pass's 16 sign rows in one int8 GEMM (its four blocks' partials π summed in the accumulators; `Pass.partials` gives each
