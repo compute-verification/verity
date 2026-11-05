@@ -1,0 +1,5 @@
+# The generous bound in all orders (HT-GENEROUS): svd at lr1, rpca and the exact split, on every credited 70B k (layers
+# 1-79) and every 8B q and k, at ranks bracketing the natural-order generous knees (70B k 48-192, 8B k 128, 8B q 256)
+70b-k-gen --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79 --match k_proj --ranks 1,8,16,32,48,64,80,96,112,128,160,192,256 --orders none,fold,sort --workers 79
+8b-q-gen --hf unsloth/Meta-Llama-3.1-8B --target 0.02 --match q_proj --ranks 1,8,32,64,96,128,160,192,224,256,320,384,512 --orders none,fold,sort --workers 32
+8b-k-gen --hf unsloth/Meta-Llama-3.1-8B --target 0.02 --match k_proj --ranks 1,8,16,32,48,64,80,96,112,128,160,192,256 --orders none,fold,sort --workers 32
