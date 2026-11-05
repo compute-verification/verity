@@ -4,6 +4,8 @@ public import Properties.Challenger
 public import Proofs.Properties.Verity.Sampled.Trees
 public import Proofs.Properties.Challenger.CanonLine
 public import Proofs.Flock.Claims.Complete.Json.Hex
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # The log v2 reads is the one the device printed, but for openings' coins of one SHA-512
