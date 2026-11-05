@@ -63,7 +63,7 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-MEMORY_CHALLENGER = ROOT / "benchmarks" / "pous" / "band_gpu" / "memory_challenger.py"
+MEMORY_CHALLENGER = ROOT / "verity" / "core" / "devices" / "memory_challenger" / "timed_audit.py"
 SALT = bytes(range(24))
 VECTORS = ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "fixtures" / "vectors.json"
 LATE_EXTRA_NS = 50_000
@@ -427,7 +427,7 @@ def with_in_degree(base: Any, d: int) -> Any:
 
 
 def _reference_segment(job: tuple[str, Any, int, bytes]) -> tuple[int, bytes]:
-    from .memory_challenger import scheme_of
+    from verity.core.devices.memory_challenger.timed_audit import scheme_of
 
     name, params, s, w_seg = job
     return s, b"".join(scheme_of(name, params).encode_segment(SALT, s, w_seg))
@@ -809,7 +809,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     from verity.core.protocols.pous import schemes
     from verity.core.protocols.pous.verifier import leaf_hash
 
-    from .memory_challenger import scheme_of
+    from verity.core.devices.memory_challenger.timed_audit import scheme_of
 
     base = base or schemes.get(a.scheme).params
     if getattr(a, "band_d", 0):
