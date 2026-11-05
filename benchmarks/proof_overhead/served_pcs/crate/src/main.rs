@@ -12,7 +12,7 @@ use flock_core::{
     challenger::FsChallenger,
     pcs::{
         LOG_PACKING, OpeningGrinding, PcsParams, commit,
-        ligerito::LigeritoProfile,
+        ligerito::{LigeritoProfile, embedded_initial_k_or_default},
         open_batch_mixed_ligerito_with_precomputed_s_hat_v_and_grinding,
         verify_opening_batch_ligerito_mixed_with_grinding,
     },
@@ -25,7 +25,6 @@ use rayon::prelude::*;
 use sha2::{Digest, Sha512};
 
 const K_SKIP: usize = 6;
-const INITIAL_K: usize = 6;
 
 fn list(name: &str, default: &str) -> Vec<usize> {
     env::var(name).unwrap_or_else(|_| default.into()).split_whitespace().map(|s| s.parse().expect(name)).collect()
@@ -79,11 +78,12 @@ fn pcs_point(m: usize, log_inv_rate: usize, claims: usize, hash: &str) {
         "sha512" => HashKind::Sha512,
         other => panic!("HASH {other:?}: hm96-sha512 or sha512"),
     };
+    let profile = if log_inv_rate == 2 { LigeritoProfile::Slim } else { LigeritoProfile::Fast };
     let params = PcsParams {
         m,
         log_inv_rate,
-        log_batch_size: INITIAL_K,
-        profile: if log_inv_rate == 2 { LigeritoProfile::Slim } else { LigeritoProfile::Fast },
+        log_batch_size: embedded_initial_k_or_default(m, profile),
+        profile,
         num_lanes: None,
         merkle_hash,
     };
