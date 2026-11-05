@@ -44,6 +44,10 @@ a tree and a timing record give one partition, named by its digest. A part's key
 files left out (`part_key`), so an edit to one file reruns its part alone, and the join of a suite's parts (`combine_parts`:
 every K once, of one partition, all passed) is the suite's verdict. The check splits a suite measured past `shards.SPLIT_S`
 (15 min; `--split-s`) into ceil(seconds / threshold) parts, and its shards partition by the timings the plan carries.
+A suite whose long tests share few files declares `[tool.verity.tests] parts = P` instead and runs in P parts by test id
+(`suites.id_part_of`): part K collects every file and runs the tests whose node id hashes to K (sha256, as circuit-check
+shards its targets), so the parts are one on every machine whatever its timing record. A part's key is the suite's with the
+part, and its parts join as a split suite's do.
 
 Passes travel between machines as verdict packs (`verdicts.py`). The Lean audit and `circuit-check` reuse their own verdicts
 the same way, each keyed on what it reads. A nightly uncached run must agree with the cached ones. A disagreement means some

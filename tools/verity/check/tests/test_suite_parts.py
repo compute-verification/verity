@@ -1,10 +1,12 @@
 """A suite in parts by test file (`suites.py SUITE:K/M`, `--files K/M`): the partition, a part's key, a run of a part, the join of
-a suite's parts into its verdict (`suites.combine_parts`), and the planner's splitting of a long suite (`shards.py`)."""
+a suite's parts into its verdict (`suites.combine_parts`), and the planner's splitting of a long suite (`shards.py`). And a suite
+in parts by test id (`[tool.verity.tests] parts`): each test in one part in every process, a part's key, the join."""
 from __future__ import annotations
 
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -47,14 +49,15 @@ TESTS = {"test_a.py": "def test_a():\n    pass\n\ndef test_a2():\n    pass\n",
 TIMES = {"pkg/tests/test_a.py": 10.0, "pkg/tests/test_b.py": 9.0, "pkg/tests/test_c.py": 1.0, "pkg/tests/sub/test_d.py": 1.0}
 
 
-def _workspace(root: Path) -> None:
+def _workspace(root: Path, tests_table: str = "") -> None:
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
     shutil.copy(HERE / "settings.py", root / "tools" / "verity" / "check" / "settings.py")
     shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg"]\n')
     (root / "pkg" / "tests" / "sub").mkdir(parents=True)
-    (root / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    (root / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n'
+                                                 + (f"\n[tool.verity.tests]\n{tests_table}" if tests_table else ""))
     (root / "pkg" / "tests" / "conftest.py").write_text("import sys, pathlib\nsys.path.insert(0, str(pathlib.Path(__file__).parent))\n")
     (root / "pkg" / "tests" / "helpers.py").write_text("VALUE = 1\n")
     for name, text in TESTS.items():
@@ -175,6 +178,93 @@ def test_the_join_fails_a_suite_whose_parts_are_missing_twice_or_of_two_partitio
     assert "twice: [2]" in S.combine_parts([row(1), row(2), row(2), row(3)])[0]["why"][0]
     assert "different partitions" in S.combine_parts([row(1), row(2, digest="d2"), row(3)])[0]["why"][0]
     assert S.combine_parts([row(1), row(2), row(3, status="failed")])[0]["status"] == "failed"
+
+
+#: the synthetic suite's tests in each of 4 parts by test id (`verity_suite_guard.id_part`): test_a.py's two in two parts, none in 3
+BY_ID = {1: ["tests/test_c.py::test_c"], 2: ["tests/sub/test_e.py::test_e", "tests/test_a.py::test_a2"], 3: [],
+         4: ["tests/sub/test_d.py::test_d", "tests/test_a.py::test_a", "tests/test_b.py::test_b"]}
+
+
+@pytest.fixture
+def G(monkeypatch):
+    monkeypatch.delenv("VERITY_SUITE_REPORT", raising=False)      # load it inert: no second audit hook in this process
+    yield _module("guard_for_suite_parts", HERE / "guard" / "verity_suite_guard.py")
+    sys.modules.pop("guard_for_suite_parts", None)
+
+
+def _status(root: Path, tmp_path: Path, name: str, *args: str) -> dict:
+    out = tmp_path / "row.json"
+    p = _run(root, tmp_path, name, "--json", str(out), *args)
+    (row,) = json.loads(out.read_text())
+    assert p.returncode == (1 if row["status"] == "failed" else 0), p.stdout + p.stderr
+    return row
+
+
+@pytest.mark.slow
+def test_the_parts_by_test_id_run_each_test_once_and_join_to_the_whole_suites_verdict(tmp_path, S, G):
+    """A suite that declares `parts = 4`: every part collects every file and runs the tests whose node id hashes to it, one that
+    holds none of the tests collected passes, and the parts join as the whole suite does; each part's pass is keyed by the
+    suite's inputs and the part, and a pass of the whole suite answers for each."""
+    ids = [f"tests/{f}::{t}" for f, text in TESTS.items() for t in re.findall(r"^def (test_\w+)", text, re.M)]
+    assert {k: sorted(i for i in ids if G.id_part(i, 4) == k) for k in BY_ID} == BY_ID
+    root = tmp_path / "tree"
+    _workspace(root, "parts = 4\n")
+    rows = {k: _status(root, tmp_path, f"pkg:{k}/4") for k in BY_ID}
+    for k, r in rows.items():
+        assert (_ran([r]), r["part"]) == (len(BY_ID[k]), {"ks": [k], "m": 4, "files": 0, "of": 0, "digest": rows[1]["part"]["digest"],
+                                                          "share": 0.25, "by": "id"}), r
+    assert [r["status"] for r in rows.values()] == ["passed", "passed", "passed", "failed"]
+    assert rows[4]["failed_tests"] == ["tests/sub/test_d.py::test_d"]
+    w = _status(root, tmp_path, "pkg")
+    assert _ran([w]) == sum(_ran([r]) for r in rows.values()) == 6, "every test runs in exactly one part"
+    (joined,) = S.combine_parts(list(rows.values()))
+    assert (joined["status"], joined["failed_tests"]) == ("failed", w["failed_tests"]), "a failing test fails its suite"
+
+    (root / "pkg" / "tests" / "sub" / "test_d.py").write_text("def test_d():\n    pass\n")
+    rows = {k: _status(root, tmp_path, f"pkg:{k}/4") for k in BY_ID}
+    assert [r["status"] for r in rows.values()] == ["passed"] * 4, "a part moves with every input of its suite"
+    (joined,) = S.combine_parts(list(rows.values()))
+    assert joined["status"] == "passed" and joined["why"] == []
+    assert _status(root, tmp_path, "pkg", "--files", "1/4")["status"] == "cached"
+    (root / "pkg" / "tests" / "helpers.py").write_text("VALUE = 1  # an input of every part\n")
+    assert _status(root, tmp_path, "pkg")["status"] == "passed"
+    assert _status(root, tmp_path, "pkg:2/4")["status"] == "cached", "a pass of the whole suite answers for each of its parts"
+
+    p = _run(root, tmp_path, "pkg:1/2")
+    assert p.returncode == 2 and "declares [tool.verity.tests] parts = 4, by test id: name its parts pkg:K/4" in p.stderr, p.stderr
+    p = _run(root, tmp_path, "pkg:3/4", "--list")
+    assert p.returncode == 0 and "part 3/4 by test id" in p.stdout, p.stdout
+
+
+@pytest.mark.parametrize("workers", [1, pytest.param(2, marks=pytest.mark.slow)])
+def test_each_process_of_a_part_by_test_id_runs_its_parts_tests(tmp_path, monkeypatch, S, G, workers):
+    """Under xdist every worker collects every file and keeps its part's tests, so the part runs each of them once; a part that
+    holds none passes on what its workers left out (`part_out`), and a part of a suite that collects nothing fails, as the
+    whole suite does."""
+    if workers > 1:
+        pytest.importorskip("xdist")
+    root = tmp_path / "tree"
+    _workspace(root, "parts = 4\n")
+    monkeypatch.setattr(S, "ROOT", root)
+    (suite,) = [s for s in S.discover() if s.name == "pkg"]
+    (tmp_path / "logs").mkdir()
+    for k, want in BY_ID.items():
+        r = S.run(suite, ["pkg"], [], tmp_path / "logs", workers, part=S.id_part_of(suite, (k,), 4))
+        assert sorted([*(r.passed or {}), *(r.failed_tests or [])]) == want, r.log.read_text()
+        assert (r.status, r.workers) == ("failed" if k == 4 else "passed", workers), r.log.read_text()
+    for f in TESTS:
+        (root / "pkg" / "tests" / f).unlink()
+    assert S.run(suite, ["pkg"], [], tmp_path / "logs", workers).status == "failed"
+    assert S.run(suite, ["pkg"], [], tmp_path / "logs", workers, part=S.id_part_of(suite, (1,), 4)).status == "failed"
+
+
+@pytest.mark.parametrize("parts", ["1", "0", '"3"', "true", "2.0"])
+def test_a_suites_parts_are_a_whole_number_of_at_least_two(tmp_path, monkeypatch, S, parts):
+    root = tmp_path / "tree"
+    _workspace(root, f"parts = {parts}\n")
+    monkeypatch.setattr(S, "ROOT", root)
+    with pytest.raises(ValueError, match="an integer of at least 2"):
+        S.discover()
 
 
 def test_the_planner_splits_a_suite_past_the_threshold_into_parts_priced_by_their_share():
