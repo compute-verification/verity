@@ -77,7 +77,7 @@ def _live(tmp_path, limit_ns: int, wrong=lambda i: False):
 
     sys.path.insert(0, str(ta.ROOT / "benchmarks" / "pous"))
     from band_gpu import harness as H
-    from band_gpu import memory_challenger as live
+    from verity.core.devices.memory_challenger import timed_audit as live
 
     from verity.core.protocols.pous import schemes
     from verity.core.protocols.pous.verifier import VerifierKey, leaf_hash
