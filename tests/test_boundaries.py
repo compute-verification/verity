@@ -241,7 +241,7 @@ BENCHMARKS_IMPORTERS = {
         "verity/core/protocols/pouw/tests/test_pouw_pearl_c4.py", "verity/core/protocols/pouw/tests/test_pouw_pearl_c_sm120.py",
         "verity/core/protocols/pouw/tests/test_pouw_pearl_c_work.py", "verity/core/protocols/pouw/tests/test_pouw_pearl_kw.py",
         "verity/core/protocols/pouw/lean/commit/tests/difftest_vectors.py",
-    ), "compute-accounting: PoUW's clear lifecycle (`benchmarks/pouw/clear`, and `pearl_c4`)"),
+    ), "compute-accounting: PoUW's clear lifecycle (`benchmarks/pouw/clear`)"),
     "verity/core/protocols/pouw/lean/window/tests/test_known_rows.py": "proofs: H1's known rows "
                                                                        "(`benchmarks/pouw/h1_lanes/run.py`)",
     **dict.fromkeys(("verity/core/protocols/pous/check/scripts/difftest_vectors.py",
