@@ -18,9 +18,9 @@ change that closes it has to say so here. Two recorded sets, both fetched fixtur
   challenger's coin tree; the second, over that inner session (`STAGE=0`, its partition, program and draw kept), staged
   V*'s statements with the inner program, every level registering its opened rows and their siblings, RecCap's
   included, and proved and verified them (`85-rec-reprice.sh` STEP=vstage, vcap, oprove and lean). The fixture holds
-  the files these tests read, the circuits and V*'s large programs xz-compressed, the inner transcript is tracked beside it (`f1-gate-transcript`), and each is checked against the run's
-  own listing (`prover.sha256`) once decompressed. Lean's verifier
-  builds the inner statement from its own partition object and program (`AcceptsPublic`), V*'s ten staged statements
+  the files these tests read, the circuits and V*'s large programs xz-compressed, the inner transcript is tracked
+  beside it (`f1-gate-transcript`), and each is checked against the run's own listing (`prover.sha256`) once
+  decompressed. Lean's verifier builds the inner statement from its own partition object and program (`AcceptsPublic`), V*'s ten staged statements
   are the ones `outerStatementsAt` lists, each session is one of them byte for byte (`RecVStar.checkStmt`) and draws every unit,
   and the rate is below 1 at `k = 2^23` (at `2^21` for these sessions). The sessions were proved with the OS masks
   in `verity/flock-circuit`'s `--zk` identity, and the verifier of record accepts them as `verity/flock-circuit`: the
