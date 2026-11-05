@@ -1,4 +1,5 @@
 import Flock.Witness
+import Flock.Desc
 import Flock.KsScope
 import Flock.PortRoots
 import Flock.Schedule

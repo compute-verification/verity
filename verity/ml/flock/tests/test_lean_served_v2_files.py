@@ -54,9 +54,14 @@ def fx(tmp_path_factory):
 
 
 @pytest.fixture(scope="module")
-def files_bin(tmp_path_factory):
-    """`tests/lean/ServedV2Files.lean` built against the verifier's own build, as a package that requires it by path."""
+def verifier():
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
+    return BIN
+
+
+@pytest.fixture(scope="module")
+def files_bin(tmp_path_factory, verifier):
+    """`tests/lean/ServedV2Files.lean` built against the verifier's own build, as a package that requires it by path."""
     pkg = tmp_path_factory.mktemp("served-v2-files")
     (pkg / "lakefile.toml").write_text(
         f'name = "served_v2_files"\ndefaultTargets = ["served-v2-files"]\n\n[[require]]\nname = "flock_verifier"\n'
@@ -85,9 +90,9 @@ def test_each_fact_of_the_premise_holds_on_the_files(fx, files_bin):
                                     "ks_scope": "ok", "proved": 16, "shape_ok": "ok", "fast100": True, "schedule": "ok"}
 
 
-def test_verify_zk_sets_the_statement_up_and_accepts_the_session(fx, files_bin):
+def test_verify_zk_sets_the_statement_up_and_accepts_the_session(fx, verifier):
     st = fx / "stage"
-    p = subprocess.run([str(BIN), "verify", "--zk", "--statement", STATEMENT, "--circuit", str(st / "circuit.txt"),
+    p = subprocess.run([str(verifier), "verify", "--zk", "--statement", STATEMENT, "--circuit", str(st / "circuit.txt"),
                         "--public", str(st / "pub-32.bin"), "--partition", str(st / "partition.json"), "--program",
                         str(st / "program.json"), "--registered", str(st / "registered.json"), "--session",
                         str(fx / "session")], capture_output=True, text=True, check=False)

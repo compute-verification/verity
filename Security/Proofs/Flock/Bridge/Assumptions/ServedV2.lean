@@ -1,6 +1,7 @@
 module
 
 public import Flock.Witness
+public import Flock.Desc
 public import Flock.KsScope
 public import Flock.PortRoots
 public import Flock.Schedule
