@@ -11,7 +11,15 @@ read. The unit is the cap row's words past its node, then zeros, and lays out as
 module
 
 public import Flock.RecCoins
+public import Flock.Sizes
+public import Std.Data.HashMap
+public import Std.Data.HashSet
+public import Std.Data.TreeMap.Raw.Lemmas
 meta import Flock.RecCoins
+meta import Flock.Sizes
+meta import Std.Data.HashMap
+meta import Std.Data.HashSet
+meta import Std.Data.TreeMap.Raw.Lemmas
 
 @[expose] public section
 

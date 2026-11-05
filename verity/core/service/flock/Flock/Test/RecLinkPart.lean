@@ -12,7 +12,15 @@ that circuit's outputs and refuses them laid out any other way.
 module
 
 public import Flock.RecLinkPart
+public import Flock.Sizes
+public import Std.Data.HashMap
+public import Std.Data.HashSet
+public import Std.Data.TreeMap.Raw.Lemmas
 meta import Flock.RecLinkPart
+meta import Flock.Sizes
+meta import Std.Data.HashMap
+meta import Std.Data.HashSet
+meta import Std.Data.TreeMap.Raw.Lemmas
 
 @[expose] public section
 
