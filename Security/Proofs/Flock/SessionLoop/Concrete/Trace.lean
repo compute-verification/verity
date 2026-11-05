@@ -611,6 +611,72 @@ theorem hmLaid_gap {off : ℕ} (h1 : 3072 ≤ off) (h2 : off < 4096) :
   exact layout_inGap _ _ _ _ (by rw [sum_HM_IN]; exact h1)
     (show off < inRowsOf HM_IN by rw [inRows_HM_IN]; exact h2)
 
+theorem getD_past {xs : Array (Array ℕ)} {i : ℕ} (h : xs.size ≤ i) : xs.getD i #[] = #[] := by
+  simp [Array.getElem?_eq_none h]
+
+theorem shaLaid_constPos (hn : Properties.Flock.Nets.FixedNetsBuild) : (HmNets.shaLaid ()).constPos = 256000 :=
+  (Net.ofRows_ok hn.1.2.2.1).2.2.2.2.1.symm.trans rfl
+
+theorem hmLaid_constPos (hn : Properties.Flock.Nets.FixedNetsBuild) : (HmNets.hmLaid ()).constPos = PIN :=
+  (Net.ofRows_ok hn.2.2.2.1).2.2.2.2.1.symm.trans rfl
+
+/-- **A laid-out net's values past its constant are 0**, when its outputs fit their group. -/
+theorem laidVal_past {s : HmNets.St} {inBits outBits : Array ℕ} {outs : Array HmNets.Lin} {x : ℕ → Bool} {i : ℕ}
+    (hsz : outs.size ≤ outBits.foldl (· + ·) 0) (h : outStart s inBits outBits + spanOf outBits < i) :
+    Total.laidVal s inBits outBits outs x i = false := by
+  have hspan : 0 < spanOf outBits := groupWords_pos _
+  have hst : inRowsOf inBits + s.rows.length ≤ outStart s inBits outBits := le_roundUp _ _ hspan
+  have hsz' : outs.size ≤ spanOf outBits := Nat.le_trans hsz (le_groupWords _)
+  unfold Total.laidVal
+  rw [ite_eq_right (show ¬ i < inRowsOf inBits by omega),
+    ite_eq_right (show ¬ i < inRowsOf inBits + s.rows.length by omega),
+    ite_eq_right (show ¬ (outStart s inBits outBits ≤ i ∧ i < outStart s inBits outBits + outs.size) by omega)]
+  exact decide_eq_false (by omega)
+
+theorem sha_outs : (compression3.run HmNets.St.empty).1.2.flatten.toArray.size ≤ SHA_OUT.foldl (· + ·) 0 := by
+  have h : Total.Tot [] compression3 _ := Total.tot_compression 3
+  have h := h HmNets.St.empty Total.scoped_empty (Total.belowL_nil _)
+  have hz := Total.stHolds_fwd (fun _ => false) h.1
+  obtain ⟨-, hl3, -⟩ := compression3_spec _ hz
+  have hlens := compression3_lens _ hz
+  have hflat : (compression3.run HmNets.St.empty).1.2.flatten.length = 1536 := by
+    rw [List.length_flatten, List.map_congr_left (g := fun _ => 512) hlens, List.map_const', List.sum_replicate, hl3]
+    rfl
+  rw [List.size_toArray, hflat]
+  decide
+
+theorem hm_outs :
+    ((hm96Row Hm96.Default512.key).run HmNets.St.empty).1.2.2.2.toArray.size ≤ HM_OUT.foldl (· + ·) 0 := by
+  have h := Total.tot_hm96Row Hm96.Default512.key HmNets.St.empty Total.scoped_empty (Total.belowL_nil _)
+  obtain ⟨-, -, -, hl, -⟩ := hm96Row_spec _ _ (Total.stHolds_fwd (fun _ => false) h.1)
+  rw [List.size_toArray, hl]
+  decide
+
+/-- The `sha512x3` net's output group ends at its constant. -/
+theorem sha_end (hn : Properties.Flock.Nets.FixedNetsBuild) :
+    outStart (compression3.run HmNets.St.empty).2 SHA_IN SHA_OUT + spanOf SHA_OUT = 256000 := by
+  have h := (HmNets.layout_rows (compression3.run HmNets.St.empty).2 SHA_IN SHA_OUT
+    (compression3.run HmNets.St.empty).1.2.flatten.toArray).1
+  rw [← HmNets.shaLaid_eq, shaLaid_constPos hn] at h
+  exact h.symm
+
+/-- The `hm96` net's output group ends at its constant. -/
+theorem hm_end (hn : Properties.Flock.Nets.FixedNetsBuild) :
+    outStart ((hm96Row Hm96.Default512.key).run HmNets.St.empty).2 HM_IN HM_OUT + spanOf HM_OUT = PIN := by
+  have h := (HmNets.layout_rows ((hm96Row Hm96.Default512.key).run HmNets.St.empty).2 HM_IN HM_OUT
+    ((hm96Row Hm96.Default512.key).run HmNets.St.empty).1.2.2.2.toArray).1
+  rw [← HmNets.hmLaid_eq, hmLaid_constPos hn] at h
+  exact h.symm
+
+theorem xorRow_congr {v w : ℕ → Bool} {cs : Array ℕ} (h : ∀ j ∈ cs.toList, v j = w j) :
+    xorRow v cs = xorRow w cs := by
+  unfold xorRow
+  generalize cs.toList = l at h
+  induction l with
+  | nil => rfl
+  | cons a l ih =>
+    simp only [List.foldr_cons, h a (by simp), ih fun j hj => h j (by simp [hj])]
+
 theorem ite_flip (x j : ℕ) : (if x = j then 1 else 0 : ℕ) = if j = x then 1 else 0 := if_congr eq_comm rfl rfl
 
 /-- **Δ at a `cv0` row**, at a statement whose Δ is `E`: its self pair and its copy of the midstate's bit. -/
@@ -965,6 +1031,183 @@ theorem holds_hmGap (hk : st.c.kLog = 22) (R : RowRanges st.c)
   rw [block_zC (S := L.model regs) hk, zIn_hm (x := r.val) hr.2]
   unfold xH
   rw [ite_eq_right (show ¬ r.val < 512 by omega), ite_eq_right (show ¬ r.val < 1536 by omega)]
+  rfl
+
+omit hda hrs in
+/-- **A row net's computed row holds** where the slot constants' pairs skip it and the XORs of the block over its laid
+rows multiply to its bit. -/
+theorem holds_netRow {tags : Tags} (F : Discharge.Aliased.UnitFacts tags st) {n s off : ℕ}
+    (hn : n = st.c.shaNet ∨ n = st.c.hmNet) {r : Fin (2 ^ (L.model regs).kLog)} (hat : AtSlot st.c n s off r.val)
+    (hlo : (st.c.nets.getD n default).2.inWords * Flock.WORD ≤ off) {l : Flock.HmNets.Laid} {name : String}
+    (hl : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (st.c.nets.getD n default).2)
+    (hc : ∀ j, (constPairs st.c st.pin).count (r.val, j) = 0) {z : Model.Witness (L.model regs).m}
+    (o : Fin (2 ^ (L.model regs).nbl))
+    (h : (xorRow (fun j => blockBit (L.model regs) z o ((st.c.rangeOf n).slot s + j)) (l.ra.getD off #[]) &&
+      xorRow (fun j => blockBit (L.model regs) z o ((st.c.rangeOf n).slot s + j)) (l.rb.getD off #[])) =
+        blockBit (L.model regs) z o r.val) :
+    ((L.model regs).A₀.mulVec ((L.model regs).block z o)) r * ((L.model regs).B₀.mulVec ((L.model regs).block z o)) r =
+      (L.model regs).block z o r := by
+  have R := RowRanges.ofL L F.parse F.check
+  obtain ⟨hm, -, -, hsl⟩ := R.range (R.rowNet_lt hn)
+  obtain ⟨-, ha, hb, -⟩ := Net.ofRows_ok hl
+  have hcl : ∀ rr : Array ℕ, (∀ y ∈ rr.toList, y < 2 ^ (st.c.nets.getD n default).2.unitLog) →
+      ∀ y ∈ rr.toList.map ((st.c.rangeOf n).slot s + ·), y < 2 ^ (L.model regs).kLog := fun rr hrr y hy => by
+    obtain ⟨y', hy', rfl⟩ := List.mem_map.1 hy
+    exact AtSlot.lt R.bound hm ⟨hat.1, by rw [hsl]; exact hrr y' hy', rfl⟩
+  refine netRow_holds (b := (st.c.rangeOf n).slot s) (ra := l.ra.getD off #[]) (rb := l.rb.getD off #[])
+    (fun j => ?_) (fun j => ?_) (hcl _ (ofRows_cols_lt ha off)) (hcl _ (ofRows_cols_lt hb off)) h
+  · have e := (rowNet_entryL L F hn hat hlo hl j.val).1
+    rw [hc, Nat.add_zero] at e
+    exact e
+  · have e := (rowNet_entryL L F hn hat hlo hl j.val).2
+    rw [hc, Nat.add_zero] at e
+    exact e
+
+omit hda hrs in
+/-- **The `sha512x3` slot's computed rows hold** at the trace: its laid rows hold at its forward evaluation
+(`Total.sha_total`). -/
+theorem holds_shaNet {tags : Tags} (F : Discharge.Aliased.UnitFacts tags st) (hn : Properties.Flock.Nets.FixedNetsBuild)
+    (hk : st.c.kLog = 22)
+    (hR : (st.c.rangeOf st.c.shaNet).count = 1 ∧ (st.c.rangeOf st.c.shaNet).slotLog = 18 ∧
+      (st.c.rangeOf st.c.shaNet).slot 0 = 262144)
+    (hiw : (st.c.nets.getD st.c.shaNet default).2.inWords = 64)
+    (hcp : constPairs st.c st.pin = [(518144, 518144), (518144, PIN), (524544, 524544), (524544, PIN)])
+    (o : Fin (2 ^ (L.model regs).nbl)) {r : Fin (2 ^ (L.model regs).kLog)} (hr : 270336 ≤ r.val ∧ r.val < 518144) :
+    ((L.model regs).A₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r *
+        ((L.model regs).B₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r =
+      (L.model regs).block (zC (L.model regs).m) o r := by
+  have R := RowRanges.ofL L F.parse F.check
+  obtain ⟨-, -, -, hsl⟩ := R.range (R.rowNet_lt (Or.inl rfl : st.c.shaNet = st.c.shaNet ∨ _))
+  have hwid : (st.c.nets.getD st.c.shaNet default).2.unitLog = 18 := hsl.symm.trans hR.2.1
+  obtain ⟨-, ha, hb, -⟩ := Net.ofRows_ok (shaNet_ofRows R.rowNets)
+  have hat : AtSlot st.c st.c.shaNet 0 (r.val - 262144) r.val :=
+    ⟨lt_of_lt_of_eq Nat.one_pos hR.1.symm,
+      by rw [hR.2.1]; exact lt_of_lt_of_le (show r.val - 262144 < 262144 by omega) (by norm_num),
+      by rw [hR.2.2]; omega⟩
+  have hv : ∀ cs : Array ℕ, (∀ y ∈ cs.toList, y < 2 ^ (st.c.nets.getD st.c.shaNet default).2.unitLog) →
+      xorRow (fun j => blockBit (L.model regs) (zC (L.model regs).m) o ((st.c.rangeOf st.c.shaNet).slot 0 + j)) cs =
+        xorRow vS cs := by
+    intro cs hcs
+    refine xorRow_congr fun j hj => ?_
+    have hj : j < 2 ^ (st.c.nets.getD st.c.shaNet default).2.unitLog := hcs j hj
+    rw [hwid] at hj
+    have hj' : j < 262144 := lt_of_lt_of_eq hj (by norm_num)
+    show blockBit (L.model regs) (zC (L.model regs).m) o ((st.c.rangeOf st.c.shaNet).slot 0 + j) = vS j
+    rw [hR.2.2, blockBit_zC (S := L.model regs) hk o (lt_of_lt_of_le (show 262144 + j < 524288 by omega) (by norm_num))]
+    unfold zIn
+    rw [ite_eq_right (show ¬ 262144 + j < 262144 by omega), ite_eq_left (show 262144 + j < 524288 by omega),
+      Nat.add_sub_cancel_left]
+  refine holds_netRow L regs F (Or.inl rfl) hat (by rw [hiw]; show 64 * 128 ≤ _; omega) (shaNet_ofRows R.rowNets)
+    (fun j => ?_) o ?_
+  · rw [hcp]
+    exact List.count_eq_zero.2 fun hm => by
+      simp only [List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false] at hm
+      omega
+  · rw [hv _ (ofRows_cols_lt ha _), hv _ (ofRows_cols_lt hb _),
+      blockBit_zC (S := L.model regs) hk o (lt_of_lt_of_le (show r.val < 518144 by omega) (by norm_num))]
+    have hz : zIn r.val = vS (r.val - 262144) := by
+      unfold zIn
+      rw [ite_eq_right (show ¬ r.val < 262144 by omega), ite_eq_left (show r.val < 524288 by omega)]
+    rw [hz]
+    exact (Total.sha_total xS).2 (r.val - 262144) (by rw [inRows_SHA_IN]; omega)
+      (by rw [shaLaid_constPos hn]; omega)
+
+omit hda hrs in
+/-- **The `hm96` slot's computed rows hold** at the trace: its laid rows hold at its forward evaluation
+(`Total.hm_total`). -/
+theorem holds_hmNet {tags : Tags} (F : Discharge.Aliased.UnitFacts tags st) (hn : Properties.Flock.Nets.FixedNetsBuild)
+    (hk : st.c.kLog = 22)
+    (hR : (st.c.rangeOf st.c.hmNet).count = 1 ∧ (st.c.rangeOf st.c.hmNet).slotLog = 18 ∧
+      (st.c.rangeOf st.c.hmNet).slot 0 = 0)
+    (hiw : (st.c.nets.getD st.c.hmNet default).2.inWords = 32)
+    (hcp : constPairs st.c st.pin = [(518144, 518144), (518144, PIN), (524544, 524544), (524544, PIN)])
+    (o : Fin (2 ^ (L.model regs).nbl)) {r : Fin (2 ^ (L.model regs).kLog)} (hr : 4096 ≤ r.val ∧ r.val < 246784) :
+    ((L.model regs).A₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r *
+        ((L.model regs).B₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r =
+      (L.model regs).block (zC (L.model regs).m) o r := by
+  have R := RowRanges.ofL L F.parse F.check
+  obtain ⟨-, -, -, hsl⟩ := R.range (R.rowNet_lt (Or.inr rfl : st.c.hmNet = st.c.shaNet ∨ st.c.hmNet = st.c.hmNet))
+  have hwid : (st.c.nets.getD st.c.hmNet default).2.unitLog = 18 := hsl.symm.trans hR.2.1
+  obtain ⟨-, ha, hb, -⟩ := Net.ofRows_ok (hmNet_ofRows R.rowNets)
+  have hat : AtSlot st.c st.c.hmNet 0 r.val r.val :=
+    ⟨lt_of_lt_of_eq Nat.one_pos hR.1.symm,
+      by rw [hR.2.1]; exact lt_of_lt_of_le (show r.val < 262144 by omega) (by norm_num),
+      by rw [hR.2.2]; omega⟩
+  have hv : ∀ cs : Array ℕ, (∀ y ∈ cs.toList, y < 2 ^ (st.c.nets.getD st.c.hmNet default).2.unitLog) →
+      xorRow (fun j => blockBit (L.model regs) (zC (L.model regs).m) o ((st.c.rangeOf st.c.hmNet).slot 0 + j)) cs =
+        xorRow vH cs := by
+    intro cs hcs
+    refine xorRow_congr fun j hj => ?_
+    have hj : j < 2 ^ (st.c.nets.getD st.c.hmNet default).2.unitLog := hcs j hj
+    rw [hwid] at hj
+    have hj' : j < 262144 := lt_of_lt_of_eq hj (by norm_num)
+    show blockBit (L.model regs) (zC (L.model regs).m) o ((st.c.rangeOf st.c.hmNet).slot 0 + j) = vH j
+    rw [hR.2.2, Nat.zero_add,
+      blockBit_zC (S := L.model regs) hk o (lt_of_lt_of_le (show j < 262144 by omega) (by norm_num))]
+    unfold zIn
+    rw [ite_eq_left hj']
+  refine holds_netRow L regs F (Or.inr rfl) hat (by rw [hiw]; show 32 * 128 ≤ _; omega) (hmNet_ofRows R.rowNets)
+    (fun j => ?_) o ?_
+  · rw [hcp]
+    exact List.count_eq_zero.2 fun hm => by
+      simp only [List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false] at hm
+      omega
+  · rw [hv _ (ofRows_cols_lt ha _), hv _ (ofRows_cols_lt hb _),
+      blockBit_zC (S := L.model regs) hk o (lt_of_lt_of_le (show r.val < 262144 by omega) (by norm_num))]
+    have hz : zIn r.val = vH r.val := by
+      unfold zIn
+      rw [ite_eq_left (show r.val < 262144 by omega)]
+    rw [hz]
+    exact (Total.hm_total xH).2 r.val (by rw [inRows_HM_IN]; omega)
+      (by rw [hmLaid_constPos hn]; show r.val < 246784; omega)
+
+omit hrs in
+/-- **The `sha512x3` slot's rows past its constant hold** at the trace: they are zero, and so is the trace there. -/
+theorem holds_shaPast (hn : Properties.Flock.Nets.FixedNetsBuild) (hk : st.c.kLog = 22) (R : RowRanges st.c)
+    (hR : (st.c.rangeOf st.c.shaNet).count = 1 ∧ (st.c.rangeOf st.c.shaNet).slotLog = 18 ∧
+      (st.c.rangeOf st.c.shaNet).slot 0 = 262144)
+    (o : Fin (2 ^ (L.model regs).nbl)) {r : Fin (2 ^ (L.model regs).kLog)} (hr : 518144 < r.val ∧ r.val < 524288) :
+    ((L.model regs).A₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r *
+        ((L.model regs).B₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r =
+      (L.model regs).block (zC (L.model regs).m) o r := by
+  have hat : AtSlot st.c st.c.shaNet 0 (r.val - 262144) r.val :=
+    ⟨lt_of_lt_of_eq Nat.one_pos hR.1.symm,
+      by rw [hR.2.1]; exact lt_of_lt_of_le (show r.val - 262144 < 262144 by omega) (by norm_num),
+      by rw [hR.2.2]; omega⟩
+  have he : (HmNets.shaLaid ()).ra.getD (r.val - 262144) #[] = #[] ∧
+      (HmNets.shaLaid ()).rb.getD (r.val - 262144) #[] = #[] :=
+    ⟨getD_past (by rw [hn.1.1]; omega), getD_past (by rw [hn.1.2.1]; omega)⟩
+  refine zeroRow_holds (zeroRow_netEmpty L regs R (Or.inl rfl) hat (shaNet_ofRows R.rowNets) he
+    (delta_free hda (x := r.val) (by omega))) ?_
+  have hz : zIn r.val = false := by
+    unfold zIn vS
+    rw [ite_eq_right (show ¬ r.val < 262144 by omega), ite_eq_left (show r.val < 524288 by omega)]
+    exact laidVal_past sha_outs (by rw [sha_end hn]; omega)
+  rw [block_zC (S := L.model regs) hk, hz]
+  rfl
+
+omit hrs in
+/-- **The `hm96` slot's rows past its constant hold** at the trace: they are zero, and so is the trace there. -/
+theorem holds_hmPast (hn : Properties.Flock.Nets.FixedNetsBuild) (hk : st.c.kLog = 22) (R : RowRanges st.c)
+    (hR : (st.c.rangeOf st.c.hmNet).count = 1 ∧ (st.c.rangeOf st.c.hmNet).slotLog = 18 ∧
+      (st.c.rangeOf st.c.hmNet).slot 0 = 0)
+    (o : Fin (2 ^ (L.model regs).nbl)) {r : Fin (2 ^ (L.model regs).kLog)} (hr : 246784 < r.val ∧ r.val < 262144) :
+    ((L.model regs).A₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r *
+        ((L.model regs).B₀.mulVec ((L.model regs).block (zC (L.model regs).m) o)) r =
+      (L.model regs).block (zC (L.model regs).m) o r := by
+  have hat : AtSlot st.c st.c.hmNet 0 r.val r.val :=
+    ⟨lt_of_lt_of_eq Nat.one_pos hR.1.symm,
+      by rw [hR.2.1]; exact lt_of_lt_of_le (show r.val < 262144 by omega) (by norm_num),
+      by rw [hR.2.2]; omega⟩
+  have he : (HmNets.hmLaid ()).ra.getD r.val #[] = #[] ∧ (HmNets.hmLaid ()).rb.getD r.val #[] = #[] :=
+    ⟨getD_past (by rw [hn.2.1]; omega), getD_past (by rw [hn.2.2.1]; omega)⟩
+  refine zeroRow_holds (zeroRow_netEmpty L regs R (Or.inr rfl) hat (hmNet_ofRows R.rowNets) he
+    (delta_free hda (x := r.val) (by omega))) ?_
+  have hz : zIn r.val = false := by
+    unfold zIn vH
+    rw [ite_eq_left (show r.val < 262144 by omega)]
+    exact laidVal_past hm_outs (by rw [hm_end hn]; show 246784 < r.val; omega)
+  rw [block_zC (S := L.model regs) hk, hz]
   rfl
 
 end place
