@@ -176,9 +176,11 @@ import multiprocessing
 import os
 import shutil
 import sys
+import threading
 import time
 from collections.abc import Iterator, Sequence
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable
@@ -958,7 +960,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
 
     def member_checks(s: dict) -> dict:
         """Lean's verdicts on member session ``s`` (`member_session`) and what the audit takes from it. They read only the
-        session's archive, so they run while the next member is proved."""
+        session's archive, so they run beside the next member's session, `LeanPool`'s workers at a time."""
         mm, sdir, record, live, draw_t, v = s["mm"], s["sdir"], s["record"], s["live"], s["draw_t"], s["draw_check"]
         m, k, session_s = mm["m"], mm["k"], s["session_s"]
         lean_u = a0.lean_draw_test(a.lean, [{"record": draw_t or None, "statement": (live or {}).get("unit_draw"),
@@ -985,10 +987,13 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                 "sessions": [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]}
 
     # outer proofs go through the ZK server one at a time (`ONE_AT_A_TIME`): the sessions run here in the members' order, and
-    # only Lean's checks of one member, outside the ZK server, overlap the next member's session
-    with ThreadPoolExecutor(1) as lean:
-        checks = [lean.submit(member_checks, member_session(i, mm, local)) for i, (mm, local) in enumerate(drawn)]
-        done = [c.result() for c in checks]
+    # only Lean's checks of finished members, outside the ZK server, overlap the next member's session
+    with LeanPool(getattr(a, "lean_workers", LEAN_WORKERS), audit_memory(a, available_memory), available_memory) as lean:
+        for i, (mm, local) in enumerate(drawn):
+            with lean.session(session_need(mm["circuit"])):
+                s = member_session(i, mm, local)
+            lean.submit(member_checks, s, lean_need(mm["st"]))
+        done = lean.results()
     for got in done:
         mm = got["mm"]
         summary["staging"]["drawn_s"] = round(summary["staging"].get("drawn_s", 0) + got["staged_s"], 1)
@@ -1229,6 +1234,121 @@ def one_session(s: str) -> int:
     return 1
 
 
+#: Lean checks of finished members at once (`LeanPool`): they read a session's archive outside the ZK server, which
+#: `ONE_AT_A_TIME` doesn't cover
+LEAN_WORKERS = 3
+#: a Lean check's memory estimate per byte of its member's circuit file, which `flock-verify verify` reads, hashes and
+#: parses whole
+LEAN_BYTES_PER_CIRCUIT_BYTE = 5
+#: a member's session's memory estimate per byte of its circuit file (its prover, its server and the audit's Python at
+#: their peak), which the Lean checks beside it leave it (`LeanPool.session`). A node the audit shares still runs one check
+#: at a time (served_verdicts.sh)
+SESSION_BYTES_PER_CIRCUIT_BYTE = 20
+
+
+class LeanPool:
+    """Member checks on ``workers`` threads beside the caller's sessions, which stay one at a time (`ONE_AT_A_TIME`). Checks
+    start in the order submitted, each once its memory estimate ``need`` fits: with the running checks' estimates and the
+    running session's (`session`) within ``budget`` bytes, and ``available()`` bytes free now. With no check and no session
+    running the next starts whatever its estimate, so one over the budget runs alone. `results` are the checks' in the
+    order submitted."""
+
+    def __init__(self, workers: int, budget: float, available: Callable[[], float]):
+        self.budget, self.available = budget, available
+        self.ex = ThreadPoolExecutor(workers)
+        self.cv = threading.Condition()
+        self.futures: list[Future] = []
+        self.next = self.running = 0
+        self.used = 0.0
+        self.held: float | None = None
+
+    def __enter__(self) -> LeanPool:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.ex.shutdown(wait=True)
+
+    @contextmanager
+    def session(self, need: float) -> Iterator[None]:
+        """The caller's session, its memory estimate ``need`` held from the budget while it runs: it starts once the running
+        checks leave ``need`` within the budget, or none runs, and no check starts beside it that doesn't fit with it."""
+        with self.cv:
+            self.cv.wait_for(lambda: not self.running or self.used + need <= self.budget)
+            self.held = need
+        try:
+            yield
+        finally:
+            with self.cv:
+                self.held = None
+                self.cv.notify_all()
+
+    def submit(self, check: Callable[[Any], Any], arg: Any, need: float) -> None:
+        self.futures.append(self.ex.submit(self._run, len(self.futures), check, arg, need))
+
+    def results(self) -> list:
+        return [f.result() for f in self.futures]
+
+    def _fits(self, turn: int, need: float) -> bool:
+        return turn == self.next and ((not self.running and self.held is None) or
+                                      (self.used + (self.held or 0) + need <= self.budget and self.available() >= need))
+
+    def _run(self, turn: int, check: Callable[[Any], Any], arg: Any, need: float) -> Any:
+        with self.cv:
+            self.cv.wait_for(lambda: self._fits(turn, need))
+            self.next, self.running, self.used = self.next + 1, self.running + 1, self.used + need
+            self.cv.notify_all()
+        try:
+            return check(arg)
+        finally:
+            with self.cv:
+                self.running, self.used = self.running - 1, self.used - need
+                self.cv.notify_all()
+
+
+def available_memory() -> int:
+    """The node's available memory now, in bytes (/proc/meminfo's MemAvailable)."""
+    for line in Path("/proc/meminfo").read_text().splitlines():
+        if line.startswith("MemAvailable:"):
+            return int(line.split()[1]) * 1024
+    raise OSError("/proc/meminfo has no MemAvailable")
+
+
+def audit_memory(a: argparse.Namespace, available: Callable[[], float]) -> float:
+    """The audit's memory in bytes, which its sessions and the Lean checks beside them share (`LeanPool`): ``--audit-mem-gb``,
+    else what ``available()`` gives as its sessions start."""
+    gb = getattr(a, "audit_mem_gb", None)
+    return gb * 2**30 if gb is not None else available()
+
+
+def lean_need(st: dict) -> int:
+    """A member's Lean check's memory estimate in bytes, `LEAN_BYTES_PER_CIRCUIT_BYTE` of its circuit file (none: 0)."""
+    f = st["dir"] / "circuit.txt"
+    return LEAN_BYTES_PER_CIRCUIT_BYTE * f.stat().st_size if f.is_file() else 0
+
+
+def session_need(circuit: Path) -> int:
+    """A member's session's memory estimate in bytes, `SESSION_BYTES_PER_CIRCUIT_BYTE` of ``circuit``, the circuit file it is
+    staged with (`stage`; none: 0)."""
+    return SESSION_BYTES_PER_CIRCUIT_BYTE * circuit.stat().st_size if circuit.is_file() else 0
+
+
+def positive(s: str) -> int:
+    """``--lean-workers``: at least 1."""
+    if int(s) < 1:
+        raise argparse.ArgumentTypeError(f"{s}: Lean checks at once is at least 1")
+    return int(s)
+
+
+def lean_options(p: argparse.ArgumentParser) -> None:
+    """The Lean checks' flags (`LeanPool`), on a5's parser and its callers'."""
+    p.add_argument("--lean-workers", type=positive, default=LEAN_WORKERS,
+                   help="Lean checks of finished members at once, beside the next member's session (sessions stay one at a time)")
+    p.add_argument("--audit-mem-gb", type=float,
+                   help=f"the audit's memory: a Lean check starts only within it beside the running session, estimated at "
+                        f"{SESSION_BYTES_PER_CIRCUIT_BYTE}x its circuit file, and the running checks, each at "
+                        f"{LEAN_BYTES_PER_CIRCUIT_BYTE}x (default: what is available as the sessions start)")
+
+
 def plain(a: argparse.Namespace) -> bool:
     """The sessions are plain (``--plain``), not `--zk`."""
     return bool(getattr(a, "plain", False))
@@ -1449,6 +1569,7 @@ def main() -> int:
     ap.add_argument("--delta", type=float, default=0.5)
     ap.add_argument("--port", type=int, default=7551)
     ap.add_argument("--session-jobs", type=one_session, default=1, help="1 only: the sessions run one at a time (ONE_AT_A_TIME)")
+    lean_options(ap)
     ap.add_argument("--session-timeout", type=float, default=14400,
                     help="each drawn member's prover limit in seconds, and each template's compose: one firewalled session of a MoE "
                          "w2 coordinate chunk (MoeExpertFp8GemmW_v2{N=1}, k_log 26) takes ~8 min, and over an hour on a loaded "
