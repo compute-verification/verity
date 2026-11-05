@@ -48,7 +48,7 @@ P_PASS = 0.75                     # a deficient unit's pass probability at 1-bit
 DEFICIT = LN_INV_DELTA / ((1 - P_PASS) * ROUNDS)   # d̄: full checking's deficit; the machine model's luck = σ_w·d̄
 
 #: cost-model/v1 is GPU-seconds of an RTX PRO
-#: 6000 proving and CPU-seconds at 1/55 of one, so a family pays it at this price (vy-nebius-1/2, measured price; that
+#: 6000 proving and CPU-seconds at 1/55 of one, so a family pays it at this price (measured on RTX PRO 6000s; that
 #: the provers are RTX PRO 6000 workers is assumed)
 PROVER_USD_H = 1.80
 SAMPLING_DATA = Path(__file__).with_name("budget_sampling.json")
@@ -61,9 +61,9 @@ ALLOCATED = ("plain", "sessions/256")
 SPEND_GRID = tuple(round(10 ** (e / 8), 6) for e in range(-28, 21))
 #: today's draws: 2 a round over a week
 TODAY_DRAWS = 2 * ROUNDS
-#: a drawn unit's proof grows with the filler it recomputes (p = 0 needs the check to recompute it): its ANDs by
+#: a sampled proof block's proof grows with the filler it recomputes (p = 0 needs the check to recompute it): its ANDs by
 #: (1 + y/16) at y extra lane instructions a word, as if the receipt arm were a quarter of the proof at fx1's 4 a word
-#: (assumed); it scales the part of a draw's cost that grows with the unit's ANDs (`unit_share`)
+#: (assumed); it scales the part of a sample's cost that grows with the unit's ANDs (`unit_share`)
 FILL_PROOF = 1 / 16
 
 #: of plain prefill time (`commit_gpu`, measured on sm_120 at 8 × 4K, applied to every family as
@@ -164,7 +164,7 @@ FAMILIES = (
 
 def sweep(out: Path = FILL_DATA) -> dict:
     """Regenerate `budget_fill.json` from the machine model (on a tree whose machine model has every family's design and
-    vector; VF3r-16 is on next since 9c9567c396). Each point is one `eps` LP, ≈ 0.3 s."""
+    vector, VF3r-16 among them). Each point is one `eps` LP, ≈ 0.3 s."""
     from verity_machine_model import eps as E
     from verity_machine_model.commands import eps as cmd
     from verity_machine_model.model import DATA, device
@@ -211,7 +211,7 @@ def sampling_sweep(tree: Path, out: Path = SAMPLING_DATA) -> dict:
     `benchmarks/sampling_plan/int8_llama.py` whose B is the serve-time total, run with `scheme=None` so a spend
     is sampling's alone, the serve-time commitments being `budget.py`'s own terms. Per regime its frontier at δ_s, and at
     each spend of SPEND_GRID the least-ε plan within it (`at_budget`, the zero-work templates included): ε_sample, the
-    draws a week, the share of the plan's cost that grows with a unit's ANDs (all but the sessions' fixed cost) and the
+    samples a week, the share of the plan's cost that grows with a unit's ANDs (all but the sessions' fixed cost) and the
     linears' cut. ≈ 2 s a regime."""
     tree = Path(tree).resolve()
     sys.path[:0] = [str(tree), str(tree / "benchmarks" / "sampling_plan")]
@@ -278,7 +278,7 @@ class Sample:
 
 
 def sample(f: Family, b_s: float, y: float = 0.0, regime: str = "plain") -> Sample | None:
-    """What a family's B_s buys: its spend on RTX PRO 6000 provers, shrunk by the filler's growth of each drawn unit's
+    """What a family's B_s buys: its spend on RTX PRO 6000 provers, shrunk by the filler's growth of each sampled proof block's
     ANDs; None below the sweep's least spend."""
     xs, es, ds, us, cuts = curve(regime)
     x0 = b_s / f.prover
@@ -345,7 +345,7 @@ def fixed_b(f: Family, c: Config, leaf: int = 128) -> float:
 
 
 def today(f: Family, **kw) -> Point:
-    """Today's protocol priced by cost-model/v1: the design's own filler, P·V's served output free, today's draws."""
+    """Today's protocol priced by cost-model/v1: the design's own filler, P·V's served output free, today's samples."""
     return point(f, Config("int", 0.0, False), f.prover * spend_for(TODAY_DRAWS), **kw)
 
 

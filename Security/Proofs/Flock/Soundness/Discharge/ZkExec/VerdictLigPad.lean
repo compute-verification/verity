@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
-import Proofs.Flock.Soundness.NovelBasis
-import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
+public import Proofs.Flock.Soundness.NovelBasis
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
 
 /-!
 # Level 0's padded column, as `Zk.ligerito` computes it
@@ -14,6 +16,8 @@ computes the same three at each query `j` of level 0 (`Zk.ligerito`): the fold o
   `X̂_i(ω_p)` (`padFold_inv`, from `X̂_i = X̂_{i − 2^⌊log₂ i⌋}·Ŵ_{⌊log₂ i⌋}`), and `X̂_{2^cols + j} = X̂_j·Ŵ_cols` for
   `j < 2^cols`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

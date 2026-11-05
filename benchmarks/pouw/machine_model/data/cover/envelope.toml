@@ -1,11 +1,11 @@
-# The envelope ISA the coverage table (rows.toml) dominates every instruction by: MODEL-MIN's `Accel.Op` (CMP-165,
-# Security/Definitions/Core/Accel/ on cursor/compute-research-model-min-ea24 at a55b3e814a), its pipes, formats and
-# each card's numbers, plus the entries MODEL-COVER proposes, each marked `proposed` with the CMP-165 item that asks for
-# it. `Card.use` gives an op's units; the table reads them as rates a SM-clock. A row is dominated when its op simulates
-# the card's instruction and the card's rate of it, in the op's units, is at most the resource's ρ: the card pays no
-# fewer units than the envelope charges.
+# The envelope ISA the coverage table (rows.toml) dominates every instruction by: `Accel.Op`
+# (Security/Definitions/Core/Accel/, as drafted when the table was built), its pipes, formats and each card's numbers,
+# plus the entries the table proposes, each marked `proposed` with what it adds. `Card.use`
+# gives an op's units; the table reads them as rates a SM-clock. A row is dominated when its op simulates the card's
+# instruction and the card's rate of it, in the op's units, is at most the resource's ρ: the card pays no fewer units
+# than the envelope charges.
 
-source = "MODEL-MIN's Accel.Op at a55b3e814a (cursor/compute-research-model-min-ea24, CMP-165)"
+source = "MODEL-MIN's Accel.Op (Security/Definitions/Core/Accel/), as drafted when the table was built"
 
 [[op]]
 key = "mma"
@@ -66,8 +66,8 @@ semantics = """one of the card's warp collectives: a word (two for .U64) or a pr
 or a predicate a lane, or a uniform register"""
 n_in = 64
 n_out = 1
-proposed = """CMP-165 item 1 (MATCH.ANY, r20261027-002237-fa90), its 00:43Z reply (REDUX on MATCH.ANY's unit, \
-r20261027-004019-4f84) and RM7: no fold of `lane`s dominates them"""
+proposed = """MODEL-MIN item 1 (MATCH.ANY), its reply (REDUX on MATCH.ANY's unit) and RM7: no fold of `lane`s
+dominates them"""
 
 [[op]]
 key = "tex"
@@ -75,7 +75,7 @@ resource = "tex"
 unit = "one filtered fetch a lane, a unit of `tex`"
 semantics = """a function of ≤ 4 texels (8 trilinear, at half rate) of ≤ 4 channels at a texture's coordinates, weighed by \
 9-bit fixed-point weights, each channel converted from the texture's format"""
-proposed = "CMP-165 item 3 and its 00:55Z correction (RM4: a rate, not an exclusion)"
+proposed = "MODEL-MIN item 3 and its correction (RM4: a rate, not an exclusion)"
 
 [[op]]
 key = "-"
@@ -121,7 +121,7 @@ key = "collective"
 resource = "collective"
 proposed = "the `collective` op's unit"
 
-# MODEL-MIN's `Fmt`, and the formats the card's MMAs read that it lacks.
+# `Accel`'s `Fmt`, and the formats the card's MMAs read that it lacks.
 [[fmt]]
 key = "s8"
 [[fmt]]
@@ -149,19 +149,19 @@ key = "f64"
 
 [[fmt]]
 key = "e3m2"
-proposed = "CMP-165 00:55Z item 1: FP6 (QMMA.16832.F32.E3M2.E2M3, native on both cards)"
+proposed = "MODEL-MIN item 1, corrected: FP6 (QMMA.16832.F32.E3M2.E2M3, native on both cards)"
 
 [[fmt]]
 key = "e2m3"
-proposed = "CMP-165 00:55Z item 1: FP6"
+proposed = "MODEL-MIN item 1, corrected: FP6"
 
 [[fmt]]
 key = "mxf8"
-proposed = "CMP-165 00:55Z item 1: block-scaled E4M3/E5M2, UE8M0 a 32 (QMMA.SF, kind::mxf8f6f4, sm_120)"
+proposed = "MODEL-MIN item 1, corrected: block-scaled E4M3/E5M2, UE8M0 a 32 (QMMA.SF, kind::mxf8f6f4, sm_120)"
 
 [[fmt]]
 key = "mxf6"
-proposed = "CMP-165 00:55Z item 1: block-scaled E3M2/E2M3, UE8M0 a 32 (QMMA.SF, sm_120)"
+proposed = "MODEL-MIN item 1, corrected: block-scaled E3M2/E2M3, UE8M0 a 32 (QMMA.SF, sm_120)"
 
 # Each card's numbers (Sm120.lean, H200.lean), a SM-clock: tensor in s8 MACs, issue in warp instructions, the pipes in
 # lanes, smem and l2 in words; dram in words a second, at `sms` SMs and `clock_mhz`. `proposed_rho` are the proposed
@@ -172,9 +172,9 @@ clock_mhz = 2430
 rho = { tensor = 1024, issue = 4, alu = 64, imad = 64, shfl = 32, f64 = 2, sfu = 16, smem = 32, l2 = 5 }
 dram = 3.9925e11
 proposed_rho = { collective = 0.5, tex = 4 }
-rho_source = """Sm120.lean (CPG 12.9 Table 7 CC 12.0; tensor IMMA.16832 r20261017-041103-d35d; L2 CALIB \
-r20261017-065855-c8a9; GDDR7 1597 GB/s); collective: MATCH.ANY and REDUX's unit, 0.4999 and 0.4990 alone, 0.2498 each \
-beside the other (r20261027-004019-4f84); tex: θ tex, 4 texture units a SM, one filtered fetch a unit a clock"""
+rho_source = """Sm120.lean (CPG 12.9 Table 7 CC 12.0; tensor IMMA.16832; L2 CALIB; GDDR7 1597 GB/s); collective:
+MATCH.ANY and REDUX's unit, 0.4999 and 0.4990 alone, 0.2498 each \
+beside the other; tex: θ tex, 4 texture units a SM, one filtered fetch a unit a clock"""
 weight = { s8 = 1, u8 = 1, b1 = 1, e4m3 = 1, e5m2 = 1, e2m1 = 1, f16 = 2, bf16 = 2, tf32 = 4, nvf4 = 0.5, mxf4 = 0.5, f64 = 32, e3m2 = 1, e2m3 = 1, mxf8 = 1, mxf6 = 1 }
 
 [device.sm_90]
@@ -184,6 +184,6 @@ rho = { tensor = 4096, issue = 4, alu = 64, imad = 64, shfl = 32, f64 = 64, sfu 
 dram = 1.2e12
 proposed_rho = { collective = 0.5, tex = 4 }
 rho_source = """H200.lean (CPG 12.9 Table 7 CC 9.0; tensor DS 1,979 TOPS; b1 CALIB; HBM3e 4.8 TB/s); collective: MATCH.ANY \
-and REDUX's unit, 0.4999 and 0.4990 alone, 0.2498 each beside the other (r20261027-032627-6722, vy-dc-h200-2 at 1980 MHz); \
+and REDUX's unit, 0.4999 and 0.4990 alone, 0.2498 each beside the other (an H200 at 1980 MHz); \
 tex: θ tex"""
 weight = { s8 = 1, u8 = 1, b1 = 0.125, e4m3 = 1, e5m2 = 1, e2m1 = 1, f16 = 2, bf16 = 2, tf32 = 4, nvf4 = 1, mxf4 = 1, f64 = 32, e3m2 = 1, e2m3 = 1, mxf8 = 1, mxf6 = 1 }

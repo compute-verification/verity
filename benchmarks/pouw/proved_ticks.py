@@ -1,5 +1,5 @@
 """`proved_ticks`: PoUW's proved block-ticks for a window's declared work, the figure network accounting's joint ledger
-credits as a block's `compute` with basis "proved" (`benchmarks/datacenter`: `Placement.public(plan, ticks=...)`, where
+credits as a block's `compute` with basis "proved" (`benchmarks/datacenter`: `Placed.public(plan, ticks=...)`, where
 its tests place PoUW's compiled Program on a block).
 
     uv run python benchmarks/pouw/proved_ticks.py     the hand-checked point: H1 + fx1 on DS-120

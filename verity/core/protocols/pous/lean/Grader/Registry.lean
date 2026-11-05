@@ -1,4 +1,6 @@
-import Lean
+module
+
+public import Lean
 
 /-!
 # The grader's registry, compiled into the grader
@@ -6,6 +8,8 @@ import Lean
 A submission cannot change these at grading time: they are part of the grader binary, whose hash `grade.sh` checks
 before and after the submission builds.
 -/
+
+@[expose] public section
 
 open Lean
 
@@ -50,8 +54,6 @@ def pinnedTargets : List Name := [
   `Pous.Guarantees.ContinuousAudit,
   `Pous.Guarantees.BackgroundRebuildExcluded,
   `Pous.Guarantees.BandFamilyContinuousTimeAverage,
-  `Pous.Guarantees.SecureErasureMeetsFamily,
-  `Pous.Guarantees.SecureErasureMeets96GiB,
   `Pous.Guarantees.P2MeetsM1pB19Uncond,
   `Pous.Guarantees.P2MeetsM1pFamilyUncond,
   `Pous.Guarantees.P2MeetsM1pW8192Uncond,

@@ -1,6 +1,8 @@
-import Definitions.Pouw.PearlC.WholeCircuit
-import Definitions.Pouw.PearlC.Row4Circuit
-import Definitions.Pouw.PearlC.Tile4Circuit
+module
+
+public import Definitions.Pouw.PearlC.WholeCircuit
+public import Definitions.Pouw.PearlC.Row4Circuit
+public import Definitions.Pouw.PearlC.Tile4Circuit
 
 /-!
 # `pc4`'s whole Program as a gate table (definitions only)
@@ -19,6 +21,8 @@ bytes) and `P_A` row `i` from RowA `rs·TM + i`, and row `j` of its `B̃` and `P
 `tests/test_circuit_whole4_lean.py` checks the inputs' widths, the ports, the unit numbering and the outputs against
 `pc4.unit_cut` of `Pc4Check`, with its descriptor digests pinned.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.WholeCircuit
 

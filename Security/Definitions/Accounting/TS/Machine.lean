@@ -1,4 +1,6 @@
-import Mathlib
+module
+
+public import Mathlib
 
 /-!
 # The tensor–scalar machine (trusted)
@@ -14,6 +16,8 @@ SM-clocked or fixed-clock, and the highest SM clock `fmax` any program runs at (
   `π · n = Σ_r λ_r a_r · n` (`Machine.price`), and of a route's per-facet demand `d` it is `Σ_r λ_r d_r`
   (`demandPrice`).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS
 

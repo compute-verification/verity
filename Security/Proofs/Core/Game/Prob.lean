@@ -1,4 +1,6 @@
-import Proofs.Core.Game.Union
+module
+
+public import Proofs.Core.Game.Union
 
 /-!
 # Probabilities for a fixed prover strategy
@@ -13,6 +15,8 @@ they use:
 * `prob_map`, `Strategy.toMap_ofMap`: relabelling the output (`map`) keeps the game's strategies (`Strategy.ofMap` and
   `Strategy.toMap`, in `Protocol`).
 -/
+
+@[expose] public section
 
 namespace Verity.Game
 

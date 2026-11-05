@@ -1,4 +1,6 @@
-import Definitions.Flock.Piop
+module
+
+public import Definitions.Flock.Piop
 
 /-!
 # Hidden unit circuits: L4′ with h, and the sparse phase H1–H4
@@ -19,6 +21,8 @@ It returns the registered claim: the value the registered opening reads, at `(r_
 coefficients without `c₁ = claim + Σ_{i≥2} c_i` (C1, the sum rule `g(0) + g(1) = claim` in characteristic 2), and each
 coordinate of a point is a coin of its own.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Model
 

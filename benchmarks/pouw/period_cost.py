@@ -14,15 +14,15 @@ A period's credit is (1 − ε(j))₊ of its accepted prefix's live words, at th
 earns nothing until ε(j) < 1 (`first_credit`: 202 windows today). A window that skips every drawn tile passes with
 p0^K_d, which past 1 − b (K_d ≤ 8) would out-earn an honest window if credited without that discount (`all_skip_pays`).
 
-**The served window** (served_h1 on vy-nebius-2): 18 rounds, 16 served steps and 2 empty, 64 rows a
+**The served window** (served_h1 on an RTX PRO 6000 node): 18 rounds, 16 served steps and 2 empty, 64 rows a
 step; 2,304 GEMM calls and 1,548,288 units of 32×32 outputs (86,016 a step: qkv 384, o 256, gate_up 1,792 at K = 4,096
 and down 256 at K = 14,336, a layer, 32 layers). 5 sequences fill 119 of its 1,152 row slots (u = 119/1152; 731,136 units
 live). Its 485.5 s serve is 439.1 s of receipts (284 µs a unit, launch-bound torch, on a node at load 500 to 615), 1.7 s of
 empty steps and about 45 s of eager int8 serving; the receipt trees add 12.6 s. The period counts 439.1 s a window,
 and 32 times that at 4×8 units unless the receipts are fused into the kernel.
 
-**A window's certification** is its K_d drawn units, proved by C-Flock (`--zk`, live coins) and checked by the Lean
-verifier (`flock-verify`). A drawn unit costs its outputs × K in lanes of the measured H1 tile (`PouwH1Tile_v1`, 4×8
+**A window's certification** is its K_d sampled proof blocks, proved by Flock (`--zk`, live coins) and checked by the Lean
+verifier (`flock-verify`). A sampled proof block costs its outputs × K in lanes of the measured H1 tile (`PouwH1Tile_v1`, 4×8
 outputs at K = 4,096: 46.7 M ANDs, `k_log` 27, the most `Stmt.InRange` admits): 32 at K = 4,096, 39.6 at the served mean
 K. down's units need a narrower lane to fit a block (a 4×8 tile at K = 14,336 is 164 M ANDs). A statement holds at most
 256 instances (`m = k_log + nbl ≤ 35`), each a lane, and no more than its prover's memory allows on one node. Its cost is
@@ -39,7 +39,7 @@ certification: its statements in parallel, but no sooner than one statement's pr
 **One window long enough on its own** (`long_window`) is n = 1: Compose's `CircuitWork`, with no period statement and
 no record check. It needs Λ·ln(1/δ_s)/u under the budget, and Λ falls with M only to `lam_limit`, so a K_d below
 r·max(a/(1 − p), b/(1 − p0))·ln(1/δ_s)/(u·budget) never gets there. Its certification starts when its serving ends,
-and it holds custody of M/18 served windows' values until its draw.
+and it holds custody of M/18 served windows' values until its sample.
 
 **Levers** (`LEVERS`): one change each, with its owner and a work class (1 a parameter, 2 one module, 3 a new path in one
 component, 4 a new circuit or proof form), applied alone to today's configuration and in sequence along `route`. δ_s is
@@ -57,9 +57,14 @@ import sys
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from verity_machine_model.headline import row
+
 A, B, P, P0 = 0.218, 0.998, 7 / 8, 0.5
 DELTA_S_LOG2 = 40
-EPS_FLAT = 0.00571
+#: ε_♭ + ε_μ on sm_120's data sheet (H1 + fx1), the machine model's sheet row: ε_skip + ε_machine is Compose's ε_♭ and
+#: ε_mand its ε_μ (`epsFlat`, `epsMu`); the row's ε_luck is Λ's term here
+SHEET = row("sm_120", "sheet")
+EPS_FLAT = SHEET.skip + SHEET.machine + SHEET.mand
 TARGET = 0.01
 DAY = 86_400.0
 
@@ -80,13 +85,13 @@ SPEND = "certifying nodes 2 → 8"
 
 
 def k_factor(units: dict[str, tuple[int, int]] = SERVED_UNITS_PER_LAYER) -> float:
-    """A uniformly drawn served unit's mean K over the measured tile's 4,096."""
+    """A uniformly sampled served unit's mean K over the measured tile's 4,096."""
     n = sum(c for c, _ in units.values())
     return sum(c * k for c, k in units.values()) / n / LANE_K
 
 
 def lanes_per_unit(unit_outputs: int = UNIT_ROWS * UNIT_COLS, k: float | None = None) -> float:
-    """A drawn unit's lanes of the measured tile: its outputs over the tile's, times its K over 4,096."""
+    """A sampled proof block's lanes of the measured tile: its outputs over the tile's, times its K over 4,096."""
     return unit_outputs / LANE_OUTPUTS * (k_factor() if k is None else k)
 
 
@@ -380,7 +385,7 @@ NEAR_TERM = ("u: every row slot of a served step filled", "r → 1: units of equ
 
 def near_term(base: Config = TODAY) -> list[Config]:
     """`NEAR_TERM`'s levers, which need no new receipt kernel, served unit or proof form, in order, each on the last;
-    then the last on eight nodes (the spend lever), its draws tuned again."""
+    then the last on eight nodes (the spend lever), its samples tuned again."""
     out, c = [], base
     for name in NEAR_TERM:
         c = apply(lever(name), c)
@@ -451,7 +456,7 @@ def sensitivity() -> dict:
     base = Config("sensitivity", u=1.0)
     return dict(
         delta_s_log2={str(d): windows(replace(base, delta_s_log2=d)) for d in (20, 30, 40, 64, 80)},
-        eps_flat={f"{e:.3%}": windows(replace(base, eps_flat=e)) for e in (0.003, 0.00571, 0.007, 0.008, 0.009)},
+        eps_flat={f"{e:.3%}": windows(replace(base, eps_flat=e)) for e in (0.003, EPS_FLAT, 0.007, 0.008, 0.009)},
     )
 
 

@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.TmplFoldTree
+module
+
+public import Proofs.Flock.Soundness.TmplFoldTree
 
 /-!
 # A class's fold, valued
@@ -13,6 +15,8 @@ valuations of `Out`, at slot `s`:
 
 `ref_exp`, `ref_sum`, `add_exp` and `add_sum` are those steps.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128
 

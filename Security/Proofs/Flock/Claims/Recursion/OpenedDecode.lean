@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.OpenedPlain
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+module
+
+public import Proofs.Flock.Claims.Recursion.OpenedPlain
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 
 /-!
 # A decoded proof's openings have each level's shape
@@ -15,6 +17,8 @@ salts: none (`saltLen = none`) or none of their 0 bytes (`some 0`), as at a `Ref
 * `saltLen_plain`: an unsalted scheme's shape reads no salts, or empty ones.
 * `levelShaped_of_decode`: at every level of the shape's schedule, `LevelShaped` of the decoded Ligerito proof.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.OpenedPlain
 

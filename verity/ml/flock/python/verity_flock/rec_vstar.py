@@ -19,7 +19,7 @@ top. Its hashing part, which this module states over plain Python:
   inner proof's and the top's nodes the prover's (V*'s witness); the positions and depths are public. A proof with
   ``hm96-sha512/v1`` leaves (``SHA-512(leaf_prefix || b || c)`` for ``x = SHA-512(row)`` under the opening's 192-byte
   salt: rec-step2's sessions and the fixture) decodes and climbs too; the RecOpen gadgets open plain leaves alone.
-* **Message rows**: each round's free message rows open the ``b || c`` the coin server recorded for them before it drew the
+* **Message rows**: each round's free message rows open the ``b || c`` the coin server recorded for them before it flipped the
   round's coins (`verity_flock.rec_live.commit_rows`).
 
 `check` runs all three over a finished inner session (``public.json``, ``private.json`` and the proofs); `queries` lists the
@@ -226,7 +226,7 @@ def query_rounds(public: dict, stream: str, qs: list[int]) -> list[dict]:
 
 @dataclass(frozen=True)
 class Top:
-    """A tree's top as the firewall committed it: its nodes and their salts (the prover's, ``private.json``) and each node's
+    """A tree's top as the ZK server committed it: its nodes and their salts (the prover's, ``private.json``) and each node's
     ``b || c`` (the coin server's record, public)."""
 
     nodes: tuple[bytes, ...]

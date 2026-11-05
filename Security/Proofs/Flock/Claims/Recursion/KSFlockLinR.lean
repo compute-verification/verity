@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.KSLin2E
-import Proofs.Flock.Claims.KS.PlainRConflict
-import Proofs.Flock.Claims.KS.PlainRCapPrefix
+module
+
+public import Proofs.Flock.Claims.Recursion.KSLin2E
+public import Proofs.Flock.Claims.KS.PlainRConflict
+public import Proofs.Flock.Claims.KS.PlainRCapPrefix
 
 /-!
 # `KSFlockLin` at the deployed reader's bound record (U3)
@@ -13,6 +15,8 @@ read (`RecDeploy.deE_R_trim`). So `KSFlockLin` there is `plainR_KSFlockLin`, fro
 run accepts (`PlainRdInR`) alone, the level caps' prefix being proved (`capPrefixR`), so `ksFlockLin_R` takes exactly
 that one.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -35,7 +39,7 @@ theorem ksFlockLin_R_of_table (rd : Msg → Option FinalP) (wE : Msg → ℝ) (j
     (FlockDeploy.KS.plainR_conflictTied _ rd) htab decode hdec
 
 /-- **`KSFlockLin` at `DE` at the deployed reader's steps and trimmed columns** (U3), from the reader's bound wherever
-some run accepts (`PlainRdInR`, STEPRTABA's) alone, through the table bound `plainR_tableBoundAbortLin_R`. -/
+some run accepts (`PlainRdInR`) alone, through the table bound `plainR_tableBoundAbortLin_R`. -/
 theorem ksFlockLin_R (rd : Msg → Option FinalP) (wE : Msg → ℝ) (join : List Msg → Msg)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
     (hIn : ∀ x, ¬ Claims.Flock.NoAcc FlockDeploy.sha512 (FlockDeploy.VR rd) x → FlockDeploy.KS.PlainRdInR rd x) :

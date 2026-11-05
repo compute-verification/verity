@@ -4,7 +4,7 @@
 # the phase kernel's gate (pgate), CAP's gate, and nothing timed unless all pass; then each arm. The round's coins are drawn
 # once per run (coins.txt). Clocks are read, never set.
 #
-#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=LANE \
+#   research run --on vy-nebius-2 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     --send benchmarks/pouw/filler/psched.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/psched.sh"'
 #
 # PS_ARMS: "B:L:FILL_SMS:PMODE:PW:PNC:PS:PARAM[:ENV=V,ENV=V]" (dcap pfill's arguments; FILL v1's filler is W 8, NC 4,

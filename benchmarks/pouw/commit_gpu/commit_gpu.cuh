@@ -4,6 +4,9 @@
 //
 // A GPU committer for hm96-sha512/row/v2 and hm96-sha512/row-seg/v1 rows in frame-v3-sha512 trees, bit for bit the
 // reference's (verity.ml.commitments: hm96.SHA512, rowleaf, merkle.CommitmentDomain and tree_levels; reference.py here).
+// The frame's leaf, pad and node, the hm96 leaf's mask, salt digest and value, and the constants' builders are the GPU's one
+// row commitment (`rc`, verity/ml/kernels/row_commit.cuh); this file keeps the committer's schedule: its rows' digests, its
+// salts, its kernels and streams, and its constants in __constant__ memory.
 //
 // Per position of a domain of n leaves (rank = position, the tree padded to width = 2^depth):
 //   x    = SHA-512(P(l) || row)                         the row's sha512/row/v2 digest
@@ -41,12 +44,15 @@
 #include <string>
 #include <vector>
 
-#include "sha512.cuh"
+#include "../../../verity/ml/kernels/row_commit.cuh"
 
 using u64 = uint64_t;
 using u32 = uint32_t;
 #ifndef DEV
 #define DEV __device__ __forceinline__
+#endif
+#ifndef HD
+#define HD __host__ __device__ __forceinline__
 #endif
 
 #ifndef CK
@@ -66,8 +72,6 @@ using u32 = uint32_t;
 constexpr int TSTRIDE = 272;                 // bytes a T row in shared memory: 256 + 16, so rows start in different bank groups
 constexpr int TSMEM = 256 * TSTRIDE;          // 69,632 bytes
 constexpr int NODE_THREADS = 256;             // a node pass covers 512 children a block, up to 9 levels
-constexpr int MAX_NB = 4;                     // positions and node indices below 2^32
-constexpr int MAX_NI = 4;
 constexpr int SMALL_THREADS = 128;            // the small path's CTAs (no shared memory): a CTA folds its 128 leaves' 7 levels
 constexpr int SMALL_LEVELS = 7;
 constexpr int SMALL_TOP = 256;                // the small path's top CTA takes a level of at most 256 nodes
@@ -78,167 +82,58 @@ constexpr int SMALL_TOP = 256;                // the small path's top CTA takes 
 struct Consts {
   u64 mid_P[8];             // after P(l)
   u64 kw_xpad[80];          // the row digest's last block when the row fills whole blocks (all padding)
-  u64 mid_salt[8];          // after the salt prefix
-  u64 mid_leaf[8];          // after leaf_prefix(key)
-  u64 kw_leafpad[80];       // the hm96 leaf's padding block
+  rc::Hm96K hm;             // the hm96 leaf's: after the salt prefix, after leaf_prefix(key), and its padding block
   u64 ks[8];                // the salt key
   u64 ks_m8[8];             // state after rounds 0..7 of a salt block (its words 0..7 are the key)
   u64 seg_mid[64][8];       // sha512/row-seg/v1: the chaining value after segment j's first block S(j, s, m_j)
 };
 // What the domain id fixes: the frame's leaf, pad and node messages. COMMIT_GPU_DOMS slots, so committers of different
 // domains (an operand's leaf counts) can share one binary while they agree on Consts.
-struct Dom {
-  u64 fl_tpl[MAX_NB + 1][32];   // the frame leaf's two blocks per nb = len(uint(pos)), pos and h zero
-  u64 fl_m15[8];            // state after rounds 0..14 of its first block (words 0..14 don't depend on pos)
-  u64 node_mid[33][8];      // per level: the chaining value after a node message's first block (it fixes only the level)
-  u64 node_tpl[MAX_NI + 1][32];  // a node message's blocks 2 and 3 per ni = len(uint(index)), index and children zero
-  u64 pad_tpl[MAX_NB + 1][16];   // a pad's first block per nb, rank zero
-};
+struct Dom : rc::FrameK, rc::NodeK {};
 #ifndef COMMIT_GPU_DOMS
 #define COMMIT_GPU_DOMS 1
 #endif
 __constant__ Consts C;
 __constant__ Dom CD[COMMIT_GPU_DOMS];
 
-DEV u32 bswap32(u32 x) { return __byte_perm(x, 0, 0x0123); }
-DEV u64 be64(u32 lo, u32 hi) { return (u64)bswap32(lo) << 32 | bswap32(hi); }   // 8 bytes loaded as two LE u32
-HD int nbytes(u64 x) { int n = 1; while (x >> (8 * n) && n < 8) ++n; return n; }
+using rc::cpy8;
+using rc::ldg16;
+using rc::nbytes;
+using rc::or_be;
+using rc::or_digest;
+using sx::be64;   // 8 bytes loaded as two LE u32
+using sx::bswap32;
 
-// OR the low NB bytes of v, big-endian, into the message words W at byte offset OFF.
-template <int OFF, int NB>
-DEV void or_be(u64* W, u64 v) {
-  constexpr int END = OFF + NB, K = (END - 1) / 8, SH = 8 * (7 - (END - 1) % 8);
-  W[K] |= v << SH;
-  if constexpr (OFF < 8 * K) W[K - 1] |= v >> (64 - SH);
-}
-// OR a digest (8 words) into W at byte offset OFF.
-template <int OFF>
-DEV void or_digest(u64* W, const u64* d) {
-  constexpr int K0 = OFF / 8, S = 8 * (OFF % 8);
-#pragma unroll
-  for (int i = 0; i < 8; ++i) {
-    if constexpr (S == 0) {
-      W[K0 + i] |= d[i];
-    } else {
-      W[K0 + i] |= d[i] >> S;
-      W[K0 + i + 1] |= d[i] << (64 - S);
-    }
-  }
-}
-
-DEV void cpy8(u64* d, const u64* s) {
-#pragma unroll
-  for (int i = 0; i < 8; ++i) d[i] = s[i];
-}
-
-// --- the frame: leaf, pad, node ----------------------------------------------------------------------------------
+// --- the frame: row_commit's leaf, pad and node over domain slot dom's constants, CD[dom] ------------------------------
 
 // SX: the schema's length beyond "hm96-sha512/row/v2" (0; 4 for "hm96-sha512/row-seg/v1").
-template <int NB, int SX>
-DEV void frame_leaf_nb(int dom, u64 pos, const u64* h, u64* out) {
-  u64 W[32];
-#pragma unroll
-  for (int i = 0; i < 32; ++i) W[i] = CD[dom].fl_tpl[NB][i];
-  or_be<121, NB>(W, pos);
-  or_be<129 + NB, NB>(W, pos);
-  or_digest<163 + 2 * NB + SX>(W, h);
-  sha::iv(out);
-  sha::compress_from<15>(out, CD[dom].fl_m15, W);
-  sha::compress(out, W + 16);
-}
 template <int SX>
 DEV void frame_leaf(int dom, u64 pos, const u64* h, u64* out) {
   switch (nbytes(pos)) {
-    case 1: frame_leaf_nb<1, SX>(dom, pos, h, out); break;
-    case 2: frame_leaf_nb<2, SX>(dom, pos, h, out); break;
-    case 3: frame_leaf_nb<3, SX>(dom, pos, h, out); break;
-    default: frame_leaf_nb<4, SX>(dom, pos, h, out); break;
+    case 1: rc::frame_leaf_nb<SX, 1>(CD[dom], pos, h, out); break;
+    case 2: rc::frame_leaf_nb<SX, 2>(CD[dom], pos, h, out); break;
+    case 3: rc::frame_leaf_nb<SX, 3>(CD[dom], pos, h, out); break;
+    default: rc::frame_leaf_nb<SX, 4>(CD[dom], pos, h, out); break;
   }
 }
 // The frame leaf's first block holds pos but not h, so its compression can run ahead (the salt phase): frame_first is the
 // state after it, frame_second the leaf from that state and h.
-template <int NB>
-DEV void frame_first_nb(int dom, u64 pos, u64* out) {
-  u64 W[16];
-#pragma unroll
-  for (int i = 0; i < 16; ++i) W[i] = CD[dom].fl_tpl[NB][i];
-  or_be<121, NB>(W, pos);
-  sha::iv(out);
-  sha::compress_from<15>(out, CD[dom].fl_m15, W);
-}
-DEV void frame_first(int dom, u64 pos, u64* out) {
-  switch (nbytes(pos)) {
-    case 1: frame_first_nb<1>(dom, pos, out); break;
-    case 2: frame_first_nb<2>(dom, pos, out); break;
-    case 3: frame_first_nb<3>(dom, pos, out); break;
-    default: frame_first_nb<4>(dom, pos, out); break;
-  }
-}
-template <int NB, int SX>
-DEV void frame_second_nb(int dom, u64 pos, const u64* h, u64* out) {
-  u64 W[32];
-#pragma unroll
-  for (int i = 16; i < 32; ++i) W[i] = CD[dom].fl_tpl[NB][i];
-  or_be<129 + NB, NB>(W, pos);
-  or_digest<163 + 2 * NB + SX>(W, h);
-  sha::compress(out, W + 16);
-}
+DEV void frame_first(int dom, u64 pos, u64* out) { rc::frame_first(CD[dom], pos, out); }
 template <int SX>
-DEV void frame_second(int dom, u64 pos, const u64* h, u64* out) {
-  switch (nbytes(pos)) {
-    case 1: frame_second_nb<1, SX>(dom, pos, h, out); break;
-    case 2: frame_second_nb<2, SX>(dom, pos, h, out); break;
-    case 3: frame_second_nb<3, SX>(dom, pos, h, out); break;
-    default: frame_second_nb<4, SX>(dom, pos, h, out); break;
-  }
-}
-
-template <int NB>
-DEV void pad_nb(int dom, u64 rank, u64* out) {
-  u64 W[16];
-#pragma unroll
-  for (int i = 0; i < 16; ++i) W[i] = CD[dom].pad_tpl[NB][i];
-  or_be<120, NB>(W, rank);
-  sha::iv(out);
-  sha::compress(out, W);
-#pragma unroll
-  for (int i = 0; i < 15; ++i) W[i] = 0;
-  W[15] = (120 + NB) * 8;
-  sha::compress(out, W);
-}
-DEV void pad(int dom, u64 rank, u64* out) {
-  switch (nbytes(rank)) {
-    case 1: pad_nb<1>(dom, rank, out); break;
-    case 2: pad_nb<2>(dom, rank, out); break;
-    case 3: pad_nb<3>(dom, rank, out); break;
-    default: pad_nb<4>(dom, rank, out); break;
-  }
-}
-
-template <int NI>
-DEV void node_ni(int dom, int level, u64 index, const u64* L, const u64* R, u64* out) {
-  u64 W[32];
-#pragma unroll
-  for (int i = 0; i < 32; ++i) W[i] = CD[dom].node_tpl[NI][i];
-  or_be<2, NI>(W, index);
-  or_digest<10 + NI>(W, L);
-  or_digest<82 + NI>(W, R);
-  cpy8(out, CD[dom].node_mid[level]);
-  sha::compress(out, W);
-  sha::compress(out, W + 16);
-}
+DEV void frame_second(int dom, u64 pos, const u64* h, u64* out) { rc::frame_second<SX>(CD[dom], pos, h, out); }
+DEV void pad(int dom, u64 rank, u64* out) { rc::pad(CD[dom], rank, out); }
+// Each arm indexes CD itself: through rc::node's pointers the node kernel stages its constant-bank addresses in uniform
+// registers and grows.
 DEV void node(int dom, int level, u64 index, const u64* L, const u64* R, u64* out) {
   switch (nbytes(index)) {
-    case 1: node_ni<1>(dom, level, index, L, R, out); break;
-    case 2: node_ni<2>(dom, level, index, L, R, out); break;
-    case 3: node_ni<3>(dom, level, index, L, R, out); break;
-    default: node_ni<4>(dom, level, index, L, R, out); break;
+    case 1: rc::node_nb_from<1>(CD[dom].node_tpl, CD[dom].node_mid[level], index, L, R, out); break;
+    case 2: rc::node_nb_from<2>(CD[dom].node_tpl, CD[dom].node_mid[level], index, L, R, out); break;
+    case 3: rc::node_nb_from<3>(CD[dom].node_tpl, CD[dom].node_mid[level], index, L, R, out); break;
+    default: rc::node_nb_from<4>(CD[dom].node_tpl, CD[dom].node_mid[level], index, L, R, out); break;
   }
 }
 
 // --- the leaf's parts ----------------------------------------------------------------------------------------------
-
-DEV uint4 ldg16(const uint8_t* p) { return __ldg(reinterpret_cast<const uint4*>(p)); }
 
 // x for the e2e leaf: the 32 int8 at A[32 pos ..] as bf16 words (little-endian), twice: one data block, then P(1024)'s
 // fixed padding block.
@@ -377,63 +272,16 @@ DEV void salt_given(const uint8_t* s, u64* Y) {
 }
 
 // c = SHA-512(salt_prefix || y)
-DEV void salt_digest(const u64* Y, u64* c) {
-  u64 w[16];
-  cpy8(c, C.mid_salt);
-#pragma unroll
-  for (int i = 0; i < 16; ++i) w[i] = Y[i];
-  sha::compress(c, w);
-#pragma unroll
-  for (int i = 0; i < 8; ++i) w[i] = Y[16 + i];
-  w[8] = 0x8000000000000000ull;
-#pragma unroll
-  for (int i = 9; i < 15; ++i) w[i] = 0;
-  w[15] = (128 + 192) * 8;
-  sha::compress(c, w);
-}
+DEV void salt_digest(const u64* Y, u64* c) { rc::salt_digest(C.hm, Y, c); }
 
-// M_key y as 16 little-endian u32 (mask byte 4w + k is byte k of m[w]): for salt bytes p = 16 q + r, the 80 bytes
-// [16 q, 16 q + 80) of T_{y_p} are xored into A_r, and A_r shifted down r bytes into m.
-// T in shared memory (TS, rows TSTRIDE apart) or read from global memory through L1 (rows 256 apart).
-// NIB: T is the nibble table (Committer::Tn). T is linear in v, so T_v = T_(v & 15) ^ T_(v & 0xF0): 31 rows, 8 KB, which
-// stays in L1 at a 100% shared-memory carveout, where all 256 rows (64 KB) came from L2. Its rows T_u and T_16u (u < 16)
-// are stored chunk-major, 16-byte chunk c of row u at 256 c + 16 u (the high nibble's 4 KB on), so a warp's lanes read one
-// chunk of at most 16 rows: 256 bytes in two lines, where row-major rows took a line a row.
+// M_key y as 16 little-endian u32 (row_commit's mask, its loop unrolled) from T in shared memory (TS, the byte table's rows
+// TSTRIDE apart) or read from global memory through L1 (rows 256 apart). NIB: T is the nibble table (Committer::Tn) through
+// L1: 31 rows, 8 KB, which stays in L1 at a 100% shared-memory carveout, where all 256 rows (64 KB) came from L2, and a
+// warp's lanes read one chunk of at most 16 rows: 256 bytes in two lines, where row-major rows took a line a row.
 template <bool TS, bool NIB = false>
 DEV void hm96_mask(const uint8_t* T, const u64* Y, u32* m) {
-  constexpr int STRIDE = TS ? TSTRIDE : 256;
-#pragma unroll
-  for (int w = 0; w < 16; ++w) m[w] = 0;
-#pragma unroll
-  for (int r = 0; r < 16; ++r) {
-    u32 A[20];
-#pragma unroll
-    for (int i = 0; i < 20; ++i) A[i] = 0;
-#pragma unroll
-    for (int q = 0; q < 12; ++q) {
-      const int p = 16 * q + r;
-      const u32 v = (u32)(Y[p >> 3] >> (56 - 8 * (p & 7))) & 0xFFu;
-      if constexpr (NIB) {
-        const uint8_t* lo = T + 256 * q + 16 * (v & 15u);
-        const uint8_t* hi = T + 4096 + 256 * q + 16 * (v >> 4);
-#pragma unroll
-        for (int i = 0; i < 5; ++i) {
-          const uint4 u = ldg16(lo + 256 * i), w = ldg16(hi + 256 * i);
-          A[4 * i] ^= u.x ^ w.x; A[4 * i + 1] ^= u.y ^ w.y; A[4 * i + 2] ^= u.z ^ w.z; A[4 * i + 3] ^= u.w ^ w.w;
-        }
-      } else {
-        const uint8_t* t = T + v * STRIDE + 16 * q;
-#pragma unroll
-        for (int i = 0; i < 5; ++i) {
-          const uint4 u = TS ? *reinterpret_cast<const uint4*>(t + 16 * i) : ldg16(t + 16 * i);
-          A[4 * i] ^= u.x; A[4 * i + 1] ^= u.y; A[4 * i + 2] ^= u.z; A[4 * i + 3] ^= u.w;
-        }
-      }
-    }
-    const int sw = r >> 2, s = 8 * (r & 3);
-#pragma unroll
-    for (int w = 0; w < 16; ++w) m[w] ^= s ? __funnelshift_r(A[w + sw], A[w + sw + 1], s) : A[w + sw];
-  }
+  if constexpr (NIB) rc::mask<false>(rc::NibTab<true>{T}, Y, m);
+  else rc::mask<false>(rc::ByteTab<TS ? TSTRIDE : 256, !TS>{T}, Y, m);
 }
 
 struct RowE2E {
@@ -502,8 +350,7 @@ DEV void salt_one(u64 pos, const uint8_t* __restrict__ salts, const uint8_t* T, 
   hm96_mask<TS, NIB>(T, Y, m);
 #endif
   salt_digest(Y, c);
-#pragma unroll
-  for (int i = 0; i < 8; ++i) my[i] = (u64)bswap32(m[2 * i]) << 32 | bswap32(m[2 * i + 1]);
+  rc::mask_words(m, my);
   st8(S + 16 * pos, my);
   st8(S + 16 * pos + 8, c);
 }
@@ -547,9 +394,7 @@ DEV void leaf_from_digest(int dom, u64 pos, const u64* x, const u64* __restrict_
 #ifdef COMMIT_GPU_DIAG_MERGED
   for (int i = 0; i < 8; ++i) h[i] = B[i] ^ B[8 + i];
 #else
-  cpy8(h, C.mid_leaf);
-  sha::compress(h, B);
-  sha::compress_kw(h, C.kw_leafpad);
+  rc::hm96_value(C.hm, B, h);
 #endif
   if (F) {
 #ifdef COMMIT_GPU_DIAG_NOS
@@ -844,7 +689,6 @@ __global__ void __launch_bounds__(NODE_THREADS) quad_node_kernel(int dom, const 
 #endif
 // --- host --------------------------------------------------------------------------------------------------------
 
-static const char FRAME[] = "veritor/protocol/merkle/frame/v3";  // + its NUL: 33 bytes
 static const char SCHEMA[] = "hm96-sha512/row/v2";
 static const char SCHEMA_SEG[] = "hm96-sha512/row-seg/v1";   // 4 bytes longer: SX = 4
 static const char SEG_TAG[] = "verity/sha512-row-seg/v1/segment";   // + its NUL
@@ -885,86 +729,29 @@ static Params read_params(const std::string& path) {
   return p;
 }
 
-// reference merkle._message: frame || u32be(len tag) || tag || (u64be(len part) || part)...
-static std::vector<uint8_t> message(const char* tag, const std::vector<std::vector<uint8_t>>& parts) {
-  std::vector<uint8_t> m(FRAME, FRAME + sizeof FRAME);
-  const size_t tl = strlen(tag);
-  for (int i = 3; i >= 0; --i) m.push_back((uint8_t)(tl >> (8 * i)));
-  m.insert(m.end(), tag, tag + tl);
-  for (const auto& p : parts) {
-    for (int i = 7; i >= 0; --i) m.push_back((uint8_t)((u64)p.size() >> (8 * i)));
-    m.insert(m.end(), p.begin(), p.end());
-  }
-  return m;
-}
-// the padded message's words (len + 17 rounded up to blocks), the length in the last block
-static std::vector<u64> padded_words(const std::vector<uint8_t>& msg) {
-  const size_t total = ((msg.size() + 17 + 127) / 128) * 128;
-  std::vector<uint8_t> b(total, 0);
-  memcpy(b.data(), msg.data(), msg.size());
-  b[msg.size()] = 0x80;
-  sha::put_be64(b.data() + total - 8, (u64)msg.size() * 8);
-  std::vector<u64> w(total / 8);
-  for (size_t i = 0; i < w.size(); ++i) w[i] = sha::be64(b.data() + 8 * i);
-  return w;
-}
-static std::vector<uint8_t> zeros(int n) { return std::vector<uint8_t>(n, 0); }
-static std::vector<uint8_t> bytes_of(const uint8_t* p, int n) { return std::vector<uint8_t>(p, p + n); }
 static void words_of(const uint8_t* block, u64* w, int n) { for (int i = 0; i < n; ++i) w[i] = sha::be64(block + 8 * i); }
 
 // seg: sha512/row-seg/v1 rows of seg_bits bits (P is then Q(seg_bits), the outer hash's first block).
 static Consts build_consts(const Params& p, u32 lb, bool seg, u64 seg_bits, Dom& dm) {
   Consts c{};
   dm = Dom{};
-  u64 w[16], st[8];
-  sha::iv(st); words_of(p.P, w, 16); sha::compress(st, w); memcpy(c.mid_P, st, 64);
-  {
-    u64 blk[16] = {0x8000000000000000ull};
-    blk[15] = (u64)(128 + lb) * 8;
-    sha::schedule_kw(blk, c.kw_xpad);
-  }
-  sha::iv(st); words_of(p.salt_prefix, w, 16); sha::compress(st, w); memcpy(c.mid_salt, st, 64);
-  sha::iv(st); words_of(p.leaf_prefix, w, 16); sha::compress(st, w); memcpy(c.mid_leaf, st, 64);
-  {
-    u64 blk[16] = {0x8000000000000000ull};
-    blk[15] = 256 * 8;
-    sha::schedule_kw(blk, c.kw_leafpad);
-  }
+  rc::midstate(p.P, c.mid_P);
+  rc::pad_schedule(128 + lb, c.kw_xpad);
+  rc::midstate(p.salt_prefix, c.hm.mid_salt);
+  rc::midstate(p.leaf_prefix, c.hm.mid_leaf);
+  rc::pad_schedule(256, c.hm.kw_leafpad);
   words_of(p.ks, c.ks, 8);
   {
-    u64 blk[16] = {};
+    u64 blk[16] = {}, st[8];
     memcpy(blk, c.ks, 64);
     sha::iv(st);
     sha::rounds_prefix(st, blk, 8, c.ks_m8);
   }
-  const auto did = bytes_of(p.domain_id, 64);
   const char* sname = seg ? SCHEMA_SEG : SCHEMA;
-  const std::vector<uint8_t> schema(sname, sname + strlen(sname));
-  for (int nb = 1; nb <= MAX_NB; ++nb) {
-    const auto m = padded_words(message("leaf", {did, zeros(nb), zeros(nb), schema, zeros(64)}));
-    if (m.size() != 32) { fprintf(stderr, "frame leaf at nb %d is not two blocks\n", nb); exit(2); }
-    std::copy(m.begin(), m.end(), dm.fl_tpl[nb]);
-    for (int i = 0; i < 15; ++i)
-      if (dm.fl_tpl[nb][i] != dm.fl_tpl[1][i]) { fprintf(stderr, "frame leaf word %d depends on nb\n", i); exit(2); }
-  }
-  sha::iv(st);
-  sha::rounds_prefix(st, dm.fl_tpl[1], 15, dm.fl_m15);
-  for (int ni = 1; ni <= MAX_NI; ++ni) {
-    const auto m = padded_words(message("node", {did, std::vector<uint8_t>{0}, zeros(ni), zeros(64), zeros(64)}));
-    if (m.size() != 48) { fprintf(stderr, "node at ni %d is not three blocks\n", ni); exit(2); }
-    std::copy(m.begin() + 16, m.end(), dm.node_tpl[ni]);
-  }
-  for (int level = 0; level < 33; ++level) {
-    const auto m = padded_words(message("node", {did, std::vector<uint8_t>{(uint8_t)level}, zeros(1), zeros(64), zeros(64)}));
-    u64 blk[16];
-    std::copy(m.begin(), m.begin() + 16, blk);
-    sha::iv(dm.node_mid[level]);
-    sha::compress(dm.node_mid[level], blk);
-  }
-  for (int nb = 1; nb <= MAX_NB; ++nb) {
-    const auto m = padded_words(message("pad", {did, zeros(nb)}));
-    if (m.size() != 32) { fprintf(stderr, "pad at nb %d is not two blocks\n", nb); exit(2); }
-    std::copy(m.begin(), m.begin() + 16, dm.pad_tpl[nb]);
+  const auto* schema = reinterpret_cast<const uint8_t*>(sname);
+  if (rc::frame_plan(p.domain_id, schema, (int)strlen(sname), dm) || rc::node_plan(p.domain_id, dm)) {
+    fprintf(stderr, "the frame's leaf, pad or node messages are not the blocks the kernels take\n");
+    exit(2);
   }
   if (seg) {   // S(j, s, m_j) = tag || u64be j || u64be s || u64be m_j, zero padded to 128 bytes
     const u64 s = (seg_bits + 8191) / 8192;
@@ -975,7 +762,7 @@ static Consts build_consts(const Params& p, u32 lb, bool seg, u64 seg_bits, Dom&
       sha::put_be64(blk + sizeof SEG_TAG, j);
       sha::put_be64(blk + sizeof SEG_TAG + 8, s);
       sha::put_be64(blk + sizeof SEG_TAG + 16, j + 1 < s ? 8192 : seg_bits - 8192 * (s - 1));
-      sha::iv(c.seg_mid[j]); words_of(blk, w, 16); sha::compress(c.seg_mid[j], w);
+      rc::midstate(blk, c.seg_mid[j]);
     }
   }
   return c;
@@ -993,22 +780,6 @@ static u64 tile_leaves(u64 M, u64 K, u64 R) {
   return (M + R - 1) / R * (K / 32);
 }
 
-// The device's node() on the CPU, from the same constants: one GPU thread takes microseconds a compression, a CPU core a
-// fraction of one, so the narrow top of a tree is faster on the host, which needs the root anyway.
-static int nbytes_host(u64 v) { int k = 1; while (k < 8 && (v >> (8 * k))) ++k; return k; }
-static void or_byte(u64* W, int off, uint8_t b) { W[off >> 3] |= (u64)b << (56 - 8 * (off & 7)); }
-static uint8_t byte_of(const u64* d, int i) { return (uint8_t)(d[i >> 3] >> (56 - 8 * (i & 7))); }
-static void host_node(const Dom& c, int level, u64 index, const u64* L, const u64* R, u64* out) {
-  const int ni = nbytes_host(index);
-  u64 W[32];
-  memcpy(W, c.node_tpl[ni], sizeof W);
-  for (int i = 0; i < ni; ++i) or_byte(W, 2 + i, (uint8_t)(index >> (8 * (ni - 1 - i))));
-  for (int i = 0; i < 64; ++i) { or_byte(W, 10 + ni + i, byte_of(L, i)); or_byte(W, 82 + ni + i, byte_of(R, i)); }
-  memcpy(out, c.node_mid[level], 64);
-  sha::compress(out, W);
-  sha::compress(out, W + 16);
-}
-
 // The salt phase's S[pos] (M_key y || c, 16 words, as salt_one<true> writes it) on the CPU from the same constants and the
 // row-major T, so host threads can make the small path's S records (ovl.cu's cgh arms copy them in).
 static void host_salt(const Consts& c, const uint8_t* T, u64 pos, u64* S) {
@@ -1020,30 +791,10 @@ static void host_salt(const Consts& c, const uint8_t* T, u64 pos, u64* S) {
     sha::iv(Y + 8 * r);
     sha::compress(Y + 8 * r, w);
   }
-  u32 m[16] = {};
-  for (int r = 0; r < 16; ++r) {
-    u32 A[20] = {};
-    for (int q = 0; q < 12; ++q) {
-      const int p = 16 * q + r;
-      const u32 v = (u32)(Y[p >> 3] >> (56 - 8 * (p & 7))) & 0xFFu;
-      u32 t[20];
-      memcpy(t, T + 256 * v + 16 * q, sizeof t);
-      for (int i = 0; i < 20; ++i) A[i] ^= t[i];
-    }
-    const int sw = r >> 2, s = 8 * (r & 3);
-    for (int w = 0; w < 16; ++w) m[w] ^= s ? (A[w + sw] >> s) | (A[w + sw + 1] << (32 - s)) : A[w + sw];
-  }
-  u64 d[8], w[16];
-  memcpy(d, c.mid_salt, sizeof d);
-  for (int i = 0; i < 16; ++i) w[i] = Y[i];
-  sha::compress(d, w);
-  for (int i = 0; i < 8; ++i) w[i] = Y[16 + i];
-  w[8] = 0x8000000000000000ull;
-  for (int i = 9; i < 15; ++i) w[i] = 0;
-  w[15] = (128 + 192) * 8;
-  sha::compress(d, w);
-  for (int i = 0; i < 8; ++i) S[i] = (u64)__builtin_bswap32(m[2 * i]) << 32 | __builtin_bswap32(m[2 * i + 1]);
-  for (int i = 0; i < 8; ++i) S[8 + i] = d[i];
+  u32 m[16];
+  rc::mask<false>(rc::ByteTab<256, false>{T}, Y, m);
+  rc::mask_words(m, S);
+  rc::salt_digest(c.hm, Y, S + 8);
 }
 
 struct Committer {
@@ -1203,13 +954,14 @@ struct Committer {
 #endif
   }
   // Levels from+1 .. depth on the CPU from level `from` (cur: its nodes' words, replaced by the root's); each level's words
-  // are appended to `keep` when given.
+  // are appended to `keep` when given. One GPU thread takes microseconds a compression, a CPU core a fraction of one, so
+  // the narrow top of a tree is faster on the host, which needs the root anyway.
   void host_tail(int from, std::vector<u64>& cur, std::vector<std::vector<u64>>* keep = nullptr) const {
     std::vector<u64> nxt;
     for (int d = from; d < depth; ++d) {
       const u64 m = (width >> d) / 2;
       nxt.resize(8 * m);
-      for (u64 i = 0; i < m; ++i) host_node(hd, d, i, &cur[16 * i], &cur[16 * i + 8], &nxt[8 * i]);
+      for (u64 i = 0; i < m; ++i) rc::node(hd, d, i, &cur[16 * i], &cur[16 * i + 8], &nxt[8 * i]);
       if (keep) keep->push_back(nxt);
       cur.swap(nxt);
     }

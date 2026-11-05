@@ -1,4 +1,6 @@
-import Definitions.Core.NaiveStrassen
+module
+
+public import Definitions.Core.NaiveStrassen
 
 /-!
 # Naive tiled against Strassen: D4's guarantees
@@ -9,6 +11,8 @@ SXM and the RTX PRO 6000, each at its data sheet's and its measured instruction 
 on a served product is at most `log₂(65536 / 16) = 12` deep, and the size form's `c` is `65536 / 16 = 4096`. Both are
 about int8 operands at `(256, 256)`.
 -/
+
+@[expose] public section
 
 namespace Verity.Guarantees
 

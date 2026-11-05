@@ -8,18 +8,23 @@ the e2e slice's o_proj operand A, 8192 x 4096 int8, beside cuBLASLt's int8 GEMM 
 Files:
 
 - `commit_gpu.cuh`: the committer (device code, constants, `Committer`); its header has the construction. A kernel that
-  commits rows it produces includes it (see Tile leaves).
+  commits rows it produces includes it (see Tile leaves). The frame's leaf, pad and node, the hm96 leaf's mask, salt
+  digest and value, and the constants' builders are the GPU's one row commitment, `verity/ml/kernels/row_commit.cuh`;
+  this file keeps the committer's schedule.
 - `commit_gpu.cu`: the command line: `check` (writes every level and every leaf's b || c for `reference.py`), `bench`
   (alone, as a CUDA graph, with the root on the host, and beside the GEMM) and the raw compression rate (`sha`).
-- `sha512.cuh`: the SHA-512 compression (build flags `SHA_ADD`, `SHA_ROT`, `SHA_ROLL`, kept for the measurements below).
+- The SHA-512 compression is `sha::compress` from the GPU's one SHA-512 header, `verity/ml/kernels/sha512.cuh` (build
+  flags `SHA_ADD`, `SHA_ROT`, `SHA_ROLL`, kept for the measurements below, and `SHA_SX`).
 - `reference.py`: the parameter file, every check case's inputs and the reference's levels, b || c and leaves, by the
   repository's own functions; `check` compares a build's output with them.
 - `gpu.sh`: the pod job (builds and reference cases outside the lease; selftest, check, rate, e2e, both leaf-size sweeps,
   the tile sweep and an nsys trace under one GPU lease). `summary.py`: one line a measurement, or (`table`) the Results
   table, (`tiles`) the R table, or (`formats`) the leaf-format table.
 
+On an RTX PRO 6000 node (MACHINE):
+
 ~~~text
-research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=LANE \
+research run --on MACHINE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
   [--env BUILDS="a0r0l a0r0 a1r0 a0r3"] -- bash benchmarks/pouw/commit_gpu/gpu.sh
 ~~~
 
@@ -126,7 +131,7 @@ the commitment's stream at the device's highest priority.
   issue slots from the GEMM instead (GEMMs 1.8x slower at e2e).
 - **The CPU tail** (the top 3-5 levels on the host, which needs the root anyway) saves 5-15 us.
 
-## Leaf size (RS-DEF owns it)
+## Leaf size
 
 A leaf's fixed cost is ~11 compressions (salt 3, c 2, hm96 leaf 2, frame leaf 2, its share of the nodes ~2) besides its row
 (L/128 blocks of int8 values). Small leaves pay the fixed cost per 32 values: 2^20 leaves a call, 3.06x the GEMM on the
@@ -143,7 +148,7 @@ Reached for leaves of 2 KiB and more as time added to the stage: committed on a 
 reads the same operand, the commitment is done before the GEMM and the GEMM ends 0.07-0.09x later. Not reached alone (0.53x,
 the serial chain of ~42 compressions times a lone warp's ~5 us), and not at the e2e slice's 32 values a leaf: its data phase
 is 8.4 M compressions, 1.18 ms at the card's integer issue ceiling (2.8x the GEMM), so no kernel gets it under that, and the
-graph is within 8% of it. What would still move it: bigger leaves (RS-DEF's call), a tree with fewer serial levels (a wider
+graph is within 8% of it. What would still move it: bigger leaves (a format change), a tree with fewer serial levels (a wider
 node, which is a format change), committing several operands of a stage in one pass (the latency floor is per launch, not
 per operand), and the salt phase timed into idle GPU time.
 
@@ -214,7 +219,7 @@ cost to the stage when the root isn't needed before the GEMM ends.
   10.3 us a level (0.106 ms at depth 11 to 0.164 at depth 16): two serial compressions on one warp, plus the launch. At
   R <= 64 the tree is half or more of the latency. The root on the host saves at most 8 us.
 
-### For a producer's epilogue (stage_cost)
+### For a producer's epilogue
 
 Include `commit_gpu.cuh`. Before the producer runs: `Committer::init(params, n, 32 R, keep_bc, seg, 256 R)` and
 `salts<true>(nullptr, stream)` (or `salts<false>` with given salts). In the epilogue, for each whole block a CTA holds
@@ -225,13 +230,12 @@ the outer hash, as `seg_kernel` and `RowBytes` do, `SX = 4`; on the small path p
 `nodes(stream)`. `check` holds the result to the reference: write `levels.bin` and `bc.bin` as `check()` does and run
 `reference.py check`.
 
-### The small path (beside the GEMMs: stage_ovl)
+### The small path (beside the GEMMs)
 
 `init(..., dom, small = true, slots)` puts a committer on kernels that can share an SM with cuBLASLt's GEMM CTAs: every
 CTA is 128 threads with no shared memory (a CTA's 7 levels pass through global memory between `__syncthreads`) and at
 most 102 registers a thread (`SMALL_MINB`, 5 CTAs an SM; the leaf kernel then takes 96
-without spilling, where it took 156 uncapped), and a consumer sets their preferred carveout to the GEMMs' (`ovl.cu`'s
-`CARVE=100`).
+without spilling, where it took 156 uncapped), and a consumer sets their preferred carveout to the GEMMs'.
 - `salts(given, stream, s0, ns)`: slots s0 .. s0 + ns - 1 of the domain's commitments, each slot's S (y, M_key y, c);
   with slot 0, the frame leaf's first block per position (`F`: it holds the position but not h, so it compresses ahead;
   r2's precomputed first blocks, applied to this format) and the pads with every 128-leaf subtree that holds only pads.
@@ -240,23 +244,22 @@ without spilling, where it took 156 uncapped), and a consumer sets their preferr
   compression-equivalents a leaf. `Tn` is chunk-major (low nibbles, then high: 16 chunks of 256 bytes, each the 16 rows'
   16 bytes of that chunk), so a warp's lookups of one chunk read two lines where row-major rows took up to 16.
   Node messages start from per-level midstates, as on the default path. A slot's salts can run any time before its
-  commitment: `ovl.cu`'s cg arms run layer l+1's behind layer l's commitment, beside the GEMMs; its cgpre arms make
-  every slot before the window, so the window only reads S (128 bytes a leaf); its cgh arms copy in S records that host
-  threads made with `host_salt` (the same S on the CPU, about 1.8 us a leaf a core).
+  commitment: layer l+1's behind layer l's commitment, beside the GEMMs; every slot before the window, so the window
+  only reads S (128 bytes a leaf); or S records copied in that host threads made with `host_salt` (the same S on the
+  CPU, about 1.8 us a leaf a core).
 - `tiles(..., slot)`: one launch: each thread its leaf (R/4 + 1 row blocks, h 2, the frame leaf's second block), then
   its CTA's 7 levels. When the tile's mr = ceil(M/R) row blocks divide 128, thread t takes the CTA's leaf
   (t % g) * mr + t / g (g = 128/mr): the leaves of one row block at g adjacent columns sit in adjacent lanes, so a warp's
   16-byte loads touch 32/g lines. `prefetch`: each leaf's next 128-byte block goes into L1 as its compression starts.
 - `nodes`: a launch a level while a level is wider than 256 nodes, then one CTA for the rest. With `fuse_top`, when the
   levels above the CTAs fit one CTA, the leaf kernel's last CTA (an atomic count) folds them and `nodes` launches
-  nothing. stage_cost's 2-warp split isn't used: it passes the message schedule between warps in shared memory, and
+  nothing. A 2-warp split isn't used: it passes the message schedule between warps in shared memory, and
   bought 1.17x on about 5 levels.
 - The domain id is a `Dom` in `CD[dom]` (`COMMIT_GPU_DOMS` slots), so committers of different leaf counts share one
   binary while their `Consts` agree (one Ks, key and row size).
 
 `COMMIT_GPU_SMALL=1` puts `check` on it (domain slot 1, salt slot 1 of 2), so `reference.py check` holds the small path
-to the reference on the same cases (`COMMIT_GPU_FUSE=1` and `COMMIT_GPU_PREFETCH=1` with `fuse_top` and `prefetch`). `benchmarks/pouw/stage_ovl/` runs it in stage_ovl's schedule (its cg arms), dumps
-chunk 0's commitments, and `reference.py verify` checks them.
+to the reference on the same cases (`COMMIT_GPU_FUSE=1` and `COMMIT_GPU_PREFETCH=1` with `fuse_top` and `prefetch`).
 
 What fusing buys, from the latency anatomy above: the leaf kernel's launch and its re-read of A (the same-run gap between
 contiguous and gathered leaves is at most 5 us, so the re-read is cheap). It doesn't shorten one leaf's chain (R/4 + 5
@@ -267,7 +270,7 @@ at R = 64 holds pairs of adjacent leaves: one level), or a 4-ary tree (a format 
 
 ### For the e2e slice (E2E)
 
-The slice's operand leaf (commit.py in benchmarks/e2e_slice on branch cursor/e2e-slice-ea24) is now one 32-value row segment as
+The slice's operand leaf is now one 32-value row segment as
 a 256-bit `row/v2` row at position i (k/32) + j: commit_gpu's `rows` mode with 256-bit rows at a 32-byte stride (bit for
 bit: the cases of 1025 and 100003 such rows; 1.198 ms for o_proj's 2^20 leaves, the Results table's 32 B row). The `e2e`
 mode here is the slice's earlier bf16 form. Its SHAKE-256 salts go in as given salts (192 bytes a leaf, `salts<false>`),

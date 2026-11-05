@@ -22,7 +22,7 @@ hiding leaves before the check coin, and the sampled cells are opened after it; 
 The served PoUW moves to this receipt, and `SharedNoiseLucks`, the premise its folds' detection rests on, has no place in
 Dither: detection rests on the value root's binding before the coin, SHA-512's extraction and the proved sampling rate.
 
-Under "One proof service" (`AGENTS.md`), Dither owns what is committed, which proof blocks need proofs, the public Program
+Under "One proof system" (`AGENTS.md`), Dither owns what is committed, which proof blocks need proofs, the public Program
 each must pass, and what it does with the outcome. Coins, selection, timing, proving, verifying and the record are the
 service's. The second half of this document states what Dither needs from the service, each need as a requirement on the
 challenger, the certifier or the firewall, with the premise it makes true.
@@ -36,9 +36,9 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation, and these:
   challenge. Each of Dither's sampling blocks takes two runs: a dither run, whose response
   is the block's value roots, and a check run, whose commitment they are.
 - **The ACCEL model 𝓜**: a period's devices as the Lean's `Accel` reads them: their resources (tensor cores, issue
-  slots, shared-memory and register ports, device memory, links), each at its data-sheet rate, and each run's use of
-  each. On the H200 and the RTX PRO 6000 it is read at 𝓜's floors (`Card.floors`). A price μ ≥ 0 is per unit of
-  each resource; a run's cost at μ is Σ_r μ_r u_r.
+  slots, shared-memory and register ports, device memory, links), each at its rate on the card, and each run's use of
+  each. On the H200 and the RTX PRO 6000 it is read at each card's table (`Accel.H200.card`, `Accel.Sm120.card`: each
+  resource's rate at its clock's ceiling). A price μ ≥ 0 is per unit of each resource; a run's cost at μ is Σ_r μ_r u_r.
 - **pub_μ(b)**: sampling block b's least cost at μ over D5 v2.1's menu of public methods, which holds the named matmul
   programs (with route (iii) on the RTX PRO 6000) and the pinned SHA-512 schedules (the Lean's `PubBest`).
 - **μ°**: the honest served period's dual prices, which follow from the period's public shapes.
@@ -89,18 +89,17 @@ w_X and w_W.
   Z_X = Σ_τ (A + d_A + V)_τ π_τᵀ, Y_W = Σ_τ (B + d_B)_τ, and T_S is taken at full width.
 
 T_S is implied by O, not committed: the s = S proof block, which opens the whole rows, derives it from O by that
-identity (NOFOLD-OPT; it takes no premise). At L ≥ K a cell commits O alone.
+identity (it takes no premise). At L ≥ K a cell commits O alone.
 
 **Leaves and roots.** Every root is a binary frame-v3-sha512 tree of hm96-sha512/row/v2 rows of 16 KiB, hiding leaves
 under the prover's salts (`verity.ml.commitments`: `rowleaf`, `hm96`, `merkle`). A 16 KiB row costs 8.6 SHA-512
-compressions a KiB, against 8.9 for an 8-chunk leaf in a 16-ary tree, so Dither has no leaf format of its own
-(NOFOLD-OPT).
+compressions a KiB, against 8.9 for an 8-chunk leaf in a 16-ary tree, so Dither has no leaf format of its own.
 - Each call has an operand root, bound in its sampling block's dither run's commit phase, and a value root holding its
   T_s and O, bound in that run's response phase (see "A sampling block's runs"), both before the block's check coin.
   The sampled cells are opened after it.
 - The weights are in the period's weight root, bound once a period, before any of the period's coins.
 
-**The value root's layout**, pinned for kernels (KCOMMIT-FB). It is V31-GPU's `v31.py` layout at 16 KiB rows,
+**The value root's layout**, pinned for kernels. It is the `v31.py` layout at 16 KiB rows,
 under Dither's tag and without segment S's rows:
 - A call's m × N output is cut into 128 × 128 tiles, tile t = t_m·(N/128) + t_n, each tile's cells row-major
   (c = 128 r + col). m and N are multiples of 128, and L′ a multiple of 32 dividing K.
@@ -116,7 +115,7 @@ under Dither's tag and without segment S's rows:
   label), -1, RangeIndexedDomain(0, leaves), hash="sha512")`, with TAG = `verity/pouw/dither/call/v1` and label
   {m, n, k, lp, t, row, leaves}.
 - A proof block (i, j, s) opens the rows holding T_s (for s < S) and T_{s−1} (for s > 1), and for s = S the row holding
-  O. The filler's leaves are this layout without O's rows (DITHER-FILL, `verity/pouw/dither/fill/v1`).
+  O. The filler's leaves are this layout without O's rows (`verity/pouw/dither/fill/v1`).
 
 **The prover hashes the words on-chip**, in the GEMM's epilogue, and doesn't write them to DRAM: they are 2/L bytes a MAC,
 0.49 tensor-times of the RTX PRO 6000's GDDR7 at L = 1,024, and hashing them from DRAM doubles that. An opened row is
@@ -217,8 +216,10 @@ O is checked only in its cell's last segment, never in a proof block of its own.
 T_{S−1} it passes exactly when O is right, at any S. A constant O is therefore a free guess of the block:
 - At A = B = 0, O = d_A d_Bᵀ is Bin(K, 1/4) in each cell, and its mode passes with probability 0.1145 at K = 64, 0.0470
   at K = 384 and 0.0144 at K = 4,096. η prices it (see "The outcome").
-- Where registration pins B, O's variance a cell at A = 0 is Σ(B² + B)/4 + 3K/16, so the guess is far rarer, but that
-  isn't measured on the checkpoints.
+- Where registration pins B, the prover knows c = B + d_B (d_B is a weight-side coin), so O's variance a cell at A = 0
+  is Σ_ℓ c_{jℓ}²/4 and the guess passes at about 1/√(2π Σ_ℓ c_{jℓ}²/4). On `LLAMA31_8B_INT8` the least such row
+  (gate-up, layer 18: one entry at ±126, rms 2.58 elsewhere) gives 4.83e-3, and 0.34–1.33% of each linear's rows give
+  more than 1e-3.
 
 **S = 1.** Where L ≥ K, a cell commits O alone, and its one proof block checks O alone. With O right, the T_S it derives
 passes whatever U, V and π are, so the noise does nothing there. The argument then rests on
@@ -245,7 +246,7 @@ which is what its draw established, and a fleet's W_F or W_cap beside W_S.
 **The bound.** Except with probability δ_coin + δ_crypto + k(κ_dmm + κ_dsha), the credited work plus any other work the
 replica's devices did in the period, valued at μ°, is at most the honest optimum plus ε_skip·W_reg (`WorkSound`). Here:
 - δ_coin is the draw's failure probability;
-- δ_crypto = κ_S + κ_x(A) + κ_sha(A): the proof service's soundness error, and SHA-512's as a random oracle in the
+- δ_crypto = κ_S + κ_x(A) + κ_sha(A): the proof system's soundness error, and SHA-512's as a random oracle in the
   extraction and in `SAKSha`;
 - κ_dmm and κ_dsha are `SAKMatmul`'s and `SAKSha`'s degenerate-dither terms at the prover's advice B_adv(A), paid once
   per sampling block.
@@ -331,7 +332,7 @@ the root and derives the draw's coins from c and the receipt, inside the challen
 as `derive(c, "verity/pouw/dither/<kind>/v1", ctx)` (`verity.ml.randomness`: SHA-512 over the domain tag, the coin and
 the receipt, under tags distinct from PoUW's noise-seed tags), where:
 - c's opening is checked by the certifiers against the root they hold privately. The prover gets no Merkle path and no
-  root before its last root, and receives the paths and the root at close (ONE-4's withheld mode): opening draw j to it
+  root before its last root, and receives the paths and the root at close (the withheld mode): opening draw j to it
   early would hand it the root before later blocks' roots;
 - kind is `weights` (the weight-side coins), `seeds` (a block's dither and noise seeds) or `check` (its check coin);
 - ctx = {period, replica, sampling block index, receipt}, where receipt is the digest of the certifier's signed receipt
@@ -341,11 +342,11 @@ the receipt, under tags distinct from PoUW's noise-seed tags), where:
 So a derived coin never has to open against the root; its c does. No c serves two draws, no context repeats, and no
 coin can be computed before the receipt it reads. Derived from roots alone, a
 repeated junk root would repeat its "not selected", and repeated operands would repeat their dither: either raises
-ε_skip to the credited share. This is the premise POOL-THM's `IndependentCoins` rests on, with SHA-512 as the
+ε_skip to the credited share. This is the premise the pooled bound's `IndependentCoins` rests on, with SHA-512 as the
 derivation's random oracle.
 
-Only expanded coins enter the boundary, never a c, which is stricter than ONE-4's withheld mode, where the prover gets the
-raw coin. A c sent in for local expansion would make a whole block's outsourcing cost one coin's bits, and P18's β would
+Only expanded coins enter the boundary, never a c, which is stricter than a withheld mode that gives the prover the raw
+coin. A c sent in for local expansion would make a whole block's outsourcing cost one coin's bits, and P18's β would
 fail.
 
 **The coin commitment.** The challenger
@@ -389,6 +390,14 @@ k_exfil. Dither needs these of the challenger and the certifier:
     across hosts the prover controls is open (see "Open"). A SHA-512 keystream with HMAC-SHA-512, at
     the measured 0.86 GB/s a core, would take about 27 certifier cores for an H200 V4 replica's 11.6 GB/s and 56 for an
     RTX PRO 6000 V4 replica's 24.0 GB/s.
+  - The challenger's side is two premises, named as in `verity/core/protocols/sampled_proofs/README.md`:
+    - `CoinsConfidential`: the challenger's coin stream reaches the network certifier only over a path on auditor
+      hosts, or the challenger and the certifier are one device at the boundary. In the Lean it is the named Prop
+      `Pouw.Assumptions.CoinsConfidential`, listed in the lock, which `FleetSound` takes: a replica's strategy reads
+      none of its own coins.
+    - `OneClock`: the challenger's release times and the certifier's ingress and receipt times are read on one clock,
+      and a challenger on a device of its own keeps its clock within 1.03 s of the certifier's (the one clock below).
+      It is a spec premise: the Lean reads every time on one axis and names no Prop for it.
   - Without it an outside machine reads the dither on the path and serves the sampling block, and ε_skip rises to the credited
     share. The replica imports only its roots: at H200 V4, E leaves 27.1 MB a check against 0.46 MB for a V4 decode
     call's activations.
@@ -506,23 +515,27 @@ week and 4.76e26 a year at H200 V4, and 1.70e26 and 7.32e26 at RTX PRO 6000 V4.
 
 ## Open
 
-- **The pooled bound over replicas** is POOL-THM's: tier A on the accepted set, weighted by each W_reg,u, with
+- **The pooled bound over replicas**, not yet proved: tier A on the accepted set, weighted by each W_reg,u, with
   the fleet registered before any member's coin (see "The fleet"), and each replica's periods as one sequence. With it,
   ε_S = ln(1/δ_coin)/(ηq) at a fleet whose replicas all accept, and G leaves ε_skip. A headline taking the minimum of
   two tiers holds at δ_coin only with each tier at δ_coin/2.
-- **κ's values** (see "Its budget") and the headline's single κ go to Daniel: κ_dmm and κ_dsha are `SAKMatmul`'s and
+- **κ's values** (see "Its budget") and the headline's single κ are not yet set: κ_dmm and κ_dsha are `SAKMatmul`'s and
   `SAKSha`'s error terms.
-- **The Lean** (WORKSOUND-5, stacked on #4787):
+- **The Lean**:
   - the dither run's commit phase: `reg b` read at the operand roots' arrival, `∀ b, opArrive ob b ≤ t ob b` in
     `Timed`, and the phase's oracle calls logged before root b;
   - the budget registration: `reg` adapted, fixed before each round's coins, with k padded to a fixed maximum by empty
     rounds;
-  - RP20 (the answers' oracle calls under one budget), the joint outsourcing premise over the period's programs, the
-    coin stream's exact exclusion in `CertifierSeesImports`, the multi-node boundary, and `SAKMatmul`'s reuse form over
-    the challenger's draw for the weight-side coins (P17's κ_re);
+  - RP20 (the answers' oracle calls under one budget), the joint outsourcing premise over the period's programs, and
+    `SAKMatmul`'s reuse form over the challenger's draw for the weight-side coins (P17's κ_re). The coin stream's exact
+    exclusion and the multi-node boundary are stated in `CertifierSeesImports` (RP5, RP9);
   - the Lean's word is 32 bits, while a proof block checks a 16-bit T_s. Until the Lean is restated at v3.2's words,
-    η is priced at the free guess of "The outcome", O's constant at the least credited K. POOL-THM's ζ is priced at a
-    word's 2^-16, which that guess exceeds, so it is to be repriced at it.
+    η is priced at the free guess of "The outcome", O's constant at the least credited K, and so is POOL-THM's ζ:
+    - from the exact binomial tail at L = ln(2m/δ) (51.5 at H200 V4), ζ's share z at N proof blocks a sampling block
+      is 0.355% at N = 1e6 at PV's guess at K = 64 (0.1145). That is above tier A's 0.1% until N ≈ 1.25e7, so
+      pooling by `SAKCheck` gains nothing at D6 v1.1's rows;
+    - where every O-only block is a pinned-B call's, the guess is the 4.83e-3 above, and z ≤ 0.01% needs N ≈ 4.7e7
+      (3.6e5 at a word's 2^-16).
 - **Keeping η near 1**, each a protocol change, not adopted:
   - selecting each proof block with probability proportional to W_p/(1 − p_p), p_p its own free guess, holds the rate
     condition at a segment word's rate. At a fixed q, ε_S is then 0.06–0.47% above that rate's, against 4.9–12.9% with

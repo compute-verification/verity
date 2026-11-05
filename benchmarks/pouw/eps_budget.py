@@ -6,7 +6,7 @@
 Each component of honest work is classified per design as unavoidable (a
 transcript Verify recomputes, a commitment, a draw, noise the cheater must expand, a value a check recomputes from the
 transcript) or skippable (unchecked: the strip of a low-rank noise, a product served plain, the vector work only a
-served output needs). The cheater is the zero instance (A* = B* = 0, chosen before the draw), which makes every strip,
+served output needs). The cheater is the zero instance (A* = B* = 0, chosen before the sample), which makes every strip,
 every served output and everything derived from it free unless a check recomputes it from the transcript.
 
 - MAC-weighted: tensor MACs only, strips at their logical rank (L per output word).
@@ -31,11 +31,10 @@ Two pieces of served-only work that the cheater skips are not priced as skippabl
 
 - co32c's recombination O = O′ − Σ128^d D_d. `TS_EPS` prices co32c as if O were a checked word, but no check reads it:
   H1's receipts are T, O′ and the D_d.
-- g1's centring correction (fpx_design's g1 arms), which nothing here prices.
+- g1's centring correction, which nothing here prices.
 
 Honest runs both. Under the floor credit, ♭'s credit B_♭ leaves them out, which is sound for any program. Counting
-either as skippable would raise B_♭ and ε_skip together and leave the floor (1 − ε_skip)·B_♭ the same
-(`benchmarks/pouw/fpx_design/h1_o_free.py`). Against honest's time (`summary`'s honest credit) they are skippable work
+either as skippable would raise B_♭ and ε_skip together and leave the floor (1 − ε_skip)·B_♭ the same. Against honest's time (`summary`'s honest credit) they are skippable work
 these shares omit, so there ε_skip is short of them.
 """
 
@@ -260,7 +259,7 @@ def parts(name: str, ctx: int, phase: str, noise: dict[str, str], rates: dict = 
     weights = sum(k * n for _, k, n in s.linears)
     extra = (r["t_dither"] * (act + qkv_el + s.heads * s.d + weights / r["tokens_per_draw"])
              + r["t_xcommit"] * (act + qkv_el) + (r["receipt_commit"] + r["draws"]) * (lin_plain + att_plain))
-    if noise["linears"] == "one-sided":                # U written into the weights once a draw
+    if noise["linears"] == "one-sided":                # U written into the weights once a sample
         extra += r["t_wedit"] * weights / r["tokens_per_draw"]
     out.append(Part("noise, commitments, draws", 0, 0, extra, 0, 0))
     return out

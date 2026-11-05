@@ -142,7 +142,7 @@ def verdict(doc: dict) -> bool:
 
 
 def served(win, g: dict, salt: bytes, lib=None, per_call: int = 1, path=None, workers: int = 1) -> dict:
-    """On a served step's capture `g` (dither_one's Window `win`, the step's salt; `lib` the served h1u build for the
+    """On a served step's capture `g` (dither_one's DitherState `win`, the step's salt; `lib` the served h1u build for the
     gpu): every call's `per_call` live leaves and one dead leaf (when the step has a dead row block), group "real", with
     their committed receipts; then, on the step's own operands at m = 32 r + j (j in `PARTLY`,
     r = min(m // 32, t / 32 - 1)), one leaf of row block r on calls 0, 2, the first of the widest K and the last, group
@@ -152,7 +152,7 @@ def served(win, g: dict, salt: bytes, lib=None, per_call: int = 1, path=None, wo
     s, m, t, L = g["s"], g["m"], win.t, win.L
     kern = PT.Kernel(lib) if lib is not None else None
     step = PT.Step(list(g["a"]), list(g["a_roots"]), m, salt)
-    pw = PT.Window(list(win.wt), list(g["b_roots"]), list(win.offs), win.u_step, {s: step})
+    pw = PT.Calls(list(win.wt), list(g["b_roots"]), list(win.offs), win.u_step, {s: step})
     rng = np.random.default_rng(s + 7)
     nrb, r = t // R, -(-min(m, t) // R)
     leaves, rcpt = [], {}
@@ -172,7 +172,7 @@ def served(win, g: dict, salt: bytes, lib=None, per_call: int = 1, path=None, wo
     wide = [w for w in range(L) if win.nk[w][1] == max(k for _, k in win.nk)][:1]
     for j in PARTLY:
         mj = R * rb + j
-        tw = PT.Window(pw.b, pw.b_roots, pw.offs, pw.u_step, {s: PT.Step(step.a, step.a_roots, mj, salt)})
+        tw = PT.Calls(pw.b, pw.b_roots, pw.offs, pw.u_step, {s: PT.Step(step.a, step.a_roots, mj, salt)})
         ls = [PT.Leaf(s, w, int(rb * (win.nk[w][0] // R) + rng.integers(win.nk[w][0] // R)))
               for w in sorted({0, 2 % L, L - 1, *wide})]
         recs += records(tw, ls, kern, None, f"partly:{mj}")

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.PlainJ.Defs
-import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.PlainJ.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
 
 /-!
 # One plain sampled session of `J` hidden-output tables: the plan, the draws and the openings
@@ -15,6 +17,8 @@ the one-table hidden-output tables (`HiddenExec.TableH`, `DrawSetupH`) in place 
 * `DrawOkPHJ`, `opnPHJ`: the coin server's draw at each table, and table `j`'s openings, with `setupHidden` for
   `setupH`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PlainHJ
 

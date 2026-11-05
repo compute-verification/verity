@@ -1,7 +1,7 @@
 # lowbit_dc: Dither's FP8 and FP4 routes on datacenter GPUs
 
 Dither for FP4 and FP8 on datacenter GPUs, in place of B300. Two questions on B200 (sm_100a, tcgen05) and H200 (sm_90a, wgmma), with sm_120's
-answers in `../fp_exact/`, `../fp4_nobits/` and `../emu8/`:
+answers in `../emu8/`:
 
 - Are the FP8 and FP4 tensor kinds exact integer arithmetic, on which grids, and from which accumulator start
   (`fpx.cu`)?
@@ -40,7 +40,7 @@ toward zero per MMA past it.
 ## Run
 
 ~~~text
-research run --on vy-dc-b200 --project verity --campaign cmp-13 --source <tree> --cwd source --timeout 40m \
+research run --on MACHINE --project verity --source <tree> --cwd source --timeout 40m \
   --env GPU_LEASE_WHO=lowbit-dc -- bash benchmarks/pouw/lowbit_dc/run.sh [gemm|pgemm]
 ~~~
 
@@ -56,7 +56,7 @@ zero per MMA) holding on sm_103. `run.sh gemm` refuses on sm_103a, since its bas
 (uniform, edge, and max: every code −128, so k4t's accumulator moves at its bound; k4t only where N is a multiple of 256), and
 benches only if every gate is exact. Its tile is 128 × 128 on one CTA, so plain FP8 there is operand-feed bound (L2) below
 cuBLASLt; γ is taken against cuBLASLt, and FULLRES gives it with the feed removed. Sent DC's pipelined int8 kernel
-(`dc/pgemm.cu` and `dc.cuh` from cursor/eps1-dc-pipe-ea24 as `--send dc-pgemm.cu --send dc.cuh`, with
+(`dc/pgemm.cu` and `dc.cuh` as `--send dc-pgemm.cu --send dc.cuh`, with
 `--env DC_PGEMM_COMMIT=SHA`), it also runs that kernel's `rate` under the same lease, and analyze.py sets each route's
 words a SM a clock of its median CTA (DC's metric) against DC's fastest honest configuration at each L.
 

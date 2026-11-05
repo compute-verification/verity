@@ -2,9 +2,9 @@
 # dcap.cu's DRAM-free filler on one leased GPU (cwd = the source tree): its receipts gated bit for bit against the host and
 # CAP's gate first, under the same lease, and nothing is timed unless both pass; then its rate alone over (W, NC), ncu's DRAM
 # and tensor-pipe counters for one chunk, and the decode step beside it on a green split and co-resident at the lowest
-# stream priority. The round's coins are drawn once per run (coins.txt). Clocks are read, never set.
+# stream priority. The round's coins are flipped once per run (coins.txt). Clocks are read, never set.
 #
-#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=LANE \
+#   research run --on vy-nebius-2 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     --send benchmarks/pouw/filler/dfill.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/dfill.sh"'
 #
 # DF_ALONE ("W:NC ..."), DF_ARMS ("split|co:FILL_SMS:W:NC[:CHUNK_LOG2[:KIND]] ...", KIND as DFILL_KIND), DF_BLS and

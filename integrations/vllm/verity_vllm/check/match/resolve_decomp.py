@@ -28,8 +28,8 @@ from verity_vllm.check.match import resolve as RS
 SCHEMA = "verity-vllm/resolve-decomp/v1"
 
 
-def decompose(match_dir: str, derived_dirs: list[str], *, oracle: "C.Prog | None" = None, log_path: str | None = None,
-              components: dict[str, "C.Prog"] | None = None, max_fault_examples: int = 24) -> dict[str, Any]:
+def decompose(match_dir: str, derived_dirs: list[str], *, oracle: "C.RootView | None" = None, log_path: str | None = None,
+              components: dict[str, "C.RootView"] | None = None, max_fault_examples: int = 24) -> dict[str, Any]:
     """The record's decomposition with v2's attribution.  `derived_dirs`: the row's request components (`build_request*/`), matched to a
     request by (LP, T) as BD.decompose does.  Returns the document (never writes)."""
     t0 = time.time()
