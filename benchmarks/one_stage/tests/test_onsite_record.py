@@ -138,13 +138,14 @@ def write_lock(f: Path, given: dict[str, list[str] | None] | None = None,
 def lock(tmp_path_factory, monkeypatch) -> Path:
     """A lock in Security's lock's place discharging every premise, each of `UNNAMED` by its `TOY` stand-in, each
     discharge at a stand-in statement `DISCHARGES` pins, taking nothing, and listing each guarantee of `RESTS_ON` at the
-    statement it names, each of `UNPINNED` at a stand-in's."""
+    statement it names, each of `UNPINNED` restated, at a stand-in's."""
     for name, toy in TOY.items():
         monkeypatch.setitem(OR.PREMISES, name, dict(OR.PREMISES[name], discharged_by=(toy,)))
     for t in (t for p in OR.PREMISES.values() for t in p["discharged_by"]):
         monkeypatch.setitem(OR.DISCHARGES, t, {"statement": f"toy-{t}", "takes": {}})
     for g in UNPINNED:
-        monkeypatch.setitem(OR.RESTS_ON, g, dict(OR.RESTS_ON[g], statement=f"toy-{g}"))
+        monkeypatch.setitem(OR.RESTS_ON, g, {k: v for k, v in OR.RESTS_ON[g].items() if k != "restate"}
+                            | {"statement": f"toy-{g}"})
     f = tmp_path_factory.mktemp("lock") / "lean-audit.json"
     write_lock(f)
     monkeypatch.setattr(OR, "LOCKS", (f,))
@@ -436,7 +437,8 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
         list(p["discharged_by"]) for p in OR.PREMISES.values()]
     assert [of["premises"]["premises"][n]["discharged_by"] for n in UNNAMED] == [[]] * len(UNNAMED)
     assert of["premises"]["rests_on"][UNPINNED[0]] == {"missing": "not in the lock",
-                                                       "takes": RESTS_ON[UNPINNED[0]]["takes"]}
+                                                       "takes": RESTS_ON[UNPINNED[0]]["takes"],
+                                                       "restate": OR.RESTATE_TIED}
     assert of["conditional_on"] == rec["periods"]["conditional_on"] == [OR.CERTIFIER_KEY] and of["tight"] == OR.TIGHT
     assert rec["verdicts"]["the network certifier"]["verdict"] == OR.NOT_ESTABLISHED
     assert of["premises"]["counts"] == OR.COUNTS and not set(OR.COUNTS) & set(of["open"])
@@ -697,6 +699,24 @@ def test_a_guarantee_the_tight_K_rests_on_with_no_statement_pinned_is_open_even_
     write_lock(lock, stated={g: "toy"})
     of = held_both(tmp_path)["bound"]["of_record"]
     assert of["open"] == [g] and of["premises"]["rests_on"][g]["restated"] == OR.RESTATED
+
+
+def test_period_tied_count_is_open_to_be_restated_at_any_statement_and_the_figure_of_record_does_not_read_it(
+        tmp_path, lock, monkeypatch):
+    """PeriodTiedCount as stated (its tie half with no scope premise, its count half over the stripped view) discharges
+    nothing: pinned at the very statement the lock lists, it stays open with why it is to be restated, and the figure
+    of record is the conservative one, ℓ_a + 1 charged for the tied audit, as with it unlisted."""
+    (g,) = UNPINNED
+    assert OR.RESTS_ON[g]["restate"] == OR.RESTATE_TIED and "scope premise" in OR.RESTATE_TIED
+    assert g not in {t for p in OR.PREMISES.values() for t in p["discharged_by"]}
+    monkeypatch.setitem(OR.RESTS_ON, g, dict(RESTS_ON[g], statement="toy"))
+    write_lock(lock, stated={g: "toy"})
+    of = held_both(tmp_path)["bound"]["of_record"]
+    assert (of["open"], of["K"]) == ([g], KR)
+    assert of["premises"]["rests_on"][g] == {"assumptions": [], "statement": "toy", "takes": RESTS_ON[g]["takes"],
+                                             "restate": OR.RESTATE_TIED}
+    write_lock(lock, given={g: None})
+    assert held_both(tmp_path / "unlisted")["bound"]["of_record"]["K"] == KR
 
 
 def test_each_guarantee_the_tight_K_rests_on_is_named_by_what_it_takes_at_its_statement_in_security_lock(monkeypatch):

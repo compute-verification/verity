@@ -371,14 +371,21 @@ CHECKS = {"free": "each tied audit's free inputs computed from its Program's des
 #: the definitions it reads): the guarantees', and the Properties' that discharge premises at the deployed code
 ROOT = HERE.parents[1]
 LOCKS = (ROOT / "Security" / "lean-audit.json", ROOT / "Security" / "Properties" / "lean-audit.json")
+#: why PeriodTiedCount is open whatever the lock states it as: no figure reads it, and nothing discharges by it
+RESTATE_TIED = ("to be restated before any pin of it counts, and never a discharge: as stated, its tie half is false, "
+                "having no scope premise, and its count half reads the stripped view, the network certifier's cells, "
+                "not the frames view. Restated with a scope premise over the frames view, read again at that "
+                "statement (``takes``) and pinned, it leaves ``open``; until then only the tight form rests on it, and "
+                "the figure of record is the conservative one, which doesn't read it (`OPEN`)")
 #: the guarantees the tight K rests on, by their names in `LOCKS`: PeriodLeakRegistered's count, at the values the
 #: registration opens at its registered inputs, is K's; PeriodLeakAccepted's is the same count at the trace's values
-#: there; PeriodTiedCount's counts a phase's tied audits with the scan as one Program, as ℓ_{a,j} does. The lock records
-#: a guarantee's named assumptions, never the antecedents its statement takes, so each gives ``statement``, the digest
-#: of its statement among the lock's reads (`statement`) at which it was read, None where none was, and ``takes``, each
-#: hypothesis, antecedent and condition its good event reads that the deployed code must meet, by its Prop's name or,
-#: stated inline, its binder's, with the premise (`PREMISES`), standing assumption (`STANDING`) or term of what K counts
-#: (`COUNTS`) that names it. Parameters the record states (δ ≥ 0) aren't listed
+#: there; PeriodTiedCount's is to count a phase's tied audits with the scan as one Program, as ℓ_{a,j} does, once it is
+#: restated (`RESTATE_TIED`). The lock records a guarantee's named assumptions, never the antecedents its statement
+#: takes, so each gives ``statement``, the digest of its statement among the lock's reads (`statement`) at which it was
+#: read, None where none was, ``takes``, each hypothesis, antecedent and condition its good event reads that the
+#: deployed code must meet, by its Prop's name or, stated inline, its binder's, with the premise (`PREMISES`), standing
+#: assumption (`STANDING`) or term of what K counts (`COUNTS`) that names it, and ``restate`` where its statement is to
+#: be restated, why, which keeps it open at any statement. Parameters the record states (δ ≥ 0) aren't listed
 RESTS_ON: dict[str, dict[str, Any]] = {
     "NetTiming.SecurityProofs.PeriodLeakAccepted": {
         "statement": "0db3f3a734d201ea45375c21d5f216e32657736e057303e8cb3291e0732a3531",
@@ -399,6 +406,7 @@ RESTS_ON: dict[str, dict[str, Any]] = {
                   "NetTiming.RegOpensAt": "reg-opens-at", "NetTiming.TapsOpen": "taps-open"}},
     "NetTiming.SecurityProofs.PeriodTiedCount": {
         "statement": None,
+        "restate": RESTATE_TIED,
         "takes": {"NetTiming.SharedRootsParsed": "shared-roots-parsed",
                   "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge", "NetTiming.RWired": "sampled-leg-bridge",
                   "Verity.Assumptions.TrustedHost": "Verity.Assumptions.TrustedHost",
@@ -578,7 +586,8 @@ DISCHARGE = ("the tight K's premises (`PREMISES`), each open until every theorem
              "isn't), with no named assumption but a standing one (`STANDING`) or one its pin takes, and every premise "
              "its pins take is discharged (``takes``), so no premises discharge each other; and open while none is "
              "named; each guarantee of `RESTS_ON` the lock doesn't list, or lists at a statement other than the one "
-             "whose hypotheses and antecedents it names (``takes``); and each named assumption the lock gives such a "
+             "whose hypotheses and antecedents it names (``takes``), or whose statement is to be restated "
+             "(``restate``) at any statement; and each named assumption the lock gives such a "
              "guarantee that is neither standing nor named there, by its own name. What K counts (`COUNTS`) is no "
              "premise. No premise about our own Python stands: soundness is in Lean or rests on an auditor-trusted "
              "device")
@@ -1154,11 +1163,11 @@ def premises(locks: Sequence[Path], root: Path = ROOT) -> dict[str, Any]:
     no lock lists (``missing``), those one lists at a statement `DISCHARGES` doesn't pin (``unpinned``, each with the
     lock's digest), the named assumptions of those one lists that don't stand and their pins don't take (``assumes``)
     and the premises their pins take (``takes``), each guarantee of `RESTS_ON` with its named assumptions, its
-    statement's digest and what it takes (``restated`` where that digest isn't the one `RESTS_ON` read, `RESTATED`),
-    what K counts (``counts``, `COUNTS`), and ``open``: each premise not discharged, then each named assumption of a
-    guarantee of `RESTS_ON` neither standing nor taken by name, and each such guarantee no lock lists or one lists
-    restated. A lock that can't be read lists nothing, and ``unread`` names it, by its path under ``root`` (the tree)
-    where it is one, with why."""
+    statement's digest and what it takes (``restated`` where that digest isn't the one `RESTS_ON` read, `RESTATED`;
+    ``restate`` where its statement is to be restated, why), what K counts (``counts``, `COUNTS`), and ``open``: each
+    premise not discharged, then each named assumption of a guarantee of `RESTS_ON` neither standing nor taken by name,
+    and each such guarantee no lock lists, one lists restated, or one to be restated. A lock that can't be read lists
+    nothing, and ``unread`` names it, by its path under ``root`` (the tree) where it is one, with why."""
     listed: dict[str, Any] = {}
     stated: dict[str, str | None] = {}
     unread: list[str] = []
@@ -1192,13 +1201,15 @@ def premises(locks: Sequence[Path], root: Path = ROOT) -> dict[str, Any]:
     for g, r in RESTS_ON.items():
         if g not in listed:
             rests[g] = {"missing": "not in the lock", "takes": r["takes"]}
-            continue
-        rests[g] = {"assumptions": list(listed[g]["assumptions"]), "statement": stated.get(g), "takes": r["takes"]}
-        if r["statement"] is None or stated.get(g) != r["statement"]:
-            rests[g]["restated"] = RESTATED
+        else:
+            rests[g] = {"assumptions": list(listed[g]["assumptions"]), "statement": stated.get(g), "takes": r["takes"]}
+            if r["statement"] is None or stated.get(g) != r["statement"]:
+                rests[g]["restated"] = RESTATED
+        if "restate" in r:
+            rests[g]["restate"] = r["restate"]
     open_ += sorted({a for g, x in rests.items() for a in x.get("assumptions", ())
                      if a not in RESTS_ON[g]["takes"] and a not in STANDING}
-                    | {g for g, x in rests.items() if "missing" in x or "restated" in x})
+                    | {g for g, x in rests.items() if {"missing", "restated", "restate"} & set(x)})
     return {"is": DISCHARGE, "from": "Security/lean-audit.json and Security/Properties/lean-audit.json guarantees "
                                      "and reads",
             "premises": found, "rests_on": rests, "standing": STANDING, "counts": COUNTS, "open": open_,
