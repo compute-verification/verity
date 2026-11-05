@@ -59,6 +59,7 @@ public import Proofs.Flock.ZkAny.RelayLoopNext
 public import Proofs.Flock.ZkAny.RelayLoopRep
 public import Proofs.Flock.ZkAny.RelayLoopL0
 public import Proofs.Flock.ZkAny.RelayLoopDeployed
+public import Proofs.Flock.ZkAny.RelayLoopPre
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release
@@ -114,6 +115,7 @@ rounds, the rep's frame at the session's next round keeping `SameInv` one round 
 round of a stream of one round, the rep's frame at the session's next round holding the history's words for it; and so,
 the setup's sizes within its frames' from its `Hello` on, at every frame round of the deployed loop the round's own rep
 one round on; and the invariant kept at a frame round of the deployed loop at its own tables, given what the loop's
-frames and the model hold there. -/
+frames and the model hold there; and so `EnvPre` from that invariant at the deployed loop's own tables, given what the
+loop's frames and the model hold at each frame round. -/
 
 @[expose] public section

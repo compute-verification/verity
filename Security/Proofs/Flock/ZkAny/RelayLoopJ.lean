@@ -412,15 +412,17 @@ theorem liveBefore_one {W Rr : Type} (L : LeanRelease W Rr) (wk : L.toSrv.Worker
 /-- **`LoopJ` is kept at the `Commit`**: the session's slots took only the model's `Hello` before it, so no stream was
 seen; the updates between keep the session's stop; and every round before the model's next passed, before the link
 and after it, where the worker's link is the firewall's own, below the `Finish` (`liveBefore_one`, `liveBefore_two`);
-and past it the session's entry is linked to the history's link coins, the setup's link points within
-`Frames.COIN_MAX` words (`linkOn_commit`). -/
+and past it, at a level 0 bound to the session, the session's entry is linked to the history's link coins
+(`linkOn_commit`): that level 0 is a table's (`BuiltAt`), so the setup has a rep stream, whose sizes (`LoopJ.sizes`)
+put the setup's link points within `Frames.COIN_MAX` words. -/
 theorem loopKept_commit {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {nonce : ByteArray} {s0 : FlockDeploy.Ins} (hx : FlockDeploy.setupOf true M.x = some (s0, spec, sts))
-    (hpm : spec.points * spec.mPts ≤ _root_.Flock.Firewall.Frames.COIN_MAX) (hlast : 1 < M.L.last M.x)
+    (hlast : 1 < M.L.last M.x)
     (hwk : M.wk M.x M.w M.ρ (M.hist 1) 0 = some (M.L.ownMsg M.x M.w M.ρ (M.hist 1), false)) :
     LoopKept M sid spec sts nonce (LoopJ M sid spec sts) .commit := by
   intro seen st pl e σ σ' hsl he hF hJ hra hgo
-  have hlk := linkOn_commit hx hpm hsl hF hJ.links hra hgo
+  have hlk : spec.points * spec.mPts ≤ _root_.Flock.Firewall.Frames.COIN_MAX → LinkOn M sid σ' :=
+    fun hpm => linkOn_commit hx hpm hsl hF hJ.links hra hgo
   obtain ⟨⟨hlt, -⟩, ⟨_, -, hL0⟩, -, ⟨_, _, hda, hdr, -⟩, -, hbt, hcc⟩ := hra
   obtain ⟨hs1, -, hop⟩ := slot_commit hsl
   have hbuilt : BuiltAt M spec sts σ'.L0 sid := by
@@ -445,12 +447,18 @@ theorem loopKept_commit {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : S
   have hlb1 := liveBefore_one M.L M.wk M.x M.w M.ρ M.κ _ hl1 (by omega)
   have hlb2 := liveBefore_two M.L M.wk M.x M.w M.ρ M.κ _ hl2 hlast (by rw [ht]; exact hwk)
   refine ⟨?_, fun _ => hseen, fun i r s _ hc => ?_, stepK_plan he hJ.plan, ?_, fun _ => hseen, fun _ => hbuilt,
-    fun _ => sessOn_sessKept hbt.2 (hJ.sess hs1), stepK_links he hJ.links, fun _ _ _ _ => hlk,
+    fun _ => sessOn_sessKept hbt.2 (hJ.sess hs1), stepK_links he hJ.links, fun _ name l0 hl => ?_,
     fun _ => hJ.sizes hs1⟩
   · rw [hsent, stopped_sessKept hbt.2, hJ.stop, hlb1, hlb2]
   · simp [seenAfter, hseen] at hc
   · show SeenAt spec sts (M.hist σ'.c) seen
     rw [hseen]
     exact seenAt_nil (by omega)
+  · obtain ⟨j, -, -, -, hj, -⟩ := hbuilt name l0 hl
+    have hk : 0 < spec.repStreams.size := by
+      have := (Array.getElem?_eq_some_iff.mp hj).1
+      rw [Claims.Bridge.Custody.repStreams_size]
+      omega
+    exact hlk (Loop.sizesOk_at (hJ.sizes hs1) hk).1.2.2
 
 end Claims.ZKServer.Relay
