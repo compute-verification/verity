@@ -56,6 +56,8 @@ lemmas): the lock's `witnesses`.
 -/
 
 @[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 open RemoteAudit
 
