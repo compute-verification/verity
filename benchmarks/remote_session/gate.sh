@@ -28,11 +28,12 @@
 set -u
 : "${OUT:?}"
 VERB=${1:?probe, open, host, close, audit or fire}
-GATE_KEY=${GATE_KEY:-$HOME/.ssh/vy-gate-memory-accounting}
+LANE=${LANE:-${RESEARCH_LANE:?LANE (else RESEARCH_LANE) names the lane whose gate key and periods these are}}
+GATE_KEY=${GATE_KEY:-$HOME/.ssh/vy-gate-$LANE}
 CHALLENGER=${CHALLENGER:-research@204.12.178.84}
 AUDITOR=${AUDITOR:-research@81.85.1.145}
 AUDITOR_FP=${AUDITOR_FP:-SHA256:s8UdOpJZGMXJR1DjgmOyTsWpTqQX7GDJq/yQCYhSJhs}
-LANE=${LANE:-memory-accounting} MODEL=${MODEL:-QWEN25_32B_BF16} ENGINES=${ENGINES:-8} ARENA_BLOCKS=${ARENA_BLOCKS:-16252928}
+MODEL=${MODEL:-QWEN25_32B_BF16} ENGINES=${ENGINES:-8} ARENA_BLOCKS=${ARENA_BLOCKS:-16252928}
 PORT=${PORT:-7951} CAP=${CAP:-4} PACE_PASS_MS=${PACE_PASS_MS:-85} MINUTES=${MINUTES:-30}
 PACED=${PACED:-1:60000:33273:2 1:60000:33273:2 1:1000:2773:7 1:1000:2773:7}
 JITTER_MS=${JITTER_MS:-50} QUANTILE=${QUANTILE:-max} PROVER_NODE=${PROVER_NODE:-vy-nebius-2}
@@ -264,11 +265,11 @@ audit() {
   local run=${HOST_RUN:-$OUT/host/$(cat "$OUT/host-run.txt" 2> /dev/null || echo DRY)}
   # PEER empty: the sessions' challenger peer is the host record's (the verifier host), not the prover's node
   if [ -n "${DRY:-}" ]; then
-    echo "DRY: PEER='' GATE=$CHALLENGER GATE_KEY=$GATE_KEY RUN=$run PERIOD=$PERIOD PIN=$PIN COMMIT=$COMMIT" \
+    echo "DRY: PEER='' GATE=$CHALLENGER GATE_KEY=$GATE_KEY LANE=$LANE RUN=$run PERIOD=$PERIOD PIN=$PIN COMMIT=$COMMIT" \
       "bash benchmarks/remote_session/auditor.sh"
     return 0
   fi
-  PEER='' GATE=$CHALLENGER GATE_KEY=$GATE_KEY RUN=$run bash benchmarks/remote_session/auditor.sh
+  PEER='' GATE=$CHALLENGER GATE_KEY=$GATE_KEY LANE=$LANE RUN=$run bash benchmarks/remote_session/auditor.sh
 }
 
 : > "$OUT/gate.requests"

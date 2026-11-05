@@ -217,7 +217,7 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     assert answer["verdict"] == "accept", answer["reason"]
     assert json.loads((served.out / "answer.json").read_text()) == answer and pous.linear_types is types
     row = SV.piece_row("space", served.out.parent)
-    assert row["verdict"] == "accept" and row["owner"] == "memory-accounting" and row["protocol"] == TEST_PROTOCOL
+    assert row["verdict"] == "accept" and row["owner"] == SV.PIECES["space"][2] and row["protocol"] == TEST_PROTOCOL
     assert row["quantity"] == answer["public"] == {"certified": False, "eps": "0", "s_bits": 0}
     leg = BR.leg("pous", row, server=NODE, runs=[])
     assert leg["quantity"] == {"symbol": "S_cert", "value": 0, "unit": "bits", "certified": False}

@@ -157,7 +157,7 @@ def test_an_audit_at_the_certified_point_checks_its_run():
         R.check_at(*_run_of(zeros.case))
 
 
-LANE, OTHER = "compute-accounting", "memory-accounting"
+LANE, OTHER = "lane-a", "lane-b"
 
 
 def _line(lines: list[str], kind: str, session: str | None, body: dict, sig_bytes: int) -> str:

@@ -12,8 +12,8 @@ HBM and the chip if nothing is reused from L2 (the encoded weights; the KV cache
 fused kernel's chunk partial sums, written and read once; the BF16 LM head, which no arm encodes).
 
 Writes OUT/frontier.json too: the same points in the rate audit's shared schema (`verity/codec-frontier-point/v0`,
-`benchmarks/word_codec/frontier.py`), with ``end_to_end: true``, the context and the model: y over stock vLLM compiled (the
-decode headline's baseline) of the compiled arms, as vLLM serves (-c) or without autotuning (-d, the step its gate ran; a
+`benchmarks/word_codec/frontier.py`), with ``end_to_end: true``, the context, the model and the lane (RESEARCH_LANE):
+y over stock vLLM compiled (the decode headline's baseline) of the compiled arms, as vLLM serves (-c) or without autotuning (-d, the step its gate ran; a
 little slower than -c, so its y errs high), split by the run's own arms in the same mode into base (the arm's kernel on plain payloads: `plain`, or the wide
 kernel at k = 0) and decode (over base); no arm tags or commits in the step, so tag, commit and τ are 0.  x and Δ are the
 codec lanes' measurements for the same field, k and packing (`CODEC`;
@@ -211,7 +211,7 @@ def main() -> int:
         return x / e if x else None
 
     points, rows, frontier = [], [], []
-    run_id = os.environ.get("RESEARCH_RUN_ID")
+    run_id, lane = os.environ.get("RESEARCH_RUN_ID"), os.environ.get("RESEARCH_LANE")
     passes: dict[int, list[float]] = {}
     for a in arms:
         for p in a.get("native_pass", []):
@@ -240,7 +240,7 @@ def main() -> int:
             ws = working_set(ms, b, mean_ctx, inst["store_bytes"], True)
             ws_stock = working_set(ms, b, mean_ctx, inst["plain_bytes"], False)
             point = {
-                "lane": "ra-vllm-encoded", "end_to_end": True, "model": model,
+                "lane": lane, "end_to_end": True, "model": model,
                 "workload": f"{checkpoint(a['model'])} decode",
                 "engine": f"vLLM {a['vllm']}, FP8 online, full decode CUDA graphs, "
                           + {"": "mode 0 (no torch.compile)", "-c": "torch.compile (vLLM's default)",
@@ -269,7 +269,7 @@ def main() -> int:
             pass_ms = native_pass.get(b)
             d = b / e * 1e3 / pass_ms if pass_ms else None
             frontier.append({
-                "schema": FRONTIER, "lane": "ra-vllm-encoded", "end_to_end": True, "model": model,
+                "schema": FRONTIER, "lane": lane, "end_to_end": True, "model": model,
                 "b": cod["word_bits"], "k": a["k"],
                 "arithmetic": (f"cuda-int32/{cod['field']}/{'wt' if tensor else 'wide'}.cu" if wide or tensor else
                                "cuda-int32/mersenne61/pb56/ve.cu"),

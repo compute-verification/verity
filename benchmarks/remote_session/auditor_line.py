@@ -138,6 +138,7 @@ import copy
 import gzip
 import hashlib
 import json
+import os
 import statistics
 import subprocess
 import sys
@@ -169,7 +170,6 @@ BURSTS = ("stated", "none")
 """What the line charges beyond the rates (`rates_at`): `ledger.Node.stated`'s bursts, the line of record's
 (`verifier.ingress_bursts`), or none, the reading of gate runs up to 7, whose recorded lines it reproduces at the S_chip
 they were recorded at (`test_auditor_line_lean`; a burst of 0 states the rate down to one nanosecond)."""
-LANE = "memory-accounting"
 VERIFIER_TREE = "verity/core/protocols/remote_bandwidth"
 LEAN_VERDICTS = ("lean", "both")
 CHECKS = ("credited", "complete", "accepted", "pinned", "bound")
@@ -911,7 +911,7 @@ def signed_lines(d: Path, kind: str, R: str, heads: list[Path], key: Ch.Challeng
 
 
 def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, heads: list[Path] | None,
-            lane: str = LANE, peer: str | None = None, rates: dict | None = None,
+            lane: str | None = None, peer: str | None = None, rates: dict | None = None,
             desc: bytes | None = None, commit: str | None = None, pins: list[str] | None = None,
             main: list[str] | None = None, model: dict | None = None, lean: lv.Lean | None = None,
             boundary: dict | None = None, lockdown: dict | None = None) -> dict:
@@ -945,9 +945,10 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
                  "pins": None if pins is None else {"lines": len(pins), "sha512": Ch.log_digest(pins)},
                  "verifier_rtt_ms": {k: x / 1e6 for k, x in v.get("rtt", {}).items() if k.endswith("_ns")}}
     if "gate" in kinds:
-        if pin is None or period is None or desc is None or commit is None:
-            raise SystemExit("auditor_line: a gate run's line needs --pin, --period and --commit (the verifier run's "
-                             "recorded commit, whose verifier the period must have committed)")
+        if pin is None or period is None or lane is None or desc is None or commit is None:
+            raise SystemExit("auditor_line: a gate run's line needs --pin, --period, --lane (default RESEARCH_LANE) and "
+                             "--commit (the verifier run's recorded commit, whose verifier the period must have "
+                             "committed)")
         ran = requested_pin(out)
         if ran is not None and ran != commit:
             raise SystemExit(f"auditor_line: the host run's request.json ran its verifier at {ran} (`pinned`), not "
@@ -1139,7 +1140,9 @@ def main(argv: list[str] | None = None) -> int:
                          "auditor's model registry's shape (`remote_bandwidth.store.read_pin`); without either no session is "
                          "bound")
     ap.add_argument("--table", type=Path, help="write each session's checks and the line here, as Markdown")
-    ap.add_argument("--lane", default=LANE)
+    ap.add_argument("--lane", default=os.environ.get("RESEARCH_LANE"),
+                    help="the lane whose period the audit is, held to the ledger's period and sessions (a gate run; "
+                         "default RESEARCH_LANE)")
     ap.add_argument("--peer", help="override the gate sessions' challenger peer, which is otherwise the run's record's "
                     "(`peer_of`: verifier.json's, else a host run's request.json beside OUT)")
     ap.add_argument("--disk-bytes-per-s", type=float, default=RATES["disk_bytes_per_s"], metavar="B/S",
