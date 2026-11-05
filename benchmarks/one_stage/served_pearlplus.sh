@@ -59,8 +59,9 @@
 #      id, its answer in PIECE_DIR/coin-put.json, which names the run's Attempt carrying out/'s copy as its custody);
 #   4b. once verify wrote its document, `served_passes.py lean` takes the Lean verdict of record, PouwCheck.PearlPlus's
 #      pouw-pearlplus (PEARLPLUS_LEAN_EXE, else built here as served_pouw.sh builds pouw-period, its log
-#      pouw-pearlplus-build.log; one that doesn't build answers nothing), on the same passes, epoch coins, draws and coin
-#      record, within PEARLPLUS_LEAN_TIMEOUT seconds (default 3,600), and writes its answer to PIECE_DIR/pearlplus-lean.json,
+#      pouw-pearlplus-build.log; one that doesn't build answers nothing), on the same passes, epoch coins, draws, coin
+#      record and W (--tie), of record (--of-record) on a live session's coins, within PEARLPLUS_LEAN_TIMEOUT seconds
+#      (default 3,600), and writes its answer to PIECE_DIR/pearlplus-lean.json,
 #      the file `served_verdicts.pearlplus_of_record` reads, only where it is the Python verdict's; both verdicts, its
 #      command line and the executable's SHA-256 go to PIECE_DIR/pearlplus-lean-check.json either way;
 #   5. `served_verdicts.py pearlplus` writes the piece (PIECE_DIR/development.json): its verdict, with each pass's salt
