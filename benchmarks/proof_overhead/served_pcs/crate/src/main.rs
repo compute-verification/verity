@@ -11,14 +11,14 @@ use std::{env, time::Instant};
 use flock_core::{
     challenger::FsChallenger,
     pcs::{
-        F128, LOG_PACKING, OpeningGrinding, PcsParams, commit,
+        LOG_PACKING, OpeningGrinding, PcsParams, commit,
         ligerito::{LigeritoProfile, prover_config_for, verifier_config_for},
         open_batch_mixed_ligerito_with_precomputed_s_hat_v_and_grinding,
         verify_opening_batch_ligerito_mixed_with_grinding,
     },
     zerocheck::{PaddingSpec, multilinear::lagrange_weights_naive, univariate_skip::build_eq},
 };
-use flock_field::test_rng::Rng;
+use flock_field::{F128, test_rng::Rng};
 use flock_hash::HashKind;
 use rayon::prelude::*;
 use sha2::{Digest, Sha512};
