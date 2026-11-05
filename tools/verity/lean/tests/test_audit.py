@@ -3302,6 +3302,27 @@ def test_an_exclusion_theorem_has_an_honest_witness_and_an_explicit_circuit_beat
     assert A.witness_scope("P.sound", device[0], device[1]["pins"]["P.sound"])[0] == "acceptance"
 
 
+def test_an_exclusion_s_nontrivial_witness_may_drop_an_antecedent_its_conclusion_takes():
+    """`Nci.SecurityProofs.HeldBudget` concludes its bound under the package's `Capability.Selects` (an antecedent, which
+    no witness need conclude), and its nontrivial witness drops that antecedent: it drops a premise of the bound, and
+    `premise_free` doesn't hold. The other premises are still concluded, and a bare `¬ bound` still fails."""
+    cover = {"name": "P.Covering.load", "module": "P.Covering", "kind": "def", "hash": "6" * 32}
+    selects = {"binder": "hs", "head": "P.Selects", "module": "P.Defs", "antecedent": True}
+    g = {"reads": [cover], "premises": [COMPILED, selects], "hypotheses": [],
+         "body": wbody("LE.le", binders=["∀", "→"], conclusion=[wk("LE.le", ["P.Covering.load"])])}
+
+    def neg(inner):
+        return {"head": "Not", "defs": [], "refl": False, "assumed": False, "negated": True, "inner": inner}
+    drops = {"body": wbody("And", conclusion=[wk("P.Compiled"), neg("P.Selects"), neg("LE.le")])}
+    pol, f = witnessed(g, nontrivial=drops)
+    assert A.droppable(f["pins"]["P.sound"]) == {"P.Compiled", "P.Selects"} and not A.premise_free(f["pins"]["P.sound"])
+    assert A.witness_failures(pol, f, WOWN) == []
+    assert witness_codes(*witnessed(g, nontrivial={"body": wbody("And", conclusion=[neg("P.Selects"), neg("LE.le")])})) \
+        == ["witnesses.nontrivial-premises"]
+    assert witness_codes(*witnessed(g, nontrivial={"body": wbody("LE.le", negated=True, conclusion=[neg("LE.le")])})) \
+        == ["witnesses.nontrivial-drops"]
+
+
 def test_a_premise_free_exclusion_theorem_is_witnessed_by_its_bound_failing_at_an_explicit_circuit():
     """An exclusion theorem that takes no premise (`premise_free`: training's `ServingBlocks.UncertifiedElementary`, a
     cap at every unit of every refinement) has none to drop: its nontrivial witness is the bare `¬ bound` at an explicit
