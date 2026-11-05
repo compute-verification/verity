@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.E2E
-import Proofs.Flock.Soundness.ExecStratified
-import Proofs.Flock.Soundness.Binding.Weights
-import Proofs.Flock.Soundness.StrictCR
+module
+
+public import Proofs.Flock.Soundness.E2E
+public import Proofs.Flock.Soundness.ExecStratified
+public import Proofs.Flock.Soundness.Binding.Weights
+public import Proofs.Flock.Soundness.StrictCR
 
 /-!
 # The end-to-end theorem with the value binding of `hm96-sha512/row/v1` rows
@@ -16,7 +18,7 @@ SHA-512 (`Refine.H512`), so `SHA512CRExpected` (`hCR`) is about SHA-512 itself, 
 
 `collide_spec` is proved (`ExplicitLeaf.hm96`): the link finder's collisions are explicit SHA-512 collisions. It is asked
 of the finders built from the prover bounded (`hCR : LinkCR … (reg σ) (cont σ) …`). The other hypotheses (`dp`, `hConst`,
-`hZero`) are the skeleton's, unchanged (`assumption-notes/e2e-checklist.md`).
+`hZero`) are the skeleton's, unchanged (`E2E.lean`).
 
 **The two forms of SHA-512's collision resistance.** The link term `δ_link` is under `SHA512CRExpected` (`ecr/sha-512`,
 through `hCR`), of SHA-512 itself, since the rows' binding hashes with it. The knowledge term and `δ_tree` are under
@@ -38,6 +40,8 @@ draw `Law.execOS` included, and read it only through their terms. The `_exec` fo
 outcomes are the byte tapes themselves, uniform by construction. The live verifier's bytes enter through `Law.execOS`, and
 A3 compares its count curve with `Law.stratified`'s (`Law.execOS_miss_le`): `Prog.flock_headline` composes the two.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Binding
 

@@ -1,0 +1,46 @@
+{
+ "BlackwellE4m3QmmaDot32_v1": {
+  "dossier": "art:b3074aba4c9ddeef7f87454bfc23e73a5a3c5f73f1676260545115fe8589cc89",
+  "sweep": "r20260930-063457-5410",
+  "specials": {
+   "capture": "r20260930-041757-0bde",
+   "eval": "r20260930-052000-e32d"
+  }
+ },
+ "BlackwellE5m2QmmaDot32_v1": {
+  "dossier": "art:fc4bb8915dd22f22b3d0260a00a6d694750322852c5163ddb80a05948370a94f",
+  "sweep": "r20260930-063527-4d6b",
+  "second_die": "r20260930-073650-c9c5"
+ },
+ "BlackwellMxf4OmmaDot64_v1": {
+  "dossier": "art:d8d4d1b602c9fde61df218c315430535fe5181882ab6b26c2b95dd81dc1b5d92",
+  "run": "r20261001-000520-2440"
+ },
+ "BlackwellNvf4OmmaDot64_v1": {
+  "dossier": "art:3e02931df28cccd398de4219f9d977371a58cdc6e8addfb7ff0a6269e5481b0e",
+  "sweeps": [
+   "r20260930-064142-07f5",
+   "r20260930-064149-a24f"
+  ],
+  "scale_bytes": "r20260930-093614-53fd"
+ },
+ "BlackwellS8ImmaDot32_v1": {
+  "dossier": "art:86f39a17b5a0c8a8c92e5e25dcdfbee95d6f65408130bc1db6c54d440dfd8474",
+  "run": "r20261015-084000-06d8",
+  "h200": "r20261019-043020-f267",
+  "b200": "r20261019-042817-8fd3"
+ },
+ "BlackwellU8S8ImmaDot32_v1": {
+  "run": "r20261015-084000-06d8",
+  "h200": "r20261019-043020-f267",
+  "b200": "r20261019-042817-8fd3"
+ },
+ "F32ToE2m1Sat_v1": {
+  "run": "r20260930-091510-b35b"
+ },
+ "HopperE4m3MmaV2Dot32_v1": {
+  "run": "r20261017-125608-3071",
+  "art": "art:41943522",
+  "h100": "r20260922-184111-671e"
+ }
+}

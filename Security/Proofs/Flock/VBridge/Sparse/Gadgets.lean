@@ -1,10 +1,12 @@
-import Proofs.Flock.VBridge.Verifier
-import Flock.RecSparse
+module
+
+public import Proofs.Flock.VBridge.Verifier
+public import Flock.RecSparse
 
 /-!
 # The sparse-phase unit's gadgets
 
-The gadgets `Flock.RecSparse.steps` builds past `GfResiduals`' (circuits' #1751), each on forms that carry elements of
+The gadgets `Flock.RecSparse.steps` builds past `GfResiduals`', each on forms that carry elements of
 `Flock.F128` (`Holds`: 128 forms, form `k` carrying bit `k`), and each against a mirror of it on the elements, so that
 what the gadget computes is stated apart from the algebra:
 
@@ -13,6 +15,8 @@ what the gadget computes is stated apart from the algebra:
 * `demuxLevel` splits each slot's vectors by one bit of the slot's type, `demux` level by level (`demuxVal`).
 * `RecOpen.xorL` and `xorAllL` are sums (`holds_xorL`, `sumVal`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Sparse
 

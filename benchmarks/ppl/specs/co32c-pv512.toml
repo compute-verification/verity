@@ -1,4 +1,4 @@
-description = "co32c-pv with P in blocks of 512 keys (p_block = 512, key 0 its own block): each block its own scale and strip, which bounds the fresh bit c's noise to half a step of the block's peak (note:20261017T0030Z-draft-checked-strip, Result 3: gamma_PV about 1.19)"
+description = "co32c-pv with P in blocks of 512 keys (p_block = 512, key 0 its own block): each block its own scale and strip, which bounds the fresh bit c's noise to half a step of the block's peak (gamma_PV about 1.19)"
 
 [[linear]]
 step = "smooth"

@@ -28,7 +28,7 @@ from .primitives import KeyDerivation, Primitives, key_program, key_query
 
 @dataclass(frozen=True, slots=True)
 class Encoding:
-    """`(pp, C)`: the salt and the `B` blocks, block `s * n + v` being segment `s`'s top label `v`."""
+    """`(pp, C)`: the salt and the `B` labels, label `s * n + v` being segment `s`'s top label `v`."""
 
     params: Params
     salt: bytes
@@ -103,7 +103,7 @@ def _label_bytes(params: Params) -> int:
 
 
 def encode_segment(params: Params, prims: Primitives, salt: bytes, s: int, w_seg: bytes) -> list[bytes]:
-    """Segment `s` of `C`: its `n` top labels (blocks `s * n .. s * n + n - 1`) from its `segment_bytes` of `W`."""
+    """Segment `s` of `C`: its `n` top labels (labels `s * n .. s * n + n - 1`) from its `segment_bytes` of `W`."""
     mb = _label_bytes(params)
     if not 0 <= s < params.segments or len(w_seg) != params.segment_bytes:
         raise ValueError(f"segment {s} of W is {params.segment_bytes} bytes")
@@ -113,7 +113,7 @@ def encode_segment(params: Params, prims: Primitives, salt: bytes, s: int, w_seg
 
 
 def decode_segment(params: Params, prims: Primitives, salt: bytes, s: int, blocks: Sequence[bytes]) -> bytes:
-    """Segment `s` of `W` (`params.segment_bytes` bytes) from its `n` blocks `s * n .. s * n + n - 1`."""
+    """Segment `s` of `W` (`params.segment_bytes` bytes) from its `n` labels `s * n .. s * n + n - 1`."""
     mb = _label_bytes(params)
     if not 0 <= s < params.segments or len(blocks) != params.n or any(len(b) != mb for b in blocks):
         raise ValueError(f"segment {s} needs its {params.n} blocks of {mb} bytes")
@@ -129,7 +129,7 @@ P3 = Codec("p3/v1", encode_segment, decode_segment)
 def encode(params: Params, prims: Primitives, w: bytes | Iterable[bytes], salt: bytes) -> Encoding:
     """`Enc(W, salt) = C`, segment by segment; `w` is `W` or its segments.  Deterministic and public given `W`, the salt
     and the primitives, so the server and the verifier compute the same `C` (`setup`).  For large `W`, iterate
-    `codec.encode_segments` instead of holding every block."""
+    `codec.encode_segments` instead of holding every label."""
     _check_salt(salt)
     blocks = [int.from_bytes(b, "little") for seg in encode_segments(P3, params, prims, w, salt) for b in seg]
     return Encoding(params, salt, tuple(blocks))

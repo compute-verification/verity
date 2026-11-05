@@ -6,7 +6,7 @@ from typing import Any
 
 
 def _universal_roots() -> list[Any]:
-    """Protocol 2's universal unit (`verity.ml.private_circuits.universal`) at two size classes: G = 16 gates over 16 inputs (W = 32 wires)
+    """The universal unit (`verity.ml.private_circuits.universal`) at two size classes: G = 16 gates over 16 inputs (W = 32 wires)
     with 8 outputs, and G = 64 over 64 (W = 128) with 32."""
     from verity.ml.circuits.defs import bind
     from verity.ml.private_circuits.universal import UniversalUnit

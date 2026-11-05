@@ -17,7 +17,7 @@ rules = ["idle", "deadline"]
 name = "vy-glm53-cpu-2"
 rules = ["deadline"]
 
-# kernels INF-122 (Daniel 9:54 AM PDT 19 Oct): the registry has neither its id nor its deadline
+# the registry has neither its id nor its deadline
 [[vm]]
 name = "vy-dc-l40s"
 rules = ["lease", "deadline"]

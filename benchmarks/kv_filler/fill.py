@@ -1,4 +1,4 @@
-"""The memory-bandwidth half of the filler climb (lane ra-fill-bandwidth): which reader comes closest to the card's read
+"""The memory-bandwidth half of the filler climb: which reader comes closest to the card's read
 capacity, and so what R is. Writes `fill-<cmd>.json` and `fill.log` under `--out`.
 
   read   every reader of `readers.cu` over a buffer far larger than the L2, at several grids: GB/s, best and median of
@@ -11,8 +11,13 @@ import argparse
 import ctypes
 import json
 import statistics
+import sys
 import time
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "word_codec"))
+
+import cuda_lib
 
 LOGF = None
 
@@ -28,8 +33,7 @@ def log(msg: str) -> None:
 class Readers:
     def __init__(self, path: str) -> None:
         v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
-        so = self.so = ctypes.CDLL(str(Path(path).resolve()))
-        so.rd_read.argtypes = [i, i, v, q, i, v, v]
+        so = self.so = cuda_lib.load(Path(path).resolve(), {"rd_read": [i, i, v, q, i, v, v]})
         self.sms = so.rd_sms()
 
     def read(self, kind: int, u: int, p: int, nbytes: int, grid: int, stream: int, xr: int) -> None:

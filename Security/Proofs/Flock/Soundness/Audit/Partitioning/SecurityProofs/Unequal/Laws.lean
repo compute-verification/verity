@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Audit.Partitioning.Model
+module
+
+public import Proofs.Flock.Soundness.Audit.Partitioning.Model
 
 /-!
 # Two laws for the free-compute proofs
@@ -10,6 +12,8 @@ import Proofs.Flock.Soundness.Audit.Partitioning.Model
   of `B`'s image (`restrict_escape`), so its expected number of draws is `∑_{u ∈ S} incl(u)` (`meanDraws_restrict`).
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs.Unequal
 
 open Finset Game
@@ -19,7 +23,7 @@ variable {n : ℕ}
 
 theorem incl_le_one (L : Law n) (u : Fin n) : L.incl u ≤ 1 := by
   classical
-  unfold Law.incl prCoin
+  unfold Verity.Law.incl prCoin
   refine (avg_mono fun ω => ?_).trans (avg_const (C := L.Ω) 1).le
   split_ifs <;> simp
 
@@ -59,7 +63,7 @@ theorem bern_escape_toReal {num : Fin n → ℕ} {den : ℕ} [NeZero den] (hnum 
   classical
   have h : (bern num den).escape B = ∏ u ∈ B, prCoin (fun x : Fin den => ¬ x.val < num u) := by
     rw [← prCoin_pi_forall (Ω := fun _ : Fin n => Fin den) B (fun u x => ¬ x.val < num u)]
-    unfold Law.escape
+    unfold Verity.Law.escape
     refine congrArg prCoin (funext fun ω => propext ?_)
     simp only [Finset.disjoint_left, Finset.mem_filter, Finset.mem_univ, true_and]
     exact ⟨fun h u hu hlt => h hlt hu, fun h u hlt hu => h u hu hlt⟩
@@ -71,7 +75,7 @@ theorem bern_incl_toReal {num : Fin n → ℕ} {den : ℕ} [NeZero den] (hnum : 
   classical
   have h : (bern num den).incl u = ∏ i ∈ {u}, prCoin (fun x : Fin den => x.val < num i) := by
     rw [← prCoin_pi_forall (Ω := fun _ : Fin n => Fin den) {u} (fun i x => x.val < num i)]
-    unfold Law.incl
+    unfold Verity.Law.incl
     refine congrArg prCoin (funext fun ω => propext ?_)
     simp
   rw [h, Finset.prod_singleton]
@@ -86,7 +90,7 @@ def restrict (L : Law n) (S : Finset (Fin n)) : Law S.card where
 
 theorem restrict_escape (L : Law n) (S : Finset (Fin n)) (B : Finset (Fin S.card)) :
     (restrict L S).escape B = L.escape (B.map (S.orderEmbOfFin rfl).toEmbedding) := by
-  unfold Law.escape
+  unfold Verity.Law.escape
   refine congrArg prCoin (funext fun ω => propext ?_)
   simp only [restrict, Finset.disjoint_left, Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_map,
     RelEmbedding.coe_toEmbedding, not_exists, not_and]
@@ -94,7 +98,7 @@ theorem restrict_escape (L : Law n) (S : Finset (Fin n)) (B : Finset (Fin S.card
 
 theorem restrict_incl (L : Law n) (S : Finset (Fin n)) (i : Fin S.card) :
     (restrict L S).incl i = L.incl (S.orderEmbOfFin rfl i) := by
-  unfold Law.incl
+  unfold Verity.Law.incl
   refine congrArg prCoin (funext fun ω => propext ?_)
   simp [restrict]
 

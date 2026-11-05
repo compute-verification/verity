@@ -1,4 +1,4 @@
-"""`pouw_h1_tables_device` (VLLM-96): H1's call tables hashed by the Commit's row-table kernels, held bit for bit to
+"""`pouw_h1_tables_device`: H1's call tables hashed by the Commit's row-table kernels, held bit for bit to
 `pouw_h1_requests.hiding_rows`, which the prover rebuilds a drawn call's tables with (`pouw_h1_prover.open_call`). Over A-table
 rows (K s8 codes and an f32 scale) and z-table records (``ZY_BYTES``), one row to a few hundred, K from 2 to two segments and
 off an 8-byte boundary, at H1's table nonces: the root, and every opening of `hiding_rows`' tree verifies under it. The CPU

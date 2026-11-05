@@ -1,11 +1,11 @@
-import Definitions.Core.NaiveStrassen
-import Definitions.Core.Guarantees.NaiveStrassen
-import Proofs.Core.NaiveStrassen.Eval
+module
+
+public import Definitions.Core.NaiveStrassen
+public import Definitions.Core.Guarantees.NaiveStrassen
+public import Proofs.Core.NaiveStrassen.Eval
 
 /-!
 # Naive tiled against Strassen: the statements and their non-vacuity witnesses
-
-ACCEL NAIVE-STRASSEN (CMP-110; note:compute-research/20261026T0140Z-draft-accel-naive-strassen).
 
 Theorem 1 at `L = 12` and its size form at `c = 4096` are proved on all four instances from one table, the RTX PRO
 6000 data sheet's, which every other instance's atoms map onto (`Packed.Dom`). The table is computed and checked by
@@ -21,6 +21,8 @@ The witnesses are proved:
 * Theorem 1's bound is attained at `l = 1`;
 * without `fast` the bound fails (naive tiled itself).
 -/
+
+@[expose] public section
 
 namespace Verity.Accel.NaiveStrassen
 

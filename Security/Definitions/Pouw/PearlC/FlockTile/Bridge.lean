@@ -1,5 +1,7 @@
-import Definitions.Core.Game
-import Definitions.Flock.Game
+module
+
+public import Definitions.Core.Game
+public import Definitions.Flock.Game
 
 /-!
 # C-Flock's games as core's games
@@ -10,6 +12,8 @@ distinct types. `toVerity` carries a C-Flock game to core's node by node; `strat
 carry a prover's strategies both ways. That they are inverse to each other, and that every event has the same
 probability under a strategy and its image, are lemmas (`Proofs.Pouw.PearlC.FlockTile.Bridge`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.FlockTile
 

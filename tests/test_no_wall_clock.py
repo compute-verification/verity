@@ -59,7 +59,7 @@ ALLOWED: dict[str, str] = {
     "integrations/vllm/tests/protocols/pouw_h1_gpu.py::await_end":
         "the live run polls the live gate's status for a window's session end entry before reserving the next: it has no wait verb",
     "integrations/vllm/tests/protocols/pouw_h1_gpu.py::await_listener":
-        "the live run waits for the challenger's ssh -R listener (ss -ltn) once a second; a probe connect would take its one client",
+        "the live run waits for the challenger's session port to listen (ss -ltn) once a second; a probe connect would take its one client",
     "integrations/vllm/tests/protocols/pouw_h1_gpu.py::served_measures":
         "the GPU run records its step seconds and when serving ended; nothing reads them",
     "integrations/vllm/tests/protocols/pouw_h1_gpu.py::hand_off": "the GPU run records its suspend's seconds; nothing reads them",
@@ -164,8 +164,8 @@ def _test_sources() -> list[str]:
 
 def test_only_the_suites_check_runs_after_its_lean_steps_skip_on_lean() -> None:
     """`check` builds the Lean verifier and every Lake package, and installs elan when `lake` is missing, while the pytest step
-    runs: a test elsewhere that runs or skips on `lake` or a `.lake/` build output passes or fails with the build order (as
-    verity-flock did, r20260929-015410-5a20). Such tests belong to a suite `check` runs after its Lean steps (`AFTER_LEAN`), and
+    runs: a test elsewhere that runs or skips on `lake` or a `.lake/` build output passes or fails with the build order.
+    Such tests belong to a suite `check` runs after its Lean steps (`AFTER_LEAN`), and
     that suite declares the build outputs it uses under `[tool.verity.tests] artifacts`, which key its cached pass."""
     spec = importlib.util.spec_from_file_location("repo_check", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec)

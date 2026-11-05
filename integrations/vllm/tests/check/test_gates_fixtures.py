@@ -559,7 +559,7 @@ QU_COUNT, QU_WMAX, QU_MAX_SEEN = 1436, 32, 32
 
 
 def query_use_doc(partition="exact", codes=(), width="ok", violators=(), unsupported=(), max_seen=QU_MAX_SEEN, count=QU_COUNT, status=None) -> dict:
-    """A synthetic `verity-ir/query-use/v1` document in the shape of qpart's INTERFACE NOTE (2026-09-17 21:45Z; freeze doc fields)."""
+    """A synthetic `verity-ir/query-use/v1` document in the shape of the query-use interface (its frozen fields)."""
     if status is None:
         status = "ok" if partition == "exact" and width == "ok" and not violators and not unsupported else "fail"
     return {"schema": G.QUERY_USE_SCHEMA, "binding_id": "b" * 64, "use": {"kind": G.QUERY_USE_KIND, "w_max": QU_WMAX},

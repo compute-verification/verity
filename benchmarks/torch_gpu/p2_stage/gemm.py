@@ -1,8 +1,7 @@
-"""The exact W8A8 GEMM on a staged matrix, and its check against `ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}`.
-
-`scaled_mm` is the stand-in for KS8-SIMPLE's path (HASH-11, `benchmarks/torch_gpu/s8_simple/`, not on main yet): the s32
-sum by `torch._int_mm` (cuBLASLt's s8 IMMA, exact for K < 2^17 whatever its k order), then the Definition's epilogue
-`cvt.rn.bf16.f32((cvt.rn.f32.s32(acc) * sx) * sw)`, the token's scale first, one torch op each.
+"""The check of the exact W8A8 GEMM on a staged matrix against `ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}`. The GEMM is
+`int_mm.linear` (`benchmarks/torch_gpu/s8_linear/int_mm.py`): the s32 sum by `torch._int_mm`
+(cuBLASLt's s8 IMMA, exact for K < 2^17 whatever its k order), then the Definition's epilogue
+`cvt.rn.bf16.f32((cvt.rn.f32.s32(acc) * sx) * sw)`, the token's scale first.
 
 `twin` computes every output word again by another road and counts the words that differ:
 
@@ -21,14 +20,6 @@ from typing import Any
 
 import numpy as np
 import torch
-
-
-def scaled_mm(x: Any, sx: Any, w: Any, sw: Any) -> Any:
-    """`x` [M, K] int8, `sx` [M] float32, `w` [N, K] int8 (staged), `sw` [N] float32: [M, N] bfloat16."""
-    y = torch._int_mm(x, w.t()).to(torch.float32)
-    y.mul_(sx[:, None])
-    y.mul_(sw[None, :])
-    return y.to(torch.bfloat16)
 
 
 def bf16_rn(f: Any) -> Any:

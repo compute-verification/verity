@@ -4,11 +4,15 @@ circuit file and the public file: Δ, the regions and their claims, the lincheck
 Nothing here evaluates the computation: the region values are the layout's constants, the public digests and outputs, and
 hashes of pinned padding constants.
 -/
-import Flock.RowLeaf
-import Flock.Piop
-import Flock.Merkle
-import Flock.Record
-import Flock.TmplSplit
+module
+
+public import Flock.RowLeaf
+public import Flock.Piop
+public import Flock.Merkle
+public import Flock.Record
+public import Flock.TmplSplit
+
+@[expose] public section
 
 namespace Flock
 
@@ -175,6 +179,11 @@ inductive Coins where
   | tree (spec : CoinTree.Spec)
   deriving BEq, Inhabited
 
+/-- The keyed coin tree the coins name, which `Hello`'s `coins` carries (`helloOf`); none for the OS's coins or a seed's. -/
+def Coins.tree? : Coins → Option CoinTree.Spec
+  | .tree s => some s
+  | _ => none
+
 /-- The tags a session on `coins` is verified under: on `os` coins, a statement whose prover names its coin mode
 (`Tags.liveOs`) binds the live-OS identity (`Tags.liveOsIdentity`) in its statement digest; otherwise the tags as they are. -/
 def Tags.withCoins (t : Tags) (coins : Coins) : Tags :=
@@ -198,10 +207,16 @@ structure Stmt where
   digest : ByteArray
   sigma : ByteArray
   hello : String
+  /-- the keyed coin tree `hello` names, from the setup's coins (`Coins.tree?`) -/
+  coinTree : Option CoinTree.Spec
   merkle : MerkleScheme
   /-- what the statement check established about the partition (`HmRow.PartitionFinding`), for the verdict; null before e51e2b86 -/
   partition : Json := Json.null
   deriving Inhabited
+
+/-- The identity's bytes a statement digest hashes: upstream's `serde_json::to_vec(&sorted(identity))` (`Stmt::new`), strings
+in UTF-8 (`canonUtf8`). Canonical JSON (`canon`) would escape what upstream writes raw, and the `--zk` hooks carry `§`. -/
+def identityBytes (identity : Json) : V ByteArray := return (← canonUtf8 identity).toUTF8
 
 /-- `Hello`, the session parameters S2 compares. A keyed coin tree's `coins` has an empty nonce here: R7 puts the prover's
 in (`CoinTree.checkHello`). -/
@@ -232,7 +247,7 @@ def Stmt.setup (tags : Tags) (leaf : RowLeaf) (circuitFile publicFile : ByteArra
   let pin ← c.pin leaf
   let (da, db) ← c.delta leaf pin
   let regions := (← leaf.regions c pub).push (← c.outRegion pub)
-  let mut h := tags.statement.toUTF8 ++ leaf.comp.digest ++ c.sha ++ leaf.key c ++ (← canon tags.identity).toUTF8
+  let mut h := tags.statement.toUTF8 ++ leaf.comp.digest ++ c.sha ++ leaf.key c ++ (← identityBytes tags.identity)
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
     h := pushLe64 h d.size
@@ -240,7 +255,8 @@ def Stmt.setup (tags : Tags) (leaf : RowLeaf) (circuitFile publicFile : ByteArra
   let digest := Sha256.hash h
   let sigma := Sha256.hash (tags.sigmaTag.toUTF8 ++ c.sha ++ digest ++ pub.sha)
   let hello ← helloOf tags sigma (PT_LOCAL + nbl) coins
-  return { tags, leaf, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma, hello, merkle }
+  return { tags, leaf, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma, hello,
+           coinTree := coins.tree?, merkle }
 
 namespace Stmt
 
@@ -248,7 +264,7 @@ namespace Stmt
 def spec (st : Stmt) : SessionSpec :=
   { tables := #[st.tags.table], domain := fun _ r => st.tags.domain r, sigma := st.sigma, hello := st.hello, mPts := st.mPts,
     retainRounds := st.tags.retainRounds, unitDraw := (st.pub.header.getObjVal? "unit_draw").toOption, instances := st.n,
-    sha512Digests := st.tags.hm96Rows, coinTree := CoinTree.ofHello st.hello }
+    sha512Digests := st.tags.hm96Rows, coinTree := st.coinTree }
 
 /-- `e[s + 64·u] = lw[s] · eq(ρ, u)` for `u < 2^|ρ|`. -/
 def tensor (lw : Array F128) (rho : Array F128) : Array F128 :=

@@ -1,6 +1,6 @@
 """V*'s hold of each Ligerito level's committed tops (`RecCap`, lane rec-v0): at level 0 one statement over the ``2^cap₀``
 nodes of ``root_B``, instance ``i`` reading node ``i`` of ``rec-top-L0`` (`rec_outer.TopValue` at level 0) as its row
-``top``, whatever the coins draw; at each later level ``l`` one over both reps' ``2 · 2^cap_l`` nodes of ``rec-top-L<l>``
+``top``, whatever the coins select; at each later level ``l`` one over both reps' ``2 · 2^cap_l`` nodes of ``rec-top-L<l>``
 (rep 0's level-``l`` top, then rep 1's), instance ``i`` reading row ``i``.
 
 A level's openings (`rec_outer.stage`) read ``rec-top-L<l>`` only at the nodes their query positions name, so the nodes no
@@ -8,7 +8,7 @@ query reaches were held by no V* statement. RecCap holds every one at a fixed ro
 (the node's 32 words, then 32 zero words, `rec_live.top_rows`) through the row's hm96 slot, and outputs the row's words past
 its node, then zeros, which V* registers as all-zero rows ``rec-cap-zero`` under public salts (`rec_residuals.zero_salts`),
 as it registers every unit's outputs. So the statement holds only if every held row is a node's, and its ``b || c`` is the
-firewall's: the verifier holds each table row of ``top`` to its node of ``root_B``, or of the reps' level-``l`` tops, in
+ZK server's: the verifier holds each table row of ``top`` to its node of ``root_B``, or of the reps' level-``l`` tops, in
 the coin server's record (``Flock/RecVStar.lean``'s ``checkTopRows``) and ``top`` to the registration the level's ``out``
 reads (``checkShared``, `rec_vstage.shared_rows`). The unit has no AND.
 
@@ -34,6 +34,7 @@ from verity.ml.circuits.boolean.forms import ZERO
 
 from . import circuit as FC
 from . import ir_lower as IL
+from . import rec_budget as RB
 from . import rec_residuals as RR
 from .class_statement import ClassDefinition
 
@@ -166,7 +167,9 @@ def stage(tops, out_dir: Path, evaluate: bool = True) -> dict:
     (d / "circuit.txt").write_text(text)
     (d / "program.json").write_bytes(canonical_json(encode_program(program_)))
     (d / "partition.json").write_text(json.dumps(part))
-    (d / "registered.json").write_text(json.dumps({"format": G.READS, "ports": {"top": read(tops.own), "out": read(zero.entry())}}))
+    own = {"format": G.READS, "ports": {"top": read(tops.own), "out": read(zero.entry())}}
+    RB.check(own, TEMPLATE, N)
+    (d / "registered.json").write_text(json.dumps(own))
     FC.write(text, SimpleNamespace(name=TEMPLATE, subcircuit=sub), 0, N, d / "inst.bin", d / "pub.bin", None, list(range(N)),
              share_rows=True, outs={"out": np.asarray(out_rows, np.uint16)}, tables={"top": rows}, refs={"top": list(range(N))},
              salts={"top": top_salts, "out": out_salts}, registered={"top": top_entry, "out": out_entry})

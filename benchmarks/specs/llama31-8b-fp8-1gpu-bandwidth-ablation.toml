@@ -2,7 +2,7 @@ schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "llama31-8b-fp8-1gpu-bandwidth-ablation"
 # Where PoUS's bandwidth audit's time over bandwidth-plain goes, by part (`verity-bench breakdown`):
-# llama31-8b-fp8-1gpu-bandwidth's two credited arms beside memory accounting's spans arms (each step timed by part) and
+# llama31-8b-fp8-1gpu-bandwidth's two credited arms beside the bandwidth audit's spans arms (each step timed by part) and
 # the same spans arms with the top-up off (`verity_bench.vllm.bandwidth_ablation`), whose difference is the top-up's
 # contention, which no span shows. Every arm but bandwidth-plain is token-controlled by it; only the two credited arms
 # are the audit's cost, the rest are uncredited ablations. bandwidth-plain is the first arm and so the baseline: every

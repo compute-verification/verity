@@ -1,10 +1,9 @@
 schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "llama31-8b-fp8-1gpu-bandwidth-served-r6"
-# llama31-8b-fp8-1gpu-bandwidth-served at 6 reps, an even count, so drift over the run cancels in each arm's mean
-# (the harness README's "How a point is timed"). That spec is llama31-8b-fp8-1gpu-bandwidth's arms and settings, plus
-# stock FP8 as vLLM serves it, so PoUS's bandwidth audit has a ratio to compiled serving as well as to stock on its own
-# graph path. The graph arms replay decode-only CUDA graphs at capture_sizes with no torch.compile (compilation mode 0,
+# llama31-8b-fp8-1gpu-bandwidth's arms and settings, plus stock FP8 as vLLM serves it, so PoUS's bandwidth audit has a
+# ratio to compiled serving as well as to stock on its own graph path, at 6 reps, an even count, so drift over the run
+# cancels in each arm's mean (the harness README's "How a point is timed"). The graph arms replay decode-only CUDA graphs at capture_sizes with no torch.compile (compilation mode 0,
 # FULL_DECODE_ONLY); `stock-fp8@compiled` builds at vLLM's serving defaults (torch.compile, vLLM's own CUDA-graph mode
 # and capture sizes). Compiled and graph-path FP8 tokens differ, so the compiled arm is uncontrolled and timed on its own
 # gated tokens.

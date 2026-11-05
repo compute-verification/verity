@@ -52,7 +52,7 @@ def fixture_check() -> dict[str, Any]:
             and [r.hex() for r in got.slot_roots] == [d["root"] for d in doc["per_slot"]], "root": got.root.hex()}
 
 
-def against(name: str, layout: S.Layout, slots: int, seed: int, other: str) -> dict[str, Any]:
+def against(name: str, layout: S.CommitShape, slots: int, seed: int, other: str) -> dict[str, Any]:
     outputs = S.random_outputs(layout, slots, np.random.default_rng(seed))
     got = G.commit(G.Plan(CTX, layout), seed, KEY, _cuda(outputs), slots)
     if other == "reference":
@@ -111,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
     def run(fn: Any, *args: Any) -> None:
         try:
             r = fn(*args)
-        except Exception as e:  # a failing check is a result, and the rest still run
+        except Exception as e:  # noqa: BLE001  (a failing check is a result, and the rest still run)
             r = {"name": getattr(fn, "__name__", str(fn)), "args": [str(x) for x in args], "ok": False, "error": repr(e)}
         results.append(r)
         print(json.dumps(r), flush=True)

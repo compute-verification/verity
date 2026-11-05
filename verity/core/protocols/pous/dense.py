@@ -90,7 +90,7 @@ class DenseParams:
         """The fastest whole call, a 64 KiB `Π₂` in a long chain: 4,830 Keccak-f, at least 241.5 µs
         (`primitives.pi2_keccak_f`), so in the ideal-permutation model `D = 5` covers `Δ + RTT < 1.449` ms.  At the
         reference Feistel-SHAKE256 `Π₂` it does not: an adversary answers without completing a call, from 1.53% of
-        `C` in 481 Keccak-f (red team, 4 Oct 2026, art:7617c8017e80)."""
+        `C` in 481 Keccak-f (the red team's state attack, `primitives.pi2_keccak_f`)."""
         return pi2_call_ns(POINT_64K.m)
 
     def parents(self, i: int) -> range:

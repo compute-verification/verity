@@ -1,8 +1,8 @@
 // The engine's kernels (rows.cuh), launched on the caller's stream; built by engine.device_lib with nvcc. Every launch
 // function returns 0, or the CUDA error of its launch. sxr_graph_* rekey the leaf launches of a graph captured from them.
 //
-// The row kernel comes in every compression variant the bench sweeps (VARIANTS: sha512x.cuh's V and ROLL, and "pouw",
-// commit_gpu's sha::compress, the one commit_slots runs); the other kernels use SX_V and SX_ROLL.
+// The row kernel comes in every compression variant the bench sweeps (VARIANTS: sx::compress's V and ROLL, and "pouw",
+// sha::compress, commit_gpu's, the one commit_slots runs); the other kernels use SX_V and SX_ROLL.
 #include <cuda_runtime.h>
 
 #include <algorithm>
@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "rows.cuh"
-#include "../../pouw/commit_gpu/sha512.cuh"
 
 #ifndef SX_V
 #define SX_V 0
@@ -35,11 +34,17 @@ namespace {
 
 template <int V, int ROLL>
 struct Sx {
-  static __host__ __device__ __forceinline__ void run(u64* st, u64* w) { sx::compress<V, ROLL>(st, w); }
-  static __host__ __device__ __forceinline__ void kw(u64* st, const u64* kw) { sx::compress_kw<V, ROLL>(st, kw); }
+  static __host__ __device__ __forceinline__ void compress(u64* st, u64* w) { sx::compress<V, ROLL>(st, w); }
+  static __host__ __device__ __forceinline__ void compress_kw(u64* st, const u64* kw) { sx::compress_kw<V, ROLL>(st, kw); }
 };
 struct Pouw {
-  static __host__ __device__ __forceinline__ void run(u64* st, u64* w) { sha::compress(st, w); }
+  static __host__ __device__ __forceinline__ void compress(u64* st, u64* w) { sha::compress(st, w); }
+  static __host__ __device__ __forceinline__ void compress_kw(u64* st, const u64* kw) {   // the block is K + W's first 16, less K
+    u64 w[16];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) w[i] = kw[i] - sx::kconst()[i];
+    sha::compress(st, w);
+  }
 };
 using D = Sx<SX_V, SX_ROLL>;
 
@@ -52,7 +57,7 @@ __global__ void __launch_bounds__(SXR_THREADS) k_row_setup(RowSpec* rows, u32 G)
 }
 
 // a thread a (row g, slot s), t = j S + s with g = order[j]: a warp's rows are one row of the table in consecutive slots, and
-// blocks start in `order` (the longest rows first, so the last wave is short rows); x stays at (g, s)
+// CTAs start in `order` (the longest rows first, so the last wave is short rows); x stays at (g, s)
 template <class C>
 __global__ void __launch_bounds__(SXR_THREADS, SXR_MINB) k_rows(const RowSpec* __restrict__ rows, const u32* __restrict__ order,
                                                                 u32 G, u32 S, u64* __restrict__ x) {
@@ -72,8 +77,8 @@ __global__ void __launch_bounds__(SXR_THREADS) k_leaf_setup(LeafRow* rows, u32 G
   if (t < G) leaf_setup<D>(rows[t], dids, schema, schema_len);
 }
 
-// T in shared memory (a block's 64 KB, loaded once), then each thread's salt words (48 KB a block; word w of thread j at
-// w SXR_THREADS + j, so a warp's loads of a word are in 32 banks); the leaves grid-stride over resident blocks; MINB blocks
+// T in shared memory (a CTA's 64 KB, loaded once), then each thread's salt words (48 KB a CTA; word w of thread j at
+// w SXR_THREADS + j, so a warp's loads of a word are in 32 banks); the leaves grid-stride over resident CTAs; MINB CTAs
 // an SM caps the registers (1: as many as it wants, 2: 128)
 template <int MINB>
 __global__ void __launch_bounds__(SXR_THREADS, MINB) k_leaves(const __grid_constant__ LeafArgs a) {
@@ -154,7 +159,7 @@ __global__ void __launch_bounds__(SXR_THREADS) k_level(const u64* mids, u32 D_, 
   const u64* kids = in + tree * in_stride;
   const u64* l = !pre ? kids + 8 * j : j ? kids + 8 * (j - 1) : pre + tree * pre_stride;
   const u64* r = kids + 8 * (pre ? j : j + 1);
-  node<D>(mids + 8 * (D_ == 1 ? 0 : tree), first + i, l, r, out + 8 * t);
+  rc::node_at<D>(mids + 8 * (D_ == 1 ? 0 : tree), first + i, l, r, out + 8 * t);
 }
 
 __global__ void __launch_bounds__(SXR_THREADS) k_pads(const u64* dids, u32 D_, u32 T, u64 first, u32 n, u64* out) {
@@ -169,7 +174,7 @@ struct Variant {
   const char* name;
   RowKernel k;
 };
-// V's digits are the modes of S0, S1, s0 and s1 (sha512x.cuh); a trailing "s" is ROLL = 0
+// V's digits are the modes of S0, S1, s0 and s1 (verity/ml/kernels/sha512.cuh); a trailing "s" is ROLL = 0
 #define SXR_V(a, b, c, d) ((a) | (b) << 2 | (c) << 4 | (d) << 6)
 const Variant VARIANTS[] = {
     {"pouw", k_rows<Pouw>},

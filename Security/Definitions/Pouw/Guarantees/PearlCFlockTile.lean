@@ -1,9 +1,11 @@
-import Definitions.Pouw.PearlC.Device
-import Definitions.Pouw.PearlC.DeviceKernelWref
-import Definitions.Pouw.PearlC.DevicePricesLoop
-import Definitions.Pouw.PearlC.Instance
-import Definitions.Pouw.Assumptions.PearlC.TTOutW1
-import Definitions.Pouw.PearlC.FlockTile.Audit
+module
+
+public import Definitions.Pouw.PearlC.Device
+public import Definitions.Pouw.PearlC.DeviceKernelWref
+public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Definitions.Pouw.PearlC.Instance
+public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+public import Definitions.Pouw.PearlC.FlockTile.Audit
 
 /-!
 # Pearl-C's γ under C-Flock's hidden audit (trusted)
@@ -16,6 +18,8 @@ hypothesis. Its proof is `Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8
 The session and the bridge to core's games are `Definitions.Pouw.PearlC.FlockTile`'s, over C-Flock's games
 (`Definitions.Flock.Game`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.PearlC
 

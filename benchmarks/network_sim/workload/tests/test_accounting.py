@@ -4,7 +4,7 @@ from collections import Counter
 
 import pytest
 
-D = pytest.importorskip("datacenter", reason="benchmarks/datacenter isn't importable (it lands with PR #2475)")
+D = pytest.importorskip("datacenter", reason="benchmarks/datacenter isn't importable")
 
 from workload import accounting as A  # noqa: E402
 from workload.block import Context  # noqa: E402
@@ -53,8 +53,9 @@ def test_an_honest_run_is_audited_and_credited_to_the_blocks_it_ran_on():
     assert not [k for k in claims if isinstance(k, D.Refused)]
     acc = D.account(claims, profile)
     assert acc.sound
-    per_block = {u: sum(ctx.model.kind[v] == "computed" for v in ctx.held(u)) for u in ctx.hw.units}
-    assert {b.block: b.credited for b in acc.blocks} == per_block
+    ands = D.ands(ctx.model.program)
+    per_block = {u: sum(n for k, n in ands.items() if dp.block(dp.device[k]) == u) for u in ctx.hw.units}
+    assert {b.block: b.credited for b in acc.blocks} == per_block and min(per_block.values()) > 0
     assert sum(acc.input_bits.values()) == ctx.spec.requests * ctx.spec.d * ctx.spec.act_bits
     closed = D.account(claims, profile, assume=(D.FLEET_CLOSED,))
     assert all(b.local_at_least == b.credited for b in closed.blocks)
@@ -68,10 +69,10 @@ def test_a_covert_frame_is_refused():
 
 
 @pytest.mark.slow
-def test_the_served_program_is_audited_and_credited_stage_by_stage():
+def test_the_served_program_is_audited_and_its_macs_reported_uncredited():
     """verity_vllm's `Serve_v1` for a truncated SmolLM2, a pipeline stage a block: the accounting layer re-executes its
-    word Definitions, gets the tokens the Program does, and credits each stage's work to its block, the BF16
-    tensor-core steps' products and the other word operations each by kind."""
+    word Definitions and gets the tokens the Program does. Its layer Definitions have no Boolean version, so no stage
+    is credited ANDs and the account names why, and each stage's BF16 tensor-core products are reported beside it."""
     pytest.importorskip("torch")
     pytest.importorskip("verity_vllm")
     from workload import served as S
@@ -82,8 +83,7 @@ def test_the_served_program_is_audited_and_credited_stage_by_stage():
     trace, claims, profile = audited(dp, run_inputs)
     assert ctx.model.output_words(trace.values) == ctx.model.reference(1)
     acc = D.account(claims, profile)
-    assert acc.sound and all(b.credited > 0 for b in acc.blocks)
-    c = ctx.model.program.circuit
-    gate_level = sum(n for g in range(c.size) for n in D.logical.gate_work(c, g).values())
-    assert sum(b.credited for b in acc.blocks) == gate_level and any(k.startswith("mac:") for k in A.kinds(ctx.model))
+    assert {c.part: c.work for c in claims if isinstance(c, D.Computed)} == {b.block: 0 for b in acc.blocks}
+    assert acc.sound and all(b.macs.get("mac:bf16", 0) > 0 for b in acc.blocks)
+    assert "no Boolean gate count" in profile.uncounted and f"nothing credited: {profile.uncounted}" in repr(acc)
     assert acc.input_bits == {"prompt": 32 * cfg.prompt}

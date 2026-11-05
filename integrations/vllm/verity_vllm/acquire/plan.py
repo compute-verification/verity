@@ -16,7 +16,7 @@ Sites (`SITE_KINDS`):
   native_tap        an existing kernel-level source (the attention hidden-stream tap, the fused-MoE block source, the TP partial source)
   runner_return     the runner's `sample()` return (`runner.sampler/sampled_token_ids`); runner_state = a buffer the runner consumed
                     (`seed`); launch_proxy = a host constant read from a kernel launch (`splits`)
-  registered_input  a weight of record: hashed once at registration (`register_weights`); analytic_table = a derived table the Match stage
+  registered_input  a weight of record: hashed once at registration (`register_weights`); analytic_table = a derived table the Match phase
                     dumps and checks analytically (`analytic_table_of_buffer`)
   prescribed        no runtime producer: the Value is materialised by rule (a padding step's identities, `padding_steps`)
 

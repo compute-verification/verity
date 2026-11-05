@@ -1,4 +1,4 @@
-"""VLLM-85: the live unit's tables on the served path (`pouw_h1_live`). With the Commit a window registers round 0's request
+"""The live proof block's tables on the served path (`pouw_h1_live`). With the Commit a window registers round 0's request
 headers ``requests@0`` and each round's slot table ``slots@<s>`` as values of the live Program, under its round roots, and
 each round's ``live@<s>`` (`PouwLiveSlots_v2{T}`) accepts its slot table at m_s, the step's scheduled rows, and refuses any
 other m. Under CUDA graphs m_s is the scheduler's rows, not the graph's padded size."""
@@ -35,7 +35,7 @@ def _window(**kw):
 
 def test_a_served_window_registers_round_0s_request_headers_and_each_rounds_slot_table():
     """``requests@0`` is round 0's request table (its root the ``request_table`` inside round 0's request root), bound to
-    the window's session; ``slots@0`` is round 0's slot table, bound to the open root and listed whole among round 0's
+    the window's challenge phase; ``slots@0`` is round 0's slot table, bound to the open root and listed whole among round 0's
     segments. Both are among the window's entries, open in the live proof only, and core's ROOTS1 steps tie the window."""
     from tests.protocols import pouw_h1_gpu as GPU
     run = _window()
@@ -158,7 +158,7 @@ def test_core_credit_ties_the_slot_table_under_the_auditors_coins(periodic):
 
 def test_the_provers_live_dump_opens_every_row_its_statement_reads(tmp_path):
     """`pouw_h1_live.dump`: window.json holds only what the verifier may read (T, S, the prefix, the window Program's
-    digest, the open root, the session, the live roots, m_s and the public max_tokens), and each round's rows.npz and
+    digest, the open root, the challenge phase, the live roots, m_s and the public max_tokens), and each round's rows.npz and
     opening.json give every port's words, salt, value, position and path, each opening its registered root
     (`registered.verify_read`) under the row format its reads file names; ``m``, ``s``, ``cap_<i>`` and ``o0`` are the
     known ``m@<s>``, ``round@<s>``, ``caps`` and ``live-ok`` rows."""

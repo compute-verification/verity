@@ -76,7 +76,7 @@ def test_sealed_record_verifies_and_every_edit_is_named():
     lambda d: d["cases"][1]["ptx"].update(extra_global_stores=2),           # it stores more than the scale
     lambda d: d["cases"][0].update(out_eq_untapped=False),                  # the tap-off build differs
     lambda d: d["cases"][0].update(unwritten=1),                            # a row's scale not written
-    lambda d: d["cases"][0].update(ir_rows=0),                              # nothing checked against the IR
+    lambda d: d["cases"][0].update(ir_rows=0),                              # nothing checked against the circuit
     lambda d: d["triton"].update(installed_sha256="b" * 64),                # the installed kernel is not the pinned one
     lambda d: d["triton"]["diff"].update(ok=False),                         # the copy changes more than the tap lines
     lambda d: d["source"].update(outside_step_acquired=1),                  # the source acquired outside a committed step
@@ -145,7 +145,7 @@ def test_source_diff_accepts_only_the_tap_lines():
 
 @pytest.mark.parametrize("kernel", X.KERNELS)
 def test_ir_scale_is_the_twins_scale(kernel):
-    """The scale gate read off the IR transcript (`ir_scale`) is the twin's `s` / `inv` on random rows (N = 64): the gate lookup is right."""
+    """The scale gate read off the evaluation trace (`ir_scale`) is the twin's `s` / `inv` on random rows (N = 64): the gate lookup is right."""
     from verity.ml.definitions.numerics import derived_rows as D
     try:
         D._rms_tables()

@@ -54,8 +54,7 @@ alone and writes its shape's alpha, beta, ia and aux) onto a stats stream before
 writes none of them, and the capturing stream joins it in its place (an event after ``stats_a``), before the forming steps
 that read them; nothing past that join is reordered, so the same kernels write the same bytes.  ``stats_a`` is launched
 after the commitment's first steps, so the commitment's CTAs, each holding an SM whole, take the SMs the call before's tile
-hashing leaves free (r20261025-115836-c84d: at k = 14336 beside gate_up's 112 tile CTAs, pd_commit took 143 us against 125
-alone).  Where those steps read A's words only in pd_commit's mode 1 and it can read the call's BF16 rows instead
+hashing leaves free.  Where those steps read A's words only in pd_commit's mode 1 and it can read the call's BF16 rows instead
 (`run.Pipeline.reads_bf16`, widening each as widen_a does), widen_a moves onto the stats stream before ``stats_a``, so A's
 commitment starts at the call's x; the forming, the screen and the stages read A's words after the join, as before.  With
 ``whole_prefetch_b`` the stats stream takes the scales and then B̃'s prefetch into L2 (`run.Pipeline.prefetch_b`, which
@@ -87,8 +86,7 @@ LANE_SLOT_BYTES = SLOT_BYTES + 24
 #: a deferred-a whole capture's side steps join the A trees forked so far only before the scatter, the one step that reads
 #: A's root, so a call's tile hashing (it reads C~ and U alone) runs beside its A tree, PD_G tiles a CTA (the pipeline's
 #: ``tiles_group``) so that its CTAs leave pd_commit's and pd_tree's whole SMs free (beside the tree a CTA a tile, and
-#: grouped after it, each lost: r20261025-015411-7d73, r20261025-020344-e838).  False joins them first (e8ea036243's
-#: PEARLC_TILES_BESIDE_TREE=0 arm)
+#: grouped after it, each is slower).  False joins them first (``PEARLC_TILES_BESIDE_TREE=0``)
 TILES_BESIDE_TREE = True
 
 

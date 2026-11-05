@@ -1,8 +1,12 @@
-import Proofs.Flock.Claims.ZK.FrameAsks
-import Proofs.Flock.Claims.ZK.FrameSched
+module
+
+public import Proofs.Flock.Claims.ZK.FrameAsks
+public import Proofs.Flock.Claims.ZK.FrameSched
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
-# A rep's scheduled rounds against its plan (Stage B, R2)
+# A rep's scheduled rounds against its plan
 
 The loop requests a rep's rounds at the plan's counts (`Session.repPlan`), and the frame checks the device against the
 rep's schedule so far (`Loop.schedSoFar`): the algebraic phase's rounds (`Skeleton.rounds`, counted in `FrameCount`),
@@ -19,6 +23,8 @@ that schedule's counts are a prefix of the plan's.
   plan's count for it (`repPlan_list`: the plan is those asks, then the inner proof's; `sched_facts`: every `--zk`
   schedule has a lane round and counts within a squeeze's, by `decide +kernel`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Count
 

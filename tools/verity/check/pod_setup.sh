@@ -39,6 +39,11 @@ fi
 if [ -n "${LC_ALL:-}" ] && ! locale -a 2>/dev/null | grep -qix "$(echo "$LC_ALL" | sed 's/UTF-8/utf8/I')"; then
   $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq locales >/dev/null && $SUDO locale-gen "$LC_ALL" >/dev/null
 fi
+# The image's Ubuntu 22.04 trust store still holds the roots that cross-signed the compromised eMudhra intermediates
+if ls /etc/ssl/certs | grep -q -E 'emSign_ECC_Root_CA_-_G3|Comodo_AAA_Services_root'; then
+  $SUDO apt-get update -qq >/dev/null
+  $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --only-upgrade ca-certificates 'libnss3*' >/dev/null
+fi
 if [ "$(uv --version 2>/dev/null | cut -d' ' -f2)" != "$UV_VERSION" ]; then
   curl -LsSf "https://astral.sh/uv/$UV_VERSION/install.sh" | $SUDO env UV_INSTALL_DIR=/usr/local/bin UV_NO_MODIFY_PATH=1 sh >/dev/null
 fi
@@ -55,8 +60,8 @@ for bin in "$HOME/.elan/bin" "$HOME/.cargo/bin"; do                            #
     if [ -x "$t" ] && [ ! -e "/usr/local/bin/$(basename "$t")" ]; then $SUDO ln -s "$t" /usr/local/bin/; fi
   done
 done
-# A run starts on the system's PATH, not this script's: vy-nebius-3 reported "setup done" with no links (research can't write
-# /usr/local/bin without sudo) and its check preflight then refused every train for an hour (24 Oct).
+# A run starts on the system's PATH, not this script's: a node that reports "setup done" with no links (research can't write
+# /usr/local/bin without sudo) has its check preflight refuse every train.
 for t in uv elan lake cargo; do
   if ! env -i HOME="$HOME" PATH=/usr/local/bin:/usr/bin:/bin "$t" --version >/dev/null 2>&1; then
     echo "pod_setup: $t does not run on a run's PATH (/usr/local/bin:/usr/bin:/bin): as root, ln -s $(command -v "$t") /usr/local/bin/" >&2
@@ -64,7 +69,7 @@ for t in uv elan lake cargo; do
   fi
 done
 # `slot.py --twin` claims a pair on its home machine over /etc/vy/peers with the vy-cluster key: a node without them refuses every
-# twinned check (vy-nebius-3, 24 Oct). A peer this node can't reach is only reported: cpu-4 and cpu-5 reach no uk-south2 node.
+# twinned check. A peer this node can't reach is only reported: cpu-4 and cpu-5 reach no uk-south2 node.
 PEERS=${CHECK_PEERS:-/etc/vy/peers}
 for f in "$PEERS" "$HOME/.ssh/vy-cluster"; do
   [ -s "$f" ] || { echo "pod_setup: no $f: copy it from vy-nebius-2, add this node to every node's $PEERS and to the from= of vy-cluster's line in each peer's authorized_keys" >&2; exit 1; }
@@ -74,7 +79,7 @@ while read -r name rest; do
   ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 $rest true 2>/dev/null || echo "pod_setup: peer $name unreachable from here" >&2
 done < "$PEERS"
 # One check slot over the pod's CPUs, so `slot.py` runs one check at a time: with no slots file it runs each check as it comes,
-# and two circuit-checks side by side OOM-killed a 256 GB pod (the layout move's shard 5, 5 Oct). A slots file in place is kept.
+# and two circuit-checks side by side OOM-kill a 256 GB pod. A slots file in place is kept.
 SLOTS=${CHECK_SLOTS:-/workspace/research/locks/slots}
 if [ ! -e "$SLOTS" ]; then
   mkdir -p "$(dirname "$SLOTS")"

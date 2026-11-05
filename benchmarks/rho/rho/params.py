@@ -2,11 +2,13 @@
 
 The registry is the TOML files under `data/`, one per layer. A leaf is either a bare value (a choice, such as a kind or a
 name) or a parameter: an inline table with `value` and optionally `unit`, `low` and `high` (the plausible range that
-sweeps and tornados span), `source` (a datasheet, an `art:` or `note:` id, a Lean name, a ruling) and `status`
+sweeps and tornados span), `source` (a datasheet, a measurement, a Lean name, a ruling) and `status`
 (`datasheet`, `measured`, `declared`, `assumed`, `ruled`, `conjecture`)::
 
     [location.h200-hgx]
     phi = { value = 1.583e16, unit = "FLOP/s", source = "census h100-sxm5-80gb/e4m3 x 8", status = "datasheet" }
+
+The monitoring periods are core's (`PERIODS`), not a layer's: each is the registry's `horizon.<name>.seconds`.
 
 A table becomes an object through its layer's `build`, which takes its fields by name (`Registry.fields`). Every
 parameter of every layer is then one key, so a sweep is `registry.override({key: value})` and a rebuild, whatever the
@@ -21,9 +23,14 @@ from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from typing import Any
 
+from verity.core.protocols.pous import wipe_monitoring
+
 DATA = Path(__file__).resolve().parent.parent / "data"
 
 STATUSES = frozenset({"datasheet", "measured", "declared", "assumed", "ruled", "conjecture", "derived"})
+
+#: core's monitoring periods (`wipe_monitoring`), seconds by name
+PERIODS = dict(wipe_monitoring.PERIODS)
 
 
 @dataclass(frozen=True)
@@ -60,7 +67,10 @@ class Registry:
 
     @classmethod
     def load(cls, paths: Iterable[Path] | None = None) -> Registry:
-        params: dict[str, Param] = {}
+        params = {f"horizon.{name}.seconds": Param(f"horizon.{name}.seconds", s, "s",
+                                                   source="verity.core.protocols.pous.wipe_monitoring PERIODS",
+                                                   status="declared")
+                  for name, s in PERIODS.items()}
         for path in sorted(paths if paths is not None else DATA.glob("*.toml")):
             with open(path, "rb") as f:
                 for key, p in _flatten(tomllib.load(f)):
@@ -120,10 +130,12 @@ class Registry:
         return cls(**values)
 
     def override(self, values: Mapping[str, Any]) -> Registry:
-        """A registry with these values in place of the old (each key must exist: a typo is an error, not a no-op)."""
+        """A registry with these values in place of the old (each key must exist: a typo is an error, not a no-op). A
+        `Param` replaces the whole parameter: its range, source and status with its value."""
         params = dict(self._params)
         for key, value in values.items():
-            params[key] = replace(self.param(key), value=value)
+            old = self.param(key)
+            params[key] = replace(value, key=key) if isinstance(value, Param) else replace(old, value=value)
         return Registry(params, index=self._tables())
 
 

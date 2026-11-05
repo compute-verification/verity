@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.GS.ZkRadius
+module
+
+public import Proofs.Flock.Claims.GS.ZkRadius
 
 /-!
 # A family of radius decoders read as one, and the masked verifier's
@@ -25,6 +27,8 @@ At the masked verifier's code (`Flock.zkEncD`, its traces `Flock.ZkTrace`, `m = 
 the schedules' sizes summed (`zkSizeRD`, `zkDecodeRD_complexity`), and its lists at most that long
 (`zkDecodeRD_length_le`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 

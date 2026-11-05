@@ -1,8 +1,8 @@
-"""[R19 admit] F-r18-admit-1 -- the Commit host working set on the 188 GB L40S class: the two mechanisms, each pinned by a CPU test.
+"""The Commit host working set on the 188 GB L40S class: the two mechanisms, each pinned by a CPU test.
 
 (c) fork-COW children: `driver._parallel_replay` freezes the parent's heap (gc.freeze) before forking the evaluator pool, so a
-    child's cyclic collection never traverses (and copy-on-write duplicates) the inherited C2 heap -- the "two ForkPoolWorkers at ~72 GB"
-    of R17 #23 (= the parent's programs + oracle heap, 74.8 GB modelled), the >= 17 GiB post-fork growth that killed #60 twice.  Tests:
+    child's cyclic collection never traverses (and copy-on-write duplicates) the inherited C2 heap (the parent's programs + oracle heap,
+    74.8 GB modelled; unfrozen, each of two ForkPoolWorkers reaches ~72 GB and grows >= 17 GiB after the fork).  Tests:
     the children run with the frozen heap, the parent is unfrozen after the pool joins, the record names it, the replay record is
     byte-identical serial vs forked (semantics-free).
 (a) the RETAIN-windowed pool: `--bounded-staging --retain host --retain-exclude hidden_m1` keeps every family the C2 forms read and drops
@@ -169,8 +169,8 @@ class _Stating:
 
 
 def test_the_pool_is_fitted_after_the_prewarm_to_what_the_parent_then_holds(world, cgroup, monkeypatch):
-    """r20261001-183627-ffcb: 30 workers asked for under a 400 GiB memory.max, 10 GiB in use when the replay began and 301.4 GiB once the
-    prewarm had compiled the Boolean versions.  The workers sized before the prewarm (all 30 at 9.6 GiB) were OOM-killed."""
+    """30 workers asked for under a 400 GiB memory.max, 10 GiB in use when the replay begins and 301.4 GiB once the prewarm has
+    compiled the Boolean versions: workers sized before the prewarm (all 30 at 9.6 GiB) would be OOM-killed."""
     mx, cur = cgroup
     mx.write_text(f"{400 * GiB}\n")
     cur.write_text(f"{10 * GiB}\n")
@@ -188,7 +188,7 @@ def test_the_pool_is_fitted_after_the_prewarm_to_what_the_parent_then_holds(worl
 
 
 def test_a_pick_that_cannot_fit_is_refused_before_the_fork_never_replayed_serially(world, cgroup, monkeypatch):
-    """r20261001-200753-63d1's LM-head worker peaked at 182.1 GiB; after ffcb's prewarm 98.6 GiB were left, for any worker or the parent."""
+    """An LM-head worker peaks at 182.1 GiB; after the prewarm 98.6 GiB are left, for any worker or the parent."""
     mx, cur = cgroup
     mx.write_text(f"{400 * GiB}\n")
     cur.write_text(f"{10 * GiB}\n")

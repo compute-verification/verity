@@ -18,7 +18,6 @@ commitment.
 
 from __future__ import annotations
 
-import inspect
 import re
 from typing import Any, Callable
 
@@ -26,7 +25,7 @@ from . import ports
 from .defs import Body, Builder, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from .layout import Circuit
 from .refs import Coll, coll_concat, runs as ref_runs
-from .types import Array, Record, Tuple as TupleT, Type, Value
+from .types import Array, RecordType, Tuple as TupleT, Type, Value
 
 _INPUT_PRIMS: dict[tuple[str, int], PrimitiveDefinition] = {}
 
@@ -87,7 +86,7 @@ def _lower_input(B: Builder, t: Type, name: str, binding: str = RUN) -> Coll:
             return Coll(t, Explicit(()))
         c = B.batch(input_prim(w, binding), axes=(), n=t.leaves, name=name)
         return c.reshape(t)
-    if isinstance(t, Record):
+    if isinstance(t, RecordType):
         parts = [_lower_input(B, ft, f"{name}.{k}", binding) for k, ft in t.fields]
         return coll_concat(t, parts)
     if isinstance(t, TupleT):

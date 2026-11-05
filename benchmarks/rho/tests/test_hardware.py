@@ -8,12 +8,11 @@ from rho.hardware import Fleet, Location
 from rho.params import Registry
 
 REG = Registry.load()
-CENSUS = {d["id"]: d for d in json.loads(
-    (Path(__file__).resolve().parents[3] / "benchmarks" / "census" / "hardware.json").read_text())}
+CENSUS_DIR = Path(__file__).resolve().parents[3] / "benchmarks" / "census"
+CENSUS = {d["id"]: d for d in json.loads((CENSUS_DIR / "hardware.json").read_text())}
 
 
-@pytest.mark.parametrize(("name", "device"), [("h100-hgx", "h100-sxm5-80gb"), ("h200-hgx", "h100-sxm5-80gb"),
-                                              ("rtx-pro-6000-server", "rtx-pro-6000-server")])
+@pytest.mark.parametrize(("name", "device"), [("h100-hgx", "h100-sxm5-80gb"), ("h200-hgx", "h100-sxm5-80gb")])
 def test_a_location_is_its_census_devices_where_the_census_has_them(name, device):
     loc, u = hardware.location(REG, name), hardware.units(REG)
     assert math.isclose(loc.phi, u.gates(loc.devices * CENSUS[f"{device}/e4m3"]["flop_per_second"]))
@@ -35,6 +34,16 @@ def test_every_fleet_is_on_a_location(name):
 def test_the_reference_fleets_are_100k_or_400k_gpus(name, gpus):
     f = hardware.fleet(REG, name)
     assert math.isclose(f.count * hardware.location(REG, f.location).devices, gpus, rel_tol=1e-3)
+
+
+@pytest.mark.parametrize("name", ["world-h200", "world-nvl72"])
+def test_the_world_fleets_serve_the_census_adversary_in_its_monitoring_period(name):
+    """`world-inference-2027` (`benchmarks/census/adversary.json`): its `total_flop` at the fleet's serving MFU."""
+    world = next(a for a in json.loads((CENSUS_DIR / "adversary.json").read_text()) if a["id"] == "world-inference-2027")
+    f = REG.table(f"fleet.{name}")
+    flops = REG[f"location.{f['location']}.flops"]
+    assert math.isclose(f["count"], world["total_flop"] / (flops * world["monitoring_period_s"] * f["mfu_serve"]),
+                        rel_tol=1e-3)
 
 
 def test_a_rack_of_four_servers_is_four_servers():

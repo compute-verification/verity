@@ -1,5 +1,7 @@
-import Definitions.Nci.Assumptions.CoveringTwoCosts
-import Mathlib.Data.Finset.Union
+module
+
+public import Definitions.Nci.Assumptions.CoveringTwoCosts
+public import Mathlib.Data.Finset.Union
 
 /-!
 # The additive covering bound's premise: parameter-hardness outside the token computations
@@ -10,9 +12,12 @@ computation `T_j`. Both may be the same inputs, so `CoveringBoundTwoCosts` multi
 `ConditionalParameterHardAt` pays the weights' bits outside every `T_j`, so the two charges add up to at most `k`, and
 AM–GM gives a quarter of the product (`Nci.Cover.Guarantees.CoveringBoundAdditive`).
 
-It is the cover theorem's `ConditionalUpdateHardness` (`Definitions.Nci.Assumptions.Cover`) in Daniel's vocabulary, with the
-token computations as its regions: on a declaration's gates it implies it (`Proofs.Nci.Cover.Gates`).
+It is the cover theorem's `ConditionalUpdateHardness` (`Definitions.Nci.Assumptions.Cover`) in the covering
+vocabulary (`Nci.Covering`), with the token computations as its regions: on a declaration's gates it implies it
+(`Proofs.Nci.Cover.Gates`).
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.Assumptions
 

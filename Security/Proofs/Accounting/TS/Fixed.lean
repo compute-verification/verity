@@ -1,8 +1,10 @@
-import Proofs.Accounting.TS.Drawn
-import Definitions.Accounting.Guarantees.TS.Fixed
+module
+
+public import Proofs.Accounting.TS.Drawn
+public import Definitions.Accounting.Guarantees.TS.Fixed
 
 /-!
-# `UnitFixed` from a fixed word, and the additive lemma (ASK-40's option A)
+# `UnitFixed` from a fixed word, and the additive lemma
 
 `Accounting.SecurityProofs.TS.UnitFixedOfWords : Accounting.Guarantees.TS.UnitFixedOfWords` and
 `Accounting.SecurityProofs.TS.AdditiveFixed : Accounting.Guarantees.TS.AdditiveFixed`.
@@ -17,6 +19,8 @@ position committed no later than the unit's coin keeps its committed value on ev
 (`committed_spliceAt`): such a continuation is one from the position's own cut too (`spliceAt_mono`), and every
 continuation from the cut has the path's plurality (`Plurality.plural_sp`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS
 

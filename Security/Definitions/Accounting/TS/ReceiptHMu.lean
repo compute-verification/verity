@@ -1,12 +1,14 @@
-import Definitions.Accounting.TS.Receipt
-import Definitions.Accounting.HMu
+module
+
+public import Definitions.Accounting.TS.Receipt
+public import Definitions.Accounting.HMu
 
 /-!
 # (H-μ) at the receipt's operands (trusted)
 
-`ReceiptGame.OperandPointMass μ` is HMU's (H-μ) (`Accounting.HMu.SkipRound.PointMass`; decisions 22, 48 and 110) on
-the ideal game split at the receipt, at word level. At every round, whatever the past, the round's share lies in
-`[0, 1]`, and the round is a `SkipRound` on its coins with:
+`ReceiptGame.OperandPointMass μ` is HMU's (H-μ) (`Accounting.HMu.SkipRound.PointMass`) on the ideal game split at the
+receipt, at word level. At every round, whatever the past, the round's share lies in `[0, 1]`, and the round is a
+`SkipRound` on its coins with:
 
 * `skipped ω`: the values of the round's deficient words;
 * `committed o`: the cheater's values for them, from its view `o`;
@@ -19,6 +21,8 @@ at `μ` (`ReceiptGame.OperandLuck`). It asks nothing of the cheater's play beyon
 the view everything the cheater's skip and values are functions of, and (H-μ) is that the skipped values' point mass
 given that view is at most `μ`. A cheater that reads a coin pinning the skipped value fails it.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS
 

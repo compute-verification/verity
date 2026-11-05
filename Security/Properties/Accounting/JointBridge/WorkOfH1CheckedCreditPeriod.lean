@@ -1,13 +1,15 @@
-import Definitions.Accounting.JointBridge.CreditedWords
-import Definitions.Accounting.JointBridge.H200
-import Definitions.Accounting.Assumptions.CreditedWords
-import Properties.Pouw.Period
+module
+
+public import Definitions.Accounting.JointBridge.CreditedWords
+public import Definitions.Accounting.JointBridge.H200
+public import Definitions.Accounting.Assumptions.CreditedWords
+public import Properties.Pouw.Period
 
 /-!
 # The joint period's PoUW guarantee from H1's checked credit over the torch loop
 
-`Accounting.Guarantees.JointPeriod` takes each audit's per-period guarantee (`Accounting.PeriodRun.Sound`) as a
-hypothesis. `WorkOfH1CheckedCreditPeriodAt p macs u b_unit` gives PoUW's, at the work certificate `W` and price `p`,
+Each audit's per-period guarantee in the coins model is `Accounting.PeriodRun.Sound`, which the one theorem's targets
+couple into the causal game (`Accounting.PeriodLive`). `WorkOfH1CheckedCreditPeriodAt p macs u b_unit` gives PoUW's, at the work certificate `W` and price `p`,
 for a period whose PoUW audit credits H1's checked words (`Accounting.RealizesCreditedWords` at the play's acceptance
 and the check's credit over the accepted prefix, `m = Accounting.Compose.minWordMacs Sc Cd macs` multiply-adds a word,
 `u` a unit and `b_unit` bits a unit), from `Properties.Pouw.Period.H1CheckedCreditPeriod` and its premises, with its
@@ -23,10 +25,12 @@ salts, the period's live tiles, the play, its folded words and the right words i
 declared circuit, the number of windows, the check's parameters, the salt's encoding, the staged and flat statements
 and the errors are the protocol's and are fixed. The premises are the source's, unchanged; the gaps it names
 (`RegisteredBeforeDraw` and the binding it reads on today's tags, `SaltIsLiveCoin`, `StagedPins`) stay premises here.
-The bridge adds two (RT4-LOGIC-6): each right word of a unit the device didn't outsource cost `m` multiply-adds of
+The bridge adds two: each right word of a unit the device didn't outsource cost `m` multiply-adds of
 priced work on it (`Accounting.Assumptions.WordCostsMacs`, at `n` times the run's fixed words), and it outsourced at
 most `K / b_unit` units (`Accounting.Assumptions.HelpWithinCertifier`).
 -/
+
+@[expose] public section
 
 namespace Properties.Accounting.JointBridge
 
@@ -51,10 +55,11 @@ def WorkOfH1CheckedCreditPeriodAt (p : Accounting.Price) (macs : Accounting.Comp
     [Nonempty V] (Sc : Scheme K) (Cd : Declared ι') {n : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ 144)
     (hr : 0 < Cd.rounds) (_hM : Cd.rounds = 1) (hK : 24 ≤ 144) (prm : Params) (enc : Cn → ByteArray)
     (staged flat : ByteArray → Fin 144 → (ℕ → V) → Prop) (δs δbind δks : ℝ)
-    (ws : ((i : I) → Ω i) → Windows (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n)
+    (ws : ((i : I) → Ω i) → Executions (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n)
     (opened : ((i : I) → Ω i) → Paths (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (salt : ((i : I) → Ω i) → Paths (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → Fin n → ByteArray)
-    (Wp : ((i : I) → Ω i) → Period Cn (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) (Fin 144) Cd.rounds n)
+    (Wp : ((i : I) → Ω i) →
+      WindowPlay Cn (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) (Fin 144) Cd.rounds n)
     (Pl : ((i : I) → Ω i) → Play (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n K T L U)
     (folded : ((i : I) → Ω i) → Paths (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → ℝ)
     (help : ((i : I) → Ω i) → Paths (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → ℝ)

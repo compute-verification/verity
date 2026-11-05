@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Types.ProgramPlaces
-import Proofs.Flock.Soundness.Audit.FlockPublic
+module
+
+public import Proofs.Flock.Soundness.Types.ProgramPlaces
+public import Proofs.Flock.Soundness.Audit.FlockPublic
 
 /-!
 # The end-to-end theorem on a program of units, carried to its Boolean circuit (verified-lowering phase 1, S4d)
@@ -15,12 +17,14 @@ The other gaps stay named, as in `E2E.lean`: `hExec`, `dp` and `vb`. The `_class
 unit's table class (`UProg.derivedPlaces_of_classes`), what 1d and 1e give for an accepted statement, and discharge
 `hConst` (`UProg.constCols_of_classes`): each unit's constant column is wired to `one` (`pairs_oneGate`).
 
-The statement's zero is a program input like `one` (#316). The `_classes` forms leave it at the plurality (`zeros = ∅`),
+The statement's zero is a program input like `one`. The `_classes` forms leave it at the plurality (`zeros = ∅`),
 so no claim may read their profile as being about the zero padding. The `_classes_zero` forms make the program input
 `zer` public at 0 and discharge `hZero` (`UProg.zeroCols_of_classes`) when each slot input that reads `zer` copies a
 forced-zero row of its class (`hzr`, what 1d and 1e give from the verifier's Δ): a column on `zer` is an input column,
 since computed columns are the unit's own gates and the constant's is on `one`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

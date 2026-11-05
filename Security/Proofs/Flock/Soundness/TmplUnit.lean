@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.TmplSplitEq
+module
+
+public import Proofs.Flock.Soundness.TmplSplitEq
 
 /-!
-# A templated unit slot's fold is the flat slot's (PRF-133, part 3)
+# A templated unit slot's fold is the flat slot's
 
 `Tmpl.foldUnit` is `foldSplit` behind the checks a verifier can make in `O(1)`: the point is the slot's, and the root is
 one chunk of 64 to `2^sl` columns. On a well-formed template at `layoutM`'s layouts, whose `unrollAt` net has `sl` bits,
@@ -9,6 +11,8 @@ it is the fold the flat statement computes on that net, `project (baseOf α (lw 
 (`foldUnit_eq_project`). The split fold reaches the reference without `fold` (`foldSplit_eq_foldRef`), so no lane count
 against the point is needed: the walk refuses a run of lanes wider than its chunk.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128
 

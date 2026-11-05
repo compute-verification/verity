@@ -1,4 +1,4 @@
-description = "adopted-bd-lm (design A) with P·V as CO-Dither serves it (note:20261017T0030Z-draft-checked-strip, Result 3): P round(P / s) + c on [0, 127], c a fresh bit where key <= query, its mean taken off in the epilogue, under the w64 peel; V dithered on 8 bits; everything else as adopted-bd-lm"
+description = "adopted-bd-lm (design A) with P·V as CO-Dither serves it: P round(P / s) + c on [0, 127], c a fresh bit where key <= query, its mean taken off in the epilogue, under the w64 peel; V dithered on 8 bits; everything else as adopted-bd-lm"
 
 [[linear]]
 step = "smooth"

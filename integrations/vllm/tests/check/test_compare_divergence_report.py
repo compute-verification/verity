@@ -1,4 +1,4 @@
-"""[R18 x09, F-r18-x09-1] compare_steps' divergence report is bounded: prefix/suffix in O(n), the matcher over a windowed core."""
+"""compare_steps' divergence report is bounded: prefix/suffix in O(n), the matcher over a windowed core."""
 from __future__ import annotations
 
 from verity_vllm.check.match import program_compare as C

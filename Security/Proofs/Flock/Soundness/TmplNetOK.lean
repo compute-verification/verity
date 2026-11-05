@@ -1,9 +1,11 @@
-import Proofs.Flock.Soundness.TmplUnitNet
-import Proofs.Flock.Soundness.ExecSetup
-import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
+module
+
+public import Proofs.Flock.Soundness.TmplUnitNet
+public import Proofs.Flock.Soundness.ExecSetup
+public import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
 
 /-!
-# A templated file's nets fit their slots (PRF-133)
+# A templated file's nets fit their slots
 
 The setup facts `nets_ok` gives a flat file's nets (`NetOK`: the constant and input rows inside the slot, the ports
 inside the input rows; at least a word of rows; and the constant row reading itself, `ConstRow`) hold of a net
@@ -16,6 +18,8 @@ bits, distinct port bits (`ofRowsAt_width`, `nets_widthPre`, `parseTmpl_net_widt
 after its first loop is at an input bit of a net slot (`deltaIn_inBitPre`, `parseTmpl_deltaIn`). They are facts of the committed nets the lincheck reads, whatever the
 audit's unit for a templated statement. No verifier path reads this file.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl
 

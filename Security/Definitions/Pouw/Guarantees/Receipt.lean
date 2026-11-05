@@ -1,6 +1,8 @@
-import Definitions.Pouw.Receipt.Duo
-import Definitions.Pouw.Receipt.Li
-import Definitions.Pouw.Receipt.Fx1
+module
+
+public import Definitions.Pouw.Receipt.Duo
+public import Definitions.Pouw.Receipt.Li
+public import Definitions.Pouw.Receipt.Fx1
 
 /-!
 # The receipt folds duo's, fx1's and li's binding (trusted)
@@ -19,7 +21,7 @@ What is proved about duo's words (`Definitions/Pouw/Receipt/Duo.lean`), at every
   multiplier.
 * `DuoRunWordInjective`: a run of any length binds each of its words at every start state when the others are
   fixed, for odd multipliers: Lemma B's (Inj) with the full state committed (LEDGER's case (a),
-  note:20261017T1723Z-draft-ledger §1.3).
+  §1.3).
 * `DuoWindowNoKernel`: four words with `DuoQuadNoKernel`'s keys have no all-state kernel anywhere in a run, whatever
   the words and keys before and after them. So in a run whose every four consecutive positions have those keys, two
   runs with the same final states on every start state differ, if at all, at two words at least four positions apart.
@@ -97,6 +99,8 @@ chain's segment has the rotations `(6, 20, 3, 17)` or `(13, 27, 10, 24)` (`fgemm
 one parity), so `r₁ + r₃ mod 32 ∈ {5, 9, 19, 23}`, off that family; three and four words have no statement here. fx1
 has the same (`Fx1PairXorNoKernel`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees.Receipt
 

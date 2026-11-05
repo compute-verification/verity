@@ -1,4 +1,6 @@
-import Proofs.Accounting.TS.Session.Held.Layer
+module
+
+public import Proofs.Accounting.TS.Session.Held.Layer
 
 /-!
 # The premise that ties a checked unit's C-Flock circuit to its declared circuit
@@ -9,11 +11,13 @@ so that its `ok` wires carrying the `ok` row means those checks hold. It belongs
 beside `Accounting.Assumptions.TS`'s other session premises (`Proofs.Accounting.TS.Session.Assumptions`).
 -/
 
+@[expose] public section
+
 namespace Accounting.Assumptions.TS
 
 open Accounting.TS Accounting.TS.Held Flock.SoundAtBridge
 
-/-- `accounting-ts-ok-realizes` (the checked unit's circuit is its declared unit's; owner @proofs). **The key
+/-- `accounting-ts-ok-realizes` (the checked unit's circuit is its declared unit's). **The key
 program's `ok` wires carry `Cd`'s checks**: at the session `s`, for every wire assignment `vals` that the key
 program's evaluation (`Circuit.eval`) agrees with on every wire of unit `u`, and whose `ok` wires of `u` (`OkWire`)
 each carry the bit of a value that is the `ok` row at its position (`OkVal`, the one word `1`), every check of the

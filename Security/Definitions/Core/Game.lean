@@ -1,8 +1,10 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Basic.ENNReal.BigOperators
-import Mathlib.Basic.ENNReal.Inv
-import Mathlib.Order.CompleteLattice.Basic
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Basic.ENNReal.BigOperators
+public import Mathlib.Basic.ENNReal.Inv
+public import Mathlib.Order.CompleteLattice.Basic
 
 /-!
 # Public-coin interactions with live coins, and what it means for one to be sound
@@ -19,7 +21,8 @@ Messages may be anything: a declaration, a commitment, whole tables of an intera
 prover strategy (`Strategy g`) picks a message at every `send` node as a function of the history, which the subtree it
 sits in encodes. `prob p g s` is the exact probability, over the verifier's uniform coins, that the output satisfies
 `p`, and `value p g` is the same probability for an optimal, computationally unbounded prover. A randomized prover is a
-mixture of deterministic ones, so every bound on `value` bounds it too.
+mixture of deterministic ones, so every bound on `value` bounds it too. `avg` and `prCoin` are the uniform average and
+probability over one coin, which every area's draw reads (`Definitions.Core.Draw`).
 
 `interleave g₁ g₂` runs two interactions side by side, the prover choosing at every step which one advances, and
 `batch` runs a list of them so. A strategy for a batch plays each of its games, and `InducedAt` names the strategies it
@@ -32,6 +35,8 @@ accepts while the claim `E` about the committed world is false is at most `δ`. 
 their acceptance and their claim. A policy is a check on the declaration inside `accept`, a game with no rounds of its
 own.
 -/
+
+@[expose] public section
 
 namespace Verity
 
@@ -87,6 +92,15 @@ noncomputable def value (p : α → Prop) : Game α → ℝ≥0∞
   | .ret a => if p a then 1 else 0
   | .send _ k => ⨆ m, value p (k m)
   | @Game.coin _ C iF _ k => ∑ c : C, (@Fintype.card C iF : ℝ≥0∞)⁻¹ * value p (k c)
+
+/-- The uniform average over a finite type. -/
+noncomputable def avg {C : Type} [Fintype C] (f : C → ℝ≥0∞) : ℝ≥0∞ :=
+  ∑ c : C, (Fintype.card C : ℝ≥0∞)⁻¹ * f c
+
+open Classical in
+/-- The probability that a uniform coin satisfies `p`, as an average of indicators. -/
+noncomputable def prCoin {C : Type} [Fintype C] (p : C → Prop) : ℝ≥0∞ :=
+  avg fun c => if p c then 1 else 0
 
 /-- The concurrent run once the first interaction's next step is fixed: `adv₁ g₂` advances the first interaction by one
 node while the second is at `g₂`, and `fin₁ b` finishes the first interaction alone once the second has ended with `b`.

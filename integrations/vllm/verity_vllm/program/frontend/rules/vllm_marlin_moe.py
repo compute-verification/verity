@@ -49,7 +49,7 @@ ROLE_KERNELS = {"marlin_moe_rank": "moe_align_block_size's ranks over a key per 
 
 #: the (TK, TN, blocks per SM) each launch of DeepSeek-V4-Pro's TP8 rank ran at each decode batch of M tokens the H200 capture swept
 #: (132 SMs, driver 580.173.02), by the launch's (E, routed TOPK, K, N, launch top_k): w13 (384, 6, 7168, 768, 6), w2 (384, 6, 384,
-#: 7168, 1); the GO r20261014-101203-3273 (tests/properties/dsv4_marlin_capture_gpu.py, dsv4-marlin-capture/v3, its `sweep`)
+#: 7168, 1); a GO run of tests/properties/dsv4_marlin_capture_gpu.py (dsv4-marlin-capture/v3, its `sweep`)
 MARLIN_SERVED = {(384, 6, 7168, 768, 6): {1: (128, 64, 2), 2: (128, 64, 4), 3: (128, 64, 4), **dict.fromkeys((*range(4, 18), 460), (64, 128, 4)),
                                           461: (64, 128, 3), 921: (64, 128, 3), 922: (64, 128, 2), 1024: (64, 128, 2)},
                  (384, 6, 384, 7168, 1): {**dict.fromkeys((*range(1, 18), 460), (64, 128, 4)),

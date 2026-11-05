@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundRuns
-import Proofs.Flock.Soundness.Discharge.Composed.Defs
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundRuns
+public import Proofs.Flock.Soundness.Discharge.Composed.Defs
 
 /-!
 # The soundness of one hidden-output `--zk` sampled session
@@ -10,9 +12,9 @@ import Proofs.Flock.Soundness.Discharge.Composed.Defs
 same law and parameters, with the same proof. For any live prover `τ` of a hidden-output one-table `--zk` session,
 `Pr[flock-verify --zk accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key program's
 partition (`keyProg c hU n`), each read at its `--zk` site in its hidden-output table and bound to the rows it commits,
-input or output (`placeZH`, `rsZH`: HiddenExec's `keyLayoutH` and `keyRowsH` moved to the `--zk` tables): #874's count
-curve at `planAtZKH` (`zk_flock_countC_execOS_atH`) at the simulated prover `simZ … τ`, with `δ_tree = 0`, carried to
-flock-verify's acceptance by `zk_headline_exec_on`. `RunsZC` at the law's draws is `runsZC_liveH`, from
+input or output (`placeZH`, `rsZH`: HiddenExec's `keyLayoutH` and `keyRowsH` moved to the `--zk` tables): the compiled
+`--zk` count curve at `planAtZKH` (`zk_flock_countC_execOS_atH`) at the simulated prover `simZ … τ`, with `δ_tree = 0`,
+carried to flock-verify's acceptance by `zk_headline_exec_on`. `RunsZC` at the law's draws is `runsZC_liveH`, from
 `TablesAtZKHLive` (`tablesAtZKH_live`), the tags (`TagsOkH`), the challenger's record of the live session
 (`RecordsLiveZK`) and its draw at each of the law's draws (`DrawOkZKH`).
 
@@ -25,6 +27,8 @@ returning the outputs comes from `scopeOk`. flock-verify refuses a statement fai
 `tagsOkH_circuit`: the citation of its tag hypotheses. Under the default `--statement` (`verity/flock-circuit`,
 `Tags.circuit`) with one table, `TagsOkH I` and `I.tags.typed = false` hold by `decide`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 

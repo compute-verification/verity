@@ -1,10 +1,12 @@
-import Proofs.Pouw.PearlC.DeviceSm120Gamma
-import Proofs.Pouw.PearlC.CapLoopGamma
-import Proofs.Pouw.PearlC.ChainCapLoopGamma
-import Proofs.Pouw.PearlC.UOnlyLoopGamma
+module
+
+public import Proofs.Pouw.PearlC.DeviceSm120Gamma
+public import Proofs.Pouw.PearlC.CapLoopGamma
+public import Proofs.Pouw.PearlC.ChainCapLoopGamma
+public import Proofs.Pouw.PearlC.UOnlyLoopGamma
 
 /-!
-# γ at the RTX PRO 6000 (sm_120) records at the in-loop prices (the price-twins lane's file; staged)
+# γ at the RTX PRO 6000 (sm_120) records at the in-loop prices (staged)
 
 The twins of `DeviceSm120Gamma`'s γ corollaries at `devSm120v1 Prices.sm120Loop` and `devSm120v2 Prices.sm120Loop` in
 place of `Prices.sm120`: each is `<instance at Prices.sm120Loop> CM (devSm120vX Prices.sm120Loop) sem rfl rfl hTT`, with
@@ -23,6 +25,8 @@ rule publishes these. `Prices.sm120Loop` rounds the A-only forming up to a whole
 Every γ here is an upper bound on the in-loop γ: `Prices.sm120Loop` rounds the A-only forming (1.047) up to 2. The
 exact in-loop values for v1 under rev1 and v2 at the cap are `DeviceSm120KernelGamma`'s `…LoopCast8…` pins.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

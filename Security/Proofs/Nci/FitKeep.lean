@@ -1,9 +1,11 @@
-import Proofs.Nci.Fit
+module
+
+public import Proofs.Nci.Fit
 
 /-!
 # The fit bound with counted multiplications left out
 
-ASK-68 (Daniel, 19 Oct) adopts `FitsSlots` and `ReachSlots` for dense recipes with two kinds of work left out:
+`FitsSlots` and `ReachSlots` are adopted for dense recipes with two kinds of work left out:
 initialization windows (each server's first window, which builds its weights from a seed, so `FitsSlots`'s slot half
 fails there) and threads that aren't the trained model's tokens (side computations inside the training circuit, such as
 data filters). `keep T s` is `T` with its counted multiplications cut to the gates in `s`, and `keepSlots σ s` is `σ` on
@@ -17,6 +19,8 @@ the bound: a citation that leaves work out charges it.
 * `fitBoundSlots_threads` cuts by thread: `s` is the counted multiplications of the threads in `K`, under `ReachSlots`
   and `FitsSlots` at `keep T s`.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs.Fit
 

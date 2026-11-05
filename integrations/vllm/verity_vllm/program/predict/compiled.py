@@ -40,7 +40,7 @@ from verity_vllm.acquire import served_artifact as SA
 from verity_vllm.acquire import served_device as SD
 from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled
-from verity_vllm.config import UsageError, option
+from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.engine.profiles import family_facts as FF
 from verity_vllm.engine.profiles.dense_generic import find_hf_config
 from verity_vllm.observe.fold.profiles.generic import router_vpt_bf16
@@ -330,7 +330,7 @@ class Options:
     """The served-compiled Build of a role on a device, predicted (never traced)."""
     role: str = option("--role", help="the checkpoint's role (its config.json: engine/profiles/hf_configs/<ROLE>.config.json)")
     device: str = option("--device", help="the serving GPU as torch names it (its pins: verity_vllm/pins/)")
-    workload: str = option("--workload", help="sweep workload json: the request schedule")
+    workload: str = option("--workload", type=workload_arg, help="sweep workload json: the request schedule")
     steps: int | None = option("--steps", type=int, default=None, help="engine steps (default: the workload's expected_engine_steps)")
     compare: str | None = option("--compare", default=None, help="a traced served Build to hold the prediction to (exit 5 when they differ)")
     out: str = option("--out")

@@ -1,5 +1,5 @@
-"""H1's live tables (VLLM-85): the served path's side of `PouwLiveSlots_v2{T}` (`verity.core.protocols.pouw.circuit.live`),
-the unit that makes each round's served rows m_s a proved value, one ``live@<s>`` a round, each request's cap bound to its
+"""H1's live tables: the served path's side of `PouwLiveSlots_v2{T}` (`verity.core.protocols.pouw.circuit.live`),
+the proof block that makes each round's served rows m_s a proved value, one ``live@<s>`` a round, each request's cap bound to its
 public max_tokens.
 
 * **The tables.** With the Commit (`pouw_h1_served.Served`'s ``tap``) a window registers its round tables as values of
@@ -11,7 +11,7 @@ public max_tokens.
     admissions, and its domain binds the window's session, since its root, round 0's ``request_table``, is inside round
     0's request root and so inside the open root (`credit.requests_root`), as ``ids@0``'s is. The prompts' tokens are
     ``ids@0``'s, not its. Its rows are ``row-seg/v1`` rows (`live_reads.REQUEST_SCHEMA`), the live statement's one row
-    format whose commitment compresses before its last block.
+    format whose commitment compresses before its last chunk.
   * round s's slot table ``<prefix>slots@<s>`` (`live_reads.SLOTS`): T rows, slot i's leaf (q + 1 for a row of request q, 0
     past the step's batch, `live_reads.slot_words`), registered at round s's close under the open root and listed whole among
     round s's segments (`Served.segments`), so round s's root commits it before its coin (`credit._a_link`).
@@ -21,7 +21,7 @@ public max_tokens.
   `pouw_h1.H1Run.open_request` and `open_slot` refuse them (`Table`). Row j's salt is the run's key's at `nonce`.
 * **m_s** is step s's served rows, the scheduler's: its batch's rows (`pouw_h1.H1Run.owners`). Under CUDA graphs a call's
   A rows are padded to the graph's size, past them (`pouw_h1.Call.pad`), and those rows are no slot of the step's.
-* **The statements.** ``live@<s>`` is unit s of the live Program (`live.program_v2` of T, the window's S and its prefix),
+* **The statements.** ``live@<s>`` is proof block s of the live Program (`live.program_v2` of T, the window's S and its prefix),
   on round s's slot table, the request headers, the public m_s, the public round s and the public caps (`caps`: round 0's
   requests' max_tokens, the fixed length the period's open commits): `statement` gives its rows and its ``--registered``
   file (`live_reads.reads_file`), and `verdicts` holds each round's tables to the roots its round committed and its rows to
@@ -71,7 +71,7 @@ def request_words(entries: Sequence[RQ.RequestEntry], rows: int) -> np.ndarray:
 
 def caps(entries: Sequence[RQ.RequestEntry]) -> list[int]:
     """The public max_tokens of round 0's requests in admission order, the fixed length the period's open commits
-    (`credit.committed_length`) and so the live unit's public caps (`live_reads.caps`)."""
+    (`credit.committed_length`) and so the live proof block's public caps (`live_reads.caps`)."""
     return [e.max_tokens for e in entries]
 
 
@@ -177,7 +177,7 @@ def evaluated(run: Any, s: int, m: int | None = None) -> int:
 def verdicts(run: Any) -> list[dict[str, Any]]:
     """Each round's ``live@<s>``: its slot table's root is the one round s's row commits (``slots``) and is listed whole
     there, round 0's request headers' is round 0's ``request_table``, and `live.live_ok_v2` of its rows at m_s and the
-    public caps, as is its unit's circuit (`evaluated`); ``ok`` when all hold, else ``reason`` (every round's
+    public caps, as is its proof block's circuit (`evaluated`); ``ok`` when all hold, else ``reason`` (every round's
     `admission_gap` of a per-round window). Empty without live tables."""
     served = run.served
     if served is None or not served.live or served.refused:
@@ -208,7 +208,7 @@ def dump(run: Any, out: Path) -> dict[str, Any]:
     """The prover's ``live@<s>`` of each closed round, for `benchmarks/pouw/h1_prove/live.py`: ``out/window.json`` (public:
     T, S, the prefix, the window Program's digest, the open root, the session, the live tables' roots, each round's
     served rows m_s and round 0's requests' max_tokens, the caps) and ``out/<s>/rows.npz`` in `window.py open`'s form (``w_``, ``s_``, ``v_``, ``r_`` and ``p_`` of each
-    port: its words, salt, registered value, position and path, one instance, unit s), with ``out/<s>/opening.json``, each
+    port: its words, salt, registered value, position and path, one instance, proof block s), with ``out/<s>/opening.json``, each
     registered row's ``b || c`` and path, which is all of it the verifier sees. Every row is the prover's own: ``out`` is
     the prover's directory, never a run's ``out/``."""
     served, T = run.served, run.rows

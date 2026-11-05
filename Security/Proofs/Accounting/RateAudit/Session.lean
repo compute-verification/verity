@@ -1,8 +1,10 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditHorizon
-import Definitions.Accounting.Guarantees.RateAuditNamed
-import Proofs.Accounting.RateAudit.Horizon
-import Proofs.Accounting.RateAudit.Named
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.RateAuditHorizon
+public import Definitions.Accounting.Guarantees.RateAuditNamed
+public import Proofs.Accounting.RateAudit.Horizon
+public import Proofs.Accounting.RateAudit.Named
 
 /-!
 # The pooled draw: windows and sessions, the proof
@@ -11,9 +13,9 @@ import Proofs.Accounting.RateAudit.Named
 coins: at each store and each value of those coins, the window's correct receipts are one fixed set, and the draw lands
 in it with probability `(#correct/(P·N))^d` (`Horizon.pr_sample'`, `Chain.pr_draw_le`).
 
-**The horizon.** A session's windows are causal rounds over `M = P·N` items (`Rate.Causal`): window `w`'s correct
-receipts read the store, the earlier windows' coins, their draws among them, and its own passes' coins, never its own
-draw. `HorizonSampling` bounds the session's shortfall over its windows (`Session.pr_draws_le`).
+**The monitoring period.** A session's windows are causal rounds over `M = P·N` items (`Rate.Causal`): window `w`'s
+correct receipts read the store, the earlier windows' coins, their draws among them, and its own passes' coins, never
+its own draw. `HorizonSampling` bounds the session's shortfall over its windows (`Session.pr_draws_le`).
 
 **The floor in every window.** Keep the first window whose correct receipts number at most `K_w` as it is and count
 every other window's receipts all good: still causal, since whether window `w` is the first short one reads only the
@@ -24,6 +26,8 @@ with no union over the windows (`Horizon.pr_floor_le`).
 short of those receipts' words leaves some window short (`Session.pr_unpaid_le`), and that window some pass, which
 `RatePaidNamedRO` bounds at the devices the earlier coins pick (`Session.pr_window_le`, then `Chain.pr_unpaid_le`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 
@@ -274,7 +278,7 @@ theorem RateWindowDraw : Accounting.Guarantees.RateWindowDraw := by
   intro P N b h ρ S L q r s d K A
   exact Chain.pr_draw_le A d K
 
-/-- **A session's pooled draws: the horizon and every window** (`Accounting.Guarantees.RateSessionDraw`). -/
+/-- **A session's pooled draws: the monitoring period and every window** (`Accounting.Guarantees.RateSessionDraw`). -/
 theorem RateSessionDraw : Accounting.Guarantees.RateSessionDraw := by
   intro n P N b h ρ S L q r s d K Kw A
   exact Session.pr_draws_le A K Kw

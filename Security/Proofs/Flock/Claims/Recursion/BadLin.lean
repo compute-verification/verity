@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.PlurLin
-import Proofs.Flock.Claims.Recursion.BoundForks
+module
+
+public import Proofs.Flock.Claims.Recursion.PlurLin
+public import Proofs.Flock.Claims.Recursion.BoundForks
 
 /-!
 # A bad draw, linearly
@@ -8,7 +10,7 @@ import Proofs.Flock.Claims.Recursion.BoundForks
 same draw is bounded linearly (`Pr_bad_le_lin`). At each inner round `j` it misses `P_I` at most as often as a link at
 the fork at `j` succeeds, plus `1/(M+1)` (`Pr_plur_fork_lin`), and where a link succeeds, two extractions forked at `j`
 open round `j` differently, so their calls collide wherever the inner rounds' forks bind (`ForksBind`, `linkOut_coll`):
-at the deployed records directly (`RecDeploy.forksBind_nf`), and wherever the played rounds' openings are recorded
+at the deployed records directly (`RecDeploy.forksBind_C`), and wherever the played rounds' openings are recorded
 (`forksBind_of_opening`).
 
 The deviation finder `Fdev` (`Definitions.Claims.RecursionLin`) draws the round `j` uniformly, then a tape, a prefix, a
@@ -17,6 +19,8 @@ gives witnesses (`linkOut`); its declared cost is one draw's calls, then the loo
 draw's in expectation (`Ex_Fdev_cost_le`). So `Pr[Bad] ≤ k_I·Pr[Fdev] + k_I/(M+1)`, and under `ExpectedCR` at `Fdev`,
 `Pr[Bad] ≤ k_I·(2·E[c]/2^256 + 1/(M+1))` at one draw's calls `c` (`Pr_bad_le_ecr`).
 -/
+
+@[expose] public section
 namespace Claims.Recursion
 
 open Claims

@@ -16,7 +16,7 @@ low six bits minus 31, exactly uniform on [−31, 32].  A tile's digest is SHAKE
 row-major within a step (the order an accumulator produces them).
 
 ``ncp-v1`` uses the word-granular production P v1.1 (`word_perm`: it moves aligned 4-entry words and keeps the order
-inside each, so forming E₂ is a free word move under W1 with byte moves priced).  The red team certified it independently
+inside each, so forming E₂ is a free word move under W1 with byte moves priced).  It is certified
 (independence rank T − 1, λ₃ = 32, MinRank 16 at k = 1,088, 2,048, 4,096 and 11,008); ``tests/test_pouw_word_p.py``
 re-checks the rejection rule, the MinRank argument's hypotheses and λ₃ ≥ 16 at the k the MVP uses.  ``ncp-v1-shift24``
 uses the shift by 24, admissible with independent checkpoints for every k >= 1024 with 16 | k (Lean
@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 
+from verity.ml.commitments import domains
 from verity.ml.randomness import Part, frame
 
 from ..protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
@@ -43,7 +44,7 @@ M32 = (1 << 32) - 1
 WORD_P_SEED = b"pous-pouw-ncp-Pword-v1"
 #: Route U's bias: X + β is u8 on the int7 domain for 127 <= β <= 129 with an unsigned P (Lean `biasU8Iff`)
 BETA = 128
-#: f: W1 units per activation position for forming the operands on route U (03:35Z W1)
+#: f: W1 units per activation position for forming the operands on route U
 FORM_UNITS = 24
 
 
@@ -213,8 +214,8 @@ def route_u_shift(unbiased: list[list[list[int]]], y: Sequence[Sequence[int]], b
 
 def stack(ctx: Context, pi: Sequence[int], sigma: Sequence[int], a: list[list[int]], b: list[list[int]], tile: Tile) -> Ops:
     u, k = ctx.matmul, ctx.matmul.shape.k
-    e1 = [noise_row("verity/pouw/ncp/E1/v1", k, ctx.salt, u.index, ctx.root_a, u.weight, i) for i in tile.rows]
-    f1 = [noise_row("verity/pouw/ncp/F1/v1", k, ctx.salt, u.weight, j) for j in tile.cols]
+    e1 = [noise_row(domains.POUW_NCP_E1, k, ctx.salt, u.index, ctx.root_a, u.weight, i) for i in tile.rows]
+    f1 = [noise_row(domains.POUW_NCP_F1, k, ctx.salt, u.weight, j) for j in tile.cols]
     return assemble(a, b, e1, f1, pi, sigma)
 
 
@@ -296,7 +297,7 @@ class NCP:
         steps = len(checked[0][0]) if checked and checked[0] else 0
         words = b"".join(checked[i][j][t].to_bytes(4, "little")
                          for t in range(steps) for i in range(len(checked)) for j in range(len(checked[i])))
-        return hashlib.shake_256(b"verity/pouw/ncp/tile/v1\0" + words).digest(32)
+        return hashlib.shake_256(domains.POUW_NCP_TILE.encode() + b"\0" + words).digest(32)
 
     def useful(self, ctx: Context, noise, ops: Ops, checked) -> list[list[int]]:
         return [[s[-1] - (1 << 32) if s[-1] >> 31 else s[-1] for s in row] for row in checked]

@@ -1,6 +1,6 @@
 // Single-instruction Blackwell (sm_120) tensor-core probes: one `mma.sync` per warp per tile, raw bits in and out.
 //
-// Lane fp4-5090.  Every kernel here executes EXACTLY ONE mma.sync on one tile, so each output element D[i][j] is the
+// Every kernel here executes EXACTLY ONE mma.sync on one tile, so each output element D[i][j] is the
 // hardware's own function of (C[i][j], A[i][:], B[:][j], the scales of row i / column j).  Operands and results move as
 // raw bits; nothing is converted or rounded on the way in or out.  Chains (K > one instruction) are driven from the host
 // by feeding D back as C, so the one-MMA-per-tile property is kept and checked by `--sass-check` (cuobjdump).
@@ -218,7 +218,7 @@ __global__ void bf16_tiles_kernel(const uint16_t* __restrict__ A, const uint16_t
     store_d(D + (size_t)warp * 128, df, lane);
 }
 
-// ---- generic rows (lane pouw rtx-pro GPU 4): one MMA per step, L dependent steps with D kept in registers ----
+// ---- generic rows: one MMA per step, L dependent steps with D kept in registers ----
 //
 // row_tiles_kernel<KIND> issues exactly one mma.sync inside a `#pragma unroll 1` loop over L steps; L = 1 is a single tile, L > 1 a
 // dependent chain whose accumulator never leaves the registers (the host-driven chains of the kernels above store and reload it).
@@ -300,7 +300,7 @@ __global__ void row_tiles_kernel(const uint8_t* __restrict__ A, const uint8_t* _
     store_d(D + (size_t)warp * 128, cf, lane);
 }
 
-// ---- 2:4 sparse kind::mxf4nvf4 m16n8k128 (lane pouw rtx-pro GPU 4): one mma.sp per tile ----
+// ---- 2:4 sparse kind::mxf4nvf4 m16n8k128: one mma.sp per tile ----
 //
 // A is pair-wise 4:8 structured sparse (PTX ISA "Sparse matrix storage"): each 8-wide chunk of a row keeps two of its four
 // element pairs, whose indices p0 < p1 form the chunk's metadata nibble (p1 << 2) | p0; the stored row is 64 codes, chunk c's four

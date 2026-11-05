@@ -1,4 +1,4 @@
-"""An untimed profile of Pearl-C mode on the smoke's chat prompts (`e2e.serve`'s ``chat``: vllm_bench's 16 prompts, 48 greedy
+"""An untimed profile of Pearl-C mode on the smoke's chat prompts (`e2e.serve`'s ``chat``: `e2e.PROMPTS`, 48 greedy
 tokens), split into first use against steady state, prefill against decode, and GEMM, forming, hashing and other.
 
   python benchmarks/pouw/pearl_c_vllm/profile_decode.py --model DIR --kernel K --cubin C --out RUN_DIR/profile.json
@@ -30,7 +30,6 @@ import cProfile
 import csv
 import io
 import json
-import os
 import pstats
 import statistics
 import sys
@@ -38,7 +37,10 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
-os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+from verity_config.settings import of
+
+settings = of(__file__)
+settings.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
 HERE = Path(__file__).resolve().parent
 sys.path[:0] = [str(HERE), str(HERE.parent)]
 
@@ -197,12 +199,11 @@ def run(args) -> dict:
     import e2e
     import torch
     from vllm import SamplingParams
-    from vllm_bench import PROMPTS, find_model
 
     prof = Profile()
     instrument(prof)
     llm = e2e.engine(args, "arm")
-    model = find_model(llm)
+    model = e2e.find_model(llm)
     t0 = time.perf_counter()
     run_, weights, stack = e2e.install(model, args, e2e.Coins(0))
     install_s = time.perf_counter() - t0
@@ -214,7 +215,7 @@ def run(args) -> dict:
         prof.forward(int(ids.shape[0]) if ids is not None else -1)
     model.register_forward_pre_hook(hook, with_kwargs=True)
     tok = llm.get_tokenizer()
-    chat = [tok.apply_chat_template([{"role": "user", "content": p}], tokenize=False, add_generation_prompt=True) for p in PROMPTS]
+    chat = [tok.apply_chat_template([{"role": "user", "content": p}], tokenize=False, add_generation_prompt=True) for p in e2e.PROMPTS]
     sp = SamplingParams(temperature=0.0, max_tokens=48)
     walls = {}
 
@@ -244,7 +245,7 @@ def run(args) -> dict:
     chat_pass("pearlc-cprofile", True, cprof=cprof)
     buf = io.StringIO()
     pstats.Stats(cprof, stream=buf).sort_stats("tottime").print_stats(30)
-    return {"schema": "verity-pouw/pearl-c-vllm-profile/v1", "run": os.environ.get("RESEARCH_RUN_ID"), "install_s": install_s,
+    return {"schema": "verity-pouw/pearl-c-vllm-profile/v1", "run": settings.RESEARCH_RUN_ID, "install_s": install_s,
             "host": run_.details["host"], "gate_ok": all(g["ok"] for g in gate), "gate": gate,
             "prompts": len(chat), "max_tokens": 48, "pass_wall_s": walls, "passes": prof.report(),
             "cprofile_top_tottime": buf.getvalue().splitlines()[:60]}

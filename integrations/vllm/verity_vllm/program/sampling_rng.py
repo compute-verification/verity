@@ -1,5 +1,4 @@
-"""[GEN sampling] Torch-free recomputation of vLLM d9105ea80's Gumbel-max sampler noise -- the executable half of the
-PROPOSED `rng` root class (out/gen/lanes/sampling/REPORT.md).
+"""Torch-free recomputation of vLLM d9105ea80's Gumbel-max sampler noise -- the executable half of an `rng` root class.
 
 vLLM's sampler (`vllm/v1/worker/gpu/sample/gumbel.py::_gumbel_sample_kernel`) draws no random tensor from a torch
 generator: for every logits row it evaluates, inside the kernel, a *pure function* of three integers --

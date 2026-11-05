@@ -1,5 +1,5 @@
 """A row template in chunks (`pipeline.serving_rows.chunked`): a row Definition the partition file's ``chunk_cap`` names is staged
-by C-Flock's `UnitStager` on its own ports, one v2 bit row per parameter (``in<g>``) and one per return field (``o<j>``), each
+by Flock's `UnitStager` on its own ports, one v2 bit row per parameter (``in<g>``) and one per return field (``o<j>``), each
 chunk a member of at most its cap of the template's rows, read once; with no cap it stays the word-row member it was.  And a scope
 of several op_path prefixes takes the rows under any of them."""
 from __future__ import annotations
@@ -13,6 +13,8 @@ from verity.ml.definitions.registry import b1 as B1
 from verity.ml.definitions.registry import dead_free as DF
 from verity.ml.definitions.registry import deepgemm as DG
 from verity.ml.definitions.registry import fa2_check_inf as FA2
+from verity.ml.definitions.registry import fa3_check_inf as FA3
+from verity.ml.definitions.registry import hopper as HP
 
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
@@ -20,6 +22,7 @@ from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.ops import mufu as MU
 from verity.ml.circuits.ops import prims as OP
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.ml.windows import interface as IF
 
 #: one plain row template, and one packed with two return fields (a whole ``PARTS`` part, DeepGEMM's linear's quantisation, here
 #: on rows of its own family); each row's committed members and their element dtypes
@@ -45,14 +48,14 @@ def rows(monkeypatch):
     def make(family: str):
         fn, rng = defn(family), np.random.default_rng(3)
         params, _ret = fn.signature()
-        fields = CR.fields(SRW.template(descriptor_id(fn)))
+        lay = IF.layout(fn)
         ops = [[bf16s(rng, len(ty.leaf_widths())) for _nm, ty in params] for _ in OPS]
         outs: dict[str, list[np.ndarray]] = {nm: [] for nm, _dt in ROWS[family][2]}
         for o in ops:
             y = np.asarray(evaluate_batch(fn, *(a.astype(np.uint64).reshape(1, -1) for a in o))).reshape(-1)
             at = 0
-            for (nm, _dt), f in zip(ROWS[family][2], fields, strict=True):
-                n, w = len(f.leaf_widths()), f.leaf_widths()[0]
+            for (nm, _dt), (_o, words), w in zip(ROWS[family][2], lay.outs, lay.widths[len(lay.rows):], strict=True):
+                n = 16 * words // w
                 outs[nm].append(y[at:at + n].astype(f"<u{w // 8}"))
                 at += n
         spec = descriptor_id(fn)
@@ -83,7 +86,7 @@ def test_a_row_template_the_caps_name_is_chunks_of_the_stager_s_bit_rows_on_its_
     T, store, _ops, _outs = rows(family)
     tp = SRW.template(T)
     params, _ret = tp.fn.signature()
-    fields = CR.fields(tp)
+    fields = IF.layout(tp.fn).outs
     assert tp.layout == ("part" if family in SRW.PART_OF else "row") and len(fields) == len(ROWS[family][2])
     assert not SRW.chunked(T, None) and not SRW.chunked(T, {}) and SRW.chunked(T, {T: CAP})
     in_rows, out_rows = CR.unit_rows(tp)
@@ -124,6 +127,18 @@ def test_a_whole_attention_row_reads_its_tables_in_lookup_slots_and_an_rmsnorm_r
     for fn, want in [(bind(d, **att), "slots") for d in (FA2.AttentionV5, DF.AttentionV18)] + [(fn, "inline") for fn in norms]:
         tp = SRW.template(descriptor_id(fn))
         assert (tp.layout, CR.reads(tp)) == ("row", want), tp.id
+
+
+def test_an_attention_heads_per_key_block_calls_read_their_tables_in_lookup_slots():
+    """`chunk_rows.reads` of the Calls the window circuit cuts a decode head into (`window_circuit.CUTS`), FA2's
+    `AttentionHead_v19` and FA3's `AttentionHead_v20` at Llama-3.2-1B's statics on each target: its first visited block, the
+    full block below it and its epilogue each read in lookup slots, as the whole row they cut is."""
+    for head, inv, BN in ((DF.AttentionHeadV19, MU.Fa2InvSum, 128), (FA3.AttentionHeadV20, HP.Fa3InvSum, 192)):
+        nodes = bind(head, T=2 * BN, D=64, BN=BN, DOT=OP.HopperBF16WgmmaDot16, INV=inv, MASKED_FROM=1).body.nodes
+        assert len({n.fn.base_id for n in nodes}) == 3
+        for n in nodes:
+            tp = SRW.template(descriptor_id(n.fn))
+            assert (tp.layout, CR.reads(tp)) == ("row", "slots"), tp.id
 
 
 def test_a_scope_of_several_prefixes_takes_the_rows_under_any_of_them(rows):

@@ -39,7 +39,9 @@ import credit as CR  # noqa: E402
 import serve as SV  # noqa: E402
 
 from h1c import H1C, Dom, Tab, Tail, unwords  # noqa: E402
+from verity_config.settings import of  # noqa: E402
 
+settings = of(__file__)
 PIN = "/workspace/hf/hub/models--verity-int8--Llama-3.1-8B-INT8/snapshots/723d342ac443b040931242c768df342b0f6f15a7"
 POISON = -0x5A5A5A5A5A5A5A5B  # 0xA5A5A5A5A5A5A5A5 as int64
 SITES = [("self_attn.qkv_proj", 6144, 4096), ("self_attn.o_proj", 4096, 4096), ("mlp.gate_up_proj", 28672, 4096),
@@ -245,7 +247,7 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     dev = torch.device("cuda")
     key = os.urandom(64)
-    window = os.environ.get("RESEARCH_RUN_ID") or "gate"
+    window = settings.RESEARCH_RUN_ID or "gate"
     t0 = time.perf_counter()
     lib = H1C(a.lib, key, dev)
     doc: dict = {"gpu": torch.cuda.get_device_name(), "init_s": round(time.perf_counter() - t0, 1)}

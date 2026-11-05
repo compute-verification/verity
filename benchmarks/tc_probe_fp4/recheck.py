@@ -3,7 +3,7 @@
     python benchmarks/tc_probe_fp4/recheck.py capture --instruction nvf4 --seeds 20261101,20261102 --n-random 625000 \
         --prebuilt SO --expect-uuid "$GPU_LEASE_UUID" --out DIR --budget-s 360   # a fill chunk; exit 99 while seeds remain
     python benchmarks/tc_probe_fp4/recheck.py verify --instruction nvf4 --seed 20261101 --n-random 625000 --capture DIR \
-        --prebuilt SO --out $RESEARCH_RUN_DIR                                      # CPU (a research run): the models, bit for bit
+        --prebuilt SO --out OUT                                                    # CPU (recorded run): the models, bit for bit
 
 ``capture``: the device's identity, the UUID gate, the SASS gate and probe.py's layout check, then for each seed the families of
 probe.py's ``--sweep`` (the same generators and rng) through the tile kernel.  Each family's words go to
@@ -29,9 +29,11 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import probe as P  # noqa: E402  (first: it puts verity on the path)
-import k32  # noqa: E402
-from verity.ml.circuits.silicon import models as M  # noqa: E402
+import probe as P
+import k32
+from verity.ml.circuits.silicon import models as M
+
+from verity_config.settings import SHARED
 
 INSTRUCTIONS = ("nvf4", "f8f6f4")
 SCHEMA = "pouw-rtxpro/tc-recheck-fp4/v1"
@@ -194,8 +196,8 @@ def verify(args) -> int:
            "failures": failures, "seconds": round(time.time() - t_all, 1)}
     (out / "recheck.json").write_text(json.dumps(doc, indent=1))
     ok = not failures and bool(gated)
-    if os.environ.get("RESEARCH_RUN_ID"):
-        res = {"schema": "research/result/v0.1", "kind": "tc-evidence/v1", "run_id": os.environ["RESEARCH_RUN_ID"],
+    if SHARED.RESEARCH_RUN_ID:
+        res = {"schema": "research/result/v0.1", "kind": "tc-evidence/v1", "run_id": SHARED.need("RESEARCH_RUN_ID"),
                "instruction": P.INSTRUCTION_ID[args.instruction], "ptx": P.PTX[args.instruction], "sku": ident.get("device"),
                "gpu_uuid": ident.get("gpu_uuid"), "driver": ident.get("driver"), "compute_capability": ident.get("compute_capability"),
                "model_agrees": ok, "primary_model": primary,
@@ -239,8 +241,8 @@ def main(argv: list[str] | None = None) -> int:
     v.add_argument("--procs", type=int, default=max(1, min(32, (os.cpu_count() or 4) - 2)))
     v.add_argument("--out", required=True)
     args = ap.parse_args(argv)
-    if getattr(args, "fake_silicon", None) and os.environ.get("RESEARCH_RUN_ID"):
-        ap.error("--fake-silicon is a dry run and never publishes: not under a research run")
+    if getattr(args, "fake_silicon", None) and SHARED.RESEARCH_RUN_ID:
+        ap.error("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     if args.cmd == "capture" and not args.fake_silicon and not args.prebuilt:
         ap.error("capture needs --prebuilt (compile off the lease)")
     return capture(args) if args.cmd == "capture" else verify(args)

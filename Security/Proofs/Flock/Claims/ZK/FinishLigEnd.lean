@@ -1,4 +1,7 @@
-import Proofs.Flock.Claims.ZK.FinishFc
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSrc
+public import Proofs.Flock.Claims.ZK.CutPrefix
 
 /-!
 # Ligerito from a source ends on a squeeze
@@ -11,6 +14,8 @@ it only updates its own state. So the inner proof that follows begins its first 
 * `EndT`, `KeepT`, `EndL`, `KeepL`: a step that leaves no pending bytes, and one that keeps none, on the transcript and
   on Ligerito's state over it.
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 

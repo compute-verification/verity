@@ -1,10 +1,12 @@
-import Definitions.Accounting.Assumptions.TS
-import Definitions.Accounting.TS.Receipt
+module
+
+public import Definitions.Accounting.Assumptions.TS
+public import Definitions.Accounting.TS.Receipt
 
 /-!
 # (I7) from the receipt (trusted)
 
-The luck premise (I7) `LuckAt` split at the receipt (LEDGER §1.3–§1.5, note:20261017T1723Z-draft-ledger), each
+The luck premise (I7) `LuckAt` split at the receipt (LEDGER §1.3–§1.5), each
 `def G : Prop` proved as `Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.TS.Receipt`:
 
 * `LuckOfReceipt`: with the openings pinned, the operand luck at `p` and the receipt luck at `pr ≤ 1` give (I7) at
@@ -29,6 +31,8 @@ The luck premise (I7) `LuckAt` split at the receipt (LEDGER §1.3–§1.5, note:
 * `LuckCaseAKeyed`: case (a) when each round's share counts wrong words only (the B200 heavy design's keyed rounds in
   the li fold), (I7) at 0.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

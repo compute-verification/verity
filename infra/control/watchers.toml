@@ -55,9 +55,10 @@ env_files = ["/root/.config/verity/relay.env"]
 needs = ["{dir}/agent-watch-offset"]
 env = { AGENT_WATCH_ON_POD = "1", AGENT_WATCH_OFFSET = "{dir}/agent-watch-offset" }
 
-# check's preflight on each node, hourly, and the nodes' drift from main (tmux `preflight-probe`). Its tree is a clone the deploy
-# key fetches (README's deploy). The store index it reads for the Lean bundles is on the pod's own disk: on /data's NFS, indexing
-# the attempts takes hours and the lean-deps step times out; after a reset, the first pass rebuilds it in a few minutes
+# check's preflight on each node, hourly (tmux `preflight-probe`); the nodes' drift from main is monitors-relay's `drift`. Its
+# tree is a clone the deploy key fetches (README's deploy). The store index it reads for the Lean bundles is on the pod's own disk:
+# on /data's NFS, indexing the attempts takes hours and the lean-deps step times out; after a reset, the first pass rebuilds it in
+# a few minutes
 [[loop]]
 name = "preflight-probe"
 argv = ["python3.12", "-s", "{src}/tools/research/src/research/pods/nebius/preflight_probe.py", "--tree", "{dir}/preflight-tree",
@@ -75,7 +76,8 @@ env_files = ["/root/.config/verity/relay.env", "{dir}/notion.env"]
 needs = ["{dir}/top-asks.json"]
 
 # top's hourly sweep (top_watch.py sweep; top's Cursor timer admin-hourly-v3): unanswered asks, agents with no handle, the rules
-# thread, main stalled while next is ahead, idle H200s from fleet's samples
+# thread, main stalled while next is ahead, idle H200s from fleet's samples, and the Linear audit with relay.env's Linear app
+# credentials (LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET), whose lines go to {dir}/linear-audit.jsonl
 [[loop]]
 name = "top-sweep"
 argv = ["python3.12", "-s", "{src}/infra/control/top_watch.py", "sweep", "--state", "{dir}/top-sweep.json"]

@@ -1,4 +1,4 @@
-"""FOLD-OPT's two-word search at the full 32-bit word, for the forms width 4 doesn't carry (RT-MACHINE-17).
+"""FOLD-OPT's two-word search at the full 32-bit word, for the forms width 4 doesn't carry.
 
 `fold_opt_fx.py --wide3` runs `fold_wide3.c` at width 4. Reducing mod 2^4 commutes with LOP3, IADD3, IMAD and LEA, so
 there it covers 32 bits for programs of those forms; it doesn't commute with IMAD.HI, LEA.HI's rotate, IMAD.WIDE's high

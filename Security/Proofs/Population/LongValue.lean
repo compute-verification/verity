@@ -1,5 +1,7 @@
-import Definitions.Population.LongValue
-import Proofs.Population.Leakage
+module
+
+public import Definitions.Population.LongValue
+public import Proofs.Population.Leakage
 
 /-!
 # Long values buy nothing
@@ -28,6 +30,8 @@ of its width (or the run holds a collision), the verifier's view of it is ⊥, a
   extra symbol is ⊥ itself, `log₂ (1 + 1/|V|)` bits a slot at most, and it costs its writer's and readers' correctness;
   read with ⊥ replaced by any short value, the counts are the population's with `|V|` (`fill_card_leak_le_coneEgress`).
 -/
+
+@[expose] public section
 
 namespace Population
 
@@ -215,8 +219,8 @@ theorem card_image_some_le {ι : Type} {O : Finset S} {V : Type} [Fintype V] [De
   rw [this]
   exact card_image_le
 
-/-- **Daniel's form over `Option V`**: with at most `m` wrong units and every unit's cone egress `E(u) ≤ E`, the egress
-takes at most `#honest · C(|U|, m) · (|V| + 1) ^ (m E)` values. -/
+/-- **The uniform form over `Option V`**: with at most `m` wrong units and every unit's cone egress `E(u) ≤ E`, the
+egress takes at most `#honest · C(|U|, m) · (|V| + 1) ^ (m E)` values. -/
 theorem opt_card_leak_le_coneEgress [Fintype U] (hc : P.Covered) (ha : P.Acyclic) {V : Type} [Fintype V]
     [DecidableEq V] (f : P.Fns V) (O : Finset S) {m E : ℕ} (hmU : m ≤ Fintype.card U)
     (hE : ∀ u, (P.coneEgress O {u}).card ≤ E) {ι : Type} (Cl : Finset ι) (σ : ι → S → Option V)

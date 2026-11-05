@@ -1,5 +1,19 @@
 {
   "rule": "P16 (every CLI command has a caller)",
+  "public": {
+    "advice": "benchmarks/network_e2e/e2e.py",
+    "advice-windows": "benchmarks/one_stage/a5_tp.sh",
+    "build": "benchmarks/stacked_share/job.sh",
+    "epoch": "examples/vllm/commit.sh",
+    "int8-checkpoint": "benchmarks/hash/dither/pin_glm53.sh",
+    "row": "tools/research/src/research/pods/nebius/n2_commit.sh",
+    "serve-openai": "examples/vllm/serve.sh",
+    "served-match": "benchmarks/hash/maxtput/build_job.sh",
+    "served-pin": "benchmarks/served_commit/served_arm.sh",
+    "serving-rows": "benchmarks/one_stage/a5.sh",
+    "tp-serving-rows": "benchmarks/one_stage/a5_tp.sh",
+    "workload": "benchmarks/stacked_share/job.sh"
+  },
   "entries": [
     {"file": "verity_vllm/acquire/served.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "served"},
     {"file": "verity_vllm/check/capture_map.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "capture-map"},

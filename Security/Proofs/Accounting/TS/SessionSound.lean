@@ -1,16 +1,20 @@
-import Proofs.Accounting.TS.Session.Guarantees
+module
+
+public import Proofs.Accounting.TS.Session.Guarantees
 
 /-!
-# #2855's served layer is sound through its C-Flock sessions (the proof)
+# The served layer is sound through its C-Flock sessions (the proof)
 
-`Accounting.SecurityProofs.TS.SessionSoundAt` is #2909's `soundAt_of_sessions` on #2855's layer `pf`, with
-`ServedRootsLinked`'s event as the event off the sessions' bad events. It needs neither `RelOfRows` nor
+`Accounting.SecurityProofs.TS.SessionSoundAt` is `Flock.SoundAtBridge.soundAt_of_sessions` on the served layer `pf`,
+with `ServedRootsLinked`'s event as the event off the sessions' bad events. It needs neither `RelOfRows` nor
 `OpenedPlurAt` on every path: the named premises state them only on the accepted sessions whose drawn units are right,
 and every other unsound proof is `RowsSession.BadU`.
 
 This module imports `Proofs.Flock.SoundAtBridge`, whose imports make `X` a token (ArkLib's `notation3 "X"`), so
 `Proofs/Accounting.lean` imports it rather than `Proofs/Accounting/TS.lean`, whose theorems bind `X`.
 -/
+
+@[expose] public section
 
 open Accounting.TS Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg in
 /-- **A window of proofs is sound at `δs + δ` through its C-Flock sessions**

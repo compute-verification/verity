@@ -1,7 +1,9 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.RateAuditDeployed
-import Proofs.Accounting.RateAudit.Deployed
-import Proofs.Accounting.RateAudit.SketchRank
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.RateAuditDeployed
+public import Proofs.Accounting.RateAudit.Deployed
+public import Proofs.Accounting.RateAudit.SketchRank
 
 /-!
 # The deployed verbatim-sketch session
@@ -11,6 +13,8 @@ correct digest query without obtaining a sector. `card_guess_le` prices the form
 `card_bad_le` and `SketchRankFiber` price the latter by `q/2^(8r)`. A union over a pass's ground candidates and passes,
 then the existing causal pooled-draw argument over windows, gives `RemoteSessionConservationSketch`.
 -/
+
+@[expose] public section
 
 namespace Accounting.RateSketch
 
@@ -346,8 +350,8 @@ theorem pr_window_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (w : 
     rw [hη]
   simpa [e, hω, hc] using hy
 
-/-- A session's pooled draws as a causal family of the horizon, on any store `store ω` drawn before the session's
-coins. -/
+/-- A session's pooled draws as a causal family over the monitoring period, on any store `store ω` drawn before the
+session's coins. -/
 theorem pr_draws_map_of_causal {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
     (A : SketchDeployedSession n P N m ρ h S L q ks G d)
     (Ev : SketchStore N m → (Fin n → SketchWindowCoins P N m ρ h ks G d) → Prop) (B : ℝ≥0∞)
@@ -396,7 +400,7 @@ theorem pr_draws_map_of_causal {Ω : Type} [Fintype Ω] (store : Ω → SketchSt
     fun ω w => Finset.card_map _
   exact hB X Gs hG e.symm E hmem hcard
 
-/-- A session's pooled draws as a causal family of the horizon. -/
+/-- A session's pooled draws as a causal family over the monitoring period. -/
 theorem pr_draws_of_causal (A : SketchDeployedSession n P N m ρ h S L q ks G d)
     (Ev : SketchStore N m → (Fin n → SketchWindowCoins P N m ρ h ks G d) → Prop) (B : ℝ≥0∞)
     (hB : ∀ (X : Fin n → Type) [∀ w, Fintype (X w)]
@@ -412,7 +416,7 @@ theorem pr_draws_of_causal (A : SketchDeployedSession n P N m ρ h S L q ks G d)
     pr (fun x : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) => Ev x.1 x.2) ≤ B :=
   pr_draws_map_of_causal id A Ev B hB
 
-/-- The pooled draw over the whole horizon, on any store drawn before the session's coins. -/
+/-- The pooled draw over the whole monitoring period, on any store drawn before the session's coins. -/
 theorem pr_draws_horizon_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
     (A : SketchDeployedSession n P N m ρ h S L q ks G d) (K : ℕ) :
     pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
@@ -441,7 +445,7 @@ theorem pr_draws_horizon_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchS
     rw [show (P : ℝ≥0∞) * N * (d * n) = d * (n * P * N) by ring]
     exact ENNReal.mul_div_mul_left _ _ hd' (ENNReal.natCast_ne_top d)
 
-/-- The pooled draw over the whole horizon. -/
+/-- The pooled draw over the whole monitoring period. -/
 theorem pr_draws_horizon_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (K : ℕ) :
     pr (fun x : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
       (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1) ∧

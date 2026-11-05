@@ -1,6 +1,8 @@
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Data.Fintype.BigOperators
-import Proofs.Flock.Sampled.Statements
+module
+
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Data.Fintype.BigOperators
+public import Proofs.Flock.Sampled.Statements
 
 /-!
 # F2's statements, proved
@@ -20,6 +22,8 @@ import Proofs.Flock.Sampled.Statements
   held slots with the trace's values (`fillValues`); so it aborts only where the draw doesn't fit; and at every other
   draw its audit's view is `zeroKnowledge_holds`'s.
 -/
+
+@[expose] public section
 
 namespace FlockSampled
 
@@ -141,7 +145,7 @@ theorem composition_holds : Composition := by
     _ ≤ avg fun ω => (if Disjoint (L.draw ω) (wrong Ty X) then (1 : ℝ≥0∞) else 0) + I.ε (L.draw ω) R (contOf σ ω) :=
         avg_mono key
     _ = L.escape (wrong Ty X) + avg fun ω => I.ε (L.draw ω) R (contOf σ ω) := by
-        unfold Law.escape
+        unfold Verity.Law.escape
         rw [avg_add, avg_ite_eq_prCoin]
 
 theorem zeroKnowledge_holds : ZeroKnowledge := by

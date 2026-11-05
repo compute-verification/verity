@@ -6,9 +6,9 @@ from typing import Any
 
 
 def _boolean_roots() -> list[Any]:
-    """The softmax max and both halves of its reciprocal at CMP-92's longest row, N = 32 (its context), and at N = 1, a
+    """The softmax max and both halves of its reciprocal at the e2e demo's longest row, N = 32 (its context), and at N = 1, a
     request's first position; one softmax output; the embedding's coordinate at the byte vocabulary, V = 256 (both
-    phases'), and at a vocabulary that isn't a power of two; and both halves of each RMSNorm part at the loop's EPS, 1e-5:
+    phases'), and at a vocabulary that isn't a power of two; and both halves of each RMSNorm part at EPS = 1e-5:
     a chunk's sum at C = 128 (Phase 1's row and Phase 2's chunk), a group's at G = 64, and rs at Phase 1's N = 128 with
     G = 1 and Phase 2's N = 16,384 with G = 2."""
     from verity.ml.circuits.defs import bind

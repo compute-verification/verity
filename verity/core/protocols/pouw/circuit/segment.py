@@ -1,7 +1,7 @@
 """The compute protocol's receipts and their spot checks, as word primitives and Boolean Definitions.
 
 The edited GEMM serves Y = A B'^T from P = A' B'^T (A' = A + U W^T, U in {±1..±64} with period 32 along k; B' = B + F, F ±1,
-or under decision 29's dither B' = B + d, d in {0, 1}) on 128 x 128 tiles of 512 threads (fgemm.cu's mainloop at warps
+or under the dither B' = B + d, d in {0, 1}) on 128 x 128 tiles of 512 threads (fgemm.cu's mainloop at warps
 32 x 32). Thread ``ctid`` (warp w = ctid / 32, lane l, wm = w / 4, wn = w % 4, g = l >> 2, q = l & 3) holds 32 accumulator
 words: entry 4 t + e (t = 4 mi + ni, mi < 2, ni < 4, e < 4) at row wm 32 + g + 8 r and column wn 32 + 2 q + 8 ni + (e & 1),
 with r = 2 mi + (e >> 1) its row slot and c = 2 ni + (e & 1) its column slot. After each 32-step segment j (k = 32 j ..
@@ -20,17 +20,17 @@ The fold is a parameter (``FOLD``, `FOLDS`):
   z = mix32(y + 0x9E3779B9) (NW = KS / S windows). Chain 4 (t % 2) + e absorbs entry 4 t + e at position t:
   u = y ^ p ^ kx_t, y = u a_t + z, z = rotl(u, r_t) + y (mod 2^32, a_t odd, fgemm.cu's lane-0 keys); R = xor_i (y_i ^
   rotl(z_i, 16)).
-- ``xin`` (P2-FF r9's XOR-in with rotations (13, 19), note:20261016T1117Z-draft-fullfloor-s-r9; provisional): state y (8
+- ``xin`` (XOR-in with rotations (13, 19); provisional): state y (8
   chains, duo's y keys), chain t absorbing entries 4 t .. 4 t + 3 as d0 .. d3: y = (rotl(y, 13) ^ d0) a0_t + d1, then
   y = (rotl(y, 19) ^ d2) a1_t + d3, the multipliers odd and outside Lambda8 (`key_ok`); R = xor_t y_t.
 
-Operands are committed as decision 46's tile leaves: R = 64 rows x 32 values of an operand (row block i / 64, segment j).
+Operands are committed as tile leaves: R = 64 rows x 32 values of an operand (row block i / 64, segment j).
 The thread's 4 rows of A at segment j are rows o + 8 r of A's leaf, o = 32 (wm % 2) + g (16 offsets); its 8 rows of B are
 rows o' + 8 (c >> 1) + (c & 1) of B's leaf, o' = 32 (wn % 2) + 2 q (8 offsets).
 
     PouwI8Add_v1     (a, u: Value<8>) -> Value<8>                  a + u mod 2^8 (A' from A and U)
     PouwI8Pm1_v1     (b: Value<8>, f: Value<1>) -> Value<8>        b + 1 - 2 f mod 2^8 (B' from B and F's sign bit)
-    PouwI8AddBit_v1  (b: Value<8>, d: Value<1>) -> Value<8>        b + d mod 2^8 (B' from B and decision 29's dither bit)
+    PouwI8AddBit_v1  (b: Value<8>, d: Value<1>) -> Value<8>        b + d mod 2^8 (B' from B and the dither bit)
     PouwSegDot_v1    (acc: Value<32>, a, b: Array<32, Value<8>>) -> Value<32>      acc + sum_k a_k b_k mod 2^32, int8 a and b
     PouwSel8_v1      (s: Value<1>, w: Value<8>) -> Value<8>        w if s else 0
     PouwXor8_v1      (x, y: Value<8>) -> Value<8>                  x ^ y
@@ -45,7 +45,7 @@ rows o' + 8 (c >> 1) + (c & 1) of B's leaf, o' = 32 (wn % 2) + 2 q (8 offsets).
 Each has a Boolean twin (``_v2``, traced from a `forms` builder, word view its ``_v1``). The segment dots' twins
 (`PouwSegDot_v2`, and `PouwSegDot0_v2` from 0 below) are bound to the wrapping s8 IMMA coordinate they compute
 (`census.silicon_step`), so census/v1 counts their gates as `tc:int8`, and serve none of their products (`census.serves_none`:
-Lean's `Accounting.Gates.roleOf` puts an H1 tile's lanes at `Site.other`). The spot check of one thread at segment j is
+Lean's `Accounting.Gates.roleOf` puts an H1 tile's lanes at `Place.other`). The spot check of one thread at segment j is
 
     PouwSegCheck_v2{S, FOLD}  (a: Array<64, Array<32, i8>>, asel: Array<16, bit>, u: Array<4, Array<32, i8>>,
                                b: Array<64, Array<32, i8>>, bsel: Array<8, bit>, f: Array<8, Array<32, bit>>,
@@ -58,13 +58,13 @@ dither's) bits for those rows, the window's S + 1 absorbed prefix-word sets (wit
 the one-hot position of j in its window (its first S bits; JW = `jsel_bits`(S), the rest zero), and whether the window is
 the first. It computes T_j = T_(j-1) + A'_j B'_j^T entry by entry from p's set at j's position, folds the window, and returns 1 exactly when the fold is the leaf's word, T_j is p's next
 set, and in the first window the incoming set is 0. A statement holds ``a``, ``b`` and ``rc`` to the trees committed before
-and after the coin, recomputes ``u``, ``f``, ``st`` and the selections from the coin and the draw, and reads the result
+and after the coin, recomputes ``u``, ``f``, ``st`` and the selections from the coin and the sample, and reads the result
 through a row of known content.
 
-    PouwSegCheckDither_v2{S, FOLD}   the same with decision 29's dither on the served side: B' = B + d (`PouwI8AddBit_v2`),
+    PouwSegCheckDither_v2{S, FOLD}   the same with the dither on the served side: B' = B + d (`PouwI8AddBit_v2`),
                                      d in {0, 1} the coin bit ``f`` carries (the served X = floor(x / s) + b)
 
-v2 is unsound (LEDGER, note:20261017T1723Z-draft-ledger): it ties only T_j to T_(j-1), so every other set of ``p`` is free
+v2 is unsound: it ties only T_j to T_(j-1), so every other set of ``p`` is free
 witness, and a meet-in-the-middle over two of their words opens any committed R_w (`tests/test_circuit_segment.py`). The
 checks below take no prefix word as witness: every word a fold absorbs is recomputed in the proof from committed operands
 and the coin, from T_(-1) = 0, so a thread's (or warp's) whole call is one unit and the committed value is binding by
@@ -98,7 +98,7 @@ thread's dither bits, coin bits, U and digit coins z_d(row slot, residue), its k
 leaf with the thread's N words at slot rsel: FOLD ``duo`` or ``fx1``, OUT ``chains`` (H1's 8 words, N = 8) or ``state``
 (the full state, N = 16). 1 exactly when the leaf's N words are the fold's over the recomputed words.
 
-LI-CP-W (decision 97, note:20261017T1848Z-draft-li-alt): li's chains (8 a lane: chain c absorbs `li_entries`(c) as two
+LI-CP-W: li's chains (8 a lane: chain c absorbs `li_entries`(c) as two
 half steps a set, y <- (y ^ d0 ^ `LK`[c][h]) `LA`[c][h] + d1, from duo's y keys) and a checkpoint after every set, the XOR
 of the warp's chain states (redux.sync.xor), one word a set, KS + m words a warp in leaves of their own.
 
@@ -110,17 +110,17 @@ XOR), 1 exactly when word s of rc is the checkpoint after set s for every s < KS
 ceil(P (KS + m) / 512) leaves in order (P = 1 here; L = 2 for duo and fx1 at K = 8192: KS = 256, m = 3, 518 words), and
 the words after the last checkpoint are unread.
 
-DUO-CP-W and FX1-CP-W (#2438): duo's or fx1's chains with a full-state checkpoint after every set, the XOR over the warp
+DUO-CP-W and FX1-CP-W: duo's or fx1's chains with a full-state checkpoint after every set, the XOR over the warp
 of every chain's y and, separately, of every chain's z (`warp_checkpoint`), two words a set.
 
     PouwWarpCheck_v2{KS, NL, FOLD}  (PouwWarpCheck_v1's ports, st: Array<NL, Array<P 8, u32>>) -> bit
 
 FOLD li (P = 1, `PouwWarpCheck_v1`), duo or fx1 (P = 2, st each lane's y then z); 1 exactly when words P s .. P s + P - 1
 of rc are the checkpoint after set s for every s < KS + m. The checkpoint is a set's, never spaced wider: the
-binding proved without FOLD-R's whole-state assumption is a set's 4 words a chain (note:20261018T0515Z-draft-proj-r4).
+binding proved without a whole-state assumption is a set's 4 words a chain.
 
 A statement holds the operand leaves and ``rc`` to the trees committed before and after the coin, and recomputes the
-noise, keys and selections from the coin and the draw.
+noise, keys and selections from the coin and the sample.
 """
 from __future__ import annotations
 
@@ -255,7 +255,7 @@ ROT = tuple(((t * 7 + 5) % 31) + 1 for t in range(MI * NI))
 
 
 def key_ok(a: int) -> bool:
-    """XOR-in's multiplier condition (the Lambda8 half of P2-FF r9's key_ok_r9): a odd, and neither +a nor -a mod 2^30 in
+    """XOR-in's multiplier condition (the Lambda8 half of the filler's `key_ok_r9`): a odd, and neither +a nor -a mod 2^30 in
     Lambda8 = {lambda : lambda b = b' mod 2^30 for some int8 b != 0 and int8 b'}."""
     if not a & 1:
         return False
@@ -415,7 +415,7 @@ def PouwI8Pm1Word(b: int, f: int) -> int:
 
 @primitive("PouwI8AddBit", 1, [("b", V8), ("d", V1)], V8, conformance="protocol-defined")
 def PouwI8AddBitWord(b: int, d: int) -> int:
-    """B'_lk = B_lk + d_lk mod 2^8, d decision 29's dither bit."""
+    """B'_lk = B_lk + d_lk mod 2^8, d the dither bit."""
     return (b + (d & 1)) & 0xFF
 
 
@@ -653,7 +653,7 @@ def PouwSegCheck(B, S, a, asel, u, b, bsel, f, p, st, rc, rsel, jsel, first):
 
 @composite("PouwSegCheckDither", 2, ["S", "FOLD"], _check_signature, conformance="protocol-defined")
 def PouwSegCheckDither(B, S, a, asel, u, b, bsel, f, p, st, rc, rsel, jsel, first):
-    """`PouwSegCheck_v2` with the served side under decision 29's dither: B' = B + f (`PouwI8AddBit_v2`), f the coin bit."""
+    """`PouwSegCheck_v2` with the served side under the dither: B' = B + f (`PouwI8AddBit_v2`), f the coin bit."""
     return _seg_check_body(B, S, PouwI8AddBit, a, asel, u, b, bsel, f, p, st, rc, rsel, jsel, first)
 
 
@@ -1109,7 +1109,7 @@ def PouwSegCheckV3(B, S, a, asel, u, b, bsel, f, st, rc, rsel):
 
 @composite("PouwSegCheckDither", 3, ["KS", "S", "FOLD"], _check3_signature, conformance="protocol-defined")
 def PouwSegCheckDitherV3(B, S, a, asel, u, b, bsel, f, st, rc, rsel):
-    """`PouwSegCheck_v3` with the served side under decision 29's dither: B' = B + f (`PouwI8AddBit_v2`), f the coin bit."""
+    """`PouwSegCheck_v3` with the served side under the dither: B' = B + f (`PouwI8AddBit_v2`), f the coin bit."""
     return _seg_check3_body(B, S, PouwI8AddBit, a, asel, u, b, bsel, f, st, rc, rsel)
 
 
@@ -1248,7 +1248,7 @@ def PouwWarpCheck(B, S, x, xsel, b, w, wsel, c, u, z, st, rc):
 
 @composite("PouwWarpCheck", 2, ["KS", "NL", "FOLD"], _warp2_signature, conformance="protocol-defined")
 def PouwWarpCheckV2(B, S, x, xsel, b, w, wsel, c, u, z, st, rc):
-    """`PouwWarpCheck_v1` for FOLD li, duo or fx1, with a full-state checkpoint a set (DUO-CP-W, #2438): each lane's sets
+    """`PouwWarpCheck_v1` for FOLD li, duo or fx1, with a full-state checkpoint a set (DUO-CP-W): each lane's sets
     absorbed by FOLD (`PouwLiAbsorb_v2`, `PouwDuoAbsorb_v2`, `PouwFx1Absorb_v2`) from its keys (li: y; duo, fx1: y, then
     z), and after set s, per part of the state, the XOR over lanes and chains equal to the leaf's word: li's y at s; duo's
     and fx1's y at 2 s and z at 2 s + 1."""

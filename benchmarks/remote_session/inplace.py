@@ -2,13 +2,13 @@
 tensors and KV pages as its binder registers them (`verity_vllm.protocols.remote_bandwidth.binder`'s `TorchBacking` and `PagedBacking`).
 
 ~~~text
-region     store blocks first … first + blocks − 1 (`Region`): a weight tensor's storage, block b at addr + 4096 b,
+region     store chunks first … first + blocks − 1 (`Region`): a weight tensor's storage, chunk b at addr + 4096 b,
            or a KV layer's pages, plane q = b // plane_blocks (page q // planes, plane q mod planes) at addr
-           + page · page_stride + plane · plane_stride with block b's 4096 bytes (b mod plane_blocks) · 4096 into it
+           + page · page_stride + plane · plane_stride with chunk b's 4096 bytes (b mod plane_blocks) · 4096 into it
            (`PagedBacking.where`)
 map        a pass's plan (any `receipts.Plan` over the regions) to each position's device address and store index
            j = plan[p], on the device from the plan's runs and the regions (`rs_map`)
-pass       its sketch-sha512 receipts on tensor cores, each block read through the map, and `receipts.tree`'s leaves
+pass       its sketch-sha512 receipts on tensor cores, each chunk read through the map, and `receipts.tree`'s leaves
            (the last one short), padding and levels hashed behind them as they are read (`rs_mapped_pass`), leaf c's
            salt `device.store_salt(key, seed, c)`; the pass keeps its levels from h0 up
 opening    the 2^h0-leaf subtree a drawn position falls in, recomputed under the pass's seed and plan from the store as
@@ -18,10 +18,10 @@ opening    the 2^h0-leaf subtree a drawn position falls in, recomputed under the
 
 Every region's tensor is on the current GPU, at a 16-byte-aligned address with 16-byte-aligned strides, and stays
 where it is for the store's life (a weight tensor isn't reallocated, the KV pool is allocated once). The store grows
-as blocks are appended: vLLM's memory map gives a written block a fresh index j while its bytes stay in its slot, the
-registered block it was written in, and `append` maps the store's next indices to their slots' bytes. A pass reads
+as chunks are appended: vLLM's memory map gives a written chunk a fresh index j while its bytes stay in its slot, the
+registered chunk it was written in, and `append` maps the store's next indices to their slots' bytes. A pass reads
 what the tensors hold, so its receipts are the session's only where they hold the codec's encoding. An opening reads
-a block as it is when it opens, so a block rewritten since its pass opens to what it holds now; the caller's
+a chunk as it is when it opens, so a chunk rewritten since its pass opens to what it holds now; the caller's
 staleness check (vLLM's `Stale`) is what refuses it.
 """
 from __future__ import annotations
@@ -32,10 +32,10 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from device import BLOCK, PACK16_WORDS, PER_LEAF, SALT_DOMAIN, Lib, digests, rb, skr, store_salt, stream_head
+from device import BLOCK, PACK16_WORDS, PER_LEAF, SALT_DOMAIN, Lib, digests, rb, store_salt, stream_head
 
 ROW = 64
-"""rs_gather64's row: a block is BLOCK // ROW of them."""
+"""rs_gather64's row: a chunk is BLOCK // ROW of them."""
 
 READY_BLOCKS = 1 << 13
 """session.cu's CONSUMER_READY_BLOCKS: the positions of a group whose receipts `rs_mapped_pass` counts together."""
@@ -46,7 +46,7 @@ FUSED_H0 = 8
 
 @dataclass(frozen=True)
 class Region:
-    """Store blocks first … first + blocks − 1 where a tensor holds them on the GPU (the module's docstring): block b at
+    """Store chunks first … first + blocks − 1 where a tensor holds them on the GPU (the module's docstring): chunk b at
     addr + 4096 b, or, paged (plane_blocks > 0), in plane q = b // plane_blocks at addr + (q // planes) · page_stride +
     (q mod planes) · plane_stride, (b mod plane_blocks) · 4096 bytes in."""
 
@@ -60,8 +60,8 @@ class Region:
 
     @classmethod
     def of_backing(cls, first: int, backing) -> Region:
-        """A registered region at store block `first` from its vLLM backing: a `TorchBacking`'s ``flat`` (its whole
-        blocks), or a `PagedBacking`'s pages through its ``physical`` layout, on a GPU."""
+        """A registered region at store chunk `first` from its vLLM backing: a `TorchBacking`'s ``flat`` (its whole
+        chunks), or a `PagedBacking`'s pages through its ``physical`` layout, on a GPU."""
         physical = getattr(backing, "physical", None)
         if physical is None:
             return cls._checked(first, backing.nbytes // BLOCK, backing.flat, 0, 0, 1, 0, 0)
@@ -70,7 +70,7 @@ class Region:
                             physical.planes, ps, ks, end=(physical.pages - 1) * ps + (physical.planes - 1) * ks)
 
     def address(self, j: int) -> int:
-        """Store block j's device address (`map_kernel`'s)."""
+        """Store chunk j's device address (`map_kernel`'s)."""
         x = j - self.first
         if not self.plane_blocks:
             return self.addr + BLOCK * x
@@ -115,7 +115,7 @@ def level_at(width: int, h0: int, h: int) -> int:
 
 
 class InPlace:
-    """Passes over the store `regions` describe (`Region`, in store order from block 0) on the current GPU, read in
+    """Passes over the store `regions` describe (`Region`, in store order from chunk 0) on the current GPU, read in
     place, leaf salts under `key`; `kept_from` is h0 (at most FUSED_H0), and `ctas` the receipt grids' CTAs (0: an
     opening's as many as are resident at once, a pass's one an SM). A pass's tree is hashed on a stream of its own
     beside the caller's."""
@@ -135,7 +135,7 @@ class InPlace:
         self.extend(regions)
 
     def extend(self, regions: Sequence[Region]) -> None:
-        """Regions from the store's end on, in store order: its registered regions, or blocks appended (`append`)."""
+        """Regions from the store's end on, in store order: its registered regions, or chunks appended (`append`)."""
         at, out = self.blocks, []
         for r in regions:
             if r.first != at or r.blocks < 1:
@@ -159,7 +159,7 @@ class InPlace:
         self._firsts.extend(r.first for r in out)
 
     def append(self, slots: Sequence[int]) -> int:
-        """The store's next indices, the k-th at the bytes of store block slots[k] (an appended block's j at its slot,
+        """The store's next indices, the k-th at the bytes of store chunk slots[k] (an appended chunk's j at its slot,
         vLLM's memory map); slots back to back in memory share a region. Returns the first's index."""
         if any(type(s) is not int or not 0 <= s < self.blocks for s in slots):
             raise ValueError(f"an appended block's slot is one of the store's {self.blocks} blocks")
@@ -195,7 +195,7 @@ class InPlace:
         n, leaves = plan.length, rb.leaves(plan.length)
         self.lib.set_tree(rb.prefix(seed), rb.DIGEST_BYTES * PER_LEAF, rb.DIGEST_BYTES * (n - PER_LEAF * (leaves - 1)),
                           rb.domain(seed, plan).domain_id, SALT_DOMAIN + self.key + seed, n)
-        self.lib.call("rb_sketch_set", skr.prefix(seed))
+        self.lib.call("rb_sketch_set", rb.sketch_prefix(seed))
         head = stream_head(seed)
         pk = self.torch.empty(PACK16_WORDS, dtype=self.torch.int32, device=self.device)
         self.lib.call("rs_signs16", head, len(head), pk.data_ptr())
@@ -246,7 +246,7 @@ class InPlace:
         return H, h0, kept
 
     def open(self, handle: Pass, positions: Sequence[int]) -> list[tuple[bytes, bytes, bytes, tuple[bytes, ...]]]:
-        """Each position's (block as the store holds it now, its leaf's receipts, the leaf's salt, the leaf's path):
+        """Each position's (chunk as the store holds it now, its leaf's receipts, the leaf's salt, the leaf's path):
         `receipts.verify_leaf`'s leaf, salt and path."""
         torch, seed, plan, H, h0 = self.torch, handle.seed, handle.plan, handle.H, handle.h0
         n, leaves, width, sub = plan.length, rb.leaves(plan.length), 1 << H, 1 << h0

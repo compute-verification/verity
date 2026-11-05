@@ -1,5 +1,7 @@
-import Definitions.Pouw.PearlC.FlockTile.Bridge
-import Proofs.Flock.Soundness.Game.Basic
+module
+
+public import Definitions.Pouw.PearlC.FlockTile.Bridge
+public import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # C-Flock's games as core's games: the lemmas
@@ -10,6 +12,8 @@ event has the same probability under a strategy and its image (`prob_toVerity`, 
 for the optimal prover (`value_toVerity`). So a bound C-Flock proves on `FlockSoundness.Game.prob` is the same bound on
 core's game, for the same prover.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.FlockTile
 

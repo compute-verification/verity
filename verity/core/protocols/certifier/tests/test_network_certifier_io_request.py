@@ -1,7 +1,7 @@
 """IoTieRequest on the warden's own ingress (`io_request`): each request's prompt_len and arrival ordinal held to the
 warden's ingress cells, a bucket row at a time, by the reference and by the Boolean Definitions. The first negative
-is REDTEAM's phase-6 split (`cursor/redteam-phase6-advised-061a`, target 1): two requests' prompt lengths swapped
-with their total kept, which N2-ADVICE's advised floor accepts."""
+is the swapped split: two requests' prompt lengths swapped with their total kept, which no count of the link's frames
+refuses."""
 from __future__ import annotations
 
 import hashlib
@@ -111,10 +111,10 @@ def test_a_forged_advice_is_refused(link):
 
 
 def test_redteam_phase6_split_is_refused():
-    """REDTEAM phase 6, target 1, as IoTieRequest's first negative. At B = 4,096 a 400-token prompt takes 2 cells and a
+    """The swapped split, as IoTieRequest's first negative. At B = 4,096 a 400-token prompt takes 2 cells and a
     16-token one 1, released one a bucket (r = 1). The forged advice swaps the two prompt lengths, keeping the total,
-    so its ends move and the advised floor accepts an acausal release (ONE-LINE FIX: bind each request's prompt_len to
-    the ingress record's content). The tie reads 400 fields from connection 1's cells, so the swap's lanes are
+    so its ends move and a floor on the frames' counts accepts an acausal release, unless each request's prompt_len is
+    bound to the ingress record's content. The tie reads 400 fields from connection 1's cells, so the swap's lanes are
     refused by the release and, built anyway, by the unit."""
     params = W.WardenParams(cell_bytes=4096, slots=1, lanes=2, window=4, delay=1)
     shape = Q.Shape(4096, 2, 1)
@@ -295,9 +295,9 @@ def test_a_client_that_ends_after_its_last_byte_is_refused():
 
 
 def test_each_buckets_row_is_the_wardens_registered_row(link):
-    """The unit's row is the warden's registration v2 (`warden_rows`): bucket t's row is row t of the ingress record the
-    grid closed, the rows open the warden's root, the verifier's port (`bucket_port`) has unit t read row t, and the
-    host's registered read refuses rows out of place or edited."""
+    """The proof block's row is the warden's registration v2 (`warden_rows`): bucket t's row is row t of the ingress
+    record the grid closed, the rows open the warden's root, the verifier's port (`bucket_port`) has proof block t read
+    row t, and the host's registered read refuses rows out of place or edited."""
     assert len(link.records) == 2
     for w, record in enumerate(link.records):
         cells = WR.Cells.of("requests", Direction.INGRESS, record, PARAMS, hashlib.sha512(b"session").digest())
@@ -375,12 +375,12 @@ def test_the_frame_circuit_is_its_reference():
 
 @pytest.mark.slow
 def test_redteam_phase6_cells_read_their_prompt_lengths():
-    """REDTEAM phase 6's cells at B = 4,096 through `IoTieRequestFrame`: the 400-token request's first cell doesn't end
-    it and holds 338 prompt fields, its second ends it with 62 more, and the 16-token request's one cell ends it with
-    16. So the forged split's first request, 16 fields ending in one cell, is not in these cells.
+    """The swapped split's cells at B = 4,096 through `IoTieRequestFrame`: the 400-token request's first cell doesn't
+    end it and holds 338 prompt fields, its second ends it with 62 more, and the 16-token request's one cell ends it
+    with 16. So the forged split's first request, 16 fields ending in one cell, is not in these cells.
 
-    Slow (about 7 s, the served cell's ANDs traced and evaluated): the one test of the circuit on REDTEAM's own cells
-    at the served cell size, which the reference's quick test reads in the clear and the unit's test reads at
+    Slow (about 7 s, the served cell's ANDs traced and evaluated): the one test of the circuit on these cells
+    at the served cell size, which the reference's quick test reads in the clear and the proof block's test reads at
     B = 512."""
     long_, short = (W.cells(r, 4096, q) for r, q in zip(_requests((400, 16), 4096), (1, 2)))
     cases = [(long_[:4096], 0, 1), (long_[4096:], Q.carries(400, 4096)[1][0], 1), (short, 0, 2)]

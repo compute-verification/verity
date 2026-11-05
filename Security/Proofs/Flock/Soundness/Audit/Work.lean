@@ -1,11 +1,13 @@
-import Proofs.Flock.Soundness.Audit.Stratified
-import Mathlib.Analysis.MeanInequalities
-import Definitions.Flock.Guarantees.Audit
+module
+
+public import Proofs.Flock.Soundness.Audit.Stratified
+public import Mathlib.Analysis.MeanInequalities
+public import Definitions.Flock.Guarantees.Audit
 
 /-!
 # The work law
 
-The draw law's second version (Daniel, Sep 28): the stratified law's strata, with each stratum's draw sized by the PoUW
+The draw law's second version: the stratified law's strata, with each stratum's draw sized by the PoUW
 work its units do instead of by their number. Stratum `s` has `n_s` units, each doing work `w_s` (zero for units that do no
 PoUW work: dequantization, the quantizer, attention), and the population does `W = Σ_s w_s n_s`. Stratum `s` draws
 `k_s = min(n_s, max(f_s, ⌈K w_s n_s / W⌉))` (`Law.workRule`, the executable's `Flock.Draw.workK`) above its floor `f_s ≥ 1`,
@@ -44,6 +46,8 @@ For the strata that do no work:
 Closure draws (a drawn unit proved with the units it reads) are not part of this law. `Law.widen` proves more units than a
 law draws on the same coins, and `escape_widen_le` carries every escape bound to it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 
@@ -471,7 +475,7 @@ theorem sizing_iff (K : ℕ) :
     ← ENNReal.div_eq_inv_mul, ENNReal.le_div_iff_mul_le (Or.inl (by norm_num)) (Or.inl (by norm_num))]
   norm_cast
 
-/-- **The sizing of record** (Daniel, Sep 29: `δ = 2^-40`, `ε = 0.1%`): `(1 − 1/1000)^27713 ≤ 2^-40`. -/
+/-- **The sizing of record** (`δ = 2^-40`, `ε = 0.1%`): `(1 − 1/1000)^27713 ≤ 2^-40`. -/
 theorem record_sizing : ((999 : ℝ≥0∞) / 1000) ^ 27713 ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ :=
   (sizing_iff 27713).2 (by decide +kernel)
 

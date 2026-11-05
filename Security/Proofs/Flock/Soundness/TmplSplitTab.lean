@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.TmplFoldClassOk
-import Flock.TmplSplit
+module
+
+public import Proofs.Flock.Soundness.TmplFoldClassOk
+public import Flock.TmplSplit
 
 /-!
-# The split fold's tables, valued (PRF-133, part 3, stage 3)
+# The split fold's tables, valued
 
 `Tmpl.walk` keeps a class's fold in sparse tables (`Tab`, `HashMap`s keyed by chunks). A table's value under a key
 weight `f` is `hsum`: each entry's value times its key's weight.
@@ -12,6 +14,8 @@ weight `f` is `hsum`: each entry's value times its key's weight.
 - `fold_val`: a fold over a table whose every step adds a known term adds their sum.
 - `eqHalf_at`, `eqTail_split_at`: the `eq` tables `walk` reads, split at a chunk boundary.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128 Std
 

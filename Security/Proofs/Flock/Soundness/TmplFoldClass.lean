@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.TmplFoldTree
+module
+
+public import Proofs.Flock.Soundness.TmplFoldTree
 
 /-!
-# A class's fold, valued (PRF-133, part 3, stage 2)
+# A class's fold, valued
 
 `foldDef` builds a class's `Out` by `Out.ref` and `Out.add` steps. Each step adds a known term to one of two linear
 valuations of `Out`, at slot `s`:
@@ -13,6 +15,8 @@ valuations of `Out`, at slot `s`:
 
 `ref_exp`, `ref_sum`, `add_exp` and `add_sum` are those steps.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128
 

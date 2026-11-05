@@ -1,4 +1,4 @@
-description = "PPL-COMPILE's plain int8: every matmul (linears, lm_head, attention) rounded to int8, one scale per token and per output row (P per row, key 0 alone), after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too), keys centred; no PoUW"
+description = "plain int8: every matmul (linears, lm_head, attention) rounded to int8, one scale per token and per output row (P per row, key 0 alone), after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too), keys centred; no PoUW"
 
 [[linear]]
 step = "smooth"

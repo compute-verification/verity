@@ -1,11 +1,13 @@
-import Definitions.Pous.Model.StreamedWipe
+module
+
+public import Definitions.Pous.Model.StreamedWipe
 
 /-!
 # The streamed-label wipe: secure erasure from streamed PRF labels (experimental)
 
-Added on 19 Oct 2026 for Daniel's tier 3, a proof of secure erasure for memory wipes, in place of the permutation-based
+A proof of secure erasure for memory wipes, in place of the permutation-based
 retention for wipes: the ideal-permutation premise (C8) is false for the reference Feistel10-SHAKE256 `Π₂`, where
-1.53% of the fill rebuilds any label (verity#1122). The game is `Security/Definitions/Pous/Model/StreamedWipe.lean`,
+1.53% of the fill rebuilds any label. The game is `Security/Definitions/Pous/Model/StreamedWipe.lean`,
 the protocol `verity/core/protocols/pous/PROTOCOL.md` ("The streamed-label wipe"). Proofs:
 `Security/Proofs/Pous/StreamedWipe/`.
 
@@ -26,6 +28,8 @@ constraints are these premises' forms there.
 **What it covers.** The sequential reveal: round `j`'s answer reads the indices before it, not those after. A batched
 reveal, where an answer can read its whole batch, is not covered.
 -/
+
+@[expose] public section
 
 namespace Pous.Guarantees
 

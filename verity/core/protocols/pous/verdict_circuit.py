@@ -1,5 +1,5 @@
 """PoUS's session verdict as one proof block: whether a memory challenger's session passes, from its round records and the
-expected digests of the blocks they challenged.  Its one output bit is the session's public verdict.
+expected digests of the labels they challenged.  Its one output bit is the session's public verdict.
 
     PousVerdict_v1{K, M, LIMIT}
         (records: Array<K, Array<736, Value<1>>>, expected: Array<K, Array<512, Value<1>>>) -> Value<1>
@@ -7,7 +7,7 @@ expected digests of the blocks they challenged.  Its one output bit is the sessi
 Every array is of `Value<1>`, and a byte string is bits in byte order, bit t being bit t mod 8 of byte ⌊t/8⌋.
 `records[j]` is round j's record as the memory challenger writes it (`memory_challenger.Round.value`, 92 bytes):
 ``u32 j ‖ u64 index ‖ u64 send_ns ‖ u64 receipt_ns ‖ H(block)``, integers big-endian.  `expected[j]` is the
-``sha512/row/v2`` digest of block ``index`` of C, what `memory_challenger.verdict`'s ``expected(index)`` returns.
+``sha512/row/v2`` digest of label ``index`` of C, what `memory_challenger.verdict`'s ``expected(index)`` returns.
 
 **What it computes.**  Round j *hits* when its record names round j, its receipt is not before its send, ``receipt − send
 ≤ LIMIT`` (Δ + RTT in ns) and its ``H(block)`` is ``expected[j]``; every other round misses (`round_verdict`).  The output
@@ -33,7 +33,7 @@ are one batch.  ANDs: 673 per round (545 in the hit, 64 per chain), W per round 
 **Why hash-free.**  The record holds ``H(block)``, the memory challenger's own digest of the answer, so the verdict needs
 no SHA-512: it compares digests, and its gates are small enough to prove in Lean gate by gate.  What ties its inputs to
 the session is the rest of the statement: ``records`` are the rows the signed records root commits, and ``expected`` the
-digests of C's blocks at the opened coins.
+digests of C's labels at the opened coins.
 """
 from __future__ import annotations
 
@@ -44,6 +44,7 @@ from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import CompositeDefinition
 from verity.ml.circuits.refs import Coll
 from verity.ml.circuits.types import Array
+from verity.ml.commitments.scheme import DIGEST_BYTES
 
 __all__ = ["DIGEST_BITS", "RECORD_BITS", "PousVerdict", "chain", "counter_width", "gates", "round_hit", "round_verdict",
            "verdict_value"]
@@ -53,7 +54,7 @@ BIT = BL.BIT
 RECORD_BITS = 8 * 92
 """A round record's bits: ``u32 j ‖ u64 index ‖ u64 send_ns ‖ u64 receipt_ns ‖ H(block)``."""
 
-DIGEST_BITS = 512
+DIGEST_BITS = 8 * DIGEST_BYTES["sha512"]
 
 J_AT, INDEX_AT, SEND_AT, RECEIPT_AT, DIGEST_AT = 0, 4, 12, 20, 28
 """The record's fields, by byte."""
@@ -109,7 +110,7 @@ def _sums(gs: list[Gate], ps: Sequence[int], cs: Sequence[int]) -> list[int]:
 
 
 def gates(K: int, M: int, LIMIT: int) -> tuple[list[Gate], list[int]]:
-    """The unit's gates in layout order and its output wire: ``("input",)``, ``("const", b)``, ``("not", (i,))``,
+    """The proof block's gates in layout order and its output wire: ``("input",)``, ``("const", b)``, ``("not", (i,))``,
     ``("and", wires)``, ``("xor", wires)``, wire i being gate i.  `PousVerdict.verdictProg` restates it builder for
     builder."""
     _statics(K, M, LIMIT)

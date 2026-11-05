@@ -1,4 +1,4 @@
-"""Counterexamples for the query track (the 2026-09-17 query-interface freeze): families with an overlap,
+"""Counterexamples for the query track: families with an overlap,
 with a gap (a forgotten Input gate, a forgotten constant gate), a set whose interface bound exceeds 32 while the exact
 w_out is 32 (dead return), sets whose exact w_out exceeds 32 (AttnBlock calls: 640 / 672 bits), scan-carry boundaries,
 fan-out counted once, dead parameters, 64-bit gates -- and the RA rule that `Unsupported` is never a pass.

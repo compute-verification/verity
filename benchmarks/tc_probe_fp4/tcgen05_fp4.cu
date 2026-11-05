@@ -1,7 +1,7 @@
 // Blackwell datacenter (sm_100a / sm_103a) FP4 tensor-core probe: ONE `tcgen05.mma` per tile, raw bits in and out.
 //
-// Lane tcgen05.  The question is whether `tcgen05.mma.kind::mxf4nvf4` (tensor-memory accumulators, 5th-generation tensor
-// cores) computes the same words as the consumer sm_120 `mma.sync.kind::mxf4nvf4` that lane fp4-re pinned with
+// The question is whether `tcgen05.mma.kind::mxf4nvf4` (tensor-memory accumulators, 5th-generation tensor
+// cores) computes the same words as the consumer sm_120 `mma.sync.kind::mxf4nvf4` that is pinned with
 // BlockScaledAlignAdd.  The harness (probe.py) keeps its 16x8xK=64 tiles: this kernel runs each tile as a 128x8x64
 // `tcgen05.mma` (the smallest M the instruction supports for this kind) with the 16 tile rows REPLICATED into all eight
 // 16-row blocks of A and of the TMEM accumulator, so the same 128 words come out of every replica -- rows 0..15 are the
@@ -189,7 +189,7 @@ __device__ __forceinline__ void tcgen05_tile_body(const uint8_t* __restrict__ A,
     asm volatile("tcgen05.fence::after_thread_sync;" ::: "memory");
 
     // 4. The MMA(s), issued by one thread, one commit.  `#pragma unroll 1` keeps exactly ONE tcgen05.mma instruction in the
-    //    SASS of each kernel (stage 0 counts it), whichever `steps` is at runtime.
+    //    SASS of each kernel, whichever `steps` is at runtime.
     if (tid == 0) {
 #pragma unroll 1
         for (int s = 0; s < steps; s++) {

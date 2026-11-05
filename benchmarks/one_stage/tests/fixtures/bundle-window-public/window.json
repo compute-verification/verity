@@ -1,0 +1,7 @@
+{
+ "partition_digest": "a5b9f7eac113d0433e157ebe6f6de646643757c4765b9409e5f74f74c9b71ab9d922c6fdc9233a72d24a8cc0a581e3b77358625b0d5889ecc2b0e9a9c0107f09",
+ "registration_digest": "d9caf961bbef84e34a18e8e6c4f3d7bc613f5f4192f063fc7c2cdaacde9e8bfe1c597489478a57d56949051cb72925e21a0e43fb7807cc278fada49624d92c52",
+ "run": "9e9fe41a46c0840cdae9f5f6d3fdf26f4c452b6753b3bfe49b1bb1ed3525223f632d0d76aab07a2d03c5f3ed2eab054426267cc63e836f4869b2509e33ea2eaf",
+ "schema": "verity-vllm/serving-rows/v2",
+ "scheme": "frame-v3-sha512/hm96-sha512"
+}

@@ -1,6 +1,5 @@
-"""`check.py --record --on`: every run of a commit on a machine shared the shipped tree <root>/src/<sha>, so sibling checks of one
-commit raced in one .lake (CI-170, 25 Oct 05:09Z, r20261025-050553-4d0a: Flock/RecSparse.olean missing; infra's rerun with
-`--cwd clone` passed). Each launch now asks `research run` for its own clone of that tree, and placement still knows the commit a
+"""`check.py --record --on`: every run of a commit on a machine shares the shipped tree <root>/src/<sha>, so sibling checks of one
+commit would race in one .lake. Each launch asks `research run` for its own clone of that tree, and placement still knows the commit a
 cloned check's slot holds, though the clone's path (<root>/scratch/<run id>/tree) names none."""
 from __future__ import annotations
 

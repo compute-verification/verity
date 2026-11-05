@@ -1369,6 +1369,32 @@ def test_every_nebius_machine_runs_the_watchdog_from_the_monitoring_lib_with_its
                                                                     "units-expected", "lost-checks"}
 
 
+@pytest.mark.parametrize("status,cancelled", [("ahead", False), ("identical", False), ("diverged", True)])
+def test_an_after_landing_run_of_main_runs_on_though_a_ticket_waits_for_its_slot(monkeypatch, status, cancelled):
+    """27 Oct: main's after-landing runs (54713f81's, 0600bab8's) were cancelled for a Lean check's slot before their pytest step
+    reported, so main stayed unverified.  A run whose tip is on `main` runs to its end; one of `next`'s commits is still
+    cancelled."""
+    monkeypatch.setattr(M, "_registry", lambda: REG)
+    monkeypatch.setattr(M, "CHECK_MACHINES", (("vy-nebius-cpu-1", "vy-nebius-cpu-1"),))
+    row = {"run": "r1", "state": "running", "step": "lean-suites", "step_ended": "2026-10-03T20:20:00Z", "line": "FAILED x",
+           "subjects": ["Merge #1466 (ea2f79691)"], "sha": "705ca7269313", "by": LANDER_ID}
+    calls = []
+
+    def answer(argv, input=None, **kw):
+        calls.append(argv)
+        if argv[0] == "ssh":
+            return subprocess.CompletedProcess(argv, 0, json.dumps({"rows": [row], "waiting": [{"run": "r2", "by": "lander"}]}), "")
+        if argv[:2] == ["gh", "-R"]:
+            return subprocess.CompletedProcess(argv, 0, json.dumps({"state": "OPEN", "headRefName": "cursor/x-558b"}), "")
+        if argv[:2] == ["gh", "api"]:
+            assert argv[2] == f"repos/{M.REPO_SLUG}/compare/705ca7269313...main"
+            return subprocess.CompletedProcess(argv, 0, status + "\n", "")
+        return subprocess.CompletedProcess(argv, 0, "research cancel: r1: SIGTERM", "")
+
+    (f,) = M.failed_checks(M.Ctx(now=T0, memo={}, run=answer, act=True))
+    assert any("cancel" in c for c in calls) == cancelled and ("Cancelled" in f.text) == cancelled
+
+
 def test_a_check_whose_step_failed_is_cancelled_once_a_ticket_waits_for_a_slot_on_its_machine_and_the_post_says_so(monkeypatch):
     monkeypatch.setattr(M, "_registry", lambda: REG)
     monkeypatch.setattr(M, "CHECK_MACHINES", (("vy-nebius-1", "n1"), ("vy-nebius-2", "vy-n2"), ("vy-nebius-cpu-1", "vy-nebius-cpu-1")))

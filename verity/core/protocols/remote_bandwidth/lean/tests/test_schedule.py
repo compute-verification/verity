@@ -1,10 +1,10 @@
 """`schedule.py`'s schedule check held to its Lean (`RemoteAudit.Schedule`, served by `remote-audit-difftest`'s
 `schedule`), refusals as outputs so that both sides' reasons are compared word for word: drawn schedules (registered
-frees, appended blocks never resident, never freed and freed, passes at increasing steps), each session's passes and
+frees, appended chunks never resident, never freed and freed, passes at increasing steps), each session's passes and
 appends the schedule's or with one fault (a plan steered off the schedule's, a step, a pass or an append missing or
 moved, a schedule that is not one, a schedule over the cap committed before the coins), with malformed inputs
 rejected by both.  The Lean is of record: `audit.ledger`
-reads the Python's verdict (`Session.scheduled`) and this holds it to the Lean, on which
+reads the Python's verdict (`AuditRun.scheduled`) and this holds it to the Lean, on which
 `Properties.RemoteAudit.ScheduleChecked` is proved."""
 
 from __future__ import annotations
@@ -94,7 +94,7 @@ def inputs(draw) -> dict:
                                sc.appends, sc.steps)
     try:
         bits = sc.bits
-    except ValueError:  # a block freed before its write has no encoding; the check refuses it before reading the cap
+    except ValueError:  # a chunk freed before its write has no encoding; the check refuses it before reading the cap
         bits = 0
     cap = bits
     if fault is None and draw(st.sampled_from([False] * 5 + [True])):

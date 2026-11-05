@@ -11,12 +11,12 @@ class Ops:
     `global_match_fast.ops()` = compute-once equals of them (MATCH_IMPL=fast): each returns what the record's function returns for the
     same arguments."""
     name: str
-    load_oracle: Callable        # (fold dir, label) -> Prog
-    load_derived: Callable       # (derived request-wrapper dir, label) -> Prog
+    load_oracle: Callable        # (fold dir, label) -> RootView
+    load_derived: Callable       # (derived request-wrapper dir, label) -> RootView
     projection: Callable         # Projection's constructor signature -> Projection
     compare_steps: Callable      # compare.compare_steps(A, B, unfold_a)
     dag_hashes: Callable         # dag_hashes(P, only): instance -> equality key of its Merkle class
     live_cone: Callable          # live_cone(P)
-    # [R17 mfast] decompose's per-request legs: None = in this process, in order (the record); else fn(items, leg, weight) ->
+    # decompose's per-request legs: None = in this process, in order (the record); else fn(items, leg, weight) ->
     # [leg(item) ...] in item order (the fast path: global_match_fast._x09_legs, forked workers)
     legs: Callable | None = None

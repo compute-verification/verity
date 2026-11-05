@@ -12,16 +12,16 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import add as AD  # noqa: E402
-import argmax as AM  # noqa: E402
-import build_check  # noqa: E402
-import fixture as F  # noqa: E402
-import quant as Q  # noqa: E402
-import rmsnorm as RN  # noqa: E402
-import softmax as SM  # noqa: E402
-import sweep as SW  # noqa: E402
-import words as W  # noqa: E402
-from verity.ml.circuits.ops import fp32, mufu, prims  # noqa: E402
+import add as AD
+import argmax as AM
+import build_check
+import fixture as F
+import quant as Q
+import rmsnorm as RN
+import softmax as SM
+import sweep as SW
+import words as W
+from verity.ml.circuits.ops import fp32, mufu, prims
 
 F32_SPECIALS = [0x00000000, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 0xFFC00001, 0x7F800001, 0x00000001, 0x80000001,
                 0x007FFFFF, 0x00800000, 0x7F7FFFFF, 0xFF7FFFFF, 0x3F800000, 0xBF800000, 0x3F800001, 0x4B000000, 0x42FE0000]
@@ -247,7 +247,7 @@ def test_add_twin_is_Bf16AddF2fp():
 
 
 class Rows:
-    """CIR-104's references as `ops.rows` states them: Argmax_v1's scan and Bf16AddRow_v1's Bf16AddF2fp per element."""
+    """The references as `ops.rows` states them: Argmax_v1's scan and Bf16AddRow_v1's Bf16AddF2fp per element."""
     argmax = staticmethod(lambda x: scan(x))
     add_row = staticmethod(lambda a, b: [fp32.Bf16AddF2fp.evaluate(p, q) for p, q in zip(a, b)])
 
@@ -280,8 +280,37 @@ def splitmix64(z: int) -> int:
 def test_sweep_digest_is_its_formula():
     assert splitmix64(0) == 0xE220A8397B1DCDAF == int(SW.splitmix64(np.array([0], np.uint64))[0])
     want = sum(splitmix64((i << 32) | int(Q.scale(np.array([i], np.uint16))[0])) for i in range(1 << 16)) % 2 ** 64
-    assert SW.digest(7, 0) == want and SW.blocks(7) == 1 and SW.blocks(0) == 256 and SW.blocks(5) == 128
-    assert SW.blocks(8) == 256
+    assert SW.digest(7, 0) == want and SW.chunks(7) == 1 and SW.chunks(0) == 256 and SW.chunks(5) == 128
+    assert SW.chunks(8) == SW.chunks(9) == SW.chunks(10) == 256
+
+
+def test_each_cubin_sweeps_its_ops():
+    """sm_90a's units_sweep runs ops 0 to 8, the ones the H200's check ran; sm_120a's adds MUFU.RSQ's two forms."""
+    assert SW.ARCH_OPS["sm_90a"] == tuple(range(9)) and SW.ARCH_OPS["sm_120a"] == tuple(range(11)) == tuple(SW.OPS)
+    assert {SW.OPS[op][0] for op in (9, 10)} == {"rsq", "rsqrt"}
+
+
+def test_sweep_rsq_models_are_circuits():
+    """Op 9 is the bare MUFU.RSQ, `mufu_rsq_bits` over the rsq table, and op 10 `RsqrtApprox` (rsqrtf, which scales a
+    subnormal operand by 2^24 and its result by 2^12), word for word with their scalar forms, the specials included."""
+    sub = np.array([0x00000001, 0x00000002, 0x00400000, 0x007FFFFF, 0x80000001, 0x807FFFFF], np.uint32)
+    i = np.concatenate([f32_words(2000, 8), sub, sub | np.uint32(0x00800000)])
+    t = mufu.table("rsq")
+    rsq, rsqrt = SW.model(9, i), SW.model(10, i)
+    assert rsq.tolist() == [mufu.mufu_rsq_bits(int(v), t) for v in i]
+    assert rsqrt.tolist() == [mufu.RsqrtApprox.evaluate(int(v)) for v in i]
+    small = (i & np.uint32(0x7FFFFFFF)) < np.uint32(0x00800000)
+    assert (rsq[small] | np.uint32(0x80000000) == np.uint32(0xFF800000)).all()
+    assert (rsq[~small] == rsqrt[~small]).all() and (rsq[small] != rsqrt[small]).any()
+
+
+def test_first_difference_names_the_first_differing_word():
+    got = SW.model(9, np.arange(5 * SW.CHUNK, 5 * SW.CHUNK + 4096, dtype=np.uint64).astype(np.uint32))
+    assert SW.first_difference(9, 5, got) == {"chunk": 5, "words": 4096, "differing": 0, "first": None}
+    got[[17, 300]] ^= np.uint32(1)
+    d = SW.first_difference(9, 5, got)
+    assert d["differing"] == 2 and d["first"]["i"] == f"{5 * SW.CHUNK + 17:08x}"
+    assert int(d["first"]["gpu"], 16) ^ int(d["first"]["model"], 16) == 1
 
 
 def test_sweep_models_are_the_units_ops():
@@ -300,7 +329,7 @@ def test_sweep_models_are_the_units_ops():
 
 # ---- the build check ------------------------------------------------------------------------------------------------------
 
-def ptxas(names=build_check.KERNELS, arch="sm_90a", spill=0) -> str:
+def ptxas(names=build_check.KERNELS["sm_90a"], arch="sm_90a", spill=0) -> str:
     return "".join(f"ptxas info    : Compiling entry function '{n}' for '{arch}'\nptxas info    : Function properties for {n}\n"
                    f"    0 bytes stack frame, {spill} bytes spill stores, 0 bytes spill loads\nptxas info    : Used 32 registers\n"
                    for n in names)
@@ -331,11 +360,38 @@ def test_build_check_passes_a_clean_listing():
     assert funcs["units_softmax"]["float"]["MUFU.EX2"] == 1 and funcs["units_argmax"]["float"] == {}
 
 
+def test_build_check_holds_each_arch_to_its_kernels():
+    """The sm_120a cubin passes with units_sweep_words (EX2 and RSQ, as units_sweep) and is refused without it; sm_90a's
+    is refused with it."""
+    k120 = build_check.KERNELS["sm_120a"]
+    with120 = dict(BODIES, units_sweep_words=list(BODIES["units_sweep"]))
+    assert build_check.check(ptxas(k120, "sm_120a"), sass(with120), "sm_120a")[1] == []
+    _, problems = build_check.check(ptxas(arch="sm_120a"), sass(), "sm_120a")
+    assert problems == ["units_sweep_words: missing from the ptxas report or the SASS"]
+    _, problems = build_check.check(ptxas(k120), sass(with120))
+    assert problems == ["kernels the check doesn't know: ['units_sweep_words']"]
+
+
+def test_build_check_takes_sm_120a_constants_and_integer_division():
+    """sm_120a's ptxas loads constants with HFMA2 (no .MMA) and computes units_relu's unrolled trip count by the
+    compiler's integer division; neither touches an integer kernel's values."""
+    bodies = dict(BODIES, units_argmax=["HFMA2 R16, -RZ, RZ, 0, 0", "HFMA2 R5, -RZ, RZ, 1.875, 1.1920928955078125e-07",
+                                        "SEL R3, R1, R2, P0"],
+                  units_relu=["I2F.U32.RP R0, R2", "MUFU.RCP R0, R0", "F2I.FTZ.U32.TRUNC.NTZ R9, R8", "I2F.U64.RP R4, R2",
+                              "MUFU.RCP R4, R4", "F2I.U64.TRUNC R6, R4", "HFMA2 R8, -RZ, RZ, 0, 0", *BODIES["units_relu"]])
+    funcs, problems = build_check.check(ptxas(), sass(bodies))
+    assert problems == []
+    assert funcs["units_argmax"]["float"] == {} and funcs["units_relu"]["float"]["MUFU.RCP"] == 2
+
+
 @pytest.mark.parametrize("edit, why", [
     (lambda b: b["units_rmsnorm"].append("MUFU.EX2 R9, R8"), "MUFU.EX2 outside"),
     (lambda b: b["units_quant"].append("MUFU.SQRT R9, R8"), "MUFU forms other than"),
     (lambda b: b["units_argmax"].append("FADD R9, R8, R7"), "integer kernel"),
     (lambda b: b["units_relu"].append("I2F.RP R9, R8"), "integer kernel"),
+    (lambda b: b["units_relu"].append("MUFU.RSQ R9, R8"), "integer kernel"),
+    (lambda b: b["units_argmax"].append("HFMA2 R9, -RZ, RZ, R8"), "integer kernel"),
+    (lambda b: b["units_argmax"].append("HFMA2.MMA R9, -RZ, RZ, R8.H0_H0, 0"), "integer kernel"),
     (lambda b: b["units_softmax"].remove("MUFU.EX2 R2, R1"), "no MUFU.EX2"),
     (lambda b: b["units_quant"].append("STL [R1], R2"), "local memory"),
     (lambda b: b["units_rmsnorm"].append("HMMA.16816.F32.BF16 R4, R8, R12, R4"), "tensor-core"),
@@ -350,7 +406,7 @@ def test_build_check_refuses(edit, why):
 
 @pytest.mark.parametrize("text, why", [(ptxas(spill=8), "local memory"), (ptxas(arch="sm_120a"), "compiled for sm_120a"),
                                        (ptxas() + "ptxas warning : Registers are spilled\n", "Registers are spilled"),
-                                       (ptxas(build_check.KERNELS + ("units_extra",)), "doesn't know")])
+                                       (ptxas(build_check.KERNELS["sm_90a"] + ("units_extra",)), "doesn't know")])
 def test_build_check_refuses_the_report(text, why):
     bodies = dict(BODIES, units_extra=["NOP"]) if "units_extra" in text else BODIES
     _, problems = build_check.check(text, sass(bodies))

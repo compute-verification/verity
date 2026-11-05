@@ -1,7 +1,7 @@
 """`global_match_checks.lift` pins the fold record GM-01 read (laptop-safe, synthetic documents).
 
-`global_match.json.impl.fold_load` is keyed by fold DIRECTORY; the pins sit one level down.  The lift used to filter the top level for
-`*sha256` keys, got {} -> None on every row, and so a candidate that read a different fold record compared equal."""
+`global_match.json.impl.fold_load` is keyed by fold DIRECTORY; the pins sit one level down.  A lift that filters the top level for
+`*sha256` keys gets {} -> None on every row, so a candidate that read a different fold record compares equal."""
 from __future__ import annotations
 
 import json

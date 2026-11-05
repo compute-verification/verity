@@ -1,6 +1,6 @@
-"""CacheStep_v1's specification (`verity.core.protocols.certifier.cache_step.reference`) against ENC-DERIVED's prefix rules
-(`derived.Prefixes`) over whole traces, through `cache_vectors.drive`, and the certifier's difftest vectors as
-`cache_vectors` makes them now."""
+"""CacheStep_v1's specification (`verity.core.protocols.certifier.cache_step.reference`) against the derived rules'
+prefix rules (`derived.Prefixes`) over whole traces, through `cache_vectors.drive`, and the certifier's difftest vectors
+as `cache_vectors` makes them now."""
 from __future__ import annotations
 
 import importlib.util

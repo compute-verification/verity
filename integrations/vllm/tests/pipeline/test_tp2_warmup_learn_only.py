@@ -1,7 +1,7 @@
 """A TP Commit's warm-up instrumented run is bounded staging's learn-only pass on every rank, as the single-rank Commit's
 (`pipeline.tp.warmup`, `acquire.sources.taps.warmup`): learn-only goes on for that run alone, the ranks' finalize binds, attributes,
-compares and replays nothing of it, and `bounded_warmup_<kind>.json` records each rank's pass.  Without it the warm-up was a record run:
-a learning step over the transient budget raised on every rank ('its plan was not pre-learned', cov-gm352 TP2 B8, r20261002-185311-7fa2).
+compares and replays nothing of it, and `bounded_warmup_<kind>.json` records each rank's pass.  Without it the warm-up is a record run:
+a learning step over the transient budget raises on every rank ('its plan was not pre-learned').
 The record runs that follow finalize with learn-only off and carry their bounded-staging record for the verdict.  CPU-only: the ranks
 are `TP2CaptureWorkerExtension`'s commit methods over a stand-in committer, and the LLM dispatches `collective_rpc` to them."""
 from __future__ import annotations

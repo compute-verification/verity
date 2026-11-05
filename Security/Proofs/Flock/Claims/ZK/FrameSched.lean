@@ -1,13 +1,17 @@
-import Proofs.Flock.Claims.ZK.FrameLoop
-import Proofs.Flock.Claims.ZK.FramePass
-import Proofs.Flock.Claims.ZK.FinishLevel0
+module
+
+public import Proofs.Flock.Claims.ZK.FrameLoop
+public import Proofs.Flock.Claims.ZK.FramePass
+public import Proofs.Flock.Claims.ZK.FinishLevel0
+import all Init.Data.String.Defs
+import all Init.Data.Array.DecidableEq
 
 /-!
-# Two runs of the firewall's prover alike in shape (Stage B, R2)
+# Two runs of the firewall's prover alike in shape
 
 The loop's release runs each rep's frame on the rep's scheduled rounds at placeholder inputs (a zero level 0 of the
 statement's shape, zero salts for levels ≥ 1), and the deployed frame checks the device against the scheduled rounds at
-the tape's (`note:20261022T0001Z-report-zkfin-stageb`). Both are the firewall's own prover (`Finish.repPiop`,
+the tape's. Both are the firewall's own prover (`Finish.repPiop`,
 `Finish.repOpening`) run at two inputs of one shape, and the frame's state reads a round's shape alone (`FrameShape`), so
 what is left is that the two runs send rounds of one shape. The prover is generic in its monad, so the comparison is
 too:
@@ -26,6 +30,8 @@ too:
   PIOP returns the same proof and claims and leaves alike transcripts.
 * **The ring switch** (`ringSwitchP_sim`): at switched vectors of the same sizes, it returns the same switched claims.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

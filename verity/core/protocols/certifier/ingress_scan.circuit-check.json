@@ -1,10 +1,16 @@
 {
  "digests": {
-  "IngressScanBucket_v2{B=512,r=2,lanes=2,C=4,IDB=17,EVERY=2,WITHIN=3,D=5,KO=8}": {
-   "sha512": "1cf8ffc5c1f17f66ec0fb3dce011053d15d3ac7be01b4c126c5b3c32b362c2713284bf9ec447504e0dd88bb1723c6f8844f39155feac5eaa05622c82bd8a5ed4"
+  "IngressScanBucket_v3{B=512,r=2,lanes=2,C=4,IDB=17,EVERY=2,WITHIN=3,D=5,KO=8,KI=100}": {
+   "sha512": "8a674fa2e9e7634420d8bffb5087afa658d32b9c04804ee7327e85bf26afa15959aacc5fde4eff6fd215eba3474c3ebbc73347050b0a33140ecdffd6c5c045f1"
   },
-  "IngressScanFirst_v2{B=512,r=2,lanes=2,C=4,IDB=17,EVERY=2,WITHIN=3,D=5,KO=8}": {
-   "sha512": "cbec18653d475facaac2b29d57cef211c4a3525e78d510c0428a442d4b936b81e196a0afc2e8577aad894420a202e49ac8d73f114d71f1c6a6d8b26ab27f8d4e"
+  "IngressScanBucket_v3{B=512,r=4,lanes=4,C=47,IDB=17,EVERY=16,WITHIN=12,D=27,KO=4,KI=32}": {
+   "sha512": "a09bda0993f5a53a6faa9e5f3ff86b2a1d8e6e6cb0bbeca8b5e463166ae14dacee399bdbdc0be09aec4483af800936205f59f968d63603413729973ef89f6264"
+  },
+  "IngressScanFirst_v3{B=512,r=2,lanes=2,C=4,IDB=17,EVERY=2,WITHIN=3,D=5,KO=8,KI=100}": {
+   "sha512": "c0526f0ab7831b75df0ea46ff830af32caa134cb88330f3cb7cc179d4cfbe02f79354c883d1a0f5d0f9c59ab449f45f366bca63f82261e76ab0e936ebf85bf4f"
+  },
+  "IngressScanFirst_v3{B=512,r=4,lanes=4,C=47,IDB=17,EVERY=16,WITHIN=12,D=27,KO=4,KI=32}": {
+   "sha512": "14ed27b3d97a21875dc0ccfd2af9b01ba2f5e640046a76fb7ca48de458b79966fc6c1447c665d400d2cc898597b579ac02f82fddffc3934dcf2368789d3ece2d"
   }
  }
 }

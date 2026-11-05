@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import http.server
+import io
 import subprocess
 import threading
+import urllib.error
 from functools import partial
 from pathlib import Path
 
 import pytest
 
-from research.store import fetchset, fixtures as F
+from research.store import fetchset, fixtures as F, remote as RM
 from research.store.cli import main as data_main
 from research.store.local import LocalStore, manifest_key, object_key, sha256_file
 from research.store.remote import ConfigError, FsRemote, HttpRemote, load_export
@@ -116,6 +118,25 @@ def test_the_http_source_reads_absent_as_absent(served):
     with pytest.raises(NotImplementedError):
         r.put("k", root / "out")
 
+
+
+def test_the_http_source_waits_out_a_429_and_gets_the_bytes(tmp_path, monkeypatch):
+    """The public store answered a check's parallel fixture fetch with 429s, each read as the source failing, so every suite
+    that needed a fixture failed with no error line of its own. A 429 waits its Retry-After, else the backoff, and is retried."""
+    calls, slept = [], []
+
+    def urlopen(req, timeout):
+        calls.append(req.full_url)
+        if len(calls) < 3:
+            raise urllib.error.HTTPError(req.full_url, 429, "Too Many Requests", {"Retry-After": "7"} if len(calls) == 2 else {},
+                                         None)
+        return io.BytesIO(b"ok")
+
+    monkeypatch.setattr(RM.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(RM.time, "sleep", slept.append)
+    monkeypatch.setattr(RM.random, "uniform", lambda a, b: a)
+    HttpRemote("https://store.example").get("objects/sha256/" + "a" * 64, tmp_path / "out")
+    assert (tmp_path / "out").read_bytes() == b"ok" and slept == [0.5, 7.0] and len(calls) == 3
 
 # ---- the registry ---------------------------------------------------------------------------------------------------------------
 
@@ -298,6 +319,22 @@ def test_export_copies_every_entry_and_verify_url_reads_it_all_back(tmp_path, se
     obj.chmod(0o644)
     obj.write_bytes(b"tampered")
     assert not F.verify_url(repo, url)["ok"]
+
+
+def test_export_also_copies_an_artifact_it_is_named_and_reports_one_nobody_holds(tmp_path):
+    origin, private = _store(tmp_path, "origin"), FsRemote(tmp_path / "private")
+    repo, _ = _repo(tmp_path, origin, private)
+    doc = tmp_path / "status" / "status.json"
+    doc.parent.mkdir()
+    doc.write_text('{"schema": "verity/status/v0"}')
+    extra = origin.put_artifact("verity/status/v0", {"commit": "ab" * 20}, None, file=doc)
+    _publish(origin, extra, private)
+    rep = F.export(_store(tmp_path, "exporter"), repo, FsRemote(tmp_path / "public"), srcs=[private], arts=[extra])
+    assert rep["ok"] and rep["ids"] == 4
+    assert (tmp_path / "public" / manifest_key(extra.split(":")[1])).is_file()
+    nobody = "art:" + "2" * 64
+    rep = F.export(_store(tmp_path, "again"), repo, FsRemote(tmp_path / "public"), srcs=[private], arts=[nobody])
+    assert not rep["ok"] and any(nobody in e for e in rep["errors"])
 
 
 def test_export_recovers_superseded_ids_from_history_and_warns_on_lost_ones(tmp_path):

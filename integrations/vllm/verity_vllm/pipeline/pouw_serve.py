@@ -6,7 +6,7 @@ first call's tiles tampered.
 
 The engine is `verity_vllm.LLM` on the workload's pinned model, with ``pouw:ncp-v2`` installed. Every linear call is
 committed natively as it is served (`protocol_options.pouw_native`), under an epoch whose salt is the salt coin of the
-auditor host's challenger at ``--challenger``, in the session infra's gate opened for the window (``--session``, the
+auditor host's challenger at ``--challenger``, in the session the gate opened for the window (``--session``, the
 gate's answer, `protocol_options.pouw_h1_challenger`), opened after the weights' root. Without ``--challenger`` the salt
 is the command's own challenger's (`verity.core.protocols.pouw.coins.Challenger`, epoch 0, its coins the Lean verifier of
 record's, `pouw.verifier.coins`): the command is then its run's auditor, and the run is a measurement, not a window any
@@ -17,7 +17,7 @@ calls as one window under the work law at a budget of K = ``--draws``:
 - **tampered**: the same calls, except that credited word 7 of every tile of the first call is flipped by its prover,
   committed and opened that way (`check.replay.pouw_circuit.tamper_tiles`), with the calls root recomputed over it.
 
-Each replay's window draws under a fresh source (`verity.core.protocols.pouw.circuit.anchors.Ledger.open`), which its report records.
+Each replay's window samples under a fresh source (`verity.core.protocols.pouw.circuit.anchors.Ledger.open`), which its report records.
 
 The command writes ``pouw_serve.json`` under ``--out`` (default ``$RESEARCH_RUN_DIR``), and ``result.json`` beside it
 under a research run (``$RESEARCH_RUN_ID``). They hold
@@ -39,23 +39,23 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
-from verity_vllm.config import RowEngine, option
+from verity_vllm.config import RowEngine, option, workload_arg
 
 ENTRY = "pouw:ncp-v2"
 
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    workload: str = option("--workload", help="a row file (config.RowConfig): the pinned model, its engine.revision and the requests")
+    workload: str = option("--workload", type=workload_arg, help="a row file (config.RowConfig): the pinned model, its engine.revision and the requests")
     draws: int = option("--draws", type=int, default=16, help="the window's work-law budget K (default 16)")
     out: str = option("--out", env="RESEARCH_RUN_DIR", default=".", help="the output directory (default $RESEARCH_RUN_DIR, else .)")
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="", help="the research run's id: result.json is written when set")
-    challenger: str | None = option("--challenger", default=None, metavar="HOST:PORT", help="the auditor host's challenger the epoch's salt coin comes from (the pouw setting 'challenger'); without it the command's own in-process challenger draws it, and the run is a measurement only")
+    challenger: str | None = option("--challenger", default=None, metavar="HOST:PORT", help="the auditor host's challenger the epoch's salt coin comes from (the pouw setting 'challenger'); without it the command's own in-process challenger samples it, and the run is a measurement only")
     session: str | None = option("--session", default=None, metavar="JSON", help="with --challenger: the challenger gate's open answer for the window, {\"session\", \"seq\", \"root\", \"commitment\"} and its \"secret\" (the pouw setting 'session')")
 
 
 def protocols_config(a: Options) -> dict[str, Any]:
-    """PoUW's settings: the salt from the auditor host's challenger in the session infra's gate opened (``--challenger``,
+    """PoUW's settings: the salt from the auditor host's challenger in the session the gate opened (``--challenger``,
     ``--session``), else from the command's own in-process challenger."""
     if a.challenger is None:
         if a.session is not None:

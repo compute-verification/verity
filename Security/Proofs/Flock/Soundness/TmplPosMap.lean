@@ -1,7 +1,9 @@
-import Flock.TmplLayout
+module
+
+public import Flock.TmplLayout
 
 /-!
-# `posMap` puts every copy at its place (PRF-133, part 3, stage 2)
+# `posMap` puts every copy at its place
 
 `posMap` is `fillMap`'s writes over the call tree (`fillMap_writes`). When every Definition's layout is in order
 (`DefPos`: runs and calls ascending and apart, each column in one, copies side by side, callees earlier), every column
@@ -11,6 +13,8 @@ at its place (`posMap_tree`, `TreeAt`), which is what `fold_eq_foldRef` reads.
 - `firstGt_spec`, `locate_call`, `locate_own`: `locate`'s halving lands on the call or run holding the column.
 - `posIn_call`, `posIn_own`, `posIn_stable`: what `posIn` is in each, at any fuel past the depth.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl
 

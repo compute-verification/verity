@@ -1,6 +1,6 @@
 """The operations: the composite Definitions whose own definition is gates, and the guard that a Program holds no data.
 
-Daniel's rulings (1 Oct 2026, PDT): an operation's own definition is gates (the floating-point formats' constants, the round
+An operation's own definition is gates (the floating-point formats' constants, the round
 constants of SHA-512 and Keccak-f, and every measured MUFU table in `verity.ml.circuits.library`: exp2, rcp, sqrt, rsq, tanh and lg2), and
 everything a program or a request brings is a value, committed under a hiding leaf and always hidden (`verity.ml.circuits.constants`).
 `verity.ml.circuits` names no operations, so the list is here and the guard passes it in:
@@ -18,7 +18,7 @@ list: it has no body, and the tables it reads are its own declaration (`Primitiv
 
 A statement may make a Program's input public (a public input port, `verity_flock.circuit.compose`'s ``public_inputs``) only
 when its value is the verifier's own recomputation from public data: the port names its seed and derivation, the verifier
-derives the words itself and refuses any other (the design owner's condition, 2 Oct 2026). The Program declares nothing new:
+derives the words itself and refuses any other. The Program declares nothing new:
 the port is one of its run inputs. `public_data` is the guard's rule for such ports: a port whose derivation is not on
 `DERIVATIONS` is data, so a statement with public ports claims its values hidden only when `program_data(root)` and
 `public_data(public_inputs)` both return {}.

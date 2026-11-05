@@ -41,6 +41,7 @@ def assert_public_only(text: str, prover: bytes, verifier: bytes) -> None:
     (hp, bp), (hv, bv) = (b.split(b"\n", 1) for b in (prover, verifier))
     hp, hv = json.loads(hp), json.loads(hv)
     assert set(hv) <= PUBLIC_HEADER and set(hv["frame_v3"]) == PUBLIC_FRAME and hv == dict(hp, rows=False)
+    assert verifier == FC.public_file(hv, bv), "the header line is Flock's, so the file's SHA-512 is public_file_sha512"
     ports = [(nm, w) for nm, w, _ in meta["ports"]]
     names = [nm for nm, _ in ports]
     assert names[meta["input_ports"]:] == [nm for nm, _ in meta["out_ports"]], "one output row per output port"
@@ -66,6 +67,13 @@ def assert_public_only(text: str, prover: bytes, verifier: bytes) -> None:
         words = np.frombuffer(bp[at:at + 2 * w], dtype="<u2").tolist()
         assert any(salt), "a hiding leaf: the salt is not zero"
         assert bv[k * FC.BC_BYTES:][:FC.BC_BYTES] == hm96.SHA512.commit_string(hm96.SHA512.default_key, sha512_row_digest(words, 16, ROLE_X), salt)
+
+
+def test_the_verifiers_file_header_is_the_line_c_flock_writes():
+    """`public_file`'s header line is serde_json's of the header (`Instances::public_file`): compact, keys sorted, UTF-8
+    unescaped, ``rows`` false, so the prover's record's ``public_file_sha512`` is the staged file's SHA-512."""
+    got = FC.public_file({"z": [1, {"b": None, "a": "é"}], "rows": True, "m": "s"}, b"\x00\xff")
+    assert got == '{"m":"s","rows":false,"z":[1,{"a":"é","b":null}]}'.encode() + b"\n\x00\xff"
 
 
 @pytest.mark.slow
@@ -291,11 +299,11 @@ def test_public_input_ports_carry_the_verifiers_recomputation(tmp_path):
 def test_program_digests_are_keyed_by_descriptor_id(tmp_path):
     """META ``program_digests`` names the template by core's descriptor id (the canonical partition's and the verifier's), not
     its display id: RMSNorm's EPS is its f64 hex."""
-    from verity.ml.circuits.codec import _spec_id
+    from verity.ml.circuits.codec import descriptor_id
 
     s = _set("rmsnorm-triton/n2048-eps1e-05/bf16", 1, tmp_path)
     got = FC.program_digests(s.subcircuit, FC.set_statics(s))
-    assert list(got) == [_spec_id(s.subcircuit.definition(**FC.set_statics(s)))]
+    assert list(got) == [descriptor_id(s.subcircuit.definition(**FC.set_statics(s)))]
     assert '"f64":"0x1.4f8b588e368f1p-17"' in next(iter(got))
     assert list(got.values()) == list(s.subcircuit.program_digests([FC.set_statics(s)]).values())
 
@@ -368,7 +376,7 @@ def test_the_leaf_scheme_is_the_lean_verifiers_and_the_provers():
 
 def test_the_zk_hooks_name_the_provers_randomness():
     """Under ``--zk`` the identity's ``hooks``, which the statement digest binds, name where the pads and every table's
-    draws come from: the Lean verifier's default statements (``Flock.Zk.hooks`` under ``Tags.osMasks``) and the prover's
+    samples come from: the Lean verifier's default statements (``Flock.Zk.hooks`` under ``Tags.osMasks``) and the prover's
     ``zk_identity`` and session tables write the same words."""
     import re
     from pathlib import Path

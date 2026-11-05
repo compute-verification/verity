@@ -12,7 +12,7 @@ TRUE = {"one": 0.6, "ands*drawn": 9.5e-11}
 
 
 def _sweep(noise=(0.0,) * 6) -> list[Observation]:
-    """A session per batch size from one 1,024-unit statement of a 14.8M-AND template."""
+    """A session per batch size from one statement of 1,024 proof blocks of a 14.8M-AND template."""
     ands = 14_843_669
     return [Observation(f"r{b}", "G", ands, 1024, b, prove=(TRUE["one"] + TRUE["ands*drawn"] * ands * b) * (1 + e))
             for b, e in zip((1, 4, 16, 64, 256, 1024), noise)]
@@ -35,7 +35,7 @@ def test_fit_holds_coefficients_non_negative():
 
 
 def test_pinned_coefficients_and_the_sigma_floor():
-    """Two zk sessions of two templates fix the session's fixed part once the per-unit slope is pinned from the sweep."""
+    """Two zk sessions of two templates fix the session's fixed part once the per-proof-block slope is pinned from the sweep."""
     b = TRUE["ands*drawn"]
     obs = [Observation("a6", "K2048", 2_650_000, 4096, 11, prove=1.4), Observation("a6", "K8192", 9_030_000, 2048, 6,
                                                                                   prove=2.2)]
@@ -65,7 +65,7 @@ def test_record_round_trips_into_the_planners_model():
 
 
 def test_every_feature_of_every_fit_reaches_the_model():
-    """A prover that pays for its staged units and a verifier that pays for the drawn ones: each feature's rate is the
+    """A prover that pays for its staged proof blocks and a verifier that pays for the drawn ones: each feature's rate is the
     prove coefficient plus the verify and stage ones at the price ratio."""
     p = {"one": 7.0, "ands": 2e-7, "ands*staged": 3e-10, "ands*drawn": 4e-9}
     v = {"one": 1.5, "ands*staged": 5e-9, "ands*drawn": 6e-8}

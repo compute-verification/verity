@@ -79,6 +79,34 @@ def _rows(rows: Any) -> list[dict[str, Any]]:
     return out
 
 
+def lookup(tool: Any, root: Path, *, argv=None, params=None, inputs=None, conditions=None, source_tree=None, any_source=False, store=None) -> dict[str, Any]:
+    """`research data lookup --json` as a call on a loaded `tool`: its attempts oldest first, `params` overriding what `argv` parses to and
+    missing key conditions from this machine.  ValueError when `root`'s tree is dirty and neither `source_tree` nor `any_source` is given."""
+    parsed, key = tool.resolve_params(argv or [], root) if (argv or tool.parse) else ({}, {})
+    if params:
+        key = tool.resolve_key_params({**parsed, **params}, root)
+    conds = dict(conditions or {})
+    missing = [k for k in tool.key_conditions if k not in conds]
+    if missing:
+        here = E.conditions(source_root=root)
+        here.update(tool.tool_conditions(here))          # the Tool's own probe (`tool.<name>.*`), as the runner records it
+        conds.update({k: here.get(k) for k in missing})
+    drv = D.derivation_id(tool.identity(), inputs or {}, key, conds, tool.key_conditions)
+    if any_source:
+        rk = None
+    elif source_tree:
+        rk = D.reuse_key(drv, {"tree": source_tree, "dirty": False, "lockfiles": _lockfiles_at(root, source_tree)})
+    else:
+        src = E.source_identity(E.source_conditions(root))
+        if src.get("dirty") is not False or not src.get("tree"):
+            raise ValueError(f"{root} is {'dirty' if src.get('dirty') else 'not a clean git tree'}: no reuse_key; give --source-tree SHA or --any-source")
+        rk = D.reuse_key(drv, src)
+    index = A.open_store(store).index
+    rows = _rows(index.attempts_by_derivation(drv) if any_source else index.attempts_by_reuse_key(rk))
+    return {"derivation": drv, "reuse_key": rk, "key_params": key, "key_conditions": {k: conds.get(k) for k in tool.key_conditions},
+            "inputs": inputs or {}, "attempts": rows}
+
+
 def cmd_lookup(argv: list[str]) -> int:
     tail: list[str] = []
     if "--" in argv:
@@ -101,41 +129,19 @@ def cmd_lookup(argv: list[str]) -> int:
     except (ImportError, LookupError, TypeError) as e:
         print(f"research data lookup: --tool {ns.tool}: {e}", file=sys.stderr)
         return 2
-    params, key = tool.resolve_params(tail, root) if (tail or tool.parse) else ({}, {})
-    overrides = _kv(ns.param, "--param")
-    if overrides:
-        merged = {**params, **overrides}
-        key = tool.resolve_key_params(merged, root)
-    inputs = _kv(ns.input, "--input")
-    conds = _kv(ns.condition, "--condition")
-    missing = [k for k in tool.key_conditions if k not in conds]
-    if missing:
-        here = E.conditions(source_root=root)
-        here.update(tool.tool_conditions(here))          # the Tool's own probe (`tool.<name>.*`), as the runner records it
-        conds.update({k: here.get(k) for k in missing})
-    drv = D.derivation_id(tool.identity(), inputs, key, conds, tool.key_conditions)
-    st = A.open_store(None, ns.store)
-    rk = None
-    if ns.any_source:
-        rows = _rows(st.index.attempts_by_derivation(drv))
-    else:
-        if ns.source_tree:
-            src = {"tree": ns.source_tree, "dirty": False, "lockfiles": _lockfiles_at(root, ns.source_tree)}
-        else:
-            src = E.source_identity(E.source_conditions(root))
-            if src.get("dirty") is not False or not src.get("tree"):
-                print(f"research data lookup: {root} is {'dirty' if src.get('dirty') else 'not a clean git tree'}: no reuse_key; give --source-tree SHA or --any-source",
-                      file=sys.stderr)
-                return 1
-        rk = D.reuse_key(drv, src)
-        rows = _rows(st.index.attempts_by_reuse_key(rk))
+    try:
+        found = lookup(tool, root, argv=tail, params=_kv(ns.param, "--param"), inputs=_kv(ns.input, "--input"),
+                       conditions=_kv(ns.condition, "--condition"), source_tree=ns.source_tree, any_source=ns.any_source, store=A.open_store(None, ns.store))
+    except ValueError as e:
+        print(f"research data lookup: {e}", file=sys.stderr)
+        return 1
     if ns.json:
-        print(json.dumps({"derivation": drv, "reuse_key": rk, "key_params": key, "key_conditions": {k: conds.get(k) for k in tool.key_conditions},
-                          "inputs": inputs, "attempts": rows}, indent=2, sort_keys=True, default=str))
+        print(json.dumps(found, indent=2, sort_keys=True, default=str))
         return 0
-    print(f"derivation {drv}")
-    print(f"reuse_key  {rk or '- (any source)'}")
-    print(f"key params {json.dumps(key, sort_keys=True, default=str)}   key conditions {json.dumps({k: conds.get(k) for k in tool.key_conditions}, sort_keys=True)}")
+    rows = found["attempts"]
+    print(f"derivation {found['derivation']}")
+    print(f"reuse_key  {found['reuse_key'] or '- (any source)'}")
+    print(f"key params {json.dumps(found['key_params'], sort_keys=True, default=str)}   key conditions {json.dumps(found['key_conditions'], sort_keys=True)}")
     if not rows:
         print("no attempts")
         return 0

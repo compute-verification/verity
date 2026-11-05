@@ -1,4 +1,4 @@
-"""[TP-12] One rank's picks for the cross-rank collective-output pass (`check.match.xrank_collectives`), from the COMMITTED bytes.
+"""One rank's picks for the cross-rank collective-output pass (`check.match.xrank_collectives`), from the COMMITTED bytes.
 
 Every member is opened and verified against this rank's run root (the reader of the value check and the sampled replay); a member
 that does not verify is a pick without bytes, named, which the driver's check fails.  Per pick: the rank's partial rows and the rows
@@ -7,7 +7,7 @@ the rank Program binds at the call (`route_of`: `registry.tp_allreduce`'s route 
 switches at the rank's world and GPU, the fused norm's when `fused_allreduce_rms_norm` takes FlashInfer's path; over several requests,
 the one call per request the Build binds on that route, from the collector's row record `step_rows`), held to the specs the rank's
 Programs bind (`program_binds`); its received member is the norm's `<norm>/all_reduce` on the other path, and the fused norm's are `<norm>/0` and
-`<norm>/1` with its residual (the previous call's `<norm>/1`, the embedding for the first) and the norm's weight.  Picks are drawn
+`<norm>/1` with its residual (the previous call's `<norm>/1`, the embedding for the first) and the norm's weight.  Picks are sampled
 identically on every rank from the pair's combined root (fixed after commitment) -> xrank_pair<k>_rank<r>.pt.
 """
 from __future__ import annotations
@@ -253,7 +253,7 @@ def dump(st: dict[str, Any], *, settings: dict[str, Any], out_dir: str, seed_hex
 
 def embedding_leg(pk: dict[str, Any], metas: dict[str, Any], step: int, rows: Any, part: Any, mods: dict[str, Any], tensor_of: Any,
                   unverified: dict[tuple[int, str], str]) -> dict[str, Any]:
-    """EmbeddingShard_v1 leg (ruling 27): this rank's committed partial rows == masked gather of the committed ids from ITS vocab shard
+    """EmbeddingShard_v1 check: this rank's committed partial rows == masked gather of the committed ids from ITS vocab shard
     (the live parameter, which the per-rank weights pin ties to the checkpoint of record); rows outside the rank's range are zero."""
     import torch
 
@@ -276,7 +276,7 @@ def embedding_leg(pk: dict[str, Any], metas: dict[str, Any], step: int, rows: An
         return {"ok": ok, "n_diff": (int((exp.view(torch.int16) != part.view(torch.int16)).sum()) if (exp.shape == part.shape and exp.dtype == torch.bfloat16) else None),
                 "vocab_range": [lo, hi], "masked_rows": int((~mask).sum()), "rows": int(idx.numel()), "why": None if ok else "committed partial != masked gather from this rank's shard"}
     except Exception as e:  # noqa: BLE001
-        return {"ok": None, "why": f"embedding-shard leg error: {e!r}"[:200]}
+        return {"ok": None, "why": f"embedding-shard check error: {e!r}"[:200]}
 
 
 __all__ = ["dump", "route_of", "call_spans", "call_family", "residual_member", "path_disagrees", "program_specs", "embedding_leg", "ROUTED_WORLD"]

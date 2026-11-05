@@ -1,4 +1,4 @@
-"""`collectives.fused_norm`: the Match recorder's view of `fused_allreduce_rms_norm` (VLLM-12).
+"""`collectives.fused_norm`: the Match recorder's view of `fused_allreduce_rms_norm`.
 
 * `targets` finds the function's own module and every module of the model's classes that imported it, and nothing when no
   class does;

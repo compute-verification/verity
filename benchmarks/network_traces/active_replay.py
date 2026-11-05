@@ -29,7 +29,7 @@ proxy saw, that its hand times are the rule's, and that the peer's digest of eac
 ingress record holds the salt frame, which carries the placeholder and never the salt, and the server receives the salt
 on a connection of its own, logging each window's SHA-512 of it (`fingerprint`), never the salt. Once the run's
 records are published the proxy answers the verifier's "reveal" call with every window's salt (`salts.json`), each
-revealed on a stand-in for the window's registration (`stand_in`: the replay registers nothing with a proof service),
+revealed on a stand-in for the window's registration (`stand_in`: the replay registers nothing with a proof system),
 and the audit's `salt` section reads the salt frames against them (`active.check_salts`, on the raw ingress records),
 counts the salt frames in each ingress record and in the egress records, and checks that no egress frame holds a salt
 and that the server received each salt.
@@ -216,7 +216,7 @@ _WORKLOADS: dict[str, dict[int, dict]] = {}
 
 
 def live_body(session: str | None, model: str) -> dict:
-    """The request `record.py` sent for a session named `workload.instance.index`, its first prompt token drawn from the
+    """The request `record.py` sent for a session named `workload.instance.index`, its first prompt token sampled from the
     session's name; one token of a one-token prompt for a request no session names. Without `return_token_ids`, with
     which vLLM puts the prompt's token ids in the first event, past a frame."""
     import record
@@ -575,16 +575,16 @@ def adversary_plan(plan: dict, setup: Setup, strategy: str, seed: int = 0) -> di
     sender that steers the online prover's declared sync with a random message), with the symbols it sent kept for
     the audit's `covert` measurement. Under syncs fixed before the run (`envelope`, `model`) the covert sender steers
     nothing: the control. On a live server the plan carries the sender's parameters, and the shim's
-    `covert.LiveSender` draws the symbols as it serves. On a live shim only, on time and logged: `extra` writes one
+    `covert.LiveSender` samples the symbols as it serves. On a live shim only, on time and logged: `extra` writes one
     event more at the end of the first session's response, after what the endpoint sent and the shim's padding
     (`pad_to`); `drop` writes that response's first event not at all, counted as written so the padding doesn't make
     it up; `byte` writes that response's first event that carries bytes with one hex digit changed (`other_hex`: one
     output byte, when the text is the outputs' hex), so only the output tie refuses it; and `token` writes every event
     that carries bytes, of every response to a request enqueued in window 0,
     with other bytes (`other_token`), so the frame counts are honest's and only a check of the frames' tokens against
-    the committed sampled ids (the I/O tie) refuses it. The tie draws positions in each window, so a window whose every
-    token is wrong is refused at any number of draws, where one wrong frame among N would be refused only at the share
-    1/N a draw."""
+    the committed sampled ids (the I/O tie) refuses it. The tie samples positions in each window, so a window whose
+    every token is wrong is refused at any number of samples, where one wrong frame among N would be refused only at the
+    share 1/N a sample."""
     if strategy == "token":
         T = setup.egress_params.buckets
         window0 = [q["session"] for q in plan.get("requests", ()) if "enqueue" in q and q["enqueue"] // T == 0]
@@ -1230,13 +1230,18 @@ class Publisher:
 def proxy_log(proxies: Sequence[Proxy]) -> dict:
     """The run's proxy log: one proxy's, or, for an outage plan, the proxies before and after the outage joined, each
     list in order and each count summed, with the windows each served (`served`). A proxy numbers the requests it cut
-    from 1 (`active.Requests`), so a later proxy's streams are shifted by the requests the ones before cut."""
+    from 1 (`active.Requests`), so a later proxy's streams are shifted by the requests the ones before cut. A paced
+    proxy's log has its offset and each bucket's pacer report (`paced`, in ms after the bucket's time)."""
     last = proxies[-1]
     shift = list(itertools.accumulate((p.requests.stream for p in proxies), initial=0))
     frames = [[pos, s + shift[j], *rest] for j, p in enumerate(proxies) for pos, s, *rest in p.frames]
     salts = {} if last.salt is None else {"salts": {"released": sum(p.salts_released for p in proxies),
                                                     "delivered": sum(p.salts_delivered for p in proxies)}}
     served_by = {} if len(proxies) == 1 else {"served": [[p.start, p.windows] for p in proxies]}
+    paced = {} if last.paced is None else {"paced": {
+        "ms": last.paced * 1000, "columns": ["bucket", "arrived_ms", "start_ms", "end_ms", "written"],
+        "releases": [[r.t, round(r.arrived * 1000, 3), round(r.start * 1000, 3), round(r.end * 1000, 3), r.written]
+                     for p in proxies for r in p.releases]}}
     return {"lateness_ms": {k: [round(x * 1000, 3) for p in proxies for x in p.lateness[k]] for k in last.lateness},
             "syncs": [[s.delta, str(s.rho)] for s in last.shaper.syncs],
             "frames": frames, "hands": [h for p in proxies for h in p.shaper.hands],
@@ -1244,11 +1249,11 @@ def proxy_log(proxies: Sequence[Proxy]) -> dict:
             "streams": sum(len(p.streams) for p in proxies), "slack_ms": last.slack * 1000,
             "forwards": [[st.window, None if st.delivered is None else round((st.delivered - st.deadline) * 1000, 3)]
                          for p in proxies for st in p.streams.values() if st.deadline is not None],
-            "prover": None if last.choices is None else last.choices.log} | salts | served_by | _usage()
+            "prover": None if last.choices is None else last.choices.log} | salts | served_by | paced | _usage()
 
 
 def stand_in(window: int) -> Registration:
-    """A stand-in for the proof service's registration of `window`, which the replay has none of: a record whose
+    """A stand-in for the proof system's registration of `window`, which the replay has none of: a record whose
     provenance names the window (`active.served_window`), with its receipt."""
     record = {"window": {"kind": "served", "window": window}}
     return Registration(record, R.receipt(record, "active-replay", received=str(window)), R.digest(record), window)

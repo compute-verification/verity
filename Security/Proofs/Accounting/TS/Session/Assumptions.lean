@@ -1,11 +1,13 @@
-import Proofs.Flock.SoundAtBridge
+module
+
+public import Proofs.Flock.SoundAtBridge
 
 /-!
 # The named premises a window of C-Flock sessions takes
 
-The premises `Accounting.Guarantees.TS.SessionSoundAt` takes on #2855's served layer `pf`, besides #2909's own, as
-decided for the lane (option A for both, 20 Oct): the proof service's acceptance rule (`AcceptedLive`, #2909's premise
-of that name, as a named `Prop`), the window's law (`WindowLaw`), and in place of #2909's
+The premises `Accounting.Guarantees.TS.SessionSoundAt` takes on the served proof layer `pf`
+(`Accounting.TS.ProofLayer`), besides `Flock.SoundAtBridge`'s own: the proof system's acceptance rule (`AcceptedLive`,
+the bridge's premise of that name, as a named `Prop`), the window's law (`WindowLaw`), and in place of the bridge's
 `Flock.SoundAtBridge.RelOfRows` and `Flock.SoundAtBridge.OpenedPlurAt`, the same two facts on the accepted sessions
 whose drawn units are right: there `pf`'s relation, the served Definition's check, holds at the session's value layer
 (`ServedChecksHold`), and the value layer is `pf`'s served opening, outside `δs` (`ServedRootsLinked`).
@@ -15,6 +17,8 @@ They belong in `Security/Definitions/Accounting/Assumptions/TS`, but they read `
 assumptions are (`Proofs/Flock/Soundness/Assumptions`).
 -/
 
+@[expose] public section
+
 namespace Accounting.Assumptions.TS
 
 open Accounting.TS Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg
@@ -22,7 +26,7 @@ open Pouw.RelativeSecurity (Paths)
 
 variable {Ω : Type} {S nπ : ℕ} {V : Type}
 
-/-- `accounting-ts-accepted-live` (the proof service's acceptance rule; owner @proofs). **A proof is credited only after
+/-- `accounting-ts-accepted-live` (the proof system's acceptance rule). **A proof is credited only after
 flock-verify `--zk --registered` accepts its session**: on every path, `pf` accepts proof `i` of round `w` only where
 flock-verify accepts its session's outcome (`LiveAcceptsZKR`). `Flock.SoundAtBridge.AcceptedLive` is the same `Prop`.
 
@@ -34,11 +38,11 @@ def AcceptedLive (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → F
     (out : ∀ x w i, (sess x w i).Out) : Prop :=
   ∀ x w i, pf.accepted x w i → LiveAcceptsZKR (sess x w i).I (sess x w i).own (out x w i)
 
-/-- `accounting-ts-window-law` (live coins at the window: the proof service's draws and audit coins are the window's).
+/-- `accounting-ts-window-law` (live coins at the window: the proof system's draws and audit coins are the window's).
 **At each round and proof, the window's coins read through the session have the session game's law**: for every event
 `E` of a session's outcome, its probability over the window's paths at `(w, i)` is at most the average over the paths
 of its probability in the session's own game (`Flock.SoundAtBridge.SessionLaw`). Read with every `E` it is equality of
-the two laws; `Flock.SoundAtBridge.WindowLaw` is the same `Prop`. The equality rests on five facts of the proof service
+the two laws; `Flock.SoundAtBridge.WindowLaw` is the same `Prop`. The equality rests on five facts of the proof system
 and of how `sess` is built:
 1. **No retry or redraw.** `out x w i` is the outcome of the session's one run on its draw: a refused session is a
    visible failure and is never rerun on a fresh draw. Otherwise the kept outcome leans toward acceptance, and `δ`
@@ -74,20 +78,21 @@ def WindowLaw [Fintype Ω] (sess : Paths Ω S → Fin S → Fin nπ → RowsSess
 Definition's check holds at its session's value layer wherever the drawn units are right**: on every path, when
 flock-verify accepts proof `i` of round `w`'s session and every drawn unit is right (`WrongAt` fails) with its rows
 right at its own owned reads (`RowsAt`), `pf`'s relation (`rel x w i`, the proof's Definition) holds at `rows` of the
-session's value layer (`XplurZC`). It is #2909's `RelOfRows` on the accepted sessions. Under a sampled draw it holds
-only for a relation that reads the drawn units alone: an undrawn unit can be wrong while every drawn one is right. -/
+session's value layer (`XplurZC`). It is `Flock.SoundAtBridge.RelOfRows` on the accepted sessions. Under a sampled
+draw it holds only for a relation that reads the drawn units alone: an undrawn unit can be wrong while every drawn one
+is right. -/
 def ServedChecksHold (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) : Prop :=
   ∀ x w i, LiveAcceptsZKR (sess x w i).I (sess x w i).own (out x w i) →
     (∀ u ∈ (out x w i).2.1, ¬ (sess x w i).WrongAt u ∧ (sess x w i).RowsAt (out x w i) u) →
     pf.rel x w i (rows (sess x w i) (sess x w i).Xv)
 
-/-- `accounting-ts-served-roots-linked` (C-Flock's rows link at the served roots; owner @proofs). **Where the drawn
+/-- `accounting-ts-served-roots-linked` (C-Flock's rows link at the served roots). **Where the drawn
 units are right, the session's value layer is the served layer's opening**: at each round and proof, the probability
 over the window's paths that flock-verify accepts the session, every drawn unit is right at its own owned reads, and
 yet `rows` of the session's value layer is not `pf`'s opening (`pf.opened x w i`: the round's served leaves, committed
-before σ_w) is at most `δs`. It is #2909's `OpenedPlurAt` on those sessions. `EndToEndRegisteredRows` links only
-registered reads, and the served trees are hiding commitments that bind nothing on their own;
+before σ_w) is at most `δs`. It is `Flock.SoundAtBridge.OpenedPlurAt` on those sessions. `EndToEndRegisteredRows`
+links only registered reads, and the served trees are hiding commitments that bind nothing on their own;
 `Flock.SecurityProofs.ServedRowsLinked` links them pointwise, but only at drawn units, and where the service registers
 each served tree as a port of `own` (`RowsSession.ServedRegistered`). With a `rows` that reads the served reads it gives
 this at `δs = 0` only under full checking (`kd = n`) and `ServedRegistered` at every unit: under a sampled draw nothing proved ties an undrawn unit's value layer to the served

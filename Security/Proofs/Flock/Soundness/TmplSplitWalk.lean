@@ -1,12 +1,16 @@
-import Proofs.Flock.Soundness.TmplSplitOk
+module
+
+public import Proofs.Flock.Soundness.TmplSplitOk
 
 /-!
-# Every walk means its class's (PRF-133, part 3, stage 3)
+# Every walk means its class's
 
 - `walkCall_exp`, `walkCall_sum`: a call's step (`walkCall`), from its callee's table (`walkChild_ok`), adds the callee's
   copies' `refVal`s (`callVal`), for an explicit and a summed class.
 - `walk_ok`: by induction on the depth, every walk's table means its class's (`WalkOk`).
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128 Std
 

@@ -10,7 +10,8 @@ def _boolean_roots() -> list[Any]:
     K = 32 and the PV row on it at T = 1, 8 and 32 of K = 32 with D = 64 (and padded to T = 32 with its key count an input),
     the GEMM at K = 32, N = 3, the E4M3 coordinate on
     the three FP8 steps at K = 64, the NVFP4 and MXFP4 coordinates at K = 128, the s8 accumulator and scaled coordinate at
-    K = 64, the scaled coordinate on two rows an operand at K = 64, and the scaled s8 linear at K = 64, N = 3."""
+    K = 64, the scaled coordinate on two rows an operand at K = 64 (and with the residual add in its epilogue), and the
+    scaled s8 linear at K = 64, N = 3."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
 
@@ -33,13 +34,14 @@ def _boolean_roots() -> list[Any]:
         bind(BG.GemmAccumulatorS8, K=64, **BG.GEMM_SM120_S8),
         bind(BG.ScaledMmS8Coordinate, K=64, **BG.GEMM_SM120_S8),
         bind(BG.ScaledMmS8CoordinateRows, K=64, R=2, **BG.GEMM_SM90_S8),
+        bind(BG.ScaledMmS8ResidualCoordinateRows, K=64, R=2, **BG.GEMM_SM90_S8),
         bind(BG.ScaledMmS8, K=64, N=3, **BG.GEMM_SM120_S8),
     ]
 
 
 def _population_roots() -> list[Any]:
-    """`TemplateInstances_v1` of the scaled s8 coordinate (K = 64, sm_120) at N = 2, a served s8 linear's window program (the
-    torch loop's, at its K), and `TemplatePopulations_v1` of the s8 accumulator and that coordinate at counts 1 and 2."""
+    """`TemplateInstances_v1` of the scaled s8 coordinate (K = 64, sm_120) at N = 2, a served s8 linear's window program, and
+    `TemplatePopulations_v1` of the s8 accumulator and that coordinate at counts 1 and 2."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
     from verity.ml.circuits.population import (

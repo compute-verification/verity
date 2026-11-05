@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.L0Pin
-import Proofs.Flock.Claims.ZK.FinishLive
-import Proofs.Flock.Claims.ZK.FramePlan
+module
+
+public import Proofs.Flock.Claims.ZK.L0Pin
+public import Proofs.Flock.Claims.ZK.FinishLive
+public import Proofs.Flock.Claims.ZK.FramePlan
 
 /-!
 # Level 0's scheduled rounds, fed
@@ -21,6 +23,8 @@ the fed coins and zero pads.
 * **`repOpening_feed`**: so a rep's opening over `OpenM`, fed, is its cut run (`repOpening_rel`), and
   **`repOpening_cutL0`**: the cut run past the ring switch stops having sent level 0's bodies.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.LigLock.Fed
 

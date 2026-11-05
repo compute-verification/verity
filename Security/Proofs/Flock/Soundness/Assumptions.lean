@@ -1,8 +1,10 @@
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
-import Proofs.Flock.Soundness.Game.Expect
-import Randomness
-import Definitions.Flock.Arith
-import Definitions.Claims.Hm96
+module
+
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
+public import Proofs.Flock.Soundness.Game.Expect
+public import Randomness
+public import Definitions.Flock.Arith
+public import Definitions.Claims.Hm96
 
 /-!
 # Named assumptions
@@ -34,6 +36,8 @@ Assumption 1, BCHKS25's mutual correlated agreement up to the Johnson bound, is 
 Merkle binding is proved too (VCVio's binding theorem, `Merkle`): a conflict of two verifying openings is a collision, which
 is what lets each finder's success be read as a collision of SHA-512.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Assumptions
 
@@ -86,7 +90,7 @@ def SHA512CRExpected {D β : Type} (H : List UInt8 → D) (g : Game β) (s : Str
     expect cost g s / 2 ^ (256 : ℝ)
 
 /-- **Assumption 3 (`uniform/io-getrandombytes`): the operating system's randomness is independent uniform bytes**, for
-the verifier's unit draw and the proof service's epoch salt (`Stream.salt`). Its per-test form,
+the verifier's unit draw and the proof system's epoch salt (`Stream.salt`). Its per-test form,
 `UniformRandomBytesTest`, is the one the zero-knowledge theorems take.
 
 The verifier draws the units it audits from `IO.getRandomBytes`: `Flock.Draw.drawOS` is `Flock.Draw.drawWith` with every
@@ -133,7 +137,7 @@ the pads `h`, the dot-product mask `μ`, the inner rows' padding, `τ`'s salt an
 (`flock-firewall tap`) serves the prover's every other read: the mask slot's words, level 0's hiding, the other trees'
 salts and the coin tree's nonce. C-Flock's prover reads every hm96 leaf salt, 192 bytes a leaf, from the operating system
 (the tap, or `getrandom(2)` unfirewalled), as the recursive audit's firewall and a registrant (`os.urandom`) do for their
-commitments' salts (Daniel, 9 Oct, decisions 4(a) and 4(c)). So the masks and the Reed–Solomon padding are inside A3's
+commitments' salts. So the masks and the Reed–Solomon padding are inside A3's
 scope, as the salts are, and no premise on a stream generator is left on them. `Discharge.ZkView.OsSalts` reads 192
 bytes as one salt and takes the hiding theorems to them; `Claims.ZKServer.OsTape` reads the server's tape.
 
@@ -180,7 +184,7 @@ window. A source is a finite probability space `Ω` (`prCoin` weighs its outcome
 `sec ω`. The source is uniform when every event about the secret has the probability it has for `S` uniform bytes.
 
 What A5 assumes of the verifier is that its window secret is such a source: `secrets.token_bytes(32)` from the operating
-system's CSPRNG, drawn once the window's receipt is complete and used for that window alone (#423's `Ledger.open`). A
+system's CSPRNG, drawn once the window's receipt is complete and used for that window alone (`Ledger.open`). A
 secret reused across windows is outside it, since later windows would be committed after earlier draws were seen.
 
 The verifier's platform is Linux, with CPython 3.12 or later. There `secrets.token_bytes` reads `os.urandom`, which is

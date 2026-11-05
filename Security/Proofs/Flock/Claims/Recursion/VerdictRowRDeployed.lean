@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.VerdictAssembly
-import Proofs.Flock.Claims.Recursion.VerdictPieces
-import Proofs.Flock.C3.VStarList.Shape
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictAssembly
+public import Proofs.Flock.Claims.Recursion.VerdictPieces
+public import Proofs.Flock.C3.VStarList.Shape
 
 /-!
 # Row R at the deployed reader
@@ -26,6 +28,8 @@ statement the reader reads at the dense form:
   and `hsz` kept: the record's rounds are the prover's JSON (`jAt` substitutes only coins and digests), so their
   sizes need the canonical record or the coin tie.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 
@@ -194,7 +198,7 @@ variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.
 
 /-- **Table `i`'s decode shape is V\*'s inner shape** in every field V\*'s algebra reads, at a decision of an inner
 statement the reader reads at the dense form, where the session's points are the link's. -/
-theorem sh_alg {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem sh_alg {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size)
     (hpts : D.sess.points = pointsOf D.spec D.d.c₁) :
     ∃ (inn : RecVStar.Inner) (ss : Array VStar.Stmt) (sh0 : Shape), RecVStar.statements inn = .ok ss ∧
@@ -259,7 +263,7 @@ theorem sh_alg {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo =
 
 /-- **S and its groups at table `i`** (row R's `hS` and `hg`): V\*'s list, which the reader's scope check builds,
 computes them at the inner shape, which is table `i`'s decode shape in the fields they read. -/
-theorem structure_ok {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem structure_ok {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size)
     (hpts : D.sess.points = pointsOf D.spec D.d.c₁) :
     ∃ (S : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)),
@@ -324,20 +328,20 @@ group `p` of S has a piece at the copy `keyAt p` whose group is the verifier's p
 elements are `w` at the group's row ports (`hE`) and its verifier values `verifierRows`' `v` at the group's `V` (`hvv`),
 every part's residuals vanish at rep `r`'s values. -/
 theorem partsZero_of_pieces {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (rpieces : List ResPiece)
-    (elemAt : Claims.Msg → List Claims.Msg → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
+    (elemAt : Claims.Msg → List Claims.Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
     (vvAt : Claims.Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
     (hres : ∀ q ∈ rpieces, resHolds elemAt vvAt q x ms cs) (keyAt : ℕ → ℕ × ℕ × ℕ × ℕ)
     (hcover : ∀ p (_hp : p < gs.size), ∃ q ∈ rpieces, q.key = keyAt p ∧
       ∃ ns nv, RecResiduals.part (D.sh cls i) p = .ok (q.S, ns, nv))
     (hE : ∀ p (hp : p < gs.size) k (hk : k < (wIdx (portSizes (D.sh cls i)) gs[p].2.1).size),
-      elemAt x ms (keyAt p) k = el (D.rep cls acc i r).w (wIdx (portSizes (D.sh cls i)) gs[p].2.1)[k])
+      elemAt x ms cs (keyAt p) k = el (D.rep cls acc i r).w (wIdx (portSizes (D.sh cls i)) gs[p].2.1)[k])
     (hvv : ∀ v info kappa, verifierRows (D.sh cls i) (D.rep cls acc i r).rounds (D.rep cls acc i r).extras
         (D.rep cls acc i r).comb = .ok (v, info, kappa) →
       ∀ p (hp : p < gs.size) k (hk : k < gs[p].2.2.size), vvAt x cs (keyAt p) k = el v gs[p].2.2[k]) :
     D.PartsZero cls acc i r gs := by
   intro p hp
   obtain ⟨q, hq, hkey, ns, nv, hpart⟩ := hcover p hp
-  refine ⟨q.S, ns, nv, hpart, elemAt x ms (keyAt p), vvAt x cs (keyAt p), fun k hk => hE p hp k hk,
+  refine ⟨q.S, ns, nv, hpart, elemAt x ms cs (keyAt p), vvAt x cs (keyAt p), fun k hk => hE p hp k hk,
     fun v info kappa h k hk => hvv v info kappa h p hp k hk, ?_⟩
   rw [← hkey]
   exact hres q hq
@@ -347,7 +351,7 @@ theorem partsZero_of_pieces {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (
 /-- **Table `i`'s reps run at the decision**, as `runs_assembled`, with row R's S, groups and `w`'s size discharged,
 its parts' residuals given by the `rec-residuals` pieces and their two ties (the layout's `hE`, check 5's `hvv`), and
 its coin rounds' sizes (`hsz`) and the accumulators' number (`hacc`) as hypotheses. -/
-theorem runs_assembled_R {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem runs_assembled_R {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size)
     (hframed : ∀ r : Fin 2, FramedAt ((D.files cls i).stream r).rounds 0 (repFrames (D.files cls i).st
@@ -372,7 +376,7 @@ theorem runs_assembled_R {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : 
       ∃ q ∈ pieces, q.table = i ∧ q.rep = r.val ∧ q.level = ℓ ∧ q.query = j)
     (hsz : ∀ r : Fin 2, (D.rep cls acc i r).rounds.toList.map Array.size = roundSizes (D.sh cls i))
     (hacc : ∀ r : Fin 2, (acc (2 * i + r)).size = 4)
-    (rpieces : List ResPiece) (elemAt : Claims.Msg → List Claims.Msg → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
+    (rpieces : List ResPiece) (elemAt : Claims.Msg → List Claims.Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
     (vvAt : Claims.Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → F128)
     (hres : ∀ q ∈ rpieces, resHolds elemAt vvAt q x ms cs) (keyAt : Fin 2 → ℕ → ℕ × ℕ × ℕ × ℕ)
     (hcoverR : ∀ (S : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)),
@@ -382,7 +386,7 @@ theorem runs_assembled_R {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : 
     (hE : ∀ (S : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)),
       structureOf (D.sh cls i) = .ok S → groups S (portSizes (D.sh cls i)) = .ok gs →
       ∀ (r : Fin 2) p (hp : p < gs.size) k (hk : k < (wIdx (portSizes (D.sh cls i)) gs[p].2.1).size),
-        elemAt x ms (keyAt r p) k = el (D.rep cls acc i r).w (wIdx (portSizes (D.sh cls i)) gs[p].2.1)[k])
+        elemAt x ms cs (keyAt r p) k = el (D.rep cls acc i r).w (wIdx (portSizes (D.sh cls i)) gs[p].2.1)[k])
     (hvv : ∀ (S : RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)),
       structureOf (D.sh cls i) = .ok S → groups S (portSizes (D.sh cls i)) = .ok gs →
       ∀ (r : Fin 2) v info kappa, verifierRows (D.sh cls i) (D.rep cls acc i r).rounds (D.rep cls acc i r).extras

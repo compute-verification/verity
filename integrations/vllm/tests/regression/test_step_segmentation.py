@@ -98,23 +98,26 @@ def test_rows_the_index_does_not_name_are_carried_over(tmp_path):
                        "files": {"row.log": {"role": "record", "bytes": 3, "sha256": "b" * 64}}}}
     index = {"rows": {"new": {"row": 101, "class": "GREEN", "selection": "green", "dir": "/o/new",
                               "files": {"stages.txt": {"bytes": 5, "sha256": "c" * 64, "extracted": True}}}}}
-    text, rows_out = LE.build_fixtures(index, tmp_path, {"record"}, carried=carried)
-    fx = tomllib.loads(text)
-    assert list(fx["rows"]) == ["old", "new"] and list(rows_out) == ["old", "new"]
-    assert fx["rows"]["old"]["artifacts"]["records"] == "art:" + "a" * 64 and fx["rows"]["old"]["files"]["row.log"]["sha256"] == "b" * 64
+    text, ftext, rows_out = LE.build_fixtures(index, tmp_path, {"record"}, carried=carried)
+    fx, files = tomllib.loads(text), tomllib.loads(ftext)
+    assert list(fx["rows"]) == ["old", "new"] and list(rows_out) == ["old", "new"] and "files" not in fx["rows"]["old"]
+    assert fx["rows"]["old"]["artifacts"]["records"] == "art:" + "a" * 64 and files["rows"]["old"]["files"]["row.log"]["sha256"] == "b" * 64
     assert fx["rows"]["new"]["selection"] == "green" and fx["rows"]["new"]["artifacts"] == {"records": "", "programs": ""}
-    assert LE.build_fixtures(index, tmp_path, {"record"}, carried={"new": dict(carried["old"], row=101)})[1]["new"]["oracle"] == "/o/new"
+    assert list(files["rows"]["new"]["files"]) == ["stages.txt"]
+    assert LE.build_fixtures(index, tmp_path, {"record"}, carried={"new": dict(carried["old"], row=101)})[2]["new"]["oracle"] == "/o/new"
 
 
 @pytest.mark.slow
 def test_append_keeps_the_existing_text_and_refuses_a_known_key(tmp_path, monkeypatch):
     import json
-    fx = tmp_path / "fixtures.toml"
+    fx, files = tmp_path / "fixtures.toml", tmp_path / "files.toml"
     head = ('schema = "verity-vllm/r19-reference-fixtures/v1"\nsnapshot_artifact = "art:' + "e" * 64 + '"\n\n[artifacts]\n'
-            'commit_logs = "art:' + "f" * 64 + '"   # a hand comment\n\n[rows."old"]\nrow = 11\nclass = "GREEN"\n\n[rows."old".files."a.json"]\n'
-            'role = "record"\nbytes = 2\n')
+            'commit_logs = "art:' + "f" * 64 + '"   # a hand comment\n\n[rows."old"]\nrow = 11\nclass = "GREEN"\n')
+    fhead = '[rows."old".files."a.json"]\nrole = "record"\nbytes = 2\n'
     fx.write_text(head)
+    files.write_text(fhead)
     monkeypatch.setattr(resolver, "FIXTURES", fx)
+    monkeypatch.setattr(resolver, "FILES", files)
     monkeypatch.setattr(resolver, "EXPECTED_DIR", tmp_path / "expected")
     row = tmp_path / "oracle" / "new"
     row.mkdir(parents=True)
@@ -127,6 +130,8 @@ def test_append_keeps_the_existing_text_and_refuses_a_known_key(tmp_path, monkey
     text = fx.read_text()
     assert text.startswith(head.rstrip("\n") + "\n\n[rows.\"new\"]\n")
     assert list(tomllib.loads(text)["rows"]) == ["old", "new"]
+    assert files.read_text().startswith(fhead + "\n[rows.\"new\".files.\"stages.txt\"]\n")
+    assert list(tomllib.loads(files.read_text())["rows"]) == ["old", "new"]
     assert json.loads((tmp_path / "expected" / "new.json").read_text())["row"] == 101
     assert not (tmp_path / "expected" / "old.json").exists()
     assert LE.main(argv) == 2 and fx.read_text() == text

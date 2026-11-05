@@ -1,28 +1,28 @@
 """ISA-ESCAPE, mechanically: no instruction or unit outside the model's menu heads a committed word more cheaply than the
-menu allows (RT-ISA, the compute-accounting red team).
+menu allows.
 
 A committed word is a fresh s32: the running sum of 32 int8 products of noised operands (32 MACs a word; FOLD-BW), or an
-input to the receipt fold (which is itself such a word). The MODEL's menu for it (note:20261017T1723Z-draft-ledger, rows
+input to the receipt fold (which is itself such a word). The model's menu for it (the ledger's rows
 (I2)/(I4) WordsWritten, (I3) ScalarRoute, (I5) SideUnits/NoSum) is exactly five routes:
-  - an MMA form's writer, at most omega_t committed words an instruction (the tensor pipe, priced per form, decision 81);
-  - the CUDA lane vector route, q* lane instructions a word (q* >= 1.22 with tables, 2.03 without; QSTAR);
-  - the uniform datapath, one committed word an instruction, on the issue slots (decisions 73, 84, 88);
-  - table routes, priced by the bytes they read from their memory level (decision 80);
+  - an MMA form's writer, at most omega_t committed words an instruction (the tensor pipe, priced per form);
+  - the CUDA lane vector route, q* lane instructions a word (q* >= 1.22 with tables, 2.03 without; `scalar_route.py`);
+  - the uniform datapath, one committed word an instruction, on the issue slots;
+  - table routes, priced by the bytes they read from their memory level;
   - priced side units, each at the pi32 floor (>= 32 MACs a word; floors.csv).
 
-NOSUM (`nosum.py`) covered the fixed-function units DATASHEET measured. This script attacks the menu from the ISA: for
-every instruction class a red team would reach for -- warp and L2 reductions, atomics, bulk reduce, the low-precision,
+NOSUM (`nosum.py`) covered the fixed-function units the data sheet measured. This script attacks the menu from the ISA: for
+every instruction class a cheater would reach for -- warp and L2 reductions, atomics, bulk reduce, the low-precision,
 1-bit and FP64 MMA forms, the dot-product instructions, DPX, the video/SIMD ALU, texture filtering, the copies and transposes, the
 packing tricks, the wide multiply, the two-word add, min/max and select, and the uniform datapath beside an asynchronous tensor op -- it records the ISA fact,
 whether the instruction can even form an exact int8 product, the factor by which an int8 committed word decomposes onto
 it, and the verdict. A committed word that is a sum of 32 int8 products needs a MULTIPLY; an instruction with no multiply
 can at most sum or move words that already exist (not fresh), and an instruction whose multiply is lower precision pays a
 decomposition factor D (int8 = D unit-products) that its raw rate must beat the honest IMMA route by to escape. A
-committed word is also an input to the receipt fold, so a cross-lane reducer is also tested as a FOLD: it collapses the
-warp to one result (one word a warp instruction = 32 lane instructions a word), so it cannot undercut duo's 3 (FOLD).
+committed word is also an input to the receipt fold, so a cross-lane reducer is also tested as a fold: it collapses the
+warp to one result (one word a warp instruction = 32 lane instructions a word), so it cannot undercut duo's 3 (FOLD-OPT).
 
 The checkable arithmetic is verified here, bit-exact over Z/2^32 and the operand alphabets; the measured rates are cited
-(tensor_kinds / opcode_probe census, DATASHEET). The conclusion for sm_120 is that every candidate is closed, by one of:
+(tensor_kinds / opcode_probe census, the data sheet). The conclusion for sm_120 is that every candidate is closed, by one of:
   - NO-MULTIPLY: the unit only adds/compares/moves, so it sums or copies existing committed words (not fresh);
   - DECOMPOSE: the unit multiplies, but in a format an int8 product needs D >= 2 of, and its rate / D <= IMMA's;
   - LOW-PRECISION: the unit's weighted sum is convex or rounded, so not an exact fresh s32;
@@ -31,11 +31,11 @@ The checkable arithmetic is verified here, bit-exact over Z/2^32 and the operand
 
 The one cross-device item that is NOT closed by measurement -- the uniform datapath's issue cost beside a SATURATED
 asynchronous wgmma (sm_90) or tcgen05.mma (sm_100), which the census priced beside the synchronous mma.sync only
-(decision 88) -- is recorded as a WATCH, with the issue-ceiling argument (decision 84) that bounds it and the `eps`
+-- is recorded as a WATCH, with the issue-ceiling argument that bounds it and the `eps`
 reading (the uniform route is already ~0% of the headline eps on the H200/B200) that shows it cannot move a headline.
 
-The B200 (sm_100, 5th-gen tensor core) adds a distinctive word ISA this script also closes (RT-BLACKWELL,
-note:20261019T0501Z): tcgen05.mma writes its 32768-word accumulator into TENSOR MEMORY (not registers) and a CTA pair
+The B200 (sm_100, 5th-gen tensor core) adds a distinctive word ISA this script also closes:
+tcgen05.mma writes its 32768-word accumulator into TENSOR MEMORY (not registers) and a CTA pair
 (cta_group::2) can share one MMA, but that writer is the honest, priced tensor route; the TMEM movers it comes with
 (tcgen05.cp/shift/ld/st) only copy or shift words that already exist (MOVER); the block-scaled low-precision forms
 (mxf8f6f4 for FP6 E2M3/E3M2, mxf4/mxf4nvf4 for FP4) carry one shared exponent a block, not a per-element mantissa, so
@@ -68,7 +68,7 @@ DESIGNS = DATA / "designs.toml"
 # instruction = 32 lane instructions a word, whatever the reduce op.
 LANES = 32
 
-# The design's operand alphabets (decisions 29, 44, 51): activations are int8 (the dithered floor), weights are capped at
+# The design's operand alphabets: activations are int8 (the dithered floor), weights are capped at
 # |w| <= 63. A committed word sums 32 such products, so it ranges within ~2^19 << 2^24 (f32's exact-integer limit).
 INT8 = range(-128, 128)
 WEIGHT = range(-63, 64)
@@ -137,8 +137,8 @@ CANDIDATES = [
         "cls": "NO-MULTIPLY", "D": None, "escape": False,
         "isa": "redux.sync.{add,min,max,and,or,xor}.{u32,s32} reduces one 32-bit value across the warp to one result; no "
                "multiply, no new product",
-        "reason": "no multiply, so the 32 MACs a word still cost on a product unit; and as a FOLD of existing words it is "
-                  "a cross-lane reduction, 1 word a warp instruction = 32 lane instructions a word, >> duo's 3 (FOLD) and "
+        "reason": "no multiply, so the 32 MACs a word still cost on a product unit; and as a fold of existing words it is "
+                  "a cross-lane reduction, 1 word a warp instruction = 32 lane instructions a word, >> duo's 3 (FOLD-OPT) and "
                   "q* (>= 1.22), so it cannot head a fresh word nor lower the fold",
     },
     {
@@ -146,14 +146,14 @@ CANDIDATES = [
         "cls": "PRICED", "D": None, "escape": False,
         "isa": "red/atom.global.add.s32 lands an exact s32 add in L2; no multiply",
         "reason": "priced RED32/ATOMG32 at the pi32 floor (floors.csv); a reducer with no multiply, so 0 fresh words "
-                  "(NOSUM); measured <= 1.9 words/SM/clk beside honest (DATASHEET)",
+                  "(NOSUM); measured <= 1.9 words/SM/clk beside honest (the data sheet)",
     },
     {
         "name": "TMA bulk reduce (cp.reduce.async.bulk)", "device": "sm_90, sm_100, sm_120",
         "cls": "PRICED", "D": None, "escape": False,
         "isa": "UBLKRED/UTMAREDG reduces a bulk tile shared->global with an exact s32 add; no multiply",
         "reason": "priced TMAred512 at the pi32 floor; a reducer with no multiply, 0 fresh words; <= 1.9 words/SM/clk "
-                  "beside honest (DATASHEET)",
+                  "beside honest (the data sheet)",
     },
     {
         "name": "IDP4A (dp4a)", "device": "all", "cls": "PRICED", "D": 1, "escape": False,
@@ -170,7 +170,7 @@ CANDIDATES = [
         "name": "sparse IMMA (2:4, IMMA.SP)", "device": "all", "cls": "DECOMPOSE", "D": 2, "escape": False,
         "isa": "IMMA.SP.16864/16832: a dot product over k positions of which only 2:4 are read (structural sparsity)",
         "reason": "a DENSE committed word has no 2:4 zeros, so one sparse MMA reads only half the terms (a wrong word); "
-                  "the full word needs two complementary-metadata passes = the dense form's MAC cost (decision 60: 2:4 "
+                  "the full word needs two complementary-metadata passes = the dense form's MAC cost (2:4 "
                   "ties honest at 1.000 in the LP)",
     },
     {
@@ -204,33 +204,33 @@ CANDIDATES = [
         "name": "FP8 MMA (QMMA E4M3/E5M2)", "device": "all", "cls": "DECOMPOSE", "D": 4, "escape": False,
         "isa": "mma.sync...f32.e4m3.e4m3.f32 m16n8k32: E4M3 holds integers exactly only to 16, so an int8 operand needs "
                "a 2-piece split and the product 4 QMMA passes",
-        "reason": "int8 is not E4M3-exact (e.g. 17, 127 are not), so 4 QMMA a word; QMMA ~1x int8 TOPS (FP-EXACT 0.985x), "
-                  "so 4 passes = 0.25x int8; the FP8 DESIGNS (parked, decision 64) are the only ones it fits",
+        "reason": "int8 is not E4M3-exact (e.g. 17, 127 are not), so 4 QMMA a word; QMMA ~1x int8 TOPS (fp_exact's 0.985x), "
+                  "so 4 passes = 0.25x int8; the FP8 DESIGNS (parked) are the only ones it fits",
     },
     {
         "name": "FP6 MMA (QMMA E3M2/E2M3, kind::f8f6f4)", "device": "sm_120", "cls": "DECOMPOSE", "D": 4,
         "escape": False,
         "isa": "mma.sync.kind::f8f6f4 m16n8k32 at e3m2 or e2m3 assembles to the same QMMA.16832 as E4M3 on sm_120a "
-               "(r20261019-050044-6f93) and runs at E4M3's rate, 0.2461 a SM-cycle (r20261019-052144-b4a4)",
+               "and runs at E4M3's rate, 0.2461 a SM-cycle",
         "reason": "E3M2 holds integers exactly only to 8 and E2M3 only to 7, so an int8 operand needs >= 2 pieces and a "
                   "product >= 4 QMMA passes; at QMMA's measured 0.992x IMMA that is <= 0.25x int8",
     },
     {
         "name": "FP64 MMA (DMMA.8x8x4)", "device": "sm_120 (also sm_80..sm_100)", "cls": "DECOMPOSE", "D": 1,
         "escape": False,
-        "isa": "mma.sync.m8n8k4.f64 assembles to one DMMA.8x8x4 on sm_120a (r20261019-050044-6f93): 64 f64 dot products "
+        "isa": "mma.sync.m8n8k4.f64 assembles to one DMMA.8x8x4 on sm_120a: 64 f64 dot products "
                "of depth 4, exact for int8 (a 32-MAC word is <= 2^19, f64 exact to 2^53)",
-        "reason": "exact at D = 1, but measured at 0.0068 DMMA a SM-cycle (r20261019-052144-b4a4), 1.74 MACs a SM-cycle "
+        "reason": "exact at D = 1, but measured at 0.0068 DMMA a SM-cycle, 1.74 MACs a SM-cycle "
                   "against IMMA s8's 1016, 1/584 of int8's rate; packing two products a MAC in the 53-bit mantissa "
                   "leaves 1/292. On issue a 32-MAC word takes 8 DMMA for 64 words (8 a slot against IMMA's 128) plus "
                   "an F2I each, so it loses on both rows",
     },
     {
         "name": "FP4 MMA (OMMA/QMMA E2M1, dense and 2:4)", "device": "all", "cls": "DECOMPOSE", "D": 8, "escape": False,
-        "isa": "mma.sync...e2m1.e2m1 m16n8k64 (OMMA 1.951x IMMA, 2:4 3.761x; decision 60): E2M1 holds only {0,.5,1,1.5,"
+        "isa": "mma.sync...e2m1.e2m1 m16n8k64 (OMMA 1.951x IMMA, 2:4 3.761x): E2M1 holds only {0,.5,1,1.5,"
                "2,3,4,6}, so an int8 operand needs many pieces",
         "reason": "int8 is not E2M1-representable, so >= 8 OMMA a word; at <= 4x int8 TOPS that is <= 0.5x int8; the FP4 "
-                  "designs are parked (decision 64, +19% perplexity at best)",
+                  "designs are parked (+19% perplexity at best)",
     },
     {
         "name": "DPX (sm_90 __vimax3/__viaddmax; __vimnmx on sm_120)", "device": "sm_90 (VIMNMX all)",
@@ -281,8 +281,8 @@ CANDIDATES = [
     {
         "name": "IADD.64 / IMNMX.64 / SEL.64 (two destination words, no multiply)", "device": "sm_120",
         "cls": "NO-MULTIPLY", "D": None, "escape": False,
-        "isa": "a register pair a lane: add.u64 assembles to one IADD.64 on sm_120a (r20261019-070108-91a5; either "
-               "operand negated, the sass_gate fixtures), IMNMX.U64 is in FOLD-FANIN's table (TS.lean) and SEL.64 in "
+        "isa": "a register pair a lane: add.u64 assembles to one IADD.64 on sm_120a (either "
+               "operand negated, the sass_gate fixtures), IMNMX.U64 is in TS.lean's fan-in table and SEL.64 in "
                "harness/sass_pins.json",
         "reason": "no multiply, so they sum, compare or select existing words (not fresh); as a fold step, fold_wide3.c "
                   "finds no program whose last instruction writes fx1's two outputs as one IADD.64, IMNMX.64 or SEL.64 "
@@ -292,17 +292,17 @@ CANDIDATES = [
         "name": "uniform datapath beside saturated async wgmma / tcgen05.mma", "device": "sm_90, sm_100",
         "cls": "WATCH", "D": 1, "escape": False,
         "isa": "UIMAD is an exact s32 MAC, one warp-uniform word an instruction; the census priced it on issue beside "
-               "mma.sync (decisions 73, 84, 88), NOT beside a saturated asynchronous wgmma/tcgen05.mma",
-        "reason": "bounded by the issue ceiling (decision 84: one instruction a cycle whatever the pipe, uniform "
+               "mma.sync, NOT beside a saturated asynchronous wgmma/tcgen05.mma",
+        "reason": "bounded by the issue ceiling (one instruction a cycle whatever the pipe, uniform "
                   "included), and the uniform route is already ~0% of the H200/B200 headline eps; sm_100 MEASURED at "
-                  "saturation, no dual-issue (dc/probes/sm100_a2u.cu, r20261019-055605-6cc2: the chain stays on the "
+                  "saturation, no dual-issue (dc/probes/sm100_a2u.cu: the chain stays on the "
                   "uniform datapath beside tcgen05.mma, total issue <= 0.9996 an SMSP-cycle at K 32-135, each uniform "
                   "instruction 0.95-1.10 of a lane slot); sm_90 MEASURED near saturation, no dual-issue "
-                  "(dc/probes/sm90_emp.cu emp_pack3, r20261019-064443-0ae6: the chain uniform beside 4 wgmma s8 n128 a "
+                  "(dc/probes/sm90_emp.cu emp_pack3: the chain uniform beside 4 wgmma s8 n128 a "
                   "group, issue 0.87, each uniform instruction 1.08-1.19 SMSP-cycles)",
     },
     # -- sm_100 (B200) only: the 5th-gen tensor core's TMEM movers, block-scaled low-precision forms, and the
-    # decompression engine (RT-BLACKWELL, note:20261019T0501Z). The writer tcgen05.mma IS the honest priced route; the
+    # decompression engine. The writer tcgen05.mma IS the honest priced route; the
     # instructions below are the Blackwell-distinctive ones a cheater would reach for beyond it.
     {
         "name": "tcgen05.cp (shared -> tensor-memory copy)", "device": "sm_100", "cls": "MOVER", "D": None,
@@ -322,7 +322,7 @@ CANDIDATES = [
         "isa": "LDTM/STTM move words between TMEM and registers (LDTM_32X32B_X128 reads 128 words/thread = 4096 bits); "
                "no arithmetic",
         "reason": "a loaded/stored word equals an existing word (a copy); the TMEM read port is the TL facet (a load "
-                  "hides beside a saturated issue, decision 89), and it heads no fresh product",
+                  "hides beside a saturated issue), and it heads no fresh product",
     },
     {
         "name": "block-scaled FP6 MMA (mxf8f6f4, E2M3 / E3M2)", "device": "sm_100", "cls": "DECOMPOSE", "D": 4,
@@ -357,11 +357,11 @@ CANDIDATES = [
 def main() -> int:
     checks = Checks()
 
-    # -- coverage: every candidate the brief names is enumerated, with a class and a verdict --------------------------
+    # -- coverage: every candidate is enumerated, with a class and a verdict --------------------------
     brief = ["redux", "L2 reduction", "TMA bulk reduce", "IDP4A", "IDP2A", "sparse IMMA", "BMMA", "s4 IMMA", "FP16",
              "FP8", "FP6", "FP4", "FP64", "DPX", "VABSDIFF4", "texture", "async copy", "ldmatrix", "PRMT", "IMAD.WIDE",
              "IADD.64", "uniform",
-             # sm_100 (B200) word ISA (RT-BLACKWELL)
+             # sm_100 (B200) word ISA
              "tcgen05.cp", "tcgen05.shift", "tcgen05.ld", "mxf4", "decompression"]
     joined = " | ".join(c["name"] for c in CANDIDATES)
     for b in brief:
@@ -390,8 +390,8 @@ def main() -> int:
     checks.check("a reducer's output is not a product of two operands (no multiply -> no fresh dot-product term)",
                  red_ne_prod)
 
-    # -- redux/shuffle-tree as a FOLD: a cross-lane reduction forfeits SIMT, so it cannot undercut duo's fold ----------
-    # The committed word is also "an input to the receipt fold", so a cheaper FOLD would raise eps_mand. duo folds
+    # -- redux/shuffle-tree as a fold: a cross-lane reduction forfeits SIMT, so it cannot undercut duo's fold ----------
+    # The committed word is also "an input to the receipt fold", so a cheaper fold would raise eps_mand. duo folds
     # vertically: each of the 32 lanes folds its own word, so a warp instruction advances 32 words at once and the fold
     # costs (ALU + IMAD) = 3 lane instructions a word. redux reduces horizontally: all 32 lanes collapse to one result,
     # so one warp instruction heads one word -- 32 lane instructions a word, whatever the op and however it is masked
@@ -400,10 +400,10 @@ def main() -> int:
     design = tomllib.loads(DESIGNS.read_text(encoding="utf-8"))
     fold_cost = sum(v for v in design["fold"].values() if isinstance(v, int))  # duo: ALU 2 + IMAD 1 = 3
     redux_fold_cost = LANES  # one word a warp instruction = 32 lane instructions a word
-    checks.check("designs.toml fold is duo at 3 lane instructions a word (FOLD's assumption)", fold_cost == 3,
+    checks.check("designs.toml fold is duo at 3 lane instructions a word (FOLD-OPT's count)", fold_cost == 3,
                  f"{design['fold']['name']} = {fold_cost}")
     checks.check("redux/shuffle-tree fold (cross-lane, 1 word a warp instruction) costs 32 lane instructions a word > "
-                 "duo's (FOLD holds: no cheaper fold, so eps_mand stays 0)", redux_fold_cost > fold_cost,
+                 "duo's (FOLD-OPT holds: no cheaper fold, so eps_mand stays 0)", redux_fold_cost > fold_cost,
                  f"redux {redux_fold_cost} vs duo {fold_cost} lane-instructions/word")
     checks.check("redux fold (32 lane-instructions/word) is also well past q* (>= 1.22), so it never beats the lane route",
                  redux_fold_cost > 1.22)
@@ -506,11 +506,11 @@ def main() -> int:
                  all(c["D"] is None and c["cls"] == "MOVER"
                      for c in sm100 if any(n in c["name"] for n in mover_names)))
 
-    # -- the int8-equivalent throughput of every non-IMMA tensor form is <= IMMA s8's (decision 81's best form holds) --
+    # -- the int8-equivalent throughput of every non-IMMA tensor form is <= IMMA s8's (the per-form pricing's best form holds) --
     # The tensor core's peak bit-operation throughput is conserved: a lower-precision form's int8 rate is its peak TOPS
     # ratio over int8 divided by D, the int8 unit-products a committed word decomposes into. eff <= 1 means the form ties
     # (eff == 1, no saving under the tensor theorem) or loses. The TOPS ratios are GENEROUS upper bounds (measured <=
-    # these: FP-EXACT, decision 60, sm_90 BMMA census), so the closure is robust. 2:4 sparsity doubles the TOPS ratio but
+    # these: fp_exact, the LP's 2:4 tie, sm_90 BMMA census), so the closure is robust. 2:4 sparsity doubles the TOPS ratio but
     # a DENSE committed word has no structural zeros, so it needs two complementary-metadata passes (D doubles too).
     tensor = [  # (name, peak TOPS ratio vs int8 [generous], D int8 unit-products a committed word)
         ("IMMA16816 (s8, k16)", 1.0, 1),

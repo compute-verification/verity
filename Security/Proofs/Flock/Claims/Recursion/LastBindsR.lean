@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.KS.PlainDrawRColsE
-import Proofs.Flock.Claims.KS.PlainLock
-import Proofs.Flock.Claims.Complete.Zk.Run
-import Proofs.Flock.Claims.Recursion.VStarCross
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawRColsE
+public import Proofs.Flock.Claims.KS.PlainLock
+public import Proofs.Flock.Claims.Complete.Zk.Run
+public import Proofs.Flock.Claims.Recursion.VStarCross
 
 /-!
 # (P4) modulo what `E*` reads, and `LastCoinFree`, at the deployed reader (`nextR`)
@@ -23,6 +25,8 @@ they are at `bdDeployed` with the deployed reader's steps `nextR rd`, its column
   (`RecDeploy.RCallsBind`) (`RecDeploy.rLastBinds_of`), as `PlainLastBindsOrSlack` does at the plain verifier, with no
   decoder slack: `nextR` decides on proofs, not proof files.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -167,7 +171,7 @@ def RColsBind (H : Msg → Msg) (rd : Msg → Option FinalP) : Prop :=
 
 /-- **The deployed reader binds its last message's calls**: two last messages it accepts after the same rounds and
 coins, where it answered each earlier round with that round's coin, whose decisions call SHA-512 on different sets,
-show a collision among those calls. The calls are compared as sets (ASK-76), as at the plain verifier. -/
+show a collision among those calls. The calls are compared as sets, as at the plain verifier. -/
 def RCallsBind (H : Msg → Msg) (rd : Msg → Option FinalP) : Prop :=
   ∀ (x : Msg) (ms : List Msg) (l l' : Msg) (cs : List Coin), ms.length + 1 = (FlockDeploy.V false).k x →
     cs.length = ms.length + 1 →

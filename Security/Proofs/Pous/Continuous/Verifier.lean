@@ -1,10 +1,12 @@
-import Definitions.Pous.Model.Continuous
+module
+
+public import Definitions.Pous.Model.Continuous
 
 /-!
 # The continuous audit's memory challenger enforces its three rules
 
-PR #896's draft assumed three requirements on the protocol. Each is proved here of the memory challenger in
-`Security/Definitions/Pous/Model/Continuous.lean`, for every machine.
+A round-structured model would assume three requirements on the protocol. Each is proved here of the memory challenger
+in `Security/Definitions/Pous/Model/Continuous.lean`, for every machine.
 
 1. **No pipelining.** `close_le_send`: round `j + 1` is sent no earlier than round `j` closed.
    `contRecords_getElem?`: round `j`'s record is the record of `i_j` after the indices before it, so it depends only on
@@ -15,6 +17,8 @@ PR #896's draft assumed three requirements on the protocol. Each is proved here 
 3. **Every answer past `Δ` is counted.** `hit_on_time`: a hit took at most `D` units and `Q` queries and returned the
    right block. `late_not_hit`: an answer past `(D, Q)` is never a hit.
 -/
+
+@[expose] public section
 
 namespace PousContinuous
 

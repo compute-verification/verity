@@ -289,7 +289,7 @@ def test_frontier_at_the_floor(monkeypatch):
 
 
 def test_built_point():
-    """The point's codec as ra-codec-tensor built it (12 warps): its untagged step lands inside the predicted decode
+    """The point's codec as the tensor-core codec built it (12 warps): its untagged step lands inside the predicted decode
     bracket at the locked clock and its tag (0.40) above the modelled 0.227. With W registered and the KV at 4 rounds
     γ_bw is 0.44%; F27 (a known payload's word at one round held in part) takes the no-assumption number from 0.81% to
     2.0%, and the batch-32 KV at one round to 2.0% (the red team's 2.1% and 1.98%), which two KV rounds fix."""

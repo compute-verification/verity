@@ -1,10 +1,12 @@
-import Definitions.NetworkCertifier.Warden
+module
+
+public import Definitions.NetworkCertifier.Warden
 
 /-!
 # The tap: one auditor device on each server's uplink, the warden and the certifier at once
 
 Definitions only. The warden (`Definitions.NetworkCertifier.Warden`) and the network certifier are one device, a tap
-on each AI server's uplink (Daniel, 25 Oct). Its one code run on what reaches it from the server (the `Arrivals` of each
+on each AI server's uplink. Its one code run on what reaches it from the server (the `Arrivals` of each
 connection) gives both what the client receives, the warden's cells (`wardenCode`), and the certifier's record of
 them, the observations the audits read (`tapCode`). Its trust is one `trusted-host`
 (`Verity.Assumptions.TrustedHost`) over that code, with no second device and no second trust, so that what the
@@ -22,6 +24,8 @@ neither the client nor the record: the record fixes what the client received, no
 The tap is stated here, over `TrustedHost`'s shape (a device, its run and its code), so that core's device vocabulary
 can lift it as it is: `TapRecord` and `tapCode` read nothing of network accounting but the warden's code.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

@@ -1,5 +1,5 @@
 """load-commit: what the network certifier's commit of the weights' load costs on the auditor host, per core, for the demo's
-frozen H200 shape (CMP-92: MQA, width 16,384, 52 layers, MLP 65,536, byte vocabulary, context 32; 130.10 GiB of INT8
+frozen H200 shape (MQA, width 16,384, 52 layers, MLP 65,536, byte vocabulary, context 32; 130.10 GiB of INT8
 W8A8 weights, P2-encoded into about 0.93·U of HBM).
 
 Two commitments of the load, each measured exactly as its verifier recomputes it (each checked, on a sample, against the
@@ -7,14 +7,14 @@ reference it must equal):
 
 * ``hm96``: the certifier's own (`certifier.transfer_rows`, `one_stage.registered`): every weight row a registered
   value's row under `hm96-sha512/row/v2`, its own 192-byte salt from the operating system, a frame-v3-sha512 tree over
-  the rows. A row is what the circuit's registered reads take: an `S8AccumulatorPart_v1{K=256}` unit's weight row, 128
-  u16 words (256 int8 weights). Per row: ``x`` (3 compressions after the row prefix's midstate), the mask ``M·y`` (192
-  table rows of 64 bytes), ``c`` (2), the hm96 leaf (2), the frame leaf (2) and one tree node (3).
+  the rows. A row is what the circuit's registered reads take: an `S8AccumulatorPart_v1{K=256}` proof block's weight
+  row, 128 u16 words (256 int8 weights). Per row: ``x`` (3 compressions after the row prefix's midstate), the mask
+  ``M·y`` (192 table rows of 64 bytes), ``c`` (2), the hm96 leaf (2), the frame leaf (2) and one tree node (3).
 * ``store``: the P2 store's own root (PoUS's verification root, `pous.verifier`): each 2,056-byte block's
   `sha512/row/v2` digest (17 compressions after the prefix's midstate), its leaf (1) and one RFC 6962 node (2).
 
 ``raw`` is SHA-512 over 64 MiB buffers (the compression rate OpenSSL reaches on one core), and ``urandom`` the
-operating system's generator, which draws the hm96 salts.
+operating system's generator, which samples the hm96 salts.
 
     python benchmarks/network_traces/load_commit.py --out DIR [--rows 65536] [--blocks 8192] [--procs 1,4,16]
 
@@ -46,14 +46,14 @@ from verity.core.protocols.sampled_proofs.one_stage import registered as G
 INST = hm96.SHA512
 KEY = INST.default_key
 SCHEMA = G.SCHEMA_V2
-#: the load's row: 128 u16 words, one S8AccumulatorPart_v1{K=256} unit's weight row
+#: the load's row: 128 u16 words, one S8AccumulatorPart_v1{K=256} proof block's weight row
 ROW_WORDS = 128
 ROW_BYTES = 2 * ROW_WORDS
 #: P2 at its registered point (`pous.schemes.p2`): 2,056-byte blocks of 2,054 payload bytes, 2^16 blocks a segment
 P2_BLOCK, P2_PAYLOAD, P2_SEGMENT = 2056, 2054, 1 << 16
 PROGRAM = "00" * 64
 
-# the frozen shape (CMP-92, compute-accounting 23:00Z): per layer, (rows, cols) of each INT8 weight matrix, K = cols
+# the frozen shape: per layer, (rows, cols) of each INT8 weight matrix, K = cols
 D, LAYERS, MLP, HEAD, VOCAB, CTX = 16384, 52, 65536, 64, 256, 32
 MATRICES = {"wq": (D, D), "wk": (HEAD, D), "wv": (HEAD, D), "wo": (D, D), "up": (MLP, D), "down": (D, MLP)}
 

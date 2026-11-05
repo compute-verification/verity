@@ -1,11 +1,14 @@
-import Proofs.Flock.Soundness.TmplUnrollAt
-import Proofs.Flock.Soundness.SparseRows
-import Proofs.Flock.C3.Reps.ReadWhole
-import Flock.TmplReads
-import Flock.KnownRead
+module
+
+public import Proofs.Flock.Soundness.TmplUnrollAt
+public import Proofs.Flock.Soundness.SparseRows
+public import Proofs.Flock.C3.Reps.ReadWhole
+public import Flock.TmplReads
+public import Flock.KnownRead
+import all Init.Util
 
 /-!
-# A templated unit's surely read columns are read by its committed net (PRF-133)
+# A templated unit's surely read columns are read by its committed net
 
 `Tmpl.readsSure` marks, from the template's description, input columns that a row of `Tmpl.rows` from the input rows to
 the constant reads (`Flock.TmplReads.rows_sure`). On the committed net (`Tmpl.unitNet`, `Tmpl.unrollAt`'s under
@@ -13,6 +16,8 @@ the constant reads (`Flock.TmplReads.rows_sure`). On the committed net (`Tmpl.un
 a row past them is placed past them and before the constant. So where `KnownRead.readsOk` checks a templated unit's known
 bits at the columns `KnownRead.sureReads` gives, it accepts only what it would at `readIns` (`readsAt_of_readsOk`).
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl
 

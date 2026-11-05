@@ -1,9 +1,11 @@
-import Mathlib.Algebra.Order.BigOperators.Ring.Finset
-import Mathlib.Tactic
-import Definitions.Pouw.TileBound.AlignedExactDefs
+module
+
+public import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+public import Mathlib.Tactic
+public import Definitions.Pouw.TileBound.AlignedExactDefs
 
 /-!
-# Aligned exactness: from one row to a whole region (the TT_OUT restatements lane)
+# Aligned exactness: from one row to a whole region
 
 `no-aligned-exact-region/sm120-unpromoted` says no `a × b` block of a unit's output words is exact on every step of a
 window, except with negligible probability over E_A. This file proves the step that handles the dependence through
@@ -25,6 +27,8 @@ shared rows, columns and noise lines, as a counting statement over the rows' raw
   short, wide region the rows are the shorter side, so `θ` is needed at the wide side's column count: at 432 × 1,728,
   θ < 2^−20 at 1,728 columns.
 -/
+
+@[expose] public section
 
 namespace Pouw.AlignedExact
 

@@ -1,4 +1,4 @@
-"""MEM-94's GPU smoke: the POUS option (`protocols.pous`, ``pous:p2-16448/v4``) over Llama-3.2-1B int8's real linears on one
+"""A GPU smoke of the POUS option (`protocols.pous`, ``pous:p2-16448/v4``) over Llama-3.2-1B int8's real linears on one
 GPU, timed (not collected; `pous_gpu.sh` runs it under a lease).
 
 The model stands in for vLLM's at TP 1: each decoder layer's four linears as vLLM's Llama holds them (``qkv_proj``, q, k and v

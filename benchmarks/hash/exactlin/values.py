@@ -2,10 +2,11 @@
 linears' y checked bit for bit against steps.py's CPU oracle, int8_exact on the CPU, a GPU rerun and every row alone) with
 `exactlin.install()` first, so every linear serves from the two Triton kernels.  The bodies count their calls, written to
 OUT/exactlin_calls.json, so a run where they never served shows it.  Arguments are int8_exact_gpu's, plus `--scratch`
-(ignored), as served.sh passes it; run from integrations/vllm.
+(ignored), as served.sh passes it; run from integrations/vllm.  `--at` and `--by` are the pin entry's resolved_at and
+resolved_by.
 
     SERVED_SCRIPT=benchmarks/hash/exactlin/values.py SERVED_KGATE=1 bash benchmarks/hash/exactlin/served.sh \
-      --at 2026-10-19T00:00:00Z --by kernels --int8-exact linears
+      --at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --by WHO --int8-exact linears
 """
 from __future__ import annotations
 

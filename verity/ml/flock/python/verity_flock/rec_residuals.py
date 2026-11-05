@@ -15,8 +15,8 @@ then zero words.
   commits them (`rec_live.message_rows`). The verifier registers the round's two ``c_k`` (rep 0's, rep 1's) as the value
   ``rec-c<i>`` from the inner session's public record alone (`commits_entry`: a registered value's tree over the given
   ``b || c``), and instance r reads row r: the prover opens the row it committed in the inner session under its salt, so
-  each message is the one the coins after it were drawn against. A holo shape's h round (`rec_algebra.h_round`) is one of
-  them, absorbed after z_partial and before r′ and ζ_c are drawn: the one registered value both this statement (L4′, h an XOR
+  each message is the one the coins after it were sampled against. A holo shape's h round (`rec_algebra.h_round`) is one of
+  them, absorbed after z_partial and before r′ and ζ_c are sampled: the one registered value both this statement (L4′, h an XOR
   term of the comb's operand, no product of its own) and `rec_sparse.RecSparse`'s ``h`` (H1) read at row r.
 * ``acc0``, ``acc1``: the rep's running sums before its first opening and after its last (two F elements, then the 48 words
   `rec_open` carries): rows of the prover's ``rec-acc`` registration, which the opening statements read too
@@ -64,6 +64,7 @@ from verity.ml.circuits.ops.boolean import gf2k as G
 
 from . import circuit as FC
 from . import ir_lower as IL
+from . import rec_budget as RB
 from .class_statement import ClassDefinition
 
 __all__ = ["HOLO_KEY", "InnerRepCheck", "MAX_LONE_SLOTS", "MAX_REGIONS", "MAX_SLOTS", "OUT_WORDS", "commits_entry", "definition", "parts", "port_words", "regions",
@@ -75,8 +76,8 @@ OUT_WORDS = 128
 F_WORDS = 8
 ROW_BLOCK = 64
 LEAVES = 3 ** 7
-ZERO_SALT = b"verity/rec-v0/zero-residual-salt/v0"
-VERIFIER_SALT = b"verity/rec-v0/verifier-salt/v0"
+ZERO_SALT = b"verity/rec-v1/zero-residual-salt/v1"
+VERIFIER_SALT = b"verity/rec-v1/verifier-salt/v1"
 ZERO_VALUE = "rec-residuals-zero"
 V_VALUE = "rec-v"
 # the META key that says the statement is over a holo shape's parts (`rec_algebra.Shape.holo`), written only when true: the
@@ -95,7 +96,7 @@ MAX_SLOTS = 160
 # grow), so the parts of a shape whose residuals each fit MAX_SLOTS are unchanged, and the bound reaches only residuals
 # MAX_SLOTS refuses. The widest, the batched T, reads 172 slots at 16 claims (llama32-1b/b1/i256's 2^29 bucket), 194 at 18
 # and 215 at 20, beside hm96's 2^23 (32 slots of 2^18), a 2^23 unit (32) and the mask (one): 191 fill a 2^26 block, so past
-# it a lone part's block is 2^27 = circuit.K_MAX, which holds 447 (runs r20261010-212155-f5ab, r20261010-223054-2894: 172 at
+# it a lone part's block is 2^27 = circuit.K_MAX, which holds 447 (172 at
 # k_log 26, 194 to 215 at 27). 21 claims' 226 refuse
 MAX_LONE_SLOTS = 223
 
@@ -402,9 +403,14 @@ def subcircuit(S: dict, name: str) -> SimpleNamespace:
 
 # --- the statement ----------------------------------------------------------------------------------------------------------
 
+def salt_of(msg: bytes) -> bytes:
+    """A salt from ``msg`` (`Flock.RecCoins.saltOf`): SHA-512 in counter mode, ``SHA-512(msg || u32be c)`` for each of the
+    salt's 64-byte blocks, each output whole."""
+    return b"".join(hashlib.sha512(msg + c.to_bytes(4, "big")).digest() for c in range(hm96.SHA512.salt_bytes // 64))
+
+
 def zero_salts(value: str, n: int) -> list[bytes]:
-    return [hashlib.shake_256(ZERO_SALT + value.encode() + b"\0" + i.to_bytes(4, "little")).digest(hm96.SHA512.salt_bytes)
-            for i in range(n)]
+    return [salt_of(ZERO_SALT + value.encode() + b"\0" + i.to_bytes(4, "little")) for i in range(n)]
 
 
 def verifier_salts(program: str, value: str, n: int) -> list[bytes]:
@@ -412,7 +418,7 @@ def verifier_salts(program: str, value: str, n: int) -> list[bytes]:
     i alone. They are public, as the rows are: the commitment's binding (cr/sha-512) is what the reads need, and it hides
     nothing the verifier does not publish."""
     head = VERIFIER_SALT + b"\0" + program.encode() + b"\0" + value.encode() + b"\0"
-    return [hashlib.shake_256(head + i.to_bytes(4, "little")).digest(hm96.SHA512.salt_bytes) for i in range(n)]
+    return [salt_of(head + i.to_bytes(4, "little")) for i in range(n)]
 
 
 def verifier_value(program: str, value: str, rows: list[list[int]]):
@@ -517,6 +523,7 @@ def write_rows(st: SimpleNamespace, reads: dict, vrows: list[list[int]], out_dir
     (d / "circuit.txt").write_text(text)
     (d / "program.json").write_bytes(canonical_json(encode_program(st.program)))
     (d / "partition.json").write_text(json.dumps(st.part))
+    RB.check({"format": RG.READS, "ports": entries}, st.defn.id, n)
     (d / "registered.json").write_text(json.dumps({"format": RG.READS, "ports": entries}))
     ds = getattr(st, "digests", None) or (FC.digest(text), FC.class_digest(text))
     FC.write(text, SimpleNamespace(name=st.zero_value, subcircuit=sub), 0, n, d / "inst.bin", d / "pub.bin", None, list(range(n)),

@@ -1,9 +1,9 @@
 """`records.served_tokens`: the driver's served tokens as its three writers write them, refused by name when a field they all
-write is missing, and read by GM-01's chronology check (`check.match.chronology`, G6) to the same document as the parsed JSON.
+write is missing, and read by the global match's chronology check (`check.match.chronology`, G6) to the same document as the parsed JSON.
 
-`data/served_tokens.json` is a real record: the one-process capture's `match/capture/tokens.json` of the regression row
-`llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager` (`tests/regression/fixtures.toml`, sha256
-c83936017d07...), byte for byte.  The G6 runs are GM-01's toy (`tests.check.test_global_match`), with the driver's record rewritten
+`data/served_tokens.json` is a real record: the one-process capture's `match/capture/tokens.json` of the regression workload
+`llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager` (`tests/regression/files.toml`, sha256
+c83936017d07...), byte for byte.  The G6 runs are the global match's toy (`tests.check.test_global_match`), with the driver's record rewritten
 to each writer's field set and to the claims G6 holds it to.
 """
 from __future__ import annotations
@@ -24,10 +24,10 @@ from verity_vllm.records.served_tokens import ServedRequest, ServedTokens
 
 DATA = Path(__file__).parent / "data"
 REAL = DATA / "served_tokens.json"
-#: sha256 of GM-01's outcomes over `_corpus` (`json.dumps(..., sort_keys=True, default=str)`, the run directory replaced), computed
+#: sha256 of the global match's outcomes over `_corpus` (`json.dumps(..., sort_keys=True, default=str)`, the run directory replaced), computed
 #: with G6 on the parsed JSON before it read the record, then once more when G6 began refusing a declared request the record has no
 #: entry for: that turned `a request unserved` and `no requests` from PASS to FAIL, and changed no other case
-OUTCOMES_SHA256 = "62242ae637e0288d12463f771cb135ae9131d6f271a66958a82cb2d2a879928c"
+OUTCOMES_SHA256 = "e1c4765cc877c03197d6e5546636ead5397ab51157445b575fcb4b590e513d8d"
 REQUIRED = ("requests", "requests[0].request_id", "requests[0].generated_token_ids", "lag.value")
 OPTIONAL = ("arrive_step_realized", "first_step", "finish_step", "finish_reason", "served_output_len", "executed_prefix_len")
 #: the TP capture's request fields (`pipeline.tp.capture`), and the TP Match arms' (`pipeline.tp.match`)
@@ -143,7 +143,7 @@ def _outcome(gp: dict, oracle: str, tokens_optional: bool = False) -> dict:
 
 
 def _corpus(tmp_path: Path) -> dict[str, dict]:
-    """GM-01 over the driver's record as each writer writes it and as each G6 leg reads it: served to the cap, an EOS stop under a
+    """The global match over the driver's record as each writer writes it and as each G6 path reads it: served to the cap, an EOS stop under a
     synchronous Program, an EOS stop under a LAG-1 Program with the one-process capture's claims; agreeing and not."""
     out: dict[str, dict] = {}
 
@@ -212,7 +212,7 @@ _POP = object()
 
 
 def test_g6_reads_the_record_to_the_same_document(memory, tmp_path):
-    """Every outcome of GM-01 over `_corpus` (verdict, G6's check, the per-request account) is what it was when G6 read the parsed
+    """Every outcome of the global match over `_corpus` (verdict, G6's check, the per-request account) is what it was when G6 read the parsed
     JSON."""
     got = _corpus(tmp_path)
     assert {k: v["verdict"] for k, v in got.items()}["as written"] == "PASS"
@@ -255,7 +255,7 @@ def _omitted(rid: str) -> str:
 @pytest.mark.parametrize("requests,shortfall", [((T.R0, T.R1), None),
                                                ((T.R0, T.R1_EOS), "engine steps [2, 3]: live requests observed [1, 0] != programmed [2, 1] -- "
                                                                   "the shortfall is not after a verified EOS (['r1'] stopped early without one): "
-                                                                  "declared schedule not exercised (M-0571 (1))")],
+                                                                  "declared schedule not exercised")],
                          ids=["served to the cap", "eos stop"])
 @pytest.mark.parametrize("tokens_optional", [False, True])
 def test_g6_refuses_a_declared_request_the_driver_omits(memory, tmp_path, requests, shortfall, tokens_optional):

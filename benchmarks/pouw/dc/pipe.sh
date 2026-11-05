@@ -2,7 +2,7 @@
 # The honest pipelined Dither GEMM on one B200 (pgemm.cu): its gates at L = 32 and 64, then its rate at L = 32, 64, 128
 # and 256 in each arm, against ρ_T5. From a pushed commit, on a 1x B200 node:
 #
-#   research run --on <node> --project verity --campaign cmp-13 --source <tree> --cwd source --custody-ttl 12h \
+#   research run --on <node> --project verity --source <tree> --cwd source --custody-ttl 12h \
 #     --timeout 40m --env GPU_LEASE_WHO=dc -- bash benchmarks/pouw/dc/pipe.sh
 #
 # Outside the lease: build pgemm (build.log, ptxas -v), dump its SASS (sass/pgemm.sass) and refuse a kernel that spills or

@@ -48,7 +48,7 @@ def test_fold_discards_partial_prefill_samples(memory):
 def test_fold_served_rule_is_seq_lens_not_positions(memory):
     # negative: the same events with StepStart.seq_lens claiming the prompt complete after step 0 -> the step-0 sample is SERVED
     # (seq_len 2 >= prompt 2 + 0 served), although position 0 alone was fed: the decision is seq_lens', not the positions'.
-    # [R9 ref 2026-09-18] the rule is vLLM's full one, `seq_len >= prompt_len + served so far` (`num_tokens` counts the output
+    # the rule is vLLM's full one, `seq_len >= prompt_len + served so far` (`num_tokens` counts the output
     # tokens; identical to `seq_len >= prompt_len` on every run without preemption): step 1 then claims seq_len 2 < 2 + 1 and
     # its sample is discarded (the engine would drop a chunk that ends inside already-generated tokens); step 2's is served.
     r = fold(_chunked_toy_log(seq_len_at_step0=2), TFS.toy_profile(), strict=True)

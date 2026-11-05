@@ -1,8 +1,10 @@
-import Definitions.Accounting.RateAuditSketchDeployed
-import Definitions.Accounting.RateAuditDeployed
-import Definitions.Accounting.Gates.Codec
-import Definitions.Accounting.Requirement
-import Mathlib.Data.ENat.Lattice
+module
+
+public import Definitions.Accounting.RateAuditSketchDeployed
+public import Definitions.Accounting.RateAuditDeployed
+public import Definitions.Accounting.Gates.Codec
+public import Definitions.Accounting.Requirement
+public import Mathlib.Data.ENat.Lattice
 
 /-!
 # Carriers: device memory whose post-seed contents are a circuit's values (trusted)
@@ -59,7 +61,7 @@ pass after it, so its coin was drawn after every pass of the windows before. `Li
 game's form: at the session's coins, every pass whose layout holds a block of append `t` is in a window from `joined t`
 to `joined t + L − 1`. The game draws every append's coin with the codec, so `joined` is the game's only record of when.
 
-**A pass on the devices' clocks.** A pass is bound to an engine step (#2378), and a placed execution
+**A pass on the devices' clocks.** A pass is bound to an engine step, and a placed execution
 (`Requirement.Placement`) says at which tick each device begins each step. Pass `j` of window `w` on device `d` is
 the `τ` ticks from the one at which `d` begins the pass's step (`Placement.passTicks`), and window `w` on `d` is its
 passes' ticks (`Placement.windowTicks`). On one clock with a placed execution's other windows (compute accounting's
@@ -87,6 +89,8 @@ own window's signs, and the window's earlier passes. Pass `j`'s store is the app
 prefix: a block appended after a pass's seed is in no plan of that pass, so a pass's store doesn't depend on its own
 coins.
 -/
+
+@[expose] public section
 
 namespace Accounting
 
@@ -150,7 +154,7 @@ def gates (cost : ℕ → ℕ∞) (E : SketchStore N m) : Provenance N m α → 
 /-- **A provenance that is `W`'s over the windows `I`** of the audit `A`: at every store its inputs are at most the
 bits of `W`'s run inputs in those windows, and its encodes, at `cost x` for `x` bits, cost at most `W`'s nonlinear
 units there: its budgeted units (`Gates.census`, property/v1's units) and its data products (`Gates.productsAt`). -/
-def OfCircuit {ι : Type} (K : Provenance N m α) (cost : ℕ → ℕ∞) (W : Gates.Dag ι) (A : Gates.Audit)
+def OfCircuit {ι : Type} (K : Provenance N m α) (cost : ℕ → ℕ∞) (W : Gates.IntDag ι) (A : Gates.Audit)
     (I : Finset ℕ) : Prop :=
   ∀ E, K.inputs E ≤ ∑ v ∈ I, (Gates.census W fun t => A.win t = v).runBits ∧
     K.gates cost E ≤

@@ -8,20 +8,20 @@ and `Q_call` v1 at `X <= 16`, and the programs this protocol builds for the temp
 * **Object, digest, program digest** are core's (`partition`, `digest`, `program_digest`, also named `program_sha512`). A
   record made before the canonical envelope names `{"program", "query"}`; `digest` gives it the envelope's rule,
   `SHA-512("verity/partition/v1\\0" || canon(object))`, which the roots registered with it bind.
-* **Units** are core's evaluation (`partition_object.evaluate`) of a query of valid form (`partition_object.validate`):
+* **Proof blocks** are core's evaluation (`partition_object.evaluate`) of a query of valid form (`partition_object.validate`):
   `QueryRefused` for a program that is not topological, or one the query does not apply to. The template queries (the
   served ones: a served window registers a population program under one), `Q_word` v1 at `X = 16` and `Q_call` v1 at
   `X <= 16` are the ones applied here. A template query reads the root body only; `Q_word` and `Q_call` lay out one
   activation of each distinct Call's Definition gate by gate, so they cost its unrolled size
-  (`benchmarks/verifier_cost/`'s `partition`). Every unit's committed bits fit a public size class (`UNIT_CLASSES`,
-  powers of two from 16 to `UNIT_CLASS_MAX` bits; ASK-61, Daniel 19 Oct 2:59 PM PDT, provisional), its class the least
-  that holds them (`unit_class`), a public property of its Definition: a program with a unit wider than the widest class
-  is refused (a template instance's bits are its distinct returned gates', `_template_bits`; a `Q_call` unit's count
+  (`benchmarks/verifier_cost/`'s `partition`). Every proof block's committed bits fit a public size class (`UNIT_CLASSES`,
+  powers of two from 16 to `UNIT_CLASS_MAX` bits; provisional), its class the least
+  that holds them (`unit_class`), a public property of its Definition: a program with a proof block wider than the widest class
+  is refused (a template instance's bits are its distinct returned gates', `_template_bits`; a `Q_call` proof block's count
   the constants and Input gates of its Definition's activation, `_committed_bits`, which `Q_call`'s width rule leaves
-  out; a `Q_word` unit's are its cut's), as is one with a template of no gate. `ranges`, `units` and `strata` read their
-  units in canonical order (node order, then member, for a template query; Call order, then the Call's own, for
+  out; a `Q_word` proof block's are its cut's), as is one with a template of no gate. `ranges`, `units` and `strata` read their
+  proof blocks in canonical order (node order, then member, for a template query; Call order, then the Call's own, for
   `Q_word` and `Q_call`), and `unit_gates` gives
-  each unit's root gates. `in_order` holds when the units read stratum by stratum are the population in order.
+  each proof block's root gates. `in_order` holds when the proof blocks read stratum by stratum are the population in order.
 * **Programs**: `population_program` (instances of one template, `TemplateInstances_v1{template, N}`) and
   `mixed_population_program` (of several, `TemplatePopulations_v1{templates, counts}`), whose binding records name the
   templates by descriptor id, are `verity.ml.circuits.population`'s, named here too: a serving stack builds its window's
@@ -29,7 +29,7 @@ and `Q_call` v1 at `X <= 16`, and the programs this protocol builds for the temp
   (`POPULATION_VERSIONS`).
 
 The verifier holds its own copy of the program and applies the query itself (`units`); it never takes a population or a
-unit index on the prover's word.
+proof block index on the prover's word.
 """
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ _PRE_CANONICAL = {"program", "query"}
 Q_WORD = ("Q_word", 1)
 #: `Q_word` v1's `X`, and the most `Q_call` v1's `X` may be: the width rule of the queries applied here.
 QUERY_X = 16
-#: The widest public size class of a unit's committed bits (the claims' `Claims.Sampling.unitClassMax`). 16 sets the
+#: The widest public size class of a proof block's committed bits (the claims' `Claims.Sampling.unitClassMax`). 16 sets the
 #: classes back to the former literal limit alone.
 UNIT_CLASS_MAX = 262_144
 #: The public size classes, ascending: the powers of two from 16 to `UNIT_CLASS_MAX` (the claims' `unitClasses`).
@@ -58,7 +58,7 @@ UNIT_CLASSES = tuple(16 << i for i in range((UNIT_CLASS_MAX // 16).bit_length())
 
 
 def unit_class(bits: int) -> int | None:
-    """The size class of a unit that commits `bits` bits: the least of `UNIT_CLASSES` that holds them, None when none
+    """The size class of a proof block that commits `bits` bits: the least of `UNIT_CLASSES` that holds them, None when none
     does."""
     return next((w for w in UNIT_CLASSES if bits <= w), None)
 
@@ -75,7 +75,7 @@ def digest(obj: Mapping[str, Any]) -> str:
 
 
 def _check_word(part: PO.Partition) -> None:
-    """Each `Q_word` unit's committed bits fit a public class (`unit_class`): each Definition's cut, once, on its Call's
+    """Each `Q_word` proof block's committed bits fit a public class (`unit_class`): each Definition's cut, once, on its Call's
     graph."""
     seen: set[str] = set()
     for p, (_k, c) in enumerate(part.calls):
@@ -94,7 +94,7 @@ def _check_word(part: PO.Partition) -> None:
 
 
 def _committed_bits(fn: Any, units: Sequence[tuple[int, int]]) -> list[int]:
-    """Per unit `[lo, hi)` of one activation of `fn` (its local gates, as `Q_call` numbers them), the bits it commits: the
+    """Per proof block `[lo, hi)` of one activation of `fn` (its local gates, as `Q_call` numbers them), the bits it commits: the
     summed declared widths of its gates that are Input gates, or that a later gate of the activation reads or the
     activation returns, constants included. Nothing outside an activation reads its gates but through its returns, so in
     any program this bounds the claims' `Prog.Boundary` count, as `Q_call`'s width rule bounds its computing gates'."""
@@ -132,7 +132,7 @@ def _template_bits(fn: Any) -> int:
 
 
 def _check_units(program: Program, part: PO.TemplatePartition | PO.CallPartition) -> None:
-    """Refuses a template of no gate, and a template instance or `Q_call` unit whose committed bits fit no public class
+    """Refuses a template of no gate, and a template instance or `Q_call` proof block whose committed bits fit no public class
     (`unit_class`; `_template_bits`, and `_committed_bits` with constants counted, which `Q_call`'s width rule leaves
     out), each Definition once, as activations of one Definition commit alike."""
     if isinstance(part, PO.TemplatePartition):
@@ -157,7 +157,7 @@ def _check_units(program: Program, part: PO.TemplatePartition | PO.CallPartition
 def evaluate(program: Program, query: Mapping[str, Any]) -> PO.TemplatePartition | PO.Partition | PO.CallPartition:
     """`query` applied to `program` by core, once core accepts the query's form; `QueryRefused` when the query is malformed,
     is not one applied here (a template query, `Q_word` v1 at `X = 16` or `Q_call` v1 at `X <= 16`), does not apply to the
-    program (core's refusals, a program that is not topological among them), or has a unit wider than the widest public
+    program (core's refusals, a program that is not topological among them), or has a proof block wider than the widest public
     class (`_check_word`, `_check_units`) or a template of no gate."""
     obj = PO.build(program, query)
     v, q = PO.validate(obj), obj["query"]
@@ -181,8 +181,8 @@ def evaluate(program: Program, query: Mapping[str, Any]) -> PO.TemplatePartition
 
 
 def ranges(program: Program, query: Mapping[str, Any]) -> list[tuple[str, int, int]]:
-    """`query` applied to `program`: (template or Definition id, first unit index, unit count) per root node computing
-    units (a template query's) or per Call with units (`Q_word`'s and `Q_call`'s), in canonical order."""
+    """`query` applied to `program`: (template or Definition id, first proof block index, proof block count) per root node computing
+    proof blocks (a template query's) or per Call with proof blocks (`Q_word`'s and `Q_call`'s), in canonical order."""
     part = evaluate(program, query)
     if isinstance(part, PO.TemplatePartition):
         return [(tid, lo, n) for _k, tid, lo, n in part.ranges]
@@ -196,14 +196,14 @@ def ranges(program: Program, query: Mapping[str, Any]) -> list[tuple[str, int, i
 
 
 def units(program: Program, query: Mapping[str, Any]) -> int:
-    """The population of `query` applied to `program`: the number of units, indexed 0.. in canonical order."""
+    """The population of `query` applied to `program`: the number of proof blocks, indexed 0.. in canonical order."""
     return evaluate(program, query).population
 
 
 def strata(program: Program, query: Mapping[str, Any]) -> list[tuple[str, list[list[int]]]]:
-    """`query` applied to `program`, grouped by template or Definition: one stratum per descriptor id, its units as
+    """`query` applied to `program`, grouped by template or Definition: one stratum per descriptor id, its proof blocks as
     ascending, disjoint half-open ranges `[lo, hi)` with adjacent ones merged, the strata in the order of their first
-    unit. These are the stratified law's strata, which each verifier derives from its own copies."""
+    proof block. These are the stratified sampling design's strata, which each verifier derives from its own copies."""
     groups: dict[str, list[list[int]]] = {}
     for tid, lo, n in ranges(program, query):
         rs = groups.setdefault(tid, [])
@@ -215,9 +215,9 @@ def strata(program: Program, query: Mapping[str, Any]) -> list[tuple[str, list[l
 
 
 def unit_gates(program: Program, query: Mapping[str, Any]) -> list[tuple[int, int]]:
-    """Each unit's root gates `[lo, hi)`, by unit: an instance's (`TemplatePartition.gates`), a `Q_call` unit's interval
-    (`CallPartition.gates`), or the span of the computing gates a `Q_word` unit owns, from the least to past the greatest,
-    which another unit's gates may interleave."""
+    """Each proof block's root gates `[lo, hi)`, by proof block: an instance's (`TemplatePartition.gates`), a `Q_call` proof block's interval
+    (`CallPartition.gates`), or the span of the computing gates a `Q_word` proof block owns, from the least to past the greatest,
+    which another proof block's gates may interleave."""
     part = evaluate(program, query)
     if not isinstance(part, PO.Partition):
         return [part.gates(u) for u in range(part.population)]
@@ -235,9 +235,9 @@ def unit_gates(program: Program, query: Mapping[str, Any]) -> list[tuple[int, in
 
 
 def in_order(program: Program, query: Mapping[str, Any], n: int) -> bool:
-    """`Slots.popOk`: `query` applies to `program`, every unit has its gates (`unit_gates`), and the units read stratum by
-    stratum (`strata`) are `0, ..., n - 1` in order, so slot `u` is unit `u`. The run refuses a registration whose program
-    and query fail it (`population-order`): the sampled audit's knowledge soundness reads slot `u` as the game's unit `u`."""
+    """`Slots.popOk`: `query` applies to `program`, every proof block has its gates (`unit_gates`), and the proof blocks read stratum by
+    stratum (`strata`) are `0, ..., n - 1` in order, so slot `u` is proof block `u`. The run refuses a registration whose program
+    and query fail it (`population-order`): the sampled audit's knowledge soundness reads slot `u` as the game's proof block `u`."""
     try:
         ss, gates = strata(program, query), unit_gates(program, query)
     except (QueryRefused, ValueError):

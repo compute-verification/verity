@@ -1,5 +1,4 @@
-"""F2's c_L over the fast-matmul catalogue, pinned per shape for `pearl_c4.int8_depth_cost` (the assessor's 20:00Z
-ruling; bc-d9842080's catalogue audit).
+"""F2's c_L over the fast-matmul catalogue, pinned per shape for `pearl_c4.int8_depth_cost`.
 
 The least cost per honest MAC, before the patch, of a masked int8 route over Perminov's catalogue at `ac13ca88`:
 - leaves at W1's 2.0 per MAC, 4.25 FP4 slots per pre-add element-op, post-adds free;

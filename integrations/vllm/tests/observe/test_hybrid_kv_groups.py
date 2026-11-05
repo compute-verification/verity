@@ -1,4 +1,4 @@
-"""[r8 lane E-cleanup 2026-09-18] Hybrid KV cache: with several KV-cache groups (`StepStart.kv_groups`, vLLM's hybrid KV-cache
+"""Hybrid KV cache: with several KV-cache groups (`StepStart.kv_groups`, vLLM's hybrid KV-cache
 manager -- Gemma-2's sliding-window vs global layers) a layer's KV rows are addressed by ITS group's block table and slot mapping;
 a single group (old logs: `kv_groups is None`) is byte-identical to the legacy fields; an unknown layer is Unsupported, never a guess."""
 from __future__ import annotations

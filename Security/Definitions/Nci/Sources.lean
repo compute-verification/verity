@@ -1,11 +1,13 @@
-import Definitions.Nci.Work
-import Mathlib.Analysis.SpecialFunctions.Log.Base
+module
+
+public import Definitions.Nci.Work
+public import Mathlib.Analysis.SpecialFunctions.Log.Base
 
 /-!
 # NCI over threads, each value charged once over its copies: the vocabulary
 
 `WeightsSupportFmt` charges `b_w` per weight gate a subcircuit uses and bounds a value's charge per thread through a
-margin `μ` derived nowhere. Both fail on copies (compute-accounting's NCI-FALSIFY, 19 Oct 2026): a weight quantized once
+margin `μ` derived nowhere. Both fail on copies: a weight quantized once
 for fprop and once for dgrad is two weight gates carrying one weight's information, and an activation's copies feed
 counted multiplications that a margin of two copies does not pay for. `Threading.Sources` names the value each gate is
 a copy of, so that weights are charged per source and fan-out is counted over all of a value's copies, and how many
@@ -20,6 +22,8 @@ optimizer steps each source is from the baseline.
   the `log₂ n` bits a value of the activations' format carries: `b_a · fanOut s ≤ e · log₂ n`.
 * `Sources.OffFresh k₀`: every counted multiplication reads a weight at least `k₀` optimizer steps from `θ`.
 -/
+
+@[expose] public section
 
 namespace Nci.Threading
 

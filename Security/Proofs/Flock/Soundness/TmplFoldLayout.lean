@@ -1,15 +1,19 @@
-import Proofs.Flock.Soundness.TmplFoldPos
-import Proofs.Flock.Soundness.TmplLayOk
-import Proofs.Flock.Soundness.TmplWf
+module
+
+public import Proofs.Flock.Soundness.TmplFoldPos
+public import Proofs.Flock.Soundness.TmplLayOk
+public import Proofs.Flock.Soundness.TmplWf
 
 /-!
-# The template fold is its reference on `layoutM`'s layouts (PRF-133, part 3, stage 2)
+# The template fold is its reference on `layoutM`'s layouts
 
 `fold_eq_foldRef` with its layout hypotheses discharged by `layoutM` (`layouts_defPos`, `layouts_lanes`), and then
 (`fold_eq_foldRef_wf`) with the template's discharged by `Tmpl.wellFormed`, which `parse` checks: each call's binding of
 its callee's inputs, its callee earlier and its copies inside the caller, the root's facts, and the column and call counts
 below `2^64` that `locate`'s halving assumes. What remains is the lane count against the transcript's `rho` and `r`.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128
 

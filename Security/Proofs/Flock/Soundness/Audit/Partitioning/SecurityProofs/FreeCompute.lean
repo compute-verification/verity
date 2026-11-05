@@ -1,11 +1,15 @@
-import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
-import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Bounds
+module
+
+public import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
+public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Bounds
 
 /-!
 # Optimal partitioning against free compute: the proofs
 
 The proofs of the free-compute statements of `Partitioning.Guarantees`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs
 
@@ -14,7 +18,7 @@ open scoped ENNReal
 
 theorem incl_le_one {n : ℕ} (L : Law n) (u : Fin n) : L.incl u ≤ 1 := by
   classical
-  unfold Law.incl prCoin
+  unfold Verity.Law.incl prCoin
   refine (avg_mono fun ω => ?_).trans (avg_const (C := L.Ω) 1).le
   split_ifs <;> simp
 

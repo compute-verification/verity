@@ -81,7 +81,7 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
                 linked += 1
             else:
                 unlinked.append({"request_id": rid, "engine_step": s, "kind": "chain", "why": f"committed input id {tid} != committed sampled id {sid} of step {s - 1}"})
-    # [R16 pin, coord ruling 36 (rev M-0410, reqval M-0417, stoch M-0446)] the PRESCRIBED sampler inputs are linked to their approved
+    # the PRESCRIBED sampler inputs are linked to their approved
     # source here, independently of whether a replay sample exposes a substitution: the committed seed word == the DECLARED workload seed
     # of the request at every committed step; on a derived-S Program the committed splits word == SplitsFor_v1(committed live count, num_SMs
     # of record).  Their unlinked entries join `unlinked` (the same FAIL-by-name path); the boundary `pairs`/`linked` counts stay the boundary's.
@@ -90,12 +90,12 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
     method = "ordered boundary linkage (declared prompt -> input_token_ids; sampled_token_ids[s-1] -> input_token_ids[s])"
     if presc["seed"].get("checked") or presc["splits"].get("checked"):
         method += " + prescribed-input linkage (" + "; ".join(k for k in ("seed", "splits") if presc[k].get("checked")) + ")"
-    # [R16 pin, ruling 35 (sys M-0466)] the horizon each request was linked over, beside its declared cap and its Program of record's steps;
-    # [rev M-0485 hardening] a horizon SHORTER than the declared cap is an early stop: the committed sampled id at its EOS step must be one
-    # of the Program's declared EOS ids (stop_rule, F-pm-24) -- Commit-side, not leaning on the Match chain's G6; undeclared -> fail closed.
-    # [padrev M-0517, RULING 21] the EOS step is steps[-1 - lag] where lag = the ATTESTED scheduler's placeholder rows after an EOS (async
-    # scheduling runs ONE step after the EOS whose sample the driver discards: sys M-0402 int-3 earlystop, EOS 0 at step 10, 504 at step 11).
-    # lag is the same header field GM-01 G6 (eos_lag_rows) and pad's LAG read; unattested -> refuse by name, never default 0 or 1.
+    # the horizon each request was linked over, beside its declared cap and its Program of record's steps;
+    # a horizon SHORTER than the declared cap is an early stop: the committed sampled id at its EOS step must be one
+    # of the Program's declared EOS ids (stop_rule) -- Commit-side, not leaning on the Match chain's G6; undeclared -> fail closed.
+    # the EOS step is steps[-1 - lag] where lag = the ATTESTED scheduler's placeholder rows after an EOS (async
+    # scheduling runs ONE step after the EOS whose sample the driver discards: e.g. EOS 0 at step 10, 504 at step 11).
+    # lag is the same header field GM-01 G6 (eos_lag_rows) and the lifted continuation's LAG read; unattested -> refuse by name, never default 0 or 1.
     horizon: dict[str, Any] = {}
     eos_set = None if eos_of_record is None else {int(x) for x in eos_of_record}
     lag = None if eos_lag_rows is None else int(eos_lag_rows)
@@ -135,7 +135,7 @@ def boundary_linkage(bmap: dict[str, Any], committed: Callable[[int, str, int, i
                     unlinked.append({"request_id": rid, "engine_step": eos_step, "kind": "eos", "why": f"{over} but the EOS step {eos_step}'s sampled id is not committed: {ewhy}"})
                 elif eos_set is None:
                     unlinked.append({"request_id": rid, "engine_step": eos_step, "kind": "eos",
-                                     "why": f"{over} and the Program declares no stop rule (eos_token_ids): the early stop cannot be verified, fail closed (F-pm-24)"})
+                                     "why": f"{over} and the Program declares no stop rule (eos_token_ids): the early stop cannot be verified, fail closed"})
                 elif e["eos_id"] not in eos_set:
                     unlinked.append({"request_id": rid, "engine_step": eos_step, "kind": "eos",
                                      "why": f"{over} but its committed sampled id {e['eos_id']} at the EOS step {eos_step} (= last step {last} - lag {lag}) is not a declared EOS id {sorted(eos_set)[:8]}"})
@@ -174,16 +174,16 @@ def linkage_horizon(arrive: int, declared_cap: int, program_steps: int | None, e
     step count is unknown (older records).  A request whose committed steps are FEWER than its Program of record still fails by name
     (the chain rule inside the horizon is unchanged); the cap's never-executed steps are not 'unlinked' -- the Program never had them."""
     n = int(declared_cap) if program_steps is None else min(int(declared_cap), int(program_steps))
-    # [R17-1 / F-moe-r17-03] `executed`: the request's executed prefix of record (executed_prefix.executed_prefix_of_record: cap, or
+    # `executed`: the request's executed prefix of record (executed_prefix.executed_prefix_of_record: cap, or
     # served + LAG on an EOS stop under the DECLARED lag) -- at B>=2 GP-01 composes every request to its cap, so the Program's step count
     # is the cap's and the horizon is the executed prefix; boundary_linkage then verifies the EOS at steps[-1 - lag] and the placeholder
-    # row(s) fed the EOS exactly as before.  None = the pre-R17-1 horizon.
+    # row(s) fed the EOS exactly as before.  None = the horizon `n` above.
     if executed is not None:
         n = min(n, max(int(executed), 0))
     return list(range(int(arrive), int(arrive) + max(n, 0)))
 
 
-SEED_RULE = "committed runner.sampler/seed word == the DECLARED workload seed of the request (i64 exact) at every step with a committed sampled id (constant per request; stoch M-0446)"
+SEED_RULE = "committed runner.sampler/seed word == the DECLARED workload seed of the request (i64 exact) at every step with a committed sampled id (constant per request)"
 SPLITS_RULE = "committed runner.sampler/splits word at step s == SplitsFor_v1(#requests with a committed sampled id at s, num_SMs of record) (REQ-03 derived S)"
 
 
@@ -241,10 +241,10 @@ def prescribed_input_linkage(store: Any, workload_requests: list[dict[str, Any]]
                 seed_linked += 1
             else:
                 unlinked.append({"request_id": rid, "engine_step": s, "kind": "seed",
-                                 "why": f"committed runner.sampler/seed {got} != declared workload seed {declared} of {rid} at step {s} (prescribed input, ruling 36)"})
+                                 "why": f"committed runner.sampler/seed {got} != declared workload seed {declared} of {rid} at step {s} (prescribed input)"})
     seed_rec: dict[str, Any] = {"rule": SEED_RULE, "requests_declared": seeded, "checked": seed_checked, "linked": seed_linked}
     if seeded == 0:
-        # [rev M-0472 hardening] 'not applicable' only when the record carries NO committed seed word: a stochastic run with no declared
+        # 'not applicable' only when the record carries NO committed seed word: a stochastic run with no declared
         # seed (vLLM's own generator) that still bound runner.sampler/seed has a prescribed input with no approved source -> unlinked by name
         stray = [(rid, s) for s, rids in sorted(live_at.items()) for rid in rids if store.has(rid, s, SAMPLER_OP, SEED_PARAM)]
         if stray:
@@ -297,6 +297,6 @@ def prescribed_input_linkage(store: Any, workload_requests: list[dict[str, Any]]
                     splits_rec["linked"] += 1
                 else:
                     unlinked.append({"request_id": rid, "engine_step": s, "kind": "splits",
-                                     "why": f"committed runner.sampler/splits {got} != SplitsFor_v1(live {len(rids)}, num_SMs {nsm}) = {want} for {rid} at step {s} (prescribed input, ruling 36)"})
+                                     "why": f"committed runner.sampler/splits {got} != SplitsFor_v1(live {len(rids)}, num_SMs {nsm}) = {want} for {rid} at step {s} (prescribed input)"})
         splits_rec["schedule"] = {str(s): v for s, v in list(sched.items())[:64]}
     return {"seed": seed_rec, "splits": splits_rec, "unlinked": unlinked}

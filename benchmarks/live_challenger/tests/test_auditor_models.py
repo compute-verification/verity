@@ -60,7 +60,7 @@ def safetensors(path: Path, tensors: dict[str, np.ndarray]) -> None:
 
 def pinned(tmp_path, parts, window, split, config=None, role=ROLE, manifest=M.MANIFEST, **fields):
     """A pinned checkpoint of int8 modules `parts` (two shards, the first holding `split` tensors), role `role`'s entry
-    (with `fields`) in the pinned tree's `manifest` (vLLM's holding another role when it is the torch loop's), core's
+    (with `fields`) in the pinned tree's `manifest` (vLLM's holding another role when `manifest` is another file), core's
     pin, and the descriptor of the window's linears `window`."""
     rng = np.random.default_rng(7)
     ts = {}
@@ -196,23 +196,21 @@ def test_a_descriptor_whose_linears_arent_the_models_decoder_layers_in_order_is_
 
 UP, DN = "model.layers.0.mlp.up_proj", "model.layers.1.mlp.down_proj"
 MLP = ((UP, 32, 64), (DN, 64, 32))
-#: circuits' entry of the torch loop's role in `MANIFESTS[1]` (#4395), its files aside
-TORCH_LOOP_ROLE = "TORCH_LOOP_MLP_H128_W8A8"
-TORCH_LOOP_ENTRY = {
+#: a role whose entry declares its linears (an MLP's), its files aside
+MLP_ROLE = "MLP_H128_W8A8"
+MLP_ENTRY = {
     "linears": [UP, DN],
-    "note": "the torch loop's served weights (integrations/torch_loop, `loop.Model()`), written by `python -m "
-            "verity_torch_loop.checkpoint`; no hub repo holds them",
-    "recipe": {"h": 128, "id": "torch-loop/mlp-w8a8/v1", "seed": 0, "vocab": 16},
-    "repo": "verity-torch-loop/mlp-w8a8-h128", "revision": "ef47a4f92c408f8c64778a9934b81c9729f2df2b"}
+    "note": "a two-layer MLP's int8 weights, whose entry declares its linears",
+    "recipe": {"h": 128, "id": "mlp-w8a8/v1", "seed": 0, "vocab": 16},
+    "repo": "verity-int8/mlp-w8a8-h128", "revision": "ef47a4f92c408f8c64778a9934b81c9729f2df2b"}
 
 
 @pytest.fixture
 def mlp(tmp_path):
-    """The torch loop's role as circuits pins it: a two-layer MLP in the torch loop's manifest alone (vLLM's holds another
-    role), whose entry declares its linears, up_proj then down_proj, and whose checkpoint has no config.json."""
-    (tmp_path / "loop").mkdir()
-    return pinned(tmp_path / "loop", {UP: (64, 32), DN: (32, 64)}, MLP, 2, role=TORCH_LOOP_ROLE,
-                  manifest=M.MANIFESTS[1], **TORCH_LOOP_ENTRY)
+    """An MLP role: a two-layer MLP in vLLM's manifest, whose entry declares its linears, up_proj then down_proj, and
+    whose checkpoint has no config.json."""
+    (tmp_path / "mlp").mkdir()
+    return pinned(tmp_path / "mlp", {UP: (64, 32), DN: (32, 64)}, MLP, 2, role=MLP_ROLE, **MLP_ENTRY)
 
 
 def test_a_role_that_declares_its_linears_commits_each_unmerged_module_as_itself(mlp):
@@ -224,41 +222,29 @@ def test_a_role_that_declares_its_linears_commits_each_unmerged_module_as_itself
             for m, _k, n in MLP]
     roots = Wt.weights_roots(mlp["circuit"], "h1/", [(n, k) for _m, k, n in MLP], lambda w: rows[w], KEY)
     line = reg(mlp)
-    assert line["weights_root"] == Wt.weights_root(roots).hex() and line["model"] == TORCH_LOOP_ROLE
+    assert line["weights_root"] == Wt.weights_root(roots).hex() and line["model"] == MLP_ROLE
     assert line["roots"] == {str(k): r.hex() for k, r in roots.items()}
-    assert line["source"]["repo"] == TORCH_LOOP_ENTRY["repo"]
+    assert line["source"]["repo"] == MLP_ENTRY["repo"]
 
 
-def test_a_role_only_in_the_torch_loops_manifest_is_its_entry(mlp):
-    assert M.manifest_entry(mlp["tree"], TORCH_LOOP_ROLE) == mlp["entry"]
-    assert M.manifest_entry(mlp["tree"], "LLAMA32_1B_INT8") == {"role": "LLAMA32_1B_INT8"}
-
-
-def test_a_role_in_both_manifests_or_in_neither_is_refused(mlp):
-    """Exactly one entry across both files: a role vLLM's manifest also lists is ambiguous, and an unlisted one unknown."""
+def test_a_role_listed_twice_or_not_at_all_is_refused(mlp):
+    """Exactly one entry: a role the manifest lists twice is ambiguous, and an unlisted one unknown."""
     vllm = mlp["tree"] / M.MANIFEST
-    vllm.write_text(json.dumps({"checkpoints": [{"role": TORCH_LOOP_ROLE, "repo": "elsewhere"}]}))
-    with pytest.raises(M.Refused, match=f"2 entries .*not one role of {M.MANIFESTS[0]} and {M.MANIFESTS[1]}"):
-        M.manifest_entry(mlp["tree"], TORCH_LOOP_ROLE)
-    with pytest.raises(M.Refused, match=f"0 entries \\(none\\), not one role of {M.MANIFESTS[0]} and {M.MANIFESTS[1]}"):
+    assert M.manifest_entry(mlp["tree"], MLP_ROLE) == mlp["entry"]
+    vllm.write_text(json.dumps({"checkpoints": [mlp["entry"], {"role": MLP_ROLE, "repo": "elsewhere"}]}))
+    with pytest.raises(M.Refused, match=f"2 entries .*not one role of {M.MANIFESTS[0]}"):
+        M.manifest_entry(mlp["tree"], MLP_ROLE)
+    with pytest.raises(M.Refused, match=f"0 entries \\(none\\), not one role of {M.MANIFESTS[0]}"):
         M.manifest_entry(mlp["tree"], "QWEN3_06B_INT8")
 
 
-def test_a_tree_pinned_before_the_torch_loops_manifest_still_serves_vllms_roles(model, mlp):
-    """A pinned tree that predates the torch loop's manifest has only vLLM's: its roles register as before, and the torch
-    loop's role is refused as unlisted. A torch loop manifest present but unreadable, or a missing vLLM manifest, is
-    refused."""
-    assert not (model["tree"] / M.MANIFESTS[1]).exists()
-    assert M.manifest_entry(model["tree"], ROLE)["repo"] == "verity-int8/Tiny"
-    with pytest.raises(M.Refused, match="0 entries"):
-        M.manifest_entry(model["tree"], TORCH_LOOP_ROLE)
-    (mlp["tree"] / M.MANIFESTS[1]).write_text("{")
-    with pytest.raises(M.Refused, match="integrations/torch_loop/manifests/checkpoints-int8.json is not readable JSON"):
-        M.manifest_entry(mlp["tree"], "LLAMA32_1B_INT8")
-    (mlp["tree"] / M.MANIFESTS[1]).write_text(json.dumps({"checkpoints": [mlp["entry"]]}))
+def test_an_unreadable_or_missing_manifest_is_refused(mlp):
+    (mlp["tree"] / M.MANIFEST).write_text("{")
+    with pytest.raises(M.Refused, match="integrations/vllm/manifests/checkpoints-int8.json is not readable JSON"):
+        M.manifest_entry(mlp["tree"], MLP_ROLE)
     (mlp["tree"] / M.MANIFEST).unlink()
     with pytest.raises(M.Refused, match="the pinned tree has no integrations/vllm"):
-        M.manifest_entry(mlp["tree"], TORCH_LOOP_ROLE)
+        M.manifest_entry(mlp["tree"], MLP_ROLE)
 
 
 @pytest.mark.parametrize("linears", [

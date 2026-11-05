@@ -10,7 +10,7 @@
 //           (sqr_fix's fold); then the even member of {s, p - s} if d of it is y, else the odd one, else an error
 //   sigma   sigma_K(r) = r xor K if that is below p, else r
 //
-// Every value is one CGBN instance of 32 threads (TPI 32), P2_TPB threads a block. Rows are staged through shared memory,
+// Every value is one CGBN instance of 32 threads (TPI 32), P2_TPB threads a CTA. Rows are staged through shared memory,
 // big-endian words to little-endian limbs. flags: bit 0, a tweak t >= p (the spec draws the next candidate, which this
 // library leaves to its caller); bit 1, a y with no root (p is not a prime 3 mod 4, or the input is not canonical).
 // Build (Makefile): nvcc -DP2_BITS=16448 -DP2_TPI=32 -DP2_PARTS=2 -DP2_SYM -DP2_TPB=64 -DXMP_WMAD -DP2_LIBRARY -shared.

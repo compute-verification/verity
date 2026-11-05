@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.GS.Decode
-import Proofs.Flock.Claims.DecodeFlock
-import Proofs.Flock.Claims.RootFindGF128
+module
+
+public import Proofs.Flock.Claims.GS.Decode
+public import Proofs.Flock.Claims.DecodeFlock
+public import Proofs.Flock.Claims.RootFindGF128
 
 /-!
 # The counted decoder at Flock's level-0 code
@@ -28,6 +30,8 @@ positions `q` and `q + 2^64` share their point: on
 its output's length its polynomial is at least their number, `2^(128·s·(k−1))`
 (`Flock.ListComplete.card_le_eval_of_agree`).
 -/
+
+@[expose] public section
 
 namespace Claims.GS
 

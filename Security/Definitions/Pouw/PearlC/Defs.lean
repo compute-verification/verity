@@ -1,12 +1,14 @@
-import Mathlib.Data.Matrix.ColumnRowPartitioned
-import Batteries.Data.List.Basic
-import Definitions.Pouw.Fp8Atom.Fp32
+module
+
+public import Mathlib.Data.Matrix.ColumnRowPartitioned
+public import Batteries.Data.List.Basic
+public import Definitions.Pouw.Fp8Atom.Fp32
 
 /-!
 # Pearl-C's Π (trusted definitions)
 
-Pearl-C is Pearl #311's product and clean-up (the "peel"), repaired after the red team, as the cheap-binding doc's §1
-specifies it (`docs/pouw/cheap-binding.md`). This file holds the parts of Π that other files state things about:
+Pearl-C is Pearl's product and clean-up (the "peel"), repaired after review, as the cheap-binding doc's §1
+specifies it. This file holds the parts of Π that other files state things about:
 
 * **Parameters** (`Params`, `Params.pi`, `Shape`): the noise scale `δ`, the promotion depth `G` and the noise rank `r`;
   Π pins `δ = 1`, `G = 4`, `r = 32`.
@@ -18,7 +20,7 @@ specifies it (`docs/pouw/cheap-binding.md`). This file holds the parts of Π tha
   liveness rule `LiveRow` and the noise scale `betaOf` take it; `LiveRow` defaults to `Stat.rms`.
 * **The noise and the forming** (`Noise`, `rowScale`, `FormChain`, `FormChain.quant`): the noise factors are E4M3
   codes, as Pearl's lines are. `A′ = e4m3(v)` per element, where `v = FormChain.value α x β e f` is the number the cast
-  reads. Three chains: `FormChain.exact` (`α·x + β·n`, with `n = E_A·F_Aᵀ` exact), `FormChain.bf16` (#311's BF16 chain)
+  reads. Three chains: `FormChain.exact` (`α·x + β·n`, with `n = E_A·F_Aᵀ` exact), `FormChain.bf16` (Pearl's BF16 chain)
   and `FormChain.atomMix` (§5's forming: the noise and `α·x` in one `HOPPER_E4M3_K32` step, then one cast).
   `lineCodes` is §5's `E′ = e4m3(β·e)` on the codes (`mulCode`, the FMUL with a zero product's sign), and `castLines`
   and `Noise.atomLines` are `E′` as the peel reuses it.
@@ -31,6 +33,8 @@ Shapes: `A` and `A′` are `m × k`, `B` and `B̃` are `n × k`, `C̃` and `U` a
 (`m × r`), `F_A` (`k × r`), `E_B` (`n × r`) and `F_B` (`k × r`). Per-row scales are functions of the row index, so the
 scalar `β` of the doc's formulas is a constant function.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 
@@ -173,7 +177,7 @@ def Noise.NB (z : Noise m n k r) : Matrix (Fin n) (Fin k) ℚ := vals z.EB * (va
 /-- The `r × r` Gram factor `F_Bᵀ·F_A`, through which the Gram order forms `N_B·F_A = E_B·(F_Bᵀ·F_A)`. -/
 def Noise.gram (z : Noise m n k r) : Matrix (Fin r) (Fin r) ℚ := (vals z.FB)ᵀ * vals z.FA
 
-/-- `β ⊙ M`: row `i` of `M` scaled by `β i` (#311's `β⊙`). -/
+/-- `β ⊙ M`: row `i` of `M` scaled by `β i`. -/
 def rowScale {p q : Nat} (β : Fin p → ℚ) (M : Matrix (Fin p) (Fin q) ℚ) : Matrix (Fin p) (Fin q) ℚ := diagonal β * M
 
 /-- A row's mean square, `rms²`. -/
@@ -215,7 +219,7 @@ structure FormChain (r : Nat) where
 exact. -/
 def FormChain.exact (r : Nat) : FormChain r := ⟨fun α x β e f => α * x + β * ∑ t, codeVal (e t) * codeVal (f t)⟩
 
-/-- **#311's BF16 chain**: the noise wgmma over the noise lines `β·e` and `f` (on the codes' values), whose FP32 value
+/-- **Pearl's BF16 chain**: the noise wgmma over the noise lines `β·e` and `f` (on the codes' values), whose FP32 value
 is `noise` (its accumulation order is not pinned, so it is a parameter), one f32→bf16 conversion of it, and one HFMA2
 `fma(α, x, bf16(n))` rounded to BF16, which the cast reads. `α` and `x` are the HFMA2's BF16 operands. §1's step list
 fixes the conversion and the HFMA2 but not where `β` enters; here it scales the noise lines, as in §5. -/
@@ -319,15 +323,15 @@ def ctExact (Aq : Matrix (Fin m) (Fin k) Code) (Bq : Matrix (Fin n) (Fin k) Code
 
 /-! ## U's two forms, exact -/
 
-/-- #311's left factor `[β·E_A ‖ A′·F_B]` (`m × 2r`); `A'` is `A′`'s values. -/
+/-- Pearl's left factor `[β·E_A ‖ A′·F_B]` (`m × 2r`); `A'` is `A′`'s values. -/
 def peelLeft (βA : Fin m → ℚ) (A' : Matrix (Fin m) (Fin k) ℚ) (z : Noise m n k r) : Matrix (Fin m) (Fin r ⊕ Fin r) ℚ :=
   fromCols (rowScale βA (vals z.EA)) (A' * vals z.FB)
 
-/-- #311's right factor `[(β·N_B − B̃)·F_A ‖ −β·E_B]` (`n × 2r`); `B'` is `B̃`'s values. -/
+/-- Pearl's right factor `[(β·N_B − B̃)·F_A ‖ −β·E_B]` (`n × 2r`); `B'` is `B̃`'s values. -/
 def peelRight (βB : Fin n → ℚ) (B' : Matrix (Fin n) (Fin k) ℚ) (z : Noise m n k r) : Matrix (Fin n) (Fin r ⊕ Fin r) ℚ :=
   fromCols ((rowScale βB z.NB - B') * vals z.FA) (-rowScale βB (vals z.EB))
 
-/-- #311's form of U: `C̃ + [β·E_A ‖ A′·F_B]·[(β·N_B − B̃)·F_A ‖ −β·E_B]ᵀ`. -/
+/-- Pearl's form of U: `C̃ + [β·E_A ‖ A′·F_B]·[(β·N_B − B̃)·F_A ‖ −β·E_B]ᵀ`. -/
 def peelU (Ct : Matrix (Fin m) (Fin n) ℚ) (βA : Fin m → ℚ) (βB : Fin n → ℚ) (A' : Matrix (Fin m) (Fin k) ℚ)
     (B' : Matrix (Fin n) (Fin k) ℚ) (z : Noise m n k r) : Matrix (Fin m) (Fin n) ℚ :=
   Ct + peelLeft βA A' z * (peelRight βB B' z)ᵀ

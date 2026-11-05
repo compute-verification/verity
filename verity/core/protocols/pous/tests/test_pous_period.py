@@ -1,6 +1,7 @@
 """`pous.period`, the period hook, in Python: which points it certifies at (`certificate`, `point_for`), its encode split
-over processes, a node's store kept and reloaded, and what an audit at the certified point publishes. Its answers against
-the Lean's are `check/tests/test_run_protocol.py`'s."""
+over processes, a node's store kept and reloaded, what an audit at the certified point publishes, and the records it
+stores, every copy of the auditor's ledger in them cut to the entries their window cites (`cite`). Its answers
+against the Lean's are `check/tests/test_run_protocol.py`'s."""
 
 from __future__ import annotations
 
@@ -10,6 +11,7 @@ import os
 from fractions import Fraction
 
 import pytest
+from pous_fakes import Clock
 from pous_test_signer import SCHEMES, TestSigner, session_log
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period
@@ -21,11 +23,6 @@ from verity.core.protocols.pous.verifier import VerifierKey
 TEST_ID = mc.TEST_PREFIX + period.PROTOCOL
 SALT = hashlib.sha512(b"the setup's salt").digest()[:R.SALT_BYTES]
 EPS = Fraction(1, 100) + Fraction(1, 2 ** 128)
-
-
-class Clock:
-    def __call__(self) -> int:
-        return 10 ** 9
 
 
 def test_the_default_point_is_the_smallest_the_family_certifies():
@@ -75,6 +72,26 @@ def test_demo_bs_store_is_certified_by_period_held_at():
     assert period.gaps(past)[1] == [f"P2 has no certificate at (w, c0, blocks) = (16448, 21065, {(1 << 27) + (1 << 16)})"]
 
 
+def test_320_reads_keep_the_105_read_certificates():
+    """At `k ≥ 320` challenges the run keeps the 105-read certificates and their `1% + 2^-128`: the registered point
+    under `P2SlackFamilyUncond`, Demo B's store and `2^27` blocks under `periodHeldAt`. `ObligationWide320`'s `2^-20`
+    (`p2.wide320_certificate`, from the open conjecture `P2RingRoundSecureWide`) is no run's certificate."""
+    def at(bps: int, segments: int, k: int) -> R.Point:
+        return R.Point(P2Params(16448, 21065, bps, segments), k, R.DEPLOYED.limit_ns)
+
+    for bps, segments, theorem in ((1 << 16, 8, "Pous.SecurityProofs.P2SlackFamilyUncond"),
+                                   (1 << 16, 1038, "Pous.Period.SecurityProofs.periodHeldAt"),
+                                   (1 << 16, 1 << 11, "Pous.Period.SecurityProofs.periodHeldAt")):
+        for k in (319, 320, 321):
+            pt, s_bits = at(bps, segments, k), bps * segments * 16448 * 18 // 19
+            assert period.certify(pt) == {"certified": True, "eps": str(EPS), "s_bits": s_bits}
+            prof = period.profile(pt)
+            assert prof["gaps"] == [] and prof["certificate"]["theorem"] == theorem and prof["certificate"]["k"] == 105
+    assert period.certify(at(1 << 16, 8, 320))["s_bits"] == 8_169_621_180
+    assert period.certify(at(256, 1, 320)) == {"certified": True, "eps": str(EPS), "s_bits": 256 * 16448 * 18 // 19}
+    assert period.certify(at(1 << 16, (1 << 11) + 1, 320))["certified"] is False
+
+
 def test_encode_in_processes_is_the_serial_encode():
     q = P2Params(128, 173, 8, 2)
     w = hashlib.shake_256(b"W").digest(q.w_bytes)
@@ -93,9 +110,9 @@ def test_a_kept_store_is_audited_again(tmp_path):
     assert again == held and len(again.blocks) == held.point.params.blocks
     signer, log = TestSigner(b"period", 3), session_log()
     got = [period.audit("n0", again, hashlib.sha512(b"coins %d" % i).digest(), signer=signer, log=log, schemes=SCHEMES,
-                        protocol=TEST_ID, clock=Clock()) for i in range(2)]
+                        protocol=TEST_ID, clock=Clock(10 ** 9)) for i in range(2)]
     assert [p.verdict for p in got] == ["accept", "accept"] and got[0].case["params"] != got[1].case["params"]
-    assert {p.s_bits for p in got} == {0}
+    assert {p.public("s_bits") for p in got} == {0}
 
 
 def _certified_store() -> period.Store:
@@ -126,7 +143,7 @@ def test_an_audit_at_the_certified_point_checks_its_run():
     `1% + 2^-128`, with no gap, under `P2SlackFamilyUncond`. This `C*` is no setup's, so the answer is the tie's refusal;
     an accepted, certified audit through the tie is `check/tests/test_run_protocol.py`'s (slow: a 256-block encode)."""
     held, signer = _certified_store(), TestSigner(b"certified", 3)
-    kw = dict(signer=signer, log=session_log(), schemes=SCHEMES, protocol=TEST_ID, clock=Clock())
+    kw = dict(signer=signer, log=session_log(), schemes=SCHEMES, protocol=TEST_ID, clock=Clock(10 ** 9))
     honest = period.audit("n0", held, hashlib.sha512(b"coins").digest(), **kw)
     assert honest.verdict == "reject" and honest.answer["reason"].startswith("setup: "), honest.answer
     R.check_at(*_run_of(honest.case))
@@ -135,6 +152,139 @@ def test_an_audit_at_the_certified_point_checks_its_run():
     assert prof["gaps"] == [] and prof["certificate"]["theorem"] == "Pous.SecurityProofs.P2SlackFamilyUncond"
     zeros = period.audit("n0", held, hashlib.sha512(b"coins 2").digest(),
                          prover=lambda blocks: lambda i: bytes(len(blocks[i])) if i % 2 else blocks[i], **kw)
-    assert zeros.verdict == "reject" and (zeros.s_bits, zeros.eps) == (0, 0)
+    assert zeros.verdict == "reject" and (zeros.public("s_bits"), zeros.eps) == (0, 0)
     with pytest.raises(R.Refused):
         R.check_at(*_run_of(zeros.case))
+
+
+LANE, OTHER = "compute-accounting", "memory-accounting"
+
+
+def _line(lines: list[str], kind: str, session: str | None, body: dict, sig_bytes: int) -> str:
+    """The auditor's next ledger line in its form (`sampled_proofs.challenger.ledger_line`), under a stand-in signature of
+    `sig_bytes` bytes at leaf `seq`: `cite` reads the form, never the signature."""
+    e = {"body": body, "kind": kind, "prev": hashlib.sha512(lines[-1].encode()).hexdigest() if lines else "0" * 128,
+         "schema": period.LEDGER_SCHEMAS[1], "seq": len(lines), "session": session}
+    return json.dumps({**e, "sig": (len(lines).to_bytes(4, "big") + bytes(sig_bytes - 4)).hex()}, sort_keys=True,
+                      separators=(",", ":"))
+
+
+def _ledger(n: int, sig_bytes: int = 2048) -> tuple[list[str], str, list[int]]:
+    """A ledger of `n` sessions in each of two lanes' periods, then a second period of `LANE`'s with `n` more: the ledger,
+    the session a window cites (`LANE`'s middle one in its first period) and the indices of the entries it cites."""
+    lines: list[str] = []
+    at: dict[str, int] = {}
+
+    def add(kind: str, session: str | None, body: dict) -> None:
+        at[f"{kind} {session or body['period']}"] = len(lines)
+        lines.append(_line(lines, kind, session, body, sig_bytes))
+
+    for name, lanes, first in (("p-1", (LANE, OTHER), 0), ("p-2", (LANE,), n)):
+        for lane in lanes:
+            add("period-open", None, {"period": f"{name}-{lane}", "lane": lane, "key_sha512": "ab" * 64, "cap": 2 * n,
+                                      "circuit": "cd" * 64})
+        held: dict[str, list[str]] = {lane: [] for lane in lanes}
+        for i in range(first, first + n):
+            for j, lane in enumerate(lanes):
+                s = f"s20261026T{i:06d}Z-{j:04x}"
+                held[lane].append(s)
+                add("reserve", s, {"by": lane, "minutes": 30})
+                add("open", s, {"by": lane, "reserve": at[f"reserve {s}"], "window": {"root": f"{i:0128x}"}})
+                add("end", s, {"closed": True, "complete": True, "files": {}})
+        for lane in lanes:
+            add("period-close", None, {"period": f"{name}-{lane}", "lane": lane, "complete": True,
+                                       "windows": [{"root": None, "session": s, "complete": True} for s in held[lane]]})
+    s = f"s20261026T{n // 2:06d}Z-0000"
+    return lines, s, [at[k] for k in (f"period-open p-1-{LANE}", f"reserve {s}", f"open {s}", f"end {s}",
+                                      f"period-close p-1-{LANE}")]
+
+
+def _window(d, lines: list[str], s: str):
+    """A live window's records as the torch loop writes them: the salt session's files beside infra's ledger head
+    (`window_salt.issue`'s `dest`) and ``salt.json``'s ``live`` params, each with the whole ledger."""
+    close = {"chain": "11" * 64, "ended": None, "lines": 3, "session": s, "signature": "22" * 40}
+    files = {"period.json": json.dumps({"index": 0}).encode(), "pouw/registration.json": b'{"window": "w0"}',
+             "pouw/salt-session/windows.jsonl": "".join(x + "\n" for x in lines).encode(),
+             "pouw/salt-session/pins.jsonl": b'{"commit":"c","main":"m","pinned_utc":"t"}\n',
+             f"pouw/salt-session/{s}/challenger.json": json.dumps(close).encode(),
+             f"pouw/salt-session/{s}/releases.jsonl": b'{"event":"head"}\n',
+             "pouw/salt.json": json.dumps({"answer": {"session": {"session": s}}, "live": {
+                 "ledger": lines, "main": ["m"], "pins": ["p"],
+                 "session": {"close": close, "hellos": [], "log": ['{"event":"head"}'], "record": {}}}},
+                 sort_keys=True).encode(),
+             "answers/pouw.json": b'{"verdict": "accept"}'}
+    for name, data in files.items():
+        (d / name).parent.mkdir(parents=True, exist_ok=True)
+        (d / name).write_bytes(data)
+    return files
+
+
+def _unframe(b: bytes) -> dict[str, bytes]:
+    out, pos = {}, 0
+    while pos < len(b):
+        n = int.from_bytes(b[pos:pos + 4], "big")
+        name, pos = b[pos + 4:pos + 4 + n].decode(), pos + 4 + n
+        m = int.from_bytes(b[pos:pos + 8], "big")
+        out[name], pos = b[pos + 8:pos + 8 + m], pos + 8 + m
+    return out
+
+
+def _whole(files: dict[str, bytes]) -> bytes:
+    """The records framed whole, as `records` framed them before it cut the ledger."""
+    return b"".join(len(k.encode()).to_bytes(4, "big") + k.encode() + len(v).to_bytes(8, "big") + v
+                    for k, v in sorted(files.items()) if not k.startswith("answers/"))
+
+
+def test_the_records_keep_only_the_ledger_entries_their_window_cites(tmp_path):
+    """A live window's records hold the auditor's whole ledger twice, in the salt session's ``windows.jsonl`` and in
+    ``salt.json``'s ``live``: the store keeps, in each, the cited session's reserve, open and end and its period's open
+    and close, and every other file as it is, while the window's files on disk keep the whole ledger PoUW reads."""
+    lines, s, kept = _ledger(200)
+    files = _window(tmp_path, lines, s)
+    store = period.records(tmp_path)
+    got = _unframe(store)
+    assert sorted(got) == sorted(k for k in files if not k.startswith("answers/"))
+    want = [lines[i] for i in kept]
+    assert got["pouw/salt-session/windows.jsonl"].decode().split("\n") == [*want, ""]
+    salt, whole = json.loads(got["pouw/salt.json"]), json.loads(files["pouw/salt.json"])
+    assert salt["live"]["ledger"] == want and salt == {**whole, "live": {**whole["live"], "ledger": want}}
+    assert {k: v for k, v in got.items() if k not in ("pouw/salt-session/windows.jsonl", "pouw/salt.json")} == {
+        k: v for k, v in files.items() if k in got and k not in ("pouw/salt-session/windows.jsonl", "pouw/salt.json")}
+    assert {k: (tmp_path / k).read_bytes() for k in files} == files
+    assert len(lines) == 1806 and len(store) * 100 < len(_whole(files))
+
+
+def test_a_ledger_that_opens_no_cited_session_is_refused(tmp_path):
+    """A copy of the ledger that doesn't open the session a close record beside it cites (a head older than the
+    window's open) is refused, naming the file and the session: the store never holds a ledger cut short of what its
+    window cites. A copy with no close record beside it cites nothing, and is kept whole."""
+    lines, s, kept = _ledger(8)
+    files = _window(tmp_path, lines, s)
+    (tmp_path / "pouw/salt-session/windows.jsonl").write_text("".join(x + "\n" for x in lines[:kept[1] + 1]))
+    with pytest.raises(ValueError, match=f"^pouw/salt-session/windows.jsonl: the auditor's ledger opens no session {s}"):
+        period.records(tmp_path)
+    (tmp_path / "pouw/salt-session/windows.jsonl").write_bytes(files["pouw/salt-session/windows.jsonl"])
+    (tmp_path / "pouw/elsewhere").mkdir()
+    (tmp_path / "pouw/elsewhere/windows.jsonl").write_bytes(files["pouw/salt-session/windows.jsonl"])
+    got = _unframe(period.records(tmp_path))
+    assert got["pouw/elsewhere/windows.jsonl"] == files["pouw/salt-session/windows.jsonl"]
+    assert got["pouw/salt-session/windows.jsonl"].decode().split("\n") == [*(lines[i] for i in kept), ""]
+    assert period.cited([json.loads(x) for x in lines], {s}) == kept
+    with pytest.raises(ValueError, match="^no challenger session is cited beside the auditor's ledger"):
+        period.cited([json.loads(x) for x in lines], set())
+
+
+def test_pous_accepts_the_cut_records_as_it_does_the_whole(tmp_path):
+    """The store's verdict doesn't read what it holds: PoUS's run at the small point accepts the cut records, as it
+    accepts the whole, on fewer blocks."""
+    lines, s, _ = _ledger(8, 64)
+    files = _window(tmp_path, lines, s)
+    signer, log = TestSigner(b"records", 4), session_log()
+    point = {}
+    for name, store in (("whole", _whole(files)), ("cut", period.records(tmp_path))):
+        got = period.run("n0", store, hashlib.sha512(b"coins " + name.encode()).digest(), signer=signer, log=log,
+                         point=period.point_for(len(store), period.W, period.C0), schemes=SCHEMES, protocol=TEST_ID,
+                         clock=Clock(10 ** 9))
+        assert got.verdict == "accept", got.answer
+        point[name] = period.point_of(got.case["params"]["point"]).params.blocks
+    assert point["cut"] < point["whole"]

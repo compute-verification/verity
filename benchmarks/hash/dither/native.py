@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import random
 import statistics
 import sys
@@ -32,6 +31,9 @@ import time
 import traceback
 from pathlib import Path
 
+from verity_config.settings import of
+
+settings = of(__file__)
 ROOT = Path(__file__).resolve().parents[3]
 VLLM_DIR = ROOT / "integrations" / "vllm"
 ROLE = "LLAMA31_8B_INT8"
@@ -90,8 +92,8 @@ def build(arm: str, a, scratch: Path):
     vc = llm.llm_engine.vllm_config
     return llm, {"enforce_eager": vc.model_config.enforce_eager, "compilation": str(vc.compilation_config.mode),
                  "cudagraph_mode": str(vc.compilation_config.cudagraph_mode),
-                 "disabled_kernels": os.environ.get("VLLM_DISABLED_KERNELS"),
-                 "flashinfer_sampler": os.environ.get("VLLM_USE_FLASHINFER_SAMPLER")}
+                 "disabled_kernels": settings.VLLM_DISABLED_KERNELS,
+                 "flashinfer_sampler": settings.VLLM_USE_FLASHINFER_SAMPLER}
 
 
 def prompts(rng: random.Random, n: int, length: int) -> list[dict]:
@@ -124,7 +126,7 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     doc: dict = {"schema": "dither-hb/native/v1", "arm": a.arm, "role": ROLE, "pin": pin_entry().get("revision"),
                  "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                 "numa": json.loads(os.environ.get("DITHER_NUMA_RECORD") or "null"),
+                 "numa": settings.DITHER_NUMA_RECORD,
                  "workload": {"decode": {"batch": 32, "prompt": 128, "out": [1, 256]},
                               "saturation": {"requests": a.sat_requests, "prompt": 512, "out": 256, "max_num_seqs": SEQS}}}
     path = out / f"native-{a.arm}.json"

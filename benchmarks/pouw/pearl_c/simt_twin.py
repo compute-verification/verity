@@ -123,8 +123,8 @@ def build() -> C.CDLL:
         raise RuntimeError("no C++ compiler")
     out = Path(tempfile.mkdtemp(prefix="h1-simt-"))
     (out / "twin.cpp").write_text(_source())
-    subprocess.run([cxx, "-O1", "-std=c++20", "-pthread", "-shared", "-fPIC", "-o", str(out / "twin.so"), str(out / "twin.cpp")],
-                   check=True, capture_output=True, text=True)
+    subprocess.run([cxx, "-O1", "-std=c++20", "-pthread", "-shared", "-fPIC", "-I", str(HERE), "-o", str(out / "twin.so"),
+                    str(out / "twin.cpp")], check=True, capture_output=True, text=True)
     return C.CDLL(str(out / "twin.so"))
 
 

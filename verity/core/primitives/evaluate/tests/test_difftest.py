@@ -1,6 +1,6 @@
 """The Lean evaluator (`verity-evaluate`, `Evaluate.evaluateFn`) against the Python reference, output for output and refusal
 for refusal, on Programs encoded as descriptor v1 (`verity/ml/circuits/PROTOCOL.md`), through the difftest harness
-(`verity_difftest`: one server open per module, reject parity, Hypothesis drawing deterministically).
+(`verity_difftest`: one server open per module, reject parity, Hypothesis sampling deterministically).
 
 The reference is `python_answer`: `codec.decode_program`, then `evaluate.evaluate_region` over each of the root's nodes that
 is not an input node, with the inputs bound by runs (a registered table as `reference`'s `RegisteredTable`, read where a gate
@@ -10,7 +10,7 @@ applies them by name: a primitive the Lean does not implement (one outside the r
 reads), and an input word at or above `2^w` (the oracle stores whatever it is given).
 
 The Programs: seeded random Boolean composites built with the IR builder, which reach every node form (primitive, call,
-batch of a gate and of a composite over an axis, scan with xs and a shared argument) and both constants, drawn by a
+batch of a gate and of a composite over an axis, scan with xs and a shared argument) and both constants, sampled by a
 Hypothesis strategy with their inputs and, for a quarter of them, a mutation both sides must refuse; and explicit examples:
 the pinned 2-bit adder of `boolean_vectors.json` on its whole truth table, real Boolean Definitions traced from
 `verity.ml.boolean`'s builders on their one-call Programs, also held to the word Definition each computes, and the malformed
@@ -46,6 +46,7 @@ from pathlib import Path
 import pytest
 import verity_difftest as DT
 from hypothesis import strategies as st
+from verity_difftest import settings
 
 from verity.core.protocols.pouw.circuit import words as W
 from verity.ml.circuits import boolean as BL
@@ -372,7 +373,7 @@ def _mutated(desc: dict, inputs: list, k: int) -> tuple[dict, list] | None:
 
 @st.composite
 def composite_requests(draw) -> dict:
-    """A random composite on random input bits; one draw in four is mutated by an entry of `REFUSE` (an input word of 2 where
+    """A random composite on random input bits; one sample in four is mutated by an entry of `REFUSE` (an input word of 2 where
     the drawn one does not apply)."""
     text, leaves = _random_desc(draw(st.integers(0, RANDOM_SEEDS - 1)))
     desc = json.loads(text)
@@ -541,7 +542,7 @@ def _one_call_text(fid: str) -> str:
 
 @st.composite
 def scalar_requests(draw) -> dict:
-    """A scalar primitive on words drawn from its operands' edges and their whole range; one word in ten is out of its
+    """A scalar primitive on words sampled from its operands' edges and their whole range; one word in ten is out of its
     range (2^w, 2^w + 1 or -1), which both sides refuse."""
     fn = draw(st.sampled_from(SCALARS))
     words = []
@@ -754,7 +755,7 @@ def test_the_fmas_on_their_edge_grids(server):
 
 @st.composite
 def float_requests(draw) -> dict:
-    """An FP32 or BF16 primitive on eight rows of words, each drawn from its operand's edges or its whole range; one request
+    """An FP32 or BF16 primitive on eight rows of words, each sampled from its operand's edges or its whole range; one request
     in ten has a word out of its range (2^w, 2^w + 1 or -1), which both sides refuse."""
     fn = draw(st.sampled_from(FLOATS))
     rows = [tuple(draw(st.one_of(st.sampled_from(_edges(fn, t)), st.integers(0, (1 << t.w) - 1))) for _, t in fn.params)
@@ -921,7 +922,7 @@ def _tc_pairs(fn: PrimitiveDefinition) -> list[list[tuple]]:
 
 def _tc_scales(fn: PrimitiveDefinition) -> list[list[tuple]]:
     """The block-scaled steps: every pair of edge scale bytes on the first and on the last block, the others one, over the
-    largest codes times one and over a draw of codes, under seven accumulators (zero, ±1, the least subnormal, the largest
+    largest codes times one and over a sample of codes, under seven accumulators (zero, ±1, the least subnormal, the largest
     normal, -inf, a NaN)."""
     f = TC_FMT[fn]
     if f.scales is None:
@@ -973,7 +974,7 @@ def test_tc_steps_on_the_accumulator_sweep(server):
 
 @st.composite
 def tc_requests(draw) -> dict:
-    """A dot step on four rows, the accumulator and every code and scale byte drawn from its edges or its whole range; one
+    """A dot step on four rows, the accumulator and every code and scale byte sampled from its edges or its whole range; one
     request in ten has a word out of its range, which both sides refuse."""
     fn = draw(st.sampled_from(TCS))
     f = TC_FMT[fn]
@@ -1369,7 +1370,7 @@ def _word_leaf_w(t) -> int:
 
 @st.composite
 def word_requests(draw) -> dict:
-    """A word primitive on four rows, each leaf drawn from its width's edges or its whole range; one request in ten has a
+    """A word primitive on four rows, each leaf sampled from its width's edges or its whole range; one request in ten has a
     word out of its range, which both sides refuse."""
     fn = draw(st.sampled_from(WORDS))
 
@@ -1499,7 +1500,7 @@ def _logf_block(b: int) -> tuple[dict[str, int], list[tuple]]:
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(os.environ.get(FULL_LOGF) != "1",
+@pytest.mark.skipif(settings.get(FULL_LOGF) != "1",
                     reason=f"set {FULL_LOGF}=1: NvLogf_v1 and _v2 on all 2^32 words, about 85 core-hours (Lean 1.4 s and "
                            "Python 0.9 s per 2^16 words and log), half an hour on a 192-vCPU machine")
 def test_the_logs_on_every_word():
@@ -1537,10 +1538,9 @@ def test_the_gpu_log_probe(server, tmp_path):
     """Every input word of the L40S and H100 probe of `__nv_logf` (20,007: the edges, then random negatives and NaNs) under
     each FTZ build: `NvLogf_v2` gives the GPU's word. Skipped where the evidence store is not reachable."""
     import glob
-    import os
 
     store = _store_io()
-    if os.environ.get("VERITY_SKIP_STORE") == "1" or not store.reachable():
+    if settings.get("VERITY_SKIP_STORE") == "1" or not store.reachable():
         pytest.skip("the evidence store is not reachable here")
     root = store.fetch(LOG_PROBE, to=tmp_path / "probe")
     runs = sorted(glob.glob(str(root / "*" / "out-*-ftz-true-*.json")))
@@ -1553,7 +1553,7 @@ def test_the_gpu_log_probe(server, tmp_path):
 
 @st.composite
 def sampler_requests(draw) -> dict:
-    """A sampler primitive on eight rows of words drawn from its grid's words or the whole range; one request in ten has a
+    """A sampler primitive on eight rows of words sampled from its grid's words or the whole range; one request in ten has a
     word out of its range, which both sides refuse."""
     fn = draw(st.sampled_from(SAMPLER))
     pools = {TW.NvLogf: (LOG_SWEEP,), TW.NvLogfV2: (LOG_SWEEP,), SPL.GumbelStreamKey: (EDGES[64], EDGES[64]),
@@ -1604,7 +1604,8 @@ def _test_mufu_literals(*names: str) -> dict:
     ns: dict = {}
     for node in ast.parse(TEST_MUFU.read_text()).body:
         if isinstance(node, ast.Assign) and len(node.targets) == 1 and getattr(node.targets[0], "id", None) in names:
-            ns[node.targets[0].id] = eval(compile(ast.Expression(node.value), str(TEST_MUFU), "eval"), {"__builtins__": {}}, ns)
+            code = compile(ast.Expression(node.value), str(TEST_MUFU), "eval")
+            ns[node.targets[0].id] = eval(code, {"__builtins__": {}}, ns)  # noqa: S307 -- no builtins; literal_eval refuses F32_EDGES + [...]
     return ns
 
 
@@ -1672,7 +1673,7 @@ def test_the_tanh_table_is_the_library_table(server):
 
 @st.composite
 def mufu_requests(draw) -> dict:
-    """A MUFU primitive on eight words, each drawn from `MUFU_SWEEP` or the whole range; one request in ten has a word out
+    """A MUFU primitive on eight words, each sampled from `MUFU_SWEEP` or the whole range; one request in ten has a word out
     of its range, which both sides refuse."""
     fn = draw(st.sampled_from(MUFU))
     x = [[draw(st.one_of(st.sampled_from(MUFU_SWEEP), st.integers(0, (1 << 32) - 1))) for _ in range(8)]]
@@ -1697,7 +1698,10 @@ def test_mufu_words_out_of_range_are_refused(server):
 
 # ---- E4: the correctly rounded transcendentals of the reference kinds: exp, erf and tanh at 100 digits -------------------
 
-_f32w = lambda v: struct.unpack("<I", struct.pack("<f", v))[0]
+def _f32w(v):
+    return struct.unpack("<I", struct.pack("<f", v))[0]
+
+
 #: the words where the rules change (exp's early exits at 89 and -105, its last finite word 0x42B17217 and its last nonzero
 #: one, erf's 4.2 and tanh's 9.2) and the words about one, two, 2^-12 and 2^-24, with their neighbours, both signs; the
 #: sixteenths below 12; and 8192 seeded words of magnitude below 16
@@ -1717,7 +1721,7 @@ def test_decimal_primitives_on_their_grids(server):
 
 @st.composite
 def decimal_requests(draw) -> dict:
-    """A decimal primitive on eight words, each drawn from `DEC_SWEEP`, the words of magnitude below 16, or the whole
+    """A decimal primitive on eight words, each sampled from `DEC_SWEEP`, the words of magnitude below 16, or the whole
     range; one request in ten has a word out of its range, which both sides refuse."""
     fn = draw(st.sampled_from(DECIMALS))
     small = st.builds(lambda s, m: s | m, st.sampled_from([0, 1 << 31]), st.integers(0, 0x41800000))
@@ -1805,7 +1809,7 @@ def test_the_l40s_silu_and_rope_captures(server):
 
 @st.composite
 def act_requests(draw) -> dict:
-    """An activation or RoPE output on eight rows of words, each drawn from its grid's words or the whole range; one request
+    """An activation or RoPE output on eight rows of words, each sampled from its grid's words or the whole range; one request
     in ten has a word out of its range, which both sides refuse."""
     fn = draw(st.sampled_from(ACTS))
     pool = {VP.RopeOut: (BF16_EDGES, BF16_EDGES, ROPE_CS, ROPE_CS), VP.RopeOutAdd: (BF16_EDGES, BF16_EDGES, ROPE_CS, ROPE_CS),
@@ -1842,7 +1846,7 @@ def _registered_sha256(server, name: str) -> str:
 
 
 def test_the_gelu_table_is_the_pinned_one(server):
-    """The Lean evaluator's `gelu_tanh_bf16` (the activation word of every bf16 gate) has the SHA-256 C-Flock pins
+    """The Lean evaluator's `gelu_tanh_bf16` (the activation word of every bf16 gate) has the SHA-256 Flock pins
     (`tail_pieces.TABLE_SHA256`), and a table that is not a registered one is refused."""
     from verity_flock.tail_pieces import TABLE_SHA256
 
@@ -1853,7 +1857,7 @@ def test_the_gelu_table_is_the_pinned_one(server):
 @pytest.mark.slow
 def test_the_tanh_rn_table_is_the_pinned_one(server):
     """The Lean evaluator's `tanh_rn` (`TanhF32Rn_v1` on all 2^27 words of its region, by their low 27 bits) has the SHA-256
-    C-Flock pins: the host's `math.tanh` on 123 million words, which no grid reaches (about 30 s)."""
+    Flock pins: the host's `math.tanh` on 123 million words, which no grid reaches (about 30 s)."""
     from verity_flock.tail_pieces import TABLE_SHA256
 
     assert _registered_sha256(server, "tanh_rn") == TABLE_SHA256["tanh_rn"]
@@ -1934,7 +1938,9 @@ def _lazy_rows(fn: PrimitiveDefinition, rng: random.Random) -> list[tuple]:
     leaf = tc
     while isinstance(leaf, Array):
         leaf = leaf.elem
-    col = lambda: tuple(rng.getrandbits(leaf.w) for _ in range(tc.leaves))
+
+    def col():
+        return tuple(rng.getrandbits(leaf.w) for _ in range(tc.leaves))
     idx = _TOKENS if fn.id.startswith("Gather") else (0, 1, 31, 32, 63, 64, 127, 0xFFFF, rng.getrandbits(ti.w))
     return [(i, col()) for i in idx for _ in range(2)]
 

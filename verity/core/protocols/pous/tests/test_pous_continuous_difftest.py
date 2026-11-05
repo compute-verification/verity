@@ -4,7 +4,7 @@
 Each action of a trace goes to the memory challenger and to `ClockOracle` at one reading of an injected clock, and after
 every action the two must agree exactly: whether the action was refused and why, the challenge revealed, every closed
 round's challenge, index, verdict and delay, the misses, the late count, `pending`, `exceeded` and `accepted`. The
-traces are a state-aware fuzzer's (answers at and one nanosecond past each limit, wrong blocks, pipelined, stale and
+traces are a state-aware fuzzer's (answers at and one nanosecond past each limit, wrong labels, pipelined, stale and
 repeated answers, challenges and `expire()` before the hard deadline, dropped answers closed by `expire()` or by the
 next challenge, actions after the last round) and a few scripted ones. `test_lean_machine_bridge` then drives the memory
 challenger from Lean `ContMachine` scripts and checks its verdicts against `cont_records`, the transcription of Lean's
@@ -28,6 +28,7 @@ import pytest
 import pous_continuous_model as model
 from pous_continuous_model import (ALL_SENT, CLOSED, HIT, LATE, NO_HARD_DEADLINE, NONE_OPEN, NOT_REVEALED, REJECT,
                                    UNANSWERED, WITHIN, WRONG, ClockOracle, Record, Refused)
+from pous_fakes import Clock
 from verity.core.protocols.pous import band
 from verity.core.protocols.pous.audit import UnsignedRounds, challenge_key, run_timed
 from verity.core.protocols.pous.codec import encode_segments
@@ -69,14 +70,6 @@ def world():
     blocks = [b for seg in encode_segments(PARAMS.codec, PARAMS, prims, w, SALT) for b in seg]
     assert len(set(blocks)) == len(blocks)
     return blocks, VerifierKey.from_segments(PARAMS, SALT, [blocks[:16], blocks[16:]])
-
-
-class Clock:
-    def __init__(self):
-        self.now = 0
-
-    def __call__(self):
-        return self.now
 
 
 def verdict(a) -> str:
@@ -355,7 +348,7 @@ def _same_index_twice(vk):
 
 @pytest.mark.parametrize("kind", KINDS[1:])
 def test_a_stale_answer_for_the_same_block(world, kind):
-    """Challenge 0 is dropped and challenge 1 asks for the same block; answer 0 then arrives. Lean's round 1 is
+    """Challenge 0 is dropped and challenge 1 asks for the same label; answer 0 then arrives. Lean's round 1 is
     answered by whatever the responder sends after its send, so an unnamed memory challenger credits it as a hit, as the
     model does; a named one refuses it, as the model does an answer naming another challenge."""
     h = Harness(world, kind, LIMITS[0], _same_index_twice(world[1]), 2)
@@ -370,7 +363,7 @@ def test_a_stale_answer_for_the_same_block(world, kind):
 @dataclass
 class Scripted:
     """A Lean `ContMachine` that answers round `j` after `script[j] = (d, w, right)`: `w` queries at its first unit,
-    none after, and its answer at unit `d` (never, for `d = None`), the challenged block or a wrong one."""
+    none after, and its answer at unit `d` (never, for `d = None`), the challenged label or a wrong one."""
 
     script: list
     C: list

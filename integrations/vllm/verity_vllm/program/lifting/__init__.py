@@ -1,1 +1,2 @@
-"""verity_vllm.program.lifting: promoted from veritor@0903f60d6 verity_ir/ (single consumer: the vLLM integration)."""
+"""verity_vllm.program.lifting: the lifted workload Program (`lifted_compose`), what a record says about it (`lifted_records`),
+the padded Program's continuation logic (`continuation`) and the reference evaluator's assignment of it (`dump`)."""

@@ -318,7 +318,7 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
     declared composition), whatever the spelling.  In a global manifest a MoE block plane is one batched tensor per step: a request's
     request-local range must fit inside its own token rows of it, and a plane whose rows are not a multiple of the step's tokens covers
     no request (named)."""
-    if manifest.get("complete") is False:                                        # [MAN-02] an incomplete manifest never yields coverage
+    if manifest.get("complete") is False:                                        # an incomplete manifest never yields coverage
         um = manifest.get("unmodelled") or {}
         n = len(manifest.get("identities") or [])
         return {"ok": False, "error": "manifest incomplete: unmodelled Program families " + "; ".join(f"{k} x{v}" for k, v in sorted(um.items())),
@@ -369,7 +369,7 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
         got = have.get(k)
         why = None
         if r.get("request_id") == "*" and isinstance(r.get("requests"), list) and r["requests"]:
-            # [R15 B8; red-team claim 3] a batch-level hidden row (B>1: one attention launch per layer per engine step over the co-scheduled
+            # a batch-level hidden row (B>1: one attention launch per layer per engine step over the co-scheduled
             # sequences) names the padded whole-step geometry; the tap stages the launch whole or as per-SEQUENCE planes
             # (`s<i>/g<h>x<rows_i>x<NB>/<class>`).  Covered when the op's tensors at the step carry the whole stream of the sequences the row
             # lists, sized by their names' geometry; the same rule as binding.coverage_check.
@@ -395,7 +395,7 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
     families_missing_whole = [f for f, n in by_family_checked.items() if by_family_missing.get(f, 0) == n]
     steps_missing_whole = sorted({int(r["engine_step"]) for r in missing}) if missing else []
     requests_missing = sorted({str(r["request_id"]) for r in missing}) if missing else []
-    # [R15 B8] global manifests address request-locally, so a layouts-only check cannot see WHICH request a block belongs to; it can and
+    # global manifests address request-locally, so a layouts-only check cannot see WHICH request a block belongs to; it can and
     # must see the declared composition's size per engine step: the packed ids member has exactly the declared rows and the sampled-ids
     # member exactly one slot per co-scheduled sequence -- a request the server never ran shortens both (named per engine step).  The
     # per-request partition itself is the binding map's `composition_check`.

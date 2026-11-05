@@ -1,5 +1,7 @@
-import Definitions.Pous.P2.Cost
-import Definitions.Pous.P2.Rounds
+module
+
+public import Definitions.Pous.P2.Cost
+public import Definitions.Pous.P2.Rounds
 
 /-!
 # P2's open steps in the ring model (named assumptions)
@@ -12,6 +14,8 @@ through `Pous.SecurityProofs.P2RingAuditSecureOfRoundSecure` and the graded boun
 statement takes, and `P2RingReducesToM1p`, the reduction the spec states, which implies it through the proved `m1p`
 row: `Pous.SecurityProofs.P2RingAuditSecureOfReduces`).
 -/
+
+@[expose] public section
 
 namespace Pous.P2.Assumptions
 
@@ -118,7 +122,7 @@ def P2RingRoundSecure (p ε₀ : ℝ≥0∞) (D Q L : ℕ) : Prop :=
 /-- **`P2RingRoundSecure` to `2^27` blocks (conjectured; unchecked in `N` above `2^25`).** The same statement as
 `P2RingRoundSecure`, at every block count from `2^19` to `2^27`, so that it reaches the demo's store, `1038·2^16 ≈
 2^26.02` blocks (139.7 GB of payload). Nobody has checked the `ε₀` a proof would give against `N` above `2^25`: that
-analysis is pending (the memory-accounting lane's pous-chain report). Its range contains `P2RingRoundSecure`'s, so it
+analysis is pending. Its range contains `P2RingRoundSecure`'s, so it
 implies that one (`Pous.SecurityProofs.roundSecure_of_wide`) and every refutation of that one refutes it: the
 falsification tests there (`PousP2Rounds.round_tight`, `PousP2Rounds.round_trunc`) and its scaled-point test. -/
 def P2RingRoundSecureWide (p ε₀ : ℝ≥0∞) (D Q L : ℕ) : Prop :=

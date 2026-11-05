@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Defs
-import Proofs.Flock.Soundness.Discharge.DecodeZLJ
-import Proofs.Flock.Soundness.Discharge.Tables
-import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Defs
+public import Proofs.Flock.Soundness.Discharge.DecodeZLJ
+public import Proofs.Flock.Soundness.Discharge.Tables
+public import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
 
 /-!
 # One `--zk` sampled session of `J` tables: the pieces `zk_session_soundJ` reads
@@ -24,6 +26,8 @@ tables, each the one-table piece's counterpart:
 * `TagsOkZJ`, `RecordsLiveZKJ`, `DrawOkZKJ`: `TagsOk` without `count ≤ 1`, and `RecordsLiveZK`, `DrawOkZK` at `J` tables.
 * `runsZCJ_live`: `runsZC_live` at `J` tables.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

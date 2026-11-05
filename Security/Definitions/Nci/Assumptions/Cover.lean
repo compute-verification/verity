@@ -1,16 +1,20 @@
-import Definitions.Nci.Cover
-import Mathlib.Basic.Real.Basic
-import Mathlib.Data.Finset.Union
+module
+
+public import Definitions.Nci.Cover
+public import Mathlib.Basic.Real.Basic
+public import Mathlib.Data.Finset.Union
 
 /-!
 # The cover theorem: the named assumptions
 
 `UpdateHardness` is the cover theorem's one assumption about the world: a block that computes whole products must be
-handed `b` bits for each distinct updated parameter they use. On a declaration's gates it is Daniel's parameter-hardness
-at cost `b` (`Nci.Assumptions.ParameterHardAt`; `Proofs.Nci.Cover.Gates`). `ConditionalUpdateHardness`, a stronger
-premise that the structural fan-out tier rests on, pays those bits outside a given set of regions. Both are statements
+handed `b` bits for each distinct updated parameter they use. On a declaration's gates it is the covering bound's
+parameter-hardness at cost `b` (`Nci.Assumptions.ParameterHardAt`; `Proofs.Nci.Cover.Gates`).
+`ConditionalUpdateHardness`, a stronger premise that the structural fan-out tier rests on, pays those bits outside a given set of regions. Both are statements
 about the training circuit `C` and its products, at block size `s`.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.Assumptions
 
@@ -40,8 +44,9 @@ for the regions `A`: `UpdateHardness` with the bits paid by inputs outside every
 It implies `UpdateHardness`. It says that what a block is handed inside the regions does not help it rebuild updated
 parameters: those bits come from the gradients and data that the updates are computed from. It fails wherever
 `UpdateHardness` does, and also when a gate a block is handed inside a region carries information about an updated
-parameter that the block would otherwise have to be handed. In Daniel's vocabulary, with the token computations as the
-regions, it is `Assumptions.ConditionalParameterHardAt` (`Definitions.Nci.Assumptions.CoverAdditive`). -/
+parameter that the block would otherwise have to be handed. In the covering vocabulary (`Nci.Covering`), with the
+token computations as the regions, it is `Assumptions.ConditionalParameterHardAt`
+(`Definitions.Nci.Assumptions.CoverAdditive`). -/
 def ConditionalUpdateHardness {C : Circuit} {J L : Type*} [DecidableEq J] [DecidableEq L] (M : MulBlocks C J L)
     (A : J → Finset (Fin C.N)) (s : ℕ) (b : ℝ) : Prop :=
   ∀ S : Finset (Fin C.N), S.card ≤ s → ∀ B ⊆ M.Pall, (∀ p ∈ B, M.m p ⊆ C.computed S) →

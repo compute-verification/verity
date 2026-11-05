@@ -1,34 +1,34 @@
 #!/usr/bin/env bash
-# R12 X-00 (infrastructure/environment): build the GPU-resident SHA-256 chunk-tree extension `hidden_gpu_tree` (CMT-2 / R9 cmt-hidden)
+# Build the GPU-resident SHA-256 chunk-tree extension `hidden_gpu_tree`
 # that `commit_delta.py --gpu-tree` / `native_collect_v2b` import in every worker step (`native_host._gpu_ext_load` ->
-# `import hidden_gpu` from `<repo>/out/gen/r9/cmt-hidden/src`).  `record_v5/ship.sh` does not ship that directory and `pod_up.sh` never
-# built the extension, so every Commit on a fresh R12 pod failed with `ModuleNotFoundError: No module named 'hidden_gpu'` (C-HIDDENGPU).
+# `import hidden_gpu` from `<repo>/out/gen/r9/cmt-hidden/src`).  The ship doesn't carry that directory, so without this step every
+# Commit on a fresh pod fails with `ModuleNotFoundError: No module named 'hidden_gpu'`.
 #
 #   cd <tree>/integrations/vllm && bash verity_vllm/ops/pod_hidden_gpu.sh            # idempotent; ~1-2 min on first run, seconds after
 #   -> prints  HIDDEN-GPU-OK <sha256 of hidden_gpu_tree.so>   (or HIDDEN-GPU-FAIL <reason>, exit 1)
 #
 # What it does: (1) materialises `out/gen/r9/cmt-hidden/src/{hidden_gpu.py,hidden_gpu_tree.cu}` from the shipped copies in
-# `verity_vllm/commit/committer/hidden_gpu_src/` (byte-identical to the R9 sources at f2c2e2a0c) when the r9 directory is absent;
+# `verity_vllm/commit/committer/hidden_gpu_src/` when that directory is absent;
 # (2) JIT-builds the extension with torch.utils.cpp_extension.load for THIS pod's GPU (TORCH_CUDA_ARCH_LIST from the device: sm80/sm89/sm90)
 # into the default torch-extensions cache -- the same directory the vLLM worker's `hidden_gpu.ext()` resolves when HIDDEN_GPU_BUILD is
-# unset, so the worker only re-checks the ninja build (no compile) -- and also into $HIDDEN_GPU_BUILD if a lane sets it;
+# unset, so the worker only re-checks the ninja build (no compile) -- and also into $HIDDEN_GPU_BUILD if the caller sets it;
 # (3) verifies the import + a GPU root check against the host hashlib reference (`hidden_gpu.py check`).
 # Env: VENV (default /workspace/venv-cu129), CUDA_HOME (default /usr/local/cuda), REPO (default: this tree).
 set -uo pipefail
 REPO=${REPO:-$(cd "$(dirname "$0")/../.." && pwd)}; cd "$REPO"
-VENV=${VENV:-/workspace/venv312}; PY=$VENV/bin/python   # [R19] the one Python 3.12 environment of verity_vllm/ops/pod_bootstrap.sh
+VENV=${VENV:-/workspace/venv312}; PY=$VENV/bin/python   # the one Python 3.12 environment of verity_vllm/ops/pod_bootstrap.sh
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}; export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
-export VERITY_TREE=$REPO PYTHONPATH=$REPO:$REPO/../..:$REPO/../../tools/research/src:$REPO/out/gen/r9/cmt-hidden/src${PYTHONPATH:+:$PYTHONPATH}   # [R19] core + runner beside the integration
+export VERITY_TREE=$REPO PYTHONPATH=$REPO:$REPO/../..:$REPO/../../tools/research/src:$REPO/out/gen/r9/cmt-hidden/src${PYTHONPATH:+:$PYTHONPATH}   # core + runner beside the integration
 export HF_HUB_OFFLINE=${HF_HUB_OFFLINE:-1}
 fail() { echo "HIDDEN-GPU-FAIL $*"; exit 1; }
 [ -x "$PY" ] || fail "no venv python at $PY"
 command -v nvcc >/dev/null || fail "nvcc not found (CUDA_HOME=$CUDA_HOME)"
 $PY -c "import ninja" 2>/dev/null || $PY -m pip install -q ninja || fail "ninja"
 
-# (1) the CMT-2 sources at the path native_host imports from
+# (1) the sources at the path native_host imports from
 SRC=$REPO/out/gen/r9/cmt-hidden/src; SHIP=$REPO/verity_vllm/commit/committer/hidden_gpu_src
 mkdir -p "$SRC"
-# [R18 infra, F-r17-tp-06] the shipped copy is the source of record: a stale r9 copy (an earlier ship's tar leaves it in place) is
+# The shipped copy is the source of record: a stale copy at that path (an earlier ship's tar leaves it in place) is
 # OVERWRITTEN when its bytes differ, never kept -- the fixed hidden_gpu.py (REPO from the importing tree) must be what native_host imports
 for f in hidden_gpu.py hidden_gpu_tree.cu; do
   [ -s "$SHIP/$f" ] || fail "missing $SHIP/$f (re-ship the tree)"
@@ -41,10 +41,10 @@ done
 
 # (2) build for this GPU: default torch-extensions cache (what the worker uses) + optional HIDDEN_GPU_BUILD
 ARCH=$($PY -c "import torch; cc=torch.cuda.get_device_capability(0); print(f'{cc[0]}.{cc[1]}')") || fail "no CUDA device"
-# [R13 REL-05] do NOT export TORCH_CUDA_ARCH_LIST here.  torch.utils.cpp_extension.load hashes the nvcc arch flags into the extension
+# Do NOT export TORCH_CUDA_ARCH_LIST here.  torch.utils.cpp_extension.load hashes the nvcc arch flags into the extension
 # version: with the variable set to "8.9" it emits sm_89 only, unset (the vLLM worker / commit_delta / pod_ready import) it emits
-# sm_89 + compute_89 PTX -> a different version -> every consumer REBUILT the cache this script had just warmed (~70 s per row start,
-# and the readiness check's "loaded from cache" assertion failed on cp-rev 06:37Z).  Build exactly what the consumers build: same env.
+# sm_89 + compute_89 PTX -> a different version -> every consumer would rebuild the cache this script just warmed (~70 s per workload
+# start, and the readiness check's "loaded from cache" assertion fails).  Build exactly what the consumers build: same env.
 # A caller that really wants a different arch list must set TORCH_CUDA_ARCH_LIST for the workers too (row_pod.sh / canary.sh env).
 echo "[hidden_gpu] $(date -u +%FT%TZ) building hidden_gpu_tree for sm_${ARCH/./} (TORCH_CUDA_ARCH_LIST=${TORCH_CUDA_ARCH_LIST:-<unset, as the worker>}) with $(nvcc --version | tail -1 | cut -c1-60) torch $($PY -c 'import torch;print(torch.__version__)')"
 build_once() {   # $1 = HIDDEN_GPU_BUILD value ("" = default cache)
@@ -69,7 +69,7 @@ import hidden_gpu as HG
 e = HG.ext()
 assert hasattr(e, "chunk_leaves") and hasattr(e, "tree_levels"), dir(e)
 out = os.path.join(tempfile.gettempdir(), "hidden_gpu_check.json")
-HG.main(HG.CheckOptions(out=out))      # R9 self-check: GPU chunk-tree root/levels/openings == host hashlib reference
+HG.main(HG.CheckOptions(out=out))      # the self-check: GPU chunk-tree root/levels/openings == host hashlib reference
 r = json.load(open(out))
 if not r.get("_all_ok"):
     raise SystemExit(f"GPU tree != host reference: {[c for c in r['cases'] if not (c['root_equal'] and c['levels_equal'] and c['openings_ok'])]}")

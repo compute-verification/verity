@@ -1,5 +1,7 @@
-import Mathlib
-import Proofs.Accounting.RateAudit.Audit
+module
+
+public import Mathlib
+public import Proofs.Accounting.RateAudit.Audit
 
 /-!
 # The rate audit over `n` windows: the proof
@@ -10,6 +12,8 @@ least `m` of them short of the floor (`le_card_short`). The probability that win
 class, played on the store and window `i`'s own coins (`pr_short_le`). Markov's inequality over the count of short
 windows (`mul_pr_le_sum`) gives the guarantee.
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 
@@ -73,7 +77,7 @@ theorem mul_pr_le_sum {Ω ι : Type} [Fintype Ω] [Fintype ι] (P : ι → Ω �
 variable {n N b h ρ S L q s : ℕ}
 
 /-- Window `i` was accepted within the compute budget with its footprint short of the floor `fl`. -/
-def Short (A : Windows n N b h ρ S L q s) (cTag cEnc F fl : ℕ) (i : Fin n) (x : Store N b × (Fin n → Coins N b h ρ s)) :
+def Short (A : Devices n N b h ρ S L q s) (cTag cEnc F fl : ℕ) (i : Fin n) (x : Store N b × (Fin n → Coins N b h ρ s)) :
     Prop :=
   (A.dev i x.2).Accepts x.1 (x.2 i).1 (x.2 i).2.1 (x.2 i).2.2 ∧
     (A.dev i x.2).compute cTag cEnc x.1 (x.2 i).1 (x.2 i).2.1 ≤ F ∧
@@ -82,7 +86,7 @@ def Short (A : Windows n N b h ρ S L q s) (cTag cEnc F fl : ℕ) (i : Fin n) (x
 open Classical in
 /-- Footprints summing short of `n + 1 − m` floors, in windows all accepted within the budget, leave at least `m`
 windows short. -/
-theorem le_card_short (A : Windows n N b h ρ S L q s) (cTag cEnc F fl m : ℕ)
+theorem le_card_short (A : Devices n N b h ρ S L q s) (cTag cEnc F fl m : ℕ)
     (x : Store N b × (Fin n → Coins N b h ρ s))
     (hall : ∀ i, (A.dev i x.2).Accepts x.1 (x.2 i).1 (x.2 i).2.1 (x.2 i).2.2 ∧
       (A.dev i x.2).compute cTag cEnc x.1 (x.2 i).1 (x.2 i).2.1 ≤ F)
@@ -107,7 +111,7 @@ theorem le_card_short (A : Windows n N b h ρ S L q s) (cTag cEnc F fl m : ℕ)
   omega
 
 /-- Window `i` is accepted short with at most `RateAudit`'s error, at every device the other windows' coins pick. -/
-theorem pr_short_le (A : Windows n N b h ρ S L q s) (cTag cEnc F k lam : ℕ) (i : Fin n) :
+theorem pr_short_le (A : Devices n N b h ρ S L q s) (cTag cEnc F k lam : ℕ) (i : Fin n) :
     pr (Short A cTag cEnc F (floor b ρ S L F cTag cEnc k lam) i) ≤
       (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam := by
   classical
@@ -120,7 +124,7 @@ theorem pr_short_le (A : Windows n N b h ρ S L q s) (cTag cEnc F k lam : ℕ) (
     (SecurityProofs.RateAudit N b h ρ S L q s k F cTag cEnc lam (A i ω'))
   have hω : ((Equiv.funSplitAt i (Coins N b h ρ s)).symm (x.2, ω')) i = x.2 := by simp
   have hd : A.dev i ((Equiv.funSplitAt i (Coins N b h ρ s)).symm (x.2, ω')) = A i ω' := by
-    simp only [Windows.dev]
+    simp only [Devices.dev]
     congr 1
     funext j
     simp [j.2]

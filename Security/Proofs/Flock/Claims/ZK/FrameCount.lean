@@ -1,9 +1,11 @@
-import Flock.Firewall.Skeleton
-import Flock.Firewall.SessionPlan
-import Proofs.Flock.Soundness.Discharge.ZkView.Decode
+module
+
+public import Flock.Firewall.Skeleton
+public import Flock.Firewall.SessionPlan
+public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 
 /-!
-# The algebraic phase's coin counts (Stage B, R2)
+# The algebraic phase's coin counts
 
 The loop requests each rep round's coins at the plan's count (`Session.repPlan`, `Loop.loopNr_succ`), and the frame
 checks the device against the rep's scheduled rounds (`schedSoFar`), so a round's frame takes its coins only where the
@@ -17,6 +19,8 @@ lincheck squeeze `replayCoins`' counts in order.
 * `tally_squeezeP`, `zerocheckFw_tally`, `lincheckFw_tally`, `repPiop_tally`: the squeezes' counts, the zerocheck's
   and lincheck's, and the PIOP's.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Count
 

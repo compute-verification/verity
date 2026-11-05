@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.TmplSplitWalk
-import Proofs.Flock.Soundness.TmplFoldLayout
+module
+
+public import Proofs.Flock.Soundness.TmplSplitWalk
+public import Proofs.Flock.Soundness.TmplFoldLayout
 
 /-!
-# The split fold is the template fold (PRF-133, part 3, stage 3)
+# The split fold is the template fold
 
 `foldSplit` walks the root's class at chunk origin 0 and sums the table's entries into the 64 slots; with the root
 reading no inputs that sum is `tabExp`, which `walk_ok` values as the root copy's reference value
@@ -10,6 +12,8 @@ reading no inputs that sum is `tabExp`, which `walk_ok` values as the root copy'
 `fold_eq_foldRef_wf` the split fold is the reference (`foldSplit_eq_foldRef_wf`). Beside the lane counts `fold` already
 needs, the split fold needs the root's chunk, `2^log2ceil(size)`, to hold 64 slots inside the point.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128 Std
 

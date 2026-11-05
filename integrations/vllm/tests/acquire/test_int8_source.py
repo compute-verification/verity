@@ -206,7 +206,7 @@ def test_x03_holds_the_quantizer_names_to_the_steps_sites():
 def test_a_credited_reads_window_quantization_is_committed_as_the_pages_is():
     """Under a credited cache read the attention quantizes its windows with `verity_int8::kv_quant_window_batch`: the same
     `<attention>/kv_quant.0..3`, bit for bit, two requests at one step concatenated in batch order, each its own slice of the batch's
-    padded results (the Commit left 4,096 of them unbound, r20261018-193305-618b)."""
+    padded results (the Commit left 4,096 of them unbound)."""
     com, model, man = _Committer(), _Model(), _manifest(steps=(0,))
     (_kc, _vc, _b, ks), (k, v) = _kv_args()
     rows_k, rows_v = torch.cat([k, k[:2]]), torch.cat([v, v[:2]])
@@ -233,7 +233,7 @@ def test_a_manifest_without_int8_sites_refuses_the_source():
 def test_the_binder_binds_the_kv_quantization_and_the_attentions_return_under_the_manifests_spelling():
     """The manifest spells a hinted multi-port Call's Values `<hint>.<port>` (`query.required.member_name`) and the attention's return
     `out`.  Committed as bare digits, `<attention>/0..3` were slots of the attention's return beside the return itself, so none of the
-    five bound (r20261020-000034-addf: 5,120 of 27,333 unbound, first model.layers.0.self_attn.attn/kv_quant.0).  Declared as
+    five bound (5,120 of 27,333 unbound, first model.layers.0.self_attn.attn/kv_quant.0).  Declared as
     Int8KvQuant_v1's ports they bind by port, and the return binds its one remaining member."""
     man = _manifest(steps=(0,))
     src = I8.Int8Source(_Committer(), _Model(), {}, I8.kv_modules(man))

@@ -1,12 +1,14 @@
-import Proofs.Pouw.H1Zy.ChainVectors
-import Proofs.Pouw.H1Zy.Combine
-import Proofs.Pouw.H1Zy.CombineBits
-import Proofs.Pouw.H1Zy.DequantVectors
-import Proofs.Pouw.H1Zy.Lane
-import Proofs.Pouw.H1Zy.LaneBits
-import Proofs.Pouw.H1Zy.Stream
-import Proofs.Pouw.H1Zy.Tile
-import Proofs.Pouw.H1Zy.LaneChunk
+module
+
+public import Proofs.Pouw.H1Zy.ChainVectors
+public import Proofs.Pouw.H1Zy.Combine
+public import Proofs.Pouw.H1Zy.CombineBits
+public import Proofs.Pouw.H1Zy.DequantVectors
+public import Proofs.Pouw.H1Zy.Lane
+public import Proofs.Pouw.H1Zy.LaneBits
+public import Proofs.Pouw.H1Zy.Stream
+public import Proofs.Pouw.H1Zy.Tile
+public import Proofs.Pouw.H1Zy.LaneChunk
 
 /-!
 # H1's drawn-leaf statements: their Definitions on words mean what `LeafChecks` reads
@@ -37,10 +39,11 @@ lane field.
 word view (the multiply's, `Pouw.H1Zy.immaS8Bits_bv`, from Baugh–Wooley and the clamp).
 
 `Stream`: at the same `K`, a lane's `ok` over `PouwH1Tile_v3` is its `ok` over `PouwH1Tile_v1` at every seed
-(`Pouw.H1Zy.laneOkZ_eq_laneOk`, `Pouw.H1Zy.laneZ3_eq`). `Proofs.Accounting.TS.Session.Lanes.Stream` reads it as
-`LeafChecks`' lane field at v3 lanes.
+(`Pouw.H1Zy.laneOkZ_eq_laneOk`, `Pouw.H1Zy.laneZ3_eq`).
 
 `LaneChunk`: a lane's `n` chunk statements, each `ok = true`, chunk `c + 1`'s carry in chunk `c`'s carry out, give the
 whole lane's `ok = true` at the chain machine's words on the rows they read joined (`Pouw.H1Zy.laneOk_of_chunks`), and so
 `laneOk_spec`'s exact z, dequant and partials over the whole `K` (`Pouw.H1Zy.chunks_spec`). No guarantee reads it yet.
 -/
+
+@[expose] public section

@@ -1,9 +1,11 @@
-import Mathlib
+module
+
+public import Mathlib
 
 /-!
 # Steiner rigidity in the rank metric (PoUW work floor)
 
-The setting of `note:20261015T0416Z-draft-steiner-rigidity-laminar`: matrices over a field `F`, the rank metric
+The setting of the laminar Steiner-rigidity draft: matrices over a field `F`, the rank metric
 `d(A, B) = rank (A - B)`, and a Steiner tree as a finite tree whose vertices carry matrices, its length the sum over
 its edges of the rank of the difference of the endpoints' labels.
 
@@ -22,6 +24,8 @@ its edges of the rank of the difference of the endpoints' labels.
 * Also here: the rank metric's facts, and the merge-proof case (Corollary 6 of the note) for any connected labelled
   graph: targets whose column spaces (or row spaces) are independent cost at least the sum of their ranks.
 -/
+
+@[expose] public section
 
 namespace Pouw.SteinerRigidity
 

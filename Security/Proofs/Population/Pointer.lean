@@ -1,5 +1,7 @@
-import Proofs.Population.Egress
-import Mathlib.Tactic.DeriveFintype
+module
+
+public import Proofs.Population.Egress
+public import Mathlib.Tactic.DeriveFintype
 
 /-!
 # Value-dependent reads: the VM pointer
@@ -13,8 +15,8 @@ values. Two things are true of it.
   choice of egress as well as a circuit does.
 * `vm_leak`, **the reach does not**: in the pointer machine `vm N`, every assignment's dependency graph is acyclic
   (`vm_acyclicAt`), the writes are single assignment (`vm_singleAssignment`), and in every honest run the egress reads
-  no secret (`vm_honest_up`); yet one wrong unit, the pointer step writing one bit, makes the egress copy all `N`
-  secret bits, so over the secrets the egress takes `2 ^ N` values. `vm_count` is the same machine under the count:
+  no secret (`vm_honest_up`); yet one faulty proof block, the pointer step writing one bit, makes the egress copy all
+  `N` secret bits, so over the secrets the egress takes `2 ^ N` values. `vm_count` is the same machine under the count:
   with the secrets fixed (as inputs), at most `2 ^ 1`.
 
 The same computation declared statically (`vmStatic`, each copy step reading the pointer, its zero slot and its secret
@@ -22,6 +24,8 @@ slot) is a checked population (`vmStatic_checked`) whose egress has every secret
 the checker sees the secret in the egress's cone and refuses to certify it, which is what `card_egress_le` needs. A
 circuit does not stop a value from selecting what is read; its public wiring makes the selection visible.
 -/
+
+@[expose] public section
 
 namespace Population
 
@@ -37,7 +41,7 @@ theorem correct_of_not_mem_wrong [Fintype U] {σ : S → V} {u : U} (h : u ∉ D
   exact h (by simp [wrong, hc])
 
 /-- **Time-ordered determinacy**: an assignment of a time-ordered population is determined by its inputs and the
-writes of a set containing its wrong units. -/
+writes of a set containing its faulty proof blocks. -/
 theorem eq_of_timeOrdered [Fintype U] (hc : D.Covered) {step : U → ℕ} (ht : D.TimeOrdered step) {B : Finset U}
     {σ τ : S → V} (hin : ∀ s ∈ D.input, σ s = τ s) (hσ : D.wrong σ ⊆ B) (hτ : D.wrong τ ⊆ B)
     (hB : ∀ u ∈ B, ∀ s ∈ D.writes u, σ s = τ s) : σ = τ := by
@@ -243,8 +247,8 @@ theorem vm_leak (N : ℕ) :
   have := card_le_card_of_injOn _ (s := univ) (fun x _ => hmem x) hinj.injOn
   simpa using this
 
-/-- **The count still holds for the pointer machine**: with the secrets fixed as inputs, the same wrong unit gives at
-most `2 ^ 1` egress values. -/
+/-- **The count still holds for the pointer machine**: with the secrets fixed as inputs, the same faulty proof block
+gives at most `2 ^ 1` egress values. -/
 theorem vm_count (N : ℕ) (a : Slot N → Bool) :
     ((vm N).egress a ∅ (univ.filter fun s => s.isOut) {none}).card ≤ 2 ^ 1 := by
   classical

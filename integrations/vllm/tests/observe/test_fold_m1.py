@@ -1,7 +1,6 @@
-"""Fold of the M1 capture (`data/logs/m1.jsonl.gz`, L1) under L3's profile.  Skipped unless both exist,
-L2's memory model is merged and `CAPTURE_BIG=1` (DESIGN §11 / D69: full-size builds are pod jobs; measured on the
-laptop at 210 MB RSS / 2.4 s for fold + Program() + digest, so the gate is discipline, not necessity).  Asserts DESIGN
-§4's instance counts, the return type and the absence of Unsupported / Unresolved; prints the Program size and build
+"""Fold of the M1 capture (`data/logs/m1.jsonl.gz`) under its profile.  Skipped unless both exist,
+the memory model is available and `CAPTURE_BIG=1` (full-size builds are pod jobs).  Asserts the expected
+instance counts, the return type and the absence of Unsupported / Unresolved; prints the Program size and build
 time (run with `-s` to see them)."""
 from __future__ import annotations
 
@@ -22,16 +21,16 @@ PROFILE = "vllm_d9105ea80_sm89_eager"
 
 def _available() -> str | None:
     if os.environ.get("CAPTURE_BIG") != "1":
-        return "full-size build: set CAPTURE_BIG=1 (DESIGN §11)"
+        return "full-size build: set CAPTURE_BIG=1"
     if not LOG.exists():
-        return f"{LOG} missing (L1)"
+        return f"{LOG} missing"
     if importlib.util.find_spec(f"verity_vllm.observe.fold.profiles.{PROFILE}") is None:
-        return f"profile {PROFILE} missing (L3)"
+        return f"profile {PROFILE} missing"
     try:
         from verity_vllm.observe.fold.memory import MemoryModel
         MemoryModel()
     except NotImplementedError:
-        return "memory.py is a skeleton (L2)"
+        return "memory.py is a skeleton"
     return None
 
 

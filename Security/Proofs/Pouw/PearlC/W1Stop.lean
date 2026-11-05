@@ -1,14 +1,16 @@
-import Definitions.Pouw.PearlC.W1Stop
-import Proofs.Pouw.PearlC.W1BudgetAbort
-import Proofs.Pouw.PearlC.W1Priced
-import Proofs.Pouw.Prob
+module
+
+public import Definitions.Pouw.PearlC.W1Stop
+public import Proofs.Pouw.PearlC.W1BudgetAbort
+public import Proofs.Pouw.PearlC.W1Priced
+public import Proofs.Pouw.Prob
 
 /-!
 # The stopping machine truncates
 
-`Accounting.BudgetAbort` (#1821) fails for W1 under any refund rule (the static-refund red team's three-load example,
-`note:20261012T0423Z-report-static-refund`), and for the outcome refund by `W1BudgetAbort.w1_not_budgetAbort`. On a
-machine that stops a run at its budget (`CostModel.withStop`, Daniel's item 9) it holds:
+`Accounting.BudgetAbort` fails for W1 under any refund rule (the static-refund three-load example),
+and for the outcome refund by `W1BudgetAbort.w1_not_budgetAbort`. On a
+machine that stops a run at its budget (`CostModel.withStop`, by ruling) it holds:
 
 - `withStop_budgetAbort`: any model with nonnegative costs truncates on the stopping machine. The copy of a program at
   budget `b` is the same program with budget `b` (or the smaller of `b` and its own).
@@ -20,6 +22,8 @@ machine that stops a run at its budget (`CostModel.withStop`, Daniel's item 9) i
 So the stop does not make the per-run bound free. `GγPerCoin` is stronger than `Gγ`, whose budget holds on every coin, and
 it is the conjecture a per-run bound over W1 rests on.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.W1Stop
 

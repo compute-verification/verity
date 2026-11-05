@@ -1,7 +1,7 @@
 """Vectorized exact evaluators for **derived boundaries** — interior gate values of the registered B0/B1
-serving semantics that the commit store does not materialise (lane VU-ACQUIRE, GUIDANCE §29 wave).
+serving semantics that the commit store does not materialise.
 
-"Any gate output can be a VU boundary": VU placement is defined over the circuit (core rule 4), so a plan
+"Any gate output can be a proof-block boundary": proof-block placement is defined over the circuit (core rule 4), so a plan
 may select values that live *inside* the kernel-aligned leaves the adapter commits.  Replay can only serve
 such a plan if the interior value can be produced fast and bit-exactly from committed neighbours.  This
 module provides that production path for four derived classes, as numpy twins of the registered gate
@@ -30,7 +30,7 @@ Non-finite bf16 operands in a tensor-core dot follow the *documented extension* 
 `prims.AmpereBF16TcDot16` only in the scalar registry; here such rows are flagged ``nonfinite`` and are
 never claimed exact (the `fa2_model` convention).
 
-Validation: `tests/program/test_derived_rows.py` (gate-by-gate IR evaluation on small shapes) and
+Validation: `tests/program/test_derived_rows.py` (gate-by-gate circuit evaluation on small shapes) and
 `verity_vllm.check.poc_derived_b0_check` (every norm/attention/silu row of a committed B0 request).
 """
 
@@ -455,11 +455,10 @@ def tc_dot16(acc: np.ndarray, a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray,
 
 
 # ---------------------------------------------------------------------------------------------------------
-# [R17 dense, F-r16-20b / ruling R17-3] Hopper bf16 tensor-core k16 step, vectorised: ONE accumulator coordinate of
+# Hopper bf16 tensor-core k16 step, vectorised: ONE accumulator coordinate of
 # `wgmma.mma_async.sync.aligned.m64n{N}k16.f32.bf16.bf16` (SASS HGMMA.64xNx16.F32.BF16) as `veritor.core.silicon_total.
 # HOPPER_BF16_WGMMA_K16` defines it -- one group of all sixteen products plus the accumulator, 26-bit adder, exponent floor
-# -133 (lane HP's H100 re-measurement, docs/data/tc-hopper-2026-09-07: 307,281,920 output words, 0 mismatches; `scale-d = 0`
-# measured equal to acc = +0).  The registered scalar primitive is `verity.ml.circuits.ops.prims.HopperBF16WgmmaDot16`; this twin
+# -133 (measured on the H100: 307,281,920 output words, 0 mismatches; `scale-d = 0` measured equal to acc = +0).  The registered scalar primitive is `verity.ml.circuits.ops.prims.HopperBF16WgmmaDot16`; this twin
 # is checked word for word against it in tests/program/test_derived_rows.py.
 #
 # The k-CHAIN of the Hopper GEMM of record (`Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}`, gemm_targets.REGISTERED['hopper']) is
@@ -469,7 +468,7 @@ def tc_dot16(acc: np.ndarray, a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray,
 # preferred_blas_library=cublaslt).  Under EXACTLY that configuration the H100 (sm 132, torch 2.13.0+cu129) output equals the
 # ascending k16 wgmma chain from a zero accumulator + RN to bf16, word for word, on every Qwen2.5-1.5B linear shape
 # (K,N in {(1536,2048),(1536,1536),(1536,17920),(8960,1536),(1536,151936)}) x step lengths M in {1..8,12,16,...,8192}:
-# 0 mismatching words of 27,240,000 (dense R17 probe 2026-09-20 16:24Z, out/gen/sweep/evidence/dense/gemm_v2-hopper-pin/);
+# 0 mismatching words of 27,240,000;
 # the Ampere chain differs on every case.  Under torch DEFAULTS (split-K allowed) the same GPU splits K=8960 three ways at
 # M<=64 (tile-64 split-K, f32 (p0+p1)+p2) -- so the relation below is the relation of a VLLM_BATCH_INVARIANT=1 record only,
 # which is what every row of record declares (sweep/record.py engine_args), the same premise Gemm_v1 already rests on.
@@ -489,7 +488,7 @@ def tc_dot16_hopper(acc: np.ndarray, a: np.ndarray, b: np.ndarray) -> tuple[np.n
 
 
 # ---------------------------------------------------------------------------------------------------------
-# [R17 dense, ruling R17-9 engineering item] RoPE_v1 vectorised -- `b1.RoPE{NHEADS, D}` = NHEADS x `RoPEHead{D}` over ONE bf16 cos/sin
+# RoPE_v1 vectorised -- `b1.RoPE{NHEADS, D}` = NHEADS x `RoPEHead{D}` over ONE bf16 cos/sin
 # cache row `cs = [cos[0:R] | sin[0:R]]` (R = D/2, the `weights` field `...rotary_emb.cos_sin_cache[pos]`), the vLLM CUDA
 # `rotary_embedding_kernel` (NeoX):  out[i] = bf16_rn(RN32(x[i]*c[i] - x[i+R]*s[i])),  out[i+R] = bf16_rn(RN32(x[i+R]*c[i] + x[i]*s[i])).
 # A product of two bf16 words is exact in f32, so RN32(x*c - y*s) == fma(x, c, -(y*s)) exactly as `prims.RopeOut` / `RopeOutAdd`
@@ -563,9 +562,9 @@ def dot_bf16_for(dot_prim_id: str):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# [R16 fp8] Hopper FP8 tensor-core k32 step, vectorised (veritor.core.silicon HOPPER_E4M3_K32 / silicon_total_fp8
+# Hopper FP8 tensor-core k32 step, vectorised (veritor.core.silicon HOPPER_E4M3_K32 / silicon_total_fp8
 # HOPPER_E4M3_WGMMA_K32: ONE group of 32 exact e4m3 products + the accumulator, 14-bit truncating adder, exponent
-# floor -139; pinned on an H100 2026-09-08, 144,543,744 words, 0 mismatches) and the two block-scaled FP8 linear
+# floor -139; measured on an H100, 144,543,744 words, 0 mismatches) and the two block-scaled FP8 linear
 # families of the Qwen3-4B-FP8 Program (`verity/ml/definitions/registry/fp8.py`: Fp8GroupQuant_v1{K,G}, ScaledMmFp8Block_v1{K,N,G}).
 # The scalar Definitions are the reference; these twins are checked word-for-word against them and against the saved
 # H100 kernel words (`tests/program/data/fp8_block_operands.npz`) in tests/program/test_derived_rows_fp8.py.
@@ -795,7 +794,7 @@ def silu_mul_rows(gu: np.ndarray):
 # Attention (FA2 online softmax, one (query, head) row) — emits per-block (m, l[4], o[D])
 # ---------------------------------------------------------------------------------------------------------
 
-BN = b1.BN  # `AttnBlock_v1`'s block (64).  [E7 D54] `attn_block` reads the block size from the K block it is given; `attention_head_states` takes ``BN``
+BN = b1.BN  # `AttnBlock_v1`'s block (64).  `attn_block` reads the block size from the K block it is given; `attention_head_states` takes ``BN``
 
 
 def attn_block(q, kb, vb, m_prev, l_prev, o_prev, *, D: int, NVIS: int, FIRST: bool, dot16=None, check: bool = True, rescale_only: bool = False, scale_bits: int | None = None):
@@ -805,7 +804,7 @@ def attn_block(q, kb, vb, m_prev, l_prev, o_prev, *, D: int, NVIS: int, FIRST: b
     q (R, D), kb/vb (R, BN, D) bf16 words (rows past NVIS must be zero — `Clear_OOB_MN` padding);
     m_prev (R,), l_prev (R, 4), o_prev (R, D) f32 words (ignored when FIRST).
     Returns (m_new, l (R,4), o (R,D), nonfinite (R,))."""
-    BN = kb.shape[1]  # [E7 D54] the block size is the block's: 64 (`AttnBlock_v1`) or `b1.fa2_kblock_n(D)` (`AttnBlock_v3`)
+    BN = kb.shape[1]  # the block size is the block's: 64 (`AttnBlock_v1`) or `b1.fa2_kblock_n(D)` (`AttnBlock_v3`)
     step = tc_dot16 if dot16 is None else dot16
     R = q.shape[0]
     nf = np.zeros(R, dtype=bool)
@@ -913,11 +912,11 @@ def attention_head_states(q: np.ndarray, k: np.ndarray, v: np.ndarray, BN: int |
 
 def attention_rows(q: np.ndarray, kc: np.ndarray, vc: np.ndarray, BN: int, *, dot_prim: str = "AmpereBF16TcDot16_v2",
                    inv_prim: str = "Fa2InvSum_v1", masked_from: int | None = None, rescale_only: bool = False, scale_bits: int | None = None) -> tuple[np.ndarray, np.ndarray]:
-    """[R17 dense, ruling R17-3 / BRIEF §4] one attention ROW of the Program -- `Attention_v3{T, NH, KVH, D, BN}` (FA2, the defaults) or
+    """one attention ROW of the Program -- `Attention_v3{T, NH, KVH, D, BN}` (FA2, the defaults) or
     `Attention_v2{T, NH, KVH, D, BN, DOT, INV}` (FA3 on sm_90: DOT = HopperBF16WgmmaDot16_v1, INV = Fa3InvSum_v1; `Attention_v4` adds ``masked_from``, `Attention_v5` ``rescale_only`` as well) -- exactly as the
     registered Definitions compose it: head h reads KV head h // (NH/KVH); one query at position T-1 over keys 0..T-1, ceil(T/BN) blocks
     visited last -> first (`AttentionHead_v2/v3`).  q (NH, D), kc / vc (T, KVH, D) bf16 words -> (out (NH, D) bf16 words, nonfinite (NH,)).
-    This is the composition of the row's VUs on its committed boundary (q, the K/V history, out); the block INTERIORS Q(P) selects live in
+    This is the composition of the row's proof blocks on its committed boundary (q, the K/V history, out); the block INTERIORS Q(P) selects live in
     the M1 export stream and are not read here -- the caller names that mechanism."""
     q = np.asarray(q, dtype=np.uint16)
     kc = np.asarray(kc, dtype=np.uint16)

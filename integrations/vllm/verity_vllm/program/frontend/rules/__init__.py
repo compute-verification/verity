@@ -1,5 +1,5 @@
-"""Lowering rules (glossary, Draft 3 §12: 'lowering rule', was 'Rule'; the class names `ViewRule` / `OpRule` / ... stay; design §4,
-GUIDANCE §43.3). `DEFAULT_RULES` is the versioned default rule set: view rules (no gates), reference-mode op rules, profile-mode
+"""Lowering rules (the class names `ViewRule` / `OpRule` / ... keep the older name 'Rule').
+`DEFAULT_RULES` is the versioned default rule set: view rules (no gates), reference-mode op rules, profile-mode
 op / in-place / state rules, and the registered program families (`family.py`) whose identity a derivation may claim after verified
 isomorphism.  Each rule application emits one Call of a registered Definition; the (rule, node, module path) record is the runtime
 correspondence's Build-side half.
@@ -7,10 +7,10 @@ correspondence's Build-side half.
 The rule modules import `..derive` (for `Ctx`, `refuse`, ...), and `derive` imports `rules.base`; the concrete
 rule sets are therefore resolved lazily (PEP 562) to keep the package import acyclic.
 
-PROTOCOL SUMMARY (Build stage: the lowering rules that turn vLLM's exported ATen graph into a Program over registered primitives)
+PROTOCOL SUMMARY (Build phase: the lowering rules that turn vLLM's exported ATen graph into a Program over registered primitives)
   Purpose: `DEFAULT_RULES` is the versioned rule set `verity_vllm.program.frontend.derive` applies node by node to the `torch.export(strict=False)`
     graph of the vLLM model class: ViewRules (reference rearrangements, no gates), reference-mode and profile-mode OpRules / InPlaceRules /
-    StateRules (each emits a Call of a REGISTERED Definition, e.g. rules/vllm_bindings.py for the Triton / unified-attention custom ops),
+    StateRules (each emits a Call of a REGISTERED Definition, e.g. rules/vllm_bindings/ for the Triton / unified-attention custom ops),
     PaddingRules, and FamilyRules that may claim a registered program identity after a verified isomorphism.
   Inputs: the exported graph nodes + `Ctx` (mode, profile, kind vocabulary from rules/vocab.py: PROFILE_B1_EAGER | REFERENCE_CPU_F32).
   Outputs: lowering-rule applications recorded in the Program's provenance (derive-report.json: rule, node, module path, emitted kind) and the
@@ -18,8 +18,7 @@ PROTOCOL SUMMARY (Build stage: the lowering rules that turn vLLM's exported ATen
   Invariants: rules decide structurally (`applies(node, ctx)`), never by op name alone; exactly one applicable rule translates a node;
     a refusal names one of derive.REASONS (mutation, decomposition, custom_op_without_binding, side_input, dynamic_control_flow,
     numerics_unregistered, hidden_state, unsupported_view, shape, export, identity); the rule set + versions go into the Program's
-    provenance (`annotations["derive"]`), which `verity.ml.circuits.codec.program_digest` EXCLUDES -- the digest covers the dataflow only.
-  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)"."""
+    provenance (`annotations["derive"]`), which `verity.ml.circuits.codec.program_digest` EXCLUDES -- the digest covers the dataflow only."""
 
 from __future__ import annotations
 

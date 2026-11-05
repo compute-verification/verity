@@ -108,7 +108,7 @@ def test_dry_run_all_and_snapshot_steps():
 
 @pytest.mark.slow
 def test_dry_run_snapshot_caps_reach_the_capture_only():
-    # D87 cap and the cov-moe dispatcher-call cap are capture flags.  [R16 global F-global-SNAP, rel r17-int-1] the D87 cap is no longer
+    # D87 cap and the cov-moe dispatcher-call cap are capture flags.  The D87 cap is not
     # absent by default: run_config DERIVES it (rows x widest row x 2 B, never below m1_capture's 32 MiB floor) so every prefill MLP row of a
     # >= 1024-prompt row has snapshot evidence; with an unresolvable workload / checkpoint (this dry run) the derivation is the floor.  The
     # dispatcher-call cap stays absent by default, and an explicit CLI value still wins (below).
@@ -180,7 +180,7 @@ def test_local_cpu_stages_on_m1(tmp_path):
     gates = json.loads((run / "gates.json").read_text())
     assert gates["verdict"] == "INCOMPLETE" and list(gates["gates"]) == list(G.ALL_GATES)
     st = {g: v["status"] for g, v in gates["gates"].items()}
-    # nothing fails on m1; every frozen gate lacks an artifact we skipped (G8: no query_use.json); [R9 ref] R1 reads the fold summary
+    # nothing fails on m1; every frozen gate lacks an artifact we skipped (G8: no query_use.json); R1 reads the fold summary
     # that IS written (errors/unresolved/unsupported 0) and passes -- it is never `skipped`
     assert st == {**{g: "skipped" for g in G.GATES + G.STRUCTURAL_GATES}, "R1": "pass"}, st
     assert "replay_a skipped" in gates["gates"]["G4"]["reason"] and "--skip" in gates["gates"]["G4"]["reason"]

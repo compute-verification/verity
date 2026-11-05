@@ -1,4 +1,4 @@
-"""Vocabulary-range exactness: the range values the vocabulary-range source commits for a tensor-parallel rank are the IR's
+"""Vocabulary-range exactness: the range values the vocabulary-range source commits for a tensor-parallel rank are the circuit's
 `EmbeddingShard_v1` values, and the fused embedding kernel applied exactly those.
 
 `acquire.sources.vocab_range_source` computes, at each `torch.ops._C.vocab_parallel_embedding` launch inside a manifest embedding site,
@@ -6,12 +6,12 @@ int32 [rows, 3] = (tok - START, START <= tok, tok <= START + VS - 1) from the la
 engine (vLLM, eager, batch invariant):
 
   (a) edge ids (0, START - 1, START, START + VS - 1, START + VS, the vocabulary's last id, and seeded random ids), through vLLM's own
-      `vocab_parallel_embedding` with int32 and int64 ids inside a committed step: every committed row equals the IR's values (`ir_values`:
-      the gates `query.vocab_range.slots` names, in the `verity.ml.circuits.evaluate.evaluate_call` transcript) and the kernel's output agrees (the
+      `vocab_parallel_embedding` with int32 and int64 ids inside a committed step: every committed row equals the circuit's values (`ir_values`:
+      the gates `query.vocab_range.slots` names, in the `verity.ml.circuits.evaluation.evaluate_call` trace) and the kernel's output agrees (the
       row is the shard's row `local` when both range bits are set, else zero), and the output is bit-identical to the launch without the
       source;
   (b) live: the engine generating with the source installed commits one `<site>/vocab_range` per step on every rank; every committed row
-      equals the IR's values for its token id and the kernel's partial agrees with it; the generated tokens equal an engine without the
+      equals the circuit's values for its token id and the kernel's partial agrees with it; the generated tokens equal an engine without the
       source; the source acquires nothing outside a step and restores the patched op.
 
 This module is the property and its record `vocab_range_exactness.json`, sealed like the other properties' (`record.seal`);
@@ -37,11 +37,11 @@ def edge_ids(start: int, vs: int, vocab: int) -> list[int]:
 
 
 def ir_values(vs: int, start: int, tok: int) -> tuple[int, int, int]:
-    """(local, ge, le) of one token id in the IR: evaluate `EmbeddingShard_v1{VS,H=2,START}` as a standalone Call over a zero table and read
+    """(local, ge, le) of one token id in the circuit: evaluate `EmbeddingShard_v1{VS,H=2,START}` as a standalone Call over a zero table and read
     its committed interior gates (`query.vocab_range.slots`).  The three values depend on the id alone, not on H or the table; H = 2 is the
     smallest width whose output words are separate units reading them, as at every served width."""
     from verity.ml.circuits.evaluation.reference import standalone_call
-    from verity.ml.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.evaluation import evaluate_call
 
     key = (vs, start)
     if key not in _CALLS:

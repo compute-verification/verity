@@ -26,7 +26,7 @@ def _allocate(mb: int) -> int:
 
 def test_a_target_s_peak_is_its_own():
     """A 600 MiB target's peak shows it, and the small target after it, in the same single job, does not inherit it: a worker
-    that outlived the first kept its 600 MiB under the second's peak (the 104 GiB plateaus in the first heavy.json)."""
+    that outlived the first would keep its 600 MiB under the second's peak."""
     got = {x: (peak, start) for x, _, peak, start in cli.parallel(_allocate, [600, 1], jobs=1)}
     (big, big_start), (small, small_start) = got[600], got[1]
     assert big - big_start >= 0.55
@@ -55,6 +55,80 @@ def test_a_target_that_raises_is_reported_not_lost():
     assert isinstance(v, cli.Killed) and v["how"] == "raised ValueError: no 5"
 
 
+#: three zygotes forked from a process of their own (a fork of pytest's could deadlock), each asked once so that it has started,
+#: then the fds each holds of this process's ends of the zygotes' pipes, and twelve items run across them
+ZYGOTES = """
+import json, os
+from circuit_check import cli
+
+def parent(_):
+    return os.getppid()
+
+zs = [cli.Zygote(parent, fork=True) for _ in range(3)]
+ends = {os.readlink(f"/proc/self/fd/{z.conn.fileno()}") for z in zs}
+held = []
+for z in zs:
+    z.conn.send((0, 0))
+    z.conn.recv()
+    held.append(sorted(ends & {os.readlink(f"/proc/{z._pid}/fd/{fd}") for fd in os.listdir(f"/proc/{z._pid}/fd")}))
+got = [v for _, v, _, _ in cli.parallel(parent, list(range(12)), 6, zygote=zs)]
+print(json.dumps({"pids": [z._pid for z in zs], "held": held, "parents": got, "codes": [z.exitcode() for z in zs]}))
+"""
+
+
+@pytest.mark.skipif(not os.path.isdir("/proc/self/fd"), reason="reads the zygotes' fds in /proc")
+def test_items_are_forked_from_every_zygote_and_no_zygote_holds_another_s_pipe():
+    """One zygote forks a 45 GiB task list's targets about a second apart however many jobs run (`cli.ZYGOTES`), so items go to
+    the zygote with the fewest running.  A zygote forked after another closes this process's end of the other's pipe: else
+    the first would not see its pipe end when this process died, and would wait for an item forever."""
+    import json
+    import subprocess
+    import sys
+
+    r = subprocess.run([sys.executable, "-c", ZYGOTES], capture_output=True, text=True, check=True)
+    out = json.loads(r.stdout.strip().splitlines()[-1])
+    assert out["held"] == [[], [], []]
+    assert len(out["parents"]) == 12 and set(out["parents"]) == set(out["pids"])
+    assert out["codes"] == [0, 0, 0]
+
+
+class _Fn:
+    def __init__(self, family: str | None = None) -> None:
+        if family is not None:
+            self.family = family
+
+
+def test_a_constructed_family_s_members_go_in_batches_where_the_first_was(monkeypatch):
+    """`cli._batched`: the members of a `CONSTRUCTED` family, each a few milliseconds to check, are batched `BATCH` at most to a
+    process, each batch where its first member was in the order; every other target stays alone, a template too."""
+    monkeypatch.setattr(cli, "BATCH", 2)
+    fams = ["Const", None, "Const", "Input", "Const", "And", "Input", "Const"]
+    tasks = [("definition", f"t{i}", None, {"roots": [_Fn(f)]}) for i, f in enumerate(fams)] + [("template", "tpl", None, {})]
+    assert cli._batched(list(range(len(tasks))), tasks) == [(0, 2), 1, (3, 6), (4, 7), 5, 8]
+    assert cli._batched([8, 7, 1], tasks) == [8, (7,), 1]
+
+
+def test_a_task_s_size_is_its_built_body_s_gates_and_reading_it_builds_nothing(monkeypatch):
+    """`cli._gates`, which orders the targets largest first: a Definition's gate count once its body is built, and 0 for one whose
+    body is not (reading it would build it in this process), a by-calls root, a template, and a task of several roots."""
+    from verity.ml.circuits import Array, bind
+    from verity.ml.circuits.defs import CompositeDefinition
+    from verity.ml.circuits.ops.scalar import BIT, F32, F32Eq
+
+    from circuit_check import targets as TG
+
+    eq = CompositeDefinition("SizeEq", 1, ("N",), lambda S: ((("x", Array(S.N, F32)), ("y", Array(S.N, F32))), Array(S.N, BIT)),
+                             lambda B, S, x, y: B.batch(F32Eq, x, y, axes=(0, 0)), register=False)
+    built, unbuilt, root = bind(eq, N=3), bind(eq, N=4), bind(eq, N=5)
+    assert built.body is not None
+    monkeypatch.setattr(TG, "BY_CALLS", {root.id})
+    assert root.body is not None
+    task = lambda *roots: ("definition", "t", None, {"roots": list(roots)})  # noqa: E731
+    assert cli._gates(task(built)) == built.gates > 0 and cli._gates(task(F32Eq)) == 1
+    assert [cli._gates(t) for t in (task(unbuilt), task(root), task(built, built), ("template", "tpl", None, {}))] == [0] * 4
+    assert unbuilt._body is None
+
+
 def test_heavy_targets_run_alone():
     """`admit` under a 160 GB budget: a 150 GiB target starts only when nothing runs, and nothing starts beside it; light ones
     fill what is left, past a heavy one that does not fit; one over the budget runs alone."""
@@ -76,8 +150,8 @@ def _pid(_: int) -> int:
 
 
 def test_a_budget_granted_mid_run_admits_what_now_fits(monkeypatch, tmp_path):
-    """b103 (r20261019-015150-b103): pytest ended 83 minutes into circuit-check's 125, and the four SHA-512 targets still ran
-    one at a time under the share it left beside pytest.  `parallel` asks a callable budget again at each admission, so once
+    """When pytest ends long before circuit-check does, the targets still queued would run one at a time under the share
+    it was given beside pytest.  `parallel` asks a callable budget again at each admission, so once
     check.py grants the slot (`granted_gb`, ``--mem-gb-file``) the targets still queued start together."""
     asked, picked, admit = [], [], cli.admit
 
@@ -119,8 +193,8 @@ def test_jobs_0_takes_one_worker_per_160_gb_the_tightest_cgroup_leaves(tmp_path,
 
 
 def test_a_cgroups_inactive_page_cache_counts_as_left(tmp_path):
-    """r20261021-101535-85fb on vy-nebius-cpu-3: a user slice at 462 of its 463 GiB, 278 GiB of it page cache, left a budget of
-    ~0, and the targets ran one at a time at 0.06 a second. The kernel reclaims inactive_file at the limit; active_file it may
+    """A user slice at 462 of its 463 GiB, 278 GiB of it page cache, would leave a budget of ~0, and the targets would run one
+    at a time. The kernel reclaims inactive_file at the limit; active_file it may
     still need, and without a memory.stat nothing is taken off."""
     (tmp_path / "proc").mkdir()
     (tmp_path / "proc/meminfo").write_text(f"MemAvailable: {380 << 20} kB\n")
@@ -158,7 +232,7 @@ def test_the_budget_reserves_this_process_s_own_task_list(monkeypatch):
 
 
 def test_without_mem_gb_a_run_in_a_check_slot_keeps_to_the_slot(monkeypatch):
-    """CIR-21: inside slot.py's slot (CHECK_SLOT_MEM_GB) a raw `circuit-check` without `--mem-gb` budgets the slot's mem=, not
+    """Inside slot.py's slot (CHECK_SLOT_MEM_GB) a raw `circuit-check` without `--mem-gb` budgets the slot's mem=, not
     the machine's MemAvailable; `--mem-gb` still wins, and outside a slot nothing changes."""
     monkeypatch.setattr(cli, "_rss_gb", lambda: 0.0)
     monkeypatch.setattr(cli, "memory_gb", lambda root=None: 1500)
@@ -170,7 +244,7 @@ def test_without_mem_gb_a_run_in_a_check_slot_keeps_to_the_slot(monkeypatch):
 
 
 def test_a_circuit_check_in_an_xdist_worker_keeps_to_the_worker_s_share(monkeypatch):
-    """r20261018-024149-8607: suites.py sizes the suite's xdist workers at `worker_gb` each from a memory every worker shares, so a
+    """suites.py sizes the suite's xdist workers at `worker_gb` each from a memory every worker shares, so a
     circuit-check a test starts budgets that worker's share (conftest.py's `worker_slot_gb`), or the slot's when smaller, never
     the slot or the cgroup the others share; outside xdist nothing is set.  A worker holding 25 GiB leaves its targets the rest
     of its share, one job."""

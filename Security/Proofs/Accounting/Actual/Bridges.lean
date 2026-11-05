@@ -1,8 +1,10 @@
-import Definitions.Accounting.Guarantees.Bridges
-import Proofs.Accounting.Actual.Physical
-import Proofs.Accounting.Actual.Localization
-import Definitions.Pouw.Assumptions.Deadline
-import Proofs.Pouw.Deadline
+module
+
+public import Definitions.Accounting.Guarantees.Bridges
+public import Proofs.Accounting.Actual.Physical
+public import Proofs.Accounting.Actual.Localization
+public import Definitions.Pouw.Assumptions.Deadline
+public import Proofs.Pouw.Deadline
 
 /-!
 # B4 and PoUW's row, proved, and the honest clock at `CM_A`
@@ -27,6 +29,8 @@ the record placed during `[a, b)`, of the certifiers' jitter words on those buck
 signals during `[a, b)`, which take at most (the number of records placed in `[a, b)`) × `χ^{buckets · #cert}` ×
 `2^{β°_X (b − a)}` values (`Alphabet`, `encard_range_le`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs
 
@@ -199,7 +203,7 @@ theorem costModel_queries (Q R S : Type) {L : Type} [LinearOrder L] [Fintype L] 
     (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π).Queries :=
   fun P U act σ s => P.queries U act σ s
 
-/-- **The cost window** (v2.4, B1): if what the outside of `V` can tell at `tₛ + ℓ` is the same in `ρ` and `ρ'`, and
+/-- **The cost window** (B1): if what the outside of `V` can tell at `tₛ + ℓ` is the same in `ρ` and `ρ'`, and
 latencies into `V` are at least `ℓ`, a gate off `V` that no gate of `ρ'` looks like (it depends on what tells the two
 apart) and that `V` reads before `t_d` lies in `[tₛ + ℓ, t_d − ℓ)`. -/
 theorem cost_window {L : Type*} [DecidableEq L] [Fintype L] {ρ ρ' : Actual.Run L} {V : Finset L} {tₛ t_d ℓ : ℕ}

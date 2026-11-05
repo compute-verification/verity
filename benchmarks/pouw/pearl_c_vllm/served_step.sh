@@ -4,8 +4,8 @@
 # only, graph nodes traced) or not (NSYS=0: the host records alone); after the lease, at low priority, each profile's SQLite
 # export, `served_step.py analyze` and the arms' `served_step.py table` (breakdown.md). From the source tree, with
 # Pearl-C's cubin built once and sent (no nvcc here):
-#   research run --on vy-nebius-2 --project verity --campaign glm53-pearl-c --source <tree> --cwd source \
-#     --env GPU_LEASE_WHO=<id> [--env GPUS=2,3] [--env ARMS=...] [--env POINT=b8-p512-mixed] [--env NSYS=0] \
+#   research run --on MACHINE --project verity --source <tree> --cwd source \
+#     --env GPU_LEASE_WHO=LANE [--env GPUS=2,3] [--env ARMS=...] [--env POINT=b8-p512-mixed] [--env NSYS=0] \
 #     --send numabind.py --send pearl_c_sm120.cubin -- bash benchmarks/pouw/pearl_c_vllm/served_step.sh
 # An ARMS entry ID+VAR=VALUE[+VAR=VALUE] runs arm ID with those variables set, in its own directory (ID_VAR_VALUE): A/B
 # rows in one lease, e.g. pouw-pearl-c-whole,pouw-pearl-c-whole+PEARLC_SPLIT=0; @IN@ in a value is the run's inputs, so
@@ -16,8 +16,8 @@
 # GPUS: the GPUs the lease may take (gpu-lease --on), SPEC (default llama31-8b-1gpu-pearl-c-whole-served), POINT,
 # WARMUPS (2), REPS (3), MAX_MIN (the lease, 20), MEM_GB (the lease's host memory, 16);
 # GPU_LEASE_TIMED=1 for rows taken inside a booked clean window
-# (gpu-lease --timed). The node's pinned-vLLM Python is env.sh's VENV. numabind.py is #3395's
-# (benchmarks/hash/dither/numabind.py); NUMABIND names another copy, and without one the arms run unbound. The node's load
+# (gpu-lease --timed). The node's pinned-vLLM Python is env.sh's VENV. numabind.py is
+# benchmarks/hash/dither/numabind.py; NUMABIND names another copy, and without one the arms run unbound. The node's load
 # (loadavg and the leases) before and after each arm is OUT/load.txt. Scratch goes to one mktemp -d directory (TMPDIR),
 # removed at the end; everything kept is under OUT.
 # `served_step.sh post DIR` (no GPU) analyzes another run's OUT again with this tree's code, into this run's OUT; ANALYZE=0

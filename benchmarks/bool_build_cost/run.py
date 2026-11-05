@@ -1,11 +1,11 @@
-"""The Boolean Build's cost against the word Build's on one row's specializations: the descriptor of their union and the
-`Q_word_v1{16,32}` unit rules the manifest computes for them (`verity.ml.definitions.word`'s prefetch, then its check, one rule per
+"""The Boolean Build's cost against the word Build's on one workload's specializations: the descriptor of their union and the
+`Q_word_v1{16,32}` proof-block rules the manifest computes for them (`verity.ml.definitions.word`'s prefetch, then its check, one rule per
 distinct Definition), timed per Definition.
 
-    uv run benchmarks/bool_build_cost/run.py [--row qwen3-06b|small] [--ir word,boolean] [--part descriptor,rules]
+    uv run benchmarks/bool_build_cost/run.py [--workload qwen3-06b|small] [--ir word,boolean] [--part descriptor,rules]
                                              [--jobs N] [--t T,T,...] --out DIR
 
-A row is its Calls' word specializations (`ROWS`); the Boolean ones are `program.boolean.boolean_version` of each, as the Boolean
+A workload is its Calls' word specializations (`WORKLOADS`); the Boolean ones are `verity.ml.definitions.boolean.boolean_version` of each, as the Boolean
 Build's lift calls them.  `--t` keeps the attention specializations of those key lengths only.  Writes `DIR/<ir>.json` (descriptor
 bytes, Program digest, the largest Definitions, rule seconds and the verdict per specialization, a digest of every rule) and
 `DIR/rules-<ir>.jsonl` (one line per rule as it finishes, so a run cut short keeps what it measured).
@@ -32,7 +32,7 @@ def _attention(T: int, mf: int) -> str:
 
 
 def qwen3_06b() -> list[str]:
-    """Qwen3-0.6B, B1, a 256-token prompt and 32 tokens out on FA2 (r20261018-183840-0fc5's row): prefill row r sees r + 1 keys,
+    """Qwen3-0.6B, B1, a 256-token prompt and 32 tokens out on FA2: prefill row r sees r + 1 keys,
     decode step s sees 256 + s; MASKED_FROM is FA2's tile rule (`attention_vocab.fa2_masked_from`, BN 64)."""
     from verity.ml.definitions.registry.attention_vocab import fa2_masked_from
     att = [_attention(r + 1, fa2_masked_from(256, 256, r, 64, True)) for r in range(256)]
@@ -44,11 +44,11 @@ def qwen3_06b() -> list[str]:
 
 
 def small() -> list[str]:
-    """Two padded attention rows (one block, and a full block plus one key), RoPE and SiLU-mul at Qwen3-0.6B's statics."""
+    """Two padded attention rows (one tile, and a full tile plus one key), RoPE and SiLU-mul at Qwen3-0.6B's statics."""
     return [_attention(1, 0), _attention(65, 0), "RoPE_v1{NHEADS=8,D=128}", "SiluMul_v2{I=3072}"]
 
 
-ROWS = {"qwen3-06b": qwen3_06b, "small": small}
+WORKLOADS = {"qwen3-06b": qwen3_06b, "small": small}
 
 
 def definitions(specs: list[str], ir: str) -> list:
@@ -156,7 +156,7 @@ def rules(fns: list, jobs: int, log: Path) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     a = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    a.add_argument("--row", default="small", choices=sorted(ROWS))
+    a.add_argument("--workload", default="small", choices=sorted(WORKLOADS))
     a.add_argument("--ir", default="word,boolean")
     a.add_argument("--part", default="descriptor,rules")
     a.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
@@ -165,14 +165,14 @@ def main(argv: list[str] | None = None) -> int:
     o = a.parse_args(argv)
     out = Path(o.out)
     out.mkdir(parents=True, exist_ok=True)
-    specs = ROWS[o.row]()
+    specs = WORKLOADS[o.workload]()
     if o.t:
         keep = {f"T={t}," for t in o.t.split(",")}
         specs = [s for s in specs if not s.startswith("Attention_") or any(k in s for k in keep)]
     for ir in o.ir.split(","):
         t = time.time()
         fns = definitions(specs, ir)
-        res: dict = {"row": o.row, "ir": ir, "specs": len(specs), "build_secs": round(time.time() - t, 2)}
+        res: dict = {"workload": o.workload, "ir": ir, "specs": len(specs), "build_secs": round(time.time() - t, 2)}
         if "descriptor" in o.part:
             res["descriptor"] = descriptor(fns)
             print(f"[{ir}] descriptor {res['descriptor']['bytes']:,} B digest {res['descriptor']['digest'][:16]} "

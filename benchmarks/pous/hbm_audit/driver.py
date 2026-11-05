@@ -4,14 +4,14 @@ Three measurements, each written to one JSON under `--out`:
 
 - `validate`: the Triton digest kernel against the numpy reference on a small `C`, bit-exact. A failure aborts the job so
   no wrong number is published.
-- `honest`: the honest digest time over `R` random 64 KiB blocks of a `C` resident in HBM, its distribution over many
+- `honest`: the honest digest time over `R` random 64 KiB labels of a `C` resident in HBM, its distribution over many
   trials and the HBM read rate it achieves, for a sweep of `C` sizes and `R`; plus the raw HBM read rate and the PCIe H2D
   rate (contiguous and gathered) as references.
-- `cheater`: for a fixed `C`, the best time a server reaches when a fraction `f` of the challenged blocks live in pinned
+- `cheater`: for a fixed `C`, the best time a server reaches when a fraction `f` of the challenged labels live in pinned
   host DRAM, by async H2D copies overlapped with the digest of the HBM-resident rest, over a sweep of `R` and `f`; and the
   PCIe H2D rate it measures.
 
-Run on a leased GPU through the research queue (`research run --queue --on vy-nebius-1 --gpus 1 ...`). `honest` and `cheater`
+Run on a leased GPU. `honest` and `cheater`
 write results per point to `--out` and skip points already there, so a preempted sweep resumes from a persistent `--out`
 instead of starting over. The honest/cheater separation and the recommended `R`, `T` are derived from these JSONs by
 `analyze.py`.
@@ -170,7 +170,7 @@ def raw_bandwidth(args, torch):
         out[f"pcie_h2d_contig_{sz >> 20}MiB"] = dist(ms, sz)
         del hpin, dev
         torch.cuda.empty_cache()
-    # PCIe H2D gathered: many 64 KiB blocks (what a real cheater's scattered host blocks cost per-copy).
+    # PCIe H2D gathered: many 64 KiB labels (what a real cheater's scattered host labels cost per-copy).
     nblk = 8192
     hpin = torch.empty((nblk, D.WORDS), dtype=torch.int32, pin_memory=True)
     dev = torch.empty((nblk, D.WORDS), dtype=torch.int32, device="cuda")
@@ -184,7 +184,7 @@ def raw_bandwidth(args, torch):
     out[f"pcie_h2d_gathered_{nblk}x64KiB"] = dist(ms, nblk * D.BLOCK_BYTES)
     del hpin, dev
     torch.cuda.empty_cache()
-    # Zero-copy read: the kernel digests blocks straight out of pinned host memory over PCIe (UVA), no staging copy.
+    # Zero-copy read: the kernel digests labels straight out of pinned host memory over PCIe (UVA), no staging copy.
     try:
         hz = torch.empty((nblk, D.WORDS), dtype=torch.int32, pin_memory=True)
         hz.random_(-(2**31), 2**31)
@@ -261,19 +261,19 @@ def cmd_honest(args, torch, meta):
 
 
 def host_resident_mask(torch, n_blocks: int, f: float, seed: int):
-    """A deterministic random subset of blocks (fraction ~f) that the cheater keeps only in host DRAM."""
+    """A deterministic random subset of labels (fraction ~f) that the cheater keeps only in host DRAM."""
     g = torch.Generator(device="cuda").manual_seed(seed)
     thr = int(f * (1 << 30))
     return (torch.randint(0, 1 << 30, (n_blocks,), dtype=torch.int64, device="cuda", generator=g) < thr)
 
 
 def measure_cheater_async(torch, C_dev, host_pin, idx, host_hit, g):
-    """Best overlapped cheater time: copy the host-resident challenged blocks H2D on one stream while the HBM-resident
-    ones are digested on another, then digest the staged blocks. `host_hit` is a bool mask over `idx`; `host_pin` is a
+    """Best overlapped cheater time: copy the host-resident challenged labels H2D on one stream while the HBM-resident
+    ones are digested on another, then digest the staged labels. `host_hit` is a bool mask over `idx`; `host_pin` is a
     pinned host buffer of at least `R_host` rows (its contents are irrelevant — only the transfer size and the overlap
     matter for timing).
 
-    The host blocks are copied as one contiguous `R_host * 64 KiB` transfer (the cheater's best case: pre-arranged, peak
+    The host labels are copied as one contiguous `R_host * 64 KiB` transfer (the cheater's best case: pre-arranged, peak
     PCIe), which is optimistic for the cheater and so conservative for the audit.
     """
     idx_dev = idx[~host_hit]
@@ -317,9 +317,9 @@ def measure_cheater_async(torch, C_dev, host_pin, idx, host_hit, g):
 
 
 def measure_cheater_zerocopy(torch, C_dev, host_pin, idx, host_hit, g):
-    """The other honest way to touch host-resident blocks: the digest kernel reads them straight out of pinned host
-    memory over PCIe (UVA zero-copy), with no staging copy, while the HBM-resident blocks are digested from device
-    memory on another stream. `host_pin` is a pinned host buffer of `R` rows; the host-resident challenged blocks are
+    """The other honest way to touch host-resident labels: the digest kernel reads them straight out of pinned host
+    memory over PCIe (UVA zero-copy), with no staging copy, while the HBM-resident labels are digested from device
+    memory on another stream. `host_pin` is a pinned host buffer of `R` rows; the host-resident challenged labels are
     read at their scattered positions within it (a realistic, non-coalesced access pattern), overlapped with the device
     digest of the HBM-resident rest."""
     idx_dev = idx[~host_hit]
@@ -370,7 +370,7 @@ def cmd_cheater(args, torch, meta):
     done = {(p["R"], p["f"]) for p in out["points"]}
     zc_ok = not out.get("zerocopy_error")  # once zero-copy fails (e.g. UVA unsupported), stop retrying it
     if not all((r, f) in done for r in rs for f in fs):
-        C = make_C(torch, n, seed=cg)  # C in HBM (8 GiB); the device-resident challenged blocks are digested from here
+        C = make_C(torch, n, seed=cg)  # C in HBM (8 GiB); the device-resident challenged labels are digested from here
         for r in rs:
             idx = None
             host_pin = None  # a pinned host buffer sized to this R, allocated lazily so a short lease window fits

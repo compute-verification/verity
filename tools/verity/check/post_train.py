@@ -4,7 +4,7 @@ reference regression's manifest rebuilds on a landing of main.
 
 `check` blocks on the regression's cheap T0 tier; the checks that recompute from a row's Programs (marked `rebuild`: the manifest
 rebuilds, `manifest_digest` on every row it applies to and the #57 refusal, and `step_segmentation`'s decode of every component;
-about an hour of CPU in one process) run here instead, once per landing (Daniel, 3 Oct).  `research merge --push` starts
+about an hour of CPU in one process) run here instead, once per landing.  `research merge --push` starts
 this, detached, after each push it lands (`after_land` in `tool.py`); run it by hand for a landing pushed another way, or to redo one.
 
 COMMIT (default origin/main) must be a landing: its `Check: <attempt>` trailer names the check that let it in, or, for a train
@@ -25,7 +25,7 @@ is left alone unless --force.
 Jobs started here run one at a time (a lock in the temp directory: the cores are one slot), so a landing waits for the one before
 it.  When that one is labelled and the change between them touches none of the `verity-vllm` suite's inputs (`suites.py
 --changed`), its verdict is carried: the same value, with the same run as `--ref`, and no rebuild.  About three trains in four
-touch them (130 of 171 between 27 Sep and 3 Oct: 19 a day, 32 on the busiest), and a job takes one to two hours, so jobs queue:
+touch them (about 19 a day, 32 on the busiest day measured), and a job takes one to two hours, so jobs queue:
 one that waited, and finds main at a later landing, is labelled `note=regression superseded:<that landing's attempt>` and runs
 nothing, since the later landing's job tests its change too.  A sweep reads `pass` and `fail:` and skips `superseded:` and
 `inconclusive:`.
@@ -46,7 +46,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 #: node 2: its two 560 GB check slots hold all 120 of its cores, so the rebuilds run unpinned at nice 19 beside them, in the
-#: ~480 GB of its 1600 GB slice the slots leave (node 1, their machine since 3 Oct on cores 96-127, drains 23 Oct 13:00Z; CI-152)
+#: ~480 GB of its 1600 GB slice the slots leave
 MACHINE = "vy-nebius-2"
 CORES = ""
 BY = "regression"
@@ -58,12 +58,12 @@ INCONCLUSIVE = f"{PREFIX}inconclusive:"
 MARKS = "regression and rebuild"
 SUITE = "verity-vllm"
 LOCK = Path(tempfile.gettempdir()) / "verity-post-train.lock"
-#: the run's bound on the machine: the rebuilds took 89 and 104 min on node 1's cores 96-127 beside other lanes' jobs (3 Oct;
-#: #39's is the longest); a run that outlives it is cut off before its junit, and is inconclusive, not a failure
+#: the run's bound on the machine: a rebuild takes up to about 104 min on 32 cores beside other jobs; a run that outlives
+#: it is cut off before its junit, and is inconclusive, not a failure
 TIMEOUT_S = 4 * 3600
 #: the run's memory, reserved on the machine (`research run --mem-gb`, waiting up to MEM_WAIT_S for it), and its xdist workers
-#: capped at MEM_GB // WORKER_GB: 19 Oct, r20261019-043523-415a ran about 20 workers at ~28 GB each with nothing reserved, 570 GB,
-#: filled vy-nebius-1's slice at 05:31Z and got two other lanes' runs killed
+#: capped at MEM_GB // WORKER_GB: about 20 workers at ~28 GB each with nothing reserved, 570 GB, fill a node's slice and get
+#: other runs killed
 MEM_GB, WORKER_GB, MEM_WAIT_S = 200, 28, 3600
 #: `research run --on` returns once the run is launched, so its records are fetched until they show its end (`research merge` too)
 POLL_S = 60
@@ -81,7 +81,7 @@ out=$RESEARCH_RUN_DIR/out; mkdir -p "$out"
 s=$(mktemp -d /workspace/research/scratch/post-train.XXXXXX 2>/dev/null || mktemp -d); trap 'rm -rf "$s"' EXIT
 export TMPDIR=$s VERITY_REGRESSION_SCRATCH=$s BUILD_RAM_BUDGET_GB=32 VERITY_MANIFEST_JOBS=4
 uv run -q --locked --all-packages --extra torch-cpu python -m research data fetch-fixtures --repo "$PWD" --json \\
-  integrations/vllm/tests/regression/expected > "$out/fetch-fixtures.json" || exit 1
+  integrations/vllm/tests/regression > "$out/fetch-fixtures.json" || exit 1
 cd integrations/vllm
 VERITY_REGRESSION=1 VERITY_REGRESSION_REBUILD=1 VERITY_STORE_REQUIRED=1 VERITY_REGRESSION_RECORD_ACTUAL=$out/actual \\
   {pin}../../.venv/bin/python -m pytest tests/regression -m {marks} -n {workers} -rA --durations=0 \\
@@ -104,7 +104,7 @@ def check_attempt(commit: str, cwd: Path = ROOT, attempt: str | None = None) -> 
     With ``attempt`` (`--attempt`, the check drive landed on), that attempt, when it ran on the commit (a fast-forward) or on the
     commit's second parent, the train drive merged onto a moved main, whose body records it (`Checked: RID (full check of ...`;
     a train commit's own second parent is a PR's head, which no check of the train ran on): a landing made with `--defer` lands
-    while its check runs, or cancels it then (#2544), so no passed attempt is in the store to find (CI-81)."""
+    while its check runs, or cancels it then, so no passed attempt is in the store to find."""
     body = git("log", "-1", "--format=%B", commit, cwd=cwd)
     m = CHECK_RE.search(body)
     if m and attempt in (None, m.group(1)):
@@ -233,8 +233,8 @@ def queued_path() -> Path:
 
 def note_attempt(sha: str, attempt: str, keep: int = 200) -> None:
     """Record ``sha``'s attempt for `later_landing`: drive's landings carry no `Check:` line, and drive cancels a train's check
-    once it lands, so `check_attempt` finds no attempt for main's tip (19 Oct: five post-train jobs queued, none superseded,
-    each a 200 GB regression of about an hour on node 1)."""
+    once it lands, so `check_attempt` finds no attempt for main's tip, and without this record no queued job is ever
+    superseded."""
     p = queued_path()
     with open(p.with_suffix(".lock"), "a") as guard:
         fcntl.flock(guard, fcntl.LOCK_EX)

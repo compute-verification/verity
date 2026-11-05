@@ -59,7 +59,7 @@ def test_construction_is_lean_chain_band():
 
 
 def test_costs():
-    """Block v costs min(v, d) + 1 calls; decode runs the rows in parallel: d + 1 rounds."""
+    """Label v costs min(v, d) + 1 calls; decode runs the rows in parallel: d + 1 rounds."""
     params = band.BandParams(16, 64, 4)
     prims = band.reference(params)
     t = tag(salt_value(SALT), 0)
@@ -102,8 +102,8 @@ def test_cliff_is_enforced():
 
 
 class GapResponder:
-    """The gap attack (`band_gap_attack`): hold every block except the positive multiples of d + 1; answer a dropped
-    block by its own row, whose parents are all held, in min(v, d) + 1 = d + 1 rounds."""
+    """The gap attack (`band_gap_attack`): hold every label except the positive multiples of d + 1; answer a dropped
+    label by its own row, whose parents are all held, in min(v, d) + 1 = d + 1 rounds."""
 
     def __init__(self, params, prims, salt, w, blocks):
         self.params, self.prims, self.salt, self.w = params, prims, salt, w
@@ -121,7 +121,7 @@ class GapResponder:
 
 
 def test_gap_attack_at_the_cliff():
-    """With D′ = d + 1 the holding with every (d + 1)-th block dropped passes the audit; with D′ = d it does not."""
+    """With D′ = d + 1 the holding with every (d + 1)-th label dropped passes the audit; with D′ = d it does not."""
     params = band.BandParams(16, 64, 4, 2)
     prims = band.reference(params)
     w = _w(params, 7)

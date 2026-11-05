@@ -1,5 +1,4 @@
-"""The layer-wise evaluation (tonight's `linears_layerwise.py`, generalized to attention): each layer's weights are read
-once from the safetensors, and the bf16 reference stream, the calibration stream and every (arm, seed) stream of every
+"""The layer-wise evaluation, of the linears and of attention: each layer's weights are read once from the safetensors, and the bf16 reference stream, the calibration stream and every (arm, seed) stream of every
 window go through it before the next layer is read. So a model of any size runs on one GPU with no `accelerate`, every
 arm shares one pass over the weights, and more GPUs split the windows (`shard`)."""
 from __future__ import annotations

@@ -1,8 +1,8 @@
 schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "llama31-8b-1gpu-pouw-protocol-served"
-# Pearl-C's served overhead measured in one run: `llama31-8b-1gpu-pouw-protocol`'s two arms (its preset and Pearl-C's
-# arm settings unchanged) beside `stock-fp8@compiled`, stock FP8 as vLLM serves it (`llama31-8b-fp8-1gpu-compiled`), so
+# Pearl-C's served overhead measured in one run: Pearl-C (`pouw:pearl-c-sm120-v1-h3`) and the batch-invariant eager
+# `stock-fp8` beside `stock-fp8@compiled`, stock FP8 as vLLM serves it (`llama31-8b-fp8-1gpu-compiled-full`), so
 # Pearl-C over the compiled engine is paired by rep under one host load instead of restated across two runs.
 #
 # Every arm shares the preset's engine settings: the 4,096-token step budget, max_num_seqs 128, max_model_len 8,384 and
@@ -12,7 +12,7 @@ id = "llama31-8b-1gpu-pouw-protocol-served"
 # (torch.compile, its CUDA-graph mode and capture sizes, not batch invariant).
 #
 # No arm is another's token control: Pearl-C's y carries the epoch's live salt, and the compiled engine runs other
-# kernels than the eager one (its greedy tokens diverge within three, `llama31-8b-fp8-1gpu-compiled`). Each is timed on
+# kernels than the eager one (its greedy tokens diverge within three, `llama31-8b-fp8-1gpu-compiled-full`). Each is timed on
 # its own gated tokens. Pearl-C isn't useful work (an FP8-accurate denoise by design): this row prices it; its tokens are
 # salt-dependent and their output quality is unmeasured.
 arms = ["stock-fp8", "pouw:pearl-c-sm120-v1-h3", "stock-fp8@compiled"]

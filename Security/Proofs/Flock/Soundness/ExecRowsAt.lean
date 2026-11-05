@@ -1,9 +1,11 @@
-import Proofs.Flock.Soundness.ExecRows
-import Proofs.Flock.Soundness.ExecParse
-import Flock.NetAt
+module
+
+public import Proofs.Flock.Soundness.ExecRows
+public import Proofs.Flock.Soundness.ExecParse
+public import Flock.NetAt
 
 /-!
-# A net committed at a position map holds exactly when its logical net does (PRF-133, part 3)
+# A net committed at a position map holds exactly when its logical net does
 
 `Net.ofRowsAt` (`Flock.NetAt`) commits the logical rows `Net.ofRows` checked at positions `pos`: committed row `pos[x]`
 is logical row `x` with every reference `v` read as `pos[v]`, and every other row of the slot is empty. So column values
@@ -12,6 +14,8 @@ is logical row `x` with every reference `v` read as `pos[v]`, and every other ro
 rows are the audit's `Rows.ofNet` (`ofRowsAt_rowsSat`), and what the soundness path proves of `Rows.ofNet` holds of the
 committed net read through `pos`. No verifier path reads `ofRowsAt` yet.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

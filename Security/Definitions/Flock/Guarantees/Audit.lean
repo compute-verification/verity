@@ -1,4 +1,6 @@
-import Mathlib.Analysis.MeanInequalities
+module
+
+public import Mathlib.Analysis.MeanInequalities
 
 /-!
 # C-Flock's one-stage audit: its guarantees (trusted)
@@ -7,10 +9,12 @@ Each guarantee is a `def G : Prop`, with the docstring, binders and `open`s of t
 module. Its proof is the theorem `FlockSoundness.Audit.SecurityProofs.G : FlockSoundness.Audit.Guarantees.G`.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Audit.Law
 open scoped ENNReal NNReal
 
-/-- **The sizing of record** (Daniel, Sep 29: `δ = 2^-40`, `ε = 0.1%`): `(1 − 1/1000)^27713 ≤ 2^-40`. -/
+/-- **The sizing of record** (`δ = 2^-40`, `ε = 0.1%`): `(1 − 1/1000)^27713 ≤ 2^-40`. -/
 def _root_.FlockSoundness.Audit.Guarantees.Law.RecordSizing : Prop :=
   ((999 : ℝ≥0∞) / 1000) ^ 27713 ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹
 

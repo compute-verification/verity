@@ -1,0 +1,27 @@
+# The repository's ruff rules (`ruff check`), for every package; integrations/vllm/ruff.toml extends them with the integration's
+# own exclusions and per-file exceptions. Of the rules the vLLM integration's `# noqa` comments name, the bug classes (pyflakes F,
+# of which they name F401, F811, F821 and F841; B018; S102, S307, S310) and the conventions its suppressions show (BLE001, E402,
+# E731), with UP017, the code study's B006, B008 and B015 (note:20261025T0140Z-report-vllm-code-quality-study), and RUF100, which
+# finds a stale `noqa`. The style rules a few comments also name (ANN001, ANN201, PLC0415, N812, D401, SLF001, I001, SIM115, D107,
+# ARG002, E702, E741, PERF203) have thousands of findings the code never suppressed, so they're off and those comments are stale.
+# Two lints hold the findings to lists that only shrink: integrations/vllm/tests/lint/test_ruff.py the integration's (and
+# verity/ml/definitions'), tests/lint/test_repo_ruff.py every other tracked file's, per (file, rule). The ratchet gate
+# (integrations/vllm/tools/ratchet_gate.py) judges a change here by running the base's copy on the change's tree, and refuses a
+# PR whose own Python outside the integration's lint gains a finding under main's copy. The formatter stays off.
+target-version = "py312"
+# the same files on every machine, whatever a checkout ignores
+respect-gitignore = false
+# Lake's package checkouts (Mathlib's scripts), not ours
+extend-exclude = [".lake"]
+# so `[format] exclude` holds for a file named on the command line too
+force-exclude = true
+
+[lint]
+select = ["B006", "B008", "B015", "B018", "BLE001", "E402", "E731", "F", "RUF100", "S102", "S307", "S310", "UP017"]
+
+[lint.per-file-ignores]
+# a pytest fixture imported from a sibling module and taken as an argument
+"**/tests/**" = ["F811"]
+
+[format]
+exclude = ["*"]

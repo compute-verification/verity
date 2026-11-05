@@ -8,8 +8,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-HERE = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import bench
 import check
@@ -69,15 +68,18 @@ def _cost(e: E.Engine, fn: Any) -> dict[str, int]:
 
 
 def test_each_call_costs_its_compressions_on_the_host_twin() -> None:
-    """Counted, not timed: a row of at most 111 bytes is one compression; an hm96 leaf five (c two, h two of which the
-    padding block's schedule is a constant, the frame leaf one from the row's midstate) and three ChaCha20 blocks, and fused
-    with its unit's slot-tree leaf six; a unit's slot-tree leaf one from its frame table's midstate (two from rank 2^24),
-    against frame_leaves' two from the IV; a node two."""
+    """Counted, not timed: a row of at most 111 bytes is one compression, the empty row's over a constant schedule (its
+    block is padding alone), and a row whose last block is padding alone ends with one, as do 112 and 128 bytes' second;
+    an hm96 leaf five (c two, h two of which the padding block's schedule is a constant, the frame leaf one from the row's
+    midstate) and three ChaCha20 blocks, and fused with its unit's slot-tree leaf six; a unit's slot-tree leaf one from its
+    frame table's midstate (two from rank 2^24), against frame_leaves' two from the IV; a node two."""
     e = E.Engine("host")
     G, S = 6, 4
     t = (np.arange(S * 128) % 251).astype(np.uint8).reshape(S, 128)
     table = e.rows([[(0, 0, n)] for n in (0, 1, 16, 64, 100, 111)], [t])
-    assert _cost(e, lambda: e.row_digests(table)) == {"compressions": G * S, "kw": 0, "chacha": 0}
+    assert _cost(e, lambda: e.row_digests(table)) == {"compressions": G * S, "kw": S, "chacha": 0}
+    pads = e.rows([[(0, 0, n)] for n in (110, 111, 112, 127, 128)], [t])
+    assert _cost(e, lambda: e.row_digests(pads)) == {"compressions": (1 + 1 + 2 + 2 + 2) * S, "kw": 3 * S, "chacha": 0}
     x = e.row_digests(table)
     lt = e.leaf_table([bytes(64)], [0] * G, list(range(G)))
     assert _cost(e, lambda: e.leaves(lt, x, E.SaltKey(bytes(32)))) == {"compressions": 5 * G * S, "kw": G * S, "chacha": 3 * G * S}

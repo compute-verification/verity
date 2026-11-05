@@ -7,7 +7,7 @@
   (what `moe_kernel_quantize_input` passes when DeepGEMM is on, vLLM's sm_90 default) to `Fp8GroupQuantUe8m0_v1{K,G}`
   (registry.deepgemm) -- each equal to its twin;
 * on cc 9.0 without batch invariance a block-FP8 `fused_moe_kernel` launch derives to
-  `MoeExpertFp8Gemm(W)_v1{...,KB,SWAP,DOT}` with #1944's tile-dependent MMAv2/QGMMA step, and a SWAP_AB that is not
+  `MoeExpertFp8Gemm(W)_v1{...,KB,SWAP,DOT}` with `fp8_moe.sm90_dot`'s tile-dependent MMAv2/QGMMA step, and a SWAP_AB that is not
   `enable_swap_ab` refuses by name;
 * the chain router -> w13 -> fused activation quant -> w2, as `TritonExperts` runs it for GLM-5.3-FP8, derives in one Program whose
   words are the twins' on the routed experts;
@@ -367,7 +367,7 @@ H200_EXPERT_CONFIG = {
 def test_the_fp8_expert_rule_binds_1944s_dot_across_the_served_envelope(on_target, monkeypatch):
     """Pin vLLM's nearest-key H200 table at decode M=1..16 and prefill M=256: MMAv2 exactly at M<=6, QGMMA otherwise.
 
-    Spying on `fp8_moe.sm90_dot` proves the frontend delegates to #1944's lowering rule instead of restating it.
+    Spying on `fp8_moe.sm90_dot` proves the frontend delegates to that lowering rule instead of restating it.
     """
     on_target(H200)
     original, calls = fp8_moe.sm90_dot, []

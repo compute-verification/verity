@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import ROOT, option
+from verity_vllm.config import ROOT, option, row_file
 
 WORD_LINE = re.compile(r"Q_word_v1\{X=16,W=32[^}]*\}: (\d+) calls -> (\d+) units over (\d+) gates")
 ROLE_RANGE = re.compile(r"([A-Z]+)(\d+)-(?:[A-Z]+)?(\d+)")
@@ -78,7 +78,7 @@ def has_role(checkpoint: dict[str, Any], role: str) -> bool:
 
 def resolve(row: str) -> tuple[str, str, str, int]:
     """The row's checkpoint role, repo, revision and TP world (its workload and `manifests/checkpoints.json`)."""
-    wl = _doc(ROOT / "workloads" / f"{row}.json")
+    wl = _doc(row_file(row))
     role = wl["case"]
     cps = _doc(ROOT / "manifests" / "checkpoints.json")["checkpoints"]
     cp = next((c for c in cps if c.get("role") == role), None) or next(c for c in cps if has_role(c, role) and c.get("local_path"))
@@ -109,7 +109,7 @@ def word_check(row: str, row_dir: str | Path, world: int, build_word_check: str,
         problems.append("the manifest names no partition (query.partition)")
     log = (d / "manifest.log").read_text(errors="replace") if (d / "manifest.log").is_file() else ""
     lines = WORD_LINE.findall(log)
-    wl = _doc(ROOT / "workloads" / f"{row}.json")
+    wl = _doc(row_file(row))
     batch = int((wl.get("sweep") or {}).get("batch") or len(wl.get("requests") or []) or 1)
     need = batch * max(1, world)
     if len(lines) < need:

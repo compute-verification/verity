@@ -1,5 +1,7 @@
-import Definitions.Nci.Work
-import Mathlib.Analysis.SpecialFunctions.Pow.Real
+module
+
+public import Definitions.Nci.Work
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
 # NCI over threads, each thread charged by the work done on it at a format's rate: the named assumption
@@ -8,6 +10,8 @@ import Mathlib.Analysis.SpecialFunctions.Pow.Real
 redundant. `WeightsSupportFmt` charges each thread by the work done on it, in thread values (`Threading.work`), at the
 rate of the activations' format less a margin.
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 
@@ -40,8 +44,7 @@ masked copies of its input). At the deployed point (`d = 2048`, `e = 4·10⁴`, 
 charged at most `4 · 36864 / 4·10⁴ = 3.69` bits against the 7.98 it carries; a reference circuit that recomputed a dense
 layer's activations, which `kappa.py`'s minimal one does not, would be charged 7.37 bits for two copies of each.
 
-**Falsified** (19 Oct 2026, NCI-FALSIFY, note:compute-accounting/20261019T0725Z-finding-nci-falsify,
-art:11fe95233ee17d4b013ddb1699b39f8e9656adc48ae17909efa46bc4ecbcccf2) at the deployed point (`d = 2048`, `e = 4·10⁴`,
+**Falsified** at the deployed point (`d = 2048`, `e = 4·10⁴`,
 E4M3 at rate 4, `S = 2·10⁷`, `b_w = 2.5`), on its weight term and its margin. One step after a checkpoint, an AdamW
 weight lies in an interval `θ` fixes: one token's 16,384 fprop products on a 128 × 128 E4M3 block are charged 40,961.6
 bits against at most 29,113, false for `b_w > 1.78` at σ = 0.006 and over the first 1, 3 and 7 steps at σ = 0.006, 0.01

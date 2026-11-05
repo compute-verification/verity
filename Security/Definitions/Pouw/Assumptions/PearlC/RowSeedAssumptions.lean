@@ -1,9 +1,11 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
 
 /-!
 # The named assumption `FragDraw`, the fragment corollary's per-row draw (trusted; a `Prop` hypothesis, not an `axiom`)
 
-Named by Daniel's ruling (30 Sep, 5:52 PM PDT). Only the fragment corollary takes it, `ttOutRowSeed_skipClass`
+Named by a ruling. Only the fragment corollary takes it, `ttOutRowSeed_skipClass`
 (`RowSeedSkip.lean`), the skip class's supporting line. P2's main line, `ttOutRowSeed_of_ttOut` and
 `ttOutTileRowSeed_of_ttOutTile`, does not read it and takes no named assumption.
 
@@ -11,6 +13,8 @@ The corollary's other conditions stay definitions in `TTOutRowSeed.lean`, taken 
 `CostModel.FragmentPriced` and (C6) `PearlCSem.RowDrawn`. C6's injective key idealizes the row leaf's collision
 resistance.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Assumptions
 

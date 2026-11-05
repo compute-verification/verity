@@ -23,12 +23,12 @@ DIR`` stages from them without the fold, which is most of a run's time on a shar
   snapshot (the twin; for a kernel whose write lands after its own event's snapshot, the first later one before another
   writer that holds it, `call_twin`); its first ``--per-kind`` unit calls (the kind's unit, `a11_kinds.chain`) give each
   unit's arguments and returns. Each is packed into the unit's rows (`a11_kinds.rows_of`, an output row per output port,
-  `a11_kinds.out_rows`) and staged by C-Flock's `UnitStager` bound to the partition, whose IR reference check and the
+  `a11_kinds.out_rows`) and staged by Flock's `UnitStager` bound to the partition, whose IR reference check and the
   transcript's returns must agree. A kind the table lowers through its Boolean version (``boolean``: MoeSum_v1 as
   MoeSum_v3's 64-column members, TokenSelect_v1 as TokenSelect_v2's argmax leaves) evaluates that version bit-sliced on the
   same operands (`boolean_units`), holds its returns to the snapshot as words, and stages its unit's bits.
 * **Audit.** As `a6.py`: kinds sharing a unit Definition share its template, one member each; one registration before the
-  draw; the verifier's Lean stratified draw over its own program and partition; each member serves its share
+  sample; the verifier's Lean stratified sample over its own program and partition; each member serves its share
   (``serve --zk --draw-file``) and Lean ``verify --zk --partition --program`` holds each session; the audit record and
   a6's negatives. A tampered copy of one kind's member (bit 0 of every instance's first output word flipped before it is
   committed) is registered and proved on its own (``subset:2``), and the Lean verifier must refuse it.
@@ -668,7 +668,7 @@ def save_values(d: Path, staged: dict, rows_of_kind: dict, weights_notes, a) -> 
 
 #: Definitions built on first use, outside the registry's catalog: name -> (module, builder) of its one static. Building one
 #: also registers its Boolean form for M0's lowering (`ir_lower._boolean_build`), which finds no other in a fresh process.
-# TODO(#2656): once its `tail_pieces.FAMILIES` lowers `GatherE4m3x{V}_v1` and `MoeSelectBf16x{E}_v1` in a fresh process, lower
+# TODO: once its `tail_pieces.FAMILIES` lowers `GatherE4m3x{V}_v1` and `MoeSelectBf16x{E}_v1` in a fresh process, lower
 # through those pieces and keep this only for the decoded units' builders.
 LAZY = {r"GatherE4m3x(\d+)_v2": ("verity.ml.definitions.registry.boolean_fp8_moe", "gather_e4m3"),
         r"GatherF32x(\d+)_v2": ("verity.ml.definitions.registry.boolean_fp8_moe", "gather_f32")}
@@ -857,7 +857,7 @@ def main() -> int:
                            "k_log": m["st"]["meta"].get("k_log"), "pin": m["st"]["pin"], "class": m["st"]["class"],
                            "twin": m["st"]["twin"], "stage_s": m["st"]["seconds"]} for m in members]
 
-    # one registration, before the draw
+    # one registration, before the sample
     want, roots, publics = {}, [], {}
     for m in members:
         fv = m["header"]["frame_v3"]
@@ -886,7 +886,7 @@ def main() -> int:
         print("A11 " + json.dumps({"refused_before_draw": summary["checks_before_draw"]}, default=str))
         return 1
 
-    # the verifier's stratified draw, by its own Lean over its own program and partition object; each member serves its share
+    # the verifier's stratified sample, by its own Lean over its own program and partition object; each member serves its share
     p = a0.run([a.lean, "draw", "--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
                 "--stratified", str(k)], out / "draw.log")
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])

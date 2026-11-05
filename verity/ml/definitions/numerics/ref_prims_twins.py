@@ -1,5 +1,5 @@
 """numpy twins of the reference vocabulary (`registry.ref_prims`) -- a TESTING AID (fast evaluation over many rows),
-validated against the gate-by-gate IR evaluation in `tests/program/test_ref_prims.py`; the registered bodies are the
+validated against the gate-by-gate circuit evaluation in `tests/program/test_ref_prims.py`; the registered bodies are the
 definition, these are not."""
 
 from __future__ import annotations

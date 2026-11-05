@@ -195,7 +195,7 @@ def separator(shape: Shape, kind: str = "shift24") -> Separator:
 
 
 #: The separator ports the protocol pins, not the registrant: a template role and the return field that crosses the
-#: separator. For NCP-INT's layout (a) it is the tile's Z, field 1 of `NcpTile`'s return (the red team's X-SPC-66).
+#: separator. For NCP-INT's layout (a) it is the tile's Z, field 1 of `NcpTile`'s return.
 SEPARATOR_PORTS: dict[str, int] = {"tile": 1}
 
 
@@ -234,8 +234,8 @@ class WidthRule:
 
 
 def width_rule(shape: Shape, kind: str = "shift24") -> WidthRule:
-    """The width rule by reachability, with the separator pinned (X-SPC-60, X-SPC-66), on the protocol's own Program
-    (`ncp2.linear`, which the verifier builds; X-SPC-73): remove the pinned ports' values, find every unit from which a
+    """The width rule by reachability, with the separator pinned, on the protocol's own Program
+    (`ncp2.linear`, which the verifier builds): remove the pinned ports' values, find every unit from which a
     served output (y's m·n entries, the protocol's designation) is still reachable, and hold each such unit to
     `cut.WIDTH_RULE`; every other unit is behind the separator and exempt. The ports are the protocol's
     (`SEPARATOR_PORTS`), so a wide unit cannot name its own output a separator: a pinned tile whose word leaf reaches a

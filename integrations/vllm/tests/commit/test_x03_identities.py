@@ -1,4 +1,4 @@
-"""X-03 on IDENTITIES (R13): the fail-closed Commit verdict compares the committed tensor identities of every step against an expected
+"""The fail-closed Commit verdict on IDENTITIES: it compares the committed tensor identities of every step against an expected
 manifest derived from the install-time module set (+ FA2 hidden source, sampler), and the per-step multiset of module-tensor names against
 the run's own call structure.  Counts alone let 'missing one value, duplicated another' pass; identities do not.  Offline (no CUDA)."""
 from __future__ import annotations
@@ -212,7 +212,7 @@ def _cb_com(steps: int = 3) -> tuple[NativeHostCommitter, _CallBoundaries]:
 
 
 def test_call_boundary_names_are_checked_against_the_steps_targets_not_step_0():
-    """Gemma-2-2B k06 (r20260930-184803-4e5e): '14 step(s) differ ... logits_processor/div/out [0, 1], logits_processor/div_1/out [1, 0]'.
+    """Gemma-2-2B: '14 step(s) differ ... logits_processor/div/out [0, 1], logits_processor/div_1/out [1, 0]'.
     Each step commits its own body's names; rule (4) compared them with step 0's.  They are checked against the source's targets."""
     com, cb = _cb_com()
     for s in range(3):

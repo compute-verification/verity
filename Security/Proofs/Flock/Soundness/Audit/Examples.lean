@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Audit.TwoStage
-import Mathlib.Logic.Equiv.Fin.Basic
-import Mathlib.Tactic.FinCases
+module
+
+public import Proofs.Flock.Soundness.Audit.TwoStage
+public import Mathlib.Logic.Equiv.Fin.Basic
+public import Mathlib.Tactic.FinCases
 
 /-!
 # Tightness and insecurity: NOT chains
@@ -18,6 +20,8 @@ fine unit is correct.
 * `late_interior_insecure`: if the interior is committed after the fine draw, a wrong chain is
   accepted with certainty.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 
@@ -308,7 +312,7 @@ theorem subset_miss_one {k₂ : ℕ} (hk : k₂ ≤ nv) (i : Fin nv) :
   have := Law.subset_escape hk {i}
   rw [Finset.card_singleton] at this
   rw [← this]
-  unfold Law.escape
+  unfold Verity.Law.escape
   exact congrArg prCoin (funext fun ω => propext Finset.disjoint_singleton_right.symm)
 
 /-- The effective escape of the chains, for any first-stage law. -/
@@ -322,11 +326,11 @@ theorem effEscape_chains {L₁ : Law K} {k₂ : ℕ} (hk : k₂ ≤ nv) (hnv : 1
   · obtain ⟨⟨c', i⟩, rfl⟩ := (F K nv).surjective v
     have hc : c' = c := by simpa [refines] using hv
     subst hc
-    rw [incl_L₂, Law.incl, ← Law.prCoin_not]
+    rw [incl_L₂, Verity.Law.incl, ← Law.prCoin_not]
     exact (subset_miss_one hk i).le
   · refine le_iSup₂_of_le (f := fun v (_ : (refines K nv).parent v = c) => 1 - (L₂ K nv hk c).incl v)
       (F K nv (c, ⟨0, by omega⟩)) (by simp [refines]) (le_of_eq ?_)
-    rw [incl_L₂, Law.incl, ← Law.prCoin_not]
+    rw [incl_L₂, Verity.Law.incl, ← Law.prCoin_not]
     exact (subset_miss_one hk _).symm
 
 /-- A chain's interior gates are not coarse-committed: only its own chain reads them. -/
@@ -412,7 +416,7 @@ theorem two_stage_b_tight (L₁ : Law K) {k₂ : ℕ} (hk : k₂ ≤ nv) (hnv : 
 /-- **Nested sampling dilutes.** When the second stage leaves some fine unit undrawn and the first
 draws something, a prover with `K` wrong chains is accepted with probability above `L₁.miss K`:
 more than one-stage over the coarse partition with `L₁` promises, and more than the `m`-dependent
-reading of the retired Python `TwoStageLaw.profile` (ASK-25) gave at `m = nv`. -/
+reading of the retired Python `TwoStageLaw.profile` gave at `m = nv`. -/
 theorem naive_two_level_unsound (L₁ : Law K) {k₂ : ℕ} (hk : k₂ + 1 ≤ nv)
     (hdraw : ∃ ω, (L₁.draw ω).Nonempty) :
     K ≤ ((coarse K nv).wrong (reg₂ (σT K nv L₁ (by omega : k₂ ≤ nv)))).card ∧

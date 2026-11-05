@@ -63,7 +63,7 @@ def test_decode_depth_and_work():
 
 
 def test_bit_layout():
-    """Lean's `codeEquiv`: bit `j` of block `i` is bit `i * width + j`; little-endian bytes."""
+    """Lean's `codeEquiv`: bit `j` of label `i` is bit `i * width + j`; little-endian bytes."""
     rng = random.Random(3)
     parts = [rng.getrandbits(5) for _ in range(7)]
     x = join(parts, 5)

@@ -1,8 +1,8 @@
-"""[R17-43 / LIFTING-SPEC v0.7 A9.3 B8 B9; PADDED-TABLE #3 / #4] padding steps: the inactive rows of a padded Commit are SYNTHESIZED by
+"""Padding steps: the inactive rows of a padded Commit are SYNTHESIZED by
 enablement at finalize -- every identity the manifest requires of a request past its executed prefix of record is the canonical ⊥ of its
 lifted width, chunked / folded / bound with the production step rule -- and the padded map binds RequiredValues(Lift(P)) completely.
 One rule, two consumers (pod finalize, laptop conversion over a pulled record); this test drives the conversion over a synthetic record
-laid out exactly like exec's pulled smollm2 records (manifest.json.gz, commit/binding_map_p0.json.gz, build_workload/workload_program.json,
+laid out exactly like a pulled smollm2 record (manifest.json.gz, commit/binding_map_p0.json.gz, build_workload/workload_program.json,
 match/capture/tokens.json).  Torch-free."""
 from __future__ import annotations
 
@@ -132,17 +132,17 @@ def test_b1_early_stop_the_padding_steps_are_the_cap_suffix_every_word_bot_one_r
             roots.setdefault(e["identity"]["step"], set()).add(e["step_root"])
     assert sorted(roots) == list(range(CAP)) and all(len(v) == 1 for v in roots.values())
     assert pm["run_root"] == scheme.run_root(bytes.fromhex(PD), geo, [bytes.fromhex(next(iter(roots[s]))) for s in range(CAP)]).hex()
-    # [revb M-1335 CORRECTION 2 / R17-42] a CONVERSION never re-labels the record's Program: program_rules_version stays the record's (None
+    # a CONVERSION never re-labels the record's Program: program_rules_version stays the record's (None
     # for an ordinary Program); the padding rule is named beside it (`conversion`, `padding_rules_version`)
     assert pm["schema"] == "padded-binding-map/1" and pm["program_rules_version"] is None and pm["padding_rules_version"] == "padded-v1"
     assert pm["conversion"].startswith("padding-steps/1")
     acts = {e["activity"] for e in pm["entries"]}
     assert acts == {"active", "bot-by-enablement", "registered-input"}
-    # [revb S-r17b-59 (i)] the block's domain is READ from the entry (block_kind / NB), never inferred from the activity label
+    # the block's domain is READ from the entry (block_kind / NB), never inferred from the activity label
     assert all((e["block_kind"], e["nb"]) == ("padding", 1) for e in pm["entries"] if e["activity"] == "bot-by-enablement")
     assert all((e["block_kind"], e["nb"]) == ("executed", 0) for e in pm["entries"] if e["activity"] == "active")
     assert sum(1 for e in pm["entries"] if e["activity"] == "bot-by-enablement") == (CAP - n_exec) * len(OPS)
-    # [reqval M-1318] the ONE fact the three consumers of the executed prefix read (rows_past_the_stop, coverage, sampled_replay's inactive
+    # the ONE fact the three consumers of the executed prefix read (rows_past_the_stop, coverage, sampled_replay's inactive
     # stratum): `activity` on EVERY entry; `encoding.committed_dtype` + `encoding.bot_word_hex` on every padding entry, and the hex IS the word
     assert all("activity" in e for e in pm["entries"])
     for e in pm["entries"]:
@@ -226,9 +226,8 @@ def test_the_rule_refuses_what_it_cannot_place_and_never_infers_the_lag(tmp_path
 
 
 #: sha256 of the conversion's outcomes over `_corpus` (`json.dumps(..., sort_keys=True, default=_plain)`, the run directory replaced),
-#: computed with the conversion on the parsed JSON before it read the records, then once more when it took the LAG as G6 does
-#: (`DeclaredStop.declared_lag`): that changed `lag_in_the_stop_rule_only` alone, to `b1_lag1`'s outcome
-OUTCOMES_SHA256 = "95bee0b277c2406645adf4af42d79e01a09e0069bbc35f1b4afaa741c392b3d6"
+#: messages included: a change to what the conversion decides or says changes it
+OUTCOMES_SHA256 = "6f16a33b80b40734410c77c44e253efa9feea2718d5602512d81466673595688"
 RECORDS = Path(__file__).parents[1] / "records" / "data"
 B1 = {"served": {"r0": [5, 6, EOS]}, "lag": 1, "executed_steps": {"r0": [0, 1, 2, 3]}}
 CAP_STOP = {"served": {"r0": [1, 2, 3, 4, 5, 6]}, "lag": 2, "executed_steps": {"r0": list(range(CAP))}}

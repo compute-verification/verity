@@ -1,10 +1,12 @@
-import Definitions.Accounting.Assumptions.TS
-import Definitions.Accounting.Assumptions.TS.Fixed
+module
+
+public import Definitions.Accounting.Assumptions.TS
+public import Definitions.Accounting.Assumptions.TS.Fixed
 
 /-!
 # `UnitFixed` from a fixed word (trusted)
 
-ASK-40's option A (`Definitions.Accounting.TS.Fixed`). Each `def G : Prop` is proved as `Accounting.SecurityProofs.TS.G`
+Option A (`Definitions.Accounting.TS.Fixed`). Each `def G : Prop` is proved as `Accounting.SecurityProofs.TS.G`
 (`Proofs.Accounting.TS.Fixed`), with its non-vacuity witness in `Proofs.Accounting.TS.FixedMeets`.
 
 * `UnitFixedOfWords`: `UnitFixed` (E1(c) per unit, with its fold clause) on a word layer whose credited units are fixed
@@ -18,6 +20,8 @@ ASK-40's option A (`Definitions.Accounting.TS.Fixed`). Each `def G : Prop` is pr
 
 `UnitFixed` itself stays an assumption, and its readers are unchanged; retiring it is a later step.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

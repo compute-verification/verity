@@ -1,9 +1,11 @@
-import Definitions.Pouw.PearlC.W1
+module
+
+public import Definitions.Pouw.PearlC.W1
 
 /-!
 # The machine stops a run at its budget (trusted; definitions only)
 
-Daniel's item 9: the machine, not the program, stops a run at its budget. `CostModel.withStop CM` gives every program of
+A ruling: the machine, not the program, stops a run at its budget. `CostModel.withStop CM` gives every program of
 `CM` an optional budget `b`. A run whose cost would exceed `b` is stopped: it commits nothing and is charged its whole
 budget (at least 0), as a device that preempts at `b` has spent it. A run within `b`, and a program with no budget, is
 `CM`'s run at `CM`'s cost. Oracle calls are `CM`'s either way.
@@ -15,6 +17,8 @@ the run goes, since it reads neither the oracle nor the outcome, so the device c
 cost is at most `T`, and wins there. The γ-gap property over `CM.withStop` is equivalent to it
 (`Proofs.Pouw.PearlC.W1Stop.gγ_withStop_iff`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

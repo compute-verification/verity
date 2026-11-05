@@ -14,7 +14,7 @@ from typing import Any, Protocol
 
 
 class Geometry(Protocol):
-    """What a codec's parameters say about sizes: `segments` segments of `blocks_per_segment` blocks of `m` bits, and
+    """What a codec's parameters say about sizes: `segments` segments of `blocks_per_segment` labels of `m` bits, and
     `segment_bytes` bytes of `W` per segment (rate 1).  `params.Params` is P3's."""
 
     segments: int
@@ -83,6 +83,6 @@ def split(params: Geometry, w: bytes | Iterable[bytes]) -> Iterator[bytes]:
 
 def encode_segments(codec: Codec, params: Geometry, prims: Any, w: bytes | Iterable[bytes],
                     salt: bytes) -> Iterator[list[bytes]]:
-    """Each segment's blocks, in order."""
+    """Each segment's labels, in order."""
     for s, seg in enumerate(split(params, w)):
         yield codec.encode_segment(params, prims, salt, s, seg)

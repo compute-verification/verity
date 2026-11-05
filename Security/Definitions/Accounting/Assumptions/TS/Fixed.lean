@@ -1,10 +1,12 @@
-import Definitions.Accounting.TS.Fixed
-import Definitions.Accounting.TS.Play
+module
+
+public import Definitions.Accounting.TS.Fixed
+public import Definitions.Accounting.TS.Play
 
 /-!
 # The two premises `UnitFixed` rests on under option A (trusted)
 
-ASK-40's option A proves `Accounting.Assumptions.TS.UnitFixed` from the fixed word of `Definitions.Accounting.TS.Fixed`
+Option A proves `Accounting.Assumptions.TS.UnitFixed` from the fixed word of `Definitions.Accounting.TS.Fixed`
 (`Accounting.Guarantees.TS.UnitFixedOfWords`). Two premises stay, each a named `Prop` of `Accounting.TS`'s vocabulary
 taken as a hypothesis, never an `axiom`, its docstring opening with its claim id (`verity/core/claims/__init__.py`).
 `CountsFixed` is not weaker than `UnitFixed`: it counts every fixed word, and a good fixed unit's words are fixed
@@ -16,9 +18,11 @@ modes.
   `UnitFixed` is claimed under; here it is a premise, per unit.
 * `CountsFixed`: the labelling counts a fixed word as fixed. The play's `fixed` and `folded` are free reals
   (`Anatomy.fixed`), which mean something only through the labelling's definition of `N_right − N_adapt`, so some
-  premise has to tie them to the values (note:20261019T0028Z-draft-adaptive-model, F5). This is that premise, at unit
+  premise has to tie them to the values. This is that premise, at unit
   grain. It is `conjectured`, and retires once it is proved or the labelling is computed in a checked program.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions.TS
 

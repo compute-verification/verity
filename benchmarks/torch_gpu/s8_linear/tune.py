@@ -24,10 +24,10 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "hash" / "exactlin"))
 import fixture as FX  # noqa: E402
+import int_mm as IM  # noqa: E402
 import kbench  # noqa: E402
 import run as R  # noqa: E402
 import wgmma as W  # noqa: E402
-from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.engine import int8_fused as X  # noqa: E402
 
 TUNE_MS = (1, 16, 32, 64, 128, 192, 256, 384, 512, 1024, 2048, 4096, 8192, 16384, 20480)
@@ -84,8 +84,8 @@ class Shape:
         self.ws = [R.Weights(n, k, seed=1000 + i, special=False) for i in range(self.copies)]
         self.x = R.codes(m, k, 7 + m, FX.STRUCT_ROWS)
         self.sa = torch.from_numpy(FX.act_scales(m, 7 + m, special=False)).cuda()
-        self.ref_first = R.reference(E.int_mm(self.x, self.ws[0].w), self.sa, self.ws[0].sw)
-        self.ref_last = R.reference(E.int_mm(self.x, self.ws[-1].w), self.sa, self.ws[-1].sw)
+        self.ref_first = R.reference(IM.int_mm(self.x, self.ws[0].w), self.sa, self.ws[0].sw)
+        self.ref_last = R.reference(IM.int_mm(self.x, self.ws[-1].w), self.sa, self.ws[-1].sw)
         self.y = torch.empty((m, n), dtype=torch.bfloat16, device="cuda")
 
     def fn(self, cfg, kern):
@@ -108,7 +108,7 @@ class Shape:
         return rec
 
 
-def stage(out: Path, shape: Shape, cfgs: list, reps: int, clock, phase: str, kern) -> dict:
+def sweep(out: Path, shape: Shape, cfgs: list, reps: int, clock, phase: str, kern) -> dict:
     fns, recs = {}, {}
     for cfg in dict.fromkeys(cfgs):
         rec = {"phase": phase, "n": shape.n, "k": shape.k, "m": shape.m, "cfg": str(cfg)}
@@ -165,10 +165,10 @@ def main() -> int:
         for m in ms:
             t0 = time.time()
             shape = Shape(n, k, m)
-            med = stage(out, shape, coarse(m, n, kern), 3, clock, "coarse", kern)
-            med = stage(out, shape, refine(best(med, a.top, kern), kern), 3, clock, "refine", kern)
+            med = sweep(out, shape, coarse(m, n, kern), 3, clock, "coarse", kern)
+            med = sweep(out, shape, refine(best(med, a.top, kern), kern), 3, clock, "refine", kern)
             base = kern.baseline(m, n, k)
-            med = stage(out, shape, best(med, a.top, kern) + [base], a.reps, clock, "final", kern)
+            med = sweep(out, shape, best(med, a.top, kern) + [base], a.reps, clock, "final", kern)
             win = best(med, 1, kern)
             row = [m, str(win[0]) if win else None, med.get(str(win[0])) if win else None, med.get(str(base))]
             table.setdefault(f"{n},{k}", []).append(row)

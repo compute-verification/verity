@@ -24,9 +24,8 @@ PROTOCOL SUMMARY (Build stage: the registry = the closed vocabulary every Progra
     `GatherBf16x64_v1`, `Lifted[..]_v2`) are resolved on demand through the regex families registered here.
   Outputs: a populated `verity.ml.circuits.defs.REGISTRY`; every Program descriptor (descriptor.json.gz) decodes only against it.
   Invariants: importing ANY `verity.ml.definitions.registry.*` module registers the lazy families first (Python imports the package), so a
-    descriptor decoded after such an import resolves as it did in veritor; family ORDER matters -- the two catch-alls (`{ORD=n}`,
+    descriptor decoded after such an import resolves the same way; family ORDER matters -- the two catch-alls (`{ORD=n}`,
     `Lifted[..]`) are registered last; a spec id no family matches is a decode failure, never a guessed definition.
-  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 
 
@@ -83,32 +82,32 @@ def _register_lazy_families() -> None:
     register_lazy_family(r"^GatherE8m0x(\d+)_v1$", lambda m: _marlin_moe().gather_e8m0(int(m[1])))
     # [GLM-5.3] the top-k selection relation's accelerator, one per (row length, TOPK), built while deriving a row past TOPK
     register_lazy_family(r"^DsaTopKOrderCheck(\d+)x(\d+)_v1$", lambda m: _dsa_topk().order_check(int(m[1]), int(m[2])))
-    # [R15 stoch] the top-p keep word (one per vocabulary; [R16] the split count S is its i32 `splits` OPERAND) and the bit extractor
+    # the top-p keep word (one per vocabulary; the split count S is its i32 `splits` OPERAND) and the bit extractor
     register_lazy_family(r"^TopPMaskWordx(\d+)_v1$", lambda m: _sampling().topp_mask_word(int(m[1])))
     register_lazy_family(r"^BitAtx(\d+)_v1$", lambda m: _sampling().bit_at(int(m[1])))
     # the keep word as word gates at a constant S (`topp_words`, the registered S): its own word gates, which no module a
-    # decoder imports for the sampler (`sampling`, GP-01's list) registers
+    # decoder imports for the sampler (`sampling`, among the modules the workload Program imports) registers
     register_lazy_family(r"^(BitXor|U32Xor|SelectBit|I32ToF32|NvLogf|TopPNumkeep)_v1$", lambda m: getattr(_topp_word_gates(), m[1]))
-    # [pad, lifted-padded] the ⊥-lifted families (LIFTING-SPEC §8): the strict lift of a registered primitive is a total function
+    # the ⊥-lifted families: the strict lift of a registered primitive is a total function
     # of the original's id, the specified ones of their width/size parameters
     register_lazy_family(r"^LSelect(\d+)_v1$", lambda m: _lifted().l_select(int(m[1])))
     register_lazy_family(r"^LIsActive(\d+)_v1$", lambda m: _lifted().l_is_active(int(m[1])))
     register_lazy_family(r"^LBot(\d+)_v1$", lambda m: _lifted().l_bot(int(m[1])))
     register_lazy_family(r"^LGatherRow(\d+)x(\d+)_v1$", lambda m: _lifted().l_gather_row(int(m[1]), int(m[2])))
     register_lazy_family(r"^LStepLive(\d+)_v1$", lambda m: _lifted().l_step_live(int(m[1])))
-    # [pad, R17-32 Continuation_v1 members and R17-42 §3 FixedSelect] a cold decode of a lifted Program must resolve these by id too
+    # a cold decode of a lifted Program must resolve these by id too
     register_lazy_family(r"^LIsEOS(\d+)_v1$", lambda m: _lifted().l_is_eos(int(m[1])))
     register_lazy_family(r"^LEmitNext\[H=(\d+)\]_v1$", lambda m: _lifted().l_emit_next(int(m[1])))
     register_lazy_family(r"^LFixedSelect(\d+)x(\d+)_v1$", lambda m: _lifted().l_fixed_select(int(m[1]), int(m[2])))
-    register_lazy_family(r"^LEnable_v1$", lambda m: _lifted().l_enable())  # [pad, LIFTING-SPEC v0.6 B7] the conditional enable
-    register_lazy_family(r"^SplitsForSMS(\d+)_v1$", lambda m: _lifted().splits_for_prim(int(m[1])))  # PAD-04 and its lift
+    register_lazy_family(r"^LEnable_v1$", lambda m: _lifted().l_enable())  # the conditional enable
+    register_lazy_family(r"^SplitsForSMS(\d+)_v1$", lambda m: _lifted().splits_for_prim(int(m[1])))  # SplitsForSMS and its lift
     register_lazy_family(r"^LSplitsForSMS(\d+)_v1$", lambda m: _lifted().l_splits_for(int(m[1])))
-    # [pad, LIFTING-SPEC v0.7 A11 / G1] a lifted primitive reading the masked operands at their ordinary type
+    # a lifted primitive reading the masked operands at their ordinary type
     register_lazy_family(r"^(.+)\{ORD=(\d+)\}$",
                          lambda m: _lifted().with_ordinary(lookup_primitive(REGISTRY, m[1]), int(m[2])))
-    # lifted-v1 (propagation semantics, LIFTING-SPEC v0.5.2): legacy, decodes as it was written
+    # lifted-v1 (propagation semantics): legacy, decodes as it was written
     register_lazy_family(r"^Lifted\[(.+)\]_v1$", lambda m: _lifted().lifted_prim_v1(lookup_primitive(REGISTRY, m[1])))
-    # padded-v1 (R17-43 explicit enablement, LIFTING-SPEC v0.6 B7): the enable is the last operand
+    # padded-v1 (explicit enablement): the enable is the last operand
     register_lazy_family(r"^Lifted\[(.+)\]_v2$", lambda m: _lifted().lifted_prim(lookup_primitive(REGISTRY, m[1])))
 
 

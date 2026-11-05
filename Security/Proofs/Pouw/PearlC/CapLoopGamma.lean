@@ -1,8 +1,10 @@
-import Proofs.Pouw.PearlC.DeviceCapGamma
-import Definitions.Pouw.PearlC.DevicePricesLoop
+module
+
+public import Proofs.Pouw.PearlC.DeviceCapGamma
+public import Definitions.Pouw.PearlC.DevicePricesLoop
 
 /-!
-# v2 at the cap 1/1,000 and v1 under rev1 at sm_120's in-loop prices (the price-twins lane's file; staged)
+# v2 at the cap 1/1,000 and v1 under rev1 at sm_120's in-loop prices (staged)
 
 γ's price rule computes γ at the issue-bound FP32 add (8.00) and at the measured in-loop one (8.376), and publishes the
 larger. Each theorem here is the twin of a `DeviceCapGamma` instance at `Prices.sm120Loop` in place of `Prices.sm120`,
@@ -17,6 +19,8 @@ Each is above its issue-bound twin (0.36162%, 0.35576%, 0.51056%, 0.50503%).
 Every γ here is an upper bound on the in-loop γ: `Prices.sm120Loop` rounds the A-only forming (1.047) up to 2. The
 exact in-loop values for v1 under rev1 and v2 at the cap are `DeviceSm120KernelGamma`'s `…LoopCast8…` pins.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

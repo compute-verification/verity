@@ -28,7 +28,7 @@ PY="$POUW_HARNESS_ENV/venv/bin/python"
 _ph_site="$("$PY" -c "import sysconfig; print(sysconfig.get_paths()['purelib'])")" || return 1
 export LD_LIBRARY_PATH="$_ph_site/nvidia/cublas/lib:$_ph_site/nvidia/cuda_runtime/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 _ph_root="$(cd "$_ph_here/../../../.." && pwd)"
-export PYTHONPATH="$_ph_root:$_ph_root/verity/core/protocols/pouw${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="$_ph_root:$_ph_root/tools/config:$_ph_root/verity/core/protocols/pouw${PYTHONPATH:+:$PYTHONPATH}"
 
 if [[ "$_ph_build" == art:* ]]; then
   _ph_build="$(PYTHONPATH="$_ph_here/../../../../tools/research/src" python3 -m research data fetch "$_ph_build" \

@@ -1,4 +1,4 @@
-"""Whether a `verity-vllm serve-openai` run numbers its requests by first row in the order it admitted them (VLLM-98).
+"""Whether a `verity-vllm serve-openai` run numbers its requests by first row in the order it admitted them.
 
     python tools/admit_rows_check.py SERVE_DIR [--json OUT]
 

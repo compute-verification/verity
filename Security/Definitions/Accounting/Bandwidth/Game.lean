@@ -1,9 +1,11 @@
-import Definitions.Pous.Game.Prob
+module
+
+public import Definitions.Pous.Game.Prob
 
 /-!
 # The bandwidth audit v0 in the random-oracle model
 
-The game behind the bandwidth audit v0 (agenda workstream 2, `note:20261011T2130Z-draft-resource-accounting-agenda`).
+The game behind the bandwidth audit v0.
 A device holds a store `E` of `N` blocks of `b` bits in device memory. The verifier reveals a fresh seed `σ`; the prover
 must commit, before a deadline, to the tag `H(σ, j, E_j)` of every block `j`; the verifier then checks `s` blocks drawn
 uniformly. Ingress is the number of bits the chip read from device memory in the window. The guarantee
@@ -28,6 +30,8 @@ measurement that falsifies each for a deployed device (`bandwidth-s-chip`, `band
 `bandwidth-regen-time`). Treating the stored blocks as uniform, apart from regeneration, is the claim
 `bandwidth-instantiation`; reading the deployed tag as the random oracle is `random-oracle`.
 -/
+
+@[expose] public section
 
 namespace Bandwidth
 

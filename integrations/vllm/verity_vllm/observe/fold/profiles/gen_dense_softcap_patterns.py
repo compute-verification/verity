@@ -1,6 +1,6 @@
-"""[r8 lane E-cleanup, 2026-09-18 — closes the M10 ADAPTER item] the FA2 scope of a model served with logit soft-capping
+"""The FA2 scope of a model served with logit soft-capping
 (`attn_logit_softcapping > 0`: Gemma-2) -> the quarantined `AttentionSoftcap_v1{T,NH,KVH,D,BN,CAP}` (`verity_vllm.program.quarantine.dense.softcap`,
-lane gemma 2026-09-17: exact `MufuTanh` over all 2^32 sm_89 words + FA2 difftest 25/25 bitwise, job 0917T223335-9ad747), or
+exact `MufuTanh` over all 2^32 sm_89 words), or
 `AttentionSoftcap_v2` under FA2's per-iteration `Check_inf`.
 
 vLLM passes the model's `attn_logit_softcapping` to `_vllm_fa2_C.varlen_fwd` as `softcap` (float; `FlashAttentionImpl.__init__`:
@@ -11,7 +11,7 @@ vLLM passes the model's `attn_logit_softcapping` to `_vllm_fa2_C.varlen_fwd` as 
     params.scale_softmax_log2 = softcap * M_LOG2E                 exp2 stage constant CAP * log2e instead of scale * log2e
 
 so relative to `Attention_v3` the body gains one stage in front of the online softmax (and one changed constant) and nothing else
-(`softcap.py` docstring).  This pattern is the MORE SPECIFIC recogniser the lane rule asks for (no base matcher is widened): it fires only
+(`softcap.py` docstring).  This pattern is a MORE SPECIFIC recogniser (no base matcher is widened): it fires only
 when the bound launch argument `softcap` is a positive finite float, re-checks every base fact through the base `AttentionScope` (causal,
 `softmax_scale == D**-0.5`, bf16, paged KV, `num_splits`, kBlockN, geometry, rows) on a copy of the launch with `softcap` rewritten to
 `0.0`, keeps the inert-window rule of `AttentionScopeInertWindow` (Gemma-2's even layers pass `window_size_left = 4095`, inert below 4096
@@ -21,7 +21,7 @@ selection: `Attention_v3{T,NH,KVH,D,BN}` -> `AttentionSoftcap_v1{T,NH,KVH,D,BN,C
 attribution / consumed ids.  `softcap` in `(None, 0.0)` is the base pattern's case (returns None); a negative,
 NaN or infinite `softcap` is Unsupported here (FA2 takes the softcap path iff `softcap > 0`; the Definition requires `CAP > 0`).
 
-The Definition stays in `quarantine/dense` (no promotion inside the r8 window, brief §2 rule 2); G4 admits it through the run's
+The Definition stays in `quarantine/dense`; G4 admits it through the run's
 `quarantine.json` (per-Definition difftest record, `verity_vllm/engine/profiles/quarantine/GEMMA2_2B.json`, inherited by `cov_pod.sh`).
 """
 from __future__ import annotations

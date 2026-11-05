@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # The compile slice in zero knowledge (compile_slice_zk.py) on a CPU machine, on hidden_zk's builds (its job.sh, sourced:
 # C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame and the sampled-proofs verifier built
-# in the tree. From a clone, in one of the network pool's pinned slots:
-#   research run --on vy-nebius-cpu-1 --source . --project verity --as LANE --cwd clone --timeout 180m \
-#     --env CS_MEM_GB=64 -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
+# in the tree. From a clone, in one of the network pool's pinned slots, as a job of at most 180 minutes:
+#   env CS_MEM_GB=64 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
 #     --by LANE -- bash benchmarks/network_traces/compile_slice_zk.sh
-#   (the slot's mem= reserves the run's memory; a --mem-gb beside it would reserve it twice), or, while the pool is full,
-#   on node 2's share: research run --on auto --cpus 16 --mem-gb 64 --timeout 180m --cwd clone ... -- bash ...
+#   (the slot's mem= reserves the run's memory, so the job reserves none beside it), or, while the pool is full,
+#   `bash benchmarks/network_traces/compile_slice_zk.sh` alone as a job of 16 CPUs and 64 GB.
 # env: CS_MEM_GB (what job.sh's stages may take, within the slot's)  CS_SLICE (compile_slice_zk.py's --slice, demo by
 #      default; several, comma-separated, are proved one after another)  CS_POINTS (its --points, 1 by default)
 #      CS_KINDS (its --kinds, every kind by default)  CS_G (its --g, the steps a served row holds, P by default)
@@ -22,6 +21,10 @@ source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
 export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
+# the encodings' traces and the certifier's vectors that compile_slice_zk.py reads are fetched fixtures (fixtures/artifacts.json)
+PYTHONPATH=$SRC/tools/research/src "$PY" -m research data fetch-fixtures --repo "$SRC" \
+  benchmarks/network_e2e/encodings/tests/fixtures verity/core/protocols/certifier/tests/fixtures > "$OUT/fetch-fixtures.log" 2>&1 \
+  || { tail -20 "$OUT/fetch-fixtures.log"; exit 7; }
 (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall

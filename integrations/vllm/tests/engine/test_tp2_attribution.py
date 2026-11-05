@@ -1,4 +1,4 @@
-"""[R15 tp, rev-cb M-0359 T6-3] per-(request, engine step) attribution of a rank's committed sampled ids against the Match record
+"""Per-(request, engine step) attribution of a rank's committed sampled ids against the Match record
 (`tp2_worker._tp2_attribution`) -- CPU-only: the committer is the production per-tensor host committer (`tests.check.opened`) with
 `step_rows` (the rank's request->rows map) set; the sampled ids are read through `oracle_compare.OpenedReader` (opened, verified against
 the run root).
@@ -18,7 +18,7 @@ import types
 import numpy as np
 import pytest
 
-# tp2_worker imports torch inside the methods that need it, so the module imports torch-free.  [rel int-4] a module-level
+# tp2_worker imports torch inside the methods that need it, so the module imports torch-free.  A module-level
 # `sys.modules.setdefault("torch", SimpleNamespace())` here poisoned the whole pytest session on a torch-free host: every later
 # collected module that imports torch (cb_a torch_frontend -> `torch.utils`) then failed at COLLECTION ("'torch' is not a package")
 # instead of skipping -- 2 collection errors, the session interrupted.  If tp2_worker ever needs torch at import, stub it in a

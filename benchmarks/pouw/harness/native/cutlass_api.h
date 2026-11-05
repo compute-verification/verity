@@ -49,7 +49,7 @@ const phc_entry* phc_table_3x_4(int* count);
 const phc_entry* phc_table_3x_5(int* count);
 const phc_entry* phc_table_3x_6(int* count);
 const phc_entry* phc_table_2x(int* count);
-// ../../nvfp4_sm120/nvf4_plain.cu, no CUTLASS: #543's plain NVFP4 (kind 5) and #570's plain FP8 E4M3 (kind 1) GEMMs,
+// ../../nvfp4_sm120/nvf4_plain.cu, no CUTLASS: the plain NVFP4 (kind 5) and plain FP8 E4M3 (kind 1) GEMMs,
 // 256 x 128 tiles, one persistent CTA an SM; m a multiple of 256, n of 128, k of 128 (FP8: 64). Each keeps its two
 // CUtensorMaps in its workspace (256 bytes, 64-byte aligned) from prepare to every launch.
 const phc_entry* phc_table_nvf4(int* count);

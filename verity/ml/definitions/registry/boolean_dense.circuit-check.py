@@ -6,13 +6,12 @@ from typing import Any
 
 
 def _boolean_roots() -> list[Any]:
-    """`registry.dense`'s rows on bits at 8 elements with Gemma-2's constants: `gelu_tanh_and_mul` at I = 8, the RMSNorm
-    chain's and the logit softcap's element-wise rows at N = 8, and the scalar rows with their scalar an input."""
+    """`registry.dense`'s rows on bits at 8 elements with Gemma-2's constants: the RMSNorm chain's and the logit softcap's
+    element-wise rows at N = 8, and the scalar rows with their scalar an input."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_dense as BDN
 
     return [
-        bind(BDN.GeluTanhMul, I=8),
         *[bind(d, N=8) for d in (BDN.SquareBf16, BDN.SquareF32, BDN.AddWidenedBf16, BDN.ScaleRowBf16, BDN.ScaleRowF32,
                                  BDN.MulVecF32, BDN.Bf16MulScalarTensor)],
         bind(BDN.AddScalarF32, N=8, C=1e-6),

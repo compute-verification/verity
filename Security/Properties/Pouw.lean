@@ -1,4 +1,6 @@
-import PouwWindow
+module
+
+public import PouwWindow
 
 /-!
 # PoUW's window: what its Lean code (`PouwWindow`) does
@@ -13,10 +15,12 @@ The numbers are the served ones: the 3-bit grid (`gridBits`), tiles of 4096 mult
 from 1/10 to 2⁻⁴⁰, over tile counts up to 2⁴⁰.
 
 What a property assumes is in its statement. The draw's (`DrawMisses`) is not: the miss probability it bounds is the
-one of `K′` indices drawn uniformly without replacement from `[0, N)`, which is what the proof service's live draw is
+one of `K′` indices drawn uniformly without replacement from `[0, N)`, which is what the proof system's live draw is
 under its named assumptions (the operating system's bytes are uniform, `UniformRandomBytes`, and the service draws a
 uniform subset of them); nothing here models the draw.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Window
 
@@ -154,7 +158,7 @@ def KPrimeExactAtEquality : Prop := (kPrime 1 (1 / 512) 7 8 1).toOption = some 3
 
 /-! ## What is public -/
 
-/-- `PUBLIC` is the draft's six items and the rows' fixed length (Daniel, 19 Oct, ASK-39), each of one of the four kinds
+/-- `PUBLIC` is the draft's six items and the rows' fixed length, each of one of the four kinds
 a protocol may make public, and a registration carries the ones that do not come from the outcome. -/
 def PublicItems : Prop :=
   publicItems.map (·.item) = ["verdict", "work", "check", "sampling", "length", "drawn", "root_W"] ∧

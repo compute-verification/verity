@@ -1,9 +1,11 @@
-import Definitions.Flock.Session
+module
+
+public import Definitions.Flock.Session
 
 /-!
-# Ligerito with M1's padded level 0, in the clear
+# Ligerito with C-Flock ZK's padded level 0, in the clear
 
-M1 (lane `flock-zk`, `backends/flock/live/PROTOCOL.md` §7) changes level 0 of each rep `r`:
+C-Flock ZK (`verity/ml/flock/live/PROTOCOL.md` §7) changes level 0 of each rep `r`:
 
 * **the committed lanes** are `2^k₀` witness lanes and `e` extra lanes per rep, rep `r`'s at
   `2^k₀ + e·r + i`. Every lane is a codeword of `RS[2^d, 2^cols + t]`: its message plus `c₀` times
@@ -23,6 +25,8 @@ enforces the restart `T' = s + Σ_i ρ_i·e_i`. Here the verifier computes the r
 values it is sent. That the masked verifier accepts only if these relations hold is the inner
 proof's soundness, a separate statement.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Model
 

@@ -1,4 +1,4 @@
-"""sbench's side of the remote bandwidth audit beside its arms (`sbench.py --bw-passes GIB`): `Side` runs `dbw_side.py`
+"""sbench's side of PoUB beside its arms (`sbench.py --bw-passes GIB`): `Side` runs `dbw_side.py`
 (the audit's verifier, and its prover on sbench's GPU) and starts each session as sbench needs it; `report` reads both
 timelines, sbench's decode rows and the audit's passes, on the host's monotonic clock.
 
@@ -151,7 +151,8 @@ def stats(xs: list[float]) -> dict | None:
     if not xs:
         return None
     s = sorted(xs)
-    at = lambda q: s[min(len(s) - 1, int(q * len(s)))]
+    def at(q):
+        return s[min(len(s) - 1, int(q * len(s)))]
     return {"n": len(s), "mean": round(statistics.fmean(s), 4), "p50": round(at(0.5), 4), "p90": round(at(0.9), 4),
             "p99": round(at(0.99), 4), "max": round(s[-1], 4)}
 

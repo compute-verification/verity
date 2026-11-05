@@ -1,4 +1,4 @@
-"""Every identity of GLM-5.3's TP8 manifest binds from what the runtime commits (the Commit of record r20261016-124321-8e1d bound none
+"""Every identity of GLM-5.3's TP8 manifest binds from what the runtime commits (a Commit of record bound none
 of 26,686 of rank 0's, by name): on a rank Program shaped like GLM's -- dense layer 0, MoE layers 3 and 4 with the shared expert under
 the runner's held path `_shared_experts._layer`, a prefill step on the unfused all-reduce + `RMSNormFusedCudaVector8` and DeepGEMM path
 and a decode step on the fused `AllReduceRmsNormMnnvl` and FlashInfer path -- every `instance_outputs` / `tp_rank_partials` identity

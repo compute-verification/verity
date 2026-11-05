@@ -1,6 +1,8 @@
-import Flock.Desc
-import Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ
-import Proofs.Flock.Soundness.Discharge.ZkLink.Rows
+module
+
+public import Flock.Desc
+public import Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Rows
 
 /-!
 # C-Flock's one-stage audit, end to end, with the rows link (trusted)
@@ -13,7 +15,7 @@ as `EndToEndRegisteredDrawn` is, and `EndToEndRegisteredRowsFlat` is the same st
 `D = Desc.single c`.
 
 It is the C-Flock side of PoUW's proof premise (`Accounting.TS.ProofLayer.SoundAt`), and does not discharge it: the
-bridge is open (PRF-107). That needs a probability bridge from a window's round and proof `(w, i)` to a C-Flock session,
+bridge is open. That needs a probability bridge from a window's round and proof `(w, i)` to a C-Flock session,
 the link from `ProofLayer`'s opening to the extracted plurality `XplurZC`, and a union bound over the `n` units, since
 `OwnReadsHJ` here is over all of a session's registered reads, not per unit.
 
@@ -21,6 +23,8 @@ C-Flock's definitions are still in its proofs package, so this module imports
 `Proofs.Flock.Soundness.Discharge.ZkReg.PublicHJ`, and `Models.lean`, which the `security` package builds without
 `security_proofs`, does not import it: `Proofs.Flock.EndToEndRegisteredRows` does.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

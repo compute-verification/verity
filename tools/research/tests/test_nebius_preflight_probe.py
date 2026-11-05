@@ -46,28 +46,3 @@ def test_one_alert_per_failing_machine_and_one_cleared_reply_once_it_passes():
     assert len(posts) == 1 and set(state["open"]) == {"vy-nebius-1"}
     P.step(state, {"vy-nebius-1": ("ok", "r4")}, post)
     assert posts[1] == ("*Cleared:* check's preflight passes on `vy-nebius-1` again (run r4).", "ts1") and state["open"] == {}
-
-
-def test_drift_posts_when_its_findings_change_and_clears_once_none_is_left():
-    posts: list[str] = []
-    state: dict = {"open": {}}
-
-    def post(text, thread):
-        posts.append(text)
-
-    def rep(*entries, strays=()):
-        return {"commit": "c", "entries": [{"path": p, "state": s, "restart": r, **({"tree": "/t"} if t else {})}
-                                           for p, s, r, t in entries], "strays": list(strays)}
-    a = rep(("/b/a.py", "stale", None, False), ("/t/x", "missing", None, True), ("/b/c.py", "ok", "restart systemd:c", False),
-            ("/u/d.service", "held", None, False), strays=["/b/a.py.bak-1"])
-    P.drift_step(state, {"vy-nebius-1": a, "vy-nebius-2": {"error": "ssh: timed out"}}, post)
-    assert len(posts) == 1 and "`vy-nebius-1` restart 1, stale 1, stray 1." in posts[0]
-    assert "• vy-nebius-1 stale /b/a.py" in posts[0] and "/t/x" not in posts[0]       # a tree's missing file is no finding
-    assert "/u/d.service" not in posts[0]                                              # nor a held one
-    P.drift_step(state, {"vy-nebius-1": a}, post)
-    P.drift_step(state, {"vy-nebius-1": {"error": "ssh: timed out"}}, post)
-    assert len(posts) == 1
-    P.drift_step(state, {"vy-nebius-1": rep(("/b/a.py", "ok", None, False), strays=["/b/a.py.bak-1"])}, post)
-    assert len(posts) == 2 and "2 resolved since the last report." in posts[1] and "•" not in posts[1]
-    P.drift_step(state, {"vy-nebius-1": rep(("/b/a.py", "ok", None, False))}, post)
-    assert posts[2].startswith("*Cleared:*") and state["drift"] == []

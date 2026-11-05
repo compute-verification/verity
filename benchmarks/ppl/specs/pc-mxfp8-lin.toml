@@ -1,4 +1,4 @@
-description = "PPL-COMPILE's format baseline in C2's scope, no PoUW: MXFP8: E4M3 in blocks of 32 along k with E8M0 scales on every linear and lm_head, rounded to nearest, products in FP32; attention plain int8 as in pc-int8; after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too), keys centred"
+description = "format baseline in C2's scope, no PoUW: MXFP8: E4M3 in blocks of 32 along k with E8M0 scales on every linear and lm_head, rounded to nearest, products in FP32; attention plain int8 as in pc-int8; after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too), keys centred"
 
 [[linear]]
 step = "smooth"

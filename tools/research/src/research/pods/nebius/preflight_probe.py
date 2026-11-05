@@ -12,8 +12,7 @@ thread once the preflight passes there again. Infra is the only reader, so each 
 Any other refusal (the machine held exclusively, ssh down) is only logged. A pass that passes leaves one Attempt (campaign
 `infra-probe`). It runs on the control pod, as the watchers' `preflight-probe` loop (infra/control/watchers.toml).
 
-Each pass also runs `research deploy drift` (`ops deploy`) and posts the same way whenever its findings change: the files on
-the nodes that aren't main's, the processes still running old code, and the strays, with what's new since the last post.
+Nodes' drift from main is the monitors relay's `drift` monitor's (`research.monitors.deploy_drift`), not this probe's.
 
   python3 preflight_probe.py --tree CHECKOUT [--machines vy-nebius-1 vy-nebius-2] [--every 3600] [--state PATH] [--once] [--dry-run]
 """
@@ -80,55 +79,6 @@ def probe(tree: Path, machines: list[str], dry: bool) -> dict[str, tuple[str, st
     return out
 
 
-def drift(tree: Path) -> dict:
-    """`research deploy drift --json` from the tree just updated to origin/main: each node's files against main."""
-    env = {**os.environ, "PYTHONPATH": str(tree / "tools" / "research" / "src")}
-    r = subprocess.run([sys.executable, "-m", "research", "deploy", "drift", "--json", "--no-fetch"], cwd=tree, env=env,
-                       capture_output=True, text=True, timeout=600)
-    return json.loads(r.stdout) if r.stdout.strip().startswith("{") else {}
-
-
-def findings(reps: dict) -> list[str]:
-    """One line per file that isn't main's or still runs old code, and per stray; a node whose read failed gives none."""
-    out = []
-    for n, rep in sorted(reps.items()):
-        if "error" in rep:
-            continue
-        for e in rep["entries"]:
-            if e["state"] not in ("ok", "held") and not (e["state"] == "missing" and e.get("tree")):
-                out.append(f"{n} {e['state']} {e['path']}")
-            if e.get("restart"):
-                out.append(f"{n} restart {e['path']}")
-        out += [f"{n} stray {p}" for p in rep["strays"]]
-    return out
-
-
-def drift_step(state: dict, reps: dict, post: Callable[[str, "str | None"], "str | None"], most: int = 12) -> None:
-    """A post whenever the set of findings changes: the counts, what's new and how many went away; "cleared" once none is left."""
-    if not reps or all("error" in r for r in reps.values()):
-        return
-    new, old = findings(reps), state.get("drift", [])
-    if new == old:
-        return
-    state["drift"] = new
-    if not new:
-        post("*Cleared:* every file on the nodes is main's, nothing runs old code, and nothing strays (`research deploy drift`).", None)
-        return
-    counts = {}
-    for f in new:
-        n, kind, _ = f.split(" ", 2)
-        counts.setdefault(n, {}).setdefault(kind, 0)
-        counts[n][kind] += 1
-    added, gone = [f for f in new if f not in old], len([f for f in old if f not in new])
-    lines = [f"*Node drift* (`research deploy drift`): " + "; ".join(f"`{n}` " + ", ".join(f"{k} {v}" for k, v in sorted(c.items()))
-                                                                     for n, c in sorted(counts.items())) + "."]
-    lines += [f"• {f}" for f in added[:most]] + ([f"• and {len(added) - most} more"] if len(added) > most else [])
-    lines += [f"{gone} resolved since the last report."] if gone else []
-    lines.append("Stale or unknown: `research deploy install NODE --by WHO PATH --apply` from main. Ahead: land its PR, then install from "
-                 "main. Restart: restart what the entry's `run` names. Stray: move it into the repository and deploy.toml, or delete it.")
-    post("\n".join(lines), None)
-
-
 def slack_post(dry: bool) -> Callable[[str, "str | None"], "str | None"]:
     from research import slack
 
@@ -165,13 +115,6 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{stamp} pass failed: {type(e).__name__}: {e}", flush=True)
         for m, (v, detail) in sorted(results.items()):
             print(f"{stamp} {m}: {v} {detail[:300]}", flush=True)
-        try:
-            reps = drift(ns.tree)
-            drift_step(state, reps, post)
-            print(f"{stamp} drift: {len(findings(reps))} findings" + "".join(f"; {n}: {r['error'][:200]}" for n, r in reps.items()
-                                                                          if "error" in r), flush=True)
-        except Exception as e:  # noqa: BLE001
-            print(f"{stamp} drift failed: {type(e).__name__}: {e}", flush=True)
         if not ns.dry_run:
             ns.state.parent.mkdir(parents=True, exist_ok=True)
             ns.state.write_text(json.dumps(state))

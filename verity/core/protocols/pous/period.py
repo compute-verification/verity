@@ -18,14 +18,17 @@ What an accepted run certifies is `certify`'s, as `PousCheck.RunProtocol.certify
 at `eps = δ + 2^eps_log2` = 1/100 + 2^-128 when a certificate covers the point (`certificate`: P2's registered one at
 `run.DEPLOYED`, a 1 GiB `C*`, else P2's proved family `p2.family_certificate`, any `2^8` to `2^23` blocks at the
 registered width and prime, else the per-period guarantee `p2.wide_certificate`, `periodHeldAt`, to `2^27` blocks, which
-holds Demo B's `C*` of 1038 segments, 1,060,008,348,186 bits), else 0 and 0 with the profile naming each gap.
+holds Demo B's `C*` of 1038 segments, 1,060,008,348,186 bits), else 0 and 0 with the profile naming each gap. More
+challenges than a certificate's `k` keep its `eps`: at `k ≥ 320` it stays `1% + 2^-128`, and
+`p2.wide320_certificate`'s `2^-20` (`ObligationWide320`, from the open conjecture `P2RingRoundSecureWide`) is no
+run's certificate.
 `point_for` gives the smallest such point holding a store, 256 blocks (526 KB) at least; the small point
 (`point_for(size, W, C0)`, 1,024-bit blocks) certifies nothing.
 
-Encoding is the cost: two 16,448-bit roots a block, about 3.7 s a block on one core in this pure-Python reference path
-(r20261025-202504-23f6), so 16 core-minutes at 256 blocks and 550 core-hours at the deployed `2^19`; `encode` splits it
+Encoding is the cost: two 16,448-bit roots a block, about 3.7 s a block on one core in this pure-Python reference path,
+so 16 core-minutes at 256 blocks and 550 core-hours at the deployed `2^19`; `encode` splits it
 over processes. The toy's 6,240,150-byte store is 3,039 blocks there, set up in 367 s in 32 processes (3.86 core-seconds
-a block, r20261026-161817-7dd1). An audit is cheap: about 1.7 s at `2^19` blocks, mostly the table's root.
+a block). An audit is cheap: about 1.7 s at `2^19` blocks, mostly the table's root.
 
 `leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for space: by default it sets the node's store up once at
 `point_for`'s certified point and audits it every period, the coins fresh from the OS. The memory challenger is a party
@@ -53,6 +56,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from verity.core.deploy.stream import Side
 from verity.ml.commitments.identity import canonical_json_bytes
 from verity.ml.crypto import lms
 from verity.ml.randomness import derive
@@ -63,6 +67,7 @@ from . import protocol as pous_protocol
 from . import run as R
 from . import setup
 from .schemes import p2 as P2
+from .verifier import DIGEST_BYTES
 
 PROTOCOL = "verity/pous/p2/v4/run"
 """`PousCheck.RunProtocol.ID`; a test signer's runs answer under `memory_challenger.TEST_PREFIX` + it."""
@@ -190,7 +195,7 @@ def setup_inputs(setup_of: Mapping[str, Any]) -> SetupInputs:
     """The setup's own inputs from its case's `commitment` and `evidence`, read as `SetupProtocol`'s decoders read them
     (each count at most a quarter of the bytes left, nothing after the last segment); `ValueError` on bytes they refuse."""
     c, b = bytes.fromhex(setup_of["commitment"]), bytes.fromhex(setup_of["evidence"])
-    if len(c) < 64:
+    if len(c) < DIGEST_BYTES:
         raise ValueError(f"the commitment to W is 64 bytes, then the salt; {len(c)} bytes is too short")
     pos = 0
 
@@ -210,7 +215,7 @@ def setup_inputs(setup_of: Mapping[str, Any]) -> SetupInputs:
     store = [[take(int.from_bytes(take(4), "big")) for _ in range(count())] for _ in range(count())]
     if pos != len(b):
         raise ValueError(f"{len(b) - pos} bytes follow the last segment")
-    return c[:64], c[64:], store
+    return c[:DIGEST_BYTES], c[DIGEST_BYTES:], store
 
 
 type Prover = Callable[[Sequence[bytes]], Callable[[int], bytes]]
@@ -223,26 +228,31 @@ def honest(blocks: Sequence[bytes]) -> Callable[[int], bytes]:
 
 
 @dataclass(frozen=True)
-class Period:
-    """A period's PoUS: the run protocol's answer and case, and the setup protocol's case that published its commitment."""
+class Run:
+    """A subprotocol's run over one monitoring period, PoUS's or the bandwidth audit's: its answer in the core
+    interface's canonical form, the core case its Lean replays to that answer, and, for a run on a setup (PoUS's), the
+    setup protocol's case that published its commitment."""
 
     answer: dict[str, Any]
     case: dict[str, Any]
-    setup_case: dict[str, Any]
+    setup_case: dict[str, Any] | None = None
 
     @property
     def verdict(self) -> str:
         return self.answer["verdict"]
 
-    @property
-    def s_bits(self) -> int:
-        """The storage certified, in bits: 0 unless accepted under a certificate that covers the point."""
-        return self.answer["public"]["s_bits"] if self.verdict == "accept" else 0
+    def public(self, key: str) -> int:
+        """What the run certifies under `key` (PoUS's `s_bits`, the bandwidth audit's `q_bytes`): 0 unless accepted."""
+        return self.answer["public"][key] if self.verdict == "accept" else 0
 
     @property
     def eps(self) -> Fraction:
-        """The error `s_bits` holds at: 0 (vacuous) when nothing is certified."""
+        """The error what it certifies holds at: 0 (vacuous) when nothing is certified."""
         return Fraction(self.answer["public"]["eps"]) if self.verdict == "accept" else Fraction(0)
+
+
+Period = Run
+"""`Run`, under the name some of its readers still use; it goes when none does."""
 
 
 @dataclass(frozen=True)
@@ -317,13 +327,13 @@ def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, wor
 def audit(node: str, held: Store, coins: bytes, *, signer: mc.Signer | None = None, log: mc.SessionLog | None = None,
           trusted: Collection[bytes] | None = None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
           protocol: str = PROTOCOL, prover: Prover = honest, clock: Callable[[], int] = time.perf_counter_ns,
-          party: challenger_party.Party | None = None) -> Period:
+          party: Side | None = None) -> Period:
     """One period's audit of the store `held` on `node` (module docstring, steps 4 and 5): the memory challenger's session
     under the id the auditor designates from `coins` and the setup's root, then the run's check and answer, the tie on
     the setup case `held` keeps, which the run's case carries. With `party`, the memory challenger is a party of its own
-    (`challenger_party`): its side runs where `party` starts it, with its own coins, key and session log, and the prover
-    answers it over a socket; `signer`, `log` and `clock` are unused, and the verifier's list is by default the key the
-    side reports."""
+    (`challenger_party`): its side runs where `party` (a `stream.Side`) starts it, with its own coins, key and session
+    log, and the prover answers it over a socket; `signer`, `log` and `clock` are unused, and the verifier's list is by
+    default the key the side reports."""
     point, published = held.point, held.published
     q = point.params
     if party is None:
@@ -339,16 +349,16 @@ def audit(node: str, held: Store, coins: bytes, *, signer: mc.Signer | None = No
         session_id, key = bytes.fromhex(got["session_id"]), bytes.fromhex(got["public_key"])
         session = R.Session.from_json(got["session"])
     trusted = (key,) if trusted is None else tuple(trusted)
-    return Period(answer(point, schemes, trusted, published, held.digests, session, session_id, protocol,
-                         setup_inputs=setup_inputs(held.setup_case)),
-                  case(point, session_id, trusted, published, held.digests, session, held.setup_case), held.setup_case)
+    return Run(answer(point, schemes, trusted, published, held.digests, session, session_id, protocol,
+                      setup_inputs=setup_inputs(held.setup_case)),
+               case(point, session_id, trusted, published, held.digests, session, held.setup_case), held.setup_case)
 
 
 def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer | None = None, log: mc.SessionLog | None = None,
         point: R.Point | None = None, trusted: Collection[bytes] | None = None,
         schemes: Mapping[str, mc.Verify] = mc.SCHEMES, protocol: str = PROTOCOL, prover: Prover = honest,
         clock: Callable[[], int] = time.perf_counter_ns, workers: int = 1,
-        party: challenger_party.Party | None = None) -> Period:
+        party: Side | None = None) -> Period:
     """The period's PoUS on `node`, setup and audit (module docstring): `store` is what the node keeps, `coins` the
     verifier's and the memory challenger's live secret for the period, `signer` the memory challenger's key and `log` its
     session log. `trusted` is the verifier's list of memory-challenger keys (by default the signer's), `schemes` the
@@ -360,9 +370,10 @@ def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer | None = Non
 
 
 def serve(exe: str | os.PathLike, cases: Sequence[Mapping[str, Any]], *args: str) -> list[dict[str, Any]]:
-    """`EXE [ARGS] serve` on `cases`, one canonical JSON line each: the Lean's answers (`Core.Protocol` CLI)."""
-    lines = "".join(canonical_json_bytes(dict(c)).decode() + "\n" for c in cases)
-    p = subprocess.run([str(exe), *args, "serve"], input=lines, capture_output=True, text=True, check=True)
+    """`EXE [ARGS] serve` on `cases`, one canonical JSON line each: the Lean's answers (`Core.Protocol` CLI). The lines go
+    as bytes, so a served case (gigabytes) is held once beside its own JSON, not again as text."""
+    lines = b"".join(canonical_json_bytes(dict(c)) + b"\n" for c in cases)
+    p = subprocess.run([str(exe), *args, "serve"], input=lines, capture_output=True, check=True)
     return [json.loads(x) for x in p.stdout.splitlines()]
 
 
@@ -395,14 +406,132 @@ def challenger(directory: str | os.PathLike, *, workers: int | None = None) -> m
     return mc.LmsSigner(key, state)
 
 
+LEDGER_SCHEMAS = ("verity/challenger-auditor/v1", "verity/challenger-auditor/v2")
+"""The schemas of the auditor's ledger entries (`sampled_proofs.challenger.LEDGER_TAGS`), whose copies `cite` cuts."""
+_ENTRY = ["body", "kind", "prev", "schema", "seq", "session", "sig"]
+_CLOSE = ["chain", "ended", "lines", "session", "signature"]
+
+
+def _json(data: str | bytes) -> Any:
+    """`data` parsed, or the `ValueError` saying why it isn't JSON, for the caller to keep the file as it is."""
+    try:
+        return json.loads(data)
+    except ValueError as e:
+        return e
+
+
+def _entry(line: Any) -> dict | None:
+    """`line` as an entry of the auditor's ledger (`sampled_proofs.challenger.ledger_text`'s form), else None."""
+    if type(line) is not str or not line.startswith('{"body":'):
+        return None
+    e = _json(line)
+    return e if isinstance(e, dict) and sorted(e) == _ENTRY and e["schema"] in LEDGER_SCHEMAS else None
+
+
+def _ledger(lines: Sequence[Any]) -> list[dict] | None:
+    entries = [_entry(x) for x in lines]
+    return entries if entries and all(e is not None for e in entries) else None
+
+
+def cited(entries: Sequence[dict], sessions: Collection[str]) -> list[int]:
+    """The indices of a ledger's `entries` its window cites: every entry of `sessions` and the open and close of each
+    period holding one of them (a period holds the sessions whose reserve, or one-step v2 open, falls in its lane between
+    its open and its close, as `challenger.verify_periods` counts them). Raises `ValueError` naming a session of
+    `sessions` the ledger doesn't open, or when `sessions` is empty: a reader of what's kept would find no entry of it."""
+    if not sessions:
+        raise ValueError("no challenger session is cited beside the auditor's ledger, so none of its entries would be kept")
+    keep: set[int] = set()
+    current: dict[Any, int] = {}
+    held: set[int] = set()
+    for i, e in enumerate(entries):
+        b, kind = e["body"], e["kind"]
+        if kind == "period-open":
+            current[b.get("lane")] = i
+        elif kind == "period-close":
+            if current.pop(b.get("lane"), None) in held:
+                keep.add(i)
+        elif e["session"] in sessions:
+            keep.add(i)
+            if kind == "reserve" or (kind == "open" and e["schema"] == LEDGER_SCHEMAS[1] and "reserve" not in b):
+                if (o := current.get(b.get("for") or b.get("by"))) is not None:
+                    keep.add(o)
+                    held.add(o)
+    opened = {e["session"] for e in entries if e["kind"] == "open"}
+    if missing := sorted(set(sessions) - opened):
+        raise ValueError(f"the auditor's ledger opens no session {missing[0]}, which a challenger close record beside it "
+                         f"cites ({len(entries)} entries, {len(missing)} of {len(sessions)} cited sessions unopened)")
+    return sorted(keep)
+
+
+def cite(files: Mapping[str, bytes]) -> dict[str, bytes]:
+    """`files` (path -> bytes) with every copy of the auditor's ledger cut to the entries its window cites (`cited`). A
+    copy is a `.jsonl` file each of whose lines is a ledger entry (infra's ``windows.jsonl``, ASCII as `ledger_text`
+    writes it) or a list of such lines in a `.json` document (`window_salt.Issued.live`'s ``ledger``); the sessions it
+    cites are those of the challenger close records (``{chain, ended, lines, session, signature}``, as `.json` files or
+    inside one) under the copy's directory, its own document included. A copy with no close record beside it is kept
+    whole: nothing cites its entries, so nothing says what a reader of it needs. A document holding a cut copy is
+    written back as `json.dumps(doc, sort_keys=True)`, as ``salt.json`` is written; every other file is kept as it is.
+    Raises `ValueError` naming the file when a copy would keep no entry of a session cited beside it, so the records
+    never hold a ledger cut short of what their window cites. PoUW's verifier reads the whole ledger (every entry,
+    chained from seq 0), so the uncut copy it reads stays on disk."""
+    parsed = {name: _json(data) for name, data in files.items() if name.endswith(".json") and b'"session"' in data}
+    docs = {name: doc for name, doc in parsed.items() if not isinstance(doc, ValueError)}
+    closes: list[tuple[str, str]] = []
+
+    def walk(name: str, v: Any) -> None:
+        if isinstance(v, dict):
+            if sorted(v) == _CLOSE and type(v["session"]) is str:
+                closes.append((name, v["session"]))
+            for x in v.values():
+                walk(name, x)
+        elif isinstance(v, list):
+            for x in v:
+                walk(name, x)
+
+    for name, doc in docs.items():
+        walk(name, doc)
+
+    def cut(name: str, lines: list[str], entries: list[dict]) -> list[str] | None:
+        scope = name.rsplit("/", 1)[0] + "/" if "/" in name else ""
+        if not (sessions := {s for n, s in closes if n.startswith(scope)}):
+            return None
+        try:
+            return [lines[i] for i in cited(entries, sessions)]
+        except ValueError as e:
+            raise ValueError(f"{name}: {e}") from None
+
+    out = dict(files)
+    for name, data in files.items():
+        if name.endswith(".jsonl") and b"verity/challenger-auditor/" in data and data.isascii():
+            lines = [x for x in data.decode("ascii").split("\n") if x]
+            if (entries := _ledger(lines)) is not None and (kept := cut(name, lines, entries)) is not None:
+                out[name] = "".join(x + "\n" for x in kept).encode()
+
+    def copies(name: str, v: Any) -> Any:
+        if isinstance(v, dict):
+            return {k: copies(name, x) for k, x in v.items()}
+        if isinstance(v, list):
+            if (entries := _ledger(v)) is not None:
+                return v if (kept := cut(name, v, entries)) is None else kept
+            return [copies(name, x) for x in v]
+        return v
+
+    for name, doc in docs.items():
+        if b"verity/challenger-auditor/" in files[name] and (kept := copies(name, doc)) != doc:
+            out[name] = json.dumps(kept, sort_keys=True).encode()
+    return out
+
+
 def records(period_dir: str | os.PathLike, skip: Collection[str] = ("answers",)) -> bytes:
     """The period's records as one byte string, the store the node keeps for the period: each file under `period_dir`
-    (but those under `skip`) in path order, framed `u32 len(path) ‖ path ‖ u64 len(bytes) ‖ bytes`."""
+    (but those under `skip`) in path order, every copy of the auditor's ledger cut to the entries its window cites
+    (`cite`), framed `u32 len(path) ‖ path ‖ u64 len(bytes) ‖ bytes`."""
     root = Path(period_dir)
+    files = {f.relative_to(root).as_posix(): f.read_bytes() for f in sorted(
+        p for p in root.rglob("*") if p.is_file() and p.relative_to(root).parts[0] not in skip)}
     out = bytearray()
-    for f in sorted(p for p in root.rglob("*") if p.is_file() and p.relative_to(root).parts[0] not in skip):
-        name, data = f.relative_to(root).as_posix().encode(), f.read_bytes()
-        out += len(name).to_bytes(4, "big") + name + len(data).to_bytes(8, "big") + data
+    for name, data in cite(files).items():
+        out += len(name.encode()).to_bytes(4, "big") + name.encode() + len(data).to_bytes(8, "big") + data
     return bytes(out)
 
 
@@ -414,20 +543,21 @@ CPUs each may run on (`setup_store`; `challenger`, from `challenger_party.main`)
 def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     """Space's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`). By default the node's store is
     set up once, at the smallest point P2's certificates cover (`point_for`): `W` is the node's records at its
-    first period, encoded in up to `SETUP_WORKERS` processes and kept beside the periods (`pous-store`), and every period
+    first period (`records`, the auditor's ledger in them cut to the entries their window cites), encoded in up to
+    `SETUP_WORKERS` processes and kept beside the periods (`pous-store`), and every period
     audits it with fresh coins, so an accepted period certifies `s_bits > 0` at the certificate's `eps`. With
     `{"pous": {"point": "small"}}` in `period.json`, each period sets the period's own records up at the small point
     instead, certifying nothing. The memory challenger is a party of its own on `period.json`'s `challenger_host`
-    (`challenger_party.Party.of`; on this node by default, a process whose key and session log are beside the periods)
-    and the prover is here. With `pous-run-protocol` and `pous-setup` among the period's tools, the Lean answers (the
-    verifier of record) and must agree with the Python; it writes `out/pous.case.json` (onsite's PoUS case),
+    (`challenger_party.side_of`; on this node by default, a process whose key and session log are beside the periods)
+    and the prover is here. With `pous-run-protocol` and `pous-setup` among the period's tools, the Lean verifier
+    answers and must agree with the Python; it writes `out/pous.case.json` (onsite's PoUS case),
     `out/pous.json` and, in a period that set a store up, `out/pous-setup.case.json`. Which host ran each party, and
     whether `trusted-host`'s premise holds (`challenger_party.placement`), go in `pous.json` and in an accepted
     answer's profile (`placement`)."""
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools, small = doc.get("tools") or {}, (doc.get("pous") or {}).get("point") == "small"
     workers = min(SETUP_WORKERS, len(os.sched_getaffinity(0)))
-    party = challenger_party.Party.of(doc, node, Path(period_dir).parent / "pous-challenger")
+    party = challenger_party.side_of(doc, node, Path(period_dir).parent / "pous-challenger")
     where = challenger_party.placement(node, party.host)
     kept = Path(period_dir).parent / "pous-store"
     t = time.monotonic()
@@ -463,11 +593,11 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     q = held.point.params
     (out / "pous.json").write_text(json.dumps({
         "answer": answer, "blocks": q.blocks, "eps": str(period.eps), "lean": lean, "placement": where,
-        "s_bits": period.s_bits, "seconds": seconds, "setup": {"fresh": fresh, "seconds": setup_s if fresh else 0},
-        "w_bytes": q.w_bytes}, sort_keys=True, indent=1))
+        "s_bits": period.public("s_bits"), "seconds": seconds,
+        "setup": {"fresh": fresh, "seconds": setup_s if fresh else 0}, "w_bytes": q.w_bytes}, sort_keys=True, indent=1))
     return answer
 
 
-__all__ = ["PROTOCOL", "SETUP_WORKERS", "Period", "Prover", "SetupInputs", "Store", "answer", "audit", "case",
-           "certificate", "certify", "challenger", "encode", "gaps", "honest", "leg", "point_for",
-           "point_of", "profile", "records", "run", "serve", "setup_case", "setup_inputs", "setup_store", "tie"]
+__all__ = ["LEDGER_SCHEMAS", "PROTOCOL", "SETUP_WORKERS", "Period", "Prover", "Run", "SetupInputs", "Store", "answer",
+           "audit", "case", "certificate", "certify", "challenger", "cite", "cited", "encode", "gaps", "honest", "leg",
+           "point_for", "point_of", "profile", "records", "run", "serve", "setup_case", "setup_inputs", "setup_store", "tie"]

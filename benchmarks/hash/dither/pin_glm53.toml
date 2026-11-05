@@ -1,0 +1,8 @@
+# pin_glm53.sh's records for the two paths it keeps in the node's HF cache: `research keep`'s --owner (a handle) and
+# --expires, and the pin entry's resolved_by (`int8-checkpoint pin --by`).
+owner = "@vllm"
+by = "vllm-dither-requant"
+
+[expires]
+base = "2026-11-06T00:00:00Z"   # the FP8-block base (GLM53)
+pin = "2026-11-20T00:00:00Z"    # the int8 pin (GLM53_INT8)

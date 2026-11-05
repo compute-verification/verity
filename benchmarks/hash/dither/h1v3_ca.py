@@ -1,6 +1,6 @@
-"""The unpeeled one-stream unit of CA's PouwH1Tile_v3 with the exact wrap correction, on words, for this lane's gates:
+"""The unpeeled one-stream unit of PouwH1Tile_v3 with the exact wrap correction, on words, for the dither gates:
 `reference(..., stream=True)`'s z is each cell's O' - sum_d 128^d D_d plus 256 X (wb+ - wb-)^T mod 2^32, X (B + c)^T (v3
-before the peel, cursor/h1-v3-1172 at 5f54fbe355), and the receipt (v1's). The word functions are h1tile's own (wrap_bits,
+before the peel, at 5f54fbe355), and the receipt (v1's). The word functions are h1tile's own (wrap_bits,
 wrap_seg, one_stream, lane_sets, col_wrap: v3's, and v4's); only the unpeeled `stream_cell` and `reference`, which h1tile
 now states peeled (z = A B^T, `peel_seg`), are kept here.
 """
@@ -13,7 +13,7 @@ from verity.core.protocols.pouw.circuit import segment as SG
 from verity.core.protocols.pouw.circuit.h1tile import (FOLD, M32, Layout, col_wrap, fold_keys, lane_sets, noise,  # noqa: F401
                                                        one_stream, wrap_bits, wrap_seg)
 
-SOURCE = "h1tile's word functions; the unpeeled stream_cell and reference of cursor/h1-v3-1172 at 5f54fbe355"
+SOURCE = "h1tile's word functions; the unpeeled stream_cell and reference at 5f54fbe355"
 
 
 def stream_cell(op: int, d: Sequence[int], x_i: Sequence[int], wb_j: Sequence[int]) -> int:

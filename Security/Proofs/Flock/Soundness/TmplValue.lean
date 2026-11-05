@@ -1,9 +1,11 @@
-import Proofs.Flock.Soundness.ExecRowsAt
-import Proofs.Flock.Soundness.TmplUnrollAt
-import Flock.TmplValue
+module
+
+public import Proofs.Flock.Soundness.ExecRowsAt
+public import Proofs.Flock.Soundness.TmplUnrollAt
+public import Flock.TmplValue
 
 /-!
-# A templated unit's committed net, satisfied, composes its Definitions (PRF-133)
+# A templated unit's committed net, satisfied, composes its Definitions
 
 Column values `z` that satisfy the committed net `Tmpl.unrollAt` builds, its whole `2^unitLog`-row slot, read through
 `posMap`'s positions satisfy the template's logical rows (`rowHolds_of_netSat`), so `Flock.TmplValue.rows_eval` applies:
@@ -12,6 +14,8 @@ Definition's value (`Tmpl.evalDef`) on its bound inputs (`unrollAt_eval`). A rea
 (`TmplUnit.eval`). The same holds of the audit's `Rows` of the logical net `Tmpl.unroll` builds (`rowHolds_of_rowsSat`,
 `unroll_eval`), the rows a partition unit is an instance of (`TmplValueUnit`). No verifier path reads this file.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockSoundness.Audit FlockSoundness.SparseRows
 

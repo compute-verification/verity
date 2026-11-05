@@ -1,7 +1,11 @@
-import Proofs.Flock.Claims.ZK.FramePlan
+module
+
+public import Proofs.Flock.Claims.ZK.FramePlan
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 
 /-!
-# The rep's own table against the placeholder's (Stage B, R2)
+# The rep's own table against the placeholder's
 
 The session loop keeps a rep's table as `Finish.tabOfLevel0` of a level 0 that `Level0.ofDraws` drew (`Finish`'s
 `level0` request, `level0Of`), and the placeholder is the same at zero draws. So the rep's own table is of the
@@ -12,6 +16,8 @@ placeholder's shape.
 * `ofDraws_gsize`: `ofDraws` takes a packed witness of exactly level 0's size.
 * `real_tabAlike`: at `RealTabs`, the rep's own table is `TabAlike` the placeholder's (`Sched.tabOfLevel0_alike`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Count
 

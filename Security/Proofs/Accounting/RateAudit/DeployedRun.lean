@@ -1,5 +1,7 @@
-import Proofs.Accounting.RateAudit.Deployed
-import Proofs.Accounting.Remote
+module
+
+public import Proofs.Accounting.RateAudit.Deployed
+public import Proofs.Accounting.Remote
 
 /-!
 # The deployed session as a run of the remote audit: its routes, and conservation at the same `γ`
@@ -7,7 +9,7 @@ import Proofs.Accounting.Remote
 `Accounting.Remote.Run.ofDeployed` reads a deployed session as a run of the remote audit. Its routes:
 
 * `Sampled d̄`: an accepting run whose correct receipts cover less than `(1 − d̄)·n·P·N·b` bits holds at most
-  `⌊(1 − d̄)·n·P·N⌋` correct receipts, the horizon's draw (`DeployedSession.pr_draws_horizon_le`).
+  `⌊(1 − d̄)·n·P·N⌋` correct receipts, the monitoring period's draw (`DeployedSession.pr_draws_horizon_le`).
 * `Paid`: a run whose correct receipts' words exceed its payments and slacks has a window whose do
   (`DeployedSession.pr_unpaid_le`), which each window's bound (`DeployedWindow.pr_unpaid_draw_le`) covers.
 
@@ -16,6 +18,8 @@ import Proofs.Accounting.Remote
 `γ` the deployed game's `Deployed.gammaPass`. The remote model's probability is real (`Pouw.pr`), the game's in `ℝ≥0∞`
 (`Pous.pr`); `pouw_pr_le` carries a bound across.
 -/
+
+@[expose] public section
 
 namespace Accounting.Remote
 
@@ -69,7 +73,7 @@ theorem roErr_toReal (n P G N h q lam : ℕ) :
   simp only [ENNReal.toReal_natCast, ENNReal.toReal_pow, ENNReal.toReal_ofNat]
   ring
 
-/-- **Sampled** for the deployed session's run, at the horizon's draw. -/
+/-- **Sampled** for the deployed session's run, at the monitoring period's draw. -/
 theorem ofDeployed_sampled (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (X : ℕ)
     (Nd : Node (Fin τ)) (a : Audit) (dbar : ℝ) (hn : 0 < n) (hP : 0 < P) (hN : 0 < N) (hb : 0 < b)
     (hdbar : dbar ≤ 1) (hab : a.b = b) (hC : Nd.declared a.T = n * P * N * b) :

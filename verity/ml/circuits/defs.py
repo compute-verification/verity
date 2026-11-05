@@ -23,7 +23,7 @@ from typing import Any, Callable, Sequence
 
 from .ports import bind_ports
 from .refs import Affine, Coll, Concat, Explicit, Refs, Strided, concat
-from .types import Array, Record, Tuple as TupleT, Type, Value, field_at, field_starts, field_types, range_widths, remove_axis
+from .types import Array, RecordType, Tuple as TupleT, Type, Value, field_at, field_starts, field_types, range_widths, remove_axis
 
 StaticValue = Any  # int | str | tuple[int, ...] | FunctionDefinition
 
@@ -166,7 +166,9 @@ def _static_key(v: StaticValue):
         return ("fn", v.id)
     if isinstance(v, (list, tuple)):
         return ("tuple",) + tuple(_static_key(x) for x in v)
-    if isinstance(v, (int, str, bool)) or v is None:
+    if isinstance(v, bool):  # True == 1 and hash(True) == hash(1): untagged, FLAG=1 would hit FLAG=True's entry
+        return ("bool", v)
+    if isinstance(v, (int, str)) or v is None:
         return v
     if isinstance(v, float):
         return ("float", v.hex())
@@ -176,8 +178,8 @@ def _static_key(v: StaticValue):
 
 
 class IdentityConflict(ValueError):
-    """`E_IDENTITY`: two different definitions claim the same fully qualified id within one program (frontend
-    rulings §8.1/§8.3). Never resolved first-wins — neither by the binding cache nor by the codec."""
+    """`E_IDENTITY`: two different definitions claim the same fully qualified id within one program. Never
+    resolved first-wins — neither by the binding cache nor by the codec."""
 
 
 def same_definition(a: "FunctionDefinition", b: "FunctionDefinition") -> bool:
@@ -226,7 +228,7 @@ def bind(F: "CompositeDefinition | SpecializedDefinition", **kw: StaticValue) ->
 
     Specializations are shared through a per-definition cache keyed by the binding record. Function-valued
     statics are keyed by id, so a cache hit whose function references are *different* definitions under the
-    same id is a conflict (ruling §8.1), not a silent reuse of the first body."""
+    same id is a conflict, not a silent reuse of the first body."""
     if isinstance(F, SpecializedDefinition):
         merged = dict(F.bindings)
         merged.update(kw)
@@ -483,7 +485,7 @@ def _cover(t: Type, lo: int, hi: int) -> tuple[Type, int]:
             if (hi - 1 - off) // L != i:
                 return t, off
             t, off = t.elem, off + i * L
-        elif isinstance(t, (Record, TupleT)) and 0 <= lo - off < t.leaves:
+        elif isinstance(t, (RecordType, TupleT)) and 0 <= lo - off < t.leaves:
             starts = field_starts(t)
             i = field_at(t, lo - off)
             if hi - off > starts[i + 1]:

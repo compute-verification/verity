@@ -1,6 +1,8 @@
-import Definitions.Pouw.Basic.Prob
-import Definitions.Pouw.Basic.Mat
-import Definitions.Pouw.Basic.QTree
+module
+
+public import Definitions.Pouw.Basic.Prob
+public import Definitions.Pouw.Basic.Mat
+public import Definitions.Pouw.Basic.QTree
 
 /-!
 # The γ-gap game (trusted; problem statement §3.2–§3.5)
@@ -29,6 +31,8 @@ Simplifications (each listed in `STATEMENTS.md` with its bridge or as a gap):
 * a finite oracle `Q → R` and a uniform salt type `S` (the chain's instance is `Fin (2^128)`);
 * deterministic adversaries (`Definitions/Pouw/Basic/Prob.lean`).
 -/
+
+@[expose] public section
 
 namespace Pouw
 
@@ -105,7 +109,7 @@ structure CostModel (Q R S : Type) where
   cost : Prog → (Q → R) → Workload → (ℕ → Mat) → State → S → ℝ
   calls : Prog → (Q → R) → Workload → (ℕ → Mat) → State → S → ℕ
 
-/-- The model's programs reach `H` only through counted queries (red-team B6): on fixed inputs, a run is the result
+/-- The model's programs reach `H` only through counted queries: on fixed inputs, a run is the result
 of an adaptive oracle program, and `calls` counts that program's queries. -/
 def CostModel.Queries {Q R S : Type} (CM : CostModel Q R S) : Prop :=
   ∀ (prog : CM.Prog) (U : Workload) (act : ℕ → Mat) (σ : State) (s : S), ∃ t : QTree Q R Transcript,

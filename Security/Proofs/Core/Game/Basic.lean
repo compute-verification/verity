@@ -1,9 +1,11 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Basic.ENNReal.BigOperators
-import Mathlib.Basic.ENNReal.Inv
-import Mathlib.Order.CompleteLattice.Basic
-import Definitions.Core.Game
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Basic.ENNReal.BigOperators
+public import Mathlib.Basic.ENNReal.Inv
+public import Mathlib.Order.CompleteLattice.Basic
+public import Definitions.Core.Game
 
 /-!
 # Games: the monad laws, values, and bounds over one coin
@@ -11,6 +13,8 @@ import Definitions.Core.Game
 `value` against the optimal prover bounds every strategy's `prob` (`prob_le_value`), is at most one and monotone in the
 event, and is bounded through a bind or a coin from a bound on each continuation.
 -/
+
+@[expose] public section
 
 namespace Verity
 
@@ -89,10 +93,6 @@ theorem value_mono {p q : α → Prop} (h : ∀ a, p a → q a) : ∀ g : Game �
   | .send _ k => iSup_mono fun m => value_mono h (k m)
   | @Game.coin _ C _ _ k => Finset.sum_le_sum fun c _ => mul_le_mul_right (value_mono h (k c)) _
 
-/-- The uniform average over a finite type. -/
-noncomputable def avg {C : Type} [Fintype C] (f : C → ℝ≥0∞) : ℝ≥0∞ :=
-  ∑ c : C, (Fintype.card C : ℝ≥0∞)⁻¹ * f c
-
 theorem avg_const {C : Type} [Fintype C] [Nonempty C] (x : ℝ≥0∞) : avg (fun _ : C => x) = x := by
   simp only [avg, Finset.sum_const, Finset.card_univ, nsmul_eq_mul, ← mul_assoc]
   rw [ENNReal.mul_inv_cancel (by exact_mod_cast Fintype.card_ne_zero) (ENNReal.natCast_ne_top _),
@@ -109,11 +109,6 @@ theorem avg_add {C : Type} [Fintype C] (f g : C → ℝ≥0∞) :
 theorem avg_mul_const {C : Type} [Fintype C] (f : C → ℝ≥0∞) (x : ℝ≥0∞) :
     avg (fun c => f c * x) = avg f * x := by
   simp only [avg, ← mul_assoc, Finset.sum_mul]
-
-open Classical in
-/-- The probability that a uniform coin satisfies `p`, as an average of indicators. -/
-noncomputable def prCoin {C : Type} [Fintype C] (p : C → Prop) : ℝ≥0∞ :=
-  avg fun c => if p c then 1 else 0
 
 theorem prCoin_eq_card {C : Type} [Fintype C] (p : C → Prop) [DecidablePred p] :
     prCoin p = ((Finset.univ.filter p).card : ℝ≥0∞) / Fintype.card C := by

@@ -1,6 +1,8 @@
-import Mathlib.Data.Finset.Card
-import Mathlib.Data.Finset.Image
-import Mathlib.Data.Set.Pairwise.Basic
+module
+
+public import Mathlib.Data.Finset.Card
+public import Mathlib.Data.Finset.Image
+public import Mathlib.Data.Set.Pairwise.Basic
 
 /-!
 # The cover theorem: the vocabulary
@@ -10,7 +12,7 @@ at most `s` gates, each reading at most `k` bits besides the registered paramete
 The cover theorem bounds how many of training's counted products one block can finish, so that a cover of a
 training circuit needs many blocks. Nothing here reads what a gate computes, only the wiring.
 
-Daniel's covering bound (`Nci.Guarantees.CoveringBoundTwoCosts`) is stated in `Nci.Covering`'s vocabulary, over a
+The covering bound (`Nci.Guarantees.CoveringBoundTwoCosts`) is stated in `Nci.Covering`'s vocabulary, over a
 declaration's gates. This one is the bare wiring, so that it also reads a declaration bit by bit (`Circuit.ofDecl`), and
 its products carry a use and an updated parameter, so that one parameter's many uses (fan-out) and a token's keyed
 lookups (`Keyed`) can be counted. On a declaration's gates the two agree: its inference blocks and covers are
@@ -27,6 +29,8 @@ lookups (`Keyed`) can be counted. On a declaration's gates the two agree: its in
 * `MulBlocks.Upstream`: the upstream certificate, a structural property of the training computation: each use's
   activation is computed, inside a region of its own, from products over at least `D` distinct updated parameters.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover
 

@@ -1,7 +1,7 @@
 """The fused exact linear's gate, and stock vLLM int8's kernels against the same statement, on one GPU.
 
 Shapes: Llama-3.1-8B's qkv [6144, 4096], o [4096, 4096], gate_up [28672, 4096] and down [4096, 14336] at GATE_MS (M = 1,
-7, 16, 32, 33, 64, 256, and with `--shapes all` 2048 and 8192) (`--models` adds Qwen3-8B's gate_up [24576, 4096] and down [4096, 12288]; a shape two models share runs once).  Activations are bf16 with per-channel spread (log-normal channel scales), and from row 0 on (when M allows)
+7, 16, 32, 33, 64, 256, and with `--shapes all` 2048 and 8192) (`--models` adds Qwen3-8B's gate_up [24576, 4096] and down [4096, 12288], or Llama-3.2-1B's qkv [3072, 2048], o [2048, 2048], gate_up [16384, 2048] and down [2048, 8192]; a shape two models share runs once).  Activations are bf16 with per-channel spread (log-normal channel scales), and from row 0 on (when M allows)
 the rows the statement's edges live on: a zero row (the 1e-30 floor), a row whose every entry is +absmax (X = 127
 everywhere, and with weight column 0 = 127 the largest |Y|, 127 * 127 * K), a row of exact ties (absmax 15.875, so s_a =
 0.125 and x / s_a = j + 1/2), a row below the floor (absmax 5e-31), one nonzero entry, a row near 1e30, and a subnormal
@@ -36,8 +36,7 @@ from pathlib import Path
 
 import torch
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import exactlin as X
 
 MODELS = {
@@ -45,6 +44,8 @@ MODELS = {
                                               "down": (4096, 14336)}},
     "qwen3-8b": {"layers": 36, "linears": {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (24576, 4096),
                                           "down": (4096, 12288)}},
+    "llama-3.2-1b": {"layers": 16, "linears": {"qkv": (3072, 2048), "o": (2048, 2048), "gate_up": (16384, 2048),
+                                              "down": (2048, 8192)}},
 }
 LAYERS = MODELS["llama-3.1-8b"]["linears"]
 MS = (1, 32, 256, 2048, 8192)

@@ -1,6 +1,6 @@
 """`verity.ml.definitions.registry.sampling_rows` — the vectorised twins of the sampler Definition are WORD-EQUAL to the registered scalar
-evaluators and to the lane-walk `evaluate_spec(GumbelTopPTokenSelect_v1)`; on the R16 GPU fixture rows both equal the device's
-served token and the device kernel's masked row.  [R17 stoch, COORD R17-34 (3) lever (a)]  CPU only; the `div.full` model
+evaluators and to the lane-walk `evaluate_spec(GumbelTopPTokenSelect_v1)`; on the GPU fixture rows both equal the device's
+served token and the device kernel's masked row.  CPU only; the `div.full` model
 (TemperatureScale) needs the in-tree MUFU tables (`rms_relation.tables`) -- those tests skip without them, the noise / log / select tests do not.
 """
 from __future__ import annotations
@@ -59,7 +59,7 @@ def _pairs(n: int = 30000):
 
 
 def test_add_rz_ftz_v1_model_equals_the_registered_v1_scalar_and_is_rn_on_every_word_pair():
-    """F-stoch-r17-01: the evaluator REGISTERED in GumbelNoiseLane_v1 (`add_rz_ftz_v1_model`) is RN (its toward-zero step is a no-op)
+    """The evaluator REGISTERED in GumbelNoiseLane_v1 (`add_rz_ftz_v1_model`) is RN (its toward-zero step is a no-op)
     and the twin reproduces it word for word -- both asserted so a change of the v1 function is noticed (v1 records depend on it)."""
     a, b = _pairs()
     v = SR.add_rz_ftz_v1_model(a, b)
@@ -95,8 +95,8 @@ def _rz_ref(x: int, y: int) -> int:
 
 
 def test_add_rz_ftz_is_true_toward_zero_against_an_exact_fraction_reference_and_differs_from_the_rn_model_where_it_must():
-    """The F-stoch-r17-01 fix: `add_rz_ftz` (scalar and twin) equals an exact-arithmetic toward-zero reference on every pair, and
-    differs from the RN model on a large share of inexact sums (revb M-0603 measured 21.5 % on random pairs) -- the branch is alive."""
+    """The true toward-zero add: `add_rz_ftz` (scalar and twin) equals an exact-arithmetic toward-zero reference on every pair, and
+    differs from the RN model on a large share of inexact sums (21.5 % of random pairs) -- the branch is alive."""
     a, b = _pairs(6000)
     v = SR.add_rz_ftz(a, b)
     n_diff = 0
@@ -123,7 +123,7 @@ def test_add_rz_ftz_is_true_toward_zero_against_an_exact_fraction_reference_and_
     assert SP.add_rz_ftz(0x3F800000, 0xBF800000) == 0 and SP.add_rz_ftz(0x80000000, 0x80000000) == 0x80000000
 
 
-# [F-stoch-r17-01, the exhaustive fact] inside `__nv_log1pf` the `__fadd_rz(a, 1)` word feeds ONLY the binade selector
+# The exhaustive fact: inside `__nv_log1pf` the `__fadd_rz(a, 1)` word feeds ONLY the binade selector
 # e = (s - 0x3F400000) & -2^23, so the RN model and the true RZ can change the output only where RN(1 + a) lands exactly on a selector
 # boundary 0.75 * 2^k that RZ stays under.  Scanning every fp32 word (test below, opt-in; 2^32 words in ~100 s vectorised):
 #   a in (-1, 0)   [the Gumbel lane's whole domain, a = -u]: the SUM differs on 939,524,097 words, e on ONE (0xBE800001), the log1pf
@@ -132,7 +132,7 @@ def test_add_rz_ftz_is_true_toward_zero_against_an_exact_fraction_reference_and_
 #                  (true log1p = 0.4054650882; the RZ word is the nearer one -- libdevice's own result);
 #   a <= -1: e differs on 104 words, the log1pf word (NaN / -inf) on none.
 # So GumbelNoiseLane_v1 is the same function under the fix and the evaluator was not moved off its record; the registered semantics
-# never changed and no version bump is owed (stoch M-06xx, revb M-0603 premise corrected).
+# never changed and no version bump is owed.
 LOG1PF_ONLY_DIFFERING_WORD = 0x3EFFFFFF
 LOG1PF_E_DIFFERING_WORD_IN_LANE_DOMAIN = 0xBE800001
 
@@ -142,7 +142,7 @@ def _e_of(s: int) -> int:
 
 
 def test_nv_log1pf_true_rz_vs_the_rn_model_the_one_differing_word_is_positive_and_the_lane_domain_has_none():
-    """revb M-0603's required test, with the fact the scan established: the constructed pair where RN and RZ give DIFFERENT log1pf
+    """What the scan established: the constructed pair where RN and RZ give DIFFERENT log1pf
     words is a = +0.49999997 (0x3EFFFFFF) -- RN(1 + a) = 1.5 exactly (the 0.75 * 2 selector boundary), RZ = 1.5 - ulp -- and it is the
     only such word in fp32; a Gumbel draw never forms it (the lane feeds -u).  In the lane's domain the single word where the
     selector itself moves (0xBE800001: RN(1 + a) = 0.75 exactly) yields the same log1pf word on both paths."""
@@ -240,7 +240,7 @@ def test_the_logs_outside_their_domain_are_one_pinned_nan_on_every_path():
         (0xFF800000, 0xFF800000, 0x80000000, 0xFF800000)
 
 
-#: the probe's edge words (art:e5dd6ce9..., the L40S and the H100, every FTZ build alike): input -> the GPU's output
+#: the probe's edge words (`PROBE`: the L40S and the H100, every FTZ build alike): input -> the GPU's output
 PROBE_EDGES = {"nv_logf": {0xBF800000: 0x7FFFFFFF, 0x80000000: 0xFF800000, 0x80400000: 0xFF800000, 0x80000001: 0xFF800000,
                            0x807FFFFF: 0xFF800000, 0xFF7FFFFF: 0x7FFFFFFF, 0xFF800000: 0x7FFFFFFF},
                "nv_log1pf": {0xC0000000: 0x7FFFFFFF, 0xBF800000: 0xFF800000, 0xBF800001: 0x7FFFFFFF, 0xFF800000: 0x7FFFFFFF,
@@ -309,7 +309,7 @@ def test_philox_stream_key_and_the_noise_row_match_the_scalar_registry_lane_for_
         nr = SR.noise_row(key, V)
         ref = np.array([SP.noise_lane(key, v) for v in range(V)], dtype=np.uint32)
         assert nr.dtype == np.uint32 and nr.shape == (V,) and int((nr != ref).sum()) == 0, key
-        # the noise lane under the RN model of record up to R17 is the same lane: no word moved (the exhaustive fact, sampled here)
+        # the noise lane under the earlier RN model of record is the same lane: no word moved (the exhaustive fact, sampled here)
         u = SR.rand_row(key, V)
         l_rn = SR.nv_log1pf_v1_model(SR._u32(u) ^ np.uint32(0x80000000))
         g_rn = SR.nv_logf(l_rn ^ np.uint32(0x80000000)) ^ np.uint32(0x80000000)
@@ -376,7 +376,7 @@ def test_the_whole_row_equals_the_lane_walk_evaluate_spec_over_temps_top_p_split
 @needs_tables
 @pytest.mark.slow
 def test_the_r16_gpu_fixture_rows_device_token_masked_row_and_lane_walk_all_agree_with_the_vectorised_row():
-    """Three real rows of the llama B8 stoch record (`fstoch01_rows.npz`, cp-dev1 L40S, vLLM d9105ea80): the device's served token,
+    """Three real rows of the llama B8 stochastic record (`fstoch01_rows.npz`, an L40S, vLLM d9105ea80): the device's served token,
     the kernel-consumed masked row, seed / pos / temperature / top_p as the kernel read them.  The vectorised row reproduces the
     served token AND every lane of the masked row; the lane walk is run on one of them (10 s) as the reference beside it."""
     from verity_vllm.properties.admission import evaluate_spec

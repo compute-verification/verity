@@ -1,4 +1,4 @@
-// The FP4-path mma.sync rows on sm_120a (lane pouw rtx-pro GPU 4): one mnemonic per RowKind, shared by the probe's generic kernel
+// The FP4-path mma.sync rows on sm_120a: one mnemonic per RowKind, shared by the probe's generic kernel
 // (mma_fp4.cu, row_tiles_kernel) and the W1 price loops (w1_price.cu), so the rate is measured on the instruction the capture gates.
 //
 // Operand registers: a[4] and b[2] as the PTX fragment layouts in mma_fp4.cu's header; K = 64 kinds read E2M1 nibbles, K = 32 kinds

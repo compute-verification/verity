@@ -1,10 +1,11 @@
-import Definitions.Accounting.TS.SharedNoise
+module
+
+public import Definitions.Accounting.TS.SharedNoise
 
 /-!
 # One noise seed a call: the bridge and the grid's moment
 
-J10 (note:compute-accounting/20261019T0825Z-draft-j10-shared-noise; red team
-note:compute-accounting/20261019T1054Z-finding-j10-redteam).
+J10's guarantees: H1 + fx1's noise derived from one seed a call (`Definitions.Accounting.TS.SharedNoise`).
 
 * `CondReceiptLuckMarginal`: luck given the rest implies the marginal luck. At `CallCoin.keySplit t` it turns the keys'
   argument for B′ into the marginal `ReceiptLuck` that `PerTile … ReceiptLuckAt` reads (`Definitions.Accounting.TS.
@@ -21,13 +22,15 @@ note:compute-accounting/20261019T1054Z-finding-j10-redteam).
   leaves each unit's `E[φ^{n/r}]`, which is the condition. `TileLuck` has `n` where this has `n/r`, because it lets
   dead events of different rows correlate; h1tile's dead events read one row's dither, so they don't. Both hypotheses
   are load-bearing: with every row's dead event on one coin, or a row's lucky events made one event, h1tile's decode
-  grid has log-moment 233.8 at the rate below (note:compute-accounting/20261019T1054Z-finding-j10-redteam).
+  grid has log-moment 233.8 at the rate below.
 * `GridTemplateCondition` and `GridTemplateMoment`: `GridLuck` at h1tile's template (`q = 2^{-w}`, `p = ½`, `κ = 4`,
   `w ≤ 32`) at `r·θ = 1/(4·max(64, n/r))`: `θ = 1/(4·max(64·r, n))` a product. The column streams carry the row
   block, so a call's grid splits into independent blocks of one row block by one band: `r = 32` rows and `n = 32·g`
   columns, `g ≤ 64` tiles a band. There `θ = 1/(256·32)`, `TemplateMoment`'s rate at one tile, for every `g ≤ 64` and
   every number of row blocks: banded, one seed a call costs the seeded premium nothing.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

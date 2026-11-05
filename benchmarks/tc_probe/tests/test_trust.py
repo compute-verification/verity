@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("research.store.local")
-from research.store.local import LocalStore  # noqa: E402
+from research.store.local import LocalStore
 
 TC_PROBE = Path(__file__).resolve().parents[1]
 if str(TC_PROBE) not in sys.path:
@@ -326,7 +326,7 @@ def test_open_d_entry_blocks_trusted(store, repo):
 
 def test_red_team_downgrade_label_blocks_trusted(store, repo):
     trusted(store)
-    art = hw(store, elements=1000, extra_labels=(("trust_downgrade", "red-team-3: verifier rejected an honest run"),))
+    art = hw(store, elements=1000, extra_labels=(("trust_downgrade", "verifier rejected an honest run"),))
     rep = assess("FP8_ADA_MMA", store, repo=repo)
     assert rep.level == "PINNED"
     assert not crit(rep, "Tf").passed and any(art in m for m in rep.missing_to_next)
@@ -452,7 +452,7 @@ def test_td_accepts_a_contract_pinned_recipe_digest(store, repo, monkeypatch):
     real = trust._contract_instance_sets(trust.subjects("FP8_ADA_MMA"))
     assert real == [] or (real[0].contract and real[0].name == "bench-instances-fp8-ada/v1" and len(real[0].sha256) == 64)
     # a recipe may declare its family composition (<PREFIX>_INSTANCES_FAMILIES): the corner families Tc's edge predicate reads,
-    # `random` excluded (lane fp4-proof: the NVFP4 set's 14 VU families)
+    # `random` excluded (the NVFP4 set's 14 proof-block families)
     fake4 = types.SimpleNamespace(NVFP4_INSTANCES_DATASET="bench-instances-nvfp4-sm120/v1", NVFP4_INSTANCES_TIER="vu-k1536-nvfp4-sm120",
                                   NVFP4_INSTANCES_DIGEST="d2" * 32, NVFP4_INSTANCES_FAMILIES={"random": 293, "zero-scales": 293, "cancel": 292})
     ds4 = trust._contract_instance_sets(trust.subjects("NVFP4_SM120"), contract=fake4)
@@ -644,7 +644,7 @@ def test_tc_probe_tool_declaration_keys_the_canary_flag():
 
 def test_a_capture_replay_counts_the_model_and_the_other_tile_positions() -> None:
     """``tc_probe --replay-capture`` compares the hardware with the recorded words and with the declared model; a replay is clean only
-    if all three counts are zero (lane wgmma-bf16: veritor's H100 wgmma capture, the reference of sm90.wgmma.m64n8k16.bf16)."""
+    if all three counts are zero (veritor's H100 wgmma capture, the reference of sm90.wgmma.m64n8k16.bf16)."""
     clean = {"file": "verity/ml/circuits/ops/tests/fixtures/tc-hopper-2026-09-07/special.reduced.json.gz", "records": 44046, "mismatches": 0,
              "model_mismatches": 0, "other_positions_nonzero": 0, "pipeline": "veritor tc-hopper-2026-09-07"}
     assert trust._replay_summary("capture_replay", clean)["mismatches"] == 0

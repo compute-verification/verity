@@ -1,4 +1,4 @@
-// W1 price microbenchmarks on sm_120a (lane pouw rtx-pro GPU 4): the sustained issue rate and the dependent-chain latency of each
+// W1 price microbenchmarks on sm_120a: the sustained issue rate and the dependent-chain latency of each
 // FP4-path mma.sync row of rows_fp4.cuh, with register-resident operands (benchmarks/native_peak/mma_peak_fp4.cu's pattern).
 //
 //   price_tput_kernel<KIND, MODE>  NSETS operand sets rotate through NACC independent accumulators: the `#pragma unroll 1` body is

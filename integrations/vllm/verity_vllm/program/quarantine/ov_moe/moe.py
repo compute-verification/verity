@@ -1,4 +1,4 @@
-"""Lane ov-moe's provisional MoE definitions -- PROMOTED to `verity.ml.definitions.registry.moe` (R13 lane moe, MOE-01). This module re-exports them
+"""The `ov_moe` quarantine's MoE definitions -- PROMOTED to `verity.ml.definitions.registry.moe`. This module re-exports them
 so the ov-moe difftest adapters and the `gen_ov_moe_patterns` eager profile keep working; the ids are unchanged (same names / versions)."""
 from __future__ import annotations
 

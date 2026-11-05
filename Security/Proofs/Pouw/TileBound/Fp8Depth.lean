@@ -1,9 +1,11 @@
-import Definitions.Pouw.TileBound.Defs
-import Mathlib.Tactic.IntervalCases
-import Definitions.Pouw.TileBound.Fp8Defs
+module
+
+public import Definitions.Pouw.TileBound.Defs
+public import Mathlib.Tactic.IntervalCases
+public import Definitions.Pouw.TileBound.Fp8Defs
 
 /-!
-# When a ⟨2,2,2⟩ recursion could pay at E4M3, and the output region it needs (the TT_OUT restatements lane)
+# When a ⟨2,2,2⟩ recursion could pay at E4M3, and the output region it needs
 
 A recursion of `L` levels of ⟨2,2,2⟩ at rank 7 (Strassen–Winograd) runs `(7/8)^L` of the MACs in its sub-products. In a
 format priced `p` against E4M3's 1 it can undercut the honest E4M3 chain only if `p·(7/8)^L < 1`, and each level halves k,
@@ -23,6 +25,8 @@ smaller depths, over other regions and shorter windows. The region family that `
 computed over all of them (the restatements report §7). These theorems are arithmetic on the model's prices for
 ⟨2,2,2⟩ recursion, not lower bounds for general bilinear algorithms.
 -/
+
+@[expose] public section
 
 namespace Pouw.TileBound
 

@@ -1,10 +1,12 @@
-import Definitions.Accounting.Guarantees.TS
-import Definitions.Accounting.Assumptions.Stages
+module
+
+public import Definitions.Accounting.Guarantees.TS
+public import Definitions.Accounting.Assumptions.Stages
 
 /-!
 # Sampled proofs under per-stage coins (trusted)
 
-STEER-PROOF's route A (note:20261018T0303Z-draft-steer-proof), each `def G : Prop` proved as
+STEER-PROOF's route A, each `def G : Prop` proved as
 `Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.TS.Stages`:
 
 * `SampledBudget`: a sampled window with `s ≥ 2` draws a round whose share is at most `r` times the draws' mass on saved
@@ -22,6 +24,8 @@ probability `p` gives `E[e^{d/Λ}·1{pass}] = p^{−m}·(1 − (1 − p)·m) > 1
 (`Pouw.RelativeSecurity.RoundGame.Staged`) covers one draw a round, at `Λ = 1/(1 − p)`, for skips fixed before the
 draw.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

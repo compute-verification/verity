@@ -1,4 +1,4 @@
-"""``sm90.wgmma.m64n8k16.bf16`` against lane wgmma-bf16's H100 capture (``fixtures/tc-hopper-wgmma-bf16-2026-09-26``, see the
+"""``sm90.wgmma.m64n8k16.bf16`` against the H100 capture (``fixtures/tc-hopper-wgmma-bf16-2026-09-26``, see the
 fixtures README): every recorded word reproduces through the registered model's total step, one wgmma per record or four
 chained on one accumulator, on both A operand paths; the Ampere pipeline does not.  A run of the legacy ``mma.sync.m16n8k16``
 on a second H100 against the same model shows the two instructions compute the same words, non-finite ones included."""
@@ -9,6 +9,7 @@ import gzip
 import json
 from pathlib import Path
 
+from verity.errors import InvalidArtifact
 from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
 from verity.ml.circuits.silicon.models import HOPPER_BF16_M16N8K16, HOPPER_BF16_WGMMA_K16, MODELS, tc_dot_chain
 from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16
@@ -61,8 +62,8 @@ def test_finite_chains_agree_with_tc_dot_chain() -> None:
             continue
         try:
             assert tc_dot_chain(HOPPER_BF16_WGMMA_K16, acc, a, b) == int(r["d"], 16), r
-        except Exception as exc:  # the finite model refuses an intermediate infinity; the total step covers those
-            assert type(exc).__name__ == "InvalidArtifact", exc
+        except InvalidArtifact as exc:  # the finite model refuses an intermediate infinity; the total step covers those
+            assert _step_total(HOPPER_BF16_WGMMA_K16, acc, a, b) == int(r["d"], 16), (r, exc)
 
 
 def test_the_capture_separates_hopper_from_ampere() -> None:

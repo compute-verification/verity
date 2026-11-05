@@ -1,7 +1,11 @@
-import Definitions.Core.Partition
-import Definitions.Core.Declaration
+module
+
+public import Definitions.Core.Partition
+public import Definitions.Core.Declaration
 
 /-! # What correct units establish about a circuit, for gates of any width -/
+
+@[expose] public section
 
 namespace Verity.Guarantees
 
@@ -22,7 +26,7 @@ def CorrectOfOpening : Prop :=
   ∀ (C : Circuit) (n : ℕ) (P : Partition C n) (X Y : C.Transcript) (u : Fin n),
     (∀ g ∈ P.io u, X g = Y g) → (P.Correct X u ↔ P.Correct Y u)
 
-/-- Under a refinement, a transcript that agrees with another on the coarse committed wires has at least as many wrong
+/-- Under a refinement, a trace that agrees with another on the coarse committed wires has at least as many wrong
 fine units as the other has wrong coarse units. -/
 def RefineWrong : Prop :=
   ∀ (C : Circuit) (nf nc : ℕ) (Pf : Partition C nf) (Pc : Partition C nc), Pf.Refines Pc →

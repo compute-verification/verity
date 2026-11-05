@@ -7,7 +7,7 @@ lookup (`find_hf_config`, `checkpoint_entry`, `hf_snapshot`) and the module name
 Why: a Mistral-7B Build passed but Match said "no profile module declares case 'MISTRAL7B'".
 The κ machinery was already configuration-only in the model dimension (`build_profile(analytic.config_of(config.json))`, D72) —
 but a hand-authored MODULE per role was still required (`profiles.PROFILE_BY_CASE` / the `PROFILE.notes["case"]` scan), so the
-profile was in effect keyed to the model NAME.  Daniel's rule: applicability comes from the selected kernels and the target facts,
+profile was in effect keyed to the model NAME.  The rule: applicability comes from the selected kernels and the target facts,
 not from an allowlist of names.  This module removes the name: `verity_vllm.observe.fold.profiles.dense_<ROLE>` is materialised on import
 (a `sys.meta_path` finder in `profiles/__init__.py`) from the role's HF `config.json` — every consumer that does
 `importlib.import_module(f"verity_vllm.observe.fold.profiles.{name}")` (resolve_log, compare, gates, run_config, fold, cb_a) works

@@ -3,8 +3,8 @@
 # the pin rewrites sass_pins.json):
 #
 #   tar -C BUILD_RUN/out/ship -cf /tmp/ship.tar .
-#   research run --on vy-dc-h200 --project verity --campaign pouw --source . --cwd clone --timeout 240m \
-#     --env GPU_LEASE_WHO=kernels-pc90 --send /tmp/ship.tar -- bash benchmarks/pouw/pearl_c_sm90/h200.sh
+#   research run --on MACHINE --project verity --source . --cwd clone --timeout 240m \
+#     --env GPU_LEASE_WHO=LANE --send /tmp/ship.tar -- bash benchmarks/pouw/pearl_c_sm90/h200.sh
 #
 # Outside any lease: the ship (build.sh's tree) unpacked into this directory and held to its MANIFEST.sha256, nvcc and the
 # card recorded.  Under one lease of at most LEASE_MIN minutes (default 60): run.py's check at the fixture's shape with its
@@ -15,7 +15,7 @@
 # (PIN=1, the default) harness/jobs/pin_target.sh pins this nvcc for sm_90a as TK (default 13.0.1-sm_90a) on its own lease, and
 # (VERIFY=1, the default) glm53_passes.py verify replays the passes on this machine's CPUs, after every lease is released, and
 # (FULL=1, the default) glm53_passes.py full checks prefill's and decode's outputs in full there (every tile's C~ and U by its
-# leaf, every real row's served y): about 17 CPU-hours of vy-nebius-cpu-4's (13 min at --jobs 96), so FULL=0 leaves it to a
+# leaf, every real row's served y): about 17 CPU-hours (13 min on a CPU pod at --jobs 96), so FULL=0 leaves it to a
 # run elsewhere on the published passes.
 # VERITY_BENCH_VENV names the Python with torch and vLLM (default /workspace/cp/venv312), CUDA the toolkit (default
 # /usr/local/cuda-13.0).  Every step's exit code is in $OUT/rc.txt; exits non-zero if any step failed.
@@ -24,7 +24,7 @@ O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
 D=benchmarks/pouw/pearl_c_sm90
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
-export PATH=$CUDA/bin:$PATH PYTHONPATH=$PWD:$PWD/integrations/vllm:$PWD/benchmarks/pouw${PYTHONPATH:+:$PYTHONPATH}
+export PATH=$CUDA/bin:$PATH PYTHONPATH=$PWD:$PWD/tools/config:$PWD/integrations/vllm:$PWD/benchmarks/pouw${PYTHONPATH:+:$PYTHONPATH}
 SHAPES=""
 for nk in 2624x6144 2048x2048 6144x2048 4096x2048 3072x6144 6144x1536 512x6144 6144x256 4096x6144; do
   SHAPES="$SHAPES 64x$nk 8192x$nk"

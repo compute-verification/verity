@@ -1,15 +1,15 @@
-"""The expected values of J10-R's units at the frozen shape (HASH-22), from the Definition itself: for each (linear, M)
-of `shape` and each sampled unit (`shape.picks`), `h1tile.j10r_reference` (`PouwH1Tile_v5`) on the unit's 32 rows of A
+"""The expected values of J10-R's proof blocks at the frozen shape, from the Definition itself: for each (linear, M)
+of `shape` and each sampled proof block (`shape.picks`), `h1tile.j10r_reference` (`PouwH1Tile_v5`) on its 32 rows of A
 and of B gives its z (32 x 32, mod 2^32) and its receipt (2 (K / 32 + m) u32), under seed_c = `seeds.call_seed`(salt,
-base, roots) at the unit's `j10r_blocks` and sigma_R = `seeds.receipt_seed`(salt, base + u, roots). `--v6` units a call
+base, roots) at its `j10r_blocks` and sigma_R = `seeds.receipt_seed`(salt, base + u, roots). `--v6` proof blocks a call
 also go through `PouwH1Tile_v6` (stream=True), whose z and receipt must be v5's.
 
     python fixtures.py expected --out OUT [--jobs 16] [--ms 4096,16384] [--linears q,kv,o,up,down,head] [--picks 16] [--v6 2]
 
 OUT/expected.npz holds, per call "<linear>-<M>": units (S,) int64, receipts (S, W) uint32, z (S, 32, 32) uint32,
-seed_c (64,) uint8 and sigma (S, 64) uint8; OUT/fixtures.json the calls' public inputs, each sampled unit's operand
+seed_c (64,) uint8 and sigma (S, 64) uint8; OUT/fixtures.json the calls' public inputs, each sampled proof block's operand
 digests (the sha256 of its 32 rows of A and of B, which `check.py` holds the regenerated operands to), the arrays'
-sha256 and the Definition's source digests. A pure-Python unit takes about 7 s at K = 16384 and 27 s at K = 65536.
+sha256 and the Definition's source digests.
 """
 from __future__ import annotations
 
@@ -23,8 +23,7 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import shape as S
 
 from verity.core.protocols.pouw.circuit import h1tile as HT
@@ -39,7 +38,7 @@ def key(linear: str, m: int) -> str:
 
 
 def unit_expected(job: tuple) -> dict:
-    """One sampled unit through j10r_reference (v5; with v6, PouwH1Tile_v6 too)."""
+    """One sampled proof block through j10r_reference (v5; with v6, PouwH1Tile_v6 too)."""
     linear, m, u, v6 = job
     c = S.call(linear, m)
     ra, rb = bytes.fromhex(c["root_a"]), bytes.fromhex(c["root_b"])

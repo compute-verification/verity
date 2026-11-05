@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import fixture as FX  # noqa: E402
-import roofline as RF  # noqa: E402
+import fixture as FX
+import roofline as RF
 
 P, B = 800.0, 1800.0
 MS = [1, 16, 64, 128, 192, 256, 384, 512, 1024, 4096]

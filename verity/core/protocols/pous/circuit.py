@@ -1,4 +1,4 @@
-"""P2's modular squaring as a Boolean circuit: x ↦ x² mod p for p = 2^W − C0, the step P2's decode does twice per block
+"""P2's modular squaring as a Boolean circuit: x ↦ x² mod p for p = 2^W − C0, the step P2's decode does twice per label
 (`schemes.p2`: ``m = sq(σ_K(sq(c))) − t mod p``), so that PoUS's setup can be proved over committed data.
 
     PousModSquare_v1{W, C0}   (x: Array<W, Value<1>>) -> Array<W, Value<1>>      x² mod (2^W − C0), every x < 2^W

@@ -1,4 +1,6 @@
-import Definitions.Nci.Remote
+module
+
+public import Definitions.Nci.Remote
 
 /-!
 # The compute dampener, remote protocol: the named assumptions
@@ -9,11 +11,13 @@ and the escape slack on sampled proofs catching each faulty block whatever came 
 [SAMPLED-DETECTION]), from which `Nci.SecurityProofs.sampled_escape` bounds what each identity's escaped blocks skip.
 -/
 
+@[expose] public section
+
 namespace Nci.Assumptions
 
 open Nci.Dampener
 
-/-- **PoUW's certificates are sound** ([POUW-SOUND]; PoUW's `CircuitCredit`, draft #2638): over the outcomes `Ω` of a
+/-- **PoUW's certificates are sound** ([POUW-SOUND]; PoUW's `CircuitCredit`): over the outcomes `Ω` of a
 deployment, drawn from `μ` (the verifier's coins, the developer's strategy fixed), the certificate of each of the `N`
 windows is wrong (`wrong ω i`: it credits more of that window's work than ran, beyond its deficit `ε`) with probability
 at most `p`, `3 · 2⁻⁴⁰` per window. It bounds each window's marginal only: it says nothing about how windows depend on

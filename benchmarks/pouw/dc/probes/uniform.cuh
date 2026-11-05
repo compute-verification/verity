@@ -1,8 +1,8 @@
-// EPS1 DC r4: the uniform datapath on sm_90a and sm_100a, built as opcode_probe's uniform.cu and uniform_up.cu are
-// (FACET-BREAK, note:20261017T0524Z-draft-eps1-facet-break): 16 warps (4 a SMSP, one block a SM), K uniform instructions
-// an iteration on eight warp-uniform chains seeded from a parameter and carried around the loop, and every vector setting
-// inside the honest step (8 IMMA m16n8k32, duo on each accumulator), the one place ptxas 13.0 keeps a chain on the uniform
-// datapath. sm90_uniform.cu and sm100_uniform.cu pin each loop's counts exactly, so a chain that lands on lanes refuses.
+// The uniform datapath on sm_90a and sm_100a, built as opcode_probe's uniform.cu and uniform_up.cu are: 16 warps (4 a
+// SMSP, one block a SM), K uniform instructions an iteration on eight warp-uniform chains seeded from a parameter and
+// carried around the loop, and every vector setting inside the honest step (8 IMMA m16n8k32, duo on each accumulator),
+// the one place ptxas 13.0 keeps a chain on the uniform datapath. sm90_uniform.cu and sm100_uniform.cu pin each loop's
+// counts exactly, so a chain that lands on lanes refuses.
 //   u<F>_<K><S>  F, the fixed stream: z none (alone: the honest MMAs unread, which ptxas deletes after placing the chain);
 //                h the honest step (beside duo's fold); g h + 64 FFMA reading the accumulators (issue binds); l h + 32
 //                LOP3 reading them (the ALU pipe binds harder); m 32 IMMA and one fold (mma.sync binds the tensor pipe

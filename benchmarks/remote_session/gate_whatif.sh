@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The what-if line beside a gate run's line of record (gate_whatif.py), read from recorded artifacts only, so on any
-# node and with no gate key: the host run SUB (its directory as vy-auditor-1 ships it, out/ beside request.json) inside
+# node and with no gate key: the host run SUB (its directory as the verifier host ships it, out/ beside request.json) inside
 # the verifier run's artifact RUN_ART (SUB unset: out/ at the artifact's root, as a gate run before host runs ships it),
 # the ledger head and pins log the auditor run AUDITOR_ART read through the gate key (auditor.sh's out/ledger.jsonl and
 # out/pins.jsonl), and the prover run PROVER_ART's out/prover.json. PERIOD and
@@ -10,9 +10,8 @@
 # ($OUT/auditor_line.json, $OUT/credit.md) and the replay ($OUT/gate_whatif.json, $OUT/whatif.md), and exits 1 when a
 # session replayed at its own round trip isn't its record.
 #
-#   research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 16 --timeout 30m --store-read \
-#     --env RUN_ART=art:... --env SUB=out/host/vID --env AUDITOR_ART=art:... --env PROVER_ART=art:... \
-#     --env PERIOD=P --env PIN=SHA512 --env COMMIT=SHA -- bash benchmarks/remote_session/gate_whatif.sh
+#   OUT=OUT RUN_ART=art:... SUB=out/host/vID AUDITOR_ART=art:... PROVER_ART=art:... PERIOD=P PIN=SHA512 COMMIT=SHA \
+#     bash benchmarks/remote_session/gate_whatif.sh      # from a clone's root
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 S=$(mktemp -d)
@@ -30,7 +29,7 @@ fetch "${RUN_ART:?}" --to "$S/run" --path "${P}request.json" --path "${P}out/ver
 fetch "${AUDITOR_ART:?}" --to "$S/aud" --path out/ledger.jsonl --path out/pins.jsonl
 fetch "${PROVER_ART:?}" --to "$S/prover" --path out/prover.json
 MAIN=()
-# main's first-parent line, fetched as auditor.sh does, where this tree's auditor_line.py takes it (--main, CMP-74)
+# main's first-parent line, fetched as auditor.sh does, where this tree's auditor_line.py takes it (--main)
 if uv run python "$HERE/auditor_line.py" --help | grep -q -- '--main FILE'; then
   UNSHALLOW=()
   [ "$(git -C "$HERE" rev-parse --is-shallow-repository)" = true ] && UNSHALLOW=(--unshallow)

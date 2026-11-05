@@ -1,11 +1,13 @@
-import Proofs.Flock.Recursive.Guarantees
-import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Hides
-import Proofs.Flock.Verifier.Registered
+module
+
+public import Proofs.Flock.Recursive.Guarantees
+public import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Hides
+public import Proofs.Flock.Verifier.Registered
 
 /-!
 # Proofs of the recursive audit's circuit privacy, and that it ran the registered private circuit
 
-* `recursiveCircuitPrivate_le` is `circuit_private_of_zk`'s argument with `RecursiveZK` as the step: at each
+* `recursiveCircuitPrivate_le`, with `RecursiveZK` as the step: at each
   registration salt `r`, `RecursiveZK` at an hm96 hiding bound `δ` (`recursiveZK_le`; and, for the other way, the same
   on the event's complement) moves
   the firewall's commitments and V*'s sessions to the ideal leaves and V*'s simulator, which read `r` only through the
@@ -27,6 +29,8 @@ import Proofs.Flock.Verifier.Registered
   string), and two of one port at `i` to different rows collide, in hm96's leaf (`ExplicitLeaf.hm96`) or along the
   registered path (`Flock.Registered.opensLeaf_binding`).
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

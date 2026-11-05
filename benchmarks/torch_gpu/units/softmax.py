@@ -1,4 +1,4 @@
-"""Softmax over one QK^T row in circuits' form (CMP-92's plan, section 1; the CMP-96 replay's SoftmaxMax_v1,
+"""Softmax over one QK^T row in circuits' form (the CPU replay's SoftmaxMax_v1,
 SoftmaxRecip_v1 and SoftmaxOut_v1): units_softmax, one thread per row of 32 words (a CTA's 128 rows come in and go out
 as uint4s through shared memory), and its twin.
 

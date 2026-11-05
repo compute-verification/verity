@@ -1,7 +1,9 @@
-import Definitions.Pouw.PearlC.DeviceFp4Issue
+module
+
+public import Definitions.Pouw.PearlC.DeviceFp4Issue
 
 /-!
-# Pearl-C4's chain-only reading at an FP4 record (the price-twins lane's file; definitions only, staged)
+# Pearl-C4's chain-only reading at an FP4 record (definitions only, staged)
 
 The forming-credit reading credits the salt-dependent forming (`fs` per activation element). The chain-only reading
 credits the unit without it, as `creditChainOnly` does at the H100 and `DeviceChainOnly` does for FP8: `creditFp4` less
@@ -9,6 +11,8 @@ credits the unit without it, as `creditChainOnly` does at the H100 and `DeviceCh
 `creditFp4 − fs·m·k − ρ·creditFp4`, and per tile the fixed credit is that times the credited rows' share. `W_ref` and
 every other field are the record's. TT_OUT at these protocols is stated in `TTOutFp4ChainOnly`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

@@ -1,9 +1,11 @@
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Ring
-import Proofs.Pouw.PearlC.Forming
-import Proofs.Pouw.PearlC.Freeze
+module
+
+public import Mathlib.Tactic.Linarith
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.NormNum
+public import Mathlib.Tactic.Ring
+public import Proofs.Pouw.PearlC.Forming
+public import Proofs.Pouw.PearlC.Freeze
 
 /-!
 # P3: the atom-mix's `PairErr` (staging)
@@ -22,6 +24,8 @@ This file proves it on Pearl's flat pairs, at `ε = 1/64`.
 * **The instances without `PairErr`**: `atomMixChain_saltLive_flat` and `rhoD_atomMix_pi_flat`, modulo the noise floor
   and `FlatPairs`. `lineCode_err` bounds `E′` against `44β`, for computing the pair's `c`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.AtomErr
 
@@ -621,7 +625,7 @@ theorem atomMixChain_saltLive_flat {S : Support 32} (hS : FlatPairs S) {α x β 
 
 /-- **`rhoD_atomMix_pi` on flat pairs, without `PairErr`.** With `FlatPairs S`, the noise floor and §5's scale, per row
 a sign pattern `s' i` whose flat-pair noise is `flatNoise (β i) (s' i) = c_i·α_iρ_i` with `648/943 ≤ c_i ≤ 4`: the
-liveness rule gives the forming budget with `ρ_D = 1/64`, as for #311's chain (`rhoD_bf16_pi`). -/
+liveness rule gives the forming budget with `ρ_D = 1/64`, as for Pearl's chain (`rhoD_bf16_pi`). -/
 theorem rhoD_atomMix_pi_flat (fs : ℕ) (s : Shape) {S : Support Params.pi.r} (hS : FlatPairs S)
     {α β ρ c : Fin s.m → ℚ} {X : Matrix (Fin s.m) (Fin s.k) ℚ} (s' : Fin s.m → Fin 32 → Bool)
     (hN : ∀ i, flatNoise (β i) (s' i) = c i * (α i * ρ i)) (hα : ∀ i, 0 < α i) (hfloor : ∀ i, 1 ≤ α i * ρ i)

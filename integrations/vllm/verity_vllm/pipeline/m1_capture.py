@@ -27,14 +27,13 @@ PROTOCOL SUMMARY (Match stage, GPU half: the capture entry -- one engine, one ar
   Invariants: the two lengths stay distinct per request (executed = served + LAG only on an EOS stop before the cap) and are functions
     of the served tokens + the attested lag, never of the trace; LAG is None (unattested) when the engine does not report it -- no default;
     the warm-up runs on throwaway prompts and is never part of the record; nothing observed from the run goes into spec_tokens.json.
-  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 
 from __future__ import annotations
 
 import time
 
-_T_PROCESS0 = time.time()      # [R16 sys] process start (before the torch / vLLM imports)
+_T_PROCESS0 = time.time()      # process start (before the torch / vLLM imports)
 
 import json
 import sys
@@ -42,7 +41,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from verity_vllm.engine import static_schedule
-from verity_vllm.config import option
+from verity_vllm.config import option, workload_arg
 from verity_vllm.engine import engine_profile as prof  # noqa: F401  (apply_env before vllm import)
 
 prof.apply_env()
@@ -71,10 +70,9 @@ def dump_cos_sin(engine: "va.Engine", out: Path) -> Path | None:
         return None
     dtype = str(buf.dtype).removeprefix("torch.")
     if buf.dtype != torch.bfloat16:
-        # [r8 E-cleanup, fp16 (d) `cos_sin_cache` root] a served-fp16 model's table is float16: it used to be silently NOT observed
-        # (a reader then found no captured cos_sin_cache.npy, which reads as a capture defect).  Observe it in its own dtype
+        # A served-fp16 model's table is float16: observe it (an unobserved table reads as a capture defect) in its own dtype
         # under a dtype-qualified name -- never as `cos_sin_cache.npy`, whose readers take bf16 words -- and label it; the bf16
-        # path below is unchanged.  There is still no fp16 analytic table.
+        # path below is unchanged.  There is no fp16 analytic table.
         if buf.dtype != torch.float16:
             return None
         words = buf.detach().contiguous().view(torch.int16).cpu().numpy().view(np.uint16)
@@ -92,7 +90,7 @@ def dump_cos_sin(engine: "va.Engine", out: Path) -> Path | None:
 
 
 def dump_normalizer(engine: "va.Engine", out: Path) -> Path | None:
-    """[ADAPTER lane cov-dense 2026-09-17] Gemma-2's `model.normalizer` (0-d bf16 buffer `torch.tensor(hidden_size ** 0.5)`,
+    """Gemma-2's `model.normalizer` (0-d bf16 buffer `torch.tensor(hidden_size ** 0.5)`,
     no checkpoint tensor) as its one uint16 word -> DIR/normalizer.npy, the same observation `dump_cos_sin` makes of the other
     analytic-table root, whose rule (`analytic.check_normalizer`) is bf16(sqrt(H)).  Models
     without the buffer (Llama, Qwen, Phi-3, ...) write nothing."""
@@ -120,7 +118,7 @@ def parse_steps(s: str | None) -> frozenset[int]:
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    workload: str = option("--workload", default="workloads/workload_32x16_1req.json")
+    workload: str = option("--workload", type=workload_arg, default="workloads/workload_32x16_1req.json")
     out: str = option("--out")
     checkpoints: str = option("--checkpoints", default="manifests/checkpoints.json")
     snapshot_steps: str | None = option("--snapshot-steps", default=None,
@@ -148,7 +146,7 @@ class Options:
     engine_arg: list[str] = option("--engine-arg", action="append", default=[],
                                    help="LLM(**kw) override key=value (JSON value), repeatable; e.g. max_num_batched_tokens=64")
     target: str | None = option("--target", default=None,
-                                help="[R13 hopper] TargetProfile JSON overrides / path the engine is built for (default: the workload's `target` block over this device)")
+                                help="TargetProfile JSON overrides / path the engine is built for (default: the workload's `target` block over this device)")
     acquisition_manifest: str | None = option("--acquisition-manifest", default=None,
                                               help="[v2 acquire, Phase 4a] the row's required-value manifest: the plan's hooks are installed beside "
                                               "the observer (occurrence counts only: DIR/acquisition_observed.json) and DIR/runtime_tree.json, acquisition_plan.json are "
@@ -182,13 +180,13 @@ def main(args: Options) -> None:
     revision = adapter_revision(args)
 
     case = va.case_of(wl, args.case)
-    # [R16 sys, BRIEF §5/§10] stage telemetry of this process (m1_capture = one engine per arm: `capture` / `control` are separate processes)
+    # stage telemetry of this process (m1_capture = one engine per arm: `capture` / `control` are separate processes)
     tl = Timeline.from_env("m1_capture", hot=False, arm=("control" if args.no_observer else "capture"))
     tl.event("startup.imports", "end", s=round(time.time() - _T_PROCESS0, 3))
     tl.start("engine.build", case=case, max_num_seqs=args.max_num_seqs)
     eng = va.build_engine(args.checkpoints, max_num_seqs=args.max_num_seqs, case=case, verify_weights=args.verify_weights,
                           engine_args=va.parse_engine_args(args.engine_arg), target=va.target_of_workload(wl, args.target),
-                          execution=va.execution_of_workload(wl))     # [R15 EXEC-02] the row's execution decides enforce_eager, recorded in the header
+                          execution=va.execution_of_workload(wl))     # the workload's execution decides enforce_eager, recorded in the header
     tl.end("engine.build", build_s=round(eng.build_s, 3), model=eng.cp["repo"], enforce_eager=eng.kwargs.get("enforce_eager"),
            engine_reused=False, restart_reason="fresh process (one m1_capture per Match arm)")
     print(f"[m1] engine built in {eng.build_s:.1f}s (case {case}, {eng.cp['repo']}); "
@@ -203,7 +201,7 @@ def main(args: Options) -> None:
         "requests": [{"request_id": r["request_id"], "prompt_token_ids": r["prompt_token_ids"], "prompt_len": len(r["prompt_token_ids"]),
                       "max_tokens": r["max_tokens"], "arrive_step": int(r.get("arrive_step") or 0)} for r in wl["requests"]],
         "sampling": wl["sampling"], "engine_kwargs": {k: v for k, v in eng.kwargs.items() if k not in ("model", "tokenizer")},
-        # [R15 EXEC-02] the execution the row declares and the one the built engine realises (vllm_config read-back), beside the kwargs
+        # the execution the workload declares and the one the built engine realises (vllm_config read-back), beside the kwargs
         "row_id": wl.get("row_id"), "declared_execution": eng.execution, "effective_execution": eng.effective},
         indent=1, default=str) + "\n")
     cs = dump_cos_sin(eng, out)
@@ -301,7 +299,7 @@ def main(args: Options) -> None:
            "expected_engine_steps": wl.get("expected_engine_steps"), "engine_steps": timing.get("engine_steps")}
     all_equal = True
     per_req = (timing.get("requests") or {})
-    # [R17-1 / DP-pad-02 (b)] the record's LAG is the engine's RESOLVED async_scheduling read back after the build -- the SAME fact the RunHeader
+    # the record's LAG is the engine's RESOLVED async_scheduling read back after the build -- the SAME fact the RunHeader
     # attests (profile.engine_kwargs.async_scheduling) and the Build's TargetProfile declares; True -> 1 post-EOS row, False -> 0, None ->
     # unattested (no default).  Per request the two lengths are kept distinct: served_output_len = the tokens served (generated_token_ids,
     # the answer up to and including the EOS or the cap); executed_prefix_len = served + LAG on an EOS stop before the cap (the post-EOS row
@@ -331,7 +329,7 @@ def main(args: Options) -> None:
                                 "arrive_step": int(r.get("arrive_step") or 0), "arrive_step_realized": steps_r.get("arrive_step_realized"),
                                 "first_step": steps_r.get("first_step"), "finish_step": steps_r.get("finish_step"),
                                 "finish_reason": steps_r.get("finish_reason"),
-                                # [R17-1] the two lengths, distinct; cap exhaustion beside them; executed None = EOS stop under an unattested lag
+                                # the two lengths, distinct; cap exhaustion beside them; executed None = EOS stop under an unattested lag
                                 "served_output_len": _served, "executed_prefix_len": _executed, "cap_exhausted": _served == _cap,
                                 "eos_stop_before_cap": _eos_stop, "lag": _lag})
         print(f"[m1] {rid}: prompt_len={len(r['prompt_token_ids'])} arrive={int(r.get('arrive_step') or 0)} "

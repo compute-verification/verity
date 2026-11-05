@@ -1,4 +1,6 @@
-import Proofs.Flock.SoundAtBridge.Reduce
+module
+
+public import Proofs.Flock.SoundAtBridge.Reduce
 
 /-!
 # `SoundAtBridge`'s layer premises hold together, and its event is C-Flock's
@@ -12,6 +14,8 @@ C-Flock's event and no weaker one; and a finite bound on every session's `n · b
 real value.
 -/
 
+@[expose] public section
+
 namespace Flock.SoundAtBridge
 
 open FlockSoundness FlockSoundness.Discharge.ZkReg Accounting.TS
@@ -24,8 +28,8 @@ variable {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type}
 with outcomes `out`, any reading `rows` of a session's value layer and any rightness `right`, the layer
 `rowsLayer sess out rows right` meets `AcceptedLive`, `OpenedPlurAt` at `δo = 0` and `RelOfRows`; its proof `i` of
 round `w` is unsound on the path `x` exactly where `(sess x w i).BadU (out x w i)`; and a bound `B ≠ ⊤` on every
-session's `n · bound` meets `n · bound ≤ ofReal δ` at `δ = B.toReal ≥ 0`. Not covered: `WindowLaw` (owner
-@compute-accounting), `RowsSession.CR` (`EndToEndRegisteredRows`' `cr/sha-512` and `ecr/sha-512` instances) and a
+session's `n · bound` meets `n · bound ≤ ofReal δ` at `δ = B.toReal ≥ 0`. Not covered: `WindowLaw`,
+`RowsSession.CR` (`EndToEndRegisteredRows`' `cr/sha-512` and `ecr/sha-512` instances) and a
 session's existence (`ZkReg.zk_session_soundHJR_nonvacuous` covers its draw hypotheses). -/
 theorem soundAtBridge_nonvacuous (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V)

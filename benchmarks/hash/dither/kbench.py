@@ -220,7 +220,7 @@ def bench(a) -> int:
         torch.cuda.synchronize()
         for c in cps:
             lib.kc_free(c)
-        del ws, sws, x, xq, xq17
+        ws = sws = x = xq = xq17 = None
         torch.cuda.empty_cache()
     return 0
 

@@ -1,7 +1,7 @@
 """The continuous audit's memory challenger: `n` challenges over time, each answered in turn, accepted when at most `max_misses`
 of them miss.
 
-Its model is the memory challenger of `Security/Definitions/Pous/Model/Continuous.lean` (#954), with the
+Its model is the memory challenger of `Security/Definitions/Pous/Model/Continuous.lean`, with the
 guarantee `Pous.SecurityProofs.ContinuousAudit`.  That memory challenger sends `n` uniform, independent indices and
 counts a miss for every round that is not a hit: wrong, late or rejected.  Three requirements are theorems about it
 (`Security/Proofs/Pous/Continuous/Verifier.lean`), and `ContinuousMemoryChallenger` enforces each one on a single
@@ -26,7 +26,7 @@ the continuous audit's guarantee does not need it and its arrivals may spread pa
 Every count of calls here (`D`, `D_late`, the cap) converts wall-clock time at `call_ns` per whole `Π₂` call, which
 holds in the ideal-permutation model only.  `ContinuousAudit` is sound in that model, but at the reference
 Feistel-SHAKE256 `Π₂` a prover holding 1.53% of `C` answers every challenge in 481 Keccak-f, about 24 µs, so the
-storage conclusion fails there (red team, 4 Oct 2026, art:7617c8017e80; `primitives.pi2_keccak_f`).
+storage conclusion fails there (the red team's state attack, `primitives.pi2_keccak_f`).
 
 `n` is fixed before the stream (the realized number of arrivals, from the memory challenger's own randomness), so the
 stream is never stopped or extended on misses, though it may reject early once they pass `max_misses` (`exceeded`).
@@ -74,7 +74,7 @@ class ContinuousMemoryChallenger:
     The continuous audit runs only on this class, never on a bare `UnsignedRounds` with a hard deadline.  That one's
     `respond(block)` names no challenge, so once a challenge expires, an answer to it still in flight is credited to
     the next one, a hit when both ask for the same block.  That block was on the wire, not in the memory the model
-    measures at the send time, so the audit would credit storage the responder does not hold (#954's red team)."""
+    measures at the send time, so the audit would credit storage the responder does not hold (a red-team finding)."""
 
     def __init__(self, vk: VerifierKey, key: Key, n: int, *, late_deadline_ns: int, max_misses: int = 0,
                  deadline_ns: int = DEADLINE_NS, rtt_allowance_ns: int = RTT_ALLOWANCE_NS,

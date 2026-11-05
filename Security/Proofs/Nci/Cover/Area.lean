@@ -1,20 +1,24 @@
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.GroupWithZero.Basic
-import Mathlib.Data.Finset.Prod
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.Ring
-import Proofs.Nci.Cover.Charge
+module
+
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.GroupWithZero.Basic
+public import Mathlib.Data.Finset.Prod
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.Ring
+public import Proofs.Nci.Cover.Charge
 
 /-!
 # The cover theorem: a block's products, by area
 
 `intensity`: the counted products a block computes whole lie in `J × L`, with `#J ≤ k` (`activationCharge`) and
 `b #L ≤ k` (`UpdateHardness` on them), so `b #whole ≤ k²`; the rest are at most `k` (`finished_sdiff_whole_card_le`).
-It is this vocabulary's form of the per-block step of Daniel's covering bound at `c_w = b`, `c_a = 1`
+It is this vocabulary's form of the per-block step of the covering bound at `c_w = b`, `c_a = 1`
 (`Nci.Guarantees.CoveringBoundTwoCosts`), with the upstream certificate in place of activation-chaining, and the bridge
 to a compliant declaration (`CoverTraining`) sums it. `cover_sum` adds a per-block
 bound over a cover: every counted product's output gate is a non-input gate, so some block finishes it.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 

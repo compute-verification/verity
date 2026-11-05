@@ -1,5 +1,4 @@
-"""Outside `integrations/vllm/`, code imports the vLLM integration (`verity_vllm`) only through its public interfaces
-(note:20261024T0615Z-draft-verity-vllm-vision, sections 3 and 5).
+"""Outside `integrations/vllm/`, code imports the vLLM integration (`verity_vllm`) only through its public interfaces.
 
 ``PUBLIC`` names each public module and the interface it is. Outside code may import it, and from it only the names its
 ``__all__`` lists. Each public module states ``__all__`` as a literal, binds every name in it (at top level, or under
@@ -42,6 +41,24 @@ PUBLIC = {
     "verity_vllm": "I1: the pinned engine (LLM), its pin, its spec and its target",
     "verity_vllm.engine.spec": "I1: engine spec documents",
     "verity_vllm.engine.handle": "I2: a built engine's vLLM objects",
+    "verity_vllm.engine.served_seed": "I1: the served engine's public default seed, which a served registration fixes",
+    "verity_vllm.program.predict.naming": "I7: a request Program's Build with the names I2's compile gives it, the verifier's "
+                                          "own Build without a trace",
+    "verity_vllm.program.predict.window_weights": "I7: the window circuit's weights, the committer's registration and the "
+                                                  "verifier's pins of it (VLLM-113)",
+    "verity_vllm.program.predict.window_rows": "I7: a window's rows, the window circuit's units filled from a served window's "
+                                               "values (VLLM-125)",
+    "verity_vllm.program.predict.scan_state": "I7: the network certifier's scan state as a window class's Programs read it: "
+                                              "the registered value, its class, its words and a slot's bridge",
+    "verity_vllm.pipeline.workload_file": "I1: a workload file, fetched from the evidence store when absent and checked against "
+                                          "its digest",
+    "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "
+                                     "Program it declares (H1Windows), which a period's offline Program must equal",
+    "verity_vllm.protocols.pouw.h1.drawn": "I1: a served H1 window's drawn calls staged as C-Flock statements and checked as "
+                                           "credit does (main), which benchmarks/pouw/h1_prove/drawn.py runs",
+    "verity_vllm.protocols.pouw.h1.receipts": "I1: served H1's receipt producer, the zy receipts serve-openai's "
+                                              "--h1-receipts registers (Receipts) and its noise kernel, which PoUW's "
+                                              "benchmarks time and gate",
 }
 
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.
@@ -51,7 +68,6 @@ KNOWN = frozenset({
     "verity_vllm.acquire.sources.taps",
     "verity_vllm.check.batch",
     "verity_vllm.check.checkpoint_index",
-    "verity_vllm.check.codes",
     "verity_vllm.check.fold_compare",
     "verity_vllm.check.fp8_ue8m0",
     "verity_vllm.check.oracle_compare",
@@ -80,7 +96,6 @@ KNOWN = frozenset({
     "verity_vllm.engine.env",
     "verity_vllm.engine.hooks",
     "verity_vllm.engine.int8_attention",
-    "verity_vllm.engine.int8_attention_vllm",
     "verity_vllm.engine.int8_exact",
     "verity_vllm.engine.int8_fused",
     "verity_vllm.engine.int8_ops",
@@ -104,6 +119,9 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.cpu_replay",
     "verity_vllm.pipeline.deferred_rows",
     "verity_vllm.pipeline.replay_bundle",
+    "verity_vllm.pipeline.serve_admit",
+    "verity_vllm.pipeline.serve_openai",
+    "verity_vllm.pipeline.serve_protocol",
     "verity_vllm.pipeline.serving_rows",
     "verity_vllm.pipeline.slice_rows",
     "verity_vllm.pipeline.tp.capture",
@@ -136,17 +154,14 @@ KNOWN = frozenset({
     "verity_vllm.protocols.linear.api",
     "verity_vllm.protocols.linear.vllm_site",
     "verity_vllm.protocols.pouw",
-    "verity_vllm.protocols.pouw.device",
     "verity_vllm.protocols.pouw.h1",
     "verity_vllm.protocols.pouw.h1.challenger",
-    "verity_vllm.protocols.pouw.h1.commit",
     "verity_vllm.protocols.pouw.h1.handoff",
     "verity_vllm.protocols.pouw.h1.kept",
     "verity_vllm.protocols.pouw.h1.prover",
     "verity_vllm.protocols.pouw.h1.registered",
     "verity_vllm.protocols.pouw.h1.served",
     "verity_vllm.protocols.pouw.h1.window",
-    "verity_vllm.protocols.pouw.native",
     "verity_vllm.protocols.pouw.pearl_c",
     "verity_vllm.protocols.pouw.pearl_c.graphs",
     "verity_vllm.protocols.pouw.pearl_c.grouped",
@@ -171,12 +186,8 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.check.fold_compare', '_component_ranges'),
     ('verity_vllm.check.fold_compare', '_in_place'),
     ('verity_vllm.program.frontend.rules.family', '_field_intervals'),
-    ('verity_vllm.protocols.pouw.pearl_c.host', '_bytes'),
-    ('verity_vllm.protocols.pouw.pearl_c.host', '_put'),
-    ('verity_vllm.protocols.pouw.pearl_c.host', '_zeros'),
     ('verity_vllm.protocols.remote_bandwidth.registry', '_page_blocks'),
     ('verity_vllm.query.program_view', '_registry'),
-    ('verity_vllm.query.program_view', '_spec_id'),
 })
 
 
@@ -238,8 +249,10 @@ def exported(module: str) -> tuple[str, ...]:
 def _definitions(module: str) -> dict[str, tuple[str, ast.AST | None]]:
     """name -> (where it is bound: "top", "type-checking" or "lazy", its def or class node when this module defines it, or the
     module it imports it from)."""
-    tree = ast.parse(_module_file(module).read_text(encoding="utf-8"))
+    path = _module_file(module)
+    tree = ast.parse(path.read_text(encoding="utf-8"))
     out: dict[str, tuple[str, ast.AST | str | None]] = {}
+    package = module.split(".") if path.name == "__init__.py" else module.split(".")[:-1]
 
     def bind(nodes, where):
         for n in nodes:
@@ -248,8 +261,9 @@ def _definitions(module: str) -> dict[str, tuple[str, ast.AST | None]]:
             elif isinstance(n, (ast.Assign, ast.AnnAssign)):
                 for t in n.targets if isinstance(n, ast.Assign) else [n.target]:
                     out.update({x.id: (where, None) for x in ast.walk(t) if isinstance(x, ast.Name)})
-            elif isinstance(n, ast.ImportFrom) and n.level == 0:
-                out.update({a.asname or a.name: (where, f"{n.module}.{a.name}") for a in n.names})
+            elif isinstance(n, ast.ImportFrom):
+                src = n.module if n.level == 0 else ".".join([*package[:len(package) + 1 - n.level], *filter(None, [n.module])])
+                out.update({a.asname or a.name: (where, f"{src}.{a.name}") for a in n.names})
             elif isinstance(n, ast.If) and "TYPE_CHECKING" in ast.unparse(n.test):
                 bind(n.body, "type-checking")
 

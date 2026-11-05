@@ -1,9 +1,11 @@
-import Flock.Firewall.Drive
-import Flock.Firewall.SessionPlan
-import Proofs.Flock.Claims.ZK.FrameCount
+module
+
+public import Flock.Firewall.Drive
+public import Flock.Firewall.SessionPlan
+public import Proofs.Flock.Claims.ZK.FrameCount
 
 /-!
-# The opening's coin asks (Stage B, R2)
+# The opening's coin asks
 
 After the algebraic phase, the opening runs live (`Drive.openStep`): every squeeze past the coins it was given asks the
 driver for its count, as the squeeze's framed header holds it (`Drive.stepAsks`). This file counts those asks, as
@@ -19,6 +21,8 @@ driver for its count, as the squeeze's framed header holds it (`Drive.stepAsks`)
 * `ringSwitchP_ot`: the ring switch asks for `7` per claim, then the batching's count.
 * `ligeritoPZk_ot`: with `1 ≤ k0`, Ligerito asks for `ligeritoCoins` without its zeros.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Count
 

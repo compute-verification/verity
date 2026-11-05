@@ -23,8 +23,8 @@ id (`release`), which `deployment.json` names (`run_id`).
 - The keys are LMS at H = `cs.HEIGHT` (2^10 one-time keys) unless `--height` says otherwise, where the deployed key's
   is H = 20 (the auditor gate's default, `benchmarks/live_challenger/auditor.py`).
 
-**Traffic** (`traffic`, `varied_traffic`): varied, as CERT-VARLEN's: Poisson arrivals at `--rate` a second, prompts of
-16–1024 tokens (log-uniform; words at 0.75 a token, so approximately), `max_tokens` of 16 … `--max-tokens`
+**Traffic** (`traffic`, `varied_traffic`): varied, as `certifier_serve`'s: Poisson arrivals at `--rate` a second,
+prompts of 16–1024 tokens (log-uniform; words at 0.75 a token, so approximately), `max_tokens` of 16 … `--max-tokens`
 (log-uniform) under real EOS, temperature 0, 0.7 or 1, and a seed on about half the requests. `--temperature` and
 `--top-p` put the same on every request instead (the gate's `warden-rehearse` always gives both): an endpoint applies
 its own generation config to a request that omits them. `rehearse --ids` sends the scan's traffic instead (`id_traffic`,
@@ -33,8 +33,8 @@ endpoint as an id-form response (`id_response`: one `io_tie.id_event` cell an ou
 `egress_cells` − 1 ids), what `scan_zk.py prove --warden-run` proves; the gate's `warden-rehearse --scan` sends it to
 the peer's endpoint, at scan_zk's schedule. `--prompts FILE` (with `--ids`) gives the id requests' prompts instead
 (`read_prompts`, `prompt_traffic`: request j's the (j mod n)-th, each with exactly `--max-tokens`), and
-`--window-per-group` sends them in groups of the n, group g's half a bucket into link-window g·G (`group_windows`), so
-that group g's cells are exactly windows g·G … (g+1)·G − 1 (`groups.json`), and the run is exactly those windows: a
+`--window-per-group` sends them in groups of the n, group g's half a bucket into execution phase g·G (`group_windows`),
+so that group g's cells are exactly windows g·G … (g+1)·G − 1 (`groups.json`), and the run is exactly those windows: a
 loop's period of requests a group, as the gate's `warden-rehearse --scan --prompts --window-per-group` runs it.
 
 **Subcommands**, from the repository root or with `benchmarks/network_traces` on the path:
@@ -44,16 +44,18 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
         [--temperature T] [--top-p P]
     python warden_serve.py fake --listen HOST:PORT [--token-ms 20] [--id-payload P]
     python warden_serve.py serve --upstream HOST:PORT --listen HOST:PORT --out DIR --key KEYDIR --session HEX
-        --windows N [--start-in 5] [--load-heads FILE] [schedule]
+        --windows N [--start-in 5] [--load-heads FILE] [--paced-ms 50] [schedule]
     python warden_serve.py client --deployment DIR/deployment.json --traffic TRAFFIC.json --out DIR
     python warden_serve.py check --run DIR
     python warden_serve.py rehearse (--upstream HOST:PORT | --fake) --out DIR [--requests 100] [--temperature T]
-        [--top-p P] [--ids [--prompts FILE [--window-per-group]]] [--load-store DIR --load-sinks HOST:PORT,...
+        [--top-p P] [--ids [--prompts FILE [--window-per-group]]] [--paced-ms 50] [--load-store DIR --load-sinks HOST:PORT,...
         --load-program HEX [--load-shape h200|tiny] [--load-workers N] [--load-ready-s 900]] [schedule]
 
 - `serve` writes `deployment.json` (the warden's public key, the session, the schedule's parameters and their digest,
-  the origin, the listener), runs the warden for `--windows` windows, and writes `warden.json` (each connection's
-  outcome, the tick lateness, the refusals and their windows). Each window's records go to `requests.records`,
+  the origin, the listener), runs the warden for `--windows` windows, each bucket released by its pacer `--paced-ms`
+  after its boundary (`warden`'s "The pacer"; 0: written on the warden's loop), and writes `warden.json` (each
+  connection's outcome, the tick lateness and each tick's (`ticks_ms`), the refusals and their windows, and each
+  bucket's pacer report, `paced`). Each window's records go to `requests.records`,
   `responses.records` and `fails.records` (each failed connection's reason, witness), and each is certified
   (`certificate.Issuer`, with the warden's parameters digest) into `certified.jsonl`, except a window in which the
   warden refused a connection, whose records and rows it certifies and signs none of (`warden`'s "Admission"). Each window of the wire's two records is also committed as
@@ -161,7 +163,7 @@ FILLER = ("Notes: the meeting moved to Thursday, the printer on the third floor 
 TEMPERATURES = (0.0, 0.7, 1.0)
 #: a prompt id's bits, the scan's IDB (`scan_zk.CLASS`): the scan reads each prompt id and output id in IDB bits
 PROMPT_ID_BITS = 17
-#: the public file of a `--window-per-group` rehearsal: each group's requests and link-windows (`groups`)
+#: the public file of a `--window-per-group` rehearsal: each group's requests and execution phases (`groups`)
 GROUPS = "groups.json"
 
 
@@ -171,7 +173,7 @@ def varied_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prom
                    max_tokens: tuple[int, int] = (16, 256), start_s: float = 1.0, temperature: float | None = None,
                    top_p: float | None = None) -> list[dict]:
     """n requests, each {"at": seconds after the origin, "body": a streamed `/v1/completions` body}. `temperature` and
-    `top_p`, when given, are every request's (else a temperature drawn from `TEMPERATURES` and no top_p); the arrivals,
+    `top_p`, when given, are every request's (else a temperature sampled from `TEMPERATURES` and no top_p); the arrivals,
     prompts, lengths and seeds are the seed's either way."""
     rng = random.Random(seed)
     at, out = start_s, []
@@ -196,8 +198,8 @@ def id_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prompt_t
                top_p: float | None = None) -> list[dict]:
     """n warden-form id requests (`active.id_request`'s fields), each {"at": seconds after the origin, "ids": its
     fields}: Poisson arrivals at `rate`, prompts of log-uniform length of ids below 2^17, `max_tokens` log-uniform, and
-    the sampling drawn as `varied_traffic` draws it (top_p 1), or `temperature` and `top_p`, when given, every
-    request's; the arrivals, prompts, lengths and seeds are the seed's either way. The scan (`ingress_scan`) reads
+    the sampling parameters picked as `varied_traffic` picks them (top_p 1), or `temperature` and `top_p`, when given,
+    every request's; the arrivals, prompts, lengths and seeds are the seed's either way. The scan (`ingress_scan`) reads
     exactly these."""
     rng = random.Random(seed)
     at, out = start_s, []
@@ -215,7 +217,7 @@ def id_traffic(n: int, *, model: str, rate: float = 0.5, seed: int = 0, prompt_t
 
 
 def group_windows(params: WardenParams, tokens: int) -> int:
-    """The link-windows a group of at most `lanes` id requests takes when it arrives half a bucket into a window's
+    """The execution phases a group of at most `lanes` id requests takes when it arrives half a bucket into a window's
     first bucket (`prompt_traffic`'s ``window_per_group``), each answered by at most `tokens` id events and the trailer:
     admitted by the bucket after its arrival's (and one more for the client's lag), its last egress cell in bucket
     s + D + ⌊tokens/r⌋ (the warden's schedule), so a group's cells are all in its own windows."""
@@ -267,7 +269,8 @@ def prompt_traffic(prompts: list[list[int]], n: int, *, model: str, params: Ward
 
 
 def groups(n: int, per: int, params: WardenParams, max_tokens: int) -> list[dict]:
-    """`prompt_traffic`'s groups under ``window_per_group``: each group's requests (indices) and its link-windows."""
+    """`prompt_traffic`'s groups under ``window_per_group``: each group's requests (indices) and its execution
+    phases."""
     G = group_windows(params, max_tokens)
     return [{"group": g, "requests": list(range(g * per, min(n, (g + 1) * per))), "windows": [g * G, (g + 1) * G]}
             for g in range(-(-n // per))]
@@ -447,7 +450,7 @@ async def probe(upstream: tuple[str, int], traffic: list[dict], in_flight: int =
 class Publisher:
     """The warden's `publish`, inline: each record packed to its file (`requests.records`, `responses.records`,
     `fails.records`), and certified by `issuer` under its link name and direction (`CERTIFIED`) with the schedule's
-    parameters digest, one line of `certified.jsonl` each, or the link-window under `refused`; the wire's two also
+    parameters digest, one line of `certified.jsonl` each, or the execution phase under `refused`; the wire's two also
     committed as rows by `commit` (`attest`). `serve` runs it in `PublisherProcess`: on the ticker's thread, or on any
     thread of its process, a window's commit holds the ticker's GIL for seconds. `close` gives the issuer's refusals."""
 
@@ -459,7 +462,7 @@ class Publisher:
 
     def withhold(self, record: Record, grid: GridParams) -> None:
         """The warden's `withhold`: a record of a window in which it refused a connection, kept and committed as
-        `keep` does but neither certified nor signed, its link-window under `refused` with ``"withheld": true``."""
+        `keep` does but neither certified nor signed, its execution phase under `refused` with ``"withheld": true``."""
         self.keep(record, grid, withheld=True)
 
     def keep(self, record: Record, grid: GridParams, withheld: bool = False) -> None:
@@ -476,7 +479,7 @@ class Publisher:
 
     def attest(self, record: Record, link: str, direction: Direction, withheld: bool = False) -> None:
         """The link-window's cells as rows and its wiring (`warden_rows`), their head signed (never `withheld`'s): one
-        line of `cells.jsonl` (the registration, or the link-window under `refused`, and the cost), the salts to
+        line of `cells.jsonl` (the registration, or the execution phase under `refused`, and the cost), the salts to
         `cells.salts` (witness)."""
         t0 = time.perf_counter()
         cells_ = self.commit(link, direction, record, self.params, self.issuer.session)
@@ -700,7 +703,7 @@ def prepare_process(params: WardenParams) -> dict:
     """The warden's process made ready before its origin, so that no tick waits in the kernel (state D) on what the
     run's growth would otherwise ask of it then:
     - descriptors: its table holds every connection's two and every queued one's (`reserve_fds`): the opening burst of
-      TRACE-CORPUS's heavy trace grew it past 256, 512 and 1024 descriptors, and the ticker waited a grace period at
+      the trace corpus's heavy trace grew it past 256, 512 and 1024 descriptors, and the ticker waited a grace period at
       each (`stall_probe` found every D episode of the ticker in `__wait_rcu_gp` there, 14-28 ms on CPU);
     - memory: a page fault for fresh memory charges the memory cgroup, and a cgroup at its limit reclaims in the
       faulting thread. glibc's heap is kept whole (no trim) and serves every allocation under 32 MiB (no mmap), a
@@ -736,10 +739,11 @@ def prepare_process(params: WardenParams) -> dict:
 async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], listen: tuple[str, int], key: Path,
                 session: bytes, windows: int, start_in: float = 5.0, slack: float = 0.025,
                 announce=cs._announce, probe: bool = False, process: dict | None = None,
-                load_heads: Path | None = None) -> dict:
+                load_heads: Path | None = None, paced_ms: float = cs.PACED_MS) -> dict:
     """One run of the warden on the host's clock (the module docstring's `serve`), its records published by a
     `PublisherProcess` that holds the key in `key` and first signs the load's heads `load_heads` when given, its
-    threads sampled by `stall_probe` when `probe`. Returns what `warden.json` holds, with `process`, what
+    threads sampled by `stall_probe` when `probe`, each bucket released by its pacer `paced_ms` after its boundary
+    (`Warden(paced=…)`; 0: written on its loop). Returns what `warden.json` holds, with `process`, what
     `prepare_process` did. The loop's errors are kept, not logged: the ticker writes no file."""
     out.mkdir(parents=True, exist_ok=True)
     loop = asyncio.get_running_loop()
@@ -749,7 +753,8 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
     publish = PublisherProcess(out, key, session, params, load_heads=load_heads)
     origin = time.monotonic() + start_in
     warden = Warden(params, lambda: asyncio.open_connection(*upstream), origin=origin, windows=windows,
-                    publish=publish, withhold=publish.withhold, release=publish.release, slack=slack)
+                    publish=publish, withhold=publish.withhold, release=publish.release, slack=slack,
+                    paced=paced_ms / 1000 if paced_ms else None)
     server = await asyncio.start_server(warden.handle, *listen)
     sampler = stall_probe.start(out / "stalls.json", origin, {"warden": os.getpid(), "publisher": publish.process.pid},
                                 {threading.get_native_id(): "ticker", publish.feeder: "feeder"}) if probe else None
@@ -769,7 +774,12 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
            "refused_windows": sorted(warden.refused_windows), "ticks": warden.ticks,
            "lateness_ms": _quantiles(lateness) | {"over_slack": sum(x > slack * 1000 for x in lateness)},
            "issuer_refused": [[link, d.value, w] for link, d, w in refused], "usage": ar._usage(),
-           "publisher_usage": publish.usage, "process": process, "stalls": stalls, "loop_errors": errors}
+           "publisher_usage": publish.usage, "process": process, "stalls": stalls, "loop_errors": errors,
+           "ticks_ms": [round(x, 3) for x in lateness]}
+    if warden.paced is not None:
+        log["paced"] = {"ms": paced_ms, "columns": ["bucket", "arrived_ms", "start_ms", "end_ms", "written"],
+                        "releases": [[r.t, round(r.arrived * 1000, 3), round(r.start * 1000, 3),
+                                      round(r.end * 1000, 3), r.written] for r in warden.releases]}
     (out / "warden.json").write_text(json.dumps(log, indent=1))
     announce({"served": True, "out": str(out)})
     return log
@@ -831,7 +841,7 @@ def read_records(run: Path, params: WardenParams) -> dict[str, list[Record]]:
 
 
 def read_certified(path: Path) -> tuple[dict[tuple[str, Direction, int], CertifiedRecord], list]:
-    """`certified.jsonl`: the certified records by (link, direction, window), and the link-windows the signer
+    """`certified.jsonl`: the certified records by (link, direction, window), and the execution phases the signer
     refused (not those the warden withheld, `Publisher.withhold`)."""
     got, refused = {}, []
     for line in path.read_text().splitlines() if path.exists() else []:
@@ -846,8 +856,8 @@ def read_certified(path: Path) -> tuple[dict[tuple[str, Direction, int], Certifi
 
 
 def read_cells(run: Path) -> list[tuple[dict, list[bytes], bytes]]:
-    """`cells.jsonl` and `cells.salts`, line by line: each link-window's registration (or refusal) and cost, its rows'
-    salts and its wiring's (`warden_rows.read_witness`)."""
+    """`cells.jsonl` and `cells.salts`, line by line: each execution phase's registration (or refusal) and cost, its
+    rows' salts and its wiring's (`warden_rows.read_witness`)."""
     path = run / "cells.jsonl"
     lines = [json.loads(x) for x in path.read_text().splitlines()] if path.exists() else []
     salts = ar.read_blobs(run / "cells.salts")
@@ -1115,7 +1125,8 @@ def rehearse(args) -> int:
             serving = subprocess.Popen(me + ["serve", "--upstream", "%s:%d" % upstream, "--listen", "127.0.0.1:0",
                                              "--out", str(out), "--key", str(scratch / "warden"), "--session",
                                              secrets.token_hex(32), "--windows", str(windows), "--start-in",
-                                             str(args.start_in), "--slack", str(args.slack), *_flags(args),
+                                             str(args.start_in), "--slack", str(args.slack), "--paced-ms",
+                                             str(args.paced_ms), *_flags(args),
                                              *(["--load-heads", str(out / "load-heads.json")] if load else [])],
                                        stdout=subprocess.PIPE, stderr=log, text=True)
             procs.append(serving)
@@ -1160,9 +1171,9 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--requests", type=int, default=100)
         q.add_argument("--rate", type=float, default=0.5, help="Poisson arrivals a second")
         q.add_argument("--seed", type=int, default=0)
-        q.add_argument("--max-tokens", type=int, default=256, help="the most max_tokens a request draws")
-        q.add_argument("--prompt-max", type=int, default=1024, help="the most prompt tokens a request draws")
-        q.add_argument("--temperature", type=float, help="every request's temperature (default: drawn, 0, 0.7 or 1)")
+        q.add_argument("--max-tokens", type=int, default=256, help="the most max_tokens a request samples")
+        q.add_argument("--prompt-max", type=int, default=1024, help="the most prompt tokens a request samples")
+        q.add_argument("--temperature", type=float, help="every request's temperature (default: sampled, 0, 0.7 or 1)")
         q.add_argument("--top-p", type=float, help="every request's top_p (default: none sent, the endpoint's own)")
     t.set_defaults(model="model")
     for q in (f, s):
@@ -1175,6 +1186,9 @@ def parser() -> argparse.ArgumentParser:
     for q in (s, r):
         q.add_argument("--start-in", type=float, default=5.0, help="the origin, seconds after the warden is up")
         q.add_argument("--slack", type=float, default=0.025, help="seconds a tick may run late before it faults")
+        q.add_argument("--paced-ms", type=float, default=cs.PACED_MS,
+                       help="when the warden's pacer releases each bucket, ms after its boundary (past the slack, "
+                            "before the next boundary); 0: the warden writes each bucket on its loop")
         for field in dataclasses.fields(WardenParams):
             q.add_argument(f"--{field.name.replace('_', '-')}", type=int, default=SCHEDULE[field.name])
     s.add_argument("--upstream", required=True, type=cs._address, help="the server's HOST:PORT")
@@ -1259,7 +1273,8 @@ def main(argv=None) -> int:
             os.environ.pop(name, None)
         asyncio.run(serve(params, args.out, upstream=args.upstream, listen=args.listen, key=args.key,
                           session=session, windows=args.windows, start_in=args.start_in, slack=args.slack,
-                          probe=args.stall_probe, process=process, load_heads=args.load_heads))
+                          probe=args.stall_probe, process=process, load_heads=args.load_heads,
+                          paced_ms=args.paced_ms))
         return 0
     if args.command == "client":
         ar._quiet_runtime()

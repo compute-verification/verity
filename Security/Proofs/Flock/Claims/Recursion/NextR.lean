@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.NextS
-import Proofs.Flock.Claims.Complete.Encode
-import Proofs.Flock.Claims.Recursion.RepFramesBind
-import Proofs.Flock.Claims.Recursion.VarLen
+module
+
+public import Proofs.Flock.Claims.Recursion.NextS
+public import Proofs.Flock.Claims.Complete.Encode
+public import Proofs.Flock.Claims.Recursion.RepFramesBind
+public import Proofs.Flock.Claims.Recursion.VarLen
 
 /-!
 # `IVStar`'s last step at the deployed reader (`nextR`)
@@ -30,9 +32,8 @@ openings, and the fields the transcript never absorbs are what V\* takes for the
   what it reads of the last message changes no absorbed value (`readRep_last`). The nonces are absorbed
   (`.bytes (le64 n)`) but no opened row carries one, so the fit fixes them at `0`, the only nonce a deployed prover
   sends: every grinder ignores its bits (`LiveChallenger`'s `pow_nonce` is `0` outside flock-live's R4 test, and the
-  firewall device's is `0`), and the inner proofs of
-  `art:84471c45417ce1f0da5e1ebcc7c9e65fc15b833357f4ec654ce12037100d7be3` carry only zeros
-  (`art:f8e2b70befdb81f371d17105e824e9ffa68f4f51cded57826217f94d46ae9456`). A proof with another nonce is decided by
+  firewall device's is `0`), and the recorded inner proofs carry only
+  zeros. A proof with another nonce is decided by
   no fit. An honest prover's rounds read back (some fit exists, and it is the prover's proof), which `RecursiveKS` at
   `nextR` needs to be non-vacuous: `NextRHonest.lean` states it (`RepReadsBack`, `ReadsBack`) and `NextRFits.lean`
   proves it (`readsBack`).
@@ -53,6 +54,8 @@ openings, and the fields the transcript never absorbs are what V\* takes for the
   with the checks the decision needs (`VerdictR`): the setup at `hOf H`, the proofs' shapes, the rep streams' names, the
   verdict on the decoded proofs and the checks after it.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 
@@ -791,9 +794,9 @@ def LastSplitR.toLast {H : Msg → Msg} {rd : Msg → Option FinalP} {R : Type} 
 /-- `ownJ`'s owners are among the statement's parts wherever `ownR`'s are. -/
 theorem ownR_lt {H : Msg → Msg} {rd : Msg → Option FinalP} {R : Type} (LS : LastSplitR H rd R)
     (ownR : Msg → R → Option ℕ) (D : Claims.Recursion.Deploy Coin) (L : LayoutB) (shape : Claims.Recursion.Form → Prop)
-    (hR : ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
+    (hR : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
       ∀ r ∈ LS.checks (Claims.Recursion.xI D x), ∀ s, ownR x r = some s → s < D.nS x) :
-    ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
+    ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
       ∀ r ∈ LS.toLast.checks (Claims.Recursion.xI D x), ∀ s, ownJ D L ownR x r = some s → s < D.nS x := by
   intro x st hx hf r hr s ho
   cases r with
@@ -819,10 +822,10 @@ theorem decompB_nextR (H : Msg → Msg) (rd : Msg → Option FinalP)
     (rel' : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings) (L : LayoutB)
     (IV : Claims.Verifier Coin) (shape : Claims.Recursion.Form → Prop) {Col' T' : Type}
     (DO : Claims.Flock.Deploy Coin Col' T') (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
-    (hR : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hR : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ r ∈ LS.checks (Claims.Recursion.xI (recBound rel' b L IV) x), ∀ s, ownR x r = some s →
         s < (recBound rel' b L IV).nS x)
-    (hrest : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hrest : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ q ∈ ivChecks (bdDeployed rel (nextR rd) colsE wE join rowIn final w)
           (deploySplit H rel (nextR rd) colsE wE join rowIn final w (nextR_coin rd H) LS.toLast)
           (Claims.Recursion.xI (recBound rel' b L IV) x),
@@ -855,9 +858,9 @@ theorem decompB_lastSplitR (H : Msg → Msg) (rd : Msg → Option FinalP)
     (rel' : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings) (L : LayoutB)
     (IV : Claims.Verifier Coin) (shape : Claims.Recursion.Form → Prop) {Col' T' : Type}
     (DO : Claims.Flock.Deploy Coin Col' T') (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
-    (hR : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hR : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ r ∈ VerdictR.all, ∀ s, ownR x r = some s → s < (recBound rel' b L IV).nS x)
-    (hrest : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hrest : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ q ∈ ivChecks (bdDeployed rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w)
           (deploySplit H rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w (nextR_coin rd H)
             (lastSplitR H rd).toLast)

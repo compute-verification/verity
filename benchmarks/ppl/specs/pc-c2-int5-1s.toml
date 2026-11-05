@@ -1,4 +1,4 @@
-description = "PPL-COMPILE C2: int5 one-sided (fp8-peel-w15's design), every linear and lm_head: activations dithered on -16..16 per token, weights rounded to +-15 per output row, served W + U with U in {0, 1} and peeled exactly, after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too); Dither-2S's int8 attention (run on the format by C1)"
+description = "C2: int5 one-sided (fp8-peel-w15's design), every linear and lm_head: activations dithered on -16..16 per token, weights rounded to +-15 per output row, served W + U with U in {0, 1} and peeled exactly, after SmoothQuant 0.5 (kv_shared) and the rotations (lm_head rotated too); Dither-2S's int8 attention (run on the format by C1)"
 
 [[linear]]
 step = "smooth"

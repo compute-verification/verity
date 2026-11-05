@@ -1,9 +1,11 @@
-import Definitions.Accounting.TS.Stages
+module
+
+public import Definitions.Accounting.TS.Stages
 
 /-!
 # Per-stage coins' named assumption (trusted)
 
-STEER-PROOF's route A (note:20261018T0303Z-draft-steer-proof): the one premise per-stage coins add to the tensor–scalar
+STEER-PROOF's route A: the one premise per-stage coins add to the tensor–scalar
 model's, a `Prop` over `Accounting.TS.StageWindow`, taken as a hypothesis, never an `axiom`.
 
 * `StageLuck`: (L) at `p` per unit at its stage's coin, the per-stage form of (I7) `LuckAt`. Under one σ the same
@@ -11,6 +13,8 @@ model's, a `Prop` over `Accounting.TS.StageWindow`, taken as a hypothesis, never
   closure and a steering bound (`Accounting.Guarantees.TS.SegmentSteer`, `SteerUnion`); with each stage's coin released
   after its operands are committed there is no such unit.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions.TS
 

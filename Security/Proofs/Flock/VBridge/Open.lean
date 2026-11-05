@@ -1,10 +1,12 @@
-import Proofs.Flock.VBridge.Climb
-import Proofs.Flock.Soundness.Discharge.Hm.Commit
+module
+
+public import Proofs.Flock.VBridge.Climb
+public import Proofs.Flock.Soundness.Discharge.Hm.Commit
 
 /-!
 # V*'s opening: the row's leaf climbs to the top
 
-`_climb` of `verity_flock.rec_open`'s `RecOpen_v3` (rec-step3) and `RecOpen_v4` (#1347), which share it, as the
+`_climb` of `verity_flock.rec_open`'s `RecOpen_v3` and `RecOpen_v4`, which share it, as the
 verifier's builder (`Flock.HmNets`) states it: the leaf is plain SHA-512 of the row's bits from the IV (the inner
 statement's `flock-leaf/sha512-unsalted`), it climbs `H` levels through the siblings in `aux` (512 bits each, bottom up)
 at the directions `d` (`climbFrom`), and `out` is the node reached and 512 zero bits.
@@ -16,6 +18,8 @@ and the directions are the position's low bits, `out` carries the verifier of re
 `out` is half of `_steps`; the other half, `acc_out` (the opening's share of the consistency sums, `cons_structure`), is
 `rec_residuals.residual_forms` at `cons_structure(LANES)` and waits on that gadget's statement.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 

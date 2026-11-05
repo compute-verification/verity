@@ -1,4 +1,6 @@
-import Definitions.Accounting.Guarantees.RemoteSketch
+module
+
+public import Definitions.Accounting.Guarantees.RemoteSketch
 
 /-!
 # The receipts' sketch bound over PoUS's P2 store (trusted; drafted)
@@ -32,9 +34,11 @@ device never held, read, took in or rebuilt is uniform to it. A device that rebu
 counts it), and what rebuilding costs, in part or whole, is the codec's, the memory line's debit
 (`Accounting.Assumptions.WorkHardnessP2`, `SquaringCeilingP2`).
 
-**Drafted, not decided**: claims are Daniel's (the remote audit's lane, 26 Oct); `audit.ledger` refuses a P2 record
+**Drafted, not decided**: the claims await a ruling; `audit.ledger` refuses a P2 record
 until a line takes this.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.Remote
 

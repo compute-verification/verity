@@ -1,9 +1,11 @@
-import Definitions.Accounting.Assumptions.Sheet
+module
+
+public import Definitions.Accounting.Assumptions.Sheet
 
 /-!
 # What the data-sheet axioms give (trusted)
 
-Statements over A1–A7 (`Definitions.Accounting.Assumptions.Sheet`, note:20261017T1818Z-draft-axioms), each `def G : Prop`,
+Statements over A1–A7 (`Definitions.Accounting.Assumptions.Sheet`), each `def G : Prop`,
 proved as `Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.TS`:
 
 * `SheetFacetCeilings`: (I1) on the data-sheet machine, from A1–A5.
@@ -11,6 +13,8 @@ proved as `Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.TS`:
 * `SheetDIdealFloor`: Theorem D-ideal (2.7♭) on the data-sheet machine, its (I1)–(I5) replaced by A1–A7 at the ½
   floor.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 
