@@ -308,11 +308,15 @@ def lock(tree: Path, tmp_path: Path, policy: dict, name: str, envs: Envs, pkg: s
     return out["results"][f"lean-lock:{pkg}"]
 
 
-def updated(tree: Path, built: Path, tmp_path: Path) -> dict:
-    """The lock `check.py --update` records for the Lake build at ``built``."""
-    p = subprocess.run([sys.executable, str(tree / "tools/verity/lean/check.py"), "--update", "--no-replay", "--no-runs",
-                        "--out", str(tmp_path / "update"), str(built)], capture_output=True, text=True)
-    assert p.returncode == 0, p.stdout[-3000:] + p.stderr[-3000:]
+def updated(tree: Path, built: Path, tmp_path: Path, *nested: str) -> dict:
+    """The lock `check.py --update` records for the Lake build at ``built``, after those of its ``nested`` packages (the
+    ones its `proved_in` names, whose audit its own runs), which go back into ``tree``'s copy."""
+    for at in (*(built / n for n in nested), built):
+        p = subprocess.run([sys.executable, str(tree / "tools/verity/lean/check.py"), "--update", "--no-replay",
+                            "--no-runs", "--out", str(tmp_path / "update" / at.name), str(at)], capture_output=True, text=True)
+        assert p.returncode == 0, p.stdout[-3000:] + p.stderr[-3000:]
+    for n in nested:
+        (tree / built.name / n / "lean-audit.json").write_text((built / n / "lean-audit.json").read_text())
     return json.loads((built / "lean-audit.json").read_text())
 
 
@@ -359,7 +363,8 @@ SP = {**TOY, "Sp.lean": "import Sp.Defs\n", "Sp/Defs.lean": "def Sp.Claim (n : N
       "lean-audit.json": json.dumps({"roots": ["Sp"], "proved_in": ["pf"], "guarantees": {"Pf.claim": {"owner": "@lean"}},
                                      "layers": {"Sp.Defs": {"imports": [], "why": "the spec imports nothing"}},
                                      "shape": {"frozen": {"Pf.claim": "lemma: a toy guarantee"}}})}
-#: `ext`, a fetched package, and `fx`, which fetches it: its guarantee's premise is headed by `ext`'s `Q`
+#: `ext`, a fetched package, and `fx`, which fetches it: its guarantee's premise is headed by `ext`'s `Q`, which its lock
+#: lists as inline, as Security's lists premises Mathlib heads
 EXT = {**TOY, "Ext.lean": "prelude\nimport Init.Prelude\n\ndef Ext.Q (n : Nat) : Prop := Eq n n\n",
        "lakefile.toml": 'name = "ext"\ndefaultTargets = ["Ext"]\n\n[[lean_lib]]\nname = "Ext"\n',
        "lake-manifest.json": manifest("ext")}
@@ -367,14 +372,15 @@ FX = {**TOY, "Fx.lean": "prelude\nimport Ext\n\ntheorem Fx.g (n : Nat) (h : Ext.
       "lakefile.toml": 'name = "fx"\ndefaultTargets = ["Fx"]\n\n[[require]]\nname = "ext"\n'
                        'git = "https://example.invalid/ext"\nrev = "main"\n\n[[lean_lib]]\nname = "Fx"\n',
       "lean-audit.json": json.dumps({"roots": ["Fx"], "guarantees": {"Fx.g": {"owner": "@lean"}},
-                                     "shape": {"frozen": {"Fx.g": "lemma: a toy guarantee"}}})}
+                                     "shape": {"frozen": {"Fx.g": "lemma: a toy guarantee"},
+                                               "inline": {"Fx.g": {"Ext.Q n": "a toy premise a fetched package heads."}}}})}
 
 
 def test_a_spec_whose_proved_in_package_requires_it_by_path_passes_on_a_lake_build_s_records(tree, tmp_path, envs):
     """Each package's build holds its own modules alone, as Lake's does: `pf`'s audit counts what it loads from its build
     as its own modules (`proved_in.unaudited`), and `sp`'s, which `pf` imports, aren't among them."""
     write(tree, {f"sp/{f}": t for f, t in SP.items()})
-    recorded = updated(tree, lake(tree, "sp", tmp_path, "pf"), tmp_path)
+    recorded = updated(tree, lake(tree, "sp", tmp_path, "pf"), tmp_path, "pf")
     res = lock(tree, tmp_path, recorded, "proved-in", envs, "sp")
     assert res["status"] == "pass", res["detail"]
 
