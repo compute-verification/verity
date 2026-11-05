@@ -1,2 +1,3 @@
-# a tool that reads a declaration by name
+# a tool that reads a declaration by name, and a module's file by its path from the package's source directory
 declaration = "Core.citedByTool"
+checks = "../Definitions/Checks.lean"

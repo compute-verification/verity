@@ -23,7 +23,8 @@ constant to the declaration it belongs to. The seeds:
   which `dsimp` and `simp only [t]` use with no trace in the proof term, and the instances of the coercion classes
   (`COERCION`), which elaboration unfolds where it inserts a coercion (`(w : Nat)` becomes `unwrap w`);
 - every declaration of the analysis trees that a file outside Lean names in full (`.py`, `.json`, `.toml`, `.rs`, `.sh`,
-  ...; `CITED_BY`), so a test or tool that reads one by name keeps it.
+  ...; `CITED_BY`), and every declaration of a module such a file names (its dotted name, or its file's path from the
+  root or from its package's source directory), so a test, a generator or a tool that reads one keeps it.
 
 The `@[defeq]` theorems, the coercion instances, the lock-listed modules and the cited names are seeds to be safe
 (`CAUTIOUS`): the report counts what each alone keeps (`kept_only_by`).
@@ -97,6 +98,8 @@ DOCS = (".md",)
 CITE_MAX_BYTES = 4 << 20
 #: a dotted identifier, as a file outside Lean would name a declaration
 DOTTED = re.compile(r"[A-Za-z_][A-Za-z0-9_'!?]*(?:\.[A-Za-z0-9_'!?]+)+")
+#: a path to a Lean file, as a file outside Lean would name a module
+LEAN_PATH = re.compile(r"[A-Za-z0-9_'!?./-]+\.lean\b")
 #: the constants Lean shares between a module's declarations: a matcher, an abstracted proof
 SHARED = re.compile(r"\.(?:match_\d+|_?proof_\d+)$")
 SKIP_DIRS = {".lake", ".git", ".venv", "node_modules", "__pycache__", "target", ".mypy_cache", ".pytest_cache"}
@@ -293,9 +296,10 @@ def lock_seeds(tree: Tree) -> tuple[set[str], set[str]]:
     return names, mods
 
 
-def citations(tree: Tree, candidates: set[str]) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
-    """The candidate names files outside Lean mention in full: by code (`CITED_BY`), and by docs (`DOCS`), each with the
-    files."""
+def citations(tree: Tree, candidates: set[str], modules: dict[str, str]) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """The candidate names files outside Lean mention in full, and the modules they name (``modules``: a module's dotted
+    name and its file's paths, from the root and from its package's source directory, each to the module): by code
+    (`CITED_BY`), and by docs (`DOCS`), each with the files."""
     code: dict[str, list[str]] = defaultdict(list)
     docs: dict[str, list[str]] = defaultdict(list)
     for f in tree.files:
@@ -306,7 +310,11 @@ def citations(tree: Tree, candidates: set[str]) -> tuple[dict[str, list[str]], d
         if not p.is_file() or p.stat().st_size > CITE_MAX_BYTES:
             continue
         text = p.read_text(errors="replace")
-        hits = {m.rstrip(".") for m in DOTTED.findall(text)} & candidates
+        dotted = {m.rstrip(".") for m in DOTTED.findall(text)}
+        hits = (dotted & candidates) | {modules[d] for d in dotted if d in modules}
+        for path in LEAN_PATH.findall(text):
+            parts = path.split("/")
+            hits |= {modules[s] for s in ("/".join(parts[k:]) for k in range(len(parts))) if s in modules}
         for h in hits:
             (docs if suffix in DOCS else code)[h].append(f)
     return code, docs
@@ -394,7 +402,8 @@ def analyse(tree: Tree, facts: Facts) -> dict:
     lock_names, lock_mods = lock_seeds(tree)
     is_decl = [owner[i] == i and i in facts.range for i in range(n)]
     candidates = {facts.name[i] for i in range(n) if is_decl[i] and tree.analysis(mod_of[i])}
-    cited_code, cited_docs = citations(tree, candidates)
+    named = {k: m for m, f in tree.module_file.items() if tree.analysis(m) for k in (m, f, m.replace(".", "/") + ".lean")}
+    cited_code, cited_docs = citations(tree, candidates, named)
     sources: dict[str, set[int]] = defaultdict(set)
     for i, name in enumerate(facts.name):
         mod = mod_of[i]
@@ -415,7 +424,7 @@ def analyse(tree: Tree, facts: Facts) -> dict:
                 sources[fl].add(i)
         if facts.instance_of.get(i) in COERCION:
             sources["coercion"].add(i)
-        if name in cited_code:
+        if name in cited_code or mod in cited_code:
             sources["cited"].add(i)
     seeds = set().union(*sources.values())
     shared = [bool(SHARED.search(x)) for x in facts.name]
@@ -634,6 +643,9 @@ def markdown(rep: dict, rev: str | None) -> str:
             "a lock lists and each one a file outside Lean names; `kept_only_by` counts what each alone keeps.",
             "- An `example`, `#guard` or `#eval` leaves nothing in the environment: a declaration only they use is "
             "reported unread, and deleting it means deleting them.",
+            "- A module of checks (theorems over concrete values or vectors, which the build checks) is read by nothing "
+            "by design: it is kept only when a file outside Lean names it, and a file that builds its path in pieces "
+            "(`LEAN / \"Prims\" / \"Vectors.lean\"`) does not name it.",
             "- A module with no read declaration that gives an instance or `simp` attribute to another module's constant is "
             "kept (`attributes`), and a module no package root imports is `unbuilt`, reported but not read.",
             "- Deleting a wholly unread module that a kept module imports means that importer imports what it imported.", ""]

@@ -62,7 +62,8 @@ def test_the_longest_chain_and_the_imports_once_modules_go():
 
 
 #: what the fixture's closure finds: each module's status, and each read module's unread declarations
-STATUS = {"Code": "read", "Definitions": "read", "Definitions.Attr": "attributes", "Definitions.Core": "read",
+STATUS = {"Code": "read", "Definitions": "read", "Definitions.Attr": "attributes", "Definitions.Checks": "read",
+          "Definitions.Core": "read",
           "Definitions.Dead": "unread", "Definitions.Gone": "unread aggregator", "Definitions.Notation": "read",
           "Definitions.Orphan": "unbuilt", "Properties.Code": "read", "Proofs.Flock": "read", "Proofs.Flock.Main": "read",
           "Proofs.Flock.Spare": "unread", "Proofs.Properties.Code": "read"}
@@ -82,6 +83,8 @@ def check_report(rep: dict) -> None:
     assert rep["seeds"]["coercion"] == 1
     assert mods["Proofs.Flock.Main"]["kept_only_by"]["defeq"] == 1
     assert core["unread_cited_in_docs"] == ["Core.unusedHelper"]
+    assert mods["Definitions.Checks"]["kept_only_by"]["cited"] == 1
+    assert rep["cited_by_code"]["Definitions.Checks"] == ["tools/reader.toml"]
     assert mods["Definitions.Attr"]["foreign_attributes"] == ["Core.unusedLemma"]
     dead = rep["areas"]["Definitions/Dead"]
     assert (dead["wholly_unread_modules"], dead["wholly_unread_lines"]) == (1, mods["Definitions.Dead"]["lines"])
@@ -97,9 +100,9 @@ def check_report(rep: dict) -> None:
 
 def test_the_fixture_s_closure_keeps_what_is_read_and_finds_the_rest():
     """The fixture's kept facts: the guarantee's proof and what it reads, the properties, the code, a notation, a
-    name a tool reads, the `@[defeq]` theorems and a coercion instance, which no term names, are kept; a matcher another
-    declaration shares, a name in `reads` or in a README, and an instance nothing uses keep nothing; a module that gives
-    another's theorem `simp` stays."""
+    name a tool reads, a module of checks a tool names by path, the `@[defeq]` theorems and a coercion instance, which no
+    term names, are kept; a matcher another declaration shares, a name in `reads` or in a README, and an instance
+    nothing uses keep nothing; a module that gives another's theorem `simp` stays."""
     tree = U.Tree(FIXTURE, U.tracked(FIXTURE))
     facts = U.Facts(FACTS)
     coe = facts.index["Core.instCoeWrapNat"]
