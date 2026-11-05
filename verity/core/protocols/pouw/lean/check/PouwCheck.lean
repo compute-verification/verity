@@ -7,8 +7,10 @@ import PouwCheck.Opening
 import PouwCheck.Pass
 import PouwCheck.Rounds
 import PouwCheck.Credit
+import PouwCheck.Period
 import PouwCheck.Chunks
 import PouwCheck.LeafOwn
+import PouwCheck.Lanes
 import PouwCheck.Verified
 import PouwCheck.LiveVerified
 import PouwCheck.CommittedFiles
