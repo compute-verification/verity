@@ -1,22 +1,27 @@
 """A two-stage sampling design on the proof system's `Stream`: the boundary registration over replay blocks, the first
 stage, the interior registration over the replay sample's proof blocks, the second stage on its own coins, one outcome
 binding both registrations and both samples, each step by both verifiers; its refusals; and its profile at the
-footprint."""
+footprint. The service and the verifier of record refuse every two-stage rule until the proof that their code meets the
+two-stage certificate lands, so these tests run it under the refusal's test hook (`verifier.UNCERTIFIED_RULES`), and one
+holds the refusal off it."""
 
 from __future__ import annotations
 
 import random
+import re
 from fractions import Fraction
 from math import comb
 
 import pytest
 
+from verity.ml.circuits import codec
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value as Bits
 from verity.core.protocols.profile import Bernoulli, Subset
 from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R
+from verity.core.protocols.sampled_proofs.one_stage import (draw as D, partition as P, registration as R,
+                                                            verifier as V)
 
 import fake_challenger as FC
 
@@ -44,6 +49,11 @@ PUBLIC = (S.Public("population", "structure", "N, the sample's range"),
             for k in ("leaves", "domain")))
 VALUES = (*(S.Value(v, SCHEMA, "serve") for v in BOUNDARY), *(S.Value(v, SCHEMA, "interior") for v in INTERIOR))
 RULE = S.TwoStage(GRAIN, f"subset:{Q}", K)
+
+
+@pytest.fixture(autouse=True)
+def uncertified(monkeypatch):
+    monkeypatch.setattr(V, "UNCERTIFIED_RULES", True)
 
 
 def _spec(selection=RULE, values=VALUES, proof_deadline=60.0) -> S.Spec:
@@ -229,6 +239,24 @@ def test_the_rule_and_the_spec_state_one_form():
         _spec(selection=S.Law("subset:2"))
     assert S.selection_law(RULE, N) == {"law": "subset", "k": Q}
     assert S.boundary_values(VALUES) == VALUES[:2] and S.interior_values(VALUES) == VALUES[2:]
+
+
+def test_off_the_test_hook_every_two_stage_rule_is_refused(monkeypatch):
+    """As deployed: a spec refuses a two-stage rule (`UNCERTIFIED_RULE`), and the verifier of record (`Pieces.verifier`)
+    refuses its first stage, its second, its run and its stream with the same reason (`Select.uncertifiedRule`). Under
+    the hook the same stages reach the difftest's pieces, which draw them."""
+    monkeypatch.setattr(V, "UNCERTIFIED_RULES", False)
+    with pytest.raises(ValueError, match=re.escape(S.UNCERTIFIED_RULE)):
+        _spec()
+    first = {"rule": RULE.to_json(), "program": codec.encode_program(P.population_program(BLOCK, N)), "query": GRAIN,
+             "work_table": None, "closure": None, "source": random.Random(1).randbytes(4096).hex()}
+    second = {"sample": [0, 2], "n": N_RHO, "k": K, "source": random.Random(2).randbytes(4096).hex()}
+    for fn, value in (("select", first), ("select_second", second), ("run", {"rule": RULE.to_json()}),
+                      ("stream", {"params": {"two_stage": True}, "state": {}, "op": {}})):
+        assert V.lean(fn, value) == {"refused": S.UNCERTIFIED_RULE}, fn
+    monkeypatch.setattr(V, "UNCERTIFIED_RULES", True)
+    assert len(V.lean("select", first)["draw"]["units"]) == Q
+    assert len(V.lean("select_second", second)["draw"]["units"]) == 2 * K
 
 
 def test_the_second_stage_samples_k_in_each_sampled_replay_block():

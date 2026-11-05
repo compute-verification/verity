@@ -58,6 +58,11 @@ DISAGREE = "disagree"
 CORE = Path(__file__).resolve().parents[3]
 PACKAGE = CORE.parents[1] / "verity/core/service/sampled_proofs"
 EXE = "sampled-proofs-verifier"
+UNCERTIFIED_RULES = False
+"""A test hook, off in every deployment. On, the service runs a two-stage rule, which the verifier of record refuses
+(`service.UNCERTIFIED_RULE`, `Select.uncertifiedRule`), and every call here goes to `UNCERTIFIED_EXE`."""
+UNCERTIFIED_EXE = "sampled-proofs-difftest"
+"""The difftest's executable, whose pieces (`Pieces.table`) run a two-stage rule."""
 BUILD_LOCK = CORE / "difftest" / "lean" / ".lake" / "harness-build.lock"
 #: The δ the Lean's registration parameters carry, which R1-R7 never read.
 REGISTRATION_DELTA = "1/2"
@@ -68,18 +73,18 @@ class LeanError(RuntimeError):
 
 
 @functools.cache
-def executable() -> Path:
-    """`lake build sampled-proofs-verifier`, once per process, under `BUILD_LOCK`; the executable's path."""
+def executable(exe: str = EXE) -> Path:
+    """`lake build sampled-proofs-verifier` (or `exe`), once per process, under `BUILD_LOCK`; the executable's path."""
     BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
     with open(BUILD_LOCK, "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         try:
-            p = subprocess.run(["lake", "build", EXE], cwd=PACKAGE, capture_output=True, text=True)
+            p = subprocess.run(["lake", "build", exe], cwd=PACKAGE, capture_output=True, text=True)
         except FileNotFoundError:
-            raise LeanError(f"lake is not on the PATH, so {EXE} in {PACKAGE} cannot be built") from None
+            raise LeanError(f"lake is not on the PATH, so {exe} in {PACKAGE} cannot be built") from None
     if p.returncode != 0:
-        raise LeanError(f"lake build {EXE} in {PACKAGE} failed ({p.returncode}):\n{p.stdout[-2000:]}{p.stderr[-2000:]}")
-    return PACKAGE / ".lake" / "build" / "bin" / EXE
+        raise LeanError(f"lake build {exe} in {PACKAGE} failed ({p.returncode}):\n{p.stdout[-2000:]}{p.stderr[-2000:]}")
+    return PACKAGE / ".lake" / "build" / "bin" / exe
 
 
 def _dumps(value: Any) -> str:
@@ -105,10 +110,11 @@ def _dumps(value: Any) -> str:
 
 
 class _Server:
-    """One `sampled-proofs-verifier serve` process per Python process (`Difftest.serve`: a request line, an answer line),
-    started at the first call and again after it dies."""
+    """One serving process of `exe` per Python process (`Difftest.serve`: a request line, an answer line), started at
+    the first call and again after it dies."""
 
-    def __init__(self) -> None:
+    def __init__(self, exe: str = EXE) -> None:
+        self.exe = exe
         self._proc: subprocess.Popen | None = None
         self._stderr: Any = None
         self._lock = threading.Lock()
@@ -119,8 +125,8 @@ class _Server:
         with self._lock:
             if self._proc is None or self._proc.poll() is not None:
                 self._stderr = tempfile.TemporaryFile()
-                self._proc = subprocess.Popen([str(executable())], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                              stderr=self._stderr, text=True, encoding="utf-8")
+                self._proc = subprocess.Popen([str(executable(self.exe))], stdin=subprocess.PIPE,
+                                              stdout=subprocess.PIPE, stderr=self._stderr, text=True, encoding="utf-8")
             try:
                 self._proc.stdin.write(line + "\n")
                 self._proc.stdin.flush()
@@ -133,16 +139,16 @@ class _Server:
                 self._stderr.seek(0)
                 err = self._stderr.read().decode("utf-8", "replace")[-2000:]
                 self._proc = None
-                raise LeanError(f"{EXE} ended on {fn}: {err}")
+                raise LeanError(f"{self.exe} ended on {fn}: {err}")
         try:
             msg = json.loads(reply)
         except ValueError:
-            raise LeanError(f"{EXE} on {fn} answered a line that is not JSON: {reply[:500]}") from None
+            raise LeanError(f"{self.exe} on {fn} answered a line that is not JSON: {reply[:500]}") from None
         if isinstance(msg, dict) and len(msg) == 1:
             (kind, body), = msg.items()
             if kind == "output" or (kind == "reject" and isinstance(body, str)):
                 return kind, body
-        raise LeanError(f"{EXE} on {fn}: {reply[:500]}")
+        raise LeanError(f"{self.exe} on {fn}: {reply[:500]}")
 
     def close(self) -> None:
         """End the server: `Difftest.serve` stops at the end of its input."""
@@ -155,12 +161,14 @@ class _Server:
 
 _server = _Server()
 atexit.register(_server.close)
+_uncertified = _Server(UNCERTIFIED_EXE)
+atexit.register(_uncertified.close)
 
 
 def lean(fn: str, value: Any) -> dict[str, Any]:
     """The Lean's answer: its output, or `{"refused": reason}` where it refuses the input or can't run."""
     try:
-        kind, body = _server.call(fn, value)
+        kind, body = (_uncertified if UNCERTIFIED_RULES else _server).call(fn, value)
     except LeanError as e:
         return {"refused": str(e)}
     return body if kind == "output" else {"refused": body}
@@ -510,6 +518,6 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     return rec
 
 
-__all__ = ["BUILD_LOCK", "COINS_MAX", "DISAGREE", "EXE", "LeanError", "PACKAGE", "RECORD_VERDICT", "audit_record",
-           "check", "check_draw", "check_proved", "check_public", "check_verdicts", "coins", "executable", "fleet",
-           "lean", "matches_public", "run", "select", "stream"]
+__all__ = ["BUILD_LOCK", "COINS_MAX", "DISAGREE", "EXE", "LeanError", "PACKAGE", "RECORD_VERDICT", "UNCERTIFIED_EXE",
+           "UNCERTIFIED_RULES", "audit_record", "check", "check_draw", "check_proved", "check_public", "check_verdicts",
+           "coins", "executable", "fleet", "lean", "matches_public", "run", "select", "select_second", "stream"]
