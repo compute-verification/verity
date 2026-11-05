@@ -10,11 +10,11 @@ premise states it with, under the tags it states them at (`Witness.zkTags`, one 
 
     served-v2-files CIRCUIT PUBLIC PARTITION PROGRAM RECORD
 
-prints one JSON line: whether `HmIn.parse` gives no ports, the public file's instances at none (`HmIn.loadPublic`), whether
-every port is a `row/v2` row, `PortRoots.check`'s and `KsScope.check`'s verdicts, and at the session record's draw
-(`Witness.recordDraw`) the units it proves, and `setupHidden`'s table's `Zk.shapeOk`, `fast100` and `Zk.schedule`. A step
-that fails prints `{"error": …}`. `rowsV2` is `Flock.Bridge.RowsV2`'s body and `jsonOf` `FlockDeploy.jsonOf`'s, which the
-premise reads from `Security/Proofs`, a package this one doesn't require.
+prints one JSON line: whether `HmIn.parse` gives no ports, the public file's instances at none (`HmIn.loadPublic`),
+whether every port is a `row/v2` row, `PortRoots.check`'s and `KsScope.check`'s verdicts, and at the session record's
+draw (`Witness.recordDraw`) the units it proves, and `setupHidden`'s table's `Zk.shapeOk`, `fast100` and
+`Zk.schedule`. A step that fails prints `{"error": …}`. `rowsV2` is `Flock.Bridge.RowsV2`'s body and `jsonOf`
+`FlockDeploy.jsonOf`'s, which the premise reads from `Security/Proofs`, a package this one doesn't require.
 -/
 
 open Lean (Json toJson)

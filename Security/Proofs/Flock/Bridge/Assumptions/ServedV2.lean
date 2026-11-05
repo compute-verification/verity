@@ -12,18 +12,18 @@ public import Proofs.Properties.Verity.Recursive.PartStatement
 /-!
 # The served v2 session's files parse and set up
 
-`KSByDeployed`'s honest witness builds one-stage v2's live session (`Verity.Sampled.Live`) on the served registered `--zk`
-session at `sha512/row/v2` rows. What it needs of that session's files is a computation on a 56 MB circuit file, which
-the kernel can't run, so it is one named premise, of the witness only: no guarantee reads it. It is stated with the
-verifier's own functions on the files `verify --zk` reads, each pinned by its SHA-512, in `ServedFilesParseV5`'s form
-where it states the same fact (the tags, `Desc.parse`, `HmIn.parse`, `HmIn.loadPublic`).
+`KSByDeployed`'s honest witness builds one-stage v2's live session (`Verity.Sampled.Live`) on the served registered
+`--zk` session at `sha512/row/v2` rows. What it needs of that session's files is a computation on a 56 MB circuit file,
+which the kernel can't run, so it is one named premise, of the witness only: no guarantee reads it. It is stated with
+the verifier's own functions on the files `verify --zk` reads, each pinned by its SHA-512, in `ServedFilesParseV5`'s
+form where it states the same fact (the tags, `Desc.parse`, `HmIn.parse`, `HmIn.loadPublic`).
 
-What the witness derives rather than assumes: the proof block is built (`built_of_parse`); `scopeOkH`, `dupName = none`,
-the public file as the committed files' circuit reads it (`HmOut.loadPublic`, with the same `n`) and the roots fixing their
-domains (`RootFixesDomainL`) follow from `PortRoots.check` and `KsScope.check`, which `verify --zk` runs on every session
-(`v5Files_of_checks`, `KsScope.check_ok`, `portRoots_load`, `loadPublic_inOut`); `m_pts` is `mPtsOf` at the draw's proved
-units (`setupHidden_mPts_of_provedP`); the tags are the hidden-output ones by `rfl`; and the statement's bytes decode to
-it (`decode_encode_fits`).
+What the witness derives rather than assumes: the proof block is built (`built_of_parse`); `scopeOkH`,
+`dupName = none`, the public file as the committed files' circuit reads it (`HmOut.loadPublic`, with the same `n`) and
+the roots fixing their domains (`RootFixesDomainL`) follow from `PortRoots.check` and `KsScope.check`, which
+`verify --zk` runs on every session (`v5Files_of_checks`, `KsScope.check_ok`, `portRoots_load`, `loadPublic_inOut`);
+`m_pts` is `mPtsOf` at the draw's proved units (`setupHidden_mPts_of_provedP`); the tags are the hidden-output ones by
+`rfl`; and the statement's bytes decode to it (`decode_encode_fits`).
 -/
 
 @[expose] public section
@@ -32,9 +32,9 @@ namespace Flock.Bridge.Assumptions
 
 open Flock
 
-/-- **One-stage v2's statement of the served session** at the draw file `d` (`Verity.Sampled.Record.baseRaw`'s fields at
-these files): the circuit, public, partition, program and registered files, `--zk`, one table, and no lookup tables, work,
-stratified, closure or public-input input. -/
+/-- **One-stage v2's statement of the served session** at the draw file `d` (`Verity.Sampled.Record.baseRaw`'s fields
+at these files): the circuit, public, partition, program and registered files, `--zk`, one table, and no lookup tables,
+work, stratified, closure or public-input input. -/
 def servedRawV2 (cf pf pt pg rg d : ByteArray) : FlockDeploy.Raw where
   statement := _root_.SampledProofs.OneStageZk.STATEMENT
   circuit := cf
@@ -99,9 +99,11 @@ def ServedFilesParseV2 : Prop :=
         PortRoots.check (Witness.zkTags ⟨Tags.circuit, cf, pf, 1, [], none, none⟩) cf pf [] = .ok () ∧
         KsScope.check (Witness.zkTags ⟨Tags.circuit, cf, pf, 1, [], none, none⟩) cf pf [] 1 none = .ok () ∧
         (∃ (ptJ d₀ : Lean.Json) (ud : Draw.UnitDraw) (st : Stmt),
-          FlockDeploy.jsonOf "partition" pt = .ok ptJ ∧ Draw.UnitDraw.ofJson d₀ = .ok ud ∧ ud.proved.size = 16 ∧
+          FlockDeploy.jsonOf "partition" pt = .ok ptJ ∧ Draw.UnitDraw.ofJson d₀ = .ok ud ∧
+          ud.proved.size = 16 ∧
           Stmt.setupHidden (Witness.zkTags ⟨Tags.circuit, cf, pf, 1, [], none, none⟩) cf pf
-            (Witness.zkCoins ⟨Tags.circuit, cf, pf, 1, [], none, none⟩) [] (some d₀) (some ptJ) (some pg) none = .ok st ∧
+            (Witness.zkCoins ⟨Tags.circuit, cf, pf, 1, [], none, none⟩) [] (some d₀) (some ptJ) (some pg) none =
+              .ok st ∧
           Zk.shapeOk st = .ok () ∧ (∃ sch, fast100 st.m = some sch) ∧
           ∃ sch tPad, Zk.schedule st.m = .ok (sch, tPad)) ∧
         ∃ (d : List UInt8) (s : FlockDeploy.Ins) (t : Stmt),
