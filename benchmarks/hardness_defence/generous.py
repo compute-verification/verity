@@ -285,7 +285,7 @@ def main():
                   f"{r['least']:.4f} | {r['route']}, {r['key']} | {r['least'] / r['credit']:.4f} | "
                   f"{r['new_credit']:.4f} | {r['knee_nb'] or ('top ' if r['knee_top'] else '') + str(r['knee'])} | "
                   f"{fit} | {il} | {rp} |")
-    live_report(book, gen, rec, args.matrices)
+    live_report(book, gen, rec, rows, args.matrices)
 
 
 def under(book, model, choose):
@@ -301,7 +301,7 @@ def under(book, model, choose):
     return sorted(out)
 
 
-def live_report(book, gen, rec, matrices):
+def live_report(book, gen, rec, rows, matrices):
     print()
     print("T's drawn range (trange.py) against the worst case its digits are priced for:")
     print()
@@ -320,6 +320,31 @@ def live_report(book, gen, rec, matrices):
     live = gen.live_book(book)
     lrows = analyse(live, gen, rec)
     lchoose = revised(lrows, rec)
+    print()
+    print("From the exact split to the generous bound, each credited q and k's least over the leaf: the exact least as "
+          "priced (E), at live digits (L), the exact split's residual with its factors at lr1 (I) and the generous "
+          "least in all orders (G); min / median over the matrices:")
+    print()
+    print("| model | kind | E − L (worst-case digits) | L − I (two digits and writes over lr1) | I − G (the factors' "
+          "rounding) | L − G | G = L (no split helps) | G > L |")
+    print("|---|---|---|---|---|---|---|---|")
+    for model in T.MODELS:
+        for kd in QK:
+            gaps = collections.defaultdict(list)
+            for r in rows:
+                if r["model"] != model or T.kind(r["t"]) != kd:
+                    continue
+                var = rec(book, model, r["t"])[0]
+                E, L, G_ = r["exact"], T.least_of(live.v[model][r["t"]][var]), r["least"]
+                gaps["E-L"].append(E - L)
+                gaps["L-G"].append(L - G_)
+                if r["isvd_lr1"] is not None:
+                    gaps["L-I"].append(L - r["isvd_lr1"])
+                    gaps["I-G"].append(r["isvd_lr1"] - G_)
+            cells = [f"{min(v):.4f} / {sorted(v)[len(v) // 2]:.4f}" if v else "–"
+                     for v in (gaps[g] for g in ("E-L", "L-I", "I-G", "L-G"))]
+            print(f"| {model} | {kd.removesuffix('_proj')} | {' | '.join(cells)} | "
+                  f"{sum(abs(g) < 1e-12 for g in gaps['L-G'])} | {sum(g < -1e-12 for g in gaps['L-G'])} |")
 
     def held(_b, model, t):
         return rec(book, model, t)
