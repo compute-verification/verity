@@ -1,7 +1,6 @@
-"""Proof overhead against a proof block's output width, per proof system and commitment scheme, and what the exfiltration
-bound makes of each curve.
+"""Proof overhead against a proof block's output width, and what the exfiltration bound makes of each curve.
 
-    python overhead.py --flock RUN_OUT [--served-pcs JSONL] [--card h200-sxm-141gb] --out DIR
+    python overhead.py --flock RUN_OUT [--card h200-sxm-141gb] --out DIR
 
 ``RUN_OUT`` is a `benchmarks/flock_s8_block` run's ``out/`` whose ``STATEMENTS`` hold two instance counts at each rows-per-block
 R (``K:N:R``, one K). A block of R rows computes R·K int8 MACs and outputs 32·R bits. Per R:
@@ -12,12 +11,14 @@ R (``K:N:R``, one K). A block of R rows computes R·K int8 MACs and outputs 32·
   each instance's rows (its activation row of K bytes, its weight row of R·K bytes, its output row of 4R bytes; packed words,
   own rows) cost ceil((L + 145) / 128) + 6 SHA-512 compressions of `SHA512_ANDS` each. A two-rate least-squares fit of the
   per-block seconds over both counts gives seconds per AND of each kind.
-- **Flock, a commitment it opens by linear claims (modeled).** The block's own ANDs at the fitted rate, plus a per-block
-  opening cost: ``served_pcs``'s marginal per-claim opening seconds (CPU) over ``--cpu-per-gpu``, or 0 without its file.
+- **The floor (modeled).** The block's own ANDs at the fitted rate, its commitment opened for free: what any commitment
+  scheme can at best reach. ``served_pcs`` measures what a linear-claim commitment's opening and serving actually cost,
+  which depends on how much data one commitment covers, so it isn't folded in here.
 - **Exfiltration.** The 3-pager's model (`exfil_bound`) at each width: proof units of 2·R·K FLOP and 32·R output bits at the
   curve's overhead, one year of world inference, a 1% verification budget.
 
-Writes ``overhead.json`` and, with matplotlib, ``overhead_vs_width.png`` and ``exfil_vs_width.png`` to DIR.
+Writes ``overhead.json`` and, with matplotlib, ``overhead_vs_width.png``, ``share_vs_width.png`` and ``exfil_vs_width.png``
+to DIR.
 """
 from __future__ import annotations
 
@@ -83,19 +84,6 @@ def fit_rates(bs: list[dict]) -> tuple[float, float]:
     return float(max(sol[0], 0.0)), float(max(sol[1], 0.0))
 
 
-def open_cost(path: Path | None, cpu_per_gpu: float) -> float:
-    """The marginal per-claim opening seconds from served_pcs (the largest window, its lowest rate), on the GPU."""
-    if path is None:
-        return 0.0
-    rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip().startswith("{")]
-    pcs = [r for r in rows if r["kind"] == "pcs"]
-    m = max(r["m"] for r in pcs)
-    rate = min(r["log_inv_rate"] for r in pcs if r["m"] == m)
-    at = {r["claims"]: r["open_s"] for r in pcs if r["m"] == m and r["log_inv_rate"] == rate}
-    lo, hi = min(at), max(at)
-    return max(at[hi] - at[lo], 0.0) / (hi - lo) / cpu_per_gpu if hi > lo else 0.0
-
-
 # The 3-pager's model (its Figure 1): all inference worldwide for a year, DeepSeek-V4-Pro at 4,500 tokens a request, a
 # 2.5 MB output cap a request, the verifier's replay share q and per-unit proving share s within a budget beta, the
 # adversary's best corruption at a 1% evasion threshold over the horizon.
@@ -142,9 +130,7 @@ def exfil_bound(flop_pu: float, bits: int, h: float, beta: float = 0.01) -> floa
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--flock", type=Path, required=True)
-    p.add_argument("--served-pcs", type=Path)
     p.add_argument("--card", default="h200-sxm-141gb")
-    p.add_argument("--cpu-per-gpu", type=float, default=48.0, help="CPU over GPU prove time for the same work (d826: 0.205 s / 4.23 ms)")
     p.add_argument("--out", type=Path, required=True)
     a = p.parse_args(argv)
     peak = peak_macs(a.card)
@@ -153,16 +139,14 @@ def main(argv: list[str] | None = None) -> int:
         print("overhead: fewer than two widths with two instance counts each", file=sys.stderr)
         return 1
     per_and, per_hash_and = fit_rates(bs)
-    opening = open_cost(a.served_pcs, a.cpu_per_gpu)
     for b in bs:
         b["overhead_hm96"] = b["block_s"] * peak / b["macs"]
         b["hash_share"] = b["hash_ands"] * per_hash_and / (b["ands"] * per_and + b["hash_ands"] * per_hash_and)
-        b["block_s_native"] = b["ands"] * per_and + opening
-        b["overhead_native"] = b["block_s_native"] * peak / b["macs"]
+        b["block_s_floor"] = b["ands"] * per_and
+        b["overhead_floor"] = b["block_s_floor"] * peak / b["macs"]
         b["exfil_bytes_hm96"] = exfil_bound(2 * b["macs"], b["width_bits"], b["overhead_hm96"])
-        b["exfil_bytes_native"] = exfil_bound(2 * b["macs"], b["width_bits"], b["overhead_native"])
-    res = {"card": a.card, "peak_s8_macs_per_s": peak, "s_per_and": per_and, "s_per_hash_and": per_hash_and,
-           "native_opening_s_per_block": opening, "blocks": bs}
+        b["exfil_bytes_floor"] = exfil_bound(2 * b["macs"], b["width_bits"], b["overhead_floor"])
+    res = {"card": a.card, "peak_s8_macs_per_s": peak, "s_per_and": per_and, "s_per_hash_and": per_hash_and, "blocks": bs}
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "overhead.json").write_text(json.dumps(res, indent=1))
     try:
@@ -174,15 +158,24 @@ def main(argv: list[str] | None = None) -> int:
     w = [b["width_bits"] for b in bs]
     fig, ax = plt.subplots(figsize=(7, 5))
     ax.loglog(w, [b["overhead_hm96"] for b in bs], "o-", label="Flock, hm96 rows opened in the circuit (measured)")
-    ax.loglog(w, [b["overhead_native"] for b in bs], "s--", label="Flock, commitment opened by linear claims (modeled)")
+    ax.loglog(w, [b["overhead_floor"] for b in bs], "s--", label="Flock, opening free: the floor for any commitment (modeled)")
     ax.set_xlabel("Proof block output width (bits)")
     ax.set_ylabel("Proof overhead (GPU-seconds × peak MAC/s ÷ block MACs)")
     ax.set_title(f"int8 matmul blocks, K = {bs[0]['k']}, {a.card}")
     ax.legend(fontsize=8)
     fig.savefig(a.out / "overhead_vs_width.png", dpi=200, bbox_inches="tight")
+    fig, ax = plt.subplots(figsize=(7, 4))
+    ax.semilogx(w, [100 * b["hash_share"] for b in bs], "o-", label="hm96 openings in the circuit")
+    ax.semilogx(w, [100 * (1 - b["hash_share"]) for b in bs], "s--", label="the block's own computation")
+    ax.set_xlabel("Proof block output width (bits)")
+    ax.set_ylabel("Share of a block's proving time (%), fitted")
+    ax.set_ylim(0, 100)
+    ax.set_title("Where a block's proving time goes")
+    ax.legend(fontsize=8)
+    fig.savefig(a.out / "share_vs_width.png", dpi=200, bbox_inches="tight")
     fig, ax = plt.subplots(figsize=(7, 5))
     ax.loglog(w, [b["exfil_bytes_hm96"] / 1e9 for b in bs], "o-", label="Flock, hm96 in the circuit")
-    ax.loglog(w, [b["exfil_bytes_native"] / 1e9 for b in bs], "s--", label="Flock, linear-claim commitment (modeled)")
+    ax.loglog(w, [b["exfil_bytes_floor"] / 1e9 for b in bs], "s--", label="Flock, opening free (modeled floor)")
     ax.set_xlabel("Proof block output width (bits)")
     ax.set_ylabel("Exfiltration capacity, one year of world inference (GB)")
     ax.set_title("3-pager model at a 1% verification budget")
