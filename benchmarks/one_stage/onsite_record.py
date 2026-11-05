@@ -21,7 +21,11 @@ no serving settings is refused (`UNLABELLED`).
 **Verdicts** (`VERDICTS`), each ``{protocol, verdict, from}`` with the answer's ``reason`` or ``refusal``, or, where the
 run wrote no answer, ``missing`` and ``why``:
 
-* sampled proofs and PoUW: ``record/verdicts.json``'s ``integrity`` and ``work`` rows (`served_verdicts.py record`);
+* sampled proofs: its leg in the composite of record, the outcome of remote's sampled proofs case there
+  (`SAMPLED_ID`: VStar.Recursive.Sampled on OneStageZk's case, the proofs themselves), never ``record/verdicts.json``'s
+  ``integrity`` row, the records audit's one-stage v1 answer, which is no verdict (`V1_UNREAD`): where the composite of
+  record has no such case, not established, the row's answer beside it (``answer``), and missing where the row is too;
+* PoUW: ``record/verdicts.json``'s ``work`` row (`served_verdicts.py record`);
 * inference-only: its case's outcome in remote's composite, or in the composite of record where that is the one
   without PoUW, with where its case's α and Γ came from (``alpha_gamma``, `alpha_gamma`), never a registered policy,
   which none records: read off the run's own division, so the verdict confirms the division against itself, where the
@@ -39,13 +43,13 @@ While `certifier-key` is open (`PREMISES`, `KEY_OPEN`), an accepted network cert
 established``, its Lean answer's accept beside it (``answer``), and its bound conditional on it by name; so is it
 where `auditor-listing` doesn't hold (`LISTING_UNMET`, `FILES_UNMET`), with no bound, and where its registered-files
 condition doesn't, so is the accepted verdict of remote's composite and of the composite of record where it reads
-remote's sampled proofs case; where that case's params name no public file, so is sampled proofs' (`PUBLIC_UNBOUND`).
-Sampled proofs'
-``credit`` (`CREDIT`) names the drawn members it credits, those whose --registered file the audit completed at the
-window's committed roots and whose Lean verdict accepted it reporting exactly its reads (the audit's published record,
-`AUDIT`), and lists every other drawn member as not credited, by name, with why; ``missing`` where the record states no
-completion. ``of_record`` holds when every verdict it reads accepted and every drawn member is credited, the condition
-for the demo's run of record, naming its composite of record by id (``composite``), the verdicts not established, the
+remote's sampled proofs case, sampled proofs' among them; where that case's params name no public file, so is
+sampled proofs' (`PUBLIC_UNBOUND`). Sampled proofs' ``credit`` (`CREDIT`) names the drawn members it credits, those
+whose --registered file the audit completed at the window's committed roots and whose Lean verdict accepted it
+reporting exactly its reads (the audit's published record, `AUDIT`), and lists every other drawn member as not
+credited, by name, with why; ``missing`` where the record states no completion, and where sampled proofs' verdict is
+not established, which credits none (`UNESTABLISHED_CREDIT`). ``of_record`` holds when every verdict it reads accepted
+and every drawn member is credited, the condition for the demo's run of record, naming its composite of record by id (``composite``), the verdicts not established, the
 members not credited and the verdicts it doesn't read (``not_claimed``: PoUW's, `NOT_CLAIMED`, listed as it is, missing
 and development where its row is, and under a composite without PoUW remote's too, `NOT_CLAIMED_WITHOUT_POUW`), and
 the verified compute it credits, none (``verified_compute``, `POUW`); ``placement`` is the network certifier's
@@ -359,7 +363,8 @@ NO_COMPLETION = ("the audit's record states no registered-file completion (check
 UNCOMPLETED = "the audit couldn't complete its --registered file, and refused it"
 UNREPORTED = "its Lean verdict of record didn't accept its completed file reporting exactly that file's reads"
 UNLISTED = "the audit's record lists its Lean verdict but no completion of its --registered file"
-#: where the window report keeps sampled proofs' answer, whose profile and public its guarantee reads
+#: where the window report keeps the records audit's answer, whose profile and public, the draw's n, law and δ and the
+#: bound there, sampled proofs' guarantee reads once its verdict, the composite's leg (`sampled_verdict`), accepted
 SAMPLED_FROM = f"record/verdicts.json protocols.{ROWS['sampled proofs']}.answer"
 SAMPLED = ("sampled proofs' guarantee, what its draw establishes, ε at δ, per window and pooled over each monitoring "
            "period, never the window's alone. A window (``per_window``): its answer's bound at its integrity profile's δ "
@@ -436,6 +441,11 @@ AUDITOR_RECORD, AUDITOR_LISTING = "auditor-record", "auditor-listing"
 #: remote's sampled proofs case (`served_cases.SAMPLED`), whose params θ the remote theorem's registered-files condition
 #: reads (`registered_files`)
 SAMPLED_ID = "verity/sampled-proofs/v1"
+V1_UNREAD = (f"sampled proofs' verdict is its leg in the composite of record, the outcome of {SAMPLED_ID}'s case there "
+             "(VStar.Recursive.Sampled on OneStageZk's case, which verifies the proofs themselves), never the window "
+             "report's integrity row: that is the records audit's one-stage v1 answer (served_integrity.answer), and a "
+             "v1 verdict is no verdict of record")
+UNESTABLISHED_CREDIT = "sampled proofs' verdict is not established, so it credits no drawn member"
 REGISTERED_FILES = "registered-files"
 #: the auditor's configuration of the run, each an obligation the record checks on the run's inputs (``checked``), by
 #: the name `RESTS_ON`'s takes and `PREMISES` give it: never a named assumption, and never charged
@@ -478,8 +488,9 @@ CHECKED = {
                       "publicHeld its scheme, roots, domains and population. It holds where no composite of the "
                       "run reads the case. Where either doesn't hold the network verdict is not established and there "
                       "is no bound (`LISTING_UNMET`, `FILES_UNMET`), and where the registered-files condition doesn't, "
-                      "neither is the verdict of a composite that reads the case; where θ names no proofs.public, the "
-                      "public file isn't bound, and sampled proofs' verdict is not established (`PUBLIC_UNBOUND`)"),
+                      "neither is the verdict of a composite that reads the case, nor sampled proofs', its leg there; "
+                      "where θ names no proofs.public, the public file isn't bound, and sampled proofs' verdict is not "
+                      "established (`PUBLIC_UNBOUND`)"),
 }
 #: the guarantees the tight K rests on, by their names in `LOCKS`: PeriodLeakRegistered's count, at the values the
 #: registration opens at its registered inputs, is K's; PeriodLeakAccepted's is the same count at the trace's values
@@ -679,8 +690,8 @@ LISTING_UNMET = (f"{AUDITOR_LISTING} doesn't hold (``checked``): a circuit file 
 FILES_UNMET = (f"{AUDITOR_LISTING}'s {REGISTERED_FILES} condition doesn't hold (``checked``): a file remote's sampled "
                "proofs case registers isn't, by SHA-512, the one its params θ name, or its public file the one pinned "
                "at staging before the draw, or the run can't say, so a Lean "
-               "accept (``answer``) establishes no verdict of the network certifier or of a composite that reads that "
-               "case, and the record states no bound")
+               "accept (``answer``) establishes no verdict of the network certifier, of a composite that reads that "
+               "case or of sampled proofs, its leg there, and the record states no bound")
 PUBLIC_UNBOUND = ("the public file isn't bound on this form: remote's sampled proofs case's params θ name no "
                   "proofs.public, so the remote theorem's registered-files condition binds the circuit file alone, and "
                   "sampled proofs' accept (``answer``) establishes no verdict. The evidence's digest of the public file, "
@@ -934,6 +945,19 @@ def case_verdict(found: Mapping[str, tuple[str, dict[str, Any]]], product: str, 
         if c.get("id") == case:
             return outcome(c, case, f"{src} cases")
     return missing(f"{product}'s composite has no {case} case", src)
+
+
+def sampled_verdict(found: Mapping[str, tuple[str, dict[str, Any]]], composite: str,
+                    rows: Mapping[str, Any]) -> dict[str, Any]:
+    """Sampled proofs' verdict (`V1_UNREAD`): the outcome of `SAMPLED_ID`'s case in the composite of record
+    ``composite``; where it has none, not established, the window report's row's answer beside it (``answer``), or
+    missing where that row is missing too."""
+    v = case_verdict(found, composite, SAMPLED_ID)
+    v1 = row_verdict(rows, ROWS["sampled proofs"])
+    if v["verdict"] != "missing" or v1["verdict"] == "missing":
+        return v
+    return {"protocol": SAMPLED_ID, "verdict": NOT_ESTABLISHED, "answer": v1["verdict"], "from": v1["from"],
+            "why": f"{V1_UNREAD}, and {v['why']}"}
 
 
 def bound(public: Mapping[str, Any]) -> dict[str, Any]:
@@ -1691,7 +1715,7 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     found = composites(out)
     composite, with_pouw = of_record_composite(found)
     unread = NOT_CLAIMED if with_pouw else NOT_CLAIMED_WITHOUT_POUW
-    v = {name: row_verdict(rows, ROWS[name]) for name in ("sampled proofs", "PoUW")}
+    v = {"sampled proofs": sampled_verdict(found, composite, rows), "PoUW": row_verdict(rows, ROWS["PoUW"])}
     v["inference-only"] = case_verdict(found, REMOTE if with_pouw else composite, INFERENCE_ONLY)
     v["remote"] = composite_verdict(found, REMOTE, "remote's composite didn't run: the run has no "
                                                    "composite/remote/composite.json")
@@ -1699,7 +1723,6 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     v["onsite"] = composite_verdict(found, composite, f"the run has no composite of {composite}")
     v = {k: v[k] for k in VERDICTS}
     v["inference-only"]["alpha_gamma"] = alpha_gamma(case_policy)
-    v["sampled proofs"]["credit"] = paid = credit(out)
     for k in unread:
         v[k]["not_claimed"] = POUW_OPEN
     case, no_case = period_case(out)
@@ -1722,12 +1745,15 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     if nv["verdict"] == "accept" and unmet:
         v["the network certifier"] = nv | {"verdict": NOT_ESTABLISHED, "answer": nv["verdict"], "open": list(unmet),
                                            "why": "; ".join(unmet.values())}
-    withheld = [(k, FILES_UNMET) for k, p in (("remote", REMOTE), ("onsite", composite))
-                if not files["holds"] and p in files["read_by"]]
-    withheld += [("sampled proofs", PUBLIC_UNBOUND)] * ("unbound" in files)
+    withheld = [("sampled proofs", PUBLIC_UNBOUND)] * ("unbound" in files)
+    withheld += [(k, FILES_UNMET) for k, p in (("sampled proofs", composite), ("remote", REMOTE), ("onsite", composite))
+                 if not files["holds"] and p in files["read_by"]]
     for k, why in withheld:
         if v[k]["verdict"] == "accept":
             v[k] = v[k] | {"verdict": NOT_ESTABLISHED, "answer": "accept", "open": [REGISTERED_FILES], "why": why}
+    paid = credit(out) if v["sampled proofs"]["verdict"] != NOT_ESTABLISHED else {
+        "credited": [], "missing": UNESTABLISHED_CREDIT, "is": CREDIT}
+    v["sampled proofs"]["credit"] = paid
     accepted = nv["verdict"] == "accept" and AUDITOR_LISTING not in unmet
     open_draws = ["sampled proofs' draw"] * bool(cond) + (draws["open"] if accepted else [])
     drawn |= {"open": bool(open_draws), "open_draws": open_draws, "draws": draws}
