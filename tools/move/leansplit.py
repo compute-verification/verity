@@ -43,7 +43,7 @@ DECL = re.compile("^" + ATTRS + MODS + r"(theorem|lemma|def|abbrev|instance|stru
 OPENER = re.compile("^" + ATTRS + r"(?:(?:noncomputable|public)\s+)*(namespace|section|mutual)\b[ \t]*(\S*)")
 END = re.compile(r"^end\b[ \t]*(\S*)")
 CONTEXT = re.compile(r"^(open|variable|universe|set_option|attribute\s*\[local|local\s|export|include|omit)\b")
-IN_PREFIX = re.compile(r"^(set_option|open)\s.*\sin\s*$")
+IN_PREFIX = re.compile(r"\sin\s*$")
 CONT = re.compile(r"^(deriving(?!\s+instance)|where|with|termination_by|decreasing_by)\b")
 IMPORT = re.compile(r"^(public\s+)?(meta\s+)?import\s+(all\s+)?(\S+)")
 SYNTAX_DEF = re.compile(r'^(?:scoped |local )?(?:elab|macro|syntax|notation|infix[lr]?|prefix|postfix)\b[^"\n]*"([^"]+)"',
@@ -167,7 +167,7 @@ def is_prefix(u: Unit) -> bool:
     h = u.head
     if h.startswith("/-!"):
         return False
-    if h.startswith("/-") or h.startswith("--") or IN_PREFIX.match(h):
+    if h.startswith("/-") or h.startswith("--") or (CONTEXT.match(h) and IN_PREFIX.search(u.own())):
         return True
     return h.startswith("@[") and not DECL.match(h)
 

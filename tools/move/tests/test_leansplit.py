@@ -123,6 +123,17 @@ def test_a_split_and_a_merge_keep_the_imports_that_expose_bodies_or_run_at_compi
     assert "import all Proofs.Toy.Src\n" in M.split_header(tree.read("Proofs.Toy.User"))[0]
 
 
+def test_a_split_takes_the_include_in_before_its_declaration(tree):
+    src = ("module\n\npublic import Proofs.Toy.Base\n\nnamespace Toy\nsection copy\nvariable (F : Nat)\n\n"
+           "include F in\ntheorem a_le (n : Nat) : n ≤ base n := Nat.le_succ n\n\n"
+           "omit F in\nvariable (G : Nat) in\ntheorem b_le (n : Nat) : n ≤ base n + 1 := by omega\nend copy\nend Toy\n")
+    tree.write("Proofs.Toy.Src", src)
+    M.split(tree, dict(SPLIT, source_imports_new=False), [])
+    rest, new = tree.read("Proofs.Toy.Src"), tree.read("Proofs.Toy.SrcA")
+    assert "include F in" not in rest and "omit F in\nvariable (G : Nat) in\ntheorem b_le" in rest
+    assert "include F in\ntheorem a_le" in new
+
+
 def test_an_open_of_a_namespace_it_cannot_see_goes_in_every_form():
     decl = "theorem t : True := trivial\n"
     text = f"module\n\nnamespace Toy\nopen Inner (c)\nopen Nat Inner in\n{decl}open Inner in\n{decl}end Toy\n"
