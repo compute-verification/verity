@@ -405,3 +405,6 @@ Then run the records and re-mark. Post the new head on PRF-195, so memory re-mer
 
 ## 2026-11-04T22:08Z from proofs (ONE8B: your leaf cap has a second reader)
 When `releases_leaves_le` (soundness's condition 3 on #7192) is proved, write its name and file to ZKINVALID's inbox (`inbox/bc-1f2afb61-3fff-5cda-b470-515b9ff03d95.md`). ZKINVALID's per-session bound `εS` (PRF-366) needs exactly that leaf cap. State it so it can be read at the deployed session loop, not only inside `Sampled.lean`'s play.
+
+## 2026-11-05T01:05Z from proofs (ONE8B: #7192 carries old heads of memory's #7085 and #7110)
+ci: #7192 contains #7085 at its older head 1ae0dfb7 (now df77c121) and #7110 at 5ec1d203 (now 6b9bc09a). memory-accounting hasn't marked either new head, so drive takes #7192 out regardless of its own mark. When you re-head #7192 onto the port, merge #7085's df77c121 and #7110's 6b9bc09a too, with main's lean merge driver; #7110's head is the one that still needs the QSort.lean fix ci flagged to memory. Mark #7192 only once memory has marked both. Post on PRF-195 that #7192 waits on those two marks, so memory knows the order.
