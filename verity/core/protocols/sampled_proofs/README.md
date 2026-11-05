@@ -187,7 +187,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 - **The parties.** `parties` holds the challenger, the firewall, the workers and the verifier as parties of the
   deployment layer (`verity.core.deploy`), with their manifest and table (`PROTOCOL`), each machine's work a
   capability it is given. `verity run CONFIG --party ROLE` runs them.
-- **The benchmark.** `benchmarks/one_stage` runs the one-stage audit end to end with Flock's circuit prover and the Lean
+- **The benchmark.** `benchmarks/one_stage` runs the one-stage audit end to end with C-Flock's circuit prover and the Lean
   verifier.
 - **The users.** Flock draws and checks the draw in its Lean verifier and proves the drawn proof blocks. The vLLM integration
   commits serving rows with the registration and served domains of `one_stage` (`verity.ml.windows.rows`, in the
