@@ -7,8 +7,8 @@
 #   them from `verity_flock`.
 # - The fixtures public tests read move beside those tests: the commit-slot layout (`verity/ml/commitments/tests`) and the
 #   captured row-101 input sets (`verity/ml/flock/tests`).
-# - `Identity/Domains.lean`, the domain-tag table, moves into the public `core_randomness` package. It imports nothing.
-# Nothing is split, edited or deleted, and no file is added. The format is `layout_map.toml`'s.
+# `Identity/Domains.lean`'s move into `core_randomness` renames a Lean module, which this script doesn't rewrite: it is the
+# window's word map's. Nothing is split, edited or deleted, and no file is added. The format is `layout_map.toml`'s.
 
 [roots]
 old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
@@ -21,13 +21,17 @@ new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity
 "benchmarks/numerical/python/verity_numerical/bench/input_sets.py" = "verity/ml/flock/python/verity_flock/input_sets.py"
 "benchmarks/torch_gpu/commit_slots/fixtures/commit-slots-v1.json" = "verity/ml/commitments/tests/fixtures/commit-slots-v1.json"
 "benchmarks/numerical/tests/bench/data/captured-101/" = "verity/ml/flock/tests/data/captured-101/"
-"verity/core/primitives/identity/Identity/Domains.lean" = "verity/core/primitives/randomness/Randomness/Domains.lean"
 
 [retired]
 paths = []
 
 [drop]
 paths = []
+
+[split]
+# the slot fixture leaves `commit_slots/`; these put the benchmark's code on `sys.path`, which stays
+"examples/h200/e2e_h200/commit.py: benchmarks/torch_gpu/commit_slots" = "imports commit_slots' code, which stays"
+"examples/h200/interfaces/verity_e2e_demo/replay_bundle.py: benchmarks/torch_gpu/commit_slots" = "imports commit_slots' code, which stays"
 
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), and files
