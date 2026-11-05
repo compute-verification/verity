@@ -44,6 +44,8 @@
     {"file": "Security/Proofs/Flock/EndToEndDrawn/Statement.lean", "count": 1},
     {"file": "Security/Proofs/Flock/EndToEndHidden/Statement.lean", "count": 1},
     {"file": "Security/Proofs/Flock/SamplingBoundary.lean", "count": 3},
+    {"file": "Security/Proofs/Flock/SamplingGeneric/Counter.lean", "count": 1},
+    {"file": "Security/Proofs/Flock/SamplingGeneric/Deployed.lean", "count": 2},
     {"file": "Security/Proofs/Flock/Soundness/Audit/Partitioning.lean", "count": 1},
     {"file": "Security/Proofs/Flock/Soundness/Audit/Partitioning/Guarantees.lean", "count": 7},
     {"file": "Security/Proofs/Flock/Soundness/Audit/Partitioning/Model.lean", "count": 13},
