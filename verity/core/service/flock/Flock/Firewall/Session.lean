@@ -19,7 +19,8 @@ the prover's bytes:
 * `Commit` and `Round` leave only as the schedule's next opening (`State.request`, `reqAt`: the session stream's at
   `Commit`, its count `Hello`'s link points', then each rep stream's rounds in order at the counts `Zk.verifyRep` draws,
   `planOf`), never at a place the prover names. The coins answered must open the committed tree there
-  (`Coins.Release.open`), and only the coins, stripped of their opening, reach the prover (`Coins.frame`).
+  (`Coins.Release.open`), and only the coins, stripped of their opening, reach the prover (`Coins.frame`). An answer
+  that is not coins stops the session, refused (`State.noCoins`), as a refused opening does.
 * Each rep's frame is the loop's own, started on its frames port for the session and the table's rep
   (`Frames.startRep`), and the loop issues every request to it (`Frames`, on the schedule `Drive.reqs` fixes). A rep
   stream's `Round` carries the device's round, and what leaves in its place is the frame's release against the
@@ -60,12 +61,14 @@ the prover's bytes:
   (`openFrame`). `Ping` never leaves: the loop answers it `Resp::Ok` itself, before a stop and after. Any other request
   (`Prime`, an unknown tag) is refused (`State.wire`).
 * Each request leaves at most once, at its place in the session's schedule, the honest prover's order (`State.place`, on
-  what of the session's frames that carry no coin left before it, `Placed`): `Register`; `Hello`; the first rep stream's
-  `Open`; `Commit`; `Link`; the first rep stream's rounds; then each later rep stream's `Open` and its rounds, in
-  `SessionSpec.repStreams` order, a stream's `Open` only once the rounds before it are past; and `Finish` once every rep
-  stream opened. A second `Register`, `Hello`, `Link` or `Open` of a stream, and any of them out of its place, is a
-  refusal. So what leaves is fixed by the statement and the schedule, as the model has it: each frame that carries no
-  coin once, at its place, and one message a round (`Claims.ZKServer.LeanRelease.toSrv`), and nothing the prover places.
+  what of the session's frames that carry no coin left before it, `Placed`; a `Commit` or `Round` at the opening its
+  coins count, `State.request`, where an answer that is not coins ends the session, `State.answer`, so no opening is
+  asked for twice): `Register`; `Hello`; the first rep stream's `Open`; `Commit`; `Link`; the first rep stream's rounds;
+  then each later rep stream's `Open` and its rounds, in `SessionSpec.repStreams` order, a stream's `Open` only once the
+  rounds before it are past; and `Finish` once every rep stream opened. A second `Register`, `Hello`, `Link` or `Open`
+  of a stream, and any of them out of its place, is a refusal. So what leaves is fixed by the statement and the
+  schedule, as the model has it: each frame that carries no coin once, at its place, and one message a round
+  (`Claims.ZKServer.LeanRelease.toSrv`), and nothing the prover places.
 
 A refusal answers the prover `Resp::Refused(WHY)` and stops the session: every request after it is refused for the same
 reason without asking the auditor (`State.request`), `Ping` alone answered `Resp::Ok` by the loop, so nothing of the
@@ -333,12 +336,25 @@ def State.coins (S : State) (a : ByteArray) : State × ByteArray :=
     | .ok (C', c) => ({ S with session := some C' }, ⟨(Coins.frame (c.length / 16) c).toArray⟩)
     | .error e => S.refuse e
 
+/-- **The auditor answered the coin request `what` with `a`, which is not coins**: the session stopped, refused, as the
+model stops at coins it refuses (`Claims.ZKServer.LeanRelease.refusesCoins`), so the request never leaves again. The
+prover receives the refusal, with the auditor's reason where `a` is a `Resp::Refused`, and nothing else of `a`. -/
+def State.noCoins (S : State) (what : String) (a : ByteArray) : State × ByteArray :=
+  match S.stop with
+  | some why => (S, refused why)
+  | none =>
+    let said := match byte? a 0, (getBytes a 1).bind fun (b, _) => String.fromUTF8? b with
+      | some 3, some why => s!": {why}"
+      | _, _ => ""
+    S.refuse s!"{Coins.STOP}the auditor answered {what} without coins{said}"
+
 /-- `Resp::Coins`' frame of the loop's id `id` for a session: what the prover receives for `Hello`'s answer. -/
 def idFrame (id : ByteArray) : ByteArray := ⟨(Coins.frame (id.size / 16) id.data.toList).toArray⟩
 
 /-- **What the prover receives** for the auditor's answer `a` to a request of kind `k`, and the session after: the draw
 taken from `Register`'s answer, the loop's id `id` for the session once `Hello`'s answer checked (`idFrame`), a round's
-coins opened (`State.coins`); anything else as it is. -/
+coins opened (`State.coins`), a `Commit`'s or a `Round`'s answer that is not coins the session's stop
+(`State.noCoins`); anything else as it is. -/
 def State.answer (S : State) (k : Kind) (a : ByteArray) (id : ByteArray := .empty) : State × ByteArray :=
   match k, byte? a 0 with
   | .register, some 6 => match getBytes a 1 with
@@ -359,6 +375,8 @@ def State.answer (S : State) (k : Kind) (a : ByteArray) (id : ByteArray := .empt
       | .error e => S.refuse e
   | .commit, some 2 => S.coins a
   | .round _ _, some 2 => S.coins a
+  | .commit, _ => S.noCoins "the step-0 coin commitment" a
+  | .round stream _, _ => S.noCoins s!"a round of {stream}" a
   | _, _ => (S, a)
 
 /-- **The sizes the loop's frames read**, at the setup `spec`, `sts`: at each rep stream `k`, its table's link points the
@@ -853,7 +871,7 @@ def level0 (ch : Frame.Chan) (reg : IO.Ref Frames.Sessions) (l0s : IO.Ref Level0
 
 /-- **The loop's frames port**: each connection to `srv` is, by its first line, one rep's frame starting (`rep …`,
 `Frames.startRep`, the frame then the loop's own in `reg`); a rep's next place or the values its frame took (`place …`,
-`vals …`, `Frames.ask`); a session's tables' level 0 (`level0 …`, `level0`); or a session's
+`vals …`, `Frames.ask`, which only reads `reg`); a session's tables' level 0 (`level0 …`, `level0`); or a session's
 proof files on the tables' level 0 in `l0s` (`finish …`, `Finish.serveLoop`, at the statement `S`), each rep's salts for
 levels ≥ 1 kept in `reg` for its opening, once (another finish's draw of them is refused), its inner proof's rounds for
 the frame to release
