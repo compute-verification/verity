@@ -22,8 +22,10 @@ import secrets
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Sequence
+from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 
 from verity.ml.commitments.identity import identity_digest, identity_digest_sha512
@@ -239,6 +241,18 @@ def firewall_env(st: dict) -> dict:
     return {"FC_FIREWALL_STATEMENT": STATEMENT_ID, "FC_FIREWALL_HELLO_ARGS": " ".join(args)}
 
 
+_CLAIMS = threading.Lock()
+
+
+def archiving(held: dict | None, ident: tuple) -> AbstractContextManager:
+    """The lock a run's checks (`lean_verify`, sharing ``held``) archive the circuit file of identity ``ident`` under: the
+    first puts it, and one running beside it waits, then links it."""
+    if held is None:
+        return nullcontext()
+    with _CLAIMS:
+        return held.setdefault(("archiving", ident), threading.Lock())
+
+
 def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: str = "lean-verify",
                 flags: Sequence[str] = ()) -> dict:
     """The verifier of record: Lean `flock-verify verify` on the session's record, with the circuit and the public file
@@ -246,8 +260,9 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's. `log` names its logs under
     `out` (a negative's own, beside the honest verdict's). `flags`: more of `verify`'s (a plain session's ``--coins os
     --stratified K``). ``st["archived"]``, a dict a run's members share: a circuit file archived once, by its file's
-    identity (members' ``circuit.txt`` are links of one file), is linked into every later archive rather than put again;
-    Lean holds the object to its key when it reads it (`archiveGet`)."""
+    identity (members' ``circuit.txt`` are links of one file), is linked into every later archive rather than put again,
+    a check running beside it (`a5.LeanPool`) waiting for the first to put it (`archiving`); Lean holds the object to its
+    key when it reads it (`archiveGet`)."""
     sessions = sorted((out / "sessions").glob("*/session.json"))
     if not sessions:
         return {"accepted": False, "of_record": True, "why": "no session recorded"}
@@ -259,18 +274,19 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     circuit, held = st["dir"] / "circuit.txt", st.get("archived")
     s = circuit.stat()
     ident = (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns)
-    pre = held.get(ident) if held is not None else None
-    if pre is not None:
-        (archive / "sha512").mkdir(parents=True, exist_ok=True)
-        if not (archive / "sha512" / pre[0]).exists():
-            os.link(pre[1], archive / "sha512" / pre[0])
-    p = run([lean, "archive-put", str(archive), *([] if pre else [str(circuit)]), str(st["dir"] / f"pub-{n}.bin"), *tables, *part,
-             *prog, *reads], out / ("archive-put.log" if log == "lean-verify" else f"{log}.archive-put.log"))
-    keys = {Path(line.split()[1]).name: line.split()[0] for line in p.stdout.splitlines() if len(line.split()) == 2}
-    if pre is not None:
-        keys["circuit.txt"] = pre[0]
-    elif held is not None and "circuit.txt" in keys:
-        held[ident] = (keys["circuit.txt"], archive / "sha512" / keys["circuit.txt"])
+    with archiving(held, ident):
+        pre = held.get(ident) if held is not None else None
+        if pre is not None:
+            (archive / "sha512").mkdir(parents=True, exist_ok=True)
+            if not (archive / "sha512" / pre[0]).exists():
+                os.link(pre[1], archive / "sha512" / pre[0])
+        p = run([lean, "archive-put", str(archive), *([] if pre else [str(circuit)]), str(st["dir"] / f"pub-{n}.bin"), *tables,
+                 *part, *prog, *reads], out / ("archive-put.log" if log == "lean-verify" else f"{log}.archive-put.log"))
+        keys = {Path(line.split()[1]).name: line.split()[0] for line in p.stdout.splitlines() if len(line.split()) == 2}
+        if pre is not None:
+            keys["circuit.txt"] = pre[0]
+        elif held is not None and "circuit.txt" in keys:
+            held[ident] = (keys["circuit.txt"], archive / "sha512" / keys["circuit.txt"])
     bound = ["--partition", keys.get(Path(part[0]).name, "")] if part else []
     bound += ["--program", keys.get(Path(prog[0]).name, "")] if prog else []
     bound += ["--registered", keys.get(Path(reads[0]).name, "")] if reads else []
