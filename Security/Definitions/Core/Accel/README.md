@@ -26,12 +26,13 @@ Resources: `tensor` (s8 MACs), `issue` (warp instructions), the `alu`, `imad`, `
 | `Accel.Sm120.card` | RTX PRO 6000 Blackwell Server Edition, 188 SMs | 2430 MHz | 2430 MHz | GDDR7 at 12481 MHz on 512 bits, 1597.6 GB/s |
 
 Both cards' firmware refuses or clamps every clock above these, and both report SM and memory clock offset ranges of
-[0, 0]. The H200's tensor rate is taken at its tensor clock's ceiling, 1830 MHz (`Accel.H200.tensorClock`): the clock
-its data sheet quotes the tensor peaks at, and the most its SMs' clock reads with the tensor pipe full while the driver
-reports 1980 (`H200.lean` gives both readings). Every rate is a ceiling, not a clock a loaded card holds: under its
-power limit it holds less. The table also gives the device model's limits (`Card.toDevice`, `Accounting.Device`). A
-run that fits the model stays within them summed over a window (`fits_toDevice`), and no per-tick
-`Accounting.Schedule` is built from a run.
+[0, 0]. The H200's tensor rate is taken at its tensor clock's ceiling, 1830 MHz (`Accel.H200.tensorClock`), the clock
+its data sheet quotes the tensor peaks at: 9.894 · 10¹⁴ `s8` MACs a second, and 1.0705 · 10¹⁵ on the second reading,
+the 1980 MHz SM clock the driver reports. `H200.lean` quotes each figure the tensor's clock moves at both, and names
+the reading's falsification test, `benchmarks/tensor_duty/`. Every rate is a ceiling, not a clock a loaded card holds:
+under its power limit it holds less. The table also gives the device model's limits (`Card.toDevice`,
+`Accounting.Device`). A run that fits the model stays within them summed over a window (`fits_toDevice`), and no
+per-tick `Accounting.Schedule` is built from a run.
 
 ## The ACCEL ops (`Accel.Op`, `Card.use`)
 
@@ -87,12 +88,12 @@ and firmware.
 - **Exclusions.** The premise excludes the video and JPEG engines, sm_120's RT cores, the texture path's filtering, the
   copy engines and compute data compression. An exclusion is a second adversary class until it has a rate row or a
   proof that the model dominates it. The RT cores (at most 58 integer products a SM-clock, 6% of sm_120's `s8` rate)
-  and the texture path (at most 64, 6% on sm_120 and 1.7% on the H200) exceed the headline's served margins, 3.9% on
-  sm_120 and 2.6% on the H200.
+  and the texture path (at most 64, 6% on sm_120 and 1.7% on the H200, 1.6% with its tensor at 1980 MHz) exceed the
+  headline's served margins, 3.9% on sm_120 and 2.6% on the H200.
 - **The card numbers.** Nothing the protocol checks attests a node's SKU and firmware. The H200's L2 row is a
   placeholder, neither measured nor a ceiling, and sm_120's is one read pattern's measurement.
 - **CUDA-core matmul routes.** With every register word an `alu` lane, the four-Russians table method pays at least an
   `alu` lane a MAC: at most 6.25% of the `s8` tensor rate on sm_120 and 1.7% on the H200 through registers, and 13.5% on
-  the H200 through L2 at its placeholder row. IDP.4A on `imad` does 4 MACs a lane. None of these is a public route, so
+  the H200 through L2 at its placeholder row (1.6% and 12.5% with the H200's tensor at 1980 MHz). IDP.4A on `imad` does 4 MACs a lane. None of these is a public route, so
   `SAKMatmul` as written fails at a dual price that leaves their pipes cheap. The algorithmic premise that would carry
   them, `SAKResidual`, is not yet adopted.
