@@ -24,7 +24,7 @@ stratified sampling design the Lean verifier's soundness covers:
    `flock-circuit` with CUDA for sm_120, stages the whole population (the same staged statement for every B) and checks its
    instances against the manifest outside any GPU lease, then proves `WARM` warm and `RUNS` timed sessions on one GPU taken
    by `gpu-lease` (the kernel-engineering skill's sharing rule), with live coins from a loopback `flock-circuit serve`
-   (`FC_COINS=os`). The server samples each session's B units at its Register by the verifier's sampling design (`serve --draw-law`,
+   (`FC_COINS=os`). The server samples each session's B units at its Register by the verifier's law (`serve --draw-law`,
    `law.json`: core's `one_stage.draw.derive` of `stratified:B` over the population's program and its
    `Q_template_instance` partition), and the session proves those units only. ZK is off. The statement gives every
    coordinate its own rows (`FLOCK_OWN_ROWS=1`), x included: the verifiers refuse a plain statement whose public file shares

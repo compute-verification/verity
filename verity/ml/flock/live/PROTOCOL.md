@@ -713,7 +713,7 @@ JSON. The two agree whenever the schedule's `Hello` holds only integers, as `sch
 
 On live coins the send check is that program itself. `rec_live --lean BIN` (required unless `--coin-tree`) starts one
 `flock-firewall live` a session (`Flock.Firewall.liveWith`): its first line is the schedule, and each request goes to it
-before the proxy handles it. It answers with the messages the challenger gets for the request and the salts it drew for
+before the proxy handles it. It answers with the messages the coin server gets for the request and the salts it drew for
 them (`Flock.Firewall.liveStep`, one step of `run`'s loop, its salts from the operating system, those a request doesn't
 draw kept for the next), or with the refusal that stops the session. The proxy delivers Lean's messages, in Lean's order,
 and handles the request too, for the prover's side (the answers, the session record, `private.json`) on Lean's salts: a message or a salt of its own that
