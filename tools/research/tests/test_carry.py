@@ -54,8 +54,8 @@ def branch(repo: Path, name: str, at: str = "main") -> None:
     git(repo, "checkout", "-q", "-b", name, at)
 
 
-def landed(repo: Path):
-    return carry.ancestor_of(repo, [git(repo, "rev-parse", "main")])
+def landed(repo: Path, *heads: str):
+    return carry.trust(repo, [git(repo, "rev-parse", "main")], heads)
 
 
 def test_a_merge_of_landed_main_carries_and_names_what_it_merged(repo: Path):
@@ -118,8 +118,10 @@ def test_merging_another_prs_head_carries_only_once_that_head_is_trusted(repo: P
     old = commit(repo, {"a.py": "a2\n"}, "the PR")
     new = merge(repo, "other")
     assert carry.delta(repo, old, new, landed(repo)).kind == "untrusted-parent"
-    reviewed = carry.ancestor_of(repo, [git(repo, "rev-parse", "main"), theirs])
-    assert carry.delta(repo, old, new, reviewed).kind == "merge-only"
+    assert carry.delta(repo, old, new, landed(repo, theirs)).kind == "merge-only"
+    branch(repo, "above", "pr")
+    above = commit(repo, {"docs/README.md": "above\n"}, "a reviewed PR stacked on the new head")
+    assert carry.delta(repo, old, new, landed(repo, above)).kind == "untrusted-parent"
 
 
 def test_a_reviewed_pr_built_on_the_old_head_and_merged_back_carries(repo: Path):
@@ -129,8 +131,17 @@ def test_a_reviewed_pr_built_on_the_old_head_and_merged_back_carries(repo: Path)
     theirs = commit(repo, {"b.py": "dependant\n"}, "a PR stacked on it")
     git(repo, "checkout", "-q", "pr")
     new = merge(repo, "dependant")
-    assert carry.delta(repo, old, new, landed(repo)).kind == "authored"
-    assert carry.delta(repo, old, new, carry.ancestor_of(repo, [theirs])).kind in carry.CARRIES
+    assert carry.delta(repo, old, new, landed(repo)).kind == "untrusted-parent"
+    assert carry.delta(repo, old, new, landed(repo, theirs)).kind in carry.CARRIES
+
+
+def test_a_reviewed_pr_stacked_on_the_new_head_vouches_for_none_of_its_own_commits(repo: Path):
+    branch(repo, "pr")
+    old = commit(repo, {"a.py": "a2\n"}, "the PR")
+    new = commit(repo, {"b.py": "sneaked\n"}, "more")
+    branch(repo, "above", "pr")
+    above = commit(repo, {"docs/README.md": "above\n"}, "a reviewed PR stacked on the new head")
+    assert carry.delta(repo, old, new, landed(repo, above)).kind == "authored"
 
 
 def test_a_rebased_head_needs_a_verdict(repo: Path):

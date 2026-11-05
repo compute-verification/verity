@@ -158,16 +158,20 @@ def marked_at(pr: int, head: str, ts: str) -> bool:
 
 
 def trusted_at(ts: str, pr: int, loose: bool = False):
-    """A commit is trusted when it is landed (an ancestor of `main`'s or `checked`'s tip) or an ancestor of another PR's
-    current marked head that its verdicts land; ``loose`` takes any head the verdicts land, marked or not."""
+    """`carry.trust` as of ``ts``: landed is an ancestor of `main`'s or `checked`'s tip; a parent a merge brings in is also
+    trusted inside another PR's current marked head that its verdicts land and that doesn't contain the merge.  ``loose`` takes
+    any head the verdicts land, marked or not."""
     landed = [x for x in (tip_at(_T, "main", ts), tip_at(_T, "checked", ts)) if x]
 
-    def trusted(c: str) -> bool:
+    def trusted(c: str, merge: str | None = None) -> bool:
         if any(_ancestor(c, x) for x in landed):
             return True
+        if merge is None:
+            return False
+        above = set(_contains(merge))
         for ref in _contains(c):
             _, _, n, h = ref.split("/")
-            if int(n) != pr and landable_at(f"{n}@{h}", ts) and (loose or marked_at(int(n), h, ts)):
+            if ref not in above and int(n) != pr and landable_at(f"{n}@{h}", ts) and (loose or marked_at(int(n), h, ts)):
                 return True
         return False
 
