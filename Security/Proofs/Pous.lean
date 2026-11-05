@@ -9,7 +9,6 @@ import Proofs.Pous.Dense.DenseMeets
 import Proofs.Pous.FreeBlocks.Zero
 import Proofs.Pous.FreeBlocks.P2
 import Proofs.Pous.P3.InvertibleCore
-import Proofs.Pous.P3.Refutation
 import Proofs.Pous.Chain.Flat
 import Proofs.Pous.Chain.Family
 import Proofs.Pous.Chain.FamilyRounds
@@ -118,7 +117,6 @@ theorem B5ExPostFacto : Pous.Guarantees.B5ExPostFacto := PousB5.b5_ex_post_facto
 
 theorem TransposeMixing : Pous.Guarantees.TransposeMixing := @PousInvertible.transpose_mixing
 theorem ReverseNeedsAllChildren : Pous.Guarantees.ReverseNeedsAllChildren := @PousInvertible.reverse_needs_all_children
-theorem N10Refuted : Pous.Guarantees.N10Refuted := PousP3Forward.not_invExPostFactoTwoLayer
 
 theorem SampledAuditProd : Pous.Guarantees.SampledAuditProd := @PousAudit.sampled_audit_prod
 

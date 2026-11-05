@@ -888,8 +888,8 @@ not reach; it is re-pinned at `k = 111`, four challenges more.
 The frozen statements (claims about a model, an ideal primitive or the model's memory challenger, which no Lean function
 computes) are in `Security/Definitions/Pous/Guarantees.lean` and its `Guarantees/` modules, each docstring ending with its
 category. The lemmas (`KFloor`, Theorem 1, Track A, the pebbling and sampled-audit results, the tagged keying's
-transfer, the column game's rows, `PerAnswer`, `ContinuousTimeAverage`, and the falsified
-`InvExPostFactoTwoLayer` beside `N10Refuted`) are stated under the same `Pous.Guarantees` names in
+transfer, the column game's rows, `PerAnswer` and `ContinuousTimeAverage`) are stated under the same
+`Pous.Guarantees` names in
 `Security/Proofs/Pous/Statements.lean`, and `ContinuousComplete`, the memory challenger's completeness, with them.
 The properties of the Lean verdicts `PousCheck.TimedAudit` and `MemoryChallenger.verdict`, and of the composed check
 `PousCheck.Run.check`, are in `Security/Properties/Pous/`.
@@ -906,7 +906,6 @@ The properties of the Lean verdicts `PousCheck.TimedAudit` and `MemoryChallenger
 | `FischClaim13`, `FischClaim14` | Fisch ePrint 2018/702, Claims 13–14 | proved |
 | `B5ExPostFactoBounded`, `B5ExPostFacto` | Pietrzak's ex post facto bound for one-way labels | proved |
 | `TransposeMixing`, `ReverseNeedsAllChildren` | N10's two core lemmas for P3's invertible labels | proved |
-| `N10Refuted` | `¬ InvExPostFactoTwoLayer`: N10 as first stated (PIEs Conjecture 1 at `L = 2`) is false | proved |
 | `SampledAuditProd`, `SampledAuditSeq`, `SampledAuditSim` | "fewer than `k` answerable" gives a sampled-audit bound | proved |
 | `StackedAuditSeq`, `StackedAuditOnePercent` | the stacked one-way scheme's audit clause; the second is conditional on a depth-robust graph | proved |
 | `DenseMeets` | the dense scheme S1 meets `Meets` with no named assumption, in the ideal-hash model only (security, correctness and rate, not decode cost) | proved |
@@ -1031,7 +1030,7 @@ Each is a `Prop` taken as a hypothesis, never an `axiom`.
   least `g` blocks with probability at most `Γ`. For M1 (`G = True`) it is `A2LemmaAM1`.
 - `B1Prime sch Mdom S D Q k` (Conjecture B1′): `sch`'s sequential audit obeys model M1's completion bound. Used by
   `M1Meets`.
-- Retracted: `InvertibleLabels`, which was N10's statement. It is false (`N10Refuted`).
+- Retracted: `InvertibleLabels`, which was N10's statement. It is false ("Why N10 fails", above).
 
 ## Provisional
 

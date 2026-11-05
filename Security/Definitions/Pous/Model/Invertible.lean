@@ -6,8 +6,8 @@ import Definitions.Pous.Model.Pebbling
 /-!
 # P3's invertible two-layer labels, their ideal model, and white/green hardness (N10)
 
-The definitions of N10, whose core lemmas are proved in `Security/Proofs/Pous/P3/InvertibleCore.lean` and whose
-statement `Security/Proofs/Pous/P3/Refutation.lean` refutes. The model `p3Model` has an `H`-oracle and one ideal
+The definitions of N10, whose core lemmas are proved in `Security/Proofs/Pous/P3/InvertibleCore.lean`; N10 itself is
+false (`Security/Definitions/Pous/Model/ColumnGame.lean`). The model `p3Model` has an `H`-oracle and one ideal
 permutation `P` of labels, with `P`
 and `P⁻¹` both queryable; the labels are `c¹ = P(W ⊕ H(0, ·))` and `c² = P(transpose(c¹) ⊕ H(1, ·))`.
 -/

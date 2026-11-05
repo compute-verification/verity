@@ -10,7 +10,7 @@ ba6e2d2d4005ac70cb22cbb7924a68e547150694de7c1f883a57556a30593a96  grade.sh
 98651b3e4252b85ff9ccca63b395aca70a452334eeb3eb9ab698e8e7b012b757  ../../../../../Security/Proofs/lakefile.toml
 ff93ba694c8590e42a4a230477990c192059d3929935f71021592c8eb1217c89  ../../../../../Security/Proofs/lake-manifest.json
 cf73810f89eabf60ad473f398e59b153aebbd3f9d0a59743587dfd88ba8867e1  ../../../../../Security/Definitions/Pous.lean
-4f33d0eaad1648b66713e59435e32707827d61f49bb284980ad98bde1dd9c06d  ../../../../../Security/Proofs/Pous/Statements.lean
+f18d8bb44b5008bba3e58dbc0752c56ecaa771f59ede778fe7e188ab4fd50c1c  ../../../../../Security/Proofs/Pous/Statements.lean
 57d86e4aa918aa43d237c72f4cf793324c1269dd6aa4a3c70550d7da7dc22c15  ../../../../../Security/Proofs/Pous/Sanity.lean
 7bd66e3b6894d7a96eba69163dfa99f8b9f4f9be5f9deddfc4d5fa2ed17ac137  ../../../../../Security/Proofs/Pous/Accounting/Numbers.lean
 69af542a51639384b919f32d59e96d1bcee8733126897e1a4e042b895a605922  ../../../../../Security/Definitions/Pous/Accounting/GradedMeets.lean
@@ -24,7 +24,7 @@ cc8b6d9df2ac558040806b51bd8f39ee8a03febe4260f1aa22269fe516ad1c4d  ../../../../..
 cfd5ae3f07bec078740c0f930381747ac17c5a5972892a17bb4057aeecc2a898  ../../../../../Security/Definitions/Pous/Claims/StreamedWipeServer.lean
 b677a8872dabcb6219f1ae2c271c35d1d8ca1ca3a4327a880500992691e0f0bc  ../../../../../Security/Definitions/Pous/Game/Oracle.lean
 88069a0c9b4dda40aee828ba450e3eea2cdcf0f87d277834f8374ec12022d8d7  ../../../../../Security/Definitions/Pous/Game/Prob.lean
-79cf2ed8c0da0fdc8ab754c23c7bcb6aa256023e2ddddc01cfc798d6c238c5d0  ../../../../../Security/Definitions/Pous/Guarantees.lean
+6c1a9596ab62473b66d35c3b83f58e12c1aca19212f28242efd4a4d1ddb2a446  ../../../../../Security/Definitions/Pous/Guarantees.lean
 a55b27b24e91d514f5b0c5a010bf28b67dad65eb0f3858818d2eed78c0136527  ../../../../../Security/Definitions/Pous/Guarantees/Obligation.lean
 a93f12373c9d4b980ae1bf4f38a5f3e88f645b135ca4ec134f0384d914e69885  ../../../../../Security/Definitions/Pous/Guarantees/P2.lean
 f2d7434f6a7db6c365999b18a3415bc1fc7ab37939cc7aa15250e7a8237da7e4  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipe.lean
@@ -35,14 +35,14 @@ b207e66034150062cb4b9f3ae1d33a98430933caca60f2e96e6273a2d98e72ac  ../../../../..
 11e8efe5ca9c6d092347de8ef8a41bbe2e010e9209c915e98c674f6396d714a4  ../../../../../Security/Definitions/Pous/Model/Audit.lean
 e009a8a96b5e18fdde250bd08974f4f81a667a55c5b6b2b5bc46c53bfc0ae136  ../../../../../Security/Definitions/Pous/Model/BandChain.lean
 de7f95a3337997aebdcc6bc391f32055040272e5262d9616a797cecdc003bc7f  ../../../../../Security/Definitions/Pous/Model/BandGraph.lean
-d57b69cb1803ae238fa511dbc1a28aa21849e3e65eb6d292633e140a0540b293  ../../../../../Security/Definitions/Pous/Model/ColumnGame.lean
+ff854369d059333cdc6a810e6be428ab7b907d9bffc61c71c5ed7ecb3a25d4f8  ../../../../../Security/Definitions/Pous/Model/ColumnGame.lean
 605a2a23c8c098682eb5d634b568920bcc7e94c909ef16bd46ba47f82c566f7d  ../../../../../Security/Definitions/Pous/Model/Continuous.lean
 9e4270fddee98edebc47e01578965a7337a2aaa2040a3b3d8eabb41a3a5e991c  ../../../../../Security/Definitions/Pous/Model/Dense.lean
 f5c0663c315513f80228ee1d3eeb58a53bbf235852e1ce8c8010349e294dc253  ../../../../../Security/Definitions/Pous/Model/FreeBlocks.lean
 8ac14266031d2c48fbc3c04946af1cc324ac323bfef6ba867fffcecb6151cb4f  ../../../../../Security/Definitions/Pous/Model/Graded.lean
 b72a5ae6ad7aa0060cf49216cfcaa3de292916a6460ba365f53b7a3cd0b291cb  ../../../../../Security/Definitions/Pous/Model/HashChain.lean
 a6d91b5df92724de3b222d1f91d6b9802dc8665f99b84172ace0f9f224b8f5ec  ../../../../../Security/Definitions/Pous/Model/Inc.lean
-c5e88ae45d1bb417618ffb98c96399d46b0fad6dc75bac3925190de5bf078fe9  ../../../../../Security/Definitions/Pous/Model/Invertible.lean
+a22a22471531fc657d25f13e038b6caf9e2206ee45ee90a621286f3e54fee979  ../../../../../Security/Definitions/Pous/Model/Invertible.lean
 c857ad7ad9ab5d9900c2ddedbfe4d90e0966d8b693e7536f0bb050b75c1fc9fb  ../../../../../Security/Definitions/Pous/Model/Labelling.lean
 007ff11057f25a3e1d6ec790b4bed58cca812badbe947e9148b4705d0244a8cd  ../../../../../Security/Definitions/Pous/Model/M1.lean
 0764fb75f43c8b0d0121916d6b7ec127e3fa22c1a5fb8289efaf05ff67115e8c  ../../../../../Security/Definitions/Pous/Model/M1p.lean

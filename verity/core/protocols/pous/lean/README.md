@@ -56,10 +56,10 @@ Definitions/Pous/Guarantees/Obligation.lean
                                     memory term at `1038·2^16` blocks (`ObligationDemo`, `ObligationDemoWide`),
                                     and a 320-read window at `2^-20` from `2^19` to `2^27` blocks (`ObligationWide320`),
                                     proved in `Proofs/Pous/Obligation.lean`
-Proofs/Pous/Statements.lean         trusted, the lemmas' statements (math, not claims): 40 lemmas, the
-                                    completeness theorem `ContinuousComplete` and `InvExPostFactoTwoLayer`, which
-                                    `N10Refuted` negates; it imports no proof, and grade.sh grades `KFloor`, `Theorem1ii` and the open
-                                    `A2LemmaAM1`, `A5RabinGcd` and `A7Params` against it
+Proofs/Pous/Statements.lean         trusted, the lemmas' statements (math, not claims): 40 lemmas and the
+                                    completeness theorem `ContinuousComplete`; it imports no proof, and grade.sh grades
+                                    `KFloor`, `Theorem1ii` and the open `A2LemmaAM1`, `A5RabinGcd` and `A7Params`
+                                    against it
 Proofs/Pous.lean                    proved, the proofs: imports every proof module, and proves
                                     Pous.SecurityProofs.X : Pous.Guarantees.X for each proved guarantee
 Proofs/Pous/{Sanity,Accounting/Numbers}.lean

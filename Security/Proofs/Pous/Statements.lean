@@ -4,10 +4,10 @@ import Definitions.Pous.Guarantees
 # PoUS's lemmas, stated
 
 The statements of PoUS's analysis that are math rather than claims: reductions over any scheme or ideal model, counting,
-pebbling and number theory, numeric certificates, the continuous audit's completeness (`ContinuousComplete`), and the
-refuted N10 (`InvExPostFactoTwoLayer`) beside its refutation, and Track A's `M1Meets`, a `Meets` in model M1 that
-is no claim about PoUS's scheme. Each is proved as `Pous.SecurityProofs.X` (`Security/Proofs/Pous.lean`) except
-`A2LemmaAM1`, `A5RabinGcd`, `A7Params` and `M1Meets`, which are open, and `InvExPostFactoTwoLayer`, which is false.
+pebbling and number theory, numeric certificates, the continuous audit's completeness (`ContinuousComplete`), and
+Track A's `M1Meets`, a `Meets` in model M1 that is no claim about PoUS's scheme. Each is proved as
+`Pous.SecurityProofs.X` (`Security/Proofs/Pous.lean`) except `A2LemmaAM1`, `A5RabinGcd`, `A7Params` and `M1Meets`,
+which are open.
 They keep their names in `Pous.Guarantees`, beside the frozen statements of `Security/Definitions/Pous/Guarantees.lean`.
 "Pinned as drafted" means the binders and conclusion are the draft's, verbatim.
 
@@ -350,32 +350,6 @@ def ReverseNeedsAllChildren : Prop :=
     (hrev : ¬ (∀ x, DRG.StackedEdge node2 (drg2 G) green2 x (node2 0 a) → x ∈ C))
     (havail : DRG.Available node2 (drg2 G) green2 C (node2 0 a)),
     ∀ b : Fin n, node2 1 b ∈ C
-
-open Pous.Invertible in
-/-- **Pinned as drafted.**
-
- **N10 as drafted (false, see `N10Refuted`).** If the two-layer P3 graph is white/green `(s, D, k)`-hard, then an
-`m`-bit preprocessor and `(D, Q)`-bounded online programs — which may query `P⁻¹` — answer at least `k` top-label
-challenges with probability at most the B5 bound at width `n·wc` and `Q_tot = n·(Q + 1) + 2n`.
-
-Kept only as the statement `N10Refuted` negates; it is no longer a target. -/
-def InvExPostFactoTwoLayer : Prop :=
-  ∀ (n wc m s D Q k : ℕ) (G : Labelling.TopoDAG n) (W : Fin n → Lab n wc)
-    (hwc : 0 < wc)
-    (hard : WhiteGreenHard G s D k)
-    (A₁ : (p3Model n wc).Ω → Bits m)
-    (A₂ : Bits m → Fin n → Prog (p3Model n wc) (Lab n wc))
-    (hA₂ : ∀ σ c, (A₂ σ c).Bounded D Q),
-    pr (fun ω : (p3Model n wc).Ω =>
-        k ≤ (Finset.univ.filter fun v => (A₂ (A₁ ω) v).run ((p3Model n wc).answer ω) = topLabel G W ω v).card) ≤
-      (n : ℝ≥0∞) * 2 ^ m * ((((n * (Q + 1) + 2 * n) ^ 2 : ℕ) : ℝ≥0∞) / 2 ^ (n * wc)) ^ (s + 1)
-
-/-- **Pinned as proved** (`Security/Proofs/Pous/P3/Refutation.lean`, `not_invExPostFactoTwoLayer`).
-
- **N10 is false.** White/green hardness charges a missing lower label a whole label, but top label `v` reads only
-column `v` of the lower layer, so an adversary pays for lower labels a component at a time (by storing components,
-`docs/p3-cryptanalysis.md` §1, or by guessing them). -/
-def N10Refuted : Prop := ¬ InvExPostFactoTwoLayer
 
 /-! ## Sampled audits and the dense scheme -/
 

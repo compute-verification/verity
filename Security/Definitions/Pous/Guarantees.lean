@@ -30,8 +30,8 @@ import Definitions.Pous.Model.Continuous
 PoUS's frozen statements: claims about a model, an ideal primitive or the model's memory challenger, which no Lean
 function computes, so none has the shape of a property (`Security/Properties/`) yet. Each docstring ends with its
 category. The list only shrinks (`.agents/skills/lean-proofs/SKILL.md`). The lemmas, the
-continuous audit's completeness, the refuted N10 and Track A's statements in model M1 are math rather than claims; they
-are stated under the same names in `Security/Proofs/Pous/Statements.lean`.
+continuous audit's completeness and Track A's statements in model M1 are math rather than claims; they are stated under
+the same names in `Security/Proofs/Pous/Statements.lean`.
 
 `grade.sh` grades against these and six of those. A submission proves exactly one of them, as
 `theorem solution : Pous.Guarantees.<Name>`. Named assumptions (`Security/Definitions/Pous/Assumptions.lean`) appear as

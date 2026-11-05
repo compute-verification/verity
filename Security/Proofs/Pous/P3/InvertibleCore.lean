@@ -8,8 +8,8 @@ import Proofs.Pous.Accounting.Numbers
 # N10's two core lemmas, on the trusted definitions of `Pous.Invertible`
 
 The proofs of `transpose_mixing` and `reverse_needs_all_children`, which are `Pous.Guarantees.TransposeMixing` and
-`Pous.Guarantees.ReverseNeedsAllChildren`. The N10 target is refuted (`Pous.SecurityProofs.P3.Refutation`) and is
-not here.
+`Pous.Guarantees.ReverseNeedsAllChildren`. N10 itself is false (`Security/Definitions/Pous/Model/ColumnGame.lean`
+says why) and is not stated.
 
 * `transpose_mixing`: with the `K_{n,n}` connector, recovering **one** lower-layer label needs **all** `n` top
   labels.
