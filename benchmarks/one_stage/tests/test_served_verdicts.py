@@ -2908,7 +2908,7 @@ def test_the_follow_on_removes_the_windows_circuit_files_after_its_period_check_
     member's, links and all, the warm's cache, and the period's copy under circuits/), so the re-proof copy finds none
     and the node's next window has the disk, saying how many and the bytes freed; the openings stay. A file the audit's
     v2 case names, or the network certifier's case does (its period's circuit files, which the composite's network leg
-    reads), waits for the composite and goes after."""
+    reads), waits for the composite and the onsite record and goes after."""
     split = {}
     if keeps == "certifier":
         for f in KEPT:
@@ -2930,8 +2930,8 @@ def test_the_follow_on_removes_the_windows_circuit_files_after_its_period_check_
     said = "V3C-CIRCUITS removed, the window's circuit files, recomposable and named by their pins: "
     heads = [x.split(" ")[0] for x in lines[5:]]
     assert heads == ["V3C-AUDIT", "V3C-PERIOD", *(["CERTIFIER-CHAIN", "CERTIFIER-PERIOD"] if split else []),
-                     "V3C-CIRCUITS", "REPROOF", "RECORD", "COMPOSITE:", *["V3C-CIRCUITS"] * bool(last),
-                     *[x.upper() for x in onsite]], lines
+                     "V3C-CIRCUITS", "REPROOF", "RECORD", "COMPOSITE:", *[x.upper() for x in onsite],
+                     *["V3C-CIRCUITS"] * bool(last)], lines
     assert [x for x in lines if x.startswith("V3C-CIRCUITS")] == [said + first, *([said + last] if last else [])], lines
     (copy,) = [f"./circuits/{p['sha512']}.txt" for p in json.loads((vw / "period.json").read_text())["circuits"]]
     kept = {None: [], "v2": ["./audit/window/m1/circuit.txt"], "certifier": [copy]}[keeps]
