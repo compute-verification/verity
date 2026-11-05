@@ -95,6 +95,7 @@
   "Proofs.Properties.Verity.Sampled.Readings",
   "Proofs.Properties.Verity.Sampled.Stops",
   "Proofs.Properties.Verity.Sampled.RoundsRead",
+  "Proofs.Properties.Verity.Sampled.SpecTie",
   "Proofs.Properties.Verity.Sampled.MovesReach",
   "Proofs.Properties.Verity.Sampled.RootB",
   "Proofs.Properties.Verity.Sampled.MovesLayout",
