@@ -390,3 +390,32 @@ def test_this_trees_export_rewrites_every_manifest_it_copies(tmp_path: Path) -> 
     assert r.returncode == 0, r.stdout + r.stderr
     report = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
     assert report["rewrites"] and report["lean_targets"]
+
+
+def test_the_build_shares_one_set_of_dependencies_where_pins_agree(tmp_path: Path, monkeypatch) -> None:
+    """The package pinning the most goes first and fetches; a later one whose pins agree uses its `.lake/packages`, and
+    each builds its default targets and its modules one by one. `elan` and `lake` are stand-ins that record their calls."""
+    bin_dir, calls = tmp_path / "elan-bin", tmp_path / "calls"
+    bin_dir.mkdir()
+    for name in ("elan", "lake"):
+        (bin_dir / name).write_text(
+            f'#!/bin/sh\necho "{name} $(basename "$PWD") $*" >> {calls}\n'
+            'if [ "$1" = env ]; then mkdir -p .lake/packages/mathlib && echo "Apache License" > .lake/packages/mathlib/LICENSE; fi\n',
+            encoding="utf-8")
+        (bin_dir / name).chmod(0o755)
+    monkeypatch.setattr(PE, "ELAN", bin_dir)
+    dest = tmp_path / "export"
+    pins = {"mathlib": {"type": "git", "name": "mathlib", "rev": "abc"}, "aesop": {"type": "git", "name": "aesop", "rev": "def"}}
+    for pkg, names in (("big", ["mathlib", "aesop"]), ("small", ["mathlib"])):
+        (dest / pkg).mkdir(parents=True)
+        (dest / pkg / "lean-toolchain").write_text("leanprover/lean4:v4.0.0\n", encoding="utf-8")
+        (dest / pkg / "lake-manifest.json").write_text(json.dumps({"packages": [pins[n] for n in names]}), encoding="utf-8")
+    targets = {"small": {"default": ["S"], "modules": [], "missing_roots": []},
+               "big": {"default": [], "modules": ["B.X", "B.Y"], "missing_roots": ["B"]}}
+    got = PE.build(dest, tmp_path / "logs", targets)
+    assert [(b["package"], b["ok"], b["shares_packages"]) for b in got["lean"]] == [("big", True, False), ("small", True, True)]
+    assert (dest / "small" / ".lake" / "packages").resolve() == (dest / "big" / ".lake" / "packages").resolve()
+    assert calls.read_text(encoding="utf-8").splitlines() == [
+        "elan big toolchain install leanprover/lean4:v4.0.0", "lake big env true", "lake big exe cache get",
+        "lake big build +B.X +B.Y", "lake small env true", "lake small build S"]
+    assert got["licenses"]["lean"] == {"mathlib": "Apache-2.0 (LICENSE)"}

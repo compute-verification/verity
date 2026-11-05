@@ -59,6 +59,7 @@ EXTRA = (("art", re.compile(r"(?<![\w-])art:[0-9A-Za-z][\w.:/-]*")),
 SCRUB_MAX_BYTES = 4 << 20
 #: a build step's limit, so one stuck step leaves the rest a report
 STEP_SECONDS = 4 * 3600
+ELAN = Path.home() / ".elan" / "bin"
 #: a TOML table's header line: `[a.b]` or `[[a.b]]`, its keys bare or quoted
 HEADER = re.compile(r"[ \t]*\[\[?[ \t]*((?:[\w-]+|\"[^\"\n]*\")(?:[ \t]*\.[ \t]*(?:[\w-]+|\"[^\"\n]*\"))*)[ \t]*\]\]?[ \t]*(?:#.*)?$")
 
@@ -425,14 +426,20 @@ def _license_of(d: Path) -> str | None:
     return None
 
 
-def _step(cmd: list[str], cwd: Path, log: Path, env: dict | None = None) -> dict:
+def _tool(name: str) -> str:
+    """elan's ``name`` (elan, lake), where elan-init puts it, else the one on the path."""
+    return str(ELAN / name) if (ELAN / name).is_file() else shutil.which(name) or name
+
+
+def _step(cmd: list[str], cwd: Path, log: Path) -> dict:
     t0 = time.monotonic()
-    shown = " ".join(cmd) if len(cmd) <= 8 else f"{' '.join(cmd[:6])} ... ({len(cmd) - 2} targets)"
+    shown = " ".join([Path(cmd[0]).name, *cmd[1:]]) if len(cmd) <= 8 else \
+        f"{' '.join([Path(cmd[0]).name, *cmd[1:6]])} ... ({len(cmd) - 2} targets)"
     with log.open("a", encoding="utf-8") as out:
         out.write(f"\n$ {shown}  (in {cwd})\n")
         out.flush()
         try:
-            code: int | str = subprocess.run(cmd, cwd=cwd, stdout=out, stderr=subprocess.STDOUT, env=env,
+            code: int | str = subprocess.run(cmd, cwd=cwd, stdout=out, stderr=subprocess.STDOUT,
                                              timeout=STEP_SECONDS).returncode
         except subprocess.TimeoutExpired:
             code = "timeout"
@@ -462,10 +469,10 @@ def build(dest: Path, logs: Path, targets: dict[str, dict]) -> dict:
     licenses of what they fetched. The package that pins the most dependencies goes first; every later one whose pins all
     agree with its pins shares its `.lake/packages` (one Mathlib, one prebuilt cache)."""
     logs.mkdir(parents=True, exist_ok=True)
-    env = dict(os.environ, PATH=f"{Path.home() / '.elan' / 'bin'}:{os.environ.get('PATH', '')}")
-    if shutil.which("elan", path=env["PATH"]) is None:
+    if not (ELAN / "elan").is_file() and shutil.which("elan") is None:
         subprocess.run("curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y "
                        "--default-toolchain none", shell=True, check=False)
+    elan, lake = _tool("elan"), _tool("lake")
     pkgs = sorted((dest / rel for rel in targets), key=lambda d: (-len(_pins(d)), -len(targets[_rel_to(d, dest)]["modules"]),
                                                                   d.as_posix()))
     lean, fetched, shared, toolchains = [], {}, None, set()
@@ -476,19 +483,19 @@ def build(dest: Path, logs: Path, targets: dict[str, dict]) -> dict:
         pins, steps = _pins(d), []
         toolchain = (d / "lean-toolchain").read_text(encoding="utf-8").strip()
         if toolchain not in toolchains:
-            steps.append(_step(["elan", "toolchain", "install", toolchain], d, log, env))
+            steps.append(_step([elan, "toolchain", "install", toolchain], d, log))
             toolchains.add(toolchain)
         shares = shared is not None and pins and all(shared[1].get(n) == r for n, r in pins.items())
         if shares:
             (d / ".lake").mkdir(parents=True, exist_ok=True)
             (d / ".lake" / "packages").symlink_to(shared[0], target_is_directory=True)
-        steps.append(fetch := _step(["lake", "env", "true"], d, log, env))
+        steps.append(fetch := _step([lake, "env", "true"], d, log))
         if shared is None and pins and fetch["exit"] == 0:
             shared = (d / ".lake" / "packages", pins)
         if "mathlib" in pins and not shares:
-            steps.append(_step(["lake", "exe", "cache", "get"], d, log, env))
+            steps.append(_step([lake, "exe", "cache", "get"], d, log))
         if want:
-            steps.append(_step(["lake", "build", *want], d, log, env))
+            steps.append(_step([lake, "build", *want], d, log))
         for p in sorted((d / ".lake" / "packages").glob("*")) if (d / ".lake" / "packages").is_dir() else []:
             fetched.setdefault(p.name, _license_of(p))
         lean.append({"package": rel, "ok": all(s["exit"] == 0 for s in steps), "targets": len(want),
