@@ -9,6 +9,7 @@ import NetworkCheck.Members
 import NetworkCheck.CircuitFile
 import NetworkCheck.Period
 import NetworkCheck.PeriodFiles
+import NetworkCheck.PeriodBlobs
 import NetworkCheck.RowsAudit
 import NetworkCheck.LinkWindow
 
@@ -55,4 +56,7 @@ first VU (`interface._members`), from the record alone, held to `interface.membe
 check with its listed circuit files (`NetworkCheck.Period.protocolWith`, `network-period check … CIRCUIT…`), which
 holds each to its template with `SampledProofs.Bits.check`. `NetworkCheck.PeriodFiles` reads a period's listed files
 within a budget of files and bytes at once, for `network-period` and for a protocol that composes the period's.
+`NetworkCheck.PeriodBlobs` is the period's check as the composites compose it: with its listed files among the caller's
+blobs, by their SHA-512s (`blobProtocol`, the verifier of record), or read by path (`readProtocol`), one verdict where
+the blobs hold the files.
 -/

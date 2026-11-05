@@ -62,6 +62,11 @@
    "except": [],
    "why": "reading a period's listed circuit files within a budget is code: the period's listing and trim, and the circuit file reader, no Mathlib and nothing of Security"
   },
+  "NetworkCheck.PeriodBlobs": {
+   "imports": ["NetworkCheck.Period", "NetworkCheck.CircuitFile", "CoreProtocol.Blobs"],
+   "except": [],
+   "why": "the period's check with its listed circuit files among the caller's blobs or read by path is code: the period's listing, trim and check, the circuit file reader, and the core interface's blobs, no Mathlib and nothing of Security"
+  },
   "NetworkCheck.Records": {
    "imports": ["NetworkCheck.Check", "Difftest"],
    "except": [],
