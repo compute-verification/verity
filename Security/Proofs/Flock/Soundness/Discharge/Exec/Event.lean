@@ -21,7 +21,7 @@ event, on an audit whose outcome carries the transcript.
   event. A run of several sessions sets each drawn session up at its own draw.
 * `auditLive L Reg live`: the audit as it runs, the registration, then the verifier's draw, then the live session
   `live S R` that ends in the transcript, and its outcome the registration, the draw and the transcript.
-* `ExecRefines`: the open guarantee R11 at one strategy pair, the probability that flock-verify accepts in the live
+* `ExecRefines`: the open refinement at one strategy pair, the probability that flock-verify accepts in the live
   audit is at most the probability that the audit as Lean defines it accepts, plus a live event `bad` (for `bad = ⊥`,
   the skeleton's `hExec`).
 -/
