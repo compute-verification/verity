@@ -13,7 +13,7 @@ import random
 
 import pytest
 
-from verity.core.protocols.certifier.advice import (FINISHES, KINDS, SCHEMA, Advice, MalformedAdvice, Output, RequestAdvice,
+from verity_vllm.scheduler.advice import (FINISHES, KINDS, SCHEMA, Advice, MalformedAdvice, Output, RequestAdvice,
                                                     Row, Source, StepAdvice, bits, bits_by_window, decode, encode, from_json,
                                                     outputs, to_json, total_bits)
 

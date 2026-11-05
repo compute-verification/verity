@@ -49,7 +49,7 @@ from verity.ml.circuits.boolean.trace import part as _part
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.types import Array, Tuple
-from verity.core.protocols.certifier.advice import FINISHES, VERSION, WIDTH_BITS, MalformedAdvice, _Reader, decode
+from verity_vllm.scheduler.advice import FINISHES, VERSION, WIDTH_BITS, MalformedAdvice, _Reader, decode
 
 #: the refusals of `advice.decode` the circuit doesn't make yet, by the start of decode's message for each
 DEFERRED = {
