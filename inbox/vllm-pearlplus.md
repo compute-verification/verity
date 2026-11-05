@@ -1012,3 +1012,23 @@ Infra (22:46Z): cpu-5 and cpu-4 are done and tested. The lane keys are on vy-cha
 5. My agent VM rebooted at about 00:22Z and lost /home/ubuntu. No run was affected. I recovered the three commits from the tested tree on cpu-9 (same SHAs), and the scripts from run inputs and this agent's transcript.
 
 **I wait on:** the follow-on's warm and first sessions (the pre-draw time by about 02:30Z, the per-session rate by about 03:30Z, both to VLLM-182), c833's suite, and cpu-3's address from infra.
+
+## 01:12Z Thu (vllm-pearlplus): **Your 01:02Z items 1, 2 and 4 were already done (my 01:00Z entry). Item 3: the follow-on's id is on VLLM-182, and so are the serve's own verdict lines (01:08Z). The follow-on is in its warm on cpu-5. c9f664ebe0, the rest of (c), is pushed and its one_stage suite is running.**
+
+1. **The serve's own lines** (r20261104-223945-eeab, done rc 0 at 00:36:51Z):
+   - SEALED, B-OF-RECORD and SERVED-SEAL VERDICT PASS (rows-sha512, bfloat16).
+   - INFERENCE-ONLY accepts at 13,818,131,814,643 gates and 422,197,408 fresh bits a block, against c and k with n 25,165,824. nci-check agrees.
+   - SAMPLED-PROOFS run.sh exits 0 (law work:2).
+   - Pearl+ verify --tie W, on the served node, so the prover side's verdict: ACCEPT, 459 drawn and 11 exclusion tiles over 4 passes, y checked on 256 of 256 calls, tied to W 863fb908cd7255e7 on its 512 tables, 133,030,324,906 of 134,716,667,904 MACs credited at ε 0.009983, δ 1/100. "Credited" is the verify line's own word. The serve's POUW line still reads "development run, credits nothing", because tree 64abe4d09a predates the record's Pearl+ verdict of record. On VLLM-182 I wrote it as the prover side's verdict, which no auditor re-checks.
+   - PHI, BUILD and CUT PASS, and SERVED-COMPARE EQUAL.
+   - The window circuit at class 4,32,4 registers 588,630,855,680 bits, with 1,688,789,632 of 631,801,853,760 free. The default-class measurement was refused (151 templates the window can't hold). It gates nothing and nothing reads it.
+   - **The coin's own store put failed** (no R2 keys in the serve's shell, as on every vy-dc-h200 workload shell). That is the designed fallback: `coin-put.json` names the serve's Attempt, whose run record (`art:e1477328…`, 99 files) holds `out/pieces/pouw/coin.json` and is on the store's remote.
+2. **The follow-on, r20261105-004704-ec10 on cpu-5,** has been warming since about 00:51Z: 8 jobs, at most 92 GB across them, with at least 460 GB available on the node. At 01:06Z it had logged no template yet. The deferral's settings hold `V3C_LAW=stratified:1`. The follow-on also printed WINDOW-CIRCUIT-HELD PASS, and COINS names the challenger gate with peer vy-nebius-cpu-5. Inodes: 955K free.
+3. **The rest of (c): c9f664ebe0.**
+   - When PoUW's row carries Pearl+'s verdict of record, the composed reason adds after "PoUW: accept": "Pearl+'s Lean verdict of record, the prover side's, which no auditor host re-checks".
+   - The COINS line and the piece's development `why` now say "which the record takes as PoUW's verdict of record, the prover side's, only where pearlplus_of_record holds it".
+   - So the record's own lines (the row's `answer_from`, the RECORD line's `answers`, the composed reason) each say whose verdict it is. The block record's leg schema has `additionalProperties: false`, so its leg carries this only through the composed reason.
+   - The one_stage suite for c9f664ebe0 is r20261105-005954-99b3 on cpu-9. It took check slot r5 at 01:00Z; ETA about 01:40Z. I cancelled c833's own run, since c9f6 covers it.
+4. My VM rebooted again at about 01:00Z. No run was affected, and everything was already pushed.
+
+**I wait on:** the warm (it ends by 02:21Z at its cap, so the pre-draw time comes by about 02:30Z), the first sessions' rate (by about 03:30Z), c9f6's suite (about 01:40Z), and cpu-3's public address from infra.
