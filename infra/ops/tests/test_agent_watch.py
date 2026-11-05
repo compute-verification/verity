@@ -1956,7 +1956,7 @@ def test_a_quiet_handles_runs_are_not_rung(tmp_path):
 
 
 def test_a_quiet_senders_runs_are_not_rung(tmp_path):
-    """The task executor sends a run per task, hundreds a graph, and drive reads each task's verdict: ringing @infra for each
+    """The task executor sends a run per task, hundreds a graph, and drive reads each task's verdict: ringing infra for each
     would bury it."""
     api, clock, w, sh, roots = nodes_setup(tmp_path)
     cfg = json.loads((tmp_path / "nodes.json").read_text())
