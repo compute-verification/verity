@@ -35,7 +35,7 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-- `Verity.sha512` reads a byte string as the code's SHA-512 does. -/
 theorem sha512_hashOf : Flock.Bridge.Spec.HashOf Verity.sha512 := fun x => by
-  have hx : (⟨(bs x).toArray⟩ : ByteArray) = x := by simp [bs]
+  have hx : (⟨(bs x).toArray⟩ : ByteArray) = x := Claims.Sampling.bytes_bs x
   show (fun i : Fin 64 => (Flock.Sha512.hash ⟨(bs x).toArray⟩).data.getD i.val 0) = _
   rw [hx]
   rfl
@@ -45,11 +45,11 @@ theorem sha512Msg_length (m : Claims.Msg) : (Claims.Sampling.sha512Msg m).length
 
 theorem log2ceil_pos {n : ℕ} (h : 2 ≤ n) : 1 ≤ Flock.log2ceil n := by
   unfold Flock.log2ceil
-  rw [if_neg (by omega)]
+  rw [ite_eq_right (show ¬ n ≤ 1 by omega)]
   omega
 
-theorem w_ofAudit {X : Verity.Circuit} {C : FlockSoundness.Audit.Circuit} (h : X = Verity.Circuit.ofAudit C)
-    (g : Fin X.N) : X.w g = 1 := by
+theorem w_ofAudit {K : Verity.Circuit} {C : FlockSoundness.Audit.Circuit} (h : K = Verity.Circuit.ofAudit C)
+    (g : Fin K.N) : K.w g = 1 := by
   subst h
   rfl
 
@@ -93,7 +93,7 @@ theorem opens_rowLeaf {A : Live} (hA : A.OpensReady) {i : ℕ} {b : Bool} {m : C
     rw [hat] at h
     dsimp only at h
     rw [Claims.Sampling.ocBind_eval, Claims.Sampling.hm96Leaf_fst,
-      if_pos (And.intro (sha512Msg_length _) (sha512Msg_length _))] at h
+      ite_eq_left (And.intro (sha512Msg_length _) (sha512Msg_length _))] at h
     dsimp only at h
     obtain ⟨reg, hfind, hop⟩ := (Claims.Sampling.regPath_sha512 _ _ _ _ _).mp h
     have hmem := Array.mem_of_find?_eq_some hfind
@@ -153,7 +153,8 @@ theorem opensAt_of (I : Instance d α)
     have h1 := k.isLt
     have h2 : (I.base.circuitOf θ F).w g = 1 := hw
     omega
-  rw [hk, Nat.add_zero, hrow, hv]
+  rw [hk, Nat.add_zero, hrow]
+  exact congrArg some hv.symm
 
 end Instance
 
