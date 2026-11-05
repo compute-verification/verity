@@ -405,13 +405,8 @@ theorem stopped_roundRun {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : 
   have hfa : frameAt R₂ sid i r = some p₁ := frameAt_own hA.frame (roundStep_key hput) (h01.1 i r) (h12.1 i r)
   obtain ⟨j, hj⟩ := find_of_frameAt hfa
   obtain ⟨st₂, hst, rfl⟩ := coinsStep_inv hj hcs
-  rcases hnd with ⟨hnd, hcr⟩ | ⟨hnd, hcr⟩
-  · exact stopped_round_next M.L M.wk M.x M.w M.ρ M.κ (M.hist σ.c) hA.kind hA.last hv hcr hm hA.frame hrp hnd
-      hcfg hu hA.stopped ho' hput (h01.1 i r) h01.2 ((h12.1 i r).trans (h22.1 i r)) (h12.2.trans h22.2) hst h23.2 e'
-  · obtain ⟨-, -, -, hst'⟩ := roundStep_nextD_nd M.L M.nN M.wk M.x M.w M.ρ M.κ (M.hist σ.c) hA.kind hA.next hA.last
-      hv hcr hm hA.frame hrp hnd (roundPlace_live hrp) hcfg hu ho' hput
-    rw [stopped_step hA.frame hrp ho' hput (h01.1 i r) h01.2 ((h12.1 i r).trans (h22.1 i r)) (h12.2.trans h22.2) hst
-      h23.2, hst' e']
+  exact stopped_round_next M.L M.wk M.x M.w M.ρ M.κ (M.hist σ.c) hA.kind hA.last hv hA.cross hm hA.frame hrp hnd
+    hcfg hu hA.stopped ho' hput (h01.1 i r) h01.2 ((h12.1 i r).trans (h22.1 i r)) (h12.2.trans h22.2) hst h23.2 e'
 
 /-- **`LoopJ` is kept at a frame round**, where the rep streams' names are distinct, `RoundFacts` holds at each
 request at the slot as the loop answers it (`slotCase_round`'s premise), and the round's rep has `RepJ` at the

@@ -13,9 +13,10 @@ at the stream's first round, `Frames.withAlg` and rep 1's `prior`:
 * `roundPlace_later`: past the stream's first round, where `placeOf` places the round in a scheduled round's place, or
   fails it, the round's place is that, the frame `placeOf`'s, and the frame takes the device round exactly where the
   session has not stopped (`Frames.Sessions.stopped`: no rep's frame of it stopped).
-* `roundPlace_own`: past the opening (`placeOf`'s `own`), the round's place is the inner proof's round `j` the
-  frame's own (`Frame.innerSched` on the rounds the loop's finish computed for the rep, `Sessions.innerOf`), and the
-  frame takes the device round exactly where the session has not stopped and the finish computed round `j`.
+* `roundPlace_own`: past the opening (`placeOf`'s `own`), once the loop's finish computed the inner proof's round `j`
+  for the rep, the round's place is round `j` the frame's own (`Frame.innerSched` on the rounds the finish computed,
+  `Sessions.innerOf`), and the frame takes the device round exactly where the session has not stopped. A round `j`
+  the finish has not computed has no place: the loop refuses it.
 * `roundPlace_first0`, `roundPlace_first1`: at the stream's first round, the place is `placeOf`'s on the frame with its
   algebraic phase, at rep 1 after rep 0's algebraic-phase coins, and the frame takes the device round exactly where
   the session has not stopped.
@@ -58,9 +59,9 @@ theorem roundPlace_later {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots
            ↓reduceIte]
          exact ⟨_, rfl, by simp⟩)
 
-/-- **A later round past the opening** is at the inner proof's round `j` the frame's own, on the rounds the loop's
-finish computed for the rep, and the frame takes the device round exactly where the session has not stopped and the
-finish computed round `j`. -/
+/-- **A later round past the opening** is, once the loop's finish computed the inner proof's round `j` for the rep,
+at round `j` the frame's own, on the rounds the finish computed, and the frame takes the device round exactly where
+the session has not stopped. -/
 theorem roundPlace_own {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r j : Nat}
     {dom content : ByteArray} {n : Nat} {p : Rep} {s : Release} {st : Stmt} {name : String}
     {l0 : _root_.Flock.Firewall.Level0.Level0} {k : Nat} {q : Rep}
@@ -69,18 +70,20 @@ theorem roundPlace_own {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} 
     (hl0 : _root_.Flock.Firewall.Level0.ofSession L0 sid name = some l0)
     (hfst : (p.coins.isEmpty && !p.st.begun) = false)
     (hp : _root_.Flock.Firewall.Frames.placeOf R.salts l0 s p (s.spec.domain name r).toUTF8 = .ok (.own, k, q))
-    (hj : q.st.m.inner.getD 0 < _root_.Flock.Firewall.Frame.INNER_ROUNDS) :
+    (hj : q.st.m.inner.getD 0 < _root_.Flock.Firewall.Frame.INNER_ROUNDS)
+    (hfin : q.st.m.inner.getD 0 < (R.innerOf l0.root r).size) :
     ∃ nd, _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n =
         .ok (q, .sched (_root_.Flock.Firewall.Frame.innerSched q.cfg q.st.m (R.innerOf l0.root r) n
           (q.st.m.inner.getD 0)), false, nd) ∧
-      (nd = none ↔ R.stopped sid = false ∧ q.st.m.inner.getD 0 < (R.innerOf l0.root r).size) := by
+      (nd = none ↔ R.stopped sid = false) := by
   have hj' : ¬ _root_.Flock.Firewall.Frame.INNER_ROUNDS ≤ q.st.m.inner.getD 0 := Nat.not_le.mpr hj
+  have hfin' : ¬ (R.innerOf l0.root r).size ≤ q.st.m.inner.getD 0 := Nat.not_le.mpr hfin
   unfold sessAt at hs
   unfold _root_.Flock.Firewall.Frames.roundPlace
-  simp only [hf, hs, hst, hname, hl0, hfst, hp, hj', bind, Except.bind, pure, Except.pure, Bool.false_eq_true,
+  simp only [hf, hs, hst, hname, hl0, hfst, hp, hj', hfin', bind, Except.bind, pure, Except.pure, Bool.false_eq_true,
     ↓reduceIte]
   refine ⟨_, rfl, ?_⟩
-  by_cases h : q.st.m.inner.getD 0 < (R.innerOf l0.root r).size <;> cases hss : R.stopped sid <;> simp [h]
+  cases hss : R.stopped sid <;> simp
 
 /-- **A round puts back `roundPlace`'s frame**, its frame state the frame's after the round in its place (the device's
 round, or none where `roundPlace` takes none), with some values. -/
