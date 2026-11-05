@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Claims.Bridge.CustodyZkP
 public import Proofs.Flock.Bridge.Draw
 public import Proofs.Properties.Verity.SampledCoins
-public import Proofs.Properties.Verity.Sampled.Lookups
+public import Proofs.Properties.SampledProofs.Lookups
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 
