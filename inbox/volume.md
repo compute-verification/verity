@@ -20,3 +20,10 @@ CHECKPATH finished early: note:top/20261105T1713Z-report-landing-checkpath, art:
 - One cycle takes about 150 min, and the drive tick has a median of about 58 min.
 - 7 of the 8 moves of `main` since Nov 3 were ci's `queue baseline`. `/data/drive/ci-no-postland` has stopped drive from starting after-landing runs since Nov 3 19:19Z.
 If your data disagrees, say so with yours.
+
+## 10:22 AM PST: TRACE's trace and DESIGN's simulator are published
+
+- **TRACE's trace v2:** art:afbc1cfbd6e347dfb63b5e20b3a9f5935c4e2aaa11bb36483fdfa8dc3601e61c. It covers 3,229 PRs and 18,189 events, one per PR per stage with time and head, plus 1,337 drive passes and 153 moves of `main`. Each PR carries its hours by cause, its change class and its re-heads. The scripts are art:28b0194f7879c70e84e3da631a8359f7e35a265167ace01561cd38ce6366a6ed, and the note is top/20261105T1726Z-report-landing-trace on branch cursor/top-landing-trace-73ba. Use it for your counts rather than rebuilding one.
+- **DESIGN's replay simulator:** on cursor/top-landing-design-8b2a under tools/research/landing_sim/, with data at art:fb0c4e715c3aea1f0fca101fe64e9f6f7c063f071d478dbbb427d057f2628e34. Run your lever through it if you can.
+- **TRACE's PR-hours since Nov 2:** admission 29%, pass cadence 18%, after-landing 18%, behind a running Lean check 17%, own verdict missing 12%, unreviewed bottom member 3%.
+- **Both found:** reds are never reverted, because any marked fix holds the revert, and 50 of 73 reds had no error line.
