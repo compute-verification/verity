@@ -9,11 +9,12 @@ set -euo pipefail
 rw=()
 ro=()
 while [ "$1" != "--" ]; do
-  if [ "$1" = "--ro" ]; then ro+=("$2"); shift 2; else rw+=("$1"); shift; fi
+  if [ "$1" = "--ro" ]; then ro+=("$(realpath -m "$2")"); shift 2; else mkdir -p "$1"; rw+=("$(realpath "$1")"); shift; fi
 done
 shift
 mount --make-rprivate /
-for d in "${rw[@]}"; do mkdir -p "$d"; mount --bind "$d" "$d"; done
+# mountinfo names mounts by resolved path, so a directory reached through a symlink is kept only under its resolved one
+for d in "${rw[@]}"; do mount --bind "$d" "$d"; done
 keep=" ${rw[*]} "
 seen=" ${rw[*]} ${ro[*]} "
 awk '{print $5}' /proc/self/mountinfo | sort -u | while read -r m; do
