@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from . import reference
+from verity.core.protocols.pous.p2 import reference
 
 LIB = "libp2v1.so"
 CUDA_LIB = Path(__file__).resolve().parents[2] / "word_codec" / "cuda_lib.py"

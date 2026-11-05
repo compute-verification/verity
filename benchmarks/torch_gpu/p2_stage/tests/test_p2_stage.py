@@ -24,7 +24,7 @@ import gemm as G  # noqa: E402
 import stage as S  # noqa: E402
 
 ROOT = HERE.parents[2]
-VECTORS = json.loads((ROOT / "benchmarks/pous/p2_v1/vectors.json").read_text())
+VECTORS = json.loads((ROOT / "verity/core/protocols/pous/p2/vectors.json").read_text())
 TOY = ROOT / "benchmarks/pous/p2_v1/store-toy"
 PREFIX = L.registered_prefix(bytes(range(24)))
 

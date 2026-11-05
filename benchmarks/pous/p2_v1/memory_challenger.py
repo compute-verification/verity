@@ -44,7 +44,7 @@ from band_gpu.memory_challenger import (  # noqa: E402
     limit_of,
     quantiles,
 )
-from p2_v1 import reference  # noqa: E402
+from verity.core.protocols.pous.p2 import reference  # noqa: E402
 
 
 def params_of(manifest: dict[str, Any], payload_bytes: int) -> reference.Params:

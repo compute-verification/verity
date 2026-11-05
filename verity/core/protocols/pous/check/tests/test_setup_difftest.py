@@ -38,7 +38,7 @@ from verity_difftest import protocol as P
 
 LEAN = Path(__file__).resolve().parents[1]
 ROOT = Path(__file__).resolve().parents[6]
-SPEC_VECTORS = ROOT / "benchmarks" / "pous" / "p2_v1" / "vectors.json"
+SPEC_VECTORS = ROOT / "verity" / "core" / "protocols" / "pous" / "p2" / "vectors.json"
 PINNED = ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "fixtures" / "schemes" / "p2-16448-v4.json"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

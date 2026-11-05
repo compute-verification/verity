@@ -340,7 +340,7 @@ class P2V1Gpu:
 
     def conformance_gate(self) -> dict[str, Any]:
         sys.path.insert(0, str(HERE))
-        from p2_v1 import reference
+        from verity.core.protocols.pous.p2 import reference
 
         return reference.conformance()
 
@@ -367,7 +367,7 @@ class P2V3Gpu(P2V1Gpu):
         """The spec's vectors (the kernels' map and its SHA-512 streams), and the registered scheme's expander given the
         spec's prefix: its `sha512_keys` gives every vector's `K` and `t`, so the two framings differ only in their prefix."""
         sys.path.insert(0, str(HERE))
-        from p2_v1 import reference
+        from verity.core.protocols.pous.p2 import reference
 
         from verity.core.protocols.pous.schemes import p2
 

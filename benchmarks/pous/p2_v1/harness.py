@@ -53,7 +53,7 @@ from typing import Any
 
 from band_gpu import harness as H
 
-from . import reference as R
+from verity.core.protocols.pous.p2 import reference as R
 
 HERE = Path(__file__).resolve().parent
 MEMORY_CHALLENGER = HERE / "memory_challenger.py"
@@ -273,7 +273,7 @@ def rows(values: list[int], width: int, device: Any) -> Any:
 
 
 KEYS = Path(__file__).resolve().parents[3] / "verity/core/protocols/pous/tests/fixtures/p2-v4-keys.json"
-"""The pinned v4 keys (`p2_v1.vectors` writes them from `vectors.json`), which the vector gate holds the device's keys to."""
+"""The pinned v4 keys (`verity.core.protocols.pous.p2.vectors` writes them from `vectors.json`), which the vector gate holds the device's keys to."""
 
 
 def vector_gate(backend: Backend, params: R.Params, vectors: dict[str, Any] | None = None,

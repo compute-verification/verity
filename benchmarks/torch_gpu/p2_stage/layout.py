@@ -20,7 +20,7 @@ at its stream offset, QKV being wq, wk and wv one after another, each with its f
 `head` (`Tensor.stream_names`). `payloads` lays it out as the store's W.
 
 `check_blocks` holds rows to W's payloads by memory-accounting's reference decode of one block (`p2_v1/store.py`'s
-`decode_block`: `p2_v1.reference.decode` under `reference.keys_after`), which refuses a row not below p, or a decode
+`decode_block`: `verity.core.protocols.pous.p2.reference.decode` under `reference.keys_after`), which refuses a row not below p, or a decode
 wider than the payload.
 """
 from __future__ import annotations
@@ -38,7 +38,7 @@ from verity.core.protocols.pous.schemes import p2 as S
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "benchmarks" / "pous"))
-from p2_v1 import reference as R  # noqa: E402
+from verity.core.protocols.pous.p2 import reference as R  # noqa: E402
 
 PARAMS = S.P2Params(*S.POINT)
 SPEC = R.Params(PARAMS.w, PARAMS.c0, PARAMS.payload_bytes, PARAMS.blocks_per_segment)

@@ -40,7 +40,7 @@ from .weights import SW, Weights
 
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "benchmarks" / "pous"))
-from p2_v1 import reference as R  # noqa: E402
+from verity.core.protocols.pous.p2 import reference as R  # noqa: E402
 
 PARAMS = S.P2Params(*S.POINT)
 SPEC = R.Params(PARAMS.w, PARAMS.c0, PARAMS.payload_bytes, PARAMS.blocks_per_segment)

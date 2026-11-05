@@ -35,7 +35,8 @@ def _bench():
 
 def _p2():
     sys.path.insert(0, str(BENCH))
-    from p2_v1 import gpu, harness, reference
+    from p2_v1 import gpu, harness
+    from verity.core.protocols.pous.p2 import reference
     return reference, harness, gpu
 
 

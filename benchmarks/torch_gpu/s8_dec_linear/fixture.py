@@ -2,7 +2,7 @@
 
 A tensor of W at W-offset `base`, `length` bytes long, lies in blocks `blocks_of(base, length)`; block j carries W bytes
 [2054 j, 2054 j + 2054) as bytes 2 .. 2055 of its big-endian 2,056-byte row (`verity/core/protocols/pous/schemes/p2.py`,
-`p2-16448/v4`). A block's decode is `p2_v1.reference.decode` (the P2 spec's map, pinned by its vectors) with the
+`p2-16448/v4`). A block's decode is `verity.core.protocols.pous.p2.reference.decode` (the P2 spec's map, pinned by its vectors) with the
 registered scheme's keys (`schemes.p2.sha512_keys` under `schemes.p2.expand_prefix`), the pairing
 `benchmarks/pous/bench.py`'s `p2-v3-gpu` arm gates its kernels by. `staged` is what the kernel writes: every block's low
 2,054 bytes, codeword or not, and `refusals` what the registered reference refuses (`decode_segment`: c >= p, or a decode
@@ -17,7 +17,7 @@ from pathlib import Path
 from verity.core.protocols.pous.schemes import p2 as S
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "pous"))
-from p2_v1 import reference as R
+from verity.core.protocols.pous.p2 import reference as R
 
 PARAMS = S.P2Params(*S.POINT)
 SPEC = R.Params(PARAMS.w, PARAMS.c0, PARAMS.payload_bytes, PARAMS.blocks_per_segment)
