@@ -4,7 +4,7 @@
 `stoch_recompute` evaluates every sampled row of a record through the
 Definition of record, `GumbelTopPTokenSelect_v1 = TemperatureScale_v1 -> TopPMask_v1 -> GumbelSelectF32_v1`, by the generic
 gate interpreter: 17 gates x V lanes per row (2.18 M gates at V = 128,256), ~44 s/row of which 60 % is the interpreter's
-per-gate address resolution and 29 % the per-lane fp32 emulation through `struct.pack` (profiles/README.md).  This module
+per-gate address resolution and 29 % the per-lane fp32 emulation through `struct.pack`.  This module
 computes the SAME words over the row with numpy — the same Philox4x32-10, the same libdevice `__nv_logf` / `__nv_log1pf`
 transcriptions, the same FTZ / RN / RZ rules, the same `div.full.f32` MUFU table, the same `topp_keep_row` — so a row costs
 milliseconds instead of tens of seconds.
