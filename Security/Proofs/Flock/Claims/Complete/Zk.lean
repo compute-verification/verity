@@ -127,9 +127,9 @@ proof's lengths (`ligeritoPZk_shape`); `Level0Premises` the premises of `ZkTable
 model, given its openings and final identity at the model's values (`ligeritoWithZ_of`); `Level0Honest` the honest
 masked prover's Ligerito against that model (`mid_lv0Z`), and `Level0HonestRun` its whole walk: it ends at the model's
 transcript and meets the model's final identity (`honestZ`); `Level0Opens` its openings passing the masked Merkle
-checks, level 0's over rows `EXTRA_LANES` wider (`ligeritoPZk_opens`, `merkleOkZ_of_opens`); `Level0Verifier` the last
-premise, the verifier returning the prover's record at its transcript (`verifier`); `Level0Complete` the four in
-`complete_jsonT_of_level0`, leaving the JSON specification and `MaskRankBound` (`complete_jsonT_closed`), and with
-`maskRankBound` the JSON specification alone (`complete_jsonT_of_spec`). -/
+checks, level 0's over rows `EXTRA_LANES` wider (`ligeritoPZk_opens`, `merkleOkZ_of_opens`). Level 0's last premise,
+the verifier returning the prover's record at its transcript (`ZkTables.Level0.Verifier`), is not proved: with the
+other three (`Level0Premises`) and `MaskRank.maskRankBound`, `ZkTables.complete_jsonT_of_level0` leaves it and the
+JSON specification. -/
 
 @[expose] public section
