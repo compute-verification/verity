@@ -82,9 +82,10 @@ def test_the_sessions_coins_are_the_challengers(root):
 
     trees = C.coin_trees_of(R.log_lines(root / "challenger" / R.RELEASES))
     records = [(s.name, json.loads((s / "session.json").read_text())) for s in _sessions(root)]
-    assert len(trees) == 2 and C.sessions_tree_reason(trees, records) is None
     (a, ra), (b, rb) = records
-    swapped = [(a, {**ra, "coin_tree": rb["coin_tree"]}), (b, {**rb, "coin_tree": ra["coin_tree"]})]
+    ta, tb = dict.fromkeys(ra["link"]["root_b"]), dict.fromkeys(rb["link"]["root_b"])
+    assert len(trees) == 2 and C.sessions_tree_reason(trees, [(a, ta, ra), (b, tb, rb)]) is None
+    swapped = [(a, ta, {**ra, "coin_tree": rb["coin_tree"]}), (b, tb, {**rb, "coin_tree": ra["coin_tree"]})]
     assert "link points are not the coins" in C.sessions_tree_reason(trees, swapped)
 
 
