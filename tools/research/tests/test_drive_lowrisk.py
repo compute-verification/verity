@@ -318,6 +318,25 @@ def test_the_lanes_merge_ports_the_lean_a_member_adds_as_the_sync_does(world, mo
     assert _git(h.d.repo, "show", f"{merged}:Lib/New.lean") + "\n" == _port("import Lib.Old\n")
 
 
+def test_the_lanes_merge_takes_a_members_deletion_of_lean_the_tip_only_ported_as_the_sync_does(world, monkeypatch, tmp_path):
+    """A member made before the port that deletes a `.lean` file the tip changed only by porting it merges again with the
+    file deleted, as the sync merged it (`queue.port_deletions`); one the tip changed beyond porting still conflicts."""
+    from test_queue_ported import _port, _tooling
+
+    h = _lane(world, monkeypatch)
+    old = "-- made before the port\nimport Init\n"
+    base = world.change({"Lib/Gone.lean": old, "Lib/Edited.lean": old})
+    gone, edited = (world.change({f: None}, base=base) for f in ("Lib/Gone.lean", "Lib/Edited.lean"))
+    tip = world.change({**_tooling(tmp_path / "argv"), "Lib/Gone.lean": _port(old),
+                        "Lib/Edited.lean": _port(old) + "\ndef y := 2\n"}, base=base)
+    _git(h.d.repo, "fetch", "-q", "origin", *(f"refs/dev/{c}" for c in (gone, edited, tip)))
+    merged, why = h.d._clean_merge(tip, gone)
+    assert merged and why == "", why
+    assert _git(h.d.repo, "ls-tree", "--name-only", merged, "--", "Lib/Gone.lean") == ""
+    assert _git(h.d.repo, "show", f"{merged}:Lib/Edited.lean") + "\n" == _port(old) + "\ndef y := 2\n"
+    assert h.d._clean_merge(tip, edited) == (None, "conflict in Lib/Edited.lean")
+
+
 def test_the_lane_waits_while_a_lean_check_drive_didnt_launch_runs(world, monkeypatch):
     """A hand check's run is of the commit it runs on, which a landing off `next` takes off it: (a) can't be shown for it."""
     h = _lane(world, monkeypatch)
