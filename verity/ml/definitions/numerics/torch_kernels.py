@@ -347,46 +347,57 @@ NROWS_PER_THREAD = 10
 EMBEDDING_FEATURE_MAX = 3072
 
 
+def _scalar_t(g) -> tuple:
+    """The gradient g's words as (g, its f32 words, the store of an f32 word as scalar_t): bf16 words (uint16) widen and store
+    by F2FP; f32 words (uint32) are their own."""
+    g = np.asarray(g)
+    if g.dtype == np.uint16:
+        return g, f32, bf16
+    if g.dtype == U32:
+        return g, (lambda x: np.asarray(x, U32)), (lambda x: np.asarray(x, U32))
+    raise TypeError(f"embedding gradient words are uint16 (bf16) or uint32 (f32), not {g.dtype}")
+
+
 def embedding_backward_sort(t, g, entries) -> np.ndarray:
-    """``embedding_dense_backward_cuda``'s sort path, deterministic, for the given entries: rows of (M,) ids t and (M, H) bf16
-    gradients g. ``radix_sort_pairs`` of (id, position) is stable, so an entry's segment is its positions in order;
-    ``compute_grad_weight`` sums each NROWS_PER_THREAD of them from +0 and ``sum_and_scatter`` the partials from +0, stored as
-    bf16. Returns (len(entries), H) bf16."""
-    t, g = np.asarray(t, U32).reshape(-1), np.asarray(g, np.uint16)
+    """``embedding_dense_backward_cuda``'s sort path, deterministic, for the given entries: rows of (M,) ids t and (M, H)
+    gradients g, bf16 words or f32 words (`_scalar_t`). ``radix_sort_pairs`` of (id, position) is stable, so an entry's segment
+    is its positions in order; ``compute_grad_weight`` sums each NROWS_PER_THREAD of them from +0 in f32 and
+    ``sum_and_scatter`` the partials from +0, stored as g's type. Returns (len(entries), H) words of g's type."""
+    t, (g, wide, store) = np.asarray(t, U32).reshape(-1), _scalar_t(g)
     order = np.argsort(t, kind="stable")
-    out = np.zeros((len(entries), g.shape[1]), np.uint16)
+    out = np.zeros((len(entries), g.shape[1]), g.dtype)
     for k, e in enumerate(entries):
         seg = order[t[order] == e]
         tot = np.zeros(g.shape[1], U32)
         for a in range(0, len(seg), NROWS_PER_THREAD):
             p = np.zeros(g.shape[1], U32)
             for i in seg[a:a + NROWS_PER_THREAD]:
-                p = add(p, f32(g[i]))
+                p = add(p, wide(g[i]))
             tot = add(tot, p)
-        out[k] = bf16(tot)
+        out[k] = store(tot)
     return out
 
 
 def embedding_backward_feature(t, g, entries) -> np.ndarray:
     """``embedding_backward_feature_kernel`` for the given entries: per chunk of 32 consecutive positions, the first position
-    holding the entry is the leader, whose f32 gradient adds the chunk's later ones in order; ``grad_weight += bf16(sum)`` is
-    bf16(f32(grad_weight) + f32(bf16(sum))), from +0."""
-    t, g = np.asarray(t, U32).reshape(-1), np.asarray(g, np.uint16)
-    out = np.zeros((len(entries), g.shape[1]), np.uint16)
+    holding the entry is the leader, whose f32 gradient adds the chunk's later ones in order, then ``grad_weight +=
+    scalar_t(sum)`` from +0: for bf16 words bf16(f32(grad_weight) + f32(bf16(sum))), for f32 words grad_weight + sum."""
+    t, (g, wide, store) = np.asarray(t, U32).reshape(-1), _scalar_t(g)
+    out = np.zeros((len(entries), g.shape[1]), g.dtype)
     for k, e in enumerate(entries):
         for a in range(0, len(t), 32):
             peers = a + np.flatnonzero(t[a:a + 32] == e)
             if len(peers):
-                s = f32(g[peers[0]])
+                s = wide(g[peers[0]])
                 for i in peers[1:]:
-                    s = add(s, f32(g[i]))
-                out[k] = bf16(add(f32(out[k]), f32(bf16(s))))
+                    s = add(s, wide(g[i]))
+                out[k] = store(add(wide(out[k]), wide(store(s))))
     return out
 
 
 def embedding_dense_backward(t, g, entries) -> np.ndarray:
-    """``embedding_dense_backward_cuda`` (``padding_idx`` -1, no ``scale_grad_by_freq``): the feature kernel up to 3072 ids,
-    else the sort path."""
+    """``embedding_dense_backward_cuda`` (``padding_idx`` -1, no ``scale_grad_by_freq``) on bf16 or f32 gradient words: the
+    feature kernel up to 3072 ids, else the sort path."""
     f = embedding_backward_feature if np.size(t) <= EMBEDDING_FEATURE_MAX else embedding_backward_sort
     return f(t, g, entries)
 
