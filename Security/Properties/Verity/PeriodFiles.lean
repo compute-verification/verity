@@ -31,11 +31,11 @@ def verifierWith : Verity.Registration.Composite → BlobProtocol → BlobProtoc
 
 /-- **Composite `k`'s executable's answer with the period's circuit files read by path** (`Core.PeriodFiles.main`): on
 the parameters `p`, the commitment `c`, the evidence `e` and the blobs `bs`, with the circuit files' bytes `cs`, held as
-`NetworkCheck.PeriodFiles.read` holds them (`NetworkCheck.Period.ofRead`) on the network certifier's own parameters
-(`Core.PeriodFiles.certifierParams`). -/
+`NetworkCheck.PeriodFiles.read` holds them (`NetworkCheck.Period.ofRead`) with as many scan files as the network
+certifier's own parameters list (`Core.PeriodFiles.certifierParams`, `NetworkCheck.Period.scanCount`). -/
 def byPath (k : Verity.Registration.Composite) (p c e : ByteArray) (bs cs : Array ByteArray) : Answer :=
-  let j := Core.PeriodFiles.certifierParams ((canonicalJson p).toOption.getD .null)
-  (verifierWith k (NetworkCheck.Period.readProtocol (NetworkCheck.Period.ofRead j cs)).withoutBlobs).answer p c e bs
+  let n := NetworkCheck.Period.scanCount (Core.PeriodFiles.certifierParams ((canonicalJson p).toOption.getD .null))
+  (verifierWith k (NetworkCheck.Period.readProtocol n (NetworkCheck.Period.ofRead n cs)).withoutBlobs).answer p c e bs
 
 /-- **Where composite `k`'s executable accepts with the period's circuit files read by path, its verifier of record
 gives the same answer with them among the blobs**: where the executable accepts the blobs `bs` with the circuit files
