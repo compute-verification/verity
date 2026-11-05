@@ -12,7 +12,11 @@ A column once written keeps its rows: `write` refuses a written column. So a sel
 (`Self`, `place_keep`), and a cover of a Definition's columns by self rows and full copies (`reach_mem`) leaves every one
 of them a self row (`place_full`).
 -/
-import Flock.TmplOrder
+module
+
+public import Flock.TmplOrder
+
+@[expose] public section
 
 namespace Flock.Tmpl
 

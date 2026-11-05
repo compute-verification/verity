@@ -1,8 +1,10 @@
-import Proofs.Flock.Recursive.Stage
-import Proofs.Flock.VBridge.InnerUnit
-import Proofs.Flock.VBridge.Keyed
-import Proofs.Flock.VBridge.PartS
-import Flock.RecAlgebra
+module
+
+public import Proofs.Flock.Recursive.Stage
+public import Proofs.Flock.VBridge.InnerUnit
+public import Proofs.Flock.VBridge.Keyed
+public import Proofs.Flock.VBridge.PartS
+public import Flock.RecAlgebra
 
 /-!
 # VBridge G item 3: V*'s port columns, decoded from the registered reads
@@ -30,6 +32,8 @@ to the layer itself. Only `RegAgree` is read: the unit theorems hold at any tran
 Which columns of V*'s units are registered reads, and the registrant's values there, are facts about the concrete V*
 statement; they enter as `RegBit` hypotheses about one unit.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Decode
 

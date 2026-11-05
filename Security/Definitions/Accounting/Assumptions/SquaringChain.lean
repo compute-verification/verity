@@ -1,5 +1,7 @@
-import Mathlib.Data.Int.ModEq
-import Definitions.Accounting.Gates.Codec
+module
+
+public import Mathlib.Data.Int.ModEq
+public import Definitions.Accounting.Gates.Codec
 
 /-!
 # The encode bound's conjectures in nonlinear units: a floor per squaring, and a chain costs its sum (trusted)
@@ -34,6 +36,8 @@ which they don't.
 `2^−20`. Both moved up from the repriced model's thin-lane units (`e = 119`, `E = 364,497`), where a product of two
 data bytes was free: the `2L − 1` products are new.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions
 

@@ -1,5 +1,7 @@
-import Flock.Draw
-import Proofs.Flock.Soundness.Audit.Work
+module
+
+public import Flock.Draw
+public import Proofs.Flock.Soundness.Audit.Work
 
 /-!
 # The work law's rule is the executable's
@@ -8,6 +10,8 @@ import Proofs.Flock.Soundness.Audit.Work
 verifier's work table, and U2 holds each stratum of a work draw to it. It is `Law.workRule`, the rule the theorems of
 `Audit/Work.lean` read; `Flock.Draw.stratumK`, the count law's rule, is `Law.countRule`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Law
 

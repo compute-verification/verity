@@ -1,7 +1,9 @@
-import Std.Sync.Mutex
-import RemoteAudit.Difftest
-import RemoteAudit.P2Session
-import RemoteAudit.Wire
+module
+
+public import Std.Sync.Mutex
+public import RemoteAudit.Difftest
+public import RemoteAudit.P2Session
+public import RemoteAudit.Wire
 
 /-!
 # The verifier's process: `remote-audit-verifier`
@@ -89,6 +91,10 @@ each verdict applied at its settle, is what `Shared.run g` accepts on the events
 none yet covers one in flight (`Flight`), and the `session` request refuses one in flight at g above 1. Openings are
 checked in the clear.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit.Verifier
 

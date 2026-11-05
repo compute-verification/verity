@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.SchedCount
-import Proofs.Flock.Claims.Recursion.InnerAccepts
-import Proofs.Flock.Claims.Recursion.InnerForm
-import Proofs.Flock.C3.VStarList.Shape
+module
+
+public import Proofs.Flock.Claims.Recursion.SchedCount
+public import Proofs.Flock.Claims.Recursion.InnerAccepts
+public import Proofs.Flock.Claims.Recursion.InnerForm
+public import Proofs.Flock.C3.VStarList.Shape
 
 /-!
 # `SchedMatches` at the dense form, and at the sparse form vacuously
@@ -18,6 +20,8 @@ import Proofs.Flock.C3.VStarList.Shape
   numbers (`innerSetup_files`), its rounds are `2 + 2R` at the plain schedule (`k_plain`), and `SchedMatches` holds at
   the dense form (`schedMatches_dense`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -55,7 +59,7 @@ theorem schedMatches_sparse : SchedMatches Claims.Recursion.Form.Sparse :=
 /-- **The inner shape the verifier's list accepts has a rep schedule**: `RecVStar.checkTopsListed` refuses one without. -/
 theorem repSched_of_statements {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss) :
     ∃ rs, repSched i = some rs := by
-  obtain ⟨_, _, _, _, _, -, -, -, ht, -, -, -⟩ := FlockC3.VStarList.statements_ok h
+  obtain ⟨_, _, _, _, _, _, -, -, -, ht, -, -, -, -⟩ := FlockC3.VStarList.statements_ok h
   unfold RecVStar.checkTopsListed at ht
   unfold repSched
   cases hrs : (if i.holo then RecVStar.holoRepRounds else RecVStar.repRounds) i.m i.kLog i.claims with

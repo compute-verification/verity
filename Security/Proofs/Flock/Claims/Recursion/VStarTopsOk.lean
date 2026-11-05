@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.VStarDense
-import Proofs.Flock.Claims.Recursion.VStarCapL
-import Proofs.Flock.Claims.Recursion.SlotsCalls
-import Proofs.Flock.Claims.Recursion.PartsVStar
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarDense
+public import Proofs.Flock.Claims.Recursion.VStarCapL
+public import Proofs.Flock.Claims.Recursion.SlotsCalls
+public import Proofs.Flock.Claims.Recursion.PartsVStar
 
 /-!
 # Every level's tops are read and every cap accepts, at the honest run (`hT_honest`, `hC_honest`)
@@ -21,6 +23,8 @@ reps' stream rounds and the two reps' tops differ at each later level (the tape 
 
 `hok_honest` is `hok_shaped` with both discharged.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 
@@ -88,7 +92,7 @@ theorem capLevel_of_partAt {x : Msg} {r : XR} (hr : readX x = some r) {rs : Arra
   have hn : nS x = r.w.parts.length := by simp [nS, hr]
   rw [hvs] at hst
   simp only [Except.toOption, Option.bind_some] at hst
-  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, hA, hC, K, n0, hK, hT, rfl⟩ := FlockC3.Reps.list_ok hvs
+  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, hA, hC, K, Lk, n0, hK, hT, hLk, rfl⟩ := FlockC3.Reps.list_ok hvs
   obtain ⟨s', _, ps, hsch, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
   have hm := Array.mem_of_getElem? hst
   rcases Array.mem_append.1 hm with hm | hm
@@ -102,16 +106,19 @@ theorem capLevel_of_partAt {x : Msg} {r : XR} (hr : readX x = some r) {rs : Arra
     · rcases FlockC3.Reps.candidate3_kinds hC _ hm with ⟨_, _, he⟩ | ⟨_, _, _, _, he⟩ |
         ⟨_, _, _, _, _, _, he⟩ <;> cases he
   · rcases Array.mem_append.1 hm with hm | hm
-    · right
-      obtain ⟨g, hg, he⟩ := Array.mem_iff_getElem.1 hm
-      have hts := topsListed_size hT hrs
-      have hgt : g < (RecVStar.topSizes rs).length := by omega
-      have hi := topsListed_at hT hrs (List.getElem?_eq_getElem hgt) hg
-      obtain ⟨N', hN'⟩ := levelCap_at hK hg
-      rw [hN'] at he hi
-      simp only [_root_.VStar.Stmt.cap.injEq] at he
-      simp only [_root_.VStar.Stmt.instances] at hi
-      exact ⟨g, _, List.getElem?_eq_getElem hgt, he.1.symm, by rw [← he.2]; exact hi⟩
+    · rcases Array.mem_append.1 hm with hm | hm
+      · right
+        obtain ⟨g, hg, he⟩ := Array.mem_iff_getElem.1 hm
+        have hts := topsListed_size hT hrs
+        have hgt : g < (RecVStar.topSizes rs).length := by omega
+        have hi := topsListed_at hT hrs (List.getElem?_eq_getElem hgt) hg
+        obtain ⟨N', hN'⟩ := levelCap_at hK hg
+        rw [hN'] at he hi
+        simp only [_root_.VStar.Stmt.cap.injEq] at he
+        simp only [_root_.VStar.Stmt.instances] at hi
+        exact ⟨g, _, List.getElem?_eq_getElem hgt, he.1.symm, by rw [← he.2]; exact hi⟩
+      · exfalso
+        rcases FlockC3.VStarList.linkStatements_ok hLk with ⟨-, rfl⟩ | ⟨_, -, rfl⟩ <;> simp at hm
     · left
       simp at hm
       obtain ⟨rfl, rfl⟩ := hm
@@ -129,7 +136,7 @@ theorem recOpenLevel_of_partAt {x : Msg} {r : XR} (hr : readX x = some r) {rs : 
   obtain ⟨vs, hvs, -⟩ := readX_statements hr
   rw [hvs] at hst
   simp only [Except.toOption, Option.bind_some] at hst
-  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, hA, hC, K, n0, hK, hT, rfl⟩ := FlockC3.Reps.list_ok hvs
+  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, hA, hC, K, Lk, n0, hK, hT, hLk, rfl⟩ := FlockC3.Reps.list_ok hvs
   obtain ⟨s', _, ps, hsch, -, -, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
   have hm := Array.mem_of_getElem? hst
   have hlt : l < s'.levels.size := by
@@ -145,10 +152,12 @@ theorem recOpenLevel_of_partAt {x : Msg} {r : XR} (hr : readX x = some r) {rs : 
       · rcases FlockC3.Reps.candidate3_kinds hC _ hm with ⟨_, _, he⟩ | ⟨_, _, _, _, he⟩ |
           ⟨_, _, _, _, _, _, he⟩ <;> cases he
     · rcases Array.mem_append.1 hm with hm | hm
-      · obtain ⟨g, hg, he⟩ := Array.mem_iff_getElem.1 hm
-        obtain ⟨N', hN'⟩ := levelCap_at hK hg
-        rw [hN'] at he
-        cases he
+      · rcases Array.mem_append.1 hm with hm | hm
+        · obtain ⟨g, hg, he⟩ := Array.mem_iff_getElem.1 hm
+          obtain ⟨N', hN'⟩ := levelCap_at hK hg
+          rw [hN'] at he
+          cases he
+        · rcases FlockC3.VStarList.linkStatements_ok hLk with ⟨-, rfl⟩ | ⟨_, -, rfl⟩ <;> simp at hm
       · simp at hm
   have hsz := levelCaps_size hK hsch
   have hts := topsListed_size hT hrs

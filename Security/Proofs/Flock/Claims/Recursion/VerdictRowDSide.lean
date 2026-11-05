@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowDPieces
-import Proofs.Flock.Claims.Recursion.VerdictRowG
-import Proofs.Flock.VBridge.Family.Structure
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowDPieces
+public import Proofs.Flock.Claims.Recursion.VerdictRowG
+public import Proofs.Flock.VBridge.Family.Structure
 
 /-!
 # Row D's layout tie: the side a `rec-open` piece reads
@@ -18,6 +20,8 @@ that reader and proves the tie.
 * `DecAt.sideAt_eq`, `DecAt.hside`: at a decision, a piece of table `i` and rep `r` reads `D.side cls i r`, in
   `runs_assembled`'s form.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 

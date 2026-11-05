@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
-import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
+public import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
 
 /-!
 # `zk_session_soundHJR_custody`, "wrong" measured against the public file
@@ -16,6 +18,8 @@ second conjunct ties, at each read the verifier owns, to the root `--registered 
 * `zk_session_soundHJR_custody_drawn_reg`: the drawn units' form of the first conjunct,
   `Pr[flock-verify accepts ∧ some drawn unit in wrongRegZ] ≤ ε_ks + δ_link`, without A3, and the same second conjunct.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 

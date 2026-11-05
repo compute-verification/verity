@@ -1,9 +1,11 @@
-import Proofs.Flock.Bridge.Assumptions.ServedV5
-import Proofs.Flock.Bridge.V5.Statement
-import Proofs.Flock.Bridge.Deployed
-import Proofs.Flock.C3.VStarList.Parse
-import Proofs.Flock.Soundness.Discharge.Hidden.Facts
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+module
+
+public import Proofs.Flock.Bridge.Assumptions.ServedV5
+public import Proofs.Flock.Bridge.V5.Statement
+public import Proofs.Flock.Bridge.Deployed
+public import Proofs.Flock.C3.VStarList.Parse
+public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 
 /-!
 # `SampledKSLiveV5`'s file hypotheses hold at the served registered session
@@ -14,10 +16,13 @@ inputs (`Flock.Bridge.Assumptions.ServedFilesParseV5`): inputs `I` whose files h
 `verity/flock-circuit`'s tags with one table and no session tables, at which the circuit file parses to `D`, the circuit of
 `D`'s proof block is built (`Built`), its public input ports `pi` parse and the public file loads over them, `D` is in `scopeOkH` and has
 the row layout it needs (`RowsOk`), no two of its ports share a name, every draw size divides into the session's tables,
-and the tags are the ones the statement takes (`TagsOkZHJ`). The registration's roots (`RootFixesDomainL`) and its
-population (`PopMatches`) are statements about the registration, not the files, and are no conjunct here; the finders'
-collision resistance is no hypothesis either: the statement takes it as `TableCRZ` and `LinkCRZC`.
+and the tags are the ones the statement takes (`TagsOkZHJ`). The registration's roots (`RootFixesDomainL`), its
+population (`PopMatches`) and its law on its layout's strata (`LawOn`) are statements about the registration, not the
+files, and are no conjunct here; the finders' collision resistance is no hypothesis either: the statement takes it as
+`TableCRZ` and `LinkCRZC`.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

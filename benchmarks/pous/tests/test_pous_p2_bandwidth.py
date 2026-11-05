@@ -32,6 +32,12 @@ from verity.core.protocols.remote_bandwidth import p2, p2_case, p2_party, receip
 SEED = hashlib.sha512(b"test_pous_p2_bandwidth/seed").digest()
 
 
+def held_to(windows: int = 2, passes: int = 2, samples: int = 64) -> str:
+    """`p2_party`'s flags holding its sessions to the toy's parameters, as `bandwidth.py session` requests them with
+    these values and `--window-s 0.001 --deadline-s 0.001`."""
+    return f"--windows {windows} --passes {passes} --samples {samples} --window-ns 1000000 --deadline-ns 1000000"
+
+
 def test_the_midstate_and_one_block_are_sha512() -> None:
     assert B.IV512[0] == 0x6A09E667F3BCC908 and B.K512[79] == 0x6C44198C4A475817
     prefix = receipts.sketch_prefix(SEED)
@@ -131,7 +137,7 @@ def test_the_toy_served_through_the_staging_decode_is_accepted_and_a_skipped_lay
     reg = B.toy(tmp_path / "toy")
     assert B.registration_of_store(tmp_path / "toy" / "store", reg.node) == reg
     verifier = (f"{sys.executable} -m verity.core.protocols.remote_bandwidth.p2_party "
-                f"--registration {tmp_path / 'toy' / 'registration.json'} --stdio")
+                f"--registration {tmp_path / 'toy' / 'registration.json'} --stdio {held_to()}")
     base = ["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
             "--node", reg.node.decode(), "--registration", str(tmp_path / "toy" / "registration.json"),
             "--verifier", verifier, "--device", "cpu", "--ref-decode", "--samples", "64", "--window-s", "0.001",
@@ -143,8 +149,7 @@ def test_the_toy_served_through_the_staging_decode_is_accepted_and_a_skipped_lay
     assert a["q_bytes"] == (a["receipts"] - a["wrong_at_most"]) * p2.UNIT_BYTES
     assert [s["covered_units"] for s in doc["steps"]] == [reg.blocks] * 4
     assert doc["verdict_line"].startswith("BW VERDICT accept") and doc["verdict_line"].endswith("PASS")
-    assert B.main(base + ["--out", str(tmp_path / "cheat"), "--skip-layer", "1", "--windows", "1", "--passes", "1",
-                          "--expect", "reject"]) == 0
+    assert B.main(base + ["--out", str(tmp_path / "cheat"), "--skip-layer", "1", "--expect", "reject"]) == 0
     a = json.loads((tmp_path / "cheat" / "session.json").read_text())["answer"]
     assert a["verdict"] == "reject" and a["failure"] == "receipt"
 
@@ -157,7 +162,8 @@ def test_a_registration_whose_plan_is_fewer_units_is_what_each_pass_reads(tmp_pa
     assert doc["plan"] == [[0, reg.blocks]]
     path = tmp_path / "fewer.json"
     path.write_text(json.dumps(doc | {"plan": [[0, 2], [4, 3]]}))
-    verifier = f"{sys.executable} -m verity.core.protocols.remote_bandwidth.p2_party --registration {path} --stdio"
+    verifier = (f"{sys.executable} -m verity.core.protocols.remote_bandwidth.p2_party --registration {path} --stdio "
+                f"{held_to()}")
     assert B.main(["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
                    "--node", reg.node.decode(), "--registration", str(path), "--verifier", verifier, "--device", "cpu",
                    "--ref-decode", "--samples", "64", "--window-s", "0.001", "--deadline-s", "0.001", "--workers", "2",
@@ -174,7 +180,8 @@ def test_sessions_reach_a_listening_verifier_which_records_their_answers(tmp_pat
     reg = B.toy(tmp_path / "toy")
     verifier = subprocess.Popen([sys.executable, "-m", "verity.core.protocols.remote_bandwidth.p2_party",
                                  "--registration", str(tmp_path / "toy" / "registration.json"), "--listen",
-                                 "127.0.0.1:0", "--sessions", "2", "--answer", str(tmp_path / "answers.jsonl")],
+                                 "127.0.0.1:0", "--sessions", "2", "--answer", str(tmp_path / "answers.jsonl"),
+                                 *held_to(1, 1, 8).split()],
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, cwd=ROOT)
     port = json.loads(verifier.stdout.readline())["listening"]
     base = ["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
@@ -200,7 +207,7 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
     reg = B.toy(tmp_path / "toy")
     party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.core.protocols.remote_bandwidth.p2_party "
              f"--device {tmp_path / 'party'} --listen 127.0.0.1:0 "
-             f"--registration {tmp_path / 'toy' / 'registration.json'}")
+             f"--registration {tmp_path / 'toy' / 'registration.json'} {held_to(1, 1, 8)}")
     base = ["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
             "--node", reg.node.decode(), "--party", party, "--party-host", "127.0.0.1", "--device", "cpu",
             "--ref-decode", "--samples", "8", "--windows", "1", "--passes", "1", "--window-s", "0.001",

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainParts
-import Proofs.Flock.Claims.KS.PlainDrawDecK
+module
+
+public import Proofs.Flock.Claims.KS.PlainParts
+public import Proofs.Flock.Claims.KS.PlainDrawDecK
 
 /-!
 # The live self-clash at level 0
@@ -34,6 +36,8 @@ The entries are `plainRepColsOf` at the decoded rep streams' rounds, which reads
   past level 0.
 -/
 
+@[expose] public section
+
 namespace Claims.Bridge.PlainDraw
 
 open _root_.Flock FlockSoundness FlockSoundness.Game FlockSoundness.Refine FlockSoundness.Discharge
@@ -55,7 +59,7 @@ draw `d`: at its one table, that table's `fast100` schedule and its record's rep
 `plainRepColsOf` entries at `t`'s proof files, at the shape `TxNoOffAt` reads, open one position to different
 columns. -/
 def EntriesClash (I : Exec.Inputs) (d : Json) (t : Exec.Transcript) : Prop :=
-  ∃ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : Session) (sch : _root_.Flock.Schedule) (s₀ s₁ : StreamRec),
+  ∃ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : RunRecord) (sch : _root_.Flock.Schedule) (s₀ s₁ : StreamRec),
     setupAtD I (some d) = .ok (spec, #[st]) ∧ Record.decode spec t.record = .ok sess ∧
     _root_.Flock.fast100 st.m = some sch ∧
     sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString 0) = some s₀ ∧
@@ -72,7 +76,7 @@ def EntriesClash (I : Exec.Inputs) (d : Json) (t : Exec.Transcript) : Prop :=
 /-- **Two of the reps' entries at one position with different columns**, in `t` at the setup at `d`, the session the
 record decodes to through `keep` (`EntriesClash`). -/
 def EntriesClashK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) (t : Exec.Transcript) : Prop :=
-  ∃ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : Session) (sch : _root_.Flock.Schedule) (s₀ s₁ : StreamRec),
+  ∃ (spec : SessionSpec) (st : _root_.Flock.Stmt) (sess : RunRecord) (sch : _root_.Flock.Schedule) (s₀ s₁ : StreamRec),
     setupAtD I (some d) = .ok (spec, #[st]) ∧ Record.decodeWithK keep With.std spec t.record = .ok sess ∧
     _root_.Flock.fast100 st.m = some sch ∧
     sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString 0) = some s₀ ∧

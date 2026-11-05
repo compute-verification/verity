@@ -1,4 +1,6 @@
-import Definitions.Accounting.Gates.Codec
+module
+
+public import Definitions.Accounting.Gates.Codec
 
 /-!
 # The encode bound's former conjecture, falsified: a word's encoding costs budgeted units per squaring (trusted)
@@ -15,6 +17,8 @@ encode bound now rests on its two parts in the model's nonlinear units (`Gates.n
   parity) on more than `ε` of the draws costs `E` budgeted units a word, less `E/(n−1)` for each bit of run input, at
   `ε ≥ 2^−64`, `k ≥ 1` and a field with `p ≥ 2^66` and `p ≡ 3 mod 4`, and claims nothing outside that floor.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions
 
