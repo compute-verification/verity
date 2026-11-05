@@ -1799,6 +1799,52 @@ def test_the_clone_keeps_the_merge_drivers_side_files_of_a_reader_that_let_the_l
     assert side.read_text() == "a side\n" and not stray.exists()
 
 
+def test_repo_alone_takes_its_github_remote_and_a_clone_of_its_own_and_a_remote_of_another_repository_is_refused(
+        world, monkeypatch, capsys):
+    """`--remote` defaulted to the caller's origin whatever `--repo` said, so `status --repo` of another repository than the
+    caller's read that one's PRs against the caller's pull refs, each waiting forever on a head the two disagreed on.
+    `--repo OWNER/NAME` alone takes https://github.com/OWNER/NAME.git and ~/.research/queue/NAME; with neither, the caller's
+    origin and ~/.research/queue/verity stay; a `--remote` naming another repository on GitHub is refused before any clone."""
+    from research.queue import remote_and_repo
+
+    assert remote_and_repo(None, "o/infra", world.dev) == ("https://github.com/o/infra.git", "o/infra")
+    assert remote_and_repo(str(world.origin), "o/infra", world.dev) == (str(world.origin), "o/infra")     # a path: no OWNER/NAME
+    with pytest.raises(QueueError, match=re.escape(f"can't tell OWNER/NAME from '{world.origin}': pass --repo")):
+        remote_and_repo(None, None, world.dev)
+    for same in ("https://github.com/o/infra", "https://u@github.com/O/Infra.git", "git@github.com:o/infra.git",
+                 "ssh://git@github.com/o/infra.git/"):
+        assert remote_and_repo(same, "o/infra", world.dev) == (same, "o/infra")
+    for other, shown in (("https://x-access-token:" "dummy@github.com/o/verity.git", "https://github.com/o/verity.git"),
+                         ("git@github.com:o/verity", "git@github.com:o/verity")):
+        with pytest.raises(QueueError) as e:
+            remote_and_repo(other, "o/infra", world.dev)
+        assert str(e.value) == (f"--remote {shown} is o/verity on GitHub, not --repo o/infra: pass --repo alone (its remote is "
+                                "https://github.com/o/infra.git), or a --remote of o/infra")
+    with pytest.raises(QueueError, match="--repo 'https://github.com/o/infra': OWNER/NAME on GitHub"):
+        remote_and_repo(None, "https://github.com/o/infra", world.dev)
+
+    _git(world.dev, "remote", "set-url", "origin", "https://verity-agent@github.com/o/verity")
+    monkeypatch.chdir(world.dev)
+    monkeypatch.setattr(Q, "WORKDIR", world.tmp / "home" / ".research" / "queue" / "verity")
+    monkeypatch.setattr(Q, "GitHub", lambda repo: world.gh)
+    cloned = []
+
+    def clone(q: Queue) -> None:
+        cloned.append((q.workdir, q.remote))
+        raise QueueError("cloned nothing")
+
+    monkeypatch.setattr(Queue, "_clone", clone)
+    store = ["--store", str(world.tmp / "qs")]
+    assert research_main(["queue", "status", "--repo", "o/infra", *store]) == 1
+    assert research_main(["queue", "status", *store]) == 1
+    assert cloned == [(world.tmp / "home" / ".research" / "queue" / "infra", "https://github.com/o/infra.git"),
+                      (Q.WORKDIR, "https://verity-agent@github.com/o/verity")]
+    capsys.readouterr()
+    assert research_main(["queue", "status", "--repo", "o/infra", "--remote", "git@github.com:o/verity.git", *store]) == 1
+    assert "research queue: --remote git@github.com:o/verity.git is o/verity on GitHub, not --repo o/infra" in capsys.readouterr().err
+    assert len(cloned) == 2
+
+
 HTTP_BACKEND = Path(subprocess.run(["git", "--exec-path"], capture_output=True, text=True).stdout.strip()) / "git-http-backend"
 
 
