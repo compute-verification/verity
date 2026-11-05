@@ -24,8 +24,8 @@ from verity.core.protocols.remote_bandwidth import audit, coins, ledger, receipt
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
 
 import prover  # noqa: E402
-import verifier  # noqa: E402
-import wire  # noqa: E402
+from benchmarks.remote_session import verifier  # noqa: E402
+from benchmarks.remote_session import wire  # noqa: E402
 
 P512 = rcodec.Codec(rcodec.P512, 2, False)
 
@@ -395,7 +395,7 @@ def test_a_session_reserves_append_coins_only_when_its_plan_appends_and_an_appen
     which takes only the append coins released, otherwise, so the session is refused there as `disagreement`, the
     honest one accepted."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    import challengers
+    from benchmarks.remote_session import challengers
 
     layouts, local = [], challengers.Local.open
 
@@ -426,7 +426,7 @@ def test_a_window_with_no_draws_settles_malformed_whatever_its_batches():
     `AuditRun.verify` and the Lean's settle give it."""
     from types import SimpleNamespace
 
-    from checks import Checks
+    from benchmarks.remote_session.checks import Checks
 
     class Books:
         _fail = audit.AuditRun._fail
@@ -443,7 +443,7 @@ def test_a_window_with_no_draws_settles_malformed_whatever_its_batches():
 
 
 def test_the_check_workers_bound_each_windows_wrong_receipts_as_its_profile_does():
-    from checks import Checks
+    from benchmarks.remote_session.checks import Checks
 
     from verity.core.protocols.profile import IntegrityProfile, Subset
 
@@ -844,7 +844,7 @@ def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_tri
     monkeypatch.setattr(TickingBackend, "run_pass", run_pass)
     import json
 
-    import challengers
+    from benchmarks.remote_session import challengers
     import replay
     from verity.core.protocols.sampled_proofs import challenger as C
 
@@ -1364,7 +1364,7 @@ def test_the_leans_line_of_a_transcript_is_the_line_of_the_record_session_run_ma
     import copy
     import json
 
-    import lean_verifier as lv
+    from benchmarks.remote_session import lean_verifier as lv
 
     got = {}
     (r,), _ = run("honest", paces=[verifier.pace_of("2:8:40:2", 1.0)], transcript=tmp_path,
@@ -1413,7 +1413,7 @@ def test_the_leans_line_of_a_transcript_drawn_four_windows_a_coin_reads_the_draw
     import copy
     import json
 
-    import lean_verifier as lv
+    from benchmarks.remote_session import lean_verifier as lv
 
     got = {}
     (r,), (pr,) = run("honest", paces=[verifier.pace_of("2:8:40:2", 1.0)], groups_per_coin=4, transcript=tmp_path,

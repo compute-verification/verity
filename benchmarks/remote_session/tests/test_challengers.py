@@ -29,14 +29,15 @@ import pytest
 ROOT = Path(__file__).resolve().parents[3]
 LIVE = ROOT / "benchmarks" / "live_challenger"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(LIVE))
 sys.path.insert(0, str(ROOT / "verity" / "core" / "protocols" / "remote_bandwidth" / "tests"))
 
 import auditor as A  # noqa: E402
 import auditor_line as al  # noqa: E402
-import challengers  # noqa: E402
-import verifier  # noqa: E402
-import wire  # noqa: E402
+from benchmarks.remote_session import challengers  # noqa: E402
+from benchmarks.remote_session import verifier  # noqa: E402
+from benchmarks.remote_session import wire  # noqa: E402
 from test_remote_bandwidth import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
 from verity.core.protocols.certifier import certificate as cert  # noqa: E402
