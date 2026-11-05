@@ -140,11 +140,11 @@ theorem linksOf_inj {a b : Option (ByteArray × Nat)} (h : RecCompose.linksOf a 
 /-- **Two shared sets with one set of digests are one**, unless two of their files collide. -/
 theorem shared_eq {S T : RecShared} (hinj : ∀ a ∈ S.files, ∀ b ∈ T.files, Sha512.hash a = Sha512.hash b → a = b)
     (h : S.digests = T.digests) (hr : S.recRows.map RecCompose.digest = T.recRows.map RecCompose.digest) : S = T := by
-  obtain ⟨s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15⟩ := S
-  obtain ⟨t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15⟩ := T
+  obtain ⟨s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14⟩ := S
+  obtain ⟨t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14⟩ := T
   simp only [RecShared.digests, RecCompose.Shared.ofFiles, RecCompose.Shared.mk.injEq] at h
-  obtain ⟨h1, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15⟩ := h
-  have e14 := linksOf_inj h14
+  obtain ⟨h1, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14⟩ := h
+  have e13 := linksOf_inj h13
   dsimp only at hr
   have e1 := map_digest_eq (fun a b ha hb => hinj a (by simp [RecShared.files, ha]) b (by simp [RecShared.files, hb])) h1
   have e2 := map_digest_eq (fun a b ha hb => hinj a (by simp [RecShared.files, ha]) b (by simp [RecShared.files, hb])) hr
@@ -155,19 +155,19 @@ theorem shared_eq {S T : RecShared} (hinj : ∀ a ∈ S.files, ∀ b ∈ T.files
   have e7 := map_digest_eq (fun a b ha hb => hinj a (by simp [RecShared.files, ha]) b (by simp [RecShared.files, hb])) h7
   have e8 := map_digest_eq (fun a b ha hb => hinj a (by simp [RecShared.files, ha]) b (by simp [RecShared.files, hb])) h8
   have e9 := map_digest_eq (fun a b ha hb => hinj a (by simp [RecShared.files, ha]) b (by simp [RecShared.files, hb])) h9
-  have e13 := map_digest_eq (fun a b ha hb => hinj a (by simp [RecShared.files, ha]) b (by simp [RecShared.files, hb])) h13
-  have e15 := map_digest_eq (fun a b ha hb => hinj a (by simp [RecShared.files, ha]) b (by simp [RecShared.files, hb])) h15
-  have e12 : s12 = t12 := by
-    cases s12 with
-    | none => cases t12 with
+  have e12 := map_digest_eq (fun a b ha hb => hinj a (by simp [RecShared.files, ha]) b (by simp [RecShared.files, hb])) h12
+  have e14 := map_digest_eq (fun a b ha hb => hinj a (by simp [RecShared.files, ha]) b (by simp [RecShared.files, hb])) h14
+  have e11 : s11 = t11 := by
+    cases s11 with
+    | none => cases t11 with
       | none => rfl
-      | some _ => simp only [Option.map_none, Option.map_some, reduceCtorEq] at h12
-    | some ts => cases t12 with
-      | none => simp only [Option.map_none, Option.map_some, reduceCtorEq] at h12
+      | some _ => simp only [Option.map_none, Option.map_some, reduceCtorEq] at h11
+    | some ts => cases t11 with
+      | none => simp only [Option.map_none, Option.map_some, reduceCtorEq] at h11
       | some ts' =>
-        simp only [Option.map_some, Option.some.injEq] at h12
-        rw [map_tables_eq (fun a ha b hb => hinj a (by simp [RecShared.files, ha]) b (by simp [RecShared.files, hb])) h12]
-  subst e1 e2 e3 e4 e5 e6 e7 e8 e9 e13 e12 e14 e15 h10 h11
+        simp only [Option.map_some, Option.some.injEq] at h11
+        rw [map_tables_eq (fun a ha b hb => hinj a (by simp [RecShared.files, ha]) b (by simp [RecShared.files, hb])) h11]
+  subst e1 e2 e3 e4 e5 e6 e7 e8 e9 e12 e11 e13 e14 h10
   rfl
 
 /-- **The composition read back to the parts' files**: where `rec-compose` accepts the verdicts the parts' runs wrote
@@ -206,8 +206,8 @@ theorem composed_views {n : Nat} {rows inner : String} {links : Option (String �
   rw [← hs0] at hform
   simp only [RecCompose.Shared.Complete, RecShared.digests, RecCompose.Shared.ofFiles, Option.isSome_map,
     Option.map_eq_none_iff] at hform
-  obtain ⟨hi, hc1, hp1, hq1, hk0, hse1, ht1, hst1, hco1, hta1, hl1⟩ := hform
-  refine ⟨v0.shared, ⟨?_, ?_, hc1, hp1, hq1, hk0, hse1, ht1, hst1, hco1, hta1⟩, hi, hl1, hr0, by simpa using hlen, ?_, ?_,
+  obtain ⟨hi, hc1, hp1, hq1, hk0, hse1, ht1, hst1, hta1, hl1⟩ := hform
+  refine ⟨v0.shared, ⟨?_, ?_, hc1, hp1, hq1, hk0, hse1, ht1, hst1, hta1⟩, hi, hl1, hr0, by simpa using hlen, ?_, ?_,
     ?_⟩
   · cases h : v0.shared.recInner <;> simp_all
   · cases h : v0.shared.recRows <;> simp_all
