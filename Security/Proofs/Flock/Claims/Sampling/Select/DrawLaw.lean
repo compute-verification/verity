@@ -162,7 +162,8 @@ theorem popOf_length_le (l : Slots.Layout) : (Slots.popOf l).length ≤ l.blocks
 
 theorem blocks_length_withInputs (pop : List (List (List ℕ))) (C : Prog) :
     (InputSlot.withInputs ⟨[pop]⟩ C).blocks.length = pop.flatten.length + (InputSlot.inputsAt C).length := by
-  simp [InputSlot.blocks_withInputs, Partition.blocks]
+  simp only [InputSlot.blocks_withInputs, List.length_append, List.length_map]
+  simp [Partition.blocks]
 
 theorem window_eq_empty {o n : ℕ} {B : Finset ℕ} (h : ∀ v ∈ B, v < o) : window o n B = ∅ := by
   simp only [window, Finset.image_eq_empty, Finset.filter_eq_empty_iff]
@@ -249,151 +250,33 @@ theorem nPU_withInputs {Coin Col T : Type} {D : Deploy Coin Col T} {x : Msg} {s 
   rw [← blocks_length_withInputs]
   simp [nPU, hx, Deploy.part, hP]
 
-/-! ## The verifier's own checked slots -/
-
-/-- **A list of slots is `checkedSlots`** where it is increasing and its slots past the population are exactly the
-input slots of `C`. -/
-theorem checkedSlots_eq {l : Slots.Layout} {C : Prog} {c : Array ℕ} (hs : c.toList.Pairwise (· < ·))
-    (hin : ∀ v, (Slots.popOf l).length ≤ v →
-      (v ∈ c ↔ v < (Slots.popOf l).length + (InputSlot.inputsAt C).length)) :
-    c.toList = checkedSlots l c C := by
-  have hs' : (checkedSlots l c C).Pairwise (· < ·) := by
-    unfold checkedSlots
-    refine List.pairwise_append.2 ⟨List.pairwise_lt_range.filter _,
-      List.pairwise_map.2 (List.pairwise_lt_range.imp fun h => Nat.add_lt_add_left h _), ?_⟩
-    intro a ha b hb
-    have ha' := List.mem_range.1 (List.mem_filter.1 ha).1
-    obtain ⟨i, -, he⟩ := List.mem_map.1 hb
-    have he' : (Slots.popOf l).length + i = b := he
-    omega
-  have hmem : ∀ v, v ∈ c.toList ↔ v ∈ checkedSlots l c C := by
-    intro v
-    rw [Array.mem_toList_iff, checkedSlots, List.mem_append, List.mem_filter, List.mem_range, List.mem_map]
-    by_cases hv : v < (Slots.popOf l).length
-    · constructor
-      · intro h
-        exact Or.inl ⟨hv, decide_eq_true h⟩
-      · rintro (⟨-, h⟩ | ⟨i, -, he⟩)
-        · exact of_decide_eq_true h
-        · have he' : (Slots.popOf l).length + i = v := he
-          omega
-    · have hiff := hin v (by omega)
-      constructor
-      · intro h
-        have := hiff.1 h
-        exact Or.inr ⟨v - (Slots.popOf l).length, List.mem_range.2 (by omega),
-          show (Slots.popOf l).length + (v - (Slots.popOf l).length) = v by omega⟩
-      · rintro (⟨h, -⟩ | ⟨i, hi, he⟩)
-        · omega
-        · have he' : (Slots.popOf l).length + i = v := he
-          have hi' := List.mem_range.1 hi
-          exact hiff.2 (by omega)
-  exact List.Perm.eq_of_pairwise (fun a b _ _ h1 h2 => absurd (Nat.lt_trans h1 h2) (Nat.lt_irrefl a)) hs hs'
-    ((List.perm_ext_iff_of_nodup (hs.imp Nat.ne_of_lt) (hs'.imp Nat.ne_of_lt)).2 hmem)
-
-/-- Every slot is checked, population and input: the slots of the statement's partition. -/
-theorem checkedSlots_allSlots (l : Slots.Layout) (C : Prog) :
-    checkedSlots l (allSlots l) C = List.range ((Slots.popOf l).length + (InputSlot.inputsAt C).length) := by
-  rw [checkedSlots, List.range_add]
-  congr 1
-  exact List.filter_eq_self.2 fun v hv =>
-    decide_eq_true ((mem_allSlots _ _).2 ((List.mem_range.1 hv).trans_le (popOf_length_le l)))
-
-/-- **`Slots.layout`'s slots**: the population, then one input slot per input gate of the program's descriptor, each
-naming no unit. -/
-theorem layout_blocks {d : Program} {query : Json} {l : Slots.Layout} (hl : Slots.layout d query = .ok l) :
-    l.blocks.size = (Slots.popOf l).length + (Slots.inputGates d.desc).size ∧
-      ∀ v (h : v < l.blocks.size), (Slots.popOf l).length ≤ v → l.blocks[v].unit = none := by
-  obtain ⟨_, -, pop, rfl, -⟩ := layout_ok d query l hl
-  have hb := blocks_toList pop (inputClass d)
-  have hic : popBlocks (inputClass d) =
-      ((Slots.inputGates d.desc).map fun g => ({ unit := none, gates := (g, g + 1) } : Slots.ProofBlock)).toList := by
-    simp only [inputClass]
-    split
-    · rename_i h
-      simp [popBlocks, Array.isEmpty_iff.1 h]
-    · simp [popBlocks]
-  have hnone : ∀ b ∈ popBlocks (inputClass d), b.unit = none := by
-    rw [hic]
-    intro b hb
-    simp only [Array.toList_map, List.mem_map, Array.mem_toList_iff] at hb
-    obtain ⟨g, -, rfl⟩ := hb
-    rfl
-  have hsize := congrArg List.length hb
-  simp only [List.length_append, Array.length_toList, hic, Array.size_map] at hsize
-  refine ⟨hsize, fun v h hv => ?_⟩
-  have e : ({ classes := #[pop, inputClass d] } : Slots.Layout).blocks[v] =
-      (popBlocks pop ++ popBlocks (inputClass d))[v]'(hb ▸ h) :=
-    List.getElem_of_eq hb h
-  rw [e, List.getElem_append_right (as := popBlocks pop) hv]
-  exact hnone _ (List.getElem_mem _)
-
-theorem checked_pairwise (l : Slots.Layout) (proved : Array ℕ) : (Slots.checked l proved).toList.Pairwise (· < ·) := by
-  unfold Slots.checked
-  rw [Array.toList_map, Array.toList_filter]
-  refine List.Pairwise.sublist (List.filter_sublist.map _) ?_
-  rw [← Array.toList_map, Array.zipIdx_map_snd, Array.toList_range']
-  exact List.pairwise_lt_range'
-
-/-- **The verifier's own checked slots are `checkedSlots`** where the program has as many input slots as the
-descriptor: `Slots.checked` lists the proved population slots, then every input slot, in slot order, and a refused
-draw checks every slot. -/
-theorem drawChecked_toList {rule : Select.Rule} {d : Program} {query : Json} {table : Option Json}
-    {cm : Option (Array (Int × Array Int))} {l : Slots.Layout} {src : ByteArray} {C : Prog}
-    (hl : Slots.layout d query = .ok l) (hn : (Slots.inputGates d.desc).size = (InputSlot.inputsAt C).length) :
-    (drawChecked rule d query table cm l src).toList = checkedSlots l (drawChecked rule d query table cm l src) C := by
-  obtain ⟨hsize, hnone⟩ := layout_blocks hl
-  rw [hn] at hsize
-  apply checkedSlots_eq
-  · unfold drawChecked
-    split
-    · rename_i l' c hs
-      obtain ⟨-, _, proved, _, -, rfl⟩ := slots_select_ok _ _ _ _ _ _ _ _ hs
-      exact checked_pairwise _ _
-    · rw [allSlots, Array.toList_range]
-      exact List.pairwise_lt_range
-  · intro v hv
-    unfold drawChecked
-    split
-    · rename_i l' c hs
-      obtain ⟨hl', _, proved, _, -, rfl⟩ := slots_select_ok _ _ _ _ _ _ _ _ hs
-      rw [hl] at hl'
-      obtain rfl := Except.ok.inj hl'
-      rw [mem_checked, ← hsize]
-      constructor
-      · exact fun ⟨h, _⟩ => h
-      · intro h
-        exact ⟨h, by rw [hnone v h hv] <;> rfl⟩
-    · rw [mem_allSlots, hsize]
-
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin]
 
 /-- **The deployed draw is `Slots.select`'s**: on a statement that parses and whose query evaluates, the verifier's own
 program `d` (its parse of the statement's descriptor), query, selection rule, work table and closure map, whose layout
 `l`'s population has the strata sizes of the statement's population `pop` and whose design is the statement's; the
 statement's partition is `pop`, then its program's input class (`InputSlot.withInputs`); `L` bytes of the coins,
-uniform when the coins are; and the checked slots the draw's population slots on them, or every population slot where
-the code refuses the statement (`ok` false, the run rejects), then every input slot of the program (`checkedSlots`). -/
+uniform when the coins are; and the checked slots the draw's population slots on them, then every input slot of the
+program (`checkedSlots`). -/
 def DrawSlots (D : Deploy Coin Col T) : Prop :=
   ∀ x s Pt, D.parse x = some s → D.partition s = some Pt →
   ∃ (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json)
     (cm : Option (Array (Int × Array Int))) (l : Slots.Layout) (pop : List (List (List ℕ))) (L : ℕ)
-    (bytes : (Fin (D.V.k x) → Coin) → Fin L → Fin 256) (ok : Bool),
+    (bytes : (Fin (D.V.k x) → Coin) → Fin L → Fin 256),
     Program.parse ⟨s.desc.toArray⟩ = .ok d ∧ Slots.layout d query = .ok l ∧
       Pt = InputSlot.withInputs ⟨[pop]⟩ s.prog ∧ strataSizes pop = strataSizes ((slotPartition l).classes.headD []) ∧
       slotDesign rule d query table = .ok s.design ∧
       (∀ E : (Fin L → Fin 256) → Prop, Pr (fun c => E (bytes c)) = Pr E) ∧
-      ∀ c, D.checked x c =
-        checkedSlots l (bif ok then drawChecked rule d query table cm l (bytesOf (bytes c)) else allSlots l) s.prog
+      ∀ c, D.checked x c = checkedSlots l (drawChecked rule d query table cm l (bytesOf (bytes c))) s.prog
 
 /-- **The draw law from the deployed draw**: where the draw is `Slots.select`'s on uniform bytes (`DrawSlots`), a set
 `B` with an input slot is never missed, since every input slot is checked, and has `P_a(B) = 0` (`pa_input`); on
 population slots the miss probability at fixed first-stage coins averages at most the layout's `P_a(B)`
-(`drawMisses`), which is the statement's (`pa_of_pop`), and a refused draw or statement checks every slot, so it misses
-no nonempty `B`; a well-formed design has `P_a(∅) = 1`. -/
+(`drawMisses`), which is the statement's (`pa_of_pop`), and a refused draw checks every slot, so it misses no nonempty
+`B`; a well-formed design has `P_a(∅) = 1`. -/
 theorem drawLaw_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : DrawLaw D := by
   intro x s Pt hx hP hin B hB
-  obtain ⟨rule, d, query, table, cm, l, pop, L, bytes, ok, -, hl, rfl, hpop, hds, hunif, hch⟩ := h x s Pt hx hP
+  obtain ⟨rule, d, query, table, cm, l, pop, L, bytes, -, hl, rfl, hpop, hds, hunif, hch⟩ := h x s Pt hx hP
   have hpn := popLength_of_sizes hpop
   have hnPU : nPU D x = (Slots.popOf l).length + (InputSlot.inputsAt s.prog).length := by
     rw [nPU_withInputs hx hP, hpn]
@@ -409,8 +292,7 @@ theorem drawLaw_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : DrawLaw D :
     refine ⟨fun _ => 0, fun _ => le_rfl,
       fun r => (Pr_congr fun dd => iff_false_intro fun hm => ?_).trans_le Pr_false.le, ?_⟩
     · obtain ⟨p, hp, hpv⟩ := checkedSlots_input (l := l)
-        (c := bif ok then drawChecked rule d query table cm l (bytesOf (bytes (forkOn (D.stage2 x) r dd)))
-          else allSlots l) (C := s.prog)
+        (c := drawChecked rule d query table cm l (bytesOf (bytes (forkOn (D.stage2 x) r dd)))) (C := s.prog)
         (i := v - (Slots.popOf l).length) (by omega)
       rw [Nat.add_sub_of_le hvn] at hpv
       exact hm v hvB ⟨p, by rw [hnPU]; exact hp⟩ (by rw [hch]; exact hpv)
@@ -422,14 +304,10 @@ theorem drawLaw_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : DrawLaw D :
       Misses B (checkedOf (Slots.select rule d query table cm (bytesOf src)))
   refine ⟨fun r => Pr fun dd => E (bytes (forkOn (D.stage2 x) r dd)), fun r => Pr_nonneg _,
     fun r => Pr_mono fun dd hm => ?_, ?_⟩
-  · have hmiss : ∀ v ∈ B, v ∉ (bif ok then drawChecked rule d query table cm l
-        (bytesOf (bytes (forkOn (D.stage2 x) r dd))) else allSlots l) := by
+  · have hmiss : ∀ v ∈ B, v ∉ drawChecked rule d query table cm l (bytesOf (bytes (forkOn (D.stage2 x) r dd))) := by
       intro v hv hvc
       obtain ⟨p, hp, hpv⟩ := checkedSlots_pop (C := s.prog) (hinp v hv) hvc
       exact hm v hv ⟨p, by rw [hnPU]; omega⟩ (by rw [hch]; exact hpv)
-    cases ok
-    · exact absurd ((mem_allSlots _ _).2 ((hinp v0 hv0).trans_le (popOf_length_le l))) (hmiss v0 hv0)
-    rw [cond_true] at hmiss
     unfold drawChecked at hmiss
     split at hmiss
     · rename_i l' c hs
