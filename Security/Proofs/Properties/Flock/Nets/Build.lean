@@ -11,7 +11,8 @@ public import Properties.Flock.Nets
 matrices of its rows (`layout_builds`), when the builder's rows output the bits after the inputs in creation order, each
 row reads only bits below its own, each output reads only committed bits, and the slot is `2 ^ 18` columns with the
 output group inside it. `ofRows_layout` is the same at the level of the rows: every check `Net.ofRows` runs passes on rows
-laid out as `layout` lays them (the loops by `checkOrder_ok` and `sparse_ok`).
+laid out as `layout` lays them (the loops by `checkOrder_ok` and `sparse_ok`). `layout_facts` reads the layout row by row,
+which the line lengths read too, and `rows_le` bounds every column by the constant's.
 -/
 
 @[expose] public section
@@ -167,6 +168,34 @@ theorem col_lt {nIn inRows k v : Nat} (hIn : nIn ≤ inRows) (hv : v < nIn + k) 
     rw [col_and]
     omega
 
+/-- **Every column of rows laid out as `layout` lays them is at most the constant's.** -/
+theorem rows_le (ra rb : Array (Array Nat)) (nIn inRows cp : Nat) (hsa : ra.size = cp + 1) (hsb : rb.size = cp + 1)
+    (hIn : nIn ≤ inRows) (hcp : inRows ≤ cp)
+    (hins : ∀ i < nIn, ra.getD i #[] = #[i] ∧ rb.getD i #[] = #[i])
+    (hpI : ∀ i, nIn ≤ i → i < inRows → ra.getD i #[] = #[] ∧ rb.getD i #[] = #[])
+    (hcon : ra.getD cp #[] = #[cp] ∧ rb.getD cp #[] = #[cp])
+    (hord : ∀ r, inRows ≤ r → r < cp → ∀ c ∈ ra.getD r #[] ++ rb.getD r #[], c = cp ∨ (c < r ∧ (c < nIn ∨ inRows ≤ c))) :
+    ∀ i, ∀ c ∈ ra.getD i #[] ++ rb.getD i #[], c ≤ cp := by
+  intro i c hc
+  by_cases h1 : i < nIn
+  · rw [(hins i h1).1, (hins i h1).2] at hc
+    simp at hc
+    omega
+  by_cases h2 : i < inRows
+  · rw [(hpI i (by omega) h2).1, (hpI i (by omega) h2).2] at hc
+    simp at hc
+  by_cases h3 : i < cp
+  · rcases hord i (by omega) h3 c hc with h | ⟨h, _⟩ <;> omega
+  by_cases h4 : i = cp
+  · subst h4
+    rw [hcon.1, hcon.2] at hc
+    simp at hc
+    omega
+  · have ha : ra.getD i #[] = #[] := by simp [Array.getD_eq_getD_getElem?, hsa, show ¬ i < cp + 1 by omega]
+    have hb : rb.getD i #[] = #[] := by simp [Array.getD_eq_getD_getElem?, hsb, show ¬ i < cp + 1 by omega]
+    rw [ha, hb] at hc
+    simp at hc
+
 /-- **`Net.ofRows` builds a net from rows laid out as `layout` lays them**: `nIn` input rows `[i]·[i]` from column 0
 in a group of `inW` words, empty padding to the group's end, a constant row `[cp]·[cp]` at the last column `cp`, and
 between them rows that read only the constant or earlier columns outside the padding; one input group and one output
@@ -193,26 +222,7 @@ theorem ofRows_layout (name : String) (inBits outBits : Array Nat) (ra rb : Arra
     · simp [Nat.not_lt.2 hc]
   have hco : Net.checkOrder "flock-ir-unit/v2" (inW * WORD) cp ra rb = .ok () :=
     checkOrder_ok _ _ _ _ _ fun r h1 h2 c hc => (hord r h1 h2 c hc).imp_right fun ⟨h, h'⟩ => ⟨h, hpad c h'⟩
-  have hle : ∀ i, ∀ c ∈ ra.getD i #[] ++ rb.getD i #[], c ≤ cp := by
-    intro i c hc
-    by_cases h1 : i < nIn
-    · rw [(hins i h1).1, (hins i h1).2] at hc
-      simp at hc
-      omega
-    by_cases h2 : i < inW * WORD
-    · rw [(hpI i (by omega) h2).1, (hpI i (by omega) h2).2] at hc
-      simp at hc
-    by_cases h3 : i < cp
-    · rcases hord i (by omega) h3 c hc with h | ⟨h, _⟩ <;> omega
-    by_cases h4 : i = cp
-    · subst h4
-      rw [hcon.1, hcon.2] at hc
-      simp at hc
-      omega
-    · have ha : ra.getD i #[] = #[] := by simp [Array.getD_eq_getD_getElem?, hsa, show ¬ i < cp + 1 by omega]
-      have hb : rb.getD i #[] = #[] := by simp [Array.getD_eq_getD_getElem?, hsb, show ¬ i < cp + 1 by omega]
-      rw [ha, hb] at hc
-      simp at hc
+  have hle := rows_le ra rb nIn (inW * WORD) cp hsa hsb hnInW (by omega) hins hpI hcon hord
   have hw : cp + 1 ≤ 2 ^ 18 := hU ▸ Nat.le_trans (log2ceil_le _) (Nat.pow_le_pow_right (by decide) (Nat.le_max_right _ _))
   have hlt : ∀ (x : Array (Array Nat)), (x = ra ∨ x = rb) → ∀ r ∈ x, ∀ c ∈ r, c < 2 ^ 18 := by
     intro x hx r hr c hc
@@ -263,22 +273,38 @@ theorem ofRows_layout (name : String) (inBits outBits : Array Nat) (ra rb : Arra
     show ¬ inW * WORD > cp by omega, show (#[⟨start / WORD, outW, outBits⟩] : Array Group).isEmpty = false from rfl]
   rfl
 
-/-- **A built circuit's layout builds its net**: when the builder's rows output the bits after the `nIn` inputs in
-creation order, each row reads only bits below its own, each output reads only committed bits and the outputs fit their
-group, and the slot is `2 ^ 18` columns with the output group inside it, `Net.ofRows` succeeds on the layout at its own
-header fields, with A and B the sparse matrices of its rows. -/
-theorem layout_builds (name : String) (st : St) (inBits outBits : Array Nat) (outs : Array Lin)
-    (nIn inW outW start : Nat) (hnIn : inBits.foldl (· + ·) 0 = nIn) (hinW : groupWords nIn = inW)
+/-- **A built circuit's layout, row by row**: when the builder's rows output the bits after the `nIn` inputs in creation
+order, each row reads only bits below its own, and each output reads only committed bits and fits its group, the layout
+has a row per useful column on both sides, its groups and constant at its header fields, input rows `[i]·[i]`, empty
+padding, the `k`-th AND's forms' columns at row `inRows + k`, output `j`'s form's columns and the constant at row
+`start + j`, and every computed row reads only the constant or earlier columns outside the input padding. -/
+theorem layout_facts (st : St) (inBits outBits : Array Nat) (outs : Array Lin) (nIn inW outW start : Nat)
+    (hnIn : inBits.foldl (· + ·) 0 = nIn) (hinW : groupWords nIn = inW)
     (houtW : groupWords (outBits.foldl (· + ·) 0) = outW)
     (hstart : (inW * WORD + st.rows.length + outW * WORD - 1) / (outW * WORD) * (outW * WORD) = start)
     (hn : st.next = nIn + st.rows.length)
     (hout : ∀ k (hk : k < st.rows.reverse.length), st.rows.reverse[k].out = nIn + k)
     (hrow : ∀ r ∈ st.rows, (∀ v ∈ r.a.s, v < r.out) ∧ ∀ v ∈ r.b.s, v < r.out)
-    (ho : ∀ f ∈ outs.toList, ∀ v ∈ f.s, v < st.next) (hsz : outs.size ≤ outW * WORD)
-    (hU : max 7 (log2ceil (start + outW * WORD + 1)) = 18) (hD : start / WORD + outW ≤ 2 ^ 18 / WORD) :
-    netOf name (layout st inBits outBits outs) = .ok (built name (start + outW * WORD + 1) ⟨0, inW, inBits⟩
-      ⟨start / WORD, outW, outBits⟩ inW (sparseOf (layout st inBits outBits outs).ra)
-        (sparseOf (layout st inBits outBits outs).rb)) := by
+    (ho : ∀ f ∈ outs.toList, ∀ v ∈ f.s, v < st.next) (hsz : outs.size ≤ outW * WORD) (l : Laid)
+    (hl : layout st inBits outBits outs = l) :
+    l.ra.size = start + outW * WORD + 1 ∧ l.rb.size = start + outW * WORD + 1 ∧
+      l.useful = start + outW * WORD + 1 ∧ l.constPos = start + outW * WORD ∧
+      l.inGroups = #[⟨0, inW, inBits⟩] ∧ l.outGroups = #[⟨start / WORD, outW, outBits⟩] ∧
+      start / WORD % outW = 0 ∧ inW * WORD + st.rows.length ≤ start ∧ nIn ≤ inW * WORD ∧
+      (∀ i < nIn, l.ra.getD i #[] = #[i] ∧ l.rb.getD i #[] = #[i]) ∧
+      (∀ i, nIn ≤ i → i < inW * WORD → l.ra.getD i #[] = #[] ∧ l.rb.getD i #[] = #[]) ∧
+      (∀ i, inW * WORD + st.rows.length ≤ i → i < start → l.ra.getD i #[] = #[] ∧ l.rb.getD i #[] = #[]) ∧
+      (∀ i, start + outs.size ≤ i → i < start + outW * WORD → l.ra.getD i #[] = #[] ∧ l.rb.getD i #[] = #[]) ∧
+      (∀ k (hk : k < st.rows.reverse.length),
+        l.ra.getD (inW * WORD + k) #[] = cols nIn (inW * WORD) (start + outW * WORD) st.rows.reverse[k].a ∧
+          l.rb.getD (inW * WORD + k) #[] = cols nIn (inW * WORD) (start + outW * WORD) st.rows.reverse[k].b) ∧
+      (∀ j (hj : j < outs.size), l.ra.getD (start + j) #[] = cols nIn (inW * WORD) (start + outW * WORD) outs[j] ∧
+        l.rb.getD (start + j) #[] = #[start + outW * WORD]) ∧
+      (l.ra.getD (start + outW * WORD) #[] = #[start + outW * WORD] ∧
+        l.rb.getD (start + outW * WORD) #[] = #[start + outW * WORD]) ∧
+      ∀ r, inW * WORD ≤ r → r < start + outW * WORD → ∀ c ∈ l.ra.getD r #[] ++ l.rb.getD r #[],
+        c = start + outW * WORD ∨ (c < r ∧ (c < nIn ∨ inW * WORD ≤ c)) := by
+  subst hl
   obtain ⟨hsa, hsb, hu, hpI, hpM, hpO, hca, hcb⟩ := layout_pad st inBits outBits outs (by rw [houtW]; exact hsz)
   obtain ⟨hc, hins, hands, houts⟩ := layout_rows st inBits outBits outs
   have hog : (layout st inBits outBits outs).outGroups = #[⟨start / WORD, outW, outBits⟩] := by
@@ -292,16 +318,13 @@ theorem layout_builds (name : String) (st : St) (inBits outBits : Array Nat) (ou
   have hst : inW * WORD + st.rows.length ≤ start := hstart ▸ le_roundUp _ _ hspan
   have hIn : nIn ≤ inW * WORD := hinW ▸ le_groupWords _
   rw [hc] at hands houts
-  generalize layout st inBits outBits outs = l at *
-  unfold netOf
-  rw [hu, hc, hig, hog]
-  refine ofRows_layout name inBits outBits l.ra l.rb nIn inW outW start (start + outW * WORD) hsa hsb hnIn hIn
-    (houtW ▸ le_groupWords _) (hinW ▸ isPow2_groupWords _) (houtW ▸ isPow2_groupWords _) ?_ (by omega) rfl hins hpI
-    ⟨hca, hcb⟩ ?_ hU hD
-  · rw [← hstart]
+  have hal : start / WORD % outW = 0 := by
+    rw [← hstart]
     generalize (inW * WORD + st.rows.length + outW * WORD - 1) / (outW * WORD) = q
     rw [← Nat.mul_assoc, Nat.mul_div_cancel _ (by decide : 0 < WORD)]
     exact Nat.mul_mod_left _ _
+  refine ⟨hsa, hsb, hu, hc, hig, hog, hal, hst, hIn, hins, hpI, hpM, hpO, hands, houts, ⟨hca, hcb⟩, ?_⟩
+  generalize layout st inBits outBits outs = l at *
   intro r h1 h2 c hc
   by_cases hA : r < inW * WORD + st.rows.length
   · obtain ⟨k, rfl⟩ : ∃ k, r = inW * WORD + k := ⟨r - inW * WORD, by omega⟩
@@ -338,5 +361,30 @@ theorem layout_builds (name : String) (st : St) (inBits outBits : Array Nat) (ou
       exact Or.inl (List.mem_singleton.1 (Array.mem_toList_iff.2 hc))
   · rw [(hpO r (by omega) h2).1, (hpO r (by omega) h2).2] at hc
     simp at hc
+
+/-- **A built circuit's layout builds its net**: when the builder's rows output the bits after the `nIn` inputs in
+creation order, each row reads only bits below its own, each output reads only committed bits and the outputs fit their
+group, and the slot is `2 ^ 18` columns with the output group inside it, `Net.ofRows` succeeds on the layout at its own
+header fields, with A and B the sparse matrices of its rows. -/
+theorem layout_builds (name : String) (st : St) (inBits outBits : Array Nat) (outs : Array Lin)
+    (nIn inW outW start : Nat) (hnIn : inBits.foldl (· + ·) 0 = nIn) (hinW : groupWords nIn = inW)
+    (houtW : groupWords (outBits.foldl (· + ·) 0) = outW)
+    (hstart : (inW * WORD + st.rows.length + outW * WORD - 1) / (outW * WORD) * (outW * WORD) = start)
+    (hn : st.next = nIn + st.rows.length)
+    (hout : ∀ k (hk : k < st.rows.reverse.length), st.rows.reverse[k].out = nIn + k)
+    (hrow : ∀ r ∈ st.rows, (∀ v ∈ r.a.s, v < r.out) ∧ ∀ v ∈ r.b.s, v < r.out)
+    (ho : ∀ f ∈ outs.toList, ∀ v ∈ f.s, v < st.next) (hsz : outs.size ≤ outW * WORD)
+    (hU : max 7 (log2ceil (start + outW * WORD + 1)) = 18) (hD : start / WORD + outW ≤ 2 ^ 18 / WORD) :
+    netOf name (layout st inBits outBits outs) = .ok (built name (start + outW * WORD + 1) ⟨0, inW, inBits⟩
+      ⟨start / WORD, outW, outBits⟩ inW (sparseOf (layout st inBits outBits outs).ra)
+        (sparseOf (layout st inBits outBits outs).rb)) := by
+  obtain ⟨hsa, hsb, hu, hc, hig, hog, hal, hst, hIn, hins, hpI, -, -, -, -, hcon, hord⟩ :=
+    layout_facts st inBits outBits outs nIn inW outW start hnIn hinW houtW hstart hn hout hrow ho hsz _ rfl
+  generalize layout st inBits outBits outs = l at *
+  unfold netOf
+  rw [hu, hc, hig, hog]
+  exact ofRows_layout name inBits outBits l.ra l.rb nIn inW outW start (start + outW * WORD) hsa hsb hnIn hIn
+    (houtW ▸ le_groupWords _) (hinW ▸ isPow2_groupWords _) (houtW ▸ isPow2_groupWords _) hal (by omega) rfl hins hpI
+    hcon hord hU hD
 
 end FlockDeploy.Concrete.Nets
