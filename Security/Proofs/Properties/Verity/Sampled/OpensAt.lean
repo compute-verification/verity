@@ -13,10 +13,13 @@ it is from the code's side (`Flock.Bridge.Spec`), at:
 * `Live.placeAt`: **the place the session registers for a claims position**, `placeFrom` (`Sampled/Place.lean`) at
   the session's commitment (`Live.Cd`'s layout). `Live.placeOfRead_eq`: wherever v2 reads a session's files, the
   committed files' place of a gate (`placeOfRead`) is the session's `placeAt` of its claims position.
-* `Live.OpensReady`: what the session's files must give: every port a `sha512/row/v2` row (`RowsV2`); every port's
-  frame-v3 domain 64 bytes, the width of `Hash.Tree.Domain.id`; every port at least two leaves, so an accepted path
-  reaches past the salt and the salt is `saltLen` bytes, as `Hash.RowLeaf.accepts` requires; and every row shorter than
-  `2^64` bits, `RowLeaf.accepts`'s `u64` length.
+* `Live.OpensReady`: what the session's files must give: every port a `sha512/row/v2` or `sha512/row-seg/v1` row,
+  the two formats `Hash.RowLeaf` has; every port's frame-v3 domain 64 bytes, the width of `Hash.Tree.Domain.id`; the
+  ports' roots distinct, so the port the deployed path check finds by its root is the row's own, of the row's format;
+  and every row shorter than `2^64` bits, `RowLeaf.accepts`'s `u64` length. The salt is `saltLen` bytes at every
+  port, a one-leaf port's included (`Flock.Bridge.saltOf_length`).
+* `rowMsg_digest`: a `sha512/row/v2` or `sha512/row-seg/v1` port's row message (`Flock.Bridge.rowMsg`) hashes to its
+  registered schema's `Hash.RowLeaf` digest (`Flock.Bridge.Spec.formatOf`).
 * `Live.opens_rowLeaf`: **an opening the deployed commitment accepts is a `Hash.RowLeaf` opening at `placeAt`** under
   SHA-512, whose row holds the opened bit at the place's offset.
 * `Instance.opensAt_of`: **`OpensAt`**, wherever each session v2 sets up is `OpensReady` and the base places each
@@ -43,10 +46,28 @@ theorem sha512_hashOf : Flock.Bridge.Spec.HashOf Verity.sha512 := fun x => by
 theorem sha512Msg_length (m : Claims.Msg) : (Claims.Sampling.sha512Msg m).length = 64 := by
   rw [Claims.Sampling.sha512Msg, bs_length, Flock.Sha512.hash_size]
 
-theorem log2ceil_pos {n : ℕ} (h : 2 ≤ n) : 1 ≤ Flock.log2ceil n := by
-  unfold Flock.log2ceil
-  rw [ite_eq_right (show ¬ n ≤ 1 by omega)]
-  omega
+/-- **A `sha512/row/v2` or `sha512/row-seg/v1` port's row message hashes to its registered schema's `Hash.RowLeaf`
+digest** under SHA-512. -/
+theorem rowMsg_digest {p : Flock.Port} (hp : (p.v2 || p.segs.isSome) = true) (bits : List Bool) :
+    Verity.sha512 (Flock.Bridge.rowMsg p bits) =
+      (Flock.Bridge.Spec.formatOf (Flock.Registered.portSchema p)).digest Verity.sha512 bits := by
+  unfold Flock.Bridge.rowMsg Flock.Registered.portSchema
+  by_cases hs : p.segs.isSome = true
+  · rw [ite_eq_left hs, ite_eq_left hs, Flock.Bridge.Spec.formatOf_seg, Hash.RowLeaf.Format.digest,
+      Hash.RowSeg.digest, Flock.Bridge.Spec.segEnc_eq sha512_hashOf]
+  · have hv : p.v2 = true := by simpa [hs] using hp
+    rw [ite_eq_right hs, ite_eq_right hs, ite_eq_left hv, ite_eq_left hv, Flock.Bridge.Spec.formatOf_v2,
+      Hash.RowLeaf.Format.digest, Hash.RowV2.digest, Flock.Bridge.Spec.enc_eq]
+
+/-- **A `sha512/row/v2` or `sha512/row-seg/v1` port's schema is one `Hash.RowLeaf` has.** -/
+theorem portSchema_bits {p : Flock.Port} (hp : (p.v2 || p.segs.isSome) = true) :
+    Flock.Registered.portSchema p = Flock.HmRow.ROW_SCHEMA_SEG ∨
+      Flock.Registered.portSchema p = Flock.HmRow.ROW_SCHEMA_V2 := by
+  unfold Flock.Registered.portSchema
+  by_cases hs : p.segs.isSome = true
+  · exact Or.inl (ite_eq_left hs)
+  · have hv : p.v2 = true := by simpa [hs] using hp
+    exact Or.inr ((ite_eq_right hs).trans (ite_eq_left hv))
 
 theorem w_ofAudit {K : Verity.Circuit} {C : FlockSoundness.Audit.Circuit} (h : K = Verity.Circuit.ofAudit C)
     (g : Fin K.N) : K.w g = 1 := by
@@ -73,13 +94,13 @@ theorem placeOfRead_eq {r : Verity.FileRead} (hr : r = A.fileRead) (hN : r.circu
   rw [A.hn, dite_eq_left (show g.val < A.Cc.N from hN ▸ g.isLt)]
   rfl
 
-/-- **What the session's files must give for its openings to be `Hash.RowLeaf`'s**: `sha512/row/v2` rows, 64-byte
-frame-v3 domains, at least two leaves a port (an accepted path then reaches past the salt), and rows shorter than
-`2^64` bits. -/
+/-- **What the session's files must give for its openings to be `Hash.RowLeaf`'s**: `sha512/row/v2` or
+`sha512/row-seg/v1` rows, 64-byte frame-v3 domains, distinct roots (the deployed path check opens a row at the first
+port of the row's root, which is then the row's own), and rows shorter than `2^64` bits. -/
 structure OpensReady : Prop where
-  v2 : Flock.Bridge.RowsV2 A.D.unroll
+  rows : A.D.unroll.ports.all (fun p => p.v2 || p.segs.isSome) = true
   domain : ∀ q < A.D.unroll.ports.size, (Flock.Bridge.domOf A.D.unroll q).size = 64
-  leaves : ∀ q < A.D.unroll.ports.size, 2 ≤ A.Lm.cnt q
+  roots : ∀ q q', q' < q → q < A.D.unroll.ports.size → A.roots.getD q' [] ≠ A.roots.getD q []
   width : ∀ i, (Flock.Bridge.placeOf A.Cc A.rows i).1 < 2 ^ 64
 
 /-- **An opening the deployed commitment accepts is a `Hash.RowLeaf` opening at the registered place**: under
@@ -88,8 +109,7 @@ theorem opens_rowLeaf {A : Live} (hA : A.OpensReady) {i : ℕ} {b : Bool} {m : C
     (h : A.Cd.Opens Claims.Sampling.sha512Msg A.roots ⟨i, b, m⟩ = true) :
     ∃ p, A.placeAt i = some p ∧ ∃ o : Hash.RowLeaf.Opening,
       Hash.RowLeaf.accepts Verity.sha512 Verity.sha512 p.verifier p.root p.rank o ∧ o.row[p.offset]? = some b := by
-  unfold Live.Cd at h
-  rw [Flock.Bridge.commitDepL_v2 _ _ hA.v2] at h
+  unfold Live.Cd Flock.Bridge.commitDepL at h
   simp only [Claims.Sampling.CommitmentScheme.Opens, Claims.Sampling.pathCommit] at h
   cases hat : Flock.Bridge.atOf A.Cc A.rows A.roots i with
   | none => simp [hat, Claims.OC.eval] at h
@@ -103,30 +123,48 @@ theorem opens_rowLeaf {A : Live} (hA : A.OpensReady) {i : ℕ} {b : Bool} {m : C
     have hmem := Array.mem_of_find?_eq_some hfind
     simp only [Flock.Bridge.portsOfL, Array.mem_map, Array.mem_range] at hmem
     obtain ⟨q, hq, hreg⟩ := hmem
-    have hdom : reg.domain.size = 64 := by rw [← hreg]; exact hA.domain q hq
-    have hleaves : reg.leaves = A.Lm.cnt q := by rw [← hreg]
-    have hschema : reg.schema = Flock.HmRow.ROW_SCHEMA_V2 := by
-      rw [← hreg]; exact Flock.Bridge.schemaOf_v2 hA.v2 hq
+    obtain ⟨r, hr, hri⟩ := Option.bind_eq_some_iff.mp
+      (show (Flock.Bridge.rowOfPos A.Cc A.rows i).bind (fun r => A.roots[r.port]?.map fun rt => (rt, r.leaf)) =
+        some ri from hat)
+    obtain ⟨rt, hrt, hrti⟩ := Option.map_eq_some_iff.mp hri
+    have hrq : r.port < A.D.unroll.ports.size := by
+      simpa [Live.roots, Flock.Bridge.rootsOfL] using (List.getElem?_eq_some_iff.mp hrt).1
+    have hqr : q = r.port := by
+      have e1 : bs reg.root = A.roots.getD q [] := by rw [← hreg]; exact Claims.Sampling.bs_bytes _
+      have e2 : bs reg.root = ri.1 := of_decide_eq_true (Array.find?_some hfind)
+      have e3 : A.roots.getD r.port [] = ri.1 := by simp [List.getD_eq_getElem?_getD, hrt, ← hrti]
+      have he : A.roots.getD q [] = A.roots.getD r.port [] := e1.symm.trans (e2.trans e3.symm)
+      rcases Nat.lt_trichotomy q r.port with hlt | heq | hgt
+      · exact absurd he (hA.roots r.port q hlt hrq)
+      · exact heq
+      · exact absurd he.symm (hA.roots q r.port hgt hq)
+    subst hqr
+    have hpr : (A.D.unroll.ports[r.port].v2 || A.D.unroll.ports[r.port].segs.isSome) = true :=
+      (Array.all_eq_true.mp hA.rows) r.port hq
+    have hschema : reg.schema = Flock.Registered.portSchema A.D.unroll.ports[r.port] := by
+      rw [← hreg]; simp [Flock.Bridge.schemaOf, hq]
+    have hrow : Flock.Bridge.rowDep A.Cc A.rows A.D.unroll (Flock.Bridge.placeOf A.Cc A.rows)
+        (Flock.Bridge.bitsOf A.Lm.d) ⟨i, b, m⟩ = Flock.Bridge.rowMsg A.D.unroll.ports[r.port]
+          (SamplingDeploy.rowBits (Flock.Bridge.placeOf A.Cc A.rows) (Flock.Bridge.bitsOf A.Lm.d) ⟨i, b, m⟩) := by
+      have hpo : Flock.Bridge.portOfPos A.Cc A.rows A.D.unroll i = some A.D.unroll.ports[r.port] := by
+        simp [Flock.Bridge.portOfPos, hr, hq]
+      simp only [Flock.Bridge.rowDep, hpo]
+    have hdom : reg.domain.size = 64 := by rw [← hreg]; exact hA.domain r.port hq
     have hacc := Flock.Bridge.Spec.opensLeaf_accepts sha512_hashOf hdom hop
-    rw [Claims.Sampling.bs_bytes, Flock.Bridge.Spec.sha512Msg_hm96Outer sha512_hashOf, hschema,
-      show SamplingDeploy.row (Flock.Bridge.placeOf A.Cc A.rows) (Flock.Bridge.bitsOf A.Lm.d) ⟨i, b, m⟩ =
-        Hash.RowV2.msg (SamplingDeploy.rowBits (Flock.Bridge.placeOf A.Cc A.rows) (Flock.Bridge.bitsOf A.Lm.d)
-          ⟨i, b, m⟩) from Flock.Bridge.Spec.enc_eq _] at hacc
-    simp only [Flock.Registered.opensLeaf, Bool.and_eq_true, decide_eq_true_eq, Claims.Sampling.size_bytes] at hop
-    obtain ⟨⟨-, hlen⟩, -⟩ := hop
-    have hsalt : (Flock.Bridge.saltOf ⟨i, b, m⟩).length = Hash.Hm96.SALT_BYTES := by
-      have h1 : 1 ≤ Flock.log2ceil reg.leaves := by rw [hleaves]; exact log2ceil_pos (hA.leaves q hq)
-      simp only [Flock.Bridge.pathOfL, Flock.Bridge.pathOf, Flock.Bridge.saltLen, List.length_take,
-        List.length_drop] at hlen
-      simp only [Flock.Bridge.saltOf, List.length_take, Flock.Bridge.saltLen, Hash.Hm96.SALT_BYTES]
-      omega
+    rw [Claims.Sampling.bs_bytes, Flock.Bridge.Spec.sha512Msg_hm96Outer sha512_hashOf, hrow, rowMsg_digest hpr,
+      ← hschema] at hacc
+    have hfs : (Flock.Bridge.Spec.formatOf reg.schema).schema = reg.schema :=
+      Flock.Bridge.Spec.formatOf_schema (by rw [hschema]; exact portSchema_bits hpr)
+    generalize hf : Flock.Bridge.Spec.formatOf reg.schema = f at hacc hfs
+    rw [← hfs] at hacc
+    have hsalt : (Flock.Bridge.saltOf ⟨i, b, m⟩).length = Hash.Hm96.SALT_BYTES := Flock.Bridge.saltOf_length _
     refine ⟨{ verifier := { domain := Flock.Bridge.Spec.domainOf reg, key := bs Flock.Hm96.Default512.key,
-                            format := .v2 }
+                            format := f }
               root := Flock.Bridge.Spec.dig reg.root, rank := ri.2,
               offset := (Flock.Bridge.placeOf A.Cc A.rows i).2.val }, ?_,
       ⟨SamplingDeploy.rowBits (Flock.Bridge.placeOf A.Cc A.rows) (Flock.Bridge.bitsOf A.Lm.d) ⟨i, b, m⟩,
         Flock.Bridge.saltOf ⟨i, b, m⟩, _⟩, ⟨?_, hsalt, hacc⟩, ?_⟩
-    · simp [placeAt, placeFrom, hat, hfind]
+    · simp [placeAt, placeFrom, hat, hfind, hf]
     · simp only [SamplingDeploy.rowBits, List.length_ofFn]
       exact hA.width i
     · simp [SamplingDeploy.rowBits]

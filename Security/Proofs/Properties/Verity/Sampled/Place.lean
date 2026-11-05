@@ -14,7 +14,7 @@ A base's `Vocab.place` read off the committed files alone, so a deployed base ca
 * `placeFrom`: **the place a commitment's layout registers for a claims position** (`Flock.Bridge.commitDepL`'s): the
   registered port whose root is the position's row's root, as the deployed path check finds it
   (`Claims.Sampling.regPath`), read as `Hash.RowLeaf`'s verifier (the port's frame-v3 domain, the executable's hm96
-  key, the `v2` format), the port's root, the row's leaf, and the bit's place in its row.
+  key, the format of the port's registered schema), the port's root, the row's leaf, and the bit's place in its row.
 * `placeOfRead`: **the place the committed files register for a gate**: the files parsed as `verify --zk` parses them,
   and `placeFrom` at the deployed commitment's layout there, at the gate's claims position.
 -/
@@ -28,13 +28,14 @@ open Properties.NetworkCertifier.Bytes (bs)
 /-- **The place a commitment's layout registers for claims position `i`** (`Flock.Bridge.commitDepL`'s `C`, `rows`,
 `c`, `L` and `roots`): the registered port whose root is the position's row's root, as the deployed path check finds it
 (`Claims.Sampling.regPath`), read as `Hash.RowLeaf`'s verifier at the port's frame-v3 domain
-(`Flock.Bridge.Spec.domainOf`), the executable's hm96 key and the `v2` format; the port's root; the row's leaf; and the
-bit's place in its row. -/
+(`Flock.Bridge.Spec.domainOf`), the executable's hm96 key and its registered schema's format
+(`Flock.Bridge.Spec.formatOf`); the port's root; the row's leaf; and the bit's place in its row. -/
 noncomputable def placeFrom (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option Flock.Bridge.RowAt)
     (c : Flock.Circuit) (L : Flock.Bridge.LeafMap) (roots : List Claims.Msg) (i : ℕ) : Option Place :=
   (Flock.Bridge.atOf C rows roots i).bind fun ri =>
     ((Flock.Bridge.portsOfL c L roots).find? fun p => decide (bs p.root = ri.1)).map fun reg =>
-      { verifier := { domain := Flock.Bridge.Spec.domainOf reg, key := bs Flock.Hm96.Default512.key, format := .v2 }
+      { verifier := { domain := Flock.Bridge.Spec.domainOf reg, key := bs Flock.Hm96.Default512.key,
+                      format := Flock.Bridge.Spec.formatOf reg.schema }
         root := Flock.Bridge.Spec.dig reg.root, rank := ri.2, offset := (Flock.Bridge.placeOf C rows i).2.val }
 
 open Classical in
