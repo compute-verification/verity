@@ -14,6 +14,7 @@ public import Proofs.Flock.SessionLoop.FinishParts
 public import Proofs.Flock.SessionLoop.FinCommits
 public import Proofs.Flock.SessionLoop.FinPoints
 public import Proofs.Flock.SessionLoop.FinRounds
+public import Proofs.Flock.SessionLoop.TablesSide
 public import Proofs.Flock.Claims.ZK.FinishBridge
 public import Proofs.Flock.Claims.ZK.FinishTrunc
 public import Proofs.Flock.Claims.ZK.FinHmkLive
