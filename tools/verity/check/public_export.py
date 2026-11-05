@@ -64,7 +64,7 @@ ELAN = Path.home() / ".elan" / "bin"
 HEADER = re.compile(r"[ \t]*\[\[?[ \t]*((?:[\w-]+|\"[^\"\n]*\")(?:[ \t]*\.[ \t]*(?:[\w-]+|\"[^\"\n]*\"))*)[ \t]*\]\]?[ \t]*(?:#.*)?$")
 
 
-class Block(NamedTuple):
+class Table(NamedTuple):
     #: its header's key, `None` for the top-level table
     name: str | None
     #: its lines, from the comment lines just above its header
@@ -101,7 +101,7 @@ def _scan(text: str, depth: int = 0, quote: str | None = None, close: bool = Fal
     return depth, quote if quote in ('"""', "'''") else None, i
 
 
-def _blocks(text: str, where: str) -> list[Block]:
+def _tables(text: str, where: str) -> list[Table]:
     """``text``'s tables: the top-level table, then one per header, each from the comment lines just above it."""
     parts: list[tuple[str | None, list[str], int]] = [(None, [], 0)]
     depth, quote = 0, None
@@ -121,7 +121,7 @@ def _blocks(text: str, where: str) -> list[Block]:
         except tomllib.TOMLDecodeError as e:
             raise ValueError(f"public_export: {where}'s table {name or '(top)'} doesn't read as TOML on its own ({e}), so "
                              "its entries can't be dropped one by one") from e
-        out.append(Block(name, "".join(lines), value))
+        out.append(Table(name, "".join(lines), value))
     return out
 
 
@@ -182,7 +182,7 @@ def rewrite_lakefile(text: str, here: str, copied: set[str]) -> tuple[str, list[
         return has(mod) or _module_path(src, mod) in dirs
 
     out, dropped, gone, kept = [], [], set(), defaultdict(list)
-    for b in _blocks(text, where):
+    for b in _tables(text, where):
         t, body = b.value, b.text
         name = str(t.get("name"))
         if b.name == "require" and isinstance(t.get("path"), str) and _norm(here, t["path"], "lakefile.toml") not in copied:
@@ -219,8 +219,8 @@ def rewrite_lakefile(text: str, here: str, copied: set[str]) -> tuple[str, list[
     if isinstance(targets, list) and gone & set(targets):
         left = [x for x in targets if x not in gone]
         dropped += [("defaultTarget", x) for x in targets if x in gone]
-        blocks = _blocks(new, where)
-        new = _set_array(blocks[0].text, "defaultTargets", left) + "".join(b.text for b in blocks[1:])
+        tables = _tables(new, where)
+        new = _set_array(tables[0].text, "defaultTargets", left) + "".join(b.text for b in tables[1:])
         expect["defaultTargets"] = left
     if not dropped:
         return text, []
@@ -290,7 +290,7 @@ def rewrite_workspace(text: str, copied: set[str], dists: set[str], workspace: s
     def lines_without(body: str, drop) -> str:
         return "".join(line for line in body.splitlines(keepends=True) if not drop(line))
 
-    for b in _blocks(text, "pyproject.toml"):
+    for b in _tables(text, "pyproject.toml"):
         body, t = b.text, b.value
         if b.name == "tool.uv.workspace" and isinstance(t.get("members"), list):
             keep = [m for m in t["members"] if "*" in m or f"{m.rstrip('/')}/pyproject.toml" in copied]
