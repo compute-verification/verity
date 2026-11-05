@@ -17,7 +17,7 @@ from the run that staged it); their ``STATEMENTS`` hold two instance counts for 
   relative error, and each shape's residual against it is reported.
 - **The floor.** The units' own slots at the fitted rate, the commitment opened for free: what any commitment scheme can at
   best reach with this prover. ``served_pcs`` measures what a linear-claim commitment's opening and serving actually cost.
-- **Exfiltration.** The 3-pager's model (`exfil_bound`) at each shape: proof units of 2·MACs FLOP and the block's output bits
+- **Exfiltration.** The 3-pager's model (`exfil_bound`) at each shape: proof blocks of 2·MACs FLOP and the block's output bits
   at the curve's overhead, one year of world inference, a 1% verification budget.
 
 Writes ``overhead.json`` and, with matplotlib, ``overhead_vs_width.png``, ``share_vs_width.png`` and ``exfil_vs_width.png``
@@ -234,10 +234,10 @@ def main(argv: list[str] | None = None) -> int:
     res = {"card": a.card, "peak_s8_macs_per_s": peak, "s_per_block_cell": per_cell, "blocks": bs}
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "overhead.json").write_text(json.dumps(res, indent=1))
-    try:
-        _plot(a, bs, res)
-    except ImportError:
-        pass
+    if importlib.util.find_spec("matplotlib") is None:
+        print("overhead: matplotlib isn't installed, so no plots", file=sys.stderr)
+        return 0
+    _plot(a, bs, res)
     return 0
 
 

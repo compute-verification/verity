@@ -11,8 +11,8 @@ this benchmark shows where that cost takes over and what amortizes it. Two block
 
 Three parts, run in order:
 
-1. **Flock with hm96 rows hashed in the circuit (measured).** `benchmarks/flock_s8_block` with two instance counts for each
-   shape, so the analysis separates each block's seconds from the session's:
+1. **Flock, its rows' hiding commitments (`hm96-sha512`) opened in the circuit (measured).** `benchmarks/flock_s8_block`
+   with two instance counts for each shape, so the analysis separates each block's seconds from the session's:
 
    ~~~sh
    research run --on vy-dc-h200 --project verity --source . --cwd source -- bash benchmarks/flock_s8_block/run.sh \
@@ -24,8 +24,8 @@ Three parts, run in order:
 2. **A commitment Flock opens by linear claims (measured on the CPU).** `served_pcs/run.sh` builds `served_pcs/crate` inside
    a Flock b684b12 checkout with this tree's patches, as `verity/ml/flock/check_build.sh` does. It commits 2^M seeded bits
    with Flock's PCS (Ligerito, under `hm96-sha512` and under plain `sha512` column leaves) at code rates 1/2 and 1/4, opens 1
-   and 16 claims at random points, and verifies them. Beside that it hashes the same bytes as hm96 rows, which is serving's
-   cost today:
+   and 16 claims at random points, and verifies them. Beside that it commits the same bytes as hiding commitments
+   (`hm96-sha512` rows), serving's cost today:
 
    ~~~sh
    research run --on auto --cwd source -- bash benchmarks/proof_overhead/served_pcs/run.sh "M=26 28 30"
