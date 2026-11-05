@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Game.Tape
-import Proofs.Flock.Soundness.TmplUnitAt
-import Proofs.Flock.EndToEnd.Joint.V5.Session
+module
+
+public import Proofs.Flock.Soundness.Game.Tape
+public import Proofs.Flock.Soundness.TmplUnitAt
+public import Proofs.Flock.EndToEnd.Joint.V5.Session
 
 /-!
 # A member's session in the window's audit, played alone
@@ -21,6 +23,8 @@ and the earlier sessions' drawn together, by `JointAuditV5.memberStrat`:
 `JointAuditV5.hcls_of_bounds` gives `JointAuditV5.hcls` from the registration check's refusal of a member whose fewest
 and most drawn proof blocks have different link points (`mPtsOf_mono`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

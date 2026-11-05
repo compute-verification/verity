@@ -1,4 +1,6 @@
-import Definitions.Flock.Game.Prob
+module
+
+public import Definitions.Flock.Game.Prob
 
 /-!
 # A strategy's coins up to a point of the game, drawn ahead
@@ -13,6 +15,8 @@ of it, `seqTape g l k h s` is the coins of the first `k` games, and `seqStrat g 
 `k` after them on the tape `t`. That an event of game `k`'s output has the same probability over `seqG`'s coins as over
 the tape and game `k`'s own coins (`prob_seqG`), and the averages it needs, are in `Proofs.Flock.Soundness.Game.Tape`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 
