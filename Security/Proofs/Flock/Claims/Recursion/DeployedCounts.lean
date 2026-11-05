@@ -27,20 +27,20 @@ condition on `x` beyond `lamLin2_deployedB_ge`'s `hS`, and `hn` from its `hO` (`
   refuses `publicInputs`, the hidden one passes it to `Stmt.setupHidden`), has `m ≤ 35` (the `k_log > 27 || m > 35`
   refusal), `0 < g` (`HmRow.pin` refuses a net range of no slots, and `HmRow.check` makes each net range `g · per_vu`
   slots) and `g · 2^7 ≤ 2^k_log` (`HmRow.check`'s slots of at least `2^7` inside the block), so
-  `n ≤ g · 2^nbl ≤ 2^(k_log - 7) · 2^(35 - k_log) = 2^28` (`Counts.n_le`); a V\* table holds at most `65536`
+  `n ≤ g · 2^nbl ≤ 2^(k_log - 7) · 2^(35 - k_log) = 2^28` (`Counts.n_le`); a V\* table holds at most `4096`
   (`RecBudget.table`, `budget_table_ok`).
 * **Check 5's rows** (`resSetup_length_le`): `rec-residuals` registers two rows of `v` and two zero rows, `rec-open`
   `2 q` rows each of `coef` and `dirs`, two inputs a row; `q < 256` at every level of every `fast100` schedule, a constant of the
   verifier (`fast100_small`), so no condition on `x` bounds it. At most `64 · (8 + 2040) = 131072` inputs.
 * **Registered reads** (`regIns_length_le`): at most `|sts| · |own| · n · D`, and an accepted part's registration has
-  at most `4096` ports of trees at most `64` levels deep (`RecBudget.regs`, `regSize_staged`), so `D ≤ 66`.
+  at most `512` ports of trees at most `64` levels deep (`RecBudget.regs`, `regSize_staged`), so `D ≤ 66`.
 
-So each staged statement has at most `131072 + 4096 · 65536 · 66 = 17716871168` setup inputs (`deployedSetup_staged_le`),
-the run at most `nS x · 17716871168` (`setupCalls_deployedB_le_cap`), and at `nS x ≤ 2^16` at most `2^55`
-(`setupCalls_deployedB_le_joint`), the call bound `lamLin2_deployedB_ge` charges (`lamLin2_deployedB_ge_joint`). The
-parts are at most `RecBudget.MAX_STATEMENTS = 16` wherever one staged part sets up: they are one a statement of
-`RecVStar.statements` at the verifier's inner shape (`readX_listed`), which `RecBudget.statements` caps
-(`nS_le_staged`).
+So each staged statement has at most `131072 + 512 · 4096 · 66 = 138543104` setup inputs (`deployedSetup_staged_le`),
+the run at most `nS x · 138543104` (`setupCalls_deployedB_le_cap`). The parts are at most
+`RecBudget.MAX_STATEMENTS = 16` wherever one staged part sets up: they are one a statement of `RecVStar.statements` at
+the verifier's inner shape (`readX_listed`), which `RecBudget.statements` caps (`nS_le_staged`). So the run's calls are
+at most `16 · 138543104 ≤ 2^32` (`setupCalls_deployedB_le_32`), and at `nS x ≤ 2^16` at most `2^55`
+(`setupCalls_deployedB_le_joint`), the call bound `lamLin2_deployedB_ge` charges (`lamLin2_deployedB_ge_joint`).
 -/
 
 @[expose] public section
@@ -367,11 +367,11 @@ theorem resSetup_length_le (xO : Msg) : (ResLower.resSetup xO).length ≤ 131072
 
 /-! ## The registered reads -/
 
-/-- **`RecBudget.regs` at an inner shape**: at most `4096` ports, each of a tree of at most `64` levels. -/
+/-- **`RecBudget.regs` at an inner shape**: at most `512` ports, each of a tree of at most `64` levels. -/
 theorem budget_regs_ok {n : RecVStar.Inner} {own : Array Registered.Port}
     (h : RecBudget.regs (some n) (some own) = .ok ()) :
-    own.size ≤ 4096 ∧ ∀ reg ∈ own.toList, log2ceil reg.leaves ≤ 64 := by
-  have hP : RecBudget.MAX_PORTS = 4096 := rfl
+    own.size ≤ 512 ∧ ∀ reg ∈ own.toList, log2ceil reg.leaves ≤ 64 := by
+  have hP : RecBudget.MAX_PORTS = 512 := rfl
   have hD : RecBudget.MAX_DEPTH = 64 := rfl
   unfold RecBudget.regs at h
   dsimp only at h
@@ -386,10 +386,10 @@ theorem budget_regs_ok {n : RecVStar.Inner} {own : Array Registered.Port}
     · first | cases hj' | simp [throw, throwThe, MonadExceptOf.throw] at hj'
     · omega
 
-/-- **`RecBudget.table` at an inner shape**: every table holds at most `65536` instances. -/
+/-- **`RecBudget.table` at an inner shape**: every table holds at most `4096` instances. -/
 theorem budget_table_ok {n : RecVStar.Inner} {sts : Array Stmt} (h : RecBudget.table (some n) sts = .ok ()) :
-    ∀ st ∈ sts.toList, st.pub.n ≤ 65536 := by
-  have hI : RecBudget.MAX_INSTANCES = 65536 := rfl
+    ∀ st ∈ sts.toList, st.pub.n ≤ 4096 := by
+  have hI : RecBudget.MAX_INSTANCES = 4096 := rfl
   unfold RecBudget.table at h
   dsimp only at h
   intro st hst
@@ -451,13 +451,13 @@ theorem RecIns.setup_table {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} 
     subst h2
     assumption
 
-/-- **An accepted V\* part's registration is of size at most `270336`**: wherever the recursive setup of a staged
-statement passes, its registration `own` has at most `4096` ports, each opening at most `2 + 64` inputs
-(`RecBudget.regs`, which the setup runs at the verifier's inner shape, `insO_staged`), so `|own| · 66 ≤ 270336`. -/
+/-- **An accepted V\* part's registration is of size at most `33792`**: wherever the recursive setup of a staged
+statement passes, its registration `own` has at most `512` ports, each opening at most `2 + 64` inputs
+(`RecBudget.regs`, which the setup runs at the verifier's inner shape, `insO_staged`), so `|own| · 66 ≤ 33792`. -/
 theorem regSize_staged {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ} {i : RecIns} {spec : SessionSpec}
     {sts : Array Stmt} {own : Array Registered.Port} (hs : setupO (staged st x ms s) = some (i, spec, sts))
     (hown : i.base.registered = some own) :
-    (∀ reg ∈ own.toList, 2 + log2ceil reg.leaves ≤ 66) ∧ own.size * 66 ≤ 270336 := by
+    (∀ reg ∈ own.toList, 2 + log2ceil reg.leaves ≤ 66) ∧ own.size * 66 ≤ 33792 := by
   obtain ⟨hins, hset⟩ := setupO_some hs
   obtain ⟨r, -, hinner, -⟩ := insO_staged hins
   have hR := RecIns.setup_regs hset
@@ -501,13 +501,13 @@ theorem mem_vstar_staged {st : Stage} {x : Msg} {ps : List (Msg × Out)} {xO : M
 
 /-! ## The count -/
 
-/-- **A staged statement's `deployedSetup`**: at most `131072 + 4096 · 65536 · 66 = 17716871168` inputs, check 5's
-(`resSetup_length_le`) and the registered reads of its one table (`RecSetup.oneFull`) of at most `65536` instances
-(`RecBudget.table`) over at most `4096` ports of at most `66` inputs an opening (`regSize_staged`). -/
+/-- **A staged statement's `deployedSetup`**: at most `131072 + 512 · 4096 · 66 = 138543104` inputs, check 5's
+(`resSetup_length_le`) and the registered reads of its one table (`RecSetup.oneFull`) of at most `4096` instances
+(`RecBudget.table`) over at most `512` ports of at most `66` inputs an opening (`regSize_staged`). -/
 theorem deployedSetup_staged_le {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ} :
-    (deployedSetup (staged st x ms s)).length ≤ 17716871168 := by
+    (deployedSetup (staged st x ms s)).length ≤ 138543104 := by
   rw [deployedSetup_length]
-  refine le_trans (Nat.add_le_add (resSetup_length_le _) (?_ : (regIns (staged st x ms s)).length ≤ 17716740096))
+  refine le_trans (Nat.add_le_add (resSetup_length_le _) (?_ : (regIns (staged st x ms s)).length ≤ 138412032))
     (by norm_num)
   cases hs : setupO (staged st x ms s) with
   | none =>
@@ -532,15 +532,15 @@ theorem deployedSetup_staged_le {st : Stage} {x : Msg} {ms : List (Msg × Out)} 
       have hO := RecIns.setup_oneFull hset
       rw [hinner] at hO
       have h1 := (oneFull_ok hO).1
-      calc (regIns (staged st x ms s)).length ≤ sts.size * (own.size * 65536) * 66 :=
+      calc (regIns (staged st x ms s)).length ≤ sts.size * (own.size * 4096) * 66 :=
             regIns_length_le hs hown (budget_table_ok hT) hD
-        _ = sts.size * 65536 * (own.size * 66) := by ring
-        _ ≤ 1 * 65536 * 270336 := Nat.mul_le_mul (Nat.mul_le_mul_right _ (le_of_eq h1)) hKD
-        _ = 17716740096 := by norm_num
+        _ = sts.size * 4096 * (own.size * 66) := by ring
+        _ ≤ 1 * 4096 * 33792 := Nat.mul_le_mul (Nat.mul_le_mul_right _ (le_of_eq h1)) hKD
+        _ = 138412032 := by norm_num
 
 end Counts
 
-/-- **The compiled verifier's own evaluations at the deployed brings**: at most `nS x · 17716871168` at a run's V\*
+/-- **The compiled verifier's own evaluations at the deployed brings**: at most `nS x · 138543104` at a run's V\*
 statements. The tables, instances, check 5's rows and the registered reads are all bounded by the verifier's own
 refusals and constants (`RecSetup.oneFull`'s one table, `RecBudget`'s caps on a V\* session's registration and table,
 `fast100`'s `q < 256`), so no condition on `x` enters. -/
@@ -548,13 +548,22 @@ theorem setupCalls_deployedB_le_cap (rel : _root_.Flock.Readable.Parsed → _roo
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (IV : Claims.Verifier Coin) (H : Msg → Msg) (x : Msg)
     (ps : List (Msg × Out)) :
     (Claims.Recursion.setupCalls H (recBound rel (deployedB b) L IV)
-      ((recBound rel (deployedB b) L IV).vstar x ps)).length ≤ nS x * 17716871168 :=
+      ((recBound rel (deployedB b) L IV).vstar x ps)).length ≤ nS x * 138543104 :=
   setupCalls_deployedB_le_at rel b L IV H x ps fun xO hx => by
     obtain ⟨ms, s, rfl⟩ := mem_vstar_staged hx
     exact deployedSetup_staged_le
 
+/-- **`v ≤ 2^32` at the deployed brings**, at `nS x ≤ 16` V\* parts (`RecBudget.MAX_STATEMENTS`, `nS_le_of_partIn`):
+`16 · 138543104 ≤ 2^32`, `recursiveBitsK`'s `hv` at `kappa_eps_deployed`'s `v`. -/
+theorem setupCalls_deployedB_le_32 (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+    (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (IV : Claims.Verifier Coin) (H : Msg → Msg) (x : Msg)
+    (ps : List (Msg × Out)) (hn : nS x ≤ 16) :
+    (Claims.Recursion.setupCalls H (recBound rel (deployedB b) L IV)
+      ((recBound rel (deployedB b) L IV).vstar x ps)).length ≤ 2 ^ 32 :=
+  (setupCalls_deployedB_le_cap rel b L IV H x ps).trans ((Nat.mul_le_mul_right _ hn).trans (by norm_num))
+
 /-- **`v ≤ 2^55` at the deployed brings**, at `nS x ≤ 2^16` V\* parts (`lamLin2_deployedB_ge`'s `hn`):
-`2^16 · 17716871168 ≤ 2^55`, `lamLin2_deployed_ge_dep`'s `hV`. -/
+`2^16 · 138543104 ≤ 2^55`, `lamLin2_deployed_ge_dep`'s `hV`. -/
 theorem setupCalls_deployedB_le_joint (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (IV : Claims.Verifier Coin) (H : Msg → Msg) (x : Msg)
     (ps : List (Msg × Out)) (hn : nS x ≤ 2 ^ 16) :
@@ -571,7 +580,7 @@ staged public statement) and `hin` (the inner statement's plain setup); and `hS`
 inputs), a deployment-size condition read off `x`. The V\* parts' count needs none: they are one a statement of
 `RecVStar.statements` at the verifier's inner shape, which `RecBudget.statements` refuses past `MAX_STATEMENTS = 16`
 (`nS_le_of_partIn`, from `hO`). The registrations need none either: the verifier refuses a V\* session's registration of more than
-`4096` ports or a tree of more than `64` levels and a table of more than `65536` instances (`RecBudget`), and the
+`512` ports or a tree of more than `64` levels and a table of more than `4096` instances (`RecBudget`), and the
 tables (one, `RecSetup.oneFull`), statements with public inputs (`setupTables_counts`) and check 5's query count
 (`q < 256`, `fast100`'s, a verifier constant) need no hypothesis either. -/
 theorem lamLin2_deployedB_ge_joint (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
