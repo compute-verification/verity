@@ -10,7 +10,7 @@ origin: top's worker CHECKPATH (Cursor cloud agent), branch cursor/top-landing-c
 
 # CHECKPATH: red-team of the check's critical path (landed on `checked` to `main` moves)
 
-Checkpoint 18:00Z. Sources: every reachable CPU node's run dirs (3,589 check.py runs, read by ssh), drive.log on the
+Checkpoint 18:05Z (final; `main` still c6ba5690, `checked` 50745b55). Sources: every reachable CPU node's run dirs (3,589 check.py runs, read by ssh), drive.log on the
 control pod (read only), the executor's events for s20261105T035123Z-a2bf21 and s20261103T000340Z-aeb35c, `verity graph`
 listings at 22 `checked` commits, the Lean import graph at `checked` 50745b55. Tables and the scripts that made them:
 art:410b0b76284443025d92c55d6dbe01c76ddb636ab454f15bedae5e11aeafdef0 (kind landing-study/v1).
@@ -70,28 +70,31 @@ against 12.3 h observed, scaled by 0.82; 197 landings a week)
 1. **Run the tree invariants and the touched suites on the batch before it lands** (ci; builds on ci's low-risk lever 3).
    `suites.py --changed <checked tip> --quick` plus repository, verity-check, verity-graph and research on the merged tip
    of what lands, beside the Lean check of `next`; a red is blamed by the Lean check's walk (each member's own commit).
-   p 0.18 to at least 0.32: ~4.8 h off the mean, ~950 landing-h a week. 0 min on the path beside a Lean check (44-65 min),
+   p 0.18 to at least 0.32 (the 7 tips whose only red was these suites turn green): ~4.9 h off the mean, ~970 landing-h a
+   week. 0 min on the path beside a Lean check (44-65 min),
    ~8 min without one. Risk: a flaky test ejects; the red names it and the flake rule deletes it. Retires the team skill's
    prose "Before marking, run ... --changed origin/main". Lands Fri.
 2. **Take the after-landing loop out of the tick** (ci). Today: call `start_postland` right after `follow_postland` at the
    top of `_tick` too (one line; the end-of-tick call stays), so a run's successor launches the tick it is seen, not 1.5
    ticks later. Then: `follow_postland`, `_promote` and `start_postland` every minute under drive's state lock, outside
-   `Queue.sync`. R 150 to ~95 min: ~4 h off the mean alone, ~800 landing-h a week. Risk: two writers of drive's state
+   `Queue.sync`. One tick (43-58 min) off each cycle: 3.5-4.8 h off the mean alone, 700-940 landing-h a week. Risk: two writers of drive's state
    (caught by drive's tests). #7490's shorter tick helps; this removes the coupling.
 3. **One Proofs build, and lean-suites in parts** (ci). Co-locate `lean-audit:Security/Properties` with Proofs in ci.toml's
    3-shard plan (or `after_landing_shards = "auto:6"`); split composition by test id (its three 1,000-example difftests
    are 19-25 min each; split each one's examples in two for ~12 min), verity-flock and pouw-benchmarks by file; pytest in
-   2 parts off the Proofs node. Shard 2 75 to ~25-35 min. Then hold it in code: suites.py fails a gated suite's test over
+   2 parts off the Proofs node. Shard 2 75 to ~25-35 min; the run's span falls 40-50 min, 3.3-4.1 h off the mean, 650-810
+   landing-h a week. Then hold it in code: suites.py fails a gated suite's test over
    10 min with the fix in the message (parts or fewer examples), in place of AGENTS.md's prose "a test that adds more than
    about a minute says why", which didn't stop #6677/#6714. Lands Fri (ci.toml, PARTS; the cap Sat).
 4. **Warm Lean on the typical batch** (infra). Until INF-533's cache works, give the Lean shard the node of the last one
-   (WarmBuilds hits only there); deploy #7501 from `checked` rather than wait for `main`. Shard 1's Lean 51 to ~5-10 min.
+   (WarmBuilds hits only there); deploy #7501 from `checked` rather than wait for `main`. Shard 1's Lean 51 to ~5-10 min;
+   once lever 3 has made shard 1 the long pole, ~20 min off the run, ~1.6 h off the mean, ~320 landing-h a week.
    Cold under 45 needs replay overlapped with the build (as the executor's lean-module does) and the per-task overhead cut
    on the 222-deep chain; best cold today is 1,743 + 1,010 s sequential, 46 min.
 5. **Before CI-340's flip** (ci, infra): key untraced compiler tests without Lean and Lake files (the read guard catches a
    read), declare test-file memory from the executor's measured peaks, start the longest chain first. Flip on shadow
    agreement and on wall time at or under train.sh's for the same tip; otherwise the flip lengthens landing (307 vs 78-90
-   min).
+   min: ~217 min more a cycle, ~18 h more on the mean). CI-436 (the lean_lock runner) is on this path too.
 6. **Automation back on** (ci): delete `ci-no-postland` once 1-3 land; then `main` moves without `queue baseline`.
 
 Target after 1-4: a typical run ~30 min, R ~37 min, p ~0.4: mean landed-to-main ~1.5 h (model). The levers interact,
