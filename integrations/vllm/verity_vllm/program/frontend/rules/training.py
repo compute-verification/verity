@@ -9,12 +9,12 @@ Arithmetic is the reference vocabulary's (`ref_prims`): each element-wise op is 
 sum in blocks). Matrix products and the element-wise ops of `Binary` and `Unary` also take bf16 values: a product is
 `LinearRef_v1{DT=bf16}` (operands widened, the f32 dot, its result rounded), and an element-wise op widens its bf16 operands to f32
 (`Bf16ToF32_v1`, exact), performs the f32 operation and rounds a bf16 result once (`F32ToBf16Rn_v1`), as torch CPU's bf16 kernels
-do; where torch's bf16 kernel rounds otherwise, the rule refuses. With a `gpu`, a bf16 `mm` is instead F.linear's GEMM as that
-GPU's cuBLAS computes it (`Matmul`): the route its capture fitted (`cublas_bf16.train_route`), each k16 step the tensor core's dot
-(`HopperBF16WgmmaDot16_v1`). A training op with no Definition to lower it to is refused with the Definition it needs
+do; where torch's bf16 kernel rounds otherwise, the rule refuses. At a compute capability `cc`, a bf16 `mm` is instead F.linear's
+GEMM as that GPU's cuBLAS computes it (`Matmul`): the route its capture fitted (`cublas_bf16.train_route`), each k16 step the tensor
+core's dot (`HopperBF16WgmmaDot16_v1`). A training op with no Definition to lower it to is refused with the Definition it needs
 (`_log_softmax`: a correctly-rounded f32 log, `F32LogRn`).
 
-    training_rules(min_view_leaves, gpu) -> RuleSet    the training rule set
+    training_rules(min_view_leaves, cc) -> RuleSet     the training rule set
 
 Views and static float tensors are `rules.training_views`'s; a survey of what the rules refuse is `rules.training_survey`'s.
 """
@@ -51,7 +51,6 @@ _DT = {torch.float32: "f32", torch.bfloat16: "bf16"}
 # ---------------------------------------------------------------------------------------------------------
 # emitting
 # ---------------------------------------------------------------------------------------------------------
-
 
 
 def _bits(x: float) -> int:
@@ -247,20 +246,15 @@ class _TrainRule(OpRule):
     modes = frozenset({"reference"})
 
 
-
 # ---------------------------------------------------------------------------------------------------------
 # matmul
 # ---------------------------------------------------------------------------------------------------------
 
 
-#: the GPUs whose cuBLAS routes are captured (`cublas_bf16.TRAIN_CAPTURE`)
-GPUS = ("sm_120",)
-#: F.linear's GEMM at x (M, K), W (N, K) by its mm's operand layouts (`_layout`), as autograd lays them out: x @ W^T, dX = dY @ W,
-#: dW = dY^T @ X
+#: F.linear's GEMM at x (M, K), W (N, K) by its mm's operand layouts (`_layout`) as autograd lays them out: x @ W^T, dY @ W, dY^T @ X
 _ROLES = {("row", "col"): "fwd", ("row", "row"): "dX", ("col", "row"): "dW"}
 #: F.linear's (M, K, N) from its role's mm(a[Mm, Km], b[Km, Nm])
-_LINEAR_DIMS = {"fwd": lambda Mm, Km, Nm: (Mm, Km, Nm), "dX": lambda Mm, Km, Nm: (Mm, Nm, Km),
-                "dW": lambda Mm, Km, Nm: (Km, Nm, Mm)}
+_LINEAR_DIMS = {"fwd": lambda Mm, Km, Nm: (Mm, Km, Nm), "dX": lambda Mm, Km, Nm: (Mm, Nm, Km), "dW": lambda Mm, Km, Nm: (Km, Nm, Mm)}
 
 
 def _layout(t) -> str | None:
@@ -273,22 +267,22 @@ def _layout(t) -> str | None:
 
 class Matmul(_TrainRule):
     """`mm(a[M,K], b[K,N])` / `bmm(a[B,M,K], b[B,K,N])` of f32 or bf16 values -> one `batch` of `LinearRef_v1{K,N,DT}` over the rows
-    of `a` (per batch index for `bmm`), with `b` transposed by reference.  With a ``gpu`` (one of `GPUS`), a bf16 `mm` is one batch
-    of F.linear's row GEMM as that GPU's cuBLAS computes it instead: its role read off the operands' layouts (`_ROLES`), its route
-    the capture's (`cublas_bf16.train_route`) and its Definition the route's on words (`cublas_bf16.train_linear`'s `word_of`).
-    The rule still claims a bf16 product it can't lower that way (a `bmm`, a layout no role has, a shape the capture doesn't
+    of `a` (per batch index for `bmm`), with `b` transposed by reference.  At a compute capability ``cc`` whose cuBLAS routes are
+    captured (`cublas_bf16.TRAIN_CC`), a bf16 `mm` is one batch of F.linear's row GEMM as its cuBLAS computes it instead: its role
+    read off the operands' layouts (`_ROLES`), its route the capture's (`cublas_bf16.train_route`) and its Definition the route's on
+    words.  The rule still claims a bf16 product it can't lower that way (a `bmm`, a layout no role has, a shape the capture doesn't
     cover, a route with no Definition on words) and refuses it, so that no other rule lowers it with torch CPU's arithmetic."""
     info = _info("Matmul", "aten.mm / aten.bmm of f32 or bf16 values", "both operands are values of one dtype, f32 or bf16",
                  "one batch of LinearRef rows per matrix")
 
-    def __init__(self, gpu: str | None = None):
-        if gpu is not None and gpu not in GPUS:
-            raise ValueError(f"Matmul: gpu {gpu!r} has no captured cuBLAS routes (only {', '.join(GPUS)})")
-        self.gpu = gpu
-        if gpu is not None:
-            self.info = _info(f"Matmul_{gpu}", "aten.mm / aten.bmm of f32 or bf16 values",
+    def __init__(self, cc: tuple[int, int] | None = None):
+        if cc is not None and tuple(cc) != CB.TRAIN_CC:
+            raise ValueError(f"Matmul: cc {tuple(cc)} has no captured cuBLAS routes (cublas_bf16.TRAIN_CC is {CB.TRAIN_CC})")
+        self.cc = None if cc is None else f"cc{cc[0]}.{cc[1]}"
+        if cc is not None:
+            self.info = _info(f"Matmul_{self.cc}", "aten.mm / aten.bmm of f32 or bf16 values",
                               "both operands are values of one dtype, f32 or bf16",
-                              f"a bf16 mm: one of F.linear's GEMMs, at a shape and route {gpu}'s capture covers",
+                              f"a bf16 mm: one of F.linear's GEMMs, at a shape and route {self.cc}'s capture covers",
                               "one batch of rows per matrix: the cuBLAS route's GEMM for a bf16 mm, else LinearRef")
 
     def targets(self):
@@ -304,7 +298,7 @@ class Matmul(_TrainRule):
         return True
 
     def emit(self, node, ctx):
-        if self.gpu is not None and ctx.dtype_of(node.args[0]) == torch.bfloat16:
+        if self.cc is not None and ctx.dtype_of(node.args[0]) == torch.bfloat16:
             return self._emit_gpu(node, ctx)
         a, b = ctx.coll(node.args[0]), ctx.coll(node.args[1])
         sa, sb = _shape(ctx, node.args[0]), _shape(ctx, node.args[1])
@@ -324,10 +318,10 @@ class Matmul(_TrainRule):
 
     def _emit_gpu(self, node, ctx):
         def no(why: str):
-            refuse("numerics_unregistered", node, ctx.module_path(node), f"a bf16 {node.target} on {self.gpu}: {why}")
+            refuse("numerics_unregistered", node, ctx.module_path(node), f"a bf16 {node.target} on {self.cc}: {why}")
 
         if node.target is not aten.mm.default:
-            no("only F.linear's GEMMs have captured routes (cublas_bf16.TRAIN_CAPTURE); without a gpu it is torch CPU's")
+            no("only F.linear's GEMMs have captured routes (cublas_bf16.TRAIN_CAPTURE); without a cc it is torch CPU's")
         layouts = tuple(_layout(ctx.tensor_meta(a)) for a in node.args[:2])
         if layouts not in _ROLES:
             no(f"operand layouts {layouts}, none of F.linear's GEMMs' "
@@ -787,20 +781,20 @@ class EmbeddingDenseBackward(_TrainRule):
         ctx.record(self, node, {"tokens": M, "V": V, "H": H}, emitted=f"(SelectF32_v1 + F32Add_v1) x{M * V * H}")
 
 
-def training_rules(min_view_leaves: int = 0, gpu: str | None = None) -> RuleSet:
+def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None) -> RuleSet:
     """The default rules with the training rules: views of static floats, `BoxPermute` (views of more than `min_view_leaves` leaves
     that are not one run) and `Matmul` before them, the element-wise, reduction, softmax, loss and embedding rules after.
     `min_view_leaves` is 0 by default: the default views write a permuted view of fewer leaves than their limit as a list of its
-    leaves, which the root's replay then substitutes as one reference part per leaf.  `gpu` (one of `GPUS`): bf16 `mm`s as that
-    GPU's cuBLAS computes them (`Matmul`), in the rule set ``training-<gpu>``."""
+    leaves, which the root's replay then substitutes as one reference part per leaf.  `cc` (`cublas_bf16.TRAIN_CC`): bf16 `mm`s as
+    that GPU's cuBLAS computes them (`Matmul`), in the rule set ``training-cc<major>.<minor>``."""
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
 
-    first = [StaticFloats(), BoxPermute(min_view_leaves), Matmul(gpu)]
+    first = [StaticFloats(), BoxPermute(min_view_leaves), Matmul(cc)]
     last = [Binary(), Unary(), Lerp(), Addcmul(), Reduce(), SafeSoftmax(), SoftmaxBackward(), LogSoftmax(), LogSoftmaxBackward(),
             NllLossForward(), NllLossBackward(), EmbeddingDenseBackward()]
-    name = "training" if gpu is None else f"training-{gpu}"
+    name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}"
     return RuleSet(name, first + list(DEFAULT_RULES.rules) + last, list(DEFAULT_RULES.families))
 
 
-__all__ = ["training_rules", "GPUS", "Matmul", "Binary", "Unary", "Lerp", "Addcmul", "Reduce", "SafeSoftmax", "SoftmaxBackward", "LogSoftmax",
+__all__ = ["training_rules", "Matmul", "Binary", "Unary", "Lerp", "Addcmul", "Reduce", "SafeSoftmax", "SoftmaxBackward", "LogSoftmax",
            "LogSoftmaxBackward", "NllLossForward", "NllLossBackward", "EmbeddingDenseBackward"]

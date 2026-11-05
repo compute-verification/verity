@@ -4,7 +4,7 @@ bf16, its f32 operation on the widened operands rounded once), and where the ref
 (sequential sums, a correctly rounded exp) bit for bit against the rule's stated arithmetic, composed from the evaluators of the
 Definitions it names, and to a tolerance against torch; the functional AdamW against `torch.optim.AdamW(foreach=False)`;
 `BoxPermute` against torch's permute; the tiny step in f32 and in bf16 (its linears' operands cast, as autocast casts them); the
-bf16 GEMMs on sm_120 (`training_rules(gpu="sm_120")`), each its captured route's Definition and, on stand-in routes at small
+bf16 GEMMs on sm_120 (`training_rules(cc=(12, 0))`), each its captured route's Definition and, on stand-in routes at small
 shapes, bit for bit that route's model; and the lf model's s step derived in reference mode, which is refused at its one op with
 no Definition (`_log_softmax`: `F32LogRn`)."""
 from __future__ import annotations
@@ -504,7 +504,7 @@ def test_tiny_bf16_step() -> None:
     assert {P.Bf16ToF32.id, P.F32ToBf16Rn.id} <= set(s.primitives)
 
 
-SM120 = "sm_120"
+CC = CB.TRAIN_CC
 
 
 def _linear_gemms(x, w, dy):
@@ -518,7 +518,7 @@ def _meta(*shapes) -> list[torch.Tensor]:
 
 def _gpu_refusal(f, *xs) -> Unsupported:
     gm = make_fx(torch.func.functionalize(f, remove="mutations"), tracing_mode="fake")(*xs)
-    u = derive_graph(gm, xs, mode="reference", rules=training_rules(gpu=SM120), name="T").unsupported
+    u = derive_graph(gm, xs, mode="reference", rules=training_rules(cc=CC), name="T").unsupported
     assert isinstance(u, Unsupported) and u.reason == "numerics_unregistered", u
     return u
 
@@ -528,7 +528,7 @@ def test_gpu_gemms_are_the_captured_routes(K: int, N: int) -> None:
     """On sm_120 the lf model's s step's linears at B 2 x S 1024: each of F.linear's GEMMs, its role read off its operands'
     layouts, is one batch over its rows of its captured route's Definition on words."""
     M = CB.LF_M[0]
-    prog = _program(_linear_gemms, *_meta((M, K), (N, K), (M, N)), rules=training_rules(gpu=SM120))
+    prog = _program(_linear_gemms, *_meta((M, K), (N, K), (M, N)), rules=training_rules(cc=CC))
     calls = [(nd.fn.id, nd.n) for nd in prog.root.body.nodes[3:]]
     assert calls == [(word_of(CB.train_linear(r, M, K, N)).id, rows) for r, rows in (("fwd", M), ("dX", M), ("dW", N))]
 
@@ -545,7 +545,7 @@ def test_gpu_gemms_are_their_routes_bit_for_bit(monkeypatch) -> None:
     for role, route in TINY_ROUTES.items():
         monkeypatch.setitem(CB.TRAIN_ROUTES, (M, K, N, role), route)
     xs = [_data(*s, seed=20 + i).to(torch.bfloat16) for i, s in enumerate(((M, K), (N, K), (M, N)))]
-    prog = _program(_linear_gemms, *xs, rules=training_rules(gpu=SM120))
+    prog = _program(_linear_gemms, *xs, rules=training_rules(cc=CC))
     tab = materialize(prog, [_bits(x) for x in xs])
     got = np.array([tab[g] for g in prog.circuit.root_outputs()], dtype=np.uint16)
     x, w, dy = (t.view(torch.int16).numpy().astype(np.uint16) for t in xs)
@@ -565,11 +565,11 @@ TINY_STEP_ROUTES = {**{(32, K, N, r): {"kernel": "nosplit"} for K, N in ((64, 64
 def test_tiny_bf16_step_on_sm120(monkeypatch) -> None:
     """The tiny bf16 step on sm_120 at stand-in routes (`TINY_STEP_ROUTES`): each linear's three GEMMs are their routes'
     Definitions on words, read off the layouts autograd gives them (nine linears at (K, N) = (64, 64), the lm_head among them,
-    four at (64, 192), two at (192, 64)), and attention's f32 products are `LinearRef_v1` rows as without a gpu."""
+    four at (64, 192), two at (192, 64)), and attention's f32 products are `LinearRef_v1` rows as without `cc`."""
     for key, route in TINY_STEP_ROUTES.items():
         monkeypatch.setitem(CB.TRAIN_ROUTES, key, route)
     model, batch = meta_step("tiny", 2, ctx=16, vocab=64, matmul_dtype=torch.bfloat16)
-    prog = step_program(model, square_loss, AdamW(**ADAMW), batch, gpu=SM120)
+    prog = step_program(model, square_loss, AdamW(**ADAMW), batch, cc=CC)
     assert not isinstance(prog, Unsupported), prog
     got = collections.Counter(nd.fn.id for nd in prog.root.body.nodes if nd.fn.id.split("{")[0] in (
         "Gemm_v2", "CublasSplitKGemmBf16Partials_v1", "CublasSerialSplitKGemm_v1", "LinearRef_v1"))
@@ -584,18 +584,18 @@ def test_tiny_bf16_step_on_sm120(monkeypatch) -> None:
 def test_gpu_refuses_what_its_capture_does_not_cover() -> None:
     """On sm_120 a bf16 product is refused, with its fix, where no captured route lowers it: a shape the capture doesn't cover, a
     layout none of F.linear's GEMMs has, a bmm, and a route with no Definition on words (smollm2's grid.z dW); f32 products
-    are as without a gpu, and a gpu without captured routes is refused."""
+    are as without `cc`, and a `cc` without captured routes is refused."""
     assert "is not captured" in _gpu_refusal(_linear_gemms, *_meta((32, 64), (48, 64), (32, 48))).hint
     assert "operand layouts ('col', 'col')" in _gpu_refusal(lambda a, b: (a.t() @ b.t(),), *_meta((64, 32), (48, 64))).hint
     assert "only F.linear's GEMMs" in _gpu_refusal(lambda a, b: (torch.bmm(a, b),), *_meta((2, 16, 32), (2, 32, 16))).hint
     assert "names no word Definition" in _gpu_refusal(lambda dy, x: (dy.t() @ x,), *_meta((4096, 576), (4096, 576))).hint
     b = _data(16, 8, seed=5)
-    ids = [[nd.fn.id for nd in _program(lambda x, y: (x @ y,), X, b, rules=r).root.body.nodes[2:]] for r in (None, training_rules(gpu=SM120))]
+    ids = [[nd.fn.id for nd in _program(lambda x, y: (x @ y,), X, b, rules=r).root.body.nodes[2:]] for r in (None, training_rules(cc=CC))]
     assert ids[0] == ids[1] and ids[0][0].startswith("LinearRef_v1") and "DT='f32'" in ids[0][0], ids
     with pytest.raises(ValueError, match="no captured cuBLAS routes"):
-        training_rules(gpu="sm_90")
-    with pytest.raises(ValueError, match="rules or gpu"):
-        step_report(None, None, None, None, rules=training_rules(), gpu=SM120)
+        training_rules(cc=(9, 0))
+    with pytest.raises(ValueError, match="rules or cc"):
+        step_report(None, None, None, None, rules=training_rules(), cc=CC)
 
 
 def test_tiny_step_theta_is_the_parameters() -> None:

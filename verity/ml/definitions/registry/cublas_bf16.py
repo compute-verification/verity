@@ -75,7 +75,8 @@ __all__ = ["BatchedGemm", "BatchedGemmWord", "ChainStep", "CublasSerialSplitKGem
            "CublasSplitKGemmBf16PartialsWord", "CublasSplitKGemmF32Out", "CublasSplitKGemmF32OutWord", "CublasSplitKGemmWord",
            "GemmF32Out", "GemmF32OutWord", "HOPPER_STEP",
            "HopperBf16Dot16Step", "HopperBf16Dot16StepFirst", "HopperBf16Dot16StepFirstX", "HopperBf16Dot16StepX",
-           "LF_LINEARS", "LF_M", "TRAIN_BMM", "TRAIN_BMM_SHAPES", "TRAIN_CAPTURE", "TRAIN_LINEARS", "TRAIN_LINEAR_ROLES", "TRAIN_M", "TRAIN_ROUTES",
+           "LF_LINEARS", "LF_M", "TRAIN_BMM", "TRAIN_BMM_SHAPES", "TRAIN_CAPTURE", "TRAIN_CC", "TRAIN_LINEARS", "TRAIN_LINEAR_ROLES",
+           "TRAIN_M", "TRAIN_ROUTES",
            "aligned_bounds", "attention_bmm", "chain_step", "conformance_cc12", "dot_step", "residue_first", "route_gemm",
            "split_bounds", "train_linear", "train_route"]
 
@@ -102,9 +103,9 @@ CONFORMANCE_CC12 = conformance_cc12("`splitKreduce_kernel` with a bf16 workspace
 CONFORMANCE_CC12_SERIAL = conformance_cc12("a cutlass kernel whose grid.z slices meet through the bf16 output, no reduction kernel "
                                            "(M 303, K 12288, 5 slices)")
 TRAIN_CAPTURE = ("captures of the training workloads' GEMMs on cc 12.0 with 188 SMs (torch 2.14.0+cu130 on "
-                 "cuBLAS 13.1.1.3, deterministic, CUBLAS_WORKSPACE_CONFIG=:4096:8), smollm2-135m's at B 1 x S 256 and "
-                 "B 8 x S 512 and the lf model's s step's linears at B 2 x S 1024, every launch's kernel and grid recorded, "
-                 "each role's sampled words fitting its route exactly on random and count-probe words")
+                 "cuBLAS 13.1.1.3, deterministic, CUBLAS_WORKSPACE_CONFIG=:4096:8) at B 1 x S 256, B 8 x S 512 and B 2 x S "
+                 "1024 (the lf model's s step's linears), every launch's kernel and grid recorded, each role's sampled words "
+                 "fitting its route exactly on random and count-probe words")
 CONFORMANCE_ALIGNED = ("exact-model-tested: every output word of the B 8 x S 512 step's dW in a full-tensor dump of the step "
                        "(row GEMMs at K 4096: N 576 over 7 and 3 grid.z slices at TILE_K 32 and over 12 at TILE_K 64, N 1536 "
                        "over 3 at TILE_K 32), where cuBLAS launches a cutlass kernel over grid.z and `splitKreduce_kernel` with "
@@ -377,6 +378,8 @@ TRAIN_BMM: dict[str, tuple[str, str, Callable[[int, int], tuple[int, int]]]] = {
 }
 TRAIN_BMM_SHAPES = ((256, 64), (512, 64))
 _NOSPLIT = {"kernel": "nosplit"}
+#: the compute capability whose cuBLAS `TRAIN_ROUTES` are (`TRAIN_CAPTURE`)
+TRAIN_CC = (12, 0)
 #: (M, K, N, role) -> the route sm_120 takes, in `bf16_gemm_check.cublas_route_rows`' form
 TRAIN_ROUTES: dict[tuple[int, int, int, str], dict[str, Any]] = {
     **{(M, K, N, role): _NOSPLIT for M in TRAIN_M for K, N in TRAIN_LINEARS for role in TRAIN_LINEAR_ROLES},

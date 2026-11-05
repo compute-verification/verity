@@ -20,7 +20,7 @@ from types import SimpleNamespace
 
 import pytest
 import torch
-from conftest import GPU, LF, STEP, STRUCTURE, dot_alone
+from conftest import CC, LF, STEP, STRUCTURE, dot_alone
 
 import grader as G
 from verity.ml.circuits.census import census
@@ -39,7 +39,7 @@ CODE = SimpleNamespace(opnames=SimpleNamespace(gemm_like=lambda name: name in G.
 FORWARD = 9 * LF.SIZES["tiny"].n_layer + 1
 AGREE = ("count", "N", "O", "widths", "token_dims")
 #: the tiny steps: f32, bf16 products on torch CPU's arithmetic, and on sm_120's cuBLAS
-STEPS = {"f32": (None, None), "bf16": (torch.bfloat16, None), f"bf16-{GPU}": (torch.bfloat16, GPU)}
+STEPS = {"f32": (None, None), "bf16": (torch.bfloat16, None), "bf16-cublas": (torch.bfloat16, CC)}
 
 
 def test_a_handover_reads_back(steps) -> None:
@@ -52,10 +52,11 @@ def test_a_handover_reads_back(steps) -> None:
         assert h.path == s.path and sorted(h.step.root.theta) == sorted(s.program.root.theta)
 
 
+@pytest.mark.slow
 def test_a_handover_reads_in_a_fresh_process(steps) -> None:
     """A process that derived no step decodes a hand-over: the grader registers the Definitions the frontend lowers to, the
     GPU's routes among them, before it decodes."""
-    s = steps(torch.bfloat16, GPU)
+    s = steps(torch.bfloat16, CC)
     script = (f"import sys; sys.path.insert(0, {str(Path(G.__file__).parent)!r}); import grader as G; "
               f"print(len(G.load_handover({str(s.path)!r}).step.root.body.nodes))")
     got = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
@@ -148,8 +149,8 @@ def test_the_products_are_the_steps_matrix_products(step, steps, unit_prices) ->
     graph varies, in its phase: the forward's products, and two in the backward for each. Every operand depends on θ′, so N
     is every product's MACs and O every output's wires. Each row's |C| is its cells' (at one gate a primitive, their word
     gates)."""
-    dtype, gpu = STEPS[step]
-    s = steps(dtype, gpu)
+    dtype, cc = STEPS[step]
+    s = steps(dtype, cc)
     h = G.load_handover(s.path)
     out = G.read(h, CODE)
     assert out["format"] == G.READ and out["slowdown_code"] == {"version": "stand-in", "commit": "0" * 40, "checked": False,
@@ -174,7 +175,7 @@ def test_the_gpu_steps_linears_are_its_tensor_cores_dots(steps, monkeypatch) -> 
     at (`HopperBF16WgmmaDot16_v2`, its gates over 16): priced at that dot alone, the linears' |C| is a trace's at its gates a
     MAC exactly, and what their full |C| adds rounds and reduces. Attention's products stay `LinearRef_v1` rows at the 32
     bits torch's math path computes them in, which call no dot."""
-    s = steps(torch.bfloat16, GPU)
+    s = steps(torch.bfloat16, CC)
     price = dot_alone(monkeypatch, s.program)
     assert price["boolean"] == "HopperBF16WgmmaDot16_v2"
     out = G.read(G.load_handover(s.path), CODE)

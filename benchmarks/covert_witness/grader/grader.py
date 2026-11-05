@@ -15,7 +15,7 @@ A lane hands over one directory (`write_handover`), and the grader refuses anyth
                        (`codec.encode_program`), named by its digest (`codec.program_digest`, which leaves the annotations
                        out, so `annotations` is the sha512 of their canonical JSON)
     structure.json.gz  the same step at another batch shape, which says which dims are the tokens': only its occurrences'
-                       views are read, so it may be derived without the step's `gpu`, whose routes needn't cover its shapes
+                       views are read, so it may be derived without the step's `cc`, whose routes needn't cover its shapes
 
 Training's slowdown code is read where it sits, at the commit named, and never copied (`load_slowdown_code`): the grader
 calls its names of the ops that compute products and its Definitions' output widths, and refuses a capture other than the
@@ -24,7 +24,7 @@ one it reads beside (`CAPTURE`).
 What it reads (`read`, "grader-products/v1"):
 
 - the step's matrix products (`Cells.products`): one row per mm or bmm occurrence, lowered to cells that each compute
-  one row of it (`ROWS`: `LinearRef_v1`, torch CPU's arithmetic, or, derived with a `gpu`, the route its cuBLAS takes, each
+  one row of it (`ROWS`: `LinearRef_v1`, torch CPU's arithmetic, or, derived at a `cc`, the route its cuBLAS takes, each
   k16 step the tensor core's dot), with its phase (forward, backward or optimizer), MACs, outputs and output wires, those
   of the cells whose two operands depend on θ′ (the start's weights and the optimizer's state and scalars: `*_both`), the
   operands' and outputs' word widths as the circuit wires them, its dims, the tokens' among them, and its cells' |C|; the

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 import torch
-from conftest import GPU, LF, STEP, dot_alone
+from conftest import CC, LF, STEP, dot_alone
 
 import grader as G
 from verity_config.settings import of
@@ -116,18 +116,18 @@ def test_the_command_line(fresh, steps, tmp_path, capsys, unit_prices) -> None:
 @pytest.mark.skipif(not SLOWDOWN_CODE, reason="set VERITY_GRADER_SLOWDOWN_CODE=DIR@COMMIT, the directory training's slowdown "
                                               "code's package sits in and its commit, to read the tiny steps beside it (about "
                                               "a minute)")
-@pytest.mark.parametrize("step", ["f32", "bf16", f"bf16-{GPU}"])
+@pytest.mark.parametrize("step", ["f32", "bf16", "bf16-cublas"])
 def test_the_tiny_steps_beside_the_slowdown_code(step, fresh, steps, monkeypatch, request) -> None:
     """The slowdown code's capture of the same tiny step (`capture_step`, its product rows with each GEMM at its operands'
     dtype) beside what the grader reads of the step's circuit: the same products, N, O and token dims at every (phase, op,
     dims), and the same operand widths but at the bf16 steps' attention products, which the circuit wires at the 32 bits
     torch's math path computes them in and the trace takes at the 16 bits their operands were passed at. On sm_120, priced at
     the tensor-core dot alone (`dot_alone`), the linears' |C| is the trace's: its gates a bf16 MAC are that dot's over 16."""
-    dtype, gpu = {"f32": (None, None), "bf16": (torch.bfloat16, None), f"bf16-{GPU}": (torch.bfloat16, GPU)}[step]
+    dtype, cc = {"f32": (None, None), "bf16": (torch.bfloat16, None), "bf16-cublas": (torch.bfloat16, CC)}[step]
     directory, _, commit = SLOWDOWN_CODE.rpartition("@")
     code = G.load_slowdown_code(Path(directory), commit)
-    s = steps(dtype, gpu)
-    if gpu:
+    s = steps(dtype, cc)
+    if cc:
         dot_alone(monkeypatch, s.program)
     else:
         request.getfixturevalue("unit_prices")
@@ -139,5 +139,5 @@ def test_the_tiny_steps_beside_the_slowdown_code(step, fresh, steps, monkeypatch
     a = G.against(G.read(G.load_handover(s.path), code), code.products.rows(g, gemm_dtype=None), code)
     assert a["agree"] == {"count": True, "N": True, "O": True, "widths": dtype is None, "token_dims": True}, a["rows"]
     assert all(a["totals"]["circuit"][x] == a["totals"]["trace"][x] for x in ("count", "N", "O"))
-    if gpu:
+    if cc:
         assert a["C"]["mm"]["circuit"] == a["C"]["mm"]["trace"] > 0, a["C"]
