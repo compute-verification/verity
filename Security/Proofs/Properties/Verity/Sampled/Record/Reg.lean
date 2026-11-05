@@ -530,32 +530,30 @@ noncomputable def regOf (A : Live) (o : Own) (v : _root_.SampledProofs.Registrat
     (cl : Option (Array (Int × Array Int))) (x : Claims.Msg) : Option _root_.SamplingDeploy.Reg :=
   if x = xOf A o then some (lawReg A v cl) else none
 
-/-- **`RegMatches` at the record, the input class on its own**: at a session v2 sets up, at the parameters
-`SetsUp.params` names, a statement the record's code parses and partitions names `regOf` at their verifier, which parses
-as the statement's descriptor, lays out under its query as `l`, and has the statement's design. The partition is v2's two
-classes: the population, whose strata have `slotPartition l`'s first class's sizes, and the input class, at most one
-stratum, which is the lowered program's and not the layout's. -/
+/-- **`RegMatches` at the record**: at a session v2 sets up, at the parameters `SetsUp.params` names, the record's code
+and `regOf` at their verifier meet `RegMatches`. The record's one statement names that registration, whose program is
+the statement's descriptor's parse and lays out under its query as `l`. Its partition `partSlots A` is the population, in
+strata of `slotPartition l`'s population's sizes, then the statement's program's input class, and its design is
+`slotDesign`'s. -/
 theorem regMatches_record (A : Live) (o : Own) (e : Ext) {ι : Type} {dv : Accounting.Device ι} {α : Type}
     [Fintype α] {V : Vocab dv α} {θ : ByteArray} {F : Array ByteArray} (hsu : SetsUp V θ F A)
     (hk : ∀ k, A.law = .subset k → 1 ≤ k) (cl : Option (Array (Int × Array Int))) :
-    ∃ p, ParamsAt θ p ∧ ∀ x s Pt, (code A o e).parse x = some s → (code A o e).partition s = some Pt →
-      ∃ g l, regOf A o p.base.verifier cl x = some g ∧
-        _root_.SampledProofs.Program.parse ⟨s.desc.toArray⟩ = .ok g.program ∧
-        _root_.SampledProofs.Slots.layout g.program g.query = .ok l ∧
-        (∃ pop ins, Pt.classes = [pop, ins] ∧ ins.length ≤ 1 ∧
-          strataSizes pop = strataSizes ((_root_.Properties.SampledProofs.slotPartition l).classes.headD [])) ∧
-        _root_.Properties.SampledProofs.slotDesign g.rule g.program g.query g.table = .ok s.design := by
-  obtain ⟨p, l, hp, -, hparse, hl, hcl, hds⟩ := regMatches_of_setsUp A hsu hk cl
-  refine ⟨p, hp, fun x s Pt hx hP => ?_⟩
+    ∃ p, ParamsAt θ p ∧ _root_.SamplingDeploy.RegMatches (code A o e) (regOf A o p.base.verifier cl) := by
+  obtain ⟨p, l, hp, -, hparse, hl, ⟨pop, ins, hc, -, hss⟩, hds⟩ := regMatches_of_setsUp A hsu hk cl
+  have h : [pop, ins] = [(Flock.Bridge.nsOf A.desc A.qr).splitLengths
+      ((List.finRange A.n).map (Flock.Bridge.unitGates A.P)), InputSlot.inputClass (Flock.Bridge.progOf A.Cc A.κ)] :=
+    hc.symm
+  obtain rfl := (List.cons.inj h).1
+  refine ⟨p, hp, ?_⟩
+  intro x s Pt hx hP
+  have hpe : (code A o e).parse x = if x = xOf A o then some (stmtSlots A) else none := rfl
+  have hre : regOf A o p.base.verifier cl x = if x = xOf A o then some (lawReg A p.base.verifier cl) else none := rfl
+  have hpp : (code A o e).partition s = some (partSlots A) := rfl
   by_cases hxo : x = xOf A o
-  · subst hxo
-    have hs : stmtSlots A = s := Option.some.inj ((show (code A o e).parse (xOf A o) = some (stmtSlots A) from
-      if_pos rfl).symm.trans hx)
-    subst hs
-    have hPt : partSlots A = Pt := Option.some.inj hP
-    subst hPt
-    exact ⟨lawReg A p.base.verifier cl, l, if_pos rfl, hparse, hl, hcl, hds⟩
-  · have h0 : (code A o e).parse x = none := if_neg hxo
-    cases h0.symm.trans hx
+  · obtain rfl : stmtSlots A = s := Option.some.inj ((hpe.trans (ite_eq_left hxo)).symm.trans hx)
+    obtain rfl : partSlots A = Pt := Option.some.inj (hpp.symm.trans hP)
+    exact ⟨lawReg A p.base.verifier cl, l, (Flock.Bridge.nsOf A.desc A.qr).splitLengths
+      ((List.finRange A.n).map (Flock.Bridge.unitGates A.P)), hre.trans (ite_eq_left hxo), hparse, hl, rfl, hss, hds⟩
+  · cases (hpe.trans (ite_eq_right hxo)).symm.trans hx
 
 end Verity.Sampled.Record
