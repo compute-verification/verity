@@ -166,7 +166,7 @@ theorem slotCase_round {W Rr : Type} {M : LoopModel W Rr} {J : List String → S
   | step k' hk' hra hrest =>
     obtain rfl : Session.Kind.round stream n = k' := Option.some.inj (hsl.symm.trans hk')
     have hJ' := hJ seen st pl e σ _ hsl hF hj hra
-    obtain ⟨⟨hlt, -⟩, ⟨i, r, dom, v, hv, hr⟩, hcc⟩ := hra
+    obtain ⟨⟨hlt, -⟩, ⟨i, r, dom, v, hv, hr, -⟩, hcc, -⟩ := hra
     have hRA := hA seen st pl e σ _ i r dom v hsl hF hj hv hr
     have hreq := request_round_slot hF.reach hF.live hsl
     obtain ⟨m, q, f, nd, hm, hrp, hnd, hcfg, hu, hf⟩ := hRA.place
