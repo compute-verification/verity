@@ -27,7 +27,7 @@ struct SzC {
     static __device__ __forceinline__ void compress_kw(uint64_t* st, const uint64_t* kw) {
         uint64_t w[16];
 #pragma unroll
-        for (int j = 0; j < 16; j++) w[j] = kw[j] - SHA512_K[j];
+        for (int j = 0; j < 16; j++) w[j] = kw[j] - sx::K_DEV[j];
         s512_compress(st, w);
     }
 };

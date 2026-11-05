@@ -132,6 +132,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 - The PR says which guarantees changed and why; the ledger's status rows match `lean-audit.json`.
 - Merge `main` in rather than rebasing, with `python tools/verity/lean/merge.py --install` run once per clone so
   `lean-audit.json` merges without a rebuild; only a conflict it refuses needs `check.py --update` on the merged tree.
+  Fetch `main` first: a checkout whose `merge.py` is older than `origin/main`'s merges by `origin/main`'s.
 - Record your lock at your own head, then mark (`ready` refuses a changed lock no records run of that head passed); a
   passing Lean check, a clean merge of `main` over a passing head, or a commit of exactly the records under `record/` a
   passing run kept needs no new run. A train regenerates records that differ only because another PR moved what yours
@@ -172,3 +173,7 @@ repository.
 - What a physical region reads is not a premise: it follows from the actual circuit's regions and causality
   (`width_into_region_le`; `Links`, `Covered` in `Security/Definitions/Accounting/Physical.lean`). A bound per
   server-window is stated on `Accounting.Placed` with `WindowsAt`.
+- Verifier code compares `Json` by a match the kernel reduces, never by `BEq Json`'s `==`, a `partial def` no proof can
+  read. A string is compared by `SampledProofs.jsonStrIs`, which `Properties.Pouw.LiveSalt.jsonStrIs_eq` reads back.
+  Replacing such an `==` or a partial reading with a total one that means the same (it refuses on every parse failure
+  and never defaults) changes no claim: the lane makes the change and tells the code's owner.

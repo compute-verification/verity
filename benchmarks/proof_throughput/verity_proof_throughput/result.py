@@ -37,12 +37,14 @@ from verity_numerical.bench import contract
 from . import instances as I
 from .workloads import Workload
 
-SECURITY = {"target": -100, "profile": "fast100", "reps": 2, "coins": "live-os: the verifier's OS draws, round by round"}
+SECURITY = {"target": -100, "profile": "fast100", "reps": 2}
+#: a point's coins, as its sweep record names them (`verity_flock.circuit.coins`)
+COINS = {"coin-tree": "coin-tree: every round's coins the challenger's keyed coin tree's (serve --tree-from)"}
 PREPROCESSING = ("the population is lowered and staged once for every B (fixed.setup_seconds); every timed session builds "
                  "its drawn statement and witness and proves both reps afresh")
 CONFIGS = {"plain": "C-Flock native prover, ZK off (flock-circuit prove --gpu), live coins and the stratified draw of B units "
                     "from a loopback flock-circuit serve --draw-law; then the compiled Lean verifier (flock-verify verify "
-                    "--coins os --stratified B) on each timed session"}
+                    "--coins tree --stratified B) on each timed session"}
 
 
 #: the prover's per-rep phases (``flock-circuit``'s ``gpu_buckets``) beyond the contract's buckets, each kept as ``prove.*_s``
@@ -143,7 +145,8 @@ def fingerprint(w: Workload, B: int, rec: Mapping[str, Any], *, hardware: Mappin
     lv = rec.get("live") or {}
     return contract.fingerprint(
         profile=w.profile, domain=rec.get("domain") or "total", K=w.K, B=B, proof_class="NON_ZK_PROOF",
-        authentication="included-hash", zk_mode=contract.ZK_NONE, security=SECURITY, hardware=hardware, software=software,
+        authentication="included-hash", zk_mode=contract.ZK_NONE, hardware=hardware, software=software,
+        security=SECURITY | {"coins": COINS.get(lv.get("coins"), lv.get("coins"))},
         preprocessing=PREPROCESSING, retention="retained", instances=None, population=I.population_ref(w),
         draw={"law": "stratified", "k": B, "population": w.n_max, "verifier": "flock-verify --stratified B, its own law"},
         workload=w.name, vu=w.vu, sites=w.sites, config=config, configuration=CONFIGS[config],

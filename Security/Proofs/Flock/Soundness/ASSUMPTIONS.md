@@ -61,7 +61,7 @@ hash, nor false of every hash.
   at most `q²/2^513`: the generic birthday bound `q(q − 1)/(2·2^512)` for a budget fixed in advance (`DESIGN.md` §1).
 - **The budgets are not checked.** `StrictCR.Finder.CR H F q` takes `SHA512CRStrict` with the cost `q` on every outcome,
   so nothing in Lean ties `q` to the evaluations the finder makes. Each budget must bound its finder's real SHA-512
-  evaluations, for `t′` one session run's (as in `LinkCR`) and `v` one opening's verification:
+  evaluations, for `t′` the prover's in one session run and `v` one opening's verification:
   - `qF ≥ 2t′ + 2v`, for the rewinding finders (two runs after a cap, and the two conflicting openings verified);
   - `qS ≥ t′ + v`, for the self-clash finder (one run, one further verification);
   - `qT ≥ 2t′ + 2v`, for `tr`'s finder (`TreeRewind.finder`: two runs after the registration);
@@ -69,11 +69,13 @@ hash, nor false of every hash.
   - `qG ≥ (1 + 5M)·t′ + 2k·v`, for zero knowledge's simulator finder (`ZK.GK.Model.finder`: the GK simulator with cap
     `M`, at most `1 + 5M` runs of `V*` on every outcome by `sim_runs_le`, then T6's extraction, which re-verifies the
     two views' `k` coin openings each and hashes at most `2(|path| + 3 + n)` aligned inputs, `coinPairs_length_le`);
-  - `t′` itself, for the link finders stopped at `q` (`CROnly.LinkCRStrict`, `hCRs`). `q` is checked in Lean: the stopped
-    finder's cost, `truncCost`, is at most `q` on every outcome. But that is the modeled cost, `t′` per run played
-    (`cT`), so under the strict form `t′` must bound every run on every outcome, not on average: the prover's
-    evaluations, and the acceptance check `accω` the finder runs on each. The openings' verification and the extraction
-    (`rdT`, `cand`) are charged nowhere, and must fit in `t′` or in `q`'s slack.
+  - a per-run cost `≥ t′ + v`, for the link finders stopped at `q` (the `t'` of `CROnly.LinkCRStrict` and `hCRs`).
+    `q` is checked in Lean: the stopped finder's cost, `truncCost`, is at most `q` on every outcome. But that is the
+    modeled cost, the per-run cost times the runs played (`cT`), so under the strict form the per-run cost must bound
+    every run on every outcome, not on average: the prover's evaluations and the verifier's, whose verdict `accω` reads
+    (as `SampledKSLiveV2` charges its link finders). The extraction (`rdT`) reads only openings that verification
+    checked, and its decoding (`cand`) evaluates no SHA-512 but is charged nowhere, so it must fit in the per-run cost
+    or in `q`'s slack.
 
   A smaller budget makes the hypothesis a claim about SHA-512 that `cr/sha-512` doesn't make, and a bound cited with it
   is unsupported. Tying the five to one per-run count in the signatures would check this in Lean; it is a follow-up.
@@ -131,8 +133,8 @@ coins.
   salts' and the ZK server's tape), so it doesn't cover these bytes, which the model's coin nodes sample.
 - **Seed coins are outside it.** By default M0's non-ZK session derives every coin from one OS seed (`cfg.coin_seed`;
   `live/src/coin_seed.rs`, through `verity.ml.randomness.derive`). Those sessions also rest on `prf/sha-512` (A4's claim)
-  and on the seed commitment's hiding, and no headline covers them. Under `FC_COINS=os` the server samples every round's
-  coins as above (The headline, its coins).
+  and on the seed commitment's hiding, and no headline covers them: the Lean verifier refuses such a session once every
+  check has passed (`ProvedScope.SEED_COINS`).
 - **Tree coins (`--zk`, `--coins tree`).** Under either, the coins are committed, not flipped round by round
   (`coin-tree/hm96-sha512/v2`, `live/src/coin_tree.rs`; the live `PROTOCOL.md` §9). A6 for these sessions is the following.
   - *The coins.* At `Hello`, after the prover's nonce and before its first message (`Commit`), the coin server reads
@@ -250,16 +252,15 @@ needs `RowsCert` per template and the Definition's Boolean semantics in Lean (Th
 Once every Definition lowers to a Boolean circuit over AND, XOR and NOT, a generic
 Boolean-semantics lemma replaces the per-template `RowsCert`.
 
-**Its coins.** The statement is for live uniform OS coins flipped each round: the model's proof coins are uniform and
-sampled after the prover's message, as the coin server's `os` coins are under A6. M0's non-ZK session samples them under
-`FC_COINS=os` on both sides (`live/src/bin/flock-circuit.rs`, `seed_coins()`), with no seed and no PRF. Its identity
-then names the mode, and `flock-verify verify --coins os` binds that identity (`Tags.withCoins`; the verifier's
-`Tags.coinScheme`). The benches run M0 so by default (`verity/ml/flock/pod/70-class-sweep.sh`, `60-circuit.sh`,
-`61-circuit-cell.sh`), and their records name the coins (`coins: live-os`). The binary's default still derives every coin
-from one OS seed through a SHA-512 PRF (`config_with` sets `cfg.coin_seed` from `seed_coins()`; `live/src/coin_seed.rs`).
-That rests on `prf/sha-512` and the seed commitment's hiding, and the headline takes neither. So the headline is cited
-only for runs on per-round OS coins (a session whose identity names `live-os`, or a bench point with `coins: live-os`)
-or under `--coins tree`, with A6's tree term.
+**Its coins.** The statement is for live uniform coins: the model's proof coins are uniform and sampled after the
+prover's message. M0's non-ZK session has them on the challenger's keyed coin tree under `FC_COINS=tree` on both sides
+(`serve --tree-from`), which `flock-verify verify --coins tree` reads (the verifier reads coins only from a challenger's
+log). The benches run M0 so by default (`verity/ml/flock/pod/70-class-sweep.sh`, `60-circuit.sh`, `61-circuit-cell.sh`),
+and their records name the coins (`coins: coin-tree`). The binary's default still derives every coin from one OS seed
+through a SHA-512 PRF (`config_with` sets `cfg.coin_seed` from `seed_coins()`; `live/src/coin_seed.rs`). That rests on
+`prf/sha-512` and the seed commitment's hiding, and the headline takes neither, so the Lean verifier refuses such a
+session once every check has passed (`ProvedScope.SEED_COINS`). So the headline is cited only for runs under
+`--coins tree` or `--zk`, with A6's tree term.
 The identity and a bench point's `coins` say which mode ran. The Lean verifier replays the recorded coins, so that they were
 the verifier's own OS samples, each sampled after the prover's message, is the record's custody and
 A6, which no check of the record establishes. The custody is `live-verifier`, named in every mode (the table above).
@@ -436,12 +437,13 @@ before the session's first coin, not bounds state by state.
 - **Statement binding** (the statement digest, Σ and `link_sha256`). These are in round 0's kept bytes, fixed before any
   coin. Their own collision resistance matters to what the statement refers to (registered data, linked proofs), not to
   this theorem.
-- **`os` coins** (the default). Each round's coins are uniform and unknown to the prover before it sent the round. They
-  come from the verifier's `/dev/urandom` (`Tags.coinScheme`). The randomness is trusted, not proved. For the unit sample it is
-  A3. The theorems, the headline among them, are for these coins.
+- **Live coins.** The theorems, the headline among them, are for coins that are uniform and unknown to the prover
+  before it sent the round, as the model's coin nodes sample them. A session reads them from the challenger's keyed coin
+  tree (`tree` coins, below). The randomness is trusted, not proved: A6, and for the unit sample A3.
 - **`seed` coins** (`coin-commit/sha256/v1`; M0's non-ZK session's default, `cfg.coin_seed`, `coin-commit/sha512`)
   add two assumptions: the seed commitment hides the seed, and SHA-256 in counter mode is a PRF. No theorem takes them,
-  so a run on seed coins is outside the headline (The headline, its coins).
+  so a run on seed coins is outside the headline (The headline, its coins), and the Lean verifier refuses it once every
+  check has passed (`ProvedScope.SEED_COINS`).
 - **`tree` coins** (`--zk`, `--coins tree`; `coin-tree/hm96-sha512/v2`): the `--zk` headlines' coins, and a plain
   one's under `--coins tree`. Soundness pays `N·2^-256` for the commitment's statistical hiding (A6, tree coins); zero
   knowledge uses its binding (`cr/sha-512`).

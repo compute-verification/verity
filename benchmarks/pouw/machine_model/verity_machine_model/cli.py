@@ -6,7 +6,7 @@ prints them all. This module only dispatches.
 `--device sm_NN` (before the command, or on `eps`, `redteam` and `margin`) reads that device's directory,
 `data/devices/sm_NN/` (README "Devices"); sm_120, `data/` itself, is the default. `--data DIR` (before the command) reads
 another data directory, such as a copy with a candidate row. `solve` exits 1 when the vector fails its check or doesn't
-reproduce a published number.
+reproduce a published number, and `solve` and `attacks` exit 1 on a device no price vector is solved on.
 """
 from __future__ import annotations
 
