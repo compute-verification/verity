@@ -54,9 +54,9 @@ def test_the_registration_places_the_records_key_on_the_nodes_uplink_and_the_rec
     """The registration is remote-network's params, the auditor holding the record's key under the certifier's id, and
     a log of one site entry placing that certifier, with that key, on the node's uplink, which the log's check
     accepts; the onsite record's auditor-record check holds on it, on parameters the composite of record composed,
-    naming the certifier. A record naming its run's peer
-    (`certifier_key`'s) or none is read alike, and a key in uppercase hex is registered as the lowercase hex the check
-    and `PeriodLeakRegistered`'s hkey (`Flock.hexOf`) compare."""
+    naming the certifier. A record naming its run's peer (`certifier_key`'s) or none is read alike, and a key in
+    uppercase hex is registered as the lowercase hex the check and `PeriodLeakRegistered`'s hkey (`Flock.hexOf`)
+    compare."""
     rc, out = run(tmp_path, key_record(public, **fields), "--node", NODE, "--certifier", GATE, *FIGURES)
     assert rc == 0
     doc = json.loads(out.read_text())
@@ -85,6 +85,7 @@ def test_the_registration_places_the_records_key_on_the_nodes_uplink_and_the_rec
 
 
 NOT_A_RECORD = f"ValueError: the auditor's record isn't a {WC.RECORD} record of a public key"
+EMPTY = "ValueError: the node's, the network certifier's and the site's ids can't be empty"
 #: each way the registration isn't written, as (the auditor's record, the arguments, why)
 REFUSED = {
     "another schema": (key_record() | {"schema": "verity/other/v1"}, (), NOT_A_RECORD),
@@ -94,6 +95,8 @@ REFUSED = {
     "another node than the record's peer": (
         key_record(peer="node-other"), (), "ValueError: the auditor's record is of a run in front of 'node-other', not "
                                            f"--node '{NODE}'"),
+    "an empty certifier id": (key_record(), ("--certifier", ""), EMPTY),
+    "an empty node id, the record naming no peer": (key_record(), ("--node", ""), EMPTY),
     "no capacity": (key_record(), ("--beta", "0"), "ValueError: its log doesn't check: entry 0: kind"),
     "a negative latency": (key_record(), ("--latency", "-1"),
                            f"Malformed: link {NODE}-uplink's latency: -1 is not a natural number"),
@@ -109,9 +112,9 @@ REFUSED = {
 @pytest.mark.parametrize("how", list(REFUSED))
 def test_a_registration_that_wouldnt_hold_isnt_written_and_says_why(tmp_path, capsys, how):
     """No registration is written, and its line says why, where the record isn't a certifier-key/v1 record of a public
-    key, where it is of a run in front of another node than the one the registration places the certifier on, and where
-    the registration would be one its check refuses or can't read: an uplink of no capacity or a negative latency, a
-    certifier id another location's or the outside's, or an id outside ASCII."""
+    key, where it is of a run in front of another node than the one the registration places the certifier on, where an
+    id is empty, and where the registration would be one its check refuses or can't read: an uplink of no capacity or a
+    negative latency, a certifier id another location's or the outside's, or an id outside ASCII."""
     record, args, why = REFUSED[how]
     given = dict(zip(args[::2], args[1::2]))
     given = {"--node": NODE, "--certifier": GATE, "--beta": "100", "--latency": "1000000"} | given

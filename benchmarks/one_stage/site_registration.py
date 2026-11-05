@@ -43,14 +43,16 @@ COMPOSITE = "remote-network"
 
 def registration(record: Any, node: str, certifier: str, beta: int, latency: int, site: str = "site") -> dict[str, Any]:
     """OUT's ``{"params", "log"}`` (the module docstring) from the auditor's ``record``; ValueError saying why where the
-    record isn't a certifier-key/v1 record of a key or names another node than ``node``, or where the registration
-    doesn't read back as the record reads it."""
+    record isn't a certifier-key/v1 record of a key or names another node than ``node``, where an id is empty, or where
+    the registration doesn't read back as the record reads it."""
     try:
         key = bytes.fromhex(record["key"]["public"]).hex() if record["schema"] == WC.RECORD else ""
     except (KeyError, TypeError, ValueError):
         key = ""
     if not key:
         raise ValueError(f"the auditor's record isn't a {WC.RECORD} record of a public key")
+    if "" in (node, certifier, site):
+        raise ValueError("the node's, the network certifier's and the site's ids can't be empty")
     if (peer := record.get("peer")) is not None and peer != node:
         raise ValueError(f"the auditor's record is of a run in front of {peer!r}, not --node {node!r}")
     uplink = f"{node}-uplink"
