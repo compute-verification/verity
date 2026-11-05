@@ -4,6 +4,7 @@ merges of commits the queue already trusts, so the old verdict holds at the new 
 A new head ``new`` carries the verdict of ``old`` when ``old`` is an ancestor of ``new`` and every commit on the paths between
 them (``git rev-list --ancestry-path old..new``) is one of:
 
+- a trusted commit itself (another PR built on ``old`` and reviewed, whose head ``new`` merged);
 - a merge whose parents off those paths are each trusted (`trusted`: landed on the landing branch, or a head of another PR with
   a land verdict, or an ancestor of one), and whose tree is what the queue's own merge of its parents gives
   (`queue.merged_tree`: the merge drivers of its first parent, each pin rebuilt) in every file but the generated ones;
@@ -102,6 +103,9 @@ def delta(repo: Path, old: str, new: str, trusted: Callable[[str], bool],
     own: dict[str, set[str]] = {"authored": set(), "hand-resolved": set(), "edited-merge": set()}
     first: dict[str, str] = {}
     for c, *ps in rows:
+        if trusted(c):
+            merged.append(c)
+            continue
         off = [p for p in ps if p not in line]
         for p in off:
             if not trusted(p):

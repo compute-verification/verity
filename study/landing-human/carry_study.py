@@ -3,7 +3,9 @@ already had one.  For each, the verdict `carry` would have given with no reviewe
 parent is trusted when it is an ancestor of `main`'s or `checked`'s tip then (GitHub's push activity) or of another PR's head
 that had a land verdict by then.
 
-    uv run --no-sync python study/landing-human/carry_study.py LABELS.json ACT_DIR OUT.json [--jobs N]
+    uv run --no-sync python study/landing-human/carry_study.py LABELS.json ACT_DIR OUT.json [--jobs N] [--marks]
+
+--marks judges every re-head instead (each PR's consecutive marked heads, as of the newer one's mark).
 
 LABELS.json: every `pr:*` label (`labels.py`); ACT_DIR: `act_main.tsv` and `act_checked.tsv` (`gh api .../activity`).  The
 clone needs every head (`git fetch origin '+refs/pull/*/head:refs/pr/*'`), a ref `refs/rv/PR/HEAD` per reviewed head, and a
@@ -66,6 +68,23 @@ def pairs(labels: list[dict]) -> list[dict]:
     return out
 
 
+def mark_pairs(labels: list[dict]) -> list[dict]:
+    """Each PR's consecutive marked heads (by first mark), the newer marked in the window: every re-head, reviewed or not,
+    judged as of the newer head's mark."""
+    marks: dict[int, dict[str, str]] = collections.defaultdict(dict)
+    for r in labels:
+        if r["key"] == "ready" and r["value"] is True and r["ts"] >= "2026-10-12T06:00:00Z":
+            h = marks[r["pr"]]
+            h[r["head"]] = min(h.get(r["head"], "~"), r["ts"])
+    out = []
+    for pr, hs in marks.items():
+        seq = sorted(hs.items(), key=lambda kv: kv[1])
+        for (old, ots), (new, nts) in zip(seq, seq[1:]):
+            if nts >= W0:
+                out.append({"pr": pr, "old": old, "old_ts": ots, "new": new, "ts": nts, "by": None, "ref": None, "mark": nts})
+    return out
+
+
 _T: dict = {}
 _FIRST: dict = {}
 _EXCLUDES: list = []
@@ -115,7 +134,7 @@ def main() -> None:
         if r["key"] == "reviewed" and r["value"] == "land":
             k = f"{r['pr']}@{r['head']}"
             first[k] = min(first.get(k, "~"), r["ts"])
-    ps = pairs(labels)
+    ps = mark_pairs(labels) if "--marks" in sys.argv else pairs(labels)
     import tomllib
     excludes = tomllib.loads(git("show", "origin/main:tools/verity/check/drive.toml").stdout)["lowrisk_excludes"]
     with ProcessPoolExecutor(jobs, initializer=_init, initargs=(tips(Path(act_dir)), first, excludes)) as ex:
