@@ -343,7 +343,7 @@ meta partial def evalVal (x : Expr) : M (Expr × Expr) := do
     let (w, q) ← evalVal v
     return (w, ← mkEqTrans p q)
   let xt ← whnfR (← inferType x)
-  let walkIt : M (Expr × Expr) := do
+  let walkIt (_ : Unit) : M (Expr × Expr) := do
     let a ← mkFreshExprMVar xt.appArg!
     let okA := mkApp3 (mkConst ``Except.ok xt.getAppFn.constLevels!) xt.appFn!.appArg! xt.appArg! a
     let g ← mkFreshExprSyntheticOpaqueMVar (← mkEq x okA)
@@ -356,7 +356,7 @@ meta partial def evalVal (x : Expr) : M (Expr × Expr) := do
   let jump ← if x'.getAppFn.isFVar then pure (← x'.getAppFn.fvarId!.getValue?).isSome else pure false
   let structural := x'.isLet || x'.isAppOfArity ``Bind.bind 6 || x'.isAppOfArity ``ite 5 || x'.isAppOfArity ``dite 5 ||
     (← isMatcherApp x') || jump
-  if isExcept && structural && (← symbolic x) then return ← walkIt
+  if isExcept && structural && (← symbolic x) then return ← walkIt ()
   if let some (x2, p) ← projStep x then
     let (w, q) ← evalVal x2
     return (w, ← mkEqTrans p q)
@@ -366,7 +366,7 @@ meta partial def evalVal (x : Expr) : M (Expr × Expr) := do
   if let some (x2, p) ← rewriteIn x then
     let (w, q) ← evalVal x2
     return (w, ← mkEqTrans p q)
-  if isExcept then return ← walkIt
+  if isExcept then return ← walkIt ()
   throwError "fwd: no value for{indentExpr x}"
 
 /-- Walk the goal `m = r` to its end. -/
