@@ -2,7 +2,13 @@
  "issue": "LEAN-186",
  "due": "2026-11-30",
  "modules": {
-  "Definitions.NetworkCertifier.SampledAudit": "@network-accounting"
+  "CoreProtocol.Protocol": "@lean",
+  "Definitions.Accounting.Compose": "@compute-accounting",
+  "Definitions.Accounting.ComposePeriod": "@compute-accounting",
+  "Definitions.NetworkCertifier.SampledAudit": "@network-accounting",
+  "Definitions.Nci.Threads": "@training",
+  "Properties.Nci": "@network-accounting",
+  "Properties.NciDesc": "@network-accounting"
  },
  "domain": {
   "Claims.Flock.ListWithin": {
