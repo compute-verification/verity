@@ -335,7 +335,7 @@ theorem deriveLaw_some {p : _root_.SampledProofs.Program} {q law : Json} {tbl : 
           · obtain ⟨tab, -, h⟩ := bind_eq_ok.1 h
             obtain ⟨L', hd, h⟩ := bind_eq_ok.1 h
             cases h
-            obtain ⟨-, -, hL⟩ := deriveWork_ok k S tab _ hd
+            obtain ⟨_, -, hL⟩ := deriveWork_ok k S tab _ hd
             refine ⟨k, hnat, deriveWork_k hd, Or.inr ⟨?_, _, hL⟩⟩
             rw [hk]
             by_cases hw : s = "work"
