@@ -1573,8 +1573,8 @@ def pinned_session(ledger: Any, window: Any, key: ChallengerKey, pins: Any, main
     the host ran from any other tree fails closed.  For PoUW this is what makes a credited window's coins come from a
     session the auditor opened on a commit main's check passed; `pouw.credit` layers on it that the pin is recent and no
     older than its period's open (the freshness floor and the period pin), which this function doesn't check.  Every path
-    that credits a session reads it here: PoUW's `credited_session` and `trusted_session_of`, and memory-accounting's
-    PoUB (`remote_bandwidth.coins`).  `audited_session` alone checks no pin and credits
+    that credits a session reads it here: PoUW's `credited_session` and `trusted_session_of`, and PoUB's
+    (`remote_bandwidth.coins`).  `audited_session` alone checks no pin and credits
     nothing.  Only the open's pin is held: a repin of the host after the open neither helps nor harms the session, which
     is credited by the commit its open sealed, the pins log only growing past it."""
     audited, opened = _audited(ledger, window, key, verify)
