@@ -7,7 +7,7 @@ tampered window's member, whose proof must not be accepted.
         --firewall flock-firewall --out DIR [--members N] [--tampered DIR] [--live] [--flips N]
 
 * **The bundle** is what `replay_bundle.build` wrote of the window's sampled proof blocks. `prove_bundle.sh` proves the
-  store's `BUNDLE_WINDOW` (a W8A8 MLP's window, its tampered twin and the H200 interfaces' bundle of four sampled proof blocks under its
+  registered fixture `BUNDLE_WINDOW` (`tests/fixtures/bundle-window`: a W8A8 MLP's window, its tampered twin and the H200 interfaces' bundle of four sampled proof blocks under its
   registered `subset:4`, a fixture's sample) unless it's given others.
 * **The bundle held to the window** before anything is proved. The window is the prover's (what ``Window.write`` wrote, its
   private files included), since Flock's statement is a whole member. Checks: the bundle's own check

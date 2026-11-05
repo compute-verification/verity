@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Opening.Session
-import Proofs.Flock.C3.Compose.Decoder
+module
+
+public import Proofs.Flock.C3.Opening.Session
+public import Proofs.Flock.C3.Compose.Decoder
 
 /-!
 # n7's opening: `OpeningReadAt` at the source, from V*'s sessions
@@ -15,6 +17,8 @@ their claims' checks (`checks_of_run`, `packed_check`).
 `openingReadAt_src` takes `SessionAt` and `OpenTie` at every accepted outer proof, and the claim tie (rec-lean's
 item 5, from `claimO` to the source's claims).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Opening
 

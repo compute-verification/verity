@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.TmplFoldClass
+module
+
+public import Proofs.Flock.Soundness.TmplFoldClass
 
 /-!
 # A class's fold is its copies' reference value
@@ -11,6 +13,8 @@ import Proofs.Flock.Soundness.TmplFoldClass
   (`sum_step`; a run of lanes through `laneSum_eq`).
 - `fold_refVal`: the unit's fold at entry `s` is the root copy's `refVal` plus the constant's row.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128
 

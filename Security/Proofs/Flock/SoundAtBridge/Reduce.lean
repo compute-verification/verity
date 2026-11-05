@@ -1,4 +1,6 @@
-import Proofs.Flock.SoundAtBridge.Statement
+module
+
+public import Proofs.Flock.SoundAtBridge.Statement
 
 /-!
 # `SoundAtBridge` from `EndToEndRegisteredRows`
@@ -10,6 +12,8 @@ import Proofs.Flock.SoundAtBridge.Statement
   `OpenedPlurAt` at `0`;
 * `soundAtBridge_of_rows`: `SoundAtBridge` from `EndToEndRegisteredRows`, through `soundAt_of_sessions`.
 -/
+
+@[expose] public section
 
 namespace Flock.SoundAtBridge
 

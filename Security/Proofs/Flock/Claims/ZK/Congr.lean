@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.Interact
+module
+
+public import Proofs.Flock.Claims.ZK.Interact
 
 /-!
 # `ZKmalR` at two provers with the same messages
@@ -9,6 +11,8 @@ import Proofs.Flock.Claims.ZK.Interact
 * `zkmalR_congr`, `zkmalR_congr_eq`: so `ZKmalR` carries over to such a prover, at `γ ≥ 0`, and to a prover with the
   same messages and calls, at every `γ`.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.SaltDead
+module
+
+public import Definitions.Pouw.PearlC.SaltDead
 
 /-!
 # P3 over a `Pipeline` (definitions only)
@@ -14,6 +16,8 @@ named protocol may read it.
 * **The predicate** (`saltDeadP p alpha beta`): `SaltDead.saltDead` with `atomMixP p` for the atom-mix, on the same
   support (`SaltDead.support`, the flat pairs).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.FormingP
 

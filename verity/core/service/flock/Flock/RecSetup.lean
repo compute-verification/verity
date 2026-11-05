@@ -9,11 +9,15 @@ the verifier's inner shape, a V* session whose draw is not every unit of its pop
 an inner session whose record holds no draw (`innerDrawn`), and a session at a holo or sparse inner shape or a
 recursive one without `--zk`, neither of which `RecursiveKS` covers (`denseOnly`, `zkOnly`).
 -/
-import Flock.RecBudget
-import Flock.RecCoins
-import Flock.RecRecord
-import Flock.Witness
-import Flock.JsonParse
+module
+
+public import Flock.RecBudget
+public import Flock.RecCoins
+public import Flock.RecRecord
+public import Flock.Witness
+public import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock
 namespace RecSetup
@@ -168,8 +172,8 @@ def checkForm (form : Option RecCoins.InnerForm) (st : Stmt) : V Unit := do
 /-- **The verifier's inner shape is the inner statement's**: where it holds the inner statement's files, the `m`,
 `k_log`, regions and claims of its inner shape (`--rec-inner`) are the ones the inner statement sets up at from them
 (`RecCoins.Files.stmt`; claims two and the session's points per region, as `RecVStar.innerOf` writes them), so the V*
-list and the rep schedule the shape fixes are the inner session's; its public file's shared-row tables are within
-`RecBudget.innerRows`; and the inner statement is set up as its files set it up (`checkForm`). -/
+list and the rep schedule the shape fixes are the inner session's; its public file's instances and shared-row tables are
+within `RecBudget.innerRows`; and the inner statement is set up as its files set it up (`checkForm`). -/
 def checkShape (inner : Option RecVStar.Inner) (src : Option RecCoins.Source) : V Unit := do
   let (some i, some (.files f)) := (inner, src) | return
   let (spec, st) ← f.stmt "the inner session"

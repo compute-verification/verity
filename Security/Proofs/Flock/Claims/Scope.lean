@@ -1,15 +1,17 @@
-import Proofs.Flock.Claims.Scope.Readable
-import Proofs.Flock.Claims.Scope.Check
-import Proofs.Flock.Claims.Scope.Setup
-import Proofs.Flock.Claims.Scope.InScope
-import Proofs.Flock.Claims.Scope.Sizes
-import Proofs.Flock.Claims.Scope.Matches
-import Proofs.Flock.Claims.Scope.System
-import Proofs.Flock.Claims.Scope.Tables
-import Proofs.Flock.Claims.Scope.Fit
-import Proofs.Flock.Claims.Scope.Deployed
-import Proofs.Flock.Claims.Scope.Witness
-import Proofs.Flock.Claims.Scope.Split
+module
+
+public import Proofs.Flock.Claims.Scope.Readable
+public import Proofs.Flock.Claims.Scope.Check
+public import Proofs.Flock.Claims.Scope.Setup
+public import Proofs.Flock.Claims.Scope.InScope
+public import Proofs.Flock.Claims.Scope.Sizes
+public import Proofs.Flock.Claims.Scope.Matches
+public import Proofs.Flock.Claims.Scope.System
+public import Proofs.Flock.Claims.Scope.Tables
+public import Proofs.Flock.Claims.Scope.Fit
+public import Proofs.Flock.Claims.Scope.Deployed
+public import Proofs.Flock.Claims.Scope.Witness
+public import Proofs.Flock.Claims.Scope.Split
 
 /-! Flock's scope at the deployed verifier: the verifier's statement read as `Claims.Flock.Stmt` (`Readable`),
 `ProvedScope.check` both ways (`Check`), what the setup gives the scope (`Setup`), the readable scope against the check
@@ -25,3 +27,5 @@ satisfied (`Deployed`: `relS_deployed`). The tables' model witnesses as a readab
 (`Witness`: `relS_witOf`). The relation splits by table: `RelS` holds exactly when each table's share satisfies that
 table alone (`Split`: `relS_only`). `ScopeMatches` at the deployed records is `FlockDeploy.scopeMatches_zk` and
 `FlockDeploy.scopeMatches_plain` (`DeployCode`), `Matches`' `scopeMatches` at the verifier's reading. -/
+
+@[expose] public section

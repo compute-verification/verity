@@ -152,6 +152,16 @@ def test_modules_of_packages_with_a_parent_src_dir_read_their_imports_transitive
         "and of every module it imports, transitively; Mathlib's imports are the env's"
 
 
+def test_a_dotted_lean_option_is_one_option_as_lake_reads_it(tmp_path):
+    lakefile = FILES["Sec/lakefile.toml"].replace("autoImplicit = false\n",
+                                                  "autoImplicit = false\nbackward.proofsInPublic = true\n")
+    ts = listed(tmp_path, **{"Sec/lakefile.toml": lakefile})
+    assert ts["lean-module:Sec/Definitions/A.lean"]["vars"]["options"] == \
+        '{"autoImplicit":false,"backward.proofsInPublic":true}', \
+        "TOML reads a dotted key as a nested table and Lake joins its keys into one option's name: `lean --setup` " \
+        "refuses a table as an option's value (`invalid LeanOptionValue type`)"
+
+
 def test_a_module_file_reads_the_public_part_of_what_it_imports(tmp_path):
     reads = {i.removeprefix("lean-module:Sec/"): t["reads"] for i, t in listed(tmp_path).items()}
     assert reads["Proofs/C.lean"] == loaded({"Sec/Definitions.lean": "public", "Sec/Definitions/A.lean": "public",

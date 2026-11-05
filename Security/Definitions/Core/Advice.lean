@@ -1,6 +1,8 @@
-import Mathlib.Data.Nat.Size
-import Definitions.Core.Partition
-import Definitions.Core.Digest
+module
+
+public import Mathlib.Data.Nat.Size
+public import Definitions.Core.Partition
+public import Definitions.Core.Digest
 
 /-!
 # The advice root, with every string it hashes
@@ -32,6 +34,8 @@ messages carry; the row width, in `rowPrefix`; and hm96's key, through its diges
 `mask`. `advice.py` refuses a commitment of no rows, and `empty_root` is not modelled: here the tree of no rows is one
 pad. Which rows a partition has is partition v2's `rows`, padded with zero rows to `R_b` (`Rows`).
 -/
+
+@[expose] public section
 
 namespace Verity.Advice
 

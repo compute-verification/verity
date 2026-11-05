@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkView.Statements
-import Proofs.Flock.Soundness.Refine.Frames
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkView.Statements
+public import Proofs.Flock.Soundness.Refine.Frames
 
 /-!
 # `Zk.decode` inverts `encZk`
@@ -10,6 +12,8 @@ stops after the last byte of `b`. `Reads.bind` composes it, so the proof walks `
 from the `Shape`, or any length with a minimum element size), the per-level openings and loops, the level-0 messages and
 the inner proof. `reads_reader` is the whole file; `decode_encode` starts it at offset 0 with nothing around it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkView
 

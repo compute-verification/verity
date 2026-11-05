@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkSession.Session
-import Proofs.Flock.Soundness.Accounting.PaddedNumbers
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Session
+public import Proofs.Flock.Soundness.Accounting.PaddedNumbers
 
 /-!
 # The `--zk` table's bound at C-Flock ZK's parameters (live/PROTOCOL.md §5, §7)
@@ -20,6 +22,8 @@ map meets `TabZK.hpos` (`posLo_uniform`, from `Arith.Correct.lo_balanced`).
 `zk_flock_count_execOS_m1`: the `--zk` count curve with every planned table at C-Flock ZK's parameters,
 `miss(K) + 2^-203 + δ_link`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkSession
 

@@ -1,6 +1,8 @@
-import Proofs.Pouw.Fp8Atom.H1TSliceProofs
-import Proofs.Pouw.PearlC.AccumProofs
-import Proofs.Pouw.PearlC.FreezeP
+module
+
+public import Proofs.Pouw.Fp8Atom.H1TSliceProofs
+public import Proofs.Pouw.PearlC.AccumProofs
+public import Proofs.Pouw.PearlC.FreezeP
 
 /-!
 # `pearl-c-sm120-v2`: the pure chain's lone skips and its identities (staging)
@@ -25,6 +27,8 @@ Without promotion (`G = 0`) the chain is `Accum.pureChain p`, one fold of `p`'s 
   `(9·2^−23·32t + 2^−14)·P < |S|` (`sm120_pure_no_identity_of_le`). No bound on the products alone excludes an
   identity: an atom whose products cancel is one on any word (`sm120_cancel_identity`, products `±1` on `1.0`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.FreezePPure
 

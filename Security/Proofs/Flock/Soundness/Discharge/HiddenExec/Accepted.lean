@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
 /-!
 # A draw flock-verify accepts under hidden outputs sets up
@@ -17,6 +19,8 @@ public path:
 `drawSetupH_of_accepts` and `tableAtH_of_accepts` are `drawSetup_of_accepts` and `tableAt_of_accepts` under hidden
 outputs (`hh : I.tags.hiddenOutputs = true`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

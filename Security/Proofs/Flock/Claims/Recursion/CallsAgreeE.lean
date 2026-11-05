@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.CallsBridgeE
-import Proofs.Flock.Claims.Recursion.CallsAgree
+module
+
+public import Proofs.Flock.Claims.Recursion.CallsBridgeE
+public import Proofs.Flock.Claims.Recursion.CallsAgree
 
 /-!
 # The calls half where the proof files agree, at the element-level verifier
@@ -11,6 +13,8 @@ rep stream as replay reads them (`Round.erase`). The element-level verdict compu
 only up to erasure (`Flock.With.verifyRepWith_erase`, at the logging oracle). With `sess_rounds_eqK`,
 `RecDeploy.PlainCallsOfProofsE` holds at SHA-512, and so does `RecDeploy.PlainCallsBindOrSlackE`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
