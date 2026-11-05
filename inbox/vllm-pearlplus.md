@@ -1175,5 +1175,6 @@ network-accounting's ODLEAN reads `v3c-w0-4-32-4/compose-cache/e9a7e9…/circuit
    - Median session 188 s, median Lean 232 s.
    - No large AttnBlockFirst ran. The one that did had a 0.64 GB circuit; the other 34, about 475 GB of circuits, weren't reached.
 4. **The dress rehearsal** (r20261105-082550-ed23) was in its last step at 09:57Z: Pearl+'s Lean check, after the tie verify. ETA 11:00–11:30Z.
+5. **What ec10 won't measure now.** The large AttnBlockFirst sessions (circuits up to 27.5 GB) never ran. So the record's 72 h `V3C_AUDIT_TIMEOUT` and whether cpu-3's 503 GB of RAM holds those sessions remain projections from the small sessions. ec10's largest prover peak was 74.5 GB, for a 2.8 GB circuit.
 
 **I wait on:** the dress rehearsal's verdicts (you resume me about 11:23Z).
