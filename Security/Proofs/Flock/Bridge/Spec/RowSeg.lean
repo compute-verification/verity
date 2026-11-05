@@ -36,7 +36,9 @@ theorem segmentTag_eq :
     bs ("verity/sha512-row-seg/v1/segment".toUTF8.push 0) = Hash.cstr "verity/sha512-row-seg/v1/segment" := by
   decide +kernel
 
-theorem be32_1024 : bs (be32 1024) = Hash.be 4 1024 := by decide +kernel
+theorem be32_1024 : bs (be32 1024) = Hash.be 4 1024 := by
+  rw [bs_be32]
+  all_goals rfl
 
 theorem count_eq (l : ℕ) : FlockSoundness.Binding.RowSeg.count l = Hash.RowSeg.segCount l := rfl
 
@@ -83,15 +85,22 @@ theorem segMsg_eq (b : List Bool) (j : ℕ) :
     ← count_eq]
   exact congrArg (· ++ _) (segmentPrefix_eq _ _ _)
 
+/-- A digest's bytes, as the code's outer message carries them, are `sha512Msg`'s. Stated at any message, so that no
+proof unfolds SHA-512 on one whose prefix is concrete. -/
+theorem digBytes_H512 (m : List UInt8) :
+    FlockSoundness.Binding.digBytes (FlockSoundness.Refine.H512 m) = Claims.Sampling.sha512Msg m := by
+  rw [FlockSoundness.Binding.digBytes, FlockSoundness.Refine.dig_eq, FlockSoundness.Refine.H512_val,
+    Claims.Sampling.sha512Msg, Claims.Sampling.bytes, bs]
+
 /-- **The code's `sha512/row-seg/v1` outer message is `Hash.RowSeg.outerMsg`**, at a hash that reads bytes as
 SHA-512 does. -/
 theorem segEnc_eq {H : Hash.Msg → Hash.Digest} (hH : HashOf H) (b : List Bool) :
     FlockSoundness.Binding.RowSeg.enc b.length (HmRow.packBits b) = Hash.RowSeg.outerMsg H b := by
-  rw [FlockSoundness.Binding.RowSeg.enc, Hash.RowSeg.outerMsg, FlockSoundness.Binding.RowSeg.digests,
-    Hash.RowSeg.segmentMsgs, List.flatMap_map, count_eq]
-  refine congrArg₂ (· ++ ·) (rowPrefixSeg_eq _) (List.flatMap_congr fun j _ => ?_)
-  rw [← segMsg_eq b j, ← sha512Msg_eq hH]
-  rfl
+  rw [FlockSoundness.Binding.RowSeg.enc, FlockSoundness.Binding.RowSeg.digests, Hash.RowSeg.outerMsg,
+    Hash.RowSeg.segmentMsgs, List.flatMap_map, count_eq, ← rowPrefixSeg_eq, bs]
+  refine congrArg ((HmRow.rowPrefixSeg b.length).data.toList ++ ·)
+    (congrArg (fun f => List.flatMap f (List.range (Hash.RowSeg.segCount b.length))) (funext fun j => ?_))
+  rw [digBytes_H512, sha512Msg_eq hH, segMsg_eq]
 
 /-- **The `Hash.RowLeaf` format of a registered schema**: `seg` at `hm96-sha512/row-seg/v1`, else `v2`. -/
 def formatOf (schema : String) : Hash.RowLeaf.Format :=
