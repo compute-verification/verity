@@ -3,6 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.Moves
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+import all Lean.Data.Json.Basic
 
 /-!
 # Sampled proofs' link: the message the challenger opened the link points after
