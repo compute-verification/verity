@@ -2156,8 +2156,8 @@ fn zk_finish<C: flock_transcript::challenger::Challenger + Send>(st: &Stmt, zk: 
 /// Lean session loop releases its own round there (`Frame.innerSched`, on the finish's round, which the loop's finish
 /// handed it first), stops the rep where the relayed round differs and decides its stop on `β = 0`, then the names of the
 /// constraints that fail on the pads, and then the rep ends ([`Firewall::rep_end`]). Where the finish refuses the rep
-/// (or this its constraints), the rep fails, and each inner round the finish did not send goes as no device round (its
-/// squeeze alone, at the round's coin count), at which the loop's frame stands in with its own round and stops the rep.
+/// (or this its constraints), the rep fails, and its next inner round, which the finish did not send, goes as no device
+/// round (its squeeze alone, at the round's coin count), which the loop refuses: the session stops there.
 /// `FC_INNER_TAMPER=J` (the selftest's `zk_worker_inner`) relays table 0 rep 0's inner round `J` with its last value byte
 /// flipped, and `FC_INNER_TAMPER=final-c` sends the session's last `inner` request in time (the [`FINISH_REPS`]-th, counted
 /// under the finish's lock, so every other rep's requests went before it: the finish ends at its refusal) with `final_c`
@@ -2205,7 +2205,7 @@ fn zk_finish_fw<C: flock_transcript::challenger::Challenger + Send>(zk: &ZkRep, 
             let lane = if zk.lay.ligerito() { LANE_PHASE.len() } else { 0 };
             let triple = zkv::triple_constraints(&zk.lay, F128::ZERO, F128::ZERO, F128::ZERO).len();
             let counts = [1, relations.len() + RING_SWITCH.len() + lane + triple, 1, zkv::Q];
-            for &n in counts.iter().skip(inner_rounds.len()) {
+            if let Some(&n) = counts.get(inner_rounds.len()) {
                 let mut c = Vec::new();
                 flock_live::push_header(&mut c, OP_SQUEEZE, KIND_SLICE, n as u64);
                 inner_ch.release = Some(c.clone());
@@ -5489,10 +5489,10 @@ fn worker_finish_case(gpu: bool) -> Value {
 /// leaves, the verifier gets the honest session's every request but its proofs, `Finish` included, and does not accept
 /// (`PROVER-STOPPED: the Lean frame stopped table 0 rep 0`), with no refusal of Rust's own. One more session's last `inner`
 /// request carries a `final_c` its passed values do not fix (`FC_INNER_TAMPER=final-c`): the finish refuses it before any
-/// inner round, so it computes none, and the ZK server fails the rep and sends its inner rounds as no device round. The
-/// frame takes none of them, its own round leaving in each one's place, so the rep stops there and the session at its
-/// `Finish`: no proof leaves, the verifier gets the honest session's every request but its proofs, and does not accept
-/// (`PROVER-STOPPED: the Lean frame stopped table T rep R`), the prover's stop the finish's refusal.
+/// inner round, so it computes none, and the ZK server fails the rep and relays its inner round 0 as no device round,
+/// which the loop refuses (`PROVER-STOPPED: table T rep R's inner round 0, which the loop's finish has not computed`),
+/// so the session stops there: no proof leaves, the verifier gets the honest session's requests before that rep's four
+/// inner rounds, the session's last, and none after, `Finish` included, and the prover's stop is the finish's refusal.
 fn worker_inner_case(gpu: bool) -> Value {
     let name = "zk_worker_inner";
     if gpu {
@@ -5516,17 +5516,26 @@ fn worker_inner_case(gpu: bool) -> Value {
         let why = v["why"].as_str().unwrap_or("");
         let refused = if m == "final-c" {
             stopped.contains("the Lean finish's inner proof refused the rep") && stopped.contains("its zerocheck c_eval constraint fails")
-                && why.contains("PROVER-STOPPED: the Lean frame stopped table")
+                && why.contains("PROVER-STOPPED: table")
+                && why.contains("inner round 0, which the loop's finish has not computed")
         } else {
             stopped.is_empty() && why.contains("PROVER-STOPPED: the Lean frame stopped table 0 rep 0")
         };
         let first_miss = (0..want.len().max(s.len())).find(|&i| want.get(i) != s.get(i));
-        json!({"mode": m, "ok": honest_ok && v["accepted"] == false && refused && first_miss.is_none(), "accepted": v["accepted"],
+        // final-c: the honest session's requests but the refused rep's four inner rounds, its last, and `Finish`
+        let seen_ok = if m == "final-c" {
+            let tail = &want[s.len().min(want.len())..];
+            first_miss == Some(s.len()) && tail.len() == 5 && kind(&tail[4]) == "finish"
+                && tail[..4].iter().all(|x| kind(x) == "round" && x[1] == tail[0][1])
+        } else {
+            first_miss.is_none()
+        };
+        json!({"mode": m, "ok": honest_ok && v["accepted"] == false && refused && seen_ok, "accepted": v["accepted"],
                "prover_stopped": stopped.chars().take(240).collect::<String>(), "why": why.chars().take(160).collect::<String>(),
                "error": v["error"], "requests": s.len(), "proofs": s.iter().filter(|x| kind(x) == "proof").count(),
                "first_miss": first_miss.map(|i| json!({"at": i, "honest": want.get(i), "tampered": s.get(i)}))})
     }).collect();
-    json!({"case": name, "expect": "the honest relay accepted; each doctored inner round, and each inner round the finish did not compute, stops the rep in the Lean frame, no proof sent, the honest session's other requests",
+    json!({"case": name, "expect": "the honest relay accepted; each doctored inner round stops the rep in the Lean frame, no proof sent, the honest session's other requests; an inner round the finish did not compute refused, the session stopped there",
            "honest": {"accepted": honest["accepted"], "error": honest["error"], "prover_stopped": honest["prover_stopped"], "requests": h.len()},
            "modes": modes, "pass": honest_ok && modes.iter().all(|c| c["ok"] == true)})
 }
