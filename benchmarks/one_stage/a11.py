@@ -671,7 +671,7 @@ def save_values(d: Path, staged: dict, rows_of_kind: dict, weights_notes, a) -> 
 # TODO: once its `tail_pieces.FAMILIES` lowers `GatherE4m3x{V}_v1` and `MoeSelectBf16x{E}_v1` in a fresh process, lower
 # through those pieces and keep this only for the decoded units' builders.
 LAZY = {r"GatherE4m3x(\d+)_v2": ("verity.ml.definitions.registry.boolean_fp8_moe", "gather_e4m3"),
-        r"GatherF32x(\d+)_v2": ("verity.ml.definitions.registry.boolean_fp8_moe", "gather_f32")}
+        r"GatherF32x(\d+)_v2": ("verity.ml.definitions.registry.boolean_gather", "gather_f32")}
 
 
 def live(fn, registry):

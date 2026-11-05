@@ -56,7 +56,7 @@ from verity_difftest import protocol as PR
 from verity.core.protocols.pouw import audit as PA
 from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.profile import Bernoulli, Stratified, Stratum
-from verity.core.protocols.sampled_proofs import service
+from verity.core.protocols.sampled_proofs import challenger as CH, service
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
                                                             partition as P, produced as PD, proofs as PF,
                                                             registered as G, registration as R)
@@ -2000,6 +2000,8 @@ NO_CHALLENGER = ("the parameters name no challenger: the draw's coins are the au
 #: `OneStageZk.POPULATION_ORDER`
 POPULATION_ORDER = ("population-order: the program's proof blocks under the query are not the registration's "
                     "population units in order")
+#: `OneStageZk.sessionTables`: the tables of the one session v2 reads, its statement's (`proofs.STATEMENT`) one
+V2_TABLES = ["circuit"]
 
 
 #: `OneStageZk.KEY_PARAMS`
@@ -2022,11 +2024,12 @@ def decode_params_v2(j) -> dict:
 
 
 def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: int = 1,
-                     seed: int = 0) -> tuple[Drawn, dict, dict]:
+                     keys: list[str] | None = None, seed: int = 0) -> tuple[Drawn, dict, dict]:
     """A draw under `law` from the coins of a challenger session its ledger opens withheld, under the key of `seed` at
     the deployed parameters, released after `rec`'s digest and read as `draw_first` reads them, the session's
-    challenger sampling and opening `trees` coin trees too (`TreeSession`): the session, the draw, and the evidence's
-    `coins` (the session's record without the key, which the verifier's parameters name)."""
+    challenger sampling and opening `trees` coin trees too (`TreeSession`) on v2's one table (`OneStageZk.sessionTables`),
+    their links opened after `keys` (that table when none): the session, the draw, and the evidence's `coins` (the
+    session's record without the key, which the verifier's parameters name)."""
     mine = DR.derive(s.program, s.query, law, None)
 
     def reads(coins) -> bytes:
@@ -2038,8 +2041,8 @@ def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: 
             return b
         draw_first(OwnRandomness(source), mine, s.population)
         return bytes(got)
-    d = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=reads, trees=trees, params=[DEPLOYED],
-              seed=seed)
+    d = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=reads, trees=trees, tables=V2_TABLES,
+              keys=keys, params=[DEPLOYED], seed=seed)
     at = [0]
 
     def source(k: int) -> bytes:
@@ -2054,12 +2057,14 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     on the proofs. An audit v1 accepts on the verdict its evidence hands in and its challenger's coins is, in v2: refused
     for naming verdicts; refused, before any tree is read, with them replaced by proofs naming no session or two (the
     drawn units are proved in one session, `oneSession`); rejected by the session's own verdict when its files are not
-    a statement's; refused before the session is verified when its coins are not a tree the challenger logged, or the
-    public file is not the registration's (`publicHeld`, its codes Python's `matches_public`'s); refused when a file it
-    names is in no blob, as the public file the parameters name is when the blobs hold another, or its sessions are not
-    the evidence's. The public file is the parameters', committed before any coin: evidence naming one of its own, or
-    parameters naming none, are refused. `test_proofs.py` holds the verdicts to `verify`'s on a real session, and
-    `test_challenger_difftest.py` the trees' check to its Python."""
+    a statement's; refused before the session is verified when its coins are not a tree the challenger logged or its
+    link was opened after other keys than its one table (`LINK_TABLES`; the `root_B` length a statement fixes,
+    `LINK_ROOT_LEN`, these files set up none to hold), or the public file is not the registration's
+    (`publicHeld`, its codes Python's `matches_public`'s); refused when a file it names is in no blob, as the public
+    file the parameters name is when the blobs hold another, or its sessions are not the evidence's. The public file is
+    the parameters', committed before any coin: evidence naming one of its own, or parameters naming none, are refused.
+    `test_proofs.py` holds the verdicts to `verify`'s on a real session, and `test_challenger_difftest.py` the trees'
+    check to its Python."""
     s = SETUPS[3]
     law = {"k": 2, "law": "subset"}
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
@@ -2067,8 +2072,8 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     rng = random.Random("v2-verdicts")
     circuit, public = b"not a circuit file", _public_of(rec)
 
-    def audit(trees: int) -> tuple[Drawn, dict, dict, dict]:
-        ch, d, coins = _challenger_draw(rng, s, law, rec, trees)
+    def audit(trees: int, keys: list[str] | None = None) -> tuple[Drawn, dict, dict, dict]:
+        ch, d, coins = _challenger_draw(rng, s, law, rec, trees, keys)
         proved = DR.proved(d)
         evidence = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
                     "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
@@ -2129,6 +2134,12 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
         "reject", "evidence: the keys of the evidence's proofs are not sessions")
     got = run(one, p=p2 | {"proofs": {k: v for k, v in p2["proofs"].items() if k != "public"}})
     assert got == ("reject", "params: the keys of proofs are not circuit, public, registered"), got
+    for keys in (["circuit", "z"], ["a", "circuit"], ["circuit-00"], []):
+        ch_k, _, base_k, p_k = audit(1, keys)
+        extra = D.canonical(ch_k.trees[0].record).encode()
+        assert run(base_k | {"proofs": proofs(["s"], extra), "sessions": ["s"]},
+                   blobs_=[circuit.hex(), public.hex(), extra.hex()], p=p_k) == (
+            "reject", f"proofs: session s's coins are not the challenger's: {CH.LINK_TABLES}"), keys
 
 
 def test_v2_refuses_a_population_out_of_order(server, server_v2):

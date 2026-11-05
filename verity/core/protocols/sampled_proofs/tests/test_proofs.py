@@ -36,7 +36,7 @@ from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
 #: `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store as that test fetches it (its records
 #: re-rendered in the canonical text the verifier requires)
-FIXTURE = "art:891ffb0bfc8ae3032e5b113d766ffe594c6e8446d293f0bfe5cba62286437edf"
+FIXTURE = "art:54456e32d1e801018ba6c9da92548482a0e9c8c8fd5c2fc956086cb6e3d8bd4b"
 VERIFIER = Path(__file__).resolve().parents[4] / "ml" / "flock" / "verifier"
 #: the SHA-512 of the fixture's circuit file, as an auditor would commit it (its public file's `circuit_sha512` pin)
 CIRCUIT = ("7b9e46f755bced2c6e00a7706f3fca90631864ca22a2d08b51c8b82260a7bd9a"
@@ -45,15 +45,15 @@ CIRCUIT = ("7b9e46f755bced2c6e00a7706f3fca90631864ca22a2d08b51c8b82260a7bd9a"
 STRATA = (("RoPEHead_v1{D=64}", ((0, 32),)),)
 #: the fixture's registered roots: every port of the circuit is registered (`Flock.Registered.checkComplete`)
 REGISTERED_ROOTS = {
-    "cs": {"value": "cs_table", "root": "a12d3a9dfc856e14a2595969f2224d439db201d2c4e25c69636cc1c54627279e"
-                                        "a44a29c073f3ccb8c576410d686a6ae6bcffc5a3df7bbdef591182855573a75c"},
-    "x": {"value": "x", "root": "2278fcc015f932e276fc0118791059365fdf46c90875e6d0c62c9e79491c4985"
-                                "c7e3e2616108e2d1fc8e6117f3accc5871388cbffa0057dfc30047c7de523635"},
-    "out": {"value": "rope_out", "root": "64503de14223fb026b06891a19f82b95e5fec73f31c75fbce2a3aeef473af979"
-                                         "2ace4062a9f029364afd57712349daedf9b69baa46a6970727f0914ce44b4327"},
+    "cs": {"value": "cs_table", "root": "e06311d0afa0492b635c50a6a983041b1ed4a577f27209d705aebcb1d5690820"
+                                        "97d7da63c77fb2c614f5838501f22e2a557f838d48fa0c143a43751f4593296e"},
+    "x": {"value": "x", "root": "504f74c35b38fceacb9485685bf8a2fa753254d9e47eab2cd788584f4f2d417c"
+                                "bde4dc5c56538d21d7047a2b834c0c7ef816e3b8b68378738e38820ad0e3fe70"},
+    "out": {"value": "rope_out", "root": "cffcc31602347cbafa44022c617bae5506de1f8f800b5b0c4b75559020f3c50a"
+                                         "2960e8ff8e0968d9d4adf7281c8739366165795a5a72c1dd55d6798aaf1dd4fb"},
 }
 #: the instances the session's own draw drew, which are the proof blocks, the public file's indices being 0..31
-DRAWN = (1, 3, 5, 6, 8, 9, 12, 13, 14, 16, 17, 23, 26, 29, 30, 31)
+DRAWN = (1, 4, 6, 7, 9, 14, 16, 18, 19, 20, 21, 22, 23, 24, 27, 29)
 
 #: a test that runs Lean on the fixture
 lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

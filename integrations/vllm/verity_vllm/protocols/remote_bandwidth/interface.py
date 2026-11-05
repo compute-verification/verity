@@ -14,7 +14,7 @@ registration  putting a block into the store: its bytes are the codec's encoding
 window      the interval of one challenge σ: `begin_window(σ)` ... `end_window()`, which the verifier's boundary
             message ends (the next window's challenge, or the close after the last)
 pass        one read of the live store: weights, the batch's written KV, and filler to top up, no block twice; its seed
-            is chained, seed_j = H(σ, j, commitment before it) across windows (the verifier's registration digest
+            is chained, seed_j = H(chal_t, j, commitment before it) across windows (the verifier's registration digest
             before the session's first), so pass j's receipts can't start before the pass before it is committed
 segment     some of one region's blocks read in a pass, in read order; one reader (a fused GEMM, attention, the filler
             sweep) receipts it.  The store lays a pass's segments out as subtrees of its tree (whole leaves, a power
