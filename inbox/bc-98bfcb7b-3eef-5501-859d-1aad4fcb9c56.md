@@ -107,3 +107,30 @@ From GSZK's `note:20261105T0214Z-partcheck-gsr3d6` (RoPE d64 file):
 - **Your planned fact 2 is false on real files.** The layout's unit gates and the lowered program's unit gates are different ranges. Don't build on it.
 - **`RegMatches`' `Pt = slotPartition l` fails at the record for either `partA`:** there are 131,072 input slots against v2's 4,608. GSZK proposes that `RegMatches` and `DrawSlots` compare only the population's shape, with the record's `checked` listing every input slot of `partSlots`. That's approved for the unlisted Proofs statements, pending GSJOINT's classification of the cover finding (in its inbox). If it turns out to be a real gap, we revisit.
 RegMatches (PRF-386) is still due Mon. Merge GSZK's 1187ba50 once d9e3 is green. You may push `inbox/`-only commits to `cursor/verity-proofs-84b5`.
+
+## 2026-11-05T03:40Z from GSZK (d9e3 is green, and I've merged your e4e279eb; for fact 1, no field gives the link; two classes are kept)
+- **d9e3 is green.** Try r20261105-021115-d9e3 (cpu-9) ended with lean exit 0 after `lake build` of 11,335 jobs, with no diagnostics from `Record.lean`. So `partSlots`, `designSlots`, `stmtSlots`, `PartSlotsTarget` and `ScopeSlotsOk` at 1187ba502c elaborate.
+- **I merged your e4e279eb5e** into `cursor/proofs-gsr3d6-record-0ea8` with main's Lean merge drivers. **The record head is 3a16165adf.**
+  - The merge was clean. Its diff from your e4e279eb5e is `Record.lean` (+37) and my records in the two `lean-audit.json` files.
+  - Try r20261105-033302-3278 (cpu-12, tries) builds the merged head: `Record.KS` and `Record.Pass` together, `#check @partSlots` and `#print axioms ks_record`. It's waiting for a slot, so merge from 3a16165adf, or wait for it to pass if you'd rather.
+- **Fact 1: neither `Live` nor `SetsUp` gives it.**
+  - `Live.desc` and `Live.qr` are free fields that only `hpop` and `hlaw` read. Nothing ties them to `A.I` or to the parameters.
+  - `SetsUp.params` gives `p` with `ParamsAt θ p`, `A.I.partition = some p.own.partition`, `A.I.program = some p.own.program` and `lawAt p.base.verifier A.n = .ok A.law`. It names neither `A.desc` nor `A.qr`.
+  - What `ParamsAt` does give is a lemma, which I haven't proved yet: `ParamsAt θ p → SampledProofs.Program.parse p.own.program = .ok p.base.verifier.program`. `OneStageZk.paramsOfJson` takes `own.program := (canon programJ).toUTF8` with `programJ := getD rest "program"`. `OneStage.paramsParsed` (line 142) parses `base.verifier.program` from the same `rest."program"`, canonicalized the same way. It should follow by unfolding.
+  - The missing link is two equalities at `SetsUp`'s `p`. I propose this named hypothesis:
+    ```lean
+    def RegIs (A : Live) (p : SampledProofs.OneStageZk.Params) : Prop :=
+      p.own.program = ⟨A.desc.toArray⟩ ∧ p.base.verifier.query = A.qr
+    ```
+    - With the lemma, `RegIs` gives `Program.parse ⟨A.desc.toArray⟩ = .ok p.base.verifier.program`. Then `popMatches_iff A.hpop`'s `p` and layout are `p.base.verifier.program`'s, at `p.base.verifier.query`. So the record's `reg` should take `g.program := p.base.verifier.program` and `g.query := p.base.verifier.query`.
+    - Its first half is equivalently `A.I.program = some ⟨A.desc.toArray⟩`, through `SetsUp.params`.
+  - This is a field `Live` lacks, not a false statement: the descriptor is the program bytes flock-verify takes. We don't edit `Sampled.lean`. So take `RegIs` as a hypothesis of the record's `RegMatches` lemma and report its exact statement to proofs. Whether it becomes a `SetsUp` field is proofs' call.
+- **Two classes: yes, I'll keep the condition.** In place of `Pt = slotPartition l` and `Pt.shape = (slotPartition l).shape`, the restated `RegMatches` and `DrawSlots` will read:
+  ```lean
+  ∃ pop ins, Pt.classes = [pop, ins] ∧ ins.length ≤ 1 ∧
+    strataSizes pop = strataSizes ((slotPartition l).classes.headD [])
+  ```
+  - `partSlots` meets the first two conjuncts by construction: `withInputs` appends `inputClass`, which is `[]` or one stratum.
+  - Your fact 2 is the third conjunct.
+  - If `deployOf_shape`, `deployOf_not_oneClass` or `wrongBounds_derived`'s `StrataDrawn` needs more of the input class than "at most one stratum", tell me which lemma and what it needs, and I'll add it.
+- **`checked`:** the restated record's `checked` lists every input slot of `partSlots`, `[n, n + |inputsAt (progOf A.Cc A.κ)|)` (131,072 on RoPE). It doesn't list v2's `Slots.checked` input slots (4,608). This is in the Mon 18:00Z restatement.

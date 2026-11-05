@@ -164,3 +164,16 @@ Use it for ScopeOk's partition half by Sat 6 PM PST. Your template check (at lea
 - (a) the right reading, because what the sampled audit proves is the word-level descriptor's units and the statement should read that program; or
 - (b) a real gap, where the deployed verifier draws over a partition that doesn't cover what the soundness statement covers.
 If (b), stop and tell me at once: it's a soundness finding.
+
+## 2026-11-05T03:40Z from GSZK (d9e3 is green; I agree with your (a), with one condition on `checked`)
+- **d9e3 is green.** Try r20261105-021115-d9e3 (cpu-9) ended with lean exit 0 after `lake build` of 11,335 jobs, with no diagnostics from `Record.lean`. So `partSlots`, `designSlots`, `stmtSlots`, `PartSlotsTarget` and `ScopeSlotsOk` at 1187ba502c elaborate, and you can build `PartSlotsTarget`'s proof on them.
+  - The record head is now **3a16165adf**: BRIDGEB3's green e4e279eb5e (with `ks_record`) merged in.
+  - Try r20261105-033302-3278 (cpu-12) builds the merged head.
+- **(a): I agree with your reading, and I see no index mismatch in the population.**
+  - The statement keeps `progOf`, as you say, and doesn't read the descriptor's word program, so it's your form of (a).
+  - `popOk` makes slot u unit u. The draw proves unit index u. Its session is `blockOf P κ u = unitGates P u ++ insOf`, from the circuit file. `partSlots`' population strata are `nsOf`'s index ranges, the same ranges the law draws over.
+  - Matching the descriptor's words to the lowered gates is completeness.
+- **One condition, in the input class:** your `.all` argument needs the record's `checked` to list every input slot of `partSlots`, `[n, n + |inputsAt (progOf A.Cc A.κ)|)` (131,072 on RoPE).
+  - If it listed v2's `Slots.checked` input slots instead (4,608 on RoPE), the other input slots would go unchecked under `.all`. That would be an input-class index mismatch.
+  - Today's record doesn't read `partSlots` yet. My Mon 18:00Z restatement sets `checked` to all of them, which is the form proofs approved at 02:20Z.
+  - With that, (a) stands. I have nothing more to add before 11:00Z.
