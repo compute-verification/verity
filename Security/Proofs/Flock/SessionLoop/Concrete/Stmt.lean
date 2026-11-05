@@ -38,7 +38,7 @@ def concreteStmt : Claims.Msg := concreteRaw.encode
 theorem name_size : Concrete.NAME.toUTF8.size < 2 ^ 64 := by decide +kernel
 
 theorem Concrete.fits_wC (ls lh : HmNets.Laid) (H : ByteArray) (hc : (Concrete.bytesOf ls lh).size < 2 ^ 64)
-    (hp : (Concrete.pubOf (Concrete.hexOf H)).size < 2 ^ 64) : (Concrete.wC ls lh H).Fits where
+    (hp : (Concrete.pubOf (hexOf H)).size < 2 ^ 64) : (Concrete.wC ls lh H).Fits where
   statement := name_size
   circuit := hc
   publicFile := hp
@@ -56,7 +56,7 @@ theorem Concrete.fits_wC (ls lh : HmNets.Laid) (H : ByteArray) (hc : (Concrete.b
   publicInputs := by intro _ h; cases h
 
 /-- A net that builds has a line per useful column and its header's (`VStar.netLines`). -/
-theorem netLines_of {name : String} {l : HmNets.Laid} {useful : ℕ} {ig og : Group} {w : ℕ}
+theorem netLines_of {name : String} {l : HmNets.Laid} {useful : Nat} {ig og : Group} {w : Nat}
     (hb : Builds name l useful ig og w) : VStar.netLines l = 1 + useful := by
   obtain ⟨-, -, h, -⟩ := hb
   have h' : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb =
@@ -70,8 +70,9 @@ theorem sha_lines (hn : FixedNetsBuild) : VStar.netLines (HmNets.shaLaid ()) = 2
 theorem hm_lines (hn : FixedNetsBuild) : VStar.netLines (HmNets.hmLaid ()) = 246786 := netLines_of hn.2
 
 theorem concreteRaw_fits (hn : FixedNetsBuild) : concreteRaw.Fits :=
-  Concrete.fits_wC _ _ _ (Concrete.circuit_size _ _ hn.1.2.2.2 hn.2.2.2.2 (sha_lines hn) (hm_lines hn))
-    (Concrete.public_size _ (Concrete.hash_size _))
+  Concrete.fits_wC (HmNets.shaLaid ()) (HmNets.hmLaid ()) concreteHash
+    (Concrete.circuit_size _ _ hn.1.2.2.2 hn.2.2.2.2 (sha_lines hn) (hm_lines hn))
+    (Concrete.public_size concreteHash (Concrete.hash_size _))
 
 /-- **The concrete statement decodes** to the `Raw` it encodes. -/
 theorem concreteStmt_decode (hn : FixedNetsBuild) : decode concreteStmt = some concreteRaw :=
@@ -92,7 +93,7 @@ theorem setupOf_of {zk : Bool} {x : Claims.Msg} {s : Ins} {p : SessionSpec × Ar
 def concreteIns : Ins := Concrete.insC (HmNets.shaLaid ()) (HmNets.hmLaid ()) concreteHash
 
 /-- The concrete statement's session and tables (`Concrete.setup_W`), at the canonical forms the setup computes. -/
-def concreteSetup : SessionSpec × Array Stmt :=
+noncomputable def concreteSetup : SessionSpec × Array Stmt :=
   Concrete.setW (HmNets.shaLaid ()) (HmNets.hmLaid ()) concreteHash (sparseOf (HmNets.shaLaid ()).ra)
     (sparseOf (HmNets.shaLaid ()).rb) (sparseOf (HmNets.hmLaid ()).ra) (sparseOf (HmNets.hmLaid ()).rb) Concrete.s1C
     Concrete.s3C (Concrete.s4Of concreteHash) Concrete.s6C Concrete.helloC concreteIns
