@@ -736,13 +736,14 @@ def _merge_thread() -> str:
 
 
 def _docs(run_dir: Path, *names: str) -> list[dict]:
+    """The objects the JSON files ``names`` of ``run_dir`` hold: a list's, or the file's own; none of one missing or unreadable."""
     out = []
     for name in names:
         try:
             doc = json.loads((run_dir / name).read_text())
         except (OSError, ValueError):
             continue
-        out += [x for x in doc if isinstance(x, dict)] if isinstance(doc, list) else []
+        out += [x for x in doc if isinstance(x, dict)] if isinstance(doc, list) else [doc] if isinstance(doc, dict) else []
     return out
 
 
@@ -1006,15 +1007,10 @@ def not_run(st: dict) -> bool:
 def live_steps(run_dir: Path) -> list[dict]:
     """The steps a check's live record (`LIVE`) names, each with its `state`: `stopped` for one still pending or running in the
     record of a check that ended (a group that stopped on a failure never starts the rest); none without one."""
-    try:
-        doc = json.loads((run_dir / LIVE).read_text())
-    except (OSError, ValueError):
-        return []
-    if not isinstance(doc, dict):
-        return []
-    over = doc.get("state") in ("passed", "failed", "stopped")
+    doc = next(iter(_docs(run_dir, LIVE)), {})
+    over, steps = doc.get("state") in ("passed", "failed", "stopped"), doc.get("steps")
     return [{**s, "state": "stopped"} if over and s.get("state") in ("pending", "running") else s
-            for s in doc.get("steps") or () if isinstance(s, dict)]
+            for s in steps if isinstance(s, dict)] if isinstance(steps, list) else []
 
 
 #: what a shard's twin says of a step against its other twin, for the shard both run (`shard_steps`): a pass answers for the
