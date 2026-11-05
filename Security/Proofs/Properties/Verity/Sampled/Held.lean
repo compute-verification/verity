@@ -1,6 +1,11 @@
 module
 
 public import Proofs.Properties.Verity.Sampled.RecordDraw
+public import Proofs.Flock.Claims.Complete.Json.Stmt
+public import Proofs.Flock.Claims.Bridge.Custody
+public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
 
 /-!
 # What v2 holds of the record's draw
@@ -15,6 +20,12 @@ v2's hold on the record's `unit_draw` (`DrawHeld`). This module gives what v2's 
   `--zk` (`ProvedScope.drawLaw`, `lawWhy_zk`), the subset or the stratified law; and the session v2 sets up has no
   `--stratified` input, so `Stmt.setupTables` refuses a stratified draw (`setupTables_stratified`). So `DrawHeld` reads
   the record's draw at the subset law of the units v2 drew, whatever law v2 drew them by.
+* **A subset draw that decodes is its own print** (`ofJson_subset_eq`): a value `norm` fixes that `UnitDraw.ofJson`
+  decodes to a subset draw is an object of exactly `law`, `population`, `k` and `units` (`obj_eq_mkObj4`), so it is the
+  draw's print at no closure, its units ascending below its population. The record's draw is rebuilt
+  (`Claims.Bridge.Custody.recordDraw_norm`), so it is its decoded draw's subset print (`recordDrawn_of_subset`).
+* **`DrawHeld` from the record draw's units** (`drawHeld_of`): wherever the subset draw the record's decodes to is over
+  v2's `n` units at the units v2 drew, `DrawHeld` holds.
 -/
 
 @[expose] public section
@@ -153,5 +164,147 @@ theorem recordDraw_subset {k : Verity.Registration.Composite} {s : Verity.Sent} 
   rcases lawWhy_zk hw with ⟨kd, hk⟩ | ⟨K, St, hk⟩
   · exact ⟨dj, D, kd, hdj, hD, hk⟩
   · exact (setupTables_stratified hset hD hk).elim
+
+/-! ## A subset draw that decodes is its own print -/
+
+section Print
+
+open FlockComplete.JsonRT (getObj_ok str_ok nat_ok arr_ok asNat_ok key_mem mem_of_getObjVal getObjVal_of_get)
+
+/-- **The values `mapM` reads as natural numbers are their prints.** -/
+theorem mapM_asNat_eq {a : Array Json} {c : String} {us : Array ℕ} (h : a.mapM (Flock.J.asNat · c) = .ok us) :
+    a = us.map fun x => Lean.toJson x := by
+  obtain ⟨hs, hb⟩ := FlockSoundness.Discharge.Exec.array_mapM_ok_getElem h
+  refine Array.ext (by rw [Array.size_map, hs]) fun i h₁ h₂ => ?_
+  rw [Array.getElem_map]
+  exact asNat_ok (hb i h₁ (by rw [hs]; exact h₁))
+
+/-- **An object of four keys is their object**: a well-formed object `norm` fixes, of four keys, `law`, `population`,
+`k` and `units` among them, is `Json.mkObj` of those keys at its values, wherever `norm` fixes that too. -/
+theorem obj_eq_mkObj4 {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hn : Flock.norm (.obj m) = .obj m)
+    (hs : m.toArray.size = 4) {a b c d : Json} (ha : m.get? "law" = some a) (hb : m.get? "population" = some b)
+    (hc : m.get? "k" = some c) (hd : m.get? "units" = some d)
+    (hN : Flock.norm (Json.mkObj [("law", a), ("population", b), ("k", c), ("units", d)]) =
+      Json.mkObj [("law", a), ("population", b), ("k", c), ("units", d)]) :
+    Json.obj m = Json.mkObj [("law", a), ("population", b), ("k", c), ("units", d)] := by
+  have hD : [("law", a), ("population", b), ("k", c), ("units", d)].Pairwise
+      (fun p q : String × Json => ¬ compare p.1 q.1 = .eq) := by simp
+  have hO : ∀ (key : String) (v : Json), (key, v) ∈ [("law", a), ("population", b), ("k", c), ("units", d)] →
+      (Std.TreeMap.Raw.ofList [("law", a), ("population", b), ("k", c), ("units", d)] compare).get? key = some v :=
+    fun key v hkv => by
+      rw [Std.TreeMap.Raw.get?_eq_getElem?]
+      exact Std.TreeMap.Raw.getElem?_ofList_of_mem (Std.ReflCmp.compare_self) hD hkv
+  have hmem : ∀ key ∈ ["law", "population", "k", "units"], key ∈ m := by
+    simp only [List.mem_cons, List.mem_nil_iff, or_false]
+    rintro key (rfl | rfl | rfl | rfl)
+    · exact (mem_of_getObjVal hm (getObjVal_of_get ha)).1
+    · exact (mem_of_getObjVal hm (getObjVal_of_get hb)).1
+    · exact (mem_of_getObjVal hm (getObjVal_of_get hc)).1
+    · exact (mem_of_getObjVal hm (getObjVal_of_get hd)).1
+  have hget : ∀ key, m.get? key =
+      (Std.TreeMap.Raw.ofList [("law", a), ("population", b), ("k", c), ("units", d)] compare).get? key := by
+    intro key
+    by_cases hk : key ∈ ["law", "population", "k", "units"]
+    · simp only [List.mem_cons, List.mem_nil_iff, or_false] at hk
+      rcases hk with rfl | rfl | rfl | rfl
+      · rw [ha, hO "law" a (by simp)]
+      · rw [hb, hO "population" b (by simp)]
+      · rw [hc, hO "k" c (by simp)]
+      · rw [hd, hO "units" d (by simp)]
+    · have h1 : key ∉ m := fun h => hk (key_mem hm (by decide) hmem
+        (by rw [← Std.TreeMap.Raw.size_toArray hm]; exact hs) h)
+      have h2 : ([("law", a), ("population", b), ("k", c), ("units", d)].map Prod.fst).contains key = false := by
+        rw [Bool.eq_false_iff]
+        intro h
+        apply hk
+        simpa using h
+      rw [Std.TreeMap.Raw.get?_eq_getElem?, Std.TreeMap.Raw.get?_eq_getElem?,
+        Std.TreeMap.Raw.getElem?_ofList_of_contains_eq_false h2]
+      cases e : m[key]? with
+      | none => rfl
+      | some v => exact absurd ((Std.TreeMap.Raw.mem_iff_isSome_getElem? hm).2 (by rw [e]; rfl)) h1
+  refine FlockDeploy.eq_of_jsonEquiv_norm hn hN ?_
+  show FlockDeploy.JsonEquiv (.obj m) (.obj (Std.TreeMap.Raw.ofList _ compare))
+  refine (FlockDeploy.jsonEquiv_obj_iff
+    (n := Std.TreeMap.Raw.ofList [("law", a), ("population", b), ("k", c), ("units", d)] compare) hm
+    Std.TreeMap.Raw.WF.ofList).2 ⟨fun key => by rw [hget], fun key x y hx hy => ?_⟩
+  rw [hget, hy] at hx
+  cases hx
+  exact FlockDeploy.JsonEquiv.refl _
+
+/-- **A subset draw's object is its print**: an object as `obj_eq_mkObj4` reads it, at the law `subset`, the population
+`pop`, `k` the units' count and the units `us`, is the subset print of `us` over `pop` units at no closure. -/
+theorem obj_eq_subsetPrint {m : Std.TreeMap.Raw String Json compare} (hm : m.WF)
+    (hn : Flock.norm (.obj m) = .obj m) (hs : m.toArray.size = 4) {s : String} {pop k : ℕ} {us : Array ℕ}
+    (hlaw : m.get? "law" = some (.str s)) (hls : s = "subset")
+    (hpop : m.get? "population" = some (.num ⟨Int.ofNat pop, 0⟩)) (hk : m.get? "k" = some (.num ⟨Int.ofNat k, 0⟩))
+    (hks : k = us.size) (hus : m.get? "units" = some (.arr (us.map fun x => Lean.toJson x))) :
+    Json.obj m = Flock.Draw.UnitDraw.toJson ⟨.subset us.size, pop, us, #[]⟩ := by
+  subst hls hks
+  exact obj_eq_mkObj4 hm hn hs hlaw hpop hk hus (norm_toJson_subset us.size pop us #[])
+
+set_option maxHeartbeats 4000000 in
+/-- **A subset draw that decodes is its own print**: a value `norm` fixes that decodes (`UnitDraw.ofJson`) to a draw
+`D` by the subset law has `D`'s units ascending below its population, and is `D`'s print at no closure. -/
+theorem ofJson_subset_eq {j : Json} (hn : Flock.norm j = j) {D : Flock.Draw.UnitDraw}
+    (h : Flock.Draw.UnitDraw.ofJson j = .ok D) {k : ℕ} (hl : D.law = .subset k) :
+    unitsAscending D.population D.units = true ∧
+      j = Flock.Draw.UnitDraw.toJson ⟨.subset D.units.size, D.population, D.units, #[]⟩ := by
+  have hw : Claims.Json.Wf j := hn ▸ FlockDeploy.wf_norm j
+  obtain rfl : D.units.size = k := (FlockSoundness.Discharge.Composed.ofJson_shape h).2.2 k hl
+  unfold Flock.Draw.UnitDraw.ofJson at h
+  dsimp only at h
+  simp only [FlockSoundness.Refine.throw_bind'] at h
+  repeat' walk_step
+  all_goals
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+  all_goals
+    have hp := ‹(pure _ : Flock.V Flock.Draw.Law) = Except.ok _›
+    simp only [pure, Except.pure, Except.ok.injEq, reduceCtorEq] at hp
+  all_goals
+    try simp only [reduceCtorEq] at hl
+  all_goals
+    have hj := getObj_ok ‹j.getObj? = _›
+    subst hj
+    cases hw with
+    | obj hm hwv =>
+    have hc := ‹¬ (_ != 4) = true›
+    simp only [bne_iff_ne, ne_eq, not_not] at hc
+    have hu := mapM_asNat_eq ‹Array.mapM (Flock.J.asNat · "U2: a drawn unit") _ = Except.ok _›
+    try simp only [Flock.Draw.Law.subset.injEq] at hp
+    try simp only [Flock.Draw.Law.subset.injEq] at hl
+    subst_vars
+    exact ⟨by simpa [unitsAscending] using ‹¬ (!(List.range _).all _) = true›,
+      obj_eq_subsetPrint hm hn (by simpa using hc) (mem_of_getObjVal hm (str_ok ‹Flock.J.str _ "law" _ = _›)).2 rfl
+        (mem_of_getObjVal hm (nat_ok ‹Flock.J.nat _ "population" _ = _›)).2
+        (mem_of_getObjVal hm (nat_ok ‹Flock.J.nat _ "k" _ = _›)).2 rfl
+        (mem_of_getObjVal hm (arr_ok ‹Flock.J.arr _ "units" _ = _›)).2⟩
+
+/-- **A subset record draw is its own print**: where the record's draw (`recordDraw`) decodes to a draw `D` by the
+subset law, the record's draw is `D`'s subset print (`recordDrawn`). -/
+theorem recordDrawn_of_subset {record : String} {dj : Json} {D : Flock.Draw.UnitDraw} {kd : ℕ}
+    (hr : Flock.Witness.recordDraw record = some dj) (hD : Flock.Draw.UnitDraw.ofJson dj = .ok D)
+    (hl : D.law = .subset kd) : recordDrawn (.subset D.units.size) D.population D.units record := by
+  obtain ⟨ha, he⟩ :=
+    ofJson_subset_eq (Claims.Bridge.Custody.recordDraw_norm ((exec_recordDraw record).trans hr)) hD hl
+  exact ⟨ha, by rw [hr, ← he]⟩
+
+end Print
+
+/-- **`DrawHeld` from the record draw's units**: where, wherever composite `k` accepted what the prover sent and v2
+drew `units` over `n` units there, the subset draw the record's decodes to is over `n` units at `units`, v2 holds the
+record's draw to its own. v2 accepts only a subset record draw (`recordDraw_subset`), which is its own print
+(`recordDrawn_of_subset`). -/
+theorem drawHeld_of {k : Verity.Registration.Composite}
+    (h : ∀ s dr L n ξ units record dj D kd, Verity.SameAccepts k s → Drew k s dr L n ξ units →
+      sentRecord s = some record → Flock.Witness.recordDraw record = some dj →
+      Flock.Draw.UnitDraw.ofJson dj = .ok D → D.law = .subset kd → D.population = n ∧ D.units = units) :
+    DrawHeld k := by
+  intro s dr L n ξ units record hS hd hr
+  obtain ⟨a, b, e, p, c, ev, hcase, hacc, -⟩ := id hd
+  obtain ⟨dj, D, kd, hdj, hD, hl⟩ := recordDraw_subset hS hcase hacc hr
+  obtain ⟨rfl, rfl⟩ := h s dr L n ξ units record dj D kd hS hd hr hdj hD hl
+  exact recordDrawn_of_subset hdj hD hl
 
 end Verity.Sampled
