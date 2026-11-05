@@ -208,41 +208,31 @@ def keep_facts(cache: Path, pkg: str, k: str, rep: dict, out: Path) -> bool:
     return True
 
 
-def kept_facts(cache: Path, pkg: str, k: str, out: Path) -> Path | None:
+def kept_facts(cache: Path, pkg: str, k: str, out: Path, log=print) -> Path | None:
     """The facts kept beside ``pkg``'s pass under ``k``, written out to ``out`` (`unread/PKG.jsonl.gz`), or None when there
-    are none or their bytes aren't the ones the entry's sha256 names."""
+    are none or (logged) they don't read or their bytes aren't the ones the entry's sha256 names."""
     entry = cache / "unread" / f"{k}.json"
+    if not entry.is_file():
+        return None
     try:
         doc = json.loads(entry.read_text())
         data = base64.b64decode(doc["facts"], validate=True)
-    except (OSError, ValueError, KeyError, TypeError):
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        log(f"lean-audit: {pkg}: the facts kept under {k[:12]} don't read ({type(e).__name__}: {e})")
         return None
-    if not isinstance(doc, dict) or doc.get("schema") != UNREAD_SCHEMA or hashlib.sha256(data).hexdigest() != doc.get("sha256"):
+    if doc.get("schema") != UNREAD_SCHEMA or hashlib.sha256(data).hexdigest() != doc.get("sha256"):
+        log(f"lean-audit: {pkg}: the facts kept under {k[:12]} aren't {UNREAD_SCHEMA} bytes of the sha256 they name")
         return None
     dst = out / "unread" / f"{pkg.replace('/', '_')}.jsonl.gz"
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_bytes(data)
-    try:
-        os.utime(entry)
-    except OSError:
-        pass
+    os.utime(entry)
     return dst
 
 
 def prune_facts(cache: Path, kept: int = UNREAD_KEPT) -> int:
     """Remove all but the ``kept`` facts entries of ``cache`` (its `unread/`) last stored or reused; the number removed."""
-    try:
-        entries = [(e.stat().st_mtime, e) for e in os.scandir(cache / "unread") if e.name.endswith(".json")]
-    except OSError:
-        return 0
-    n = 0
-    for _, e in sorted(entries, key=lambda x: x[0], reverse=True)[kept:]:
-        try:
-            os.unlink(e.path)
-            n += 1
-        except OSError:
-            pass
-    return n
+    return prune_replays(cache / "unread", kept)
 
 
 def unread_ratchet(pkgs: list[str], failed: list[str], facts: dict[str, Path], files: list[str], out: Path,
@@ -1312,7 +1302,7 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
         entry = cache / f"{k}.json"
         if not fresh and entry.is_file():
             if p in UNREAD_FACTS:
-                if (f := kept_facts(cache, p, k, out)) is None:
+                if (f := kept_facts(cache, p, k, out, log)) is None:
                     log(f"lean-audit: {p}: its pass ({k[:12]}) is kept without the facts the ratchet reads: audited again")
                     continue
                 facts[p] = f
