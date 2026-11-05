@@ -85,7 +85,7 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
     assert f.line() == ("on=m1,m2 marked_after=2026-10-12T06:00:00Z regenerate_locks=True land=review "
                         "land_into=None after_landing_no_cache=True landing_gates=gates/g.py max_lean_checks=3 nonlean_first=False reviewed_first=False verdict_first=False stale_days=3 "
                         "stale_close_days=7 stale_keep= close_unlandable=log after_landing_shards=1 command_line=on lowrisk_lane=True "
-                        "lowrisk_per_tick=20 lowrisk_excludes= executor=off executor_enqueue=")
+                        "lowrisk_per_tick=20 lowrisk_excludes= executor=off executor_enqueue= signed_verdicts=False")
     assert [DriveFlags.parse(f'executor = "{v}"\n').executor for v in ("off", "shadow", "on")] == ["off", "shadow", "on"]
     assert [DriveFlags.parse(f'close_unlandable = "{v}"\n').close_unlandable for v in ("off", "log", "on")] == ["off", "log", "on"]
     for text, why in (('on = "m1,m2"', 'on = \'m1,m2\': a list of names, as ["a", "b"]'),
@@ -139,7 +139,7 @@ def test_drive_refuses_an_unknown_key_naming_the_keys_it_reads_and_the_one_it_li
                             "marked_after, regenerate_locks, land, land_into, after_landing_no_cache, landing_gates, max_lean_checks, "
                             "nonlean_first, reviewed_first, verdict_first, stale_days, stale_close_days, stale_keep, close_unlandable, "
                             "after_landing_shards, command_line, lowrisk_lane, "
-                            "lowrisk_per_tick, lowrisk_excludes, executor, executor_enqueue; "
+                            "lowrisk_per_tick, lowrisk_excludes, executor, executor_enqueue, signed_verdicts; "
                             "rename or remove it, or update this research")
 
 
@@ -169,7 +169,7 @@ def test_drive_reads_the_flags_at_main_in_its_clone_never_the_callers_tree_and_t
                      "marked_after=2026-10-12T06:00:00Z regenerate_locks=True land=review "
                      "land_into=None after_landing_no_cache=True landing_gates=gates/g.py max_lean_checks=3 nonlean_first=False reviewed_first=False verdict_first=False stale_days=3 "
                      "stale_close_days=7 stale_keep= close_unlandable=log after_landing_shards=1 command_line=on lowrisk_lane=True "
-                     "lowrisk_per_tick=20 lowrisk_excludes= executor=off executor_enqueue="]
+                     "lowrisk_per_tick=20 lowrisk_excludes= executor=off executor_enqueue= signed_verdicts=False"]
     assert drive(world, "--config", DRIVE_FLAGS) == 0 and driven[-1] == FROM_FLAGS
 
     on_main(world, FLAGS.replace("max_lean_checks = 3", "max_lean_checks = 6"))
