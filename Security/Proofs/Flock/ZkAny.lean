@@ -99,6 +99,7 @@ session's stop and each seen rep's frame, entry and level 0 against the model's 
 streams seen those before the model's next round, kept at every slot that reads no model message and at the `Hello`,
 and at a frame round given what the loop's frames and the model hold there and the round's own rep one round on; and
 what the loop's frames and the model hold at a frame round, from that invariant on the deployed loop's model, given
-the model's answer there and what it holds at the round's place. -/
+the model's answer there and what it holds at the round's place, past a stream's first round the model's scheduled
+round where the model's tables and salts are the loop's. -/
 
 @[expose] public section
