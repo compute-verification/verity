@@ -3,7 +3,7 @@ id: 20261105T1720Z-report-landing-reds
 campaign: landing-speed
 lane: top
 kind: report
-status: draft
+status: final
 repo: verity
 origin: bc-737c0a42-fa89-51b7-9407-8ecb9fc08e6f
 ---
@@ -60,102 +60,84 @@ Numbers (scratch in /tmp/reds, to the store before the final):
 
 Next: incident table to the store; lever estimates; final to top by 20:30Z.
 
-## Report (draft 18:00Z; final numbers at 20:00Z)
+CHECKPOINT 18:20Z.
 
-Data: art:ca7e94f669b42e3fad91e552b3a49ffecbdaad04c6f9d8216fd757f509a9629d (`landing-study/reds/v1`: stall intervals,
-24-row incident table, 703 PRs' checked -> main waits, the 49 "revert in range" records with first-parent counts, every
-main move since 22 Oct). Method of each estimate below: /tmp/reds/levers.py, restated here.
+Inbox 10:15 and 10:22 AM PST read. My numbers against the other workers': CHECKPATH's after-landing green at 9 of 50
+tips matches mine (8 of 36 drive runs gated green 29 Oct-3 Nov). CHECKPATH's 197 counts landings (batches) and mine,
+703, counts PRs reaching `checked`; DESIGN's 693 landings since 29 Oct is the PR count too, and its ~20 fix-forwards
+(break rate 2-5%) sits beside my 33 culprit PRs (4.7%, counting each PR of a multi-PR red). TRACE and DESIGN found too
+that nothing reverts because a marked fix holds the revert; the first-parent bug (finding 3) and the live case's
+mechanism (finding 4) are REDS's own.
 
-### Findings
+Live case refreshed at 18:18Z: `main` c6ba569002 (moved about 10:51Z), `checked` 50745b55b4 (17:29Z). #6980 and #6996
+landed in 343a905778 (09:38Z, 8 PRs); 3f209e82b0 and 4bc15be99e at 10:48Z (5 PRs); 32 PRs after, in 7 pushes. 45 PRs,
+253 PR-hours on `checked` so far (`checked`'s push activity, each PR from its push to 18:18Z).
 
-1. Reds after landing are the norm, not the exception. About 33 culprit PRs made gated reds on checked in 7 days
-   (4.7% of 703 landings): cross-PR semantics 10, lint and lane text 9, undeclared input, path or rename 4, lock records
-   3, tests of the tooling 3, flakes 3, plus 3 machine faults. At that rate a run over the typical 27-45 landings is
-   green 11-27% of the time; main moves only when fixes outrun new reds.
-2. Fix-forward, not revert, sets the stall length. Code-fix waits (red named -> fix on checked), 14 fixes: median
-   4.0 h, 56.6 h in all; the 7 of 14 at 4 h or more waited behind next's Lean checks (fixes touching tests/,
-   tools/verity/check/ or Lean leave the low-risk lane and `_land_fixes`), a move-restack loop, a GitHub 500, or a
-   launch that never registered. Each red wave then needs a fresh 2-2.5 h after-landing cycle.
-3. Drive's revert never fires. 9 culprits named on checked, 8 reverts scheduled, 0 done: `_fix` holds a revert while
-   any ready PR is marked as the fix, with no bound on when it lands. 49 reds named no culprit because of a bug ("a
-   revert lies in range": every such range had 0 first-parent reverts, 109 PR-internal ones). Since 3 Nov 19:20Z drive
-   names nothing at all: ci runs after-landing by hand (ci-no-postland) and reads reds by hand. Daniel's 11 Oct ruling:
-   a post-landing part's failure "reverts the landing at once".
-4. The live case: 4bc15be9's lean-suites step failed in three suites; ci fixed the first (#7499) and read the other two
-   (composition: #6980; verity-flock: #6996) 4.6 h later at aa7843fd. A red at the bottom of checked held 45 PRs; main
-   unmoved since 10:53Z. The pre-landing Lean check of next's prefix runs only lean-audit (drive.py LEAN_STEP), so no
-   Python-Lean difftest sees a Lean PR's merged state before it lands, and #7499's own check didn't run the suites
-   red at the tip it fixed.
-5. Cache: after_landing_no_cache was set true 24 Oct (2d2eec3783) as a precaution, "until a suite's reuse is per test",
-   with no incident, and false since 29 Oct (c2829cf8bc). Every after-landing run since is cached (ci's hand runs too:
-   `--verdicts-in`; pytest reuse 52%, lean-audit 0%). No cached/uncached pair on one tree with a common verdict in 14
-   days; CI-330's three shadow comparisons (70 reused task verdicts) found 0 reuse that hid a red (95% bound about 4% a
-   reused verdict). The nightly uncached backstop drive.toml's comment cites (audit-main) never ran: jobs queued 0/3,
-   none claimed since 7 Oct.
+Simulation (art:df78cbfbbb619e43f51d9719db9f6e00083ccaa92f552fbfd89b93544e18d859; scripts at
+`notes/landing-reds/sim_reds.py`, `reds_sim_run.py`, `reds_sim_grid.py`). DESIGN's `sim.py` (branch
+cursor/top-landing-design-8b2a, data art:fb0c4e715c3aea1f0fca101fe64e9f6f7c063f071d478dbbb427d057f2628e34) plus one
+lever of its current model, `precheck`: the changed suites run on a landing batch's merged tip; a breaker is caught
+with probability `catch` (15/24, the incidents of my table that check would have caught; ci's lever 3: 4/24) and leaves
+`next`, back fixed `fix_min` later; `pre_min` adds to the landing pass, or with `async_pre` the check starts when the
+member joins `next` and no pass waits; `lean_only` catches only Lean members' breaks (lean-suites in the Lean check,
+lean_min 82 -> 92). Grid: fix_min 240 (my measured median) and 360 (DESIGN's calibration), break draws b/c/d, p_break
+0.04. Mean ready->main of the 546 PRs marked in the checked era:
 
-### Levers, ranked
+| lever | mean ready→main, fix 4 h | vs today | mean, fix 6 h | vs today | to main/day |
+|---|---|---|---|---|---|
+| today (DESIGN's calibrated model) | 58.2–63.3 h | +0..+0% | 72.4–85.7 h | +0..+0% | 91 |
+| revert at once (final L1) | 50.9–53.3 h | -18..-10% | 50.9–53.6 h | -37..-27% | 90 |
+| changed suites in the landing pass, +30 min | 77.7–80.3 h | +27..+34% | 79.6–89.5 h | +4..+10% | 83 |
+| changed suites from joining next (async) | 51.7–59.2 h | -13..-6% | 56.1–72.5 h | -27..-15% | 90 |
+| lean-suites in the Lean check only (final L2) | 58.9–63.1 h | -4..+2% | 62.9–88.4 h | -13..+4% | 91 |
+| async check + revert | 51.5–53.5 h | -17..-11% | 51.6–53.3 h | -38..-28% | 90 |
+| ci's lever 3 in the pass, +8 min | 62.2–67.1 h | +1..+10% | 66.1–97.2 h | -14..+13% | 91 |
+| DESIGN: no pin + open admission + 10-min pass | 15.8–20.7 h | -73..-67% | 16.5–33.2 h | -77..-61% | 110 |
+| DESIGN's + revert | 11.4–12.1 h | -81..-80% | 11.3–12.1 h | -86..-84% | 113 |
+| DESIGN's + async check + revert | 11.0–11.6 h | -82..-81% | 11.1–11.6 h | -86..-85% | 112 |
 
-L1. Check the merged state before it lands. (a) drive's Lean check of next's prefix runs lean-suites beside lean-audit
-(a second shard sharing lean-build); (b) every non-Lean landing batch (the low-risk lane's, the reviewed prefix's) runs
-`suites.py --changed <checked's tip>` on the batch's merged tip before pushing checked; a red ejects the member whose
-change touches what the failure names (`Driver._name`'s rule, moved before landing), and the rest land. Extends ci's
-lever 3 (repository invariants only, which catch 4 of the 15 code reds: R01 R07 R23 R24) to the changed suites.
-- Removed: 69 h of main stall in 7 days, 5,250 PR-h of 9,388 (56%), about 7.5 h off each PR's mean checked -> main.
-  Method: each code red caught on next saves its fix wait plus one 2.5 h cycle, capped per stall at its excess over
-  one cycle, times that stall's mean PRs on checked. Catchable: R01 R03 R05 R07 R09-R13 R17 R18 R21-R24 (15 of 24).
-- Cost: +1 train slot per Lean check for about 50 min (CHECKPATH's key fix shrinks it); +15-40 min on each non-Lean
-  batch, so low-risk PRs land a pass later.
-- Risk: a flake ejects an innocent PR (3 flakes in 7 days); caught by one rerun on another node before ejecting, and
-  the ejection rings the owner with the failing test.
-- Rule: AGENTS.md "Checking and merging": "drive lands next's longest reviewed prefix ... and its low-risk members on
-  their ready mark alone" gains "once the suites its landing changes pass on the merged tip". Realizes Daniel's 11 Oct
-  "parts under about 10 min cold run before landing".
-- Owner ci (drive), infra (slots). (a) 1 day, (b) 2-3 days (suites.py --changed exists today).
+What this changed from the 18:00Z draft: the pre-landing check fell from first to second. My draft's estimate (5,250
+PR-h) held throughput fixed; the queue is saturated (DESIGN: admission caps throughput), so wall time added to the
+landing pass costs more than the stall it saves, and run asynchronously it only duplicates what a working revert does.
+Reverting is robust over every draw and both fix waits.
 
-L2. Revert at once, with a wider fix lane. (i) ac7673f757 (first-parent) so drive names culprits; (ii) ci-no-postland
-off, ci's hand shards joining drive through `queue drive-shard-add`, so drive reads every red of every run; (iii)
-`_red_clock`: a marked fix holds the revert only until FIX_WINDOW_S after the ring unless it is on checked by then;
-(iv) `_land_fixes` lands a marked fix of a named red at the next pass outside next's prefix and `lowrisk_excludes`,
-once the red's suites pass on checked + fix (a Lean fix gets its own Lean check of checked + fix, not next's prefix).
-- Removed: 44 h of main stall in 7 days, 3,480 PR-h (37%), about 5 h a PR; overlaps L1 (it handles what L1 misses).
-  Method: each code red on a stall's critical path costs max(0, fix wait - 1 h) less.
-- Cost: reverted PRs re-land (about 10-15 a week without L1, 3 with it), each a day later. Risk: a wrong culprit (1 of
-  9 named: #5268 by bisection) reverts an innocent PR; caught when the reverted tip's run is still red, and drive
-  re-lands it.
-- Owner ci. (i) today, (ii)-(iv) by Sat.
+Process-design note: L1 adds no gate; it retires the unbounded hold in `_red_clock` and ci's hand after-landing loop
+(ci-no-postland), making the code do what AGENTS.md and the 11 Oct ruling already say. L2's lean-suites adds a shard to
+the existing pre-landing Lean check (+0-15 min wall, machine only, no human, no new serialization point); its exit is
+CI-340's graph read on `next`'s tip.
 
-L3. A real uncached backstop. A nightly executor graph of main's tip with no reuse (about 506 task-min, 40 min on 13
-slots), compared key by key with the cached verdicts that verified it; a disagreement rings ci and deletes that key's
-passes. Fix drive.toml's comment. No latency now (runs are already cached); it makes CI-340's changed-task-only
-after-landing run safe. Cost about 8.5 slot-h a night. Owner infra; 1-2 days.
+## Report (final, sent to top 18:25Z)
 
-L4. Machine and tooling events, beyond CI-226 (pinned deploy, direct lane): about 11 h of main stall in 7 days (tick
-crashes, move restack loops, NFS merges, a launch wait shorter than verdict gathering, a lean-suites run in a 64 GB slot,
-a non-gating circuit-check red skipping gated flock-rust-tests, flakes, composition's 1 h cap). Each is a small change:
-ci.toml groups run gated jobs before off-gate ones; a failed task reruns once on another node before it is red; a flaky
-test is deleted at its first flake (AGENTS.md says so already); drive rings on a refused push; a move PR lands alone.
-Owner ci and infra; 1-3 days.
+REDS final (landing-speed). Note: lanes/top/20261105T1720Z-report-landing-reds.md, copy and scripts at `notes/landing-reds.md` on cursor/top-landing-reds-fb4c. Data: art:ca7e94f669b42e3fad91e552b3a49ffecbdaad04c6f9d8216fd757f509a9629d. Simulation: art:df78cbfbbb619e43f51d9719db9f6e00083ccaa92f552fbfd89b93544e18d859 (DESIGN's simulator plus a pre-landing-check lever, fix waits of 4 h and 6 h, three break draws).
 
-In flight, and whether it is enough: CI-427 (merge records, passes 65 -> 43 min) shortens each fix's ticks, not its
-wait behind Lean checks. ci's lever 3 catches 4 of 15 code reds. CI-340 names culprits by input files after landing;
-it does not move checks before landing. infra/full-check-45-min cuts each red wave's cycle from 2.5 h to 0.75 h
-(about 25 h of stall a week at 14 waves), the best in-flight lever on this angle; L1 and L2 remove the waves.
+**Findings**
+1. About 1 PR in 21 lands a gated red: 33 of 703 PRs reaching `checked` 29 Oct–5 Nov (4.7%). Causes: cross-PR semantics 10, lint 9, inputs or renames 4, locks 3, tooling tests 3, flakes 3. A 27–45-PR run is clean 11–27% of the time (CHECKPATH: 9 of 50 tips). Two stalls (27.3 h and 37.2 h) hold 67% of the 9,388 PR-hours on `checked`.
+2. Fix-forward sets every stall's length, and nothing bounds it. 14 fixes, red to fix on `checked`: median 4.0 h (0.6–8.9), the long ones behind `next`'s Lean checks. Nothing was reverted in 14 days: drive scheduled 8 reverts and `_red_clock` held each while any fix was marked. Daniel's 11 Oct ruling: a post-landing failure "reverts the landing at once".
+3. Drive's culprit naming was broken. In 49 reds it named nothing because "a revert lies in range". All 49 ranges had 0 reverts on the landing branch; the 109 it saw sat inside PRs' own branches. I fixed this in ac7673f757 (`--first-parent` in `Driver._name`, plus a test that fails without it; the suite passed in r20261105-174519-cf04). Since 3 Nov 19:20Z drive names nothing at all (ci-no-postland).
+4. The live case. #6980 and #6996 landed in 343a9057 (09:38Z). The run for 4bc15be9 (r20261105-110254-368d) failed in sampled-proofs, composition and verity-flock. ci fixed sampled-proofs by hand (#7499); composition and flock surfaced 4.6 h later (r20261105-154334-d0e6).
+   - Why it went unnoticed: a hand run keeps no per-suite red ledger, and #7499's check never reran the tip's red suites.
+   - Why it landed: the prefix Lean check runs only `lean-audit` (`LEAN_STEP`), never the Lean–Python difftests.
+   - What it held: `main` unmoved for 7.5 h, with 45 PRs on `checked` (32 behind the red batches), 253 PR-hours by 18:18Z.
+5. Simulation: reverting is the lever, and a check on the serial pass is a loss. Revert at once saves 5.7–10.8 h a PR (3,400–6,300 PR-h/week) at a 4 h fix wait, and 19–32 h at 6 h. A changed-suites check adding 30 min to each landing pass is 17–20 h a PR worse (throughput drops from 91 to 83 a day). Run asynchronously it saves 4–8 h alone, but under 0.5 h once reverts work. ci's lever 3, run inside the pass, is 0.5–5.7 h worse.
 
-### Process-design pricing of L1 (the only new gate)
+**Levers, ranked**
+L1. Revert at once, as ruled.
+- Mechanism: (i) land ac7673f757; (ii) retire ci-no-postland, with hand shards joining drive through `queue drive-shard-add`, so drive keeps the red ledger; (iii) in `_red_clock`, a fix holds a revert only until FIX_WINDOW_S unless it is on `checked`; (iv) `_land_fixes` lands a named red's fix at the next pass, outside the prefix and `lowrisk_excludes`, once the red's suites pass with it.
+- Hours removed: 3,400–6,300 PR-h/week, and 2,600–5,100 more on top of DESIGN's throughput levers (mean 16–21 h → 11–12 h, p90 32 h → 20 h). My measured method gives 3,480, at the low end.
+- Cost: 10–15 reverted PRs a week re-land later.
+- Risk: a wrong culprit (1 of 9 so far). Caught by 24 h in shadow mode, where drive posts "would revert X" and ci compares it with its own attribution, and then by the reverted tip's run: if it stays red, drive re-lands the PR.
+- Rule: AGENTS.md already says the culprit is reverted; the code is made to match, and the unbounded hold is retired.
+- Owner: ci. (i) today, the rest by Saturday.
 
-Failure: 33 culprit PRs a week land reds (incident table R01-R24); about 70 h of main stall a week. Mechanism: the
-changed suites on the merged tip; smaller tried: repository invariants only (ci's lever 3) catch 4 of 15. Walkthrough
-(29 Oct-5 Nov, 703 landings): Lean prefixes (lean-suites beside lean-audit, +0-15 min wall, machine), reviewed non-Lean
-batches and low-risk batches (+15-40 min, machine); blocks by ejecting one member, never the batch. Price per week:
-human 0; merge path +15-40 min per non-Lean batch; shared queue: train slots; always-read words +1 clause; pods within
-today's slots. Against about 5,000 PR-h a week. Tests: fires at landing (a reliance point); code with the failing test
-in the ejection's ring; blocks, because a red on checked holds every landing above it; no new serialization point.
-Budget: within (automatic, no human gate). Owner ci; exit: CI-340's graph read on next's tip replaces the suites.py
-step. Pilot: the low-risk lane for 8 h; measure reds on checked per 100 landings (now 4.7), batch wall, ejections.
+L2. Keep checks off the landing pass. The prefix Lean check runs lean-suites beside lean-audit (a second shard, adding 0–15 min), which catches the live case's class of red. ci's lever 3 runs in admission's preflight, never in the pass. Once L1 works, this buys fewer reverts (3 a week instead of 10–15), not latency. Owner ci; 1 day.
 
-### Next 48 h
+L3. A real uncached backstop. `after_landing_no_cache` was set true on 24 Oct as a precaution with no incident behind it, and has been false since 29 Oct; every run since reuses verdicts. No cached/uncached pair exists on one tree in 14 days, and CI-330's comparisons (70 reused verdicts) hid no red. drive.toml's backstop, audit-main, has never run. The lever: a nightly no-reuse graph of `main` (about 40 min on 13 slots), compared key by key with the cached verdicts; a disagreement rings ci and drops that key's passes. It makes cached and CI-340's changed-tasks-only runs safe. Owner infra; 1–2 days.
 
-1. Today: ci reviews and lands ac7673f757; ci.toml gated-before-off-gate group order; L1(a) on the next Lean check.
-2. Fri 6 Nov: L1(b) pilot on the low-risk lane, 8 h; ci-no-postland off; `_red_clock` bounded hold.
-3. Sat 7 Nov: widen `_land_fixes`; infra's nightly cold graph and drive.toml's comment; L1(b) on every batch if the
-   pilot's reds per 100 landings fall under 1.
+L4. Machine and tooling faults cost about 11 h of stall a week. ci.toml runs gated jobs before off-gate ones, a failed task reruns once on another node, drive rings on a refused push, and a move PR lands alone. ci and infra; 1–3 days.
+
+In flight: full-check-45-min helps most here (DESIGN's run-60 row: mean 72 h → 57 h). CI-427 shortens passes but not fix waits, CI-340 acts only with L1(ii), and nothing in flight reverts.
+
+**Next 48 h**
+1. Today: land ac7673f757; the Lean check gains lean-suites; drive runs reverts in shadow mode on 4bc15be9's reds.
+2. Friday: ci-no-postland off and the bounded hold; reverts go live once 24 h of shadow agrees with ci.
+3. Saturday: the wider `_land_fixes` and the nightly uncached graph. Measure reds per 100 landings (now 4.7) and red-to-revert time.
