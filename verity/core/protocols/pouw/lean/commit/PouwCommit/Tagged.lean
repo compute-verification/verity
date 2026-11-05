@@ -1,4 +1,6 @@
-import Randomness
+module
+
+public import Randomness
 
 /-!
 # `tagged`: PoUW's domain-separated hash (`verity.core.protocols.pouw.protocol.tagged`)
@@ -7,6 +9,8 @@ import Randomness
 (`verity.ml.randomness.frame`, here `FlockSoundness.Randomness.frame`): a tag byte (`b` bytes, `s` a UTF-8 string, `i` a
 natural as minimal big-endian bytes, one zero byte for 0), the body's length as 8 bytes big-endian, then the body.
 -/
+
+@[expose] public section
 
 namespace PouwCommit
 

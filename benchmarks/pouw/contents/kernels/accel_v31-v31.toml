@@ -1,0 +1,4 @@
+order = 75
+tool = "Dither's no-fold call: the coins, X and W', the protocol GEMM's prefix sums and a served call's O, and the commit beside the next call's compute; the H200's warpgroup GEMM under -DV31_WG"
+files = "`accel_v31/v31.cu`, `wg_proto.cuh`, `v31lib.py`, `v31.py`, `run.sh`"
+includes = "`commit_gpu/commit_gpu.cuh`, `gpu_kit/bench.cuh`"

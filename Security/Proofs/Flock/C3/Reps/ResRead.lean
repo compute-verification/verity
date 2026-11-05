@@ -1,5 +1,7 @@
-import Proofs.Flock.C3.Reps.ReadRow
-import Proofs.Flock.VBridge.OpeningUnit
+module
+
+public import Proofs.Flock.C3.Reps.ReadRow
+public import Proofs.Flock.VBridge.OpeningUnit
 
 /-!
 # The `rec-residuals` unit reads the columns its products read (`readCol_resUnit`)
@@ -18,6 +20,8 @@ reads, under any name; in particular each column a product of two one-term opera
 * At the checks (`readCol_opening`, `readCol_residuals`): the unit `RecOpening.check` or `RecResiduals.check` accepted
   for part `p` reads each column its part's products read.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps.RowRead
 

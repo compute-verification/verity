@@ -13,7 +13,12 @@ So the element-level verdict accepts wherever the shipped one does, with the sam
 (`verifyWithE_of_verifyWith`, `verifyLoggedE_of_verifyLogged`). `Sim.impSt` relates two runs of one `StV σ` where the
 second ends `.ok`, at the same state, wherever the first does; it walks the two `keep`s in step.
 -/
-import Flock.With.Log
+module
+
+public import Flock.With.Log
+public import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock
 
@@ -35,7 +40,7 @@ def decodeJWithK (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec) (j 
   match spec.coinTree with
   | none => check ((← str j "hello") == spec.hello) "S2/R7: the session parameters are not the verifier's"
   | some ct =>
-    let some own := (Json.parse spec.hello).toOption | throw "S2/R7: the verifier's Hello is not JSON"
+    let some own := (JsonParse.parse spec.hello).toOption | throw "S2/R7: the verifier's Hello is not JSON"
     let nonce ← CoinTree.checkHello own (← str j "hello")
     let _ ← CoinTree.checkRecord ct nonce (← fld j "coin_tree")
   -- S3
@@ -47,7 +52,7 @@ def decodeJWithK (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec) (j 
   check ((← str l "mode") == "exchange") "S3/E1: link.mode is not exchange"
   -- S4
   check ((← str l "sigma") == hexOf spec.sigma) "S4: the record's Σ is not the statement's"
-  -- U1–U3 (§7.3): a null draw is no draw
+  -- U1–U3 (`Flock.Draw`): a null draw is no draw
   let recDraw := match j.getObjVal? "unit_draw" with
     | .ok Json.null => none
     | .ok d => some d
@@ -93,7 +98,7 @@ def decodeJWithK (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec) (j 
       let coins ← f128s (← arr r "coins")
       check (1 ≤ n && n ≤ 65536 && coins.size == n && keep (sha.size == (← spec.dgWith hs ByteArray.empty).size))
         s!"S12: {name} round {k} is malformed"
-      -- the framed bytes, when the server retained them: bound to the digest, then compared exactly at replay (§6.2)
+      -- the framed bytes, when the server retained them: bound to the digest, then compared exactly at replay (`Flock.Transcript`)
       check (!spec.retainRounds || !isNull r "msg")
         s!"S12: {name} round {k}: the statement retains round bytes and the record has none"
       let bytes ← if isNull r "msg" then pure none else do
@@ -129,13 +134,13 @@ def decodeJWithK (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec) (j 
 /-- **`Record.decodeWith` with its digests of encodings read through `keep`**: the parse, then `decodeJWithK`.
 `keep := id` is `decodeWith` (`decodeWith_eq_decodeWithK`), `keep := fun _ => true` drops them (`decodeWithE`). -/
 def decodeWithK (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec) (text : String) : M RunRecord := do
-  let j ← match Json.parse text with
+  let j ← match JsonParse.parse text with
     | .ok j => pure j
     | .error e => throw s!"record: not JSON: {e}"
   decodeJWithK keep hs spec j
 
 theorem decodeWithK_of_parse [LawfulMonad M] (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec)
-    {text : String} {j : Json} (h : Json.parse text = .ok j) :
+    {text : String} {j : Json} (h : JsonParse.parse text = .ok j) :
     decodeWithK keep hs spec text = decodeJWithK keep hs spec j := by
   simp only [decodeWithK, h, pure_bind]
 
@@ -210,7 +215,7 @@ def verifyJWithMK (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec) (t
     if c0 != c1 then throw s!"S18/R1: {spec.tables[i]!}: the reps' caps differ"
 
 theorem verifyWithMK_of_parse [LawfulMonad M] (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec)
-    (tabs : Array Setup) {record : String} {j : Json} (proofs : Array ByteArray) (h : Json.parse record = .ok j) :
+    (tabs : Array Setup) {record : String} {j : Json} (proofs : Array ByteArray) (h : JsonParse.parse record = .ok j) :
     verifyWithMK keep hs spec tabs record proofs = verifyJWithMK keep hs spec tabs j proofs := by
   simp only [verifyWithMK, verifyJWithMK, Record.decodeWithK_of_parse keep hs spec h]
 

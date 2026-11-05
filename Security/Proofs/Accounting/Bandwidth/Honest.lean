@@ -1,5 +1,7 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.Bandwidth
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.Bandwidth
 
 /-!
 # The honest device: the guarantee is not vacuous
@@ -8,6 +10,8 @@ A device with no on-chip state, no side sources and no regeneration, whose devic
 reads every block once and queries the oracle at it. It is accepted on every store, oracle and sample, and its
 ingress is exactly the store, `N·b` bits (`honest_accepts`; the guarantee `Bandwidth.SecurityProofs.HonestPasses`).
 -/
+
+@[expose] public section
 
 namespace Bandwidth.Completeness
 

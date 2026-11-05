@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainAccPrR
-import Proofs.Flock.Claims.KS.PlainLeafClashJK
+module
+
+public import Proofs.Flock.Claims.KS.PlainAccPrR
+public import Proofs.Flock.Claims.KS.PlainLeafClashJK
 
 /-!
 # The run-level half of `PlainRdInR`, at `VR rd`
@@ -21,6 +23,8 @@ and whose simulator's live outcome is that decision's view (`PlainSimRunR`).
   (`plainRawLevelColsRV`), from the J decoders' later entries (`LaterEntriesAtJK`).
 * `plainRdInR_of_sim`: `PlainRdInR rd x` from a simulator at every prover (`PlainSimAtR`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

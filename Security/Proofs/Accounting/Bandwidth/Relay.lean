@@ -1,5 +1,7 @@
-import Mathlib
-import Proofs.Accounting.Bandwidth.AuditRO
+module
+
+public import Mathlib
+public import Proofs.Accounting.Bandwidth.AuditRO
 
 /-!
 # The bandwidth audit v0 with relayed tags: the proof
@@ -14,6 +16,8 @@ and `relayed`, those among them whose contents the chip never queried:
 - otherwise at least `k − m` queried: `AuditRO`'s compression at `k − m` blocks, for the device with its side sources
   fixed at the oracle (`RelayDevice.atOracle`).
 -/
+
+@[expose] public section
 
 namespace Bandwidth
 

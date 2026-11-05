@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.PlainDrawKDefs
-import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawKDefs
+public import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
 
 /-!
 # The plain verdict at the statement's draw, at the record's parsed value
@@ -16,6 +18,8 @@ need not be any text's parse, so the KS and Bits route is stated here at a parse
   each text form is the form here at `j`; `acceptsAtDK_iff_exists_J` adds that a text form accepts only where its
   record parses. So `acceptsAtDJK_wrPDJK_of_K` moves an accepting record of the outcome at the text forms to `wrPDJK`.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.PlainDraw
 
@@ -124,7 +128,7 @@ theorem acceptsAtDJK_wrPDJK {keep : Bool → Bool} {I : Exec.Inputs} {d : Json} 
 
 /-- **At a record that parses to `j`, `AcceptsAtDK` is `AcceptsAtDJK` at `j`** (`verifyWithMK_of_parse`). -/
 theorem acceptsAtDK_iff_J {keep : Bool → Bool} {I : Exec.Inputs} {dr : Option Json} {text : String} {j : Json}
-    (proofs : Array ByteArray) (h : Json.parse text = .ok j) :
+    (proofs : Array ByteArray) (h : Flock.JsonParse.parse text = .ok j) :
     AcceptsAtDK keep I dr ⟨text, proofs⟩ ↔ AcceptsAtDJK keep I dr ⟨j, proofs⟩ := by
   have hv : ∀ spec tabs, verifyWithMK keep With.std spec tabs text proofs =
       verifyJWithMK keep With.std spec tabs j proofs := fun spec tabs =>
@@ -133,14 +137,14 @@ theorem acceptsAtDK_iff_J {keep : Bool → Bool} {I : Exec.Inputs} {dr : Option 
 
 /-- **`AcceptsAtDK` holds exactly where the record parses and `AcceptsAtDJK` holds at its parsed value.** -/
 theorem acceptsAtDK_iff_exists_J {keep : Bool → Bool} {I : Exec.Inputs} {dr : Option Json} (t : Exec.Transcript) :
-    AcceptsAtDK keep I dr t ↔ ∃ j, Json.parse t.record = .ok j ∧ AcceptsAtDJK keep I dr ⟨j, t.proofs⟩ := by
+    AcceptsAtDK keep I dr t ↔ ∃ j, Flock.JsonParse.parse t.record = .ok j ∧ AcceptsAtDJK keep I dr ⟨j, t.proofs⟩ := by
   refine ⟨fun ⟨spec, sts, hs, hv⟩ => ?_, fun ⟨j, hj, hA⟩ => (acceptsAtDK_iff_J t.proofs hj).2 hA⟩
   obtain ⟨j, hj, hvj⟩ := (verifyWithMK_ok_iff keep With.std spec _ t.record t.proofs).1 hv
   exact ⟨j, hj, spec, sts, hs, hvj⟩
 
 /-- **At a record that parses to `j`, `RecordsLiveAtDK` is `RecordsLiveAtDJK` at `j`** (`decodeWithK_of_parse`). -/
 theorem recordsLiveAtDK_iff_J {keep : Bool → Bool} {I : Exec.Inputs} {d : Json} {J mPts : ℕ}
-    {o : Tables.LiveOutJ J mPts} {text : String} {j : Json} (proofs : Array ByteArray) (h : Json.parse text = .ok j) :
+    {o : Tables.LiveOutJ J mPts} {text : String} {j : Json} (proofs : Array ByteArray) (h : Flock.JsonParse.parse text = .ok j) :
     RecordsLiveAtDK keep I d o ⟨text, proofs⟩ ↔ RecordsLiveAtDJK keep I d o ⟨j, proofs⟩ := by
   have hdec : ∀ spec, Record.decodeWithK keep With.std spec text = Record.decodeJWithK keep With.std spec j :=
     fun spec => Record.decodeWithK_of_parse keep With.std spec h
@@ -148,7 +152,7 @@ theorem recordsLiveAtDK_iff_J {keep : Bool → Bool} {I : Exec.Inputs} {d : Json
 
 /-- **At a record that parses to `j`, `TxNoOffAtK` is `TxNoOffAtJK` at `j`.** -/
 theorem txNoOffAtK_iff_J {keep : Bool → Bool} {I : Exec.Inputs} {d : Json} {N : ℕ} {C : Fin N → List 𝔽}
-    {text : String} {j : Json} (proofs : Array ByteArray) (h : Json.parse text = .ok j) :
+    {text : String} {j : Json} (proofs : Array ByteArray) (h : Flock.JsonParse.parse text = .ok j) :
     TxNoOffAtK keep I d C ⟨text, proofs⟩ ↔ TxNoOffAtJK keep I d C ⟨j, proofs⟩ := by
   have hdec : ∀ spec, Record.decodeWithK keep With.std spec text = Record.decodeJWithK keep With.std spec j :=
     fun spec => Record.decodeWithK_of_parse keep With.std spec h

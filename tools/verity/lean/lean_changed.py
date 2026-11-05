@@ -21,7 +21,7 @@ dependencies the node does not keep.
 `--records` is a lane's fast path to the records in PKG's `lean-audit.json` (PKG: its path, or a unique part of one):
 `tools/verity/lean/check.py --build --no-replay --no-runs` on PKG in a tree kept per slot, which prints what the audit prints,
 `--update`'s review included, after a build of only what changed since that slot's last run, which restores each module the
-node's artifact cache holds under its sha256 key (`check.py --artifacts`, `lean_audit.LakeArtifacts`, the one the audit
+node's artifact cache holds under its key (`check.py --artifacts`, `lean_audit.LakeArtifacts`, the one the audit
 reads); each package whose check.py passes, its report saying it built in the sandbox, puts the modules its build
 compiled there. It first waits for one of the
 node's Lean slots of pool `build` (`lean_slot.py`; pool `any` never stands in for it), never one of the `audit` pool's, where
@@ -268,8 +268,8 @@ def write_links(tree: Path, links: dict[str, str]) -> None:
 
 def in_sandbox(pkg: str, tree: Path, argv: list[str]) -> list[str]:
     """``argv`` in the sandbox, writable in the `.lake` of ``tree/pkg`` and the packages it requires by path but not in their
-    fetched dependencies."""
-    rw = [str(tree / p / ".lake") for p in closure(pkg)]
+    fetched dependencies. The paths are resolved, as mountinfo names them: a slot tree is a link into the node's cache root."""
+    rw = [str((tree / p / ".lake").resolve()) for p in closure(pkg)]
     ro = [str(Path(d) / "packages") for d in rw if (Path(d) / "packages").is_dir()]
     return [*UNSHARE, "--", "bash", str(SANDBOX), *rw, "--", "bash", "-c", READ_ONLY, "ro", *ro, "--", *argv]
 

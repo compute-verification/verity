@@ -1,4 +1,6 @@
-import Proofs.Flock.VBridge.Algebra.Sim
+module
+
+public import Proofs.Flock.VBridge.Algebra.Sim
 
 /-!
 # What `_build`'s passes compute
@@ -13,6 +15,8 @@ residual's coefficients on the consistency sums into `kappa`, and only Ligerito'
   holo shape plus w's `h`, `hOf`, as `atomOp` reads it), or the level's consistency sum.
 * `kapSum kappa r cons` is the final check's component `r` on the levels' consistency sums `cons`.
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 

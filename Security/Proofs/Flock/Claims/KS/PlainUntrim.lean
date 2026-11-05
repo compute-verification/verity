@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.KS.Extend
-import Proofs.Flock.Claims.KS.PlainLeafKS
+module
+
+public import Proofs.Flock.Claims.KS.Extend
+public import Proofs.Flock.Claims.KS.PlainLeafKS
 
 /-!
 # KS at the untrimmed plain instance
@@ -19,6 +21,8 @@ masked code:
   (`Claims.Flock.tableBoundθ_of_extend`), and `Flock.KS` at the untrimmed plain instance at SHA-512 at the deployed
   relation with no premise (`plain_KS_of_tableBound`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

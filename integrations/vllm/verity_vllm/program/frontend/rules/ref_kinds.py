@@ -18,7 +18,7 @@ from verity.ml.circuits.types import Array, Value
 F32 = Value(32)
 BF16 = Value(16)
 
-_CONF = "derive-lane composite over an exact-model-tested primitive (Bf16ToF32_v1 / F32ToBf16Rn_v1), one element per gate"
+_CONF = "derived: a composite over an exact-model-tested primitive (Bf16ToF32_v1 / F32ToBf16Rn_v1), one element per gate"
 
 
 def _ew1(prim):
