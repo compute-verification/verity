@@ -44,7 +44,7 @@ theorem loopKept_round_deployed {M : LoopModel Claims.Flock.Wit
       LoopJ M sid spec sts seen st σ → σ.c < M.τ.length → M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) →
       RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R →
       (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) → SaltsSrc M sid σ →
-      (∃ o, e.round = .ok o) → RoundFacts M sid spec seen stream n i r dom v σ) :
+      InnerSrc M sid i r σ → (∃ o, e.round = .ok o) → RoundFacts M sid spec seen stream n i r dom v σ) :
     LoopKept M sid spec sts nonce (LoopJ M sid spec sts) (.round stream n) :=
   loopKept_round hD.names hA (repJ_round ZKMal.Masked.dataE hD (Loop.realTabs_realOf src M.x M.w M.ρ hD.setup)
     fun _ hK hB => realAt_h0 hsrc hD.setup hK hD.names hB hS hlive)

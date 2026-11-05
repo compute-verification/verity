@@ -434,7 +434,7 @@ theorem loopKept_round {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
       LoopJ M sid spec sts seen st σ → σ.c < M.τ.length → M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) →
       RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R →
       (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) → SaltsSrc M sid σ →
-      (∃ o, e.round = .ok o) → RoundFacts M sid spec seen stream n i r dom v σ)
+      InnerSrc M sid i r σ → (∃ o, e.round = .ok o) → RoundFacts M sid spec seen stream n i r dom v σ)
     (hcur : ∀ (seen : List String) (st : State) (pl : Placed) (e : Env) (σ σ' : LoopAt) (i r : Nat)
       (dom : ByteArray) (v : Claims.Msg), slot st pl = some (.round stream n) → e.setup = .ok (spec, sts) →
       LoopFacts sid spec seen st pl σ → LoopJ M sid spec sts seen st σ → M.Ans σ.c e →
@@ -446,12 +446,12 @@ theorem loopKept_round {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Se
       RepJ M sid spec sts i r σ') :
     LoopKept M sid spec sts nonce (LoopJ M sid spec sts) (.round stream n) := by
   intro seen st pl e σ σ' hsl he hF hJ hra hgo
-  obtain ⟨hans, ⟨i, r, dom, v, hv, hr, hpc⟩, hcc, hst, hsal⟩ := hra
+  obtain ⟨hans, ⟨i, r, dom, v, hv, hr, hpc, hin⟩, hcc, hst, hsal⟩ := hra
   have hlt := hans.1
   obtain ⟨hsent, hop, -, -⟩ := slot_round hsl
   have hreq := request_round_slot hF.reach hF.live hsl
   obtain ⟨⟨o, hro⟩, a, hae, hb, hsa, hco⟩ := stepK_round_go hF.reach hF.live hsl hgo
-  have hRA := hA seen st pl e σ σ' i r dom v hsl hF hJ hlt hv hr hpc hsal ⟨o, hro⟩
+  have hRA := hA seen st pl e σ σ' i r dom v hsl hF hJ hlt hv hr hpc hsal hin ⟨o, hro⟩
   have hk : (Except.ok (.round stream n) : Except String _root_.Flock.Firewall.Session.Kind) ≠ .ok .hello := by
     intro h
     cases h

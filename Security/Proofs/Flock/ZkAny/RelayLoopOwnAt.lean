@@ -14,16 +14,20 @@ deployed model, whose release has the session loop's own rounds of the inner pro
 finish's rounds `fin`), the model's scheduled round there is `Loop.innerOf`'s, `Frame.innerSched` at the model's
 configuration and `ε` and `β` the first words of the coins of the inner proof's rounds 0 and 2. They are one round:
 
+* `innerSched_fin_congr`: the frame's own inner round reads the finish's rounds only at round 0's (at round 0) and
+  round 2's (at round 2). `roundPlace_own_bounds`: `roundPlace` readies an inner round only within the inner proof and
+  where the loop's finish computed it.
 * `ofLoop_answered_own`: past the rep's schedule on its own table and salts the model's masking state has begun no
   inner round where the schedule ends at the round, and is at the inner proof's round past the last it took coins at
   otherwise, `ε` and `β` the first words of the coins of its rounds 0 and 2 (`repState_own_inner`, `repState_own_eb`).
 * `roundPlace_scheduled_own`: at the deployed model, where `placeOf` places the frame's round at the inner proof's own,
-  the frame at the model's configuration and masking state but for `stopped`, the loop's finish rounds the model's and
-  the round out, the round's place is the model's scheduled round (`Loop.innerOf_eq`, `scheduled_innerAt`,
-  `innerSched_congr`); past the inner proof's last round the frame refuses the round (`check_inner_done`).
-* **`placeSched_own`**: so at a round of a stream seen, where `LoopFacts` and `LoopJ` hold and the model's tables and
-  salts are the loop's (`RealAt`), the round's place is the model's scheduled round wherever `placeOf` places it at
-  the inner proof's own: `placeFacts_seen`'s `hown`.
+  the frame at the model's configuration and masking state but for `stopped`, and each round of the inner proof the
+  loop's finish computed so far the model's finish's, the round's place is the model's scheduled round
+  (`Loop.innerOf_eq`, `scheduled_innerAt`, `innerSched_congr`, `innerSched_fin_congr`).
+* **`placeSched_own`**: so at a round of a stream seen, where `LoopFacts` and `LoopJ` hold, the model's tables and
+  salts are the loop's (`RealAt`) and the rep's rounds of the inner proof the model's finish's (`InnerSrc`, the
+  model's `fin` the release's), the round's place is the model's scheduled round wherever `placeOf` places it at the
+  inner proof's own: `placeFacts_seen`'s `hown`.
 -/
 
 @[expose] public section
@@ -45,9 +49,50 @@ theorem extract_getD {α : Type} {a : Array α} {s e k : Nat} (d : α) (h : s + 
 
 /-- A byte array is its bytes' list read back. -/
 theorem bytes_toList_toArray (b : ByteArray) : (⟨b.data.toList.toArray⟩ : ByteArray) = b := by
-  first
-    | rfl
-    | rw [Array.toArray_toList]
+  rfl
+
+/-- Where each entry `a` holds is `b`'s, `a` and `b` read alike within `a`. -/
+theorem getD_of_agree {a b : Array ByteArray} (h : ∀ (k : Nat) (x : ByteArray), a[k]? = some x → b[k]? = some x)
+    {k : Nat}
+    (hk : k < a.size) (d : ByteArray) : a.getD k d = b.getD k d := by
+  have ha : a[k]? = some a[k] := Array.getElem?_eq_getElem hk
+  rw [Array.getD_eq_getD_getElem?, Array.getD_eq_getD_getElem?, h k _ ha, ha]
+
+open _root_.Flock.Firewall.Frame (innerSched ownRound) in
+/-- **The frame's own inner round reads the finish's rounds only at round 0's and round 2's**, the first at round 0
+and the second at round 2: on rounds alike there, it is one round. -/
+theorem innerSched_fin_congr (c : Cfg) (s : Masker) {fin fin' : Array ByteArray} (n : Nat) :
+    ∀ {k : Nat}, k < INNER_ROUNDS → (k = 0 → fin.getD 0 .empty = fin'.getD 0 .empty) →
+      (k = 2 → fin.getD 2 .empty = fin'.getD 2 .empty) → innerSched c s fin n k = innerSched c s fin' n k
+  | 0, _, h0, _ => by simp only [innerSched, ownRound, h0 rfl]
+  | 1, _, _, _ => by simp only [innerSched, ownRound]
+  | 2, _, _, h2 => by simp only [innerSched, ownRound, h2 rfl]
+  | 3, _, _, _ => by simp only [innerSched, ownRound]
+  | k + 4, h, _, _ => absurd h (by unfold INNER_ROUNDS; omega)
+
+set_option maxHeartbeats 1000000 in
+/-- **At the inner proof's own place `roundPlace` readies only a round the loop's finish computed**: where `placeOf`
+places the found frame's next round at the inner proof's own, the readied frame is at an inner round within the inner
+proof that the rounds the loop's finish computed so far hold; at any other it refuses. -/
+theorem roundPlace_own_bounds {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r j : Nat}
+    {dom content : ByteArray} {n : Nat} {p q : Rep} {pl : Place} {f : Bool} {nd : Option String}
+    (hf : R.find sid i r = some (j, p))
+    (h : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd))
+    (hl : f = false) {s : Release} {name : String} {l0 : _root_.Flock.Firewall.Level0.Level0}
+    (hs : R.sessions.find? (·.sid == sid) = some s) (hn : s.spec.tables[i]? = some name)
+    (hl0 : _root_.Flock.Firewall.Level0.ofSession L0 sid name = some l0) {k : Nat} {q' : Rep}
+    (hv : _root_.Flock.Firewall.Frames.placeOf R.salts l0 s p (s.spec.domain name r).toUTF8 = .ok (.own, k, q')) :
+    q.st.m.inner.getD 0 < INNER_ROUNDS ∧ q.st.m.inner.getD 0 < (R.innerOf l0.root r).size := by
+  have hfst : (p.coins.isEmpty && !p.st.begun) = false := (roundPlace_first hf h).symm.trans hl
+  unfold _root_.Flock.Firewall.Frames.roundPlace at h
+  simp only [hf, bind, Except.bind, pure, Except.pure] at h
+  repeat' (first
+    | simp only [hs, hn, hl0, hfst, hv, Bool.false_eq_true, ↓reduceIte] at h
+    | split at h)
+  all_goals first
+    | (cases h; done)
+    | exact absurd (by assumption) throw_ne_ok
+    | (cases h; exact ⟨by omega, by omega⟩)
 
 open Loop LeanRelease in
 /-- **The model's masking state past a rep's schedule**: where the frame takes the coins after `e0 :: h1` at `m`, the
@@ -179,12 +224,13 @@ has the session loop's own rounds of the inner proof (`withInner` at the finish'
 (`Loop.RepInv`) on the loop's table, the session's extras at the model's link and the salts the loop holds where
 `placeOf` reads them, which are the model's (`real`), holds the history's words for the rep's rounds so far, and
 `placeOf` places its round at the inner proof's own (`hown`), where the readied frame is at the model's configuration
-and masking state but for `stopped`, the round squeezes the model's coin count, the loop's finish rounds are the
-model's (`hfin`) and the round is out: the round's place is the model's scheduled round there. `roundPlace_own_of`
-gives the place, `Frame.innerSched` at the frame's state on the inner proof's round the frame is at;
-`ofLoop_answered_own` that round, the model's (`Loop.innerOf_eq`, `scheduled_innerAt`), and its `ε` and `β`, the
-model's where the round reads them (`innerSched_congr`). Past the inner proof's last round the frame's check refuses
-every round (`check_inner_done`), which the round being out rules out. -/
+and masking state but for `stopped`, the round squeezes the model's coin count and each round of the inner proof the
+loop's finish computed so far is the model's finish's (`hfin`): the round's place is the model's scheduled round
+there. `roundPlace_own_of` gives the place, `Frame.innerSched` at the frame's state on the inner proof's round the frame
+is at, which is within the inner proof and one the loop's finish computed (`roundPlace_own_bounds`);
+`ofLoop_answered_own` that round, the model's (`Loop.innerOf_eq`, `scheduled_innerAt`), its `ε` and `β`, the model's
+where the round reads them (`innerSched_congr`), and the finish's rounds it reads, the model's (`innerSched_fin_congr`).
+-/
 theorem roundPlace_scheduled_own
     (L₁ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr ZKMal.Masked.dataE).refP.Nonce ×
@@ -239,8 +285,7 @@ theorem roundPlace_scheduled_own
     (hA : (ofLoop ZKMal.Masked.dataE (withFiles (withLink (withInner ZKMal.Masked.dataE L₁ real fin) src) src)
       real).answered x ρ (e0 :: h1) = .ok m)
     (huq : unstop q.st.m = unstop m) (hnr : n = loopNr x (q₀ + 1))
-    (hfin : R.innerOf l0.root r = fin x w ρ (e0 :: h1)) {o : ByteArray}
-    (ho : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).out = .ok o) :
+    (hfin : ∀ (k : Nat) (b : ByteArray), (R.innerOf l0.root r)[k]? = some b → (fin x w ρ (e0 :: h1))[k]? = some b) :
     pc = .sched ⟨((ofLoop ZKMal.Masked.dataE (withFiles (withLink (withInner ZKMal.Masked.dataE L₁ real fin) src) src)
       real).scheduled x w ρ (e0 :: h1) vals).toArray⟩ := by
   obtain ⟨_, hfd⟩ := find_of_frameAt hfa
@@ -296,16 +341,11 @@ theorem roundPlace_scheduled_own
   have hqb : q.st.m.beta = m.beta := by
     have h := congrArg Masker.beta huq
     exact h
+  obtain ⟨hb4, hbf⟩ := roundPlace_own_bounds hfd hrp hf hss hn hl0 hv
   have hdone : q.st.m.inner ≠ some INNER_ROUNDS := by
     intro hin4
-    obtain ⟨out, vd, hre, -⟩ := roundStep_out hrp ho
-    have hst2 : _root_.Flock.Firewall.Frame.step q.cfg q.st
-        (.round n (if nd.isSome then ByteArray.empty else content) pc) =
-        (.round out vd, (_root_.Flock.Firewall.Frame.step q.cfg q.st
-          (.round n (if nd.isSome then ByteArray.empty else content) pc)).2) := Prod.ext hre rfl
-    rw [hpc] at hst2
-    obtain ⟨why, hck⟩ := _root_.Flock.Firewall.Frame.check_of_step hst2
-    exact check_inner_done hin4 _ _ _ _ hck
+    rw [hin4, Option.getD_some] at hb4
+    exact Nat.lt_irrefl _ hb4
   have hkey : j + 1 - sched.size < INNER_ROUNDS ∧ q.st.m.inner.getD 0 = j + 1 - sched.size ∧
       (j + 1 - sched.size = 1 → q.st.m.eps = (((Array.range (j + 1)).map fun k =>
         wordsAt x (h1.map fun e => ZKMal.CoinLayer.rd e.2) (q₀ - (j + 1) + k + 1)).getD sched.size #[])[0]!) ∧
@@ -329,8 +369,13 @@ theorem roundPlace_scheduled_own
       real).cfg x ρ (e0 :: h1) = (withFrames ZKMal.Masked.dataE L₁ real).cfg x ρ (e0 :: h1) := by
     unfold LeanRelease.cfg LeanRelease.drawsAt
     rfl
-  rw [hpc, hsc, bytes_toList_toArray, hcq, hcfg, hfin, hnr, hidx]
-  refine congrArg Place.sched (innerSched_congr _ _ _ hlt4 (fun h1' => ?_) (fun h3 => ?_))
+  rw [hpc, hsc, bytes_toList_toArray, hcq, hcfg, hnr, hidx]
+  rw [hidx] at hbf
+  refine congrArg Place.sched (Eq.trans (innerSched_fin_congr _ q.st.m (fin := R.innerOf l0.root r)
+    (fin' := fin x w ρ (e0 :: h1)) _ hlt4 (fun h0 => ?_) (fun h2 => ?_))
+    (innerSched_congr _ _ _ hlt4 (fun h1' => ?_) (fun h3 => ?_)))
+  · exact getD_of_agree hfin (by omega) _
+  · exact getD_of_agree hfin (by omega) _
   · dsimp only
     rw [he h1', getElem!_zero_getD, extract_getD (k := 0) _ (by omega) (by simp), Nat.add_zero sched.size]
   · dsimp only
@@ -339,14 +384,15 @@ theorem roundPlace_scheduled_own
 
 /-- **`placeFacts_seen`'s `hown`**: at the slot of a round of `stream`, table `i`'s rep `r`, of the deployed loop whose
 release has the session loop's own rounds of the inner proof (`withInner` at the finish's rounds `fin`), where
-`LoopFacts` and `LoopJ` hold, the model's tables and salts are the loop's (`RealAt`) and answer the round, the loop's
-finish rounds for each level 0 bound to the session are the model's (`hfin`) and the round is out, wherever `seen` has
-a round of `stream` and `placeOf` places it at the inner proof's own, the round's place is the model's scheduled
-round. `RepJ` gives the rep's `StreamAt` on the frame, entry, name and level 0 `hown` reads (`Option.some.inj`),
-`SessOn` the entry's setup, `LinkOn` the model's link and `SeenAt` the round past the stream's first; the frame keeps
-its schedule so far at `real`'s salts as in `placeSched_later`, and `SameInv` puts the readied frame at the model's
-configuration and masking state but for `stopped` (`sameInv_place`); the round's coin count is the model's
-(`Loop.reqOf_eq`, `LoopJ.plan`), so `roundPlace_scheduled_own` places it. -/
+`LoopFacts` and `LoopJ` hold, the model's tables and salts are the loop's (`RealAt`) and answer the round, and each
+round of the inner proof the loop's finish computed so far for the rep is the model's finish's (`InnerSrc`, at the
+model's `fin` the release's), wherever `seen` has a round of `stream` and `placeOf` places it at the inner proof's
+own, the round's place is the model's scheduled round. `RepJ` gives the rep's `StreamAt` on the frame, entry, name
+and level 0 `hown` reads (`Option.some.inj`), `SessOn` the entry's setup, `LinkOn` the model's link and `SeenAt` the
+round past the stream's first; the frame keeps its schedule so far at `real`'s salts as in `placeSched_later`, and
+`SameInv` puts the readied frame at the model's configuration and masking state but for `stopped`
+(`sameInv_place`); the round's coin count is the model's (`Loop.reqOf_eq`, `LoopJ.plan`), so
+`roundPlace_scheduled_own` places it. -/
 theorem placeSched_own
     {L₁ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×
@@ -374,13 +420,9 @@ theorem placeSched_own
     (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
     (hJ : LoopJ M sid spec sts seen st σ) (hrep : streamRep st stream = (i, r)) (hlt : σ.c < M.τ.length)
     (hR : RealAt M real sid σ) (hans : ∃ m, M.L.answered M.x M.ρ (M.hist σ.c) = .ok m)
-    (hfin : ∀ (rel : Release) (name : String) (l0 : _root_.Flock.Firewall.Level0.Level0),
-      sessAt σ.R sid = some rel → rel.spec.tables[i]? = some name →
-      _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 →
-      σ.R.innerOf l0.root r = fin M.x M.w M.ρ (M.hist σ.c))
-    {dom content : ByteArray} {q : Rep} {pc : Place} {f : Bool} {nd : Option String}
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i r dom content n = .ok (q, pc, f, nd))
-    (ho : ∃ o, (_root_.Flock.Firewall.Frames.roundStep σ.R σ.L0 sid i r dom content n).out = .ok o) :
+    (hin : InnerSrc M sid i r σ) (hfin : M.fin = fin M.x M.w M.ρ) {dom content : ByteArray} {q : Rep} {pc : Place}
+    {f : Bool} {nd : Option String}
+    (hrp : _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i r dom content n = .ok (q, pc, f, nd)) :
     seen.contains stream = true → ∀ (p : Rep) (rel : Release) (name : String)
       (l0 : _root_.Flock.Firewall.Level0.Level0) n' q', frameAt σ.R sid i r = some p → sessAt σ.R sid = some rel →
       rel.spec.tables[i]? = some name → _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 →
@@ -509,13 +551,12 @@ theorem placeSched_own
     rw [Loop.reqOf_eq hD.setup, ← hJ.plan hsent]
     unfold reqAt
     rw [ite_eq_right hop, Array.getD_eq_getD_getElem?, hpq, Option.getD_some]
-  have hfin' := hfin rel name l0 hss hn hl0
-  rw [hh] at hfin'
-  obtain ⟨o, ho⟩ := ho
+  have hfin' := hin rel name l0 hss hn hl0
+  rw [hfin, hh] at hfin'
   have := roundPlace_scheduled_own L₁ src real fin M.x M.w M.ρ e0 h1
     (computedOf (M.L.computed M.x M.w M.ρ (M.hist σ.c))) hD.setup (hJ.sizes hsent) hRT hq hk1 hr2 hk2
     (rep_lt_size hmem) hfa hrp hss' hn hl0 hspec hsts hl (by rw [← hsts]; exact hstm) htab hreal
-    (by rw [← hspec]; exact hIR) hI.coins hsalt hsc' hown hcq hAm1 huq hnr hfin' ho
+    (by rw [← hspec]; exact hIR) hI.coins hsalt hsc' hown hcq hAm1 huq hnr hfin'
   rw [this, hD.rel, hh]
 
 end Claims.ZKServer.Relay

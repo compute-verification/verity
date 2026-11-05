@@ -68,7 +68,7 @@ theorem envPre_deployed {M : LoopModel Claims.Flock.Wit
       M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) →
       RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R →
       (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) → SaltsSrc M sid σ →
-      (∃ o, e.round = .ok o) → RoundFacts M sid spec seen stream n i r dom v σ) :
+      InnerSrc M sid i r σ → (∃ o, e.round = .ok o) → RoundFacts M sid spec seen stream n i r dom v σ) :
     ∀ (es : List Env) (seen : List String) (st : State) (pl : Placed) (ms : List Claims.Msg),
       LoopP M (LoopJ M sid spec sts) sid spec sts nonce seen st pl es ms →
         EnvPre spec seen (schedSteps true st pl es) ms := by

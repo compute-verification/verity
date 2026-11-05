@@ -60,6 +60,8 @@ public import Proofs.Flock.ZkAny.RelayLoopRep
 public import Proofs.Flock.ZkAny.RelayLoopL0
 public import Proofs.Flock.ZkAny.RelayLoopDeployed
 public import Proofs.Flock.ZkAny.RelayLoopPre
+public import Proofs.Flock.ZkAny.RelayLoopInner
+public import Proofs.Flock.ZkAny.RelayLoopOwnAt
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release
@@ -116,6 +118,10 @@ round of a stream of one round, the rep's frame at the session's next round hold
 the setup's sizes within its frames' from its `Hello` on, at every frame round of the deployed loop the round's own rep
 one round on; and the invariant kept at a frame round of the deployed loop at its own tables, given what the loop's
 frames and the model hold there; and so `EnvPre` from that invariant at the deployed loop's own tables, given what the
-loop's frames and the model hold at each frame round. -/
+loop's frames and the model hold at each frame round; and past a rep's schedule so far the masking state's `ε` and `β`
+the first words of the coins of the inner proof's rounds 0 and 2, all `Frame.innerSched` reads of it; and so, at the
+deployed model with the session loop's own rounds of the inner proof, where `placeOf` places a round of a stream seen
+at the inner proof's own, the round's place the model's scheduled round, given each round of the inner proof the
+loop's finish computed so far the model's finish's. -/
 
 @[expose] public section

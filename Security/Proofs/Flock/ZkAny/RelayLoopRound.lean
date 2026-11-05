@@ -157,7 +157,7 @@ theorem slotCase_round {W Rr : Type} {M : LoopModel W Rr} {J : List String → S
       σ.c < M.τ.length → M.wk M.x M.w M.ρ (M.hist σ.c) 0 = some (v, false) →
       RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R →
       (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) → SaltsSrc M sid σ →
-      (∃ o, e.round = .ok o) → RoundFacts M sid spec seen stream n i r dom v σ)
+      InnerSrc M sid i r σ → (∃ o, e.round = .ok o) → RoundFacts M sid spec seen stream n i r dom v σ)
     (hJ : LoopKept M sid spec sts nonce J (.round stream n)) :
     SlotCase spec (LoopP M J sid spec sts nonce) (.round stream n) := by
   intro seen st pl e rest ms hsl hP
@@ -170,8 +170,9 @@ theorem slotCase_round {W Rr : Type} {M : LoopModel W Rr} {J : List String → S
   | step k' hk' hra hrest =>
     obtain rfl : Session.Kind.round stream n = k' := Option.some.inj (hsl.symm.trans hk')
     have hJ' := hJ seen st pl e σ _ hsl (hset e List.mem_cons_self) hF hj hra
-    obtain ⟨⟨hlt, -⟩, ⟨i, r, dom, v, hv, hr, hpc⟩, hcc, -, hsal⟩ := hra
-    have hRA := fun o (ho : e.round = .ok o) => hA seen st pl e σ _ i r dom v hsl hF hj hlt hv hr hpc hsal ⟨o, ho⟩
+    obtain ⟨⟨hlt, -⟩, ⟨i, r, dom, v, hv, hr, hpc, hin⟩, hcc, -, hsal⟩ := hra
+    have hRA := fun o (ho : e.round = .ok o) =>
+      hA seen st pl e σ _ i r dom v hsl hF hj hlt hv hr hpc hsal hin ⟨o, ho⟩
     have hreq := request_round_slot hF.reach hF.live hsl
     refine ⟨fun _ => ?_, fun hgo => ?_⟩
     · intro c hc
