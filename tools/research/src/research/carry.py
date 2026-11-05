@@ -13,7 +13,9 @@ of ``new`` and each commit of that line is one of:
 - a commit that changes only generated files (a lock's records regenerated, a pin rebuilt).
 
 No other PR's verdict vouches for a commit of the PR's own line (a PR stacked on this one was reviewed over it, not for it),
-nor for an older head of that PR or anything inside another PR's head that its own verdict doesn't cover.
+nor for an older head of that PR or anything inside another PR's head that its own verdict doesn't cover.  Nor does the old
+verdict hold once the PR carries a withdrawn PR's change (`Queue._carried`): that change became its own after the review, so
+the caller carries no verdict for such a member, whatever `delta` says.
 
 With ``lowrisk`` given, a delta whose own commits and hand resolutions change only files the low-risk lane lands with no
 verdict at all (drive.toml's `lowrisk_excludes`: docs, benchmarks, most tests) carries it too: drive would land that change on

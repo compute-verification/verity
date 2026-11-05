@@ -19,13 +19,17 @@ import bisect
 import collections
 import functools
 import json
+import os
 import subprocess
 import sys
 import tomllib
+import types
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 from research import carry
+
+_merged_tree = carry.Q.merged_tree
 
 REPO = Path(__file__).resolve().parents[2]
 W0 = "2026-10-22T17:00:00Z"
@@ -122,7 +126,27 @@ _EXCLUDES: list = []
 _HEADS: dict = {}
 
 
+CACHE = Path("/tmp/lh/merged_tree")
+
+
+def _cached_merged_tree(repo, a: str, b: str, **kw):
+    """`queue.merged_tree`, kept on disk by its two commits: the drivers are deterministic and dominate the replay's time."""
+    if kw:
+        return _merged_tree(repo, a, b, **kw)
+    f = CACHE / f"{a}-{b}.json"
+    if f.exists():
+        d = json.loads(f.read_text())
+        return d["tree"], d["conflicted"], types.SimpleNamespace(returncode=d["rc"], stdout=d["stdout"], stderr="")
+    tree, conflicted, r = _merged_tree(repo, a, b)
+    tmp = f.with_suffix(f".{os.getpid()}")
+    tmp.write_text(json.dumps({"tree": tree, "conflicted": list(conflicted), "rc": r.returncode, "stdout": r.stdout}))
+    tmp.replace(f)
+    return tree, conflicted, r
+
+
 def _init(t: dict, verdicts: dict, marks: dict, excludes: list) -> None:
+    CACHE.mkdir(parents=True, exist_ok=True)
+    carry.Q.merged_tree = _cached_merged_tree
     _T.update(t)
     _VERDICTS.update(verdicts)
     _MARKS.update(marks)
