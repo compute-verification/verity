@@ -597,13 +597,13 @@ theorem layout_inGap (st : HmNets.St) (inBits outBits : Array ℕ) (outs : Array
   · rw [hra]
     simp (disch := (simp only [Array.size_append, Array.size_map, hs, hr, hi, List.size_toArray, Array.size_singleton]; omega))
       only [getD_append_left, getD_append_right]
-    simp only [Array.size_append, Array.size_map, hs, hi, hr]
+    simp only [hi]
     simp only [e, Array.getD_eq_getD_getElem?, Array.getElem?_replicate]
     split <;> rfl
   · rw [hrb]
     simp (disch := (simp only [Array.size_append, Array.size_map, hs, hr, hi, List.size_toArray, Array.size_singleton]; omega))
       only [getD_append_left, getD_append_right]
-    simp only [Array.size_append, Array.size_map, hs, hi, hr]
+    simp only [hi]
     simp only [e, Array.getD_eq_getD_getElem?, Array.getElem?_replicate]
     split <;> rfl
 
