@@ -90,3 +90,19 @@ from = ["spot"]
 why = "the accounting PoUW needs"
 paths = ["Security/*/Accounting{,.lean}", "Security/Proofs/Properties/Accounting{,.lean}"]
 from = ["pouw"]
+
+# Known residue: what the export copies knowing it still carries the process's words, each until the change that removes it
+# (`until`). The export reports each entry's sites in what it copies: a line of a copied file under `paths` that `pattern`
+# matches.
+[[residue]]
+what = "the auditor ledger's `lane` field: a monitoring period's prover, as the v2 ledger's period-open and period-close name it"
+pattern = '\bperiod\b[^\n]*\blane\b|\blane\b[^\n]*\bperiod\b'
+paths = [
+    "verity/core/protocols/{sampled_proofs,pouw}",
+    "verity/core/service/sampled_proofs",
+    "Security/*/Pouw",
+    "Security/Proofs/Properties/Pouw",
+    "integrations/vllm",
+    "benchmarks/one_stage",
+]
+until = "PRF-285: the v3 ledger names a period's prover `prover`"

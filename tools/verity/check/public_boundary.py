@@ -122,19 +122,35 @@ class Needed(NamedTuple):
     via: frozenset[str] | None = None
 
 
+class Residue(NamedTuple):
+    what: str
+    #: what marks a site of it in a file's text
+    pattern: re.Pattern[str]
+    paths: re.Pattern[str]
+    #: the change that removes it
+    until: str
+
+
 class Boundary(NamedTuple):
     groups: dict[str, re.Pattern[str]]
     raw: dict[str, list[str]]
     private: re.Pattern[str]
     needed: tuple[Needed, ...]
     when_closed: re.Pattern[str]
+    residue: tuple[Residue, ...] = ()
 
     @classmethod
     def load(cls, doc: dict | Path = BOUNDARY) -> Boundary:
         if isinstance(doc, Path):
             doc = tomllib.loads(doc.read_text(encoding="utf-8"))
-        if other := sorted(set(doc) - {"public", "private", "needed", "when_closed"}):
+        if other := sorted(set(doc) - {"public", "private", "needed", "when_closed", "residue"}):
             raise ValueError(f"the boundary has keys it doesn't read: {other}")
+        residue = []
+        for e in doc.get("residue", []):
+            if sorted(e) != ["paths", "pattern", "until", "what"]:
+                raise ValueError(f"residue {e.get('what')!r} has keys {sorted(e)}; each has exactly what, pattern, paths "
+                                 "and until")
+            residue.append(Residue(e["what"], re.compile(e["pattern"]), globs(e["paths"]), e["until"]))
         groups = {name: globs(ps) for name, ps in doc.get("public", {}).items()}
         needed = []
         for e in doc.get("needed", []):
@@ -149,7 +165,7 @@ class Boundary(NamedTuple):
             needed.append(Needed(e.get("why", ""), globs(e["paths"]), None if src == "*" else frozenset(src),
                                  None if via == "*" else frozenset(via)))
         return cls(groups, dict(doc.get("public", {})), globs(p for ps in doc.get("private", {}).values() for p in ps),
-                   tuple(needed), globs(doc.get("when_closed", [])))
+                   tuple(needed), globs(doc.get("when_closed", [])), tuple(residue))
 
     def group(self, path: str) -> str | None:
         return next((g for g, r in self.groups.items() if r.fullmatch(path)), None)
