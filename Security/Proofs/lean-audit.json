@@ -98,6 +98,7 @@
   "Proofs.Properties.Verity.Sampled.SpecTie",
   "Proofs.Properties.Verity.Sampled.MovesReach",
   "Proofs.Properties.Verity.Sampled.RootB",
+  "Proofs.Properties.Verity.Sampled.LinkFirst",
   "Proofs.Properties.Verity.Sampled.MovesLayout",
   "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledLog",
