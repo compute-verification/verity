@@ -236,11 +236,15 @@ negatives.
   stated parameters, not measured; that the node has no egress but the uplink the network certifier splits, which the
   registration asserts, is the auditor's placement under trusted-host, which no file establishes); and
   `auditor-listing`, that each circuit file the
-  period lists is, by SHA-512, the one its audit's sessions were verified against. `certifier-key` closes only where the
+  period lists is, by SHA-512, the one its audit's sessions were verified against, and the remote theorem's
+  registered-files condition: each file remote's sampled proofs case registers, the circuit file and the public file, is
+  by SHA-512 the one its params θ name (`proofs.circuit`, `proofs.public`), θ held to the params each composite that
+  reads the case states, the files hashed and never read off the evidence. `certifier-key` closes only where the
   lock holds PeriodLeakRegistered at its pinned statement taking hA, hr and hkey as `auditor-record` and that check
   holds; while it is open, an accepted network verdict is not established, its Lean answer's accept beside it, and its
   bound conditional on `certifier-key` by name. Where `auditor-listing` doesn't hold, the verdict is not established
-  and there is no bound.
+  and there is no bound; where its registered-files condition doesn't, neither is a composite's that reads the case;
+  and where θ names no public file, the public file isn't bound and sampled proofs' verdict is not established.
   Sampled proofs credits only the drawn members whose `--registered` file its audit completed at the window's
   committed roots and whose Lean verdict of record reported exactly that file's reads, and lists every other drawn
   member as not credited, by name; PoUW's freed compute is credited nowhere and not claimed, by name, beside the PoUW

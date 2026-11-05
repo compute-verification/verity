@@ -2820,6 +2820,28 @@ def test_the_follow_on_removes_the_windows_circuit_files_after_its_period_check_
     assert not list(vw.rglob("circuit.txt")) and (vw / "audit" / "window" / "m0-private.bin").read_bytes() == b"\x01"
 
 
+def test_the_follow_on_hands_the_onsite_record_remotes_sampled_proofs_case_before_removing_the_files_it_registers(
+        tmp_path):
+    """Where the composite step wrote remote's sampled proofs case under the serve dir's private/, the onsite record is
+    handed it (--sampled-proofs-case), whose registered files it hashes, so it runs before the follow-on removes the
+    circuit file the audit's v2 case names: it finds that file there, and the file goes after it."""
+    assert _deferred(tmp_path, CERTIFIER_FRONT="front", WINDOW_STEPS="1", MAX_TOKENS="1").returncode == 0
+    d, out, vw = tmp_path / "serve", tmp_path / "out", tmp_path / "serve" / f"v3c-w7-{VTAG}"
+    left = LEFT.format(at=vw, step="onsite")
+    (tmp_path / "tree" / "benchmarks" / "one_stage").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "tree" / "benchmarks" / "one_stage" / "onsite_record.py").write_text(
+        f"{FAKE_ONSITE_RECORD}import subprocess\nsubprocess.run(['bash', '-c', {left!r}], check=True)\n")
+    case = 'mkdir -p "$1/private/sampled-proofs" && echo {} > "$1/private/sampled-proofs/case.json"'
+    rc, lines, order, _limits = _follow(tmp_path, f"{FAKE_SERVED_COMPOSITE}\n{case}", records_audit=COMPOSED_AUDIT,
+                                        V2_CASE="1")
+    assert rc == 0 and order == ["audit", "period", "record", "composite", "onsite"], (lines, order)
+    assert json.loads((tmp_path / "order.onsite").read_text()) == [
+        str(out), "--window-steps", "1", "--max-tokens", "1",
+        "--sampled-proofs-case", str(d / "private" / "sampled-proofs" / "case.json"), "--h1-tie"]
+    assert (tmp_path / "order.left-onsite").read_text().split() == ["./audit/window/m1/circuit.txt"]
+    assert [x.split(" ")[0] for x in lines[-2:]] == ["ONSITE", "V3C-CIRCUITS"] and not list(vw.rglob("circuit.txt"))
+
+
 #: the network certifier's kept run in `_deferred`'s serve dir: the gate's fetch and the front's session
 KEPT = ("private/certifier/r1/fetch.tar.gz", "private/certifier/r1/session.json")
 #: the split certifier's period check, writing the network certifier's case and its answer in its piece dir
