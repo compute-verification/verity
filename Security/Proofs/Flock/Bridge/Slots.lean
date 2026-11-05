@@ -16,8 +16,8 @@ values.
   an input slot's.
 * Every gate but a constant is in a slot: an input gate is its own, and every other is a computed wire's lowered gate,
   so its unit's (`exists_unitGates`).
-* Every slot's commitment fits a size class (`unitClass_of_le`): a unit's by hypothesis, an input slot's, one gate, is at
-  most `1`.
+* Every slot's commitment fits a size class (`unitClass_of_le`): a unit's by hypothesis, and an input slot's, one gate,
+  is at most `1`.
 -/
 
 @[expose] public section
@@ -39,7 +39,8 @@ theorem unitClass_of_le {Cp : Prog} {u : List ℕ} (h : committed Cp u ≤ unitC
   have hs : (unitClasses.find? fun w => decide (committed Cp u ≤ w)).isSome :=
     List.find?_isSome.2 ⟨unitClassMax, hmem, decide_eq_true h⟩
   obtain ⟨w, hw⟩ := Option.isSome_iff_exists.1 hs
-  exact ⟨w, hw, of_decide_eq_true (List.find?_some hw)⟩
+  have hd := List.find?_some hw
+  exact ⟨w, hw, of_decide_eq_true hd⟩
 
 theorem lower_ne_input {g : Fin C.N} (hni : (C.op g).isInput = false) : ∀ x ∈ lower C κ g, x ≠ .input := by
   unfold lower
@@ -57,7 +58,8 @@ theorem lt_length_of_unit {n : ℕ} {P : Partition C n} {u : Fin n} {p : ℕ} (h
     p < (progOf C κ).gates.length := by
   obtain ⟨g, -, j, hj, rfl⟩ := mem_unitGates.1 hp
   have h := gates_off (κ := κ) g hj
-  rw [List.getElem?_eq_getElem (by rw [length_lower]; exact hj)] at h
+  have hl : j < (lower C κ g).length := by rw [length_lower]; exact hj
+  rw [List.getElem?_eq_getElem hl] at h
   exact (List.getElem?_eq_some_iff.1 h).1
 
 theorem nodup_unitGates {n : ℕ} (P : Partition C n) (u : Fin n) : (unitGates P u).Nodup := by
