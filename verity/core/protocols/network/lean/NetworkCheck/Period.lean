@@ -2306,17 +2306,19 @@ def protocolWith (fs : Array (ByteArray × Flock.Circuit)) : Core.Protocol := pr
 /-- The period protocol refusing every period for `why`: a listed file that couldn't be read. -/
 def refusing (why : String) : Core.Protocol := protocolBy fun _ _ _ => .reject why
 
-/-- How many of the circuit files given to `network-period check` the parameters at `p` list for the scan
-(`scan_circuits`), the last ones: 0 where they are not canonical JSON (`Core.canonicalJson`) or list none. A miscount
-holds a scan's file as an audit's, without its computed rows, which the check refuses (`fileWhy`), or an audit's file
-whole, more of it than the check needs. -/
-def scanFiles (p : String) : IO Nat := do
+/-- How many of the circuit files given to `network-period check` the parameters `j` list for the scan
+(`scan_circuits`), the last ones: 0 where they list none. A miscount holds a scan's file as an audit's, without its
+computed rows, which the check refuses (`fileWhy`), or an audit's file whole, more of it than the check needs. -/
+def scanCount (j : Json) : Nat :=
+  match j.getObjVal? "scan_circuits" with
+  | .ok (.arr a) => a.size
+  | _ => 0
+
+/-- The parameters at the path `p` as canonical JSON (`Core.canonicalJson`), `null` where they are not, which lists no
+scan files (`scanCount`). -/
+def paramsAt (p : String) : IO Json := do
   let b ← tryCatch (IO.FS.readBinFile p) fun _ => pure ByteArray.empty
-  match Core.canonicalJson b with
-  | .ok j => match j.getObjVal? "scan_circuits" with
-    | .ok (.arr a) => return a.size
-    | _ => return 0
-  | .error _ => return 0
+  return (Core.canonicalJson b).toOption.getD .null
 
 /-! ## The clock openings -/
 

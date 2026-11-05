@@ -2025,8 +2025,8 @@ def check_with(files: list[CircuitHeader], pl: tuple[Params, Listing], c: Commit
     return check(charged(p, listing, files), c, e)
 
 
-def scan_files(params) -> int:
-    """`scanFiles`: how many files the parameters' `scan_circuits` lists, read before the parameters are: 0 for
+def scan_count(params) -> int:
+    """`scanCount`: how many files the parameters' `scan_circuits` lists, read before the parameters are: 0 for
     parameters that list none or aren't an object."""
     sc = params.get("scan_circuits") if isinstance(params, dict) else None
     return len(sc) if isinstance(sc, list) else 0
@@ -2034,12 +2034,12 @@ def scan_files(params) -> int:
 
 def reference_with(case: dict, texts: list[str]) -> dict:
     """`network-period check PARAMS COMMITMENT EVIDENCE CIRCUIT…`'s answer with the circuit files `texts`, in order
-    (`protocolWith`), the last as many as the parameters' `scan_circuits` lists (`scan_files`) read whole; a file it
+    (`protocolWith`), the last as many as the parameters' `scan_circuits` lists (`scan_count`) read whole; a file it
     can't read (`read_circuit`) refuses the period (`refusing`). With no files it is the check that reads none
     (`reference`)."""
     if not texts:
         return reference(case)
-    files, why, whole = [], None, len(texts) - scan_files(case["params"])
+    files, why, whole = [], None, len(texts) - scan_count(case["params"])
     for i, t in enumerate(texts):
         try:
             files.append(read_circuit(t, i >= whole))
