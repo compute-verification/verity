@@ -4,6 +4,8 @@ public import Proofs.Properties.Verity.Sampled.Lines
 public import Proofs.Properties.Verity.Sampled.Binding
 public import Proofs.Properties.NetworkCertifier.LinkWindow
 public import Proofs.Core.Game.Tape
+import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
 
 /-!
 # The device's history at a play: the run that printed the play's log

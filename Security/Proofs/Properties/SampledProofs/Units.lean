@@ -5,6 +5,7 @@ public import Flock.With.SetupEq
 public import Proofs.Flock.Claims.JsonNorm
 public import Proofs.Flock.Claims.Complete.Json.Parse
 public import Proofs.Flock.Claims.Recursion.SetupValues
+import all Lean.Data.Json.Basic
 
 /-!
 # v2's units, read off the values the verifier keeps
