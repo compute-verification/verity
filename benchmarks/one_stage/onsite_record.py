@@ -33,7 +33,7 @@ established``, its Lean answer's accept beside it (``answer``), and its bound co
 ``credit`` (`CREDIT`) names the drawn members it credits, those whose --registered file the audit completed at the
 window's committed roots and whose Lean verdict accepted it reporting exactly its reads (the audit's published record,
 `AUDIT`), and lists every other drawn member as not credited, by name, with why; ``missing`` where the record states no
-completion. ``of_record`` holds when every verdict but PoUW's accepted and every drawn member is credited, the condition
+completion. ``of_record`` holds when every verdict it reads accepted and every drawn member is credited, the condition
 for the demo's run of record, naming its composite of record by id (``composite``), the verdicts not established, the
 members not credited and the verdicts it doesn't read (``not_claimed``: PoUW's, `NOT_CLAIMED`, listed as it is, missing
 and development where its row is, and under a composite without PoUW remote's too, `NOT_CLAIMED_WITHOUT_POUW`), and
