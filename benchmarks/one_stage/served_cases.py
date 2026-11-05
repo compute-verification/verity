@@ -49,13 +49,15 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
 
   Both composites name the policy among their subprotocols (`Core.Remote.components`, `Core.Onsite.components`), and
   compose its v0, which publishes the division and its blocks' profiles, as a stated exception (`composite.EXCEPTIONS`).
-* **PoUW's period case** (`period_case`, `PERIOD`: `verity/pouw/period/v1`, both composites' work subprotocol):
+* **PoUW's period case** (`period_case`, `PERIOD`: `verity/pouw/period/v1`, PoUW's subprotocol at remote,
+  remote-network and onsite; remote-network-no-pouw has none):
   `pouw_piece.py period`'s case and answer as it wrote them (``--period``; with ``--serve-dir``, `served_pouw.sh`'s
   ``D/private/pouw/period`` when it holds a case), taken once every window of the period names R as its Commit record
   (`credit.commit_of`, as `Core.Remote.windowRecords` reads it): the case commits to the auditor's ledger, so the tie
   is its windows'. A period with a window on another record, or on none, is refused here, before any composite runs,
   and so is handed to neither: remote would reject it on the tie, and onsite, which doesn't check it, would credit
-  another record's work beside this window's. Without a period case none is made, and a composite names it missing.
+  another record's work beside this window's. Without a period case none is made, and a composite with PoUW among its
+  subprotocols names it missing.
 * **`verity/sampled-proofs/one-stage/v2`** (`v2_case`, only with ``--v2``): a5's ``window/case-v2.json``
   (`a5.case_v2`: v1's case with the verdicts replaced by the sampled member's proofs' files, and ``blobs``), refused
   when it commits to another record than v1's case or names a blob that isn't there, and when a5 wrote none (its
@@ -67,8 +69,10 @@ Each case goes to its own directory under ``--private`` (``sampled-proofs-v1/``,
 ``inference-only/``, ``pouw-period/``, ``sampled-proofs-v2/``; 0700, files 0600): ``case.json`` (``{"params",
 "commitment", "evidence"}``, hex commitment and evidence, and sampled proofs', v2's and the period's ``blobs``) and
 ``answer.json``, its Lean answer line (and, given ``--from-division``, the inference-only case's ``policy.json``). A
-composition is handed only the directories whose answer's protocol is one of its product's subprotocols: remote's are
-sampled proofs', the inference-only case's and the period's, onsite's v1's among its own, and neither's v2's bare case.
+composition is handed only the directories whose answer's protocol is one of its subprotocols (`composite.COMPONENTS`):
+remote's are sampled proofs', the inference-only case's and the period's, remote-network-no-pouw's sampled proofs', the
+inference-only case's and the network certifier's but never the period's, onsite's v1's among its own, and none's v2's
+bare case.
 The Lean runs on files in a 0700 scratch directory under ``--private``; the period's answer is the one `pouw_piece.py`
 wrote. This prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written and
 a ``NOT_WRITTEN {"protocol", "reason"}`` line per case refused, and nothing of a case's params or evidence: not α and Γ

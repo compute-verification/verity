@@ -17,22 +17,24 @@ import Lms.Verify
 The verifier of record is one compiled Lean function per composite (`Verity.Registration.Composite`), the `answer` of
 the composite `Core.Composites.composites` lists for it (`verifier`): onsite's `Core.Onsite.protocol`
 (`verity/onsite/v0`, `Core.Composition.tiedSameB`), remote's `Core.Remote.protocol` (`verity/remote/v0`,
-`Core.Composition.tiedSameB`) and remote with the network certifier's `Core.RemoteNetwork.protocol`
-(`verity/remote-network/v0`, `Core.Composition.tiedSameB` under remote's ties and its egress tie), each composing its
-subprotocols over the blobs the prover sent. Onsite has seven subprotocols, remote three of them and remote with the
-network certifier remote's three and the network certifier, each subprotocol at the component its composite names for
-it (`component`);
+`Core.Composition.tiedSameB`), remote with the network certifier's `Core.RemoteNetwork.protocol`
+(`verity/remote-network/v0`, `Core.Composition.tiedSameB` under remote's ties and its egress tie) and, for remote with
+the network certifier, without PoUW, `Core.RemoteNetworkNoPouw.protocol` (`verity/remote-network-no-pouw/v0`,
+`Core.Composition.tiedSameB` under the egress tie alone), each composing its subprotocols over the blobs the prover
+sent. Onsite has seven subprotocols, remote three of them, remote with the network certifier remote's three and the
+network certifier, and remote-network without PoUW those four but PoUW, each subprotocol at the component its composite
+names for it (`component`);
 the five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAudit`):
 
-| subprotocol | `Audit` | onsite's component | remote's component | remote with the network certifier's |
-| --- | --- | --- | --- | --- |
-| sampled proofs | `.sampled` | `SampledProofs.OneStage.protocol` (v1) | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit or the recursive audit, as its params' `form` names it; one-stage v1 refused) | remote's |
-| PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) | the same | the same |
-| the inference-only policy | | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | the same | the same |
-| PoUS | `.pous` | `PousCheck.RunProtocol.protocol` | | |
-| PoUB-P2 | `.poub` | `RemoteAudit.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | | |
-| the network certifier | `.network` | `NetworkCheck.Period.protocol` | | onsite's |
-| the wipe | | `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`) | | |
+| subprotocol | `Audit` | onsite's component | remote's component | remote with the network certifier's | without PoUW's |
+| --- | --- | --- | --- | --- | --- |
+| sampled proofs | `.sampled` | `SampledProofs.OneStage.protocol` (v1) | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit or the recursive audit, as its params' `form` names it; one-stage v1 refused) | remote's | remote's |
+| PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) | the same | the same | |
+| the inference-only policy | | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | the same | the same | the same |
+| PoUS | `.pous` | `PousCheck.RunProtocol.protocol` | | | |
+| PoUB-P2 | `.poub` | `RemoteAudit.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | | | |
+| the network certifier | `.network` | `NetworkCheck.Period.protocol` | | onsite's | onsite's |
+| the wipe | | `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`) | | | |
 
 The statement's form is the causal game, the committed files, one fixed extractor and one adversary form:
 
@@ -75,8 +77,9 @@ The statement's form is the causal game, the committed files, one fixed extracto
 * **Each component's acceptance in what the prover sent.** Subprotocol `a`'s verdict at composite `k` (`Verdict`) is the
   file check, the composite's own acceptance as a `same` composition (`SameAccepts`: an accepted composition of its
   components whose record subprotocols committed to one record, `Properties.Composition.AcceptSame`'s conclusion, and
-  at onsite PoUS and PoUB-P2 on one store and at remote and remote with the network certifier every window of PoUW's
-  period on the record, `AcceptTied`'s),
+  at onsite PoUS and PoUB-P2 on one store, at remote and remote with the network certifier every window of PoUW's
+  period on the record, and at remote with the network certifier, with PoUW or without, every compute audit of the
+  network certifier's period on it, `AcceptTied`'s),
   and `a`'s compiled component's acceptance of its own case.
   The releases each component's check read (`coinsRead`) are the targets' to bound (`Logged`).
 * **PoUW counts gates** of the committed circuit the play computed after their window's coin, over the period's windows
@@ -84,9 +87,10 @@ The statement's form is the causal game, the committed files, one fixed extracto
 
 Each subprotocol's target (`SampledProofsSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
 `NetworkCertifierSound`, `WipeSound`) is `Target k a`: at every `θ`, `F`, `c` and strategy, the probability that `a`'s
-verdict at `k` accepts while its claim fails is at most its error there. `Verity.Soundness` and `Verity.RemoteSoundness`
-(`Properties.Verity.Soundness`) compose them, onsite's seven and remote's three; `Verity.SoundnessOf` composes every
-composite's, remote with the network certifier's four among them.
+verdict at `k` accepts while its claim fails is at most its error there. `Verity.Soundness`, `Verity.RemoteSoundness`
+and `Verity.RemoteNetworkNoPouwSoundness` (`Properties.Verity.Soundness`) compose them, onsite's seven, remote's three
+and remote-network without PoUW's three; `Verity.SoundnessOf` composes every composite's, remote with the network
+certifier's four among them.
 
 The names a subprotocol defines are `Vocab`'s fields: `read` (v2's reading of the circuit file), `place`, `programDigest` and
 `registered`, `rounds` and `coinsRead`, `extract`, the finders and the forgers, `computed`, `world` (the runs PoUS,
@@ -135,26 +139,30 @@ def verifier : Verity.Registration.Composite → BlobProtocol
   | .onsite => Onsite.protocol
   | .remote => Remote.protocol
   | .remoteNetwork => RemoteNetwork.protocol
+  | .remoteNetworkNoPouw => RemoteNetworkNoPouw.protocol
 
 /-- Composite `k`'s subprotocols, as its verifier composes them, in the order of their ids. -/
 def componentsOf : Verity.Registration.Composite → List BlobProtocol
   | .onsite => Onsite.components
   | .remote => Remote.components
   | .remoteNetwork => RemoteNetwork.components
+  | .remoteNetworkNoPouw => RemoteNetworkNoPouw.components
 
 /-- The subprotocols of composite `k` that must commit to one record. -/
 def tied : Verity.Registration.Composite → List String
   | .onsite => Onsite.tied
   | .remote => Remote.tied
   | .remoteNetwork => Remote.tied
+  | .remoteNetworkNoPouw => Remote.tied
 
 /-- The ties of composite `k`: at onsite, PoUS and PoUB-P2 on one store; at remote and remote with the network
-certifier, every window of PoUW's period on the policy's record, and at remote with the network certifier every compute
-audit of the network certifier's period on it too. -/
+certifier, every window of PoUW's period on the policy's record, and at remote with the network certifier, with PoUW or
+without, every compute audit of the network certifier's period on it. -/
 def ties : Verity.Registration.Composite → List Composition.Tie
   | .onsite => [Onsite.store]
   | .remote => [Remote.windows]
   | .remoteNetwork => RemoteNetwork.ties
+  | .remoteNetworkNoPouw => RemoteNetworkNoPouw.ties
 
 /-- **The compiled component of composite `k` that decides subprotocol `a`**; `none` when `k` has no such
 subprotocol. -/
@@ -175,9 +183,13 @@ def component : Verity.Registration.Composite → Subprotocol → Option BlobPro
   | .remoteNetwork, .inferenceOnly => some NciCheck.Protocol.protocol
   | .remoteNetwork, .network => some NetworkCheck.Period.protocol
   | .remoteNetwork, _ => none
+  | .remoteNetworkNoPouw, .sampled => some VStar.Recursive.Sampled.protocol
+  | .remoteNetworkNoPouw, .inferenceOnly => some NciCheck.Protocol.protocol
+  | .remoteNetworkNoPouw, .network => some NetworkCheck.Period.protocol
+  | .remoteNetworkNoPouw, _ => none
 
-/-- Composite `k`'s subprotocols: those it has a component for. Remote's and remote with the network certifier's are
-subsets of onsite's. -/
+/-- Composite `k`'s subprotocols: those it has a component for. Remote's and remote with the network certifier's, with
+PoUW or without, are subsets of onsite's. -/
 def subprotocols (k : Verity.Registration.Composite) : Finset Subprotocol :=
   Finset.univ.filter fun a => (component k a).isSome
 
@@ -197,8 +209,8 @@ def Sent.components (k : Verity.Registration.Composite) (s : Sent) : List Protoc
 def Accepts (k : Verity.Registration.Composite) (s : Sent) : Prop :=
   ((verifier k).answer s.params s.commitment s.evidence s.blobs).verdict = .accept
 
-/-- The three byte strings decode under the composition's formats (`Core.Composition.product`'s, which both composites
-read): the components' parameters `ps`, the binding `c` of their digests, and their cases `ev`. -/
+/-- The three byte strings decode under the composition's formats (`Core.Composition.product`'s, which every composite
+reads): the components' parameters `ps`, the binding `c` of their digests, and their cases `ev`. -/
 def Decoded (s : Sent) (ps : List Composition.Named) (c : ByteArray) (ev : List Composition.Case) : Prop :=
   (canonicalJson s.params >>= Composition.decodeParams) = .ok ps ∧ Composition.decodeCommitment s.commitment = .ok c ∧
     Composition.decodeEvidence s.evidence = .ok ev
@@ -218,8 +230,9 @@ def ComponentAccepts (k : Verity.Registration.Composite) (a : Subprotocol) (s : 
 /-- **Composite `k` accepted what the prover sent as a `same` composition**: the three byte strings decode to an
 accepted composition of `k`'s components on the blobs sent, whose record subprotocols (`tied k`) committed to one
 record (`Properties.Composition.SameAccepted`), and whose ties (`ties k`: at onsite, PoUS and PoUB-P2 on one store; at
-remote and remote with the network certifier, every window of PoUW's period on the policy's record) each named one value
-(`Properties.Composition.Tied`). -/
+remote and remote with the network certifier, every window of PoUW's period on the policy's record; at remote with the
+network certifier, with PoUW or without, every compute audit of the network certifier's period on it) each named one
+value (`Properties.Composition.Tied`). -/
 def SameAccepts (k : Verity.Registration.Composite) (s : Sent) : Prop :=
   ∃ ps c ev, Decoded s ps c ev ∧ ∃ pub prof,
     Properties.Composition.SameAccepted (verifier k).id (tied k) (s.components k) ps c ev pub prof ∧

@@ -98,8 +98,10 @@ negatives.
   `verity/remote-network/v0`'s, which refuses a network certifier's period whose compute audits are not all on the run's
   registration record (its `egress` tie). So a remote-network run takes the split certifier below, whose one compute
   audit is V3c's of the served window, and its preflight refuses `CERTIFIER_CMD`, whose audits are its scan's own
-  registrations. An accept's clause says when its weights were held and their share of the checkpoint, where its
-  profile says so (PoUS's), and each δ of the block record's at which its quantity is not established. With the
+  registrations. `PRODUCT=remote-network-no-pouw` is the same run without PoUW's piece, its one composite
+  `verity/remote-network-no-pouw/v0`, over the network certifier's, the policy's and sampled proofs' cases and never
+  PoUW's period case, so its record credits no verified compute. An accept's clause says when its weights were held and
+  their share of the checkpoint, where its profile says so (PoUS's), and each δ of the block record's at which its quantity is not established. With the
   certifier's piece split in two (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), V3c's step also runs the chain after
   its window commit, beside its audit (within `CERTIFIER_TIMEOUT`, default 4h), and the period check on its
   `period.json` once both are done, whose answer the certifier's piece reads. Each
@@ -215,7 +217,8 @@ negatives.
   token, time to first token and tokens per second as composed over stock, the composed run's window open and close on
   the engine loop, and `verity-bench served-table`'s single-protocol rows beside them.
 - `served_composite.sh`: `served_verdicts.sh`'s step after its record. It writes PoUS's and the wipe's composite cases
-  (PoUS's `served_case.sh`), then gets remote's, remote-network's and onsite's Lean verdicts on the run's cases (soundness's composite
+  (PoUS's `served_case.sh`), then gets remote's, remote-network's and onsite's Lean verdicts, or remote-network-no-pouw's
+  alone, on the run's cases (soundness's composite
   reader), all on the node. Only the verdict lines reach the run's `verdicts.txt`, and a tree without those two scripts skips the step.
 - `onsite_record.py OUT [--advice-charge FILE] [--certifier-key RECORD --site-registration FILE]`: the onsite demo's
   record of a served run (`record/onsite.json`), which

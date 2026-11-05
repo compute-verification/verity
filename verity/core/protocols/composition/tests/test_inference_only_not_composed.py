@@ -2,9 +2,10 @@
 with its reason. The inference-only policy's public form, `verity/inference-only/v0` (`NciCheck.Protocol.protocol`),
 publishes the division, and each inference block's gates and fresh-input bits, so it isn't zero-knowledge; every
 composite composes it for one run of record only, a stated exception, and v1's private form replaces it. The
-composites' components are read wherever they are listed: their Lean (`Core.Onsite.components`, `Core.Remote.components`
-and `Core.RemoteNetwork.components`, which extends remote's with `::`, with the ids each one's `#guard` pins), the
-reference's mirror of them (`reference.ONSITE`, `REMOTE`, `REMOTE_NETWORK`), and the ids a configuration may name as components (`parties.IDS`, which step0's
+composites' components are read wherever they are listed: their Lean (`Core.Onsite.components`, `Core.Remote.components`,
+`Core.RemoteNetwork.components`, which extends remote's with `::`, and `Core.RemoteNetworkNoPouw.components`, with the
+ids each one's `#guard` pins), the reference's mirror of them (`reference.ONSITE`, `REMOTE`, `REMOTE_NETWORK`,
+`REMOTE_NETWORK_NO_POUW`), and the ids a configuration may name as components (`parties.IDS`, which step0's
 `MANIFESTS` lists), read from its source: importing `parties` would read the deploy runtime, which this suite doesn't
 declare."""
 
@@ -24,7 +25,8 @@ V0 = "verity/inference-only/v0"
 PRIVATE_ONLY = ("only the private form (v1: division committed under hiding leaves, compliance proved, padded profile) "
                 "may be composed")
 COMPOSITES = {"Core.Onsite": PROTOCOLS / "onsite/CoreOnsite.lean", "Core.Remote": PROTOCOLS / "remote/CoreRemote.lean",
-              "Core.RemoteNetwork": PROTOCOLS / "onsite/CoreRemoteNetwork.lean"}
+              "Core.RemoteNetwork": PROTOCOLS / "onsite/CoreRemoteNetwork.lean",
+              "Core.RemoteNetworkNoPouw": PROTOCOLS / "onsite/CoreRemoteNetworkNoPouw.lean"}
 #: The protocols that publish private data in the clear, each with what it publishes.
 IN_THE_CLEAR = {V0: "the division, and each inference block's gates and fresh-input bits"}
 #: The protocols of `IN_THE_CLEAR` a composite may compose, each with its reason. KNOWN only shrinks: an entry no
@@ -73,7 +75,7 @@ def unlisted(where: str, ids: list[str]) -> list[str]:
 def composed() -> set[str]:
     """Every id a composite's Lean or the reference composes."""
     return {i for p in COMPOSITES.values() for i in lean_components(p)[1]} | {
-        C.id for p in (R.ONSITE, R.REMOTE, R.REMOTE_NETWORK) for C in p.components}
+        C.id for p in (R.ONSITE, R.REMOTE, R.REMOTE_NETWORK, R.REMOTE_NETWORK_NO_POUW) for C in p.components}
 
 
 @pytest.mark.parametrize("composite", sorted(COMPOSITES))
@@ -84,7 +86,7 @@ def test_lean_components(composite):
     assert not v0_names() & set(names) or V0 in ids, f"{composite}.components holds v0 under an id its `#guard` doesn't pin"
 
 
-@pytest.mark.parametrize("product", [R.ONSITE, R.REMOTE, R.REMOTE_NETWORK], ids=lambda p: p.id)
+@pytest.mark.parametrize("product", [R.ONSITE, R.REMOTE, R.REMOTE_NETWORK, R.REMOTE_NETWORK_NO_POUW], ids=lambda p: p.id)
 def test_reference_components(product):
     ids = [C.id for C in product.components]
     assert not unlisted(f"the reference's {product.id}", ids), unlisted(f"the reference's {product.id}", ids)

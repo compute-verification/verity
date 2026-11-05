@@ -29,6 +29,7 @@ COMMIT = "a" * 40
 ONSITE = ("sampled-proofs", "certifier", "pouw", "pous", "bandwidth", "inference-only", "wipe")
 REMOTE = ("sampled-proofs", "pouw", "inference-only")
 REMOTE_NETWORK = ("sampled-proofs", "certifier", "pouw", "inference-only")
+REMOTE_NETWORK_NO_POUW = ("sampled-proofs", "certifier", "inference-only")
 
 
 def config(protocols=ONSITE, **machines) -> dict:
@@ -116,12 +117,15 @@ def test_a_set_of_subprotocols_that_is_neither_composite_is_refused(protocols):
     assert e.value.name in ("composite", "requires")
 
 
-def test_the_composites_are_remote_remote_network_and_onsite():
-    assert {K.composite(p, REG.components) for p in (ONSITE, REMOTE, REMOTE_NETWORK)} == {
-        "verity/onsite/v0", "verity/remote/v0", "verity/remote-network/v0"}
+def test_the_composites_are_remote_remote_network_with_pouw_or_without_and_onsite():
+    assert {K.composite(p, REG.components) for p in (ONSITE, REMOTE, REMOTE_NETWORK, REMOTE_NETWORK_NO_POUW)} == {
+        "verity/onsite/v0", "verity/remote/v0", "verity/remote-network/v0", "verity/remote-network-no-pouw/v0"}
     assert K.composite(ONSITE[::-1], REG.components) == "verity/onsite/v0"
     assert K.composite(REMOTE_NETWORK[::-1], REG.components) == "verity/remote-network/v0"
+    assert K.composite(REMOTE_NETWORK_NO_POUW[::-1], REG.components) == "verity/remote-network-no-pouw/v0"
     assert K.new("toy", list(REMOTE_NETWORK), REG.components, REG.workloads, COMMIT)["protocols"] == list(REMOTE_NETWORK)
+    assert K.new("toy", list(REMOTE_NETWORK_NO_POUW), REG.components, REG.workloads, COMMIT)["protocols"] == list(
+        REMOTE_NETWORK_NO_POUW)
     assert {cid: sorted(names) for cid, names in K.COMPOSITES.items()} == {
         cid: sorted(subs) for cid, subs in SP.SUBPROTOCOLS.items()}
     assert SP.SUBPROTOCOLS["verity/remote/v0"] == {"inference-only": "verity/inference-only/v0",
@@ -129,6 +133,8 @@ def test_the_composites_are_remote_remote_network_and_onsite():
                                                    "sampled-proofs": "verity/sampled-proofs/v1"}
     assert SP.SUBPROTOCOLS["verity/remote-network/v0"] == {**SP.SUBPROTOCOLS["verity/remote/v0"],
                                                            "certifier": "verity/certifier/v0"}
+    assert SP.SUBPROTOCOLS["verity/remote-network-no-pouw/v0"] == {
+        n: i for n, i in SP.SUBPROTOCOLS["verity/remote-network/v0"].items() if n != "pouw"}
     assert SP.SUBPROTOCOLS["verity/onsite/v0"]["sampled-proofs"] == "verity/sampled-proofs/one-stage/v1"
     assert SP.SUBPROTOCOLS["verity/onsite/v0"]["pouw"] == "verity/pouw/period/v1"
     assert SP.SUBPROTOCOLS["verity/onsite/v0"]["wipe"] == "verity/wipe/v0"

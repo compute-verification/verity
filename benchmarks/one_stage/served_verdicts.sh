@@ -112,6 +112,8 @@
 #     drops them, its composites remote's and remote-network's. Remote-network's egress tie refuses a certifier's period
 #     with a compute audit on any registration but the run's, so the preflight refuses CERTIFIER_CMD there: the whole
 #     piece's audits are its scan's own, and only the split's one audit, V3c's of the served window, is the run's.
+#     remote-network-no-pouw is remote-network's but PoUW's piece, dropped too (`block_record.PRODUCTS`), its composite
+#     remote-network-no-pouw's alone: it credits no verified compute, and the same preflight holds.
 #     CERTIFIER_FRONT is remote's too: the network certifier in front of the endpoint is how its requests are served, not
 #     a piece, so its session stays in the serve dir's private/ and its exit is the CERTIFIER-FRONT line's, which remote's
 #     record doesn't read. Behind the front remote also takes the split certifier's CERTIFIER_CHAIN_CMD and
@@ -219,8 +221,8 @@
 # On a node with less memory than V3c's audit needs (its MemTotal, NODE_MEM_GB, under V3C_AUDIT_MEM_GB, default 290),
 # tied or not, step 6 makes the window commit (under H1_TIE, holds the tie's) (WINDOW-COMMIT, WINDOW-CIRCUIT-HELD) and
 # defers the audit and the composite (`defer`), for
-# PRODUCT=remote and remote-network, whose composites read neither PoUS's case nor the wipe's, and for onsite with
-# COMPOSITE set empty (onsite's composite reads both cases, which only this node's card writes: the preflight refuses it).
+# PRODUCT=remote and remote-network, with PoUW or without, whose composites read neither PoUS's case nor the wipe's, and
+# for onsite with COMPOSITE set empty (onsite's composite reads both cases, which only this node's card writes: the preflight refuses it).
 # Step 5's record has sampled proofs missing and says what was deferred and why (its `deferred`), a DEFERRED line says
 # so, and the serve dir's
 # private/deferred gets the pieces the record read, the inference-only verdict (which the follow-on's record carries as
@@ -395,12 +397,12 @@ case $PRODUCT in
           "certifier in front, whose period case it writes: set CERTIFIER_FRONT, or unset it"; exit 3; }
       done
     fi ;;
-  remote-network)
+  remote-network | remote-network-no-pouw)
     for v in WIPE_CMD POUS_CMD BANDWIDTH_CMD; do
-      [ -z "${!v:-}" ] || { say "PREFLIGHT: PRODUCT=remote-network runs no onsite piece but the network certifier's, and $v is set: unset it"; exit 3; }
+      [ -z "${!v:-}" ] || { say "PREFLIGHT: PRODUCT=$PRODUCT runs no onsite piece but the network certifier's, and $v is set: unset it"; exit 3; }
     done
-    [ -z "${CERTIFIER_CMD:-}" ] || { say "PREFLIGHT: PRODUCT=remote-network holds every compute audit of the network certifier's period to the run's registration, which only the split certifier's (V3c's) is: set CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD in place of CERTIFIER_CMD"; exit 3; } ;;
-  *) say "PREFLIGHT: PRODUCT is onsite, remote or remote-network, not $PRODUCT"; exit 3 ;;
+    [ -z "${CERTIFIER_CMD:-}" ] || { say "PREFLIGHT: PRODUCT=$PRODUCT holds every compute audit of the network certifier's period to the run's registration, which only the split certifier's (V3c's) is: set CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD in place of CERTIFIER_CMD"; exit 3; } ;;
+  *) say "PREFLIGHT: PRODUCT is onsite, remote, remote-network or remote-network-no-pouw, not $PRODUCT"; exit 3 ;;
 esac
 # ℓ_a, unless CAP gives it: the least width that pads every Commit period's advice this server commits (advice_windows.least_cap
 # of window_advice.max_bits), at most SLOTS requests (--window-requests) and WINDOW_STEPS engine steps a period, positions
@@ -1160,7 +1162,7 @@ fi
 case ${1:-} in v3c | advice-charge) ;; *)  # a run that serves and reaches step 6, tied or not
   if DEFER=$(short_of_memory); then  # step 6's audit and the composite go to a follow-on
     [ "$PRODUCT" != onsite ] || [ -z "${COMPOSITE-1}" ] \
-      || { say "PREFLIGHT: where $DEFER, its audit and the composite are deferred to a follow-on, and onsite's composite reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote or remote-network, COMPOSITE set empty, or a node with the memory"; exit 3; }
+      || { say "PREFLIGHT: where $DEFER, its audit and the composite are deferred to a follow-on, and onsite's composite reads PoUS's and the wipe's cases, which only this node's card writes: PRODUCT=remote, remote-network or remote-network-no-pouw, COMPOSITE set empty, or a node with the memory"; exit 3; }
   fi ;;
 esac
 if [ -n "${PREFLIGHT_ONLY:-}" ]; then  # the checks above alone: nothing kept, built or served

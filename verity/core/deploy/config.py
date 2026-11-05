@@ -15,9 +15,9 @@ workload declares (``default_params``), and `check` returns the configuration wi
 covers, so stating a default changes no hash.
 
 The subprotocols a configuration lists that the composite takes (a `Component`'s ``product``) are exactly one
-composite's (`COMPOSITES`): onsite's, remote's (sampled proofs, PoUW and the inference-only policy), or remote's with
-the network certifier. Protocol soundness covers those three composites and no other, so `check` refuses any other set
-(``composite``).
+composite's (`COMPOSITES`): onsite's, remote's (sampled proofs, PoUW and the inference-only policy), remote's with
+the network certifier, or those without PoUW. Protocol soundness covers those four composites and no other, so `check`
+refuses any other set (``composite``).
 
 What a protocol declares (`Component`: its id, the workload hooks it needs, the subprotocols it requires, its parties and
 channels as its manifest's `Role`s and `Channel`s, the parties that must share a machine, its parameters' schema and the
@@ -58,7 +58,8 @@ LOCAL = "local"
 COMPOSITES = {"verity/onsite/v0": ("bandwidth", "certifier", "inference-only", "pous", "pouw", "sampled-proofs",
                                     "wipe"),
               "verity/remote/v0": ("inference-only", "pouw", "sampled-proofs"),
-              "verity/remote-network/v0": ("certifier", "inference-only", "pouw", "sampled-proofs")}
+              "verity/remote-network/v0": ("certifier", "inference-only", "pouw", "sampled-proofs"),
+              "verity/remote-network-no-pouw/v0": ("certifier", "inference-only", "sampled-proofs")}
 _COMMIT = re.compile(r"[0-9a-f]{40}")
 _NAME = re.compile(r"[a-z][a-z0-9-]*")
 

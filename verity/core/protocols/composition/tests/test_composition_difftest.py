@@ -1,5 +1,5 @@
-"""Onsite's, remote's and remote's with the network certifier's Lean (`onsite serve`, `remote serve`, `remote-network
-serve`: each product's executable, the core CLI) against the
+"""Onsite's, remote's and remote's with the network certifier's, with PoUW or without, Lean (`onsite serve`, `remote
+serve`, `remote-network serve`, `remote-network-no-pouw serve`: each composite's executable, the core CLI) against the
 Python reference (`reference.py`: the trial's composition rule with reject dominance, over the harness's framing of the
 core interface and the subprotocols' own Python). Hypothesis draws each subprotocol's case to accept, reject, be
 undecided or fail to decode (from its own difftest's generator: PoUW's periods, made once from
@@ -19,9 +19,9 @@ best (an audit that drew nothing), so no product accepts here; remote's case on 
 registration of its tables (`reusing`) is one made case, which sampled proofs refuses until a session of record opens
 those tables, and remote's with the network certifier rejects with it beside each kind of the network certifier's
 period, its ties read off the case. `product IDS serve` over each composite's subprotocols, the composite `verity run`'s
-verifier runs, is held to the same reference, and `product IDS id` names remote, remote with the network certifier and
-onsite for their subprotocols and refuses every other set: the same three composites a configuration may list
-(`verity.core.deploy.config.COMPOSITES`)."""
+verifier runs, is held to the same reference, and `product IDS id` names remote, remote with the network certifier with
+PoUW or without, and onsite for their subprotocols and refuses every other set: the same four composites a configuration
+may list (`verity.core.deploy.config.COMPOSITES`)."""
 
 from __future__ import annotations
 
@@ -472,20 +472,26 @@ def ids(product: R.Product) -> str:
     return ",".join(C.id for C in product.components)
 
 
-SEEN = {"onsite": collections.Counter(), "remote": collections.Counter(), "remote-network": collections.Counter()}
+SEEN = {"onsite": collections.Counter(), "remote": collections.Counter(), "remote-network": collections.Counter(),
+        "remote-network-no-pouw": collections.Counter()}
 ONSITE = port("onsite", R.ONSITE, SEEN["onsite"], UndecidedPort)
 REMOTE = port("remote", R.REMOTE, SEEN["remote"], RejectingPort)
 REMOTE_NETWORK = port("remote-network", R.REMOTE_NETWORK, SEEN["remote-network"], RejectingPort, package="onsite")
+REMOTE_NETWORK_NO_POUW = port("remote-network-no-pouw", R.REMOTE_NETWORK_NO_POUW, SEEN["remote-network-no-pouw"],
+                              RejectingPort, package="onsite")
 #: `product IDS serve` over each composite's subprotocols, which `verity run`'s verifier runs
 PRODUCT = {p.id: port("product", p, SEEN[n], kind, serve=(ids(p), "serve"), package="onsite")
            for n, p, kind in (("onsite", R.ONSITE, UndecidedPort), ("remote", R.REMOTE, RejectingPort),
-                              ("remote-network", R.REMOTE_NETWORK, RejectingPort))}
+                              ("remote-network", R.REMOTE_NETWORK, RejectingPort),
+                              ("remote-network-no-pouw", R.REMOTE_NETWORK_NO_POUW, RejectingPort))}
 onsite_server = D.server_fixture(ONSITE)
 remote_server = D.server_fixture(REMOTE)
 remote_network_server = D.server_fixture(REMOTE_NETWORK)
+remote_network_no_pouw_server = D.server_fixture(REMOTE_NETWORK_NO_POUW)
 product_onsite_server = D.server_fixture(PRODUCT[R.ONSITE.id])
 product_remote_server = D.server_fixture(PRODUCT[R.REMOTE.id])
 product_remote_network_server = D.server_fixture(PRODUCT[R.REMOTE_NETWORK.id])
+product_remote_network_no_pouw_server = D.server_fixture(PRODUCT[R.REMOTE_NETWORK_NO_POUW.id])
 
 
 @pytest.fixture(scope="module")
@@ -742,6 +748,25 @@ def on_r(made: dict, verdict: str = R.ACCEPT) -> tuple[dict, dict, dict]:
     return {"program": s.desc, "steps": 0}, rec, got if verdict == R.ACCEPT else NP.PC._refused(got, verdict)
 
 
+def certifier_rows(made: dict) -> list[tuple[dict, str, bool]]:
+    """The network certifier's periods beside R (what `reusing` made, ``made``), each with its verdict and whether
+    every compute audit of it is R (the `egress` tie holds): compute audits that are R (`certifier_with`, `on_r`),
+    accepted, with a forged certificate, or with R's audit rejected or undecided; compute audits on records of their own
+    (`period_case.build`'s, in either form, accepted or undecided); one with R's audit and another; and none."""
+    rows = [(certifier_with("honest", [on_r(made)]), R.ACCEPT, True),
+            (certifier_with("honest", [on_r(made), on_r(made)]), R.ACCEPT, True),
+            (certifier_with("cert-forged", [on_r(made)]), R.REJECT, True),
+            (certifier_with("honest", [on_r(made, R.REJECT)]), R.REJECT, True),
+            (certifier_with("honest", [on_r(made, R.UNDECIDED)]), R.UNDECIDED, True)]
+    for m, verdict in (("rows-honest", R.ACCEPT), ("rows-audit-undecided", R.UNDECIDED)):
+        rows.append((as_component(R.CERTIFIER, NP.build(m, 0, small=True)), verdict, False))
+    j = NP.build("rows-honest", 0, small=True)
+    c, e = (json.loads(bytes.fromhex(j[k])) for k in ("commitment", "evidence"))
+    return rows + [(certifier_with("honest", []), R.ACCEPT, False),
+                   (certifier_with("honest", [on_r(made), (j["params"]["audits"][0], c["audits"][0], e["audits"][0])]),
+                    R.ACCEPT, False)]
+
+
 def test_remote_network_is_remotes_verdict_and_the_network_certifiers(remote_network_server,
                                                                        product_remote_network_server):
     """Remote with the network certifier over remote's made components (`remote_made`), whose sampled proofs refuses R
@@ -756,19 +781,8 @@ def test_remote_network_is_remotes_verdict_and_the_network_certifiers(remote_net
     that rejects too."""
     policy, period, own, audit, _, made = remote_made()
     refused = f"{R.SAMPLED_PROOFS.id} reject: the audit's checks failed: registered"
-    rows = [(certifier_with("honest", [on_r(made)]), period, R.ACCEPT, True),
-            (certifier_with("honest", [on_r(made), on_r(made)]), period, R.ACCEPT, True),
-            (certifier_with("cert-forged", [on_r(made)]), period, R.REJECT, True),
-            (certifier_with("honest", [on_r(made, R.REJECT)]), period, R.REJECT, True),
-            (certifier_with("honest", [on_r(made, R.UNDECIDED)]), period, R.UNDECIDED, True),
-            (certifier_with("honest", [on_r(made)]), own, R.ACCEPT, True)]
-    for m, verdict in (("rows-honest", R.ACCEPT), ("rows-audit-undecided", R.UNDECIDED)):
-        rows.append((as_component(R.CERTIFIER, NP.build(m, 0, small=True)), period, verdict, False))
-    j = NP.build("rows-honest", 0, small=True)
-    c, e = (json.loads(bytes.fromhex(j[k])) for k in ("commitment", "evidence"))
-    rows += [(certifier_with("honest", []), period, R.ACCEPT, False),
-             (certifier_with("honest", [on_r(made), (j["params"]["audits"][0], c["audits"][0], e["audits"][0])]), period,
-              R.ACCEPT, False)]
+    rows = [(certifier, period, verdict, held) for certifier, verdict, held in certifier_rows(made)]
+    rows.append((certifier_with("honest", [on_r(made)]), own, R.ACCEPT, True))
     seen = collections.Counter()
     for certifier, period_, verdict, held in rows:
         case = remote_case([certifier, policy, period_, audit], R.REMOTE_NETWORK)
@@ -784,6 +798,40 @@ def test_remote_network_is_remotes_verdict_and_the_network_certifiers(remote_net
         seen[verdict, held] += 1
     assert seen == {(R.ACCEPT, True): 3, (R.REJECT, True): 2, (R.UNDECIDED, True): 1, (R.ACCEPT, False): 3,
                     (R.UNDECIDED, False): 1}, dict(seen)
+
+
+def test_remote_network_without_pouw_is_the_network_certifiers_verdict_beside_the_policy_and_sampled_proofs(
+        remote_network_no_pouw_server, product_remote_network_no_pouw_server):
+    """Remote with the network certifier, without PoUW, over the policy and sampled proofs remote makes on R
+    (`remote_made`), whose sampled proofs refuses R, beside each of `certifier_rows`' periods of the network certifier.
+    Each subprotocol answers as it does alone and the composite rejects; its one tie is `egress`, which holds exactly
+    where every compute audit is R, and it has no `windows` tie, since no subprotocol is PoUW's. Its executable,
+    `product IDS serve` over its subprotocols and the Python agree on each, and the executables name sampled proofs'
+    refusal, after the network certifier's where that rejects too. A PoUW period beside them is no subprotocol of it:
+    refused by name, in Lean as in Python."""
+    policy, period, _, audit, _, made = remote_made()
+    refused = f"{R.SAMPLED_PROOFS.id} reject: the audit's checks failed: registered"
+    seen = collections.Counter()
+    for certifier, verdict, held in certifier_rows(made):
+        case = remote_case([certifier, policy, audit], R.REMOTE_NETWORK_NO_POUW)
+        assert R.REMOTE_NETWORK_NO_POUW.verdicts(case) == [verdict, R.ACCEPT, R.REJECT], (
+            R.REMOTE_NETWORK_NO_POUW.verdicts(case))
+        assert R.REMOTE_NETWORK_NO_POUW.tied(case) == [(R.EGRESS.what, held)], R.REMOTE_NETWORK_NO_POUW.tied(case)
+        python = R.REMOTE_NETWORK_NO_POUW.answer(case)
+        assert python["verdict"] == R.REJECT, python
+        for out in (remote_network_no_pouw_server.exchange(case), product_remote_network_no_pouw_server.exchange(case)):
+            assert {k: v for k, v in out.items() if k != "reason"} == {k: v for k, v in python.items() if k != "reason"}
+            assert out["reason"].endswith(refused), out
+            assert out["reason"].startswith(f"{R.CERTIFIER.id} reject: ") == (verdict == R.REJECT), out
+        seen[verdict, held] += 1
+    assert seen == {(R.ACCEPT, True): 2, (R.REJECT, True): 2, (R.UNDECIDED, True): 1, (R.ACCEPT, False): 3,
+                    (R.UNDECIDED, False): 1}, dict(seen)
+    case = remote_case([certifier_rows(made)[0][0], policy, period, audit], R.REMOTE_NETWORK_NO_POUW)
+    python = R.REMOTE_NETWORK_NO_POUW.answer(case)
+    assert python["verdict"] == R.REJECT, python
+    for out in (remote_network_no_pouw_server.exchange(case), product_remote_network_no_pouw_server.exchange(case)):
+        assert {k: v for k, v in out.items() if k != "reason"} == {k: v for k, v in python.items() if k != "reason"}
+        assert out["reason"] == f"params: {R.POUW_PERIOD.id} is not a component of this composition", out
 
 
 @pytest.mark.slow
@@ -817,18 +865,19 @@ def test_onsite_refuses_p2_named_as_the_generic_bandwidth_audit(onsite_server, r
     assert stats.counts == {R.REJECT: 10} and seen["generic bandwidth"] == 10, (stats, dict(seen))
 
 
-def test_product_names_only_the_three_composites():
+def test_product_names_only_the_composites():
     """`product IDS id` is remote over remote's subprotocols, remote with the network certifier over those and the
-    network certifier's, and onsite over onsite's, in any order, exactly the configuration's composites
-    (`verity.core.deploy.config.COMPOSITES`, by the ids `SUBPROTOCOLS` gives their names), and refuses every other set
-    of their subprotocols and the wipe (exit 64)."""
+    network certifier's, and without PoUW over those but PoUW's period, and onsite over onsite's, in any order, exactly
+    the configuration's composites (`verity.core.deploy.config.COMPOSITES`, by the ids `SUBPROTOCOLS` gives their
+    names), and refuses every other set of their subprotocols and the wipe (exit 64)."""
     exe = D.build(PROTOCOLS / "onsite", "product")
 
     def named(xs) -> tuple[int, str]:
         p = subprocess.run([exe, ",".join(xs), "id"], capture_output=True, text=True)
         return p.returncode, p.stdout.strip()
 
-    want = {p.id: sorted(C.id for C in p.components) for p in (R.ONSITE, R.REMOTE, R.REMOTE_NETWORK)}
+    want = {p.id: sorted(C.id for C in p.components)
+            for p in (R.ONSITE, R.REMOTE, R.REMOTE_NETWORK, R.REMOTE_NETWORK_NO_POUW)}
     assert {cid: sorted(subs.values()) for cid, subs in SPP.SUBPROTOCOLS.items()} == want
     assert {cid: sorted(names) for cid, names in K.COMPOSITES.items()} == {
         cid: sorted(subs) for cid, subs in SPP.SUBPROTOCOLS.items()}
@@ -855,6 +904,23 @@ def test_product_over_remotes_subprotocols_is_remote(product_remote_server):
 def test_product_over_remote_networks_subprotocols_is_remote_network(product_remote_network_server):
     _agree(PRODUCT[R.REMOTE_NETWORK.id], product_remote_network_server, SEEN["remote-network"], 200,
            (R.REJECT, "reject, a component undecided", "reject, no component rejected", "one record", "two records"))
+
+
+@pytest.mark.slow
+def test_remote_network_no_pouw_agrees(remote_network_no_pouw_server):
+    """Remote with the network certifier, without PoUW: its policy and sampled proofs meet on one record (left to the
+    subprotocols) and on two (refused), each often, beside every kind of the network certifier's period, with its
+    `egress` tie and no `windows` tie, which remote-network's run, where the windows tie refuses first, doesn't reach."""
+    _agree(REMOTE_NETWORK_NO_POUW, remote_network_no_pouw_server, SEEN["remote-network-no-pouw"], 200,
+           (R.REJECT, "reject, a component undecided", "reject, no component rejected", "one record", "two records"))
+
+
+@pytest.mark.slow
+def test_product_over_remote_network_no_pouws_subprotocols_is_remote_network_no_pouw(
+        product_remote_network_no_pouw_server):
+    _agree(PRODUCT[R.REMOTE_NETWORK_NO_POUW.id], product_remote_network_no_pouw_server, SEEN["remote-network-no-pouw"],
+           200, (R.REJECT, "reject, a component undecided", "reject, no component rejected", "one record",
+                 "two records"))
 
 
 @pytest.mark.slow
