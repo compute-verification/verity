@@ -88,6 +88,7 @@ whether an earlier round of the model's run failed; and a frame round at its slo
 lets through, and the step at it, given what the loop's frames and the model hold there and the invariant kept; and
 the session's reps and labels the setup's rep streams' once its `Hello` left, so a round's rep its stream's own and no
 other rep stream's; and after a stream's first round the rep's frame its run, holding the history's words for its one
-round and keeping its schedule so far, which a stream of one round hands to the next stream's first. -/
+round and keeping its schedule so far, which a stream of one round hands to the next stream's first, and at the model's
+state where the next round is the same rep's. -/
 
 @[expose] public section
