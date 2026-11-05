@@ -1,7 +1,8 @@
 """The served window's two modes (`served_window.py`): every rung covers the window's work, the fused rungs and wide tiles
 exceed C-Flock's block and no fitting rung has a proof block past it, proving alone picks the finest rung, the commitment moves the work optimum coarser as the pooled
 period grows and along √(w β h C/(o Λ)), and leaves the exfiltration optimum where it was; a code-based commitment
-hashes 1/ρ the bytes and no row in circuit, and no rung's fit turns on hm96's slots."""
+hashes 1/ρ the bytes and no row in circuit, and no rung's fit turns on hm96's slots; and the replay re-runs each drawn
+request and moves no optimum."""
 
 from __future__ import annotations
 
@@ -103,6 +104,22 @@ def test_a_code_commitment_hashes_1_over_rho_the_bytes_and_no_row_in_circuit(out
             assert code["lean"]["commit"] == pytest.approx(base["lean"]["commit"] / r["rate"], rel=1e-9)
             assert code["lean"]["draws"] == pytest.approx(base["lean"]["draws"], rel=1e-9)
             assert code["lean"]["prove"] < base["lean"]["prove"], (r["scheme"], code["rung"])
+
+
+def test_the_replay_reruns_each_drawn_request_and_moves_no_optimum(out):
+    """Serving keeps no values, so each request a drawn proof block lies in is re-run from its prompt: at one window every
+    request of the step (the draws far outnumber them), one stock step; pooled over a period about one request a draw; and
+    the cheapest fitting rung is the one it is without the replay."""
+    step, sequences = S.IN["step_s"].value, S.IN["sequences"].value
+    for r in out["results"]:
+        for row in r["rows"]:
+            lean = row["lean"]
+            assert lean["total"] == pytest.approx(lean["prove"] + r["weight"] * lean["commit"] + lean["replay"],
+                                                  rel=1e-12)
+            expected = step if r["scope"] == "window" else lean["draws"] * step / sequences
+            assert lean["replay"] == pytest.approx(expected, rel=1e-3), (r["scope"], r["target"], row["rung"])
+        without = min((x for x in r["rows"] if x["fits"]), key=lambda x: x["lean"]["total"] - x["lean"]["replay"])
+        assert without["rung"] == r["best_lean"], (r["scope"], r["target"], r["h"], r["scheme"], r["mode"])
 
 
 def test_no_rungs_fit_turns_on_the_hm96_and_sha512_slots(out):

@@ -37,6 +37,12 @@ encoding and the openings' own work in Flock are not priced, so its proving is a
 statement's share stay today's (`inputs.cap`, which the hm96 and SHA-512 slots only enlarge), and no rung's fit turns on
 those slots: a rung that misses C-Flock's block misses it on its own ANDs and rows' bits.
 
+**Replay.**  Serving keeps only the requests' tokens and the weights (a commitment is a hash), so every mode's total adds the
+rebuilding of the drawn proof blocks' witnesses (`replay`): each request a drawn proof block lies in, re-run whole from its
+prompt at the stock step's share, under either commitment.  A request's values are its own tokens' alone (the served
+engine is batch-invariant), so no co-scheduled request is re-run with it.  The draws barely differ between rungs, so the
+replay moves the totals, not s*.
+
 **Targets.**  Free compute: C = `EPS` of the scope's MACs, at the window and pooled over each monitoring period
 (`wipe_monitoring.PERIODS`: a week, a month and a year) of windows at the stock step; the draws are about Λ/ε whatever
 the scope, the commitment grows with it.  Exfiltration: ℓ = `LEAK_BITS` a window.
@@ -50,7 +56,7 @@ import json
 import sys
 from dataclasses import dataclass, replace
 from fractions import Fraction
-from math import log, log2
+from math import expm1, log, log1p, log2
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -335,6 +341,22 @@ def planner(rung: str, parts: list[Part], m: CostModel, *, h: float, weight: flo
             "commit": p.cost["commit"], "draws": sum(p.sizes.values())}
 
 
+def replay(draws: float, windows: float) -> float:
+    """The witnesses' rebuilding for `draws` drawn proof blocks over `windows` windows: each request one lies in re-run from
+    its prompt, `step_s` / `sequences` (the requests are alike), the draws independent and uniform over the scope's
+    requests, as `optimize.replay_cost` meets a replay domain."""
+    requests = IN["sequences"].value * windows
+    return -requests * expm1(draws * log1p(-1 / requests)) * IN["step_s"].value / IN["sequences"].value
+
+
+def replayed(cost: dict | None, windows: float) -> dict | None:
+    """``cost`` with its draws' `replay` in its total."""
+    if cost is None:
+        return None
+    r = replay(cost["draws"], windows)
+    return {**cost, "replay": r, "total": cost["total"] + r}
+
+
 def unit_work(parts: list[Part]) -> float:
     """A rung's proof-block size as the table quotes it: an int8 linear's proof block (gate_up's, most of the work), else the
     fused block's largest."""
@@ -382,13 +404,13 @@ def run(weight: float = 1.0, *, rates: tuple[float, ...] = RATES, plan: bool = T
                         kw = {"work": EPS * work_window * windows} if target == "work" else {"leak": LEAK_BITS}
                         by = "work" if target == "work" else "bits"
                         g = grain(name, parts_s, m, by)
-                        lean = grain_costs([g], DELTA, h=h, weight=w, **kw)[0]
-                        marginal = grain_costs([grain(name, parts_s, m, by, marginal=True)], DELTA, h=h, weight=w,
-                                               **kw)[0]
+                        lean = replayed(grain_costs([g], DELTA, h=h, weight=w, **kw)[0], windows)
+                        marginal = replayed(grain_costs([grain(name, parts_s, m, by, marginal=True)], DELTA, h=h,
+                                                        weight=w, **kw)[0], windows)
                         row = {"rung": name, "fits": out["rungs"][name]["fits"], "work": unit_work(parts),
                                "mean_work": g.work, "lean": lean, "lean_marginal": marginal}
                         if plan:
-                            row["planner"] = planner(name, parts_s, m, h=h, weight=w, **kw)
+                            row["planner"] = replayed(planner(name, parts_s, m, h=h, weight=w, **kw), windows)
                         rows.append(row)
                     fit_rows = [r for r in rows if r["fits"]]
                     out["results"].append({
@@ -439,24 +461,25 @@ def render(out: dict) -> str:
              f"(δ = 2^-40, ε = {EPS:.0%}, ℓ = 2^{log2(LEAK_BITS):.0f} bits a window)", ""]
     lines.append("GPU-seconds (proving: RTX PRO 6000 ZK fit, modelled for these units; commitment: H200 SHA-512 at h, hm96's "
                  "rows, or at h/ρ, a code at rate ρ whose proof blocks hash no row in circuit, its encoding and openings "
-                 "unpriced). 'x serve' divides by the scope's stock serving time. s* is the cheapest rung every proof block "
+                 "unpriced; replay: H200, each request a drawn proof block lies in re-run from its prompt). 'x serve' divides "
+                 "by the scope's stock serving time. s* is the cheapest rung every proof block "
                  f"of which C-Flock's block holds (k_log <= {K_MAX} at the composer's occupancy, `inputs.cap`; attention in "
                  f"key blocks of {attention_keys()}) and the size classes; 'any' includes the rungs that don't.")
     lines += ["", "| scope | target | h | commitment | mode | s* (lean) | s* (MACs a gate_up block) | total | prove | commit | "
-              "x serve | s* (planner) | planner total | s* any, as fitted | s* any, marginal |",
-              "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+              "replay | x serve | s* (planner) | planner total | s* any, as fitted | s* any, marginal |",
+              "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in out["results"]:
         best = next(x for x in r["rows"] if x["rung"] == r["best_lean"])
         pl = next((x for x in r["rows"] if x["rung"] == r["best_planner"]), None)
         lean = best["lean"]
         lines.append(f"| {r['scope']} | {r['target']} | {r['h']} | {r['scheme']} | {r['mode']} | {r['best_lean']} | "
                      f"{_g(best['work'])} | "
-                     f"{_g(lean['total'])} | {_g(lean['prove'])} | {_g(lean['commit'])} | "
+                     f"{_g(lean['total'])} | {_g(lean['prove'])} | {_g(lean['commit'])} | {_g(lean['replay'])} | "
                      f"{_g(lean['total'] / r['serve_s'])} | {r['best_planner'] or '-'} | "
                      f"{'-' if pl is None else _g(pl['planner']['total'])} | {r['best_lean_any']} | "
                      f"{r['best_marginal_any']} |")
     keys = [(s, "work") for s in scopes()] + [("window", "leak")]
-    lines += ["", "Each rung's total, GPU-seconds (lean view, hm96, h 398 GB/s, proving + w x commit), as fitted / marginal:",
+    lines += ["", "Each rung's total, GPU-seconds (lean view, hm96, h 398 GB/s, proving + w x commit + replay), as fitted / marginal:",
               "", "| rung | fits | widest block's k_log | proof blocks a window | committed GB a window | "
               + " | ".join(f"{s} {t}" for s, t in keys) + " |", "|---|---|---|---|---|" + "---|" * len(keys)]
     pick = {(r["scope"], r["target"]): r for r in out["results"]
