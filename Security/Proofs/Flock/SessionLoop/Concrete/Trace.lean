@@ -198,6 +198,45 @@ theorem da_stW : (stW ls lh H A B A' B' s1 s3 s4 s6 hello).da.toList = E := by
 
 end cW
 
+/-! ## The concrete circuit's slots
+
+One slot per range: `hm96` (net 2) at 0 and `sha512x3` (net 1) at `2^18`, each `2^18` rows; the unit (net 0) at
+`2^19`, `2^9` rows; the mask's `2^14` rows at `2^20`. The pin is `hm96`'s constant, so Δ's slot-constant pairs are
+`sha512x3`'s and the unit's (`constPairs_cW`). -/
+
+section facts
+
+variable (ls lh : HmNets.Laid) (H : ByteArray) (A B A' B' : Sparse) (s1 s3 s4 s6 : String)
+  (hello : ByteArray → Nat → String)
+
+theorem c_stW : (stW ls lh H A B A' B' s1 s3 s4 s6 hello).c = cW ls lh H A B A' B' s1 := by kernel_rfl'
+
+theorem kLog_cW : (cW ls lh H A B A' B' s1).kLog = 22 := by kernel_rfl'
+
+theorem nets_cW : (cW ls lh H A B A' B' s1).unitNet = 0 ∧ (cW ls lh H A B A' B' s1).shaNet = 1 ∧
+    (cW ls lh H A B A' B' s1).hmNet = 2 :=
+  ⟨by kernel_rfl', by kernel_rfl', by kernel_rfl'⟩
+
+theorem ranges_cW : (cW ls lh H A B A' B' s1).ranges.toList.map (fun r => (r.kind, r.slotLog, r.pos0, r.count)) =
+    [(Kind.net 2, 18, 0, 1), (Kind.net 1, 18, 1, 1), (Kind.net 0, 9, 1024, 1), (Kind.mask, 14, 64, 1)] := by
+  kernel_rfl'
+
+theorem constPos_cW : ((cW ls lh H A B A' B' s1).nets.getD 0 default).2.constPos = 256 ∧
+    ((cW ls lh H A B A' B' s1).nets.getD 1 default).2.constPos = 256000 ∧
+    ((cW ls lh H A B A' B' s1).nets.getD 2 default).2.constPos = 246784 :=
+  ⟨by kernel_rfl', by kernel_rfl', by kernel_rfl'⟩
+
+theorem inWords_cW : ((cW ls lh H A B A' B' s1).nets.getD 0 default).2.inWords = 1 ∧
+    ((cW ls lh H A B A' B' s1).nets.getD 1 default).2.inWords = 64 ∧
+    ((cW ls lh H A B A' B' s1).nets.getD 2 default).2.inWords = 32 :=
+  ⟨by kernel_rfl', by kernel_rfl', by kernel_rfl'⟩
+
+theorem constPairs_cW :
+    constPairs (cW ls lh H A B A' B' s1) PIN = [(518144, 518144), (518144, PIN), (524544, 524544), (524544, PIN)] := by
+  kernel_rfl'
+
+end facts
+
 /-! ## The trace -/
 
 /-- The `sha512x3` slot's inputs: `cv0` the midstate's bits, every other input 0 (the row's bits and the unused
