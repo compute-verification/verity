@@ -983,8 +983,8 @@ the `8·B·N` bits read.
 
 ## The schedule's declared bound and the coins
 
-The two terms of the charge that the capacity bounds leave open, the content advice and the coins (D7), are fixed in
-the trusted text: the last section of `Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation. The coin
+The two terms of the charge that the capacity bounds leave open, the content advice `A_c` and the coins (D7), are fixed in
+the spec: the last section of `Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation. The coin
 link that carries the coins: [protocol/coin-link.md](protocol/coin-link.md).
 
 ## Advice for arbitrary serving: what it can carry
@@ -1123,11 +1123,10 @@ Each assumption, and what breaks without it:
   is no jitter), and the advice's release buckets are certifier buckets. Nothing else in the accounting reads a time.
   The challenger's readings of when a registration or a proof arrived (`received_at`) are the prover's choice within
   their deadlines, so they stay out of anything published, or they are charged.
-- **A7, the advice set is fixed before the run.** The codec, the cap ℓ_a and each execution phase's registered width
-  ℓ_a,j are registered before the audit's first window, and the audit refuses advice over the cap, as it refuses a sync
-  outside 𝒮_sync. The trusted text's log2 #`Ac` needs the set fixed before the run. Without a registered cap, a
-  realized charge is sound only in the indexed form, which no Lean states: for every cap, the runs charged at most it
-  number at most 2^(cap + 1) times the rest.
+- **A7, the advice set is fixed before the run.** The codec and the cap c are registered before the audit's first
+  window, and the audit refuses advice over the cap, as it refuses a sync outside Σ_sync. `A_c = log2 #Ac` in the
+  spec needs the set fixed before the run. Without a registered cap, the realized charge is sound only in the
+  indexed form: for every c, the runs whose charge is at most c number at most 2^(c+1) times the rest.
 
 The claim does not say three things: that the advice is what serving did (attack 7), anything about rejected windows,
 and the ingress terms, which stay the K charge's.

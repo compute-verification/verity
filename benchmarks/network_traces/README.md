@@ -226,9 +226,9 @@ The terms, in the generator reading of the scan's statement (each proof block's 
 - The free inputs (`terms.free`): as registered, the tied audit's slot entries, NR·T / EVERY entries of NE bits
   (`ingress_scan.entry_bits`) a sampling block; or an entry's 33 + KO·IDB bits a request if `prog` is an input only at
   its anchored entries.
-- k_skip is 0 with every proof block drawn, and d_jit = 1, so the jitter term is 0: assumed (J),
-  `NetTiming.JitterBounded`, not met at d_jit = 1 until a run shows the warden's written buckets tell a receiver no more
-  than an idle one. The warden hands each bucket to a pacer that releases it at a time fixed before the bucket is made
+- No faulty term with every proof block drawn, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
+  not met at D_j = 1 until a run shows the certifier's written buckets tell a receiver no more than an idle one. The
+  certifier hands each bucket to a pacer that releases it at a time fixed before the bucket is made
   (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`).
 
 Each entry carries a read bit (`ingress_scan.entry_layout`: an occupied slot no Program reads is refused). Bucket t
@@ -280,7 +280,7 @@ K also rests on these conditions:
   `NetworkCheck.Period` doesn't check.
 - The scan proves sampling block 0. A monitoring period's figures scale its per-sampling-block and per-request terms at
   the run's rate.
-- The jitter term is 0 at d_jit = 1, assumed (J), not met until a run shows the paced warden's written buckets tell a
+- The jitter term is 0 at D_j = 1, assumed (J), not met until a run shows the paced certifier's written buckets tell a
   receiver no more than an idle one.
 - An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriodLive's sum. The tied
   audit's (the `SlotEntry_v1` stand-in's) are the sampling block's free inputs above.
