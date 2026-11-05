@@ -69,8 +69,8 @@ theorem placeOfRead_eq {r : Verity.FileRead} (hr : r = A.fileRead) (hN : r.circu
   have hD : Flock.Desc.parse A.fileRead.tags A.fileRead.circuitFile A.fileRead.tables = .ok A.D := A.hD
   have hpub : Flock.HmIn.loadPublic A.fileRead.tags A.D.unroll {} A.fileRead.publicFile = .ok A.pub := A.hpub
   unfold placeOfRead
-  simp only [hD, hpub, dif_pos A.hU]
-  rw [A.hn, dif_pos (show g.val < A.Cc.N from hN ▸ g.isLt)]
+  simp only [hD, hpub, dite_eq_left A.hU]
+  rw [A.hn, dite_eq_left (show g.val < A.Cc.N from hN ▸ g.isLt)]
   rfl
 
 /-- **What the session's files must give for its openings to be `Hash.RowLeaf`'s**: `sha512/row/v2` rows, 64-byte
