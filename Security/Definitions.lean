@@ -13,6 +13,7 @@ import Definitions.Nci.Transfers
 import Definitions.Nci.Dark
 import Definitions.Nci.Packed
 import Definitions.Nci.Covering
+import Definitions.Nci.Capability
 import Definitions.Pous
 import Definitions.Pous.Guarantees.StreamedWipeFamily
 import Definitions.Pous.Guarantees.StreamedWipeReads
@@ -34,6 +35,8 @@ import Definitions.Claims
 import Definitions.Claims.Recursion
 import Definitions.Claims.RecursionLin
 import Definitions.Claims.Sampling
+import Definitions.Claims.SamplingGeneric
+import Definitions.Claims.ZKOut
 import Definitions.Hash
 import Definitions.Flock
 

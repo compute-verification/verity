@@ -19,12 +19,13 @@
 A root a sidecar lists in ``_by_calls_roots`` is checked by its calls alone and never built (`by_calls`): its report entry says
 ``"mode": "by-calls"`` and names the target each callee relies on.
 
-Exit status 1 when a check fails that `circuit_check.known` does not list (failures are named in the summary; ``--strict`` fails
-on the known ones too), and with ``--all`` when a known entry no longer fails; 0 otherwise.  Redundant and dead gates, an
+Exit status 1 when a check fails (each failure is named, `FAIL NAME`, and in the summary), 0 otherwise: the verdict is every
+target's real one, and whether a failure may stay red is drive's policy (`research.policy`, policy.toml's allowances), never
+this command's.  Redundant and dead gates, an
 unpinned or untyped lowering, and a Definition over the partition's budget are warnings, which never fail
 (``--fail-on-warnings`` makes them fail too): a target with one is logged ``unchecked``, not ``ok``, the warnings are printed
 under ``unchecked`` by check, with counts, and the last line counts them.  A shard fails on its own targets' failures alone
-(whether a known entry no longer fails, and a by-calls root's callees' verdicts, only ``--combine`` sees), and ``--combine``
+(a by-calls root's callees' verdicts only ``--combine`` sees), and ``--combine``
 exits 2 when it refuses the shards it was given (`shard.read`).  ``--binding`` fails as a shard does, and exits 2 when the
 bindings' records give no task list or the catalog has no binding of that name; its report holds the binding's read set and
 what it read beyond what `READS` declares (``reads``, ``undeclared``: `run`), which ``--update-reads`` adds there.
@@ -1460,7 +1461,6 @@ def main(argv: list[str] | None = None) -> int:
                     help="hold a Definition target to the partition invariant as a Call, or not (--no-as-call) (default: when its "
                          "family is a Call of a served Program, `targets.is_call`, which refuses one it can't decide without "
                          "building the whole catalog)")
-    ap.add_argument("--strict", action="store_true", help="fail on the known failures too (circuit_check.known)")
     ap.add_argument("--fail-on-warnings", action="store_true")
     ap.add_argument("--update-pins", action="store_true", help="pin the lowering counts and circuit digests measured now (review the diff)")
     ap.add_argument("--cache", type=Path, default=None, metavar="DIR",
@@ -1599,14 +1599,14 @@ def main(argv: list[str] | None = None) -> int:
               f"({', '.join(sorted(beyond))}; the report's undeclared): run it again with --update-reads and commit "
               f"{os.path.relpath(READS, REPO)}", file=sys.stderr)
     if a.binding is not None:
-        return max(unread, verdict(rep, everything=False, out=a.out, strict=a.strict, fail_on_warnings=a.fail_on_warnings,
+        return max(unread, verdict(rep, out=a.out, fail_on_warnings=a.fail_on_warnings,
                                    what=f"binding {a.binding}: {len(rep['targets'])} target(s)"))
     if shard is None:
-        return max(unread, verdict(rep, everything=a.all, out=a.out, strict=a.strict, fail_on_warnings=a.fail_on_warnings))
+        return max(unread, verdict(rep, out=a.out, fail_on_warnings=a.fail_on_warnings))
     SH.write(a.shard_dir, rep, wall_s=round(wall, 1), prologue_s=rep.get("prologue_s"), jobs=jobs)
     m = rep["shard"]
     print(f"circuit-check: shard {m['shard']}/{m['shards']}'s records and manifest are in {a.shard_dir}")
-    return verdict(rep, everything=False, out=a.out, strict=a.strict, fail_on_warnings=a.fail_on_warnings,
+    return verdict(rep, out=a.out, fail_on_warnings=a.fail_on_warnings,
                    what=f"shard {m['shard']}/{m['shards']}: {len(rep['targets'])} of the list's {m['list']['targets']} target(s)")
 
 
@@ -1645,7 +1645,7 @@ def _combine_main(a: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
     if a.targets or a.all or a.shard or a.shard_dir or a.update_pins:
         ap.error("--combine joins the shards' records: give no target, --all, --shard, --shard-dir or --update-pins")
     try:
-        rep, request = combined(a.combine)
+        rep, _ = combined(a.combine)
     except SH.Refused as e:
         print(f"circuit-check --combine: refused: {e}", file=sys.stderr)
         return 2
@@ -1656,7 +1656,7 @@ def _combine_main(a: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
                           + (f" ({w['prologue_s']}s before the first check)" if w.get("prologue_s") is not None else "")
                           + f" at -j {w['jobs']}" for w in walls))
     _cache_lines(rep)
-    return verdict(rep, everything=request["all"], out=a.out, strict=a.strict, fail_on_warnings=a.fail_on_warnings)
+    return verdict(rep, out=a.out, fail_on_warnings=a.fail_on_warnings)
 
 
 def _cache_lines(rep: dict) -> None:
@@ -1673,24 +1673,12 @@ def _cache_lines(rep: dict) -> None:
               + ("; the task list reused, so no Definition was built" if c.get("task_list") else ""))
 
 
-def verdict(rep: dict, *, everything: bool, out: Path | None, strict: bool = False, fail_on_warnings: bool = False,
-            what: str | None = None) -> int:
-    """Print the report's verdict, each new and known failure, with ``everything`` each `circuit_check.known` entry no failure
-    matches any more, each warning and a last line counting ``what`` (default: its targets); write the report to ``out``; and
-    return the exit status."""
+def verdict(rep: dict, *, out: Path | None, fail_on_warnings: bool = False, what: str | None = None) -> int:
+    """Print the report's verdict, each failure, each warning and a last line counting ``what`` (default: its targets); write the
+    report to ``out``; and return the exit status."""
     s = rep["summary"]
-    stale = []
-    if everything:
-        from .known import stale as stale_known
-
-        stale = stale_known(f for t in rep["targets"] if t["kind"] == "definition" for f in t.get("failures", []))
-        s["stale_known"] = stale
-    for name in s["new_failures"]:
+    for name in s["failure_names"]:
         print(f"FAIL {name}")
-    for name in s["known_failures"]:
-        print(f"known {name}")
-    for k in stale:
-        print(f"FAIL circuit_check.known lists {k}, which no longer fails: drop it")
     for k, w in s["warnings"].items():
         print(f"unchecked {k}: {w['total']} over {w['definitions']} target(s)")
     if out:
@@ -1699,13 +1687,11 @@ def verdict(rep: dict, *, everything: bool, out: Path | None, strict: bool = Fal
     refused = s.get("q_call_refused") or {}
     what = what or f"{len(rep['targets'])} target(s)"
     u = s["unchecked"]
-    print(f"circuit-check: {what}, {len(s['new_failures'])} new failure(s), {len(s['known_failures'])} known, "
-          f"{u['items']} unchecked (warnings, which never fail) on {u['definitions']} Definition(s)"
+    print(f"circuit-check: {what}, {s['failures']} failure(s), {u['items']} unchecked (warnings, which never fail) on {u['definitions']} Definition(s)"
           + (f", {len(across)} Boolean Call(s) recomputing {sum(across.values())} gate(s) across units (Q_word v2)" if across else "")
           + (f", {len(refused)} Definition(s) Q_call v1 refuses" if refused else "")
           + (f", report {out}" if out else ""))
-    failed = bool(s["new_failures"] or stale or (strict and s["known_failures"]) or (fail_on_warnings and s["warnings"]))
-    return 1 if failed else 0
+    return 1 if s["failures"] or (fail_on_warnings and s["warnings"]) else 0
 
 
 if __name__ == "__main__":
