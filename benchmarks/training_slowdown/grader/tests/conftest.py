@@ -21,11 +21,15 @@ LF_PATH = Path(__file__).resolve().parents[4] / "integrations" / "vllm" / "tests
 STEP, STRUCTURE = (2, 17), (3, 5)
 #: the compute capability a step's bf16 products may be derived at, and the routes its cuBLAS stands in to take for the tiny
 #: step's linears' GEMMs at M = 2 x 16 tokens (its capture covers the workloads' shapes, not these): unsplit, but for a split-K
-#: over a bf16 workspace and a serial split-K, one route of each kind the grader reads
+#: over a bf16 workspace, a serial split-K and the three over grid.z (an f32 workspace and none, their slices' residue tiles
+#: padded, and a bf16 workspace, its slices whole tiles), one route of each kind the grader reads
 CC = CB.TRAIN_CC
 ROUTES = {**{(32, K, N, role): {"kernel": "nosplit"} for K, N in ((64, 64), (64, 192), (192, 64)) for role in CB.TRAIN_LINEAR_ROLES},
           (32, 64, 64, "dW"): {"kernel": "splitk", "SPLIT_K": 2, "partial": "bf16"},
-          (32, 64, 192, "dX"): {"kernel": "serialk", "SPLIT_K": 3}}
+          (32, 64, 192, "dX"): {"kernel": "serialk", "SPLIT_K": 3},
+          (32, 64, 64, "fwd"): {"kernel": "splitk", "SPLIT_K": 3, "partial": "f32", "align": 8, "tile_k": 16},
+          (32, 192, 64, "fwd"): {"kernel": "serialk", "SPLIT_K": 5, "align": 8, "tile_k": 32},
+          (32, 64, 192, "dW"): {"kernel": "splitk", "SPLIT_K": 2, "partial": "bf16", "align": 8, "tile_k": 16}}
 
 
 def _lf():
