@@ -587,7 +587,10 @@ item leaves:
 
 A device that sends more rounds than the statement has gets coins back and nothing leaves; one that returns early has the
 rest of the schedule released by the ZK server itself. A failed rep's rounds from its failure on reach the loop as no
-device round (the place's squeeze alone), which the rep's frame fails, releasing the statement's round in its place. Then the session's `Finish` goes without its proofs, and the auditor
+device round (the place's squeeze alone), and every rep of the session stops at its first failure: from then on the
+loop hands no rep's frame a device round, whatever the device sent (`Flock.Firewall.Frames.Sessions.stopped`), so each
+frame fails each of its rounds, releasing the statement's round in its place. Then the session's `Finish` goes
+without its proofs, and the auditor
 sees the stop there. What leaves before `Finish` has the form and the distribution of an honest session's, wherever the
 check failed: under pads `h + v` a stopped rep releases byte for byte what the honest rep with values `v` releases under `h`
 (`tests/test_firewall_frame.py`). So the stop reveals one bit a session (stop at `Finish` or not), and `log₂ Σ_{i≤b}
@@ -871,7 +874,9 @@ rep's opening a round at a time in the loop, on the extra claims at the `Commit`
 ≥ 1, one copy with the finish's), then the inner proof's, each at the frame's own round (`Frame.innerSched`) on the loop's
 finish's round, which the finish hands the loop before Rust relays it (§10.4). At an inner round the finish has not
 computed, the loop hands the frame no device round (`Frames.roundStep`): whatever Rust relays fails, the frame's own round
-stands in, and the rep stops. Rep 1's frame first takes rep 0's algebraic-phase coins. What leaves is the
+stands in, and the rep stops. Once any rep's frame of the session stopped, the loop hands no rep's frame of it a device
+round (`Frames.Sessions.stopped`), so every rep of the session stops at its first failure, each round leaving as the
+statement's. Rep 1's frame first takes rep 0's algebraic-phase coins. What leaves is the
 frame's release, at the stream's first round after its domain frame (`Frames.round`); anything the frame refuses is
 refused before it reaches the auditor. Once a round's coins open the tree, they are the frame's coins before the prover
 receives them (`Frames.feedOf`, `Frames.coins`), and the session's `Finish` leaves only once every rep's frame answered
