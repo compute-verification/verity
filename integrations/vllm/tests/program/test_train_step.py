@@ -6,8 +6,8 @@ Definitions it names, and to a tolerance against torch; the functional AdamW aga
 `BoxPermute` against torch's permute; the tiny step in f32 and in bf16 (its linears' operands cast, as autocast casts them); the
 bf16 GEMMs on sm_120 (`training_rules(cc=(12, 0))`), each its captured route's Definition and, on stand-in routes at small
 shapes, bit for bit that route's model; the element-wise ops on sm_120 bit for bit against the GPU's arithmetic as torch CPU's
-f32 operations compute it on NaN-free words; and the lf model's s step derived in reference mode, which is refused at its one op
-with no Definition (`_log_softmax`: `F32LogRn`)."""
+f32 operations compute it on NaN-free words, and `silu_backward` against its stated form in the GPU's Definitions; and the lf
+model's s step derived in reference mode, which is refused at its one op with no Definition (`_log_softmax`: `F32LogRn`)."""
 from __future__ import annotations
 
 import bisect
@@ -212,6 +212,11 @@ EXACT = {
                            (X, torch.tensor([2, 5, 2, 0]))),
     "embedding_backward_67": (lambda g, i: (aten.embedding_dense_backward(g, i, 6, -1, False),), (M67, torch.tensor([2, 5, 2]))),
     "permute_of_concat": (lambda x, y: ((torch.cat([x, y], dim=1).t() * 2.0),), (X, Y)),
+    "copy_into_allocation": (lambda a, b: (a.new_empty_strided((4, 16), (16, 1)).copy_(b) + a,), (X, Y)),
+    "copy_broadcast": (lambda m, r: (torch.empty_like(m).copy_(r) * m,), (X, ROW)),
+    "copy_of_static": (lambda a: (torch.empty_like(a).copy_(torch.full((4, 16), 0.5)) * a,), (X,)),
+    "static_arithmetic": (lambda a: (a * (torch.full((16,), 3.0) * 0.5 + 1.0 - torch.ones(16)),), (X,)),
+    "foreach_add": (lambda a, s: torch._foreach_add([a, s], 1.0), (X67, torch.tensor(7.0))),
 }
 
 
@@ -331,6 +336,21 @@ def _nll_forward(ignore: int):
     return ref
 
 
+def _silu_backward_with(add, div, sub, fma, mul):
+    """`SiluBackward` in the given Definitions: s = `div(1, add(1, F32ExpRn_v1(F32Neg_v1(x))))`, then
+    `mul(mul(dy, s), fma(x, sub(1, s), 1))`."""
+    def ref(dy, x):
+        out = []
+        for g, v in zip(_bits(dy), _bits(x), strict=True):
+            s = div.evaluate(ONE, add.evaluate(ONE, R.F32ExpRn.evaluate(SC.F32Neg.evaluate(v))))
+            out.append(mul.evaluate(mul.evaluate(g, s), fma.evaluate(v, sub.evaluate(ONE, s), ONE)))
+        return out
+    return ref
+
+
+_silu_backward = _silu_backward_with(P.F32Add, P.F32Div, R.F32Sub, P.F32Fma, P.F32Mul)
+
+
 #: the rules whose reference arithmetic is the vocabulary's own (a sequential sum, a correctly rounded exp, a dot by fma), each with
 #: its stated arithmetic composed from the evaluators of the Definitions it names
 CLOSE = {
@@ -382,6 +402,9 @@ CLOSE = {
     "bmm_bf16": (lambda a, b: (torch.bmm(a, b),),
                  (_data(2, 4, 16, seed=6).to(torch.bfloat16), _data(2, 16, 4, seed=7).to(torch.bfloat16)),
                  _in_bf16(lambda a, b: [w for i in range(a.shape[0]) for w in _mm(a[i], b[i])])),
+    "silu_backward": (lambda g, x: (aten.silu_backward(g, x),), (Y, X), _silu_backward),
+    "silu_backward_67": (lambda g, x: (aten.silu_backward(g, x),), (Y67, X67), _silu_backward),
+    "silu_backward_bf16": (lambda g, x: (aten.silu_backward(g, x),), (Y.to(torch.bfloat16), XB), _in_bf16(_silu_backward)),
 }
 
 
@@ -432,6 +455,25 @@ def test_bf16_rounding_in_between_is_refused(f, x, why: str) -> None:
     assert isinstance(u, Unsupported) and u.reason == "numerics_unregistered" and why in u.hint, u
 
 
+@pytest.mark.parametrize("f, x, why", [
+    (lambda a: (torch.empty_like(a, dtype=torch.bfloat16).copy_(a),), X, "a conversion from torch.float32 to torch.bfloat16"),
+    (lambda a: (a * (torch.full((16,), float("inf")) * 0.0),), X, "a static NaN result"),
+    (lambda a: (a * (torch.full((16,), 3.0, dtype=torch.bfloat16) * 0.1),), XB, "a static bf16 or f16 result")])
+def test_copy_and_static_arithmetic_refusals(f, x, why: str) -> None:
+    """A copy that converts is `_to_copy`'s arithmetic, which `Copy` doesn't take; a static NaN result is refused (torch CPU's NaN
+    word is not the GPU's), and so is a static bf16 result (torch CPU rounds a number in a bf16 add to bf16 first)."""
+    gm = make_fx(torch.func.functionalize(f, remove="mutations"), tracing_mode="fake")(x)
+    u = derive_graph(gm, (x,), mode="reference", rules=training_rules(), name="T").unsupported
+    assert isinstance(u, Unsupported) and u.reason == "numerics_unregistered" and why in u.hint, u
+
+
+def test_an_allocation_read_before_a_copy_writes_it_is_refused() -> None:
+    gm = make_fx(torch.func.functionalize(lambda a: (a.new_empty_strided((4, 16), (16, 1)) + a,), remove="mutations"),
+                 tracing_mode="fake")(X)
+    u = derive_graph(gm, (X,), mode="reference", rules=training_rules(), name="T").unsupported
+    assert isinstance(u, Unsupported) and "Alloc" in u.hint, u
+
+
 def _f32_of(s: float) -> torch.Tensor:
     return torch.tensor(s, dtype=torch.float32)
 
@@ -453,6 +495,8 @@ GPU = {
     "div_value_bf16": (lambda a, b: (a / b,), (XB, POSB[0, :1].reshape(())), lambda a, b: (a.float() / b.float()).bfloat16()),
     "add_alpha": (lambda a, b: (torch.add(a, b, alpha=0.95),), (X67, Y67), lambda a, b: torch.add(a, b, alpha=0.95)),
     "mul_mask": (lambda a, k: (a * k,), (M67, ROW67 > 0), lambda a, k: a * k),
+    "foreach_add": (lambda a, s: torch._foreach_add([a, s], 1.0), (X67, torch.tensor(7.0)),
+                    lambda a, s: torch.cat([(a + 1.0).reshape(-1), (s + 1.0).reshape(-1)])),
 }
 
 
@@ -497,6 +541,21 @@ def test_gpu_binary_definitions_and_refusals() -> None:
     gm = make_fx(lambda a, b: (torch.add(a, b, alpha=0.5),), tracing_mode="fake")(XB, XB)
     u = derive_graph(gm, (XB, XB), mode="reference", rules=training_rules(), name="T").unsupported
     assert isinstance(u, Unsupported) and "alpha != 1" in u.hint, u
+
+
+@pytest.mark.parametrize("dt", [torch.float32, torch.bfloat16])
+def test_gpu_silu_backward_is_its_stated_arithmetic(dt: torch.dtype) -> None:
+    """At `cc` silu_backward is its stated form in the GPU's Definitions (`_v2`; `F32ExpRn_v1`, `Unary`'s exp; a bf16 result
+    `F2fpBf16_v1`), bit for bit at an odd length."""
+    dy, x = Y67.to(dt), X67.to(dt)
+    prog = _program(lambda g, v: (aten.silu_backward(g, v),), dy, x, rules=training_rules(cc=CB.TRAIN_CC))
+    ids = {nd.fn.id.split("{")[0] for nd in prog.root.body.nodes}
+    assert {"F32Add_v2", "F32Div_v2", "F32Sub_v2", "F32Fma_v2", "F32Mul_v2", "F32ExpRn_v1"} <= ids, ids
+    assert not {"F32Add_v1", "F32Div_v1", "F32Sub_v1", "F32Fma_v1", "F32Mul_v1", "F32ToBf16Rn_v1"} & ids, ids
+    want = _silu_backward_with(P.F32AddV2, P.F32DivV2, P.F32SubV2, P.F32FmaV2, P.F32MulV2)(dy.float(), x.float())
+    if dt == torch.bfloat16:
+        want = [P.F2fpBf16.evaluate(w) << 16 for w in want]
+    _same_bits(_outputs(prog, dy, x), torch.from_numpy(np.array(want, dtype=np.uint32).view(np.float32).copy()))
 
 
 def _adamw_inputs(seed: int = 0, n: int = 64):

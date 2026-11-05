@@ -42,7 +42,8 @@ _STATIC_ARITH = {aten.add.Tensor, aten.sub.Tensor, aten.mul.Tensor, aten.floor_d
                  aten.to.device}
 # `x.new_ones(shape) / new_zeros / new_full`: constant makers whose ONE tensor operand only supplies dtype/device defaults (never read)
 _STATIC_LIKE_MAKERS = {aten.new_ones.default, aten.new_zeros.default, aten.new_full.default}
-_ALLOCS = {aten.empty.memory_format, aten.empty_like.default, aten.new_empty.default, aten.empty_strided.default}
+_ALLOCS = {aten.empty.memory_format, aten.empty_like.default, aten.new_empty.default, aten.empty_strided.default,
+           aten.new_empty_strided.default}
 _GATHERS = {aten.index_select.default, aten.index.Tensor, aten.embedding.default}
 
 
@@ -475,7 +476,7 @@ class StaticGatherRule(ViewRule):
 
 class AllocRule(ViewRule):
     """`empty`/`empty_like`: an uninitialised allocation that an in-place rule must write before any read."""
-    info = RuleInfo("Alloc", 1, "view", applies_to="aten.empty / empty_like / new_empty / empty_strided",
+    info = RuleInfo("Alloc", 1, "view", applies_to="aten.empty / empty_like / new_empty / empty_strided / new_empty_strided",
                     preconditions=("the result is only ever read after an in-place rule wrote it",),
                     evidence_domain="structural: reading an unwritten allocation is refused")
 

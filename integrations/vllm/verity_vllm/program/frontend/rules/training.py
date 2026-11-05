@@ -5,23 +5,26 @@ and the training rules placed first claim only what the defaults lower per row o
 
 Arithmetic is the reference vocabulary's (`ref_prims`): each element-wise op is the f32 operation torch's CPU kernel performs for it
 (true division, IEEE `sqrt`, `pow` 2 and 3 as products, `rsqrt` as `1 / sqrt`, `lerp` as `fma(w, end - start, start)` or
-`fma(w - 1, end - start, end)`, `addcmul` as `fma(value * t1, t2, self)`), and each reduction is the vocabulary's sequential one (`DotRef`, ascending from +0, where torch's kernels
-sum in blocks). Matrix products and the element-wise ops of `Binary` and `Unary` also take bf16 values: a product is
+`fma(w - 1, end - start, end)`, `addcmul` as `fma(value * t1, t2, self)`, `silu_backward` as `(dy * s) * fma(x, 1 - s, 1)`), and
+each reduction is the vocabulary's sequential one (`DotRef`, ascending from +0, where torch's kernels sum in blocks). Matrix
+products and the element-wise ops of `Binary`, `Unary` and `SiluBackward` also take bf16 values: a product is
 `LinearRef_v1{DT=bf16}` (operands widened, the f32 dot, its result rounded), and an element-wise op widens its bf16 operands to f32
 (`Bf16ToF32_v1`, exact), performs the f32 operation and rounds a bf16 result once (`F32ToBf16Rn_v1`), as torch CPU's bf16 kernels
 do; where torch's bf16 kernel rounds otherwise, the rule refuses. At a compute capability `cc`, a bf16 `mm` or `mv` is instead
 F.linear's GEMM as that GPU's cuBLAS computes it (`Matmul`): the route its capture fitted (`cublas_bf16.train_route`), each k16 step
-the tensor core's dot (`HopperBF16WgmmaDot16_v1`); `add`, `sub`, `mul` and `div` are the GPU's (`Binary`); a vector norm or a sum of a
-whole tensor is its `reduce_kernel`'s (`rules.training_reduce.FullReduce`); an f32 embedding's gradient is its kernels'
-(`EmbeddingDenseBackward`); and the conversions to bf16 and to and from f16 and a `kthvalue` are its own (`rules.training_masks`).
+the tensor core's dot (`HopperBF16WgmmaDot16_v1`); `add`, `sub`, `mul` and `div` are the GPU's (`Binary`), as are
+`silu_backward`'s operations and `_foreach_add`'s (`SiluBackward`, `ForeachAdd`); a vector norm or a sum of a whole tensor is its
+`reduce_kernel`'s (`rules.training_reduce.FullReduce`); an f32 embedding's gradient is its kernels' (`EmbeddingDenseBackward`);
+and the conversions to bf16 and to and from f16 and a `kthvalue` are its own (`rules.training_masks`).
 A random op's values are an input of the step, committed with its generator's seed (`rules.training_draws.Random`). A training op
 with no Definition to lower it to is refused with the Definition it needs (`_log_softmax`: a correctly-rounded f32 log, `F32LogRn`).
 
     training_rules(min_view_leaves, cc, tf32) -> RuleSet     the training rule set
 
-Views and static float tensors are `rules.training_views`'s, matrix products `rules.training_matmul`'s, comparisons, masks,
-integer sums, conversions, table lookups and `kthvalue` `rules.training_masks`'s, draws `rules.training_draws`'s and the helpers
-the rules emit with `rules.training_emit`'s; a survey of what the rules refuse is `rules.training_survey`'s.
+Views, static float tensors and functionalized copies are `rules.training_views`'s, matrix products `rules.training_matmul`'s,
+comparisons, masks, integer sums, conversions, table lookups and `kthvalue` `rules.training_masks`'s, draws
+`rules.training_draws`'s and the helpers the rules emit with `rules.training_emit`'s; a survey of what the rules refuse is
+`rules.training_survey`'s.
 """
 
 from __future__ import annotations
@@ -46,7 +49,7 @@ from verity_vllm.program.frontend.rules.training_draws import Random
 from verity_vllm.program.frontend.rules.training_masks import Cast, Clamp, Compare, Index, IntSum, KthValue, Logic, Where
 from verity_vllm.program.frontend.rules.training_matmul import Matmul
 from verity_vllm.program.frontend.rules.training_reduce import FullReduce
-from verity_vllm.program.frontend.rules.training_views import BoxPermute, StaticFloat, StaticFloats, _info, _view_permute
+from verity_vllm.program.frontend.rules.training_views import BoxPermute, Copy, StaticFloat, StaticFloats, _info, _view_permute
 from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import shape_of
 
@@ -258,6 +261,78 @@ class Addcmul(_TrainRule):
         vt1 = _flat(_ew(ctx, node, P.F32Mul, [v, t1], S), S)
         ctx.define(node, _ew(ctx, node, P.F32Fma, [vt1, t2, s], S))
         ctx.record(self, node, {"shape": list(S)}, emitted=f"F32Mul_v1 + F32Fma_v1 x{math.prod(S)}")
+
+
+class SiluBackward(_TrainRule):
+    """`silu_backward(dy, x)` = `(dy * s) * fma(x, 1 - s, 1)` with `s = 1 / (1 + exp(-x))`, the form of torch's kernels (its
+    CPU kernel's scalar loop exactly; nvcc contracts `1 + x * (1 - s)` to one FFMA): `F32ExpRn_v1` as `Unary`'s `exp`,
+    `F32Add_v1`, `F32Div_v1`, `F32Sub_v1`, `F32Fma_v1`, `F32Mul_v1`. bf16 operands are widened and the result rounded once
+    (`F32ToBf16Rn_v1`), as both kernels compute in f32. At a compute capability `cc` the operations are the GPU's
+    (`F32Add_v2`, ..., `F32Mul_v2`) and a bf16 result is rounded by `F2fpBf16_v1`."""
+    info = _info("SiluBackward", "aten.silu_backward of f32 or bf16", "dy and x are values of the result's dtype",
+                 "one batch per step over the elements")
+
+    def __init__(self, cc: tuple[int, int] | None = None):
+        self.cc = cc
+
+    def targets(self):
+        return {aten.silu_backward.default}
+
+    def applies(self, node, ctx):
+        for a in node.args[:2]:
+            why = _operand_ok(ctx, a, tuple(_DT))
+            if why or not isinstance(ctx.val(a), Coll):
+                return why or "an operand is not a value"
+            if ctx.dtype_of(a) != ctx.dtype_of(node):
+                return f"numerics_unregistered: {a.name} has dtype {ctx.dtype_of(a)}, the result {ctx.dtype_of(node)}"
+        return True
+
+    def emit(self, node, ctx):
+        S = ctx.shape_of_node(node)
+        gpu = self.cc is not None
+        one = (_const(ctx, node, _bits(1.0)), None)
+
+        def ew(op, *ops):
+            return _flat(_ew(ctx, node, _F32[op][gpu] if isinstance(op, str) else op, list(ops), S), S)
+
+        dy, x = (_operand(ctx, node, a, S) for a in node.args[:2])
+        s = ew("div", one, ew("add", one, ew(R.F32ExpRn, ew(SC.F32Neg, x))))
+        t = ew("fma", x, ew("sub", one, s), one)
+        y = _ew(ctx, node, _F32["mul"][gpu], [ew("mul", dy, s), t], S)
+        ctx.define(node, _rounded(ctx, node, y, S, P.F2fpBf16 if gpu else P.F32ToBf16Rn))
+        ctx.record(self, node, {"shape": list(S), "dtype": _DT[ctx.dtype_of(node)]}, emitted=f"x{math.prod(S)}")
+
+
+class ForeachAdd(_TrainRule):
+    """`_foreach_add.Scalar(tensors, s)`: each f32 tensor plus the number `s` (an optimizer's step counts), element by element,
+    `F32Add_v1`, and at a compute capability `cc` its kernel's `F32Add_v2`; the results a list."""
+    info = _info("ForeachAdd", "aten._foreach_add.Scalar of f32 values", "each tensor is an f32 value",
+                 "the scalar is a Python number")
+
+    def __init__(self, cc: tuple[int, int] | None = None):
+        self.cc = cc
+
+    def targets(self):
+        return {aten._foreach_add.Scalar}
+
+    def applies(self, node, ctx):
+        ts, s = node.args[:2]
+        if not isinstance(s, (int, float)) or isinstance(s, bool):
+            return "the scalar is not a Python number"
+        for a in ts:
+            why = _operand_ok(ctx, a)
+            if why or not isinstance(ctx.val(a), Coll):
+                return why or "a tensor is not a value"
+        return True
+
+    def emit(self, node, ctx):
+        ts, s = node.args[:2]
+        fn = _F32["add"][self.cc is not None]
+        c = (_const(ctx, node, _bits(s)), None)
+        outs = [_ew(ctx, node, fn, [_operand(ctx, node, a, _shape(ctx, a)), c], _shape(ctx, a)) for a in ts]
+        ctx.define(node, outs)
+        ctx.record(self, node, {"tensors": len(ts), "scalar": s},
+                   emitted=f"{fn.id} x{sum(math.prod(_shape(ctx, a)) for a in ts)}")
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -556,11 +631,12 @@ class EmbeddingDenseBackward(_TrainRule):
 
 def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, tf32: bool = False) -> RuleSet:
     """The default rules with the training rules: views of static floats, `BoxPermute` (views of more than `min_view_leaves` leaves
-    that are not one run) and `Matmul` before them, the element-wise, reduction, softmax, loss, embedding, comparison, mask,
-    integer, conversion, lookup, order-statistic and draw rules after. `min_view_leaves` is 0 by default: the default views write a
-    permuted view of fewer leaves than their limit as a list of its leaves, which the root's replay then substitutes as one
-    reference part per leaf.  `cc` (`cublas_bf16.TRAIN_CC`): bf16 `mm`s and `mv`s as that GPU's cuBLAS computes them (`Matmul`),
-    every add, sub, mul and div as its kernels do (`Binary`) and the conversions to bf16 and to and from f16 as its kernels do
+    that are not one run) and `Matmul` before them, the element-wise, optimizer-count, reduction, softmax, loss, embedding,
+    comparison, mask, integer, conversion, lookup, order-statistic, draw and copy rules after. `min_view_leaves` is 0 by default:
+    the default views write a permuted view of fewer leaves than their limit as a list of its leaves, which the root's replay then
+    substitutes as one reference part per leaf.  `cc` (`cublas_bf16.TRAIN_CC`): bf16 `mm`s and `mv`s as that GPU's cuBLAS computes
+    them (`Matmul`), every add, sub, mul and div as its kernels do (`Binary`; `SiluBackward` and `ForeachAdd` take the same
+    operations) and the conversions to bf16 and to and from f16 as its kernels do
     (`Cast`), both placed first, before the default rules' CPU kinds, a whole tensor's vector norm or sum as its `reduce_kernel`
     does (`FullReduce`, before `Reduce`), an f32 embedding's gradient as its kernels do (`EmbeddingDenseBackward`) and
     `kthvalue` as its radix select does (`KthValue`), in the rule set
@@ -569,14 +645,14 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
     from verity_vllm.program.frontend.rules import DEFAULT_RULES
 
     first = [StaticFloats(), BoxPermute(min_view_leaves), Matmul(cc, tf32)] + ([Binary(cc), Cast(cc)] if cc else [])
-    last = ([] if cc else [Binary()]) + [Unary(), Lerp(), Addcmul(), FullReduce(cc), Reduce(), IntSum(), SafeSoftmax(),
-                                         SoftmaxBackward(), LogSoftmax(), LogSoftmaxBackward(), NllLossForward(),
-                                         NllLossBackward(), EmbeddingDenseBackward(cc), Compare(), Logic(), Where(), Clamp(cc),
-                                         Index(), KthValue(cc), Random()] + ([] if cc else [Cast()])
+    last = ([] if cc else [Binary()]) + [Unary(), Lerp(), Addcmul(), SiluBackward(cc), ForeachAdd(cc), FullReduce(cc), Reduce(),
+                                         IntSum(), SafeSoftmax(), SoftmaxBackward(), LogSoftmax(), LogSoftmaxBackward(),
+                                         NllLossForward(), NllLossBackward(), EmbeddingDenseBackward(cc), Compare(), Logic(),
+                                         Where(), Clamp(cc), Index(), KthValue(cc), Random(), Copy()] + ([] if cc else [Cast()])
     name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}" + ("-tf32" if tf32 else "")
     return RuleSet(name, first + list(DEFAULT_RULES.rules) + last, list(DEFAULT_RULES.families))
 
 
-__all__ = ["training_rules", "Matmul", "Binary", "Unary", "Lerp", "Addcmul", "FullReduce", "Reduce", "IntSum", "SafeSoftmax",
-           "SoftmaxBackward", "LogSoftmax", "LogSoftmaxBackward", "NllLossForward", "NllLossBackward", "EmbeddingDenseBackward",
-           "Compare", "Logic", "Where", "Clamp", "Cast", "Index", "KthValue", "Random"]
+__all__ = ["training_rules", "Matmul", "Binary", "Unary", "Lerp", "Addcmul", "SiluBackward", "ForeachAdd", "FullReduce", "Reduce",
+           "IntSum", "SafeSoftmax", "SoftmaxBackward", "LogSoftmax", "LogSoftmaxBackward", "NllLossForward", "NllLossBackward",
+           "EmbeddingDenseBackward", "Compare", "Logic", "Where", "Clamp", "Cast", "Index", "KthValue", "Random", "Copy"]
