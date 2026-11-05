@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from verity.ml.circuits.program import is_input, is_registered
+from verity.ml.circuits.program import RUN, input_id, is_input, is_registered
 from verity_vllm.pipeline import registration_log as RL
 from verity_vllm.program.predict.build import build_program
 from verity_vllm.program.predict.node import build_node_program, check_ranks
@@ -118,7 +118,7 @@ def test_the_node_reads_only_its_prompt_besides_theta():
     inp = [is_input(n.fn) for n in root.nodes]
     theta = node.desc["annotations"]["theta"]
     assert theta == [k for k in range(1, len(inp)) if inp[k]] and all(is_registered(root.nodes[k].fn) for k in theta)
-    assert inp[0] and not is_registered(root.nodes[0].fn) and root.offsets[1] - root.offsets[0] == 4 * 32
+    assert input_id(root.nodes[0].fn.id) == (RUN, 32) and root.nodes[0].n == 4
 
 
 def test_a_world_of_one_has_no_node_program():
