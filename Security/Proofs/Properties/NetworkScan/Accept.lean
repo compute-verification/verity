@@ -4,7 +4,8 @@ import Proofs.Properties.Nci.BodiesOk
 /-!
 # What `NetworkCheck.Period.scanOf`'s acceptance gives of the scan's Program
 
-`scanOf_accepted` reads `scanOf`'s steps one by one (each check a `need`, so each step a bind) and keeps what
+`scanOf_accepted` reads `scanProg`'s steps one by one, at the Program `scanOf` decodes (`scanOf_scanProg`; each check a
+`need`, so each step a bind), and keeps what
 `NetTiming.BoundaryGates.Fits`'s first two parts rest on (`Accepted`): the description's layout and walk checks, the
 egress template's node (a batch of `T`, returning a u16 and the row, every leaf its own, all `T` instances' leaves
 returned by the root in one run), each step's ingress bucket (`Ingress`: a batch member, its first parameter the row,
@@ -98,17 +99,26 @@ theorem split_three {β : Type} {g : ℕ → β} {l : List ℕ} {f b : β} (h : 
     exact ⟨a, a', e, rfl, h'.1, h'.2⟩
   | _ :: _ :: _ :: _ :: _, h => simp at h
 
-/-- **What `scanOf`'s acceptance gives**: an accepted scan's canonical text decodes to a Program of the generator
-form, as `Accepted` states it. -/
-theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : Scan} {c : String} {P : Prog}
+/-- **`scanOf` is `scanProg` at the decoded Program**: if `scanOf` accepts the scan `j`, whose canonical text `c`
+decodes to `P`, then `scanProg` accepts `P` with the same terms. -/
+theorem scanOf_scanProg {j : Lean.Json} {program : String} {s : Schedule} {sc : Scan} {c : String} {P : Prog}
     (h : scanOf j program s = .ok sc) (hc : Flock.canon j = .ok c) (hd : Flock.Program.decode c.toUTF8 = .ok P) :
-    Accepted P s := by
+    scanProg P program s = .ok sc := by
   unfold scanOf at h
   obtain ⟨c', hc', h⟩ := bind_ok h
   obtain rfl : c' = c := by rw [hc] at hc'; exact (Except.ok.inj hc').symm
   obtain ⟨P', hP', h⟩ := bind_ok h
   rw [hd] at hP'
   obtain rfl : P = P' := by cases hP'; rfl
+  exact h
+
+/-- **What `scanOf`'s acceptance gives**: an accepted scan's canonical text decodes to a Program of the generator
+form, as `Accepted` states it. -/
+theorem scanOf_accepted {j : Lean.Json} {program : String} {s : Schedule} {sc : Scan} {c : String} {P : Prog}
+    (h : scanOf j program s = .ok sc) (hc : Flock.canon j = .ok c) (hd : Flock.Program.decode c.toUTF8 = .ok P) :
+    Accepted P s := by
+  replace h := scanOf_scanProg h hc hd
+  unfold scanProg at h
   obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨root, hroot, h⟩ := bind_ok h
   replace hroot := needSome_ok hroot

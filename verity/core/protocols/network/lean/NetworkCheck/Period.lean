@@ -958,8 +958,8 @@ def readsEntriesFn (j : Json) : Except String Json := do
   return .bool (readsEntries x (← Flock.J.nat j "o" ctx) (← Flock.J.nat j "t0" ctx) (← Flock.J.nat j "every" ctx)
     (← Flock.J.nat j "E" ctx) ks)
 
-/-- The scan's terms from its Program's descriptor (`Flock.Program.decode` of its canonical bytes), which must be the
-registered Program (`program`, its SHA-512), with no two definitions of one key (`keysUnique`) and no template keyed
+/-- The scan's terms from its Program, which must be the registered Program (`program`, its SHA-512), with no two
+definitions of one key (`keysUnique`) and no template keyed
 as an input (`Flock.Program.isInputId`), so the template query (`Flock.TemplateQuery.evaluate`, which finds a
 definition by its key, the first of that key, and skips an input's) reads each template node as this check does, and
 the generator form of the schedule's execution phase: its root batches
@@ -986,8 +986,7 @@ T / every` counted once among the input gates): bucket `t`'s `prog<j>`, mapped o
 its row `⌊t / every⌋` (`readsEntries`, read off the argument's parts), the
 leaf the period check's `wired` holds to chunk `j` of an audit's `SlotEntry_v1` or `SelectEntry_v1` entries port;
 their bits are the scan's `entries`. -/
-def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
-  let prog ← (Flock.Program.decode (← Flock.canon j).toUTF8).mapError fun e => s!"scan: {e}"
+def scanProg (prog : Flock.Program.Prog) (program : String) (s : Schedule) : V Scan := do
   need (Flock.hexOf prog.sha512 == program) "scan: its SHA-512 is not the registered Program's (program)"
   let root ← needSome prog.defs[prog.root]? "scan: no root"
   let templates := (templateNodes prog).toArray.map fun k => (root.body.nodes[k]!, prog.defs[root.body.nodes[k]!.fn]!)
@@ -1062,7 +1061,13 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   pure { steps := T, free := 0,
          ingress := vuBits 1 (max (paramWords df.params) ((later.map fun (_, d) => paramWords d.params).getD 0) +
            retWords df.ret),
-         egress := vuBits 1 (paramWords de.params + retWords de.ret), entries := s.lanes * nb * bitsOf ety }
+          egress := vuBits 1 (paramWords de.params + retWords de.ret), entries := s.lanes * nb * bitsOf ety }
+
+/-- The scan's terms from its Program's descriptor `j`: the Program `Flock.Program.decode` reads off its canonical
+bytes, as `scanProg` checks it. -/
+def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
+  let prog ← (Flock.Program.decode (← Flock.canon j).toUTF8).mapError fun e => s!"scan: {e}"
+  scanProg prog program s
 
 /-- The rows form's keys with the scan's listed circuit files (`scan_circuits`, a file a root template of the scan's
 Program, `listedOf`). -/
