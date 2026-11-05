@@ -16,7 +16,8 @@ says which files it holds. A file needs another when it:
   (`tests/test_boundaries.py`'s ``_imports``), resolved to a repository path through the file's own directory (the first
   above it outside a package, as a script or pytest puts it on the path), its suite's `pythonpath`, the workspace's
   distributions and the root, with the `__init__.py` of each package above the target;
-* is a lakefile whose package `require`s the other's by path, or a pyproject whose distribution depends on the other's;
+* is a lakefile whose package `require`s the other's by path, or a pyproject whose distribution depends on the other's or
+  whose script runs a module of it;
 * reaches it by a path anchored on its own place (`anchors.py`: a load, a `sys.path` entry, a data file, a script's
   `$(dirname "$0")/..`), or a shell script names it by a path from the root;
 * runs a command the other's distribution provides (`research`, `cluster`): a shell command, or a Python subprocess call
@@ -474,6 +475,11 @@ class Tree:
             if (t := dists.get(_requirement_name(r))) is not None and t != f:
                 at = text.find(f'"{r}"')
                 out.append(Edge(f, t, text.count("\n", 0, at) + 1 if at >= 0 else 1, "python dependency", r))
+        for name, entry in project.get("scripts", {}).items():
+            if isinstance(entry, str):
+                at = text.find(f'"{entry}"')
+                out += [Edge(f, t, text.count("\n", 0, at) + 1 if at >= 0 else 1, "python import", f"{name} = {entry}")
+                        for t in self._module(entry.partition(":")[0].strip(), f)]
         return out
 
     def prefetch(self, files: Iterable[str], workers: int = 4) -> None:

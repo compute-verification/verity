@@ -66,7 +66,8 @@ TREE = {
                                   '[tool.hatch.build.targets.wheel]\npackages = ["privpkg"]\n'),
     "tools/priv/privpkg/__init__.py": "def main():\n    pass\n",
     "tools/priv/data.json": "{}\n",
-    "verity/pub/pyproject.toml": '[project]\nname = "pub"\ndependencies = ["privtool>=1"]\n',
+    "verity/pub/pyproject.toml": ('[project]\nname = "pub"\ndependencies = ["privtool>=1"]\n'
+                                  '[project.scripts]\npub-run = "privpkg:main"\n'),
     "verity/pub/imports.py": "import json\nimport privpkg\n",
     "verity/pub/reads.py": "from pathlib import Path\n\nDATA = Path(__file__).resolve().parents[2] / 'tools' / 'priv' / 'data.json'\n",
     "verity/pub/runs.py": "import subprocess\n\nsubprocess.run(['research', 'status'], check=True)\n",
@@ -101,6 +102,7 @@ def judged(tmp_path: Path):
     ("verity/pub/lakefile.toml", "lake require", "tools/priv/lakefile.toml"),
     ("verity/pub/imports.py", "python import", "tools/priv/privpkg/__init__.py"),
     ("verity/pub/pyproject.toml", "python dependency", "tools/priv/pyproject.toml"),
+    ("verity/pub/pyproject.toml", "python import", "tools/priv/privpkg/__init__.py"),
     ("verity/pub/reads.py", "path", "tools/priv/data.json"),
     ("verity/pub/runs.py", "command", "tools/priv/pyproject.toml"),
     ("verity/pub/run.sh", "command", "tools/priv/pyproject.toml"),
