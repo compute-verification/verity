@@ -1,5 +1,5 @@
 """The `lf` model of the training-efficiency ladder (`benchmarks/covert_witness/model.py` on the te-ref-optim branch), for
-the training-step frontend's tests and the grader's (`benchmarks/covert_witness/grader`): a Llama-style decoder (RMSNorm,
+the training-step frontend's tests and the grader's (`benchmarks/training_slowdown/grader`): a Llama-style decoder (RMSNorm,
 SwiGLU, RoPE, no biases, tied input and output embeddings) over the GPT-2 vocabulary padded to 50,304, its loss the next-token
 cross-entropy, and the plain AdamW the step is derived with (the ladder trains its matrices with Muon instead).
 
