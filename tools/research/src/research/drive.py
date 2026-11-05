@@ -258,8 +258,9 @@ CIRCUIT_RED = "step circuit-check"
 #: not listed is its own job
 JOB_OF_KIND = {"test-file": "pytest", "lean-module": "lean-audit", "lean-lock": "lean-audit", "circuit-binding": "circuit-check",
                "circuit-coverage": "circuit-check", "circuit-catalog": "circuit-check"}
-#: the graph/v2 kind that runs check's lean-suites step whole (`verity_graph.runners.lean_suites`): its fail names each failed
-#: suite (`detail.failed`, suites.py's rows), which drive names, allows and blames as that suite's own red, as it does a run's
+#: the graph/v2 kind that runs check's lean-suites step on one of its suites, or a part of one (`verity_graph.runners.lean_suites`):
+#: its fail names each failed suite (`detail.failed`, suites.py's rows), which drive names, allows and blames as that suite's own
+#: red, as it does a run's, a red unit any of a suite's parts fails
 SUITES_KIND = "lean-suites"
 #: the most new failures a circuit-binding result names (`verity_graph.runners.circuit_binding.NAMED`): a list that long may
 #: leave some out, so no allowance covers it
