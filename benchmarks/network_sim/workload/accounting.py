@@ -87,7 +87,7 @@ def datacenter(hw: DeviceGraph, cadence: D.Cadence, kinds: set[str], rate: float
         cadence)
 
 
-def placement(model, hw: DeviceGraph, p: P.StepPlacement, dc: D.Datacenter, registration: D.Registration) -> D.Placed:
+def placement(model, hw: DeviceGraph, p: P.StepPlacement, dc: D.Datacenter, registration: D.RegisteredInputs) -> D.Placed:
     program = model.program
     body = program.root.body
     client = hw.leaves[hw.client]
