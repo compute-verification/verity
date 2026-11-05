@@ -78,9 +78,10 @@ def main (protocolWith : BlobProtocol → BlobProtocol) (args : List String) : I
           IO.eprintln s!"{P.id}: --circuits is given twice"
           usage
         else
-          let j ← NetworkCheck.Period.paramsAt p
-          let fs ← NetworkCheck.PeriodFiles.read (budget gb) (certifierParams j) files
-          (protocolWith (NetworkCheck.Period.readProtocol fs).withoutBlobs).main ("check" :: p :: c :: e :: blobs)
+          let j := certifierParams (← NetworkCheck.Period.paramsAt p)
+          let fs ← NetworkCheck.PeriodFiles.read (budget gb) j files
+          let net := NetworkCheck.Period.readProtocol (NetworkCheck.Period.scanCount j) fs
+          (protocolWith net.withoutBlobs).main ("check" :: p :: c :: e :: blobs)
   | ["id"] | ["serve"] => P.main args
   | _ => usage
 
