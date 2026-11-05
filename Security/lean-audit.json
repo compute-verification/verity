@@ -71395,7 +71395,7 @@
    },
    "guarantees": ["Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192"]
   },
-  "Proofs.Properties.NetworkCertifier.Bytes": {
+  "Proofs.Properties.NetworkCertifier.Check.Bytes": {
    "digest": "dd4b5150ef158d7b1805d199610831c520cb73bd3a25b6f8f5bae4d8212b0e6a",
    "definitions": {
     "Properties.NetworkCertifier.Bytes.bs": "a42720c5b5b8602389499662042ebda0cf215bef5cf9191921c4ce4e0db150b2"
