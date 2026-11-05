@@ -16,6 +16,7 @@ head's time (approximated by `checked` now); two heads with the same own change 
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import subprocess
 import sys
@@ -45,19 +46,23 @@ def own(repo: str, h: str, base: str) -> dict[str, str | None] | None:
 
 #: files a sync regenerates rather than edits: the Lean locks and the generated pins
 GENERATED = ("lean-audit.json", "pins", ".sha256", "uv.lock", "lake-manifest.json")
+#: a head that changes more files than this (a demo line's, thousands) isn't patch-id'd: "big"
+BIG = 5000
 
 
 def patch_ids(repo: str, h: str, base: str) -> dict[str, str]:
-    """{path: patch-id of its zero-context diff against the merge base}: equal across two heads when the PR's own edit of the
-    file is the same whatever else its base changed in it."""
+    """{path: sha256 of its zero-context diff's added and removed lines against the merge base} (a zero-context patch-id):
+    equal across two heads when the PR's own edit of the file is the same whatever else its base changed in it."""
     mb = g(repo, "merge-base", base, h).stdout.strip()
-    out = {}
-    for f in g(repo, "diff", "--no-renames", "--name-only", mb, h).stdout.splitlines():
-        d = g(repo, "diff", "--no-renames", "-U0", mb, h, "--", f).stdout
-        pid = subprocess.run(["git", "-C", repo, "patch-id", "--stable"], input=d, capture_output=True, text=True,
-                             errors="replace").stdout.split()
-        out[f] = pid[0] if pid else ""
-    return out
+    out: dict[str, hashlib._Hash] = {}
+    cur = None
+    for line in g(repo, "diff", "--no-renames", "--no-color", "-U0", mb, h).stdout.splitlines():
+        if line.startswith("diff --git "):
+            cur = line.split(" b/", 1)[-1]
+            out[cur] = hashlib.sha256()
+        elif cur and line[:1] in "+-" and not line.startswith(("+++ ", "--- ")):
+            out[cur].update(line.encode() + b"\n")
+    return {f: d.hexdigest() for f, d in out.items()}
 
 
 def main(labels_json: str, repo: str, out_csv: str, open_json: str, *closed: str) -> None:
@@ -112,6 +117,8 @@ def main(labels_json: str, repo: str, out_csv: str, open_json: str, *closed: str
             kind = "rewrite" if oa != ob else "rewrite-same"
         elif oa == ob:
             kind = "sync"
+        elif max(len(oa or {}), len(ob or {})) > BIG:
+            kind = "big"
         else:
             pa, pb = patch_ids(repo, a, at(ta)), patch_ids(repo, b, base)
             differ = sorted(f for f in set(pa) | set(pb) if pa.get(f) != pb.get(f))
