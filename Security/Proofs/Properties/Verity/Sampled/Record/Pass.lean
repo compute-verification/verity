@@ -154,13 +154,9 @@ theorem units_of_pass (A : Live) (o : Own) {b : ByteArray} {p : _root_.SampledPr
     simp only [Trace.seen]
   exact units_of_accepts A o he hacc hn hlaw (prefix_of_live A o P ω r hlive.1) (by rw [hsm]; exact h64) hshow
 
-/-- **v2's acceptance keeps the run's draw file**: where v2 accepts evidence it parsed at the coins `ξ`, reading `A`'s
-and `o`'s inputs (`Names`), with the verifier's law read over `A`'s population as `A`'s (`lawAt`), at a run whose draw
-file the blobs show (`Shows`) and whose draw rounds' coins begin with `ξ` (`LiveCoins`' first half), where the run's
-draw file and `o`'s partition object and registered file are each under `2^64` bytes, the draw file round keeps the
-run's draw file (`drawOk`): it proves the units the draw rounds' coins draw, its session sets up one table of `A.kd`
-units, so it has the statement's numbers, and its session's statement fits its length words (`fits_of_accepts`). -/
-theorem pass_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.SampledProofs.OneStageZk.Params}
+/-- **v2's acceptance makes the run's draw file a reference draw file** (`RefOk`): at `pass_of_accepts`'s hypotheses,
+its session sets up one table of `A.kd` units. -/
+theorem refOk_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.SampledProofs.OneStageZk.Params}
     {c : _root_.SampledProofs.OneStage.Commitment} {ev : _root_.SampledProofs.OneStageZk.Evidence} {bs : Core.Blobs}
     {ξ : ByteArray} {pub : _root_.SampledProofs.OneStage.Public} {prof : Core.Integrity}
     (he : _root_.SampledProofs.OneStageZk.evidenceOf b = .ok ev)
@@ -172,10 +168,9 @@ theorem pass_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Sampled
       ((List.range (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs.length).map (coinSeq r)))
     (hd : (drawOf (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen).length < 2 ^ 64)
     (hpart : o.partition.size < 2 ^ 64) (hreg : ∀ b ∈ o.registered, b.size < 2 ^ 64) :
-    drawOk A o (drawOf (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen) (coinsAt r) := by
+    RefOk A o (drawOf (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen) := by
   have hfits := fits_of_accepts hacc hn hd hpart hreg
   have hu := units_of_pass A o he hacc hn hlaw P ω r hshow hlive
-  refine ⟨hu, numsOk_of_refOk ?_, hfits⟩
   obtain ⟨s, rd, B, record, ksFiles, hs, hpl, hrd, hB, hutf, hv⟩ := verdict_of_accepts hacc hn
   have h64 := reach_draw FlockDeploy.sha512 P ω r
   have hsm : (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen.msgs =
@@ -213,5 +208,29 @@ theorem pass_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Sampled
   rw [htn, hnD, proved_of_drawLaw hD hlawc, ← unitsAt_size hX hD, _root_.Properties.SampledProofs.size_qsort,
     List.size_toArray]
   exact drawn_length A hdu
+
+/-- **v2's acceptance keeps the run's draw file**: where v2 accepts evidence it parsed at the coins `ξ`, reading `A`'s
+and `o`'s inputs (`Names`), with the verifier's law read over `A`'s population as `A`'s (`lawAt`), at a run whose draw
+file the blobs show (`Shows`) and whose draw rounds' coins begin with `ξ` (`LiveCoins`' first half), where the run's
+draw file and `o`'s partition object and registered file are each under `2^64` bytes, the draw file round keeps the
+run's draw file (`drawOk`): it proves the units the draw rounds' coins draw, its session sets up one table of `A.kd`
+units (`refOk_of_accepts`), so it has the statement's numbers, and its session's statement fits its length words
+(`fits_of_accepts`). -/
+theorem pass_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.SampledProofs.OneStageZk.Params}
+    {c : _root_.SampledProofs.OneStage.Commitment} {ev : _root_.SampledProofs.OneStageZk.Evidence} {bs : Core.Blobs}
+    {ξ : ByteArray} {pub : _root_.SampledProofs.OneStage.Public} {prof : Core.Integrity}
+    (he : _root_.SampledProofs.OneStageZk.evidenceOf b = .ok ev)
+    (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof) (hn : Names A o p bs)
+    (hlaw : lawAt p.base.verifier A.n = .ok A.law)
+    {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin ((V A o).k (xOf A o)) → Coin)
+    (hshow : Shows A o ev bs (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen)
+    (hlive : LiveCoins A o ξ (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen
+      ((List.range (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs.length).map (coinSeq r)))
+    (hd : (drawOf (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen).length < 2 ^ 64)
+    (hpart : o.partition.size < 2 ^ 64) (hreg : ∀ b ∈ o.registered, b.size < 2 ^ 64) :
+    drawOk A o (drawOf (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen) (coinsAt r) :=
+  ⟨units_of_pass A o he hacc hn hlaw P ω r hshow hlive,
+    numsOk_of_refOk (refOk_of_accepts A o he hacc hn hlaw P ω r hshow hlive hd hpart hreg),
+    fits_of_accepts hacc hn hd hpart hreg⟩
 
 end Verity.Sampled.Record

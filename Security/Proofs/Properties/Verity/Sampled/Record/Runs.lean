@@ -1,4 +1,4 @@
-import Proofs.Properties.Verity.Sampled.Record
+import Proofs.Properties.Verity.Sampled.Record.Facts
 import Proofs.Flock.Claims.Sampling.Prefix
 
 /-!
@@ -29,9 +29,8 @@ theorem drawOk_of_okAt {as : List Msg} {cs : List FlockDeploy.Coin} (h : okAt A 
   of_decide_eq_true h
 
 /-! The record's fields at a statement `x`, by `rfl` only where `x` is a variable: at `xOf A o` itself,
-`ite_eq_left rfl` takes the branch, since unfolding the record there would evaluate the statement's bytes. -/
-
-theorem record_parse (x : Msg) : (record A o e).parse x = if x = xOf A o then some (stmtA A) else none := rfl
+`ite_eq_left rfl` takes the branch, since unfolding the record there would evaluate the statement's bytes. The parse
+is `record_parse_eq`. -/
 
 theorem record_session (x : Msg) (u : ℕ) (v : Seen) :
     (record A o e).session x u v = if x = xOf A o then some (sessionOf A o v) else none := rfl
@@ -94,13 +93,13 @@ theorem prefixAt :
 the rounds after the draw file round. -/
 theorem sessionRuns : SessionRuns FlockDeploy.sha512 (record A o e) :=
   SamplingDeploy.sessionRuns_prefix FlockDeploy.sha512 (record A o e) SamplingDeploy.flockAt_sha512
-    (fun _ => DRAW_ROUNDS + 1) (fun _ => kS A o) (fun _ => okAt A o) (fun _ => sessStmt A o) (fun _ => numsOk A o)
-    (fun _ => xS₀ A o)
+    (fun _ => DRAW_ROUNDS + 1) (fun _ => kS A o) (fun _ => okAt A o) (fun _ => sessStmt A o)
+    (fun _ d => numsOk A o d ∧ Fits A o d) (fun _ => xS₀ A o)
     (fun x hx => by
       obtain rfl := eq_xOf_of_nPU A o e hx
       rw [record_V, record_flockV]
       exact prefixAt A o)
-    (fun _ _ _ h => (drawOk_of_okAt A o h).2.1)
+    (fun _ _ _ h => (drawOk_of_okAt A o h).2)
     (fun _ => by rw [record_flockV, kS])
     (fun x u t => by
       rw [record_rounds]
@@ -108,10 +107,10 @@ theorem sessionRuns : SessionRuns FlockDeploy.sha512 (record A o e) :=
     (fun x u hx v d hd hok => by
       obtain rfl := eq_xOf_of_nPU A o e hx
       have hd' : v.msgs[DRAW_ROUNDS]? = some (d, .msg []) := hd
-      have hok' : numsOk A o d := hok
+      have hok' : numsOk A o d ∧ Fits A o d := hok
       rw [record_session_xOf]
       unfold sessionOf
-      simp only [hd', hok', ↓reduceIte])
+      simp only [hd', hok', and_self, ↓reduceIte])
     (fun x u hx v d hd => by
       obtain rfl := eq_xOf_of_nPU A o e hx
       have hd' : v.msgs[DRAW_ROUNDS]? = some (d, .rej) := hd

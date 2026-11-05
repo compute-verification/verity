@@ -158,12 +158,13 @@ at once. -/
 noncomputable def refused (A : Live) (o : Own) : Msg × Seen := (xS₀ A o, ⟨[([2], .rej)], .rej⟩)
 
 open Classical in
-/-- **The session a run shows**: where the draw file round kept the draw file `d` and the session has the statement's
-numbers, the session's statement and the run from the session's first round on; else `refused`. -/
+/-- **The session a run shows**: where the draw file round kept the draw file `d`, the session has the statement's
+numbers and its statement fits its length words, the session's statement and the run from the session's first round on;
+else `refused`. -/
 noncomputable def sessionOf (A : Live) (o : Own) (v : Seen) : Msg × Seen :=
   match v.msgs[DRAW_ROUNDS]? with
   | some (d, .msg []) =>
-    if numsOk A o d then (sessStmt A o d, ⟨v.msgs.drop (DRAW_ROUNDS + 1), v.out⟩) else refused A o
+    if numsOk A o d ∧ Fits A o d then (sessStmt A o d, ⟨v.msgs.drop (DRAW_ROUNDS + 1), v.out⟩) else refused A o
   | _ => refused A o
 
 /-- The statement's audit statement: V5's at the session (`Live.extract`'s). -/

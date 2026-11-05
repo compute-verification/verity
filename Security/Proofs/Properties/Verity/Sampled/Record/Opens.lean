@@ -327,7 +327,7 @@ section Fields
 variable (o : Own) (e : Ext)
 
 theorem parse_at {x : Msg} (hx : x = xOf A o) : (record A o e).parse x = some (stmtA A) :=
-  (record_parse A o e x).trans (ite_eq_left hx)
+  (record_parse_eq A o e x).trans (ite_eq_left hx)
 
 theorem checked_at {x : Msg} (hx : x = xOf A o) (r : Fin ((record A o e).V.k x) → FlockDeploy.Coin) :
     (record A o e).checked x r = drawn A (drawBytes (coinsAt r)) := by
@@ -356,11 +356,13 @@ theorem seen_msgs (t : Claims.Trace) : t.seen.msgs = t.msgs := rfl
 theorem drawOf_of {v : Seen} {d : Msg} {a : Claims.Out} (hv : v.msgs[DRAW_ROUNDS]? = some (d, a)) : drawOf v = d := by
   simp only [drawOf, List.getD_eq_getElem?_getD, List.getElem?_map, hv, Option.map_some, Option.getD_some]
 
-/-- A view whose draw file round kept `d` at the statement's numbers shows the session at `d`. -/
+/-- A view whose draw file round kept `d` at the statement's numbers, `d` fitting its length words, shows the session
+at `d`. -/
 theorem sessionOf_kept (o : Own) {v : Seen} {d : Msg} (hv : v.msgs[DRAW_ROUNDS]? = some (d, .msg []))
-    (hn : numsOk A o d) : sessionOf A o v = (sessStmt A o d, ⟨v.msgs.drop (DRAW_ROUNDS + 1), v.out⟩) := by
+    (hn : numsOk A o d ∧ Fits A o d) :
+    sessionOf A o v = (sessStmt A o d, ⟨v.msgs.drop (DRAW_ROUNDS + 1), v.out⟩) := by
   unfold sessionOf
-  simp only [hv, hn, ↓reduceIte]
+  simp only [hv, hn, and_self, ↓reduceIte]
 
 /-- **An accepted run kept its draw file**: at the record's statement the draw file round's check passed (`run_pre` at
 `prefixAt`), on the draw file the run shows and the draw coins. -/
@@ -533,7 +535,7 @@ theorem sessionOpens (o : Own) (e : Ext) {ι : Type} {dv : Accounting.Device ι}
   obtain ⟨d, hdOk, hl⟩ := accepted_draw A o e hx P ω r hacc
   rw [checked_at A o e hx] at hq
   have hud : u ∈ drawn A (drawBytes (coinsAt r)) := List.mem_of_getElem? hq
-  rw [session_at A o e hx, sessionOf_kept A o hl hdOk.2.1] at hsess
+  rw [session_at A o e hx, sessionOf_kept A o hl hdOk.2] at hsess
   obtain ⟨rfl, -⟩ := Prod.mk.inj (Option.some.inj hsess)
   rw [record_flockParse] at hchk
   obtain ⟨J, hJ, st, hst, hshape, hsat⟩ :=
