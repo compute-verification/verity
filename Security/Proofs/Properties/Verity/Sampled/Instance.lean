@@ -29,9 +29,12 @@ of `Deployed` and `Covers` either proved or one of the named `Prop`s below.
 * **The extractor** (`Instance.vocab`): the session's at the projected strategy.
 * **The coupling** (`couplingTarget_at`, at the constructions `constructionsAt` assembles at the deployed device's
   history): `couplingTargetAt` at the stage, whose signer premise is the base's (`Instance.signer`).
-* **What stays open**: the commitment format's openings (`OpensAt`), the registered files' file check
-  (`RegisteredFiles`), v2's session at the registered files (`SessionAt`), and of the coupling the stops' term
-  (`StopsWithin`) and `movesReachAt`'s premises (`remote_soundness_deployedAt`).
+* **The registered files** (`RegisteredFiles`): wherever some committed files pass the file check, the registered
+  files do, which holds of registered files built from the parameters' digests (`registeredOf`,
+  `registeredFiles_of`), the honest instance's.
+* **What stays open**: the commitment format's openings (`OpensAt`), v2's session at the registered files
+  (`SessionAt`), and of the coupling the stops' term (`StopsWithin`) and `movesReachAt`'s premises
+  (`remote_soundness_deployedAt`).
 -/
 
 @[expose] public section
@@ -187,6 +190,27 @@ theorem tablesAgree_of {F R : Array ByteArray} (hp : (tableFinder F R).Pr Verity
   have hn := List.findSome?_eq_none_iff.1 hnone t ht
   by_contra hab
   simp only [tablePair, ha, hb, if_neg hab, reduceCtorEq] at hn
+
+/-! ## The registered files -/
+
+open Classical in
+/-- **A file with the digest `h`**, where some file has it. -/
+noncomputable def fileWith (h : Option Hash.Digest) : Option ByteArray :=
+  if hx : ∃ f : ByteArray, h = some (Verity.sha512 f.data.toList) then some hx.choose else none
+
+theorem fileWith_mem {h : Option Hash.Digest} (hx : ∃ f : ByteArray, h = some (Verity.sha512 f.data.toList)) :
+    ∃ f ∈ (fileWith h).toArray, h = some (Verity.sha512 f.data.toList) := by
+  have he : fileWith h = some hx.choose := by
+    unfold fileWith
+    rw [dif_pos hx]
+  refine ⟨hx.choose, ?_, hx.choose_spec⟩
+  rw [he]
+  simp [Option.toArray]
+
+/-- **The files the parameters' digests name**: a file with the circuit file's digest and one with the public file's
+that v2's parameters hold (`programDigestOf`, `publicDigestOf`), where some file has it. -/
+noncomputable def registeredOf (θ : ByteArray) : Array ByteArray :=
+  (fileWith (programDigestOf θ)).toArray ++ (fileWith (publicDigestOf θ)).toArray
 
 /-! ## The base -/
 
@@ -555,8 +579,25 @@ theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = Binding.readFind
 
 /-! ## `Covers` -/
 
-/-- **The registered files pass the file check** wherever the parameters name the one-stage form. -/
-def RegisteredFiles : Prop := ∀ θ, (∃ p, ParamsAt θ p) → I.base.Registered θ (I.base.registered θ)
+/-- **The registered files pass the file check wherever some files do**, at parameters naming the one-stage form:
+where some committed files hold a file with each digest the parameters hold, as the verifier's check of an accepting
+play's files finds them (`Vocab.Verdict`), the registered files hold one too. No check of the verifier reads the
+registered files: this is the registration's, whose parameters hold the SHA-512s of the files it registers. -/
+def RegisteredFiles : Prop :=
+  ∀ θ F, (∃ p, ParamsAt θ p) → I.base.Registered θ F → I.base.Registered θ (I.base.registered θ)
+
+/-- **Registered files built from the parameters' digests pass the file check wherever some files do**
+(`registeredOf`). -/
+theorem registeredFiles_of (h : ∀ θ, I.base.registered θ = registeredOf θ) : I.RegisteredFiles := by
+  intro θ F _ hF
+  unfold Vocab.Registered at hF ⊢
+  obtain ⟨⟨f, -, hc⟩, ⟨g, -, hp⟩⟩ := hF
+  rw [I.programDigest] at hc ⊢
+  rw [I.publicDigest] at hp ⊢
+  rw [h, registeredOf]
+  obtain ⟨x, hx, hxe⟩ := fileWith_mem ⟨f, hc⟩
+  obtain ⟨y, hy, hye⟩ := fileWith_mem ⟨g, hp⟩
+  exact ⟨⟨x, Array.mem_append_left _ hx, hxe⟩, ⟨y, Array.mem_append_right _ hy, hye⟩⟩
 
 /-- **v2's session at the registered files' files**: at parameters naming the one-stage form, committed files that
 name the registered circuit and public files and hold the registered lookup tables wherever both hold one, and that
@@ -594,7 +635,7 @@ theorem covers (k : Verity.Registration.Composite) (hRg : I.RegisteredFiles) (hS
     have h1 := hv'.1
     rw [hθ, hF] at h1
     exact h1
-  have hR := hRg θ hP
+  have hR := hRg θ F hP hreg
   obtain ⟨h1, h2, h3⟩ := I.fileCR K hcr
   obtain ⟨A, hA, hs⟩ := hSa θ F hP (namedFile_eq hreg.1 hR.1 h1) (namedFile_eq hreg.2 hR.2 h2) (tablesAgree_of h3)
     ⟨c, _, hreach, hv'⟩
@@ -794,7 +835,8 @@ noncomputable def cost (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
       (Verity.Game.Tape.out _ σ t).sent.blobs.size
 
 /-- **The idle deployment at v2's reading**: `Idle.vocab 0 1` with the idle deployment's signer (`signer`) and its
-signature count, v2's reading of the committed files and its digests, the declared calls `cost`, and every name that
+signature count, v2's reading of the committed files and its digests, the files the digests name as the registered
+files (`registeredOf`), the declared calls `cost`, and every name that
 reads the committed circuit or a strategy of the play at them. -/
 noncomputable def base : Vocab Verity.Idle.device Unit :=
   { Verity.Idle.vocab 0 1 with
@@ -802,6 +844,7 @@ noncomputable def base : Vocab Verity.Idle.device Unit :=
     read := readOf
     programDigest := programDigestOf
     publicDigest := publicDigestOf
+    registered := registeredOf
     place := fun _ _ _ _ => none
     extract := fun _ _ _ _ _ => 0
     finder := fun _ _ _ _ _ => Verity.Idle.finder
@@ -848,6 +891,11 @@ theorem sessions_none (θ : ByteArray) (F : Array ByteArray) : (inst fun _ => no
 
 /-- At no session the openings hold of every session, there being none. -/
 theorem opensAt_none : (inst fun _ => none).OpensAt := fun _ _ _ h => by simp [inst] at h
+
+/-- The honest instance's registered files, the parameters' digests' (`registeredOf`), pass the file check wherever
+some files do. -/
+theorem registeredFiles (session : ByteArray → Option Live) : (inst session).RegisteredFiles :=
+  (inst session).registeredFiles_of fun _ => rfl
 
 end Instance.Honest
 
