@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Claims.RecursionGeneric
+public import Proofs.Flock.RecGeneric.Plans
 public import Proofs.Flock.RecGeneric.Outer
 public import Proofs.Flock.RecGeneric.ZK
 public import Proofs.Flock.RecGeneric.AtFlock

@@ -117,11 +117,6 @@ noncomputable def RunFinder.PrAsk (F : RunFinder Coin) (m : RunModel Coin Ω n C
       ∃ e ∈ ((F.plan x s.1).exec m s.2.1 (slotRuns s.2.2)).1, q s.2.1 (m.named (slotRuns s.2.2) e)
   else 0
 
-/-- `E[F's cost]` in the model `m`: the expected SHA-512 calls of the runs it names, `0` where its selector is
-empty. -/
-noncomputable def RunFinder.ExCost (F : RunFinder Coin) (m : RunModel Coin Ω n C) (x : Msg) : ℝ :=
-  if h : 0 < F.sel x then Ex fun s => ((F.finder m x h).cost s : ℝ) else 0
-
 end Finder
 
 /-- **`F`'s plan meets a bad run at most `d` times as often as one run is bad**: in every model, for every predicate
@@ -132,17 +127,6 @@ def RunFinder.ReadsLe {Coin : Type} [Fintype Coin] [Nonempty Coin] (F : RunFinde
   ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (n : ℕ) (C : Type) [Fintype C] [Nonempty C] (m : RunModel Coin Ω n C)
     (x : Msg) (bad : Ω → (Fin n → Coin) × C → Prop),
     F.PrAsk m x (fun ω u => bad ω u ∧ m.acc ω u) ≤ d x * Pr (fun t : Ω × ((Fin n → Coin) × C) => bad t.1 t.2)
-
-/-- **`F` names at most `e` runs in expectation, each of cost at most `c`**: in every model whose runs cost at most
-`c` calls each on average over every fork the plan can make, `E[F's cost] ≤ e(x) · c`. What a run finder's bits read
-(`ExpectedCR` turns its expected cost into its collision bound). -/
-def RunFinder.MadeLe {Coin : Type} [Fintype Coin] [Nonempty Coin] (F : RunFinder Coin) (e : Msg → ℕ) : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (n : ℕ) (C : Type) [Fintype C] [Nonempty C] (m : RunModel Coin Ω n C)
-    (x : Msg) (c : ℝ), (∀ (ω : Ω) (j : ℕ) (u₀ : (Fin n → Coin) × C),
-      Ex (fun v : (Fin n → Coin) × C =>
-        (m.cost ω (Claims.Recursion.fork (m.cut j) u₀.1 v.1, v.2) : ℝ)) ≤ c) →
-    (∀ ω, Ex (fun u => (m.cost ω u : ℝ)) ≤ c) →
-    F.ExCost m x ≤ e x * c
 
 section Runs
 

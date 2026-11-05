@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Claims.RecursionGeneric.Plans
+public import Proofs.Flock.RecGeneric.Plans
 
 /-!
 # The plans' expected cost from one run's

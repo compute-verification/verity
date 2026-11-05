@@ -2654,9 +2654,7 @@
    "Claims.RecGeneric.Proto.KSAbortLin": "a helper the claims read: Π_in's knowledge soundness against aborting provers, which `CompositionKS` and `CompilerKS` take",
    "Claims.RecGeneric.Proto.LastCoinFree": "a helper the claims read: Π_in's last step reading no last coin, which `CompositionKS` and `CompilerKS` take",
    "Claims.RecGeneric.Server.Binds": "a helper the claims read: the server's binding, which `CompositionKS` and `CompilerKS` take",
-   "Claims.RecGeneric.Server.Opens": "the server's completeness (a commitment opens to its row), which no soundness claim takes; the hm96 server meets it (`OpensOfBound`)",
-   "Claims.RecGeneric.RunFinder.ReadsLe": "a helper the claims read: a run finder's reads per bad run, which `Proto.WF` reads",
-   "Claims.RecGeneric.RunFinder.MadeLe": "a helper the claims read: a run finder's expected runs made, which its collision bound (`ExpectedCR`) reads"
+   "Claims.RecGeneric.RunFinder.ReadsLe": "a helper the claims read: a run finder's reads per bad run, which `Proto.WF` reads"
   },
   "generic": {
    "Claims.SamplingGeneric.CompilerKS": "Claims.SamplingGeneric.compilerKS",

@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Claims.RecursionGeneric
+public import Proofs.Flock.RecGeneric.Plans
 public import Proofs.Flock.RecGeneric.Outer
 public import Proofs.Flock.RecGeneric.ZK
 public import Proofs.Flock.Recursive.KSStatement
@@ -80,6 +81,12 @@ def ConflictPlanIsF0 (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coi
   ∀ (H : Msg → Msg) (V : Verifier Coin) (k : Msg → ℕ) (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (A : Type) [Fintype A] [Nonempty A] (keep : Ω → (Fin (V.k x) → Coin) → A → Bool) (R : ℕ),
     (conflictPlan k R).PrAt H (runModel H V P x keep) x = PrF0 H V P x keep (k x) R
+
+/-- **The server's commitments open** (completeness, at a hash whose outputs are 64 bytes): a commit string the server
+makes for a row under a salt opens to that row under that salt. -/
+def Server.Opens (S : Server) : Prop :=
+  ∀ H : Msg → Msg, Out64 H → ∀ (row : Msg) (y : S.Salt),
+    ((S.opens ((S.commit row y).eval H).1 row y).eval H).1 = true
 
 section Instance
 
