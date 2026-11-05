@@ -191,8 +191,8 @@ STATUS = [
      "weight columns."),
     ("Declared computation, partial-sum law", "Off by default (kappa_chain = 0): ContainedTraining and PS' rest on "
      "PartialSumsSupport and ActivationsSupport, which NCI-FALSIFY reproduced as false."),
-    ("Monitored compute residual", "r = r-hat + epsilon_W W_cert/C + eps', as Nci.Guarantees.DampenerRemote states it. "
-     "PoUW's deficit epsilon_W = 0.744% (CircuitCredit) is a share of credited work, evaluated "
+    ("Monitored compute residual", "r = r-hat + epsilon_W W_cert/C + eps', as Nci.Guarantees.DampenerRemote states it "
+     "in Lean. PoUW's deficit epsilon_W = 0.744% (CircuitCredit) is a share of credited work, evaluated "
      "with its premises granted. Under the floor credit r-hat = 0.449: GPU floor time 0.323 (honest kernels at 1.72 "
      "times the floor, unpublished), the clock 0 (PoUW credits the card "
      "table's 2,430 MHz, the SKU's maximum; the premise that a node's cards are that SKU and firmware is "
