@@ -26,8 +26,8 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    --mark, on the owner's word alone (`MarkOnly`).  First it refuses a PR
                                                    whose head is on another repository or whose author isn't the
                                                    organization's or one of `AUTHORS` (`PR.outside`), as admission does; then
-                                                   one whose body names neither a live goal of the Goals page (on, and not
-                                                   done) on a `Goal <id>` line nor no issue on an `Issue: none: REASON` line
+                                                   one whose body has neither a `Goal <id>` line naming a live goal of the
+                                                   Goals page (on it, and not done) nor an `Issue: none: REASON` line
                                                    (`goal_gate`; the goals as this machine last read them when the page can't
                                                    be read, said in one line, and refused when it never read them); then
                                                    the records gate

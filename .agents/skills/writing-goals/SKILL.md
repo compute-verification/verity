@@ -24,8 +24,9 @@ The page is how Daniel sees what is being done, so it moves when the work does:
 - **At least every 12 hours** while it's open, rewrite it or `research goals confirm ID` (it still holds as written).
 - **A goal due within a week names its next step with a day** no more than a day out.
 - **Work serves a goal on the page:** its issue carries the goal's label (the `goal` label group, one label per id),
-  and its PR names that issue (`research queue open --issue KEY`). Work that serves none starts by writing its goal,
-  or asking top.
+  and its PR names that issue and the goal: `research queue open --issue KEY` writes a `Goal <id>` line for each live
+  goal KEY's labels name and opens nothing when they name none, and `research queue ready` marks only a PR whose body
+  names a live goal so, or says `Issue: none: REASON`. Work that serves none starts by writing its goal, or asking top.
 - **One outcome, one goal.** Before adding one, look for it under another owner's goal, and make yours a piece of it.
 
 top's hourly audit rings the owner of a goal past its due, unchanged for 12 hours, or past a step's day.
