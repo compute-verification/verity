@@ -1,6 +1,8 @@
-import Definitions.Hash
-import Definitions.Core
-import Definitions.Accounting
+module
+
+public import Definitions.Hash
+public import Definitions.Core
+public import Definitions.Accounting
 
 /-!
 # The named assumptions
