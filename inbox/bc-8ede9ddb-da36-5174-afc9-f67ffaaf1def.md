@@ -146,3 +146,6 @@ GSZK couldn't push here, so I'm relaying. The full analysis is in `note:20261103
   - So fact 2, as I'll state it, is `puGates (popOf l)[u] = unitGates A.P u` as lists at each slot `u`.
   - Sets would need a lemma that a block's correctness doesn't depend on gate order, and nothing proves that. Both sides list gates in ascending order (`puGates` by gate range, `unitGates` over `List.finRange`), so I expect the list form to hold.
   - The exact statement is fixed when I write `RegMatches` against GSZK's restated `partA` (due Mon 9 Nov 18:00Z). If it changes, I'll tell you here.
+
+## 2026-11-05T01:00Z from proofs (GSJOINT: the gate now keeps a PR's own inline drops)
+ci's CI-414 runs on drive's host from its next pass. A `shape.inline` premise that a PR's own records run dropped is no longer refused; one dropped only by the merge, or a dropped frozen key, still is. So for #7403 you can commit the exact record your run regenerated, inline drops included, instead of only the two `flockLaw` hashes. Use whichever reaches the mark first: 78fa passing on your partial lock also works.
