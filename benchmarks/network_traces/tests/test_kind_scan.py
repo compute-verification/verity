@@ -6,7 +6,7 @@ lies: the window's own number in V3c's provenance, a count of requests in an ans
 parameters, and a file DIR doesn't declare, a log among them. What either development check would feed the record
 is a finding naming the check: an advice binding in an audit's registration (what `records_audit.py audit --opening`
 opens), at any length, the padded width included, and the chain's endpoint step (CR_ENDPOINT's rebuild), or any step
-the active-warden path doesn't run. On a finding the piece refuses, releasing nothing, its findings (file and key path)
+the network certifier path doesn't run. On a finding the piece refuses, releasing nothing, its findings (file and key path)
 in its hold.
 
 What a verifier on another machine receives of a served run's OUT (``--received``: the certifier's piece, V3c's audit,
@@ -125,19 +125,21 @@ def test_the_scans_circuit_files_its_case_names_are_structure_in_either_layout_a
 
 
 def test_a_field_no_declaration_names_is_a_finding_wherever_it_lies(tmp_path, period):
-    """The window's own number in V3c's provenance (which counts the run's windows), a count of requests in the
-    period's answer and in an execution phase's one-stage answer, and an advice length beside the parameters."""
+    """The window's own number in each audit's V3c provenance (which counts the run's windows), a count of requests in
+    the period's answer and in an execution phase's one-stage answer, and an advice length beside the parameters."""
     case, answer = _case(period, V3C_WINDOW | {"window_circuit": {"class": [4, 32, 4, 4, 16], "window": 3}})
+    n = len(case["params"]["audits"])
     ev = json.loads(bytes.fromhex(case["evidence"]))
     ev["windows"][0]["answer"]["public"]["requests"] = 7
     case = {**case, "evidence": canonical_json(ev).hex(), "params": {**case["params"], "advice_bits": REALIZED}}
     answer = answer | {"public": answer["public"] | {"requests": 7}}
-    want = [("answer.json", "public.requests"), ("case.json", "commitment.audits[].window.window_circuit.window"),
+    want = [("answer.json", "public.requests"),
+            *[("case.json", "commitment.audits[].window.window_circuit.window")] * n,
             ("case.json", "evidence.windows[].answer.public.requests"), ("case.json", "params.advice_bits")]
     assert sorted(_paths(KS.scan(_dir(tmp_path / "dir", case, answer))[0])) == want
     held = KS.scan(_dir(tmp_path / "hold", case, answer, hold=True))[0]
     assert sorted(_paths(held)) == [("answer.json", "public.requests"),
-                                    ("period/commitment.bin", "audits[].window.window_circuit.window"),
+                                    *[("period/commitment.bin", "audits[].window.window_circuit.window")] * n,
                                     ("period/evidence.json", "windows[].answer.public.requests"),
                                     ("period/params.json", "advice_bits")]
     assert KS.main([str(tmp_path / "dir")]) == 1
@@ -145,22 +147,24 @@ def test_a_field_no_declaration_names_is_a_finding_wherever_it_lies(tmp_path, pe
 
 def test_an_audit_that_opened_the_advice_is_a_finding_naming_the_check_at_any_length(tmp_path, period):
     """An advice binding (`interface.advice_binding`: the compiler and the advice's root and length) in an audit's
-    registration is what `records_audit.py audit --opening` opens, so it is `OPENING`'s finding at the padded width ℓ_a
-    as at the realized length, in either layout, the finding's text holding neither length."""
+    registration is what `records_audit.py audit --opening` opens, so it is `OPENING`'s finding (each audit's) at the
+    padded width ℓ_a as at the realized length, in either layout, the finding's text holding neither length."""
     for bits in (L_A, REALIZED):
         v3c = V3C_WINDOW | {"compiler": {"name": "i2", "digest": "04" * 64, "commit": "05" * 20},
                             "advice": {"root": "06" * 64, "bits": bits}}
         case, answer = _case(period, v3c)
+        n = len(case["params"]["audits"])
         for hold, at in ((False, "case.json"), (True, "period/commitment.bin")):
             found = KS.scan(_dir(tmp_path / f"{bits}-{hold}", case, answer, hold))[0]
             pre = "commitment." if not hold else ""
-            assert sorted(_paths(found)) == [(at, f"{pre}audits[].window.advice"), (at, f"{pre}audits[].window.compiler")]
+            assert sorted(_paths(found)) == sorted(
+                [(at, f"{pre}audits[].window.advice"), (at, f"{pre}audits[].window.compiler")] * n)
             assert all(f.why == KS.OPENING.why and str(bits) not in str(f) for f in found)
     assert KS.main([str(tmp_path / f"{L_A}-False")]) == 1
 
 
 def test_the_chains_endpoint_rebuild_or_any_other_step_is_a_finding(tmp_path, period):
-    """The report's steps are the active-warden path's (`STEPS`, the five `chain_record.report` writes there, which
+    """The report's steps are the network certifier path's (`STEPS`, the five `chain_record.report` writes there, which
     test_certifier_piece holds a published report to): with them it is clean; the endpoint step (CR_ENDPOINT's rebuild,
     and its tie negatives beside it) is `ENDPOINT`'s finding, and a step of no other name is one of no declared kind."""
     def found(steps: dict, name: str) -> list[tuple[str, str, str]]:
@@ -213,13 +217,13 @@ COMPILER = {"name": "verity-vllm/capped/v1", "digest": "0a" * 64, "cap_bits": L_
                     "target": {"gpu": "H200"}, "tp": 1, "sampling": {"kind": "greedy"},
                     "engine": {"execution": "bi-eager", "pin": {"world": 1}}, "workload": {}, "execution": "bi-eager",
                     "profile": "b1-eager-v3"}}
-#: a window's advice registration as `verity-vllm advice` writes it, with its requests, the advice's own length and the
-#: window's number
+#: a window's advice registration as `verity-vllm advice` writes it, with its requests and the window's number, its advice
+#: committed padded to ℓ_a (the rows ℓ_a fixes)
 ADVICE = {"schema": "verity-vllm/advice-registration/v1", "scheme": "verity-vllm/advice/v1",
           "binding": {"compiler": {"name": COMPILER["name"], "digest": COMPILER["digest"]},
-                      "advice": {"root": "06" * 64, "bits": REALIZED}},
+                      "advice": {"root": "06" * 64, "bits": L_A}},
           "compiler": {"name": COMPILER["name"], "digest": COMPILER["digest"], "cap_bits": L_A, "inner": COMPILER["inner"]},
-          "rows": 1, "row_bits": 4096, "T": 600, "bits_by_window": {"3": REALIZED}, "window": 3,
+          "rows": L_A // 4096, "row_bits": 4096, "T": 600, "window": 3,
           "commit": {"run_id": "RUN/w3", "run_root": "ab" * 64}, "registered_roots": {"weights/embed@4": "02" * 64},
           "requests": 2, "compiled": [{"request": "r0"}], "refused": [{"request": "r1", "why": "a chunked prefill"}]}
 #: the committer's weights registration (`window_weights.weights_registration`)
@@ -320,11 +324,11 @@ def test_v3cs_period_audit_with_its_wires_order_is_of_the_public_kinds(tmp_path,
     (lambda o: (o / "v3c-audit" / "audit.log").write_text('RECORDS {"population": 37}\n'), [("v3c-audit/audit.log", "")]),
     (lambda o: (o / "v3c-audit" / "main.txt").write_text("ab" * 20 + "\n"), [("v3c-audit/main.txt", "")]),
     (lambda o: _edit(o / "registration.json", lambda r: {**r, "binding": {**r["binding"], "advice": {
-        **r["binding"]["advice"], "bits": REALIZED}}, "rows": 1}),
-     [("registration.json", "binding.advice.bits"), ("registration.json", "rows")]),
+        **r["binding"]["advice"], "bits": REALIZED}}, "rows": 1, "bits_by_window": {"3": REALIZED}}),
+     [("registration.json", p) for p in ("binding.advice.bits", "bits_by_window.3", "rows")]),
     (lambda o: (o / "registration.json").write_text(json.dumps(ADVICE)),
-     [("registration.json", p) for p in ("binding.advice.bits", "bits_by_window.3", "compiled[].request",
-                                         "refused[].request", "refused[].why", "requests", "rows", "window")]),
+     [("registration.json", p) for p in ("compiled[].request", "refused[].request", "refused[].why", "requests",
+                                         "window")]),
     (lambda o: _edit(o / "compiler.json", lambda c: {**c, "phi": {**c["phi"], "workload": {
         "requests": [{"request_id": "r0", "prompt": 11, "max_tokens": 8}]}}}),
      [("compiler.json", f"phi.workload.requests[].{k}") for k in ("max_tokens", "prompt", "request_id")]),
@@ -348,7 +352,7 @@ def test_v3cs_period_audit_with_its_wires_order_is_of_the_public_kinds(tmp_path,
 def test_what_reads_the_advice_or_counts_the_window_is_a_finding_in_what_a_verifier_receives(
         tmp_path, period, plant, want):
     """A log or main's history left in the piece's dir or V3c's audit; the advice's own length in its registration,
-    or the registration as `verity-vllm advice` writes it (its requests, compiles, length and window); a workload in the
+    or the registration as `verity-vllm advice` writes it (its requests, compiles and window); a workload in the
     compiler's φ; the advice's length in a class's count; a compile in V3c's summary (the audit opened the advice); an
     advice binding in the registration V3c audited; a field of the audit record `served_integrity.answer` doesn't
     read; among V3c's circuit files one period.json doesn't name (under its own SHA-512, or under no SHA-512) or one

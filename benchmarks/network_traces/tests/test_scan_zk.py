@@ -669,22 +669,29 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
                                                                for r in reg["roots"]] for d in x["registrations"])
     ports = sz.ports_of(sz.TEST.cls)
     bits = {tp: dict(ins + outs) for tp, (ins, outs) in ports.items()}
-    assert PC.params(p).scan == PC.Scan(T, 0, 16 + bits["first"]["o1"] + bits["first"]["o2"], 16 + bits["egress"]["o1"],
-                                        E * bits["first"]["prog0"])
+    def w(b: int) -> int:
+        return -(-b // 16)
+
+    ins = {tp: sum(w(b) for _, b in ports[tp][0]) for tp in ports}
+    # each parameter and each return field on whole 16-bit words of its own, o0 one
+    assert PC.params(p).scan == PC.Scan(
+        T, 0, PC.vu_bits(1, max(ins["first"], ins["ingress"] if T > 1 else 0) + 1 + w(bits["first"]["o1"])
+                         + w(bits["first"]["o2"])),
+        PC.vu_bits(1, ins["egress"] + 1 + w(bits["egress"]["o1"])), E * bits["first"]["prog0"])
     out = PC.reference(case)
     assert (out["verdict"], out["reason"]) == ("reject", f"window 0: {PC.UNWIRED}"), out
     monkeypatch.setattr(PC, "SLOT_ENTRY_PINS", (*PC.SLOT_ENTRY_PINS, digest))
     out = PC.reference(case)
     assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, 2 * T), out
     assert p["circuit"] == audit["registration"]["program"]
-    record = tmp_path / "window-circuit.json"
-    record.write_text(json.dumps({"format": IF.CIRCUIT, "program": program_digest(encode_program(block))}))
+    window_record = tmp_path / "window-circuit.json"
+    window_record.write_text(json.dumps({"format": IF.CIRCUIT, "program": program_digest(encode_program(block))}))
     summary = json.loads((scan / "summary.json").read_text())
     for k in (1, 2):
         (v3c := tmp_path / f"period-subset-{k}.json").write_text(json.dumps(sampled := block_audit(progs, sampled=k)))
         (scan / "summary.json").write_text(json.dumps({**summary, "v3c": {
             "registration": R.digest(sampled["registration"])}}))
-        got = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit=SP.circuit_of_record(record)))
+        got = PC.reference(SP.rows_case(run, scan, v3c=v3c, circuit=SP.circuit_of_record(window_record)))
         assert (got["verdict"], got["public"]["audits"][0]["drawn"], got["public"]["audits"][0]["units"]) == (
             "accept", k, E), got
         assert got["public"]["held"] == ["circuit", "free"], got

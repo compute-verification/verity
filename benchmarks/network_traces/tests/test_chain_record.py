@@ -45,6 +45,7 @@ from verity.core.protocols.certifier import audit, lean_audit
 HERE = Path(__file__).resolve().parents[1]
 PERIOD_CASE = HERE.parents[1] / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
 BLOCK_SCHEMA = HERE.parents[1] / "examples" / "h200" / "interfaces" / "verity_e2e_demo" / "schemas" / "block-record.v1.schema.json"
+PATH = os.environ["PATH"]
 
 
 def _load(name: str):
@@ -223,7 +224,7 @@ def test_job_keeps_no_gate_runs_witness(tmp_path):
         (run / name).write_text("{}")
     (tmp_path / "OUT" / "gates").mkdir(parents=True)
     subprocess.run(["bash", "-c", copy], check=True, env={"G": str(tmp_path / "G"), "OUT": str(tmp_path / "OUT"),
-                                                          "PATH": os.environ["PATH"]})
+                                                          "PATH": PATH})
     kept = sorted(p.relative_to(tmp_path / "OUT" / "gates" / "g2" / run.name).as_posix()
                   for p in (tmp_path / "OUT").rglob("*") if p.is_file())
     assert kept == ["end.json", "out/deployment.json"]
@@ -239,7 +240,7 @@ def test_the_scan_proves_at_cr_scan_delta(tmp_path, delta):
     py.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$ARGV"\n')
     py.chmod(0o755)
     env = {"PY": str(py), "ARGV": str(tmp_path / "argv"), "OUT": str(tmp_path), "BIN": "b", "LEAN": "l",
-           "SCANOUT": "s", "CR_SCAN_ARGS": "--draw 8", "PATH": os.environ["PATH"]}
+           "SCANOUT": "s", "CR_SCAN_ARGS": "--draw 8", "PATH": PATH}
     subprocess.run(["bash", "-c", "\n".join(lines[i:i + 3])], check=True,
                    env=env | ({"CR_SCAN_DELTA": delta} if delta else {}))
     argv = (tmp_path / "argv").read_text().splitlines()

@@ -26,6 +26,10 @@ supplies each of the statement's quantities as at most the check's number:
   (`faulty_bits`) and, when a tied audit is sampled in part with a bound of at least one incorrect proof block, every
   slot entry bit (`faulty_entries`, `E_w`), and `Dj^k` at most `jitter ^ steps`.
 
+`AcceptsWith` is what the period check with its listed circuit files accepts (`checkWith`): every audit tied to the
+scan listing files, the files held to their listing, and `check` at the VUs they count and the bits a wrong VU is
+charged (`charged`).
+
 The rows form's terms charge a tied audit (one a scan's `prog` is an output of) its free inputs, and its incorrect
 proof blocks only as the slot entries they can set, since the scan reads the audit only through its `prog` and its
 state is the scan's own. The check accepts a tied audit at any sample; the consistency check of one is `RowsProgWired`,
@@ -91,6 +95,16 @@ def RowsKBoundsCount : Prop :=
         2 ^ ((w i).wrong * max scan.ingress scan.egress) * jitter ^ scan.steps * 2 ^ faulty i)) ≤
       2 ^ (rowsTerms facts scan (Array.ofFn fun i => (w i, tied i, faulty i)) (Array.ofFn caps) jitter windows
         charged).K
+
+/-- **The period check with its listed circuit files accepts** (`network-period check PARAMS COMMITMENT EVIDENCE
+CIRCUIT…`, `protocolWith`): given the files `fs`, each its SHA-512 and circuit in `Listing.files`' order (a scan's
+file read whole, as its sessions' verifier parses it, `NetworkCheck.CircuitFile.whole`; an audit's its header,
+`NetworkCheck.CircuitFile.read`), `checkWith` accepts the parameters `p` (with the files they list), the commitment `c`
+and the evidence `e`. It refuses an audit tied to the scan that lists no files (`unlistedTied`), holds the files to the
+listing (`circuitsWhy`) and checks the period at the VUs and bits they charge (`charged`). -/
+def AcceptsWith (fs : Array (ByteArray × Flock.Circuit)) (p : Params × Listing) (c : Commitment) (e : Evidence) :
+    Prop :=
+  ∃ (pub : Public) (prof : Profile), checkWith fs p c e = .accept pub prof
 
 /-- What `RowsProgWired` says of a period its check accepted: in the rows form, each link-window's scan's registration
 is wired to the audits' slot entries (`wired`). -/
@@ -263,5 +277,44 @@ def stateReadAt (base : ℤ) : NetworkCheck.Circuit.Read :=
 
 /-- The slot audit with the circuit record whose read of the scan's state is from `base`. -/
 def anchorAudit (base : ℤ) : Audit := { slotAudit with circuit := some (anchorRecord (stateReadAt base)) }
+
+/-- The slot audit's registration with its `SCAN_STATE` registered at the root `root` and the domain `e`, beside its
+entries port at `r` and `d`. -/
+def stateReg (root : String) : Lean.Json :=
+  Lean.Json.mkObj [
+    ("registered", Lean.Json.arr #[Lean.Json.mkObj
+      [("value", "verity/certifier/scan-state/v1"), ("root", root), ("domain", "e")]]),
+    ("roots", Lean.Json.arr #[Lean.Json.mkObj
+      [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])]
+
+/-- A run of the scan's state reads: units `lo` to `hi − 1`, unit `lo + i` at leaf `l + i` (`isRun`). -/
+def stateRun (l lo hi : ℕ) : Lean.Json :=
+  Lean.Json.mkObj [("leaf", Lean.toJson l), ("units", Lean.Json.arr #[Lean.toJson lo, Lean.toJson hi])]
+
+/-- A link-window whose scan's `prog` is at the slot audit's entries port's root and domain, whose state, the tree its
+units read and register their states in, is at the root `s` and the domain `e`, and whose registration states its
+units' `sin` reads as the run `sin` and their `o1` as `o1`. -/
+def stateWindowOf (sin o1 : Lean.Json) : Lean.Json :=
+  Lean.Json.mkObj [
+    ("roots", Lean.Json.arr #[
+      Lean.Json.mkObj [("port", "scan/prog0"), ("root", "r"), ("domain", "d")],
+      Lean.Json.mkObj [("port", "scan/state"), ("root", "s"), ("domain", "e")]]),
+    ("window", Lean.Json.mkObj [("reads", Lean.Json.mkObj [("scan/state", Lean.Json.mkObj [("o1", o1), ("sin", sin)])])])]
+
+/-- That link-window at T = 1, its one unit reading no state and registering none: both runs empty. -/
+def stateWindow : Lean.Json := stateWindowOf (stateRun 1 1 1) (stateRun 1 0 0)
+
+/-- The slot audit with 9 free inputs, 4 of them with its reads of the scan's state held. -/
+def heldAudit : Audit := { slotAudit with free := 9, stateFree := 4 }
+
+/-- A rows-form period of the held audit and one phase, under the slot audit's schedule. -/
+def heldParams : Params :=
+  ⟨#[heldAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", none, .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+
+/-- A public whose one link-window's term counts 4 free inputs: the held audit's `stateFree`. -/
+def heldPublic : Public :=
+  { audits := #[], cells := 0, schedules := 0, windows := 1,
+    units := #[{ facts := { units := 0, drawn := 0, delta := ⟨0, 1⟩, wrong := 0 }, free := 4, faultySets := 0,
+                 faultyBits := 0, jitter := 0 }] }
 
 end Properties.NetworkPeriod

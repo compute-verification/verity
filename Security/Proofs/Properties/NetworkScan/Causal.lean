@@ -537,6 +537,8 @@ theorem scanOf_facts {j : Lean.Json} {program : String} {s : Schedule} {sc : Sca
   obtain rfl : root = P.defs[P.root]! := by
     obtain ⟨hlt, e⟩ := Array.getElem?_eq_some_iff.1 (Fits.needSome_ok hroot)
     rw [getElem!_pos P.defs _ hlt, e]
+  obtain ⟨_, -, h⟩ := Fits.bind_ok h
+  obtain ⟨_, -, h⟩ := Fits.bind_ok h
   obtain ⟨⟨xe, de⟩, hback, h⟩ := Fits.bind_ok h
   replace hback := Fits.needSome_ok hback
   obtain ⟨_, -, h⟩ := Fits.bind_ok h

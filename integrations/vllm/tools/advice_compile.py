@@ -1,11 +1,12 @@
 """The compiler's verdict on a served run's advice: `predict.steps.compile_steps` (I2) over the advice `verity-vllm advice` wrote,
 its request Programs traced by the Build, and the digests compared.
 
-Reads a run of `tools/advice_run.py`: `advice/private/advice.bin` (I1, the prover's), `step_trace.jsonl` (each request's
+Reads a run of `tools/advice_run.py`: `advice/private/advice.bin` (I1, the prover's, padded to its registration's ℓ:
+`advice_of`), `step_trace.jsonl` (each request's
 sampling parameters, which advice v0 doesn't carry: they come with the request's certified I/O; a stand-in, see the TODO in
 `main`), `requests.jsonl` (engine id to `user`) and `run.json` (the
 model pin, the device's target profile, the execution label and the server's default seed).  The registration is φ of that
-model, its config.json the pin's config of record (`dense_generic.pinned_hf_config`, as `prove_path.phi_of_serve` reads it), on
+model, its config.json the pin's config of record (`dense_generic.pinned_hf_config`, as `served_compiler.phi_of_serve` reads it), on
 that target at that execution, without workload, and the public default seed (`engine.served_seed.DEFAULT_SEED`): a run whose
 server says it filled in another is refused (exit 2, `registered_seed`).  Writes, under `--out`:
 
@@ -74,6 +75,20 @@ def registered_seed(meta: dict) -> int:
     return DEFAULT_SEED
 
 
+def advice_of(adv: Path, data: bytes | None = None) -> bytes:
+    """The advice of a `verity-vllm advice` directory ``adv``: ``data`` (default its ``private/advice.bin``), the advice as the
+    registered compiler reads it, less its padding to its registration's ℓ (`advice_windows.unpad`); a ValueError otherwise,
+    a missing or unreadable registration or advice file included."""
+    from verity_vllm.pipeline import advice_windows as AW
+
+    try:
+        cap = int(json.loads((adv / "registration.json").read_text())["compiler"]["cap_bits"])
+        raw = (adv / "private" / "advice.bin").read_bytes() if data is None else data
+    except (OSError, KeyError, TypeError, ValueError) as e:
+        raise ValueError(f"{adv}: no advice to read at its registration's ℓ ({type(e).__name__}: {e})") from None
+    return AW.unpad(raw, cap)
+
+
 def carry_of(run: Path, window: int, data: bytes) -> dict:
     """Window K's carry (``data`` its advice), held to the advice of the last window before K that ran steps (``windows.jsonl``'s
     last non-empty one): K must open where that window closed (`window_advice.follows`). The requests K carries in and the ones it
@@ -85,12 +100,13 @@ def carry_of(run: Path, window: int, data: bytes) -> dict:
     lines = (run / "windows.jsonl").read_text().splitlines() if (run / "windows.jsonl").exists() else []
     before = [int(d["window"]) for d in map(json.loads, filter(str.strip, lines)) if not d.get("empty") and int(d["window"]) < window]
     last = max(before, default=None)
-    path = None if last is None else run / "advice" / f"w{last}" / "private" / "advice.bin"
+    prev = None if last is None else run / "advice" / f"w{last}"
+    path = None if prev is None else prev / "private" / "advice.bin"
     carry = {"in": [q.id for q in a.requests[:len(a.carried)]], "out": [a.requests[c.request].id for c in WA.close(a) if c.must],
              "follows": None}
     if path is not None and path.exists():
         try:
-            WA.follows(WA.decode(path.read_bytes()), a)
+            WA.follows(WA.decode(advice_of(prev)), a)
         except WA.MalformedAdvice as e:
             raise ValueError(f"window {window} doesn't open where window {last} closed: {e}") from None
         carry["follows"] = last
@@ -106,7 +122,7 @@ def main() -> int:
     ap.add_argument("--out", default=None, help="where compiled.json and the traces go (default: --window's row dir)")
     ap.add_argument("--window", type=int, default=None, help="a serve-openai --seal run's Commit window")
     ap.add_argument("--max-model-len", type=int, default=2048)
-    ap.add_argument("--advice", default=None, help="the advice (default RUN/advice/private/advice.bin)")
+    ap.add_argument("--advice", default=None, help="the advice, padded to its registration's ℓ (default RUN/advice/private/advice.bin)")
     ap.add_argument("--partial", action="store_true",
                     help="refuse request by request (a measurement over served traffic) rather than the whole advice")
     a = ap.parse_args()
@@ -132,15 +148,15 @@ def main() -> int:
     reg_doc, carry = None, None
     if a.window is not None:
         path, meta, bodies, reg_doc = served_inputs(run, a.window)
-        data = Path(a.advice or path).read_bytes()
         try:
+            data = advice_of(path.parent.parent, Path(a.advice or path).read_bytes())
             carry = carry_of(run, a.window, data)
         except ValueError as e:
             (out / "compiled.json").write_text(json.dumps({"refused": str(e)}, indent=1) + "\n")
-            print(f"[advice-compile] the advice's carry is refused: {e}", flush=True)
+            print(f"[advice-compile] the advice or its carry is refused: {e}", flush=True)
             return 2
     else:
-        data = Path(a.advice or run / "advice" / "private" / "advice.bin").read_bytes()
+        data = advice_of(run / "advice", Path(a.advice or run / "advice" / "private" / "advice.bin").read_bytes())
         meta = json.loads((run / "run.json").read_text())
         recs = [d for d in map(json.loads, (run / "requests.jsonl").read_text().splitlines()) if d]
         user = {d["request"]: d["user"] for d in recs}

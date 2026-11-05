@@ -47,9 +47,10 @@ PUBLIC = {"K": 756 + 756 + 9088 + 63, "audits": [{"delta": "1/100", "drawn": 2, 
 K = PUBLIC["K"]
 #: the period's one compute audit's registration, V3c's class window's, which binds no advice or compiler
 NO_ADVICE = {"format": "verity/registration/v2", "window": {"circuit": "cd" * 64}}
-#: the run's advice registration as `served_verdicts.py public-registration` publishes it, its advice padded to its
-#: compiler's cap ℓ_a = 2^23
-PUBLISHED = SV.public_registration({"row_bits": 256, "binding": {"advice": {"root": "ab" * 64, "bits": 392}},
+#: the run's advice registration as `served_verdicts.py public-registration` publishes it, its advice committed padded to
+#: its compiler's cap ℓ_a = 2^23 (`advice_windows.pad`)
+PUBLISHED = SV.public_registration({"row_bits": 256, "rows": 2 ** 23 // 256,
+                                    "binding": {"advice": {"root": "ab" * 64, "bits": 2 ** 23}},
                                     "compiler": {"name": "c", "digest": "d", "cap_bits": 2 ** 23}})
 #: K of record with both checks open and the one audit's ℓ_a + 1 bits for the one phase
 KR = K + 2 ** 23 + 1
