@@ -1004,20 +1004,30 @@ def not_run(st: dict) -> bool:
 
 
 def live_steps(run_dir: Path) -> list[dict]:
-    """The steps a check's live record (`LIVE`) names, each with its `state`; none without one."""
+    """The steps a check's live record (`LIVE`) names, each with its `state`: `stopped` for one still pending or running in the
+    record of a check that ended (a group that stopped on a failure never starts the rest); none without one."""
     try:
         doc = json.loads((run_dir / LIVE).read_text())
     except (OSError, ValueError):
         return []
-    return [s for s in doc.get("steps") or () if isinstance(s, dict)] if isinstance(doc, dict) else []
+    if not isinstance(doc, dict):
+        return []
+    over = doc.get("state") in ("passed", "failed", "stopped")
+    return [{**s, "state": "stopped"} if over and s.get("state") in ("pending", "running") else s
+            for s in doc.get("steps") or () if isinstance(s, dict)]
+
+
+#: what a shard's twin says of a step against its other twin, for the shard both run (`shard_steps`): a pass answers for the
+#: shard, a step one still has to run may yet pass, and a stop (a cancel's, or a step its ended check never started) says least
+RANK = {"passed": 4, None: 3, "failed": 2, "skipped": 1, "stopped": 0}
 
 
 def shard_steps(groups: list[list[Path]], done: list[bool]) -> list[dict[str, str | None]] | None:
-    """Each shard's steps, from its twins' run dirs (``groups``): {step: "passed" when a twin passed it, else None while one has it
-    pending or running, else the status one ended it with}, a twin's by its steps.jsonl (`stopped` for a step a cancel stopped,
-    `not_run`), else its live record (`LIVE`), which names every step the check planned.  None, of more than one shard, while a
-    shard's plan isn't known: no twin's live record names a step past the preflight, and none exited 0 (``done``), as a check does
-    only once every step it planned ended."""
+    """Each shard's steps, from its twins' run dirs (``groups``): {step: the status its twins give it, the highest by `RANK`, None
+    while one has it pending or running and none passed it}, a twin's by its steps.jsonl (`stopped` for a step a cancel stopped,
+    `not_run`), else its live record (`live_steps`), which names every step the check planned.  None, of more than one shard,
+    while a shard's plan isn't known: no twin's live record names a step past the preflight, and none exited 0 (``done``), as a
+    check does only once every step it planned ended."""
     out = []
     for dirs, known in zip(groups, done):
         got: dict[str, str | None] = {}
@@ -1028,7 +1038,7 @@ def shard_steps(groups: list[list[Path]], done: list[bool]) -> list[dict[str, st
             mine.update({st.get("step") or "": "stopped" if not_run(st) else st.get("status") or "failed" for st in step_records(d)})
             for step, v in mine.items():
                 v = None if v in ("pending", "running", None) else v
-                if got.get(step) != "passed" and (v in (None, "passed") or step not in got):
+                if step not in got or RANK.get(v, RANK["failed"]) > RANK.get(got[step], RANK["failed"]):
                     got[step] = v
         if len(groups) > 1 and not known:
             return None
