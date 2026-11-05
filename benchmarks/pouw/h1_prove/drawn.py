@@ -1,4 +1,4 @@
-"""drawn.py: the CLI of a served H1 window's drawn J10-R units staged as C-Flock statements and checked as credit does
+"""drawn.py: the CLI of a served H1 window's drawn units staged as C-Flock statements and checked as credit does
 (`verity_vllm.protocols.pouw.h1.drawn`, whose docstring is the method), with ``--checkpoint``'s safetensors read by the
 live challenger's model registry (`live_challenger.models`) and ``check`` credit's own verification (`credit._verified`
 with the Lean ``flock-verify`` at ``--lean``, then `credit._proved`).
@@ -51,12 +51,13 @@ def checkpoint_weights(checkpoint: Path, linears: Sequence[tuple[str, int, int]]
     return out
 
 
-def verified(statements: list, files: dict, win: dict, units: list[int], lean: Path) -> tuple[list | None, tuple | None]:
-    """Credit's verification of a window's drawn-call statements (`credit._verified`, then `credit._proved`), its Lean
-    verifier the ``flock-verify`` at `lean`."""
+def verified(statements: list | dict, files: dict, win: dict, units: list[int], lean: Path
+             ) -> tuple[list | None, tuple | None]:
+    """Credit's verification of a window's drawn statements (`credit._verified` under the window's draw, then
+    `credit._proved`), its Lean verifier the ``flock-verify`` at `lean`."""
     PF.executable = lambda: lean
     proofs, why = CR._verified(statements, files, win["raw"], win["layout"], win["entries"], win["root"], units,
-                               win["steps"], PF.verify, win["salt"])
+                               win["steps"], PF.verify, win["salt"], win["draw"])
     return proofs, why if why is not None else CR._proved(units, proofs)
 
 

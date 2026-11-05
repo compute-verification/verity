@@ -87,8 +87,8 @@ public import Proofs.Flock.Recursive.KSLinked
 public import Proofs.Flock.Claims.Recursion.DeployedCounts
 public import Proofs.Flock.Claims.Recursion.LamDeployedTight
 public import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
+public import Proofs.Flock.Claims.Recursion.KappaEpsCap
 public import Proofs.Flock.Recursive.BitsK
-public import Proofs.Flock.Claims.Recursion.KappaEpsTight
 public import Proofs.Flock.Recursive.BitsKTight
 public import Proofs.Flock.Claims.Recursion.AcceptedScope
 public import Proofs.Flock.Claims.Recursion.InnerSetupCount
