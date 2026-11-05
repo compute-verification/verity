@@ -2280,9 +2280,9 @@ def test_a_route_that_cannot_be_read_is_not_rung_and_a_handle_with_no_route_has_
     reg, api = slack.load_registry(registry), slack.Slack(TOKEN)
     post = {"ts": "1700000050.000001", "text": "what is the TP8 status?", "user": "UDANIEL"}
     out = io.StringIO()
-    lines = slack.deliver(api, reg, slack.Routes(get=get), ASK_TEAM, post, names=["top", "soundness"], log=out)
+    lines = slack.deliver(api, reg, slack.Routes(get=get), ASK_TEAM, post, names=["top", "console"], log=out)
     assert lines == [f"@top: NOT RUNG (its route couldn't be read: {slack.Routes().base}top.json: HTTP 503)",
-                     "@soundness: no inbox; its holder opens one with `research msg names open --as soundness`",
+                     "@console: no inbox; its holder opens one with `research msg names open --as console`",
                      "1 doorbell(s) didn't ring (@top): `research msg deliver --channel ask-the-team --ts "
                      "1700000050.000001 (or --event, where the bot can't read it)` rings only the ones still missing"]
     assert bells(fake, top) == [] and "route @top: NOT RUNG" in out.getvalue()
