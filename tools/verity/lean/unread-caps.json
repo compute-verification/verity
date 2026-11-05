@@ -1,6 +1,10 @@
 {
  "schema": "lean-unread-caps/v1",
  "areas": {
+  "Definitions/Accounting": {
+   "modules": 1,
+   "lines": 113
+  },
   "Definitions/Core": {
    "modules": 1,
    "lines": 103
@@ -35,7 +39,7 @@
   },
   "Proofs/Pouw": {
    "modules": 47,
-   "lines": 4303
+   "lines": 4316
   }
  }
 }
