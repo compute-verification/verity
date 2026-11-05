@@ -1012,7 +1012,7 @@ Two gaps stood between these statements and the deployed verifier:
   audit has at most one session it can accept. On the served piece (`benchmarks/pous/served_piece.py`) the id is
   derived, not drawn: the memory challenger draws the setup's salt after the commitment to `W` and logs it under the
   window's binding (`memory_challenger.SaltLog`, one salt an audit), derives the id from the binding, the commitment
-  and the salt (`challenger_party.session_id`), and refuses a session whose setup doesn't publish exactly that
+  and the salt (`challenger_session.session_id`), and refuses a session whose setup doesn't publish exactly that
   commitment and salt. The verifier computes the same id from the binding and what setup published, never from the
   report. The salt is in the id because the signed header binds only the root of `C*`. The Lean states the check's side (`RunCheckAccepts`: an accepted session
   carries the designated id); the device's refusal is its code and log, which the Lean does not model.
