@@ -337,6 +337,28 @@ def test_the_priority_file_reaches_the_ticks_queue_and_is_for_sync_and_drive_onl
     assert e.value.code == 2 and "--priority-file is for sync and drive only" in capsys.readouterr().err
 
 
+def test_a_ticks_queue_judges_its_merges_by_pool_runs_and_reads_the_verdicts_in_the_store(world, monkeypatch):
+    """A tick's sync launches the preflight of each merge no verdict stands for as a pool run (`PreflightPool`, its worktrees
+    under `--preflight-root`), drive.toml's `preflight_pool` of them out at once, and reads the verdicts that marks and other
+    syncs recorded from the store (`StoreLabels.preflights`)."""
+    on_main(world, FLAGS)
+    monkeypatch.chdir(world.dev)
+    seen: list[tuple] = []
+
+    class Driver:
+        def __init__(self, q, **kw):
+            seen.append((q.pool, q.verdicts, q.preflight_pool))
+
+        def tick(self, dry_run=False):
+            return ""
+
+    monkeypatch.setattr(D, "Driver", Driver)
+    assert drive(world, "--preflight-root", str(world.tmp / "fast")) == 0
+    ((pool, verdicts, cap),) = seen
+    assert isinstance(pool, Q.PreflightPool) and (pool.repo, pool.root) == (world.tmp / "q" / "verity", world.tmp / "fast")
+    assert verdicts.__func__ is Q.StoreLabels.preflights and cap == 3
+
+
 def test_config_refusals_name_the_fix(world, driven, monkeypatch, capsys):
     monkeypatch.chdir(world.dev)
     assert drive(world, "--config", DRIVE_FLAGS) == 1

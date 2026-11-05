@@ -23,7 +23,7 @@ from research import merge
 from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, LEAN_STEP, SIGTERM_RC
 from research.queue import PR, QueueError, StoreLabels, label_target, lean_change
 from research.store import vocab
-from test_queue import World, _git
+from test_queue import World, _git, _pool
 from test_queue_drive import Harness, _failed_run, _killed_run, _live_run, _steps_run, _tip
 
 EVERY = {s: "passed" for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL}
@@ -161,16 +161,27 @@ def test_a_reviewed_prefix_lands_and_awaits_the_after_landing_run_of_every_step(
 
 
 def test_a_pr_whose_preflight_onto_next_refuses_it_is_told_and_stays_out_while_the_members_above_it_land(world, monkeypatch):
+    """A PR waiting for its pool run's verdict, and one that contains it, are told nothing (`tell_out`) while the members around
+    it land; once a verdict at the base it merges onto refuses it, its owner is told, with what it takes out."""
     _registry(world, "lane-2")
     h = Review(world, monkeypatch)
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
         h.review(n)
-    h.q.preflight = lambda pr, base, commit, members: "a.py: SyntaxError" if pr.number == 2 else None
+    world.gh.put(4, world.change({"d.txt": "4\n"}, base=world.gh.prs[2].head))
+    h.review(4)
+    pool = _pool(h.q, refuse={2: "a.py: SyntaxError"})
+    h.tick()
+    assert not [p for p in h.posts if "#2 at" in p or "#4 at" in p], h.posts
+    pool.end()
     assert h.tick().startswith("landed #3"), world.logs
     assert [_subject(world, r)[:9] for r in ("main", "main^1")] == ["Queue: #3", "Queue: #1"]
+    assert not [p for p in h.posts if "#2 at" in p or "#4 at" in p], h.posts
+    pool.end()
+    h.tick()
     (post,) = [p for p in h.posts if "out of `next`" in p]
     assert f"#2 at {world.gh.prs[2].head[:8]} is out of `next`: a.py: SyntaxError" in post and "@lane-2" in post, post
+    assert "It takes out #4, which contains it" in post, post
 
 
 def test_a_sharded_after_landing_run_verifies_main_only_once_every_shard_passed(world, monkeypatch):
