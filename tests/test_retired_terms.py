@@ -43,8 +43,7 @@ _INCORRECT_TERM = re.compile(rf"\b(?:faulty{_SEP}(?:outputs?|steps?|ingress{_SEP
 #: The retired-terms table, the Glossary's older names (`ARCHITECTURE.md` links it).
 GLOSSARY = "GLOSSARY.md"
 #: The table's rows that name the terms, in GLOSSARY.
-RETIRED_ROWS = ('| "proof unit"', '| "wrong unit"', '| "proof service"', '| "declared advice"', '| "audit coin"',
-                '| "C-Flock"', '| "netlist"', '| "M0"', '| "IR"', '| "verifier of record"')
+RETIRED_ROWS = ('| "proof unit"', '| "wrong unit"', '| "proof service"', '| "declared advice"', '| "audit coin"')
 
 #: Retired in the maintained docs' prose, and what to write instead.
 DOC_TERMS = {
@@ -55,11 +54,6 @@ DOC_TERMS = {
     "draw, drawn, redraw": "the sample, sampled proof block (verb: sample; coins are flipped)",
     "components, the composite's product": "subprotocols, composition",
     "firewall": "ZK server",
-    "C-Flock": "Flock (Succinct's is upstream Flock)",
-    "netlist": "a private circuit, or the circuit's description",
-    "M0": "Flock's circuit prover",
-    "IR, Verity IR": "circuit or Program (`verity.ml.circuits`)",
-    "verifier of record": "the verifier (other checking code is named for what it is: the Rust cross-check, a Python mirror)",
     "flock-verify, remote check, naming the verifier": "verity verify proof, verity verify remote (a command someone runs today "
                                                       "stays in backticks)",
     "builder, advice compiler, circuit builder": "registered compiler",
@@ -68,6 +62,11 @@ DOC_TERMS = {
     "declared work, declared workload, declares its advice": "registered work; the developer reports its advice, which the "
                                                              "registered compiler turns into the execution block",
     "sampled unit, unit class": "sampled proof block; a size class, or Flock's proof-block class",
+    "C-Flock": "Flock (Succinct's is upstream Flock)",
+    "netlist": "a private circuit, or the circuit's description",
+    "M0": "Flock's circuit prover",
+    "IR, Verity IR": "circuit or Program (`verity.ml.circuits`)",
+    "verifier of record": "the verifier (other checking code is named for what it is: the Rust cross-check, a Python mirror)",
     "audit coin": "the challenger's coins (the step that reads them is the verification phase)",
     "declaration block, declaration period": "execution block, execution phase",
     "sampling period, sampling block, PoUW's commit period": "execution phase (work plus its audit: an execution phase and its "
