@@ -37,7 +37,8 @@ bound `Dj`, at `δ` and the decoder `decode`, with the claim at `K`. Every field
 * the statements are in the sampled audit's scope (`scope`): the registration refuses any other;
 * the deployed network certifier, in `PeriodLeakAccepted`'s form: one device (`device`) on the server's uplink, with
   its connections `Conn`, cells `Cell` and the server's state `Srv`, whose run (`run`) on a schedule and the server's
-  state gives the cells the client receives and its records of the period's windows; its record format (`fmt`) and
+  state gives the frames the client receives (`laneWire`) and its records of the period's windows; its record format
+  (`fmt`) and
   what reaches it from the server on each connection (`arr`);
 * the network certifier runs its code on its host (`trusted`, `trusted-host`);
 * at each window and every value of the other coins, the network audit's own coins are a run of the sampled verifier
@@ -93,8 +94,8 @@ structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Typ
   fmt : TapRecord Conn Cell (Fin n → List (Obs L Kₒ S))
   /-- the deployed network certifier -/
   device : Dev
-  /-- what the network certifier does on a schedule and the server's state: the cells the client receives and its
-  records of the period's windows -/
+  /-- what the network certifier does on a schedule and the server's state: the frames the client receives
+  (`laneWire`) and its records of the period's windows -/
   run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L Kₒ S))
   /-- the network certifier runs its code (`tapCode`) on its host: `trusted-host`, the trust the network audit rests
   on. Its records are what `window_le`'s per-window bound comes from; deriving `window_le` from `PeriodLeakAccepted`

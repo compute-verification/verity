@@ -92,7 +92,7 @@ def PeriodLeakRegisteredUntrusted : Prop :=
 /-- **Without `TrustedHost`, `PeriodLeakRegisteredWf` is false**: at `scopelessD`, where `KS` holds (no statement is in
 its scope, `scopelessD_ks`) and so sampling at the incorrect set (`notLay` has no wires), the rows format `fxRows`
 (well formed), no window, `Θ = {(1, 0)}` and the schedule `emptySched` (which fits), the device `leakyRun`, which
-shows the client a cell its record doesn't hold on one of two servings (`leakyRun_untrusted`), tells the two apart,
+shows the client a frame its record doesn't hold on one of two servings (`leakyRun_untrusted`), tells the two apart,
 so `2` secrets are counted against `#Θ = 1`. -/
 theorem not_periodLeakRegisteredUntrusted : ¬ PeriodLeakRegisteredUntrusted := fun h => by
   have hc := (h shaD (scopelessD Unit) 1 1 1 (fun _ => notLay) (ksWired_none (fun _ => rfl) (scopelessD_ks shaD))
@@ -122,7 +122,7 @@ def PeriodLeakRegisteredAnyFormat : Prop :=
     ∀ {Conn Cell Srv Dev Sec : Type} (arr : Srv → Conn → Arrivals Cell) (F : RowsFormat Conn Cell L K) (cert : Dev)
       (run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S))),
     Verity.Assumptions.TrustedHost cert run (fun p =>
-      (wardenCode p.1 (arr p.2), F.record S n p.1 (arr p.2) (wardenCode p.1 (arr p.2)))) →
+      (laneWire p.1 (wardenCode p.1 (arr p.2)), F.record S n p.1 (arr p.2) (wardenCode p.1 (arr p.2)))) →
     ∀ (Θ : Set (ℕ × ℕ)) (Zs : Set Sec) (schedOf : Sec → WardenSchedule Conn) (srvOf : Sec → Srv),
     SchedulesCovered {s | (s.r, s.D) ∈ Θ ∧ F.Fits S n s} Zs schedOf →
     ∀ (dec : (Conn → List (ℕ × CellView Cell)) → Sec), SenderDecodes run cert Zs schedOf srvOf dec →

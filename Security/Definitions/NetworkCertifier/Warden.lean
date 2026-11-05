@@ -15,6 +15,12 @@ late: the network certifier fails the connection closed there, with one fail cel
 lane to its scheduled end with padding. The end of the data counts as a cell too: the server's end of stream must reach
 the network certifier by the bucket of the cell after the data's last, or the connection fails there.
 
+**What the client sees is what crosses the wire** (`laneWire`): each connection's frames, bucket by bucket
+(`laneFrames`). Those are `r` padding frames in each bucket from its admission to `adm c + D`, then its lane's cells,
+its `END` or its `FAIL` the last, then padding to `r` frames in that cell's bucket (`tailPads`). This is one
+definition, which the network certifier's record format (`Definitions.NetworkCertifier.RecordRows`) and every
+statement about the client's view read.
+
 NCI's transfer gates `T` are these cells' bits (`transfers`, `Definitions.Nci`): their number per
 window is the schedule's, so it is public.
 
@@ -67,10 +73,35 @@ def wardenLane {Cell : Type} (a : Arrivals Cell) (t : ℕ → ℕ) : ℕ → ℕ
     else if t j < a.ready j then (t j, .fail) :: (List.range' (j + 1) k).map fun i => (t i, .pad)
     else (t j, streamCell a.stream j) :: wardenLane a t (j + 1) k
 
-/-- **The network certifier's code**: on schedule `s` and the arrivals `arr c` of every connection `c`, the cells the
-client receives on each connection, each with its bucket. -/
+/-- **The network certifier's code**: on schedule `s` and the arrivals `arr c` of every connection `c`, the cells of
+each connection's lane, each with its bucket. The client receives them as frames, padding included (`laneWire`). -/
 def wardenCode {κ Cell : Type} (s : WardenSchedule κ) (arr : κ → Arrivals Cell) : κ → List (ℕ × CellView Cell) :=
   fun c => wardenLane (arr c) (s.bucket c) 0 (s.cells c)
+
+/-- The padding after connection `c`'s last cell in bucket `b`: in the bucket of its lane's last cell, the slots of the
+bucket's `r` after it; none in any other bucket, or for a lane of no cells. -/
+def tailPads {κ : Type} (s : WardenSchedule κ) (c : κ) (b : ℕ) : ℕ :=
+  if 0 < s.cells c ∧ b = s.bucket c (s.cells c - 1) then s.r - 1 - (s.cells c - 1) % s.r else 0
+
+/-- **The frames connection `c` sends in bucket `b`**: `r` padding frames in each bucket from its admission to
+`adm c + D`, then the cells `v c` of its lane in bucket `b`, in order, then the padding after its last cell
+(`tailPads`). -/
+def laneFrames {κ Cell : Type} (s : WardenSchedule κ) (v : κ → List (ℕ × CellView Cell)) (c : κ) (b : ℕ) :
+    List (CellView Cell) :=
+  (if s.adm c ≤ b ∧ b < s.adm c + s.D then List.replicate s.r .pad else []) ++
+    ((v c).filter fun x => x.1 == b).map Prod.snd ++ List.replicate (tailPads s c b) .pad
+
+/-- The buckets connection `c`'s frames fall in, from the first: its admission padding ends at `adm c + D`, and its
+cells' buckets, which number at most its cells, follow. -/
+def WardenSchedule.span {κ : Type} (s : WardenSchedule κ) (c : κ) : List ℕ :=
+  List.range (s.adm c + s.D + s.cells c)
+
+/-- **What crosses the wire on connection `c`**, which is what its client sees: its frames (`laneFrames`), bucket by
+bucket over its span, each with its bucket. The padding is included: the admission padding, and the padding after its
+lane's last cell. -/
+def laneWire {κ Cell : Type} (s : WardenSchedule κ) (v : κ → List (ℕ × CellView Cell)) (c : κ) :
+    List (ℕ × CellView Cell) :=
+  (s.span c).flatMap fun b => (laneFrames s v c b).map (b, ·)
 
 /-- **The fail cell** of connection `c`: the first cell of its lane, among the data's cells and the end of the stream,
 that reached the network certifier after its bucket, or none. -/
@@ -82,8 +113,8 @@ def cellView {Cell : Type} (stream : List Cell) : Option ℕ → ℕ → CellVie
   | none, j => streamCell stream j
   | some f, j => if j < f then streamCell stream j else if j = f then .fail else .pad
 
-/-- **The client's view** of the server side, connection by connection, from the schedule `s`, each connection's data
-and its fail cell or none: every cell of its lane, in its bucket. -/
+/-- **The lanes' cells** from the schedule `s`, each connection's data and its fail cell or none: every cell of its
+lane, in its bucket. -/
 def clientView {κ Cell : Type} (s : WardenSchedule κ) (data : κ → List Cell) (fail : κ → Option ℕ) :
     κ → List (ℕ × CellView Cell) :=
   fun c => (List.range (s.cells c)).map fun j => (s.bucket c j, cellView (data c) (fail c) j)

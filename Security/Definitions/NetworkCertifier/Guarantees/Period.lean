@@ -11,8 +11,9 @@ import Mathlib.Algebra.BigOperators.Fin
 A monitoring period is `n` windows, each audited by the sampled verifier at a statement it registered (`sw i`, with its
 partition `Pw i` and the values `ρ i` the registration commits at its registered inputs). The network certifier is one
 device on the server's uplink, and it functions as an active network certifier (`Definitions.NetworkCertifier.Tap`): one
-run of its code gives the cells the client receives and the observations the audits read, its record of those cells, so
-on every schedule its record format holds the client's view reads back from the observations. The network certifier
+run of its code gives the frames the client receives, what crosses the wire with its padding (`laneWire`), and the
+observations the audits read, its record of those frames, so on every schedule its record format holds the client's
+view reads back from the observations. The network certifier
 registers its records at the transfer gates: its openings `tops s` under the statement's roots, its signed root for the
 window, so they vary with what the server did
 (`TapOpens`). `PeriodLeakAccepted` composes the sampled leak bound at the network certifier's rows (`RLeakTap`, with the
@@ -75,8 +76,8 @@ commitment binds
 windows registered as `sw i` (partition `Pw i`, registered values `ρ i`, operator `op i`, and `β i` bounding the
 committed bits of each of its possible incorrect sets), with the network certifier's openings `tops s` at each statement,
 and a network certifier that runs its code by `trusted-host` on schedules in `Ss`, each held by its record format `f`
-(`TapRecord.fits`) and giving connection `c` at most `cap c` cells, its one run giving the cells the client receives
-and the observations of the monitoring period's windows (its record of those cells, in the format `f`):
+(`TapRecord.fits`) and giving connection `c` at most `cap c` cells, its one run giving the frames the client receives
+(`laneWire`) and the observations of the monitoring period's windows (its record of those frames, in the format `f`):
 
 * each window's audit, at a statement in its scope, has `Pr[acc ∧ ¬RLeakTap δ] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`;
 * where at every window's statement the network certifier registers its observations at that window's operator

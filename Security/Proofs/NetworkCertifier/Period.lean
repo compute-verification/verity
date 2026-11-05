@@ -9,7 +9,7 @@ import Proofs.NetworkCertifier.TapRows
 
 A window that meets `WindowGood`, whose observations the network certifier registers at the transfer gates
 (`TapOpens`), has them among the sequences `AccSeqsSampled` counts at its registration, with the registration's values
-at `reg` (`mem_accSeqsSampled_of_windowGood`). The observations are the trusted network certifier's record of the cells
+at `reg` (`mem_accSeqsSampled_of_windowGood`). The observations are the trusted network certifier's record of the frames
 it sends, so the client's view reads back from them under its schedule, one its record format holds
 (`tap_cells_read`): the views, and the secrets
 they decode to, number at most `#Ss` times the size of the product of those sets (`encard_period_le`). The record

@@ -562,18 +562,26 @@ theorem fxRows_wf : fxRows.Wf := by
 theorem fxQueue_bucket (c : Fin 3) (j : ℕ) (hj : j < fxQueueSched.cells c) : fxQueueSched.bucket c j < 10 := by
   fin_cases c <;> simp [fxQueueSched, WardenSchedule.bucket] at hj ⊢ <;> omega
 
-/-- **`fxQueue`'s schedule fits the format** over one window of four slots: its cells fall in buckets `4 … 9`, and no
-bucket holds more than four frames. -/
+/-- **`fxQueue`'s schedule fits the format** over one window of four slots: its cells fall in buckets `4 … 9`, its
+admission padding in buckets `1 … 8`, and no bucket holds more than four frames. -/
 theorem fxQueue_fits : (RowsFormat.tapRecord fxRows fxRows_wf 4 1).fits fxQueueSched := by
-  refine ⟨fun c j hj => by simpa [fxRows] using fxQueue_bucket c j hj, fun b => ?_⟩
+  refine ⟨⟨fun c j hj => by simpa [fxRows] using fxQueue_bucket c j hj,
+    fun c i hi => by fin_cases c <;> simp [fxRows, fxQueueSched] at hi ⊢ <;> omega⟩, fun b => ?_⟩
   rcases Nat.lt_or_ge b 10 with hb | hb
   · interval_cases b <;> decide
   · have h0 : ∀ c, laneLoad fxQueueSched c b = 0 := by
       intro c
       have hadm : ¬ (fxQueueSched.adm c ≤ b ∧ b < fxQueueSched.adm c + fxQueueSched.D) := by
         fin_cases c <;> simp [fxQueueSched] <;> omega
-      simp only [laneLoad, hadm, ↓reduceIte, zero_add, List.length_eq_zero_iff, List.filter_eq_nil_iff,
-        List.mem_range, beq_iff_eq]
+      have htail : tailPads fxQueueSched c b = 0 := by
+        unfold tailPads
+        split_ifs with h
+        · obtain ⟨h1, h2⟩ := h
+          have := fxQueue_bucket c _ (Nat.sub_lt h1 Nat.one_pos)
+          omega
+        · rfl
+      simp only [laneLoad, hadm, htail, ↓reduceIte, zero_add, add_zero, List.length_eq_zero_iff,
+        List.filter_eq_nil_iff, List.mem_range, beq_iff_eq]
       intro j hj
       have := fxQueue_bucket c j hj
       omega
@@ -621,17 +629,18 @@ theorem leakyDec_run (z : Bool) : leakyDec (leakyRun () (emptySched, z)).1 = z :
   cases z <;> rfl
 
 theorem emptySched_fits : fxRows.Fits 1 0 emptySched := by
-  refine ⟨fun c j hj => by simp [emptySched] at hj, fun b => ?_⟩
-  simp [fxRows, laneLoad, emptySched]
+  refine ⟨⟨fun c j hj => by simp [emptySched] at hj, fun c i hi => by simp [emptySched] at hi⟩, fun b => ?_⟩
+  simp [fxRows, laneLoad, emptySched, tailPads]
 
-/-- **The device is not trusted-host's**: on the serving `true` it shows the client a cell the code, which sends no
-cell on `emptySched`, doesn't. -/
+/-- **The device is not trusted-host's**: on the serving `true` it shows the client a frame the code, which sends no
+frame on `emptySched`, doesn't. -/
 theorem leakyRun_untrusted :
     ¬ Verity.Assumptions.TrustedHost () leakyRun fun p =>
-      (wardenCode p.1 (noArr p.2), fxRows.record 1 0 p.1 (noArr p.2) (wardenCode p.1 (noArr p.2))) := by
+      (laneWire p.1 (wardenCode p.1 (noArr p.2)),
+        fxRows.record 1 0 p.1 (noArr p.2) (wardenCode p.1 (noArr p.2))) := by
   intro h
   have h0 := congrArg (fun q => q.1 0) (h (emptySched, true))
-  simp [leakyRun, wardenCode, emptySched, wardenLane] at h0
+  simp [leakyRun, laneWire, WardenSchedule.span, emptySched] at h0
 
 /-! ### A rows format that drops each frame's content -/
 
@@ -691,18 +700,20 @@ def oneSched : WardenSchedule Unit := ⟨1, 0, fun _ => 0, fun _ => 1⟩
 def cellArr : ℕ → Unit → Arrivals ℕ := fun z _ => ⟨[z], fun _ => 0⟩
 
 theorem oneSched_fits : blindRows.Fits 1 1 oneSched := by
-  refine ⟨fun c j hj => ?_, fun b => ?_⟩
+  refine ⟨⟨fun c j hj => ?_, fun c i hi => absurd hi (Nat.not_lt_zero i)⟩, fun b => ?_⟩
   · obtain rfl := Nat.lt_one_iff.1 hj
     exact Nat.one_pos
   · simp only [blindRows, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero, laneLoad]
     have h0 : ¬ (oneSched.adm () ≤ b ∧ b < oneSched.adm () + oneSched.D) :=
       fun h => absurd h.2 (Nat.not_lt_zero b)
-    rw [ite_eq_right h0, zero_add]
+    have ht : tailPads oneSched () b = 0 := by simp [tailPads, oneSched]
+    rw [ite_eq_right h0, zero_add, ht, add_zero]
     exact (List.length_filter_le _ _).trans (by simp [oneSched])
 
 /-- The device runs the network certifier's code, recording in `blindRows`. -/
 def blindRun : Unit → WardenSchedule Unit × ℕ → (Unit → List (ℕ × CellView ℕ)) × (Fin 1 → List (Obs 1 1 1)) :=
-  fun _ p => (wardenCode p.1 (cellArr p.2), blindRows.record 1 1 p.1 (cellArr p.2) (wardenCode p.1 (cellArr p.2)))
+  fun _ p => (laneWire p.1 (wardenCode p.1 (cellArr p.2)),
+    blindRows.record 1 1 p.1 (cellArr p.2) (wardenCode p.1 (cellArr p.2)))
 
 /-- The client reads the cell's data. -/
 def cellDec (v : Unit → List (ℕ × CellView ℕ)) : ℕ :=
@@ -710,7 +721,13 @@ def cellDec (v : Unit → List (ℕ × CellView ℕ)) : ℕ :=
   | (_, .data z) :: _ => z
   | _ => 0
 
-theorem cellDec_run (z : ℕ) : cellDec (blindRun () (oneSched, z)).1 = z := rfl
+theorem blindRun_wire (z : ℕ) : (blindRun () (oneSched, z)).1 () = [(0, .data z)] := by
+  simp [blindRun, laneWire, WardenSchedule.span, laneFrames, tailPads, oneSched, cellArr, wardenCode, wardenLane,
+    WardenSchedule.bucket, streamCell]
+
+theorem cellDec_run (z : ℕ) : cellDec (blindRun () (oneSched, z)).1 = z := by
+  unfold cellDec
+  rw [blindRun_wire]
 
 theorem blindRun_length (z : ℕ) (i : Fin 1) : ((blindRun () (oneSched, z)).2 i).length = 1 := rfl
 
@@ -742,7 +759,7 @@ theorem blindRun_tapOpens (H : Msg → Msg) (z : ℕ) (i : Fin 1) :
   · funext σ
     obtain rfl : ℓ = 0 := Subsingleton.elim _ _
     obtain rfl : σ = 0 := Subsingleton.elim _ _
-    simp [blindRun, RowsFormat.record, blindRows, bucketFrames, laneFrames, oneSched, cellArr, wardenCode,
+    simp [blindRun, RowsFormat.record, blindRows, bucketFrames, laneFrames, tailPads, oneSched, cellArr, wardenCode,
       wardenLane, WardenSchedule.bucket, streamCell, rowOf, notLay, tapVal, negOps]
 
 end NetTiming.Witness
