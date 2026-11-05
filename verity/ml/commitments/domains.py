@@ -1,7 +1,7 @@
 """One table of domain separators: every versioned string a protocol hashes, derives from or commits under, or names its
 records, schemes and protocols by. The Lean is `Identity.Domains`
-(`verity/core/primitives/identity/Identity/Domains.lean`), beside the tagged SHA-512 most of them key; this module mirrors
-it beside `identity.tagged_sha512`.
+(`verity/core/primitives/identity/Identity/Domains.lean`); this module mirrors it, beside `identity.tagged_sha512`, the
+tagged SHA-512 most of them key.
 
 A constant's name is in today's words. Its bytes are what committed formats, pinned vectors and recorded runs carry, so
 they keep the words of their version: a PoUW period's tags say "window", its sampling's say "draw", the network
