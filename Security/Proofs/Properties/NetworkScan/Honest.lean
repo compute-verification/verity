@@ -1,7 +1,8 @@
 import Properties.NetworkScan
+import Properties.NetworkScan.Honest
 import Proofs.Properties.NetworkScan.Check
 import Proofs.Properties.NetworkScan.Passes
-import Proofs.Properties.NetworkScan.Honest.Defs
+import Proofs.Properties.NetworkScan.Honest.Loop
 import Proofs.Properties.NetworkScan.Honest.ReadsIngress
 import Proofs.Properties.NetworkScan.Honest.ReadsEgress
 
@@ -9,7 +10,7 @@ import Proofs.Properties.NetworkScan.Honest.ReadsEgress
 # An accepted scan whose premises hold
 
 `ScanFits`' honest witness (`scanFits_honest`), at the Program `Honest.prog` and its two templates' circuit files
-(`Honest.Defs`):
+(`Properties.NetworkScan.Honest`, in the properties tree, since the witness's statement names them):
 
 * `Honest.scan`: `scanProg` accepts the Program at the schedule `Honest.sched`: its keys are distinct
   (`keysUnique_of_nodup`) and its composites' nodes read only parameters and earlier nodes (`orderViolation_none`).

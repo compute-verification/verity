@@ -1,6 +1,4 @@
 import Properties.NetworkScan
-import Proofs.Properties.NetworkScan.Check
-import Proofs.Properties.NetworkScan.Passes
 
 /-!
 # `ScanFits`' honest instance: a scan window's Program and its templates' circuit files
@@ -13,7 +11,6 @@ The instance at which `Properties.NetworkScan.scanFits_honest` shows each of `Sc
 * `fIngress`, `fEgress`: each template's circuit file, one template instance a VU, whose unit net holds the template's
   parameters as 16-bit ports of one input word and returns computed rows that read only columns those ports hold. The
   matrices sit in thunks, which Bits' check never forces: it reads only the unit net's header.
-* `loopId`: `lastLe`'s `while` loop one step at a time, through which `cbv` reads it.
 -/
 
 namespace Properties.NetworkScan.Honest
@@ -106,14 +103,5 @@ def fEgress : Flock.Circuit :=
     nets := #[("unit", unitNet #[16] #[16, 16] 32 fun i => #[i % 16])], upv := 1,
     ports := #[port "state" 1, port "o" 2], outRowPorts := #[1], outPorts := #[("o", 2)],
     leavesIn := #[#[0]], leavesOut := #[#[0, 1]] }
-
-/-- `lastLe`'s `while` loop, one step at a time: `cbv` reads it through this, since the loop's own recursion is
-opaque. -/
-theorem loopId {β : Type} (b : β) (f : Unit → β → Id (ForInStep β)) :
-    Lean.Loop.forIn (m := Id) ⟨⟩ b f = match (f () b).run with
-      | .done v => pure v
-      | .yield v => Lean.Loop.forIn (m := Id) ⟨⟩ v f := by
-  rw [Lean.Loop.forIn_eq_of_monadTail]
-  rfl
 
 end Properties.NetworkScan.Honest

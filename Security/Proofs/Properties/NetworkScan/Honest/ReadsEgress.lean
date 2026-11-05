@@ -1,4 +1,4 @@
-import Proofs.Properties.NetworkScan.Honest.Defs
+import Proofs.Properties.NetworkScan.Honest.Loop
 
 /-!
 # The honest instance's egress file reads no padding
