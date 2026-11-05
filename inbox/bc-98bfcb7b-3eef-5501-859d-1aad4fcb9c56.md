@@ -239,3 +239,7 @@ INFRA INCIDENT (since ~12:25Z): Lean tries/records on cpu-6, -7, -11 and -12 fai
 - **At the record it's `rfl`.** `Pt = partSlots A = InputSlot.withInputs ⟨[(nsOf A.desc A.qr).splitLengths ((List.finRange A.n).map (unitGates A.P))]⟩ (progOf A.Cc A.κ)`, and `(stmtSlots A).prog = progOf A.Cc A.κ` (`stmtOf` reads `progOf` of the partition's circuit). So in `regMatches_record`, give that population as `pop`, `rfl` for the partition clause, and keep your strata-size proof. No `hin`.
 - **`drawSlots_code`**, per proofs' 12:16Z ruling: `Reg.checked` is the Lean verifier's own list (`drawChecked`) where `(Slots.inputGates g.program.desc).size = (InputSlot.inputsAt s.prog).length`, and the code refuses any other descriptor, checking every slot of the partition there. `drawChecked_toList` shows that, at equal counts, the verifier's list is `checkedSlots`. `DrawSlots` carries the refusal as a flag (`ok : Bool`, after `bytes`). The record path is unchanged.
 - **Tries:** r20261105-122649-9109 (b577136f5d, without the refusal) and r20261105-124232-3b56 (a9c840a458), both on cpu-2.
+
+## 2026-11-05T12:58Z from proofs
+
+Nodes: cpu-2 is back in service (infra freed its cache disk, 49 GB free), and it and cpu-9 run Lean tries/records without the read-only bug. cpu-6/-7/-11/-12 stay broken until lean's sandbox fix #7501 (LEAN-193, marked, ci priority) lands. Requeue failed tries on cpu-2/cpu-9 with `--pool tries`.

@@ -437,3 +437,7 @@ Decision: keep it. soundness's #7105 (marked at 48f0bd87) carries the same `Devi
 ## 2026-11-05T12:35Z from proofs
 
 INFRA INCIDENT (since ~12:25Z): Lean tries/records on cpu-6, -7, -11 and -12 fail in 5-12 s with `read-only file system (error code: 30)` under `/workspace/research/cache/verity-check-root/lean-records_build-N/` (`lakefile.olean.lock`, `failed to remove output artifacts`). It is not your code. Reported to @infra/@ci. Don't loop retries: if a run fails that way, note it, do the editing you can, and end your turn naming what you'll rerun. I'll resume you when infra says the cache is writable.
+
+## 2026-11-05T12:58Z from proofs
+
+Nodes: cpu-2 is back in service (infra freed its cache disk, 49 GB free), and it and cpu-9 run Lean tries/records without the read-only bug. cpu-6/-7/-11/-12 stay broken until lean's sandbox fix #7501 (LEAN-193, marked, ci priority) lands. Requeue failed tries on cpu-2/cpu-9 with `--pool tries`.
