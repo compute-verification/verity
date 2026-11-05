@@ -58,15 +58,16 @@ It writes ``DIR/unread.json`` (every module's counts and unread declarations, by
 seeds) and ``DIR/unread.md`` (the summary). The owners of an area are the `owner` handles the locks give the guarantees
 and assumptions its modules declare: the tree has no other map from Lean to lanes.
 
-**The ratchet.** Each area of the analysis's trees has a cap on its wholly unread modules and on their lines
-(`unread-caps.json`, `CAPS`), and a count may only come down: ``--caps FILE`` exits 1 when an area's count rose above its
-cap (an area the file doesn't list has a cap of nothing), and ``--update-caps`` lowers each cap to its count, never
-raising one. The Lean check runs it (`check`, from `lean_audit.py`) on the facts its audits wrote, with no build; there
-the report is the short one (`analyse` without ``full``: no chains or `kept_only_by`). Neither this file nor the caps is
-in an audit's key (`lean_audit.NOT_READ`), so changing them reruns no audit. Those facts come from the builds of
-`Security` and `Security/Proofs` alone: a module of `Security/Properties` that `Security/Proofs` doesn't import has no
-`.olean` there and is reported `unbuilt`, so a spec definition that only such a module reads counts as unread. None does
-today (``--build`` builds all three trees). Stdlib only.
+**The ratchet.** Each area of the analysis's trees has a cap on its wholly unread modules and on their declarations
+(`unread-caps.json`, `CAPS`), not on their lines, which a rewrap changes. A count may only come down: ``--caps FILE``
+exits 1 when an area's count rose above its cap (an area the file doesn't list has a cap of nothing), and
+``--update-caps`` lowers each cap to its count, never raising one. The Lean check runs it (`check`, from
+`lean_audit.py`) on the facts its audits wrote, with no build; there the report is the short one (`analyse` without
+``full``: no chains or `kept_only_by`). Neither this file nor the caps is in an audit's key (`lean_audit.NOT_READ`), so
+changing them reruns no audit. Those facts come from the builds of `Security` and `Security/Proofs` alone: a module of
+`Security/Properties` that `Security/Proofs` doesn't import has no `.olean` there and is reported `unbuilt`, so a spec
+definition that only such a module reads counts as unread. None does today (``--build`` builds all three trees). Stdlib
+only.
 """
 from __future__ import annotations
 
@@ -119,9 +120,10 @@ CAUTIOUS_TEXT = {"defeq": "`@[defeq]` theorems", "coercion": "coercion instances
 #: a module of checks or vectors (its name's last component): theorems over concrete values that test the definitions
 #: they mention, which nothing reads by design. It is kept when it mentions a declaration that is read (`checks`)
 CHECKS = re.compile(r"(?:Checks|Vectors)$")
-#: the ratchet's caps: each area's wholly unread modules and their lines, which may only come down (`ratchet`)
+#: the ratchet's caps: each area's wholly unread modules and their declarations, which may only come down (`ratchet`)
 CAPS = HERE / "unread-caps.json"
 CAPS_SCHEMA = "lean-unread-caps/v1"
+CAP_KEYS = ("modules", "declarations")
 #: the files outside Lean whose full mention of a declaration keeps it (a test or tool reading it by name)
 CITED_BY = (".py", ".json", ".toml", ".rs", ".sh", ".yaml", ".yml", ".txt", ".ts", ".js", ".cfg")
 #: the files whose naming of a module keeps it: code, and a suite's declared inputs (`pyproject.toml`); data that only
@@ -837,13 +839,18 @@ def analyse(tree: Tree, facts: Facts, full: bool = True) -> dict:
 
 
 def counts(rep: dict) -> dict[str, dict[str, int]]:
-    """Each analysis area's wholly unread modules and their lines, the areas with none aside: what the caps bound."""
-    return {a: {"modules": v["wholly_unread_modules"], "lines": v["wholly_unread_lines"]}
+    """Each analysis area's wholly unread modules and their declarations, the areas with none aside: what the caps
+    bound."""
+    decls = Counter()
+    for r in rep["modules"].values():
+        if r["status"] in ("unread", "unread aggregator"):
+            decls[r["area"]] += r["unread"]
+    return {a: {"modules": v["wholly_unread_modules"], "declarations": decls[a]}
             for a, v in sorted(rep["areas"].items()) if v["package"] in rep["analysis"] and v["wholly_unread_modules"]}
 
 
 def load_caps(path: Path) -> dict[str, dict[str, int]]:
-    """The caps a file holds ({area: {"modules", "lines"}}); ValueError when it isn't a caps file."""
+    """The caps a file holds ({area: {"modules", "declarations"}}); ValueError when it isn't a caps file."""
     doc = json.loads(path.read_text())
     if not isinstance(doc, dict) or doc.get("schema") != CAPS_SCHEMA or not isinstance(doc.get("areas"), dict):
         raise ValueError(f"{path} is not a {CAPS_SCHEMA} file")
@@ -856,24 +863,24 @@ def caps_text(areas: dict[str, dict[str, int]]) -> str:
 
 def ratchet(rep: dict, caps: dict[str, dict[str, int]], where: str = str(CAPS.relative_to(ROOT))
             ) -> tuple[list[str], dict[str, dict[str, int]]]:
-    """(a failure for each area whose wholly unread modules, or their lines, rose above its cap in ``where``; the caps,
-    each lowered to its count). The count only comes down: an area the caps don't list has a cap of nothing."""
-    now, fails = counts(rep), []
+    """(a failure for each area whose wholly unread modules, or their declarations, rose above its cap in ``where``; the
+    caps, each lowered to its count). The count only comes down: an area the caps don't list has a cap of nothing."""
+    now, fails, zero = counts(rep), [], dict.fromkeys(CAP_KEYS, 0)
     for area in sorted(set(now) | set(caps)):
-        got, cap = now.get(area, {"modules": 0, "lines": 0}), {"modules": 0, "lines": 0} | caps.get(area, {})
-        if got["modules"] <= cap["modules"] and got["lines"] <= cap["lines"]:
+        got, cap = now.get(area, zero), zero | caps.get(area, {})
+        if all(got[k] <= cap[k] for k in CAP_KEYS):
             continue
         mods = sorted((m for m, r in rep["modules"].items() if r["area"] == area and r["status"] in ("unread", "unread aggregator")),
-                      key=lambda m: (-rep["modules"][m]["lines"], m))
-        shown = ", ".join(f"{m} ({rep['modules'][m]['lines']} lines)" for m in mods[:12])
+                      key=lambda m: (-rep["modules"][m]["unread"], m))
+        shown = ", ".join(f"{m} ({rep['modules'][m]['unread']} declarations)" for m in mods[:12])
         more = f" and {len(mods) - 12} more" if len(mods) > 12 else ""
-        fails.append(f"unread: {area} has {got['modules']} wholly unread modules ({got['lines']} lines), above its cap of "
-                     f"{cap['modules']} ({cap['lines']} lines) in {where}: {shown}{more}. Nothing "
+        fails.append(f"unread: {area} has {got['modules']} wholly unread modules ({got['declarations']} declarations), above "
+                     f"its cap of {cap['modules']} ({cap['declarations']} declarations) in {where}: {shown}{more}. Nothing "
                      f"reads such a module: delete it, or seed it: a lock/code reference (name the module, or a declaration "
                      f"of it, in a lock's text or in code that reads it). A module of checks (its name ending in Checks or "
                      f"Vectors) is kept once it mentions a declaration that is read, and a module moved to another area "
                      f"takes its cap with it")
-    lowered = {a: {k: min(v.get(k, 0), now.get(a, {}).get(k, 0)) for k in ("modules", "lines")} for a, v in caps.items()}
+    lowered = {a: {k: min(v.get(k, 0), now.get(a, zero)[k]) for k in CAP_KEYS} for a, v in caps.items()}
     return fails, {a: v for a, v in lowered.items() if v["modules"]}
 
 
@@ -894,7 +901,7 @@ def check(root: Path, files: list[str], facts: list[Path], out: Path, caps: Path
         (out / "unread-caps.json").write_text(caps_text(lowered))
     now = counts(rep)
     return {"failures": fails, "lower": lower, "seconds": round(time.monotonic() - t, 1),
-            "areas": {a: {"count": now.get(a, {"modules": 0, "lines": 0}), "cap": cap.get(a)} for a in sorted(set(now) | set(cap))}}
+            "areas": {a: {"count": now.get(a, dict.fromkeys(CAP_KEYS, 0)), "cap": cap.get(a)} for a in sorted(set(now) | set(cap))}}
 
 
 def fmt(n: int) -> str:

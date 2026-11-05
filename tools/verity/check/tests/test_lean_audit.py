@@ -940,7 +940,7 @@ def check(root, files, facts, out, caps=CAPS):
     (out / "seen.json").write_text(json.dumps(mods))
     cap = json.loads(caps.read_text())
     return {"failures": [f"unread: {len(mods)} above {cap}"] if len(mods) > cap else [], "lower": len(mods) < cap,
-            "seconds": 0.0, "areas": {"A": {"count": {"modules": len(mods), "lines": 0}, "cap": cap}}}
+            "seconds": 0.0, "areas": {"A": {"count": {"modules": len(mods), "declarations": 0}, "cap": cap}}}
 '''
 SPEC = {"lakefile.toml": "", "lean-toolchain": "v1\n", "lake-manifest.json": json.dumps({"packages": []}), "lean-audit.json": "{}"}
 

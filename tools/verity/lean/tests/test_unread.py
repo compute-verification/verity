@@ -204,23 +204,24 @@ def test_the_ratchet_fails_when_an_area_s_wholly_unread_modules_rise_and_its_cap
     caps above them, and never raises one."""
     files, caps, out = U.tracked(FIXTURE), tmp_path / "caps.json", tmp_path / "out"
     now = U.counts(U.analyse(U.Tree(FIXTURE, files), U.Facts(FACTS), full=False))
-    assert now == {"Definitions/Dead": {"modules": 1, "lines": 7}, "Definitions/Gone": {"modules": 1, "lines": 1},
-                   "Proofs/Flock": {"modules": 1, "lines": 9}}
+    assert now == {"Definitions/Dead": {"modules": 1, "declarations": 2}, "Definitions/Gone": {"modules": 1, "declarations": 0},
+                   "Proofs/Flock": {"modules": 1, "declarations": 1}}
     r = U.check(FIXTURE, files, [FACTS], out, caps)
     assert len(r["failures"]) == 3 and not r["lower"] and (out / "unread.json").is_file()
     caps.write_text(U.caps_text(now))
     r = U.check(FIXTURE, files, [FACTS], out, caps)
     assert r["failures"] == [] and not r["lower"] and not (out / "unread-caps.json").exists()
-    higher = {a: {"modules": v["modules"] + 1, "lines": v["lines"] + 5} for a, v in now.items()} | {
-        "Proofs/Gone": {"modules": 2, "lines": 9}}
+    higher = {a: {"modules": v["modules"] + 1, "declarations": v["declarations"] + 5} for a, v in now.items()} | {
+        "Proofs/Gone": {"modules": 2, "declarations": 9}}
     caps.write_text(U.caps_text(higher))
     r = U.check(FIXTURE, files, [FACTS], out, caps)
     assert r["failures"] == [] and r["lower"] and U.load_caps(out / "unread-caps.json") == now
-    tight = now | {"Definitions/Dead": {"modules": 1, "lines": 6}}
+    tight = now | {"Definitions/Dead": {"modules": 1, "declarations": 1}}
     caps.write_text(U.caps_text(tight))
     (fail,) = U.check(FIXTURE, files, [FACTS], out, caps)["failures"]
-    assert fail.startswith(f"unread: Definitions/Dead has 1 wholly unread modules (7 lines), above its cap of 1 (6 lines) in "
-                           f"{caps}: Definitions.Dead (7 lines). ") and "delete it, or seed it: a lock/code reference" in fail
+    assert fail.startswith(f"unread: Definitions/Dead has 1 wholly unread modules (2 declarations), above its cap of 1 "
+                           f"(1 declarations) in {caps}: Definitions.Dead (2 declarations). ") and (
+        "delete it, or seed it: a lock/code reference" in fail)
     cli = ["--root", str(FIXTURE), "--facts", str(FACTS), "--out", str(tmp_path / "cli"), "--caps", str(tmp_path / "new.json")]
     assert U.main([*cli, "--update-caps"]) == 0 and U.load_caps(tmp_path / "new.json") == now
     (tmp_path / "new.json").write_text(U.caps_text(higher))
@@ -233,7 +234,7 @@ def test_the_ratchet_fails_when_an_area_s_wholly_unread_modules_rise_and_its_cap
 
 def test_the_kept_caps_are_a_caps_file_as_update_caps_writes_it():
     caps = U.load_caps(U.CAPS)
-    assert caps and all(v["modules"] > 0 and v["lines"] > 0 for v in caps.values())
+    assert caps and all(set(v) == set(U.CAP_KEYS) and v["modules"] > 0 for v in caps.values())
     assert U.CAPS.read_text() == U.caps_text(caps), "write it with `unread.py --caps ... --update-caps`"
 
 

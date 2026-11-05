@@ -65,9 +65,9 @@ The audits of `Security` and `Security/Proofs` (`UNREAD_FACTS`) also write what 
 (`check.py`'s `unread_facts`), and their passes are stored, and reused, only with those facts beside them (`unread/` in
 the cache, `UNREAD_KEPT` last used kept). After the audits, the run joins both packages' facts, this run's or the reused
 passes', and runs the ratchet on wholly unread modules (`unread_ratchet`, `unread.py`): an area of the analysis whose
-wholly unread modules, or their lines, rose above its cap in `unread-caps.json` fails the run (`unread` in `audit.json`'s
-`failed`), and one that came down leaves the lowered caps in `unread/` under ``--out``. It builds nothing and takes
-seconds. `unread.py` and the caps are out of every key (`NOT_READ`), so a change to either reruns no audit.
+wholly unread modules, or their declarations, rose above its cap in `unread-caps.json` fails the run (`unread` in
+`audit.json`'s `failed`), and one that came down leaves the lowered caps in `unread/` under ``--out``. It builds nothing
+and takes seconds. `unread.py` and the caps are out of every key (`NOT_READ`), so a change to either reruns no audit.
 
 A machine without a package's dependencies restores them from the evidence store instead of cloning them from GitHub, which
 throttles anonymous clones from shared addresses. `lean-deps.json` pins one bundle per `lake-manifest.json`'s fetched entries + `lean-toolchain`
@@ -263,8 +263,9 @@ def unread_ratchet(pkgs: list[str], failed: list[str], facts: dict[str, Path], f
             f"the caps at the counts, to copy over {u.CAPS.relative_to(ROOT)} (or `unread.py --caps "
             f"{u.CAPS.relative_to(ROOT)} --update-caps`)")
     if not r["failures"]:
-        n = sum(v["count"]["modules"] for v in r["areas"].values())
-        log(f"lean-audit: unread: PASS in {r['seconds']} s: {n} wholly unread modules, no area above its cap")
+        n, d = (sum(v["count"][k] for v in r["areas"].values()) for k in ("modules", "declarations"))
+        log(f"lean-audit: unread: PASS in {r['seconds']} s: {n} wholly unread modules ({d} declarations), no area above "
+            f"its cap")
     return r
 
 
