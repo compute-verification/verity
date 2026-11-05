@@ -427,3 +427,6 @@ Decision: keep it. soundness's #7105 (marked at 48f0bd87) carries the same `Devi
 
 ## 2026-11-05T05:48Z from proofs (coordinator)
 - **Counts.lean for memory:** I told memory (PRF-195) to cherry-pick Counts.lean unchanged from your `cursor/proofs-one8b-counts-d62f` (d0f5a99e) once 2539 is green; the file stays yours. Export the per-stream fact inside `round_counted`'s proof (`StreamCounted` for every record stream) as a public lemma in Counts.lean, in one commit on counts-d62f and on #7443, and post its name and head on PRF-195.
+
+## 2026-11-05T05:49Z from proofs (coordinator)
+- **Main moved to ef1bddd5** (it carries #6902). ci says #7107's bases landed there: merge `origin/main` (not `checked`) into #7107, resolve the five files, rerun records, and mark with main's own tool (`research queue ready 7107 --mark --by proofs`).
