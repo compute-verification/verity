@@ -39,25 +39,41 @@ form, `s* = √(w β h C / (o Λ))`, when `c(s) = f + o s` and every proof block
 """
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from math import ceil, exp, expm1, floor, fsum, inf, lgamma, log, log1p, log2, nextafter, sqrt
+from pathlib import Path
 
 from verity.core.protocols.profile import HARM_MARGIN, IntegrityProfile, Stratified, Stratum
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound
 from verity.core.protocols.sampled_proofs.one_stage.partition import UNIT_CLASS_MAX, unit_class
 
-#: ANDs of one SHA-512 compression in Boolean form (hm96 PROTOCOL §5)
+
+def pinned_ands(definition: str, sidecar: str = "lms") -> int:
+    """`definition`'s ANDs as its circuit-check pin records them (`verity.ml.commitments.gates`' `SIDECAR.circuit-check.json`):
+    the AND rows C-Flock proves, the copies that keep a form short (`forms.commit`) among them."""
+    from verity.ml.commitments import gates
+
+    pins = json.loads(Path(gates.__file__).with_name(f"{sidecar}.circuit-check.json").read_text())
+    return pins["definitions"][definition]["and"]
+
+
+#: ANDs of one SHA-512 compression in hm96 PROTOCOL §5's ripple-carry model, no copies: a gate count to compare hashes
+#: by, not what C-Flock proves
 SHA512_ANDS = 58_120
+#: the AND rows C-Flock proves for one SHA-512 compression, `Sha512Compress_v1`'s pin: `compress_gadget`'s ANDs and the
+#: copies it commits
+SHA512_ROWS = pinned_ands("Sha512Compress_v1")
 #: the hiding part of an hm96-sha512 row in circuit: two private compressions (hm96 PROTOCOL §5)
-HM96_ANDS = 116_240
+HM96_ANDS = 2 * SHA512_ROWS
 
 
 def row_ands(nbytes: int) -> int:
-    """In-circuit ANDs to open one hm96-sha512 row of `nbytes` bytes: its digest's private blocks, the length and padding
-    included, and the hiding part (hm96 PROTOCOL §6's table)."""
-    return HM96_ANDS + SHA512_ANDS * ceil((nbytes + 17) / 128)
+    """In-circuit AND rows to open one hm96-sha512 row of `nbytes` bytes: its digest's private blocks, the length and
+    padding included, and the hiding part (hm96 PROTOCOL §6's table, at `SHA512_ROWS` a compression)."""
+    return HM96_ANDS + SHA512_ROWS * ceil((nbytes + 17) / 128)
 
 
 @dataclass(frozen=True)
@@ -1000,9 +1016,9 @@ def sqrt_grain(beta: float, h: float, target: float, o: float, delta: float, wei
 
 
 __all__ = ["Candidate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
-           "Objective", "PROVING_ONLY", "Plan", "PlanBounds", "ReplayDomain", "SHA512_ANDS", "TemplateCost",
+           "Objective", "PROVING_ONLY", "Plan", "PlanBounds", "ReplayDomain", "SHA512_ANDS", "SHA512_ROWS", "TemplateCost",
            "acceptance_parts",
            "certify", "density_bound", "density_exact", "fill", "for_budget", "for_target", "frontier", "grain_costs",
            "grain_optimum", "leak_count", "leak_draws", "ln_bound", "ln_upper", "loc_bits", "max_harm",
-           "max_harm_check", "needs_benchmark", "overlaps", "perturb", "replay_cost", "row_ands", "sensitivity",
+           "max_harm_check", "needs_benchmark", "overlaps", "perturb", "pinned_ands", "replay_cost", "row_ands", "sensitivity",
            "sqrt_grain", "structure", "template_cost", "touched", "weigh", "work_draws", "work_law"]
