@@ -27,6 +27,7 @@ public import Proofs.Flock.SessionLoop.Concrete.Stmt
 public import Proofs.Flock.SessionLoop.Concrete.Scope
 public import Proofs.Flock.SessionLoop.Concrete.Total
 public import Proofs.Flock.SessionLoop.Concrete.Trace
+public import Proofs.Flock.SessionLoop.Concrete.Live
 public import Proofs.Flock.Recursive
 public import Proofs.Flock.C3
 public import Proofs.Flock.Claims.Complete
