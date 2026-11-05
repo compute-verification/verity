@@ -14,6 +14,7 @@ public import Proofs.Accounting.TS.Fork
 public import Proofs.Accounting.TS.Drawn
 public import Proofs.Accounting.TS.Keyed
 public import Proofs.Pouw.RelativeSecurity
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # The tensor–scalar model's proofs

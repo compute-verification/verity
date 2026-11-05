@@ -21,9 +21,10 @@ judgement; `check.py` holds the policy.
 - `pins`: for each name in `pins`, its kind, where its declaration starts (`at`: line, codepoint column), signature,
   axioms, `Prop` hypotheses, the hash of its type, and the
   definitions its statement reads, followed through every definition, inductive type and constructor declared under
-  `meaning`, with their source lines and the constants under each one's declaration's name (`family`) that its own type,
+  `recorded` (`meaning` and the prefixes of `trees`' `except`, whose definitions a statement reads from the proofs tree),
+  with their source lines and the constants under each one's declaration's name (`family`) that its own type,
   value or constructors use (`reads`, `own`: what its record hashes with it), and the constants other than theorems outside
-  `meaning` where that walk
+  `recorded` where that walk
   stops, with their modules (`outside`). Signatures print with no notation, since no notation is loaded: nothing a
   package declares can change how its statements read.
 - `assumption_reads`: for each name under `assumptions`, and each premise head and named hypothesis a pin reports, that
@@ -37,9 +38,9 @@ judgement; `check.py` holds the policy.
   before that application (`negated`) and the binders on the way (`binders`: `∀`, `→` for a proposition, `∃`), read as
   written: nothing is unfolded; and its `conclusion`, split at `∧`, with what each conjunct applies (`conclusionOf`). A
   statement that is a definition under `meaning` applied under binders has the same read of it with that definition
-  unfolded once (`lifted`, `liftOf`), as `shape` reads it. Beside them, the definitions under `meaning` the head unfolds
-  through (`chain`, `headChain`); and each pin's `accept_all`, the verifiers accepting everything it applies
-  (`acceptAllOf`).
+  unfolded once (`lifted`, `liftOf`), as `shape` reads it. Beside them, the definitions under `recorded` the head unfolds
+  through and the bound it ends at, one of `bounds` (`chain`, `headChain`); and each pin's `accept_all`, the verifiers
+  accepting everything it applies (`acceptAllOf`).
 - each pin's `inline`: the `Prop` binders of its statement, with a definition under `meaning` it applies unfolded once
   (`liftOf`), in each conjunct, instance binders aside, each split past its leading `∀` over data and at `∧`
   (`inlineParts`): as printed with those `∀`s, its head as written and past reducible unfolding (`premiseHead`), whether
@@ -323,7 +324,7 @@ def readsWhere (env : Environment) (table : Std.HashMap Name (Array Name)) (inSc
       stack := stack ++ meaningDeps env table ci
   return (out, outside)
 
-/-- `readsWhere` over the modules under `meaning`: what a guarantee's statement reads. -/
+/-- `readsWhere` over the modules under `meaning`: what a guarantee's statement reads, with `recorded` for `meaning`. -/
 def reads (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning : Array Name) (roots : Array Name) :
     Array (Name × Name × ConstantInfo) × Array (Name × Name) :=
   readsWhere env table (under meaning) roots
@@ -773,24 +774,28 @@ partial def bodyHead (t : Expr) : MetaM (Option Name × Bool × Array String) :=
     else
       return (b.getAppFn.constName?, false, kinds)
 
-/-- The definitions declared under `meaning` that a statement's head unfolds through: past its `∀` and `∃` binders and a
-`¬`, its head when it is one, then the head of its value at the arguments (`Expr.beta`, as `liftOf` unfolds), and so on,
-at most `n` deep, so that `¬ G' …` can be read against a `G` that unfolds to `G'`. -/
-partial def headChain (env : Environment) (meaning : Array Name) (t : Expr) : Nat → MetaM (Array Name)
+/-- The definitions declared under `recorded` (the modules a statement's record follows) that a statement's head unfolds
+through: past its `∀` and `∃` binders and a `¬`, its head when it is one, then the head of its value at the arguments
+(`Expr.beta`, as `liftOf` unfolds), and so on, at most `n` deep, so that `¬ G' …` can be read against a `G` that unfolds
+to `G'`; and, last, the head it ends at when that is one of `bounds` (`check.py`'s `BOUND_HEADS`), so that a statement
+whose definition hides its `≤` (`PartitionBound`) concludes a bound as one stated with `≤` does. -/
+partial def headChain (env : Environment) (recorded bounds : Array Name) (t : Expr) : Nat → MetaM (Array Name)
   | 0 => return #[]
   | n + 1 => forallTelescope t fun _ b => do
     let b := b.consumeMData
     if b.isAppOfArity ``Exists 2 then
       match b.appArg!.consumeMData with
-      | .lam x ty body bi => withLocalDecl x bi ty fun y => headChain env meaning (body.instantiate1 y) (n + 1)
+      | .lam x ty body bi => withLocalDecl x bi ty fun y => headChain env recorded bounds (body.instantiate1 y) (n + 1)
       | _ => return #[]
     else
       let b := if b.isAppOfArity ``Not 1 then b.appArg!.consumeMData else b
       let .const g us := b.getAppFn | return #[]
+      if bounds.contains g then return #[g]
       let some (.defnInfo v) := env.find? g | return #[]
       let some i := env.getModuleIdxFor? g | return #[]
-      unless us.length == v.levelParams.length && under meaning (moduleName env i) do return #[]
-      return #[g] ++ (← headChain env meaning ((v.value.instantiateLevelParams v.levelParams us).beta b.getAppArgs) n)
+      unless us.length == v.levelParams.length && under recorded (moduleName env i) do return #[]
+      return #[g] ++
+        (← headChain env recorded bounds ((v.value.instantiateLevelParams v.levelParams us).beta b.getAppArgs) n)
 
 partial def lamBody : Expr → Expr
   | .lam _ _ b _ => lamBody b
@@ -917,7 +922,7 @@ def inlineOf (env : Environment) (meaning : Array Name) (moduleOf : Name → Opt
           (toJson (!d.type.hasFVar))).setObjVal! "outer" (toJson (cs.length == 1 && i < outer)))
     return acc
 
-def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning premises : Array Name)
+def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning recorded bounds premises : Array Name)
     (listed built : NameSet) (axioms : Std.HashMap Name NameSet)
     (ranges : Std.HashMap Name DeclarationRanges) (rs : Array (Name × Name × ConstantInfo) × Array (Name × Name)) (n : Name) :
     MetaM Json := do
@@ -956,7 +961,7 @@ def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning
       let read (t : Expr) : MetaM (List (String × Json)) := do
         let (h, neg, ks) ← bodyHead t
         let (cs, absurd) ← conclusionOf env meaning t
-        let chain ← headChain env meaning t 8
+        let chain ← headChain env recorded bounds t 8
         return [("head", toJson (h.map toString)), ("negated", toJson neg), ("binders", toJson ks),
           ("chain", toJson (chain.map toString)), ("conclusion", toJson cs), ("absurd", toJson absurd)]
       let lifted ← (do
@@ -1055,6 +1060,9 @@ unsafe def main (args : List String) : IO UInt32 := do
   let cfg ← IO.ofExcept (Json.parse (← IO.FS.readFile cfgPath))
   let roots := names cfg "roots"
   let meaning := names cfg "meaning"
+  let further := (names cfg "recorded").filter (!meaning.contains ·)
+  let recorded := meaning ++ further
+  let bounds := names cfg "bounds"
   let premises := names cfg "premises"
   let listed := (names cfg "assumptions").foldl NameSet.insert {}
   let allowed := names cfg "allowed"
@@ -1080,7 +1088,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   let mut ranges : Std.HashMap Name DeclarationRanges := {}
   for h : i in [0:mnames.size] do
     let m := mnames[i]
-    if !under roots m && !under meaning m then continue
+    if !under roots m && !under recorded m then continue
     let data := env.header.moduleData[i]!
     for (n, r) in entriesOf DeclarationRanges data declRangeExt.name do
       ranges := ranges.insert n r
@@ -1137,7 +1145,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   let opts : Options := (({} : Options).set `pp.proofs false).set `format.width (100 : Nat)
   let ctx : Core.Context := { fileName := "<audit>", fileMap := default, maxHeartbeats := 0, options := opts }
   let readsOf : Std.HashMap Name (Array (Name × Name × ConstantInfo) × Array (Name × Name)) := Id.run do
-    let tasks := pins.map fun p => Task.spawn fun _ => (env.find? p).map fun ci => reads env table meaning ci.type.getUsedConstants
+    let tasks := pins.map fun p => Task.spawn fun _ => (env.find? p).map fun ci => reads env table recorded ci.type.getUsedConstants
     let mut acc := {}
     for h : i in [0:pins.size] do
       if let some rs := tasks[i]!.get then
@@ -1156,7 +1164,8 @@ unsafe def main (args : List String) : IO UInt32 := do
   -- each pin's facts are a function of the environment and the maps above, so each pin is a task, joined in order
   let tasks ← pins.mapM fun p => IO.asTask do
     let (out, _) ← (MetaM.run' do
-      return (p.toString, ← pinInfo env table meaning premises listed built axioms ranges (readsOf.getD p (#[], #[])) p)).toIO
+      return (p.toString, ← pinInfo env table meaning recorded bounds premises listed built axioms ranges
+        (readsOf.getD p (#[], #[])) p)).toIO
         ctx { env }
     return out
   let pinned ← tasks.mapM fun t => IO.ofExcept t.get

@@ -41,6 +41,11 @@ a verdict: `check`'s Lean audit rebuilds every record of the merged tree and fai
 train's (`--regenerate`) commits the regenerated records on landing, and the landing DM shows each one that changed
 against `main`.
 
+Git runs a driver from the worktree of the side merged into, so a branch whose checkout took older merge rules would merge
+`main`, or another branch, by those (`deferred`): when `origin/main` has changed this file or `check.py` since the checkout took
+them, and the checkout neither edited them nor committed a `merge.py` of its own, this file runs `origin/main`'s copy of its
+directory instead and says so on stderr. `research queue` runs the drivers of the tip it merges onto already (`base_drivers`).
+
 The layer rules (`layers`), which two branches that each widen a layer for a guarantee both change, merge field by field: `imports`
 and `except` as lists, `why` as a list of its `; ` clauses (`layers`). Every list of names (the roots, `meaning`, `proved_in`,
 `claims.modules`, `shape.premises`...), which two branches that each add a module both change, merges as a list (`items`). For a `.lean` file (`--lean`, `lean-imports` in
@@ -104,6 +109,10 @@ DEEPER = {"shape[inline]"}
 #: the witness rule's sections, merged entry by entry with theirs' value where the sides disagree (`judged`)
 JUDGED = {"unwitnessed", "witnesses"}
 MISSING = object()
+#: the landed drivers a checkout's older one defers to (`deferred`), and the files whose history decides that: this file and
+#: the `check.py` it loads
+MAIN = "origin/main"
+RULES = ("tools/verity/lean/merge.py", "tools/verity/lean/check.py")
 
 
 def one(path: str, o, a, b, why: list[str]):
@@ -880,6 +889,38 @@ def load(path: Path) -> dict:
     return A.as_guarantees(json.loads(text)) if text.strip() else {}
 
 
+def deferred(argv: list[str]) -> int | None:
+    """Run the driver ``argv`` names with `MAIN`'s copy of this directory when git runs this file from its worktree, unedited,
+    and `MAIN` has changed the merge rules (`RULES`) since this checkout took them while the checkout committed no `merge.py`
+    of its own: that run's exit status, else None, and this file merges. Git runs a driver from the worktree of the side
+    merged into, so a branch that merges another into an older checkout would merge by the rules that checkout took: one from
+    before `held` applies a side's drop of `shape.inline` premises the merged tree still prints, and that tree's records fail
+    `guarantees.inline-hypothesis`. Without `MAIN` (a test's repository) this file merges, and a copy outside the worktree
+    (the one this runs, and those `research queue`'s `base_drivers` runs, the drivers of the tip it merges onto) never
+    defers."""
+
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", *args], capture_output=True)
+    top = git("rev-parse", "--show-toplevel")
+    if top.returncode or (Path(top.stdout.decode().strip()) / "tools" / "verity" / "lean").resolve() != HERE:
+        return None
+    tip = git("rev-parse", "-q", "--verify", f"{MAIN}^{{commit}}").stdout.decode().strip()
+    if (not tip or git("diff", "--quiet", "HEAD", "--", *RULES).returncode
+            or not git("rev-list", "-n1", tip, "^HEAD", "--", *RULES).stdout.strip()
+            or git("rev-list", "-n1", "HEAD", f"^{tip}", "--", RULES[0]).stdout.strip()):
+        return None
+    ls = git("ls-tree", "-z", tip, "--", f"{Path(RULES[0]).parent}/").stdout
+    with tempfile.TemporaryDirectory(prefix="lean-merge-driver-") as tmp:
+        for e in filter(None, ls.split(b"\0")):
+            meta, path = e.decode().split("\t", 1)
+            if meta.split()[1] == "blob":
+                (out := Path(tmp) / path).parent.mkdir(parents=True, exist_ok=True)
+                out.write_bytes(git("cat-file", "blob", meta.split()[2]).stdout)
+        print(f"merge.py: merging with {MAIN}'s drivers ({tip[:10]}), which changed the merge rules since this checkout "
+              f"took them", file=sys.stderr)
+        return subprocess.run([sys.executable, str(Path(tmp) / RULES[0]), *argv]).returncode
+
+
 def install(repo: Path) -> None:
     """Register the driver in ``repo``'s git config, as this file's path from the top of the worktree (git runs drivers
     there)."""
@@ -927,6 +968,8 @@ def main(argv: list[str]) -> int:
         return 0
     if len(a.files) not in (3, 4):
         ap.error("name BASE OURS THEIRS [PATH], or --install, or --normalize FILE...")
+    if (rc := deferred(argv)) is not None:
+        return rc
     base, ours, theirs = a.files[:3]
     path = a.files[3] if len(a.files) == 4 else ours
     if a.lean or a.lakefile or a.caps:

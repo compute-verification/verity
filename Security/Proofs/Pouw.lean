@@ -198,6 +198,7 @@ public import Proofs.Pouw.TileBound.WinogradStrassen
 public import Proofs.Pouw.TileBound.Witness
 public import Proofs.Pouw.Window
 public import Proofs.Pouw.Witness
+public import Proofs.Pouw.Lemmas.Game
 
 /-!
 # PoUW's proofs

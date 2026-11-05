@@ -1,7 +1,7 @@
 module
 
 public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Definitions.Accounting.Guarantees.RequirementPouw
+public import Proofs.Accounting.Lemmas.RequirementPouw
 
 /-!
 # PoUW's credits and help when a node runs a declared circuit as placed
