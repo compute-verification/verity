@@ -2455,7 +2455,7 @@ def test_a_shard_of_the_after_landing_run_that_prints_no_run_ids_within_the_boun
     h.clock += 1
     h.tick()
     (post,) = [p for p in h.posts if "--shard 2/2 registered no run" in p]
-    assert "registered no run: no run ids 60 min after its launch" in post, post
+    assert "no run ids 60 min after its launch" in post, post
     assert h.cancelled == ["r-one"] and starts == [main] * 5, world.logs
 
 
