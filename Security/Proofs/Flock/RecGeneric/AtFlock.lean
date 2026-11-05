@@ -35,9 +35,8 @@ every statement `Flock.Guarantees.RecursiveKSEveryAtRec`. The contract reads V\*
 accepts, and the deployed compiled verifier accepts only dense statements, so at the deployment every statement needs
 V\*'s dense facts alone.
 
-The link term is not traded for `FdevV`'s: `FdevV` searches its loop's reruns even where its first rerun gives nothing,
-which its declared cost doesn't charge, while the gated link's cost charges every rerun it names (`RunFinder.finder`),
-so bits read off `linkPlan` charge what they search.
+The link term is the gated link's on the composite's reruns (`linkPlan`), whose cost charges every rerun it names
+(`RunFinder.finder`), so bits read off it charge what they search.
 
 Statements only: definitions, no proofs.
 -/

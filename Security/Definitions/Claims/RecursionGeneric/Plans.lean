@@ -11,8 +11,8 @@ Plans that need no inner protocol:
   `B_I` (`Claims.Recursion.BinnerV`'s finder).
 * `linkPlan k M`: the deviation finder's plan, gated: guess a round `j`, ask whether a rerun forked at `j` from a shared
   prefix gives; only if it does, ask up to `M` more forks at `j` and search the first and the first of them that gives.
-  At the composite's reruns it is `Claims.Recursion.FdevV`'s finder with its search gated by the first rerun (`FdevV`
-  searches the loop even where the first rerun gives nothing, which its declared cost doesn't charge).
+  At the composite's reruns it is `Claims.Recursion.FdevV`'s finder, which is gated by the first rerun in the same way
+  (`linkOutV`, `linkCost`).
 
 Flock's terms are plans too, which only its instance reads (`Proofs.Flock.RecGeneric.Plans`).
 
