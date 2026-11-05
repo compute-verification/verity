@@ -29,6 +29,13 @@ def _placed(tmp_path, monkeypatch):
     monkeypatch.setattr(CHECK, "PLACED", tmp_path / "placed.json")
 
 
+@pytest.fixture(autouse=True)
+def roomy_disk(monkeypatch, tmp_path):
+    """The machine's own /workspace and check cache never block a slot `status_doc` reads in these tests."""
+    monkeypatch.setattr(CHECK.SLOT, "DISK", tmp_path / "no-disk")
+    monkeypatch.setattr(CHECK.SLOT, "cache_disk", lambda: tmp_path / "no-disk")
+
+
 def slot(name: str, holder: dict | None = None, blocked: str | None = None, upcoming: list | None = None) -> dict:
     return {"name": name, "cpus": "0-47", "windows": None, "lead": 30, "holder": holder, "blocked": blocked, "upcoming": upcoming or []}
 
