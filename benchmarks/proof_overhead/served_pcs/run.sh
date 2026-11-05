@@ -3,7 +3,8 @@
 # same bytes as hm96 rows. Builds the crate inside a Flock b684b12 checkout with this tree's patches, as
 # verity/ml/flock/check_build.sh does, in a scratch directory it deletes. Run from the tree:
 #   research run --on auto --cwd source -- bash benchmarks/proof_overhead/served_pcs/run.sh M="26 28 30"
-# env: M, RATES, CLAIMS, ROW_BYTES (crate/src/main.rs), RUST_TOOLCHAIN (default check_build.sh's pin)
+# env: M, RATES, CLAIMS, ROW_BYTES (crate/src/main.rs), HASHES (the PCS leaves to run, each its own process; default
+# "hm96-sha512 sha512"), RUST_TOOLCHAIN (default check_build.sh's pin)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -27,4 +28,10 @@ grep -q '"crates/flock-live"' Cargo.toml || sed -i 's|    "crates/flock-transcri
 sed -i 's|    "crates/flock-transcript",|    "crates/flock-transcript",\n    "crates/served-pcs",|' Cargo.toml
 cargo build --release -q -p served-pcs
 { lscpu | grep -E 'Model name|^CPU\(s\)'; nproc; } > "$OUT/host.txt"
-"$CARGO_TARGET_DIR/release/served-pcs" | tee "$OUT/served_pcs.jsonl"
+: > "$OUT/served_pcs.jsonl"
+first=1
+for h in ${HASHES:-hm96-sha512 sha512}; do
+  HASH=$h ROWS_BASELINE=$first "$CARGO_TARGET_DIR/release/served-pcs" 2> "$OUT/stderr-$h.txt" | tee -a "$OUT/served_pcs.jsonl" \
+    || echo "served-pcs under $h failed: $(tail -3 "$OUT/stderr-$h.txt")"
+  first=0
+done

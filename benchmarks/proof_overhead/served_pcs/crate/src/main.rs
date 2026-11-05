@@ -1,9 +1,10 @@
 //! A served window's bits committed with Flock's PCS (Ligerito over F_{2^128}, `hm96-sha512` column leaves) and opened at
 //! evaluation points, against hashing the same bytes as hm96 rows. One JSON object per line on stdout:
-//! `{"kind": "pcs", m, log_inv_rate, claims, bytes, commit_s, open_s, verify_s, proof_bytes}` and
+//! `{"kind": "pcs", hash, m, log_inv_rate, claims, bytes, commit_s, open_s, verify_s, proof_bytes}` and
 //! `{"kind": "hm96_rows", m, bytes, row_bytes, hash_s}`.
 //! env: M (window sizes as log2 of its bits, default "26 28 30"), RATES (log_inv_rate, default "1 2"), CLAIMS (claims per
-//! opening, default "1 16"), ROW_BYTES (hm96 row size, default 4096).
+//! opening, default "1 16"), ROW_BYTES (hm96 row size, default 4096), HASH (the PCS's Merkle leaves: `hm96-sha512`, the
+//! default, or `sha512`), ROWS_BASELINE (0 skips the hm96 rows' timing).
 
 use std::{env, time::Instant};
 
@@ -70,15 +71,20 @@ fn claim(words: &[u128], m: usize, z_skip: F128, x_outer: &[F128]) -> F128 {
         .reduce(|| F128::ZERO, |a, b| a + b)
 }
 
-fn pcs_point(m: usize, log_inv_rate: usize, claims: usize) {
+fn pcs_point(m: usize, log_inv_rate: usize, claims: usize, hash: &str) {
     let (words, packed) = window(m, 0x5e_7ed ^ m as u64);
+    let merkle_hash = match hash {
+        "hm96-sha512" => HashKind::Hm96Sha512,
+        "sha512" => HashKind::Sha512,
+        other => panic!("HASH {other:?}: hm96-sha512 or sha512"),
+    };
     let params = PcsParams {
         m,
         log_inv_rate,
         log_batch_size: INITIAL_K,
         profile: Default::default(),
         num_lanes: None,
-        merkle_hash: HashKind::Hm96Sha512,
+        merkle_hash,
     };
     let t = Instant::now();
     let (commitment, prover_data) = commit(&packed, &params);
@@ -129,7 +135,7 @@ fn pcs_point(m: usize, log_inv_rate: usize, claims: usize) {
     let verify_s = t.elapsed().as_secs_f64();
     let proof_bytes = bincode::serialize(&proof).expect("proof bytes").len();
     println!(
-        "{{\"kind\":\"pcs\",\"m\":{m},\"log_inv_rate\":{log_inv_rate},\"claims\":{claims},\"bytes\":{},\"commit_s\":{commit_s:.4},\
+        "{{\"kind\":\"pcs\",\"hash\":\"{hash}\",\"m\":{m},\"log_inv_rate\":{log_inv_rate},\"claims\":{claims},\"bytes\":{},\"commit_s\":{commit_s:.4},\
          \"open_s\":{open_s:.4},\"verify_s\":{verify_s:.4},\"proof_bytes\":{proof_bytes}}}",
         1usize << (m - 3)
     );
@@ -158,11 +164,15 @@ fn hm96_rows(m: usize, row_bytes: usize) {
 
 fn main() {
     let row_bytes = list("ROW_BYTES", "4096")[0];
+    let hash = env::var("HASH").unwrap_or_else(|_| "hm96-sha512".into());
+    let baseline = env::var("ROWS_BASELINE").map_or(true, |v| v != "0");
     for m in list("M", "26 28 30") {
-        hm96_rows(m, row_bytes);
+        if baseline {
+            hm96_rows(m, row_bytes);
+        }
         for rate in list("RATES", "1 2") {
             for claims in list("CLAIMS", "1 16") {
-                pcs_point(m, rate, claims);
+                pcs_point(m, rate, claims, &hash);
             }
         }
     }
