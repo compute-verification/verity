@@ -1094,14 +1094,6 @@
    "owner": "@proofs",
    "digest": "5940e744cfbf40d468b38bff5b5e11af64fa5ec785bd3e59b8842b3242bd461c"
   },
-  "FlockSoundness.Audit.Analysis₂.KnowledgeSound": {
-   "owner": "@proofs",
-   "digest": "8a2f46b27b21677f27cc741dbe7157563462022f8dd8380491b783e5a16c1ca0"
-  },
-  "FlockSoundness.Audit.Analysis₂.LinkSound": {
-   "owner": "@proofs",
-   "digest": "b2dd0bef8eef004c2e18888ce56dfec5928aa24a38399cbd7741a01bdc3ca1e2"
-  },
   "FlockSoundness.Audit.IsHarmBound": {
    "owner": "@proofs",
    "digest": "52f3cf78e453da3db400f98daa47175bca529e8c6ffc62bbf790d77b11e65386"
@@ -1113,10 +1105,6 @@
   "FlockSoundness.Audit.Partition.AnchorsSound": {
    "owner": "@proofs",
    "digest": "ee66c362fa30414a4eec41722cb34b5d4152539846da39933f92cbaa2b89236d"
-  },
-  "FlockSoundness.Audit.Partition.AnchorsSound₂": {
-   "owner": "@proofs",
-   "digest": "693df68f8eefe5547fe3465d17dcc6a2169a5a6ab947fe0a67c867708ead03ac"
   },
   "FlockSoundness.Audit.Partition.Separates": {
    "owner": "@proofs",
@@ -7697,38 +7685,6 @@
    "assumptions": [],
    "type_hash": "1e2d2d7fc827b476cb8a4db81d52bd09fbec04282babd193d5f1f3db46a8ac69"
   },
-  "FlockSoundness.Audit.Partition.Refines.twoStage_influence": {
-   "owner": "@proofs",
-   "signature": [
-    "FlockSoundness.Audit.Partition.Refines.twoStage_influence {C : FlockSoundness.Audit.Circuit} {nf nc : Nat}",
-    "  {Pf : FlockSoundness.Audit.Partition C nf} {Pc : FlockSoundness.Audit.Partition C nc} {a : Fin C.N → Bool}",
-    "  {εks δlink δin : ENNReal} {D : Finset (Fin C.N)} (r : Pf.Refines Pc) {L₁ : FlockSoundness.Audit.Law nc}",
-    "  {L₂ : Fin nc → FlockSoundness.Audit.Law nf} {Reg : Type} {Int : Finset (Fin nc) → Type}",
-    "  {session : Finset (Fin nf) → Reg → (S₁ : Finset (Fin nc)) → Int S₁ → FlockSoundness.Game Bool}",
-    "  (X : (R : Reg) → FlockSoundness.Audit.Cont₁ L₁ L₂ Reg Int session R → Fin C.N → Bool)",
-    "  (Yint :",
-    "    (R : Reg) →",
-    "      (ω₁ : L₁.Ω) → (I : Int (L₁.draw ω₁)) → FlockSoundness.Audit.Cont₂ L₁ L₂ Reg Int session R ω₁ I → Fin C.N → Bool)",
-    "  (ext :",
-    "    (S : Finset (Fin nf)) →",
-    "      (R : Reg) →",
-    "        (S₁ : Finset (Fin nc)) → (I : Int S₁) → (session S R S₁ I).Strategy → Fin nf → Option (Fin C.N → Bool))",
-    "  (hks : (r.analysis₂ X Yint ext).KnowledgeSound εks) (hlink : (r.analysis₂ X Yint ext).LinkSound δlink)",
-    "  (hin : FlockSoundness.Audit.Partition.AnchorsSound₂ X a δin) (δ : ENNReal)",
-    "  (σ : (FlockSoundness.Audit.twoStage L₁ L₂ Reg Int session).Strategy) :",
-    "  ENNReal.instLE.le",
-    "    (FlockSoundness.Game.prob",
-    "      (fun o =>",
-    "        And (Eq o.fst Bool.true)",
-    "          (Not",
-    "            (SetLike.instMembership.mem (Pc.influenceSet D (FlockSoundness.Audit.effEscape L₁ L₂ r.parent) a δ)",
-    "              (FlockSoundness.Audit.Partition.out D (X (FlockSoundness.Audit.reg₂ σ) (FlockSoundness.Audit.cont₁ σ))))))",
-    "      (FlockSoundness.Audit.twoStage L₁ L₂ Reg Int session) σ)",
-    "    (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd δ εks) δlink) δin)"
-   ],
-   "assumptions": [],
-   "type_hash": "1e60e868153ea1d60325bf8527e1cc857dd7ffa310078c7c7dac968564d4a577"
-  },
   "FlockSoundness.Audit.Partition.audit_exfiltration": {
    "owner": "@proofs",
    "signature": [
@@ -14202,7 +14158,6 @@
    "Pouw.Guarantees.Window.WindowEps": "unstated: M2 with C1, a window's epsilon from its calls' in the compiled tables' shape (max of the calls' knowledge constants, plus one window-level collision term of the prover's state, plus the sum of their link terms at the window's state, at a draw that depends on the registration); stated first, per Daniel's 17 Oct order (statement, red team, card, proof), and its theorem Pouw.SecurityProofs.Window.WindowEps is not proved yet (note:proofs/20261018T0400Z-draft-pouw-gap6-statement).",
    "Pouw.Guarantees.Window.ServiceEscapes": "unstated: sampled proofs' service draw (one uniform K-subset in rank-ordered sessions, window.py) is within 0 of its sessions' own uniform laws on copy-closed unit sets, so WindowEps reads the deployed draw with each session a call; stated with WindowEps, and its theorem Pouw.SecurityProofs.Window.ServiceEscapes is not proved yet (note:proofs/20261018T0400Z-draft-pouw-gap6-statement).",
    "FlockSoundness.Audit.Partition.audit_influence": "frozen (obligation,no-function): It takes KnowledgeSound and LinkSound (Security/Proofs/Flock/Soundness/Audit/OneStage.lean:85, :94), open obligations of the backend, as hypotheses, and it is about the abstract one-stage audit rather than a Lean function.",
-   "FlockSoundness.Audit.Partition.Refines.twoStage_influence": "frozen (obligation,no-function): It takes the two-stage KnowledgeSound and LinkSound (Security/Proofs/Flock/Soundness/Audit/TwoStage.lean:121, :130), open obligations of the backend, as hypotheses, and it is about the abstract two-stage audit rather than a Lean function.",
    "Verity.SecurityProofs.ComposeCone": "frozen (no-function): It is stated over an arbitrary partition and transcript, and takes the anchors' inputs (InputsAgree) and that no unit of the cone is wrong as hypotheses, conditions on the run that are not on the premises list, rather than a function's acceptance.",
    "Accounting.SecurityProofs.CarrierBits": "frozen (no-function): A counting bound over abstract provenances of a circuit's values (Security/Definitions/Accounting/Carrier.lean: the store reached only through the circuit's inputs and its own encodes), about no function of the code.",
    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed on a store per pass made by the append-coin rule (Accounting.appendCoinBlocks: each append's blocks keyed by a live coin drawn after its root commits their digests, so the writers' choices are fixed before it), each pass reading the blocks its layout names at the coins drawn before it (RateSketch.coinStore), for devices whose rebuilds beyond X are their carriers' sectors (Accounting.RateSketch.Carrier), at rebuilt bits X + C with C the carriers' input and encoded bits under the property's budgets, with delta once a pass and no advice, under the named assumptions Accounting.Assumptions.SquaringFloor, Accounting.Assumptions.ChainSum and Accounting.Assumptions.KeyBinding: abstract chip programs in the random-oracle and ideal encoding models, not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest nonlinear units, budgeted units and data products, of Gates.encodeCosts, ⊤ where there is none).",
@@ -23996,7 +23951,6 @@
     "Flock.SecurityProofs.SessionLoopZKDeployed",
     "Flock.SecurityProofs.SoundAtBridge",
     "Flock.SoundAtBridge.soundAtBridge_nonvacuous",
-    "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -24517,7 +24471,6 @@
     "FlockSoundness.Audit.Law.closure_escape",
     "FlockSoundness.Audit.Law.stratified_miss_eq_greedy",
     "FlockSoundness.Audit.Law.work_escape_le",
-    "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
     "FlockSoundness.Audit.Partition.card_admissible_le",
@@ -24776,7 +24729,6 @@
     "FlockSoundness.Audit.Law.closure_escape",
     "FlockSoundness.Audit.Law.stratified_miss_eq_greedy",
     "FlockSoundness.Audit.Law.work_escape_le",
-    "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
     "FlockSoundness.Audit.Partition.card_admissible_le",
@@ -26777,7 +26729,6 @@
     "FlockSoundness.Audit.Law.closure_escape",
     "FlockSoundness.Audit.Law.stratified_miss_eq_greedy",
     "FlockSoundness.Audit.Law.work_escape_le",
-    "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
     "FlockSoundness.Audit.Partition.card_admissible_le",
@@ -26866,7 +26817,6 @@
     "Flock.SecurityProofs.ServedRowsLinked",
     "Flock.SecurityProofs.SoundAtBridge",
     "Flock.SoundAtBridge.soundAtBridge_nonvacuous",
-    "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -27221,7 +27171,6 @@
     "Flock.SecurityProofs.SoundAtBridge",
     "Flock.SoundAtBridge.soundAtBridge_nonvacuous",
     "FlockSoundness.Audit.Adaptive.life_harm_budget",
-    "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
     "FlockSoundness.Audit.audit_profile",
@@ -27532,7 +27481,6 @@
     "Flock.SecurityProofs.SoundAtBridge",
     "Flock.SoundAtBridge.soundAtBridge_nonvacuous",
     "FlockSoundness.Audit.Adaptive.life_harm_budget",
-    "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
     "FlockSoundness.Audit.audit_profile",
@@ -61729,11 +61677,7 @@
     "FlockSoundness.Audit.Partition.influenceSet": "b3ee5d870554457ba560502bb4234960f1afcd5c0361f9a5397d2221cc98d8b0",
     "FlockSoundness.Audit.Partition.out": "8dfbea87cc032dc2f1982487d569ba1c725ed4a2f36d927602e5215d9dacd11e"
    },
-   "guarantees": [
-    "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
-    "FlockSoundness.Audit.Partition.audit_exfiltration",
-    "FlockSoundness.Audit.Partition.audit_influence"
-   ]
+   "guarantees": ["FlockSoundness.Audit.Partition.audit_exfiltration", "FlockSoundness.Audit.Partition.audit_influence"]
   },
   "Proofs.Flock.Soundness.Audit.OneStage": {
    "digest": "4648e607da86a6f786236f39bb0cd50b9dd40467218b5041066a5f8e09c13043",
@@ -61908,31 +61852,6 @@
     "FlockSoundness.Audit.Law.stratumRatio": "225b263043cf68fc4cd9db538ee87b51bc50532328a234ddb3e02bd02e8ca23a"
    },
    "guarantees": ["FlockSoundness.Audit.Law.stratified_miss_eq_greedy"]
-  },
-  "Proofs.Flock.Soundness.Audit.TwoStage": {
-   "digest": "85f106184e79ebf1bdbef3e7b9b6aa7dd66fcb27bf6f744fcfe02303ba58b0c9",
-   "definitions": {
-    "FlockSoundness.Audit.Analysis₂": "b0613504c9fe55c7a376d80c48f378d74df3ca0cdf70c40c42c35f0a2b90d56d",
-    "FlockSoundness.Audit.Analysis₂.KnowledgeSound": "8a2f46b27b21677f27cc741dbe7157563462022f8dd8380491b783e5a16c1ca0",
-    "FlockSoundness.Audit.Analysis₂.LinkSound": "b2dd0bef8eef004c2e18888ce56dfec5928aa24a38399cbd7741a01bdc3ca1e2",
-    "FlockSoundness.Audit.Analysis₂.TrC": "effdc44d1ad5101bf51c2611c8a28706d2c455a2fc0c96a7a8baa26514616974",
-    "FlockSoundness.Audit.Analysis₂.TrF": "4e549034e309934508dadb41407fb64a422bedf5efdbc9656709d880dd20cf24",
-    "FlockSoundness.Audit.Analysis₂.committedC": "fe85f9dd70496a9f821b135368bb383a65917d5bda16de2aa3c4b52846538fb6",
-    "FlockSoundness.Audit.Analysis₂.committedF": "fe9c099dcc4e4710a8dce6fd5d5c9d5eda1df2ae9dc325d79236c584e15b2f94",
-    "FlockSoundness.Audit.Analysis₂.ksFail": "25b77d62b5237df05d35d15c666b167537e5da3ade2344caa431f15367c896ba",
-    "FlockSoundness.Audit.Analysis₂.linkFail": "9e67db2206da37115367a9f1d6a9023ccb3c86874099df9cebb26eb6720bfd5e",
-    "FlockSoundness.Audit.Cont₁": "629d18e1b241fa8d9322a137517a52066c8149999714625b441731d16c7c3ae7",
-    "FlockSoundness.Audit.Cont₂": "b5480a02dab6b6f197ff181e4d2c5892fc99b336669f854d68f5386854338083",
-    "FlockSoundness.Audit.Partition.AnchorsSound₂": "693df68f8eefe5547fe3465d17dcc6a2169a5a6ab947fe0a67c867708ead03ac",
-    "FlockSoundness.Audit.Partition.Refines.analysis₂": "c71560b505763b7df2811c13100d957910f78d3ce7b6c8703dc0f9a3f6015b9d",
-    "FlockSoundness.Audit.Partition.extend": "876638b86cfc448f74fada587b55a96c112d262a41c84ca474bc101948ed9603",
-    "FlockSoundness.Audit.cont₁": "8ed6d8d555f3ac1a402a542eca867259a0d10179f5a67f6545982bd40ffeede4",
-    "FlockSoundness.Audit.effEscape": "78bacea530bd38e87c6cd094c061ba295272175e6fac442afa4cb210fe4bad3a",
-    "FlockSoundness.Audit.fineDraw": "c4fdcb4bca2bc0ce5509d7683453e09dec6fd4d65701fcc79b35f2f38a72d6f5",
-    "FlockSoundness.Audit.reg₂": "c2bd1965f951c63d8209e25d6c67bfa4ce19b4bc699003b278a0e14454b10c7e",
-    "FlockSoundness.Audit.twoStage": "ae48a0e77c56a90ccfc1eb4892a2f1e430a77d8c2cedd20a1805c0b8fc6046f3"
-   },
-   "guarantees": ["FlockSoundness.Audit.Partition.Refines.twoStage_influence"]
   },
   "Proofs.Flock.Soundness.Audit.Window": {
    "digest": "d607b6dd26b72be9479f5d6931c704ab7cd08c1171f102708f10e90f54fa7a40",
