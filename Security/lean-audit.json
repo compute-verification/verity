@@ -2632,7 +2632,17 @@
    "Claims.SamplingGeneric.FlockKS": "proved of every Flock record, decoder and compiled verifier over it (`Claims.SamplingGeneric.flockKS`)",
    "Claims.SamplingGeneric.FlockKSReg": "proved of every Flock record, decoder and compiled verifier over it (`Claims.SamplingGeneric.flockKSReg`)",
    "Claims.SamplingGeneric.Compiled.OpenCallsLe": "a helper the claims read: the opening checks' count, which `CompilerBits` and `CompilerEfficient` read",
-   "Claims.SamplingGeneric.ZkCompiled.ZkSessions": "a helper the claims read: the compiler's zero-knowledge contract, the code facts `CompilerZK` takes of a masked compiled verifier"
+   "Claims.SamplingGeneric.ZkCompiled.ZkSessions": "a helper the claims read: the compiler's zero-knowledge contract, the code facts `CompilerZK` takes of a masked compiled verifier",
+   "Claims.Encodings.ByPosBinds": "a closed statement over every pair of commitment schemes (the sum by position binds when its parts do), no claim of a deployment; stated, not yet proved",
+   "Claims.Encodings.CodeScheme.Distance": "a helper the claims read: an encoding's distance, which `CodeBinds` reads",
+   "Claims.Encodings.CodeScheme.ColBinds": "a helper the claims read: an encoding's column check binds, as a collision reduction, which `CodeBinds` reads",
+   "Claims.Encodings.CodeBinds": "a closed statement over every encoding (it binds within the unique decoding radius), no claim of a deployment; stated, not yet proved",
+   "Claims.Encodings.Linked": "a helper the claims read: pairs that link positions, which `RegLink.Opens`, `RelinkR` and `LinkBinds` read",
+   "Claims.Encodings.LinkBinds": "a closed statement over every record, encoding and pairs (a linked position binds the two), no claim of a deployment; stated, not yet proved",
+   "Claims.Encodings.RelinkR": "a closed statement over every trace and pairs (the sampling relation carries over the link), no claim of a deployment; stated, not yet proved",
+   "Claims.Encodings.RegLink.Opens": "a helper the claims read: a registration link's contract, the code fact the linked compiler's statements take of a link",
+   "Claims.Encodings.CompilerKSLinked": "a closed statement over every proof system, compiled verifier and link, no claim of a deployment; stated, not yet proved",
+   "Claims.Encodings.CompilerKSRegLinked": "a closed statement over every proof system, compiled verifier and link, no claim of a deployment; stated, not yet proved"
   },
   "generic": {
    "Claims.SamplingGeneric.CompilerKS": "Claims.SamplingGeneric.compilerKS",
