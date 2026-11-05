@@ -1,6 +1,8 @@
-import Mathlib.Data.Fin.Embedding
-import Mathlib.Data.Fin.Tuple.Basic
-import Definitions.Core.Partition
+module
+
+public import Mathlib.Data.Fin.Embedding
+public import Mathlib.Data.Fin.Tuple.Basic
+public import Definitions.Core.Partition
 
 /-!
 # The registered compiler and its execution blocks
@@ -30,6 +32,8 @@ The compiler's output is the one description of the registered circuit: `Verity.
 the registration and `D`, `θ`, `𝓘` and `P` from `B`'s output, and nothing restates them. That the output explains the
 committed trace is `Verity.Committed.Explains`.
 -/
+
+@[expose] public section
 
 namespace Verity
 

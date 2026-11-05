@@ -1,12 +1,14 @@
-import Definitions.Nci.Capability.Toy
-import Definitions.Nci.Threads
-import Definitions.Nci.Dark
-import Definitions.Nci.Links
-import Definitions.Nci.Fit
-import Definitions.Nci.Layered
-import Definitions.Nci.Packed
-import Definitions.Nci.BitDecl
-import Definitions.Nci.Covering
+module
+
+public import Definitions.Nci.Capability.Toy
+public import Definitions.Nci.Threads
+public import Definitions.Nci.Dark
+public import Definitions.Nci.Links
+public import Definitions.Nci.Fit
+public import Definitions.Nci.Layered
+public import Definitions.Nci.Packed
+public import Definitions.Nci.BitDecl
+public import Definitions.Nci.Covering
 
 /-!
 # The (c, k) guarantees: the instances their witnesses are stated at
@@ -29,6 +31,8 @@ that nothing a proof block reads is fresh and the policy holds at read cap `0`.
 * `OneWindow`: one PoUW window of capacity `2` over the outcomes `Bool`, its certificate `right` or `wrong` at every
   outcome, and no faulty proof block (`bad`).
 -/
+
+@[expose] public section
 
 namespace Nci.Witness
 
