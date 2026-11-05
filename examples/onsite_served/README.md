@@ -47,6 +47,7 @@ deploy bindings:
 | `POUS_CMD`, `POUS_ARGS` | PoUS | `memory-challenger.pous`: `host`, `address`, `command`, `key-sha512`; `--rounds` is `[params."verity/pous/p2/v4/run"] challenges`, 320 (ε = 2^-20) |
 | `SERVE_ARGS` (`--remote-verifier`) | PoUB | `bandwidth-verifier.bandwidth`: `address` |
 | `CERTIFIER_FRONT`, `CERTIFIER_CMD` | the network certifier | `network-certifier.certifier`: `gate` (`USER@HOST`) |
+| `CERTIFIER_KEY` | the network certifier | the run's environment: the auditor's record of the kept run's deployment (`certifier-key/v1`, `warden_chain.RECORD`), read off the gate on the auditor's side and never from the prover's node, which `CERTIFIER_CMD` passes as `--certifier-key "$CERTIFIER_KEY"`: the piece takes the network certifier's key and session from it, and refuses without it or when the kept fetch isn't the record's |
 | `WIPE_CMD`, `WIPE_CHALLENGER`, `WIPE_ADDRESS`, `WIPE_COMMAND` | the wipe | `memory-challenger.wipe`: `host`, `address`, `command` |
 | `OUT` | the run | `STATE/out`, the served window's public record |
 

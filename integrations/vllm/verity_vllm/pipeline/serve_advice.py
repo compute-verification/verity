@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.protocols import registration as REG
+from verity.core.site import COMPOSITES
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine import step_trace as ST
 from verity_vllm.records import served_advice as RSA
@@ -52,7 +53,6 @@ from . import window_advice as WA
 
 REGISTRATION = "advice_registration.json"
 LINES = "advice.jsonl"
-COMPOSITES = ("onsite", "remote")
 
 
 @dataclass(frozen=True, kw_only=True)
