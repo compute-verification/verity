@@ -116,7 +116,8 @@ format:
 Registration registers the site, θ, `B` and each day's declared circuit, not the circuit `B` builds. A subprotocol's
 Program and parameters, and the proof system, are that protocol's public verifier parameters, not entries of the log;
 each window's program is held to its day's declared one (the sampled-proofs registration record's R2, `day` and
-`declarations`).
+`declarations`). A window's day is the UTC day of its open's `started_utc`, which the auditor's challenger signs
+(`challenger.declared_day`): a window that opens before UTC midnight and closes after is a window of its open's day.
 
 An entry's digest is `SHA-512(format ‖ 0 ‖ canon(entry))`, and the genesis is the Site's, so a log of site entries alone
 has the Site's head. `check` holds each entry to the log before it and refuses the first that fails by name: a site

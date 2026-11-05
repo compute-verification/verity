@@ -56,8 +56,10 @@
   salt bound to it is one salt a window.
 * **Declared day** (`day`, `declarations`): the prover declares one circuit a day, before the day's first coin, in the
   registration log (`verity/registration/declaration/v1`, `verity.core.protocols.registration`). The verifier passes
-  the window's day, by its index among the monitoring period's days on its own clock, and the declarations of the log
-  it holds when it draws (its view's `declarations`: `{"day", "program", "blocks"}` each). R2 refuses a day with no
+  the window's day and the declarations it holds when it draws (its view's `declarations`: `{"day", "program",
+  "blocks"}` each): of record, the UTC day of the window open's `started_utc` and the declarations its lane signed
+  before that open, both from the challenger's ledger checked under the auditor's key (`challenger.declared_day`), so a
+  window that opens before UTC midnight and closes after is a window of its open's day. R2 refuses a day with no
   declaration (`R2-undeclared`), a day declared twice (`R2-declared-twice`, which the log's own check refuses as
   `duplicate-declaration`), and a record whose program is not the day's declared one (`R2-declared`), as R2's Lean does
   (`SampledProofs.Registration.declaredCode`), which `verifier.check` runs beside it.

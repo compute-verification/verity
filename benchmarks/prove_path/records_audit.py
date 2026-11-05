@@ -73,7 +73,8 @@ Declared day), a negative moves the declaration to another program, and the summ
 program and where the day came from (`DAY_SOURCES`). ``--day`` and the prover's log are the development fallback: they
 bind the day to no time the auditor's device signed. ``--day-ledger LEDGER`` reads the day from the challenger's signed
 ledger instead (`device_day`, the challenger's ``declared_day``): the UTC day of the window's signed open and the
-declarations its lane signed before it. It reads the device's own ledger whole: a copy PoUS cut to a window's sessions
+declarations its lane signed before it, so a window that opens before UTC midnight and closes after is its open's day's.
+It reads the device's own ledger whole: a copy PoUS cut to a window's sessions
 (`pous.period.cite`) drops the declarations and the chain, and is refused. A window opened before its day's declaration,
 or of a lane that never declares, has no declaration of its day, so R2 refuses it (``R2-undeclared``).
 
