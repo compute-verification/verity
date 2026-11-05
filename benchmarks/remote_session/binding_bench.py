@@ -43,8 +43,8 @@ sys.path.insert(0, str(HERE.parents[1]))
 
 from verity.core.protocols.remote_bandwidth import store  # noqa: E402
 
-import lean_verifier as lv  # noqa: E402
-import verifier as V  # noqa: E402
+from benchmarks.remote_session import lean_verifier as lv  # noqa: E402
+from benchmarks.remote_session import verifier as V  # noqa: E402
 
 ROLE = "SYNTHETIC_BF16"
 NODE = b"binding-bench-node"
