@@ -13,7 +13,7 @@ the model's state for the rep's next round:
   at its round's count.
 * `coins_run_answered`: so the frame's coins at the session's round, taken at a state alike the loop's after the round
   (`Loop.progOf`) at a configuration alike the model's, leave the model's state for the next round
-  (`LeanRelease.answered`, `coins_answered`).
+  before the rank stop (`LeanRelease.answeredR`, `coins_answered`).
 * `roundStep_put_of`, `roundRun_carry`: the frame the round puts back is `roundPlace`'s at its state after the round,
   so at a `RoundRun` the frame the session's next round finds is its run one round on (`roundRun_next`) at the model's
   state for that round.
@@ -38,7 +38,8 @@ open Loop LeanRelease in
 /-- **The coins the session's round hands the frame leave the model's state**: where the frame the round put (`p₁`)
 is at the loop's state after the history with the auditor's answer `a` (`progOf`) but for `stopped`, at a configuration
 alike the model's, the round after it is the same rep's, and the frame takes `Frames.feedOf` of `a` at the round's
-count, its state is the model's state for the rep's next round (`answered`), but for `stopped`. -/
+count, its state is the model's state for the rep's next round before the rank stop (`answeredR`), but for
+`stopped`. -/
 theorem coins_run_answered (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -54,7 +55,7 @@ theorem coins_run_answered (T : ZKMal.CoinLayer.TableData)
     {st₂ : _root_.Flock.Firewall.Frame.State}
     (hco : _root_.Flock.Firewall.Frame.step p₁.cfg p₁.st
       (.coins (.ok (_root_.Flock.Firewall.Frames.feedOf (loopNr x h1.length) a.data.toList))) = (.ok, st₂))
-    {m : Masker} (hA : (ofLoop T L₀ real).answered x ρ (e0 :: (h1 ++ [(v, a.data.toList)])) = .ok m) :
+    {m : Masker} (hA : (ofLoop T L₀ real).answeredR x ρ (e0 :: (h1 ++ [(v, a.data.toList)])) = .ok m) :
     unstop st₂.m = unstop m := by
   rw [← coinsAt_cons_snoc x e0 h1 v] at hco
   exact coins_answered T L₀ real x ρ e0 (h1 ++ [(v, a.data.toList)]) hx (by simp) hj hc hu hco hA
@@ -81,7 +82,7 @@ content is the worker's message `v`, whose round releases and whose coins the re
 `a`, where the round after it is the same rep's, the frame `roundPlace` readied has a configuration alike the model's
 after the history with `(v, a)` and the round leaves it at the loop's state there (`progOf`) but for `stopped`, the
 frame the session's next round finds is its run one round on (`roundRun_next`), at the model's state for that round
-(`answered`) but for `stopped`. -/
+before the rank stop (`answeredR`) but for `stopped`. -/
 theorem roundRun_carry (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -108,7 +109,7 @@ theorem roundRun_carry (T : ZKMal.CoinLayer.TableData)
     (hu : unstop (_root_.Flock.Firewall.Frame.step q.cfg q.st
         (.round (loopNr x h1.length) (if nd.isSome then ByteArray.empty else (⟨v.toArray⟩ : ByteArray)) pl')).2.m =
       unstop (progOf x ((h1 ++ [(v, a.data.toList)]).map fun p => ZKMal.CoinLayer.rd p.2)))
-    {m : Masker} (hA : (ofLoop T L₀ real).answered x ρ (e0 :: (h1 ++ [(v, a.data.toList)])) = .ok m) :
+    {m : Masker} (hA : (ofLoop T L₀ real).answeredR x ρ (e0 :: (h1 ++ [(v, a.data.toList)])) = .ok m) :
     ∃ p, frameAt R₃ sid i r = some p ∧
       RepRun pre (ev ++ [(loopNr x h1.length, if nd.isSome then ByteArray.empty else (⟨v.toArray⟩ : ByteArray), pl',
         _root_.Flock.Firewall.Frames.feedOf (loopNr x h1.length) a.data.toList)]) p ∧

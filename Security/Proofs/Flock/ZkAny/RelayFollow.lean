@@ -83,8 +83,8 @@ open Loop LeanRelease in
 /-- **The rep's next round reads its frame at the model's state**: at `roundRun_carry`'s round, where only updates
 that keep the rep's frame come between the frames the session's next request sees (`R₃`) and the same rep's next
 round's read (`R'`), that round is not its stream's first, and the frame `roundPlace` readies there is the run of the
-frame this round readied one round on, at the model's state for the history with `(v, a)` (`answered`) but for
-`stopped`. -/
+frame this round readied one round on, at the model's state for the history with `(v, a)` before the rank stop
+(`answeredR`) but for `stopped`. -/
 theorem roundRun_follow (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -111,7 +111,7 @@ theorem roundRun_follow (T : ZKMal.CoinLayer.TableData)
     (hu : unstop (_root_.Flock.Firewall.Frame.step q.cfg q.st
         (.round (loopNr x h1.length) (if nd.isSome then ByteArray.empty else (⟨v.toArray⟩ : ByteArray)) pl')).2.m =
       unstop (progOf x ((h1 ++ [(v, a.data.toList)]).map fun p => ZKMal.CoinLayer.rd p.2)))
-    {m : Masker} (hA : (ofLoop T L₀ real).answered x ρ (e0 :: (h1 ++ [(v, a.data.toList)])) = .ok m)
+    {m : Masker} (hA : (ofLoop T L₀ real).answeredR x ρ (e0 :: (h1 ++ [(v, a.data.toList)])) = .ok m)
     {R' : Sessions} (hK : Kept sid i r R₃ R') {L0' : _root_.Flock.Firewall.Level0.Slots}
     {dom' content' : ByteArray} {n' : Nat} {q' : Rep} {pl'' : Place} {f' : Bool} {nd' : Option String}
     (hrp' : _root_.Flock.Firewall.Frames.roundPlace R' L0' sid i r dom' content' n' = .ok (q', pl'', f', nd')) :

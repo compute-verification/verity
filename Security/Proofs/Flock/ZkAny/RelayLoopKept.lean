@@ -22,7 +22,8 @@ frame is kept; so `LoopJ` is kept there given `RoundFacts` and `RepJ` of the rou
 * `LoopModel.hist_succ`: the history one message on.
 * `opens_snd`, `frameAnswer_snd`, `tookEarlier_snd`, **`answered_snd`**: the coins' answer reads the history only
   through its answers, where the frame's states and the transport's coins do; so at the loop's own frames
-  (`ofLoop_answered_snd`), and `SameInv` with it (`sameInv_hist`, `sameInv_snd`).
+  (`ofLoop_answered_snd`). `frameAnswerR_snd`, `answeredR_snd`, `ofLoop_answeredR_snd`: so does its answer before
+  the rank stop, and `SameInv` with it (`sameInv_hist`, `sameInv_snd`).
 * `stopped_roundRun`: the session's stop one frame round on.
 * **`loopKept_round`**: `LoopJ` is kept at a frame round, given `RoundFacts` there and the round's rep's `RepJ` at the
   session's next request.
@@ -373,12 +374,62 @@ theorem ofLoop_answered_snd (T : ZKMal.CoinLayer.TableData)
         ((congrArg (Loop.readCoins x) (tail_snd hs ZKMal.CoinLayer.rd)).trans
           (LeanRelease.loop_coinsRead Loop.loopNr T (LeanRelease.withFrames T L₀ real) x m' a' t').symm)
 
-/-- **`SameInv` reads the history only through the configuration and the coins' answer there.** -/
+/-- **The frame's coin step reads the history only through its answers**, as `frameAnswer_snd`. -/
+theorem frameAnswerR_snd {W Rr : Type} (L : LeanRelease W Rr) {x : Msg} {ρ : Rr}
+    (hp : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.prog x h = L.prog x h')
+    (hf : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.fresh x h = L.fresh x h')
+    (hc : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.coinsOf x h = L.coinsOf x h')
+    {h h' : List (Msg × Msg)} (hs : h.map Prod.snd = h'.map Prod.snd) :
+    L.frameAnswerR x ρ h = L.frameAnswerR x ρ h' := by
+  have hl : h.length = h'.length := by simpa using congrArg List.length hs
+  match h, h', hs, hl with
+  | [], [], _, _ => rfl
+  | [], _ :: _, hs, _ => simp at hs
+  | _ :: _, [], hs, _ => simp at hs
+  | e :: t, e' :: t', hs, hl =>
+    rw [LeanRelease.frameAnswerR_cons, LeanRelease.frameAnswerR_cons, hp _ _ hs, hf _ _ hs, hc _ _ hs,
+      cfg_length L x ρ hl, hl]
+
+/-- **The coins' answer before the rank stop reads the history only through its answers**, as `answered_snd`. -/
+theorem answeredR_snd {W Rr : Type} (L : LeanRelease W Rr) {x : Msg} {ρ : Rr}
+    (hp : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.prog x h = L.prog x h')
+    (hf : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.fresh x h = L.fresh x h')
+    (hc : ∀ h h' : List (Msg × Msg), h.map Prod.snd = h'.map Prod.snd → L.coinsOf x h = L.coinsOf x h')
+    {h h' : List (Msg × Msg)} (hs : h.map Prod.snd = h'.map Prod.snd) :
+    L.answeredR x ρ h = L.answeredR x ρ h' := by
+  unfold LeanRelease.answeredR
+  rw [opens_snd L x ρ hs, tookEarlier_snd L hp hf hc hs, frameAnswerR_snd L hp hf hc hs]
+
+/-- **At the loop's own frames the coins' answer before the rank stop reads the history only through its answers**,
+as `ofLoop_answered_snd`. -/
+theorem ofLoop_answeredR_snd (T : ZKMal.CoinLayer.TableData)
+    (L₀ : LeanRelease Claims.Flock.Wit
+      ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
+    (real : Msg → Claims.Flock.Wit →
+      (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
+      Nat → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (x : Msg)
+    (ρ : (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)
+    {h h' : List (Msg × Msg)} (hs : h.map Prod.snd = h'.map Prod.snd) :
+    (LeanRelease.ofLoop T L₀ real).answeredR x ρ h = (LeanRelease.ofLoop T L₀ real).answeredR x ρ h' := by
+  refine answeredR_snd _ (fun h h' hs => ?_) (fun h h' hs => ?_) (fun h h' hs => ?_) hs
+  · exact congrArg (Loop.progOf x) (tail_snd hs ZKMal.CoinLayer.rd)
+  · exact congrArg (Loop.freshOf x) (tail_snd hs ZKMal.CoinLayer.rd)
+  · rcases h with _ | ⟨⟨m, a⟩, t⟩ <;> rcases h' with _ | ⟨⟨m', a'⟩, t'⟩
+    · rfl
+    · simp at hs
+    · simp at hs
+    · exact (LeanRelease.loop_coinsRead Loop.loopNr T (LeanRelease.withFrames T L₀ real) x m a t).trans
+        ((congrArg (Loop.readCoins x) (tail_snd hs ZKMal.CoinLayer.rd)).trans
+          (LeanRelease.loop_coinsRead Loop.loopNr T (LeanRelease.withFrames T L₀ real) x m' a' t').symm)
+
+/-- **`SameInv` reads the history only through the configuration and the coins' answer there** before the rank
+stop. -/
 theorem sameInv_hist {W Rr : Type} {L : LeanRelease W Rr} {x : Msg} {ρ : Rr} {h h' : List (Msg × Msg)}
     {cs : List FlockDeploy.Coin} {q j : Nat} {t : _root_.Flock.Firewall.Finish.Tab} {dom : ByteArray}
     {xs : Array (Array _root_.Flock.F128)} {hi : Array ByteArray} {pre : List _root_.Flock.Firewall.Frame.Req}
     {ev : List (Nat × ByteArray × _root_.Flock.Firewall.Frame.Place × Array _root_.Flock.F128)} {p : Rep}
-    (hc : L.cfg x ρ h' = L.cfg x ρ h) (ha : L.answered x ρ h' = L.answered x ρ h)
+    (hc : L.cfg x ρ h' = L.cfg x ρ h) (ha : L.answeredR x ρ h' = L.answeredR x ρ h)
     (hI : SameInv L x ρ h cs q j t dom xs hi pre ev p) : SameInv L x ρ h' cs q j t dom xs hi pre ev p :=
   ⟨hI.run, hI.cfg.trans hc.symm, fun m hm => hI.st m (ha.symm.trans hm), hI.coins, hI.inv⟩
 
@@ -397,7 +448,7 @@ theorem sameInv_snd {T : ZKMal.CoinLayer.TableData}
     (hI : SameInv (LeanRelease.ofLoop T L₀ real) x ρ h cs q j t dom xs hi pre ev p) :
     SameInv (LeanRelease.ofLoop T L₀ real) x ρ h' cs q j t dom xs hi pre ev p :=
   sameInv_hist (cfg_length _ x ρ (h := h') (h' := h) (by simpa using (congrArg List.length hs).symm))
-    (ofLoop_answered_snd T L₀ real x ρ hs).symm hI
+    (ofLoop_answeredR_snd T L₀ real x ρ hs).symm hI
 
 /-- **The session's stop one frame round on**: at a frame round with `RoundFacts` that releases, whose coins the
 auditor answered and the session and the rep's frame took, the loop's frames at the session's next request have

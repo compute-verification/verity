@@ -55,6 +55,10 @@ public import Proofs.Flock.ZkAny.RelayLoopFacts
 public import Proofs.Flock.ZkAny.RelayLoopCur
 public import Proofs.Flock.ZkAny.RelayLoopFirst
 public import Proofs.Flock.ZkAny.RelayLoopL0
+public import Proofs.Flock.ZkAny.RelayTook
+public import Proofs.Flock.ZkAny.RelayRank
+public import Proofs.Flock.ZkAny.RelayTaken
+public import Proofs.Flock.ZkAny.RelayRoundTook
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release
@@ -105,6 +109,10 @@ and at a frame round given what the loop's frames and the model hold there and t
 what the loop's frames and the model hold at a frame round, from that invariant on the deployed loop's model, given
 the model's answer there and what it holds at the round's place, past a stream's first round the model's scheduled
 round where the model's tables and salts are the loop's; and past the `Commit` the session's entry linked to the
-coins answering the model's link, at the setup's link points. -/
+coins answering the model's link, at the setup's link points; and what the loop took of the coins so far against the
+model's release: the transport's verdict, the frame's taking of each earlier round's coins and its coin step on the
+last; and the model's taking of the coins before its rank stop, which a frame releasing an opening round passes; and
+so the model's taking of the coins after a frame round's history, from what the loop took, a rep's first-round state
+and the rank stop at the opening round the frame releases. -/
 
 @[expose] public section

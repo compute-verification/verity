@@ -422,14 +422,14 @@ theorem roundPlace_scheduled_first (T : ZKMal.CoinLayer.TableData)
 
 /-- **What the model holds at the place a frame round is readied at**, for the frame `q` and the place `pc` and
 no-device reason `nd` `roundPlace` returns, the worker's value `v` at the model's history so far, the loop at `σ`: the
-place is the model's scheduled round there, `q`'s masking state the model's but for `stopped`, where the round takes a
-device round exactly where the frames haven't stopped session `sid`, `v` fails the crossing only where it fails to
-pass. -/
+place is the model's scheduled round there, `q`'s masking state the model's before the rank stop (`answeredR`) but for
+`stopped`, where the round takes a device round exactly where the frames haven't stopped session `sid`, `v` fails the
+crossing only where it fails to pass. -/
 structure PlaceFacts {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (v : Claims.Msg) (σ : LoopAt) (q : Rep)
     (pc : Place) (nd : Option String) : Prop where
   sched : pc = .sched ⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c)
     (computedOf (M.L.computed M.x M.w M.ρ (M.hist σ.c)))).toArray⟩
-  st : ∀ m, M.L.answered M.x M.ρ (M.hist σ.c) = .ok m → unstop q.st.m = unstop m
+  st : ∀ m, M.L.answeredR M.x M.ρ (M.hist σ.c) = .ok m → unstop q.st.m = unstop m
   cross : nd.isSome = σ.R.stopped sid → M.L.cross M.x (M.hist σ.c).length M.w M.ρ (M.hist σ.c) v = false →
     M.L.pass M.x M.w M.ρ (M.hist σ.c) v = false
 
@@ -443,7 +443,7 @@ theorem placeSt_seen {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Sess
     (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup) (hseen : seen.contains stream = true)
     {dom content : ByteArray} {q : Rep} {pc : Place} {f : Bool} {nd : Option String}
     (hrp : _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i r dom content n = .ok (q, pc, f, nd)) :
-    ∀ m, M.L.answered M.x M.ρ (M.hist σ.c) = .ok m → unstop q.st.m = unstop m := by
+    ∀ m, M.L.answeredR M.x M.ρ (M.hist σ.c) = .ok m → unstop q.st.m = unstop m := by
   obtain ⟨hk, hmem⟩ := round_rep hsl hF hJ hrep hlt hnd
   obtain ⟨p, rel, name, l0, hfa, -, -, -, hA⟩ := hJ.reps i r stream hmem hseen
   obtain ⟨j, c, stm, t, xs, hi, pre, ev, -, -, -, -, -, -, hI, -⟩ := hA.1 hk.symm
@@ -741,7 +741,7 @@ theorem placeSched_first {T : ZKMal.CoinLayer.TableData}
 /-- **`PlaceFacts.st` at a rep 0 stream's first round**: at the slot of a round of `stream`, table `i`'s rep 0, where
 `LoopFacts` and `LoopJ` hold and `seen` has no round of `stream`, the frame `roundPlace` readies is at the model's
 masking state: the rep's frame is fresh (`FreshAt`), its run on no requests, and the model's state there is the next
-rep's start (`ofLoop_answered_switch`), the frame's start at rep 0 (`roundPlace_switch0`). -/
+rep's start (`ofLoop_answeredR_switch`), the frame's start at rep 0 (`roundPlace_switch0`). -/
 theorem placeSt_first0 {T : ZKMal.CoinLayer.TableData}
     {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
@@ -757,7 +757,7 @@ theorem placeSt_first0 {T : ZKMal.CoinLayer.TableData}
     (hsn : seen.contains stream = false)
     {dom content : ByteArray} {q : Rep} {pc : Place} {f : Bool} {nd : Option String}
     (hrp : _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i 0 dom content n = .ok (q, pc, f, nd)) :
-    ∀ m, M.L.answered M.x M.ρ (M.hist σ.c) = .ok m → unstop q.st.m = unstop m := by
+    ∀ m, M.L.answeredR M.x M.ρ (M.hist σ.c) = .ok m → unstop q.st.m = unstop m := by
   intro m hA
   obtain ⟨hsent, hop, -, -⟩ := slot_round hsl
   obtain ⟨hk0, hmem⟩ := round_rep hsl hF hJ hrep hlt hD.names
@@ -790,7 +790,7 @@ theorem placeSt_first0 {T : ZKMal.CoinLayer.TableData}
     rwa [hl2] at this
   obtain ⟨_, p, hfd⟩ := roundPlace_find hrp
   have hp : FreshRep p := fresh_found (hF.fresh i 0 stream hmem hsn) hfd
-  have hA₁ : (LeanRelease.ofLoop T L₀ real).answered M.x M.ρ (e0 :: h1) = .ok m := by
+  have hA₁ : (LeanRelease.ofLoop T L₀ real).answeredR M.x M.ρ (e0 :: h1) = .ok m := by
     rw [← hD.rel, ← hh]
     exact hA
   have hsw : 2 ≤ h1.length → Loop.repOf M.x (h1.length + 1) ≠ Loop.repOf M.x h1.length := by
@@ -808,7 +808,7 @@ theorem placeSt_first0 {T : ZKMal.CoinLayer.TableData}
     omega
   have hcs : (h1.map fun e => ZKMal.CoinLayer.rd e.2).length = q₀ + 1 := by rw [List.length_map, hq]
   rw [roundPlace_switch0 hfd hrp (fresh_repRun hp) M.x _ hD.setup hcs (by rw [hk1]; omega)
-    (ofLoop_answered_switch T L₀ real M.x M.ρ e0 h1 hsw hA₁)]
+    (ofLoop_answeredR_switch T L₀ real M.x M.ρ e0 h1 hsw hA₁)]
 
 /-- **`PlaceFacts.st` at a rep 1 stream's first round**: at the slot of a round of `stream`, table `i`'s rep 1, where
 `LoopFacts` and `LoopJ` hold, `seen` has no round of `stream` and the rep's frame is at the model's configuration, the
@@ -832,7 +832,7 @@ theorem placeSt_first1 {T : ZKMal.CoinLayer.TableData}
     (hpc : ∀ p, frameAt σ.R sid i 1 = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c))
     {dom content : ByteArray} {q : Rep} {pc : Place} {f : Bool} {nd : Option String}
     (hrp : _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i 1 dom content n = .ok (q, pc, f, nd)) :
-    ∀ m, M.L.answered M.x M.ρ (M.hist σ.c) = .ok m → unstop q.st.m = unstop m := by
+    ∀ m, M.L.answeredR M.x M.ρ (M.hist σ.c) = .ok m → unstop q.st.m = unstop m := by
   intro m hA
   obtain ⟨hsent, hop, -, -⟩ := slot_round hsl
   obtain ⟨hk0, hmem⟩ := round_rep hsl hF hJ hrep hlt hD.names
@@ -882,7 +882,7 @@ theorem placeSt_first1 {T : ZKMal.CoinLayer.TableData}
   have hstmb : sts[i]! = stm := by
     obtain ⟨hli, he⟩ := Array.getElem?_eq_some_iff.mp hstm'
     rw [← hsts, getElem!_pos rel.sts i hli, he]
-  have hA₁ : (LeanRelease.ofLoop T L₀ real).answered M.x M.ρ (e0 :: h1) = .ok m := by
+  have hA₁ : (LeanRelease.ofLoop T L₀ real).answeredR M.x M.ρ (e0 :: h1) = .ok m := by
     rw [← hD.rel, ← hh]
     exact hA
   have hsw : 2 ≤ h1.length → Loop.repOf M.x (h1.length + 1) ≠ Loop.repOf M.x h1.length := by
@@ -899,7 +899,7 @@ theorem placeSt_first1 {T : ZKMal.CoinLayer.TableData}
     rw [show q₀ - 1 + 1 = q₀ by omega, hk2] at h'
     omega
   have hcs : (h1.map fun e => ZKMal.CoinLayer.rd e.2).length = q₀ + 1 := by rw [List.length_map, hq]
-  have hm := ofLoop_answered_switch T L₀ real M.x M.ρ e0 h1 hsw hA₁
+  have hm := ofLoop_answeredR_switch T L₀ real M.x M.ρ e0 h1 hsw hA₁
   obtain ⟨c', t', dom', xs', hip, alg, hph, hal, -⟩ := Loop.freshOf_ok M.x _ hD.setup hcs hm
   have hsz : p'.alg.size = alg.size :=
     withAlg_size hw (fresh_alg hp) hst' hph (by rw [hk1, hdiv]; exact hstmb) hal
@@ -1123,8 +1123,9 @@ theorem roundFacts_loop {T : ZKMal.CoinLayer.TableData}
   have hP := hpl q pc f nd hrp
   obtain ⟨m, hm⟩ := hans
   have hnd := roundPlace_nd_eq hrp
+  have hu := hP.st m (LeanRelease.answeredR_of_answered hm)
   refine ⟨hcoins, hkind, by have := hD.next; omega, hlt', hP.cross hnd, Option.isSome_iff_exists.mpr ⟨p, hfa⟩,
-    ⟨m, q, f, nd, hm, ?_, hnd, (roundPlace_cfg hfd hrp).trans (hpc p hfa), hP.st m hm, ?_⟩, ?_,
+    ⟨m, q, f, nd, hm, ?_, hnd, (roundPlace_cfg hfd hrp).trans (hpc p hfa), hu, ?_⟩, ?_,
     streamRep_other hF.setup hsent (slot_round_open hsl) hr.rep_eq⟩
   · rw [← hP.sched]
     exact hrp
