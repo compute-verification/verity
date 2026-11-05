@@ -140,8 +140,7 @@ def size(source: Path, command: list[str], cpus: int | None) -> dict | None:
     workers = jobs or cpus or AUTO_CPUS
     many = rev is not None or not names
     if many:
-        # side by side, suites.py holds half the slot for its serial suites at TEST_PROCESS_GB each: a pool slot of 40 GB ran a
-        # --changed run of 90 suites on 2 workers, past the hour it was given
+        # side by side, suites.py holds half the slot for its serial suites at TEST_PROCESS_GB each
         out["mem_gb"] = max(AUTO_MEM_GB, math.ceil(2 * workers * max(TEST_PROCESS_GB, *(s["worker_gb"] for s in chosen))))
     elif gb := max(s["worker_gb"] for s in chosen):
         out["mem_gb"] = max(AUTO_MEM_GB, math.ceil(workers * gb))
