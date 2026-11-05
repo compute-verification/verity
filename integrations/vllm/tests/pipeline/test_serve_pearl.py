@@ -113,7 +113,8 @@ def _rows(x, y):
 class Run(PP.EpochCalls, PassEnds):
     """Pearl-C's device run with no device: the real pass numbering (`passes.call_index`, `passes.pass_dir`) and ends
     (`PassEnds.end_pass`, `finish`); a call's y the BF16 product and its A rows and y committed as test_pearltie's toy
-    commits them, in a retained pass's manifest."""
+    commits them, in a retained pass's manifest beside each weight's n, k and root (as `host.write_manifest` writes
+    them)."""
 
     lag_ends = False
 
@@ -121,6 +122,7 @@ class Run(PP.EpochCalls, PassEnds):
         workload = Workload(tuple(Matmul(w, Shape(16, t.shape[1], t.shape[0]), w) for w, t in weights.items()))
         self.epoch = PPD.epoch_of(workload, roots, coins, opening, pass_index)
         self.scheme, self.entry, self.salt, self.salt_key, self.coins = s, entry, self.epoch.salt, salt_key, coins
+        self.weights = {str(w): {"n": t.shape[0], "k": t.shape[1], "root": roots[w].hex()} for w, t in weights.items()}
         self.commits = {"scheme": s.name, "salt": self.salt.hex(), "weights_root": self.epoch.weights_root.hex(),
                         "coins": coins.to_json(), "salt_opening": opening.to_json()}
         self.details, self.retain_dir, self.retained, self.cur, self.finished = {"passes": []}, None, 0, None, False
@@ -154,7 +156,7 @@ class Run(PP.EpochCalls, PassEnds):
             cur.retain.mkdir(mode=0o700)
             (path := cur.retain / "manifest.json").write_text(json.dumps(
                 {"entry": self.entry, "scheme": self.scheme.name, "salt": self.salt.hex(),
-                 "hm96_salt_key": self.salt_key.hex(), "matmuls": cur.records}))
+                 "hm96_salt_key": self.salt_key.hex(), "weights": self.weights, "matmuls": cur.records}))
             out["manifest"] = str(path)
         self.details["passes"].append(out)
         return out
