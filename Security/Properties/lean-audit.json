@@ -3365,13 +3365,36 @@
    "type_hash": "90efc0f384a07f296425b858eeab58b576755ec019e505e27a543b218c5533e9"
   },
   "Properties.Pouw.PearlPlus.acceptMeans_drawn": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn :",
+    "  Eq (PouwCheck.PearlPlus.check Properties.Pouw.PearlPlus.testRun Properties.Pouw.PearlPlus.testOpener).accept Bool.true"
+   ],
+   "assumptions": [],
+   "type_hash": "66e4279b53d4930c692134784996c874f38abe5f162e1518dc6eb9837f17d261"
   },
   "Properties.Pouw.PearlPlus.acceptMeans_honest": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Pouw.PearlPlus.acceptMeans_honest :",
+    "  Eq (PouwCheck.PearlPlus.check (Properties.Pouw.PearlPlus.honestRun 0) Properties.Pouw.PearlPlus.noOpening).accept",
+    "    Bool.true"
+   ],
+   "assumptions": [],
+   "type_hash": "8fe0d6a29058019ee1a9962d5d0e603dc4ea0874d445c92a78a3c2eba55a7144"
   },
   "Properties.Pouw.PearlPlus.acceptMeans_nontrivial": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Pouw.PearlPlus.acceptMeans_nontrivial (pl : PouwCheck.PearlPlus.Plan) :",
+    "  Not",
+    "    (Eq",
+    "      (Properties.Pouw.PearlPlus.acceptAllCheck Properties.Pouw.PearlPlus.emptyRun",
+    "          Properties.Pouw.PearlPlus.noOpening).plan",
+    "      (Option.some pl))"
+   ],
+   "assumptions": [],
+   "type_hash": "7532548f3a41c9d2ac203879f8d6f65222496282d062a35262f764f6c272b507"
   },
   "Properties.Pouw.PearlPlus.loadedGivesUp": {
    "owner": "@proofs",
@@ -3380,10 +3403,27 @@
    "type_hash": "fe144c78782881cad675b441c5aa96bdee8c785945e202e6ee26025fa7f9281a"
   },
   "Properties.Pouw.PearlPlus.loadedGivesUp_honest": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Pouw.PearlPlus.loadedGivesUp_honest :",
+    "  Eq",
+    "    (PouwCheck.PearlPlus.load (PouwCheck.PearlPlus.EpochCoins.inproc Properties.Pouw.PearlPlus.honestCoins)",
+    "      Properties.Pouw.PearlPlus.honestManifest)",
+    "    (Except.ok Properties.Pouw.PearlPlus.honestPass)"
+   ],
+   "assumptions": [],
+   "type_hash": "32bdd3129cc3b4201f7dd3149bfb2ac60b64750c091d43df14127546ea9138bb"
   },
   "Properties.Pouw.PearlPlus.loadedGivesUp_nontrivial": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Pouw.PearlPlus.loadedGivesUp_nontrivial :",
+    "  Not",
+    "    (instLENat.le Properties.Pouw.PearlPlus.acceptAllRecord.voluntaryA.length",
+    "      (PouwCheck.PearlPlus.voluntaryCap Properties.Pouw.PearlPlus.acceptAllRecord.matmul.m))"
+   ],
+   "assumptions": [],
+   "type_hash": "95da05796795e1568619ecb735690e895ed33f5b00adf4faed5210c5cb7bc446"
   },
   "Properties.Pouw.PearlPlus.openingBinds": {
    "owner": "@proofs",
@@ -3439,10 +3479,29 @@
    "type_hash": "3824aad752bcde7f7623cbf22f9be6692c3423041bbb695ccbffdf3504ac7449"
   },
   "Properties.Pouw.PearlPlus.planMeans_honest": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Pouw.PearlPlus.planMeans_honest :",
+    "  Eq (PouwCheck.PearlPlus.plan (Properties.Pouw.PearlPlus.honestRun 1))",
+    "    (Except.ok",
+    "      { passes := List.cons Properties.Pouw.PearlPlus.honestPass List.nil,",
+    "        root := PouwCheck.PearlPlus.runCommitment (List.cons Properties.Pouw.PearlPlus.honestPass List.nil),",
+    "        source := Properties.Pouw.PearlPlus.honestSource, todo := List.cons { fst := 0, snd := 0 } List.nil, drawn := 1,",
+    "        picks := List.cons { fst := 0, snd := 0 } List.nil })"
+   ],
+   "assumptions": [],
+   "type_hash": "01bad243d32845c8a6a1b67e176af234b8975f901dd00d3e50eec4b6872fc1a9"
   },
   "Properties.Pouw.PearlPlus.planMeans_nontrivial": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Pouw.PearlPlus.planMeans_nontrivial :",
+    "  Not",
+    "    (Eq Properties.Pouw.PearlPlus.acceptAllPlan.root",
+    "      (PouwCheck.PearlPlus.runCommitment Properties.Pouw.PearlPlus.acceptAllPlan.passes))"
+   ],
+   "assumptions": [],
+   "type_hash": "0b1cc2e945e9c21dbb7e91e61ee173b2e863d5499bb26e45619ee73f99d57639"
   },
   "Properties.Pouw.PearlPlus.refusedBeforeTheCoin": {
    "owner": "@proofs",
@@ -3451,10 +3510,27 @@
    "type_hash": "04a994afa72912a80e8367b3a327cd717d628c83ee8ad19f3ec1f9c4a2ff6feb"
   },
   "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest :",
+    "  Eq (PouwCheck.PearlPlus.plan Properties.Pouw.PearlPlus.emptyRun) (Except.error Properties.Pouw.PearlPlus.emptyRefusal)"
+   ],
+   "assumptions": [],
+   "type_hash": "c8d395eae0ef4363019450c6dbbf9ae1dc3b96ecb09f3ecd40afd6279ea53968"
   },
   "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_nontrivial": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_nontrivial :",
+    "  Not",
+    "    (Eq",
+    "      (Properties.Pouw.PearlPlus.acceptAllCheck Properties.Pouw.PearlPlus.emptyRun Properties.Pouw.PearlPlus.noOpening)",
+    "      { accept := Bool.false, reason := Option.some Properties.Pouw.PearlPlus.emptyRefusal.reason,",
+    "        refused := Properties.Pouw.PearlPlus.emptyRefusal.refused,",
+    "        overCap := Properties.Pouw.PearlPlus.emptyRun.overCap, tie := Properties.Pouw.PearlPlus.emptyRefusal.tie })"
+   ],
+   "assumptions": [],
+   "type_hash": "b25b21e56b09973bff4f05593902302657cf412286f5f37961c0e92fd577e160"
   },
   "Properties.Pouw.PearlPlus.tileAcceptMeans": {
    "owner": "@proofs",
@@ -3463,13 +3539,40 @@
    "type_hash": "1265aedc4151ebc55099699be6188cabde6f3925129e6028d774eb1198a9630d"
   },
   "Properties.Pouw.PearlPlus.tileAcceptMeans_derived": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived :",
+    "  Eq",
+    "    (PouwCheck.PearlPlus.checkTile Properties.Pouw.PearlPlus.testPass",
+    "      (Properties.Pouw.PearlPlus.noiseOf Properties.Pouw.PearlPlus.testPass 0) 0 Properties.Pouw.PearlPlus.testOpening)",
+    "    PouwCheck.PearlPlus.TileOutcome.pass"
+   ],
+   "assumptions": [],
+   "type_hash": "fb632dbc226c3ad87c7f66cc1ec19fe455cdab4c9cf75662ee0d68b40bdcf9f0"
   },
   "Properties.Pouw.PearlPlus.tileAcceptMeans_honest": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_honest :",
+    "  Eq",
+    "    (PouwCheck.PearlPlus.checkTile Properties.Pouw.PearlPlus.testPass (Except.ok Properties.Pouw.PearlPlus.testNoise) 0",
+    "      Properties.Pouw.PearlPlus.testOpening)",
+    "    PouwCheck.PearlPlus.TileOutcome.pass"
+   ],
+   "assumptions": [],
+   "type_hash": "7c08dfebb594d153feab8065f50c224bbbcc7281617d0fafb8731cf1a9d465b2"
   },
   "Properties.Pouw.PearlPlus.tileAcceptMeans_nontrivial": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_nontrivial (pos : Nat) (rows cols : List Nat)",
+    "  (_ops : PouwCheck.PearlPlus.Words.Ops) (_ch : PouwCheck.PearlPlus.Words.Checked) :",
+    "  Not",
+    "    (Eq (Properties.Pouw.PearlPlus.noCallsPass.tile? 0)",
+    "      (Option.some { fst := pos, snd := { fst := rows, snd := cols } }))"
+   ],
+   "assumptions": [],
+   "type_hash": "f6522f83f590a78455ff5e47b169d9663ce4de4f9fcc77ffd0b90b56535ee51b"
   },
   "Properties.Pouw.PearlPlus.tileKeepsTheCap": {
    "owner": "@proofs",
@@ -3478,10 +3581,89 @@
    "type_hash": "23077127b35df41a81f887f61bef24cba194bd4dc3c51edf05eeeef7cb548407"
   },
   "Properties.Pouw.PearlPlus.tileKeepsTheCap_honest": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap_honest :",
+    "  And",
+    "    (Eq",
+    "      (PouwCheck.PearlPlus.Rule.checkOpened Properties.Pouw.PearlPlus.capScheme Properties.Pouw.PearlPlus.capRecord",
+    "        (List.cons 0 List.nil) (List.cons 0 List.nil) Properties.Pouw.PearlPlus.capOps)",
+    "      Option.none)",
+    "    (And (Ne (Properties.Pouw.PearlPlus.capRecord.credited (List.cons 0 List.nil) (List.cons 0 List.nil)).fst List.nil)",
+    "      (Ne (Properties.Pouw.PearlPlus.capRecord.credited (List.cons 0 List.nil) (List.cons 0 List.nil)).snd List.nil))"
+   ],
+   "assumptions": [],
+   "type_hash": "0fb3fdd9afb9bea2ecd0801900a52cc996350e8dd5aa15cd02509c611ee5ef31"
   },
   "Properties.Pouw.PearlPlus.tileKeepsTheCap_nontrivial": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap_nontrivial :",
+    "  Not",
+    "    (Properties.Pouw.PearlPlus.TileKeepsTheCap.match_1 (fun x => Prop)",
+    "      (Properties.Pouw.PearlPlus.capRecord.credited (List.cons 0 List.nil) (List.cons 0 List.nil)) fun cr cc =>",
+    "      Ne cr List.nil →",
+    "        Ne cc List.nil →",
+    "          Exists fun words =>",
+    "            Exists fun elems =>",
+    "              And",
+    "                (Eq",
+    "                  (List.mapM",
+    "                    (fun i =>",
+    "                      List.mapM",
+    "                        (fun j =>",
+    "                          PouwCheck.PearlPlus.Rule.wordFlags",
+    "                            (Array.instGetElem?NatLtSize.getElem! Properties.Pouw.PearlPlus.shortOps.a.codes",
+    "                              (List.idxOf i (List.cons 0 List.nil)))",
+    "                            (Array.instGetElem?NatLtSize.getElem! Properties.Pouw.PearlPlus.shortOps.b.codes",
+    "                              (List.idxOf j (List.cons 0 List.nil))))",
+    "                        cc)",
+    "                    cr)",
+    "                  (Except.ok words))",
+    "                (And",
+    "                  (Eq",
+    "                    (List.mapM",
+    "                      (fun iw =>",
+    "                        PouwCheck.PearlPlus.Rule.rowElements",
+    "                          (Array.instGetElem?NatLtSize.getElem! Properties.Pouw.PearlPlus.shortOps.a.alpha",
+    "                            (List.idxOf iw.fst (List.cons 0 List.nil)))",
+    "                          (Array.instGetElem?NatLtSize.getElem! Properties.Pouw.PearlPlus.shortOps.a.beta",
+    "                            (List.idxOf iw.fst (List.cons 0 List.nil)))",
+    "                          (Array.instGetElem?NatLtSize.getElem! Properties.Pouw.PearlPlus.shortOps.a.x",
+    "                            (List.idxOf iw.fst (List.cons 0 List.nil)))",
+    "                          (List.map Prod.fst iw.snd))",
+    "                      (cr.zip words))",
+    "                    (Except.ok elems))",
+    "                  (have credit :=",
+    "                    PouwCheck.PearlPlus.creditOf 1 Properties.Pouw.PearlPlus.capRecord.kKept",
+    "                      Properties.Pouw.PearlPlus.capRecord.matmul.n;",
+    "                  have rowDebit :=",
+    "                    List.map",
+    "                      (fun we =>",
+    "                        PouwCheck.PearlPlus.Rule.debitUnits Properties.Pouw.PearlPlus.capRecord.matmul.n cc.length",
+    "                          (List.foldl (fun t w => instHAdd.hAdd t (Array.filter id w.fst).size) 0 we.fst)",
+    "                          (List.foldl (fun t w => instHAdd.hAdd t w.snd) 0 we.fst) we.snd)",
+    "                      (words.zip elems);",
+    "                  And",
+    "                    (instLENat.le",
+    "                      (instHMul.hMul (List.foldl (fun x1 x2 => instHAdd.hAdd x1 x2) 0 rowDebit)",
+    "                        PouwCheck.PearlPlus.Rule.CAP_DEN)",
+    "                      (instHMul.hMul (instHMul.hMul (instHMul.hMul PouwCheck.PearlPlus.Rule.CAP_NUM credit) cr.length)",
+    "                        cc.length))",
+    "                    (∀ (d : Nat),",
+    "                      List.instMembership.mem rowDebit d →",
+    "                        instLENat.le (instHMul.hMul d PouwCheck.PearlPlus.Rule.CAP_DEN)",
+    "                          (instHMul.hMul",
+    "                            (instHMul.hMul (instHMul.hMul PouwCheck.PearlPlus.Rule.CAP_NUM credit) cc.length)",
+    "                            (ite",
+    "                              (Eq",
+    "                                (Properties.Pouw.PearlPlus.capScheme.censusKs.contains",
+    "                                  Properties.Pouw.PearlPlus.capRecord.matmul.k)",
+    "                                Bool.true)",
+    "                              4 1))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "a4e47477fa4f4ca40fb01876f99097112f1bcd6bd91e3806404b1b8f1ff0a915"
   },
   "Properties.Pouw.PearlPlus.yIsTheUnscale": {
    "owner": "@proofs",
@@ -3490,10 +3672,25 @@
    "type_hash": "d4c155b5e234c30aa1928e5a2b90c9c4fdc91887d2fbf2c6968720f79c98d211"
   },
   "Properties.Pouw.PearlPlus.yIsTheUnscale_honest": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Pouw.PearlPlus.yIsTheUnscale_honest :",
+    "  And (Eq (PouwCheck.PearlPlus.Rule.yOf 1199804864 1114459047 1150222350) (Option.some 16254))",
+    "    (Eq (Pouw.PearlC.unscale 1199804864 1114459047 1150222350) 16254)"
+   ],
+   "assumptions": [],
+   "type_hash": "b4ccfeb5ff8b318032524a0954588839515aa74c0cf561c96e397a2bf7f35a2a"
   },
   "Properties.Pouw.PearlPlus.yIsTheUnscale_nontrivial": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Pouw.PearlPlus.yIsTheUnscale_nontrivial :",
+    "  Not",
+    "    (Eq (Properties.Pouw.PearlPlus.acceptAllYOf 16255 1199804864 1114459047 1150222350)",
+    "      (Option.some (Pouw.PearlC.unscale 1199804864 1114459047 1150222350)))"
+   ],
+   "assumptions": [],
+   "type_hash": "16377b265cf870c9dca64bf35191527dec47ab752ae68f7dc9bd7a5dbdde2d0d"
   },
   "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod": {
    "owner": "@compute-accounting",
@@ -9850,7 +10047,9 @@
     "Properties.Evaluator.Fp32.roundRn",
     "Properties.Evaluator.Fp32.roundSum",
     "Properties.Evaluator.Fp32.zeroWord",
-    "Properties.Pouw.PearlPlus.yIsTheUnscale"
+    "Properties.Pouw.PearlPlus.yIsTheUnscale",
+    "Properties.Pouw.PearlPlus.yIsTheUnscale_honest",
+    "Properties.Pouw.PearlPlus.yIsTheUnscale_nontrivial"
    ]
   },
   "Definitions.Core.Game": {
@@ -11538,7 +11737,11 @@
     "Pouw.PearlC.UNSCALE_ONE": "12ee9c951b1c06a5a20993ea3f61bb9adf4c16642146179ed92369a49bd47361",
     "Pouw.PearlC.unscale": "076fb6f8ecc457e59d1856009f0b754ab4e7d1d8d529f1b499d29b89ed62023a"
    },
-   "guarantees": ["Properties.Pouw.PearlPlus.yIsTheUnscale"]
+   "guarantees": [
+    "Properties.Pouw.PearlPlus.yIsTheUnscale",
+    "Properties.Pouw.PearlPlus.yIsTheUnscale_honest",
+    "Properties.Pouw.PearlPlus.yIsTheUnscale_nontrivial"
+   ]
   },
   "Definitions.Pouw.PearlC.W1": {
    "digest": "2103ebd0e10fdadc34bfdb52870a92ed82c1cd280321532c7c37806bd27b4397",
@@ -11655,7 +11858,15 @@
     "Properties.Evaluator.Casts.f32ToE4m3Sat",
     "Properties.Evaluator.Casts.roundEvenDyadic",
     "Properties.Pouw.PearlPlus.acceptMeans",
-    "Properties.Pouw.PearlPlus.tileAcceptMeans"
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_honest",
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap",
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap_honest",
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap_nontrivial"
    ]
   },
   "Evaluate.Fp32": {
@@ -11755,9 +11966,17 @@
     "Properties.Evaluator.Fp32.roundSum",
     "Properties.Evaluator.Fp32.zeroWord",
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_honest",
     "Properties.Pouw.PearlPlus.tileKeepsTheCap",
-    "Properties.Pouw.PearlPlus.yIsTheUnscale"
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap_honest",
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap_nontrivial",
+    "Properties.Pouw.PearlPlus.yIsTheUnscale",
+    "Properties.Pouw.PearlPlus.yIsTheUnscale_honest"
    ]
   },
   "Evaluate.Prims": {
@@ -11829,9 +12048,17 @@
     "Properties.Evaluator.Scalar.selectBf16",
     "Properties.Evaluator.Scalar.selectI32",
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_honest",
     "Properties.Pouw.PearlPlus.tileKeepsTheCap",
-    "Properties.Pouw.PearlPlus.yIsTheUnscale"
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap_honest",
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap_nontrivial",
+    "Properties.Pouw.PearlPlus.yIsTheUnscale",
+    "Properties.Pouw.PearlPlus.yIsTheUnscale_honest"
    ]
   },
   "Evaluate.TC.Dots": {
@@ -11845,8 +12072,15 @@
     "Properties.Evaluator.TC.ampereBf16Dot16",
     "Properties.Evaluator.TC.hopperBf16Dot16",
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
-    "Properties.Pouw.PearlPlus.tileKeepsTheCap"
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_honest",
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap",
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap_honest",
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap_nontrivial"
    ]
   },
   "Evaluate.TC.Fp8Atom": {
@@ -11902,8 +12136,15 @@
    },
    "guarantees": [
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
-    "Properties.Pouw.PearlPlus.tileKeepsTheCap"
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_honest",
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap",
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap_honest",
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap_nontrivial"
    ]
   },
   "Evaluate.TC.Spec": {
@@ -11985,7 +12226,12 @@
     "Properties.Evaluator.TC.valueTerm",
     "Properties.Evaluator.TC.zero",
     "Properties.Pouw.PearlPlus.acceptMeans",
-    "Properties.Pouw.PearlPlus.tileAcceptMeans"
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_honest"
    ]
   },
   "Flock.Bytes": {
@@ -12157,9 +12403,20 @@
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
+    "Properties.Pouw.PearlPlus.loadedGivesUp_honest",
+    "Properties.Pouw.PearlPlus.openingBinds",
+    "Properties.Pouw.PearlPlus.openingBinds_honest",
+    "Properties.Pouw.PearlPlus.openingBinds_nontrivial",
     "Properties.Pouw.PearlPlus.planMeans",
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_honest",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
@@ -12352,8 +12609,14 @@
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
+    "Properties.Pouw.PearlPlus.loadedGivesUp_honest",
     "Properties.Pouw.PearlPlus.planMeans",
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
@@ -12865,7 +13128,12 @@
     "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
     "Properties.Pouw.PearlPlus.planMeans",
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
@@ -13060,9 +13328,20 @@
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
+    "Properties.Pouw.PearlPlus.loadedGivesUp_honest",
+    "Properties.Pouw.PearlPlus.openingBinds",
+    "Properties.Pouw.PearlPlus.openingBinds_honest",
+    "Properties.Pouw.PearlPlus.openingBinds_nontrivial",
     "Properties.Pouw.PearlPlus.planMeans",
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_honest",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
@@ -13369,9 +13648,21 @@
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.LiveSalt.rowSeedBinding",
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
+    "Properties.Pouw.PearlPlus.loadedGivesUp_honest",
+    "Properties.Pouw.PearlPlus.openingBinds",
+    "Properties.Pouw.PearlPlus.openingBinds_honest",
+    "Properties.Pouw.PearlPlus.openingBinds_nontrivial",
     "Properties.Pouw.PearlPlus.planMeans",
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.planMeans_nontrivial",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_honest",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
@@ -13539,9 +13830,20 @@
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
+    "Properties.Pouw.PearlPlus.loadedGivesUp_honest",
+    "Properties.Pouw.PearlPlus.openingBinds",
+    "Properties.Pouw.PearlPlus.openingBinds_honest",
+    "Properties.Pouw.PearlPlus.openingBinds_nontrivial",
     "Properties.Pouw.PearlPlus.planMeans",
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_honest",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
@@ -13840,7 +14142,15 @@
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
+    "Properties.Pouw.PearlPlus.openingBinds",
+    "Properties.Pouw.PearlPlus.openingBinds_honest",
+    "Properties.Pouw.PearlPlus.openingBinds_nontrivial",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_honest",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
@@ -14260,8 +14570,14 @@
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
+    "Properties.Pouw.PearlPlus.loadedGivesUp_honest",
     "Properties.Pouw.PearlPlus.planMeans",
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
@@ -15956,7 +16272,12 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
     "Properties.Pouw.PearlPlus.planMeans",
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
@@ -15995,9 +16316,18 @@
    },
    "guarantees": [
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
+    "Properties.Pouw.PearlPlus.loadedGivesUp_honest",
+    "Properties.Pouw.PearlPlus.openingBinds_honest",
     "Properties.Pouw.PearlPlus.planMeans",
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_honest",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
@@ -19580,9 +19910,17 @@
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
+    "Properties.Pouw.PearlPlus.loadedGivesUp_honest",
     "Properties.Pouw.PearlPlus.planMeans",
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_honest",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
@@ -19638,8 +19976,16 @@
     "Properties.Pouw.Commit.saltRefusals",
     "Properties.Pouw.Commit.saltSize",
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
+    "Properties.Pouw.PearlPlus.acceptMeans_nontrivial",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
-    "Properties.Pouw.PearlPlus.planMeans"
+    "Properties.Pouw.PearlPlus.loadedGivesUp_honest",
+    "Properties.Pouw.PearlPlus.planMeans",
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_nontrivial"
    ]
   },
   "PouwCommit.Draws": {
@@ -19671,8 +20017,14 @@
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
+    "Properties.Pouw.PearlPlus.loadedGivesUp_honest",
     "Properties.Pouw.PearlPlus.planMeans",
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
@@ -19734,9 +20086,20 @@
     "Properties.Pouw.Commit.frameSizes",
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
+    "Properties.Pouw.PearlPlus.loadedGivesUp_honest",
+    "Properties.Pouw.PearlPlus.openingBinds",
+    "Properties.Pouw.PearlPlus.openingBinds_honest",
+    "Properties.Pouw.PearlPlus.openingBinds_nontrivial",
     "Properties.Pouw.PearlPlus.planMeans",
-    "Properties.Pouw.PearlPlus.tileAcceptMeans"
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_honest"
    ]
   },
   "PouwCommit.Py": {
@@ -19781,8 +20144,14 @@
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
+    "Properties.Pouw.PearlPlus.loadedGivesUp_honest",
     "Properties.Pouw.PearlPlus.planMeans",
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
@@ -19823,8 +20192,18 @@
    "guarantees": [
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
+    "Properties.Pouw.PearlPlus.openingBinds",
+    "Properties.Pouw.PearlPlus.openingBinds_honest",
+    "Properties.Pouw.PearlPlus.openingBinds_nontrivial",
     "Properties.Pouw.PearlPlus.planMeans",
-    "Properties.Pouw.PearlPlus.tileAcceptMeans"
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_honest"
    ]
   },
   "PouwCommit.Tagged": {
@@ -19845,9 +20224,18 @@
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
+    "Properties.Pouw.PearlPlus.loadedGivesUp_honest",
     "Properties.Pouw.PearlPlus.planMeans",
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.planMeans_nontrivial",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_honest",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
@@ -19919,7 +20307,18 @@
     "PouwCheck.PearlPlus.replay": "ab0b4b007e3b545705dba78c7bb29f1c42cd5187ee7bf2f835323115bf522e86",
     "PouwCheck.PearlPlus.testCredit": "9b2de1bcdfc918762f9ea8b38be15d7795d5401057ca27016d35237d0ccf1292"
    },
-   "guarantees": ["Properties.Pouw.PearlPlus.acceptMeans", "Properties.Pouw.PearlPlus.planMeans"]
+   "guarantees": [
+    "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
+    "Properties.Pouw.PearlPlus.acceptMeans_nontrivial",
+    "Properties.Pouw.PearlPlus.planMeans",
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.planMeans_nontrivial",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_nontrivial"
+   ]
   },
   "PouwPearlPlus.Coins": {
    "digest": "9b8976bae215f19dcbcf3634fce54ecd26afc4f202f5d34ecce716493c863627",
@@ -19950,8 +20349,16 @@
    },
    "guarantees": [
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
+    "Properties.Pouw.PearlPlus.acceptMeans_nontrivial",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
-    "Properties.Pouw.PearlPlus.planMeans"
+    "Properties.Pouw.PearlPlus.loadedGivesUp_honest",
+    "Properties.Pouw.PearlPlus.planMeans",
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_nontrivial"
    ]
   },
   "PouwPearlPlus.Credit": {
@@ -19968,7 +20375,14 @@
     "PouwCheck.PearlPlus.epsilon": "cd7e921e198ab2b1a7200594c8b46abd50b94183bf06592af6148cc970ab9b97",
     "PouwCheck.PearlPlus.missMass": "b3bc865bcc100a1ff34d5119132cd1f2d0d833a8c6f84951bbd72283c5c82724"
    },
-   "guarantees": ["Properties.Pouw.PearlPlus.acceptMeans"]
+   "guarantees": [
+    "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
+    "Properties.Pouw.PearlPlus.acceptMeans_nontrivial",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_nontrivial"
+   ]
   },
   "PouwPearlPlus.Load": {
    "digest": "e2cfd48b71144f30afd9118495091e975b32c6f99c994f0152ce8deda7e74492",
@@ -20007,12 +20421,21 @@
    },
    "guarantees": [
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
+    "Properties.Pouw.PearlPlus.acceptMeans_nontrivial",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
-    "Properties.Pouw.PearlPlus.planMeans"
+    "Properties.Pouw.PearlPlus.loadedGivesUp_honest",
+    "Properties.Pouw.PearlPlus.planMeans",
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.planMeans_nontrivial",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_nontrivial"
    ]
   },
   "PouwPearlPlus.Records": {
-   "digest": "b39177055e43252893bbf1b20bb6b9559dc6c1b0aa243150720d1ce01b4ec601",
+   "digest": "9962150cb90484c5bc670204afc6375e89042f94030cb145311c33a660d5b13a",
    "definitions": {
     "PouwCheck.PearlPlus.ALIGN": "0be569e77844ee0345a46b82482750a57baecaa0bdf7684b48989e7f797a554a",
     "PouwCheck.PearlPlus.BF16_MAC": "01be70ad4b94fc8d7f82b9f2c8e5018b5c3a50f01a7ce73c151e1ee73ebcaad8",
@@ -20038,7 +20461,8 @@
     "PouwCheck.PearlPlus.Scheme.tileN": "60322c8957a35c93279e0e46777aaeb6815025e37dc1de86a65544fe540bba57",
     "PouwCheck.PearlPlus.Scheme.tiles": "85279009c6a3e5421a4f4904bb933765d409481b00dc7d35dc8a70a157fd524f",
     "PouwCheck.PearlPlus.UnitRecord": "9096d4806f83905f720e54abe13bc10b74d34791034ccb635b0e35a6297f5f8c",
-    "PouwCheck.PearlPlus.UnitRecord.credited": "2718c4893e6b14a3abdc2c65e1e813b0772c9eb4791b138c13a982dd675592a3",
+    "PouwCheck.PearlPlus.UnitRecord.BAND": "8f6580dd024143cf92f3e236a7512cebbe6b6d1538161d66653220362722b9f9",
+    "PouwCheck.PearlPlus.UnitRecord.credited": "f1fde5ff7ef5e9f689810cac847833edcb092f8e6fb1f9335b93b1bca116aecf",
     "PouwCheck.PearlPlus.UnitRecord.encode": "89018349eb3bf5d650c01e7ca659d7ff48276c1bc092a198df2bc4bdd4055875",
     "PouwCheck.PearlPlus.UnitRecord.excludedA": "d28112c8804fcd602cbc030f036e1c022fad2943abc7bd63f7261c3046d72de3",
     "PouwCheck.PearlPlus.UnitRecord.excludedB": "0f9a95f3c4e0440a4db89ab9e350514f0871b3430ff6a5c7c783430701418b10",
@@ -20069,17 +20493,36 @@
    },
    "guarantees": [
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
+    "Properties.Pouw.PearlPlus.acceptMeans_nontrivial",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
+    "Properties.Pouw.PearlPlus.loadedGivesUp_honest",
+    "Properties.Pouw.PearlPlus.loadedGivesUp_nontrivial",
     "Properties.Pouw.PearlPlus.planMeans",
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.planMeans_nontrivial",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_nontrivial",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
-    "Properties.Pouw.PearlPlus.tileKeepsTheCap"
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_honest",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_nontrivial",
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap",
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap_honest",
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap_nontrivial"
    ]
   },
   "PouwPearlPlus.Rule": {
-   "digest": "151e6df98f9a595c861bae0342374d3cfd5e8a2516cddafafa49f621056d7046",
+   "digest": "054aa59af476bafd0f9071420a7883d46adffcf603d31fa8e5c01fd4f18dbd50",
    "definitions": {
     "PouwCheck.PearlPlus.Rule.CAP_DEN": "99dcb14c409cf24823be6faeb0ce2eb4a67dd8441c5a8815c2dcf0cabe8d06f9",
     "PouwCheck.PearlPlus.Rule.CAP_NUM": "471ae5289d0a8b40f7bccbe5a2dd8b12ad09bbeb273613eded437d14b08ee837",
+    "PouwCheck.PearlPlus.Rule.E_FLAT": "2f1eb8a9915bbe5ea95f1508d4b552dac8f41583223074810bd832c32f15274c",
+    "PouwCheck.PearlPlus.Rule.FS": "bc6a81d00faeffea2b376b036f7959126818ee504538899197b5c7b870d71ed8",
+    "PouwCheck.PearlPlus.Rule.F_MINUS": "8f9c54f25483031972acf7a4de1830ced1abbb43502d19c10c49cfd8dcfd2182",
+    "PouwCheck.PearlPlus.Rule.F_PLUS": "b303c634c9a399271d5311393f113e6881de296726ecee9de89124b992d1e625",
     "PouwCheck.PearlPlus.Rule.Kind": "0546beab7b26e3f1c417923c6a981505166650cc9c670e5661eb81cd81088d78",
     "PouwCheck.PearlPlus.Rule.Kind.casesOn": "272162f11470857cf01b573461377219ab36eed73231f9fa0f6e282aae95a7f6",
     "PouwCheck.PearlPlus.Rule.Kind.credited": "ea5db65d8faeb97ec905adb47b56fefc4bfdc7ab006a6012faf0a1c86eecf4d4",
@@ -20091,11 +20534,13 @@
     "PouwCheck.PearlPlus.Rule.Kind.voluntary": "241035dfce25634b649e42a5bd2c0d375deb4b832688351ed08a96e963bfdaef",
     "PouwCheck.PearlPlus.Rule.TOP": "a8ddb845c0dedda83c79eb3b44c3abed341e357cee3ef3b817f048258a231387",
     "PouwCheck.PearlPlus.Rule.UNSCALE_ONE": "a12ff12dd0435f908d1381bc34e27af649784aa13bfdf5c3a78742467ccd3265",
-    "PouwCheck.PearlPlus.Rule.capCheck": "820e5bed8238e219ce8ec629247d80ce6173ec2e774d35a2dfa37166a2dbaa91",
+    "PouwCheck.PearlPlus.Rule.capCheck": "aed8c8ae5f6d4971994962c54faa1a2ceca48c4bd8984640fd14f38b06171f76",
     "PouwCheck.PearlPlus.Rule.capFailure": "06a17519cc3c6a4bff9e87028992ae07eafd6dc01288dd16896be82beae047ce",
     "PouwCheck.PearlPlus.Rule.carried": "1e8a391f35ee433644906474fcf02ad3e7c5b27000a5f5b4b61828a500ddcc29",
     "PouwCheck.PearlPlus.Rule.checkOpened": "39a400545f72450799b75a44dc78c8fc7a90188004aff81df5c4d15b18534aaf",
-    "PouwCheck.PearlPlus.Rule.debitUnits": "ddf27bbf453a6cafc4d375c61e7104e841aab8f0d0d083a8c1714ceb2670d550",
+    "PouwCheck.PearlPlus.Rule.debitUnits": "ce2d8164d25074b9ea610fd484c82ce3671fe6c1f17377e06296972b6e23e011",
+    "PouwCheck.PearlPlus.Rule.endsAgree": "eb6ba1804dbc26790e9359f5111a7441fe180970a4f65fc3ed87c15ff3603622",
+    "PouwCheck.PearlPlus.Rule.flatCode": "a5f7646aead2e0cc3d47b6970ca744809e9d1ab4fc7c560996838f08c5d9b9f7",
     "PouwCheck.PearlPlus.Rule.floorOK": "5107658d0f7aa23f3eb8fa1c8784a5262e77d1e45f0652166bbcc982f2c0fec7",
     "PouwCheck.PearlPlus.Rule.instBEqKind": "817bfa8edabd544b136e287a62a4563260c8eee2369975287ec18c59c3334d15",
     "PouwCheck.PearlPlus.Rule.instBEqKind.beq": "e6c64c3e0b698446a8822b9e721761ac219b494df80401948e9a7da3a84a8128",
@@ -20108,21 +20553,31 @@
     "PouwCheck.PearlPlus.Rule.parts": "479f835d830c41957a3fdd8921cef54f0557721ceee5cd2ee5b8086455482e9d",
     "PouwCheck.PearlPlus.Rule.promote": "fd942dd4ff4960e76ef948aef73a2d738fa8f071a643493a26843102b270b78f",
     "PouwCheck.PearlPlus.Rule.roundHalfEven": "90b096e7181cc58f764381aef97a717fa8d515342af6f4c0fe6d4ba6f79f25da",
+    "PouwCheck.PearlPlus.Rule.rowElements": "98e9416e20f7d81fffacb527f993a25ac79024318fcc4f338fc72972896c613c",
     "PouwCheck.PearlPlus.Rule.rowPasses": "a163e53269dc167c5b448be6ea9f3ae4523246f48fd5852a8306493434c5113c",
     "PouwCheck.PearlPlus.Rule.rowsFailure": "86b5d24d18d8571c92333b4cccc1ac47c9dd5e25a5013c40166dd2990cf70e3a",
+    "PouwCheck.PearlPlus.Rule.saltDead": "5f23aa2cb7190fd534b3dcc31616cfcfe8fc621a7529c38c4b457269c7443fc1",
     "PouwCheck.PearlPlus.Rule.sq300": "c323583243cbec11b7957674aa87b23689197039df48708fbabcdf6cf8f8e904",
     "PouwCheck.PearlPlus.Rule.step": "884d41100e63b632f690293325dc825ae293b95121acd91b2b6a3ef5419cd804",
     "PouwCheck.PearlPlus.Rule.unscale": "77669f93f9f9d71f63cbcd9a2762e1ff99751c15c05abafd1fddda338af2a0c9",
-    "PouwCheck.PearlPlus.Rule.wordDebit": "881e6f1f857bb214470d0572cfe8aed0dbd0dab8ad14f9fdb83acf7d81f968be",
+    "PouwCheck.PearlPlus.Rule.wordFlags": "e62879111c50394a25824b2a009b3be771f381947913539a062954f29b466e03",
     "PouwCheck.PearlPlus.Rule.wordOf": "59f22e81d7759763b8a444399cc4be5098945d4d66510ff3e383824b31a0ddfd",
     "PouwCheck.PearlPlus.Rule.yOf": "6c59b7797b83c9805b27efd1f6181366fecbb3c8404e716ded32b4c1b3ad20f6",
     "PouwCheck.PearlPlus.Rule.yReason": "cc394d77f14121aae37cf8b9d2ee2ce1c036d8c1a702c29320cc03818d0ebecb"
    },
    "guarantees": [
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_honest",
     "Properties.Pouw.PearlPlus.tileKeepsTheCap",
-    "Properties.Pouw.PearlPlus.yIsTheUnscale"
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap_honest",
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap_nontrivial",
+    "Properties.Pouw.PearlPlus.yIsTheUnscale",
+    "Properties.Pouw.PearlPlus.yIsTheUnscale_honest"
    ]
   },
   "PouwPearlPlus.Run": {
@@ -20163,9 +20618,21 @@
    },
    "guarantees": [
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
+    "Properties.Pouw.PearlPlus.acceptMeans_nontrivial",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
+    "Properties.Pouw.PearlPlus.loadedGivesUp_honest",
     "Properties.Pouw.PearlPlus.planMeans",
-    "Properties.Pouw.PearlPlus.tileAcceptMeans"
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.planMeans_nontrivial",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_nontrivial",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_honest",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_nontrivial"
    ]
   },
   "PouwPearlPlus.Tie": {
@@ -20192,7 +20659,15 @@
     "_private.PouwPearlPlus.Tie.0.PouwCheck.PearlPlus.rawStr._sparseCasesOn_1": "4e77a0187e555f5e19188a799ba80088ab7d0cf1dec2b7b0fa9756c0e00b1001",
     "_private.PouwPearlPlus.Tie.0.PouwCheck.PearlPlus.rawStr._sparseCasesOn_2": "adf67794a88f10cd610e715c91c3d3addaa36f34fca007a1ea4e642dfa7265f9"
    },
-   "guarantees": ["Properties.Pouw.PearlPlus.acceptMeans", "Properties.Pouw.PearlPlus.planMeans"]
+   "guarantees": [
+    "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
+    "Properties.Pouw.PearlPlus.planMeans",
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest"
+   ]
   },
   "PouwPearlPlus.Tile": {
    "digest": "a8ec9884d6697df6d30fa3ec227abc6ba6b946a6c4986432b6e47772b1d98b09",
@@ -20225,12 +20700,24 @@
    },
    "guarantees": [
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
+    "Properties.Pouw.PearlPlus.acceptMeans_nontrivial",
+    "Properties.Pouw.PearlPlus.openingBinds",
+    "Properties.Pouw.PearlPlus.openingBinds_honest",
+    "Properties.Pouw.PearlPlus.openingBinds_nontrivial",
     "Properties.Pouw.PearlPlus.planMeans",
-    "Properties.Pouw.PearlPlus.tileAcceptMeans"
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_nontrivial",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_honest"
    ]
   },
   "PouwPearlPlus.Words": {
-   "digest": "c7bf49932de60154ba86899601accdd4ba05995fc5c848f16b14762ef11c6087",
+   "digest": "61246babaf2bff6fb76961adec45a854ac92f2a612e61968df20a48cacd92317",
    "definitions": {
     "PouwCheck.PearlPlus.Words.CHUNK": "b6c1576e9ffd03ac9e537e2c0eb4fae40dd127917c448192efb0683cb4cd434d",
     "PouwCheck.PearlPlus.Words.Checked": "69bffb9828b78b2c69fc06a643af36bb5092c4cae15e3f237d4638d717ac6a3f",
@@ -20243,12 +20730,13 @@
     "PouwCheck.PearlPlus.Words.FixedNoise.fbCols": "10ee564a45838cb685a288e76284a9674cadebc5a422adb52e8dcb18053ee112",
     "PouwCheck.PearlPlus.Words.FixedNoise.gram": "a1bb1cd6702f85cc900c1eda2287d273ce34706fefb0e5dc3e4e6b7ff64c0920",
     "PouwCheck.PearlPlus.Words.FixedNoise.seedB": "e78813624e43c88f7c7780218a254d360d88ea948673d0cfb5aa81ca43412139",
-    "PouwCheck.PearlPlus.Words.Formed": "280df2646df7a3b872e452ed4224f71680c580b20c621cf5f9ec92fd0fe3cdd8",
+    "PouwCheck.PearlPlus.Words.Formed": "cc7e06bc7a54a61d87c1d564497456c65ea758de3b72faa2cf50db3d25fe5f0c",
     "PouwCheck.PearlPlus.Words.Formed.alpha": "a3b9b5bdd114ca2d94a462c47a03b8049134cbcd60778bbdbc8715c41f0eede4",
+    "PouwCheck.PearlPlus.Words.Formed.beta": "a0d3d0ffebbe97600c9ea35b56b083a7f4e5b2c9c200edba7a2ccb9c2d39f16c",
     "PouwCheck.PearlPlus.Words.Formed.codes": "7f7e327e270a748fcf0ca0b402ec90281adbb1cf685c82ac401b8f482de4617a",
-    "PouwCheck.PearlPlus.Words.Formed.ep": "93d444c63a87ed175198404a28644d65a3d1b4865841eb4cf526df7f3e8c84d8",
+    "PouwCheck.PearlPlus.Words.Formed.ep": "87d9d8daa7f28224278473a45bb0c266421a6fd1da08a6feda4424aafe5cddff",
     "PouwCheck.PearlPlus.Words.Formed.rho": "1ab0a8850f9353b30d3927f174b6965bb9f4d4ec4e23b795734b2d8fa98a55fb",
-    "PouwCheck.PearlPlus.Words.Formed.x": "bdb417209746f4e76ea84b992ee0e7e5839e6b111288e1ff9fa0a99c4b076fb3",
+    "PouwCheck.PearlPlus.Words.Formed.x": "a2d5343fe17c37f9c6a1584d0f81a6e63dab6546e0aa767d175d31245e402a7e",
     "PouwCheck.PearlPlus.Words.NORM_E": "e447ada1cedeaaaeb60b57a8d8e6d40ad5e78fde9b83f4fc050edca78d44310b",
     "PouwCheck.PearlPlus.Words.NORM_F": "cd37305d67fcb60fc5a0cd624facbc600d2597a8da621958e96ce236aa360aac",
     "PouwCheck.PearlPlus.Words.Ops": "42ec682aec8076863b4c3464f94360a78f18193ba795105da76a020d2e34d45b",
@@ -20273,7 +20761,7 @@
     "PouwCheck.PearlPlus.Words.encode": "89e2712c6f7aa99b8d106ed30cf8221207661262439f00a989e1aa1cf70b8839",
     "PouwCheck.PearlPlus.Words.finite": "f0ffcf50eebfa130c1186904072e3bafc26f259abf7e1112aab5405b2cb7ad58",
     "PouwCheck.PearlPlus.Words.fixedNoise": "de81101f9a600b68dbc2e5fc113c39e7fad65fb1f8ded3eba0da2ae7f2511957",
-    "PouwCheck.PearlPlus.Words.formV1": "d67faa1e4c46a089e1bbcd95b7bfdaf86f1fcdc92a3aa8d8080ad07aeb179435",
+    "PouwCheck.PearlPlus.Words.formV1": "c7a6ada98381d645cf7c7503c53dc7a88d1db67fc044674b3136442ff7835f07",
     "PouwCheck.PearlPlus.Words.le": "4df7606ffe212e3f93079dbef12e09bd69fb08b07c441272a69606d9e21b8008",
     "PouwCheck.PearlPlus.Words.le32s": "4eed0468a493f4588bd6d1992bf1b7ede89586c10171f559883155b20f10081c",
     "PouwCheck.PearlPlus.Words.leaf": "767a352e90f57b3b97f7bdfb7366213676119cf8badba9ebac635960f13642ef",
@@ -20296,8 +20784,16 @@
    },
    "guarantees": [
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
-    "Properties.Pouw.PearlPlus.tileKeepsTheCap"
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_honest",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_nontrivial",
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap",
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap_honest",
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap_nontrivial"
    ]
   },
   "PouwWindow.Draw": {
@@ -22348,7 +22844,9 @@
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.Pouw.Commit.saltRefusals",
     "Properties.Pouw.Commit.saltSize",
-    "Properties.Pouw.Commit.taggedSize"
+    "Properties.Pouw.Commit.taggedSize",
+    "Properties.Pouw.PearlPlus.openingBinds",
+    "Properties.Pouw.PearlPlus.openingBinds_nontrivial"
    ]
   },
   "Properties.Pouw.Credit": {
@@ -22431,24 +22929,109 @@
    ]
   },
   "Properties.Pouw.PearlPlus": {
-   "digest": "c15c1e2247024d5106dfec7cf4575d8206d656d90e91f77643045b2715de9ff2",
+   "digest": "aebe65a4859f0177e1c17b15297a33638e831e65117a9f17be795f5891ddc56a",
    "definitions": {
     "Properties.Pouw.PearlPlus.AcceptMeans": "435c497d2018dd7e575720ecf7868e8139bef52b00bd09985b450b0f85ec33c3",
     "Properties.Pouw.PearlPlus.LoadedGivesUp": "8b0af154a9cedb29f081c72ae7bc31952aec4d5e94989d25ed0cfd2191a71533",
+    "Properties.Pouw.PearlPlus.OpeningBinds": "b2f1dce6218a432639f3f9b7cef28b2721123e5cffeb590de3f792ffbeef5795",
     "Properties.Pouw.PearlPlus.PlanMeans": "fe60c9162376b74768b2150fb69345421bf96990fd0a62857320cdab7cea4d72",
+    "Properties.Pouw.PearlPlus.RefusedBeforeTheCoin": "6ed1ce3dc8d6d5b501c7a1030569614f745b81b8c360374da15ce9eb167b9ec2",
     "Properties.Pouw.PearlPlus.TileAcceptMeans": "0d56addd50877692127a99f95d5974d985914caed80fb8b9d0e787dda572f2cd",
-    "Properties.Pouw.PearlPlus.TileKeepsTheCap": "b028c36a4c86ff041ac5fe043158d93a932e593e6d02f3b568b60ae074100dfb",
+    "Properties.Pouw.PearlPlus.TileKeepsTheCap": "e663d148ff2771b48e265616c9718be74d6dab713b5e43a36591a5486cce58ee",
     "Properties.Pouw.PearlPlus.YIsTheUnscale": "56d4b9563eca3102b2afb37caf66d36cffd74ce63794c79fa179c5c1c89321a2",
     "Properties.Pouw.PearlPlus.formed": "7bf6769ad60757a9959ee99ac343e7eac97819cfe353436bb8b584ea1e83ca59",
-    "Properties.Pouw.PearlPlus.noiseOf": "c75d84ea825fad9afe68dbeb54ec4d2521b1b960c5afd03a7bd043904cff1c9c"
+    "Properties.Pouw.PearlPlus.noiseOf": "c75d84ea825fad9afe68dbeb54ec4d2521b1b960c5afd03a7bd043904cff1c9c",
+    "Properties.Pouw.PearlPlus.rowsHashed": "08ca9add09dd71b502ce4ca802cc4f407c87cef369d175c78d739c368829c5b0",
+    "Properties.Pouw.PearlPlus.segHashed": "42eea348801fcc09771f03d44d9cdf978c95d8a27f7620037cc975bfff4988b7"
    },
    "guarantees": [
     "Properties.Pouw.PearlPlus.acceptMeans",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
+    "Properties.Pouw.PearlPlus.openingBinds",
+    "Properties.Pouw.PearlPlus.openingBinds_nontrivial",
     "Properties.Pouw.PearlPlus.planMeans",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
     "Properties.Pouw.PearlPlus.tileAcceptMeans",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived",
     "Properties.Pouw.PearlPlus.tileKeepsTheCap",
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap_nontrivial",
     "Properties.Pouw.PearlPlus.yIsTheUnscale"
+   ]
+  },
+  "Properties.Pouw.PearlPlus.Witnesses": {
+   "digest": "fe5cff6749ac005fc8760b8b819d1c7486c7ada138af6d791677c2885fb71138",
+   "definitions": {
+    "Properties.Pouw.PearlPlus.acceptAllCheck": "d384012f96f2f9145d1c405925d04f3e6f2bad392599e81010d6f204326909cc",
+    "Properties.Pouw.PearlPlus.acceptAllPlan": "fb188deed17e7fc2a2c8021a21e34b88c8c4b05b758316aef3982a3d55d07972",
+    "Properties.Pouw.PearlPlus.acceptAllRecord": "1eb3a5f8dad4ed5af1abe5557950418add2bdc388dcf17d1edd4faad0082f324",
+    "Properties.Pouw.PearlPlus.acceptAllYOf": "f1c2d3ea035be424901ce8b3dc9b74f3d135907634a3ba104ceee56c82d0342d",
+    "Properties.Pouw.PearlPlus.beBytes": "3e285aaf7dca2464aafc1f16b6f233eb67f0f5402f312fd624752f4894a3e9cf",
+    "Properties.Pouw.PearlPlus.capOps": "8a7c41df93af341ee2d973715095c0d9c03f6c835b7976ce300b08bdbf2da5d5",
+    "Properties.Pouw.PearlPlus.capRecord": "cdeb45cc3c838da93edce117033c5bc9c954eb6ef7c1312a96eb42b0b5c28ee1",
+    "Properties.Pouw.PearlPlus.capScheme": "a59b094395e157f6f3130fcbbc1aec6222b9530d9628153fb92fa1dc077d680f",
+    "Properties.Pouw.PearlPlus.capSide": "4e5646d6386c7d3794012279bf7159f096f095905478f731a2c4b6bf354f6e01",
+    "Properties.Pouw.PearlPlus.emptyRefusal": "83e46e08a47dd68d4bc9a7b6cfa392bc6cf0accdac97ef578495698fd0cf2292",
+    "Properties.Pouw.PearlPlus.emptyRun": "8a09cd23c73fff3f3c15d66926aaf05b00be18ce06007c8cef1d8b5fb9ed8dd3",
+    "Properties.Pouw.PearlPlus.hexBytes": "c73d60e76fe40cd7aefaceb89e1917ec08657b83ca628e08edaddd827124ef60",
+    "Properties.Pouw.PearlPlus.honestCoinSibling": "dbe72d0f9d1f5a0d5f73d608f3e97c2915465dc1372fa116e6db15d94a392f95",
+    "Properties.Pouw.PearlPlus.honestCoins": "bfc1ae99431003c2c0ef8cd672c2673048f84492b8cb95a678ba305f76f98af1",
+    "Properties.Pouw.PearlPlus.honestCoinsRoot": "b406713b21994863772889593f82ed510ccccb7da29c2c5e0b89b495571ad5fb",
+    "Properties.Pouw.PearlPlus.honestManifest": "2a80d341e0dc41c13307aaa44938a8354805024fc04e258e29f65c43810918ea",
+    "Properties.Pouw.PearlPlus.honestPass": "ffec1e8c5de6cd2d202a18925fe1ba1129f5333f3c936305df02ddc6ae966172",
+    "Properties.Pouw.PearlPlus.honestRecord": "6d5cfe958d9b9187da2cdd5bdf47e6975ab5a9f446658218db5c0bdaf04c909e",
+    "Properties.Pouw.PearlPlus.honestRecordsRoot": "4195f329faed0eb764b85dc4b656fbf139f31528b241f5c03e6aae69c5853e01",
+    "Properties.Pouw.PearlPlus.honestRootA": "4dfabe569d5b86745e89292f5ff6650793450ff4a5f0a2e5295dd40114f4e59a",
+    "Properties.Pouw.PearlPlus.honestRootB": "c2b5de09e47a572e4bc073471ae2c20def5b7ae74d74a5ee1a7a25362a68e921",
+    "Properties.Pouw.PearlPlus.honestRun": "97aaa9b2a1676fc3fd4fb75e648613a08cbbe60675b8bbedcc55b9d483924244",
+    "Properties.Pouw.PearlPlus.honestSalt": "6769e046e07fa8362d3f6ccafb18e8d236bfe848ee2300f0f733365163eedec2",
+    "Properties.Pouw.PearlPlus.honestSource": "e1e6e3495595c2a0ffc47248d6f5572c0bbc359e85902b10caeaaef5ace3fa3c",
+    "Properties.Pouw.PearlPlus.honestTranscriptRoot": "421df51d263796f5e2320613539ec2069e2fb7e4f461deeb989e9686296cf9e4",
+    "Properties.Pouw.PearlPlus.honestWeightsRoot": "671c0b1fb7d23ce74e55cc96994a504c3a14b3401be30e93da6420881a7f5060",
+    "Properties.Pouw.PearlPlus.noCallsPass": "21c58cfc57e9fdf1c7de270a620945eddb7dfeb55bc6b51430350420f51e3bee",
+    "Properties.Pouw.PearlPlus.noOpening": "3c9c1055057858b78747cc934a1fd5c1c2ab4e406c4ddbfe5ea081df8d3754a4",
+    "Properties.Pouw.PearlPlus.shortOps": "19e81b657cd20878a93b3d176514c22d272f5340af06bec2385ccc10106f85d2",
+    "Properties.Pouw.PearlPlus.shortSide": "e249ac20c035d2d976d72bf34f65803912416b9161eaeca4065fe1a839951eb5",
+    "Properties.Pouw.PearlPlus.testFa": "2e94105e2d4fb87314d7ce2dc7b9ff81ded6c2d011287f6b01bdbcf43dd2851b",
+    "Properties.Pouw.PearlPlus.testFb": "5eb83bde94030398feff0b87d2b838e2350b6c68a1d6eae2f0af8042799e28dc",
+    "Properties.Pouw.PearlPlus.testGram": "6d060ba77024ef4d1e53cfd3b195d99aff48c479a8f697aebb94e3f07a3058ac",
+    "Properties.Pouw.PearlPlus.testLeafDigest": "5d502efb0f0ab343724897084cf28f75e64ebfb0f758d019215c3d08940f3ee1",
+    "Properties.Pouw.PearlPlus.testManifest": "c72c750e770f402bb915dfad462154e0a69b0837072fdce18992300bc8826c82",
+    "Properties.Pouw.PearlPlus.testNoise": "251bf7da4b517677e63041e56df55335a91859e45ce6f201b0da03c8c6c9fd98",
+    "Properties.Pouw.PearlPlus.testOpener": "04b5706bd27ca21d0a9024132347e24e16133c7dcde2c03bb29b3d83b950ece0",
+    "Properties.Pouw.PearlPlus.testOpening": "78bae182da2447fcc58abd1237fb7857addc6275d33303a477c548df43d2cc27",
+    "Properties.Pouw.PearlPlus.testPass": "f4ff50f5ca008fd7974aea7d3a93f96f87f935ea53f187fc5fd4684206ccbefb",
+    "Properties.Pouw.PearlPlus.testRecordsRoot": "8806ad69399772d78bdea98e632a7f757451a2126cce7a24439441cf5b65956d",
+    "Properties.Pouw.PearlPlus.testRootA": "763bb39bf8b28c60de5ff827ee67bec6f9a392f70e58bcda338e49f984933c74",
+    "Properties.Pouw.PearlPlus.testRootB": "74cd43be6debd5ab0caf02f2ef52b0c52e33ebfe8774dc1a3c51d9dca5968a38",
+    "Properties.Pouw.PearlPlus.testRowA": "e56939533a77192154d77530f50ac9a62462397fbe5d9ba53fdc4bfd0e81e607",
+    "Properties.Pouw.PearlPlus.testRowB": "3923b176659a53e33398a7dced5db4fdaf04669d54590e90abc8659f4c9e5181",
+    "Properties.Pouw.PearlPlus.testRun": "1df597abc11cd07ba8058f421e626974a12fa6003a873324a0ce12fff80b2f1c",
+    "Properties.Pouw.PearlPlus.testSalt": "108520d874b6a10285a997f4e7346cfc85220c0f820eaee1b6e5e4aa78345681",
+    "Properties.Pouw.PearlPlus.testSeedB": "4e43adb39a6b7fbce66866324a627cadfa66c398080019804873f22446d0d3d0",
+    "Properties.Pouw.PearlPlus.testTranscriptRoot": "5538978c4cde9cbe5acabafeebab0a50e199a5bf704ae06be29d1ba73dbe10ff",
+    "Properties.Pouw.PearlPlus.testWeightsRoot": "d57e086600445ba27e29d7c0dd3ca119872255498b491b71a52d5e64cdd89133",
+    "Properties.Pouw.PearlPlus.witnessCoins": "c4b4d5dd597d12d99f54499a3a8ed0b6e7c85c190dc509d4c2f504c85801c65c",
+    "Properties.Pouw.PearlPlus.witnessDomain": "0bd9a41581a59648d14db1a1d487c92ee857731fa081abe7707b53a5e0373cb7",
+    "Properties.Pouw.PearlPlus.witnessOpening": "4a76903300edc927c7935306d168d0dd5c096fcb57ec64322b90de21f1e61a02",
+    "Properties.Pouw.PearlPlus.zeroSalt": "94b51a277d1798ea1cde28ed566af521131dda1fbc1664558ec16fdd08c34d7c"
+   },
+   "guarantees": [
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
+    "Properties.Pouw.PearlPlus.acceptMeans_nontrivial",
+    "Properties.Pouw.PearlPlus.loadedGivesUp_honest",
+    "Properties.Pouw.PearlPlus.loadedGivesUp_nontrivial",
+    "Properties.Pouw.PearlPlus.openingBinds_nontrivial",
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.planMeans_nontrivial",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_nontrivial",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_derived",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_honest",
+    "Properties.Pouw.PearlPlus.tileAcceptMeans_nontrivial",
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap_honest",
+    "Properties.Pouw.PearlPlus.tileKeepsTheCap_nontrivial",
+    "Properties.Pouw.PearlPlus.yIsTheUnscale_nontrivial"
    ]
   },
   "Properties.Pouw.Period": {
@@ -24513,8 +25096,16 @@
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
+    "Properties.Pouw.PearlPlus.acceptMeans_nontrivial",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
+    "Properties.Pouw.PearlPlus.loadedGivesUp_honest",
     "Properties.Pouw.PearlPlus.planMeans",
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_nontrivial",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
@@ -24982,8 +25573,14 @@
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.PearlPlus.acceptMeans",
+    "Properties.Pouw.PearlPlus.acceptMeans_drawn",
+    "Properties.Pouw.PearlPlus.acceptMeans_honest",
     "Properties.Pouw.PearlPlus.loadedGivesUp",
+    "Properties.Pouw.PearlPlus.loadedGivesUp_honest",
     "Properties.Pouw.PearlPlus.planMeans",
+    "Properties.Pouw.PearlPlus.planMeans_honest",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin",
+    "Properties.Pouw.PearlPlus.refusedBeforeTheCoin_honest",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
@@ -25046,7 +25643,7 @@
    ]
   },
   "SampledProofs.OneStage": {
-   "digest": "6419211eb3d185903f93fcaf7f3755565949abc8b5d4f038d4f9ff93a00c98ec",
+   "digest": "18a526681dcbf2eafb2b75c70d8e665c29dcdf62a8b8b42129db58c33fa27774",
    "definitions": {
     "SampledProofs.OneStage.Commitment": "d744e6fb2fdff36157845bc9fb3224434ff1f62fc26396f87b4393a0af67c01b",
     "SampledProofs.OneStage.Commitment.digest": "8f1997edbf41ef170699331a03a0ea01ec0eeefb3a34a36d521c4eb1673c6f01",
@@ -25082,7 +25679,7 @@
     "SampledProofs.OneStage.evidenceParsed": "d5a2c851a4823a5a540f86f4757ef8369b6f5cb09b6d270c6cc3326a8251b23e",
     "SampledProofs.OneStage.evidenceParsed._sparseCasesOn_1": "51bbf148591d9cf41b546e04df6e9a14dcea1742a99e367017cfd13accf2a8f8",
     "SampledProofs.OneStage.paramsOfJson": "eb0d1903ac9d06f34b776012524afbf4238ba55660dce074e9318674830827f9",
-    "SampledProofs.OneStage.paramsParsed": "1c327216c813e769bb11125f4c7071b83ef0e4a64cc3ebf637a8ca69bbdeca77",
+    "SampledProofs.OneStage.paramsParsed": "df0e312ba3066dd3548a97bf8eef158ca6d8d740f5b35f378294af76492ed058",
     "SampledProofs.OneStage.paramsParsed._sparseCasesOn_1": "35d30f7cdf24bb21dceda1d2e3aa98dfa7fbbf4d1a4157284ce4925cd5ef7b21",
     "SampledProofs.OneStage.paramsParsed._sparseCasesOn_19": "75a26beceecd70c2e23225c814da95d5fe0f4edfb794e0f7e11e0403356c4266",
     "SampledProofs.OneStage.paramsParsed._sparseCasesOn_6": "af926ec68b471d34eb9bd0aba804a60a51c576ba5ec83f06f5702aa363b350e3",
@@ -25117,14 +25714,14 @@
    ]
   },
   "SampledProofs.OneStageZk": {
-   "digest": "7117c0d00272101368dfe6fcb9b1f819d46ce067ff2ea5d88da57ba4d6224129",
+   "digest": "692090dd932d537ac48f65686da68a8a43625c493b0e8f120adf1644b535d3ed",
    "definitions": {
     "SampledProofs.OneStageZk.Form": "8488dbbe2940cfdc19dae45d7ea68752991f39258fc9170be705789d55da7aed",
     "SampledProofs.OneStageZk.Form.members": "5edf22b9d5342bdd7c8b3db576fa9d5ec0f35e6082f09e7c435658ad816b2e3b",
     "SampledProofs.OneStageZk.Form.one": "9ce448554290e361a620d08943a99df68d9f211bc783517ab245270f1ad38c0a",
     "SampledProofs.OneStageZk.Member": "e7a0f8b212b958e93a625d03b0eb79605b603cf106ee1dccde57b556aec829aa",
-    "SampledProofs.OneStageZk.Own": "c11ad14a9461f028770ecd35980df6c5207a6685c5696e07714826e1bf77ec4d",
-    "SampledProofs.OneStageZk.Params": "44ccd0fe4a39a1a890ff34151e75fed325fc47c8d80ec3ab9c757d00cfa26f5f",
+    "SampledProofs.OneStageZk.Own": "f344af97127fc6f2add89e6a6fbd4c4c0819b572fd04ae96f8a3830b6d3c2603",
+    "SampledProofs.OneStageZk.Params": "9e93ea99cc829ca52ae127f2b29f8a386227dcdc37bea4bf21ff5cc275fcba78",
     "SampledProofs.OneStageZk.Params.base": "fbe5b2dd3615b47c18051c72520081953f48e2235817e790937215a43702cf92"
    },
    "guarantees": [
