@@ -240,6 +240,8 @@ theorem sampledProofsSound_of_targets {K : Constructions V} {S : ByteArray → A
             rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
     have hrec : ENNReal.ofReal (Real.sqrt ((K.recordFinder A θ F c σ).Pr Verity.sha512Msg)) ≤ Live.twoRun (A.qM t) :=
       sqrt_le_twoRun hFin.record (K.record_calls A θ F c σ)
+    have hbind : ENNReal.ofReal (Real.sqrt ((K.bindFinder A θ F c σ).Pr Verity.sha512Msg)) ≤ Live.twoRun (A.qM t) :=
+      sqrt_le_twoRun hFin.bind (K.bind_calls A θ F c σ)
     have hread : ENNReal.ofReal ((K.readFinder θ F c σ).Pr Verity.sha512Msg) ≤
         ENNReal.ofReal (V.crBound θ .sampled t) := by
       rw [← hD.finder θ F c σ]; exact ENNReal.ofReal_le_ofReal hFC
@@ -250,15 +252,16 @@ theorem sampledProofsSound_of_targets {K : Constructions V} {S : ByteArray → A
         (hUf (fun x => V.forger_calls .sampled θ F c σ x) (fun x => V.forger_signed .sampled θ F c σ x))
     simp only [hD.loss, add_zero]
     refine hver.trans ((hC θ F A hS c σ).trans ?_)
-    calc _ ≤ A.sessionDelta t + (A.rounds * Live.twoRun (A.qM t) + Live.twoRun (A.qM t) + A.hidingTerm +
-            ENNReal.ofReal (V.crBound θ .sampled t) +
+    calc _ ≤ A.sessionDelta t + (A.rounds * Live.twoRun (A.qM t) + Live.twoRun (A.qM t) + Live.twoRun (A.qM t) +
+            A.hidingTerm + ENNReal.ofReal (V.crBound θ .sampled t) +
             ENNReal.ofReal (V.epsForge θ (V.callsMul θ .sampled * t + V.callsAdd θ .sampled) (V.signatures θ))) :=
-          add_le_add hks (add_le_add (add_le_add (add_le_add (add_le_add hmsg hrec) le_rfl) hread) hforge)
+          add_le_add hks
+            (add_le_add (add_le_add (add_le_add (add_le_add (add_le_add hmsg hrec) hbind) le_rfl) hread) hforge)
       _ ≤ A.delta t (V.crBound θ .sampled t) +
             ENNReal.ofReal (V.epsForge θ (V.callsMul θ .sampled * t + V.callsAdd θ .sampled) (V.signatures θ)) := by
           unfold Live.delta
-          calc _ = A.sessionDelta t + A.rounds * Live.twoRun (A.qM t) + Live.twoRun (A.qM t) + A.hidingTerm +
-                  ENNReal.ofReal (V.crBound θ .sampled t) +
+          calc _ = A.sessionDelta t + A.rounds * Live.twoRun (A.qM t) + Live.twoRun (A.qM t) +
+                  Live.twoRun (A.qM t) + A.hidingTerm + ENNReal.ofReal (V.crBound θ .sampled t) +
                   ENNReal.ofReal (V.epsForge θ (V.callsMul θ .sampled * t + V.callsAdd θ .sampled)
                     (V.signatures θ)) := by ring
             _ ≤ _ := add_le_add (add_le_add le_self_add le_rfl) le_rfl

@@ -530,7 +530,8 @@ def rootBTables (p : Own) (bs : Core.Blobs) (record : String) : Array (String ×
   let tabs : Option (Array Flock.Setup) := (do
     let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
     let I := inputsOf tags0 p (← bs.get p.circuit "circuit") (← bs.get p.pub "public file") bs
-    let (_, tabs, _) ← setupAt I (← readsOf p.registered) (Flock.Witness.recordDraw record)
+    let (_, tabs, _) ← setupAt I { (← readsOf p.registered) with declared := ← declaredOf p bs }
+      (Flock.Witness.recordDraw record)
     pure tabs : V (Array Flock.Setup)).toOption
   sessionTables.mapIdx fun i t => (t, tabs.bind fun ts => ts[i]?.bind fun st => (rootBLen st).toOption)
 

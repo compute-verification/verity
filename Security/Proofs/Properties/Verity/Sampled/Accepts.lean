@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.Sampled.Moves
-public import Proofs.Properties.Verity.Sampled.Project
+public import Proofs.Properties.Verity.Sampled.CoinMap
 public import Proofs.Flock.Recursive.Witness
 public import Proofs.Flock.Soundness.Refine.Walk
 public import Proofs.Flock.Soundness.Refine.Lookups
@@ -386,22 +386,12 @@ theorem run_reaches {β : Type} : ∀ (g : Verity.Game β) (s : Verity.Game.Stra
   | .send _ k, s, x => run_reaches (k s.1) s.2 x
   | @Verity.Game.coin _ _ _ _ k, s, x => ⟨x.1, run_reaches (k x.1) (s x.1) (x.2 x.1)⟩
 
-/-- An output a play of `g.bind f` reaches is one a play of some `f b` reaches. -/
-theorem playReaches_bind {β γ : Type} {f : β → Verity.Game γ} {o : γ} :
-    ∀ (g : Verity.Game β) (s : Verity.Game.Strategy (g.bind f)), Verity.Game.PlayReaches (g.bind f) s o →
-      ∃ b, ∃ s' : Verity.Game.Strategy (f b), Verity.Game.PlayReaches (f b) s' o
-  | .ret b, s, h => ⟨b, s, h⟩
-  | .send _ k, s, h => playReaches_bind (k s.1) s.2 h
-  | @Verity.Game.coin _ _ _ _ k, s, h => by
-    obtain ⟨c, hc⟩ := h
-    exact playReaches_bind (k c) (s c) hc
-
 /-- **A play of the period's game ends at its parameters and its committed files.** -/
 theorem play_ends (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c)) (x : Verity.Game.CoinTape (V.game θ F c) σ) :
     (Verity.Game.CoinTape.run (V.game θ F c) σ x).params = θ ∧
       (Verity.Game.CoinTape.run (V.game θ F c) σ x).files = F := by
-  obtain ⟨log, s, h⟩ := playReaches_bind (f := finish (V.signer θ) θ F c σ.1)
+  obtain ⟨log, s, h⟩ := Verity.Game.PlayReaches.of_bind (f := finish (V.signer θ) θ F c σ.1)
     (releases (frames (V.families θ)) (V.families θ) []) σ.2 (run_reaches (V.game θ F c) σ x)
   obtain ⟨ρ, ho⟩ : ∃ ρ : Fin (V.signer θ).draws → Bool, Verity.Game.CoinTape.run (V.game θ F c) σ x =
       ⟨θ, F, c, σ.1, log, s.1, List.ofFn ρ, (V.signer θ).signatures σ.1 log s.1 (List.ofFn ρ), (s.2 ρ).1.1,
