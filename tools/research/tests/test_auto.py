@@ -116,6 +116,27 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
     assert failing == {m: "exit 1: no python here" for m in (N2, *(machine for machine, _ in auto.SPILL))}
 
 
+def test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen(tmp_path, monkeypatch):
+    """A node 2 carrying /etc/vy/runs-via-slot refuses a run placed on its share, so its share reads as unread."""
+    monkeypatch.setattr(cores, "CLAIMS", tmp_path / "claims")
+    monkeypatch.setattr(cores, "CPU_ROOT", tmp_path / "no-topology")
+    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))
+    marker = tmp_path / "runs-via-slot"
+    marker.write_text("slot only\n")
+    monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(marker))
+    src = tmp_path / "src"
+    (src / auto.DESCRIPTION).parent.mkdir(parents=True)
+    (src / auto.DESCRIPTION).write_text(f'[[shares]]\nproject = "verity"\nnode = "{N2}"\ncpus = "48-95"\n')
+    (src / auto.SLOT_PY).parent.mkdir(parents=True)
+    (src / auto.SLOT_PY).write_text("def status_doc(now):\n    return {'file': 'f', 'slots': [], 'waiters': []}\n")
+    n2 = auto.read(src, 4, reach=lambda name: [sys.executable, "-"])[N2]
+    assert "runs-via-slot" in n2["share"]["error"]
+    target, why = auto.choose({N2: n2, CPU1: pool(slot("r0", held=True), waiters=9)}, 4, 16)
+    assert target == (CPU1, "research") and f"{N2}'s share wasn't read" in why
+    with pytest.raises(auto.Unplaceable):
+        auto.choose({N2: n2, CPU1: "no answer in 30 s"}, 4, 16)
+
+
 def _auto_repo(tmp_path: Path) -> Path:
     repo = tmp_path / "repo"
     repo.mkdir()
