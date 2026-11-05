@@ -6,7 +6,7 @@
 # compute-sanitizer (memcheck: every kernel the step launches, at the batch's MMA width), then the step itself. Results
 # go to $RESEARCH_RUN_DIR/out.
 #
-#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=ra-codec-tensor MODEL=8b BATCH=32 taskset -c 48-95 bash \
+#   RESEARCH_RUN_DIR=DIR MODEL=8b BATCH=32 taskset -c 48-95 bash \
 #     benchmarks/codec_tensor/step.sh
 #
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). MODEL (8b, 70b) and BATCH name the point (kv.cu

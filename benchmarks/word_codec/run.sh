@@ -6,7 +6,7 @@
 # 1024h32mf6), the tests, then, under one gpu-lease 1 --wait --max-min MAXMIN (default 25), KV_SCRIPT (default
 # kv_bench.py) with KV_ARGS. Results go to $RESEARCH_RUN_DIR/out.
 #
-#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=ra-word-codec taskset -c 48-95 bash benchmarks/word_codec/run.sh
+#   RESEARCH_RUN_DIR=DIR taskset -c 48-95 bash benchmarks/word_codec/run.sh
 #
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). SANITIZE=1 runs KV_SCRIPT's --sanitize smoke
 # under compute-sanitizer's memcheck, racecheck and synccheck, and SANITIZE=2 runs KV_SCRIPT after it if every tool
