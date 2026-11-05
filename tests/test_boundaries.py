@@ -217,8 +217,6 @@ BENCHMARKS_IMPORTERS = {
     "integrations/vllm/verity_vllm/protocols/remote_bandwidth/in_place.py": "proofs: the remote session's `device` and "
                                                                             "`inplace` (`benchmarks/remote_session`)",
     "integrations/vllm/verity_vllm/engine/int8_credited_env.py": "circuits (vllm): `benchmarks/vllm_encoded/paged.py`",
-    "verity/core/protocols/pous/check/timed_audit.py": "memory-accounting: the memory challenger, the strict timed audit's "
-                                                       "reference (`verity/core/devices/memory_challenger/timed_audit.py`)",
     "verity/ml/flock/python/verity_flock/struct_lower.py": "proofs: H1's unit (`benchmarks/pouw/h1_prove`, `hidden_zk`)",
     # Flock and circuit-check build statements from the numerical benchmarks' templates and lowerings
     **dict.fromkeys((
@@ -258,8 +256,8 @@ BENCHMARKS_IMPORTERS = {
                                                                        "(`benchmarks/pouw/h1_lanes/run.py`)",
     **dict.fromkeys(("verity/core/protocols/pous/check/scripts/difftest_vectors.py",
                      "verity/core/protocols/pous/check/tests/test_timed_audit.py"),
-                    "memory-accounting: P2's reference and wire (`benchmarks/pous/p2_v1`) and the memory challenger "
-                    "(`benchmarks/pous/band_gpu`)"),
+                    "memory-accounting: P2's reference and wire (`benchmarks/pous/p2_v1`) and the harness's control "
+                    "responder (`benchmarks/pous/band_gpu/harness.py`)"),
     "verity/ml/circuits/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`benchmarks/tc_probe`)",
     **dict.fromkeys(("integrations/vllm/tests/protocols/pouw_h1_circuits.py",
